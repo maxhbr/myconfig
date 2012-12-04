@@ -1,17 +1,17 @@
 myconfig
 ========
 
-my Linux Configuration
+my Linux Configuration on Arch Linux
 
-## used software
-# Enviroment
+# used software
+## Enviroment
 - xmonad
 - xmobar
 
-# applications
+## Applications
 - vim
 - urxvt
 - zathura
 - sylpheed
 
-vim: set ft=md :
+<!--- vim: set ft=md : -->
