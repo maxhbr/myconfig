@@ -1,0 +1,13 @@
+#!/bin/bash
+
+cp ~/.bashrc bashrc
+cp ~/.aliasrc aliasrc
+cp ~/.xmonad/xmonad.hs ./
+cp ~/.xmobarrc xmobarrc
+cp ~/.vimrc vimrc
+cp ~/.xinitrc xinitrc
+cp ~/.bash_profile bash_profile
+cp ~/.emacs emacs
+cp ~/.vimencrypt vimencrypt
+cp ~/.Xresources Xresources
+cp /etc/zathurarc zathurarc

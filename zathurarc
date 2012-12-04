@@ -1,0 +1,9 @@
+# zathurarc
+
+# key bindings
+#map f toggle_fullscreen
+
+map + zoom in
+map - zoom out
+
+map <C-q> quit

@@ -1,0 +1,438 @@
+alias vi="vim"
+
+# makes "sudo vi" to "sudo vim"
+alias sudo="sudo "
+
+alias reload='source ~/.bashrc'
+
+#--------------------------------------------------------------------
+#   Basics
+#-------------------------------------------------------------------{{{
+
+alias rm='rm -I'
+alias cp='cp -vi'
+
+alias mv='mv -vi'
+# mkmv - creates a new directory and moves the file into it, in 1 step
+# Usage: mkmv <file> <directory>
+mkmv() {
+  mkdir "$2"
+  mv "$1" "$2"
+}
+
+alias ls='ls --color=auto'
+alias ll='ls -alF'
+alias lll='ls -alF | less'
+alias la='ls -CFA'
+alias l='ls -CF'
+alias l.='ls -dF .[a-zA-Z0-9]*' #only show dotfiles
+lgrep() { ls -alF | egrep "$@"; }
+
+#keep track of folders
+#TODO: make silent
+#alias cd="pushd"
+#alias bd="popd"
+
+cd() { #Automatically do an ls after each cd
+  if [ -n "$1" ]; then
+    builtin cd "$@" && ls
+  else
+    builtin cd ~ && ls
+  fi
+}
+
+alias cd..="cd .."
+alias ..="cd .."
+alias ...="cd ../.."
+alias ~="cd ~/"
+
+mkcd() { #make dir and enter it
+  mkdir -p "$1"
+  cd "$1"
+}
+
+alias grep='grep --color=auto'
+alias fgrep='fgrep --color=auto'
+alias egrep='egrep --color=auto'
+
+# Creates an archive from given directory
+mktar() { tar cvf  "${1%%/}.tar"     "${1%%/}/"; }
+mktgz() { tar cvzf "${1%%/}.tar.gz"  "${1%%/}/"; }
+mktbz() { tar cvjf "${1%%/}.tar.bz2" "${1%%/}/"; }
+
+alias pkill9="pkill --signal 9"
+
+#TODO: remove functions if not used
+e() {
+  if [  $# -eq 0 ]; then
+    if [ -f /tmp/e-last-used-files ] ; then
+      #tail /tmp/e-last-used-files
+      OLD_IFS=$IFS
+      IFS=$'\n'
+      lines_ary=( $(cat "/tmp/e-last-used-files") )
+      IFS=$OLD_IFS
+
+      if [[ ${#lines_ary[@]} -lt 20 ]]; then
+        for idx in $(seq 0 $((${#lines_ary[@]} - 1))); do
+          line="${lines_ary[$idx]}"
+          printf "${idx}   ${line}\n"
+        done
+      else
+        for idx in $(seq $((${#lines_ary[@]} - 21)) $((${#lines_ary[@]} - 1))); do
+          line="${lines_ary[$idx]}"
+          printf "${idx}   ${line}\n"
+        done
+      fi
+
+      read number
+      if [[ "$number" =~ ^[0-9]+$ ]] ; then
+        e "${lines_ary[$number]}"
+      fi
+    else
+      echo "nothing in list yet"
+    fi
+    #vim
+  else
+    if [ -f $1 ] ; then
+      # Save name of the opened file
+      echo $(realpath $1) >> /tmp/e-last-used-files
+
+      opt=$( tr '[:upper:]' '[:lower:]' <<<"$1" ) # to Lower case
+      case $opt in
+        *.pdf) zathura $1 ;;
+        *.djvu) zathura $1 ;;
+        *.ps) zathura $1 ;;
+        *.jpg) geeqie $1 ;;
+        *.tex) vim --servername texServer $1 ;;
+        *) vim $1 ;;
+      esac
+    else
+      vim $1
+    fi
+  fi
+}
+
+#-------------------------------------------------------------------}}}
+#   misc
+#-------------------------------------------------------------------{{{
+
+#for vim latex plugin:
+alias tvim="vim --servername texServer"
+
+#alias tmux="tmux -2"
+
+alias reboot="systemctl reboot"
+alias poweroff="systemctl poweroff"
+alias halt="systemctl poweroff"
+alias suspend="systemctl suspend"
+
+alias keynav='pkill keynav; keynav'
+
+alias dmesgwatch='watch "dmesg |tail -15"'
+alias mydmesg='watch "dmesg |tail -15"' #the same
+
+duh() { # disk usage for humans
+  test $# -eq 0 && set -- *
+  du -sch "$@" | sort -h
+}
+
+# Find a file with a pattern in name:
+ff() { find . -type f -iname '*'$*'*' -ls ; }
+
+# Find a file with pattern $1 in name and Execute $2 on it:
+fe() { find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \;  ; }
+
+alias clamscan="clamscan --recursive --infected --bell"
+alias clamclean="clamscan --recursive --infected --bell --remove"
+
+hgrep() {
+  history | egrep "$@"
+}
+
+# Extract files from any archive
+# Usage: ex <archive_name>
+ex() {
+  if [ -f $1 ] ; then
+    opt=$( tr '[:upper:]' '[:lower:]' <<<"$1" )
+    case $opt in
+      *.tar.bz2) tar xjf $1 ;;
+      *.tar.gz) tar xzf $1 ;;
+      *.bz2) bunzip2 $1 ;;
+      *.rar) rar x $1 ;;
+      *.gz) gunzip $1 ;;
+      *.tar) tar xf $1 ;;
+      *.tbz2) tar xjf $1 ;;
+      *.tgz) tar xzf $1 ;;
+      *.zip) unzip $1 ;;
+      *.Z) uncompress $1 ;;
+      *.7z) 7z x $1 ;;
+      *) echo "'$1' cannot be extracted via ex()" ;;
+    esac
+  else
+    echo "'$1' is not a valid file"
+  fi
+}
+
+genpasswd() {
+  local l=$1
+  [ "$l" == "" ] && l=16
+  tr -dc A-Za-z0-9_ < /dev/urandom | head -c ${l} | xargs
+}
+
+#Fix permissions
+permfix() {
+  for dir in "$@"; do
+    find "$dir" -type d -exec chmod 755 {} \;
+    find "$dir" -type f -exec chmod 644 {} \;
+  done
+}
+
+#-------------------------------------------------------------------}}}
+#   package management
+#-------------------------------------------------------------------{{{
+
+# remove orphan pacman packages
+myRemOrphans() {
+  if [[ ! -n $(pacman -Qdt) ]]; then
+    echo no orphans to remove
+  else
+    sudo pacman -Rs $(pacman -Qdtq)
+  fi
+}
+
+# Pacman alias examples
+alias pacupg='sudo pacman -Syu ; echo ; myRemOrphans'        # Synchronize with repositories before upgrading packages that are out of date on the local system.
+alias pacin='sudo pacman -S'           # Install specific package(s) from the repositories
+alias pacins='sudo pacman -U'          # Install specific package not from the repositories but from a file
+alias pacre='sudo pacman -R'           # Remove the specified package(s), retaining its configuration(s) and required dependencies
+alias pacrem='sudo pacman -Rns'        # Remove the specified package(s), its configuration(s) and unneeded dependencies
+alias pacrep='pacman -Si'              # Display information about a given package in the repositories
+alias pacreps='pacman -Ss'             # Search for package(s) in the repositories
+alias pacloc='pacman -Qi'              # Display information about a given package in the local database
+alias paclocs='pacman -Qs'             # Search for package(s) in the local database
+
+# Additional pacman alias examples
+alias pacupd='sudo pacman -Sy && sudo abs'     # Update and refresh the local package and ABS databases against repositories
+alias pacinsd='sudo pacman -S --asdeps'        # Install given package(s) as dependencies of another package
+alias pacmir='sudo pacman -Syy'                # Force refresh of all package lists after updating /etc/pacman.d/mirrorlist
+
+#update via yaourt
+alias yaourtupd="yaourt -Syu --aur"
+
+#-------------------------------------------------------------------}}}
+#   some advanced stuff
+#-------------------------------------------------------------------{{{
+
+alias dotbashrc="vim ~/.bashrc"
+alias dopvimrc="vim ~/.vimrc"
+alias dotxinitrc="vim ~/.xinitrc"
+alias dotxmonadhs="vim ~/.xmonad/xmonad.hs"
+alias dotrcconfig="sudo vim /etc/rc.conf"
+
+alias vime="vim -u ~/.vimencrypt -x "
+alias gvime="gvim -u ~/.vimencrypt -x "
+
+#alias setbat="sudo tlp start && xbacklight -set 30 && sudo powertop"
+
+#alias ducks='du -cksh * | sort -rn|head -11' # Lists folders and files sizes in the current folder
+alias ducks='du -cs * |sort -rn |head -11' # better
+alias ducksall='du -cs * |sort -rn' # better without head
+alias countFilesByTypes="find . -type f -exec basename \"{}\" \\; | sed -e 's/.*\\.//gi' | sort  | uniq  -c | sort  -rn"
+
+# download from youtube
+alias ccl="cclive -f best"
+
+#alias syncZzBesten="rsync -avze ssh /home/hubi/Bilder/zz-besten/ hubi@192.168.178.42:/home/hubi/Bilder/zz-besten/"
+
+if [ -f ~/bin/mydock.sh ]; then
+  alias mydock="mydock.sh"
+fi
+
+#-------------------------------------------------------------------}}}
+#   some networking
+#-------------------------------------------------------------------{{{
+
+alias ping6alle="ping6 ff02::1%eth0"
+alias ping6allw="ping6 ff02::1%wlan0"
+# or: mtr
+#     sudo arp-scan  --interface=wlan0 -l
+
+# Get IP (call with myip)
+myip() {
+  myip=`elinks -dump http://checkip.dyndns.org:8245/`
+  echo "${myip}"
+}
+
+#-------------------------------------------------------------------}}}
+#   some functions
+#-------------------------------------------------------------------{{{
+
+mysmbload() {
+  sudo modprobe fuse
+  sudo systemctl start smbnetfs
+}
+
+# Quick and dirty version control for one file
+myversioncontrol() {
+  ( IFS=$'\n'; suf="_versions"; mkdir -p "$1$suf"; nr=`ls "$1$suf" | wc -l`; nr=`printf "%02d" $(($nr + 1))`; cp "$1" "$1$suf/v${nr}_$1" )
+}
+
+bac() { # backup with copy
+  for file; do
+    cp -Rpv "$file" "$file~$(date -Ins)~"
+  done
+}
+
+buc() { # undo backup copy
+  for file; do
+    dest=${file%%\~*}
+    test -d "$dest" && mv -v "$dest" "$file.orig"
+    mv -v "$file" "$dest"
+  done
+}
+
+compTime() { #compare the speed of two ($1, $2) commands (loop $3 times)
+  if [ $# -ne 3 ]; then return 1; fi
+  type $1 >/dev/null 2>&1 || return 2
+  type $2 >/dev/null 2>&1 || return 3
+  printf 1
+  time for ((i=0; i<${3:-10}; i++)) ; do $1 ; done >/dev/null 2>&1
+  printf 2
+  time for ((i=0; i<${3:-10}; i++)) ; do $2 ; done >/dev/null 2>&1
+}
+
+# Repeat n times command
+# example: repeat 10 ls
+repeat() {
+  local i max
+  max=$1; shift;
+  for ((i=1; i <= max ; i++)); do
+    eval "$@";
+  done
+}
+
+mkscript() {
+  # usage:
+  # mkscript [sh/py] filename
+  if [ $# -eq 2 ]; then
+    if [ ! -f $2 ]; then
+      case $1 in
+        sh)
+          echo "#!/bin/bash" > "$2"
+          ;;
+        py)
+          echo "#!/usr/bin/env python" > "$2"
+          ;;
+      esac
+
+      if [ -f $2 ]; then
+        chmod 700 "$2"
+        vim -c "set ft=$1" "$2"
+      fi
+    fi
+  fi
+}
+
+# calc - simple calculator
+# usage: calc <equation>
+calc() { echo "$*" | bc; }
+
+# remind me, its important!
+# usage: remindme <time> <text>
+# e.g.: remindme 10m "omg, the pizza"
+myremind() {
+  if [  $# -eq 0 ]; then
+    echo
+    echo "usage: remindme <time> <text>"
+    echo "e.g.: remindme 10m \"omg, the pizza\""
+    echo
+  else
+    time=$(date +%H:%M)
+    if [  $# -eq 1 ]; then
+      sleep $1 && zenity --info --text "${time} to $(date +%H:%M):   \n\n$1" &
+    else
+      if [  $# -eq 2 ]; then
+        sleep $1 && zenity --info --text "${time} to $(date +%H:%M) ($1):   \n\n$2" &
+      fi
+    fi
+  fi
+}
+
+myclock() {
+  keypress=''
+  echo
+  while [ "x$keypress" = "x" ];do
+    printf "   " ; date; printf "\33[A";
+    #sleep 1;
+    read -t 1 -r -n1 keypress
+  done
+}
+
+# will show a list of all the currently loaded modules and all of their parameters
+# should be run as root
+my_mod_parameters () { 
+  N=/dev/null;
+  C=`tput op` O=$(echo -en "\n`tput setaf 2`>>> `tput op`");
+  for mod in $(cat /proc/modules|cut -d" " -f1);
+  do
+    md=/sys/module/$mod/parameters;
+    [[ ! -d $md ]] && continue;
+    m=$mod;
+    d=`modinfo -d $m 2>$N | tr "\n" "\t"`;
+    echo -en "$O$m$C";
+    [[ ${#d} -gt 0 ]] && echo -n " - $d";
+    echo;
+    for mc in $(cd $md; echo *);
+    do
+      de=`modinfo -p $mod 2>$N | grep ^$mc 2>$N|sed "s/^$mc=//" 2>$N`;
+      echo -en "\t$mc=`cat $md/$mc 2>$N`";
+      [[ ${#de} -gt 1 ]] && echo -en " - $de";
+      echo;
+    done;
+  done
+}
+
+function my_power_settings ()
+{ 
+  sudo bash -c '
+    for i in `find /sys/devices -name "bMaxPower"`;
+    do
+        for ii in `find $i -type f`;
+        do
+            bd=`dirname $ii`;
+            busnum=`cat $bd/busnum`;
+            devnum=`cat $bd/devnum`;
+            title=`lsusb -s $busnum:$devnum`;
+            echo -e "\n\n+++ $title\n  -$bd\n  -$ii";
+            for ff in `find $bd/power -type f ! -empty 2>/dev/null`;
+            do
+                v=`cat $ff 2>/dev/null|tr -d "\n"`;
+                [[ ${#v} -gt 0 ]] && echo -e " `basename $ff`=$v";
+                v=;
+            done | sort -g;
+        done;
+    done;
+    echo -e "\n\n\n+++ Kernel Modules\n";
+    for m in `command lspci -k|sed -n "/in use:/s,^.*: ,,p"|sort -u`;
+    do
+        echo "+ $m";
+        systool -v -m $m 2> /dev/null | sed -n "/Parameters:/,/^$/p";
+    done
+  ';
+}
+
+countLinesInConfig(){
+  wc -l ~/.vimrc
+  wc -l ~/.bashrc
+  wc -l ~/.aliasrc
+  wc -l ~/.xmonad/xmonad.hs
+  wc -l ~/.emacs
+  wc -l ~/.xinitrc
+  wc -l ~/.Xresources
+  #wc -l ~/.muttrc
+  #wc -l ~/.conkyrc
+  #wc -l ~/.keynavrc
+}
+
+#}}}
+# vim: set filetype=sh :
