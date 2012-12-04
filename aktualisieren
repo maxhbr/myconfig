@@ -10,6 +10,7 @@ cp ~/.bash_profile bash_profile
 cp ~/.emacs emacs
 cp ~/.vimencrypt vimencrypt
 cp ~/.Xresources Xresources
+cp ~/.tmux.conf tmux.conf
 
 mkdir -p etc
 cp /etc/zathurarc etc/zathurarc

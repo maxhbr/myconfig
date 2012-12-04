@@ -7,11 +7,15 @@ my Linux Configuration on Arch Linux
 ## Enviroment
 - xmonad
 - xmobar
+- systemd
 
 ## Applications
-- vim
 - urxvt
+- vim
+- ranger
+- tmux
 - zathura
 - sylpheed
+- ...
 
 <!--- vim: set ft=md : -->
