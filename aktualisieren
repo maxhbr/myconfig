@@ -11,3 +11,7 @@ cp ~/.emacs emacs
 cp ~/.vimencrypt vimencrypt
 cp ~/.Xresources Xresources
 cp /etc/zathurarc zathurarc
+
+git add .
+git commit -a -m "aktualisiert"
+git push
