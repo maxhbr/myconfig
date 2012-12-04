@@ -1,5 +1,6 @@
 #!/bin/bash
 
+echo "copy"
 cp ~/.bashrc bashrc
 cp ~/.aliasrc aliasrc
 cp ~/.xmonad/xmonad.hs ./
@@ -22,6 +23,8 @@ cp /etc/zathurarc etc/zathurarc
 #/etc/udev/rules.d/wifi_power_save.rules
 #/etc/sysctl.d/laptop_mode.conf
 #/etc/udev/rules.d/usb_power_save.rules
+
+echo "git"
 
 git add .
 git commit -a -m "aktualisiert"
