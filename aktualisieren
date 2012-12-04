@@ -10,7 +10,17 @@ cp ~/.bash_profile bash_profile
 cp ~/.emacs emacs
 cp ~/.vimencrypt vimencrypt
 cp ~/.Xresources Xresources
-cp /etc/zathurarc zathurarc
+
+mkdir -p etc
+cp /etc/zathurarc etc/zathurarc
+
+#/etc/modprobe.d/audio_power_save.conf
+#/etc/sysctl.d/disable_watchdog.conf
+#/etc/udev/rules.d/disable_wol.rules
+#/etc/udev/rules.d/pci_pm.rules
+#/etc/udev/rules.d/wifi_power_save.rules
+#/etc/sysctl.d/laptop_mode.conf
+#/etc/udev/rules.d/usb_power_save.rules
 
 git add .
 git commit -a -m "aktualisiert"
