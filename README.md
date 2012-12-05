@@ -18,4 +18,7 @@ my Linux Configuration on Arch Linux
 - sylpheed
 - ...
 
+## Multimedia
+- moc
+
 <!--- vim: set ft=md : -->
