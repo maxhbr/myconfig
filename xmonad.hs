@@ -1,5 +1,5 @@
 -- xmonad config file for xmobar, dmenu
--- Last modified: Mi Dez 05, 2012  02:38
+-- Last modified: Mi Dez 05, 2012  08:19
 
 import XMonad
 import Data.Monoid
@@ -33,8 +33,6 @@ import qualified Data.Map        as M
 -- The preferred terminal program
 --
 myTerminal = "urxvtc" -- -e tmux"
-scrTerminal = "urxvtc"
-{-scrTerminal = "urxvtc -e bash -c \"tmux -q has-session && exec tmux attach-session -d || exec tmux new-session -n$USER -s$USER@$HOSTNAME\""-}
 
 -- Whether focus follows the mouse pointer.
 myFocusFollowsMouse :: Bool
@@ -212,9 +210,9 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
         | (key, sc) <- zip [xK_w, xK_e, xK_r] [0..]
         , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
 
-     where
+     where 
 
-       scratchPad = scratchpadSpawnActionTerminal scrTerminal
+       scratchPad = scratchpadSpawnActionTerminal myTerminal 
 
 
 --}}}
@@ -321,8 +319,10 @@ myLogHook = dynamicLog
 --myStartupHook = return ()
 myStartupHook :: X ()
 myStartupHook = do
-    spawn "[ -n $(ps -A | grep -c unclutter) ] || unclutter &"
-    spawn "urxvtc -e bash -c \"tmux -q has-session && exec tmux attach-session -d || exec tmux new-session -n$USER -s$USER@$HOSTNAME\""
+    spawn "unclutter &"
+    --automatic start tmux:
+    -- spawn "urxvt -e bash -c \"tmux -q has-session && exec tmux attach-session -d || exec tmux new-session -n$USER -shome\""
+    -- spawn "tkremind" -- replaced bei calcurse??
 
 ------------------------------------------------------------------------
 --Status bar

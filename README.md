@@ -16,9 +16,11 @@ my Linux Configuration on Arch Linux
 - tmux
 - zathura
 - sylpheed
+- dwb
 - ...
 
 ## Multimedia
 - moc
+- geeqie
 
 <!--- vim: set ft=md : -->

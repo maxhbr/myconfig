@@ -119,7 +119,7 @@ e() {
 #for vim latex plugin:
 alias tvim="vim --servername texServer"
 
-#alias tmux="tmux -2"
+alias tmuxatt="tmux -q has-session && exec tmux attach-session -d || tmux"
 
 alias reboot="systemctl reboot"
 alias poweroff="systemctl poweroff"
@@ -222,12 +222,6 @@ alias yaourtupd="yaourt -Syu --aur"
 #-------------------------------------------------------------------}}}
 #   some advanced stuff
 #-------------------------------------------------------------------{{{
-
-alias dotbashrc="vim ~/.bashrc"
-alias dopvimrc="vim ~/.vimrc"
-alias dotxinitrc="vim ~/.xinitrc"
-alias dotxmonadhs="vim ~/.xmonad/xmonad.hs"
-alias dotrcconfig="sudo vim /etc/rc.conf"
 
 alias vime="vim -u ~/.vimencrypt -x "
 alias gvime="gvim -u ~/.vimencrypt -x "
