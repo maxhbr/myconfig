@@ -1,5 +1,5 @@
 -- xmonad config file for xmobar, dmenu
--- Last modified: Fr Nov 30, 2012  01:32
+-- Last modified: Mi Dez 05, 2012  02:38
 
 import XMonad
 import Data.Monoid
@@ -321,10 +321,8 @@ myLogHook = dynamicLog
 --myStartupHook = return ()
 myStartupHook :: X ()
 myStartupHook = do
-    spawn "unclutter &"
-    --automatic start tmux:
-    -- spawn "urxvt -e bash -c \"tmux -q has-session && exec tmux attach-session -d || exec tmux new-session -n$USER -shome\""
-    -- spawn "tkremind" -- replaced bei calcurse??
+    spawn "[ -n $(ps -A | grep -c unclutter) ] || unclutter &"
+    spawn "urxvtc -e bash -c \"tmux -q has-session && exec tmux attach-session -d || exec tmux new-session -n$USER -s$USER@$HOSTNAME\""
 
 ------------------------------------------------------------------------
 --Status bar
