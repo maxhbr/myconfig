@@ -1,5 +1,5 @@
 -- xmonad config file for xmobar, dmenu
--- Last modified: Mi Dez 05, 2012  08:19
+-- Last modified: Do Dez 06, 2012  08:26
 
 import XMonad
 import Data.Monoid
@@ -7,15 +7,16 @@ import System.Exit
 
 import XMonad.Prompt
 import XMonad.Prompt.Shell
---import XMonad.Prompt.Ssh
 
 import XMonad.Hooks.DynamicLog
 import XMonad.Hooks.UrgencyHook
+import XMonad.Hooks.ManageDocks
 import XMonad.Hooks.EwmhDesktops
 import XMonad.Hooks.ManageHelpers
 
 import XMonad.Util.EZConfig
 import XMonad.Util.Scratchpad
+import XMonad.Util.NamedScratchpad
 
 import XMonad.Actions.CycleWS
 import XMonad.Actions.GridSelect
@@ -25,8 +26,11 @@ import XMonad.Layout.NoBorders
 import XMonad.Layout.Tabbed
 import XMonad.Layout.Magnifier
 
+
 import qualified XMonad.StackSet as W
 import qualified Data.Map        as M
+
+import XMonad.ManageHook
 
 --import Graphics.X11.ExtraTypes.XF86
 
@@ -56,20 +60,25 @@ myWorkspaces    = ["1","2","3","4","5","6","mail","web","chat"]
 myNormalBorderColor  = "#333333"      -- #dddddd
 myFocusedBorderColor = "#dd0000"
 
+-- Scratchpad
+--
+scratchpads :: [NamedScratchpad]
+scratchpads = [ 
+        NS "scratchpad" "urxvt -name Scratchpad" (resource =? "Scratchpad")
+            (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5)) 
+        , NS "ScratchGvim" "gvim --role ScratchGvim" (role =? "ScratchGvim") nonFloating
+    ] where role = stringProperty "WM_WINDOW_ROLE"
+
 ------------------------------------------------------------------------
 -- Key bindings. Add, modify or remove key bindings here.
 --{{{
 myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
-
-    -- launch a terminal
     [ ((modm .|. shiftMask, xK_Return), spawn $ XMonad.terminal conf)
 
     , ((modm,               xK_p     ), spawn "dmenu_run")
     , ((modm,               xK_o     ), spawn "emelfm2")
     , ((modm,               xK_i     ), spawn "dwb")
     , ((modm .|. shiftMask, xK_p     ), spawn "gmrun")
-    , ((modm,               xK_g     ), spawn "gvim")
-    , ((modm .|. shiftMask, xK_g     ), spawn "gvim")
 
     -- close focused window
     , ((modm .|. shiftMask, xK_c     ), kill)
@@ -125,46 +134,31 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     -- Restart xmonad
     , ((modm            , xK_q    ), spawn "xmonad --recompile; xmonad --restart")
 
-    , ((modm .|. shiftMask, xK_F11),  spawn "sudo pm-suspend") --suspend
-    , ((modm .|. shiftMask, xK_F11),  spawn "sudo /sbin/reboot") --reboot
-    , ((modm .|. shiftMask, xK_F12),  spawn "sudo /sbin/shutdown -hP now") --shutdown
+    , ((modm .|. shiftMask, xK_F11),  spawn "systemctl suspend") --suspend
+    , ((modm .|. shiftMask, xK_F11),  spawn "systemctl reboot") --reboot
+    , ((modm .|. shiftMask, xK_F12),  spawn "systemctl poweroff") --shutdown
 
     -- toggle touchpad
-    --
     , ((0               , 0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
 
     -- screensaver
-    --
     , ((modm .|. shiftMask, xK_y), spawn "xbacklight -set 0; xscreensaver-command -lock")
 
     --invert Colors
     , ((modm            , xK_Home    ), spawn "xcalib -i -a")
 
     -- screenshot
-    --
     , ((0               , xK_Print) , spawn "scrot screen_%Y-%m-%d_%H-%M-%S.png -d 1")
 
-
-    , ((modm .|. shiftMask, xK_minus), scratchPad)
-
     --volume controls
-    --
     , ((0, 0x1008ff12)  , spawn "/home/hubi/bin/myvolume.sh m")
     , ((0, 0x1008ff11)  , spawn "/home/hubi/bin/myvolume.sh -")
     , ((0, 0x1008ff13)  , spawn "/home/hubi/bin/myvolume.sh +")
 
     -- alternative zu anderem starter
-    --
     , ((modm , xK_x), shellPrompt defaultXPConfig)
     --, ((modm , xK_x), sshPrompt defaultXPConfig)
 
-     -- start a program
---    , ((modm, xK_s), spawnSelected defaultGSConfig [
---                        "xdotool mousemove 0 0"
---                        , "sudo shutdown -hP now"
---                        , "sudo shutdown -r now"
---                        , "sudo pm-suspend"
---                        ])
      -- toggle mouse
     , ((modm,               xK_s) , spawn "/home/hubi/bin/togglemouse.sh silent off")
     , ((modm .|. shiftMask, xK_s) , spawn "/home/hubi/bin/togglemouse.sh")
@@ -173,7 +167,6 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. shiftMask, xK_d) , spawn "/home/hubi/bin/mydock.sh")
 
     -- CycleWS setup
-    --
     , ((modm,               xK_Down),  moveTo Next NonEmptyWS)
     , ((modm,               xK_Up),    moveTo Prev NonEmptyWS)
     , ((modm .|. shiftMask, xK_Down), shiftToNext >> nextWS)
@@ -184,37 +177,23 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. shiftMask, xK_Left),  shiftPrevScreen)
     , ((modm,               xK_y),     toggleWS)
 
-    -- for magnifier
-    --
-    {-, ((modm .|. controlMask              , xK_plus ), sendMessage MagnifyMore)-}
-    {-, ((modm .|. controlMask              , xK_minus), sendMessage MagnifyLess)-}
+    , ((modm .|. shiftMask, xK_minus), namedScratchpadAction scratchpads "scratchpad")
+    , ((modm,               xK_g), namedScratchpadAction scratchpads "ScratchGvim")
     ]
     ++
 
-    --
-    -- mod-[1..9], Switch to workspace N
-    --
     -- mod-[1..9], Switch to workspace N
     -- mod-shift-[1..9], Move client to workspace N
-    --
     [((m .|. modm, k), windows $ f i)
         | (i, k) <- zip (XMonad.workspaces conf) [xK_1 .. xK_9]
         , (f, m) <- [(W.greedyView, 0), (W.shift, shiftMask)]]
     ++
 
-    --
     -- mod-{w,e,r}, Switch to physical/Xinerama screens 1, 2, or 3
     -- mod-shift-{w,e,r}, Move client to screen 1, 2, or 3
-    --
     [((m .|. modm, key), screenWorkspace sc >>= flip whenJust (windows . f))
         | (key, sc) <- zip [xK_w, xK_e, xK_r] [0..]
         , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
-
-     where 
-
-       scratchPad = scratchpadSpawnActionTerminal myTerminal 
-
-
 --}}}
 ------------------------------------------------------------------------
 -- Mouse bindings: default actions bound to mouse events
@@ -238,17 +217,19 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 ------------------------------------------------------------------------
 -- Layouts:
 --{{{
-myLayout = smartBorders (tiled ||| magnifier (Tall 1 (3/100) (1/2)) ||| Full ||| simpleTabbedBottom)  -- Mirror tiled
+myLayout = avoidStruts  $ smartBorders 
+    (tiled 
+    ||| magnifier (Tall 1 (3/100) (1/2)) 
+    ||| Full 
+    ||| simpleTabbedBottom 
+    )  -- Mirror tiled
   where
     -- default tiling algorithm partitions the screen into two panes
     tiled   = Tall nmaster delta ratio
-
     -- The default number of windows in the master pane
     nmaster = 1
-
     -- Default proportion of screen occupied by master pane
     ratio   = 1/2
-
     -- Percent of screen to increment by when resizing panes
     delta   = 3/100
 --}}}
@@ -275,24 +256,9 @@ myManageHook = composeAll
     , className =? "Gimp"         --> doShift "4"
     , resource =? "Gimp"         --> doShift "4"
     , className =? "Virtualbox" --> doFullFloat
---    , resource  =? "apvlv"          --> doCenterFloat
---    , className =? "apvlv"          --> doCenterFloat
---    , resource  =? "zathura"          --> doCenterFloat
---    , className =? "zathura"          --> doCenterFloat
---    , resource  =? "mupdf"          --> doCenterFloat
---    , className =? "mupdf"          --> doCenterFloat
     , resource  =? "desktop_window" --> doIgnore
     , resource  =? "kdesktop"       --> doIgnore
-    , className =? "Zenity"          --> doCenterFloat] <+> manageScratchPad
-
--- then define your scratchpad management separately:
-manageScratchPad :: ManageHook
-manageScratchPad = scratchpadManageHook (W.RationalRect l t w h)
-  where
-    h = 0.6     -- terminal height, 30%
-    w = 0.8       -- terminal width, 80%
-    t = (1 - h)/2   -- distance from top edge, 70%
-    l = (1 - w)/2   -- distance from left edge, 0%
+    , className =? "Zenity"          --> doCenterFloat] <+> namedScratchpadManageHook scratchpads
 --}}}
 ------------------------------------------------------------------------
 -- Event handling
@@ -320,13 +286,9 @@ myLogHook = dynamicLog
 myStartupHook :: X ()
 myStartupHook = do
     spawn "unclutter &"
-    --automatic start tmux:
-    -- spawn "urxvt -e bash -c \"tmux -q has-session && exec tmux attach-session -d || exec tmux new-session -n$USER -shome\""
-    -- spawn "tkremind" -- replaced bei calcurse??
 
 ------------------------------------------------------------------------
 --Status bar
--- Command to launch the bar.
 myBar = "xmobar"
 
 -- Custom PP, configure it as you like. It determines what is being written to the bar.
@@ -341,7 +303,6 @@ toggleStrutsKey XConfig {XMonad.modMask = modMask} = (modMask, xK_b)
 main = xmonad =<< statusBar myBar myPP toggleStrutsKey defaults
 
 defaults = withUrgencyHook NoUrgencyHook $ defaultConfig {
-      -- simple stuff
         terminal           = myTerminal,
         focusFollowsMouse  = myFocusFollowsMouse,
         borderWidth        = myBorderWidth,
@@ -356,7 +317,8 @@ defaults = withUrgencyHook NoUrgencyHook $ defaultConfig {
 
       -- hooks, layouts
         layoutHook         = myLayout,
-        manageHook         = myManageHook,
+        manageHook = manageDocks <+> myManageHook
+            <+> manageHook defaultConfig,
         handleEventHook    = myEventHook,
         logHook            = myLogHook,
         startupHook        = myStartupHook
