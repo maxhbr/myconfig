@@ -1,9 +1,10 @@
 -- xmonad config file for xmobar, dmenu
--- Last modified: Do Dez 06, 2012  08:26
+-- Last modified: Do Dez 06, 2012  09:38
 
 import XMonad
 import Data.Monoid
 import System.Exit
+import System.IO
 
 import XMonad.Prompt
 import XMonad.Prompt.Shell
@@ -17,6 +18,7 @@ import XMonad.Hooks.ManageHelpers
 import XMonad.Util.EZConfig
 import XMonad.Util.Scratchpad
 import XMonad.Util.NamedScratchpad
+import XMonad.Util.Run(spawnPipe)
 
 import XMonad.Actions.CycleWS
 import XMonad.Actions.GridSelect
@@ -26,11 +28,11 @@ import XMonad.Layout.NoBorders
 import XMonad.Layout.Tabbed
 import XMonad.Layout.Magnifier
 
-
 import qualified XMonad.StackSet as W
 import qualified Data.Map        as M
 
 import XMonad.ManageHook
+
 
 --import Graphics.X11.ExtraTypes.XF86
 
@@ -63,9 +65,9 @@ myFocusedBorderColor = "#dd0000"
 -- Scratchpad
 --
 scratchpads :: [NamedScratchpad]
-scratchpads = [ 
+scratchpads = [
         NS "scratchpad" "urxvt -name Scratchpad" (resource =? "Scratchpad")
-            (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5)) 
+            (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
         , NS "ScratchGvim" "gvim --role ScratchGvim" (role =? "ScratchGvim") nonFloating
     ] where role = stringProperty "WM_WINDOW_ROLE"
 
@@ -130,6 +132,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
 
     -- Quit xmonad
     , ((modm .|. shiftMask, xK_q    ), io (exitWith ExitSuccess))
+
+     ,((modm, xK_b     ), sendMessage ToggleStruts)
 
     -- Restart xmonad
     , ((modm            , xK_q    ), spawn "xmonad --recompile; xmonad --restart")
@@ -217,11 +221,11 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 ------------------------------------------------------------------------
 -- Layouts:
 --{{{
-myLayout = avoidStruts  $ smartBorders 
-    (tiled 
-    ||| magnifier (Tall 1 (3/100) (1/2)) 
-    ||| Full 
-    ||| simpleTabbedBottom 
+myLayout = avoidStruts $ smartBorders
+    (tiled
+    ||| magnifier (Tall 1 (3/100) (1/2))
+    ||| Full
+    ||| simpleTabbedBottom
     )  -- Mirror tiled
   where
     -- default tiling algorithm partitions the screen into two panes
@@ -293,16 +297,25 @@ myBar = "xmobar"
 
 -- Custom PP, configure it as you like. It determines what is being written to the bar.
 -- myPP = xmobarPP { ppCurrent = xmobarColor "#429942" "" . wrap "<" ">" }
-myPP = xmobarPP { ppCurrent = xmobarColor "#ee9a00" "" . wrap "<" ">" }
+myPP = xmobarPP
+    { ppCurrent = xmobarColor "#ee9a00" "" . wrap "<" ">"
+    , ppSort = fmap (.namedScratchpadFilterOutWorkspace)
+               $ ppSort defaultPP
+    , ppTitle = (" " ++) . xmobarColor "#ee9a00" ""
+    , ppVisible = xmobarColor "#ee9a00" ""
+    }
 
 -- Key binding to toggle the gap for the bar.
 toggleStrutsKey XConfig {XMonad.modMask = modMask} = (modMask, xK_b)
 
 ------------------------------------------------------------------------
 -- Now run xmonad with all the defaults we set up.
-main = xmonad =<< statusBar myBar myPP toggleStrutsKey defaults
+{-main = xmonad =<< statusBar myBar myPP toggleStrutsKey defaults-}
+main = do
+    xmproc <- spawnPipe "xmobar /home/hubi/.xmobarrc"
+    xmonad $ myConfig xmproc
 
-defaults = withUrgencyHook NoUrgencyHook $ defaultConfig {
+myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
         terminal           = myTerminal,
         focusFollowsMouse  = myFocusFollowsMouse,
         borderWidth        = myBorderWidth,
@@ -316,10 +329,17 @@ defaults = withUrgencyHook NoUrgencyHook $ defaultConfig {
         mouseBindings      = myMouseBindings,
 
       -- hooks, layouts
-        layoutHook         = myLayout,
-        manageHook = manageDocks <+> myManageHook
+        manageHook = myManageHook <+> manageDocks
             <+> manageHook defaultConfig,
+        layoutHook         = myLayout,
         handleEventHook    = myEventHook,
-        logHook            = myLogHook,
+        logHook            = dynamicLogWithPP xmobarPP
+            { ppOutput = hPutStrLn xmproc
+                , ppCurrent = xmobarColor "#ee9a00" "" . wrap "<" ">"
+                , ppSort = fmap (.namedScratchpadFilterOutWorkspace)
+                           $ ppSort defaultPP
+                , ppTitle = (" " ++) . xmobarColor "#ee9a00" ""  
+                , ppVisible = xmobarColor "#ee9a00" ""
+            },
         startupHook        = myStartupHook
     }
