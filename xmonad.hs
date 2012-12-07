@@ -1,7 +1,8 @@
 -- xmonad config file for xmobar, dmenu
--- Last modified: Do Dez 06, 2012  09:38
+-- Last modified: Fr Dez 07, 2012  07:20
 
 import XMonad
+import XMonad.ManageHook
 import Data.Monoid
 import System.Exit
 import System.IO
@@ -16,12 +17,12 @@ import XMonad.Hooks.EwmhDesktops
 import XMonad.Hooks.ManageHelpers
 
 import XMonad.Util.EZConfig
-import XMonad.Util.Scratchpad
+--import XMonad.Util.Scratchpad
 import XMonad.Util.NamedScratchpad
 import XMonad.Util.Run(spawnPipe)
 
 import XMonad.Actions.CycleWS
-import XMonad.Actions.GridSelect
+--import XMonad.Actions.GridSelect
 --import XMonad.Actions.SpawnOn
 
 import XMonad.Layout.NoBorders
@@ -30,8 +31,6 @@ import XMonad.Layout.Magnifier
 
 import qualified XMonad.StackSet as W
 import qualified Data.Map        as M
-
-import XMonad.ManageHook
 
 
 --import Graphics.X11.ExtraTypes.XF86
@@ -290,23 +289,6 @@ myLogHook = dynamicLog
 myStartupHook :: X ()
 myStartupHook = do
     spawn "unclutter &"
-
-------------------------------------------------------------------------
---Status bar
-myBar = "xmobar"
-
--- Custom PP, configure it as you like. It determines what is being written to the bar.
--- myPP = xmobarPP { ppCurrent = xmobarColor "#429942" "" . wrap "<" ">" }
-myPP = xmobarPP
-    { ppCurrent = xmobarColor "#ee9a00" "" . wrap "<" ">"
-    , ppSort = fmap (.namedScratchpadFilterOutWorkspace)
-               $ ppSort defaultPP
-    , ppTitle = (" " ++) . xmobarColor "#ee9a00" ""
-    , ppVisible = xmobarColor "#ee9a00" ""
-    }
-
--- Key binding to toggle the gap for the bar.
-toggleStrutsKey XConfig {XMonad.modMask = modMask} = (modMask, xK_b)
 
 ------------------------------------------------------------------------
 -- Now run xmonad with all the defaults we set up.

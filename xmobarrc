@@ -9,13 +9,14 @@ Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
                     --, Run Memory ["-t","Mem: <usedratio>%"] 10
                     --, Run Swap [] 10
                     , Run Com "/home/hubi/bin/batteryrate.sh" [] "rate" 100
+                    , Run Network "eth0" ["-L","0","-H","32","--normal","green","--high","red"] 10
                     , Run Network "wlan0" ["-L","0","-H","32","--normal","green","--high","red"] 10
                     , Run Com "/home/hubi/bin/myinformation.sh" [] "info" 100
                     , Run Date "%a %d.%m.%Y %H:%M:%S" "date" 10
                     ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %StdinReader% }{%multicpu% @ %coreTemp% | %rate% | %wlan0% %info% | <fc=#ee9a00>%date%</fc>"
+       , template = " %StdinReader% }{%multicpu% @ %coreTemp% | %rate% | %eth0% %wlan0% %info% | <fc=#ee9a00>%date%</fc>"
        }
 
 -- vim: set ft=haskell :

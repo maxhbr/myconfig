@@ -5,8 +5,6 @@
 # Get back ctrl+alt+backspace in new versions of xorg
 # setxkbmap -option terminate:ctrl_alt_bksp
 
-#defekt
-#sudo tlp start &
 xsetroot -cursor_name left_ptr
 ## Disable beeps
 #xset -b & # doesnt work
