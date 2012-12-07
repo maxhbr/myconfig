@@ -117,9 +117,11 @@ e() {
 #-------------------------------------------------------------------{{{
 
 #for vim latex plugin:
-alias tvim="vim --servername texServer"
+#alias tvim="vim --servername texServer"
 
-alias tmuxatt="tmux -q has-session && exec tmux attach-session -d || tmux"
+#alias tmuxatt="tmux -q has-session && exec tmux attach-session -d || tmux"
+alias tmx="tmux attach-session || tmux"
+alias tvim="tmux new vim"
 
 alias reboot="systemctl reboot"
 alias poweroff="systemctl poweroff"

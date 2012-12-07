@@ -1,5 +1,5 @@
 -- xmonad config file for xmobar, dmenu
--- Last modified: Fr Dez 07, 2012  07:20
+-- Last modified: Fr Dez 07, 2012  04:00
 
 import XMonad
 import XMonad.ManageHook
@@ -54,21 +54,12 @@ myModMask = mod4Mask
 ------------------------------------------------------------
 -- The number of workspaces (virtual screens) and their names.
 --
-myWorkspaces    = ["1","2","3","4","5","6","mail","web","chat"]
+myWorkspaces = ["1","2","3","4","5","6","mail","web","chat"]
 
 -- Border colors for unfocused and focused windows, respectively.
 --
 myNormalBorderColor  = "#333333"      -- #dddddd
 myFocusedBorderColor = "#dd0000"
-
--- Scratchpad
---
-scratchpads :: [NamedScratchpad]
-scratchpads = [
-        NS "scratchpad" "urxvt -name Scratchpad" (resource =? "Scratchpad")
-            (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
-        , NS "ScratchGvim" "gvim --role ScratchGvim" (role =? "ScratchGvim") nonFloating
-    ] where role = stringProperty "WM_WINDOW_ROLE"
 
 ------------------------------------------------------------------------
 -- Key bindings. Add, modify or remove key bindings here.
@@ -94,19 +85,19 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,               xK_n     ), refresh)
 
     -- Move focus to the next window
-    , ((modm,           xK_Tab   ), windows W.focusDown)
+    , ((modm,               xK_Tab   ), windows W.focusDown)
 
     -- Move focus to the next window
-    , ((modm,           xK_j     ), windows W.focusDown)
+    , ((modm,               xK_j     ), windows W.focusDown)
 
     -- Move focus to the previous window
-    , ((modm,           xK_k     ), windows W.focusUp  )
+    , ((modm,               xK_k     ), windows W.focusUp  )
 
     -- Move focus to the master window
-    , ((modm,           xK_m     ), windows W.focusMaster  )
+    , ((modm,               xK_m     ), windows W.focusMaster  )
 
     -- Swap the focused window and the master window
-    , ((modm,           xK_Return), windows W.swapMaster)
+    , ((modm,               xK_Return), windows W.swapMaster)
 
     -- Swap the focused window with the next window
     , ((modm .|. shiftMask, xK_j     ), windows W.swapDown  )
@@ -115,86 +106,86 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. shiftMask, xK_k     ), windows W.swapUp    )
 
     -- Shrink the master area
-    , ((modm,             xK_h     ), sendMessage Shrink)
+    , ((modm,               xK_h     ), sendMessage Shrink)
 
     -- Expand the master area
-    , ((modm,             xK_l     ), sendMessage Expand)
+    , ((modm,               xK_l     ), sendMessage Expand)
 
     -- Push window back into tiling
     , ((modm,               xK_t     ), withFocused $ windows . W.sink)
 
     -- Increment the number of windows in the master area
-    , ((modm            , xK_comma ), sendMessage (IncMasterN 1))
+    , ((modm,               xK_comma ), sendMessage (IncMasterN 1))
 
     -- Deincrement the number of windows in the master area
-    , ((modm            , xK_period), sendMessage (IncMasterN (-1)))
+    , ((modm,               xK_period), sendMessage (IncMasterN (-1)))
 
     -- Quit xmonad
-    , ((modm .|. shiftMask, xK_q    ), io (exitWith ExitSuccess))
+    , ((modm .|. shiftMask, xK_q     ), io (exitWith ExitSuccess))
 
-     ,((modm, xK_b     ), sendMessage ToggleStruts)
+     ,((modm,               xK_b     ), sendMessage ToggleStruts)
 
     -- Restart xmonad
-    , ((modm            , xK_q    ), spawn "xmonad --recompile; xmonad --restart")
+    , ((modm,                xK_q    ), spawn "xmonad --recompile; xmonad --restart")
 
-    , ((modm .|. shiftMask, xK_F11),  spawn "systemctl suspend") --suspend
-    , ((modm .|. shiftMask, xK_F11),  spawn "systemctl reboot") --reboot
-    , ((modm .|. shiftMask, xK_F12),  spawn "systemctl poweroff") --shutdown
+    , ((modm .|. shiftMask,  xK_F11  ),  spawn "systemctl suspend") --suspend
+    , ((modm .|. shiftMask,  xK_F11  ),  spawn "systemctl reboot") --reboot
+    , ((modm .|. shiftMask,  xK_F12  ),  spawn "systemctl poweroff") --shutdown
 
     -- toggle touchpad
-    , ((0               , 0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
+    , ((0,                  0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
 
     -- screensaver
-    , ((modm .|. shiftMask, xK_y), spawn "xbacklight -set 0; xscreensaver-command -lock")
+    , ((modm .|. shiftMask,  xK_y    ), spawn "xbacklight -set 0; xscreensaver-command -lock")
 
     --invert Colors
-    , ((modm            , xK_Home    ), spawn "xcalib -i -a")
+    , ((modm,                xK_Home ), spawn "xcalib -i -a")
 
     -- screenshot
-    , ((0               , xK_Print) , spawn "scrot screen_%Y-%m-%d_%H-%M-%S.png -d 1")
+    , ((0,                   xK_Print), spawn "scrot screen_%Y-%m-%d_%H-%M-%S.png -d 1")
 
     --volume controls
-    , ((0, 0x1008ff12)  , spawn "/home/hubi/bin/myvolume.sh m")
-    , ((0, 0x1008ff11)  , spawn "/home/hubi/bin/myvolume.sh -")
-    , ((0, 0x1008ff13)  , spawn "/home/hubi/bin/myvolume.sh +")
+    , ((0,                  0x1008ff12), spawn "/home/hubi/bin/myvolume.sh m")
+    , ((0,                  0x1008ff11), spawn "/home/hubi/bin/myvolume.sh -")
+    , ((0,                  0x1008ff13), spawn "/home/hubi/bin/myvolume.sh +")
 
     -- alternative zu anderem starter
-    , ((modm , xK_x), shellPrompt defaultXPConfig)
+    , ((modm,                xK_x     ), shellPrompt defaultXPConfig)
     --, ((modm , xK_x), sshPrompt defaultXPConfig)
 
      -- toggle mouse
-    , ((modm,               xK_s) , spawn "/home/hubi/bin/togglemouse.sh silent off")
-    , ((modm .|. shiftMask, xK_s) , spawn "/home/hubi/bin/togglemouse.sh")
+    , ((modm,                xK_s     ), spawn "/home/hubi/bin/togglemouse.sh silent off")
+    , ((modm .|. shiftMask,  xK_s     ), spawn "/home/hubi/bin/togglemouse.sh")
 
     -- check for dock, set up desktop
     , ((modm .|. shiftMask, xK_d) , spawn "/home/hubi/bin/mydock.sh")
 
     -- CycleWS setup
-    , ((modm,               xK_Down),  moveTo Next NonEmptyWS)
-    , ((modm,               xK_Up),    moveTo Prev NonEmptyWS)
-    , ((modm .|. shiftMask, xK_Down), shiftToNext >> nextWS)
-    , ((modm .|. shiftMask, xK_Up),   shiftToPrev >> prevWS)
-    , ((modm,               xK_Right), nextScreen)
-    , ((modm,               xK_Left),  prevScreen)
-    , ((modm .|. shiftMask, xK_Right), shiftNextScreen)
-    , ((modm .|. shiftMask, xK_Left),  shiftPrevScreen)
-    , ((modm,               xK_y),     toggleWS)
+    , ((modm,                xK_Down  ), moveTo Next NonEmptyWS)
+    , ((modm,                xK_Up    ), moveTo Prev NonEmptyWS)
+    , ((modm .|. shiftMask,  xK_Down  ), shiftToNext >> nextWS)
+    , ((modm .|. shiftMask,  xK_Up    ), shiftToPrev >> prevWS)
+    , ((modm,                xK_Right ), nextScreen)
+    , ((modm,                xK_Left  ), prevScreen)
+    , ((modm .|. shiftMask,  xK_Right ), shiftNextScreen)
+    , ((modm .|. shiftMask,  xK_Left  ), shiftPrevScreen)
+    , ((modm,                xK_y     ), toggleWS)
 
-    , ((modm .|. shiftMask, xK_minus), namedScratchpadAction scratchpads "scratchpad")
-    , ((modm,               xK_g), namedScratchpadAction scratchpads "ScratchGvim")
+    , ((modm .|. shiftMask,  xK_minus ), namedScratchpadAction scratchpads "scratchpad")
+    , ((modm,                xK_g     ), namedScratchpadAction scratchpads "ScratchGvim")
     ]
     ++
 
     -- mod-[1..9], Switch to workspace N
     -- mod-shift-[1..9], Move client to workspace N
-    [((m .|. modm, k), windows $ f i)
+    [((m .|. modm,           k        ), windows $ f i)
         | (i, k) <- zip (XMonad.workspaces conf) [xK_1 .. xK_9]
         , (f, m) <- [(W.greedyView, 0), (W.shift, shiftMask)]]
     ++
 
     -- mod-{w,e,r}, Switch to physical/Xinerama screens 1, 2, or 3
     -- mod-shift-{w,e,r}, Move client to screen 1, 2, or 3
-    [((m .|. modm, key), screenWorkspace sc >>= flip whenJust (windows . f))
+    [((m .|. modm,a           key     ), screenWorkspace sc >>= flip whenJust (windows . f))
         | (key, sc) <- zip [xK_w, xK_e, xK_r] [0..]
         , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
 --}}}
@@ -254,14 +245,23 @@ myLayout = avoidStruts $ smartBorders
 myManageHook = composeAll
     [ className =? "MPlayer"        --> doFloat
     , className =? "Pidgin"         --> doShift "chat"
-    , className =? "Chromium"         --> doShift "web"
-    , className =? "Sylpheed"         --> doShift "mail"
-    , className =? "Gimp"         --> doShift "4"
-    , resource =? "Gimp"         --> doShift "4"
-    , className =? "Virtualbox" --> doFullFloat
+    , className =? "Chromium"       --> doShift "web"
+    , className =? "Sylpheed"       --> doShift "mail"
+    , className =? "Gimp"           --> doShift "4"
+    , resource =? "Gimp"            --> doShift "4"
+    , className =? "Virtualbox"     --> doFullFloat
     , resource  =? "desktop_window" --> doIgnore
     , resource  =? "kdesktop"       --> doIgnore
-    , className =? "Zenity"          --> doCenterFloat] <+> namedScratchpadManageHook scratchpads
+    , className =? "Zenity"         --> doCenterFloat] <+> namedScratchpadManageHook scratchpads
+
+-- Scratchpads
+--
+scratchpads :: [NamedScratchpad]
+scratchpads = [
+        NS "scratchpad" "urxvt -name Scratchpad" (resource =? "Scratchpad")
+            (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
+        , NS "ScratchGvim" "gvim --role ScratchGvim" (role =? "ScratchGvim") nonFloating
+    ] where role = stringProperty "WM_WINDOW_ROLE"
 --}}}
 ------------------------------------------------------------------------
 -- Event handling
