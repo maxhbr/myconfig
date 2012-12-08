@@ -1,5 +1,5 @@
 -- xmonad config file for xmobar, dmenu
--- Last modified: Fr Dez 07, 2012  04:00
+-- Last modified: Sa Dez 08, 2012  09:57
 
 import XMonad
 import XMonad.ManageHook
@@ -31,7 +31,6 @@ import XMonad.Layout.Magnifier
 
 import qualified XMonad.StackSet as W
 import qualified Data.Map        as M
-
 
 --import Graphics.X11.ExtraTypes.XF86
 
@@ -145,17 +144,17 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((0,                   xK_Print), spawn "scrot screen_%Y-%m-%d_%H-%M-%S.png -d 1")
 
     --volume controls
-    , ((0,                  0x1008ff12), spawn "/home/hubi/bin/myvolume.sh m")
-    , ((0,                  0x1008ff11), spawn "/home/hubi/bin/myvolume.sh -")
-    , ((0,                  0x1008ff13), spawn "/home/hubi/bin/myvolume.sh +")
+    , ((0,                  0x1008ff12), spawn "/home/hubi/.xmonad/myvolume.sh m")
+    , ((0,                  0x1008ff11), spawn "/home/hubi/.xmonad/myvolume.sh -")
+    , ((0,                  0x1008ff13), spawn "/home/hubi/.xmonad/myvolume.sh +")
 
     -- alternative zu anderem starter
     , ((modm,                xK_x     ), shellPrompt defaultXPConfig)
     --, ((modm , xK_x), sshPrompt defaultXPConfig)
 
      -- toggle mouse
-    , ((modm,                xK_s     ), spawn "/home/hubi/bin/togglemouse.sh silent off")
-    , ((modm .|. shiftMask,  xK_s     ), spawn "/home/hubi/bin/togglemouse.sh")
+    , ((modm,                xK_s     ), spawn "/home/hubi/.xmonad/togglemouse.sh silent off")
+    , ((modm .|. shiftMask,  xK_s     ), spawn "/home/hubi/.xmonad/togglemouse.sh")
 
     -- check for dock, set up desktop
     , ((modm .|. shiftMask, xK_d) , spawn "/home/hubi/bin/mydock.sh")
@@ -185,7 +184,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
 
     -- mod-{w,e,r}, Switch to physical/Xinerama screens 1, 2, or 3
     -- mod-shift-{w,e,r}, Move client to screen 1, 2, or 3
-    [((m .|. modm,a           key     ), screenWorkspace sc >>= flip whenJust (windows . f))
+    [((m .|. modm,           key      ), screenWorkspace sc >>= flip whenJust (windows . f))
         | (key, sc) <- zip [xK_w, xK_e, xK_r] [0..]
         , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
 --}}}
@@ -294,7 +293,7 @@ myStartupHook = do
 -- Now run xmonad with all the defaults we set up.
 {-main = xmonad =<< statusBar myBar myPP toggleStrutsKey defaults-}
 main = do
-    xmproc <- spawnPipe "xmobar /home/hubi/.xmobarrc"
+    xmproc <- spawnPipe "xmobar /home/hubi/.xmonad/xmobarrc"
     xmonad $ myConfig xmproc
 
 myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
