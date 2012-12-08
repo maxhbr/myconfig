@@ -4,7 +4,7 @@ echo "copy"
 cp ~/.bashrc bashrc
 cp ~/.aliasrc aliasrc
 cp ~/.xmonad/xmonad.hs ./
-cp ~/.xmobarrc xmobarrc
+cp ~/.xmonad/xmobarrc ./
 cp ~/.vimrc vimrc
 cp ~/.xinitrc xinitrc
 cp ~/.bash_profile bash_profile
