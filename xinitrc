@@ -6,6 +6,9 @@
 # setxkbmap -option terminate:ctrl_alt_bksp
 
 xsetroot -cursor_name left_ptr
+
+#transparency
+xcompmgr -n &
 ## Disable beeps
 #xset -b & # doesnt work
 xset dpms 300 600 900 & # screen saver replacement

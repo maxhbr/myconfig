@@ -1,5 +1,5 @@
 -- xmonad config file for xmobar, dmenu
--- Last modified: Sa Dez 08, 2012  09:57
+-- Last modified: Sa Dez 08, 2012  05:18
 
 import XMonad
 import XMonad.ManageHook
@@ -28,6 +28,9 @@ import XMonad.Actions.CycleWS
 import XMonad.Layout.NoBorders
 import XMonad.Layout.Tabbed
 import XMonad.Layout.Magnifier
+import XMonad.Layout.Named
+import XMonad.Layout.LayoutHints
+import XMonad.Layout.ResizableTile
 
 import qualified XMonad.StackSet as W
 import qualified Data.Map        as M
@@ -104,11 +107,11 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     -- Swap the focused window with the previous window
     , ((modm .|. shiftMask, xK_k     ), windows W.swapUp    )
 
-    -- Shrink the master area
+    -- Shrink and Expand
     , ((modm,               xK_h     ), sendMessage Shrink)
-
-    -- Expand the master area
     , ((modm,               xK_l     ), sendMessage Expand)
+    , ((modm .|. shiftMask, xK_h     ), sendMessage MirrorShrink)
+    , ((modm .|. shiftMask, xK_l     ), sendMessage MirrorExpand)
 
     -- Push window back into tiling
     , ((modm,               xK_t     ), withFocused $ windows . W.sink)
@@ -212,19 +215,31 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 --{{{
 myLayout = avoidStruts $ smartBorders
     (tiled
-    ||| magnifier (Tall 1 (3/100) (1/2))
-    ||| Full
-    ||| simpleTabbedBottom
+    ||| mag
+    ||| full
+    ||| stb
     )  -- Mirror tiled
   where
-    -- default tiling algorithm partitions the screen into two panes
-    tiled   = Tall nmaster delta ratio
-    -- The default number of windows in the master pane
+    --tiled   = named "tiled" $ Tall  nmaster delta ratio
+    tiled   = named " " $ ResizableTall nmaster delta ratio []
     nmaster = 1
-    -- Default proportion of screen occupied by master pane
     ratio   = 1/2
-    -- Percent of screen to increment by when resizing panes
     delta   = 3/100
+    mag     = named "zoom" $ magnifier (Tall 1 (3/100) (1/2))
+    full    = named "full" $ Full
+    --stb     = named "tabs" $ simpleTabbedBottom
+    stb     = named "tabs" $ tabbedBottom shrinkText myTab
+
+myTab = defaultTheme
+    { activeColor         = "black"
+    , inactiveColor       = "black"
+    , urgentColor         = "yellow"
+    , activeBorderColor   = "orange"
+    , inactiveBorderColor = "#333333"
+    , urgentBorderColor   = "black"
+    , activeTextColor     = "orange"
+    , inactiveTextColor   = "#666666"
+    , urgentTextColor     = "yellow" }
 --}}}
 ------------------------------------------------------------------------
 -- Window rules:
@@ -287,7 +302,8 @@ myLogHook = dynamicLog
 --myStartupHook = return ()
 myStartupHook :: X ()
 myStartupHook = do
-    spawn "unclutter &"
+    spawn "/home/hubi/.xmonad/mystartup.sh"
+    --spawn "unclutter &"
 
 ------------------------------------------------------------------------
 -- Now run xmonad with all the defaults we set up.
@@ -319,7 +335,7 @@ myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
                 , ppCurrent = xmobarColor "#ee9a00" "" . wrap "<" ">"
                 , ppSort = fmap (.namedScratchpadFilterOutWorkspace)
                            $ ppSort defaultPP
-                , ppTitle = (" " ++) . xmobarColor "#ee9a00" ""  
+                , ppTitle = (" " ++) . xmobarColor "#ee9a00" ""
                 , ppVisible = xmobarColor "#ee9a00" ""
             },
         startupHook        = myStartupHook
