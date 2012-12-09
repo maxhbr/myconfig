@@ -24,7 +24,9 @@ cp /etc/zathurarc etc/zathurarc
 #/etc/sysctl.d/laptop_mode.conf
 #/etc/udev/rules.d/usb_power_save.rules
 
+echo
 echo "git"
+echo
 
 git add .
 git commit -a -m "aktualisiert"
