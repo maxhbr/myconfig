@@ -1,5 +1,5 @@
 -- xmonad config file for xmobar, dmenu
--- Last modified: Sa Dez 08, 2012  05:18
+-- Last modified: So Dez 09, 2012  03:05
 
 import XMonad
 import XMonad.ManageHook
@@ -229,17 +229,16 @@ myLayout = avoidStruts $ smartBorders
     full    = named "full" $ Full
     --stb     = named "tabs" $ simpleTabbedBottom
     stb     = named "tabs" $ tabbedBottom shrinkText myTab
-
-myTab = defaultTheme
-    { activeColor         = "black"
-    , inactiveColor       = "black"
-    , urgentColor         = "yellow"
-    , activeBorderColor   = "orange"
-    , inactiveBorderColor = "#333333"
-    , urgentBorderColor   = "black"
-    , activeTextColor     = "orange"
-    , inactiveTextColor   = "#666666"
-    , urgentTextColor     = "yellow" }
+    myTab   = defaultTheme
+        { activeColor         = "black"
+        , inactiveColor       = "black"
+        , urgentColor         = "yellow"
+        , activeBorderColor   = "orange"
+        , inactiveBorderColor = "#333333"
+        , urgentBorderColor   = "black"
+        , activeTextColor     = "orange"
+        , inactiveTextColor   = "#666666"
+        , urgentTextColor     = "yellow" }
 --}}}
 ------------------------------------------------------------------------
 -- Window rules:
@@ -262,7 +261,7 @@ myManageHook = composeAll
     , className =? "Chromium"       --> doShift "web"
     , className =? "Sylpheed"       --> doShift "mail"
     , className =? "Gimp"           --> doShift "4"
-    , resource =? "Gimp"            --> doShift "4"
+    , resource  =? "Gimp"           --> doShift "4"
     , className =? "Virtualbox"     --> doFullFloat
     , resource  =? "desktop_window" --> doIgnore
     , resource  =? "kdesktop"       --> doIgnore

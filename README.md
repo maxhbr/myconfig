@@ -21,6 +21,10 @@ my Linux Configuration on Arch Linux
 
 ## Multimedia
 - moc
+
+## Image Prozessing
 - geeqie
+- rawtherapee
+- gimp
 
 <!--- vim: set ft=md : -->
