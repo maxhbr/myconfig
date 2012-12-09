@@ -1,5 +1,5 @@
 -- xmonad config file for xmobar, dmenu
--- Last modified: So Dez 09, 2012  03:05
+-- Last modified: So Dez 09, 2012  09:12
 
 import XMonad
 import XMonad.ManageHook
@@ -25,7 +25,7 @@ import XMonad.Actions.CycleWS
 --import XMonad.Actions.GridSelect
 --import XMonad.Actions.SpawnOn
 
-import XMonad.Layout.NoBorders
+import XMonad.Layout.NoBorders (smartBorders, noBorders)
 import XMonad.Layout.Tabbed
 import XMonad.Layout.Magnifier
 import XMonad.Layout.Named
@@ -173,6 +173,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. shiftMask,  xK_Left  ), shiftPrevScreen)
     , ((modm,                xK_y     ), toggleWS)
 
+    -- Scratchpads
     , ((modm .|. shiftMask,  xK_minus ), namedScratchpadAction scratchpads "scratchpad")
     , ((modm,                xK_g     ), namedScratchpadAction scratchpads "ScratchGvim")
     ]
@@ -226,7 +227,7 @@ myLayout = avoidStruts $ smartBorders
     ratio   = 1/2
     delta   = 3/100
     mag     = named "zoom" $ magnifier (Tall 1 (3/100) (1/2))
-    full    = named "full" $ Full
+    full    = named "full" $ noBorders Full
     --stb     = named "tabs" $ simpleTabbedBottom
     stb     = named "tabs" $ tabbedBottom shrinkText myTab
     myTab   = defaultTheme

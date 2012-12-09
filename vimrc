@@ -1,5 +1,5 @@
 " Written by Maximilian-Huber.de
-" Last modified: Do Nov 22, 2012  09:14
+" Last modified: So Dez 09, 2012  04:34
 
 "tipps / Keybindings                                                 {{{
 " write as root: :w !sudo tee % > /dev/null
@@ -501,6 +501,7 @@ augroup vimrc_autocmds
   " in makefiles, don't expand tabs to spaces
   autocmd FileType matlab call SetMatlabFile()
   autocmd FileType make set noexpandtab shiftwidth=8
+  autocmd FileType log setlocal autoread
 augroup END
 
 augroup Shebang
