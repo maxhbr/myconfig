@@ -1,5 +1,5 @@
 " Written by Maximilian-Huber.de
-" Last modified: So Dez 09, 2012  04:34
+" Last modified: Mo Dez 10, 2012  08:38
 
 "tipps / Keybindings                                                 {{{
 " write as root: :w !sudo tee % > /dev/null
@@ -47,6 +47,9 @@ if exists("g:did_myvimrc")
   "finish
 endif
 let g:did_myvimrc = 1
+
+" auto reload when saving
+autocmd! bufwritepost .vimrc source %
 
 runtime! archlinux.vim
 
@@ -226,9 +229,10 @@ endif
 "highlight OverLength ctermbg=red ctermfg=white guibg=#592929
 "match OverLength /\%81v.\+/
 
-"if exists('+colorcolumn')
-"set colorcolumn=80
-"endif
+if exists('+colorcolumn')
+    set colorcolumn=80
+    highlight ColorColumn ctermbg=233
+endif
 "                                                                    }}}
 " ====  Status hilighting  =========================================={{{
 function! InsertStatuslineColor(mode)
@@ -323,8 +327,8 @@ vnoremap < <gv
 vnoremap > >gv
 
 " Use Q for formatting the current paragraph (or selection)
-"vmap Q gq
-"nmap Q gqap
+vmap <leader>Q gq
+nmap <leader>Q gqap
 
 " http://vim.wikia.com/wiki/Avoid_the_escape_key
 " Press i to enter insert mode, and kj to exit.
@@ -367,10 +371,10 @@ inoremap <expr> <Tab>     pumvisible() ? "\<C-y>" : "\<Tab>"
 inoremap <expr> <CR>      pumvisible() ? "\<C-e><CR>" : "\<CR>"
 
 " force vim keys
-"map <up> <nop>
-"map <down> <nop>
-"map <left> <nop>
-"map <right> <nop>
+map <up> <nop>
+map <down> <nop>
+map <left> <nop>
+map <right> <nop>
 "
 "inoremap  <Up> ""
 "noremap! <Up> <Esc><Up>
@@ -561,6 +565,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "testing
   "Bundle 'Indent-Guides'
   Bundle 'git://github.com/djoshea/vim-matlab-fold.git'
+  Bundle 'git://github.com/Lokaltog/vim-powerline.git'
 
   " not used Bundles                                                   {{{
   "Bundle 'Solarized'
