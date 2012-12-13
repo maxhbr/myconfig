@@ -1,5 +1,8 @@
 " Written by Maximilian-Huber.de
-" Last modified: Mo Dez 10, 2012  08:38
+" Last modified: Do Dez 13, 2012  12:48
+"
+" this config will automatically download Vundle from git, and then it will
+" install all plugins
 
 "tipps / Keybindings                                                 {{{
 " write as root: :w !sudo tee % > /dev/null
@@ -42,11 +45,11 @@
 "   ]<down> -- Jump to next line with the same/lower indentation
 "                                                                    }}}
 
-" Only run the script once
-if exists("g:did_myvimrc")
+" prevents from loading config to offten
+"if exists("g:did_myvimrc")
   "finish
-endif
-let g:did_myvimrc = 1
+"endif
+"let g:did_myvimrc = 1
 
 " auto reload when saving
 autocmd! bufwritepost .vimrc source %
@@ -72,6 +75,9 @@ if has("autocmd")
 
   " jump to the last position when reopening a file
   au BufReadPost * if line("'\"") > 1 && line("'\"") <= line("$") | exe "normal! g'\"" | endif
+
+  " resize splits
+  au VimResized * exe "normal! \<c-w>="
 
   "save folding (shouldnt run every time)
   "au BufWinLeave * mkview
@@ -149,15 +155,13 @@ set history=1000
 set undolevels=1000
 
 " Keep undo history across sessions, by storing in file.
-" Only works all the time.
-
 silent !mkdir ~/.vim/backups > /dev/null 2>&1
 set undodir=~/.vim/backups
 set undofile
 
 " swap
 set swapfile
-set dir=~/tmp
+set dir=/tmp " tmpfs
 
 " no backup!
 set nobackup
@@ -197,8 +201,9 @@ if has("gui_running")
   set guioptions+=c
 
   " show focus lost"
-  au FocusLost * : hi StatusLine gui=undercurl
-  au FocusGained * : hi StatusLine gui=bold,reverse
+  " replaced by powerline
+  "au FocusLost * : hi StatusLine gui=undercurl
+  "au FocusGained * : hi StatusLine gui=bold,reverse
 
   let g:indent_guides_auto_colors = 0
   "autocmd VimEnter,Colorscheme * :hi IndentGuidesOdd  guibg=darkgrey   ctermbg=3
@@ -208,8 +213,9 @@ else
   set t_Co=256
   set background=dark
 
-  hi IndentGuidesEven ctermbg=darkgrey
-  hi IndentGuidesOdd  ctermbg=black
+  " replaced by powerline
+  "hi IndentGuidesEven ctermbg=darkgrey
+  "hi IndentGuidesOdd  ctermbg=black
 
   "if &term =~ "xterm"
   "elseif &term =~ "urxvt"
@@ -235,20 +241,21 @@ if exists('+colorcolumn')
 endif
 "                                                                    }}}
 " ====  Status hilighting  =========================================={{{
-function! InsertStatuslineColor(mode)
-  if a:mode == 'i'
-    "hi statusline guibg=red
-    hi StatusLine term=reverse ctermbg=5 gui=undercurl guisp=red guibg=red
-  elseif a:mode == 'r'
-    "hi statusline guibg=magenta
-    hi StatusLine term=reverse ctermbg=5 gui=undercurl guisp=magenta guibg=magenta
-  else
-    "hi statusline guibg=blue
-    hi StatusLine term=reverse ctermbg=5 gui=undercurl guisp=blue guibg=blue
-  endif
-endfunction
-au InsertEnter * call InsertStatuslineColor(v:insertmode)
-au InsertLeave * hi StatusLine term=reverse ctermfg=0 ctermbg=2 gui=bold,reverse
+" replaced by powerline
+"function! InsertStatuslineColor(mode)
+  "if a:mode == 'i'
+    ""hi statusline guibg=red
+    "hi StatusLine term=reverse ctermbg=5 gui=undercurl guisp=red guibg=red
+  "elseif a:mode == 'r'
+    ""hi statusline guibg=magenta
+    "hi StatusLine term=reverse ctermbg=5 gui=undercurl guisp=magenta guibg=magenta
+  "else
+    ""hi statusline guibg=blue
+    "hi StatusLine term=reverse ctermbg=5 gui=undercurl guisp=blue guibg=blue
+  "endif
+"endfunction
+"au InsertEnter * call InsertStatuslineColor(v:insertmode)
+"au InsertLeave * hi StatusLine term=reverse ctermfg=0 ctermbg=2 gui=bold,reverse
 "                                                                    }}}
 "                                                                    }}}
 " ===================================================================}}}
@@ -371,22 +378,24 @@ inoremap <expr> <Tab>     pumvisible() ? "\<C-y>" : "\<Tab>"
 inoremap <expr> <CR>      pumvisible() ? "\<C-e><CR>" : "\<CR>"
 
 " force vim keys
-map <up> <nop>
-map <down> <nop>
-map <left> <nop>
-map <right> <nop>
-"
-"inoremap  <Up> ""
-"noremap! <Up> <Esc><Up>
-"inoremap  <Down> ""
-"noremap! <Down> <Esc><Down>
-"inoremap  <Left> ""
-"noremap! <Left> <Esc><Left>
-"inoremap  <Right> ""
-"Vnoremap! <Right> <Esc><Right>
+"map <up> <nop>
+"map <down> <nop>
+"map <left> <nop>
+"map <right> <nop>
+nnoremap <up> <nop>
+nnoremap <down> <nop>
+nnoremap <left> <nop>
+nnoremap <right> <nop>
 
 "Markdown to HTML
 nmap <leader>md :%!/home/hubi/bin/Markdown.pl --html4tags <cr>
+
+"easyer increment/decrement
+"nnoremap + <C-a>
+"nnoremap - <C-x>
+
+"Open last/alternate buffer
+noremap <Leader><Leader> <C-^>
 
 " ===================================================================}}}
 " ====  Filetype specific  ==========================================
@@ -561,11 +570,12 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'AutoComplPop'
   Bundle 'vimwiki'
   Bundle 'git://github.com/nathanaelkane/vim-indent-guides.git'
+  Bundle 'git://github.com/Lokaltog/vim-powerline.git'
 
   "testing
   "Bundle 'Indent-Guides'
   Bundle 'git://github.com/djoshea/vim-matlab-fold.git'
-  Bundle 'git://github.com/Lokaltog/vim-powerline.git'
+  "Bundle 'SuperTab'
 
   " not used Bundles                                                   {{{
   "Bundle 'Solarized'
@@ -581,7 +591,6 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "Bundle 'hexman.vim'
   "Bundle 'AutomaticLaTexPlugin'
   "Bundle 'SudoEdit.vim'
-  "Bundle 'SuperTab'
   "Bundle 'Tabular'
   "Bundle 'ProtoDef'
   "Bundle 'minibufexpl.vim'

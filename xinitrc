@@ -7,6 +7,9 @@
 
 xsetroot -cursor_name left_ptr
 
+# set caps lock as ctrl
+setxkbmap -option ctrl:nocaps
+
 #transparency
 xcompmgr -n &
 ## Disable beeps

@@ -1,5 +1,5 @@
 -- xmonad config file for xmobar, dmenu
--- Last modified: So Dez 09, 2012  09:12
+-- Last modified: Di Dez 11, 2012  10:15
 
 import XMonad
 import XMonad.ManageHook
@@ -302,7 +302,8 @@ myLogHook = dynamicLog
 --myStartupHook = return ()
 myStartupHook :: X ()
 myStartupHook = do
-    spawn "/home/hubi/.xmonad/mystartup.sh"
+    spawn "[ -n $(ps -A | grep -c unclutter) ] || unclutter &"
+    --spawn "/home/hubi/.xmonad/mystartup.sh"
     --spawn "unclutter &"
 
 ------------------------------------------------------------------------
