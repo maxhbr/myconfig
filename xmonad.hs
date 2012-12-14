@@ -1,5 +1,5 @@
 -- xmonad config file for xmobar, dmenu
--- Last modified: Di Dez 11, 2012  10:15
+-- Last modified: Fr Dez 14, 2012  05:54
 
 import XMonad
 import XMonad.ManageHook
@@ -11,35 +11,33 @@ import XMonad.Prompt
 import XMonad.Prompt.Shell
 
 import XMonad.Hooks.DynamicLog
-import XMonad.Hooks.UrgencyHook
-import XMonad.Hooks.ManageDocks
 import XMonad.Hooks.EwmhDesktops
+import XMonad.Hooks.ManageDocks
 import XMonad.Hooks.ManageHelpers
+import XMonad.Hooks.UrgencyHook
 
-import XMonad.Util.EZConfig
 --import XMonad.Util.Scratchpad
+import XMonad.Util.EZConfig
 import XMonad.Util.NamedScratchpad
 import XMonad.Util.Run(spawnPipe)
 
-import XMonad.Actions.CycleWS
 --import XMonad.Actions.GridSelect
 --import XMonad.Actions.SpawnOn
+import XMonad.Actions.CycleWS
 
-import XMonad.Layout.NoBorders (smartBorders, noBorders)
-import XMonad.Layout.Tabbed
+import XMonad.Layout.LayoutHints
 import XMonad.Layout.Magnifier
 import XMonad.Layout.Named
-import XMonad.Layout.LayoutHints
+import XMonad.Layout.NoBorders (smartBorders, noBorders)
 import XMonad.Layout.ResizableTile
+import XMonad.Layout.Tabbed
 
-import qualified XMonad.StackSet as W
 import qualified Data.Map        as M
+import qualified XMonad.StackSet as W
 
 --import Graphics.X11.ExtraTypes.XF86
 
--- The preferred terminal program
---
-myTerminal = "urxvtc" -- -e tmux"
+myTerminal = "urxvtc"
 
 -- Whether focus follows the mouse pointer.
 myFocusFollowsMouse :: Bool
@@ -71,7 +69,9 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
 
     , ((modm,               xK_p     ), spawn "dmenu_run")
     , ((modm,               xK_o     ), spawn "emelfm2")
-    , ((modm,               xK_i     ), spawn "dwb")
+    --, ((modm,               xK_i     ), spawn "dwb")
+    , ((modm,               xK_i     ), namedScratchpadAction scratchpads "ScratchWeb")
+    --, ((modm .|. shiftMask, xK_i     ), namedScratchpadAction scratchpads "ScratchMail")
     , ((modm .|. shiftMask, xK_p     ), spawn "gmrun")
 
     -- close focused window
@@ -266,7 +266,8 @@ myManageHook = composeAll
     , className =? "Virtualbox"     --> doFullFloat
     , resource  =? "desktop_window" --> doIgnore
     , resource  =? "kdesktop"       --> doIgnore
-    , className =? "Zenity"         --> doCenterFloat] <+> namedScratchpadManageHook scratchpads
+    , className =? "Zenity"         --> doCenterFloat] 
+        <+> namedScratchpadManageHook scratchpads
 
 -- Scratchpads
 --
@@ -274,7 +275,13 @@ scratchpads :: [NamedScratchpad]
 scratchpads = [
         NS "scratchpad" "urxvt -name Scratchpad" (resource =? "Scratchpad")
             (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
-        , NS "ScratchGvim" "gvim --role ScratchGvim" (role =? "ScratchGvim") nonFloating
+        , NS "ScratchGvim" "gvim --role ScratchGvim" (role =? "ScratchGvim") 
+            nonFloating
+        --, NS "ScratchWeb" "Chromium" (className =? "Chromium") nonFloating
+        , NS "ScratchWeb" "dwb" (resource =? "dwb")
+            (customFloating $ W.RationalRect (1/12) (1/12) (5/6) (5/6))
+        --, NS "ScratchMail" "sylpheed" (className =? "Sylpheed")
+        --    nonFloating
     ] where role = stringProperty "WM_WINDOW_ROLE"
 --}}}
 ------------------------------------------------------------------------
@@ -341,3 +348,5 @@ myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
             },
         startupHook        = myStartupHook
     }
+
+-- vim: set ts=4 sw=4 sts=4 et fenc=utf-8 foldmethod=marker foldmarker={{{,}}}:
