@@ -1,5 +1,5 @@
 " Written by Maximilian-Huber.de
-" Last modified: Do Dez 13, 2012  12:48
+" Last modified: Do Dez 13, 2012  09:06
 "
 " this config will automatically download Vundle from git, and then it will
 " install all plugins
@@ -84,7 +84,10 @@ if has("autocmd")
   "au BufWinEnter * silent loadview
 endif
 
+" Use Unix as the standard file type
+set ffs=unix,dos,mac
 set encoding=utf8
+
 set virtualedit=all
 set backspace=2
 " set backspace=indent,eol,start
@@ -92,8 +95,10 @@ set showcmd         " Show (partial) command in status line.
 set showmatch       " Show matching brackets.
 set ignorecase      " Do case insensitive matching
 set autowrite       " Automatically save before commands like :next and :make
-set mouse=a         " Enable mouse usage (all modes) alternativ nvc
-set mousehide
+if has("mouse")
+  set mouse=a         " Enable mouse usage (all modes) alternativ nvc
+    set mousehide
+endif
 set visualbell
 set noerrorbells
 set hidden
@@ -102,9 +107,6 @@ set magic " For regular expressions turn magic on
 set splitbelow
 set splitright
 set autochdir
-
-" Use Unix as the standard file type
-set ffs=unix,dos,mac
 
 set wildmenu "Kommando Zeilen Vervollständigung
 set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png
@@ -139,7 +141,6 @@ set list
 set listchars=tab:>.,trail:.,extends:#,nbsp:.
 "                                                                    }}}
 " ====  Performance  ================================================{{{
-
 set ttyfast
 
 " for powersave, stops the blinking cursor
@@ -186,7 +187,7 @@ set showmode "show when you are in insert mode
 " statusline
 set laststatus=2
 " default the statusline to green when entering Vim
-hi StatusLine term=reverse ctermfg=0 ctermbg=2 gui=bold,reverse
+"hi StatusLine term=reverse ctermfg=0 ctermbg=2 gui=bold,reverse
 
 
 set statusline=%<%f\          " custom statusline
@@ -232,12 +233,12 @@ else
 endif
 
 " ====  hilight to long lines  ======================================{{{
-"highlight OverLength ctermbg=red ctermfg=white guibg=#592929
-"match OverLength /\%81v.\+/
-
 if exists('+colorcolumn')
     set colorcolumn=80
-    highlight ColorColumn ctermbg=233
+    highlight ColorColumn ctermbg=233 guibg=#592929
+else
+    highlight OverLength ctermbg=red ctermfg=white guibg=#592929
+    match OverLength /\%81v.\+/
 endif
 "                                                                    }}}
 " ====  Status hilighting  =========================================={{{
