@@ -1,27 +1,16 @@
 #!/bin/bash
-
-
-
-
-
-
-
-
-
-
-
 echo "copy"
-\cp -vu ~/.bashrc bashrc
-\cp -vu ~/.aliasrc aliasrc
-\cp -vu ~/.xmonad/xmonad.hs ./
-\cp -vu ~/.xmonad/xmobarrc ./
-\cp -vu ~/.vimrc vimrc
-\cp -vu ~/.xinitrc xinitrc
-\cp -vu ~/.bash_profile bash_profile
-\cp -vu ~/.emacs emacs
-\cp -vu ~/.vimencrypt vimencrypt
-\cp -vu ~/.Xresources Xresources
-\cp -vu ~/.tmux.conf tmux.conf
+cp -v ~/.bashrc bashrc
+cp -v ~/.aliasrc aliasrc
+cp -v ~/.xmonad/xmonad.hs ./
+cp -v ~/.xmonad/xmobarrc ./
+cp -v ~/.vimrc vimrc
+cp -v ~/.xinitrc xinitrc
+cp -v ~/.bash_profile bash_profile
+cp -v ~/.emacs emacs
+cp -v ~/.vimencrypt vimencrypt
+cp -v ~/.Xresources Xresources
+cp -v ~/.tmux.conf tmux.conf
 
 mkdir -p etc
 cp /etc/zathurarc etc/zathurarc
