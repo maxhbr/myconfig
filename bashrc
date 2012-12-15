@@ -1,4 +1,4 @@
-#
+# written by maximilian-huber.de
 # ~/.bashrc
 #
 
