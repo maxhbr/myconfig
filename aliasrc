@@ -238,8 +238,6 @@ alias countFilesByTypes="find . -type f -exec basename \"{}\" \\; | sed -e 's/.*
 # download from youtube
 alias ccl="cclive -f best"
 
-#alias syncZzBesten="rsync -avze ssh /home/hubi/Bilder/zz-besten/ hubi@192.168.178.42:/home/hubi/Bilder/zz-besten/"
-
 if [ -f ~/bin/mydock.sh ]; then
   alias mydock="mydock.sh"
 fi
