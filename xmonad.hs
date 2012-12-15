@@ -1,5 +1,5 @@
 -- xmonad config file for xmobar, dmenu
--- Last modified: Fr Dez 14, 2012  05:54
+-- Last modified: So Dez 16, 2012  12:13
 
 import XMonad
 import XMonad.ManageHook
@@ -25,6 +25,7 @@ import XMonad.Util.Run(spawnPipe)
 --import XMonad.Actions.SpawnOn
 import XMonad.Actions.CycleWS
 
+import XMonad.Layout.Gaps
 import XMonad.Layout.LayoutHints
 import XMonad.Layout.Magnifier
 import XMonad.Layout.Named
@@ -125,7 +126,9 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     -- Quit xmonad
     , ((modm .|. shiftMask, xK_q     ), io (exitWith ExitSuccess))
 
-     ,((modm,               xK_b     ), sendMessage ToggleStruts)
+    -- xmobar has some Problems
+    --,((modm,                xK_b     ), sendMessage ToggleStruts)
+    ,((modm,                xK_b     ), sendMessage ToggleGaps)
 
     -- Restart xmonad
     , ((modm,                xK_q    ), spawn "xmonad --recompile; xmonad --restart")
@@ -222,7 +225,7 @@ myLayout = avoidStruts $ smartBorders
     )  -- Mirror tiled
   where
     --tiled   = named "tiled" $ Tall  nmaster delta ratio
-    tiled   = named " " $ ResizableTall nmaster delta ratio []
+    tiled   = named " "  $ gaps [(U,14)] $ ResizableTall nmaster delta ratio []
     nmaster = 1
     ratio   = 1/2
     delta   = 3/100
@@ -309,15 +312,15 @@ myLogHook = dynamicLog
 --myStartupHook = return ()
 myStartupHook :: X ()
 myStartupHook = do
-    spawn "[ -n $(ps -A | grep -c unclutter) ] || unclutter &"
+    spawn "unclutter &"
+    --spawn "[ -n $(ps -A | grep -c unclutter) ] || unclutter &"
     --spawn "/home/hubi/.xmonad/mystartup.sh"
-    --spawn "unclutter &"
 
 ------------------------------------------------------------------------
 -- Now run xmonad with all the defaults we set up.
-{-main = xmonad =<< statusBar myBar myPP toggleStrutsKey defaults-}
 main = do
     xmproc <- spawnPipe "xmobar /home/hubi/.xmonad/xmobarrc"
+    --xmproc <- spawnPipe "/usr/bin/tint2 /home/hubi/.xmonad/tint2rc"
     xmonad $ myConfig xmproc
 
 myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
