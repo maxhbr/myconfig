@@ -1,5 +1,5 @@
 -- ~/.xmonad/xmonad.hs
--- Last modified: Mo Dez 17, 2012  02:23
+-- Last modified: Mo Dez 17, 2012  05:39
 
 import XMonad
 import XMonad.ManageHook
@@ -217,6 +217,7 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 ------------------------------------------------------------------------
 -- Layouts:
 --{{{
+-- gaps, while avoidStruts doesn't work
 myLayout = avoidStruts $ smartBorders
     (tiled
     ||| mag
@@ -225,14 +226,14 @@ myLayout = avoidStruts $ smartBorders
     )  -- Mirror tiled
   where
     --tiled   = named "tiled" $ Tall  nmaster delta ratio
-    tiled   = named " "  $ gaps [(U,14)] $ ResizableTall nmaster delta ratio []
+    tiled   = named " "  $ gaps [(U,13)] $ ResizableTall nmaster delta ratio []
     nmaster = 1
     ratio   = 1/2
     delta   = 3/100
-    mag     = named "zoom" $ magnifier (Tall 1 (3/100) (1/2))
-    full    = named "full" $ noBorders Full
+    mag     = named "zoom" $ gaps [(U,13)] $ magnifier (Tall 1 (3/100) (1/2))
+    full    = named "full" $ gaps [(U,13)] $ noBorders Full
     --stb     = named "tabs" $ simpleTabbedBottom
-    stb     = named "tabs" $ tabbedBottom shrinkText myTab
+    stb     = named "tabs" $ gaps [(U,13)] $ tabbedBottom shrinkText myTab
     myTab   = defaultTheme
         { activeColor         = "black"
         , inactiveColor       = "black"
