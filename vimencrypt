@@ -1,3 +1,5 @@
+" ~/.vimencrypt
+
 source ~/.vimrc
 set nobackup
 set noswapfile

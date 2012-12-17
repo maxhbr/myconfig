@@ -1,3 +1,6 @@
+# written by maximilian-huber.de
+# ~/.aliasrc
+
 alias vi="vim"
 
 # makes "sudo vi" to "sudo vim"

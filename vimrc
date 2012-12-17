@@ -1,5 +1,6 @@
 " Written by Maximilian-Huber.de
-" Last modified: Do Dez 13, 2012  09:06
+" ~/.vimrc
+" Last modified: Mo Dez 17, 2012  02:26
 "
 " this config will automatically download Vundle from git, and then it will
 " install all plugins

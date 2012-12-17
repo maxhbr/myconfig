@@ -1,5 +1,5 @@
--- xmonad config file for xmobar, dmenu
--- Last modified: So Dez 16, 2012  12:13
+-- ~/.xmonad/xmonad.hs
+-- Last modified: Mo Dez 17, 2012  02:23
 
 import XMonad
 import XMonad.ManageHook
@@ -331,12 +331,8 @@ myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
         workspaces         = myWorkspaces,
         normalBorderColor  = myNormalBorderColor,
         focusedBorderColor = myFocusedBorderColor,
-
-      -- key bindings
         keys               = myKeys,
         mouseBindings      = myMouseBindings,
-
-      -- hooks, layouts
         manageHook = myManageHook <+> manageDocks
             <+> manageHook defaultConfig,
         layoutHook         = myLayout,

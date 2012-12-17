@@ -1,4 +1,4 @@
-;; .emacs
+;; ~/.emacs
 
 (setq inhibit-startup-message t)
 
