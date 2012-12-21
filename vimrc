@@ -1,6 +1,6 @@
 " Written by Maximilian-Huber.de
 " ~/.vimrc
-" Last modified: Mo Dez 17, 2012  02:26
+" Last modified: Do Dez 20, 2012  10:01
 "
 " this config will automatically download Vundle from git, and then it will
 " install all plugins
@@ -98,7 +98,7 @@ set ignorecase      " Do case insensitive matching
 set autowrite       " Automatically save before commands like :next and :make
 if has("mouse")
   set mouse=a         " Enable mouse usage (all modes) alternativ nvc
-    set mousehide
+  set mousehide
 endif
 set visualbell
 set noerrorbells
@@ -108,6 +108,9 @@ set magic " For regular expressions turn magic on
 set splitbelow
 set splitright
 set autochdir
+
+set cpoptions+=n
+set showbreak=\ \ \ ↳
 
 set wildmenu "Kommando Zeilen Vervollständigung
 set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png
@@ -577,6 +580,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "testing
   "Bundle 'Indent-Guides'
   Bundle 'git://github.com/djoshea/vim-matlab-fold.git'
+  Bundle 'tsaleh/vim-align.git'
   "Bundle 'SuperTab'
 
   " not used Bundles                                                   {{{

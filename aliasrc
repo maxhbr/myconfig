@@ -119,6 +119,7 @@ e() {
 #   misc
 #-------------------------------------------------------------------{{{
 
+alias mylatexmk="grep -l '\\documentclass' *tex | xargs latexmk -pdf -pvc" # -silent"
 #for vim latex plugin:
 #alias tvim="vim --servername texServer"
 

@@ -1,5 +1,5 @@
 -- ~/.xmonad/xmonad.hs
--- Last modified: Mo Dez 17, 2012  05:39
+-- Last modified: Mi Dez 19, 2012  06:05
 
 import XMonad
 import XMonad.ManageHook
@@ -127,8 +127,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. shiftMask, xK_q     ), io (exitWith ExitSuccess))
 
     -- xmobar has some Problems
-    --,((modm,                xK_b     ), sendMessage ToggleStruts)
-    ,((modm,                xK_b     ), sendMessage ToggleGaps)
+    ,((modm,                xK_b     ), sendMessage ToggleStruts)
+    ,((modm .|. shiftMask,  xK_b     ), sendMessage ToggleGaps)
 
     -- Restart xmonad
     , ((modm,                xK_q    ), spawn "xmonad --recompile; xmonad --restart")
@@ -141,7 +141,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((0,                  0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
 
     -- screensaver
-    , ((modm .|. shiftMask,  xK_y    ), spawn "xbacklight -set 0; xscreensaver-command -lock")
+    {-, ((modm .|. shiftMask,  xK_y    ), spawn "xbacklight -set 0; xscreensaver-command -lock")-}
+    , ((modm .|. shiftMask,  xK_y    ), spawn "xbacklight -set 0; i3lock")
 
     --invert Colors
     , ((modm,                xK_Home ), spawn "xcalib -i -a")
@@ -270,7 +271,7 @@ myManageHook = composeAll
     , className =? "Virtualbox"     --> doFullFloat
     , resource  =? "desktop_window" --> doIgnore
     , resource  =? "kdesktop"       --> doIgnore
-    , className =? "Zenity"         --> doCenterFloat] 
+    , className =? "Zenity"         --> doCenterFloat]
         <+> namedScratchpadManageHook scratchpads
 
 -- Scratchpads

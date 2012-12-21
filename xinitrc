@@ -29,7 +29,6 @@ exec urxvtd & # -q -o -f &
 [[ -f ~/.Xresources ]] && xrdb -merge ~/.Xresources
 
 if [ -f ~/bin/mydock.sh ]; then
-  #exec ~/bin/mydock.sh fast &
   ~/bin/mydock.sh fast &
 else
   if [ -f ~/.icc/X220.icc ]; then
