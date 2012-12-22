@@ -41,7 +41,10 @@ if [[ "$TERM" != "screen-bce" && "$SSH_CONNECTION" != "" ]]; then
 else
   #PS1="┌─[\$(date +%H:%M) \[\e[1;33m\]\u \[\e[1;34m\]\w\[\e[m\]\ ] \n└─>  "
   #PS1="\n [\$(date +%H:%M)] \[\e[1;33m\]\u \e[1;00m\]in \[\e[1;34m\]\w\[\e[m\]\ $ \[\e[0m\] " # has some problems
-  PS1="\n[ \$(date +%H:%M) \[\e[1;33m\]\u \[\e[1;34m\]\w\[\e[m\] \$(parse_git_branch)]─>  "
+  PS1="\n[ \$(date +%H:%M) \[\e[1;33m\]\u \[\e[1;34m\]\w\[\e[m\] "
+  PS1="$PS1"'$(parse_git_branch)' #git information
+  [ -n "$RANGER_LEVEL" ] && PS1="$PS1"'(Rlvl: $RANGER_LEVEL)'
+  PS1="$PS1"']─>  '
 
   case $TERM in
     xterm*|*rxvt*|Eterm|eterm|rxvt-unicode|urxvt)
