@@ -1,6 +1,6 @@
 " Written by Maximilian-Huber.de
 " ~/.vimrc
-" Last modified: Do Dez 20, 2012  10:01
+" Last modified: Sa Dez 22, 2012  11:54
 "
 " this config will automatically download Vundle from git, and then it will
 " install all plugins
@@ -305,6 +305,17 @@ function! LastModified()
   endif
 endfun
 autocmd BufWritePre * call LastModified()
+
+" open files via ranger
+fun! RangerChooser()
+  exec "silent !ranger --choosefile=/tmp/chosenfile " . expand("%:p:h")
+  if filereadable('/tmp/chosenfile')
+    exec 'edit ' . system('cat /tmp/chosenfile')
+    call system('rm /tmp/chosenfile')
+  endif
+  redraw!
+endfun
+map ,R :call RangerChooser()<CR>
 
 " ===================================================================}}}
 " ====  Keymappings  ================================================
