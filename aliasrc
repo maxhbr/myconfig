@@ -203,7 +203,7 @@ function ranger-cd {
   rm -f -- "$tempfile"
 }
 # This binds Ctrl-O to ranger-cd:
-bind '"\C-o":"ranger-cd\C-m"'
+bind '"\C-o":" ranger-cd\C-m"'
 
 
 #-------------------------------------------------------------------}}}
