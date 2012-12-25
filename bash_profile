@@ -1,6 +1,8 @@
-#
 # ~/.bash_profile
 #
+# written by maximilian-huber.de
+#
+# Last modified: Di Dez 25, 2012
 
 [[ -f ~/.bashrc ]] && . ~/.bashrc
 

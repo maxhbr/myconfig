@@ -1,6 +1,9 @@
 #!/bin/sh
-#
 # ~/.xinitrc
+#
+# written by maximilian-huber.de
+#
+# Last modified: Di Dez 25, 2012  06:02
 
 # Get back ctrl+alt+backspace in new versions of xorg
 # setxkbmap -option terminate:ctrl_alt_bksp

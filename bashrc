@@ -1,6 +1,11 @@
-# written by maximilian-huber.de
 # ~/.bashrc
 #
+# written by maximilian-huber.de
+#
+# Last modified: Di Dez 25, 2012  06:02
+
+# If not running interactively stop here
+[[ $- != *i* ]] && return
 
 [ -d /home/hubi/bin ] && export PATH=/home/hubi/bin:$PATH
 
@@ -10,9 +15,6 @@ export EDITOR="vim"
 if [ -f ~/.aliasrc ]; then
   source ~/.aliasrc
 fi
-
-# If not running interactively stop here
-[[ $- != *i* ]] && return
 
 #start tmux for every bash:
 #if which tmux 2>&1 >/dev/null; then

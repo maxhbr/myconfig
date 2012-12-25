@@ -1,6 +1,8 @@
-" Written by Maximilian-Huber.de
 " ~/.vimrc
-" Last modified: Sa Dez 22, 2012  11:54
+"
+" Written by Maximilian-Huber.de
+"
+" Last modified: Di Dez 25, 2012  06:39
 "
 " this config will automatically download Vundle from git, and then it will
 " install all plugins
@@ -46,15 +48,11 @@
 "   ]<down> -- Jump to next line with the same/lower indentation
 "                                                                    }}}
 
-" prevents from loading config to offten
-"if exists("g:did_myvimrc")
-  "finish
-"endif
-"let g:did_myvimrc = 1
-
 " auto reload when saving
 autocmd! bufwritepost .vimrc source %
 
+" This must be first, because it changes other options as a side effect.
+set nocompatible
 runtime! archlinux.vim
 
 " ===================================================================
@@ -317,6 +315,17 @@ fun! RangerChooser()
 endfun
 map ,R :call RangerChooser()<CR>
 
+function! InsertTabWrapper()
+    let col = col('.') - 1
+    if !col || getline('.')[col - 1] !~ '\k'
+        return "\<tab>"
+    else
+        return "\<c-p>"
+    endif
+endfunction
+inoremap <tab> <c-r>=InsertTabWrapper()<cr>
+inoremap <s-tab> <c-n>
+
 " ===================================================================}}}
 " ====  Keymappings  ================================================
 " ==================================================================={{{
@@ -376,15 +385,30 @@ inoremap <silent> <F5> <Esc>:update<CR>
 noremap <silent> <F10> :q!<CR>
 inoremap <silent> <F10> <Esc>:q!<CR>
 
+"Markdown to HTML
+nmap <leader>md :%!/home/hubi/bin/Markdown.pl --html4tags <cr>
+
+"easyer increment/decrement
+nnoremap + <C-a>
+nnoremap - <C-x>
+
+"Open last/alternate buffer
+noremap <Leader><Leader> <C-^>
+
+" ====  Movement  ===================================================
+
 " jump to next row instead of next line
 nnoremap j gj
 nnoremap k gk
 
+nnoremap <c-j> 5j 
+nnoremap <c-k> 5k 
+
 " Easy window navigation
-map <C-h> <C-w>h
-map <C-j> <C-w>j
-map <C-k> <C-w>k
-map <C-l> <C-w:vnew \| CommandT>l
+"map <C-h> <C-w>h
+"map <C-j> <C-w>j
+"map <C-k> <C-w>k
+"map <C-l> <C-w:vnew \| CommandT>l
 
 " control-left & right arrows switch between tabs
 map <c-Left> :tabp<CR>
@@ -402,16 +426,6 @@ nnoremap <up> <nop>
 nnoremap <down> <nop>
 nnoremap <left> <nop>
 nnoremap <right> <nop>
-
-"Markdown to HTML
-nmap <leader>md :%!/home/hubi/bin/Markdown.pl --html4tags <cr>
-
-"easyer increment/decrement
-"nnoremap + <C-a>
-"nnoremap - <C-x>
-
-"Open last/alternate buffer
-noremap <Leader><Leader> <C-^>
 
 " ===================================================================}}}
 " ====  Filetype specific  ==========================================
@@ -587,15 +601,15 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'vimwiki'
   Bundle 'git://github.com/nathanaelkane/vim-indent-guides.git'
   Bundle 'git://github.com/Lokaltog/vim-powerline.git'
+  Bundle 'git://github.com/djoshea/vim-matlab-fold.git'
+  Bundle 'tsaleh/vim-align.git'
+  Bundle 'Solarized'
 
   "testing
   "Bundle 'Indent-Guides'
-  Bundle 'git://github.com/djoshea/vim-matlab-fold.git'
-  Bundle 'tsaleh/vim-align.git'
   "Bundle 'SuperTab'
 
   " not used Bundles                                                   {{{
-  "Bundle 'Solarized'
   "Bundle 'xoria256.vim'
   "Bundle 'neverland.vim--All-colorschemes-suck'
   "Bundle 'speeddating.vim'

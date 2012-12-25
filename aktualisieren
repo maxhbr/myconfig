@@ -11,6 +11,7 @@ cp -vu ~/.emacs emacs
 cp -vu ~/.vimencrypt vimencrypt
 cp -vu ~/.Xresources Xresources
 cp -vu ~/.tmux.conf tmux.conf
+cp -vu ~/bin/disp-controll ./bin/
 
 mkdir -p etc
 cp /etc/zathurarc etc/zathurarc

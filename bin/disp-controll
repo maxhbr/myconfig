@@ -35,7 +35,7 @@ myAutomatic() {
       if [ "$CHK_HDMI1" == "connected" ] ; then
         xrandr --output HDMI1 --auto --right-of LVDS1
       fi
-      amixer -q set Master unmute
+      #amixer -q set Master mute
       ;;
     "1")
       if [ "$CHK_HDMI2" == "connected" ] ; then
