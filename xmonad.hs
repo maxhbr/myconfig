@@ -2,7 +2,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Mi Dez 26, 2012  12:20
+-- Last modified: Mi Dez 26, 2012  12:23
 
 import XMonad
 import XMonad.ManageHook
@@ -51,7 +51,7 @@ import qualified XMonad.StackSet as W
 ------------------------------------------------------------
 -- The number of workspaces (virtual screens) and their names.
 --
-myWorkspaces = ["1","2","3","4","5","6","mail","web","chat"]
+myWorkspaces = ["1","2","3","4","5","6","mail","web","im"]
 
 -- Border colors for unfocused and focused windows, respectively.
 --
@@ -268,7 +268,7 @@ myChatLayout = avoidStruts $ smartBorders (tiled ||| full)
         pidgin l = withIM (1%8) (Role "buddy_list") l
 
 -- Put all layouts together
-myLayout = onWorkspace "chat" myChatLayout $ myMainLayout
+myLayout = onWorkspace "im" myChatLayout $ myMainLayout
 --}}}
 ------------------------------------------------------------------------
 -- Window rules:
@@ -287,7 +287,7 @@ myLayout = onWorkspace "chat" myChatLayout $ myMainLayout
 --
 myManageHook = composeAll
     [ className =? "MPlayer"        --> doFloat
-    , className =? "Pidgin"         --> doShift "chat"
+    , className =? "Pidgin"         --> doShift "im"
     , className =? "Chromium"       --> doShift "web"
     , className =? "Sylpheed"       --> doShift "mail"
     , className =? "Gimp"           --> doShift "4"
