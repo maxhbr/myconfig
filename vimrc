@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Di Dez 25, 2012  06:39
+" Last modified: Di Dez 25, 2012  07:06
 "
 " this config will automatically download Vundle from git, and then it will
 " install all plugins
@@ -401,8 +401,8 @@ noremap <Leader><Leader> <C-^>
 nnoremap j gj
 nnoremap k gk
 
-nnoremap <c-j> 5j 
-nnoremap <c-k> 5k 
+nnoremap <c-j> 5j
+nnoremap <c-k> 5k
 
 " Easy window navigation
 "map <C-h> <C-w>h

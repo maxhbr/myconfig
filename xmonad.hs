@@ -1,11 +1,16 @@
 -- ~/.xmonad/xmonad.hs
--- Last modified: Mi Dez 19, 2012  06:05
+--
+-- written by maximilian-huber.de
+--
+-- Last modified: Mi Dez 26, 2012  12:20
 
 import XMonad
 import XMonad.ManageHook
 import Data.Monoid
 import System.Exit
 import System.IO
+import Data.List
+import Data.Ratio ((%))
 
 import XMonad.Prompt
 import XMonad.Prompt.Shell
@@ -25,32 +30,23 @@ import XMonad.Util.Run(spawnPipe)
 --import XMonad.Actions.SpawnOn
 import XMonad.Actions.CycleWS
 
+--import XMonad.Layout.WindowNavigation
 import XMonad.Layout.Gaps
 import XMonad.Layout.LayoutHints
+import XMonad.Layout.MagicFocus   (followOnlyIf, disableFollowOnWS)
 import XMonad.Layout.Magnifier
 import XMonad.Layout.Named
 import XMonad.Layout.NoBorders (smartBorders, noBorders)
+import XMonad.Layout.PerWorkspace (onWorkspace)
 import XMonad.Layout.ResizableTile
-import XMonad.Layout.Tabbed
+import XMonad.Layout.Tabbed  
+import XMonad.Layout.IM
 
 import qualified Data.Map        as M
 import qualified XMonad.StackSet as W
 
 --import Graphics.X11.ExtraTypes.XF86
 
-myTerminal = "urxvtc"
-
--- Whether focus follows the mouse pointer.
-myFocusFollowsMouse :: Bool
-myFocusFollowsMouse = True
-
--- Width of the window border in pixels.
-myBorderWidth :: Dimension
-myBorderWidth = 2
-
--- modMask
---
-myModMask = mod4Mask
 
 ------------------------------------------------------------
 -- The number of workspaces (virtual screens) and their names.
@@ -59,8 +55,6 @@ myWorkspaces = ["1","2","3","4","5","6","mail","web","chat"]
 
 -- Border colors for unfocused and focused windows, respectively.
 --
-myNormalBorderColor  = "#333333"      -- #dddddd
-myFocusedBorderColor = "#dd0000"
 
 ------------------------------------------------------------------------
 -- Key bindings. Add, modify or remove key bindings here.
@@ -180,6 +174,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     -- Scratchpads
     , ((modm .|. shiftMask,  xK_minus ), namedScratchpadAction scratchpads "scratchpad")
     , ((modm,                xK_g     ), namedScratchpadAction scratchpads "ScratchGvim")
+    {-, ((modm,                xK_z     ), namedScratchpadAction scratchpads "ScratchPidgin")-}
     ]
     ++
 
@@ -219,32 +214,61 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 -- Layouts:
 --{{{
 -- gaps, while avoidStruts doesn't work
-myLayout = avoidStruts $ smartBorders
-    (tiled
-    ||| mag
-    ||| full
-    ||| stb
-    )  -- Mirror tiled
-  where
-    --tiled   = named "tiled" $ Tall  nmaster delta ratio
-    tiled   = named " "  $ gaps [(U,13)] $ ResizableTall nmaster delta ratio []
-    nmaster = 1
-    ratio   = 1/2
-    delta   = 3/100
-    mag     = named "zoom" $ gaps [(U,13)] $ magnifier (Tall 1 (3/100) (1/2))
-    full    = named "full" $ gaps [(U,13)] $ noBorders Full
-    --stb     = named "tabs" $ simpleTabbedBottom
-    stb     = named "tabs" $ gaps [(U,13)] $ tabbedBottom shrinkText myTab
-    myTab   = defaultTheme
-        { activeColor         = "black"
-        , inactiveColor       = "black"
-        , urgentColor         = "yellow"
-        , activeBorderColor   = "orange"
-        , inactiveBorderColor = "#333333"
-        , urgentBorderColor   = "black"
-        , activeTextColor     = "orange"
-        , inactiveTextColor   = "#666666"
-        , urgentTextColor     = "yellow" }
+myMainLayout = avoidStruts $
+    {-configurableNavigation (navigateColor "#661111") $-}
+    smartBorders
+        (tiled
+        ||| mag
+        ||| full
+        ||| stb
+        )  -- Mirror tiled
+    where
+        --tiled   = named "tiled" $ Tall  nmaster delta ratio
+        tiled   = named " "  $
+            gaps [(U,13)] $
+            ResizableTall nmaster delta ratio []
+        nmaster = 1
+        ratio   = 1/2
+        delta   = 3/100
+        mag     = named "zoom" $
+            gaps [(U,13)] $
+            magnifier (Tall 1 (3/100) (1/2))
+        full    = named "full" $
+            gaps [(U,13)] $
+            noBorders Full
+        --stb     = named "tabs" $ simpleTabbedBottom
+        stb     = named "tabs" $
+            gaps [(U,13)] $
+            tabbedBottom shrinkText myTab
+        myTab   = defaultTheme
+            { activeColor         = "black"
+            , inactiveColor       = "black"
+            , urgentColor         = "yellow"
+            , activeBorderColor   = "orange"
+            , inactiveBorderColor = "#333333"
+            , urgentBorderColor   = "black"
+            , activeTextColor     = "orange"
+            , inactiveTextColor   = "#666666"
+            , urgentTextColor     = "yellow" }
+
+-- Define layout for specific workspaces
+myChatLayout = avoidStruts $ smartBorders (tiled ||| full)
+    where
+        tiled   = named "tiled" $
+            pidgin $
+            gaps [(U,13)] $
+            ResizableTall nmaster delta ratio []
+        nmaster = 1
+        ratio   = 1/2
+        delta   = 3/100
+        full    = named "full" $
+            pidgin $
+            gaps [(U,13)] $
+            noBorders Full
+        pidgin l = withIM (1%8) (Role "buddy_list") l
+
+-- Put all layouts together
+myLayout = onWorkspace "chat" myChatLayout $ myMainLayout
 --}}}
 ------------------------------------------------------------------------
 -- Window rules:
@@ -280,25 +304,40 @@ scratchpads :: [NamedScratchpad]
 scratchpads = [
         NS "scratchpad" "urxvt -name Scratchpad" (resource =? "Scratchpad")
             (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
-        , NS "ScratchGvim" "gvim --role ScratchGvim" (role =? "ScratchGvim") 
+        , NS "ScratchGvim" "gvim --role ScratchGvim" (role =? "ScratchGvim")
             nonFloating
         --, NS "ScratchWeb" "Chromium" (className =? "Chromium") nonFloating
         , NS "ScratchWeb" "dwb" (resource =? "dwb")
             (customFloating $ W.RationalRect (1/12) (1/12) (5/6) (5/6))
         --, NS "ScratchMail" "sylpheed" (className =? "Sylpheed")
         --    nonFloating
+        {-, NS "ScratchPidgin" "pidgin" (role =? "conversation")-}
+            {-(customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))-}
     ] where role = stringProperty "WM_WINDOW_ROLE"
 --}}}
 ------------------------------------------------------------------------
 -- Event handling
-
+--{{{
 -- Defines a custom handler function for X Events. The function should
 -- return (All True) if the default handler is to be run afterwards. To
 -- combine event hooks use mappend or mconcat from Data.Monoid.
 --
 --myEventHook = mempty
 myEventHook = fullscreenEventHook
+    <+>followEventHook
 
+{-followEventHook = followOnlyIf $ disableFollowOnWS allButLastWS-}
+    {-where allButLastWS = init allWS-}
+          {-allWS        = myWorkspaces-}
+
+followEventHook = followOnlyIf (fmap not isFull)
+    where
+        isFull = fmap (isSuffixOf "full") $
+            gets (description . W.layout . W.workspace . W.current . windowset)
+        {-isTabs = fmap (isSuffixOf "tabs") $-}
+            {-gets (description . W.layout . W.workspace . W.current . windowset)-}
+-- TODO: combine the statements -> no followfocus on "tabs"
+--}}}
 ------------------------------------------------------------------------
 -- Status bars and logging
 
@@ -314,7 +353,7 @@ myLogHook = dynamicLog
 --myStartupHook = return ()
 myStartupHook :: X ()
 myStartupHook = do
-    spawn "unclutter &"
+    spawn "pkill unclutter; unclutter &"
     --spawn "[ -n $(ps -A | grep -c unclutter) ] || unclutter &"
     --spawn "/home/hubi/.xmonad/mystartup.sh"
 
@@ -326,13 +365,13 @@ main = do
     xmonad $ myConfig xmproc
 
 myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
-        terminal           = myTerminal,
-        focusFollowsMouse  = myFocusFollowsMouse,
-        borderWidth        = myBorderWidth,
-        modMask            = myModMask,
+        terminal           = "urxvtc",
+        focusFollowsMouse  = True,
+        borderWidth        = 2,
+        modMask            = mod4Mask,
         workspaces         = myWorkspaces,
-        normalBorderColor  = myNormalBorderColor,
-        focusedBorderColor = myFocusedBorderColor,
+        normalBorderColor  = "#333333",
+        focusedBorderColor = "#dd0000",
         keys               = myKeys,
         mouseBindings      = myMouseBindings,
         manageHook = myManageHook <+> manageDocks
