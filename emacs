@@ -1,8 +1,10 @@
 ;; ~/.emacs
+;;
+;; i use vi!
 
 (setq inhibit-startup-message t)
 
-;; ===== Set the highlight current line minor mode ===== 
+;; ===== Set the highlight current line minor mode =====
 ;; In every buffer, the line which contains the cursor will be fully
 ;; highlighted
 (global-hl-line-mode 1)
@@ -106,7 +108,7 @@
 )
 
 ;; show more info in taskbar/icon than just "Emacs"
-(setq-default frame-title-format (list "%b @Emacs"))  
+(setq-default frame-title-format (list "%b @Emacs"))
 
 (autoload 'php-mode "php-mode.el" "Php mode." t)
 (setq auto-mode-alist (append '(("/*.\.php[345]?$" . php-mode)) auto-mode-alist))
