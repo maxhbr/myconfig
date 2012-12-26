@@ -2,7 +2,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Mi Dez 26, 2012  11:33
+-- Last modified: Do Dez 27, 2012  12:08
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 
@@ -38,6 +38,7 @@ import XMonad.Layout.Named
 import XMonad.Layout.NoBorders (smartBorders, noBorders)
 import XMonad.Layout.PerWorkspace (onWorkspace)
 import XMonad.Layout.ResizableTile
+import XMonad.Layout.Simplest
 import XMonad.Layout.SubLayouts
 import XMonad.Layout.Tabbed
 import XMonad.Layout.WindowNavigation
@@ -54,10 +55,9 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     [ ((modm .|. shiftMask, xK_Return), spawn $ XMonad.terminal conf)
 
     , ((modm,               xK_p     ), spawn "dmenu_run")
+    -- alternative zu anderem starter
+    , ((modm,               xK_x     ), shellPrompt defaultXPConfig)
     , ((modm,               xK_o     ), spawn "emelfm2")
-    --, ((modm,               xK_i     ), spawn "dwb")
-    , ((modm,               xK_i     ), namedScratchpadAction scratchpads "ScratchWeb")
-    --, ((modm .|. shiftMask, xK_i     ), namedScratchpadAction scratchpads "ScratchMail")
     , ((modm .|. shiftMask, xK_p     ), spawn "gmrun")
 
     -- close focused window
@@ -117,14 +117,14 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     ,((modm .|. shiftMask,  xK_b     ), sendMessage ToggleGaps)
 
     -- Restart xmonad
-    , ((modm,                xK_q    ), spawn "xmonad --recompile; xmonad --restart")
-
-    , ((modm .|. shiftMask,  xK_F11  ),  spawn "systemctl suspend") --suspend
-    , ((modm .|. shiftMask,  xK_F11  ),  spawn "systemctl reboot") --reboot
-    , ((modm .|. shiftMask,  xK_F12  ),  spawn "systemctl poweroff") --shutdown
-
-    -- toggle touchpad
-    , ((0,                  0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
+    , ((modm,                xK_q    ), spawn "xmonad --recompile; xmonad --restart") ]
+    ++
+    [ ((modm .|. shiftMask,  xK_F11  ),  spawn "systemctl suspend")
+    , ((modm .|. shiftMask,  xK_F11  ),  spawn "systemctl reboot")
+    , ((modm .|. shiftMask,  xK_F12  ),  spawn "systemctl poweroff") ]
+    ++
+    [ -- toggle touchpad
+    ((0,                  0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
 
     -- screensaver
     {-, ((modm .|. shiftMask,  xK_y    ), spawn "xbacklight -set 0; xscreensaver-command -lock")-}
@@ -141,20 +141,16 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((0,                  0x1008ff11), spawn "/home/hubi/.xmonad/myvolume.sh -")
     , ((0,                  0x1008ff13), spawn "/home/hubi/.xmonad/myvolume.sh +")
 
-    -- alternative zu anderem starter
-    , ((modm,                xK_x     ), shellPrompt defaultXPConfig)
-    --, ((modm , xK_x), sshPrompt defaultXPConfig)
-
      -- toggle mouse
     --, ((modm,                xK_s     ), spawn "/home/hubi/.xmonad/togglemouse.sh silent off")
     --, ((modm .|. shiftMask,  xK_s     ), spawn "/home/hubi/.xmonad/togglemouse.sh")
     , ((modm,                xK_s     ), toggleFF)
 
     -- check for dock, set up desktop
-    , ((modm .|. shiftMask, xK_d) , spawn "/home/hubi/bin/mydock.sh")
-
-    -- CycleWS setup
-    , ((modm,                xK_Down  ), moveTo Next NonEmptyWS)
+    , ((modm .|. shiftMask, xK_d) , spawn "/home/hubi/bin/mydock.sh") ]
+    ++
+    [ -- CycleWS setup
+    ((modm,                xK_Down  ), moveTo Next NonEmptyWS)
     , ((modm,                xK_Up    ), moveTo Prev NonEmptyWS)
     , ((modm .|. shiftMask,  xK_Down  ), shiftToNext >> nextWS)
     , ((modm .|. shiftMask,  xK_Up    ), shiftToPrev >> prevWS)
@@ -162,15 +158,17 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,                xK_Left  ), prevScreen)
     , ((modm .|. shiftMask,  xK_Right ), shiftNextScreen)
     , ((modm .|. shiftMask,  xK_Left  ), shiftPrevScreen)
-    , ((modm,                xK_y     ), toggleWS)
-
-    -- (some) Scratchpads
-    , ((modm .|. shiftMask,  xK_minus ), namedScratchpadAction scratchpads "scratchpad")
+    , ((modm,                xK_y     ), toggleWS)]
+    ++
+    [ -- (some) Scratchpads
+    ((modm .|. shiftMask,  xK_minus ), namedScratchpadAction scratchpads "scratchpad")
     , ((modm,                xK_g     ), namedScratchpadAction scratchpads "ScratchGvim")
-    {-, ((modm,                xK_z     ), namedScratchpadAction scratchpads "ScratchPidgin")-}
-
-    -- for XMonad.Layout.SubLayouts
-     , ((modm .|. controlMask, xK_h), sendMessage $ pullGroup L)
+    , ((modm,                xK_i     ), namedScratchpadAction scratchpads "ScratchWeb")
+    --, ((modm .|. shiftMask, xK_i     ), namedScratchpadAction scratchpads "ScratchMail")
+    {-, ((modm,                xK_z     ), namedScratchpadAction scratchpads "ScratchPidgin")-} ]
+    ++
+    [ -- for XMonad.Layout.SubLayouts
+     ((modm .|. controlMask, xK_h), sendMessage $ pullGroup L)
      , ((modm .|. controlMask, xK_l), sendMessage $ pullGroup R)
      , ((modm .|. controlMask, xK_k), sendMessage $ pullGroup U)
      , ((modm .|. controlMask, xK_j), sendMessage $ pullGroup D)
@@ -179,14 +177,12 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
      , ((modm .|. controlMask, xK_u), withFocused (sendMessage . UnMerge))
     ]
     ++
-
     -- mod-[1..9], Switch to workspace N
     -- mod-shift-[1..9], Move client to workspace N
     [((m .|. modm,           k        ), windows $ f i)
         | (i, k) <- zip (XMonad.workspaces conf) [xK_1 .. xK_9]
         , (f, m) <- [(W.greedyView, 0), (W.shift, shiftMask)]]
     ++
-
     -- mod-{w,e,r}, Switch to physical/Xinerama screens 1, 2, or 3
     -- mod-shift-{w,e,r}, Move client to screen 1, 2, or 3
     [((m .|. modm,           key      ), screenWorkspace sc >>= flip whenJust (windows . f))
@@ -215,12 +211,10 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 ------------------------------------------------------------------------
 -- Layouts:
 --{{{
--- gaps, while avoidStruts doesn't work
-myMainLayout = avoidStruts $
+-- gaps, only while avoidStruts doesn't work
+myMainLayout = avoidStrutsOn[U] $
     windowNavigation $ -- for subTabbed (controls)
-    subTabbed $
-    boringWindows $ -- ignore not-focused windows in tabs
-    smartBorders (tiled ||| mag ||| full ||| stb)
+    subThis (smartBorders (tiled ||| mag ||| full ||| stb))
     where
         tiled   = named " "  $
             gaps [(U,13)] $
@@ -237,6 +231,7 @@ myMainLayout = avoidStruts $
         stb     = named "tabs" $
             gaps [(U,13)] $
             tabbedBottom shrinkText myTab
+        subThis x = boringAuto . addTabs shrinkText myTab $ subLayout [] Simplest x
         myTab   = defaultTheme
             { activeColor         = "black"
             , inactiveColor       = "black"
@@ -252,8 +247,8 @@ myMainLayout = avoidStruts $
 myChatLayout = avoidStruts $ smartBorders (tiled ||| full)
     where
         tiled   = named "tiled" $
-            pidgin $
             gaps [(U,13)] $
+            pidgin $
             ResizableTall nmaster delta ratio []
         nmaster = 1
         ratio   = 1/2
@@ -355,6 +350,8 @@ main = do
 
 myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
         terminal             = "urxvtc"
+    , ((modm,               xK_i     ), namedScratchpadAction scratchpads "ScratchWeb")
+    --, ((modm .|. shiftMask, xK_i     ), namedScratchpadAction scratchpads "ScratchMail")
         , focusFollowsMouse  = False -- see: focusFollow
         , borderWidth        = 2
         , modMask            = mod4Mask
@@ -373,7 +370,7 @@ myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
                     $ ppSort defaultPP
                 , ppTitle       = (" " ++) . xmobarColor "#ee9a00" ""
                 , ppVisible     = xmobarColor "#ee9a00" ""
-            } >>  updatePointer (TowardsCentre 0.2 0.2) 
+            } >>  updatePointer (TowardsCentre 0.2 0.2)
         , startupHook        = myStartupHook
     }
 
