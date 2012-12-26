@@ -2,7 +2,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Mi Dez 26, 2012  11:29
+-- Last modified: Mi Dez 26, 2012  11:33
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 
@@ -29,18 +29,18 @@ import XMonad.Util.Run(spawnPipe)
 import XMonad.Actions.CycleWS
 import XMonad.Actions.UpdatePointer
 
+import XMonad.Layout.BoringWindows
 import XMonad.Layout.Gaps
+import XMonad.Layout.IM
 import XMonad.Layout.LayoutHints
 import XMonad.Layout.Magnifier
 import XMonad.Layout.Named
 import XMonad.Layout.NoBorders (smartBorders, noBorders)
 import XMonad.Layout.PerWorkspace (onWorkspace)
 import XMonad.Layout.ResizableTile
+import XMonad.Layout.SubLayouts
 import XMonad.Layout.Tabbed
-import XMonad.Layout.IM
-import XMonad.Layout.SubLayouts --testing
-import XMonad.Layout.WindowNavigation --testing
-import XMonad.Layout.BoringWindows --testing
+import XMonad.Layout.WindowNavigation
 
 import qualified Data.Map        as M
 import qualified XMonad.StackSet as W
