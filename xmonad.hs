@@ -2,15 +2,16 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Mi Dez 26, 2012  12:23
+-- Last modified: Mi Dez 26, 2012  11:29
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 
-import XMonad
-import XMonad.ManageHook
 import Data.Monoid
+import Data.Ratio ((%))
 import System.Exit
 import System.IO
-import Data.List
-import Data.Ratio ((%))
+import XMonad
+import XMonad.ManageHook
 
 import XMonad.Prompt
 import XMonad.Prompt.Shell
@@ -21,43 +22,33 @@ import XMonad.Hooks.ManageDocks
 import XMonad.Hooks.ManageHelpers
 import XMonad.Hooks.UrgencyHook
 
---import XMonad.Util.Scratchpad
 import XMonad.Util.EZConfig
 import XMonad.Util.NamedScratchpad
 import XMonad.Util.Run(spawnPipe)
 
---import XMonad.Actions.GridSelect
---import XMonad.Actions.SpawnOn
 import XMonad.Actions.CycleWS
+import XMonad.Actions.UpdatePointer
 
---import XMonad.Layout.WindowNavigation
 import XMonad.Layout.Gaps
 import XMonad.Layout.LayoutHints
-import XMonad.Layout.MagicFocus   (followOnlyIf, disableFollowOnWS)
 import XMonad.Layout.Magnifier
 import XMonad.Layout.Named
 import XMonad.Layout.NoBorders (smartBorders, noBorders)
 import XMonad.Layout.PerWorkspace (onWorkspace)
 import XMonad.Layout.ResizableTile
-import XMonad.Layout.Tabbed  
+import XMonad.Layout.Tabbed
 import XMonad.Layout.IM
+import XMonad.Layout.SubLayouts --testing
+import XMonad.Layout.WindowNavigation --testing
+import XMonad.Layout.BoringWindows --testing
 
 import qualified Data.Map        as M
 import qualified XMonad.StackSet as W
-
---import Graphics.X11.ExtraTypes.XF86
-
-
-------------------------------------------------------------
--- The number of workspaces (virtual screens) and their names.
---
-myWorkspaces = ["1","2","3","4","5","6","mail","web","im"]
-
--- Border colors for unfocused and focused windows, respectively.
---
+import qualified XMonad.Util.ExtensibleState as XS
+import qualified XMonad.Prompt         as P
 
 ------------------------------------------------------------------------
--- Key bindings. Add, modify or remove key bindings here.
+-- Key bindings.
 --{{{
 myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     [ ((modm .|. shiftMask, xK_Return), spawn $ XMonad.terminal conf)
@@ -82,7 +73,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,               xK_n     ), refresh)
 
     -- Move focus to the next window
-    , ((modm,               xK_Tab   ), windows W.focusDown)
+    {-, ((modm,               xK_Tab   ), windows W.focusDown)-}
+    , ((modm,               xK_Tab   ), focusDown) -- from BoringWindows
 
     -- Move focus to the next window
     , ((modm,               xK_j     ), windows W.focusDown)
@@ -154,8 +146,9 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     --, ((modm , xK_x), sshPrompt defaultXPConfig)
 
      -- toggle mouse
-    , ((modm,                xK_s     ), spawn "/home/hubi/.xmonad/togglemouse.sh silent off")
-    , ((modm .|. shiftMask,  xK_s     ), spawn "/home/hubi/.xmonad/togglemouse.sh")
+    --, ((modm,                xK_s     ), spawn "/home/hubi/.xmonad/togglemouse.sh silent off")
+    --, ((modm .|. shiftMask,  xK_s     ), spawn "/home/hubi/.xmonad/togglemouse.sh")
+    , ((modm,                xK_s     ), toggleFF)
 
     -- check for dock, set up desktop
     , ((modm .|. shiftMask, xK_d) , spawn "/home/hubi/bin/mydock.sh")
@@ -171,10 +164,19 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. shiftMask,  xK_Left  ), shiftPrevScreen)
     , ((modm,                xK_y     ), toggleWS)
 
-    -- Scratchpads
+    -- (some) Scratchpads
     , ((modm .|. shiftMask,  xK_minus ), namedScratchpadAction scratchpads "scratchpad")
     , ((modm,                xK_g     ), namedScratchpadAction scratchpads "ScratchGvim")
     {-, ((modm,                xK_z     ), namedScratchpadAction scratchpads "ScratchPidgin")-}
+
+    -- for XMonad.Layout.SubLayouts
+     , ((modm .|. controlMask, xK_h), sendMessage $ pullGroup L)
+     , ((modm .|. controlMask, xK_l), sendMessage $ pullGroup R)
+     , ((modm .|. controlMask, xK_k), sendMessage $ pullGroup U)
+     , ((modm .|. controlMask, xK_j), sendMessage $ pullGroup D)
+
+     , ((modm .|. controlMask, xK_m), withFocused (sendMessage . MergeAll))
+     , ((modm .|. controlMask, xK_u), withFocused (sendMessage . UnMerge))
     ]
     ++
 
@@ -192,7 +194,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
         , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
 --}}}
 ------------------------------------------------------------------------
--- Mouse bindings: default actions bound to mouse events
+-- Mouse bindings.
 --{{{
 myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 
@@ -215,15 +217,11 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 --{{{
 -- gaps, while avoidStruts doesn't work
 myMainLayout = avoidStruts $
-    {-configurableNavigation (navigateColor "#661111") $-}
-    smartBorders
-        (tiled
-        ||| mag
-        ||| full
-        ||| stb
-        )  -- Mirror tiled
+    windowNavigation $ -- for subTabbed (controls)
+    subTabbed $
+    boringWindows $ -- ignore not-focused windows in tabs
+    smartBorders (tiled ||| mag ||| full ||| stb)
     where
-        --tiled   = named "tiled" $ Tall  nmaster delta ratio
         tiled   = named " "  $
             gaps [(U,13)] $
             ResizableTall nmaster delta ratio []
@@ -236,7 +234,6 @@ myMainLayout = avoidStruts $
         full    = named "full" $
             gaps [(U,13)] $
             noBorders Full
-        --stb     = named "tabs" $ simpleTabbedBottom
         stb     = named "tabs" $
             gaps [(U,13)] $
             tabbedBottom shrinkText myTab
@@ -297,6 +294,8 @@ myManageHook = composeAll
     , resource  =? "kdesktop"       --> doIgnore
     , className =? "Zenity"         --> doCenterFloat]
         <+> namedScratchpadManageHook scratchpads
+        <+> manageDocks
+        <+> manageHook defaultConfig
 
 -- Scratchpads
 --
@@ -322,71 +321,60 @@ scratchpads = [
 -- return (All True) if the default handler is to be run afterwards. To
 -- combine event hooks use mappend or mconcat from Data.Monoid.
 --
---myEventHook = mempty
 myEventHook = fullscreenEventHook
-    <+>followEventHook
+    <+> focusFollow
 
-{-followEventHook = followOnlyIf $ disableFollowOnWS allButLastWS-}
-    {-where allButLastWS = init allWS-}
-          {-allWS        = myWorkspaces-}
+-- Toggle follow Mouse
+-- from: http://www.haskell.org/haskellwiki/Xmonad/Config_archive/adamvo's_xmonad.hs
+-- A nice little example of extensiblestate
+newtype FocusFollow = FocusFollow {getFocusFollow :: Bool } deriving (Typeable,Read,Show)
+instance ExtensionClass FocusFollow where
+    initialValue = FocusFollow True
+    extensionType = PersistentExtension
 
-followEventHook = followOnlyIf (fmap not isFull)
-    where
-        isFull = fmap (isSuffixOf "full") $
-            gets (description . W.layout . W.workspace . W.current . windowset)
-        {-isTabs = fmap (isSuffixOf "tabs") $-}
-            {-gets (description . W.layout . W.workspace . W.current . windowset)-}
--- TODO: combine the statements -> no followfocus on "tabs"
+-- this eventHook is the same as from xmonad for handling crossing events
+focusFollow e@(CrossingEvent {ev_window=w, ev_event_type=t})
+                | t == enterNotify, ev_mode e == notifyNormal =
+        whenX (XS.gets getFocusFollow) (focus w) >> return (All True)
+focusFollow _ = return (All True)
+
+toggleFF = XS.modify $ FocusFollow . not . getFocusFollow
 --}}}
 ------------------------------------------------------------------------
--- Status bars and logging
-
--- Perform an arbitrary action on each internal state change or X event.
--- See the 'XMonad.Hooks.DynamicLog' extension for examples.
---
---myLogHook = return ()
-myLogHook = dynamicLog
-
-------------------------------------------------------------------------
 -- Startup hook
---
---myStartupHook = return ()
+--{{{
 myStartupHook :: X ()
 myStartupHook = do
     spawn "pkill unclutter; unclutter &"
-    --spawn "[ -n $(ps -A | grep -c unclutter) ] || unclutter &"
-    --spawn "/home/hubi/.xmonad/mystartup.sh"
-
+--}}}
 ------------------------------------------------------------------------
--- Now run xmonad with all the defaults we set up.
+-- Now run xmonad
 main = do
     xmproc <- spawnPipe "xmobar /home/hubi/.xmonad/xmobarrc"
-    --xmproc <- spawnPipe "/usr/bin/tint2 /home/hubi/.xmonad/tint2rc"
     xmonad $ myConfig xmproc
 
 myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
-        terminal           = "urxvtc",
-        focusFollowsMouse  = True,
-        borderWidth        = 2,
-        modMask            = mod4Mask,
-        workspaces         = myWorkspaces,
-        normalBorderColor  = "#333333",
-        focusedBorderColor = "#dd0000",
-        keys               = myKeys,
-        mouseBindings      = myMouseBindings,
-        manageHook = myManageHook <+> manageDocks
-            <+> manageHook defaultConfig,
-        layoutHook         = myLayout,
-        handleEventHook    = myEventHook,
-        logHook            = dynamicLogWithPP xmobarPP
-            { ppOutput = hPutStrLn xmproc
-                , ppCurrent = xmobarColor "#ee9a00" "" . wrap "<" ">"
-                , ppSort = fmap (.namedScratchpadFilterOutWorkspace)
-                           $ ppSort defaultPP
-                , ppTitle = (" " ++) . xmobarColor "#ee9a00" ""
-                , ppVisible = xmobarColor "#ee9a00" ""
-            },
-        startupHook        = myStartupHook
+        terminal             = "urxvtc"
+        , focusFollowsMouse  = False -- see: focusFollow
+        , borderWidth        = 2
+        , modMask            = mod4Mask
+        , workspaces         = ["1","2","3","4","5","6","mail","web","im"]
+        , normalBorderColor  = "#333333"
+        , focusedBorderColor = "#dd0000"
+        , keys               = myKeys
+        , mouseBindings      = myMouseBindings
+        , manageHook         = myManageHook
+        , layoutHook         = myLayout
+        , handleEventHook    = myEventHook
+        , logHook            = dynamicLogWithPP xmobarPP
+            { ppOutput          = hPutStrLn xmproc
+                , ppCurrent     = xmobarColor "#ee9a00" "" . wrap "<" ">"
+                , ppSort        = fmap (.namedScratchpadFilterOutWorkspace)
+                    $ ppSort defaultPP
+                , ppTitle       = (" " ++) . xmobarColor "#ee9a00" ""
+                , ppVisible     = xmobarColor "#ee9a00" ""
+            } >>  updatePointer (TowardsCentre 0.2 0.2) 
+        , startupHook        = myStartupHook
     }
 
 -- vim: set ts=4 sw=4 sts=4 et fenc=utf-8 foldmethod=marker foldmarker={{{,}}}:
