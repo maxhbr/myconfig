@@ -2,7 +2,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Do Dez 27, 2012  12:08
+-- Last modified: Fr Dez 28, 2012  09:40
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 
@@ -13,12 +13,12 @@ import System.IO
 import XMonad
 import XMonad.ManageHook
 
-import XMonad.Prompt
-import XMonad.Prompt.Shell
+import XMonad.Prompt ( defaultXPConfig, font, height, XPConfig )
+import XMonad.Prompt.Shell ( shellPrompt )
 
 import XMonad.Hooks.DynamicLog
-import XMonad.Hooks.EwmhDesktops
-import XMonad.Hooks.ManageDocks
+import XMonad.Hooks.EwmhDesktops ( fullscreenEventHook )
+import XMonad.Hooks.ManageDocks  -- ( avoidStruts, manageDocks, ToggleStruts )
 import XMonad.Hooks.ManageHelpers
 import XMonad.Hooks.UrgencyHook
 
@@ -29,24 +29,24 @@ import XMonad.Util.Run(spawnPipe)
 import XMonad.Actions.CycleWS
 import XMonad.Actions.UpdatePointer
 
-import XMonad.Layout.BoringWindows
+import XMonad.Layout.BoringWindows( boringAuto, focusUp, focusDown )
 import XMonad.Layout.Gaps
 import XMonad.Layout.IM
 import XMonad.Layout.LayoutHints
 import XMonad.Layout.Magnifier
-import XMonad.Layout.Named
-import XMonad.Layout.NoBorders (smartBorders, noBorders)
-import XMonad.Layout.PerWorkspace (onWorkspace)
+import XMonad.Layout.Named ( named )
+import XMonad.Layout.NoBorders ( smartBorders, noBorders )
+import XMonad.Layout.PerWorkspace ( onWorkspace )
 import XMonad.Layout.ResizableTile
 import XMonad.Layout.Simplest
 import XMonad.Layout.SubLayouts
 import XMonad.Layout.Tabbed
-import XMonad.Layout.WindowNavigation
+import XMonad.Layout.WindowNavigation (windowNavigation)
 
-import qualified Data.Map        as M
-import qualified XMonad.StackSet as W
+import qualified Data.Map                    as M
+import qualified XMonad.StackSet             as W
 import qualified XMonad.Util.ExtensibleState as XS
-import qualified XMonad.Prompt         as P
+import qualified XMonad.Prompt               as P
 
 ------------------------------------------------------------------------
 -- Key bindings.
@@ -73,8 +73,9 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,               xK_n     ), refresh)
 
     -- Move focus to the next window
-    {-, ((modm,               xK_Tab   ), windows W.focusDown)-}
-    , ((modm,               xK_Tab   ), focusDown) -- from BoringWindows
+    , ((modm,               xK_Tab   ), windows W.focusDown)
+    {-, ((modm,               xK_Tab   ), focusDown) -- from BoringWindows-}
+    , ((modm .|. shiftMask, xK_Tab   ), focusDown) -- from BoringWindows
 
     -- Move focus to the next window
     , ((modm,               xK_j     ), windows W.focusDown)
@@ -213,26 +214,31 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 --{{{
 -- gaps, only while avoidStruts doesn't work
 myMainLayout = avoidStrutsOn[U] $
+    gaps [(U,13)] $ -- only while avoidStruts doesn't work
     windowNavigation $ -- for subTabbed (controls)
-    subThis (smartBorders (tiled ||| mag ||| full ||| stb))
+    boringAuto $
+    smartBorders $
+    basicLayout
     where
-        tiled   = named " "  $
-            gaps [(U,13)] $
+        basicLayout = tiled ||| mag ||| full ||| stb
+        tiled       = named " "  $
+            subThis $
             ResizableTall nmaster delta ratio []
-        nmaster = 1
-        ratio   = 1/2
-        delta   = 3/100
-        mag     = named "zoom" $
-            gaps [(U,13)] $
-            magnifier (Tall 1 (3/100) (1/2))
-        full    = named "full" $
-            gaps [(U,13)] $
-            noBorders Full
-        stb     = named "tabs" $
-            gaps [(U,13)] $
+        mag         = named "zoom" $
+            subThis $
+            magnifier (Tall nmaster delta ratio)
+        full        = named "full" $
+            subThis $
+            Full
+            -- noBorders Full
+        stb         = named "tabs" $
+            subThis $
             tabbedBottom shrinkText myTab
-        subThis x = boringAuto . addTabs shrinkText myTab $ subLayout [] Simplest x
-        myTab   = defaultTheme
+        nmaster     = 1
+        ratio       = 1/2
+        delta       = 3/100
+        subThis x   = addTabs shrinkText myTab $ subLayout [] Simplest x
+        myTab       = defaultTheme
             { activeColor         = "black"
             , inactiveColor       = "black"
             , urgentColor         = "yellow"
@@ -244,20 +250,20 @@ myMainLayout = avoidStrutsOn[U] $
             , urgentTextColor     = "yellow" }
 
 -- Define layout for specific workspaces
-myChatLayout = avoidStruts $ smartBorders (tiled ||| full)
+myChatLayout = avoidStrutsOn[U] $
+    gaps [(U,13)] $
+    pidgin $
+    (tiled ||| full)
     where
         tiled   = named "tiled" $
-            gaps [(U,13)] $
-            pidgin $
+            smartBorders $
             ResizableTall nmaster delta ratio []
         nmaster = 1
         ratio   = 1/2
         delta   = 3/100
         full    = named "full" $
-            pidgin $
-            gaps [(U,13)] $
             noBorders Full
-        pidgin l = withIM (1%8) (Role "buddy_list") l
+        pidgin l = withIM (1%6) (Role "buddy_list") l
 
 -- Put all layouts together
 myLayout = onWorkspace "im" myChatLayout $ myMainLayout
@@ -340,18 +346,12 @@ toggleFF = XS.modify $ FocusFollow . not . getFocusFollow
 --{{{
 myStartupHook :: X ()
 myStartupHook = do
-    spawn "pkill unclutter; unclutter &"
+    spawn "pkill unclutter; unclutter &" 
+    spawn "urxvt -e bash -c 'if ! tmux has > /dev/null ; then tmux attach ; else tmux new ; fi'"
 --}}}
 ------------------------------------------------------------------------
--- Now run xmonad
-main = do
-    xmproc <- spawnPipe "xmobar /home/hubi/.xmonad/xmobarrc"
-    xmonad $ myConfig xmproc
-
 myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
         terminal             = "urxvtc"
-    , ((modm,               xK_i     ), namedScratchpadAction scratchpads "ScratchWeb")
-    --, ((modm .|. shiftMask, xK_i     ), namedScratchpadAction scratchpads "ScratchMail")
         , focusFollowsMouse  = False -- see: focusFollow
         , borderWidth        = 2
         , modMask            = mod4Mask
@@ -373,5 +373,10 @@ myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
             } >>  updatePointer (TowardsCentre 0.2 0.2)
         , startupHook        = myStartupHook
     }
+------------------------------------------------------------------------
+-- Now run xmonad
+main = do
+    xmproc <- spawnPipe "xmobar /home/hubi/.xmonad/xmobarrc"
+    xmonad $ myConfig xmproc
 
 -- vim: set ts=4 sw=4 sts=4 et fenc=utf-8 foldmethod=marker foldmarker={{{,}}}:

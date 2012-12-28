@@ -250,6 +250,7 @@ alias gvime="gvim -u ~/.vimencrypt -x "
 #alias ducks='du -cksh * | sort -rn|head -11' # Lists folders and files sizes in the current folder
 alias ducks='du -cs * |sort -rn |head -11' # better
 alias ducksall='du -cs * |sort -rn' # better without head
+alias ducksALL='du -c --max-depth=1 ./ |sort -rn'
 alias countFilesByTypes="find . -type f -exec basename \"{}\" \\; | sed -e 's/.*\\.//gi' | sort  | uniq  -c | sort  -rn"
 
 # download from youtube
