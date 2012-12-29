@@ -2,7 +2,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Fr Dez 28, 2012  09:40
+-- Last modified: Sa Dez 29, 2012  09:49
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 
@@ -12,6 +12,7 @@ import System.Exit
 import System.IO
 import XMonad
 import XMonad.ManageHook
+import Graphics.X11.ExtraTypes.XF86 ( xF86XK_Display )
 
 import XMonad.Prompt ( defaultXPConfig, font, height, XPConfig )
 import XMonad.Prompt.Shell ( shellPrompt )
@@ -30,7 +31,7 @@ import XMonad.Actions.CycleWS
 import XMonad.Actions.UpdatePointer
 
 import XMonad.Layout.BoringWindows( boringAuto, focusUp, focusDown )
-import XMonad.Layout.Gaps
+import XMonad.Layout.Gaps ( gaps, GapMessage( ToggleGaps ) )
 import XMonad.Layout.IM
 import XMonad.Layout.LayoutHints
 import XMonad.Layout.Magnifier
@@ -57,8 +58,10 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,               xK_p     ), spawn "dmenu_run")
     -- alternative zu anderem starter
     , ((modm,               xK_x     ), shellPrompt defaultXPConfig)
-    , ((modm,               xK_o     ), spawn "emelfm2")
     , ((modm .|. shiftMask, xK_p     ), spawn "gmrun")
+
+    , ((modm,               xK_o     ), spawn "urxvt -e bash -c 'ranger'")
+    , ((modm .|. shiftMask, xK_o     ), spawn "emelfm2")
 
     -- close focused window
     , ((modm .|. shiftMask, xK_c     ), kill)
@@ -114,8 +117,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. shiftMask, xK_q     ), io (exitWith ExitSuccess))
 
     -- xmobar has some Problems
-    ,((modm,                xK_b     ), sendMessage ToggleStruts)
-    ,((modm .|. shiftMask,  xK_b     ), sendMessage ToggleGaps)
+    , ((modm,                xK_b     ), sendMessage ToggleStruts)
+    , ((modm .|. shiftMask,  xK_b     ), sendMessage ToggleGaps)
 
     -- Restart xmonad
     , ((modm,                xK_q    ), spawn "xmonad --recompile; xmonad --restart") ]
@@ -126,7 +129,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     ++
     [ -- toggle touchpad
     ((0,                  0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
-
+    , ((0,              xF86XK_Display), spawn "~/bin/disp-toggle")
+    --xF86XK_SplitScreen
     -- screensaver
     {-, ((modm .|. shiftMask,  xK_y    ), spawn "xbacklight -set 0; xscreensaver-command -lock")-}
     , ((modm .|. shiftMask,  xK_y    ), spawn "xbacklight -set 0; i3lock")
@@ -222,22 +226,18 @@ myMainLayout = avoidStrutsOn[U] $
     where
         basicLayout = tiled ||| mag ||| full ||| stb
         tiled       = named " "  $
-            subThis $
+            addTabs shrinkText myTab $
+            subLayout [] Simplest $
             ResizableTall nmaster delta ratio []
         mag         = named "zoom" $
-            subThis $
             magnifier (Tall nmaster delta ratio)
         full        = named "full" $
-            subThis $
             Full
-            -- noBorders Full
         stb         = named "tabs" $
-            subThis $
             tabbedBottom shrinkText myTab
         nmaster     = 1
         ratio       = 1/2
         delta       = 3/100
-        subThis x   = addTabs shrinkText myTab $ subLayout [] Simplest x
         myTab       = defaultTheme
             { activeColor         = "black"
             , inactiveColor       = "black"
@@ -252,17 +252,17 @@ myMainLayout = avoidStrutsOn[U] $
 -- Define layout for specific workspaces
 myChatLayout = avoidStrutsOn[U] $
     gaps [(U,13)] $
+    smartBorders $
     pidgin $
     (tiled ||| full)
     where
         tiled   = named "tiled" $
-            smartBorders $
             ResizableTall nmaster delta ratio []
         nmaster = 1
         ratio   = 1/2
         delta   = 3/100
         full    = named "full" $
-            noBorders Full
+            Full
         pidgin l = withIM (1%6) (Role "buddy_list") l
 
 -- Put all layouts together
@@ -302,7 +302,7 @@ myManageHook = composeAll
 --
 scratchpads :: [NamedScratchpad]
 scratchpads = [
-        NS "scratchpad" "urxvt -name Scratchpad" (resource =? "Scratchpad")
+        NS "scratchpad" "urxvt -name Scratchpad -e ~/.xmonad/tmux-scratch.sh" (resource =? "Scratchpad")
             (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
         , NS "ScratchGvim" "gvim --role ScratchGvim" (role =? "ScratchGvim")
             nonFloating
@@ -346,8 +346,8 @@ toggleFF = XS.modify $ FocusFollow . not . getFocusFollow
 --{{{
 myStartupHook :: X ()
 myStartupHook = do
-    spawn "pkill unclutter; unclutter &" 
-    spawn "urxvt -e bash -c 'if ! tmux has > /dev/null ; then tmux attach ; else tmux new ; fi'"
+    spawn "pkill unclutter; unclutter &"
+    spawn "urxvtc"
 --}}}
 ------------------------------------------------------------------------
 myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
