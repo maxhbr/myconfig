@@ -1,5 +1,5 @@
-myconfig
-========
+myconfig / my dotfiles
+======================
 
 my Linux Configuration on Arch Linux
 
