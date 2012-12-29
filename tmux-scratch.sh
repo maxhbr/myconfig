@@ -1,5 +1,5 @@
 #!/bin/sh
-# ~/bin/tmux-scratch.sh
+# ~/.xmonad/tmux-scratch.sh
 PROJECT_NAME="tmux-scratch"
 
 tmux has-session -t $PROJECT_NAME 2>/dev/null
