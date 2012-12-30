@@ -2,13 +2,16 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Sa Dez 29, 2012  09:49
+-- Last modified: So Dez 30, 2012  02:31
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 
+------------------------------------------------------------------------
+-- Imports
+--{{{
 import Data.Monoid
 import Data.Ratio ((%))
-import System.Exit
+import System.Exit ( exitWith, ExitCode( ExitSuccess ) )
 import System.IO
 import XMonad
 import XMonad.ManageHook
@@ -17,38 +20,46 @@ import Graphics.X11.ExtraTypes.XF86 ( xF86XK_Display )
 import XMonad.Prompt ( defaultXPConfig, font, height, XPConfig )
 import XMonad.Prompt.Shell ( shellPrompt )
 
-import XMonad.Hooks.DynamicLog
+import XMonad.Hooks.DynamicLog ( dynamicLogWithPP,xmobarPP, PP(..), defaultPP,
+    xmobarColor, wrap )
 import XMonad.Hooks.EwmhDesktops ( fullscreenEventHook )
-import XMonad.Hooks.ManageDocks  -- ( avoidStruts, manageDocks, ToggleStruts )
-import XMonad.Hooks.ManageHelpers
-import XMonad.Hooks.UrgencyHook
+import XMonad.Hooks.ManageDocks ( avoidStrutsOn, manageDocks, ToggleStruts(..) )
+import XMonad.Hooks.ManageHelpers ( doFullFloat, doCenterFloat )
+import XMonad.Hooks.UrgencyHook ( withUrgencyHook, NoUrgencyHook(..) )
 
-import XMonad.Util.EZConfig
-import XMonad.Util.NamedScratchpad
-import XMonad.Util.Run(spawnPipe)
+import XMonad.Util.NamedScratchpad ( NamedScratchpad(..), customFloating,
+    nonFloating, namedScratchpadAction, namedScratchpadFilterOutWorkspace,
+    namedScratchpadManageHook )
+import XMonad.Util.Run ( spawnPipe )
+import XMonad.Util.Types ( Direction2D(..) )
 
-import XMonad.Actions.CycleWS
-import XMonad.Actions.UpdatePointer
+import XMonad.Actions.CycleWS ( nextWS , prevWS , shiftToNext , shiftToPrev,
+    nextScreen , prevScreen , shiftNextScreen , shiftPrevScreen , toggleWS 
+    , moveTo , Direction1D(..) , WSType( NonEmptyWS ) )
+import XMonad.Actions.UpdatePointer ( updatePointer, 
+    PointerPosition ( TowardsCentre ) )
 
 import XMonad.Layout.BoringWindows( boringAuto, focusUp, focusDown )
 import XMonad.Layout.Gaps ( gaps, GapMessage( ToggleGaps ) )
-import XMonad.Layout.IM
-import XMonad.Layout.LayoutHints
-import XMonad.Layout.Magnifier
+import XMonad.Layout.IM ( Property(..), withIM )
+import XMonad.Layout.Magnifier ( magnifier )
 import XMonad.Layout.Named ( named )
 import XMonad.Layout.NoBorders ( smartBorders, noBorders )
 import XMonad.Layout.PerWorkspace ( onWorkspace )
-import XMonad.Layout.ResizableTile
-import XMonad.Layout.Simplest
-import XMonad.Layout.SubLayouts
-import XMonad.Layout.Tabbed
+import XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall), 
+    MirrorResize( MirrorShrink, MirrorExpand ) )
+import XMonad.Layout.Simplest ( Simplest(Simplest) )
+import XMonad.Layout.SubLayouts ( subLayout, pullGroup,
+    GroupMsg( MergeAll, UnMerge ) )
+import XMonad.Layout.Tabbed ( addTabs, shrinkText, tabbedBottom, defaultTheme,
+    Theme(..) )
 import XMonad.Layout.WindowNavigation (windowNavigation)
 
 import qualified Data.Map                    as M
 import qualified XMonad.StackSet             as W
 import qualified XMonad.Util.ExtensibleState as XS
 import qualified XMonad.Prompt               as P
-
+--}}}
 ------------------------------------------------------------------------
 -- Key bindings.
 --{{{
@@ -129,7 +140,9 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     ++
     [ -- toggle touchpad
     ((0,                  0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
-    , ((0,              xF86XK_Display), spawn "~/bin/disp-toggle")
+    , ((0,              xF86XK_Display), spawn "~/bin/disp-controll 2") -- toggle
+    , ((0 .|. shiftMask, xF86XK_Display), spawn "~/bin/disp-controll 1") -- auto
+    , ((0 .|. controlMask, xF86XK_Display), spawn "~/bin/disp-controll 3") -- cycle
     --xF86XK_SplitScreen
     -- screensaver
     {-, ((modm .|. shiftMask,  xK_y    ), spawn "xbacklight -set 0; xscreensaver-command -lock")-}
@@ -247,7 +260,8 @@ myMainLayout = avoidStrutsOn[U] $
             , urgentBorderColor   = "black"
             , activeTextColor     = "orange"
             , inactiveTextColor   = "#666666"
-            , urgentTextColor     = "yellow" }
+            , decoHeight          = 14
+            }
 
 -- Define layout for specific workspaces
 myChatLayout = avoidStrutsOn[U] $
@@ -302,7 +316,8 @@ myManageHook = composeAll
 --
 scratchpads :: [NamedScratchpad]
 scratchpads = [
-        NS "scratchpad" "urxvt -name Scratchpad -e ~/.xmonad/tmux-scratch.sh" (resource =? "Scratchpad")
+        NS "scratchpad" "urxvt -name Scratchpad -e ~/.xmonad/tmux-scratch.sh"
+            (resource =? "Scratchpad")
             (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
         , NS "ScratchGvim" "gvim --role ScratchGvim" (role =? "ScratchGvim")
             nonFloating
