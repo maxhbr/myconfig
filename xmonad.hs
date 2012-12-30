@@ -2,10 +2,9 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: So Dez 30, 2012  02:31
+-- Last modified: So Dez 30, 2012  05:18
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
-
 ------------------------------------------------------------------------
 -- Imports
 --{{{
@@ -280,7 +279,9 @@ myChatLayout = avoidStrutsOn[U] $
         pidgin l = withIM (1%6) (Role "buddy_list") l
 
 -- Put all layouts together
-myLayout = onWorkspace "im" myChatLayout $ myMainLayout
+myLayout = onWorkspace "im" myChatLayout $
+    myMainLayout
+    {-onWorkspace "VM" Full $-}
 --}}}
 ------------------------------------------------------------------------
 -- Window rules:
@@ -298,16 +299,18 @@ myLayout = onWorkspace "im" myChatLayout $ myMainLayout
 -- 'className' and 'resource' are used below.
 --
 myManageHook = composeAll
-    [ className =? "MPlayer"        --> doFloat
+    [ className =?  "Xmessage"      --> doCenterFloat 
+    , className =? "MPlayer"        --> doFloat
     , className =? "Pidgin"         --> doShift "im"
     , className =? "Chromium"       --> doShift "web"
     , className =? "Sylpheed"       --> doShift "mail"
     , className =? "Gimp"           --> doShift "4"
-    , resource  =? "Gimp"           --> doShift "4"
+    , resource  =? "Gimp"           --> doShift "4" 
+    {-, className =? "VirtualBox"     --> doShift "VM"-}
     , className =? "Virtualbox"     --> doFullFloat
     , resource  =? "desktop_window" --> doIgnore
     , resource  =? "kdesktop"       --> doIgnore
-    , className =? "Zenity"         --> doCenterFloat]
+    , className =? "Zenity"         --> doCenterFloat ]
         <+> namedScratchpadManageHook scratchpads
         <+> manageDocks
         <+> manageHook defaultConfig
