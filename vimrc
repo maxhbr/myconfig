@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Di Dez 25, 2012  07:06
+" Last modified: Mo Dez 31, 2012  08:50
 "
 " this config will automatically download Vundle from git, and then it will
 " install all plugins
@@ -386,7 +386,7 @@ noremap <silent> <F10> :q!<CR>
 inoremap <silent> <F10> <Esc>:q!<CR>
 
 "Markdown to HTML
-nmap <leader>md :%!/home/hubi/bin/Markdown.pl --html4tags <cr>
+nmap <leader>md :%!~/bin/Markdown.pl --html4tags <cr>
 
 "easyer increment/decrement
 nnoremap + <C-a>

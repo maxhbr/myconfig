@@ -4,7 +4,7 @@
 mySetBkg() {
   background="background1.png"
   #background="DSC03551-2-1080-bw.jpg"
-  feh --bg-center "/home/hubi/.background/${background}"
+  feh --bg-center "~/.background/${background}"
 }
 
 myAutomatic() {
@@ -30,7 +30,7 @@ myAutomatic() {
     "0")
       xrandr --output LVDS1 --auto --primary
       if [ -f ~/.icc/X220.icc ]; then
-        dispwin -d 1 /home/hubi/.icc/X220.icc
+        dispwin -d 1 ~/.icc/X220.icc
       fi
       if [ "$CHK_HDMI1" == "connected" ] ; then
         xrandr --output HDMI1 --auto --right-of LVDS1
@@ -45,10 +45,10 @@ myAutomatic() {
             xrandr --output LVDS1 --auto --primary \
               --output HDMI2 --auto --right-of LVDS1
             if [ -f ~/.icc/X220.icc ]; then
-              dispwin -d 1 /home/hubi/.icc/X220.icc
+              dispwin -d 1 ~/.icc/X220.icc
             fi
             if [ -f ~/.icc/23anX220.icc ]; then
-              dispwin -d 2 /home/hubi/.icc/23anX220.icc
+              dispwin -d 2 ~/.icc/23anX220.icc
             fi
             ;;
           "closed")
@@ -56,14 +56,14 @@ myAutomatic() {
             xrandr --output LVDS1 --off \
               --output HDMI2 --auto --primary
             if [ -f ~/.icc/23anX220.icc ]; then
-              dispwin -d 1 /home/hubi/.icc/23anX220.icc
+              dispwin -d 1 ~/.icc/23anX220.icc
             fi
             ;;
         esac
       else
         xrandr --output LVDS1 --auto --primary
         if [ -f ~/.icc/X220.icc ]; then
-          dispwin -d 1 /home/hubi/.icc/X220.icc
+          dispwin -d 1 ~/.icc/X220.icc
         fi
         if [ "$CHK_HDMI1" == "connected" ] ; then
           xrandr --output HDMI1 --auto --right-of LVDS1

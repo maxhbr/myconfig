@@ -54,6 +54,10 @@ mkcd() { #make dir and enter it
   cd "$1"
 }
 
+function s {
+  cd ~/studium/$1
+} 
+
 alias grep='grep --color=auto'
 alias fgrep='fgrep --color=auto'
 alias egrep='egrep --color=auto'
@@ -118,6 +122,8 @@ e() {
 #-------------------------------------------------------------------}}}
 #   misc
 #-------------------------------------------------------------------{{{
+
+#have() { type "$1" &> /dev/null; }
 
 alias mylatexmk="grep -l '\\documentclass' *tex | xargs latexmk -pdf -pvc" # -silent"
 #for vim latex plugin:

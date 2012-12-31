@@ -2,7 +2,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: So Dez 30, 2012  05:18
+-- Last modified: Mo Dez 31, 2012  08:52
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -154,17 +154,17 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((0,                   xK_Print), spawn "scrot screen_%Y-%m-%d_%H-%M-%S.png -d 1")
 
     --volume controls
-    , ((0,                  0x1008ff12), spawn "/home/hubi/.xmonad/myvolume.sh m")
-    , ((0,                  0x1008ff11), spawn "/home/hubi/.xmonad/myvolume.sh -")
-    , ((0,                  0x1008ff13), spawn "/home/hubi/.xmonad/myvolume.sh +")
+    , ((0,                  0x1008ff12), spawn "~/.xmonad/myvolume.sh m")
+    , ((0,                  0x1008ff11), spawn "~/.xmonad/myvolume.sh -")
+    , ((0,                  0x1008ff13), spawn "~/.xmonad/myvolume.sh +")
 
      -- toggle mouse
-    --, ((modm,                xK_s     ), spawn "/home/hubi/.xmonad/togglemouse.sh silent off")
-    --, ((modm .|. shiftMask,  xK_s     ), spawn "/home/hubi/.xmonad/togglemouse.sh")
+    --, ((modm,                xK_s     ), spawn "~/.xmonad/togglemouse.sh silent off")
+    --, ((modm .|. shiftMask,  xK_s     ), spawn "~/.xmonad/togglemouse.sh")
     , ((modm,                xK_s     ), toggleFF)
 
     -- check for dock, set up desktop
-    , ((modm .|. shiftMask, xK_d) , spawn "/home/hubi/bin/mydock.sh") ]
+    , ((modm .|. shiftMask, xK_d) , spawn "~/bin/mydock.sh") ]
     ++
     [ -- CycleWS setup
     ((modm,                xK_Down  ), moveTo Next NonEmptyWS)
@@ -368,7 +368,8 @@ myStartupHook = do
     spawn "urxvtc"
 --}}}
 ------------------------------------------------------------------------
-myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
+myConfig xmproc = withUrgencyHook NoUrgencyHook $
+    defaultConfig {
         terminal             = "urxvtc"
         , focusFollowsMouse  = False -- see: focusFollow
         , borderWidth        = 2
@@ -383,18 +384,18 @@ myConfig xmproc = withUrgencyHook NoUrgencyHook $ defaultConfig {
         , handleEventHook    = myEventHook
         , logHook            = dynamicLogWithPP xmobarPP
             { ppOutput          = hPutStrLn xmproc
-                , ppCurrent     = xmobarColor "#ee9a00" "" . wrap "<" ">"
-                , ppSort        = fmap (.namedScratchpadFilterOutWorkspace)
-                    $ ppSort defaultPP
-                , ppTitle       = (" " ++) . xmobarColor "#ee9a00" ""
-                , ppVisible     = xmobarColor "#ee9a00" ""
-            } >>  updatePointer (TowardsCentre 0.2 0.2)
+            , ppCurrent     = xmobarColor "#ee9a00" "" . wrap "<" ">"
+            , ppSort        = fmap (.namedScratchpadFilterOutWorkspace)
+                $ ppSort defaultPP
+            , ppTitle       = (" " ++) . xmobarColor "#ee9a00" ""
+            , ppVisible     = xmobarColor "#ee9a00" ""
+            } >> updatePointer (TowardsCentre 0.2 0.2)
         , startupHook        = myStartupHook
-    }
+        }
 ------------------------------------------------------------------------
 -- Now run xmonad
 main = do
-    xmproc <- spawnPipe "xmobar /home/hubi/.xmonad/xmobarrc"
+    xmproc <- spawnPipe "xmobar ~/.xmonad/xmobarrc"
     xmonad $ myConfig xmproc
 
 -- vim: set ts=4 sw=4 sts=4 et fenc=utf-8 foldmethod=marker foldmarker={{{,}}}:
