@@ -2,7 +2,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Do Jan 03, 2013  11:17
+-- Last modified: Do Jan 03, 2013  03:57
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -38,7 +38,8 @@ import XMonad.Actions.CycleWS ( nextWS , prevWS , shiftToNext , shiftToPrev,
 import XMonad.Actions.UpdatePointer ( updatePointer, 
     PointerPosition ( TowardsCentre ) )
 
-import XMonad.Layout.BoringWindows( boringAuto, focusUp, focusDown )
+import XMonad.Layout.BoringWindows( boringAuto, focusUp, focusDown ) 
+import XMonad.Layout.Gaps ( gaps, GapMessage( ToggleGaps ) )
 import XMonad.Layout.IM ( Property(..), withIM )
 import XMonad.Layout.Magnifier ( magnifier )
 import XMonad.Layout.Named ( named )
@@ -127,14 +128,17 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
 
     -- xmobar has some Problems
     , ((modm,                xK_b     ), sendMessage ToggleStruts)
+    , ((modm .|. shiftMask,  xK_b     ), sendMessage ToggleGaps)
 
     -- Restart xmonad
     , ((modm,                xK_q    ), spawn "xmonad --recompile; xmonad --restart") ]
     ++
-    [ ((modm .|. shiftMask,  xK_F11  ),  spawn "systemctl suspend")
+    [ ((modm .|. shiftMask,  xK_F10  ),  spawn "systemctl suspend")
     , ((modm .|. shiftMask,  xK_F11  ),  spawn "systemctl reboot")
     , ((modm .|. shiftMask,  xK_F12  ),  spawn "systemctl poweroff") ]
     ++
+    --[ ((modm,               xK_F9  ),  spawn "sxiv ~/.xmonad/neo_Ebenen_1_2_3_4.png")]
+    -- ++
     [ -- toggle touchpad
     ((0,                  0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
     , ((0,              xF86XK_Display), spawn "~/bin/disp-controll 2") -- toggle
@@ -226,11 +230,8 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 ------------------------------------------------------------------------
 -- Layouts:
 --{{{
-myMainLayout = avoidStrutsOn[U] $
-    configurableNavigation (navigateColor "#333333") $
-    {-windowNavigation $ -- for subTabbed (controls)-}
+myMainLayout = configurableNavigation (navigateColor "#333333") $ 
     boringAuto $
-    smartBorders $
     basicLayout
     where
         basicLayout = tiled ||| mag ||| full ||| stb
@@ -261,7 +262,6 @@ myMainLayout = avoidStrutsOn[U] $
 
 -- Define layout for specific workspaces
 myChatLayout = avoidStrutsOn[U] $
-    smartBorders $
     pidgin $
     (tiled ||| full)
     where
@@ -275,7 +275,10 @@ myChatLayout = avoidStrutsOn[U] $
         pidgin l = withIM (1%6) (Role "buddy_list") l
 
 -- Put all layouts together
-myLayout = onWorkspace "im" myChatLayout $
+myLayout = avoidStrutsOn[U] $
+    gaps [(U,13)] $ -- only while avoidStruts doesn't work
+    smartBorders $
+    onWorkspace "im" myChatLayout $
     myMainLayout
     {-onWorkspace "VM" Full $-}
 --}}}

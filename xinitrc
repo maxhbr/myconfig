@@ -3,13 +3,17 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Di Dez 25, 2012  06:02
+# Last modified: Do Jan 03, 2013  04:04
 
 # Get back ctrl+alt+backspace in new versions of xorg
 # setxkbmap -option terminate:ctrl_alt_bksp
 
 xsetroot -cursor_name left_ptr
 
+#toggle to neo via scrol
+#setxkbmap -layout de,de -variant nodeadkeys,neo -option -option grp:sclk_toggle -option grp_led:scrol
+
+#setxkbmap -layout de -variant nodeadkeys
 # set caps lock as ctrl
 setxkbmap -option ctrl:nocaps
 
@@ -18,15 +22,11 @@ xcompmgr -n &
 ## Disable beeps
 #xset -b # doesnt work
 xset dpms 300 600 900 & # screen saver replacement
-#/usr/bin/xscreensaver -no-splash &
-#setxkbmap -layout de
 xbacklight -set 90 &
 
 ## OSD
 #dunst &
 
-
-# keynav & # mouseless
 exec urxvtd & # -q -o -f &
 
 [[ -f ~/.Xresources ]] && xrdb -merge ~/.Xresources
@@ -46,13 +46,6 @@ else
   fi
 fi
 
-# exec conky &
-
-# main Display
-#if [ "${DISPLAY}" = ":0" ]; then
-#fi
-
-#exec unclutter & # moved to xmonad.hs
 exec ck-launch-session dbus-launch xmonad
 #exec ck-launch-session dbus-launch xmonad > /dev/null 2>&1
 #exec ck-launch-session dbus-launch --sh-syntax --exit-with-session i3 -V -d all > /tmp/i3log 2>&1

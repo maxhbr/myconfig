@@ -16,6 +16,7 @@ Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
                     , Run Network "wlan0" ["-L","0","-H","32","--normal","green","--high","red"] 10
                     , Run Com "~/.xmonad/myinformation.sh" [] "info" 100
                     , Run Date "%a %d.%m.%Y %H:%M:%S" "date" 10
+                    --, Run Com "setxkbmap -print | grep xkb_symbols | awk -F\"+\" '{print $2}'"  [] "keyboard" 30
                     ]
        , sepChar = "%"
        , alignSep = "}{"
