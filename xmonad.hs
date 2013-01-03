@@ -2,7 +2,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Mo Dez 31, 2012  08:52
+-- Last modified: Do Jan 03, 2013  11:17
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -39,7 +39,6 @@ import XMonad.Actions.UpdatePointer ( updatePointer,
     PointerPosition ( TowardsCentre ) )
 
 import XMonad.Layout.BoringWindows( boringAuto, focusUp, focusDown )
-import XMonad.Layout.Gaps ( gaps, GapMessage( ToggleGaps ) )
 import XMonad.Layout.IM ( Property(..), withIM )
 import XMonad.Layout.Magnifier ( magnifier )
 import XMonad.Layout.Named ( named )
@@ -52,7 +51,7 @@ import XMonad.Layout.SubLayouts ( subLayout, pullGroup,
     GroupMsg( MergeAll, UnMerge ) )
 import XMonad.Layout.Tabbed ( addTabs, shrinkText, tabbedBottom, defaultTheme,
     Theme(..) )
-import XMonad.Layout.WindowNavigation (windowNavigation)
+import XMonad.Layout.WindowNavigation ( configurableNavigation, navigateColor )
 
 import qualified Data.Map                    as M
 import qualified XMonad.StackSet             as W
@@ -128,7 +127,6 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
 
     -- xmobar has some Problems
     , ((modm,                xK_b     ), sendMessage ToggleStruts)
-    , ((modm .|. shiftMask,  xK_b     ), sendMessage ToggleGaps)
 
     -- Restart xmonad
     , ((modm,                xK_q    ), spawn "xmonad --recompile; xmonad --restart") ]
@@ -228,10 +226,9 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 ------------------------------------------------------------------------
 -- Layouts:
 --{{{
--- gaps, only while avoidStruts doesn't work
 myMainLayout = avoidStrutsOn[U] $
-    gaps [(U,13)] $ -- only while avoidStruts doesn't work
-    windowNavigation $ -- for subTabbed (controls)
+    configurableNavigation (navigateColor "#333333") $
+    {-windowNavigation $ -- for subTabbed (controls)-}
     boringAuto $
     smartBorders $
     basicLayout
@@ -264,7 +261,6 @@ myMainLayout = avoidStrutsOn[U] $
 
 -- Define layout for specific workspaces
 myChatLayout = avoidStrutsOn[U] $
-    gaps [(U,13)] $
     smartBorders $
     pidgin $
     (tiled ||| full)
@@ -324,9 +320,9 @@ scratchpads = [
             (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
         , NS "ScratchGvim" "gvim --role ScratchGvim" (role =? "ScratchGvim")
             nonFloating
-        --, NS "ScratchWeb" "Chromium" (className =? "Chromium") nonFloating
         , NS "ScratchWeb" "dwb" (resource =? "dwb")
             (customFloating $ W.RationalRect (1/12) (1/12) (5/6) (5/6))
+        --, NS "ScratchWeb" "Chromium" (className =? "Chromium") nonFloating
         --, NS "ScratchMail" "sylpheed" (className =? "Sylpheed")
         --    nonFloating
         {-, NS "ScratchPidgin" "pidgin" (role =? "conversation")-}
