@@ -1,18 +1,27 @@
 #!/bin/sh
 # toggle between default layout and neo
 
-KEYBOARD=`cat /tmp/mykeyboard`
-[[ "$KEYBOARD" = "neo" ]]
-RETURN=$?
-if [[ $RETURN -eq 0 ]]; then
-  setxkbmap de nodeadkeys -option
+if [[ -f /tmp/mykeyboard ]]; then
+  #setxkbmap de nodeadkeys -option
+  setxkbmap -layout de,de -variant nodeadkeys,neo -option -option grp:sclk_toggle -option grp_led:scrol
   setxkbmap -option ctrl:nocaps
-  feh --bg-center "/home/hubi/.background/background1.png"
+  feh --bg-center "/home/hubi/.xmonad/background1.png"
   echo "nodeadkeys"
-  echo "nodeadkeys" > /tmp/mykeyboard
-elif [[ $RETURN -eq 1 ]]; then
-  setxkbmap de neo -option
-  feh --bg-center "/home/hubi/.xmonad/neo_Ebenen_1_2_3_4.png"
-  echo "neo"
-  echo "neo" > /tmp/mykeyboard
+  rm /tmp/mykeyboard
+else
+  case "neo" in
+    "neo")
+      #setxkbmap de neo -option
+      setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:sclk_toggle -option grp_led:scrol
+      feh --bg-center "/home/hubi/.xmonad/neo_Ebenen_1_2_3_4.png"
+      echo "neo"
+      echo "neo" > /tmp/mykeyboard
+      ;;
+    "dvorak")
+      setxkbmap us dvorak -option
+      feh --bg-center "/home/hubi/.xmonad/dvorak.gif"
+      echo "dvorak"
+      echo "dvorak" > /tmp/mykeyboard
+      ;;
+  esac
 fi

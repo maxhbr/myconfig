@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Do Jan 03, 2013  04:04
+# Last modified: Do Jan 03, 2013  09:58
 
 # Get back ctrl+alt+backspace in new versions of xorg
 # setxkbmap -option terminate:ctrl_alt_bksp
@@ -11,7 +11,7 @@
 xsetroot -cursor_name left_ptr
 
 #toggle to neo via scrol
-#setxkbmap -layout de,de -variant nodeadkeys,neo -option -option grp:sclk_toggle -option grp_led:scrol
+setxkbmap -layout de,de -variant nodeadkeys,neo -option -option grp:sclk_toggle -option grp_led:scrol
 
 #setxkbmap -layout de -variant nodeadkeys
 # set caps lock as ctrl

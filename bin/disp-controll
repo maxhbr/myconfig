@@ -4,7 +4,7 @@
 mySetBkg() {
   background="background1.png"
   #background="DSC03551-2-1080-bw.jpg"
-  feh --bg-center "~/.background/${background}"
+  feh --bg-center "~/.xmonad/${background}"
 }
 
 myAutomatic() {

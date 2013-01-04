@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Do Jan 03, 2013  02:14
+" Last modified: Fr Jan 04, 2013  12:58
 "
 " this config will automatically download Vundle from git, and then it will
 " install all plugins
@@ -427,6 +427,8 @@ nnoremap <down> <nop>
 nnoremap <left> <nop>
 nnoremap <right> <nop>
 
+map <leader>bb :source ~/.vimrc-neo<cr>
+
 " ===================================================================}}}
 " ====  Filetype specific  ==========================================
 " ==================================================================={{{
@@ -701,15 +703,5 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
 
 endif
 "                                                                    }}}
-
-" ==== NEO keyboard layout  =========================================
-"no s h
-"no h s
-"no n j
-"no j n
-"no r k
-"no k r
-"no t l
-"no l k
 
 " vim:set ts=2 sw=2 sts=2 et fenc=utf-8 ff=unix foldmethod=marker foldmarker={{{,}}}:
