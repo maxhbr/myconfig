@@ -9,7 +9,7 @@ alias sudo="sudo "
 alias reload='source ~/.bashrc'
 
 #--------------------------------------------------------------------
-#   Basics
+#   basics
 #-------------------------------------------------------------------{{{
 
 alias rm='rm -I'
@@ -54,9 +54,9 @@ mkcd() { #make dir and enter it
   cd "$1"
 }
 
-function s {
+s() {
   cd ~/studium/$1
-} 
+}
 
 alias grep='grep --color=auto'
 alias fgrep='fgrep --color=auto'
@@ -200,7 +200,7 @@ permfix() {
   done
 }
 
-function ranger-cd {
+ranger-cd() {
   tempfile='/tmp/chosendir'
   /usr/bin/ranger --choosedir="$tempfile" "${@:-$(pwd)}"
   test -f "$tempfile" &&
@@ -211,6 +211,10 @@ function ranger-cd {
 }
 # This binds Ctrl-O to ranger-cd:
 have ranger && bind '"\C-o":" ranger-cd\C-m"'
+
+myusbsusendoff() {
+  for i in /sys/bus/usb/devices/*/power/control; do echo on > $i; done
+}
 
 #-------------------------------------------------------------------}}}
 #   package management
@@ -281,18 +285,22 @@ myip() {
   echo "${myip}"
 }
 
-#-------------------------------------------------------------------}}}
-#   some functions
-#-------------------------------------------------------------------{{{
-
 mysmbload() {
   sudo modprobe fuse
   sudo systemctl start smbnetfs
 }
 
+#-------------------------------------------------------------------}}}
+#   some functions
+#-------------------------------------------------------------------{{{
+
 # Quick and dirty version control for one file
 myversioncontrol() {
-  ( IFS=$'\n'; suf="_versions"; mkdir -p "$1$suf"; nr=`ls "$1$suf" | wc -l`; nr=`printf "%02d" $(($nr + 1))`; cp "$1" "$1$suf/v${nr}_$1" )
+  ( IFS=$'\n'; suf="_versions";\
+    mkdir -p "$1$suf";\
+    nr=`ls "$1$suf" | wc -l`;\
+    nr=`printf "%02d" $(($nr + 1))`;\
+    cp "$1" "$1$suf/v${nr}_$1" )
 }
 
 bac() { # backup with copy
@@ -388,7 +396,7 @@ myclock() {
 
 # will show a list of all the currently loaded modules and all of their parameters
 # should be run as root
-my_mod_parameters () { 
+my_mod_parameters () {
   N=/dev/null;
   C=`tput op` O=$(echo -en "\n`tput setaf 2`>>> `tput op`");
   for mod in $(cat /proc/modules|cut -d" " -f1);
@@ -410,34 +418,33 @@ my_mod_parameters () {
   done
 }
 
-function my_power_settings ()
-{ 
+my_power_settings() {
   sudo bash -c '
-    for i in `find /sys/devices -name "bMaxPower"`;
+  for i in `find /sys/devices -name "bMaxPower"`;
+  do
+    for ii in `find $i -type f`;
     do
-        for ii in `find $i -type f`;
-        do
-            bd=`dirname $ii`;
-            busnum=`cat $bd/busnum`;
-            devnum=`cat $bd/devnum`;
-            title=`lsusb -s $busnum:$devnum`;
-            echo -e "\n\n+++ $title\n  -$bd\n  -$ii";
-            for ff in `find $bd/power -type f ! -empty 2>/dev/null`;
-            do
-                v=`cat $ff 2>/dev/null|tr -d "\n"`;
-                [[ ${#v} -gt 0 ]] && echo -e " `basename $ff`=$v";
-                v=;
-            done | sort -g;
-        done;
+      bd=`dirname $ii`;
+      busnum=`cat $bd/busnum`;
+      devnum=`cat $bd/devnum`;
+      title=`lsusb -s $busnum:$devnum`;
+      echo -e "\n\n+++ $title\n  -$bd\n  -$ii";
+      for ff in `find $bd/power -type f ! -empty 2>/dev/null`;
+      do
+        v=`cat $ff 2>/dev/null|tr -d "\n"`;
+        [[ ${#v} -gt 0 ]] && echo -e " `basename $ff`=$v";
+        v=;
+      done | sort -g;
     done;
-    echo -e "\n\n\n+++ Kernel Modules\n";
-    for m in `command lspci -k|sed -n "/in use:/s,^.*: ,,p"|sort -u`;
-    do
-        echo "+ $m";
-        systool -v -m $m 2> /dev/null | sed -n "/Parameters:/,/^$/p";
-    done
+  done;
+  echo -e "\n\n\n+++ Kernel Modules\n";
+  for m in `command lspci -k|sed -n "/in use:/s,^.*: ,,p"|sort -u`;
+  do
+    echo "+ $m";
+    systool -v -m $m 2> /dev/null | sed -n "/Parameters:/,/^$/p";
+  done
   ';
 }
 
 #}}}
-# vim: set filetype=sh :
+# vim: set filetype=sh foldmethod=marker foldmarker={{{,}}}:

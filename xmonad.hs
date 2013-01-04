@@ -2,7 +2,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Fr Jan 04, 2013  01:43
+-- Last modified: Fr Jan 04, 2013  07:49
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -13,7 +13,6 @@ import Data.Ratio ((%))
 import System.Exit ( exitWith, ExitCode( ExitSuccess ) )
 import System.IO
 import XMonad
-import XMonad.ManageHook
 import Graphics.X11.ExtraTypes.XF86 ( xF86XK_Display )
 
 import XMonad.Prompt ( defaultXPConfig, font, height, XPConfig )
@@ -412,7 +411,7 @@ myMainLayout = configurableNavigation (navigateColor "#333333") $
 -- Define layout for specific workspaces
 myChatLayout = avoidStrutsOn[U] $
     pidgin $
-    (tiled ||| full)
+    (tiled ||| Mirror tiled ||| full)
     where
         tiled   = named "tiled" $
             ResizableTall nmaster delta ratio []

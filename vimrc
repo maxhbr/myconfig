@@ -2,31 +2,17 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Fr Jan 04, 2013  12:58
+" Last modified: Fr Jan 04, 2013  04:32
 "
-" this config will automatically download Vundle from git, and then it will
-" install all plugins
+" !!!
+"       this config will automatically download Vundle from git, and then it
+"       will install all plugins
+" !!!
 
 "tipps / Keybindings                                                 {{{
 " write as root: :w !sudo tee % > /dev/null
 "
 ":r! date
-"
-" Vim folding commands
-"zf#j creates a fold from the cursor down # lines.
-"zf/string creates a fold from the cursor to string .
-"zj moves the cursor to the next fold.
-"zk moves the cursor to the previous fold.
-"zo opens a fold at the cursor.
-"zO opens all folds at the cursor.
-"zm increases the foldlevel by one.
-"zM closes all open folds.
-"zr decreases the foldlevel by one.
-"zR decreases the foldlevel to zero -- all folds will be open.
-"zd deletes the fold at the cursor.
-"zE deletes all folds.
-"[z move to start of open fold.
-"]z move to end of open fold.
 "
 " Vundle help
 " :BundleList          - list configured bundles
@@ -46,6 +32,16 @@
 "   ]d      -- Select current/previous function
 "   ]<up>   -- Jump to previous line with the same/lower indentation
 "   ]<down> -- Jump to next line with the same/lower indentation
+"
+" Custom
+"   ,r      -- reload vimrc
+"   ,ev     -- edit vimrc
+"
+" Plugins
+"   ,lj     -- LustyJuggler
+"   ,ww     -- vimwiki
+"   :MRU    -- mru
+"   ,ig     -- vim-indent-guides
 "                                                                    }}}
 
 " auto reload when saving
@@ -53,7 +49,6 @@ autocmd! bufwritepost .vimrc source %
 
 " This must be first, because it changes other options as a side effect.
 set nocompatible
-runtime! archlinux.vim
 
 " ===================================================================
 " ====  General  ====================================================
@@ -114,6 +109,10 @@ set wildmenu "Kommando Zeilen Vervollständigung
 set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png
 set wildmode=list:longest
 
+" Suffixes that get lower priority when doing tab completion for filenames.
+" These are files we are not likely to want to edit or read.
+set suffixes=.bak,~,.swp,.o,.info,.aux,.log,.dvi,.bbl,.blg,.brf,.cb,.ind,.idx,.ilg,.inx,.out,.toc
+
 " ====  Scrolling  =================================================={{{
 
 set scrolljump=5
@@ -132,6 +131,7 @@ set smartcase
 " ====  Folding / indenting  ========================================{{{
 
 set foldmethod=marker
+set foldmarker={{{,}}}
 
 " indending
 set autoindent
@@ -198,6 +198,8 @@ set stl+=%y%m%r%=
 set stl+=%-14.(%l,%c%V%)\ %P
 
 if has("gui_running")
+  map <S-Insert> <MiddleMouse>
+  map! <S-Insert> <MiddleMouse>
   " in gui
   set guioptions-=T  " no toolbar
   " Use console messages instead of GUI dialogs
@@ -447,7 +449,7 @@ function! SetPythonFile()
   " folding
   setlocal foldenable
   setlocal foldmethod=indent
-  set foldlevel=7
+  setlocal foldlevel=7
 
   "invisible chars
   setlocal list listchars=tab:>~,trail:·
@@ -472,25 +474,25 @@ endfunction
 function! SetTextFile()
   " mails / text
 
-  set wrap
-  set textwidth=79
+  setlocal wrap
+  setlocal textwidth=79
 
-  set linebreak
+  setlocal linebreak
 
 endfunction
 
 function! SetLaTeXFile()
 
-  set wrap
-  set sw=2
-  set ts=2
-  set et
-  set textwidth=79
-  set cc=80
+  setlocal wrap
+  setlocal sw=2
+  setlocal ts=2
+  setlocal et
+  setlocal textwidth=79
+  setlocal cc=80
 
-  set linebreak
+  setlocal linebreak
 
-  set foldmarker=%{{{,%}}}
+  setlocal foldmarker=%{{{,%}}}
   "save folding
   "au BufWinLeave * mkview
   "au BufWinEnter * silent loadview
@@ -503,26 +505,26 @@ function! SetLaTeXFile()
 endfunction
 
 function! SetCssFile()
-  set sw=4
-  set ts=4
-  set et
-  set tw=79
-  set linebreak
+  setlocal sw=4
+  setlocal ts=4
+  setlocal et
+  setlocal tw=79
+  setlocal linebreak
   if exists('+colorcolumn')
-    set colorcolumn=80
+    setlocal colorcolumn=80
   endif
 endfunction
 
 function! SetMatlabFile()
-  set sw=4
-  set ts=4
-  set et
-  set tw=79
-  set linebreak
+  setlocal sw=4
+  setlocal ts=4
+  setlocal et
+  setlocal tw=79
+  setlocal linebreak
 
-  set foldmarker={{{,}}}
+  setlocal foldmarker={{{,}}}
   if exists('+colorcolumn')
-    set colorcolumn=80
+    setlocal colorcolumn=80
   endif
 endfunction
 
@@ -542,10 +544,10 @@ augroup vimrc_autocmds
   "autocmd FileType haskell call SetHaskellFile()
   autocmd FileType css call SetCssFile()
   autocmd FileType less call SetCssFile()
-  autocmd FileType sh set sw=2 ts=2 et
+  autocmd FileType sh setlocal sw=2 ts=2 et
   " in makefiles, don't expand tabs to spaces
   autocmd FileType matlab call SetMatlabFile()
-  autocmd FileType make set noexpandtab shiftwidth=8
+  autocmd FileType make setlocal noexpandtab shiftwidth=8
   autocmd FileType log setlocal autoread
 augroup END
 
