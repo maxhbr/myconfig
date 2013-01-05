@@ -2,7 +2,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Fr Jan 04, 2013  07:49
+-- Last modified: Sa Jan 05, 2013  04:10
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -72,6 +72,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
 
     , ((modm,               xK_o     ), spawn "urxvt -e bash -c 'ranger'")
     , ((modm .|. shiftMask, xK_o     ), spawn "emelfm2")
+
+    , ((modm,               xK_F1     ), spawn "onboard")
 
     -- close focused window
     , ((modm .|. shiftMask, xK_c     ), kill)
@@ -213,13 +215,13 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
 myNeoKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     [ ((modm .|. shiftMask, xK_Return), spawn $ XMonad.terminal conf)
 
-    , ((modm,               xK_p     ), spawn "dmenu_run")
+    , ((modm,               xK_q     ), spawn "dmenu_run")
     -- alternative zu anderem starter
-    , ((modm,               xK_x     ), shellPrompt defaultXPConfig)
-    , ((modm .|. shiftMask, xK_p     ), spawn "gmrun")
+    {-, ((modm,               xK_x     ), shellPrompt defaultXPConfig)-}
+    {-, ((modm .|. shiftMask, xK_p     ), spawn "gmrun")-}
 
-    , ((modm,               xK_o     ), spawn "urxvt -e bash -c 'ranger'")
-    , ((modm .|. shiftMask, xK_o     ), spawn "emelfm2")
+    {-, ((modm,               xK_o     ), spawn "urxvt -e bash -c 'ranger'")-}
+    {-, ((modm .|. shiftMask, xK_o     ), spawn "emelfm2")-}
 
     -- close focused window
     , ((modm .|. shiftMask, xK_c     ), kill)
@@ -245,7 +247,7 @@ myNeoKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,               xK_r     ), windows W.focusUp  )
 
     -- Move focus to the master window
-    , ((modm,               xK_m     ), windows W.focusMaster  )
+    {-, ((modm,               xK_m     ), windows W.focusMaster  )-}
 
     -- Swap the focused window and the master window
     , ((modm,               xK_Return), windows W.swapMaster)
@@ -263,7 +265,7 @@ myNeoKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. shiftMask, xK_t     ), sendMessage MirrorExpand)
 
     -- Push window back into tiling
-    , ((modm,               xK_t     ), withFocused $ windows . W.sink)
+    {-, ((modm,               xK_t     ), withFocused $ windows . W.sink)-}
 
     -- Increment the number of windows in the master area
     , ((modm,               xK_comma ), sendMessage (IncMasterN 1))
@@ -448,6 +450,7 @@ myLayout = avoidStrutsOn[U] $
 myManageHook = composeAll
     [ className =?  "Xmessage"      --> doCenterFloat 
     , className =? "MPlayer"        --> doFloat
+    , className =? "Onboard"        --> doFloat
     , className =? "Pidgin"         --> doShift "im"
     , className =? "Chromium"       --> doShift "web"
     , className =? "Sylpheed"       --> doShift "mail"

@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Fr Jan 04, 2013  04:32
+" Last modified: Sa Jan 05, 2013  10:46
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -36,6 +36,7 @@
 " Custom
 "   ,r      -- reload vimrc
 "   ,ev     -- edit vimrc
+"   ,dt     -- DeleteTrailing
 "
 " Plugins
 "   ,lj     -- LustyJuggler
@@ -85,21 +86,19 @@ set encoding=utf8
 set virtualedit=all
 set backspace=2
 " set backspace=indent,eol,start
-set showcmd         " Show (partial) command in status line.
-set showmatch       " Show matching brackets.
-set ignorecase      " Do case insensitive matching
-set autowrite       " Automatically save before commands like :next and :make
+set showcmd   " Show (partial) command in status line.
+set showmatch " Show matching brackets.
+set autowrite " Automatically save before commands like :next and :make
 if has("mouse")
-  set mouse=a         " Enable mouse usage (all modes) alternativ nvc
+  set mouse=a " Enable mouse usage (all modes) alternativ nvc
   set mousehide
 endif
-set visualbell
+set visualbell " ausgehebelt durch noerrorbells ?
 set noerrorbells
 set hidden
 set autoread
-set magic " For regular expressions turn magic on
-set splitbelow
-set splitright
+set magic      " For regular expressions turn magic on
+set splitbelow " set splitright
 set autochdir
 
 set cpoptions+=n
@@ -125,8 +124,9 @@ set sidescroll=1
 " highlight searches, searches begin immediately
 set hlsearch
 set incsearch
-" non-case-sensitive searches
+" case sensitiv, if a uppercase letter is contained
 set smartcase
+set ignorecase
 "                                                                    }}}
 " ====  Folding / indenting  ========================================{{{
 
@@ -179,7 +179,7 @@ set nobackup
 set title
 set cursorline
 set nocursorcolumn " hat probleme mit acp (Popup)
-set textwidth=0                " Don't wrap lines by default
+set textwidth=0    " Don't wrap lines by default
 set nowrap
 set ruler
 set number
@@ -198,34 +198,19 @@ set stl+=%y%m%r%=
 set stl+=%-14.(%l,%c%V%)\ %P
 
 if has("gui_running")
+  " in gui
   map <S-Insert> <MiddleMouse>
   map! <S-Insert> <MiddleMouse>
-  " in gui
   set guioptions-=T  " no toolbar
   " Use console messages instead of GUI dialogs
   set guioptions+=c
 
-  " show focus lost"
-  " replaced by powerline
-  "au FocusLost * : hi StatusLine gui=undercurl
-  "au FocusGained * : hi StatusLine gui=bold,reverse
-
   let g:indent_guides_auto_colors = 0
-  "autocmd VimEnter,Colorscheme * :hi IndentGuidesOdd  guibg=darkgrey   ctermbg=3
   autocmd VimEnter,Colorscheme * :hi IndentGuidesEven guibg=black ctermbg=4
 else
   " no gui
   set t_Co=256
   set background=dark
-
-  " replaced by powerline
-  "hi IndentGuidesEven ctermbg=darkgrey
-  "hi IndentGuidesOdd  ctermbg=black
-
-  "if &term =~ "xterm"
-  "elseif &term =~ "urxvt"
-  "elseif &term =~ "urxvtc"
-  "endif
 endif
 
 if filereadable(expand("$VIMRUNTIME/colors/mustang.vim"))
@@ -244,23 +229,6 @@ else
     highlight OverLength ctermbg=red ctermfg=white guibg=#592929
     match OverLength /\%81v.\+/
 endif
-"                                                                    }}}
-" ====  Status hilighting  =========================================={{{
-" replaced by powerline
-"function! InsertStatuslineColor(mode)
-  "if a:mode == 'i'
-    ""hi statusline guibg=red
-    "hi StatusLine term=reverse ctermbg=5 gui=undercurl guisp=red guibg=red
-  "elseif a:mode == 'r'
-    ""hi statusline guibg=magenta
-    "hi StatusLine term=reverse ctermbg=5 gui=undercurl guisp=magenta guibg=magenta
-  "else
-    ""hi statusline guibg=blue
-    "hi StatusLine term=reverse ctermbg=5 gui=undercurl guisp=blue guibg=blue
-  "endif
-"endfunction
-"au InsertEnter * call InsertStatuslineColor(v:insertmode)
-"au InsertLeave * hi StatusLine term=reverse ctermfg=0 ctermbg=2 gui=bold,reverse
 "                                                                    }}}
 "                                                                    }}}
 " ===================================================================}}}
@@ -406,12 +374,6 @@ nnoremap k gk
 nnoremap <c-j> 5j
 nnoremap <c-k> 5k
 
-" Easy window navigation
-"map <C-h> <C-w>h
-"map <C-j> <C-w>j
-"map <C-k> <C-w>k
-"map <C-l> <C-w:vnew \| CommandT>l
-
 " control-left & right arrows switch between tabs
 map <c-Left> :tabp<CR>
 map <c-Right> :tabn<CR>
@@ -420,10 +382,6 @@ inoremap <expr> <Tab>     pumvisible() ? "\<C-y>" : "\<Tab>"
 inoremap <expr> <CR>      pumvisible() ? "\<C-e><CR>" : "\<CR>"
 
 " force vim keys
-"map <up> <nop>
-"map <down> <nop>
-"map <left> <nop>
-"map <right> <nop>
 nnoremap <up> <nop>
 nnoremap <down> <nop>
 nnoremap <left> <nop>
@@ -540,20 +498,19 @@ augroup vimrc_autocmds
   autocmd FileType tex call SetLaTeXFile()
   autocmd FileType human call SetTextFile()
   autocmd FileType txt call SetTextFile()
-  "autocmd FileType php call SetPHPFile()
-  "autocmd FileType haskell call SetHaskellFile()
   autocmd FileType css call SetCssFile()
   autocmd FileType less call SetCssFile()
   autocmd FileType sh setlocal sw=2 ts=2 et
-  " in makefiles, don't expand tabs to spaces
   autocmd FileType matlab call SetMatlabFile()
-  autocmd FileType make setlocal noexpandtab shiftwidth=8
   autocmd FileType log setlocal autoread
+  " in makefiles, don't expand tabs to spaces
+  autocmd FileType make setlocal noexpandtab shiftwidth=8
 augroup END
 
 augroup Shebang
   autocmd BufNewFile *.py 0put =\"#!/usr/bin/env python\<nl># -*- coding: iso-8859-15 -*-\<nl>\"|$
   autocmd BufNewFile *.rb 0put =\"#!/usr/bin/env ruby\<nl># -*- coding: None -*-\<nl>\"|$
+  autocmd BufNewFile *.sh 0put =\"#!/bin/sh\"|$
 augroup END
 
 " ===================================================================}}}

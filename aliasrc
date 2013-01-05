@@ -158,9 +158,7 @@ fe() { find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \;  ; }
 alias clamscan="clamscan --recursive --infected --bell"
 alias clamclean="clamscan --recursive --infected --bell --remove"
 
-hgrep() {
-  history | egrep "$@"
-}
+hgrep() { history | egrep "$@"; }
 
 # Extract files from any archive
 # Usage: ex <archive_name>
@@ -266,9 +264,7 @@ alias countFilesByTypes="find . -type f -exec basename \"{}\" \\; | sed -e 's/.*
 # download from youtube
 alias ccl="cclive -f best"
 
-if [ -f ~/bin/mydock.sh ]; then
-  alias mydock="mydock.sh"
-fi
+[[ -f ~/bin/mydock.sh ]] && alias mydock="mydock.sh"
 
 #-------------------------------------------------------------------}}}
 #   some networking
