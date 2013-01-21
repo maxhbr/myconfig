@@ -12,15 +12,15 @@ Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
                     --, Run Memory ["-t","Mem: <usedratio>%"] 10
                     --, Run Swap [] 10
                     , Run Com "~/.xmonad/batteryrate.sh" [] "rate" 100
-                    , Run Network "eth0" ["-L","0","-H","32","--normal","green","--high","red"] 10
-                    , Run Network "wlan0" ["-L","0","-H","32","--normal","green","--high","red"] 10
+                    , Run Network "enp0s25" ["-L","0","-H","32","--normal","green","--high","red"] 10
+                    , Run Network "wlp3s0" ["-L","0","-H","32","--normal","green","--high","red"] 10
                     , Run Com "~/.xmonad/myinformation.sh" [] "info" 100
                     , Run Date "%a %d.%m.%Y %H:%M:%S" "date" 10
                     --, Run Com "setxkbmap -print | grep xkb_symbols | awk -F\"+\" '{print $2}'"  [] "keyboard" 30
                     ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %StdinReader% }{ %multicpu% @ %coreTemp% | %rate% | %eth0%%wlan0% %info% | <fc=#ee9a00>%date%</fc>"
+       , template = " %StdinReader% }{ %multicpu% @ %coreTemp% | %rate% | %enp0s25%%wlp3s0% %info% | <fc=#ee9a00>%date%</fc>"
        }
 
 -- vim: set ft=haskell :

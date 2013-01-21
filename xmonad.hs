@@ -2,16 +2,16 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Sa Jan 05, 2013  04:10
+-- Last modified: So Jan 06, 2013  02:22
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
 -- Imports
 --{{{
-import Data.Monoid
+import Data.Monoid -- used is: "All"
 import Data.Ratio ((%))
 import System.Exit ( exitWith, ExitCode( ExitSuccess ) )
-import System.IO
+import System.IO ( hPutStrLn )
 import XMonad
 import Graphics.X11.ExtraTypes.XF86 ( xF86XK_Display )
 

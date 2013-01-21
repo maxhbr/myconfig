@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sa Jan 05, 2013  10:46
+" Last modified: Mi Jan 16, 2013  03:03
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -37,6 +37,8 @@
 "   ,r      -- reload vimrc
 "   ,ev     -- edit vimrc
 "   ,dt     -- DeleteTrailing
+"   ,s      -- search and replace word under cursor
+"   ,T      -- expand all Tabs
 "
 " Plugins
 "   ,lj     -- LustyJuggler
@@ -105,7 +107,8 @@ set cpoptions+=n
 set showbreak=\ \ \ ↳
 
 set wildmenu "Kommando Zeilen Vervollständigung
-set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png
+"set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png
+set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png,*.aux,*.bbl,*.blg,*.fdb_latexmk,*.fls,*.idx,*.ilg,*.ind,*.nlo,*.nls,*.toc
 set wildmode=list:longest
 
 " Suffixes that get lower priority when doing tab completion for filenames.
@@ -286,15 +289,25 @@ endfun
 map ,R :call RangerChooser()<CR>
 
 function! InsertTabWrapper()
-    let col = col('.') - 1
-    if !col || getline('.')[col - 1] !~ '\k'
-        return "\<tab>"
-    else
-        return "\<c-p>"
-    endif
+  let col = col('.') - 1
+  if !col || getline('.')[col - 1] !~ '\k'
+    return "\<tab>"
+  else
+    return "\<c-p>"
+  endif
 endfunction
 inoremap <tab> <c-r>=InsertTabWrapper()<cr>
 inoremap <s-tab> <c-n>
+
+function! MyHtmlEscape()
+  silent s/ö/\&ouml;/eg
+  silent s/ä/\&auml;/eg
+  silent s/ü/\&uuml;/eg
+  silent s/Ö/\&Ouml;/eg
+  silent s/Ä/\&Auml;/eg
+  silent s/Ü/\&Uuml;/eg
+  silent s/ß/\&szlig;/eg
+endfunction
 
 " ===================================================================}}}
 " ====  Keymappings  ================================================
@@ -313,7 +326,8 @@ noremap <Leader>s :update<CR>
 
 nmap <Leader>r :source $MYVIMRC
 
-nmap <silent> <leader>ev :tabedit $MYVIMRC<CR>
+"nmap <silent> <leader>ev :tabedit $MYVIMRC<CR>
+nmap <silent> <leader>ev :e $MYVIMRC<CR>
 "nmap <silent> <leader>sv :so $MYVIMRC<CR>
 
 " ersetzt durch NerdComment
@@ -352,6 +366,11 @@ noremap <silent> <F4> :close<CR>
 noremap <silent> <F5> :update<CR>
 inoremap <silent> <F5> <Esc>:update<CR>
 
+" Use arrow key to change buffer
+noremap <silent> <F7> :bp<CR>
+noremap <silent> <F8> :bn<CR>
+noremap <silent> <F9> :bd<CR>
+
 noremap <silent> <F10> :q!<CR>
 inoremap <silent> <F10> <Esc>:q!<CR>
 
@@ -364,6 +383,10 @@ nnoremap - <C-x>
 
 "Open last/alternate buffer
 noremap <Leader><Leader> <C-^>
+
+nnoremap <leader>T :set expandtab<cr>:retab!<cr>
+
+nnoremap <Leader>s :%s/\<<C-r><C-w>\>//g<Left><Left>
 
 " ====  Movement  ===================================================
 
@@ -386,6 +409,10 @@ nnoremap <up> <nop>
 nnoremap <down> <nop>
 nnoremap <left> <nop>
 nnoremap <right> <nop>
+
+" Use arrow key to change buffer
+"noremap <left> :bp<CR>
+"noremap <right> :bn<CR>
 
 map <leader>bb :source ~/.vimrc-neo<cr>
 
@@ -413,7 +440,7 @@ function! SetPythonFile()
   setlocal list listchars=tab:>~,trail:·
   " autocmd BufWrite *.py :call DeleteTrailing()
 
-  map <F5> :w<CR>:!python "%"<CR>
+  "map <F5> :w<CR>:!python "%"<CR>
 endfunction
 
 function! SetJavaFile()
@@ -460,6 +487,14 @@ function! SetLaTeXFile()
     "set spelllang=de,en
     "setlocal spellsuggest=9
   "endif
+
+  "map \gq ?^$\\|^\s*\(\\begin\\|\\end\\|\\label\)?1<CR>gq//-1<CR>
+  "omap lp ?^$\\|^\s*\(\\begin\\|\\end\\|\\label\)?1<CR>//-1<CR>.<CR>
+
+  set iskeyword+=: " type /ref{fig: and prec <C-n> to autocomplete references
+  set iskeyword+=- " same with -
+
+  setl noai nocin nosi inde=
 endfunction
 
 function! SetCssFile()
@@ -567,6 +602,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'Solarized'
 
   "testing
+  Bundle 'LatexParFormat'
   "Bundle 'Indent-Guides'
   "Bundle 'SuperTab'
 
