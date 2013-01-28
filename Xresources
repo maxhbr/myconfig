@@ -29,7 +29,8 @@ URxvt*scrollBar_right: false
 URxvt*scrollstyle: plain
 
 urxvt*perl-lib:         /usr/lib/urxvt/perl/
-urxvt*perl-ext-common:  default,matcher,tabbed,clipboard,url-select
+urxvt*perl-ext-common:  default,matcher,tabbed 
+!,clipboard,url-select
 !URxvt.keysym.C-Insert:  perl:clipboard:copy
 !URxvt.keysym.S-Insert:  perl:clipboard:paste
 !URxvt.keysym.M-Insert:  perl:clipboard:paste_escaped

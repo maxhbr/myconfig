@@ -6,6 +6,22 @@ alias vi="vim"
 # makes "sudo vi" to "sudo vim"
 alias sudo="sudo "
 
+e() {
+  if [ $# -eq 1 ]; then
+    if [ -f $1 ] ; then
+      case $( tr '[:upper:]' '[:lower:]' <<<"$1" ) in
+        *.pdf|*.djvu|*.ps) zathura $1 ;;
+        *.jpg|*.png) geeqie $1 ;;
+        *.zip) file-roller $1 ;;
+        *) vim $1 ;;
+      esac
+    else
+      vim $1
+    fi
+  else
+    vim
+  fi
+}
 
 #--------------------------------------------------------------------
 #   basics
@@ -67,55 +83,6 @@ mktgz() { tar cvzf "${1%%/}.tar.gz"  "${1%%/}/"; }
 mktbz() { tar cvjf "${1%%/}.tar.bz2" "${1%%/}/"; }
 
 alias pkill9="pkill --signal 9"
-
-#TODO: remove functions if not used
-e() {
-  #if [  $# -eq 0 ]; then
-    #if [ -f /tmp/e-last-used-files ] ; then
-      ##tail /tmp/e-last-used-files
-      #OLD_IFS=$IFS
-      #IFS=$'\n'
-      #lines_ary=( $(cat "/tmp/e-last-used-files") )
-      #IFS=$OLD_IFS
-
-      #if [[ ${#lines_ary[@]} -lt 20 ]]; then
-        #for idx in $(seq 0 $((${#lines_ary[@]} - 1))); do
-          #line="${lines_ary[$idx]}"
-          #printf "${idx}   ${line}\n"
-        #done
-      #else
-        #for idx in $(seq $((${#lines_ary[@]} - 21)) $((${#lines_ary[@]} - 1))); do
-          #line="${lines_ary[$idx]}"
-          #printf "${idx}   ${line}\n"
-        #done
-      #fi
-
-      #read number
-      #if [[ "$number" =~ ^[0-9]+$ ]] ; then
-        #e "${lines_ary[$number]}"
-      #fi
-    #else
-      #echo "nothing in list yet"
-    #fi
-    ##vim
-  #else
-    if [ -f $1 ] ; then
-      # Save name of the opened file
-      #echo $(realpath $1) >> /tmp/e-last-used-files
-
-      opt=$( tr '[:upper:]' '[:lower:]' <<<"$1" ) # to Lower case
-      case $opt in
-        *.pdf) zathura $1 ;;
-        *.djvu) zathura $1 ;;
-        *.ps) zathura $1 ;;
-        *.jpg) geeqie $1 ;;
-        *) vim $1 ;;
-      esac
-    else
-      vim $1
-    fi
-  #fi
-}
 
 #-------------------------------------------------------------------}}}
 #   misc
@@ -268,6 +235,7 @@ alias ccl="cclive -f best"
 
 alias ping6alle="ping6 ff02::1%eth0"
 alias ping6allw="ping6 ff02::1%wlan0"
+alias myarp-scan="sudo arp-scan --localnet"
 # or: mtr
 #     sudo arp-scan  --interface=wlan0 -l
 
@@ -281,10 +249,28 @@ mysmbload() {
   sudo modprobe fuse
   sudo systemctl start smbnetfs
 }
+alias mywakenas="wakeonlan -i 192.168.178.255 00:08:9b:bd:b3:3c"
+
+## shortcut  for iptables and pass it via sudo#
+#alias ipt='sudo /sbin/iptables'
+## display all rules #
+#alias iptlist='sudo /sbin/iptables -L -n -v --line-numbers'
+#alias iptlistin='sudo /sbin/iptables -L INPUT -n -v --line-numbers'
+#alias iptlistout='sudo /sbin/iptables -L OUTPUT -n -v --line-numbers'
+#alias iptlistfw='sudo /sbin/iptables -L FORWARD -n -v --line-numbers'
+#alias firewall=iptlist
 
 #-------------------------------------------------------------------}}}
 #   some functions
 #-------------------------------------------------------------------{{{
+
+whilezathura(){
+  if [  $# -eq 1 ]; then
+    while true; do zathura -l error $1; sleep 1; done
+  else
+    while true; do zathura -l error *.pdf; sleep 1; done
+  fi
+}
 
 # Quick and dirty version control for one file
 myversioncontrol() {
@@ -447,6 +433,7 @@ if [ -n "$BASH_VERSION" ]; then
   alias reload='source ~/.bashrc'
 elif [ -n "$ZSH_VERSION" ]; then
   #for zsh
+  #bindkey '^r' ranger-cd
   alias reload='source ~/.zshrc'
 fi
 # vim: set filetype=sh foldmethod=marker foldmarker={{{,}}}:

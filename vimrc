@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Mi Jan 16, 2013  03:03
+" Last modified: Fr Jan 25, 2013  09:56
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -493,6 +493,7 @@ function! SetLaTeXFile()
 
   set iskeyword+=: " type /ref{fig: and prec <C-n> to autocomplete references
   set iskeyword+=- " same with -
+  set iskeyword+=_ " same with _
 
   setl noai nocin nosi inde=
 endfunction

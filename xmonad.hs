@@ -2,7 +2,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: So Jan 06, 2013  02:22
+-- Last modified: So Jan 27, 2013  09:09
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -141,15 +141,16 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     ++
     --[ ((modm,               xK_F9  ),  spawn "sxiv ~/.xmonad/neo_Ebenen_1_2_3_4.png")]
     -- ++
-    [ -- toggle touchpad
+    [ -- toggle touchpad        
     ((0,                  0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
-    , ((0,              xF86XK_Display), spawn "~/bin/disp-controll 2") -- toggle
-    , ((0 .|. shiftMask, xF86XK_Display), spawn "~/bin/disp-controll 1") -- auto
-    , ((0 .|. controlMask, xF86XK_Display), spawn "~/bin/disp-controll 3") -- cycle
+    , ((modm,              xK_z), spawn "~/bin/disp-controll 1") -- auto
+    , ((modm .|. shiftMask, xK_z), spawn "~/bin/disp-controll 2") -- toggle
+    , ((modm .|. controlMask, xK_z), spawn "~/bin/disp-controll 3") -- cycle
     --xF86XK_SplitScreen
     -- screensaver
     {-, ((modm .|. shiftMask,  xK_y    ), spawn "xbacklight -set 0; xscreensaver-command -lock")-}
-    , ((modm .|. shiftMask,  xK_y    ), spawn "xbacklight -set 0; i3lock")
+    {-, ((modm .|. shiftMask,  xK_y    ), spawn "xbacklight -set 0; i3lock")-}
+    , ((modm .|. shiftMask,  xK_y    ), spawn "slock")
 
     --invert Colors
     , ((modm,                xK_Home ), spawn "xcalib -i -a")
@@ -297,7 +298,7 @@ myNeoKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     --xF86XK_SplitScreen
     -- screensaver
     {-, ((modm .|. shiftMask,  xK_y    ), spawn "xbacklight -set 0; xscreensaver-command -lock")-}
-    , ((modm .|. shiftMask,  xK_y    ), spawn "xbacklight -set 0; i3lock")
+    , ((modm .|. shiftMask,  xK_y    ), spawn "xbacklight -set 0; slock")
 
     --invert Colors
     , ((modm,                xK_Home ), spawn "xcalib -i -a")
@@ -426,7 +427,7 @@ myChatLayout = avoidStrutsOn[U] $
 
 -- Put all layouts together
 myLayout = avoidStrutsOn[U] $
-    gaps [(U,13)] $ -- only while avoidStruts doesn't work
+    {-gaps [(U,13)] $ -- only while avoidStruts doesn't work-}
     onWorkspace "im" myChatLayout $
     smartBorders $
     myMainLayout

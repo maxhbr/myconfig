@@ -7,7 +7,7 @@ Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
        , position = TopW L 100
        , lowerOnStart = True
        , commands = [ Run StdinReader
-                    , Run MultiCpu ["-t","Cpu: <total0> <total1> <total2> <total3>","-L","30","-H","60","-h","#FFB6B0","-l","#CEFFAC","-n","#FFFFCC","-w","3"] 10
+                    , Run MultiCpu ["-t","Cpu:<total0> <total1> <total2> <total3>","-L","30","-H","60","-h","#FFB6B0","-l","#CEFFAC","-n","#FFFFCC","-w","3"] 10
                     , Run Com "~/.xmonad/coreTemp.sh" [] "coreTemp" 100
                     --, Run Memory ["-t","Mem: <usedratio>%"] 10
                     --, Run Swap [] 10
