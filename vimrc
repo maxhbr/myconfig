@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Fr Jan 25, 2013  09:56
+" Last modified: Do Jan 31, 2013  06:04
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -477,7 +477,7 @@ function! SetLaTeXFile()
 
   setlocal linebreak
 
-  setlocal foldmarker=%{{{,%}}}
+  setlocal foldmarker={{{,}}}
   "save folding
   "au BufWinLeave * mkview
   "au BufWinEnter * silent loadview
