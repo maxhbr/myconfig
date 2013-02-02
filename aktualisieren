@@ -12,6 +12,8 @@ cp -vu ~/.emacs emacs
 cp -vu ~/.vimencrypt vimencrypt
 cp -vu ~/.Xresources Xresources
 cp -vu ~/.tmux.conf tmux.conf
+cp -vu ~/.zshrc zshrc
+cp -vu ~/.zshrc.local zshrc.local
 cp -vu ~/bin/disp-controll ./bin/
 cp -vu ~/bin/mylayouttoggle.sh ./bin/
 

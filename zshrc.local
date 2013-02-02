@@ -1,0 +1,2 @@
+source ~/.aliasrc
+export PATH=/home/hubi/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:/usr/bin/core_perl
