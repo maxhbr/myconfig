@@ -1,2 +1,62 @@
+#this is loaded by grml's zshrc
+
 source ~/.aliasrc
 export PATH=/home/hubi/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:/usr/bin/core_perl
+
+HISTFILE=~/.histfile
+HISTSIZE=50000
+SAVEHIST=50000
+setopt SHARE_HISTORY
+
+alias -s tex=vim
+alias -s pdf=zathura
+alias -s ps=zathura
+alias -s djvu=zathura
+
+## use the vi navigation keys (hjkl) besides cursor keys in menu completion
+bindkey -M menuselect 'h' vi-backward-char        # left
+bindkey -M menuselect 'k' vi-up-line-or-history   # up
+bindkey -M menuselect 'l' vi-forward-char         # right
+bindkey -M menuselect 'j' vi-down-line-or-history # bottom
+
+## set command prediction from history, see 'man 1 zshcontrib'
+is4 && zrcautoload predict-on && \
+zle -N predict-on         && \
+zle -N predict-off        && \
+bindkey "^X^Z" predict-on && \
+bindkey "^Z" predict-off
+
+# just type '...' to get '../..'
+rationalise-dot() {
+    local MATCH
+    if [[ $LBUFFER =~ '(^|/| |	|'$'\n''|\||;|&)\.\.$' ]]; then
+        LBUFFER+=/
+        zle self-insert
+        zle self-insert
+    else
+        zle self-insert
+    fi
+}
+zle -N rationalise-dot
+bindkey . rationalise-dot
+# without this, typing a . aborts incremental history search
+bindkey -M isearch . self-insert
+
+
+## get top 10 shell commands:
+alias top10='print -l ${(o)history%% *} | uniq -c | sort -nr | head -n 10'
+
+## miscellaneous code ##
+
+## Use a default width of 80 for manpages for more convenient reading
+export MANWIDTH=${MANWIDTH:-80}
+
+## you want to automatically use a bigger font on big terminals?
+#if [[ "$TERM" == "xterm" ]] && [[ "$LINES" -ge 50 ]] && [[ "$COLUMNS" -ge 100 ]] && [[ -z "$SSH_CONNECTION" ]] ; then
+    #large
+#fi
+
+# vim:filetype=zsh foldmethod=marker autoindent expandtab shiftwidth=4
+# Local variables:
+# mode: sh
+# End:
