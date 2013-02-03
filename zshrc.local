@@ -9,9 +9,13 @@ SAVEHIST=50000
 setopt SHARE_HISTORY
 
 alias -s tex=vim
+
 alias -s pdf=zathura
 alias -s ps=zathura
 alias -s djvu=zathura
+
+#alias -s avi=smplayer
+#alias -s webm=smplayer
 
 ## use the vi navigation keys (hjkl) besides cursor keys in menu completion
 bindkey -M menuselect 'h' vi-backward-char        # left
@@ -46,15 +50,8 @@ bindkey -M isearch . self-insert
 ## get top 10 shell commands:
 alias top10='print -l ${(o)history%% *} | uniq -c | sort -nr | head -n 10'
 
-## miscellaneous code ##
-
 ## Use a default width of 80 for manpages for more convenient reading
 export MANWIDTH=${MANWIDTH:-80}
-
-## you want to automatically use a bigger font on big terminals?
-#if [[ "$TERM" == "xterm" ]] && [[ "$LINES" -ge 50 ]] && [[ "$COLUMNS" -ge 100 ]] && [[ -z "$SSH_CONNECTION" ]] ; then
-    #large
-#fi
 
 # vim:filetype=zsh foldmethod=marker autoindent expandtab shiftwidth=4
 # Local variables:
