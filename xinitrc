@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Sa Jan 26, 2013  10:35
+# Last modified: So Feb 03, 2013  09:55
 
 #toggle to neo via scrol
 #setxkbmap -layout de,de -variant nodeadkeys,neo -option -option grp:sclk_toggle -option grp_led:scrol
@@ -23,7 +23,9 @@ exec urxvtd -q -f -o &
 feh --bg-center "/home/hubi/.xmonad/background2o.png" &
 amixer sset Master off &
 xbacklight -set 70 & 
+xcalib .icc/x230.icc &
 #rfkill block bluetooth # fehlende rechte
 #{ ntpd -qg; hwclock -w; } & 
+
 
 exec dbus-launch xmonad
