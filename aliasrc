@@ -235,7 +235,8 @@ alias ccl="cclive -f best"
 
 alias ping6alle="ping6 ff02::1%eth0"
 alias ping6allw="ping6 ff02::1%wlan0"
-alias myarp-scan="sudo arp-scan --localnet"
+alias myarp-scan-e="sudo arp-scan --interface=enp0s25 --localnet"
+alias myarp-scan-w="sudo arp-scan --interface=wlp3s0 --localnet"
 # or: mtr
 #     sudo arp-scan  --interface=wlan0 -l
 
@@ -250,6 +251,11 @@ mysmbload() {
   sudo systemctl start smbnetfs
 }
 alias mywakenas="wakeonlan -i 192.168.178.255 00:08:9b:bd:b3:3c"
+
+mybibload() {
+  sudo mkdir /mnt/bibliothek
+  sudo mount -o nolock 192.168.178.100:/bibliothek /mnt/bibliothek
+}
 
 ## shortcut  for iptables and pass it via sudo#
 #alias ipt='sudo /sbin/iptables'

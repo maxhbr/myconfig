@@ -4,6 +4,7 @@ cp -vu ~/.bashrc bashrc
 cp -vu ~/.aliasrc aliasrc
 cp -vu ~/.xmonad/xmonad.hs ./
 cp -vu ~/.xmonad/xmobarrc ./
+cp -vu ~/.xmonad/showkeys ./
 cp -vu ~/.vimrc vimrc
 cp -vu ~/.vimrc-neo vimrc-neo
 cp -vu ~/.xinitrc xinitrc

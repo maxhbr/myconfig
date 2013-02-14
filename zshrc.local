@@ -1,18 +1,28 @@
-#this is loaded by grml's zshrc
+# ~/.zshrc.local
+#
+# this script is loaded by grml's zshrc
+#
+# written by maximilian-huber.de
+#
+# Last modified: So Feb 10, 2013  06:05
 
-source ~/.aliasrc
-export PATH=/home/hubi/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:/usr/bin/core_perl
+[[ -f ~/.aliasrc ]] && source ~/.aliasrc
+[[ -d $HOME/bin ]] && export PATH=$HOME/bin:$PATH
 
-HISTFILE=~/.histfile
-HISTSIZE=50000
-SAVEHIST=50000
-setopt SHARE_HISTORY
+export HISTSIZE=5000
+export SAVEHIST=5000
+setopt inc_append_history
+#setopt SHARE_HISTORY
+bindkey "^R" history-incremental-pattern-search-backward
+bindkey "^S" history-incremental-pattern-search-forward
 
 alias -s tex=vim
 
 alias -s pdf=zathura
 alias -s ps=zathura
 alias -s djvu=zathura
+
+alias -s zip=file-roller
 
 #alias -s avi=smplayer
 #alias -s webm=smplayer
@@ -52,6 +62,13 @@ alias top10='print -l ${(o)history%% *} | uniq -c | sort -nr | head -n 10'
 
 ## Use a default width of 80 for manpages for more convenient reading
 export MANWIDTH=${MANWIDTH:-80}
+
+# HelloText:
+echo -e ""
+cal -3
+echo -e ""
+date
+echo -e ""
 
 # vim:filetype=zsh foldmethod=marker autoindent expandtab shiftwidth=4
 # Local variables:
