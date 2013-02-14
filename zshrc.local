@@ -4,9 +4,10 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: So Feb 10, 2013  06:05
+# Last modified: Do Feb 14, 2013  06:19
 
 [[ -f ~/.aliasrc ]] && source ~/.aliasrc
+[[ -f ~/.aliasrc-local ]] && source ~/.aliasrc-local
 [[ -d $HOME/bin ]] && export PATH=$HOME/bin:$PATH
 
 export HISTSIZE=5000
