@@ -2,7 +2,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Mi Feb 13, 2013  11:22
+-- Last modified: Fr Feb 15, 2013  10:14
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -10,6 +10,7 @@
 --{{{
 import Data.Monoid -- used is: "All"
 import Data.Ratio ((%))
+import Control.Monad
 import System.Exit ( exitWith, ExitCode( ExitSuccess ) )
 import System.IO ( hPutStrLn )
 import XMonad
@@ -33,7 +34,7 @@ import XMonad.Util.Types ( Direction2D(..) )
 
 import XMonad.Actions.CycleWS ( nextWS , prevWS , shiftToNext , shiftToPrev,
     nextScreen , prevScreen , shiftNextScreen , shiftPrevScreen , toggleWS 
-    , moveTo , Direction1D(..) , WSType( NonEmptyWS ) )
+    , moveTo , Direction1D(..) , WSType( NonEmptyWS ) , skipTags )
 import XMonad.Actions.UpdatePointer ( updatePointer, 
     PointerPosition ( TowardsCentre ) )
 
@@ -180,7 +181,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,                xK_Left  ), prevScreen)
     , ((modm .|. shiftMask,  xK_Right ), shiftNextScreen)
     , ((modm .|. shiftMask,  xK_Left  ), shiftPrevScreen)
-    , ((modm,                xK_y     ), toggleWS)]
+    {-, ((modm,                xK_y     ), toggleWS)]-}
+    , ((modm,                xK_y     ), toggleSkip ["NSP"])]
     ++
     [ -- (some) Scratchpads
     ((modm .|. shiftMask,  xK_minus ), namedScratchpadAction scratchpads "scratchpad")
@@ -211,6 +213,12 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     [((m .|. modm,           key      ), screenWorkspace sc >>= flip whenJust (windows . f))
         | (key, sc) <- zip [xK_w, xK_e, xK_r] [0..]
         , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
+
+-- Toggle workspaces but ignore some
+toggleSkip :: [WorkspaceId] -> X ()
+toggleSkip skips = do
+    hs <- gets (flip skipTags skips . W.hidden . windowset)
+    unless (null hs) (windows . W.view . W.tag $ head hs)
 --}}}
 ------------------------------------------------------------------------
 -- Mouse bindings.

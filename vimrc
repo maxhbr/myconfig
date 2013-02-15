@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Do Jan 31, 2013  06:04
+" Last modified: Fr Feb 15, 2013  09:16
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -373,6 +373,8 @@ noremap <silent> <F9> :bd<CR>
 
 noremap <silent> <F10> :q!<CR>
 inoremap <silent> <F10> <Esc>:q!<CR>
+
+set pastetoggle=<F11>
 
 "Markdown to HTML
 nmap <leader>md :%!~/bin/Markdown.pl --html4tags <cr>

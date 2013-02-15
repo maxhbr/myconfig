@@ -4,11 +4,11 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Do Feb 14, 2013  06:19
+# Last modified: Fr Feb 15, 2013  08:49
 
 [[ -f ~/.aliasrc ]] && source ~/.aliasrc
 [[ -f ~/.aliasrc-local ]] && source ~/.aliasrc-local
-[[ -d $HOME/bin ]] && export PATH=$HOME/bin:$PATH
+[[ -d $HOME/bin ]] && export PATH=$HOME/bin:$PATH:$HOME/.cabal/bin
 
 export HISTSIZE=5000
 export SAVEHIST=5000
