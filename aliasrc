@@ -225,7 +225,7 @@ alias ducksALL='du -c --max-depth=1 ./ |sort -rn'
 alias countFilesByTypes="find . -type f -exec basename \"{}\" \\; | sed -e 's/.*\\.//gi' | sort  | uniq  -c | sort  -rn"
 
 # download from youtube
-alias ccl="cclive -f best"
+alias ccl="cclive -s best"
 
 [[ -f ~/bin/mydock.sh ]] && alias mydock="mydock.sh"
 

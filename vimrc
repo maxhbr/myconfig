@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Fr Feb 15, 2013  09:16
+" Last modified: So Feb 17, 2013  11:49
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -498,6 +498,12 @@ function! SetLaTeXFile()
   set iskeyword+=_ " same with _
 
   setl noai nocin nosi inde=
+
+  "" Conceal
+  "colorscheme topfunky-light
+  "set cole=2
+  "let g:tex_conceal= 'adgm'
+  "hi Conceal guibg=White guifg=DarkMagenta
 endfunction
 
 function! SetCssFile()
@@ -541,6 +547,7 @@ augroup vimrc_autocmds
   autocmd FileType sh setlocal sw=2 ts=2 et
   autocmd FileType matlab call SetMatlabFile()
   autocmd FileType log setlocal autoread
+  autocmd FileType haskell setlocal sw=2 ts=2 et
   " in makefiles, don't expand tabs to spaces
   autocmd FileType make setlocal noexpandtab shiftwidth=8
 augroup END
@@ -605,7 +612,12 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'Solarized'
 
   "testing
-  Bundle 'LatexParFormat'
+  "Bundle 'unicode-haskell'
+  "Bundle 'git://github.com/frerich/unicode-haskell.git'
+  Bundle 'git://github.com/vim-scripts/Haskell-Conceal.git'
+  Bundle 'git://github.com/Twinside/vim-hoogle.git'
+
+  "Bundle 'LatexParFormat'
   "Bundle 'Indent-Guides'
   "Bundle 'SuperTab'
 
