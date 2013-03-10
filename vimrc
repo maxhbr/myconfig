@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: So Feb 17, 2013  11:49
+" Last modified: Sa Mär 09, 2013  05:51
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -530,32 +530,99 @@ function! SetMatlabFile()
   endif
 endfunction
 
+function! SetMailFile()
+  set textwidth=70 wrap nonumber
+  set spell
+  set spell spelllang=de_de
+  set spellfile=~/.vim/spellfile.add
+
+  highlight clear SpellBad
+  highlight SpellBad term=standout ctermfg=1 
+  highlight SpellBad term=underline cterm=underline
+  highlight clear SpellCap
+  highlight SpellCap term=underline cterm=underline
+  highlight clear SpellRare
+  highlight SpellRare term=underline cterm=underline
+  highlight clear SpellLocal
+  highlight SpellLocal term=underline cterm=underline
+endfunction
+
+
 "augroup filetypedetect
   "au! BufRead,BufNewFile *.m,*.oct setfiletype matlab
 "augroup END
 
 augroup vimrc_autocmds
   au!
-  autocmd FileType python call SetPythonFile()
-  autocmd FileType java call SetJavaFile()
-  autocmd FileType text call SetTextFile()
-  autocmd FileType tex call SetLaTeXFile()
-  autocmd FileType human call SetTextFile()
-  autocmd FileType txt call SetTextFile()
   autocmd FileType css call SetCssFile()
-  autocmd FileType less call SetCssFile()
-  autocmd FileType sh setlocal sw=2 ts=2 et
-  autocmd FileType matlab call SetMatlabFile()
-  autocmd FileType log setlocal autoread
   autocmd FileType haskell setlocal sw=2 ts=2 et
+  autocmd FileType human call SetTextFile()
+  autocmd FileType java call SetJavaFile()
+  autocmd FileType less call SetCssFile()
+  autocmd FileType log setlocal autoread
+  autocmd FileType mail call SetMailFile()
+  autocmd FileType matlab call SetMatlabFile()
+  autocmd FileType python call SetPythonFile()
+  autocmd FileType sh setlocal sw=2 ts=2 et
+  autocmd FileType tex call SetLaTeXFile()
+  autocmd FileType text call SetTextFile()
+  autocmd FileType txt call SetTextFile()
   " in makefiles, don't expand tabs to spaces
   autocmd FileType make setlocal noexpandtab shiftwidth=8
 augroup END
+
+au BufRead,BufNewFile tmpmsg-*.txt set filetype=mail
 
 augroup Shebang
   autocmd BufNewFile *.py 0put =\"#!/usr/bin/env python\<nl># -*- coding: iso-8859-15 -*-\<nl>\"|$
   autocmd BufNewFile *.rb 0put =\"#!/usr/bin/env ruby\<nl># -*- coding: None -*-\<nl>\"|$
   autocmd BufNewFile *.sh 0put =\"#!/bin/sh\"|$
+augroup END
+
+" Transparent editing of gpg encrypted files.
+" Placed Public Domain by Wouter Hanegraaff <wouter@blub.net>
+" (asc support and sh -c"..." added by Osamu Aoki)
+augroup aencrypted
+  au!
+  " First make sure nothing is written to ~/.viminfo while editing
+  " an encrypted file.
+  autocmd BufReadPre,FileReadPre      *.asc set viminfo=
+  " We don't want a swap file, as it writes unencrypted data to disk
+  autocmd BufReadPre,FileReadPre      *.asc set noswapfile
+  " Switch to binary mode to read the encrypted file
+  autocmd BufReadPre,FileReadPre      *.asc set bin
+  autocmd BufReadPre,FileReadPre      *.asc let ch_save = &ch|set ch=2
+  autocmd BufReadPost,FileReadPost    *.asc '[,']!sh -c "gpg --decrypt 2> /dev/null"
+  " Switch to normal mode for editing
+  autocmd BufReadPost,FileReadPost    *.asc set nobin
+  autocmd BufReadPost,FileReadPost    *.asc let &ch = ch_save|unlet ch_save
+  autocmd BufReadPost,FileReadPost    *.asc execute ":doautocmd BufReadPost " . expand("%:r")
+  " Convert all text to encrypted text before writing
+  autocmd BufWritePre,FileWritePre    *.asc   '[,']!sh -c "gpg --default-recipient-self -ae 2>/dev/null"
+  " Undo the encryption so we are back in the normal text, directly
+  " after the file has been written.
+  autocmd BufWritePost,FileWritePost    *.asc   u
+augroup END
+augroup bencrypted
+  au!
+  " First make sure nothing is written to ~/.viminfo while editing
+  " an encrypted file.
+  autocmd BufReadPre,FileReadPre      *.gpg set viminfo=
+  " We don't want a swap file, as it writes unencrypted data to disk
+  autocmd BufReadPre,FileReadPre      *.gpg set noswapfile
+  " Switch to binary mode to read the encrypted file
+  autocmd BufReadPre,FileReadPre      *.gpg set bin
+  autocmd BufReadPre,FileReadPre      *.gpg let ch_save = &ch|set ch=2
+  autocmd BufReadPost,FileReadPost    *.gpg '[,']!sh -c "gpg --decrypt 2> /dev/null"
+  " Switch to normal mode for editing
+  autocmd BufReadPost,FileReadPost    *.gpg set nobin
+  autocmd BufReadPost,FileReadPost    *.gpg let &ch = ch_save|unlet ch_save
+  autocmd BufReadPost,FileReadPost    *.gpg execute ":doautocmd BufReadPost " . expand("%:r")
+  " Convert all text to encrypted text before writing
+  autocmd BufWritePre,FileWritePre    *.gpg   '[,']!sh -c "gpg --default-recipient-self --armor -ev 2>/dev/null"
+  " Undo the encryption so we are back in the normal text, directly
+  " after the file has been written.
+  autocmd BufWritePost,FileWritePost    *.gpg   u
 augroup END
 
 " ===================================================================}}}

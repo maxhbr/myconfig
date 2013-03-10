@@ -2,7 +2,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Fr Feb 15, 2013  10:14
+-- Last modified: Do Feb 28, 2013  03:08
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -32,20 +32,20 @@ import XMonad.Util.NamedScratchpad ( NamedScratchpad(..), customFloating,
 import XMonad.Util.Run ( spawnPipe )
 import XMonad.Util.Types ( Direction2D(..) )
 
-import XMonad.Actions.CycleWS ( nextWS , prevWS , shiftToNext , shiftToPrev,
-    nextScreen , prevScreen , shiftNextScreen , shiftPrevScreen , toggleWS 
+zmport XMonad.Actions.CycleWS ( nextWS , prevWS , shiftToNext , shiftToPrev,
+    nextScreen , prevScreen , shiftNextScreen , shiftPrevScreen , toggleWS
     , moveTo , Direction1D(..) , WSType( NonEmptyWS ) , skipTags )
-import XMonad.Actions.UpdatePointer ( updatePointer, 
+import XMonad.Actions.UpdatePointer ( updatePointer,
     PointerPosition ( TowardsCentre ) )
 
-import XMonad.Layout.BoringWindows( boringAuto, focusUp, focusDown ) 
+import XMonad.Layout.BoringWindows( boringAuto, focusUp, focusDown )
 import XMonad.Layout.Gaps ( gaps, GapMessage( ToggleGaps ) )
 import XMonad.Layout.IM ( Property(..), withIM )
 import XMonad.Layout.Magnifier ( magnifier )
 import XMonad.Layout.Named ( named )
 import XMonad.Layout.NoBorders ( smartBorders, noBorders )
 import XMonad.Layout.PerWorkspace ( onWorkspace )
-import XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall), 
+import XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall),
     MirrorResize( MirrorShrink, MirrorExpand ) )
 import XMonad.Layout.Simplest ( Simplest(Simplest) )
 import XMonad.Layout.SubLayouts ( subLayout, pullGroup,
@@ -73,8 +73,6 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
 
     , ((modm,               xK_o     ), spawn "urxvt -e bash -c 'ranger'")
     , ((modm .|. shiftMask, xK_o     ), spawn "emelfm2")
-
-    , ((modm,               xK_F1     ), spawn "onboard")
 
     -- close focused window
     , ((modm .|. shiftMask, xK_c     ), kill)
@@ -142,7 +140,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     ++
     --[ ((modm,               xK_F9  ),  spawn "sxiv ~/.xmonad/neo_Ebenen_1_2_3_4.png")]
     -- ++
-    [ -- toggle touchpad        
+    [ -- toggle touchpad
     ((0,                  0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
     , ((modm,              xK_z), spawn "~/bin/disp-controll 1") -- auto
     , ((modm .|. shiftMask, xK_z), spawn "~/bin/disp-controll 2") -- toggle
@@ -242,7 +240,7 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 ------------------------------------------------------------------------
 -- Layouts:
 --{{{
-myMainLayout = configurableNavigation (navigateColor "#333333") $ 
+myMainLayout = configurableNavigation (navigateColor "#333333") $
     boringAuto $
     basicLayout
     where
@@ -311,14 +309,14 @@ myLayout = avoidStrutsOn[U] $
 -- 'className' and 'resource' are used below.
 --
 myManageHook = composeAll
-    [ className =?  "Xmessage"      --> doCenterFloat 
+    [ className =?  "Xmessage"      --> doCenterFloat
     , className =? "MPlayer"        --> doFloat
     , className =? "Onboard"        --> doFloat
     , className =? "Pidgin"         --> doShift "im"
     , className =? "Chromium"       --> doShift "web"
     , className =? "Sylpheed"       --> doShift "mail"
     , className =? "Gimp"           --> doShift "4"
-    , resource  =? "Gimp"           --> doShift "4" 
+    , resource  =? "Gimp"           --> doShift "4"
     {-, className =? "VirtualBox"     --> doShift "VM"-}
     , className =? "Virtualbox"     --> doFullFloat
     , resource  =? "desktop_window" --> doIgnore

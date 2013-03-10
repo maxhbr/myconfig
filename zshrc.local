@@ -4,14 +4,35 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Fr Feb 15, 2013  08:49
+# Last modified: Sa Mär 02, 2013  09:37
+#
+umask 077
 
 [[ -f ~/.aliasrc ]] && source ~/.aliasrc
 [[ -f ~/.aliasrc-local ]] && source ~/.aliasrc-local
-[[ -d $HOME/bin ]] && export PATH=$HOME/bin:$PATH:$HOME/.cabal/bin
+[[ -d $HOME/bin ]] && export PATH=$HOME/bin:$PATH
+[[ -d $Home/.cabal/bin ]] && export PATH=$PATH:$HOME/.cabal/bin
 
-export HISTSIZE=5000
-export SAVEHIST=5000
+ZDOTDIR=${ZDOTDIR:-${HOME}}
+ZSHDDIR="${HOME}/.config/zsh.d"
+#HISTFILE="${ZDOTDIR}/.zsh_history"
+HISTSIZE=10000
+SAVEHIST="${HISTSIZE}"
+export EDITOR="/usr/bin/vim"
+export TMP="$HOME/tmp"
+export TEMP="$TMP"
+export TMPDIR="$TMP"
+export TMPPREFIX="${TMPDIR}/zsh"
+## Use a default width of 80 for manpages for more convenient reading
+export MANWIDTH=${MANWIDTH:-80}
+
+if [ ! -d "${TMP}" ]; then mkdir "${TMP}"; fi
+
+# Not all servers have terminfo for rxvt-256color. :<
+if [ "${TERM}" = 'rxvt-256color' ] && ! [ -f '/usr/share/terminfo/r/rxvt-256color' ] && ! [ -f '/lib/terminfo/r/rxvt-256color' ] && ! [ -f "${HOME}/.terminfo/r/rxvt-256color" ]; then
+	export TERM='rxvt-unicode'
+fi
+
 setopt inc_append_history
 #setopt SHARE_HISTORY
 bindkey "^R" history-incremental-pattern-search-backward
@@ -57,19 +78,23 @@ bindkey . rationalise-dot
 # without this, typing a . aborts incremental history search
 bindkey -M isearch . self-insert
 
-
 ## get top 10 shell commands:
 alias top10='print -l ${(o)history%% *} | uniq -c | sort -nr | head -n 10'
 
-## Use a default width of 80 for manpages for more convenient reading
-export MANWIDTH=${MANWIDTH:-80}
+# Fix for tmux on linux.
+case "$(uname -o)" in
+    'GNU/Linux')
+        export EVENT_NOEPOLL=1
+        ;;
+esac
 
 # HelloText:
 echo -e ""
 cal -3
 echo -e ""
 date
-echo -e ""
+echo -e ""  
+if [ -f ~/TODO/TODO.wiki ]; then cat ~/TODO/TODO.wiki; fi
 
 # vim:filetype=zsh foldmethod=marker autoindent expandtab shiftwidth=4
 # Local variables:

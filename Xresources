@@ -3,6 +3,8 @@
 !emacs*Background: DarkSlateGray
 !emacs*Foreground: Wheat
 
+URxvt.urgentOnBell: true
+
 ! transparency - true or false (default)
 URxvt*transparent: true
 

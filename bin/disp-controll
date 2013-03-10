@@ -2,9 +2,9 @@
 # written by maximilian-huber.de
 
 mySetBkg() {
-  background="background1.png"
+  background="background2o.png"
   ##background="DSC03551-2-1080-bw.jpg"
-  #feh --bg-center "~/.xmonad/${background}"
+  feh --bg-center "~/.xmonad/${background}"
 }
 
 myAutomatic() {
@@ -199,4 +199,5 @@ case $choice in
     ;;
 esac
 
-mySetBkg
+#mySetBkg
+setxkbmap -option ctrl:nocaps
