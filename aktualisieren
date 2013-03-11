@@ -1,24 +1,28 @@
 #!/bin/bash
-echo "copy"
-cp -vu ~/.bashrc bashrc
-cp -vu ~/.aliasrc aliasrc
-cp -vu ~/.xmonad/xmonad.hs ./
-cp -vu ~/.xmonad/xmobarrc ./
-cp -vu ~/.xmonad/showkeys ./
-cp -vu ~/.vimrc vimrc
-cp -vu ~/.vimrc-neo vimrc-neo
-cp -vu ~/.xinitrc xinitrc
-cp -vu ~/.bash_profile bash_profile
-cp -vu ~/.emacs emacs
-cp -vu ~/.vimencrypt vimencrypt
-cp -vu ~/.Xresources Xresources
-cp -vu ~/.tmux.conf tmux.conf
-cp -vu ~/.zshrc.local zshrc.local
-cp -vu ~/bin/disp-controll ./bin/
-cp -vu ~/bin/mylayouttoggle.sh ./bin/
+mkdir -p ~/myconfig/
+cd ~/myconfig/
 
-mkdir -p etc
-cp /etc/zathurarc etc/zathurarc
+echo "copy"
+echo
+cp -vu ~/.bashrc ~/myconfig/bashrc
+cp -vu ~/.aliasrc ~/myconfig/aliasrc
+cp -vu ~/.xmonad/xmonad.hs ~/myconfig/
+cp -vu ~/.xmonad/xmobarrc ~/myconfig/
+cp -vu ~/.xmonad/showkeys ~/myconfig/
+cp -vu ~/.vimrc ~/myconfig/vimrc
+cp -vu ~/.vimrc-neo ~/myconfig/vimrc-neo
+cp -vu ~/.xinitrc ~/myconfig/xinitrc
+cp -vu ~/.bash_profile ~/myconfig/bash_profile
+cp -vu ~/.emacs ~/myconfig/emacs
+cp -vu ~/.vimencrypt ~/myconfig/vimencrypt
+cp -vu ~/.Xresources ~/myconfig/Xresources
+cp -vu ~/.tmux.conf ~/myconfig/tmux.conf
+cp -vu ~/.zshrc.local ~/myconfig/zshrc.local
+cp -vu ~/bin/disp-controll ~/myconfig/bin/
+cp -vu ~/bin/mylayouttoggle.sh ~/myconfig/bin/
+
+mkdir -p ~/myconfig/etc
+cp /etc/zathurarc ~/myconfig/etc/zathurarc
 
 #/etc/modprobe.d/audio_power_save.conf
 #/etc/sysctl.d/disable_watchdog.conf

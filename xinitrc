@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: So Feb 03, 2013  09:55
+# Last modified: Mo Mär 11, 2013  09:32
 
 #toggle to neo via scrol
 #setxkbmap -layout de,de -variant nodeadkeys,neo -option -option grp:sclk_toggle -option grp_led:scrol
@@ -27,5 +27,6 @@ xcalib .icc/x230.icc &
 #rfkill block bluetooth # fehlende rechte
 #{ ntpd -qg; hwclock -w; } & 
 
+[[ -f ~/bin/mailrun.sh ]] && ~/bin/mailrun.sh --start
 
 exec dbus-launch xmonad
