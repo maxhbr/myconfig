@@ -3,7 +3,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Di Mär 12, 2013  10:40
+-- Last modified: Do Mär 14, 2013  11:07
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -66,7 +66,9 @@ import qualified XMonad.Prompt               as P
 -- Key bindings:
 --{{{
 myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
-    [ ((modm .|. shiftMask, xK_Return), spawn $ XMonad.terminal conf)
+    [ --default --{{{
+    ((modm .|. shiftMask, xK_Return), spawn $ XMonad.terminal conf)
+    , ((modm .|. shiftMask .|. controlMask, xK_Return), spawn "urxvtd -q -f -o &")
 
     , ((modm,               xK_p     ), spawn "dmenu_run")
     -- alternative zu anderem starter
@@ -125,19 +127,22 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,               xK_period), sendMessage (IncMasterN (-1)))
 
     -- xmobar has some Problems
-    , ((modm,                xK_b     ), sendMessage ToggleStruts)
-    , ((modm .|. shiftMask,  xK_b     ), sendMessage ToggleGaps)
+    , ((modm,                xK_b    ), sendMessage ToggleStruts)
+    , ((modm .|. shiftMask,  xK_b    ), sendMessage ToggleGaps)
 
     -- Restart xmonad
     , ((modm,                xK_q    ), spawn "xmonad --recompile; xmonad --restart")
     -- Quit xmonad
-    , ((modm .|. shiftMask, xK_q     ), io (exitWith ExitSuccess))]
+    , ((modm .|. shiftMask, xK_q     ), io (exitWith ExitSuccess))
+    ] --}}}
     ++
-    [ ((modm .|. shiftMask,  xK_F10  ),  spawn "systemctl suspend")
+    [ --systemctl --{{{
+    ((modm .|. shiftMask,  xK_F10  ),  spawn "systemctl suspend")
     , ((modm .|. shiftMask,  xK_F11  ),  spawn "systemctl reboot")
-    , ((modm .|. shiftMask,  xK_F12  ),  spawn "systemctl poweroff") ]
+    , ((modm .|. shiftMask,  xK_F12  ),  spawn "systemctl poweroff")
+    ] --}}}
     ++
-    [ --misc
+    [ -- misc --{{{
     ((0,                  0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
     , ((modm,              xK_z), spawn "~/bin/disp-controll 1") -- auto
     , ((modm .|. shiftMask, xK_z), spawn "~/bin/disp-controll 2") -- toggle
@@ -149,7 +154,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,                xK_Home ), spawn "xcalib -i -a")
 
     -- screenshot
-    , ((0,                   xK_Print), spawn "scrot screen_%Y-%m-%d_%H-%M-%S.png -d 1")
+    , ((modm, xK_Print), spawn "scrot screen_%Y-%m-%d_%H-%M-%S.png -d 1")
 
     --volume controls
     , ((0,                  0x1008ff12), spawn "~/.xmonad/myvolume.sh m")
@@ -157,9 +162,10 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((0,                  0x1008ff13), spawn "~/.xmonad/myvolume.sh +")
 
      -- toggle mouse
-    , ((modm,                xK_s     ), toggleFF)]
+    , ((modm,                xK_s     ), toggleFF)
+    ] --}}}
     ++
-    [ -- CycleWS setup
+    [ -- CycleWS setup --{{{
     ((modm,                xK_Down  ), moveTo Next NonEmptyWS)
     , ((modm,                xK_Up    ), moveTo Prev NonEmptyWS)
     , ((modm .|. shiftMask,  xK_Down  ), shiftToNext >> nextWS)
@@ -170,17 +176,17 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. shiftMask,  xK_Left  ), shiftPrevScreen)
     {-, ((modm,                xK_y     ), toggleWS)]-}
     , ((modm,                xK_y     ), toggleSkip ["NSP"])
-    ]
+    ] --}}}
     ++
-    [ -- (some) Scratchpads
+    [ -- (some) Scratchpads --{{{
     ((modm .|. shiftMask,  xK_minus ), namedScratchpadAction scratchpads "scratchpad")
     , ((modm,                xK_g     ), namedScratchpadAction scratchpads "ScratchGvim")
     , ((modm,                xK_i     ), namedScratchpadAction scratchpads "ScratchWeb")
     , ((modm .|. shiftMask,  xK_i     ), namedScratchpadAction scratchpads "ScratchMutt")
     , ((modm,                xK_n     ), namedScratchpadAction scratchpads "notepad")
-    ]
+    ] --}}}
     ++
-    [ -- for XMonad.Layout.SubLayouts
+    [ -- for XMonad.Layout.SubLayouts --{{{
      ((modm .|. controlMask, xK_h), sendMessage $ pullGroup L)
      , ((modm .|. controlMask, xK_l), sendMessage $ pullGroup R)
      , ((modm .|. controlMask, xK_k), sendMessage $ pullGroup U)
@@ -188,7 +194,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
 
      , ((modm .|. controlMask, xK_m), withFocused (sendMessage . MergeAll))
      , ((modm .|. controlMask, xK_u), withFocused (sendMessage . UnMerge))
-    ]
+    ] --}}}
     ++
     -- mod-[1..9], Switch to workspace N
     -- mod-shift-[1..9], Move client to workspace N
@@ -207,7 +213,6 @@ toggleSkip :: [WorkspaceId] -> X ()
 toggleSkip skips = do
     hs <- gets (flip skipTags skips . W.hidden . windowset)
     unless (null hs) (windows . W.view . W.tag $ head hs)
---}}}
 ------------------------------------------------------------------------
 -- Mouse bindings:
 --{{{
@@ -224,6 +229,7 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
     ]
 --}}}
 ------------------------------------------------------------------------
+--}}}
 -- Layouts:
 --{{{
 myMainLayout = configurableNavigation (navigateColor "#333333") $
@@ -303,10 +309,17 @@ myManageHook = composeAll
     , className =? "Sylpheed"       --> doShift "mail"
     , className =? "Gimp"           --> doShift "4"
     , resource  =? "Gimp"           --> doShift "4"
+    , resource  =? "ToScreen1"      --> doShift "1"
     , className =? "Virtualbox"     --> doFullFloat
     , resource  =? "desktop_window" --> doIgnore
     , resource  =? "kdesktop"       --> doIgnore
     , className =? "Zenity"         --> doCenterFloat ]
+        <+> composeAll
+            [ resource  =? ("ToWorkspace"++i)    --> doShift i
+                | i <- myWorkspaces]
+        <+> composeAll
+            [ className =? ("ToWorkspace"++i)    --> doShift i
+                | i <- myWorkspaces]
         <+> namedScratchpadManageHook scratchpads
         <+> manageDocks
         <+> manageHook defaultConfig
@@ -325,9 +338,12 @@ scratchpads = [
         , NS "notepad" "urxvt -name Notepad -e vim ~/TODO/notizen.wiki"
             (resource =? "Notepad")
             (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
-        , NS "ScratchMutt" "urxvt -name ScratchMutt -e bash -c \"~/bin/mailclient.sh\""
-            (resource =? "ScratchMutt")
-            (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
+       , NS "ScratchMutt" "urxvt -name ScratchMutt -e bash -c \"~/bin/mailclient.sh\""
+           (resource =? "ScratchMutt")
+           (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
+        {-, NS "ScratchMutt" "urxvt -name ScratchMutt -e bash -c \"mutt\""-}
+            {-(resource =? "ScratchMutt")-}
+            {-(customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))-}
     ] where role = stringProperty "WM_WINDOW_ROLE"
 --}}}
 ------------------------------------------------------------------------
@@ -366,13 +382,16 @@ myStartupHook = do
     spawn "urxvtc"
 --}}}
 ------------------------------------------------------------------------
+-- General
+myWorkspaces = ["1","2","3","4","5","6","mail","web","im"]
+
 myConfig xmproc = withUrgencyHook NoUrgencyHook $
     defaultConfig {
         terminal             = "urxvtc"
         , focusFollowsMouse  = False -- see: focusFollow
         , borderWidth        = 2
         , modMask            = mod4Mask
-        , workspaces         = ["1","2","3","4","5","6","mail","web","im"]
+        , workspaces         = myWorkspaces
         , normalBorderColor  = "#333333"
         , focusedBorderColor = "#dd0000"
         , keys               = myKeys
