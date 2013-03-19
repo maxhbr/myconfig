@@ -3,7 +3,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Do Mär 14, 2013  11:07
+-- Last modified: Sa Mär 16, 2013  02:00
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -15,9 +15,9 @@ import Control.Monad
 import System.Exit ( exitWith, ExitCode( ExitSuccess ) )
 import System.IO ( hPutStrLn )
 import XMonad
-import Graphics.X11.ExtraTypes.XF86 ( xF86XK_Display )
+import Graphics.X11.ExtraTypes.XF86()
 
-import XMonad.Prompt ( defaultXPConfig, font, height, XPConfig )
+import XMonad.Prompt ( defaultXPConfig )
 import XMonad.Prompt.Shell ( shellPrompt )
 
 import XMonad.Hooks.DynamicLog ( dynamicLogWithPP,xmobarPP, PP(..), defaultPP,
@@ -35,17 +35,16 @@ import XMonad.Util.Run ( spawnPipe )
 import XMonad.Util.Types ( Direction2D(..) )
 
 import XMonad.Actions.CycleWS ( nextWS , prevWS , shiftToNext , shiftToPrev,
-    nextScreen , prevScreen , shiftNextScreen , shiftPrevScreen , toggleWS
-    , moveTo , Direction1D(..) , WSType( NonEmptyWS ) , skipTags )
+    nextScreen , prevScreen , shiftNextScreen , shiftPrevScreen , moveTo ,
+    Direction1D(..) , WSType( NonEmptyWS ) , skipTags )
 import XMonad.Actions.UpdatePointer ( updatePointer,
     PointerPosition ( TowardsCentre ) )
 
-import XMonad.Layout.BoringWindows( boringAuto, focusUp, focusDown )
-import XMonad.Layout.Gaps ( gaps, GapMessage( ToggleGaps ) )
+import XMonad.Layout.BoringWindows( boringAuto, focusDown )
 import XMonad.Layout.IM ( Property(..), withIM )
 import XMonad.Layout.Magnifier ( magnifier )
 import XMonad.Layout.Named ( named )
-import XMonad.Layout.NoBorders ( smartBorders, noBorders )
+import XMonad.Layout.NoBorders ( smartBorders )
 import XMonad.Layout.PerWorkspace ( onWorkspace )
 import XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall),
     MirrorResize( MirrorShrink, MirrorExpand ) )
@@ -59,7 +58,6 @@ import XMonad.Layout.WindowNavigation ( configurableNavigation, navigateColor )
 import qualified Data.Map                    as M
 import qualified XMonad.StackSet             as W
 import qualified XMonad.Util.ExtensibleState as XS
-import qualified XMonad.Prompt               as P
 
 --}}}
 ------------------------------------------------------------------------
@@ -128,7 +126,6 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
 
     -- xmobar has some Problems
     , ((modm,                xK_b    ), sendMessage ToggleStruts)
-    , ((modm .|. shiftMask,  xK_b    ), sendMessage ToggleGaps)
 
     -- Restart xmonad
     , ((modm,                xK_q    ), spawn "xmonad --recompile; xmonad --restart")
@@ -279,7 +276,6 @@ myChatLayout = avoidStrutsOn[U] $
 
 -- Put all layouts together
 myLayout = avoidStrutsOn[U] $
-    {-gaps [(U,13)] $ -- only while avoidStruts doesn't work-}
     onWorkspace "im" myChatLayout $
     smartBorders $
     myMainLayout
