@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Mi Mär 13, 2013  10:14
+# Last modified: Do Mär 21, 2013  03:43
 
 #toggle to neo via scrol
 #setxkbmap -layout de,de -variant nodeadkeys,neo -option -option grp:sclk_toggle -option grp_led:scrol
@@ -14,6 +14,7 @@ xsetroot -cursor_name left_ptr
 xset dpms 300 600 900 & # screen saver replacement
 [[ -f ~/.Xresources ]] && xrdb -merge ~/.Xresources
 
+#TODO: only start once
 #[[ $(ps -A | grep -c urxvtd) == "0" ]] && exec urxvtd -q -f -o &
 exec urxvtd -q -f -o &
 

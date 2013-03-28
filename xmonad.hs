@@ -1,15 +1,26 @@
 -- ~/.xmonad/xmonad.hs
 -- needs xorg-xmessage for error messages
 --
+-- used software {{{
+--  dmenu        to start software
+--  dwb          fast browser
+--  scrot        screenshot tool
+--  slock        screenlock tool
+--  unclutter    to hide mouse pointer
+--  urxvt        terminal
+--  xcalib       invert colors
+--  xmobar       bar
+-- }}}
+--
 -- written by maximilian-huber.de
 --
--- Last modified: Sa Mär 16, 2013  02:00
+-- Last modified: Do Mär 28, 2013  12:03
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
 -- Imports:
 --{{{
-import Data.Monoid -- used is: "All"
+import Data.Monoid
 import Data.Ratio ((%))
 import Control.Monad
 import System.Exit ( exitWith, ExitCode( ExitSuccess ) )
@@ -71,9 +82,9 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,               xK_p     ), spawn "dmenu_run")
     -- alternative zu anderem starter
     , ((modm,               xK_x     ), shellPrompt defaultXPConfig)
-    , ((modm .|. shiftMask, xK_p     ), spawn "gmrun")
+    {-, ((modm .|. shiftMask, xK_p     ), spawn "gmrun")-}
 
-    , ((modm,               xK_o     ), spawn "urxvt -e bash -c 'ranger'")
+    , ((modm,               xK_o     ), spawn "urxvtc -e bash -c 'ranger'")
 
     -- close focused window
     , ((modm .|. shiftMask, xK_c     ), kill)
@@ -177,7 +188,6 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     ++
     [ -- (some) Scratchpads --{{{
     ((modm .|. shiftMask,  xK_minus ), namedScratchpadAction scratchpads "scratchpad")
-    , ((modm,                xK_g     ), namedScratchpadAction scratchpads "ScratchGvim")
     , ((modm,                xK_i     ), namedScratchpadAction scratchpads "ScratchWeb")
     , ((modm .|. shiftMask,  xK_i     ), namedScratchpadAction scratchpads "ScratchMutt")
     , ((modm,                xK_n     ), namedScratchpadAction scratchpads "notepad")
@@ -227,13 +237,13 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 --}}}
 ------------------------------------------------------------------------
 --}}}
+------------------------------------------------------------------------
 -- Layouts:
 --{{{
 myMainLayout = configurableNavigation (navigateColor "#333333") $
     boringAuto $
-    basicLayout
+    (tiled ||| mag ||| full ||| stb)
     where
-        basicLayout = tiled ||| mag ||| full ||| stb
         tiled       = named " "  $
             addTabs shrinkText myTab $
             subLayout [] Simplest $
@@ -324,22 +334,17 @@ myManageHook = composeAll
 --
 scratchpads :: [NamedScratchpad]
 scratchpads = [
-        NS "scratchpad" "urxvt -name Scratchpad -e ~/.xmonad/tmux-scratch.sh"
+        NS "scratchpad" "urxvtc -name Scratchpad -e ~/.xmonad/tmux-scratch.sh"
             (resource =? "Scratchpad")
             (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
-        , NS "ScratchGvim" "gvim --role ScratchGvim" (role =? "ScratchGvim")
-            nonFloating
         , NS "ScratchWeb" "dwb" (resource =? "dwb")
             (customFloating $ W.RationalRect (1/12) (1/12) (5/6) (5/6))
-        , NS "notepad" "urxvt -name Notepad -e vim ~/TODO/notizen.wiki"
+        , NS "notepad" "urxvtc -name Notepad -e vim ~/TODO/notizen.wiki"
             (resource =? "Notepad")
             (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
-       , NS "ScratchMutt" "urxvt -name ScratchMutt -e bash -c \"~/bin/mailclient.sh\""
+       , NS "ScratchMutt" "urxvtc -name ScratchMutt -e bash -c \"~/bin/mailclient.sh\""
            (resource =? "ScratchMutt")
            (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
-        {-, NS "ScratchMutt" "urxvt -name ScratchMutt -e bash -c \"mutt\""-}
-            {-(resource =? "ScratchMutt")-}
-            {-(customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))-}
     ] where role = stringProperty "WM_WINDOW_ROLE"
 --}}}
 ------------------------------------------------------------------------
@@ -374,11 +379,12 @@ toggleFF = XS.modify $ FocusFollow . not . getFocusFollow
 myStartupHook :: X ()
 myStartupHook = do
     setWMName "LG3D"
-    spawn "pkill unclutter; unclutter &"
+    spawn "killall unclutter; unclutter &"
     spawn "urxvtc"
 --}}}
 ------------------------------------------------------------------------
 -- General
+--{{{
 myWorkspaces = ["1","2","3","4","5","6","mail","web","im"]
 
 myConfig xmproc = withUrgencyHook NoUrgencyHook $
@@ -396,15 +402,16 @@ myConfig xmproc = withUrgencyHook NoUrgencyHook $
         , layoutHook         = myLayout
         , handleEventHook    = myEventHook
         , logHook            = dynamicLogWithPP xmobarPP
-            { ppOutput      = hPutStrLn xmproc
-            , ppCurrent     = xmobarColor "#ee9a00" "" . wrap "<" ">"
-            , ppSort        = fmap (.namedScratchpadFilterOutWorkspace)
-                $ ppSort defaultPP
-            , ppTitle       = (" " ++) . xmobarColor "#ee9a00" ""
-            , ppVisible     = xmobarColor "#ee9a00" ""
-            } >> updatePointer (TowardsCentre 0.2 0.2)
+                { ppOutput      = hPutStrLn xmproc
+                , ppCurrent     = xmobarColor "#ee9a00" "" . wrap "<" ">"
+                , ppSort        = fmap (.namedScratchpadFilterOutWorkspace)
+                    $ ppSort defaultPP
+                , ppTitle       = (" " ++) . xmobarColor "#ee9a00" ""
+                , ppVisible     = xmobarColor "#ee9a00" ""
+                } >> updatePointer (TowardsCentre 0.2 0.2)
         , startupHook        = myStartupHook
         }
+--}}}
 ------------------------------------------------------------------------
 -- Now run xmonad
 main = do

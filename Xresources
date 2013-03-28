@@ -6,11 +6,11 @@
 URxvt.urgentOnBell: true
 
 ! transparency - true or false (default)
-URxvt*transparent: true
-
+!URxvt*transparent: true
 ! shading - 0 to 99 darkens, 101 to 200 lightens.
 !   Dont use with tintColor; just use a darker or lighter color instead.
-URxvt*shading: 10
+!URxvt*shading: 10
+
 URxvt.depth: 32
 !URxvt.background: rgba:1111/1111/1111/dddd
 URxvt*saveLines: 12000
@@ -31,7 +31,7 @@ URxvt*scrollBar_right: false
 URxvt*scrollstyle: plain
 
 urxvt*perl-lib:         /usr/lib/urxvt/perl/
-urxvt*perl-ext-common:  default,matcher,tabbed 
+urxvt*perl-ext-common:  default,matcher,tabbed
 !,clipboard,url-select
 !URxvt.keysym.C-Insert:  perl:clipboard:copy
 !URxvt.keysym.S-Insert:  perl:clipboard:paste
