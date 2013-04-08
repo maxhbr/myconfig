@@ -14,7 +14,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Do Mär 28, 2013  12:03
+-- Last modified: So Mär 31, 2013  10:45
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -84,7 +84,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,               xK_x     ), shellPrompt defaultXPConfig)
     {-, ((modm .|. shiftMask, xK_p     ), spawn "gmrun")-}
 
-    , ((modm,               xK_o     ), spawn "urxvtc -e bash -c 'ranger'")
+    , ((modm,               xK_o     ), spawn "urxvtc -e bash -c 'EDITOR=vim ranger'")
 
     -- close focused window
     , ((modm .|. shiftMask, xK_c     ), kill)
@@ -312,7 +312,7 @@ myManageHook = composeAll
     , className =? "Onboard"        --> doFloat
     , className =? "Pidgin"         --> doShift "im"
     , className =? "Chromium"       --> doShift "web"
-    , className =? "Sylpheed"       --> doShift "mail"
+    {-, className =? "Sylpheed"       --> doShift "7"-}
     , className =? "Gimp"           --> doShift "4"
     , resource  =? "Gimp"           --> doShift "4"
     , resource  =? "ToScreen1"      --> doShift "1"
@@ -385,7 +385,7 @@ myStartupHook = do
 ------------------------------------------------------------------------
 -- General
 --{{{
-myWorkspaces = ["1","2","3","4","5","6","mail","web","im"]
+myWorkspaces = ["1","2","3","4","5","6","7","web","im"]
 
 myConfig xmproc = withUrgencyHook NoUrgencyHook $
     defaultConfig {

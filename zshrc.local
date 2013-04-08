@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Mo Mär 25, 2013  06:47
+# Last modified: Do Apr 04, 2013  08:43
 #
 umask 077
 
@@ -92,7 +92,11 @@ esac
 echo -e ""
 cal -3
 echo -e ""
-date
+if true; then
+    when m
+else
+    date
+fi
 echo -e ""  
 if [ -f ~/TODO/TODO.wiki ]; then cat ~/TODO/TODO.wiki; fi
 

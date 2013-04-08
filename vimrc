@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sa Mär 09, 2013  05:51
+" Last modified: Mo Apr 08, 2013  11:13
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -155,6 +155,13 @@ hi NonText cterm=NONE ctermfg=NONE
 " stops slow responding in large files
 set synmaxcol=128
 "                                                                    }}}
+" ====  Line Numbering  ============================================={{{
+au InsertEnter * :set nu
+au InsertLeave * :set rnu
+au FocusLost * :set nu
+au FocusGained * :set rnu
+set rnu
+"                                                                    }}}
 " ====  Backup / Undo  =============================================={{{
 
 set history=1000
@@ -185,7 +192,6 @@ set nocursorcolumn " hat probleme mit acp (Popup)
 set textwidth=0    " Don't wrap lines by default
 set nowrap
 set ruler
-set number
 
 set showmode "show when you are in insert mode
 
@@ -308,6 +314,14 @@ function! MyHtmlEscape()
   silent s/Ü/\&Uuml;/eg
   silent s/ß/\&szlig;/eg
 endfunction
+
+function! NumberToggle()
+  if(&relativenumber == 1)
+    set number
+  else
+    set relativenumber
+  endif
+endfunc
 
 " ===================================================================}}}
 " ====  Keymappings  ================================================
@@ -497,7 +511,12 @@ function! SetLaTeXFile()
   set iskeyword+=- " same with -
   set iskeyword+=_ " same with _
 
-  setl noai nocin nosi inde=
+  "setlocal noautoindent
+  setlocal nocindent
+  setlocal nosmartindent
+  setlocal indentexpr=
+
+  setlocal autoindent
 
   "" Conceal
   "colorscheme topfunky-light

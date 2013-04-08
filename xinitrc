@@ -3,13 +3,9 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Do Mär 21, 2013  03:43
+# Last modified: Do Apr 04, 2013  11:03
 
-#toggle to neo via scrol
-#setxkbmap -layout de,de -variant nodeadkeys,neo -option -option grp:sclk_toggle -option grp_led:scrol
-#setxkbmap -layout de -variant nodeadkeys
-# set caps lock as ctrl
-setxkbmap -option ctrl:nocaps
+setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 xsetroot -cursor_name left_ptr
 xset dpms 300 600 900 & # screen saver replacement
 [[ -f ~/.Xresources ]] && xrdb -merge ~/.Xresources
@@ -18,16 +14,20 @@ xset dpms 300 600 900 & # screen saver replacement
 #[[ $(ps -A | grep -c urxvtd) == "0" ]] && exec urxvtd -q -f -o &
 exec urxvtd -q -f -o &
 
-#if [ -f ~/bin/mydock.sh ]; then
-  #~/bin/mydock.sh fast &
-#fi
+(
+  if xrandr -q | grep -q "HDMI2 connected"; then
+    xrandr --output HDMI2 --mode 1920x1080 --right-of LVDS1 --output LVDS1 --mode 1366x768
+    xcalib -s 0 .icc/x230.icc &
+    #xcalib -s 1 .icc/23.icc &
+  else
+    xcalib .icc/x230.icc &
+  fi
+  feh --bg-center "/home/hubi/.xmonad/background2o.png"
+  sleep 20; /home/hubi/bin/myInformationToBkg.sh
+) &
 
-feh --bg-center "/home/hubi/.xmonad/background2o.png" &
 amixer sset Master off &
-xbacklight -set 70 & 
-xcalib .icc/x230.icc &
-#rfkill block bluetooth # fehlende rechte
-#{ ntpd -qg; hwclock -w; } & 
+#xbacklight -set 70 & # geht nicht...
 
 ([[ -f ~/bin/mailrun.sh ]] && ~/bin/mailrun.sh) &
 
