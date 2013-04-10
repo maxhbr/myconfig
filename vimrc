@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Mo Apr 08, 2013  11:13
+" Last modified: Mi Apr 10, 2013  11:15
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -366,6 +366,10 @@ nmap <leader>Q gqap
 " On gvim and Linux console Vim, you can use Alt-Space.
 imap <M-Space> <Esc>
 
+inoremap <F1> <nop>
+nnoremap <F1> <nop>
+vnoremap <F1> <nop>
+
 " clear hilighting
 nmap <silent> ,/ :nohlsearch<CR>
 
@@ -566,14 +570,16 @@ function! SetMailFile()
   highlight SpellLocal term=underline cterm=underline
 endfunction
 
-
-"augroup filetypedetect
+augroup filetypedetect
+  au BufRead,BufNewFile tmpmsg-*.txt set filetype=mail
+  au BufRead,BufNewFile *.tex set filetype=tex
   "au! BufRead,BufNewFile *.m,*.oct setfiletype matlab
-"augroup END
+augroup END
 
 augroup vimrc_autocmds
   au!
-  autocmd FileType css call SetCssFile()
+  autocmd FileType sh setlocal sw=2 ts=2 et
+  autocmd FileType tex call SetLaTeXFile()
   autocmd FileType haskell setlocal sw=2 ts=2 et
   autocmd FileType human call SetTextFile()
   autocmd FileType java call SetJavaFile()
@@ -582,20 +588,17 @@ augroup vimrc_autocmds
   autocmd FileType mail call SetMailFile()
   autocmd FileType matlab call SetMatlabFile()
   autocmd FileType python call SetPythonFile()
-  autocmd FileType sh setlocal sw=2 ts=2 et
-  autocmd FileType tex call SetLaTeXFile()
   autocmd FileType text call SetTextFile()
   autocmd FileType txt call SetTextFile()
+  autocmd FileType css call SetCssFile()
   " in makefiles, don't expand tabs to spaces
   autocmd FileType make setlocal noexpandtab shiftwidth=8
 augroup END
 
-au BufRead,BufNewFile tmpmsg-*.txt set filetype=mail
-
 augroup Shebang
+  autocmd BufNewFile *.sh 0put =\"#!/bin/sh\"|$
   autocmd BufNewFile *.py 0put =\"#!/usr/bin/env python\<nl># -*- coding: iso-8859-15 -*-\<nl>\"|$
   autocmd BufNewFile *.rb 0put =\"#!/usr/bin/env ruby\<nl># -*- coding: None -*-\<nl>\"|$
-  autocmd BufNewFile *.sh 0put =\"#!/bin/sh\"|$
 augroup END
 
 " Transparent editing of gpg encrypted files.
