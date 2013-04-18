@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Do Apr 04, 2013  11:03
+# Last modified: So Apr 14, 2013  08:29
 
 setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 xsetroot -cursor_name left_ptr
@@ -23,8 +23,8 @@ exec urxvtd -q -f -o &
     xcalib .icc/x230.icc &
   fi
   feh --bg-center "/home/hubi/.xmonad/background2o.png"
-  sleep 20; /home/hubi/bin/myInformationToBkg.sh
 ) &
+  #sleep 20; /home/hubi/bin/myInformationToBkg.sh
 
 amixer sset Master off &
 #xbacklight -set 70 & # geht nicht...

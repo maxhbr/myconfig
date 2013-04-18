@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Mi Apr 10, 2013  11:15
+" Last modified: Fr Apr 12, 2013  03:05
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -339,6 +339,9 @@ let mapleader=","
 noremap <Leader>s :update<CR>
 
 nmap <Leader>r :source $MYVIMRC
+
+"Make Y behave like other capitals
+map Y y$
 
 "nmap <silent> <leader>ev :tabedit $MYVIMRC<CR>
 nmap <silent> <leader>ev :e $MYVIMRC<CR>
