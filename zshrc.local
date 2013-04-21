@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Do Apr 04, 2013  08:43
+# Last modified: So Apr 21, 2013  02:53
 #
 umask 077
 
@@ -19,6 +19,7 @@ ZSHDDIR="${HOME}/.config/zsh.d"
 HISTSIZE=10000
 SAVEHIST="${HISTSIZE}"
 export EDITOR="/usr/bin/vim"
+export VISUAL="/usr/bin/vim -p -X"
 export TMP="$HOME/tmp"
 export TEMP="$TMP"
 export TMPDIR="$TMP"
