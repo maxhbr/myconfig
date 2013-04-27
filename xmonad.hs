@@ -14,7 +14,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: So Mär 31, 2013  10:45
+-- Last modified: Fr Apr 26, 2013  07:49
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -380,7 +380,6 @@ myStartupHook :: X ()
 myStartupHook = do
     setWMName "LG3D"
     spawn "killall unclutter; unclutter &"
-    spawn "urxvtc"
 --}}}
 ------------------------------------------------------------------------
 -- General

@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Fr Apr 12, 2013  03:05
+" Last modified: Do Apr 25, 2013  10:31
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -490,6 +490,10 @@ function! SetTextFile()
 endfunction
 
 function! SetLaTeXFile()
+
+  nmap <leader>cl :! runlatex -pdf % > logfile 2>&1 &<CR><CR>
+  nmap <leader>oe :! llpp %:r.pdf > /dev/null 2>&1 &<CR><CR>
+  nmap <leader>oa :! llpp *.pdf > /dev/null 2>&1 &<CR><CR>
 
   setlocal wrap
   setlocal sw=2
