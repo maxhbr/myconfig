@@ -262,6 +262,11 @@ run_under_tmux() {
 mutt() { run_under_tmux 'mutt'; }
 finch() { run_under_tmux 'finch'; }
 
+myXnest() {
+  Xnest :1 &
+  export DISPLAY=localhost:1
+}
+
 #-------------------------------------------------------------------}}}
 #   some networking
 #-------------------------------------------------------------------{{{
