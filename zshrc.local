@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: So Apr 21, 2013  02:53
+# Last modified: Sa Mai 04, 2013  08:46
 #
 umask 077
 
@@ -88,6 +88,9 @@ case "$(uname -o)" in
         export EVENT_NOEPOLL=1
         ;;
 esac
+
+hash -d ba=~/studium/baArbeit/00-arbeit
+hash -d gal=~/Bilder/00-galerie/
 
 # HelloText:
 echo -e ""

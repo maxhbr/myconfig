@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Do Apr 25, 2013  10:31
+" Last modified: Di Mai 21, 2013  06:33
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -79,6 +79,9 @@ if has("autocmd")
   "save folding (shouldnt run every time)
   "au BufWinLeave * mkview
   "au BufWinEnter * silent loadview
+  
+  " leave paste mode, when exit insert mode
+  au InsertLeave * set nopaste
 endif
 
 " Use Unix as the standard file type
@@ -143,7 +146,7 @@ set shiftwidth=4 softtabstop=4 tabstop=4 expandtab
 set smarttab
 
 set list
-set listchars=tab:>.,trail:.,extends:#,nbsp:.
+set listchars=tab:>.,trail:…,extends:#,nbsp:. " …°
 "                                                                    }}}
 " ====  Performance  ================================================{{{
 set ttyfast
@@ -480,7 +483,7 @@ function! SetJavaFile()
 endfunction
 
 function! SetTextFile()
-  " mails / text
+  " text
 
   setlocal wrap
   setlocal textwidth=79
@@ -534,6 +537,16 @@ function! SetLaTeXFile()
   "set cole=2
   "let g:tex_conceal= 'adgm'
   "hi Conceal guibg=White guifg=DarkMagenta
+
+  highlight clear SpellBad
+  highlight SpellBad term=standout ctermfg=1 
+  highlight SpellBad term=underline cterm=underline
+  highlight clear SpellCap
+  highlight SpellCap term=underline cterm=underline
+  highlight clear SpellRare
+  highlight SpellRare term=underline cterm=underline
+  highlight clear SpellLocal
+  highlight SpellLocal term=underline cterm=underline
 endfunction
 
 function! SetCssFile()
@@ -676,46 +689,53 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'gmarik/vundle'
 
   " My Bundles here:
+  "general
   Bundle 'Vimball'
-  Bundle 'rstacruz/sparkup', {'rtp': 'vim/'}
-  Bundle 'git://git.wincent.com/command-t.git'
-  Bundle 'git://github.com/vim-scripts/LaTeX-Box.git'
+  Bundle 'The-NERD-Commenter'
+  Bundle 'sudo.vim'
+  Bundle 'Gundo'
   Bundle 'SearchComplete'
   Bundle 'ShowPairs'
-  Bundle 'Gundo'
-  Bundle 'lastpos.vim'
-  Bundle 'sudo.vim'
-  Bundle 'The-NERD-Commenter'
-  Bundle 'The-NERD-tree'
-  Bundle 'csv.vim'
-  Bundle 'surround.vim'
-  Bundle 'delete-surround-html'
-  Bundle 'gmarik/snipmate.vim'
-  Bundle 'honza/snipmate-snippets'
-  Bundle 'mru.vim'
-  Bundle 'XML-Folding'
-  Bundle 'matchit.zip'
-  Bundle 'git://github.com/Raimondi/delimitMate.git'
-  Bundle 'LustyJuggler'
-  Bundle 'vim-less'
-  Bundle 'L9'
-  Bundle 'AutoComplPop'
   Bundle 'vimwiki'
+  Bundle 'matchit.zip'
+  Bundle 'AutoComplPop'
   Bundle 'git://github.com/nathanaelkane/vim-indent-guides.git'
   Bundle 'git://github.com/Lokaltog/vim-powerline.git'
+  Bundle 'gmarik/snipmate.vim'
+  Bundle 'honza/snipmate-snippets'
+  "manage files
+  Bundle 'LustyJuggler'
+  Bundle 'The-NERD-tree'
+  Bundle 'mru.vim'
+  "matlab
   Bundle 'git://github.com/djoshea/vim-matlab-fold.git'
-  Bundle 'tsaleh/vim-align.git'
-  Bundle 'Solarized'
-
-  "testing
-  "Bundle 'unicode-haskell'
-  "Bundle 'git://github.com/frerich/unicode-haskell.git'
+  "haskell
   Bundle 'git://github.com/vim-scripts/Haskell-Conceal.git'
   Bundle 'git://github.com/Twinside/vim-hoogle.git'
+  "csv
+  Bundle 'csv.vim'
+  "html
+  Bundle 'rstacruz/sparkup', {'rtp': 'vim/'}
+  "colorschemes
+  Bundle 'Solarized'  
+  Bundle 'flazz/vim-colorschemes'
+  "unsorted
+  Bundle 'surround.vim'
+  Bundle 'delete-surround-html'
+  Bundle 'XML-Folding'
+  Bundle 'git://github.com/Raimondi/delimitMate.git'
+  Bundle 'vim-less'
+  Bundle 'L9'
+  Bundle 'tsaleh/vim-align.git'
 
+  "testing
   "Bundle 'LatexParFormat'
   "Bundle 'Indent-Guides'
   "Bundle 'SuperTab'
+  
+  "frisch aussortiert
+  "Bundle 'lastpos.vim'
+  "Bundle 'git://github.com/vim-scripts/LaTeX-Box.git'
 
   " not used Bundles                                                   {{{
   "Bundle 'xoria256.vim'
@@ -768,11 +788,14 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   " MRU most recent files
   " :MRU
 
-  " ===================================================================
-  " commandT:
-  " open file in new tabs
-  let g:CommandTAcceptSelectionMap = '<C-t>'
-  let g:CommandTAcceptSelectionTabMap = '<CR>'
+  "" ===================================================================
+  "" commandT:
+  ""Bundle 'git://git.wincent.com/command-t.git'
+  ""cd ~/.vim/bundle/command-t/ruby/command-t
+  ""ruby extconf.rb
+  ""make
+  "let g:CommandTAcceptSelectionMap = '<C-t>'
+  "let g:CommandTAcceptSelectionTabMap = '<CR>'
 
   " ===================================================================
   " nerdTree

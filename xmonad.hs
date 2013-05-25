@@ -14,7 +14,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Fr Apr 26, 2013  07:49
+-- Last modified: Do Mai 02, 2013  10:23
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
