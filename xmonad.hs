@@ -1,6 +1,8 @@
 -- ~/.xmonad/xmonad.hs
 -- needs xorg-xmessage for error messages
 --
+-- xmonad-extras from cabal
+--
 -- used software {{{
 --  dmenu        to start software
 --  dwb          fast browser
@@ -14,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Do Mai 02, 2013  10:23
+-- Last modified: Mo Jul 08, 2013  08:43
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -50,6 +52,7 @@ import XMonad.Actions.CycleWS ( nextWS , prevWS , shiftToNext , shiftToPrev,
     Direction1D(..) , WSType( NonEmptyWS ) , skipTags )
 import XMonad.Actions.UpdatePointer ( updatePointer,
     PointerPosition ( TowardsCentre ) )
+import XMonad.Actions.GridSelect
 
 import XMonad.Layout.BoringWindows( boringAuto, focusDown )
 import XMonad.Layout.IM ( Property(..), withIM )
@@ -171,6 +174,16 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
 
      -- toggle mouse
     , ((modm,                xK_s     ), toggleFF)
+    , ((modm, xK_F2), spawn "qiv ~/.xmonad/neo/neo_Ebenen_1_2_3_4.png")
+    ] --}}}
+    ++
+    [ --backlight --{{{
+    ((modm, xK_F1), spawnSelected defaultGSConfig [ "xbacklight =100"
+                                                  , "xbacklight =75"
+                                                  , "xbacklight +10" 
+                                                  , "xbacklight =50"
+                                                  , "xbacklight -10"
+                                                  , "xbacklight =0" ])
     ] --}}}
     ++
     [ -- CycleWS setup --{{{

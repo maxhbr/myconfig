@@ -4,12 +4,12 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Sa Mai 04, 2013  08:46
+# Last modified: Sa Mai 25, 2013  01:14
 #
 umask 077
 
 [[ -f ~/.aliasrc ]] && source ~/.aliasrc
-[[ -f ~/.aliasrc-local ]] && source ~/.aliasrc-local
+[[ -f ~/.aliasrc-private ]] && source ~/.aliasrc-private
 [[ -d $HOME/bin ]] && export PATH=$HOME/bin:$PATH
 [[ -d $HOME/.cabal/bin ]] && export PATH=$PATH:$HOME/.cabal/bin
 

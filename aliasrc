@@ -109,6 +109,8 @@ alias keynav='pkill keynav; keynav'
 alias dmesgwatch='watch "dmesg |tail -15"'
 alias mydmesg='watch "dmesg |tail -15"' #the same
 
+alias incognito="/usr/bin/chromium --incognito"
+
 duh() { # disk usage for humans
   test $# -eq 0 && set -- *
   du -sch "$@" | sort -h
@@ -177,6 +179,13 @@ myusbsusendoff() {
   for i in /sys/bus/usb/devices/*/power/control; do echo on > $i; done
 }
 
+starWars() { telnet towel.blinkenlights.nl; }
+starphp() { php -S 127.0.0.1 8080; }
+alias mplayerampl="mplayer -af volume=10.1:0"
+mdump() { mplayer -dumpstream "${1}" -dumpfile ${2}.mp4; }
+
+mybkbd(){ sudo hciconfig hci0 up; sudo hciconfig hci0 pscan; }
+
 #-------------------------------------------------------------------}}}
 #   package management
 #-------------------------------------------------------------------{{{
@@ -231,37 +240,39 @@ alias ccl="cclive -s best"
 
 [[ -f ~/bin/mydock.sh ]] && alias mydock="mydock.sh"
 
-run_under_tmux() {
-  # Run $1 under session or attach if such session already exist.
-  # $2 is optional path, if no specified, will use $1 from $PATH.
-  # If you need to pass extra variables, use $2 for it as in example below..
-  # Example usage:
-  #  torrent() { run_under_tmux 'rtorrent' '/usr/local/rtorrent-git/bin/rtorrent'; }
-  #  mutt() { run_under_tmux 'mutt'; }
-  #  irc() { run_under_tmux 'irssi' "TERM='screen' command irssi"; }
+have tmux && {
+  run_under_tmux() {
+    # Run $1 under session or attach if such session already exist.
+    # $2 is optional path, if no specified, will use $1 from $PATH.
+    # If you need to pass extra variables, use $2 for it as in example below..
+    # Example usage:
+    #  torrent() { run_under_tmux 'rtorrent' '/usr/local/rtorrent-git/bin/rtorrent'; }
+    #  mutt() { run_under_tmux 'mutt'; }
+    #  irc() { run_under_tmux 'irssi' "TERM='screen' command irssi"; }
 
-  # There is a bug in linux's libevent...
-  # export EVENT_NOEPOLL=1
+    # There is a bug in linux's libevent...
+    # export EVENT_NOEPOLL=1
 
-  command -v tmux >/dev/null 2>&1 || return 1
+    command -v tmux >/dev/null 2>&1 || return 1
 
-  if [ -z "$1" ]; then return 1; fi
-  local name="$1"
-  if [ -n "$2" ]; then
-    local file_path="$2"
-  else
-    local file_path="command ${name}"
-  fi
+    if [ -z "$1" ]; then return 1; fi
+    local name="$1"
+    if [ -n "$2" ]; then
+      local file_path="$2"
+    else
+      local file_path="command ${name}"
+    fi
 
-  if tmux has-session -t "${name}" 2>/dev/null; then
-    tmux attach -d -t "${name}"
-  else
-    tmux new-session -s "${name}" "${file_path}" \; set-option status \; set set-titles-string "${name} (tmux@${HOST})"
-  fi
+    if tmux has-session -t "${name}" 2>/dev/null; then
+      tmux attach -d -t "${name}"
+    else
+      tmux new-session -s "${name}" "${file_path}" \; set-option status \; set set-titles-string "${name} (tmux@${HOST})"
+    fi
+  }
+  have mutt && mutt() { run_under_tmux 'mutt'; }
+  have finch && finch() { run_under_tmux 'finch'; }
+  have ekg2 && ekg2() { run_under_tmux 'ekg2'; }
 }
-mutt() { run_under_tmux 'mutt'; }
-finch() { run_under_tmux 'finch'; }
-ekg2() { run_under_tmux 'ekg2'; }
 
 myXnest() {
   Xnest :1 &
@@ -274,10 +285,10 @@ myXnest() {
 
 alias ping6alle="ping6 ff02::1%eth0"
 alias ping6allw="ping6 ff02::1%wlan0"
+# or: mtr
 alias myarp-scan-e="sudo arp-scan --interface=enp0s25 --localnet"
 alias myarp-scan-w="sudo arp-scan --interface=wlp3s0 --localnet"
-# or: mtr
-#     sudo arp-scan  --interface=wlan0 -l
+#nmap -sP 192.168.1.0/24
 
 # Get IP (call with myip)
 myip() {
@@ -373,7 +384,7 @@ mkscript() {
 
 # calc - simple calculator
 # usage: calc <equation>
-calc() { echo "$*" | bc; }
+calc() { echo "$*" | bc -l; }
 
 # remind me, its important!
 # usage: remindme <time> <text>
@@ -396,14 +407,17 @@ myremind() {
   fi
 }
 
-myclock() {
-  keypress=''
-  echo
-  while [ "x$keypress" = "x" ];do
-    printf "   " ; date; printf "\33[A";
-    #sleep 1;
-    read -t 1 -r -n1 keypress
-  done
+#myclock() {
+  #keypress=''
+  #echo
+  #while [ "x$keypress" = "x" ];do
+    #printf "   " ; date; printf "\33[A";
+    ##sleep 1;
+    #read -t 1 -r -n1 keypress
+  #done
+#}
+myclock(){
+  while sleep 1;do tput sc;tput cup 0 $(($(tput cols)-29));date;tput rc;done &
 }
 
 # will show a list of all the currently loaded modules and all of their parameters

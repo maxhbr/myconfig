@@ -1,6 +1,6 @@
 #!/bin/sh
 # a simple script to backup my files
-# Last modified: Di Apr 30, 2013  08:51
+# Last modified: Mo Jul 08, 2013  10:32
 
 ###############################################################################
 ####  Funktionen  #############################################################
@@ -48,15 +48,15 @@ bkObject () {
   fi
 }
 
-bkObjectTar () {
-  if [ ! -r $1 ]; then
-    myecho "**** not readable:   ${1}"
-  elif [ -d "$1" ]; then
-    myecho "${1} to ${BKDIR}${1%/}.tar.gz"
-    mkdir -p $(dirname $BKDIR$1)
-    tar -pvczf "${BKDIR}${1%/}.tar.gz" "${1%/}"
-  fi
-}
+#bkObjectTar () { # files are to large
+  #if [ ! -r $1 ]; then
+    #myecho "**** not readable:   ${1}"
+  #elif [ -d "$1" ]; then
+    #myecho "${1} to ${BKDIR}${1%/}.tar.gz"
+    #mkdir -p $(dirname $BKDIR$1)
+    #tar -pvczf "${BKDIR}${1%/}.tar.gz" "${1%/}"
+  #fi
+#}
 
 ############################################################################}}}
 ####  Variablen / Argumente   #################################################
@@ -78,7 +78,7 @@ while [[ $# > 0 ]] ; do
       myecho "*****************************************************************"
       myecho "****  Bachup $1"
       myecho "*****************************************************************"
-      bkObjectTar "$1"
+      bkObject "$1"
       exit 0
       ;;
     -h)
@@ -199,11 +199,12 @@ EOF
   myecho "$TIMESTAMP" > "${BKDIR}/date-config"
   read -p "Backup Data?" -n 1 -r
   if [[ $REPLY =~ ^[Yy]$ ]]; then
+    myecho ""
     myecho "*****************************************************************"
     myecho "****  Bachup Data  **********************************************"
     myecho "*****************************************************************"
     while IFS= read -r LINE; do
-      [[ ! $LINE == \#* ]] && bkObjectTar "$LINE"
+      [[ ! $LINE == \#* ]] && bkObject "$LINE"
     done <<EOF
 /home/hubi/Bilder/00-galerie/
 /home/hubi/Bilder/Logo/

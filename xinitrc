@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: So Apr 14, 2013  08:29
+# Last modified: Mo Jul 08, 2013  03:06
 
 setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 xsetroot -cursor_name left_ptr
@@ -26,8 +26,9 @@ exec urxvtd -q -f -o &
 ) &
   #sleep 20; /home/hubi/bin/myInformationToBkg.sh
 
-amixer sset Master off &
-#xbacklight -set 70 & # geht nicht...
+#amixer sset Master off &
+amixer -q set Master off &
+xbacklight =70 &
 
 ([[ -f ~/bin/mailrun.sh ]] && ~/bin/mailrun.sh) &
 

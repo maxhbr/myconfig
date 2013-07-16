@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Di Mai 21, 2013  06:33
+" Last modified: Fr Jul 05, 2013  10:37
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -79,7 +79,7 @@ if has("autocmd")
   "save folding (shouldnt run every time)
   "au BufWinLeave * mkview
   "au BufWinEnter * silent loadview
-  
+
   " leave paste mode, when exit insert mode
   au InsertLeave * set nopaste
 endif
@@ -111,7 +111,7 @@ set showbreak=\ \ \ ↳
 
 set wildmenu "Kommando Zeilen Vervollständigung
 "set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png
-set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png,*.aux,*.bbl,*.blg,*.fdb_latexmk,*.fls,*.idx,*.ilg,*.ind,*.nlo,*.nls,*.toc
+set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png,*.aux,*.bbl,*.blg,*.fdb_latexmk,*.fls,*.idx,*.ilg,*.ind,*.nlo,*.nls,*.toc,*.hi
 set wildmode=list:longest
 
 " Suffixes that get lower priority when doing tab completion for filenames.
@@ -146,7 +146,8 @@ set shiftwidth=4 softtabstop=4 tabstop=4 expandtab
 set smarttab
 
 set list
-set listchars=tab:>.,trail:…,extends:#,nbsp:. " …°
+set listchars=tab:>.,trail:…,extends:#,nbsp:. " …°⎼
+set fillchars=vert:┃,diff:⎼,fold:⎼
 "                                                                    }}}
 " ====  Performance  ================================================{{{
 set ttyfast
@@ -463,7 +464,6 @@ function! SetPythonFile()
   setlocal foldlevel=7
 
   "invisible chars
-  setlocal list listchars=tab:>~,trail:·
   " autocmd BufWrite *.py :call DeleteTrailing()
 
   "map <F5> :w<CR>:!python "%"<CR>
@@ -538,8 +538,12 @@ function! SetLaTeXFile()
   "let g:tex_conceal= 'adgm'
   "hi Conceal guibg=White guifg=DarkMagenta
 
+  set spell
+  set spell spelllang=de_de
+  set spellfile=~/.vim/spellfile.add
+
   highlight clear SpellBad
-  highlight SpellBad term=standout ctermfg=1 
+  highlight SpellBad term=standout ctermfg=1
   highlight SpellBad term=underline cterm=underline
   highlight clear SpellCap
   highlight SpellCap term=underline cterm=underline
@@ -580,7 +584,7 @@ function! SetMailFile()
   set spellfile=~/.vim/spellfile.add
 
   highlight clear SpellBad
-  highlight SpellBad term=standout ctermfg=1 
+  highlight SpellBad term=standout ctermfg=1
   highlight SpellBad term=underline cterm=underline
   highlight clear SpellCap
   highlight SpellCap term=underline cterm=underline
@@ -593,6 +597,7 @@ endfunction
 augroup filetypedetect
   au BufRead,BufNewFile tmpmsg-*.txt set filetype=mail
   au BufRead,BufNewFile *.tex set filetype=tex
+  au BufRead,BufNewFile *.log setlocal autoread
   "au! BufRead,BufNewFile *.m,*.oct setfiletype matlab
 augroup END
 
@@ -604,7 +609,6 @@ augroup vimrc_autocmds
   autocmd FileType human call SetTextFile()
   autocmd FileType java call SetJavaFile()
   autocmd FileType less call SetCssFile()
-  autocmd FileType log setlocal autoread
   autocmd FileType mail call SetMailFile()
   autocmd FileType matlab call SetMatlabFile()
   autocmd FileType python call SetPythonFile()
@@ -717,7 +721,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "html
   Bundle 'rstacruz/sparkup', {'rtp': 'vim/'}
   "colorschemes
-  Bundle 'Solarized'  
+  Bundle 'Solarized'
   Bundle 'flazz/vim-colorschemes'
   "unsorted
   Bundle 'surround.vim'
@@ -732,7 +736,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "Bundle 'LatexParFormat'
   "Bundle 'Indent-Guides'
   "Bundle 'SuperTab'
-  
+
   "frisch aussortiert
   "Bundle 'lastpos.vim'
   "Bundle 'git://github.com/vim-scripts/LaTeX-Box.git'
