@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Mo Jul 08, 2013  03:06
+# Last modified: Sa Jul 20, 2013  06:06
 
 setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 xsetroot -cursor_name left_ptr
