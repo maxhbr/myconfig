@@ -18,10 +18,10 @@ cp -vu ~/.vimencrypt ~/myconfig/vimencrypt
 cp -vu ~/.Xresources ~/myconfig/Xresources
 cp -vu ~/.tmux.conf ~/myconfig/tmux.conf
 cp -vu ~/.zshrc.local ~/myconfig/zshrc.local
-cp -vu {~/bin/disp-controll \
-       ,~/bin/mylayouttoggle.sh \
-       ,~/bin/mailrun.sh \
-       ,~/bin/mailclient.sh} ~/myconfig/bin/
+cp -vu ~/bin/disp-controll ~/myconfig/bin/
+cp -vu ~/bin/mylayouttoggle.sh ~/myconfig/bin/
+cp -vu ~/bin/mailrun.sh ~/myconfig/bin/
+cp -vu ~/bin/mailclient.sh ~/myconfig/bin/
 
 mkdir -p ~/myconfig/etc
 cp /etc/zathurarc ~/myconfig/etc/zathurarc
