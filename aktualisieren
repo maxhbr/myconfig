@@ -23,8 +23,8 @@ cp -vu ~/bin/mylayouttoggle.sh ~/myconfig/bin/
 cp -vu ~/bin/mailrun.sh ~/myconfig/bin/
 cp -vu ~/bin/mailclient.sh ~/myconfig/bin/
 
-mkdir -p ~/myconfig/etc
-cp /etc/zathurarc ~/myconfig/etc/zathurarc
+#mkdir -p ~/myconfig/etc
+#cp /etc/zathurarc ~/myconfig/etc/zathurarc
 
 #/etc/modprobe.d/audio_power_save.conf
 #/etc/sysctl.d/disable_watchdog.conf
