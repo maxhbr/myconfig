@@ -12,17 +12,18 @@ i moved from bash to zsh
 - systemd
 
 ## Applications
-- urxvt
+- rxvt-unicode
 - vim
 - ranger
 - tmux
 - zathura
-- sylpheed
+- mutt with offlineimap
 - dwb
 - ...
 
 ## Multimedia
-- moc
+- mplayer
+- cmus
 
 ## Image Prozessing
 - geeqie
