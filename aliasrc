@@ -186,6 +186,8 @@ mdump() { mplayer -dumpstream "${1}" -dumpfile ${2}.mp4; }
 
 mybkbd(){ sudo hciconfig hci0 up; sudo hciconfig hci0 pscan; }
 
+alias myStopScreensaver="xset dpms 9997 9998 9999"
+
 #-------------------------------------------------------------------}}}
 #   package management
 #-------------------------------------------------------------------{{{
