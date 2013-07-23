@@ -11,7 +11,7 @@
 # - the routine _monitor() checks, if offlineimap is alive, by checking wether
 #   the log file changes
 #
-# Last modified: Di Jul 23, 2013  12:02
+# Last modified: Di Jul 23, 2013  09:07
 
 PID=$$
 PIDFILE=/tmp/mailrun-sh-pid
@@ -88,15 +88,16 @@ while true; do
     if [ $(($CURR-$LASTRUN)) -gt $((10*60)) ]; then
       LASTRUN=$CURR
       /usr/bin/offlineimap -o -u ttyui
+      echo "**** Offlineimap is ready (at $(date)) ****"
     else
       if [[ $(acpi -a | grep -c on-line) == "1" ]]; then
         /usr/bin/offlineimap -o -f INBOX -u ttyui
+        echo "**** Offlineimap is ready (at $(date)) ****"
       else
         echo "**** no shortsynch, because no AC ****"
       fi
       echo "**** $((10-($CURR-$LASTRUN)/60))m till next full run ****"
     fi
-    echo "**** Offlineimap is ready (at $(date)) ****"
   fi
 done >>$LOGFILE 2>&1
 

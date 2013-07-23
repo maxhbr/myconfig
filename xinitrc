@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Sa Jul 20, 2013  06:06
+# Last modified: Di Jul 23, 2013  02:41
 
 setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 xsetroot -cursor_name left_ptr
@@ -16,7 +16,8 @@ exec urxvtd -q -f -o &
 
 (
   if xrandr -q | grep -q "HDMI2 connected"; then
-    xrandr --output HDMI2 --mode 1920x1080 --right-of LVDS1 --output LVDS1 --mode 1366x768
+    xrandr --output HDMI2 --mode 1920x1080 --right-of LVDS1 \
+      --output LVDS1 --mode 1366x768
     xcalib -s 0 .icc/x230.icc &
     #xcalib -s 1 .icc/23.icc &
   else
