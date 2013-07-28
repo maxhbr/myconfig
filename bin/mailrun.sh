@@ -11,19 +11,20 @@
 # - the routine _monitor() checks, if offlineimap is alive, by checking wether
 #   the log file changes
 #
-# Last modified: Di Jul 23, 2013  09:07
+# Last modified: Do Jul 25, 2013  05:14
 
 PID=$$
 PIDFILE=/tmp/mailrun-sh-pid
 LOGFILE=/tmp/mailrun-sh-log
+ERRFILE=/tmp/mailrun-sh-err
 
 pid=$(pgrep -f "/usr/bin/offlineimap")
 if [[ ${pid} -gt 0 ]] ; then
-  echo "Offlineimap is running with pid ${pid}"
+  echo "Offlineimap is running with pid ${pid}" >>$ERRFILE 2>&1
   exit 1
 fi
 if [ -f ${PIDFILE} ] && [ -d "/proc/`cat $PIDFILE`" ]; then
-  echo "mailrun.sh is already running"
+  echo "mailrun.sh is already running" >>$ERRFILE 2>&1
   exit 2 # TODO: or kill the running instance?
 fi
 
@@ -33,15 +34,14 @@ echo "**** started at $(date) ****" >$LOGFILE 2>&1
 # Monitor offlineimap #######################################################
 # checks every minute, if the logfile has changed in the last 5 minutes
 _monitor() {
-  LOGFILE=/tmp/mailrun-sh-log
   while true; do
     sleep 60
-    if [ -f $LOGFILE ]; then
-      if test `find ${LOGFILE} -mmin +5`; then
+    if [ -f $1 ]; then
+      if test `find $1 -mmin +5`; then
         # dead for more then 5 Minutes
         if [[ $(pgrep -f "/usr/bin/offlineimap") -gt 0 ]] ; then
           sleep 20 # just wait some more, bevore killing offlineimap
-          if test `find ${LOGFILE} -mmin +5`; then 
+          if test `find $1 -mmin +5`; then 
             # test, if it is realy dead
             pid=$(pgrep -f "/usr/bin/offlineimap")
             if [[ ${pid} -gt 0 ]] ; then
@@ -57,9 +57,9 @@ _monitor() {
         fi
       fi
     fi
-  done >>$LOGFILE 2>&1
+  done >>$2 2>&1
 }
-_monitor &
+_monitor $LOGFILE $ERRFILE &
 trap 'kill $(jobs -p)' EXIT
 
 LASTRUN=0
@@ -70,10 +70,10 @@ while true; do
   sleeptime=$((2*60))
   # check, if connected #####################################################
   if ! ping -c1 cloud.github.com > /dev/null 2>&1; then
-    echo "**** not connected (ping) ****" >&2
+    echo "**** not connected (ping) ****" >>$ERRFILE 2>&1
     # check again ###########################################################
     if ! wget -O - cloud.github.com > /dev/null 2>&1; then
-      echo "**** not connected (wget) ****" >&2
+      echo "**** not connected (wget) ****" >>$ERRFILE 2>&1
       continue
     fi
   fi

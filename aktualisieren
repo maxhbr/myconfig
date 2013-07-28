@@ -23,6 +23,7 @@ cp -vu ~/bin/mylayouttoggle.sh ~/myconfig/bin/
 cp -vu ~/bin/mailrun.sh ~/myconfig/bin/
 cp -vu ~/bin/mailclient.sh ~/myconfig/bin/
 cp -vu ~/bin/myfsize.sh ~/myconfig/bin/
+cp -vu ~/bin/mycrypt ~/myconfig/bin/
 
 #mkdir -p ~/myconfig/etc
 #cp /etc/zathurarc ~/myconfig/etc/zathurarc

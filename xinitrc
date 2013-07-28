@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Di Jul 23, 2013  02:41
+# Last modified: Di Jul 23, 2013  03:01
 
 setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 xsetroot -cursor_name left_ptr
@@ -11,8 +11,10 @@ xset dpms 300 600 900 & # screen saver replacement
 [[ -f ~/.Xresources ]] && xrdb -merge ~/.Xresources
 
 #TODO: only start once
-#[[ $(ps -A | grep -c urxvtd) == "0" ]] && exec urxvtd -q -f -o &
-exec urxvtd -q -f -o &
+#pid=$(pgrep -f "urxvtd")
+#if [[ ! ${pid} -gt 0 ]] ; then
+  exec urxvtd -q -f -o &
+#fi
 
 (
   if xrandr -q | grep -q "HDMI2 connected"; then
@@ -25,7 +27,6 @@ exec urxvtd -q -f -o &
   fi
   feh --bg-center "/home/hubi/.xmonad/background2o.png"
 ) &
-  #sleep 20; /home/hubi/bin/myInformationToBkg.sh
 
 #amixer sset Master off &
 amixer -q set Master off &
