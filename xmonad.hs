@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Di Jul 23, 2013  12:57
+-- Last modified: Fr Aug 09, 2013  09:41
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -405,7 +405,7 @@ myConfig xmproc = withUrgencyHook NoUrgencyHook $
         terminal             = "urxvtc"
         , focusFollowsMouse  = False -- see: focusFollow
         , borderWidth        = 2
-        , modMask            = mod4Mask
+        {-, modMask            = mod4Mask-}
         , workspaces         = myWorkspaces
         , normalBorderColor  = "#333333"
         , focusedBorderColor = "#dd0000"

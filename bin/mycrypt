@@ -1,6 +1,8 @@
 #!/bin/bash
-# crypten - a script to encrypt files using openssl
-# Last modified: So Jul 28, 2013  09:35
+# ~/bin/mycrypt
+# a simple script to en/decrypt files using des3 and openssl
+
+# Last modified: So Jul 28, 2013  10:58
 
 if [[ $# -eq 1 ]]; then
   if [[ -f "$1" ]]; then

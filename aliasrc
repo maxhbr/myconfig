@@ -184,7 +184,7 @@ starphp() { php -S 127.0.0.1 8080; }
 alias mplayerampl="mplayer -af volume=10.1:0"
 mdump() { mplayer -dumpstream "${1}" -dumpfile ${2}.mp4; }
 
-mybkbd(){ sudo hciconfig hci0 up; sudo hciconfig hci0 pscan; }
+#mybkbd(){ sudo hciconfig hci0 up; sudo hciconfig hci0 pscan; }
 
 alias myStopScreensaver="xset dpms 9997 9998 9999"
 

@@ -11,7 +11,7 @@
 # - the routine _monitor() checks, if offlineimap is alive, by checking wether
 #   the log file changes
 #
-# Last modified: Do Jul 25, 2013  05:14
+# Last modified: Do Aug 08, 2013  04:50
 
 PID=$$
 PIDFILE=/tmp/mailrun-sh-pid
@@ -45,11 +45,12 @@ _monitor() {
             # test, if it is realy dead
             pid=$(pgrep -f "/usr/bin/offlineimap")
             if [[ ${pid} -gt 0 ]] ; then
+              echo "#############################################"
+              echo "#############################################"
+              echo "Offlineimap has hung with pid ${pid} (at $(date))"
               # kill offlineimap
               pkill -9 -f 'offlineimap\>.*-o'
-              echo "#############################################"
-              echo "#############################################"
-              echo "Offlineimap has hung with pid ${pid} (killed)"
+              echo "-> killed"
               echo "#############################################"
               echo "#############################################"
             fi
