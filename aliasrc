@@ -319,13 +319,22 @@ whilezathura(){
   fi
 }
 
-# Quick and dirty version control for one file
+# Quick and dirty version control for one file or one folder
 myversioncontrol() {
-  ( IFS=$'\n'; suf="_versions";\
-    mkdir -p "$1$suf";\
-    nr=`ls "$1$suf" | wc -l`;\
-    nr=`printf "%02d" $(($nr + 1))`;\
-    cp "$1" "$1$suf/v${nr}_$1" )
+  suf="_versions"
+  mkdir -p "$1$suf"
+  touch "$1$suf/log"
+  nr=`ls "$1$suf" | wc -l`
+  nr=`printf "%02d" $(($nr))`
+  if [ -d "$1" ]; then
+    echo "${1} -> $1$suf/v${nr}_${1%%/}.tar.gz"
+    tar cvzf "$1$suf/v${nr}_${1%%/}.tar.gz"  "${1%%/}/" > /dev/null
+  else
+    \cp -v "$1" "$1$suf/v${nr}_$1"
+  fi
+  echo "${nr}: $(date)" >> "$1$suf/log"
+  echo
+  echo "size: $(du -hs "$1$suf")"
 }
 
 bac() { # backup with copy

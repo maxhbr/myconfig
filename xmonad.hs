@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Fr Aug 09, 2013  09:41
+-- Last modified: Fr Aug 09, 2013  10:38
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -174,8 +174,11 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
 
      -- toggle mouse
     , ((modm,                xK_s     ), toggleFF)
+
+    -- keyboard layouts
     , ((modm, xK_F2), spawn "qiv ~/.xmonad/neo/neo_Ebenen_1_2_3_4.png")
     , ((modm, xK_F3), spawn "qiv ~/.xmonad/neo/neo_Ebenen_1_2_5_6.png")
+    , ((modm, xK_F4), spawn "qiv ~/.xmonad/typematrix/typematrix-qwertz.png")
     ] --}}}
     ++
     [ --backlight --{{{
