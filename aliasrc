@@ -69,10 +69,6 @@ mkcd() { #make dir and enter it
   cd "$1"
 }
 
-s() {
-  cd ~/studium/$1
-}
-
 alias grep='grep --color=auto'
 alias fgrep='fgrep --color=auto'
 alias egrep='egrep --color=auto'
@@ -235,6 +231,7 @@ alias ducksall='du -cs * |sort -rn' # better without head
 alias ducksALL='du -c --max-depth=1 ./ |sort -rn'
 alias hducks='du -cs .??* |sort -rn |head -11' # better
 alias hducksall='du -cs .??* |sort -rn' # better without head
+
 alias countFilesByTypes="find . -type f -exec basename \"{}\" \\; | sed -e 's/.*\\.//gi' | sort  | uniq  -c | sort  -rn"
 
 # download from youtube

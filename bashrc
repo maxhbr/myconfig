@@ -2,7 +2,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Sa Jan 05, 2013  10:18
+# Last modified: Sa Aug 10, 2013  07:14
 
 # If not running interactively stop here
 [[ $- != *i* ]] && return
