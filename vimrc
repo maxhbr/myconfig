@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Fr Jul 05, 2013  10:37
+" Last modified: Mo Sep 02, 2013  03:16
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -373,6 +373,8 @@ nmap <leader>Q gqap
 " On gvim and Linux console Vim, you can use Alt-Space.
 imap <M-Space> <Esc>
 
+nnoremap K <nop>
+
 inoremap <F1> <nop>
 nnoremap <F1> <nop>
 vnoremap <F1> <nop>
@@ -538,7 +540,7 @@ function! SetLaTeXFile()
   "let g:tex_conceal= 'adgm'
   "hi Conceal guibg=White guifg=DarkMagenta
 
-  set spell
+  setlocal spell
   set spell spelllang=de_de
   set spellfile=~/.vim/spellfile.add
 

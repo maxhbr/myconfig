@@ -118,8 +118,9 @@ ff() { find . -type f -iname '*'$*'*' -ls ; }
 # Find a file with pattern $1 in name and Execute $2 on it:
 fe() { find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \;  ; }
 
-alias clamscan="clamscan --recursive --infected --bell"
-alias clamclean="clamscan --recursive --infected --bell --remove"
+alias clamscan="sudo clamscan --recursive --infected --bell"
+alias clamclean="sudo clamscan --recursive --infected --bell --remove"
+alias clamupd="sudo freshclam"
 
 hgrep() { history | egrep "$@"; }
 
@@ -318,20 +319,29 @@ whilezathura(){
 
 # Quick and dirty version control for one file or one folder
 myversioncontrol() {
-  suf="_versions"
-  mkdir -p "$1$suf"
-  touch "$1$suf/log"
-  nr=`ls "$1$suf" | wc -l`
-  nr=`printf "%02d" $(($nr))`
-  if [ -d "$1" ]; then
-    echo "${1} -> $1$suf/v${nr}_${1%%/}.tar.gz"
-    tar cvzf "$1$suf/v${nr}_${1%%/}.tar.gz"  "${1%%/}/" > /dev/null
-  else
-    \cp -v "$1" "$1$suf/v${nr}_$1"
+  if [ $# -ne 0 ]; then
+    if [ -f $FILE ]; then
+      suf="_versions"
+      fn=$1
+      mkdir -p "$fn$suf"
+      touch "$fn$suf/log"
+      nr=`ls "$fn$suf" | wc -l`
+      nr=`printf "%02d" $(($nr))`
+      if [ -d "$fn" ]; then
+        echo "${fn} -> $fn$suf/v${nr}_${fn%%/}.tar.gz"
+        tar cvzf "$fn$suf/v${nr}_${fn%%/}.tar.gz"  "${fn%%/}/" > /dev/null
+      else
+        \cp -v "$fn" "$fn$suf/v${nr}_$fn"
+      fi
+      echo "${nr}: $(date)" >> "$fn$suf/log"
+      while [ $# -ne 1 ]; do
+        echo "    $2" >> "$fn$suf/log"
+        shift
+      done
+      echo
+      echo "size: $(du -hs "$fn$suf")"
+    fi
   fi
-  echo "${nr}: $(date)" >> "$1$suf/log"
-  echo
-  echo "size: $(du -hs "$1$suf")"
 }
 
 bac() { # backup with copy

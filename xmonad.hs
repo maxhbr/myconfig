@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Fr Aug 09, 2013  10:38
+-- Last modified: Mi Sep 04, 2013  02:25
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -158,6 +158,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,              xK_z), spawn "~/bin/disp-controll 1") -- auto
     , ((modm .|. shiftMask, xK_z), spawn "~/bin/disp-controll 2") -- toggle
     , ((modm .|. controlMask, xK_z), spawn "~/bin/disp-controll 3") -- cycle
+    , (0,                 0x1008ff59), spawn "~/bin/myautosetup.sh")
     -- screensaver
     , ((modm .|. shiftMask,  xK_y    ), spawn "slock")
 

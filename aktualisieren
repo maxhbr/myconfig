@@ -4,37 +4,27 @@ cd ~/myconfig/
 
 echo "copy"
 echo
-cp -vu ~/.bashrc ~/myconfig/bashrc
-cp -vu ~/.aliasrc ~/myconfig/aliasrc
-cp -vu ~/.xmonad/xmonad.hs ~/myconfig/
-cp -vu ~/.xmonad/xmobarrc ~/myconfig/
-cp -vu ~/.xmonad/showkeys ~/myconfig/
-cp -vu ~/.vimrc ~/myconfig/vimrc
-cp -vu ~/.vimrc-neo ~/myconfig/vimrc-neo
-cp -vu ~/.xinitrc ~/myconfig/xinitrc
-cp -vu ~/.bash_profile ~/myconfig/bash_profile
-cp -vu ~/.emacs ~/myconfig/emacs
-cp -vu ~/.vimencrypt ~/myconfig/vimencrypt
-cp -vu ~/.Xresources ~/myconfig/Xresources
-cp -vu ~/.tmux.conf ~/myconfig/tmux.conf
-cp -vu ~/.zshrc.local ~/myconfig/zshrc.local
-cp -vu ~/bin/disp-controll ~/myconfig/bin/
+cp -vu ~/.Xresources           ~/myconfig/Xresources
+cp -vu ~/.aliasrc              ~/myconfig/aliasrc
+cp -vu ~/.bash_profile         ~/myconfig/bash_profile
+cp -vu ~/.bashrc               ~/myconfig/bashrc
+cp -vu ~/.emacs                ~/myconfig/emacs
+cp -vu ~/.tmux.conf            ~/myconfig/tmux.conf
+cp -vu ~/.vimencrypt           ~/myconfig/vimencrypt
+cp -vu ~/.vimrc                ~/myconfig/vimrc
+cp -vu ~/.vimrc-neo            ~/myconfig/vimrc-neo
+cp -vu ~/.xinitrc              ~/myconfig/xinitrc
+cp -vu ~/.xmonad/showkeys      ~/myconfig/
+cp -vu ~/.xmonad/xmobarrc      ~/myconfig/
+cp -vu ~/.xmonad/xmonad.hs     ~/myconfig/
+cp -vu ~/.zshrc.local          ~/myconfig/zshrc.local
+cp -vu ~/bin/disp-controll     ~/myconfig/bin/
+cp -vu ~/bin/mailclient.sh     ~/myconfig/bin/
+cp -vu ~/bin/mailrun.sh        ~/myconfig/bin/
+cp -vu ~/bin/myautosetup.sh    ~/myconfig/bin/
+cp -vu ~/bin/mycrypt           ~/myconfig/bin/
+cp -vu ~/bin/myfsize.sh        ~/myconfig/bin/
 cp -vu ~/bin/mylayouttoggle.sh ~/myconfig/bin/
-cp -vu ~/bin/mailrun.sh ~/myconfig/bin/
-cp -vu ~/bin/mailclient.sh ~/myconfig/bin/
-cp -vu ~/bin/myfsize.sh ~/myconfig/bin/
-cp -vu ~/bin/mycrypt ~/myconfig/bin/
-
-#mkdir -p ~/myconfig/etc
-#cp /etc/zathurarc ~/myconfig/etc/zathurarc
-
-#/etc/modprobe.d/audio_power_save.conf
-#/etc/sysctl.d/disable_watchdog.conf
-#/etc/udev/rules.d/disable_wol.rules
-#/etc/udev/rules.d/pci_pm.rules
-#/etc/udev/rules.d/wifi_power_save.rules
-#/etc/sysctl.d/laptop_mode.conf
-#/etc/udev/rules.d/usb_power_save.rules
 
 echo
 echo "git"

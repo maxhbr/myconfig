@@ -1,6 +1,6 @@
 #!/bin/sh
 # a simple script to backup my files
-# Last modified: Mo Jul 08, 2013  10:32
+# Last modified: Fr Aug 23, 2013  12:51
 
 ###############################################################################
 ####  Funktionen  #############################################################
@@ -48,15 +48,18 @@ bkObject () {
   fi
 }
 
-#bkObjectTar () { # files are to large
-  #if [ ! -r $1 ]; then
-    #myecho "**** not readable:   ${1}"
-  #elif [ -d "$1" ]; then
-    #myecho "${1} to ${BKDIR}${1%/}.tar.gz"
-    #mkdir -p $(dirname $BKDIR$1)
+bkObjectTar () {
+  if [ ! -r $1 ]; then
+    myecho "**** not readable:   ${1}"
+  elif [ -d "$1" ]; then
+    myecho "${1} to ${BKDIR}${1%/}.tar.gz"
+    mkdir -p $(dirname $BKDIR$1)
     #tar -pvczf "${BKDIR}${1%/}.tar.gz" "${1%/}"
-  #fi
-#}
+    rm "${BKDIR}${1%/}.tar.gz."*
+    tar -pcz "${1%/}" | split -d -b 1G - "${BKDIR}${1%/}.tar.gz."
+    #cat $(FILE_NAME_PREFIX)* | tar xz
+  fi
+}
 
 ############################################################################}}}
 ####  Variablen / Argumente   #################################################
@@ -94,6 +97,7 @@ while [[ $# > 0 ]] ; do
     -a)
       sudo sh ${BASH_SOURCE[0]}
       sh ${BASH_SOURCE[0]}
+      sync
       exit 0
       ;;
   esac
@@ -204,7 +208,7 @@ EOF
     myecho "****  Bachup Data  **********************************************"
     myecho "*****************************************************************"
     while IFS= read -r LINE; do
-      [[ ! $LINE == \#* ]] && bkObject "$LINE"
+      [[ ! $LINE == \#* ]] && bkObjectTar "$LINE"
     done <<EOF
 /home/hubi/Bilder/00-galerie/
 /home/hubi/Bilder/Logo/
