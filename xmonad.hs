@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Mi Sep 04, 2013  03:25
+-- Last modified: So Sep 08, 2013  09:05
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -155,9 +155,10 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     ++
     [ -- misc --{{{
     ((0,                  0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
-    , ((modm,              xK_z), spawn "~/bin/disp-controll 1") -- auto
-    , ((modm .|. shiftMask, xK_z), spawn "~/bin/disp-controll 2") -- toggle
-    , ((modm .|. controlMask, xK_z), spawn "~/bin/disp-controll 3") -- cycle
+    {-, ((modm,              xK_z), spawn "~/bin/disp-controll 1") -- auto-}
+    {-, ((modm .|. shiftMask, xK_z), spawn "~/bin/disp-controll 2") -- toggle-}
+    {-, ((modm .|. controlMask, xK_z), spawn "~/bin/disp-controll 3") -- cycle-}
+    , ((modm,              xK_z), spawn "~/bin/myautosetup.sh") -- auto-}
     , ((0,                0x1008ff59), spawn "~/bin/myautosetup.sh")
     -- screensaver
     , ((modm .|. shiftMask,  xK_y    ), spawn "slock")

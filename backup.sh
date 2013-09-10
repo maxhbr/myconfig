@@ -1,6 +1,9 @@
 #!/bin/sh
 # a simple script to backup my files
-# Last modified: Fr Aug 23, 2013  12:51
+# Last modified: Di Sep 10, 2013  10:51
+#
+# to unpack splitted tar.gz:
+#    cat path_to_files/prefix* | tar xz
 
 ###############################################################################
 ####  Funktionen  #############################################################
@@ -52,7 +55,7 @@ bkObjectTar () {
   if [ ! -r $1 ]; then
     myecho "**** not readable:   ${1}"
   elif [ -d "$1" ]; then
-    myecho "${1} to ${BKDIR}${1%/}.tar.gz"
+    myecho "${1}"
     mkdir -p $(dirname $BKDIR$1)
     #tar -pvczf "${BKDIR}${1%/}.tar.gz" "${1%/}"
     rm "${BKDIR}${1%/}.tar.gz."*
@@ -158,7 +161,6 @@ if [ "$(id -u)" != "0" ]; then
 /etc/zsh/
 /home/hubi/.Xresources
 /home/hubi/.aliasrc
-/home/hubi/.aliasrc-local
 /home/hubi/.bash_profile
 /home/hubi/.bashrc
 /home/hubi/.config/LyX
@@ -199,6 +201,7 @@ if [ "$(id -u)" != "0" ]; then
 /usr/bin/chromium
 /usr/bin/chromium-tmpfs
 /usr/bin/pacget
+/usr/share/kbd/keymaps/neo/neo.map
 EOF
   myecho "$TIMESTAMP" > "${BKDIR}/date-config"
   read -p "Backup Data?" -n 1 -r
@@ -214,7 +217,6 @@ EOF
 /home/hubi/Bilder/Logo/
 /home/hubi/Dokumente/
 /home/hubi/Dropbox/git/
-/home/hubi/Mail/backup/
 /home/hubi/studium/
 /home/hubi/workspace/
 EOF
@@ -236,6 +238,7 @@ else
 /etc/wicd
 /etc/systemd/system/offlineimap-hubi.service
 /home/hubi/.abook/
+/home/hubi/.aliasrc-private
 /home/hubi/.filezilla
 /home/hubi/.mailcap
 /home/hubi/.msmtprc
@@ -246,10 +249,13 @@ else
 /home/hubi/.smbsecrets
 /home/hubi/.sylpheed-2.0
 /home/hubi/.when/
+/home/hubi/.dropbox/
+/home/hubi/Dropbox-2/.dropbox/
 /home/hubi/Mail/config/
 /home/hubi/TODO/
 /home/hubi/backup/other/
 /home/hubi/backup/private/
+/home/hubi/Mail/backup/
 EOF
   myecho "$TIMESTAMP" > "${BKDIR}/date-private"
   myecho "*****************************************************************"

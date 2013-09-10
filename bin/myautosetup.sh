@@ -1,6 +1,6 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Mi Sep 04, 2013  03:31
+# Last modified: Mo Sep 09, 2013  10:23
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -55,6 +55,11 @@ case "$DOCKED" in
     xrandr --output $DEFAULT_OUTPUT --primary --auto $EXECUTE
 
     [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
+    (
+      [[ -f ~/.asoundrc.default ]] && cp ~/.asoundrc.default ~/.asoundrc
+      sleep 1
+      amixer -q set Master off
+    )&
     ;;
   "1")
     xset dpms 900 1800 2700 &
@@ -73,7 +78,9 @@ case "$DOCKED" in
       xset dpms 99997 99998 99999 &
     fi
 
-    setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
+    #setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
+    setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:shifts_toggle -option grp_led:scroll
+    [[ -f ~/.asoundrc.uca202 ]] && cp ~/.asoundrc.uca202 ~/.asoundrc
     ;;
 esac
 

@@ -2,29 +2,19 @@
 # ~/.aliasrc
 
 alias vi="vim"
+alias vime="vim -u ~/.vimencrypt -x "
+alias gvime="gvim -u ~/.vimencrypt -x "
+alias tvim="tmux new vim"
+
+alias tmx="tmux attach-session || tmux"
 
 # makes "sudo vi" to "sudo vim"
 alias sudo="sudo "
 
-e() {
-  if [ $# -eq 1 ]; then
-    if [ -f $1 ] ; then
-      case $( tr '[:upper:]' '[:lower:]' <<<"$1" ) in
-        *.pdf|*.djvu|*.ps) zathura $1 ;;
-        *.jpg|*.png) geeqie $1 ;;
-        *.zip) file-roller $1 ;;
-        *) vim $1 ;;
-      esac
-    else
-      vim $1
-    fi
-  else
-    vim
-  fi
-}
+have() { type "$1" &> /dev/null; }
 
 #--------------------------------------------------------------------
-#   basics
+#   file specific
 #-------------------------------------------------------------------{{{
 
 alias rm='rm -I'
@@ -80,36 +70,32 @@ mktbz() { tar cvjf "${1%%/}.tar.bz2" "${1%%/}/"; }
 
 alias pkill9="pkill --signal 9"
 
-#-------------------------------------------------------------------}}}
-#   misc
-#-------------------------------------------------------------------{{{
+# disk usage for humans
+duh() { test $# -eq 0 && set -- *; du -sch "$@" | sort -h; }
 
-have() { type "$1" &> /dev/null; }
-#have smplayer && alias mplayer=smplayer
+#alias ducks='du -cksh * | sort -rn|head -11' # Lists folders and files sizes in the current folder
+alias ducks='du -cs * |sort -rn |head -11' # better
+alias ducksall='du -cs * |sort -rn' # better without head
+alias ducksALL='du -c --max-depth=1 ./ |sort -rn'
+alias hducks='du -cs .??* |sort -rn |head -11' # better
+alias hducksall='du -cs .??* |sort -rn' # better without head
 
-alias mylatexmk="grep -l '\\documentclass' *tex | xargs latexmk -pdf -pvc" # -silent"
-#for vim latex plugin:
-#alias tvim="vim --servername texServer"
+ranger-cd() {
+  tempfile='/tmp/chosendir'
+  /usr/bin/ranger --choosedir="$tempfile" "${@:-$(pwd)}"
+  test -f "$tempfile" &&
+  if [ "$(cat -- "$tempfile")" != "$(echo -n `pwd`)" ]; then
+    cd -- "$(cat "$tempfile")"
+  fi
+  rm -f -- "$tempfile"
+}
 
-#alias tmuxatt="tmux -q has-session && exec tmux attach-session -d || tmux"
-alias tmx="tmux attach-session || tmux"
-alias tvim="tmux new vim"
-
-alias reboot="systemctl reboot"
-alias poweroff="systemctl poweroff"
-alias halt="systemctl poweroff"
-alias suspend="systemctl suspend"
-
-alias keynav='pkill keynav; keynav'
-
-alias dmesgwatch='watch "dmesg |tail -15"'
-alias mydmesg='watch "dmesg |tail -15"' #the same
-
-alias incognito="/usr/bin/chromium --incognito"
-
-duh() { # disk usage for humans
-  test $# -eq 0 && set -- *
-  du -sch "$@" | sort -h
+#Fix permissions
+permfix() {
+  for dir in "$@"; do
+    find "$dir" -type d -exec chmod 755 {} \;
+    find "$dir" -type f -exec chmod 644 {} \;
+  done
 }
 
 # Find a file with a pattern in name:
@@ -117,12 +103,6 @@ ff() { find . -type f -iname '*'$*'*' -ls ; }
 
 # Find a file with pattern $1 in name and Execute $2 on it:
 fe() { find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \;  ; }
-
-alias clamscan="sudo clamscan --recursive --infected --bell"
-alias clamclean="sudo clamscan --recursive --infected --bell --remove"
-alias clamupd="sudo freshclam"
-
-hgrep() { history | egrep "$@"; }
 
 # Extract files from any archive
 # Usage: ex <archive_name>
@@ -148,174 +128,7 @@ ex() {
   fi
 }
 
-genpasswd() {
-  local l=$1
-  [ "$l" == "" ] && l=16
-  tr -dc A-Za-z0-9_ < /dev/urandom | head -c ${l} | xargs
-}
-
-#Fix permissions
-permfix() {
-  for dir in "$@"; do
-    find "$dir" -type d -exec chmod 755 {} \;
-    find "$dir" -type f -exec chmod 644 {} \;
-  done
-}
-
-ranger-cd() {
-  tempfile='/tmp/chosendir'
-  /usr/bin/ranger --choosedir="$tempfile" "${@:-$(pwd)}"
-  test -f "$tempfile" &&
-  if [ "$(cat -- "$tempfile")" != "$(echo -n `pwd`)" ]; then
-    cd -- "$(cat "$tempfile")"
-  fi
-  rm -f -- "$tempfile"
-}
-
-myusbsusendoff() {
-  for i in /sys/bus/usb/devices/*/power/control; do echo on > $i; done
-}
-
-starWars() { telnet towel.blinkenlights.nl; }
-starphp() { php -S 127.0.0.1 8080; }
-alias mplayerampl="mplayer -af volume=10.1:0"
-mdump() { mplayer -dumpstream "${1}" -dumpfile ${2}.mp4; }
-
-#mybkbd(){ sudo hciconfig hci0 up; sudo hciconfig hci0 pscan; }
-
-alias myStopScreensaver="xset dpms 9997 9998 9999"
-
-#-------------------------------------------------------------------}}}
-#   package management
-#-------------------------------------------------------------------{{{
-
-# remove orphan pacman packages
-myRemOrphans() {
-  if [[ ! -n $(pacman -Qdt) ]]; then
-    echo no orphans to remove
-  else
-    sudo pacman -Rs $(pacman -Qdtq)
-  fi
-}
-
-# Pacman alias examples
-alias pacupg='sudo pacman -Syu ; echo ; myRemOrphans'        # Synchronize with repositories before upgrading packages that are out of date on the local system.
-alias pacin='sudo pacman -S'           # Install specific package(s) from the repositories
-alias pacins='sudo pacman -U'          # Install specific package not from the repositories but from a file
-alias pacre='sudo pacman -R'           # Remove the specified package(s), retaining its configuration(s) and required dependencies
-alias pacrem='sudo pacman -Rns'        # Remove the specified package(s), its configuration(s) and unneeded dependencies
-alias pacrep='pacman -Si'              # Display information about a given package in the repositories
-alias pacreps='pacman -Ss'             # Search for package(s) in the repositories
-alias pacloc='pacman -Qi'              # Display information about a given package in the local database
-alias paclocs='pacman -Qs'             # Search for package(s) in the local database
-
-# Additional pacman alias examples
-alias pacupd='sudo pacman -Sy && sudo abs'     # Update and refresh the local package and ABS databases against repositories
-alias pacinsd='sudo pacman -S --asdeps'        # Install given package(s) as dependencies of another package
-alias pacmir='sudo pacman -Syy'                # Force refresh of all package lists after updating /etc/pacman.d/mirrorlist
-
-#update via yaourt
-alias yaourtupd="yaourt -Syu --aur"
-
-#-------------------------------------------------------------------}}}
-#   some advanced stuff
-#-------------------------------------------------------------------{{{
-
-alias vime="vim -u ~/.vimencrypt -x "
-alias gvime="gvim -u ~/.vimencrypt -x "
-
-#alias setbat="sudo tlp start && xbacklight -set 30 && sudo powertop"
-
-#alias ducks='du -cksh * | sort -rn|head -11' # Lists folders and files sizes in the current folder
-alias ducks='du -cs * |sort -rn |head -11' # better
-alias ducksall='du -cs * |sort -rn' # better without head
-alias ducksALL='du -c --max-depth=1 ./ |sort -rn'
-alias hducks='du -cs .??* |sort -rn |head -11' # better
-alias hducksall='du -cs .??* |sort -rn' # better without head
-
 alias countFilesByTypes="find . -type f -exec basename \"{}\" \\; | sed -e 's/.*\\.//gi' | sort  | uniq  -c | sort  -rn"
-
-# download from youtube
-alias ccl="cclive -s best"
-
-[[ -f ~/bin/mydock.sh ]] && alias mydock="mydock.sh"
-
-have tmux && {
-  run_under_tmux() {
-    # Run $1 under session or attach if such session already exist.
-    # $2 is optional path, if no specified, will use $1 from $PATH.
-    # If you need to pass extra variables, use $2 for it as in example below..
-    # Example usage:
-    #  torrent() { run_under_tmux 'rtorrent' '/usr/local/rtorrent-git/bin/rtorrent'; }
-    #  mutt() { run_under_tmux 'mutt'; }
-    #  irc() { run_under_tmux 'irssi' "TERM='screen' command irssi"; }
-
-    # There is a bug in linux's libevent...
-    # export EVENT_NOEPOLL=1
-
-    command -v tmux >/dev/null 2>&1 || return 1
-
-    if [ -z "$1" ]; then return 1; fi
-    local name="$1"
-    if [ -n "$2" ]; then
-      local file_path="$2"
-    else
-      local file_path="command ${name}"
-    fi
-
-    if tmux has-session -t "${name}" 2>/dev/null; then
-      tmux attach -d -t "${name}"
-    else
-      tmux new-session -s "${name}" "${file_path}" \; set-option status \; set set-titles-string "${name} (tmux@${HOST})"
-    fi
-  }
-  have mutt && mutt() { run_under_tmux 'mutt'; }
-  have finch && finch() { run_under_tmux 'finch'; }
-  have ekg2 && ekg2() { run_under_tmux 'ekg2'; }
-}
-
-myXnest() {
-  Xnest :1 &
-  export DISPLAY=localhost:1
-}
-
-#-------------------------------------------------------------------}}}
-#   some networking
-#-------------------------------------------------------------------{{{
-
-alias ping6alle="ping6 ff02::1%eth0"
-alias ping6allw="ping6 ff02::1%wlan0"
-# or: mtr
-alias myarp-scan-e="sudo arp-scan --interface=enp0s25 --localnet"
-alias myarp-scan-w="sudo arp-scan --interface=wlp3s0 --localnet"
-#nmap -sP 192.168.1.0/24
-
-# Get IP (call with myip)
-myip() {
-  myip=`elinks -dump http://checkip.dyndns.org:8245/`
-  echo "${myip}"
-}
-
-## shortcut  for iptables and pass it via sudo#
-#alias ipt='sudo /sbin/iptables'
-## display all rules #
-#alias iptlist='sudo /sbin/iptables -L -n -v --line-numbers'
-#alias iptlistin='sudo /sbin/iptables -L INPUT -n -v --line-numbers'
-#alias iptlistout='sudo /sbin/iptables -L OUTPUT -n -v --line-numbers'
-#alias iptlistfw='sudo /sbin/iptables -L FORWARD -n -v --line-numbers'
-#alias firewall=iptlist
-
-#-------------------------------------------------------------------}}}
-#   some functions
-#-------------------------------------------------------------------{{{
-
-whilezathura(){
-  if [  $# -eq 1 ]; then
-    while true; do zathura -l error $1; sleep 1; done
-  else
-    while true; do zathura -l error *.pdf; sleep 1; done
-  fi
-}
 
 # Quick and dirty version control for one file or one folder
 myversioncontrol() {
@@ -358,7 +171,246 @@ buc() { # undo backup copy
   done
 }
 
-compTime() { #compare the speed of two ($1, $2) commands (loop $3 times)
+#-------------------------------------------------------------------}}}
+#   system control
+#-------------------------------------------------------------------{{{
+
+alias reboot="systemctl reboot"
+alias poweroff="systemctl poweroff"
+alias halt="systemctl poweroff"
+alias suspend="systemctl suspend"
+
+# for hotswaping SATA or eSATA drives
+# scan for new sata devices (as root):
+mysatascan() { su -c "echo \"0 0 0\" >/sys/class/scsi_host/host1/scan"; }
+# remove sata devices:
+#       hdparm -Y /dev/sdX
+
+myusbsusendoff() {
+  su -c "for i in /sys/bus/usb/devices/*/power/control; do echo on > \$i; done"
+}
+
+# will show a list of all the currently loaded modules and all of their parameters
+# should be run as root
+my_mod_parameters () {
+  N=/dev/null;
+  C=`tput op` O=$(echo -en "\n`tput setaf 2`>>> `tput op`");
+  for mod in $(cat /proc/modules|cut -d" " -f1);
+  do
+    md=/sys/module/$mod/parameters;
+    [[ ! -d $md ]] && continue;
+    m=$mod;
+    d=`modinfo -d $m 2>$N | tr "\n" "\t"`;
+    echo -en "$O$m$C";
+    [[ ${#d} -gt 0 ]] && echo -n " - $d";
+    echo;
+    for mc in $(cd $md; echo *);
+    do
+      de=`modinfo -p $mod 2>$N | grep ^$mc 2>$N|sed "s/^$mc=//" 2>$N`;
+      echo -en "\t$mc=`cat $md/$mc 2>$N`";
+      [[ ${#de} -gt 1 ]] && echo -en " - $de";
+      echo;
+    done;
+  done
+}
+
+# will show a list of the current power settings
+my_power_settings() {
+  sudo bash -c '
+  for i in `find /sys/devices -name "bMaxPower"`;
+  do
+    for ii in `find $i -type f`;
+    do
+      bd=`dirname $ii`;
+      busnum=`cat $bd/busnum`;
+      devnum=`cat $bd/devnum`;
+      title=`lsusb -s $busnum:$devnum`;
+      echo -e "\n\n+++ $title\n  -$bd\n  -$ii";
+      for ff in `find $bd/power -type f ! -empty 2>/dev/null`;
+      do
+        v=`cat $ff 2>/dev/null|tr -d "\n"`;
+        [[ ${#v} -gt 0 ]] && echo -e " `basename $ff`=$v";
+        v=;
+      done | sort -g;
+    done;
+  done;
+  echo -e "\n\n\n+++ Kernel Modules\n";
+  for m in `command lspci -k|sed -n "/in use:/s,^.*: ,,p"|sort -u`;
+  do
+    echo "+ $m";
+    systool -v -m $m 2> /dev/null | sed -n "/Parameters:/,/^$/p";
+  done
+  ';
+}
+
+#-------------------------------------------------------------------}}}
+#   multimedia
+#-------------------------------------------------------------------{{{
+
+alias myStopScreensaver="xset dpms 9997 9998 9999"
+starWars() { telnet towel.blinkenlights.nl; }
+
+alias mplayerampl="mplayer -af volume=10.1:0"
+mdump() { mplayer -dumpstream "${1}" -dumpfile ${2}.mp4; }
+
+# download from youtube
+alias ccl="cclive -s best"
+
+#-------------------------------------------------------------------}}}
+#   package management
+#-------------------------------------------------------------------{{{
+
+# remove orphan pacman packages
+myRemOrphans() {
+  if [[ ! -n $(pacman -Qdt) ]]; then
+    echo no orphans to remove
+  else
+    sudo pacman -Rs $(pacman -Qdtq)
+  fi
+}
+
+# Pacman alias examples
+alias pacupg='sudo pacman -Syu ; echo ; myRemOrphans'        # Synchronize with repositories before upgrading packages that are out of date on the local system.
+alias pacin='sudo pacman -S'           # Install specific package(s) from the repositories
+alias pacins='sudo pacman -U'          # Install specific package not from the repositories but from a file
+alias pacre='sudo pacman -R'           # Remove the specified package(s), retaining its configuration(s) and required dependencies
+alias pacrem='sudo pacman -Rns'        # Remove the specified package(s), its configuration(s) and unneeded dependencies
+alias pacrep='pacman -Si'              # Display information about a given package in the repositories
+alias pacreps='pacman -Ss'             # Search for package(s) in the repositories
+alias pacloc='pacman -Qi'              # Display information about a given package in the local database
+alias paclocs='pacman -Qs'             # Search for package(s) in the local database
+
+# Additional pacman alias examples
+alias pacupd='sudo pacman -Sy && sudo abs'     # Update and refresh the local package and ABS databases against repositories
+alias pacinsd='sudo pacman -S --asdeps'        # Install given package(s) as dependencies of another package
+alias pacmir='sudo pacman -Syy'                # Force refresh of all package lists after updating /etc/pacman.d/mirrorlist
+
+#update via yaourt
+alias yaourtupd="yaourt -Syu --aur"
+
+#-------------------------------------------------------------------}}}
+#   some networking
+#-------------------------------------------------------------------{{{
+
+alias ping6alle="ping6 ff02::1%eth0"
+alias ping6allw="ping6 ff02::1%wlan0"
+# or: mtr
+alias myarp-scan-e="sudo arp-scan --interface=enp0s25 --localnet"
+alias myarp-scan-w="sudo arp-scan --interface=wlp3s0 --localnet"
+#nmap -sP 192.168.1.0/24
+
+# Get IP (call with myip)
+myip() { myip=`elinks -dump http://checkip.dyndns.org:8245/`; echo "${myip}"; }
+
+## shortcut  for iptables and pass it via sudo#
+#alias ipt='sudo /sbin/iptables'
+## display all rules #
+#alias iptlist='sudo /sbin/iptables -L -n -v --line-numbers'
+#alias iptlistin='sudo /sbin/iptables -L INPUT -n -v --line-numbers'
+#alias iptlistout='sudo /sbin/iptables -L OUTPUT -n -v --line-numbers'
+#alias iptlistfw='sudo /sbin/iptables -L FORWARD -n -v --line-numbers'
+#alias firewall=iptlist
+
+#-------------------------------------------------------------------}}}
+#   misc
+#-------------------------------------------------------------------{{{
+
+e() {
+  if [ $# -eq 1 ]; then
+    if [ -f $1 ] ; then
+      case $( tr '[:upper:]' '[:lower:]' <<<"$1" ) in
+        *.pdf|*.djvu|*.ps) zathura $1 ;;
+        *.jpg|*.png) geeqie $1 ;;
+        *.zip) file-roller $1 ;;
+        *) vim $1 ;;
+      esac
+    else
+      vim $1
+    fi
+  else
+    vim
+  fi
+}
+
+alias mylatexmk="grep -l '\\documentclass' *tex | xargs latexmk -pdf -pvc" # -silent"
+
+alias keynav='pkill keynav; keynav'
+
+alias dmesgwatch='watch "dmesg |tail -15"'
+alias mydmesg='watch "dmesg |tail -15"' #the same
+
+alias incognito="/usr/bin/chromium --incognito"
+
+alias clamscan="sudo clamscan --recursive --infected --bell"
+alias clamclean="sudo clamscan --recursive --infected --bell --remove"
+alias clamupd="sudo freshclam"
+
+# calc - simple calculator
+# usage: calc <equation>
+calc() { echo "$*" | bc -l; }
+
+hgrep() { history | egrep "$@"; }
+
+genpasswd() {
+  local l=$1
+  [ "$l" == "" ] && l=16
+  tr -dc A-Za-z0-9_ < /dev/urandom | head -c ${l} | xargs
+}
+
+starphp() { php -S 127.0.0.1:8080; }
+
+have tmux && {
+  run_under_tmux() {
+    # Run $1 under session or attach if such session already exist.
+    # $2 is optional path, if no specified, will use $1 from $PATH.
+    # If you need to pass extra variables, use $2 for it as in example below..
+    # Example usage:
+    #  torrent() { run_under_tmux 'rtorrent' '/usr/local/rtorrent-git/bin/rtorrent'; }
+    #  mutt() { run_under_tmux 'mutt'; }
+    #  irc() { run_under_tmux 'irssi' "TERM='screen' command irssi"; }
+
+    # There is a bug in linux's libevent...
+    # export EVENT_NOEPOLL=1
+
+    command -v tmux >/dev/null 2>&1 || return 1
+
+    if [ -z "$1" ]; then return 1; fi
+    local name="$1"
+    if [ -n "$2" ]; then
+      local file_path="$2"
+    else
+      local file_path="command ${name}"
+    fi
+
+    if tmux has-session -t "${name}" 2>/dev/null; then
+      tmux attach -d -t "${name}"
+    else
+      tmux new-session -s "${name}" "${file_path}" \; set-option status \; set set-titles-string "${name} (tmux@${HOST})"
+    fi
+  }
+  have mutt && mutt() { run_under_tmux 'mutt'; }
+  have finch && finch() { run_under_tmux 'finch'; }
+  have ekg2 && ekg2() { run_under_tmux 'ekg2'; }
+}
+
+myXnest() {
+  Xnest :1 &
+  export DISPLAY=localhost:1
+}
+
+#-------------------------------------------------------------------}}}
+#   some functions
+#-------------------------------------------------------------------{{{
+
+whilezathura(){
+  if [  $# -eq 1 ]; then
+    while true; do zathura -l error $1; sleep 1; done
+  else
+    while true; do zathura -l error *.pdf; sleep 1; done
+  fi
+}
+
+mycompTime() { #compare the speed of two ($1, $2) commands (loop $3 times)
   if [ $# -ne 3 ]; then return 1; fi
   type $1 >/dev/null 2>&1 || return 2
   type $2 >/dev/null 2>&1 || return 3
@@ -369,7 +421,7 @@ compTime() { #compare the speed of two ($1, $2) commands (loop $3 times)
 }
 
 # Repeat n times command
-# example: repeat 10 ls
+# example: myRepeat 10 ls
 myRepeat() {
   local i max
   max=$1; shift;
@@ -399,10 +451,6 @@ mkscript() {
     fi
   fi
 }
-
-# calc - simple calculator
-# usage: calc <equation>
-calc() { echo "$*" | bc -l; }
 
 # remind me, its important!
 # usage: remindme <time> <text>
@@ -436,58 +484,6 @@ myremind() {
 #}
 myclock(){
   while sleep 1;do tput sc;tput cup 0 $(($(tput cols)-29));date;tput rc;done &
-}
-
-# will show a list of all the currently loaded modules and all of their parameters
-# should be run as root
-my_mod_parameters () {
-  N=/dev/null;
-  C=`tput op` O=$(echo -en "\n`tput setaf 2`>>> `tput op`");
-  for mod in $(cat /proc/modules|cut -d" " -f1);
-  do
-    md=/sys/module/$mod/parameters;
-    [[ ! -d $md ]] && continue;
-    m=$mod;
-    d=`modinfo -d $m 2>$N | tr "\n" "\t"`;
-    echo -en "$O$m$C";
-    [[ ${#d} -gt 0 ]] && echo -n " - $d";
-    echo;
-    for mc in $(cd $md; echo *);
-    do
-      de=`modinfo -p $mod 2>$N | grep ^$mc 2>$N|sed "s/^$mc=//" 2>$N`;
-      echo -en "\t$mc=`cat $md/$mc 2>$N`";
-      [[ ${#de} -gt 1 ]] && echo -en " - $de";
-      echo;
-    done;
-  done
-}
-
-my_power_settings() {
-  sudo bash -c '
-  for i in `find /sys/devices -name "bMaxPower"`;
-  do
-    for ii in `find $i -type f`;
-    do
-      bd=`dirname $ii`;
-      busnum=`cat $bd/busnum`;
-      devnum=`cat $bd/devnum`;
-      title=`lsusb -s $busnum:$devnum`;
-      echo -e "\n\n+++ $title\n  -$bd\n  -$ii";
-      for ff in `find $bd/power -type f ! -empty 2>/dev/null`;
-      do
-        v=`cat $ff 2>/dev/null|tr -d "\n"`;
-        [[ ${#v} -gt 0 ]] && echo -e " `basename $ff`=$v";
-        v=;
-      done | sort -g;
-    done;
-  done;
-  echo -e "\n\n\n+++ Kernel Modules\n";
-  for m in `command lspci -k|sed -n "/in use:/s,^.*: ,,p"|sort -u`;
-  do
-    echo "+ $m";
-    systool -v -m $m 2> /dev/null | sed -n "/Parameters:/,/^$/p";
-  done
-  ';
 }
 
 #}}}

@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Mo Sep 02, 2013  03:16
+" Last modified: So Sep 08, 2013  09:49
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -434,10 +434,10 @@ inoremap <expr> <Tab>     pumvisible() ? "\<C-y>" : "\<Tab>"
 inoremap <expr> <CR>      pumvisible() ? "\<C-e><CR>" : "\<CR>"
 
 " force vim keys
-nnoremap <up> <nop>
-nnoremap <down> <nop>
-nnoremap <left> <nop>
-nnoremap <right> <nop>
+"nnoremap <up> <nop>
+"nnoremap <down> <nop>
+"nnoremap <left> <nop>
+"nnoremap <right> <nop>
 
 " Use arrow key to change buffer
 "noremap <left> :bp<CR>

@@ -1,4 +1,5 @@
 -- ~/.xmonad/xmobarrc
+-- see http://projects.haskell.org/xmobar/
 
 Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
        , bgColor = "black"
@@ -8,19 +9,39 @@ Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
        , lowerOnStart = True
        , commands = [ Run StdinReader
                     , Run MultiCpu ["-t","Cpu:<total0> <total1> <total2> <total3>","-L","30","-H","60","-h","#FFB6B0","-l","#CEFFAC","-n","#FFFFCC","-w","3"] 10
-                    , Run Com "~/.xmonad/coreTemp.sh" [] "coreTemp" 100
+                    --, Run MultiCpu [] 10
+                    --, Run Com "~/.xmonad/coreTemp.sh" [] "coreTemp" 100
                     --, Run Memory ["-t","Mem: <usedratio>%"] 10
                     --, Run Swap [] 10
-                    , Run Com "~/.xmonad/batteryrate.sh" [] "rate" 100
-                    , Run Network "enp0s25" ["-L","0","-H","32","--normal","green","--high","red"] 10
-                    , Run Network "wlp3s0" ["-L","0","-H","32","--normal","green","--high","red"] 10
+                    --, Run Network "enp0s25" ["-L","0","-H","32","--normal","green","--high","red"] 10
+                    --, Run Network "wlp3s0" ["-L","0","-H","32","--normal","green","--high","red"] 10
+                    , Run DynNetwork ["-L","0","-H","32","--normal","green","--high","red"] 10
                     , Run Com "~/.xmonad/myinformation.sh" [] "info" 100
                     , Run Date "%a %d.%m.%Y %H:%M:%S" "date" 10
+                    , Run Kbd [("de(nodeadkeys)", "| de "), ("de(neo)", "")]
+                    , Run BatteryP ["BAT0"]
+                      ["-t", "Bat: <left>%<acstatus> (<watts>W)"
+                      , "-L", "10"
+                      , "-H", "80"
+                      , "-p", "3"
+                      , "--"
+                      , "-O", "<fc=green>On</fc> - "
+                      , "-o", " / <timeleft>"
+                      , "-i", ""
+                      , "-L", "-15"
+                      , "-H", "-5"
+                      , "-l", "red"
+                      , "-m", "blue"
+                      , "-h", "green"] 100
+                    --, Run Com "~/.xmonad/batteryrate.sh" [] "rate" 100
+                    --, Run Weather "EDMA" ["-t", "| <station>: <tempC>C "] 36000
                     --, Run Com "setxkbmap -print | grep xkb_symbols | awk -F\"+\" '{print $2}'"  [] "keyboard" 30
+                    , Run TopProc [] 10
+                    , Run CoreTemp [ "-t", "@ <core0>C" ] 60
                     ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %StdinReader% }{ %multicpu% @ %coreTemp% | %rate% | %enp0s25%%wlp3s0% %info% | <fc=#ee9a00>%date%</fc>"
+       , template = " %StdinReader% }{ %top% %multicpu% %coretemp% %kbd%| %battery% | %dynnetwork% %info% | <fc=#ee9a00>%date%</fc>"
        }
 
 -- vim: set ft=haskell :
