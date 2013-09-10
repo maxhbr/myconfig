@@ -8,14 +8,23 @@ Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
        , position = TopW L 100
        , lowerOnStart = True
        , commands = [ Run StdinReader
-                    , Run MultiCpu ["-t","Cpu:<total0> <total1> <total2> <total3>","-L","30","-H","60","-h","#FFB6B0","-l","#CEFFAC","-n","#FFFFCC","-w","3"] 10
-                    --, Run MultiCpu [] 10
-                    --, Run Com "~/.xmonad/coreTemp.sh" [] "coreTemp" 100
+                    , Run MultiCpu 
+                      ["-t","Cpu:<total0> <total1> <total2> <total3>"
+                      ,"-L","30"
+                      ,"-H","60"
+                      ,"-h","#FFB6B0"
+                      ,"-l","#CEFFAC"
+                      ,"-n","#FFFFCC"
+                      ,"-w","3"] 10
                     --, Run Memory ["-t","Mem: <usedratio>%"] 10
                     --, Run Swap [] 10
                     --, Run Network "enp0s25" ["-L","0","-H","32","--normal","green","--high","red"] 10
                     --, Run Network "wlp3s0" ["-L","0","-H","32","--normal","green","--high","red"] 10
-                    , Run DynNetwork ["-L","0","-H","32","--normal","green","--high","red"] 10
+                    , Run DynNetwork 
+                      ["-L","0"
+                      ,"-H","32"
+                      ,"--normal","green",
+                      "--high","red"] 10
                     , Run Com "~/.xmonad/myinformation.sh" [] "info" 100
                     , Run Date "%a %d.%m.%Y %H:%M:%S" "date" 10
                     , Run Kbd [("de(nodeadkeys)", "| de "), ("de(neo)", "")]
@@ -35,13 +44,13 @@ Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
                       , "-h", "green"] 100
                     --, Run Com "~/.xmonad/batteryrate.sh" [] "rate" 100
                     --, Run Weather "EDMA" ["-t", "| <station>: <tempC>C "] 36000
-                    --, Run Com "setxkbmap -print | grep xkb_symbols | awk -F\"+\" '{print $2}'"  [] "keyboard" 30
-                    , Run TopProc [] 10
+                    , Run TopProc ["-t","(<name1>)"] 10
                     , Run CoreTemp [ "-t", "@ <core0>C" ] 60
+                    --, Run Com "~/.xmonad/coreTemp.sh" [] "coreTemp" 100
                     ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %StdinReader% }{ %top% %multicpu% %coretemp% %kbd%| %battery% | %dynnetwork% %info% | <fc=#ee9a00>%date%</fc>"
+       , template = " %StdinReader% }{ %multicpu% %top% %coretemp% %kbd%| %battery% | %dynnetwork% %info% | <fc=#ee9a00>%date%</fc>"
        }
 
 -- vim: set ft=haskell :
