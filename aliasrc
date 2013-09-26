@@ -5,6 +5,7 @@ alias vi="vim"
 alias vime="vim -u ~/.vimencrypt -x "
 alias gvime="gvim -u ~/.vimencrypt -x "
 alias tvim="tmux new vim"
+alias svim="sudo vim -u /home/hubi/.vimrc "
 
 alias tmx="tmux attach-session || tmux"
 
@@ -37,7 +38,6 @@ alias l.='ls -dF .[a-zA-Z0-9]*' #only show dotfiles
 lgrep() { ls -alF | egrep "$@"; }
 
 #keep track of folders
-#TODO: make silent
 #alias cd="pushd"
 #alias bd="popd"
 
@@ -73,21 +73,27 @@ alias pkill9="pkill --signal 9"
 # disk usage for humans
 duh() { test $# -eq 0 && set -- *; du -sch "$@" | sort -h; }
 
-#alias ducks='du -cksh * | sort -rn|head -11' # Lists folders and files sizes in the current folder
-alias ducks='du -cs * |sort -rn |head -11' # better
-alias ducksall='du -cs * |sort -rn' # better without head
+alias ducks='du -cs * |sort -rn |head -11'
+alias ducksall='du -cs * |sort -rn'
 alias ducksALL='du -c --max-depth=1 ./ |sort -rn'
-alias hducks='du -cs .??* |sort -rn |head -11' # better
-alias hducksall='du -cs .??* |sort -rn' # better without head
+alias hducks='du -cs .??* |sort -rn |head -11'
+alias hducksall='du -cs .??* |sort -rn'
 
-ranger-cd() {
-  tempfile='/tmp/chosendir'
-  /usr/bin/ranger --choosedir="$tempfile" "${@:-$(pwd)}"
-  test -f "$tempfile" &&
-  if [ "$(cat -- "$tempfile")" != "$(echo -n `pwd`)" ]; then
-    cd -- "$(cat "$tempfile")"
+have ranger && {
+  ranger-cd() {
+    tempfile='/tmp/chosendir'
+    /usr/bin/ranger --choosedir="$tempfile" "${@:-$(pwd)}"
+    test -f "$tempfile" &&
+    if [ "$(cat -- "$tempfile")" != "$(echo -n `pwd`)" ]; then
+      cd -- "$(cat "$tempfile")"
+    fi
+    rm -f -- "$tempfile"
+  }
+  if [ -n "$BASH_VERSION" ]; then
+    have ranger && bind '"\C-o":" ranger-cd\C-m"'
+  elif [ -n "$ZSH_VERSION" ]; then
+    bindkey -s '^o' '^qranger-cd\n'
   fi
-  rm -f -- "$tempfile"
 }
 
 #Fix permissions
@@ -243,18 +249,36 @@ my_power_settings() {
   ';
 }
 
+myiscsi() {
+  myiscsiRoutine() {
+    systemctl start open-iscsi.service
+    #iscsiadm -m discovery -t sendtargets -p $2
+    iscsiadm -m node -L all
+    mkdir -p /mnt/iscsi/
+    mount /dev/disk/by-uuid/${1} /mnt/iscsi/
+  }
+  UUID=1971b7be-593f-4950-ae93-4904b007c18e
+  IP=192.168.178.56
+  sudo myiscsiRoutine $UUID $IP
+}
+
 #-------------------------------------------------------------------}}}
 #   multimedia
 #-------------------------------------------------------------------{{{
 
 alias myStopScreensaver="xset dpms 9997 9998 9999"
-starWars() { telnet towel.blinkenlights.nl; }
 
 alias mplayerampl="mplayer -af volume=10.1:0"
 mdump() { mplayer -dumpstream "${1}" -dumpfile ${2}.mp4; }
+alias mdir="mplayer -shuffle {*,**/*}{wma,mp3,acc,ogg}"
 
 # download from youtube
 alias ccl="cclive -s best"
+
+starWars() { telnet towel.blinkenlights.nl; }
+
+#rename all images
+alias myrenameAllImages="jhead -autorot -nf%y%m%d-%f **/*.jpg"
 
 #-------------------------------------------------------------------}}}
 #   package management
@@ -286,7 +310,7 @@ alias pacinsd='sudo pacman -S --asdeps'        # Install given package(s) as dep
 alias pacmir='sudo pacman -Syy'                # Force refresh of all package lists after updating /etc/pacman.d/mirrorlist
 
 #update via yaourt
-alias yaourtupd="yaourt -Syu --aur"
+have yaourt && alias yaourtupd="yaourt -Syu --aur"
 
 #-------------------------------------------------------------------}}}
 #   some networking
@@ -297,7 +321,7 @@ alias ping6allw="ping6 ff02::1%wlan0"
 # or: mtr
 alias myarp-scan-e="sudo arp-scan --interface=enp0s25 --localnet"
 alias myarp-scan-w="sudo arp-scan --interface=wlp3s0 --localnet"
-#nmap -sP 192.168.1.0/24
+alias mynmap="nmap -sP 192.168.178.0/24"
 
 # Get IP (call with myip)
 myip() { myip=`elinks -dump http://checkip.dyndns.org:8245/`; echo "${myip}"; }
@@ -334,8 +358,6 @@ e() {
 
 alias mylatexmk="grep -l '\\documentclass' *tex | xargs latexmk -pdf -pvc" # -silent"
 
-alias keynav='pkill keynav; keynav'
-
 alias dmesgwatch='watch "dmesg |tail -15"'
 alias mydmesg='watch "dmesg |tail -15"' #the same
 
@@ -357,7 +379,7 @@ genpasswd() {
   tr -dc A-Za-z0-9_ < /dev/urandom | head -c ${l} | xargs
 }
 
-starphp() { php -S 127.0.0.1:8080; }
+startphp() { php -S 127.0.0.1:8080; }
 
 have tmux && {
   run_under_tmux() {
@@ -489,14 +511,8 @@ myclock(){
 #}}}
 
 if [ -n "$BASH_VERSION" ]; then
-  #for bash
-  # This binds Ctrl-O to ranger-cd:
-  have ranger && bind '"\C-o":" ranger-cd\C-m"'
   alias reload='source ~/.bashrc'
 elif [ -n "$ZSH_VERSION" ]; then
-  #for zsh
-  #bindkey '^r' ranger-cd
-  bindkey -s '^o' '^qranger-cd\n'
   alias reload='source /etc/zsh/zshrc'
 fi
 # vim: set filetype=sh foldmethod=marker foldmarker={{{,}}}:

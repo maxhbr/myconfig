@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: So Sep 08, 2013  09:05
+-- Last modified: So Sep 22, 2013  02:43
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -289,23 +289,24 @@ myMainLayout = configurableNavigation (navigateColor "#333333") $
             }
 
 -- Define layout for specific workspaces
-myChatLayout = avoidStrutsOn[U] $
-    pidgin $
-    (tiled ||| Mirror tiled ||| full)
-    where
-        tiled   = named "tiled" $
-            ResizableTall nmaster delta ratio []
-        nmaster = 1
-        ratio   = 1/2
-        delta   = 3/100
-        full    = named "full" $
-            Full
-        pidgin l = withIM (1%6) (Role "buddy_list") l
-        {-licq l = withIM (1%6) (className "MainWindow") l-}
+{-myChatLayout = avoidStrutsOn[U] $
+ -   pidgin $
+ -   (tiled ||| Mirror tiled ||| full)
+ -   where
+ -       tiled   = named "tiled" $
+ -           ResizableTall nmaster delta ratio []
+ -       nmaster = 1
+ -       ratio   = 1/2
+ -       delta   = 3/100
+ -       full    = named "full" $
+ -           Full
+ -       pidgin l = withIM (1%6) (Role "buddy_list") l
+ -       {-licq l = withIM (1%6) (className "MainWindow") l-}
+ - -}
 
 -- Put all layouts together
 myLayout = avoidStrutsOn[U] $
-    onWorkspace "im" myChatLayout $
+    {-onWorkspace "im" myChatLayout $-}
     smartBorders $
     myMainLayout
     {-onWorkspace "VM" Full $-}
@@ -403,7 +404,7 @@ myStartupHook = do
 ------------------------------------------------------------------------
 -- General
 --{{{
-myWorkspaces = ["1","2","3","4","5","6","7","web","im"]
+myWorkspaces = ["1","2","3","4","5","6","7","web","9"]
 
 myConfig xmproc = withUrgencyHook NoUrgencyHook $
     defaultConfig {

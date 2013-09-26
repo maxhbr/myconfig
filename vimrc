@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: So Sep 08, 2013  09:49
+" Last modified: Fr Sep 20, 2013  10:16
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -608,15 +608,16 @@ augroup vimrc_autocmds
   autocmd FileType sh setlocal sw=2 ts=2 et
   autocmd FileType tex call SetLaTeXFile()
   autocmd FileType haskell setlocal sw=2 ts=2 et
-  autocmd FileType human call SetTextFile()
   autocmd FileType java call SetJavaFile()
-  autocmd FileType less call SetCssFile()
-  autocmd FileType mail call SetMailFile()
   autocmd FileType matlab call SetMatlabFile()
   autocmd FileType python call SetPythonFile()
+  autocmd FileType human call SetTextFile()
   autocmd FileType text call SetTextFile()
+  autocmd FileType mail call SetMailFile()
   autocmd FileType txt call SetTextFile()
   autocmd FileType css call SetCssFile()
+  autocmd FileType less call SetCssFile()
+  autocmd FileType php setlocal sw=2 ts=2 et
   " in makefiles, don't expand tabs to spaces
   autocmd FileType make setlocal noexpandtab shiftwidth=8
 augroup END
