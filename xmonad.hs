@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: So Sep 22, 2013  02:43
+-- Last modified: So Okt 13, 2013  02:16
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -333,9 +333,8 @@ myManageHook = composeAll
     , className =? "Pidgin"         --> doShift "im"
     , className =? "Chromium"       --> doShift "web"
     {-, className =? "Sylpheed"       --> doShift "7"-}
-    , className =? "Gimp"           --> doShift "4"
-    , resource  =? "Gimp"           --> doShift "4"
-    , resource  =? "ToScreen1"      --> doShift "1"
+    {-, className =? "Gimp"           --> doShift "4"-}
+    {-, resource  =? "Gimp"           --> doShift "4"-}
     , className =? "Virtualbox"     --> doFullFloat
     , resource  =? "desktop_window" --> doIgnore
     , resource  =? "kdesktop"       --> doIgnore

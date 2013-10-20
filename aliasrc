@@ -249,19 +249,6 @@ my_power_settings() {
   ';
 }
 
-myiscsi() {
-  myiscsiRoutine() {
-    systemctl start open-iscsi.service
-    #iscsiadm -m discovery -t sendtargets -p $2
-    iscsiadm -m node -L all
-    mkdir -p /mnt/iscsi/
-    mount /dev/disk/by-uuid/${1} /mnt/iscsi/
-  }
-  UUID=1971b7be-593f-4950-ae93-4904b007c18e
-  IP=192.168.178.56
-  sudo myiscsiRoutine $UUID $IP
-}
-
 #-------------------------------------------------------------------}}}
 #   multimedia
 #-------------------------------------------------------------------{{{
@@ -278,7 +265,30 @@ alias ccl="cclive -s best"
 starWars() { telnet towel.blinkenlights.nl; }
 
 #rename all images
-alias myrenameAllImages="jhead -autorot -nf%y%m%d-%f **/*.jpg"
+#alias myrenameAllImages="jhead -autorot -nf%y%m%d-%f **/*.jpg"
+alias myrenameImg="jhead -autorot -nf%y%m%d-%f"
+
+mystartcups() {
+  [[  ! -f /tmp/myCupsStartet ]] && {
+    echo "starting CUPS"
+    sudo systemctl start avahi-daemon.service
+    sudo systemctl start cups.service
+    touch /tmp/myCupsStartet
+  }
+}
+# druckt A5 Broschüren
+lprBook() {
+  mystartcups()
+  [[ -f $1 ]] && {
+    pdftops -paperw 420 -paperh 595 $1 - \
+      | psbook -q \
+      | ps2pdf14 - - \
+      | lpr -o sides=two-sided-short-edge -o number-up=2 -o fit-to-page -o media=A4
+  } || { echo "file not found"; }
+}
+alias myLprBook=lprBook
+alias lprFit="lpr -o fit-to-page -o media=A4 "
+alias lprFitL="lpr -o landscape -o fit-to-page -o media=A4 "
 
 #-------------------------------------------------------------------}}}
 #   package management
@@ -334,6 +344,19 @@ myip() { myip=`elinks -dump http://checkip.dyndns.org:8245/`; echo "${myip}"; }
 #alias iptlistout='sudo /sbin/iptables -L OUTPUT -n -v --line-numbers'
 #alias iptlistfw='sudo /sbin/iptables -L FORWARD -n -v --line-numbers'
 #alias firewall=iptlist
+
+myiscsi() {
+  myiscsiRoutine() {
+    sudo systemctl start open-iscsi.service
+    #sudo iscsiadm -m discovery -t sendtargets -p $2
+    sudo iscsiadm -m node -L all
+    sudo mkdir -p /mnt/iscsi/
+    sudo mount /dev/disk/by-uuid/${1} /mnt/iscsi/
+  }
+  UUID=1971b7be-593f-4950-ae93-4904b007c18e
+  IP=192.168.178.56
+  myiscsiRoutine $UUID $IP
+}
 
 #-------------------------------------------------------------------}}}
 #   misc

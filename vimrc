@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Fr Sep 20, 2013  10:16
+" Last modified: So Okt 20, 2013  01:35
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -597,9 +597,11 @@ function! SetMailFile()
 endfunction
 
 augroup filetypedetect
-  au BufRead,BufNewFile tmpmsg-*.txt set filetype=mail
-  au BufRead,BufNewFile *.tex set filetype=tex
-  au BufRead,BufNewFile *.log setlocal autoread
+  au!
+  autocmd BufRead,BufNewFile tmpmsg-*.txt set filetype=mail
+  autocmd BufRead,BufNewFile *.tex set filetype=tex
+  autocmd BufRead,BufNewFile *.log setlocal autoread
+  autocmd BufRead,BufNewFile *.nlogo set filetype=nlogo
   "au! BufRead,BufNewFile *.m,*.oct setfiletype matlab
 augroup END
 
