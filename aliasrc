@@ -330,7 +330,7 @@ whilezathura(){
 #-------------------------------------------------------------------{{{
 
 alias mymatlab="/usr/local/MATLAB/R2013a/bin/matlab -desktop -nosplash"
-alias mymatlab-headless="/usr/local/MATLAB/R2013a/bin/matlab  -nojvm -nodisplay -nosplash < "
+alias mymatlab-headless="/usr/local/MATLAB/R2013a/bin/matlab -nojvm -nodisplay -nosplash < "
 
 #-------------------------------------------------------------------}}}
 #   package management
