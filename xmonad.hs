@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Mo Nov 04, 2013  07:38
+-- Last modified: Mi Nov 06, 2013  10:54
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -180,7 +180,6 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     -- keyboard layouts
     , ((modm, xK_F2), spawn "qiv ~/.xmonad/neo/neo_Ebenen_1_2_3_4.png")
     , ((modm, xK_F3), spawn "qiv ~/.xmonad/neo/neo_Ebenen_1_2_5_6.png")
-    , ((modm, xK_F4), spawn "qiv ~/.xmonad/typematrix/typematrix-qwertz.png")
     ] --}}}
     ++
     [ --backlight --{{{
