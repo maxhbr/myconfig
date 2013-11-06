@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: So Okt 13, 2013  02:16
+-- Last modified: Mo Nov 04, 2013  07:38
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -327,18 +327,15 @@ myLayout = avoidStrutsOn[U] $
 -- 'className' and 'resource' are used below.
 --
 myManageHook = composeAll
-    [ className =? "Xmessage"       --> doCenterFloat
-    , className =? "MPlayer"        --> doFloat
-    , className =? "Onboard"        --> doFloat
-    , className =? "Pidgin"         --> doShift "im"
-    , className =? "Chromium"       --> doShift "web"
-    {-, className =? "Sylpheed"       --> doShift "7"-}
-    {-, className =? "Gimp"           --> doShift "4"-}
-    {-, resource  =? "Gimp"           --> doShift "4"-}
-    , className =? "Virtualbox"     --> doFullFloat
-    , resource  =? "desktop_window" --> doIgnore
-    , resource  =? "kdesktop"       --> doIgnore
-    , className =? "Zenity"         --> doCenterFloat ]
+    [ className =? "Xmessage"                      --> doCenterFloat
+    , className =? "MPlayer"                       --> doFloat
+    , className =? "Onboard"                       --> doFloat
+    , className =? "com-mathworks-util-PostVMInit" --> doShift "7"
+    , className =? "Chromium"                      --> doShift "web"
+    , className =? "Virtualbox"                    --> doFullFloat
+    , resource  =? "desktop_window"                --> doIgnore
+    , resource  =? "kdesktop"                      --> doIgnore
+    , className =? "Zenity"                        --> doCenterFloat ]
         <+> composeAll
             [ resource  =? ("ToWorkspace"++i)    --> doShift i
                 | i <- myWorkspaces]

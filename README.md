@@ -3,13 +3,12 @@ myconfig / my dotfiles
 
 my Linux Configuration on Arch Linux
 
-i moved from bash to zsh
-
 # used software
 ## Enviroment
 - xmonad
 - xmobar
 - systemd
+- zsh with grml-zsh-config
 
 ## Applications
 - rxvt-unicode

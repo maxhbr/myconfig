@@ -52,7 +52,7 @@ cd() { #Automatically do an ls after each cd
 alias cd..="cd .."
 alias ..="cd .."
 alias ...="cd ../.."
-alias ~="cd ~/"
+#alias ~="cd ~/"
 
 mkcd() { #make dir and enter it
   mkdir -p "$1"
@@ -268,6 +268,10 @@ starWars() { telnet towel.blinkenlights.nl; }
 #alias myrenameAllImages="jhead -autorot -nf%y%m%d-%f **/*.jpg"
 alias myrenameImg="jhead -autorot -nf%y%m%d-%f"
 
+#-------------------------------------------------------------------}}}
+#   documente / printing
+#-------------------------------------------------------------------{{{
+
 mystartcups() {
   [[  ! -f /tmp/myCupsStartet ]] && {
     echo "starting CUPS"
@@ -278,7 +282,7 @@ mystartcups() {
 }
 # druckt A5 Broschüren
 lprBook() {
-  mystartcups()
+  mystartcups
   [[ -f $1 ]] && {
     pdftops -paperw 420 -paperh 595 $1 - \
       | psbook -q \
@@ -289,6 +293,44 @@ lprBook() {
 alias myLprBook=lprBook
 alias lprFit="lpr -o fit-to-page -o media=A4 "
 alias lprFitL="lpr -o landscape -o fit-to-page -o media=A4 "
+
+alias myPyfCrop="pdfcrop --margins \"20 30 20 40\""
+
+# Extract range of Pages From a PDF
+# from: http://www.linuxjournal.com/content/tech-tip-extract-pages-pdf
+function myPdfpextr()
+{
+    # this function uses 3 arguments:
+    #     $1 is the first page of the range to extract
+    #     $2 is the last page of the range to extract
+    #     $3 is the input file
+    #     output file will be named "inputfile_pXX-pYY.pdf"
+    gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER \
+       -dFirstPage=${1} \
+       -dLastPage=${2} \
+       -sOutputFile=${3%.pdf}_p${1}-p${2}.pdf \
+       ${3}
+}
+
+mylatexmk(){
+  grep -l '\\documentclass' *tex | \
+    xargs latexmk -pdf -outdir=".latexmk_files" -pvc
+}
+
+whilezathura(){
+  if [  $# -eq 1 ]; then
+    while true; do zathura -l error $1; sleep 1; done
+  else
+    while true; do zathura -l error *.pdf; sleep 1; done
+  fi
+}
+
+#-------------------------------------------------------------------}}}
+#   Mathe
+#-------------------------------------------------------------------{{{
+
+alias mymatlab="/usr/local/MATLAB/R2013a/bin/matlab -desktop -nosplash"
+alias mymatlab-headless="/usr/local/MATLAB/R2013a/bin/matlab  -nojvm -nodisplay -nosplash < "
 
 #-------------------------------------------------------------------}}}
 #   package management
@@ -379,8 +421,6 @@ e() {
   fi
 }
 
-alias mylatexmk="grep -l '\\documentclass' *tex | xargs latexmk -pdf -pvc" # -silent"
-
 alias dmesgwatch='watch "dmesg |tail -15"'
 alias mydmesg='watch "dmesg |tail -15"' #the same
 
@@ -394,13 +434,13 @@ alias clamupd="sudo freshclam"
 # usage: calc <equation>
 calc() { echo "$*" | bc -l; }
 
-hgrep() { history | egrep "$@"; }
+hgrep() { history 0 | egrep "$@"; }
 
-genpasswd() {
-  local l=$1
-  [ "$l" == "" ] && l=16
-  tr -dc A-Za-z0-9_ < /dev/urandom | head -c ${l} | xargs
-}
+#genpasswd() {
+  #local l=$1
+  #[ "$l" == "" ] && l=16
+  #tr -dc A-Za-z0-9_ < /dev/urandom | head -c ${l} | xargs
+#}
 
 startphp() { php -S 127.0.0.1:8080; }
 
@@ -446,14 +486,6 @@ myXnest() {
 #-------------------------------------------------------------------}}}
 #   some functions
 #-------------------------------------------------------------------{{{
-
-whilezathura(){
-  if [  $# -eq 1 ]; then
-    while true; do zathura -l error $1; sleep 1; done
-  else
-    while true; do zathura -l error *.pdf; sleep 1; done
-  fi
-}
 
 mycompTime() { #compare the speed of two ($1, $2) commands (loop $3 times)
   if [ $# -ne 3 ]; then return 1; fi
