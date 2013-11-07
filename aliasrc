@@ -1,6 +1,9 @@
 # written by maximilian-huber.de
 # ~/.aliasrc
 
+# needs:
+# vim, tmux, sudo, mutt
+
 alias vi="vim"
 alias vime="vim -u ~/.vimencrypt -x "
 alias gvime="gvim -u ~/.vimencrypt -x "
@@ -79,7 +82,7 @@ alias ducksALL='du -c --max-depth=1 ./ |sort -rn'
 alias hducks='du -cs .??* |sort -rn |head -11'
 alias hducksall='du -cs .??* |sort -rn'
 
-have ranger && {
+#have ranger && {
   ranger-cd() {
     tempfile='/tmp/chosendir'
     /usr/bin/ranger --choosedir="$tempfile" "${@:-$(pwd)}"
@@ -90,11 +93,11 @@ have ranger && {
     rm -f -- "$tempfile"
   }
   if [ -n "$BASH_VERSION" ]; then
-    have ranger && bind '"\C-o":" ranger-cd\C-m"'
+    bind '"\C-o":" ranger-cd\C-m"'
   elif [ -n "$ZSH_VERSION" ]; then
     bindkey -s '^o' '^qranger-cd\n'
   fi
-}
+#}
 
 #Fix permissions
 permfix() {
@@ -134,7 +137,10 @@ ex() {
   fi
 }
 
-alias countFilesByTypes="find . -type f -exec basename \"{}\" \\; | sed -e 's/.*\\.//gi' | sort  | uniq  -c | sort  -rn"
+countFilesByTypes() {
+  find . -type f -exec basename "{}" \; | sed -e 's/.*\.//gi' | sort  | \
+    uniq  -c | sort  -rn
+}
 
 # Quick and dirty version control for one file or one folder
 myversioncontrol() {
@@ -195,6 +201,13 @@ mysatascan() { su -c "echo \"0 0 0\" >/sys/class/scsi_host/host1/scan"; }
 myusbsusendoff() {
   su -c "for i in /sys/bus/usb/devices/*/power/control; do echo on > \$i; done"
 }
+
+alias dmesgwatch='watch "dmesg |tail -15"'
+alias mydmesg='watch "dmesg |tail -15"' #the same
+
+alias clamscan="sudo clamscan --recursive --infected --bell"
+alias clamclean="sudo clamscan --recursive --infected --bell --remove"
+alias clamupd="sudo freshclam"
 
 # will show a list of all the currently loaded modules and all of their parameters
 # should be run as root
@@ -280,6 +293,7 @@ mystartcups() {
     touch /tmp/myCupsStartet
   }
 }
+
 # druckt A5 Broschüren
 lprBook() {
   mystartcups
@@ -294,22 +308,19 @@ alias myLprBook=lprBook
 alias lprFit="lpr -o fit-to-page -o media=A4 "
 alias lprFitL="lpr -o landscape -o fit-to-page -o media=A4 "
 
-alias myPyfCrop="pdfcrop --margins \"20 30 20 40\""
+alias myPdfCrop="pdfcrop --margins \"20 30 20 40\""
 
 # Extract range of Pages From a PDF
 # from: http://www.linuxjournal.com/content/tech-tip-extract-pages-pdf
-function myPdfpextr()
-{
-    # this function uses 3 arguments:
-    #     $1 is the first page of the range to extract
-    #     $2 is the last page of the range to extract
-    #     $3 is the input file
-    #     output file will be named "inputfile_pXX-pYY.pdf"
-    gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER \
-       -dFirstPage=${1} \
-       -dLastPage=${2} \
-       -sOutputFile=${3%.pdf}_p${1}-p${2}.pdf \
-       ${3}
+myPdfpextr() {
+  # myPdfpextr start end file
+  gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dFirstPage=${1} \
+    -dLastPage=${2} -sOutputFile=${3%.pdf}_p${1}-p${2}.pdf ${3}
+}
+
+myPdfreducesize() {
+  gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/screen\
+    -dNOPAUSE -dQUIET -dBATCH -sOutputFile=${3%.pdf}-small.pdf $1
 }
 
 mylatexmk(){
@@ -327,20 +338,12 @@ myxelatexmk(){
     xargs latexmk -pdflatex=xelatex -pdf -outdir=".xelatexmk_files" -pvc
 }
 
-whilezathura(){
-  if [  $# -eq 1 ]; then
-    while true; do zathura -l error $1; sleep 1; done
-  else
-    while true; do zathura -l error *.pdf; sleep 1; done
-  fi
-}
-
 #-------------------------------------------------------------------}}}
 #   Mathe
 #-------------------------------------------------------------------{{{
 
-alias mymatlab="/usr/local/MATLAB/R2013a/bin/matlab -desktop -nosplash"
-alias mymatlab-headless="/usr/local/MATLAB/R2013a/bin/matlab -nojvm -nodisplay -nosplash < "
+alias mymatlab="~/matlab/bin/matlab -desktop -nosplash"
+alias mymatlab-headless="~/matlab/bin/matlab -nojvm -nodisplay -nosplash < "
 
 #-------------------------------------------------------------------}}}
 #   package management
@@ -356,23 +359,23 @@ myRemOrphans() {
 }
 
 # Pacman alias examples
-alias pacupg='sudo pacman -Syu ; echo ; myRemOrphans'        # Synchronize with repositories before upgrading packages that are out of date on the local system.
-alias pacin='sudo pacman -S'           # Install specific package(s) from the repositories
-alias pacins='sudo pacman -U'          # Install specific package not from the repositories but from a file
-alias pacre='sudo pacman -R'           # Remove the specified package(s), retaining its configuration(s) and required dependencies
-alias pacrem='sudo pacman -Rns'        # Remove the specified package(s), its configuration(s) and unneeded dependencies
-alias pacrep='pacman -Si'              # Display information about a given package in the repositories
-alias pacreps='pacman -Ss'             # Search for package(s) in the repositories
-alias pacloc='pacman -Qi'              # Display information about a given package in the local database
-alias paclocs='pacman -Qs'             # Search for package(s) in the local database
+alias pacupg='sudo pacman -Syu ; echo ; myRemOrphans'
+alias pacin='sudo pacman -S'
+alias pacins='sudo pacman -U'
+alias pacre='sudo pacman -R'
+alias pacrem='sudo pacman -Rns'
+alias pacrep='pacman -Si'
+alias pacreps='pacman -Ss'
+alias pacloc='pacman -Qi'
+alias paclocs='pacman -Qs'
 
 # Additional pacman alias examples
-alias pacupd='sudo pacman -Sy && sudo abs'     # Update and refresh the local package and ABS databases against repositories
-alias pacinsd='sudo pacman -S --asdeps'        # Install given package(s) as dependencies of another package
-alias pacmir='sudo pacman -Syy'                # Force refresh of all package lists after updating /etc/pacman.d/mirrorlist
+alias pacupd='sudo pacman -Sy && sudo abs'
+alias pacinsd='sudo pacman -S --asdeps'
+alias pacmir='sudo pacman -Syy'
 
 #update via yaourt
-have yaourt && alias yaourtupd="yaourt -Syu --aur"
+alias yaourtupd="yaourt -Syu --aur"
 
 #-------------------------------------------------------------------}}}
 #   some networking
@@ -397,17 +400,13 @@ myip() { myip=`elinks -dump http://checkip.dyndns.org:8245/`; echo "${myip}"; }
 #alias iptlistfw='sudo /sbin/iptables -L FORWARD -n -v --line-numbers'
 #alias firewall=iptlist
 
-myiscsi() {
-  myiscsiRoutine() {
-    sudo systemctl start open-iscsi.service
-    #sudo iscsiadm -m discovery -t sendtargets -p $2
-    sudo iscsiadm -m node -L all
-    sudo mkdir -p /mnt/iscsi/
-    sudo mount /dev/disk/by-uuid/${1} /mnt/iscsi/
-  }
-  UUID=1971b7be-593f-4950-ae93-4904b007c18e
-  IP=192.168.178.56
-  myiscsiRoutine $UUID $IP
+myiscsiRoutine() {
+  # myiscsiRoutine UUID IP
+  sudo systemctl start open-iscsi.service
+  #sudo iscsiadm -m discovery -t sendtargets -p $2
+  sudo iscsiadm -m node -L all
+  sudo mkdir -p /mnt/iscsi/
+  sudo mount /dev/disk/by-uuid/${1} /mnt/iscsi/
 }
 
 #-------------------------------------------------------------------}}}
@@ -431,14 +430,7 @@ e() {
   fi
 }
 
-alias dmesgwatch='watch "dmesg |tail -15"'
-alias mydmesg='watch "dmesg |tail -15"' #the same
-
 alias incognito="/usr/bin/chromium --incognito"
-
-alias clamscan="sudo clamscan --recursive --infected --bell"
-alias clamclean="sudo clamscan --recursive --infected --bell --remove"
-alias clamupd="sudo freshclam"
 
 # calc - simple calculator
 # usage: calc <equation>
@@ -446,15 +438,9 @@ calc() { echo "$*" | bc -l; }
 
 hgrep() { history 0 | egrep "$@"; }
 
-#genpasswd() {
-  #local l=$1
-  #[ "$l" == "" ] && l=16
-  #tr -dc A-Za-z0-9_ < /dev/urandom | head -c ${l} | xargs
-#}
-
 startphp() { php -S 127.0.0.1:8080; }
 
-have tmux && {
+#have tmux && {
   run_under_tmux() {
     # Run $1 under session or attach if such session already exist.
     # $2 is optional path, if no specified, will use $1 from $PATH.
@@ -484,9 +470,9 @@ have tmux && {
     fi
   }
   have mutt && mutt() { run_under_tmux 'mutt'; }
-  have finch && finch() { run_under_tmux 'finch'; }
-  have ekg2 && ekg2() { run_under_tmux 'ekg2'; }
-}
+  #have finch && finch() { run_under_tmux 'finch'; }
+  #have ekg2 && ekg2() { run_under_tmux 'ekg2'; }
+#}
 
 myXnest() {
   Xnest :1 &
@@ -508,8 +494,8 @@ mycompTime() { #compare the speed of two ($1, $2) commands (loop $3 times)
 }
 
 # Repeat n times command
-# example: myRepeat 10 ls
 myRepeat() {
+  # example: myRepeat 10 ls
   local i max
   max=$1; shift;
   for ((i=1; i <= max ; i++)); do
@@ -518,8 +504,7 @@ myRepeat() {
 }
 
 mkscript() {
-  # usage:
-  # mkscript [sh/py] filename
+  # usage: mkscript [sh/py] filename
   if [ $# -eq 2 ]; then
     if [ ! -f $2 ]; then
       case $1 in
@@ -539,10 +524,8 @@ mkscript() {
   fi
 }
 
-# remind me, its important!
-# usage: remindme <time> <text>
-# e.g.: remindme 10m "omg, the pizza"
 myremind() {
+  # usage: myremind <time> <text>
   if [  $# -eq 0 ]; then
     echo
     echo "usage: remindme <time> <text>"
@@ -569,6 +552,7 @@ myremind() {
     #read -t 1 -r -n1 keypress
   #done
 #}
+
 myclock(){
   while sleep 1;do tput sc;tput cup 0 $(($(tput cols)-29));date;tput rc;done &
 }
