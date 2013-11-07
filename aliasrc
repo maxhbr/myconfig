@@ -317,6 +317,16 @@ mylatexmk(){
     xargs latexmk -pdf -outdir=".latexmk_files" -pvc
 }
 
+mylualatexmk(){
+  grep -l '\\documentclass' *tex | \
+    xargs latexmk -pdflatex=lualatex -pdf -outdir=".lualatexmk_files" -pvc
+}
+
+myxelatexmk(){
+  grep -l '\\documentclass' *tex | \
+    xargs latexmk -pdflatex=xelatex -pdf -outdir=".xelatexmk_files" -pvc
+}
+
 whilezathura(){
   if [  $# -eq 1 ]; then
     while true; do zathura -l error $1; sleep 1; done

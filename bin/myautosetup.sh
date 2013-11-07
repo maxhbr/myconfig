@@ -1,6 +1,6 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Mo Sep 09, 2013  10:23
+# Last modified: Do Nov 07, 2013  02:32
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -18,7 +18,6 @@ XRANDR=`xrandr`
 while [ $# -ne 0 ]; do
   case "$1" in
     single)
-      shift
       SECOND=0
       ;;
     wait)
@@ -34,7 +33,7 @@ done
 [[ $ACPresent == "0" ]] && { xbacklight =70 & } || { xbacklight =100 & }
 
 case "$DOCKED" in
-  "0")
+  "0") #=======================================================================
     xset dpms 300 600 900 &
 
     DEFAULT_OUTPUT='LVDS1'
@@ -61,7 +60,7 @@ case "$DOCKED" in
       amixer -q set Master off
     )&
     ;;
-  "1")
+  "1") #=======================================================================
     xset dpms 900 1800 2700 &
 
     if [[ $XRANDR == *HDMI2\ connected\ \(* \
@@ -78,8 +77,8 @@ case "$DOCKED" in
       xset dpms 99997 99998 99999 &
     fi
 
-    #setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
-    setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:shifts_toggle -option grp_led:scroll
+    setxkbmap -layout de,de -variant neo,nodeadkeys -option\
+      -option grp:shifts_toggle -option grp_led:scroll
     [[ -f ~/.asoundrc.uca202 ]] && cp ~/.asoundrc.uca202 ~/.asoundrc
     ;;
 esac
