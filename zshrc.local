@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Fr Nov 01, 2013  04:38
+# Last modified: So Nov 24, 2013  01:11
 #
 umask 077
 
@@ -45,7 +45,7 @@ alias -s pdf=zathura
 alias -s ps=zathura
 alias -s djvu=zathura
 
-alias -s zip=file-roller
+#alias -s zip=file-roller
 
 #alias -s avi=smplayer
 #alias -s webm=smplayer
@@ -89,20 +89,7 @@ case "$(uname -o)" in
         ;;
 esac
 
-hash -d ba=~/studium/baArbeit/00-arbeit
-hash -d gal=~/Bilder/00-galerie/
-
-# HelloText:
-echo -e ""
-cal -3
-echo -e ""
-if true; then
-    when m
-else
-    date
-fi
-echo -e ""  
-if [ -f ~/TODO/TODO.wiki ]; then cat ~/TODO/TODO.wiki; fi
+[[ -f ~/.zshrc.private ]] && source ~/.zshrc.private
 
 # vim:filetype=zsh foldmethod=marker autoindent expandtab shiftwidth=4
 # Local variables:

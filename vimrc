@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: So Okt 20, 2013  01:35
+" Last modified: Sa Nov 23, 2013  12:00
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -815,8 +815,8 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   " ===================================================================
   " LatexBox
   " vim --servername SOMETHING file.tex
-  let g:LatexBox_viewer = 'zathura'
-  let g:LatexBox_latexmk_options = '-pvc'
+  "let g:LatexBox_viewer = 'zathura'
+  "let g:LatexBox_latexmk_options = '-pvc'
   " \ll   run latexmk
   " \lv   run pdf viewer
 
