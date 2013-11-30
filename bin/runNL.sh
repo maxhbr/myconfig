@@ -1,13 +1,21 @@
 #!/bin/sh
+#
+# usage:
+#   $ runNL.sh [model [exp1 [exp2 [...]]]]
 [[ $# -eq 0 ]] && netlogo
 [[ $# -eq 1 ]] && netlogo "$(realpath $1)"
 [[ $# -eq 2 ]] && {
   DIR=$(realpath $(dirname $1)) 
-  mkdir -p "$DIR/experiment_${2}"
-  nr=`ls "$DIR/experiment_${2}" | wc -l`
-  echo "run Experiment ${2} (${nr})"
+  MODEL=$(realpath $1)
+  shift
 
-  netlogo-headless --model "$(realpath $1)" \
-    --experiment "$2" \
-    --spreadsheet "${DIR}/experiment_${2}/${nr}_$2"
+  for EXP in $*; do
+    mkdir -p "$DIR/experiment_${EXP}"
+    nr=`ls "$DIR/experiment_${EXP}" | wc -l`
+    echo "run Experiment ${EXP} (${nr})"
+
+    netlogo-headless --model "$MODEL" \
+      --experiment "$EXP" \
+      --spreadsheet "${DIR}/experiment_${EXP}/${nr}_$EXP"
+  done
 }

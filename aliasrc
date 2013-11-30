@@ -391,6 +391,8 @@ alias myarp-scan-e="sudo arp-scan --interface=enp0s25 --localnet"
 alias myarp-scan-w="sudo arp-scan --interface=wlp3s0 --localnet"
 alias mynmap="nmap -sP 192.168.178.0/24"
 
+# watch network:  sudo iptraf-ng
+
 # Get IP (call with myip)
 myip() { myip=`elinks -dump http://checkip.dyndns.org:8245/`; echo "${myip}"; }
 
