@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: So Dez 01, 2013  02:46
+-- Last modified: So Dez 01, 2013  07:27
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -68,12 +68,12 @@ import XMonad.Layout.SubLayouts ( subLayout, pullGroup,
     GroupMsg( MergeAll, UnMerge ) )
 import XMonad.Layout.Tabbed ( addTabs, shrinkText, tabbedBottom, defaultTheme,
     Theme(..) )
-import XMonad.Layout.WindowNavigation ( configurableNavigation, navigateColor )
+import XMonad.Layout.WindowNavigation ( configurableNavigation, navigateColor,
+    Navigate(Move))
 
 import qualified Data.Map                    as M
 import qualified XMonad.StackSet             as W
 import qualified XMonad.Util.ExtensibleState as XS
-
 
 
 --}}}
@@ -207,21 +207,28 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,                xK_y     ), toggleSkip ["NSP"])
     ] --}}}
     ++
+    [ -- Combine Two --{{{
+    ((modm .|. controlMask .|. shiftMask, xK_l ), sendMessage $ Move L)
+    {-, ((modm .|. controlMask .|. shiftMask, xK_h), sendMessage $ Move R)-}
+    {-, ((modm .|. controlMask .|. shiftMask, xK_k   ), sendMessage $ Move U)-}
+    {- , ((modm .|. controlMask .|. shiftMask, xK_j ), sendMessage $ Move D)-}
+    ] --}}}
+    ++
+    [ -- for XMonad.Layout.SubLayouts --{{{
+    ((modm .|. controlMask, xK_h), sendMessage $ pullGroup L)
+    , ((modm .|. controlMask, xK_l), sendMessage $ pullGroup R)
+    , ((modm .|. controlMask, xK_k), sendMessage $ pullGroup U)
+    , ((modm .|. controlMask, xK_j), sendMessage $ pullGroup D)
+
+    , ((modm .|. controlMask, xK_m), withFocused (sendMessage . MergeAll))
+    , ((modm .|. controlMask, xK_u), withFocused (sendMessage . UnMerge))
+    ] --}}}
+    ++
     [ -- (some) Scratchpads --{{{
     ((modm .|. shiftMask,  xK_minus ), namedScratchpadAction scratchpads "scratchpad")
     , ((modm,                xK_i     ), namedScratchpadAction scratchpads "ScratchWeb")
     , ((modm .|. shiftMask,  xK_i     ), namedScratchpadAction scratchpads "ScratchMutt")
     , ((modm,                xK_n     ), namedScratchpadAction scratchpads "notepad")
-    ] --}}}
-    ++
-    [ -- for XMonad.Layout.SubLayouts --{{{
-     ((modm .|. controlMask, xK_h), sendMessage $ pullGroup L)
-     , ((modm .|. controlMask, xK_l), sendMessage $ pullGroup R)
-     , ((modm .|. controlMask, xK_k), sendMessage $ pullGroup U)
-     , ((modm .|. controlMask, xK_j), sendMessage $ pullGroup D)
-
-     , ((modm .|. controlMask, xK_m), withFocused (sendMessage . MergeAll))
-     , ((modm .|. controlMask, xK_u), withFocused (sendMessage . UnMerge))
     ] --}}}
     ++
     -- mod-[1..9], Switch to workspace N
@@ -273,7 +280,7 @@ myMainLayout = configurableNavigation (navigateColor "#333333") $
         full    = named "full" $
             Full
         dtb     = named "dtb" $
-            (tabbedBottom shrinkText myTab) *|* full
+            (tabbedBottom shrinkText myTab) *|* tiled
         --options:
         nmaster = 1
         ratio   = 1/2
