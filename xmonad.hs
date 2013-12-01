@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Mi Nov 06, 2013  10:54
+-- Last modified: So Dez 01, 2013  02:46
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -56,7 +56,8 @@ import XMonad.Actions.GridSelect
 
 import XMonad.Layout.BoringWindows( boringAuto, focusDown )
 import XMonad.Layout.IM ( Property(..), withIM )
-import XMonad.Layout.Magnifier ( magnifier )
+import XMonad.Layout.LayoutCombinators ( (*|*) ) --hiding ( (|||) )
+--import XMonad.Layout.Magnifier ( magnifier )
 import XMonad.Layout.Named ( named )
 import XMonad.Layout.NoBorders ( smartBorders )
 import XMonad.Layout.PerWorkspace ( onWorkspace )
@@ -72,6 +73,8 @@ import XMonad.Layout.WindowNavigation ( configurableNavigation, navigateColor )
 import qualified Data.Map                    as M
 import qualified XMonad.StackSet             as W
 import qualified XMonad.Util.ExtensibleState as XS
+
+
 
 --}}}
 ------------------------------------------------------------------------
@@ -260,22 +263,22 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 --{{{
 myMainLayout = configurableNavigation (navigateColor "#333333") $
     boringAuto $
-    (tiled ||| mag ||| full ||| stb)
+    (tiled ||| full ||| dtb)
     where
-        tiled       = named " "  $
+        --layouts:
+        tiled   = named " "  $
             addTabs shrinkText myTab $
             subLayout [] Simplest $
             ResizableTall nmaster delta ratio []
-        mag         = named "zoom" $
-            magnifier (Tall nmaster delta ratio)
-        full        = named "full" $
+        full    = named "full" $
             Full
-        stb         = named "tabs" $
-            tabbedBottom shrinkText myTab
-        nmaster     = 1
-        ratio       = 1/2
-        delta       = 3/100
-        myTab       = defaultTheme
+        dtb     = named "dtb" $
+            (tabbedBottom shrinkText myTab) *|* full
+        --options:
+        nmaster = 1
+        ratio   = 1/2
+        delta   = 3/100
+        myTab   = defaultTheme
             { activeColor         = "black"
             , inactiveColor       = "black"
             , urgentColor         = "yellow"
@@ -286,6 +289,11 @@ myMainLayout = configurableNavigation (navigateColor "#333333") $
             , inactiveTextColor   = "#666666"
             , decoHeight          = 14
             }
+        --old:
+        {-stb     = named "tabs" $-}
+            {-tabbedBottom shrinkText myTab-}
+        {-mag     = named "zoom" $-}
+            {-magnifier (Tall nmaster delta ratio)-}
 
 -- Define layout for specific workspaces
 {-myChatLayout = avoidStrutsOn[U] $
@@ -336,10 +344,10 @@ myManageHook = composeAll
     , resource  =? "kdesktop"                      --> doIgnore
     , className =? "Zenity"                        --> doCenterFloat ]
         <+> composeAll
-            [ resource  =? ("ToWorkspace"++i)    --> doShift i
+            [ resource  =? ("ToWorkspace"++i) --> doShift i
                 | i <- myWorkspaces]
         <+> composeAll
-            [ className =? ("ToWorkspace"++i)    --> doShift i
+            [ className =? ("ToWorkspace"++i) --> doShift i
                 | i <- myWorkspaces]
         <+> namedScratchpadManageHook scratchpads
         <+> manageDocks
@@ -416,13 +424,13 @@ myConfig xmproc = withUrgencyHook NoUrgencyHook $
         , layoutHook         = myLayout
         , handleEventHook    = myEventHook
         , logHook            = dynamicLogWithPP xmobarPP
-                { ppOutput      = hPutStrLn xmproc
-                , ppCurrent     = xmobarColor "#ee9a00" "" . wrap "<" ">"
-                , ppSort        = fmap (.namedScratchpadFilterOutWorkspace)
-                    $ ppSort defaultPP
-                , ppTitle       = (" " ++) . xmobarColor "#ee9a00" ""
-                , ppVisible     = xmobarColor "#ee9a00" ""
-                } >> updatePointer (TowardsCentre 0.2 0.2)
+            { ppOutput  = hPutStrLn xmproc
+            , ppCurrent = xmobarColor "#ee9a00" "" . wrap "<" ">"
+            , ppSort    = fmap (.namedScratchpadFilterOutWorkspace)
+                $ ppSort defaultPP
+            , ppTitle   = (" " ++) . xmobarColor "#ee9a00" ""
+            , ppVisible = xmobarColor "#ee9a00" ""
+            } >> updatePointer (TowardsCentre 0.2 0.2)
         , startupHook        = myStartupHook
         }
 --}}}
