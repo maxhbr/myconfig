@@ -281,9 +281,15 @@ starWars() { telnet towel.blinkenlights.nl; }
 #alias myrenameAllImages="jhead -autorot -nf%y%m%d-%f **/*.jpg"
 alias myrenameImg="jhead -autorot -nf%y%m%d-%f"
 
+#gimp() {
+  #command gimp "$@" &
+#}
+
 #-------------------------------------------------------------------}}}
 #   documente / printing
 #-------------------------------------------------------------------{{{
+
+#   printing
 
 mystartcups() {
   [[  ! -f /tmp/myCupsStartet ]] && {
@@ -310,6 +316,8 @@ alias lprFitL="lpr -o landscape -o fit-to-page -o media=A4 "
 
 alias myPdfCrop="pdfcrop --margins \"20 30 20 40\""
 
+#   PDFs
+
 # Extract range of Pages From a PDF
 # from: http://www.linuxjournal.com/content/tech-tip-extract-pages-pdf
 myPdfpextr() {
@@ -322,6 +330,8 @@ myPdfreducesize() {
   gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/screen\
     -dNOPAUSE -dQUIET -dBATCH -sOutputFile=${3%.pdf}-small.pdf $1
 }
+
+#   LaTeX
 
 mylatexmk(){
   grep -l '\\documentclass' *tex | \
@@ -408,9 +418,11 @@ myip() { myip=`elinks -dump http://checkip.dyndns.org:8245/`; echo "${myip}"; }
 
 myiscsiRoutine() {
   # myiscsiRoutine UUID IP
-  sudo systemctl start open-iscsi.service
+  #sudo systemctl start open-iscsi.service
   #sudo iscsiadm -m discovery -t sendtargets -p $2
-  sudo iscsiadm -m node -L all
+
+  sudo iscsiadm -m node -p $2 --login
+  sleep 3
   sudo mkdir -p /mnt/iscsi/
   sudo mount /dev/disk/by-uuid/${1} /mnt/iscsi/
 }

@@ -1,4 +1,7 @@
 ! ~/.Xresources
+*utf8:1
+urxvt*loginShell: true
+xterm*loginShell: true
 
 !emacs*Background: DarkSlateGray
 !emacs*Foreground: Wheat
@@ -16,8 +19,8 @@ URxvt.depth: 32
 URxvt*saveLines: 12000
 URxvt*foreground: White
 URxvt*background: Black
-URxvt*font: xft:DejaVu Sans Mono:pixelsize=12:antialias=true:hinting=true
-URxvt*boldFont: xft:DejaVu Sans Mono:bold:pixelsize=13:antialias=true:hinting=true
+URxvt*font: xft:DejaVu Sans Mono:pixelsize=11:antialias=true:hinting=true
+URxvt*boldFont: xft:DejaVu Sans Mono:bold:pixelsize=12:antialias=true:hinting=true
 URxvt*color4: RoyalBlue
 URxvt*color12: RoyalBlue
 
@@ -31,7 +34,7 @@ URxvt*scrollBar_right: false
 URxvt*scrollstyle: plain
 
 urxvt*perl-lib:         /usr/lib/urxvt/perl/
-urxvt*perl-ext-common:  default,matcher,tabbed
+urxvt*perl-ext-common:  default,matcher,tabbed,font-size
 !,clipboard,url-select
 !URxvt.keysym.C-Insert:  perl:clipboard:copy
 !URxvt.keysym.S-Insert:  perl:clipboard:paste
@@ -53,3 +56,8 @@ Xft.hintstyle:  hintfull
 Xft.hinting: 1
 Xft.antialias: 1
 Xft.rgba: rgb
+
+URxvt.keysym.C-Up:     perl:font-size:increase
+URxvt.keysym.C-Down:   perl:font-size:decrease
+URxvt.keysym.C-S-Up:   perl:font-size:incglobal
+URxvt.keysym.C-S-Down: perl:font-size:decglobal

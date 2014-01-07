@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Sa Nov 30, 2013  07:21
+# Last modified: Wed Jan 01, 2014  11:44PM
 
 #setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 #setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:sclk_toggle -option grp_led:scroll
@@ -11,6 +11,8 @@ setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:shifts_toggl
 xsetroot -cursor_name left_ptr
 xset dpms 300 600 900 & # screen saver replacement
 [[ -f ~/.Xresources ]] && xrdb -merge ~/.Xresources
+
+export LANG="de_DE.utf8"
 
 #TODO: only start once
 #pid=$(pgrep -f "urxvtd")

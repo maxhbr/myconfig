@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: So Dez 01, 2013  07:27
+-- Last modified: Fri Jan 03, 2014  12:21
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -205,6 +205,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. shiftMask,  xK_Left  ), shiftPrevScreen)
     {-, ((modm,                xK_y     ), toggleWS)]-}
     , ((modm,                xK_y     ), toggleSkip ["NSP"])
+    , ((modm,                0xf6     ), toggleSkip ["NSP"])
     ] --}}}
     ++
     [ -- Combine Two --{{{
@@ -268,19 +269,26 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
 ------------------------------------------------------------------------
 -- Layouts:
 --{{{
-myMainLayout = configurableNavigation (navigateColor "#333333") $
+myLayout = avoidStrutsOn[U] $
+    smartBorders $
+    configurableNavigation (navigateColor "#333333") $
     boringAuto $
-    (tiled ||| full ||| dtb)
+    onWorkspace "1" (tiled ||| full ||| dtb) $
+    onWorkspace "7" (dtb ||| full) $
+    onWorkspace "web" (full ||| tiled ||| stb) $
+    (tiled ||| full)
     where
         --layouts:
         tiled   = named " "  $
             addTabs shrinkText myTab $
             subLayout [] Simplest $
             ResizableTall nmaster delta ratio []
-        full    = named "full" $
+        full    = named "=" $
             Full
-        dtb     = named "dtb" $
+        dtb     = named "%" $
             (tabbedBottom shrinkText myTab) *|* tiled
+        stb     = named "_" $
+            tabbedBottom shrinkText myTab
         --options:
         nmaster = 1
         ratio   = 1/2
@@ -297,33 +305,8 @@ myMainLayout = configurableNavigation (navigateColor "#333333") $
             , decoHeight          = 14
             }
         --old:
-        {-stb     = named "tabs" $-}
-            {-tabbedBottom shrinkText myTab-}
         {-mag     = named "zoom" $-}
             {-magnifier (Tall nmaster delta ratio)-}
-
--- Define layout for specific workspaces
-{-myChatLayout = avoidStrutsOn[U] $
- -   pidgin $
- -   (tiled ||| Mirror tiled ||| full)
- -   where
- -       tiled   = named "tiled" $
- -           ResizableTall nmaster delta ratio []
- -       nmaster = 1
- -       ratio   = 1/2
- -       delta   = 3/100
- -       full    = named "full" $
- -           Full
- -       pidgin l = withIM (1%6) (Role "buddy_list") l
- -       {-licq l = withIM (1%6) (className "MainWindow") l-}
- - -}
-
--- Put all layouts together
-myLayout = avoidStrutsOn[U] $
-    {-onWorkspace "im" myChatLayout $-}
-    smartBorders $
-    myMainLayout
-    {-onWorkspace "VM" Full $-}
 --}}}
 ------------------------------------------------------------------------
 -- Window rules:
@@ -358,7 +341,7 @@ myManageHook = composeAll
                 | i <- myWorkspaces]
         <+> namedScratchpadManageHook scratchpads
         <+> manageDocks
-        <+> manageHook defaultConfig
+        {-<+> manageHook defaultConfig-}
 
 -- Scratchpads
 --
