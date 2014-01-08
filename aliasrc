@@ -15,6 +15,8 @@ alias tmx="tmux attach-session || tmux"
 # makes "sudo vi" to "sudo vim"
 alias sudo="sudo "
 
+alias visudo='sudo EDITOR=vim visudo'
+
 have() { type "$1" &> /dev/null; }
 
 #--------------------------------------------------------------------

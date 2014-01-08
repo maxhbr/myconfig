@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sa Nov 23, 2013  12:00
+" Last modified: Wed Jan 08, 2014  01:05
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -111,7 +111,7 @@ set showbreak=\ \ \ ↳
 
 set wildmenu "Kommando Zeilen Vervollständigung
 "set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png
-set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png,*.aux,*.bbl,*.blg,*.fdb_latexmk,*.fls,*.idx,*.ilg,*.ind,*.nlo,*.nls,*.toc,*.hi
+set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png,*.aux,*.bbl,*.blg,*.fdb_latexmk,*.fls,*.idx,*.ilg,*.ind,*.nlo,*.toc,*.hi
 set wildmode=list:longest
 
 " Suffixes that get lower priority when doing tab completion for filenames.
@@ -430,8 +430,8 @@ nnoremap <c-k> 5k
 map <c-Left> :tabp<CR>
 map <c-Right> :tabn<CR>
 
-inoremap <expr> <Tab>     pumvisible() ? "\<C-y>" : "\<Tab>"
-inoremap <expr> <CR>      pumvisible() ? "\<C-e><CR>" : "\<CR>"
+"inoremap <expr> <Tab>     pumvisible() ? "\<C-y>" : "\<Tab>"
+"inoremap <expr> <CR>      pumvisible() ? "\<C-e><CR>" : "\<CR>"
 
 " force vim keys
 "nnoremap <up> <nop>
@@ -496,9 +496,9 @@ endfunction
 
 function! SetLaTeXFile()
 
-  nmap <leader>cl :! runlatex -pdf % > logfile 2>&1 &<CR><CR>
-  nmap <leader>oe :! llpp %:r.pdf > /dev/null 2>&1 &<CR><CR>
-  nmap <leader>oa :! llpp *.pdf > /dev/null 2>&1 &<CR><CR>
+  "nmap <leader>cl :! runlatex -pdf % > logfile 2>&1 &<CR><CR>
+  "nmap <leader>oe :! llpp %:r.pdf > /dev/null 2>&1 &<CR><CR>
+  "nmap <leader>oa :! llpp *.pdf > /dev/null 2>&1 &<CR><CR>
 
   setlocal wrap
   setlocal sw=2
