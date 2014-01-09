@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Wed Jan 08, 2014  01:05
+" Last modified: Thu Jan 09, 2014  10:18
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -443,8 +443,6 @@ map <c-Right> :tabn<CR>
 "noremap <left> :bp<CR>
 "noremap <right> :bn<CR>
 
-map <leader>bb :source ~/.vimrc-neo<cr>
-
 " ===================================================================}}}
 " ====  Filetype specific  ==========================================
 " ==================================================================={{{
@@ -522,6 +520,10 @@ function! SetLaTeXFile()
 
   "map \gq ?^$\\|^\s*\(\\begin\\|\\end\\|\\label\)?1<CR>gq//-1<CR>
   "omap lp ?^$\\|^\s*\(\\begin\\|\\end\\|\\label\)?1<CR>//-1<CR>.<CR>
+
+  "inoremap <expr>" getline('.')[col(".")-2] =~ "\\s" ? "\"`\"\'<left><left>" : "\"'"
+  inoremap <expr>[ getline('.')[col(".")-2] =~ "\\" ? "[<C-v>u005c]<left><left>" : "[" 
+  inoremap <expr>{ getline('.')[col(".")-2] =~ "\\" ? "{<C-v>u005c}<left><left>" : "{" 
 
   set iskeyword+=: " type /ref{fig: and prec <C-n> to autocomplete references
   set iskeyword+=- " same with -
