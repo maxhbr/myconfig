@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Thu Jan 09, 2014  10:18
+" Last modified: Sat Jan 11, 2014  12:08
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -523,7 +523,7 @@ function! SetLaTeXFile()
 
   "inoremap <expr>" getline('.')[col(".")-2] =~ "\\s" ? "\"`\"\'<left><left>" : "\"'"
   inoremap <expr>[ getline('.')[col(".")-2] =~ "\\" ? "[<C-v>u005c]<left><left>" : "[" 
-  inoremap <expr>{ getline('.')[col(".")-2] =~ "\\" ? "{<C-v>u005c}<left><left>" : "{" 
+  "inoremap <expr>{ getline('.')[col(".")-2] =~ "\\" ? "{<C-v>u005c}<left><left>" : "{" 
 
   set iskeyword+=: " type /ref{fig: and prec <C-n> to autocomplete references
   set iskeyword+=- " same with -
