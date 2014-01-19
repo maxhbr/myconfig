@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: So Nov 24, 2013  01:11
+# Last modified: Mon Jan 13, 2014  05:23
 #
 umask 077
 
@@ -78,9 +78,6 @@ zle -N rationalise-dot
 bindkey . rationalise-dot
 # without this, typing a . aborts incremental history search
 bindkey -M isearch . self-insert
-
-## get top 10 shell commands:
-alias top10='print -l ${(o)history%% *} | uniq -c | sort -nr | head -n 10'
 
 # Fix for tmux on linux.
 case "$(uname -o)" in

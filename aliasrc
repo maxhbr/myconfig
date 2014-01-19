@@ -338,19 +338,16 @@ myPdfreducesize() {
 mylatexmk(){
   grep -l '\\documentclass' *tex | \
     xargs latexmk -pdf -outdir=".latexmk_files" -pvc
-  #cp ".latexmk_files/*pdf" ./
 }
 
 mylualatexmk(){
   grep -l '\\documentclass' *tex | \
     xargs latexmk -pdflatex=lualatex -pdf -outdir=".lualatexmk_files" -pvc
-  #cp ".lualatexmk_files/*pdf" ./
 }
 
 myxelatexmk(){
   grep -l '\\documentclass' *tex | \
     xargs latexmk -pdflatex=xelatex -pdf -outdir=".xelatexmk_files" -pvc
-  #cp ".xelatexmk_files/*pdf" ./
 }
 
 #-------------------------------------------------------------------}}}
