@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Fri Jan 03, 2014  12:21
+-- Last modified: Tue Jan 21, 2014  11:04
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -274,6 +274,8 @@ myLayout = avoidStrutsOn[U] $
     configurableNavigation (navigateColor "#333333") $
     boringAuto $
     onWorkspace "1" (tiled ||| full ||| dtb) $
+    onWorkspace "5" (dtb ||| full) $
+    onWorkspace "6" (dtb ||| full) $
     onWorkspace "7" (dtb ||| full) $
     onWorkspace "web" (full ||| tiled ||| stb) $
     (tiled ||| full)
