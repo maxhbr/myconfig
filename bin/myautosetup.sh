@@ -1,6 +1,6 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Thu Jan 02, 2014  01:09PM
+# Last modified: Tue Jan 21, 2014  10:13
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -80,14 +80,6 @@ case "$DOCKED" in
     setxkbmap -layout de,de -variant neo,nodeadkeys -option\
       -option grp:shifts_toggle -option grp_led:scroll
     [[ -f ~/.asoundrc.uca202 ]] && cp ~/.asoundrc.uca202 ~/.asoundrc
-    (
-      [[ ! -f /tmp/myCupsStartet ]] && {
-        echo "starting CUPS"
-        sudo systemctl start avahi-daemon.service
-        sudo systemctl start cups.service
-        touch /tmp/myCupsStartet
-      }
-    )&
     ;;
 esac
 

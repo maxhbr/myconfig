@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Wed Jan 01, 2014  11:44PM
+# Last modified: Tue Jan 21, 2014  11:21
 
 #setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 #setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:sclk_toggle -option grp_led:scroll
@@ -38,4 +38,4 @@ xbacklight =70 &
 
 ([[ -f ~/bin/mailrun.sh ]] && ~/bin/mailrun.sh) &
 
-exec dbus-launch xmonad
+exec dbus-launch /home/hubi/.cabal/bin/xmonad
