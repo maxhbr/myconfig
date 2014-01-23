@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sat Jan 11, 2014  12:08
+" Last modified: Thu Jan 23, 2014  11:01
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -543,7 +543,7 @@ function! SetLaTeXFile()
   "hi Conceal guibg=White guifg=DarkMagenta
 
   setlocal spell
-  set spell spelllang=de_de
+  set spelllang=de_de,en_us
   set spellfile=~/.vim/spellfile.add
 
   highlight clear SpellBad
@@ -740,6 +740,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'tsaleh/vim-align.git'
 
   "testing
+  Bundle 'http://github.com/tpope/vim-fugitive'
   "Bundle 'LatexParFormat'
   "Bundle 'Indent-Guides'
   "Bundle 'SuperTab'
