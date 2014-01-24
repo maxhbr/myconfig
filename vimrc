@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Thu Jan 23, 2014  11:01
+" Last modified: Thu Jan 23, 2014  09:04
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -339,9 +339,6 @@ nnoremap ; :
 
 let mapleader=","
 
-" quicksave
-noremap <Leader>s :update<CR>
-
 nmap <Leader>r :source $MYVIMRC
 
 "Make Y behave like other capitals
@@ -417,6 +414,8 @@ nnoremap <leader>T :set expandtab<cr>:retab!<cr>
 
 nnoremap <Leader>s :%s/\<<C-r><C-w>\>//g<Left><Left>
 
+map <Leader>S :SyntasticToggleMode<CR>
+
 " ====  Movement  ===================================================
 
 " jump to next row instead of next line
@@ -467,6 +466,46 @@ function! SetPythonFile()
   " autocmd BufWrite *.py :call DeleteTrailing()
 
   "map <F5> :w<CR>:!python "%"<CR>
+endfunction
+
+function! SetHaskellFile()
+  setlocal sw=2 ts=2 et
+
+  let s:width = 80
+
+  function! HaskellModuleSection(...)
+    let name = 0 < a:0 ? a:1 : inputdialog("Section name: ")
+
+    return  repeat('-', s:width) . "\n"
+                \       . "--  " . name . "\n"
+                \       . "\n"
+
+  endfunction
+
+  nmap <silent> --s "=HaskellModuleSection()<CR>gp
+
+  function! HaskellModuleHeader(...)
+    let name = 0 < a:0 ? a:1 : inputdialog("Module: ")
+    let note = 1 < a:0 ? a:2 : inputdialog("Note: ")
+    let description = 2 < a:0 ? a:3 : inputdialog("Describe this module: ")
+    
+    return  repeat('-', s:width) . "\n" 
+    \       . "-- | \n" 
+    \       . "-- Module      : " . name . "\n"
+    \       . "-- Note        : " . note . "\n"
+    \       . "-- \n"
+    \       . "-- " . description . "\n"
+    \       . "-- \n"
+    \       . repeat('-', s:width) . "\n"
+    \       . "\n"
+
+  endfunction
+
+  nmap <silent> --h "=HaskellModuleHeader()<CR>:0put =<CR>
+
+  " ===================================================================
+  " syntastic
+  let g:syntastic_auto_loc_list=1
 endfunction
 
 function! SetJavaFile()
@@ -610,18 +649,18 @@ augroup END
 augroup vimrc_autocmds
   au!
   autocmd FileType sh setlocal sw=2 ts=2 et
-  autocmd FileType tex call SetLaTeXFile()
-  autocmd FileType haskell setlocal sw=2 ts=2 et
-  autocmd FileType java call SetJavaFile()
-  autocmd FileType matlab call SetMatlabFile()
-  autocmd FileType python call SetPythonFile()
-  autocmd FileType human call SetTextFile()
-  autocmd FileType text call SetTextFile()
-  autocmd FileType mail call SetMailFile()
-  autocmd FileType txt call SetTextFile()
-  autocmd FileType css call SetCssFile()
-  autocmd FileType less call SetCssFile()
   autocmd FileType php setlocal sw=2 ts=2 et
+  autocmd FileType tex     call SetLaTeXFile()
+  autocmd FileType haskell call SetHaskellFile()
+  autocmd FileType java    call SetJavaFile()
+  autocmd FileType matlab  call SetMatlabFile()
+  autocmd FileType python  call SetPythonFile()
+  autocmd FileType human   call SetTextFile()
+  autocmd FileType text    call SetTextFile()
+  autocmd FileType mail    call SetMailFile()
+  autocmd FileType txt     call SetTextFile()
+  autocmd FileType css     call SetCssFile()
+  autocmd FileType less    call SetCssFile()
   " in makefiles, don't expand tabs to spaces
   autocmd FileType make setlocal noexpandtab shiftwidth=8
 augroup END
@@ -740,7 +779,9 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'tsaleh/vim-align.git'
 
   "testing
-  Bundle 'http://github.com/tpope/vim-fugitive'
+  "Bundle 'http://github.com/tpope/vim-fugitive'
+  Bundle 'https://github.com/scrooloose/syntastic'
+  Bundle 'https://github.com/jpalardy/vim-slime'
   "Bundle 'LatexParFormat'
   "Bundle 'Indent-Guides'
   "Bundle 'SuperTab'
@@ -841,6 +882,11 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   " ===================================================================
   "Gundo
   nnoremap <F6> :GundoToggle<CR>
+
+  " ===================================================================
+  " Vim-slime
+ " let g:slime_target = "tmux"
+ " let g:slime_paste_file = tempname()
 
 endif
 "                                                                    }}}
