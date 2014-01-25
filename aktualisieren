@@ -13,13 +13,15 @@ cp -vu ~/.vimencrypt              ~/myconfig/vimencrypt
 cp -vu ~/.vimrc                   ~/myconfig/vimrc
 cp -vu ~/.vimrc-neo               ~/myconfig/vimrc-neo
 cp -vu ~/.xinitrc                 ~/myconfig/xinitrc
-cp -vu ~/.xmonad/showkeys         ~/myconfig/
-cp -vu ~/.xmonad/xmobarrc         ~/myconfig/
-cp -vu ~/.xmonad/xmonad.hs        ~/myconfig/
 cp -vu ~/.zshrc.local             ~/myconfig/zshrc.local
 cp -vu ~/.asoundrc.default        ~/myconfig/asoundrc.default
 cp -vu ~/.asoundrc.hdmi-connected ~/myconfig/asoundrc.hdmi-connected
 cp -vu ~/.asoundrc.uca202         ~/myconfig/asoundrc.uca202
+
+mkdir -p ~/myconfig/xmonad/
+cp -vu ~/.xmonad/showkeys         ~/myconfig/xmonad/
+cp -vu ~/.xmonad/xmobarrc         ~/myconfig/xmonad/
+cp -vu ~/.xmonad/xmonad.hs        ~/myconfig/xmonad/
 
 mkdir -p ~/myconfig/bin/
 cp -vu ~/bin/disp-controll        ~/myconfig/bin/
