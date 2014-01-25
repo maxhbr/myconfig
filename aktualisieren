@@ -32,7 +32,7 @@ cp -vu ~/bin/nmgui             ~/myconfig/bin/
 cp -vu ~/bin/remove_spaces.sh  ~/myconfig/bin/
 
 mkdir -p ~/myconfig/fontconfig/
-cp -vu ~.fontconfig/fonts.conf ~/myconfig/fontconfig/
+cp -vu ~/.fontconfig/fonts.conf ~/myconfig/fontconfig/
 
 mkdir -p ~/myconfig/etc/
 cp -vu /etc/pacman.conf ~/myconfig/etc/
