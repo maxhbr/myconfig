@@ -1,6 +1,6 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Tue Jan 21, 2014  10:13
+# Last modified: Sat Jan 25, 2014  04:20
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -83,4 +83,4 @@ case "$DOCKED" in
     ;;
 esac
 
-feh --bg-center "/home/hubi/.xmonad/background2o.png"
+feh --bg-center "/home/hubi/Bilder/background/BACKGROUND.png"
