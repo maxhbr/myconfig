@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sat Jan 25, 2014  01:37
+" Last modified: Sat Jan 25, 2014  10:54
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -477,8 +477,13 @@ function! SVNUpdate()
   execute '!svn update'
 endfunction
 
+function! SVNAdd() 
+  execute '!svn add %'
+endfunction
+
 command! SVNCommit call SVNCommit()
 command! SVNUpdate call SVNUpdate()
+command! SVNAdd    call SVNAdd()
 
 " ===================================================================}}}
 " ====  Filetype specific  ==========================================
@@ -508,6 +513,7 @@ endfunction
 
 function! SetHaskellFile()
   setlocal sw=2 ts=2 et
+  set iskeyword+='
 
   let s:width = 80
 
