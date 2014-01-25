@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sat Jan 25, 2014  01:31
+" Last modified: Sat Jan 25, 2014  01:37
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -443,7 +443,7 @@ map <c-Right> :tabn<CR>
 "noremap <right> :bn<CR>
 
 " ===================================================================}}}
-" ====  Git  ========================================================
+" ====  Git / SVN   =================================================
 " ==================================================================={{{
 
 function! GitCommit() 
@@ -467,6 +467,18 @@ command! GCommit call GitCommit()
 command! GPush   call GitPush()
 command! GPull   call GitPull()
 command! GAdd    call GitAdd()
+
+function! SVNCommit() 
+  let msg = 0 < a:0 ? a:1 : inputdialog("Msg: ")
+  execute '!svn commit -m "' msg '"'
+endfunction
+
+function! SVNUpdate() 
+  execute '!svn update'
+endfunction
+
+command! SVNCommit call SVNCommit()
+command! SVNUpdate call SVNUpdate()
 
 " ===================================================================}}}
 " ====  Filetype specific  ==========================================
