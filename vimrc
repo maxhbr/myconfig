@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sat Jan 25, 2014  10:54
+" Last modified: Sat Jan 25, 2014  11:17
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -526,7 +526,7 @@ function! SetHaskellFile()
 
   endfunction
 
-  nmap <silent> --s "=HaskellModuleSection()<CR>gp
+  nmap <silent> __s "=HaskellModuleSection()<CR>gp
 
   function! HaskellModuleHeader(...)
     let name = 0 < a:0 ? a:1 : inputdialog("Module: ")
@@ -545,7 +545,7 @@ function! SetHaskellFile()
 
   endfunction
 
-  nmap <silent> --h "=HaskellModuleHeader()<CR>:0put =<CR>
+  nmap <silent> __h "=HaskellModuleHeader()<CR>:0put =<CR>
 
   " ===================================================================
   " syntastic
