@@ -3,39 +3,42 @@
 echo "copy"
 echo
 mkdir -p ~/myconfig/
-cp -vu ~/.Xresources           ~/myconfig/Xresources
-cp -vu ~/.aliasrc              ~/myconfig/aliasrc
-cp -vu ~/.bash_profile         ~/myconfig/bash_profile
-cp -vu ~/.bashrc               ~/myconfig/bashrc
-cp -vu ~/.emacs                ~/myconfig/emacs
-cp -vu ~/.tmux.conf            ~/myconfig/tmux.conf
-cp -vu ~/.vimencrypt           ~/myconfig/vimencrypt
-cp -vu ~/.vimrc                ~/myconfig/vimrc
-cp -vu ~/.vimrc-neo            ~/myconfig/vimrc-neo
-cp -vu ~/.xinitrc              ~/myconfig/xinitrc
-cp -vu ~/.xmonad/showkeys      ~/myconfig/
-cp -vu ~/.xmonad/xmobarrc      ~/myconfig/
-cp -vu ~/.xmonad/xmonad.hs     ~/myconfig/
-cp -vu ~/.zshrc.local          ~/myconfig/zshrc.local
+cp -vu ~/.Xresources              ~/myconfig/Xresources
+cp -vu ~/.aliasrc                 ~/myconfig/aliasrc
+cp -vu ~/.bash_profile            ~/myconfig/bash_profile
+cp -vu ~/.bashrc                  ~/myconfig/bashrc
+cp -vu ~/.emacs                   ~/myconfig/emacs
+cp -vu ~/.tmux.conf               ~/myconfig/tmux.conf
+cp -vu ~/.vimencrypt              ~/myconfig/vimencrypt
+cp -vu ~/.vimrc                   ~/myconfig/vimrc
+cp -vu ~/.vimrc-neo               ~/myconfig/vimrc-neo
+cp -vu ~/.xinitrc                 ~/myconfig/xinitrc
+cp -vu ~/.xmonad/showkeys         ~/myconfig/
+cp -vu ~/.xmonad/xmobarrc         ~/myconfig/
+cp -vu ~/.xmonad/xmonad.hs        ~/myconfig/
+cp -vu ~/.zshrc.local             ~/myconfig/zshrc.local
+cp -vu ~/.asoundrc.default        ~/myconfig/asoundrc.default
+cp -vu ~/.asoundrc.hdmi-connected ~/myconfig/asoundrc.hdmi-connected
+cp -vu ~/.asoundrc.uca202         ~/myconfig/asoundrc.uca202
 
 mkdir -p ~/myconfig/bin/
-cp -vu ~/bin/disp-controll     ~/myconfig/bin/
-cp -vu ~/bin/mailclient.sh     ~/myconfig/bin/
-cp -vu ~/bin/mailrun.sh        ~/myconfig/bin/
-cp -vu ~/bin/myautosetup.sh    ~/myconfig/bin/
-cp -vu ~/bin/mycrypt           ~/myconfig/bin/
-cp -vu ~/bin/myfsize.sh        ~/myconfig/bin/
-cp -vu ~/bin/mylayouttoggle.sh ~/myconfig/bin/
-cp -vu ~/bin/runNL.sh          ~/myconfig/bin/
-cp -vu ~/bin/installiere_neo   ~/myconfig/bin/
-cp -vu ~/bin/nmgui             ~/myconfig/bin/
-cp -vu ~/bin/remove_spaces.sh  ~/myconfig/bin/
+cp -vu ~/bin/disp-controll        ~/myconfig/bin/
+cp -vu ~/bin/mailclient.sh        ~/myconfig/bin/
+cp -vu ~/bin/mailrun.sh           ~/myconfig/bin/
+cp -vu ~/bin/myautosetup.sh       ~/myconfig/bin/
+cp -vu ~/bin/mycrypt              ~/myconfig/bin/
+cp -vu ~/bin/myfsize.sh           ~/myconfig/bin/
+cp -vu ~/bin/mylayouttoggle.sh    ~/myconfig/bin/
+cp -vu ~/bin/runNL.sh             ~/myconfig/bin/
+cp -vu ~/bin/installiere_neo      ~/myconfig/bin/
+cp -vu ~/bin/nmgui                ~/myconfig/bin/
+cp -vu ~/bin/remove_spaces.sh     ~/myconfig/bin/
 
 mkdir -p ~/myconfig/fontconfig/
-cp -vu ~/.fontconfig/fonts.conf ~/myconfig/fontconfig/
+cp -vu ~/.fontconfig/fonts.conf   ~/myconfig/fontconfig/
 
 mkdir -p ~/myconfig/etc/
-cp -vu /etc/pacman.conf ~/myconfig/etc/
+cp -vu /etc/pacman.conf           ~/myconfig/etc/
 
 echo
 echo "git"
