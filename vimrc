@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Thu Jan 23, 2014  09:04
+" Last modified: Sat Jan 25, 2014  01:31
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -443,6 +443,32 @@ map <c-Right> :tabn<CR>
 "noremap <right> :bn<CR>
 
 " ===================================================================}}}
+" ====  Git  ========================================================
+" ==================================================================={{{
+
+function! GitCommit() 
+  let msg = 0 < a:0 ? a:1 : inputdialog("Msg: ")
+  execute '!git commit -a -m "' msg '"'
+endfunction
+
+function! GitPush() 
+  execute '!git push'
+endfunction
+
+function! GitPull() 
+  execute '!git pull'
+endfunction
+
+function! GitAdd() 
+  execute '!git add %'
+endfunction
+
+command! GCommit call GitCommit()
+command! GPush   call GitPush()
+command! GPull   call GitPull()
+command! GAdd    call GitAdd()
+
+" ===================================================================}}}
 " ====  Filetype specific  ==========================================
 " ==================================================================={{{
 
@@ -753,6 +779,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'git://github.com/Lokaltog/vim-powerline.git'
   Bundle 'gmarik/snipmate.vim'
   Bundle 'honza/snipmate-snippets'
+  Bundle 'https://github.com/scrooloose/syntastic'
   "manage files
   Bundle 'LustyJuggler'
   Bundle 'The-NERD-tree'
@@ -780,8 +807,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
 
   "testing
   "Bundle 'http://github.com/tpope/vim-fugitive'
-  Bundle 'https://github.com/scrooloose/syntastic'
-  Bundle 'https://github.com/jpalardy/vim-slime'
+  "Bundle 'https://github.com/jpalardy/vim-slime'
   "Bundle 'LatexParFormat'
   "Bundle 'Indent-Guides'
   "Bundle 'SuperTab'
@@ -791,7 +817,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "Bundle 'git://github.com/vim-scripts/LaTeX-Box.git'
 
   " not used Bundles                                                   {{{
-  "Bundle 'xoria256.vim'
+  "Bundle 'xoria255.vim'
   "Bundle 'neverland.vim--All-colorschemes-suck'
   "Bundle 'speeddating.vim'
   "Bundle 'snipMate'
@@ -813,7 +839,6 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "Bundle 'recover.vim'
   "Bundle 'ShowMarks'
   "Bundle 'git.zip'
-  "Bundle 'fugitive.vim'
   "Bundle 'snipmate-snippets'
   "Bundle 'xptemplate'
   "Bundle 'VisIncr'
