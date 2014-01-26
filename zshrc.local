@@ -4,14 +4,14 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Mon Jan 13, 2014  05:23
+# Last modified: Sun Jan 26, 2014  02:40
 #
 umask 077
 
 [[ -f ~/.aliasrc ]] && source ~/.aliasrc
 [[ -f ~/.aliasrc-private ]] && source ~/.aliasrc-private
 [[ -d $HOME/bin ]] && export PATH=$HOME/bin:$PATH
-[[ -d $HOME/.cabal/bin ]] && export PATH=$PATH:$HOME/.cabal/bin
+[[ -d $HOME/.cabal/bin ]] && export PATH=$HOME/.cabal/bin:$PATH
 
 ZDOTDIR=${ZDOTDIR:-${HOME}}
 ZSHDDIR="${HOME}/.config/zsh.d"

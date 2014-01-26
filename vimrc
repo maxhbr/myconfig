@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sun Jan 26, 2014  11:29
+" Last modified: Sun Jan 26, 2014  02:47
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -519,7 +519,9 @@ endfunction
 
 function! SetHaskellFile()
   setlocal sw=2 ts=2 et
-  set iskeyword+='
+  setlocal iskeyword+='
+
+  "setlocal formatprg=pointfree
 
   let s:width = 80
 

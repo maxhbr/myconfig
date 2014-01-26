@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Sat Jan 25, 2014  04:22
+# Last modified: Sun Jan 26, 2014  02:56
 
 #setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 #setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:sclk_toggle -option grp_led:scroll
@@ -29,7 +29,7 @@ export LANG="de_DE.utf8"
   else
     [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
   fi
-  feh --bg-center "/home/hubi/.xmonad/BACKGROUND.png"
+  feh --bg-center "/home/hubi/Bilder/background/BACKGROUND.png"
 ) &
 
 #amixer sset Master off &
