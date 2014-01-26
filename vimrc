@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sat Jan 25, 2014  11:17
+" Last modified: Sun Jan 26, 2014  11:28
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -468,6 +468,8 @@ command! GPush   call GitPush()
 command! GPull   call GitPull()
 command! GAdd    call GitAdd()
 
+nmap <silent> _gc :GCommit<cr>
+
 function! SVNCommit() 
   let msg = 0 < a:0 ? a:1 : inputdialog("Msg: ")
   execute '!svn commit -m "' msg '"'
@@ -484,6 +486,8 @@ endfunction
 command! SVNCommit call SVNCommit()
 command! SVNUpdate call SVNUpdate()
 command! SVNAdd    call SVNAdd()
+
+nmap <silent> _sc :GCommit<cr>
 
 " ===================================================================}}}
 " ====  Filetype specific  ==========================================
