@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Sun Jan 26, 2014  02:26
+-- Last modified: Sun Jan 26, 2014  11:09
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -329,11 +329,14 @@ myLayout = avoidStrutsOn[U] $
 --
 myManageHook = composeAll
     [ className =? "Xmessage"                      --> doCenterFloat
+    , role      =? "gimp-message-dialog"           --> doCenterFloat
     , className =? "MPlayer"                       --> doFloat
     , className =? "Onboard"                       --> doFloat
     , className =? "com-mathworks-util-PostVMInit" --> doShift "7"
     , className =? "Chromium"                      --> doShift "web"
     , className =? "Virtualbox"                    --> doFullFloat
+    , className =? "qiv"                           --> doCenterFloat
+    , resource  =? "qiv"                           --> doCenterFloat
     , resource  =? "desktop_window"                --> doIgnore
     , resource  =? "kdesktop"                      --> doIgnore
     , className =? "Zenity"                        --> doCenterFloat ]
@@ -346,6 +349,7 @@ myManageHook = composeAll
         <+> namedScratchpadManageHook scratchpads
         <+> manageDocks
         {-<+> manageHook defaultConfig-}
+  where role = stringProperty "WM_WINDOW_ROLE"
 
 -- Scratchpads
 --
@@ -362,7 +366,7 @@ scratchpads = [
        , NS "ScratchMutt" "urxvtc -name ScratchMutt -e bash -c \"~/bin/mailclient.sh\""
            (resource =? "ScratchMutt")
            (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
-    ] -- where role = stringProperty "WM_WINDOW_ROLE"
+    ]
 --}}}
 ------------------------------------------------------------------------
 -- Event handling:

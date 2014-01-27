@@ -291,6 +291,10 @@ alias myrenameImg="jhead -autorot -nf%y%m%d-%f"
 #   documente / printing
 #-------------------------------------------------------------------{{{
 
+zathura() {
+  command zathura "$@" &
+}
+
 #   printing
 
 mystartcups() {
