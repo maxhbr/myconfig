@@ -74,7 +74,7 @@ echo
 echo "git"
 echo
 
-cd ~/myconfig/
+cd "$FOLDER"
 git add .
 git commit -a -m "aktualisiert"
 git push
