@@ -59,7 +59,8 @@ goToFolder "etc/"
 cpToFolder /etc/pacman.conf \
            /etc/vconsole.conf \
            /etc/locale.conf \
-           /etc/hosts
+           /etc/hosts \
+           /etc/mkinitcpio.conf
 
 goToFolder "etc/modprobe.d/"
 cpToFolder /etc/modprobe.d/*
