@@ -9,16 +9,23 @@ while IFS= read -r FILE; do
   [[ ! $FILE == \#* ]] && {
     BASE=${FILE##*/}
     BASE=${BASE#.}
+    [[ $BASE == *"*"* ]] && BASE=""
     DIR=""
     [[ $FILE == ~* ]] && {
-      FILE="/home/hubi"${FILE#\~}
+      FILE=${FILE#\~}
+      DIR=${FILE%/*}
+      [[ $DIR != "" ]] && {
+        DIR=${DIR#*/}"/"
+        DIR=${DIR#.}
+      }
+      FILE="/home/hubi"${FILE}
     } || {
       DIR=${FILE%/*}
       DIR=${DIR#*/}"/"
       DIR=${DIR#.}
-      mkdir -p "${FOLDER}${DIR}"
     }
-    cp -vu "$FILE" "${FOLDER}${DIR}${pfBASE}"
+    mkdir -p "${FOLDER}${DIR}"
+    cp -vu $FILE "${FOLDER}${DIR}${BASE}"
   }
 done <<EOF
 ~/.aliasrc
