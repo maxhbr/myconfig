@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Sun Jan 26, 2014  11:09
+-- Last modified: Mon Jan 27, 2014  08:57
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -56,7 +56,7 @@ import XMonad.Actions.GridSelect
 
 import XMonad.Layout.BoringWindows( boringAuto, focusDown )
 --import XMonad.Layout.IM ( Property(..), withIM )
-import XMonad.Layout.LayoutCombinators  ( (*||*) , (***||****) ) --hiding ( (|||) )
+import XMonad.Layout.LayoutCombinators  ( (*||*) ) --hiding ( (|||) )
 --import XMonad.Layout.Magnifier ( magnifier )
 import XMonad.Layout.Named ( named )
 import XMonad.Layout.NoBorders ( smartBorders )
@@ -275,7 +275,7 @@ myLayout = avoidStrutsOn[U] $
     boringAuto $
     onWorkspace "1" (tiled ||| full ||| dtb) $
     onWorkspace "5" (dtb ||| full) $
-    onWorkspace "6" (dtbTex ||| full) $
+    onWorkspace "6" (dtb ||| full) $
     onWorkspace "7" (dtb ||| full) $
     onWorkspace "web" (full ||| tiled ||| stb) $
     (tiled ||| full)
@@ -289,8 +289,6 @@ myLayout = avoidStrutsOn[U] $
             Full
         dtb     = named "%" $
             (tabbedBottom shrinkText myTab) *||* tiled
-        dtbTex  = named "%" $
-            (tabbedBottom shrinkText myTab) ***||**** tiled
         stb     = named "_" $
             tabbedBottom shrinkText myTab
         --options:
@@ -365,8 +363,7 @@ scratchpads = [
             (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
        , NS "ScratchMutt" "urxvtc -name ScratchMutt -e bash -c \"~/bin/mailclient.sh\""
            (resource =? "ScratchMutt")
-           (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
-    ]
+           (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5)) ]
 --}}}
 ------------------------------------------------------------------------
 -- Event handling:

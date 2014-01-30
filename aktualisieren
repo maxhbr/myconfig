@@ -1,6 +1,6 @@
 #!/bin/bash
 
-FOLDER="~/myconfig/"
+FOLDER="/home/hubi/myconfig/"
 SUBFOLDER=""
 
 goToFolder(){
@@ -10,7 +10,8 @@ goToFolder(){
 
 cpToFolder(){
   for FILE in "$@"; do
-    cp -vu $FILE ${FOLDER}${SUBFOLDER}
+    BASE=${FILE##*/}
+    cp -vu "$FILE" "${FOLDER}${SUBFOLDER}${BASE#.}"
   done
 }
 
@@ -59,6 +60,9 @@ cpToFolder /etc/pacman.conf \
            /etc/vconsole.conf \
            /etc/locale.conf \
            /etc/hosts
+
+goToFolder "etc/modprobe.d/"
+cpToFolder /etc/modprobe.d/*
 
 goToFolder "etc/X11/xorg.conf.d/"
 cpToFolder /etc/X11/xorg.conf.d/*.conf
