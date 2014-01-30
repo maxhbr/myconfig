@@ -1,0 +1,17 @@
+" ~/.vimrc-neo
+"source ~/.vimrc
+
+" ==== NEO keyboard layout  =========================================
+no s h
+no h s
+no n j
+no j n
+no r k
+no k r
+no t l
+no l k
+
+nnoremap <up> <up>
+nnoremap <down> <down>
+nnoremap <left> <left>
+nnoremap <right> <right>
