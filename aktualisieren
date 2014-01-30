@@ -1,75 +1,63 @@
 #!/bin/bash
 
 FOLDER="/home/hubi/myconfig/"
-SUBFOLDER=""
-
-goToFolder(){
-  SUBFOLDER=$1
-  mkdir -p "${FOLDER}${SUBFOLDER}"
-}
-
-cpToFolder(){
-  for FILE in "$@"; do
-    BASE=${FILE##*/}
-    cp -vu "$FILE" "${FOLDER}${SUBFOLDER}${BASE#.}"
-  done
-}
 
 echo "copy"
 echo
 
-goToFolder ""
-cpToFolder ~/.Xresources \
-           ~/.aliasrc \
-           ~/.bash_profile \
-           ~/.bashrc \
-           ~/.emacs \
-           ~/.tmux.conf \
-           ~/.vimencrypt \
-           ~/.vimrc \
-           ~/.vimrc-neo \
-           ~/.xinitrc \
-           ~/.zshrc.local \
-           ~/.asoundrc.default \
-           ~/.asoundrc.hdmi-connected \
-           ~/.asoundrc.uca202
-
-goToFolder "xmonad/"
-cpToFolder ~/.xmonad/showkeys \
-           ~/.xmonad/xmobarrc \
-           ~/.xmonad/xmonad.hs
-
-goToFolder "bin/"
-cpToFolder ~/bin/disp-controll \
-           ~/bin/mailclient.sh \
-           ~/bin/mailrun.sh \
-           ~/bin/myautosetup.sh \
-           ~/bin/mycrypt \
-           ~/bin/myfsize.sh \
-           ~/bin/mylayouttoggle.sh \
-           ~/bin/runNL.sh \
-           ~/bin/installiere_neo \
-           ~/bin/nmgui \
-           ~/bin/remove_spaces.sh
-
-goToFolder "fontconfig/"
-cpToFolder ~/.fontconfig/fonts.conf
-
-goToFolder "etc/"
-cpToFolder /etc/pacman.conf \
-           /etc/vconsole.conf \
-           /etc/locale.conf \
-           /etc/hosts \
-           /etc/mkinitcpio.conf
-
-goToFolder "etc/modprobe.d/"
-cpToFolder /etc/modprobe.d/*
-
-goToFolder "etc/X11/xorg.conf.d/"
-cpToFolder /etc/X11/xorg.conf.d/*.conf
-
-goToFolder "usr/share/kbd/keymaps/neo/"
-cpToFolder /usr/share/kbd/keymaps/neo/*
+while IFS= read -r FILE; do
+  [[ ! $FILE == \#* ]] && {
+    BASE=${FILE##*/}
+    BASE=${BASE#.}
+    DIR=""
+    [[ $FILE != ~* ]] && {
+      DIR=${FILE%/*}
+      DIR=${DIR#*/}"/"
+      DIR=${DIR#.}
+      mkdir -p "${FOLDER}${DIR}"
+    }
+    cp -vu "$FILE" "${FOLDER}${DIR}${pfBASE}"
+  }
+done <<EOF
+~/.aliasrc
+~/.asoundrc.default
+~/.asoundrc.hdmi-connected
+~/.asoundrc.uca202
+~/.bash_profile
+~/.bashrc
+~/.emacs
+~/.fontconfig/fonts.conf
+~/.tmux.conf
+~/.vimencrypt
+~/.vimrc
+~/.vimrc-neo
+~/.xinitrc
+~/.xmonad/myinformation.sh
+~/.xmonad/showkeys
+~/.xmonad/xmobarrc
+~/.xmonad/xmonad.hs
+~/.Xresources
+~/.zshrc.local
+~/bin/disp-controll
+~/bin/installiere_neo
+~/bin/mailclient.sh
+~/bin/mailrun.sh
+~/bin/myautosetup.sh
+~/bin/mycrypt
+~/bin/myfsize.sh
+~/bin/mylayouttoggle.sh
+~/bin/nmgui
+~/bin/remove_spaces.sh
+~/bin/runNL.sh
+/etc/X11/xorg.conf.d/*.conf
+/etc/hosts
+/etc/locale.conf
+/etc/mkinitcpio.conf
+/etc/modprobe.d/*
+/etc/pacman.conf
+/etc/vconsole.conf
+/usr/share/kbd/keymaps/neo/*
+EOF
 
 echo
 echo "git"
