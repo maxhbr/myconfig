@@ -10,7 +10,9 @@ while IFS= read -r FILE; do
     BASE=${FILE##*/}
     BASE=${BASE#.}
     DIR=""
-    [[ $FILE != ~* ]] && {
+    [[ $FILE == ~* ]] && {
+      FILE="/home/hubi"${FILE#\~}
+    } || {
       DIR=${FILE%/*}
       DIR=${DIR#*/}"/"
       DIR=${DIR#.}
