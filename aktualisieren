@@ -54,6 +54,7 @@ done <<EOF
 ~/bin/myautosetup.sh
 ~/bin/mycrypt
 ~/bin/myfsize.sh
+~/bin/myfullbackup.sh
 ~/bin/mylayouttoggle.sh
 ~/bin/nmgui
 ~/bin/remove_spaces.sh
