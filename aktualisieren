@@ -28,6 +28,7 @@ while IFS= read -r FILE; do
     cp -vu $FILE "${FOLDER}${DIR}${BASE}"
   }
 done <<EOF
+~/.Xresources
 ~/.aliasrc
 ~/.asoundrc.default
 ~/.asoundrc.hdmi-connected
@@ -36,6 +37,7 @@ done <<EOF
 ~/.bashrc
 ~/.emacs
 ~/.fontconfig/fonts.conf
+~/.ghci
 ~/.tmux.conf
 ~/.vimencrypt
 ~/.vimrc
@@ -45,7 +47,6 @@ done <<EOF
 ~/.xmonad/showkeys
 ~/.xmonad/xmobarrc
 ~/.xmonad/xmonad.hs
-~/.Xresources
 ~/.zshrc.local
 ~/bin/disp-controll
 ~/bin/installiere_neo
