@@ -9,6 +9,7 @@ bashrc    /home/hubi/.bashrc
 emacs    /home/hubi/.emacs
 fontconfig/fonts.conf    /home/hubi/.fontconfig/fonts.conf
 ghci    /home/hubi/.ghci
+mutt/colors.solarized-light    /home/hubi/.mutt/colors.solarized-light
 tmux.conf    /home/hubi/.tmux.conf
 vimencrypt    /home/hubi/.vimencrypt
 vimrc    /home/hubi/.vimrc
@@ -28,6 +29,7 @@ bin/mycrypt    /home/hubi/bin/mycrypt
 bin/myfsize.sh    /home/hubi/bin/myfsize.sh
 bin/myfullbackup.sh    /home/hubi/bin/myfullbackup.sh
 bin/mylayouttoggle.sh    /home/hubi/bin/mylayouttoggle.sh
+bin/ncChat.sh    /home/hubi/bin/ncChat.sh
 bin/nmgui    /home/hubi/bin/nmgui
 bin/remove_spaces.sh    /home/hubi/bin/remove_spaces.sh
 bin/runNL.sh    /home/hubi/bin/runNL.sh

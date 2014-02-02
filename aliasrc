@@ -447,7 +447,16 @@ myiscsiRoutine() {
 #   ncat (or netcat or nc) for chatting
 #-------------------------------------------------------------------{{{
 # from: http://www.nixaid.com/linux/network/encrypted-chat-with-netcat
+# TODO: Merge to one function!
 ncChatServer(){
+  bold=`tput bold``tput setaf 4`
+  normal=`tput sgr0`
+  incText="${bold}Incoming: "
+
+  echoDecMsg(){
+    echo "$incText$(echo "$1" | openssl enc -d -a -A -aes-256-cbc -k ${pass})$normal"; \
+  }
+
   [ "$#" -eq 1 ] && {
     #encrypted
     pass=$1
@@ -455,19 +464,27 @@ ncChatServer(){
         echo "$userinput" | openssl enc -aes-256-cbc -a -A -k $pass;echo;done \
       | ncat -l -p 8877 \
       | while IFS= read -r serveroutput;do \
-          echo "Incoming: $(echo "$serveroutput" | openssl enc -d -a -A -aes-256-cbc -k ${pass})"; \
+          echoDecMsg "$serveroutput"
         done
   } || {
     #not encrypted
     while IFS= read -r userinput; do echo $userinput ; done \
       | ncat -l -p 8877 \
       | while IFS= read -r serveroutput; do \
-          echo "Incoming: $serveroutput"; \
+          echo "$incText$serveroutput$normal"; \
         done
   }
 }
 
 ncChatClient(){
+  bold=`tput bold``tput setaf 4`
+  normal=`tput sgr0`
+  incText="${bold}Incoming: "
+
+  echoDecMsg(){
+    echo "$incText$(echo "$1" | openssl enc -d -a -A -aes-256-cbc -k ${pass})$normal"; \
+  }
+
   [ "$#" -eq 0 ] && exit 1
   hostIP=$1
   [ "$#" -eq 2 ] && {
@@ -477,14 +494,14 @@ ncChatClient(){
         echo "$userinput" | openssl enc -aes-256-cbc -a -A -k $pass;echo;done \
       | ncat $hostIP 8877 \
       | while IFS= read -r serveroutput;do \
-          echo "Incoming: $(echo "$serveroutput" | openssl enc -d -a -A -aes-256-cbc -k ${pass})"; \
+          echoDecMsg "$serveroutput"
         done
   } || {
     #not encrypted
     while IFS= read -r userinput; do echo $userinput ; done \
       | ncat $hostIP 8877 \
       | while IFS= read -r serveroutput; do \
-          echo "Incoming: $serveroutput"; \
+          echo "$incText$serveroutput$normal"; \
         done
   }
 }
