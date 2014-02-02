@@ -31,3 +31,11 @@ bin/mylayouttoggle.sh    /home/hubi/bin/mylayouttoggle.sh
 bin/nmgui    /home/hubi/bin/nmgui
 bin/remove_spaces.sh    /home/hubi/bin/remove_spaces.sh
 bin/runNL.sh    /home/hubi/bin/runNL.sh
+etc/X11/xorg.conf.d/    /etc/X11/xorg.conf.d/*.conf
+etc/hosts    /etc/hosts
+etc/locale.conf    /etc/locale.conf
+etc/mkinitcpio.conf    /etc/mkinitcpio.conf
+etc/modprobe.d/    /etc/modprobe.d/*
+etc/pacman.conf    /etc/pacman.conf
+etc/vconsole.conf    /etc/vconsole.conf
+usr/share/kbd/keymaps/neo/    /usr/share/kbd/keymaps/neo/*
