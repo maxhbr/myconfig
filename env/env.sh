@@ -7,26 +7,6 @@ mkdir /home/hubi
 
 pacman -Sy
 
-## Operating System
-#pacman -S linux
-
-## Arch
-#pacman -S pacman
-
-## Userland
-#pacman -S bash
-#pacman -S ca-certificates
-#pacman -S dbus-core
-#pacman -S hwdetect
-#pacman -S gcc
-#pacman -S gcc-fortran
-#pacman -S gcc-libs
-#pacman -S clang
-#pacman -S valgrind
-#pacman -S llvm
-#pacman -S glibc
-#pacman -S glib2
-
 # Network
 pacman -S dhcpcd
 pacman -S dhclient
@@ -48,18 +28,8 @@ pacman -S powertop
 pacman -S xf86-video-intel
 
 # System
-pacman -S autoconf
-pacman -S automake
-pacman -S binutils
-pacman -S bison
-pacman -S fakeroot
-pacman -S flex
 pacman -S gcc
-pacman -S libtool
-pacman -S m4
-pacman -S make
 pacman -S patch
-pacman -S pkg-config
 pacman -S htop
 
 # Shell
@@ -77,7 +47,7 @@ pacman -S git
 pacman -S gvim
 pacman -S rxvt-unicode
 
-git clone https://github.com/maximilianhuber/myconfig
+#git clone https://github.com/maximilianhuber/myconfig
 
 ## Math
 #pacman -S mpfr
@@ -173,13 +143,9 @@ pacman -S xorg-xinput
 
 ## Desktop
 pacman -S chromium
-#pacman -S firefox
-#pacman -S flashplugin
-#pacman -S vifm
 pacman -S tmux
 pacman -S feh
 pacman -S unclutter
-#pacman -S xlock
 #pacman -S epdfview
 
 # Media
@@ -197,11 +163,8 @@ pacman -S texlive-pictures
 pacman -S texlive-pstricks
 pacman -S ghostscript
 
-## Drawing
-#pacman -S inkscape
-
-# IRC
-pacman -S irssi
+pacman -S gimp
+pacmas -S geeqie
 
 ## Dev
 #pacman -S zeromq
@@ -233,16 +196,6 @@ pacman -S lua
 #pacman -S antlr2
 #cabal install agda
 
-## GPU Programming
-#pacman -S libcl
-#pacman -S opencl-nvidia
-#pacman -S cuda
-
-## Databases
-#pacman -Q postgres
-#pacman -S redis
-#pacman -S hdf5
-
 # Compression
 pacman -S xz
 pacman -S tar
@@ -260,7 +213,3 @@ pacman -S ttf-freefont
 pacman -S ttf-inconsolata-g
 pacman -S ttf-liberation
 pacman -S monaco-linux-font
-
-## Misc
-#pacman -S par
-#pacman -S fuse
