@@ -9,7 +9,8 @@ echo > "${FOLDER}.files"
 
 while IFS= read -r FILE; do
   [[ ! $FILE == \#* ]] && {
-    BASE=${${FILE#.}##*/}
+    BASE=${FILE##*/}
+    BASE=${BASE#.}
     [[ $BASE == *"*"* ]] && BASE=""
     DIR=""
     [[ $FILE == ~* ]] && {
