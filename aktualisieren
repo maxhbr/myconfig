@@ -17,7 +17,8 @@ while IFS= read -r FILE; do
       FILE=${FILE#\~}
       DIR=${FILE%/*}
       [[ $DIR != "" ]] && {
-        DIR=${${DIR#*/}#.}"/"
+        DIR=${DIR#*/}"/"
+        DIR=${DIR#.}
       }
       FILE="/home/hubi"${FILE}
     } || {
