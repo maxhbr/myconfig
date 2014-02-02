@@ -9,16 +9,14 @@ echo > "${FOLDER}.files"
 
 while IFS= read -r FILE; do
   [[ ! $FILE == \#* ]] && {
-    BASE=${FILE##*/}
-    BASE=${BASE#.}
+    BASE=${${FILE#.}##*/}
     [[ $BASE == *"*"* ]] && BASE=""
     DIR=""
     [[ $FILE == ~* ]] && {
       FILE=${FILE#\~}
       DIR=${FILE%/*}
       [[ $DIR != "" ]] && {
-        DIR=${DIR#*/}"/"
-        DIR=${DIR#.}
+        DIR=${${DIR#*/}#.}"/"
       }
       FILE="/home/hubi"${FILE}
     } || {
