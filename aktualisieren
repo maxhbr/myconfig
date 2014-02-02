@@ -5,6 +5,8 @@ FOLDER="/home/hubi/myconfig/"
 echo "copy"
 echo
 
+echo > "${FOLDER}files"
+
 while IFS= read -r FILE; do
   [[ ! $FILE == \#* ]] && {
     BASE=${FILE##*/}
@@ -26,6 +28,7 @@ while IFS= read -r FILE; do
     }
     mkdir -p "${FOLDER}${DIR}"
     cp -vu $FILE "${FOLDER}${DIR}${BASE}"
+    echo "${FOLDER}${DIR}${BASE} $FILE" >> "${FOLDER}files"
   }
 done <<EOF
 ~/.Xresources

@@ -287,6 +287,10 @@ alias myrenameImg="jhead -autorot -nf%y%m%d-%f"
   #command gimp "$@" &
 #}
 
+geeqie() {
+  command geeqie "$@" &
+}
+
 #-------------------------------------------------------------------}}}
 #   documente / printing
 #-------------------------------------------------------------------{{{
@@ -396,6 +400,15 @@ alias yaourtupd="yaourt -Syu --aur"
 #-------------------------------------------------------------------}}}
 #   some networking
 #-------------------------------------------------------------------{{{
+
+# gen QR-Code for a WiFi:
+genQrCode(){
+  have qrencode && {
+    SSID=$(zenity --entry --text="Network name (SSID)" --title="Create WiFi QR")
+    PASS=$(zenity --password --title="Wifi Password")
+    qrencode -s 7 -o qr-${SSID}.png "WIFI:S:${SSID};T:WPA;P:${PASS};;"
+  } || echo "needs qrencode"
+}
 
 alias ping6alle="ping6 ff02::1%eth0"
 alias ping6allw="ping6 ff02::1%wlan0"
