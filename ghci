@@ -1,9 +1,16 @@
+let ghciEscapeShellArg arg = "'" ++ concatMap (\x -> if x == '\'' then "'\"'\"'" else [x]) arg ++ "'"
+:def! hoogle return . (":! hoogle --color --count=20 " ++) . ghciEscapeShellArg
+:def! hoogleAll return . (":! hoogle --color " ++) . ghciEscapeShellArg
+:def! doc return . (":! hoogle --info " ++) . ghciEscapeShellArg
+:def! hlint return . (":! hlint " ++) . ghciEscapeShellArg
+:def! pf return . (":! pointfree " ++) . ghciEscapeShellArg
+-- :def! pl return . (":! pointfull " ++) . ghciEscapeShellArg
 
 :set +t
 
-let ghciEscapeShellArg arg = "'" ++ concatMap (\x -> if x == '\'' then "'\"'\"'" else [x]) arg ++ "'"
-:def! hoogle return . (":! hoogle --color --count=20 " ++) . ghciEscapeShellArg
-:def! doc return . (":! hoogle --info " ++) . ghciEscapeShellArg
--- :def hlint const . return $ ":! hlint \"src\"
--- :def pf \s -> return $ ":! pointfree \" ++ s ++ "\"
--- :def pl \s -> return $ "
+-- :set +s      -- statistics (time,space)
+-- let tracify x = (trace $ "<pop "++show x++">") x
+
+:set prompt "λ: "
+
+-- vim: set ft=haskell :

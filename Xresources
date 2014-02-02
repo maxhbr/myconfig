@@ -33,6 +33,8 @@ URxvt*scrollBar_right: false
 ! scrollbar style - rxvt (default), plain, next, or xterm
 URxvt*scrollstyle: plain
 
+
+URxvt*termName: rxvt-256color
 urxvt*perl-lib:         /usr/lib/urxvt/perl/
 urxvt*perl-ext-common:  default,matcher,tabbed,font-size
 !,clipboard,url-select

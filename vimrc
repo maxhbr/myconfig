@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sun Jan 26, 2014  02:47
+" Last modified: Sun Feb 02, 2014  10:04
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -378,6 +378,9 @@ vnoremap <F1> <nop>
 
 " clear hilighting
 nmap <silent> ,/ :nohlsearch<CR>
+
+" go back to last cursor position
+nnoremap <leader>- ``
 
 "save without sudo
 cmap w!! w !sudo tee % >/dev/null

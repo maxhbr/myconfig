@@ -431,6 +431,52 @@ myiscsiRoutine() {
 }
 
 #-------------------------------------------------------------------}}}
+#   ncat (or netcat or nc) for chatting
+#-------------------------------------------------------------------{{{
+# from: http://www.nixaid.com/linux/network/encrypted-chat-with-netcat
+ncChatServer(){
+  [ "$#" -eq 1 ] && {
+    #encrypted
+    pass=$1
+    while IFS= read -r userinput;do \
+        echo "$userinput" | openssl enc -aes-256-cbc -a -A -k $pass;echo;done \
+      | ncat -l -p 8877 \
+      | while IFS= read -r serveroutput;do \
+          echo "Incoming: $(echo "$serveroutput" | openssl enc -d -a -A -aes-256-cbc -k ${pass})"; \
+        done
+  } || {
+    #not encrypted
+    while IFS= read -r userinput; do echo $userinput ; done \
+      | ncat -l -p 8877 \
+      | while IFS= read -r serveroutput; do \
+          echo "Incoming: $serveroutput"; \
+        done
+  }
+}
+
+ncChatClient(){
+  [ "$#" -eq 0 ] && exit 1
+  hostIP=$1
+  [ "$#" -eq 2 ] && {
+    #encrypted
+    pass=$2
+    while IFS= read -r userinput;do \
+        echo "$userinput" | openssl enc -aes-256-cbc -a -A -k $pass;echo;done \
+      | ncat $hostIP 8877 \
+      | while IFS= read -r serveroutput;do \
+          echo "Incoming: $(echo "$serveroutput" | openssl enc -d -a -A -aes-256-cbc -k ${pass})"; \
+        done
+  } || {
+    #not encrypted
+    while IFS= read -r userinput; do echo $userinput ; done \
+      | ncat $hostIP 8877 \
+      | while IFS= read -r serveroutput; do \
+          echo "Incoming: $serveroutput"; \
+        done
+  }
+}
+
+#-------------------------------------------------------------------}}}
 #   misc
 #-------------------------------------------------------------------{{{
 
