@@ -1,22 +1,38 @@
 #!/bin/sh
+# ~/bin/ncChat.sh
 #
-# uses ncat (or netcat or nc) for chatting
+# uses ncat (or netcat or nc) for chatting over LAN
 #
 # partly from: http://www.nixaid.com/linux/network/encrypted-chat-with-netcat
 #
 # written by maximilian-huber.de
-# Last modified: Sun Feb 02, 2014  10:43
+# Last modified: Mon Feb 03, 2014  08:11
+
+if [[ "$1" == "-h" ]]; then
+  echo "ncChat.sh [-h] [-u] [-ip serverip] [passwd]"
+  echo "   -h     Displays this message"
+  echo "   -u     Use the username"
+  echo "   -ip    Ip of the server, if none is given, a server will be started"
+  echo "* Order of arguments is important"
+  echo "* Needs ncat (or netcat or nc) to be installed"
+  exit 0
+fi
+
 
 have() { type "$1" &> /dev/null; }
 echoDecodedMsg(){
-  echo "$bold$(echo "$1" | openssl enc -d -a -A -aes-256-cbc -k ${2})$normal"; \
+  echo "$bold$(echo "$1" | openssl enc -d -a -A -aes-256-cbc -k ${2})$normal";
 }
 
 bold=`tput bold``tput setaf 4`
 normal=`tput sgr0`
 
-#inPrefix="$(whoami): "
-inPrefix=""
+if [[ "$1" == "-u" ]]; then
+  shift
+  inPrefix="$(whoami): "
+else
+  inPrefix=""
+fi
 
 have ncat \
   && { ncat="ncat "; } \
@@ -28,7 +44,7 @@ have ncat \
       }
     }
 
-if [[ "$1" == "-h" ]]; then
+if [[ "$1" == "-ip" ]]; then
   shift
   ncat="${ncat}${1} 8877"
   shift
