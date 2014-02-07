@@ -10,6 +10,7 @@ alias gvime="gvim -u ~/.vimencrypt -x "
 alias tvim="tmux new vim"
 alias svim="sudo vim -u /home/hubi/.vimrc "
 
+alias tmux='tmux new -s $(basename $(pwd))' # name sessions automatically
 alias tmx="tmux attach-session || tmux"
 
 # makes "sudo vi" to "sudo vim"
@@ -401,6 +402,8 @@ alias yaourtupd="yaourt -Syu --aur"
 #   some networking
 #-------------------------------------------------------------------{{{
 
+startphp() { php -S 127.0.0.1:8080; }
+
 # gen QR-Code for a WiFi:
 genQrCode(){
   have qrencode && {
@@ -472,7 +475,11 @@ calc() { echo "$*" | bc -l; }
 
 hgrep() { history 0 | egrep "$@"; }
 
-startphp() { php -S 127.0.0.1:8080; }
+function dic() {
+ w3m -dump "http://pocket.dict.cc?s=\"$*\"" \
+   | sed -r -e '/^([ ]{5,}.*)$/d' -e '1,2d' -e '/^$/d' -e '/^\[/d' \
+   | head -n 40
+}
 
 #have tmux && {
   run_under_tmux() {

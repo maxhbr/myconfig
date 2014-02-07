@@ -27,7 +27,7 @@ Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
                     , Run Date "%a %d.%m.%Y %H:%M:%S" "date" 10
                     , Run Kbd [("de(nodeadkeys)", "| de "), ("de(neo)", "")]
                     , Run BatteryP ["BAT0"]
-                      ["-t", "Bat: <left>%<acstatus>"
+                      ["-t", "♥: <left>%<acstatus>"
                       , "-L", "10" , "-H", "80"
                       , "-p", "3"
                       , "--"

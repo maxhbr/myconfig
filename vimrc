@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sun Feb 02, 2014  10:04
+" Last modified: Fri Feb 07, 2014  10:02
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -117,6 +117,9 @@ set wildmode=list:longest
 " Suffixes that get lower priority when doing tab completion for filenames.
 " These are files we are not likely to want to edit or read.
 set suffixes=.bak,~,.swp,.o,.info,.aux,.log,.dvi,.bbl,.blg,.brf,.cb,.ind,.idx,.ilg,.inx,.out,.toc
+
+set ssop-=options    " do not store global and local values in a session
+set ssop-=folds      " do not store folds
 
 " ====  Scrolling  =================================================={{{
 
