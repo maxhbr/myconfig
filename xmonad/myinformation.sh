@@ -22,19 +22,6 @@ case `expr $stngth / 10` in
 esac
 echo -n $essid $bar
 
-#OfflineImapON=$(ps -A | grep -c offlineimap)
-#Mails1=$(find "$HOME/Mail/by-hubi/INBOX/new/" -type f | wc -l)
-#Mails2=$(find "$HOME/Mail/alfa/INBOX/new/" -type f | wc -l)
-#if ! [[ $OfflineImapON == "0" ]]; then
-  #if ! [[ $Mails1 == "0" && $Mails2 == "0" ]]; then
-    #echo -n "| <fc=#00ff00>Mail: $Mails1 / $Mails2</fc> "
-  #fi
-#elif ! [[ $Mails1 == "0" && $Mails2 == "0" ]]; then
-  #echo -n "| <fc=#ff0000>no IMAP: $Mails1 / $Mails2</fc>"
-#else
-  #echo -n "| <fc=#ff0000>no IMAP</fc>"
-#fi
-
 Mails1=$(find "$HOME/Mail/by-hubi/INBOX/new/" -type f | wc -l)
 Mails2=$(find "$HOME/Mail/alfa/INBOX/new/" -type f | wc -l)
 if test `find /tmp/mailrun-sh-log -mmin -2`; then
