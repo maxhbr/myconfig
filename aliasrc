@@ -10,8 +10,8 @@ alias gvime="gvim -u ~/.vimencrypt -x "
 alias tvim="tmux new vim"
 alias svim="sudo vim -u /home/hubi/.vimrc "
 
-alias tmux='tmux new -s $(basename $(pwd))' # name sessions automatically
 alias tmx="tmux attach-session || tmux"
+#alias tmux='tmux new -s $(basename $(pwd))' # name sessions automatically
 
 # makes "sudo vi" to "sudo vim"
 alias sudo="sudo "
