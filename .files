@@ -40,4 +40,5 @@ etc/mkinitcpio.conf    /etc/mkinitcpio.conf
 etc/modprobe.d/    /etc/modprobe.d/*
 etc/pacman.conf    /etc/pacman.conf
 etc/vconsole.conf    /etc/vconsole.conf
+etc/vsftpd.conf    /etc/vsftpd.conf
 usr/share/kbd/keymaps/neo/    /usr/share/kbd/keymaps/neo/*

@@ -73,6 +73,7 @@ done <<EOF
 /etc/modprobe.d/*
 /etc/pacman.conf
 /etc/vconsole.conf
+/etc/vsftpd.conf
 /usr/share/kbd/keymaps/neo/*
 EOF
 

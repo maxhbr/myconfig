@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Fri Feb 07, 2014  10:02
+" Last modified: Mon Feb 17, 2014  02:31
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -419,6 +419,7 @@ noremap <Leader><Leader> <C-^>
 nnoremap <leader>T :set expandtab<cr>:retab!<cr>
 
 nnoremap <Leader>s :%s/\<<C-r><C-w>\>//g<Left><Left>
+nnoremap _s :%s/\<<C-r><C-w>\>/<C-r><C-w>/g<Left><Left>
 
 map <Leader>S :SyntasticToggleMode<CR>
 

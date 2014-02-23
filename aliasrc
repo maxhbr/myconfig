@@ -11,7 +11,7 @@ alias tvim="tmux new vim"
 alias svim="sudo vim -u /home/hubi/.vimrc "
 
 alias tmx="tmux attach-session || tmux"
-#alias tmux='tmux new -s $(basename $(pwd))' # name sessions automatically
+alias ntmx='tmux new -s $(basename $(pwd))' # name sessions automatically
 
 # makes "sudo vi" to "sudo vim"
 alias sudo="sudo "
@@ -475,10 +475,29 @@ calc() { echo "$*" | bc -l; }
 
 hgrep() { history 0 | egrep "$@"; }
 
-function dic() {
- w3m -dump "http://pocket.dict.cc?s=\"$*\"" \
-   | sed -r -e '/^([ ]{5,}.*)$/d' -e '1,2d' -e '/^$/d' -e '/^\[/d' \
-   | head -n 40
+dic(){
+  if [[ "$#" -eq 0 ]]; then
+    tput bold
+    tput setaf 6
+    while read line; do
+      if [[ "$line" == "" ]]; then
+        tput sgr0
+        return 0
+      fi
+      tput sgr0
+      w3m -dump "http://pocket.dict.cc?s=\"$line\"" \
+        | sed -r -e '/^([ ]{5,}.*)$/d' -e '1,2d' -e '/^$/d' -e '/^\[/d' \
+        | head -n 40
+      echo "=================================================================="
+      tput bold
+      tput setaf 6
+    done
+    tput sgr0
+  else
+    w3m -dump "http://pocket.dict.cc?s=\"$*\"" \
+      | sed -r -e '/^([ ]{5,}.*)$/d' -e '1,2d' -e '/^$/d' -e '/^\[/d' \
+      | head -n 40
+  fi
 }
 
 #have tmux && {
