@@ -8,6 +8,11 @@ ASIMFile="${FOLDER}/asimilieren"
 asimilieren() {
 cat <<ASIMILIEREN
 #!/bin/bash
+
+# !!!
+# Not working yet!
+# !!!
+
 FOLDER="/home/hubi/myconfig/"
 
 while IFS= read -r LINE; do
