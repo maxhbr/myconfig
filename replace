@@ -1,9 +1,0 @@
-#!/bin/bash 
-FOLDER="/home/hubi/myconfig/"
-
-while IFS= read -r LINE; do
-  read -p "$LINE? " -n 1 -r
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-      exit 1
-  fi
-done < ${FOLDER}.files
