@@ -25,6 +25,8 @@ ${FOLDER}asoundrc.hdmi-connected /home/hubi/.asoundrc.hdmi-connected
 ${FOLDER}asoundrc.uca202 /home/hubi/.asoundrc.uca202
 ${FOLDER}bash_profile /home/hubi/.bash_profile
 ${FOLDER}bashrc /home/hubi/.bashrc
+${FOLDER}config/ranger/rc.conf /home/hubi/.config/ranger/rc.conf
+${FOLDER}config/ranger/rifle.conf /home/hubi/.config/ranger/rifle.conf
 ${FOLDER}emacs /home/hubi/.emacs
 ${FOLDER}fontconfig/fonts.conf /home/hubi/.fontconfig/fonts.conf
 ${FOLDER}ghci /home/hubi/.ghci
@@ -60,5 +62,6 @@ ${FOLDER}etc/modprobe.d/ /etc/modprobe.d/*
 ${FOLDER}etc/pacman.conf /etc/pacman.conf
 ${FOLDER}etc/vconsole.conf /etc/vconsole.conf
 ${FOLDER}etc/vsftpd.conf /etc/vsftpd.conf
+${FOLDER}etc/zathurarc /etc/zathurarc
 ${FOLDER}usr/share/kbd/keymaps/neo/ /usr/share/kbd/keymaps/neo/*
 COMMANDS

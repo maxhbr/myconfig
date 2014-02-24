@@ -68,6 +68,8 @@ done <<FILES
 ~/.asoundrc.uca202
 ~/.bash_profile
 ~/.bashrc
+~/.config/ranger/rc.conf
+~/.config/ranger/rifle.conf
 ~/.emacs
 ~/.fontconfig/fonts.conf
 ~/.ghci
@@ -103,6 +105,7 @@ done <<FILES
 /etc/pacman.conf
 /etc/vconsole.conf
 /etc/vsftpd.conf
+/etc/zathurarc
 /usr/share/kbd/keymaps/neo/*
 FILES
 
