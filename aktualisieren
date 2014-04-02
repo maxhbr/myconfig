@@ -73,6 +73,7 @@ done <<FILES
 ~/.emacs
 ~/.fontconfig/fonts.conf
 ~/.ghci
+~/.gitconfig
 ~/.mutt/colors.solarized-light
 ~/.tmux.conf
 ~/.vimencrypt

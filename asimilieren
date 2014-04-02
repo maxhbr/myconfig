@@ -30,6 +30,7 @@ ${FOLDER}config/ranger/rifle.conf /home/hubi/.config/ranger/rifle.conf
 ${FOLDER}emacs /home/hubi/.emacs
 ${FOLDER}fontconfig/fonts.conf /home/hubi/.fontconfig/fonts.conf
 ${FOLDER}ghci /home/hubi/.ghci
+${FOLDER}gitconfig /home/hubi/.gitconfig
 ${FOLDER}mutt/colors.solarized-light /home/hubi/.mutt/colors.solarized-light
 ${FOLDER}tmux.conf /home/hubi/.tmux.conf
 ${FOLDER}vimencrypt /home/hubi/.vimencrypt

@@ -6,6 +6,11 @@ let ghciEscapeShellArg arg = "'" ++ concatMap (\x -> if x == '\'' then "'\"'\"'"
 :def! pf return . (":! pointfree " ++) . ghciEscapeShellArg
 -- :def! pl return . (":! pointfull " ++) . ghciEscapeShellArg
 
+:def! GCommit return . (\m -> ":! git commit -a -m \"" ++ m ++ "\"") . ghciEscapeShellArg
+:def! GAdd return . (":! git add " ++) . ghciEscapeShellArg
+:def! GPush return . (const ":! git push")
+:def! GPull return . (const ":! git pull")
+
 :set +t
 
 -- :set +s      -- statistics (time,space)

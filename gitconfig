@@ -1,0 +1,16 @@
+[user]
+	name = maximilianhuber
+	email = hubi@by-hubi.de
+[core]
+	autocrlf = input
+	safecrlf = false
+[push]
+	default = matching
+[giggle]
+	main-window-maximized = false
+	main-window-geometry = 1366x754+0+14
+	history-view-vpane-position = 382
+	main-window-view = HistoryView
+	file-view-vpane-position = 652
+[credential]
+	helper = cache --timeout=3600

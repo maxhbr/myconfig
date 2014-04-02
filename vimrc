@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Mon Feb 17, 2014  02:31
+" Last modified: Tue Mar 18, 2014  07:43
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -471,10 +471,16 @@ function! GitAdd()
   execute '!git add %'
 endfunction
 
+function! GitAuto()
+  call GitCommit()
+  call GitPush()
+endfunction
+
 command! GCommit call GitCommit()
 command! GPush   call GitPush()
 command! GPull   call GitPull()
 command! GAdd    call GitAdd()
+command! GAuto   call GitAuto()
 
 nmap <silent> _gc :GCommit<cr>
 
@@ -702,6 +708,8 @@ augroup filetypedetect
   autocmd BufRead,BufNewFile *.tex set filetype=tex
   autocmd BufRead,BufNewFile *.log setlocal autoread
   autocmd BufRead,BufNewFile *.nlogo set filetype=nlogo
+  autocmd BufRead,BufNewFile *.pde set filetype=arduino
+  autocmd BufRead,BufNewFile *.ino set filetype=arduino
   "au! BufRead,BufNewFile *.m,*.oct setfiletype matlab
 augroup END
 
@@ -709,6 +717,7 @@ augroup vimrc_autocmds
   au!
   autocmd FileType sh setlocal sw=2 ts=2 et
   autocmd FileType php setlocal sw=2 ts=2 et
+  autocmd FileType arduino setlocal sw=2 ts=2 et
   autocmd FileType tex     call SetLaTeXFile()
   autocmd FileType haskell call SetHaskellFile()
   autocmd FileType java    call SetJavaFile()
@@ -837,6 +846,11 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'vim-less'
   Bundle 'L9'
   Bundle 'tsaleh/vim-align.git'
+
+  "Bundle 'git://github.com/tclem/vim-arduino.git'
+
+  Bundle "sudar/vim-arduino-snippets"
+  Bundle "sudar/vim-arduino-syntax"
 
   "testing
   "Bundle 'http://github.com/tpope/vim-fugitive'
