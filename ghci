@@ -8,6 +8,8 @@ let ghciEscapeShellArg arg = "'" ++ concatMap (\x -> if x == '\'' then "'\"'\"'"
 
 :def! GCommit return . (\m -> ":! git commit -a -m \"" ++ m ++ "\"") . ghciEscapeShellArg
 :def! GAdd return . (":! git add " ++) . ghciEscapeShellArg
+:def! GBranch return . (":! git branch " ++) . ghciEscapeShellArg
+:def! GCheckout return . (":! git checkout " ++) . ghciEscapeShellArg
 :def! GPush return . (const ":! git push")
 :def! GPull return . (const ":! git pull")
 
