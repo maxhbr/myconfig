@@ -1,17 +1,18 @@
 let ghciEscapeShellArg arg = "'" ++ concatMap (\x -> if x == '\'' then "'\"'\"'" else [x]) arg ++ "'"
-:def! hoogle return . (":! hoogle --color --count=20 " ++) . ghciEscapeShellArg
+:def! hoogle    return . (":! hoogle --color --count=20 " ++) . ghciEscapeShellArg
 :def! hoogleAll return . (":! hoogle --color " ++) . ghciEscapeShellArg
-:def! doc return . (":! hoogle --info " ++) . ghciEscapeShellArg
-:def! hlint return . (":! hlint " ++) . ghciEscapeShellArg
-:def! pf return . (":! pointfree " ++) . ghciEscapeShellArg
+:def! doc       return . (":! hoogle --info " ++) . ghciEscapeShellArg
+:def! hlint     return . (":! hlint " ++) . ghciEscapeShellArg
+:def! pf        return . (":! pointfree " ++) . ghciEscapeShellArg
 -- :def! pl return . (":! pointfull " ++) . ghciEscapeShellArg
 
-:def! GCommit return . (\m -> ":! git commit -a -m " ++ m) . ghciEscapeShellArg
-:def! GAdd return . (":! git add " ++) . ghciEscapeShellArg
-:def! GBranch return . (":! git branch " ++) . ghciEscapeShellArg
+:def! GCommit   return . (":! git commit -a -m " ++) . ghciEscapeShellArg
+:def! GAdd      return . (":! git add " ++) . ghciEscapeShellArg
+:def! GBranch   return . (":! git checkout -b " ++) . ghciEscapeShellArg
 :def! GCheckout return . (":! git checkout " ++) . ghciEscapeShellArg
-:def! GPush return . (const ":! git push")
-:def! GPull return . (const ":! git pull")
+:def! GPush     return . (const ":! git push")
+:def! GPull     return . (const ":! git pull")
+:def! GStatus   return . (const ":! git status")
 
 :set +t
 

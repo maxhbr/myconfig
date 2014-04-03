@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Tue Mar 18, 2014  07:43
+" Last modified: Thu Apr 03, 2014  10:53
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -471,18 +471,35 @@ function! GitAdd()
   execute '!git add %'
 endfunction
 
+function! GitStatus() 
+  execute '!git status'
+endfunction
+
+function! GitCheckout() 
+  let msg = 0 < a:0 ? a:1 : inputdialog("Branch: ")
+  execute '!git checkout ' msg
+endfunction
+
+function! GitBranch() 
+  let msg = 0 < a:0 ? a:1 : inputdialog("Create Branch: ")
+  execute '!git checkout -b ' msg
+endfunction
+
 function! GitAuto()
   call GitCommit()
   call GitPush()
 endfunction
 
-command! GCommit call GitCommit()
-command! GPush   call GitPush()
-command! GPull   call GitPull()
-command! GAdd    call GitAdd()
-command! GAuto   call GitAuto()
+command! GCommit   call GitCommit()
+command! GPush     call GitPush()
+command! GPull     call GitPull()
+command! GAdd      call GitAdd()
+command! GStatus   call GitStatus()
+command! GCheckout call GitCheckout()
+command! GBranch   call GitBranch()
+command! GAuto     call GitAuto()
 
-nmap <silent> _gc :GCommit<cr>
+nmap <silent> _gc :call GitCommit<cr>
 
 " ====  SVN  ========================================================
 function! SVNCommit() 
