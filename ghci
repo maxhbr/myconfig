@@ -19,6 +19,6 @@ let ghciEscapeShellArg arg = "'" ++ concatMap (\x -> if x == '\'' then "'\"'\"'"
 -- :set +s      -- statistics (time,space)
 -- let tracify x = (trace $ "<pop "++show x++">") x
 
-:set prompt "λ: "
+:set prompt "\x1B[01;34mλ:\x1B[00m "
 
 -- vim: set ft=haskell :
