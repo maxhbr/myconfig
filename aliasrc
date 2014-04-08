@@ -320,6 +320,9 @@ geeqie() {
 zathura() {
   command zathura "$@" &
 }
+gnumeric() {
+  command gnumeric "$@" &
+}
 
 #   printing
 

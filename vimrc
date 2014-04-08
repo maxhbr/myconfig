@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Thu Apr 03, 2014  10:53
+" Last modified: Tue Apr 08, 2014  12:18
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -454,33 +454,33 @@ map <c-Right> :tabn<CR>
 " ==================================================================={{{
 
 " ====  Git  ========================================================
-function! GitCommit() 
+function! GitCommit()
   let msg = 0 < a:0 ? a:1 : inputdialog("Msg: ")
   execute '!git commit -a -m "' msg '"'
 endfunction
 
-function! GitPush() 
+function! GitPush()
   execute '!git push'
 endfunction
 
-function! GitPull() 
+function! GitPull()
   execute '!git pull'
 endfunction
 
-function! GitAdd() 
+function! GitAdd()
   execute '!git add %'
 endfunction
 
-function! GitStatus() 
+function! GitStatus()
   execute '!git status'
 endfunction
 
-function! GitCheckout() 
+function! GitCheckout()
   let msg = 0 < a:0 ? a:1 : inputdialog("Branch: ")
   execute '!git checkout ' msg
 endfunction
 
-function! GitBranch() 
+function! GitBranch()
   let msg = 0 < a:0 ? a:1 : inputdialog("Create Branch: ")
   execute '!git checkout -b ' msg
 endfunction
@@ -502,16 +502,16 @@ command! GAuto     call GitAuto()
 nmap <silent> _gc :call GitCommit<cr>
 
 " ====  SVN  ========================================================
-function! SVNCommit() 
+function! SVNCommit()
   let msg = 0 < a:0 ? a:1 : inputdialog("Msg: ")
   execute '!svn commit -m "' msg '"'
 endfunction
 
-function! SVNUpdate() 
+function! SVNUpdate()
   execute '!svn update'
 endfunction
 
-function! SVNAdd() 
+function! SVNAdd()
   execute '!svn add %'
 endfunction
 
@@ -570,9 +570,9 @@ function! SetHaskellFile()
     let name = 0 < a:0 ? a:1 : inputdialog("Module: ")
     let note = 1 < a:0 ? a:2 : inputdialog("Note: ")
     let description = 2 < a:0 ? a:3 : inputdialog("Describe this module: ")
-    
-    return  repeat('-', s:width) . "\n" 
-    \       . "-- | \n" 
+
+    return  repeat('-', s:width) . "\n"
+    \       . "-- | \n"
     \       . "-- Module      : " . name . "\n"
     \       . "-- Note        : " . note . "\n"
     \       . "-- \n"
@@ -613,7 +613,10 @@ function! SetTextFile()
 
 endfunction
 
+let g:tex_flavor = "latex"
 function! SetLaTeXFile()
+  setlocal ft=latex
+
 
   "nmap <leader>cl :! runlatex -pdf % > logfile 2>&1 &<CR><CR>
   "nmap <leader>oe :! llpp %:r.pdf > /dev/null 2>&1 &<CR><CR>
@@ -626,8 +629,10 @@ function! SetLaTeXFile()
   setlocal textwidth=79
   setlocal cc=80
 
+
   setlocal linebreak
 
+  setlocal foldmethod=marker
   setlocal foldmarker={{{,}}}
   "save folding
   "au BufWinLeave * mkview
@@ -643,8 +648,8 @@ function! SetLaTeXFile()
   "omap lp ?^$\\|^\s*\(\\begin\\|\\end\\|\\label\)?1<CR>//-1<CR>.<CR>
 
   "inoremap <expr>" getline('.')[col(".")-2] =~ "\\s" ? "\"`\"\'<left><left>" : "\"'"
-  inoremap <expr>[ getline('.')[col(".")-2] =~ "\\" ? "[<C-v>u005c]<left><left>" : "[" 
-  "inoremap <expr>{ getline('.')[col(".")-2] =~ "\\" ? "{<C-v>u005c}<left><left>" : "{" 
+  inoremap <expr>[ getline('.')[col(".")-2] =~ "\\" ? "[<C-v>u005c]<left><left>" : "["
+  "inoremap <expr>{ getline('.')[col(".")-2] =~ "\\" ? "{<C-v>u005c}<left><left>" : "{"
 
   set iskeyword+=: " type /ref{fig: and prec <C-n> to autocomplete references
   set iskeyword+=- " same with -
@@ -656,12 +661,6 @@ function! SetLaTeXFile()
   setlocal indentexpr=
 
   setlocal autoindent
-
-  "" Conceal
-  "colorscheme topfunky-light
-  "set cole=2
-  "let g:tex_conceal= 'adgm'
-  "hi Conceal guibg=White guifg=DarkMagenta
 
   setlocal spell
   set spelllang=de_de,en_us
