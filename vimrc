@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Tue Apr 08, 2014  12:18
+" Last modified: Fri Apr 11, 2014  12:05
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -718,6 +718,10 @@ function! SetMailFile()
   highlight SpellLocal term=underline cterm=underline
 endfunction
 
+function! SetKIVFile()
+  set ft=kiv
+endfunction
+
 augroup filetypedetect
   au!
   autocmd BufRead,BufNewFile tmpmsg-*.txt set filetype=mail
@@ -738,6 +742,7 @@ augroup vimrc_autocmds
   autocmd FileType haskell call SetHaskellFile()
   autocmd FileType java    call SetJavaFile()
   autocmd FileType matlab  call SetMatlabFile()
+  autocmd FileType kiv     call SetKIVFile()
   autocmd FileType python  call SetPythonFile()
   autocmd FileType human   call SetTextFile()
   autocmd FileType text    call SetTextFile()

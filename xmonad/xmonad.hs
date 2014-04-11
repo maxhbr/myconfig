@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Tue Apr 08, 2014  02:06
+-- Last modified: Fri Apr 11, 2014  05:38
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -250,10 +250,11 @@ toggleSkip :: [WorkspaceId] -> X ()
 toggleSkip skips = do
     hs <- gets (flip skipTags skips . W.hidden . windowset)
     unless (null hs) (windows . W.view . W.tag $ head hs)
+
 ------------------------------------------------------------------------
 -- Mouse bindings:
 --{{{
-myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList $
+myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList
     -- mod-button1, Set the window to floating mode and move by dragging
     [ ((modm, button1), (\w -> focus w >> mouseMoveWindow w
                                        >> windows W.shiftMaster))
@@ -286,9 +287,9 @@ myLayout = avoidStrutsOn[U] $
             addTabs shrinkText myTab $
             subLayout [] Simplest $
             ResizableTall nmaster delta ratio []
-        full    = named "=" $
+        full    = named "="
             Full
-        dtb     = named "%" $
+        dtb     = named "%"
             (tabbedBottom shrinkText myTab) *||* tiled
         stb     = named "_" $
             tabbedBottom shrinkText myTab
