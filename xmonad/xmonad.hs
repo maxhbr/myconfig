@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Fri Apr 11, 2014  05:38
+-- Last modified: Sun Apr 13, 2014  12:19
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -279,7 +279,7 @@ myLayout = avoidStrutsOn[U] $
     onWorkspace "5" (dtb ||| full) $
     onWorkspace "6" (dtb ||| full) $
     onWorkspace "7" (dtb ||| full) $
-    onWorkspace "web" (full ||| tiled ||| stb) $
+    onWorkspace "web" (full ||| tiled) $
     (tiled ||| full)
     where
         --layouts:
@@ -289,8 +289,8 @@ myLayout = avoidStrutsOn[U] $
             ResizableTall nmaster delta ratio []
         full    = named "="
             Full
-        dtb     = named "%"
-            (tabbedBottom shrinkText myTab) *||* tiled
+        dtb     = named "%" $
+            tabbedBottom shrinkText myTab *||* tiled
         stb     = named "_" $
             tabbedBottom shrinkText myTab
         --options:
