@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Sun Apr 13, 2014  12:19
+-- Last modified: Mon Apr 14, 2014  12:01
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -291,8 +291,8 @@ myLayout = avoidStrutsOn[U] $
             Full
         dtb     = named "%" $
             tabbedBottom shrinkText myTab *||* tiled
-        stb     = named "_" $
-            tabbedBottom shrinkText myTab
+        {-stb     = named "_" $-}
+            {-tabbedBottom shrinkText myTab-}
         --options:
         nmaster = 1
         ratio   = 1/2
