@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Fri Apr 11, 2014  12:05
+" Last modified: Tue Apr 15, 2014  09:45
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -615,7 +615,7 @@ endfunction
 
 let g:tex_flavor = "latex"
 function! SetLaTeXFile()
-  setlocal ft=latex
+  "setlocal ft=latex
 
 
   "nmap <leader>cl :! runlatex -pdf % > logfile 2>&1 &<CR><CR>

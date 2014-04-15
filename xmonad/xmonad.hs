@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Mon Apr 14, 2014  12:01
+-- Last modified: Mon Apr 14, 2014  03:12
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -191,8 +191,12 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
                                                   , "xbacklight +10" 
                                                   , "xbacklight =50"
                                                   , "xbacklight -10"
+                                                  , "xbacklight =25"
+                                                  , "xbacklight =10"
+                                                  , "xbacklight =5"
+                                                  , "xbacklight =1"
                                                   , "xbacklight =0"
-                                                  , "xbacklight =25" ])
+                                                  ])
     ] --}}}
     ++
     [ -- CycleWS setup --{{{
