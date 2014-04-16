@@ -422,6 +422,13 @@ alias pacmir='sudo pacman -Syy'
 #update via yaourt
 alias yaourtupd="yaourt -Syu --aur"
 
+#cabalupd() {
+#  cabal list --simple-output --installed \
+#    | awk '{print $1}' \
+#    | uniq \
+#    | xargs -I {} cabal install {} --reinstall
+#}
+
 #-------------------------------------------------------------------}}}
 #   some networking
 #-------------------------------------------------------------------{{{
