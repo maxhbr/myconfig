@@ -32,6 +32,7 @@ ${FOLDER}fontconfig/fonts.conf /home/hubi/.fontconfig/fonts.conf
 ${FOLDER}ghci /home/hubi/.ghci
 ${FOLDER}gitconfig /home/hubi/.gitconfig
 ${FOLDER}mutt/colors.solarized-light /home/hubi/.mutt/colors.solarized-light
+${FOLDER}ncmpcpp/config /home/hubi/.ncmpcpp/config
 ${FOLDER}tmux.conf /home/hubi/.tmux.conf
 ${FOLDER}vimencrypt /home/hubi/.vimencrypt
 ${FOLDER}vimrc /home/hubi/.vimrc

@@ -75,6 +75,7 @@ done <<FILES
 ~/.ghci
 ~/.gitconfig
 ~/.mutt/colors.solarized-light
+~/.ncmpcpp/config
 ~/.tmux.conf
 ~/.vimencrypt
 ~/.vimrc
