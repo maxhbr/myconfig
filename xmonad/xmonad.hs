@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Mon Apr 14, 2014  03:12
+-- Last modified: Fri Apr 18, 2014  10:55
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -185,6 +185,14 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm, xK_F3), spawn "qiv ~/.xmonad/neo/neo_Ebenen_1_2_5_6.png")
     ] --}}}
     ++
+    [ -- mpd --{{{
+    ((modm,   0xfc ), spawn "mpc -h 192.168.178.28 --no-status prev")
+    , ((modm .|. shiftMask, 0xfc ), namedScratchpadAction scratchpads "ncmpcpp")
+    , ((modm, 0xf6 ), spawn "mpc -h 192.168.178.28 --no-status toggle")
+    , ((modm .|. shiftMask, 0xf6 ), spawn "mpc -h 192.168.178.28 --no-status stop")
+    , ((modm, 0xe4 ), spawn "mpc -h 192.168.178.28 --no-status next")
+    ] --}}}
+    ++
     [ --backlight --{{{
     ((modm, xK_F1), spawnSelected defaultGSConfig [ "xbacklight =100"
                                                   , "xbacklight =75"
@@ -210,7 +218,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. shiftMask,  xK_Left  ), shiftPrevScreen)
     {-, ((modm,                xK_y     ), toggleWS)]-}
     , ((modm,                xK_y     ), toggleSkip ["NSP"])
-    , ((modm,                0xf6     ), toggleSkip ["NSP"])
+    --, ((modm,                0xf6     ), toggleSkip ["NSP"])
     ] --}}}
     ++
     [ -- Combine Two --{{{
@@ -364,6 +372,9 @@ scratchpads = [
             (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
         , NS "ScratchWeb" "dwb" (resource =? "dwb")
             (customFloating $ W.RationalRect (1/12) (1/12) (5/6) (5/6))
+        , NS "ncmpcpp" "urxvtc -name Ncmpcpp -e ncmpcpp"
+            (resource =? "Ncmpcpp")
+            (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
         , NS "notepad" "urxvtc -name Notepad -e vim ~/TODO/notizen.wiki"
             (resource =? "Notepad")
             (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
