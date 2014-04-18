@@ -561,6 +561,7 @@ dic(){
     fi
   }
   have mutt && mutt() { run_under_tmux 'mutt'; }
+  have ncmpcpp && ncmpcpp() { run_under_tmux 'ncmpcpp'; }
   #have finch && finch() { run_under_tmux 'finch'; }
   #have ekg2 && ekg2() { run_under_tmux 'ekg2'; }
 #}
