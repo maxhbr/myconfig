@@ -56,3 +56,14 @@ ${FOLDER}bin/ncChat.sh /home/hubi/bin/ncChat.sh
 ${FOLDER}bin/nmgui /home/hubi/bin/nmgui
 ${FOLDER}bin/remove_spaces.sh /home/hubi/bin/remove_spaces.sh
 ${FOLDER}bin/runNL.sh /home/hubi/bin/runNL.sh
+${FOLDER}etc/X11/xorg.conf.d/ /etc/X11/xorg.conf.d/*.conf
+${FOLDER}etc/hosts /etc/hosts
+${FOLDER}etc/locale.conf /etc/locale.conf
+${FOLDER}etc/mkinitcpio.conf /etc/mkinitcpio.conf
+${FOLDER}etc/modprobe.d/ /etc/modprobe.d/*
+${FOLDER}etc/pacman.conf /etc/pacman.conf
+${FOLDER}etc/vconsole.conf /etc/vconsole.conf
+${FOLDER}etc/vsftpd.conf /etc/vsftpd.conf
+${FOLDER}etc/zathurarc /etc/zathurarc
+${FOLDER}usr/share/kbd/keymaps/neo/ /usr/share/kbd/keymaps/neo/*
+COMMANDS
