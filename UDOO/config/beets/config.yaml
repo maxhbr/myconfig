@@ -1,0 +1,22 @@
+# Automatically migrated from legacy .beetsconfig.
+
+directory: /mnt/music
+library: /mnt/music/musiclibrary.blb
+#path_format: $genre/$artist/$album/$track $title
+#plugins: bpd
+ignore: 00-Beets 00*
+
+import: 
+    move: yes
+    quiet_fallback: skip
+    log: /mnt/music/beetslog.txt
+
+#paths:
+    #default: $genre/$albumartist/$album/$track $title
+    #singleton: Singletons/$artist - $title
+    #comp: $genre/$album/$track $title
+    #albumtype:soundtrack: Soundtracks/$album/$track $title
+
+#bpd:
+    #host: 127.0.0.1
+    #port: 6600
