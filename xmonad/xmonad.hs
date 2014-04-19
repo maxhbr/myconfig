@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Fri Apr 18, 2014  10:58
+-- Last modified: Sat Apr 19, 2014  05:50
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -375,13 +375,13 @@ scratchpads = [
             (customFloating $ W.RationalRect (1/12) (1/12) (5/6) (5/6))
         , NS "ncmpcpp" "urxvtc -name Ncmpcpp -e ncmpcpp"
             (resource =? "Ncmpcpp")
-            (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
+            (customFloating $ W.RationalRect (1/2) (1/5) (1/2) (4/5))
         , NS "notepad" "urxvtc -name Notepad -e vim ~/TODO/notizen.wiki"
             (resource =? "Notepad")
-            (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
+            (customFloating $ W.RationalRect (5/12) (3/20) (1/2) (4/5))
        , NS "ScratchMutt" "urxvtc -name ScratchMutt -e bash -c \"~/bin/mailclient.sh\""
            (resource =? "ScratchMutt")
-           (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5)) ]
+           (customFloating $ W.RationalRect (1/24) (3/20) (5/6) (4/5)) ]
 --}}}
 ------------------------------------------------------------------------
 -- Event handling:
