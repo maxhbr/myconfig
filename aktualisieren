@@ -31,6 +31,8 @@ ASIMILIEREN
 }
 
 #RUN
+git pull
+
 asimilieren >$ASIMFile
 
 echo "copy"

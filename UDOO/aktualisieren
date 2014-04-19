@@ -3,6 +3,8 @@
 # Variables
 FOLDER="/home/hubi/myconfig/UDOO/"
 
+git pull
+
 #RUN
 echo "copy"
 echo
