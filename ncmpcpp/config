@@ -287,7 +287,7 @@ mpd_port = "6600"
 #
 #seek_time = "1"
 #
-#autocenter_mode = "no"
+autocenter_mode = "yes"
 #
 #centered_cursor = "no"
 #
