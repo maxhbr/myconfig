@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Sat Apr 19, 2014  05:50
+-- Last modified: Mon Apr 21, 2014  10:17
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -191,7 +191,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm, 0xf6 ), spawn "mpc -h 192.168.178.28 --no-status toggle")
     , ((modm .|. shiftMask, 0xf6 ), namedScratchpadAction scratchpads "ncmpcpp")
     , ((modm, 0xe4 ), spawn "mpc -h 192.168.178.28 --no-status next")
-    , ((modm .|. shiftMask, 0xe4 ), spawn "mpc -h 192.168.178.28 --no-status volume +10")
+    , ((modm .|. shiftMask, 0xe4 ), spawn "mpc -h 192.168.178.28 --no-status volume +5")
     ] --}}}
     ++
     [ --backlight --{{{
