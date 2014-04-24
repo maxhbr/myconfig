@@ -52,6 +52,7 @@ ${FOLDER}bin/mycrypt /home/hubi/bin/mycrypt
 ${FOLDER}bin/myfsize.sh /home/hubi/bin/myfsize.sh
 ${FOLDER}bin/myfullbackup.sh /home/hubi/bin/myfullbackup.sh
 ${FOLDER}bin/mylayouttoggle.sh /home/hubi/bin/mylayouttoggle.sh
+${FOLDER}bin/myPdfCorp.sh /home/hubi/bin/myPdfCorp.sh
 ${FOLDER}bin/myWmaToMp3.sh /home/hubi/bin/myWmaToMp3.sh
 ${FOLDER}bin/ncChat.sh /home/hubi/bin/ncChat.sh
 ${FOLDER}bin/nmgui /home/hubi/bin/nmgui
