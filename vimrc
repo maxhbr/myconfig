@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Tue Apr 15, 2014  09:45
+" Last modified: Fri Apr 25, 2014  10:14
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -879,6 +879,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "Bundle 'LatexParFormat'
   "Bundle 'Indent-Guides'
   "Bundle 'SuperTab'
+  Bundle 'git://github.com/scala/scala-dist/tree/master/tool-support/src/vim.git'
 
   "frisch aussortiert
   "Bundle 'lastpos.vim'

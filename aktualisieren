@@ -96,6 +96,7 @@ done <<FILES
 ~/bin/myfullbackup.sh
 ~/bin/mylayouttoggle.sh
 ~/bin/myPdfCorp.sh
+~/bin/myScalaToScript.sh
 ~/bin/myWmaToMp3.sh
 ~/bin/ncChat.sh
 ~/bin/nmgui
