@@ -60,12 +60,14 @@ ${FOLDER}bin/nmgui /home/hubi/bin/nmgui
 ${FOLDER}bin/remove_spaces.sh /home/hubi/bin/remove_spaces.sh
 ${FOLDER}bin/runNL.sh /home/hubi/bin/runNL.sh
 ${FOLDER}etc/X11/xorg.conf.d/ /etc/X11/xorg.conf.d/*.conf
+${FOLDER}etc/fstab /etc/fstab
 ${FOLDER}etc/hosts /etc/hosts
 ${FOLDER}etc/locale.conf /etc/locale.conf
 ${FOLDER}etc/lvm/lvm.conf /etc/lvm/lvm.conf
 ${FOLDER}etc/mkinitcpio.conf /etc/mkinitcpio.conf
 ${FOLDER}etc/modprobe.d/ /etc/modprobe.d/*
 ${FOLDER}etc/pacman.conf /etc/pacman.conf
+${FOLDER}etc/sysctl.d/99-sysctl.conf /etc/sysctl.d/99-sysctl.conf
 ${FOLDER}etc/vconsole.conf /etc/vconsole.conf
 ${FOLDER}etc/vsftpd.conf /etc/vsftpd.conf
 ${FOLDER}etc/zathurarc /etc/zathurarc

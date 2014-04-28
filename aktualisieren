@@ -103,12 +103,14 @@ done <<FILES
 ~/bin/remove_spaces.sh
 ~/bin/runNL.sh
 /etc/X11/xorg.conf.d/*.conf
+/etc/fstab
 /etc/hosts
 /etc/locale.conf
 /etc/lvm/lvm.conf
 /etc/mkinitcpio.conf
 /etc/modprobe.d/*
 /etc/pacman.conf
+/etc/sysctl.d/99-sysctl.conf
 /etc/vconsole.conf
 /etc/vsftpd.conf
 /etc/zathurarc
