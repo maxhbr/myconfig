@@ -62,6 +62,7 @@ ${FOLDER}bin/runNL.sh /home/hubi/bin/runNL.sh
 ${FOLDER}etc/X11/xorg.conf.d/ /etc/X11/xorg.conf.d/*.conf
 ${FOLDER}etc/hosts /etc/hosts
 ${FOLDER}etc/locale.conf /etc/locale.conf
+${FOLDER}etc/lvm/lvm.conf /etc/lvm/lvm.conf
 ${FOLDER}etc/mkinitcpio.conf /etc/mkinitcpio.conf
 ${FOLDER}etc/modprobe.d/ /etc/modprobe.d/*
 ${FOLDER}etc/pacman.conf /etc/pacman.conf

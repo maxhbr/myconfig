@@ -105,6 +105,7 @@ done <<FILES
 /etc/X11/xorg.conf.d/*.conf
 /etc/hosts
 /etc/locale.conf
+/etc/lvm/lvm.conf
 /etc/mkinitcpio.conf
 /etc/modprobe.d/*
 /etc/pacman.conf
