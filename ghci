@@ -1,5 +1,4 @@
 let ghciEscapeShellArg arg = "'" ++ concatMap (\x -> if x == '\'' then "'\"'\"'" else [x]) arg ++ "'"
-
 :def! hoogle    return . (":! hoogle --color --count=20 " ++) . ghciEscapeShellArg
 :def! hoogleAll return . (":! hoogle --color " ++) . ghciEscapeShellArg
 :def! doc       return . (":! hoogle --info " ++) . ghciEscapeShellArg
