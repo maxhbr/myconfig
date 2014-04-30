@@ -39,6 +39,7 @@ ${FOLDER}vimrc /home/hubi/.vimrc
 ${FOLDER}xinitrc /home/hubi/.xinitrc
 ${FOLDER}xmonad/myinformation.sh /home/hubi/.xmonad/myinformation.sh
 ${FOLDER}xmonad/showkeys /home/hubi/.xmonad/showkeys
+${FOLDER}xmonad/tmux-scratch.sh /home/hubi/.xmonad/tmux-scratch.sh
 ${FOLDER}xmonad/xmobarrc /home/hubi/.xmonad/xmobarrc
 ${FOLDER}xmonad/xmonad.hs /home/hubi/.xmonad/xmonad.hs
 ${FOLDER}zshrc.local /home/hubi/.zshrc.local

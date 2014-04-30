@@ -89,6 +89,7 @@ done <<FILES
 ~/.xinitrc
 ~/.xmonad/myinformation.sh
 ~/.xmonad/showkeys
+~/.xmonad/tmux-scratch.sh
 ~/.xmonad/xmobarrc
 ~/.xmonad/xmonad.hs
 ~/.zshrc.local
