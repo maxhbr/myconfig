@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Tue Mar 11, 2014  08:05
+# Last modified: Wed Apr 30, 2014  12:45
 #
 umask 077
 
@@ -87,6 +87,13 @@ case "$(uname -o)" in
 esac
 
 [[ -f ~/.zshrc.private ]] && source ~/.zshrc.private
+
+if [ "$PS1" != "" -a "${SSH_TTY:-x}" != x ]; then
+  if test -z $TMUX && [[ $TERM != "screen" ]]; then
+    ( (tmux has-session -t remote && tmux attach-session -t remote) || (tmux new-session -s remote) ) && exit 0
+    echo "tmux failed to start"
+  fi
+fi
 
 # vim:filetype=zsh foldmethod=marker autoindent expandtab shiftwidth=4
 # Local variables:
