@@ -36,7 +36,6 @@ ${FOLDER}ncmpcpp/config /home/hubi/.ncmpcpp/config
 ${FOLDER}tmux.conf /home/hubi/.tmux.conf
 ${FOLDER}vimencrypt /home/hubi/.vimencrypt
 ${FOLDER}vimrc /home/hubi/.vimrc
-${FOLDER}vimrc-neo /home/hubi/.vimrc-neo
 ${FOLDER}xinitrc /home/hubi/.xinitrc
 ${FOLDER}xmonad/myinformation.sh /home/hubi/.xmonad/myinformation.sh
 ${FOLDER}xmonad/showkeys /home/hubi/.xmonad/showkeys

@@ -79,7 +79,6 @@ done <<FILES
 ~/.tmux.conf
 ~/.vimencrypt
 ~/.vimrc
-~/.vimrc-neo
 ~/.xinitrc
 ~/.xmonad/myinformation.sh
 ~/.xmonad/showkeys
