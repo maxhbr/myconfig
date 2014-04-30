@@ -37,7 +37,7 @@ echo "copy"
 echo
 
 while IFS= read -r FILE; do
-  [[ -e $FILE ]] && {
+  if [ -b $FILE ]; then
     [[ ! $FILE == \#* ]] && {
       BASE=${FILE##*/}
       BASE=${BASE#.}
@@ -68,9 +68,9 @@ while IFS= read -r FILE; do
 
       echo "\${FOLDER}${DIR}${BASE} $FILE" >> "$ASIMFile"
     }
-  } || {
+  else
     echo "${FILE} not found"
-  }
+  fi
 done <<FILES
 ~/.Xresources
 ~/.aliasrc

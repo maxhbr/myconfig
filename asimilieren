@@ -18,14 +18,4 @@ while IFS= read -r LINE; do
       exit 1
   fi
 done <<COMMANDS
-${FOLDER}etc/fstab /etc/fstab
-${FOLDER}etc/hosts /etc/hosts
-${FOLDER}etc/locale.conf /etc/locale.conf
-${FOLDER}etc/lvm/lvm.conf /etc/lvm/lvm.conf
-${FOLDER}etc/mkinitcpio.conf /etc/mkinitcpio.conf
-${FOLDER}etc/pacman.conf /etc/pacman.conf
-${FOLDER}etc/sysctl.d/99-sysctl.conf /etc/sysctl.d/99-sysctl.conf
-${FOLDER}etc/vconsole.conf /etc/vconsole.conf
-${FOLDER}etc/vsftpd.conf /etc/vsftpd.conf
-${FOLDER}etc/zathurarc /etc/zathurarc
 COMMANDS
