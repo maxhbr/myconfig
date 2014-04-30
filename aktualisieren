@@ -37,35 +37,39 @@ echo "copy"
 echo
 
 while IFS= read -r FILE; do
-  [[ ! $FILE == \#* ]] && {
-    BASE=${FILE##*/}
-    BASE=${BASE#.}
-    [[ $BASE == *"*"* ]] && BASE=""
-    DIR=""
-    [[ $FILE == ~* ]] && {
-      FILE=${FILE#\~}
-      DIR=${FILE%/*}
-      [[ $DIR != "" ]] && {
+  [[ -e $FILE ]] && {
+    [[ ! $FILE == \#* ]] && {
+      BASE=${FILE##*/}
+      BASE=${BASE#.}
+      [[ $BASE == *"*"* ]] && BASE=""
+      DIR=""
+      [[ $FILE == ~* ]] && {
+        FILE=${FILE#\~}
+        DIR=${FILE%/*}
+        [[ $DIR != "" ]] && {
+          DIR=${DIR#*/}"/"
+          DIR=${DIR#.}
+        }
+        FILE="/home/hubi"${FILE}
+      } || {
+        DIR=${FILE%/*}
         DIR=${DIR#*/}"/"
         DIR=${DIR#.}
       }
-      FILE="/home/hubi"${FILE}
-    } || {
-      DIR=${FILE%/*}
-      DIR=${DIR#*/}"/"
-      DIR=${DIR#.}
-    }
-    mkdir -p "${FOLDER}${DIR}"
-    cp -vu $FILE "${FOLDER}${DIR}${BASE}"
+      mkdir -p "${FOLDER}${DIR}"
+      cp -vu $FILE "${FOLDER}${DIR}${BASE}"
 
-    if [ -f "$FILE"  ]; then
-      cmp -s $FILE "${FOLDER}${DIR}${BASE}" > /dev/null
-      if [ $? -eq 1 ]; then
+      if [ -f "$FILE"  ]; then
+        cmp -s $FILE "${FOLDER}${DIR}${BASE}" > /dev/null
+        if [ $? -eq 1 ]; then
           echo "${FILE} is different"
+        fi
       fi
-    fi
 
-    echo "\${FOLDER}${DIR}${BASE} $FILE" >> "$ASIMFile"
+      echo "\${FOLDER}${DIR}${BASE} $FILE" >> "$ASIMFile"
+    }
+  } || {
+    echo "${FILE} not found"
   }
 done <<FILES
 ~/.Xresources
