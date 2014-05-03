@@ -58,6 +58,13 @@ while IFS= read -r FILE; do
     mkdir -p "${FOLDER}${DIR}"
     cp -vu $FILE "${FOLDER}${DIR}${BASE}"
 
+    if [ -f "$FILE"  ]; then
+      cmp -s $FILE "${FOLDER}${DIR}${BASE}" > /dev/null
+      if [ $? -eq 1 ]; then
+        echo "${FILE} is different"
+      fi
+    fi
+
     echo "\${FOLDER}${DIR}${BASE} $FILE" >> "$ASIMFile"
   }
 done <<FILES
@@ -82,6 +89,7 @@ done <<FILES
 ~/.xinitrc
 ~/.xmonad/myinformation.sh
 ~/.xmonad/showkeys
+~/.xmonad/tmux-scratch.sh
 ~/.xmonad/xmobarrc
 ~/.xmonad/xmonad.hs
 ~/.zshrc.local
