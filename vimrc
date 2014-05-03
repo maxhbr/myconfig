@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Fri Apr 25, 2014  10:14
+" Last modified: Sat May 03, 2014  10:54
 "
 " !!!
 "       this config will automatically download Vundle from git, and then it
@@ -67,7 +67,6 @@ if has("autocmd")
 
   " completion
   set ofu=syntaxcomplete#Complete
-  "filetype plugin indent on
   set completeopt=longest,menuone
 
   " jump to the last position when reopening a file
@@ -75,10 +74,6 @@ if has("autocmd")
 
   " resize splits
   au VimResized * exe "normal! \<c-w>="
-
-  "save folding (shouldnt run every time)
-  "au BufWinLeave * mkview
-  "au BufWinEnter * silent loadview
 
   " leave paste mode, when exit insert mode
   au InsertLeave * set nopaste
@@ -133,8 +128,7 @@ set sidescroll=1
 " highlight searches, searches begin immediately
 set hlsearch
 set incsearch
-" case sensitiv, if a uppercase letter is contained
-set smartcase
+set smartcase " case sensitiv, if a uppercase letter is contained
 set ignorecase
 "                                                                    }}}
 " ====  Folding / indenting  ========================================{{{
@@ -251,21 +245,6 @@ endif
 " ====  Functions  ==================================================
 " ==================================================================={{{
 
-" Kommenting fpr c bzw php
-function! Komment()
-  if getline(".") =~ '\/\*'
-    let hls=@/
-    s/^\/\*//
-    s/*\/$//
-    let @/=hls
-  else
-    let hls=@/
-    s/^/\/*/
-    s/$/*\//
-    let @/=hls
-  endif
-endfunction
-
 " delete all trails
 " use :call DeleteTrailing
 " or <Leader>dt
@@ -322,14 +301,6 @@ function! MyHtmlEscape()
   silent s/ß/\&szlig;/eg
 endfunction
 
-function! NumberToggle()
-  if(&relativenumber == 1)
-    set number
-  else
-    set relativenumber
-  endif
-endfunc
-
 " ===================================================================}}}
 " ====  Keymappings  ================================================
 " ==================================================================={{{
@@ -350,9 +321,6 @@ map Y y$
 "nmap <silent> <leader>ev :tabedit $MYVIMRC<CR>
 nmap <silent> <leader>ev :e $MYVIMRC<CR>
 "nmap <silent> <leader>sv :so $MYVIMRC<CR>
-
-" ersetzt durch NerdComment
-"nmap <silent> <Leader>k :call Komment()<CR>
 
 nmap <Leader>dt :call DeleteTrailing()
 
@@ -722,16 +690,17 @@ function! SetKIVFile()
   set ft=kiv
 endfunction
 
-augroup filetypedetect
-  au!
+"augroup filetypedetect
+  "au!
   autocmd BufRead,BufNewFile tmpmsg-*.txt set filetype=mail
   autocmd BufRead,BufNewFile *.tex set filetype=tex
+  autocmd BufRead,BufNewFile *.scala set filetype=scala
   autocmd BufRead,BufNewFile *.log setlocal autoread
   autocmd BufRead,BufNewFile *.nlogo set filetype=nlogo
   autocmd BufRead,BufNewFile *.pde set filetype=arduino
   autocmd BufRead,BufNewFile *.ino set filetype=arduino
   "au! BufRead,BufNewFile *.m,*.oct setfiletype matlab
-augroup END
+"augroup END
 
 augroup vimrc_autocmds
   au!
@@ -879,7 +848,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "Bundle 'LatexParFormat'
   "Bundle 'Indent-Guides'
   "Bundle 'SuperTab'
-  Bundle 'git://github.com/scala/scala-dist/tree/master/tool-support/src/vim.git'
+  "Bundle 'git://github.com/scala/scala-dist/tree/master/tool-support/src/vim.git'
 
   "frisch aussortiert
   "Bundle 'lastpos.vim'
@@ -981,6 +950,8 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   " Vim-slime
  " let g:slime_target = "tmux"
  " let g:slime_paste_file = tempname()
+
+ let g:syntastic_scala_checkers = []
 
 endif
 "                                                                    }}}
