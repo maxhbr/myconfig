@@ -81,6 +81,7 @@ done <<FILES
 ~/.fontconfig/fonts.conf
 ~/.ghci
 ~/.gitconfig
+~/.inputrc
 ~/.mutt/colors.solarized-light
 ~/.ncmpcpp/config
 ~/.tmux.conf

@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Wed Apr 30, 2014  12:45
+# Last modified: Sat May 03, 2014  10:07
 #
 umask 077
 
@@ -92,6 +92,8 @@ if [ "$PS1" != "" -a "${SSH_TTY:-x}" != x ]; then
   if test -z $TMUX && [[ $TERM != "screen" ]]; then
     ( (tmux has-session -t remote && tmux attach-session -t remote) || (tmux new-session -s remote) ) && exit 0
     echo "tmux failed to start"
+    else
+    export DISPLAY=:0
   fi
 fi
 

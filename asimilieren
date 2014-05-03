@@ -31,6 +31,7 @@ ${FOLDER}emacs /home/hubi/.emacs
 ${FOLDER}fontconfig/fonts.conf /home/hubi/.fontconfig/fonts.conf
 ${FOLDER}ghci /home/hubi/.ghci
 ${FOLDER}gitconfig /home/hubi/.gitconfig
+${FOLDER}inputrc /home/hubi/.inputrc
 ${FOLDER}mutt/colors.solarized-light /home/hubi/.mutt/colors.solarized-light
 ${FOLDER}ncmpcpp/config /home/hubi/.ncmpcpp/config
 ${FOLDER}tmux.conf /home/hubi/.tmux.conf
