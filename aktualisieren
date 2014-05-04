@@ -5,30 +5,30 @@ FOLDER="/home/hubi/myconfig/"
 ASIMFile="${FOLDER}/asimilieren"
 
 # Functions
-asimilieren() {
-cat <<ASIMILIEREN
-#!/bin/bash
+#asimilieren() {
+#cat <<ASIMILIEREN
+##!/bin/bash
 
-# !!!
-# Not working yet!
-# !!!
+## !!!
+## Not working yet!
+## !!!
 
-FOLDER="/home/hubi/myconfig/"
+#FOLDER="/home/hubi/myconfig/"
 
-while IFS= read -r LINE; do
-  echo \${LINE##* }
+#while IFS= read -r LINE; do
+  #echo \${LINE##* }
 
-  # TODO:
-  #     * Abfrage geht noch nicht!
-  #     * Sudo, wenn nötig
+  ## TODO:
+  ##     * Abfrage geht noch nicht!
+  ##     * Sudo, wenn nötig
 
-  read -p "\${LINE##* }? " -n 1 -r
-  if [[ \$REPLY =~ ^[Yy]$ ]]; then
-      exit 1
-  fi
-done <<COMMANDS
-ASIMILIEREN
-}
+  #read -p "\${LINE##* }? " -n 1 -r
+  #if [[ \$REPLY =~ ^[Yy]$ ]]; then
+      #exit 1
+  #fi
+#done <<COMMANDS
+#ASIMILIEREN
+#}
 
 x230Files() {
   cat <<X230FILES
@@ -100,7 +100,7 @@ UDOOFILES
 
 ###############################################################################
 #RUN
-asimilieren >$ASIMFile
+#asimilieren >$ASIMFile
 
 [[ "$(hostname)" == "x230" ]] && {
   echo "copy"
@@ -136,12 +136,12 @@ asimilieren >$ASIMFile
         fi
       fi
 
-      echo "\${FOLDER}${DIR}${BASE} $FILE" >> "$ASIMFile"
+      #echo "\${FOLDER}${DIR}${BASE} $FILE" >> "$ASIMFile"
     }
   done
 }
 
-echo "COMMANDS" >> "$ASIMFile"
+#echo "COMMANDS" >> "$ASIMFile"
 
 echo
 echo "git"

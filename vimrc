@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sun May 04, 2014  11:13
+" Last modified: Sun May 04, 2014  11:37
 "
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -525,7 +525,7 @@ nmap <silent> _sc :GCommit<cr>
 " ====  filetype specific  ==========================================
 " ==================================================================={{{
 
-function! SetPythonFile()
+function! SetPythonFile() "{{{
   let g:pydiction_location = '~/.vim/pydiction/complete-dict'
   " au FocusLost *.py :write
   " au FocusLost *.py :echo "autoSaved"
@@ -542,9 +542,15 @@ function! SetPythonFile()
   setlocal foldlevel=7
 
   map <c-F5> :w<CR>:!python "%"<CR>
-endfunction
+endfunction "}}}
 
-function! SetHaskellFile()
+function! SetShFile() "{{{
+  setlocal sw=2 ts=2 et
+
+  map <c-F5> :w<CR>:!sh "%"<CR>
+endfunction "}}}
+
+function! SetHaskellFile() "{{{
   setlocal sw=2 ts=2 et
   setlocal iskeyword+='
 
@@ -583,9 +589,9 @@ function! SetHaskellFile()
   " ===================================================================
   " syntastic
   let g:syntastic_auto_loc_list=1
-endfunction
+endfunction "}}}
 
-function! SetJavaFile()
+function! SetJavaFile() "{{{
   setlocal shiftwidth=4 softtabstop=4 tabstop=4 expandtab
 
   " folding
@@ -596,17 +602,17 @@ function! SetJavaFile()
 
   autocmd VimEnter * NERDTree
   autocmd VimEnter * wincmd p
-endfunction
+endfunction "}}}
 
-function! SetTextFile()
+function! SetTextFile() "{{{
   setlocal wrap
   setlocal textwidth=79
 
   setlocal linebreak
-endfunction
+endfunction "}}}
 
 let g:tex_flavor = "latex"
-function! SetLaTeXFile()
+function! SetLaTeXFile() "{{{
   "nmap <leader>cl :! runlatex -pdf % > logfile 2>&1 &<CR><CR>
   "nmap <leader>oe :! llpp %:r.pdf > /dev/null 2>&1 &<CR><CR>
   "nmap <leader>oa :! llpp *.pdf > /dev/null 2>&1 &<CR><CR>
@@ -645,17 +651,17 @@ function! SetLaTeXFile()
   setlocal spell
   set spelllang=de_de,en_us
   set spellfile=~/.vim/spellfile.add
-endfunction
+endfunction "}}}
 
-function! SetCssFile()
+function! SetCssFile() "{{{
   setlocal sw=4
   setlocal ts=4
   setlocal et
   setlocal tw=79
   setlocal linebreak
-endfunction
+endfunction "}}}
 
-function! SetMatlabFile()
+function! SetMatlabFile() "{{{
   setlocal sw=4
   setlocal ts=4
   setlocal et
@@ -663,17 +669,14 @@ function! SetMatlabFile()
   setlocal linebreak
 
   setlocal foldmarker={{{,}}}
-endfunction
+endfunction "}}}
 
-function! SetMailFile()
+function! SetMailFile() "{{{
   set textwidth=70 wrap nonumber
   set spell
   set spell spelllang=de_de
   set spellfile=~/.vim/spellfile.add
-endfunction
-
-function! SetKIVFile()
-endfunction
+endfunction "}}}
 
 "augroup filetypedetect
   "au!
@@ -689,9 +692,7 @@ endfunction
 
 augroup vimrc_autocmds
   au!
-  autocmd FileType sh setlocal sw=2 ts=2 et
-  autocmd FileType php setlocal sw=2 ts=2 et
-  autocmd FileType arduino setlocal sw=2 ts=2 et
+  autocmd FileType sh      call SetShFile()
   autocmd FileType tex     call SetLaTeXFile()
   autocmd FileType haskell call SetHaskellFile()
   autocmd FileType java    call SetJavaFile()
@@ -704,6 +705,8 @@ augroup vimrc_autocmds
   autocmd FileType txt     call SetTextFile()
   autocmd FileType css     call SetCssFile()
   autocmd FileType less    call SetCssFile()
+  autocmd FileType php setlocal sw=2 ts=2 et
+  autocmd FileType arduino setlocal sw=2 ts=2 et
   " in makefiles, don't expand tabs to spaces
   autocmd FileType make setlocal noexpandtab shiftwidth=8
 augroup END
