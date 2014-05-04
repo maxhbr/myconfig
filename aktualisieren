@@ -30,44 +30,8 @@ done <<COMMANDS
 ASIMILIEREN
 }
 
-#RUN
-asimilieren >$ASIMFile
-
-echo "copy"
-echo
-
-while IFS= read -r FILE; do
-  [[ ! $FILE == \#* ]] && {
-    BASE=${FILE##*/}
-    BASE=${BASE#.}
-    [[ $BASE == *"*"* ]] && BASE=""
-    DIR=""
-    [[ $FILE == ~* ]] && {
-      FILE=${FILE#\~}
-      DIR=${FILE%/*}
-      [[ $DIR != "" ]] && {
-        DIR=${DIR#*/}"/"
-        DIR=${DIR#.}
-      }
-      FILE="/home/hubi"${FILE}
-    } || {
-      DIR=${FILE%/*}
-      DIR=${DIR#*/}"/"
-      DIR=${DIR#.}
-    }
-    mkdir -p "${FOLDER}${DIR}"
-    cp -vu $FILE "${FOLDER}${DIR}${BASE}"
-
-    if [ -f "$FILE"  ]; then
-      cmp -s $FILE "${FOLDER}${DIR}${BASE}" > /dev/null
-      if [ $? -eq 1 ]; then
-        echo "${FILE} is different"
-      fi
-    fi
-
-    echo "\${FOLDER}${DIR}${BASE} $FILE" >> "$ASIMFile"
-  }
-done <<FILES
+x230Files() {
+  cat <<X230FILES
 ~/.Xresources
 ~/.aliasrc
 ~/.asoundrc.default
@@ -123,7 +87,59 @@ done <<FILES
 /etc/vsftpd.conf
 /etc/zathurarc
 /usr/share/kbd/keymaps/neo/*
-FILES
+X230FILES
+}
+
+udooFiles() {
+  cat <<UDOOFILES
+~/.config/beets/config.yaml
+/etc/mpd.conf
+/etc/dnsmasq.conf
+UDOOFILES
+}
+
+###############################################################################
+#RUN
+asimilieren >$ASIMFile
+
+[[ "$(hostname)" == "x230" ]] && {
+  echo "copy"
+  echo
+  x230Files | while IFS= read -r FILE; do
+    [[ ! $FILE == \#* ]] && {
+      BASE=${FILE##*/}
+      BASE=${BASE#.}
+      [[ $BASE == *"*"* ]] && BASE=""
+      DIR=""
+      [[ $FILE == ~* ]] && {
+        FILE=${FILE#\~}
+        DIR=${FILE%/*}
+        [[ $DIR != "" ]] && {
+          DIR=${DIR#*/}"/"
+          DIR=${DIR#.}
+        }
+        FILE="/home/hubi"${FILE}
+      } || {
+        DIR=${FILE%/*}
+        DIR=${DIR#*/}"/"
+        DIR=${DIR#.}
+      }
+
+      mkdir -p "${FOLDER}${DIR}"
+      cp -vu $FILE "${FOLDER}${DIR}${BASE}"
+      git add "${FOLDER}${DIR}${BASE}"
+
+      if [ -f "$FILE"  ]; then
+        cmp -s $FILE "${FOLDER}${DIR}${BASE}" > /dev/null
+        if [ $? -eq 1 ]; then
+          echo "${FILE} is different"
+        fi
+      fi
+
+      echo "\${FOLDER}${DIR}${BASE} $FILE" >> "$ASIMFile"
+    }
+  done
+}
 
 echo "COMMANDS" >> "$ASIMFile"
 
@@ -132,6 +148,5 @@ echo "git"
 echo
 
 cd "$FOLDER"
-git add .
-git commit -a -m "aktualisiert"
+git commit -a -m "automatisch aktualisiert"
 git push
