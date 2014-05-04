@@ -2,14 +2,13 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sat May 03, 2014  10:54
+" Last modified: Sun May 04, 2014  11:13
 "
-" !!!
+" !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
 "       will install all plugins
-" !!!
-
-"tipps / Keybindings                                                 {{{
+" !!!! !!! !! !
+" tipps / keybindings                                                {{{
 " write as root: :w !sudo tee % > /dev/null
 "
 ":r! date
@@ -54,7 +53,7 @@ autocmd! bufwritepost .vimrc source %
 set nocompatible
 
 " ===================================================================
-" ====  General  ====================================================
+" ====  general  ====================================================
 " ==================================================================={{{
 
 if has("syntax")
@@ -116,14 +115,14 @@ set suffixes=.bak,~,.swp,.o,.info,.aux,.log,.dvi,.bbl,.blg,.brf,.cb,.ind,.idx,.i
 set ssop-=options    " do not store global and local values in a session
 set ssop-=folds      " do not store folds
 
-" ====  Scrolling  =================================================={{{
+" ====  scrolling  =================================================={{{
 
 set scrolljump=5
 set scrolloff=5         "Start scrolling when we're x lines away from margins
 set sidescrolloff=10
 set sidescroll=1
 "                                                                    }}}
-" ====  Search  ====================================================={{{
+" ====  search  ====================================================={{{
 
 " highlight searches, searches begin immediately
 set hlsearch
@@ -131,7 +130,7 @@ set incsearch
 set smartcase " case sensitiv, if a uppercase letter is contained
 set ignorecase
 "                                                                    }}}
-" ====  Folding / indenting  ========================================{{{
+" ====  folding / indenting  ========================================{{{
 
 set foldmethod=marker
 set foldmarker={{{,}}}
@@ -146,7 +145,7 @@ set list
 set listchars=tab:>.,trail:…,extends:#,nbsp:. " …°⎼
 set fillchars=vert:┃,diff:⎼,fold:⎼
 "                                                                    }}}
-" ====  Performance  ================================================{{{
+" ====  performance  ================================================{{{
 set ttyfast
 
 " for powersave, stops the blinking cursor
@@ -156,14 +155,14 @@ hi NonText cterm=NONE ctermfg=NONE
 " stops slow responding in large files
 set synmaxcol=128
 "                                                                    }}}
-" ====  Line Numbering  ============================================={{{
+" ====  line numbering  ============================================={{{
 au InsertEnter * :set nu
 au InsertLeave * :set rnu
 au FocusLost * :set nu
 au FocusGained * :set rnu
 set rnu
 "                                                                    }}}
-" ====  Backup / Undo  =============================================={{{
+" ====  backup / undo  =============================================={{{
 
 set history=1000
 set undolevels=1000
@@ -185,7 +184,7 @@ set nobackup
 "set directory=~/.vim-tmp,~/.tmp,~/tmp,/var/tmp,/tmp
 "set writebackup
 "                                                                    }}}
-" ====  Desing ======================================================{{{
+" ====  desing ======================================================{{{
 
 set title
 set cursorline
@@ -231,7 +230,7 @@ else
   colorscheme default
 endif
 
-" ====  hilight to long lines  ======================================{{{
+" ====  hilight to long lines  ======================================
 if exists('+colorcolumn')
     set colorcolumn=80
     highlight ColorColumn ctermbg=233 guibg=#592929
@@ -240,9 +239,23 @@ else
     match OverLength /\%81v.\+/
 endif
 "                                                                    }}}
-"                                                                    }}}
 " ===================================================================}}}
-" ====  Functions  ==================================================
+" ====  spell  ======================================================
+" ==================================================================={{{
+setlocal nospell
+set spelllang=de_de,en_us
+highlight clear SpellBad
+highlight SpellBad term=standout ctermfg=1
+highlight SpellBad term=underline cterm=underline
+highlight clear SpellCap
+highlight SpellCap term=underline cterm=underline
+highlight clear SpellRare
+highlight SpellRare term=underline cterm=underline
+highlight clear SpellLocal
+highlight SpellLocal term=underline cterm=underline
+
+" ===================================================================}}}
+" ====  functions  ==================================================
 " ==================================================================={{{
 
 " delete all trails
@@ -302,27 +315,28 @@ function! MyHtmlEscape()
 endfunction
 
 " ===================================================================}}}
-" ====  Keymappings  ================================================
+" ====  keymappings  ================================================
 " ==================================================================={{{
 
+nnoremap ; :
+let mapleader=","
+
+" ====  general  ===================================================={{{
 " overwrite those annoying commands
 cnoreabbrev <expr> W ((getcmdtype() is# ':' && getcmdline() is# 'W')?('w'):('W'))
 cnoreabbrev <expr> Q ((getcmdtype() is# ':' && getcmdline() is# 'Q')?('q'):('Q'))
 
-nnoremap ; :
-
-let mapleader=","
-
-nmap <Leader>r :source $MYVIMRC
+"save without sudo
+cmap w!! w !sudo tee % >/dev/null
 
 "Make Y behave like other capitals
 map Y y$
 
+nmap <Leader>r :source $MYVIMRC
+
 "nmap <silent> <leader>ev :tabedit $MYVIMRC<CR>
 nmap <silent> <leader>ev :e $MYVIMRC<CR>
 "nmap <silent> <leader>sv :so $MYVIMRC<CR>
-
-nmap <Leader>dt :call DeleteTrailing()
 
 " Pressing ,ss will toggle and untoggle spell checking
 map <leader>ss :setlocal spell!<cr>
@@ -331,30 +345,53 @@ map <leader>ss :setlocal spell!<cr>
 vnoremap < <gv
 vnoremap > >gv
 
-" Use Q for formatting the current paragraph (or selection)
-vmap <leader>Q gq
-nmap <leader>Q gqap
+" Press üö to exit.
+imap üö <Esc>
 
-" http://vim.wikia.com/wiki/Avoid_the_escape_key
-" Press i to enter insert mode, and kj to exit.
-"imap kj <Esc>
-" On gvim and Linux console Vim, you can use Alt-Space.
-imap <M-Space> <Esc>
+" clear hilighting
+nmap <silent> ,/ :nohlsearch<CR>
 
+set pastetoggle=<F11>
+
+"easyer increment/decrement
+nnoremap + <C-a>
+nnoremap - <C-x>
+
+"                                                                    }}}
+" ====  noremaps  ==================================================={{{
 nnoremap K <nop>
 
 inoremap <F1> <nop>
 nnoremap <F1> <nop>
 vnoremap <F1> <nop>
 
-" clear hilighting
-nmap <silent> ,/ :nohlsearch<CR>
+inoremap <F2> <nop>
+inoremap <F3> <nop>
+inoremap <F4> <nop>
 
-" go back to last cursor position
-nnoremap <leader>- ``
+inoremap <F6> <nop>
+inoremap <F7> <nop>
+inoremap <F8> <nop>
+inoremap <F9> <nop>
 
-"save without sudo
-cmap w!! w !sudo tee % >/dev/null
+inoremap <F12> <nop>
+
+"                                                                    }}}
+" ====  formatting  ================================================={{{
+" Use Q for formatting the current paragraph (or selection)
+vmap <leader>Q gq
+nmap <leader>Q gqap
+
+nmap <Leader>dt :call DeleteTrailing()
+nnoremap <leader>T :set expandtab<cr>:retab!<cr>
+
+nnoremap <Leader>s :%s/\<<C-r><C-w>\>//g<Left><Left>
+nnoremap _s :%s/\<<C-r><C-w>\>/<C-r><C-w>/g<Left><Left>
+
+"                                                                    }}}
+" ====  buffer  ====================================================={{{
+"Open last/alternate buffer
+noremap <Leader><Leader> <C-^>
 
 noremap <silent> <F1> :split<CR>
 noremap <silent> <F2> :vsplit<CR>
@@ -369,29 +406,14 @@ noremap <silent> <F7> :bp<CR>
 noremap <silent> <F8> :bn<CR>
 noremap <silent> <F9> :bd<CR>
 
+" for fast quitting
 noremap <silent> <F10> :q!<CR>
 inoremap <silent> <F10> <Esc>:q!<CR>
 
-set pastetoggle=<F11>
-
-"Markdown to HTML
-nmap <leader>md :%!~/bin/Markdown.pl --html4tags <cr>
-
-"easyer increment/decrement
-nnoremap + <C-a>
-nnoremap - <C-x>
-
-"Open last/alternate buffer
-noremap <Leader><Leader> <C-^>
-
-nnoremap <leader>T :set expandtab<cr>:retab!<cr>
-
-nnoremap <Leader>s :%s/\<<C-r><C-w>\>//g<Left><Left>
-nnoremap _s :%s/\<<C-r><C-w>\>/<C-r><C-w>/g<Left><Left>
-
-map <Leader>S :SyntasticToggleMode<CR>
-
-" ====  Movement  ===================================================
+"                                                                    }}}
+" ====  movement  ==================================================={{{
+" go back to last cursor position
+nnoremap <leader>- ``
 
 " jump to next row instead of next line
 nnoremap j gj
@@ -417,11 +439,19 @@ map <c-Right> :tabn<CR>
 "noremap <left> :bp<CR>
 "noremap <right> :bn<CR>
 
+"                                                                    }}}
+" ====  for plugins / external scripts  ============================={{{
+map <Leader>S :SyntasticToggleMode<CR>
+
+"Markdown to HTML
+nmap <leader>md :%!~/bin/Markdown.pl --html4tags <cr>
+
+"                                                                    }}}
 " ===================================================================}}}
 " ====  Git / SVN   =================================================
 " ==================================================================={{{
 
-" ====  Git  ========================================================
+" ====  Git  ========================================================{{{
 function! GitCommit()
   let msg = 0 < a:0 ? a:1 : inputdialog("Msg: ")
   execute '!git commit -a -m "' msg '"'
@@ -469,7 +499,8 @@ command! GAuto     call GitAuto()
 
 nmap <silent> _gc :call GitCommit<cr>
 
-" ====  SVN  ========================================================
+"                                                                    }}}
+" ====  SVN  ========================================================{{{
 function! SVNCommit()
   let msg = 0 < a:0 ? a:1 : inputdialog("Msg: ")
   execute '!svn commit -m "' msg '"'
@@ -489,8 +520,9 @@ command! SVNAdd    call SVNAdd()
 
 nmap <silent> _sc :GCommit<cr>
 
+"                                                                    }}}
 " ===================================================================}}}
-" ====  Filetype specific  ==========================================
+" ====  filetype specific  ==========================================
 " ==================================================================={{{
 
 function! SetPythonFile()
@@ -509,10 +541,7 @@ function! SetPythonFile()
   setlocal foldmethod=indent
   setlocal foldlevel=7
 
-  "invisible chars
-  " autocmd BufWrite *.py :call DeleteTrailing()
-
-  "map <F5> :w<CR>:!python "%"<CR>
+  map <c-F5> :w<CR>:!python "%"<CR>
 endfunction
 
 function! SetHaskellFile()
@@ -523,15 +552,15 @@ function! SetHaskellFile()
 
   let s:width = 80
 
+  map <c-F5> :w<CR>:!ghci "%"<CR>
+
   function! HaskellModuleSection(...)
     let name = 0 < a:0 ? a:1 : inputdialog("Section name: ")
 
     return  repeat('-', s:width) . "\n"
                 \       . "--  " . name . "\n"
                 \       . "\n"
-
   endfunction
-
   nmap <silent> __s "=HaskellModuleSection()<CR>gp
 
   function! HaskellModuleHeader(...)
@@ -548,9 +577,7 @@ function! SetHaskellFile()
     \       . "-- \n"
     \       . repeat('-', s:width) . "\n"
     \       . "\n"
-
   endfunction
-
   nmap <silent> __h "=HaskellModuleHeader()<CR>:0put =<CR>
 
   " ===================================================================
@@ -572,20 +599,14 @@ function! SetJavaFile()
 endfunction
 
 function! SetTextFile()
-  " text
-
   setlocal wrap
   setlocal textwidth=79
 
   setlocal linebreak
-
 endfunction
 
 let g:tex_flavor = "latex"
 function! SetLaTeXFile()
-  "setlocal ft=latex
-
-
   "nmap <leader>cl :! runlatex -pdf % > logfile 2>&1 &<CR><CR>
   "nmap <leader>oe :! llpp %:r.pdf > /dev/null 2>&1 &<CR><CR>
   "nmap <leader>oa :! llpp *.pdf > /dev/null 2>&1 &<CR><CR>
@@ -602,15 +623,6 @@ function! SetLaTeXFile()
 
   setlocal foldmethod=marker
   setlocal foldmarker={{{,}}}
-  "save folding
-  "au BufWinLeave * mkview
-  "au BufWinEnter * silent loadview
-
-  "if has("gui_running")
-    "set spell
-    "set spelllang=de,en
-    "setlocal spellsuggest=9
-  "endif
 
   "map \gq ?^$\\|^\s*\(\\begin\\|\\end\\|\\label\)?1<CR>gq//-1<CR>
   "omap lp ?^$\\|^\s*\(\\begin\\|\\end\\|\\label\)?1<CR>//-1<CR>.<CR>
@@ -633,16 +645,6 @@ function! SetLaTeXFile()
   setlocal spell
   set spelllang=de_de,en_us
   set spellfile=~/.vim/spellfile.add
-
-  highlight clear SpellBad
-  highlight SpellBad term=standout ctermfg=1
-  highlight SpellBad term=underline cterm=underline
-  highlight clear SpellCap
-  highlight SpellCap term=underline cterm=underline
-  highlight clear SpellRare
-  highlight SpellRare term=underline cterm=underline
-  highlight clear SpellLocal
-  highlight SpellLocal term=underline cterm=underline
 endfunction
 
 function! SetCssFile()
@@ -651,9 +653,6 @@ function! SetCssFile()
   setlocal et
   setlocal tw=79
   setlocal linebreak
-  if exists('+colorcolumn')
-    setlocal colorcolumn=80
-  endif
 endfunction
 
 function! SetMatlabFile()
@@ -664,9 +663,6 @@ function! SetMatlabFile()
   setlocal linebreak
 
   setlocal foldmarker={{{,}}}
-  if exists('+colorcolumn')
-    setlocal colorcolumn=80
-  endif
 endfunction
 
 function! SetMailFile()
@@ -674,20 +670,9 @@ function! SetMailFile()
   set spell
   set spell spelllang=de_de
   set spellfile=~/.vim/spellfile.add
-
-  highlight clear SpellBad
-  highlight SpellBad term=standout ctermfg=1
-  highlight SpellBad term=underline cterm=underline
-  highlight clear SpellCap
-  highlight SpellCap term=underline cterm=underline
-  highlight clear SpellRare
-  highlight SpellRare term=underline cterm=underline
-  highlight clear SpellLocal
-  highlight SpellLocal term=underline cterm=underline
 endfunction
 
 function! SetKIVFile()
-  set ft=kiv
 endfunction
 
 "augroup filetypedetect
@@ -729,7 +714,7 @@ augroup Shebang
   autocmd BufNewFile *.rb 0put =\"#!/usr/bin/env ruby\<nl># -*- coding: None -*-\<nl>\"|$
 augroup END
 
-" Transparent editing of gpg encrypted files.
+" Transparent editing of gpg encrypted files.                         {{{
 " Placed Public Domain by Wouter Hanegraaff <wouter@blub.net>
 " (asc support and sh -c"..." added by Osamu Aoki)
 augroup aencrypted
@@ -774,9 +759,9 @@ augroup bencrypted
   " after the file has been written.
   autocmd BufWritePost,FileWritePost    *.gpg   u
 augroup END
-
+"                                                                    }}}
 " ===================================================================}}}
-" ====  Plugin specific  ============================================
+" ====  plugin specific  ============================================
 " ==================================================================={{{
 
 " install vundle automatically, if not existend
@@ -785,6 +770,7 @@ if !isdirectory(expand('~').'/.vim/bundle/vundle')
   exec '!git clone '.src.' ~/.vim/bundle/vundle'
   au VimEnter * BundleInstall
 endif
+
 if isdirectory(expand('~').'/.vim/bundle/vundle')
 "Vundle                                                              {{{
   filetype off " required!
@@ -896,22 +882,9 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "Bundle 'Markdown-syntax'
   "Bundle 'vim-octopress'
   "Bundle 'tsaleh/vim-align.git'
-  "                                                                    }}}
+  "                                                                  }}}
 "                                                                    }}}
   filetype plugin indent on
-
-
-  " MRU most recent files
-  " :MRU
-
-  "" ===================================================================
-  "" commandT:
-  ""Bundle 'git://git.wincent.com/command-t.git'
-  ""cd ~/.vim/bundle/command-t/ruby/command-t
-  ""ruby extconf.rb
-  ""make
-  "let g:CommandTAcceptSelectionMap = '<C-t>'
-  "let g:CommandTAcceptSelectionTabMap = '<CR>'
 
   " ===================================================================
   " nerdTree
@@ -920,38 +893,14 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   " autocmd VimEnter * NERDTree
 
   " ===================================================================
-  " LatexBox
-  " vim --servername SOMETHING file.tex
-  "let g:LatexBox_viewer = 'zathura'
-  "let g:LatexBox_latexmk_options = '-pvc'
-  " \ll   run latexmk
-  " \lv   run pdf viewer
-
-  " ===================================================================
   " AutoComplPop: acp
   " http://www.vim.org/scripts/script.php?script_id=1880
-
-  " ===================================================================
-  " ConqueTerm
-  " map <C-B> :ConqueTerm bash
-
-  " ===================================================================
-  " minibufferexplorer
-  " let g:miniBufExplMapWindowNavVim = 1
-  " let g:miniBufExplMapWindowNavArrows = 1
-  " let g:miniBufExplMapCTabSwitchBufs = 1
-  " let g:miniBufExplModSelTarget = 1
 
   " ===================================================================
   "Gundo
   nnoremap <F6> :GundoToggle<CR>
 
-  " ===================================================================
-  " Vim-slime
- " let g:slime_target = "tmux"
- " let g:slime_paste_file = tempname()
-
- let g:syntastic_scala_checkers = []
+  let g:syntastic_scala_checkers = []
 
 endif
 "                                                                    }}}

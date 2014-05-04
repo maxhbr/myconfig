@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Mon Apr 21, 2014  10:17
+-- Last modified: Sun May 04, 2014  09:49
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -36,7 +36,8 @@ import XMonad.Prompt.Shell ( shellPrompt )
 import XMonad.Hooks.DynamicLog ( dynamicLogWithPP,xmobarPP, PP(..), defaultPP,
     xmobarColor, wrap )
 import XMonad.Hooks.EwmhDesktops ( fullscreenEventHook )
-import XMonad.Hooks.ManageDocks ( avoidStrutsOn, manageDocks, ToggleStruts(..) )
+import XMonad.Hooks.ManageDocks ( avoidStrutsOn, manageDocks,
+    ToggleStruts(..) )
 import XMonad.Hooks.ManageHelpers ( doFullFloat, doCenterFloat )
 import XMonad.Hooks.UrgencyHook ( withUrgencyHook, NoUrgencyHook(..) )
 import XMonad.Hooks.SetWMName
@@ -321,9 +322,6 @@ myLayout = avoidStrutsOn[U] $
             , inactiveTextColor   = "#666666"
             , decoHeight          = 14
             }
-        --old:
-        {-mag     = named "zoom" $-}
-            {-magnifier (Tall nmaster delta ratio)-}
 --}}}
 ------------------------------------------------------------------------
 -- Window rules:
@@ -354,11 +352,9 @@ myManageHook = composeAll
     , resource  =? "kdesktop"                      --> doIgnore
     , className =? "Zenity"                        --> doCenterFloat ]
         <+> composeAll
-            [ resource  =? ("ToWorkspace"++i) --> doShift i
-                | i <- myWorkspaces]
+            [resource  =? ("ToWorkspace"++i) --> doShift i | i <- myWorkspaces]
         <+> composeAll
-            [ className =? ("ToWorkspace"++i) --> doShift i
-                | i <- myWorkspaces]
+            [className =? ("ToWorkspace"++i) --> doShift i | i <- myWorkspaces]
         <+> namedScratchpadManageHook scratchpads
         <+> manageDocks
         {-<+> manageHook defaultConfig-}
@@ -367,21 +363,21 @@ myManageHook = composeAll
 -- Scratchpads
 --
 scratchpads :: [NamedScratchpad]
-scratchpads = [
-        NS "scratchpad" "urxvtc -name Scratchpad -e ~/.xmonad/tmux-scratch.sh"
-            (resource =? "Scratchpad")
-            (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
-        , NS "ScratchWeb" "dwb" (resource =? "dwb")
-            (customFloating $ W.RationalRect (1/12) (1/12) (5/6) (5/6))
-        , NS "ncmpcpp" "urxvtc -name Ncmpcpp -e ncmpcpp"
-            (resource =? "Ncmpcpp")
-            (customFloating $ W.RationalRect (1/2) (1/5) (1/2) (4/5))
-        , NS "notepad" "urxvtc -name Notepad -e vim ~/TODO/notizen.wiki"
-            (resource =? "Notepad")
-            (customFloating $ W.RationalRect (5/12) (3/20) (1/2) (4/5))
-       , NS "ScratchMutt" "urxvtc -name ScratchMutt -e bash -c \"~/bin/mailclient.sh\""
-           (resource =? "ScratchMutt")
-           (customFloating $ W.RationalRect (1/24) (3/20) (5/6) (4/5)) ]
+scratchpads = 
+    [ NS "scratchpad" "urxvtc -name Scratchpad -e ~/.xmonad/tmux-scratch.sh"
+        (resource =? "Scratchpad")
+        (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
+    , NS "ScratchWeb" "dwb" (resource =? "dwb")
+        (customFloating $ W.RationalRect (1/12) (1/12) (5/6) (5/6))
+    , NS "ncmpcpp" "urxvtc -name Ncmpcpp -e ncmpcpp"
+        (resource =? "Ncmpcpp")
+        (customFloating $ W.RationalRect (1/2) (1/5) (1/2) (4/5))
+    , NS "notepad" "urxvtc -name Notepad -e vim ~/TODO/notizen.wiki"
+        (resource =? "Notepad")
+        (customFloating $ W.RationalRect (5/12) (3/20) (1/2) (4/5))
+   , NS "ScratchMutt" "urxvtc -name ScratchMutt -e bash -c \"~/bin/mailclient.sh\""
+       (resource =? "ScratchMutt")
+       (customFloating $ W.RationalRect (1/24) (3/20) (5/6) (4/5)) ]
 --}}}
 ------------------------------------------------------------------------
 -- Event handling:
@@ -403,8 +399,8 @@ instance ExtensionClass FocusFollow where
 
 -- this eventHook is the same as from xmonad for handling crossing events
 focusFollow e@(CrossingEvent {ev_window=w, ev_event_type=t})
-                | t == enterNotify, ev_mode e == notifyNormal =
-        whenX (XS.gets getFocusFollow) (focus w) >> return (All True)
+        | t == enterNotify, ev_mode e == notifyNormal =
+    whenX (XS.gets getFocusFollow) (focus w) >> return (All True)
 focusFollow _ = return (All True)
 
 toggleFF = XS.modify $ FocusFollow . not . getFocusFollow
@@ -433,9 +429,10 @@ myConfig xmproc = withUrgencyHook NoUrgencyHook $
         , focusedBorderColor = "#dd0000"
         , keys               = myKeys
         , mouseBindings      = myMouseBindings
-        , manageHook         = myManageHook
         , layoutHook         = myLayout
+        , manageHook         = myManageHook
         , handleEventHook    = myEventHook
+        , startupHook        = myStartupHook
         , logHook            = dynamicLogWithPP xmobarPP
             { ppOutput  = hPutStrLn xmproc
             , ppCurrent = xmobarColor "#ee9a00" "" . wrap "<" ">"
@@ -444,7 +441,6 @@ myConfig xmproc = withUrgencyHook NoUrgencyHook $
             , ppTitle   = (" " ++) . xmobarColor "#ee9a00" ""
             , ppVisible = xmobarColor "#ee9a00" ""
             } >> updatePointer (TowardsCentre 0.2 0.2)
-        , startupHook        = myStartupHook
         }
 --}}}
 ------------------------------------------------------------------------
