@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Sun May 04, 2014  09:49
+-- Last modified: Mon May 05, 2014  02:03
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -187,12 +187,12 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     ] --}}}
     ++
     [ -- mpd --{{{
-    ((modm,   0xfc ), spawn "mpc -h 192.168.178.28 --no-status prev")
-    , ((modm .|. shiftMask, 0xfc ), spawn "mpc -h 192.168.178.28 --no-status volume -10")
-    , ((modm, 0xf6 ), spawn "mpc -h 192.168.178.28 --no-status toggle")
+    ((modm,   0xfc ), spawn "mpc -h mpd@192.168.178.28 --no-status prev")
+    , ((modm .|. shiftMask, 0xfc ), spawn "mpc -h mpd@192.168.178.28 --no-status volume -10")
+    , ((modm, 0xf6 ), spawn "mpc -h mpd@192.168.178.28 --no-status toggle")
     , ((modm .|. shiftMask, 0xf6 ), namedScratchpadAction scratchpads "ncmpcpp")
-    , ((modm, 0xe4 ), spawn "mpc -h 192.168.178.28 --no-status next")
-    , ((modm .|. shiftMask, 0xe4 ), spawn "mpc -h 192.168.178.28 --no-status volume +5")
+    , ((modm, 0xe4 ), spawn "mpc -h mpd@192.168.178.28 --no-status next")
+    , ((modm .|. shiftMask, 0xe4 ), spawn "mpc -h mpd@192.168.178.28 --no-status volume +5")
     ] --}}}
     ++
     [ --backlight --{{{
@@ -241,10 +241,16 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     ] --}}}
     ++
     [ -- (some) Scratchpads --{{{
-    ((modm .|. shiftMask,  xK_minus ), namedScratchpadAction scratchpads "scratchpad")
-    , ((modm,                xK_i     ), namedScratchpadAction scratchpads "ScratchWeb")
-    , ((modm .|. shiftMask,  xK_i     ), namedScratchpadAction scratchpads "ScratchMutt")
-    , ((modm,                xK_n     ), namedScratchpadAction scratchpads "notepad")
+    ((modm .|. shiftMask,  xK_minus ),
+        namedScratchpadAction scratchpads "scratchpad")
+    , ((modm .|. controlMask,  xK_minus ),
+        namedScratchpadAction scratchpads "udoo")
+    , ((modm,                xK_i     ),
+        namedScratchpadAction scratchpads "ScratchWeb")
+    , ((modm .|. shiftMask,  xK_i     ),
+        namedScratchpadAction scratchpads "ScratchMutt")
+    , ((modm,                xK_n     ),
+        namedScratchpadAction scratchpads "notepad")
     ] --}}}
     ++
     -- mod-[1..9], Switch to workspace N
@@ -367,6 +373,9 @@ scratchpads =
     [ NS "scratchpad" "urxvtc -name Scratchpad -e ~/.xmonad/tmux-scratch.sh"
         (resource =? "Scratchpad")
         (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
+    , NS "udoo" "urxvtc -name udoo -e mosh udooLocal"
+        (resource =? "udoo")
+        (customFloating $ W.RationalRect (3/24) (1/20) (5/6) (4/5))
     , NS "ScratchWeb" "dwb" (resource =? "dwb")
         (customFloating $ W.RationalRect (1/12) (1/12) (5/6) (5/6))
     , NS "ncmpcpp" "urxvtc -name Ncmpcpp -e ncmpcpp"
