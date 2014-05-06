@@ -2,49 +2,12 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sun May 04, 2014  11:37
-"
+" Last modified: Tue May 06, 2014  09:49
+
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
-"       will install all plugins
+"       will install some plugins via vundle
 " !!!! !!! !! !
-" tipps / keybindings                                                {{{
-" write as root: :w !sudo tee % > /dev/null
-"
-":r! date
-"
-" Vundle help
-" :BundleList          - list configured bundles
-" :BundleInstall(!)    - install(update) bundles
-" :BundleSearch(!) foo - search(or refresh cache first) for foo
-" :BundleClean(!)      - confirm(or auto-approve) removal of unused bundles
-"
-" PYTHON
-"   ]t      -- Jump to beginning of block
-"   ]e      -- Jump to end of block
-"   ]v      -- Select (Visual Line Mode) block
-"   ]<      -- Shift block to left
-"   ]>      -- Shift block to right
-"   ]#      -- Comment selection
-"   ]u      -- Uncomment selection
-"   ]c      -- Select current/previous class
-"   ]d      -- Select current/previous function
-"   ]<up>   -- Jump to previous line with the same/lower indentation
-"   ]<down> -- Jump to next line with the same/lower indentation
-"
-" Custom
-"   ,r      -- reload vimrc
-"   ,ev     -- edit vimrc
-"   ,dt     -- DeleteTrailing
-"   ,s      -- search and replace word under cursor
-"   ,T      -- expand all Tabs
-"
-" Plugins
-"   ,lj     -- LustyJuggler
-"   ,ww     -- vimwiki
-"   :MRU    -- mru
-"   ,ig     -- vim-indent-guides
-"                                                                    }}}
 
 " auto reload when saving
 autocmd! bufwritepost .vimrc source %
@@ -88,10 +51,6 @@ set backspace=2
 set showcmd   " Show (partial) command in status line.
 set showmatch " Show matching brackets.
 set autowrite " Automatically save before commands like :next and :make
-if has("mouse")
-  set mouse=a " Enable mouse usage (all modes) alternativ nvc
-  set mousehide
-endif
 set visualbell " ausgehebelt durch noerrorbells ?
 set noerrorbells
 set hidden
@@ -103,6 +62,7 @@ set autochdir
 set cpoptions+=n
 set showbreak=\ \ \ ↳
 
+" ====  wildmenu  ==================================================={{{
 set wildmenu "Kommando Zeilen Vervollständigung
 "set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png
 set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png,*.aux,*.bbl,*.blg,*.fdb_latexmk,*.fls,*.idx,*.ilg,*.ind,*.nlo,*.toc,*.hi
@@ -111,10 +71,12 @@ set wildmode=list:longest
 " Suffixes that get lower priority when doing tab completion for filenames.
 " These are files we are not likely to want to edit or read.
 set suffixes=.bak,~,.swp,.o,.info,.aux,.log,.dvi,.bbl,.blg,.brf,.cb,.ind,.idx,.ilg,.inx,.out,.toc
+"                                                                    }}}
+" ====  sessioning  ================================================={{{
 
 set ssop-=options    " do not store global and local values in a session
 set ssop-=folds      " do not store folds
-
+"                                                                    }}}
 " ====  scrolling  =================================================={{{
 
 set scrolljump=5
@@ -140,12 +102,15 @@ set autoindent
 set smartindent
 set shiftwidth=4 softtabstop=4 tabstop=4 expandtab
 set smarttab
+"                                                                    }}}
+" ====  list  ======================================================={{{
 
 set list
 set listchars=tab:>.,trail:…,extends:#,nbsp:. " …°⎼
 set fillchars=vert:┃,diff:⎼,fold:⎼
 "                                                                    }}}
 " ====  performance  ================================================{{{
+
 set ttyfast
 
 " for powersave, stops the blinking cursor
@@ -158,8 +123,8 @@ set synmaxcol=128
 " ====  line numbering  ============================================={{{
 au InsertEnter * :set nu
 au InsertLeave * :set rnu
-au FocusLost * :set nu
-au FocusGained * :set rnu
+"au FocusLost * :set nu
+"au FocusGained * :set rnu
 set rnu
 "                                                                    }}}
 " ====  backup / undo  =============================================={{{
@@ -197,9 +162,6 @@ set showmode "show when you are in insert mode
 
 " statusline
 set laststatus=2
-" default the statusline to green when entering Vim
-"hi StatusLine term=reverse ctermfg=0 ctermbg=2 gui=bold,reverse
-
 
 set statusline=%<%f\          " custom statusline
 set stl+=[%{&ff}]             " show fileformat
@@ -226,8 +188,6 @@ if filereadable(expand("$VIMRUNTIME/colors/mustang.vim"))
   colorscheme mustang
 elseif filereadable(expand("$HOME/.vim/colors/mustang.vim"))
   colorscheme mustang
-else
-  colorscheme default
 endif
 
 " ====  hilight to long lines  ======================================
@@ -240,7 +200,7 @@ else
 endif
 "                                                                    }}}
 " ===================================================================}}}
-" ====  spell  ======================================================
+" ====  spelling  ===================================================
 " ==================================================================={{{
 setlocal nospell
 set spelllang=de_de,en_us
@@ -258,6 +218,7 @@ highlight SpellLocal term=underline cterm=underline
 " ====  functions  ==================================================
 " ==================================================================={{{
 
+" ====  for cleanup  ================================================{{{
 " delete all trails
 " use :call DeleteTrailing
 " or <Leader>dt
@@ -267,31 +228,13 @@ func! DeleteTrailing()
   exe "normal `z"
 endfunc
 
-" If buffer modified, update any 'Last modified: ' in the first 20 lines.
-" 'Last modified: ' can have up to 10 characters before (they are retained).
-" Restores cursor and window position using save_cursor variable.
-function! LastModified()
-  if &modified
-    let save_cursor = getpos(".")
-    let n = min([20, line("$")])
-    keepjumps exe '1,' . n . 's#^\(.\{,10}Last modified: \).*#\1' .
-          \ strftime('%a %b %d, %Y  %I:%M%p') . '#e'
-    call histdel('search', -1)
-    call setpos('.', save_cursor)
-  endif
-endfun
-autocmd BufWritePre * call LastModified()
-
-" open files via ranger
-fun! RangerChooser()
-  exec "silent !ranger --choosefile=/tmp/chosenfile " . expand("%:p:h")
-  if filereadable('/tmp/chosenfile')
-    exec 'edit ' . system('cat /tmp/chosenfile')
-    call system('rm /tmp/chosenfile')
-  endif
-  redraw!
-endfun
-map ,R :call RangerChooser()<CR>
+func! Cleanup()
+  call DeleteTrailing()
+  setlocal ff=unix
+  setlocal expandtab
+  retab!
+endfunc
+"                                                                    }}}
 
 function! InsertTabWrapper()
   let col = col('.') - 1
@@ -314,9 +257,51 @@ function! MyHtmlEscape()
   silent s/ß/\&szlig;/eg
 endfunction
 
+" ====  open files via ranger  ======================================{{{
+fun! RangerChooser()
+  exec "silent !ranger --choosefile=/tmp/chosenfile " . expand("%:p:h")
+  if filereadable('/tmp/chosenfile')
+    exec 'edit ' . system('cat /tmp/chosenfile')
+    call system('rm /tmp/chosenfile')
+  endif
+  redraw!
+endfun
+map ,R :call RangerChooser()<CR>
+
+"                                                                    }}}
+" ====  last modified  =============================================={{{
+" If buffer modified, update any 'Last modified: ' in the first 20 lines.
+" 'Last modified: ' can have up to 10 characters before (they are retained).
+" Restores cursor and window position using save_cursor variable.
+function! LastModified()
+  if &modified
+    let save_cursor = getpos(".")
+    let n = min([20, line("$")])
+    keepjumps exe '1,' . n . 's#^\(.\{,10}Last modified: \).*#\1' .
+          \ strftime('%a %b %d, %Y  %I:%M%p') . '#e'
+    call histdel('search', -1)
+    call setpos('.', save_cursor)
+  endif
+endfun
+autocmd BufWritePre * call LastModified()
+function! GenHeader(...)
+  return  repeat(a:1, a:2) . "\n"
+  \       . a:1 . " \n"
+  \       . a:1 . " Written by Maximilian-Huber.de\n"
+  \       . a:1 . " \n"
+  \       . a:1 . " Last modified: \n"
+  \       . "\n"
+  call LastModified()
+endfunction
+
+"                                                                    }}}
 " ===================================================================}}}
-" ====  keymappings  ================================================
+" ====  keymappings / input  ========================================
 " ==================================================================={{{
+if has("mouse")
+  set mouse=a " Enable mouse usage (all modes) alternativ nvc
+  set mousehide
+endif
 
 nnoremap ; :
 let mapleader=","
@@ -332,6 +317,7 @@ cmap w!! w !sudo tee % >/dev/null
 "Make Y behave like other capitals
 map Y y$
 
+"Reload vimrc
 nmap <Leader>r :source $MYVIMRC
 
 "nmap <silent> <leader>ev :tabedit $MYVIMRC<CR>
@@ -382,12 +368,14 @@ inoremap <F12> <nop>
 vmap <leader>Q gq
 nmap <leader>Q gqap
 
+"for cleaning
 nmap <Leader>dt :call DeleteTrailing()
 nnoremap <leader>T :set expandtab<cr>:retab!<cr>
+nmap <Leader>dT :call Cleanup()
 
+" Search and replace
 nnoremap <Leader>s :%s/\<<C-r><C-w>\>//g<Left><Left>
 nnoremap _s :%s/\<<C-r><C-w>\>/<C-r><C-w>/g<Left><Left>
-
 "                                                                    }}}
 " ====  buffer  ====================================================={{{
 "Open last/alternate buffer
@@ -546,6 +534,7 @@ endfunction "}}}
 
 function! SetShFile() "{{{
   setlocal sw=2 ts=2 et
+  nmap <silent> __h "=GenHeader('#',80)<CR>:0put =<CR>
 
   map <c-F5> :w<CR>:!sh "%"<CR>
 endfunction "}}}
@@ -590,6 +579,7 @@ function! SetHaskellFile() "{{{
   " syntastic
   let g:syntastic_auto_loc_list=1
 endfunction "}}}
+
 
 function! SetJavaFile() "{{{
   setlocal shiftwidth=4 softtabstop=4 tabstop=4 expandtab
@@ -678,90 +668,92 @@ function! SetMailFile() "{{{
   set spellfile=~/.vim/spellfile.add
 endfunction "}}}
 
-"augroup filetypedetect
-  "au!
-  autocmd BufRead,BufNewFile tmpmsg-*.txt set filetype=mail
-  autocmd BufRead,BufNewFile *.tex set filetype=tex
-  autocmd BufRead,BufNewFile *.scala set filetype=scala
-  autocmd BufRead,BufNewFile *.log setlocal autoread
-  autocmd BufRead,BufNewFile *.nlogo set filetype=nlogo
-  autocmd BufRead,BufNewFile *.pde set filetype=arduino
-  autocmd BufRead,BufNewFile *.ino set filetype=arduino
-  "au! BufRead,BufNewFile *.m,*.oct setfiletype matlab
-"augroup END
+if has("autocmd")
+  "augroup filetypedetect
+    "au!
+    autocmd BufRead,BufNewFile tmpmsg-*.txt set filetype=mail
+    autocmd BufRead,BufNewFile *.tex set filetype=tex
+    autocmd BufRead,BufNewFile *.scala set filetype=scala
+    autocmd BufRead,BufNewFile *.log setlocal autoread
+    autocmd BufRead,BufNewFile *.nlogo set filetype=nlogo
+    autocmd BufRead,BufNewFile *.pde set filetype=arduino
+    autocmd BufRead,BufNewFile *.ino set filetype=arduino
+    "au! BufRead,BufNewFile *.m,*.oct setfiletype matlab
+  "augroup END
 
-augroup vimrc_autocmds
-  au!
-  autocmd FileType sh      call SetShFile()
-  autocmd FileType tex     call SetLaTeXFile()
-  autocmd FileType haskell call SetHaskellFile()
-  autocmd FileType java    call SetJavaFile()
-  autocmd FileType matlab  call SetMatlabFile()
-  autocmd FileType kiv     call SetKIVFile()
-  autocmd FileType python  call SetPythonFile()
-  autocmd FileType human   call SetTextFile()
-  autocmd FileType text    call SetTextFile()
-  autocmd FileType mail    call SetMailFile()
-  autocmd FileType txt     call SetTextFile()
-  autocmd FileType css     call SetCssFile()
-  autocmd FileType less    call SetCssFile()
-  autocmd FileType php setlocal sw=2 ts=2 et
-  autocmd FileType arduino setlocal sw=2 ts=2 et
-  " in makefiles, don't expand tabs to spaces
-  autocmd FileType make setlocal noexpandtab shiftwidth=8
-augroup END
+  augroup vimrc_autocmds
+    au!
+    autocmd FileType sh      call SetShFile()
+    autocmd FileType tex     call SetLaTeXFile()
+    autocmd FileType haskell call SetHaskellFile()
+    autocmd FileType java    call SetJavaFile()
+    autocmd FileType matlab  call SetMatlabFile()
+    autocmd FileType kiv     call SetKIVFile()
+    autocmd FileType python  call SetPythonFile()
+    autocmd FileType human   call SetTextFile()
+    autocmd FileType text    call SetTextFile()
+    autocmd FileType mail    call SetMailFile()
+    autocmd FileType txt     call SetTextFile()
+    autocmd FileType css     call SetCssFile()
+    autocmd FileType less    call SetCssFile()
+    autocmd FileType php setlocal sw=2 ts=2 et
+    autocmd FileType arduino setlocal sw=2 ts=2 et
+    " in makefiles, don't expand tabs to spaces
+    autocmd FileType make setlocal noexpandtab shiftwidth=8
+  augroup END
 
-augroup Shebang
-  autocmd BufNewFile *.sh 0put =\"#!/bin/sh\"|$
-  autocmd BufNewFile *.py 0put =\"#!/usr/bin/env python\<nl># -*- coding: iso-8859-15 -*-\<nl>\"|$
-  autocmd BufNewFile *.rb 0put =\"#!/usr/bin/env ruby\<nl># -*- coding: None -*-\<nl>\"|$
-augroup END
+  augroup Shebang
+    autocmd BufNewFile *.sh 0put =\"#!/bin/sh\"|$
+    autocmd BufNewFile *.py 0put =\"#!/usr/bin/env python\<nl># -*- coding: iso-8859-15 -*-\<nl>\"|$
+    autocmd BufNewFile *.rb 0put =\"#!/usr/bin/env ruby\<nl># -*- coding: None -*-\<nl>\"|$
+  augroup END
 
-" Transparent editing of gpg encrypted files.                         {{{
-" Placed Public Domain by Wouter Hanegraaff <wouter@blub.net>
-" (asc support and sh -c"..." added by Osamu Aoki)
-augroup aencrypted
-  au!
-  " First make sure nothing is written to ~/.viminfo while editing
-  " an encrypted file.
-  autocmd BufReadPre,FileReadPre      *.asc set viminfo=
-  " We don't want a swap file, as it writes unencrypted data to disk
-  autocmd BufReadPre,FileReadPre      *.asc set noswapfile
-  " Switch to binary mode to read the encrypted file
-  autocmd BufReadPre,FileReadPre      *.asc set bin
-  autocmd BufReadPre,FileReadPre      *.asc let ch_save = &ch|set ch=2
-  autocmd BufReadPost,FileReadPost    *.asc '[,']!sh -c "gpg --decrypt 2> /dev/null"
-  " Switch to normal mode for editing
-  autocmd BufReadPost,FileReadPost    *.asc set nobin
-  autocmd BufReadPost,FileReadPost    *.asc let &ch = ch_save|unlet ch_save
-  autocmd BufReadPost,FileReadPost    *.asc execute ":doautocmd BufReadPost " . expand("%:r")
-  " Convert all text to encrypted text before writing
-  autocmd BufWritePre,FileWritePre    *.asc   '[,']!sh -c "gpg --default-recipient-self -ae 2>/dev/null"
-  " Undo the encryption so we are back in the normal text, directly
-  " after the file has been written.
-  autocmd BufWritePost,FileWritePost    *.asc   u
-augroup END
-augroup bencrypted
-  au!
-  " First make sure nothing is written to ~/.viminfo while editing
-  " an encrypted file.
-  autocmd BufReadPre,FileReadPre      *.gpg set viminfo=
-  " We don't want a swap file, as it writes unencrypted data to disk
-  autocmd BufReadPre,FileReadPre      *.gpg set noswapfile
-  " Switch to binary mode to read the encrypted file
-  autocmd BufReadPre,FileReadPre      *.gpg set bin
-  autocmd BufReadPre,FileReadPre      *.gpg let ch_save = &ch|set ch=2
-  autocmd BufReadPost,FileReadPost    *.gpg '[,']!sh -c "gpg --decrypt 2> /dev/null"
-  " Switch to normal mode for editing
-  autocmd BufReadPost,FileReadPost    *.gpg set nobin
-  autocmd BufReadPost,FileReadPost    *.gpg let &ch = ch_save|unlet ch_save
-  autocmd BufReadPost,FileReadPost    *.gpg execute ":doautocmd BufReadPost " . expand("%:r")
-  " Convert all text to encrypted text before writing
-  autocmd BufWritePre,FileWritePre    *.gpg   '[,']!sh -c "gpg --default-recipient-self --armor -ev 2>/dev/null"
-  " Undo the encryption so we are back in the normal text, directly
-  " after the file has been written.
-  autocmd BufWritePost,FileWritePost    *.gpg   u
-augroup END
+  " Transparent editing of gpg encrypted files.                         {{{
+  " Placed Public Domain by Wouter Hanegraaff <wouter@blub.net>
+  " (asc support and sh -c"..." added by Osamu Aoki)
+  augroup aencrypted
+    au!
+    " First make sure nothing is written to ~/.viminfo while editing
+    " an encrypted file.
+    autocmd BufReadPre,FileReadPre      *.asc set viminfo=
+    " We don't want a swap file, as it writes unencrypted data to disk
+    autocmd BufReadPre,FileReadPre      *.asc set noswapfile
+    " Switch to binary mode to read the encrypted file
+    autocmd BufReadPre,FileReadPre      *.asc set bin
+    autocmd BufReadPre,FileReadPre      *.asc let ch_save = &ch|set ch=2
+    autocmd BufReadPost,FileReadPost    *.asc '[,']!sh -c "gpg --decrypt 2> /dev/null"
+    " Switch to normal mode for editing
+    autocmd BufReadPost,FileReadPost    *.asc set nobin
+    autocmd BufReadPost,FileReadPost    *.asc let &ch = ch_save|unlet ch_save
+    autocmd BufReadPost,FileReadPost    *.asc execute ":doautocmd BufReadPost " . expand("%:r")
+    " Convert all text to encrypted text before writing
+    autocmd BufWritePre,FileWritePre    *.asc   '[,']!sh -c "gpg --default-recipient-self -ae 2>/dev/null"
+    " Undo the encryption so we are back in the normal text, directly
+    " after the file has been written.
+    autocmd BufWritePost,FileWritePost    *.asc   u
+  augroup END
+  augroup bencrypted
+    au!
+    " First make sure nothing is written to ~/.viminfo while editing
+    " an encrypted file.
+    autocmd BufReadPre,FileReadPre      *.gpg set viminfo=
+    " We don't want a swap file, as it writes unencrypted data to disk
+    autocmd BufReadPre,FileReadPre      *.gpg set noswapfile
+    " Switch to binary mode to read the encrypted file
+    autocmd BufReadPre,FileReadPre      *.gpg set bin
+    autocmd BufReadPre,FileReadPre      *.gpg let ch_save = &ch|set ch=2
+    autocmd BufReadPost,FileReadPost    *.gpg '[,']!sh -c "gpg --decrypt 2> /dev/null"
+    " Switch to normal mode for editing
+    autocmd BufReadPost,FileReadPost    *.gpg set nobin
+    autocmd BufReadPost,FileReadPost    *.gpg let &ch = ch_save|unlet ch_save
+    autocmd BufReadPost,FileReadPost    *.gpg execute ":doautocmd BufReadPost " . expand("%:r")
+    " Convert all text to encrypted text before writing
+    autocmd BufWritePre,FileWritePre    *.gpg   '[,']!sh -c "gpg --default-recipient-self --armor -ev 2>/dev/null"
+    " Undo the encryption so we are back in the normal text, directly
+    " after the file has been written.
+    autocmd BufWritePost,FileWritePost    *.gpg   u
+  augroup END
+endif
 "                                                                    }}}
 " ===================================================================}}}
 " ====  plugin specific  ============================================
@@ -831,6 +823,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle "sudar/vim-arduino-snippets"
   Bundle "sudar/vim-arduino-syntax"
 
+  " not used Bundles                                                   {{{
   "testing
   "Bundle 'http://github.com/tpope/vim-fugitive'
   "Bundle 'https://github.com/jpalardy/vim-slime'
@@ -843,7 +836,6 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "Bundle 'lastpos.vim'
   "Bundle 'git://github.com/vim-scripts/LaTeX-Box.git'
 
-  " not used Bundles                                                   {{{
   "Bundle 'xoria255.vim'
   "Bundle 'neverland.vim--All-colorschemes-suck'
   "Bundle 'speeddating.vim'
