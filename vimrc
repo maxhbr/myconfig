@@ -2,11 +2,11 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Tue May 06, 2014  09:49
+" Last modified: Tue May 06, 2014  09:58
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
-"       will install some plugins via vundle
+"       will install some plugins via Vundle
 " !!!! !!! !! !
 
 " auto reload when saving
