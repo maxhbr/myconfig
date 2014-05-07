@@ -1,6 +1,11 @@
 #!/bin/bash
+#
+# Written by Maximilian-Huber.de
+#
+# Last modified: Wed May 07, 2014  09:38
 
-# Variables
+###############################################################################
+# VARIABLES
 USER="$(whoami)"
 HOST="$(hostname)"
 [[ $HOST == "x230" ]] && {
@@ -13,7 +18,10 @@ HOST="$(hostname)"
   }
 }
 ASIMFile="${FOLDER}/asimilieren"
+>$ASIMFile
 
+###############################################################################
+# FILES
 files() {
   [[ $HOST == "x230" ]] && {
     cat <<X230FILES
@@ -85,7 +93,7 @@ UDOOFILES
 }
 
 ###############################################################################
-#RUN
+# RUN
 echo "copy"
 echo
 files | while IFS= read -r FILE; do
@@ -123,10 +131,13 @@ files | while IFS= read -r FILE; do
   }
 done
 
+###############################################################################
+# GIT
 echo
 echo "git"
 echo
 
-cd "$FOLDER"
+pushd "$FOLDER"
 git commit -a -m "automatisch aktualisiert"
 git push
+popd
