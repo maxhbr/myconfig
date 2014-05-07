@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Wed May 07, 2014  12:16
+" Last modified: Wed May 07, 2014  03:59
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -584,7 +584,6 @@ function! SetHaskellFile() "{{{
   let g:syntastic_auto_loc_list=1
 endfunction "}}}
 
-
 function! SetJavaFile() "{{{
   setlocal shiftwidth=4 softtabstop=4 tabstop=4 expandtab
 
@@ -607,10 +606,6 @@ endfunction "}}}
 
 let g:tex_flavor = "latex"
 function! SetLaTeXFile() "{{{
-  "nmap <leader>cl :! runlatex -pdf % > logfile 2>&1 &<CR><CR>
-  "nmap <leader>oe :! llpp %:r.pdf > /dev/null 2>&1 &<CR><CR>
-  "nmap <leader>oa :! llpp *.pdf > /dev/null 2>&1 &<CR><CR>
-
   setlocal wrap
   setlocal sw=2
   setlocal ts=2
@@ -618,18 +613,10 @@ function! SetLaTeXFile() "{{{
   setlocal textwidth=79
   setlocal cc=80
 
-
   setlocal linebreak
 
   setlocal foldmethod=marker
   setlocal foldmarker={{{,}}}
-
-  "map \gq ?^$\\|^\s*\(\\begin\\|\\end\\|\\label\)?1<CR>gq//-1<CR>
-  "omap lp ?^$\\|^\s*\(\\begin\\|\\end\\|\\label\)?1<CR>//-1<CR>.<CR>
-
-  "inoremap <expr>" getline('.')[col(".")-2] =~ "\\s" ? "\"`\"\'<left><left>" : "\"'"
-  inoremap <expr>[ getline('.')[col(".")-2] =~ "\\" ? "[<C-v>u005c]<left><left>" : "["
-  "inoremap <expr>{ getline('.')[col(".")-2] =~ "\\" ? "{<C-v>u005c}<left><left>" : "{"
 
   set iskeyword+=: " type /ref{fig: and prec <C-n> to autocomplete references
   set iskeyword+=- " same with -
@@ -645,6 +632,21 @@ function! SetLaTeXFile() "{{{
   setlocal spell
   set spelllang=de_de,en_us
   set spellfile=~/.vim/spellfile.add
+
+  "inoremap <expr>" getline('.')[col(".")-2] =~ "\\s" ? "\"`\"\'<left><left>" : "\"'"
+  inoremap <expr>[ getline('.')[col(".")-2] =~ "\\" ? "[<C-v>u005c]<left><left>" : "["
+  "inoremap <expr>{ getline('.')[col(".")-2] =~ "\\" ? "{<C-v>u005c}<left><left>" : "{"
+
+  "nmap <leader>cl :! runlatex -pdf % > logfile 2>&1 &<CR><CR>
+  "nmap <leader>oe :! llpp %:r.pdf > /dev/null 2>&1 &<CR><CR>
+  "nmap <leader>oa :! llpp *.pdf > /dev/null 2>&1 &<CR><CR>
+
+  function! SyncTexForward()
+    let execstr = 'silent !zathura --synctex-forward '.line('.').":".col('.').":".'%:t'
+    exec execstr . ' ' . system("find $(dirname %) -type f -name '*.pdf' -printf '%T@ %p\n' \ | sort -n \ | tail -1 \ | cut -f2- -d\" \"")
+    redraw!
+  endfunction
+  nmap <Leader>f :call SyncTexForward()<CR>
 endfunction "}}}
 
 function! SetCssFile() "{{{
