@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Tue May 06, 2014  09:58
+" Last modified: Tue May 06, 2014  10:53
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -46,8 +46,6 @@ set ffs=unix,dos,mac
 set encoding=utf8
 
 set virtualedit=all
-set backspace=2
-" set backspace=indent,eol,start
 set showcmd   " Show (partial) command in status line.
 set showmatch " Show matching brackets.
 set autowrite " Automatically save before commands like :next and :make
@@ -121,10 +119,12 @@ hi NonText cterm=NONE ctermfg=NONE
 set synmaxcol=128
 "                                                                    }}}
 " ====  line numbering  ============================================={{{
-au InsertEnter * :set nu
-au InsertLeave * :set rnu
-"au FocusLost * :set nu
-"au FocusGained * :set rnu
+if has("autocmd")
+  au InsertEnter * :set nu
+  au InsertLeave * :set rnu
+  "au FocusLost * :set nu
+  "au FocusGained * :set rnu
+endif
 set rnu
 "                                                                    }}}
 " ====  backup / undo  =============================================={{{
@@ -149,7 +149,9 @@ set nobackup
 "set directory=~/.vim-tmp,~/.tmp,~/tmp,/var/tmp,/tmp
 "set writebackup
 "                                                                    }}}
-" ====  desing ======================================================{{{
+" ===================================================================}}}
+" ====  design  =====================================================
+" ==================================================================={{{
 
 set title
 set cursorline
@@ -198,7 +200,6 @@ else
     highlight OverLength ctermbg=red ctermfg=white guibg=#592929
     match OverLength /\%81v.\+/
 endif
-"                                                                    }}}
 " ===================================================================}}}
 " ====  spelling  ===================================================
 " ==================================================================={{{
@@ -302,6 +303,8 @@ if has("mouse")
   set mouse=a " Enable mouse usage (all modes) alternativ nvc
   set mousehide
 endif
+set backspace=2
+" set backspace=indent,eol,start
 
 nnoremap ; :
 let mapleader=","
@@ -767,7 +770,6 @@ if !isdirectory(expand('~').'/.vim/bundle/vundle')
 endif
 
 if isdirectory(expand('~').'/.vim/bundle/vundle')
-"Vundle                                                              {{{
   filetype off " required!
 
   set rtp+=~/.vim/bundle/vundle/
@@ -818,8 +820,6 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'L9'
   Bundle 'tsaleh/vim-align.git'
 
-  "Bundle 'git://github.com/tclem/vim-arduino.git'
-
   Bundle "sudar/vim-arduino-snippets"
   Bundle "sudar/vim-arduino-syntax"
 
@@ -835,6 +835,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "frisch aussortiert
   "Bundle 'lastpos.vim'
   "Bundle 'git://github.com/vim-scripts/LaTeX-Box.git'
+  "Bundle 'git://github.com/tclem/vim-arduino.git'
 
   "Bundle 'xoria255.vim'
   "Bundle 'neverland.vim--All-colorschemes-suck'
@@ -878,7 +879,6 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "Bundle 'vim-octopress'
   "Bundle 'tsaleh/vim-align.git'
   "                                                                  }}}
-"                                                                    }}}
   filetype plugin indent on
 
   " ===================================================================
@@ -886,10 +886,6 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   map <silent> <C-N> :NERDTree<CR>
   " start NERDTree at startup
   " autocmd VimEnter * NERDTree
-
-  " ===================================================================
-  " AutoComplPop: acp
-  " http://www.vim.org/scripts/script.php?script_id=1880
 
   " ===================================================================
   "Gundo
