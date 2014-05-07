@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Wed May 07, 2014  09:48
+" Last modified: Wed May 07, 2014  12:16
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -118,7 +118,8 @@ hi NonText cterm=NONE ctermfg=NONE
 " stops slow responding in large files
 set synmaxcol=128
 "                                                                    }}}
-" ====  line numbering  ============================================={{{
+" ====  line numberig  ============================================={{{
+" TODO: has problems?
 if has("autocmd")
   au InsertEnter * set nu
   au InsertLeave * set rnu
@@ -150,7 +151,7 @@ set nobackup
 "set writebackup
 "                                                                    }}}
 " ===================================================================}}}
-" ====  design  =====================================================
+" ====  appearance  =================================================
 " ==================================================================={{{
 
 set title
@@ -828,7 +829,6 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "Bundle 'http://github.com/tpope/vim-fugitive'
   "Bundle 'https://github.com/jpalardy/vim-slime'
   "Bundle 'LatexParFormat'
-  "Bundle 'Indent-Guides'
   "Bundle 'SuperTab'
   "Bundle 'git://github.com/scala/scala-dist/tree/master/tool-support/src/vim.git'
 
@@ -886,6 +886,8 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   map <silent> <C-N> :NERDTree<CR>
   " start NERDTree at startup
   " autocmd VimEnter * NERDTree
+  " open a NERDTree automatically when vim starts up if no files were specified
+  autocmd vimenter * if !argc() | NERDTree | endif
 
   " ===================================================================
   "Gundo
