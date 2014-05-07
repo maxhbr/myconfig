@@ -22,14 +22,14 @@
 # Last modified: Wed May 07, 2014  08:10
 
 ################################################################################
-# Aditional Configuration:
+# Aditional Configuration files:
 # ~/.latexmkrc
 #       $pdflatex = 'pdflatex -interaction=nonstopmode --shell-escape';
 #       $dvi_previewer = "start xdvi";
-#       $pdf_previewer = "zathura -l error -s -x '/home/hubi/bin/myTexWrapper.sh %{line} \"%{input}\"' %O %S"
+#       $pdf_previewer = "zathura -l error -s -x 'myTexWrapper.sh %{line} \"%{input}\"' %O %S"
 # ~/.vimrc
 #       function! SyncTexForward()
-#         exec 'silent !/home/hubi/bin/myTexWrapper.sh % '.line('.')." ".col('.')
+#         exec 'silent !myTexWrapper.sh % '.line('.')." ".col('.')
 #         redraw!
 #       endfunction
 #       nmap <Leader>f :call SyncTexForward()<CR>
@@ -62,6 +62,7 @@ xelatexcmd="latexmk -pdflatex=xelatex -pdf -synctex=1 -outdir=\"xelatexmk\" -pvc
     tmux send-keys -t $SRVR:1 "${cmd}${MAIN}" 'C-m'
     tmux split-window -t $SRVR:1
     tmux send-keys -t $SRVR:1 "vim --servername ${SRVR} $MAIN" 'C-m'
+    tmux select-layout -t $SRVR:1 main-horizontal
   fi
   tmux attach -t $SRVR
 } || {
@@ -81,10 +82,13 @@ xelatexcmd="latexmk -pdflatex=xelatex -pdf -synctex=1 -outdir=\"xelatexmk\" -pvc
     vim --servername $SRVR --remote +$1 "$2"
   } || {
     # Vim -> Zathura
-    zathura --synctex-forward "$2:$3:$1" \
-      $(find $DIR -type f -name '*.pdf' -printf '%T@ %p\n' \
-        | sort -n \
-        | tail -1 \
-        | cut -f2- -d " ")
+    OUT=$(find $DIR -type f -name '*.pdf' -printf '%T@ %p\n' \
+      | sort -n \
+      | tail -1 \
+      | cut -f2- -d " ")
+    zathura --synctex-forward "$2:$3:$1" $OUT
+    if [ $? != 0 ]; then
+      zathura  -l error -s -x 'myTexWrapper.sh %{line} "%{input}"' $OUT&
+    fi
   }
 }
