@@ -31,6 +31,7 @@ myinstall "${FOLDER}fontconfig/fonts.conf" "/home/hubi/.fontconfig/fonts.conf" 7
 myinstall "${FOLDER}ghci" "/home/hubi/.ghci" 600 hubi users
 myinstall "${FOLDER}gitconfig" "/home/hubi/.gitconfig" 600 hubi users
 myinstall "${FOLDER}inputrc" "/home/hubi/.inputrc" 600 hubi users
+myinstall "${FOLDER}latexmkrc" "/home/hubi/.latexmkrc" 600 hubi users
 myinstall "${FOLDER}mutt/colors.solarized-light" "/home/hubi/.mutt/colors.solarized-light" 600 hubi users
 myinstall "${FOLDER}ncmpcpp/config" "/home/hubi/.ncmpcpp/config" 600 hubi users
 myinstall "${FOLDER}tmux.conf" "/home/hubi/.tmux.conf" 600 hubi users
