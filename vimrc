@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Tue May 06, 2014  10:53
+" Last modified: Wed May 07, 2014  09:48
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -120,12 +120,12 @@ set synmaxcol=128
 "                                                                    }}}
 " ====  line numbering  ============================================={{{
 if has("autocmd")
-  au InsertEnter * :set nu
-  au InsertLeave * :set rnu
-  "au FocusLost * :set nu
-  "au FocusGained * :set rnu
+  au InsertEnter * set nu
+  au InsertLeave * set rnu
+  "au FocusLost * set nu
+  "au FocusGained * set rnu
 endif
-set rnu
+set nu
 "                                                                    }}}
 " ====  backup / undo  =============================================={{{
 
