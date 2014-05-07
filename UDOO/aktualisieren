@@ -34,6 +34,7 @@ done <<FILES
 ~/.config/beets/config.yaml
 /etc/mpd.conf
 /etc/dnsmasq.conf
+/etc/sysctl.d/90-inotify.conf
 FILES
 
 echo
