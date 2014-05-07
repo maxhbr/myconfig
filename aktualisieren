@@ -2,7 +2,7 @@
 #
 # Written by Maximilian-Huber.de
 #
-# Last modified: Wed May 07, 2014  01:00
+# Last modified: Wed May 07, 2014  01:02
 
 ###############################################################################
 # variables
@@ -159,9 +159,9 @@ files | while IFS= read -r FILE; do
       perms=$( stat --format=%a $FILE )
       ownr=$(ls -l $FILE | awk '{ print $3 }') #<-- will give you the owner
       grp=$(ls -l $FILE | awk '{ print $4 }') #<-- will give you the group
-      echo "myinstall \${FOLDER}${DIR}${BASE} $FILE $perms $ownr $grp" >>"$ASIMFile"
+      echo "myinstall \"\${FOLDER}${DIR}${BASE}\" \"$FILE\" $perms $ownr $grp" >>"$ASIMFile"
     else
-      echo "# \${FOLDER}${DIR}${BASE} $FILE" >>"$ASIMFile"
+      echo "# \"\${FOLDER}${DIR}${BASE}\" \"$FILE\"" >>"$ASIMFile"
     fi
   }
 done
