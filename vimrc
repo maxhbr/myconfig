@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Wed May 07, 2014  03:59
+" Last modified: Wed May 07, 2014  08:33
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -642,8 +642,7 @@ function! SetLaTeXFile() "{{{
   "nmap <leader>oa :! llpp *.pdf > /dev/null 2>&1 &<CR><CR>
 
   function! SyncTexForward()
-    let execstr = 'silent !zathura --synctex-forward '.line('.').":".col('.').":".'%:t'
-    exec execstr . ' ' . system("find $(dirname %) -type f -name '*.pdf' -printf '%T@ %p\n' \ | sort -n \ | tail -1 \ | cut -f2- -d\" \"")
+    exec 'silent !/home/hubi/bin/myTexWrapper.sh % '.line('.')." ".col('.')
     redraw!
   endfunction
   nmap <Leader>f :call SyncTexForward()<CR>

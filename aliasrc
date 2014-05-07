@@ -369,8 +369,15 @@ myPdfreducesize() {
 #   LaTeX
 
 mylatexmk(){
-  grep -l '\\documentclass' *tex | \
-    xargs latexmk -pdf -synctex=1 -outdir=".latexmk_files" -pvc
+  # TODO: in work
+  [[ -z $TMUX ]] || {
+    SESSION=$(tmux list-panes -F "#S")
+    MAIN=$(grep -l '\\documentclass' *tex)
+    tmux send-keys \
+      "latexmk -pdf -synctex=1 -outdir=\".latexmk_files\" -pvc $MAIN" 'C-m'
+    tmux split-window -t $SESSION:1 -h
+    tmux send-keys "vim --servername $(basename $(dirname $MAIN))" 'C-m'
+  }
 }
 
 mylualatexmk(){
