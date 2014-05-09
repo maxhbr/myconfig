@@ -390,6 +390,8 @@ myxelatexmk(){
     xargs latexmk -pdflatex=xelatex -pdf -synctex=1 -outdir=".xelatexmk_files" -pvc
 }
 
+alias mtw="myTexWrapper.sh"
+
 #-------------------------------------------------------------------}}}
 #   Mathe
 #-------------------------------------------------------------------{{{
