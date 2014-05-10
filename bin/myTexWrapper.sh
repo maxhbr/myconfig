@@ -61,7 +61,11 @@ xelatexcmd="latexmk -pdflatex=xelatex -pdf -synctex=1 -outdir=\"xelatexmk\" -pvc
     tmux new-session -s $SRVR -n base -d
     tmux send-keys -t $SRVR:1 "${cmd}${MAIN}" 'C-m'
     tmux split-window -t $SRVR:1
-    tmux send-keys -t $SRVR:1 "vim --servername ${SRVR} $MAIN" 'C-m'
+    NEWEST=$(find $DIR -type f -name '*.tex' -printf '%T@ %p\n' \
+      | sort -n \
+      | tail -1 \
+      | cut -f2- -d " ")
+    tmux send-keys -t $SRVR:1 "vim --servername ${SRVR} $NEWEST" 'C-m'
     tmux select-layout -t $SRVR:1 main-horizontal
   fi
   tmux attach -t $SRVR
@@ -82,13 +86,13 @@ xelatexcmd="latexmk -pdflatex=xelatex -pdf -synctex=1 -outdir=\"xelatexmk\" -pvc
     vim --servername $SRVR --remote +$1 "$2"
   } || {
     # Vim -> Zathura
-    OUT=$(find $DIR -type f -name '*.pdf' -printf '%T@ %p\n' \
+    PDF=$(find $DIR -type f -name '*.pdf' -printf '%T@ %p\n' \
       | sort -n \
       | tail -1 \
       | cut -f2- -d " ")
-    zathura --synctex-forward "$2:$3:$1" $OUT
+    zathura --synctex-forward "$2:$3:$1" $PDF
     if [ $? != 0 ]; then
-      zathura  -l error -s -x 'myTexWrapper.sh %{line} "%{input}"' $OUT&
+      zathura  -l error -s -x 'myTexWrapper.sh %{line} "%{input}"' $PDF&
     fi
   }
 }
