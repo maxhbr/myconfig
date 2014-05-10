@@ -35,10 +35,6 @@
 #       nmap <Leader>f :call SyncTexForward()<CR>
 ################################################################################
 
-latexcmd="latexmk -pdf -synctex=1 -outdir=\"latexmk\" -pvc "
-lualatexcmd="latexmk -pdflatex=lualatex -pdf -synctex=1 -outdir=\"lualatexmk\" -pvc "
-xelatexcmd="latexmk -pdflatex=xelatex -pdf -synctex=1 -outdir=\"xelatexmk\" -pvc "
-
 [[ $# < 2 ]] && {
   MAIN=$(grep -l '\\documentclass' *tex 2> /dev/null)
   if [ $? != 0 ]; then
@@ -49,17 +45,19 @@ xelatexcmd="latexmk -pdflatex=xelatex -pdf -synctex=1 -outdir=\"xelatexmk\" -pvc
 
   tmux has-session -t $SRVR 2> /dev/null
   if [ $? != 0 ]; then
-    cmd=$latexcmd
+    cmd="latexmk"
     ([[ $# == 1 ]] && [[ "$1" == lua* ]] || [[ -d "./lualatexmk" ]]) && {
-      cmd=$lualatexcmd
+      cmd="${cmd} -pdflatex=lualatex"
+    } || {
+      ([[ $# == 1 ]] && [[ "$1" == xe* ]] || [[ -d "./xelatexmk" ]]) && {
+        cmd="${cmd} -pdflatex=xelatex"
+      }
     }
-    ([[ $# == 1 ]] && [[ "$1" == xe* ]] || [[ -d "./xelatexmk" ]]) && {
-      cmd=$xelatexcmd
-    }
+    cmd="${cmd} -pdf -synctex=1 -outdir=\"xelatexmk\" -pvc"
 
     echo "$SRVR" > "$(dirname $MAIN)/.srvr"
     tmux new-session -s $SRVR -n base -d
-    tmux send-keys -t $SRVR:1 "${cmd}${MAIN}" 'C-m'
+    tmux send-keys -t $SRVR:1 "${cmd} ${MAIN}" 'C-m'
     tmux split-window -t $SRVR:1
     NEWEST=$(find $DIR -type f -name '*.tex' -printf '%T@ %p\n' \
       | sort -n \
