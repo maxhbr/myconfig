@@ -47,13 +47,13 @@
   if [ $? != 0 ]; then
     cmd="latexmk"
     ([[ $# == 1 ]] && [[ "$1" == lua* ]] || [[ -d "./lualatexmk" ]]) && {
-      cmd="${cmd} -pdflatex=lualatex"
+      cmd="${cmd} -pdflatex=lualatex -outdir=\"lualatexmk\""
     } || {
       ([[ $# == 1 ]] && [[ "$1" == xe* ]] || [[ -d "./xelatexmk" ]]) && {
-        cmd="${cmd} -pdflatex=xelatex"
+        cmd="${cmd} -pdflatex=xelatex -outdir=\"xelatexmk\""
       }
     }
-    cmd="${cmd} -pdf -synctex=1 -outdir=\"xelatexmk\" -pvc"
+    cmd="${cmd} -pdf -synctex=1 -pvc"
 
     echo "$SRVR" > "$(dirname $MAIN)/.srvr"
     tmux new-session -s $SRVR -n base -d
