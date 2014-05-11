@@ -10,15 +10,15 @@ UUID=c949bcd6-f4ae-403c-93c0-e399abbaed57	/home     	ext4      	rw,noatime,data=
 # /dev/mapper/tank-lvol--var
 UUID=5f81653a-2094-4f90-997c-64d1bd204e4c	/var      	ext4      	rw,noatime,data=ordered    0 2
 
-# /dev/mapper/tank2-lvol--swap
-UUID=f8068637-ccd1-4992-8970-cda2d2b1df38   none        swap        defaults                            0 0
+# /dev/mapper/tank2-swap
+UUID=df065cc4-c2c6-4e76-9f48-aa97d076e142   none        swap        defaults                            0 0
 
 /dev/dvd   /media/dvd   auto   ro,user,noauto,unhide   0 0
 /dev/cdrom   /media/dvd   auto   ro,user,noauto,unhide   0 0
 
 # 320GB hdd
 UUID=6CA06556A0652832   /mnt/hdd  	ntfs      	defaults,nls=utf8,umask=007,gid=46,uid=hubi,rw,noauto	0 2
-# ssd
+# 3rd ssd
 UUID=71a34cb1-0484-4075-8fbd-c079621c2bf3 /mnt/hdd  	ext4      	rw,noatime,discard,data=ordered,noauto	0 2
 # backup
 UUID=09ec7ae8-70a1-407b-860f-a7a21e3f671d /backup ext4 rw,noatime,discard,data=ordered,noauto	0 2
