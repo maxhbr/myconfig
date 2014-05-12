@@ -33,6 +33,8 @@
 #         redraw!
 #       endfunction
 #       nmap <Leader>f :call SyncTexForward()<CR>
+# Optional:
+#       alias myTexWrapper.sh to something like mtw
 ################################################################################
 
 [[ $# < 2 ]] && {
