@@ -1,13 +1,18 @@
 #!/bin/sh
 
-#Rip with Mplayer / encode with LAME
-for track in *.wma; do
-  ffmpeg -y -i "$track" -f wav - | \
-    lame --cbr -b 321 - "${track%.wma}.mp3"
+#for wma
+for a in *.wma; do
+  ffmpeg -y -i "$a" -f wav - | \
+    lame --cbr -b 321 - "${a%.wma}.mp3"
 done
 
-#Rip with FAAD / encode with LAME
-for track in *.m4a; do 
-  faad -o - "$track" | \
-    lame --cbr -b 321 - "${track%.m4a}.mp3"
+#for m4a
+for a in *.m4a; do 
+  faad -o - "$a" | \
+    lame --cbr -b 321 - "${a%.m4a}.mp3"
+done
+
+#for flac
+for a in *.flac; do
+  < /dev/null ffmpeg -i "$a" -qscale:a 0 "${a[@]/%flac/mp3}"
 done
