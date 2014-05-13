@@ -7,7 +7,7 @@ for track in *.wma; do
 done
 
 #Rip with FAAD / encode with LAME
-for i in *.m4a; do 
+for track in *.m4a; do 
   faad -o - "$track" | \
     lame --cbr -b 321 - "${track%.m4a}.mp3"
 done
