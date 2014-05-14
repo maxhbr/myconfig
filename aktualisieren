@@ -2,7 +2,7 @@
 #
 # Written by Maximilian-Huber.de
 #
-# Last modified: Wed May 14, 2014  09:49
+# Last modified: Wed May 14, 2014  09:51
 
 ###############################################################################
 # variables
@@ -116,6 +116,7 @@ X230FILES
   [[ $HOST == "udoo" ]] && {
     cat <<UDOOFILES
 ~/.config/beets/config.yaml
+/etc/asound.conf
 /etc/mpd.conf
 /etc/dnsmasq.conf
 /etc/sysctl.d/90-inotify.conf
