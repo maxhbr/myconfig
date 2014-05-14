@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Wed May 07, 2014  09:05
+" Last modified: Wed May 14, 2014  05:09
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -895,6 +895,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   nnoremap <F6> :GundoToggle<CR>
 
   let g:syntastic_scala_checkers = []
+  "let g:syntastic_haskell_checkers = ["hlint"]
 
 endif
 "                                                                    }}}

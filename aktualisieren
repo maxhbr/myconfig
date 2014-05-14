@@ -2,7 +2,7 @@
 #
 # Written by Maximilian-Huber.de
 #
-# Last modified: Tue May 13, 2014  05:54
+# Last modified: Wed May 14, 2014  09:49
 
 ###############################################################################
 # variables
@@ -84,6 +84,7 @@ files() {
 ~/bin/installiere_neo
 ~/bin/mailclient.sh
 ~/bin/mailrun.sh
+~/bin/mpcSleep.sh
 ~/bin/myAnyToMp3.sh
 ~/bin/myPdfCorp.sh
 ~/bin/myScalaToScript.sh
