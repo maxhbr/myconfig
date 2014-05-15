@@ -21,4 +21,4 @@ myinstall "${FOLDER}config/beets/config.yaml" "/home/hubi/.config/beets/config.y
 myinstall "${FOLDER}etc/asound.conf" "/etc/asound.conf" 644 root root
 myinstall "${FOLDER}etc/mpd.conf" "/etc/mpd.conf" 644 mpd root
 myinstall "${FOLDER}etc/dnsmasq.conf" "/etc/dnsmasq.conf" 644 root root
-# "${FOLDER}etc/sysctl.d/90-inotify.conf" "/etc/sysctl.d/90-inotify.conf"
+myinstall "${FOLDER}etc/sysctl.d/90-inotify.conf" "/etc/sysctl.d/90-inotify.conf" 644 root root
