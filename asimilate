@@ -48,7 +48,6 @@ myinstall "${FOLDER}bin/disp-controll" "/home/hubi/bin/disp-controll" 711 hubi u
 myinstall "${FOLDER}bin/installiere_neo" "/home/hubi/bin/installiere_neo" 744 hubi users
 myinstall "${FOLDER}bin/mailclient.sh" "/home/hubi/bin/mailclient.sh" 700 hubi users
 myinstall "${FOLDER}bin/mailrun.sh" "/home/hubi/bin/mailrun.sh" 700 hubi users
-myinstall "${FOLDER}bin/mpcSleep.sh" "/home/hubi/bin/mpcSleep.sh" 700 hubi users
 myinstall "${FOLDER}bin/myAnyToMp3.sh" "/home/hubi/bin/myAnyToMp3.sh" 600 hubi users
 myinstall "${FOLDER}bin/myPdfCorp.sh" "/home/hubi/bin/myPdfCorp.sh" 700 hubi users
 myinstall "${FOLDER}bin/myScalaToScript.sh" "/home/hubi/bin/myScalaToScript.sh" 700 hubi users
