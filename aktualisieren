@@ -1,7 +1,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Thu May 15, 2014  03:27
+# Last modified: Thu May 15, 2014  06:52
 
 ###############################################################################
 # variables
@@ -113,6 +113,8 @@ X230FILES
   }
   [[ $HOST == "udoo" ]] && {
     cat <<UDOOFILES
+~/bin/m3u-handler.sh
+~/bin/pls-handler.sh
 ~/.config/beets/config.yaml
 /etc/asound.conf
 /etc/mpd.conf
