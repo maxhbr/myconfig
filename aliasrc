@@ -322,9 +322,9 @@ mpcFade() {
     echo $(($vol - $i))
     sleep $(($t / $vol))
   done
-  mpc -h $HOST --no-status pause
-  sleep 10
-  mpc -h $HOST --no-status volume $vol
+  mpc -h $MPD_HOST --no-status pause
+  sleep 2
+  mpc -h $MPD_HOST --no-status volume $vol
 }
 
 #-------------------------------------------------------------------}}}
