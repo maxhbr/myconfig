@@ -14,7 +14,7 @@ myinstall(){
   read -r -p "$2? [y/N] " response
   response=${response,,}
   if [[ $response =~ ^(yes|y)$ ]]; then
-    install -D --mode$3 --owner=$4 --group=$5 $1 $2
+    install -D --mode=$3 --owner=$4 --group=$5 $1 $2
   fi
 }
 myinstall "${FOLDER}config/beets/config.yaml" "/home/hubi/.config/beets/config.yaml" 600 hubi users
