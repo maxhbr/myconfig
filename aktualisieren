@@ -1,7 +1,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Thu May 15, 2014  06:52
+# Last modified: Sat May 17, 2014  01:52
 
 ###############################################################################
 # variables
@@ -79,6 +79,7 @@ files() {
 ~/.xmonad/xmobarrc
 ~/.xmonad/xmonad.hs
 ~/.zshrc.local
+~/bin/create_ap
 ~/bin/disp-controll
 ~/bin/installiere_neo
 ~/bin/mailclient.sh

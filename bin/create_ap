@@ -1,0 +1,477 @@
+#!/bin/bash
+
+# from: https://github.com/oblique/create_ap
+
+# general dependencies:
+#    bash (to run this script)
+#    util-linux (for getopt)
+#    hostapd
+#    iproute2
+#    iw
+#    haveged (optional)
+
+# dependencies for 'nat' or 'none' Internet sharing method
+#    dnsmasq
+#    iptables
+
+# dependencies for 'bridge' Internet sharing method
+#    bridge-utils
+
+usage() {
+    echo "Usage: $(basename $0) [options] <wifi-interface> [<interface-with-internet>] [<access-point-name> [<passphrase>]]"
+    echo
+    echo "Options:"
+    echo "  -h, --help          Show this help"
+    echo "  -c <channel>        Channel number (default: 1)"
+    echo "  -w <WPA version>    Use 1 for WPA, use 2 for WPA2, use 1+2 for both (default: 1+2)"
+    echo "  -n                  Disable Internet sharing (if you use this, don't pass"
+    echo "                      the <interface-with-internet> argument)"
+    echo "  -m <method>         Method for Internet sharing."
+    echo "                      Use: 'nat' for NAT (default)"
+    echo "                           'bridge' for bridging"
+    echo "                           'none' for no Internet sharing (equivalent to -n)"
+    echo "  --hidden            Make the Access Point hidden (do not broadcast the SSID)"
+    echo "  --ieee80211n        Enable IEEE 802.11n (HT)"
+    echo "  --ht_capab <HT>     HT capabilities (default: [HT40+])"
+    echo "  --driver            Choose your WiFi adapter driver (default: nl80211)"
+    echo "  --no-virt           Do not create virtual interface"
+    echo
+    echo "Non-Bridging Options:"
+    echo "  -g <gateway>        IPv4 Gateway for the Access Point (default: 192.168.12.1)"
+    echo "  -d                  DNS server will take into account /etc/hosts"
+    echo
+    echo "Useful informations:"
+    echo "  * If you're not using the --no-virt option, then you can create an AP with the same"
+    echo "    interface you are getting your Internet connection."
+    echo "  * You can pass your SSID and password through pipe or through arguments (see examples)."
+    echo
+    echo "Examples:"
+    echo "  $(basename $0) wlan0 eth0 MyAccessPoint MyPassPhrase"
+    echo "  echo -e 'MyAccessPoint\nMyPassPhrase' | $(basename $0) wlan0 eth0"
+    echo "  $(basename $0) wlan0 eth0 MyAccessPoint"
+    echo "  echo 'MyAccessPoint' | $(basename $0) wlan0 eth0"
+    echo "  $(basename $0) wlan0 wlan0 MyAccessPoint MyPassPhrase"
+    echo "  $(basename $0) -n wlan0 MyAccessPoint MyPassPhrase"
+    echo "  $(basename $0) -m bridge wlan0 eth0 MyAccessPoint MyPassPhrase"
+    echo "  $(basename $0) --driver rtl871xdrv wlan0 eth0 MyAccessPoint MyPassPhrase"
+}
+
+get_macaddr() {
+    ip link show "$1" | grep ether | grep -Eo '([0-9a-f]{2}:){5}[0-9a-f]{2}[[:space:]]' | tr -d '[[:space:]]'
+}
+
+get_avail_bridge() {
+    for i in {0..100}; do
+        curr_bridge=$(brctl show | grep "br$i" | cut -s -f1)
+        if [[ -z $curr_bridge ]]; then
+            echo "br$i"
+            return
+        fi
+    done
+}
+
+get_new_macaddr() {
+    OLDMAC=$(get_macaddr "$1")
+    for i in {20..255}; do
+        NEWMAC="${OLDMAC%:*}:$(printf %02x $i)"
+        (ip link | grep "ether ${NEWMAC}" > /dev/null 2>&1) || break
+    done
+    echo $NEWMAC
+}
+
+ADDED_UNMANAGED=0
+NETWORKMANAGER_CONF=/etc/NetworkManager/NetworkManager.conf
+
+networkmanager_add_unmanaged() {
+    [[ ! -d ${NETWORKMANAGER_CONF%/*} ]] && return
+    [[ -f ${NETWORKMANAGER_CONF} ]] || touch ${NETWORKMANAGER_CONF}
+    if [[ -z "$2" ]]; then
+        MAC=$(get_macaddr "$1")
+    else
+        MAC="$2"
+    fi
+    UNMANAGED=$(grep -m1 -Eo "^unmanaged-devices=.*" ${NETWORKMANAGER_CONF})
+    [[ $UNMANAGED == *mac:${MAC}* ]] && return
+    echo -n "Network Manager config found, set $1 as unmanaged device... "
+    grep -E '^\[keyfile\]' ${NETWORKMANAGER_CONF} > /dev/null 2>&1 || echo -e '\n\n[keyfile]' >> ${NETWORKMANAGER_CONF}
+    if [[ -z ${UNMANAGED} ]]; then
+        sed -e "s/^\(\[keyfile\].*\)$/\1\nunmanaged-devices=mac:${MAC}/" -i ${NETWORKMANAGER_CONF}
+    else
+        NEW_UNMANAGED=$(echo "${UNMANAGED}" | sed -e "s/^\([[:alnum:]=:;-]*\)/\1;mac:${MAC}/")
+        sed -e "s/^${UNMANAGED}/${NEW_UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
+    fi
+    ADDED_UNMANAGED=1
+    sleep 2
+    echo "DONE"
+}
+
+networkmanager_rm_unmanaged() {
+    [[ $ADDED_UNMANAGED -eq 0 ]] && return
+    [[ ! -f ${NETWORKMANAGER_CONF} ]] && return
+    if [[ -z "$2" ]]; then
+        MAC=$(get_macaddr "$1")
+    else
+        MAC="$2"
+    fi
+    UNMANAGED=$(grep -m1 -Eo "^unmanaged-devices=.*" ${NETWORKMANAGER_CONF})
+    if [[ $UNMANAGED != *\;* ]]; then
+        sed -e "/^unmanaged-devices=mac:${MAC}/d" -i ${NETWORKMANAGER_CONF}
+    else
+        NEW_UNMANAGED=$(echo ${UNMANAGED} | sed -e "s/;mac:${MAC}//")
+        sed -e "s/^${UNMANAGED}/${NEW_UNMANAGED}/" -i ${NETWORKMANAGER_CONF}
+    fi
+    sleep 2
+}
+
+CHANNEL=1
+GATEWAY=192.168.12.1
+WPA_VERSION=1+2
+ETC_HOSTS=0
+HIDDEN=0
+SHARE_METHOD=nat
+IEEE80211N=0
+HT_CAPAB='[HT40+]'
+DRIVER=nl80211
+NO_VIRT=0
+
+CONFDIR=
+WIFI_IFACE=
+VWIFI_IFACE=
+INTERNET_IFACE=
+BRIDGE_IFACE=
+OLD_IP_FORWARD=
+OLD_BRIDGE_IPTABLES=
+OLD_MACADDR=
+
+cleanup() {
+    echo
+    echo "Doing cleanup..."
+
+    # exiting
+    for x in $CONFDIR/*.pid; do
+        # even if the $CONFDIR is empty, the for loop will assign
+        # a value in $x. so we need to check if the value is a file
+        [[ -f $x ]] && kill -9 $(cat $x)
+    done
+    rm -rf $CONFDIR
+
+    if [[ "$SHARE_METHOD" != "none" ]]; then
+        if [[ "$SHARE_METHOD" == "nat" ]]; then
+            iptables -t nat -D POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE
+            iptables -D FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT
+            iptables -D FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT
+            [[ -n $OLD_IP_FORWARD ]] && echo $OLD_IP_FORWARD > /proc/sys/net/ipv4/ip_forward
+        elif [[ "$SHARE_METHOD" == "bridge" ]]; then
+            ip link set down $BRIDGE_IFACE
+            brctl delbr $BRIDGE_IFACE
+            [[ -n $OLD_BRIDGE_IPTABLES ]] && echo $OLD_BRIDGE_IPTABLES > /proc/sys/net/bridge/bridge-nf-call-iptables
+        fi
+    fi
+
+    if [[ "$SHARE_METHOD" != "bridge" ]]; then
+        iptables -D INPUT -p tcp -m tcp --dport 53 -j ACCEPT
+        iptables -D INPUT -p udp -m udp --dport 53 -j ACCEPT
+        iptables -D INPUT -p udp -m udp --dport 67 -j ACCEPT
+    fi
+
+    if [[ $NO_VIRT -eq 0 ]]; then
+        if [[ -n $VWIFI_IFACE ]]; then
+            ip link set down dev ${VWIFI_IFACE}
+            ip addr flush ${VWIFI_IFACE}
+            networkmanager_rm_unmanaged ${VWIFI_IFACE} ${OLD_MACADDR}
+            iw dev ${VWIFI_IFACE} del
+        fi
+    else
+        ip link set down dev ${WIFI_IFACE}
+        ip addr flush ${WIFI_IFACE}
+        networkmanager_rm_unmanaged ${WIFI_IFACE}
+    fi
+}
+
+die() {
+    [[ -n "$1" ]] && echo -e "\nERROR: $1\n" >&2
+    cleanup
+    exit 1
+}
+
+# if the user press ctrl+c then execute die()
+trap "die" SIGINT
+
+ARGS=$(getopt -o hc:w:g:dnm: -l "help","hidden","ieee80211n","ht_capab:","driver:","no-virt" -n $(basename $0) -- "$@")
+[[ $? -ne 0 ]] && exit 1
+eval set -- "$ARGS"
+
+while :; do
+    case "$1" in
+        -h|--help)
+            usage >&2
+            exit 1
+            ;;
+        --hidden)
+            shift
+            HIDDEN=1
+            ;;
+        -c)
+            shift
+            CHANNEL="$1"
+            shift
+            ;;
+        -w)
+            shift
+            WPA_VERSION="$1"
+            shift
+            ;;
+        -g)
+            shift
+            GATEWAY="$1"
+            shift
+            ;;
+        -d)
+            shift
+            ETC_HOSTS=1
+            ;;
+        -n)
+            shift
+            SHARE_METHOD=none
+            ;;
+        -m)
+            shift
+            SHARE_METHOD="$1"
+            shift
+            ;;
+        --ieee80211n)
+            shift
+            IEEE80211N=1
+            ;;
+        --ht_capab)
+            shift
+            HT_CAPAB="$1"
+            shift
+            ;;
+        --driver)
+            shift
+            DRIVER="$1"
+            shift
+            ;;
+        --no-virt)
+            shift
+            NO_VIRT=1
+            ;;
+        --)
+            shift
+            break
+            ;;
+    esac
+done
+
+if [[ $# -lt 1 ]]; then
+    usage >&2
+    exit 1
+fi
+
+if [[ $(id -u) -ne 0 ]]; then
+    echo "You must run it as root." >&2
+    exit 1
+fi
+
+if [[ "$SHARE_METHOD" != "nat" && "$SHARE_METHOD" != "bridge" && "$SHARE_METHOD" != "none" ]]; then
+    echo "ERROR: Wrong Internet sharing method" >&2
+    echo
+    usage >&2
+    exit 1
+fi
+
+WIFI_IFACE=$1
+
+if [[ "$SHARE_METHOD" == "bridge" ]]; then
+    OLD_BRIDGE_IPTABLES=$(cat /proc/sys/net/bridge/bridge-nf-call-iptables)
+    BRIDGE_IFACE=$(get_avail_bridge)
+    if [[ -z $BRIDGE_IFACE ]]; then
+        echo "ERROR: No availabe bridges < br100" >&2
+        exit 1
+    fi
+elif [[ "$SHARE_METHOD" == "nat" ]]; then
+    OLD_IP_FORWARD=$(cat /proc/sys/net/ipv4/ip_forward)
+fi
+
+if [[ "$SHARE_METHOD" != "none" ]]; then
+    MIN_REQUIRED_ARGS=2
+else
+    MIN_REQUIRED_ARGS=1
+fi
+
+if [[ $# -gt $MIN_REQUIRED_ARGS ]]; then
+    if [[ "$SHARE_METHOD" != "none" ]]; then
+        if [[ $# -ne 3 && $# -ne 4 ]]; then
+            usage >&2
+            exit 1
+        fi
+        INTERNET_IFACE=$2
+        SSID=$3
+        PASSPHRASE=$4
+    else
+        if [[ $# -ne 2 && $# -ne 3 ]]; then
+            usage >&2
+            exit 1
+        fi
+        SSID=$2
+        PASSPHRASE=$3
+    fi
+else
+    if [[ "$SHARE_METHOD" != "none" ]]; then
+        if [[ $# -ne 2 ]]; then
+            usage >&2
+            exit 1
+        fi
+        INTERNET_IFACE=$2
+    fi
+    if tty -s; then
+        read -p "SSID: " SSID
+        while :; do
+            read -p "Passphrase: " -s PASSPHRASE
+            echo
+            read -p "Retype passphrase: " -s PASSPHRASE2
+            echo
+            if [[ "$PASSPHRASE" != "$PASSPHRASE2" ]]; then
+                echo "Passphrases do not match."
+            else
+                break
+            fi
+        done
+    else
+        read SSID
+        read PASSPHRASE
+    fi
+fi
+
+CONFDIR=$(mktemp -d /tmp/create_ap.${WIFI_IFACE}.conf.XXXXXXXX)
+echo "Config dir: $CONFDIR"
+
+if [[ $NO_VIRT -eq 0 ]]; then
+    VWIFI_IFACE=${WIFI_IFACE}ap
+    WIFI_IFACE_CHANNEL=$(iw ${WIFI_IFACE} info | grep channel | awk '{print $2}')
+
+    if [[ -n $WIFI_IFACE_CHANNEL && $WIFI_IFACE_CHANNEL -ne $CHANNEL ]]; then
+        echo "hostapd will fail to use channel $CHANNEL because $WIFI_IFACE is already set to channel $WIFI_IFACE_CHANNEL, fallback to channel $WIFI_IFACE_CHANNEL."
+        CHANNEL=$WIFI_IFACE_CHANNEL
+    fi
+
+    VIRTDIEMSG="Maybe your WiFi adapter does not fully support virtual interfaces.
+       Try again with --no-virt."
+    echo -n "Creating a virtual WiFi interface... "
+    iw dev ${VWIFI_IFACE} del > /dev/null 2>&1
+    if iw dev ${WIFI_IFACE} interface add ${VWIFI_IFACE} type __ap; then
+        echo "${VWIFI_IFACE} created."
+    else
+        VWIFI_IFACE=
+        die "$VIRTDIEMSG"
+    fi
+    OLD_MACADDR=$(get_macaddr ${VWIFI_IFACE})
+    NEW_MACADDR=$(get_new_macaddr ${VWIFI_IFACE})
+    WIFI_IFACE=${VWIFI_IFACE}
+else
+    [[ "$WIFI_IFACE" == "$INTERNET_IFACE" ]] && die "You can not share your connection from the same interface if you are using --no-virt option."
+fi
+
+networkmanager_add_unmanaged ${WIFI_IFACE}
+
+[[ $HIDDEN -eq 1 ]] && echo "Access Point's SSID is hidden!"
+
+# hostapd config
+cat << EOF > $CONFDIR/hostapd.conf
+ssid=${SSID}
+interface=${WIFI_IFACE}
+driver=${DRIVER}
+hw_mode=g
+channel=${CHANNEL}
+
+ctrl_interface=$CONFDIR/hostapd_ctrl
+ctrl_interface_group=0
+ignore_broadcast_ssid=$HIDDEN
+EOF
+
+if [[ $IEEE80211N -eq 1 ]]; then
+    cat << EOF >> $CONFDIR/hostapd.conf
+ieee80211n=1
+wmm_enabled=1
+ht_capab=${HT_CAPAB}
+EOF
+fi
+
+if [[ -n "$PASSPHRASE" ]]; then
+    [[ "$WPA_VERSION" == "1+2" || "$WPA_VERSION" == "2+1" ]] && WPA_VERSION=3
+    cat << EOF >> $CONFDIR/hostapd.conf
+wpa=${WPA_VERSION}
+wpa_passphrase=$PASSPHRASE
+wpa_key_mgmt=WPA-PSK
+wpa_pairwise=TKIP
+rsn_pairwise=CCMP
+EOF
+fi
+
+if [[ "$SHARE_METHOD" == "bridge" ]]; then
+    echo "bridge=${BRIDGE_IFACE}" >> $CONFDIR/hostapd.conf
+else
+    # dnsmasq config (dhcp + dns)
+    cat << EOF > $CONFDIR/dnsmasq.conf
+interface=${WIFI_IFACE}
+bind-interfaces
+dhcp-range=${GATEWAY%.*}.1,${GATEWAY%.*}.254,255.255.255.0,24h
+dhcp-option=option:router,${GATEWAY}
+EOF
+    [[ $ETC_HOSTS -eq 0 ]] && echo no-hosts >> $CONFDIR/dnsmasq.conf
+fi
+
+# initialize WiFi interface
+if [[ $NO_VIRT -eq 0 ]]; then
+    ip link set dev ${WIFI_IFACE} address ${NEW_MACADDR} || die "$VIRTDIEMSG"
+fi
+ip link set down dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
+ip addr flush ${WIFI_IFACE} || die "$VIRTDIEMSG"
+if [[ "$SHARE_METHOD" != "bridge" ]]; then
+    ip link set up dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
+    ip addr add ${GATEWAY}/24 broadcast ${GATEWAY%.*}.255 dev ${WIFI_IFACE} || die "$VIRTDIEMSG"
+fi
+
+# enable Internet sharing
+if [[ "$SHARE_METHOD" != "none" ]]; then
+    echo "Sharing Internet using method: $SHARE_METHOD"
+    if [[ "$SHARE_METHOD" == "nat" ]]; then
+        iptables -t nat -I POSTROUTING -o ${INTERNET_IFACE} -j MASQUERADE || die
+        iptables -I FORWARD -i ${WIFI_IFACE} -s ${GATEWAY%.*}.0/24 -j ACCEPT || die
+        iptables -I FORWARD -i ${INTERNET_IFACE} -d ${GATEWAY%.*}.0/24 -j ACCEPT || die
+        echo 1 > /proc/sys/net/ipv4/ip_forward || die
+    elif [[ "$SHARE_METHOD" == "bridge" ]]; then
+        # disable iptables rules for bridged interfaces
+        echo 0 > /proc/sys/net/bridge/bridge-nf-call-iptables || die
+        # create and initialize bridged interface
+        brctl addbr ${BRIDGE_IFACE} || die
+        brctl addif ${BRIDGE_IFACE} ${INTERNET_IFACE} || die
+        ip link set dev ${BRIDGE_IFACE} up || die
+    fi
+else
+    echo "No Internet sharing"
+fi
+
+# boost low-entropy
+if [[ $(cat /proc/sys/kernel/random/entropy_avail) -lt 1000 ]]; then
+    which haveged > /dev/null 2>&1 && {
+        haveged -w 1024 -p $CONFDIR/haveged.pid
+    }
+fi
+
+# start dns + dhcp server
+if [[ "$SHARE_METHOD" != "bridge" ]]; then
+    iptables -I INPUT -p tcp -m tcp --dport 53 -j ACCEPT || die
+    iptables -I INPUT -p udp -m udp --dport 53 -j ACCEPT || die
+    iptables -I INPUT -p udp -m udp --dport 67 -j ACCEPT || die
+    dnsmasq -C $CONFDIR/dnsmasq.conf -x $CONFDIR/dnsmasq.pid || die
+fi
+
+# start access point
+echo "hostapd command-line interface: hostapd_cli -p $CONFDIR/hostapd_ctrl"
+trap - SIGINT # reset trap
+hostapd $CONFDIR/hostapd.conf || die "Failed to run hostapd, maybe a program is interfering."
+
+cleanup
+exit 0
