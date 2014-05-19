@@ -20,6 +20,7 @@ myinstall(){
 myinstall "${FOLDER}bin/m3u-handler.sh" "/home/hubi/bin/m3u-handler.sh" 700 hubi users
 myinstall "${FOLDER}bin/pls-handler.sh" "/home/hubi/bin/pls-handler.sh" 700 hubi users
 myinstall "${FOLDER}config/beets/config.yaml" "/home/hubi/.config/beets/config.yaml" 600 hubi users
+myinstall "${FOLDER}ncmpcpp/config" "/home/hubi/.ncmpcpp/config" 600 hubi users
 myinstall "${FOLDER}etc/asound.conf" "/etc/asound.conf" 644 root root
 myinstall "${FOLDER}etc/mpd.conf" "/etc/mpd.conf" 644 mpd root
 myinstall "${FOLDER}etc/dnsmasq.conf" "/etc/dnsmasq.conf" 644 root root

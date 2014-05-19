@@ -17,6 +17,10 @@ paths:
     #comp: $genre/$album/$track $title
     #albumtype:soundtrack: Soundtracks/$album/$track $title
 
-#bpd:
-    #host: 127.0.0.1
-    #port: 6600
+plugins: mpdupdate fromfilename discogs
+#needs: pip install discogs-client
+
+mpdupdate:
+    host: localhost
+    port: 6600
+    password: mpd
