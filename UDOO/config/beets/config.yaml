@@ -17,8 +17,7 @@ paths:
     #comp: $genre/$album/$track $title
     #albumtype:soundtrack: Soundtracks/$album/$track $title
 
-plugins: mpdupdate fromfilename discogs
-#needs: pip install discogs-client
+plugins: mpdupdate fromfilename 
 
 mpdupdate:
     host: localhost
