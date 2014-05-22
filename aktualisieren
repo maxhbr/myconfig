@@ -1,7 +1,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Thu May 22, 2014  05:30
+# Last modified: Thu May 22, 2014  05:32
 
 ###############################################################################
 # variables
@@ -120,6 +120,7 @@ X230FILES
 ~/bin/pls-handler.sh
 ~/.config/beets/config.yaml
 ~/.ncmpcpp/config
+~/.zprofile
 /etc/asound.conf
 /etc/mpd.conf
 /etc/dnsmasq.conf
