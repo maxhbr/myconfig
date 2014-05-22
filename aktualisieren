@@ -123,7 +123,7 @@ X230FILES
 /etc/mpd.conf
 /etc/dnsmasq.conf
 /etc/sysctl.d/90-inotify.conf
-/etc/systemd/system/getty@tty1.service.d/autologin.con
+/etc/systemd/system/getty@tty1.service.d/autologin.conf
 /etc/minidlna.conf
 UDOOFILES
   }
