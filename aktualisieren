@@ -1,7 +1,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Mon May 19, 2014  09:46
+# Last modified: Wed May 21, 2014  05:57
 
 ###############################################################################
 # variables
@@ -85,7 +85,7 @@ files() {
 ~/bin/mailclient.sh
 ~/bin/mailrun.sh
 ~/bin/myAnyToMp3.sh
-~/bin/myPdfCorp.sh
+~/bin/myPdfCrop.sh
 ~/bin/myScalaToScript.sh
 ~/bin/myTexWrapper.sh
 ~/bin/myautosetup.sh
