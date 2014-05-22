@@ -1,7 +1,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Wed May 21, 2014  05:57
+# Last modified: Thu May 22, 2014  05:29
 
 ###############################################################################
 # variables
@@ -123,6 +123,7 @@ X230FILES
 /etc/mpd.conf
 /etc/dnsmasq.conf
 /etc/sysctl.d/90-inotify.conf
+/etc/systemd/system/getty@tty1.service.d/autologin.conf
 /etc/minidlna.conf
 UDOOFILES
   }
