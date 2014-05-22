@@ -346,12 +346,13 @@ mystartcups() {
     sudo systemctl start avahi-daemon.service
     sudo systemctl start cups.service
     touch /tmp/myCupsStartet
+    sleep 2
   }
 }
 
 # druckt A5 Broschüren
 lprBook() {
-  mystartcups
+  mystartcups 
   [[ -f $1 ]] && {
     pdftops -paperw 420 -paperh 595 $1 - \
       | psbook -q \

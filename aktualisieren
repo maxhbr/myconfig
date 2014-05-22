@@ -1,7 +1,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Thu May 22, 2014  05:29
+# Last modified: Thu May 22, 2014  05:30
 
 ###############################################################################
 # variables
@@ -79,6 +79,7 @@ files() {
 ~/.xmonad/xmobarrc
 ~/.xmonad/xmonad.hs
 ~/.zshrc.local
+~/.zprofile
 ~/bin/create_ap
 ~/bin/disp-controll
 ~/bin/installiere_neo
