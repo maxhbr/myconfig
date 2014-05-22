@@ -25,4 +25,5 @@ myinstall "${FOLDER}etc/asound.conf" "/etc/asound.conf" 644 root root
 myinstall "${FOLDER}etc/mpd.conf" "/etc/mpd.conf" 644 mpd root
 myinstall "${FOLDER}etc/dnsmasq.conf" "/etc/dnsmasq.conf" 644 root root
 myinstall "${FOLDER}etc/sysctl.d/90-inotify.conf" "/etc/sysctl.d/90-inotify.conf" 644 root root
+# "${FOLDER}etc/systemd/system/getty@tty1.service.d/autologin.con" "/etc/systemd/system/getty@tty1.service.d/autologin.con"
 myinstall "${FOLDER}etc/minidlna.conf" "/etc/minidlna.conf" 644 root root
