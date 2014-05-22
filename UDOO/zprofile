@@ -2,12 +2,11 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Thu May 22, 2014  05:31
+# Last modified: Thu May 22, 2014  05:37
 
 [[ -f ~/.zshrc ]] && . ~/.zshrc
 
 # my login manager
 if [[ -z "$DISPLAY" ]] && [[ $(tty) = /dev/tty1 ]]; then
-    run_under_tmux 'ncmpcpp'
-    ncmpcpp
+    exec ncmpcpp
 fi
