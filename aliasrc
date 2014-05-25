@@ -11,7 +11,14 @@ alias tvim="tmux new vim"
 alias svim="sudo vim -u /home/hubi/.vimrc "
 
 alias tmx="tmux attach-session || tmux"
-alias ntmx='tmux new -s $(basename $(pwd))' # name sessions automatically
+alias ntmx='tmux attach-session -t $(basename "$(pwd)") || tmux new -s $(basename "$(pwd)")' # name sessions automatically
+if test -z $TMUX && [[ $TERM != "screen" ]]; then
+  if [ -n "$BASH_VERSION" ]; then
+    bind '"\C-n":" ntmx\C-m"'
+  elif [ -n "$ZSH_VERSION" ]; then
+    bindkey -s '^n' '^qntmx\n'
+  fi
+fi
 
 # makes "sudo vi" to "sudo vim"
 alias sudo="sudo "
