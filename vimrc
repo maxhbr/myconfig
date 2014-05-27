@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Wed May 14, 2014  05:09
+" Last modified: Mon May 26, 2014  04:46
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -182,7 +182,6 @@ if has("gui_running")
   let g:indent_guides_auto_colors = 0
   autocmd VimEnter,Colorscheme * :hi IndentGuidesEven guibg=black ctermbg=4
 else
-  " no gui
   set t_Co=256
   set background=dark
 endif
@@ -193,6 +192,14 @@ elseif filereadable(expand("$HOME/.vim/colors/mustang.vim"))
   colorscheme mustang
 endif
 
+function! ToggleColorscheme()
+if (g:colors_name == "mustang")
+  colorscheme solarized
+else
+  colorscheme mustang
+endif
+endfunction
+
 " ====  hilight to long lines  ======================================
 if exists('+colorcolumn')
     set colorcolumn=80
@@ -201,6 +208,7 @@ else
     highlight OverLength ctermbg=red ctermfg=white guibg=#592929
     match OverLength /\%81v.\+/
 endif
+
 " ===================================================================}}}
 " ====  spelling  ===================================================
 " ==================================================================={{{
@@ -342,6 +350,8 @@ imap üö <Esc>
 nmap <silent> ,/ :nohlsearch<CR>
 
 set pastetoggle=<F11>
+
+map <F12> :call ToggleColorscheme()<CR>
 
 "easyer increment/decrement
 nnoremap + <C-a>
@@ -812,7 +822,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'rstacruz/sparkup', {'rtp': 'vim/'}
   "colorschemes
   Bundle 'Solarized'
-  Bundle 'flazz/vim-colorschemes'
+  "Bundle 'flazz/vim-colorschemes'
   "unsorted
   Bundle 'surround.vim'
   Bundle 'delete-surround-html'

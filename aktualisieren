@@ -1,7 +1,8 @@
+#!/bin/bash
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Thu May 22, 2014  05:32
+# Last modified: Mon May 26, 2014  04:28
 
 ###############################################################################
 # variables
@@ -72,6 +73,7 @@ files() {
 ~/.tmux.conf
 ~/.vimencrypt
 ~/.vimrc
+~/.vim/colors/mustang.vim
 ~/.xinitrc
 ~/.xmonad/myinformation.sh
 ~/.xmonad/showkeys
