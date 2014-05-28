@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Mon May 26, 2014  04:46
+" Last modified: Wed May 28, 2014  08:03
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -342,9 +342,6 @@ map <leader>ss :setlocal spell!<cr>
 " Make < > shifts keep selection
 vnoremap < <gv
 vnoremap > >gv
-
-" Press üö to exit.
-imap üö <Esc>
 
 " clear hilighting
 nmap <silent> ,/ :nohlsearch<CR>
