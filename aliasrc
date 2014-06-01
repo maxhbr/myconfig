@@ -371,8 +371,8 @@ lprBook() {
   } || { echo "file not found"; }
 }
 alias myLprBook=lprBook
-alias lprFit="lpr -o fit-to-page -o media=A4 "
-alias lprFitL="lpr -o landscape -o fit-to-page -o media=A4 "
+alias lprFit="lpr -o sides=two-sided-long-edge -o fit-to-page -o media=A4 "
+alias lprFitL="lpr -o sides=two-sided-short-edge -o landscape -o fit-to-page -o media=A4 "
 
 alias myPdfCrop="pdfcrop --margins \"20 30 20 40\""
 
