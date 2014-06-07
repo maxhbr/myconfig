@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Mon May 05, 2014  02:03
+-- Last modified: Tue Jun 03, 2014  01:55
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -220,6 +220,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. shiftMask,  xK_Left  ), shiftPrevScreen)
     {-, ((modm,                xK_y     ), toggleWS)]-}
     , ((modm,                xK_y     ), toggleSkip ["NSP"])
+    , ((modm,                xK_a     ), toggleSkip ["NSP"])
     --, ((modm,                0xf6     ), toggleSkip ["NSP"])
     ] --}}}
     ++
