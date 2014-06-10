@@ -72,6 +72,7 @@ myinstall "${FOLDER}etc/fstab" "/etc/fstab" 644 root root
 myinstall "${FOLDER}etc/hosts" "/etc/hosts" 644 hubi users
 myinstall "${FOLDER}etc/locale.conf" "/etc/locale.conf" 644 root root
 myinstall "${FOLDER}etc/lvm/lvm.conf" "/etc/lvm/lvm.conf" 644 root root
+myinstall "${FOLDER}etc/makepkg.conf" "/etc/makepkg.conf" 644 root root
 myinstall "${FOLDER}etc/mkinitcpio.conf" "/etc/mkinitcpio.conf" 644 root root
 # "${FOLDER}etc/modprobe.d/" "/etc/modprobe.d/*"
 myinstall "${FOLDER}etc/pacman.conf" "/etc/pacman.conf" 644 root root

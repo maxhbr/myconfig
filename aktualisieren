@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Sat Jun 07, 2014  08:43
+# Last modified: Tue Jun 10, 2014  08:12
 
 ###############################################################################
 # variables
@@ -108,6 +108,7 @@ files() {
 /etc/hosts
 /etc/locale.conf
 /etc/lvm/lvm.conf
+/etc/makepkg.conf
 /etc/mkinitcpio.conf
 /etc/modprobe.d/*
 /etc/pacman.conf
