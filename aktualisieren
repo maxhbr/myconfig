@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Tue Jun 10, 2014  08:12
+# Last modified: Wed Jun 11, 2014  01:44
 
 ###############################################################################
 # variables
@@ -92,6 +92,7 @@ files() {
 ~/bin/myAnyToMp3.sh
 ~/bin/myPdfCrop.sh
 ~/bin/myScalaToScript.sh
+~/bin/mystopwatch
 ~/bin/myTexWrapper.sh
 ~/bin/myautosetup.sh
 ~/bin/mycrypt
