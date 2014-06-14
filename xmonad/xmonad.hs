@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Tue Jun 03, 2014  01:55
+-- Last modified: Sat Jun 14, 2014  01:37
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -187,12 +187,12 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     ] --}}}
     ++
     [ -- mpd --{{{
-    ((modm,   0xfc ), spawn "mpc -h mpd@192.168.178.28 --no-status prev")
-    , ((modm .|. shiftMask, 0xfc ), spawn "mpc -h mpd@192.168.178.28 --no-status volume -10")
-    , ((modm, 0xf6 ), spawn "mpc -h mpd@192.168.178.28 --no-status toggle")
+    ((modm,   0xfc ), spawn "mpc -h mpd@192.168.178.61 --no-status prev")
+    , ((modm .|. shiftMask, 0xfc ), spawn "mpc -h mpd@192.168.178.61 --no-status volume -10")
+    , ((modm, 0xf6 ), spawn "mpc -h mpd@192.168.178.61 --no-status toggle")
     , ((modm .|. shiftMask, 0xf6 ), namedScratchpadAction scratchpads "ncmpcpp")
-    , ((modm, 0xe4 ), spawn "mpc -h mpd@192.168.178.28 --no-status next")
-    , ((modm .|. shiftMask, 0xe4 ), spawn "mpc -h mpd@192.168.178.28 --no-status volume +5")
+    , ((modm, 0xe4 ), spawn "mpc -h mpd@192.168.178.61 --no-status next")
+    , ((modm .|. shiftMask, 0xe4 ), spawn "mpc -h mpd@192.168.178.61 --no-status volume +5")
     ] --}}}
     ++
     [ --backlight --{{{

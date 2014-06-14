@@ -26,7 +26,7 @@ ncmpcpp_directory = "~/.ncmpcpp"
 #
 ## set it in order to make tag editor and renaming files work properly
 #
-mpd_host = "mpd@192.168.178.28"
+mpd_host = "mpd@192.168.178.61"
 #
 mpd_port = "6600"
 #

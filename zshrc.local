@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Tue Jun 10, 2014  08:14
+# Last modified: Sat Jun 14, 2014  01:33
 #
 umask 077
 
@@ -13,7 +13,7 @@ umask 077
 [[ -f ~/.aliasrc-private ]] && source ~/.aliasrc-private
 [[ -d $HOME/bin ]] && export PATH=$HOME/bin:$PATH
 [[ -d $HOME/.cabal/bin ]] && export PATH=$HOME/.cabal/bin:$PATH
-export MPD_HOST="mpd@192.168.178.28"
+export MPD_HOST="mpd@192.168.178.61"
 
 ###############################################################################
 ZDOTDIR=${ZDOTDIR:-${HOME}}
