@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Wed Jun 11, 2014  01:44
+# Last modified: Sat Jun 21, 2014  12:23
 
 ###############################################################################
 # variables
@@ -119,6 +119,9 @@ files() {
 /etc/vsftpd.conf
 /etc/zathurarc
 /usr/share/kbd/keymaps/neo/*
+/usr/share/zsh/functions/Completion/Haskell/_cabal
+/usr/share/zsh/functions/Completion/Haskell/_ghc
+/usr/share/zsh/functions/Completion/Haskell/_hugs
 X230FILES
   }
   [[ $HOST == "udoo" ]] && {
