@@ -6,7 +6,7 @@
 # partly from: http://www.nixaid.com/linux/network/encrypted-chat-with-netcat
 #
 # written by maximilian-huber.de
-# Last modified: Fri Jun 27, 2014  01:25
+# Last modified: Fri Jun 27, 2014  01:26
 
 if [[ "$1" == "-h" ]] ||  [[ "$1" == "--help" ]]; then
   echo "ncChat.sh [-h] [-u] [-ip serverip] [passwd]"
@@ -18,7 +18,6 @@ if [[ "$1" == "-h" ]] ||  [[ "$1" == "--help" ]]; then
   echo "* Needs ncat (or netcat or nc) to be installed"
   exit 0
 fi
-
 
 have() { type "$1" &> /dev/null; }
 echoDecodedMsg(){
