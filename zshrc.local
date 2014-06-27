@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Sat Jun 14, 2014  01:33
+# Last modified: Sat Jun 21, 2014  02:33
 #
 umask 077
 
@@ -31,6 +31,9 @@ export TMPPREFIX="${TMPDIR}/zsh"
 ## Use a default width of 80 for manpages for more convenient reading
 export MANWIDTH=${MANWIDTH:-80}
 
+#paralleles compilieren mit haskell
+export ncpus=3
+
 ###############################################################################
 # Not all servers have terminfo for rxvt-256color. :<
 if [ "${TERM}" = 'rxvt-256color' ] \
@@ -39,6 +42,9 @@ if [ "${TERM}" = 'rxvt-256color' ] \
   && ! [ -f "${HOME}/.terminfo/r/rxvt-256color" ]; then
   export TERM='rxvt-unicode'
 fi
+
+autoload -U compinit
+compinit
 
 ###############################################################################
 setopt inc_append_history

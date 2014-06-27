@@ -83,3 +83,6 @@ myinstall "${FOLDER}etc/vconsole.conf" "/etc/vconsole.conf" 644 root root
 myinstall "${FOLDER}etc/vsftpd.conf" "/etc/vsftpd.conf" 644 root root
 myinstall "${FOLDER}etc/zathurarc" "/etc/zathurarc" 644 root root
 # "${FOLDER}usr/share/kbd/keymaps/neo/" "/usr/share/kbd/keymaps/neo/*"
+myinstall "${FOLDER}usr/share/zsh/functions/Completion/Haskell/_cabal" "/usr/share/zsh/functions/Completion/Haskell/_cabal" 644 hubi users
+myinstall "${FOLDER}usr/share/zsh/functions/Completion/Haskell/_ghc" "/usr/share/zsh/functions/Completion/Haskell/_ghc" 644 hubi users
+myinstall "${FOLDER}usr/share/zsh/functions/Completion/Haskell/_hugs" "/usr/share/zsh/functions/Completion/Haskell/_hugs" 644 hubi users
