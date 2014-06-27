@@ -6,12 +6,13 @@
 # partly from: http://www.nixaid.com/linux/network/encrypted-chat-with-netcat
 #
 # written by maximilian-huber.de
-# Last modified: Fri Jun 27, 2014  01:26
+# Last modified: Fri Jun 27, 2014  01:48
 
 if [[ "$1" == "-h" ]] ||  [[ "$1" == "--help" ]]; then
-  echo "ncChat.sh [-h] [-u] [-ip serverip] [passwd]"
+  echo "ncChat.sh [-h] [-u] [-w width] [-ip serverip] [passwd]"
   echo "   -h     Displays this message"
   echo "   -u     Use the username"
+  echo "   -w     width of output"
   echo "   -ip    Ip of the server, if none is given, a server will be started"
   echo "* If no passwd is given, it uses a (bad) default password"
   echo "* Order of arguments is important"
@@ -21,7 +22,8 @@ fi
 
 have() { type "$1" &> /dev/null; }
 echoDecodedMsg(){
-  echo "$bold$(echo "$1" | openssl enc -d -a -A -aes-256-cbc -k ${2})$normal";
+  echo "$bold$(echo "$1" | openssl enc -d -a -A -aes-256-cbc -k ${2})$normal" \
+    | fold -sw width
 }
 
 bold=`tput bold``tput setaf 6`
@@ -31,6 +33,13 @@ inPrefix=""
 if [[ "$1" == "-u" ]] ; then
   shift
   inPrefix="$(whoami): "
+fi
+
+width=80
+if [[ "$1" == "-w" ]] ; then
+  shift
+  width=$1
+  shift
 fi
 
 have ncat \
