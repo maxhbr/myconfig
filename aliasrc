@@ -428,13 +428,17 @@ alias mymatlab-headless="~/matlab/bin/matlab -nojvm -nodisplay -nosplash < "
 #   package management
 #-------------------------------------------------------------------{{{
 
-# remove orphan pacman packages
+# remove orphan pacman packages and delete packages in the cache, which are
+# older than 30 days
 myRemOrphans() {
   if [[ ! -n $(pacman -Qdt) ]]; then
     echo no orphans to remove
   else
     sudo pacman -Rs $(pacman -Qdtq)
   fi
+
+  echo "$(find /var/cache/pacman/pkg/ -type f -mtime +30 | wc -l) to old packages to remove from cache"
+  find /var/cache/pacman/pkg/ -type f -mtime +30 -exec sudo rm -v {} \;
 }
 
 # Pacman alias examples
@@ -462,13 +466,6 @@ cabalupd() {
     | uniq \
     | xargs -I {} cabal install {} --reinstall
 }
-
-#cabalupd() {
-#  cabal list --simple-output --installed \
-#    | awk '{print $1}' \
-#    | uniq \
-#    | xargs -I {} cabal install {} --reinstall
-#}
 
 #-------------------------------------------------------------------}}}
 #   some networking
