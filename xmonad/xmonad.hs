@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Sat Jun 14, 2014  01:37
+-- Last modified: Fri Jul 04, 2014  10:47
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -84,6 +84,7 @@ import qualified XMonad.Util.ExtensibleState as XS
 myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     [ --default --{{{
     ((modm .|. shiftMask, xK_Return), spawn $ XMonad.terminal conf)
+    , ((modm .|. controlMask, xK_Return), spawn "urxvtc -e zsh -c 'ssh vserver'")
     , ((modm .|. shiftMask .|. controlMask, xK_Return), spawn "urxvtd -q -f -o &")
 
     , ((modm,               xK_p     ), spawn "dmenu_run")
