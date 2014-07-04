@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Sat Jun 21, 2014  12:23
+# Last modified: Fri Jul 04, 2014  12:22
 
 ###############################################################################
 # variables
@@ -60,6 +60,7 @@ files() {
 ~/.asoundrc.uca202
 ~/.bash_profile
 ~/.bashrc
+~/,cabal/config
 ~/.config/ranger/rc.conf
 ~/.config/ranger/rifle.conf
 ~/.emacs
