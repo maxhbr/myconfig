@@ -381,9 +381,12 @@ alias myPdfCrop="pdfcrop --margins \"20 30 20 40\""
 # Extract range of Pages From a PDF
 # from: http://www.linuxjournal.com/content/tech-tip-extract-pages-pdf
 myPdfpextr() {
-  # myPdfpextr start end file
-  gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dFirstPage=${1} \
-    -dLastPage=${2} -sOutputFile=${3%.pdf}_p${1}-p${2}.pdf ${3}
+  [[ -z "$3" ]] && {
+    echo "myPdfpextr start end file"
+  } || { 
+    gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dFirstPage=${1} \
+      -dLastPage=${2} -sOutputFile=${3%.pdf}_p${1}-p${2}.pdf ${3}
+  }
 }
 
 myPdfreducesize() {
