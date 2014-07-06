@@ -19,11 +19,6 @@ if test -z $TMUX && [[ $TERM != "screen" ]]; then
     bindkey -s '^n' '^qntmx\n'
   fi
 fi
-shareTmx() {
-  touch /tmp/pair
-  chmod 777 /tmp/pair
-  tmux -S /tmp/pair
-}
 
 # makes "sudo vi" to "sudo vim"
 alias sudo="sudo "
