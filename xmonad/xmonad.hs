@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Fri Jul 04, 2014  10:47
+-- Last modified: Sat Jul 05, 2014  05:52
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -72,6 +72,8 @@ import XMonad.Layout.Tabbed ( addTabs, shrinkText, tabbedBottom, defaultTheme,
 import XMonad.Layout.WindowNavigation ( configurableNavigation, navigateColor,
     Navigate(Move))
 
+import XMonad.Layout.Minimize
+
 import qualified Data.Map                    as M
 import qualified XMonad.StackSet             as W
 import qualified XMonad.Util.ExtensibleState as XS
@@ -117,7 +119,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,               xK_k     ), windows W.focusUp  )
 
     -- Move focus to the master window
-    , ((modm,               xK_m     ), windows W.focusMaster  )
+    --, ((modm,               xK_m     ), windows W.focusMaster  )
 
     -- Swap the focused window and the master window
     , ((modm,               xK_Return), windows W.swapMaster)
@@ -150,6 +152,11 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,                xK_q    ), spawn "xmonad --recompile; xmonad --restart")
     -- Quit xmonad
     , ((modm .|. shiftMask, xK_q     ), io (exitWith ExitSuccess))
+    ] --}}}
+    ++
+    [ --Layout --{{{
+    ((modm,               xK_m     ), withFocused minimizeWindow)
+    , ((modm .|. shiftMask, xK_m     ), sendMessage RestoreNextMinimizedWin)
     ] --}}}
     ++
     [ --systemctl --{{{
@@ -306,12 +313,14 @@ myLayout = avoidStrutsOn[U] $
     where
         --layouts:
         tiled   = named " "  $
+            minimize $
             addTabs shrinkText myTab $
             subLayout [] Simplest $
             ResizableTall nmaster delta ratio []
         full    = named "="
             Full
         dtb     = named "%" $
+            minimize $
             tabbedBottom shrinkText myTab *||* tiled
         {-stb     = named "_" $-}
             {-tabbedBottom shrinkText myTab-}
