@@ -4,15 +4,18 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Sat Jun 21, 2014  02:33
+# Last modified: Sun Jul 06, 2014  06:07
 #
 umask 077
+
+export LANG=de_DE.UTF-8
 
 ###############################################################################
 [[ -f ~/.aliasrc ]] && source ~/.aliasrc
 [[ -f ~/.aliasrc-private ]] && source ~/.aliasrc-private
 [[ -d $HOME/bin ]] && export PATH=$HOME/bin:$PATH
 [[ -d $HOME/.cabal/bin ]] && export PATH=$HOME/.cabal/bin:$PATH
+[[ -d $HOME/perl5/bin ]] && export PATH=$HOME/perl5/bin:$PATH
 export MPD_HOST="mpd@192.168.178.61"
 
 ###############################################################################
