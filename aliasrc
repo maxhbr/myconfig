@@ -536,21 +536,21 @@ hsenvAuto () {
     NUMBER_OF_ENVS=$(find . -maxdepth 1 -type d -name ".hsenv*" | wc -l)
     case ${NUMBER_OF_ENVS} in
       "0") 
-        read -r -p "Generate hsenv? [y/N] " response
-        response=${response,,}
-        if [[ $response =~ ^(yes|y)$ ]]; then
-          hsenv
-        fi
+        #read -r -p "Generate hsenv? [y/N] " response
+        #response=${response,,}
+        #if [[ $response =~ ^(yes|y)$ ]]; then
+          #hsenv
+        #fi
         ;;
       "1") source .hsenv*/bin/activate;;
       *) echo multiple environments, manual activaton required;;
     esac
-  else
-    read -r -p "Deactivate hsenv? [y/N] " response
-    response=${response,,}
-    if [[ $response =~ ^(yes|y)$ ]]; then
-      deactivate_hsenv
-    fi
+  #else
+    #read -r -p "Deactivate hsenv? [y/N] " response
+    #response=${response,,}
+    #if [[ $response =~ ^(yes|y)$ ]]; then
+      #deactivate_hsenv
+    #fi
   fi
 }
 
