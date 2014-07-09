@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Sun Jul 06, 2014  06:07
+# Last modified: Wed Jul 09, 2014  09:02
 #
 umask 077
 
@@ -112,9 +112,13 @@ esac
 # Start tmux on ssh
 if [ "$PS1" != "" -a "${SSH_TTY:-x}" != x ]; then
   if test -z $TMUX && [[ $TERM != "screen" ]]; then
-    ( (tmux has-session -t remote && tmux attach-session -t remote) \
-      || (tmux new-session -s remote) ) && exit 0
-    echo "tmux failed to start"
+    read -r -p "tmux? [y/N] " response
+    response=\${response,,}
+    if [[ \$response =~ ^(yes|y)$ ]]; then
+      ( (tmux has-session -t remote && tmux attach-session -t remote) \
+        || (tmux new-session -s remote) ) && exit 0
+      echo "tmux failed to start"
+    fi
   else
     export DISPLAY=:0
   fi
