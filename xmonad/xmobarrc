@@ -44,7 +44,7 @@ Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
                     ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %StdinReader% }{ %multicpu% %top% %coretemp% %kbd%| %battery% | %dynnetwork% %info% | <fc=#ee9a00>%date%</fc>"
+       , template = " %StdinReader% }{ %multicpu% %top% %coretemp% %kbd%| %battery% | %dynnetwork% %info%| <fc=#ee9a00>%date%</fc>"
        }
 
 -- vim: set ft=haskell :
