@@ -25,6 +25,7 @@ alias sudo="sudo "
 
 alias visudo='sudo EDITOR=vim visudo'
 
+grepr() { grep -r "$@" * }
 have() { type "$1" &> /dev/null; }
 
 #--------------------------------------------------------------------

@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Wed Jun 04, 2014  05:53
+" Last modified: Mon Jul 14, 2014  07:26
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -800,7 +800,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'matchit.zip'
   Bundle 'AutoComplPop'
   Bundle 'git://github.com/nathanaelkane/vim-indent-guides.git'
-  Bundle 'git://github.com/Lokaltog/vim-powerline.git'
+  "Bundle 'git://github.com/Lokaltog/vim-powerline.git'
   Bundle 'gmarik/snipmate.vim'
   Bundle 'honza/snipmate-snippets'
   Bundle 'https://github.com/scrooloose/syntastic'
@@ -831,6 +831,9 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
 
   Bundle "sudar/vim-arduino-snippets"
   Bundle "sudar/vim-arduino-syntax"
+
+  Bundle 'bling/vim-airline'
+  let g:airline#extensions#tabline#enabled = 1
 
   " not used Bundles                                                   {{{
   "testing
