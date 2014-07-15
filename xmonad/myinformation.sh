@@ -53,7 +53,11 @@ if ! [[ $VirtualBoxON == "0" ]]; then
   echo -n "| VB: $VirtualBoxON "
 fi
 
-echo -n $(amixer get Master | awk -F'[]%[]' '/%/ {if ($7 == "off") { print " | <fc=#00ff00>m</fc>" } else { print " | Vol: " $2/10 }}' | head -n 1)
+volume=$(amixer get Master | awk -F'[]%[]' '/%/ {if ($7 == "off") { print " | <fc=#00ff00>m</fc>" } else { print " | Vol: " $2/10 }}' | head -n 1)
+if ! [[ -z "$volume" ]]; then
+  echo -n "$volume "
+fi
+
 
 #others:
 #printDiskInfo
