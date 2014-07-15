@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Sat Jul 05, 2014  05:52
+-- Last modified: Tue Jul 15, 2014  01:22
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -61,6 +61,7 @@ import XMonad.Layout.LayoutCombinators  ( (*||*) ) --hiding ( (|||) )
 --import XMonad.Layout.Magnifier ( magnifier )
 import XMonad.Layout.Named ( named )
 import XMonad.Layout.NoBorders ( smartBorders )
+import XMonad.Layout.Minimize
 import XMonad.Layout.PerWorkspace ( onWorkspace )
 import XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall),
     MirrorResize( MirrorShrink, MirrorExpand ) )
@@ -71,8 +72,6 @@ import XMonad.Layout.Tabbed ( addTabs, shrinkText, tabbedBottom, defaultTheme,
     Theme(..) )
 import XMonad.Layout.WindowNavigation ( configurableNavigation, navigateColor,
     Navigate(Move))
-
-import XMonad.Layout.Minimize
 
 import qualified Data.Map                    as M
 import qualified XMonad.StackSet             as W
@@ -206,7 +205,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     [ --backlight --{{{
     ((modm, xK_F1), spawnSelected defaultGSConfig [ "xbacklight =100"
                                                   , "xbacklight =75"
-                                                  , "xbacklight +10" 
+                                                  , "xbacklight +10"
                                                   , "xbacklight =50"
                                                   , "xbacklight -10"
                                                   , "xbacklight =25"
@@ -309,9 +308,8 @@ myLayout = avoidStrutsOn[U] $
     onWorkspace "6" (dtb ||| full) $
     onWorkspace "7" (dtb ||| full) $
     onWorkspace "web" (full ||| tiled) $
-    (tiled ||| full)
+    (tiled ||| full ||| dtb )
     where
-        --layouts:
         tiled   = named " "  $
             minimize $
             addTabs shrinkText myTab $
@@ -380,7 +378,7 @@ myManageHook = composeAll
 -- Scratchpads
 --
 scratchpads :: [NamedScratchpad]
-scratchpads = 
+scratchpads =
     [ NS "scratchpad" "urxvtc -name Scratchpad -e ~/.xmonad/tmux-scratch.sh"
         (resource =? "Scratchpad")
         (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
