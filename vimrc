@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Mon Jul 14, 2014  07:26
+" Last modified: Wed Jul 16, 2014  11:23
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -788,38 +788,92 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   " required!
   Bundle 'gmarik/vundle'
 
+  "############################################################################
   " My Bundles here:
+  "############################################################################
   "general
   Bundle 'Vimball'
   Bundle 'The-NERD-Commenter'
   Bundle 'sudo.vim'
-  Bundle 'Gundo'
+  if 1
+    Bundle 'Gundo'
+    nnoremap <F6> :GundoToggle<CR>
+  endif
   Bundle 'SearchComplete'
   Bundle 'ShowPairs'
   Bundle 'vimwiki'
   Bundle 'matchit.zip'
   Bundle 'AutoComplPop'
   Bundle 'git://github.com/nathanaelkane/vim-indent-guides.git'
-  "Bundle 'git://github.com/Lokaltog/vim-powerline.git'
   Bundle 'gmarik/snipmate.vim'
   Bundle 'honza/snipmate-snippets'
-  Bundle 'https://github.com/scrooloose/syntastic'
+  if 1
+    Bundle 'https://github.com/scrooloose/syntastic'
+    let g:syntastic_scala_checkers = []
+    "let g:syntastic_haskell_checkers = ["hlint"]
+  endif
+  if 0 "Vim-airline or vim-powerline
+    Bundle 'bling/vim-airline'
+    let g:airline#extensions#tabline#enabled = 1
+    AirlineTheme urbaryd
+  else
+    Bundle 'git://github.com/Lokaltog/vim-powerline.git'
+  endif
+
+  "############################################################################
   "manage files
   Bundle 'LustyJuggler'
+  if 0
   Bundle 'The-NERD-tree'
+    map <silent> <C-N> :NERDTree<CR>
+    " start NERDTree at startup
+    " autocmd VimEnter * NERDTree
+    " open a NERDTree automatically when vim starts up if no files were specified
+    autocmd vimenter * if !argc() | NERDTree | endif
+  endif
   Bundle 'mru.vim'
+  if 1 "CtrlP
+    Bundle 'https://github.com/kien/ctrlp.vim'
+    let g:ctrlp_map = '<c-p>'
+    let g:ctrlp_cmd = 'CtrlP'
+    let g:ctrlp_working_path_mode = 'ra'
+    nmap <Leader>b :CtrlPBuffer<CR>
+  endif
+  "if 0
+    "Bundle 'minibufexpl.vim'
+    "let g:miniBufExplMapWindowNavVim = 1 
+    "let g:miniBufExplMapWindowNavArrows = 1 
+    "let g:miniBufExplMapCTabSwitchBufs = 1 
+    "let g:miniBufExplModSelTarget = 1
+  "endif
+  "############################################################################
   "matlab
   Bundle 'git://github.com/djoshea/vim-matlab-fold.git'
+
+  "############################################################################
   "haskell
   Bundle 'git://github.com/vim-scripts/Haskell-Conceal.git'
   Bundle 'git://github.com/Twinside/vim-hoogle.git'
+
+  "############################################################################
   "csv
   Bundle 'csv.vim'
+
+  "############################################################################
   "html
   Bundle 'rstacruz/sparkup', {'rtp': 'vim/'}
+
+  "############################################################################
+  "arduino
+  Bundle "sudar/vim-arduino-snippets"
+  Bundle "sudar/vim-arduino-syntax"
+
+  "############################################################################
   "colorschemes
   Bundle 'Solarized'
   "Bundle 'flazz/vim-colorschemes'
+
+  "############################################################################
   "unsorted
   Bundle 'surround.vim'
   Bundle 'delete-surround-html'
@@ -829,12 +883,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'L9'
   Bundle 'tsaleh/vim-align.git'
 
-  Bundle "sudar/vim-arduino-snippets"
-  Bundle "sudar/vim-arduino-syntax"
-
-  Bundle 'bling/vim-airline'
-  let g:airline#extensions#tabline#enabled = 1
-
+  filetype plugin indent on
   " not used Bundles                                                   {{{
   "testing
   "Bundle 'http://github.com/tpope/vim-fugitive'
@@ -862,7 +911,6 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "Bundle 'SudoEdit.vim'
   "Bundle 'Tabular'
   "Bundle 'ProtoDef'
-  "Bundle 'minibufexpl.vim'
   "Bundle 'unicode.vim'
   "Bundle 'unimpaired.vim'
   "Bundle 'endwise.vim'
@@ -890,22 +938,6 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "Bundle 'vim-octopress'
   "Bundle 'tsaleh/vim-align.git'
   "                                                                  }}}
-  filetype plugin indent on
-
-  " ===================================================================
-  " nerdTree
-  map <silent> <C-N> :NERDTree<CR>
-  " start NERDTree at startup
-  " autocmd VimEnter * NERDTree
-  " open a NERDTree automatically when vim starts up if no files were specified
-  autocmd vimenter * if !argc() | NERDTree | endif
-
-  " ===================================================================
-  "Gundo
-  nnoremap <F6> :GundoToggle<CR>
-
-  let g:syntastic_scala_checkers = []
-  "let g:syntastic_haskell_checkers = ["hlint"]
 
 endif
 "                                                                    }}}
