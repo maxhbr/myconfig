@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Wed Jul 16, 2014  11:23
+" Last modified: Wed Jul 16, 2014  11:27
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -815,7 +815,6 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   if 0 "Vim-airline or vim-powerline
     Bundle 'bling/vim-airline'
     let g:airline#extensions#tabline#enabled = 1
-    AirlineTheme urbaryd
   else
     Bundle 'git://github.com/Lokaltog/vim-powerline.git'
   endif
@@ -823,14 +822,14 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "############################################################################
   "manage files
   Bundle 'LustyJuggler'
-  if 0
-  Bundle 'The-NERD-tree'
-    map <silent> <C-N> :NERDTree<CR>
-    " start NERDTree at startup
-    " autocmd VimEnter * NERDTree
-    " open a NERDTree automatically when vim starts up if no files were specified
-    autocmd vimenter * if !argc() | NERDTree | endif
-  endif
+  "if 0
+  "Bundle 'The-NERD-tree'
+    "map <silent> <C-N> :NERDTree<CR>
+    "" start NERDTree at startup
+    "" autocmd VimEnter * NERDTree
+    "" open a NERDTree automatically when vim starts up if no files were specified
+    "autocmd vimenter * if !argc() | NERDTree | endif
+  "endif
   Bundle 'mru.vim'
   if 1 "CtrlP
     Bundle 'https://github.com/kien/ctrlp.vim'
@@ -883,7 +882,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'L9'
   Bundle 'tsaleh/vim-align.git'
 
-  filetype plugin indent on
+  filetype plugin indent on " required!
   " not used Bundles                                                   {{{
   "testing
   "Bundle 'http://github.com/tpope/vim-fugitive'
