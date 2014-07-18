@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Wed Jul 16, 2014  11:27
+" Last modified: Fri Jul 18, 2014  08:18
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -120,12 +120,12 @@ set synmaxcol=128
 "                                                                    }}}
 " ====  line numberig  ============================================={{{
 " TODO: has problems?
-if has("autocmd")
-  au InsertEnter * set nu
-  au InsertLeave * set rnu
-  "au FocusLost * set nu
-  "au FocusGained * set rnu
-endif
+"if has("autocmd")
+"  au InsertEnter * set nu
+"  au InsertLeave * set rnu
+"  "au FocusLost * set nu
+"  "au FocusGained * set rnu
+"endif
 set nu
 "                                                                    }}}
 " ====  backup / undo  =============================================={{{
@@ -439,8 +439,7 @@ map <c-Right> :tabn<CR>
 "noremap <right> :bn<CR>
 
 "                                                                    }}}
-" ====  for plugins / external scripts  ============================={{{
-map <Leader>S :SyntasticToggleMode<CR>
+" ====  for external scripts  ======================================={{{
 
 "Markdown to HTML
 nmap <leader>md :%!~/bin/Markdown.pl --html4tags <cr>
@@ -795,21 +794,24 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'Vimball'
   Bundle 'The-NERD-Commenter'
   Bundle 'sudo.vim'
-  if 1
+  "if 1
     Bundle 'Gundo'
     nnoremap <F6> :GundoToggle<CR>
-  endif
+  "endif
   Bundle 'SearchComplete'
   Bundle 'ShowPairs'
   Bundle 'vimwiki'
+  " move by % to matching bracket/tag/...
   Bundle 'matchit.zip'
+  Bundle 'git://github.com/Raimondi/delimitMate.git'
   Bundle 'AutoComplPop'
-  Bundle 'git://github.com/nathanaelkane/vim-indent-guides.git'
+  "Bundle 'git://github.com/nathanaelkane/vim-indent-guides.git'
   Bundle 'gmarik/snipmate.vim'
   Bundle 'honza/snipmate-snippets'
   if 1
     Bundle 'https://github.com/scrooloose/syntastic'
     let g:syntastic_scala_checkers = []
+    map <Leader>S :SyntasticToggleMode<CR>
     "let g:syntastic_haskell_checkers = ["hlint"]
   endif
   if 0 "Vim-airline or vim-powerline
@@ -831,13 +833,13 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
     "autocmd vimenter * if !argc() | NERDTree | endif
   "endif
   Bundle 'mru.vim'
-  if 1 "CtrlP
+  "if 1 "CtrlP
     Bundle 'https://github.com/kien/ctrlp.vim'
     let g:ctrlp_map = '<c-p>'
     let g:ctrlp_cmd = 'CtrlP'
     let g:ctrlp_working_path_mode = 'ra'
     nmap <Leader>b :CtrlPBuffer<CR>
-  endif
+  "endif
   "if 0
     "Bundle 'minibufexpl.vim'
     "let g:miniBufExplMapWindowNavVim = 1 
@@ -861,6 +863,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "############################################################################
   "html
   Bundle 'rstacruz/sparkup', {'rtp': 'vim/'}
+  "Bundle 'vim-less'
 
   "############################################################################
   "arduino
@@ -877,10 +880,8 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'surround.vim'
   Bundle 'delete-surround-html'
   Bundle 'XML-Folding'
-  Bundle 'git://github.com/Raimondi/delimitMate.git'
-  Bundle 'vim-less'
-  Bundle 'L9'
   Bundle 'tsaleh/vim-align.git'
+  Bundle 'L9'
 
   filetype plugin indent on " required!
   " not used Bundles                                                   {{{

@@ -25,6 +25,8 @@ alias sudo="sudo "
 
 alias visudo='sudo EDITOR=vim visudo'
 
+alias ssh="TERM=xterm ssh"
+
 grepr() { grep -r "$@" *; }
 have() { type "$1" &> /dev/null; }
 
