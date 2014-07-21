@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Tue Jul 15, 2014  01:22
+-- Last modified: Mon Jul 21, 2014  11:18
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -310,12 +310,13 @@ myLayout = avoidStrutsOn[U] $
     onWorkspace "web" (full ||| tiled) $
     (tiled ||| full ||| dtb )
     where
-        tiled   = named " "  $
+        tiled   = named " " $
             minimize $
             addTabs shrinkText myTab $
             subLayout [] Simplest $
             ResizableTall nmaster delta ratio []
-        full    = named "="
+        full    = named "=" $
+            minimize $
             Full
         dtb     = named "%" $
             minimize $
@@ -361,6 +362,8 @@ myManageHook = composeAll
     , className =? "com-mathworks-util-PostVMInit" --> doShift "7"
     , className =? "Chromium"                      --> doShift "web"
     , className =? "Virtualbox"                    --> doFullFloat
+    , className =? "qemu"                          --> doCenterFloat
+    , className =? "qemu-system-x86_64"            --> doCenterFloat
     , className =? "qiv"                           --> doCenterFloat
     , resource  =? "qiv"                           --> doCenterFloat
     , resource  =? "desktop_window"                --> doIgnore

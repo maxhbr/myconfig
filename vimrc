@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Fri Jul 18, 2014  08:18
+" Last modified: Sat Jul 19, 2014  08:00
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
