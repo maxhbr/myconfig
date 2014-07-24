@@ -5,6 +5,8 @@
 # vim, tmux, sudo, mutt
 
 alias vi="vim"
+alias e="vim"
+alias :e="vim" #Typo
 alias vime="vim -u ~/.vimencrypt -x "
 alias gvime="gvim -u ~/.vimencrypt -x "
 alias tvim="tmux new vim"
@@ -68,7 +70,6 @@ cd() { #Automatically do an ls after each cd
 alias cd..="cd .."
 alias ..="cd .."
 alias ...="cd ../.."
-#alias ~="cd ~/"
 
 mkcd() { #make dir and enter it
   mkdir -p "$1"
@@ -121,12 +122,10 @@ permfix() {
 }
 
 # Find a file with a pattern in name:
-ff() {
-  find . -type f -iname '*'$*'*' -ls 2>/dev/null
-}
+ff() { find . -type f -iname '*'$*'*' -ls 2>/dev/null ; }
 
 # Find a file with pattern $1 in name and Execute $2 on it:
-fe() { find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \;  ; }
+fe() { find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \; ; }
 
 # Extract files from any archive
 # Usage: ex <archive_name>
@@ -156,8 +155,11 @@ ex() {
 }
 
 countFilesByTypes() {
-  find . -type f -exec basename "{}" \; | sed -e 's/.*\.//gi' | sort  | \
-    uniq  -c | sort  -rn
+  find . -type f -exec basename "{}" \; \
+    | sed -e 's/.*\.//gi' \
+    | sort \
+    | uniq  -c \
+    | sort  -rn
 }
 
 # Quick and dirty version control for one file or one folder
@@ -532,47 +534,6 @@ myiscsiRoutine() {
 #-------------------------------------------------------------------}}}
 #   misc
 #-------------------------------------------------------------------{{{
-
-hsenvAuto () {
-
-  if [[ -z $HSENV ]]; then
-    NUMBER_OF_ENVS=$(find . -maxdepth 1 -type d -name ".hsenv*" | wc -l)
-    case ${NUMBER_OF_ENVS} in
-      "0") 
-        #read -r -p "Generate hsenv? [y/N] " response
-        #response=${response,,}
-        #if [[ $response =~ ^(yes|y)$ ]]; then
-          #hsenv
-        #fi
-        ;;
-      "1") source .hsenv*/bin/activate;;
-      *) echo multiple environments, manual activaton required;;
-    esac
-  #else
-    #read -r -p "Deactivate hsenv? [y/N] " response
-    #response=${response,,}
-    #if [[ $response =~ ^(yes|y)$ ]]; then
-      #deactivate_hsenv
-    #fi
-  fi
-}
-
-e() {
-  if [ $# -eq 1 ]; then
-    if [ -f $1 ] ; then
-      case $( tr '[:upper:]' '[:lower:]' <<<"$1" ) in
-        *.pdf|*.djvu|*.ps) zathura $1 ;;
-        *.jpg|*.png) geeqie $1 ;;
-        *.zip) file-roller $1 ;;
-        *) vim $1 ;;
-      esac
-    else
-      vim $1
-    fi
-  else
-    vim
-  fi
-}
 
 alias incognito="/usr/bin/chromium --incognito"
 
