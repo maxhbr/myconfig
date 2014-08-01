@@ -54,6 +54,7 @@ myinstall "${FOLDER}bin/installiere_neo" "/home/hubi/bin/installiere_neo" 744 hu
 myinstall "${FOLDER}bin/mailclient.sh" "/home/hubi/bin/mailclient.sh" 700 hubi users
 myinstall "${FOLDER}bin/mailrun.sh" "/home/hubi/bin/mailrun.sh" 700 hubi users
 myinstall "${FOLDER}bin/myAnyToMp3.sh" "/home/hubi/bin/myAnyToMp3.sh" 600 hubi users
+myinstall "${FOLDER}bin/myCleanDownloads.sh" "/home/hubi/bin/myCleanDownloads.sh" 700 hubi users
 myinstall "${FOLDER}bin/myPdfCrop.sh" "/home/hubi/bin/myPdfCrop.sh" 700 hubi users
 myinstall "${FOLDER}bin/myScalaToScript.sh" "/home/hubi/bin/myScalaToScript.sh" 700 hubi users
 myinstall "${FOLDER}bin/mystopwatch" "/home/hubi/bin/mystopwatch" 700 hubi users

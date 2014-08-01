@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Mon Jul 14, 2014  09:03
+# Last modified: Fri Aug 01, 2014  03:48
 
 ###############################################################################
 # variables
@@ -91,6 +91,7 @@ files() {
 ~/bin/mailclient.sh
 ~/bin/mailrun.sh
 ~/bin/myAnyToMp3.sh
+~/bin/myCleanDownloads.sh
 ~/bin/myPdfCrop.sh
 ~/bin/myScalaToScript.sh
 ~/bin/mystopwatch
