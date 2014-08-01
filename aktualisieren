@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Fri Aug 01, 2014  03:48
+# Last modified: Fri Aug 01, 2014  08:54
 
 ###############################################################################
 # variables
@@ -83,6 +83,7 @@ files() {
 ~/.xmonad/tmux-scratch.sh
 ~/.xmonad/xmobarrc
 ~/.xmonad/xmonad.hs
+~/.zlogin
 ~/.zshrc.local
 ~/.zprofile
 ~/bin/create_ap

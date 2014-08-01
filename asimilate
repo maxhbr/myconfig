@@ -46,6 +46,7 @@ myinstall "${FOLDER}xmonad/showkeys" "/home/hubi/.xmonad/showkeys" 755 hubi user
 myinstall "${FOLDER}xmonad/tmux-scratch.sh" "/home/hubi/.xmonad/tmux-scratch.sh" 711 hubi users
 myinstall "${FOLDER}xmonad/xmobarrc" "/home/hubi/.xmonad/xmobarrc" 600 hubi users
 myinstall "${FOLDER}xmonad/xmonad.hs" "/home/hubi/.xmonad/xmonad.hs" 600 hubi users
+myinstall "${FOLDER}zlogin" "/home/hubi/.zlogin" 600 hubi users
 myinstall "${FOLDER}zshrc.local" "/home/hubi/.zshrc.local" 644 hubi users
 myinstall "${FOLDER}zprofile" "/home/hubi/.zprofile" 644 hubi users
 myinstall "${FOLDER}bin/create_ap" "/home/hubi/bin/create_ap" 744 hubi users
