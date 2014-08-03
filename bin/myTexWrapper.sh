@@ -53,6 +53,8 @@
     } || {
       ([[ $# == 1 ]] && [[ "$1" == xe* ]] || [[ -d "./xelatexmk" ]]) && {
         cmd="${cmd} -pdflatex=xelatex -outdir=\"xelatexmk\""
+      } || {
+        cmd="${cmd} -outdir=\"latexmk\""
       }
     }
     cmd="${cmd} -pdf -synctex=1 -pvc"
@@ -70,6 +72,7 @@
   fi
   tmux attach -t $SRVR
 } || {
+  # Locate .srvr file
   [[ -a ".srvr" ]] && {
     SRVR=$(<".srvr")
     DIR="./"
@@ -78,7 +81,12 @@
       SRVR=$(<"../.srvr")
       DIR="../"
     } || {
-      exit 1
+      [[ -a "../../.srvr" ]] && {
+        SRVR=$(<"../../.srvr")
+        DIR="../../"
+      } || {
+        exit 1
+      }
     }
   }
   [[ $# == 2 ]] && {
