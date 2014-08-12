@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Fri Aug 01, 2014  08:54
+# Last modified: Tue Aug 12, 2014  05:11
 
 ###############################################################################
 # variables
@@ -86,6 +86,7 @@ files() {
 ~/.zlogin
 ~/.zshrc.local
 ~/.zprofile
+~/.xmodmap
 ~/bin/create_ap
 ~/bin/disp-controll
 ~/bin/installiere_neo
