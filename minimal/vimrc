@@ -1,15 +1,10 @@
 " ~/.vimrc
 "
-" minimal version
+" minimal version (plugins removed)
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Tue Aug 12, 2014  10:31
-
-" !!!! !!! !! !
-"       this config will automatically download Vundle from git, and then it
-"       will install some plugins via Vundle
-" !!!! !!! !! !
+" Last modified: Tue Aug 12, 2014  10:35
 
 " auto reload when saving
 autocmd! bufwritepost .vimrc source %

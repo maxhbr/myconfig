@@ -213,6 +213,8 @@ alias poweroff="systemctl poweroff"
 alias halt="systemctl poweroff"
 alias suspend="systemctl suspend"
 
+alias btsyncStart="sudo btsync --config ~/.config/btsync/btsync.conf"
+
 # for hotswaping SATA or eSATA drives
 # scan for new sata devices (as root):
 mysatascan() { su -c "echo \"0 0 0\" >/sys/class/scsi_host/host1/scan"; }

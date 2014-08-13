@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Sat Jul 19, 2014  08:00
+" Last modified: Tue Aug 12, 2014  10:31
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -495,7 +495,7 @@ command! GCheckout call GitCheckout()
 command! GBranch   call GitBranch()
 command! GAuto     call GitAuto()
 
-nmap <silent> _gc :call GitCommit<cr>
+nmap <silent> _gc :call GitCommit()<cr>
 
 "                                                                    }}}
 " ====  SVN  ========================================================{{{
@@ -544,9 +544,20 @@ endfunction "}}}
 
 function! SetShFile() "{{{
   setlocal sw=2 ts=2 et
-  nmap <silent> __h "=GenHeader('#',80)<CR>:0put =<CR>
 
   map <c-F5> :w<CR>:!sh "%"<CR>
+
+  function! GenHeader(...)
+    return  repeat(a:1, a:2) . "\n"
+    \       . a:1 . " \n"
+    \       . a:1 . " Written by Maximilian-Huber.de\n"
+    \       . a:1 . " \n"
+    \       . a:1 . " Last modified: \n"
+    \       . "\n"
+    call LastModified()
+  endfunction
+
+  nmap <silent> __h "=GenHeader('#',80)<CR>:0put =<CR>
 endfunction "}}}
 
 function! SetHaskellFile() "{{{
