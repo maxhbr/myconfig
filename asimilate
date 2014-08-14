@@ -26,6 +26,7 @@ myinstall "${FOLDER}bash_profile" "/home/hubi/.bash_profile" 644 hubi users
 myinstall "${FOLDER}bashrc" "/home/hubi/.bashrc" 644 hubi users
 myinstall "${FOLDER}config/ranger/rc.conf" "/home/hubi/.config/ranger/rc.conf" 644 hubi users
 myinstall "${FOLDER}config/ranger/rifle.conf" "/home/hubi/.config/ranger/rifle.conf" 644 hubi users
+myinstall "${FOLDER}config/dwb/default/custom_keys" "/home/hubi/.config/dwb/default/custom_keys" 644 hubi users
 myinstall "${FOLDER}emacs" "/home/hubi/.emacs" 600 hubi users
 myinstall "${FOLDER}fontconfig/fonts.conf" "/home/hubi/.fontconfig/fonts.conf" 700 hubi users
 myinstall "${FOLDER}ghci" "/home/hubi/.ghci" 600 hubi users

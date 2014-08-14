@@ -6,7 +6,7 @@
 # partly from: http://www.nixaid.com/linux/network/encrypted-chat-with-netcat
 #
 # written by maximilian-huber.de
-# Last modified: Tue Jul 08, 2014  01:15
+# Last modified: Thu Aug 14, 2014  04:53
 
 if [[ "$1" == "-h" ]] ||  [[ "$1" == "--help" ]]; then
   echo "ncChat.sh -h"
@@ -30,7 +30,7 @@ fi
 have() { type "$1" &> /dev/null; }
 echoDecodedMsg(){
   echo "$bold$(echo "$1" | openssl enc -d -a -A -aes-256-cbc -k ${2})$normal" \
-    | fold -sw width
+    | fold -sw $width
 }
 
 bold=`tput bold``tput setaf 6`
