@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Thu Aug 14, 2014  12:29
+-- Last modified: Thu Aug 14, 2014  05:05
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -361,8 +361,6 @@ myManageHook = composeAll
     , className =? "Onboard"                       --> doFloat
     , className =? "com-mathworks-util-PostVMInit" --> doShift "7"
     , className =? "Chromium"                      --> doShift "web"
-    , className =? "xombrero"                      --> doShift "web"
-    , className =? "Xombrero"                      --> doShift "web"
     , className =? "Virtualbox"                    --> doFullFloat
     , className =? "qemu"                          --> doCenterFloat
     , className =? "qemu-system-x86_64"            --> doCenterFloat
@@ -391,7 +389,7 @@ scratchpads =
         (resource =? "udoo")
         (customFloating $ W.RationalRect (3/24) (1/20) (5/6) (4/5))
     , NS "ScratchWeb" "dwb" (resource =? "dwb")
-        (customFloating $ W.RationalRect (1/12) (1/12) (5/6) (5/6))
+        (customFloating $ W.RationalRect (1/64) (3/128) (31/32) (31/32))
     , NS "ncmpcpp" "urxvtc -name Ncmpcpp -e ncmpcpp"
         (resource =? "Ncmpcpp")
         (customFloating $ W.RationalRect (1/2) (1/5) (1/2) (4/5))
