@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Wed Aug 13, 2014  06:24
+-- Last modified: Thu Aug 14, 2014  12:29
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -160,8 +160,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     ++
     [ --systemctl --{{{
     ((modm .|. shiftMask,  xK_F10  ),  spawn "systemctl suspend")
-    , ((modm .|. shiftMask,  xK_F11  ),  spawn "systemctl reboot")
-    , ((modm .|. shiftMask,  xK_F12  ),  spawn "systemctl poweroff")
+    , ((modm .|. shiftMask .|. controlMask,  xK_F11  ),  spawn "systemctl reboot")
+    , ((modm .|. shiftMask .|. controlMask,  xK_F12  ),  spawn "systemctl poweroff")
     ] --}}}
     ++
     [ -- misc --{{{
