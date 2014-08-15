@@ -5,12 +5,18 @@
 # initaialy create $STATUSFILE with the content "0"
 #   $ echo "0" > $STATUSFILE
 #
-# Last modified: Fri Aug 15, 2014  05:40
+# Last modified: Fri Aug 15, 2014  05:50
 #
 
 if [ "$(id -u)" != "0" ]; then
   exit 1
 fi
+
+have() { type "$1" &> /dev/null; }
+have rsnapshot || {
+  echo "rsnapshot has to be installed"
+  exit 1
+}
 
 ###############################################################################
 # config
@@ -83,16 +89,21 @@ echo "0 0 0" >/sys/class/scsi_host/host1/scan
 sleep 1
 mount /dev/disk/by-uuid/$UUID ${BACKUPDIR}
 
-# check if mounted
 rootId=$(stat -c%d /)
 mountId=$(stat -c%d "${BACKUPDIR}")
 if (( rootId == mountId )); then
+  echo "nothing mouned at $BACKUPDIR"
   exit 1
 fi
-[[ -f $STATUSFILE ]] || exit 1
+
+if [[ ! -f $STATUSFILE ]]; then
+  echo "no statusfile found, generate one with:"
+  echo "    echo \"0\" > $STATUSFILE"
+  exit 1
+fi
 
 ###############################################################################
-# write config
+# write rsnapshot config to files
 BACKUPNR=`cat $STATUSFILE`
 rsnapshot_cfg >${BACKUPDIR}rsnapshot_cfg
 exclude_file >${BACKUPDIR}exclude_file
@@ -112,7 +123,6 @@ fi
 
 echo `expr $BACKUPNR + 1` > $STATUSFILE
 
-have() { type "$1" &> /dev/null; }
 have pacman && {
   pacman -Qeq > ${BACKUPDIR}daily.0/Pakete.txt
 }
