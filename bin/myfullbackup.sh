@@ -1,12 +1,19 @@
 #!/bin/sh
-# Last modified: Fr Nov 29, 2013  07:14
+#
+# Written by Maximilian-Huber.de
+#
+# initaialy create $STATUSFILE with the content "0"
+#   $ echo "0" > $STATUSFILE
+#
+# Last modified: Fri Aug 15, 2014  05:40
+#
+
 if [ "$(id -u)" != "0" ]; then
   exit 1
 fi
 
-##########
-# Config #
-##########
+###############################################################################
+# config
 UUID="09ec7ae8-70a1-407b-860f-a7a21e3f671d"
 BACKUPDIR="/backup/"
 STATUSFILE="${BACKUPDIR}statusfile"
@@ -71,15 +78,27 @@ EXCLUDE
 }
 
 ###############################################################################
+# mount disc
 echo "0 0 0" >/sys/class/scsi_host/host1/scan
 sleep 1
 mount /dev/disk/by-uuid/$UUID ${BACKUPDIR}
 
+# check if mounted
+rootId=$(stat -c%d /)
+mountId=$(stat -c%d "${BACKUPDIR}")
+if (( rootId == mountId )); then
+  exit 1
+fi
 [[ -f $STATUSFILE ]] || exit 1
+
+###############################################################################
+# write config
 BACKUPNR=`cat $STATUSFILE`
 rsnapshot_cfg >${BACKUPDIR}rsnapshot_cfg
 exclude_file >${BACKUPDIR}exclude_file
 
+###############################################################################
+# do backup
 echo "starting backups (Nr. $BACKUPNR)..."
 echo
 
@@ -99,6 +118,7 @@ have pacman && {
 }
 
 ###############################################################################
+# unmount
 sync
 umount /backup
 hdparm -Y /dev/disk/by-uuid/$UUID

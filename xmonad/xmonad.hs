@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Thu Aug 14, 2014  05:05
+-- Last modified: Fri Aug 15, 2014  11:17
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -43,7 +43,7 @@ import XMonad.Hooks.UrgencyHook ( withUrgencyHook, NoUrgencyHook(..) )
 import XMonad.Hooks.SetWMName
 
 import XMonad.Util.NamedScratchpad ( NamedScratchpad(..), customFloating,
-    namedScratchpadAction, namedScratchpadFilterOutWorkspace,
+    nonFloating, namedScratchpadAction, namedScratchpadFilterOutWorkspace,
     namedScratchpadManageHook )
 import XMonad.Util.Run ( spawnPipe )
 import XMonad.Util.Types ( Direction2D(..) )
@@ -388,8 +388,8 @@ scratchpads =
     , NS "udoo" "urxvtc -name udoo -e mosh udooLocal"
         (resource =? "udoo")
         (customFloating $ W.RationalRect (3/24) (1/20) (5/6) (4/5))
-    , NS "ScratchWeb" "dwb" (resource =? "dwb")
-        (customFloating $ W.RationalRect (1/64) (3/128) (31/32) (31/32))
+    , NS "ScratchWeb" "dwb" (resource =? "dwb") nonFloating
+        {-(customFloating $ W.RationalRect (1/64) (3/128) (31/32) (31/32))-}
     , NS "ncmpcpp" "urxvtc -name Ncmpcpp -e ncmpcpp"
         (resource =? "Ncmpcpp")
         (customFloating $ W.RationalRect (1/2) (1/5) (1/2) (4/5))
