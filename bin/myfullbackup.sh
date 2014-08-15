@@ -5,7 +5,7 @@
 # initaialy create $STATUSFILE with the content "0"
 #   $ echo "0" > $STATUSFILE
 #
-# Last modified: Fri Aug 15, 2014  05:50
+# Last modified: Fri Aug 15, 2014  06:01
 #
 
 if [ "$(id -u)" != "0" ]; then
@@ -27,7 +27,7 @@ STATUSFILE="${BACKUPDIR}statusfile"
 rsnapshot_cfg() { #{{{
 cat <<CONFIG
 # this file is overwritten at every run
-# This file requires tabs between elements #
+# This file requires tabs between the elements
 config_version	1.2
 snapshot_root	${BACKUPDIR}
 no_create_root	1
