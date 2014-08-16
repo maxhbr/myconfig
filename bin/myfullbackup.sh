@@ -5,7 +5,7 @@
 # initaialy create $STATUSFILE with the content "0"
 #   $ echo "0" > $STATUSFILE
 #
-# Last modified: Fri Aug 15, 2014  06:01
+# Last modified: Fri Aug 15, 2014  06:03
 #
 
 if [ "$(id -u)" != "0" ]; then
