@@ -7,7 +7,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Tue Aug 19, 2014  01:00
+" Last modified: Tue Aug 19, 2014  01:29
 
 " auto reload when saving
 if has("autocmd")
@@ -182,20 +182,10 @@ set stl+=%y%m%r%=
 set stl+=%-14.(%l,%c%V%)\ %P
 
 if has("gui_running")
-  " in gui
-  noremap <S-Insert> <MiddleMouse>
-  noremap! <S-Insert> <MiddleMouse>
   set guioptions-=T  " no toolbar
-  " Use console messages instead of GUI dialogs
-  set guioptions+=c
-
-  let g:indent_guides_auto_colors = 0
-  augroup guiAugroup
-    autocmd!
-    autocmd VimEnter,Colorscheme * :hi IndentGuidesEven guibg=black ctermbg=4
-  augroup END
+  set guioptions+=c " Use console messages instead of GUI dialogs
 else
-  set t_Co=256
+  "set t_Co=256
   set background=dark
 endif
 

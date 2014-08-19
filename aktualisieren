@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Tue Aug 19, 2014  01:16
+# Last modified: Tue Aug 19, 2014  01:32
 
 ###############################################################################
 # variables
@@ -80,6 +80,7 @@ files() {
 ~/.vimencrypt
 ~/.vimrc
 ~/.vim/colors/mustang.vim
+~/.vim/colors/badwolf.vim
 ~/.xinitrc
 ~/.xmonad/myinformation.sh
 ~/.xmonad/showkeys
