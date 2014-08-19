@@ -2,9 +2,12 @@
 "
 " call `MyInstallAllPlugins` for installing all plugins
 "
+" Worth reading:
+"   Steve Losh: Learn Vimscript the Hard Way
+"
 " Written by Maximilian-Huber.de
 "
-" Last modified: Tue Aug 19, 2014  11:48
+" Last modified: Tue Aug 19, 2014  01:00
 
 " auto reload when saving
 if has("autocmd")
@@ -324,6 +327,8 @@ set backspace=2
 
 nnoremap ; :
 let mapleader=","
+let maplocalleader = "\\"
+
 
 inoremap ää <esc>l
 "inoremap <esc> <nop>
@@ -928,6 +933,11 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'XML-Folding'
   Bundle 'tsaleh/vim-align.git'
   Bundle 'L9'
+  if 1
+    Bundle 'https://github.com/sjl/clam.vim/'
+    nnoremap ! :Clam<space>
+    vnoremap ! :ClamVisual<space>
+  endif
 
   filetype plugin indent on " required!
   " not used Bundles                                                   {{{
