@@ -4,13 +4,15 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Tue Aug 19, 2014  11:26
+" Last modified: Tue Aug 19, 2014  11:48
 
 " auto reload when saving
-augroup autoSourceVimrc
-  autocmd!
-  autocmd bufwritepost .vimrc source %
-augroup END
+if has("autocmd")
+  augroup autoSourceVimrc
+    autocmd!
+    autocmd bufwritepost .vimrc source %
+  augroup END
+endif
 
 " This must be first, because it changes other options as a side effect.
 set nocompatible
@@ -31,14 +33,17 @@ if has("autocmd")
   set ofu=syntaxcomplete#Complete
   set completeopt=longest,menuone
 
-  " jump to the last position when reopening a file
-  au BufReadPost * if line("'\"") > 1 && line("'\"") <= line("$") | exe "normal! g'\"" | endif
+  augroup someAugroup
+    autocmd!
+    " jump to the last position when reopening a file
+    autocmd BufReadPost * if line("'\"") > 1 && line("'\"") <= line("$") | exe "normal! g'\"" | endif
 
-  " resize splits
-  au VimResized * exe "normal! \<c-w>="
+    " resize splits
+    autocmd VimResized * exe "normal! \<c-w>="
 
-  " leave paste mode, when exit insert mode
-  au InsertLeave * set nopaste
+    " leave paste mode, when exit insert mode
+    autocmd InsertLeave * set nopaste
+  augroup END
 endif
 
 " Use Unix as the standard file type
@@ -243,6 +248,7 @@ function! DeleteTrailing()
   exe "normal `z"
 endfunction
 
+" DeleteTrailing and more
 function! Cleanup()
   call DeleteTrailing()
   setlocal ff=unix
@@ -285,32 +291,25 @@ noremap ,R :call RangerChooser()<CR>
 
 "                                                                    }}}
 " ====  last modified  =============================================={{{
-" If buffer modified, update any 'Last modified: ' in the first 20 lines.
-" 'Last modified: ' can have up to 10 characters before (they are retained).
-" Restores cursor and window position using save_cursor variable.
-function! LastModified()
-  if &modified
-    let save_cursor = getpos(".")
-    let n = min([20, line("$")])
-    keepjumps exe '1,' . n . 's#^\(.\{,10}Last modified: \).*#\1' .
-          \ strftime('%a %b %d, %Y  %I:%M%p') . '#e'
-    call histdel('search', -1)
-    call setpos('.', save_cursor)
-  endif
-endfunction
-augroup lastModified
-  autocmd!
-  autocmd BufWritePre * call LastModified()
-augroup END
-function! GenHeader(...)
-  return  repeat(a:1, a:2) . "\n"
-  \       . a:1 . " \n"
-  \       . a:1 . " Written by Maximilian-Huber.de\n"
-  \       . a:1 . " \n"
-  \       . a:1 . " Last modified: \n"
-  \       . "\n"
-  call LastModified()
-endfunction
+if has("autocmd")
+  " If buffer modified, update any 'Last modified: ' in the first 20 lines.
+  " 'Last modified: ' can have up to 10 characters before (they are retained).
+  " Restores cursor and window position using save_cursor variable.
+  function! LastModified()
+    if &modified
+      let save_cursor = getpos(".")
+      let n = min([20, line("$")])
+      keepjumps exe '1,' . n . 's#^\(.\{,10}Last modified: \).*#\1' .
+            \ strftime('%a %b %d, %Y  %I:%M%p') . '#e'
+      call histdel('search', -1)
+      call setpos('.', save_cursor)
+    endif
+  endfunction
+  augroup lastModified
+    autocmd!
+    autocmd BufWritePre * call LastModified()
+  augroup END
+endif
 
 "                                                                    }}}
 " ===================================================================}}}
@@ -326,7 +325,7 @@ set backspace=2
 nnoremap ; :
 let mapleader=","
 
-"inoremap ää <esc>l
+inoremap ää <esc>l
 "inoremap <esc> <nop>
 
 " ====  general  ===================================================={{{
@@ -577,13 +576,19 @@ function! SetShFile() "{{{
   noremap <c-F5> :w<CR>:!sh "%"<CR>
 
   function! GenHeader(...)
-    return  repeat(a:1, a:2) . "\n"
-    \       . a:1 . " \n"
-    \       . a:1 . " Written by Maximilian-Huber.de\n"
-    \       . a:1 . " \n"
-    \       . a:1 . " Last modified: \n"
-    \       . "\n"
-    call LastModified()
+    if has("autocmd")
+      return  repeat(a:1, a:2) . "\n"
+      \       . a:1 . "\n"
+      \       . a:1 . " Written by Maximilian-Huber.de\n"
+      \       . a:1 . "\n"
+      \       . a:1 . " Last modified: \n"
+      \       . "\n"
+    else
+      return  repeat(a:1, a:2) . "\n"
+      \       . a:1 . "\n"
+      \       . a:1 . " Written by Maximilian-Huber.de\n"
+      \       . "\n"
+    endif
   endfunction
 
   nnoremap <silent> __h "=GenHeader('#',80)<CR>:0put =<CR>
