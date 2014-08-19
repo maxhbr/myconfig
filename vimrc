@@ -2,7 +2,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Tue Aug 12, 2014  10:31
+" Last modified: Mon Aug 18, 2014  10:34
 
 " !!!! !!! !! !
 "       this config will automatically download Vundle from git, and then it
@@ -10,7 +10,10 @@
 " !!!! !!! !! !
 
 " auto reload when saving
-autocmd! bufwritepost .vimrc source %
+augroup autoReadVimrc
+  autocmd!
+  autocmd bufwritepost .vimrc source %
+augroup END
 
 " This must be first, because it changes other options as a side effect.
 set nocompatible
@@ -173,14 +176,17 @@ set stl+=%-14.(%l,%c%V%)\ %P
 
 if has("gui_running")
   " in gui
-  map <S-Insert> <MiddleMouse>
-  map! <S-Insert> <MiddleMouse>
+  noremap <S-Insert> <MiddleMouse>
+  noremap! <S-Insert> <MiddleMouse>
   set guioptions-=T  " no toolbar
   " Use console messages instead of GUI dialogs
   set guioptions+=c
 
   let g:indent_guides_auto_colors = 0
-  autocmd VimEnter,Colorscheme * :hi IndentGuidesEven guibg=black ctermbg=4
+  augroup guiAugroup
+    autocmd!
+    autocmd VimEnter,Colorscheme * :hi IndentGuidesEven guibg=black ctermbg=4
+  augroup END
 else
   set t_Co=256
   set background=dark
@@ -276,7 +282,7 @@ fun! RangerChooser()
   endif
   redraw!
 endfun
-map ,R :call RangerChooser()<CR>
+noremap ,R :call RangerChooser()<CR>
 
 "                                                                    }}}
 " ====  last modified  =============================================={{{
@@ -293,7 +299,10 @@ function! LastModified()
     call setpos('.', save_cursor)
   endif
 endfun
-autocmd BufWritePre * call LastModified()
+augroup lastModified
+  autocmd!
+  autocmd BufWritePre * call LastModified()
+augroup END
 function! GenHeader(...)
   return  repeat(a:1, a:2) . "\n"
   \       . a:1 . " \n"
@@ -318,37 +327,40 @@ set backspace=2
 nnoremap ; :
 let mapleader=","
 
+inoremap ee <esc>l
+inoremap <esc> <nop>
+
 " ====  general  ===================================================={{{
 " overwrite those annoying commands
 cnoreabbrev <expr> W ((getcmdtype() is# ':' && getcmdline() is# 'W')?('w'):('W'))
 cnoreabbrev <expr> Q ((getcmdtype() is# ':' && getcmdline() is# 'Q')?('q'):('Q'))
 
 "save without sudo
-cmap w!! w !sudo tee % >/dev/null
+cnoremap w!! w !sudo tee % >/dev/null
 
 "Make Y behave like other capitals
-map Y y$
+noremap Y y$
 
 "Reload vimrc
-nmap <Leader>r :source $MYVIMRC
+nnoremap <Leader>r :source $MYVIMRC
 
-"nmap <silent> <leader>ev :tabedit $MYVIMRC<CR>
-nmap <silent> <leader>ev :e $MYVIMRC<CR>
-"nmap <silent> <leader>sv :so $MYVIMRC<CR>
+"nnoremap <silent> <leader>ev :tabedit $MYVIMRC<CR>
+nnoremap <silent> <leader>ev :e $MYVIMRC<CR>
+"nnoremap <silent> <leader>sv :so $MYVIMRC<CR>
 
 " Pressing ,ss will toggle and untoggle spell checking
-map <leader>ss :setlocal spell!<cr>
+noremap <leader>ss :setlocal spell!<cr>
 
 " Make < > shifts keep selection
 vnoremap < <gv
 vnoremap > >gv
 
 " clear hilighting
-nmap <silent> ,/ :nohlsearch<CR>
+nnoremap <silent> ,/ :nohlsearch<CR>
 
 set pastetoggle=<F11>
 
-map <F12> :call ToggleColorscheme()<CR>
+noremap <F12> :call ToggleColorscheme()<CR>
 
 "easyer increment/decrement
 nnoremap + <C-a>
@@ -376,17 +388,26 @@ inoremap <F12> <nop>
 "                                                                    }}}
 " ====  formatting  ================================================={{{
 " Use Q for formatting the current paragraph (or selection)
-vmap <leader>Q gq
-nmap <leader>Q gqap
+vnoremap <leader>Q gq
+nnoremap <leader>Q gqap
 
 "for cleaning
-nmap <Leader>dt :call DeleteTrailing()
+nnoremap <Leader>dt :call DeleteTrailing()
 nnoremap <leader>T :set expandtab<cr>:retab!<cr>
-nmap <Leader>dT :call Cleanup()
+nnoremap <Leader>dT :call Cleanup()
 
 " Search and replace
 nnoremap <Leader>s :%s/\<<C-r><C-w>\>//g<Left><Left>
 nnoremap _s :%s/\<<C-r><C-w>\>/<C-r><C-w>/g<Left><Left>
+
+" Word to UPPERCASE
+inoremap <c-u> <esc>viwUi
+nnoremap <c-u> viwUw
+
+" souround with quotes
+nnoremap <leader>" viw<esc>a"<esc>hbi"<esc>lel
+nnoremap <leader>' viw<esc>a'<esc>hbi'<esc>lel
+
 "                                                                    }}}
 " ====  buffer  ====================================================={{{
 "Open last/alternate buffer
@@ -422,8 +443,8 @@ nnoremap <c-j> 5j
 nnoremap <c-k> 5k
 
 " control-left & right arrows switch between tabs
-map <c-Left> :tabp<CR>
-map <c-Right> :tabn<CR>
+noremap <c-Left> :tabp<CR>
+noremap <c-Right> :tabn<CR>
 
 "inoremap <expr> <Tab>     pumvisible() ? "\<C-y>" : "\<Tab>"
 "inoremap <expr> <CR>      pumvisible() ? "\<C-e><CR>" : "\<CR>"
@@ -442,9 +463,15 @@ map <c-Right> :tabn<CR>
 " ====  for external scripts  ======================================={{{
 
 "Markdown to HTML
-nmap <leader>md :%!~/bin/Markdown.pl --html4tags <cr>
+nnoremap <leader>md :%!~/bin/Markdown.pl --html4tags <cr>
 
 "                                                                    }}}
+" ===================================================================}}}
+" ====  abbreviations  ==============================================
+" ==================================================================={{{
+iabbrev adn and
+iabbrev @@ mail@maximilian-huber.de
+iabbrev VGr Viele Grüße<cr>Maximilian
 " ===================================================================}}}
 " ====  Git / SVN   =================================================
 " ==================================================================={{{
@@ -495,7 +522,7 @@ command! GCheckout call GitCheckout()
 command! GBranch   call GitBranch()
 command! GAuto     call GitAuto()
 
-nmap <silent> _gc :call GitCommit()<cr>
+nnoremap <silent> _gc :call GitCommit()<cr>
 
 "                                                                    }}}
 " ====  SVN  ========================================================{{{
@@ -516,7 +543,7 @@ command! SVNCommit call SVNCommit()
 command! SVNUpdate call SVNUpdate()
 command! SVNAdd    call SVNAdd()
 
-nmap <silent> _sc :GCommit<cr>
+nnoremap <silent> _sc :GCommit<cr>
 
 "                                                                    }}}
 " ===================================================================}}}
@@ -539,13 +566,13 @@ function! SetPythonFile() "{{{
   setlocal foldmethod=indent
   setlocal foldlevel=7
 
-  map <c-F5> :w<CR>:!python "%"<CR>
+  noremap <c-F5> :w<CR>:!python "%"<CR>
 endfunction "}}}
 
 function! SetShFile() "{{{
   setlocal sw=2 ts=2 et
 
-  map <c-F5> :w<CR>:!sh "%"<CR>
+  noremap <c-F5> :w<CR>:!sh "%"<CR>
 
   function! GenHeader(...)
     return  repeat(a:1, a:2) . "\n"
@@ -557,7 +584,7 @@ function! SetShFile() "{{{
     call LastModified()
   endfunction
 
-  nmap <silent> __h "=GenHeader('#',80)<CR>:0put =<CR>
+  nnoremap <silent> __h "=GenHeader('#',80)<CR>:0put =<CR>
 endfunction "}}}
 
 function! SetHaskellFile() "{{{
@@ -568,7 +595,7 @@ function! SetHaskellFile() "{{{
 
   let s:width = 80
 
-  map <c-F5> :w<CR>:!ghci "%"<CR>
+  noremap <c-F5> :w<CR>:!ghci "%"<CR>
 
   function! HaskellModuleSection(...)
     let name = 0 < a:0 ? a:1 : inputdialog("Section name: ")
@@ -577,7 +604,7 @@ function! SetHaskellFile() "{{{
                 \       . "--  " . name . "\n"
                 \       . "\n"
   endfunction
-  nmap <silent> __s "=HaskellModuleSection()<CR>gp
+  nnoremap <silent> __s "=HaskellModuleSection()<CR>gp
 
   function! HaskellModuleHeader(...)
     let name = 0 < a:0 ? a:1 : inputdialog("Module: ")
@@ -594,7 +621,7 @@ function! SetHaskellFile() "{{{
     \       . repeat('-', s:width) . "\n"
     \       . "\n"
   endfunction
-  nmap <silent> __h "=HaskellModuleHeader()<CR>:0put =<CR>
+  nnoremap <silent> __h "=HaskellModuleHeader()<CR>:0put =<CR>
 
   " ===================================================================
   " syntastic
@@ -610,8 +637,11 @@ function! SetJavaFile() "{{{
 
   setlocal nowrap
 
-  autocmd VimEnter * NERDTree
-  autocmd VimEnter * wincmd p
+  augroup setJavaFileAugroup
+    autocmd!
+    autocmd VimEnter * NERDTree
+    autocmd VimEnter * wincmd p
+  augroup END
 endfunction "}}}
 
 function! SetTextFile() "{{{
@@ -654,15 +684,15 @@ function! SetLaTeXFile() "{{{
   inoremap <expr>[ getline('.')[col(".")-2] =~ "\\" ? "[<C-v>u005c]<left><left>" : "["
   "inoremap <expr>{ getline('.')[col(".")-2] =~ "\\" ? "{<C-v>u005c}<left><left>" : "{"
 
-  "nmap <leader>cl :! runlatex -pdf % > logfile 2>&1 &<CR><CR>
-  "nmap <leader>oe :! llpp %:r.pdf > /dev/null 2>&1 &<CR><CR>
-  "nmap <leader>oa :! llpp *.pdf > /dev/null 2>&1 &<CR><CR>
+  "nnoremap <leader>cl :! runlatex -pdf % > logfile 2>&1 &<CR><CR>
+  "nnoremap <leader>oe :! llpp %:r.pdf > /dev/null 2>&1 &<CR><CR>
+  "nnoremap <leader>oa :! llpp *.pdf > /dev/null 2>&1 &<CR><CR>
 
   function! SyncTexForward()
     exec 'silent !myTexWrapper.sh % '.line('.')." ".col('.')
     redraw!
   endfunction
-  nmap <Leader>f :call SyncTexForward()<CR>
+  nnoremap <Leader>f :call SyncTexForward()<CR>
 endfunction "}}}
 
 function! SetCssFile() "{{{
@@ -691,8 +721,8 @@ function! SetMailFile() "{{{
 endfunction "}}}
 
 if has("autocmd")
-  "augroup filetypedetect
-    "au!
+  augroup filetypedetect
+    autocmd!
     autocmd BufRead,BufNewFile tmpmsg-*.txt set filetype=mail
     autocmd BufRead,BufNewFile *.tex set filetype=tex
     autocmd BufRead,BufNewFile *.scala set filetype=scala
@@ -701,10 +731,10 @@ if has("autocmd")
     autocmd BufRead,BufNewFile *.pde set filetype=arduino
     autocmd BufRead,BufNewFile *.ino set filetype=arduino
     "au! BufRead,BufNewFile *.m,*.oct setfiletype matlab
-  "augroup END
+  augroup END
 
   augroup vimrc_autocmds
-    au!
+    autocmd!
     autocmd FileType sh      call SetShFile()
     autocmd FileType tex     call SetLaTeXFile()
     autocmd FileType haskell call SetHaskellFile()
@@ -725,6 +755,7 @@ if has("autocmd")
   augroup END
 
   augroup Shebang
+    autocmd!
     autocmd BufNewFile *.sh 0put =\"#!/bin/sh\"|$
     autocmd BufNewFile *.py 0put =\"#!/usr/bin/env python\<nl># -*- coding: iso-8859-15 -*-\<nl>\"|$
     autocmd BufNewFile *.rb 0put =\"#!/usr/bin/env ruby\<nl># -*- coding: None -*-\<nl>\"|$
@@ -734,7 +765,7 @@ if has("autocmd")
   " Placed Public Domain by Wouter Hanegraaff <wouter@blub.net>
   " (asc support and sh -c"..." added by Osamu Aoki)
   augroup aencrypted
-    au!
+    autocmd!
     " First make sure nothing is written to ~/.viminfo while editing
     " an encrypted file.
     autocmd BufReadPre,FileReadPre      *.asc set viminfo=
@@ -755,7 +786,7 @@ if has("autocmd")
     autocmd BufWritePost,FileWritePost    *.asc   u
   augroup END
   augroup bencrypted
-    au!
+    autocmd!
     " First make sure nothing is written to ~/.viminfo while editing
     " an encrypted file.
     autocmd BufReadPre,FileReadPre      *.gpg set viminfo=
@@ -822,7 +853,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   if 1
     Bundle 'https://github.com/scrooloose/syntastic'
     let g:syntastic_scala_checkers = []
-    map <Leader>S :SyntasticToggleMode<CR>
+    noremap <Leader>S :SyntasticToggleMode<CR>
     "let g:syntastic_haskell_checkers = ["hlint"]
   endif
   if 0 "Vim-airline or vim-powerline
@@ -837,7 +868,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'LustyJuggler'
   "if 0
   "Bundle 'The-NERD-tree'
-    "map <silent> <C-N> :NERDTree<CR>
+    "noremap <silent> <C-N> :NERDTree<CR>
     "" start NERDTree at startup
     "" autocmd VimEnter * NERDTree
     "" open a NERDTree automatically when vim starts up if no files were specified
@@ -849,7 +880,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
     let g:ctrlp_map = '<c-p>'
     let g:ctrlp_cmd = 'CtrlP'
     let g:ctrlp_working_path_mode = 'ra'
-    nmap <Leader>b :CtrlPBuffer<CR>
+    nnoremap <Leader>b :CtrlPBuffer<CR>
   "endif
   "if 0
     "Bundle 'minibufexpl.vim'
