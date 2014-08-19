@@ -1,13 +1,13 @@
 " ~/.vimrc
 "
-" call `MyInstallAllPlugins` for installing all plugins
+" `call MyInstallAllPlugins()` for installing all plugins
 "
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
 " Written by Maximilian-Huber.de
 "
-" Last modified: Tue Aug 19, 2014  01:29
+" Last Modified: Tue Aug 19, 2014  06:33
 
 " auto reload when saving
 if has("autocmd")
@@ -40,10 +40,8 @@ if has("autocmd")
     autocmd!
     " jump to the last position when reopening a file
     autocmd BufReadPost * if line("'\"") > 1 && line("'\"") <= line("$") | exe "normal! g'\"" | endif
-
     " resize splits
     autocmd VimResized * exe "normal! \<c-w>="
-
     " leave paste mode, when exit insert mode
     autocmd InsertLeave * set nopaste
   augroup END
@@ -189,19 +187,21 @@ else
   set background=dark
 endif
 
-if filereadable(expand("$VIMRUNTIME/colors/mustang.vim"))
-  colorscheme mustang
-elseif filereadable(expand("$HOME/.vim/colors/mustang.vim"))
-  colorscheme mustang
-endif
+" ====  choose colorscheme  =========================================
+colorscheme mycolorscheme
+"if filereadable(expand("$VIMRUNTIME/colors/mustang.vim"))
+  "colorscheme mustang
+"elseif filereadable(expand("$HOME/.vim/colors/mustang.vim"))
+  "colorscheme mustang
+"endif
 
-function! ToggleColorscheme()
-if (g:colors_name ==? "mustang")
-  colorscheme solarized
-else
-  colorscheme mustang
-endif
-endfunction
+"function! ToggleColorscheme()
+"if (g:colors_name ==? "mustang")
+  "colorscheme solarized
+"else
+  "colorscheme mustang
+"endif
+"endfunction
 
 " ====  hilight to long lines  ======================================
 if exists('+colorcolumn')
@@ -283,28 +283,6 @@ endfunction
 noremap ,R :call RangerChooser()<CR>
 
 "                                                                    }}}
-" ====  last modified  =============================================={{{
-if has("autocmd")
-  " If buffer modified, update any 'Last modified: ' in the first 20 lines.
-  " 'Last modified: ' can have up to 10 characters before (they are retained).
-  " Restores cursor and window position using save_cursor variable.
-  function! LastModified()
-    if &modified
-      let save_cursor = getpos(".")
-      let n = min([20, line("$")])
-      keepjumps exe '1,' . n . 's#^\(.\{,10}Last modified: \).*#\1' .
-            \ strftime('%a %b %d, %Y  %I:%M%p') . '#e'
-      call histdel('search', -1)
-      call setpos('.', save_cursor)
-    endif
-  endfunction
-  augroup lastModified
-    autocmd!
-    autocmd BufWritePre * call LastModified()
-  augroup END
-endif
-
-"                                                                    }}}
 " ===================================================================}}}
 " ====  keymappings / input  ========================================
 " ==================================================================={{{
@@ -345,7 +323,7 @@ vnoremap < <gv
 vnoremap > >gv
 
 " clear hilighting
-nnoremap <silent> ,/ :nohlsearch<CR>
+nnoremap <silent> <leader>/ :nohlsearch<CR>
 
 set pastetoggle=<F11>
 
@@ -354,9 +332,6 @@ noremap <F12> :call ToggleColorscheme()<CR>
 " easyer increment/decrement
 nnoremap + <C-a>
 nnoremap - <C-x>
-
-" remove warning
-nnoremap <c-c> <nop>
 
 "                                                                    }}}
 " ====  maps to nop ================================================{{{
@@ -376,6 +351,9 @@ inoremap <F8> <nop>
 inoremap <F9> <nop>
 
 inoremap <F12> <nop>
+
+" remove warning
+nnoremap <c-c> <nop>
 
 "                                                                    }}}
 " ====  formatting  ================================================={{{
@@ -576,7 +554,7 @@ function! SetShFile() "{{{
       \       . a:1 . "\n"
       \       . a:1 . " Written by Maximilian-Huber.de\n"
       \       . a:1 . "\n"
-      \       . a:1 . " Last modified: \n"
+      \       . a:1 . " Last Modified: \n"
       \       . "\n"
     else
       return  repeat(a:1, a:2) . "\n"

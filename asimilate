@@ -44,6 +44,8 @@ myinstall "${FOLDER}vimencrypt" "/home/hubi/.vimencrypt" 600 hubi users
 myinstall "${FOLDER}vimrc" "/home/hubi/.vimrc" 600 hubi users
 myinstall "${FOLDER}vim/colors/mustang.vim" "/home/hubi/.vim/colors/mustang.vim" 600 hubi users
 myinstall "${FOLDER}vim/colors/badwolf.vim" "/home/hubi/.vim/colors/badwolf.vim" 600 hubi users
+myinstall "${FOLDER}vim/plugin/myLastModified.vim" "/home/hubi/.vim/plugin/myLastModified.vim" 600 hubi users
+myinstall "${FOLDER}vim/plugin/grep-operator.vim" "/home/hubi/.vim/plugin/grep-operator.vim" 600 hubi users
 myinstall "${FOLDER}xinitrc" "/home/hubi/.xinitrc" 600 hubi users
 myinstall "${FOLDER}xmonad/myinformation.sh" "/home/hubi/.xmonad/myinformation.sh" 777 hubi users
 myinstall "${FOLDER}xmonad/showkeys" "/home/hubi/.xmonad/showkeys" 755 hubi users

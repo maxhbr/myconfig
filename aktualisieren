@@ -81,6 +81,8 @@ files() {
 ~/.vimrc
 ~/.vim/colors/mustang.vim
 ~/.vim/colors/badwolf.vim
+~/.vim/plugin/myLastModified.vim
+~/.vim/plugin/grep-operator.vim
 ~/.xinitrc
 ~/.xmonad/myinformation.sh
 ~/.xmonad/showkeys
