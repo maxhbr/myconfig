@@ -1,16 +1,13 @@
 " ~/.vimrc
 "
+" call `MyInstallAllPlugins` for installing all plugins
+"
 " Written by Maximilian-Huber.de
 "
-" Last modified: Mon Aug 18, 2014  10:34
-
-" !!!! !!! !! !
-"       this config will automatically download Vundle from git, and then it
-"       will install some plugins via Vundle
-" !!!! !!! !! !
+" Last modified: Tue Aug 19, 2014  11:26
 
 " auto reload when saving
-augroup autoReadVimrc
+augroup autoSourceVimrc
   autocmd!
   autocmd bufwritepost .vimrc source %
 augroup END
@@ -64,6 +61,7 @@ set cpoptions+=n
 set showbreak=\ \ \ ↳
 
 " ====  wildmenu  ==================================================={{{
+
 set wildmenu "Kommando Zeilen Vervollständigung
 "set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png
 set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png,*.aux,*.bbl,*.blg,*.fdb_latexmk,*.fls,*.idx,*.ilg,*.ind,*.nlo,*.toc,*.hi
@@ -123,12 +121,13 @@ set synmaxcol=128
 "                                                                    }}}
 " ====  line numberig  ============================================={{{
 " TODO: has problems?
-"if has("autocmd")
-"  au InsertEnter * set nu
-"  au InsertLeave * set rnu
-"  "au FocusLost * set nu
-"  "au FocusGained * set rnu
-"endif
+"augroup autoChangeNumbering
+"  autocmd!
+"  autocmd InsertEnter * set nu
+"  autocmd InsertLeave * set rnu
+""  "au FocusLost * set nu
+""  "au FocusGained * set rnu
+"augroup END
 set nu
 "                                                                    }}}
 " ====  backup / undo  =============================================={{{
@@ -199,7 +198,7 @@ elseif filereadable(expand("$HOME/.vim/colors/mustang.vim"))
 endif
 
 function! ToggleColorscheme()
-if (g:colors_name == "mustang")
+if (g:colors_name ==? "mustang")
   colorscheme solarized
 else
   colorscheme mustang
@@ -238,18 +237,18 @@ highlight SpellLocal term=underline cterm=underline
 " delete all trails
 " use :call DeleteTrailing
 " or <Leader>dt
-func! DeleteTrailing()
+function! DeleteTrailing()
   exe "normal mz"
   %s/\s\+$//ge
   exe "normal `z"
-endfunc
+endfunction
 
-func! Cleanup()
+function! Cleanup()
   call DeleteTrailing()
   setlocal ff=unix
   setlocal expandtab
   retab!
-endfunc
+endfunction
 "                                                                    }}}
 
 function! InsertTabWrapper()
@@ -274,14 +273,14 @@ function! MyHtmlEscape()
 endfunction
 
 " ====  open files via ranger  ======================================{{{
-fun! RangerChooser()
+function! RangerChooser()
   exec "silent !ranger --choosefile=/tmp/chosenfile " . expand("%:p:h")
   if filereadable('/tmp/chosenfile')
     exec 'edit ' . system('cat /tmp/chosenfile')
     call system('rm /tmp/chosenfile')
   endif
   redraw!
-endfun
+endfunction
 noremap ,R :call RangerChooser()<CR>
 
 "                                                                    }}}
@@ -298,7 +297,7 @@ function! LastModified()
     call histdel('search', -1)
     call setpos('.', save_cursor)
   endif
-endfun
+endfunction
 augroup lastModified
   autocmd!
   autocmd BufWritePre * call LastModified()
@@ -327,14 +326,10 @@ set backspace=2
 nnoremap ; :
 let mapleader=","
 
-inoremap ee <esc>l
-inoremap <esc> <nop>
+"inoremap ää <esc>l
+"inoremap <esc> <nop>
 
 " ====  general  ===================================================={{{
-" overwrite those annoying commands
-cnoreabbrev <expr> W ((getcmdtype() is# ':' && getcmdline() is# 'W')?('w'):('W'))
-cnoreabbrev <expr> Q ((getcmdtype() is# ':' && getcmdline() is# 'Q')?('q'):('Q'))
-
 "save without sudo
 cnoremap w!! w !sudo tee % >/dev/null
 
@@ -362,12 +357,15 @@ set pastetoggle=<F11>
 
 noremap <F12> :call ToggleColorscheme()<CR>
 
-"easyer increment/decrement
+" easyer increment/decrement
 nnoremap + <C-a>
 nnoremap - <C-x>
 
+" remove warning
+nnoremap <c-c> <nop>
+
 "                                                                    }}}
-" ====  noremaps  ==================================================={{{
+" ====  maps to nop ================================================{{{
 nnoremap K <nop>
 
 inoremap <F1> <nop>
@@ -472,6 +470,10 @@ nnoremap <leader>md :%!~/bin/Markdown.pl --html4tags <cr>
 iabbrev adn and
 iabbrev @@ mail@maximilian-huber.de
 iabbrev VGr Viele Grüße<cr>Maximilian
+
+" overwrite those annoying commands
+cnoreabbrev <expr> W ((getcmdtype() is# ':' && getcmdline() is# 'W')?('w'):('W'))
+cnoreabbrev <expr> Q ((getcmdtype() is# ':' && getcmdline() is# 'Q')?('q'):('Q'))
 " ===================================================================}}}
 " ====  Git / SVN   =================================================
 " ==================================================================={{{
@@ -812,12 +814,14 @@ endif
 " ====  plugin specific  ============================================
 " ==================================================================={{{
 
-" install vundle automatically, if not existend
-if !isdirectory(expand('~').'/.vim/bundle/vundle')
-  let src = 'http://github.com/gmarik/vundle.git'
-  exec '!git clone '.src.' ~/.vim/bundle/vundle'
-  au VimEnter * BundleInstall
-endif
+function! MyInstallAllPlugins()
+  " install vundle, if not existend
+  if !isdirectory(expand('~').'/.vim/bundle/vundle')
+    let src = 'http://github.com/gmarik/vundle.git'
+    exec '!git clone '.src.' ~/.vim/bundle/vundle'
+    au VimEnter * BundleInstall
+  endif
+endfunction
 
 if isdirectory(expand('~').'/.vim/bundle/vundle')
   filetype off " required!
@@ -856,12 +860,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
     noremap <Leader>S :SyntasticToggleMode<CR>
     "let g:syntastic_haskell_checkers = ["hlint"]
   endif
-  if 0 "Vim-airline or vim-powerline
-    Bundle 'bling/vim-airline'
-    let g:airline#extensions#tabline#enabled = 1
-  else
-    Bundle 'git://github.com/Lokaltog/vim-powerline.git'
-  endif
+  Bundle 'git://github.com/Lokaltog/vim-powerline.git'
 
   "############################################################################
   "manage files
@@ -884,14 +883,14 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "endif
   "if 0
     "Bundle 'minibufexpl.vim'
-    "let g:miniBufExplMapWindowNavVim = 1 
-    "let g:miniBufExplMapWindowNavArrows = 1 
-    "let g:miniBufExplMapCTabSwitchBufs = 1 
+    "let g:miniBufExplMapWindowNavVim = 1
+    "let g:miniBufExplMapWindowNavArrows = 1
+    "let g:miniBufExplMapCTabSwitchBufs = 1
     "let g:miniBufExplModSelTarget = 1
   "endif
   "############################################################################
   "matlab
-  Bundle 'git://github.com/djoshea/vim-matlab-fold.git'
+  "Bundle 'git://github.com/djoshea/vim-matlab-fold.git'
 
   "############################################################################
   "haskell
