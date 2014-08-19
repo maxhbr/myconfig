@@ -74,7 +74,6 @@ myinstall "${FOLDER}bin/nmgui" "/home/hubi/bin/nmgui" 755 hubi users
 myinstall "${FOLDER}bin/remove_spaces.sh" "/home/hubi/bin/remove_spaces.sh" 711 hubi users
 myinstall "${FOLDER}bin/rip_gapless.sh" "/home/hubi/bin/rip_gapless.sh" 700 hubi users
 myinstall "${FOLDER}bin/runNL.sh" "/home/hubi/bin/runNL.sh" 700 hubi users
-myinstall "${FOLDER}bin/stolen/ffind" "/home/hubi/bin/stolen/ffind" 700 hubi users
 myinstall "${FOLDER}bin/stolen/peat" "/home/hubi/bin/stolen/peat" 700 hubi users
 # "${FOLDER}etc/X11/xorg.conf.d/" "/etc/X11/xorg.conf.d/*.conf"
 myinstall "${FOLDER}etc/fstab" "/etc/fstab" 644 root root
