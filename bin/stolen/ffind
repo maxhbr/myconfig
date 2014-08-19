@@ -1,0 +1,856 @@
+#!/usr/bin/env python
+# -*- coding: utf8 -*-
+
+#    ____  ____  __  ____  __ _  ____  __    _  _     ____  __  __ _  ____
+#   (  __)(  _ \(  )(  __)(  ( \(    \(  )  ( \/ )___(  __)(  )(  ( \(    \
+#    ) _)  )   / )(  ) _) /    / ) D (/ (_/\ )  /(___)) _)  )( /    / ) D (
+#   (__)  (__\_)(__)(____)\_)__)(____/\____/(__/     (__)  (__)\_)__)(____/
+#
+#                         The friendlier file finder.
+
+import time
+import os
+import optparse
+import string
+import sys
+import re
+from optparse import OptionParser, OptionGroup
+
+
+# Constants -------------------------------------------------------------------
+CASE_SENSITIVE = 1
+CASE_INSENSITIVE = 2
+CASE_SMART = 3
+
+BYTE = 1
+KILOBYTE = 1024 * BYTE
+MEGABYTE = 1024 * KILOBYTE
+GIGABYTE = 1024 * MEGABYTE
+TERABYTE = 1024 * GIGABYTE
+PETABYTE = 1024 * TERABYTE
+
+VCS_DIRS = ['.hg', '.git', '.svn']
+
+TYPE_FILE_REAL = 1
+TYPE_FILE_SYMLINK = 2
+TYPE_DIR_REAL = 3
+TYPE_DIR_SYMLINK = 4
+
+TYPES_FILE_REAL = set([TYPE_FILE_REAL])
+TYPES_FILE_SYMLINK = set([TYPE_FILE_SYMLINK])
+TYPES_DIR_REAL = set([TYPE_DIR_REAL])
+TYPES_DIR_SYMLINK = set([TYPE_DIR_SYMLINK])
+
+TYPES_FILE = TYPES_FILE_REAL | TYPES_FILE_SYMLINK
+TYPES_DIR = TYPES_DIR_REAL | TYPES_DIR_SYMLINK
+
+TYPES_REAL = TYPES_FILE_REAL | TYPES_DIR_REAL
+TYPES_SYMLINK = TYPES_FILE_SYMLINK | TYPES_DIR_SYMLINK
+
+TYPES_ALL = TYPES_FILE | TYPES_DIR
+
+SECOND = 1
+MINUTE = 60 * SECOND
+HOUR = 60 * MINUTE
+DAY = 24 * HOUR
+WEEK = 7 * DAY
+MONTH = 30 * DAY
+YEAR = int(365.2425 * DAY)
+
+IGNORE_SYNTAX_REGEX = 1
+IGNORE_SYNTAX_GLOB = 2
+IGNORE_SYNTAX_LITERAL = 3
+
+IGNORE_MODE_RESTRICTED = 1
+IGNORE_MODE_SEMI = 2
+IGNORE_MODE_UNRESTRICTED = 3
+IGNORE_MODE_ALL = 4
+
+
+# Regexes ---------------------------------------------------------------------
+SIZE_RE = re.compile(r'^(\d+(?:\.\d+)?)([bkmgtp])?[a-z]*$', re.IGNORECASE)
+
+AGO_RE = re.compile(r'''
+                    (\d+(?:\.\d+)?)           # The number (float/int)
+                    \s*                       # Optional whitespace
+                    (                         # Units
+                        y(?:ears?)?           # y/year/years
+                      | mos?(?:nths?)?        # mo/mos/month/months
+                      | w(?:eeks?)?           # w/week/weeks
+                      | d(?:ays?)?            # d/day/days
+                      | h(?:ours?)?           # h/hour/hours
+                      | m(?:ins?(?:utes?)?)?  # m/min/mins/minute/minutes
+                      | s(?:ecs?(?:onds?)?)?  # s/sec/secs/second/seconds
+                    )
+                    ''', re.VERBOSE | re.IGNORECASE)
+
+IGNORE_SYNTAX_RE = re.compile(r'^\s*syntax:\s*(glob|regexp|regex|re|literal)\s*$',
+                              re.IGNORECASE)
+IGNORE_COMMENT_RE = re.compile(r'^\s*#')
+IGNORE_BLANK_RE = re.compile(r'^\s*$')
+
+GITIGNORE_COMMENT_RE = re.compile(r'^\s*#')
+GITIGNORE_BLANK_RE = re.compile(r'^\s*$')
+GITIGNORE_NEGATE_RE = re.compile(r'^\s*!')
+
+HGIGNORE_SYNTAX_RE = re.compile(r'^\s*syntax:\s*(glob|regexp|re)\s*$',
+                                re.IGNORECASE)
+HGIGNORE_COMMENT_RE = re.compile(r'^\s*#')
+HGIGNORE_BLANK_RE = re.compile(r'^\s*$')
+
+
+# Global Options --------------------------------------------------------------
+# (it's a prototype, shut up)
+options = None
+
+
+# Output ----------------------------------------------------------------------
+def out(s, line_ending='\n'):
+    sys.stdout.write(s + line_ending)
+
+def err(s):
+    sys.stderr.write(s + '\n')
+
+def die(s, exitcode=1):
+    err('error: ' + s)
+    sys.exit(exitcode)
+
+def warn(s):
+    sys.stderr.write('warning: ' + s + '\n')
+
+
+# Ingore Files ----------------------------------------------------------------
+def compile_re(line):
+    try:
+        r = re.compile(line)
+        return lambda s: r.search(s)
+    except:
+        warn('could not compile regular expression "%s"' % line)
+        return lambda s: False
+
+def glob_to_re(glob):
+    pat = ''
+
+    chs = list(glob)
+    while chs:
+        ch = chs.pop(0)
+        if ch == '\\':
+            pat += re.escape(chs.pop(0))
+        elif ch == '?':
+            pat += '.'
+        elif ch == '*':
+            if chs and chs[0] == '*':
+                chs.pop(0)
+                pat += '.*'
+            else:
+                pat += '[^/]*'
+        elif ch == '[':
+            pat += '['
+            ch = chs.pop(0)
+            while chs and ch != ']':
+                pat += ch
+                ch = chs.pop(0)
+            pat += ']'
+        else:
+            pat += re.escape(ch)
+
+    return pat
+
+def compile_literal(line):
+    l = line
+    return lambda s: l in s
+
+def compile_git(line):
+    original_line = line
+    pat = ''
+
+    # From man gitignore 5:
+    #     If the pattern ends with a slash, it is removed for the purpose of the
+    #     following description, but it would only find a match with
+    #     a directory. In other words, foo/ will match a directory foo and paths
+    #     underneath it, but will not match a regular file or a symbolic link
+    #     foo (this is consistent with the way how pathspec works in general in
+    #     git).
+    #
+    #     A leading slash matches the beginning of the pathname. For example,
+    #     "/*.c" matches "cat-file.c" but not "mozilla-sha1/sha1.c".
+    #
+    #     If the pattern does not contain a slash /, git treats it as a shell
+    #     glob pattern and checks for a match against the pathname relative to
+    #     the location of the .gitignore file (relative to the toplevel of the
+    #     work tree if not from a .gitignore file).
+    #
+    #     Otherwise, git treats the pattern as a shell glob suitable for
+    #     consumption by fnmatch(3) with the FNM_PATHNAME flag: wildcards in the
+    #     pattern will not match a / in the pathname. For example,
+    #     "Documentation/*.html" matches "Documentation/git.html" but not
+    #     "Documentation/ppc/ppc.html" or "tools/perf/Documentation/perf.html".
+    #
+    # If you can't tell what the hell this means you're not alone, because git's
+    # documentation is fucking inscrutable.  Here's what I've come up with from
+    # trial and error:
+    # 
+    # 0. Patterns ending in a slash will only match directories, and then you
+    #    can ignore that slash for the rest of these rules.
+    # 1. Patterns are shell globs, except * doesn't match / and there's no **.
+    # 2. Patterns without a slash search the basename of the path, for example:
+    #    the 'file.txt' in '/foo/bar/file.txt'.
+    # 3. Patterns with a slash search against the entire path.
+    # 4. All matching must match the entire string it's searching.  For example:
+    #
+    #    'am' will not ignore '/foo/bar/spam'
+    #    it matches against the basename 'spam' but does not match all of it
+    #
+    #    'bar/spam' will not ignore '/foo/bar/spam'
+    #    it matches against the full path (because it has a slash) but does not
+    #    match all of it.
+    # 5. A leading slash doesn't affect the matching, but does turn a
+    #    "pattern with no slash" into a "pattern with a slash".  So:
+    #
+    #    'bar' will ignore '/foo/bar/spam' (actually it'll ignore bar entirely)
+    #    it matches against the basename 'bar' (because there's no slash) when
+    #    at that level
+    #
+    #    '/bar' will not ignore '/foo/bar/spam'
+    #    it matches against the entire path '/foo/bar' (because there is
+    #    a slash) when at that level
+
+    if line.endswith('/'):
+        # TODO: Deal with this.
+        # directories_only = True
+        line = line[:-1]
+
+    has_slash = '/' in line
+
+    line = line.lstrip('/')
+
+    if has_slash:
+        # Patterns with a slash have to match against the entire pathname.  So
+        # they need to be rooted at the beginning.
+        pat += '^./'
+    else:
+        # Patterns without a slash match against just the basename, which we'll
+        # simulate by including the (final) divider in the pattern.
+        pat += '/'
+
+    # The rest of the pattern is git's variation on shell globs.
+    # Mostly normal shell globs, but there's no **.
+    chs = list(line)
+    while chs:
+        ch = chs.pop(0)
+        if ch == '?':
+            pat += '.'
+        elif ch == '*':
+            pat += '[^/]*'
+        elif ch == '[':
+            pat += '['
+            ch = chs.pop(0)
+            while chs and ch != ']':
+                pat += ch
+                ch = chs.pop(0)
+            pat += ']'
+        else:
+            pat += re.escape(ch)
+
+    # Patterns always have the be anchored at the end.
+    pat += '$'
+
+    try:
+        return compile_re(pat)
+    except:
+        warn("could not parse gitignore pattern '%s'" % original_line)
+        return lambda s: True
+
+def compile_hg_glob(line):
+    pat = glob_to_re(line)
+
+    # Mercurial ignore globs are quasi-rooted at directory boundaries or the
+    # beginning of the pattern.
+    pat = '(^|/)' + pat
+
+    # Mercurial globs also have to match to the end of the pattern.
+    pat = pat + '$'
+
+    try:
+        regex = re.compile(pat)
+        return lambda s: regex.search(s[2:] if s.startswith('./') else s)
+    except:
+        warn("could not parse hgignore pattern '%s'" % line)
+        return lambda s: True
+
+def compile_ff_glob(line):
+    pat = glob_to_re(line)
+
+    try:
+        return compile_re(pat)
+    except:
+        warn("could not parse ffignore pattern '%s'" % line)
+        return lambda s: True
+
+
+def parse_gitignore_file(path):
+    if not os.path.isfile(path):
+        return []
+
+    ignorers = []
+    with open(path) as f:
+        for line in f.readlines():
+            line = line.rstrip('\n')
+            if GITIGNORE_BLANK_RE.match(line):
+                continue
+            elif GITIGNORE_COMMENT_RE.match(line):
+                continue
+            elif GITIGNORE_NEGATE_RE.match(line):
+                # TODO: This bullshit feature.
+                continue
+            else:
+                # This line is a gitignore pattern.
+                ignorers.append(compile_git(line))
+
+    return ignorers
+
+def parse_hgignore_file(path):
+    if not os.path.isfile(path):
+        return []
+
+    syntax = IGNORE_SYNTAX_REGEX
+    ignorers = []
+    with open(path) as f:
+        for line in f.readlines():
+            line = line.rstrip('\n')
+            if HGIGNORE_BLANK_RE.match(line):
+                continue
+            elif HGIGNORE_COMMENT_RE.match(line):
+                continue
+            elif HGIGNORE_SYNTAX_RE.match(line):
+                s = HGIGNORE_SYNTAX_RE.match(line).groups()[0].lower()
+                if s == 'glob':
+                    syntax = IGNORE_SYNTAX_GLOB
+                elif s in ['re', 'regexp']:
+                    syntax = IGNORE_SYNTAX_REGEX
+            else:
+                # This line is a pattern.
+                if syntax == IGNORE_SYNTAX_REGEX:
+                    ignorers.append(compile_re(line))
+                elif syntax == IGNORE_SYNTAX_GLOB:
+                    ignorers.append(compile_hg_glob(line))
+
+    return ignorers
+
+def parse_ffignore_file(path):
+    if not os.path.isfile(path):
+        return []
+
+    syntax = IGNORE_SYNTAX_REGEX
+    ignorers = []
+    with open(path) as f:
+        for line in f.readlines():
+            line = line.rstrip('\n')
+            if IGNORE_BLANK_RE.match(line):
+                continue
+            elif IGNORE_COMMENT_RE.match(line):
+                continue
+            elif IGNORE_SYNTAX_RE.match(line):
+                s = IGNORE_SYNTAX_RE.match(line).groups()[0].lower()
+                if s == 'literal':
+                    syntax = IGNORE_SYNTAX_LITERAL
+                elif s == 'glob':
+                    syntax = IGNORE_SYNTAX_GLOB
+                elif s in ['re', 'regex', 'regexp']:
+                    syntax = IGNORE_SYNTAX_REGEX
+            else:
+                # This line is a pattern.
+                if syntax == IGNORE_SYNTAX_LITERAL:
+                    ignorers.append(compile_literal(line))
+                elif syntax == IGNORE_SYNTAX_REGEX:
+                    ignorers.append(compile_re(line))
+                elif syntax == IGNORE_SYNTAX_GLOB:
+                    ignorers.append(compile_ff_glob(line))
+
+    return ignorers
+
+def parse_ignore_files(dir):
+    ignorers = []
+    for filename in options.ignore_files:
+        target = os.path.join(dir, filename)
+        if filename == '.ffignore':
+            ignorers.extend(parse_ffignore_file(target))
+        elif filename == '.gitignore':
+            ignorers.extend(parse_gitignore_file(target))
+        elif filename == '.hgignore':
+            ignorers.extend(parse_hgignore_file(target))
+    return ignorers
+
+
+def get_initial_ignorers():
+    if '.ffignore' in options.ignore_files:
+        home = os.environ.get('HOME')
+        if home:
+            return parse_ffignore_file(os.path.join(home, '.ffignore'))
+        else:
+            return []
+    else:
+        return []
+
+
+# Searching! ------------------------------------------------------------------
+def get_type(path):
+    link = os.path.islink(path)
+    dir = os.path.isdir(path)
+
+    if link and dir:
+        return TYPE_DIR_SYMLINK
+    elif link and not dir:
+        return TYPE_FILE_SYMLINK
+    elif not link and dir:
+        return TYPE_DIR_REAL
+    elif not link and not dir:
+        return TYPE_FILE_REAL
+
+def should_ignore(basename, path, ignorers):
+    if options.ignore_vcs_dirs and basename in VCS_DIRS:
+        return True
+
+    for i in ignorers:
+        if i(path):
+            return True
+
+    return False
+
+def match(query, path, basename):
+    def _match():
+        if options.type != TYPES_ALL:
+            if get_type(path) not in options.type:
+                return False
+
+        if not query(path if options.entire else basename):
+            return False
+
+        stat = os.lstat(path)
+        if options.larger_than:
+            if stat.st_size < options.larger_than:
+                return False
+
+        if options.smaller_than:
+            if stat.st_size > options.smaller_than:
+                return False
+
+        if options.before:
+            if stat.st_mtime > options.before:
+                return False
+
+        if options.after:
+            if stat.st_mtime < options.after:
+                return False
+
+        if not options.binary:
+            # We open in non-blocking mode so things like file-based sockets
+            # don't hang while waiting for their full kb.
+            # TODO: Ignore those altogether for the binary check?
+            fd = os.open(path, os.O_NONBLOCK)
+            with os.fdopen(fd) as f:
+                if '\0' in f.read(1024):
+                    return False
+
+        return True
+
+
+    result = _match()
+    return not result if options.invert else result
+
+
+def _search(query, dir, depth, ignorers):
+    ignorers = ignorers + parse_ignore_files(dir)
+
+    contents = os.listdir(dir)
+    next = []
+
+    for item in contents:
+        path = os.path.join(dir, item)
+        if not should_ignore(item, path, ignorers):
+            if match(query, path, item):
+                out(path, '\0' if options.zero else '\n')
+
+            is_dir = os.path.isdir(path)
+            if is_dir:
+                if options.follow or not os.path.islink(path):
+                    next.append(path)
+
+
+    if depth < options.depth:
+        for d in next:
+            _search(query, d, depth + 1, ignorers)
+
+def search(query, dir='.', depth=0, ignorers=None):
+    _search(query, '.', 0, get_initial_ignorers())
+
+
+# Option Parsing and Main -----------------------------------------------------
+def build_option_parser():
+    p = OptionParser("usage: %prog [options] PATTERN")
+
+    # Main options
+    p.add_option('-d', '--dir', default='.',
+                 help='root the search in DIR (default .)',
+                 metavar='DIR')
+    p.add_option('-D', '--depth', default='25',
+                 help='search at most N directories deep (default 25)',
+                 metavar='N')
+    p.add_option('-f', '--follow',
+                 action='store_true', default=False,
+                 help='follow symlinked directories and search their contents')
+    p.add_option('-F', '--no-follow',
+                 dest='follow', action='store_false',
+                 help="don't follow symlinked directories (default)")
+    p.add_option('-0', '--print0', dest='zero',
+                 action='store_true', default=False,
+                 help='separate matches with a null byte in output')
+    p.add_option('-l', '--literal',
+                 action='store_true', default=False,
+                 help='force literal search, even if it looks like a regex')
+    p.add_option('-v', '--invert',
+                 action='store_true', default=False,
+                 help='invert match')
+    p.add_option('-e', '--entire',
+                 action='store_true', default=False,
+                 help='match PATTERN against the entire path string')
+    p.add_option('-E', '--non-entire', dest='entire',
+                 action='store_false',
+                 help='match PATTERN against only the filenames (default)')
+
+    # Case sensitivity
+    g = OptionGroup(p, "Configuring Case Sensitivity")
+    g.add_option('-s', '--case-sensitive',
+                 dest='case', action='store_const', const=CASE_SENSITIVE,
+                 default=CASE_SENSITIVE,
+                 help='case sensitive matching (default)')
+    g.add_option('-i', '--case-insensitive',
+                 dest='case', action='store_const', const=CASE_INSENSITIVE,
+                 help='case insensitive matching')
+    g.add_option('-S', '--case-smart',
+                 dest='case', action='store_const', const=CASE_SMART,
+                 help='smart case matching (sensitive if any uppercase chars '
+                      'are in the pattern, insensitive otherwise)')
+    p.add_option_group(g)
+
+    # Ignoring
+    g = OptionGroup(p, "Configuring Ignoring")
+
+    g.add_option('-b', '--binary',
+                 dest='binary', action='store_true', default=True,
+                 help="allow binary files (default)")
+
+    g.add_option('-B', '--no-binary',
+                 dest='binary', action='store_false',
+                 help='ignore binary files')
+
+    g.add_option('-r', '--restricted', dest='ignore_mode',
+                 action='store_const', const=IGNORE_MODE_RESTRICTED,
+                 default=IGNORE_MODE_RESTRICTED,
+                 help="restricted search (skip VCS directories, "
+                      "parse all ignore files) (default)")
+
+    g.add_option('-q', '--semi-restricted', dest='ignore_mode',
+                 action='store_const', const=IGNORE_MODE_SEMI,
+                 help="semi-restricted search (don't parse VCS ignore files, "
+                      "but still skip VCS directories and parse .ffignore)")
+
+    g.add_option('-u', '--unrestricted', dest='ignore_mode',
+                 action='store_const', const=IGNORE_MODE_UNRESTRICTED,
+                 help="unrestricted search (don't parse ignore files, but "
+                      "still skip VCS directories)")
+
+    g.add_option('-a', '--all', dest='ignore_mode',
+                 action='store_const', const=IGNORE_MODE_ALL,
+                 help="don't ignore anything (ALL files can match)")
+
+    g.add_option('-I', '--ignore', metavar='PATTERN',
+                 action='append',
+                 help="add a pattern to be ignored (can be given multiple times)")
+
+    p.add_option_group(g)
+
+    # Time filtering
+    g = OptionGroup(p, "Time Filtering")
+    g.add_option('--before',
+                 help='match files modified < TIME',
+                 metavar='TIME')
+    g.add_option('--after',
+                 help='match files modified > TIME',
+                 metavar='TIME')
+    g.add_option('--until',
+                 help='match files modified <= TIME',
+                 metavar='TIME')
+    g.add_option('--since',
+                 help='match files modified >= TIME',
+                 metavar='TIME')
+    g.add_option('--at',
+                 help='match files modified at TIME',
+                 metavar='TIME')
+    g.add_option('--created-before',
+                 help='match files created < TIME',
+                 metavar='TIME')
+    g.add_option('--created-after',
+                 help='match files created > TIME',
+                 metavar='TIME')
+    g.add_option('--created-until',
+                 help='match files created <= TIME',
+                 metavar='TIME')
+    g.add_option('--created-since',
+                 help='match files created >= TIME',
+                 metavar='TIME')
+    g.add_option('--created-at',
+                 help='match files created at TIME',
+                 metavar='TIME')
+    # TODO
+    # p.add_option_group(g)
+
+    # Size filtering
+    g = OptionGroup(p, "Size Filtering",
+                    "Sizes can be given as a number followed by a prefix.  Some examples: "
+                    "1k, 5kb, 1.5gb, 2g, 1024b")
+    g.add_option('--larger-than',
+                 help='match files larger than SIZE (inclusive)',
+                 metavar='SIZE')
+    g.add_option('--bigger-than', dest='larger_than',
+                 help=optparse.SUPPRESS_HELP)
+    g.add_option('--smaller-than',
+                 help='match files smaller than SIZE (inclusive)',
+                 metavar='SIZE')
+    p.add_option_group(g)
+
+    # Type filtering
+    g = OptionGroup(p, "Type Filtering",
+                    "Possible types are "
+                    "a (all), "
+                    "f (files), "
+                    "d (dirs), "
+                    "r (real), "
+                    "s (symlinked), "
+                    "e (real files), "
+                    "c (real dirs), "
+                    "x (symlinked files), "
+                    "y (symlinked dirs). "
+                    "If multiple types are given they will be unioned together:  "
+                    "--type 'es' would match real files and all symlinks.")
+    g.add_option('-t', '--type',
+                 action='store', default=False, metavar='TYPE(S)',
+                 help='match only specific types of things (files, dirs, non-symlinks, symlinks)')
+    p.add_option_group(g)
+
+    return p
+
+def build_type_set(types):
+    if not types:
+        return TYPES_ALL
+
+    result = set()
+    for c in types:
+        if c not in 'aexcyfdrs':
+            die("invalid type specification\n\n"
+                "valid types:\n\n"
+                "  a (all)\n"
+                "  f (files)\n"
+                "  d (dirs)\n"
+                "  r (real)\n"
+                "  s (symlinked)\n"
+                "  e (real files)\n"
+                "  c (real dirs)\n"
+                "  x (symlinked files)\n"
+                "  y (symlinked dirs)")
+
+        result = result | {
+            'a': TYPES_ALL,
+
+            'e': TYPES_FILE_REAL,
+            'x': TYPES_FILE_SYMLINK,
+            'c': TYPES_DIR_REAL,
+            'y': TYPES_DIR_SYMLINK,
+
+            'f': TYPES_FILE,
+            'd': TYPES_DIR,
+
+            'r': TYPES_REAL,
+            's': TYPES_SYMLINK,
+        }[c.lower()]
+
+    return result
+
+def parse_size(size):
+    size = size.replace(' ', '') if size else size
+
+    if not size:
+        return None
+
+    m = SIZE_RE.match(size)
+    if not m:
+        die('invalid size "%s"' % size)
+
+    n, unit = m.groups()
+
+    try:
+        n = float(n)
+    except ValueError:
+        die('invalid size "%s"' % size)
+
+    unit = {
+        'b': BYTE,
+        'k': KILOBYTE,
+        'm': MEGABYTE,
+        'g': GIGABYTE,
+        't': TERABYTE,
+        'p': PETABYTE,
+    }[unit or 'b']
+
+    return int(n * unit)
+
+def is_re(s):
+    """Try to guess if the string is a regex.
+
+    Err on the side of "True", because treating a literal like a regex only
+    slows you down a bit, but the other way around is broken behaviour.
+
+    """
+
+    return not all(c.lower() in string.ascii_letters + '_-' for c in s)
+
+
+def clean_ago_piece(n, unit):
+    n = float(n)
+
+    if unit in ['s', 'sec', 'secs', 'second', 'seconds']:
+        unit = SECOND
+    if unit in ['m', 'min', 'mins', 'minute', 'minutes']:
+        unit = MINUTE
+    if unit in ['h', 'hour', 'hours']:
+        unit = HOUR
+    if unit in ['d', 'day', 'days']:
+        unit = DAY
+    if unit in ['w', 'week', 'weeks']:
+        unit = WEEK
+    if unit in ['mo', 'mos', 'month', 'months']:
+        unit = MONTH
+    if unit in ['y', 'year', 'years']:
+        unit = YEAR
+
+    return n, unit
+
+def parse_ago(start_time, timestr):
+    pieces = AGO_RE.findall(timestr)
+
+    units = set()
+    result = start_time
+
+    for piece in pieces:
+        n, unit = clean_ago_piece(*piece)
+
+        if unit in units:
+            die('duplicate "%s" in time specification' % unit)
+
+        units.add(unit)
+        result -= n * unit
+
+    return int(result)
+
+def parse_time(timestr):
+    """Parse a time string into milliseconds past the epoch."""
+    start_time = int(time.time())
+
+    timestr = timestr.strip().lower()
+
+    if AGO_RE.match(timestr):
+        return parse_ago(start_time, timestr)
+
+    return None
+
+
+def main():
+    global options
+
+    (options, args) = build_option_parser().parse_args()
+
+    # PATTERN
+    if len(args) > 1:
+        die("only one search pattern can be given")
+        sys.exit(1)
+
+    query = args[0] if args else ''
+
+    # --dir
+    if options.dir:
+        try:
+            os.chdir(options.dir)
+        except OSError:
+            die('could not change to directory "%s"' % options.dir)
+
+    # --depth
+    try:
+        options.depth = int(options.depth)
+    except ValueError:
+        die('depth must be a non-negative integer (got "%s")' % options.depth)
+
+    # --case-*
+    if options.case == CASE_SMART:
+        if any(c in string.uppercase for c in query):
+            options.case = CASE_SENSITIVE
+        else:
+            options.case = CASE_INSENSITIVE
+
+    # --type
+    options.type = build_type_set(options.type)
+
+    # --larger-than, --smaller-than
+    options.larger_than = parse_size(options.larger_than)
+    options.smaller_than = parse_size(options.smaller_than)
+
+    if options.larger_than or options.smaller_than:
+        # Directory sizes are not supported.
+        options.type = options.type - TYPES_DIR
+
+    # time filtering
+    if options.before:
+        options.before = parse_time(options.before)
+
+    if options.after:
+        options.after = parse_time(options.after)
+
+    # Ignore files
+    if options.ignore_mode == IGNORE_MODE_RESTRICTED:
+        options.ignore_files = ['.ffignore', '.gitignore', '.hgignore']
+        options.ignore_vcs_dirs = True
+    elif options.ignore_mode == IGNORE_MODE_SEMI:
+        options.ignore_files = ['.ffignore']
+        options.ignore_vcs_dirs = True
+    elif options.ignore_mode == IGNORE_MODE_UNRESTRICTED:
+        options.ignore_files = []
+        options.ignore_vcs_dirs = True
+    elif options.ignore_mode == IGNORE_MODE_ALL:
+        options.ignore_files = []
+        options.ignore_vcs_dirs = False
+
+    # Build the query matcher.
+    if options.literal or not is_re(query):
+        if options.case == CASE_SENSITIVE:
+            literal = query
+            query = lambda s: literal in s
+        else:
+            literal = query.lower()
+            query = lambda s: literal in s.lower()
+    else:
+        if options.case == CASE_SENSITIVE:
+            r = re.compile(query)
+        else:
+            r = re.compile(query, re.IGNORECASE)
+        query = lambda s: r.search(s)
+
+    # Go!
+    search(query)
+
+
+if __name__ == '__main__':
+    import signal
+    def sigint_handler(signal, frame):
+        sys.stdout.write('\n')
+        sys.exit(130)
+    signal.signal(signal.SIGINT, sigint_handler)
+    main()
