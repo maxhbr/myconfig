@@ -5,7 +5,7 @@
 if has("autocmd")
   " If buffer modified, update any 'Last modified: ' in the first 20 lines.
   " Restores cursor and window position using save_cursor variable.
-  function! g:LastModified()
+  function! s:LastModified()
     if &modified
       let save_cursor = getpos(".")
       let n = min([20, line("$")])

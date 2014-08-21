@@ -7,7 +7,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last Modified: Tue Aug 19, 2014  06:33
+" Last Modified: Wed Aug 20, 2014  07:39
 
 " auto reload when saving
 if has("autocmd")
@@ -297,10 +297,6 @@ nnoremap ; :
 let mapleader=","
 let maplocalleader = "\\"
 
-
-inoremap ää <esc>l
-"inoremap <esc> <nop>
-
 " ====  general  ===================================================={{{
 "save without sudo
 cnoremap w!! w !sudo tee % >/dev/null
@@ -316,7 +312,7 @@ nnoremap <silent> <leader>ev :e $MYVIMRC<CR>
 "nnoremap <silent> <leader>sv :so $MYVIMRC<CR>
 
 " Pressing ,ss will toggle and untoggle spell checking
-noremap <leader>ss :setlocal spell!<cr>
+"noremap <leader>ss :setlocal spell!<cr>
 
 " Make < > shifts keep selection
 vnoremap < <gv
@@ -435,6 +431,16 @@ noremap <c-Right> :tabn<CR>
 "Markdown to HTML
 nnoremap <leader>md :%!~/bin/Markdown.pl --html4tags <cr>
 
+"                                                                    }}}
+" ====  testing  ===================================================={{{
+nnoremap <leader>f :call FoldColumnToggle()<cr>
+function! FoldColumnToggle()
+  if &foldcolumn
+    setlocal foldcolumn=0
+  else
+    setlocal foldcolumn=4
+  endif
+endfunction
 "                                                                    }}}
 " ===================================================================}}}
 " ====  abbreviations  ==============================================
@@ -645,9 +651,9 @@ function! SetLaTeXFile() "{{{
   setlocal foldmethod=marker
   setlocal foldmarker={{{,}}}
 
-  set iskeyword+=: " type /ref{fig: and prec <C-n> to autocomplete references
-  set iskeyword+=- " same with -
-  set iskeyword+=_ " same with _
+  setlocal iskeyword+=: " type /ref{fig: and prec <C-n> to autocomplete references
+  setlocal iskeyword+=- " same with -
+  setlocal iskeyword+=_ " same with _
 
   "setlocal noautoindent
   setlocal nocindent
@@ -657,12 +663,16 @@ function! SetLaTeXFile() "{{{
   setlocal autoindent
 
   setlocal spell
-  set spelllang=de_de,en_us
-  set spellfile=~/.vim/spellfile.add
+  setlocal spelllang=de_de,en_us
+  setlocal spellfile=~/.vim/spellfile.add
 
   "inoremap <expr>" getline('.')[col(".")-2] =~ "\\s" ? "\"`\"\'<left><left>" : "\"'"
   inoremap <expr>[ getline('.')[col(".")-2] =~ "\\" ? "[<C-v>u005c]<left><left>" : "["
   "inoremap <expr>{ getline('.')[col(".")-2] =~ "\\" ? "{<C-v>u005c}<left><left>" : "{"
+
+  nnoremap <leader>$ viw<esc>a$<esc>hbi$<esc>lel
+
+  iabbrev ... <bs>\dots
 
   "nnoremap <leader>cl :! runlatex -pdf % > logfile 2>&1 &<CR><CR>
   "nnoremap <leader>oe :! llpp %:r.pdf > /dev/null 2>&1 &<CR><CR>
