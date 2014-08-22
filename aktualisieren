@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Tue Aug 19, 2014  01:32
+# Last modified: Thu Aug 21, 2014  03:43
 
 ###############################################################################
 # variables
@@ -64,6 +64,7 @@ files() {
 ~/.config/ranger/rc.conf
 ~/.config/ranger/rifle.conf
 ~/.config/dwb/default/custom_keys
+~/.config/dwb/userscripts/gitClone.sh
 ~/.config/dwb/userscripts/open-chromium.sh
 ~/.config/dwb/userscripts/wget-file.sh
 ~/.emacs

@@ -7,7 +7,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last Modified: Wed Aug 20, 2014  07:39
+" Last Modified: Fri Aug 22, 2014  10:25
 
 " auto reload when saving
 if has("autocmd")
@@ -249,17 +249,6 @@ function! Cleanup()
   retab!
 endfunction
 "                                                                    }}}
-
-function! InsertTabWrapper()
-  let col = col('.') - 1
-  if !col || getline('.')[col - 1] !~ '\k'
-    return "\<tab>"
-  else
-    return "\<c-p>"
-  endif
-endfunction
-inoremap <tab> <c-r>=InsertTabWrapper()<cr>
-inoremap <s-tab> <c-n>
 
 function! MyHtmlEscape()
   silent s/ö/\&ouml;/eg
@@ -838,7 +827,6 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   " move by % to matching bracket/tag/...
   Bundle 'matchit.zip'
   Bundle 'git://github.com/Raimondi/delimitMate.git'
-  Bundle 'AutoComplPop'
   "Bundle 'git://github.com/nathanaelkane/vim-indent-guides.git'
   Bundle 'gmarik/snipmate.vim'
   Bundle 'honza/snipmate-snippets'
@@ -903,6 +891,99 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "colorschemes
   Bundle 'Solarized'
   "Bundle 'flazz/vim-colorschemes'
+  Bundle 'CSApprox'
+  "let g:CSApprox_hook_post = ['hi Normal ctermbg=none',
+                              "\ 'hi NonText ctermbg=none',
+                              "\ 'hi Conceal ctermbg=none']
+
+  "############################################################################
+  "completion
+  if 1
+    Bundle 'Shougo/neocomplcache'
+    " === neocomplcache setup ==========================================={{{
+    " Disable AutoComplPop.
+    let g:acp_enableAtStartup = 0
+    " Use neocomplcache.
+    let g:neocomplcache_enable_at_startup = 1
+    " Use smartcase.
+    let g:neocomplcache_enable_smart_case = 1
+    " Set minimum syntax keyword length.
+    let g:neocomplcache_min_syntax_length = 3
+    let g:neocomplcache_lock_buffer_name_pattern = '\*ku\*'
+    let g:neocomplcache_snippets_dir='~/.vim/bundle/vim-snippets/snippets'
+
+    " Enable heavy features.
+    " Use camel case completion.
+    "let g:neocomplcache_enable_camel_case_completion = 1
+    " Use underbar completion.
+    "let g:neocomplcache_enable_underbar_completion = 1
+
+    " Define dictionary.
+    let g:neocomplcache_dictionary_filetype_lists = {
+        \ 'default' : '',
+        \ 'vimshell' : $HOME.'/.vimshell_hist',
+        \ 'scheme' : $HOME.'/.gosh_completions'
+            \ }
+
+    " Define keyword.
+    if !exists('g:neocomplcache_keyword_patterns')
+        let g:neocomplcache_keyword_patterns = {}
+    endif
+    let g:neocomplcache_keyword_patterns['default'] = '\h\w*'
+
+    " Plugin key-mappings.
+    "inoremap <expr><C-g>     neocomplcache#undo_completion()
+    "inoremap <expr><C-l>     neocomplcache#complete_common_string()
+
+    " Recommended key-mappings.
+    " <CR>: close popup and save indent.
+    inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
+    function! s:my_cr_function()
+      return neocomplcache#smart_close_popup() . "\<CR>"
+      " For no inserting <CR> key.
+      "return pumvisible() ? neocomplcache#close_popup() : "\<CR>"
+    endfunction
+    " <TAB>: completion.
+    inoremap <expr><TAB>  pumvisible() ? "\<C-n>" : "\<TAB>"
+    " <C-h>, <BS>: close popup and delete backword char.
+    "inoremap <expr><C-h> neocomplcache#smart_close_popup()."\<C-h>"
+    "inoremap <expr><BS> neocomplcache#smart_close_popup()."\<C-h>"
+    "inoremap <expr><C-y>  neocomplcache#close_popup()
+    "inoremap <expr><C-e>  neocomplcache#cancel_popup()
+
+
+    " Enable snipMate compatibility feature.
+    let g:neosnippet#enable_snipmate_compatibility = 1
+
+    " Tell Neosnippet about the other snippets
+    let g:neosnippet#snippets_directory='~/.vim/bundle/vim-snippets/snippets'
+
+    " SuperTab like snippets behavior.
+    imap <expr><TAB> neosnippet#expandable_or_jumpable() ?
+      \ "\<Plug>(neosnippet_expand_or_jump)"
+      \: pumvisible() ? "\<C-n>" : "\<TAB>"
+    smap <expr><TAB> neosnippet#expandable_or_jumpable() ?
+      \ "\<Plug>(neosnippet_expand_or_jump)"
+      \: "\<TAB>"
+
+    " For snippet_complete marker.
+    if has('conceal')
+      "set conceallevel=2 concealcursor=i
+    endif
+    " ===================================================================}}}
+  else
+    Bundle 'AutoComplPop'
+    function! InsertTabWrapper()
+      let col = col('.') - 1
+      if !col || getline('.')[col - 1] !~ '\k'
+        return "\<tab>"
+      else
+        return "\<c-p>"
+      endif
+    endfunction
+    inoremap <tab> <c-r>=InsertTabWrapper()<cr>
+    inoremap <s-tab> <c-n>
+  endif
 
   "############################################################################
   "unsorted
