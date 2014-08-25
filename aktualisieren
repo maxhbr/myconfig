@@ -80,7 +80,7 @@ files() {
 ~/.tmux.conf
 ~/.vimencrypt
 ~/.vimrc
-~/.vim/colors/
+~/.vim/colors
 ~/.vim/plugin/myLastModified.vim
 ~/.vim/plugin/grep-operator.vim
 ~/.xinitrc
