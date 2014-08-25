@@ -43,3 +43,12 @@
 [submodule "vim/bundle/neosnippet"]
 	path = vim/bundle/neosnippet
 	url = https://github.com/Shougo/neosnippet.vim.git
+[submodule "vim/bundle/clam"]
+	path = vim/bundle/clam
+	url = https://github.com/sjl/clam.vim/
+[submodule "vim/bundle/vim-snippets"]
+	path = vim/bundle/vim-snippets
+	url = https://github.com/honza/vim-snippets
+[submodule "vim/bundle/ultisnips"]
+	path = vim/bundle/ultisnips
+	url = https://github.com/SirVer/ultisnips
