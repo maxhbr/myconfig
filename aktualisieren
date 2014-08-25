@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Mon Aug 25, 2014  03:31
+# Last modified: Mon Aug 25, 2014  03:32
 
 ###############################################################################
 # variables
@@ -177,7 +177,7 @@ files | while IFS= read -r FILE; do
     }
 
     mkdir -p "${FOLDER}${DIR}"
-    cp -vu $FILE "${FOLDER}${DIR}${BASE}"
+    cp -vur $FILE "${FOLDER}${DIR}${BASE}"
     git add "${FOLDER}${DIR}${BASE}"
 
     if [ -f "$FILE"  ]; then
