@@ -43,7 +43,13 @@ myinstall "${FOLDER}ncmpcpp/config" "/home/hubi/.ncmpcpp/config" 600 hubi users
 myinstall "${FOLDER}tmux.conf" "/home/hubi/.tmux.conf" 600 hubi users
 myinstall "${FOLDER}vimencrypt" "/home/hubi/.vimencrypt" 600 hubi users
 myinstall "${FOLDER}vimrc" "/home/hubi/.vimrc" 600 hubi users
+# "${FOLDER}vim/autoload" "/home/hubi/.vim/autoload"
 # "${FOLDER}vim/colors" "/home/hubi/.vim/colors"
+# "${FOLDER}vim/ftdetect" "/home/hubi/.vim/ftdetect"
+# "${FOLDER}vim/ftplugin" "/home/hubi/.vim/ftplugin"
+# "${FOLDER}vim/indent" "/home/hubi/.vim/indent"
+# "${FOLDER}vim/plugin" "/home/hubi/.vim/plugin"
+# "${FOLDER}vim/syntax" "/home/hubi/.vim/syntax"
 myinstall "${FOLDER}vim/plugin/myLastModified.vim" "/home/hubi/.vim/plugin/myLastModified.vim" 600 hubi users
 myinstall "${FOLDER}vim/plugin/grep-operator.vim" "/home/hubi/.vim/plugin/grep-operator.vim" 600 hubi users
 myinstall "${FOLDER}xinitrc" "/home/hubi/.xinitrc" 600 hubi users

@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Mon Aug 25, 2014  03:42
+# Last modified: Mon Aug 25, 2014  04:17
 
 ###############################################################################
 # variables
@@ -80,7 +80,13 @@ files() {
 ~/.tmux.conf
 ~/.vimencrypt
 ~/.vimrc
+~/.vim/autoload
 ~/.vim/colors
+~/.vim/ftdetect
+~/.vim/ftplugin
+~/.vim/indent
+~/.vim/plugin
+~/.vim/syntax
 ~/.vim/plugin/myLastModified.vim
 ~/.vim/plugin/grep-operator.vim
 ~/.xinitrc
@@ -184,7 +190,8 @@ files | while IFS= read -r FILE; do
       grp=$(ls -l $FILE | awk '{ print $4 }') #<-- will give you the group
       echo "myinstall \"\${FOLDER}${DIR}${BASE}\" \"$FILE\" $perms $ownr $grp" >>"$ASIMFile"
     elif [ -d "$FILE" ]; then
-      rsync -vaz --delete $FILE "${FOLDER}${DIR}${BASE}"
+      echo $FILE
+      rsync -az --delete $FILE "${FOLDER}${DIR}"
       echo "# \"\${FOLDER}${DIR}${BASE}\" \"$FILE\"" >>"$ASIMFile"
     fi
     git add "${FOLDER}${DIR}${BASE}"
