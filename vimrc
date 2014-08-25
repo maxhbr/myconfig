@@ -7,7 +7,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last Modified: Mon Aug 25, 2014  04:15
+" Last Modified: Mon Aug 25, 2014  05:22
 
 " auto reload when saving
 if has("autocmd")
@@ -443,291 +443,30 @@ cnoreabbrev <expr> Q ((getcmdtype() is# ':' && getcmdline() is# 'Q')?('q'):('Q')
 " ===================================================================}}}
 " ====  Git / SVN   =================================================
 " ==================================================================={{{
+command! GCommit   call myVersionControl#GitCommit()
+command! GPush     call myVersionControl#GitPush()
+command! GPull     call myVersionControl#GitPull()
+command! GAdd      call myVersionControl#GitAdd()
+command! GStatus   call myVersionControl#GitStatus()
+command! GCheckout call myVersionControl#GitCheckout()
+command! GBranch   call myVersionControl#GitBranch()
+command! GAuto     call myVersionControl#GitAuto()
 
-" ====  Git  ========================================================{{{
-function! GitCommit()
-  let msg = 0 < a:0 ? a:1 : inputdialog("Msg: ")
-  execute '!git commit -a -m "' msg '"'
-endfunction
+nnoremap <silent> _gc :call myVersionControl#GitCommit()<cr>
 
-function! GitPush()
-  execute '!git push'
-endfunction
-
-function! GitPull()
-  execute '!git pull'
-endfunction
-
-function! GitAdd()
-  execute '!git add %'
-endfunction
-
-function! GitStatus()
-  execute '!git status'
-endfunction
-
-function! GitCheckout()
-  let msg = 0 < a:0 ? a:1 : inputdialog("Branch: ")
-  execute '!git checkout ' msg
-endfunction
-
-function! GitBranch()
-  let msg = 0 < a:0 ? a:1 : inputdialog("Create Branch: ")
-  execute '!git checkout -b ' msg
-endfunction
-
-function! GitAuto()
-  call GitCommit()
-  call GitPush()
-endfunction
-
-command! GCommit   call GitCommit()
-command! GPush     call GitPush()
-command! GPull     call GitPull()
-command! GAdd      call GitAdd()
-command! GStatus   call GitStatus()
-command! GCheckout call GitCheckout()
-command! GBranch   call GitBranch()
-command! GAuto     call GitAuto()
-
-nnoremap <silent> _gc :call GitCommit()<cr>
-
-"                                                                    }}}
-" ====  SVN  ========================================================{{{
-function! SVNCommit()
-  let msg = 0 < a:0 ? a:1 : inputdialog("Msg: ")
-  execute '!svn commit -m "' msg '"'
-endfunction
-
-function! SVNUpdate()
-  execute '!svn update'
-endfunction
-
-function! SVNAdd()
-  execute '!svn add %'
-endfunction
-
-command! SVNCommit call SVNCommit()
-command! SVNUpdate call SVNUpdate()
-command! SVNAdd    call SVNAdd()
-
-nnoremap <silent> _sc :GCommit<cr>
-
-"                                                                    }}}
+command! SVNCommit call myVersionControl#SVNCommit()
+command! SVNUpdate call myVersionControl#SVNUpdate()
+command! SVNAdd    call myVersionControl#SVNAdd()
 " ===================================================================}}}
 " ====  filetype specific  ==========================================
 " ==================================================================={{{
-
-function! SetPythonFile() "{{{
-  let g:pydiction_location = '~/.vim/pydiction/complete-dict'
-  " au FocusLost *.py :write
-  " au FocusLost *.py :echo "autoSaved"
-  setlocal omnifunc=pythoncomplete#Complete
-  setlocal sw=4 ts=4 et
-  " setlocal tw=72
-
-  setlocal nowrap
-  set ttyfast
-
-  " folding
-  setlocal foldenable
-  setlocal foldmethod=indent
-  setlocal foldlevel=7
-
-  noremap <c-F5> :w<CR>:!python "%"<CR>
-endfunction "}}}
-
-function! SetShFile() "{{{
-  setlocal sw=2 ts=2 et
-
-  noremap <c-F5> :w<CR>:!sh "%"<CR>
-
-  function! GenHeader(...)
-    if has("autocmd")
-      return  repeat(a:1, a:2) . "\n"
-      \       . a:1 . "\n"
-      \       . a:1 . " Written by Maximilian-Huber.de\n"
-      \       . a:1 . "\n"
-      \       . a:1 . " Last Modified: \n"
-      \       . "\n"
-    else
-      return  repeat(a:1, a:2) . "\n"
-      \       . a:1 . "\n"
-      \       . a:1 . " Written by Maximilian-Huber.de\n"
-      \       . "\n"
-    endif
-  endfunction
-
-  nnoremap <silent> __h "=GenHeader('#',80)<CR>:0put =<CR>
-endfunction "}}}
-
-function! SetHaskellFile() "{{{
-  setlocal sw=2 ts=2 et
-  setlocal iskeyword+='
-
-  "setlocal formatprg=pointfree
-
-  let s:width = 80
-
-  noremap <c-F5> :w<CR>:!ghci "%"<CR>
-
-  function! HaskellModuleSection(...)
-    let name = 0 < a:0 ? a:1 : inputdialog("Section name: ")
-
-    return  repeat('-', s:width) . "\n"
-                \       . "--  " . name . "\n"
-                \       . "\n"
-  endfunction
-  nnoremap <silent> __s "=HaskellModuleSection()<CR>gp
-
-  function! HaskellModuleHeader(...)
-    let name = 0 < a:0 ? a:1 : inputdialog("Module: ")
-    let note = 1 < a:0 ? a:2 : inputdialog("Note: ")
-    let description = 2 < a:0 ? a:3 : inputdialog("Describe this module: ")
-
-    return  repeat('-', s:width) . "\n"
-    \       . "-- | \n"
-    \       . "-- Module      : " . name . "\n"
-    \       . "-- Note        : " . note . "\n"
-    \       . "-- \n"
-    \       . "-- " . description . "\n"
-    \       . "-- \n"
-    \       . repeat('-', s:width) . "\n"
-    \       . "\n"
-  endfunction
-  nnoremap <silent> __h "=HaskellModuleHeader()<CR>:0put =<CR>
-
-  " ===================================================================
-  " syntastic
-  let g:syntastic_auto_loc_list=1
-endfunction "}}}
-
-function! SetJavaFile() "{{{
-  setlocal shiftwidth=4 softtabstop=4 tabstop=4 expandtab
-
-  " folding
-  setlocal foldenable
-  setlocal foldmethod=syntax
-
-  setlocal nowrap
-
-  augroup setJavaFileAugroup
-    autocmd!
-    autocmd VimEnter * NERDTree
-    autocmd VimEnter * wincmd p
-  augroup END
-endfunction "}}}
-
-function! SetTextFile() "{{{
-  setlocal wrap
-  setlocal textwidth=79
-
-  setlocal linebreak
-endfunction "}}}
-
-let g:tex_flavor = "latex"
-function! SetLaTeXFile() "{{{
-  setlocal wrap
-  setlocal sw=2
-  setlocal ts=2
-  setlocal et
-  setlocal textwidth=79
-  setlocal cc=80
-
-  setlocal linebreak
-
-  setlocal foldmethod=marker
-  setlocal foldmarker={{{,}}}
-
-  setlocal iskeyword+=: " type /ref{fig: and prec <C-n> to autocomplete references
-  setlocal iskeyword+=- " same with -
-  setlocal iskeyword+=_ " same with _
-
-  "setlocal noautoindent
-  setlocal nocindent
-  setlocal nosmartindent
-  setlocal indentexpr=
-
-  setlocal autoindent
-
-  setlocal spell
-  setlocal spelllang=de_de,en_us
-  setlocal spellfile=~/.vim/spellfile.add
-
-  "inoremap <expr>" getline('.')[col(".")-2] =~ "\\s" ? "\"`\"\'<left><left>" : "\"'"
-  inoremap <expr>[ getline('.')[col(".")-2] =~ "\\" ? "[<C-v>u005c]<left><left>" : "["
-  "inoremap <expr>{ getline('.')[col(".")-2] =~ "\\" ? "{<C-v>u005c}<left><left>" : "{"
-
-  nnoremap <leader>$ viw<esc>a$<esc>hbi$<esc>lel
-
-  iabbrev ... <bs>\dots
-
-  "nnoremap <leader>cl :! runlatex -pdf % > logfile 2>&1 &<CR><CR>
-  "nnoremap <leader>oe :! llpp %:r.pdf > /dev/null 2>&1 &<CR><CR>
-  "nnoremap <leader>oa :! llpp *.pdf > /dev/null 2>&1 &<CR><CR>
-
-  function! SyncTexForward()
-    exec 'silent !myTexWrapper.sh % '.line('.')." ".col('.')
-    redraw!
-  endfunction
-  nnoremap <Leader>f :call SyncTexForward()<CR>
-endfunction "}}}
-
-function! SetCssFile() "{{{
-  setlocal sw=4
-  setlocal ts=4
-  setlocal et
-  setlocal tw=79
-  setlocal linebreak
-endfunction "}}}
-
-function! SetMatlabFile() "{{{
-  setlocal sw=4
-  setlocal ts=4
-  setlocal et
-  setlocal tw=79
-  setlocal linebreak
-
-  setlocal foldmarker={{{,}}}
-endfunction "}}}
-
-function! SetMailFile() "{{{
-  set textwidth=70 wrap nonumber
-  set spell
-  set spell spelllang=de_de
-  set spellfile=~/.vim/spellfile.add
-endfunction "}}}
-
 if has("autocmd")
-  augroup filetypedetect
-    autocmd!
-    autocmd BufRead,BufNewFile tmpmsg-*.txt set filetype=mail
-    autocmd BufRead,BufNewFile *.tex set filetype=tex
-    autocmd BufRead,BufNewFile *.scala set filetype=scala
-    autocmd BufRead,BufNewFile *.log setlocal autoread
-    autocmd BufRead,BufNewFile *.nlogo set filetype=nlogo
-    autocmd BufRead,BufNewFile *.pde set filetype=arduino
-    autocmd BufRead,BufNewFile *.ino set filetype=arduino
-    "au! BufRead,BufNewFile *.m,*.oct setfiletype matlab
-  augroup END
-
   augroup vimrc_autocmds
     autocmd!
-    autocmd FileType sh      call SetShFile()
-    autocmd FileType tex     call SetLaTeXFile()
-    autocmd FileType haskell call SetHaskellFile()
-    autocmd FileType java    call SetJavaFile()
-    autocmd FileType matlab  call SetMatlabFile()
-    autocmd FileType kiv     call SetKIVFile()
-    autocmd FileType python  call SetPythonFile()
-    autocmd FileType human   call SetTextFile()
-    autocmd FileType text    call SetTextFile()
-    autocmd FileType mail    call SetMailFile()
-    autocmd FileType txt     call SetTextFile()
-    autocmd FileType css     call SetCssFile()
-    autocmd FileType less    call SetCssFile()
-    autocmd FileType php setlocal sw=2 ts=2 et
-    autocmd FileType arduino setlocal sw=2 ts=2 et
+    autocmd FileType human   setlocal wrap tw=79 linebreak
+    autocmd FileType text    setlocal wrap tw=79 linebreak
+    autocmd FileType txt     setlocal wrap tw=79 linebreak
+    autocmd FileType php     setlocal sw=2 ts=2 et
     " in makefiles, don't expand tabs to spaces
     autocmd FileType make setlocal noexpandtab shiftwidth=8
   augroup END
