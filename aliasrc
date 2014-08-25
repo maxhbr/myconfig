@@ -32,6 +32,8 @@ alias ssh="TERM=xterm ssh"
 grepr() { grep -r "$@" * 2>/dev/null; }
 have() { type "$1" &> /dev/null; }
 
+alias gitDiff="git diff HEAD^ HEAD"
+
 #--------------------------------------------------------------------
 #   file specific
 #-------------------------------------------------------------------{{{
