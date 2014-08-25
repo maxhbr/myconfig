@@ -7,7 +7,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last Modified: Mon Aug 25, 2014  05:22
+" Last Modified: Mon Aug 25, 2014  05:56
 
 " auto reload when saving
 if has("autocmd")
@@ -39,7 +39,9 @@ if has("autocmd")
   augroup someAugroup
     autocmd!
     " jump to the last position when reopening a file
-    autocmd BufReadPost * if line("'\"") > 1 && line("'\"") <= line("$") | exe "normal! g'\"" | endif
+    autocmd BufReadPost * if line("'\"") > 1 && line("'\"") <= line("$") 
+                          \ | exe "normal! g'\"" 
+                        \ | endif
     " resize splits
     autocmd VimResized * exe "normal! \<c-w>="
     " leave paste mode, when exit insert mode
@@ -70,12 +72,16 @@ set showbreak=\ \ \ ↳
 
 set wildmenu "Kommando Zeilen Vervollständigung
 "set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png
-set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png,*.aux,*.bbl,*.blg,*.fdb_latexmk,*.fls,*.idx,*.ilg,*.ind,*.nlo,*.toc,*.hi
+set wildignore=*.dll,*.o,*.obj,*.exe,*.hi,*.pyc,
+  \*.bak,*.bac,
+  \*.jpg,*.gif,*.png,
+  \*.aux,*.bbl,*.blg,*.fdb_latexmk,*.fls,*.idx,*.ilg,*.ind,*.nlo,*.toc
 set wildmode=list:longest
 
 " Suffixes that get lower priority when doing tab completion for filenames.
 " These are files we are not likely to want to edit or read.
-set suffixes=.bak,~,.swp,.o,.info,.aux,.log,.dvi,.bbl,.blg,.brf,.cb,.ind,.idx,.ilg,.inx,.out,.toc
+set suffixes=.bak,.bac,~,.swp,.o,.info,.aux,.log,.dvi,.bbl,.blg,.brf,.cb,.ind,
+  \.idx,.ilg,.inx,.out,.toc
 "                                                                    }}}
 " ====  sessioning  ================================================={{{
 
@@ -241,6 +247,7 @@ function! DeleteTrailing()
   %s/\s\+$//ge
   exe "normal `z"
 endfunction
+nnoremap <Leader>dt :call DeleteTrailing()
 
 " DeleteTrailing and more
 function! Cleanup()
@@ -249,8 +256,10 @@ function! Cleanup()
   setlocal expandtab
   retab!
 endfunction
-"                                                                    }}}
+nnoremap <Leader>dT :call Cleanup()
 
+"                                                                    }}}
+" ====  simpel Html escapeing  ======================================{{{
 function! MyHtmlEscape()
   silent s/ö/\&ouml;/eg
   silent s/ä/\&auml;/eg
@@ -261,6 +270,7 @@ function! MyHtmlEscape()
   silent s/ß/\&szlig;/eg
 endfunction
 
+"                                                                    }}}
 " ====  open files via ranger  ======================================{{{
 function! RangerChooser()
   exec "silent !ranger --choosefile=/tmp/chosenfile " . expand("%:p:h")
@@ -346,12 +356,11 @@ vnoremap <leader>Q gq
 nnoremap <leader>Q gqap
 
 "for cleaning
-nnoremap <Leader>dt :call DeleteTrailing()
 nnoremap <leader>T :set expandtab<cr>:retab!<cr>
-nnoremap <Leader>dT :call Cleanup()
 
 " Search and replace
 nnoremap <Leader>s :%s/\<<C-r><C-w>\>//g<Left><Left>
+" Search and change
 nnoremap _s :%s/\<<C-r><C-w>\>/<C-r><C-w>/g<Left><Left>
 
 " Word to UPPERCASE
@@ -400,19 +409,6 @@ nnoremap <c-k> 5k
 noremap <c-Left> :tabp<CR>
 noremap <c-Right> :tabn<CR>
 
-"inoremap <expr> <Tab>     pumvisible() ? "\<C-y>" : "\<Tab>"
-"inoremap <expr> <CR>      pumvisible() ? "\<C-e><CR>" : "\<CR>"
-
-" force vim keys
-"nnoremap <up> <nop>
-"nnoremap <down> <nop>
-"nnoremap <left> <nop>
-"nnoremap <right> <nop>
-
-" Use arrow key to change buffer
-"noremap <left> :bp<CR>
-"noremap <right> :bn<CR>
-
 "                                                                    }}}
 " ====  for external scripts  ======================================={{{
 
@@ -441,34 +437,18 @@ iabbrev VGr Viele Grüße<cr>Maximilian
 cnoreabbrev <expr> W ((getcmdtype() is# ':' && getcmdline() is# 'W')?('w'):('W'))
 cnoreabbrev <expr> Q ((getcmdtype() is# ':' && getcmdline() is# 'Q')?('q'):('Q'))
 " ===================================================================}}}
-" ====  Git / SVN   =================================================
-" ==================================================================={{{
-command! GCommit   call myVersionControl#GitCommit()
-command! GPush     call myVersionControl#GitPush()
-command! GPull     call myVersionControl#GitPull()
-command! GAdd      call myVersionControl#GitAdd()
-command! GStatus   call myVersionControl#GitStatus()
-command! GCheckout call myVersionControl#GitCheckout()
-command! GBranch   call myVersionControl#GitBranch()
-command! GAuto     call myVersionControl#GitAuto()
-
-nnoremap <silent> _gc :call myVersionControl#GitCommit()<cr>
-
-command! SVNCommit call myVersionControl#SVNCommit()
-command! SVNUpdate call myVersionControl#SVNUpdate()
-command! SVNAdd    call myVersionControl#SVNAdd()
-" ===================================================================}}}
 " ====  filetype specific  ==========================================
 " ==================================================================={{{
+" most filetype specific is coantained in the files under ftplugin/
+
 if has("autocmd")
   augroup vimrc_autocmds
     autocmd!
-    autocmd FileType human   setlocal wrap tw=79 linebreak
-    autocmd FileType text    setlocal wrap tw=79 linebreak
-    autocmd FileType txt     setlocal wrap tw=79 linebreak
-    autocmd FileType php     setlocal sw=2 ts=2 et
+    autocmd FileType human setlocal wrap tw=79 linebreak
+    autocmd FileType text  setlocal wrap tw=79 linebreak
+    autocmd FileType txt   setlocal wrap tw=79 linebreak
     " in makefiles, don't expand tabs to spaces
-    autocmd FileType make setlocal noexpandtab shiftwidth=8
+    autocmd FileType make  setlocal noexpandtab shiftwidth=8
   augroup END
 
   augroup Shebang
@@ -566,8 +546,15 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   Bundle 'matchit.zip'
   Bundle 'git://github.com/Raimondi/delimitMate.git'
   "Bundle 'git://github.com/nathanaelkane/vim-indent-guides.git'
-  Bundle 'gmarik/snipmate.vim'
-  Bundle 'honza/snipmate-snippets'
+  if 0
+    Bundle 'gmarik/snipmate.vim'
+    Bundle 'honza/snipmate-snippets'
+  else
+    Bundle "MarcWeber/vim-addon-mw-utils"
+    Bundle "garbas/vim-snipmate"
+    Bundle "honza/vim-snippets"
+  endif
+
   if 1
     Bundle 'https://github.com/scrooloose/syntastic'
     let g:syntastic_scala_checkers = []
@@ -579,14 +566,6 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "############################################################################
   "manage files
   Bundle 'LustyJuggler'
-  "if 0
-  "Bundle 'The-NERD-tree'
-    "noremap <silent> <C-N> :NERDTree<CR>
-    "" start NERDTree at startup
-    "" autocmd VimEnter * NERDTree
-    "" open a NERDTree automatically when vim starts up if no files were specified
-    "autocmd vimenter * if !argc() | NERDTree | endif
-  "endif
   Bundle 'mru.vim'
   "if 1 "CtrlP
     Bundle 'https://github.com/kien/ctrlp.vim'
@@ -594,13 +573,6 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
     let g:ctrlp_cmd = 'CtrlP'
     let g:ctrlp_working_path_mode = 'ra'
     nnoremap <Leader>b :CtrlPBuffer<CR>
-  "endif
-  "if 0
-    "Bundle 'minibufexpl.vim'
-    "let g:miniBufExplMapWindowNavVim = 1
-    "let g:miniBufExplMapWindowNavArrows = 1
-    "let g:miniBufExplMapCTabSwitchBufs = 1
-    "let g:miniBufExplModSelTarget = 1
   "endif
   "############################################################################
   "matlab
@@ -627,12 +599,9 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
 
   "############################################################################
   "colorschemes
-  Bundle 'Solarized'
+  "Bundle 'Solarized'
   "Bundle 'flazz/vim-colorschemes'
-  Bundle 'CSApprox'
-  "let g:CSApprox_hook_post = ['hi Normal ctermbg=none',
-                              "\ 'hi NonText ctermbg=none',
-                              "\ 'hi Conceal ctermbg=none']
+  "Bundle 'CSApprox'
 
   "############################################################################
   "completion
@@ -727,8 +696,6 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
 
   "############################################################################
   "unsorted
-  Bundle 'surround.vim'
-  Bundle 'delete-surround-html'
   Bundle 'XML-Folding'
   Bundle 'tsaleh/vim-align.git'
   Bundle 'L9'
@@ -748,9 +715,26 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
   "Bundle 'git://github.com/scala/scala-dist/tree/master/tool-support/src/vim.git'
 
   "frisch aussortiert
+  "Bundle 'surround.vim'
+  "Bundle 'delete-surround-html'
   "Bundle 'lastpos.vim'
   "Bundle 'git://github.com/vim-scripts/LaTeX-Box.git'
   "Bundle 'git://github.com/tclem/vim-arduino.git'
+  "if 0
+    "Bundle 'minibufexpl.vim'
+    "let g:miniBufExplMapWindowNavVim = 1
+    "let g:miniBufExplMapWindowNavArrows = 1
+    "let g:miniBufExplMapCTabSwitchBufs = 1
+    "let g:miniBufExplModSelTarget = 1
+  "endif
+  "if 0
+  "Bundle 'The-NERD-tree'
+    "noremap <silent> <C-N> :NERDTree<CR>
+    "" start NERDTree at startup
+    "" autocmd VimEnter * NERDTree
+    "" open a NERDTree automatically when vim starts up if no files were specified
+    "autocmd vimenter * if !argc() | NERDTree | endif
+  "endif
 
   "Bundle 'xoria255.vim'
   "Bundle 'neverland.vim--All-colorschemes-suck'
