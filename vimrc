@@ -1,21 +1,19 @@
 " ~/.vimrc
 "
-" `call MyInstallAllPlugins()` for installing all plugins
+" Written by Maximilian-Huber.de
 "
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Written by Maximilian-Huber.de
-"
-" Last Modified: Tue Aug 26, 2014  12:22
+" Last Modified: Tue Aug 26, 2014  12:51
 
-" auto reload when saving
+" auto reload vimrc when saved ======================================{{{
 if has("autocmd")
   augroup autoSourceVimrc
     autocmd!
     autocmd bufwritepost .vimrc source %
   augroup END
-endif
+endif "==============================================================}}}
 
 " This must be first, because it changes other options as a side effect.
 set nocompatible
@@ -169,6 +167,20 @@ set nobackup
 "set directory=~/.vim-tmp,~/.tmp,~/tmp,/var/tmp,/tmp
 "set writebackup
 "                                                                    }}}
+" ====  spelling  ==================================================={{{
+setlocal nospell
+set spelllang=de_de,en_us
+highlight clear SpellBad
+highlight SpellBad term=standout ctermfg=1
+highlight SpellBad term=underline cterm=underline
+highlight clear SpellCap
+highlight SpellCap term=underline cterm=underline
+highlight clear SpellRare
+highlight SpellRare term=underline cterm=underline
+highlight clear SpellLocal
+highlight SpellLocal term=underline cterm=underline
+
+"                                                                    }}}
 " ===================================================================}}}
 " ====  appearance  =================================================
 " ==================================================================={{{
@@ -223,21 +235,6 @@ else
     highlight OverLength ctermbg=red ctermfg=white guibg=#592929
     match OverLength /\%81v.\+/
 endif
-
-" ===================================================================}}}
-" ====  spelling  ===================================================
-" ==================================================================={{{
-setlocal nospell
-set spelllang=de_de,en_us
-highlight clear SpellBad
-highlight SpellBad term=standout ctermfg=1
-highlight SpellBad term=underline cterm=underline
-highlight clear SpellCap
-highlight SpellCap term=underline cterm=underline
-highlight clear SpellRare
-highlight SpellRare term=underline cterm=underline
-highlight clear SpellLocal
-highlight SpellLocal term=underline cterm=underline
 
 " ===================================================================}}}
 " ====  functions  ==================================================
@@ -435,13 +432,17 @@ nnoremap <leader>f :call FoldColumnToggle()<cr>
 " ===================================================================}}}
 " ====  abbreviations  ==============================================
 " ==================================================================={{{
-iabbrev adn and
-iabbrev @@ mail@maximilian-huber.de
-iabbrev VGr Viele Grüße<cr>Maximilian
-
 " overwrite those annoying commands
 cnoreabbrev <expr> W ((getcmdtype() is# ':' && getcmdline() is# 'W')?('w'):('W'))
 cnoreabbrev <expr> Q ((getcmdtype() is# ':' && getcmdline() is# 'Q')?('q'):('Q'))
+
+" handy abbreviations
+iabbrev @@ mail@maximilian-huber.de
+iabbrev VGr Viele Grüße<cr>Maximilian
+
+" correct some typos
+iabbrev adn and
+
 " ===================================================================}}}
 " ====  filetype specific  ==========================================
 " ==================================================================={{{
@@ -514,7 +515,10 @@ endif
 " ===================================================================}}}
 " ====  plugin specific  ============================================
 " ==================================================================={{{
+" $ ln -s $MYCONFIGDIR/vim/bundle ~/.vim/bundle
+
 execute pathogen#infect()
+
 " Used Plugins:
 "   General:
 "   * The-NERD-Commenter
@@ -560,7 +564,16 @@ let g:UltiSnipsEditSplit="vertical"
 "   * YouCompleteMe
 "       needs:
 "       $ ./install.sh --clang-completer
-let g:ycm_use_ultisnips_completer = 0
+let g:ycm_use_ultisnips_completer = 1
+let g:ycm_min_num_of_chars_for_completion = 2
+let g:ycm_filetype_blacklist = {
+      \ 'tagbar' : 1,
+      \ 'qf' : 1,
+      \ 'notes' : 1,
+      \ 'unite' : 1,
+      \ 'pandoc' : 1,
+      \ 'infolog' : 1,
+      \}
 " ===================================================================
 "   Others:
 "   * Clam
