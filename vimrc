@@ -7,7 +7,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last Modified: Mon Aug 25, 2014  05:56
+" Last Modified: Tue Aug 26, 2014  12:22
 
 " auto reload when saving
 if has("autocmd")
@@ -56,7 +56,8 @@ set encoding=utf8
 set virtualedit=all
 set showcmd   " Show (partial) command in status line.
 set showmatch " Show matching brackets.
-set autowrite " Automatically save before commands like :next and :make
+"set autowrite " Automatically save before commands like :next and :make
+set noautowrite " don't automagically write on :next"
 set visualbell " ausgehebelt durch noerrorbells ?
 set noerrorbells
 set hidden
@@ -65,10 +66,13 @@ set magic      " For regular expressions turn magic on
 set splitbelow " set splitright
 set autochdir
 
+set restorescreen=on 
+
 set cpoptions+=n
 set showbreak=\ \ \ ↳
 
 " ====  wildmenu  ==================================================={{{
+set complete=.,w,b,u,U,t,i,d    " do lots of scanning on tab completion"
 
 set wildmenu "Kommando Zeilen Vervollständigung
 "set wildignore=*.dll,*.o,*.obj,*.bak,*.exe,*.pyc,*.jpg,*.gif,*.png
@@ -105,6 +109,7 @@ set ignorecase
 "                                                                    }}}
 " ====  folding / indenting  ========================================{{{
 
+"default folding
 set foldmethod=marker
 set foldmarker={{{,}}}
 
@@ -417,7 +422,6 @@ nnoremap <leader>md :%!~/bin/Markdown.pl --html4tags <cr>
 
 "                                                                    }}}
 " ====  testing  ===================================================={{{
-nnoremap <leader>f :call FoldColumnToggle()<cr>
 function! FoldColumnToggle()
   if &foldcolumn
     setlocal foldcolumn=0
@@ -425,6 +429,8 @@ function! FoldColumnToggle()
     setlocal foldcolumn=4
   endif
 endfunction
+nnoremap <leader>f :call FoldColumnToggle()<cr>
+
 "                                                                    }}}
 " ===================================================================}}}
 " ====  abbreviations  ==============================================
@@ -508,277 +514,58 @@ endif
 " ===================================================================}}}
 " ====  plugin specific  ============================================
 " ==================================================================={{{
+execute pathogen#infect()
+" Used Plugins:
+"   General:
+"   * The-NERD-Commenter
+"   * Gundo
+nnoremap <F6> :GundoToggle<CR>
+"   * vimwiki
+"   * matchit
+"   * delimitMate
+"   * snipmate                                              <-- TODO
+"   * synctastic
+let g:syntastic_scala_checkers = []
+noremap <Leader>S :SyntasticToggleMode<CR>
+"let g:syntastic_haskell_checkers = ["hlint"]
+"   * vim-powerline
+"   Manage Files:
+"   * CtrlP
+let g:ctrlp_map = '<c-p>'
+let g:ctrlp_cmd = 'CtrlP'
+let g:ctrlp_working_path_mode = 'ra'
+nnoremap <Leader>b :CtrlPBuffer<CR>
+"   * (LustJuggle, MRU)
+" ===================================================================
+"   Haskell:
+"   * Haskell-Concal
+"   Clojure:
+"   * vim-fireplace
+"   CSV:
+"   * csv.vim
+"   HTML:
+"   * sparkup
+"   Arduino:
+"   * vim-arduino-syntax
+" ===================================================================
+"   Completion:
+"   * ultisnips + honza/vim-snippets
+" Trigger configuration. Do not use <tab> if you use https://github.com/Valloric/YouCompleteMe.
+let g:UltiSnipsExpandTrigger="<c-y>"
+let g:UltiSnipsJumpForwardTrigger="<c-b>"
+let g:UltiSnipsJumpBackwardTrigger="<c-z>"
 
-function! MyInstallAllPlugins()
-  " install vundle, if not existend
-  if !isdirectory(expand('~').'/.vim/bundle/vundle')
-    let src = 'http://github.com/gmarik/vundle.git'
-    exec '!git clone '.src.' ~/.vim/bundle/vundle'
-    au VimEnter * BundleInstall
-  endif
-endfunction
-
-if isdirectory(expand('~').'/.vim/bundle/vundle')
-  filetype off " required!
-
-  set rtp+=~/.vim/bundle/vundle/
-  call vundle#rc()
-
-  " let Vundle manage Vundle
-  " required!
-  Bundle 'gmarik/vundle'
-
-  "############################################################################
-  " My Bundles here:
-  "############################################################################
-  "general
-  Bundle 'Vimball'
-  Bundle 'The-NERD-Commenter'
-  Bundle 'sudo.vim'
-  "if 1
-    Bundle 'Gundo'
-    nnoremap <F6> :GundoToggle<CR>
-  "endif
-  Bundle 'SearchComplete'
-  Bundle 'ShowPairs'
-  Bundle 'vimwiki'
-  " move by % to matching bracket/tag/...
-  Bundle 'matchit.zip'
-  Bundle 'git://github.com/Raimondi/delimitMate.git'
-  "Bundle 'git://github.com/nathanaelkane/vim-indent-guides.git'
-  if 0
-    Bundle 'gmarik/snipmate.vim'
-    Bundle 'honza/snipmate-snippets'
-  else
-    Bundle "MarcWeber/vim-addon-mw-utils"
-    Bundle "garbas/vim-snipmate"
-    Bundle "honza/vim-snippets"
-  endif
-
-  if 1
-    Bundle 'https://github.com/scrooloose/syntastic'
-    let g:syntastic_scala_checkers = []
-    noremap <Leader>S :SyntasticToggleMode<CR>
-    "let g:syntastic_haskell_checkers = ["hlint"]
-  endif
-  Bundle 'git://github.com/Lokaltog/vim-powerline.git'
-
-  "############################################################################
-  "manage files
-  Bundle 'LustyJuggler'
-  Bundle 'mru.vim'
-  "if 1 "CtrlP
-    Bundle 'https://github.com/kien/ctrlp.vim'
-    let g:ctrlp_map = '<c-p>'
-    let g:ctrlp_cmd = 'CtrlP'
-    let g:ctrlp_working_path_mode = 'ra'
-    nnoremap <Leader>b :CtrlPBuffer<CR>
-  "endif
-  "############################################################################
-  "matlab
-  "Bundle 'git://github.com/djoshea/vim-matlab-fold.git'
-
-  "############################################################################
-  "haskell
-  Bundle 'git://github.com/vim-scripts/Haskell-Conceal.git'
-  Bundle 'git://github.com/Twinside/vim-hoogle.git'
-
-  "############################################################################
-  "csv
-  Bundle 'csv.vim'
-
-  "############################################################################
-  "html
-  Bundle 'rstacruz/sparkup', {'rtp': 'vim/'}
-  "Bundle 'vim-less'
-
-  "############################################################################
-  "arduino
-  Bundle "sudar/vim-arduino-snippets"
-  Bundle "sudar/vim-arduino-syntax"
-
-  "############################################################################
-  "colorschemes
-  "Bundle 'Solarized'
-  "Bundle 'flazz/vim-colorschemes'
-  "Bundle 'CSApprox'
-
-  "############################################################################
-  "completion
-  if 1
-    Bundle 'Shougo/neocomplcache'
-    " === neocomplcache setup ==========================================={{{
-    " Disable AutoComplPop.
-    let g:acp_enableAtStartup = 0
-    " Use neocomplcache.
-    let g:neocomplcache_enable_at_startup = 1
-    " Use smartcase.
-    let g:neocomplcache_enable_smart_case = 1
-    " Set minimum syntax keyword length.
-    let g:neocomplcache_min_syntax_length = 3
-    let g:neocomplcache_lock_buffer_name_pattern = '\*ku\*'
-    let g:neocomplcache_snippets_dir='~/.vim/bundle/vim-snippets/snippets'
-
-    " Enable heavy features.
-    " Use camel case completion.
-    "let g:neocomplcache_enable_camel_case_completion = 1
-    " Use underbar completion.
-    "let g:neocomplcache_enable_underbar_completion = 1
-
-    " Define dictionary.
-    let g:neocomplcache_dictionary_filetype_lists = {
-        \ 'default' : '',
-        \ 'vimshell' : $HOME.'/.vimshell_hist',
-        \ 'scheme' : $HOME.'/.gosh_completions'
-            \ }
-
-    " Define keyword.
-    if !exists('g:neocomplcache_keyword_patterns')
-        let g:neocomplcache_keyword_patterns = {}
-    endif
-    let g:neocomplcache_keyword_patterns['default'] = '\h\w*'
-
-    " Plugin key-mappings.
-    "inoremap <expr><C-g>     neocomplcache#undo_completion()
-    "inoremap <expr><C-l>     neocomplcache#complete_common_string()
-
-    " Recommended key-mappings.
-    " <CR>: close popup and save indent.
-    inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
-    function! s:my_cr_function()
-      return neocomplcache#smart_close_popup() . "\<CR>"
-      " For no inserting <CR> key.
-      "return pumvisible() ? neocomplcache#close_popup() : "\<CR>"
-    endfunction
-    " <TAB>: completion.
-    inoremap <expr><TAB>  pumvisible() ? "\<C-n>" : "\<TAB>"
-    " <C-h>, <BS>: close popup and delete backword char.
-    "inoremap <expr><C-h> neocomplcache#smart_close_popup()."\<C-h>"
-    "inoremap <expr><BS> neocomplcache#smart_close_popup()."\<C-h>"
-    "inoremap <expr><C-y>  neocomplcache#close_popup()
-    "inoremap <expr><C-e>  neocomplcache#cancel_popup()
-
-
-    " Enable snipMate compatibility feature.
-    let g:neosnippet#enable_snipmate_compatibility = 1
-
-    " Tell Neosnippet about the other snippets
-    let g:neosnippet#snippets_directory='~/.vim/bundle/vim-snippets/snippets'
-
-    " SuperTab like snippets behavior.
-    imap <expr><TAB> neosnippet#expandable_or_jumpable() ?
-      \ "\<Plug>(neosnippet_expand_or_jump)"
-      \: pumvisible() ? "\<C-n>" : "\<TAB>"
-    smap <expr><TAB> neosnippet#expandable_or_jumpable() ?
-      \ "\<Plug>(neosnippet_expand_or_jump)"
-      \: "\<TAB>"
-
-    " For snippet_complete marker.
-    if has('conceal')
-      "set conceallevel=2 concealcursor=i
-    endif
-    " ===================================================================}}}
-  else
-    Bundle 'AutoComplPop'
-    " === AutoComplPop setup ============================================{{{
-    function! InsertTabWrapper()
-      let col = col('.') - 1
-      if !col || getline('.')[col - 1] !~ '\k'
-        return "\<tab>"
-      else
-        return "\<c-p>"
-      endif
-    endfunction
-    inoremap <tab> <c-r>=InsertTabWrapper()<cr>
-    inoremap <s-tab> <c-n>
-    " ===================================================================}}}
-  endif
-
-  "############################################################################
-  "unsorted
-  Bundle 'XML-Folding'
-  Bundle 'tsaleh/vim-align.git'
-  Bundle 'L9'
-  if 1
-    Bundle 'https://github.com/sjl/clam.vim/'
-    nnoremap ! :Clam<space>
-    vnoremap ! :ClamVisual<space>
-  endif
-
-  filetype plugin indent on " required!
-  " not used Bundles                                                   {{{
-  "testing
-  "Bundle 'http://github.com/tpope/vim-fugitive'
-  "Bundle 'https://github.com/jpalardy/vim-slime'
-  "Bundle 'LatexParFormat'
-  "Bundle 'SuperTab'
-  "Bundle 'git://github.com/scala/scala-dist/tree/master/tool-support/src/vim.git'
-
-  "frisch aussortiert
-  "Bundle 'surround.vim'
-  "Bundle 'delete-surround-html'
-  "Bundle 'lastpos.vim'
-  "Bundle 'git://github.com/vim-scripts/LaTeX-Box.git'
-  "Bundle 'git://github.com/tclem/vim-arduino.git'
-  "if 0
-    "Bundle 'minibufexpl.vim'
-    "let g:miniBufExplMapWindowNavVim = 1
-    "let g:miniBufExplMapWindowNavArrows = 1
-    "let g:miniBufExplMapCTabSwitchBufs = 1
-    "let g:miniBufExplModSelTarget = 1
-  "endif
-  "if 0
-  "Bundle 'The-NERD-tree'
-    "noremap <silent> <C-N> :NERDTree<CR>
-    "" start NERDTree at startup
-    "" autocmd VimEnter * NERDTree
-    "" open a NERDTree automatically when vim starts up if no files were specified
-    "autocmd vimenter * if !argc() | NERDTree | endif
-  "endif
-
-  "Bundle 'xoria255.vim'
-  "Bundle 'neverland.vim--All-colorschemes-suck'
-  "Bundle 'speeddating.vim'
-  "Bundle 'snipMate'
-  "Bundle 'taglist.vim'
-  "Bundle 'FuzzyFinder'
-  "Bundle 'Buffer-Search'
-  "Bundle 'c.vim'
-  "Bundle 'vimshell-ssh'
-  "Bundle 'hexman.vim'
-  "Bundle 'AutomaticLaTexPlugin'
-  "Bundle 'SudoEdit.vim'
-  "Bundle 'Tabular'
-  "Bundle 'ProtoDef'
-  "Bundle 'unicode.vim'
-  "Bundle 'unimpaired.vim'
-  "Bundle 'endwise.vim'
-  "Bundle 'repeat.vim'
-  "Bundle 'recover.vim'
-  "Bundle 'ShowMarks'
-  "Bundle 'git.zip'
-  "Bundle 'snipmate-snippets'
-  "Bundle 'xptemplate'
-  "Bundle 'VisIncr'
-  "Bundle 'FSwitch'
-  "Bundle 'EasyGrep'
-  "Bundle 'cespare/vjde.git'
-  "Bundle 'CheckAttach.vim'
-
-  "Web
-  "Bundle 'ragtag.vim'
-  "Bundle 'vim-coffee-script'
-  "Bundle 'rails.vim'
-  "Bundle 'Haml'
-
-  "Bundle 'mirell/vim-matchit.git'
-  "Bundle 'tpope/vim-markdown.git'
-  "Bundle 'Markdown-syntax'
-  "Bundle 'vim-octopress'
-  "Bundle 'tsaleh/vim-align.git'
-  "                                                                  }}}
-
-endif
-"                                                                    }}}
+" If you want :UltiSnipsEdit to split your window.
+let g:UltiSnipsEditSplit="vertical"
+"   * YouCompleteMe
+"       needs:
+"       $ ./install.sh --clang-completer
+let g:ycm_use_ultisnips_completer = 0
+" ===================================================================
+"   Others:
+"   * Clam
+nnoremap ! :Clam<space>
+vnorema ! :ClamVisual<space>
+" ===================================================================}}}
 
 " vim:set ts=2 sw=2 sts=2 et fenc=utf-8 ff=unix foldmethod=marker foldmarker={{{,}}}:
