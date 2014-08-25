@@ -7,7 +7,7 @@
 "
 " Written by Maximilian-Huber.de
 "
-" Last Modified: Fri Aug 22, 2014  10:25
+" Last Modified: Sun Aug 24, 2014  11:59
 
 " auto reload when saving
 if has("autocmd")
@@ -196,12 +196,13 @@ colorscheme mycolorscheme
 "endif
 
 "function! ToggleColorscheme()
-"if (g:colors_name ==? "mustang")
-  "colorscheme solarized
-"else
-  "colorscheme mustang
-"endif
+  "if (g:colors_name ==? "mustang")
+    "colorscheme solarized
+  "else
+    "colorscheme mustang
+  "endif
 "endfunction
+"noremap <F12> :call ToggleColorscheme()<CR>
 
 " ====  hilight to long lines  ======================================
 if exists('+colorcolumn')
@@ -311,8 +312,6 @@ vnoremap > >gv
 nnoremap <silent> <leader>/ :nohlsearch<CR>
 
 set pastetoggle=<F11>
-
-noremap <F12> :call ToggleColorscheme()<CR>
 
 " easyer increment/decrement
 nnoremap + <C-a>
@@ -973,6 +972,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
     " ===================================================================}}}
   else
     Bundle 'AutoComplPop'
+    " === AutoComplPop setup ============================================{{{
     function! InsertTabWrapper()
       let col = col('.') - 1
       if !col || getline('.')[col - 1] !~ '\k'
@@ -983,6 +983,7 @@ if isdirectory(expand('~').'/.vim/bundle/vundle')
     endfunction
     inoremap <tab> <c-r>=InsertTabWrapper()<cr>
     inoremap <s-tab> <c-n>
+    " ===================================================================}}}
   endif
 
   "############################################################################

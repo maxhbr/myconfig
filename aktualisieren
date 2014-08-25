@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Thu Aug 21, 2014  03:43
+# Last modified: Mon Aug 25, 2014  03:31
 
 ###############################################################################
 # variables
@@ -80,8 +80,7 @@ files() {
 ~/.tmux.conf
 ~/.vimencrypt
 ~/.vimrc
-~/.vim/colors/mustang.vim
-~/.vim/colors/badwolf.vim
+~/.vim/colors/
 ~/.vim/plugin/myLastModified.vim
 ~/.vim/plugin/grep-operator.vim
 ~/.xinitrc
