@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Tue Aug 26, 2014  08:56
+# Last modified: Tue Aug 26, 2014  09:00
 
 ###############################################################################
 # variables
@@ -224,5 +224,9 @@ pushd "$FOLDER"
 git commit -a -m "automatisch aktualisiert"
 git push
 
-git submodule foreach git pull
+n=$[ 1 + $[ RANDOM % 10 ]]
+#echo $n
+if [[ "$n" -gt "4" ]]; then
+  git submodule foreach git pull
+fi
 popd
