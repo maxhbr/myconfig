@@ -5,7 +5,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Aug 26, 2014  08:51
+" Last Modified: Tue Aug 26, 2014  05:05
 
 " auto reload vimrc when saved ======================================{{{
 if has("autocmd")
@@ -211,21 +211,17 @@ else
 endif
 
 " ====  choose colorscheme  =========================================
-colorscheme mycolorscheme
-"if filereadable(expand("$VIMRUNTIME/colors/mustang.vim"))
-  "colorscheme mustang
-"elseif filereadable(expand("$HOME/.vim/colors/mustang.vim"))
-  "colorscheme mustang
+colorscheme mustang
+"if (g:colors_name ==? "mustang")
+  "function! ToggleColorscheme()
+    "if (g:colors_name ==? "mustang")
+      "colorscheme solarized
+    "else
+      "colorscheme mustang
+    "endif
+  "endfunction
+  "noremap <F12> :call ToggleColorscheme()<CR>
 "endif
-
-"function! ToggleColorscheme()
-  "if (g:colors_name ==? "mustang")
-    "colorscheme solarized
-  "else
-    "colorscheme mustang
-  "endif
-"endfunction
-"noremap <F12> :call ToggleColorscheme()<CR>
 
 " ====  hilight to long lines  ======================================
 if exists('+colorcolumn')

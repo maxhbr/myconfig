@@ -9,7 +9,7 @@ setlocal cc=80
 setlocal linebreak
 
 setlocal foldmethod=marker
-setlocal foldmarker={{{,}}}
+setlocal foldmarker=%{{{,%}}}
 
 setlocal iskeyword+=: " type /ref{fig: and prec <C-n> to autocomplete references
 setlocal iskeyword+=- " same with -
@@ -33,6 +33,12 @@ inoremap <expr>[ getline('.')[col(".")-2] =~ "\\" ? "[<C-v>u005c]<left><left>" :
 nnoremap <leader>$ viw<esc>a$<esc>hbi$<esc>lel
 
 iabbrev ... <bs>\dots
+if 1
+  iabbrev ρ \rho
+  iabbrev μ \mu
+  iabbrev π \pi
+  iabbrev λ \lambda
+end
 
 "nnoremap <leader>cl :! runlatex -pdf % > logfile 2>&1 &<CR><CR>
 "nnoremap <leader>oe :! llpp %:r.pdf > /dev/null 2>&1 &<CR><CR>
