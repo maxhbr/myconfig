@@ -22,7 +22,7 @@ my Linux Configuration on Arch Linux
 
 ## Multimedia
 - mplayer
-- cmus
+- mpd
 
 ## Image Prozessing
 - geeqie

@@ -5,7 +5,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Aug 26, 2014  08:23
+" Last Modified: Tue Aug 26, 2014  08:51
 
 " auto reload vimrc when saved ======================================{{{
 if has("autocmd")
@@ -37,8 +37,8 @@ if has("autocmd")
   augroup someAugroup
     autocmd!
     " jump to the last position when reopening a file
-    autocmd BufReadPost * if line("'\"") > 1 && line("'\"") <= line("$") 
-                          \ | exe "normal! g'\"" 
+    autocmd BufReadPost * if line("'\"") > 1 && line("'\"") <= line("$")
+                          \ | exe "normal! g'\""
                         \ | endif
     " resize splits
     autocmd VimResized * exe "normal! \<c-w>="
@@ -64,7 +64,7 @@ set magic      " For regular expressions turn magic on
 set splitbelow " set splitright
 set autochdir
 
-set restorescreen=on 
+set restorescreen=on
 
 set cpoptions+=n
 set showbreak=\ \ \ ↳
@@ -237,55 +237,6 @@ else
 endif
 
 " ===================================================================}}}
-" ====  functions  ==================================================
-" ==================================================================={{{
-
-" ====  for cleanup  ================================================{{{
-" delete all trails
-" use :call DeleteTrailing
-" or <Leader>dt
-function! DeleteTrailing()
-  exe "normal mz"
-  %s/\s\+$//ge
-  exe "normal `z"
-endfunction
-nnoremap <Leader>dt :call DeleteTrailing()
-
-" DeleteTrailing and more
-function! Cleanup()
-  call DeleteTrailing()
-  setlocal ff=unix
-  setlocal expandtab
-  retab!
-endfunction
-nnoremap <Leader>dT :call Cleanup()
-
-"                                                                    }}}
-" ====  simpel Html escapeing  ======================================{{{
-function! MyHtmlEscape()
-  silent s/ö/\&ouml;/eg
-  silent s/ä/\&auml;/eg
-  silent s/ü/\&uuml;/eg
-  silent s/Ö/\&Ouml;/eg
-  silent s/Ä/\&Auml;/eg
-  silent s/Ü/\&Uuml;/eg
-  silent s/ß/\&szlig;/eg
-endfunction
-
-"                                                                    }}}
-" ====  open files via ranger  ======================================{{{
-function! RangerChooser()
-  exec "silent !ranger --choosefile=/tmp/chosenfile " . expand("%:p:h")
-  if filereadable('/tmp/chosenfile')
-    exec 'edit ' . system('cat /tmp/chosenfile')
-    call system('rm /tmp/chosenfile')
-  endif
-  redraw!
-endfunction
-noremap ,R :call RangerChooser()<CR>
-
-"                                                                    }}}
-" ===================================================================}}}
 " ====  keymappings / input  ========================================
 " ==================================================================={{{
 if has("mouse")
@@ -430,6 +381,55 @@ nnoremap <leader>f :call FoldColumnToggle()<cr>
 
 "                                                                    }}}
 " ===================================================================}}}
+" ====  functions  ==================================================
+" ==================================================================={{{
+
+" ====  for cleanup  ================================================{{{
+" delete all trails
+" use :call DeleteTrailing
+" or <Leader>dt
+function! DeleteTrailing()
+  exe "normal mz"
+  %s/\s\+$//ge
+  exe "normal `z"
+endfunction
+nnoremap <Leader>dt :call DeleteTrailing()<cr>
+
+" DeleteTrailing and more
+function! Cleanup()
+  call DeleteTrailing()
+  setlocal ff=unix
+  setlocal expandtab
+  retab!
+endfunction
+nnoremap <Leader>dT :call Cleanup()
+
+"                                                                    }}}
+" ====  simpel Html escapeing  ======================================{{{
+function! MyHtmlEscape()
+  silent s/ö/\&ouml;/eg
+  silent s/ä/\&auml;/eg
+  silent s/ü/\&uuml;/eg
+  silent s/Ö/\&Ouml;/eg
+  silent s/Ä/\&Auml;/eg
+  silent s/Ü/\&Uuml;/eg
+  silent s/ß/\&szlig;/eg
+endfunction
+
+"                                                                    }}}
+" ====  open files via ranger  ======================================{{{
+function! RangerChooser()
+  exec "silent !ranger --choosefile=/tmp/chosenfile " . expand("%:p:h")
+  if filereadable('/tmp/chosenfile')
+    exec 'edit ' . system('cat /tmp/chosenfile')
+    call system('rm /tmp/chosenfile')
+  endif
+  redraw!
+endfunction
+noremap ,R :call RangerChooser()<CR>
+
+"                                                                    }}}
+" ===================================================================}}}
 " ====  abbreviations  ==============================================
 " ==================================================================={{{
 " overwrite those annoying commands
@@ -439,6 +439,8 @@ cnoreabbrev <expr> Q ((getcmdtype() is# ':' && getcmdline() is# 'Q')?('q'):('Q')
 " handy abbreviations
 iabbrev @@ mail@maximilian-huber.de
 iabbrev VGr Viele Grüße<cr>Maximilian
+iabbrev vlt vieleicht
+iabbrev mgl möglicherweise
 
 " correct some typos
 iabbrev adn and
@@ -574,6 +576,7 @@ let g:ycm_filetype_blacklist = {
       \ 'pandoc' : 1,
       \ 'infolog' : 1,
       \}
+let g:ycm_key_detailed_diagnostics = "<leader>Dt"
 " ===================================================================
 "   Others:
 "   * Clam
