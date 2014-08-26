@@ -5,7 +5,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Aug 26, 2014  12:51
+" Last Modified: Tue Aug 26, 2014  08:23
 
 " auto reload vimrc when saved ======================================{{{
 if has("autocmd")
@@ -555,9 +555,9 @@ nnoremap <Leader>b :CtrlPBuffer<CR>
 "   Completion:
 "   * ultisnips + honza/vim-snippets
 " Trigger configuration. Do not use <tab> if you use https://github.com/Valloric/YouCompleteMe.
-let g:UltiSnipsExpandTrigger="<c-y>"
+let g:UltiSnipsExpandTrigger="<c-b>"
 let g:UltiSnipsJumpForwardTrigger="<c-b>"
-let g:UltiSnipsJumpBackwardTrigger="<c-z>"
+"let g:UltiSnipsJumpBackwardTrigger="<c-z>"
 
 " If you want :UltiSnipsEdit to split your window.
 let g:UltiSnipsEditSplit="vertical"
