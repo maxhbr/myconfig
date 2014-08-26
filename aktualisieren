@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Tue Aug 26, 2014  09:00
+# Last modified: Tue Aug 26, 2014  09:56
 
 ###############################################################################
 # variables
@@ -222,6 +222,18 @@ echo
 
 pushd "$FOLDER"
 git commit -a -m "automatisch aktualisiert"
+
+# check, if connected #####################################################
+if ! ping -c1 cloud.github.com > /dev/null 2>&1; then
+  echo "**** not connected (ping) ****"
+  # check again ###########################################################
+  if ! wget -O - cloud.github.com > /dev/null 2>&1; then
+    echo "**** not connected (wget) ****"
+    popd
+    exit 1
+  fi
+fi
+
 git push
 
 n=$[ 1 + $[ RANDOM % 10 ]]
