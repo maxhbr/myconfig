@@ -1,6 +1,6 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Sat Jan 25, 2014  04:20
+# Last modified: Wed Aug 27, 2014  09:03
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -11,6 +11,10 @@ SECOND=1
 #BatPresent=$(acpi -b | wc -l)
 ACPresent=$(acpi -a | grep -c on-line)
 XRANDR=`xrandr`
+
+#TODO:
+#MPD_HOST="mpd@192.168.178.61"
+#mpc -h MPD_HOST --no-status pause
 
 #==============================================================================
 #===  Input arguments  ========================================================

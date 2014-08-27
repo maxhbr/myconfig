@@ -5,7 +5,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Aug 26, 2014  05:05
+" Last Modified: Wed Aug 27, 2014  02:57
 
 " auto reload vimrc when saved ======================================{{{
 if has("autocmd")
@@ -170,15 +170,6 @@ set nobackup
 " ====  spelling  ==================================================={{{
 setlocal nospell
 set spelllang=de_de,en_us
-highlight clear SpellBad
-highlight SpellBad term=standout ctermfg=1
-highlight SpellBad term=underline cterm=underline
-highlight clear SpellCap
-highlight SpellCap term=underline cterm=underline
-highlight clear SpellRare
-highlight SpellRare term=underline cterm=underline
-highlight clear SpellLocal
-highlight SpellLocal term=underline cterm=underline
 
 "                                                                    }}}
 " ===================================================================}}}
@@ -222,6 +213,17 @@ colorscheme mustang
   "endfunction
   "noremap <F12> :call ToggleColorscheme()<CR>
 "endif
+
+"Set spell hilighting
+highlight clear SpellBad
+highlight SpellBad term=standout ctermfg=1
+highlight SpellBad term=underline cterm=underline
+highlight clear SpellCap
+highlight SpellCap term=underline cterm=underline
+highlight clear SpellRare
+highlight SpellRare term=underline cterm=underline
+highlight clear SpellLocal
+highlight SpellLocal term=underline cterm=underline
 
 " ====  hilight to long lines  ======================================
 if exists('+colorcolumn')
@@ -435,7 +437,7 @@ cnoreabbrev <expr> Q ((getcmdtype() is# ':' && getcmdline() is# 'Q')?('q'):('Q')
 " handy abbreviations
 iabbrev @@ mail@maximilian-huber.de
 iabbrev VGr Viele Grüße<cr>Maximilian
-iabbrev vlt vieleicht
+iabbrev vlt vielleicht
 iabbrev mgl möglicherweise
 
 " correct some typos
@@ -517,36 +519,43 @@ endif
 
 execute pathogen#infect()
 
+" ===================================================================
 " Used Plugins:
 "   General:
 "   * The-NERD-Commenter
 "   * Gundo
 nnoremap <F6> :GundoToggle<CR>
-"   * vimwiki
 "   * matchit
 "   * delimitMate
-"   * snipmate                                              <-- TODO
 "   * synctastic
-let g:syntastic_scala_checkers = []
 noremap <Leader>S :SyntasticToggleMode<CR>
+let g:syntastic_scala_checkers = []
 "let g:syntastic_haskell_checkers = ["hlint"]
 "   * vim-powerline
+" ===================================================================
 "   Manage Files:
 "   * CtrlP
 let g:ctrlp_map = '<c-p>'
 let g:ctrlp_cmd = 'CtrlP'
 let g:ctrlp_working_path_mode = 'ra'
 nnoremap <Leader>b :CtrlPBuffer<CR>
-"   * (LustJuggle, MRU)
+nnoremap <Leader>p :CtrlPMRU<CR>
+" ===================================================================
+"   Vimwiki:
+"   * vimwiki
 " ===================================================================
 "   Haskell:
 "   * Haskell-Concal
+" ===================================================================
 "   Clojure:
 "   * vim-fireplace
+" ===================================================================
 "   CSV:
 "   * csv.vim
+" ===================================================================
 "   HTML:
 "   * sparkup
+" ===================================================================
 "   Arduino:
 "   * vim-arduino-syntax
 " ===================================================================
@@ -556,7 +565,6 @@ nnoremap <Leader>b :CtrlPBuffer<CR>
 let g:UltiSnipsExpandTrigger="<c-b>"
 let g:UltiSnipsJumpForwardTrigger="<c-b>"
 "let g:UltiSnipsJumpBackwardTrigger="<c-z>"
-
 " If you want :UltiSnipsEdit to split your window.
 let g:UltiSnipsEditSplit="vertical"
 "   * YouCompleteMe
@@ -577,7 +585,9 @@ let g:ycm_key_detailed_diagnostics = "<leader>Dt"
 "   Others:
 "   * Clam
 nnoremap ! :Clam<space>
-vnorema ! :ClamVisual<space>
+vnoremap ! :ClamVisual<space>
+" ===================================================================
+"   Testing:
 " ===================================================================}}}
 
 " vim:set ts=2 sw=2 sts=2 et fenc=utf-8 ff=unix foldmethod=marker foldmarker={{{,}}}:
