@@ -5,7 +5,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Wed Aug 27, 2014  02:57
+" Last Modified: Thu Aug 28, 2014  12:03
 
 " auto reload vimrc when saved ======================================{{{
 if has("autocmd")
@@ -214,16 +214,21 @@ colorscheme mustang
   "noremap <F12> :call ToggleColorscheme()<CR>
 "endif
 
+"tweak the colorscheme
+hi CursorLine cterm=none
+
 "Set spell hilighting
-highlight clear SpellBad
-highlight SpellBad term=standout ctermfg=1
-highlight SpellBad term=underline cterm=underline
-highlight clear SpellCap
-highlight SpellCap term=underline cterm=underline
-highlight clear SpellRare
-highlight SpellRare term=underline cterm=underline
-highlight clear SpellLocal
-highlight SpellLocal term=underline cterm=underline
+if has('spell')
+  highlight clear SpellBad
+  highlight SpellBad term=standout ctermfg=1
+  highlight SpellBad term=underline cterm=underline
+  highlight clear SpellCap
+  highlight SpellCap term=underline cterm=underline
+  highlight clear SpellRare
+  highlight SpellRare term=underline cterm=underline
+  highlight clear SpellLocal
+  highlight SpellLocal term=underline cterm=underline
+endif
 
 " ====  hilight to long lines  ======================================
 if exists('+colorcolumn')

@@ -1,6 +1,6 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Wed Aug 27, 2014  09:03
+# Last modified: Wed Aug 27, 2014  07:29
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -57,6 +57,8 @@ case "$DOCKED" in
     done
     xrandr --output $DEFAULT_OUTPUT --primary --auto $EXECUTE
 
+    rfkill unblock all &
+
     [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
     (
       [[ -f ~/.asoundrc.default ]] && cp ~/.asoundrc.default ~/.asoundrc
@@ -80,6 +82,8 @@ case "$DOCKED" in
       #[[ -f ~/.icc/23.icc ]] && xcalib ~/.icc/23.icc &
       xset dpms 99997 99998 99999 &
     fi
+
+    rfkill block all &
 
     setxkbmap -layout de,de -variant neo,nodeadkeys -option\
       -option grp:shifts_toggle -option grp_led:scroll

@@ -291,25 +291,18 @@ my_power_settings() {
 #   multimedia
 #-------------------------------------------------------------------{{{
 
-#alias myStopScreensaver="xset dpms 9997 9998 9999"
 myStopScreensaver(){
-  while true; do 
+  # needs xdotool
+  while true; do
     xdotool mousemove_relative 1 1
     xdotool mousemove_relative -- -1 -1
     sleep $((60 * 4))
   done
 }
 
-incoChrome(){ 
+incoChrome(){
   mkdir -p /tmp/badChrome
   chromium --incognito --user-data-dir="/tmp/incoChrome"
-}
-
-badChrome(){ 
-  #myStopScreensaver
-  chromium --incognito \
-    --user-agent="Mozilla/5.0 (compatible; MSIE 6.0; Windows NT 6.2)" \
-    amazon.de
 }
 
 alias mplayerampl="mplayer -af volume=10.1:0"
@@ -324,10 +317,6 @@ starWars() { telnet towel.blinkenlights.nl; }
 #rename all images
 #alias myrenameAllImages="jhead -autorot -nf%y%m%d-%f **/*.jpg"
 alias myrenameImg="jhead -autorot -nf%y%m%d-%f"
-
-#gimp() {
-  #command gimp "$@" &
-#}
 
 geeqie() {
   command geeqie "$@" &
@@ -372,7 +361,7 @@ mystartcups() {
 
 # druckt A5 Broschüren
 lprBook() {
-  mystartcups 
+  mystartcups
   [[ -f $1 ]] && {
     pdftops -paperw 420 -paperh 595 $1 - \
       | psbook -q \
@@ -393,7 +382,7 @@ alias myPdfCrop="pdfcrop --margins \"20 30 20 40\""
 myPdfpextr() {
   [[ -z "$3" ]] && {
     echo "myPdfpextr start end file"
-  } || { 
+  } || {
     gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dFirstPage=${1} \
       -dLastPage=${2} -sOutputFile=${3%.pdf}_p${1}-p${2}.pdf ${3}
   }
