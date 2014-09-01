@@ -5,17 +5,30 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Mon Sep 01, 2014  12:55
+" Last Modified: Tue Sep 02, 2014  12:18
+
+
+" initialize default settings
+let s:settings = {}
+let s:settings.InstallVundleAutomatically = 0
+let s:settings.useAirline = 1                   " 1: Airline 0: Powerline
+let s:settings.UndotreeOrGundo = 1              " 1: Undotree 0: Gundo
+let s:settings.UseVimArduino = 0
+let s:settings.YcmOrNeocomplete = 0             " 1: YCM 0: Neocomplete
+" Best Colorscheme: mustang
+" Also Good: molokai, badwolf, jellybeans...
+let s:settings.Colorscheme = "jellybeans"
 
 " auto reload vimrc when saved ======================================{{{
 if has("autocmd")
   augroup autoSourceVimrc
     autocmd!
-    autocmd bufwritepost .vimrc source %
+    autocmd bufwritepost .vimrc source % |
+      \ set ts=2 sw=2 sts=2 et fenc=utf-8 ff=unix
+      \ foldmethod=marker foldmarker={{{,}}}
   augroup END
 endif "==============================================================}}}
 
-" This must be first, because it changes other options as a side effect.
 set nocompatible
 
 " ===================================================================
@@ -110,6 +123,7 @@ set ignorecase
 "default folding
 set foldmethod=marker
 set foldmarker={{{,}}}
+"set foldlevelstart=99
 
 " indending
 set autoindent
@@ -151,9 +165,11 @@ set history=1000
 set undolevels=1000
 
 " Keep undo history across sessions, by storing in file.
-silent !mkdir ~/.vim/backups > /dev/null 2>&1
-set undodir=~/.vim/backups
-set undofile
+if exists('+undofile')
+  silent !mkdir ~/.undodir/ > /dev/null 2>&1
+  set undodir="~/.undodir/"
+  set undofile
+endif
 
 " swap
 set swapfile
@@ -177,8 +193,10 @@ set spelllang=de_de,en_us
 " ==================================================================={{{
 
 set title
+
 set cursorline
 set nocursorcolumn " hat probleme mit acp (Popup)
+
 set textwidth=0    " Don't wrap lines by default
 set nowrap
 set ruler
@@ -210,13 +228,9 @@ else
 endif
 
 " ====  choose colorscheme  =========================================
-" Best Colorscheme: mustang
-" Also Good: molokai, badwolf, ...
-if 1
-    colorscheme mustang
-    highlight ColorColumn ctermbg=233 guibg=#592929
-else
-    colorscheme molokai
+exec 'colorscheme '.s:settings.Colorscheme
+if s:settings.Colorscheme == "mustang"
+  highlight ColorColumn ctermbg=233 guibg=#592929
 endif
 
 "tweak the colorscheme
@@ -516,82 +530,181 @@ endif
 " ===================================================================}}}
 " ====  plugin specific  ============================================
 " ==================================================================={{{
-" $ ln -s $MYCONFIGDIR/vim/bundle ~/.vim/bundle
+" install vundle automatically, if not present
+if s:settings.InstallVundleAutomatically
+    if !isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
+      let src = 'http://github.com/gmarik/vundle.git'
+      exec '!git clone '.src.' ~/.vim/bundle/Vundle.vim'
+      au VimEnter * BundleInstall
+    endif
+endif
+if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
+  filetype off                 " required
 
-execute pathogen#infect()
+  set rtp+=~/.vim/bundle/Vundle.vim
+  call vundle#begin()
 
-" ===================================================================
-" Used Plugins:
-"   General:
-"   * The-NERD-Commenter
-"   * Gundo
-nnoremap <F6> :GundoToggle<CR>
-"   * matchit
-"   * delimitMate
-"   * synctastic
-noremap <Leader>S :SyntasticToggleMode<CR>
-let g:syntastic_scala_checkers = []
-"let g:syntastic_haskell_checkers = ["hlint"]
-"   * vim-powerline
-" ===================================================================
-"   Manage Files:
-"   * CtrlP
-let g:ctrlp_map = '<c-p>'
-let g:ctrlp_cmd = 'CtrlP'
-let g:ctrlp_working_path_mode = 'ra'
-nnoremap <Leader>b :CtrlPBuffer<CR>
-nnoremap <Leader>p :CtrlPMRU<CR>
-" ===================================================================
-"   Vimwiki:
-"   * vimwiki
-" ===================================================================
-"   Haskell:
-"   * Haskell-Concal
-" ===================================================================
-"   Clojure:
-"   * vim-fireplace
-" ===================================================================
-"   CSV:
-"   * csv.vim
-" ===================================================================
-"   HTML:
-"   * sparkup
-" ===================================================================
-"   Arduino:
-"   * vim-arduino-syntax
-" ===================================================================
-"   Ruby:
-"   * rails.vim
-" ===================================================================
-"   Completion:
-"   * ultisnips + honza/vim-snippets
-" Trigger configuration. Do not use <tab> if you use https://github.com/Valloric/YouCompleteMe.
-let g:UltiSnipsExpandTrigger="<c-b>"
-let g:UltiSnipsJumpForwardTrigger="<c-b>"
-"let g:UltiSnipsJumpBackwardTrigger="<c-z>"
-" If you want :UltiSnipsEdit to split your window.
-let g:UltiSnipsEditSplit="vertical"
-"   * YouCompleteMe
-"       needs:
-"       $ ./install.sh --clang-completer
-let g:ycm_use_ultisnips_completer = 1
-let g:ycm_min_num_of_chars_for_completion = 2
-let g:ycm_filetype_blacklist = {
-      \ 'tagbar' : 1,
-      \ 'qf' : 1,
-      \ 'notes' : 1,
-      \ 'unite' : 1,
-      \ 'pandoc' : 1,
-      \ 'infolog' : 1,
-      \}
-let g:ycm_key_detailed_diagnostics = "<leader>Dt"
-" ===================================================================
-"   Others:
-"   * Clam
-nnoremap ! :Clam<space>
-vnoremap ! :ClamVisual<space>
-" ===================================================================
-"   Testing:
+  " Used Plugins:
+
+  " ===================================================================
+  "   General:
+  if s:settings.UndotreeOrGundo
+    Plugin 'mbbill/undotree'
+    nnoremap <F6> :UndotreeToggle<CR>
+  else
+    Plugin 'sjl/gundo.vim'
+    nnoremap <F6> :GundoToggle<CR>
+  endif
+
+  Plugin 'vim-scripts/matchit.zip'
+
+  Plugin 'Raimondi/delimitMate'
+
+  Plugin 'scrooloose/syntastic'
+  noremap <Leader>S :SyntasticToggleMode<CR>
+  let g:syntastic_scala_checkers = []
+  "let g:syntastic_haskell_checkers = ["hlint"]
+
+  Plugin 'scrooloose/nerdcommenter'
+
+  " ===================================================================
+  "   Design:
+  if s:settings.useAirline
+    Plugin 'bling/vim-airline'
+    "let g:airline_powerline_fonts = 1
+    if 0 " tabline
+      let g:airline#extensions#tabline#enabled = 1
+      let g:airline#extensions#tabline#left_sep=' '
+      let g:airline#extensions#tabline#left_alt_sep='¦'
+    endif
+  else
+    Plugin 'Lokaltog/vim-powerline' " DEPRECATED in favor of Lokaltog/powerline.
+  endif
+
+  Plugin 'nanotech/jellybeans.vim'
+
+  " ===================================================================
+  "   Manage Files:
+  Plugin 'kien/ctrlp.vim'
+  let g:ctrlp_map = '<c-p>'
+  let g:ctrlp_cmd = 'CtrlP'
+  let g:ctrlp_working_path_mode = 'ra'
+  nnoremap <Leader>b :CtrlPBuffer<CR>
+  nnoremap <Leader>p :CtrlPMRU<CR>
+
+  " ===================================================================
+  "   Vimwiki:
+  Plugin 'vimwiki/vimwiki'
+
+  " ===================================================================
+  "   Haskell:
+  Plugin 'Twinside/vim-haskellConceal'
+
+  " ===================================================================
+  "   Clojure:
+  Plugin 'tpope/vim-fireplace'
+
+  " ===================================================================
+  "   CSV:
+  Plugin 'chrisbra/csv.vim'
+
+  " ===================================================================
+  "   HTML:
+  Plugin 'rstacruz/sparkup', {'rtp': 'vim/'}
+
+  " ===================================================================
+  "   Arduino:
+  Plugin 'sudar/vim-arduino-syntax'
+  if s:settings.UseVimArduino
+    Plugin 'tclem/vim-arduino'
+  endif
+
+  " ===================================================================
+  "   Ruby:
+  Plugin 'tpope/vim-rails'
+
+  " ===================================================================
+  "   Completion:
+  Plugin 'honza/vim-snippets'
+
+  Plugin 'SirVer/ultisnips'
+  " Trigger configuration. Do not use <tab> if you use https://github.com/Valloric/YouCompleteMe.
+  let g:UltiSnipsExpandTrigger="<c-b>"
+  let g:UltiSnipsJumpForwardTrigger="<c-b>"
+  "let g:UltiSnipsJumpBackwardTrigger="<c-z>"
+  " If you want :UltiSnipsEdit to split your window.
+  let g:UltiSnipsEditSplit="vertical"
+
+  if s:settings.YcmOrNeocomplete
+    Plugin 'Valloric/YouCompleteMe'
+    "       needs:
+    "       $ ./install.sh --clang-completer
+    let g:ycm_use_ultisnips_completer = 1
+    let g:ycm_min_num_of_chars_for_completion = 2
+    let g:ycm_filetype_blacklist = {
+          \ 'tagbar' : 1,
+          \ 'qf' : 1,
+          \ 'notes' : 1,
+          \ 'unite' : 1,
+          \ 'pandoc' : 1,
+          \ 'infolog' : 1,
+          \}
+    let g:ycm_key_detailed_diagnostics = "<leader>Dt"
+  else
+    if has('lua')
+      Plugin 'Shougo/neocomplete.vim'
+    else
+      Plugin 'Shougo/neocomplcache.vim'
+    endif
+
+    " Use neocomplete.
+    let g:neocomplete#enable_at_startup = 1
+    " Use smartcase.
+    let g:neocomplete#enable_smart_case = 1
+    " Set minimum syntax keyword length.
+    let g:neocomplete#sources#syntax#min_keyword_length = 2
+    let g:neocomplete#lock_buffer_name_pattern = '\*ku\*'
+
+    " For cursor moving in insert mode(Not recommended)
+    inoremap <expr><Left>  neocomplete#close_popup() . "\<Left>"
+    inoremap <expr><Right> neocomplete#close_popup() . "\<Right>"
+    inoremap <expr><Up>    neocomplete#close_popup() . "\<Up>"
+    inoremap <expr><Down>  neocomplete#close_popup() . "\<Down>"
+
+    " <CR>: close popup and save indent.
+    inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
+    function! s:my_cr_function()
+      return neocomplete#close_popup() . "\<CR>"
+      " For no inserting <CR> key.
+      "return pumvisible() ? neocomplete#close_popup() : "\<CR>"
+    endfunction
+    " <TAB>: completion.
+    inoremap <expr><TAB>  pumvisible() ? "\<C-n>" : "\<TAB>"
+
+    " Enable omni completion.
+    autocmd FileType css setlocal omnifunc=csscomplete#CompleteCSS
+    autocmd FileType html,markdown setlocal omnifunc=htmlcomplete#CompleteTags
+    autocmd FileType javascript setlocal omnifunc=javascriptcomplete#CompleteJS
+    autocmd FileType python setlocal omnifunc=pythoncomplete#Complete
+    autocmd FileType xml setlocal omnifunc=xmlcomplete#CompleteTags
+  endif
+
+  " ===================================================================
+  "   Others:
+  Plugin 'sjl/clam.vim'
+  nnoremap ! :Clam<space>
+  vnoremap ! :ClamVisual<space>
+
+  " ===================================================================
+  "   Testing:
+
+  " ===================================================================
+  "   Old:
+  "   * The-NERD-Commenter
+
+  call vundle#end()            " required
+  filetype plugin indent on    " required
+endif
 " ===================================================================}}}
 
 " vim:set ts=2 sw=2 sts=2 et fenc=utf-8 ff=unix foldmethod=marker foldmarker={{{,}}}:
