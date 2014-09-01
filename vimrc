@@ -5,7 +5,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Thu Aug 28, 2014  12:03
+" Last Modified: Mon Sep 01, 2014  12:55
 
 " auto reload vimrc when saved ======================================{{{
 if has("autocmd")
@@ -201,18 +201,23 @@ else
   set background=dark
 endif
 
+" ====  hilight to long lines  ======================================
+if exists('+colorcolumn')
+    set colorcolumn=80
+else
+    highlight OverLength ctermbg=red ctermfg=white guibg=#592929
+    match OverLength /\%81v.\+/
+endif
+
 " ====  choose colorscheme  =========================================
-colorscheme mustang
-"if (g:colors_name ==? "mustang")
-  "function! ToggleColorscheme()
-    "if (g:colors_name ==? "mustang")
-      "colorscheme solarized
-    "else
-      "colorscheme mustang
-    "endif
-  "endfunction
-  "noremap <F12> :call ToggleColorscheme()<CR>
-"endif
+" Best Colorscheme: mustang
+" Also Good: molokai, badwolf, ...
+if 1
+    colorscheme mustang
+    highlight ColorColumn ctermbg=233 guibg=#592929
+else
+    colorscheme molokai
+endif
 
 "tweak the colorscheme
 hi CursorLine cterm=none
@@ -228,15 +233,6 @@ if has('spell')
   highlight SpellRare term=underline cterm=underline
   highlight clear SpellLocal
   highlight SpellLocal term=underline cterm=underline
-endif
-
-" ====  hilight to long lines  ======================================
-if exists('+colorcolumn')
-    set colorcolumn=80
-    highlight ColorColumn ctermbg=233 guibg=#592929
-else
-    highlight OverLength ctermbg=red ctermfg=white guibg=#592929
-    match OverLength /\%81v.\+/
 endif
 
 " ===================================================================}}}
@@ -563,6 +559,9 @@ nnoremap <Leader>p :CtrlPMRU<CR>
 " ===================================================================
 "   Arduino:
 "   * vim-arduino-syntax
+" ===================================================================
+"   Ruby:
+"   * rails.vim
 " ===================================================================
 "   Completion:
 "   * ultisnips + honza/vim-snippets
