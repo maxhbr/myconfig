@@ -5,7 +5,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Sep 02, 2014  01:24
+" Last Modified: Tue Sep 02, 2014  01:39
 
 
 " initialize default settings
@@ -79,8 +79,15 @@ set splitbelow " set splitright
 set autochdir
 
 set lazyredraw
+set viewoptions=folds,options,cursor,unix,slash     "unix/windows compatibility
 
 set restorescreen=on
+
+
+if has('conceal')
+  set conceallevel=1
+  set listchars+=conceal:Δ
+endif
 
 " ====  wildmenu  ==================================================={{{
 set complete=.,w,b,u,U,t,i,d    " do lots of scanning on tab completion"
@@ -218,7 +225,8 @@ set stl+=%y%m%r%=
 set stl+=%-14.(%l,%c%V%)\ %P
 
 if has("gui_running")
-  set guioptions-=T  " no toolbar
+  set guioptions+=t " tear off menu items
+  set guioptions-=T " no toolbar
   set guioptions+=c " Use console messages instead of GUI dialogs
 else
   "set t_Co=256
@@ -402,14 +410,32 @@ nnoremap <leader>f :call FoldColumnToggle()<cr>
 " ====  functions  ==================================================
 " ==================================================================={{{
 
+" stolen from: https://github.com/bling/dotvim/blob/master/vimrc
+function! Preserve(command) "{{{
+  " preparation: save last search, and cursor position.
+  let _s=@/
+  let l = line(".")
+  let c = col(".")
+  " do the business:
+  execute a:command
+  " clean up: restore previous search history, and cursor position
+  let @/=_s
+  call cursor(l, c)
+endfunction "}}}
+
 " ====  for cleanup  ================================================{{{
 " delete all trails
 " use :call DeleteTrailing
 " or <Leader>dt
 function! DeleteTrailing()
-  exe "normal mz"
-  %s/\s\+$//ge
-  exe "normal `z"
+  if 0
+    exe "normal mz"
+    %s/\s\+$//ge
+    exe "normal `z"
+  else
+    "new implementation
+    call Preserve("%s/\\s\\+$//e")
+  endif
 endfunction
 nnoremap <Leader>dt :call DeleteTrailing()<cr>
 
@@ -729,11 +755,16 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   " ===================================================================
   "   Testing:
   Plugin 'terryma/vim-multiple-cursors'
+
   Plugin 'chrisbra/NrrwRgn'
+  " :NR - Open the selected region in a new narrowed window
+
+  Plugin 'tpope/vim-surround'
+
+  Plugin 'tpope/vim-eunuch'
 
   " ===================================================================
   "   Old:
-  "   * The-NERD-Commenter
 
   call vundle#end()            " required
   filetype plugin indent on    " required
