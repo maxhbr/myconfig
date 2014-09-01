@@ -5,7 +5,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Sep 02, 2014  01:49
+" Last Modified: Tue Sep 02, 2014  01:52
 
 
 " initialize default settings
@@ -32,11 +32,11 @@ if has("autocmd")
   augroup END
 endif "==============================================================}}}
 
-set nocompatible
-
 " ===================================================================
 " ====  general  ====================================================
 " ==================================================================={{{
+
+set nocompatible
 
 if has("syntax")
   syntax on
@@ -563,13 +563,13 @@ endif
 " ===================================================================}}}
 " ====  plugin specific  ============================================
 " ==================================================================={{{
-" install vundle automatically, if not present
 if s:settings.InstallVundleAutomatically " ========================={{{
-    if !isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
-      let src = 'http://github.com/gmarik/vundle.git'
-      exec '!git clone '.src.' ~/.vim/bundle/Vundle.vim'
-      au VimEnter * BundleInstall
-    endif
+  " install vundle automatically, if not present
+  if !isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
+    let src = 'http://github.com/gmarik/vundle.git'
+    exec '!git clone '.src.' ~/.vim/bundle/Vundle.vim'
+    au VimEnter * BundleInstall
+  endif
 endif " ============================================================}}}
 if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   filetype off                 " required
