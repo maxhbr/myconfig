@@ -5,19 +5,20 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Sep 02, 2014  12:18
+" Last Modified: Tue Sep 02, 2014  01:24
 
 
 " initialize default settings
 let s:settings = {}
-let s:settings.InstallVundleAutomatically = 0
-let s:settings.useAirline = 1                   " 1: Airline 0: Powerline
-let s:settings.UndotreeOrGundo = 1              " 1: Undotree 0: Gundo
-let s:settings.UseVimArduino = 0
-let s:settings.YcmOrNeocomplete = 0             " 1: YCM 0: Neocomplete
 " Best Colorscheme: mustang
 " Also Good: molokai, badwolf, jellybeans...
-let s:settings.Colorscheme = "jellybeans"
+let s:settings.Colorscheme="jellybeans"
+let s:settings.InstallVundleAutomatically=0
+let s:settings.useAirline=1                           " 1: Airline 0: Powerline
+let s:settings.UndotreeOrGundo=1                      " 1: Undotree 0: Gundo
+let s:settings.YcmOrNeocomplete=0                     " 1: YCM 0: Neocomplete
+  let s:settings.YcmAlternativeKeybindings=1
+let s:settings.UseVimArduino=0
 
 " auto reload vimrc when saved ======================================{{{
 if has("autocmd")
@@ -77,10 +78,9 @@ set magic      " For regular expressions turn magic on
 set splitbelow " set splitright
 set autochdir
 
-set restorescreen=on
+set lazyredraw
 
-set cpoptions+=n
-set showbreak=\ \ \ ↳
+set restorescreen=on
 
 " ====  wildmenu  ==================================================={{{
 set complete=.,w,b,u,U,t,i,d    " do lots of scanning on tab completion"
@@ -109,6 +109,7 @@ set scrolljump=5
 set scrolloff=5         "Start scrolling when we're x lines away from margins
 set sidescrolloff=10
 set sidescroll=1
+set display+=lastline
 "                                                                    }}}
 " ====  search  ====================================================={{{
 
@@ -135,7 +136,12 @@ set smarttab
 
 set list
 set listchars=tab:>.,trail:…,extends:#,nbsp:. " …°⎼
+"set listchars=tab:│\ ,trail:•,extends:❯,precedes:❮
 set fillchars=vert:┃,diff:⎼,fold:⎼
+
+set cpoptions+=n
+set showbreak=\ \ \ ↳
+
 "                                                                    }}}
 " ====  performance  ================================================{{{
 
@@ -161,14 +167,14 @@ set nu
 "                                                                    }}}
 " ====  backup / undo  =============================================={{{
 
-set history=1000
-set undolevels=1000
+set history=3000
+set undolevels=3000
 
 " Keep undo history across sessions, by storing in file.
 if exists('+undofile')
-  silent !mkdir ~/.undodir/ > /dev/null 2>&1
-  set undodir="~/.undodir/"
+  execute "silent !mkdir " . expand("~/.undodir/") . " > /dev/null 2>&1"
   set undofile
+  let &undodir=expand("~/.undodir/")
 endif
 
 " swap
@@ -256,8 +262,7 @@ if has("mouse")
   set mouse=a " Enable mouse usage (all modes) alternativ nvc
   set mousehide
 endif
-set backspace=2
-" set backspace=indent,eol,start
+set backspace=indent,eol,start
 
 nnoremap ; :
 let mapleader=","
@@ -558,7 +563,11 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   Plugin 'vim-scripts/matchit.zip'
 
-  Plugin 'Raimondi/delimitMate'
+  if 0
+    Plugin 'Raimondi/delimitMate'
+  else
+    Plugin 'jiangmiao/auto-pairs'
+  endif
 
   Plugin 'scrooloose/syntastic'
   noremap <Leader>S :SyntasticToggleMode<CR>
@@ -580,8 +589,6 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   else
     Plugin 'Lokaltog/vim-powerline' " DEPRECATED in favor of Lokaltog/powerline.
   endif
-
-  Plugin 'nanotech/jellybeans.vim'
 
   " ===================================================================
   "   Manage Files:
@@ -624,18 +631,18 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   Plugin 'tpope/vim-rails'
 
   " ===================================================================
-  "   Completion:
+  "   Completion: ====================================================={{{
   Plugin 'honza/vim-snippets'
 
-  Plugin 'SirVer/ultisnips'
-  " Trigger configuration. Do not use <tab> if you use https://github.com/Valloric/YouCompleteMe.
-  let g:UltiSnipsExpandTrigger="<c-b>"
-  let g:UltiSnipsJumpForwardTrigger="<c-b>"
-  "let g:UltiSnipsJumpBackwardTrigger="<c-z>"
-  " If you want :UltiSnipsEdit to split your window.
-  let g:UltiSnipsEditSplit="vertical"
-
   if s:settings.YcmOrNeocomplete
+    Plugin 'SirVer/ultisnips'
+    " Trigger configuration. Do not use <tab> if you use https://github.com/Valloric/YouCompleteMe.
+    let g:UltiSnipsExpandTrigger="<c-b>"
+    let g:UltiSnipsJumpForwardTrigger="<c-b>"
+    "let g:UltiSnipsJumpBackwardTrigger="<c-z>"
+    " If you want :UltiSnipsEdit to split your window.
+    let g:UltiSnipsEditSplit="vertical"
+
     Plugin 'Valloric/YouCompleteMe'
     "       needs:
     "       $ ./install.sh --clang-completer
@@ -650,6 +657,14 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
           \ 'infolog' : 1,
           \}
     let g:ycm_key_detailed_diagnostics = "<leader>Dt"
+    let g:ycm_complete_in_comments_and_strings=1
+
+    if s:settings.YcmAlternativeKeybindings
+      let g:ycm_key_list_select_completion=['<C-n>', '<Down>']
+      let g:ycm_key_list_previous_completion=['<C-p>', '<Up>']
+      let g:UltiSnipsExpandTrigger="<tab>"
+      let g:UltiSnipsJumpForwardTrigger="<tab>"
+    endif
   else
     if has('lua')
       Plugin 'Shougo/neocomplete.vim'
@@ -687,8 +702,24 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     autocmd FileType javascript setlocal omnifunc=javascriptcomplete#CompleteJS
     autocmd FileType python setlocal omnifunc=pythoncomplete#Complete
     autocmd FileType xml setlocal omnifunc=xmlcomplete#CompleteTags
+
+
+    Plugin 'Shougo/neosnippet-snippets'
+    Plugin 'Shougo/neosnippet.vim' "{{{
+      let g:neosnippet#snippets_directory='~/.vim/bundle/vim-snippets/snippets'
+      let g:neosnippet#enable_snipmate_compatibility=1
+
+      imap <expr><TAB> neosnippet#expandable_or_jumpable() ?
+            \ "\<Plug>(neosnippet_expand_or_jump)" :
+            \ (pumvisible() ? "\<C-n>" : "\<TAB>")
+      smap <expr><TAB> neosnippet#expandable_or_jumpable() ?
+            \ "\<Plug>(neosnippet_expand_or_jump)" : "\<TAB>"
+      imap <expr><S-TAB> pumvisible() ? "\<C-p>" : ""
+      smap <expr><S-TAB> pumvisible() ? "\<C-p>" : ""
+    "}}}
   endif
 
+  "}}}
   " ===================================================================
   "   Others:
   Plugin 'sjl/clam.vim'
@@ -697,6 +728,8 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   " ===================================================================
   "   Testing:
+  Plugin 'terryma/vim-multiple-cursors'
+  Plugin 'chrisbra/NrrwRgn'
 
   " ===================================================================
   "   Old:
