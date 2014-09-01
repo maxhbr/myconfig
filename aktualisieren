@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Tue Aug 26, 2014  09:56
+# Last modified: Mon Sep 01, 2014  11:03
 
 ###############################################################################
 # variables
@@ -235,10 +235,3 @@ if ! ping -c1 cloud.github.com > /dev/null 2>&1; then
 fi
 
 git push
-
-n=$[ 1 + $[ RANDOM % 10 ]]
-#echo $n
-if [[ "$n" -gt "4" ]]; then
-  git submodule foreach git pull
-fi
-popd
