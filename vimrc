@@ -5,7 +5,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Sep 02, 2014  01:39
+" Last Modified: Tue Sep 02, 2014  01:49
 
 
 " initialize default settings
@@ -17,8 +17,10 @@ let s:settings.InstallVundleAutomatically=0
 let s:settings.useAirline=1                           " 1: Airline 0: Powerline
 let s:settings.UndotreeOrGundo=1                      " 1: Undotree 0: Gundo
 let s:settings.YcmOrNeocomplete=0                     " 1: YCM 0: Neocomplete
-  let s:settings.YcmAlternativeKeybindings=1
+  let s:settings.YcmAlternativeKeybindings=1          " only if YCM is chosen
+" ====  more settings  =============================================={{{
 let s:settings.UseVimArduino=0
+" ===================================================================}}}
 
 " auto reload vimrc when saved ======================================{{{
 if has("autocmd")
@@ -562,13 +564,13 @@ endif
 " ====  plugin specific  ============================================
 " ==================================================================={{{
 " install vundle automatically, if not present
-if s:settings.InstallVundleAutomatically
+if s:settings.InstallVundleAutomatically " ========================={{{
     if !isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
       let src = 'http://github.com/gmarik/vundle.git'
       exec '!git clone '.src.' ~/.vim/bundle/Vundle.vim'
       au VimEnter * BundleInstall
     endif
-endif
+endif " ============================================================}}}
 if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   filetype off                 " required
 
@@ -589,11 +591,7 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   Plugin 'vim-scripts/matchit.zip'
 
-  if 0
-    Plugin 'Raimondi/delimitMate'
-  else
-    Plugin 'jiangmiao/auto-pairs'
-  endif
+  Plugin 'jiangmiao/auto-pairs'
 
   Plugin 'scrooloose/syntastic'
   noremap <Leader>S :SyntasticToggleMode<CR>
