@@ -5,7 +5,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Sep 02, 2014  01:52
+" Last Modified: Tue Sep 02, 2014  09:51
 
 
 " initialize default settings
@@ -20,6 +20,7 @@ let s:settings.YcmOrNeocomplete=0                     " 1: YCM 0: Neocomplete
   let s:settings.YcmAlternativeKeybindings=1          " only if YCM is chosen
 " ====  more settings  =============================================={{{
 let s:settings.UseVimArduino=0
+let s:settings.useConcealEverywhere=0
 " ===================================================================}}}
 
 " auto reload vimrc when saved ======================================{{{
@@ -33,9 +34,218 @@ if has("autocmd")
 endif "==============================================================}}}
 
 " ===================================================================
+" ====  plugins  ====================================================
+" ==================================================================={{{
+if s:settings.InstallVundleAutomatically " ========================={{{
+  " install vundle automatically, if not present
+  if !isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
+    let src = 'http://github.com/gmarik/vundle.git'
+    exec '!git clone '.src.' ~/.vim/bundle/Vundle.vim'
+    au VimEnter * BundleInstall
+  endif
+endif " ============================================================}}}
+if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
+  filetype off                 " required
+
+  set rtp+=~/.vim/bundle/Vundle.vim
+  call vundle#begin()
+
+  " Used Plugins:
+  if !isdirectory(expand('~').'/.vim/ftplugin')
+    Plugin 'maximilianhuber/myconfig', {'rtp': 'vim/'}
+  endif
+
+  " ===================================================================
+  "   General:
+  if s:settings.UndotreeOrGundo
+    Plugin 'mbbill/undotree'
+    nnoremap <F6> :UndotreeToggle<CR>
+  else
+    Plugin 'sjl/gundo.vim'
+    nnoremap <F6> :GundoToggle<CR>
+  endif
+
+  Plugin 'vim-scripts/matchit.zip'
+
+  Plugin 'jiangmiao/auto-pairs'
+
+  Plugin 'scrooloose/syntastic'
+  noremap <Leader>S :SyntasticToggleMode<CR>
+  let g:syntastic_scala_checkers = []
+  "let g:syntastic_haskell_checkers = ["hlint"]
+
+  Plugin 'scrooloose/nerdcommenter'
+
+  " ===================================================================
+  "   Design:
+  if s:settings.useAirline
+    Plugin 'bling/vim-airline'
+    "let g:airline_powerline_fonts = 1
+    if 0 " tabline
+      let g:airline#extensions#tabline#enabled = 1
+      let g:airline#extensions#tabline#left_sep=' '
+      let g:airline#extensions#tabline#left_alt_sep='¦'
+    endif
+  else
+    Plugin 'Lokaltog/vim-powerline' " DEPRECATED in favor of Lokaltog/powerline.
+  endif
+
+  " ===================================================================
+  "   Manage Files:
+  Plugin 'kien/ctrlp.vim'
+  let g:ctrlp_map = '<c-p>'
+  let g:ctrlp_cmd = 'CtrlP'
+  let g:ctrlp_working_path_mode = 'ra'
+  nnoremap <Leader>b :CtrlPBuffer<CR>
+  nnoremap <Leader>p :CtrlPMRU<CR>
+
+  " ===================================================================
+  "   Vimwiki:
+  Plugin 'vimwiki/vimwiki'
+
+  " ===================================================================
+  "   Haskell:
+  Plugin 'Twinside/vim-haskellConceal'
+
+  " ===================================================================
+  "   Clojure:
+  Plugin 'tpope/vim-fireplace'
+
+  " ===================================================================
+  "   CSV:
+  Plugin 'chrisbra/csv.vim'
+
+  " ===================================================================
+  "   HTML:
+  Plugin 'rstacruz/sparkup', {'rtp': 'vim/'}
+
+  " ===================================================================
+  "   Arduino:
+  Plugin 'sudar/vim-arduino-syntax'
+  if s:settings.UseVimArduino
+    Plugin 'tclem/vim-arduino'
+  endif
+
+  " ===================================================================
+  "   Ruby:
+  Plugin 'tpope/vim-rails'
+
+  " ===================================================================
+  "   Completion: ====================================================={{{
+  Plugin 'honza/vim-snippets'
+
+  if s:settings.YcmOrNeocomplete
+    Plugin 'SirVer/ultisnips'
+    " Trigger configuration. Do not use <tab> if you use https://github.com/Valloric/YouCompleteMe.
+    let g:UltiSnipsExpandTrigger="<c-b>"
+    let g:UltiSnipsJumpForwardTrigger="<c-b>"
+    "let g:UltiSnipsJumpBackwardTrigger="<c-z>"
+    " If you want :UltiSnipsEdit to split your window.
+    let g:UltiSnipsEditSplit="vertical"
+
+    Plugin 'Valloric/YouCompleteMe'
+    "       needs:
+    "       $ ./install.sh --clang-completer
+    let g:ycm_use_ultisnips_completer = 1
+    let g:ycm_min_num_of_chars_for_completion = 2
+    let g:ycm_filetype_blacklist = {
+          \ 'tagbar' : 1,
+          \ 'qf' : 1,
+          \ 'notes' : 1,
+          \ 'unite' : 1,
+          \ 'pandoc' : 1,
+          \ 'infolog' : 1,
+          \}
+    let g:ycm_key_detailed_diagnostics = "<leader>Dt"
+    let g:ycm_complete_in_comments_and_strings=1
+
+    if s:settings.YcmAlternativeKeybindings
+      let g:ycm_key_list_select_completion=['<C-n>', '<Down>']
+      let g:ycm_key_list_previous_completion=['<C-p>', '<Up>']
+      let g:UltiSnipsExpandTrigger="<tab>"
+      let g:UltiSnipsJumpForwardTrigger="<tab>"
+    endif
+  else
+    if has('lua')
+      Plugin 'Shougo/neocomplete.vim'
+    else
+      Plugin 'Shougo/neocomplcache.vim'
+    endif
+
+    " Use neocomplete.
+    let g:neocomplete#enable_at_startup = 1
+    " Use smartcase.
+    let g:neocomplete#enable_smart_case = 1
+    " Set minimum syntax keyword length.
+    let g:neocomplete#sources#syntax#min_keyword_length = 2
+    let g:neocomplete#lock_buffer_name_pattern = '\*ku\*'
+
+    " For cursor moving in insert mode(Not recommended)
+    inoremap <expr><Left>  neocomplete#close_popup() . "\<Left>"
+    inoremap <expr><Right> neocomplete#close_popup() . "\<Right>"
+    inoremap <expr><Up>    neocomplete#close_popup() . "\<Up>"
+    inoremap <expr><Down>  neocomplete#close_popup() . "\<Down>"
+
+    " <CR>: close popup and save indent.
+    inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
+    function! s:my_cr_function()
+      return neocomplete#close_popup() . "\<CR>"
+      " For no inserting <CR> key.
+      "return pumvisible() ? neocomplete#close_popup() : "\<CR>"
+    endfunction
+    " <TAB>: completion.
+    inoremap <expr><TAB>  pumvisible() ? "\<C-n>" : "\<TAB>"
+
+    " Enable omni completion.
+    autocmd FileType css setlocal omnifunc=csscomplete#CompleteCSS
+    autocmd FileType html,markdown setlocal omnifunc=htmlcomplete#CompleteTags
+    autocmd FileType javascript setlocal omnifunc=javascriptcomplete#CompleteJS
+    autocmd FileType python setlocal omnifunc=pythoncomplete#Complete
+    autocmd FileType xml setlocal omnifunc=xmlcomplete#CompleteTags
+
+
+    Plugin 'Shougo/neosnippet-snippets'
+    Plugin 'Shougo/neosnippet.vim' "{{{
+      let g:neosnippet#snippets_directory='~/.vim/bundle/vim-snippets/snippets'
+      let g:neosnippet#enable_snipmate_compatibility=1
+
+      imap <expr><TAB> neosnippet#expandable_or_jumpable() ?
+            \ "\<Plug>(neosnippet_expand_or_jump)" :
+            \ (pumvisible() ? "\<C-n>" : "\<TAB>")
+      smap <expr><TAB> neosnippet#expandable_or_jumpable() ?
+            \ "\<Plug>(neosnippet_expand_or_jump)" : "\<TAB>"
+      imap <expr><S-TAB> pumvisible() ? "\<C-p>" : ""
+      smap <expr><S-TAB> pumvisible() ? "\<C-p>" : ""
+    "}}}
+  endif
+
+  "}}}
+  " ===================================================================
+  "   Others:
+  Plugin 'sjl/clam.vim'
+  nnoremap ! :Clam<space>
+  vnoremap ! :ClamVisual<space>
+
+  " ===================================================================
+  "   Testing:
+  Plugin 'terryma/vim-multiple-cursors'
+
+  Plugin 'chrisbra/NrrwRgn'
+  " :NR - Open the selected region in a new narrowed window
+
+  Plugin 'tpope/vim-surround'
+
+  Plugin 'tpope/vim-eunuch'
+
+  " ===================================================================
+  "   Old:
+
+  call vundle#end()            " required
+  filetype plugin indent on    " required
+endif
+" ===================================================================}}}
 " ====  general  ====================================================
 " ==================================================================={{{
-
 set nocompatible
 
 if has("syntax")
@@ -86,9 +296,11 @@ set viewoptions=folds,options,cursor,unix,slash     "unix/windows compatibility
 set restorescreen=on
 
 
-if has('conceal')
-  set conceallevel=1
-  set listchars+=conceal:Δ
+if s:settings.useConcealEverywhere
+  if has('conceal')
+    set conceallevel=1
+    set listchars+=conceal:Δ
+  endif
 endif
 
 " ====  wildmenu  ==================================================={{{
@@ -560,213 +772,6 @@ if has("autocmd")
   augroup END
 endif
 "                                                                    }}}
-" ===================================================================}}}
-" ====  plugin specific  ============================================
-" ==================================================================={{{
-if s:settings.InstallVundleAutomatically " ========================={{{
-  " install vundle automatically, if not present
-  if !isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
-    let src = 'http://github.com/gmarik/vundle.git'
-    exec '!git clone '.src.' ~/.vim/bundle/Vundle.vim'
-    au VimEnter * BundleInstall
-  endif
-endif " ============================================================}}}
-if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
-  filetype off                 " required
-
-  set rtp+=~/.vim/bundle/Vundle.vim
-  call vundle#begin()
-
-  " Used Plugins:
-
-  " ===================================================================
-  "   General:
-  if s:settings.UndotreeOrGundo
-    Plugin 'mbbill/undotree'
-    nnoremap <F6> :UndotreeToggle<CR>
-  else
-    Plugin 'sjl/gundo.vim'
-    nnoremap <F6> :GundoToggle<CR>
-  endif
-
-  Plugin 'vim-scripts/matchit.zip'
-
-  Plugin 'jiangmiao/auto-pairs'
-
-  Plugin 'scrooloose/syntastic'
-  noremap <Leader>S :SyntasticToggleMode<CR>
-  let g:syntastic_scala_checkers = []
-  "let g:syntastic_haskell_checkers = ["hlint"]
-
-  Plugin 'scrooloose/nerdcommenter'
-
-  " ===================================================================
-  "   Design:
-  if s:settings.useAirline
-    Plugin 'bling/vim-airline'
-    "let g:airline_powerline_fonts = 1
-    if 0 " tabline
-      let g:airline#extensions#tabline#enabled = 1
-      let g:airline#extensions#tabline#left_sep=' '
-      let g:airline#extensions#tabline#left_alt_sep='¦'
-    endif
-  else
-    Plugin 'Lokaltog/vim-powerline' " DEPRECATED in favor of Lokaltog/powerline.
-  endif
-
-  " ===================================================================
-  "   Manage Files:
-  Plugin 'kien/ctrlp.vim'
-  let g:ctrlp_map = '<c-p>'
-  let g:ctrlp_cmd = 'CtrlP'
-  let g:ctrlp_working_path_mode = 'ra'
-  nnoremap <Leader>b :CtrlPBuffer<CR>
-  nnoremap <Leader>p :CtrlPMRU<CR>
-
-  " ===================================================================
-  "   Vimwiki:
-  Plugin 'vimwiki/vimwiki'
-
-  " ===================================================================
-  "   Haskell:
-  Plugin 'Twinside/vim-haskellConceal'
-
-  " ===================================================================
-  "   Clojure:
-  Plugin 'tpope/vim-fireplace'
-
-  " ===================================================================
-  "   CSV:
-  Plugin 'chrisbra/csv.vim'
-
-  " ===================================================================
-  "   HTML:
-  Plugin 'rstacruz/sparkup', {'rtp': 'vim/'}
-
-  " ===================================================================
-  "   Arduino:
-  Plugin 'sudar/vim-arduino-syntax'
-  if s:settings.UseVimArduino
-    Plugin 'tclem/vim-arduino'
-  endif
-
-  " ===================================================================
-  "   Ruby:
-  Plugin 'tpope/vim-rails'
-
-  " ===================================================================
-  "   Completion: ====================================================={{{
-  Plugin 'honza/vim-snippets'
-
-  if s:settings.YcmOrNeocomplete
-    Plugin 'SirVer/ultisnips'
-    " Trigger configuration. Do not use <tab> if you use https://github.com/Valloric/YouCompleteMe.
-    let g:UltiSnipsExpandTrigger="<c-b>"
-    let g:UltiSnipsJumpForwardTrigger="<c-b>"
-    "let g:UltiSnipsJumpBackwardTrigger="<c-z>"
-    " If you want :UltiSnipsEdit to split your window.
-    let g:UltiSnipsEditSplit="vertical"
-
-    Plugin 'Valloric/YouCompleteMe'
-    "       needs:
-    "       $ ./install.sh --clang-completer
-    let g:ycm_use_ultisnips_completer = 1
-    let g:ycm_min_num_of_chars_for_completion = 2
-    let g:ycm_filetype_blacklist = {
-          \ 'tagbar' : 1,
-          \ 'qf' : 1,
-          \ 'notes' : 1,
-          \ 'unite' : 1,
-          \ 'pandoc' : 1,
-          \ 'infolog' : 1,
-          \}
-    let g:ycm_key_detailed_diagnostics = "<leader>Dt"
-    let g:ycm_complete_in_comments_and_strings=1
-
-    if s:settings.YcmAlternativeKeybindings
-      let g:ycm_key_list_select_completion=['<C-n>', '<Down>']
-      let g:ycm_key_list_previous_completion=['<C-p>', '<Up>']
-      let g:UltiSnipsExpandTrigger="<tab>"
-      let g:UltiSnipsJumpForwardTrigger="<tab>"
-    endif
-  else
-    if has('lua')
-      Plugin 'Shougo/neocomplete.vim'
-    else
-      Plugin 'Shougo/neocomplcache.vim'
-    endif
-
-    " Use neocomplete.
-    let g:neocomplete#enable_at_startup = 1
-    " Use smartcase.
-    let g:neocomplete#enable_smart_case = 1
-    " Set minimum syntax keyword length.
-    let g:neocomplete#sources#syntax#min_keyword_length = 2
-    let g:neocomplete#lock_buffer_name_pattern = '\*ku\*'
-
-    " For cursor moving in insert mode(Not recommended)
-    inoremap <expr><Left>  neocomplete#close_popup() . "\<Left>"
-    inoremap <expr><Right> neocomplete#close_popup() . "\<Right>"
-    inoremap <expr><Up>    neocomplete#close_popup() . "\<Up>"
-    inoremap <expr><Down>  neocomplete#close_popup() . "\<Down>"
-
-    " <CR>: close popup and save indent.
-    inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
-    function! s:my_cr_function()
-      return neocomplete#close_popup() . "\<CR>"
-      " For no inserting <CR> key.
-      "return pumvisible() ? neocomplete#close_popup() : "\<CR>"
-    endfunction
-    " <TAB>: completion.
-    inoremap <expr><TAB>  pumvisible() ? "\<C-n>" : "\<TAB>"
-
-    " Enable omni completion.
-    autocmd FileType css setlocal omnifunc=csscomplete#CompleteCSS
-    autocmd FileType html,markdown setlocal omnifunc=htmlcomplete#CompleteTags
-    autocmd FileType javascript setlocal omnifunc=javascriptcomplete#CompleteJS
-    autocmd FileType python setlocal omnifunc=pythoncomplete#Complete
-    autocmd FileType xml setlocal omnifunc=xmlcomplete#CompleteTags
-
-
-    Plugin 'Shougo/neosnippet-snippets'
-    Plugin 'Shougo/neosnippet.vim' "{{{
-      let g:neosnippet#snippets_directory='~/.vim/bundle/vim-snippets/snippets'
-      let g:neosnippet#enable_snipmate_compatibility=1
-
-      imap <expr><TAB> neosnippet#expandable_or_jumpable() ?
-            \ "\<Plug>(neosnippet_expand_or_jump)" :
-            \ (pumvisible() ? "\<C-n>" : "\<TAB>")
-      smap <expr><TAB> neosnippet#expandable_or_jumpable() ?
-            \ "\<Plug>(neosnippet_expand_or_jump)" : "\<TAB>"
-      imap <expr><S-TAB> pumvisible() ? "\<C-p>" : ""
-      smap <expr><S-TAB> pumvisible() ? "\<C-p>" : ""
-    "}}}
-  endif
-
-  "}}}
-  " ===================================================================
-  "   Others:
-  Plugin 'sjl/clam.vim'
-  nnoremap ! :Clam<space>
-  vnoremap ! :ClamVisual<space>
-
-  " ===================================================================
-  "   Testing:
-  Plugin 'terryma/vim-multiple-cursors'
-
-  Plugin 'chrisbra/NrrwRgn'
-  " :NR - Open the selected region in a new narrowed window
-
-  Plugin 'tpope/vim-surround'
-
-  Plugin 'tpope/vim-eunuch'
-
-  " ===================================================================
-  "   Old:
-
-  call vundle#end()            " required
-  filetype plugin indent on    " required
-endif
 " ===================================================================}}}
 
 " vim:set ts=2 sw=2 sts=2 et fenc=utf-8 ff=unix foldmethod=marker foldmarker={{{,}}}:
