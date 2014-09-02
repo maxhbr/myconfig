@@ -4,7 +4,7 @@
 "     https://github.com/maximilianhuber/myconfig
 "
 " Try it out:
-"     simply call the script `bin/testVimrc.sh` in my config repo. It will
+"     simply call the script `tasteMyVimrc.sh` in my config repo. It will
 "     generate a folder `/tmp/vimtest/` and install my vimrc completely in this
 "     folder
 "
@@ -13,13 +13,13 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Sep 02, 2014  11:51
+" Last Modified: Tue Sep 02, 2014  07:24
 
 
 " initialize default settings
 let s:settings = {}
-" Best Colorscheme: mustang
-" Also Good: molokai, badwolf, jellybeans...
+" Good Colorscheme: mustang, jellybeans
+" Also Good: molokai, badwolf...
 let s:settings.Colorscheme="jellybeans"
 let s:settings.InstallVundleAutomatically=1
 let s:settings.useAirline=1                           " 1: Airline 0: Powerline
@@ -98,6 +98,13 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   else
     Plugin 'Lokaltog/vim-powerline' " DEPRECATED in favor of Lokaltog/powerline.
   endif
+
+  if s:settings.Colorscheme == "jellybeans"
+    Plugin 'nanotech/jellybeans.vim'
+  elseif s:settings.Colorscheme == "mustang"
+    Plugin 'croaker/mustang-vim'
+  endif
+
 
   " ===================================================================
   "   Manage Files:
@@ -711,6 +718,7 @@ iabbrev mgl möglicherweise
 
 " correct some typos
 iabbrev adn and
+iabbrev Kapittel Kapitel
 
 " ===================================================================}}}
 " ====  filetype specific  ==========================================

@@ -1,11 +1,11 @@
 #!/bin/sh
 #
-# This script will generate a folder `/tmp/vimtest/` and install my vimrc
-# completely in this folder.
-# 
+# This script will generate a folder `/tmp/vimtest/` and install my
+# vim-environment completely in this folder.
+#
 # Written by Maximilian-Huber.de
 #
-# Last Modified: Tue Sep 02, 2014  11:59
+# Last Modified: Tue Sep 02, 2014  07:26
 if [ ! -d /tmp/vimtest/myconfig ]; then
   # create and cd to test folder
   mkdir -p /tmp/vimtest/.vim && pushd /tmp/vimtest/
@@ -19,9 +19,10 @@ if [ ! -d /tmp/vimtest/myconfig ]; then
   git clone https://github.com/gmarik/Vundle.vim.git /tmp/vimtest/.vim/bundle/Vundle.vim
   # install all plugins:
   HOME='/tmp/vimtest' vim +BundleInstall +qall
+  popd
   alias vimtest="HOME='/tmp/vimtest' vim"
 fi
 # run vim with my vimrc
 HOME='/tmp/vimtest' vim
-#echo "run this script again, to start vim again"
-#echo "or call `vimtest`"
+
+echo "run this script again, to start vim again"

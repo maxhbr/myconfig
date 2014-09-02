@@ -88,7 +88,6 @@ myinstall "${FOLDER}bin/remove_spaces.sh" "/home/hubi/bin/remove_spaces.sh" 711 
 myinstall "${FOLDER}bin/rip_gapless.sh" "/home/hubi/bin/rip_gapless.sh" 700 hubi users
 myinstall "${FOLDER}bin/runNL.sh" "/home/hubi/bin/runNL.sh" 700 hubi users
 myinstall "${FOLDER}bin/stolen/peat" "/home/hubi/bin/stolen/peat" 700 hubi users
-myinstall "${FOLDER}bin/testVimrc.sh" "/home/hubi/bin/testVimrc.sh" 700 hubi users
 myinstall "${FOLDER}etc/X11/xorg.conf.d/20-intel.conf" "/etc/X11/xorg.conf.d/20-intel.conf" 644 root root
 myinstall "${FOLDER}etc/X11/xorg.conf.d/20-keyboard.conf" "/etc/X11/xorg.conf.d/20-keyboard.conf" 644 root root
 myinstall "${FOLDER}etc/fstab" "/etc/fstab" 644 root root
