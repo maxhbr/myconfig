@@ -4,19 +4,16 @@
 "     https://github.com/maximilianhuber/myconfig
 "
 " Try it out:
-" # create and cd to test folder
-"     $ mkdir -p /tmp/vimtest && cd /tmp/vimtest
-" # clone full configuration
-"     $ git clone https://github.com/maximilianhuber/myconfig myconfig
-" # run vim with my vimrc, it will clone vundle and install all plugins
-"     $ HOME=`pwd` vim -u myconfig/vimrc
+"     simply call the script `bin/testVimrc.sh` in my config repo. It will
+"     generate a folder `/tmp/vimtest/` and install my vimrc completely in this
+"     folder
 "
 " Written by Maximilian-Huber.de
 "
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Sep 02, 2014  11:34
+" Last Modified: Tue Sep 02, 2014  11:51
 
 
 " initialize default settings
@@ -38,9 +35,7 @@ let s:settings.useConcealEverywhere=0
 if has("autocmd")
   augroup autoSourceVimrc
     autocmd!
-    autocmd bufwritepost .vimrc source % |
-      \ set ts=2 sw=2 sts=2 et fenc=utf-8 ff=unix
-      \ foldmethod=marker foldmarker={{{,}}}
+    autocmd bufwritepost .vimrc source % | set ts=2 sw=2 sts=2 et fenc=utf-8 ff=unix foldmethod=marker foldmarker={{{,}}}
   augroup END
 endif "==============================================================}}}
 
