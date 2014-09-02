@@ -1,11 +1,22 @@
 " ~/.vimrc
 "
+" The rest of my vim config can be foundat github:
+"     https://github.com/maximilianhuber/myconfig
+"
+" Try it out:
+" # create and cd to test folder
+"     $ mkdir -p /tmp/vimtest && cd /tmp/vimtest
+" # clone full configuration
+"     $ git clone https://github.com/maximilianhuber/myconfig myconfig
+" # run vim with my vimrc, it will clone vundle and install all plugins
+"     $ HOME=`pwd` vim -u myconfig/vimrc
+"
 " Written by Maximilian-Huber.de
 "
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Sep 02, 2014  09:51
+" Last Modified: Tue Sep 02, 2014  11:34
 
 
 " initialize default settings
@@ -13,7 +24,7 @@ let s:settings = {}
 " Best Colorscheme: mustang
 " Also Good: molokai, badwolf, jellybeans...
 let s:settings.Colorscheme="jellybeans"
-let s:settings.InstallVundleAutomatically=0
+let s:settings.InstallVundleAutomatically=1
 let s:settings.useAirline=1                           " 1: Airline 0: Powerline
 let s:settings.UndotreeOrGundo=1                      " 1: Undotree 0: Gundo
 let s:settings.YcmOrNeocomplete=0                     " 1: YCM 0: Neocomplete
@@ -50,11 +61,14 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   set rtp+=~/.vim/bundle/Vundle.vim
   call vundle#begin()
 
-  " Used Plugins:
+  " download the rest of my config with vundle, if no ~/ftplugin folder is
+  " present
+  " TODO: find better test
   if !isdirectory(expand('~').'/.vim/ftplugin')
     Plugin 'maximilianhuber/myconfig', {'rtp': 'vim/'}
   endif
 
+  " Used Plugins:
   " ===================================================================
   "   General:
   if s:settings.UndotreeOrGundo
