@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Wed Sep 03, 2014  02:50
+" Last Modified: Wed Sep 03, 2014  02:57
 
 
 " ===================================================================
@@ -31,6 +31,7 @@ let s:settings.YcmOrNeocomplete=0                  " 1: YCM      0: Neocomplete
 " ====  more settings  =============================================={{{
 let s:settings.UseVimArduino=0
 let s:settings.SupportClojure=1
+let s:settings.SupportPerl=0
 let s:settings.TestPlugins=1
 let s:settings.useConcealEverywhere=0
 " ===================================================================}}}
@@ -109,7 +110,6 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     Plugin 'croaker/mustang-vim'
   endif
 
-
   " ===================================================================
   "   Manage Files:
   Plugin 'kien/ctrlp.vim'
@@ -118,39 +118,6 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   let g:ctrlp_working_path_mode = 'ra'
   nnoremap <Leader>b :CtrlPBuffer<CR>
   nnoremap <Leader>p :CtrlPMRU<CR>
-
-  " ===================================================================
-  "   Vimwiki:
-  Plugin 'vimwiki/vimwiki'
-
-  " ===================================================================
-  "   Haskell:
-  Plugin 'Twinside/vim-haskellConceal'
-
-  " ===================================================================
-  "   Clojure:
-  if s:settings.SupportClojure
-    Plugin 'tpope/vim-fireplace'
-  endif
-
-  " ===================================================================
-  "   CSV:
-  Plugin 'chrisbra/csv.vim'
-
-  " ===================================================================
-  "   HTML:
-  Plugin 'rstacruz/sparkup', {'rtp': 'vim/'}
-
-  " ===================================================================
-  "   Arduino:
-  Plugin 'sudar/vim-arduino-syntax'
-  if s:settings.UseVimArduino
-    Plugin 'tclem/vim-arduino'
-  endif
-
-  " ===================================================================
-  "   Ruby:
-  Plugin 'tpope/vim-rails'
 
   " ===================================================================
   "   Completion: ====================================================={{{
@@ -240,12 +207,14 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     inoremap <expr><TAB>  pumvisible() ? "\<C-n>" : "\<TAB>"
 
     " Enable omni completion.
-    autocmd FileType css setlocal omnifunc=csscomplete#CompleteCSS
-    autocmd FileType html,markdown setlocal omnifunc=htmlcomplete#CompleteTags
-    autocmd FileType javascript setlocal omnifunc=javascriptcomplete#CompleteJS
-    autocmd FileType python setlocal omnifunc=pythoncomplete#Complete
-    autocmd FileType xml setlocal omnifunc=xmlcomplete#CompleteTags
-
+    augroup neoOmicActivations
+      autocmd!
+      autocmd FileType css           setlocal omnifunc=csscomplete#CompleteCSS
+      autocmd FileType html,markdown setlocal omnifunc=htmlcomplete#CompleteTags
+      autocmd FileType javascript    setlocal omnifunc=javascriptcomplete#CompleteJS
+      autocmd FileType python        setlocal omnifunc=pythoncomplete#Complete
+      autocmd FileType xml           setlocal omnifunc=xmlcomplete#CompleteTags
+    augroup END
 
     Plugin 'Shougo/neosnippet-snippets'
     Plugin 'Shougo/neosnippet.vim' "{{{
@@ -261,6 +230,61 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
       smap <expr><S-TAB> pumvisible() ? "\<C-p>" : ""
     "}}}
   endif
+
+  " ===================================================================
+  "   Vimwiki:
+  Plugin 'vimwiki/vimwiki'
+
+  " ===================================================================
+  "   Haskell:
+  Plugin 'Twinside/vim-haskellConceal'
+
+  " ===================================================================
+  "   Clojure:
+  if s:settings.SupportClojure
+    Plugin 'tpope/vim-fireplace'
+  endif
+
+  " ===================================================================
+  "   CSV:
+  Plugin 'chrisbra/csv.vim'
+
+  " ===================================================================
+  "   HTML:
+  Plugin 'rstacruz/sparkup', {'rtp': 'vim/'}
+
+  " ===================================================================
+  "   Arduino:
+  Plugin 'sudar/vim-arduino-syntax'
+  if s:settings.UseVimArduino
+    Plugin 'tclem/vim-arduino'
+  endif
+
+  " ===================================================================
+  "   Ruby:
+  Plugin 'tpope/vim-rails'
+
+  " ===================================================================
+  "   Perl:
+  if s:settings.SupportPerl
+    Plugin 'c9s/perlomni.vim' " {{{
+
+    if s:settings.YcmOrNeocomplete == 0
+      if has('lua')
+        if !exists('g:neocomplete#sources#omni#input_patterns')
+          let g:neocomplete#sources#omni#input_patterns = {}
+        endif
+        let g:neocomplete#sources#omni#input_patterns.perl = '\h\w*->\h\w*\|\h\w*::'
+      else
+        if !exists('g:neocomplcache_force_omni_patterns')
+          let g:neocomplcache_force_omni_patterns = {}
+        endif
+        let g:neocomplcache_force_omni_patterns.perl = '\h\w*->\h\w*\|\h\w*::'
+      endif
+    endif
+    " }}}
+  endif
+
 
   "}}}
   " ===================================================================
