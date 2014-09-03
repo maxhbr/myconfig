@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Sep 02, 2014  07:24
+" Last Modified: Mi Sep 03, 2014  02:24
 
 
 " initialize default settings
@@ -182,26 +182,40 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
       let g:UltiSnipsJumpForwardTrigger="<tab>"
     endif
   else
+    let g:acp_enableAtStartup = 0
     if has('lua')
       Plugin 'Shougo/neocomplete.vim'
+                             e
+      " Use neocomplcache
+      let g:neocomplete#enable_at_startup = 1
+      " Use smartcase.
+      let g:neocomplete#enable_smart_case = 1
+      " Set minimum syntax keyword length.
+      let g:neocomplete#sources#syntax#min_keyword_length = 2
+      let g:neocomplete#lock_buffer_name_pattern = '\*ku\*'
+
+      " For cursor moving in insert mode(Not recommended)
+      inoremap <expr><Left>  neocomplete#close_popup() . "\<Left>"
+      inoremap <expr><Right> neocomplete#close_popup() . "\<Right>"
+      inoremap <expr><Up>    neocomplete#close_popup() . "\<Up>"
+      inoremap <expr><Down>  neocomplete#close_popup() . "\<Down>"
     else
       Plugin 'Shougo/neocomplcache.vim'
+
+      " Use neocomplcache.
+      let g:neocomplcache_enable_at_startup = 1
+      " Use smartcase.
+      let g:neocomplcache_enable_smart_case = 1
+      " Set minimum syntax keyword length.
+      let g:neocomplcache_min_syntax_length = 2
+      let g:neocomplcache_lock_buffer_name_pattern = '\*ku\*'
+
+      " For cursor moving in insert mode(Not recommended)
+      inoremap <expr><Left>  neocomplcache#close_popup() . "\<Left>"
+      inoremap <expr><Right> neocomplcache#close_popup() . "\<Right>"
+      inoremap <expr><Up>    neocomplcache#close_popup() . "\<Up>"
+      inoremap <expr><Down>  neocomplcache#close_popup() . "\<Down>"
     endif
-
-    " Use neocomplete.
-    let g:neocomplete#enable_at_startup = 1
-    " Use smartcase.
-    let g:neocomplete#enable_smart_case = 1
-    " Set minimum syntax keyword length.
-    let g:neocomplete#sources#syntax#min_keyword_length = 2
-    let g:neocomplete#lock_buffer_name_pattern = '\*ku\*'
-
-    " For cursor moving in insert mode(Not recommended)
-    inoremap <expr><Left>  neocomplete#close_popup() . "\<Left>"
-    inoremap <expr><Right> neocomplete#close_popup() . "\<Right>"
-    inoremap <expr><Up>    neocomplete#close_popup() . "\<Up>"
-    inoremap <expr><Down>  neocomplete#close_popup() . "\<Down>"
-
     " <CR>: close popup and save indent.
     inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
     function! s:my_cr_function()
