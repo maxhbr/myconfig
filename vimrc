@@ -13,21 +13,25 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Mi Sep 03, 2014  02:24
+" Last Modified: Wed Sep 03, 2014  02:50
 
 
-" initialize default settings
+" ===================================================================
+" ====  initialize default settings  ================================
+" ===================================================================
 let s:settings = {}
 " Good Colorscheme: mustang, jellybeans
 " Also Good: molokai, badwolf...
 let s:settings.Colorscheme="jellybeans"
 let s:settings.InstallVundleAutomatically=1
-let s:settings.useAirline=1                           " 1: Airline 0: Powerline
-let s:settings.UndotreeOrGundo=1                      " 1: Undotree 0: Gundo
-let s:settings.YcmOrNeocomplete=0                     " 1: YCM 0: Neocomplete
-  let s:settings.YcmAlternativeKeybindings=1          " only if YCM is chosen
+let s:settings.useAirline=1                        " 1: Airline  0: Powerline
+let s:settings.UndotreeOrGundo=1                   " 1: Undotree 0: Gundo
+let s:settings.YcmOrNeocomplete=0                  " 1: YCM      0: Neocomplete
+  let s:settings.YcmAlternativeKeybindings=1       " only if YCM is chosen
 " ====  more settings  =============================================={{{
 let s:settings.UseVimArduino=0
+let s:settings.SupportClojure=1
+let s:settings.TestPlugins=1
 let s:settings.useConcealEverywhere=0
 " ===================================================================}}}
 
@@ -125,7 +129,9 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   " ===================================================================
   "   Clojure:
-  Plugin 'tpope/vim-fireplace'
+  if s:settings.SupportClojure
+    Plugin 'tpope/vim-fireplace'
+  endif
 
   " ===================================================================
   "   CSV:
@@ -182,47 +188,54 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
       let g:UltiSnipsJumpForwardTrigger="<tab>"
     endif
   else
-    let g:acp_enableAtStartup = 0
     if has('lua')
-      Plugin 'Shougo/neocomplete.vim'
-                             e
-      " Use neocomplcache
-      let g:neocomplete#enable_at_startup = 1
-      " Use smartcase.
-      let g:neocomplete#enable_smart_case = 1
-      " Set minimum syntax keyword length.
-      let g:neocomplete#sources#syntax#min_keyword_length = 2
-      let g:neocomplete#lock_buffer_name_pattern = '\*ku\*'
+      Plugin 'Shougo/neocomplete.vim' " {{{
+        " Use neocomplcache
+        let g:neocomplete#enable_at_startup = 1
+        " Use smartcase.
+        let g:neocomplete#enable_smart_case = 1
+        " Set minimum syntax keyword length.
+        let g:neocomplete#sources#syntax#min_keyword_length = 2
+        let g:neocomplete#lock_buffer_name_pattern = '\*ku\*'
 
-      " For cursor moving in insert mode(Not recommended)
-      inoremap <expr><Left>  neocomplete#close_popup() . "\<Left>"
-      inoremap <expr><Right> neocomplete#close_popup() . "\<Right>"
-      inoremap <expr><Up>    neocomplete#close_popup() . "\<Up>"
-      inoremap <expr><Down>  neocomplete#close_popup() . "\<Down>"
+        " For cursor moving in insert mode(Not recommended)
+        inoremap <expr><Left>  neocomplete#close_popup() . "\<Left>"
+        inoremap <expr><Right> neocomplete#close_popup() . "\<Right>"
+        inoremap <expr><Up>    neocomplete#close_popup() . "\<Up>"
+        inoremap <expr><Down>  neocomplete#close_popup() . "\<Down>"
+
+        function! s:my_cr_function()
+          return neocomplete#close_popup() . "\<CR>"
+          " For no inserting <CR> key.
+          "return pumvisible() ? neocomplete#close_popup() : "\<CR>"
+        endfunction
+      " }}}
     else
-      Plugin 'Shougo/neocomplcache.vim'
+      Plugin 'Shougo/neocomplcache.vim' " {{{
+        " Use neocomplcache.
+        let g:neocomplcache_enable_at_startup = 1
+        " Use smartcase.
+        let g:neocomplcache_enable_smart_case = 1
+        " Set minimum syntax keyword length.
+        let g:neocomplcache_min_syntax_length = 2
+        let g:neocomplcache_lock_buffer_name_pattern = '\*ku\*'
 
-      " Use neocomplcache.
-      let g:neocomplcache_enable_at_startup = 1
-      " Use smartcase.
-      let g:neocomplcache_enable_smart_case = 1
-      " Set minimum syntax keyword length.
-      let g:neocomplcache_min_syntax_length = 2
-      let g:neocomplcache_lock_buffer_name_pattern = '\*ku\*'
+        " For cursor moving in insert mode(Not recommended)
+        inoremap <expr><Left>  neocomplcache#close_popup() . "\<Left>"
+        inoremap <expr><Right> neocomplcache#close_popup() . "\<Right>"
+        inoremap <expr><Up>    neocomplcache#close_popup() . "\<Up>"
+        inoremap <expr><Down>  neocomplcache#close_popup() . "\<Down>"
 
-      " For cursor moving in insert mode(Not recommended)
-      inoremap <expr><Left>  neocomplcache#close_popup() . "\<Left>"
-      inoremap <expr><Right> neocomplcache#close_popup() . "\<Right>"
-      inoremap <expr><Up>    neocomplcache#close_popup() . "\<Up>"
-      inoremap <expr><Down>  neocomplcache#close_popup() . "\<Down>"
+        function! s:my_cr_function()
+          return neocomplcache#smart_close_popup() . "\<CR>"
+          " For no inserting <CR> key.
+          "return pumvisible() ? neocomplete#close_popup() : "\<CR>"
+        endfunction
+      " }}}
     endif
+    let g:acp_enableAtStartup = 0
     " <CR>: close popup and save indent.
     inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
-    function! s:my_cr_function()
-      return neocomplete#close_popup() . "\<CR>"
-      " For no inserting <CR> key.
-      "return pumvisible() ? neocomplete#close_popup() : "\<CR>"
-    endfunction
     " <TAB>: completion.
     inoremap <expr><TAB>  pumvisible() ? "\<C-n>" : "\<TAB>"
 
@@ -258,17 +271,18 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   " ===================================================================
   "   Testing:
-  Plugin 'terryma/vim-multiple-cursors'
+  if s:settings.TestPlugins
+    Plugin 'terryma/vim-multiple-cursors'
 
-  Plugin 'chrisbra/NrrwRgn'
-  " :NR - Open the selected region in a new narrowed window
+    Plugin 'chrisbra/NrrwRgn'
+    " :NR - Open the selected region in a new narrowed window
 
-  Plugin 'tpope/vim-surround'
+    Plugin 'tpope/vim-surround'
 
-  Plugin 'tpope/vim-eunuch'
+    Plugin 'tpope/vim-eunuch'
+  endif
 
   " ===================================================================
-  "   Old:
 
   call vundle#end()            " required
   filetype plugin indent on    " required
@@ -485,7 +499,7 @@ else
     match OverLength /\%81v.\+/
 endif
 
-" ====  choose colorscheme  =========================================
+" ====  apply colorscheme  ==========================================
 exec 'colorscheme '.s:settings.Colorscheme
 if s:settings.Colorscheme == "mustang"
   highlight ColorColumn ctermbg=233 guibg=#592929
