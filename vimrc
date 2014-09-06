@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Wed Sep 03, 2014  02:57
+" Last Modified: Sat Sep 06, 2014  11:17
 
 
 " ===================================================================
@@ -22,11 +22,12 @@
 let s:settings = {}
 " Good Colorscheme: mustang, jellybeans
 " Also Good: molokai, badwolf...
+"let s:settings.Colorscheme="jellybeans"
 let s:settings.Colorscheme="jellybeans"
 let s:settings.InstallVundleAutomatically=1
 let s:settings.useAirline=1                        " 1: Airline  0: Powerline
 let s:settings.UndotreeOrGundo=1                   " 1: Undotree 0: Gundo
-let s:settings.YcmOrNeocomplete=0                  " 1: YCM      0: Neocomplete
+let s:settings.YcmOrNeocomplete=1                  " 1: YCM      0: Neocomplete
   let s:settings.YcmAlternativeKeybindings=1       " only if YCM is chosen
 " ====  more settings  =============================================={{{
 let s:settings.UseVimArduino=0
@@ -124,37 +125,40 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   Plugin 'honza/vim-snippets'
 
   if s:settings.YcmOrNeocomplete
-    Plugin 'SirVer/ultisnips'
-    " Trigger configuration. Do not use <tab> if you use https://github.com/Valloric/YouCompleteMe.
-    let g:UltiSnipsExpandTrigger="<c-b>"
-    let g:UltiSnipsJumpForwardTrigger="<c-b>"
-    "let g:UltiSnipsJumpBackwardTrigger="<c-z>"
-    " If you want :UltiSnipsEdit to split your window.
-    let g:UltiSnipsEditSplit="vertical"
+    Plugin 'SirVer/ultisnips' "{{{
+      " Trigger configuration. Do not use <tab> if you use YCM.
+      let g:UltiSnipsExpandTrigger="<c-b>"
+      let g:UltiSnipsJumpForwardTrigger="<c-b>"
+      "let g:UltiSnipsJumpBackwardTrigger="<c-z>"
+      " If you want :UltiSnipsEdit to split your window.
+      let g:UltiSnipsEditSplit="vertical"
+    "}}}
 
-    Plugin 'Valloric/YouCompleteMe'
-    "       needs:
-    "       $ ./install.sh --clang-completer
-    let g:ycm_use_ultisnips_completer = 1
-    let g:ycm_min_num_of_chars_for_completion = 2
-    let g:ycm_filetype_blacklist = {
-          \ 'tagbar' : 1,
-          \ 'qf' : 1,
-          \ 'notes' : 1,
-          \ 'unite' : 1,
-          \ 'pandoc' : 1,
-          \ 'infolog' : 1,
-          \}
-    let g:ycm_key_detailed_diagnostics = "<leader>Dt"
-    let g:ycm_complete_in_comments_and_strings=1
+    Plugin 'Valloric/YouCompleteMe' "{{{
+      "       needs:
+      "       $ ./install.sh --clang-completer
+      let g:ycm_use_ultisnips_completer = 1
+      let g:ycm_min_num_of_chars_for_completion = 2
+      let g:ycm_filetype_blacklist = {
+            \ 'tagbar' : 1,
+            \ 'qf' : 1,
+            \ 'notes' : 1,
+            \ 'unite' : 1,
+            \ 'pandoc' : 1,
+            \ 'infolog' : 1,
+            \}
+      let g:ycm_key_detailed_diagnostics = "<leader>Dt"
+      let g:ycm_complete_in_comments_and_strings=1
 
-    if s:settings.YcmAlternativeKeybindings
-      let g:ycm_key_list_select_completion=['<C-n>', '<Down>']
-      let g:ycm_key_list_previous_completion=['<C-p>', '<Up>']
-      let g:UltiSnipsExpandTrigger="<tab>"
-      let g:UltiSnipsJumpForwardTrigger="<tab>"
-    endif
+      if s:settings.YcmAlternativeKeybindings
+        let g:ycm_key_list_select_completion=['<C-n>', '<c-b>', '<Down>']
+        let g:ycm_key_list_previous_completion=['<C-p>', '<Up>']
+        let g:UltiSnipsExpandTrigger="<tab>"
+        let g:UltiSnipsJumpForwardTrigger="<tab>"
+      endif
+    "}}}
   else
+    " neocomplete / neocomplcache and neosnippet {{{
     if has('lua')
       Plugin 'Shougo/neocomplete.vim' " {{{
         " Use neocomplcache
@@ -198,6 +202,7 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
           " For no inserting <CR> key.
           "return pumvisible() ? neocomplete#close_popup() : "\<CR>"
         endfunction
+      " }}}
       " }}}
     endif
     let g:acp_enableAtStartup = 0
@@ -511,7 +516,7 @@ if has("gui_running")
   set guioptions-=T " no toolbar
   set guioptions+=c " Use console messages instead of GUI dialogs
 else
-  "set t_Co=256
+  set t_Co=256
   set background=dark
 endif
 

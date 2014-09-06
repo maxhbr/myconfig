@@ -466,6 +466,7 @@ have pacman && {
   have apt-get && {
     alias aptupd="sudo apt-get update && sudo apt-get upgrade"
     alias aptin="sudo apt-get install"
+    alias aptre="sudo apt-get remove"
     alias aptse="apt-cache search"
   }
 }

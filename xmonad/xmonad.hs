@@ -16,67 +16,94 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Fri Aug 15, 2014  11:17
+-- Last modified: Sat Sep 06, 2014  05:04
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
 -- Imports:
 --{{{
-import Data.Monoid
---import Data.Ratio ((%))
-import Control.Monad
-import System.Exit ( exitWith, ExitCode( ExitSuccess ) )
-import System.IO ( hPutStrLn )
-import XMonad
-import Graphics.X11.ExtraTypes.XF86()
+import           Data.Monoid
+import           Control.Monad
+import           Control.Applicative ((<$>))
+import           System.Exit ( exitSuccess )
+import           System.IO ( hPutStrLn )
+import           XMonad
+import           Graphics.X11.ExtraTypes.XF86()
 
-import XMonad.Prompt ( defaultXPConfig )
-import XMonad.Prompt.Shell ( shellPrompt )
+-- XMonad.Prompt... {{{
+import           XMonad.Prompt ( defaultXPConfig )
+import           XMonad.Prompt.Shell ( shellPrompt )
+--}}}
 
-import XMonad.Hooks.DynamicLog ( dynamicLogWithPP,xmobarPP, PP(..), defaultPP,
-    xmobarColor, wrap )
-import XMonad.Hooks.EwmhDesktops ( fullscreenEventHook )
-import XMonad.Hooks.ManageDocks ( avoidStrutsOn, manageDocks,
-    ToggleStruts(..) )
-import XMonad.Hooks.ManageHelpers ( doFullFloat, doCenterFloat )
-import XMonad.Hooks.UrgencyHook ( withUrgencyHook, NoUrgencyHook(..) )
-import XMonad.Hooks.SetWMName
+-- XMonad.Hooks... {{{
+import           XMonad.Hooks.DynamicLog ( dynamicLogWithPP
+                                         , xmobarPP , defaultPP
+                                         , PP(..)
+                                         , xmobarColor
+                                         , wrap )
+import           XMonad.Hooks.EwmhDesktops ( fullscreenEventHook )
+import           XMonad.Hooks.ManageDocks ( avoidStrutsOn
+                                          , manageDocks
+                                          , ToggleStruts(..) )
+import           XMonad.Hooks.ManageHelpers ( doFullFloat
+                                            , doCenterFloat )
+import           XMonad.Hooks.UrgencyHook ( withUrgencyHook
+                                          , NoUrgencyHook(..) )
+import           XMonad.Hooks.SetWMName
+--}}}
 
-import XMonad.Util.NamedScratchpad ( NamedScratchpad(..), customFloating,
-    nonFloating, namedScratchpadAction, namedScratchpadFilterOutWorkspace,
-    namedScratchpadManageHook )
-import XMonad.Util.Run ( spawnPipe )
-import XMonad.Util.Types ( Direction2D(..) )
+-- XMonad.Util...{{{
+import           XMonad.Util.NamedScratchpad ( NamedScratchpad(..)
+                                             , customFloating , nonFloating
+                                             , namedScratchpadAction
+                                             , namedScratchpadFilterOutWorkspace
+                                             , namedScratchpadManageHook )
+import           XMonad.Util.Run ( spawnPipe )
+import           XMonad.Util.Types ( Direction2D(..) )
+--}}}
 
-import XMonad.Actions.CycleWS ( nextWS , prevWS , shiftToNext , shiftToPrev,
-    nextScreen , prevScreen , shiftNextScreen , shiftPrevScreen , moveTo ,
-    Direction1D(..) , WSType( NonEmptyWS ) , skipTags )
-import XMonad.Actions.UpdatePointer ( updatePointer,
-    PointerPosition ( TowardsCentre ) )
-import XMonad.Actions.GridSelect
+-- XMonad.Actions... {{{
+import           XMonad.Actions.CycleWS ( nextWS, prevWS
+                                        , shiftToNext, shiftToPrev
+                                        , nextScreen, prevScreen
+                                        , shiftNextScreen, shiftPrevScreen
+                                        , moveTo
+                                        , Direction1D(..)
+                                        , WSType( NonEmptyWS )
+                                        , skipTags )
+import           XMonad.Actions.UpdatePointer ( updatePointer
+                                              , PointerPosition (TowardsCentre))
+import           XMonad.Actions.GridSelect
+--}}}
 
-import XMonad.Layout.BoringWindows( boringAuto, focusDown )
---import XMonad.Layout.IM ( Property(..), withIM )
-import XMonad.Layout.LayoutCombinators  ( (*||*) ) --hiding ( (|||) )
---import XMonad.Layout.Magnifier ( magnifier )
-import XMonad.Layout.Named ( named )
-import XMonad.Layout.NoBorders ( smartBorders )
-import XMonad.Layout.Minimize
-import XMonad.Layout.PerWorkspace ( onWorkspace )
-import XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall),
-    MirrorResize( MirrorShrink, MirrorExpand ) )
-import XMonad.Layout.Simplest ( Simplest(Simplest) )
-import XMonad.Layout.SubLayouts ( subLayout, pullGroup,
-    GroupMsg( MergeAll, UnMerge ) )
-import XMonad.Layout.Tabbed ( addTabs, shrinkText, tabbedBottom, defaultTheme,
-    Theme(..) )
-import XMonad.Layout.WindowNavigation ( configurableNavigation, navigateColor,
-    Navigate(Move))
+-- XMonad.Layout... {{{
+import           XMonad.Layout.BoringWindows( boringAuto
+                                            , focusDown )
+import           XMonad.Layout.LayoutCombinators  ( (*||*) )
+import           XMonad.Layout.Named ( named )
+import           XMonad.Layout.NoBorders ( smartBorders )
+import           XMonad.Layout.Minimize
+import           XMonad.Layout.PerWorkspace ( onWorkspace )
+import           XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall)
+                                             , MirrorResize ( MirrorShrink
+                                                            , MirrorExpand ) )
+import           XMonad.Layout.Simplest ( Simplest(Simplest) )
+import           XMonad.Layout.SubLayouts ( subLayout
+                                          , pullGroup
+                                          , GroupMsg( MergeAll, UnMerge ) )
+import           XMonad.Layout.Tabbed ( addTabs
+                                      , shrinkText
+                                      , tabbedBottom
+                                      , defaultTheme
+                                      , Theme(..) )
+import           XMonad.Layout.WindowNavigation ( configurableNavigation
+                                                , navigateColor
+                                                , Navigate(Move))
+-- }}}
 
 import qualified Data.Map                    as M
 import qualified XMonad.StackSet             as W
 import qualified XMonad.Util.ExtensibleState as XS
-
 
 --}}}
 ------------------------------------------------------------------------
@@ -150,7 +177,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     -- Restart xmonad
     , ((modm,                xK_q    ), spawn "xmonad --recompile; xmonad --restart")
     -- Quit xmonad
-    , ((modm .|. shiftMask, xK_q     ), io (exitWith ExitSuccess))
+    , ((modm .|. shiftMask, xK_q     ), io exitSuccess)
     ] --}}}
     ++
     [ --Layout --{{{
@@ -284,13 +311,13 @@ toggleSkip skips = do
 --{{{
 myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList
     -- mod-button1, Set the window to floating mode and move by dragging
-    [ ((modm, button1), (\w -> focus w >> mouseMoveWindow w
-                                       >> windows W.shiftMaster))
+    [ ((modm, button1), \w -> focus w >> mouseMoveWindow w
+                                       >> windows W.shiftMaster)
     -- mod-button2, Raise the window to the top of the stack
-    , ((modm, button2), (\w -> focus w >> windows W.shiftMaster))
+    , ((modm, button2), \w -> focus w >> windows W.shiftMaster)
     -- mod-button3, Set the window to floating mode and resize by dragging
-    , ((modm, button3), (\w -> focus w >> mouseResizeWindow w
-                                       >> windows W.shiftMaster))
+    , ((modm, button3), \w -> focus w >> mouseResizeWindow w
+                                       >> windows W.shiftMaster)
     -- you may also bind events to the mouse scroll wheel (button4 and button5)
     ]
 --}}}
@@ -307,7 +334,7 @@ myLayout = avoidStrutsOn[U] $
     onWorkspace "5" (dtb ||| full) $
     onWorkspace "6" (dtb ||| full) $
     onWorkspace "7" (dtb ||| full) $
-    onWorkspace "web" (full ||| tiled) $
+    onWorkspace "web" (full ||| tiled)
     (tiled ||| full ||| dtb )
     where
         tiled   = named " " $
@@ -316,8 +343,7 @@ myLayout = avoidStrutsOn[U] $
             subLayout [] Simplest $
             ResizableTall nmaster delta ratio []
         full    = named "=" $
-            minimize $
-            Full
+            minimize Full
         dtb     = named "%" $
             minimize $
             tabbedBottom shrinkText myTab *||* tiled
@@ -457,8 +483,8 @@ myConfig xmproc = withUrgencyHook NoUrgencyHook $
         , logHook            = dynamicLogWithPP xmobarPP
             { ppOutput  = hPutStrLn xmproc
             , ppCurrent = xmobarColor "#ee9a00" "" . wrap "<" ">"
-            , ppSort    = fmap (.namedScratchpadFilterOutWorkspace)
-                $ ppSort defaultPP
+            , ppSort    = (. namedScratchpadFilterOutWorkspace) <$>
+                ppSort defaultPP
             , ppTitle   = (" " ++) . xmobarColor "#ee9a00" ""
             , ppVisible = xmobarColor "#ee9a00" ""
             } >> updatePointer (TowardsCentre 0.2 0.2)

@@ -33,6 +33,7 @@ inoremap <expr>[ getline('.')[col(".")-2] =~ "\\" ? "[<C-v>u005c]<left><left>" :
 nnoremap <leader>$ viw<esc>a$<esc>hbi$<esc>lel
 
 iabbrev ... <bs>\dots
+iabbrev ,,, <bs>,\dots,
 if 1 " iabbrev's for greek letters and more (for neo-layout) {{{
   "iabbrev ξ
   iabbrev λ \lambda
