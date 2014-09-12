@@ -16,13 +16,14 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Sat Sep 06, 2014  05:04
+-- Last modified: Fri Sep 12, 2014  11:49
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
 -- Imports:
 --{{{
 import           Data.Monoid
+import           Data.Ratio ((%))
 import           Control.Monad
 import           Control.Applicative ((<$>))
 import           System.Exit ( exitSuccess )
@@ -99,6 +100,7 @@ import           XMonad.Layout.Tabbed ( addTabs
 import           XMonad.Layout.WindowNavigation ( configurableNavigation
                                                 , navigateColor
                                                 , Navigate(Move))
+import           XMonad.Layout.IM  -- (withIM)
 -- }}}
 
 import qualified Data.Map                    as M
@@ -334,7 +336,12 @@ myLayout = avoidStrutsOn[U] $
     onWorkspace "5" (dtb ||| full) $
     onWorkspace "6" (dtb ||| full) $
     onWorkspace "7" (dtb ||| full) $
-    onWorkspace "web" (full ||| tiled)
+    onWorkspace "web" ((withIM
+                            (1%7)
+                            (And (Role "roster")
+                                 (ClassName "Gajim"))
+                            full ||| tiled)
+                        ||| full ||| tiled)
     (tiled ||| full ||| dtb )
     where
         tiled   = named " " $

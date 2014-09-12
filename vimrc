@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Sat Sep 06, 2014  11:17
+" Last Modified: Wed Sep 10, 2014  09:35
 
 
 " ===================================================================
@@ -26,12 +26,14 @@ let s:settings = {}
 let s:settings.Colorscheme="jellybeans"
 let s:settings.InstallVundleAutomatically=1
 let s:settings.useAirline=1                        " 1: Airline  0: Powerline
+let s:settings.useNERDTree=0                       " 1: NERDTree 0: none
 let s:settings.UndotreeOrGundo=1                   " 1: Undotree 0: Gundo
 let s:settings.YcmOrNeocomplete=1                  " 1: YCM      0: Neocomplete
   let s:settings.YcmAlternativeKeybindings=1       " only if YCM is chosen
 " ====  more settings  =============================================={{{
-let s:settings.UseVimArduino=0
+let s:settings.supportArduino=0
 let s:settings.SupportClojure=1
+let s:settings.SupportRails=0
 let s:settings.SupportPerl=0
 let s:settings.TestPlugins=1
 let s:settings.useConcealEverywhere=0
@@ -84,44 +86,62 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   Plugin 'jiangmiao/auto-pairs'
 
-  Plugin 'scrooloose/syntastic'
-  noremap <Leader>S :SyntasticToggleMode<CR>
-  let g:syntastic_scala_checkers = []
-  "let g:syntastic_haskell_checkers = ["hlint"]
+  Plugin 'scrooloose/syntastic' "{{{
+    noremap <Leader>S :SyntasticToggleMode<CR>
+    let g:syntastic_scala_checkers = []
+    "let g:syntastic_haskell_checkers = ["hlint"]
+  "}}}
 
   Plugin 'scrooloose/nerdcommenter'
 
   " ===================================================================
   "   Design:
   if s:settings.useAirline
-    Plugin 'bling/vim-airline'
-    "let g:airline_powerline_fonts = 1
-    if 0 " tabline
-      let g:airline#extensions#tabline#enabled = 1
-      let g:airline#extensions#tabline#left_sep=' '
-      let g:airline#extensions#tabline#left_alt_sep='¦'
-    endif
+    Plugin 'bling/vim-airline' "{{{
+      "let g:airline_powerline_fonts = 1
+      if 0 " tabline
+        let g:airline#extensions#tabline#enabled = 1
+        let g:airline#extensions#tabline#left_sep=' '
+        let g:airline#extensions#tabline#left_alt_sep='¦'
+      endif
+    "}}}
   else
     Plugin 'Lokaltog/vim-powerline' " DEPRECATED in favor of Lokaltog/powerline.
   endif
 
+  " ===================================================================
+  "  Colorschemes:  ==================================================={{{
   if s:settings.Colorscheme == "jellybeans"
     Plugin 'nanotech/jellybeans.vim'
   elseif s:settings.Colorscheme == "mustang"
     Plugin 'croaker/mustang-vim'
   endif
-
+  "                                                                    }}}
   " ===================================================================
   "   Manage Files:
-  Plugin 'kien/ctrlp.vim'
-  let g:ctrlp_map = '<c-p>'
-  let g:ctrlp_cmd = 'CtrlP'
-  let g:ctrlp_working_path_mode = 'ra'
-  nnoremap <Leader>b :CtrlPBuffer<CR>
-  nnoremap <Leader>p :CtrlPMRU<CR>
+  Plugin 'kien/ctrlp.vim' "{{{
+    let g:ctrlp_map = '<c-p>'
+    let g:ctrlp_cmd = 'CtrlP'
+    let g:ctrlp_working_path_mode = 'ra'
+    nnoremap <Leader>b :CtrlPBuffer<CR>
+    nnoremap <Leader>p :CtrlPMRU<CR>
+  "}}}
+  
+  if s:settings.useNERDTree
+    Plugin 'scrooloose/nerdtree' "{{{
+      "noremap <C-n> :NERDTreeToggle<CR>
+      augroup autoNERDTree
+        autocmd!
+        autocmd bufenter * if (winnr("$") == 1 && exists("b:NERDTreeType") && b:NERDTreeType == "primary") | q | endif
+      augroup END
+    "}}}
+  else
+    noremap <C-e> :Explore<CR>
+    "noremap <C-e> :Ve<CR>
+  endif
 
   " ===================================================================
-  "   Completion: ====================================================={{{
+  "   Completion:  ===================================================={{{
   Plugin 'honza/vim-snippets'
 
   if s:settings.YcmOrNeocomplete
@@ -260,14 +280,16 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   " ===================================================================
   "   Arduino:
-  Plugin 'sudar/vim-arduino-syntax'
-  if s:settings.UseVimArduino
+  if s:settings.supportArduino
+    Plugin 'sudar/vim-arduino-syntax'
     Plugin 'tclem/vim-arduino'
   endif
 
   " ===================================================================
   "   Ruby:
-  Plugin 'tpope/vim-rails'
+  if s:settings.SupportRails
+    Plugin 'tpope/vim-rails'
+  endif
 
   " ===================================================================
   "   Perl:
@@ -294,9 +316,12 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   "}}}
   " ===================================================================
   "   Others:
-  Plugin 'sjl/clam.vim'
-  nnoremap ! :Clam<space>
-  vnoremap ! :ClamVisual<space>
+  Plugin 'sjl/clam.vim' "{{{
+    nnoremap ! :Clam<space>
+    vnoremap ! :ClamVisual<space>
+  "}}}
+
+  Plugin 'tpope/vim-eunuch'
 
   " ===================================================================
   "   Testing:
@@ -307,8 +332,6 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     " :NR - Open the selected region in a new narrowed window
 
     Plugin 'tpope/vim-surround'
-
-    Plugin 'tpope/vim-eunuch'
   endif
 
   " ===================================================================
@@ -431,7 +454,8 @@ set smarttab
 set list
 set listchars=tab:>.,trail:…,extends:#,nbsp:. " …°⎼
 "set listchars=tab:│\ ,trail:•,extends:❯,precedes:❮
-set fillchars=vert:┃,diff:⎼,fold:⎼
+"set fillchars=vert:┃,diff:⎼,fold:⎼
+set fillchars=vert:┃,diff:\ ,fold:\ 
 
 set cpoptions+=n
 set showbreak=\ \ \ ↳
@@ -448,7 +472,7 @@ hi NonText cterm=NONE ctermfg=NONE
 " stops slow responding in large files
 set synmaxcol=128
 "                                                                    }}}
-" ====  line numberig  ============================================={{{
+" ====  line numberig  =============================================={{{
 " TODO: has problems?
 "augroup autoChangeNumbering
 "  autocmd!
@@ -594,7 +618,7 @@ nnoremap + <C-a>
 nnoremap - <C-x>
 
 "                                                                    }}}
-" ====  maps to nop ================================================{{{
+" ====  maps to nop  ================================================{{{
 nnoremap K <nop>
 
 inoremap <F1> <nop>

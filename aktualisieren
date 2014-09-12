@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Sat Sep 06, 2014  06:25
+# Last modified: Fri Sep 12, 2014  02:43
 
 ###############################################################################
 # variables
@@ -91,6 +91,7 @@ files() {
 ~/.vim/indent
 ~/.vim/plugin
 ~/.vim/syntax
+~/.vim/snippets
 ~/.vim/plugin/myLastModified.vim
 ~/.vim/plugin/grep-operator.vim
 ~/.xinitrc

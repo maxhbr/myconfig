@@ -54,6 +54,7 @@ myinstall "${FOLDER}vimrc" "/home/hubi/.vimrc" 600 hubi users
 # "${FOLDER}vim/indent" "/home/hubi/.vim/indent"
 # "${FOLDER}vim/plugin" "/home/hubi/.vim/plugin"
 # "${FOLDER}vim/syntax" "/home/hubi/.vim/syntax"
+# "${FOLDER}vim/snippets" "/home/hubi/.vim/snippets"
 myinstall "${FOLDER}vim/plugin/myLastModified.vim" "/home/hubi/.vim/plugin/myLastModified.vim" 600 hubi users
 myinstall "${FOLDER}vim/plugin/grep-operator.vim" "/home/hubi/.vim/plugin/grep-operator.vim" 600 hubi users
 myinstall "${FOLDER}xinitrc" "/home/hubi/.xinitrc" 600 hubi users
