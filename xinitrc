@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Thu Jul 10, 2014  08:18
+# Last modified: Sat Sep 13, 2014  02:19
 
 #setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 #setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:sclk_toggle -option grp_led:scroll
@@ -11,6 +11,7 @@ setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:shifts_toggl
 xsetroot -cursor_name left_ptr
 xset dpms 300 600 900 & # screen saver replacement
 [[ -f ~/.Xresources ]] && xrdb -merge ~/.Xresources
+[[ -f ~/.xmodmap ]] && xmodmap ~/.xmodmap
 
 export LANG="de_DE.utf8"
 

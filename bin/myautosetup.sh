@@ -1,6 +1,6 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Wed Aug 27, 2014  07:29
+# Last modified: Sat Sep 13, 2014  02:40
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -87,6 +87,7 @@ case "$DOCKED" in
 
     setxkbmap -layout de,de -variant neo,nodeadkeys -option\
       -option grp:shifts_toggle -option grp_led:scroll
+    [[ -f ~/.xmodmap ]] && xmodmap ~/.xmodmap
     [[ -f ~/.asoundrc.uca202 ]] && cp ~/.asoundrc.uca202 ~/.asoundrc
     ;;
 esac
