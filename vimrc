@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Wed Sep 10, 2014  09:35
+" Last Modified: Sat Sep 13, 2014  12:20
 
 
 " ===================================================================
@@ -332,6 +332,10 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     " :NR - Open the selected region in a new narrowed window
 
     Plugin 'tpope/vim-surround'
+
+    Plugin 'mileszs/ack.vim' "{{{
+      nnoremap _a :silent execute "Ack " . expand("<cWORD>") <cr>
+    "}}}
   endif
 
   " ===================================================================

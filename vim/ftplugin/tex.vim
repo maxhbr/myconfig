@@ -110,9 +110,9 @@ end "}}}
 "nnoremap <leader>oe :! llpp %:r.pdf > /dev/null 2>&1 &<CR><CR>
 "nnoremap <leader>oa :! llpp *.pdf > /dev/null 2>&1 &<CR><CR>
 
-function! SyncTexForward()
+function! s:SyncTexForward()
   " see ~/bin/myTexWrapper.sh
   exec 'silent !myTexWrapper.sh % '.line('.')." ".col('.')
   redraw!
 endfunction
-nnoremap <Leader>f :call SyncTexForward()<CR>
+nnoremap <Leader>f :call <SID>SyncTexForward()<CR>
