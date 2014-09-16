@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Sat Sep 13, 2014  12:20
+" Last Modified: Tue Sep 16, 2014  06:41
 
 
 " ===================================================================
@@ -21,8 +21,7 @@
 " ===================================================================
 let s:settings = {}
 " Good Colorscheme: mustang, jellybeans
-" Also Good: molokai, badwolf...
-"let s:settings.Colorscheme="jellybeans"
+" Also Good: seoul256(-light), badwolf...
 let s:settings.Colorscheme="jellybeans"
 let s:settings.InstallVundleAutomatically=1
 let s:settings.useAirline=1                        " 1: Airline  0: Powerline
@@ -115,6 +114,14 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     Plugin 'nanotech/jellybeans.vim'
   elseif s:settings.Colorscheme == "mustang"
     Plugin 'croaker/mustang-vim'
+  elseif s:settings.Colorscheme == "seoul256" || s:settings.Colorscheme == "seoul256-light"
+    Plugin 'junegunn/seoul256.vim'
+  elseif s:settings.Colorscheme == "badwolf"
+    Plugin 'sjl/badwolf' "{{{
+      let g:badwolf_darkgutter = 0
+      let g:badwolf_tabline = 3
+      let g:badwolf_css_props_highlight = 1
+    "}}}
   endif
   "                                                                    }}}
   " ===================================================================
@@ -126,7 +133,7 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     nnoremap <Leader>b :CtrlPBuffer<CR>
     nnoremap <Leader>p :CtrlPMRU<CR>
   "}}}
-  
+
   if s:settings.useNERDTree
     Plugin 'scrooloose/nerdtree' "{{{
       "noremap <C-n> :NERDTreeToggle<CR>
@@ -255,6 +262,7 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
       smap <expr><S-TAB> pumvisible() ? "\<C-p>" : ""
     "}}}
   endif
+  "}}}
 
   " ===================================================================
   "   Vimwiki:
@@ -268,7 +276,9 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   "   Clojure:
   if s:settings.SupportClojure
     Plugin 'tpope/vim-fireplace'
+    "Plugin 'vim-scripts/VimClojure'
   endif
+  Plugin 'amdt/vim-niji'
 
   " ===================================================================
   "   CSV:
@@ -312,8 +322,6 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     " }}}
   endif
 
-
-  "}}}
   " ===================================================================
   "   Others:
   Plugin 'sjl/clam.vim' "{{{
@@ -336,6 +344,7 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     Plugin 'mileszs/ack.vim' "{{{
       nnoremap _a :silent execute "Ack " . expand("<cWORD>") <cr>
     "}}}
+
   endif
 
   " ===================================================================
@@ -459,7 +468,7 @@ set list
 set listchars=tab:>.,trail:…,extends:#,nbsp:. " …°⎼
 "set listchars=tab:│\ ,trail:•,extends:❯,precedes:❮
 "set fillchars=vert:┃,diff:⎼,fold:⎼
-set fillchars=vert:┃,diff:\ ,fold:\ 
+set fillchars=vert:┃,diff:\ ,fold:\
 
 set cpoptions+=n
 set showbreak=\ \ \ ↳

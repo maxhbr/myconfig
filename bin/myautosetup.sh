@@ -1,6 +1,6 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Sat Sep 13, 2014  02:40
+# Last modified: Sat Sep 13, 2014  08:48
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -84,12 +84,12 @@ case "$DOCKED" in
     fi
 
     rfkill block all &
-
-    setxkbmap -layout de,de -variant neo,nodeadkeys -option\
-      -option grp:shifts_toggle -option grp_led:scroll
-    [[ -f ~/.xmodmap ]] && xmodmap ~/.xmodmap
     [[ -f ~/.asoundrc.uca202 ]] && cp ~/.asoundrc.uca202 ~/.asoundrc
     ;;
 esac
+
+setxkbmap -layout de,de -variant neo,nodeadkeys -option\
+  -option grp:shifts_toggle -option grp_led:scroll
+[[ -f ~/.xmodmap ]] && xmodmap ~/.xmodmap
 
 feh --bg-center "/home/hubi/Bilder/background/BACKGROUND.png"
