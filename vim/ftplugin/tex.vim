@@ -26,6 +26,8 @@ setlocal spell
 setlocal spelllang=de_de,en_us
 setlocal spellfile=~/.vim/spellfile.add
 
+setlocal nonu
+
 "inoremap <expr>" getline('.')[col(".")-2] =~ "\\s" ? "\"`\"\'<left><left>" : "\"'"
 inoremap <expr>[ getline('.')[col(".")-2] =~ "\\" ? "[<C-v>u005c]<left><left>" : "["
 "inoremap <expr>{ getline('.')[col(".")-2] =~ "\\" ? "{<C-v>u005c}<left><left>" : "{"
@@ -34,6 +36,8 @@ nnoremap <leader>$ viw<esc>a$<esc>hbi$<esc>lel
 
 iabbrev ... <bs>\dots
 iabbrev ,,, <bs>,\dots,
+iabbrev Leftrightarrow Leftrightarrow{}
+iabbrev Rightarrow Rightarrow{}
 if 1 " iabbrev's for greek letters and more (for neo-layout) {{{
   "iabbrev ξ
   iabbrev λ \lambda

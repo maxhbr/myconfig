@@ -1,32 +1,34 @@
 " ~/.vimrc
 "
-" The rest of my vim config can be foundat github:
+" The other files of my vim config can be found at github:
 "     https://github.com/maximilianhuber/myconfig
 "
 " Try it out:
 "     simply call the script `tasteMyVimrc.sh` in my config repo. It will
-"     generate a folder `/tmp/vimtest/` and install my vimrc completely in this
-"     folder
+"     generate a folder `/tmp/vimtest/` and install my vimrc and the other
+"     files completely in this folder
 "
 " Written by Maximilian-Huber.de
 "
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Sep 16, 2014  06:41
-
+" Last Modified: Wed Sep 17, 2014  12:15
 
 " ===================================================================
-" ====  initialize default settings  ================================
+" ====  initialize settings  ========================================
 " ===================================================================
 let s:settings = {}
 " Good Colorscheme: mustang, jellybeans
-" Also Good: seoul256(-light), badwolf...
-let s:settings.Colorscheme="jellybeans"
+" Also Good: seoul256(-light), badwolf, hybrid, kolor...
+let s:settings.Colorscheme="hybrid"
 let s:settings.InstallVundleAutomatically=1
 let s:settings.useAirline=1                        " 1: Airline  0: Powerline
 let s:settings.useNERDTree=0                       " 1: NERDTree 0: none
 let s:settings.UndotreeOrGundo=1                   " 1: Undotree 0: Gundo
+let s:settings.ChooseCommenter=2                   " 2: vim-commentry
+                                                   " 1: tComment
+                                                   " 0: NerdCommenter
 let s:settings.YcmOrNeocomplete=1                  " 1: YCM      0: Neocomplete
   let s:settings.YcmAlternativeKeybindings=1       " only if YCM is chosen
 " ====  more settings  =============================================={{{
@@ -86,12 +88,22 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   Plugin 'jiangmiao/auto-pairs'
 
   Plugin 'scrooloose/syntastic' "{{{
+    let g:syntastic_error_symbol = '✗'
+    let g:syntastic_style_error_symbol = '✠'
+    let g:syntastic_warning_symbol = '∆'
+    let g:syntastic_style_warning_symbol = '≈'
     noremap <Leader>S :SyntasticToggleMode<CR>
     let g:syntastic_scala_checkers = []
     "let g:syntastic_haskell_checkers = ["hlint"]
   "}}}
 
-  Plugin 'scrooloose/nerdcommenter'
+  if  s:settings.ChooseCommenter==2
+    Plugin 'tpope/vim-commentary'
+  elseif  s:settings.ChooseCommenter==1
+    Plugin 'tomtom/tcomment_vim'
+  else
+    Plugin 'scrooloose/nerdcommenter'
+  end
 
   " ===================================================================
   "   Design:
@@ -122,7 +134,12 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
       let g:badwolf_tabline = 3
       let g:badwolf_css_props_highlight = 1
     "}}}
+  elseif s:settings.Colorscheme == "hybrid"
+    Plugin 'w0ng/vim-hybrid'
+  elseif s:settings.Colorscheme == "kolor"
+    Plugin 'zeis/vim-kolor' 
   endif
+  
   "                                                                    }}}
   " ===================================================================
   "   Manage Files:
@@ -133,6 +150,8 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     nnoremap <Leader>b :CtrlPBuffer<CR>
     nnoremap <Leader>p :CtrlPMRU<CR>
   "}}}
+
+  Plugin 'Shougo/unite.vim'
 
   if s:settings.useNERDTree
     Plugin 'scrooloose/nerdtree' "{{{
@@ -276,7 +295,7 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   "   Clojure:
   if s:settings.SupportClojure
     Plugin 'tpope/vim-fireplace'
-    "Plugin 'vim-scripts/VimClojure'
+    "NeoBundle Plugin 'vim-scripts/VimClojure'
   endif
   Plugin 'amdt/vim-niji'
 
@@ -345,9 +364,15 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
       nnoremap _a :silent execute "Ack " . expand("<cWORD>") <cr>
     "}}}
 
+    Bundle "szw/vim-ctrlspace"
+
+    Bundle "tpope/vim-dispatch"
   endif
 
   " ===================================================================
+  " More {{{
+  "Plugin 'justinmk/vim-sneak'
+  " }}}
 
   call vundle#end()            " required
   filetype plugin indent on    " required
@@ -387,16 +412,16 @@ set ffs=unix,dos,mac
 set encoding=utf8
 
 set virtualedit=all
-set showcmd   " Show (partial) command in status line.
-set showmatch " Show matching brackets.
-"set autowrite " Automatically save before commands like :next and :make
+set showcmd     " Show (partial) command in status line.
+set showmatch   " Show matching brackets.
+"set autowrite  " Automatically save before commands like :next and :make
 set noautowrite " don't automagically write on :next"
-set visualbell " ausgehebelt durch noerrorbells ?
+set visualbell  " ausgehebelt durch noerrorbells ?
 set noerrorbells
 set hidden
 set autoread
-set magic      " For regular expressions turn magic on
-set splitbelow " set splitright
+set magic       " For regular expressions turn magic on
+set splitbelow  " set splitright
 set autochdir
 
 set lazyredraw
@@ -596,7 +621,7 @@ if has("mouse")
 endif
 set backspace=indent,eol,start
 
-nnoremap ; :
+"nnoremap ; :
 let mapleader=","
 let maplocalleader = "\\"
 

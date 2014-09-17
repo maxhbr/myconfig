@@ -103,6 +103,7 @@ myinstall "${FOLDER}etc/modprobe.d/power_save.conf" "/etc/modprobe.d/power_save.
 myinstall "${FOLDER}etc/pacman.conf" "/etc/pacman.conf" 644 root root
 myinstall "${FOLDER}etc/sysctl.d/99-sysctl.conf" "/etc/sysctl.d/99-sysctl.conf" 644 root root
 myinstall "${FOLDER}etc/systemd/system/tpacpi-bat-custom.service" "/etc/systemd/system/tpacpi-bat-custom.service" 644 root root
+myinstall "${FOLDER}etc/systemd/system/ntpdate.service.d/hwclock.conf" "/etc/systemd/system/ntpdate.service.d/hwclock.conf" 600 root root
 myinstall "${FOLDER}etc/vconsole.conf" "/etc/vconsole.conf" 644 root root
 myinstall "${FOLDER}etc/vsftpd.conf" "/etc/vsftpd.conf" 644 root root
 myinstall "${FOLDER}etc/zathurarc" "/etc/zathurarc" 644 root root
