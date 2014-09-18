@@ -13,14 +13,14 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Wed Sep 17, 2014  12:15
+" Last Modified: Thu Sep 18, 2014  10:23
 
 " ===================================================================
 " ====  initialize settings  ========================================
 " ===================================================================
 let s:settings = {}
-" Good Colorscheme: mustang, jellybeans
-" Also Good: seoul256(-light), badwolf, hybrid, kolor...
+" Best Colorschemes: mustang, jellybeans, hybrid
+" Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256...
 let s:settings.Colorscheme="hybrid"
 let s:settings.InstallVundleAutomatically=1
 let s:settings.useAirline=1                        " 1: Airline  0: Powerline
@@ -65,12 +65,12 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   set rtp+=~/.vim/bundle/Vundle.vim
   call vundle#begin()
 
-  " download the rest of my config with vundle, if no ~/ftplugin folder is
-  " present
-  " TODO: find better test
-  if !isdirectory(expand('~').'/.vim/ftplugin')
-    Plugin 'maximilianhuber/myconfig', {'rtp': 'vim/'}
-  endif
+  " " download the rest of my config with vundle, if no ~/ftplugin folder is
+  " " present
+  " " TODO: find better test
+  " if !isdirectory(expand('~').'/.vim/ftplugin')
+  "   Plugin 'maximilianhuber/myconfig', {'rtp': 'vim/'}
+  " endif
 
   " Used Plugins:
   " ===================================================================
@@ -122,24 +122,28 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   " ===================================================================
   "  Colorschemes:  ==================================================={{{
-  if s:settings.Colorscheme == "jellybeans"
-    Plugin 'nanotech/jellybeans.vim'
-  elseif s:settings.Colorscheme == "mustang"
-    Plugin 'croaker/mustang-vim'
-  elseif s:settings.Colorscheme == "seoul256" || s:settings.Colorscheme == "seoul256-light"
-    Plugin 'junegunn/seoul256.vim'
-  elseif s:settings.Colorscheme == "badwolf"
-    Plugin 'sjl/badwolf' "{{{
-      let g:badwolf_darkgutter = 0
-      let g:badwolf_tabline = 3
-      let g:badwolf_css_props_highlight = 1
-    "}}}
-  elseif s:settings.Colorscheme == "hybrid"
-    Plugin 'w0ng/vim-hybrid'
-  elseif s:settings.Colorscheme == "kolor"
-    Plugin 'zeis/vim-kolor' 
+  if !filereadable(expand('~').'/.vim/colors/'.s:settings.Colorscheme.'.vim')
+    if s:settings.Colorscheme ==? "jellybeans"
+      Plugin 'nanotech/jellybeans.vim'
+    elseif s:settings.Colorscheme ==? "mustang"
+      Plugin 'croaker/mustang-vim'
+    elseif s:settings.Colorscheme ==? "seoul256" || s:settings.Colorscheme ==? "seoul256-light"
+      Plugin 'junegunn/seoul256.vim'
+    elseif s:settings.Colorscheme ==? "badwolf"
+      Plugin 'sjl/badwolf' "{{{
+        let g:badwolf_darkgutter = 0
+        let g:badwolf_tabline = 3
+        let g:badwolf_css_props_highlight = 1
+      "}}}
+    elseif s:settings.Colorscheme ==? "hybrid" || s:settings.Colorscheme ==? "hybrid-light"
+      Plugin 'w0ng/vim-hybrid'
+    elseif s:settings.Colorscheme ==? "kolor"
+      Plugin 'zeis/vim-kolor'
+    else
+      Plugin 'tomasr/molokai'
+      Plugin 'vim-scripts/wombat256.vim'
+    endif
   endif
-  
   "                                                                    }}}
   " ===================================================================
   "   Manage Files:
@@ -151,7 +155,13 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     nnoremap <Leader>p :CtrlPMRU<CR>
   "}}}
 
-  Plugin 'Shougo/unite.vim'
+  Plugin 'Shougo/unite.vim' "{{{
+    if !has("gui_running") && !has("win32")
+      nnoremap <silent> <Nul> :Unite  -start-insert buffer file<CR>
+    else
+      nnoremap <silent> <C-space> :Unite  -start-insert buffer file<CR>
+    end
+  "}}}
 
   if s:settings.useNERDTree
     Plugin 'scrooloose/nerdtree' "{{{
@@ -165,6 +175,10 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     noremap <C-e> :Explore<CR>
     "noremap <C-e> :Ve<CR>
   endif
+
+  Plugin 'mileszs/ack.vim' "{{{
+    nnoremap _a :silent execute "Ack " . expand("<cWORD>") <cr>
+  "}}}
 
   " ===================================================================
   "   Completion:  ===================================================={{{
@@ -297,7 +311,11 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     Plugin 'tpope/vim-fireplace'
     "NeoBundle Plugin 'vim-scripts/VimClojure'
   endif
-  Plugin 'amdt/vim-niji'
+
+  "Rainbow parantheses:
+  Plugin 'amdt/vim-niji' "{{{
+    let g:niji_matching_filetypes = ['lisp', 'scheme', 'clojure']
+  "}}}
 
   " ===================================================================
   "   CSV:
@@ -350,21 +368,16 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   Plugin 'tpope/vim-eunuch'
 
+  Plugin 'chrisbra/NrrwRgn'
+  " :NR - Open the selected region in a new narrowed window
+
+  Plugin 'tpope/vim-surround'
+  " cs'"
+
   " ===================================================================
   "   Testing:
   if s:settings.TestPlugins
     Plugin 'terryma/vim-multiple-cursors'
-
-    Plugin 'chrisbra/NrrwRgn'
-    " :NR - Open the selected region in a new narrowed window
-
-    Plugin 'tpope/vim-surround'
-
-    Plugin 'mileszs/ack.vim' "{{{
-      nnoremap _a :silent execute "Ack " . expand("<cWORD>") <cr>
-    "}}}
-
-    Bundle "szw/vim-ctrlspace"
 
     Bundle "tpope/vim-dispatch"
   endif
@@ -592,11 +605,17 @@ endif
 
 " ====  apply colorscheme  ==========================================
 exec 'colorscheme '.s:settings.Colorscheme
-if s:settings.Colorscheme == "mustang"
-  highlight ColorColumn ctermbg=233 guibg=#592929
-endif
 
 "tweak the colorscheme
+if s:settings.Colorscheme == "mustang"
+  highlight ColorColumn ctermbg=233 guibg=#592929
+elseif s:settings.Colorscheme == "badwolf"
+  highlight LineNr ctermbg=235
+elseif s:settings.Colorscheme == "jellybeans"
+  highlight LineNr ctermbg=234
+elseif s:settings.Colorscheme == "hybrid"
+  highlight LineNr ctermfg=243 ctermbg=232
+endif
 hi CursorLine cterm=none
 
 "Set spell hilighting
