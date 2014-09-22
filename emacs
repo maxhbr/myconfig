@@ -1,6 +1,6 @@
 ;; ~/.emacs
 ;;
-;; i use vi!
+;; No, i do not use emacs, i use vi!
 
 (setq inhibit-startup-message t)
 

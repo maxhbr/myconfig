@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Thu Sep 18, 2014  10:23
+" Last Modified: Mon Sep 22, 2014  08:31
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -21,7 +21,7 @@
 let s:settings = {}
 " Best Colorschemes: mustang, jellybeans, hybrid
 " Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256...
-let s:settings.Colorscheme="hybrid"
+let s:settings.Colorscheme="jellybeans"
 let s:settings.InstallVundleAutomatically=1
 let s:settings.useAirline=1                        " 1: Airline  0: Powerline
 let s:settings.useNERDTree=0                       " 1: NERDTree 0: none
@@ -31,14 +31,10 @@ let s:settings.ChooseCommenter=2                   " 2: vim-commentry
                                                    " 0: NerdCommenter
 let s:settings.YcmOrNeocomplete=1                  " 1: YCM      0: Neocomplete
   let s:settings.YcmAlternativeKeybindings=1       " only if YCM is chosen
-" ====  more settings  =============================================={{{
-let s:settings.supportArduino=0
-let s:settings.SupportClojure=1
-let s:settings.SupportRails=0
-let s:settings.SupportPerl=0
+" Plugin Groups:
+" hasekll, scheme, clojure, lisp, html, csv, arduino, ruby, perl
+let s:settings.supportLanguages=['haskell', 'arduino', 'html', 'csv', 'lisp', 'arduino']
 let s:settings.TestPlugins=1
-let s:settings.useConcealEverywhere=0
-" ===================================================================}}}
 
 " auto reload vimrc when saved ======================================{{{
 if has("autocmd")
@@ -303,44 +299,58 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   " ===================================================================
   "   Haskell:
-  Plugin 'Twinside/vim-haskellConceal'
+  if (index(s:settings.supportLanguages, 'haskell') >= 0)
+    Plugin 'Twinside/vim-haskellConceal'
+  end
 
   " ===================================================================
-  "   Clojure:
-  if s:settings.SupportClojure
+  "   Clojure, Scheme(Racket) and Lisp:
+  if (index(s:settings.supportLanguages, 'clojure') >= 0)
     Plugin 'tpope/vim-fireplace'
-    "NeoBundle Plugin 'vim-scripts/VimClojure'
+    "Plugin 'vim-scripts/VimClojure'
+  endif
+
+  if (index(s:settings.supportLanguages, 'scheme') >= 0)
+    Plugin 'wlangstroth/vim-racket'
   endif
 
   "Rainbow parantheses:
-  Plugin 'amdt/vim-niji' "{{{
-    let g:niji_matching_filetypes = ['lisp', 'scheme', 'clojure']
-  "}}}
+  if (index(s:settings.supportLanguages, 'clojure') >= 0)
+        \ || (index(s:settings.supportLanguages, 'scheme') >= 0)
+        \ || (index(s:settings.supportLanguages, 'lisp') >= 0)
+    Plugin 'amdt/vim-niji' "{{{
+      let g:niji_matching_filetypes = ['lisp', 'scheme', 'clojure']
+    "}}}
+  endif
 
   " ===================================================================
   "   CSV:
-  Plugin 'chrisbra/csv.vim'
+  if (index(s:settings.supportLanguages, 'csv') >= 0)
+    Plugin 'chrisbra/csv.vim'
+  endif
 
   " ===================================================================
   "   HTML:
-  Plugin 'rstacruz/sparkup', {'rtp': 'vim/'}
+  if (index(s:settings.supportLanguages, 'html') >= 0)
+    Plugin 'rstacruz/sparkup', {'rtp': 'vim/'}
+  endif
 
   " ===================================================================
   "   Arduino:
-  if s:settings.supportArduino
+  if (index(s:settings.supportLanguages, 'arduino') >= 0)
     Plugin 'sudar/vim-arduino-syntax'
     Plugin 'tclem/vim-arduino'
   endif
 
   " ===================================================================
   "   Ruby:
-  if s:settings.SupportRails
+  if (index(s:settings.supportLanguages, 'ruby') >= 0)
     Plugin 'tpope/vim-rails'
   endif
 
   " ===================================================================
   "   Perl:
-  if s:settings.SupportPerl
+  if (index(s:settings.supportLanguages, 'perl') >= 0)
     Plugin 'c9s/perlomni.vim' " {{{
 
     if s:settings.YcmOrNeocomplete == 0
@@ -379,11 +389,18 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   if s:settings.TestPlugins
     Plugin 'terryma/vim-multiple-cursors'
 
-    Bundle "tpope/vim-dispatch"
+    Plugin 'tpope/vim-dispatch' "{{{
+      augroup vim_dispatch_autocmds
+        autocmd!
+        autocmd FileType java let b:dispatch = 'javac %'
+        autocmd FileType lisp let b:dispatch = 'clisp -repl %'
+      augroup END
+      " noremap <c-F5> :Dispatch<CR>
+    "}}}
   endif
 
   " ===================================================================
-  " More {{{
+  " Not used plugins {{{
   "Plugin 'justinmk/vim-sneak'
   " }}}
 
@@ -441,14 +458,6 @@ set lazyredraw
 set viewoptions=folds,options,cursor,unix,slash     "unix/windows compatibility
 
 set restorescreen=on
-
-
-if s:settings.useConcealEverywhere
-  if has('conceal')
-    set conceallevel=1
-    set listchars+=conceal:Δ
-  endif
-endif
 
 " ====  wildmenu  ==================================================={{{
 set complete=.,w,b,u,U,t,i,d    " do lots of scanning on tab completion"
@@ -618,8 +627,7 @@ elseif s:settings.Colorscheme == "hybrid"
 endif
 hi CursorLine cterm=none
 
-"Set spell hilighting
-if has('spell')
+if has('spell') " Set spell hilighting =============================={{{
   highlight clear SpellBad
   highlight SpellBad term=standout ctermfg=1
   highlight SpellBad term=underline cterm=underline
@@ -629,7 +637,7 @@ if has('spell')
   highlight SpellRare term=underline cterm=underline
   highlight clear SpellLocal
   highlight SpellLocal term=underline cterm=underline
-endif
+endif " =============================================================}}}
 
 " ===================================================================}}}
 " ====  keymappings / input  ========================================
