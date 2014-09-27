@@ -1,5 +1,5 @@
 #!/bin/sh
-# dwb: xw
+# dwb: xW
 pushd ~/Downloads/
 wget $DWB_URI &
 popd

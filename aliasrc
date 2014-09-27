@@ -149,6 +149,7 @@ ex() {
         *.Z) uncompress $file ;;
         *.7z) 7z x $file ;;
         *.jar) jar xf $file ;;
+        *.deb) ar xv $file ;;
         *) echo "'$file' of type '$opt' cannot be extracted via ex()" ;;
       esac
     else

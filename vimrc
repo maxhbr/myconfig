@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Mon Sep 22, 2014  08:31
+" Last Modified: Wed Sep 24, 2014  03:54
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -36,11 +36,15 @@ let s:settings.YcmOrNeocomplete=1                  " 1: YCM      0: Neocomplete
 let s:settings.supportLanguages=['haskell', 'arduino', 'html', 'csv', 'lisp', 'arduino']
 let s:settings.TestPlugins=1
 
+let mapleader=","
+let maplocalleader = "\\"
+
 " auto reload vimrc when saved ======================================{{{
 if has("autocmd")
   augroup autoSourceVimrc
     autocmd!
-    autocmd bufwritepost .vimrc source % | set ts=2 sw=2 sts=2 et fenc=utf-8 ff=unix foldmethod=marker foldmarker={{{,}}}
+    autocmd bufwritepost .vimrc source %
+          \ | set ts=2 sw=2 sts=2 et fenc=utf-8 ff=unix foldmethod=marker foldmarker={{{,}}}
   augroup END
 endif "==============================================================}}}
 
@@ -56,10 +60,9 @@ if s:settings.InstallVundleAutomatically " ========================={{{
   endif
 endif " ============================================================}}}
 if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
-  filetype off                 " required
-
-  set rtp+=~/.vim/bundle/Vundle.vim
-  call vundle#begin()
+  filetype off                      " required
+  set rtp+=~/.vim/bundle/Vundle.vim " required
+  call vundle#begin()               " required
 
   " " download the rest of my config with vundle, if no ~/ftplugin folder is
   " " present
@@ -314,6 +317,10 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     Plugin 'wlangstroth/vim-racket'
   endif
 
+  " if (index(s:settings.supportLanguages, 'lisp') >= 0)
+  "   Plugin 'kovisoft/slimv'
+  " endif
+
   "Rainbow parantheses:
   if (index(s:settings.supportLanguages, 'clojure') >= 0)
         \ || (index(s:settings.supportLanguages, 'scheme') >= 0)
@@ -393,9 +400,9 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
       augroup vim_dispatch_autocmds
         autocmd!
         autocmd FileType java let b:dispatch = 'javac %'
-        autocmd FileType lisp let b:dispatch = 'clisp -repl %'
+        autocmd FileType lisp let b:dispatch = '/usr/bin/env clisp %'
       augroup END
-      " noremap <c-F5> :Dispatch<CR>
+      noremap <leader>ö :Dispatch<cr>
     "}}}
   endif
 
@@ -404,8 +411,8 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   "Plugin 'justinmk/vim-sneak'
   " }}}
 
-  call vundle#end()            " required
-  filetype plugin indent on    " required
+  call vundle#end()                 " required
+  filetype plugin indent on         " required
 endif
 " ===================================================================}}}
 " ====  general  ====================================================
@@ -649,8 +656,6 @@ endif
 set backspace=indent,eol,start
 
 "nnoremap ; :
-let mapleader=","
-let maplocalleader = "\\"
 
 " ====  general  ===================================================={{{
 "save without sudo
