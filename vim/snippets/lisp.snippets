@@ -1,0 +1,40 @@
+snippet +
+	(+ ${1}
+	   ${0})
+
+snippet -
+	(- ${1}
+	   ${0})
+
+snippet /
+	(/ ${1}
+	   ${0})
+
+snippet *
+	(* ${1}
+	   ${0})
+
+# If statement
+snippet if
+	(if (${1:predicate})
+	    (${2:true-action})
+	    (${0:false-action}))
+
+# define function
+snippet def
+	(defun ${1:fun-name} (${2:fun-parameter})
+	  ${0:fun-body})
+
+#defparameter
+snippet defp
+	(defparameter *${1:name}* ${0:value})
+
+# let
+snippet let
+	(let (${1:defs})
+	  (${0:body}))
+
+# labels
+snippet lab
+	(labels (${1:fun-defs})
+	  (${0:body}))

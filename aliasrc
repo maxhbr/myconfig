@@ -139,6 +139,7 @@ ex() {
       case $opt in
         *.tar.bz2) tar xjf $file ;;
         *.tar.gz) tar xzf $file ;;
+        *.tar.xz) tar xvfJ $file ;;
         *.bz2) bunzip2 $file ;;
         *.rar) unrar e $file ;;
         *.gz) gunzip $file ;;
