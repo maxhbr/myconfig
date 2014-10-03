@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Wed Sep 24, 2014  03:54
+" Last Modified: Fri Oct 03, 2014  10:51
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -23,14 +23,15 @@ let s:settings = {}
 " Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256...
 let s:settings.Colorscheme="jellybeans"
 let s:settings.InstallVundleAutomatically=1
-let s:settings.useAirline=1                        " 1: Airline  0: Powerline
-let s:settings.useNERDTree=0                       " 1: NERDTree 0: none
-let s:settings.UndotreeOrGundo=1                   " 1: Undotree 0: Gundo
-let s:settings.ChooseCommenter=2                   " 2: vim-commentry
-                                                   " 1: tComment
-                                                   " 0: NerdCommenter
-let s:settings.YcmOrNeocomplete=1                  " 1: YCM      0: Neocomplete
-  let s:settings.YcmAlternativeKeybindings=1       " only if YCM is chosen
+let s:settings.useAirline=1                    " 1: Airline      0: Powerline
+let s:settings.useNERDTree=0                   " 1: NERDTree     0: none
+let s:settings.UndotreeOrGundo=1               " 1: Undotree     0: Gundo
+let s:settings.ChooseCommenter=2               " 2: vim-commentry
+                                               " 1: tComment
+                                               " 0: NerdCommenter
+let s:settings.YcmOrNeocomplete=1              " 1: YCM          0: Neocomplete
+  let s:settings.YcmAlternativeKeybindings=1   " only if YCM is chosen
+let s:settings.DelimitMateOrAutoPairs=1        " 1: delimitMate  0: oter
 " Plugin Groups:
 " hasekll, scheme, clojure, lisp, html, csv, arduino, ruby, perl
 let s:settings.supportLanguages=['haskell', 'arduino', 'html', 'csv', 'lisp', 'arduino']
@@ -84,7 +85,11 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   Plugin 'vim-scripts/matchit.zip'
 
-  Plugin 'jiangmiao/auto-pairs'
+  if s:settings.DelimitMateOrAutoPairs
+    Plugin 'Raimondi/delimitMate'
+  else
+    Plugin 'jiangmiao/auto-pairs'
+  end
 
   Plugin 'scrooloose/syntastic' "{{{
     let g:syntastic_error_symbol = '✗'
