@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Fri Oct 03, 2014  10:51
+" Last Modified: Sat Oct 04, 2014  02:06
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -22,7 +22,7 @@ let s:settings = {}
 " Best Colorschemes: mustang, jellybeans, hybrid
 " Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256...
 let s:settings.Colorscheme="jellybeans"
-let s:settings.InstallVundleAutomatically=1
+let s:settings.InstallPluginManagerAutomatically=1
 let s:settings.useAirline=1                    " 1: Airline      0: Powerline
 let s:settings.useNERDTree=0                   " 1: NERDTree     0: none
 let s:settings.UndotreeOrGundo=1               " 1: Undotree     0: Gundo
@@ -31,7 +31,6 @@ let s:settings.ChooseCommenter=2               " 2: vim-commentry
                                                " 0: NerdCommenter
 let s:settings.YcmOrNeocomplete=1              " 1: YCM          0: Neocomplete
   let s:settings.YcmAlternativeKeybindings=1   " only if YCM is chosen
-let s:settings.DelimitMateOrAutoPairs=1        " 1: delimitMate  0: oter
 " Plugin Groups:
 " hasekll, scheme, clojure, lisp, html, csv, arduino, ruby, perl
 let s:settings.supportLanguages=['haskell', 'arduino', 'html', 'csv', 'lisp', 'arduino']
@@ -52,18 +51,23 @@ endif "==============================================================}}}
 " ===================================================================
 " ====  plugins  ====================================================
 " ==================================================================={{{
-if s:settings.InstallVundleAutomatically " ========================={{{
+if s:settings.InstallPluginManagerAutomatically " ========================={{{
   " install vundle automatically, if not present
-  if !isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
-    let src = 'http://github.com/gmarik/vundle.git'
-    exec '!git clone '.src.' ~/.vim/bundle/Vundle.vim'
-    au VimEnter * BundleInstall
+  " if !isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
+  "   let src = 'http://github.com/gmarik/vundle.git'
+  "   exec '!git clone '.src.' ~/.vim/bundle/Vundle.vim'
+  "   au VimEnter * BundleInstall
+  " endif
+  if !filereadable(expand('~').'/.vim/autoload/plug.vim')
+    exec '!curl -fLo '.expand('~').'/.vim/autoload/plug.vim '.
+      \ 'https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim'
   endif
 endif " ============================================================}}}
 if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   filetype off                      " required
-  set rtp+=~/.vim/bundle/Vundle.vim " required
-  call vundle#begin()               " required
+  " set rtp+=~/.vim/bundle/Vundle.vim " required
+  " call vundle#begin()               " required
+  call plug#begin('~/.vim/plug')
 
   " " download the rest of my config with vundle, if no ~/ftplugin folder is
   " " present
@@ -76,22 +80,20 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   " ===================================================================
   "   General:
   if s:settings.UndotreeOrGundo
-    Plugin 'mbbill/undotree'
+    Plug 'mbbill/undotree',  { 'on': 'UndotreeToggle' }
     nnoremap <F6> :UndotreeToggle<CR>
   else
-    Plugin 'sjl/gundo.vim'
+    Plug 'sjl/gundo.vim',  { 'on': 'GundoToggle' }
     nnoremap <F6> :GundoToggle<CR>
   endif
 
-  Plugin 'vim-scripts/matchit.zip'
+  Plug 'vim-scripts/matchit.zip'
 
-  if s:settings.DelimitMateOrAutoPairs
-    Plugin 'Raimondi/delimitMate'
-  else
-    Plugin 'jiangmiao/auto-pairs'
-  end
+  Plug 'Raimondi/delimitMate'
+  " or:
+  "Plug 'jiangmiao/auto-pairs'
 
-  Plugin 'scrooloose/syntastic' "{{{
+  Plug 'scrooloose/syntastic' "{{{
     let g:syntastic_error_symbol = '✗'
     let g:syntastic_style_error_symbol = '✠'
     let g:syntastic_warning_symbol = '∆'
@@ -102,17 +104,17 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   "}}}
 
   if  s:settings.ChooseCommenter==2
-    Plugin 'tpope/vim-commentary'
+    Plug 'tpope/vim-commentary'
   elseif  s:settings.ChooseCommenter==1
-    Plugin 'tomtom/tcomment_vim'
+    Plug 'tomtom/tcomment_vim'
   else
-    Plugin 'scrooloose/nerdcommenter'
+    Plug 'scrooloose/nerdcommenter'
   end
 
   " ===================================================================
   "   Design:
   if s:settings.useAirline
-    Plugin 'bling/vim-airline' "{{{
+    Plug 'bling/vim-airline' "{{{
       "let g:airline_powerline_fonts = 1
       if 0 " tabline
         let g:airline#extensions#tabline#enabled = 1
@@ -121,37 +123,37 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
       endif
     "}}}
   else
-    Plugin 'Lokaltog/vim-powerline' " DEPRECATED in favor of Lokaltog/powerline.
+    Plug 'Lokaltog/vim-powerline' " DEPRECATED in favor of Lokaltog/powerline.
   endif
 
   " ===================================================================
   "  Colorschemes:  ==================================================={{{
   if !filereadable(expand('~').'/.vim/colors/'.s:settings.Colorscheme.'.vim')
     if s:settings.Colorscheme ==? "jellybeans"
-      Plugin 'nanotech/jellybeans.vim'
+      Plug 'nanotech/jellybeans.vim'
     elseif s:settings.Colorscheme ==? "mustang"
-      Plugin 'croaker/mustang-vim'
+      Plug 'croaker/mustang-vim'
     elseif s:settings.Colorscheme ==? "seoul256" || s:settings.Colorscheme ==? "seoul256-light"
-      Plugin 'junegunn/seoul256.vim'
+      Plug 'junegunn/seoul256.vim'
     elseif s:settings.Colorscheme ==? "badwolf"
-      Plugin 'sjl/badwolf' "{{{
+      Plug 'sjl/badwolf' "{{{
         let g:badwolf_darkgutter = 0
         let g:badwolf_tabline = 3
         let g:badwolf_css_props_highlight = 1
       "}}}
     elseif s:settings.Colorscheme ==? "hybrid" || s:settings.Colorscheme ==? "hybrid-light"
-      Plugin 'w0ng/vim-hybrid'
+      Plug 'w0ng/vim-hybrid'
     elseif s:settings.Colorscheme ==? "kolor"
-      Plugin 'zeis/vim-kolor'
+      Plug 'zeis/vim-kolor'
     else
-      Plugin 'tomasr/molokai'
-      Plugin 'vim-scripts/wombat256.vim'
+      Plug 'tomasr/molokai'
+      Plug 'vim-scripts/wombat256.vim'
     endif
   endif
   "                                                                    }}}
   " ===================================================================
   "   Manage Files:
-  Plugin 'kien/ctrlp.vim' "{{{
+  Plug 'kien/ctrlp.vim' "{{{
     let g:ctrlp_map = '<c-p>'
     let g:ctrlp_cmd = 'CtrlP'
     let g:ctrlp_working_path_mode = 'ra'
@@ -159,16 +161,16 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     nnoremap <Leader>p :CtrlPMRU<CR>
   "}}}
 
-  Plugin 'Shougo/unite.vim' "{{{
+  Plug 'Shougo/unite.vim',  { 'on': 'Unite' } "{{{
     if !has("gui_running") && !has("win32")
-      nnoremap <silent> <Nul> :Unite  -start-insert buffer file<CR>
+      nnoremap <silent> <Nul> :Unite -start-insert buffer file<CR>
     else
-      nnoremap <silent> <C-space> :Unite  -start-insert buffer file<CR>
+      nnoremap <silent> <C-space> :Unite -start-insert buffer file<CR>
     end
   "}}}
 
   if s:settings.useNERDTree
-    Plugin 'scrooloose/nerdtree' "{{{
+    Plug 'scrooloose/nerdtree', { 'on': 'NERDTreeToggle' } "{{{
       "noremap <C-n> :NERDTreeToggle<CR>
       augroup autoNERDTree
         autocmd!
@@ -180,16 +182,16 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     "noremap <C-e> :Ve<CR>
   endif
 
-  Plugin 'mileszs/ack.vim' "{{{
+  Plug 'mileszs/ack.vim', { 'on': 'Ack' } "{{{
     nnoremap _a :silent execute "Ack " . expand("<cWORD>") <cr>
   "}}}
 
   " ===================================================================
   "   Completion:  ===================================================={{{
-  Plugin 'honza/vim-snippets'
+  Plug 'honza/vim-snippets'
 
   if s:settings.YcmOrNeocomplete
-    Plugin 'SirVer/ultisnips' "{{{
+    Plug 'SirVer/ultisnips' "{{{
       " Trigger configuration. Do not use <tab> if you use YCM.
       let g:UltiSnipsExpandTrigger="<c-b>"
       let g:UltiSnipsJumpForwardTrigger="<c-b>"
@@ -198,7 +200,7 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
       let g:UltiSnipsEditSplit="vertical"
     "}}}
 
-    Plugin 'Valloric/YouCompleteMe' "{{{
+    Plug 'Valloric/YouCompleteMe', { 'do': './install.sh' } "{{{
       "       needs:
       "       $ ./install.sh --clang-completer
       let g:ycm_use_ultisnips_completer = 1
@@ -224,7 +226,7 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   else
     " neocomplete / neocomplcache and neosnippet {{{
     if has('lua')
-      Plugin 'Shougo/neocomplete.vim' " {{{
+      Plug 'Shougo/neocomplete.vim' " {{{
         " Use neocomplcache
         let g:neocomplete#enable_at_startup = 1
         " Use smartcase.
@@ -246,7 +248,7 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
         endfunction
       " }}}
     else
-      Plugin 'Shougo/neocomplcache.vim' " {{{
+      Plug 'Shougo/neocomplcache.vim' " {{{
         " Use neocomplcache.
         let g:neocomplcache_enable_at_startup = 1
         " Use smartcase.
@@ -285,8 +287,8 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
       autocmd FileType xml           setlocal omnifunc=xmlcomplete#CompleteTags
     augroup END
 
-    Plugin 'Shougo/neosnippet-snippets'
-    Plugin 'Shougo/neosnippet.vim' "{{{
+    Plug 'Shougo/neosnippet-snippets'
+    Plug 'Shougo/neosnippet.vim' "{{{
       let g:neosnippet#snippets_directory='~/.vim/bundle/vim-snippets/snippets'
       let g:neosnippet#enable_snipmate_compatibility=1
 
@@ -303,34 +305,34 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   " ===================================================================
   "   Vimwiki:
-  Plugin 'vimwiki/vimwiki'
+  Plug 'vimwiki/vimwiki'
 
   " ===================================================================
   "   Haskell:
   if (index(s:settings.supportLanguages, 'haskell') >= 0)
-    Plugin 'Twinside/vim-haskellConceal'
+    Plug 'Twinside/vim-haskellConceal', { 'for': 'haskell' }
   end
 
   " ===================================================================
   "   Clojure, Scheme(Racket) and Lisp:
   if (index(s:settings.supportLanguages, 'clojure') >= 0)
-    Plugin 'tpope/vim-fireplace'
-    "Plugin 'vim-scripts/VimClojure'
+    Plug 'tpope/vim-fireplace', { 'for': 'clojure' }
+    "Plug 'vim-scripts/VimClojure'
   endif
 
   if (index(s:settings.supportLanguages, 'scheme') >= 0)
-    Plugin 'wlangstroth/vim-racket'
+    Plug 'wlangstroth/vim-racket', { 'for': 'scheme' }
   endif
 
   " if (index(s:settings.supportLanguages, 'lisp') >= 0)
-  "   Plugin 'kovisoft/slimv'
+  "   Plug 'kovisoft/slimv'
   " endif
 
   "Rainbow parantheses:
   if (index(s:settings.supportLanguages, 'clojure') >= 0)
         \ || (index(s:settings.supportLanguages, 'scheme') >= 0)
         \ || (index(s:settings.supportLanguages, 'lisp') >= 0)
-    Plugin 'amdt/vim-niji' "{{{
+    Plug 'amdt/vim-niji' "{{{
       let g:niji_matching_filetypes = ['lisp', 'scheme', 'clojure']
     "}}}
   endif
@@ -338,32 +340,32 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   " ===================================================================
   "   CSV:
   if (index(s:settings.supportLanguages, 'csv') >= 0)
-    Plugin 'chrisbra/csv.vim'
+    Plug 'chrisbra/csv.vim' , { 'for': 'csv' }
   endif
 
   " ===================================================================
   "   HTML:
   if (index(s:settings.supportLanguages, 'html') >= 0)
-    Plugin 'rstacruz/sparkup', {'rtp': 'vim/'}
+    Plug 'rstacruz/sparkup', {'rtp': 'vim/'}
   endif
 
   " ===================================================================
   "   Arduino:
   if (index(s:settings.supportLanguages, 'arduino') >= 0)
-    Plugin 'sudar/vim-arduino-syntax'
-    Plugin 'tclem/vim-arduino'
+    Plug 'sudar/vim-arduino-syntax' , { 'for': 'arduino' }
+    Plug 'tclem/vim-arduino' , { 'for': 'arduino' }
   endif
 
   " ===================================================================
   "   Ruby:
   if (index(s:settings.supportLanguages, 'ruby') >= 0)
-    Plugin 'tpope/vim-rails'
+    Plug 'tpope/vim-rails' , { 'for': 'ruby' }
   endif
 
   " ===================================================================
   "   Perl:
   if (index(s:settings.supportLanguages, 'perl') >= 0)
-    Plugin 'c9s/perlomni.vim' " {{{
+    Plug 'c9s/perlomni.vim' , { 'for': 'perl' } " {{{
 
     if s:settings.YcmOrNeocomplete == 0
       if has('lua')
@@ -383,25 +385,25 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   " ===================================================================
   "   Others:
-  Plugin 'sjl/clam.vim' "{{{
+  Plug 'sjl/clam.vim' "{{{
     nnoremap ! :Clam<space>
     vnoremap ! :ClamVisual<space>
   "}}}
 
-  Plugin 'tpope/vim-eunuch'
+  Plug 'tpope/vim-eunuch'
 
-  Plugin 'chrisbra/NrrwRgn'
+  Plug 'chrisbra/NrrwRgn'
   " :NR - Open the selected region in a new narrowed window
 
-  Plugin 'tpope/vim-surround'
+  Plug 'tpope/vim-surround'
   " cs'"
 
   " ===================================================================
   "   Testing:
   if s:settings.TestPlugins
-    Plugin 'terryma/vim-multiple-cursors'
+    Plug 'terryma/vim-multiple-cursors'
 
-    Plugin 'tpope/vim-dispatch' "{{{
+    Plug 'tpope/vim-dispatch' "{{{
       augroup vim_dispatch_autocmds
         autocmd!
         autocmd FileType java let b:dispatch = 'javac %'
@@ -413,10 +415,11 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   " ===================================================================
   " Not used plugins {{{
-  "Plugin 'justinmk/vim-sneak'
+  "Plug 'justinmk/vim-sneak'
   " }}}
 
-  call vundle#end()                 " required
+  " call vundle#end()                 " required
+  call plug#end()
   filetype plugin indent on         " required
 endif
 " ===================================================================}}}
