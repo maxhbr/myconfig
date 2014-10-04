@@ -11,7 +11,7 @@ setlocal linebreak
 
 setlocal foldmarker={{{,}}}
 
-setlocal fo+=croql
+" setlocal fo+=croql
 " setlocal comments=:%>,:%
 setlocal commentstring=\%\ %s
 

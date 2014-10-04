@@ -13,17 +13,19 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Sat Oct 04, 2014  02:06
+" Last Modified: Sat Oct 04, 2014  04:52
 
 " ===================================================================
 " ====  initialize settings  ========================================
 " ===================================================================
 let s:settings = {}
 " Best Colorschemes: mustang, jellybeans, hybrid
-" Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256...
-let s:settings.Colorscheme="jellybeans"
+" Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256, landscape...
+let s:settings.Colorscheme="landscape"
 let s:settings.InstallPluginManagerAutomatically=1
-let s:settings.useAirline=1                    " 1: Airline      0: Powerline
+let s:settings.ChooseStatusline=2              " 2: lightline
+                                               " 1: Airline
+                                               " 0: Powerline
 let s:settings.useNERDTree=0                   " 1: NERDTree     0: none
 let s:settings.UndotreeOrGundo=1               " 1: Undotree     0: Gundo
 let s:settings.ChooseCommenter=2               " 2: vim-commentry
@@ -61,9 +63,11 @@ if s:settings.InstallPluginManagerAutomatically " ========================={{{
   if !filereadable(expand('~').'/.vim/autoload/plug.vim')
     exec '!curl -fLo '.expand('~').'/.vim/autoload/plug.vim '.
       \ 'https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim'
+    au VimEnter * PlugInstall
   endif
 endif " ============================================================}}}
-if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
+" if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
+if filereadable(expand('~').'/.vim/autoload/plug.vim')
   filetype off                      " required
   " set rtp+=~/.vim/bundle/Vundle.vim " required
   " call vundle#begin()               " required
@@ -113,7 +117,9 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   " ===================================================================
   "   Design:
-  if s:settings.useAirline
+  if s:settings.ChooseStatusline==2
+    Plug 'itchyny/lightline.vim'
+  elseif s:settings.ChooseStatusline==1
     Plug 'bling/vim-airline' "{{{
       "let g:airline_powerline_fonts = 1
       if 0 " tabline
@@ -145,6 +151,8 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
       Plug 'w0ng/vim-hybrid'
     elseif s:settings.Colorscheme ==? "kolor"
       Plug 'zeis/vim-kolor'
+    elseif s:settings.Colorscheme ==? "landscape"
+      Plug 'itchyny/landscape.vim'
     else
       Plug 'tomasr/molokai'
       Plug 'vim-scripts/wombat256.vim'
@@ -161,12 +169,16 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
     nnoremap <Leader>p :CtrlPMRU<CR>
   "}}}
 
-  Plug 'Shougo/unite.vim',  { 'on': 'Unite' } "{{{
+  Plug 'Shougo/unite.vim' "{{{
     if !has("gui_running") && !has("win32")
       nnoremap <silent> <Nul> :Unite -start-insert buffer file<CR>
     else
       nnoremap <silent> <C-space> :Unite -start-insert buffer file<CR>
     end
+  "}}}
+  Plug 'Shougo/vimfiler.vim', { 'on': ['VimFiler', 'VimFilerExplorer'] } "{{{
+    let g:vimfiler_as_default_explorer = 1
+    noremap <C-e> :VimFilerExplorer<CR>
   "}}}
 
   if s:settings.useNERDTree
@@ -177,13 +189,15 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
         autocmd bufenter * if (winnr("$") == 1 && exists("b:NERDTreeType") && b:NERDTreeType == "primary") | q | endif
       augroup END
     "}}}
-  else
-    noremap <C-e> :Explore<CR>
+  " else
+    " noremap <C-e> :Explore<CR>
     "noremap <C-e> :Ve<CR>
   endif
 
   Plug 'mileszs/ack.vim', { 'on': 'Ack' } "{{{
     nnoremap _a :silent execute "Ack " . expand("<cWORD>") <cr>
+    " use ggreer/the_silver_searcher
+    let g:ackprg = 'ag --nogroup --nocolor --column'
   "}}}
 
   " ===================================================================
@@ -385,7 +399,7 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
 
   " ===================================================================
   "   Others:
-  Plug 'sjl/clam.vim' "{{{
+  Plug 'sjl/clam.vim', { 'on': ['Clam', 'ClamVisual'] } "{{{
     nnoremap ! :Clam<space>
     vnoremap ! :ClamVisual<space>
   "}}}
@@ -403,7 +417,7 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
   if s:settings.TestPlugins
     Plug 'terryma/vim-multiple-cursors'
 
-    Plug 'tpope/vim-dispatch' "{{{
+    Plug 'tpope/vim-dispatch', { 'on': ['Start', 'Dispatch'] } "{{{
       augroup vim_dispatch_autocmds
         autocmd!
         autocmd FileType java let b:dispatch = 'javac %'
@@ -411,6 +425,11 @@ if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
       augroup END
       noremap <leader>ö :Dispatch<cr>
     "}}}
+    
+    Plug 'goldfeld/ctrlr.vim'
+
+    Plug 'AndrewRadev/splitjoin.vim'
+    " gS
   endif
 
   " ===================================================================
