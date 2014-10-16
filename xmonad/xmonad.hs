@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Sat Sep 27, 2014  08:31
+-- Last modified: Thu Oct 16, 2014  08:56
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -231,15 +231,18 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     ] --}}}
     ++
     [ --backlight --{{{
-    ((modm, xK_F1), spawnSelected defaultGSConfig [ "xbacklight =100"
-                                                  , "xbacklight =75"
-                                                  , "xbacklight +10"
-                                                  , "xbacklight =50"
-                                                  , "xbacklight -10"
+    ((modm, xK_F1), spawnSelected defaultGSConfig [ "xbacklight =50"
                                                   , "xbacklight =25"
+                                                  , "xbacklight +10"
+                                                  , "xbacklight =75"
+                                                  , "xbacklight -10"
                                                   , "xbacklight =10"
                                                   , "xbacklight =5"
+                                                  , "xbacklight +1"
+                                                  , "xbacklight =3"
+                                                  , "xbacklight =100"
                                                   , "xbacklight =1"
+                                                  , "xbacklight -1"
                                                   , "xbacklight =0"
                                                   ])
     ] --}}}

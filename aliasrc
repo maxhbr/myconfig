@@ -392,7 +392,7 @@ myPdfpextr() {
 
 myPdfreducesize() {
   gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/screen\
-    -dNOPAUSE -dQUIET -dBATCH -sOutputFile=${3%.pdf}-small.pdf $1
+    -dNOPAUSE -dQUIET -dBATCH -sOutputFile=${1%.pdf}-small.pdf $1
 }
 
 #   LaTeX

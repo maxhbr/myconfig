@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Sat Oct 04, 2014  04:52
+" Last Modified: Sun Oct 12, 2014  11:02
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -21,6 +21,7 @@
 let s:settings = {}
 " Best Colorschemes: mustang, jellybeans, hybrid
 " Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256, landscape...
+" let s:settings.Colorscheme="jellybeans"
 let s:settings.Colorscheme="landscape"
 let s:settings.InstallPluginManagerAutomatically=1
 let s:settings.ChooseStatusline=2              " 2: lightline
@@ -35,7 +36,7 @@ let s:settings.YcmOrNeocomplete=1              " 1: YCM          0: Neocomplete
   let s:settings.YcmAlternativeKeybindings=1   " only if YCM is chosen
 " Plugin Groups:
 " hasekll, scheme, clojure, lisp, html, csv, arduino, ruby, perl
-let s:settings.supportLanguages=['haskell', 'arduino', 'html', 'csv', 'lisp', 'arduino']
+let s:settings.supportLanguages=['haskell', 'arduino', 'html', 'csv', 'lisp', 'perl', 'arduino']
 let s:settings.TestPlugins=1
 
 let mapleader=","
@@ -412,6 +413,28 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
   Plug 'tpope/vim-surround'
   " cs'"
 
+  Plug 'junegunn/limelight.vim' "{{{
+  " Color name (:help cterm-colors) or ANSI code
+    let g:limelight_conceal_ctermfg = 'gray'
+    let g:limelight_conceal_ctermfg = 240
+
+    " Color name (:help gui-colors) or RGB color
+    let g:limelight_conceal_guifg = 'DarkGray'
+    let g:limelight_conceal_guifg = '#777777'
+
+    " Default: 0.5
+    let g:limelight_default_coefficient = 0.7
+  "}}}
+  Plug 'junegunn/goyo.vim' "{{{
+    " :Goyo
+    " autocmd User GoyoEnter Limelight
+    " autocmd User GoyoLeave Limelight!
+
+    let g:goyo_margin_top = 1
+    let g:goyo_margin_bottom = 1
+    let g:goyo_width = 80
+  "}}}
+
   " ===================================================================
   "   Testing:
   if s:settings.TestPlugins
@@ -422,19 +445,21 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
         autocmd!
         autocmd FileType java let b:dispatch = 'javac %'
         autocmd FileType lisp let b:dispatch = '/usr/bin/env clisp %'
+        autocmd FileType perl let b:dispatch = '/usr/bin/env perl %'
       augroup END
       noremap <leader>ö :Dispatch<cr>
     "}}}
-    
-    Plug 'goldfeld/ctrlr.vim'
 
     Plug 'AndrewRadev/splitjoin.vim'
     " gS
+
+    Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': 'yes \| ./install' }
   endif
 
   " ===================================================================
   " Not used plugins {{{
   "Plug 'justinmk/vim-sneak'
+  "Plug 'goldfeld/ctrlr.vim'
   " }}}
 
   " call vundle#end()                 " required
@@ -470,6 +495,12 @@ if has("autocmd")
     autocmd InsertLeave * set nopaste
   augroup END
 endif
+
+let &foldcolumn = (&columns - &textwidth - 12) / 2
+augroup mySidepaddingAugroup
+  autocmd!
+  autocmd VimResized * let &foldcolumn = (&columns - &textwidth - 12) / 2
+augroup END
 
 " Use Unix as the standard file type
 set ffs=unix,dos,mac
@@ -615,7 +646,7 @@ set title
 set cursorline
 set nocursorcolumn " hat probleme mit acp (Popup)
 
-set textwidth=0    " Don't wrap lines by default
+set textwidth=80    " Don't wrap lines by default
 set nowrap
 set ruler
 
@@ -881,6 +912,9 @@ endfunction
 noremap ,R :call RangerChooser()<CR>
 
 "                                                                    }}}
+function! MyBigLeftPadding()
+  let &foldcolumn = (&columns - &textwidth) / 2
+endfunction
 " ===================================================================}}}
 " ====  abbreviations  ==============================================
 " ==================================================================={{{
@@ -915,9 +949,19 @@ if has("autocmd")
 
   augroup Shebang
     autocmd!
+    " Shell Sript:
     autocmd BufNewFile *.sh 0put =\"#!/bin/sh\"|$
+    " Python Sript:
     autocmd BufNewFile *.py 0put =\"#!/usr/bin/env python\<nl># -*- coding: iso-8859-15 -*-\<nl>\"|$
+    " Ruby Script:
     autocmd BufNewFile *.rb 0put =\"#!/usr/bin/env ruby\<nl># -*- coding: None -*-\<nl>\"|$
+    " Perl Sript:
+    autocmd BufNewFile *.pl 0put =\"#!/usr/bin/env perl\<nl>\<nl>use strict;\<nl>use warnings;\<nl>\"|$
+    " Perl Module:
+    autocmd BufNewFile *.pm 0put =\"package ;\<nl>\<nl>use strict;\<nl>use warnings;\<nl>\"|$
+    " Lisp Sript:
+    autocmd BufNewFile *.cl 0put =\"#!/usr/bin/env clisp\<nl>\"|$
+    autocmd BufNewFile *.lisp 0put =\"#!/usr/bin/env clisp\<nl>\"|$
   augroup END
 
   " Transparent editing of gpg encrypted files.                         {{{

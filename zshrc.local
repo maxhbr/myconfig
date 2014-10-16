@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Tue Aug 19, 2014  01:12
+# Last modified: Thu Oct 09, 2014  03:11
 #
 umask 077
 
@@ -20,6 +20,8 @@ export LANG=de_DE.UTF-8
 [[ -d $HOME/.cabal/bin ]] && export PATH=$HOME/.cabal/bin:$PATH
 [[ -d $HOME/perl5/bin ]] && export PATH=$HOME/perl5/bin:$PATH
 export MPD_HOST="mpd@192.168.178.61"
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 ###############################################################################
 ZDOTDIR=${ZDOTDIR:-${HOME}}
