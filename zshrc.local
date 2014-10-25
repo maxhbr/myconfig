@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Thu Oct 09, 2014  03:11
+# Last modified: Fri Oct 24, 2014  09:20
 #
 umask 077
 
@@ -19,6 +19,7 @@ export LANG=de_DE.UTF-8
 }
 [[ -d $HOME/.cabal/bin ]] && export PATH=$HOME/.cabal/bin:$PATH
 [[ -d $HOME/perl5/bin ]] && export PATH=$HOME/perl5/bin:$PATH
+# [[ -d $HOME/.local/bin ]] && export PATH=$HOME//.local/bin:$PATH
 export MPD_HOST="mpd@192.168.178.61"
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
@@ -38,6 +39,9 @@ export TMPDIR="$TMP"
 export TMPPREFIX="${TMPDIR}/zsh"
 ## Use a default width of 80 for manpages for more convenient reading
 export MANWIDTH=${MANWIDTH:-80}
+
+#Python virtualenvs
+export WORKON_HOME=~/workspace/python/virtualenvs
 
 #paralleles compilieren mit haskell
 export ncpus=3
