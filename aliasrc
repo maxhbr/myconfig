@@ -117,7 +117,7 @@ alias hducksall='du -cs .??* |sort -rn'
 #}
 
 #Fix permissions
-permfix() {
+myPermfix() {
   for dir in "$@"; do
     find "$dir" -type d -exec chmod 755 {} \;
     find "$dir" -type f -exec chmod 644 {} \;

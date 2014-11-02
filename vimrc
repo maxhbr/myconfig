@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Sat Oct 25, 2014  01:41
+" Last Modified: Sun Nov 02, 2014  02:38
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -454,6 +454,9 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
     " gS
 
     Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': 'yes \| ./install' }
+
+    Plug 'majutsushi/tagbar'
+    nmap <leader>tt :TagbarToggle<CR>
   endif
 
   " ===================================================================
