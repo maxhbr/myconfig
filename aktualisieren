@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Sat Sep 27, 2014  09:23
+# Last modified: Wed Nov 05, 2014  01:47
 
 ###############################################################################
 # variables
@@ -143,6 +143,7 @@ files() {
 /etc/vconsole.conf
 /etc/vsftpd.conf
 /etc/zathurarc
+/etc/zsh/zshrc
 /usr/share/kbd/keymaps/neo/*
 /usr/share/zsh/functions/Completion/Haskell/*
 X230FILES

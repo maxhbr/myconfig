@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Sun Nov 02, 2014  02:38
+" Last Modified: Wed Nov 05, 2014  01:48
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -62,6 +62,7 @@ if s:settings.InstallPluginManagerAutomatically " ========================={{{
   "   au VimEnter * BundleInstall
   " endif
   if !filereadable(expand('~').'/.vim/autoload/plug.vim')
+    exec '!mkdir -p '.expand('~').'/.vim/autoload/'
     exec '!curl -fLo '.expand('~').'/.vim/autoload/plug.vim '.
       \ 'https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim'
     au VimEnter * PlugInstall
