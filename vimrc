@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Wed Nov 05, 2014  01:48
+" Last Modified: Wed Nov 05, 2014  05:04
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -440,6 +440,7 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
   "   Testing:
   if s:settings.TestPlugins
     Plug 'terryma/vim-multiple-cursors'
+    " Ctrl-n
 
     Plug 'tpope/vim-dispatch', { 'on': ['Start', 'Dispatch'] } "{{{
       augroup vim_dispatch_autocmds

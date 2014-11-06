@@ -356,6 +356,8 @@ mystartcups() {
     echo "starting CUPS"
     sudo systemctl start avahi-daemon.service
     sudo systemctl start cups.service
+    # org.cups.cupsd.service
+    # cups-browsed.service
     touch /tmp/myCupsStartet
     sleep 2
   }
