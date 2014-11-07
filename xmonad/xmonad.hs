@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Thu Nov 06, 2014  08:57
+-- Last modified: Thu Nov 06, 2014  09:32
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -203,9 +203,9 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. shiftMask,  xK_y    ), spawn "slock")
 
     --invert Colors
-    -- , ((modm,                xK_Home ), spawn "xcalib -i -a")
-    , ((modm,                xK_Home ), spawn "pkill compton; compton --invert-color-include 'g:e:URxvt' &")
-    , ((modm .|. shiftMask,  xK_Home ), spawn "pkill compton")
+    , ((modm,                xK_Home ), spawn "xcalib -i -a")
+    -- , ((modm,                xK_Home ), spawn "pkill compton; compton  -CG --invert-color-include 'g:e:URxvt' &")
+    -- , ((modm .|. shiftMask,  xK_Home ), spawn "pkill compton")
 
     -- screenshot
     , ((modm, xK_Print), spawn "scrot screen_%Y-%m-%d_%H-%M-%S.png -d 1")

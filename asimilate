@@ -28,12 +28,13 @@ myinstall "${FOLDER}asoundrc.hdmi-connected" "/home/hubi/.asoundrc.hdmi-connecte
 myinstall "${FOLDER}asoundrc.uca202" "/home/hubi/.asoundrc.uca202" 600 hubi users
 myinstall "${FOLDER}bash_profile" "/home/hubi/.bash_profile" 644 hubi users
 myinstall "${FOLDER}bashrc" "/home/hubi/.bashrc" 644 hubi users
-myinstall "${FOLDER}config/ranger/rc.conf" "/home/hubi/.config/ranger/rc.conf" 644 hubi users
-myinstall "${FOLDER}config/ranger/rifle.conf" "/home/hubi/.config/ranger/rifle.conf" 644 hubi users
 myinstall "${FOLDER}config/dwb/default/custom_keys" "/home/hubi/.config/dwb/default/custom_keys" 644 hubi users
 myinstall "${FOLDER}config/dwb/userscripts/gitClone.sh" "/home/hubi/.config/dwb/userscripts/gitClone.sh" 700 hubi users
 myinstall "${FOLDER}config/dwb/userscripts/open-chromium.sh" "/home/hubi/.config/dwb/userscripts/open-chromium.sh" 700 hubi users
 myinstall "${FOLDER}config/dwb/userscripts/wget-file.sh" "/home/hubi/.config/dwb/userscripts/wget-file.sh" 700 hubi users
+myinstall "${FOLDER}config/ranger/rc.conf" "/home/hubi/.config/ranger/rc.conf" 644 hubi users
+myinstall "${FOLDER}config/ranger/rifle.conf" "/home/hubi/.config/ranger/rifle.conf" 644 hubi users
+myinstall "${FOLDER}config/llpp.conf" "/home/hubi/.config/llpp.conf" 600 hubi users
 myinstall "${FOLDER}emacs" "/home/hubi/.emacs" 600 hubi users
 myinstall "${FOLDER}fontconfig/fonts.conf" "/home/hubi/.fontconfig/fonts.conf" 700 hubi users
 myinstall "${FOLDER}ghci" "/home/hubi/.ghci" 600 hubi users
