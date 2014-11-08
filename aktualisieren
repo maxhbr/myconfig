@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Fri Nov 07, 2014  07:29
+# Last modified: Sat Nov 08, 2014  10:09
 
 ###############################################################################
 # variables
@@ -71,7 +71,7 @@ files() {
 ~/.config/dwb/userscripts/wget-file.sh
 ~/.config/ranger/rc.conf
 ~/.config/ranger/rifle.conf
-~/.config/llpp.conf
+#~/.config/llpp.conf
 ~/.emacs
 ~/.fontconfig/fonts.conf
 ~/.ghci
