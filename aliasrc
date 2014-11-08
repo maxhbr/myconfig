@@ -5,7 +5,7 @@
 # vim, tmux, sudo, mutt
 
 alias vi="vim"
-alias e="vim"
+#alias e="vim"
 alias :e="vim" #Typo
 alias vime="vim -u ~/.vimencrypt -x "
 alias gvime="gvim -u ~/.vimencrypt -x "
@@ -129,6 +129,21 @@ ff() { find . -type f -iname '*'$*'*' -ls 2>/dev/null ; }
 
 # Find a file with pattern $1 in name and Execute $2 on it:
 fe() { find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \; ; }
+
+e() {
+  for file in "$@"; do
+    if [ -f $file ] ; then
+      opt=$( tr '[:upper:]' '[:lower:]' <<<"$file" )
+      case $opt in
+        *.pdf) llpp $file ;;
+        *.djvu) apvlv $file ;;
+        *) vim $file ;;
+      esac
+    else
+      echo "'$file' is not a valid file"
+    fi
+  done
+}
 
 # Extract files from any archive
 # Usage: ex <archive_name>
@@ -344,6 +359,9 @@ mpcFade() {
 
 zathura() {
   command zathura "$@" &
+}
+llpp() {
+  command llpp "$@" &
 }
 gnumeric() {
   command gnumeric "$@" &

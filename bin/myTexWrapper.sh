@@ -14,6 +14,8 @@
 #        mv cursor in vim session
 #      myTexWrapper.sh pdffile line collumn
 #        show text in Zathura
+#      myTexWrapper.sh pdffile page x y
+#        mv cursor in vim session
 #
 #   uses: vim, tmux, zathura, latexmk
 #
@@ -33,6 +35,15 @@
 #         redraw!
 #       endfunction
 #       nmap <Leader>f :call SyncTexForward()<CR>
+# ~/.config/llpp.conf
+#       <llppconfig>
+#       <defaults
+#         ...
+#         synctex-command='~/bin/myTexWrapper.sh'
+#         ...>
+#         ...
+#       </defaults>
+#       </llppconfig>
 # Optional:
 #       alias myTexWrapper.sh to something like mtw
 ################################################################################
@@ -85,6 +96,7 @@
         SRVR=$(<"../../.srvr")
         DIR="../../"
       } || {
+        echo "no .srvr file found!"
         exit 1
       }
     }
@@ -92,7 +104,7 @@
   [[ $# == 2 ]] && {
     # Zathura -> Vim
     vim --servername $SRVR --remote +$1 "$2"
-  } || {
+  } || [[ $# == 3 ]] && {
     # Vim -> Zathura
     PDF=$(find $DIR -type f -name '*.pdf' -printf '%T@ %p\n' \
       | sort -n \
@@ -100,7 +112,13 @@
       | cut -f2- -d " ")
     zathura --synctex-forward "$2:$3:$1" $PDF
     if [ $? != 0 ]; then
-      zathura  -l error -s -x 'myTexWrapper.sh %{line} "%{input}"' $PDF&
+      zathura  -l error -x 'myTexWrapper.sh %{line} "%{input}"' $PDF&
     fi
+  } || [[ $# == 4 ]] && {
+    # llpp -> synctex -> Vim
+    # page:x:y:file
+    synctex edit -o "$(( $2 + 1 )):$3:$4:$1" \
+                 -d $DIR \
+                 -x "vim --servername $SRVR --remote +%{line} \"%{input}\""
   }
 }
