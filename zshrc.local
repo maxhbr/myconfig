@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Fri Oct 24, 2014  09:20
+# Last modified: Wed Nov 26, 2014  08:34
 #
 umask 077
 
@@ -128,6 +128,8 @@ if [ "$PS1" != "" -a "${SSH_TTY:-x}" != x ]; then
     export DISPLAY=:0
   fi
 fi
+
+eval $(perl -I$HOME/.perl/lib/perl5 -Mlocal::lib=$HOME/.perl)
 
 # vim:filetype=zsh foldmethod=marker autoindent expandtab shiftwidth=2
 # Local variables:

@@ -24,12 +24,19 @@
 # Last modified: Wed May 07, 2014  08:10
 
 ################################################################################
-# Aditional Configuration files:
+# Aditional configuration needed:
 # ~/.latexmkrc
+#   for zathura
 #       $pdflatex = 'pdflatex -interaction=nonstopmode --shell-escape';
-#       $dvi_previewer = "start xdvi";
+#       $pdf_mode=1;
 #       $pdf_previewer = "zathura -l error -s -x 'myTexWrapper.sh %{line} \"%{input}\"' %O %S"
+#   for llpp
+#       $pdflatex = 'pdflatex -interaction=nonstopmode --shell-escape';
+#       $pdf_mode=1;
+#       $pdf_previewer='start llpp %S';
+#       $pdf_update_method=2;
 # ~/.vimrc
+#   for vim -> zathura
 #       function! SyncTexForward()
 #         exec 'silent !myTexWrapper.sh % '.line('.')." ".col('.')
 #         redraw!
@@ -47,9 +54,15 @@
 # Optional:
 #       alias myTexWrapper.sh to something like mtw
 ################################################################################
+#
+# TODO:
+#      vim -> llpp
+#
+################################################################################
 
 [[ $# < 2 ]] && {
-  MAIN=$(grep -l '\\documentclass' *tex 2> /dev/null)
+  # MAIN=$(grep -l '\\documentclass' *tex 2> /dev/null)
+  MAIN=$(find . -mindepth 1 -maxdepth 1 -name "*.tex" -type f -exec grep -l '\\documentclass' '{}' +  2> /dev/null)
   if [ $? != 0 ]; then
     exit 1
   fi

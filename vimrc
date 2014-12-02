@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Wed Nov 05, 2014  05:04
+" Last Modified: Thu Nov 13, 2014  03:33
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -806,6 +806,7 @@ noremap <silent> <F4> :close<CR>
 
 noremap <silent> <F5> :update<CR>
 inoremap <silent> <F5> <Esc>:update<CR>
+vnoremap <silent> <F5> <Esc>:update<CR>
 
 " Use arrow key to change buffer
 noremap <silent> <F7> :bp<CR>
