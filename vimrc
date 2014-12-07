@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Thu Nov 13, 2014  03:33
+" Last Modified: Sun Dec 07, 2014  11:14
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -69,10 +69,11 @@ if s:settings.InstallPluginManagerAutomatically " ========================={{{
   endif
 endif " ============================================================}}}
 " if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
-if filereadable(expand('~').'/.vim/autoload/plug.vim')
-  filetype off                      " required
+  " filetype off                      " required
   " set rtp+=~/.vim/bundle/Vundle.vim " required
   " call vundle#begin()               " required
+if filereadable(expand('~').'/.vim/autoload/plug.vim')
+  filetype off
   call plug#begin('~/.vim/plug')
 
   " " download the rest of my config with vundle, if no ~/ftplugin folder is
@@ -467,10 +468,12 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
   "Plug 'goldfeld/ctrlr.vim'
   " }}}
 
-  " call vundle#end()                 " required
   call plug#end()
-  filetype plugin indent on         " required
+  filetype plugin indent on
 endif
+  " call vundle#end()                 " required
+  " filetype plugin indent on         " required
+" endif
 " ===================================================================}}}
 " ====  general  ====================================================
 " ==================================================================={{{
