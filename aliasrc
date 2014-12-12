@@ -12,6 +12,7 @@ alias gvime="gvim -u ~/.vimencrypt -x "
 alias tvim="tmux new vim"
 alias svim="sudo vim -u /home/hubi/.vimrc "
 
+alias tmux="tmux -2"
 alias tmx="tmux attach-session || tmux"
 alias ntmx='tmux attach-session -t $(basename "$(pwd)") || tmux new -s $(basename "$(pwd)")' # name sessions automatically
 if test -z $TMUX && [[ $TERM != "screen" ]]; then
@@ -28,6 +29,8 @@ alias sudo="sudo "
 alias visudo='sudo EDITOR=vim visudo'
 
 alias ssh="TERM=xterm ssh"
+
+man(){ /usr/bin/man $@ || which $@; }
 
 grepr() { grep -r "$@" * 2>/dev/null; }
 have() { type "$1" &> /dev/null; }
@@ -155,6 +158,7 @@ ex() {
         *.tar.bz2) tar xjf $file ;;
         *.tar.gz) tar xzf $file ;;
         *.tar.xz) tar xvfJ $file ;;
+        *.tar.lzma) tar --lzma -xvf $file;;
         *.bz2) bunzip2 $file ;;
         *.rar) unrar e $file ;;
         *.gz) gunzip $file ;;
