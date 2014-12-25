@@ -93,7 +93,7 @@ myinstall "${FOLDER}bin/stolen/peat" "/home/hubi/bin/stolen/peat" 700 hubi users
 myinstall "${FOLDER}etc/X11/xorg.conf.d/20-intel.conf" "/etc/X11/xorg.conf.d/20-intel.conf" 644 root root
 myinstall "${FOLDER}etc/X11/xorg.conf.d/20-keyboard.conf" "/etc/X11/xorg.conf.d/20-keyboard.conf" 644 root root
 myinstall "${FOLDER}etc/fstab" "/etc/fstab" 644 root root
-myinstall "${FOLDER}etc/hosts" "/etc/hosts" 644 hubi users
+myinstall "${FOLDER}etc/hosts" "/etc/hosts" 644 root root
 myinstall "${FOLDER}etc/locale.conf" "/etc/locale.conf" 644 root root
 myinstall "${FOLDER}etc/lvm/lvm.conf" "/etc/lvm/lvm.conf" 644 root root
 myinstall "${FOLDER}etc/makepkg.conf" "/etc/makepkg.conf" 644 root root

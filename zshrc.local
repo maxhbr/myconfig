@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Sun Dec 14, 2014  03:00
+# Last modified: Sun Dec 21, 2014  09:57
 #
 umask 077
 
@@ -65,7 +65,7 @@ compinit
 ###############################################################################
 setopt inc_append_history
 #setopt SHARE_HISTORY
-# bindkey "^R" history-incremental-pattern-search-backward
+bindkey "^R" history-incremental-pattern-search-backward
 bindkey "^S" history-incremental-pattern-search-forward
 
 ###############################################################################

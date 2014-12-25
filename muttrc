@@ -24,6 +24,8 @@ bind index "^" imap-fetch-mail
 bind index gg first-entry
 bind index G last-entry
 
+macro pager \cb <pipe-entry>'urlview'<enter> 'Follow links with urlview'
+
 ##############################################################################
 # General
 ##############################################################################
