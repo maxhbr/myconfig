@@ -1,6 +1,6 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Sat Sep 27, 2014  08:33
+# Last modified: Thu Dec 25, 2014  02:58
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -61,7 +61,6 @@ case "$DOCKED" in
 
     [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
     (
-      [[ -f ~/.asoundrc.default ]] && cp ~/.asoundrc.default ~/.asoundrc
       sleep 1
       amixer -q set Master off
     )&
@@ -84,7 +83,6 @@ case "$DOCKED" in
     fi
 
     rfkill block all &
-    [[ -f ~/.asoundrc.uca202 ]] && cp ~/.asoundrc.uca202 ~/.asoundrc
     ;;
 esac
 

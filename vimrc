@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Sun Dec 07, 2014  11:14
+" Last Modified: Sat Dec 27, 2014  08:28
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -460,6 +460,11 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
 
     Plug 'majutsushi/tagbar'
     nmap <leader>tt :TagbarToggle<CR>
+
+    Plug 'Yggdroot/indentLine'
+
+    Plug 'xolox/vim-misc'
+    Plug 'xolox/vim-notes'
   endif
 
   " ===================================================================

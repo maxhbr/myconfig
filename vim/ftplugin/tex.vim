@@ -6,6 +6,9 @@ setlocal et
 setlocal textwidth=79
 setlocal cc=80
 
+
+let g:tex_conceal= 'a'
+
 setlocal linebreak
 
 setlocal foldmethod=marker
