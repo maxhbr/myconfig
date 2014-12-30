@@ -92,6 +92,7 @@ myinstall "${FOLDER}bin/runNL.sh" "/home/hubi/bin/runNL.sh" 700 hubi users
 myinstall "${FOLDER}bin/stolen/peat" "/home/hubi/bin/stolen/peat" 700 hubi users
 myinstall "${FOLDER}etc/X11/xorg.conf.d/20-intel.conf" "/etc/X11/xorg.conf.d/20-intel.conf" 644 root root
 myinstall "${FOLDER}etc/X11/xorg.conf.d/20-keyboard.conf" "/etc/X11/xorg.conf.d/20-keyboard.conf" 644 root root
+myinstall "${FOLDER}etc/X11/xorg.conf.d/50-synaptics.conf" "/etc/X11/xorg.conf.d/50-synaptics.conf" 644 root root
 myinstall "${FOLDER}etc/fstab" "/etc/fstab" 644 root root
 myinstall "${FOLDER}etc/hosts" "/etc/hosts" 644 root root
 myinstall "${FOLDER}etc/locale.conf" "/etc/locale.conf" 644 root root
