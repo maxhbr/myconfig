@@ -8,6 +8,8 @@ xterm*loginShell: true
 
 URxvt.urgentOnBell: true
 
+URxvt*reverseVideo: false
+
 ! transparency - true or false (default)
 !URxvt*transparent: true
 ! shading - 0 to 99 darkens, 101 to 200 lightens.

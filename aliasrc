@@ -339,9 +339,8 @@ starWars() { telnet towel.blinkenlights.nl; }
 #alias myrenameAllImages="jhead -autorot -nf%y%m%d-%f **/*.jpg"
 alias myrenameImg="jhead -autorot -nf%y%m%d-%f"
 
-geeqie() {
-  command geeqie "$@" &
-}
+geeqie() { command geeqie "$@" & }
+rawtherapee() { command rawtherapee "$@" & }
 
 mpcFade() {
   t=$(($1 * 60))
@@ -449,8 +448,12 @@ alias mtw="myTexWrapper.sh"
 #   Mathe
 #-------------------------------------------------------------------{{{
 
-alias mymatlab="~/matlab/bin/matlab -desktop -nosplash"
-alias mymatlab-headless="~/matlab/bin/matlab -nojvm -nodisplay -nosplash < "
+alias mymatlab="~/matlab/bin/matlab -nodisplay -nosplash -noFigureWindows ./"
+mymatlabRun(){
+  ~/matlab/bin/matlab -nodisplay -nosplash -noFigureWindows -r "$@"
+}
+alias mymatlabGUI="~/matlab/bin/matlab -desktop -nosplash"
+alias mymatlabRunFile="~/matlab/bin/matlab -nojvm -nodisplay -nosplash < "
 
 #-------------------------------------------------------------------}}}
 #   package management

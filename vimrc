@@ -13,14 +13,14 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Sat Dec 27, 2014  08:28
+" Last Modified: Wed Dec 31, 2014  02:29
 
 " ===================================================================
 " ====  initialize settings  ========================================
 " ===================================================================
 let s:settings = {}
-" Best Colorschemes: mustang, jellybeans, hybrid
-" Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256, landscape...
+" Best Colorschemes: landscape, mustang, jellybeans, hybrid
+" Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256...
 " let s:settings.Colorscheme="jellybeans"
 let s:settings.Colorscheme="landscape"
 let s:settings.InstallPluginManagerAutomatically=1
@@ -461,7 +461,7 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
     Plug 'majutsushi/tagbar'
     nmap <leader>tt :TagbarToggle<CR>
 
-    Plug 'Yggdroot/indentLine'
+    Plug 'Yggdroot/indentLine', { 'for': ['tex', 'vim'] }
 
     Plug 'xolox/vim-misc'
     Plug 'xolox/vim-notes'
