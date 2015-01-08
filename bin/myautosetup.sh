@@ -1,6 +1,6 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Thu Dec 25, 2014  02:58
+# Last modified: Wed Jan 07, 2015  02:13
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -64,6 +64,7 @@ case "$DOCKED" in
       sleep 1
       amixer -q set Master off
     )&
+    [[ -f ~/.asoundrc.default ]] && cp ~/.asoundrc.default ~/.asoundrc
     ;;
   "1") #=======================================================================
     xset dpms 900 1800 2700 &

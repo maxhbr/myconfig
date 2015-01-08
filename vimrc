@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Wed Dec 31, 2014  02:29
+" Last Modified: Thu Jan 08, 2015  01:42
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -760,6 +760,13 @@ nnoremap - <C-x>
 
 "                                                                    }}}
 " ====  maps to nop  ================================================{{{
+inoremap <PageUp> <nop>
+" nnoremap <PageUp> <nop>
+" vnoremap <PageUp> <nop>
+inoremap <PageDown> <nop>
+" nnoremap <PageDown> <nop>
+" vnoremap <PageDown> <nop>
+
 nnoremap K <nop>
 
 inoremap <F1> <nop>
