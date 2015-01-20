@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Sat Nov 08, 2014  10:09
+# Last modified: Sat Jan 10, 2015  09:07
 
 ###############################################################################
 # variables
@@ -113,6 +113,7 @@ files() {
 ~/bin/mailrun.sh
 ~/bin/myAnyToMp3.sh
 ~/bin/myCleanDownloads.sh
+~/bin/myEcryptfsMount.sh
 ~/bin/myPdfCrop.sh
 ~/bin/myScalaToScript.sh
 ~/bin/mystopwatch
@@ -139,8 +140,9 @@ files() {
 /etc/pacman.conf
 /etc/sysctl.d/99-sysctl.conf
 /etc/systemd/system/getty@tty1.service.d/noclear.conf
-/etc/systemd/system/tpacpi-bat-custom.service
 /etc/systemd/system/ntpdate.service.d/hwclock.conf
+/etc/systemd/system/tpacpi-bat-custom.service
+/etc/udev/rules.d/*
 /etc/vconsole.conf
 /etc/vsftpd.conf
 /etc/zathurarc
