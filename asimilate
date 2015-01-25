@@ -90,6 +90,7 @@ myinstall "${FOLDER}bin/nmgui" "/home/hubi/bin/nmgui" 755 hubi users
 myinstall "${FOLDER}bin/remove_spaces.sh" "/home/hubi/bin/remove_spaces.sh" 711 hubi users
 myinstall "${FOLDER}bin/rip_gapless.sh" "/home/hubi/bin/rip_gapless.sh" 700 hubi users
 myinstall "${FOLDER}bin/runNL.sh" "/home/hubi/bin/runNL.sh" 700 hubi users
+myinstall "${FOLDER}bin/runQEMU.sh" "/home/hubi/bin/runQEMU.sh" 700 hubi users
 # "${FOLDER}bin/stolen/" "/home/hubi/bin/stolen/"
 myinstall "${FOLDER}etc/X11/xorg.conf.d/20-intel.conf" "/etc/X11/xorg.conf.d/20-intel.conf" 644 root root
 myinstall "${FOLDER}etc/X11/xorg.conf.d/20-keyboard.conf" "/etc/X11/xorg.conf.d/20-keyboard.conf" 644 root root
