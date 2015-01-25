@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Sat Jan 10, 2015  09:07
+# Last modified: Sun Jan 25, 2015  01:59
 
 ###############################################################################
 # variables
@@ -128,7 +128,7 @@ files() {
 ~/bin/remove_spaces.sh
 ~/bin/rip_gapless.sh
 ~/bin/runNL.sh
-~/bin/stolen/peat
+~/bin/stolen/
 /etc/X11/xorg.conf.d/*.conf
 /etc/fstab
 /etc/hosts
