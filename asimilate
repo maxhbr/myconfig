@@ -108,7 +108,7 @@ myinstall "${FOLDER}etc/systemd/system/getty@tty1.service.d/noclear.conf" "/etc/
 myinstall "${FOLDER}etc/systemd/system/ntpdate.service.d/hwclock.conf" "/etc/systemd/system/ntpdate.service.d/hwclock.conf" 644 root root
 myinstall "${FOLDER}etc/systemd/system/tpacpi-bat-custom.service" "/etc/systemd/system/tpacpi-bat-custom.service" 644 root root
 myinstall "${FOLDER}etc/udev/rules.d/51-flirc.rules" "/etc/udev/rules.d/51-flirc.rules" 644 root root
-myinstall "${FOLDER}etc/udev/rules.d/69-yubikey.rules" "/etc/udev/rules.d/69-yubikey.rules" 600 root root
+myinstall "${FOLDER}etc/udev/rules.d/69-yubikey.rules" "/etc/udev/rules.d/69-yubikey.rules" 644 root root
 myinstall "${FOLDER}etc/udev/rules.d/70-u2f.rules" "/etc/udev/rules.d/70-u2f.rules" 644 root root
 myinstall "${FOLDER}etc/vconsole.conf" "/etc/vconsole.conf" 644 root root
 myinstall "${FOLDER}etc/vsftpd.conf" "/etc/vsftpd.conf" 644 root root
