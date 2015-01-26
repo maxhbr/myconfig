@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Thu Jan 08, 2015  01:42
+" Last Modified: Mon Jan 26, 2015  08:53
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -401,6 +401,11 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
   endif
 
   " ===================================================================
+  "   Tagbar:
+  Plug 'majutsushi/tagbar', { 'on': 'TagbarToggle' }
+  nmap <leader>tt :TagbarToggle<CR>
+
+  " ===================================================================
   "   Others:
   Plug 'sjl/clam.vim', { 'on': ['Clam', 'ClamVisual'] } "{{{
     nnoremap ! :Clam<space>
@@ -414,6 +419,9 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
 
   Plug 'tpope/vim-surround'
   " cs'"
+
+  Plug 'terryma/vim-multiple-cursors'
+  " Ctrl-n
 
   Plug 'junegunn/limelight.vim' "{{{
   " Color name (:help cterm-colors) or ANSI code
@@ -440,9 +448,6 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
   " ===================================================================
   "   Testing:
   if s:settings.TestPlugins
-    Plug 'terryma/vim-multiple-cursors'
-    " Ctrl-n
-
     Plug 'tpope/vim-dispatch', { 'on': ['Start', 'Dispatch'] } "{{{
       augroup vim_dispatch_autocmds
         autocmd!
@@ -453,16 +458,15 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
       noremap <leader>ö :Dispatch<cr>
     "}}}
 
-    Plug 'AndrewRadev/splitjoin.vim'
-    " gS
+    " Plug 'AndrewRadev/splitjoin.vim'
+    " " gS gJ
 
     Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': 'yes \| ./install' }
 
-    Plug 'majutsushi/tagbar'
-    nmap <leader>tt :TagbarToggle<CR>
-
     Plug 'Yggdroot/indentLine', { 'for': ['tex', 'vim'] }
 
+    " ===================================================================
+    "   Notes:
     Plug 'xolox/vim-misc'
     Plug 'xolox/vim-notes'
   endif
@@ -971,7 +975,7 @@ if has("autocmd")
   augroup Shebang
     autocmd!
     " Shell Sript:
-    autocmd BufNewFile *.sh 0put =\"#!/bin/sh\"|$
+    autocmd BufNewFile *.sh 0put =\"#!/usr/bin/env bash\"|$
     " Python Sript:
     autocmd BufNewFile *.py 0put =\"#!/usr/bin/env python\<nl># -*- coding: iso-8859-15 -*-\<nl>\"|$
     " Ruby Script:
