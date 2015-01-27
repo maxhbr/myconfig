@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+#
+# ./myThesausrus.sh WORD1 [WORD2 [...]]
 # 
 #   needs: xmllint
 #
@@ -7,7 +9,7 @@ URL="http://www.collinsdictionary.com/dictionary/english-thesaurus/"
 for word in $@; do
   content=$(wget -qO- $URL$word)
 
-  if [[ $content == *"Sorry"* ]]; then
+  if [[ $content == *"Sorry, no results"* ]]; then
     tput bold
     tput setaf 3
     echo "No result!";
