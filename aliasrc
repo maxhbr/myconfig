@@ -567,6 +567,7 @@ calc() { echo "$*" | bc -l; }
 
 hgrep() { history 0 | egrep "$@"; }
 
+alias tes="myThesausrus.sh"
 dic(){
   if [[ "$#" -eq 0 ]]; then
     tput bold

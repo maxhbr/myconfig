@@ -78,13 +78,14 @@ myinstall "${FOLDER}bin/myCleanDownloads.sh" "/home/hubi/bin/myCleanDownloads.sh
 myinstall "${FOLDER}bin/myEcryptfsMount.sh" "/home/hubi/bin/myEcryptfsMount.sh" 700 hubi users
 myinstall "${FOLDER}bin/myPdfCrop.sh" "/home/hubi/bin/myPdfCrop.sh" 700 hubi users
 myinstall "${FOLDER}bin/myScalaToScript.sh" "/home/hubi/bin/myScalaToScript.sh" 700 hubi users
-myinstall "${FOLDER}bin/mystopwatch" "/home/hubi/bin/mystopwatch" 700 hubi users
 myinstall "${FOLDER}bin/myTexWrapper.sh" "/home/hubi/bin/myTexWrapper.sh" 700 hubi users
+myinstall "${FOLDER}bin/myThesausrus.sh" "/home/hubi/bin/myThesausrus.sh" 700 hubi users
 myinstall "${FOLDER}bin/myautosetup.sh" "/home/hubi/bin/myautosetup.sh" 700 hubi users
 myinstall "${FOLDER}bin/mycrypt" "/home/hubi/bin/mycrypt" 700 hubi users
 myinstall "${FOLDER}bin/myfsize.sh" "/home/hubi/bin/myfsize.sh" 700 hubi users
 myinstall "${FOLDER}bin/myfullbackup.sh" "/home/hubi/bin/myfullbackup.sh" 700 hubi users
 myinstall "${FOLDER}bin/mylayouttoggle.sh" "/home/hubi/bin/mylayouttoggle.sh" 600 hubi users
+myinstall "${FOLDER}bin/mystopwatch" "/home/hubi/bin/mystopwatch" 700 hubi users
 myinstall "${FOLDER}bin/ncChat.sh" "/home/hubi/bin/ncChat.sh" 700 hubi users
 myinstall "${FOLDER}bin/nmgui" "/home/hubi/bin/nmgui" 755 hubi users
 myinstall "${FOLDER}bin/remove_spaces.sh" "/home/hubi/bin/remove_spaces.sh" 711 hubi users

@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Sun Jan 25, 2015  03:13
+# Last modified: Tue Jan 27, 2015  12:16
 
 ###############################################################################
 # variables
@@ -116,13 +116,14 @@ files() {
 ~/bin/myEcryptfsMount.sh
 ~/bin/myPdfCrop.sh
 ~/bin/myScalaToScript.sh
-~/bin/mystopwatch
 ~/bin/myTexWrapper.sh
+~/bin/myThesausrus.sh
 ~/bin/myautosetup.sh
 ~/bin/mycrypt
 ~/bin/myfsize.sh
 ~/bin/myfullbackup.sh
 ~/bin/mylayouttoggle.sh
+~/bin/mystopwatch
 ~/bin/ncChat.sh
 ~/bin/nmgui
 ~/bin/remove_spaces.sh
