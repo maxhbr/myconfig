@@ -15,7 +15,7 @@
 #   $ runQEMU.sh br0
 #
 #   written by maximilian-huber.de
-# Last modified: Sun Jan 25, 2015  03:11
+# Last modified: Sun Feb 01, 2015  11:24
 #
 
 ###############################################################################
@@ -43,6 +43,18 @@ while [[ "$#" -gt 1 ]]; do
   fi
   if [ "$1" == "-cdrom" ]; then
     shift; CDROM=$1; shift
+  fi
+  if [ "$1" == "-bridge" ]; then
+    BRIDGED=true
+  fi
+  if [ "$1" == "-nobridge" ]; then
+    BRIDGED=false
+  fi
+  if [ "$1" == "-vnc" ]; then
+    VNC=true
+  fi
+  if [ "$1" == "-novnc" ]; then
+    VNC=false
   fi
   echo $1
 done
