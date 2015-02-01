@@ -15,7 +15,7 @@
 #   $ runQEMU.sh br0
 #
 #   written by maximilian-huber.de
-# Last modified: Sun Feb 01, 2015  11:32
+# Last modified: Sun Feb 01, 2015  11:38
 #
 
 ###############################################################################
@@ -136,7 +136,7 @@ if [ $# -eq 0 ]; then
 
   ##  run  ####################################################################
   echo "-- run ---------------------------------------------------------------"
-  exec qemu-system-x86_64 $param
+  sudo qemu-system-x86_64 $param
 else
   # for bridged networking:
   echo "Bringing up $1 for bridged mode..."
