@@ -27,7 +27,7 @@ myinstall "${FOLDER}asoundrc.default" "/home/hubi/.asoundrc.default" 600 hubi us
 myinstall "${FOLDER}asoundrc.hdmi-connected" "/home/hubi/.asoundrc.hdmi-connected" 600 hubi users
 myinstall "${FOLDER}asoundrc.uca202" "/home/hubi/.asoundrc.uca202" 600 hubi users
 myinstall "${FOLDER}bash_profile" "/home/hubi/.bash_profile" 644 hubi users
-myinstall "${FOLDER}bashrc" "/home/hubi/.bashrc" 644 hubi users
+myinstall "${FOLDER}bashrc" "/home/hubi/.bashrc" 600 hubi users
 myinstall "${FOLDER}config/dwb/default/custom_keys" "/home/hubi/.config/dwb/default/custom_keys" 644 hubi users
 myinstall "${FOLDER}config/dwb/userscripts/gitClone.sh" "/home/hubi/.config/dwb/userscripts/gitClone.sh" 700 hubi users
 myinstall "${FOLDER}config/dwb/userscripts/open-chromium.sh" "/home/hubi/.config/dwb/userscripts/open-chromium.sh" 700 hubi users

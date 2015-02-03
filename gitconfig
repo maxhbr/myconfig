@@ -1,16 +1,24 @@
 [user]
-	name = maximilianhuber
-	email = mail@maximilian-huber.de
+    name = maximilianhuber
+    email = mail@maximilian-huber.de
+[alias]
+    lol = log --graph --decorate --pretty=oneline --abbrev-commit
+    lola = log --graph --decorate --pretty=oneline --abbrev-commit --all
+[color]
+    branch = auto
+    diff = auto
+    interactive = auto
+    status = auto
 [core]
-	autocrlf = input
-	safecrlf = false
+    autocrlf = input
+    safecrlf = false
 [push]
-	default = matching
+    default = matching
 [giggle]
-	main-window-maximized = false
-	main-window-geometry = 1366x754+0+14
-	history-view-vpane-position = 382
-	main-window-view = HistoryView
-	file-view-vpane-position = 652
+    main-window-maximized = false
+    main-window-geometry = 1366x754+0+14
+    history-view-vpane-position = 382
+    main-window-view = HistoryView
+    file-view-vpane-position = 652
 [credential]
-	helper = cache --timeout=3600
+    helper = cache --timeout=3600

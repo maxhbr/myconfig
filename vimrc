@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Mon Jan 26, 2015  08:53
+" Last Modified: Sun Feb 01, 2015  10:42
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -446,6 +446,14 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
   "}}}
 
   " ===================================================================
+  "   Notes:
+  if isdirectory(expand('~').'/.notes')
+    Plug 'xolox/vim-misc'
+    Plug 'xolox/vim-notes'
+    let g:notes_directories = ['~/.notes']
+  endif
+
+  " ===================================================================
   "   Testing:
   if s:settings.TestPlugins
     Plug 'tpope/vim-dispatch', { 'on': ['Start', 'Dispatch'] } "{{{
@@ -458,23 +466,20 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
       noremap <leader>ö :Dispatch<cr>
     "}}}
 
-    " Plug 'AndrewRadev/splitjoin.vim'
-    " " gS gJ
-
-    Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': 'yes \| ./install' }
-
     Plug 'Yggdroot/indentLine', { 'for': ['tex', 'vim'] }
 
-    " ===================================================================
-    "   Notes:
-    Plug 'xolox/vim-misc'
-    Plug 'xolox/vim-notes'
   endif
 
   " ===================================================================
   " Not used plugins {{{
   "Plug 'justinmk/vim-sneak'
+
   "Plug 'goldfeld/ctrlr.vim'
+
+  " Plug 'AndrewRadev/splitjoin.vim'
+  " " gS gJ
+
+  " Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': 'yes \| ./install' }
   " }}}
 
   call plug#end()
