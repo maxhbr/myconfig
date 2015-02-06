@@ -129,6 +129,8 @@ myPermfix() {
 
 # Find a file with a pattern in name:
 ff() { find . -type f -iname '*'$*'*' -ls 2>/dev/null ; }
+ffd() { find . -type d -iname '*'$*'*' -ls 2>/dev/null ; }
+ffa() { find . -iname '*'$*'*' -ls 2>/dev/null ; }
 
 # Find a file with pattern $1 in name and Execute $2 on it:
 fe() { find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \; ; }
