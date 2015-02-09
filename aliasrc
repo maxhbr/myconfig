@@ -127,7 +127,7 @@ myPermfix() {
   done
 }
 
-# Find a file with a pattern in name:
+# Find a file/dir/file&dir with a pattern in name:
 ff() { find . -type f -iname '*'$*'*' -ls 2>/dev/null ; }
 ffd() { find . -type d -iname '*'$*'*' -ls 2>/dev/null ; }
 ffa() { find . -iname '*'$*'*' -ls 2>/dev/null ; }

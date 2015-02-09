@@ -15,7 +15,7 @@
 #   $ runQEMU.sh br0
 #
 #   written by maximilian-huber.de
-# Last modified: Sun Feb 01, 2015  11:38
+# Last modified: Mon Feb 09, 2015  07:36
 #
 
 ###############################################################################
@@ -62,9 +62,9 @@ if [ $# -eq 1 ]; then
   echo $1
   if [ -e "$1" ]; then
     if [ -z "$IMG" ]; then
-      $IMG=$1
+      IMG=$1
     else
-      $CDROM=$1
+      CDROM=$1
     fi
     shift
   fi

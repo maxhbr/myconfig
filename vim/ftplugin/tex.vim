@@ -6,6 +6,7 @@ setlocal et
 setlocal textwidth=79
 setlocal cc=80
 
+setlocal showbreak=@
 
 let g:tex_conceal= 'a'
 
