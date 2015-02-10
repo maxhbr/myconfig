@@ -83,6 +83,7 @@ myinstall "${FOLDER}bin/remove_spaces.sh" "/home/mhuber/bin/remove_spaces.sh" 71
 myinstall "${FOLDER}bin/rip_gapless.sh" "/home/mhuber/bin/rip_gapless.sh" 700 mhuber mhuber
 myinstall "${FOLDER}bin/runNL.sh" "/home/mhuber/bin/runNL.sh" 700 mhuber mhuber
 myinstall "${FOLDER}bin/runQEMU.sh" "/home/mhuber/bin/runQEMU.sh" 700 mhuber mhuber
+# "${FOLDER}bin/stolen/" "/home/mhuber/bin/stolen/"
 myinstall "${FOLDER}etc/X11/xorg.conf.d/20-intel.conf" "/etc/X11/xorg.conf.d/20-intel.conf" 644 root root
 myinstall "${FOLDER}etc/X11/xorg.conf.d/20-keyboard.conf" "/etc/X11/xorg.conf.d/20-keyboard.conf" 644 root root
 myinstall "${FOLDER}etc/X11/xorg.conf.d/50-synaptics.conf" "/etc/X11/xorg.conf.d/50-synaptics.conf" 644 root root

@@ -74,52 +74,52 @@ pacman -S cabal-install
 pacman -S xmobar
 pacman -S dmenu
 #pacman -S dzen2
-cabal install xmonad
-xmonad --recompile
+# cabal install xmonad
+# xmonad --recompile
 
-# Essential Haskell
-#cabal install parsec
-#cabal install containers
-#cabal install monad-loops
-#cabal install directory
-#cabal install filepath
-#cabal install mtl
-#cabal install transformers
-#cabal install text
-#cabal install stm
-#cabal install pandoc
-#cabal install lens
-#cabal install categories
-#cabal install diagrams
-#cabal install network
-#cabal install HTTP
-#cabal install unix
-#cabal install aeson
-#cabal install hashable
-#cabal install cereal
-#cabal install criterion
-#cabal install process
-#cabal install quickcheck
-#cabal install smallcheck
-##cabal install smartcheck
-#cabal install hashtable
-#cabal install warp
-#cabal install happy
-#cabal install pretty
-#cabal install pretty-show
-#cabal install cloud
-#cabal install hmatrix
-#cabal install vect
-#cabal install repa
-#cabal install accelerate
-#cabal install pipes
-#cabal install uniplate
-cabal install pointfree
-#cabal install pointful
-#cabal install pandoc
-#cabal install hakyll
-cabal install hlint
-cabal install hdevtools
+# # Essential Haskell
+# #cabal install parsec
+# #cabal install containers
+# #cabal install monad-loops
+# #cabal install directory
+# #cabal install filepath
+# #cabal install mtl
+# #cabal install transformers
+# #cabal install text
+# #cabal install stm
+# #cabal install pandoc
+# #cabal install lens
+# #cabal install categories
+# #cabal install diagrams
+# #cabal install network
+# #cabal install HTTP
+# #cabal install unix
+# #cabal install aeson
+# #cabal install hashable
+# #cabal install cereal
+# #cabal install criterion
+# #cabal install process
+# #cabal install quickcheck
+# #cabal install smallcheck
+# ##cabal install smartcheck
+# #cabal install hashtable
+# #cabal install warp
+# #cabal install happy
+# #cabal install pretty
+# #cabal install pretty-show
+# #cabal install cloud
+# #cabal install hmatrix
+# #cabal install vect
+# #cabal install repa
+# #cabal install accelerate
+# #cabal install pipes
+# #cabal install uniplate
+# cabal install pointfree
+# #cabal install pointful
+# #cabal install pandoc
+# #cabal install hakyll
+# cabal install hlint
+# cabal install hdevtools
 
 ## Python
 #pacman -S python2
