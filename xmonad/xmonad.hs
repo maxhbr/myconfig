@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Tue Dec 16, 2014  06:17
+-- Last modified: Tue Feb 10, 2015  10:13
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -219,8 +219,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm,                xK_s     ), toggleFF)
 
     -- keyboard layouts
-    , ((modm, xK_F2), spawn "qiv ~/.xmonad/neo/neo_Ebenen_1_2_3_4.png")
-    , ((modm, xK_F3), spawn "qiv ~/.xmonad/neo/neo_Ebenen_1_2_5_6.png")
+    , ((modm, xK_F2), spawn "feh ~/.xmonad/neo/neo_Ebenen_1_2_3_4.png")
+    , ((modm, xK_F3), spawn "feh ~/.xmonad/neo/neo_Ebenen_1_2_5_6.png")
     ] --}}}
     ++
     [ -- mpd --{{{
@@ -396,8 +396,7 @@ myManageHook = composeAll
     , className =? "Virtualbox"                    --> doFullFloat
     , className =? "qemu"                          --> doCenterFloat
     , className =? "qemu-system-x86_64"            --> doCenterFloat
-    , className =? "qiv"                           --> doCenterFloat
-    , resource  =? "qiv"                           --> doCenterFloat
+    , className =? "feh"                           --> doCenterFloat
     , resource  =? "desktop_window"                --> doIgnore
     , resource  =? "kdesktop"                      --> doIgnore
     , className =? "Zenity"                        --> doCenterFloat ]
