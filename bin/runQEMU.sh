@@ -15,13 +15,13 @@
 #   $ runQEMU.sh br0
 #
 #   written by maximilian-huber.de
-# Last modified: Mon Feb 09, 2015  07:36
+# Last modified: Mon Feb 09, 2015  07:58
 #
 
 ###############################################################################
 ##  variables  ################################################################
 IMG=
-BRIDGED=true
+BRIDGED=false
 VNC=false
 CDROM= #ubuntu-14.04.1-server-amd64.iso
 NUMCPUS=2
@@ -112,7 +112,9 @@ if [ $# -eq 0 ]; then
     addParam "-net nic,vlan=0 -net tap,vlan=0,ifname=tap0,script=$ME"
   else
     # redirect important ports
-    addParam "-redir tcp:10022::22 -redir tcp:10023::80 -redir tcp:10024::445"
+    printf -v macaddr "52:54:%02x:%02x:%02x:%02x" $(( $RANDOM & 0xff)) $(( $RANDOM & 0xff )) $(( $RANDOM & 0xff)) $(( $RANDOM & 0xff ))
+    addParam "-net nic,macaddr=$macaddr -net vde"
+    # addParam "-redir tcp:10022::22 -redir tcp:10023::80 -redir tcp:10024::445"
   fi
   addParam "-localtime"
   if [ "$VNC" = true ]; then
