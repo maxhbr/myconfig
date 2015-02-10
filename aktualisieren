@@ -2,13 +2,14 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Tue Jan 27, 2015  12:16
+# Last modified: Tue Feb 10, 2015  10:00
 
 ###############################################################################
 # variables
 USER="$(whoami)"
 HOST="$(hostname)"
-[[ $HOST == "x230" ]] && {
+echo $HOST
+[[ $HOST == "x230" || $HOST == "t450s" ]] && {
   FOLDER="/home/${USER}/myconfig/"
 } || {
   [[ $HOST == "udoo" ]] && {
@@ -55,7 +56,7 @@ git add $ASIMFile
 ###############################################################################
 # files to sync
 files() {
-  [[ $HOST == "x230" ]] && {
+  [[ $HOST == "x230" || $HOST == "t450s" ]] && {
     cat <<X230FILES
 ~/.Xresources
 ~/.aliasrc

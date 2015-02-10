@@ -21,78 +21,68 @@ myinstall(){
     install -D --mode=$3 --owner=$4 --group=$5 $1 $2
   fi
 }
-myinstall "${FOLDER}Xresources" "/home/hubi/.Xresources" 644 hubi users
-myinstall "${FOLDER}aliasrc" "/home/hubi/.aliasrc" 600 hubi users
-myinstall "${FOLDER}asoundrc.default" "/home/hubi/.asoundrc.default" 600 hubi users
-myinstall "${FOLDER}asoundrc.hdmi-connected" "/home/hubi/.asoundrc.hdmi-connected" 600 hubi users
-myinstall "${FOLDER}asoundrc.uca202" "/home/hubi/.asoundrc.uca202" 600 hubi users
-myinstall "${FOLDER}bash_profile" "/home/hubi/.bash_profile" 644 hubi users
-myinstall "${FOLDER}bashrc" "/home/hubi/.bashrc" 600 hubi users
-myinstall "${FOLDER}config/dwb/default/custom_keys" "/home/hubi/.config/dwb/default/custom_keys" 644 hubi users
-myinstall "${FOLDER}config/dwb/userscripts/gitClone.sh" "/home/hubi/.config/dwb/userscripts/gitClone.sh" 700 hubi users
-myinstall "${FOLDER}config/dwb/userscripts/open-chromium.sh" "/home/hubi/.config/dwb/userscripts/open-chromium.sh" 700 hubi users
-myinstall "${FOLDER}config/dwb/userscripts/wget-file.sh" "/home/hubi/.config/dwb/userscripts/wget-file.sh" 700 hubi users
-myinstall "${FOLDER}config/ranger/rc.conf" "/home/hubi/.config/ranger/rc.conf" 644 hubi users
-myinstall "${FOLDER}config/ranger/rifle.conf" "/home/hubi/.config/ranger/rifle.conf" 644 hubi users
-myinstall "${FOLDER}emacs" "/home/hubi/.emacs" 600 hubi users
-myinstall "${FOLDER}fontconfig/fonts.conf" "/home/hubi/.fontconfig/fonts.conf" 700 hubi users
-myinstall "${FOLDER}ghci" "/home/hubi/.ghci" 600 hubi users
-myinstall "${FOLDER}gnupg/gpg.conf" "/home/hubi/.gnupg/gpg.conf" 600 hubi users
-myinstall "${FOLDER}gitconfig" "/home/hubi/.gitconfig" 600 hubi users
-myinstall "${FOLDER}inputrc" "/home/hubi/.inputrc" 600 hubi users
-myinstall "${FOLDER}latexmkrc" "/home/hubi/.latexmkrc" 600 hubi users
-myinstall "${FOLDER}mutt/mutt-colors" "/home/hubi/.mutt/mutt-colors" 600 hubi users
-myinstall "${FOLDER}muttrc" "/home/hubi/.muttrc" 600 hubi users
-myinstall "${FOLDER}ncmpcpp/config" "/home/hubi/.ncmpcpp/config" 600 hubi users
-myinstall "${FOLDER}tmux.conf" "/home/hubi/.tmux.conf" 600 hubi users
-myinstall "${FOLDER}vimencrypt" "/home/hubi/.vimencrypt" 600 hubi users
-myinstall "${FOLDER}vimrc" "/home/hubi/.vimrc" 600 hubi users
-# "${FOLDER}vim/autoload" "/home/hubi/.vim/autoload"
-# "${FOLDER}vim/colors" "/home/hubi/.vim/colors"
-# "${FOLDER}vim/ftdetect" "/home/hubi/.vim/ftdetect"
-# "${FOLDER}vim/ftplugin" "/home/hubi/.vim/ftplugin"
-# "${FOLDER}vim/indent" "/home/hubi/.vim/indent"
-# "${FOLDER}vim/plugin" "/home/hubi/.vim/plugin"
-# "${FOLDER}vim/syntax" "/home/hubi/.vim/syntax"
-# "${FOLDER}vim/snippets" "/home/hubi/.vim/snippets"
-myinstall "${FOLDER}vim/plugin/myLastModified.vim" "/home/hubi/.vim/plugin/myLastModified.vim" 600 hubi users
-myinstall "${FOLDER}vim/plugin/grep-operator.vim" "/home/hubi/.vim/plugin/grep-operator.vim" 600 hubi users
-myinstall "${FOLDER}xinitrc" "/home/hubi/.xinitrc" 600 hubi users
-myinstall "${FOLDER}xmonad/myinformation.sh" "/home/hubi/.xmonad/myinformation.sh" 777 hubi users
-myinstall "${FOLDER}xmonad/showkeys" "/home/hubi/.xmonad/showkeys" 755 hubi users
-myinstall "${FOLDER}xmonad/tmux-scratch.sh" "/home/hubi/.xmonad/tmux-scratch.sh" 711 hubi users
-myinstall "${FOLDER}xmonad/xmobarrc" "/home/hubi/.xmonad/xmobarrc" 600 hubi users
-myinstall "${FOLDER}xmonad/xmonad.hs" "/home/hubi/.xmonad/xmonad.hs" 600 hubi users
-myinstall "${FOLDER}zlogin" "/home/hubi/.zlogin" 600 hubi users
-myinstall "${FOLDER}zshrc.local" "/home/hubi/.zshrc.local" 644 hubi users
-myinstall "${FOLDER}zprofile" "/home/hubi/.zprofile" 644 hubi users
-myinstall "${FOLDER}xmodmap" "/home/hubi/.xmodmap" 600 hubi users
-myinstall "${FOLDER}bin/create_ap" "/home/hubi/bin/create_ap" 744 hubi users
-myinstall "${FOLDER}bin/disp-controll" "/home/hubi/bin/disp-controll" 711 hubi users
-myinstall "${FOLDER}bin/gitWalk" "/home/hubi/bin/gitWalk" 700 hubi users
-myinstall "${FOLDER}bin/installiere_neo" "/home/hubi/bin/installiere_neo" 744 hubi users
-myinstall "${FOLDER}bin/mailclient.sh" "/home/hubi/bin/mailclient.sh" 700 hubi users
-myinstall "${FOLDER}bin/mailrun.sh" "/home/hubi/bin/mailrun.sh" 700 hubi users
-myinstall "${FOLDER}bin/myAnyToMp3.sh" "/home/hubi/bin/myAnyToMp3.sh" 600 hubi users
-myinstall "${FOLDER}bin/myCleanDownloads.sh" "/home/hubi/bin/myCleanDownloads.sh" 700 hubi users
-myinstall "${FOLDER}bin/myEcryptfsMount.sh" "/home/hubi/bin/myEcryptfsMount.sh" 700 hubi users
-myinstall "${FOLDER}bin/myPdfCrop.sh" "/home/hubi/bin/myPdfCrop.sh" 700 hubi users
-myinstall "${FOLDER}bin/myScalaToScript.sh" "/home/hubi/bin/myScalaToScript.sh" 700 hubi users
-myinstall "${FOLDER}bin/myTexWrapper.sh" "/home/hubi/bin/myTexWrapper.sh" 700 hubi users
-myinstall "${FOLDER}bin/myThesausrus.sh" "/home/hubi/bin/myThesausrus.sh" 700 hubi users
-myinstall "${FOLDER}bin/myautosetup.sh" "/home/hubi/bin/myautosetup.sh" 700 hubi users
-myinstall "${FOLDER}bin/mycrypt" "/home/hubi/bin/mycrypt" 700 hubi users
-myinstall "${FOLDER}bin/myfsize.sh" "/home/hubi/bin/myfsize.sh" 700 hubi users
-myinstall "${FOLDER}bin/myfullbackup.sh" "/home/hubi/bin/myfullbackup.sh" 700 hubi users
-myinstall "${FOLDER}bin/mylayouttoggle.sh" "/home/hubi/bin/mylayouttoggle.sh" 600 hubi users
-myinstall "${FOLDER}bin/mystopwatch" "/home/hubi/bin/mystopwatch" 700 hubi users
-myinstall "${FOLDER}bin/ncChat.sh" "/home/hubi/bin/ncChat.sh" 700 hubi users
-myinstall "${FOLDER}bin/nmgui" "/home/hubi/bin/nmgui" 755 hubi users
-myinstall "${FOLDER}bin/remove_spaces.sh" "/home/hubi/bin/remove_spaces.sh" 711 hubi users
-myinstall "${FOLDER}bin/rip_gapless.sh" "/home/hubi/bin/rip_gapless.sh" 700 hubi users
-myinstall "${FOLDER}bin/runNL.sh" "/home/hubi/bin/runNL.sh" 700 hubi users
-myinstall "${FOLDER}bin/runQEMU.sh" "/home/hubi/bin/runQEMU.sh" 700 hubi users
-# "${FOLDER}bin/stolen/" "/home/hubi/bin/stolen/"
+myinstall "${FOLDER}Xresources" "/home/mhuber/.Xresources" 644 mhuber mhuber
+myinstall "${FOLDER}aliasrc" "/home/mhuber/.aliasrc" 600 mhuber mhuber
+myinstall "${FOLDER}asoundrc.default" "/home/mhuber/.asoundrc.default" 600 mhuber mhuber
+myinstall "${FOLDER}asoundrc.hdmi-connected" "/home/mhuber/.asoundrc.hdmi-connected" 600 mhuber mhuber
+myinstall "${FOLDER}asoundrc.uca202" "/home/mhuber/.asoundrc.uca202" 600 mhuber mhuber
+myinstall "${FOLDER}bash_profile" "/home/mhuber/.bash_profile" 644 mhuber mhuber
+myinstall "${FOLDER}bashrc" "/home/mhuber/.bashrc" 600 mhuber mhuber
+myinstall "${FOLDER}config/dwb/default/custom_keys" "/home/mhuber/.config/dwb/default/custom_keys" 644 mhuber mhuber
+myinstall "${FOLDER}config/ranger/rc.conf" "/home/mhuber/.config/ranger/rc.conf" 644 mhuber mhuber
+myinstall "${FOLDER}config/ranger/rifle.conf" "/home/mhuber/.config/ranger/rifle.conf" 644 mhuber mhuber
+myinstall "${FOLDER}emacs" "/home/mhuber/.emacs" 600 mhuber mhuber
+myinstall "${FOLDER}fontconfig/fonts.conf" "/home/mhuber/.fontconfig/fonts.conf" 700 mhuber mhuber
+myinstall "${FOLDER}ghci" "/home/mhuber/.ghci" 600 mhuber mhuber
+myinstall "${FOLDER}gnupg/gpg.conf" "/home/mhuber/.gnupg/gpg.conf" 600 mhuber mhuber
+myinstall "${FOLDER}gitconfig" "/home/mhuber/.gitconfig" 600 mhuber mhuber
+myinstall "${FOLDER}inputrc" "/home/mhuber/.inputrc" 600 mhuber mhuber
+myinstall "${FOLDER}latexmkrc" "/home/mhuber/.latexmkrc" 600 mhuber mhuber
+myinstall "${FOLDER}mutt/mutt-colors" "/home/mhuber/.mutt/mutt-colors" 600 mhuber mhuber
+myinstall "${FOLDER}muttrc" "/home/mhuber/.muttrc" 600 mhuber mhuber
+myinstall "${FOLDER}ncmpcpp/config" "/home/mhuber/.ncmpcpp/config" 600 mhuber mhuber
+myinstall "${FOLDER}tmux.conf" "/home/mhuber/.tmux.conf" 600 mhuber mhuber
+myinstall "${FOLDER}vimencrypt" "/home/mhuber/.vimencrypt" 600 mhuber mhuber
+myinstall "${FOLDER}vimrc" "/home/mhuber/.vimrc" 600 mhuber mhuber
+# "${FOLDER}vim/autoload" "/home/mhuber/.vim/autoload"
+# "${FOLDER}vim/plugin" "/home/mhuber/.vim/plugin"
+myinstall "${FOLDER}vim/plugin/myLastModified.vim" "/home/mhuber/.vim/plugin/myLastModified.vim" 600 mhuber mhuber
+myinstall "${FOLDER}vim/plugin/grep-operator.vim" "/home/mhuber/.vim/plugin/grep-operator.vim" 600 mhuber mhuber
+myinstall "${FOLDER}xinitrc" "/home/mhuber/.xinitrc" 600 mhuber mhuber
+myinstall "${FOLDER}xmonad/myinformation.sh" "/home/mhuber/.xmonad/myinformation.sh" 777 mhuber mhuber
+myinstall "${FOLDER}xmonad/showkeys" "/home/mhuber/.xmonad/showkeys" 755 mhuber mhuber
+myinstall "${FOLDER}xmonad/tmux-scratch.sh" "/home/mhuber/.xmonad/tmux-scratch.sh" 711 mhuber mhuber
+myinstall "${FOLDER}xmonad/xmobarrc" "/home/mhuber/.xmonad/xmobarrc" 600 mhuber mhuber
+myinstall "${FOLDER}xmonad/xmonad.hs" "/home/mhuber/.xmonad/xmonad.hs" 600 mhuber mhuber
+myinstall "${FOLDER}zlogin" "/home/mhuber/.zlogin" 600 mhuber mhuber
+myinstall "${FOLDER}zshrc.local" "/home/mhuber/.zshrc.local" 644 mhuber mhuber
+myinstall "${FOLDER}zprofile" "/home/mhuber/.zprofile" 644 mhuber mhuber
+myinstall "${FOLDER}xmodmap" "/home/mhuber/.xmodmap" 600 mhuber mhuber
+myinstall "${FOLDER}bin/create_ap" "/home/mhuber/bin/create_ap" 744 mhuber mhuber
+myinstall "${FOLDER}bin/disp-controll" "/home/mhuber/bin/disp-controll" 711 mhuber mhuber
+myinstall "${FOLDER}bin/gitWalk" "/home/mhuber/bin/gitWalk" 700 mhuber mhuber
+myinstall "${FOLDER}bin/installiere_neo" "/home/mhuber/bin/installiere_neo" 744 mhuber mhuber
+myinstall "${FOLDER}bin/mailclient.sh" "/home/mhuber/bin/mailclient.sh" 700 mhuber mhuber
+myinstall "${FOLDER}bin/mailrun.sh" "/home/mhuber/bin/mailrun.sh" 700 mhuber mhuber
+myinstall "${FOLDER}bin/myAnyToMp3.sh" "/home/mhuber/bin/myAnyToMp3.sh" 600 mhuber mhuber
+myinstall "${FOLDER}bin/myCleanDownloads.sh" "/home/mhuber/bin/myCleanDownloads.sh" 700 mhuber mhuber
+myinstall "${FOLDER}bin/myEcryptfsMount.sh" "/home/mhuber/bin/myEcryptfsMount.sh" 700 mhuber mhuber
+myinstall "${FOLDER}bin/myPdfCrop.sh" "/home/mhuber/bin/myPdfCrop.sh" 700 mhuber mhuber
+myinstall "${FOLDER}bin/myScalaToScript.sh" "/home/mhuber/bin/myScalaToScript.sh" 700 mhuber mhuber
+myinstall "${FOLDER}bin/myTexWrapper.sh" "/home/mhuber/bin/myTexWrapper.sh" 700 mhuber mhuber
+myinstall "${FOLDER}bin/myThesausrus.sh" "/home/mhuber/bin/myThesausrus.sh" 700 mhuber mhuber
+myinstall "${FOLDER}bin/myautosetup.sh" "/home/mhuber/bin/myautosetup.sh" 700 mhuber mhuber
+myinstall "${FOLDER}bin/mycrypt" "/home/mhuber/bin/mycrypt" 700 mhuber mhuber
+myinstall "${FOLDER}bin/myfsize.sh" "/home/mhuber/bin/myfsize.sh" 700 mhuber mhuber
+myinstall "${FOLDER}bin/myfullbackup.sh" "/home/mhuber/bin/myfullbackup.sh" 700 mhuber mhuber
+myinstall "${FOLDER}bin/mylayouttoggle.sh" "/home/mhuber/bin/mylayouttoggle.sh" 600 mhuber mhuber
+myinstall "${FOLDER}bin/mystopwatch" "/home/mhuber/bin/mystopwatch" 700 mhuber mhuber
+myinstall "${FOLDER}bin/ncChat.sh" "/home/mhuber/bin/ncChat.sh" 700 mhuber mhuber
+myinstall "${FOLDER}bin/nmgui" "/home/mhuber/bin/nmgui" 755 mhuber mhuber
+myinstall "${FOLDER}bin/remove_spaces.sh" "/home/mhuber/bin/remove_spaces.sh" 711 mhuber mhuber
+myinstall "${FOLDER}bin/rip_gapless.sh" "/home/mhuber/bin/rip_gapless.sh" 700 mhuber mhuber
+myinstall "${FOLDER}bin/runNL.sh" "/home/mhuber/bin/runNL.sh" 700 mhuber mhuber
+myinstall "${FOLDER}bin/runQEMU.sh" "/home/mhuber/bin/runQEMU.sh" 700 mhuber mhuber
 myinstall "${FOLDER}etc/X11/xorg.conf.d/20-intel.conf" "/etc/X11/xorg.conf.d/20-intel.conf" 644 root root
 myinstall "${FOLDER}etc/X11/xorg.conf.d/20-keyboard.conf" "/etc/X11/xorg.conf.d/20-keyboard.conf" 644 root root
 myinstall "${FOLDER}etc/X11/xorg.conf.d/50-synaptics.conf" "/etc/X11/xorg.conf.d/50-synaptics.conf" 644 root root
@@ -102,13 +92,8 @@ myinstall "${FOLDER}etc/locale.conf" "/etc/locale.conf" 644 root root
 myinstall "${FOLDER}etc/lvm/lvm.conf" "/etc/lvm/lvm.conf" 644 root root
 myinstall "${FOLDER}etc/makepkg.conf" "/etc/makepkg.conf" 644 root root
 myinstall "${FOLDER}etc/mkinitcpio.conf" "/etc/mkinitcpio.conf" 644 root root
-myinstall "${FOLDER}etc/modprobe.d/blacklist.conf" "/etc/modprobe.d/blacklist.conf" 644 root root
-myinstall "${FOLDER}etc/modprobe.d/power_save.conf" "/etc/modprobe.d/power_save.conf" 644 root root
 myinstall "${FOLDER}etc/pacman.conf" "/etc/pacman.conf" 644 root root
-myinstall "${FOLDER}etc/sysctl.d/99-sysctl.conf" "/etc/sysctl.d/99-sysctl.conf" 644 root root
 myinstall "${FOLDER}etc/systemd/system/getty@tty1.service.d/noclear.conf" "/etc/systemd/system/getty@tty1.service.d/noclear.conf" 644 root root
-myinstall "${FOLDER}etc/systemd/system/ntpdate.service.d/hwclock.conf" "/etc/systemd/system/ntpdate.service.d/hwclock.conf" 644 root root
-myinstall "${FOLDER}etc/systemd/system/tpacpi-bat-custom.service" "/etc/systemd/system/tpacpi-bat-custom.service" 644 root root
 myinstall "${FOLDER}etc/udev/rules.d/51-flirc.rules" "/etc/udev/rules.d/51-flirc.rules" 644 root root
 myinstall "${FOLDER}etc/udev/rules.d/69-yubikey.rules" "/etc/udev/rules.d/69-yubikey.rules" 644 root root
 myinstall "${FOLDER}etc/udev/rules.d/70-u2f.rules" "/etc/udev/rules.d/70-u2f.rules" 644 root root
@@ -117,6 +102,6 @@ myinstall "${FOLDER}etc/vsftpd.conf" "/etc/vsftpd.conf" 644 root root
 myinstall "${FOLDER}etc/zathurarc" "/etc/zathurarc" 644 root root
 myinstall "${FOLDER}etc/zsh/zshrc" "/etc/zsh/zshrc" 644 root root
 myinstall "${FOLDER}usr/share/kbd/keymaps/neo/neo.map" "/usr/share/kbd/keymaps/neo/neo.map" 644 root root
-myinstall "${FOLDER}usr/share/zsh/functions/Completion/Haskell/_cabal" "/usr/share/zsh/functions/Completion/Haskell/_cabal" 644 hubi users
-myinstall "${FOLDER}usr/share/zsh/functions/Completion/Haskell/_ghc" "/usr/share/zsh/functions/Completion/Haskell/_ghc" 644 hubi users
-myinstall "${FOLDER}usr/share/zsh/functions/Completion/Haskell/_hugs" "/usr/share/zsh/functions/Completion/Haskell/_hugs" 644 hubi users
+myinstall "${FOLDER}usr/share/zsh/functions/Completion/Haskell/_cabal" "/usr/share/zsh/functions/Completion/Haskell/_cabal" 644 mhuber mhuber
+myinstall "${FOLDER}usr/share/zsh/functions/Completion/Haskell/_ghc" "/usr/share/zsh/functions/Completion/Haskell/_ghc" 644 mhuber mhuber
+myinstall "${FOLDER}usr/share/zsh/functions/Completion/Haskell/_hugs" "/usr/share/zsh/functions/Completion/Haskell/_hugs" 644 mhuber mhuber

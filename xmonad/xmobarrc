@@ -20,7 +20,7 @@ Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
                     , Run DynNetwork 
                       ["-L","0" ,"-H","32"
                       ,"--normal","green", "--high","red"] 10
-                    , Run Com "/home/hubi/.xmonad/myinformation.sh" [] "info" 100
+                    , Run Com "/home/mhuber/.xmonad/myinformation.sh" [] "info" 100
                     --, Run Volume "default" "Master" [] 10 -- --flags="with_alsa
                     --, Run Wireless "wlp3s0" [] -- --flags="with_iwlib"
                     --, Run Com "conky" ["-q", "-i", "1"] "conky" 600

@@ -3,7 +3,7 @@
 #   In work!
 #
 
-mkdir /home/hubi
+# mkdir /home/mhuber
 
 pacman -Sy
 
@@ -210,6 +210,6 @@ pacman -S mpg123
 pacman -S ttf-bitstream-vera
 pacman -S ttf-dejavu
 pacman -S ttf-freefont
-pacman -S ttf-inconsolata-g
-pacman -S ttf-liberation
-pacman -S monaco-linux-font
+# pacman -S ttf-inconsolata-g
+# pacman -S ttf-liberation
+# pacman -S monaco-linux-font

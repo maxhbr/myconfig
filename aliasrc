@@ -10,7 +10,7 @@ alias :e="vim" #Typo
 alias vime="vim -u ~/.vimencrypt -x "
 alias gvime="gvim -u ~/.vimencrypt -x "
 alias tvim="tmux new vim"
-alias svim="sudo vim -u /home/hubi/.vimrc "
+alias svim="sudo vim -u /home/mhuber/.vimrc "
 
 alias tmux="tmux -2"
 alias tmx="tmux attach-session || tmux"

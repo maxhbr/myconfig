@@ -1,6 +1,6 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Wed Jan 07, 2015  02:13
+# Last modified: Tue Feb 10, 2015  09:51
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -91,4 +91,4 @@ setxkbmap -layout de,de -variant neo,nodeadkeys -option\
   -option grp:shifts_toggle -option grp_led:scroll
 # [[ -f ~/.xmodmap ]] && xmodmap ~/.xmodmap
 
-feh --bg-center "/home/hubi/Bilder/background/BACKGROUND.png"
+feh --bg-center "/home/mhuber/Bilder/background/BACKGROUND.png"

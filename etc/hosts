@@ -4,7 +4,7 @@
 # Last updated: Jul 18th, 2014 at 00:00
 
 #<localhost>
-127.0.0.1 	localhost myhost hubi-arch
+127.0.0.1 	localhost myhost
 127.0.0.1 	localhost.localdomain
 255.255.255.255	broadcasthost
 ::1		localhost
