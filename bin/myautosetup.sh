@@ -1,11 +1,11 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Tue Feb 10, 2015  09:51
+# Last modified: Wed Feb 11, 2015  11:09
 
 #==============================================================================
 #===  Global variables  =======================================================
 #==============================================================================
-DOCKED=$(cat /sys/devices/platform/dock.2/docked)
+DOCKED=$(cat /sys/devices/platform/dock.0/docked)
 SECOND=1
 
 #BatPresent=$(acpi -b | wc -l)
@@ -40,8 +40,8 @@ case "$DOCKED" in
   "0") #=======================================================================
     xset dpms 300 600 900 &
 
-    DEFAULT_OUTPUT='LVDS1'
-    OUTPUTS='VGA1 HDMI1 HDMI2'
+    DEFAULT_OUTPUT='eDP1'
+    OUTPUTS='DP1 DP2 HDMI1 HDMI2'
     EXECUTE=""
     for CURRENT in $OUTPUTS; do
       if [[ $XRANDR == *$CURRENT\ connected*  ]]; then # is connected
@@ -59,7 +59,7 @@ case "$DOCKED" in
 
     rfkill unblock all &
 
-    [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
+    # [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
     (
       sleep 1
       amixer -q set Master off
@@ -69,14 +69,14 @@ case "$DOCKED" in
   "1") #=======================================================================
     xset dpms 900 1800 2700 &
 
-    if [[ $XRANDR == *HDMI2\ connected\ \(* \
-        || $XRANDR == *LVDS1\ connected\ \(* ]]; then # is disabled
+    if [[ $XRANDR == *DP2-1\ connected\ \(* \
+        || $XRANDR == *eDP1\ connected\ \(* ]]; then # is disabled
       /usr/bin/xrandr \
-        --output HDMI2 --primary --mode 1920x1080 --right-of LVDS1 \
-        --output LVDS1 --mode 1366x768
-      [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
+        --output DP2-1 --primary --mode 1920x1080 --right-of eDP1 \
+        --output eDP1 --mode 1920x1080
+      # [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
     else
-      /usr/bin/xrandr --output HDMI2 --mode 1920x1080 --output LVDS1 --off
+      /usr/bin/xrandr --output DP2-1 --mode 1920x1080 --output eDP1 --off
 
       #Error - unsupported ramp size 0
       #[[ -f ~/.icc/23.icc ]] && xcalib ~/.icc/23.icc &
