@@ -93,14 +93,14 @@ myinstall "${FOLDER}bin/runQEMU.sh" "/home/mhuber/bin/runQEMU.sh" 700 mhuber mhu
 myinstall "${FOLDER}etc/X11/xorg.conf.d/20-intel.conf" "/etc/X11/xorg.conf.d/20-intel.conf" 644 root root
 myinstall "${FOLDER}etc/X11/xorg.conf.d/20-keyboard.conf" "/etc/X11/xorg.conf.d/20-keyboard.conf" 644 root root
 myinstall "${FOLDER}etc/X11/xorg.conf.d/50-synaptics.conf" "/etc/X11/xorg.conf.d/50-synaptics.conf" 644 root root
-myinstall "${FOLDER}etc/X11/xorg.conf.d/90-evdev.conf" "/etc/X11/xorg.conf.d/90-evdev.conf" 600 root root
+myinstall "${FOLDER}etc/X11/xorg.conf.d/90-evdev.conf" "/etc/X11/xorg.conf.d/90-evdev.conf" 644 root root
 myinstall "${FOLDER}etc/fstab" "/etc/fstab" 644 root root
 myinstall "${FOLDER}etc/hosts" "/etc/hosts" 644 root root
 myinstall "${FOLDER}etc/locale.conf" "/etc/locale.conf" 644 root root
 myinstall "${FOLDER}etc/lvm/lvm.conf" "/etc/lvm/lvm.conf" 644 root root
 myinstall "${FOLDER}etc/makepkg.conf" "/etc/makepkg.conf" 644 root root
 myinstall "${FOLDER}etc/mkinitcpio.conf" "/etc/mkinitcpio.conf" 644 root root
-myinstall "${FOLDER}etc/modprobe.d/psmouse.conf" "/etc/modprobe.d/psmouse.conf" 600 root root
+myinstall "${FOLDER}etc/modprobe.d/psmouse.conf" "/etc/modprobe.d/psmouse.conf" 644 root root
 myinstall "${FOLDER}etc/pacman.conf" "/etc/pacman.conf" 644 root root
 myinstall "${FOLDER}etc/systemd/system/getty@tty1.service.d/noclear.conf" "/etc/systemd/system/getty@tty1.service.d/noclear.conf" 644 root root
 myinstall "${FOLDER}etc/udev/rules.d/51-flirc.rules" "/etc/udev/rules.d/51-flirc.rules" 644 root root

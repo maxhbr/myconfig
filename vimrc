@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Sun Feb 01, 2015  10:42
+" Last Modified: Wed Feb 11, 2015  10:06
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -107,6 +107,11 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
     let g:syntastic_style_warning_symbol = '≈'
     noremap <Leader>S :SyntasticToggleMode<CR>
     let g:syntastic_scala_checkers = []
+    
+    let g:syntastic_always_populate_loc_list = 0
+    let g:syntastic_auto_loc_list = 0
+    let g:syntastic_check_on_open = 1
+    let g:syntastic_check_on_wq = 0
     "let g:syntastic_haskell_checkers = ["hlint"]
   "}}}
 

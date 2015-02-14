@@ -26,7 +26,17 @@ Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
                     --, Run Com "conky" ["-q", "-i", "1"] "conky" 600
                     , Run Date "%a %d.%m.%Y %H:%M:%S" "date" 10
                     , Run Kbd [("de(nodeadkeys)", "| de "), ("de(neo)", "")]
-                    , Run BatteryP ["BAT0"]
+                    -- , Run BatteryP ["BAT0"]
+                    --   ["-t", "Bat: <left>%<acstatus>"
+                    --   , "-L", "10" , "-H", "80"
+                    --   , "-p", "3"
+                    --   , "--"
+                    --   , "-O", " <fc=green>+<watts>W</fc>"
+                    --   , "-o", " / <fc=#ee9a00><timeleft></fc> (<watts>W)"
+                    --   , "-i", ""
+                    --   , "-L", "-15" , "-H", "-5"
+                    --   , "-l", "red" , "-m", "blue" , "-h", "green"] 600
+                    , Run BatteryP ["BAT1"]
                       ["-t", "Bat: <left>%<acstatus>"
                       , "-L", "10" , "-H", "80"
                       , "-p", "3"
