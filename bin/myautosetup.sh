@@ -1,6 +1,6 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Wed Feb 11, 2015  11:09
+# Last modified: Sat Feb 14, 2015  12:25
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -40,22 +40,31 @@ case "$DOCKED" in
   "0") #=======================================================================
     xset dpms 300 600 900 &
 
-    DEFAULT_OUTPUT='eDP1'
-    OUTPUTS='DP1 DP2 HDMI1 HDMI2'
-    EXECUTE=""
-    for CURRENT in $OUTPUTS; do
-      if [[ $XRANDR == *$CURRENT\ connected*  ]]; then # is connected
-        if [[ $XRANDR == *$CURRENT\ connected\ \(* ]]; then # is disabled
-          EXECUTE+="--output $CURRENT --auto --above $DEFAULT_OUTPUT "
-          xset dpms 99997 99998 99999 &
-        else
-          EXECUTE+="--output $CURRENT --off "
-        fi
-      else # make sure disconnected outputs are off
-        EXECUTE+="--output $CURRENT --off "
-      fi
-    done
-    xrandr --output $DEFAULT_OUTPUT --primary --auto $EXECUTE
+    # DEFAULT_OUTPUT='eDP1'
+    # OUTPUTS='DP1 DP2 DP2-1 DP2-2 DP2-3 HDMI1 HDMI2 VIRTUAL1'
+    # EXECUTE=""
+    # for CURRENT in $OUTPUTS; do
+    #   if [[ $XRANDR == *$CURRENT\ connected*  ]]; then # is connected
+    #     if [[ $XRANDR == *$CURRENT\ connected\ \(* ]]; then # is disabled
+    #       EXECUTE+="--output $CURRENT --auto --above $DEFAULT_OUTPUT "
+    #       xset dpms 99997 99998 99999 &
+    #     else
+    #       EXECUTE+="--output $CURRENT --off "
+    #     fi
+    #   else # make sure disconnected outputs are off
+    #     EXECUTE+="--output $CURRENT --off "
+    #   fi
+    # done
+    # xrandr --output $DEFAULT_OUTPUT --primary --auto $EXECUTE
+    xrandr --output VIRTUAL1 --off \
+           --output eDP1 --mode 1920x1080 --pos 0x0 --rotate normal \
+           --output DP1 --off \
+           --output DP2-1 --off \
+           --output DP2-2 --off \
+           --output DP2-3 --off \
+           --output HDMI2 --off \
+           --output HDMI1 --off \
+           --output DP2 --off
 
     rfkill unblock all &
 
