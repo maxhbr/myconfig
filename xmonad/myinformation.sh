@@ -82,7 +82,7 @@ if ! [[ -z "$volume" ]]; then
 fi
 
 ###############################################################################
-#others:
+## Others:
 #printDiskInfo
   #RFSP=$(df -h / | tail -1 | awk '{ print $5 }' | tr -d '%')
   #HFSP=$(df -h /home | tail -1 | awk '{ print $5 }' | tr -d '%')
