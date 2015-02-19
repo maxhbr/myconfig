@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Tue Feb 10, 2015  09:55
+# Last modified: Thu Feb 19, 2015  11:02
 
 #setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 #setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:sclk_toggle -option grp_led:scroll
@@ -36,8 +36,11 @@ export LANG="de_DE.utf8"
 #amixer sset Master off &
 amixer -q set Master off &
 xbacklight =70 &
+redshift -l 48.2:10.8 -b 0.8:1 &
 
 ([[ -f ~/bin/mailrun.sh ]] && ~/bin/mailrun.sh) &
+
+rfkill unblock all &
 
 #exec dbus-launch /home/mhuber/.cabal/bin/xmonad
 exec dbus-launch /usr/bin/xmonad

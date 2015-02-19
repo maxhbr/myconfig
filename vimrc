@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Wed Feb 11, 2015  10:06
+" Last Modified: Wed Feb 18, 2015  03:02
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -735,7 +735,7 @@ endif " =============================================================}}}
 " ====  keymappings / input  ========================================
 " ==================================================================={{{
 if has("mouse")
-  set mouse=a " Enable mouse usage (all modes) alternativ nvc
+  set mouse=nv " Enable mouse usage (all modes) alternativ nvc
   set mousehide
 endif
 set backspace=indent,eol,start
