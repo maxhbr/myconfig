@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Thu Feb 19, 2015  11:02
+# Last modified: Thu Feb 19, 2015  08:38
 
 #setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 #setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:sclk_toggle -option grp_led:scroll
@@ -36,7 +36,7 @@ export LANG="de_DE.utf8"
 #amixer sset Master off &
 amixer -q set Master off &
 xbacklight =70 &
-redshift -l 48.2:10.8 -b 0.8:1 &
+redshift -l 48.2:10.8 &
 
 ([[ -f ~/bin/mailrun.sh ]] && ~/bin/mailrun.sh) &
 

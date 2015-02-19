@@ -126,3 +126,5 @@ function! s:SyncTexForward()
   redraw!
 endfunction
 nnoremap <Leader>f :call <SID>SyncTexForward()<CR>
+
+nnoremap <leader>kl :!killall lualatex<cr>
