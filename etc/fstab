@@ -3,20 +3,20 @@
 #
 # <file system>	<dir>	<type>	<options>	<dump>	<pass>
 # /dev/mapper/lvm-root LABEL=root
-# UUID=66120cca-942a-48d4-8550-40183b4a6f92	/         	ext4      	rw,noatime,data=ordered	0 1
-UUID=/dev/mapper/lvm-root	/         	ext4      	rw,noatime,data=ordered	0 1
+UUID=66120cca-942a-48d4-8550-40183b4a6f92	/         	ext4      	rw,noatime,data=ordered	0 1
+# UUID=/dev/mapper/lvm-root	/         	ext4      	rw,noatime,data=ordered	0 1
 
 # /dev/mapper/lvm-home LABEL=home
-# UUID=bdec9803-cb5d-4fd9-b4fb-31066bdac9bb	/home     	ext4      	rw,noatime,data=ordered	0 2
-UUID=/dev/mapper/lvm-home	/home     	ext4      	rw,noatime,data=ordered	0 2
+UUID=bdec9803-cb5d-4fd9-b4fb-31066bdac9bb	/home     	ext4      	rw,noatime,data=ordered	0 2
+# UUID=/dev/mapper/lvm-home	/home     	ext4      	rw,noatime,data=ordered	0 2
 
 # /dev/mapper/lvm-var LABEL=var
-# UUID=7bf0cf37-06e4-4d92-b03b-2fd197dfb804	/var      	ext4      	rw,noatime,data=ordered	0 2
-UUID=/dev/mapper/lvm-var	/var      	ext4      	rw,noatime,data=ordered	0 2
+UUID=7bf0cf37-06e4-4d92-b03b-2fd197dfb804	/var      	ext4      	rw,noatime,data=ordered	0 2
+# UUID=/dev/mapper/lvm-var	/var      	ext4      	rw,noatime,data=ordered	0 2
 
 # /dev/sda1
-# UUID=4DDA-A6B7      	/boot     	vfat      	rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro	0 2
-UUID=/dev/sda1      	/boot     	vfat      	rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro	0 2
+UUID=4DDA-A6B7      	/boot     	vfat      	rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro	0 2
+# UUID=/dev/sda1      	/boot     	vfat      	rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro	0 2
 
 tmpfs /tmp tmpfs nodev,nosuid,size=8G 0 0
 tmpfs /media tmpfs nodev,nosuid,size=2M 0 0
