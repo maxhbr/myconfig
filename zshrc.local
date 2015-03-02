@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Sun Dec 21, 2014  09:57
+# Last modified: Mon Mar 02, 2015  09:39
 #
 umask 077
 
@@ -22,11 +22,20 @@ export LANG=de_DE.UTF-8
 # [[ -d $HOME/perl5/bin ]] && export PATH=$HOME/perl5/bin:$PATH
 [[ -d $HOME/.perl/bin ]] && export PATH=$HOME/.perl/bin:$PATH
 
+PATH="$HOME/perl5/bin${PATH+:}${PATH}"; export PATH;
+PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB+:}${PERL5LIB}"; export PERL5LIB;
+PERL_LOCAL_LIB_ROOT="$HOME/perl5${PERL_LOCAL_LIB_ROOT+:}${PERL_LOCAL_LIB_ROOT}"; export PERL_LOCAL_LIB_ROOT;
+PERL_MB_OPT="--install_base \"$HOME/perl5\""; export PERL_MB_OPT;
+PERL_MM_OPT="INSTALL_BASE=$HOME/perl5"; export PERL_MM_OPT;
+
 # [[ -d $HOME/.local/bin ]] && export PATH=$HOME/.local/bin:$PATH
 
 export MPD_HOST="mpd@192.168.178.61"
 
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+###############################################################################
+# nix:
+#  to install: curl https://nixos.org/nix/install | sh
+if [ -e /home/mhuber/.nix-profile/etc/profile.d/nix.sh ]; then . /home/mhuber/.nix-profile/etc/profile.d/nix.sh; fi
 
 ###############################################################################
 ZDOTDIR=${ZDOTDIR:-${HOME}}
@@ -133,7 +142,7 @@ if [ "$PS1" != "" -a "${SSH_TTY:-x}" != x ]; then
   fi
 fi
 
-eval $(perl -I$HOME/.perl/lib/perl5 -Mlocal::lib=$HOME/.perl)
+# eval $(perl -I$HOME/.perl/lib/perl5 -Mlocal::lib=$HOME/.perl)
 
 # vim:filetype=zsh foldmethod=marker autoindent expandtab shiftwidth=2
 # Local variables:
