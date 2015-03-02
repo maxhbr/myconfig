@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Tue Feb 10, 2015  10:13
+-- Last modified: Mon Mar 02, 2015  05:29
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -178,7 +178,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     -- Restart xmonad
     , ((modm,                xK_q    ), spawn "xmonad --recompile; xmonad --restart")
     -- Quit xmonad
-    , ((modm .|. shiftMask, xK_q     ), io exitSuccess)
+    , ((modm .|. shiftMask .|. controlMask, xK_q     ), io exitSuccess)
     ] --}}}
     ++
     [ --Layout --{{{

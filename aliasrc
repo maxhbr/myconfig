@@ -491,8 +491,14 @@ have pacman && {
   alias pacinsd='sudo pacman -S --asdeps'
   alias pacmir='sudo pacman -Syy'
 
-  #update via yaourt
-  alias yaourtupd="yaourt -Syu --aur"
+  #update via packer
+  alias packerupd="packer -Syu --aur"
+
+  #nix
+  alias nixin="nix-env -i"
+  alias nixupg="nix-env -u '*'"
+  alias nixTest="nix-shell -p"
+  alias nixColGarbage="nix-collect-garbage -d"
 } || {
   have apt-get && {
     alias aptupd="sudo apt-get update && sudo apt-get upgrade"
