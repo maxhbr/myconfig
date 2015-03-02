@@ -13,17 +13,17 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Mon Mar 02, 2015  10:39
+" Last Modified: Mon Mar 02, 2015  10:45
 
 " ===================================================================
 " ====  initialize settings  ========================================
 " ===================================================================
 let s:settings = {}
 " Best Colorschemes: landscape, mustang, jellybeans, hybrid
-" Light Colorscheme: lucius
+" Light Colorscheme: lucius, hemisu
 " Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256...
 " let s:settings.Colorscheme="jellybeans"
-let s:settings.Colorscheme="lucius"
+let s:settings.Colorscheme="hemisu"
 let s:settings.ColorschemeVariant="light"      " dark or light
 let s:settings.InstallPluginManagerAutomatically=1
 let s:settings.ChooseStatusline=2              " 2: lightline
@@ -165,6 +165,8 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
       Plug 'itchyny/landscape.vim'
     elseif s:settings.Colorscheme ==? "lucius"
       Plug 'jonathanfilip/vim-lucius'
+    elseif s:settings.Colorscheme ==? "hemisu"
+      Plug 'noahfrederick/vim-hemisu'
     else
       Plug 'tomasr/molokai'
       Plug 'vim-scripts/wombat256.vim'
