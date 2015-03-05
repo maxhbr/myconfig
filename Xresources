@@ -16,7 +16,7 @@ URxvt*reverseVideo: false
 !   Dont use with tintColor; just use a darker or lighter color instead.
 !URxvt*shading: 10
 
-URxvt.internalBorder: 10
+URxvt.internalBorder: 0
 URxvt.externalBorder: 0
 
 URxvt.depth: 32
