@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Mar 03, 2015  12:42
+" Last Modified: Thu Mar 05, 2015  09:49
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -566,7 +566,8 @@ set wildmenu "Kommando Zeilen Vervollständigung
 set wildignore=*.dll,*.o,*.obj,*.exe,*.hi,*.pyc,
   \*.bak,*.bac,
   \*.jpg,*.gif,*.png,
-  \*.aux,*.bbl,*.blg,*.fdb_latexmk,*.fls,*.idx,*.ilg,*.ind,*.nlo,*.toc
+  \*.aux,*.bbl,*.blg,*.fdb_latexmk,*.fls,*.idx,*.ilg,*.ind,*.nlo,*.toc,
+  \*.cmi,*.cmx,*.cmo
 set wildmode=list:longest
 
 " Suffixes that get lower priority when doing tab completion for filenames.
