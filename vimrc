@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Thu Mar 05, 2015  09:49
+" Last Modified: Thu Mar 05, 2015  10:16
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -435,6 +435,8 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
   Plug 'terryma/vim-multiple-cursors'
   " Ctrl-n
 
+  Plug 'Yggdroot/indentLine', { 'for': ['tex', 'vim','ocaml'] }
+
   Plug 'junegunn/limelight.vim' "{{{
   " Color name (:help cterm-colors) or ANSI code
     let g:limelight_conceal_ctermfg = 'gray'
@@ -477,9 +479,6 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
       augroup END
       noremap <leader>ö :Dispatch<cr>
     "}}}
-
-    Plug 'Yggdroot/indentLine', { 'for': ['tex', 'vim'] }
-
   endif
 
   " ===================================================================

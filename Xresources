@@ -16,15 +16,21 @@ URxvt*reverseVideo: false
 !   Dont use with tintColor; just use a darker or lighter color instead.
 !URxvt*shading: 10
 
+URxvt.internalBorder: 10
+URxvt.externalBorder: 0
+
 URxvt.depth: 32
-!URxvt.background: rgba:1111/1111/1111/dddd
 URxvt*saveLines: 12000
-URxvt*foreground: White
-URxvt*background: Black
-!URxvt*foreground: Black
-!URxvt*background: White
-URxvt*font: xft:DejaVu Sans Mono:pixelsize=11:antialias=true:hinting=true
-URxvt*boldFont: xft:DejaVu Sans Mono:bold:pixelsize=12:antialias=true:hinting=true
+!URxvt*foreground: White
+!URxvt*background: Black
+URxvt*background: #2e3436
+URxvt*foreground: #eeeeec
+!URxvt*font: xft:DejaVu Sans Mono:pixelsize=15:antialias=true:hinting=true
+!URxvt*boldFont: xft:DejaVu Sans Mono:bold:pixelsize=16:antialias=true:hinting=true
+URxvt.font:             xft:inconsolata:pixelsize=17:antialias=true:hinting=true,             xft:DejaVu Sans Mono:pixelsize=15:antialias=true,hinting=true
+URxvt.boldFont:         xft:inconsolata:bold:pixelsize=17:antialias=true:hinting=true,        xft:DejaVu Sans Mono:bold:pixelsize=14:antialias=true,hinting=true
+URxvt.italicFont:       xft:inconsolata:italic:pixelsize=17:antialias=true:hinting=true,      xft:DejaVu Sans Mono:italic:pixelsize=15:antialias=true,hinting=true
+URxvt.bolditalicFont:   xft:inconsolata:bold:italic:pixelsize=17:antialias=true:hinting=true, xft:DejaVu Sans Mono:bold:italic:pixelsize=15:antialias=true,hinting=true
 URxvt*color4: RoyalBlue
 URxvt*color12: RoyalBlue
 
@@ -46,9 +52,7 @@ urxvt*perl-ext-common:  default,matcher,tabbed,font-size
 !URxvt.keysym.S-Insert:  perl:clipboard:paste
 !URxvt.keysym.M-Insert:  perl:clipboard:paste_escaped
 !Rxvt.keysym.M-s:       perl:url-select:select_next
-!urxvt*urlLauncher:      /usr/bin/chromium
-!URxvt*urlLauncher:      uzbl-tabbed
-URxvt*urlLauncher:      dwb
+URxvt*urlLauncher:       /usr/bin/chromium
 !URxvt.colorUL:          #86a2be
 urxvt*matcher.button:   1
 URxvt.tabbed.tabbar-fg: 8
@@ -67,4 +71,3 @@ URxvt.keysym.C-Up:     perl:font-size:increase
 URxvt.keysym.C-Down:   perl:font-size:decrease
 URxvt.keysym.C-S-Up:   perl:font-size:incglobal
 URxvt.keysym.C-S-Down: perl:font-size:decglobal
-
