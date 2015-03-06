@@ -3,7 +3,7 @@
 
 ###############################################################################
 ## Wifi
-if [[ "$(rfkill list 1 | grep -c yes)" == "0" ]]; then
+if [[ "$(rfkill list 0 | grep -c yes)" == "0" ]]; then
   #TODO: iwconfig shouldnt be called double
   essid=`iwconfig wlp3s0 \
     | awk -F '"' '/ESSID/ {print $2}'`
