@@ -1,6 +1,6 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Sun Mar 08, 2015  11:56
+# Last modified: Sun Mar 08, 2015  04:48
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -74,7 +74,7 @@ case "$DOCKED" in
            --output HDMI1 --off \
            --output DP2 --off
 
-    rfkill unblock all &
+    sudo /usr/bin/rfkill unblock all &
 
     (
       sleep 1
@@ -103,7 +103,7 @@ case "$DOCKED" in
       touch /tmp/myMonitorConfig1
     fi
 
-    rfkill block all &
+    sudo /usr/bin/rfkill block all &
     (
       sleep 1
       chooseAudioCard Device
