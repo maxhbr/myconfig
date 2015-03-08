@@ -1,6 +1,6 @@
 #!/bin/sh
 # ~/bin/myautosetup.sh
-# Last modified: Sat Feb 14, 2015  12:25
+# Last modified: Sun Mar 08, 2015  11:56
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -15,6 +15,14 @@ XRANDR=`xrandr`
 #TODO:
 #MPD_HOST="mpd@192.168.178.61"
 #mpc -h MPD_HOST --no-status pause
+
+chooseAudioCard() {
+  NUM=$(cat /proc/asound/cards | grep -m1 $1 | cut -d' ' -f2)
+  echo "#generated via ~/bin/myautosetup.sh" > ~/.asoundrc
+  echo "defaults.ctl.card $NUM" >> ~/.asoundrc
+  echo "defaults.pcm.card $NUM" >> ~/.asoundrc
+  echo "defaults.timer.card $NUM" >> ~/.asoundrc
+}
 
 #==============================================================================
 #===  Input arguments  ========================================================
@@ -68,36 +76,42 @@ case "$DOCKED" in
 
     rfkill unblock all &
 
-    # [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
     (
       sleep 1
+      chooseAudioCard PCH
       amixer -q set Master off
     )&
-    [[ -f ~/.asoundrc.default ]] && cp ~/.asoundrc.default ~/.asoundrc
     ;;
   "1") #=======================================================================
     xset dpms 900 1800 2700 &
 
-    if [[ $XRANDR == *DP2-1\ connected\ \(* \
-        || $XRANDR == *eDP1\ connected\ \(* ]]; then # is disabled
+    if [[ -a "/tmp/myMonitorConfig1" ]]; then
       /usr/bin/xrandr \
-        --output DP2-1 --primary --mode 1920x1080 --right-of eDP1 \
-        --output eDP1 --mode 1920x1080
+        --output DP2-1 --primary --mode 1920x1080 \
+        --output eDP1 --mode 1920x1080 --left-of DP2-1
+      rm /tmp/myMonitorConfig1
       # [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
     else
-      /usr/bin/xrandr --output DP2-1 --mode 1920x1080 --output eDP1 --off
+      # /usr/bin/xrandr --output DP2-1 --mode 1920x1080 --output eDP1 --off
+      /usr/bin/xrandr \
+        --output eDP1 --mode 1920x1080 \
+        --output DP2-1 --mode 1920x1080 --same-as eDP1
 
       #Error - unsupported ramp size 0
       #[[ -f ~/.icc/23.icc ]] && xcalib ~/.icc/23.icc &
       xset dpms 99997 99998 99999 &
+      touch /tmp/myMonitorConfig1
     fi
 
     rfkill block all &
+    (
+      sleep 1
+      chooseAudioCard Device
+    )&
     ;;
 esac
 
 setxkbmap -layout de,de -variant neo,nodeadkeys -option\
   -option grp:shifts_toggle -option grp_led:scroll
-# [[ -f ~/.xmodmap ]] && xmodmap ~/.xmodmap
 
 feh --bg-center "/home/mhuber/Bilder/background/BACKGROUND.png"

@@ -22,8 +22,8 @@ URxvt.externalBorder: 0
 URxvt.depth: 32
 URxvt*saveLines: 12000
 !URxvt*foreground: White
-URxvt*background: Black
-!URxvt*background: #2e3436
+!URxvt*background: Black
+URxvt*background: #2e3436
 URxvt*foreground: #eeeeec
 !URxvt*font: xft:DejaVu Sans Mono:pixelsize=15:antialias=true:hinting=true
 !URxvt*boldFont: xft:DejaVu Sans Mono:bold:pixelsize=16:antialias=true:hinting=true
