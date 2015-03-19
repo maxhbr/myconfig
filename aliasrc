@@ -170,7 +170,8 @@ ex() {
         *.zip) unzip $file ;;
         *.Z) uncompress $file ;;
         *.7z) 7z x $file ;;
-        *.jar) jar xf $file ;;
+        # *.jar) jar xf $file ;;
+        *.jar) unzip $file ;;
         *.deb) ar xv $file ;;
         *) echo "'$file' of type '$opt' cannot be extracted via ex()" ;;
       esac
@@ -499,6 +500,7 @@ have pacman && {
   alias nixupg="nix-env -u '*'"
   alias nixTest="nix-shell -p"
   alias nixColGarbage="nix-collect-garbage -d"
+  alias nixse="nix-env -qa"
 } || {
   have apt-get && {
     alias aptupd="sudo apt-get update && sudo apt-get upgrade"

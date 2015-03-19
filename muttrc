@@ -48,7 +48,7 @@ set date_format="%a, %d. %b %H:%M"          #gibt an, wie das Datum formatiert w
 set index_format="%4C %Z %D %-22.22F (%?l?%4l&%4c?) %s"	#Format der Mail-Übersicht
 set folder_format="%2C %8s %d %t %N %f"     #Format des Datei-Browsers
 set pager_index_lines=10                    #Anzahl der angezeigten Mails in der Übersicht
-set editor="vim +10"                         #Editor, der zum Verfassen der E-Mail benutzt wird, hier Vim beginnend auf Zeile 8
+set editor="vim +11"                         #Editor, der zum Verfassen der E-Mail benutzt wird, hier Vim beginnend auf Zeile 8
 set beep_new                                # bell on new mails
 set header_cache=$HOME/Mail/.hcache
 
@@ -138,6 +138,9 @@ set pgp_sign_as=0x32CA3654
 set pgp_replyencrypt=yes
 set pgp_timeout=3600
 set pgp_good_sign="^gpg: Good signature from"
+
+# http://www.gnuterrypratchett.com/
+my_hdr X-Clacks-Overhead: GNU Terry Pratchett
 
 my_hdr X-Homepage: http://www.maximilian-huber.de
 my_hdr X-PGP-Key: http://www.maximilian-huber.de/gpg-pubkey.asc

@@ -1,23 +1,32 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # ~/bin/myautosetup.sh
-# Last modified: Sun Mar 08, 2015  04:48
+# Last modified: Tue Mar 10, 2015  10:44
 
 #==============================================================================
 #===  Global variables  =======================================================
 #==============================================================================
-DOCKED=$(cat /sys/devices/platform/dock.0/docked)
-SECOND=1
 
 #BatPresent=$(acpi -b | wc -l)
 ACPresent=$(acpi -a | grep -c on-line)
 XRANDR=`xrandr`
+DOCKED_OUTPUT="DP2-1"
 
-#TODO:
-#MPD_HOST="mpd@192.168.178.61"
-#mpc -h MPD_HOST --no-status pause
+# DOCKED=$(cat /sys/devices/platform/dock.0/docked)
+if [[ $XRANDR == *$DOCKED_OUTPUT\ connected*  ]]; then
+  DOCKED=1
+else
+  DOCKED=0
+fi
 
+#==============================================================================
+#===  Functions  ==============================================================
+#==============================================================================
 chooseAudioCard() {
   NUM=$(cat /proc/asound/cards | grep -m1 $1 | cut -d' ' -f2)
+  if [[ -z "$NUM" ]]; then
+    echo "NUM was empty for $1"
+    NUM=1
+  fi
   echo "#generated via ~/bin/myautosetup.sh" > ~/.asoundrc
   echo "defaults.ctl.card $NUM" >> ~/.asoundrc
   echo "defaults.pcm.card $NUM" >> ~/.asoundrc
@@ -29,9 +38,6 @@ chooseAudioCard() {
 #==============================================================================
 while [ $# -ne 0 ]; do
   case "$1" in
-    single)
-      SECOND=0
-      ;;
     wait)
       sleep 0.5
       ;;
@@ -46,6 +52,7 @@ done
 
 case "$DOCKED" in
   "0") #=======================================================================
+    echo "status is UNDOCKED"
     xset dpms 300 600 900 &
 
     # DEFAULT_OUTPUT='eDP1'
@@ -78,16 +85,17 @@ case "$DOCKED" in
 
     (
       sleep 1
-      chooseAudioCard PCH
+      chooseAudioCard "PCH"
       amixer -q set Master off
     )&
     ;;
   "1") #=======================================================================
+    echo "status is DOCKED"
     xset dpms 900 1800 2700 &
 
     if [[ -a "/tmp/myMonitorConfig1" ]]; then
       /usr/bin/xrandr \
-        --output DP2-1 --primary --mode 1920x1080 \
+        --output $DOCKED_OUTPUT --primary --mode 1920x1080 \
         --output eDP1 --mode 1920x1080 --left-of DP2-1
       rm /tmp/myMonitorConfig1
       # [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
@@ -95,7 +103,7 @@ case "$DOCKED" in
       # /usr/bin/xrandr --output DP2-1 --mode 1920x1080 --output eDP1 --off
       /usr/bin/xrandr \
         --output eDP1 --mode 1920x1080 \
-        --output DP2-1 --mode 1920x1080 --same-as eDP1
+        --output $DOCKED_OUTPUT --mode 1920x1080 --same-as eDP1
 
       #Error - unsupported ramp size 0
       #[[ -f ~/.icc/23.icc ]] && xcalib ~/.icc/23.icc &
@@ -106,7 +114,7 @@ case "$DOCKED" in
     sudo /usr/bin/rfkill block all &
     (
       sleep 1
-      chooseAudioCard Device
+      chooseAudioCard "Device"
     )&
     ;;
 esac
