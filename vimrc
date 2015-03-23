@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Thu Mar 05, 2015  10:16
+" Last Modified: Fri Mar 20, 2015  07:38
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -339,7 +339,7 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
   " ===================================================================
   "   Haskell:
   if (index(s:settings.supportLanguages, 'haskell') >= 0)
-    Plug 'Twinside/vim-haskellConceal', { 'for': 'haskell' }
+    " Plug 'Twinside/vim-haskellConceal', { 'for': 'haskell' }
   end
 
   " ===================================================================
@@ -435,7 +435,7 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
   Plug 'terryma/vim-multiple-cursors'
   " Ctrl-n
 
-  Plug 'Yggdroot/indentLine', { 'for': ['tex', 'vim','ocaml'] }
+  Plug 'Yggdroot/indentLine', { 'for': ['tex', 'vim', 'ocaml', 'haskell'] }
 
   Plug 'junegunn/limelight.vim' "{{{
   " Color name (:help cterm-colors) or ANSI code

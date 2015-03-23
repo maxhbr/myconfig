@@ -7,6 +7,8 @@ let s:width = 80
 
 noremap <c-F5> :w<CR>:!ghci "%"<CR>
 
+" set formatprg=pointfree
+
 function! HaskellModuleSection(...)
 let name = 0 < a:0 ? a:1 : inputdialog("Section name: ")
 
