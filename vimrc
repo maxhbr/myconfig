@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Fri Mar 20, 2015  07:38
+" Last Modified: Tue Mar 24, 2015  08:49
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -115,7 +115,8 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
     let g:syntastic_auto_loc_list = 0
     let g:syntastic_check_on_open = 1
     let g:syntastic_check_on_wq = 0
-    "let g:syntastic_haskell_checkers = ["hlint"]
+    let g:syntastic_haskell_checkers = ["hlint","scan","hdevtools"]
+    " let g:syntastic_haskell_checkers = ["hlint","scan","hdevtools","ghc-mod"]
   "}}}
 
   if  s:settings.ChooseCommenter==2
@@ -330,6 +331,9 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
       smap <expr><S-TAB> pumvisible() ? "\<C-p>" : ""
     "}}}
   endif
+    Plug 'ervandew/supertab' "{{{
+      let g:SuperTabDefaultCompletionType = "<c-n>"
+    "}}}
   "}}}
 
   " ===================================================================
@@ -339,7 +343,34 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
   " ===================================================================
   "   Haskell:
   if (index(s:settings.supportLanguages, 'haskell') >= 0)
-    " Plug 'Twinside/vim-haskellConceal', { 'for': 'haskell' }
+    " http://www.stephendiehl.com/posts/vim_haskell.html
+    " https://wiki.haskell.org/Vim
+    " http://blog.mno2.org/posts/2011-11-17-vim-plugins-for-haskell-programmers.html
+
+    Plug 'eagletmt/ghcmod-vim', { 'for': ['haskell','lhaskell'] } "{{{
+      Plug 'Shougo/vimproc.vim', { 'do': 'make', 'for': ['haskell','lhaskell'] }
+      hi ghcmodType ctermbg=yellow
+      let g:ghcmod_type_highlight = 'ghcmodType'
+    "}}}
+
+    "needs $ cabal install hoogle
+    Plug 'Twinside/vim-hoogle', { 'for': ['haskell','lhaskell'] }
+
+    "needs $ cabal install hdevtools
+    Plug 'bitc/vim-hdevtools', { 'for': ['haskell','lhaskell'] } "{{{
+      let g:syntastic_haskell_hdevtools_args = '-g-Wall'
+      " let g:syntastic_haskell_hdevtools_args = '-g-isrc -g-Wall'
+    "}}}
+
+    Plug 'eagletmt/neco-ghc', { 'for': ['haskell','lhaskell'] }
+
+    " Plug 'Twinside/vim-haskellConceal', { 'for': ['haskell','lhaskell'] }
+    
+    " Plug 'lukerandall/haskellmode-vim', { 'for': ['haskell','lhaskell'] } "{{{
+    "   let g:haddock_browser = 'chromium'
+    " "}}}
+
+    " Plug 'Twinside/vim-haskellFold', { 'for': ['haskell','lhaskell'] }
   end
 
   " ===================================================================
@@ -479,6 +510,8 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
       augroup END
       noremap <leader>ö :Dispatch<cr>
     "}}}
+
+    Plug 'tpope/vim-fugitive'
   endif
 
   " ===================================================================

@@ -3,6 +3,9 @@ setlocal iskeyword+='
 
 "setlocal formatprg=pointfree
 
+let g:ycm_semantic_triggers = {'haskell' : ['.']}
+setlocal omnifunc=necoghc#omnifunc
+
 let s:width = 80
 
 noremap <c-F5> :w<CR>:!ghci "%"<CR>
