@@ -16,14 +16,13 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Fri Mar 06, 2015  06:35
+-- Last modified: Wed Mar 25, 2015  10:54
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
 -- Imports:
 --{{{
 import           Data.Monoid
-import           Data.Ratio ((%))
 import           Control.Monad
 import           Control.Applicative ((<$>))
 import           System.Exit ( exitSuccess )
@@ -208,12 +207,12 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     -- , ((modm .|. shiftMask,  xK_Home ), spawn "pkill compton")
 
     -- screenshot
-    , ((modm, xK_Print), spawn "scrot screen_%Y-%m-%d_%H-%M-%S.png -d 1")
+    , ((modm, xK_Print), spawn "scrot ~/screen_%Y-%m-%d_%H-%M-%S.png -d 1")
 
     --volume controls
-    , ((0,                  0x1008ff12), spawn "~/.xmonad/myvolume.sh m")
-    , ((0,                  0x1008ff11), spawn "~/.xmonad/myvolume.sh -")
-    , ((0,                  0x1008ff13), spawn "~/.xmonad/myvolume.sh +")
+    -- , ((0,                  0x1008ff12), spawn "~/.xmonad/myvolume.sh m")
+    -- , ((0,                  0x1008ff11), spawn "~/.xmonad/myvolume.sh -")
+    -- , ((0,                  0x1008ff13), spawn "~/.xmonad/myvolume.sh +")
 
      -- toggle mouse
     , ((modm,                xK_s     ), toggleFF)
@@ -419,7 +418,7 @@ scratchpads =
     , NS "udoo" "urxvtc -name udoo -e mosh udooLocal"
         (resource =? "udoo")
         (customFloating $ W.RationalRect (3/24) (1/20) (5/6) (4/5))
-    , NS "ScratchWeb" "dwb" (resource =? "dwb") nonFloating
+    , NS "ScratchWeb" "Chromium" (resource =? "Chromium") nonFloating
         {-(customFloating $ W.RationalRect (1/64) (3/128) (31/32) (31/32))-}
     , NS "ncmpcpp" "urxvtc -name Ncmpcpp -e ncmpcpp"
         (resource =? "Ncmpcpp")

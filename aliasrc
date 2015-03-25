@@ -315,6 +315,8 @@ my_power_settings() {
 #   multimedia
 #-------------------------------------------------------------------{{{
 
+alias equalizer="alsamixer -D equal"
+
 myStopScreensaver(){
   # needs xdotool
   while true; do

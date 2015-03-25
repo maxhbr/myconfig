@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ~/bin/myautosetup.sh
-# Last modified: Tue Mar 10, 2015  10:44
+# Last modified: Wed Mar 25, 2015  09:10
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -31,6 +31,12 @@ chooseAudioCard() {
   echo "defaults.ctl.card $NUM" >> ~/.asoundrc
   echo "defaults.pcm.card $NUM" >> ~/.asoundrc
   echo "defaults.timer.card $NUM" >> ~/.asoundrc
+  # the following needs the package alsaequal 
+  if [[ -a "/usr/lib/alsa-lib/libasound_module_ctl_equal.so" ]]; then
+    echo "ctl.equal { type equal; }" >> ~/.asoundrc
+    echo "pcm.plugequal { type equal; slave.pcm \"plughw:${NUM},0\"; }" >> ~/.asoundrc
+    echo "pcm.!default { type plug; slave.pcm plugequal; }" >> ~/.asoundrc
+  fi
 }
 
 #==============================================================================

@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Mar 24, 2015  08:49
+" Last Modified: Tue Mar 24, 2015  10:21
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -43,7 +43,7 @@ let s:settings.supportLanguages=['haskell', 'arduino', 'html', 'csv', 'lisp', 'p
 let s:settings.TestPlugins=1
 
 let mapleader=","
-let maplocalleader = "\\"
+" let maplocalleader = "\\"
 
 " auto reload vimrc when saved ======================================{{{
 if has("autocmd")
@@ -347,6 +347,7 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
     " https://wiki.haskell.org/Vim
     " http://blog.mno2.org/posts/2011-11-17-vim-plugins-for-haskell-programmers.html
 
+    "needs $ cabal install ghc-mod
     Plug 'eagletmt/ghcmod-vim', { 'for': ['haskell','lhaskell'] } "{{{
       Plug 'Shougo/vimproc.vim', { 'do': 'make', 'for': ['haskell','lhaskell'] }
       hi ghcmodType ctermbg=yellow
@@ -362,13 +363,16 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
       " let g:syntastic_haskell_hdevtools_args = '-g-isrc -g-Wall'
     "}}}
 
-    Plug 'eagletmt/neco-ghc', { 'for': ['haskell','lhaskell'] }
+    " better highlighting
+    Plug 'vim-scripts/haskell.vim', { 'for': 'haskell' }
 
-    " Plug 'Twinside/vim-haskellConceal', { 'for': ['haskell','lhaskell'] }
+    Plug 'eagletmt/neco-ghc', { 'for': ['haskell','lhaskell'] }
     
     " Plug 'lukerandall/haskellmode-vim', { 'for': ['haskell','lhaskell'] } "{{{
     "   let g:haddock_browser = 'chromium'
     " "}}}
+
+    " Plug 'Twinside/vim-haskellConceal', { 'for': ['haskell','lhaskell'] }
 
     " Plug 'Twinside/vim-haskellFold', { 'for': ['haskell','lhaskell'] }
   end
@@ -426,27 +430,28 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
   "   Perl:
   if (index(s:settings.supportLanguages, 'perl') >= 0)
     Plug 'c9s/perlomni.vim' , { 'for': 'perl' } " {{{
-
-    if s:settings.YcmOrNeocomplete == 0
-      if has('lua')
-        if !exists('g:neocomplete#sources#omni#input_patterns')
-          let g:neocomplete#sources#omni#input_patterns = {}
+      if s:settings.YcmOrNeocomplete == 0
+        if has('lua')
+          if !exists('g:neocomplete#sources#omni#input_patterns')
+            let g:neocomplete#sources#omni#input_patterns = {}
+          endif
+          let g:neocomplete#sources#omni#input_patterns.perl = '\h\w*->\h\w*\|\h\w*::'
+        else
+          if !exists('g:neocomplcache_force_omni_patterns')
+            let g:neocomplcache_force_omni_patterns = {}
+          endif
+          let g:neocomplcache_force_omni_patterns.perl = '\h\w*->\h\w*\|\h\w*::'
         endif
-        let g:neocomplete#sources#omni#input_patterns.perl = '\h\w*->\h\w*\|\h\w*::'
-      else
-        if !exists('g:neocomplcache_force_omni_patterns')
-          let g:neocomplcache_force_omni_patterns = {}
-        endif
-        let g:neocomplcache_force_omni_patterns.perl = '\h\w*->\h\w*\|\h\w*::'
       endif
-    endif
     " }}}
   endif
 
   " ===================================================================
   "   Tagbar:
-  Plug 'majutsushi/tagbar', { 'on': 'TagbarToggle' }
-  nmap <leader>tt :TagbarToggle<CR>
+  " needs Ctags in $PATH
+  Plug 'majutsushi/tagbar', { 'on': 'TagbarToggle' } "{{{
+    nmap <leader>tt :TagbarToggle<CR>
+  "}}}
 
   " ===================================================================
   "   Others:
@@ -507,6 +512,7 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
         autocmd FileType java let b:dispatch = 'javac %'
         autocmd FileType lisp let b:dispatch = '/usr/bin/env clisp %'
         autocmd FileType perl let b:dispatch = '/usr/bin/env perl %'
+        autocmd FileType haskell let b:dispatch = 'ghci %'
       augroup END
       noremap <leader>ö :Dispatch<cr>
     "}}}
