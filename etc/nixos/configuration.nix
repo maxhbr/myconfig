@@ -33,7 +33,7 @@ in {
   # $ nix-env -qaP | grep wget
   environment = {
     systemPackages = with pkgs; [
-      wget htop vim zsh tmux
+      wget htop vim tmux
       gitAndTools.gitFull
       xlibs.xmodmap xlibs.xset
       dmenu scrot unclutter feh redshift
@@ -85,16 +85,20 @@ in {
     };
   };
 
-  users.extraUsers.mhuber = {
-    isNormalUser = true;
-    group = "users";
-    uid = 1000;
-    extraGroups = [ "wheel" ];
-    createHome = true;
-    home = "/home/mhuber";
-    shell = "/run/current-system/sw/bin/zsh";
+  users = {
+    extraUsers.mhuber = {
+      isNormalUser = true;
+      group = "users";
+      uid = 1000;
+      extraGroups = [ "wheel" ];
+      createHome = true;
+      home = "/home/mhuber";
+      shell = "/run/current-system/sw/bin/zsh";
+    };
+    extraGroups.docker.members = [ "mhuber" ];
   };
-
+  virtualisation.docker.enable = true;
+  programs.zsh.enable = true;
 }
 
 # vim:set ts=2 sw=2 sts=2 et foldmethod=marker foldlevel=0 foldmarker={{{,}}}:
