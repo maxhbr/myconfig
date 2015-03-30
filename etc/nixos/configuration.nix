@@ -1,32 +1,21 @@
-# Edit this configuration file to define what should be installed on
-# your system.  Help is available in the configuration.nix(5) man page
-# and in the NixOS manual (accessible by running ‘nixos-help’).
-
 { config, pkgs, ... }:
 
 let
   hsPackages = with pkgs.haskellPackages; [
-    xmonad
-    xmobar
-    ghc
-    hlint
-    pandoc
-    pointfree
-    pointful
+    xmonad xmobar
+    ghc hlint pandoc pointfree pointful
   ];
 in {
   imports =
-    [ # Include the results of the hardware scan.
+    [
       ./hardware-configuration.nix
     ];
 
-  # Use the GRUB 2 boot loader.
   boot.loader.grub = {
     enable = true;
     version = 2;
     device = "/dev/sda";
   };
-  # Define on which hard drive you want to install Grub.
 
   networking = {
     hostName = "nixos"; # Define your hostname.
@@ -34,7 +23,6 @@ in {
     # wireless.enable = true;  # Enables wireless.
   };
 
-  # Select internationalisation properties.
   i18n = {
     consoleFont = "lat9w-16";
     consoleKeyMap = "de";
@@ -45,8 +33,7 @@ in {
   # $ nix-env -qaP | grep wget
   environment = {
     systemPackages = with pkgs; [
-      wget pkgs.htop
-      vim zsh tmux
+      wget htop vim zsh tmux
       gitAndTools.gitFull
       xlibs.xmodmap
       dmenu scrot unclutter feh redshift
@@ -69,7 +56,7 @@ in {
     printing.enable = true;
     xserver = {
       enable = true;
-      layout = "de";
+      layout = "de"; # TODO: neo
       # xkbOptions = "eurosign:e";
       windowManager = {
         xmonad = {
@@ -83,10 +70,20 @@ in {
         ${pkgs.redshift}/bin/redshift -l 48.2:10.8 &
         ${pkgs.roxterm}/bin/roxterm &
       '';
+
+      # synaptics.additionalOptions = ''
+      #   Option "VertScrollDelta" "-100"
+      #   Option "HorizScrollDelta" "-100"
+      #   '';
+      # synaptics.buttonsMap = [ 1 3 2 ];
+      # synaptics.enable = true;
+      # synaptics.tapButtons = false;
+      # synaptics.fingersMap = [ 0 0 0 ];
+      # synaptics.twoFingerScroll = true;
+      # synaptics.vertEdgeScroll = false;
     };
   };
 
-  # Define a user account. Don't forget to set a password with ‘passwd’.
   users.extraUsers.mhuber = {
     isNormalUser = true;
     group = "users";
@@ -98,3 +95,5 @@ in {
   };
 
 }
+
+# vim:set ts=2 sw=2 sts=2 et foldmethod=marker foldlevel=0 foldmarker={{{,}}}:
