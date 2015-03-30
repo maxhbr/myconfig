@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Mar 24, 2015  10:21
+" Last Modified: Mon Mar 30, 2015  12:20
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -363,14 +363,20 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
       " let g:syntastic_haskell_hdevtools_args = '-g-isrc -g-Wall'
     "}}}
 
-    " better highlighting
-    Plug 'vim-scripts/haskell.vim', { 'for': 'haskell' }
-
     Plug 'eagletmt/neco-ghc', { 'for': ['haskell','lhaskell'] }
     
-    " Plug 'lukerandall/haskellmode-vim', { 'for': ['haskell','lhaskell'] } "{{{
-    "   let g:haddock_browser = 'chromium'
-    " "}}}
+    if 0
+      " Plug 'lukerandall/haskellmode-vim', { 'for': ['haskell','lhaskell'] } "{{{
+      "   let g:haddock_browser = 'chromium'
+      " "}}}
+    else
+      Plug 'dag/vim2hs', { 'for': ['haskell','lhaskell'] } "{{{
+        let g:haskell_conceal_wide = 0
+      "}}}
+    endif
+
+    " better highlighting
+    " Plug 'vim-scripts/haskell.vim', { 'for': 'haskell' }
 
     " Plug 'Twinside/vim-haskellConceal', { 'for': ['haskell','lhaskell'] }
 
@@ -568,12 +574,6 @@ if has("autocmd")
   augroup END
 endif
 
-let &foldcolumn = (&columns - &textwidth - 12) / 2
-augroup mySidepaddingAugroup
-  autocmd!
-  autocmd VimResized * let &foldcolumn = (&columns - &textwidth - 12) / 2
-augroup END
-
 " Use Unix as the standard file type
 set ffs=unix,dos,mac
 set encoding=utf8
@@ -639,6 +639,7 @@ set ignorecase
 "default folding
 set foldmethod=marker
 set foldmarker={{{,}}}
+set foldlevel=99
 "set foldlevelstart=99
 
 " indending
@@ -720,6 +721,12 @@ set cursorline
 set nocursorcolumn " hat probleme mit acp (Popup)
 
 set textwidth=80    " Don't wrap lines by default
+let &foldcolumn = (&columns - &textwidth - 2) / 2
+augroup mySidepaddingAugroup
+  autocmd!
+  autocmd VimResized * let &foldcolumn = (&columns - &textwidth - 2) / 2
+augroup END
+
 set nowrap
 set ruler
 
@@ -1094,4 +1101,4 @@ endif
 "                                                                    }}}
 " ===================================================================}}}
 
-" vim:set ts=2 sw=2 sts=2 et fenc=utf-8 ff=unix foldmethod=marker foldmarker={{{,}}}:
+" vim:set ts=2 sw=2 sts=2 et fenc=utf-8 ff=unix foldmethod=marker foldlevel=0 foldmarker={{{,}}}:

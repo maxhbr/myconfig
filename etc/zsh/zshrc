@@ -764,14 +764,17 @@ grmlcomp() {
 
     # host completion
     if is42 ; then
+        [[ -r ~/.ssh/config ]] && _ssh_config_hosts=(${${${(@M)${(f)"$(<$HOME/.ssh/config)"}:#Host *}#Host }:#*[*?]*}) || _ssh_config_hosts=()
         [[ -r ~/.ssh/known_hosts ]] && _ssh_hosts=(${${${${(f)"$(<$HOME/.ssh/known_hosts)"}:#[\|]*}%%\ *}%%,*}) || _ssh_hosts=()
         [[ -r /etc/hosts ]] && : ${(A)_etc_hosts:=${(s: :)${(ps:\t:)${${(f)~~"$(</etc/hosts)"}%%\#*}##[:blank:]#[^[:blank:]]#}}} || _etc_hosts=()
     else
+        _ssh_config_hosts()
         _ssh_hosts=()
         _etc_hosts=()
     fi
     hosts=(
         $(hostname)
+        "$_ssh_config_hosts[@]"
         "$_ssh_hosts[@]"
         "$_etc_hosts[@]"
         localhost
@@ -783,7 +786,7 @@ grmlcomp() {
     # use generic completion system for programs not yet defined; (_gnu_generic works
     # with commands that provide a --help option with "standard" gnu-like output.)
     for compcom in cp deborphan df feh fetchipac gpasswd head hnb ipacsum mv \
-                   pal stow tail uname ; do
+                   pal stow uname ; do
         [[ -z ${_comps[$compcom]} ]] && compdef _gnu_generic ${compcom}
     done; unset compcom
 
@@ -1393,7 +1396,6 @@ bind2maps emacs             -- Left   backward-char
 bind2maps       viins vicmd -- Left   vi-backward-char
 bind2maps emacs             -- Right  forward-char
 bind2maps       viins vicmd -- Right  vi-forward-char
-bind2maps       viins vicmd -- Right  vi-forward-char
 #k# Perform abbreviation expansion
 bind2maps emacs viins       -- -s '^x.' zleiab
 #k# Display list of abbreviations that would expand
@@ -1699,7 +1701,7 @@ batteryopenbsd(){
 GRML_BATTERY_LEVEL=''
 local bat batfull batwarn batnow num
 for num in 0 1 ; do
-    bat=$(sysctl -n hw.sensors.acpibat${num})
+    bat=$(sysctl -n hw.sensors.acpibat${num} 2>/dev/null)
     if [[ -n $bat ]]; then
         batfull=${"$(sysctl -n hw.sensors.acpibat${num}.amphour0)"%% *}
         batwarn=${"$(sysctl -n hw.sensors.acpibat${num}.amphour1)"%% *}
@@ -2587,7 +2589,7 @@ if [[ -r /etc/debian_version ]] ; then
     # get a root shell as normal user in live-cd mode:
     if isgrmlcd && [[ $UID -ne 0 ]] ; then
        alias su="sudo su"
-     fi
+    fi
 
     #a1# Take a look at the syslog: \kbd{\$PAGER /var/log/syslog}
     salias llog="$PAGER /var/log/syslog"     # take a look at the syslog
@@ -2955,8 +2957,6 @@ export COLORTERM="yes"
 # general
 #a2# Execute \kbd{du -sch}
 alias da='du -sch'
-#a2# Execute \kbd{jobs -l}
-alias j='jobs -l'
 
 # listing stuff
 #a2# Execute \kbd{ls -lSrah}
@@ -3019,10 +3019,74 @@ fi
 
 # useful functions
 
-#f5# Backup \kbd{file {\rm to} file\_timestamp}
+#f5# Backup \kbd{file_or_folder {\rm to} file_or_folder\_timestamp}
 bk() {
     emulate -L zsh
-    cp -b $1 $1_`date --iso-8601=m`
+    local current_date=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
+    local clean keep move verbose result
+    setopt extended_glob
+    usage() {
+        cat << EOT
+bk [-hcmv] FILE [FILE ...]
+bk -r [-v] [FILE [FILE ...]]
+Backup a file or folder in place and append the timestamp
+Remove backups of a file or folder, or all backups in the current directory
+
+Usage:
+-h    Display this help text
+-c    Keep the file/folder as is, create a copy backup using cp(1) (default)
+-m    Move the file/folder, using mv(1)
+-r    Remove backups of the specified file or directory, using rm(1). If none
+      is provided, remove all backups in the current directory.
+-v    Verbose
+
+The -c, -r and -m options are mutually exclusive. If specified at the same time,
+the last one is used.
+
+The return code is the sum of all cp/mv/rm return codes.
+EOT
+    }
+    keep=1
+    while getopts ":hcmrv" opt; do
+        case $opt in
+            c) unset move clean && (( ++keep ));;
+            m) unset keep clean && (( ++move ));;
+            r) unset move keep && (( ++clean ));;
+            v) verbose="-v";;
+            h) usage;;
+            \?) usage >&2; return 1;;
+        esac
+    done
+    shift "$((OPTIND-1))"
+    if (( keep > 0 )); then
+        while (( $# > 0 )); do
+            if islinux || isfreebsd; then
+                cp $verbose -a "${1%/}" "${1%/}_$current_date"
+            else
+                cp $verbose -pR "${1%/}" "${1%/}_$current_date"
+            fi
+            (( result += $? ))
+            shift
+        done
+    elif (( move > 0 )); then
+        while (( $# > 0 )); do
+            mv $verbose "${1%/}" "${1%/}_$current_date"
+            (( result += $? ))
+            shift
+        done
+    elif (( clean > 0 )); then
+        if (( $# > 0 )); then
+            while (( $# > 0 )); do
+                rm $verbose -rf "${1%/}"_[0-9](#c4,)-(0[0-9]|1[0-2])-([0-2][0-9]|3[0-1])T([0-1][0-9]|2[0-3])(:[0-5][0-9])(#c2)Z
+                (( result += $? ))
+                shift
+            done
+        else
+            rm $verbose -rf *_[0-9](#c4,)-(0[0-9]|1[0-2])-([0-2][0-9]|3[0-1])T([0-1][0-9]|2[0-3])(:[0-5][0-9])(#c2)Z
+            (( result += $? ))
+        fi
+    fi
+    return $result
 }
 
 #f5# cd to directoy and list files

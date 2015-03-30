@@ -67,6 +67,15 @@ alternative_order text/plain text/html
 
 set index_format="%2C | %Z [%d] %-30.30F %X (%-4.4c) %s"
 
+# set up the sidebar, default not visible
+set sidebar_width=30
+set sidebar_visible=yes
+set sidebar_delim='|'
+set sidebar_sort=yes
+
+macro index b ‘<enter-command>toggle sidebar_visible<enter><refresh>’
+macro pager b ‘<enter-command>toggle sidebar_visible<enter><redraw-screen>’
+
 ##############################################################################
 # GnuPG
 ##############################################################################

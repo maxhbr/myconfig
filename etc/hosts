@@ -12,6 +12,7 @@ fe80::1%lo0     localhost
 
 #<shortcut>
 5.45.104.211 vs
+127.0.0.1 tobias-huber.de
 #</shortcut>
 
 #<shock-sites>

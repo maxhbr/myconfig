@@ -502,7 +502,11 @@ have pacman && {
   alias nixupg="nix-env -u '*'"
   alias nixTest="nix-shell -p"
   alias nixColGarbage="nix-collect-garbage -d"
-  alias nixse="nix-env -qa"
+  alias nixse="nix-env -qaP | grep "
+  nixsel(){
+    nix-env -qaP | grep $1 | less
+  }
+  alias nixlist="nix-env -qa \*"
 } || {
   have apt-get && {
     alias aptupd="sudo apt-get update && sudo apt-get upgrade"
