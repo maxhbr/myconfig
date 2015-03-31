@@ -51,15 +51,15 @@ fi
 ## count processes
 psOut=$(ps -A)
 
-BTSyncON=$(echo $psOut | grep -c btsync)
-if ! [[ $BTSyncON == "0" ]]; then
-  echo -n "| BT: $BTSyncON "
-fi
+# BTSyncON=$(echo $psOut | grep -c btsync)
+# if ! [[ $BTSyncON == "0" ]]; then
+#   echo -n "| BT: $BTSyncON "
+# fi
 
-DropboxON=$(echo $psOut | grep -c dropbox)
-if ! [[ $DropboxON == "0" ]]; then
-  echo -n "| DB: $DropboxON "
-fi
+# DropboxON=$(echo $psOut | grep -c dropbox)
+# if ! [[ $DropboxON == "0" ]]; then
+#   echo -n "| DB: $DropboxON "
+# fi
 
 VirtualBoxON=$(echo $psOut | grep -c VirtualBox)
 if ! [[ $VirtualBoxON == "0" ]]; then
@@ -73,13 +73,13 @@ fi
 
 ###############################################################################
 ## Volume
-volume=$(amixer get Master \
-  | awk -F'[]%[]' '/%/ {if ($7 == "off") { print " | <fc=#00ff00>m</fc>" } \
-                                    else { print " | Vol: " $2/10 }}' \
-  | head -n 1)
-if ! [[ -z "$volume" ]]; then
-  echo -n "$volume "
-fi
+# volume=$(amixer get Master \
+#   | awk -F'[]%[]' '/%/ {if ($7 == "off") { print " | <fc=#00ff00>m</fc>" } \
+#                                     else { print " | Vol: " $2/10 }}' \
+#   | head -n 1)
+# if ! [[ -z "$volume" ]]; then
+#   echo -n "$volume "
+# fi
 
 ###############################################################################
 ## Others:
