@@ -500,7 +500,8 @@ have pacman && {
   #nix
   alias nixin="nix-env -i"
   alias nixupg="nix-env -u '*'"
-  alias nixTest="nix-shell -p"
+  alias nixTest="nix-shell '<nixpkgs>' -A"
+  alias nixTestAlternativ="nix-shell -p"
   alias nixColGarbage="nix-collect-garbage -d"
   alias nixse="nix-env -qaP | grep "
   nixsel(){

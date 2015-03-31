@@ -2,7 +2,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Tue Feb 10, 2015  10:00
+# Last modified: Wed Apr 01, 2015  12:46
 
 ###############################################################################
 # variables
@@ -98,6 +98,7 @@ files() {
 ~/.vim/plugin/grep-operator.vim
 ~/.xinitrc
 ~/.xmonad/myinformation.sh
+~/.xmonad/mymailinfo.sh
 ~/.xmonad/showkeys
 ~/.xmonad/tmux-scratch.sh
 ~/.xmonad/xmobarrc

@@ -36,10 +36,14 @@ Config { -- font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
             , "-l", "red" , "-m", "blue" , "-h", "green"] 600
           , Run TopProc ["-t","(<name2>)"] 10
           , Run CoreTemp [ "-t", "@ <core0>C" ] 60
+          , Run MBox [("I ", "mail/INBOX", "red"), ("O ", "alfa/INBOX", "")] ["-d", "/home/mhuber/Mail/", "-p", " "] "mbox"
+          -- , Run Mail [ ("mail: ", "~/Mail/mail/INBOX")
+          --            , ("+", "~/Mail/alfa/INBOX") ] "mail"
+          , Run Com  "/home/mhuber/.xmonad/mymailinfo.sh" [] "mail" 60
           ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %StdinReader% }{ %multicpu% %top% %coretemp% %kbd%| %battery% | %dynnetwork% %wlp3s0wi% | %default:Master% | %date% "
+       , template = " %StdinReader% }{ <action=`urxvtc -name ScratchHtop -e bash -c htop`>%multicpu% %top% %coretemp%</action> %kbd%| %battery% | %dynnetwork% %wlp3s0wi% <action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action> | <action=`urxvtc -name ScratchAlsa -e bash -c alsamixer`>%default:Master%</action> | %date% "
        }
 
 -- vim: set ft=haskell :

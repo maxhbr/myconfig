@@ -56,6 +56,7 @@ myinstall "${FOLDER}vim/plugin/myLastModified.vim" "/home/mhuber/.vim/plugin/myL
 myinstall "${FOLDER}vim/plugin/grep-operator.vim" "/home/mhuber/.vim/plugin/grep-operator.vim" 600 mhuber mhuber
 myinstall "${FOLDER}xinitrc" "/home/mhuber/.xinitrc" 600 mhuber mhuber
 myinstall "${FOLDER}xmonad/myinformation.sh" "/home/mhuber/.xmonad/myinformation.sh" 777 mhuber mhuber
+myinstall "${FOLDER}xmonad/mymailinfo.sh" "/home/mhuber/.xmonad/mymailinfo.sh" 700 mhuber mhuber
 myinstall "${FOLDER}xmonad/showkeys" "/home/mhuber/.xmonad/showkeys" 755 mhuber mhuber
 myinstall "${FOLDER}xmonad/tmux-scratch.sh" "/home/mhuber/.xmonad/tmux-scratch.sh" 711 mhuber mhuber
 myinstall "${FOLDER}xmonad/xmobarrc" "/home/mhuber/.xmonad/xmobarrc" 600 mhuber mhuber

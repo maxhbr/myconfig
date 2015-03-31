@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Tue Mar 31, 2015  10:24
+-- Last modified: Wed Apr 01, 2015  12:35
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -428,7 +428,13 @@ scratchpads =
         (customFloating $ W.RationalRect (5/12) (3/20) (1/2) (4/5))
    , NS "ScratchMutt" "urxvtc -name ScratchMutt -e bash -c \"~/bin/mailclient.sh\""
        (resource =? "ScratchMutt")
-       (customFloating $ W.RationalRect (1/24) (3/20) (5/6) (4/5)) ]
+       (customFloating $ W.RationalRect (1/24) (3/20) (5/6) (4/5)) 
+   , NS "ScratchAlsa" "urxvtc -name ScratchAlsa -e bash -c alsamixer"
+       (resource =? "ScratchAlsa")
+       (customFloating $ W.RationalRect (1/24) (3/20) (5/6) (4/5)) 
+   , NS "ScratchHtop" "urxvtc -name ScratchHtop -e bash -c htop"
+       (resource =? "ScratchHtop")
+       (customFloating $ W.RationalRect (1/10) (1/10) (4/5) (4/5)) ]
 --}}}
 ------------------------------------------------------------------------
 -- Event handling:
