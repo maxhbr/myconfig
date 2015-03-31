@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Mon Mar 30, 2015  12:20
+" Last Modified: Tue Mar 31, 2015  12:08
 
 " ===================================================================
 " ====  initialize settings  ========================================

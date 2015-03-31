@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Wed Mar 25, 2015  10:54
+-- Last modified: Tue Mar 31, 2015  10:24
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -210,9 +210,9 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm, xK_Print), spawn "scrot ~/screen_%Y-%m-%d_%H-%M-%S.png -d 1")
 
     --volume controls
-    -- , ((0,                  0x1008ff12), spawn "~/.xmonad/myvolume.sh m")
-    -- , ((0,                  0x1008ff11), spawn "~/.xmonad/myvolume.sh -")
-    -- , ((0,                  0x1008ff13), spawn "~/.xmonad/myvolume.sh +")
+    , ((0,                  0x1008ff12), spawn "amixer -q set Master toggle")
+    , ((0,                  0x1008ff11), spawn "amixer -q set Master 6dB-")
+    , ((0,                  0x1008ff13), spawn "amixer -q set Master unmute 3dB+")
 
      -- toggle mouse
     , ((modm,                xK_s     ), toggleFF)
