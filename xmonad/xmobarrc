@@ -3,6 +3,8 @@
 
 Config { -- font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
          font = "xft:inconsolata:pixelsize=13:antialias=true:hinting=true"
+       -- , additionalFonts =
+       --    ["xft:inconsolata:bold:pixelsize=13:antialias=true:hinting=true"]
        , bgColor = "black"
        , fgColor = "grey"
        --, position = Top
@@ -36,7 +38,6 @@ Config { -- font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
             , "-l", "red" , "-m", "blue" , "-h", "green"] 600
           , Run TopProc ["-t","(<name2>)"] 10
           , Run CoreTemp [ "-t", "@ <core0>C" ] 60
-          , Run MBox [("I ", "mail/INBOX", "red"), ("O ", "alfa/INBOX", "")] ["-d", "/home/mhuber/Mail/", "-p", " "] "mbox"
           -- , Run Mail [ ("mail: ", "~/Mail/mail/INBOX")
           --            , ("+", "~/Mail/alfa/INBOX") ] "mail"
           , Run Com  "/home/mhuber/.xmonad/mymailinfo.sh" [] "mail" 60
