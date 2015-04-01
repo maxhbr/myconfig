@@ -1,50 +1,46 @@
 -- ~/.xmonad/xmobarrc
 -- see http://projects.haskell.org/xmobar/
 
-Config { -- font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
-         font = "xft:inconsolata:pixelsize=13:antialias=true:hinting=true"
-       -- , additionalFonts =
-       --    ["xft:inconsolata:bold:pixelsize=13:antialias=true:hinting=true"]
-       , bgColor = "black"
-       , fgColor = "grey"
-       --, position = Top
-       , position = TopW L 100
-       , lowerOnStart = True
-       , commands =
-          [ Run StdinReader
-          , Run MultiCpu
-            ["-t","Cpu:<total0> <total1> <total2> <total3>"
-            ,"-L","30" ,"-H","60"
-            ,"-h","#FFB6B0" ,"-l","#CEFFAC" ,"-n","#FFFFCC"
-            ,"-w","3"] 10
-          , Run DynNetwork
-            ["-L","0" ,"-H","32"
-            ,"--normal","green", "--high","red"] 10
-          , Run Wireless "wlp3s0" ["-t", "<essid> <qualitybar>"] 60
-          -- , Run Com "/home/mhuber/.xmonad/myinformation.sh" [] "info" 100
-          , Run Volume "default" "Master" ["-t", "Vol: <volume>% <status>"] 10
-          , Run Date "<fc=#ee9a00>%H:%M:%S</fc> %a %d.%m.%Y" "date" 10
-          , Run Kbd [ ("de(nodeadkeys)", "| <fc=#ee9a00>de</fc> ")
-                    , ("de(neo)", "") ]
-          , Run BatteryP ["BAT1"]
-            ["-t", "Bat: <left>%<acstatus>"
-            , "-L", "10" , "-H", "80"
-            , "-p", "3"
-            , "--"
-            , "-O", " <fc=green>+<watts>W</fc>"
-            , "-o", " / <fc=#ee9a00><timeleft></fc> (<watts>W)"
-            , "-i", ""
-            , "-L", "-15" , "-H", "-5"
-            , "-l", "red" , "-m", "blue" , "-h", "green"] 600
-          , Run TopProc ["-t","(<name2>)"] 10
-          , Run CoreTemp [ "-t", "@ <core0>C" ] 60
-          -- , Run Mail [ ("mail: ", "~/Mail/mail/INBOX")
-          --            , ("+", "~/Mail/alfa/INBOX") ] "mail"
-          , Run Com  "/home/mhuber/.xmonad/mymailinfo.sh" [] "mail" 60
-          ]
-       , sepChar = "%"
-       , alignSep = "}{"
-       , template = " %StdinReader% }{ <action=`urxvtc -name ScratchHtop -e bash -c htop`>%multicpu% %top% %coretemp%</action> %kbd%| %battery% | %dynnetwork% %wlp3s0wi% <action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action> | <action=`urxvtc -name ScratchAlsa -e bash -c alsamixer`>%default:Master%</action> | %date% "
-       }
+Config
+  { font = "xft:inconsolata:pixelsize=13:antialias=true:hinting=true"
+  -- , additionalFonts =
+  --    ["xft:inconsolata:bold:pixelsize=13:antialias=true:hinting=true"]
+  , bgColor = "black"
+  , fgColor = "grey"
+  , position = TopW L 100
+  , lowerOnStart = True
+  , commands =
+    [ Run StdinReader
+    , Run MultiCpu [ "-t","Cpu:<total0> <total1> <total2> <total3>"
+                   , "-L","30" ,"-H","60"
+                   , "-h","#FFB6B0" ,"-l","#CEFFAC" ,"-n","#FFFFCC"
+                   , "-w","3" ] 10
+    , Run DynNetwork [ "-L","0" ,"-H","32"
+                     , "--normal","green", "--high","red" ] 10
+    , Run Wireless "wlp3s0" [ "-t", "<essid> <qualitybar>" ] 60
+    , Run Volume "default" "Master" [ "-t", "Vol: <volume>% <status>" ] 10
+    , Run Date "<fc=#ee9a00>%H:%M:%S</fc> %a %d.%m.%Y" "date" 10
+    , Run Kbd [ ("de(nodeadkeys)", "| <fc=#ee9a00>de</fc> ")
+              , ("de(neo)", "") ]
+    , Run BatteryP [ "BAT0"
+                   , "BAT1" ] [ "-t", "Bat: <left>%<acstatus>"
+                             , "-L", "10" , "-H", "80"
+                             , "-p", "3"
+                             , "--"
+                             , "-O", " <fc=green>+<watts>W</fc>"
+                             , "-o", " / <fc=#ee9a00><timeleft></fc> (<watts>W)"
+                             , "-i", ""
+                             , "-L", "-15" , "-H", "-5"
+                             , "-l", "red" , "-m", "blue" , "-h", "green" ] 600
+    , Run TopProc ["-t","(<name2>)"] 10
+    , Run CoreTemp [ "-t", "@ <core0>C" ] 60
+    , Run Mail [ ("<fc=green>Mail! </fc>", "~/Mail/mail/INBOX")
+               , ("<fc=red>-</fc>", "~/Mail/by-hubi/INBOX")
+               , ("<fc=green>+</fc>", "~/Mail/alfa/INBOX") ] "mail"
+    , Run Com  "/home/mhuber/.xmonad/mymailinfo.sh" [] "mailStat" 60 ]
+  , sepChar = "%"
+  , alignSep = "}{"
+  , template = " %StdinReader% }{ <action=`urxvtc -name ScratchHtop -e bash -c htop`>%multicpu% %top% %coretemp%</action> %kbd%| <action=`xbacklight =10`>%battery%</action> | %dynnetwork% %wlp3s0wi% | <action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%%mailStat%</action> | <action=`urxvtc -name ScratchAlsa -e bash -c alsamixer`>%default:Master%</action> | %date% "
+  }
 
 -- vim: set ft=haskell :

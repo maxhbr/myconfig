@@ -11,12 +11,13 @@
 # - the routine _monitor() checks, if offlineimap is alive, by checking wether
 #   the log file changes
 #
-# Last modified: Do Aug 08, 2013  04:50
+# Last modified: Wed Apr 01, 2015  01:40
 
 PID=$$
 PIDFILE=/tmp/mailrun-sh-pid
 LOGFILE=/tmp/mailrun-sh-log
 ERRFILE=/tmp/mailrun-sh-err
+STATFILE=/tmp/mailrun-mailstatus
 
 pid=$(pgrep -f "/usr/bin/offlineimap")
 if [[ ${pid} -gt 0 ]] ; then
@@ -30,6 +31,13 @@ fi
 
 echo $PID >$PIDFILE
 echo "**** started at $(date) ****" >$LOGFILE 2>&1
+
+# genMailStatusFile() {
+#   Mails1=$(find "$HOME/Mail/mail/INBOX/new/" -type f | wc -l)
+#   Mails2=$(find "$HOME/Mail/by-hubi/INBOX/new/" -type f | wc -l)
+#   Mails3=$(find "$HOME/Mail/alfa/INBOX/new/" -type f | wc -l)
+#   echo -n "${Mails1}/${Mails2}/${Mails3}" > $STATFILE
+# }
 
 # Monitor offlineimap #######################################################
 # checks every minute, if the logfile has changed in the last 5 minutes
@@ -89,6 +97,8 @@ while true; do
     if [ $(($CURR-$LASTRUN)) -gt $((10*60)) ]; then
       LASTRUN=$CURR
       /usr/bin/offlineimap -o -u ttyui
+      echo "**** sort Maildir ****"
+      ~/workspace/haskell/mySortMaildir/mySortMaildir.sh
       echo "**** Offlineimap is ready (at $(date)) ****"
     else
       if [[ $(acpi -a | grep -c on-line) == "1" ]]; then
