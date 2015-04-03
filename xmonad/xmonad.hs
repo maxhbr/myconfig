@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Wed Apr 01, 2015  12:35
+-- Last modified: Fri Apr 03, 2015  12:33
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -79,7 +79,7 @@ import           XMonad.Actions.GridSelect
 -- XMonad.Layout... {{{
 import           XMonad.Layout.BoringWindows( boringAuto
                                             , focusDown )
-import           XMonad.Layout.LayoutCombinators  ( (*||*) )
+import           XMonad.Layout.LayoutCombinators  ( (*||*), (****||*) )
 import           XMonad.Layout.Named ( named )
 import           XMonad.Layout.NoBorders ( smartBorders )
 import           XMonad.Layout.Minimize
@@ -336,7 +336,7 @@ myLayout = avoidStrutsOn[U] $
     configurableNavigation (navigateColor "#333333") $
     boringAuto $
     onWorkspace "1" (tiled ||| full ||| dtb) $
-    onWorkspace "5" (dtb ||| full) $
+    onWorkspace "5" (dtb ||| dtbNEvn) $
     onWorkspace "6" (dtb ||| full) $
     onWorkspace "7" (dtb ||| full) $
     onWorkspace "web" (full ||| tiled)
@@ -352,6 +352,9 @@ myLayout = avoidStrutsOn[U] $
         dtb     = named "%" $
             minimize $
             tabbedBottom shrinkText myTab *||* tiled
+        dtbNEvn = named "%" $
+            minimize $
+            tabbedBottom shrinkText myTab ****||* tiled
         {-stb     = named "_" $-}
             {-tabbedBottom shrinkText myTab-}
         --options:
@@ -396,6 +399,7 @@ myManageHook = composeAll
     , className =? "qemu"                          --> doCenterFloat
     , className =? "qemu-system-x86_64"            --> doCenterFloat
     , className =? "feh"                           --> doCenterFloat
+    , className =? "Steam"                         --> doShift "9"
     , resource  =? "desktop_window"                --> doIgnore
     , resource  =? "kdesktop"                      --> doIgnore
     , className =? "Zenity"                        --> doCenterFloat ]
@@ -506,4 +510,4 @@ main = do
     xmproc <- spawnPipe "xmobar ~/.xmonad/xmobarrc"
     xmonad $ myConfig xmproc
 
--- vim: set ts=4 sw=4 sts=4 et fenc=utf-8 foldmethod=marker foldmarker={{{,}}}:
+-- vim: set ts=4 sw=4 sts=4 et fenc=utf-8 foldmethod=marker foldlevel=0 foldmarker={{{,}}}:

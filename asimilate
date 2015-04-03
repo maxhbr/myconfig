@@ -63,6 +63,7 @@ myinstall "${FOLDER}xmonad/xmobarrc" "/home/mhuber/.xmonad/xmobarrc" 600 mhuber 
 myinstall "${FOLDER}xmonad/xmonad.hs" "/home/mhuber/.xmonad/xmonad.hs" 600 mhuber mhuber
 myinstall "${FOLDER}zlogin" "/home/mhuber/.zlogin" 600 mhuber mhuber
 myinstall "${FOLDER}zshrc.local" "/home/mhuber/.zshrc.local" 644 mhuber mhuber
+myinstall "${FOLDER}zshrc.z" "/home/mhuber/.zshrc.z" 600 mhuber mhuber
 myinstall "${FOLDER}zprofile" "/home/mhuber/.zprofile" 644 mhuber mhuber
 myinstall "${FOLDER}xmodmap" "/home/mhuber/.xmodmap" 600 mhuber mhuber
 myinstall "${FOLDER}bin/create_ap" "/home/mhuber/bin/create_ap" 744 mhuber mhuber

@@ -11,7 +11,7 @@
 # - the routine _monitor() checks, if offlineimap is alive, by checking wether
 #   the log file changes
 #
-# Last modified: Wed Apr 01, 2015  01:40
+# Last modified: Thu Apr 02, 2015  07:07
 
 PID=$$
 PIDFILE=/tmp/mailrun-sh-pid
@@ -97,8 +97,8 @@ while true; do
     if [ $(($CURR-$LASTRUN)) -gt $((10*60)) ]; then
       LASTRUN=$CURR
       /usr/bin/offlineimap -o -u ttyui
-      echo "**** sort Maildir ****"
-      ~/workspace/haskell/mySortMaildir/mySortMaildir.sh
+      # echo "**** sort Maildir ****"
+      # ~/workspace/haskell/mySortMaildir/mySortMaildir.sh
       echo "**** Offlineimap is ready (at $(date)) ****"
     else
       if [[ $(acpi -a | grep -c on-line) == "1" ]]; then

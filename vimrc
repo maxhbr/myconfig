@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Mar 31, 2015  12:08
+" Last Modified: Wed Apr 01, 2015  08:17
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -23,8 +23,9 @@ let s:settings = {}
 " Light Colorscheme: lucius, hemisu
 " Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256...
 " let s:settings.Colorscheme="jellybeans"
+let s:settings.Colorscheme="landscape"
 " let s:settings.Colorscheme="hemisu"
-let s:settings.Colorscheme="lucius"
+" let s:settings.Colorscheme="lucius"
 let s:settings.ColorschemeVariant="light"      " dark or light
 let s:settings.InstallPluginManagerAutomatically=1
 let s:settings.ChooseStatusline=2              " 2: lightline

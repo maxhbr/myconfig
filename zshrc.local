@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Mon Mar 02, 2015  09:39
+# Last modified: Fri Apr 03, 2015  01:39
 #
 umask 077
 
@@ -31,6 +31,10 @@ PERL_MM_OPT="INSTALL_BASE=$HOME/perl5"; export PERL_MM_OPT;
 # [[ -d $HOME/.local/bin ]] && export PATH=$HOME/.local/bin:$PATH
 
 export MPD_HOST="mpd@192.168.178.61"
+
+###############################################################################
+# source the file 'z.sh' from https://github.com/rupa/z
+[[ -f ~/.zshrc.z ]] && source ~/.zshrc.z
 
 ###############################################################################
 # nix:
