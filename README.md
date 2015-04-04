@@ -1,7 +1,11 @@
 myconfig / my dotfiles
 ======================
 
-my Linux Configuration on Arch Linux
+# Other repos, where i have stolen scripts/ideas:
+- https://github.com/rupa/v
+- https://github.com/rupa/z
+- https://github.com/junegunn/myvim
+
 
 # used software
 ## Enviroment
