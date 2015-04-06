@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Wed Apr 01, 2015  08:17
+" Last Modified: Tue Apr 07, 2015  12:09
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -23,9 +23,9 @@ let s:settings = {}
 " Light Colorscheme: lucius, hemisu
 " Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256...
 " let s:settings.Colorscheme="jellybeans"
-let s:settings.Colorscheme="landscape"
+" let s:settings.Colorscheme="landscape"
 " let s:settings.Colorscheme="hemisu"
-" let s:settings.Colorscheme="lucius"
+let s:settings.Colorscheme="lucius"
 let s:settings.ColorschemeVariant="light"      " dark or light
 let s:settings.InstallPluginManagerAutomatically=1
 let s:settings.ChooseStatusline=2              " 2: lightline
@@ -116,7 +116,8 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
     let g:syntastic_auto_loc_list = 0
     let g:syntastic_check_on_open = 1
     let g:syntastic_check_on_wq = 0
-    let g:syntastic_haskell_checkers = ["hlint","scan","hdevtools"]
+    let g:syntastic_haskell_checkers = ["hlint","scan"]
+    " let g:syntastic_haskell_checkers = ["hlint","scan","hdevtools"]
     " let g:syntastic_haskell_checkers = ["hlint","scan","hdevtools","ghc-mod"]
   "}}}
 
@@ -453,12 +454,12 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
     " }}}
   endif
 
-  " ===================================================================
-  "   Tagbar:
-  " needs Ctags in $PATH
-  Plug 'majutsushi/tagbar', { 'on': 'TagbarToggle' } "{{{
-    nmap <leader>tt :TagbarToggle<CR>
-  "}}}
+  " " ===================================================================
+  " "   Tagbar:
+  " " needs Ctags in $PATH
+  " Plug 'majutsushi/tagbar', { 'on': 'TagbarToggle' } "{{{
+  "   nmap <leader>tt :TagbarToggle<CR>
+  " "}}}
 
   " ===================================================================
   "   Others:

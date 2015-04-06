@@ -46,8 +46,8 @@
 ;; Do not use tabs!
 (setq-default indent-tabs-mode nil)
 
-(load "auctex.el" nil t t)
-(load "preview-latex.el" nil t t)
+; (load "auctex.el" nil t t)
+; (load "preview-latex.el" nil t t)
 
 ;; save position in files
 (setq-default save-place t)
