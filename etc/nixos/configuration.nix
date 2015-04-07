@@ -3,7 +3,7 @@
 let
   hsPackages = with pkgs.haskellPackages; [
     xmonad xmobar
-    ghc hlint pandoc pointfree pointful
+    ghc hlint pandoc pointfree pointful hdevtools
   ];
 in {
   imports =
@@ -19,7 +19,7 @@ in {
 
   networking = {
     hostName = "nixos"; # Define your hostname.
-    hostId = "54510fe1";
+    hostId = "54510fe1"; # TODO: ?
     # wireless.enable = true;  # Enables wireless.
   };
 
@@ -33,11 +33,33 @@ in {
   # $ nix-env -qaP | grep wget
   environment = {
     systemPackages = with pkgs; [
-      wget htop vim tmux
-      gitAndTools.gitFull
-      xlibs.xmodmap xlibs.xset
-      dmenu scrot unclutter feh redshift
-      rxvt roxterm chromium
+      wget
+      htop
+      vim
+
+      # For email setup
+      tmux-with-sidebar
+      offlineimap
+      msmtp
+      gnupg
+      abook
+
+      # git
+      # gitAndTools.gitFull
+      # git
+      gitMinimal
+
+      # for the desktop environmen
+      xlibs.xmodmap
+      xlibs.xset
+      dmenu
+      scrot
+      unclutter
+      feh
+      redshift
+      rxvt_unicode_with-plugins
+      roxterm
+      chromium
     ] ++ hsPackages;
   };
 
@@ -56,6 +78,7 @@ in {
     printing.enable = true;
     xserver = {
       enable = true;
+      autorun = false;
       layout = "de"; # TODO: neo
       # xkbOptions = "eurosign:e";
       windowManager = {
