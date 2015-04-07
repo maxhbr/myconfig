@@ -5,6 +5,7 @@ myconfig / my dotfiles
 - https://github.com/rupa/v
 - https://github.com/rupa/z
 - https://github.com/junegunn/myvim
+- https://github.com/Xfennec/cv
 
 
 # used software

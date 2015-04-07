@@ -3,8 +3,45 @@
 let
   hsPackages = with pkgs.haskellPackages; [
     xmonad xmobar
-    ghc hlint pandoc pointfree pointful hdevtools
+    ghc hlint cabalInstall pandoc pointfree pointful hdevtools cabal2nix
   ];
+  myPackages = with pkgs; [
+    wget curl elinks w3m
+    htop powertop
+    vim
+
+# for development
+    leiningen clojure
+
+# Virtualization
+    # virtualbox
+    # docker
+
+# For email setup
+    tmux-with-sidebar
+    offlineimap
+    msmtp
+    gnupg
+    abook
+
+# git
+    # gitAndTools.gitFull
+    # git
+    gitMinimal
+
+# for the desktop environmen
+    xlibs.xmodmap
+    xlibs.xset
+    dmenu
+    scrot
+    unclutter
+    feh
+    redshift
+    rxvt_unicode_with-plugins
+    roxterm
+    chromium
+    ] ++ hsPackages;
+###############################################################################
 in {
   imports =
     [
@@ -32,42 +69,22 @@ in {
   # List packages installed in system profile. To search by name, run:
   # $ nix-env -qaP | grep wget
   environment = {
-    systemPackages = with pkgs; [
-      wget
-      htop
-      vim
-
-      # For email setup
-      tmux-with-sidebar
-      offlineimap
-      msmtp
-      gnupg
-      abook
-
-      # git
-      # gitAndTools.gitFull
-      # git
-      gitMinimal
-
-      # for the desktop environmen
-      xlibs.xmodmap
-      xlibs.xset
-      dmenu
-      scrot
-      unclutter
-      feh
-      redshift
-      rxvt_unicode_with-plugins
-      roxterm
-      chromium
-    ] ++ hsPackages;
+    systemPackages = myPackages;
+    # shellAliases = {
+    #   ll = "ls -l";
+    # };
+    shells = ["/run/current-system/sw/bin/zsh"];
   };
 
-  fonts.fonts = with pkgs; [
-    dejavu_fonts
-    corefonts
-    inconsolata
-  ];
+  fonts = {
+    enableFontDir = true;
+    enableGhostscriptFonts = true;
+    fonts = with pkgs; [
+      dejavu_fonts
+      corefonts
+      inconsolata
+    ];
+  };
 
   powerManagement.enable = true;
 
@@ -94,6 +111,8 @@ in {
         ${pkgs.redshift}/bin/redshift -l 48.2:10.8 &
         ${pkgs.roxterm}/bin/roxterm &
       '';
+
+      startGnuPGAgent = true;
 
       # synaptics.additionalOptions = ''
       #   Option "VertScrollDelta" "-100"
