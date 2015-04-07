@@ -2,7 +2,7 @@
 
 let
   hsPackages = with pkgs.haskellPackages; [
-    xmonad xmobar
+    xmonad xmobar yeganesh
     ghc hlint cabalInstall pandoc pointfree pointful hdevtools cabal2nix
   ];
   myPackages = with pkgs; [
@@ -125,6 +125,8 @@ in {
       # synaptics.twoFingerScroll = true;
       # synaptics.vertEdgeScroll = false;
     };
+
+    nixosManual.showManual = true;
   };
 
   users = {
