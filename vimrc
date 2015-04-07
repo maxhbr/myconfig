@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Apr 07, 2015  12:09
+" Last Modified: Tue Apr 07, 2015  10:49
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -22,10 +22,10 @@ let s:settings = {}
 " Best Colorschemes: landscape, mustang, jellybeans, hybrid
 " Light Colorscheme: lucius, hemisu
 " Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256...
-" let s:settings.Colorscheme="jellybeans"
+let s:settings.Colorscheme="jellybeans"
 " let s:settings.Colorscheme="landscape"
 " let s:settings.Colorscheme="hemisu"
-let s:settings.Colorscheme="lucius"
+" let s:settings.Colorscheme="lucius"
 let s:settings.ColorschemeVariant="light"      " dark or light
 let s:settings.InstallPluginManagerAutomatically=1
 let s:settings.ChooseStatusline=2              " 2: lightline
@@ -148,10 +148,14 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
 
   " ===================================================================
   "  Colorschemes:  ==================================================={{{
+  " Often used colorschemes
+  Plug 'nanotech/jellybeans.vim'
+  Plug 'itchyny/landscape.vim'
+  Plug 'jonathanfilip/vim-lucius'
+  Plug 'noahfrederick/vim-hemisu'
+  " other good colorschemes
   if !filereadable(expand('~').'/.vim/colors/'.s:settings.Colorscheme.'.vim')
-    if s:settings.Colorscheme ==? "jellybeans"
-      Plug 'nanotech/jellybeans.vim'
-    elseif s:settings.Colorscheme ==? "mustang"
+    if s:settings.Colorscheme ==? "mustang"
       Plug 'croaker/mustang-vim'
     elseif s:settings.Colorscheme ==? "seoul256" || s:settings.Colorscheme ==? "seoul256-light"
       Plug 'junegunn/seoul256.vim'
@@ -165,12 +169,6 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
       Plug 'w0ng/vim-hybrid'
     elseif s:settings.Colorscheme ==? "kolor"
       Plug 'zeis/vim-kolor'
-    elseif s:settings.Colorscheme ==? "landscape"
-      Plug 'itchyny/landscape.vim'
-    elseif s:settings.Colorscheme ==? "lucius"
-      Plug 'jonathanfilip/vim-lucius'
-    elseif s:settings.Colorscheme ==? "hemisu"
-      Plug 'noahfrederick/vim-hemisu'
     else
       Plug 'tomasr/molokai'
       Plug 'vim-scripts/wombat256.vim'
@@ -359,6 +357,8 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
     "needs $ cabal install hoogle
     Plug 'Twinside/vim-hoogle', { 'for': ['haskell','lhaskell'] }
 
+    " In addition to Syntastic, it is recommended that you also use
+    " vim-hdevtools for additional functionality.
     "needs $ cabal install hdevtools
     Plug 'bitc/vim-hdevtools', { 'for': ['haskell','lhaskell'] } "{{{
       let g:syntastic_haskell_hdevtools_args = '-g-Wall'
@@ -404,7 +404,9 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
   if (index(s:settings.supportLanguages, 'clojure') >= 0)
         \ || (index(s:settings.supportLanguages, 'scheme') >= 0)
         \ || (index(s:settings.supportLanguages, 'lisp') >= 0)
-    Plug 'amdt/vim-niji' "{{{
+    " original but dead repo: 'amdt/vim-niji'
+    Plug 'raymond-w-ko/vim-niji'
+    "{{{
       let g:niji_matching_filetypes = ['lisp', 'scheme', 'clojure']
     "}}}
   endif
@@ -454,12 +456,12 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
     " }}}
   endif
 
-  " " ===================================================================
-  " "   Tagbar:
-  " " needs Ctags in $PATH
-  " Plug 'majutsushi/tagbar', { 'on': 'TagbarToggle' } "{{{
-  "   nmap <leader>tt :TagbarToggle<CR>
-  " "}}}
+  " ===================================================================
+  "   Tagbar:
+  " needs Ctags in $PATH
+  Plug 'majutsushi/tagbar', { 'on': 'TagbarToggle' } "{{{
+    nmap <leader>tt :TagbarToggle<CR>
+  "}}}
 
   " ===================================================================
   "   Others:
