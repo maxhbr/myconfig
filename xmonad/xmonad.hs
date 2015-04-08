@@ -5,6 +5,7 @@
 --
 -- used software {{{
 --  dmenu        to start software
+--  yeganesh     dmenu wrapper
 --  dwb          fast browser
 --  scrot        screenshot tool
 --  slock        screenlock tool
@@ -16,7 +17,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Fri Apr 03, 2015  12:33
+-- Last modified: Wed Apr 08, 2015  05:55
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -115,7 +116,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. controlMask, xK_Return), spawn "urxvtc -e zsh -c 'ssh vserver'")
     , ((modm .|. shiftMask .|. controlMask, xK_Return), spawn "urxvtd -q -f -o &")
 
-    , ((modm,               xK_p     ), spawn "dmenu_run")
+    -- , ((modm,               xK_p     ), spawn "dmenu_run")
+    , ((modm,               xK_p     ), spawn "dmenu_path | yeganesh -- -nb '#000000' -nf '#FFFFFF' -sb '#7C7C7C' -sf '#CEFFAC'")
     -- alternative zu anderem starter
     , ((modm,               xK_x     ), shellPrompt defaultXPConfig)
     {-, ((modm .|. shiftMask, xK_p     ), spawn "gmrun")-}

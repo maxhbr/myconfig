@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Apr 07, 2015  12:03
+" Last Modified: Wed Apr 08, 2015  12:55
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -116,8 +116,8 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
     let g:syntastic_auto_loc_list = 0
     let g:syntastic_check_on_open = 1
     let g:syntastic_check_on_wq = 0
-    let g:syntastic_haskell_checkers = ["hlint","scan"]
-    " let g:syntastic_haskell_checkers = ["hlint","scan","hdevtools"]
+    " let g:syntastic_haskell_checkers = ["hlint","scan"]
+    let g:syntastic_haskell_checkers = ["hlint","scan","hdevtools"]
     " let g:syntastic_haskell_checkers = ["hlint","scan","hdevtools","ghc-mod"]
   "}}}
 

@@ -496,18 +496,6 @@ have pacman && {
 
   #update via packer
   alias packerupd="packer -Syu --aur"
-
-  #nix
-  alias nixin="nix-env -i"
-  alias nixupg="nix-env -u '*'"
-  alias nixTest="nix-shell '<nixpkgs>' -A"
-  alias nixTestAlternativ="nix-shell -p"
-  alias nixColGarbage="nix-collect-garbage -d"
-  alias nixse="nix-env -qaP | grep "
-  nixsel(){
-    nix-env -qaP | grep $1 | less
-  }
-  alias nixlist="nix-env -qa \*"
 } || {
   have apt-get && {
     alias aptupd="sudo apt-get update && sudo apt-get upgrade"
@@ -516,6 +504,21 @@ have pacman && {
     alias aptse="apt-cache search"
   }
 }
+
+#nix
+alias nixin="nix-env -i"
+alias nixupg="nix-env -u '*'"
+alias nixTest="nix-shell '<nixpkgs>' -A"
+alias nixTestAlternativ="nix-shell -p"
+alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
+alias nixse="nix-env -qaP | grep "
+nixsel(){
+  nix-env -qaP | grep $1 | less
+}
+alias nixlist="nix-env -qa \*"
+
+#nixos
+alias nixosupg="sudo nixos-rebuild switch --upgrade"
 
 cabalupd() {
   cabal list --simple-output --installed \

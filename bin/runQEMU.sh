@@ -14,6 +14,12 @@
 # for bridged network (usually called from this script):
 #   $ runQEMU.sh br0
 #
+# for vde2 network, one has to 
+#       modprobe tun
+#       vde_switch -tap tap0 -daemon -mod 660 -group users
+#       ip addr add 192.168.100.254/24 dev tap0
+
+#
 #   written by maximilian-huber.de
 # Last modified: Mon Feb 09, 2015  07:58
 #
