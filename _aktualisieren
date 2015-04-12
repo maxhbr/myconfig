@@ -1,5 +1,7 @@
 #!/bin/bash
 #
+#   TODO: TEST!
+#
 # the "_meta"-folder:
 #   files are of the form:
 #       $filename
@@ -10,7 +12,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Mon Apr 13, 2015  01:12
+# Last modified: Mon Apr 13, 2015  01:23
 
 ###############################################################################
 # variables
@@ -21,7 +23,7 @@ CONFIGFolder="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 ###############################################################################
 # functions
-updateFile(){
+updateFile(){ #{{{
   tmp=$(mktemp -p /tmp/)
   file="$1" && echo ${file/$USER/USER} > $tmp
 
@@ -66,11 +68,16 @@ META
     fi
   fi
   rm $tmp
-}
+} #}}}
 
-asimilate(){
+asimilate(){ #{{{
+  if [[ $EUID != 0 ]]; then
+    echo "not enougth privs"
+    exit 1
+  fi
+
   parseMetaFile(){
-    myRecGenDir(){
+    genDirWithParentPerms(){
       if [[ ! -f $1 ]]; then
         dir="${1%/*}"
         if [[ ! -d $dir ]]; then
@@ -96,7 +103,7 @@ asimilate(){
     read -r -p "install: ${1/\/_meta/}? [y/N] " response
     response=${response,,}
     if [[ $response =~ ^(yes|y)$ ]]; then
-      myRecGenDir ${LINES[0]/USER/$USER}
+      genDirWithParentPerms ${LINES[0]/USER/$USER}
       install -D \
         --mode=${LINES[1]} \
         --owner=${LINES[2]/USER/$USER} \
@@ -104,7 +111,6 @@ asimilate(){
         ${1/\/_meta/} \
         ${LINES[0]/USER/$USER}
     fi
-
   }
 
   for f in $CONFIGFolder/_meta/*; do
@@ -113,9 +119,9 @@ asimilate(){
   for f in $CONFIGFolder/_meta/**/*; do
     [[ -f $f ]] && parseMetaFile $f
   done
-}
+} #}}}
 
-gitRoutine(){
+gitRoutine(){ #{{{
   pushIfConnected(){
     # check, if connected #####################################################
     if ! ping -c1 cloud.github.com > /dev/null 2>&1; then
@@ -136,7 +142,7 @@ gitRoutine(){
     pushIfConnected
     popd
   fi
-}
+} #}}}
 
 ###############################################################################
 # run
@@ -154,6 +160,12 @@ if [[ $# == 0 ]]; then
 else
   case $1 in
     -a|--asimilate)
+      # asimilate
+      sudo "${BASH_SOURCE[0]}" --thisShouldBeCalledByTheScript $USER $UGROUP
+      ;;
+    --thisShouldBeCalledByTheScript)
+      USER=$2
+      UGROUP=$3
       asimilate
       ;;
     *)
