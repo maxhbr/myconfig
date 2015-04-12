@@ -4,6 +4,10 @@
 [alias]
     lol = log --graph --decorate --pretty=oneline --abbrev-commit
     lola = log --graph --decorate --pretty=oneline --abbrev-commit --all
+    changes = diff --name-status -r
+    diffstat = diff --stat -r
+    whatis = show -s --pretty='tformat:%h (%s, %ad)' --date=short
+    pwhatis = show -s --pretty='tformat:%h, %s, %ad' --date=short
 [color]
     branch = auto
     diff = auto

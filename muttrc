@@ -71,7 +71,7 @@ set index_format="%2C | %Z [%d] %-30.30F %X (%-4.4c) %s"
 set sidebar_width=30
 set sidebar_visible=yes
 set sidebar_delim='|'
-set sidebar_sort=yes
+set sidebar_sort=no
 
 macro index b ‘<enter-command>toggle sidebar_visible<enter><refresh>’
 macro pager b ‘<enter-command>toggle sidebar_visible<enter><redraw-screen>’

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ~/bin/myautosetup.sh
-# Last modified: Wed Mar 25, 2015  09:10
+# Last modified: Thu Apr 09, 2015  11:18
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -28,6 +28,7 @@ chooseAudioCard() {
     NUM=1
   fi
   echo "#generated via ~/bin/myautosetup.sh" > ~/.asoundrc
+  echo "#Device is: $1" > ~/.asoundrc
   echo "defaults.ctl.card $NUM" >> ~/.asoundrc
   echo "defaults.pcm.card $NUM" >> ~/.asoundrc
   echo "defaults.timer.card $NUM" >> ~/.asoundrc

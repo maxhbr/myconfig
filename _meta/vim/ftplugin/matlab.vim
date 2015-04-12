@@ -1,0 +1,5 @@
+/home/USER/.vim/ftplugin/matlab.vim
+600
+USER
+UGROUP
+6279626197914e0241b6881a07c83fd8

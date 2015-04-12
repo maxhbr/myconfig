@@ -1,0 +1,135 @@
+#!/bin/bash
+#
+# the "_meta"-folder:
+#   files are of the form:
+#       $filename
+#       $permisions
+#       $owner
+#       $group
+#       $md5
+
+# Written by Maximilian-Huber.de
+#
+# Last modified: Sun Apr 12, 2015  06:19
+
+###############################################################################
+# variables
+USER="$(whoami)"
+UGROUP="$(id -g -n $USER)"
+HOST="$(hostname)"
+CONFIGFolder="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+###############################################################################
+# functions
+updateFile(){
+  tmp=$(mktemp -p /tmp/)
+  file="$1" && echo ${file/$USER/USER} > $tmp
+
+  if [[ -f "$file" ]]; then
+  #   base="${file##*/}"
+
+    dir="${file%/*}/"
+    dir=${dir/$HOME/}
+    dir="/${dir#/.}"
+    base=${file##*/}
+    base=${base#.}
+
+    targetfile="$CONFIGFolder/$dir/$base"
+    metafile="$CONFIGFolder/_meta/$dir/$base"
+
+    [[ -f $metafile ]] && oldMd5="$(tail -n 1 $metafile)" || oldMd5=""
+    newMd5=`md5sum $file | awk '{ print $1 }'`
+
+    if [ ! "$oldMd5" == "$newMd5" ] ; then
+      echo "update: $file"
+      fuser=$(ls -l $file | awk '{ print $3 }')
+      fgroup=$(ls -l $file | awk '{ print $4 }')
+      cat >> $tmp <<META
+$(stat --format=%a $file )
+${fuser/$USER/USER}
+${fgroup/$UGROUP/UGROUP}
+$newMd5
+META
+
+      mkdir -p "$CONFIGFolder/$dir" && mkdir -p "$CONFIGFolder/_meta/$dir"
+      cp $file "$targetfile" && cp $tmp $metafile
+      if [ -d "$CONFIGFolder/.git" ]; then
+        git add $targetfile
+        git add "$metafile"
+      fi
+    fi
+  else
+    if [[ -d "$file" ]]; then
+      echo "is dir: $file"
+    else
+      echo "not found: $file"
+    fi
+  fi
+  # cat $tmp
+  rm $tmp
+}
+
+# scanForMetaToUpdate(){
+#   # for f in $1/*; do
+#   #   [[ -f $f ]] && updateFile "$f"
+#   # done
+#   # for f in $1/**/*; do
+#   #   [[ -f $f ]] && updateFile "$f"
+#   # done
+#   files | while IFS= read -r LINE; do
+#     mycopy $LINE
+#   done
+# }
+
+# parseMetaFile(){
+#   LINES=()
+#   while IFS= read -r line; do
+#     echo -E "$line"
+#     LINES[${#LINES[@]}]="$line"
+#   done < "$1"
+#   echo ${#LINES[@]}
+# }
+
+gitRoutine(){
+  pushIfConnected(){
+    # check, if connected #####################################################
+    if ! ping -c1 cloud.github.com > /dev/null 2>&1; then
+      echo "**** not connected (ping) ****"
+      # check again ###########################################################
+      if ! wget -O - cloud.github.com > /dev/null 2>&1; then
+        echo "**** not connected (wget) ****"
+        popd
+        exit 1
+      fi
+    fi
+    git push
+  }
+
+  if [ -d "$CONFIGFolder/.git" ]; then
+    pushd "$CONFIGFolder"
+    if [ $# -eq 0 ]; then
+      git commit -a # -m "automatisch aktualisiert"
+    else
+      git commit -a -m $1
+    fi
+
+    pushIfConnected
+    popd
+  fi
+}
+
+###############################################################################
+# run
+
+cat "$CONFIGFolder/_files" | while IFS= read -r LINE; do
+  [[ ! $LINE == \#* ]] && {
+    for FILE in ${LINE/\~/$HOME}; do
+      # echo $FILE
+      updateFile $FILE
+    done
+  }
+done
+
+gitRoutine "$@"
+exit 0
+# vim: set foldmethod=marker foldlevel=0 foldmarker={{{,}}}:

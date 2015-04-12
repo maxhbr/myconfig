@@ -1,0 +1,5 @@
+/home/USER/bin/myTexWrapper.sh
+700
+USER
+UGROUP
+a3a3323f9996511cd16945807aaaaf59

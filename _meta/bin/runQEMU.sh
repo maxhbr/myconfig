@@ -1,0 +1,5 @@
+/home/USER/bin/runQEMU.sh
+700
+USER
+UGROUP
+7f6ab1fd77f5fcda937219c4e5425818

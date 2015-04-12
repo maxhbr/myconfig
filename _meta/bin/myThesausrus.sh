@@ -1,0 +1,5 @@
+/home/USER/bin/myThesausrus.sh
+700
+USER
+UGROUP
+3cc7c014f71a77001d4243278b9a9e54

@@ -48,7 +48,7 @@ Config
                , ("<fc=green>+</fc>", "~/Mail/alfa/INBOX") ] "mail"
     , Run Com  "/home/mhuber/.xmonad/mymailinfo.sh" [] "mailStat" 600
     , Run Volume "default" "Master" [ "-t", "Vol: <volume>% <status>" ] 10
-    , Run Date "<fc=#ee9a00>%H:%M:%S</fc> %a %d.%m.%Y" "date" 10
+    , Run Date "%a %d.%m.%Y <fc=#ee9a00>%H:%M:%S</fc>" "date" 10
     ]
   , sepChar = "%"
   , alignSep = "}{"

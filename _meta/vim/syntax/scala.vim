@@ -1,0 +1,5 @@
+/home/USER/.vim/syntax/scala.vim
+600
+USER
+UGROUP
+869c360582576f8425404960fc5f792f
