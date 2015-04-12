@@ -10,7 +10,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Sun Apr 12, 2015  06:19
+# Last modified: Mon Apr 13, 2015  01:12
 
 ###############################################################################
 # variables
@@ -42,8 +42,8 @@ updateFile(){
 
     if [ ! "$oldMd5" == "$newMd5" ] ; then
       echo "update: $file"
-      fuser=$(ls -l $file | awk '{ print $3 }')
-      fgroup=$(ls -l $file | awk '{ print $4 }')
+      fuser=$(stat --format='%U' $file)
+      fgroup=$(stat --format='%G' $file)
       cat >> $tmp <<META
 $(stat --format=%a $file )
 ${fuser/$USER/USER}
@@ -65,30 +65,55 @@ META
       echo "not found: $file"
     fi
   fi
-  # cat $tmp
   rm $tmp
 }
 
-# scanForMetaToUpdate(){
-#   # for f in $1/*; do
-#   #   [[ -f $f ]] && updateFile "$f"
-#   # done
-#   # for f in $1/**/*; do
-#   #   [[ -f $f ]] && updateFile "$f"
-#   # done
-#   files | while IFS= read -r LINE; do
-#     mycopy $LINE
-#   done
-# }
+asimilate(){
+  parseMetaFile(){
+    myRecGenDir(){
+      if [[ ! -f $1 ]]; then
+        dir="${1%/*}"
+        if [[ ! -d $dir ]]; then
+          while [[ ! -d $dir && -n $dir ]]; do
+            dir="${dir%/*}"
+          done
+          if [[ -d $dir && ! -d $ldir ]]; then
+            install -d \
+              --mode=$(stat --format=%a $dir) \
+              --owner=$(stat --format='%U' $dir) \
+              --group=$(stat --format='%G' $dir) \
+              "${1%/*}"
+          fi
+        fi
+      fi
+    }
 
-# parseMetaFile(){
-#   LINES=()
-#   while IFS= read -r line; do
-#     echo -E "$line"
-#     LINES[${#LINES[@]}]="$line"
-#   done < "$1"
-#   echo ${#LINES[@]}
-# }
+    LINES=()
+    while IFS= read -r line; do
+      LINES[${#LINES[@]}]="$line"
+    done < "$1"
+
+    read -r -p "install: ${1/\/_meta/}? [y/N] " response
+    response=${response,,}
+    if [[ $response =~ ^(yes|y)$ ]]; then
+      myRecGenDir ${LINES[0]/USER/$USER}
+      install -D \
+        --mode=${LINES[1]} \
+        --owner=${LINES[2]/USER/$USER} \
+        --group=${LINES[3]/UGROUP/$UGROUP} \
+        ${1/\/_meta/} \
+        ${LINES[0]/USER/$USER}
+    fi
+
+  }
+
+  for f in $CONFIGFolder/_meta/*; do
+    [[ -f $f ]] && parseMetaFile $f
+  done
+  for f in $CONFIGFolder/_meta/**/*; do
+    [[ -f $f ]] && parseMetaFile $f
+  done
+}
 
 gitRoutine(){
   pushIfConnected(){
@@ -107,12 +132,7 @@ gitRoutine(){
 
   if [ -d "$CONFIGFolder/.git" ]; then
     pushd "$CONFIGFolder"
-    if [ $# -eq 0 ]; then
-      git commit -a # -m "automatisch aktualisiert"
-    else
-      git commit -a -m $1
-    fi
-
+    git commit -a # -m "automatisch aktualisiert"
     pushIfConnected
     popd
   fi
@@ -121,15 +141,26 @@ gitRoutine(){
 ###############################################################################
 # run
 
-cat "$CONFIGFolder/_files" | while IFS= read -r LINE; do
-  [[ ! $LINE == \#* ]] && {
-    for FILE in ${LINE/\~/$HOME}; do
-      # echo $FILE
-      updateFile $FILE
-    done
-  }
-done
+if [[ $# == 0 ]]; then
+  cat "$CONFIGFolder/_files" | while IFS= read -r LINE; do
+    [[ ! $LINE == \#* ]] && {
+      for FILE in ${LINE/\~/$HOME}; do
+        # echo $FILE
+        updateFile $FILE
+      done
+    }
+  done
+  gitRoutine
+else
+  case $1 in
+    -a|--asimilate)
+      asimilate
+      ;;
+    *)
+      echo "unknown parameter $1"
+      ;;
+  esac
+fi
 
-gitRoutine "$@"
 exit 0
 # vim: set foldmethod=marker foldlevel=0 foldmarker={{{,}}}:
