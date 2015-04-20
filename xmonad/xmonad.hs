@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Sat Apr 11, 2015  11:17
+-- Last modified: Sat Apr 18, 2015  11:44
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -99,6 +99,7 @@ import           XMonad.Layout.Tabbed ( addTabs
 import           XMonad.Layout.WindowNavigation ( configurableNavigation
                                                 , navigateColor
                                                 , Navigate(Move))
+import XMonad.Layout.Magnifier
 -- }}}
 
 import qualified Data.Map                    as M
@@ -336,7 +337,7 @@ myLayout = avoidStrutsOn[U] $
     configurableNavigation (navigateColor "#333333") $
     boringAuto $
     onWorkspace "1" (tiled ||| full ||| dtb) $
-    onWorkspace "5" (dtb ||| dtbNEvn) $
+    onWorkspace "5" (dtb ||| magnifiercz 1.3 (dtb ||| full)) $
     onWorkspace "6" (dtb ||| full) $
     onWorkspace "7" (dtb ||| full) $
     onWorkspace "web" (full ||| tiled)
@@ -352,10 +353,6 @@ myLayout = avoidStrutsOn[U] $
         dtb     = named "%" $
             minimize $
             tabbedBottom shrinkText myTab *||* tiled
-        -- dtbNEvn = named "%" $
-        --     minimize $
-        --     tabbedBottom shrinkText myTab ****||* tiled
-        dtbNEvn = full
         {-stb     = named "_" $-}
             {-tabbedBottom shrinkText myTab-}
         --options:

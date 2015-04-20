@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Thu Feb 19, 2015  08:38
+# Last modified: Mon Apr 20, 2015  03:05
 
 #setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 #setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:sclk_toggle -option grp_led:scroll
@@ -30,7 +30,7 @@ export LANG="de_DE.utf8"
   else
     [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
   fi
-  feh --bg-center "/home/mhuber/Bilder/background/BACKGROUND.png"
+  feh --bg-center "~/Bilder/background/BACKGROUND.png"
 ) &
 
 #amixer sset Master off &
@@ -42,5 +42,10 @@ redshift -l 48.2:10.8 &
 
 rfkill unblock all &
 
-#exec dbus-launch /home/mhuber/.cabal/bin/xmonad
-exec dbus-launch /usr/bin/xmonad
+if [[ -f ~/.nix-profile/bin/xmonad ]]; then
+  exec dbus-launch ~/.nix-profile/bin/xmonad
+elif [[ -f ~/.cabal/bin/xmonad ]]; then
+  exec dbus-launch ~/.cabal/bin/xmonad
+else
+  exec dbus-launch /usr/bin/xmonad
+fi

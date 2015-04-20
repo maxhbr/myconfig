@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ~/bin/myautosetup.sh
-# Last modified: Thu Apr 09, 2015  11:18
+# Last modified: Fri Apr 17, 2015  01:51
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -116,6 +116,7 @@ case "$DOCKED" in
       #[[ -f ~/.icc/23.icc ]] && xcalib ~/.icc/23.icc &
       xset dpms 99997 99998 99999 &
       touch /tmp/myMonitorConfig1
+      chmod 777 /tmp/myMonitorConfig1 # Thats ugly :(
     fi
 
     sudo /usr/bin/rfkill block all &
