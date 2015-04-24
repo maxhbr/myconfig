@@ -4,7 +4,7 @@
 "     https://github.com/maximilianhuber/myconfig
 "
 " Try it out:
-"     simply call the script `tasteMyVimrc.sh` in my config repo. It will
+"     simply call the script `_tasteMyVimrc.sh` in my config repo. It will
 "     generate a folder `/tmp/vimtest/` and install my vimrc and the other
 "     files completely in this folder
 "
@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Tue Apr 14, 2015  04:59
+" Last Modified: Fri Apr 24, 2015  12:28
 
 " ===================================================================
 " ====  initialize settings  ========================================

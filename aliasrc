@@ -14,7 +14,11 @@ alias svim="sudo vim -u /home/mhuber/.vimrc "
 
 alias tmux="tmux -2"
 alias tmx="tmux attach-session || tmux"
-alias ntmx='tmux attach-session -t $(basename "$(pwd)") || tmux new -s $(basename "$(pwd)")' # name sessions automatically
+ntmx(){
+  # name sessions automatically, depending on the current dir
+  n=`echo $(basename "$(pwd)") | sed "s/\./_/g"`
+  tmux attach-session -t "$n" || tmux new -s "$n"
+}
 if test -z $TMUX && [[ $TERM != "screen" ]]; then
   if [ -n "$BASH_VERSION" ]; then
     bind '"\C-n":" ntmx\C-m"'
@@ -464,6 +468,24 @@ alias mymatlabRunFile="~/matlab/bin/matlab -nojvm -nodisplay -nosplash < "
 #   package management
 #-------------------------------------------------------------------{{{
 
+#nix
+alias nixin="nix-env -iA"
+# alias nixupg="nix-env -u '*'"
+alias nixupg="nix-channel --update && nix-env --upgrade"
+alias nixTest="nix-shell '<nixpkgs>' -A"
+alias nixTestAlternativ="nix-shell -p"
+alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
+alias nixse="nix-env -qaP | grep "
+nixsel(){
+  nix-env -qaP | grep $1 | less
+}
+alias nixlist="nix-env -qa \*"
+
+alias upg='nixupg'
+
+#nixos
+alias nixosupg="sudo nixos-rebuild switch --upgrade"
+
 have pacman && {
   # remove orphan pacman packages and delete packages in the cache, which are
   # older than 30 days
@@ -489,6 +511,8 @@ have pacman && {
   alias pacloc='pacman -Qi'
   alias paclocs='pacman -Qs'
 
+  alias upg='pacupg && nixupg'
+
   # Additional pacman alias examples
   alias pacupd='sudo pacman -Sy && sudo abs'
   alias pacinsd='sudo pacman -S --asdeps'
@@ -504,22 +528,6 @@ have pacman && {
     alias aptse="apt-cache search"
   }
 }
-
-#nix
-alias nixin="nix-env -iA"
-# alias nixupg="nix-env -u '*'"
-alias nixupg="nix-channel --update && nix-env --upgrade"
-alias nixTest="nix-shell '<nixpkgs>' -A"
-alias nixTestAlternativ="nix-shell -p"
-alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
-alias nixse="nix-env -qaP | grep "
-nixsel(){
-  nix-env -qaP | grep $1 | less
-}
-alias nixlist="nix-env -qa \*"
-
-#nixos
-alias nixosupg="sudo nixos-rebuild switch --upgrade"
 
 cabalupd() {
   cabal list --simple-output --installed \

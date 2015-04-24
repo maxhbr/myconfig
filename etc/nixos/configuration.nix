@@ -2,7 +2,7 @@
 
 let
   hsPackages = with pkgs.haskellPackages; [
-    xmonad xmobar yeganesh
+    xmonad xmobar
     ghc hlint cabalInstall pandoc pointfree pointful hdevtools cabal2nix
   ];
   myPackages = with pkgs; [
