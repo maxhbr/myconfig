@@ -12,7 +12,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Sat Apr 25, 2015  08:24
+# Last modified: Sat Apr 25, 2015  10:48
 
 ###############################################################################
 # variables
@@ -146,10 +146,10 @@ gitRoutine(){ #{{{
 
 additionalThingsToDo(){
   pushd "$CONFIGFolder"
+  echo "update zsh plugins"
   git submodule foreach git pull
-  mkdir -p ~/.zsh/
-  cp -r "$CONFIGFolder/zsh/*" ~/.zsh/
   popd
+  [[ ! -d ~/.zsh/ ]] && ln -s $CONFIGFolder/zsh/ ~/.zsh/
 }
 
 ###############################################################################

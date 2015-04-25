@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Sat Apr 25, 2015  10:17
+# Last modified: Sat Apr 25, 2015  10:44
 #
 umask 077
 
@@ -137,10 +137,15 @@ esac
 
 ###############################################################################
 # Plugins
+[[ -f ~/.zsh/zsh-autosuggestions/autosuggestions.zsh ]] && {
+  source ~/.zsh/zsh-autosuggestions/autosuggestions.zsh
+  zle-line-init() { zle autosuggest-start }
+  zle -N zle-line-init
+  # use ctrl+t to toggle autosuggestions
+  bindkey '^T' autosuggest-toggle
+}
 [[ -f ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] &&
   source ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
-[[ -f ~/.zsh/zsh-history-substring-search/zsh-history-substring-search.zsh ]] &&
-  source ~/.zsh/zsh-history-substring-search/zsh-history-substring-search.zsh
 
 ###############################################################################
 # Start tmux on ssh
