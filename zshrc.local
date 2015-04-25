@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Sat Apr 25, 2015  10:44
+# Last modified: Sat Apr 25, 2015  11:26
 #
 umask 077
 
@@ -137,13 +137,14 @@ esac
 
 ###############################################################################
 # Plugins
-[[ -f ~/.zsh/zsh-autosuggestions/autosuggestions.zsh ]] && {
-  source ~/.zsh/zsh-autosuggestions/autosuggestions.zsh
-  zle-line-init() { zle autosuggest-start }
-  zle -N zle-line-init
-  # use ctrl+t to toggle autosuggestions
-  bindkey '^T' autosuggest-toggle
+autoload predict-on
+predict-toggle() {
+  ((predict_on=1-predict_on)) && predict-on || predict-off
 }
+zle -N predict-toggle
+bindkey '^Z'   predict-toggle
+zstyle ':predict' toggle true
+zstyle ':predict' verbose true
 [[ -f ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] &&
   source ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 
