@@ -12,7 +12,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Mon Apr 13, 2015  01:23
+# Last modified: Sat Apr 25, 2015  08:24
 
 ###############################################################################
 # variables
@@ -144,6 +144,14 @@ gitRoutine(){ #{{{
   fi
 } #}}}
 
+additionalThingsToDo(){
+  pushd "$CONFIGFolder"
+  git submodule foreach git pull
+  mkdir -p ~/.zsh/
+  cp -r "$CONFIGFolder/zsh/*" ~/.zsh/
+  popd
+}
+
 ###############################################################################
 # run
 
@@ -156,6 +164,7 @@ if [[ $# == 0 ]]; then
       done
     }
   done
+  additionalThingsToDo
   gitRoutine
 else
   case $1 in

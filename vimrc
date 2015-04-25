@@ -13,20 +13,21 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Fri Apr 24, 2015  12:28
+" Last Modified: Sat Apr 25, 2015  05:03
 
 " ===================================================================
 " ====  initialize settings  ========================================
 " ===================================================================
 let s:settings = {}
+let b:settings = {}
 " Best Colorschemes: landscape, mustang, jellybeans, hybrid
 " Light Colorscheme: lucius, hemisu
 " Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256...
-" let s:settings.Colorscheme="jellybeans"
-" let s:settings.Colorscheme="landscape"
-" let s:settings.Colorscheme="hemisu"
-let s:settings.Colorscheme="lucius"
-let s:settings.ColorschemeVariant="light"      " dark or light
+" let b:settings.Colorscheme="jellybeans"
+" let b:settings.Colorscheme="hemisu"
+let s:settings.LightColorscheme="lucius"
+let s:settings.DarkColorscheme="landscape"
+let s:settings.ColorschemeVariant="dark"      " dark or light
 let s:settings.InstallPluginManagerAutomatically=1
 let s:settings.ChooseStatusline=2              " 2: lightline
                                                " 1: Airline
@@ -42,6 +43,39 @@ let s:settings.YcmOrNeocomplete=1              " 1: YCM          0: Neocomplete
 " hasekll, scheme, clojure, lisp, html, csv, arduino, ruby, perl
 let s:settings.supportLanguages=['haskell', 'arduino', 'html', 'csv', 'lisp', 'perl', 'arduino']
 let s:settings.TestPlugins=1
+
+if s:settings.ColorschemeVariant == "light" "{{{
+  let b:settings.Colorscheme=s:settings.LightColorscheme
+  let b:settings.ColorschemeVariant="light"
+else
+  let b:settings.Colorscheme=s:settings.DarkColorscheme
+  let b:settings.ColorschemeVariant="dark"
+endif "}}}
+augroup colorschemeAuto "{{{
+  autocmd!
+  autocmd BufEnter *.tex let b:settings.Colorscheme=s:settings.LightColorscheme
+  autocmd BufEnter *.tex let b:settings.ColorschemeVariant="light"
+  autocmd BufEnter *.tex call s:applyColorscheme()
+augroup END "}}}
+function! s:applyColorscheme() "{{{
+  if !has("gui_running")
+    set t_Co=256
+    exec 'set background='.b:settings.ColorschemeVariant
+  endif
+  exec 'colorscheme '.b:settings.Colorscheme
+
+  "tweak the colorscheme
+  if b:settings.Colorscheme == "mustang"
+    highlight ColorColumn ctermbg=233 guibg=#592929
+  elseif b:settings.Colorscheme == "badwolf"
+    highlight LineNr ctermbg=235
+  elseif b:settings.Colorscheme == "jellybeans"
+    highlight LineNr ctermbg=234
+  elseif b:settings.Colorscheme == "hybrid"
+    highlight LineNr ctermfg=243 ctermbg=232
+  endif
+  hi CursorLine cterm=none
+endfunction "}}}
 
 let mapleader=","
 " let maplocalleader = "\\"
@@ -154,20 +188,20 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
   Plug 'jonathanfilip/vim-lucius'
   Plug 'noahfrederick/vim-hemisu'
   " other good colorschemes
-  if !filereadable(expand('~').'/.vim/colors/'.s:settings.Colorscheme.'.vim')
-    if s:settings.Colorscheme ==? "mustang"
+  if !filereadable(expand('~').'/.vim/colors/'.b:settings.Colorscheme.'.vim')
+    if b:settings.Colorscheme ==? "mustang"
       Plug 'croaker/mustang-vim'
-    elseif s:settings.Colorscheme ==? "seoul256" || s:settings.Colorscheme ==? "seoul256-light"
+    elseif b:settings.Colorscheme ==? "seoul256" || b:settings.Colorscheme ==? "seoul256-light"
       Plug 'junegunn/seoul256.vim'
-    elseif s:settings.Colorscheme ==? "badwolf"
+    elseif b:settings.Colorscheme ==? "badwolf"
       Plug 'sjl/badwolf' "{{{
         let g:badwolf_darkgutter = 0
         let g:badwolf_tabline = 3
         let g:badwolf_css_props_highlight = 1
       "}}}
-    elseif s:settings.Colorscheme ==? "hybrid" || s:settings.Colorscheme ==? "hybrid-light"
+    elseif b:settings.Colorscheme ==? "hybrid" || b:settings.Colorscheme ==? "hybrid-light"
       Plug 'w0ng/vim-hybrid'
-    elseif s:settings.Colorscheme ==? "kolor"
+    elseif b:settings.Colorscheme ==? "kolor"
       Plug 'zeis/vim-kolor'
     else
       Plug 'tomasr/molokai'
@@ -750,9 +784,6 @@ if has("gui_running")
   set guioptions+=t " tear off menu items
   set guioptions-=T " no toolbar
   set guioptions+=c " Use console messages instead of GUI dialogs
-else
-  set t_Co=256
-  exec 'set background='.s:settings.ColorschemeVariant
 endif
 
 " ====  hilight to long lines  ======================================
@@ -764,19 +795,7 @@ else
 endif
 
 " ====  apply colorscheme  ==========================================
-exec 'colorscheme '.s:settings.Colorscheme
-
-"tweak the colorscheme
-if s:settings.Colorscheme == "mustang"
-  highlight ColorColumn ctermbg=233 guibg=#592929
-elseif s:settings.Colorscheme == "badwolf"
-  highlight LineNr ctermbg=235
-elseif s:settings.Colorscheme == "jellybeans"
-  highlight LineNr ctermbg=234
-elseif s:settings.Colorscheme == "hybrid"
-  highlight LineNr ctermfg=243 ctermbg=232
-endif
-hi CursorLine cterm=none
+call s:applyColorscheme()
 
 if has('spell') " Set spell hilighting =============================={{{
   highlight clear SpellBad
@@ -794,7 +813,7 @@ endif " =============================================================}}}
 " ====  keymappings / input  ========================================
 " ==================================================================={{{
 if has("mouse")
-  set mouse=nv " Enable mouse usage (all modes) alternativ nvc
+  set mouse=nv
   set mousehide
 endif
 set backspace=indent,eol,start

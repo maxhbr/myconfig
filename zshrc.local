@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Fri Apr 03, 2015  01:39
+# Last modified: Sat Apr 25, 2015  10:17
 #
 umask 077
 
@@ -134,6 +134,14 @@ case "$(uname -o)" in
     export EVENT_NOEPOLL=1
     ;;
 esac
+
+###############################################################################
+# Plugins
+[[ -f ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] &&
+  source ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+[[ -f ~/.zsh/zsh-history-substring-search/zsh-history-substring-search.zsh ]] &&
+  source ~/.zsh/zsh-history-substring-search/zsh-history-substring-search.zsh
+
 ###############################################################################
 # Start tmux on ssh
 if [ "$PS1" != "" -a "${SSH_TTY:-x}" != x ]; then
