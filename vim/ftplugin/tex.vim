@@ -1,3 +1,5 @@
+let b:ColorschemeVariant="light"
+
 let g:tex_flavor = "latex"
 setlocal wrap
 setlocal sw=2

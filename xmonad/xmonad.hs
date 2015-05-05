@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Sat Apr 18, 2015  11:44
+-- Last modified: Tue May 05, 2015  08:05
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -99,7 +99,7 @@ import           XMonad.Layout.Tabbed ( addTabs
 import           XMonad.Layout.WindowNavigation ( configurableNavigation
                                                 , navigateColor
                                                 , Navigate(Move))
-import XMonad.Layout.Magnifier
+import           XMonad.Layout.Magnifier
 -- }}}
 
 import qualified Data.Map                    as M
@@ -116,7 +116,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     , ((modm .|. controlMask, xK_Return), spawn "urxvtc -e zsh -c 'ssh vserver'")
     , ((modm .|. shiftMask .|. controlMask, xK_Return), spawn "urxvtd -q -f -o &")
 
-    , ((modm,               xK_p     ), spawn "dmenu_run")
+    -- , ((modm,               xK_p     ), spawn "dmenu_run")
+    , ((modm,               xK_p     ), spawn "`dmenu_path | yeganesh`")
     -- alternative zu anderem starter
     , ((modm,               xK_x     ), shellPrompt defaultXPConfig)
     {-, ((modm .|. shiftMask, xK_p     ), spawn "gmrun")-}
@@ -337,7 +338,7 @@ myLayout = avoidStrutsOn[U] $
     configurableNavigation (navigateColor "#333333") $
     boringAuto $
     onWorkspace "1" (tiled ||| full ||| dtb) $
-    onWorkspace "5" (dtb ||| magnifiercz 1.3 (dtb ||| full)) $
+    onWorkspace "5" (dtb ||| magnifiercz 1.3 dtb ||| full) $
     onWorkspace "6" (dtb ||| full) $
     onWorkspace "7" (dtb ||| full) $
     onWorkspace "web" (full ||| tiled)

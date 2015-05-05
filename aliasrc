@@ -78,7 +78,7 @@ cd() { #Automatically do an ls after each cd
 
 alias cd..="cd .."
 alias ..="cd .."
-alias ...="cd ../.."
+# alias ...="cd ../.."
 
 mkcd() { #make dir and enter it
   mkdir -p "$1"
@@ -369,6 +369,7 @@ mpcFade() {
 #   documente / printing
 #-------------------------------------------------------------------{{{
 
+[[ -f ~/bin/univOpWrap ]] && alias p="~/bin/univOpWrap -f \".djvu:/usr/bin/zathura /usr/bin/llpp\""
 zathura() {
   command zathura "$@" &
 }

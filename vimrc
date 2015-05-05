@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Sat Apr 25, 2015  05:03
+" Last Modified: Sun Apr 26, 2015  09:07
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -27,7 +27,7 @@ let b:settings = {}
 " let b:settings.Colorscheme="hemisu"
 let s:settings.LightColorscheme="lucius"
 let s:settings.DarkColorscheme="landscape"
-let s:settings.ColorschemeVariant="dark"      " dark or light
+let s:settings.ColorschemeVariant="light"      " dark or light
 let s:settings.InstallPluginManagerAutomatically=1
 let s:settings.ChooseStatusline=2              " 2: lightline
                                                " 1: Airline
@@ -44,38 +44,47 @@ let s:settings.YcmOrNeocomplete=1              " 1: YCM          0: Neocomplete
 let s:settings.supportLanguages=['haskell', 'arduino', 'html', 'csv', 'lisp', 'perl', 'arduino']
 let s:settings.TestPlugins=1
 
-if s:settings.ColorschemeVariant == "light" "{{{
-  let b:settings.Colorscheme=s:settings.LightColorscheme
-  let b:settings.ColorschemeVariant="light"
-else
-  let b:settings.Colorscheme=s:settings.DarkColorscheme
-  let b:settings.ColorschemeVariant="dark"
-endif "}}}
-augroup colorschemeAuto "{{{
-  autocmd!
-  autocmd BufEnter *.tex let b:settings.Colorscheme=s:settings.LightColorscheme
-  autocmd BufEnter *.tex let b:settings.ColorschemeVariant="light"
-  autocmd BufEnter *.tex call s:applyColorscheme()
-augroup END "}}}
 function! s:applyColorscheme() "{{{
-  if !has("gui_running")
-    set t_Co=256
-    exec 'set background='.b:settings.ColorschemeVariant
+  if s:settings.ColorschemeVariant == "light" "{{{
+    let l:col = s:settings.LightColorscheme
+    set background=light
+  else
+    let l:col = s:settings.DarkColorscheme
+    set background=dark
+  endif "}}}
+
+  "configure the colorscheme
+  if l:col == "badwolf"
+    let g:badwolf_darkgutter = 0
+    let g:badwolf_tabline = 3
+    let g:badwolf_css_props_highlight = 1
   endif
-  exec 'colorscheme '.b:settings.Colorscheme
+
+  "apply the colorscheme
+  exec 'colorscheme '.l:col
 
   "tweak the colorscheme
-  if b:settings.Colorscheme == "mustang"
+  if l:col == "mustang"
     highlight ColorColumn ctermbg=233 guibg=#592929
-  elseif b:settings.Colorscheme == "badwolf"
+  elseif l:col == "badwolf"
     highlight LineNr ctermbg=235
-  elseif b:settings.Colorscheme == "jellybeans"
+  elseif l:col == "jellybeans"
     highlight LineNr ctermbg=234
-  elseif b:settings.Colorscheme == "hybrid"
+  elseif l:col == "hybrid"
     highlight LineNr ctermfg=243 ctermbg=232
   endif
   hi CursorLine cterm=none
+
+  " if s:settings.ChooseStatusline == 2
+  "   if exists("s:lightline#colorscheme#default#palette")
+  "     call lightline#enable()
+  "   endif
+  " endif
 endfunction "}}}
+" augroup AutoApplyColorscheme "{{{
+"   autocmd!
+"   autocmd BufEnter * call s:applyColorscheme()
+" augroup END "}}}
 
 let mapleader=","
 " let maplocalleader = "\\"
@@ -187,27 +196,14 @@ if filereadable(expand('~').'/.vim/autoload/plug.vim')
   Plug 'itchyny/landscape.vim'
   Plug 'jonathanfilip/vim-lucius'
   Plug 'noahfrederick/vim-hemisu'
+  Plug 'sjl/badwolf'
   " other good colorschemes
-  if !filereadable(expand('~').'/.vim/colors/'.b:settings.Colorscheme.'.vim')
-    if b:settings.Colorscheme ==? "mustang"
-      Plug 'croaker/mustang-vim'
-    elseif b:settings.Colorscheme ==? "seoul256" || b:settings.Colorscheme ==? "seoul256-light"
-      Plug 'junegunn/seoul256.vim'
-    elseif b:settings.Colorscheme ==? "badwolf"
-      Plug 'sjl/badwolf' "{{{
-        let g:badwolf_darkgutter = 0
-        let g:badwolf_tabline = 3
-        let g:badwolf_css_props_highlight = 1
-      "}}}
-    elseif b:settings.Colorscheme ==? "hybrid" || b:settings.Colorscheme ==? "hybrid-light"
-      Plug 'w0ng/vim-hybrid'
-    elseif b:settings.Colorscheme ==? "kolor"
-      Plug 'zeis/vim-kolor'
-    else
-      Plug 'tomasr/molokai'
-      Plug 'vim-scripts/wombat256.vim'
-    endif
-  endif
+  " Plug 'croaker/mustang-vim'
+  " Plug 'junegunn/seoul256.vim'
+  " Plug 'w0ng/vim-hybrid'
+  " Plug 'zeis/vim-kolor'
+  " Plug 'tomasr/molokai'
+  " Plug 'vim-scripts/wombat256.vim'
   "                                                                    }}}
   " ===================================================================
   "   Manage Files:
@@ -784,6 +780,8 @@ if has("gui_running")
   set guioptions+=t " tear off menu items
   set guioptions-=T " no toolbar
   set guioptions+=c " Use console messages instead of GUI dialogs
+else
+  set t_Co=256
 endif
 
 " ====  hilight to long lines  ======================================
