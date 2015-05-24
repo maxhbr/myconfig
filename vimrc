@@ -13,7 +13,7 @@
 " Worth reading:
 "   Steve Losh: Learn Vimscript the Hard Way
 "
-" Last Modified: Wed May 06, 2015  06:51
+" Last Modified: Thu May 14, 2015  11:02
 
 " ===================================================================
 " ====  initialize settings  ========================================
@@ -27,7 +27,7 @@ let b:settings = {}
 " let b:settings.Colorscheme="hemisu"
 let s:settings.LightColorscheme="lucius"
 let s:settings.DarkColorscheme="landscape"
-let s:settings.ColorschemeVariant="light"      " dark or light
+let s:settings.ColorschemeVariant="dark"      " dark or light
 let s:settings.InstallPluginManagerAutomatically=1
 let s:settings.ChooseStatusline=2              " 2: lightline
                                                " 1: Airline
@@ -704,8 +704,8 @@ set ttyfast
 let &guicursor = &guicursor . ",a:blinkon0"
 " Speed hack
 hi NonText cterm=NONE ctermfg=NONE
-" stops slow responding in large files
-set synmaxcol=128
+" " stops slow responding in large files
+" set synmaxcol=128
 "                                                                    }}}
 " ====  line numberig  =============================================={{{
 " TODO: has problems?
@@ -757,10 +757,12 @@ set cursorline
 set nocursorcolumn " hat probleme mit acp (Popup)
 
 set textwidth=80    " Don't wrap lines by default
-let &foldcolumn = (&columns - &textwidth - 2) / 2
+let &foldcolumn=(&columns - &textwidth - 2) / 2
+let &synmaxcol=max([128, &columns])
 augroup mySidepaddingAugroup
   autocmd!
-  autocmd VimResized * let &foldcolumn = (&columns - &textwidth - 2) / 2
+  autocmd VimResized * let &foldcolumn=(&columns - &textwidth - 2) / 2
+  autocmd VimResized * let &synmaxcol=max([128, &columns])
 augroup END
 
 set nowrap

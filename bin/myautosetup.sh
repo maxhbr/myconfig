@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ~/bin/myautosetup.sh
-# Last modified: Fri Apr 17, 2015  01:51
+# Last modified: Fri May 22, 2015  03:51
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -55,8 +55,6 @@ done
 #==============================================================================
 #===  Main part  ==============================================================
 #==============================================================================
-[[ $ACPresent == "0" ]] && { xbacklight =70 & } || { xbacklight =100 & }
-
 case "$DOCKED" in
   "0") #=======================================================================
     echo "status is UNDOCKED"
@@ -87,6 +85,7 @@ case "$DOCKED" in
            --output HDMI2 --off \
            --output HDMI1 --off \
            --output DP2 --off
+    [[ $ACPresent == "0" ]] && { xbacklight =70 & } || { xbacklight =100 & }
 
     sudo /usr/bin/rfkill unblock all &
 
@@ -104,6 +103,7 @@ case "$DOCKED" in
       /usr/bin/xrandr \
         --output $DOCKED_OUTPUT --primary --mode 1920x1080 \
         --output eDP1 --mode 1920x1080 --left-of DP2-1
+      xbacklight =100 &
       rm /tmp/myMonitorConfig1
       # [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
     else
@@ -111,6 +111,7 @@ case "$DOCKED" in
       /usr/bin/xrandr \
         --output eDP1 --mode 1920x1080 \
         --output $DOCKED_OUTPUT --mode 1920x1080 --same-as eDP1
+      xbacklight =1 &
 
       #Error - unsupported ramp size 0
       #[[ -f ~/.icc/23.icc ]] && xcalib ~/.icc/23.icc &

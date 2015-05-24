@@ -177,7 +177,10 @@ ex() {
         # *.jar) jar xf $file ;;
         *.jar) unzip $file ;;
         *.deb) ar xv $file ;;
-        *) echo "'$file' of type '$opt' cannot be extracted via ex()" ;;
+        *) 
+          echo "'$file' of type '$opt' cannot be extracted via ex(), more info:"
+          file $file
+          ;;
       esac
     else
       echo "'$file' is not a valid file"
@@ -337,7 +340,7 @@ incoChrome(){
 
 alias mplayerampl="mplayer -af volume=10.1:0"
 mdump() { mplayer -dumpstream "${1}" -dumpfile ${2}.mp4; }
-alias mdir="mplayer -shuffle {*,**/*}{wma,mp3,acc,ogg}"
+alias mdir="mplayer -shuffle {*,**/*}{wma,mp3,acc,ogg,flac}"
 
 # download from youtube
 alias ccl="cclive -s best"

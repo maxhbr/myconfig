@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Tue May 05, 2015  08:05
+-- Last modified: Sun May 24, 2015  11:24
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -394,6 +394,9 @@ myManageHook = composeAll
     , className =? "Onboard"                       --> doFloat
     , className =? "com-mathworks-util-PostVMInit" --> doShift "7"
     , className =? "Chromium"                      --> doShift "web"
+    , role      =? "app"                           --> doFloat
+    -- , className =? "Chromium"                      --> doShift "web"
+    -- crx_knipolnnllmklapflnccelgolnpehhpl
     , className =? "Virtualbox"                    --> doFullFloat
     , className =? "qemu"                          --> doCenterFloat
     , className =? "qemu-system-x86_64"            --> doCenterFloat
