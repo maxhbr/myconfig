@@ -340,7 +340,13 @@ incoChrome(){
 
 alias mplayerampl="mplayer -af volume=10.1:0"
 mdump() { mplayer -dumpstream "${1}" -dumpfile ${2}.mp4; }
-alias mdir="mplayer -shuffle {*,**/*}{wma,mp3,acc,ogg,flac}"
+mdir() {
+  if [ $# -eq 1 ]; then
+    mplayer -shuffle {$1/*,$1/**/*}{wma,mp3,acc,ogg,flac}
+  else
+    mplayer -shuffle {*,**/*}{wma,mp3,acc,ogg,flac}
+  fi
+}
 
 # download from youtube
 alias ccl="cclive -s best"
