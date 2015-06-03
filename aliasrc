@@ -154,7 +154,7 @@ e() {
   done
 }
 
-# Extract files from any archive
+# Extract files from nearly any archive
 # Usage: ex <archive_name>
 ex() {
   for file in "$@"; do
@@ -179,6 +179,39 @@ ex() {
         *.deb) ar xv $file ;;
         *) 
           echo "'$file' of type '$opt' cannot be extracted via ex(), more info:"
+          file $file
+          ;;
+      esac
+    else
+      echo "'$file' is not a valid file"
+    fi
+  done
+}
+
+# list files from nearly any archive
+# Usage: ex <archive_name>
+exl() {
+  for file in "$@"; do
+    if [ -f $file ] ; then
+      opt=$( tr '[:upper:]' '[:lower:]' <<<"$file" )
+      case $opt in
+        *.tar.bz2) tar -jdvf $file ;;
+        *.tar.gz) tar -ztvf $file ;;
+        # *.tar.xz) tar xvfJ $file ;;
+        # *.tar.lzma) tar --lzma -xvf $file;;
+        # *.bz2) bunzip2 $file ;;
+        # *.rar) unrar e $file ;;
+        *.gz) gzip -l $file ;;
+        # *.tar) tar xf $file ;;
+        # *.tbz2) tar xjf $file ;;
+        # *.tgz) tar xzf $file ;;
+        *.zip) unzip -l $file ;;
+        # *.Z) uncompress $file ;;
+        # *.7z) 7z x $file ;;
+        # *.jar) unzip $file ;;
+        # *.deb) ar xv $file ;;
+        *) 
+          echo "'$file' cannot be listed via exl(), more info:"
           file $file
           ;;
       esac
@@ -334,18 +367,15 @@ myStopScreensaver(){
 }
 
 incoChrome(){
-  mkdir -p /tmp/badChrome
+  mkdir -p /tmp/incoChrome
   chromium --incognito --user-data-dir="/tmp/incoChrome"
 }
 
 alias mplayerampl="mplayer -af volume=10.1:0"
 mdump() { mplayer -dumpstream "${1}" -dumpfile ${2}.mp4; }
 mdir() {
-  if [ $# -eq 1 ]; then
-    mplayer -shuffle {$1/*,$1/**/*}{wma,mp3,acc,ogg,flac}
-  else
-    mplayer -shuffle {*,**/*}{wma,mp3,acc,ogg,flac}
-  fi
+  mplayer -shuffle -playlist \
+    <(find "$PWD/$1" -type f -iregex ".*/.*\.\(wma\|mp3\|acc\|ogg\|flac\)")
 }
 
 # download from youtube
