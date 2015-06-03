@@ -433,6 +433,13 @@ mystartcups() {
   }
 }
 
+lprBookPre() {
+  [[ -f $1 ]] && {
+    pdftops -paperw 420 -paperh 595 $1 - \
+      | psbook -q \
+      | ps2pdf14 - "${1%.pdf}-booklet.pdf"
+  } || { echo "file not found"; }
+}
 # druckt A5 Broschüren
 lprBook() {
   mystartcups
