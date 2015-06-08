@@ -433,6 +433,7 @@ mystartcups() {
   }
 }
 
+# pdf zu A5 Broschüre
 lprBookPre() {
   [[ -f $1 ]] && {
     pdftops -paperw 420 -paperh 595 $1 - \
@@ -558,6 +559,16 @@ have pacman && {
   alias pacloc='pacman -Qi'
   alias paclocs='pacman -Qs'
 
+  # pacupg(){
+  #   if (( RANDOM % 2 )); then # fast upg
+  #     sudo pacman -Syu
+  #   else # long upg
+  #     packer -Syu
+  #     # nixupg
+  #   fi
+  #   echo
+  #   myRemOrphans
+  # }
   alias upg='pacupg && nixupg'
 
   # Additional pacman alias examples

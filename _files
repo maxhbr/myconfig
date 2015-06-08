@@ -11,6 +11,7 @@
 ~/.config/ranger/rifle.conf
 #~/.config/llpp.conf
 ~/.emacs
+~/.emacs.d/elisp/*
 ~/.fontconfig/fonts.conf
 ~/.ghci
 ~/.gnupg/gpg.conf

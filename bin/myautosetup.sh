@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ~/bin/myautosetup.sh
-# Last modified: Fri May 22, 2015  03:51
+# Last modified: Fri Jun 05, 2015  02:21
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -128,7 +128,8 @@ case "$DOCKED" in
     ;;
 esac
 
-setxkbmap -layout de,de -variant neo,nodeadkeys -option\
-  -option grp:shifts_toggle -option grp_led:scroll
+# setxkbmap -layout de,de -variant neo,nodeadkeys\
+#   -option grp:shifts_toggle -option grp_led:scroll\
+#   -option altwin:swap_lalt_lwin
 
 feh --bg-center "/home/mhuber/Bilder/background/BACKGROUND.png"

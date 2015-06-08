@@ -3,11 +3,14 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Mon Apr 20, 2015  03:05
+# Last modified: Fri Jun 05, 2015  01:37
 
 #setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 #setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:sclk_toggle -option grp_led:scroll
-setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:shifts_toggle -option grp_led:scroll
+setxkbmap -layout de,de -variant neo,nodeadkeys\
+  -option grp:shifts_toggle -option grp_led:scroll\
+  -option altwin:swap_lalt_lwin
+
 xsetroot -cursor_name left_ptr
 xset dpms 300 600 900 & # screen saver replacement
 [[ -f ~/.Xresources ]] && xrdb -merge ~/.Xresources

@@ -8,11 +8,11 @@ source ~/.mutt/mutt-accounts
 ##############################################################################
 # Keybindings
 ##############################################################################
-macro index,pager AB "<save-message>~/Mail/mail/Archive.Billing<enter>" \
+macro index,pager AB "<save-message>~/Mail/mail/Sort.Billing<enter>" \
     "move message to the billing archive"
-macro index,pager AJ "<save-message>~/Mail/mail/Archive.Job<enter>" \
+macro index,pager AJ "<save-message>~/Mail/mail/Sort.Job<enter>" \
     "move message to the web archive"
-macro index,pager AP "<save-message>~/Mail/mail/Archive.Private<enter>" \
+macro index,pager AP "<save-message>~/Mail/mail/Sort.Private<enter>" \
     "move message to the private archive"
 
 macro index,pager M "<pipe-message>abook --add-email-quiet<return>" "add sender to abook"

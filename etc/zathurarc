@@ -2,6 +2,8 @@
 set recolor false # invert colors
 set recolor-keephue false
 
+set scroll-step 100
+
 set first-page-column 2 # book-like feeling
 
 map [normal] i scroll half-down
