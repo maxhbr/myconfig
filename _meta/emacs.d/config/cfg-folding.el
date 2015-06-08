@@ -1,4 +1,4 @@
-/home/USER/.emacs.d/elisp/folding.el
+/home/USER/.emacs.d/config/cfg-folding.el
 600
 USER
 UGROUP

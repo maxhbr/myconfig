@@ -1,7 +1,3 @@
-(setq inhibit-splash-screen t
-      inhibit-startup-message t
-      inhibit-startup-echo-area-message t)
-(menu-bar-mode -1)
 
 ;; ===== Set the highlight current line minor mode =====
 ;; In every buffer, the line which contains the cursor will be fully
@@ -35,8 +31,12 @@
 (setq require-final-newline t)
 
 ;; I use UTF-8
-(set-keyboard-coding-system 'utf-8)
+(setq locale-coding-system 'utf-8)
 (set-terminal-coding-system 'utf-8)
+(set-keyboard-coding-system 'utf-8)
+(set-selection-coding-system 'utf-8)
+(prefer-coding-system 'utf-8)
+
 
 ;; quit message
 (fset 'yes-or-no-p 'y-or-n-p)
@@ -52,10 +52,6 @@
   ;vc-follow-symlinks t
   ;; see what you type
   echo-keystrokes 0.01
-  ;; text scrolling
-  scroll-conservatively 50
-  scroll-preserve-screen-position 't
-  scroll-margin 5
   ;; Insert space/slash after completion
   comint-completion-addsuffix t
   ;; number of chars in line
@@ -68,14 +64,10 @@
   delete-key-deletes-forward t
   ;; next-line don't add new lines
   next-line-add-newlines nil
-  ;; Scroll by one line at a time
-  scroll-step 1
   ;; don't add new lines when scrolling down
   next-line-add-newlines nil
   ;; make sure file ends with NEWLINE
   require-final-newline t
-  ;; delete excess backup versions
-  delete-old-versions t
   ;; setting the default tabulation
   default-tab-width 2
   ;; paste at cursor NOT at mouse pointer position
@@ -90,6 +82,8 @@
   dired-recursive-deletes t
   )
 
+(setq create-lockfiles nil)
+
 (setq
   ;; autosave every 512 keyboard inputs
   auto-save-interval 512
@@ -101,21 +95,62 @@
   )
 
 (setq
+  ;; text scrolling
+  scroll-conservatively 50
+  scroll-preserve-screen-position t
+  scroll-margin 5
+  ;; Scroll by one line at a time
+  scroll-step 1
+  )
+
+(setq
   ;; display time in the modeline
   display-time-24hr-format t
   display-time-day-and-date t
   ;; calendar customizing
   european-calendar-style t
   calendar-week-start-day 1
+  ;; delete excess backup versions
+  delete-old-versions t
   )
+
+(which-function-mode t)
+;; (blink-cursor-mode -1)
+(global-auto-revert-mode t)
+(electric-indent-mode t)
+(electric-pair-mode t)
+(transient-mark-mode t)
+(delete-selection-mode t)
+(random t) ;; seed
+
+(setenv "EDITOR" "emacsclient")
 
 ;; show more info in taskbar/icon than just "Emacs"
 (setq-default frame-title-format (list "%b @Emacs"))
 
-(load "folding" 'nomessage 'noerror)
-; (folding-mode-add-find-file-hook)
-; (folding-add-to-marks-list 'Emacs-Lisp  ";{{{" ";}}}" nil t)
-; (folding-add-to-marks-list 'ruby-mode   "#{{{" "#}}}" nil t)
-; (folding-add-to-marks-list 'php-mode    "//{"  "//}"  nil t)
-; (folding-add-to-marks-list 'prolog-mode "%{{{" "%}}}" nil t)
-; (folding-add-to-marks-list 'html-mode   "<!-- {{{ " "<!-- }}} -->" " -->" nil t)
+;; (load "folding" 'nomessage 'noerror)
+;; (folding-mode-add-find-file-hook)
+;; (folding-add-to-marks-list 'Emacs-Lisp  ";{{{" ";}}}" nil t)
+;; (folding-add-to-marks-list 'ruby-mode   "#{{{" "#}}}" nil t)
+;; (folding-add-to-marks-list 'php-mode    "//{"  "//}"  nil t)
+;; (folding-add-to-marks-list 'prolog-mode "%{{{" "%}}}" nil t)
+;; (folding-add-to-marks-list 'html-mode   "<!-- {{{ " "<!-- }}} -->" " -->" nil t)
+
+;; minibuffer history
+(require-package 'savehist)
+(setq savehist-file (concat dotemacs-cache-directory "savehist")
+      savehist-additional-variables '(search ring regexp-search-ring)
+      savehist-autosave-interval 60
+      history-length 1000)
+(savehist-mode t)
+
+;; clean up old buffers periodically
+(require-package 'midnight)
+(midnight-delay-set 'midnight-delay 0)
+
+;; better buffer names for duplicates
+(require-package 'uniquify)
+(setq uniquify-buffer-name-style 'forward
+      uniquify-separator "/"
+      uniquify-ignore-buffers-re "^\\*" ; leave special buffers alone
+      uniquify-after-kill-buffer-p t)
