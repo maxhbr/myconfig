@@ -11,9 +11,9 @@
         (delete-window))
     (kill-buffer-and-window)))
 
-(global-set-key (kbd "<f1>") 'switch-to-previous-buffer)
 (global-set-key (kbd "<f5>") 'save-buffer)
 (global-set-key (kbd "<f7>") 'switch-to-prev-buffer)
 (global-set-key (kbd "<f8>") 'switch-to-next-buffer)
 (global-set-key (kbd "<f9>") 'my-window-killer)
 
+(evil-leader/set-key "," 'switch-to-previous-buffer)

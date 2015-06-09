@@ -1,9 +1,3 @@
-
-;; ===== Set the highlight current line minor mode =====
-;; In every buffer, the line which contains the cursor will be fully
-;; highlighted
-(global-hl-line-mode 1)
-
 ;; ===== Set standard indent to 2 rather that 4 ====
 (setq standard-indent 2)
 
@@ -54,8 +48,6 @@
   echo-keystrokes 0.01
   ;; Insert space/slash after completion
   comint-completion-addsuffix t
-  ;; number of chars in line
-  fill-column 80
   ;; delete line in one stage
   kill-whole-line t
   ;; default mode

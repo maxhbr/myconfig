@@ -4,3 +4,6 @@
 [submodule "zsh/zsh-syntax-highlighting"]
 	path = zsh/zsh-syntax-highlighting
 	url = https://github.com/zsh-users/zsh-syntax-highlighting
+[submodule "emacs.d/snippets"]
+	path = emacs.d/snippets
+	url = https://github.com/AndreaCrotti/yasnippet-snippets/
