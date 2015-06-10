@@ -1,24 +1,29 @@
+(require-packages '(yasnippet haskell-snippets))
+(setq yas-fallback-behavior 'return-nil)
+(setq yas-also-auto-indent-first-line t)
+;; (setq yas-prompt-functions '(yas/ido-prompt yas/completing-prompt))
+(require 'yasnippet)
+(yas-global-mode 1)
+;; (add-hook 'prog-mode-hook 'yas-minor-mode)
+;; (add-hook 'html-mode-hook 'yas-minor-mode)
+;; (add-hook 'latex-mode-hook 'yas-minor-mode)
+
 (delayed-init
-    (require-packages '(yasnippet haskell-snippets))
+ (yas-reload-all))
+ ;; (yas-load-directory (concat user-emacs-directory "/snippets")))
 
-    (setq yas-fallback-behavior 'return-nil)
-    (setq yas-also-auto-indent-first-line t)
-    ;; (setq yas-prompt-functions '(yas/ido-prompt yas/completing-prompt))
-    
-    (yas-reload-all)
-    ;; (add-hook 'prog-mode-hook 'yas-minor-mode)
-    ;; (add-hook 'html-mode-hook 'yas-minor-mode)
-    (add-hook 'latex-mode-hook 'yas-minor-mode)
+;; Use ido everywhere
+(require-package 'ido-ubiquitous)
+(require 'ido-ubiquitous)
+(ido-ubiquitous-mode 1)
 
-    ;; (let* ((yas-install-dir (car (file-expand-wildcards (concat package-user-dir "/yasnippet-*"))))
-           ;; (dir (concat yas-install-dir "/snippets/js-mode")))
-      ;; (if (file-exists-p dir)
-          ;; (delete-directory dir t)))
+;; Fix ido-ubiquitous for newer packages
+(defmacro ido-ubiquitous-use-new-completing-read (cmd package)
+  `(eval-after-load ,package
+     '(defadvice ,cmd (around ido-ubiquitous-new activate)
+        (let ((ido-ubiquitous-enable-compatibility nil))
+          ad-do-it))))
 
-    ;; (require 'yasnippet)
-
-
-
-    ;; (yas-load-directory (concat user-emacs-directory "/snippets"))
-
-    )
+;; (ido-ubiquitous-use-new-completing-read webjump 'webjump)
+(ido-ubiquitous-use-new-completing-read yas/expand 'yasnippet)
+(ido-ubiquitous-use-new-completing-read yas/visit-snippet-file 'yasnippet)

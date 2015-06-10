@@ -1,12 +1,14 @@
 (require-packages '(evil
                     evil-leader
                     evil-nerd-commenter
+                    evil-numbers
                     powerline
                     ;; column-marker
                     ;; column-enforce-mode
-                    fill-column-indicator 
+                    fill-column-indicator
                     indent-guide
                     saveplace
+                    multiple-cursors
                     ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -74,5 +76,18 @@
 (define-key evil-motion-state-map "gcc" 'evilnc-comment-or-uncomment-lines)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(require 'saveplace)
 (setq save-place-file (concat dotemacs-cache-directory "saveplace.el"))
 (setq-default save-place t)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(require 'multiple-cursors)
+(global-set-key (kbd "C->") 'mc/mark-next-like-this)
+(global-set-key (kbd "C-<") 'mc/mark-previous-like-this)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(require 'evil-numbers)
+;; (global-set-key (kbd "C-c +") 'evil-numbers/inc-at-pt)
+;; (global-set-key (kbd "C-c -") 'evil-numbers/dec-at-pt)
+(define-key evil-normal-state-map (kbd "+") 'evil-numbers/inc-at-pt)
+(define-key evil-normal-state-map (kbd "-") 'evil-numbers/dec-at-pt)

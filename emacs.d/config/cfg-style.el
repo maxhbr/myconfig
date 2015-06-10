@@ -1,6 +1,5 @@
 (load-theme 'wombat)
 
-(tool-bar-mode -1)
 (set-default-font "Inconsolata-16")
 (set-face-attribute 'mode-line nil :font "Inconsolata-12")
 
@@ -32,4 +31,3 @@
 ;; highlight current line
 (global-hl-line-mode 1)
 (set-face-foreground 'highlight nil)
-

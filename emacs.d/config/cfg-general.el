@@ -4,15 +4,6 @@
 ;; ========== Support Wheel Mouse Scrolling ==========
 (mouse-wheel-mode t)
 
-;; ========== Place Backup Files in Specific Directory ==========
-;; Enable backup files.
-;(setq make-backup-files t)
-(setq make-backup-files nil)
-;; Enable versioning with default values (keep five last versions, I think!)
-;(setq version-control t)
-;; Save all backup file in this directory.
-(setq backup-directory-alist (quote ((".*" . "~/tmp/"))))
-
 ;; ===== Turn on Auto Fill mode automatically in all modes =====
 ;; Auto-fill-mode the the automatic wrapping of lines and insertion of
 ;; newlines when the cursor goes over the column limit.
@@ -76,15 +67,25 @@
 
 (setq create-lockfiles nil)
 
+;; Backup Files
+;; Enable backup files.
+(setq make-backup-files t)
+;; (setq make-backup-files nil)
+;; Save all backup file in this directory.
+(setq backup-directory-alist (quote ((".*" . "~/tmp/"))))
 (setq
-  ;; autosave every 512 keyboard inputs
-  auto-save-interval 512
-  ;; limit the number of newest versions
-  kept-new-versions 5
-  ;; limit the number of oldest versions
-  kept-old-versions 5
-  auto-save-list-file-prefix "~/.emacs.d/backups/save-"
-  )
+ ;; Enable versioning with default values (keep five last versions, I think!)
+ version-control t
+ ;; autosave every 512 keyboard inputs
+ auto-save-interval 512
+ ;; limit the number of newest versions
+ kept-new-versions 5
+ ;; limit the number of oldest versions
+ kept-old-versions 5
+ auto-save-list-file-prefix "~/.emacs.d/backups/save-"
+ )
+;; Make backups of files, even when they're in version control
+(setq vc-make-backup-files t)
 
 (setq
   ;; text scrolling
@@ -146,3 +147,11 @@
       uniquify-separator "/"
       uniquify-ignore-buffers-re "^\\*" ; leave special buffers alone
       uniquify-after-kill-buffer-p t)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Auto refresh buffers
+(global-auto-revert-mode 1)
+
+;; Also auto refresh dired, but be quiet about it
+(setq global-auto-revert-non-file-buffers t)
+(setq auto-revert-verbose nil)
