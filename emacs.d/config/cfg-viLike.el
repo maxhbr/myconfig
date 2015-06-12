@@ -1,14 +1,10 @@
-(require-packages '(evil
-                    evil-leader
-                    evil-nerd-commenter
-                    evil-numbers
+(require-packages '(evil evil-leader evil-nerd-commenter evil-numbers
                     powerline
-                    ;; column-marker
-                    ;; column-enforce-mode
                     fill-column-indicator
                     indent-guide
                     saveplace
                     multiple-cursors
+                    undo-tree
                     ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -19,7 +15,7 @@
 ;   EEEE    V    III LLLL
 ;
 ; vim key bindings and modes
-(require-package 'evil)
+(require 'evil)
 (evil-mode 1)
 
 (setq evil-emacs-state-cursor '("red" box))
@@ -91,3 +87,9 @@
 ;; (global-set-key (kbd "C-c -") 'evil-numbers/dec-at-pt)
 (define-key evil-normal-state-map (kbd "+") 'evil-numbers/inc-at-pt)
 (define-key evil-normal-state-map (kbd "-") 'evil-numbers/dec-at-pt)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(require 'undo-tree)
+(setq undo-tree-auto-save-history t)
+(setq undo-tree-visualizer-diff t)
+(global-set-key (kbd "<f6>") 'undo-tree-visualize)

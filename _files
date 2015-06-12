@@ -10,7 +10,7 @@
 ~/.config/ranger/rc.conf
 ~/.config/ranger/rifle.conf
 #~/.config/llpp.conf
-~/.emacs/init.el
+~/.emacs.d/init.el
 ~/.emacs.d/config/*
 ~/.fontconfig/fonts.conf
 ~/.ghci
