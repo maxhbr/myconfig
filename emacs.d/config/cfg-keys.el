@@ -1,6 +1,11 @@
+(global-set-key (kbd "<f5>") 'save-buffer)
+(global-set-key (kbd "<f7>") 'switch-to-prev-buffer)
+(global-set-key (kbd "<f8>") 'switch-to-next-buffer)
+
 (defun switch-to-previous-buffer ()
   (interactive)
   (switch-to-buffer (other-buffer (current-buffer) 1)))
+(evil-leader/set-key "," 'switch-to-previous-buffer)
 
 (defun my-window-killer ()
   "closes the window, and deletes the buffer if it's the last window open."
@@ -10,31 +15,24 @@
           (kill-buffer)
         (delete-window))
     (kill-buffer-and-window)))
-
-(global-set-key (kbd "<f5>") 'save-buffer)
-(global-set-key (kbd "<f7>") 'switch-to-prev-buffer)
-(global-set-key (kbd "<f8>") 'switch-to-next-buffer)
 (global-set-key (kbd "<f9>") 'my-window-killer)
 
-(evil-leader/set-key "," 'switch-to-previous-buffer)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Opening new lines can be finicky.
-(defun open-line-below ()
-  (interactive)
-  (end-of-line)
-  (newline)
-  (indent-for-tab-command))
+;; Opening new lines can be finicky (solved by evil).
+;; (defun open-line-below ()
+;;   (interactive)
+;;   (end-of-line)
+;;   (newline)
+;;   (indent-for-tab-command))
+;; (defun open-line-above ()
+;;   (interactive)
+;;   (beginning-of-line)
+;;   (newline)
+;;   (forward-line -1)
+;;   (indent-for-tab-command))
 
-(defun open-line-above ()
-  (interactive)
-  (beginning-of-line)
-  (newline)
-  (forward-line -1)
-  (indent-for-tab-command))
-
-(global-set-key (kbd "<C-return>") 'open-line-below)
-(global-set-key (kbd "<C-S-return>") 'open-line-above)
+;; (global-set-key (kbd "<C-return>") 'open-line-below)
+;; (global-set-key (kbd "<C-S-return>") 'open-line-above)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; When programming I tend to shuffle lines around a lot.
@@ -59,7 +57,7 @@
 (global-set-key (kbd "<C-S-up>") 'move-line-up)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Uneven application of white-space is bad, m'kay?
+;; Uneven application of white-space is bad.
 (defun cleanup-buffer-safe ()
   "Perform a bunch of safe operations on the whitespace content of a buffer.
 Does not indent buffer, because it is used for a before-save-hook, and that
@@ -80,3 +78,7 @@ Including indent-buffer, which should not be called automatically on save."
   (indent-region (point-min) (point-max)))
 
 (global-set-key (kbd "C-c n") 'cleanup-buffer)
+
+(evil-leader/set-key "Q" (if mark-active
+                             'fill-individual-paragraphs
+                           'fill-paragraph))

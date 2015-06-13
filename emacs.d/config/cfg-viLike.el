@@ -93,3 +93,26 @@
 (setq undo-tree-auto-save-history t)
 (setq undo-tree-visualizer-diff t)
 (global-set-key (kbd "<f6>") 'undo-tree-visualize)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-key evil-visual-state-map ">" (lambda ()
+    (interactive)
+    ; ensure mark is less than point
+    (when (> (mark) (point))
+        (exchange-point-and-mark)
+    )
+    (evil-normal-state)
+    (evil-shift-right (mark) (point))
+    (evil-visual-restore) ; re-select last visual-mode selection
+))
+
+(define-key evil-visual-state-map "<" (lambda ()
+    (interactive)
+    ; ensure mark is less than point
+    (when (> (mark) (point))
+        (exchange-point-and-mark)
+    )
+    (evil-normal-state)
+    (evil-shift-left (mark) (point))
+    (evil-visual-restore) ; re-select last visual-mode selection
+))

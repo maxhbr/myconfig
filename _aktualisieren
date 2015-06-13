@@ -12,7 +12,7 @@
 
 # Written by Maximilian-Huber.de
 #
-# Last modified: Tue Jun 09, 2015  12:46
+# Last modified: Sat Jun 13, 2015  01:42
 
 ###############################################################################
 # variables
@@ -151,6 +151,7 @@ additionalThingsToDo(){
   popd
   [[ ! -e ~/.zsh/ ]] && ln -s $CONFIGFolder/zsh ~/.zsh
   [[ ! -e ~/.emacs.d/snippets ]] && ln -s $CONFIGFolder/emacs.d/snippets ~/.emacs.d/snippets
+  [[ ! -e ~/.emacs.d/use-package ]] && ln -s $CONFIGFolder/emacs.d/use-package ~/.emacs.d/use-package
 }
 
 ###############################################################################

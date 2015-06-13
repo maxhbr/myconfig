@@ -7,3 +7,6 @@
 [submodule "emacs.d/snippets"]
 	path = emacs.d/snippets
 	url = https://github.com/AndreaCrotti/yasnippet-snippets/
+[submodule "emacs.d/use-package"]
+	path = emacs.d/use-package
+	url = https://github.com/jwiegley/use-package
