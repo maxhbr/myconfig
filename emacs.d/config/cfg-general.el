@@ -129,24 +129,33 @@
 ;; (folding-add-to-marks-list 'prolog-mode "%{{{" "%}}}" nil t)
 ;; (folding-add-to-marks-list 'html-mode   "<!-- {{{ " "<!-- }}} -->" " -->" nil t)
 
+(use-package adaptive-wrap
+  :ensure t
+  :config
+  (adaptive-wrap-prefix-mode))
+
 ;; minibuffer history
-(require-package 'savehist)
-(setq savehist-file (concat dotemacs-cache-directory "savehist")
-      savehist-additional-variables '(search ring regexp-search-ring)
-      savehist-autosave-interval 60
-      history-length 1000)
-(savehist-mode t)
+(use-package savehist
+  :ensure t
+  :config
+  (setq savehist-file (concat dotemacs-cache-directory "savehist")
+        savehist-additional-variables '(search ring regexp-search-ring)
+        savehist-autosave-interval 60
+        history-length 1000)
+  (savehist-mode t))
 
 ;; clean up old buffers periodically
-(require-package 'midnight)
-(midnight-delay-set 'midnight-delay 0)
+(use-package midnight
+  :config
+  (midnight-delay-set 'midnight-delay 0))
 
 ;; better buffer names for duplicates
-(require-package 'uniquify)
-(setq uniquify-buffer-name-style 'forward
-      uniquify-separator "/"
-      uniquify-ignore-buffers-re "^\\*" ; leave special buffers alone
-      uniquify-after-kill-buffer-p t)
+(use-package uniquify
+  :init
+  (setq uniquify-buffer-name-style 'forward
+        uniquify-separator "/"
+        uniquify-ignore-buffers-re "^\\*" ; leave special buffers alone
+        uniquify-after-kill-buffer-p t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Auto refresh buffers
@@ -155,3 +164,11 @@
 ;; Also auto refresh dired, but be quiet about it
 (setq global-auto-revert-non-file-buffers t)
 (setq auto-revert-verbose nil)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; (defadvice find-file (before make-directory-maybe (filename &optional wildcards) activate)
+;;   "Create parent directory if not exists while visiting file."
+;;   (unless (file-exists-p filename)
+;;     (let ((dir (file-name-directory filename)))
+;;       (unless (file-exists-p dir)
+;;         (make-directory dir)))))

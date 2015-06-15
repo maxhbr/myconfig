@@ -18,6 +18,16 @@
 (global-set-key (kbd "<f9>") 'my-window-killer)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(global-set-key (kbd "C-SPC") 'buffer-menu)
+;; Open in a different frame 
+(defun Buffer-menu-other-frame ()
+  (interactive)
+  (switch-to-buffer-other-frame (Buffer-menu-buffer t)))
+
+(define-key Buffer-menu-mode-map "5"
+            'Buffer-menu-other-frame)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Opening new lines can be finicky (solved by evil).
 ;; (defun open-line-below ()
 ;;   (interactive)
@@ -79,6 +89,3 @@ Including indent-buffer, which should not be called automatically on save."
 
 (global-set-key (kbd "C-c n") 'cleanup-buffer)
 
-(evil-leader/set-key "Q" (if mark-active
-                             'fill-individual-paragraphs
-                           'fill-paragraph))

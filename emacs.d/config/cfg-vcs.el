@@ -1,9 +1,9 @@
-(require-package 'magit)
-
-; (setq magit-last-seen-setup-instructions "1.4.0")
-
-(after 'magit
-  (setq magit-auto-revert-mode nil)
+(use-package magit
+  :ensure t
+  :init
+  (setq magit-last-seen-setup-instructions "1.4.0")
+  ;; (setq magit-auto-revert-mode nil)
+  :config
 
   ;; full screen magit-status
   (defadvice magit-status (around magit-fullscreen activate)
@@ -36,12 +36,10 @@
     (setq magit-diff-options (remove "-w" magit-diff-options))
     (magit-refresh))
 
-  (define-key magit-status-mode-map (kbd "W") 'magit-toggle-whitespace)
-  )
+  (define-key magit-status-mode-map (kbd "W") 'magit-toggle-whitespace))
 
 ;        (setq magit-diff-options '("--histogram"))
 ;        (setq magit-stage-all-confirm nil)
 ;        (setq magit-unstage-all-confirm nil)
 ;        (setq magit-status-buffer-switch-function 'switch-to-buffer)
 ;        (setq magit-show-child-count t))
-

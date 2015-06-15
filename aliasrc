@@ -20,7 +20,7 @@ ntmx(){
   tmux attach-session -t "$n" || tmux new -s "$n"
 }
 if test -z $TMUX && [[ $TERM != "screen" ]]; then
-  if [ -n "$BASH_VERSION" ]; then
+if [ -n "$BASH_VERSION" ]; then
     bind '"\C-n":" ntmx\C-m"'
   elif [ -n "$ZSH_VERSION" ]; then
     bindkey -s '^n' '^qntmx\n'
@@ -177,7 +177,7 @@ ex() {
         # *.jar) jar xf $file ;;
         *.jar) unzip $file ;;
         *.deb) ar xv $file ;;
-        *) 
+        *)
           echo "'$file' of type '$opt' cannot be extracted via ex(), more info:"
           file $file
           ;;
@@ -210,7 +210,7 @@ exl() {
         # *.7z) 7z x $file ;;
         # *.jar) unzip $file ;;
         # *.deb) ar xv $file ;;
-        *) 
+        *)
           echo "'$file' cannot be listed via exl(), more info:"
           file $file
           ;;

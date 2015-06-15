@@ -13,42 +13,37 @@
 (if (fboundp 'tool-bar-mode) (tool-bar-mode -1))
 (if (fboundp 'scroll-bar-mode) (scroll-bar-mode -1))
 
-(add-to-list 'load-path (concat user-emacs-directory "/config"))
-(let ((base (concat user-emacs-directory "/elisp")))
-  (add-to-list 'load-path base)
-  (dolist (dir (directory-files base t "^[^.]"))
-    (when (file-directory-p dir)
-      (add-to-list 'load-path dir))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; directories
+(defun dot-emacs (relative-path)
+  "Return the full path of a file in the user's emacs directory."
+  (expand-file-name (concat user-emacs-directory relative-path)))
+(defvar dotemacs-cache-directory (dot-emacs ".cache/"))
+(unless (file-exists-p dotemacs-cache-directory)
+  (make-directory dotemacs-cache-directory))
+;; store most files in the cache
+(setq backup-directory-alist `((".*" . ,(dot-emacs "backups")))
+      auto-save-file-name-transforms `((".*" ,(dot-emacs "backups") t))
+      auto-save-list-file-prefix (dot-emacs "auto-save-list/saves-"))
+
+(add-to-list 'load-path (dot-emacs "config"))
+(add-to-list 'load-path (dot-emacs "use-package"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; common and utils
+(load-library "use-package")
 (load-library "cfg-common")
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; cache directory
-(defvar dotemacs-cache-directory (concat user-emacs-directory ".cache/"))
-;; store most files in the cache
-(setq backup-directory-alist
-      `((".*" . ,(concat dotemacs-cache-directory "backups")))
-      auto-save-file-name-transforms
-      `((".*" ,(concat dotemacs-cache-directory "backups") t))
-      auto-save-list-file-prefix
-      (concat dotemacs-cache-directory "auto-save-list/saves-"))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; basic behaviour
 (load-library "cfg-general")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; file types and modes
-(load-library "cfg-eshell")
+(use-package diminish
+  :ensure t)
 (load-library "cfg-helm")
 (load-library "cfg-flycheck")
 (load-library "cfg-flyspell")
-(load-library "cfg-yasnippet")
-(load-library "cfg-haskell")
 (load-library "cfg-gitGutter")
 (load-library "cfg-completion")
-(load-library "cfg-latex")
 (load-library "cfg-vcs")
 (load-library "cfg-testing")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -56,5 +51,45 @@
 (load-library "cfg-viLike")
 (load-library "cfg-style")
 (load-library "cfg-keys")
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; file types and buffer types
+(load-library "cfg-eshell")
+(use-package haskell-mode
+  :ensure t
+  :mode "\\.hs\\'")
+(load-library "cfg-tex")
+(load-library "cfg-web")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; load all files in the elisp dir
+(let ((base (concat user-emacs-directory "/elisp")))
+  (unless (file-exists-p base)
+    (make-directory base))
+  (add-to-list 'load-path base)
+  (dolist (dir (directory-files base t "^[^.]"))
+    (when (file-directory-p dir)
+      (add-to-list 'load-path dir))))
+
+;; This has to be last, such that there is a menu bar in the error-case
 (if (fboundp 'menu-bar-mode) (menu-bar-mode -1))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(TeX-engine (quote luatex))
+ '(custom-safe-themes
+   (quote
+    ("987b709680284a5858d5fe7e4e428463a20dfabe0a6f2a6146b3b8c7c529f08b" "a27c00821ccfd5a78b01e4f35dc056706dd9ede09a8b90c6955ae6a390eb1c1e" "3c83b3676d796422704082049fc38b6966bcad960f896669dfc21a7a37a748fa" "6a9606327ecca6e772fba6ef46137d129e6d1888dcfc65d0b9b27a7a00a4af20" default)))
+ '(undo-tree-history-directory-alist (\` (("." \, (expand-file-name "~/.emacs.d/.cache/"))))))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
