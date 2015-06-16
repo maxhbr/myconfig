@@ -17,9 +17,11 @@
     (kill-buffer-and-window)))
 (global-set-key (kbd "<f9>") 'my-window-killer)
 
+(global-set-key (kbd "<f11>") 'delete-other-windows)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (global-set-key (kbd "C-SPC") 'buffer-menu)
-;; Open in a different frame 
+;; Open in a different frame
 (defun Buffer-menu-other-frame ()
   (interactive)
   (switch-to-buffer-other-frame (Buffer-menu-buffer t)))
@@ -88,4 +90,3 @@ Including indent-buffer, which should not be called automatically on save."
   (indent-region (point-min) (point-max)))
 
 (global-set-key (kbd "C-c n") 'cleanup-buffer)
-

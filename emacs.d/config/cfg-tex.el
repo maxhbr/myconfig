@@ -58,4 +58,6 @@
                                (push
                                 '("myLatexmk" "latexmk -outdir=\"_latexmk\" -pdf -synctex=1 -pvc  %s" TeX-run-TeX nil t
                                   :help "Run Latexmk on file")
-                                TeX-command-list))))
+                                TeX-command-list)))
+
+  (add-hook 'LaTeX-Output-mode-hook 'fci-mode))
