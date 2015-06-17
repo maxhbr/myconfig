@@ -19,10 +19,10 @@ fi
 transcode -J stabilize -i "$1"
 transcode -J transform=crop=1:optzoom=0 -i "$1" -y raw -o "${fn}-stab.avi"
 avconv -i "${fn}-stab.avi" -c:v h264 -c:a copy -crf 20 "${fn}-stab-tny.mp4"
-mv "${fn}-stab-tny.mp4" "${fn}-stab.avi"
+rm "${fn}-stab.avi"
 
 if [[ "$2" ]]; then
   if [[ -d "$2" ]]; then
-    cp "${fn}-stab.avi" "$2"
+    cp "${fn}-stab-tny.mp4" "$2/${fn}-stab.mp4"
   fi
 fi
