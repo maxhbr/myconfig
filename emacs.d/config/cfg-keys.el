@@ -6,6 +6,7 @@
   (interactive)
   (switch-to-buffer (other-buffer (current-buffer) 1)))
 (evil-leader/set-key "," 'switch-to-previous-buffer)
+(global-set-key (kbd "<mouse-8>") 'switch-to-next-buffer)
 
 (defun my-window-killer ()
   "closes the window, and deletes the buffer if it's the last window open."

@@ -64,3 +64,17 @@
   ;; (ido-ubiquitous-use-new-completing-read webjump 'webjump)
   (ido-ubiquitous-use-new-completing-read yas/expand 'yasnippet)
   (ido-ubiquitous-use-new-completing-read yas/visit-snippet-file 'yasnippet))
+
+; (use-package predictive
+;   :ensure t
+;   :init
+;   (add-to-list 'load-path "~/elisp/predictive")
+;   (set-default 'predictive-auto-add-to-dict t)
+;   (setq predictive-main-dict 'rpg-dictionary
+;         predictive-auto-learn t
+;         predictive-add-to-dict-ask nil
+;         predictive-use-auto-learn-cache nil
+;         predictive-which-dict t)
+;   :config
+;   (autoload 'predictive-mode "predictive" "predictive" t)
+;   )

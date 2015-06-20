@@ -79,7 +79,6 @@
 /etc/fstab
 /etc/hosts
 /etc/locale.conf
-/etc/lvm/lvm.conf
 /etc/makepkg.conf
 /etc/mkinitcpio.conf
 /etc/modprobe.d/*

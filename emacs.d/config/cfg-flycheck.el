@@ -7,4 +7,5 @@
   (setq flycheck-checkers (delq 'html-tidy flycheck-checkers))
   (setq flycheck-standard-error-navigation nil)
 
-  (global-flycheck-mode t))
+  (global-flycheck-mode t)
+  :diminish flycheck-mode)

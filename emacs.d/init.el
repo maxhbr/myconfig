@@ -33,6 +33,12 @@
 ;; common and utils
 (load-library "use-package")
 (load-library "cfg-common")
+;; (use-package auto-async-byte-compile
+;;   :ensure t
+;;   :init
+;;   (setq auto-async-byte-compile-exclude-files-regexp "/junk/")
+;;   :config
+;;   (add-hook 'emacs-lisp-mode-hook 'enable-auto-async-byte-compile-mode))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; basic behaviour
 (load-library "cfg-general")
@@ -62,7 +68,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; load all files in the elisp dir
-(let ((base (concat user-emacs-directory "/elisp")))
+(let ((base (dot-emacs "elisp")))
   (unless (file-exists-p base)
     (make-directory base))
   (add-to-list 'load-path base)
