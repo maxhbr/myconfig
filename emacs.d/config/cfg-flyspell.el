@@ -4,7 +4,7 @@
   :init
   (setq ispell-extra-args '("--sug-mode=fast"))
   (setq flyspell-issue-message-flag nil)
-  (ispell-change-dictionary "english")
+  (setq ispell-dictionary "english")
   :config
   (ispell-change-dictionary "english")
   (dolist (hook '(latex-mode-hook

@@ -16,9 +16,9 @@ fn="${1%.*}"
 if [[ -e "${1}.trf" ]]; then
   mv "${1}.trf" "${1}.trf.alt"
 fi
-transcode -J stabilize -i "$1"
-transcode -J transform=crop=1:optzoom=0 -i "$1" -y raw -o "${fn}-stab.avi"
-avconv -i "${fn}-stab.avi" -c:v h264 -c:a copy -crf 20 "${fn}-stab-tny.mp4"
+transcode -threads 4 -J stabilize -i "$1"
+transcode -threads 4 -J transform=crop=1:optzoom=0 -i "$1" -y raw -o "${fn}-stab.avi"
+avconv -threads auto -i "${fn}-stab.avi" -c:v h264 -c:a copy -crf 20 "${fn}-stab-tny.mp4"
 rm "${fn}-stab.avi"
 
 if [[ "$2" ]]; then

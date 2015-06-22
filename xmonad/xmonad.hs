@@ -49,7 +49,7 @@ import           XMonad.Hooks.ManageHelpers ( doFullFloat
                                             , doCenterFloat )
 import           XMonad.Hooks.UrgencyHook ( withUrgencyHook
                                           , NoUrgencyHook(..) )
-import           XMonad.Hooks.SetWMName
+import           XMonad.Hooks.SetWMName ( setWMName )
 --}}}
 
 -- XMonad.Util...{{{
@@ -82,7 +82,8 @@ import           XMonad.Layout.BoringWindows( boringAuto
 import           XMonad.Layout.LayoutCombinators  ( (*||*), (****||*) )
 import           XMonad.Layout.Named ( named )
 import           XMonad.Layout.NoBorders ( smartBorders )
-import           XMonad.Layout.Minimize
+import           XMonad.Layout.Minimize ( minimize, minimizeWindow
+                                        , MinimizeMsg(RestoreNextMinimizedWin) )
 import           XMonad.Layout.PerWorkspace ( onWorkspace )
 import           XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall)
                                              , MirrorResize ( MirrorShrink
@@ -99,7 +100,7 @@ import           XMonad.Layout.Tabbed ( addTabs
 import           XMonad.Layout.WindowNavigation ( configurableNavigation
                                                 , navigateColor
                                                 , Navigate(Move))
-import           XMonad.Layout.Magnifier
+import           XMonad.Layout.Magnifier (magnifiercz)
 -- }}}
 
 import qualified Data.Map                    as M
