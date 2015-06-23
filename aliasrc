@@ -674,7 +674,7 @@ dic(){
       tput sgr0
       w3m -dump "http://pocket.dict.cc?s=\"$line\"" \
         | sed -r -e '/^([ ]{5,}.*)$/d' -e '1,2d' -e '/^$/d' -e '/^\[/d' \
-        | head -n 40
+        | head -n $(( $(tput lines) - 3 ))
       echo "=================================================================="
       tput bold
       tput setaf 6
@@ -683,7 +683,7 @@ dic(){
   else
     w3m -dump "http://pocket.dict.cc?s=\"$*\"" \
       | sed -r -e '/^([ ]{5,}.*)$/d' -e '1,2d' -e '/^$/d' -e '/^\[/d' \
-      | head -n 40
+      | head -n $(( $(tput lines) - 3 ))
   fi
 }
 
