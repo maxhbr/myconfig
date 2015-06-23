@@ -1,4 +1,4 @@
-/home/USER/.emacs.d/config/cfg-eshell.el
+/home/USER/.emacs.d/config/ft-eshell.el
 600
 USER
 UGROUP

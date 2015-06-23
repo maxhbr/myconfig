@@ -59,12 +59,12 @@
 (load-library "cfg-keys")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; file types and buffer types
-(load-library "cfg-eshell")
+(load-library "ft-eshell")
 (use-package haskell-mode
   :ensure t
   :mode "\\.hs\\'")
-(load-library "cfg-tex")
-(load-library "cfg-web")
+(load-library "ft-tex")
+(load-library "ft-web")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; load all files in the elisp dir

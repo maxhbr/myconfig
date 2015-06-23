@@ -1,4 +1,4 @@
-/home/USER/.emacs.d/config/cfg-tex.el
+/home/USER/.emacs.d/config/ft-tex.el
 600
 USER
 UGROUP

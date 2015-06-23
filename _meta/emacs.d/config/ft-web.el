@@ -1,4 +1,4 @@
-/home/USER/.emacs.d/config/cfg-web.el
+/home/USER/.emacs.d/config/ft-web.el
 600
 USER
 UGROUP
