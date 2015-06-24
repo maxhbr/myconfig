@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ~/bin/myautosetup.sh
-# Last modified: Fri Jun 05, 2015  02:21
+# Last modified: Wed Jun 24, 2015  12:03
 
 #==============================================================================
 #===  Global variables  =======================================================
@@ -43,10 +43,15 @@ chooseAudioCard() {
 #==============================================================================
 #===  Input arguments  ========================================================
 #==============================================================================
+rotate="normal"
 while [ $# -ne 0 ]; do
   case "$1" in
     wait)
       sleep 0.5
+      ;;
+    rotate)
+      shift
+      rotate=$1
       ;;
   esac
   shift
@@ -76,15 +81,15 @@ case "$DOCKED" in
     #   fi
     # done
     # xrandr --output $DEFAULT_OUTPUT --primary --auto $EXECUTE
-    xrandr --output VIRTUAL1 --off \
+    xrandr --output VIRTUAL1 --rotate normal --off \
            --output eDP1 --mode 1920x1080 --pos 0x0 --rotate normal \
-           --output DP1 --off \
-           --output DP2-1 --off \
-           --output DP2-2 --off \
-           --output DP2-3 --off \
-           --output HDMI2 --off \
-           --output HDMI1 --off \
-           --output DP2 --off
+           --output DP1 --rotate normal --off \
+           --output DP2-1 --rotate normal --off \
+           --output DP2-2 --rotate normal --off \
+           --output DP2-3 --rotate normal --off \
+           --output HDMI2 --rotate normal --off \
+           --output HDMI1 --rotate normal --off \
+           --output DP2 --rotate normal --off
     [[ $ACPresent == "0" ]] && { xbacklight =70 & } || { xbacklight =100 & }
 
     sudo /usr/bin/rfkill unblock all &
@@ -101,7 +106,7 @@ case "$DOCKED" in
 
     if [[ -a "/tmp/myMonitorConfig1" ]]; then
       /usr/bin/xrandr \
-        --output $DOCKED_OUTPUT --primary --mode 1920x1080 \
+        --output $DOCKED_OUTPUT --primary --mode 1920x1080 --rotate "$rotate" \
         --output eDP1 --mode 1920x1080 --left-of DP2-1
       xbacklight =100 &
       rm /tmp/myMonitorConfig1
@@ -110,7 +115,7 @@ case "$DOCKED" in
       # /usr/bin/xrandr --output DP2-1 --mode 1920x1080 --output eDP1 --off
       /usr/bin/xrandr \
         --output eDP1 --mode 1920x1080 \
-        --output $DOCKED_OUTPUT --mode 1920x1080 --same-as eDP1
+        --output $DOCKED_OUTPUT --mode 1920x1080 --same-as eDP1 --rotate normal
       xbacklight =1 &
 
       #Error - unsupported ramp size 0
