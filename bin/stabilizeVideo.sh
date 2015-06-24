@@ -24,17 +24,17 @@ if [ ! -e "${td}/${bn}" ]; then
 fi
 
 ## Move old 'trf' file out of the way
-if [ -e "${td}/${1}.trf" ]; then
-    mv "${td}/${1}.trf" "${td}/${1}.trf.alt"
+if [ -e "${td}/${bn}.trf" ]; then
+    mv "${td}/${bn}.trf" "${td}/${fn}.trf.alt"
 fi
 
 ################################################################################
 ## Do all the work
 time transcode -threads 4 -J stabilize \
-          -i "${td}/$1" \
+          -i "${td}/${bn}" \
     || { echo 'first pass failed' ; exit 1; }
 time transcode -threads 4 -J transform=crop=1:optzoom=0 \
-          -i "${td}/$1" -y raw \
+          -i "${td}/${bn}" -y raw \
           -o "${td}/${fn}-stab-large.avi" \
     || { echo 'second pass failed' ; exit 1; }
 time avconv -threads auto \
