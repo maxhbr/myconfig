@@ -6,6 +6,7 @@ let
     ghc hlint cabalInstall pandoc pointfree pointful hdevtools cabal2nix
   ];
   myPackages = with pkgs; [
+    kbd
     wget curl elinks w3m
     htop powertop
     vim

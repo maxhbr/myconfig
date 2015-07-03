@@ -646,6 +646,11 @@ myiscsiRoutine() {
 #   misc
 #-------------------------------------------------------------------{{{
 
+touchpadtoggle(){
+  xdotool mousemove 0 0
+  synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')
+}
+
 alias incognito="/usr/bin/chromium --incognito"
 
 # calc - simple calculator

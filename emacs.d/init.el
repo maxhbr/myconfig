@@ -65,6 +65,17 @@
   :mode "\\.hs\\'")
 (load-library "ft-tex")
 (load-library "ft-web")
+(use-package jabber
+  :config
+  (add-hook 'jabber-chat-mode-hook
+          (lambda()
+            (flyspell-mode t)
+            (visual-line-mode)
+            (ispell-change-dictionary "deutsch8"))))
+
+(let ((priv (dot-emacs "private-init.el")))
+  (when (file-exists-p priv)
+    (load priv)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; load all files in the elisp dir
@@ -78,6 +89,7 @@
 
 ;; This has to be last, such that there is a menu bar in the error-case
 (if (fboundp 'menu-bar-mode) (menu-bar-mode -1))
+;; (server-start)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -98,4 +110,5 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- )
+ '(jabber-chat-prompt-foreign ((t (:foreground "dark orange" :weight bold))))
+ '(jabber-chat-prompt-local ((t (:foreground "saddle brown" :weight normal)))))

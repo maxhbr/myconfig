@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Fri Jun 05, 2015  01:37
+# Last modified: Wed Jun 24, 2015  06:08
 
 #setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 #setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:sclk_toggle -option grp_led:scroll
@@ -28,10 +28,6 @@ export LANG="de_DE.utf8"
   if xrandr -q | grep -q "HDMI2 connected"; then
     xrandr --output HDMI2 --mode 1920x1080 --right-of LVDS1 \
       --output LVDS1 --mode 1366x768
-    [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
-    # [[ -f ~/.icc/23.icc ]] && xcalib -s 0 ~/.icc/23.icc &
-  else
-    [[ -f ~/.icc/x230.icc ]] && xcalib -s 0 ~/.icc/x230.icc &
   fi
   feh --bg-center "~/Bilder/background/BACKGROUND.png"
 ) &
