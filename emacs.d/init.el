@@ -52,6 +52,8 @@
 (load-library "cfg-completion")
 (load-library "cfg-vcs")
 (load-library "cfg-testing")
+(use-package tramp
+  :ensure t)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; advanced behaviour and styling
 (load-library "cfg-viLike")
@@ -59,19 +61,14 @@
 (load-library "cfg-keys")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; file types and buffer types
+(load-library "ft-org")
 (load-library "ft-eshell")
-(use-package haskell-mode
-  :ensure t
-  :mode "\\.hs\\'")
+(load-library "ft-haskell")
 (load-library "ft-tex")
 (load-library "ft-web")
-(use-package jabber
-  :config
-  (add-hook 'jabber-chat-mode-hook
-          (lambda()
-            (flyspell-mode t)
-            (visual-line-mode)
-            (ispell-change-dictionary "deutsch8"))))
+(load-library "ft-jabber")
+(use-package markdown-mode
+  :ensure t)
 
 (let ((priv (dot-emacs "private-init.el")))
   (when (file-exists-p priv)

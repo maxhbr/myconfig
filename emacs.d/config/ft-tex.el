@@ -75,7 +75,11 @@
            (define-key outline-minor-mode-map (kbd "<C-tab>") 'outline-cycle))))
     (add-hook 'LaTeX-mode-hook #'outline-minor-mode)
     :diminish outline-minor-mode)
-  )
+  (use-package ebib
+    :ensure t
+    :init
+    (add-to-list 'evil-emacs-state-modes 'ebib-entry-mode)
+    (add-to-list 'evil-emacs-state-modes 'ebib-index-mode)))
 
 
 ;; (defun guess-TeX-master (filename)
