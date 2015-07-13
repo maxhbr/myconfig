@@ -15,6 +15,10 @@ macro index,pager AJ "<save-message>~/Mail/mail/Sort.Job<enter>" \
 macro index,pager AP "<save-message>~/Mail/mail/Sort.Private<enter>" \
     "move message to the private archive"
 
+# Move message(s) to Spam/Verified by pressing "S"
+macro index S "<tag-prefix><enter-command>unset resolve<enter><tag-prefix><clear-flag>N<tag-prefix><enter-command>set resolve<enter><tag-prefix><save-message>=Spam.Verified<enter>" "file as Spam"
+macro pager S "<save-message>=Spam.Verified<enter>" "file as Spam"
+
 macro index,pager M "<pipe-message>abook --add-email-quiet<return>" "add sender to abook"
 
 #drücke t, um in den Ordnern des Postfaches zu navigieren
@@ -45,7 +49,7 @@ set sort_aux=date-sent
 #set sort=date                              #würde alternativ zuerst nach Datum sortieren
 
 set date_format="%a, %d. %b %H:%M"          #gibt an, wie das Datum formatiert wird
-set index_format="%4C %Z %D %-22.22F (%?l?%4l&%4c?) %s"	#Format der Mail-Übersicht
+set index_format="%4C %Z %D %-22.22F (%?l?%4l&%4c?) %s" #Format der Mail-Übersicht
 set folder_format="%2C %8s %d %t %N %f"     #Format des Datei-Browsers
 set pager_index_lines=10                    #Anzahl der angezeigten Mails in der Übersicht
 set editor="vim +11"                         #Editor, der zum Verfassen der E-Mail benutzt wird, hier Vim beginnend auf Zeile 8

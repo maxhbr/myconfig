@@ -17,3 +17,9 @@
 ;; highlight current line
 (global-hl-line-mode 1)
 (set-face-foreground 'highlight nil)
+
+(set-face-attribute 'region nil :foreground nil :background "#664724")
+
+;; (use-package color-theme-buffer-local)
+;; (add-hook 'java-mode
+;;           (lambda nil (color-theme-buffer-local 'color-theme-robin-hood (current-buffer))))

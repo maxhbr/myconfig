@@ -84,10 +84,6 @@
 (add-hook 'latex-mode-hook 'auto-fill-mode)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; (require 'column-enforce-mode)
-;; (global-column-enforce-mode t)
-;; (require 'column-marker)
-;; (add-hook 'foo-mode-hook (lambda () (interactive) (column-marker-1 80)))
 (use-package fill-column-indicator
   :ensure t
   :init

@@ -51,6 +51,7 @@
 ~/bin/gitFindBigFiles.sh
 ~/bin/gitRemoveFileTotaly.sh
 ~/bin/gitWalk
+~/bin/hearAudiobook.sh
 ~/bin/installiere_neo
 ~/bin/mailclient.sh
 ~/bin/mailrun.sh
