@@ -367,8 +367,9 @@ myStopScreensaver(){
 }
 
 incoChrome(){
-  mkdir -p /tmp/incoChrome
-  chromium --incognito --user-data-dir="/tmp/incoChrome"
+  postfix=$(date +%s | sha256sum | base64 | head -c 32 ; echo)
+  mkdir -p "/tmp/incoChrome_$postfix" && \
+    /usr/bin/chromium --incognito --user-data-dir="/tmp/incoChrome_$postfix" &disown
 }
 
 alias mplayerampl="mplayer -af volume=10.1:0"
@@ -651,8 +652,6 @@ touchpadtoggle(){
   synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')
 }
 
-alias incognito="/usr/bin/chromium --incognito"
-
 # calc - simple calculator
 # usage: calc <equation>
 calc() { echo "$*" | bc -l; }
@@ -688,7 +687,8 @@ dic(){
   else
     w3m -dump "http://pocket.dict.cc?s=\"$*\"" \
       | sed -r -e '/^([ ]{5,}.*)$/d' -e '1,2d' -e '/^$/d' -e '/^\[/d' \
-      | head -n $(( $(tput lines) - 3 ))
+      | less
+      # | head -n $(( $(tput lines) - 3 ))
   fi
 }
 

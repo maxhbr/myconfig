@@ -56,6 +56,7 @@
   :ensure t)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; advanced behaviour and styling
+(load-library "cfg-undoTree")
 (load-library "cfg-viLike")
 (load-library "cfg-style")
 (load-library "cfg-keys")
