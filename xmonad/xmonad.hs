@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Wed Jun 24, 2015  12:14
+-- Last modified: Mon Jul 20, 2015  09:38
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -431,9 +431,9 @@ scratchpads =
     , NS "ncmpcpp" "urxvtc -name Ncmpcpp -e ncmpcpp"
         (resource =? "Ncmpcpp")
         (customFloating $ W.RationalRect (1/2) (1/5) (1/2) (4/5))
-    , NS "notepad" "emacs -name Notepad ~/TODO/notes.org"
+    , NS "notepad" "emacs -name Notepad ~/Sync/org/index.org"
         (resource =? "Notepad")
-        (customFloating $ W.RationalRect (5/12) (3/20) (1/2) (4/5))
+        (customFloating $ W.RationalRect (4/12) (3/20) (7/12) (4/5))
     -- , NS "notepad" "urxvtc -name Notepad -e vim ~/TODO/notizen.wiki"
     --     (resource =? "Notepad")
     --     (customFloating $ W.RationalRect (5/12) (3/20) (1/2) (4/5))

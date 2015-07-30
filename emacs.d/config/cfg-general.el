@@ -129,7 +129,9 @@
 ;; (folding-add-to-marks-list 'prolog-mode "%{{{" "%}}}" nil t)
 ;; (folding-add-to-marks-list 'html-mode   "<!-- {{{ " "<!-- }}} -->" " -->" nil t)
 
-(setq undo-limit 3600)
+(setq undo-limit        120000)
+(setq undo-strong-limit 1200000)
+(setq undo-outer-limit  12000000)
 
 (use-package adaptive-wrap
   :ensure t

@@ -93,4 +93,5 @@
 /etc/zsh/zshrc
 /usr/share/kbd/keymaps/neo/*
 /usr/share/zsh/functions/Completion/Haskell/*
+/usr/share/zsh/site-functions/_lein
 

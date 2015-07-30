@@ -51,7 +51,6 @@
 (load-library "cfg-gitGutter")
 (load-library "cfg-completion")
 (load-library "cfg-vcs")
-(load-library "cfg-testing")
 (use-package tramp
   :ensure t)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -60,12 +59,17 @@
 (load-library "cfg-viLike")
 (load-library "cfg-style")
 (load-library "cfg-keys")
+(use-package sbt-mode
+  :ensure t)
+(use-package whitespace
+  :ensure t)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; file types and buffer types
 (load-library "ft-org")
 (load-library "ft-eshell")
 (load-library "ft-haskell")
 (load-library "ft-tex")
+(load-library "ft-scala")
 (load-library "ft-web")
 (load-library "ft-jabber")
 (use-package markdown-mode
@@ -74,6 +78,9 @@
 (let ((priv (dot-emacs "private-init.el")))
   (when (file-exists-p priv)
     (load priv)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(load-library "cfg-testing")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; load all files in the elisp dir

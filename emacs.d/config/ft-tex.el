@@ -24,19 +24,19 @@
               (turn-on-reftex)
               (setq reftex-plug-into-AUCTeX t)
               (push
-                '("myLuatexmk" "latexmk  -pdflatex=lualatex -outdir=\"_lualatexmk\" -pdf -synctex=1 -pvc  %s" TeX-run-TeX nil t
+                '("myLuatexmk" "latexmk  -pdflatex=lualatex -outdir=\"_lualatexmk\" -pdf -synctex=1 -pvc \"%s\"" TeX-run-TeX nil t
                   :help "Run Latexmk with luatex on file")
                 TeX-command-list)
               (push
-                '("myLatexmk" "latexmk -outdir=\"_latexmk\" -pdf -synctex=1 -pvc  %s" TeX-run-TeX nil t
+                '("myLatexmk" "latexmk -outdir=\"_latexmk\" -pdf -synctex=1 -pvc \"%s\"" TeX-run-TeX nil t
                   :help "Run Latexmk on file")
                 TeX-command-list)
               (push
-                '("myLuatexmkTMP" "latexmk  -pdflatex=lualatex -outdir=\"/tmp/_lualatexmk\" -pdf -synctex=1 -pvc  %s" TeX-run-TeX nil t
+                '("myLuatexmkTMP" "latexmk  -pdflatex=lualatex -outdir=\"/tmp/_lualatexmk\" -pdf -synctex=1 -pvc \"%s\"" TeX-run-TeX nil t
                   :help "Run Latexmk with luatex on file")
                 TeX-command-list)
               (push
-                '("myLatexmkTMP" "latexmk -outdir=\"/tmp/_latexmk\" -pdf -synctex=1 -pvc  %s" TeX-run-TeX nil t
+                '("myLatexmkTMP" "latexmk -outdir=\"/tmp/_latexmk\" -pdf -synctex=1 -pvc \"%s\"" TeX-run-TeX nil t
                   :help "Run Latexmk on file")
                 TeX-command-list)
               (local-set-key (kbd "RET") 'newline-and-indent)))
