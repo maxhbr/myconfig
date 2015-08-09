@@ -1,0 +1,5 @@
+/home/USER/bin/mkhs.sh
+700
+USER
+UGROUP
+2ecb9025981ee92f5373c0afdc64d212

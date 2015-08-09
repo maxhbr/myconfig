@@ -55,6 +55,7 @@
 ~/bin/installiere_neo
 ~/bin/mailclient.sh
 ~/bin/mailrun.sh
+~/bin/mkhs.sh
 ~/bin/myAnyToMp3.sh
 ~/bin/myCleanDownloads.sh
 ~/bin/myEcryptfsMount.sh

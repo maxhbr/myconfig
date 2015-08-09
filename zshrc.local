@@ -4,7 +4,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Sat Apr 25, 2015  11:26
+# Last modified: Mon Aug 03, 2015  01:24
 #
 umask 077
 
@@ -17,10 +17,10 @@ export LANG=de_DE.UTF-8
   export PATH=$HOME/bin:$PATH
   [[ -d $HOME/bin/stolen ]] && export PATH=$PATH:$HOME/bin/stolen
 }
-[[ -d $HOME/.cabal/bin ]] && export PATH=$HOME/.cabal/bin:$PATH
-
-# [[ -d $HOME/perl5/bin ]] && export PATH=$HOME/perl5/bin:$PATH
 [[ -d $HOME/.perl/bin ]] && export PATH=$HOME/.perl/bin:$PATH
+# [[ -d $HOME/perl5/bin ]] && export PATH=$HOME/perl5/bin:$PATH
+[[ -d $HOME/.gem/ruby/2.2.0/bin ]] && export PATH=$PATH:$HOME/.gem/ruby/2.2.0/bin
+[[ -d $HOME/.cabal/bin ]] && export PATH=$HOME/.cabal/bin:$PATH
 
 PATH="$HOME/perl5/bin${PATH+:}${PATH}"; export PATH;
 PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB+:}${PERL5LIB}"; export PERL5LIB;

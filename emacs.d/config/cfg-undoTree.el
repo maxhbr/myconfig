@@ -9,5 +9,5 @@
   ;; (defadvice undo-tree-make-history-save-file-name
   ;;            (after undo-tree-compressed activate)
   ;;            (setq ad-return-value (concat ad-return-value ".gz")))
-  (global-set-key (kbd "<f6>") 'undo-tree-visualize)
+  ; (global-set-key (kbd "<f6>") 'undo-tree-visualize)
   :diminish undo-tree-mode)

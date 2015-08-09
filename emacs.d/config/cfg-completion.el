@@ -19,6 +19,10 @@
   ;; (define-key company-active-map (kbd "<return>") nil)
   (define-key company-active-map (kbd "C-b") 'company-complete-common-or-cycle)
   ;; (define-key company-active-map (kbd "C-p") 'company-select-previous)
+
+  (add-to-list 'company-backends 'company-ghc)
+  (custom-set-variables '(company-ghc-show-info t))
+
   :diminish company-mode)
 
 (use-package haskell-snippets

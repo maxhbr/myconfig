@@ -1,11 +1,25 @@
 (use-package haskell-mode
   :ensure t
   :config
-  (add-hook 'haskell-mode-hook 'haskell-indentation-mode)
+  ;; Indent-mode simple
+  ;; (add-hook 'haskell-mode-hook 'turn-on-haskell-simple-indent)
+
+  ;; Indent-mode indent
+  ;; (add-hook 'haskell-mode-hook 'turn-on-haskell-indent)
+
+  ;; Indent-mode indentation
+  ;; (add-hook 'haskell-mode-hook 'turn-on-haskell-indentation)
+
+  ;; Indent-mode hi2
+  (use-package hi2
+    :ensure t
+    :config
+    (add-hook 'haskell-mode-hook 'turn-on-hi2))
 
   (require 'haskell-interactive-mode)
   (require 'haskell-process)
   (add-hook 'haskell-mode-hook 'interactive-haskell-mode)
+
   (custom-set-variables
    '(haskell-process-suggest-remove-import-lines t)
    '(haskell-process-auto-import-loaded-modules t)

@@ -16,6 +16,13 @@
         '(("PDF Viewer" "zathura %o")
           ("DVI Viewer" "xdvi %o")
           ("HTML Viewer" "chromium %o")))
+
+  ;; (setq LaTeX-verbatim-environments-local '("comment" "lstlisting"))
+  (setq font-latex-user-keyword-classes
+        '(("shadow-rewrite" (("rewrite" "{")) shadow command)
+          ("shadow-TODO"    (("TODO" "{"))    shadow command)
+          ("shadow-comment" (("comment" "{")) shadow command)))
+
   :config
   (add-hook 'LaTeX-mode-hook
             (lambda ()
