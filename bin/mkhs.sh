@@ -102,7 +102,17 @@ EOL
             cat >>runGuard.sh <<EOL
 #!/usr/bin/env bash
 
-nix-shell -I ~ --command 'guard start'
+
+if [[ -z "\$TMUX" ]]; then
+  if tmux has-session -t "${pkg}-Guard" 2>/dev/null; then
+    tmux att "${pkg}-Guard"
+  else
+    tmux new-session -s "${pkg}-Guard" "nix-shell -I ~ --command 'guard start'"
+  fi
+else
+
+  nix-shell -I ~ --command 'guard start'
+fi
 EOL
             chmod +x runGuard.sh
             git add runGuard.sh
