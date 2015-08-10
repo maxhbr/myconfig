@@ -1,15 +1,25 @@
 #!/usr/bin/env bash
-have() { type "$1" &> /dev/null; }
 
+initGit="true"
+initCabal="true"
+initTests="true"
+useCabal="true"
+useGuards="true"
+
+################################################################################
+# global variables
+have() { type "$1" &> /dev/null; }
 DIR=$( pwd )
 pkg=$( basename $DIR )
 cblFile="${pkg}.cabal"
 
-# git init
-[[ -e .git ]] || git init
+################################################################################
+# git
+[[ -e .git ]] || [[ "$initGit" = true ]] && git init
 
-# cabal install
-[[ -e $cblFile ]] || {
+################################################################################
+# cabal
+[[ -e $cblFile ]] || [[ "$initCabal" = true ]] && {
     cabal init --minimal --no-comments \
           --package-name="$pkg" \
           --version=0.1.0.0 \
@@ -20,7 +30,8 @@ cblFile="${pkg}.cabal"
           --language=Haskell2010 \
           --source-dir=src \
           --main-is=Main.hs
-    cat >>$cblFile <<EOL
+    [[ "$initTests" = "true" ]] && {
+        cat >>$cblFile <<EOL
 
 
 test-suite spec
@@ -33,16 +44,20 @@ test-suite spec
                , hspec >= 1.3
   default-language:    Haskell2010
 EOL
+    }
     git add $cblFile
     git add Setup.hs
     git add LICENSE
 }
 
 mkdir -p src
-mkdir -p test
 
-[[ -f test/Spec.hs ]] || {
-    cat >>test/Spec.hs <<EOL
+################################################################################
+# tests
+[[ "$initTests" = "true" ]] && {
+    mkdir -p test
+    [[ -f test/Spec.hs ]] || {
+        cat >>test/Spec.hs <<EOL
 {-# OPTIONS_GHC -F -pgmF hspec-discover #-}
 module Name.Of.ModuleSpec where
 {-
@@ -57,11 +72,11 @@ main :: IO ()
 main = hspec $ spec
 -}
 EOL
-    git add test/Spec.hs
-}
+        git add test/Spec.hs
+    }
 
-[[ -f test/SpecHelper.hs ]] || {
-    cat >>test/SpecHelper.hs <<EOL
+    [[ -f test/SpecHelper.hs ]] || {
+        cat >>test/SpecHelper.hs <<EOL
 module SpecHelper
        ( module X
        ) where
@@ -70,10 +85,14 @@ import Test.Hspec as X
 import Test.QuickCheck as X
 import Control.Exception as X
 EOL
-    git add test/SpecHelper.hs
+        git add test/SpecHelper.hs
+    }
 }
 
-have cabal2nix && {
+################################################################################
+# nix and scripts
+have nix-env && [[ "$useCabal" = "true" ]] && {
+    have cabal2nix || nix-env -iA nixpkgs.cabal2nix
     # uptare nix files
     cabal2nix ./ > default.nix
     cabal2nix --shell ./ > shell.nix
@@ -83,17 +102,20 @@ have cabal2nix && {
     # install all dependencies
     nix-shell -I ~ --command 'cabal install --only-dependencies --enable-tests'
 
-    [[ -f runCabalREPL.sh ]] || {
-        cat >>runCabalREPL.sh <<EOL
+    [[ -f runCabal.sh ]] || {
+        cat >>runCabal.sh <<EOL
 #!/usr/bin/env bash
-
-nix-shell -I ~ --command 'cabal repl'
+if [[ $# -eq 0 ]] ; then
+  nix-shell -I ~ --command "cabal repl"
+else
+  nix-shell -I ~ --command "cabal \$@"
+fi
 EOL
-        chmod +x runCabalREPL.sh
-        git add runCabalREPL.sh
+        chmod +x runCabal.sh
+        git add runCabal.sh
     }
 
-    have gem && {
+    have gem && [[ "$useGuards" = "true" ]] && {
         have guard || {
             gem install guard-shell
             gem install guard-haskell
@@ -101,8 +123,6 @@ EOL
         [[ -f runGuard.sh ]] || {
             cat >>runGuard.sh <<EOL
 #!/usr/bin/env bash
-
-
 if [[ -z "\$TMUX" ]]; then
   if tmux has-session -t "${pkg}-Guard" 2>/dev/null; then
     tmux att "${pkg}-Guard"
@@ -110,7 +130,6 @@ if [[ -z "\$TMUX" ]]; then
     tmux new-session -s "${pkg}-Guard" "nix-shell -I ~ --command 'guard start'"
   fi
 else
-
   nix-shell -I ~ --command 'guard start'
 fi
 EOL
