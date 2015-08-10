@@ -15,23 +15,26 @@ cblFile="${pkg}.cabal"
 
 ################################################################################
 # git
-[[ -e .git ]] || [[ "$initGit" = true ]] && git init
+[[ -e .git ]] || {
+    [[ "$initGit" = "true" ]] && git init
+}
 
 ################################################################################
 # cabal
-[[ -e $cblFile ]] || [[ "$initCabal" = true ]] && {
-    cabal init --minimal --no-comments \
-          --package-name="$pkg" \
-          --version=0.1.0.0 \
-          --author=maximilianhuber \
-          --license=BSD3 \
-          --email=mail@maximilian-huber.de \
-          --homepage= \
-          --language=Haskell2010 \
-          --source-dir=src \
-          --main-is=Main.hs
-    [[ "$initTests" = "true" ]] && {
-        cat >>$cblFile <<EOL
+[[ -e $cblFile ]] || {
+    [[ "$initCabal" = "true" ]] && {
+        cabal init --minimal --no-comments \
+              --package-name="$pkg" \
+              --version=0.1.0.0 \
+              --author=maximilianhuber \
+              --license=BSD3 \
+              --email=mail@maximilian-huber.de \
+              --homepage= \
+              --language=Haskell2010 \
+              --source-dir=src \
+              --main-is=Main.hs
+        [[ "$initTests" = ""true"" ]] && {
+            cat >>$cblFile <<EOL
 
 
 test-suite spec
@@ -44,10 +47,11 @@ test-suite spec
                , hspec >= 1.3
   default-language:    Haskell2010
 EOL
+        }
+        git add $cblFile
+        git add Setup.hs
+        git add LICENSE
     }
-    git add $cblFile
-    git add Setup.hs
-    git add LICENSE
 }
 
 mkdir -p src
