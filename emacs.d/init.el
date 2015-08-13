@@ -39,6 +39,17 @@
 ;;   (setq auto-async-byte-compile-exclude-files-regexp "/junk/")
 ;;   :config
 ;;   (add-hook 'emacs-lisp-mode-hook 'enable-auto-async-byte-compile-mode))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; load all files in the elisp dir
+(let ((base (dot-emacs "elisp")))
+  (unless (file-exists-p base)
+    (make-directory base))
+  (add-to-list 'load-path base)
+  (dolist (dir (directory-files base t "^[^.]"))
+    (when (file-directory-p dir)
+      (add-to-list 'load-path dir))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; basic behaviour
 (load-library "cfg-general")
@@ -72,6 +83,8 @@
 (load-library "ft-scala")
 (load-library "ft-web")
 (load-library "ft-jabber")
+(load-library "ft-shell")
+(load-library "ft-clojure")
 (use-package markdown-mode
   :ensure t)
 
@@ -81,16 +94,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (load-library "cfg-testing")
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; load all files in the elisp dir
-(let ((base (dot-emacs "elisp")))
-  (unless (file-exists-p base)
-    (make-directory base))
-  (add-to-list 'load-path base)
-  (dolist (dir (directory-files base t "^[^.]"))
-    (when (file-directory-p dir)
-      (add-to-list 'load-path dir))))
 
 ;; This has to be last, such that there is a menu bar in the error-case
 (if (fboundp 'menu-bar-mode) (menu-bar-mode -1))

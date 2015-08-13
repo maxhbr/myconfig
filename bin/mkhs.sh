@@ -3,8 +3,27 @@
 initGit="true"
 initCabal="true"
 initTests="true"
-useCabal="true"
+useNix="true"
 useGuards="true"
+initSandboxIfNoNix="true"
+
+while [[ $# > 0 ]]; do
+    case $1 in
+        -git) initGit="false" ;;
+        +git) initGit="true" ;;
+        -cabal) initCabal="false" ;;
+        +cabal) initCabal="true" ;;
+        -test|-tests) initTests="false" ;;
+        +test|+tests) initTests="true" ;;
+        -nix) useNix="false" ;;
+        +nix) useNix="true" ;;
+        -guard|-guards) useGuards="false" ;;
+        +guard|+guards) useGuards="true" ;;
+        -sandbox) initSandboxIfNoNix="false" ;;
+        +sandbox) initSandboxIfNoNix="true" ;;
+    esac
+    shift
+done
 
 ################################################################################
 # global variables
@@ -15,12 +34,15 @@ cblFile="${pkg}.cabal"
 
 ################################################################################
 # git
+# {{{
 [[ -e .git ]] || {
     [[ "$initGit" = "true" ]] && git init
 }
+# }}}
 
 ################################################################################
 # cabal
+# {{{
 [[ -e $cblFile ]] || {
     [[ "$initCabal" = "true" ]] && {
         cabal init --minimal --no-comments \
@@ -45,6 +67,7 @@ test-suite spec
 
   build-depends: base  == 4.*
                , hspec >= 1.3
+               , QuickCheck
   default-language:    Haskell2010
 EOL
         }
@@ -53,11 +76,13 @@ EOL
         git add LICENSE
     }
 }
+# }}}
 
 mkdir -p src
 
 ################################################################################
 # tests
+# {{{
 [[ "$initTests" = "true" ]] && {
     mkdir -p test
     [[ -f test/Spec.hs ]] || {
@@ -92,40 +117,68 @@ EOL
         git add test/SpecHelper.hs
     }
 }
+# }}}
 
 ################################################################################
 # nix and scripts
-have nix-env && [[ "$useCabal" = "true" ]] && {
-    have cabal2nix || nix-env -iA nixpkgs.cabal2nix
-    # uptare nix files
-    cabal2nix ./ > default.nix
-    cabal2nix --shell ./ > shell.nix
-    git add *.nix
-    # reconfigure
-    nix-shell -I ~ --command 'cabal configure --enable-tests'
-    # install all dependencies
-    nix-shell -I ~ --command 'cabal install --only-dependencies --enable-tests'
+# {{{
+[[ "$useNix" = "true" ]] && {
+    have nix-env && {
+        have cabal2nix || nix-env -iA nixpkgs.cabal2nix
+        # uptare nix files
+        cabal2nix ./ > default.nix
+        cabal2nix --shell ./ > shell.nix
+        git add *.nix
 
-    [[ -f runCabal.sh ]] || {
-        cat >>runCabal.sh <<EOL
+        [[ -f runCabal.sh ]] || {
+            cat >>runCabal.sh <<EOL
 #!/usr/bin/env bash
-if [[ $# -eq 0 ]] ; then
+if [[ \$# -eq 0 ]] ; then
   nix-shell -I ~ --command "cabal repl"
 else
   nix-shell -I ~ --command "cabal \$@"
 fi
 EOL
-        chmod +x runCabal.sh
-        git add runCabal.sh
-    }
-
-    have gem && [[ "$useGuards" = "true" ]] && {
-        have guard || {
-            gem install guard-shell
-            gem install guard-haskell
+            chmod +x runCabal.sh
+            git add runCabal.sh
         }
-        [[ -f runGuard.sh ]] || {
-            cat >>runGuard.sh <<EOL
+    }
+} || {
+    [[ "$initSandboxIfNoNix" = "true" ]] && {
+        [[ -e .cabal-sandbox ]] || {
+            cabal sandbox init
+        }
+    }
+}
+# }}}
+
+################################################################################
+# reconfigure
+# {{{
+[[ "$useNix" = "true" ]] && {
+    # reconfigure
+    nix-shell -I ~ --command 'cabal configure --enable-tests'
+    # install all dependencies
+    nix-shell -I ~ --command 'cabal install --only-dependencies --enable-tests'
+} || {
+    [[ -e .cabal-sandbox ]] && {
+        cabal configure --enable-tests
+        cabal install --only-dependencies --enable-tests
+    }
+}
+# }}}
+
+################################################################################
+# guards
+# {{{
+have gem && [[ "$useGuards" = "true" ]] && {
+    have guard || {
+        gem install guard-shell
+        gem install guard-haskell
+    }
+    [[ -f runGuard.sh ]] || {
+        [[ "$useNix" = "true" ]] && {
+        cat >>runGuard.sh <<EOL
 #!/usr/bin/env bash
 if [[ -z "\$TMUX" ]]; then
   if tmux has-session -t "${pkg}-Guard" 2>/dev/null; then
@@ -137,12 +190,26 @@ else
   nix-shell -I ~ --command 'guard start'
 fi
 EOL
-            chmod +x runGuard.sh
-            git add runGuard.sh
+        } || {
+        cat >>runGuard.sh <<EOL
+#!/usr/bin/env bash
+if [[ -z "\$TMUX" ]]; then
+  if tmux has-session -t "${pkg}-Guard" 2>/dev/null; then
+    tmux att "${pkg}-Guard"
+  else
+    tmux new-session -s "${pkg}-Guard" "guard start"
+  fi
+else
+  guard start
+fi
+EOL
         }
+        chmod +x runGuard.sh
+        git add runGuard.sh
+    }
 
-        [[ -f Guardfile ]] || {
-            cat >>Guardfile <<EOL
+    [[ -f Guardfile ]] || {
+        cat >>Guardfile <<EOL
 # Runs the command and prints a notification
 def execute(cmd)
   if system(cmd)
@@ -178,7 +245,7 @@ guard :shell do
   watch(%r{test/(.+)Spec\.hs$})  { |m| run_tests(m[1]) }
 end
 EOL
-            git add Guardfile
-        }
+        git add Guardfile
     }
 }
+# }}}

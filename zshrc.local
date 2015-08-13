@@ -4,11 +4,11 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Mon Aug 03, 2015  01:24
+# Last modified: Mi Aug 12, 2015  03:47
 #
 umask 077
 
-export LANG=de_DE.UTF-8
+# export LANG=de_DE.UTF-8
 
 ###############################################################################
 [[ -f ~/.aliasrc ]] && source ~/.aliasrc
@@ -31,10 +31,6 @@ PERL_MM_OPT="INSTALL_BASE=$HOME/perl5"; export PERL_MM_OPT;
 # [[ -d $HOME/.local/bin ]] && export PATH=$HOME/.local/bin:$PATH
 
 export MPD_HOST="mpd@192.168.178.61"
-
-###############################################################################
-# source the file 'z.sh' from https://github.com/rupa/z
-[[ -f ~/.zshrc.z ]] && source ~/.zshrc.z
 
 ###############################################################################
 # nix:

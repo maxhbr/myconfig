@@ -41,6 +41,26 @@ have() { type "$1" &> /dev/null; }
 
 alias gitDiff="git diff HEAD^ HEAD"
 
+
+# zathura() {
+#   command zathura "$@" &disown
+# }
+emacs(){
+  fork="true"
+  for var in "$@"; do
+    if [[ "$var" = "-nw" ]]; then
+      fork="false"
+      break
+    fi
+  done
+  if [[ "$fork" = "true" ]]; then
+    command emacs "$@" &disown
+  else
+    command emacs "$@"
+  fi
+}
+alias e="emacs"
+
 #--------------------------------------------------------------------
 #   file specific
 #-------------------------------------------------------------------{{{
@@ -139,20 +159,20 @@ ffa() { find . -iname '*'$*'*' -ls 2>/dev/null ; }
 # Find a file with pattern $1 in name and Execute $2 on it:
 fe() { find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \; ; }
 
-e() {
-  for file in "$@"; do
-    if [ -f $file ] ; then
-      opt=$( tr '[:upper:]' '[:lower:]' <<<"$file" )
-      case $opt in
-        *.pdf) llpp $file ;;
-        *.djvu) apvlv $file ;;
-        *) vim $file ;;
-      esac
-    else
-      echo "'$file' is not a valid file"
-    fi
-  done
-}
+# e() {
+#   for file in "$@"; do
+#     if [ -f $file ] ; then
+#       opt=$( tr '[:upper:]' '[:lower:]' <<<"$file" )
+#       case $opt in
+#         *.pdf) llpp $file ;;
+#         *.djvu) apvlv $file ;;
+#         *) vim $file ;;
+#       esac
+#     else
+#       echo "'$file' is not a valid file"
+#     fi
+#   done
+# }
 
 # Extract files from nearly any archive
 # Usage: ex <archive_name>
@@ -409,7 +429,7 @@ mpcFade() {
 #   documente / printing
 #-------------------------------------------------------------------{{{
 
-[[ -f ~/bin/univOpWrap ]] && alias p="~/bin/univOpWrap -f \".djvu:/usr/bin/zathura /usr/bin/llpp\""
+[[ -f ~/bin/univOpWrap ]] && alias p="~/bin/univOpWrap -r -f \".djvu:/usr/bin/zathura /usr/bin/llpp\""
 zathura() {
   command zathura "$@" &disown
 }
