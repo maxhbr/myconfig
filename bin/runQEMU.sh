@@ -14,7 +14,7 @@
 # for bridged network (usually called from this script):
 #   $ runQEMU.sh br0
 #
-# for vde2 network, one has to 
+# for vde2 network, one has to
 #       modprobe tun
 #       vde_switch -tap tap0 -daemon -mod 660 -group users
 #       ip addr add 192.168.100.254/24 dev tap0
@@ -51,18 +51,18 @@ while [[ "$#" -gt 1 ]]; do
     shift; CDROM=$1; shift
   fi
   if [ "$1" == "-bridge" ]; then
-    BRIDGED=true
+    shift; BRIDGED=true
   fi
   if [ "$1" == "-nobridge" ]; then
-    BRIDGED=false
+    shift; BRIDGED=false
   fi
   if [ "$1" == "-vnc" ]; then
-    VNC=true
+    shift; VNC=true
   fi
   if [ "$1" == "-novnc" ]; then
-    VNC=false
+    shift; VNC=false
   fi
-  echo $1
+  # echo $1
 done
 if [ $# -eq 1 ]; then
   echo $1
@@ -118,9 +118,14 @@ if [ $# -eq 0 ]; then
     addParam "-net nic,vlan=0 -net tap,vlan=0,ifname=tap0,script=$ME"
   else
     # redirect important ports
+
+    # to prepare use:
+    # $ sudo vde_switch -daemon -mod 660 -group users
+    # $ sudo slirpvde --dhcp --daemon
+
     printf -v macaddr "52:54:%02x:%02x:%02x:%02x" $(( $RANDOM & 0xff)) $(( $RANDOM & 0xff )) $(( $RANDOM & 0xff)) $(( $RANDOM & 0xff ))
     addParam "-net nic,macaddr=$macaddr -net vde"
-    # addParam "-redir tcp:10022::22 -redir tcp:10023::80 -redir tcp:10024::445"
+    addParam "-redir tcp:10022::22 -redir tcp:10023::80 -redir tcp:10024::445"
   fi
   addParam "-localtime"
   if [ "$VNC" = true ]; then
@@ -133,7 +138,7 @@ if [ $# -eq 0 ]; then
   fi
   if [ ! -z "$CDROM" ]; then
     if [ -e "$CDROM" ]; then
-      addParam "-cdrom \"$CDROM\""
+      addParam "-cdrom $CDROM"
     # else
     #   echo "cdrom not found. IGNORED!"
     fi

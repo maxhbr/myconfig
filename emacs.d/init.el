@@ -84,6 +84,9 @@
 (load-library "ft-web")
 (load-library "ft-jabber")
 (load-library "ft-shell")
+(load-library "ft-nix")
+(load-library "ft-java")
+(load-library "ft-scala")
 (load-library "ft-clojure")
 (use-package markdown-mode
   :ensure t)

@@ -1,5 +1,4 @@
 (use-package scala-mode2
-  :ensure t
   :config
   (add-hook 'scala-mode-hook '(lambda ()
                                 ;; clean-up whitespace at save
@@ -10,5 +9,6 @@
                                 ;; the *whitespace-style* variable. A sane set of things to
                                 ;; highlight is: face, tabs, trailing
                                 (whitespace-mode)
-                                )))
+                                ))
   ; :mode "\\.scala\\'")
+  :ensure t)

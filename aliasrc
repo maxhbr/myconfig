@@ -4,9 +4,10 @@
 # needs:
 # vim, tmux, sudo, mutt
 
-alias vi="vim"
+alias vi="emacs -nw"
+alias vim="emacs -nw"
 #alias e="vim"
-alias :e="vim" #Typo
+alias :e="emacs -nw" #Typo
 alias vime="vim -u ~/.vimencrypt -x "
 alias gvime="gvim -u ~/.vimencrypt -x "
 alias tvim="tmux new vim"

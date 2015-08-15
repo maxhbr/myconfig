@@ -59,16 +59,41 @@ cblFile="${pkg}.cabal"
             cat >>$cblFile <<EOL
 
 
+-- You can disable the spec test suite with -f-test-spec
+flag test-spec
+  default: True
+  manual: True
+-- You can disable the hlint test suite with -f-test-hlint
+flag test-hlint
+  default: True
+  manual: True
+
 test-suite spec
   type: exitcode-stdio-1.0
   hs-source-dirs: test
 
   main-is: Spec.hs
 
-  build-depends: base  == 4.*
-               , hspec >= 1.3
-               , QuickCheck
+  if !flag(test-spec)
+    buildable: False
+  else
+    build-depends: base  == 4.*
+                 , hspec >= 1.3
+                 , QuickCheck
   default-language:    Haskell2010
+
+test-suite hlint
+  type: exitcode-stdio-1.0
+  main-is: hlint.hs
+  ghc-options: -w -threaded -rtsopts -with-rtsopts=-N
+  hs-source-dirs: ./
+  default-language:    Haskell2010
+
+  if !flag(test-hlint)
+    buildable: False
+  else
+    build-depends: base
+                 , hlint >= 1.7
 EOL
         }
         git add $cblFile
@@ -115,6 +140,25 @@ import Test.QuickCheck as X
 import Control.Exception as X
 EOL
         git add test/SpecHelper.hs
+    }
+
+    [[ -f hlint.hs ]] || {
+        cat >>hlint.hs <<EOL
+-- stolen from https://github.com/ekmett/lens/blob/master/tests/hlint.hs
+module Main where
+
+import Control.Monad
+import Language.Haskell.HLint
+import System.Environment
+import System.Exit
+
+main :: IO ()
+main = do
+  args <- getArgs
+  hints <- hlint $ ["src", "--cpp-define=HLINT", "--cpp-ansi"] ++ args
+  unless (null hints) exitFailure
+EOL
+        git add hlint.hs
     }
 }
 # }}}
