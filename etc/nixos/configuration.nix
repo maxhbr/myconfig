@@ -9,17 +9,19 @@ let
     kbd
     wget curl elinks w3m
     htop powertop
+    emacs
     vim
+    tmux
 
 # for development
     leiningen clojure
 
 # Virtualization
-    # virtualbox
-    # docker
+    virtualbox
+    docker
 
 # For email setup
-    tmux-with-sidebar
+    mutt-with-sidebar
     offlineimap
     msmtp
     gnupg
@@ -96,7 +98,7 @@ in {
     printing.enable = true;
     xserver = {
       enable = true;
-      autorun = false;
+      autorun = true;
       layout = "de"; # TODO: neo
       # xkbOptions = "eurosign:e";
       windowManager = {
@@ -113,7 +115,7 @@ in {
         ${pkgs.roxterm}/bin/roxterm &
       '';
 
-      startGnuPGAgent = true;
+      # startGnuPGAgent = true;
 
       # synaptics.additionalOptions = ''
       #   Option "VertScrollDelta" "-100"
