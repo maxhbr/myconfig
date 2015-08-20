@@ -152,7 +152,7 @@ in {
       createHome = true;
       home = "/home/mhuber";
       shell = "/run/current-system/sw/bin/zsh";
-      password = "dummy"
+      password = "dummy";
     };
     extraGroups.docker.members = [ "mhuber" ];
   };
