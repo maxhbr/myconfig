@@ -133,10 +133,10 @@ in {
       # synaptics.twoFingerScroll = true;
       # synaptics.vertEdgeScroll = false;
 
-      acpid.enable = true;
     };
 
     nixosManual.showManual = true;
+    acpid.enable = true;
 
 
     # TODO: emacs service?
