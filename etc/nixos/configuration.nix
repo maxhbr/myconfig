@@ -54,6 +54,7 @@ in {
     ];
 
   boot = {
+    kernelPackages = pkgs.linuxPackages_4_1;
     cleanTmpDir = true;
     loader.grub = {
       enable = true;
