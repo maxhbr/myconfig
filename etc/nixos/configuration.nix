@@ -3,7 +3,7 @@
 let
   hsPackages = with pkgs.haskellPackages; [
     xmonad xmobar
-    ghc hlint cabalInstall pandoc pointfree pointful hdevtools cabal2nix
+    # ghc hlint cabalInstall pandoc pointfree pointful hdevtools cabal2nix
   ];
   myPackages = with pkgs; [
     kbd
@@ -56,43 +56,44 @@ in {
     kernelPackages = pkgs.linuxPackages_4_0;
     kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
     cleanTmpDir = true;
-    loader.grub = {
-      enable = true;
-      version = 2;
-      device = "/dev/sda";
-      memtest86.enable = true;
-    };
+ #  loader.grub = {
+ #    enable = true;
+ #    version = 2;
+ #    device = "/dev/sda";
+ #    memtest86.enable = true;
+ #  };
+    loader.gummiboot.enable = true;
   };
 
-  nix = {
-    seChroot = true;
-    readOnlyStore = true;
-    buildCores = 4;
-    maxJobs = 2;
-    binaryCaches = [
-      "http://cache.nixos.org/"
-      "http://hydra.nixos.org/"
-      "http://hydra.cryp.to/"
-    ];
-    trustedBinaryCaches = [
-      "http://hydra.cryp.to/"
-    ];
-    extraOptions = ''
-      gc-keep-outputs = true
-      gc-keep-derivations = true
-      auto-optimise-store = true
-      binary-caches-parallel-connections = 10
-    '';
-  };
-
-  nixpkgs.config = {
-    allowUnfree = true;
-  }
+# nix = {
+#   seChroot = true;
+#   readOnlyStore = true;
+#   buildCores = 4;
+#   maxJobs = 2;
+#   binaryCaches = [
+#     "http://cache.nixos.org/"
+#     "http://hydra.nixos.org/"
+#     "http://hydra.cryp.to/"
+#   ];
+#   trustedBinaryCaches = [
+#     "http://hydra.cryp.to/"
+#   ];
+#   extraOptions = ''
+#     gc-keep-outputs = true
+#     gc-keep-derivations = true
+#     auto-optimise-store = true
+#     binary-caches-parallel-connections = 10
+#   '';
+# };
+#
+# nixpkgs.config = {
+#   allowUnfree = true;
+# }
 
   networking = {
     hostName = "nixos"; # Define your hostname.
     hostId = "54510fe1"; # TODO: ?
-    # wireless.enable = true;  # Enables wireless.
+    wireless.enable = true;  # Enables wireless.
   };
 
   i18n = {
@@ -146,6 +147,7 @@ in {
         ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name left_ptr &
         ${pkgs.redshift}/bin/redshift -l 48.2:10.8 &
         ${pkgs.roxterm}/bin/roxterm &
+        ${pkgs.rxvt_unicode_with-plugins}/bin/urxvtd -q -f -o &
       '';
 
       # startGnuPGAgent = true;
