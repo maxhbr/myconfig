@@ -31,7 +31,7 @@ let
     # gitAndTools.gitFull
     # git
     gitMinimal
-    gitAndTools.git-annex
+    # gitAndTools.git-annex
 
 # for the desktop environmen
     xlibs.xmodmap
@@ -53,7 +53,7 @@ in {
     ];
 
   boot = {
-    kernelPackages = pkgs.linuxPackages_4_1;
+    kernelPackages = pkgs.linuxPackages_4_0;
     kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
     cleanTmpDir = true;
     loader.grub = {
@@ -63,6 +63,31 @@ in {
       memtest86.enable = true;
     };
   };
+
+  nix = {
+    seChroot = true;
+    readOnlyStore = true;
+    buildCores = 4;
+    maxJobs = 2;
+    binaryCaches = [
+      "http://cache.nixos.org/"
+      "http://hydra.nixos.org/"
+      "http://hydra.cryp.to/"
+    ];
+    trustedBinaryCaches = [
+      "http://hydra.cryp.to/"
+    ];
+    extraOptions = ''
+      gc-keep-outputs = true
+      gc-keep-derivations = true
+      auto-optimise-store = true
+      binary-caches-parallel-connections = 10
+    '';
+  };
+
+  nixpkgs.config = {
+    allowUnfree = true;
+  }
 
   networking = {
     hostName = "nixos"; # Define your hostname.
