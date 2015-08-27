@@ -31,6 +31,7 @@ let
     # gitAndTools.gitFull
     # git
     gitMinimal
+    gitAndTools.git-annex
 
 # for the desktop environmen
     xlibs.xmodmap
@@ -52,6 +53,8 @@ in {
     ];
 
   boot = {
+    kernelPackages = pkgs.linuxPackages_4_1;
+    kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
     cleanTmpDir = true;
     loader.grub = {
       enable = true;
