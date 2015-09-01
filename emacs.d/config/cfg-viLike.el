@@ -39,31 +39,31 @@
   (define-key evil-visual-state-map "=" (lambda ()
                                           (interactive)
                                           (doWithRetainVisual #'evil-indent)))
-  (evil-leader/set-key "Q" (if mark-active
-                               (fill-individual-paragraphs)
-                             'fill-paragraph))
 
   (use-package evil-leader
     :ensure t
     :config
     (global-evil-leader-mode)
-    (evil-leader/set-leader ","))
+    (evil-leader/set-leader ",")
+    (evil-leader/set-key "Q" (if mark-active
+                                 (fill-individual-paragraphs)
+                               'fill-paragraph))
 
-  (use-package evil-nerd-commenter
-    :ensure t
-    :config
-    (define-key evil-visual-state-map "gc" 'evilnc-comment-or-uncomment-lines)
-    (define-key evil-motion-state-map "gcc" 'evilnc-comment-or-uncomment-lines)
-    (evil-leader/set-key
-      "ci" 'evilnc-comment-or-uncomment-lines
-      "cl" 'evilnc-quick-comment-or-uncomment-to-the-line
-      "ll" 'evilnc-quick-comment-or-uncomment-to-the-line
-      "cc" 'evilnc-copy-and-comment-lines
-      "cp" 'evilnc-comment-or-uncomment-paragraphs
-      "cr" 'comment-or-uncomment-region
-      "cv" 'evilnc-toggle-invert-comment-line-by-line
-      "\\" 'evilnc-comment-operator ; if you prefer backslash key
-      ))
+    (use-package evil-nerd-commenter
+      :ensure t
+      :config
+      (define-key evil-visual-state-map "gc" 'evilnc-comment-or-uncomment-lines)
+      (define-key evil-motion-state-map "gcc" 'evilnc-comment-or-uncomment-lines)
+      (evil-leader/set-key
+        "ci" 'evilnc-comment-or-uncomment-lines
+        "cl" 'evilnc-quick-comment-or-uncomment-to-the-line
+        "ll" 'evilnc-quick-comment-or-uncomment-to-the-line
+        "cc" 'evilnc-copy-and-comment-lines
+        "cp" 'evilnc-comment-or-uncomment-paragraphs
+        "cr" 'comment-or-uncomment-region
+        "cv" 'evilnc-toggle-invert-comment-line-by-line
+        "\\" 'evilnc-comment-operator ; if you prefer backslash key
+        )))
 
   (use-package evil-numbers
     :ensure t

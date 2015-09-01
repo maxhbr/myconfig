@@ -99,6 +99,8 @@ EOL
         git add $cblFile
         git add Setup.hs
         git add LICENSE
+        [[ -e README.md ]] || touch add README.md
+        git add README.md
     }
 }
 # }}}

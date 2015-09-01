@@ -41,6 +41,9 @@ redshift -l 48.2:10.8 &
 
 rfkill unblock all &
 
+# also set in /etc/environment
+export LOCALE_ARCHIVE="/nix/store/w5is4fda72mrq9pzi51inp9ylp9hbwwx-glibc-locales-2.21/lib/locale/locale-archive"
+
 if [[ -f ~/.nix-profile/bin/xmonad ]]; then
   exec dbus-launch ~/.nix-profile/bin/xmonad
 elif [[ -f ~/.cabal/bin/xmonad ]]; then

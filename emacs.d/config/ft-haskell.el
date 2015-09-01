@@ -16,6 +16,9 @@
     :config
     (add-hook 'haskell-mode-hook 'turn-on-hi2))
 
+  (use-package haskell-snippets
+    :ensure t)
+
   (require 'haskell-interactive-mode)
   (require 'haskell-process)
   (add-hook 'haskell-mode-hook 'interactive-haskell-mode)

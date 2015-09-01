@@ -50,6 +50,8 @@
     (when (file-directory-p dir)
       (add-to-list 'load-path dir))))
 
+;; (byte-recompile-directory (expand-file-name "~/.emacs.d/config") 0)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; basic behaviour
 (load-library "cfg-general")
@@ -62,6 +64,7 @@
 (load-library "cfg-gitGutter")
 (load-library "cfg-completion")
 (load-library "cfg-vcs")
+(load-library "cfg-tramp")
 (use-package tramp
   :ensure t)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -88,6 +91,7 @@
 (load-library "ft-java")
 (load-library "ft-scala")
 (load-library "ft-clojure")
+(load-library "ft-js")
 (use-package markdown-mode
   :ensure t)
 
