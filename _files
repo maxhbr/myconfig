@@ -7,11 +7,12 @@
 # ~/.config/dwb/userscripts/gitClone.sh
 # ~/.config/dwb/userscripts/open-chromium.sh
 # ~/.config/dwb/userscripts/wget-file.sh
+~/.config/systemd/user/emacs.service
 ~/.config/ranger/rc.conf
 ~/.config/ranger/rifle.conf
 #~/.config/llpp.conf
 ~/.emacs.d/init.el
-~/.emacs.d/config/*
+~/.emacs.d/config/*el
 ~/.fontconfig/fonts.conf
 ~/.ghci
 ~/.gnupg/gpg.conf
@@ -49,6 +50,7 @@
 ~/.xmodmap
 # ~/bin/create_ap
 # ~/bin/disp-controll
+~/bin/emc
 ~/bin/gitFindBigFiles.sh
 ~/bin/gitRemoveFileTotaly.sh
 ~/bin/gitWalk

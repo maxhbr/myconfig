@@ -3,7 +3,7 @@
 let
   hsPackages = with pkgs.haskellPackages; [
     xmonad xmobar
-    ghc hlint cabalInstall pandoc pointfree pointful hdevtools cabal2nix
+    # ghc hlint cabalInstall pandoc pointfree pointful hdevtools cabal2nix
   ];
   myPackages = with pkgs; [
     kbd
@@ -56,12 +56,13 @@ in {
     kernelPackages = pkgs.linuxPackages_4_0;
     kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
     cleanTmpDir = true;
-    loader.grub = {
-      enable = true;
-      version = 2;
-      device = "/dev/sda";
-      memtest86.enable = true;
-    };
+ #  loader.grub = {
+ #    enable = true;
+ #    version = 2;
+ #    device = "/dev/sda";
+ #    memtest86.enable = true;
+ #  };
+    loader.gummiboot.enable = true;
   };
 
   nix = {
@@ -90,9 +91,15 @@ in {
   }
 
   networking = {
-    hostName = "nixos"; # Define your hostname.
-    hostId = "54510fe1"; # TODO: ?
-    # wireless.enable = true;  # Enables wireless.
+    networkmanager.enable = true;
+    hostName = "nixos";
+    hostId = "54510fe1"; # head -c4 /dev/urandom | od -A none -t x4
+    wireless.enable = true;
+    firewall = {
+      enable = true;
+      # allowedTCPPorts = [ 80 443 ];
+      allowPing = false;
+    };
   };
 
   i18n = {
@@ -146,6 +153,7 @@ in {
         ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name left_ptr &
         ${pkgs.redshift}/bin/redshift -l 48.2:10.8 &
         ${pkgs.roxterm}/bin/roxterm &
+        ${pkgs.rxvt_unicode_with-plugins}/bin/urxvtd -q -f -o &
       '';
 
       # startGnuPGAgent = true;
@@ -160,7 +168,6 @@ in {
       # synaptics.fingersMap = [ 0 0 0 ];
       # synaptics.twoFingerScroll = true;
       # synaptics.vertEdgeScroll = false;
-
     };
 
     nixosManual.showManual = true;

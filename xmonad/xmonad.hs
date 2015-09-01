@@ -125,6 +125,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
 
     , ((modm,               xK_o     ), spawn "urxvtc -e bash -c 'EDITOR=vim ranger'")
 
+    , ((modm,                xK_g    ), spawn "~/bin/emc || emacs")
+
     -- close focused window
     , ((modm .|. shiftMask, xK_c     ), kill)
 
@@ -431,7 +433,7 @@ scratchpads =
     , NS "ncmpcpp" "urxvtc -name Ncmpcpp -e ncmpcpp"
         (resource =? "Ncmpcpp")
         (customFloating $ W.RationalRect (1/2) (1/5) (1/2) (4/5))
-    , NS "notepad" "emacs -name Notepad ~/Sync/org/index.org"
+    , NS "notepad" "/usr/bin/emacsclient -a \"\" -nc  -name Notepad ~/Sync/org/index.org"
         (resource =? "Notepad")
         (customFloating $ W.RationalRect (4/12) (3/20) (7/12) (4/5))
     -- , NS "notepad" "urxvtc -name Notepad -e vim ~/TODO/notizen.wiki"

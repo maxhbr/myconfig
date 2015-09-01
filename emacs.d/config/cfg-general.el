@@ -111,10 +111,10 @@
 ;; (blink-cursor-mode -1)
 (global-auto-revert-mode t)
 (electric-indent-mode t)
-(electric-pair-mode t)
 (transient-mark-mode t)
 (delete-selection-mode t)
 (random t) ;; seed
+(electric-pair-mode t)
 
 (setenv "EDITOR" "emacsclient")
 

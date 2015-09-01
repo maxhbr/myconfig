@@ -1,7 +1,7 @@
 (load-theme 'wombat)
 
-(set-default-font "Inconsolata-16")
-(set-face-attribute 'mode-line nil :font "Inconsolata-12")
+(setq default-frame-alist '((font . "Inconsolata-16")))
+;; (set-face-attribute 'mode-line nil :font "Inconsolata-12")
 
 (show-paren-mode)
 (setq show-paren-delay 0)

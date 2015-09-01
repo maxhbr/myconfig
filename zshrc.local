@@ -43,6 +43,7 @@ ZSHDDIR="${HOME}/.config/zsh.d"
 #HISTFILE="${ZDOTDIR}/.zsh_history"
 HISTSIZE=10000
 SAVEHIST="${HISTSIZE}"
+# export EDITOR="/usr/bin/vim"
 export EDITOR="/usr/bin/vim"
 export VISUAL="/usr/bin/vim -p -X"
 export TMP="$HOME/tmp"
@@ -108,7 +109,7 @@ bindkey "^Z" predict-off
 # just type '...' to get '../..'
 rationalise-dot() {
   local MATCH
-  if [[ $LBUFFER =~ '(^|/| |	|'$'\n''|\||;|&)\.\.$' ]]; then
+  if [[ $LBUFFER =~ '(^|/| |  |'$'\n''|\||;|&)\.\.$' ]]; then
     LBUFFER+=/
     zle self-insert
     zle self-insert

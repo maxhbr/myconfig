@@ -25,20 +25,16 @@
 
   :diminish company-mode)
 
-(use-package haskell-snippets
-  :ensure t
-  :mode "\\.hs\\'")
-
 ;; (yas/initialize)
-(setq yas/root-directory "~/emacs/snippets")
+(setq yas/root-directory "~/.emacs.d/snippets")
 ;; (yas/load-directory yas/root-directory)
 (use-package yasnippet
   :ensure t
   :init
   (setq yas-fallback-behavior 'return-nil)
   (setq yas-also-auto-indent-first-line t)
-  (setq yas-snippet-dirs `(,(dot-emacs "snippets")
-                           ,(dot-emacs "~/.emacs.d/mysnippets")))
+  (setq yas-snippet-dirs `(,"~/.emacs.d/snippets"
+                           ,"~/.emacs.d/mysnippets"))
   :config
   (yas-reload-all)
   (yas-global-mode 1)
