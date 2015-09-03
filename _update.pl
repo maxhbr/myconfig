@@ -31,7 +31,7 @@ my $myhome = glob('~');
 my $outDir = abs_path("@{[hostname() eq $defaultHostname ? $defaultOut : hostname()]}");
 my ($myuser, $p, $myuid, $mygid ) = getpwuid $< ;
 
-system("git", "commit", "-a", "-m \"commit bevore update\"") if $useGit;
+system("git", "commit", "-a", "-m \"automatic commit bevore update\"", "-e") if $useGit;
 sub update{
     if ( !-d $outDir ) {make_path $outDir or die "Failed to create: $outDir";}
     ############################################################################
@@ -97,7 +97,7 @@ sub update{
                         if -r "$_";
                 }
             }
-            system("git", "commit", "-a") if $useGit;
+            system("git", "commit", "-a", "-m \"automatic commit for $curToppic\"", "-e") if $useGit;
         } else {
             warn "Could not open file '$filesFile' $!";
         }
