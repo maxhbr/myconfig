@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# https://github.com/junegunn/myvim
+
+set -u
+set -e
+
+EDIT=0
+COMPRESS=-z
+OUTPUT=vim.$(whoami)
+
+usage() {
+  echo "usage: $0 [-e|--edit] [-j] [output]"
+}
+
+while [ $# -gt 0 ]; do
+  case $1 in
+    -e|--edit) EDIT=1 ;;
+    -z|-j)     COMPRESS=$1 ;;
+    -h|--help) usage; exit 0 ;;
+    -*)        echo "$0: Unrecognized option $1"; exit 1 ;;
+    *)         OUTPUT=$1 ;;
+  esac
+  shift
+done
+
+get_md5() {
+  if which md5sum > /dev/null 2>&1; then
+    md5sum "$1" | awk '{print $1}'
+  else
+    md5 -q "$1"
+  fi
+}
+
+list() {
+  (cd ~ &&
+   find -L .vim .vimrc \
+   \( -name .git -o -name .hg -o -name .svn \) -prune \
+   -o ! -type d -print)
+}
+
+gitenv() {
+  local NAME EMAIL
+  if which git > /dev/null 2>&1 && NAME=$(git config user.name 2> /dev/null) &&
+     EMAIL=$(git config user.email 2> /dev/null); then
+    echo "export GIT_AUTHOR_NAME=\"$NAME\""
+    echo "export GIT_AUTHOR_EMAIL=\"$EMAIL\""
+    echo 'export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"'
+    echo 'export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"'
+  fi
+}
+
+generate() {
+  if [ $EDIT -eq 1 ]; then
+    CONF="$OUTPUT.conf.sh"
+    echo "# EDIT: environment variables" > "$CONF"
+    gitenv >> "$CONF"
+    echo >> "$CONF"
+
+    echo "# EDIT: the list of files to be archived" >> "$CONF"
+    list >> "$CONF"
+
+    ${EDITOR:-vim} "$CONF"
+    ENV_VARS=$(sed -n '1,/^# EDIT/{/^# EDIT/d; p;}' "$CONF")
+    FILES=$(sed '1,/^# EDIT/d' "$CONF")
+    rm -f "$CONF"
+  else
+    ENV_VARS=""
+    FILES=$(list)
+  fi
+
+  TEMP=/tmp/myvim.tar.compressed
+  tar -C ~ -h $COMPRESS -cf $TEMP -T <(echo "$FILES")
+
+  MD5=$(get_md5 "$TEMP")
+  MD5=${MD5:0:8}
+  echo '#!/usr/bin/env bash
+# Created at: '$(date)'
+'"$ENV_VARS"'
+set -u
+set -e
+
+MYVIM=/tmp/myvim
+BASE=$MYVIM/'$MD5'
+
+if [ ! -d $BASE/.vim ]; then
+  >&2 echo "Extracting Vim environment to $BASE"
+  mkdir -p $BASE
+  sed "1,/^# EOF #$/d" "$0" | tar -C $BASE -x '$COMPRESS' || (echo Failed; exit 1)
+  (cd $BASE
+   mv -f .vimrc .vimrc.org
+   echo "let [s:home_org, \$HOME] = [\$HOME, \"$BASE\"]" > .vimrc
+   echo "set rtp^=$BASE/.vim" >> .vimrc
+   cat .vimrc.org >> .vimrc
+   rm -f .vimrc.org
+   echo "let \$HOME = s:home_org" >> .vimrc)
+fi
+
+\vim -Nu $BASE/.vimrc "$@"
+exit $?
+# EOF #' > "$OUTPUT"
+  cat "$TEMP" >> "$OUTPUT"
+  chmod +x "$OUTPUT"
+  echo "Created $OUTPUT executable"
+  rm -f "$TEMP"
+}
+
+if [ ! -e ~/.vimrc ]; then
+  >&2 echo "~/.vimrc is not found"
+  exit 1
+fi
+
+if [ ! -e ~/.vim ]; then
+  mkdir -p ~/.vim
+fi
+
+generate
+
