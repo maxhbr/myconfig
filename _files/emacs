@@ -1,0 +1,4 @@
+~/.config/systemd/user/emacs.service
+~/.emacs.d/init.el
+~/.emacs.d/config/*el
+~/bin/emc

@@ -1,0 +1,70 @@
+~/.aliasrc
+~/.bash_profile
+~/.bashrc
+#~/.cabal/config
+# ~/.config/dwb/default/custom_keys
+# ~/.config/dwb/userscripts/gitClone.sh
+# ~/.config/dwb/userscripts/open-chromium.sh
+# ~/.config/dwb/userscripts/wget-file.sh
+~/.config/ranger/rc.conf
+~/.config/ranger/rifle.conf
+~/.fontconfig/fonts.conf
+~/.ghci
+~/.gnupg/gpg.conf
+~/.gitconfig
+~/.inputrc
+~/.latexmkrc
+~/.ncmpcpp/config
+~/.tmux.conf
+~/.zlogin
+~/.zshrc.pre
+~/.zshrc.local
+~/.zshrc.z
+~/.zprofile
+# ~/bin/create_ap
+# ~/bin/disp-controll
+~/bin/gitFindBigFiles.sh
+~/bin/gitRemoveFileTotaly.sh
+~/bin/gitWalk
+~/bin/hearAudiobook.sh
+~/bin/installiere_neo
+~/bin/mkhs.sh
+~/bin/myAnyToMp3.sh
+~/bin/myCleanDownloads.sh
+~/bin/myEcryptfsMount.sh
+# ~/bin/myPdfCrop.sh
+~/bin/myScalaToScript.sh
+~/bin/myTexWrapper.sh
+~/bin/myThesausrus.sh
+~/bin/myautosetup.sh
+# ~/bin/mycrypt
+# ~/bin/myfsize.sh
+# ~/bin/myfullbackup.sh
+# ~/bin/mylayouttoggle.sh
+~/bin/mystopwatch
+~/bin/ncChat.sh
+# ~/bin/nmgui
+~/bin/remove_spaces.sh
+~/bin/rip_gapless.sh
+~/bin/runNL.sh
+~/bin/runQEMU.sh
+~/bin/stabilizeVideo.sh
+~/bin/stolen/*
+/etc/X11/xorg.conf.d/*.conf
+/etc/fstab
+/etc/hosts
+/etc/locale.conf
+# /etc/lvm
+/etc/makepkg.conf
+/etc/mkinitcpio.conf
+/etc/modprobe.d/*
+/etc/pacman.conf
+/etc/systemd/system/getty@tty1.service.d/noclear.conf
+/etc/udev/rules.d/*
+/etc/vconsole.conf
+/etc/vsftpd.conf
+/etc/zathurarc
+/etc/zsh/zshrc
+/usr/share/kbd/keymaps/neo/*
+/usr/share/zsh/functions/Completion/Haskell/*
+/usr/share/zsh/site-functions/_lein

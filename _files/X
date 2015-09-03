@@ -1,0 +1,10 @@
+# ~/.Xresources
+~/.xinitrc
+~/.xmonad/myinformation.sh
+~/.xmonad/mymailinfo.sh
+~/.xmonad/showkeys
+~/.xmonad/tmux-scratch.sh
+~/.xmonad/xmobarrc
+~/.xmonad/xmonad.hs
+~/.xmodmap
+#~/.config/llpp.conf
