@@ -16,11 +16,6 @@
 ~/.latexmkrc
 ~/.ncmpcpp/config
 ~/.tmux.conf
-~/.zlogin
-~/.zshrc.pre
-~/.zshrc.local
-~/.zshrc.z
-~/.zprofile
 # ~/bin/create_ap
 # ~/bin/disp-controll
 ~/bin/gitFindBigFiles.sh
@@ -64,7 +59,4 @@
 /etc/vconsole.conf
 /etc/vsftpd.conf
 /etc/zathurarc
-/etc/zsh/zshrc
 /usr/share/kbd/keymaps/neo/*
-/usr/share/zsh/functions/Completion/Haskell/*
-/usr/share/zsh/site-functions/_lein
