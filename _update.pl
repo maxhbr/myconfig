@@ -16,6 +16,7 @@ use Sys::Hostname qw( hostname );
 
 my $defaultHostname = "t450s";
 my $defaultOut = "./";
+my $updateFiles = 1;
 my $useGit = 1;
 my $symLinkFiles = 1;
 
@@ -26,12 +27,12 @@ my %toLink = (
     );
 
 ################################################################################
+my $myhome = glob('~');
 my $outDir = abs_path("@{[hostname() eq $defaultHostname ? $defaultOut : hostname()]}");
 my ($myuser, $p, $myuid, $mygid ) = getpwuid $< ;
 
 system("git", "commit", "-a", "-m \"commit bevore update\"") if $useGit;
 sub update{
-    my $myhome = glob('~');
     if ( !-d $outDir ) {make_path $outDir or die "Failed to create: $outDir";}
     ############################################################################
     # functions
@@ -102,7 +103,7 @@ sub update{
         }
     }
 }
-update();
+update() if $updateFiles;
 
 sub moreToDo{
     while ( my ($key, $value) = each(%toLink) ) {
