@@ -29,6 +29,7 @@ my %toLink = (
 my $outDir = abs_path("@{[hostname() eq $defaultHostname ? $defaultOut : hostname()]}");
 my ($myuser, $p, $myuid, $mygid ) = getpwuid $< ;
 
+system("git", "commit", "-a", "-m \"commit bevore update\"") if $useGit;
 sub update{
     my $myhome = glob('~');
     if ( !-d $outDir ) {make_path $outDir or die "Failed to create: $outDir";}

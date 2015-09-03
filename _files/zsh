@@ -1,0 +1,8 @@
+/etc/zsh/zshrc
+/usr/share/zsh/functions/Completion/Haskell/*
+/usr/share/zsh/site-functions/_lein
+~/.zlogin
+~/.zprofile
+~/.zshrc.local
+~/.zshrc.pre
+~/.zshrc.z
