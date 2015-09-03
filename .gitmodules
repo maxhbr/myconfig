@@ -10,3 +10,9 @@
 [submodule "emacs.d/use-package"]
 	path = emacs.d/use-package
 	url = https://github.com/jwiegley/use-package
+[submodule "emacs/emacs.d/use-package"]
+	path = emacs/emacs.d/use-package
+	url = https://github.com/jwiegley/use-package
+[submodule "emacs/emacs.d/snippets"]
+	path = emacs/emacs.d/snippets
+	url = https://github.com/AndreaCrotti/yasnippet-snippets/
