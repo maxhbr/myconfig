@@ -1,0 +1,160 @@
+# function
+snippet fun
+	function [${1:output_args}]=`substitute(substitute(expand('%:r'), '[/\\]','.','g'),'^\%(\l*\.\)\?','','')`(${2:input_args})
+		${0}
+	end
+
+# custom function
+snippet cfun
+	function [${1:output_args}]=${2:functionName}(${3:input_args})
+		${0}
+	end
+
+###############################################################################
+# while
+snippet whi
+	while ${1:condition}
+		${2:body}
+	end	
+
+# for
+snippet for
+	for ${1:i} = ${2:from}:${3:to}
+		${0}
+	end
+
+###############################################################################
+# if 
+snippet if
+	if ${1:condition}
+		
+	end
+# if … else …end
+snippet ife
+	if ${1:condition}
+		${2}
+	else
+		${3}
+	end
+# else
+snippet el
+	else
+		${1:body}
+# elseif
+snippet elif
+	elseif ${1:condition}
+		${0}
+# if … elseif … end
+snippet ifeif
+	if ${1:condition}
+		${2:body}
+	elseif ${3:condition}
+		${4:body}
+	else
+		${5:body}
+	end
+
+###############################################################################
+# switch ... case ... otherwise ... end
+snippet switch
+	switch ${1:switch_expression}
+		case ${2:case_expression}
+			${0}
+		otherwise
+			
+	end
+# case
+snippet case
+	case ${2:'${3:string}'}
+		${0}
+	
+# try … catch … end
+snippet try
+	try 
+		${1}
+	catch 
+		${0}
+	end
+
+###############################################################################
+## set
+#snippet set
+#	set(${1:get(${2:gca},'${3:PropertyName}')},'${4:PropertyName}',${5:PropertyValue});
+#
+## title
+#snippet tit
+#	title('${1}');
+#
+## xlabel
+#snippet xla
+#	xlabel('${1}');
+## xtick
+#snippet xti
+#	set(gca,'XTick',[${2}]);
+#
+## ylabel
+#snippet yla
+#	ylabel('${1}');
+## ytick
+#snippet yti
+#	set(gca,'YTick',[${2}]);
+#
+## zlabel
+#snippet zla
+#	zlabel('${1}');
+#
+## clear
+#snippet cle
+#	clear('${1:all}'${2});
+#
+## disp sprintf
+#snippet dsp
+#	disp(sprintf('${1:%s}\\n'${1/([^%]|%%)*(%.)?.*/(?2:, :\);)/}${2}${1/([^%]|%%)*(%.)?.*/(?2:\);)/});
+#
+## disp
+#snippet disp
+#	disp('${1:Text}');
+#
+## dlmwrite
+#snippet dlmwrite
+#	dlmwrite('${1:filename}.dat', [${2:variables}], ${3:'${4:delimiter}', '${5:\t}'});
+#	${0}
+#
+## error
+#snippet error
+#	error('${1:Description}');
+#
+## exp
+#snippet e
+#	exp(${1}) ${2}
+#
+## fprintf
+#snippet fpr
+#	fprintf(${1:fid}, '${2:%s}\\n'${2/([^%]|%%)*(%.)?.*/(?2:, :\);)/}${3}${2/([^%]|%%)*(%.)?.*/(?2:\);)/}
+#
+## get
+#snippet get
+#	get(${1:gca},'${2:PropertyName}');
+#	
+## griddata
+#snippet griddata
+#	griddata(${1:xx}, ${2:yy}, ${3:zz}, ${4:xi}, ${5:yi}); 
+#
+## line
+#snippet line
+#	line(${1:xvector},${2:yvector}${3:,'Color','${4:b}','LineWidth',${5:1},'LineStyle','${6:-}'})
+#	
+## sprintf
+#snippet spr
+#	sprintf('${1:%s}\\n'${1/([^%]|%%)*(%.)?.*/(?2:, :\);)/}${2}${1/([^%]|%%)*(%.)?.*/(?2:\);)/}
+#
+## warning
+#snippet war
+#	warning('${1:Description}');
+#
+## fontsize
+#snippet fontsi
+#	set(gca, 'fontsize', ${1:14});
+## fontweight
+#snippet fontwei
+#	set(gca, 'fontweight', '${1:bold}');
