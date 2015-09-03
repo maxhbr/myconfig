@@ -11,6 +11,13 @@ use Sys::Hostname qw( hostname );
 my $defaultHostname = "t450s";
 my $defaultOut = "./";
 my $useGit = 1;
+my $symLinkFiles = 1;
+
+my %toLink = (
+    '/zsh/zsh/' => '~/.zsh',
+    '/emacs/emacs.d/snippets' => '~/.emacs.d/snippets',
+    '/emacs/emacs.d/use-package' => '~/.emacs.d/use-package',
+    );
 
 ################################################################################
 my $outDir = abs_path("@{[hostname() eq $defaultHostname ? $defaultOut : hostname()]}");
@@ -89,3 +96,15 @@ sub update{
     }
 }
 update();
+
+sub moreToDo{
+    while ( my ($key, $value) = each(%toLink) ) {
+        $value = "@{[glob($value)]}";
+        $key = "$outDir$key";
+        if ( !-d $value && -d $key ) {
+            print "$key => $value\n";
+            symlink($key, $value);
+        }
+    }
+}
+moreToDo() if $symLinkFiles;
