@@ -1,4 +1,10 @@
 #!/usr/bin/env perl
+#
+# parses the files in the folder "_files/" and copys all listed files, which are
+# changed, to the git repo.
+#
+#  written by maximilian-huber.de
+
 use strict;
 use warnings;
 use File::Path qw( make_path );
@@ -21,10 +27,10 @@ my %toLink = (
 
 ################################################################################
 my $outDir = abs_path("@{[hostname() eq $defaultHostname ? $defaultOut : hostname()]}");
-my $myhome = glob('~');
 my ($myuser, $p, $myuid, $mygid ) = getpwuid $< ;
 
 sub update{
+    my $myhome = glob('~');
     if ( !-d $outDir ) {make_path $outDir or die "Failed to create: $outDir";}
     ############################################################################
     # functions
