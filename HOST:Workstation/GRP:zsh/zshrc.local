@@ -1,0 +1,154 @@
+# ~/.zshrc.local
+#
+# this script is loaded by grml's zshrc
+#
+# written by maximilian-huber.de
+#
+# Last modified: Mi Apr 15, 2015  08:54
+#
+umask 077
+
+export LANG=de_DE.UTF-8
+
+###############################################################################
+[[ -f ~/.aliasrc ]] && source ~/.aliasrc
+[[ -f ~/.aliasrc-private ]] && source ~/.aliasrc-private
+[[ -d $HOME/bin ]] && {
+  export PATH=$HOME/bin:$PATH
+  [[ -d $HOME/bin/stolen ]] && export PATH=$PATH:$HOME/bin/stolen
+}
+[[ -d $HOME/.cabal/bin ]] && export PATH=$HOME/.cabal/bin:$PATH
+
+# [[ -d $HOME/perl5/bin ]] && export PATH=$HOME/perl5/bin:$PATH
+[[ -d $HOME/.perl/bin ]] && export PATH=$HOME/.perl/bin:$PATH
+
+PATH="$HOME/perl5/bin${PATH+:}${PATH}"; export PATH;
+PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB+:}${PERL5LIB}"; export PERL5LIB;
+PERL_LOCAL_LIB_ROOT="$HOME/perl5${PERL_LOCAL_LIB_ROOT+:}${PERL_LOCAL_LIB_ROOT}"; export PERL_LOCAL_LIB_ROOT;
+PERL_MB_OPT="--install_base \"$HOME/perl5\""; export PERL_MB_OPT;
+PERL_MM_OPT="INSTALL_BASE=$HOME/perl5"; export PERL_MM_OPT;
+
+# [[ -d $HOME/.local/bin ]] && export PATH=$HOME/.local/bin:$PATH
+
+export MPD_HOST="mpd@192.168.178.61"
+
+###############################################################################
+# source the file 'z.sh' from https://github.com/rupa/z
+[[ -f ~/.zshrc.z ]] && source ~/.zshrc.z
+
+###############################################################################
+# nix:
+#  to install: curl https://nixos.org/nix/install | sh
+if [ -e /home/hubi/.nix-profile/etc/profile.d/nix.sh ]; then . /home/hubi/.nix-profile/etc/profile.d/nix.sh; fi
+
+###############################################################################
+ZDOTDIR=${ZDOTDIR:-${HOME}}
+ZSHDDIR="${HOME}/.config/zsh.d"
+#HISTFILE="${ZDOTDIR}/.zsh_history"
+HISTSIZE=10000
+SAVEHIST="${HISTSIZE}"
+export EDITOR="/usr/bin/vim"
+export VISUAL="/usr/bin/vim -p -X"
+export TMP="$HOME/tmp"
+[[ ! -d "${TMP}" ]] && mkdir "${TMP}"
+export TEMP="$TMP"
+export TMPDIR="$TMP"
+export TMPPREFIX="${TMPDIR}/zsh"
+## Use a default width of 80 for manpages for more convenient reading
+export MANWIDTH=${MANWIDTH:-80}
+
+#Python virtualenvs
+export WORKON_HOME=~/workspace/python/virtualenvs
+
+#paralleles compilieren mit haskell
+export ncpus=3
+
+###############################################################################
+# Not all servers have terminfo for rxvt-256color. :<
+if [ "${TERM}" = 'rxvt-256color' ] \
+  && ! [ -f '/usr/share/terminfo/r/rxvt-256color' ] \
+  && ! [ -f '/lib/terminfo/r/rxvt-256color' ] \
+  && ! [ -f "${HOME}/.terminfo/r/rxvt-256color" ]; then
+  export TERM='rxvt-unicode'
+fi
+
+autoload -U compinit
+compinit
+
+###############################################################################
+setopt inc_append_history
+#setopt SHARE_HISTORY
+bindkey "^R" history-incremental-pattern-search-backward
+bindkey "^S" history-incremental-pattern-search-forward
+
+###############################################################################
+alias -s tex=vim
+
+alias -s pdf=zathura
+alias -s ps=zathura
+alias -s djvu=zathura
+
+#alias -s zip=file-roller
+
+#alias -s avi=smplayer
+#alias -s webm=smplayer
+
+###############################################################################
+## use the vi navigation keys (hjkl) besides cursor keys in menu completion
+#bindkey -M menuselect 'h' vi-backward-char        # left
+#bindkey -M menuselect 'k' vi-up-line-or-history   # up
+#bindkey -M menuselect 'l' vi-forward-char         # right
+#bindkey -M menuselect 'j' vi-down-line-or-history # bottom
+
+###############################################################################
+## set command prediction from history, see 'man 1 zshcontrib'
+is4 && zrcautoload predict-on && \
+zle -N predict-on         && \
+zle -N predict-off        && \
+bindkey "^X^Z" predict-on && \
+bindkey "^Z" predict-off
+
+###############################################################################
+# just type '...' to get '../..'
+rationalise-dot() {
+  local MATCH
+  if [[ $LBUFFER =~ '(^|/| |	|'$'\n''|\||;|&)\.\.$' ]]; then
+    LBUFFER+=/
+    zle self-insert
+    zle self-insert
+  else
+    zle self-insert
+  fi
+}
+zle -N rationalise-dot
+bindkey . rationalise-dot
+# without this, typing a . aborts incremental history search
+bindkey -M isearch . self-insert
+
+[[ -f ~/.zshrc.private ]] && source ~/.zshrc.private
+
+###############################################################################
+# Fix for tmux on linux.
+case "$(uname -o)" in
+  'GNU/Linux')
+    export EVENT_NOEPOLL=1
+    ;;
+esac
+###############################################################################
+# Start tmux on ssh
+if [ "$PS1" != "" -a "${SSH_TTY:-x}" != x ]; then
+  if test -z $TMUX && [[ $TERM != "screen" ]]; then
+    ( (tmux has-session -t remote && tmux attach-session -t remote) \
+      || (tmux -2 new-session -s remote) ) && exit 0
+    echo "tmux failed to start"
+  else
+    export DISPLAY=:0
+  fi
+fi
+
+# eval $(perl -I$HOME/.perl/lib/perl5 -Mlocal::lib=$HOME/.perl)
+
+# vim:filetype=zsh foldmethod=marker autoindent expandtab shiftwidth=2
+# Local variables:
+# mode: sh
+# End:
