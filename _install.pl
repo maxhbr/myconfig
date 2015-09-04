@@ -27,6 +27,8 @@ my $mbase = "$base/.meta";
 die colored(['red'], "given directory contains no meta information!\n","")
     if (!-d $mbase);
 
+my $myhome = glob('~');
+
 ################################################################################
 ##  subroutines                                                               ##
 ################################################################################
@@ -44,32 +46,32 @@ sub showSubPath{
     my($filename, $dir, $suffix) = fileparse(getSubPath($_[0]));
     return $dir . colored(['bold'],$filename,"");
 }
-sub metaFromPath{
-    return $mbase . getSubPath($_[0]);
-}
-sub filenameFromPath{
-    return $base . getSubPath($_[0]);
-}
+sub metaFromPath{return $mbase . getSubPath($_[0]);}
+sub filenameFromPath{return $base . getSubPath($_[0]);}
 
 ################################################################################
 ##  run                                                                       ##
 ################################################################################
 foreach my $mfile (glob("$mbase/**/*")) {
     my $file = filenameFromPath($mfile);
-    if (-f $file && -e $mfile && open(my $fh, '<:encoding(UTF-8)', $mfile)){
+    if (-f $file && open(my $fh, '<:encoding(UTF-8)', $mfile)){
         my @mdata = <$fh>;
-        chomp $mdata[0];
-        if(!-f $mdata[0]){
-            print showSubPath($file) . " @{[colored(['yellow'],'does not exist yet','')]}\n";
-        }else{
-            if(compare($file,$mdata[0]) != 0) {
-                print showSubPath($file) . " @{[colored(['red'],'is different','')]}\n";
+        chomp @mdata;
+        print $mdata[0];
+        # if(!-f glob($mdata[0])){
+        #     print showSubPath($file) .
+        #         " @{[colored(['yellow'],'does not exist yet','')]}\n";
+        # }else{
+            if(compare($file,glob($mdata[0])) != 0) {
+                print showSubPath($file) .
+                    " @{[colored(['red'],'is different','')]}\n";
             }else{
-                print showSubPath($file) . " is @{[colored(['green'], 'already installed','')]}\n";
+                print showSubPath($file) .
+                    " is @{[colored(['green'], 'already installed','')]}\n";
                 next if !$forceRun;
             }
-        }
+        # }
         print "do you want to install it? [yN]\n" if !$dryRun;
-        die colored(['bold red'], "not implemented yet", "\n");
+        # die colored(['bold red'], "not implemented yet", "\n");
     }
 }
