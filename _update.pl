@@ -23,6 +23,7 @@ my $updateFiles  = 1; # default: 1
 my $useGit       = 1; # default: 1
 my $doHooks      = 1; # default: 1
 my $forceUpdates = 0; # default: 0
+my $dryRun       = 0; # default: 0
 
 ################################################################################
 ##  prepare                                                                   ##
@@ -36,7 +37,10 @@ GetOptions(
     'noHooks'          => sub { $doHooks = 0 },
     'forceUpdates|s'   => \$forceUpdates,
     'noForceUpdates|s' => sub { $forceUpdates = 0 },
-) or die "Usage: $0 [--forceUpdates|-f] [--noGit] [--noHooks]\n";
+    'dryRun'           => \$dryRun,
+) or die "Usage: $0 [--dryRun] [--forceUpdates|-f] [--noGit] [--noHooks]\n";
+
+if ($dryRun) {$useGit = 0; $doHooks = 0;}
 
 chdir dirname($0);
 my $myhome = glob('~');
@@ -117,10 +121,14 @@ sub update{
         if(compare($_[1],$target) != 0 || $forceUpdates) {
             my($tFilename, $tDir, $suffix) = fileparse($target);
             print "update: @{[colored(['bold green'], $tFilename,'')]} (of toppic: $_[0])\n";
-            if ( !-d $tDir ) {make_path $tDir or die "Failed to create: $tDir";}
-            copy($_[1],$target) or die colored(['red'], "Copy failed: $!", "");
+            if ( !-d $tDir && !$dryRun) {
+                make_path $tDir or die "Failed to create: $tDir";
+            }
+            copy($_[1],$target) or die colored(['red'], "Copy failed: $!", "")
+                if !$dryRun;
             system("git", "add", $target) if $useGit;
-            savePermissions($_[1],getTargetName($_[0],$_[1],1));
+            savePermissions($_[1],getTargetName($_[0],$_[1],1))
+                if !$dryRun;
         }
     }
 
