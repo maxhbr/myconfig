@@ -17,11 +17,11 @@ use Sys::Hostname qw( hostname );
 use Term::ANSIColor;
 
 my %givenOutDirs = (
-    't450s' => './',
+    't450s' => './', # default host is t450s
     );
-my $updateFiles = 1; # default: 1
-my $useGit = 1; # default: 1
-my $doHooks = 1; # default: 1
+my $updateFiles  = 1; # default: 1
+my $useGit       = 1; # default: 1
+my $doHooks      = 1; # default: 1
 my $forceUpdates = 0; # default: 0
 
 ################################################################################
@@ -36,7 +36,7 @@ GetOptions(
     'noHooks'          => sub { $doHooks = 0 },
     'forceUpdates|s'   => \$forceUpdates,
     'noForceUpdates|s' => sub { $forceUpdates = 0 },
-) or die "Usage: $0 [--forceUpdates|-f] [--noGit] [--noHooks] \n";
+) or die "Usage: $0 [--forceUpdates|-f] [--noGit] [--noHooks]\n";
 
 chdir dirname($0);
 my $myhome = glob('~');
@@ -54,7 +54,6 @@ sub update{
     if ( !-d $outDir ) {
         make_path $outDir or
             die colored(['red'], "Failed to create: $outDir","");
-
     }
     ############################################################################
     # subroutines
@@ -62,7 +61,7 @@ sub update{
         # parameters are:
         #   toppic
         #   path of src file
-        #   bool, if ...
+        #   bool, if meta
         my $toppic = ($_[0] eq "root") ? "" : "/$_[0]";
         if ($_[2]) {$toppic = "$toppic/.meta";}
         my $abs_path = abs_path($_[1]);
@@ -94,7 +93,7 @@ sub update{
         my($filename, $dir, $suffix) = fileparse($_[1]);
         if ( !-d $dir ) {
             make_path $dir or die colored(['red'], "Failed to create: $dir","");
-}
+        }
         open MDATA, ">$_[1]";
         print MDATA "$_[0]\n";
         print MDATA "@{[sprintf \"%04o\", $stat[2] & 07777]}\n";
@@ -109,13 +108,12 @@ sub update{
         #   path of src file
         my $target = getTargetName($_[0],$_[1],0);
         if(compare($_[1],$target) != 0 || $forceUpdates) {
-            my $mtarget = getTargetName($_[0],$_[1],1);
             my($tFilename, $tDir, $suffix) = fileparse($target);
             print "update: @{[colored(['bold green'], $tFilename,'')]} (of toppic: $_[0])\n";
             if ( !-d $tDir ) {make_path $tDir or die "Failed to create: $tDir";}
             copy($_[1],$target) or die colored(['red'], "Copy failed: $!", "");
             system("git", "add", $target) if $useGit;
-            savePermissions($_[1],$mtarget);
+            savePermissions($_[1],getTargetName($_[0],$_[1],1));
         }
     }
 
@@ -149,9 +147,7 @@ sub runHooks{
     print "run hooks: @{[colored(['bold green'], $_[0],'')]}\n";
     my $hookDir = "_hooks-$_[0]";
     if ( -d $hookDir ) {
-        foreach (glob("$hookDir/*")) {
-            system($_) if -x $_;
-        }
+        foreach (glob("$hookDir/*")) {system($_) if -x $_;}
     }
 }
 
