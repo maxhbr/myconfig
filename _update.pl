@@ -17,7 +17,7 @@ use Sys::Hostname qw( hostname );
 my $defaultHostname = "t450s";
 my $defaultOut = "./";
 my $updateFiles = 1;
-my $useGit = 1;
+my $useGit = 0;
 my $symLinkFiles = 1;
 
 my %toLink = (
@@ -109,6 +109,7 @@ sub update{
 update() if $updateFiles;
 
 sub moreToDo{
+    system("git", "submodule", "foreach", "git", "pull");
     while ( my ($key, $value) = each(%toLink) ) {
         $value = "@{[glob($value)]}";
         $key = "$outDir$key";
