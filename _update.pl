@@ -147,6 +147,7 @@ sub update{
                     updateFile($curTopic,$_) if -r "$_";
                 }
             }
+            close $fh;
             system("git", "commit"
                    , "-m automatic commit for $curTopic", "-e") if $useGit;
         } else {
