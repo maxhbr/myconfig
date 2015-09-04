@@ -57,8 +57,7 @@ foreach my $mfile (glob("$mbase/**/*")) {
     if (-f $file && open(my $fh, '<:encoding(UTF-8)', $mfile)){
         my @mdata = <$fh>;
         chomp @mdata;
-        print $mdata[0];
-        # if(!-f glob($mdata[0])){
+        # if(defined $mdata[0] && !-f glob($mdata[0])){
         #     print showSubPath($file) .
         #         " @{[colored(['yellow'],'does not exist yet','')]}\n";
         # }else{
