@@ -17,8 +17,8 @@ use Sys::Hostname qw( hostname );
 my $defaultHostname = "t450s";
 my $defaultOut = "./";
 my $updateFiles = 1;
-my $useGit = 0;
-my $symLinkFiles = 1;
+my $useGit = 1;
+my $doMore = 1;
 
 my %toLink = (
     '/zsh/zsh/' => '~/.zsh',
@@ -29,7 +29,6 @@ my %toLink = (
 ################################################################################
 my $myhome = glob('~');
 my $outDir = abs_path("@{[hostname() eq $defaultHostname ? $defaultOut : hostname()]}");
-my ($myuser, $p, $myuid, $mygid ) = getpwuid $< ;
 
 system("git", "commit", "-a", "-m \"automatic commit bevore update\"", "-e")
     if $useGit;
@@ -89,18 +88,18 @@ sub update{
     # do everything
     foreach (glob('_files/*')) {
         my $filesFile = $_;
+        my @curToppicParts = split /@/, basename($filesFile);
+        if (@curToppicParts > 1 && !($curToppicParts[1] eq hostname())) {next;}
+        my $curToppic = $curToppicParts[0];
         if (open(my $fh, '<:encoding(UTF-8)', $filesFile)) {
-            my $curToppic = basename($filesFile);
             while (my $file = <$fh>) {
                 if ($file =~ /^#/) { next; }
                 foreach (glob($file)) {
-                    updateFile($curToppic,$_)
-                        if -r "$_";
+                    updateFile($curToppic,$_) if -r "$_";
                 }
             }
             system("git", "commit", "-a"
-                   , "-m \"automatic commit for $curToppic\"", "-e")
-                if $useGit;
+                   , "-m \"automatic commit for $curToppic\"", "-e") if $useGit;
         } else {
             warn "Could not open file '$filesFile' $!";
         }
@@ -119,4 +118,4 @@ sub moreToDo{
         }
     }
 }
-moreToDo() if $symLinkFiles;
+moreToDo() if $doMore;
