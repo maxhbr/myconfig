@@ -1,5 +1,0 @@
-/home/USER/bin/gitRemoveFileTotaly.sh
-700
-USER
-UGROUP
-046e96428373540b280d0898c38631d0

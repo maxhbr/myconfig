@@ -1,5 +1,0 @@
-/home/USER/.vim/ftplugin/lisp.vim
-600
-USER
-UGROUP
-614769b057725cc268880f6138c9ea88

@@ -1,5 +1,0 @@
-/home/USER/.emacs.d/init.el
-600
-USER
-UGROUP
-2a0636a6bdc1205da98136c599562764
