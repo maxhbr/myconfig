@@ -1,0 +1,2 @@
+KERNEL=="udoo_ard", MODE="0660", GROUP="dialout"
+KERNEL=="ttymxc3",  MODE="0660", GROUP="dialout"

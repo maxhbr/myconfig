@@ -1,0 +1,16 @@
+# ~/.config/dwb/default/custom_keys
+# ~/.config/dwb/userscripts/gitClone.sh
+# ~/.config/dwb/userscripts/open-chromium.sh
+# ~/.config/dwb/userscripts/wget-file.sh
+# ~/.Xresources
+~/.xinitrc
+~/.xmonad/myinformation.sh
+~/.xmonad/mymailinfo.sh
+~/.xmonad/showkeys
+~/.xmonad/tmux-scratch.sh
+~/.xmonad/xmobarrc
+~/.xmonad/xmonad.hs
+~/.xmodmap
+#~/.config/llpp.conf
+/etc/zathurarc
+~/.fontconfig/fonts.conf

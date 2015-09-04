@@ -1,0 +1,5 @@
+/etc/mpd.conf
+/etc/minidlna.conf
+/etc/sysctl.d/90-inotify.conf
+~/config/beets/config.yaml
+~/ncmpcpp/config

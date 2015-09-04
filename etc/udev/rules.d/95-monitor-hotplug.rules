@@ -1,0 +1,2 @@
+#Rule for executing commands when an external screen is plugged in.
+KERNEL=="card0", SUBSYSTEM=="drm", ENV{DISPLAY}=":0", ENV{XAUTHORITY}="/home/mhuber/.Xauthority", RUN+="/home/mhuber/bin/myautosetup.sh"

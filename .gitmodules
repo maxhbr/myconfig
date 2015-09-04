@@ -1,12 +1,9 @@
-[submodule "vim/bundle/neosnippet"]
-	path = vim/bundle/neosnippet
-	url = https://github.com/Shougo/neosnippet.vim.git
-[submodule "zsh/zsh-syntax-highlighting"]
-	path = zsh/zsh-syntax-highlighting
-	url = https://github.com/zsh-users/zsh-syntax-highlighting
-[submodule "emacs.d/snippets"]
-	path = emacs.d/snippets
-	url = https://github.com/AndreaCrotti/yasnippet-snippets/
-[submodule "emacs.d/use-package"]
-	path = emacs.d/use-package
-	url = https://github.com/jwiegley/use-package
+[submodule "GRP:emacs/emacs.d/snippets"]
+  path = GRP:emacs/emacs.d/snippets
+  url = https://github.com/AndreaCrotti/yasnippet-snippets/
+[submodule "GRP:emacs/emacs.d/use-package"]
+  path = GRP:emacs/emacs.d/use-package
+  url = https://github.com/jwiegley/use-package
+[submodule "GRP:zsh/zsh/zsh-syntax-highlighting"]
+  path = GRP:zsh/zsh/zsh-syntax-highlighting
+  url = https://github.com/zsh-users/zsh-syntax-highlighting

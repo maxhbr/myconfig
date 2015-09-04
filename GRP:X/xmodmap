@@ -1,0 +1,20 @@
+!!
+!! from: http://www.emacswiki.org/emacs/MovingTheCtrlKey
+!! Swap Caps_Lock and Control_L
+!! in ~/.xsession add:
+!!      xmodmap ~/.xmodmap
+!!
+!! deactivated
+
+!remove Lock = Caps_Lock
+!remove Control = Control_L
+!keysym Control_L = Caps_Lock
+!keysym Caps_Lock = Control_L
+!add Lock = Caps_Lock
+!add Control = Control_L
+
+! ! Exchange left Alt and left Win
+! remove mod1 = Alt_L
+! remove mod4 = Super_L
+! add mod1 = Super_L
+! add mod4 = Alt_L

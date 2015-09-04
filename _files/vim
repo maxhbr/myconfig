@@ -1,0 +1,12 @@
+# ~/.vimencrypt
+~/.vimrc
+~/.vim/autoload/*
+~/.vim/colors/*
+~/.vim/ftdetect/*
+~/.vim/ftplugin/*
+~/.vim/indent/*
+~/.vim/plugin/*
+~/.vim/syntax/*
+~/.vim/snippets/*
+~/.vim/plugin/myLastModified.vim
+~/.vim/plugin/grep-operator.vim

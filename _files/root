@@ -1,0 +1,53 @@
+~/.aliasrc
+~/.bash_profile
+~/.bashrc
+~/.config/ranger/rc.conf
+~/.config/ranger/rifle.conf
+~/.ghci
+~/.gnupg/gpg.conf
+~/.gitconfig
+~/.inputrc
+~/.latexmkrc
+~/.ncmpcpp/config
+~/.tmux.conf
+# ~/bin/create_ap
+# ~/bin/disp-controll
+~/bin/gitFindBigFiles.sh
+~/bin/gitRemoveFileTotaly.sh
+~/bin/gitWalk
+~/bin/hearAudiobook.sh
+~/bin/installiere_neo
+~/bin/mkhs.sh
+~/bin/myAnyToMp3.sh
+~/bin/myCleanDownloads.sh
+~/bin/myEcryptfsMount.sh
+# ~/bin/myPdfCrop.sh
+~/bin/myScalaToScript.sh
+~/bin/myTexWrapper.sh
+~/bin/myThesausrus.sh
+~/bin/myautosetup.sh
+# ~/bin/mycrypt
+# ~/bin/myfsize.sh
+# ~/bin/myfullbackup.sh
+~/bin/mystopwatch
+~/bin/ncChat.sh
+~/bin/remove_spaces.sh
+~/bin/rip_gapless.sh
+~/bin/runNL.sh
+~/bin/runQEMU.sh
+~/bin/stabilizeVideo.sh
+~/bin/stolen/*
+/etc/X11/xorg.conf.d/*.conf
+/etc/fstab
+/etc/hosts
+/etc/locale.conf
+# /etc/lvm
+/etc/makepkg.conf
+/etc/mkinitcpio.conf
+/etc/modprobe.d/*
+/etc/pacman.conf
+/etc/systemd/system/getty@tty1.service.d/noclear.conf
+/etc/udev/rules.d/*
+/etc/vconsole.conf
+/etc/vsftpd.conf
+/usr/share/kbd/keymaps/neo/*
