@@ -8,9 +8,9 @@ use Cwd qw( abs_path );
 use Term::ANSIColor qw( colored );
 
 my %toLink = (
-    '/zsh/zsh/' => '~/.zsh',
-    '/emacs/emacs.d/snippets' => '~/.emacs.d/snippets',
-    '/emacs/emacs.d/use-package' => '~/.emacs.d/use-package',
+    '/GRP:zsh/zsh/' => '~/.zsh',
+    '/GRP:emacs/emacs.d/snippets' => '~/.emacs.d/snippets',
+    '/GRP:emacs/emacs.d/use-package' => '~/.emacs.d/use-package',
     );
 
 my $baseDir = abs_path("@{[dirname($0)]}/..");

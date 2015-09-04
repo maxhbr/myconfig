@@ -7,12 +7,12 @@
 [submodule "emacs.d/use-package"]
   path = emacs.d/use-package
   url = https://github.com/jwiegley/use-package
-[submodule "emacs/emacs.d/use-package"]
-  path = emacs/emacs.d/use-package
-  url = https://github.com/jwiegley/use-package
-[submodule "emacs/emacs.d/snippets"]
-  path = emacs/emacs.d/snippets
-  url = https://github.com/AndreaCrotti/yasnippet-snippets/
-[submodule "zsh/zsh/zsh-syntax-highlighting"]
-	path = zsh/zsh/zsh-syntax-highlighting
+[submodule "GRP:emacs/emacs.d/snippets"]
+	path = GRP:emacs/emacs.d/snippets
+	url = https://github.com/AndreaCrotti/yasnippet-snippets/
+[submodule "GRP:emacs/emacs.d/use-package"]
+	path = GRP:emacs/emacs.d/use-package
+	url = https://github.com/jwiegley/use-package
+[submodule "GRP:zsh/zsh/zsh-syntax-highlighting"]
+	path = GRP:zsh/zsh/zsh-syntax-highlighting
 	url = https://github.com/zsh-users/zsh-syntax-highlighting
