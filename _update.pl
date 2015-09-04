@@ -98,7 +98,7 @@ sub update{
                     updateFile($curToppic,$_) if -r "$_";
                 }
             }
-            system("git", "commit", "-a"
+            system("git", "commit"
                    , "-m \"automatic commit for $curToppic\"", "-e") if $useGit;
         } else {
             warn "Could not open file '$filesFile' $!";
