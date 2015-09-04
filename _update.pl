@@ -126,5 +126,5 @@ runHooks("bevore") if $doHooks;
 update() if $updateFiles;
 runHooks("after") if $doHooks;
 
-print colored(['bold green'], "git push","n") if $useGit;
+print colored(['bold green'], "git push","\n") if $useGit;
 system("git", "push") if $useGit;
