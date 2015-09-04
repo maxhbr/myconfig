@@ -7,11 +7,12 @@
 
 use strict;
 use warnings;
-use File::Path qw( make_path );
-use File::Basename qw( basename fileparse dirname );
-use File::Copy qw( copy );
-use File::Compare qw( compare );
 use Cwd qw( abs_path );
+use File::Basename qw( basename fileparse dirname );
+use File::Compare qw( compare );
+use File::Copy qw( copy );
+use File::Path qw( make_path );
+use Getopt::Long qw(GetOptions);
 use Sys::Hostname qw( hostname );
 use Term::ANSIColor;
 
@@ -26,6 +27,17 @@ my $forceUpdates = 0; # default: 0
 ################################################################################
 ##  prepare                                                                   ##
 ################################################################################
+GetOptions(
+    'updateFiles|u'    => \$updateFiles,
+    'noUpdateFiles'    => sub { $updateFiles = 0 },
+    'useGit|g'         => \$useGit,
+    'noGit'            => sub { $useGit = 0 },
+    'doHooks|h'        => \$doHooks,
+    'noHooks'          => sub { $doHooks = 0 },
+    'forceUpdates|s'   => \$forceUpdates,
+    'noForceUpdates|s' => sub { $forceUpdates = 0 },
+) or die "Usage: $0 [--forceUpdates|-f] [--noGit] [--noHooks] \n";
+
 chdir dirname($0);
 my $myhome = glob('~');
 
@@ -65,7 +77,9 @@ sub update{
         #   path of meta file
         my @stat = stat($_[0]);
         my($filename, $dir, $suffix) = fileparse($_[1]);
-        if ( !-d $dir ) {make_path $dir or die "Failed to create: $dir";}
+        if ( !-d $dir ) {
+            make_path $dir or die colored(['red'], "Failed to create: $dir","");
+}
         open MDATA, ">$_[1]";
         print MDATA "$_[0]\n";
         print MDATA "@{[sprintf \"%04o\", $stat[2] & 07777]}\n";
