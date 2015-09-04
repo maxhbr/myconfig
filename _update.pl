@@ -70,11 +70,11 @@ sub update{
     # subroutines
     sub getTargetName{
         # parameters are:
-        #   toppic
+        #   topic
         #   path of src file
         #   bool, if meta
-        my $toppic = ($_[0] eq "root") ? "" : "/$_[0]";
-        if ($_[2]) {$toppic = "$toppic/.meta";}
+        my $topic = ($_[0] eq "root") ? "" : "/GRP:$_[0]";
+        if ($_[2]) {$topic = "$topic/.meta";}
         my $abs_path = abs_path($_[1]);
         sub trimHome{
             if ($_[0] =~ /^$myhome\/\./){
@@ -83,15 +83,15 @@ sub update{
                 return(substr($_[0],length($myhome)));
             } else {return($_[0]);}
         }
-        return("$outDir$toppic@{[trimHome($abs_path)]}");
+        return("$outDir$topic@{[trimHome($abs_path)]}");
     }
-    sub writeToppicReadme{
+    sub writeTopicReadme{
         # parameters are
         #   topic
         my $rdme = getTargetName($_[0],"/README.md",0);
         if(!-e $rdme){
             open README, ">$rdme";
-            print README "# myconfig for the toppic: $_[0]\n";
+            print README "# myconfig for the topic: $_[0]\n";
             close README;
             system("git", "add", $rdme) if $useGit;
         }
@@ -115,12 +115,12 @@ sub update{
     }
     sub updateFile{
         # parameters are:
-        #   toppic
+        #   topic
         #   path of src file
         my $target = getTargetName($_[0],$_[1],0);
         if(compare($_[1],$target) != 0 || $forceUpdates) {
             my($tFilename, $tDir, $suffix) = fileparse($target);
-            print "update: @{[colored(['bold green'], $tFilename,'')]} (of toppic: $_[0])\n";
+            print "update: @{[colored(['bold green'], $tFilename,'')]} (of topic: $_[0])\n";
             if ( !-d $tDir && !$dryRun) {
                 make_path $tDir or die "Failed to create: $tDir";
             }
@@ -136,20 +136,20 @@ sub update{
     # do everything
     foreach (glob('_files/*')) {
         my $filesFile = $_;
-        my @curToppicParts = split /@/, basename($filesFile);
-        if (@curToppicParts > 1 && !($curToppicParts[1] eq hostname())) {next;}
-        my $curToppic = $curToppicParts[0];
-        print "update toppic: @{[colored(['bold green'], $curToppic,'')]}\n";
-        writeToppicReadme($curToppic);
+        my @curTopicParts = split /@/, basename($filesFile);
+        if (@curTopicParts > 1 && !($curTopicParts[1] eq hostname())) {next;}
+        my $curTopic = $curTopicParts[0];
+        print "update topic: @{[colored(['bold green'], $curTopic,'')]}\n";
+        writeTopicReadme($curTopic);
         if (open(my $fh, '<:encoding(UTF-8)', $filesFile)) {
             while (my $file = <$fh>) {
                 if ($file =~ /^#/) { next; }
                 foreach (glob($file)) {
-                    updateFile($curToppic,$_) if -r "$_";
+                    updateFile($curTopic,$_) if -r "$_";
                 }
             }
             system("git", "commit"
-                   , "-m automatic commit for $curToppic", "-e") if $useGit;
+                   , "-m automatic commit for $curTopic", "-e") if $useGit;
         } else {
             warn "Could not open file '$filesFile' $!";
         }
@@ -169,10 +169,10 @@ sub runHooks{
 ################################################################################
 ##  run                                                                       ##
 ################################################################################
-system("git", "commit", "-a", "-m automatic commit bevore update", "-e")
+system("git", "commit", "-a", "-m automatic commit before update", "-e")
     if $useGit;
 
-runHooks("bevore") if $doHooks;
+runHooks("before") if $doHooks;
 update() if $updateFiles;
 runHooks("after") if $doHooks;
 
