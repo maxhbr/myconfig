@@ -11,6 +11,9 @@ For every host, except for the default host, is a folder of the form
 For every group is a folder `GRP:groupname` generated, which contains the
 corresponding config files.
 
+The folders `.meta` contain information about the files like permissions and
+where they belong.
+
 ## Other repos, where i have stolen scripts/ideas:
 - https://github.com/junegunn/myvim
 - https://github.com/Xfennec/cv

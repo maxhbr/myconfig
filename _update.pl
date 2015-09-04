@@ -59,9 +59,8 @@ sub update{
         make_path $outDir or
             die colored(['red'], "Failed to create: $outDir","");
     }
-    my $rdme = getTargetName("","/README.md",0);
-    if(!-e $rdme){
-        open README, ">$rdme";
+    my $rdme = getTargetName("root","/README.md",0);
+    if(!-e $rdme && open(README, ">$rdme")) {
         print README "# myconfig for the host: @{[hostname()]}\n";
         close README;
         system("git", "add", $rdme) if $useGit;
@@ -89,8 +88,7 @@ sub update{
         # parameters are
         #   topic
         my $rdme = getTargetName($_[0],"/README.md",0);
-        if(!-e $rdme){
-            open README, ">$rdme";
+        if(!-e $rdme && open(README, ">$rdme")) {
             print README "# myconfig for the topic: $_[0]\n";
             close README;
             system("git", "add", $rdme) if $useGit;
@@ -105,13 +103,14 @@ sub update{
         if ( !-d $dir ) {
             make_path $dir or die colored(['red'], "Failed to create: $dir","");
         }
-        open MDATA, ">$_[1]";
-        print MDATA "$_[0]\n";
-        print MDATA "@{[sprintf \"%04o\", $stat[2] & 07777]}\n";
-        print MDATA "$stat[4]\n";
-        print MDATA "$stat[5]\n";
-        close MDATA;
-        system("git", "add", $_[1]) if $useGit;
+        if (open(MDATA, ">$_[1]")) {
+            print MDATA "$_[0]\n";
+            print MDATA "@{[sprintf \"%04o\", $stat[2] & 07777]}\n";
+            print MDATA "$stat[4]\n";
+            print MDATA "$stat[5]\n";
+            close MDATA;
+            system("git", "add", $_[1]) if $useGit;
+        }
     }
     sub updateFile{
         # parameters are:
