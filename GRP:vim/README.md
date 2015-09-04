@@ -1,1 +1,1 @@
-# myconfig for the toppic: vim
+# myconfig for the topic: vim
