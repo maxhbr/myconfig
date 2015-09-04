@@ -1,4 +1,4 @@
-/home/mhuber/.vim/ftplugin/python.vim
+~/.vim/ftplugin/python.vim
 0600
 1000
 1000

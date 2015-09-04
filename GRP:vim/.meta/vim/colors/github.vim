@@ -1,4 +1,4 @@
-/home/mhuber/.vim/colors/github.vim
+~/.vim/colors/github.vim
 0600
 1000
 1000

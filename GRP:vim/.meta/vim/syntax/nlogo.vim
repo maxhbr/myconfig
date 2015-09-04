@@ -1,4 +1,4 @@
-/home/mhuber/.vim/syntax/nlogo.vim
+~/.vim/syntax/nlogo.vim
 0600
 1000
 1000

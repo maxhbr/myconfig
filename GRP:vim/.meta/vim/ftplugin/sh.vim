@@ -1,4 +1,4 @@
-/home/mhuber/.vim/ftplugin/sh.vim
+~/.vim/ftplugin/sh.vim
 0600
 1000
 1000
