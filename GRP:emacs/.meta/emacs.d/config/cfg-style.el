@@ -1,4 +1,4 @@
-/home/mhuber/.emacs.d/config/cfg-style.el
+~/.emacs.d/config/cfg-style.el
 0600
 1000
 1000
