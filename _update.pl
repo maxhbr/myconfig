@@ -8,30 +8,30 @@
 use strict;
 use warnings;
 use File::Path qw( make_path );
-use File::Basename qw( basename fileparse );
+use File::Basename qw( basename fileparse dirname );
 use File::Copy qw( copy );
 use File::Compare qw( compare );
 use Cwd qw( abs_path );
 use Sys::Hostname qw( hostname );
+use Term::ANSIColor;
 
 my $defaultHostname = "t450s";
 my $defaultOut = "./";
-my $updateFiles = 1;
-my $useGit = 1;
-my $doMore = 1;
-
-my %toLink = (
-    '/zsh/zsh/' => '~/.zsh',
-    '/emacs/emacs.d/snippets' => '~/.emacs.d/snippets',
-    '/emacs/emacs.d/use-package' => '~/.emacs.d/use-package',
-    );
+my $updateFiles = 1; # default: 1
+my $useGit = 0; # default: 1
+my $doHooks = 1; # default: 1
+my $forceUpdates = 0; # default: 0
 
 ################################################################################
+##  prepare                                                                   ##
+################################################################################
+chdir dirname($0);
 my $myhome = glob('~');
 my $outDir = abs_path("@{[hostname() eq $defaultHostname ? $defaultOut : hostname()]}");
 
-system("git", "commit", "-a", "-m \"automatic commit bevore update\"", "-e")
-    if $useGit;
+################################################################################
+##  subroutines                                                               ##
+################################################################################
 sub update{
     if ( !-d $outDir ) {make_path $outDir or die "Failed to create: $outDir";}
     ############################################################################
@@ -66,21 +66,21 @@ sub update{
         print MDATA "$stat[4]\n";
         print MDATA "$stat[5]\n";
         close MDATA;
+        system("git", "add", $_[1]) if $useGit;
     }
     sub updateFile{
         # parameters are:
         #   toppic
         #   path of src file
         my $target = getTargetName($_[0],$_[1],0);
-        if(compare($_[1],$target) != 0) {
+        if(compare($_[1],$target) != 0 || $forceUpdates) {
             my $mtarget = getTargetName($_[0],$_[1],1);
-            my($filename, $dir, $suffix) = fileparse($target);
-            print "$filename\n";
-            if ( !-d $dir ) {make_path $dir or die "Failed to create: $dir";}
+            my($tFilename, $tDir, $suffix) = fileparse($target);
+            print "update: @{[colored(['bold green'], $tFilename,'')]} (of toppic: $_[0])\n";
+            if ( !-d $tDir ) {make_path $tDir or die "Failed to create: $tDir";}
             copy($_[1],$target) or die "Copy failed: $!";
-            savePermissions($_[1],$mtarget);
             system("git", "add", $target) if $useGit;
-            system("git", "add", $mtarget) if $useGit;
+            savePermissions($_[1],$mtarget);
         }
     }
 
@@ -105,17 +105,23 @@ sub update{
         }
     }
 }
-update() if $updateFiles;
 
-sub moreToDo{
-    system("git", "submodule", "foreach", "git", "pull");
-    while ( my ($key, $value) = each(%toLink) ) {
-        $value = "@{[glob($value)]}";
-        $key = "@{[abs_path($defaultOut)]}$key";
-        if ( !-d $value && -d $key ) {
-            print "$key => $value\n";
-            symlink($key, $value);
+sub runHooks{
+    # parameters
+    #   name of hooks to run
+    my $hookDir = "_hooks-$_[0]";
+    if ( -d $hookDir ) {
+        foreach (glob("$hookDir/*")) {
+            system($_) if -x $_;
         }
     }
 }
-moreToDo() if $doMore;
+
+################################################################################
+##  run                                                                       ##
+################################################################################
+system("git", "commit", "-a", "-m \"automatic commit bevore update\"", "-e")
+    if $useGit;
+runHooks("bevore") if $doHooks;
+update() if $updateFiles;
+runHooks("after") if $doHooks;
