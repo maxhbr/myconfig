@@ -112,7 +112,7 @@ sub update{
             make_path $dir or die colored(['red'], "Failed to create: $dir","");
         }
         if (open(MDATA, ">$_[1]")) {
-            print MDATA "@{[tightenhome($_[0])]}\n";
+            print MDATA "@{[tightenHome($_[0])]}\n";
             print MDATA "@{[sprintf \"%04o\", $stat[2] & 07777]}\n";
             print MDATA "$stat[4]\n";
             print MDATA "$stat[5]\n";
