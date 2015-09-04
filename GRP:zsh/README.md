@@ -1,1 +1,1 @@
-# myconfig for the toppic: zsh
+# myconfig for the topic: zsh
