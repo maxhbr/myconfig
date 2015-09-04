@@ -111,7 +111,7 @@ sub moreToDo{
     system("git", "submodule", "foreach", "git", "pull");
     while ( my ($key, $value) = each(%toLink) ) {
         $value = "@{[glob($value)]}";
-        $key = "$outDir$key";
+        $key = "@{[abs_path($defaultOut)]}$key";
         if ( !-d $value && -d $key ) {
             print "$key => $value\n";
             symlink($key, $value);
