@@ -1,4 +1,4 @@
-/home/mhuber/bin/myScalaToScript.sh
+~/bin/myScalaToScript.sh
 0700
 1000
 1000

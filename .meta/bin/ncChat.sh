@@ -1,4 +1,4 @@
-/home/mhuber/bin/ncChat.sh
+~/bin/ncChat.sh
 0700
 1000
 1000
