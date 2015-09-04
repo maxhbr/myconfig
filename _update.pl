@@ -20,7 +20,7 @@ my $defaultOut = "./";
 my $updateFiles = 1; # default: 1
 my $useGit = 1; # default: 1
 my $doHooks = 1; # default: 1
-my $forceUpdates = 0; # default: 0
+my $forceUpdates = 1; # default: 0
 
 ################################################################################
 ##  prepare                                                                   ##
@@ -91,6 +91,7 @@ sub update{
         my @curToppicParts = split /@/, basename($filesFile);
         if (@curToppicParts > 1 && !($curToppicParts[1] eq hostname())) {next;}
         my $curToppic = $curToppicParts[0];
+        print "update toppic: @{[colored(['bold green'], $curToppic,'')]}\n";
         if (open(my $fh, '<:encoding(UTF-8)', $filesFile)) {
             while (my $file = <$fh>) {
                 if ($file =~ /^#/) { next; }
@@ -109,6 +110,7 @@ sub update{
 sub runHooks{
     # parameters
     #   name of hooks to run
+    print "run hooks: @{[colored(['bold green'], $_[0],'')]}\n";
     my $hookDir = "_hooks-$_[0]";
     if ( -d $hookDir ) {
         foreach (glob("$hookDir/*")) {

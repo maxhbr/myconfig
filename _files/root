@@ -1,14 +1,8 @@
 ~/.aliasrc
 ~/.bash_profile
 ~/.bashrc
-#~/.cabal/config
-# ~/.config/dwb/default/custom_keys
-# ~/.config/dwb/userscripts/gitClone.sh
-# ~/.config/dwb/userscripts/open-chromium.sh
-# ~/.config/dwb/userscripts/wget-file.sh
 ~/.config/ranger/rc.conf
 ~/.config/ranger/rifle.conf
-~/.fontconfig/fonts.conf
 ~/.ghci
 ~/.gnupg/gpg.conf
 ~/.gitconfig
@@ -35,10 +29,8 @@
 # ~/bin/mycrypt
 # ~/bin/myfsize.sh
 # ~/bin/myfullbackup.sh
-# ~/bin/mylayouttoggle.sh
 ~/bin/mystopwatch
 ~/bin/ncChat.sh
-# ~/bin/nmgui
 ~/bin/remove_spaces.sh
 ~/bin/rip_gapless.sh
 ~/bin/runNL.sh
@@ -58,5 +50,4 @@
 /etc/udev/rules.d/*
 /etc/vconsole.conf
 /etc/vsftpd.conf
-/etc/zathurarc
 /usr/share/kbd/keymaps/neo/*
