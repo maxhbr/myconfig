@@ -1,1 +1,1 @@
-# myconfig for the toppic: X
+# myconfig for the topic: X
