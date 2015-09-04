@@ -1,0 +1,13 @@
+~/.bash_profile
+/etc/X11/xorg.conf.d/*.conf
+/etc/fstab
+/etc/hosts
+/etc/locale.conf
+/etc/makepkg.conf
+/etc/mkinitcpio.conf
+/etc/modprobe.d/*
+/etc/pacman.conf
+/etc/systemd/system/getty@tty1.service.d/noclear.conf
+/etc/udev/rules.d/*
+/etc/vconsole.conf
+/etc/vsftpd.conf
