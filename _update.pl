@@ -133,8 +133,7 @@ sub update{
 
     ############################################################################
     # do everything
-    foreach (glob('_files/*')) {
-        my $filesFile = $_;
+    foreach my $filesFile (glob('_files/*')) {
         my @curTopicParts = split /@/, basename($filesFile);
         if (@curTopicParts > 1 && !($curTopicParts[1] eq hostname())) {next;}
         my $curTopic = $curTopicParts[0];

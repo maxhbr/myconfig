@@ -7,9 +7,11 @@ it is updated by the script `_update.pl`, which uses
 
 For every host, except for the default host, is a folder of the form
 `HOST:hostname` generated.
+Some of them may become submodules.
 
 For every group is a folder `GRP:groupname` generated, which contains the
 corresponding config files.
+Some of them may become submodules.
 
 The folders `.meta` contain information about the files like permissions and
 where they belong.
