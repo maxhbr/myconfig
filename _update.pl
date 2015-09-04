@@ -18,7 +18,7 @@ use Term::ANSIColor;
 my $defaultHostname = "t450s";
 my $defaultOut = "./";
 my $updateFiles = 1; # default: 1
-my $useGit = 0; # default: 1
+my $useGit = 1; # default: 1
 my $doHooks = 1; # default: 1
 my $forceUpdates = 0; # default: 0
 
@@ -125,3 +125,4 @@ system("git", "commit", "-a", "-m \"automatic commit bevore update\"", "-e")
 runHooks("bevore") if $doHooks;
 update() if $updateFiles;
 runHooks("after") if $doHooks;
+system("git", "push") if $useGit;
