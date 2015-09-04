@@ -41,7 +41,7 @@ $outDir = abs_path($outDir);
 sub update{
     if ( !-d $outDir ) {make_path $outDir or die "Failed to create: $outDir";}
     ############################################################################
-    # functions
+    # subroutines
     sub getTargetName{
         # parameters are:
         #   toppic
@@ -84,7 +84,7 @@ sub update{
             my($tFilename, $tDir, $suffix) = fileparse($target);
             print "update: @{[colored(['bold green'], $tFilename,'')]} (of toppic: $_[0])\n";
             if ( !-d $tDir ) {make_path $tDir or die "Failed to create: $tDir";}
-            copy($_[1],$target) or die "Copy failed: $!";
+            copy($_[1],$target) or die colored(['red'], "Copy failed: $!", "");
             system("git", "add", $target) if $useGit;
             savePermissions($_[1],$mtarget);
         }
@@ -128,8 +128,9 @@ sub runHooks{
 ################################################################################
 ##  run                                                                       ##
 ################################################################################
-system("git", "commit", "-a", "-m \"automatic commit bevore update\"", "-e")
+system("git", "commit", "-a", "-m automatic commit bevore update", "-e")
     if $useGit;
+
 runHooks("bevore") if $doHooks;
 update() if $updateFiles;
 runHooks("after") if $doHooks;
