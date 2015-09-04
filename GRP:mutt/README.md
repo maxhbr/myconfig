@@ -1,1 +1,1 @@
-# myconfig for the toppic: mutt
+# myconfig for the topic: mutt
