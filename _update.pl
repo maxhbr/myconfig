@@ -51,7 +51,11 @@ $outDir = abs_path($outDir);
 ##  subroutines                                                               ##
 ################################################################################
 sub update{
-    if ( !-d $outDir ) {make_path $outDir or die "Failed to create: $outDir";}
+    if ( !-d $outDir ) {
+        make_path $outDir or
+            die colored(['red'], "Failed to create: $outDir","");
+
+    }
     ############################################################################
     # subroutines
     sub getTargetName{
@@ -70,6 +74,17 @@ sub update{
             } else {return($_[0]);}
         }
         return("$outDir$toppic@{[trimHome($abs_path)]}");
+    }
+    sub writeToppicReadme{
+        # parameters are
+        #   topic
+        my $rdme = getTargetName($_[0],"/README.md");
+        if(!-e $rdme){
+            open README, ">$rdme";
+            print README "# myconfig for the toppic: $_[0]";
+            close README;
+            system("git", "add", $rdme) if $useGit;
+        }
     }
     sub savePermissions{
         # parameters are:
@@ -112,6 +127,7 @@ sub update{
         if (@curToppicParts > 1 && !($curToppicParts[1] eq hostname())) {next;}
         my $curToppic = $curToppicParts[0];
         print "update toppic: @{[colored(['bold green'], $curToppic,'')]}\n";
+        writeToppicReadme($curToppic);
         if (open(my $fh, '<:encoding(UTF-8)', $filesFile)) {
             while (my $file = <$fh>) {
                 if ($file =~ /^#/) { next; }
@@ -120,7 +136,7 @@ sub update{
                 }
             }
             system("git", "commit"
-                   , "-m \"automatic commit for $curToppic\"", "-e") if $useGit;
+                   , "-m automatic commit for $curToppic", "-e") if $useGit;
         } else {
             warn "Could not open file '$filesFile' $!";
         }
