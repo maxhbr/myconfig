@@ -14,7 +14,7 @@ use File::Copy qw( copy );
 use File::Path qw( make_path );
 use Getopt::Long qw(GetOptions);
 use Sys::Hostname qw( hostname );
-use Term::ANSIColor;
+use Term::ANSIColor qw( colored );
 
 my %givenOutDirs = (
     't450s' => './', # default host is t450s
@@ -80,7 +80,7 @@ sub update{
         my $rdme = getTargetName($_[0],"/README.md");
         if(!-e $rdme){
             open README, ">$rdme";
-            print README "# myconfig for the toppic: $_[0]";
+            print README "# myconfig for the toppic: $_[0]\n";
             close README;
             system("git", "add", $rdme) if $useGit;
         }

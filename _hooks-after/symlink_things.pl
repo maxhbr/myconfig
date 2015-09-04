@@ -5,7 +5,7 @@ use strict;
 use warnings;
 use File::Basename qw( dirname );
 use Cwd qw( abs_path );
-use Term::ANSIColor;
+use Term::ANSIColor qw( colored );
 
 my %toLink = (
     '/zsh/zsh/' => '~/.zsh',
@@ -20,7 +20,7 @@ chdir $baseDir;
 while ( my ($key, $value) = each(%toLink) ) {
     $value = "@{[glob($value)]}";
     $key = "$baseDir$key";
-    if ( !-d $value && -d $key ) {
+    if ( -d $key && -d dirname($value) && !-d $value ) {
         print "symlink: @{[colored(['bold green'], \"$key => $value\n\",'')]}\n";
         symlink($key, $value);
     }
