@@ -1,1 +1,1 @@
-# myconfig for the toppic: root
+# myconfig for the host: udoo
