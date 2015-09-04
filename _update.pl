@@ -55,7 +55,7 @@ sub update{
         make_path $outDir or
             die colored(['red'], "Failed to create: $outDir","");
     }
-    my $rdme = getTargetName($_[0],"/README.md");
+    my $rdme = getTargetName($_[0],"/README.md",0);
     if(!-e $rdme){
         open README, ">$rdme";
         print README "# myconfig for the host: @{[hostname()]}\n";
@@ -84,7 +84,7 @@ sub update{
     sub writeToppicReadme{
         # parameters are
         #   topic
-        my $rdme = getTargetName($_[0],"/README.md");
+        my $rdme = getTargetName($_[0],"/README.md",0);
         if(!-e $rdme){
             open README, ">$rdme";
             print README "# myconfig for the toppic: $_[0]\n";
