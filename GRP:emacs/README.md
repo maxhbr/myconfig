@@ -1,1 +1,1 @@
-# myconfig for the toppic: emacs
+# myconfig for the topic: emacs
