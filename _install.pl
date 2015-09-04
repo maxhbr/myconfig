@@ -10,9 +10,6 @@ use warnings;
 use Cwd qw( abs_path );
 use File::Basename qw( fileparse );
 use File::Compare qw( compare );
-# use File::Copy qw( copy );
-# use File::Path qw( make_path );
-# use Sys::Hostname qw( hostname );
 use Term::ANSIColor qw( colored );
 
 my $forceRun = 0; # default: 0
@@ -37,7 +34,11 @@ sub getSubPath{
     if ($_[0] !~ /^$base/){
         die colored(['red'], "path has not the correct prefix","");
     }
-    return substr($_[0],length($base));
+    if ($_[0] =~ /^$mbase/){
+        return substr($_[0],length($mbase));
+    }else{
+        return substr($_[0],length($base));
+    }
 }
 sub showSubPath{
     my($filename, $dir, $suffix) = fileparse(getSubPath($_[0]));
@@ -46,12 +47,15 @@ sub showSubPath{
 sub metaFromPath{
     return $mbase . getSubPath($_[0]);
 }
+sub filenameFromPath{
+    return $base . getSubPath($_[0]);
+}
 
 ################################################################################
 ##  run                                                                       ##
 ################################################################################
-foreach my $file (glob("$base/**/*")) {
-    my $mfile = metaFromPath($file);
+foreach my $mfile (glob("$mbase/**/*")) {
+    my $file = filenameFromPath($mfile);
     if (-f $file && -e $mfile && open(my $fh, '<:encoding(UTF-8)', $mfile)){
         my @mdata = <$fh>;
         chomp $mdata[0];

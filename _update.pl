@@ -75,14 +75,14 @@ sub update{
         my $topic = ($_[0] eq "root") ? "" : "/GRP:$_[0]";
         if ($_[2]) {$topic = "$topic/.meta";}
         my $abs_path = abs_path($_[1]);
-        sub trimHome{
+        sub expandHome{
             if ($_[0] =~ /^$myhome\/\./){
                 return("/@{[substr($_[0],length($myhome) + 2)]}");
             } elsif ($_[0] =~ /^$myhome/){
                 return(substr($_[0],length($myhome)));
             } else {return($_[0]);}
         }
-        return("$outDir$topic@{[trimHome($abs_path)]}");
+        return("$outDir$topic@{[expandHome($abs_path)]}");
     }
     sub writeTopicReadme{
         # parameters are
@@ -98,13 +98,21 @@ sub update{
         # parameters are:
         #   path of src file
         #   path of meta file
+        sub tightenHome{
+            if ($_[0] =~ /^$myhome/){
+                return '~' . substr($_[0],length($myhome));
+            }else{
+                return $_[0];
+            }
+        }
+
         my @stat = stat($_[0]);
         my($filename, $dir, $suffix) = fileparse($_[1]);
         if ( !-d $dir ) {
             make_path $dir or die colored(['red'], "Failed to create: $dir","");
         }
         if (open(MDATA, ">$_[1]")) {
-            print MDATA "$_[0]\n";
+            print MDATA "@{[tightenhome($_[0])]}\n";
             print MDATA "@{[sprintf \"%04o\", $stat[2] & 07777]}\n";
             print MDATA "$stat[4]\n";
             print MDATA "$stat[5]\n";
