@@ -41,7 +41,7 @@ GetOptions(
 chdir dirname($0);
 my $myhome = glob('~');
 
-my $outDir = hostname();
+my $outDir = "HOST:@{[hostname()]}";
 while ( my ($key, $value) = each(%givenOutDirs) ) {
     if ( $key eq hostname() ) {$outDir = $value;}
 }
