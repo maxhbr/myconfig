@@ -15,19 +15,25 @@ use Cwd qw( abs_path );
 use Sys::Hostname qw( hostname );
 use Term::ANSIColor;
 
-my $defaultHostname = "t450s";
-my $defaultOut = "./";
+my %givenOutDirs = (
+    't450s' => './',
+    );
 my $updateFiles = 1; # default: 1
 my $useGit = 1; # default: 1
 my $doHooks = 1; # default: 1
-my $forceUpdates = 1; # default: 0
+my $forceUpdates = 0; # default: 0
 
 ################################################################################
 ##  prepare                                                                   ##
 ################################################################################
 chdir dirname($0);
 my $myhome = glob('~');
-my $outDir = abs_path("@{[hostname() eq $defaultHostname ? $defaultOut : hostname()]}");
+
+my $outDir = hostname();
+while ( my ($key, $value) = each(%givenOutDirs) ) {
+    if ( $key eq hostname() ) {$outDir = $value;}
+}
+$outDir = abs_path($outDir);
 
 ################################################################################
 ##  subroutines                                                               ##
