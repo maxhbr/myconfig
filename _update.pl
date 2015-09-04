@@ -55,6 +55,13 @@ sub update{
         make_path $outDir or
             die colored(['red'], "Failed to create: $outDir","");
     }
+    my $rdme = getTargetName($_[0],"/README.md");
+    if(!-e $rdme){
+        open README, ">$rdme";
+        print README "# myconfig for the host: @{[hostname()]}\n";
+        close README;
+        system("git", "add", $rdme) if $useGit;
+    }
     ############################################################################
     # subroutines
     sub getTargetName{
