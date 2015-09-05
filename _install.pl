@@ -71,6 +71,7 @@ foreach my $mfile (glob("$mbase/**/*")) {
             }
         # }
         print "do you want to install it? [yN]\n" if !$dryRun;
+        # TODO:
         # die colored(['bold red'], "not implemented yet", "\n");
     }
 }
