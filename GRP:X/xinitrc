@@ -5,6 +5,7 @@
 #
 # Last modified: Wed Aug 12, 2015  09:47AM
 
+
 #setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 #setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:sclk_toggle -option grp_led:scroll
 setxkbmap -layout de,de -variant neo,nodeadkeys\

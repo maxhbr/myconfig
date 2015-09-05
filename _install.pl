@@ -55,13 +55,13 @@ sub filenameFromPath{return $base . getSubPath($_[0]);}
 foreach my $mfile (glob("$mbase/**/*")) {
     my $file = filenameFromPath($mfile);
     if (-f $file && open(my $fh, '<:encoding(UTF-8)', $mfile)){
-        my @mdata = <$fh>; chomp @mdata;
-        close $fh;
-        # if(defined $mdata[0] && !-f glob($mdata[0])){
-        #     print showSubPath($file) .
-        #         " @{[colored(['yellow'],'does not exist yet','')]}\n";
-        # }else{
-            if(compare($file,glob($mdata[0])) != 0) {
+        my @mdata = <$fh>; chomp @mdata; close $fh;
+        my $target = (glob($mdata[0]))[0];
+        if(!-f $target){
+            print showSubPath($file) .
+                " @{[colored(['yellow'],'does not exist yet','')]}\n";
+        }else{
+            if(compare($file,$target) != 0) {
                 print showSubPath($file) .
                     " @{[colored(['red'],'is different','')]}\n";
             }else{
@@ -69,9 +69,9 @@ foreach my $mfile (glob("$mbase/**/*")) {
                     " is @{[colored(['green'], 'already installed','')]}\n";
                 next if !$forceRun;
             }
-        # }
+        }
         print "do you want to install it? [yN]\n" if !$dryRun;
         # TODO:
-        # die colored(['bold red'], "not implemented yet", "\n");
+        die colored(['bold red'], "not implemented yet", "\n");
     }
 }
