@@ -55,8 +55,8 @@ sub filenameFromPath{return $base . getSubPath($_[0]);}
 foreach my $mfile (glob("$mbase/**/*")) {
     my $file = filenameFromPath($mfile);
     if (-f $file && open(my $fh, '<:encoding(UTF-8)', $mfile)){
-        my @mdata = <$fh>;
-        chomp @mdata;
+        my @mdata = <$fh>; chomp @mdata;
+        close $fh;
         # if(defined $mdata[0] && !-f glob($mdata[0])){
         #     print showSubPath($file) .
         #         " @{[colored(['yellow'],'does not exist yet','')]}\n";
