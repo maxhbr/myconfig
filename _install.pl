@@ -42,36 +42,48 @@ sub getSubPath{
         return substr($_[0],length($base));
     }
 }
-sub showSubPath{
-    my($filename, $dir, $suffix) = fileparse(getSubPath($_[0]));
-    return $dir . colored(['bold'],$filename,"");
-}
 sub metaFromPath{return $mbase . getSubPath($_[0]);}
 sub filenameFromPath{return $base . getSubPath($_[0]);}
+sub showSubPath{
+    my($filename, $dir, $suffix) = fileparse($_[0]);
+    return $dir . colored(['bold'],$filename,"");
+}
+sub prompt_yn {
+    sub prompt {
+        my ($query) = @_;
+        local $| = 1;
+        print $query;
+        chomp(my $answer = <STDIN>);
+        return $answer;
+    }
+    my ($query) = @_;
+    my $answer = prompt("$query [yN]: ");
+    return lc($answer) eq 'y';
+}
 
 ################################################################################
 ##  run                                                                       ##
 ################################################################################
-foreach my $mfile (glob("$mbase/**/*")) {
+foreach my $mfile (glob("$mbase/* $mbase/**/*")) {
     my $file = filenameFromPath($mfile);
     if (-f $file && open(my $fh, '<:encoding(UTF-8)', $mfile)){
-        my @mdata = <$fh>; chomp @mdata; close $fh;
+        chomp(my @mdata = <$fh>);
+        close $fh;
         my $target = (glob($mdata[0]))[0];
         if(!-f $target){
-            print showSubPath($file) .
+            print showSubPath($target) .
                 " @{[colored(['yellow'],'does not exist yet','')]}\n";
+        }elsif(compare($file,$target) != 0) {
+            print showSubPath($target) .
+                " is @{[colored(['red'],'different','')]}\n";
         }else{
-            if(compare($file,$target) != 0) {
-                print showSubPath($file) .
-                    " @{[colored(['red'],'is different','')]}\n";
-            }else{
-                print showSubPath($file) .
-                    " is @{[colored(['green'], 'already installed','')]}\n";
-                next if !$forceRun;
-            }
+            print showSubPath($target) .
+                " is @{[colored(['green'], 'already installed','')]}\n";
+            next if !$forceRun;
         }
-        print "do you want to install it? [yN]\n" if !$dryRun;
-        # TODO:
-        die colored(['bold red'], "not implemented yet", "\n");
+        if (!$dryRun && prompt_yn "do you want to install it?"){
+            # TODO:
+            die colored(['bold red'], "not implemented yet", "\n");
+        }
     }
 }
