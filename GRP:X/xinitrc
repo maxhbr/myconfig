@@ -16,6 +16,8 @@ xset dpms 300 600 900 & # screen saver replacement
 [[ -f ~/.Xresources ]] && xrdb -merge ~/.Xresources
 # [[ -f ~/.xmodmap ]] && xmodmap ~/.xmodmap
 
+# export LANG="de_DE.utf8"
+
 #TODO: only start once
 #pid=$(pgrep -f "urxvtd")
 #if [[ ! ${pid} -gt 0 ]] ; then

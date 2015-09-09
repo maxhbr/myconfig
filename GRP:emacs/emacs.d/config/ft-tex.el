@@ -86,7 +86,8 @@
     :ensure t
     :init
     (add-to-list 'evil-emacs-state-modes 'ebib-entry-mode)
-    (add-to-list 'evil-emacs-state-modes 'ebib-index-mode)))
+    (add-to-list 'evil-emacs-state-modes 'ebib-index-mode))
+  )
 
 
 ;; (defun guess-TeX-master (filename)
