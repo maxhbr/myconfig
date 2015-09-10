@@ -16,7 +16,7 @@ use Getopt::Long qw(GetOptions);
 use Sys::Hostname qw( hostname );
 use Term::ANSIColor qw( colored );
 
-my %givenOutDirs = (
+my %predefinedOutDirs = (
     't450s' => './', # default host is t450s
     );
 my $updateFiles  = 1; # default: 1
@@ -46,7 +46,7 @@ chdir dirname($0);
 my $myhome = glob('~');
 
 my $outDir = "HOST:@{[hostname()]}";
-while ( my ($key, $value) = each(%givenOutDirs) ) {
+while ( my ($key, $value) = each(%predefinedOutDirs) ) {
     if ( $key eq hostname() ) {$outDir = $value;}
 }
 $outDir = abs_path($outDir);
@@ -112,10 +112,10 @@ sub update{
             make_path $dir or die colored(['red'], "Failed to create: $dir","");
         }
         if (open(MDATA, ">$_[1]")) {
-            print MDATA "@{[tightenHome($_[0])]}\n";
-            print MDATA "@{[sprintf \"%04o\", $stat[2] & 07777]}\n";
-            print MDATA "$stat[4]\n";
-            print MDATA "$stat[5]\n";
+            print MDATA tightenHome($_[0]) . "\n";
+            print MDATA sprintf("%04o", $stat[2] & 07777) . "\n";
+            print MDATA $stat[4] . "\n";
+            print MDATA $stat[5] . "n";
             close MDATA;
             system("git", "add", $_[1]) if $useGit;
         }
