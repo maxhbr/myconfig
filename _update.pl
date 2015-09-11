@@ -21,6 +21,7 @@ my %predefinedOutDirs = (
     );
 my $updateFiles  = 1; # default: 1
 my $useGit       = 1; # default: 1
+my $noPush       = 0; # default: 1
 my $doHooks      = 1; # default: 1
 my $forceUpdates = 0; # default: 0
 my $dryRun       = 0; # default: 0
@@ -32,6 +33,7 @@ GetOptions(
     'updateFiles|u'    => \$updateFiles,
     'noUpdateFiles'    => sub { $updateFiles = 0 },
     'useGit|g'         => \$useGit,
+    'noPush'           => \$noPush,
     'noGit'            => sub { $useGit = 0 },
     'doHooks|h'        => \$doHooks,
     'noHooks'          => sub { $doHooks = 0 },
@@ -41,6 +43,7 @@ GetOptions(
 ) or die "Usage: $0 [--dryRun] [--forceUpdates|-f] [--noGit] [--noHooks]\n";
 
 if ($dryRun) {$useGit = 0; $doHooks = 0;}
+if ($useGit == 0) {$noPush = 1;}
 
 chdir dirname($0);
 my $myhome = glob('~');
@@ -183,5 +186,5 @@ runHooks("before") if $doHooks;
 update() if $updateFiles;
 runHooks("after") if $doHooks;
 
-print colored(['bold green'], "git push","\n") if $useGit;
-system("git", "push") if $useGit;
+print colored(['bold green'], "git push","\n") if $noPush == 0;
+system("git", "push") if $noPush == 0;
