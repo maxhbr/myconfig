@@ -1,5 +1,3 @@
-~/.aliasrc
-~/.bashrc
 ~/.config/ranger/rc.conf
 ~/.config/ranger/rifle.conf
 ~/.ghci
@@ -13,9 +11,7 @@
 # ~/bin/disp-controll
 ~/bin/gitFindBigFiles.sh
 ~/bin/gitRemoveFileTotaly.sh
-~/bin/gitWalk
 ~/bin/hearAudiobook.sh
-~/bin/installiere_neo
 ~/bin/mkhs.sh
 ~/bin/myAnyToMp3.sh
 ~/bin/myCleanDownloads.sh
@@ -30,8 +26,6 @@
 # ~/bin/myfullbackup.sh
 ~/bin/mystopwatch
 ~/bin/ncChat.sh
-~/bin/remove_spaces.sh
-~/bin/rip_gapless.sh
 ~/bin/runNL.sh
 ~/bin/runQEMU.sh
 ~/bin/stabilizeVideo.sh
