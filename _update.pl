@@ -46,7 +46,7 @@ if ($dryRun) {$useGit = 0; $doHooks = 0;}
 if ($useGit == 0) {$noPush = 1;}
 
 chdir dirname($0);
-my $myhome = glob('~');
+my $myhome = glob('~'); # TODO: use a clojure/closure?
 
 my $outDir = "HOST:@{[hostname()]}";
 while ( my ($key, $value) = each(%predefinedOutDirs) ) {
