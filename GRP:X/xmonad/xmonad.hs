@@ -16,7 +16,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Mon Jul 20, 2015  09:38
+-- Last modified: Sa Sep 12, 2015  05:12
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 ------------------------------------------------------------------------
@@ -482,8 +482,8 @@ toggleFF = XS.modify $ FocusFollow . not . getFocusFollow
 myStartupHook :: X ()
 myStartupHook = do
     setWMName "LG3D"
-    spawn "killall unclutter; unclutter &"
-    spawn "([[ -f ~/bin/emc ]] && ~/bin/emc) &"
+    spawn "killall unclutter; unclutter"
+    spawn "([[ -f ~/bin/emc ]] && ~/bin/emc)"
 --}}}
 ------------------------------------------------------------------------
 -- General

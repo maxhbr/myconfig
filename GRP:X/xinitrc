@@ -3,7 +3,7 @@
 #
 # written by maximilian-huber.de
 #
-# Last modified: Wed Aug 12, 2015  09:47AM
+# Last modified: Sa Sep 12, 2015  03:32
 
 #setxkbmap -option ctrl:nocaps -layout de -variant nodeadkeys
 #setxkbmap -layout de,de -variant neo,nodeadkeys -option -option grp:sclk_toggle -option grp_led:scroll
@@ -42,7 +42,8 @@ redshift -l 48.2:10.8 &
 rfkill unblock all &
 
 # also set in /etc/environment
-export LOCALE_ARCHIVE="/nix/store/w5is4fda72mrq9pzi51inp9ylp9hbwwx-glibc-locales-2.21/lib/locale/locale-archive"
+
+export LOCALE_ARCHIVE="/nix/store/2mbqc6p36xlyl21d4mf1zhmprmqijwkk-glibc-locales-2.21/lib/locale/locale-archive"
 
 if [[ -f ~/.nix-profile/bin/xmonad ]]; then
   exec dbus-launch ~/.nix-profile/bin/xmonad
