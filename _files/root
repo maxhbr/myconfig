@@ -19,6 +19,7 @@
 ~/bin/myScalaToScript.sh
 ~/bin/myThesausrus.sh
 ~/bin/myautosetup.sh
+~/bin/myautosetup.pl
 # ~/bin/mycrypt
 # ~/bin/myfsize.sh
 # ~/bin/myfullbackup.sh
