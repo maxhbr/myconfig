@@ -1,8 +1,5 @@
 #!/usr/bin/env perl
 #
-# parses the files in the folder "_files/" and copys all listed files, which are
-# changed, to the git repo.
-#
 #  written by maximilian-huber.de
 
 use strict;
@@ -62,6 +59,30 @@ sub prompt_yn {
     my $answer = prompt("$query [yN]: ");
     return lc($answer) eq 'y';
 }
+sub copyFileIfDifferent {
+    my $from = $_[0];
+    my $to = $_[1];
+    if(!-f $to){
+        print showSubPath($to) .
+            " @{[colored(['yellow'],'does not exist yet','')]}\n";
+    }elsif(compare($from,$to) != 0) {
+        print showSubPath($to) .
+            " is @{[colored(['red'],'different','')]}\n";
+    }else{
+        print showSubPath($to) .
+            " is @{[colored(['green'], 'already installed','')]}\n";
+        next if !$forceRun;
+    }
+    if (!$dryRun && prompt_yn "do you want to install it?"){
+        my($filename, $dir, $suffix) = fileparse($to);
+        if ( !-d $dir ) {
+            make_path $dir or
+                die colored(['red'], "Failed to create: $dir","");
+        }
+        cp($from,$to) or
+            die colored(['bold red'], "copy failed", "\n");
+    }
+}
 
 ################################################################################
 ##  run                                                                       ##
@@ -72,27 +93,6 @@ foreach my $mfile (glob("$mbase/* $mbase/**/*")) {
         chomp(my @mdata = <$fh>);
         close $fh;
         my $target = (glob($mdata[0]))[0];
-        if(!-f $target){
-            print showSubPath($target) .
-                " @{[colored(['yellow'],'does not exist yet','')]}\n";
-        }elsif(compare($file,$target) != 0) {
-            print showSubPath($target) .
-                " is @{[colored(['red'],'different','')]}\n";
-        }else{
-            print showSubPath($target) .
-                " is @{[colored(['green'], 'already installed','')]}\n";
-            next if !$forceRun;
-        }
-        if (!$dryRun && prompt_yn "do you want to install it?"){
-            my($filename, $dir, $suffix) = fileparse($target);
-            if ( !-d $dir ) {
-                make_path $dir or
-                    die colored(['red'], "Failed to create: $dir","");
-            }
-            cp($file,$target) or
-                die colored(['bold red'], "copy failed", "\n");
-            # TODO:
-            # die colored(['bold red'], "not implemented yet", "\n");
-        }
+        copyFileIfDifferent($file,$target);
     }
 }
