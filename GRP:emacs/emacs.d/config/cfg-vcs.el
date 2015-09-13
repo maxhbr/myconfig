@@ -37,7 +37,8 @@
     (magit-refresh))
 
   (define-key magit-status-mode-map (kbd "W") 'magit-toggle-whitespace)
-  :diminish magit-auto-revert-mode)
+  ; :diminish magit-auto-revert-mode
+  )
 
 ;        (setq magit-diff-options '("--histogram"))
 ;        (setq magit-stage-all-confirm nil)

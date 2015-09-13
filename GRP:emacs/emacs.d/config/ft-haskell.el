@@ -1,5 +1,5 @@
 (use-package haskell-mode
-  :ensure t
+  ; :ensure t ;; produces error ...
   :config
   ;; Indent-mode simple
   ;; (add-hook 'haskell-mode-hook 'turn-on-haskell-simple-indent)
