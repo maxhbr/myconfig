@@ -10,7 +10,9 @@ use warnings;
 use Cwd qw( abs_path );
 use File::Basename qw( fileparse );
 use File::Compare qw( compare );
+use File::Path qw( make_path );
 use Term::ANSIColor qw( colored );
+use File::Copy qw( cp );
 
 my $forceRun = 0; # default: 0
 my $dryRun   = 0; # default: 0
@@ -82,8 +84,15 @@ foreach my $mfile (glob("$mbase/* $mbase/**/*")) {
             next if !$forceRun;
         }
         if (!$dryRun && prompt_yn "do you want to install it?"){
+            my($filename, $dir, $suffix) = fileparse($target);
+            if ( !-d $dir ) {
+                make_path $dir or
+                    die colored(['red'], "Failed to create: $dir","");
+            }
+            cp($file,$target) or
+                die colored(['bold red'], "copy failed", "\n");
             # TODO:
-            die colored(['bold red'], "not implemented yet", "\n");
+            # die colored(['bold red'], "not implemented yet", "\n");
         }
     }
 }

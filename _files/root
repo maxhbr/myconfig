@@ -4,7 +4,6 @@
 ~/.gnupg/gpg.conf
 ~/.gitconfig
 ~/.inputrc
-~/.latexmkrc
 ~/.ncmpcpp/config
 ~/.tmux.conf
 # ~/bin/create_ap
@@ -18,7 +17,6 @@
 ~/bin/myEcryptfsMount.sh
 # ~/bin/myPdfCrop.sh
 ~/bin/myScalaToScript.sh
-~/bin/myTexWrapper.sh
 ~/bin/myThesausrus.sh
 ~/bin/myautosetup.sh
 # ~/bin/mycrypt
