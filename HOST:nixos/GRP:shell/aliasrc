@@ -518,6 +518,7 @@ alias mymatlabRunFile="~/matlab/bin/matlab -nojvm -nodisplay -nosplash < "
 
 #nix
 alias nixin="nix-env -iA"
+alias nixin-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -iA"
 # alias nixupg="nix-env -u '*'"
 alias nixupg="nix-channel --update && nix-env --upgrade"
 alias nixTest="nix-shell '<nixpkgs>' -A"

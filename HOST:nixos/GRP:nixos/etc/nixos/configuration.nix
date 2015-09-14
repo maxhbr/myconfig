@@ -14,6 +14,7 @@ let
     vim
     tmux
     ranger
+    pmount
 
 # for development
     leiningen clojure
@@ -35,6 +36,9 @@ let
     # git
     gitMinimal
     # gitAndTools.git-annex
+
+# encryption
+    cryptsetup
 
 # for the desktop environmen
     xlibs.xmodmap xlibs.xset xlibs.setxkbmap
@@ -68,6 +72,10 @@ in {
  #    memtest86.enable = true;
  #  };
     loader.gummiboot.enable = true;
+    initrd = {
+        supportedFilesystems = [ "luks" ];
+        # luks.devices = [ { device = "/dev/sda2"; name = "crypted"; } ];
+    };
   };
 
   nix = {
