@@ -12,7 +12,7 @@ use File::Basename qw( basename fileparse dirname );
 use File::Compare qw( compare );
 use File::Copy qw( copy );
 use File::Path qw( make_path );
-use Getopt::Long qw(GetOptions);
+use Getopt::Long qw( GetOptions );
 use Sys::Hostname qw( hostname );
 use Term::ANSIColor qw( colored );
 
@@ -46,7 +46,7 @@ if ($dryRun) {$useGit = 0; $doHooks = 0;}
 if ($useGit == 0) {$noPush = 1;}
 
 chdir dirname($0);
-my $myhome = glob('~'); # TODO: use a clojure/closure?
+my $myhome = (glob('~'))[0]; # TODO: use a clojure/closure?
 
 my $outDir = "HOST:@{[hostname()]}";
 while ( my ($key, $value) = each(%predefinedOutDirs) ) {
@@ -132,7 +132,7 @@ sub update{
             my($tFilename, $tDir, $suffix) = fileparse($target);
             print "update: @{[colored(['bold green'], $tFilename,'')]} (of topic: $_[0])\n";
             if ( !-d $tDir && !$dryRun) {
-                make_path $tDir or die "Failed to create: $tDir";
+                make_path $tDir or die colored(['red'], "Failed to create: $tDir");
             }
             copy($_[1],$target) or die colored(['red'], "Copy failed: $!", "")
                 if !$dryRun;
