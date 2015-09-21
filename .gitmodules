@@ -1,9 +1,0 @@
-[submodule "GRP:emacs/emacs.d/snippets"]
-  path = GRP:emacs/emacs.d/snippets
-  url = https://github.com/AndreaCrotti/yasnippet-snippets/
-[submodule "GRP:emacs/emacs.d/use-package"]
-  path = GRP:emacs/emacs.d/use-package
-  url = https://github.com/jwiegley/use-package
-[submodule "GRP:zsh/zsh/zsh-syntax-highlighting"]
-  path = GRP:zsh/zsh/zsh-syntax-highlighting
-  url = https://github.com/zsh-users/zsh-syntax-highlighting
