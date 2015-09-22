@@ -483,7 +483,6 @@ myStartupHook :: X ()
 myStartupHook = do
     setWMName "LG3D"
     spawn "killall unclutter; unclutter"
-    spawn "([[ -f ~/bin/emc ]] && ~/bin/emc)"
 --}}}
 ------------------------------------------------------------------------
 -- General

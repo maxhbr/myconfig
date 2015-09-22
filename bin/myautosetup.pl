@@ -12,7 +12,7 @@ use Scalar::Util qw( looks_like_number );
 ##  config                                                                    ##
 ################################################################################
 my $lvdsOutput = "eDP1";
-my @mainOutputs = ("DP1", "HDMI1", "HDMI2");
+my @mainOutputs = ("DP1", "DP1-8", "HDMI0", "HDMI2");
 my @dockedOutputs = ("DP2-1", "DP2-2", "DP2-3");
 my $background = "/home/mhuber/Bilder/background/BACKGROUND.png";
 
@@ -58,7 +58,8 @@ foreach my $output (@dockedOutputs) {
     }
     sub runXrandrCmd {
         foreach my $output (@otherOutputs) {
-            addToXrandrCmd($output,"--rotate normal --off");
+            addToXrandrCmd($output,"--rotate normal --off")
+                if ($xrandr =~ /$output/);
         }
         system($xrandrCmd) if !$noXrandr;
     }
