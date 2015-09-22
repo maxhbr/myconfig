@@ -1,4 +1,7 @@
 #!/bin/sh
+args="-nc"
+termArgs="-t"
+
 if [ -z "$DISPLAY" ]; then
     IS_GRAPHICAL=true
 else
@@ -6,7 +9,7 @@ else
 fi
 
 if $IS_GRAPHICAL; then
-    emacsclient -a "" -nc "$@"
+    emacsclient -a "" $args "$@"
 else
-    emacsclient -a "" -t "$@"
+    emacsclient -a "" $temrArgs "$@"
 fi

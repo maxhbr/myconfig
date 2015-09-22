@@ -50,7 +50,7 @@
     (when (file-directory-p dir)
       (add-to-list 'load-path dir))))
 
-;; (byte-recompile-directory (expand-file-name "~/.emacs.d/config") 0)
+(byte-recompile-directory (expand-file-name "~/.emacs.d/config") 0)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; basic behaviour
@@ -92,6 +92,7 @@
 (load-library "ft-scala")
 (load-library "ft-clojure")
 (load-library "ft-js")
+(load-library "ft-makefile")
 (use-package markdown-mode
   :ensure t)
 

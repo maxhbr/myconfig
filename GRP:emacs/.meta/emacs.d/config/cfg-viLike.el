@@ -1,4 +1,4 @@
 ~/.emacs.d/config/cfg-viLike.el
-0600
+0644
 1000
-1000
+1000n

@@ -30,9 +30,9 @@
     (funcall cmd (mark) (point))
     (evil-visual-restore) ; re-select last visual-mode selection
     )
-  (define-key evil-visual-state-map ">" (lambda ()
-                                          (interactive)
-                                          (doWithRetainVisual #'evil-shift-right)))
+    (define-key evil-visual-state-map ">" (lambda ()
+                                            (interactive)
+                                            (doWithRetainVisual #'evil-shift-right)))
   (define-key evil-visual-state-map "<" (lambda ()
                                           (interactive)
                                           (doWithRetainVisual #'evil-shift-left)))
