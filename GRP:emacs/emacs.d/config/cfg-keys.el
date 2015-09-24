@@ -5,6 +5,8 @@
 (defun switch-to-previous-buffer ()
   (interactive)
   (switch-to-buffer (other-buffer (current-buffer) 1)))
+  ; TODO: if (other-buffer (current-buffer) 1) = buffer-menu
+
 (evil-leader/set-key "," 'switch-to-previous-buffer)
 (global-set-key (kbd "<mouse-8>") 'switch-to-next-buffer)
 
@@ -31,24 +33,6 @@
             'Buffer-menu-other-frame)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Opening new lines can be finicky (solved by evil).
-;; (defun open-line-below ()
-;;   (interactive)
-;;   (end-of-line)
-;;   (newline)
-;;   (indent-for-tab-command))
-;; (defun open-line-above ()
-;;   (interactive)
-;;   (beginning-of-line)
-;;   (newline)
-;;   (forward-line -1)
-;;   (indent-for-tab-command))
-
-;; (global-set-key (kbd "<C-return>") 'open-line-below)
-;; (global-set-key (kbd "<C-S-return>") 'open-line-above)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; When programming I tend to shuffle lines around a lot.
 (defun move-line-down ()
   (interactive)
   (let ((col (current-column)))
@@ -68,24 +52,3 @@
 
 (global-set-key (kbd "<C-S-down>") 'move-line-down)
 (global-set-key (kbd "<C-S-up>") 'move-line-up)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Uneven application of white-space is bad.
-(defun cleanup-buffer-safe ()
-  "Perform a bunch of safe operations on the whitespace content of a buffer.
-Does not indent buffer, because it is used for a before-save-hook, and that
-might be bad."
-  (interactive)
-  (if (not indent-tabs-mode)
-      (untabify (point-min) (point-max)))
-  (delete-trailing-whitespace)
-  (set-buffer-file-coding-system 'utf-8))
-
-(defun cleanup-buffer ()
-  "Perform a bunch of operations on the whitespace content of a buffer.
-Including indent-buffer, which should not be called automatically on save."
-  (interactive)
-  (cleanup-buffer-safe)
-  (indent-region (point-min) (point-max)))
-
-(global-set-key (kbd "C-c n") 'cleanup-buffer)

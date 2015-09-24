@@ -1,4 +1,4 @@
 ~/.emacs.d/config/cfg-keys.el
-0644
+0600
 1000
 1000n

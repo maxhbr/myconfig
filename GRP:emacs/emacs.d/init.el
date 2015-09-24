@@ -50,7 +50,7 @@
     (when (file-directory-p dir)
       (add-to-list 'load-path dir))))
 
-(byte-recompile-directory (expand-file-name "~/.emacs.d/config") 0)
+;; (byte-recompile-directory (expand-file-name "~/.emacs.d/config") 0)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; basic behaviour
@@ -73,6 +73,7 @@
 (load-library "cfg-viLike")
 (load-library "cfg-style")
 (load-library "cfg-keys")
+(load-library "cfg-cleanup")
 (use-package sbt-mode
   :ensure t)
 (use-package whitespace
