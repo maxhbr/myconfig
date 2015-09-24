@@ -202,7 +202,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     {-, ((modm,              xK_z), spawn "~/bin/disp-controll 1") -- auto-}
     {-, ((modm .|. shiftMask, xK_z), spawn "~/bin/disp-controll 2") -- toggle-}
     {-, ((modm .|. controlMask, xK_z), spawn "~/bin/disp-controll 3") -- cycle-}
-    , ((modm .|. shiftMask, xK_z), spawn "~/bin/myautosetup.sh") -- auto
+    , ((modm .|. shiftMask, xK_z), spawn "~/bin/myautosetup.pl") -- auto
     , ((modm .|. shiftMask .|. controlMask, xK_z), spawn "~/bin/myautosetup.sh rotate left") -- auto
     , ((0,                0x1008ff59), spawn "~/bin/myautosetup.sh")
     -- screensaver
@@ -434,7 +434,7 @@ scratchpads =
     , NS "ncmpcpp" "urxvtc -name Ncmpcpp -e ncmpcpp"
         (resource =? "Ncmpcpp")
         (customFloating $ W.RationalRect (1/2) (1/5) (1/2) (4/5))
-    , NS "notepad" "/usr/bin/emacsclient -a \"\" -nc  -name Notepad ~/Sync/org/index.org"
+    , NS "notepad" "/usr/bin/emacsclient -a \"\" -nc ~/Sync/org/index.org"
         (resource =? "Notepad")
         (customFloating $ W.RationalRect (4/12) (3/20) (7/12) (4/5))
     -- , NS "notepad" "urxvtc -name Notepad -e vim ~/TODO/notizen.wiki"
