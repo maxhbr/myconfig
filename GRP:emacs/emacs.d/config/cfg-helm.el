@@ -1,18 +1,80 @@
+
+;; ;; Use ido everywhere
+;; (use-package ido-ubiquitous
+;;   :config
+;;   (require 'ido)
+;;   (ido-mode 1)
+;;   (ido-everywhere 1)
+;;   (ido-ubiquitous-mode 1)
+;;   ;; Fix ido-ubiquitous for newer packages
+;;   (defmacro ido-ubiquitous-use-new-completing-read (cmd package)
+;;     `(eval-after-load ,package
+;;        '(defadvice ,cmd (around ido-ubiquitous-new activate)
+;;           (let ((ido-ubiquitous-enable-compatibility nil))
+;;             ad-do-it))))
+
+;;   ;; (ido-ubiquitous-use-new-completing-read webjump 'webjump)
+;;   (ido-ubiquitous-use-new-completing-read yas/expand 'yasnippet)
+;;   (ido-ubiquitous-use-new-completing-read yas/visit-snippet-file 'yasnippet))
+
+;; ; (use-package predictive
+;; ;   :ensure t
+;; ;   :init
+;; ;   (add-to-list 'load-path "~/elisp/predictive")
+;; ;   (set-default 'predictive-auto-add-to-dict t)
+;; ;   (setq predictive-main-dict 'rpg-dictionary
+;; ;         predictive-auto-learn t
+;; ;         predictive-add-to-dict-ask nil
+;; ;         predictive-use-auto-learn-cache nil
+;; ;         predictive-which-dict t)
+;; ;   :config
+;; ;   (autoload 'predictive-mode "predictive" "predictive" t)
+;; ;   )
+
 (use-package helm
+  :ensure t
+  :diminish helm-mode
   :init
-  (setq helm-command-prefix-key "C-c h")
-  (setq helm-quick-update t)
-  (setq helm-bookmark-show-location t)
-  (setq helm-buffers-fuzzy-matching t)
-  (setq helm-M-x-fuzzy-match t)
-  (setq helm-apropos-fuzzy-match t)
-  (setq helm-recentf-fuzzy-match t)
-  (setq helm-locate-fuzzy-match t)
-  (setq helm-file-cache-fuzzy-match t)
-  (setq helm-semantic-fuzzy-match t)
-  (setq helm-imenu-fuzzy-match t)
-  (setq helm-lisp-fuzzy-completion t)
-  )
+  (progn
+    (require 'helm-config)
+    (setq helm-candidate-number-limit 100)
+    ;; From https://gist.github.com/antifuchs/9238468
+    (setq helm-idle-delay 0.0 ; update fast sources immediately (doesn't).
+          helm-input-idle-delay 0.01  ; this actually updates things
+                                        ; reeeelatively quickly.
+          helm-yas-display-key-on-candidate t
+          helm-quick-update t
+          helm-M-x-requires-pattern nil
+          helm-ff-skip-boring-files t)
+    (helm-mode))
+  :bind (("C-c h" . helm-mini)
+         ("C-h a" . helm-apropos)
+         ("C-x C-b" . helm-buffers-list)
+         ("C-x b" . helm-buffers-list)
+         ("M-y" . helm-show-kill-ring)
+         ("M-x" . helm-M-x)
+         ("C-x c o" . helm-occur)
+         ("C-x c s" . helm-swoop)
+         ("C-x c y" . helm-yas-complete)
+         ("C-x c Y" . helm-yas-create-snippet-on-region)
+         ("C-x c b" . my/helm-do-grep-book-notes)
+         ("C-x c SPC" . helm-all-mark-rings)))
+(ido-mode -1) ;; Turn off ido mode in case I enabled it accidentally
+;; (use-package helm
+;;   :init
+;;   (setq helm-command-prefix-key "C-c h")
+;;   (setq helm-quick-update t)
+;;   (setq helm-bookmark-show-location t)
+;;   (setq helm-buffers-fuzzy-matching t)
+;;   (setq helm-M-x-fuzzy-match t)
+;;   (setq helm-apropos-fuzzy-match t)
+;;   (setq helm-recentf-fuzzy-match t)
+;;   (setq helm-locate-fuzzy-match t)
+;;   (setq helm-file-cache-fuzzy-match t)
+;;   (setq helm-semantic-fuzzy-match t)
+;;   (setq helm-imenu-fuzzy-match t)
+;;   (setq helm-lisp-fuzzy-completion t)
+;;   )
 
 (use-package helm-descbinds)
 

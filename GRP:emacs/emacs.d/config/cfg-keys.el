@@ -23,7 +23,7 @@
 (global-set-key (kbd "<f11>") 'delete-other-windows)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(global-set-key (kbd "C-SPC") 'buffer-menu)
+(global-set-key (kbd "C-SPC") 'ibuffer)
 ;; Open in a different frame
 (defun Buffer-menu-other-frame ()
   (interactive)
