@@ -104,9 +104,7 @@ sub update{
         sub tightenHome{
             if ($_[0] =~ /^$myhome/){
                 return '~' . substr($_[0],length($myhome));
-            }else{
-                return $_[0];
-            }
+            }else{return $_[0];}
         }
 
         my @stat = stat($_[0]);
@@ -146,7 +144,7 @@ sub update{
     # do everything
     foreach my $filesFile (glob('_files/*')) {
         my @curTopicParts = split /@/, basename($filesFile);
-        if (@curTopicParts > 1 && !($curTopicParts[1] eq hostname())) {next;}
+        if (@curTopicParts > 1 && !($curTopicParts[1] eq hostname())) { next; }
         my $curTopic = $curTopicParts[0];
         print "update topic: @{[colored(['bold green'], $curTopic,'')]}\n";
         writeTopicReadme($curTopic);
@@ -159,7 +157,8 @@ sub update{
             }
             close $fh;
             system("git", "commit"
-                   , "-m automatic commit for $curTopic", "-e") if $useGit;
+                   , "-m automatic commit for $curTopic", "-e")
+                if $useGit;
         } else {
             warn "Could not open file '$filesFile' $!";
         }
@@ -186,5 +185,6 @@ runHooks("before") if $doHooks;
 update() if $updateFiles;
 runHooks("after") if $doHooks;
 
-print colored(['bold green'], "git push","\n") if $noPush == 0;
+print colored(['bold green'], "git push","\n")
+    if $noPush == 0;
 system("git", "push") if $noPush == 0;
