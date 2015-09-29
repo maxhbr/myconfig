@@ -1,6 +1,6 @@
 [user]
     name = maximilianhuber
-    email = mail@maximilian-huber.de
+    email = maximilian.huber@tngtech.com
 [alias]
     lol = log --graph --decorate --pretty=oneline --abbrev-commit
     lola = log --graph --decorate --pretty=oneline --abbrev-commit --all

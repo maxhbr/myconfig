@@ -7,6 +7,7 @@ use warnings;
 use Getopt::Long qw( GetOptions );
 use Term::ANSIColor qw( colored );
 use Scalar::Util qw( looks_like_number );
+use threads;
 
 ################################################################################
 ##  config                                                                    ##
@@ -25,7 +26,7 @@ my $noXrandr = 0;
 my $alsaOutput = "";
 
 GetOptions(
-    'rotate'     => \$rotate,
+    'rotate=s'   => \$rotate,
     'docked'     => \$docked,
     'unDocked'   => sub { $docked = 0 },
     'noXrandr'   => \$noXrandr,
@@ -98,9 +99,10 @@ sub configureSoundCardIfNotPredefined{
 sub undockedConfig{
     sub toggleMainOutputs{
         addToXrandrCmd($lvdsOutput,"--mode 1920x1080 --pos 0x0 --rotate normal --primary");
+        my $defaultPosition = "--right-of"; # --above
         foreach my $output (@mainOutputs) {
             if ($xrandr =~ /$output connected \(/){
-                addToXrandrCmd($output,"--auto --above $lvdsOutput");
+                addToXrandrCmd($output,"--auto $defaultPosition $lvdsOutput");
             }elsif ($xrandr =~ /$output connected/){
                 addToXrandrCmd($output,"--rotate normal --off");
             }
@@ -111,22 +113,20 @@ sub undockedConfig{
     toggleMainOutputs();
     system("xset dpms 300 600 900");
     $acPresent ? system("xbacklight =70") : system("xbacklight =100");
-
-    #sound
-    sleep(1);
-    configureSoundCardIfNotPredefined("PCH");
-    system("amixer -q set Master off");
 }
 
 ################################################################################
 sub dockedConfig{
     sub setupDockedOutputs{
+        # TODO: turn lvds off?
         addToXrandrCmd($lvdsOutput,"--mode 1920x1080 --pos 0x0 --rotate normal");
+        
+        # TODO: if there is a "--same-as" in $xrandr, take other modifier
+        my $modifier = "--same-as";
+
         foreach my $output (@dockedOutputs) {
             if ($xrandr =~ /$output connected/){
-                addToXrandrCmd($output,"--mode 1920x1080 --same-as $lvdsOutput --rotate $rotate --primary");
-                # $cmd .= " --output $output --mode 1920x1080 --same-as eDP1 --rotate $rotate";
-                # --output $DOCKED_OUTPUT --primary --mode 1920x1080 --rotate "$rotate" \
+                addToXrandrCmd($output,"--mode 1920x1080 $modifier $lvdsOutput --rotate $rotate --primary");
             }
         }
         runXrandrCmd();
@@ -135,15 +135,23 @@ sub dockedConfig{
     setupDockedOutputs();
     system("xset dpms 900 1800 2700");
     system("xbacklight =100");
-
-    #sound
-    sleep(1);
-    configureSoundCardIfNotPredefined("Device");
 }
 
 ################################################################################
 sub commonConfig{
     system("feh --bg-center \"$background\"");
+    # TODO: set keyboard
+}
+
+################################################################################
+sub setupSound{
+    sleep(1);
+    if ($docked){
+        configureSoundCardIfNotPredefined("Device");
+    }else{
+        configureSoundCardIfNotPredefined("PCH");
+        system("amixer -q set Master off");
+    }
 }
 
 ################################################################################
@@ -151,3 +159,4 @@ sub commonConfig{
 ################################################################################
 $docked ? dockedConfig() : undockedConfig();
 commonConfig();
+setupSound();
