@@ -41,7 +41,7 @@ let
     cryptsetup
 
 # for the desktop environmen
-    xlibs.xmodmap xlibs.xset xlibs.setxkbmap
+    xlibs.xmodmap xlibs.xset xlibs.setxkbmap xlibs.xbacklight
     arandr
     dmenu
     scrot
