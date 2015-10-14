@@ -13,7 +13,7 @@ use threads;
 ##  config                                                                    ##
 ################################################################################
 my $lvdsOutput = "eDP1";
-my @mainOutputs = ("DP1", "DP1-8", "HDMI0", "HDMI2");
+my @mainOutputs = ("DP1", "DP1-8", "HDMI1", "HDMI2");
 my @dockedOutputs = ("DP2-1", "DP2-2", "DP2-3");
 my $background = "/home/mhuber/Bilder/background/BACKGROUND.png";
 
@@ -24,6 +24,7 @@ my $docked = 0;
 my $rotate = "normal";
 my $noXrandr = 0;
 my $alsaOutput = "";
+my $primaryCountStart = 0;
 
 GetOptions(
     'rotate=s'   => \$rotate,
@@ -31,6 +32,7 @@ GetOptions(
     'unDocked'   => sub { $docked = 0 },
     'noXrandr'   => \$noXrandr,
     'setSound=s' => \$alsaOutput,
+    'primOutNr=i' => \$primaryCountStart,
 ) or die "Usage: $0 \n\t[--rotate=rotation]\n\t[--setSound=CardName/CardNumber]\n\t[--docked/--unDocked]\n\t[--noXrandr]\n";
 
 my $acPresent = `acpi -a | grep -c on-line`;
@@ -43,7 +45,7 @@ foreach my $output (@dockedOutputs) {
 ################################################################################
 ##  subroutines                                                               ##
 ################################################################################
-{
+{ # clojure
     my $xrandrCmd = "xrandr";
     my @otherOutputs = ();
     push @otherOutputs, @mainOutputs;
@@ -58,6 +60,7 @@ foreach my $output (@dockedOutputs) {
         @otherOutputs = grep { $_ ne $output } @otherOutputs;
     }
     sub runXrandrCmd {
+        print $xrandrCmd;
         foreach my $output (@otherOutputs) {
             addToXrandrCmd($output,"--rotate normal --off")
                 if ($xrandr =~ /$output/);
@@ -96,13 +99,20 @@ sub configureSoundCardIfNotPredefined{
 }
 
 ################################################################################
+{ # clojure
+    my $primaryCount = $primaryCountStart;
+    sub isPrimary {
+        return ($primaryCount-- == 0) ? "--primary" : "";
+    }
+}
 sub undockedConfig{
     sub toggleMainOutputs{
-        addToXrandrCmd($lvdsOutput,"--mode 1920x1080 --pos 0x0 --rotate normal --primary");
+        addToXrandrCmd($lvdsOutput,"--mode 1920x1080 --pos 0x0 --rotate normal @{[isPrimary()]}");
         my $defaultPosition = "--right-of"; # --above
         foreach my $output (@mainOutputs) {
-            if ($xrandr =~ /$output connected \(/){
-                addToXrandrCmd($output,"--auto $defaultPosition $lvdsOutput");
+            if ($xrandr =~ /$output connected \(/ ||
+                $xrandr =~ /$output connected \w \(/){
+                addToXrandrCmd($output,"--auto $defaultPosition $lvdsOutput @{[isPrimary()]}");
             }elsif ($xrandr =~ /$output connected/){
                 addToXrandrCmd($output,"--rotate normal --off");
             }
