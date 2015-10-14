@@ -5,7 +5,8 @@
 # vim, tmux, sudo, mutt
 
 alias vim="emacsclient -t"
-alias :e="emacs -nw" #Typo
+alias :e="emacsclient -t" #Typo
+alias pgp="gpg" #Typo
 alias vime="vim -u ~/.vimencrypt -x "
 alias gvime="gvim -u ~/.vimencrypt -x "
 alias tvim="tmux new vim"
@@ -388,7 +389,18 @@ myStopScreensaver(){
 incoChrome(){
   postfix=$(date +%s | sha256sum | base64 | head -c 32 ; echo)
   mkdir -p "/tmp/incoChrome_$postfix" && \
-    /usr/bin/chromium --incognito --user-data-dir="/tmp/incoChrome_$postfix" &disown
+      /usr/bin/chromium --incognito \
+                        --user-data-dir="/tmp/incoChrome_$postfix" &disown
+}
+
+incoTorChrome(){
+  sudo systemctl start tor.service && {
+    postfix=$(date +%s | sha256sum | base64 | head -c 32 ; echo)
+    mkdir -p "/tmp/incoChrome_$postfix" && \
+        /usr/bin/chromium --incognito \
+                          --user-data-dir="/tmp/incoChrome_$postfix" \
+                          --proxy-server="socks://localhost:9050" &disown
+  }
 }
 
 alias mplayerampl="mplayer -af volume=10.1:0"
@@ -536,25 +548,27 @@ alias mymatlabRunFile="~/matlab/bin/matlab -nojvm -nodisplay -nosplash < "
 #   package management
 #-------------------------------------------------------------------{{{
 
-#nix
-alias nixin="nix-env -iA"
-# alias nixupg="nix-env -u '*'"
-alias nixupg="nix-channel --update && nix-env --upgrade"
-alias nixTest="nix-shell '<nixpkgs>' -A"
-alias nixTestAlternativ="nix-shell -p"
-alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
-alias nixse="nix-env -qaP | grep "
-nixsel(){
+have nix-env && {
+  #nix
+  alias nixin="nix-env -iA"
+  # alias nixupg="nix-env -u '*'"
+  alias nixupg="nix-channel --update && nix-env --upgrade"
+  alias nixTest="nix-shell '<nixpkgs>' -A"
+  alias nixTestAlternativ="nix-shell -p"
+  alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
+  alias nixse="nix-env -qaP | grep "
+  nixsel(){
   nix-env -qaP | grep $1 | less
+  }
+  alias nixlist="nix-env -qa \*"
+
+  alias upg='nixupg'
+
+  alias nix-shell-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-shell"
+
+  #nixos
+  alias nixosupg="sudo nixos-rebuild switch --upgrade"
 }
-alias nixlist="nix-env -qa \*"
-
-alias upg='nixupg'
-
-alias nix-shell-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-shell"
-
-#nixos
-alias nixosupg="sudo nixos-rebuild switch --upgrade"
 
 have pacman && {
   # remove orphan pacman packages and delete packages in the cache, which are
@@ -591,7 +605,11 @@ have pacman && {
   #   echo
   #   myRemOrphans
   # }
-  alias upg='pacupg && nixupg'
+  have nix-env && {
+      alias upg='pacupg && nixupg'
+  } || {
+      alias upg='pacupg'
+  }
 
   # Additional pacman alias examples
   alias pacupd='sudo pacman -Sy && sudo abs'
