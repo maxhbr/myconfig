@@ -50,7 +50,7 @@ Config { font = "xft:inconsolata:pixelsize=13:antialias=true:hinting=true"
        , sepChar = "%"
        , alignSep = "}{"
        -- , template = " %StdinReader%"
-       , template = " %StdinReader% }{ <action=`urxvtc -name ScratchHtop -e bash -c htop`>%multicpu% %top% %coretemp%</action> %kbd%| <action=`xbacklight =10`>%bat%%bata%</action> | %dynnetwork% %wlp3s0wi% | <action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action> | <action=`urxvtc -name ScratchAlsa -e bash -c alsamixer`>%vol%</action> | %date% "
+       , template = " %StdinReader% }{ <action=`urxvtc -name ScratchHtop -e bash -c htop`>%multicpu% %top% %coretemp%</action> %kbd%| <action=`xbacklight =10`>%bat%%bata%</action> | %dynnetwork% <action=`urxvtc -name ScratchHtop -e bash -c 'sudo wifi-menu'`>%wlp3s0wi%</action> | <action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action> | <action=`urxvtc -name ScratchAlsa -e bash -c alsamixer`>%vol%</action> | %date% "
        }
 
 -- vim: set ft=haskell :
