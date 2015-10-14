@@ -18,13 +18,15 @@ my %toLink = (
 while ( my ($url, $target) = each(%toLink) ) {
     print "update: @{[colored(['bold green'], $target,'')]}\n";
     $target = (glob($target))[0];
-    if ( !-d dirname($target) ){
-        make_path dirname($target) or die "Failed to create: $target";
-    }
-    if ( !-d $target ){
-        system("git","clone",$url,$target);
+    if ( -d dirname($target) ){
+        if ( !-d $target ){
+            system("git","clone",$url,$target);
+        }else{
+            chdir($target);
+            system("git","pull");
+        }
     }else{
-        chdir($target);
-        system("git","pull");
+        print "the parent directory of $target does not exist";
+        # make_path dirname($target) or die "Failed to create: $target";
     }
 }
