@@ -10,7 +10,7 @@ source ~/.mutt/mutt-accounts
 ##############################################################################
 macro index,pager AB "<save-message>~/Mail/mail/Sort.Billing<enter>" \
     "move message to the billing archive"
-macro index,pager AJ "<save-message>~/Mail/mail/Sort.Job<enter>" \
+macro index,pager AJ "<save-message>~/Mail/mail/Sort.Job.Gen<enter>" \
     "move message to the web archive"
 macro index,pager AP "<save-message>~/Mail/mail/Sort.Private<enter>" \
     "move message to the private archive"
@@ -155,9 +155,6 @@ set pgp_good_sign="^gpg: Good signature from"
 
 # http://www.gnuterrypratchett.com/
 my_hdr X-Clacks-Overhead: GNU Terry Pratchett
-
-my_hdr X-Homepage: http://www.maximilian-huber.de
-my_hdr X-PGP-Key: http://www.maximilian-huber.de/gpg-pubkey.asc
 
 ##############################################################################
 # Colors
