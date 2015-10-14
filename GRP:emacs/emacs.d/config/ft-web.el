@@ -1,9 +1,21 @@
 ;; (use-package php-mode
 ;;   :ensure t
 ;;   :mode "\\.php\\'")
+;; (use-package web-mode
+;;   :ensure t
+;;   :mode "\\.php\\'")
+
+(use-package php-mode
+  :init
+  (setq php-indent-level 2)
+  :config
+  (add-to-list 'auto-mode-alist '("\\.php$" . php-mode))
+  (add-to-list 'auto-mode-alist '("\\.inc$" . php-mode)) 
+  :ensure t)
 (use-package web-mode
-  :ensure t
-  :mode "\\.php\\'")
+  :config
+  (add-to-list 'auto-mode-alist '("\\.twig$" . web-mode))
+  :ensure t)
 
 (defun my-php ()
   (add-to-list 'company-backends 'company-my-php-backend))
@@ -22,7 +34,7 @@
 
                      (with-temp-buffer
                           (call-process-shell-command "php -r '$all=get_defined_functions();foreach ($all[\"internal\"] as $fun) { echo $fun . \";\";};'"\
-     nil t)
+                                                      nil t)
                        (goto-char (point-min))
                        (let ((hash (make-hash-table)))
                          (while (re-search-forward "\\([^;]+\\);" (point-max) t)
