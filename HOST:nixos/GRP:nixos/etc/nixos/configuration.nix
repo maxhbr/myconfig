@@ -21,7 +21,7 @@ let
     cabal2nix
 
 # Virtualization
-    # virtualbox
+    vagrant
     docker
 
 # For email setup
@@ -158,13 +158,23 @@ in {
         };
         default = "xmonad";
       };
-      desktopManager.default = "none";
-      displayManager.sessionCommands = ''
-        ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name left_ptr &
-        ${pkgs.xlibs.setxkbmap}/bin/setxkbmap de neo
-        ${pkgs.redshift}/bin/redshift -l 48.2:10.8 &
-        ${pkgs.rxvt_unicode_with-plugins}/bin/urxvtd -q -f -o &
-      '';
+      
+      desktopManager = {
+        xterm.enable = false;
+        default = "none";
+      };
+      displayManager = {
+        slim = {
+	        enable = true;
+	        defaultUser = "mhuber";
+        };
+        sessionCommands = ''
+          ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name left_ptr &
+          ${pkgs.xlibs.setxkbmap}/bin/setxkbmap de neo
+          ${pkgs.redshift}/bin/redshift -l 48.2:10.8 &
+          ${pkgs.rxvt_unicode_with-plugins}/bin/urxvtd -q -f -o &
+        '';
+      };
 
       # startGnuPGAgent = true;
 
@@ -183,9 +193,7 @@ in {
     nixosManual.showManual = true;
     acpid.enable = true;
 
-
-    # TODO: emacs service?
-    # see: https://github.com/ardumont/dot-files/blob/master/nixos/services.nix#L28
+    virtualboxHost.enable = true;
   };
 
   users = {
@@ -199,10 +207,14 @@ in {
       shell = "/run/current-system/sw/bin/zsh";
       password = "dummy";
     };
-    extraGroups.docker.members = [ "mhuber" ];
+    extraGroups = {
+      vboxusers.members = [ "mhuber" ];
+      docker.members = [ "mhuber" ];
+    };
   };
   virtualisation.docker.enable = true;
-  # services.virtualboxHost.enable = false;
+  # ab 16.03
+  # virtualisation.virtualbox.host.enable = true;
   programs.zsh.enable = true;
 
 
@@ -210,7 +222,7 @@ in {
     mkdir -m 0755 -p /media /share
   '';
 
-systemd.user.services = {
+  systemd.user.services = {
     emacs = {
       description = "Emacs: the extensible, self-documenting text editor";
       serviceConfig = {
