@@ -2,6 +2,8 @@
     name = maximilianhuber
     email = maximilian.huber@tngtech.com
 [alias]
+    co = checkout
+
     lol = log --graph --decorate --pretty=oneline --abbrev-commit
     lola = log --graph --decorate --pretty=oneline --abbrev-commit --all
     changes = diff --name-status -r

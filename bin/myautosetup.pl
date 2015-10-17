@@ -27,13 +27,13 @@ my $alsaOutput = "";
 my $primaryCountStart = 0;
 
 GetOptions(
-    'rotate=s'   => \$rotate,
-    'docked'     => \$docked,
-    'unDocked'   => sub { $docked = 0 },
-    'noXrandr'   => \$noXrandr,
-    'setSound=s' => \$alsaOutput,
+    'rotate=s'    => \$rotate,
+    'docked'      => \$docked,
+    'unDocked'    => sub { $docked = 0 },
+    'noXrandr'    => \$noXrandr,
     'primOutNr=i' => \$primaryCountStart,
-) or die "Usage: $0 \n\t[--rotate=rotation]\n\t[--setSound=CardName/CardNumber]\n\t[--docked/--unDocked]\n\t[--noXrandr]\n";
+    'setSound=s'  => \$alsaOutput,
+) or die "Usage: $0 \n\t[--rotate=rotation]\n\t[--primOutNr=0]\n\t[--setSound=CardName/CardNumber]\n\t[--docked/--unDocked]\n\t[--noXrandr]\n";
 
 my $acPresent = `acpi -a | grep -c on-line`;
 my $xrandr = `xrandr`;
@@ -60,15 +60,20 @@ foreach my $output (@dockedOutputs) {
         @otherOutputs = grep { $_ ne $output } @otherOutputs;
     }
     sub runXrandrCmd {
-        print $xrandrCmd;
+        addToXrandrCmd($lvdsOutput,"--primary") if($xrandrCmd !~ /--primary/);
         foreach my $output (@otherOutputs) {
             addToXrandrCmd($output,"--rotate normal --off")
                 if ($xrandr =~ /$output/);
         }
         system($xrandrCmd) if !$noXrandr;
     }
-
     addToXrandrCmd("VIRTUAL1","--rotate normal --off");
+}
+{ # clojure
+    my $primaryCount = $primaryCountStart;
+    sub isPrimary {
+        return ($primaryCount-- == 0) ? "--primary" : "";
+    }
 }
 sub configureSoundCard{
     # parameters are:
@@ -92,19 +97,8 @@ sub configureSoundCard{
         close ASOUNDRC;
     }
 }
-sub configureSoundCardIfNotPredefined{
-    $alsaOutput eq "" ?
-        configureSoundCard($_[0]) :
-        configureSoundCard($alsaOutput);
-}
 
 ################################################################################
-{ # clojure
-    my $primaryCount = $primaryCountStart;
-    sub isPrimary {
-        return ($primaryCount-- == 0) ? "--primary" : "";
-    }
-}
 sub undockedConfig{
     sub toggleMainOutputs{
         addToXrandrCmd($lvdsOutput,"--mode 1920x1080 --pos 0x0 --rotate normal @{[isPrimary()]}");
@@ -112,7 +106,7 @@ sub undockedConfig{
         foreach my $output (@mainOutputs) {
             if ($xrandr =~ /$output connected \(/ ||
                 $xrandr =~ /$output connected \w \(/){
-                addToXrandrCmd($output,"--auto $defaultPosition $lvdsOutput @{[isPrimary()]}");
+                addToXrandrCmd($output,"--auto $defaultPosition $lvdsOutput --rotate $rotate @{[isPrimary()]}");
             }elsif ($xrandr =~ /$output connected/){
                 addToXrandrCmd($output,"--rotate normal --off");
             }
@@ -128,11 +122,9 @@ sub undockedConfig{
 ################################################################################
 sub dockedConfig{
     sub setupDockedOutputs{
-        # TODO: turn lvds off?
         addToXrandrCmd($lvdsOutput,"--mode 1920x1080 --pos 0x0 --rotate normal");
         
-        # TODO: if there is a "--same-as" in $xrandr, take other modifier
-        my $modifier = "--same-as";
+        my $modifier = ($xrandr =~ /1920x1080\+1920\+0/) ? "--same-as" : "--right-of";
 
         foreach my $output (@dockedOutputs) {
             if ($xrandr =~ /$output connected/){
@@ -150,16 +142,18 @@ sub dockedConfig{
 ################################################################################
 sub commonConfig{
     system("feh --bg-center \"$background\"");
-    # TODO: set keyboard
 }
 
 ################################################################################
 sub setupSound{
+    sub configureSoundCardIfNotPredefined{
+        $alsaOutput eq "" ?
+            configureSoundCard($_[0]) :
+            configureSoundCard($alsaOutput);
+    }
     sleep(1);
-    if ($docked){
-        configureSoundCardIfNotPredefined("Device");
-    }else{
-        configureSoundCardIfNotPredefined("PCH");
+    configureSoundCardIfNotPredefined("PCH");
+    if (! $docked){
         system("amixer -q set Master off");
     }
 }
