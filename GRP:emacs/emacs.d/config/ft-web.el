@@ -7,14 +7,18 @@
 
 (use-package php-mode
   :init
-  (setq php-indent-level 2)
   :config
+  (add-hook 'php-mode-hook (lambda ()
+                             (setq indent-tabs-mode nil
+                                   c-basic-offset 2
+                                   tab-width 2)))
   (add-to-list 'auto-mode-alist '("\\.php$" . php-mode))
   (add-to-list 'auto-mode-alist '("\\.inc$" . php-mode)) 
   :ensure t)
+
 (use-package web-mode
   :config
-  (add-to-list 'auto-mode-alist '("\\.twig$" . web-mode))
+  (add-to-list 'auto-mode-alist '("\\.php.twig$" . web-mode))
   :ensure t)
 
 (defun my-php ()
