@@ -580,7 +580,7 @@ have pacman && {
       sudo pacman -Rs $(pacman -Qdtq)
     fi
 
-    echo "$(find /var/cache/pacman/pkg/ -type f -mtime +30 | wc -l) to old packages to remove from cache"
+    echo "$(find /var/cache/pacman/pkg/ -type f -mtime +100 | wc -l) old packages to remove from cache"
     find /var/cache/pacman/pkg/ -type f -mtime +100 -exec sudo rm -v {} \;
   }
 
