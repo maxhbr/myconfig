@@ -202,8 +202,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) = M.fromList $
     {-, ((modm,              xK_z), spawn "~/bin/disp-controll 1") -- auto-}
     {-, ((modm .|. shiftMask, xK_z), spawn "~/bin/disp-controll 2") -- toggle-}
     {-, ((modm .|. controlMask, xK_z), spawn "~/bin/disp-controll 3") -- cycle-}
-    , ((modm .|. shiftMask, xK_z), spawn "~/bin/myautosetup.pl") -- auto
-    , ((modm .|. shiftMask .|. controlMask, xK_z), spawn "~/bin/myautosetup.sh rotate left") -- auto
+    , ((modm .|. shiftMask, xK_z), spawn "~/bin/myautosetup.pl --primOutNr=1") -- auto
+    , ((modm .|. shiftMask .|. controlMask, xK_z), spawn "~/bin/myautosetup.pl --rotate=left --primOutNr=1") -- auto
     , ((0,                0x1008ff59), spawn "~/bin/myautosetup.sh")
     -- screensaver
     , ((modm .|. shiftMask,  xK_y    ), spawn "slock")
