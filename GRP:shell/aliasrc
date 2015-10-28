@@ -88,6 +88,24 @@ lgrep() { ls -alF | egrep "$@"; }
 #alias cd="pushd"
 #alias bd="popd"
 
+cdStack() {
+  DEFAULT_LIMIT=19
+  LIMIT=${1:-$DEFAULT_LIMIT}
+  for i in {1..$LIMIT..-1}; do
+    echo "$i: $(echo ~$i)"
+  done
+  if [ -n "$BASH_VERSION" ]; then
+    read -p "Where to go: " input
+  elif [ -n "$ZSH_VERSION" ]; then
+    read "input?Where to go: "
+  fi
+  if [ -n "$input" ]; then
+    if [ $input -eq $input 2>/dev/null ]; then
+      cd ~$input
+    fi
+  fi
+}
+
 cd() { #Automatically do an ls after each cd
   if [ -n "$1" ]; then
     builtin cd "$@" && ls
