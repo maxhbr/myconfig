@@ -27,7 +27,7 @@
     main-window-view = HistoryView
     file-view-vpane-position = 652
 [credential]
-    helper = cache --timeout=3600
+	helper = cache --timeout=3600
 [filter "lfs"]
 	clean = git lfs clean %f
 	smudge = git lfs smudge %f
