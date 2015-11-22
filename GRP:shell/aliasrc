@@ -5,7 +5,6 @@
 # vim, tmux, sudo, mutt
 
 alias vim="emacsclient -t"
-alias :e="emacsclient -t" #Typo
 alias pgp="gpg" #Typo
 alias vime="vim -u ~/.vimencrypt -x "
 alias gvime="gvim -u ~/.vimencrypt -x "
@@ -36,11 +35,10 @@ alias ssh="TERM=xterm ssh"
 
 man(){ /usr/bin/man $@ || which $@; }
 
-grepr() { grep -r "$@" * 2>/dev/null; }
+grepr() { grep -r --color=always "$@" * 2>/dev/null; }
 have() { type "$1" &> /dev/null; }
 
 alias gitDiff="git diff HEAD^ HEAD"
-
 
 # zathura() {
 #   command zathura "$@" &disown
@@ -780,7 +778,7 @@ dic(){
       tmux new-session -s "${name}" "${file_path}" \; set-option status \; set set-titles-string "${name} (tmux@${HOST})"
     fi
   }
-  have mutt && mutt() { run_under_tmux 'mutt'; }
+  # have mutt && mutt() { run_under_tmux 'mutt'; }
   have ncmpcpp && ncmpcpp() { run_under_tmux 'ncmpcpp'; }
   #have finch && finch() { run_under_tmux 'finch'; }
   #have ekg2 && ekg2() { run_under_tmux 'ekg2'; }
