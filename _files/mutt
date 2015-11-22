@@ -2,3 +2,4 @@
 ~/.muttrc
 ~/bin/mailclient.sh
 ~/bin/mailrun.sh
+/etc/systemd/system/offlineimap@.service
