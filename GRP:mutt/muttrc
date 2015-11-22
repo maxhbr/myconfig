@@ -41,7 +41,7 @@ set query_command="abook --mutt-query '%s'"
 #set sendmail="/usr/bin/msmtp"               #Pfad zu dem Programm, das die Mails verschicken soll
 set envelope_from=yes                       #übergibt msmtp automatisch den richtigen Absender
 set edit_hdrs                               #Empfänger u.a. auch im Editor bearbeiten
-set attribution="%f schrieb am %d:"         #Zitatkennzeichnung in unserer Muttersprache :)
+# set attribution="%f schrieb am %d:"         #Zitatkennzeichnung in unserer Muttersprache :)
 
 set sort=threads                            #E-Mails werden nach Gesprächsverlauf und nach Datum sortiert
 set sort_aux=date-sent
@@ -51,12 +51,12 @@ set date_format="%a, %d. %b %H:%M"          #gibt an, wie das Datum formatiert w
 set index_format="%4C %Z %D %-22.22F (%?l?%4l&%4c?) %s" #Format der Mail-Übersicht
 set folder_format="%2C %8s %d %t %N %f"     #Format des Datei-Browsers
 set pager_index_lines=10                    #Anzahl der angezeigten Mails in der Übersicht
-set editor="vim +11"                         #Editor, der zum Verfassen der E-Mail benutzt wird, hier Vim beginnend auf Zeile 8
+set editor="vim +11"                         #Editor, der zum Verfassen der E-Mail benutzt wird, hier Vim beginnend auf Zeile 11
 set beep_new                                # bell on new mails
 set header_cache=$HOME/Mail/.hcache
 
 set timeout=15
-set mail_check=60                           # aktualisiere jede minute (offlineimap)
+set mail_check=60
 
 set sleep_time = 0                          #Speed up folders switch
 
