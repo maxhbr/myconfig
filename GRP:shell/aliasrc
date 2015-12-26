@@ -4,7 +4,11 @@
 # needs:
 # vim, tmux, sudo, mutt
 
-alias vim="emacsclient -t"
+if [ -x "$HOME/bin/emc" ]; then
+  alias vim="$HOME/bin/emc -forceTerminal"
+else
+  alias vim="emacsclient -t"
+fi
 alias pgp="gpg" #Typo
 alias vime="vim -u ~/.vimencrypt -x "
 alias gvime="gvim -u ~/.vimencrypt -x "
@@ -35,7 +39,7 @@ alias ssh="TERM=xterm ssh"
 
 man(){ /usr/bin/man $@ || which $@; }
 
-grepr() { grep -r --color=always "$@" * 2>/dev/null; }
+grepr() { grep -rn --color=always "$@" * 2>/dev/null; }
 have() { type "$1" &> /dev/null; }
 
 alias gitDiff="git diff HEAD^ HEAD"
@@ -212,6 +216,8 @@ ex() {
         *.7z) 7z x $file ;;
         # *.jar) jar xf $file ;;
         *.jar) unzip $file ;;
+        *.war) unzip $file ;;
+        *.ear) unzip $file ;;
         *.deb) ar xv $file ;;
         *)
           echo "'$file' of type '$opt' cannot be extracted via ex(), more info:"

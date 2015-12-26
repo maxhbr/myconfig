@@ -35,7 +35,9 @@ export MPD_HOST="mpd@192.168.178.61"
 ###############################################################################
 # nix:
 #  to install: curl https://nixos.org/nix/install | sh
-if [ -e /home/mhuber/.nix-profile/etc/profile.d/nix.sh ]; then . /home/mhuber/.nix-profile/etc/profile.d/nix.sh; fi
+if [ -e /home/mhuber/.nix-profile/etc/profile.d/nix.sh ]; then
+  . /home/mhuber/.nix-profile/etc/profile.d/nix.sh
+fi
 
 ###############################################################################
 ZDOTDIR=${ZDOTDIR:-${HOME}}
@@ -63,9 +65,9 @@ export ncpus=3
 ###############################################################################
 # Not all servers have terminfo for rxvt-256color. :<
 if [ "${TERM}" = 'rxvt-256color' ] \
-  && ! [ -f '/usr/share/terminfo/r/rxvt-256color' ] \
-  && ! [ -f '/lib/terminfo/r/rxvt-256color' ] \
-  && ! [ -f "${HOME}/.terminfo/r/rxvt-256color" ]; then
+    && ! [ -f '/usr/share/terminfo/r/rxvt-256color' ] \
+    && ! [ -f '/lib/terminfo/r/rxvt-256color' ] \
+    && ! [ -f "${HOME}/.terminfo/r/rxvt-256color" ]; then
   export TERM='rxvt-unicode'
 fi
 
