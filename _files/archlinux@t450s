@@ -1,4 +1,5 @@
 ~/.bash_profile
+~/.config/fontconfig/fonts.conf
 /etc/X11/xorg.conf.d/*.conf
 /etc/fstab
 /etc/hosts
@@ -13,3 +14,4 @@
 /etc/udev/rules.d/*
 /etc/vconsole.conf
 /etc/vsftpd.conf
+/etc/netctl/interfaces/wlp5s0
