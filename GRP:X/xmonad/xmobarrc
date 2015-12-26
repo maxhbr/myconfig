@@ -14,6 +14,7 @@ Config { font = "xft:inconsolata:pixelsize=13:antialias=true:hinting=true"
                         , "-L","30" ,"-H","60"
                         , "-h","#FFB6B0" ,"-l","#CEFFAC" ,"-n","#FFFFCC"
                         , "-w","3" ] 10
+         , Run Memory ["-t","Mem: <usedratio>%"] 10
          , Run TopProc ["-t","(<name2>)"] 10
          , Run CoreTemp [ "-t", "@ <core0>C" ] 60
          , Run Kbd [ ("de(nodeadkeys)", "| <fc=#ee9a00>de</fc> ")
@@ -50,7 +51,7 @@ Config { font = "xft:inconsolata:pixelsize=13:antialias=true:hinting=true"
        , sepChar = "%"
        , alignSep = "}{"
        -- , template = " %StdinReader%"
-       , template = " %StdinReader% }{ <action=`urxvtc -name ScratchHtop -e bash -c htop`>%multicpu% %top% %coretemp%</action> %kbd%| <action=`xbacklight =10`>%bat%%bata%</action> | %dynnetwork% <action=`urxvtc -name ScratchHtop -e bash -c 'sudo wifi-menu'`>%wlp3s0wi%</action> | <action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action> | <action=`urxvtc -name ScratchAlsa -e bash -c alsamixer`>%vol%</action> | %date% "
+       , template = " %StdinReader% }{ <action=`urxvtc -name ScratchHtop -e bash -c htop`>%multicpu% %top% %coretemp% %memory%</action> %kbd%| <action=`xbacklight =10`>%bat%%bata%</action> | %dynnetwork% <action=`urxvtc -name ScratchHtop -e bash -c 'sudo wifi-menu'`>%wlp3s0wi%</action> | <action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action> | <action=`urxvtc -name ScratchAlsa -e bash -c alsamixer`>%vol%</action> | %date% "
        }
 
 -- vim: set ft=haskell :
