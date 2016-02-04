@@ -1,3 +1,9 @@
+;(use-package malabar-mode
+;  :mode "\\.java\\'")
+;; (use-package java-mode
+;;   :mode "\\.java\\'"
+;;   :ensure t)
+
 (use-package eclim
   :config
   (global-eclim-mode)

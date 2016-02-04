@@ -73,6 +73,7 @@
 (load-library "cfg-viLike")
 (load-library "cfg-style")
 (load-library "cfg-keys")
+(load-library "cfg-navigation")
 (load-library "cfg-cleanup")
 (use-package sbt-mode
   :ensure t)
@@ -119,9 +120,15 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(TeX-engine (quote luatex))
+ '(company-ghc-show-info t)
  '(custom-safe-themes
    (quote
     ("987b709680284a5858d5fe7e4e428463a20dfabe0a6f2a6146b3b8c7c529f08b" "a27c00821ccfd5a78b01e4f35dc056706dd9ede09a8b90c6955ae6a390eb1c1e" "3c83b3676d796422704082049fc38b6966bcad960f896669dfc21a7a37a748fa" "6a9606327ecca6e772fba6ef46137d129e6d1888dcfc65d0b9b27a7a00a4af20" default)))
+ '(ecb-options-version "2.40")
+ '(haskell-process-auto-import-loaded-modules t)
+ '(haskell-process-log t)
+ '(haskell-process-suggest-remove-import-lines t)
+ '(haskell-process-type (quote cabal-repl))
  '(undo-tree-history-directory-alist (\` (("." \, (expand-file-name "~/.emacs.d/.cache/"))))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
