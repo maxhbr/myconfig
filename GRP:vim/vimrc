@@ -1038,6 +1038,8 @@ cnoreabbrev <expr> Q ((getcmdtype() is# ':' && getcmdline() is# 'Q')?('q'):('Q')
 " handy abbreviations
 iabbrev @@ mail@maximilian-huber.de
 iabbrev VGr Viele Grüße<cr>Maximilian
+iabbrev BRr Best regards<cr>Maximilian
+iabbrev KRr Kind regards<cr>Maximilian
 iabbrev vlt vielleicht
 iabbrev mgl möglicherweise
 
