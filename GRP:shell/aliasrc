@@ -4,6 +4,8 @@
 # needs:
 # vim, tmux, sudo, mutt
 
+alias asdf="setxkbmap -layout de,de -variant neo,nodeadkeys -option grp:shifts_toggle -option grp_led:scroll -option altwin:swap_lalt_lwin"
+
 if [ -x "$HOME/bin/emc" ]; then
   alias vim="$HOME/bin/emc -forceTerminal"
 else
@@ -39,7 +41,8 @@ alias ssh="TERM=xterm ssh"
 
 man(){ /usr/bin/man $@ || which $@; }
 
-grepr() { grep -rn --color=always "$@" * 2>/dev/null; }
+grepr() { grep -rn --color=always "$@" | grep -v Binärdatei 2>/dev/null; }
+greprL() { grepr "$@" | less -R; }
 have() { type "$1" &> /dev/null; }
 
 alias gitDiff="git diff HEAD^ HEAD"
@@ -62,6 +65,8 @@ emacs(){
   fi
 }
 alias e="emacs"
+
+alias httptunnel="ssh -ND localhost:9567 vserver"
 
 #--------------------------------------------------------------------
 #   file specific
@@ -204,7 +209,8 @@ ex() {
         *.tar.bz2) tar xjf $file ;;
         *.tar.gz) tar xzf $file ;;
         *.tar.xz) tar xvfJ $file ;;
-        *.tar.lzma) tar --lzma -xvf $file;;
+        *.xz) xz -d $file ;; 
+        *.tar.lzma) tar --lzma -xvf $file ;;
         *.bz2) bunzip2 $file ;;
         *.rar) unrar e $file ;;
         *.gz) gunzip $file ;;
@@ -661,6 +667,10 @@ cabalupd() {
 #-------------------------------------------------------------------{{{
 
 startphp() { php -S 127.0.0.1:8080; }
+mydhcp() {
+  sudo ip link set $1 up
+	sudo dhcpcd -w -B $1
+}
 
 # gen QR-Code for a WiFi:
 genQrCode(){
