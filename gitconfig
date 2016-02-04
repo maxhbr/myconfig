@@ -32,3 +32,8 @@
 	clean = git lfs clean %f
 	smudge = git lfs smudge %f
 	required = true
+# [mergetool "fancymeld"]
+#   cmd = meld $LOCAL $BASE $REMOTE -o $MERGED --diff $LOCAL $BASE $REMOTE --diff $BASE $LOCAL --diff $BASE $REMOTE --auto-merge
+[merge]
+  tool = meld
+  conflictstyle = diff3
