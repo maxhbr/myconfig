@@ -6,7 +6,8 @@ Config { font = "xft:inconsolata:pixelsize=13:antialias=true:hinting=true"
        --    ["xft:inconsolata:bold:pixelsize=13:antialias=true:hinting=true"]
        , bgColor = "black"
        , fgColor = "grey"
-       , position = TopW L 100
+       -- , position = TopW L 100
+       , position = BottomW L 100
        , lowerOnStart = True
        , commands =
          [ Run StdinReader
