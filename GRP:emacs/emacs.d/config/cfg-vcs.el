@@ -4,6 +4,7 @@
   (setq magit-last-seen-setup-instructions "1.4.0")
   ;; (setq magit-auto-revert-mode nil)
   :config
+  (global-set-key (kbd "<C-return>") 'magit-status)
 
   ;; full screen magit-status
   (defadvice magit-status (around magit-fullscreen activate)

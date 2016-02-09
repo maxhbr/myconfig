@@ -13,7 +13,7 @@ use threads;
 ##  config                                                                    ##
 ################################################################################
 my $lvdsOutput = "eDP1";
-my @mainOutputs = ("DP1", "DP1-8", "HDMI1", "HDMI2");
+my @mainOutputs = ("DP2", "DP1", "DP1-8", "HDMI1", "HDMI2");
 my @dockedOutputs = ("DP2-1", "DP2-2", "DP2-3");
 my $background = "/home/mhuber/Bilder/background/BACKGROUND.png";
 

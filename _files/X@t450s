@@ -4,6 +4,7 @@
 # ~/.config/dwb/userscripts/wget-file.sh
 # ~/.Xresources
 ~/.xinitrc
+ ~/.xmonad/lib/XMonad/MyConfig/*.hs
 ~/.xmonad/myinformation.sh
 ~/.xmonad/mymailinfo.sh
 ~/.xmonad/showkeys

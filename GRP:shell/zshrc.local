@@ -147,6 +147,12 @@ zstyle ':predict' toggle true
 zstyle ':predict' verbose true
 [[ -f ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] &&
   source ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+# [[ -f ~/.zsh/auto-fu.zsh/auto-fu.zsh ]] && {
+#   source ~/.zsh/auto-fu.zsh/auto-fu.zsh
+# 	zle-line-init () {auto-fu-init;}; zle -N zle-line-init
+# 	zstyle ':completion:*' completer _oldlist _complete
+# 	zle -N zle-keymap-select auto-fu-zle-keymap-select
+# }
 
 ###############################################################################
 # Start tmux on ssh

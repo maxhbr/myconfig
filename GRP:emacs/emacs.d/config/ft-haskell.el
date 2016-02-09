@@ -1,5 +1,5 @@
 (use-package haskell-mode
-  ; :ensure t ;; produces error ...
+  ;; :ensure t ;; produces error ...
   :config
   ;; Indent-mode simple
   ;; (add-hook 'haskell-mode-hook 'turn-on-haskell-simple-indent)
@@ -19,7 +19,17 @@
   (use-package haskell-snippets
     :ensure t)
 
-  (require 'haskell-interactive-mode)
+  ;; (use-package haskell-interactive-mode
+  ;;   :ensure t)
+  ;; (use-package inf-haskell
+  ;;   :ensure t)
+  
+  (use-package company-ghc
+    :ensure t
+    :config
+    (add-to-list 'company-backends 'company-ghc)
+    (custom-set-variables '(company-ghc-show-info t)))
+
   (require 'haskell-process)
   (add-hook 'haskell-mode-hook 'interactive-haskell-mode)
 
@@ -42,3 +52,6 @@
   (custom-set-variables
    '(haskell-process-type 'cabal-repl))
   :mode "\\.hs\\'")
+
+(setq initial-major-mode 'haskell-mode)
+(setq initial-scratch-message nil)

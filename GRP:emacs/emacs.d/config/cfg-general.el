@@ -133,20 +133,48 @@
 (setq undo-strong-limit 1200000)
 (setq undo-outer-limit  12000000)
 
+;; Display tilde at the end of file
+(setq-default indicate-empty-lines t)
+(progn
+  (define-fringe-bitmap 'tilde [0 0 0 113 219 142 0 0] nil nil 'center)
+  (setcdr (assq 'empty-line fringe-indicator-alist) 'tilde))
+(set-fringe-bitmap-face 'tilde 'font-lock-comment-face)
+
+;; (setq whitespace-style (quote (spaces tabs newline space-mark tab-mark newline-mark)))
+;; (setq whitespace-display-mappings '(;(space-mark 32 [183] [46])
+;;                                     (newline-mark 10 [8617 10])
+;;                                     (tab-mark 9 [9655 9] [92 9])))
+(require 'whitespace)
+(setq whitespace-display-mappings
+      ;; all numbers are Unicode codepoint in decimal. try (insert-char 182 ) to see it
+      '(
+        (space-mark 32 [183] [46]) ; 32 SPACE, 183 MIDDLE DOT 「·」, 46 FULL STOP 「.」
+        (newline-mark 10 [182 10]) ; 10 LINE FEED
+        (tab-mark 9 [187 9] [9655 9] [92 9]) ; 9 TAB, 9655 WHITE RIGHT-POINTING TRIANGLE 「▷」
+        ))
+(setq whitespace-style '(face tabs trailing tab-mark))
+(set-face-attribute 'whitespace-tab nil
+                    :background "#f0f0f0"
+                    :foreground "#00a8a8"
+                    :weight 'bold)
+(set-face-attribute 'whitespace-trailing nil
+                    :background "#e4eeff"
+                    :foreground "#183bc8"
+                    :weight 'normal)
+(add-hook 'prog-mode-hook 'whitespace-mode)
+
+
 (use-package adaptive-wrap
   :ensure t
   :config
   (adaptive-wrap-prefix-mode))
 
-;; minibuffer history
-(use-package savehist
-  :ensure t
-  :config
-  (setq savehist-file (concat dotemacs-cache-directory "savehist")
-        savehist-additional-variables '(search ring regexp-search-ring)
-        savehist-autosave-interval 60
-        history-length 1000)
-  (savehist-mode t))
+; minibuffer history
+(setq savehist-file "~/.emacs.d/.cache/savehist"
+      savehist-additional-variables '(search ring regexp-search-ring)
+      savehist-autosave-interval 60
+      history-length 1000)
+(savehist-mode t)
 
 ;; clean up old buffers periodically
 (use-package midnight

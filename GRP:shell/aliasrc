@@ -41,7 +41,7 @@ alias ssh="TERM=xterm ssh"
 
 man(){ /usr/bin/man $@ || which $@; }
 
-grepr() { grep -rn --color=always "$@" | grep -v Binärdatei 2>/dev/null; }
+grepr() { grep -rns --color=always "$@" | grep -v Binärdatei 2>/dev/null; }
 greprL() { grepr "$@" | less -R; }
 have() { type "$1" &> /dev/null; }
 
