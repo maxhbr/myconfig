@@ -14,3 +14,5 @@
 
   :mode "\\.java\\'"
   :ensure emacs-eclim)
+
+(add-to-list 'auto-mode-alist '("\\.java$\\'" . java-mode))

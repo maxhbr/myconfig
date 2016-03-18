@@ -1,3 +1,5 @@
+(use-package ghc-mod
+  :ensure t)
 (use-package haskell-mode
   ;; :ensure t ;; produces error ...
   :config
