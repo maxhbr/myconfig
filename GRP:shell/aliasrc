@@ -42,6 +42,7 @@ alias ssh="TERM=xterm ssh"
 man(){ /usr/bin/man $@ || which $@; }
 
 grepr() { grep -rns --color=always "$@" | grep -v Binärdatei 2>/dev/null; }
+grepri() { grepr -i "$@" }
 greprL() { grepr "$@" | less -R; }
 have() { type "$1" &> /dev/null; }
 
@@ -67,6 +68,15 @@ emacs(){
 alias e="emacs"
 
 alias httptunnel="ssh -ND localhost:9567 vserver"
+
+alias g="git"
+# g() {
+#   if [  $# -eq 0 ]; then
+#     git fetch --all && git status
+#   else
+#     git $@
+#   fi
+# }
 
 #--------------------------------------------------------------------
 #   file specific
@@ -669,7 +679,7 @@ cabalupd() {
 startphp() { php -S 127.0.0.1:8080; }
 mydhcp() {
   sudo ip link set $1 up
-	sudo dhcpcd -w -B $1
+  sudo dhcpcd -w -B $1
 }
 
 # gen QR-Code for a WiFi:
