@@ -1,15 +1,46 @@
+# partially stolen from https://github.com/quchen/dotfiles/
 [user]
     name = maximilianhuber
-    email = maximilian.huber@tngtech.com
+    email = mail@maximilian-huber.de
 [alias]
-    co = checkout
+    s        = status
+    s        = status --short --branch
+    a        = add
+    c        = commit
+    cm       = commit -m
+    ca       = commit --amend
+    co       = checkout
+    cob      = checkout -b
+    f        = fetch --all
 
-    lol = log --graph --decorate --pretty=oneline --abbrev-commit
-    lola = log --graph --decorate --pretty=oneline --abbrev-commit --all
-    changes = diff --name-status -r
+    d        = diff
+    ds       = diff --stat -r
+    dd       = diff --word-diff=color
+    dw       = diff --color-words="[^[:space:],;:_-]+"
+    dt       = difftool --dir-diff
+    changes  = diff --name-status -r
     diffstat = diff --stat -r
-    whatis = show -s --pretty='tformat:%h (%s, %ad)' --date=short
-    pwhatis = show -s --pretty='tformat:%h, %s, %ad' --date=short
+
+    mt       = mergetool --no-prompt
+    l        = log
+    sup      = submodule update
+    unstage  = reset HEAD --
+    untrack  = rm --cached
+
+    whatis   = show -s --pretty='tformat:%h (%s, %ad)' --date=short
+    pwhatis  = show -s --pretty='tformat:%h, %s, %ad' --date=short
+
+    # Pretty graphs
+    lol      = log --graph --decorate --pretty=oneline --abbrev-commit
+    lola     = log --graph --decorate --pretty=oneline --abbrev-commit --all
+    # Up to current commit, medium commit info
+    g        = log -10 --graph --pretty=format:'%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n        %ar (%ai)%n        %an <%ae>'
+    # Long, full commit info
+    gl       = log --graph --pretty=format:'%C(bold)%h%C(reset)%n%H%n%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n%n%b%n%nAuthor%n    %ar (%ai)%n    %an <%ae>%nCommitter%n    %cr (%ci)%n    %cn <%ce>%n'
+    # All commits, medium commit info
+    gg       = log --graph --all --pretty=format:'%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n        %ar (%ai)%n        %an <%ae>'
+    # All commits, full commit info
+    ggl      = log --graph --all --pretty=format:'%C(bold)%h%C(reset)%n%H%n%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n%n%b%n%nAuthor%n    %ar (%ai)%n    %an <%ae>%nCommitter%n    %cr (%ci)%n    %cn <%ce>%n'
 [color]
     branch = auto
     diff = auto
@@ -37,3 +68,8 @@
 [merge]
   tool = meld
   conflictstyle = diff3
+[diff]
+  tool = meld
+
+[include]
+  path = .gitconfig-local

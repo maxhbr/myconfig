@@ -1,0 +1,2 @@
+#!/bin/bash
+/usr/bin/chromium "data:text/html;base64,$(base64 -w 0 <&0)" &> /dev/null
