@@ -103,7 +103,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) =
        basicKBs
     ++ miscKBs
     ++ scratchpadKBs
-    ++ baclightControlKBs 
+    ++ baclightControlKBs
     ++ layoutKBs
     ++ systemctlKBs
     ++ mpdKBs
@@ -148,7 +148,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) =
               | (k, sc) <- zip [xK_w, xK_e, xK_r] [0..]
               , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
          -}
-    layoutKBs = 
+    layoutKBs =
         [ ((m__, xK_space ), sendMessage NextLayout) -- Rotate through the available layout algorithms
         , ((ms_, xK_x     ), sendMessage $ Toggle MIRROR)
         , ((ms_, xK_space ), setLayout $ XMonad.layoutHook conf) --  Reset the layouts on the current workspace to default
@@ -170,7 +170,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) =
           ++ combineTwoKBs
           ++ subLayoutKBs
       where
-        cycleWSKBs = 
+        cycleWSKBs =
           [ ((m__, xK_Down ), moveTo Next NonEmptyWS)
           , ((m__, xK_Up   ), moveTo Prev NonEmptyWS)
           , ((ms_, xK_Down ), shiftToNext >> nextWS)
@@ -181,14 +181,14 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) =
           , ((ms_, xK_Left ), shiftPrevScreen)
           , ((m__, xK_y    ), toggleSkip ["NSP"])
           , ((m__, xK_a    ), toggleSkip ["NSP"])]
-        combineTwoKBs = 
+        combineTwoKBs =
           [((msc, xK_l ), sendMessage $ Move L)]
-        subLayoutKBs = 
+        subLayoutKBs =
           map (\(k,v) -> ((m_c, k), sendMessage $ pullGroup v))
             [(xK_h,L),(xK_l,R),(xK_k,U),(xK_j,D)]
             ++ [ ((m_c, xK_m), withFocused (sendMessage . MergeAll))
                , ((m_c, xK_u), withFocused (sendMessage . UnMerge))]
-    systemctlKBs = 
+    systemctlKBs =
       map (\(k,v) -> (k, spawn $ "systemctl " ++ v))
         [ ((ms_, xK_F10), "suspend")
         , ((msc, xK_F11), "reboot")
@@ -210,17 +210,17 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) =
         , ((m__,  xK_F3     ), spawn "feh ~/.xmonad/neo/neo_Ebenen_1_2_5_6.png")]
           ++ volumeControlls
       where
-        volumeControlls = 
+        volumeControlls =
           map (\(k,v) -> ((const 0, k), spawn v))
             [ (0x1008ff12, "amixer -q set Master toggle")
             , (0x1008ff11, "amixer -q set Master 6dB-")
             , (0x1008ff13, "amixer -q set Master unmute 3dB+")]
-    mpdKBs = 
-      [ ((m__, 0xfc), spawn "mpc -h mpd@192.168.178.61 --no-status prev")
-      , ((ms_, 0xfc), spawn "mpc -h mpd@192.168.178.61 --no-status volume -10")
-      , ((m__, 0xf6), spawn "mpc -h mpd@192.168.178.61 --no-status toggle")
-      , ((m__, 0xe4), spawn "mpc -h mpd@192.168.178.61 --no-status next")
-      , ((ms_, 0xe4), spawn "mpc -h mpd@192.168.178.61 --no-status volume +5")]
+    mpdKBs =
+      [ ((m__, 0xfc), spawn "mpc -h mpd@192.168.178.26 --no-status prev")
+      , ((ms_, 0xfc), spawn "mpc -h mpd@192.168.178.26 --no-status volume -10")
+      , ((m__, 0xf6), spawn "mpc -h mpd@192.168.178.26 --no-status toggle")
+      , ((m__, 0xe4), spawn "mpc -h mpd@192.168.178.26 --no-status next")
+      , ((ms_, 0xe4), spawn "mpc -h mpd@192.168.178.26 --no-status volume +5")]
     baclightControlKBs =
       [ ((m__, xK_F1), spawnSelected def [ "xbacklight =50"
                                          , "xbacklight =25"
@@ -291,7 +291,7 @@ myLayout = avoidStrutsOn[U,D] $
                       , activeTextColor     = "orange"
                       , inactiveTextColor   = "#666666"
                       , decoHeight          = 14 }
-        
+
 ------------------------------------------------------------------------
 -- Window rules:
 -- Execute arbitrary actions and WindowSet manipulations when managing
@@ -367,10 +367,9 @@ myConfig xmproc = withUrgencyHook NoUrgencyHook $
             , ppVisible = xmobarColor "#ee9a00" ""
             } >> updatePointer (0.5,0.5) (0.1,0.1)
         }
-    
+
 ------------------------------------------------------------------------
 -- Now run xmonad
 main = do
     xmproc <- spawnPipe "xmobar ~/.xmonad/xmobarrc"
     xmonad $ myConfig xmproc
-
