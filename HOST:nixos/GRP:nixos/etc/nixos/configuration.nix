@@ -17,8 +17,9 @@ let
     pmount
 
 # for development
+    meld
     leiningen clojure
-    cabal2nix
+    stack cabal-install cabal2nix
 
 # Virtualization
     vagrant
@@ -30,15 +31,19 @@ let
     msmtp
     gnupg
     abook
+    notmuch
 
 # git
     # gitAndTools.gitFull
-    # git
-    gitMinimal
+    git
+    # gitMinimal
     # gitAndTools.git-annex
 
 # encryption
     cryptsetup
+
+# tex
+    (pkgs.texLiveAggregationFun { paths = [ pkgs.texLive pkgs.texLiveExtra pkgs.texLiveBeamer pkgs.texLiveCMSuper]; })
 
 # for the desktop environmen
     xlibs.xmodmap xlibs.xset xlibs.setxkbmap
@@ -52,6 +57,7 @@ let
     roxterm
     chromium
     trayer networkmanagerapplet
+    mupdf zathura llpp
     ] ++ hsPackages;
 ###############################################################################
 in {
@@ -60,9 +66,15 @@ in {
       ./hardware-configuration.nix
     ];
 
+  hardware = {
+    bluetooth.enable = false;
+    opengl.driSupport32Bit = true;
+  };
+
   boot = {
     # kernelPackages = pkgs.linuxPackages_4_0;
-    kernelPackages = pkgs.linuxPackages_testing;
+    # kernelPackages = pkgs.linuxPackages_testing;
+    kernelPackages = pkgs.linuxPackages_4_3;
     kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
     cleanTmpDir = true;
  #  loader.grub = {
@@ -74,7 +86,7 @@ in {
     loader.gummiboot.enable = true;
     initrd = {
         supportedFilesystems = [ "luks" ];
-        # luks.devices = [ { device = "/dev/sda2"; name = "crypted"; } ];
+        luks.devices = [ { device = "/dev/sda2"; name = "crypted"; } ];
     };
   };
 
@@ -158,19 +170,23 @@ in {
         };
         default = "xmonad";
       };
-      
+
       desktopManager = {
         xterm.enable = false;
         default = "none";
       };
       displayManager = {
         slim = {
-	        enable = true;
-	        defaultUser = "mhuber";
+          enable = true;
+          defaultUser = "mhuber";
         };
         sessionCommands = ''
-          ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name left_ptr &
+          ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name left_ptr
           ${pkgs.xlibs.setxkbmap}/bin/setxkbmap de neo
+          ${pkgs.xorg.xrdb}/bin/xrdb --merge ~/.Xresources
+          if test -e $HOME/.background-image; then
+            ${pkgs.feh}/bin/feh --bg-center $HOME/.background-image
+          fi
           ${pkgs.redshift}/bin/redshift -l 48.2:10.8 &
           ${pkgs.rxvt_unicode_with-plugins}/bin/urxvtd -q -f -o &
         '';
@@ -192,8 +208,6 @@ in {
 
     nixosManual.showManual = true;
     acpid.enable = true;
-
-    virtualboxHost.enable = true;
   };
 
   users = {
@@ -212,22 +226,29 @@ in {
       docker.members = [ "mhuber" ];
     };
   };
-  virtualisation.docker.enable = true;
-  # ab 16.03
-  # virtualisation.virtualbox.host.enable = true;
+  virtualisation = {
+    docker.enable = true;
+    virtualbox.host.enable = true;
+  };
+
   programs.zsh.enable = true;
 
-
-  system.activationScripts.media = ''
-    mkdir -m 0755 -p /media /share
-  '';
+  system = {
+    activationScripts.media = ''
+      mkdir -m 0755 -p /media /share
+    '';
+    autoUpgrade = {
+      enable = true;
+      channel = https://nixos.org/channels/nixos-15.09;
+    };
+  };
 
   systemd.user.services = {
     emacs = {
       description = "Emacs: the extensible, self-documenting text editor";
       serviceConfig = {
         Type      = "forking";
-        ExecStart = "${pkgs.emacs}/bin/emacs --daemon";
+        ExecStart = "${pkgs.emacs}/bin/emacs --daemon --user=mhuber";
         ExecStop  = "${pkgs.emacs}/bin/emacsclient --eval \"(kill-emacs)\"";
         Restart   = "always";
       };

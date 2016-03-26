@@ -10,10 +10,14 @@ source ~/.mutt/mutt-accounts
 ##############################################################################
 macro index,pager AB "<save-message>~/Mail/mail/Sort.Billing<enter>" \
     "move message to the billing archive"
-macro index,pager AJ "<save-message>~/Mail/mail/Sort.Job<enter>" \
+macro index,pager AJ "<save-message>~/Mail/mail/Sort.Job.Gen<enter>" \
     "move message to the web archive"
 macro index,pager AP "<save-message>~/Mail/mail/Sort.Private<enter>" \
     "move message to the private archive"
+
+# Move message(s) to Spam/Verified by pressing "S"
+macro index S "<tag-prefix><enter-command>unset resolve<enter><tag-prefix><clear-flag>N<tag-prefix><enter-command>set resolve<enter><tag-prefix><save-message>=Spam.Verified<enter>" "file as Spam"
+macro pager S "<save-message>=Spam.Verified<enter>" "file as Spam"
 
 macro index,pager M "<pipe-message>abook --add-email-quiet<return>" "add sender to abook"
 
@@ -37,25 +41,26 @@ set query_command="abook --mutt-query '%s'"
 #set sendmail="/usr/bin/msmtp"               #Pfad zu dem Programm, das die Mails verschicken soll
 set envelope_from=yes                       #übergibt msmtp automatisch den richtigen Absender
 set edit_hdrs                               #Empfänger u.a. auch im Editor bearbeiten
-set signature ="~/.mutt/signatur"           #Datei, die den Text der Signatur enthält
-set attribution="%f schrieb am %d:"         #Zitatkennzeichnung in unserer Muttersprache :)
+# set attribution="%f schrieb am %d:"         #Zitatkennzeichnung in unserer Muttersprache :)
 
 set sort=threads                            #E-Mails werden nach Gesprächsverlauf und nach Datum sortiert
 set sort_aux=date-sent
 #set sort=date                              #würde alternativ zuerst nach Datum sortieren
 
 set date_format="%a, %d. %b %H:%M"          #gibt an, wie das Datum formatiert wird
-set index_format="%4C %Z %D %-22.22F (%?l?%4l&%4c?) %s"	#Format der Mail-Übersicht
+set index_format="%4C %Z %D %-22.22F (%?l?%4l&%4c?) %s" #Format der Mail-Übersicht
 set folder_format="%2C %8s %d %t %N %f"     #Format des Datei-Browsers
 set pager_index_lines=10                    #Anzahl der angezeigten Mails in der Übersicht
-set editor="vim +11"                         #Editor, der zum Verfassen der E-Mail benutzt wird, hier Vim beginnend auf Zeile 8
+set editor="vim +11"                         #Editor, der zum Verfassen der E-Mail benutzt wird, hier Vim beginnend auf Zeile 11
 set beep_new                                # bell on new mails
 set header_cache=$HOME/Mail/.hcache
 
 set timeout=15
-set mail_check=60                           # aktualisiere jede minute (offlineimap)
+set mail_check=60
 
 set sleep_time = 0                          #Speed up folders switch
+
+set metoo = yes
 
 unset allow_8bit                            #u.U. verbesserte Darstellung von Umlauten
 set charset="utf-8"
@@ -67,14 +72,14 @@ alternative_order text/plain text/html
 
 set index_format="%2C | %Z [%d] %-30.30F %X (%-4.4c) %s"
 
-# set up the sidebar, default not visible
-set sidebar_width=30
-set sidebar_visible=yes
-set sidebar_delim='|'
-set sidebar_sort=no
+# # set up the sidebar, default not visible
+# set sidebar_width=30
+# set sidebar_visible=yes
+# set sidebar_delim='|'
+# set sidebar_sort=no
 
-macro index b ‘<enter-command>toggle sidebar_visible<enter><refresh>’
-macro pager b ‘<enter-command>toggle sidebar_visible<enter><redraw-screen>’
+# macro index b ‘<enter-command>toggle sidebar_visible<enter><refresh>’
+# macro pager b ‘<enter-command>toggle sidebar_visible<enter><redraw-screen>’
 
 ##############################################################################
 # GnuPG
@@ -151,8 +156,10 @@ set pgp_good_sign="^gpg: Good signature from"
 # http://www.gnuterrypratchett.com/
 my_hdr X-Clacks-Overhead: GNU Terry Pratchett
 
-my_hdr X-Homepage: http://www.maximilian-huber.de
-my_hdr X-PGP-Key: http://www.maximilian-huber.de/gpg-pubkey.asc
+##############################################################################
+# notmuch
+##############################################################################
+source ~/.mutt/notmuch-mutt.rc
 
 ##############################################################################
 # Colors

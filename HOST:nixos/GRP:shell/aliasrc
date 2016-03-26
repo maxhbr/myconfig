@@ -4,13 +4,18 @@
 # needs:
 # vim, tmux, sudo, mutt
 
-alias vi="vim"
-#alias e="vim"
-alias :e="vim" #Typo
+alias asdf="setxkbmap -layout de,de -variant neo,nodeadkeys -option grp:shifts_toggle -option grp_led:scroll -option altwin:swap_lalt_lwin"
+
+if [ -x "$HOME/bin/emc" ]; then
+  alias vim="$HOME/bin/emc -forceTerminal"
+else
+  alias vim="emacsclient -t"
+fi
+alias pgp="gpg" #Typo
 alias vime="vim -u ~/.vimencrypt -x "
 alias gvime="gvim -u ~/.vimencrypt -x "
 alias tvim="tmux new vim"
-alias svim="sudo vim -u /home/mhuber/.vimrc "
+alias svim="sudo /usr/bin/vim -u /home/mhuber/.vimrc "
 
 alias tmux="tmux -2"
 alias tmx="tmux attach-session || tmux"
@@ -36,10 +41,42 @@ alias ssh="TERM=xterm ssh"
 
 man(){ /usr/bin/man $@ || which $@; }
 
-grepr() { grep -r "$@" * 2>/dev/null; }
+grepr() { grep -rns --color=always "$@" | grep -v Binärdatei 2>/dev/null; }
+grepri() { grepr -i "$@" }
+greprL() { grepr "$@" | less -R; }
 have() { type "$1" &> /dev/null; }
 
 alias gitDiff="git diff HEAD^ HEAD"
+
+# zathura() {
+#   command zathura "$@" &disown
+# }
+emacs(){
+  fork="true"
+  for var in "$@"; do
+    if [[ "$var" = "-nw" ]]; then
+      fork="false"
+      break
+    fi
+  done
+  if [[ "$fork" = "true" ]]; then
+    command emacs "$@" &disown
+  else
+    command emacs "$@"
+  fi
+}
+alias e="emacs"
+
+alias httptunnel="ssh -ND localhost:9567 vserver"
+
+alias g="git"
+# g() {
+#   if [  $# -eq 0 ]; then
+#     git fetch --all && git status
+#   else
+#     git $@
+#   fi
+# }
 
 #--------------------------------------------------------------------
 #   file specific
@@ -58,7 +95,7 @@ mkmv() {
 
 alias ls='ls --color=auto'
 alias ll='ls -alF'
-alias lll='ls -alF | less'
+alias lll='ls --color=always -alF | less -R'
 alias la='ls -CFA'
 alias l='ls -CF'
 alias l.='ls -dF .[a-zA-Z0-9]*' #only show dotfiles
@@ -67,6 +104,24 @@ lgrep() { ls -alF | egrep "$@"; }
 #keep track of folders
 #alias cd="pushd"
 #alias bd="popd"
+
+cdStack() {
+  DEFAULT_LIMIT=19
+  LIMIT=${1:-$DEFAULT_LIMIT}
+  for i in {1..$LIMIT..-1}; do
+    echo "$i: $(echo ~$i)"
+  done
+  if [ -n "$BASH_VERSION" ]; then
+    read -p "Where to go: " input
+  elif [ -n "$ZSH_VERSION" ]; then
+    read "input?Where to go: "
+  fi
+  if [ -n "$input" ]; then
+    if [ $input -eq $input 2>/dev/null ]; then
+      cd ~$input
+    fi
+  fi
+}
 
 cd() { #Automatically do an ls after each cd
   if [ -n "$1" ]; then
@@ -139,20 +194,20 @@ ffa() { find . -iname '*'$*'*' -ls 2>/dev/null ; }
 # Find a file with pattern $1 in name and Execute $2 on it:
 fe() { find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \; ; }
 
-e() {
-  for file in "$@"; do
-    if [ -f $file ] ; then
-      opt=$( tr '[:upper:]' '[:lower:]' <<<"$file" )
-      case $opt in
-        *.pdf) llpp $file ;;
-        *.djvu) apvlv $file ;;
-        *) vim $file ;;
-      esac
-    else
-      echo "'$file' is not a valid file"
-    fi
-  done
-}
+# e() {
+#   for file in "$@"; do
+#     if [ -f $file ] ; then
+#       opt=$( tr '[:upper:]' '[:lower:]' <<<"$file" )
+#       case $opt in
+#         *.pdf) llpp $file ;;
+#         *.djvu) apvlv $file ;;
+#         *) vim $file ;;
+#       esac
+#     else
+#       echo "'$file' is not a valid file"
+#     fi
+#   done
+# }
 
 # Extract files from nearly any archive
 # Usage: ex <archive_name>
@@ -164,7 +219,8 @@ ex() {
         *.tar.bz2) tar xjf $file ;;
         *.tar.gz) tar xzf $file ;;
         *.tar.xz) tar xvfJ $file ;;
-        *.tar.lzma) tar --lzma -xvf $file;;
+        *.xz) xz -d $file ;; 
+        *.tar.lzma) tar --lzma -xvf $file ;;
         *.bz2) bunzip2 $file ;;
         *.rar) unrar e $file ;;
         *.gz) gunzip $file ;;
@@ -176,6 +232,8 @@ ex() {
         *.7z) 7z x $file ;;
         # *.jar) jar xf $file ;;
         *.jar) unzip $file ;;
+        *.war) unzip $file ;;
+        *.ear) unzip $file ;;
         *.deb) ar xv $file ;;
         *)
           echo "'$file' of type '$opt' cannot be extracted via ex(), more info:"
@@ -367,8 +425,20 @@ myStopScreensaver(){
 }
 
 incoChrome(){
-  mkdir -p /tmp/incoChrome
-  chromium --incognito --user-data-dir="/tmp/incoChrome"
+  postfix=$(date +%s | sha256sum | base64 | head -c 32 ; echo)
+  mkdir -p "/tmp/incoChrome_$postfix" && \
+      /usr/bin/chromium --incognito \
+                        --user-data-dir="/tmp/incoChrome_$postfix" &disown
+}
+
+incoTorChrome(){
+  sudo systemctl start tor.service && {
+    postfix=$(date +%s | sha256sum | base64 | head -c 32 ; echo)
+    mkdir -p "/tmp/incoChrome_$postfix" && \
+        /usr/bin/chromium --incognito \
+                          --user-data-dir="/tmp/incoChrome_$postfix" \
+                          --proxy-server="socks://localhost:9050" &disown
+  }
 }
 
 alias mplayerampl="mplayer -af volume=10.1:0"
@@ -408,7 +478,7 @@ mpcFade() {
 #   documente / printing
 #-------------------------------------------------------------------{{{
 
-[[ -f ~/bin/univOpWrap ]] && alias p="~/bin/univOpWrap -f \".djvu:/usr/bin/zathura /usr/bin/llpp\""
+[[ -f ~/bin/univOpWrap ]] && alias p="~/bin/univOpWrap -r -f \".djvu:/usr/bin/zathura /usr/bin/llpp\""
 zathura() {
   command zathura "$@" &disown
 }
@@ -516,25 +586,28 @@ alias mymatlabRunFile="~/matlab/bin/matlab -nojvm -nodisplay -nosplash < "
 #   package management
 #-------------------------------------------------------------------{{{
 
-#nix
-alias nixin="nix-env -iA"
-alias nixin-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -iA"
-# alias nixupg="nix-env -u '*'"
-alias nixupg="nix-channel --update && nix-env --upgrade"
-alias nixTest="nix-shell '<nixpkgs>' -A"
-alias nixTestAlternativ="nix-shell -p"
-alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
-alias nixse="nix-env -qaP | grep "
-alias nixhsse="nix-env -f \"<nixpkgs>\" -qaP -A haskellPackages | grep "
-nixsel(){
+have nix-env && {
+  #nix
+  alias nixin="nix-env -iA"
+  alias nixin-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -iA"
+  # alias nixupg="nix-env -u '*'"
+  alias nixupg="nix-channel --update && nix-env --upgrade"
+  alias nixTest="nix-shell '<nixpkgs>' -A"
+  alias nixTestAlternativ="nix-shell -p"
+  alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
+  alias nixse="nix-env -qaP | grep "
+  nixsel(){
   nix-env -qaP | grep $1 | less
+  }
+  alias nixlist="nix-env -qa \*"
+
+  alias upg='nixupg'
+
+  alias nix-shell-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-shell"
+
+  #nixos
+  alias nixosupg="sudo nixos-rebuild switch --upgrade"
 }
-alias nixlist="nix-env -qa \*"
-
-alias upg='nixupg'
-
-#nixos
-alias nixosupg="sudo nixos-rebuild switch --upgrade"
 
 have pacman && {
   # remove orphan pacman packages and delete packages in the cache, which are
@@ -546,8 +619,8 @@ have pacman && {
       sudo pacman -Rs $(pacman -Qdtq)
     fi
 
-    echo "$(find /var/cache/pacman/pkg/ -type f -mtime +30 | wc -l) to old packages to remove from cache"
-    find /var/cache/pacman/pkg/ -type f -mtime +30 -exec sudo rm -v {} \;
+    echo "$(find /var/cache/pacman/pkg/ -type f -mtime +100 | wc -l) old packages to remove from cache"
+    find /var/cache/pacman/pkg/ -type f -mtime +100 -exec sudo rm -v {} \;
   }
 
   # Pacman alias examples
@@ -571,7 +644,11 @@ have pacman && {
   #   echo
   #   myRemOrphans
   # }
-  alias upg='pacupg && nixupg'
+  have nix-env && {
+      alias upg='pacupg && nixupg'
+  } || {
+      alias upg='pacupg'
+  }
 
   # Additional pacman alias examples
   alias pacupd='sudo pacman -Sy && sudo abs'
@@ -601,6 +678,10 @@ cabalupd() {
 #-------------------------------------------------------------------{{{
 
 startphp() { php -S 127.0.0.1:8080; }
+mydhcp() {
+  sudo ip link set $1 up
+  sudo dhcpcd -w -B $1
+}
 
 # gen QR-Code for a WiFi:
 genQrCode(){
@@ -648,12 +729,12 @@ myiscsiRoutine() {
 #   misc
 #-------------------------------------------------------------------{{{
 
+alias vbox="sudo modprobe vboxdrv && VirtualBox &disown"
+
 touchpadtoggle(){
   xdotool mousemove 0 0
   synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')
 }
-
-alias incognito="/usr/bin/chromium --incognito"
 
 # calc - simple calculator
 # usage: calc <equation>
@@ -690,7 +771,8 @@ dic(){
   else
     w3m -dump "http://pocket.dict.cc?s=\"$*\"" \
       | sed -r -e '/^([ ]{5,}.*)$/d' -e '1,2d' -e '/^$/d' -e '/^\[/d' \
-      | head -n $(( $(tput lines) - 3 ))
+      | less
+      # | head -n $(( $(tput lines) - 3 ))
   fi
 }
 
@@ -723,7 +805,7 @@ dic(){
       tmux new-session -s "${name}" "${file_path}" \; set-option status \; set set-titles-string "${name} (tmux@${HOST})"
     fi
   }
-  have mutt && mutt() { run_under_tmux 'mutt'; }
+  # have mutt && mutt() { run_under_tmux 'mutt'; }
   have ncmpcpp && ncmpcpp() { run_under_tmux 'ncmpcpp'; }
   #have finch && finch() { run_under_tmux 'finch'; }
   #have ekg2 && ekg2() { run_under_tmux 'ekg2'; }
