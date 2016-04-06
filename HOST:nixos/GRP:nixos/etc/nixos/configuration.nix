@@ -14,7 +14,9 @@ let
     vim
     tmux
     ranger
-    pmount
+    pmount fuse
+    acpi acpid
+    gnumake cmake automake
 
 # for development
     meld
@@ -27,35 +29,36 @@ let
 
 # For email setup
     mutt-with-sidebar
-    offlineimap
-    msmtp
-    gnupg
-    abook
-    notmuch
+    offlineimap msmtp gnupg abook notmuch
 
 # git
-    # gitAndTools.gitFull
-    git
+    gitAndTools.gitFull
+    # git
     # gitMinimal
     # gitAndTools.git-annex
 
 # encryption
     cryptsetup
 
+# password store
+    pass
+
 # tex
     (pkgs.texLiveAggregationFun { paths = [ pkgs.texLive pkgs.texLiveExtra pkgs.texLiveBeamer pkgs.texLiveCMSuper]; })
 
 # for the desktop environmen
     xlibs.xmodmap xlibs.xset xlibs.setxkbmap
+    xorg.xbacklight
+    slock
     arandr
     dmenu
     scrot
     unclutter
     feh
     redshift
-    rxvt_unicode_with-plugins
+    rxvt_unicode_with-plugins rxvt_unicode.terminfo
     roxterm
-    chromium
+    chromium luakit
     trayer networkmanagerapplet
     mupdf zathura llpp
     ] ++ hsPackages;
@@ -72,7 +75,6 @@ in {
   };
 
   boot = {
-    # kernelPackages = pkgs.linuxPackages_4_0;
     # kernelPackages = pkgs.linuxPackages_testing;
     kernelPackages = pkgs.linuxPackages_4_3;
     kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
@@ -94,13 +96,11 @@ in {
     useChroot = true;
     readOnlyStore = true;
     buildCores = 4;
-    binaryCaches = [
-      "http://cache.nixos.org/"
-      "http://hydra.nixos.org/"
-      "http://hydra.cryp.to/"
-    ];
     trustedBinaryCaches = [
-      "http://hydra.cryp.to/"
+      "https://cache.nixos.org" "https://hydra.snabb.co" "http://hydra.cryp.to/"
+    ];
+    binaryCaches = [
+      "https://cache.nixos.org" "https://hydra.snabb.co" "http://hydra.cryp.to/"
     ];
     extraOptions = ''
       gc-keep-outputs = true
@@ -110,7 +110,7 @@ in {
     '';
   };
 
-  nixpkgs.config.allowUnfree = true;
+  # nixpkgs.config.allowUnfree = true;
 
   networking = {
     networkmanager.enable = true;
@@ -155,9 +155,10 @@ in {
   time.timeZone = "Europe/Berlin";
 
   services = {
-    openssh.enable = true;
+    # openssh.enable = true;
     ntp.enable = true;
     printing.enable = true;
+    logind.extraConfig = "HandleLidSwitch=ignore";
     xserver = {
       enable = true;
       autorun = true;
@@ -192,7 +193,7 @@ in {
         '';
       };
 
-      # startGnuPGAgent = true;
+      startGnuPGAgent = true;
 
       synaptics.additionalOptions = ''
         Option "VertScrollDelta" "-100"
@@ -208,6 +209,22 @@ in {
 
     nixosManual.showManual = true;
     acpid.enable = true;
+#     tlp = {
+#       enable = true;
+#       extraConfig = ''
+# MAX_LOST_WORK_SECS_ON_BAT=15
+
+# # Battery charge thresholds (ThinkPad only, tp-smapi or acpi-call kernel module
+# # required). Charging starts when the remaining capacity falls below the
+# # START_CHARGE_TRESH value and stops when exceeding the STOP_CHARGE_TRESH value.
+# # Main / Internal battery (values in %)
+# START_CHARGE_THRESH_BAT0=75
+# STOP_CHARGE_THRESH_BAT0=90
+# # Ultrabay / Slice / Replaceable battery (values in %)
+# START_CHARGE_THRESH_BAT1=75
+# STOP_CHARGE_THRESH_BAT1=90
+#       '';
+#     };
   };
 
   users = {
@@ -226,12 +243,16 @@ in {
       docker.members = [ "mhuber" ];
     };
   };
+
   virtualisation = {
     docker.enable = true;
     virtualbox.host.enable = true;
   };
 
-  programs.zsh.enable = true;
+  programs = {
+    zsh.enable = true;
+    ssh.startAgent = false;
+  };
 
   system = {
     activationScripts.media = ''
@@ -243,25 +264,39 @@ in {
     };
   };
 
-  systemd.user.services = {
-    emacs = {
-      description = "Emacs: the extensible, self-documenting text editor";
-      serviceConfig = {
-        Type      = "forking";
-        ExecStart = "${pkgs.emacs}/bin/emacs --daemon --user=mhuber";
-        ExecStop  = "${pkgs.emacs}/bin/emacsclient --eval \"(kill-emacs)\"";
-        Restart   = "always";
-      };
-      wantedBy = [ "default.target" ];
-      environment = {
-        # Make sure aspell will find its dictionaries
-        ASPELL_CONF     = "dict-dir /run/current-system/sw/lib/aspell";
-        # Make sure locate will find its database
-        LOCATE_PATH     = "/var/cache/locatedb";
-      };
-      enable = true;
-    };
-  };
+  # systemd.user.services = {
+  #   emacs = {
+  #     description = "Emacs: the extensible, self-documenting text editor";
+  #     serviceConfig = {
+  #       Type      = "forking";
+  #       ExecStart = "${pkgs.emacs}/bin/emacs --daemon --user=mhuber";
+  #       ExecStop  = "${pkgs.emacs}/bin/emacsclient --eval \"(kill-emacs)\"";
+  #       Restart   = "always";
+  #     };
+  #     wantedBy = [ "default.target" ];
+  #     environment = {
+  #       SSH_AUTH_SOCK = "%t/keyring/ssh";
+  #       # Make sure aspell will find its dictionaries
+  #       ASPELL_CONF   = "dict-dir /run/current-system/sw/lib/aspell";
+  #       # Make sure locate will find its database
+  #       LOCATE_PATH   = "/var/cache/locatedb";
+  #     };
+  #     enable = true;
+  #   };
+  #   offlineimap = {
+  #     description = "Start offlineimap as a daemon";
+  #     serviceConfig = {
+  #       Type       = "forking";
+  #       ExecStart  = "${pkgs.offlineimap}/bin/offlineimap";
+  #       KillSignal = "SIGUSR2";
+  #       Restart    = "always";
+  #     };
+  #     wantedBy = [ "multi-user.target" ];
+  #     wants = [ "network-online.target" ];
+  #     after = [ "network.target" ];
+  #     enable = true;
+  #   };
+  # };
 }
 
 # vim:set ts=2 sw=2 sts=2 et foldmethod=marker foldlevel=0 foldmarker={{{,}}}:
