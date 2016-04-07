@@ -17,6 +17,7 @@ let
     pmount fuse
     acpi acpid
     gnumake cmake automake
+    # grml-zsh-config
 
 # for development
     meld
@@ -230,7 +231,7 @@ in {
   users = {
     extraUsers.mhuber = {
       isNormalUser = true;
-      group = "users";
+      group = "mhuber";
       uid = 1000;
       extraGroups = [ "wheel" "audio" "video" "vboxusers" "docker" "networkmanager" "dialout" ];
       createHome = true;
@@ -239,6 +240,9 @@ in {
       password = "dummy";
     };
     extraGroups = {
+      mhuber = {
+        gid = 1000;
+      };
       vboxusers.members = [ "mhuber" ];
       docker.members = [ "mhuber" ];
     };
