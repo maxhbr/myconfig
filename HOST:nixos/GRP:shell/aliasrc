@@ -413,7 +413,7 @@ my_power_settings() {
 # alias diclean='docker images | grep '\''<none>'\'' | grep -P '\''[1234567890abcdef]{12}'\'' -o | xargs -L1 docker rmi'
 # alias dclean='docker ps -a | grep -v '\''CONTAINER\|_config\|_data\|_run'\'' | cut -c-12 | xargs docker rm'
 alias diclean='docker images -q |xargs docker rmi'
-alias dclean='docker ps -q |xargs docker rm'
+alias dclean='docker ps -a -q |xargs docker rm'
 
 #-------------------------------------------------------------------}}}
 #   multimedia
@@ -532,6 +532,8 @@ alias lprFit="lpr -o sides=two-sided-long-edge -o fit-to-page -o media=A4 "
 alias lprFitL="lpr -o sides=two-sided-short-edge -o landscape -o fit-to-page -o media=A4 "
 
 alias myPdfCrop="pdfcrop --margins \"20 30 20 40\""
+
+alias myPdfCollect="gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -sOutputFile=collected.pdf *.pdf"
 
 #   PDFs
 
