@@ -47,8 +47,8 @@ ZSHDDIR="${HOME}/.config/zsh.d"
 HISTSIZE=10000
 SAVEHIST="${HISTSIZE}"
 # export EDITOR="/usr/bin/vim"
-export EDITOR="/usr/bin/vim"
-export VISUAL="/usr/bin/vim -p -X"
+export EDITOR="vim"
+export VISUAL="vim -p -X"
 export TMP="$HOME/tmp"
 [[ ! -d "${TMP}" ]] && mkdir "${TMP}"
 export TEMP="$TMP"
@@ -65,12 +65,12 @@ export ncpus=3
 
 ###############################################################################
 # Not all servers have terminfo for rxvt-256color. :<
-if [ "${TERM}" = 'rxvt-256color' ] \
-    && ! [ -f '/usr/share/terminfo/r/rxvt-256color' ] \
-    && ! [ -f '/lib/terminfo/r/rxvt-256color' ] \
-    && ! [ -f "${HOME}/.terminfo/r/rxvt-256color" ]; then
-  export TERM='rxvt-unicode'
-fi
+# if [ "${TERM}" = 'rxvt-256color' ] \
+#     && ! [ -f '/usr/share/terminfo/r/rxvt-256color' ] \
+#     && ! [ -f '/lib/terminfo/r/rxvt-256color' ] \
+#     && ! [ -f "${HOME}/.terminfo/r/rxvt-256color" ]; then
+#   export TERM='rxvt-unicode'
+# fi
 
 autoload -U compinit
 compinit

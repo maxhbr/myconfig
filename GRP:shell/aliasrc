@@ -95,7 +95,7 @@ mkmv() {
 
 alias ls='ls --color=auto'
 alias ll='ls -alF'
-alias lll='ls -alF | less'
+alias lll='ls --color=always -alF | less -R'
 alias la='ls -CFA'
 alias l='ls -CF'
 alias l.='ls -dF .[a-zA-Z0-9]*' #only show dotfiles
@@ -164,7 +164,7 @@ alias hducksall='du -cs .??* |sort -rn'
 #have ranger && {
   ranger-cd() {
     tempfile='/tmp/chosendir'
-    /usr/bin/ranger --choosedir="$tempfile" "${@:-$(pwd)}"
+    ranger --choosedir="$tempfile" "${@:-$(pwd)}"
     test -f "$tempfile" &&
     if [ "$(cat -- "$tempfile")" != "$(echo -n `pwd`)" ]; then
       cd -- "$(cat "$tempfile")"
@@ -596,12 +596,14 @@ alias mymatlabRunFile="~/matlab/bin/matlab -nojvm -nodisplay -nosplash < "
 have nix-env && {
   #nix
   alias nixin="nix-env -iA"
+  alias nixin-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -iA"
   # alias nixupg="nix-env -u '*'"
   alias nixupg="nix-channel --update && nix-env --upgrade"
   alias nixTest="nix-shell '<nixpkgs>' -A"
   alias nixTestAlternativ="nix-shell -p"
   alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
   alias nixse="nix-env -qaP | grep "
+  alias nixse-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -qaP | grep "
   nixsel(){
   nix-env -qaP | grep $1 | less
   }
