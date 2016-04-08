@@ -1,4 +1,5 @@
 ~/.mutt/mutt-colors
+~/.mutt/callGpg.sh
 ~/.muttrc
 ~/bin/mailclient.sh
 ~/bin/mailrun.sh

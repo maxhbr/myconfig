@@ -17,7 +17,9 @@ use Sys::Hostname qw( hostname );
 use Term::ANSIColor qw( colored );
 
 my %predefinedOutDirs = (
-    't450s' => './', # default host is t450s
+    # desktops:
+    't450s' => './',
+    'nixos' => './',
     );
 my $updateFiles  = 1; # default: 1
 my $useGit       = 1; # default: 1
@@ -116,7 +118,8 @@ sub update{
             print MDATA tightenHome($_[0]) . "\n";
             print MDATA sprintf("%04o", $stat[2] & 07777) . "\n";
             print MDATA $stat[4] . "\n";
-            print MDATA $stat[5] . "n";
+            print MDATA $stat[5] . "\n";
+            print MDATA hostname() . "\n";
             close MDATA;
             system("git", "add", $_[1]) if $useGit;
         }
@@ -125,26 +128,56 @@ sub update{
         # parameters are:
         #   topic
         #   path of src file
+
+        sub isLastUpdatedByCurrentHost{
+            # parameters are:
+            #   path of mdata
+            if (-f $_[0] && open(my $fh, '<:encoding(UTF-8)', $_[0])){
+                chomp(my @mdata = <$fh>);
+                close $fh;
+                return chomp($mdata[4]) eq hostname();
+            }
+            return 1;
+        }
+
         my $target = getTargetName($_[0],$_[1],0);
-        if(compare($_[1],$target) != 0 || $forceUpdates) {
+        my $mtarget = getTargetName($_[0],$_[1],1);
+        if(!(-f $target) || compare($_[1],$target) != 0 || $forceUpdates) {
             my($tFilename, $tDir, $suffix) = fileparse($target);
             print "update: @{[colored(['bold green'], $tFilename,'')]} (of topic: $_[0])\n";
-            if ( !-d $tDir && !$dryRun) {
+            if (!-d $tDir && !$dryRun) {
                 make_path $tDir or die colored(['red'], "Failed to create: $tDir");
             }
-            copy($_[1],$target) or die colored(['red'], "Copy failed: $!", "")
-                if !$dryRun;
+            if (isLastUpdatedByCurrentHost($mtarget) || $forceUpdates){
+                copy($_[1],$target) or die colored(['red'], "Copy failed: $!", "")
+                    if !$dryRun;
+            }else{
+                system("touch",$target)
+                    if !$dryRun;
+                system("meld", $_[1], $target)
+                    if !$dryRun;
+            }
             system("git", "add", $target) if $useGit;
-            savePermissions($_[1],getTargetName($_[0],$_[1],1))
+            savePermissions($_[1],$mtarget)
                 if !$dryRun;
         }
+    }
+    sub isOneOfTheHosts{
+        # parameters are:
+        #   hostlist, i.e. "host1,host2,host3"
+        my @hosts = split /,/, $_[0];
+        for( @hosts ){
+            return 1 if hostname() eq chomp($_);
+        }
+        return 0;
     }
 
     ############################################################################
     # do everything
     foreach my $filesFile (glob('_files/*')) {
         my @curTopicParts = split /@/, basename($filesFile);
-        if (@curTopicParts > 1 && !($curTopicParts[1] eq hostname())) { next; }
+        #TODO: komma seperated hosts
+        if (@curTopicParts > 1 && !(isOneOfTheHosts($curTopicParts[1]))) { next; }
         my $curTopic = $curTopicParts[0];
         print "update topic: @{[colored(['bold green'], $curTopic,'')]}\n";
         writeTopicReadme($curTopic);
