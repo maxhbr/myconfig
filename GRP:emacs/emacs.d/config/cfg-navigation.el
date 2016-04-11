@@ -7,21 +7,21 @@
   (switch-to-buffer-other-frame (Buffer-menu-buffer t)))
 
 (define-key Buffer-menu-mode-map "5"
-            'Buffer-menu-other-frame)
+  'Buffer-menu-other-frame)
 
-;; (use-package sr-speedbar
-;; 	:ensure t)
+(use-package sr-speedbar
+  :ensure t)
 
 (use-package neotree
-	:ensure t
-	:config
+  :ensure t
+  :config
   (global-set-key [f8] 'neotree-toggle)
-	(add-hook 'neotree-mode-hook
-						(lambda ()
-							(define-key evil-normal-state-local-map (kbd "TAB") 'neotree-enter)
-							(define-key evil-normal-state-local-map (kbd "SPC") 'neotree-enter)
-							(define-key evil-normal-state-local-map (kbd "q") 'neotree-hide)
-							(define-key evil-normal-state-local-map (kbd "RET") 'neotree-enter))))
+  (add-hook 'neotree-mode-hook
+            (lambda ()
+              (define-key evil-normal-state-local-map (kbd "TAB") 'neotree-enter)
+              (define-key evil-normal-state-local-map (kbd "SPC") 'neotree-enter)
+              (define-key evil-normal-state-local-map (kbd "q") 'neotree-hide)
+              (define-key evil-normal-state-local-map (kbd "RET") 'neotree-enter))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (use-package recentf
