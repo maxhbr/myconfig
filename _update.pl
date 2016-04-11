@@ -167,7 +167,8 @@ sub update{
         #   hostlist, i.e. "host1,host2,host3"
         my @hosts = split /,/, $_[0];
         for( @hosts ){
-            return 1 if hostname() eq chomp($_);
+            print chomp($_), hostname(), "\n";
+            return 1 if hostname() eq $_;
         }
         return 0;
     }
