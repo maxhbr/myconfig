@@ -135,7 +135,7 @@ sub update{
             if (-f $_[0] && open(my $fh, '<:encoding(UTF-8)', $_[0])){
                 chomp(my @mdata = <$fh>);
                 close $fh;
-                return chomp($mdata[4]) eq hostname();
+                return trim($mdata[4]) eq hostname();
             }
             return 1;
         }
