@@ -352,6 +352,7 @@ myConfig xmproc = withUrgencyHook NoUrgencyHook $
         , focusFollowsMouse  = False -- see: focusFollow
         , borderWidth        = 2
         -- , modMask            = mod4Mask
+        , modMask            = mod1Mask
         , workspaces         = myWorkspaces
         , normalBorderColor  = "#333333"
         , focusedBorderColor = "#dd0000"
