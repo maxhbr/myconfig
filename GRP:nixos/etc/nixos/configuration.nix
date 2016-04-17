@@ -6,6 +6,9 @@ let
     cabal-install
     ghc hlint pandoc pointfree pointful hdevtools
   ];
+  workPackages = with pkgs; [
+    networkmanager_openvpn
+  ];
   myPackages = with pkgs; [
     kbd
     wget curl elinks w3m
@@ -22,7 +25,7 @@ let
 
 # for development
     meld
-    leiningen clojure
+    # leiningen clojure
     stack cabal-install cabal2nix
     python python3
 
@@ -50,6 +53,7 @@ let
 # for the desktop environmen
     xlibs.xmodmap xlibs.xset xlibs.setxkbmap
     xorg.xbacklight
+    xclip
     slock
     arandr
     dmenu
@@ -61,7 +65,10 @@ let
     chromium luakit
     trayer networkmanagerapplet
     mupdf zathura llpp
-    ] ++ hsPackages;
+
+# testing
+    # usb-modeswitch dhcpcd
+    ] ++ hsPackages ++ workPackages;
 ###############################################################################
 in {
   imports =
@@ -87,8 +94,13 @@ in {
  #  };
     loader.gummiboot.enable = true;
     initrd = {
-        supportedFilesystems = [ "luks" ];
-        luks.devices = [ { device = "/dev/sda2"; name = "crypted"; } ];
+      supportedFilesystems = [ "luks" ];
+      luks.devices = [ {
+        device = "/dev/sda2";
+        name = "crypted";
+        preLVM = true;
+        allowDiscards = true;
+      } ];
     };
   };
 
@@ -157,7 +169,10 @@ in {
   services = {
     # openssh.enable = true;
     ntp.enable = true;
-    printing.enable = true;
+    printing = {
+      enable = true;
+      drivers = [ pkgs.gutenprint pkgs.hplip ];
+    };
     logind.extraConfig = "HandleLidSwitch=ignore";
     xserver = {
       enable = true;
@@ -269,7 +284,7 @@ in {
       channel = https://nixos.org/channels/nixos-unstable;
     };
   };
-  security.setuidPrograms = [ "slock" "pmount" ];
+  security.setuidPrograms = [ "slock" "pmount" "pumount" ];
 
   # systemd.user.services = {
   #   emacs = {
