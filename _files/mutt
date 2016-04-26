@@ -4,3 +4,4 @@
 ~/bin/mailclient.sh
 ~/bin/mailrun.sh
 /etc/systemd/system/offlineimap@.service
+~/.gnupg/toMutt.pl

@@ -141,7 +141,8 @@ sub dockedConfig{
 
 ################################################################################
 sub commonConfig{
-    system("feh --bg-center \"$background\"");
+    # system("feh --bg-center \"$background\"");
+    system("feh --bg-scale \"$background\"");
     system("setxkbmap -layout de,de -variant neo,nodeadkeys -option grp:shifts_toggle -option grp_led:scroll -option altwin:swap_lalt_lwin")
 }
 

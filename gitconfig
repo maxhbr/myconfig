@@ -20,6 +20,12 @@
     dt       = difftool --dir-diff
     changes  = diff --name-status -r
     diffstat = diff --stat -r
+    sortdiff = !sh -c 'git diff "$@" | grep "^[+-]" | sort --key=1.2 | uniq -u -s1'
+    
+
+    ri       = rebase --interactive
+    rc       = rebase --continue
+    ra       = rebase --abort
 
     mt       = mergetool --no-prompt
     l        = log
@@ -29,6 +35,12 @@
 
     whatis   = show -s --pretty='tformat:%h (%s, %ad)' --date=short
     pwhatis  = show -s --pretty='tformat:%h, %s, %ad' --date=short
+
+    new = !sh -c 'git log $1@{1}..$1@{0} "$@"'
+
+    remadd = "!f() { \
+                     git remote add $1 https://github.com/$2.git; \
+                   }; f"
 
     # Pretty graphs
     lol      = log --graph --decorate --pretty=oneline --abbrev-commit
