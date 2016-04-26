@@ -14,6 +14,10 @@
     f        = fetch --all
 
     d        = diff
+    d1       = diff HEAD~1
+    d2       = diff HEAD~2
+    d3       = diff HEAD~3
+    d4       = diff HEAD~4
     ds       = diff --stat -r
     dd       = diff --word-diff=color
     dw       = diff --color-words="[^[:space:],;:_-]+"
@@ -41,6 +45,7 @@
     remadd = "!f() { \
                      git remote add $1 https://github.com/$2.git; \
                    }; f"
+    remotes = remote -v
 
     # Pretty graphs
     lol      = log --graph --decorate --pretty=oneline --abbrev-commit
@@ -72,8 +77,8 @@
 [credential]
 	helper = cache --timeout=3600
 [filter "lfs"]
-	clean = git lfs clean %f
-	smudge = git lfs smudge %f
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
 	required = true
 # [mergetool "fancymeld"]
 #   cmd = meld $LOCAL $BASE $REMOTE -o $MERGED --diff $LOCAL $BASE $REMOTE --diff $BASE $LOCAL --diff $BASE $REMOTE --auto-merge

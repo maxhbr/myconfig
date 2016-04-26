@@ -123,7 +123,7 @@ sub undockedConfig{
 sub dockedConfig{
     sub setupDockedOutputs{
         addToXrandrCmd($lvdsOutput,"--mode 1920x1080 --pos 0x0 --rotate normal");
-        
+
         my $modifier = ($xrandr =~ /1920x1080\+1920\+0/) ? "--same-as" : "--right-of";
 
         foreach my $output (@dockedOutputs) {
