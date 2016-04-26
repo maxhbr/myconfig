@@ -74,6 +74,7 @@ alias e="emacs"
 alias httptunnel="ssh -ND localhost:9567 vserver"
 
 alias g="git"
+alias t="tig"
 # g() {
 #   if [  $# -eq 0 ]; then
 #     git fetch --all && git status
