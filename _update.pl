@@ -135,6 +135,7 @@ sub update{
             if (-f $_[0] && open(my $fh, '<:encoding(UTF-8)', $_[0])){
                 chomp(my @mdata = <$fh>);
                 close $fh;
+                sub trim { my $s = shift; $s =~ s/^\s+|\s+$//g; return $s };
                 return trim($mdata[4]) eq hostname();
             }
             return 1;
