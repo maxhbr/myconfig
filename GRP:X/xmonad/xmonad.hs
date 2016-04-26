@@ -116,8 +116,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) =
         , ((m__, xK_g     ), spawn "~/bin/emc || emacs")
         , ((m__, xK_q     ), spawn "xmonad --recompile; xmonad --restart") -- Restart xmonad
         , ((msc, xK_q     ), io exitSuccess) -- Quit xmonad
-        , ((m__, xK_p     ), spawn "`dmenu_run`")
-        -- , ((m__, xK_p     ), spawn "`dmenu_path | yeganesh`")
+        -- , ((m__, xK_p     ), spawn "`dmenu_run`")
+        , ((m__, xK_p     ), spawn "`dmenu_path | yeganesh`")
         , ((m__, xK_x     ), shellPrompt defaultXPConfig)
 
 

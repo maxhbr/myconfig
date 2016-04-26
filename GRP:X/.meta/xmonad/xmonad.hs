@@ -1,5 +1,5 @@
 ~/.xmonad/xmonad.hs
-0644
+0600
 1000
 1000
-nixos
+t450s
