@@ -156,13 +156,15 @@ set pgp_good_sign="^gpg: Good signature from"
 # http://www.gnuterrypratchett.com/
 my_hdr X-Clacks-Overhead: GNU Terry Pratchett
 
-##############################################################################
-# sidebar 
-##############################################################################
+source `FILE=$HOME/.gnupg/gpg_groups.mutt; if [ ! -s "$FILE" ]; then FILE=/dev/null;fi;echo "$FILE"`
 
-set sidebar_visible = yes
-macro index b '<enter-command>toggle sidebar_visible<enter><refresh>'
-macro pager b '<enter-command>toggle sidebar_visible<enter><redraw-screen>'
+# ##############################################################################
+# # sidebar 
+# ##############################################################################
+
+# set sidebar_visible = yes
+# macro index b '<enter-command>toggle sidebar_visible<enter><refresh>'
+# macro pager b '<enter-command>toggle sidebar_visible<enter><redraw-screen>'
 
 ##############################################################################
 # notmuch
