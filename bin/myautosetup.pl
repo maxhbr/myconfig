@@ -16,6 +16,7 @@ my $lvdsOutput = "eDP1";
 my @mainOutputs = ("DP2", "DP1", "DP1-8", "HDMI1", "HDMI2");
 my @dockedOutputs = ("DP2-1", "DP2-2", "DP2-3");
 my $background = "/home/mhuber/.background-image";
+my @alsaOutputs = ("CODEC" => "on", "PCH" => "off");
 
 ################################################################################
 ##  prepare                                                                   ##
@@ -148,15 +149,19 @@ sub commonConfig{
 
 ################################################################################
 sub setupSound{
-    sub configureSoundCardIfNotPredefined{
-        $alsaOutput eq "" ?
-            configureSoundCard($_[0]) :
-            configureSoundCard($alsaOutput);
-    }
     sleep(1);
-    configureSoundCardIfNotPredefined("PCH");
-    if (! $docked){
-        system("amixer -q set Master off");
+    if ($alsaOutput eq ""){
+        my $asoundCards = `cat /proc/asound/cards`;
+        while (@alsaOutputs) {
+            my ($output, $defaultState) = splice @alsaOutputs, 0, 2;
+            if($asoundCards =~ /$output/) {
+                configureSoundCard($output);
+                system("amixer -q set Master $defaultState");
+                last;
+            }
+        }
+    }else{
+        configureSoundCard($alsaOutput);
     }
 }
 
