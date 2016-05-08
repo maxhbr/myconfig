@@ -158,13 +158,19 @@ my_hdr X-Clacks-Overhead: GNU Terry Pratchett
 
 source `FILE=$HOME/.gnupg/gpg_groups.mutt; if [ ! -s "$FILE" ]; then FILE=/dev/null;fi;echo "$FILE"`
 
-# ##############################################################################
-# # sidebar 
-# ##############################################################################
+##############################################################################
+# sidebar 
+##############################################################################
 
-# set sidebar_visible = yes
-# macro index b '<enter-command>toggle sidebar_visible<enter><refresh>'
-# macro pager b '<enter-command>toggle sidebar_visible<enter><redraw-screen>'
+set sidebar_width=40
+
+set sidebar_visible = yes
+
+set sidebar_delim='|'
+set sidebar_sort=yes
+
+macro index b '<enter-command>toggle sidebar_visible<enter><refresh>'
+macro pager b '<enter-command>toggle sidebar_visible<enter><redraw-screen>'
 
 ##############################################################################
 # notmuch
