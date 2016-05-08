@@ -16,6 +16,7 @@ my %toLink = (
     'https://github.com/AndreaCrotti/yasnippet-snippets'   => '~/.emacs.d/snippets',
     'https://github.com/jwiegley/use-package'              => '~/.emacs.d/use-package',
     'https://github.com/jrosdahl/maildirproc'              => '~/Mail/maildirproc',
+    'https://github.com/monky-hs/monky'                    => '~/.xmonad/monky'
     );
 
 while ( my ($url, $target) = each(%toLink) ) {
