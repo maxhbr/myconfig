@@ -129,12 +129,6 @@
  '(haskell-process-log t)
  '(haskell-process-suggest-remove-import-lines t)
  '(haskell-process-type (quote cabal-repl))
- '(org-file-apps
-   (quote
-    ((auto-mode . emacs)
-     ("\\.mm\\'" . default)
-     ("\\.x?html?\\'" . default)
-     ("\\.pdf\\'" . "zathura %s"))))
  '(undo-tree-history-directory-alist (\` (("." \, (expand-file-name "~/.emacs.d/.cache/"))))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
