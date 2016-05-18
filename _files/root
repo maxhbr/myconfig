@@ -5,6 +5,7 @@
 ~/.inputrc
 ~/.ncmpcpp/config
 ~/.tmux.conf
+~/.vagrant.d/Vagrantfile
 # ~/bin/create_ap
 # ~/bin/disp-controll
 ~/bin/gitFindBigFiles.sh
