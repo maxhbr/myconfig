@@ -8,6 +8,8 @@ let
   ];
   workPackages = with pkgs; [
     networkmanager_openvpn
+    rdesktop
+    openjdk
   ];
   myPackages = with pkgs; [
     kbd
@@ -22,12 +24,15 @@ let
     gnumake cmake automake
     usbutils
     # grml-zsh-config
+    # oh-my-zsh
+    # nix-zsh-completions
 
 # for development
     meld
     # leiningen clojure
     stack cabal-install cabal2nix
     python python3
+    ruby
 
 # Virtualization / Containerization
     vagrant
@@ -51,23 +56,17 @@ let
     (pkgs.texLiveAggregationFun { paths = [ pkgs.texLive pkgs.texLiveExtra pkgs.texLiveBeamer pkgs.texLiveCMSuper]; })
 
 # for the desktop environmen
+    arandr
+    slock dmenu unclutter redshift
     xlibs.xmodmap xlibs.xset xlibs.setxkbmap
     xorg.xbacklight
     xclip
-    slock
-    arandr
-    dmenu
-    scrot
-    unclutter
     feh
-    redshift
+    scrot
     rxvt_unicode_with-plugins rxvt_unicode.terminfo
     chromium luakit
-    trayer networkmanagerapplet
+    # trayer networkmanagerapplet
     mupdf zathura llpp
-
-# testing
-    # usb-modeswitch dhcpcd
     ] ++ hsPackages ++ workPackages;
 ###############################################################################
 in {
@@ -184,6 +183,7 @@ in {
           enable = true;
           enableContribAndExtras = true;
         };
+        # i3.enable = true;
         default = "xmonad";
       };
 
