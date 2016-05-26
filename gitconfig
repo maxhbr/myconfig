@@ -2,13 +2,16 @@
 [user]
     name = maximilianhuber
     email = mail@maximilian-huber.de
+    signingkey = 32CA3654
 [alias]
     s        = status
     s        = status --short --branch
     a        = add
     c        = commit
     cm       = commit -m
+    cma      = commit -am
     ca       = commit --amend
+    caa      = commit --amend -a
     co       = checkout
     cob      = checkout -b
     f        = fetch --all

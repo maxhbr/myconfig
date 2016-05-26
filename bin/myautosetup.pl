@@ -26,6 +26,7 @@ my $rotate = "normal";
 my $noXrandr = 0;
 my $alsaOutput = "";
 my $primaryCountStart = 0;
+my $sameAs = 0;
 
 GetOptions(
     'rotate=s'    => \$rotate,
@@ -34,6 +35,7 @@ GetOptions(
     'noXrandr'    => \$noXrandr,
     'primOutNr=i' => \$primaryCountStart,
     'setSound=s'  => \$alsaOutput,
+    'sameAs'      => \$sameAs,
 ) or die "Usage: $0 \n\t[--rotate=rotation]\n\t[--primOutNr=0]\n\t[--setSound=CardName/CardNumber]\n\t[--docked/--unDocked]\n\t[--noXrandr]\n";
 
 my $acPresent = `acpi -a | grep -c on-line`;
@@ -103,11 +105,11 @@ sub configureSoundCard{
 sub undockedConfig{
     sub toggleMainOutputs{
         addToXrandrCmd($lvdsOutput,"--mode 1920x1080 --pos 0x0 --rotate normal @{[isPrimary()]}");
-        my $defaultPosition = "--right-of"; # --above
+        my $defaultPosition = $sameAs ? "--mode 1920x1080 --pos 0x0" : "--auto --right-of $lvdsOutput"; 
         foreach my $output (@mainOutputs) {
             if ($xrandr =~ /$output connected \(/ ||
                 $xrandr =~ /$output connected \w \(/){
-                addToXrandrCmd($output,"--auto $defaultPosition $lvdsOutput --rotate $rotate @{[isPrimary()]}");
+                addToXrandrCmd($output,"$defaultPosition --rotate $rotate @{[isPrimary()]}");
             }elsif ($xrandr =~ /$output connected/){
                 addToXrandrCmd($output,"--rotate normal --off");
             }
