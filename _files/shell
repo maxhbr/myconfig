@@ -4,6 +4,7 @@
 ~/.bashrc
 ~/.zlogin
 ~/.zprofile
+~/.zshrc
 ~/.zshrc.local
 ~/.zshrc.pre
 ~/.zshrc.z
