@@ -169,8 +169,8 @@ set sidebar_visible = yes
 set sidebar_delim='|'
 set sidebar_sort=yes
 
-macro index b '<enter-command>toggle sidebar_visible<enter><refresh>'
-macro pager b '<enter-command>toggle sidebar_visible<enter><redraw-screen>'
+macro index B '<enter-command>toggle sidebar_visible<enter><refresh>'
+macro pager B '<enter-command>toggle sidebar_visible<enter><redraw-screen>'
 
 ##############################################################################
 # notmuch
