@@ -58,15 +58,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (use-package diminish
   :ensure t)
-(load-library "cfg-helm")
 (load-library "cfg-flycheck")
 (load-library "cfg-flyspell")
 (load-library "cfg-gitGutter")
 (load-library "cfg-completion")
 (load-library "cfg-vcs")
 (load-library "cfg-tramp")
-(use-package tramp
-  :ensure t)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; advanced behaviour and styling
 (load-library "cfg-undoTree")
@@ -75,6 +72,11 @@
 (load-library "cfg-keys")
 (load-library "cfg-navigation")
 (load-library "cfg-cleanup")
+;;{
+    (load-library "cfg-helm")
+    (load-library "cfg-ido")
+    ;; (load-library "cfg-smex")
+;;}
 (use-package sbt-mode
   :ensure t)
 (use-package whitespace

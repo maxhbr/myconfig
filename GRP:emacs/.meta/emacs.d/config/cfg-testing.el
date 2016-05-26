@@ -1,4 +1,5 @@
 ~/.emacs.d/config/cfg-testing.el
 0644
 1000
-1000n
+1000
+nixos
