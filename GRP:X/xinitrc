@@ -45,10 +45,11 @@ rfkill unblock all &
 
 # export LOCALE_ARCHIVE="/nix/store/2mbqc6p36xlyl21d4mf1zhmprmqijwkk-glibc-locales-2.21/lib/locale/locale-archive"
 
-if [[ -f ~/.nix-profile/bin/xmonad ]]; then
-  exec dbus-launch ~/.nix-profile/bin/xmonad
-elif [[ -f ~/.cabal/bin/xmonad ]]; then
-  exec dbus-launch ~/.cabal/bin/xmonad
-else
-  exec dbus-launch /usr/bin/xmonad
-fi
+# if [[ -f ~/.nix-profile/bin/xmonad ]]; then
+#   exec dbus-launch ~/.nix-profile/bin/xmonad
+# elif [[ -f ~/.cabal/bin/xmonad ]]; then
+#   exec dbus-launch ~/.cabal/bin/xmonad
+# else
+#   exec dbus-launch /usr/bin/xmonad
+# fi
+exec dbus-launch xmonad
