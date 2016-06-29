@@ -10,6 +10,7 @@ use Term::ANSIColor qw( colored );
 
 my %toLink = (
     'https://github.com/zsh-users/zsh-syntax-highlighting' => '~/.zsh/zsh-syntax-highlighting',
+    'https://github.com/zsh-users/zsh-syntax-highlighting' => '~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting',
     # 'https://github.com/zsh-users/antigen.git'             => '~/.zsh/antigen',
     # 'https://github.com/tarjoilija/zgen.git'               => '~/.zsh/zgen',
     # 'https://github.com/Tarrasch/antigen-hs.git'           => '~/.zsh/antigen-hs/',
