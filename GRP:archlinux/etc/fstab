@@ -4,8 +4,8 @@
 # UUID=cf93cdce-0520-4ad1-a894-a999436bfcb3
 /dev/mapper/tank-home /home       ext4        rw,relatime,data=ordered  0 2
 
-# UUID=29706ba4-5060-4622-9be8-c5b7881ff801
-/dev/mapper/tank-var  /var        ext4        rw,relatime,data=ordered  0 2
+# swap
+UUID=cae8a6bb-179e-40b0-be63-7335652095bd none swap defaults 0 0
 
 # UUID=3104-18B7
 /dev/sda1             /boot       vfat        rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro  0 2
