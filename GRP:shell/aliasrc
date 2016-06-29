@@ -422,7 +422,14 @@ dclean(){
 }
 diclean(){
     # call `dclean -a` to clean all images
-    docker images -q $1 |xargs docker rmi
+    remAll() {
+        docker images -q -a |xargs docker rmi
+    }
+    remUntagged() {
+        docker images | awk '/^<none>/ {print $3}' |xargs docker rmi
+    }
+
+    [[ "$1" == "-a" ]] && remAll || remUntagged
 }
 dssh(){
     docker exec -i -t $1 bash

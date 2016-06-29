@@ -79,7 +79,11 @@ source $ZSH/oh-my-zsh.sh
 # [[ -d $HOME/perl5/bin ]] && export PATH=$HOME/perl5/bin:$PATH
 [[ -d $HOME/.cabal/bin ]] && export PATH=$HOME/.cabal/bin:$PATH
 [[ -d $HOME/.local/bin ]] && export PATH=$HOME/.local/bin:$PATH
-[[ -d $HOME/.gem/ruby/2.2.0/bin ]] && export PATH=$PATH:$HOME/.gem/ruby/2.2.0/bin
+[[ -d $HOME/.gem/ruby/2.3.0/bin ]] && {
+    export PATH=$PATH:$HOME/.gem/ruby/2.3.0/bin
+} || {
+    [[ -d $HOME/.gem/ruby/2.2.0/bin ]] && export PATH=$PATH:$HOME/.gem/ruby/2.2.0/bin
+}
 
 PATH="$HOME/perl5/bin${PATH+:}${PATH}"; export PATH;
 PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB+:}${PERL5LIB}"; export PERL5LIB;
