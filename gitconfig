@@ -13,6 +13,9 @@
     ca       = commit --amend
     caa      = commit --amend -a
     co       = checkout
+    # col      = "!f() { \
+    #                  git checkout -b $2 $1/$2; \
+    #                }; f"
     cob      = checkout -b
     f        = fetch --all
 
@@ -22,6 +25,10 @@
     d3       = diff HEAD~3
     d4       = diff HEAD~4
     ds       = diff --stat -r
+    ds1      = diff --stat -r HEAD~1
+    ds2      = diff --stat -r HEAD~2
+    ds3      = diff --stat -r HEAD~3
+    ds4      = diff --stat -r HEAD~4
     dd       = diff --word-diff=color
     dw       = diff --color-words="[^[:space:],;:_-]+"
     dt       = difftool --dir-diff
