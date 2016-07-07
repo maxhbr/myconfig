@@ -1,4 +1,4 @@
-# written by maximilian-huber.de
+#written by maximilian-huber.de
 # ~/.aliasrc
 
 # needs:
@@ -77,6 +77,7 @@ alias httptunnel="ssh -ND localhost:9567 vserver"
 
 alias g="git"
 alias t="tig"
+alias d="docker"
 # g() {
 #   if [  $# -eq 0 ]; then
 #     git fetch --all && git status
@@ -418,22 +419,44 @@ my_power_settings() {
 
 dclean(){
     # call `dclean -a` to clean all containers
-    docker ps -q $1 |xargs docker rm
+    docker ps -q $1 |xargs --no-run-if-empty docker rm
 }
 diclean(){
     # call `dclean -a` to clean all images
     remAll() {
-        docker images -q -a |xargs docker rmi
+        docker images -q -a |xargs --no-run-if-empty docker rmi
     }
     remUntagged() {
-        docker images | awk '/^<none>/ {print $3}' |xargs docker rmi
+        docker images | awk '/^<none>/ {print $3}' |xargs --no-run-if-empty docker rmi
     }
 
     [[ "$1" == "-a" ]] && remAll || remUntagged
 }
 dssh(){
-    docker exec -i -t $1 bash
+    containerID=""
+    [ $1 ] && {
+        containerID=$1
+    } || {
+        containers="$(docker ps -a | tail -n +2)"
+
+        echo "choose number of container:"
+        echo
+        echo $containers | nl
+
+        if [ -n "$BASH_VERSION" ]; then
+            read -p "Num of container: " input
+        elif [ -n "$ZSH_VERSION" ]; then
+            read "input?Num of container: "
+        fi
+        if [ -n "$input" ]; then
+            if [ $input -eq $input 2>/dev/null ]; then
+                containerID="$(echo $containers | sed "${input}q;d" | awk '{print $1;}')"
+            fi
+        fi
+    }
+    [ "$containerID" ] && docker exec -i -t "$containerID" bash
 }
+
 dstop(){
     # call `dclean -a` to clean all containers
     docker ps -q |xargs docker stop
@@ -780,7 +803,7 @@ d2b(){ echo "obase=2; $@"|bc; }
 b2h(){ echo "obase=16; ibase=2; $@"|bc; }
 h2b(){ echo "ibase=16; obase=2; $@"|bc; }
 
-hgrep() { history 0 | egrep "$@"; }
+hgrep() { history | egrep "$@"; }
 
 alias tes="myThesausrus.sh"
 dic(){
