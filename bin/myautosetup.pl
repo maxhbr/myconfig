@@ -51,12 +51,15 @@ foreach my $output (@dockedOutputs) {
 { # clojure
     my $xrandrCmd = "xrandr";
     my @otherOutputs = ();
+    my $primaryOutput = $lvdsOutput;
     push @otherOutputs, @mainOutputs;
     push @otherOutputs, @dockedOutputs;
 
     sub addToXrandrCmd {
         my $output = shift;
         my $params = shift;
+
+        $primaryOutput = $output if($params =~ /--primary/);
 
         $xrandrCmd .= " --output $output $params";
 
@@ -69,6 +72,9 @@ foreach my $output (@dockedOutputs) {
                 if ($xrandr =~ /$output/);
         }
         system($xrandrCmd) if !$noXrandr;
+    }
+    sub getPrimaryOutput {
+        return $primaryOutput;
     }
     addToXrandrCmd("VIRTUAL1","--rotate normal --off");
 }
@@ -167,9 +173,21 @@ sub setupSound{
     }
 }
 
+
+################################################################################
+sub setupWacom{
+    my @wacomDevices = `xsetwacom --list devices | sed -e 's#.*id: \\(\\)#\\1#' | awk '{print \$1;}'`;
+    chomp @wacomDevices;
+
+    foreach my $wacomDevice (@wacomDevices) {
+        system("xsetwacom --set $wacomDevice MapToOutput @{[getPrimaryOutput()]}");
+    }
+}
+
 ################################################################################
 ##  main                                                                      ##
 ################################################################################
 $docked ? dockedConfig() : undockedConfig();
 commonConfig();
 setupSound();
+setupWacom();

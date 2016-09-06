@@ -25,6 +25,7 @@
     d2       = diff HEAD~2
     d3       = diff HEAD~3
     d4       = diff HEAD~4
+    dstaged  = diff --staged
     ds       = diff --stat -r
     ds0      = diff --stat -r HEAD
     ds1      = diff --stat -r HEAD~1
@@ -70,6 +71,20 @@
     gg       = log --graph --all --pretty=format:'%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n        %ar (%ai)%n        %an <%ae>'
     # All commits, full commit info
     ggl      = log --graph --all --pretty=format:'%C(bold)%h%C(reset)%n%H%n%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n%n%b%n%nAuthor%n    %ar (%ai)%n    %an <%ae>%nCommitter%n    %cr (%ci)%n    %cn <%ce>%n'
+
+    ls-assume-unchanged = !git ls-files -v | grep ^h | awk '{print $2}'
+    assume-unchanged    = update-index --assume-unchanged
+    assume-changed      = update-index --no-assume-unchanged
+    rebaseInteractiveWithStashing = "!f() { \
+                                          git stash; \
+                                          git rebase -i $@; \
+                                          git stash pop; \
+                                        }; f"
+
+    testPR   = "!f() { \
+                     git fetch ${2:-origin} "+refs/pull/${1}/merge:"; \
+                     git checkout -qf FETCH_HEAD; \
+                   }; f"
 [color]
     branch = auto
     diff = auto
