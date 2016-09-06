@@ -2,7 +2,7 @@
 # ~/.config/dwb/userscripts/gitClone.sh
 # ~/.config/dwb/userscripts/open-chromium.sh
 # ~/.config/dwb/userscripts/wget-file.sh
-# ~/.Xresources
+~/.Xresources
 ~/.xinitrc
  ~/.xmonad/lib/XMonad/MyConfig/*.hs
 ~/.xmonad/myinformation.sh

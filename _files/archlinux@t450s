@@ -11,6 +11,7 @@
 /etc/modules-load.d/virtualbox.conf
 /etc/pacman.conf
 /etc/systemd/system/getty@tty1.service.d/noclear.conf
+/etc/systemd/system/docker.service.d/imagelocation.conf
 /etc/udev/rules.d/*
 /etc/vconsole.conf
 /etc/vsftpd.conf
