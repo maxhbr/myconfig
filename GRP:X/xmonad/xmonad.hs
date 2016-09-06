@@ -17,7 +17,7 @@
 --
 -- written by maximilian-huber.de
 --
--- Last modified: Sa Sep 12, 2015  05:12
+-- Last modified: Sa Jul 23, 2016  02:15
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 
@@ -309,12 +309,10 @@ myLayout = avoidStrutsOn[U,D] $
 --
 myManageHook = composeAll
     [ className =? "Xmessage"            --> doCenterFloat
-    , role      =? "gimp-message-dialog" --> doCenterFloat
     , className =? "MPlayer"             --> doFloat
     , className =? "Onboard"             --> doFloat
     , className =? "Chromium"            --> doShift "web"
     , className =? "chromium-browser"    --> doShift "web"
-    , role      =? "app"                 --> doFloat
     , className =? "Virtualbox"          --> doFullFloat
     , className =? "qemu"                --> doCenterFloat
     , className =? "qemu-system-x86_64"  --> doCenterFloat
@@ -325,7 +323,6 @@ myManageHook = composeAll
     , className =? "Zenity"              --> doCenterFloat ]
         <+> scratchpadHook
         <+> manageDocks
-  where role = stringProperty "WM_WINDOW_ROLE"
 
 ------------------------------------------------------------------------
 -- Event handling:
