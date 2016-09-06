@@ -33,6 +33,10 @@ macro pager \cb <pipe-entry>'urlview'<enter> 'Follow links with urlview'
 bind compose p pgp-menu
 macro compose Y pfy "Send without GPG"
 
+
+set trash='/home/mhuber/Mail/Trash'
+bind index D purge-message
+
 ##############################################################################
 # General
 ##############################################################################
@@ -166,8 +170,8 @@ set sidebar_width=40
 
 set sidebar_visible = yes
 
-set sidebar_delim='|'
-set sidebar_sort=yes
+# set sidebar_delim='|'
+# set sidebar_sort=yes
 
 macro index B '<enter-command>toggle sidebar_visible<enter><refresh>'
 macro pager B '<enter-command>toggle sidebar_visible<enter><redraw-screen>'
