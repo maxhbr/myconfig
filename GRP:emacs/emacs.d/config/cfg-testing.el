@@ -9,6 +9,10 @@
 (use-package json-mode
   :ensure t)
 
+; (use-package intero
+;   :init
+;   (add-hook 'haskell-mode-hook 'intero-mode))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; (use-package multiple-cursors
 ;;   :config

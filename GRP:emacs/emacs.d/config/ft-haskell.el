@@ -25,7 +25,7 @@
   ;;   :ensure t)
   ;; (use-package inf-haskell
   ;;   :ensure t)
-  
+
   (use-package company-ghc
     :ensure t
     :config
