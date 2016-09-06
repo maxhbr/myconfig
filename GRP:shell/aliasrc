@@ -51,6 +51,23 @@ grepr() { grep -rns --color=always "$@" | grep -v Binärdatei 2>/dev/null; }
 grepri() { grepr -i "$@" }
 greprL() { grepr "$@" | less -R; }
 have() { type "$1" &> /dev/null; }
+confirm () {
+    # call with a prompt string or use a default
+    if [ -n "$BASH_VERSION" ]; then
+        read -r -p "${1:-Are you sure? [y/N]} " response
+    elif [ -n "$ZSH_VERSION" ]; then
+        echo "${1:-Are you sure? [y/N]} "
+        read response
+    fi
+    case $response in
+        [yY][eE][sS]|[yY])
+            true
+            ;;
+        *)
+            false
+            ;;
+    esac
+}
 
 alias gitDiff="git diff HEAD^ HEAD"
 
@@ -85,6 +102,10 @@ alias d="docker"
 #     git $@
 #   fi
 # }
+
+file-roller() {
+  command file-roller "$@" &disown
+}
 
 #--------------------------------------------------------------------
 #   file specific
@@ -201,6 +222,7 @@ ffa() { find . -iname '*'$*'*' -ls 2>/dev/null ; }
 
 # Find a file with pattern $1 in name and Execute $2 on it:
 fe() { find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \; ; }
+fed() { find . -type d -iname '*'${1:-}'*' -exec ${2:-file} {} \; ; }
 
 # e() {
 #   for file in "$@"; do
@@ -418,16 +440,23 @@ my_power_settings() {
 }
 
 dclean(){
+    # remove all dangling volumes
+    docker volume ls -qf dangling=true |xargs -r docker volume rm
+
+    confirm "also do dcclean?" && dcclean
+    confirm "also do diclean?" && diclean
+}
+dcclean(){
     # call `dclean -a` to clean all containers
     docker ps -q $1 |xargs --no-run-if-empty docker rm
 }
 diclean(){
     # call `dclean -a` to clean all images
     remAll() {
-        docker images -q -a |xargs --no-run-if-empty docker rmi
+        docker images -q -a |xargs -r docker rmi
     }
     remUntagged() {
-        docker images | awk '/^<none>/ {print $3}' |xargs --no-run-if-empty docker rmi
+        docker images | awk '/^<none>/ {print $3}' |xargs -r docker rmi
     }
 
     [[ "$1" == "-a" ]] && remAll || remUntagged
@@ -437,7 +466,7 @@ dssh(){
     [ $1 ] && {
         containerID=$1
     } || {
-        containers="$(docker ps -a | tail -n +2)"
+        containers="$(docker ps | tail -n +2)"
 
         echo "choose number of container:"
         echo
@@ -455,6 +484,14 @@ dssh(){
         fi
     }
     [ "$containerID" ] && docker exec -i -t "$containerID" bash
+}
+
+dsaveAllRunning() {
+    docker ps --format "{{.Image}}" |\
+        while read -r image ; do
+            echo "save image $image to tar..."
+            docker save -o "$image.tar" "$image"
+        done
 }
 
 dstop(){
@@ -753,7 +790,9 @@ alias ping6allw="ping6 ff02::1%wlan0"
 # or: mtr
 alias myarp-scan-e="sudo arp-scan --interface=enp0s25 --localnet"
 alias myarp-scan-w="sudo arp-scan --interface=wlp3s0 --localnet"
-alias mynmap="nmap -sP 192.168.178.0/24"
+mynmap() {
+    nmap -sn "${1:-192.168.178.0}/${2:-24}" -oG -
+}
 
 # watch network:  sudo iptraf-ng
 #                 sudo iftop
