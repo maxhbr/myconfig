@@ -7,10 +7,15 @@ let
     ghc hlint pandoc pointfree pointful hdevtools
   ];
   workPackages = with pkgs; [
-    networkmanager_openvpn
+    openvpn networkmanager_openvpn
     rdesktop
     openjdk
   ];
+  # imageworkPackages = with pkgs; [
+  #   gimp
+  #   rawtherapee
+  #   geeqie
+  # ];
   myPackages = with pkgs; [
     kbd
     wget curl elinks w3m
@@ -44,6 +49,7 @@ let
 
 # git
     gitAndTools.gitFull
+    gitAndTools.tig
     # gitAndTools.git-annex
 
 # encryption
@@ -53,12 +59,13 @@ let
     pass
 
 # tex
-    (pkgs.texLiveAggregationFun { paths = [ pkgs.texLive pkgs.texLiveExtra pkgs.texLiveBeamer pkgs.texLiveCMSuper]; })
+    # (pkgs.texLiveAggregationFun { paths = [ pkgs.texLive pkgs.texLiveExtra pkgs.texLiveBeamer pkgs.texLiveCMSuper]; })
 
 # for the desktop environmen
     arandr
     slock dmenu unclutter redshift
     xlibs.xmodmap xlibs.xset xlibs.setxkbmap
+    xf86_input_wacom
     xorg.xbacklight
     xclip
     feh
@@ -82,7 +89,7 @@ in {
 
   boot = {
     # kernelPackages = pkgs.linuxPackages_testing;
-    kernelPackages = pkgs.linuxPackages_4_3;
+    # kernelPackages = pkgs.linuxPackages_4_3;
     kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
     cleanTmpDir = true;
  #  loader.grub = {
@@ -92,6 +99,7 @@ in {
  #    memtest86.enable = true;
  #  };
     loader.gummiboot.enable = true;
+    # loader.systemd-boot.enable = true;
     initrd = {
       supportedFilesystems = [ "luks" ];
       luks.devices = [ {
@@ -105,6 +113,7 @@ in {
 
   nix = {
     useChroot = true;
+    # useSandbox = true;
     readOnlyStore = true;
     buildCores = 4;
     trustedBinaryCaches = [
@@ -121,7 +130,7 @@ in {
     '';
   };
 
-  # nixpkgs.config.allowUnfree = true;
+  nixpkgs.config.allowUnfree = true;
 
   networking = {
     networkmanager.enable = true;
@@ -210,7 +219,7 @@ in {
         '';
       };
 
-      startGnuPGAgent = true;
+      # startGnuPGAgent = true;
 
       synaptics.additionalOptions = ''
         Option "VertScrollDelta" "-100"
@@ -265,7 +274,10 @@ in {
   };
 
   virtualisation = {
-    docker.enable = true;
+    docker = {
+        enable = true;
+        extraOptions = "-g /home/docker";
+    };
     virtualbox.host.enable = true;
   };
 
