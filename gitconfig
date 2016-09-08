@@ -83,7 +83,7 @@
 
     testPR   = "!f() { \
                      git fetch ${2:-origin} "+refs/pull/${1}/merge:"; \
-                     git checkout -qf FETCH_HEAD; \
+                     git checkout -b "testpr/${2:-origin}/${1}" -qf FETCH_HEAD; \
                    }; f"
 [color]
     branch = auto
