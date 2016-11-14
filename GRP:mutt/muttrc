@@ -34,8 +34,8 @@ bind compose p pgp-menu
 macro compose Y pfy "Send without GPG"
 
 
-set trash='/home/mhuber/Mail/Trash'
-bind index D purge-message
+# set trash='/home/mhuber/Mail/Trash'
+# bind index D purge-message
 
 ##############################################################################
 # General
