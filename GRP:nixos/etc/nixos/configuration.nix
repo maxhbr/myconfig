@@ -7,19 +7,21 @@ let
     ghc hlint pandoc pointfree pointful hdevtools
   ];
   workPackages = with pkgs; [
-    openvpn networkmanager_openvpn
+    openvpn networkmanager_openvpn maven thrift
+    ruby
     rdesktop
     openjdk
+    cloc
   ];
-  # imageworkPackages = with pkgs; [
-  #   gimp
-  #   rawtherapee
-  #   geeqie
-  # ];
+  imageworkPackages = with pkgs; [
+    gimp
+    rawtherapee
+    geeqie
+  ];
   myPackages = with pkgs; [
     kbd
     wget curl elinks w3m
-    htop powertop
+    htop iftop powertop
     emacs
     vim
     tmux
@@ -34,7 +36,7 @@ let
 
 # for development
     meld
-    # leiningen clojure
+    leiningen clojure
     stack cabal-install cabal2nix
     python python3
     ruby
@@ -68,13 +70,18 @@ let
     xf86_input_wacom
     xorg.xbacklight
     xclip
-    feh
-    scrot
+    feh scrot
     rxvt_unicode_with-plugins rxvt_unicode.terminfo
-    chromium luakit
-    # trayer networkmanagerapplet
+    chromium firefox-unwrapped luakit
     mupdf zathura llpp
-    ] ++ hsPackages ++ workPackages;
+    mplayer
+    gnome3.file-roller
+
+# backup
+    rsnapshot
+
+    clamav
+    ] ++ hsPackages ++ workPackages ++ imageworkPackages;
 ###############################################################################
 in {
   imports =
@@ -89,7 +96,6 @@ in {
 
   boot = {
     # kernelPackages = pkgs.linuxPackages_testing;
-    # kernelPackages = pkgs.linuxPackages_4_3;
     kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
     cleanTmpDir = true;
  #  loader.grub = {
@@ -98,8 +104,7 @@ in {
  #    device = "/dev/sda";
  #    memtest86.enable = true;
  #  };
-    loader.gummiboot.enable = true;
-    # loader.systemd-boot.enable = true;
+    loader.systemd-boot.enable = true;
     initrd = {
       supportedFilesystems = [ "luks" ];
       luks.devices = [ {
@@ -112,16 +117,23 @@ in {
   };
 
   nix = {
-    useChroot = true;
-    # useSandbox = true;
+    useSandbox = true;
     readOnlyStore = true;
     buildCores = 4;
+
+    binaryCachePublicKeys = [
+       "hydra.cryp.to-1:8g6Hxvnp/O//5Q1bjjMTd5RO8ztTsG8DKPOAg9ANr2g=" # crypt.to
+       "hydra.snabb.co-1:zPzKSJ1mynGtYEVbUR0QVZf9TLcaygz/OyzHlWo5AMM=" # snabb.co
+       # "ryantrinkle.com-1:JJiAKaRv9mWgpVAz8dwewnZe0AzzEAzPkagE9SP5NWI=" # reflex-frp
+    ];
     trustedBinaryCaches = [
       "https://cache.nixos.org" "https://hydra.snabb.co" "http://hydra.cryp.to/"
+      # "https://nixcache.reflex-frp.org"
     ];
     binaryCaches = [
       "https://cache.nixos.org" "https://hydra.snabb.co" "http://hydra.cryp.to/"
     ];
+
     extraOptions = ''
       gc-keep-outputs = true
       gc-keep-derivations = true
@@ -150,8 +162,6 @@ in {
     defaultLocale = "de_DE.UTF-8";
   };
 
-  # List packages installed in system profile. To search by name, run:
-  # $ nix-env -qaP | grep wget
   environment = {
     systemPackages = myPackages;
     # shellAliases = {
@@ -176,6 +186,11 @@ in {
 
   services = {
     # openssh.enable = true;
+    # emacs = {
+    #   enable = true;
+    #   # package = import /home/mhuber/.emacs.d { pkgs = pkgs; };
+    # };
+
     ntp.enable = true;
     printing = {
       enable = true;
@@ -251,6 +266,18 @@ in {
 # STOP_CHARGE_THRESH_BAT1=90
 #       '';
 #     };
+    clamav = {
+      daemon.enable = true;
+      updater.enable = true;
+    };
+    vsftpd = {
+      enable = false;
+      userlist = ["mhuber"];
+      localUsers = true;
+      extraConfig = ''
+        listen_port=9136
+      '';
+    };
   };
 
   users = {
@@ -277,6 +304,7 @@ in {
     docker = {
         enable = true;
         extraOptions = "-g /home/docker";
+        storageDriver = "overlay2";
     };
     virtualbox.host.enable = true;
   };
@@ -292,8 +320,7 @@ in {
     '';
     autoUpgrade = {
       enable = true;
-      # channel = https://nixos.org/channels/nixos-15.09;
-      channel = https://nixos.org/channels/nixos-unstable;
+      channel = "https://nixos.org/channels/nixos-unstable";
     };
   };
   security.setuidPrograms = [ "slock" "pmount" "pumount" ];
