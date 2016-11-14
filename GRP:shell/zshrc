@@ -65,6 +65,17 @@ plugins=(git rake ruby zsh-syntax-highlighting)
 source $ZSH/oh-my-zsh.sh
 
 ###############################################################################
+# vi key bindings
+bindkey -v
+export KEYTIMEOUT=1
+bindkey '^r' history-incremental-search-backward
+# bindkey '^P' up-history
+# bindkey '^N' down-history
+bindkey '^?' backward-delete-char
+bindkey '^h' backward-delete-char
+bindkey '^w' backward-kill-word
+
+###############################################################################
 ###############################################################################
 ###############################################################################
 ###############################################################################
@@ -85,11 +96,15 @@ source $ZSH/oh-my-zsh.sh
     [[ -d $HOME/.gem/ruby/2.2.0/bin ]] && export PATH=$PATH:$HOME/.gem/ruby/2.2.0/bin
 }
 
+[[ -d $HOME/nixpkgs ]] && export NIXPKGS=$HOME/nixpkgs
+
 PATH="$HOME/perl5/bin${PATH+:}${PATH}"; export PATH;
 PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB+:}${PERL5LIB}"; export PERL5LIB;
 PERL_LOCAL_LIB_ROOT="$HOME/perl5${PERL_LOCAL_LIB_ROOT+:}${PERL_LOCAL_LIB_ROOT}"; export PERL_LOCAL_LIB_ROOT;
 PERL_MB_OPT="--install_base \"$HOME/perl5\""; export PERL_MB_OPT;
 PERL_MM_OPT="INSTALL_BASE=$HOME/perl5"; export PERL_MM_OPT;
+
+[[ "$JAVA_HOME" ]] || JAVA_HOME=$(readlink -f $(which java) | sed "s:bin/java::")
 
 ###############################################################################
 ZDOTDIR=${ZDOTDIR:-${HOME}}

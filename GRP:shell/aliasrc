@@ -517,8 +517,8 @@ myStopScreensaver(){
 incoChrome(){
   postfix=$(date +%s | sha256sum | base64 | head -c 32 ; echo)
   mkdir -p "/tmp/incoChrome_$postfix" && \
-      /usr/bin/chromium --incognito \
-                        --user-data-dir="/tmp/incoChrome_$postfix" &disown
+      chromium --incognito \
+               --user-data-dir="/tmp/incoChrome_$postfix" &disown
 }
 
 incoTorChrome(){
@@ -681,16 +681,23 @@ alias mymatlabRunFile="~/matlab/bin/matlab -nojvm -nodisplay -nosplash < "
 have nix-env && {
   #nix
   alias nixin="nix-env -iA"
+  alias mynixin="nix-env -f \$NIXPKGS -iA"
   alias nixin-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -iA"
+  alias mynixin-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -f \$NIXPKGS -iA"
   # alias nixupg="nix-env -u '*'"
   alias nixupg="nix-channel --update && nix-env --upgrade"
-  alias nixTest="nix-shell '<nixpkgs>' -A"
-  alias nixTestAlternativ="nix-shell -p"
+  alias nixTest="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p"
+  # alias nixTestAlternativ="nix-shell '<nixpkgs>' -A"
   alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
   alias nixse="nix-env -qaP | grep "
+  alias mynixse="nix-env -f \$NIXPKGS -qaP | grep "
   alias nixse-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -qaP | grep "
+  alias mynixse-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -f \$NIXPKGS -qaP | grep "
   nixsel(){
-  nix-env -qaP | grep $1 | less
+      nix-env -qaP | grep $1 | less
+  }
+  mynixsel(){
+      nix-env -f $NIXPKGS -qaP | grep $1 | less
   }
   alias nixlist="nix-env -qa \*"
 
@@ -699,7 +706,7 @@ have nix-env && {
   alias nix-shell-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-shell"
 
   #nixos
-  alias nixosupg="sudo nixos-rebuild switch --upgrade"
+  alias nixosupg="sudo nixos-rebuild switch --fallback --upgrade"
 }
 
 have pacman && {
@@ -767,6 +774,12 @@ cabalupd() {
 }
 
 #-------------------------------------------------------------------}}}
+#   aws
+#-------------------------------------------------------------------{{{
+
+alias aws="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p 'aws' 'ec2_api_tools'"
+
+#-------------------------------------------------------------------}}}
 #   some networking
 #-------------------------------------------------------------------{{{
 
@@ -818,6 +831,15 @@ myiscsiRoutine() {
   sleep 3
   sudo mkdir -p /mnt/iscsi/
   sudo mount /dev/disk/by-uuid/${1} /mnt/iscsi/
+}
+
+getCert() {
+  if [[ "$#" -eq 0 ]]; then
+    echo "usage: getCert some.host.tld:345"
+    return 0
+  fi
+  openssl s_client -connect "$1" < /dev/null \
+      | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > "$1.crt"
 }
 
 #-------------------------------------------------------------------}}}
