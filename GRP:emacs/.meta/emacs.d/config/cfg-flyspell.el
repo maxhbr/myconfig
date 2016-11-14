@@ -1,4 +1,5 @@
 ~/.emacs.d/config/cfg-flyspell.el
-0600
+0644
 1000
 1000
+nixos
