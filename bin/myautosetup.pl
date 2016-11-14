@@ -110,17 +110,27 @@ sub configureSoundCard{
 ################################################################################
 sub undockedConfig{
     sub toggleMainOutputs{
-        addToXrandrCmd($lvdsOutput,"--mode 1920x1080 --pos 0x0 --rotate normal @{[isPrimary()]}");
-        my $defaultPosition = $sameAs ? "--mode 1920x1080 --pos 0x0" : "--auto --right-of $lvdsOutput"; 
+        my $lidState = `cat /proc/acpi/button/lid/LID/state`;
+        my $ok = 0;
+        if($lidState =~ /open/){
+            addToXrandrCmd($lvdsOutput,"--mode 1920x1080 --pos 0x0 --rotate normal @{[isPrimary()]}");
+            $ok = 1;
+        }else{
+            addToXrandrCmd($lvdsOutput,"--rotate normal --off");
+        }
+        my $defaultPosition = $sameAs ? "--mode 1920x1080 --pos 0x0" : "--auto --right-of $lvdsOutput";
         foreach my $output (@mainOutputs) {
             if ($xrandr =~ /$output connected \(/ ||
-                $xrandr =~ /$output connected \w \(/){
+                $xrandr =~ /$output connected \w \(/ ||
+                $lidState =~ /closed/){
                 addToXrandrCmd($output,"$defaultPosition --rotate $rotate @{[isPrimary()]}");
+                $ok = 1;
             }elsif ($xrandr =~ /$output connected/){
                 addToXrandrCmd($output,"--rotate normal --off");
             }
         }
-        runXrandrCmd();
+
+        runXrandrCmd() if $ok;
     }
 
     toggleMainOutputs();
