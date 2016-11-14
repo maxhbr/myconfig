@@ -52,4 +52,5 @@ rfkill unblock all &
 # else
 #   exec dbus-launch /usr/bin/xmonad
 # fi
+xmonad --recompile
 exec dbus-launch xmonad
