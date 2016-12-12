@@ -57,7 +57,7 @@
     (when (file-directory-p dir)
       (add-to-list 'load-path dir))))
 
-(byte-recompile-directory (expand-file-name "~/.emacs.d/config") 0)
+;(byte-recompile-directory (expand-file-name "~/.emacs.d/config") 0)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; basic behaviour
@@ -139,6 +139,9 @@
  '(haskell-process-log t)
  '(haskell-process-suggest-remove-import-lines t)
  '(haskell-process-type (quote cabal-repl))
+ '(package-selected-packages
+   (quote
+    (yaml-mode web-mode wanderlust thrift sr-speedbar smex simp sbt-mode restclient rainbow-delimiters puppet-mode powerline php-mode outline-magic nix-mode neotree markdown-mode malabar-mode magit json-mode js3-mode jabber indent-guide idris-mode hi2 helm haskell-snippets git-gutter folding flymake-php flycheck fill-column-indicator expand-region evil-numbers evil-nerd-commenter evil-leader evil-iedit-state eruby-mode emacs-eclim ecb ebib dropdown-list dockerfile-mode diminish csv-mode company-ghc cider auctex-latexmk adaptive-wrap)))
  '(undo-tree-history-directory-alist (\` (("." \, (expand-file-name "~/.emacs.d/.cache/"))))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
