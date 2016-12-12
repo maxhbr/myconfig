@@ -30,6 +30,7 @@ let
     acpi acpid
     gnumake cmake automake
     usbutils
+    taskwarrior
     # grml-zsh-config
     # oh-my-zsh
     # nix-zsh-completions
