@@ -94,6 +94,7 @@ alias httptunnel="ssh -ND localhost:9567 vserver"
 
 alias g="git"
 alias t="tig"
+alias ta="task"
 alias d="docker"
 # g() {
 #   if [  $# -eq 0 ]; then
@@ -138,8 +139,11 @@ cdStack() {
   DEFAULT_LIMIT=19
   LIMIT=${1:-$DEFAULT_LIMIT}
   for i in {1..$LIMIT..-1}; do
-    echo "$i: $(echo ~$i)"
-  done
+    iDir="$(echo ~$i)"
+    if [ ! -z "$iDir" ]; then
+      echo "$i: $iDir"
+    fi
+  done 2>/dev/null
   if [ -n "$BASH_VERSION" ]; then
     read -p "Where to go: " input
   elif [ -n "$ZSH_VERSION" ]; then
@@ -153,16 +157,11 @@ cdStack() {
 }
 
 cd() { #Automatically do an ls after each cd
-  if [ -n "$1" ]; then
     builtin cd "$@" && ls
-  else
-    builtin cd ~ && ls
-  fi
 }
 
 alias cd..="cd .."
 alias ..="cd .."
-# alias ...="cd ../.."
 
 mkcd() { #make dir and enter it
   mkdir -p "$1"
@@ -223,21 +222,6 @@ ffa() { find . -iname '*'$*'*' -ls 2>/dev/null ; }
 # Find a file with pattern $1 in name and Execute $2 on it:
 fe() { find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \; ; }
 fed() { find . -type d -iname '*'${1:-}'*' -exec ${2:-file} {} \; ; }
-
-# e() {
-#   for file in "$@"; do
-#     if [ -f $file ] ; then
-#       opt=$( tr '[:upper:]' '[:lower:]' <<<"$file" )
-#       case $opt in
-#         *.pdf) llpp $file ;;
-#         *.djvu) apvlv $file ;;
-#         *) vim $file ;;
-#       esac
-#     else
-#       echo "'$file' is not a valid file"
-#     fi
-#   done
-# }
 
 # Extract files from nearly any archive
 # Usage: ex <archive_name>
@@ -315,47 +299,6 @@ countFilesByTypes() {
     | sort \
     | uniq  -c \
     | sort  -rn
-}
-
-# Quick and dirty version control for one file or one folder
-myversioncontrol() {
-  if [ $# -ne 0 ]; then
-    if [ -f $FILE ]; then
-      suf="_versions"
-      fn=$1
-      mkdir -p "$fn$suf"
-      touch "$fn$suf/log"
-      nr=`ls "$fn$suf" | wc -l`
-      nr=`printf "%02d" $(($nr))`
-      if [ -d "$fn" ]; then
-        echo "${fn} -> $fn$suf/v${nr}_${fn%%/}.tar.gz"
-        tar cvzf "$fn$suf/v${nr}_${fn%%/}.tar.gz"  "${fn%%/}/" > /dev/null
-      else
-        \cp -v "$fn" "$fn$suf/v${nr}_$fn"
-      fi
-      echo "${nr}: $(date)" >> "$fn$suf/log"
-      while [ $# -ne 1 ]; do
-        echo "    $2" >> "$fn$suf/log"
-        shift
-      done
-      echo
-      echo "size: $(du -hs "$fn$suf")"
-    fi
-  fi
-}
-
-bac() { # backup with copy
-  for file; do
-    cp -Rpv "$file" "$file~$(date -Ins)~"
-  done
-}
-
-buc() { # undo backup copy
-  for file; do
-    dest=${file%%\~*}
-    test -d "$dest" && mv -v "$dest" "$file.orig"
-    mv -v "$file" "$dest"
-  done
 }
 
 #-------------------------------------------------------------------}}}
@@ -439,6 +382,10 @@ my_power_settings() {
   ';
 }
 
+#-------------------------------------------------------------------}}}
+#  docker 
+#-------------------------------------------------------------------{{{
+
 dclean(){
     # remove all dangling volumes
     docker volume ls -qf dangling=true |xargs -r docker volume rm
@@ -495,7 +442,6 @@ dsaveAllRunning() {
 }
 
 dstop(){
-    # call `dclean -a` to clean all containers
     docker ps -q |xargs docker stop
 }
 
@@ -937,6 +883,12 @@ myXnest() {
 #   some functions
 #-------------------------------------------------------------------{{{
 
+adddate() { # see http://serverfault.com/questions/310098/how-to-add-a-timestamp-to-bash-script-log
+    while IFS= read -r line; do
+        echo "$(date) $line"
+    done
+}
+
 mycompTime() { #compare the speed of two ($1, $2) commands (loop $3 times)
   if [ $# -ne 3 ]; then return 1; fi
   type $1 >/dev/null 2>&1 || return 2
@@ -956,56 +908,6 @@ myRepeat() {
     eval "$@";
   done
 }
-
-mkscript() {
-  # usage: mkscript [sh/py] filename
-  if [ $# -eq 2 ]; then
-    if [ ! -f $2 ]; then
-      case $1 in
-        sh)
-          echo "#!/bin/bash" > "$2"
-          ;;
-        py)
-          echo "#!/usr/bin/env python" > "$2"
-          ;;
-      esac
-
-      if [ -f $2 ]; then
-        chmod 700 "$2"
-        vim -c "set ft=$1" "$2"
-      fi
-    fi
-  fi
-}
-
-myremind() {
-  # usage: myremind <time> <text>
-  if [  $# -eq 0 ]; then
-    echo
-    echo "usage: remindme <time> <text>"
-    echo "e.g.: remindme 10m \"omg, the pizza\""
-    echo
-  else
-    time=$(date +%H:%M)
-    if [  $# -eq 1 ]; then
-      sleep $1 && zenity --info --text "${time} to $(date +%H:%M):   \n\n$1" &
-    else
-      if [  $# -eq 2 ]; then
-        sleep $1 && zenity --info --text "${time} to $(date +%H:%M) ($1):   \n\n$2" &
-      fi
-    fi
-  fi
-}
-
-#myclock() {
-  #keypress=''
-  #echo
-  #while [ "x$keypress" = "x" ];do
-    #printf "   " ; date; printf "\33[A";
-    ##sleep 1;
-    #read -t 1 -r -n1 keypress
-  #done
-#}
 
 myclock(){
   while sleep 1;do tput sc;tput cup 0 $(($(tput cols)-29));date;tput rc;done &
