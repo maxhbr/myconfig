@@ -38,6 +38,9 @@ scratchpads =
        (customFloating $ W.RationalRect (1/24) (3/20) (5/6) (4/5))
    , NS "ScratchHtop" "urxvtc -name ScratchHtop -e bash -c htop"
        (resource =? "ScratchHtop")
+       (customFloating $ W.RationalRect (1/10) (1/10) (4/5) (4/5))
+   , NS "ScratchNMTUI" "urxvtc -name ScratchHtop -e bash -c htop"
+       (resource =? "ScratchNMTUI")
        (customFloating $ W.RationalRect (1/10) (1/10) (4/5) (4/5)) ]
 
 scratchpadKBs =

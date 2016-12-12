@@ -47,7 +47,7 @@ Config { font = "xft:inconsolata:pixelsize=13:antialias=true:hinting=true"
        , sepChar = "%"
        , alignSep = "}{"
        , template = " %StdinReader% }{ <fc=#888888><action=`urxvtc -name ScratchHtop -e bash -c htop`>%multicpu% %top% %coretemp% %memory%</action> %kbd%|</fc> <action=`xbacklight =10`>%bat%%bata%</action> |  <fc=#ffffff><action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action></fc> | %dynnetwork% | %date% "
-       -- , template = " %StdinReader% }{ <fc=#888888><action=`urxvtc -name ScratchHtop -e bash -c htop`>%multicpu% %top% %coretemp% %memory%</action> %kbd%|</fc> <action=`xbacklight =10`>%bat%%bata%</action> | %dynnetwork% <action=`urxvtc -name ScratchHtop -e bash -c 'sudo wifi-menu'`>%wlp3s0wi%</action> | <fc=#ffffff><action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action></fc> | %date% "
+       -- , template = " %StdinReader% }{ <fc=#888888><action=`urxvtc -name ScratchHtop -e bash -c htop`>%multicpu% %top% %coretemp% %memory%</action> %kbd%|</fc> <action=`xbacklight =10`>%bat%%bata%</action> | %dynnetwork% <action=`urxvtc -name ScratchNMTUI -e bash -c 'sudo nmtui`>%wlp3s0wi%</action> | <fc=#ffffff><action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action></fc> | %date% "
        }
 
 -- vim: set ft=haskell :
