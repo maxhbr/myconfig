@@ -6,13 +6,6 @@
     # kernelPackages = pkgs.linuxPackages_testing;
     kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
     cleanTmpDir = true;
- #  loader.grub = {
- #    enable = true;
- #    version = 2;
- #    device = "/dev/sda";
- #    memtest86.enable = true;
- #  };
-    loader.systemd-boot.enable = true;
   };
 
   networking = {

@@ -2,6 +2,8 @@
 
 {
   imports = [
+    # ../profiles/efi.nix
+    ../profiles/grub.nix
     ../profiles/desktop.nix
     ../profiles/virtualization.nix
     ../profiles/mail.nix
@@ -12,5 +14,4 @@
   ];
 
   services.xserver.videoDrivers = ["nvidia"];
-
 }
