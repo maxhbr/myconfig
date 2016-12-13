@@ -1,0 +1,23 @@
+{ config, pkgs, ... }:
+
+{
+
+  environment.systemPackages = with pkgs; [
+    vagrant
+    docker
+  ];
+
+  virtualisation = {
+    docker = {
+        enable = true;
+        extraOptions = "-g /home/docker";
+        storageDriver = "overlay2";
+    };
+    virtualbox.host.enable = true;
+  };
+
+  users.extraGroups = {
+    vboxusers.members = [ "mhuber" ];
+    docker.members = [ "mhuber" ];
+  };
+}
