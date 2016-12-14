@@ -21,7 +21,7 @@
     systemPackages = with pkgs; [
       kbd
       wget curl elinks w3m
-      git
+      git git-lfs
       emacs vim
       tmux
       htop iftop powertop
@@ -34,6 +34,7 @@
       pass
       cryptsetup
       rsnapshot
+      stow
     ];
     # shellAliases = {
     #   ll = "ls -l";
@@ -127,10 +128,6 @@
 
     nixosManual.showManual = true;
     acpid.enable = true;
-    clamav = {
-      daemon.enable = true;
-      updater.enable = true;
-    };
     vsftpd = {
       enable = false;
       userlist = ["mhuber"];

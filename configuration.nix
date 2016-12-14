@@ -1,21 +1,22 @@
 { config, pkgs, ... }:
 
 let
+  # echo -n "HOSTNAME" | sudo tee /etc/nixos/hostname
   hostName = "${builtins.readFile ./hostname}";
+  # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
+  hostId = "${builtins.readFile ./hostid}";
 ###############################################################################
 in {
   imports =
     [
       ./hardware-configuration.nix
       ./configuration-common.nix
-      # echo -n "HOSTNAME" | sudo tee /etc/nixos/hostname
       (./machines + "/${hostName}.nix")
+      ./dotfiles.nix
     ];
 
   networking = {
-    # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
-    # head -c4 /dev/urandom | od -A none -t x4
-    hostId = "54510fe1";
+    hostId = "${hostId}";
     hostName = "${hostName}";
   };
 }

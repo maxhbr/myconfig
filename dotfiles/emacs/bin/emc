@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+args="-a \"\""
+guiArgs="-nc"
+termArgs="-t"
+
+socketFile="/tmp/emacs1000/server"
+if [ -x $socketFile ]; then
+  args="$args -s $socketFile"
+fi
+
+if [ "$1" = "-forceTerminal" ]; then
+  IS_GRAPHICAL=false
+  shift
+else
+  if [ -z "$DISPLAY" ]; then
+    IS_GRAPHICAL=true
+  else
+    IS_GRAPHICAL=$(emacs --batch -Q --eval='(if (fboundp '"'"'tool-bar-mode) (message "true") (message "false"))' 2>&1)
+  fi
+fi
+
+if $IS_GRAPHICAL; then
+  args="$args $guiArgs"
+else
+  args="$args $termArgs"
+fi
+
+if [ $# -eq 0 ]; then
+  eval "emacsclient $args ./"
+else
+  eval "emacsclient $args \"$@\""
+fi

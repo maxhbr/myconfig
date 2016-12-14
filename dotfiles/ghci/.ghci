@@ -1,0 +1,26 @@
+let ghciEscapeShellArg arg = "'" ++ concatMap (\x -> if x == '\'' then "'\"'\"'" else [x]) arg ++ "'"
+:def! hoogle    return . (":! hoogle --color --count=20 " ++) . ghciEscapeShellArg
+:def! hoogleAll return . (":! hoogle --color " ++) . ghciEscapeShellArg
+:def! doc       return . (":! hoogle --info " ++) . ghciEscapeShellArg
+:def! hlint     return . (":! hlint " ++) . ghciEscapeShellArg
+:def! pf        return . (":! pointfree " ++) . ghciEscapeShellArg
+-- :def! pl return . (":! pointfull " ++) . ghciEscapeShellArg
+
+:def! GCommit   return . (":! git commit -a -m " ++) . ghciEscapeShellArg
+:def! GAdd      return . (":! git add " ++) . ghciEscapeShellArg
+:def! GBranch   return . (":! git checkout -b " ++) . ghciEscapeShellArg
+:def! GCheckout return . (":! git checkout " ++) . ghciEscapeShellArg
+:def! GPush     return . (const ":! git push")
+:def! GPull     return . (const ":! git pull")
+:def! GStatus   return . (const ":! git status")
+
+:set +t
+
+-- :set +s      -- statistics (time,space)
+-- let tracify x = (trace $ "<pop "++show x++">") x
+
+:set prompt "\x1B[01;34mλ:\x1B[00m "
+
+{-:set -fbreak-on-exception-}
+
+-- vim: set ft=haskell :

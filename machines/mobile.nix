@@ -5,6 +5,8 @@
     ../profiles/efi.nix
     #../profiles/grub.nix
     ../profiles/desktop.nix
+    ../profiles/xmonad.nix
+    # ../profiles/xfce.nix
     ../profiles/virtualization.nix
     ../profiles/mail.nix
     ../profiles/dev.nix
@@ -20,7 +22,7 @@
   ];
 
   #networking.wireless.enable = true;
-  
+
   hardware = {
     bluetooth.enable = false;
     opengl.driSupport32Bit = true;

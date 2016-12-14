@@ -5,7 +5,6 @@
   # terminal
     rxvt_unicode_with-plugins rxvt_unicode.terminfo
   # gui related
-    slock dmenu unclutter
     arandr
     xlibs.xmodmap xlibs.xset xlibs.setxkbmap
     xclip
@@ -17,9 +16,7 @@
     gnome3.file-roller
   # misc
     xf86_input_wacom
-  ] ++ (with pkgs.haskellPackages; [
-    xmonad xmobar yeganesh
-  ]);
+  ];
 
   services = {
     xserver = {
@@ -28,20 +25,6 @@
       layout = "de"; # TODO: neo
       xkbOptions = "neo";
       enableCtrlAltBackspace = true;
-
-      windowManager = {
-        xmonad = {
-          enable = true;
-          enableContribAndExtras = true;
-        };
-        # i3.enable = true;
-        default = "xmonad";
-      };
-
-      desktopManager = {
-        xterm.enable = false;
-        default = "none";
-      };
 
       displayManager = {
         slim = {
@@ -61,6 +44,7 @@
         '';
       };
     };
+
     redshift = {
       enable = true;
       latitude = "48.2";

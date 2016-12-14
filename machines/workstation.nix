@@ -5,6 +5,8 @@
     # ../profiles/efi.nix
     ../profiles/grub.nix
     ../profiles/desktop.nix
+    # ../profiles/xmonad.nix
+    ../profiles/xfce.nix
     ../profiles/virtualization.nix
     ../profiles/mail.nix
     # ../profiles/dev.nix
