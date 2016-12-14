@@ -1,3 +1,4 @@
+
 { config, pkgs, ... }:
 
 {
@@ -5,7 +6,7 @@
     # ../profiles/efi.nix
     ../profiles/grub.nix
     ../profiles/desktop.nix
-    # ../profiles/xmonad.nix
+    ../profiles/xmonad.nix
     ../profiles/xfce.nix
     # ../profiles/kde.nix
     ../profiles/virtualization.nix
