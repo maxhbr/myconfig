@@ -7,6 +7,7 @@
     ../profiles/desktop.nix
     # ../profiles/xmonad.nix
     ../profiles/xfce.nix
+    # ../profiles/kde.nix
     ../profiles/virtualization.nix
     ../profiles/mail.nix
     # ../profiles/dev.nix
@@ -15,5 +16,5 @@
     ../profiles/games.nix
   ];
 
-  services.xserver.videoDrivers = ["nvidia"];
+  services.xserver.videoDrivers = ["nvidiaLegacy340"];
 }

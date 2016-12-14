@@ -26,23 +26,17 @@
       xkbOptions = "neo";
       enableCtrlAltBackspace = true;
 
-      displayManager = {
-        slim = {
-          enable = true;
-          defaultUser = "mhuber";
-        };
-        sessionCommands = ''
-          ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name left_ptr
-          ${pkgs.xlibs.setxkbmap}/bin/setxkbmap de neo
-          if test -e $HOME/.Xresources; then
-            ${pkgs.xorg.xrdb}/bin/xrdb --merge $HOME/.Xresources
-          fi
-          if test -e $HOME/.background-image; then
-            ${pkgs.feh}/bin/feh --bg-center $HOME/.background-image
-          fi
-          ${pkgs.rxvt_unicode_with-plugins}/bin/urxvtd -q -f -o &
-        '';
-      };
+      displayManager.sessionCommands = ''
+        ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name left_ptr
+        ${pkgs.xlibs.setxkbmap}/bin/setxkbmap de neo
+        if test -e $HOME/.Xresources; then
+          ${pkgs.xorg.xrdb}/bin/xrdb --merge $HOME/.Xresources
+        fi
+        if test -e $HOME/.background-image; then
+          ${pkgs.feh}/bin/feh --bg-center $HOME/.background-image
+        fi
+        ${pkgs.rxvt_unicode_with-plugins}/bin/urxvtd -q -f -o &
+      '';
     };
 
     redshift = {
