@@ -1,0 +1,118 @@
+# partially stolen from https://github.com/quchen/dotfiles/
+[user]
+    name = maximilianhuber
+    email = mail@maximilian-huber.de
+    signingkey = 32CA3654
+[alias]
+    s        = status
+    s        = status --short --branch
+    a        = add
+    c        = commit
+    cm       = commit -m
+    cma      = commit -am
+    ca       = commit --amend
+    caa      = commit --amend -a
+    co       = checkout
+    # col      = "!f() { \
+    #                  git checkout -b $2 $1/$2; \
+    #                }; f"
+    cob      = checkout -b
+    f        = fetch --all
+
+    d        = diff
+    d0       = diff HEAD
+    d1       = diff HEAD~1
+    d2       = diff HEAD~2
+    d3       = diff HEAD~3
+    d4       = diff HEAD~4
+    dstaged  = diff --staged
+    ds       = diff --stat -r
+    ds0      = diff --stat -r HEAD
+    ds1      = diff --stat -r HEAD~1
+    ds2      = diff --stat -r HEAD~2
+    ds3      = diff --stat -r HEAD~3
+    ds4      = diff --stat -r HEAD~4
+    dd       = diff --word-diff=color
+    dw       = diff --color-words="[^[:space:],;:_-]+"
+    dt       = difftool --dir-diff
+    changes  = diff --name-status -r
+    diffstat = diff --stat -r
+    sortdiff = !sh -c 'git diff "$@" | grep "^[+-]" | sort --key=1.2 | uniq -u -s1'
+    
+
+    ri       = rebase --interactive
+    rc       = rebase --continue
+    ra       = rebase --abort
+
+    mt       = mergetool --no-prompt
+    l        = log
+    sup      = submodule update
+    unstage  = reset HEAD --
+    untrack  = rm --cached
+
+    whatis   = show -s --pretty='tformat:%h (%s, %ad)' --date=short
+    pwhatis  = show -s --pretty='tformat:%h, %s, %ad' --date=short
+
+    new      = !sh -c 'git log $1@{1}..$1@{0} "$@"'
+
+    remadd   = "!f() { \
+                     git remote add $1 https://github.com/$2.git; \
+                   }; f"
+    remotes = remote -v
+
+    # Pretty graphs
+    lol      = log --graph --decorate --pretty=oneline --abbrev-commit
+    lola     = log --graph --decorate --pretty=oneline --abbrev-commit --all
+    # Up to current commit, medium commit info
+    g        = log -10 --graph --pretty=format:'%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n        %ar (%ai)%n        %an <%ae>'
+    # Long, full commit info
+    gl       = log --graph --pretty=format:'%C(bold)%h%C(reset)%n%H%n%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n%n%b%n%nAuthor%n    %ar (%ai)%n    %an <%ae>%nCommitter%n    %cr (%ci)%n    %cn <%ce>%n'
+    # All commits, medium commit info
+    gg       = log --graph --all --pretty=format:'%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n        %ar (%ai)%n        %an <%ae>'
+    # All commits, full commit info
+    ggl      = log --graph --all --pretty=format:'%C(bold)%h%C(reset)%n%H%n%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n%n%b%n%nAuthor%n    %ar (%ai)%n    %an <%ae>%nCommitter%n    %cr (%ci)%n    %cn <%ce>%n'
+
+    ls-assume-unchanged = !git ls-files -v | grep ^h | awk '{print $2}'
+    assume-unchanged    = update-index --assume-unchanged
+    assume-changed      = update-index --no-assume-unchanged
+
+    testPR   = "!f() { remote="${2:-origin}"; \
+                       branch="testpr/${remote}/${1}"; \
+                       git fetch "${remote}" "+refs/pull/${1}/merge:" \
+                       && ( git checkout -b "$branch" -qf FETCH_HEAD \
+                         || ( git checkout "$branch" \
+                           && git reset --hard FETCH_HEAD ) ) \
+                       || ( echo && echo "possible refs:" && git ls-remote $remote | grep "/merge"; ); \
+                     }; f"
+[color]
+    branch = auto
+    diff = auto
+    interactive = auto
+    status = auto
+[core]
+    autocrlf = input
+    safecrlf = false
+[push]
+    default = matching
+[giggle]
+    main-window-maximized = false
+    main-window-geometry = 1366x754+0+14
+    history-view-vpane-position = 382
+    main-window-view = HistoryView
+    file-view-vpane-position = 652
+[credential]
+	helper = cache --timeout=3600
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	required = true
+# [mergetool "fancymeld"]
+#   cmd = meld $LOCAL $BASE $REMOTE -o $MERGED --diff $LOCAL $BASE $REMOTE --diff $BASE $LOCAL --diff $BASE $REMOTE --auto-merge
+[merge]
+  tool = meld
+  conflictstyle = diff3
+[diff]
+  tool = meld
+
+[include]
+  path = .gitconfig-local
