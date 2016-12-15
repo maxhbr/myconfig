@@ -40,6 +40,7 @@
         if test -e $HOME/.desktop-backgronud.png; then
           ${pkgs.feh}/bin/feh --bg-scale "$HOME/.desktop-backgronud.png"
         fi
+        # ${pkgs.rxvt_unicode_with-plugins}/bin/urxvtd -q -f -o &
       '';
     };
 
@@ -49,11 +50,6 @@
       longitude = "10.8";
       # temperature.day = 5500;
       # temperature.night = 3500;
-    };
-    
-    printing = {
-      enable = true;
-      drivers = [ pkgs.gutenprint pkgs.hplip ];
     };
 
     urxvtd = {

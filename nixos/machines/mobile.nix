@@ -13,6 +13,7 @@
     ../profiles/work.nix
     ../profiles/imagework.nix
     # ../profiles/games.nix
+    ../profiles/printing.nix
   ];
 
   powerManagement.enable = true;
@@ -23,10 +24,7 @@
 
   #networking.wireless.enable = true;
 
-  hardware = {
-    bluetooth.enable = false;
-    opengl.driSupport32Bit = true;
-  };
+  hardware.bluetooth.enable = false;
 
   boot = {
     initrd = {
