@@ -1,0 +1,2 @@
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0e6a", ATTRS{idProduct}=="030c", TAG+="uaccess", TAG+="udev-acl"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0e6a", ATTRS{idProduct}=="030b", TAG+="uaccess", TAG+="udev-acl"

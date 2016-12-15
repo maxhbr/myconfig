@@ -1,0 +1,2 @@
+SUBSYSTEM=="input", ATTRS{name}=="Sundtek Ltd. Remote Control", ACTION=="add",       RUN+="/opt/bin/lirc.sh ATTACH"
+SUBSYSTEM=="input", ATTRS{name}=="Sundtek Ltd. Remote Control", ACTION=="remove",    RUN+="/opt/bin/lirc.sh REMOVE"
