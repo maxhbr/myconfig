@@ -3,5 +3,5 @@
 have() { type "$1" &> /dev/null; }
 
 have gpg && gpg $@ || {
-       have gpg2 && gpg2 $@ 
+       have gpg2 && gpg2 $@
     }

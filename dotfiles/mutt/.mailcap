@@ -1,0 +1,6 @@
+#text/html; elinks %s; nametemplate=%s.html 
+#text/html; elinks -dump %s; nametemplate=%s.html; copiousoutput
+text/html; w3m -I %{charset} -T text/html; copiousoutput;
+application/pdf; zathura %s
+#image/*; mutt_bgrun xv %s
+image/*; xv %s

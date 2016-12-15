@@ -20,5 +20,5 @@ for dir in $dirs; do
     find . -mindepth 1 -type d \
          -exec mkdir -p "$userDir/"{} \; \
          -exec chown $user:$userGroup "$userDir/"{} \;
-    stow --adopt -t $userDir -d $dotfiles $dir
+    stow -t $userDir -d $dotfiles $dir
 done

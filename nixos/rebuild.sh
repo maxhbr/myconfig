@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-SRC=$(dirname $0)
-chmod 755 $SRC
+SRC="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+#chmod 755 $SRC
 sudo rsync --filter="protect /hardware-configuration.nix" \
            --filter="protect /hostname" \
            --filter="protect /hostid" \
@@ -10,13 +10,13 @@ sudo rsync --filter="protect /hardware-configuration.nix" \
            --filter="exclude,s *.git" \
            --filter="exclude .*.swp" \
            --delete --recursive --perms \
-           "$SRC" /etc/nixos/
+           "$SRC/" /etc/nixos/
 
 if [ ! -e "/etc/nixos/dotfiles" ]; then
-    sudo ln -s  "${SRC}/../dotfiles" "/etc/nixos/dotfiles"
+    sudo ln -s "${SRC}/../dotfiles" "/etc/nixos/dotfiles"
 fi
 if [ ! -e "/etc/nixos/backgrounds" ]; then
-    sudo ln -s  "${SRC}/../backgrounds" "/etc/nixos/backgrounds"
+    sudo ln -s "${SRC}/../background" "/etc/nixos/background"
 fi
 
 sudo \

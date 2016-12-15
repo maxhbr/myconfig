@@ -100,11 +100,7 @@
       shell = "/run/current-system/sw/bin/zsh";
       password = "dummy";
     };
-    extraGroups = {
-      mhuber = {
-        gid = 1000;
-      };
-    };
+    extraGroups.mhuber.gid = 1000;
   };
 
   system = {
