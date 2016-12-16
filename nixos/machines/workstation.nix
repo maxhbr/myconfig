@@ -21,6 +21,7 @@
     # ../profiles/work.nix
     ../profiles/imagework.nix
     ../profiles/games.nix
+    ../profiles/wine.nix
   ];
 
   services.xserver.videoDrivers = ["nvidiaLegacy340"];
