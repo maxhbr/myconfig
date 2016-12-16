@@ -58,4 +58,6 @@
       urxvtPackage = pkgs.rxvt_unicode_with-plugins;
     };
   };
+
+  security.setuidPrograms = [ "slock" ];
 }

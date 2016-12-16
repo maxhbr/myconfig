@@ -35,11 +35,10 @@
       cryptsetup
       rsnapshot
       stow
+      oh-my-zsh
     ];
-    # shellAliases = {
-    #   ll = "ls -l";
-    # };
     shells = ["/run/current-system/sw/bin/zsh"];
+    sessionVariables = { EDITOR = "${myPkgs.vim}/bin/vim"; };
   };
 
   nix = {
@@ -74,7 +73,7 @@
 
   i18n = {
     consoleFont = "lat9w-16";
-    consoleKeyMap = "de";
+    consoleKeyMap = "neo";
     defaultLocale = "de_DE.UTF-8";
   };
 
@@ -114,27 +113,16 @@
   };
 
   services = {
-    # openssh.enable = true;
+    nixosManual.showManual = true;
+    acpid.enable = true;
+    ntp.enable = true;
     # emacs = {
     #   enable = true;
     #   # package = import /home/mhuber/.emacs.d { pkgs = pkgs; };
     # };
-
-    ntp.enable = true;
-
-    nixosManual.showManual = true;
-    acpid.enable = true;
-    vsftpd = {
-      enable = false;
-      userlist = ["mhuber"];
-      localUsers = true;
-      extraConfig = ''
-        listen_port=9136
-      '';
-    };
   };
 
-  security.setuidPrograms = [ "slock" "pmount" "pumount" ];
+  security.setuidPrograms = [ "pmount" "pumount" ];
 
   programs = {
     zsh.enable = true;

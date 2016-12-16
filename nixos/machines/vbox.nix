@@ -14,12 +14,12 @@
     # ../profiles/work.nix
     # ../profiles/imagework.nix
     # ../profiles/games.nix
+    ../profiles/openssh.nix
   ];
   virtualisation.virtualbox.guest.enable = true;
   boot.initrd.checkJournalingFS = false;
   services.xserver.displayManager.auto.enable = true;
   services.xserver.displayManager.auto.user = "mhuber";
-  services.openssh.enable = true;
 
   # fileSystems."/virtualboxshare" = {
   #   fsType = "vboxsf";
