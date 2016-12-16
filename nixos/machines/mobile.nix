@@ -1,5 +1,12 @@
 { config, pkgs, ... }:
 
+#
+#
+# Hardware:
+#   Thinkpad T450s
+#
+#
+
 {
   imports = [
     ../profiles/efi.nix

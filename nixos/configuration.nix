@@ -12,7 +12,6 @@ in {
       ./hardware-configuration.nix
       ./configuration-common.nix
       (./machines + "/${hostName}.nix")
-      ./dotfiles.nix
     ];
 
   networking = {

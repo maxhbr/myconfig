@@ -12,12 +12,12 @@ sudo rsync --filter="protect /hardware-configuration.nix" \
            --delete --recursive --perms \
            "$SRC/" /etc/nixos/
 
-if [ ! -e "/etc/nixos/dotfiles" ]; then
-    sudo ln -s "${SRC}/../dotfiles" "/etc/nixos/dotfiles"
-fi
-if [ ! -e "/etc/nixos/backgrounds" ]; then
-    sudo ln -s "${SRC}/../background" "/etc/nixos/background"
-fi
+# if [ ! -e "/etc/nixos/dotfiles" ]; then
+#     sudo ln -s "${SRC}/../dotfiles" "/etc/nixos/dotfiles"
+# fi
+# if [ ! -e "/etc/nixos/backgrounds" ]; then
+#     sudo ln -s "${SRC}/../background" "/etc/nixos/background"
+# fi
 
 sudo \
     NIX_CURL_FLAGS='--retry=1000' \
