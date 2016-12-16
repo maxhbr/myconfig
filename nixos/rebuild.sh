@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+if [ "$EUID" -eq 0 ]; then
+    echo "you should run this script as user"
+    exit 1
+fi
+
+###########################################################################
 SRC="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $SRC
 
@@ -16,27 +22,28 @@ fi
 # update git directory if clean ###########################################
 echo "* update config ..."
 if git diff-index --quiet HEAD --; then
+    git fetch
     UPSTREAM=${1:-'@{u}'}
     LOCAL=$(git rev-parse @)
     REMOTE=$(git rev-parse "$UPSTREAM")
     BASE=$(git merge-base @ "$UPSTREAM")
     if [ $LOCAL = $REMOTE ]; then
-        echo "Up-to-date"
+        echo "... up-to-date"
     elif [ $LOCAL = $BASE ]; then
-        echo "Need to pull"
+        echo "* pull ..."
         git pull
+        # run updatet version of script ###################################
         exec $0
     elif [ $REMOTE = $BASE ]; then
-        echo "Need to push"
+        echo "... need to push"
     else
-        echo "Diverged"
+        echo "... diverged"
     fi
 else
     echo "... your git directory is unclean, it will not be updated"
 fi
 
 # update git directory if clean ###########################################
-#chmod 755 $SRC
 echo "* rsync ..."
 sudo rsync --filter="protect /hardware-configuration.nix" \
            --filter="protect /hostname" \
@@ -59,9 +66,7 @@ sudo \
 
 # link dotfiles ###########################################################
 echo "* dotfiles ..."
-if [ "$EUID" -ne 0 ]; then
-    [ -x ../dotfiles/deploy.sh ] && ../dotfiles/deploy.sh
-fi
+[ -x ../dotfiles/deploy.sh ] && ../dotfiles/deploy.sh
 
 # set desktop background ##################################################
-# TODO
+[ -x ../background/setBackgroundImage.sh ] && ../background/setBackgroundImage.sh
