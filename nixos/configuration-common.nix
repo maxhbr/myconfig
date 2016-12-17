@@ -38,7 +38,6 @@
       oh-my-zsh
     ];
     shells = ["/run/current-system/sw/bin/zsh"];
-    sessionVariables = { EDITOR = "${myPkgs.vim}/bin/vim"; };
   };
 
   nix = {

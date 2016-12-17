@@ -31,7 +31,7 @@ if git diff-index --quiet HEAD --; then
         echo "... up-to-date"
     elif [ $LOCAL = $BASE ]; then
         echo "* pull ..."
-        git pull
+        git pull --rebase
         # run updatet version of script ###################################
         exec $0
     elif [ $REMOTE = $BASE ]; then

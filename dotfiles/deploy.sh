@@ -13,6 +13,13 @@ fi
 
 ################################################################################
 cd "$dotfiles"
+
+add_stow_params=""
+if git diff-index --quiet HEAD --; then
+    echo "git is clean, adopt files ..."
+    add_stow_params="--adopt"
+fi
+
 dirs=$(find . -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 for dir in $dirs; do
     cd "$dotfiles/$dir"
@@ -20,5 +27,5 @@ for dir in $dirs; do
     find . -mindepth 1 -type d \
          -exec mkdir -p "$userDir/"{} \; \
          -exec chown $user:$userGroup "$userDir/"{} \;
-    stow -t $userDir -d $dotfiles $dir
+    stow $add_stow_params -t $userDir -d $dotfiles $dir
 done
