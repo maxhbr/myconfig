@@ -20,6 +20,7 @@
     gnome3.file-roller
   # misc
     xf86_input_wacom
+    xdotool
   ];
 
   services = {
