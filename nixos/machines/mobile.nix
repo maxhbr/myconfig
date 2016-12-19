@@ -27,6 +27,7 @@
 
   environment.systemPackages = with pkgs; [
     xorg.xbacklight
+    powertop
   ];
 
   #networking.wireless.enable = true;

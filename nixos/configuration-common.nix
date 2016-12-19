@@ -24,7 +24,7 @@
       git git-lfs
       emacs vim
       tmux
-      htop iftop powertop
+      htop iftop iotop
       ranger
       pmount fuse usbutils
       acpi acpid
