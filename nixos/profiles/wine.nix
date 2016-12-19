@@ -2,7 +2,7 @@
 
 {
   environment.systemPackages = with pkgs; [
-    wineFull
+    wineStaging
     winetricks
   ];
 }
