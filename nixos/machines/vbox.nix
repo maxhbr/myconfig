@@ -2,8 +2,11 @@
 
 {
   imports = [
-    # ../profiles/efi.nix
-    ../profiles/grub.nix
+    ## hardware:
+    ./hardware/quadroFX4800.nix
+    ./hardware/grub.nix
+
+    ## software:
     ../profiles/desktop.nix
     ../profiles/xmonad.nix
     # ../profiles/xfce.nix

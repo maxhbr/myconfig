@@ -1,6 +1,6 @@
 { config, pkgs, ... }:
-{
 
+{
   environment.systemPackages = with pkgs; [
     mutt-with-sidebar
     offlineimap msmtp gnupg abook notmuch

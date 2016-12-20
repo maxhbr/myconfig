@@ -4,19 +4,16 @@
   imports = [
     ## hardware:
     ./hardware/T450s.nix
+    ./hardware/efi.nix
 
     ## software:
-    ../profiles/efi.nix
-    #../profiles/grub.nix
     ../profiles/desktop.nix
     ../profiles/xmonad.nix
-    # ../profiles/xfce.nix
     ../profiles/virtualization.nix
     ../profiles/mail.nix
     ../profiles/dev.nix
     ../profiles/work.nix
     ../profiles/imagework.nix
-    # ../profiles/games.nix
     ../profiles/printing.nix
   ];
 
