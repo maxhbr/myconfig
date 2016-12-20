@@ -1,14 +1,11 @@
 { config, pkgs, ... }:
 
-#
-#
-# Hardware:
-#   GeForce Quadro FX 4800
-#
-#
-
 {
   imports = [
+    ## hardware:
+    ./hardware/quadroFX4800.nix
+
+    ## software:
     # ../profiles/efi.nix
     ../profiles/grub.nix
     ../profiles/desktop.nix
@@ -24,6 +21,4 @@
     ../profiles/wine.nix
     ../profiles/openssh.nix
   ];
-
-  services.xserver.videoDrivers = ["nvidiaLegacy340"];
 }
