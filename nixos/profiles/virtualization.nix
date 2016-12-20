@@ -4,6 +4,7 @@
   environment.systemPackages = with pkgs; [
     vagrant
     docker
+    python35Packages.docker_compose
   ];
 
   virtualisation = {

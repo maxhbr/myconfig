@@ -12,15 +12,19 @@
     ./notebook-generic.nix
   ];
 
-  services.xserver.synaptics = {
-    additionalOptions = ''
-      Option "VertScrollDelta" "-100"
-      Option "HorizScrollDelta" "-100"
-    '';
-    buttonsMap = [ 1 3 2 ];
-    tapButtons = false;
-    fingersMap = [ 0 0 0 ];
+  services.xserver = {
+    videoDrivers = [ "intel" ];
+    synaptics = {
+      additionalOptions = ''
+        Option "VertScrollDelta" "-100"
+        Option "HorizScrollDelta" "-100"
+      '';
+      buttonsMap = [ 1 3 2 ];
+      tapButtons = false;
+      fingersMap = [ 0 0 0 ];
+    };
   };
+
 #     services.tlp = {
 #       enable = true;
 #       extraConfig = ''

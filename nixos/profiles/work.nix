@@ -2,10 +2,9 @@
 
 {
   environment.systemPackages = with pkgs; [
-    openvpn networkmanager_openvpn maven thrift
+    openvpn networkmanager_openvpn
     ruby
     rdesktop
-    openjdk
-    cloc
+    openjdk maven thrift
   ];
 }

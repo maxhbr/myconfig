@@ -92,9 +92,16 @@
       isNormalUser = true;
       group = "mhuber";
       uid = 1000;
-      extraGroups = [ "wheel" "audio" "video" "vboxusers" "docker" "networkmanager" "dialout" "input" ];
-      createHome = true;
+      extraGroups = [
+        "wheel"
+        "audio" "video"
+        "vboxusers" "docker"
+        "networkmanager"
+        "dialout"
+        "input"
+      ];
       home = "/home/mhuber";
+      createHome = true;
       shell = "/run/current-system/sw/bin/zsh";
       password = "dummy";
     };

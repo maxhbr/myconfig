@@ -14,6 +14,8 @@ in {
     ruby
     gnumake cmake automake
 
+    cloc
+
     gitAndTools.gitFull
     gitAndTools.tig
   ] ++ hsPackages;

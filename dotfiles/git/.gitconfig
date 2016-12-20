@@ -84,6 +84,10 @@
                            && git reset --hard FETCH_HEAD ) ) \
                        || ( echo && echo "possible refs:" && git ls-remote $remote | grep "/merge"; ); \
                      }; f"
+
+    # git subtree:
+    sba = "!f() {git subtree add --prefix $2 $1 master --squash; }; f" 
+    sbu = "!f() {git subtree pull --prefix $2 $1 master --squash; }; f" 
 [color]
     branch = auto
     diff = auto

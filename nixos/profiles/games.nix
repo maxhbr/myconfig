@@ -6,6 +6,9 @@
     pkgs.steamcontroller-udev-rules
   ];
 
+  hardware.opengl.driSupport32Bit = true;
+
+  # steam controller
   nixpkgs.config.packageOverrides = pkgs: {
     steamcontroller-udev-rules = pkgs.writeTextFile {
       name = "steamcontroller-udev-rules";
@@ -40,8 +43,5 @@
       destination = "/etc/udev/rules.d/99-steamcontroller.rules";
     };
   };
-
   services.udev.packages = [ pkgs.steamcontroller-udev-rules ];
-
-  hardware.opengl.driSupport32Bit = true;
 }
