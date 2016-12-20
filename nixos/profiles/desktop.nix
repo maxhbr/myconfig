@@ -34,14 +34,12 @@
 
       displayManager.sessionCommands = ''
         ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name left_ptr
-        # ${pkgs.xlibs.setxkbmap}/bin/setxkbmap de neo
         if test -e $HOME/.Xresources; then
           ${pkgs.xorg.xrdb}/bin/xrdb --merge $HOME/.Xresources
         fi
         if test -e $HOME/.desktop-backgronud.png; then
-          ${pkgs.feh}/bin/feh --bg-scale "$HOME/.desktop-backgronud.png"
+          ${pkgs.feh}/bin/feh --bg-scale "$HOME/.background-image"
         fi
-        # ${pkgs.rxvt_unicode_with-plugins}/bin/urxvtd -q -f -o &
       '';
     };
 
