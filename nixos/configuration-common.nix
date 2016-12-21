@@ -1,6 +1,9 @@
 { config, pkgs, ... }:
 
 {
+  imports = [
+    ./profiles/terminal.nix
+  ];
 
   boot = {
     # kernelPackages = pkgs.linuxPackages_testing;
@@ -20,18 +23,11 @@
   environment = {
     systemPackages = with pkgs; [
       kbd
-      wget curl elinks w3m
+      wget curl
       git git-lfs
-      emacs vim
-      tmux
-      htop iftop iotop
       ranger
       pmount fuse usbutils
       acpi acpid
-      mkpasswd
-      manpages
-      taskwarrior
-      pass
       cryptsetup
       rsnapshot
       stow
