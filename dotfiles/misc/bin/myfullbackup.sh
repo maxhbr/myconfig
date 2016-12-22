@@ -90,6 +90,7 @@ ${HOME}/.cache/
 ${HOME}/Bilder/workspace/
 ${HOME}/Desktop/games/
 ${HOME}/.local/share/Steam/
+${HOME}/.wine/
 /tmp/
 /var/lib/docker/
 /var/cache/
