@@ -7,5 +7,6 @@
     
     ## software:
     ../profiles/virtualization.nix
+    ../profiles/openssh.nix
   ];
 }
