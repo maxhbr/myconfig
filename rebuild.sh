@@ -5,16 +5,15 @@ if [ "$EUID" -eq 0 ]; then
     exit 1
 fi
 
-###########################################################################
 SRC="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $SRC
 
 # check, if connected #####################################################
 if ! ping -c1 cloud.github.com > /dev/null 2>&1; then
-  echo "**** not connected (ping) ****" >>$ERRFILE 2>&1
+  echo "**** not connected (ping) ****"
   # check again ###########################################################
   if ! wget -O - cloud.github.com > /dev/null 2>&1; then
-    echo "**** not connected (wget) ****" >>$ERRFILE 2>&1
+    echo "**** not connected (wget) ****"
     exit 1
   fi
 fi
@@ -43,30 +42,19 @@ else
     echo "... your git directory is unclean, it will not be updated"
 fi
 
-# update git directory if clean ###########################################
-echo "* rsync ..."
-sudo rsync --filter="protect /hardware-configuration.nix" \
-           --filter="protect /hostname" \
-           --filter="protect /hostid" \
-           --filter="exclude,s *.gitignore" \
-           --filter="exclude,s *.gitmodules" \
-           --filter="exclude,s *.git" \
-           --filter="exclude .*.swp" \
-           --delete --recursive --perms \
-           "$SRC/" /etc/nixos/
 
 # nixos-rebuild ###########################################################
-echo "* nixos-rebuild ..."
-sudo \
-    NIX_CURL_FLAGS='--retry=1000' \
-    nixos-rebuild --show-trace \
-                  --upgrade \
-                  --keep-failed \
-                  --fallback ${1:-switch}
+if [ -e /etc/nixos/configuration.nix ]; then
+    echo "* nixos-rebuild ..."
+    [ -x ./nixos/deploy.sh ] \
+        && ./nixos/deploy.sh
+fi
 
 # link dotfiles ###########################################################
 echo "* dotfiles ..."
-[ -x ../dotfiles/deploy.sh ] && ../dotfiles/deploy.sh
+[ -x ./dotfiles/deploy.sh ] \
+    && ./dotfiles/deploy.sh
 
 # set desktop background ##################################################
-[ -x ../background/setBackgroundImage.sh ] && ../background/setBackgroundImage.sh
+[ -x ./background/setBackgroundImage.sh ] \
+    && ./background/setBackgroundImage.sh
