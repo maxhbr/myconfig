@@ -3,8 +3,9 @@
 {
   imports = [
     ## hardware:
-    ./hardware/quadroFX4800.nix
     ./hardware/grub.nix
+    ./hardware/quadroFX4800.nix
+    ./hardware/steamcontroller.nix
 
     ## software:
     ../profiles/desktop.nix

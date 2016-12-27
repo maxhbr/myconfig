@@ -15,6 +15,9 @@
     ../profiles/work.nix
     ../profiles/imagework.nix
     ../profiles/printing.nix
+
+    ## others
+    ../profiles/games.nix
   ];
 
   boot = {
