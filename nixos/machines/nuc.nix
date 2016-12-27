@@ -3,10 +3,14 @@
 {
   imports = [
     ## hardware:
-    ./hardware/grub.nix
+    ./hardware/efi.nix
     
     ## software:
     ../profiles/virtualization.nix
     ../profiles/openssh.nix
+    ../profiles/terminal.nix
+    # ../profiles/vsftp.nix
   ];
+
+  # services.xservervideoDrivers = [ "intel" ];
 }
