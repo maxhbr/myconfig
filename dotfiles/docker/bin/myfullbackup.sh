@@ -4,6 +4,11 @@
 
 set -e
 
+if [ "$EUID" -ne 0 ]; then
+    echo "restart with sudo..."
+    exec sudo $0 $@
+fi
+
 type "docker" &> /dev/null || {
     echo "this script needs docker to be installed within \$PATH"
     exit 1
@@ -108,9 +113,9 @@ set -x
 
 ###############################################################################
 # mount disc                                                                  #
-echo "0 0 0" | sudo tee /sys/class/scsi_host/host1/scan
+echo "0 0 0" | tee /sys/class/scsi_host/host1/scan
 sleep 1
-sudo mkdir -p ${BACKUPMOUNT}
+mkdir -p ${BACKUPMOUNT}
 rootId=$(stat -c%d /)
 mountId=$(stat -c%d "${BACKUPMOUNT}")
 if (( rootId == mountId )); then
@@ -127,7 +132,7 @@ mkdir -p $BACKUPDIR
 # end mount disc                                                              #
 ###############################################################################
 
-exec &> >(sudo tee -a "$LOGFILE")
+exec &> >(tee -a "$LOGFILE")
 echo
 echo
 echo "$(date)"
@@ -135,17 +140,17 @@ echo "$(date)"
 ###############################################################################
 # write config files                                                          #
 
-rsnapshot_cfg | sudo tee ${BACKUPDIR}/rsnapshot_cfg
-exclude_file | sudo tee ${BACKUPDIR}/exclude_file
+rsnapshot_cfg | tee ${BACKUPDIR}/rsnapshot_cfg
+exclude_file | tee ${BACKUPDIR}/exclude_file
 
 # end write config files                                                      #
 ###############################################################################
 
 ###############################################################################
 # generate docker image                                                       #
-sudo docker rm --force myfullbackup >/dev/null 2>&1 || continue
+docker rm --force myfullbackup >/dev/null 2>&1 || continue
 
-sudo docker build -t myfullbackup --rm=true --force-rm=true - <<EOF
+docker build -t myfullbackup --rm=true --force-rm=true - <<EOF
 FROM ubuntu:latest
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get install -y \
@@ -171,16 +176,16 @@ LDIFS=$IFS; IFS=','
 for i in daily,1 weekly,7 monthly,28; do
   set -- $i;
   if (test $[$BACKUPNR % $2] -eq 0); then
-    sudo docker run -ti \
+    docker run -ti \
                 --volume /:/source \
                 --volume $BACKUPDIR:/target \
                 --name=myfullbackup \
                 myfullbackup \
-                rsnapshot -V -c /target/rsnapshot_cfg $1
+                rsnapshot -v -c /target/rsnapshot_cfg $1 >> "$LOGFILE"
   fi
 done
 IFS=$OLDIFS
-echo -n "$(expr $BACKUPNR + 1)" | sudo tee $STATUSFILE
+echo -n "$(expr $BACKUPNR + 1)" | tee $STATUSFILE
 
 ###############################################################################
 
@@ -188,8 +193,10 @@ type "pacman" &> /dev/null && {
     pacman -Qeq > ${BACKUPDIR}/daily.0/pacmanPakete.txt
 }
 
-type "nix" &> /dev/null && {
+type "nix-store" &> /dev/null && {
     nix-store -q --references /var/run/current-system/sw | cut -d'-' -f2- > ${BACKUPDIR}/daily.0/nixPakete.txt
+}
+type "nix-channel" &> /dev/null && {
     nix-channel --list > ${BACKUPDIR}/daily.0/nixChannel.txt
 }
 # end run                                                                     #
@@ -198,15 +205,15 @@ type "nix" &> /dev/null && {
 ###############################################################################
 # unmount disc                                                                #
 sync
-sudo umount $BACKUPMOUNT
+umount $BACKUPMOUNT
 type "hdparm" &> /dev/null && {
-  sudo hdparm -Y /dev/disk/by-uuid/$UUID
+  hdparm -Y /dev/disk/by-uuid/$UUID
 }
 # end unmount disc                                                            #
 ###############################################################################
 
 if [ "$1" = "suspend" ]; then
-    sudo systemctl suspend
+    systemctl suspend
 fi
 
 # vim: set noexpandtab :
