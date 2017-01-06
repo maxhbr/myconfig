@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
+# set desktop background ##################################################
 image=penrose_4k_color.png
 
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../background"
 target="$HOME/.background-image"
 
 [[ -e "$target" ]] && rm "$target"

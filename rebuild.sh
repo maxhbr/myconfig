@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+#
+#  written by maximilian-huber.de
+
+set -e
 
 if [ "$EUID" -eq 0 ]; then
     echo "you should run this script as user"
@@ -42,19 +46,8 @@ else
     echo "... your git directory is unclean, it will not be updated"
 fi
 
-
-# nixos-rebuild ###########################################################
-if [ -e /etc/nixos/configuration.nix ]; then
-    echo "* nixos-rebuild ..."
-    [ -x ./nixos/deploy.sh ] \
-        && ./nixos/deploy.sh
-fi
-
-# link dotfiles ###########################################################
-echo "* dotfiles ..."
-[ -x ./dotfiles/deploy.sh ] \
-    && ./dotfiles/deploy.sh
-
-# set desktop background ##################################################
-[ -x ./background/setBackgroundImage.sh ] \
-    && ./background/setBackgroundImage.sh
+# run hooks ###############################################################
+shopt -s nullglob
+for f in $SRC/_hooks/*; do
+    [ -x $f ] && $f
+done
