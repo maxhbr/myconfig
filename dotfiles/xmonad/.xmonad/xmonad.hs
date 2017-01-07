@@ -52,12 +52,13 @@ import           XMonad.Util.Run ( spawnPipe )
 import           XMonad.Util.Types ( Direction2D(..) )
 
 import           XMonad.Actions.CycleWS ( nextWS, prevWS
+                                        , toggleWS'
                                         , shiftToNext, shiftToPrev
                                         , nextScreen, prevScreen
                                         , shiftNextScreen, shiftPrevScreen
                                         , moveTo
                                         , Direction1D(..)
-                                        , WSType( NonEmptyWS )
+                                        , WSType( HiddenNonEmptyWS )
                                         , skipTags )
 import           XMonad.Actions.UpdatePointer ( updatePointer )
 import           XMonad.Actions.GridSelect
@@ -172,16 +173,16 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) =
           ++ subLayoutKBs
       where
         cycleWSKBs =
-          [ ((m__, xK_Down ), moveTo Next NonEmptyWS)
-          , ((m__, xK_Up   ), moveTo Prev NonEmptyWS)
+          [ ((m__, xK_Down ), moveTo Next HiddenNonEmptyWS)
+          , ((m__, xK_Up   ), moveTo Prev HiddenNonEmptyWS)
           , ((ms_, xK_Down ), shiftToNext >> nextWS)
           , ((ms_, xK_Up   ), shiftToPrev >> prevWS)
           , ((m__, xK_Right), nextScreen)
           , ((m__, xK_Left ), prevScreen)
           , ((ms_, xK_Right), shiftNextScreen)
           , ((ms_, xK_Left ), shiftPrevScreen)
-          , ((m__, xK_y    ), toggleSkip ["NSP"])
-          , ((m__, xK_a    ), toggleSkip ["NSP"])]
+          , ((m__, xK_y    ), toggleWS' ["NSP"])
+          , ((m__, xK_a    ), toggleWS' ["NSP"])]
         combineTwoKBs =
           [((msc, xK_l ), sendMessage $ Move L)]
         subLayoutKBs =
@@ -236,12 +237,6 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) =
                                          , "xbacklight =1"
                                          , "xbacklight -1"
                                          , "xbacklight =0"])]
-
--- Toggle workspaces but ignore some
-toggleSkip :: [WorkspaceId] -> X ()
-toggleSkip skips = do
-    hs <- gets (flip skipTags skips . W.hidden . windowset)
-    unless (null hs) (windows . W.view . W.tag $ head hs)
 
 ------------------------------------------------------------------------
 -- Mouse bindings:

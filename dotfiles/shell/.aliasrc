@@ -635,7 +635,9 @@ have nix-env && {
   # alias nixupg="nix-env -u '*'"
   alias nixupg="nix-channel --update && nix-env --upgrade"
   alias nixTest="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p"
-  # alias nixTestAlternativ="nix-shell '<nixpkgs>' -A"
+  nixRun() {
+      NIXPKGS_ALLOW_UNFREE=1 nix-shell -p "$1" --command "$1"
+  }
   alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
   alias nixse="nix-env -qaP | grep "
   alias mynixse="nix-env -f \$NIXPKGS -qaP | grep "
