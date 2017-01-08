@@ -2,7 +2,7 @@
 SRC="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $SRC
 
-# update git directory if clean ###########################################
+# rsync file to target folder #############################################
 echo "* rsync ..."
 sudo rsync --filter="protect /hardware-configuration.nix" \
            --filter="protect /hostname" \

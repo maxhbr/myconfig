@@ -1,5 +1,11 @@
 # Path to your oh-my-zsh installation.
-  export ZSH=/home/mhuber/.oh-my-zsh
+if [ -z $ZSH ]; then
+    export ZSH=/home/mhuber/.oh-my-zsh
+    if [ ! -e $ZSH ]; then
+        echo 'oh-my-zsh not found'
+        echo 'get oh-my-zsh via sh -c "$(curl -fsSL https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"'
+    fi
+fi
 
 # Set name of the theme to load.
 # Look in ~/.oh-my-zsh/themes/

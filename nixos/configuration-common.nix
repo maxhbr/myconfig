@@ -2,6 +2,7 @@
 
 {
   imports = [
+    ./profiles/oh-my-zsh.nix
     ./profiles/terminal.nix
   ];
 
@@ -20,21 +21,17 @@
     };
   };
 
-  environment = {
-    systemPackages = with pkgs; [
-      kbd
-      wget curl
-      git git-lfs
-      ranger
-      pmount fuse usbutils
-      acpi acpid
-      cryptsetup
-      rsnapshot
-      stow
-      oh-my-zsh
-    ];
-    shells = ["/run/current-system/sw/bin/zsh"];
-  };
+  environment.systemPackages = with pkgs; [
+    kbd
+    wget curl
+    git git-lfs
+    ranger
+    pmount fuse usbutils
+    acpi acpid
+    cryptsetup
+    rsnapshot
+    stow
+  ];
 
   nix = {
     useSandbox = true;
@@ -126,8 +123,5 @@
 
   security.setuidPrograms = [ "pmount" "pumount" ];
 
-  programs = {
-    zsh.enable = true;
-    ssh.startAgent = false;
-  };
+  programs.ssh.startAgent = false;
 }
