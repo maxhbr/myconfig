@@ -2,6 +2,15 @@
 SRC="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $SRC
 
+type "curl" &> /dev/null && {
+  echo "* update hosts from someonewhocares.org ..."
+  curl http://someonewhocares.org/hosts/hosts | \
+    sed -e '/<localhost>/,/<\/localhost>/d' > static/extrahosts
+  git update-index --assume-unchanged static/extrahost
+}
+
+set -e
+
 # rsync file to target folder #############################################
 echo "* rsync ..."
 sudo rsync --filter="protect /hardware-configuration.nix" \

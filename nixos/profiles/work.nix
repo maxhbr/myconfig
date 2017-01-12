@@ -5,6 +5,6 @@
     openvpn networkmanager_openvpn
     ruby
     rdesktop
-    openjdk maven thrift
+    openjdk maven thrift gradle
   ];
 }

@@ -3,6 +3,7 @@
 {
   imports = [
     ../pkgs/urxvtd.nix
+    ./hosts.nix
   ];
 
   environment.systemPackages = with pkgs; [
