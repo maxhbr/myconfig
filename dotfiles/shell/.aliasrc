@@ -807,12 +807,18 @@ touchpadtoggle(){
 # usage: calc <equation>
 calc() { echo "$*" | bc -l; }
 # binär, dezimal, hexadezimal (binary, hex, ...)
-h2d(){ echo "ibase=16; $@"|bc; }
-d2h(){ echo "obase=16; $@"|bc; }
-b2d(){ echo "ibase=2; $@"|bc; }
-d2b(){ echo "obase=2; $@"|bc; }
-b2h(){ echo "obase=16; ibase=2; $@"|bc; }
-h2b(){ echo "ibase=16; obase=2; $@"|bc; }
+b2d(){ echo "ibase=2;            $@"|bc; }
+b2h(){ echo "ibase=2;  obase=16; $@"|bc; }
+b2o(){ echo "ibase=2;  obase=8;  $@"|bc; }
+d2b(){ echo "          obase=2;  $@"|bc; }
+d2h(){ echo "          obase=16; $@"|bc; }
+d2o(){ echo "          obase=8;  $@"|bc; }
+h2b(){ echo "ibase=16; obase=2;  $@"|bc; }
+h2d(){ echo "ibase=16;           $@"|bc; }
+h2o(){ echo "ibase=16; obase=8;  $@"|bc; }
+o2b(){ echo "ibase=8;  obase=2;  $@"|bc; }
+o2d(){ echo "ibase=8;            $@"|bc; }
+o2h(){ echo "ibase=8;  obase=16; $@"|bc; }
 
 hgrep() { history | egrep "$@"; }
 
