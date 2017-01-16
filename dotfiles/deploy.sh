@@ -29,5 +29,5 @@ for dir in $dirs; do
     find . -mindepth 1 -type d \
          -exec mkdir -p "$userDir/"{} \; \
          -exec chown $user:$userGroup "$userDir/"{} \;
-    stow $add_stow_params -t $userDir -d $dotfiles $dir
+    stow $add_stow_params -t $userDir -d $dotfiles $@ $dir
 done
