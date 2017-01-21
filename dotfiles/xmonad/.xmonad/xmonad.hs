@@ -58,7 +58,7 @@ import           XMonad.Actions.CycleWS ( nextWS, prevWS
                                         , shiftNextScreen, shiftPrevScreen
                                         , moveTo
                                         , Direction1D(..)
-                                        , WSType( HiddenNonEmptyWS )
+                                        , WSType( NonEmptyWS )
                                         , skipTags )
 import           XMonad.Actions.UpdatePointer ( updatePointer )
 import           XMonad.Actions.GridSelect
@@ -137,10 +137,10 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) =
           ++ switchWorkspaceKBs
       where
         switchWorkspaceKBs =
-          -- mod-[1..9], Switch to workspace N
-          -- mod-shift-[1..9], Move client to workspace N
+          -- mod-[1..9,0], Switch to workspace N
+          -- mod-shift-[1..9,0], Move client to workspace N
           [((m, k), windows $ f i)
-              | (i, k) <- zip (XMonad.workspaces conf) [xK_1 .. xK_9]
+              | (i, k) <- zip (XMonad.workspaces conf) ([xK_1 .. xK_9] ++ [xK_0])
               , (f, m) <- [(W.greedyView, m__), (W.shift, ms_)]]
         {-
         switchPhysicalKBs =
@@ -173,8 +173,8 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) =
           ++ subLayoutKBs
       where
         cycleWSKBs =
-          [ ((m__, xK_Down ), moveTo Next HiddenNonEmptyWS)
-          , ((m__, xK_Up   ), moveTo Prev HiddenNonEmptyWS)
+          [ ((m__, xK_Down ), moveTo Next NonEmptyWS) -- HiddenNonEmptyWS
+          , ((m__, xK_Up   ), moveTo Prev NonEmptyWS) -- HiddenNonEmptyWS
           , ((ms_, xK_Down ), shiftToNext >> nextWS)
           , ((ms_, xK_Up   ), shiftToPrev >> prevWS)
           , ((m__, xK_Right), nextScreen)
@@ -240,7 +240,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) =
 
 ------------------------------------------------------------------------
 -- Mouse bindings:
-myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList
+myMouseBindings XConfig {XMonad.modMask = modm} = M.fromList
     -- mod-button1, Set the window to floating mode and move by dragging
     [ ((modm, button1), \w -> focus w >> mouseMoveWindow w
                                        >> windows W.shiftMaster)
@@ -254,7 +254,7 @@ myMouseBindings (XConfig {XMonad.modMask = modm}) = M.fromList
 
 ------------------------------------------------------------------------
 -- Layouts / workspaces:
-myWorkspaces = ["1","2","3","4","5","6","7","web","9"]
+myWorkspaces = map show [1..7] ++ ("web" : map show [9..15]) ++ ["games"]
 
 myLayout = avoidStrutsOn[U,D] $
     smartBorders $
@@ -262,12 +262,13 @@ myLayout = avoidStrutsOn[U,D] $
     boringAuto $
     mkToggle (single MIRROR) $
     onWorkspace (myWorkspaces !! 8) (full ||| tiled) $
-    (minimize $
-     onWorkspace (myWorkspaces !! 1) (tiled |||dtb) $
-     onWorkspace (myWorkspaces !! 5) (dtb ||| magnifiercz 1.3 dtb) $
-     onWorkspace (myWorkspaces !! 6) dtb $
-     onWorkspace (myWorkspaces !! 7) dtb $
-     (tiled ||| dtb )) ||| full
+    minimize (
+      onWorkspace (myWorkspaces !! 1) (tiled ||| dtb) $
+      onWorkspace (myWorkspaces !! 5) (dtb ||| magnifiercz 1.3 dtb) $
+      onWorkspace (myWorkspaces !! 6) dtb $
+      onWorkspace (myWorkspaces !! 7) dtb
+      (tiled ||| dtb ))
+    ||| full
     where
         tiled   = named " " $
             addTabs shrinkText myTab $
@@ -308,11 +309,12 @@ myManageHook = composeAll
     , className =? "Onboard"             --> doFloat
     , className =? "Chromium"            --> doShift "web"
     , className =? "chromium-browser"    --> doShift "web"
-    , className =? "Virtualbox"          --> doFullFloat
+    , className =? "Virtualbox"          --> doShift "10"
+    -- , className =? "Virtualbox"          --> doFullFloat
     , className =? "qemu"                --> doCenterFloat
     , className =? "qemu-system-x86_64"  --> doCenterFloat
     , className =? "feh"                 --> doCenterFloat
-    , className =? "Steam"               --> doShift "9"
+    , className =? "Steam"               --> doShift "games"
     , resource  =? "desktop_window"      --> doIgnore
     , resource  =? "kdesktop"            --> doIgnore
     , className =? "Zenity"              --> doCenterFloat ]

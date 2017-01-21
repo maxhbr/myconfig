@@ -116,7 +116,7 @@ PERL_MM_OPT="INSTALL_BASE=$HOME/perl5"; export PERL_MM_OPT;
 ZDOTDIR=${ZDOTDIR:-${HOME}}
 ZSHDDIR="${HOME}/.config/zsh.d"
 #HISTFILE="${ZDOTDIR}/.zsh_history"
-HISTSIZE=10000
+HISTSIZE=50000
 SAVEHIST="${HISTSIZE}"
 # export EDITOR="/usr/bin/vim"
 export EDITOR="vim"
