@@ -2,7 +2,7 @@
 
 {
   imports = [
-    ../pkgs/urxvtd.nix
+    ../pkgs/services/urxvtd.nix
     ./hosts.nix
   ];
 

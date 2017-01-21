@@ -46,6 +46,7 @@
 
     mt       = mergetool --no-prompt
     l        = log
+    lg = log --oneline
     sup      = submodule update
     unstage  = reset HEAD --
     untrack  = rm --cached

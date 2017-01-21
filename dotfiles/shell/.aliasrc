@@ -94,6 +94,7 @@ alias httptunnel="ssh -ND localhost:9567 vserver"
 
 alias g="git"
 alias t="tig"
+alias tu='tig HEAD @{upstream}'
 alias ta="task"
 alias d="docker"
 # g() {
