@@ -16,6 +16,8 @@
     ../profiles/imagework.nix
     ../profiles/printing.nix
 
+    ../profiles/vgrep.nix
+
     ## others
     ../profiles/games.nix
   ];
