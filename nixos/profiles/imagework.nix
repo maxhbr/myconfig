@@ -2,7 +2,7 @@
 
 {
   environment.systemPackages = with pkgs; [
-    gimp
+    gimp-with-plugins
     rawtherapee
     geeqie
 

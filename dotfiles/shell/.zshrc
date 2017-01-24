@@ -54,6 +54,7 @@ bindkey '^w' backward-kill-word
 [[ -d $HOME/bin ]] && {
   export PATH=$HOME/bin:$PATH
   [[ -d $HOME/bin/stolen ]] && export PATH=$PATH:$HOME/bin/stolen
+  [[ -d $HOME/bin/docker ]] && export PATH=$PATH:$HOME/bin/docker
 }
 [[ -d $HOME/.perl/bin ]] && export PATH=$HOME/.perl/bin:$PATH
 # [[ -d $HOME/perl5/bin ]] && export PATH=$HOME/perl5/bin:$PATH

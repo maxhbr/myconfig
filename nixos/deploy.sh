@@ -2,6 +2,7 @@
 SRC="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $SRC
 
+# hosts from someonewhocares.org ##########################################
 type "curl" &> /dev/null && {
   echo "* update hosts from someonewhocares.org ..."
   curl http://someonewhocares.org/hosts/hosts | \

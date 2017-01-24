@@ -6,18 +6,14 @@ Xcursor.theme: Vanilla-DMZ-AA
 urxvt*loginShell: true
 xterm*loginShell: true
 
-!emacs*Background: DarkSlateGray
-!emacs*Foreground: Wheat
-
 URxvt.urgentOnBell: true
 
 URxvt*reverseVideo: false
 
 ! transparency - true or false (default)
-!URxvt*transparent: true
+URxvt*transparent: true
 ! shading - 0 to 99 darkens, 101 to 200 lightens.
-!   Dont use with tintColor; just use a darker or lighter color instead.
-!URxvt*shading: 10
+URxvt*shading: 20
 
 URxvt.internalBorder: 0
 URxvt.externalBorder: 0

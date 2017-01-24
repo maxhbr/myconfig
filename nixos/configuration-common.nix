@@ -1,6 +1,11 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 
-{
+let
+  hasVBox = config.virtualisation.virtualbox.host.enable;
+  hasDocker = config.virtualisation.docker.enable;
+  hasnm = config.networking.networkmanager.enable;
+
+in {
   imports = [
     ./profiles/oh-my-zsh.nix
     ./profiles/terminal.nix
@@ -57,11 +62,18 @@
       auto-optimise-store = true
       binary-caches-parallel-connections = 10
     '';
+
+    # nixPath = [ "/etc/nixos/path" "nixos-config"=/etc/nixos/configuration.nix" ];
+    nixPath = [ "nixpkgs=http://nixos.org/channels/nixos-16.09/nixexprs.tar.xz" ];
   };
 
   time.timeZone = "Europe/Berlin";
 
-  nixpkgs.config.allowUnfree = true;
+  nixpkgs.config = {
+    allowUnfree = true;
+    # packageOverrides = super: let self = super.pkgs; in {
+    # };
+  };
 
   i18n = {
     consoleFont = "lat9w-16";
@@ -80,7 +92,7 @@
   };
 
   users = {
-    mutableUsers = true;
+    mutableUsers = false;
     extraUsers.mhuber = {
       isNormalUser = true;
       group = "mhuber";
@@ -88,15 +100,16 @@
       extraGroups = [
         "wheel"
         "audio" "video"
-        "vboxusers" "docker"
-        "networkmanager"
         "dialout"
-        "input"
-      ];
+        "input" ]
+        ++ pkgs.lib.optional hasnm "networkmanager"
+        ++ pkgs.lib.optional hasVBox "vboxusers"
+        ++ pkgs.lib.optional hasDocker "docker";
       home = "/home/mhuber";
       createHome = true;
       shell = "/run/current-system/sw/bin/zsh";
-      password = "dummy";
+      # password = "dummy";
+      initialPassword = lib.mkForce "dummy";
     };
     extraGroups.mhuber.gid = 1000;
   };
@@ -105,10 +118,10 @@
     activationScripts.media = ''
       mkdir -m 0755 -p /media /share
     '';
-    autoUpgrade = {
-      enable = true;
-      channel = "https://nixos.org/channels/nixos-unstable";
-    };
+    # autoUpgrade = {
+    #   enable = true;
+    #   channel = "https://nixos.org/channels/nixos-unstable";
+    # };
   };
 
   services = {
