@@ -63,8 +63,8 @@ in {
       binary-caches-parallel-connections = 10
     '';
 
-    # nixPath = [ "/etc/nixos/path" "nixos-config"=/etc/nixos/configuration.nix" ];
-    nixPath = [ "nixpkgs=http://nixos.org/channels/nixos-16.09/nixexprs.tar.xz" ];
+    # nixPath = [ "/etc/nixos/path" "nixos-config=/etc/nixos/configuration.nix" ];
+    # nixPath = [ "nixpkgs=http://nixos.org/channels/nixos-16.09/nixexprs.tar.xz" ];
   };
 
   time.timeZone = "Europe/Berlin";
@@ -92,7 +92,7 @@ in {
   };
 
   users = {
-    mutableUsers = false;
+    mutableUsers = true; # one needs to change the password?
     extraUsers.mhuber = {
       isNormalUser = true;
       group = "mhuber";
