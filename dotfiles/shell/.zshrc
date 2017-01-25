@@ -10,7 +10,7 @@ fi
 ZSH_THEME="robbyrussell" # gallifrey
 # DISABLE_AUTO_UPDATE="true"
 # export UPDATE_ZSH_DAYS=13
-ENABLE_CORRECTION="true"
+ENABLE_CORRECTION="false"
 COMPLETION_WAITING_DOTS="true"
 plugins=(git zsh-syntax-highlighting) # rake ruby
 

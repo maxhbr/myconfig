@@ -50,6 +50,7 @@
     sup      = submodule update
     unstage  = reset HEAD --
     untrack  = rm --cached
+    unadd    = rm --cached
 
     whatis   = show -s --pretty='tformat:%h (%s, %ad)' --date=short
     pwhatis  = show -s --pretty='tformat:%h, %s, %ad' --date=short
