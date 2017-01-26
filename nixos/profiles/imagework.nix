@@ -1,10 +1,12 @@
 { config, pkgs, ... }:
 
-{
+let
+  unstable = (import <unstable> {});
+in {
   environment.systemPackages = with pkgs; [
-    gimp-with-plugins
-    rawtherapee
-    geeqie
+    unstable.gimp-with-plugins
+    unstable.rawtherapee
+    unstable.geeqie
 
     blender
     librecad

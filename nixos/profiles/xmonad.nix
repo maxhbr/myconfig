@@ -1,9 +1,11 @@
 { config, pkgs, ... }:
 
-{
+let
+  unstable = (import <unstable> {});
+in {
   environment.systemPackages = with pkgs; [
-    slock dmenu unclutter
-  ] ++ (with pkgs.haskellPackages; [
+    unstable.slock unstable.dmenu unstable.unclutter
+  ] ++ (with unstable.haskellPackages; [
     xmonad xmobar yeganesh
   ]);
 

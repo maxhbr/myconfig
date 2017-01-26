@@ -5,6 +5,8 @@ let
   hasDocker = config.virtualisation.docker.enable;
   hasnm = config.networking.networkmanager.enable;
 
+  unstable = (import <unstable> {});
+
 in {
   imports = [
     ./profiles/oh-my-zsh.nix
@@ -29,8 +31,8 @@ in {
   environment.systemPackages = with pkgs; [
     kbd
     wget curl
-    git git-lfs
-    ranger
+    unstable.git unstable.git-lfs
+    unstable.ranger
     pmount fuse usbutils
     acpi acpid
     cryptsetup
@@ -62,9 +64,6 @@ in {
       auto-optimise-store = true
       binary-caches-parallel-connections = 10
     '';
-
-    # nixPath = [ "/etc/nixos/path" "nixos-config=/etc/nixos/configuration.nix" ];
-    # nixPath = [ "nixpkgs=http://nixos.org/channels/nixos-16.09/nixexprs.tar.xz" ];
   };
 
   time.timeZone = "Europe/Berlin";

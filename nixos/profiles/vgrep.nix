@@ -1,7 +1,9 @@
-{ config, pkgs, unstable, ... }:
+{ config, pkgs, ... }:
 
-{
+let
+  unstable = (import <unstable> {});
+in {
   environment.systemPackages = with pkgs; [
-    haskellPackages.vgrep
+    unstable.haskellPackages.vgrep
   ];
 }

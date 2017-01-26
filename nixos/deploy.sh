@@ -18,6 +18,7 @@ sudo rsync --filter="protect /hardware-configuration.nix" \
            --filter="protect /hostname" \
            --filter="protect /hostid" \
            --filter="exclude,s *.gitignore" \
+           --filter="exclude,s *path*" \
            --filter="exclude,s *.gitmodules" \
            --filter="exclude,s *.git" \
            --filter="exclude .*.swp" \
@@ -29,6 +30,9 @@ echo "* nixos-rebuild ..."
 sudo \
     NIX_CURL_FLAGS='--retry=1000' \
     nixos-rebuild --show-trace \
+                  -I nixpkgs=http://nixos.org/channels/nixos-16.09/nixexprs.tar.xz \
+                  -I nixos-config=/etc/nixos/configuration.nix \
+                  -I "$SRC/path" \
                   --upgrade \
                   --keep-failed \
                   --fallback ${1:-switch}
