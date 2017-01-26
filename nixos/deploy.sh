@@ -32,7 +32,7 @@ if git diff --cached --exit-code --quiet; then
         git submodule update --remote --merge $submodule
         git add $submodule
     done
-    git commit -m "automatic update of submodules related to channels" 1>/dev/null
+    git commit -m "automatic update of submodules related to channels" 1>/dev/null || true
 else
     echo "... something is staged: do not update channels automatically"
 fi

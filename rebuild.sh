@@ -2,6 +2,9 @@
 #
 #  written by maximilian-huber.de
 
+echo -e "\n\n\n\n$(date)" >>"rebuild.sh.log"
+exec &> >(tee -a "rebuild.sh.log")
+
 set -e
 
 if [ "$EUID" -eq 0 ]; then
@@ -43,7 +46,7 @@ if git diff-index --quiet HEAD --; then
         echo "... diverged"
     fi
 else
-    echo "... your git directory is unclean, it will not be updated"
+    echo "... git directory is unclean, it will not be updated"
 fi
 
 # run hooks ###############################################################
