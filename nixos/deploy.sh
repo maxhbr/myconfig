@@ -18,34 +18,28 @@ sudo rsync --filter="protect /hardware-configuration.nix" \
            --filter="protect /hostname" \
            --filter="protect /hostid" \
            --filter="exclude,s *.gitignore" \
-           --filter="exclude,s *path*" \
            --filter="exclude,s *.gitmodules" \
            --filter="exclude,s *.git" \
            --filter="exclude .*.swp" \
            --delete --recursive --perms \
            "$SRC/" /etc/nixos/
 
-# update channels #########################################################
-echo "* update channels ..."
-if git diff --cached --exit-code --quiet; then
-    for submodule in path/nixos-16.09 path/nixos-unstable path/nixpkgs-unstable; do
-        git submodule update --remote --merge $submodule
-        git add $submodule
-    done
-    git commit -m "automatic update of submodules related to channels" 1>/dev/null || true
-else
-    echo "... something is staged: do not update channels automatically"
-fi
-
 # nixos-rebuild ###########################################################
 echo "* nixos-rebuild ..."
+sudo nix-channel --add https://nixos.org/channels/nixos-unstable unstable
+sudo nix-channel --add https://nixos.org/channels/nixos-16.09 nixos
+# sudo nix-channel --update
 exec sudo \
     NIX_CURL_FLAGS='--retry=1000' \
     nixos-rebuild --show-trace \
                   -I nixpkgs=http://nixos.org/channels/nixos-16.09/nixexprs.tar.xz \
+                  -I unstable=http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz \
+                  -I unstabler=http://nixos.org/channels/nixpkgs-unstable/nixexprs.tar.xz \
                   -I nixos-config=/etc/nixos/configuration.nix \
-                  -I "$SRC/path" \
                   --upgrade \
                   --keep-failed \
                   --fallback ${1:-switch}
 
+# nix-env remove old generations ##########################################
+echo "* nix-env --delete-generations 30d ..."
+sudo nix-env --delete-generations 30d

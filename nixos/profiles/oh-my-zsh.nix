@@ -1,11 +1,9 @@
 { config, pkgs, ... }:
 
-let
-  unstable = (import <unstable> {});
-in {
+{
   environment = {
     systemPackages = with pkgs; [
-      unstable.oh-my-zsh
+      oh-my-zsh
     ];
     shells = ["/run/current-system/sw/bin/zsh"];
   };

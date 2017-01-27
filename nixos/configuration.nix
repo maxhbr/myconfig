@@ -6,13 +6,19 @@ let
   # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
   hostId = "${builtins.readFile ./hostid}";
 ###############################################################################
+
+  pkgsConfig = import ../nix/nixpkgs-config.nix {
+    inherit pkgs;
+  };
+
 in {
-  imports =
-    [
-      ./hardware-configuration.nix
-      ./configuration-common.nix
-      (./machines + "/${hostName}.nix")
-    ];
+  imports = [
+    ./hardware-configuration.nix
+    ./configuration-common.nix
+    (./machines + "/${hostName}.nix")
+  ];
+
+  nixpkgs.config = pkgsConfig;
 
   networking = {
     hostId = "${hostId}";

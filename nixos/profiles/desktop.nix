@@ -1,8 +1,6 @@
 { config, pkgs, ... }:
 
-let
-  unstable = (import <unstable> {});
-in {
+{
   imports = [
     ../pkgs/services/urxvtd.nix
     ./hosts.nix
@@ -10,16 +8,16 @@ in {
 
   environment.systemPackages = with pkgs; [
   # terminal
-    unstable.rxvt_unicode_with-plugins unstable.rxvt_unicode.terminfo
+    rxvt_unicode_with-plugins rxvt_unicode.terminfo
   # gui related
     arandr
     xlibs.xmodmap xlibs.xset xlibs.setxkbmap
     xclip
   # gui applications
     feh scrot
-    unstable.chromium unstable.firefox-unwrapped luakit
-    unstable.mupdf unstable.zathura unstable.llpp
-    unstable.mplayer
+    chromium firefox-unwrapped luakit
+    mupdf zathura llpp
+    mplayer
     gnome3.file-roller
   # misc
     xf86_input_wacom

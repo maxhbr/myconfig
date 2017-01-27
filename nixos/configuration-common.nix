@@ -5,12 +5,9 @@ let
   hasDocker = config.virtualisation.docker.enable;
   hasnm = config.networking.networkmanager.enable;
 
-  unstable = (import <unstable> {});
-
 in {
   imports = [
     ./profiles/oh-my-zsh.nix
-    ./profiles/terminal.nix
   ];
 
   boot = {
@@ -28,17 +25,31 @@ in {
     };
   };
 
-  environment.systemPackages = with pkgs; [
-    kbd
-    wget curl
-    unstable.git unstable.git-lfs
-    unstable.ranger
-    pmount fuse usbutils
-    acpi acpid
-    cryptsetup
-    rsnapshot
-    stow
-  ];
+  environment = {
+    # shellInit = ''
+    # '';
+    # loginShellInit = ''
+    # '';
+    systemPackages = with pkgs; [
+      kbd
+      wget curl
+      git git-lfs
+      ranger
+      emacs vim
+      elinks w3m
+      tmux
+      htop iftop iotop
+      mkpasswd
+      manpages
+      taskwarrior
+      pass
+      pmount fuse usbutils
+      acpi acpid
+      cryptsetup
+      rsnapshot
+      stow
+    ];
+  };
 
   nix = {
     useSandbox = true;
@@ -67,12 +78,6 @@ in {
   };
 
   time.timeZone = "Europe/Berlin";
-
-  nixpkgs.config = {
-    allowUnfree = true;
-    # packageOverrides = super: let self = super.pkgs; in {
-    # };
-  };
 
   i18n = {
     consoleFont = "lat9w-16";
@@ -112,15 +117,12 @@ in {
     };
     extraGroups.mhuber.gid = 1000;
   };
+  systemd.tmpfiles.rules = [ "d /home/mhuber/tmp 1777 mhuber mhuber 10d" ];
 
   system = {
     activationScripts.media = ''
       mkdir -m 0755 -p /media /share
     '';
-    # autoUpgrade = {
-    #   enable = true;
-    #   channel = "https://nixos.org/channels/nixos-unstable";
-    # };
   };
 
   services = {
@@ -136,4 +138,5 @@ in {
   security.setuidPrograms = [ "pmount" "pumount" ];
 
   programs.ssh.startAgent = false;
+
 }
