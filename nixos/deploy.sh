@@ -26,9 +26,6 @@ sudo rsync --filter="protect /hardware-configuration.nix" \
 
 # nixos-rebuild ###########################################################
 echo "* nixos-rebuild ..."
-sudo nix-channel --add https://nixos.org/channels/nixos-unstable unstable
-sudo nix-channel --add https://nixos.org/channels/nixos-16.09 nixos
-# sudo nix-channel --update
 exec sudo \
     NIX_CURL_FLAGS='--retry=1000' \
     nixos-rebuild --show-trace \
@@ -39,7 +36,3 @@ exec sudo \
                   --upgrade \
                   --keep-failed \
                   --fallback ${1:-switch}
-
-# nix-env remove old generations ##########################################
-echo "* nix-env --delete-generations 30d ..."
-sudo nix-env --delete-generations 30d

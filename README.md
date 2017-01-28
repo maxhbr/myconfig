@@ -11,9 +11,11 @@ Here I collect all configuration files of my machines. Currently I use
 this folder contains my dotfiles grouped by their topic. There is also a script
 `deploy.sh` to deploy them via `stow`.
 
+## `./nix`
+this contains the nixos configuration of nix.
+
 ## `./nixos`
-this contains the nixos configuration of my machines. These expressions also
-take care, that the dotfiles get deployed.
+this contains the nixos configuration of my machines.
 
 ## `./archlinux`
 this contains configuration related to my (currently not used) archlinux setup.
