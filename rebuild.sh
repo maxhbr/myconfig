@@ -2,8 +2,7 @@
 #
 #  written by maximilian-huber.de
 
-echo -e "\n\n\n\n$(date)" >>"rebuild.sh.log"
-exec &> >(tee -a "rebuild.sh.log")
+exec &> >(tee -a "$(date +%Y-%m-%d)-rebuild.sh.log")
 
 set -e
 

@@ -1,4 +1,5 @@
 hardware-configuration.nix
 hostname
 hostid
-rebuild.sh.log
+*.log
+*.orig
