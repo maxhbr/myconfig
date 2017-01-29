@@ -5,9 +5,10 @@ cd $SRC
 # hosts from someonewhocares.org ##########################################
 type "curl" &> /dev/null && {
   echo "* update hosts from someonewhocares.org ..."
-  curl http://someonewhocares.org/hosts/hosts | \
-    sed -e '/<localhost>/,/<\/localhost>/d' > static/extrahosts
-  git update-index --assume-unchanged static/extrahost
+
+  [[ "$(find static/extrahosts -mtime +7)" != "" ]] && \
+      curl http://someonewhocares.org/hosts/hosts | \
+          sed -e '/<localhost>/,/<\/localhost>/d' > static/extrahosts
 }
 
 set -e
@@ -29,9 +30,6 @@ echo "* nixos-rebuild ..."
 exec sudo \
     NIX_CURL_FLAGS='--retry=1000' \
     nixos-rebuild --show-trace \
-                  -I nixpkgs=http://nixos.org/channels/nixos-16.09/nixexprs.tar.xz \
-                  -I unstable=http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz \
-                  -I unstabler=http://nixos.org/channels/nixpkgs-unstable/nixexprs.tar.xz \
                   -I nixos-config=/etc/nixos/configuration.nix \
                   --upgrade \
                   --keep-failed \

@@ -1,17 +1,18 @@
-{ pkgs, ... }:
+{ ... }:
 
 let
   simple-config = {
     allowUnfree = true;
   };
 
-  unstable = (import <unstable> { config = simple-config; });
-  unstabler = (import <unstabler> { config = simple-config; });
+  pkgs = (import (fetchTarball http://nixos.org/channels/nixos-16.09/nixexprs.tar.xz) { config = simple-config; });
+  unstable = (import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) { config = simple-config; });
+  # unstabler = (import (fetchTarball http://nixos.org/channels/nixpkgs-unstable/nixexprs.tar.xz) { config = simple-config; });
 
 in simple-config // {
   packageOverrides = super: let self = super.pkgs; in {
     inherit (unstable) ranger;
-    inherit (unstabler) tmux;
+    inherit (unstable) tmux;
     # inherit (unstable) git;
     # inherit (unstable) git-lfs;
     inherit (unstable) rxvt_unicode_with-plugins;

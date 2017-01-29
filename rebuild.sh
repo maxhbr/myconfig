@@ -2,7 +2,8 @@
 #
 #  written by maximilian-huber.de
 
-exec &> >(tee -a "$(date +%Y-%m-%d)-rebuild.sh.log")
+mkdir -p _logs
+exec &> >(tee -a "_logs/$(date +%Y-%m-%d)-rebuild.sh.log")
 
 set -e
 

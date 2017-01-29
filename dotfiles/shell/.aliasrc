@@ -630,9 +630,7 @@ alias mymatlabRunFile="~/matlab/bin/matlab -nojvm -nodisplay -nosplash < "
 have nix-env && {
   #nix
   alias nixin="nix-env -iA"
-  alias mynixin="nix-env -f \$NIXPKGS -iA"
   alias nixin-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -iA"
-  alias mynixin-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -f \$NIXPKGS -iA"
   # alias nixupg="nix-env -u '*'"
   alias nixupg="nix-channel --update && nix-env --upgrade"
   alias nixTest="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p"
@@ -641,9 +639,7 @@ have nix-env && {
   }
   alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
   alias nixse="nix-env -qaP | grep "
-  alias mynixse="nix-env -f \$NIXPKGS -qaP | grep "
   alias nixse-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -qaP | grep "
-  alias mynixse-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -f \$NIXPKGS -qaP | grep "
   nixsel(){
       nix-env -qaP | grep $1 | less
   }
