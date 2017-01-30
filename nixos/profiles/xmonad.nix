@@ -2,7 +2,8 @@
 
 {
   environment.systemPackages = with pkgs; [
-    slock dmenu unclutter
+    dmenu unclutter
+    slock
   ] ++ (with haskellPackages; [
     xmonad xmobar yeganesh
   ]);
@@ -13,7 +14,6 @@
         enable = true;
         enableContribAndExtras = true;
       };
-      # i3.enable = true;
       default = "xmonad";
     };
 
@@ -27,4 +27,6 @@
       defaultUser = "mhuber";
     };
   };
+
+  security.setuidPrograms = [ "slock" ];
 }
