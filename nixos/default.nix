@@ -1,5 +1,5 @@
 let
-  configuration = { config, pkgs, ... }: {
+  configuration = { ... }: {
 
     imports = [ ./configuration.nix ];
 
@@ -14,3 +14,10 @@ let
   };
   build = import <nixpkgs/nixos> { inherit configuration; };
 in build.vm
+
+# let
+# nixos = import <nixpkgs/nixos> {
+#   system = "x86_64-linux";
+#   configuration = import ./configuration.nix;
+# };
+# in { system = nixos.config.system.build.toplevel; }

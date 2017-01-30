@@ -40,15 +40,23 @@
       xkbOptions = "altwin:swap_alt_win";
       enableCtrlAltBackspace = true;
 
-      displayManager.sessionCommands = ''
-        ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name left_ptr
-        if test -e $HOME/.Xresources; then
-          ${pkgs.xorg.xrdb}/bin/xrdb --merge $HOME/.Xresources
-        fi
-        if test -e $HOME/.desktop-backgronud.png; then
-          ${pkgs.feh}/bin/feh --bg-scale "$HOME/.background-image"
-        fi
-      '';
+      displayManager = {
+        slim = {
+          enable = true;
+          defaultUser = "mhuber";
+          theme = ../static/slim-theme;
+        };
+        sessionCommands = ''
+          ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name left_ptr
+          if test -e $HOME/.Xresources; then
+            ${pkgs.xorg.xrdb}/bin/xrdb --merge $HOME/.Xresources
+          fi
+          if test -e $HOME/.background-image; then
+            ${pkgs.feh}/bin/feh --bg-scale "$HOME/.background-image"
+          fi
+        '';
+      };
+
     };
 
     redshift = {

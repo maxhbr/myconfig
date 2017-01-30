@@ -22,7 +22,7 @@ sudo rsync --filter="protect /hardware-configuration.nix" \
            --filter="exclude,s *.gitmodules" \
            --filter="exclude,s *.git" \
            --filter="exclude .*.swp" \
-           --delete --recursive --perms \
+           --delete --recursive --perms --copy-links \
            "$SRC/" /etc/nixos/
 
 # nixos-rebuild ###########################################################

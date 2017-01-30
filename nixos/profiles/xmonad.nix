@@ -21,11 +21,6 @@
       xterm.enable = false;
       default = "none";
     };
-
-    displayManager.slim = {
-      enable = true;
-      defaultUser = "mhuber";
-    };
   };
 
   security.setuidPrograms = [ "slock" ];
