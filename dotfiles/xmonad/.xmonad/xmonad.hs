@@ -200,7 +200,7 @@ myKeys conf@(XConfig {XMonad.modMask = modm}) =
         , ((ms_, xK_s      ), spawn "xdotool mousemove 0 0; synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
         , ((ms_, xK_z      ), spawn "~/bin/myautosetup.pl --primOutNr=1") -- auto
         , ((msc, xK_z      ), spawn "~/bin/myautosetup.pl --rotate=left --primOutNr=1") -- auto
-        , ((ms_, xK_y      ), spawn "slock") -- screenlocker
+        , ((ms_, xK_y      ), spawn "slimlock") -- screenlocker
 
         , ((m__,  xK_Home   ), spawn "xcalib -i -a") --invert Colors (does not work with retdshift)
 

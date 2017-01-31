@@ -1,5 +1,3 @@
-{ ... }:
-
 let
   simple-config = {
     allowUnfree = true;
