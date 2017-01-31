@@ -8,13 +8,12 @@
     ./hardware/steamcontroller.nix
 
     ## software:
-    ../profiles/desktop.nix
-    ../profiles/xmonad.nix
-    ../profiles/xfce.nix
+    ../profiles/desktop
+    ../profiles/desktop/xfce.nix
     ../profiles/virtualization.nix
     ../profiles/mail.nix
-    ../profiles/imagework.nix
-    ../profiles/games.nix
+    ../profiles/desktop/imagework.nix
+    ../profiles/desktop/games.nix
     ../profiles/wine.nix
     ../profiles/openssh.nix
   ];

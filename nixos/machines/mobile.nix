@@ -7,19 +7,17 @@
     ./hardware/efi.nix
 
     ## software:
-    ../profiles/desktop.nix
-    ../profiles/xmonad.nix
+    ../profiles/desktop
     ../profiles/virtualization.nix
     ../profiles/mail.nix
     ../profiles/dev.nix
     ../profiles/work.nix
-    ../profiles/imagework.nix
-    ../profiles/printing.nix
+    ../profiles/desktop/imagework.nix
 
     ../profiles/vgrep.nix
 
     ## others
-    ../profiles/games.nix
+    ../profiles/desktop/games.nix
   ];
 
   boot = {

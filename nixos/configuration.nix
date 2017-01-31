@@ -1,29 +1,22 @@
-{ config, pkgs, ... }:
-
+{ config, pkgs, lib, ... }:
 let
+
   # echo -n "HOSTNAME" | sudo tee /etc/nixos/hostname
-  hostName = "${builtins.readFile ./hostname}";
+  hostName = "${builtins.readFile /etc/nixos/hostname}";
   # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
-  hostId = "${builtins.readFile ./hostid}";
-###############################################################################
+  hostId = "${builtins.readFile /etc/nixos/hostid}";
 
-  pkgsConfig = import ../nix/nixpkgs-config.nix {
-    inherit pkgs;
+  hardwareConfig = import /etc/nixos/hardware-configuration.nix {
+    inherit config lib pkgs;
   };
 
-in {
-  imports = [
-    ./hardware-configuration.nix
-    ./configuration-common.nix
-    (./machines + "/${hostName}.nix")
-  ];
+  baseConfig = hardwareConfig // {
+    networking = {
+      hostId = "${hostId}";
+      hostName = "${hostName}";
+    };
 
-  nixpkgs.config = pkgsConfig;
-
-  networking = {
-    hostId = "${hostId}";
-    hostName = "${hostName}";
+    nixpkgs.config = import ../nix/nixpkgs-config.nix;
   };
-}
 
-# vim:set ts=2 sw=2 sts=2 et foldmethod=marker foldlevel=0 foldmarker={{{,}}}:
+in import ./machines { config = baseConfig; }

@@ -2,13 +2,13 @@
 
 {
   imports = [
-    ../pkgs/services/urxvtd.nix
+    ./xmonad.nix
+    ./urxvt.nix
     ./hosts.nix
+    ./printing.nix
   ];
 
   environment.systemPackages = with pkgs; [
-  # terminal
-    rxvt_unicode_with-plugins rxvt_unicode.terminfo
   # gui related
     arandr
     xlibs.xmodmap xlibs.xset xlibs.setxkbmap
@@ -44,7 +44,7 @@
         slim = {
           enable = true;
           defaultUser = "mhuber";
-          theme = ../static/slim-theme;
+          theme = ../../static/slim-theme;
         };
         sessionCommands = ''
           ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name left_ptr
@@ -66,11 +66,15 @@
       # temperature.day = 5500;
       # temperature.night = 3500;
     };
+  };
 
-    urxvtd = {
-      enable = true;
-      users = [ "mhuber" ];
-      urxvtPackage = pkgs.rxvt_unicode_with-plugins;
-    };
+  fonts = {
+    enableFontDir = true;
+    enableGhostscriptFonts = true;
+    fonts = with pkgs; [
+      dejavu_fonts
+      corefonts
+      inconsolata
+    ];
   };
 }

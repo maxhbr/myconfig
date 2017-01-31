@@ -6,9 +6,9 @@ if [ $1 ]; then
         echo "machine file not present"
         exit 1
     fi
-    echo -n $1 > hostname
+    echo -n $1 > /etc/nixos/hostname
     cksum /etc/machine-id \
-        | while read c rest; do printf "%x" $c; done > hostid
+        | while read c rest; do printf "%x" $c; done > /etc/nixos/hostid
 else
   echo "needs hostname as argument"
   exit 1

@@ -4,11 +4,11 @@ cd $SRC
 
 # hosts from someonewhocares.org ##########################################
 type "curl" &> /dev/null && {
-  echo "* update hosts from someonewhocares.org ..."
-
-  [[ "$(find static/extrahosts -mtime +7)" != "" ]] && \
-      curl http://someonewhocares.org/hosts/hosts | \
-          sed -e '/<localhost>/,/<\/localhost>/d' > static/extrahosts
+    [[ "$(find static/extrahosts -mtime +7)" != "" ]] && {
+        echo "* update hosts from someonewhocares.org ..."
+        curl http://someonewhocares.org/hosts/hosts | \
+            sed -e '/<localhost>/,/<\/localhost>/d' > static/extrahosts
+    }
 }
 
 set -e
@@ -22,6 +22,7 @@ sudo rsync --filter="protect /hardware-configuration.nix" \
            --filter="exclude,s *.gitmodules" \
            --filter="exclude,s *.git" \
            --filter="exclude .*.swp" \
+           --filter="exclude result" \
            --delete --recursive --perms --copy-links \
            "$SRC/" /etc/nixos/
 

@@ -7,8 +7,7 @@
     ./hardware/grub.nix
 
     ## software:
-    ../profiles/desktop.nix
-    ../profiles/xmonad.nix
+    ../profiles/desktop
     # ../profiles/xfce.nix
     # ../profiles/kde.nix
     # ../profiles/virtualization.nix
@@ -41,4 +40,4 @@
   #     %wheel      ALL=(ALL) NOPASSWD: SETENV: ALL
   #   '';
 #   # };
-# }
+}

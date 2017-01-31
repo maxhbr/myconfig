@@ -3,3 +3,4 @@ hostname
 hostid
 *.log
 *.orig
+result
