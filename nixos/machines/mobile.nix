@@ -17,7 +17,7 @@
     ../profiles/vgrep.nix
 
     ## others
-    ../profiles/desktop/games.nix
+    # ../profiles/desktop/games.nix
   ];
 
   boot.initrd.supportedFilesystems = [ "luks" ];

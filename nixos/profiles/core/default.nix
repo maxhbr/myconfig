@@ -34,7 +34,7 @@
       emacs vim
       elinks w3m
       tmux
-      htop iftop iotop
+      htop iftop iptraf-ng iotop
       mkpasswd
       manpages
       taskwarrior

@@ -1,4 +1,5 @@
 { config, ... }:
+
 let
   # echo -n "HOSTNAME" | sudo tee /etc/nixos/hostname
   hostName = "${builtins.readFile /etc/nixos/hostname}";
@@ -8,6 +9,8 @@ let
 in {
   networking.hostId = "${hostId}";
   networking.hostName = "${hostName}";
+  nixpkgs.config = import ../../nix/nixpkgs-config.nix;
+
 
   imports = [
     ../profiles/core
