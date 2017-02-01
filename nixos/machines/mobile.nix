@@ -20,15 +20,11 @@
     ../profiles/desktop/games.nix
   ];
 
-  boot = {
-    initrd = {
-      supportedFilesystems = [ "luks" ];
-      luks.devices = [ {
-        device = "/dev/sda2";
-        name = "crypted";
-        preLVM = true;
-        allowDiscards = true;
-      } ];
-    };
-  };
+  boot.initrd.supportedFilesystems = [ "luks" ];
+  boot.initrd.luks.devices = [ {
+    device = "/dev/sda2";
+    name = "crypted";
+    preLVM = true;
+    allowDiscards = true;
+  } ];
 }

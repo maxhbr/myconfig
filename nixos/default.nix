@@ -8,12 +8,12 @@ let
 
     nixpkgs.config = import ../nix/nixpkgs-config.nix;
 
-    imports = [
-      /etc/nixos/hardware-configuration.nix
-    ];
+#    imports = [
+#      /etc/nixos/hardware-configuration.nix
+#    ];
   };
 
-  machineConfig = import ./machines { baseConfig = baseConfig; };
+  machineConfig = import ./machines { config = baseConfig; };
 
   configuration = { ... }: {
     _module.args.buildVM = true;

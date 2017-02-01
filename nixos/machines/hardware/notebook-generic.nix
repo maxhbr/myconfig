@@ -8,8 +8,7 @@
     powertop
   ];
 
-  #networking.wireless.enable = true;
-
+  # networking.wireless.enable = true;
   hardware.bluetooth.enable = false;
 
   services = {

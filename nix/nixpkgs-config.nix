@@ -23,5 +23,6 @@ in simple-config // {
     inherit (unstable) oh-my-zsh;
     inherit (unstable) haskellPackages;
     inherit (unstable) dmenu;
+    inherit (unstable) mutt-with-sidebar;
   };
 }
