@@ -4,6 +4,7 @@
   imports = [
     ./oh-my-zsh.nix
     ./mhuber.nix
+    ./admintools.nix
   ];
 
   boot = {
@@ -34,13 +35,10 @@
       emacs vim
       elinks w3m
       tmux
-      htop iftop iptraf-ng iotop
-      mkpasswd
       manpages
       taskwarrior
       pass
-      pmount fuse usbutils
-      acpi acpid
+      pmount fuse
       cryptsetup
       rsnapshot
       stow

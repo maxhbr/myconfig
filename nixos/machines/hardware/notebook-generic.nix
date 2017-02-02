@@ -4,6 +4,7 @@
   powerManagement.enable = true;
 
   environment.systemPackages = with pkgs; [
+    acpi acpid
     xorg.xbacklight
     powertop
   ];
