@@ -1,7 +1,6 @@
 { config, pkgs, lib, ... }:
 
 let
-
   hasVBox = config.virtualisation.virtualbox.host.enable;
   hasDocker = config.virtualisation.docker.enable;
   hasnm = config.networking.networkmanager.enable;

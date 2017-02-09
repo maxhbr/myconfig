@@ -2,6 +2,12 @@
 
 {
   environment.systemPackages = with pkgs; [
-    (pkgs.texLiveAggregationFun { paths = [ pkgs.texLive pkgs.texLiveExtra pkgs.texLiveBeamer pkgs.texLiveCMSuper]; })
+    (pkgs.texLiveAggregationFun {
+      paths = [
+        pkgs.texLive pkgs.texLiveExtra
+        pkgs.texLiveBeamer
+        pkgs.texLiveCMSuper
+      ];
+    })
   ];
 }
