@@ -16,5 +16,7 @@
     ../profiles/desktop/games.nix
     ../profiles/wine.nix
     ../profiles/openssh.nix
+
+    ../profiles/vsftp.nix
   ];
 }
