@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-cd $(basename $0)
 
 if [ $1 ]; then
     if [ ! -f "machines/$1.nix" ]; then
