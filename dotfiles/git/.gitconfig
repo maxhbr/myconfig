@@ -66,7 +66,7 @@
     lol      = log --graph --decorate --pretty=oneline --abbrev-commit
     lola     = log --graph --decorate --pretty=oneline --abbrev-commit --all
     # Up to current commit, medium commit info
-    g        = log -10 --graph --pretty=format:'%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n        %ar (%ai)%n        %an <%ae>'
+    g        = log --graph --pretty=format:'%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n        %ar (%ai)%n        %an <%ae>'
     # Long, full commit info
     gl       = log --graph --pretty=format:'%C(bold)%h%C(reset)%n%H%n%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n%n%b%n%nAuthor%n    %ar (%ai)%n    %an <%ae>%nCommitter%n    %cr (%ci)%n    %cn <%ce>%n'
     # All commits, medium commit info

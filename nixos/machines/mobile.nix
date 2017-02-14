@@ -18,6 +18,7 @@
 
     ## others
     # ../profiles/desktop/games.nix
+    # ../profiles/vsftp.nix
   ];
 
   boot.initrd.supportedFilesystems = [ "luks" ];
