@@ -10,7 +10,7 @@
     ## software:
     ../profiles/desktop
     ../profiles/desktop/xfce.nix
-    ../profiles/virtualization.nix
+    ../profiles/virtualization
     ../profiles/mail.nix
     ../profiles/desktop/imagework.nix
     ../profiles/desktop/games.nix

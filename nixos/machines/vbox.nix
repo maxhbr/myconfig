@@ -7,7 +7,7 @@
 
     ## software:
     # ../profiles/dev.nix
-    # ../profiles/virtualization.nix
+    ../profiles/virtualization/docker.nix
     ../profiles/openssh.nix
   ];
 }

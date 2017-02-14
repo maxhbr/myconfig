@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+set -e
+
+if [ ! -f /etc/nixos/hardware-configuration.nix ]; then
+    nixos-generate-config
+fi
+
 if [ $1 ]; then
     if [ ! -f "machines/$1.nix" ]; then
         echo "machine file not present"

@@ -8,7 +8,7 @@
 
     ## software:
     ../profiles/desktop
-    ../profiles/virtualization.nix
+    ../profiles/virtualization
     ../profiles/mail.nix
     ../profiles/dev.nix
     ../profiles/work.nix
