@@ -1,10 +1,7 @@
 { config, pkgs, ... }:
 
 {
-  environment.systemPackages = with pkgs; [
-    mutt-with-sidebar
-    offlineimap msmtp gnupg abook notmuch urlview
-  ];
+  environment.systemPackages = with pkgs; [ muttEnv ];
 
   # systemd.user.services.offlineimap = {
   #   description = "Start offlineimap as a daemon";

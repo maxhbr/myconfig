@@ -1,12 +1,7 @@
 { config, pkgs, ... }:
 
 {
-  environment.systemPackages = with pkgs; [
-    dmenu unclutter
-    slock
-  ] ++ (with haskellPackages; [
-    xmonad xmobar yeganesh
-  ]);
+  environment.systemPackages = [ pkgs.xmonadEnv ];
 
   services.xserver = {
     windowManager = {

@@ -4,7 +4,6 @@
   imports = [
     ./oh-my-zsh.nix
     ./mhuber.nix
-    ./admintools.nix
   ];
 
   boot = {
@@ -29,15 +28,7 @@
     # '';
     systemPackages = with pkgs; [
       kbd
-      wget curl
-      git git-lfs
-      ranger
-      emacs vim
-      elinks w3m
-      tmux
-      manpages
-      taskwarrior
-      pass
+      coreEnv
       pmount fuse
       cryptsetup
       rsnapshot
