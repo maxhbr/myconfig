@@ -17,7 +17,7 @@ let
     inherit (unstable) gimp-with-plugins;
     # inherit (unstable) rawtherapee geeqie;
     inherit (unstable) oh-my-zsh;
-    inherit (unstable) haskellPackages;
+    # inherit (unstable) haskellPackages;
     inherit (unstable) dmenu;
     inherit (unstable) mutt-with-sidebar;
   };
@@ -26,6 +26,7 @@ let
 
   callEnv = path: import path {
     pkgs = pkgsWithUnstables;
+    inherit unstable;
   };
 
   cliEnv = callEnv ./envs/cliEnv.nix;
@@ -46,7 +47,7 @@ let
   workEnv = callEnv ./envs/workEnv.nix;
 
 in simple-config // {
-  packageOverrides = super: let self = super.pkgs; in unstables // {
+  packageOverrides = super: let self = super.pkgs; in {
     # envs (i.e. groups of packages)
     inherit cliEnv adminEnv coreEnv muttEnv xmonadEnv imageworkEnv devEnv workEnv;
 
@@ -57,5 +58,5 @@ in simple-config // {
     #     pkgs.texLiveCMSuper
     #   ];
     # });
-  };
+  } // unstables;
 }

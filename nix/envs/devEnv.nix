@@ -1,10 +1,10 @@
-{pkgs}:
+{pkgs,unstable}:
 with pkgs; let
   name = "devEnv";
   paths = [
     meld
     leiningen clojure
-    stack cabal-install cabal2nix
+    unstable.stack unstable.cabal-install unstable.cabal2nix
     python python3
     ruby
     gnumake cmake automake
@@ -13,7 +13,7 @@ with pkgs; let
 
     gitAndTools.gitFull
     gitAndTools.tig
-  ] ++ (with haskellPackages; [
+  ] ++ (with unstable.haskellPackages; [
     # cabal-install
     ghc hlint pandoc
     #pointfree pointful

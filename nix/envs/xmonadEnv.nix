@@ -1,10 +1,10 @@
-{pkgs}:
+{pkgs,unstable}:
 with pkgs; let
   name = "xmonadEnv";
   paths = [
-    dmenu unclutter
+    unstable.dmenu unclutter
     slock
-  ] ++ (with haskellPackages; [
+  ] ++ (with unstable.haskellPackages; [
     xmonad xmobar yeganesh
   ]);
 in buildEnv { inherit name paths; }

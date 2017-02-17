@@ -1,4 +1,4 @@
-{pkgs}:
+{pkgs,...}:
 with pkgs; let
   name = "muttEnv";
   paths  = with pkgs; [

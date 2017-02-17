@@ -1,4 +1,4 @@
-{pkgs}:
+{pkgs,unstable}:
 with pkgs; let
   name = "adminEnv";
   paths = [
