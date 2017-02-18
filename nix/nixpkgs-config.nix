@@ -22,41 +22,10 @@ let
     inherit (unstable) mutt-with-sidebar;
   };
 
-  pkgsWithUnstables = pkgs // unstables;
-
-  callEnv = path: import path {
-    pkgs = pkgsWithUnstables;
+  myenvs = import ./envs.nix {
+    pkgsWithUnstables = pkgs // unstables;
     inherit unstable;
   };
-
-  cliEnv = callEnv ./envs/cliEnv.nix;
-  adminEnv = callEnv ./envs/adminEnv.nix;
-  coreEnv = pkgsWithUnstables.buildEnv {
-    name = "coreEnv";
-    paths = with pkgsWithUnstables; [
-      cliEnv
-      adminEnv
-      wget curl
-      git git-lfs
-    ];
-  };
-  muttEnv = callEnv ./envs/muttEnv.nix;
-  xmonadEnv = callEnv ./envs/xmonadEnv.nix;
-  imageworkEnv = callEnv ./envs/imageworkEnv.nix;
-  devEnv = callEnv ./envs/devEnv.nix;
-  workEnv = callEnv ./envs/workEnv.nix;
-
 in simple-config // {
-  packageOverrides = super: let self = super.pkgs; in {
-    # envs (i.e. groups of packages)
-    inherit cliEnv adminEnv coreEnv muttEnv xmonadEnv imageworkEnv devEnv workEnv;
-
-    # texEnv = (pkgs.texLiveAggregationFun {
-    #   paths = [
-    #     pkgs.texLive pkgs.texLiveExtra
-    #     pkgs.texLiveBeamer
-    #     pkgs.texLiveCMSuper
-    #   ];
-    # });
-  } // unstables;
+  packageOverrides = super: let self = super.pkgs; in myenvs // unstables;
 }

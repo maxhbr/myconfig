@@ -17,8 +17,8 @@ this contains the nixos configuration of nix.
 ## `./nixos`
 this contains the nixos configuration of my machines.
 
-## `./archlinux`
-this contains configuration related to my (currently not used) archlinux setup.
-
 ## `./background`
 this contains desktop background images (all created by myself).
+
+## `./archlinux` (unused)
+this contains configuration related to my (currently not used) archlinux setup.

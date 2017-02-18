@@ -6,9 +6,7 @@ cd $SRC
 # rsync file to target folder #############################################
 echo "* rsync ..."
 sudo rsync --perms \
-     "$SRC/nixpkgs-config.nix" /etc/nix/
-sudo rsync -r --perms \
-     "$SRC/envs" /etc/nix/
+     "$SRC/nixpkgs-config.nix" "$SRC/envs.nix" /etc/nix/
 
 # setup channels ##########################################################
 echo "* setup channels ..."

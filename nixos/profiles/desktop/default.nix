@@ -9,19 +9,11 @@
   ];
 
   environment.systemPackages = with pkgs; [
-  # gui related
-    arandr
-    xlibs.xmodmap xlibs.xset xlibs.setxkbmap
-    xclip
+    desktopEnv
   # gui applications
-    feh scrot
-    chromium firefox-unwrapped luakit
-    mupdf zathura llpp
-    mplayer
-    gnome3.file-roller
+    chromium firefox-unwrapped
   # misc
     xf86_input_wacom
-    xdotool
   ];
 
   nixpkgs.config.packageOverrides = pkgs: {
