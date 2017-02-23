@@ -34,7 +34,7 @@ in with pkgsWithUnstables; rec {
     offlineimap msmtp gnupg abook notmuch urlview
   ];
 
-  desktopEnv = lib.lowPrio (mkEnv "desktopEnv" [
+  desktopEnv = mkEnv "desktopEnv" [
     arandr
     xlibs.xmodmap xlibs.xset xlibs.setxkbmap
     xclip
@@ -46,27 +46,28 @@ in with pkgsWithUnstables; rec {
     gnome3.file-roller
     mplayer
     xdotool
-  ]);
+  ];
 
-  xmonadEnv = lib.lowPrio (mkEnv "xmonadEnv" ([
+  xmonadEnv = mkEnv "xmonadEnv" ([
     unstable.dmenu unclutter
     slock
   ] ++ (with unstable.haskellPackages; [
     xmonad xmobar yeganesh
-  ])));
+  ]));
 
-  imageworkEnv = lib.lowPrio (mkEnv "imageworkEnv" [
+  imageworkEnv = mkEnv "imageworkEnv" [
     gimp-with-plugins
     rawtherapee
     geeqie
+    #krita
+
+    inkscape
 
     blender
     librecad
+  ];
 
-    inkscape
-  ]);
-
-  devEnv = lib.lowPrio (mkEnv "devEnv" ([
+  devEnv = mkEnv "devEnv" ([
     meld
     leiningen clojure
     unstable.stack unstable.cabal-install unstable.cabal2nix
@@ -81,13 +82,13 @@ in with pkgsWithUnstables; rec {
   ] ++ (with unstable.haskellPackages; [
     # cabal-install
     ghc hlint pandoc
-    #pointfree pointful
+    pointfree pointful
     hdevtools
-  ])));
+  ]));
 
-  workEnv = lib.lowPrio (mkEnv "workEnv" [
+  workEnv = mkEnv "workEnv" [
     openvpn networkmanager_openvpn
     rdesktop
     openjdk maven thrift gradle
-  ]);
+  ];
 }

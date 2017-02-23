@@ -14,13 +14,14 @@ Config { font = "xft:inconsolata:pixelsize=13:antialias=true:hinting=true"
                         , "-h","#FFB6B0" ,"-l","#CEFFAC" ,"-n","#FFFFCC"
                         , "-w","3" ] 10
          , Run Memory ["-t","Mem: <usedratio>%"] 10
-         , Run TopProc ["-t","(<name2>)"] 10
+         , Run TopProc ["-t","<both1>"] 10
+         , Run TopMem ["-t","<both1>"] 10
          , Run CoreTemp [ "-t", "@ <core0>C" ] 60
          , Run Kbd [ ("de(nodeadkeys)", "| <fc=#ee9a00>de</fc> ")
                    , ("de(neo)", "") ]
          , Run DynNetwork [ "-L","0" ,"-H","32"
                           , "--normal","green", "--high","red" ] 10
-         -- , Run Wireless "wlp3s0" [ "-t", "<essid> <qualitybar>" ] 60
+         , Run Wireless "wlp3s0" [ "-t", "<essid> <qualitybar>" ] 60
          , Run BatteryN [ "BAT1" ]
                         [ "-t", "Bat: <left>%"
                         , "-L", "10" , "-H", "80"
@@ -46,7 +47,7 @@ Config { font = "xft:inconsolata:pixelsize=13:antialias=true:hinting=true"
          ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %StdinReader% }{ <fc=#888888><action=`urxvtc -name ScratchHtop -e bash -c htop`>%multicpu% %top% %coretemp% %memory%</action> %kbd%|</fc> <action=`xbacklight =10`>%bat%%bata%</action> |  <fc=#ffffff><action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action></fc> | %dynnetwork% | %date% "
+       , template = " %StdinReader% }{ <fc=#888888><action=`urxvtc -name ScratchHtop -e bash -c htop`>%multicpu% (%top% / %topmem%) %coretemp% %memory%</action> %kbd%|</fc> <action=`xbacklight =10`>%bat%%bata%</action> |  <fc=#ffffff><action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action></fc> | <action=`urxvtc -name ScratchNMTUI -e bash -c 'sudo nmtui`>%dynnetwork% %wlp3s0wi%</action> | %date% "
        -- , template = " %StdinReader% }{ <fc=#888888><action=`urxvtc -name ScratchHtop -e bash -c htop`>%multicpu% %top% %coretemp% %memory%</action> %kbd%|</fc> <action=`xbacklight =10`>%bat%%bata%</action> | %dynnetwork% <action=`urxvtc -name ScratchNMTUI -e bash -c 'sudo nmtui`>%wlp3s0wi%</action> | <fc=#ffffff><action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action></fc> | %date% "
        }
 
