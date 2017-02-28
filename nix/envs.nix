@@ -71,7 +71,7 @@ in with pkgsWithUnstables; rec {
     meld
     leiningen clojure
     unstable.stack unstable.cabal-install unstable.cabal2nix
-    python python3
+    python python3 python35Packages.bpython
     ruby
     gnumake cmake automake
 
