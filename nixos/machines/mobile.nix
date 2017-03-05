@@ -17,6 +17,7 @@
     ../profiles/vgrep.nix
 
     ## others
+    # ../profiles/desktop/vnc.nix
     # ../profiles/desktop/games.nix
     # ../profiles/vsftp.nix
   ];
