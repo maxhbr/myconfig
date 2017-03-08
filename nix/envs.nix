@@ -90,5 +90,6 @@ in with pkgsWithUnstables; rec {
     openvpn networkmanager_openvpn
     rdesktop
     openjdk maven thrift gradle
+    libreoffice
   ];
 }

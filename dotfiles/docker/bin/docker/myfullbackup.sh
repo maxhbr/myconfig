@@ -176,12 +176,14 @@ LDIFS=$IFS; IFS=','
 for i in daily,1 weekly,7 monthly,28; do
   set -- $i;
   if (test $[$BACKUPNR % $2] -eq 0); then
+      echo "run ${BACKUPNR}th backup: $1"
     docker run -ti \
                 --volume /:/source \
                 --volume $BACKUPDIR:/target \
                 --name=myfullbackup \
                 myfullbackup \
                 rsnapshot -v -c /target/rsnapshot_cfg $1 >> "$LOGFILE"
+    docker rm --force myfullbackup >/dev/null 2>&1 || true
   fi
 done
 IFS=$OLDIFS
