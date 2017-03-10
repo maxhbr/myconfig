@@ -10,8 +10,9 @@ use File::Path qw( make_path );
 use Term::ANSIColor qw( colored );
 
 my %toLink = (
-    'https://github.com/AndreaCrotti/yasnippet-snippets'   => '~/.emacs.d/snippets',
-    'https://github.com/jwiegley/use-package'              => '~/.emacs.d/use-package',
+    'https://github.com/syl20bnr/spacemacs'                => '~/.emacs.d',
+    # 'https://github.com/AndreaCrotti/yasnippet-snippets'   => '~/.emacs.d/snippets',
+    # 'https://github.com/jwiegley/use-package'              => '~/.emacs.d/use-package',
     'https://github.com/jrosdahl/maildirproc'              => '~/Mail/maildirproc'
     );
     # 'https://github.com/monky-hs/monky'                    => '~/.xmonad/monky',

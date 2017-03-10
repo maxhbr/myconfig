@@ -21,7 +21,7 @@ if git diff-index --quiet HEAD --; then
     add_stow_params="--adopt"
 fi
 
-dirs=$(find . -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+dirs=$(find . -mindepth 1 -maxdepth 1 -type d -not -name "_*" -exec basename {} \;)
 for dir in $dirs; do
     cd "$dotfiles/$dir"
     # I only want to have linked files, no linked folders
