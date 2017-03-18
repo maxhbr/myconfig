@@ -20,6 +20,7 @@
     # ../profiles/desktop/vnc.nix
     # ../profiles/desktop/games.nix
     # ../profiles/vsftp.nix
+    ../profiles/irc.nix
   ];
 
   boot.initrd.supportedFilesystems = [ "luks" ];

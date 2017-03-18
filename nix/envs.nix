@@ -32,6 +32,7 @@ in with pkgsWithUnstables; rec {
   muttEnv = mkEnv "muttEnv" [
     mutt-with-sidebar
     offlineimap msmtp gnupg abook notmuch urlview
+    procmail
   ];
 
   desktopEnv = mkEnv "desktopEnv" [
@@ -50,7 +51,8 @@ in with pkgsWithUnstables; rec {
 
   xmonadEnv = mkEnv "xmonadEnv" ([
     unstable.dmenu unclutter
-    slock
+    # slock
+    xss-lock
   ] ++ (with unstable.haskellPackages; [
     xmonad xmobar yeganesh
   ]));

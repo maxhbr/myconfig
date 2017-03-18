@@ -19,7 +19,8 @@ let
     inherit (unstable) oh-my-zsh;
     # inherit (unstable) haskellPackages;
     inherit (unstable) dmenu;
-    inherit (unstable) mutt-with-sidebar;
+    inherit (unstable) mutt-with-sidebar alot;
+    inherit (unstable) weechat;
   };
 
   myenvs = import ./envs.nix {

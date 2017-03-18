@@ -4,6 +4,7 @@
 set mbox_type=Maildir
 
 source ~/.mutt/mutt-accounts
+source ~/.mutt/editlabel.mutt
 
 ##############################################################################
 # Keybindings

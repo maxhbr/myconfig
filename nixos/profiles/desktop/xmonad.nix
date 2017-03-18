@@ -18,5 +18,5 @@
     };
   };
 
-  security.setuidPrograms = [ "slock" ];
+  # security.setuidPrograms = [ "slock" ];
 }

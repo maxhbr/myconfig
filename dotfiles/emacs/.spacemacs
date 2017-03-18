@@ -31,6 +31,8 @@ values."
    ;; List of configuration layers to load.
    dotspacemacs-configuration-layers
    '(
+     yaml
+     ruby
      haskell
      ;; ----------------------------------------------------------------
      ;; Example of useful layers you may want to use right away.
@@ -113,7 +115,7 @@ values."
    ;; directory. A string value must be a path to an image format supported
    ;; by your Emacs build.
    ;; If the value is nil then no banner is displayed. (default 'official)
-   dotspacemacs-startup-banner 'official
+   dotspacemacs-startup-banner nil
    ;; List of items to show in startup buffer or an association list of
    ;; the form `(list-type . list-size)`. If nil then it is disabled.
    ;; Possible values for list-type are:
@@ -131,12 +133,17 @@ values."
    ;; with 2 themes variants, one dark and one light)
    dotspacemacs-themes '(spacemacs-dark
                          spacemacs-light)
+   ;; dotspacemacs-themes '(wombat
+   ;;                       monokai
+   ;;                       zenburn)
+   ;; dotspacemacs-themes '(solarized-light
+   ;;                       solarized-dark)
    ;; If non nil the cursor color matches the state color in GUI Emacs.
    dotspacemacs-colorize-cursor-according-to-state t
    ;; Default font, or prioritized list of fonts. `powerline-scale' allows to
    ;; quickly tweak the mode-line size to make separators look not too crappy.
-   dotspacemacs-default-font '("Source Code Pro"
-                               :size 13
+   dotspacemacs-default-font '("Inconsolata"
+                               :size 16
                                :weight normal
                                :width normal
                                :powerline-scale 1.1)
@@ -302,6 +309,42 @@ layers configuration.
 This is the place where most of your configurations should be done. Unless it is
 explicitly specified that a variable should be set before a package is loaded,
 you should place your code here."
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; magit config
+  (global-set-key (kbd "<C-return>") 'magit-status)
+  ;; ;; full screen magit-status
+  ;; (defadvice magit-status (around magit-fullscreen activate)
+  ;;   (window-configuration-to-register :magit-fullscreen)
+  ;;   ad-do-it
+  ;;   (delete-other-windows))
+
+  ;; (defun magit-quit-session ()
+  ;;   "Restores the previous window configuration and kills the magit buffer"
+  ;;   (interactive)
+  ;;   (kill-buffer)
+  ;;   (jump-to-register :magit-fullscreen))
+
+  ;; ;; (define-key magit-status-mode-map (kbd "q") 'magit-quit-session)
+
+  ;; ;; Actual changes lost in a sea of whitespace diffs?
+  ;; (defun magit-toggle-whitespace ()
+  ;;   (interactive)
+  ;;   (if (member "-w" magit-diff-options)
+  ;;       (magit-dont-ignore-whitespace)
+  ;;     (magit-ignore-whitespace)))
+
+  ;; (defun magit-ignore-whitespace ()
+  ;;   (interactive)
+  ;;   (add-to-list 'magit-diff-options "-w")
+  ;;   (magit-refresh))
+
+  ;; (defun magit-dont-ignore-whitespace ()
+  ;;   (interactive)
+  ;;   (setq magit-diff-options (remove "-w" magit-diff-options))
+  ;;   (magit-refresh))
+
+  ;; ;; (define-key magit-status-mode-map (kbd "W") 'magit-toggle-whitespace)
   )
 
 ;; Do not write anything past this comment. This is where Emacs will
