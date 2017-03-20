@@ -5,7 +5,7 @@
 # {}
 nix:
   enable: true
-  packages: [zlib]
+  packages: [zlib,git]
 # docker:
 #     enable: true
 #     # repo: "fpco/stack-ghcjs-build"
