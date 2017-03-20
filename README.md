@@ -20,5 +20,8 @@ this contains the nixos configuration of my machines.
 ## `./background`
 this contains desktop background images (all created by myself).
 
+## `./misc`
+just some miscellaneous stuff.
+
 ## `./archlinux` (unused)
 this contains configuration related to my (currently not used) archlinux setup.
