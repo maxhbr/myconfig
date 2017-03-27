@@ -278,6 +278,7 @@ myLayout = avoidStrutsOn[U,D] $
     --            ifWider 1920 (gaps [(L,320),(U,180),(R,320),(D,180)] Full) Full
     mySpacing = spacing 10
     full      = named "=" $
+                mySpacing $
                 ifWider 1920 (gaps [(L,320), (R,320)] Full) Full
     tiled     = named " " $
                 minimize $
