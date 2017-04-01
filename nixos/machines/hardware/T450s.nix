@@ -16,8 +16,10 @@
     videoDrivers = [ "intel" ];
     synaptics = {
       additionalOptions = ''
-        Option "VertScrollDelta" "-100"
-        Option "HorizScrollDelta" "-100"
+        Option "VertScrollDelta" "-50"
+        Option "HorizScrollDelta" "-50"
+        Option "MinSpeed" "1.2"
+        Option "AccelFactor" "0.05"
       '';
       buttonsMap = [ 1 3 2 ];
       tapButtons = false;

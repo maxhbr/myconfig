@@ -276,10 +276,12 @@ myLayout = avoidStrutsOn[U,D] $
   where
     -- full1080 = named "fixed=" $
     --            ifWider 1920 (gaps [(L,320),(U,180),(R,320),(D,180)] Full) Full
-    mySpacing = spacing 10
+    baseSpacing = 10
+    wqhdGapping = 320
+    mySpacing l = ifWider 1919 (spacing baseSpacing l) l
     full      = named "=" $
                 mySpacing $
-                ifWider 1920 (gaps [(L,320), (R,320)] Full) Full
+                ifWider 1920 (gaps [(L,wqhdGapping), (R,wqhdGapping)] Full) Full
     tiled     = named " " $
                 minimize $
                 -- addTabs shrinkText myTab $

@@ -21,6 +21,8 @@ let
     inherit (unstable) dmenu;
     inherit (unstable) mutt-with-sidebar alot;
     inherit (unstable) weechat;
+    # inherit (unstable) citrix_receiver;
+    citrix_receiver = unstable.callPackage pkgs/citrix-receiver {};
   };
 
   myenvs = import ./envs.nix {

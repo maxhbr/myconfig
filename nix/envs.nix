@@ -90,7 +90,7 @@ in with pkgsWithUnstables; rec {
 
   workEnv = mkEnv "workEnv" [
     openvpn networkmanager_openvpn
-    rdesktop
+    rdesktop citrix_receiver
     openjdk maven thrift gradle
     libreoffice
   ];
