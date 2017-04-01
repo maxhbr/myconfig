@@ -14,7 +14,7 @@
     ../profiles/work.nix
     ../profiles/desktop/imagework.nix
 
-    ../profiles/vgrep.nix
+    # ../profiles/vgrep.nix
 
     ## others
     # ../profiles/desktop/vnc.nix

@@ -3,7 +3,7 @@ let
     allowUnfree = true;
   };
 
-  pkgs = (import (fetchTarball http://nixos.org/channels/nixos-16.09/nixexprs.tar.xz) { config = simple-config; });
+  pkgs = (import (fetchTarball http://nixos.org/channels/nixos-17.03/nixexprs.tar.xz) { config = simple-config; });
   unstable = (import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) { config = simple-config; });
   # unstabler = (import (fetchTarball http://nixos.org/channels/nixpkgs-unstable/nixexprs.tar.xz) { config = simple-config; });
 

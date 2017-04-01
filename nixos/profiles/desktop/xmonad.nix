@@ -17,6 +17,4 @@
       default = "none";
     };
   };
-
-  # security.setuidPrograms = [ "slock" ];
 }

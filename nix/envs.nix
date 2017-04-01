@@ -41,7 +41,7 @@ in with pkgsWithUnstables; rec {
     xclip
     imagemagick
   # gui applications
-    luakit
+    # luakit
     mupdf zathura llpp
     feh scrot
     gnome3.file-roller
@@ -51,7 +51,6 @@ in with pkgsWithUnstables; rec {
 
   xmonadEnv = mkEnv "xmonadEnv" ([
     unstable.dmenu unclutter
-    # slock
     xss-lock
   ] ++ (with unstable.haskellPackages; [
     xmonad xmobar yeganesh
