@@ -159,10 +159,13 @@ set pgp_replyencrypt=yes
 set pgp_timeout=3600
 set pgp_good_sign="^gpg: Good signature from"
 
+source `FILE=$HOME/.gnupg/gpg_groups.mutt; if [ ! -s "$FILE" ]; then FILE=/dev/null;fi;echo "$FILE"`
+
+##############################################################################
+
 # http://www.gnuterrypratchett.com/
 my_hdr X-Clacks-Overhead: GNU Terry Pratchett
-
-source `FILE=$HOME/.gnupg/gpg_groups.mutt; if [ ! -s "$FILE" ]; then FILE=/dev/null;fi;echo "$FILE"`
+unignore X-Clacks-Overhead
 
 ##############################################################################
 # sidebar 

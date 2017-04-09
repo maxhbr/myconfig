@@ -6,7 +6,7 @@
 
 alias asdf="setxkbmap -layout de,de -variant neo,nodeadkeys -option grp:shifts_toggle -option grp_led:scroll -option altwin:swap_lalt_lwin"
 
-alias vi="/usr/bin/vim"
+alias vi="/var/run/current-system/sw/bin/vim"
 
 if [ -x "$HOME/bin/emc" ]; then
   alias vim="$HOME/bin/emc -forceTerminal"
@@ -638,8 +638,8 @@ have nix-env && {
       NIXPKGS_ALLOW_UNFREE=1 nix-shell -p "$1" --command "$1"
   }
   alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
-  alias nixse="nix-env -qaP | grep "
-  alias nixse-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -qaP | grep "
+  alias nixse="nix-env -qaP | grep -i"
+  alias nixse-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -qaP | grep -i"
   nixsel(){
       nix-env -qaP | grep $1 | less
   }

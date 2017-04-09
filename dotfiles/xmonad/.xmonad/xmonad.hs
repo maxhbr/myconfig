@@ -9,7 +9,7 @@
 --  scrot        screenshot tool
 --  imagemagic   screenshot tool
 --  slim         screenlock tool
---  xss-lock     automatic locking 
+--  xss-lock     automatic locking
 --  unclutter    to hide mouse pointer
 --  urxvt        terminal
 --  xcalib       invert colors
@@ -19,7 +19,6 @@
 -- written by maximilian-huber.de
 --
 -- Last modified: Sa Jul 23, 2016  02:15
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 
 ------------------------------------------------------------------------
@@ -43,6 +42,7 @@ import           XMonad.Hooks.DynamicLog ( dynamicLogWithPP
 import           XMonad.Hooks.EwmhDesktops ( fullscreenEventHook )
 import           XMonad.Hooks.ManageDocks ( avoidStrutsOn
                                           , manageDocks
+                                          , docksEventHook
                                           , ToggleStruts(..) )
 import           XMonad.Hooks.ManageHelpers ( doFullFloat
                                             , doCenterFloat )
@@ -108,7 +108,7 @@ import XMonad.MyConfig.ToggleFollowFocus
 
 ------------------------------------------------------------------------
 -- Key bindings:
-myKeys conf@(XConfig {XMonad.modMask = modm}) =
+myKeys conf@XConfig {XMonad.modMask = modm} =
   M.fromList $
   map (\((m,k),v) -> ((m modm,k),v)) $
        basicKBs
@@ -277,8 +277,10 @@ myLayout = avoidStrutsOn[U,D] $
     -- full1080 = named "fixed=" $
     --            ifWider 1920 (gaps [(L,320),(U,180),(R,320),(D,180)] Full) Full
     baseSpacing = 10
-    wqhdGapping = 320
-    mySpacing l = ifWider 1919 (spacing baseSpacing l) l
+    wqhdSpacing = 20
+    wqhdGapping = (2560 - 1920) `div` 2 - wqhdSpacing + baseSpacing
+    mySpacing l = ifWider 1920 (spacing wqhdSpacing l)
+                               (ifWider 1919 (spacing baseSpacing l) l)
     full      = named "=" $
                 mySpacing $
                 ifWider 1920 (gaps [(L,wqhdGapping), (R,wqhdGapping)] Full) Full
@@ -349,6 +351,7 @@ myManageHook = (composeAll (foldMap (\(a,cs) -> map (\c -> className =? c --> a)
 -- combine event hooks use mappend or mconcat from Data.Monoid.
 --
 myEventHook = fullscreenEventHook
+              <+> docksEventHook
               <+> focusFollow
 
 ------------------------------------------------------------------------

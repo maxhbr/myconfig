@@ -7,6 +7,7 @@ let
   hostId = "${builtins.readFile /etc/nixos/hostid}";
 
 in import ./machines {
+  system.copySystemConfiguration = true;
   inherit config hostName hostId;
   otherImports = [ ./hardware-configuration.nix ];
 }

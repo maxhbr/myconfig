@@ -4,3 +4,4 @@ hostid
 *.log
 *.orig
 result
+*.tar.gz

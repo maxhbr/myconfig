@@ -7,8 +7,9 @@ let
 in with pkgsWithUnstables; rec {
 
   adminEnv = mkEnv "adminEnv" [
-    htop iftop iptraf-ng iotop
-    mkpasswd
+    htop
+    iftop iptraf-ng iotop
+    mkpasswd pwgen
     usbutils
   ];
 
@@ -30,8 +31,9 @@ in with pkgsWithUnstables; rec {
   ];
 
   muttEnv = mkEnv "muttEnv" [
-    mutt-with-sidebar
+    neomutt # mutt-with-sidebar
     offlineimap msmtp gnupg abook notmuch urlview
+    sxiv
     procmail
   ];
 
@@ -68,13 +70,31 @@ in with pkgsWithUnstables; rec {
     librecad
   ];
 
-  devEnv = mkEnv "devEnv" ([
+  devEnv = let
+    myclojureenv = pkgs.myEnvFun {
+      name = "myclojureenv";
+      buildInputs = [
+        leiningen clojure
+      ];
+    };
+    mypythonenv = pkgs.myEnvFun {
+      name = "mypythonenv";
+      buildInputs = [
+        python python3 python35Packages.bpython
+      ];
+    };
+    myrubyenv = pkgs.myEnvFun {
+      name = "myrubyenv";
+      buildInputs = [
+        ruby
+      ];
+    };
+  in mkEnv "devEnv" ([
     meld
-    leiningen clojure
     unstable.stack unstable.cabal-install unstable.cabal2nix
-    python python3 python35Packages.bpython
-    ruby
     gnumake cmake automake
+
+    myclojureenv mypythonenv myrubyenv
 
     cloc
 

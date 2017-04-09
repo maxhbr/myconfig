@@ -23,6 +23,11 @@ let
     inherit (unstable) weechat;
     # inherit (unstable) citrix_receiver;
     citrix_receiver = unstable.callPackage pkgs/citrix-receiver {};
+
+    freetype_subpixel = pkgs.freetype.override {
+      useEncumberedCode = true;
+      useInfinality = false;
+    };
   };
 
   myenvs = import ./envs.nix {
