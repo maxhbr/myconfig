@@ -61,7 +61,7 @@ foreach my $output (@dockedOutputs) {
 
         $primaryOutput = $output if($params =~ /--primary/);
 
-        $xrandrCmd .= " --output $output $params";
+        $xrandrCmd .= " --output $output $params --scale 1x1";
 
         @otherOutputs = grep { $_ ne $output } @otherOutputs;
     }
@@ -72,6 +72,11 @@ foreach my $output (@dockedOutputs) {
                 if ($xrandr =~ /$output/);
         }
         system($xrandrCmd) if !$noXrandr;
+
+        # restart xmonad, if running
+        if(`ps -aux |  grep -v grep| grep xmonad-x86`) {
+            system("xmonad", "--restart");
+        }
     }
     sub getPrimaryOutput {
         return $primaryOutput;

@@ -58,8 +58,8 @@
     new      = !sh -c 'git log $1@{1}..$1@{0} "$@"'
 
     remadd   = "!f() { \
-                     git remote add $1 https://github.com/$2.git; \
-                   }; f"
+                       git remote add $1 https://github.com/$2.git; \
+                     }; f"
     remotes = remote -v
 
     # Pretty graphs
@@ -77,6 +77,10 @@
     ls-assume-unchanged = !git ls-files -v | grep ^h | awk '{print $2}'
     assume-unchanged    = update-index --assume-unchanged
     assume-changed      = update-index --no-assume-unchanged
+
+  	ghc = "!f() { \
+	                git clone git@github.com:${1}/${2}.git ${1}-${2}; \
+	              }; f"
 
     testPR   = "!f() { remote="${2:-origin}"; \
                        branch="testpr/${remote}/${1}"; \
