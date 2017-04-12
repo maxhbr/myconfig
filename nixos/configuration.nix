@@ -10,4 +10,7 @@ in import ./machines {
   system.copySystemConfiguration = true;
   inherit config hostName hostId;
   otherImports = [ ./hardware-configuration.nix ];
+} // {  environment.etc = {
+    nixos-orig.source = ./.;
+  };
 }
