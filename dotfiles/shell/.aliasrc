@@ -1,6 +1,9 @@
 #written by maximilian-huber.de
 # ~/.aliasrc
 
+if [ $__HOME_ALIASRC_SOURCED ]; then return; fi
+__HOME_ALIASRC_SOURCED=1
+
 # needs:
 # vim, tmux, sudo, mutt
 

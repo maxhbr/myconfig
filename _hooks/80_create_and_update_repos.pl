@@ -11,12 +11,13 @@ use Term::ANSIColor qw( colored );
 
 my %toLink = (
     'https://github.com/syl20bnr/spacemacs'                => '~/.emacs.d',
+    # 'https://github.com/robbyrussell/oh-my-zsh.git'        => '~/.oh-my-zsh',
+    # 'https://github.com/zsh-users/zsh-syntax-highlighting' => '~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting',
     # 'https://github.com/AndreaCrotti/yasnippet-snippets'   => '~/.emacs.d/snippets',
     # 'https://github.com/jwiegley/use-package'              => '~/.emacs.d/use-package',
+    # 'https://github.com/monky-hs/monky'                    => '~/.xmonad/monky',
     'https://github.com/jrosdahl/maildirproc'              => '~/Mail/maildirproc'
     );
-    # 'https://github.com/monky-hs/monky'                    => '~/.xmonad/monky',
-    # 'https://github.com/zsh-users/zsh-syntax-highlighting' => '~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting',
 
 while ( my ($url, $target) = each(%toLink) ) {
     print "update: @{[colored(['bold green'], $target,'')]}\n";
@@ -29,6 +30,6 @@ while ( my ($url, $target) = each(%toLink) ) {
             system("git","pull");
         }
     }else{
-        print "the parent directory of $target does not exist";
+        print "the parent directory of $target does not exist\n";
     }
 }

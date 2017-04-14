@@ -1,3 +1,4 @@
+#!/usr/bin/env nix-build
 let
   hostName = "mobile";
 

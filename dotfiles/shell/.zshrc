@@ -1,37 +1,30 @@
+if [ $__HOME_ZSHRC_SOURCED ]; then return; fi
+__HOME_ZSHRC_SOURCED=1
+
+###############################################################################
 # Path to your oh-my-zsh installation.
 if [ -z $ZSH ]; then
-    export ZSH=/home/mhuber/.oh-my-zsh
-    if [ ! -e $ZSH ]; then
-        echo 'oh-my-zsh not found'
-        echo 'get oh-my-zsh via sh -c "$(curl -fsSL https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"'
-    fi
+    export ZSH="$HOME/.oh-my-zsh"
 fi
 
-ZSH_THEME="robbyrussell" # gallifrey
-# DISABLE_AUTO_UPDATE="true"
-# export UPDATE_ZSH_DAYS=13
-ENABLE_CORRECTION="false"
-COMPLETION_WAITING_DOTS="true"
-plugins=(git zsh-syntax-highlighting) # rake ruby
+if [ -d $ZSH ]; then
+    ZSH_THEME="robbyrussell" # gallifrey
+    # DISABLE_AUTO_UPDATE="true"
+    # export UPDATE_ZSH_DAYS=13
+    ENABLE_CORRECTION="false"
+    COMPLETION_WAITING_DOTS="true"
+    plugins=(git zsh-syntax-highlighting) # rake ruby
 
-# Uncomment the following line if you want to disable marking untracked files
-# under VCS as dirty. This makes repository status check for large repositories
-# much, much faster.
-# DISABLE_UNTRACKED_FILES_DIRTY="true"
+    # Uncomment the following line if you want to disable marking untracked files
+    # under VCS as dirty. This makes repository status check for large repositories
+    # much, much faster.
+    # DISABLE_UNTRACKED_FILES_DIRTY="true"
 
-###############################################################################
-###############################################################################
-###############################################################################
-# User configuration
-
-# if [ -d "/nix/var/nix" ]; then
-#   export PATH="/home/mhuber/bin:/var/setuid-wrappers:/home/mhuber/.nix-profile/bin:/home/mhuber/.nix-profile/sbin:/home/mhuber/.nix-profile/lib/kde4/libexec:/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/nix/var/nix/profiles/default/lib/kde4/libexec:/run/current-system/sw/bin:/run/current-system/sw/sbin:/run/current-system/sw/lib/kde4/libexec"
-# # else
-# #   export PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/lib/jvm/default/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl"
-# fi
-# export MANPATH="/usr/local/man:$MANPATH"
-
-source $ZSH/oh-my-zsh.sh
+    source $ZSH/oh-my-zsh.sh
+else
+    echo 'oh-my-zsh not found'
+    echo 'get oh-my-zsh via sh -c "$(curl -fsSL https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"'
+fi
 
 ###############################################################################
 # vi key bindings
@@ -44,9 +37,6 @@ bindkey '^?' backward-delete-char
 bindkey '^h' backward-delete-char
 bindkey '^w' backward-kill-word
 
-###############################################################################
-###############################################################################
-###############################################################################
 ###############################################################################
 
 [[ -f ~/.aliasrc ]] && source ~/.aliasrc
