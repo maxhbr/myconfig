@@ -11,7 +11,7 @@
   environment.systemPackages = with pkgs; [
     desktopEnv
   # gui applications
-    chromium firefox-unwrapped
+    chromium firefox-unwrapped qutebrowser
   # misc
     xf86_input_wacom
   ];
