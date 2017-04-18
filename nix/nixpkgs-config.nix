@@ -7,7 +7,11 @@ let
   unstable = (import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) { config = simple-config; });
   # unstabler = (import (fetchTarball http://nixos.org/channels/nixpkgs-unstable/nixexprs.tar.xz) { config = simple-config; });
 
-  unstables = {
+
+  
+  inherit (unstable) callPackage;
+
+  unstables = rec {
     inherit (unstable) ranger tmux;
     inherit (unstable) vim vimNox vimHugeX;
     inherit (unstable) rxvt_unicode_with-plugins rxvt_unicode;
@@ -22,7 +26,13 @@ let
     inherit (unstable) mutt-with-sidebar alot;
     inherit (unstable) weechat;
     # inherit (unstable) citrix_receiver;
-    citrix_receiver = unstable.callPackage pkgs/citrix-receiver {};
+
+    citrix_receiver = callPackage pkgs/citrix-receiver {};
+
+    premake5 = callPackage pkgs/premake5 {};
+    otfcc = callPackage pkgs/otfcc { inherit premake5; };
+    iosevka = callPackage pkgs/iosevka { inherit otfcc; };
+    imposevka = callPackage pkgs/iosevka/imposevka.nix { inherit otfcc; };
 
     freetype_subpixel = pkgs.freetype.override {
       useEncumberedCode = true;
