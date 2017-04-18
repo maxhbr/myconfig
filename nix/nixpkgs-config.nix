@@ -22,6 +22,8 @@ let
     inherit (unstable) mutt-with-sidebar alot;
     inherit (unstable) weechat;
     # inherit (unstable) citrix_receiver;
+    inherit (unstable) iosevka;
+
     citrix_receiver = unstable.callPackage pkgs/citrix-receiver {};
 
     freetype_subpixel = pkgs.freetype.override {
