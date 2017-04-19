@@ -11,7 +11,7 @@ let
   
   inherit (unstable) callPackage;
 
-  unstables = rec {
+  myOverrides = rec {
     inherit (unstable) ranger tmux;
     inherit (unstable) vim vimNox vimHugeX;
     inherit (unstable) rxvt_unicode_with-plugins rxvt_unicode;
@@ -40,10 +40,10 @@ let
     };
   };
 
-  myenvs = import ./envs.nix {
-    pkgsWithUnstables = pkgs // unstables;
+  myEnvs = import ./envs.nix {
+    pkgsWithUnstables = pkgs // myOverrides;
     inherit unstable;
   };
 in simple-config // {
-  packageOverrides = super: let self = super.pkgs; in myenvs // unstables;
+  packageOverrides = super: let self = super.pkgs; in myEnvs // myOverrides;
 }
