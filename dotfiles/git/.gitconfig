@@ -9,6 +9,7 @@
     a        = add
     c        = commit
     cm       = commit -m
+    chunk       = commit --patch
     cma      = commit -am
     ca       = commit --amend
     caa      = commit --amend -a
@@ -43,6 +44,9 @@
     ri       = rebase --interactive
     rc       = rebase --continue
     ra       = rebase --abort
+	  rMaster  = rebase --interactive master
+	  rAncestor = "!f() { git rebase -i $(git merge-base master HEAD); }; f"
+
 
     mt       = mergetool --no-prompt
     l        = log
@@ -57,9 +61,7 @@
 
     new      = !sh -c 'git log $1@{1}..$1@{0} "$@"'
 
-    remadd   = "!f() { \
-                       git remote add $1 https://github.com/$2.git; \
-                     }; f"
+    remadd   = "!f() { git remote add $1 git@github.com:$2.git; }; f"
     remotes = remote -v
 
     # Pretty graphs
@@ -92,8 +94,8 @@
                      }; f"
 
     # git subtree:
-    sba = "!f() {git subtree add --prefix $2 $1 master --squash; }; f" 
-    sbu = "!f() {git subtree pull --prefix $2 $1 master --squash; }; f" 
+    sba = "!f() { git subtree add --prefix $2 $1 master --squash; }; f" 
+    sbu = "!f() { git subtree pull --prefix $2 $1 master --squash; }; f" 
 [color]
     branch = auto
     diff = auto
