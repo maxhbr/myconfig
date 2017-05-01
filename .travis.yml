@@ -1,0 +1,17 @@
+language: nix
+
+before_install:
+  - echo -n mobile > nixos/hostname
+  - cksum /etc/machine-id \
+        | while read c rest; do printf "%x" $c; done > nixos/hostid
+  
+matrix:
+  include:
+    - script: cd nixos && nix-shell --packages nixpkgs-lint --run "nixpkgs-lint -f ."
+    - script: cd nixos && NIX_CONF_DIR="$TRAVIS_BUILD_DIR/nix" nix-build --show-trace .
+    - script: ./nixos/make-iso.nix
+
+notifications:
+    email:
+        on_success: never
+        on_failure: change

@@ -43,7 +43,6 @@ in with pkgsWithUnstables; rec {
     xclip
     imagemagick
   # gui applications
-    # luakit
     mupdf zathura llpp
     feh scrot
     gnome3.file-roller
