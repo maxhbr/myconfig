@@ -27,7 +27,7 @@ let
     inherit (unstable) weechat;
     # inherit (unstable) citrix_receiver;
 
-    citrix_receiver = callPackage pkgs/citrix-receiver {};
+    # citrix_receiver = callPackage pkgs/citrix-receiver {};
 
     premake5 = callPackage pkgs/premake5 {};
     otfcc = callPackage pkgs/otfcc { inherit premake5; };
