@@ -4,10 +4,13 @@ cd $SRC
 
 # hosts from someonewhocares.org ##########################################
 type "curl" &> /dev/null && {
-    [[ "$(find static/extrahosts -mtime +7)" != "" ]] && {
+    [[ ! -f static/extrahosts || "$(find static/extrahosts -mtime +1)" != "" ]] && {
         echo "* update hosts from someonewhocares.org ..."
-        curl http://someonewhocares.org/hosts/hosts | \
-            sed -e '/<localhost>/,/<\/localhost>/d' > static/extrahosts
+        # curl http://someonewhocares.org/hosts/hosts | \
+        #     sed -e '/<localhost>/,/<\/localhost>/d' > static/extrahosts
+        # use hosts file from https://github.com/StevenBlack/hosts (MIT)
+        curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts |
+            grep ^0 > static/extrahosts
     }
 }
 

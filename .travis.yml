@@ -1,9 +1,9 @@
 language: nix
 
-before_install:
-  - echo -n mobile > nixos/hostname
-  - cksum /etc/machine-id \
-        | while read c rest; do printf "%x" $c; done > nixos/hostid
+# before_install:
+#   - echo -n mobile > nixos/hostname
+#   - cksum /etc/machine-id \
+#         | while read c rest; do printf "%x" $c; done > nixos/hostid
   
 matrix:
   include:
