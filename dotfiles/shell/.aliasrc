@@ -219,13 +219,13 @@ myPermfix() {
 }
 
 # Find a file/dir/file&dir with a pattern in name:
-ff() { find . -type f -iname '*'$*'*' -ls 2>/dev/null ; }
-ffd() { find . -type d -iname '*'$*'*' -ls 2>/dev/null ; }
-ffa() { find . -iname '*'$*'*' -ls 2>/dev/null ; }
+ff() { find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -iname '*'$*'*' -ls 2>/dev/null ; }
+ffd() { find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type d -iname '*'$*'*' -ls 2>/dev/null ; }
+ffa() { find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -iname '*'$*'*' -ls 2>/dev/null ; }
 
 # Find a file with pattern $1 in name and Execute $2 on it:
-fe() { find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \; ; }
-fed() { find . -type d -iname '*'${1:-}'*' -exec ${2:-file} {} \; ; }
+fe() { find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \; ; }
+fed() { find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type d -iname '*'${1:-}'*' -exec ${2:-file} {} \; ; }
 
 # Extract files from nearly any archive
 # Usage: ex <archive_name>
@@ -298,7 +298,7 @@ exl() {
 }
 
 countFilesByTypes() {
-  find . -type f -exec basename "{}" \; \
+  find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -exec basename "{}" \; \
     | sed -e 's/.*\.//gi' \
     | sort \
     | uniq  -c \

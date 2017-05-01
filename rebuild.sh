@@ -2,18 +2,41 @@
 #
 #  written by maximilian-huber.de
 
-mkdir -p _logs
-exec &> >(tee -a "_logs/$(date +%Y-%m-%d)-rebuild.sh.log")
-
-set -e
-
 if [ "$EUID" -eq 0 ]; then
     echo "you should run this script as user"
     exit 1
 fi
 
-SRC="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd $SRC
+cd "$(dirname $0)"
+SRC="$(pwd)"
+
+TMUX_NAME="rebuild_sh"
+logfile="_logs/$(date +%Y-%m-%d)-rebuild.sh.log"
+
+# wrap into tmux ##########################################################
+if test -z $TMUX && [[ $TERM != "screen" ]]; then
+    echo "wrap into tmux ..."
+    tmux has-session -t $TMUX_NAME 2>/dev/null
+    [[ "$?" -eq 0 ]] && {
+        echo "already running somewhere"
+        exit 1
+    }
+    tmux -2 new-session -s $TMUX_NAME \
+         "command echo \"... wrapped into tmux\"; $0 $@; $SHELL" \; \
+         set-option status-left "rebuild.sh "\; \
+         set-option status-right "..."\; \
+         set set-titles-string "${TMUX_NAME}@tmux" \
+        && exit 0
+    echo "tmux failed to start, running without tmux"
+fi
+
+# prepare logging #########################################################
+mkdir -p _logs
+
+echo -e "\n\n\n\n\n\n\n" >> $logfile
+exec &> >(tee -a $logfile)
+
+set -e
 
 # check, if connected #####################################################
 if ! ping -c1 cloud.github.com > /dev/null 2>&1; then

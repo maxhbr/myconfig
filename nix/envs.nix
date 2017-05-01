@@ -8,7 +8,7 @@ in with pkgsWithUnstables; rec {
 
   adminEnv = mkEnv "adminEnv" [
     htop
-    iftop iptraf-ng iotop
+    iftop iptraf-ng iotop mtr
     mkpasswd pwgen
     usbutils
   ];

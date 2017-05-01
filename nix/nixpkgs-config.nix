@@ -18,7 +18,7 @@ let
     # inherit (unstable) emacs;
     # inherit (unstable) git git-lfs gitFull;
     # gitAndTools.tig = unstable.gitAndTools.tig;
-    inherit (unstable) gimp-with-plugins;
+    # inherit (unstable) gimp-with-plugins;
     # inherit (unstable) rawtherapee geeqie;
     inherit (unstable) oh-my-zsh;
     # inherit (unstable) haskellPackages;
