@@ -60,7 +60,6 @@
       dejavu_fonts
       corefonts
       inconsolata
-      iosevka
     ];
   };
 }

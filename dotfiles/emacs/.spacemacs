@@ -61,7 +61,7 @@ values."
      version-control
      mykeybindings
      mythriftlayer
-     myligatures
+     ;; myligatures
      )
    ;; List of additional packages that will be installed without being
    ;; wrapped in a layer. If you need some configuration for these
@@ -151,9 +151,9 @@ values."
    dotspacemacs-colorize-cursor-according-to-state t
    ;; Default font, or prioritized list of fonts. `powerline-scale' allows to
    ;; quickly tweak the mode-line size to make separators look not too crappy.
-   dotspacemacs-default-font '("Iosevka Expanded"
+   ;; dotspacemacs-default-font '("Iosevka Expanded"
    ;; dotspacemacs-default-font '("Iosevka Medium"
-   ;; dotspacemacs-default-font '("Inconsolata"
+   dotspacemacs-default-font '("Inconsolata"
                                :size 16
                                :weight normal
                                :width normal
