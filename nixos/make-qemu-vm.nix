@@ -10,7 +10,7 @@ let
   config = (import <nixpkgs/nixos/lib/eval-config.nix> {
     system = "x86_64-linux";
     modules = [
-      <nixpkgs/nixos/modules/installer/cd-dvd/iso-image.nix>
+      <nixpkgs/nixos/modules/virtualisation/qemu-vm.nix>
       ({ pkgs, lib, ... }:
       let
         baseConfig = {
@@ -20,7 +20,7 @@ let
         machineConfig = import ./machines {
           config = baseConfig;
           hostId = "12ABCDEF";
-          hostName = "iso";
+          hostName = "vm";
         };
   
       in {
@@ -35,4 +35,4 @@ let
   
   }).config;
 in
-  config.system.build.isoImage
+  config.system.build.vm

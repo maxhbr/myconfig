@@ -5,3 +5,4 @@ hostid
 *.orig
 result
 *.tar.gz
+*.qcow2
