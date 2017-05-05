@@ -36,6 +36,8 @@
     dd       = diff --word-diff=color
     dw       = diff --color-words="[^[:space:],;:_-]+"
     dt       = difftool --dir-diff
+	  dAncestor = "!f() { git diff $(git merge-base master HEAD); }; f"
+	  dsAncestor = "!f() { git diff --stat $(git merge-base master HEAD); }; f"
     changes  = diff --name-status -r
     diffstat = diff --stat -r
     sortdiff = !sh -c 'git diff "$@" | grep "^[+-]" | sort --key=1.2 | uniq -u -s1'
@@ -46,6 +48,7 @@
     ra       = rebase --abort
 	  rMaster  = rebase --interactive master
 	  rAncestor = "!f() { git rebase -i $(git merge-base master HEAD); }; f"
+	  rsAncestor = "!f() { git reset --soft $(git merge-base master HEAD); }; f"
 
 
     mt       = mergetool --no-prompt
@@ -61,28 +64,28 @@
 
     new      = !sh -c 'git log $1@{1}..$1@{0} "$@"'
 
-    remadd   = "!f() { git remote add $1 git@github.com:$2.git; }; f"
+    remadd   = "!f() { \
+									git remote add $1 git@github.com:${1}/${2}.git; \
+	              }; f"
+		ghc = "!f() { \
+	                git clone git@github.com:${1}/${2}.git ${1}-${2}; \
+	              }; f"
     remotes = remote -v
 
     # Pretty graphs
     lol      = log --graph --decorate --pretty=oneline --abbrev-commit
     lola     = log --graph --decorate --pretty=oneline --abbrev-commit --all
     # Up to current commit, medium commit info
-    g        = log --graph --pretty=format:'%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n        %ar (%ai)%n        %an <%ae>'
+    g        = log --graph --pretty=format:'%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n         %ar (%ai)%n         %an <%ae>'
     # Long, full commit info
-    gl       = log --graph --pretty=format:'%C(bold)%h%C(reset)%n%H%n%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n%n%b%n%nAuthor%n    %ar (%ai)%n    %an <%ae>%nCommitter%n    %cr (%ci)%n    %cn <%ce>%n'
-    # All commits, medium commit info
-    gg       = log --graph --all --pretty=format:'%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n        %ar (%ai)%n        %an <%ae>'
+	  gl       = log --graph --pretty=format:'%C(reverse) %C(bold)%h%C(reset)%C(reverse) (%H) %C(reset)%n%n%C(yellow)%d%C(reset) %C(red)%C(bold)%s%C(reset)%n%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'
+		gg       = log --graph --all --pretty=format:'%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n         %ar (%ai)%n         %an <%ae>'
     # All commits, full commit info
-    ggl      = log --graph --all --pretty=format:'%C(bold)%h%C(reset)%n%H%n%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n%n%b%n%nAuthor%n    %ar (%ai)%n    %an <%ae>%nCommitter%n    %cr (%ci)%n    %cn <%ce>%n'
+	  ggl      = log --graph --all --pretty=format:'%C(reverse) %C(bold)%h%C(reset)%C(reverse) (%H) %C(reset)%n%n%C(yellow)%d%C(reset) %C(red)%C(bold)%s%C(reset)%n%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'
 
     ls-assume-unchanged = !git ls-files -v | grep ^h | awk '{print $2}'
     assume-unchanged    = update-index --assume-unchanged
     assume-changed      = update-index --no-assume-unchanged
-
-  	ghc = "!f() { \
-	                git clone git@github.com:${1}/${2}.git ${1}-${2}; \
-	              }; f"
 
     testPR   = "!f() { remote="${2:-origin}"; \
                        branch="testpr/${remote}/${1}"; \

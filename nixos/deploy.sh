@@ -5,7 +5,7 @@ cd $SRC
 # hosts from someonewhocares.org ##########################################
 type "curl" &> /dev/null && {
     [[ ! -f static/extrahosts || "$(find static/extrahosts -mtime +1)" != "" ]] && {
-        echo "* update hosts from someonewhocares.org ..."
+        echo "* update hosts blacklist ..."
         # curl http://someonewhocares.org/hosts/hosts | \
         #     sed -e '/<localhost>/,/<\/localhost>/d' > static/extrahosts
         # use hosts file from https://github.com/StevenBlack/hosts (MIT)

@@ -18,7 +18,8 @@ RUN GOSU_VERSION='1.7' set -x \
  && rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc && $_purge ca-certificates
 
 RUN set -x \
-  && $_update && $_install texlive-full latexmk && $_cleanup
+  && $_update && $_install texlive-full latexmk zathura xpdf && $_cleanup
+RUN echo "\$pdf_previewer = \"start zathura\";" > ~/.latexmkrc
 
 RUN mkdir -p /workdir
 WORKDIR /workdir
