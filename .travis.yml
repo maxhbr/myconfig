@@ -4,11 +4,14 @@ language: nix
 #   - echo -n mobile > nixos/hostname
 #   - cksum /etc/machine-id \
 #         | while read c rest; do printf "%x" $c; done > nixos/hostid
+
+sudo: required
   
 matrix:
   include:
     - script: cd nixos && nix-shell --packages nixpkgs-lint --run "nixpkgs-lint -f ."
     - script: cd nixos && NIX_CONF_DIR="$TRAVIS_BUILD_DIR/nix" nix-build --show-trace .
+    - script: sudo ./nixos/writeHostName.sh iso && ./nix/deploy.sh && ./nixos/deploy.sh
     - script: ./nixos/make-iso.nix
 
 notifications:

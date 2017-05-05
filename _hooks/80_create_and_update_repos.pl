@@ -23,8 +23,12 @@ while ( my ($url, $target) = each(%toLink) ) {
     print "update: @{[colored(['bold green'], $target,'')]}\n";
     $target = (glob($target))[0];
     if ( -d dirname($target) ){
-        if ( !-d $target ){
-            system("git","clone",$url,$target);
+        if ( !-d "$target/.git" ){
+            chdir($target);
+            system("git init");
+            system("git","remote","add","origin",$url);
+            system("git","fetch");
+            system("git","checkout","-t","origin/master");
         }else{
             chdir($target);
             system("git","pull");
