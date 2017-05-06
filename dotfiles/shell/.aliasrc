@@ -309,10 +309,10 @@ countFilesByTypes() {
 #   system control
 #-------------------------------------------------------------------{{{
 
-alias reboot="systemctl reboot"
-alias poweroff="systemctl poweroff"
-alias halt="systemctl poweroff"
-alias suspend="systemctl suspend"
+# alias reboot="systemctl reboot"
+# alias poweroff="systemctl poweroff"
+# alias halt="systemctl poweroff"
+# alias suspend="systemctl suspend"
 
 alias btsyncStart="sudo btsync --config ~/.config/btsync/btsync.conf"
 

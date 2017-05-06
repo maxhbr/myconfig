@@ -4,7 +4,7 @@ let
 
   build = import <nixpkgs/nixos> {
     system = "x86_64-linux";
-    configuration = import ./machines {
+    configuration = import ../machines {
       config = {};
       hostId = "12ABCDEF";
       hostName = hostName;

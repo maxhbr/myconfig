@@ -1,0 +1,23 @@
+#!/usr/bin/env nix-build
+# build an ISO image that will auto install NixOS and reboot
+# $ nix-build make-iso.nix
+# delete with
+# $ nix-store --delete <result>
+#
+# stolen from https://github.com/snabblab/snabblab-nixos/blob/master/make-iso.nix
+
+{ machine ? "iso" }:
+
+let
+  config = (import <nixpkgs/nixos/lib/eval-config.nix> {
+    system = "x86_64-linux";
+    modules = [
+      <nixpkgs/nixos/modules/installer/cd-dvd/iso-image.nix>
+      ({ pkgs, lib, ... }: import ./common-make.nix {
+        inherit pkgs lib machine;
+      })
+    ];
+  
+  }).config;
+in
+  config.system.build.isoImage
