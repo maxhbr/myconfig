@@ -15,6 +15,9 @@ let
       <nixpkgs/nixos/modules/installer/cd-dvd/iso-image.nix>
       ({ pkgs, lib, ... }: import ./common-make.nix {
         inherit pkgs lib machine;
+      } // {
+        services.mingetty.autologinUser = "mhuber";
+        security.sudo.wheelNeedsPassword = false;
       })
     ];
   

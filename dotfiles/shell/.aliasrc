@@ -657,6 +657,13 @@ have nix-env && {
 
   #nixos
   alias nixosupg="sudo nixos-rebuild switch --fallback --upgrade"
+
+  freeStoreSpace() {
+    for folder in /nix/store/*-nixos-vm; do
+      nix-store --delete $folder;
+    done
+    nix-store --gc
+  }
 }
 
 have pacman && {

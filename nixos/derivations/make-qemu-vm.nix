@@ -15,6 +15,13 @@ let
       <nixpkgs/nixos/modules/virtualisation/qemu-vm.nix>
       ({ pkgs, lib, ... }: import ./common-make.nix {
         inherit pkgs lib machine;
+      } // {
+        virtualisation.memorySize = 1024;
+        virtualisation.diskSize = 1024;
+        virtualisation.graphics = false;
+        services.mingetty.autologinUser = "mhuber";
+        programs.zsh.shellInit = "touch ~/.zshrc";
+        security.sudo.wheelNeedsPassword = false;
       })
     ];
   
