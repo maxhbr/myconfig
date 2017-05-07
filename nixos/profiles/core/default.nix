@@ -82,5 +82,5 @@
     pmount.source  = "${pkgs.pmount}/bin/pmount";
     pumount.source  = "${pkgs.pmount}/bin/pumount";
   };
-  programs.ssh.startAgent = false;
+  programs.ssh.startAgent = true;
 }

@@ -24,7 +24,6 @@ let
         security.sudo.wheelNeedsPassword = false;
       })
     ];
-  
   }).config;
 in
   config.system.build.vm
