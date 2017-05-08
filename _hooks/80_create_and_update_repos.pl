@@ -27,7 +27,7 @@ while ( my ($url, $target) = each(%toLink) ) {
             chdir($target);
             system("git init");
             system("git","remote","add","origin",$url);
-            system("git","fetch");
+            system("git","fetch","origin","master");
             system("git","checkout","-t","origin/master");
         }else{
             chdir($target);

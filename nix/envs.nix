@@ -38,7 +38,7 @@ in with pkgsWithUnstables; rec {
   ];
 
   desktopEnv = mkEnv "desktopEnv" [
-    arandr
+    arandr xrandr-invert-colors
     xlibs.xmodmap xlibs.xset xlibs.setxkbmap
     xclip
     imagemagick

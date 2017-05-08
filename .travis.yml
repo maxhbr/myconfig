@@ -8,6 +8,7 @@ matrix:
     - script: ./nixos/derivations/make-qemu-vm.nix --arg machine \"mobile\" && ( set -ex; cmdpid=$BASHPID; (sleep 300; kill $cmdpid 2>/dev/null) & ./result/bin/run-vm-vm -nographic && false ) ; [[ $? -eq 143 ]]
 
 notifications:
-    email:
-        on_success: never
-        on_failure: change
+  email:
+    on_success: never
+    # on_failure: change
+    on_failure: always
