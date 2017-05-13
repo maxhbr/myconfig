@@ -96,6 +96,8 @@ alias e="emacs"
 alias httptunnel="ssh -ND localhost:9567 vserver"
 
 alias g="git"
+alias gs="git status"
+
 alias t="tig"
 alias tu='tig HEAD @{upstream}'
 alias ta="task"
@@ -170,6 +172,11 @@ alias ..="cd .."
 mkcd() { #make dir and enter it
   mkdir -p "$1"
   cd "$1"
+}
+
+cdtmp() {
+  cd $(mktemp -d)
+  pwd
 }
 
 alias grep='grep --color=auto'

@@ -45,7 +45,7 @@ in with pkgsWithUnstables; rec {
   # gui applications
     mupdf zathura llpp
     feh scrot
-    gnome3.file-roller
+    xarchiver # gnome3.file-roller
     mplayer
     xdotool
   ];
@@ -110,7 +110,7 @@ in with pkgsWithUnstables; rec {
     openvpn networkmanager_openvpn
     rdesktop
     # citrix_receiver
-    openjdk maven thrift gradle
+    openjdk unstable.maven thrift gradle
     libreoffice
   ];
 }

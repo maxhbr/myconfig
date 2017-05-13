@@ -19,7 +19,7 @@
     #                     git checkout -b $2 $1/$2; \
     #                   }; f"
     cob         = checkout -b
-    f           = fetch --all
+    f           = "!f() { git fetch ${1:-\"--all\"}; }; f"
 
     d           = diff
     d0          = diff HEAD
@@ -79,10 +79,10 @@
     # Up to current commit, medium commit info
     g           = log --graph --pretty=format:'%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n         %ar (%ai)%n         %an <%ae>'
     # Long, full commit info
-	  gl          = log --graph --pretty=format:'%C(reverse) %C(bold)%h%C(reset)%C(reverse) (%H) %C(reset)%n%n%C(yellow)%d%C(reset) %C(red)%C(bold)%s%C(reset)%n%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'
+	  gl          = log --graph --pretty=format:'%C(reverse) %C(bold)%h%C(reset)%C(reverse) (%H) %C(reset)%n%C(yellow)%d%C(reset)%n%C(red)%C(bold)%s%C(reset)%n%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'
 		gg          = log --graph --all --pretty=format:'%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %C(red)%s%C(reset)%n         %ar (%ai)%n         %an <%ae>'
     # All commits, full commit info
-	  ggl         = log --graph --all --pretty=format:'%C(reverse) %C(bold)%h%C(reset)%C(reverse) (%H) %C(reset)%n%n%C(yellow)%d%C(reset) %C(red)%C(bold)%s%C(reset)%n%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'
+	  ggl         = log --graph --all --pretty=format:'%C(reverse) %C(bold)%h%C(reset)%C(reverse) (%H) %C(reset)%n%C(yellow)%d%C(reset)%n%C(red)%C(bold)%s%C(reset)%n%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'
 
     ls-assume-unchanged = !git ls-files -v | grep ^h | awk '{print $2}'
     assume-unchanged    = update-index --assume-unchanged

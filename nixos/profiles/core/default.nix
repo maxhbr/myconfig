@@ -10,6 +10,7 @@
     # kernelPackages = pkgs.linuxPackages_testing;
     kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
     cleanTmpDir = true;
+    # tmpOnTmpfs = true;
   };
 
   networking = {
@@ -34,6 +35,7 @@
       rsnapshot
       stow
     ];
+    variables = { TMP = "/tmp"; };
   };
 
   nix = {

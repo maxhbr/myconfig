@@ -62,6 +62,7 @@ values."
      mykeybindings
      mythriftlayer
      mynixmode
+     mydockermode
      ;; myligatures
      )
    ;; List of additional packages that will be installed without being
