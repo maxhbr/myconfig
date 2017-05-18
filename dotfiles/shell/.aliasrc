@@ -641,8 +641,6 @@ have nix-env && {
   #nix
   alias nixin="nix-env -iA"
   alias nixin-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -iA"
-  # alias nixupg="nix-env -u '*'"
-  alias nixupg="nix-channel --update && nix-env --upgrade"
   alias nixTest="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p"
   nixRun() {
       NIXPKGS_ALLOW_UNFREE=1 nix-shell -p "$1" --command "$1"
@@ -658,18 +656,27 @@ have nix-env && {
   }
   alias nixlist="nix-env -qa \*"
 
-  alias upg='nixupg'
 
   alias nix-shell-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-shell"
 
-  #nixos
-  alias nixosupg="sudo nixos-rebuild switch --fallback --upgrade"
+  [ ! -x ~/myconfig/rebuild.sh ] && {
+    alias nixupg="nix-channel --update && nix-env --upgrade"
+    alias upg='nixupg'
+    #nixos
+    alias nixosupg="sudo nixos-rebuild switch --fallback --upgrade"
+  } || {
+    alias upg="~/myconfig/rebuild.sh"
+    alias nixupg="~/myconfig/rebuild.sh"
+    alias nixosupg="~/myconfig/rebuild.sh"
+  }
 
   freeStoreSpace() {
     for folder in /nix/store/*-nixos-vm; do
       nix-store --delete $folder;
     done
     nix-store --gc
+    nix-collect-garbage -d
+    sudo nix-collect-garbage -d
   }
 }
 
