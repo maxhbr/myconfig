@@ -4,12 +4,12 @@ SRC="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $SRC
 
 # rsync file to target folder #############################################
-echo "* rsync ..."
+echo "* $(tput bold)rsync$(tput sgr0) ..."
 sudo rsync --perms -r \
      "$SRC/nixpkgs-config.nix" "$SRC/envs.nix" "$SRC/pkgs" /etc/nix/
 
 # setup channels ##########################################################
-echo "* setup channels ..."
+echo "* $(tput bold)setup channels$(tput sgr0) ..."
 nix-channel --add https://nixos.org/channels/nixos-unstable unstable
 nix-channel --add https://nixos.org/channels/nixos-17.03 nixos
 sudo nix-channel --add https://nixos.org/channels/nixos-unstable unstable

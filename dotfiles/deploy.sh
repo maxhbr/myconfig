@@ -2,6 +2,8 @@
 
 set -e
 
+echo "* $(tput bold)dotfiles$(tput sgr0) ..."
+
 dotfiles="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 user=$(stat -c '%U' $0)

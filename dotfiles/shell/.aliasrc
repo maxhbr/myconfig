@@ -114,6 +114,8 @@ file-roller() {
   command file-roller "$@" &disown
 }
 
+alias uncolor='sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g"'
+
 #--------------------------------------------------------------------
 #   file specific
 #-------------------------------------------------------------------{{{
@@ -467,9 +469,10 @@ alias equalizer="alsamixer -D equal"
 myStopScreensaver(){
   # needs xdotool
   while true; do
-    xdotool mousemove_relative 1 1
-    xdotool mousemove_relative -- -1 -1
     sleep $((60 * 4))
+    # xdotool mousemove_relative 1 1
+    # xdotool mousemove_relative -- -1 -1
+    xdotool key shift
   done
 }
 

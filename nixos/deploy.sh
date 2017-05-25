@@ -5,7 +5,7 @@ cd $SRC
 # hosts from someonewhocares.org ##########################################
 type "curl" &> /dev/null && {
     [[ ! -f static/extrahosts || "$(find static/extrahosts -mtime +1)" != "" ]] && {
-        echo "* update hosts blacklist ..."
+        echo "* $(tput bold)update hosts blacklist$(tput sgr0) ..."
         # curl http://someonewhocares.org/hosts/hosts | \
         #     sed -e '/<localhost>/,/<\/localhost>/d' > static/extrahosts
         # use hosts file from https://github.com/StevenBlack/hosts (MIT)
@@ -17,7 +17,7 @@ type "curl" &> /dev/null && {
 set -e
 
 # rsync file to target folder #############################################
-echo "* rsync ..."
+echo "* $(tput bold)rsync$(tput sgr0) ..."
 sudo rsync --filter="protect /hardware-configuration.nix" \
            --filter="protect /hostname" \
            --filter="protect /hostid" \
@@ -31,7 +31,7 @@ sudo rsync --filter="protect /hardware-configuration.nix" \
            "$SRC/" /etc/nixos/
 
 # nixos-rebuild ###########################################################
-echo "* nixos-rebuild ..."
+echo "* $(tput bold)nixos-rebuild$(tput sgr0) ..."
 exec sudo \
     NIX_CURL_FLAGS='--retry=1000' \
     nixos-rebuild --show-trace \

@@ -49,7 +49,7 @@ if ! ping -c1 cloud.github.com > /dev/null 2>&1; then
 fi
 
 # update git directory if clean ###########################################
-echo "* update config ..."
+echo "* $(tput bold)update config$(tput sgr0) ..."
 if git diff-index --quiet HEAD --; then
     git fetch
     UPSTREAM=${1:-'@{u}'}
@@ -76,8 +76,8 @@ fi
 shopt -s nullglob
 for f in $SRC/_hooks/*; do
     [ -x $f ] && {
-        echo "****************************************************************************"
-        echo "*** run $f"
+        echo "$(tput bold)****************************************************************************"
+        echo "***$(tput sgr0) Run $(tput bold)$(basename $f)$(tput sgr0)"
         $f
     }
 done
