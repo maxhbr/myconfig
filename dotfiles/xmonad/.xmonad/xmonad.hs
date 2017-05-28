@@ -83,16 +83,13 @@ import           XMonad.Layout.Tabbed ( addTabs
                                       , shrinkText
                                       , tabbedBottom
                                       , Theme(..) )
-import           XMonad.Layout.WindowNavigation ( configurableNavigation
-                                                , navigateColor
-                                                , Navigate(Move))
 import           XMonad.Layout.Magnifier (magnifiercz)
 import           XMonad.Layout.MultiToggle
 import           XMonad.Layout.MultiToggle.Instances
 import           XMonad.Layout.Master (mastered)
 -- testing layouts:
 import           XMonad.Layout.TwoPane (TwoPane(TwoPane))
--- import           XMonad.Layout.IfMax (IfMax(IfMax), ifMax)
+import           XMonad.Layout.IfMax (IfMax(IfMax), ifMax)
 import           XMonad.Layout.Spacing
 import           XMonad.Layout.Gaps -- testing
 import           XMonad.Layout.PerScreen -- testing
@@ -164,6 +161,7 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
     layoutKBs =
       [ ((m__, xK_space ), sendMessage NextLayout) -- Rotate through the available layout algorithms
       , ((ms_, xK_x     ), sendMessage $ Toggle MIRROR)
+      , ((m__, xK_f     ), sendMessage $ Toggle FULL)
       , ((ms_, xK_space ), setLayout $ XMonad.layoutHook conf) --  Reset the layouts on the current workspace to default
       , ((m__, xK_m     ), withFocused minimizeWindow)
       , ((ms_, xK_m     ), sendMessage RestoreNextMinimizedWin)
@@ -264,15 +262,16 @@ myMouseBindings XConfig {XMonad.modMask = modm} = M.fromList
 
 ------------------------------------------------------------------------
 -- Layouts / workspaces:
-myWorkspaces = map show [1..7] ++ ("web" : map show [9..15]) ++ ["vbox", "games"]
+myWorkspaces = map show [1..7] ++ ("web" : map show [9..15]) ++ ["vbox", "media"]
 
-myLayout = avoidStrutsOn[U,D] $
+myLayout = mkToggle (single FULL) $
            smartBorders $
-           configurableNavigation (navigateColor "#333333") $
            boringAuto $
+           modWorkspaces [ "vbox", "media" ] (Full |||) $
+           avoidStrutsOn[U,D] $
            mkToggle (single MIRROR) $
-           modWorkspaces [ "vbox", "games" ] (Full |||) $
-           full ||| (onWorkspace (myWorkspaces !! 7) (Full ||| tiled) (dtb ||| tiled))
+           full ||| dtb ||| tiled
+           -- (IfMax 1 full  (full ||| (IfMax 2 tiled (dtb ||| tiled))))
   where
     -- full1080 = named "fixed=" $
     --            ifWider 1920 (gaps [(L,320),(U,180),(R,320),(D,180)] Full) Full
@@ -332,15 +331,12 @@ myManageHook = (composeAll (foldMap (\(a,cs) -> map (\c -> className =? c --> a)
                                                ,"Zenity"])
                              , (doFloat, ["MPlayer"
                                          ,"Onboard"])
-                             , (doShift "web", ["Chromium"
-                                               ,"chromium-browser"
-                                               ,"Firefox"])
+                             , (doShift "web", ["Firefox"]) --["Chromium" ,"chromium-browser" ,"Firefox"]
                              , (doShift "vbox", ["Virtualbox"
                                                 ,"VirtualBox"])
-                             , (doShift "games", ["Steam"])
+                             , (doShift "media", ["Steam"])
                              , (doIgnore, ["desktop_window"
-                                          ,"kdesktop"]) ]
-                           ))
+                                          ,"kdesktop"]) ]))
                <+> scratchpadHook
                <+> manageDocks
 

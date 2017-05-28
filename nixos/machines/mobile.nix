@@ -5,6 +5,7 @@
     ## hardware:
     ./hardware/T450s.nix
     ./hardware/efi.nix
+    ./hardware/exfat.nix
 
     ## software:
     ../profiles/desktop

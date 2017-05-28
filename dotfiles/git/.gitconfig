@@ -14,6 +14,7 @@
     cma         = commit -am
     ca          = commit --amend
     caa         = commit --amend -a
+	  cac         = commit --patch --amend
     co          = checkout
     # col         = "!f() { \
     #                     git checkout -b $2 $1/$2; \

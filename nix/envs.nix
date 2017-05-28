@@ -28,6 +28,7 @@ in with pkgsWithUnstables; rec {
     adminEnv
     wget curl
     git git-lfs
+    nox
   ];
 
   muttEnv = mkEnv "muttEnv" [
@@ -71,29 +72,41 @@ in with pkgsWithUnstables; rec {
 
   devEnv = let
     myclojureenv = pkgs.myEnvFun {
-      name = "myclojureenv";
+      name = "clojur";
       buildInputs = [
         leiningen clojure
       ];
     };
     mypythonenv = pkgs.myEnvFun {
-      name = "mypythonenv";
+      name = "python";
       buildInputs = [
         python python3 python35Packages.bpython
       ];
     };
     myrubyenv = pkgs.myEnvFun {
-      name = "myrubyenv";
+      name = "ruby";
       buildInputs = [
         ruby
       ];
     };
+    myschemeenv = pkgs.myEnvFun {
+      name = "scheme";
+      buildInputs = [
+        chicken
+      ];
+   };
+   myrustenv = pkgs.myEnvFun {
+     name = "rust";
+       buildInputs = [
+         rustc
+     ];
+   };
   in mkEnv "devEnv" ([
     meld
     unstable.stack unstable.cabal-install unstable.cabal2nix
     gnumake cmake automake
 
-    myclojureenv mypythonenv myrubyenv
+    myclojureenv mypythonenv myrubyenv myschemeenv myrustenv
 
     cloc
 
