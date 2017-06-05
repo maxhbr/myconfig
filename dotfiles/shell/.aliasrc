@@ -53,6 +53,26 @@ man(){
 grepr() { grep -rns --color=always "$@" | grep -v Binärdatei 2>/dev/null; }
 grepri() { grepr -i "$@" }
 greprL() { grepr "$@" | less -R; }
+grepf() {
+    # stolen from: https://www.manthanhd.com/2016/01/15/waiting-for-tomcat-to-start-up-in-a-script/
+    if [ $# -ne 2 ]; then
+        echo "usage: grepf \"search string\" filename"
+        return 1
+    fi
+    FIFO=$(mktemp -u)
+    mkfifo $FIFO || return 1
+    {
+        tailf --lines=-1 "$2" &
+        TAILPID=$!
+        read foo <$FIFO
+        kill $TAILPID
+    } | {
+        grep -m 1 "$1"
+        echo >$FIFO
+    }
+    rm $FIFO
+}
+
 have() { type "$1" &> /dev/null; }
 confirm () {
     # call with a prompt string or use a default

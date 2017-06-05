@@ -28,7 +28,9 @@ in with pkgsWithUnstables; rec {
     adminEnv
     wget curl
     git git-lfs
+    unzip
     nox
+    tree
   ];
 
   muttEnv = mkEnv "muttEnv" [
