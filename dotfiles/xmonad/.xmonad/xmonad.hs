@@ -102,6 +102,7 @@ import qualified XMonad.StackSet             as W
 import XMonad.MyConfig.Common
 import XMonad.MyConfig.Scratchpads
 import XMonad.MyConfig.ToggleFollowFocus
+import XMonad.MyConfig.Notify
 
 ------------------------------------------------------------------------
 -- Key bindings:
@@ -182,8 +183,8 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       -- ++ subLayoutKBs
       where
         cycleWSKBs =
-          [ ((m__, xK_Down ), moveTo Next NonEmptyWS) -- HiddenNonEmptyWS
-          , ((m__, xK_Up   ), moveTo Prev NonEmptyWS) -- HiddenNonEmptyWS
+          [ ((m__, xK_Down ), moveTo Next NonEmptyWS >> popupCurDesktop) -- HiddenNonEmptyWS
+          , ((m__, xK_Up   ), moveTo Prev NonEmptyWS >> popupCurDesktop) -- HiddenNonEmptyWS
           , ((ms_, xK_Down ), shiftToNext >> nextWS)
           , ((ms_, xK_Up   ), shiftToPrev >> prevWS)
           , ((m__, xK_Right), nextScreen)
@@ -212,7 +213,9 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       -- , ((ms_, xK_y      ), spawn "slimlock") -- screenlocker
       , ((ms_, xK_y      ), spawn "xset s activate") -- screenlocker
 
-      , ((m__,  xK_Home   ), spawn "xcalib -i -a") --invert Colors (does not work with retdshift)
+      -- invert Colors (does not work with retdshift)
+      -- alternative command:  "xcalib -i -a"
+      , ((m__,  xK_Home   ), spawn "xrandr-invert-colors")
 
       , ((m__,  xK_Print  ), spawn "scrot ~/screen_%Y-%m-%d_%H-%M-%S.png -d 1") -- screenshot
       , ((ms_,  xK_Print  ), spawn "bash -c \"import -frame ~/screen_`date +%Y-%m-%d_%H-%M-%S`.png\"")
@@ -362,7 +365,7 @@ myStartupHook = do
 ------------------------------------------------------------------------
 -- General
 
-myConfig xmproc = withUrgencyHook NoUrgencyHook $
+myConfig xmproc = withUrgencyHook myUrgencyHook $
   def { terminal             = "urxvtc"
       , focusFollowsMouse  = False -- see: focusFollow
       , borderWidth        = 2

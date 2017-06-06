@@ -56,6 +56,7 @@ in with pkgsWithUnstables; rec {
   xmonadEnv = mkEnv "xmonadEnv" ([
     unstable.dmenu unclutter
     xss-lock
+    libnotify dzen2 # xfce.xfce4notifyd # notify-osd
   ] ++ (with unstable.haskellPackages; [
     xmonad xmobar yeganesh
   ]));
