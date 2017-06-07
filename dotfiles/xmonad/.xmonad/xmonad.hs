@@ -122,8 +122,8 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       , ((msc, xK_Return), spawn "urxvtd -q -f -o &")
       -- , ((m__, xK_Return), windows W.swapMaster)
       , ((m4m, xK_Return), windows W.swapMaster)
-      , ((m__, xK_g     ), spawn "~/bin/emc || emacs")
-      , ((m__, xK_q     ), spawn "xmonad --recompile; xmonad --restart") -- Restart xmonad
+      -- , ((m__, xK_g     ), spawn "~/bin/emc || emacs")
+      , ((m__, xK_q     ), spawn "xmonad --recompile && xmonad --restart") -- Restart xmonad
       , ((msc, xK_q     ), io exitSuccess) -- Quit xmonad
       -- , ((m__, xK_p     ), spawn "`dmenu_run`")
       , ((m__, xK_p     ), spawn "`dmenu_path | yeganesh`")
@@ -148,9 +148,10 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
         switchWorkspaceKBs =
           -- mod-[1..9,0], Switch to workspace N
           -- mod-shift-[1..9,0], Move client to workspace N
-          [((m, k), windows $ f i)
+          [((m, k), f i)
               | (i, k) <- zip (XMonad.workspaces conf) ([xK_1 .. xK_9] ++ [xK_0])
-              , (f, m) <- [(W.greedyView, m__), (W.shift, ms_)]]
+              , (f, m) <- [ (\i -> windows (W.greedyView i) >> popupCurDesktop, m__)
+                          , (windows . W.shift, ms_) ]]
         {-
         switchPhysicalKBs =
           -- mod-{w,e,r}, Switch to physical/Xinerama screens 1, 2, or 3
@@ -182,9 +183,9 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       -- ++ combineTwoKBs
       -- ++ subLayoutKBs
       where
-        cycleWSKBs =
-          [ ((m__, xK_Down ), moveTo Next NonEmptyWS >> popupCurDesktop) -- HiddenNonEmptyWS
-          , ((m__, xK_Up   ), moveTo Prev NonEmptyWS >> popupCurDesktop) -- HiddenNonEmptyWS
+        cycleWSKBs = map (\(a,b) -> (a,b >> popupCurDesktop))
+          [ ((m__, xK_Down ), moveTo Next NonEmptyWS) -- HiddenNonEmptyWS
+          , ((m__, xK_Up   ), moveTo Prev NonEmptyWS) -- HiddenNonEmptyWS
           , ((ms_, xK_Down ), shiftToNext >> nextWS)
           , ((ms_, xK_Up   ), shiftToPrev >> prevWS)
           , ((m__, xK_Right), nextScreen)
@@ -218,7 +219,7 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       , ((m__,  xK_Home   ), spawn "xrandr-invert-colors")
 
       , ((m__,  xK_Print  ), spawn "scrot ~/screen_%Y-%m-%d_%H-%M-%S.png -d 1") -- screenshot
-      , ((ms_,  xK_Print  ), spawn "bash -c \"import -frame ~/screen_`date +%Y-%m-%d_%H-%M-%S`.png\"")
+      , ((ms_,  xK_Print  ), spawn "~/bin/screenshot.sh") -- or: "bash -c \"import -frame ~/screen_`date +%Y-%m-%d_%H-%M-%S`.png\"")
 
       -- keyboard layouts
       , ((m__,  xK_F2     ), spawn "feh ~/.xmonad/neo/neo_Ebenen_1_2_3_4.png")
