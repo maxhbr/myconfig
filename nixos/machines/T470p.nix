@@ -5,6 +5,7 @@
     ## hardware:
     ./hardware/T470p.nix
     ./hardware/efi.nix
+    ./hardware/exfat.nix
 
     ## software:
     ../profiles/desktop
@@ -25,7 +26,7 @@
 
   boot.initrd.supportedFilesystems = [ "luks" ];
   boot.initrd.luks.devices = [ {
-    device = "/dev/sda2";
+    device = "/dev/disk/by-uuid/fc9ecff5-e0c5-4cff-bb5c-08a745c76e3c";
     name = "crypted";
     preLVM = true;
     allowDiscards = true;

@@ -664,7 +664,8 @@ have nix-env && {
   #nix
   alias nixin="nix-env -iA"
   alias nixin-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -iA"
-  alias nixTest="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p"
+  alias nix-zsh="nix-shell -p zsh --run zsh"
+  alias nixTest="NIXPKGS_ALLOW_UNFREE=1 nix-shell --run zsh -p"
   nixRun() {
       NIXPKGS_ALLOW_UNFREE=1 nix-shell -p "$1" --command "$1"
   }
@@ -923,7 +924,7 @@ dic(){
     fi
   }
   # have mutt && mutt() { run_under_tmux 'mutt'; }
-  have ncmpcpp && ncmpcpp() { run_under_tmux 'ncmpcpp'; }
+  # have ncmpcpp && ncmpcpp() { run_under_tmux 'ncmpcpp'; }
   #have finch && finch() { run_under_tmux 'finch'; }
   #have ekg2 && ekg2() { run_under_tmux 'ekg2'; }
 #}

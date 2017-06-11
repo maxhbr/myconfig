@@ -14,7 +14,7 @@ else
   tmux -2 \
        new-session -s "mutt" "command mutt" \; \
        set-option status \; \
-       set set-titles-string "mutt (tmux@x230)" \; \
+       set set-titles-string "mutt@tmux" \; \
        split-window -l 2 'echo "sync..."; offlineimap -o 2>&1 | grep --color=always "Copy message" && exit' \; \
        last-pane \;
 fi

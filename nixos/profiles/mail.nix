@@ -3,17 +3,7 @@
 {
   environment.systemPackages = with pkgs; [ muttEnv ];
 
-  # systemd.user.services.offlineimap = {
-  #   description = "Start offlineimap as a daemon";
-  #   serviceConfig = {
-  #     Type       = "forking";
-  #     ExecStart  = "${pkgs.offlineimap}/bin/offlineimap";
-  #     KillSignal = "SIGUSR2";
-  #     Restart    = "always";
-  #   };
-  #   wantedBy = [ "multi-user.target" ];
-  #   wants = [ "network-online.target" ];
-  #   after = [ "network.target" ];
-  #   enable = true;
-  # };
+  services.offlineimap = {
+    enable = true;
+  };
 }
