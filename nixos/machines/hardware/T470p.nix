@@ -11,16 +11,27 @@
   imports = [
     ./notebook-generic.nix
     ./highres.nix
+    ./wwan.nix
   ];
 
+  hardware.bumblebee.enable = true;
   services.xserver = {
     videoDrivers = [ "intel" ];
     synaptics = {
+      minSpeed = "1";
+      maxSpeed = "1";
+      accelFactor = "0.15";
+      # see: https://major.io/2013/08/24/get-a-rock-solid-linux-touchpad-configuration-for-the-lenovo-x1-carbon/
       additionalOptions = ''
         Option "VertScrollDelta" "-50"
         Option "HorizScrollDelta" "-50"
-        Option "MinSpeed" "1.2"
-        Option "AccelFactor" "0.05"
+
+        # accurate tap-to-click!
+        Option "FingerLow" "50"
+        Option "FingerHigh" "55"
+
+        Option "AccelerationProfile" "2"
+        Option "ConstantDeceleration" "4"
       '';
       buttonsMap = [ 1 3 2 ];
       tapButtons = false;

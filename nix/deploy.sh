@@ -10,7 +10,9 @@ sudo rsync --perms -r \
 
 # setup channels ##########################################################
 echo "* $(tput bold)setup channels$(tput sgr0) ..."
-nix-channel --add https://nixos.org/channels/nixos-unstable unstable
 nix-channel --add https://nixos.org/channels/nixos-17.03 nixos
-sudo nix-channel --add https://nixos.org/channels/nixos-unstable unstable
+nix-channel --add https://nixos.org/channels/nixos-unstable unstable
+# nix-channel --add https://nixos.org/channels/nixpkgs-unstable unstabler
 sudo nix-channel --add https://nixos.org/channels/nixos-17.03 nixos
+sudo nix-channel --add https://nixos.org/channels/nixos-unstable unstable
+# sudo nix-channel --add https://nixos.org/channels/nixpkgs-unstable unstabler

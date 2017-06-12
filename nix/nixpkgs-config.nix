@@ -5,7 +5,7 @@ let
 
   pkgs = (import (fetchTarball http://nixos.org/channels/nixos-17.03/nixexprs.tar.xz) { config = simple-config; });
   unstable = (import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) { config = simple-config; });
-  # unstabler = (import (fetchTarball http://nixos.org/channels/nixpkgs-unstable/nixexprs.tar.xz) { config = simple-config; });
+  unstabler = (import (fetchTarball http://nixos.org/channels/nixpkgs-unstable/nixexprs.tar.xz) { config = simple-config; });
 
   inherit (unstable) callPackage;
 
@@ -27,6 +27,8 @@ let
 
     # citrix_receiver = callPackage pkgs/citrix-receiver {};
 
+    idea-ultimate = callPackage ./pkgs/idea/default.nix {};
+
     premake5 = callPackage pkgs/premake5 {};
     otfcc = callPackage pkgs/otfcc { inherit premake5; };
     iosevka = callPackage pkgs/iosevka { inherit otfcc; };
@@ -40,7 +42,7 @@ let
 
   myEnvs = import ./envs.nix {
     pkgsWithUnstables = pkgs // myOverrides;
-    inherit unstable;
+    inherit unstable unstabler;
   };
 in simple-config // {
   packageOverrides = super: let self = super.pkgs; in myEnvs // myOverrides;

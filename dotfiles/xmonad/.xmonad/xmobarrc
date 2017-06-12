@@ -10,7 +10,7 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
        , lowerOnStart = True
        , commands =
          [ Run StdinReader
-         , Run MultiCpu [ "-t","Cpu:<total0> <total1> <total2> <total3>"
+         , Run MultiCpu [ "-t","Cpu:<total0> <total1> <total2> <total3> <total4> <total5> <total6> <total7>"
                         , "-L","30" ,"-H","60"
                         , "-h","#FFB6B0" ,"-l","#CEFFAC" ,"-n","#FFFFCC"
                         , "-w","3" ] 10

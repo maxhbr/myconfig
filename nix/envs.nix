@@ -1,4 +1,4 @@
-{pkgsWithUnstables, unstable}:
+{pkgsWithUnstables, unstable, unstabler}:
 let
   mkEnv = name: paths: pkgsWithUnstables.buildEnv {
     inherit name paths;
@@ -128,5 +128,6 @@ in with pkgsWithUnstables; rec {
     # citrix_receiver
     openjdk unstable.maven thrift gradle
     libreoffice
+    idea-ultimate
   ];
 }
