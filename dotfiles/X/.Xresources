@@ -33,15 +33,15 @@ URxvt.internalBorder: 0
 URxvt.externalBorder: 0
 
 URxvt*transparent: true
-URxvt*shading: 20
+URxvt.shading: 20
 
 URxvt*fading:  30
 
 URxvt.depth: 32
-URxvt*background: #2e3436
-URxvt*foreground: #eeeeec
-URxvt*color4: RoyalBlue
-URxvt*color12: RoyalBlue
+URxvt.background: #2e3436
+URxvt.foreground: #eeeeec
+URxvt.color4: RoyalBlue
+URxvt.color12: RoyalBlue
 
 !! URxvt -> font
 URxvt.font:             xft:inconsolata:pixelsize=19:antialias=true:hinting=true,             xft:DejaVu Sans Mono:pixelsize=17:antialias=true:hinting=true
@@ -54,9 +54,9 @@ URxvt.bolditalicFont:   xft:inconsolata:bold:italic:pixelsize=19:antialias=true:
 ! xft:Iosevka:bold:italic:pixelsize=17:antialias=true:hinting=true,
 
 !! URxvt -> libs
-urxvt*perl-lib: /usr/lib/urxvt/perl/
-urxvt*perl-ext-common:  default,matcher,tabbed,font-size,clipboard,url-select,keyboard-select
-urxvt*matcher.button:   1
+urxvt.perl-lib: /usr/lib/urxvt/perl/
+urxvt.perl-ext-common:  default,matcher,tabbed,font-size,clipboard,url-select,keyboard-select
+urxvt.matcher.button:   1
 URxvt.tabbed.tabbar-fg: 8
 URxvt.tabbed.tabbar-bg: 0
 URxvt.tabbed.tab-fg:    2
@@ -67,8 +67,8 @@ URxvt.keysym.C-Down:   perl:font-size:decrease
 URxvt.keysym.C-S-Up:   perl:font-size:incglobal
 URxvt.keysym.C-S-Down: perl:font-size:decglobal
 
-URxvt*urlLauncher:       /usr/bin/chromium
-URxvt.url-select.launcher:  chromium
+URxvt.urlLauncher:          qutebrowser
+URxvt.url-select.launcher:  qutebrowser
 URxvt.url-select.underline: true
 URxvt.keysym.M-u:           perl:url-select:select_next
 URxvt.keysym.M-Escape:      perl:keyboard-select:activate

@@ -1,0 +1,10 @@
+resolver: lts-8.18
+
+packages:
+- .
+nix:
+  packages: []
+  shell-file: shell.nix
+extra-deps: []
+flags: {}
+extra-package-dbs: []

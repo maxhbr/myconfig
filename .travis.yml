@@ -2,6 +2,9 @@ language: nix
   
 matrix:
   include:
+    - before_install: nix-env -i stack
+      install: cd xmonad && stack setup && stack build
+      script: cd xmonad && stack test
     - script: nix-shell --packages nixpkgs-lint --run "nixpkgs-lint -f  $TRAVIS_BUILD_DIR/nixos/derivations"
     - script: NIX_CONF_DIR="$TRAVIS_BUILD_DIR/nix" nix-build --show-trace "$TRAVIS_BUILD_DIR/nixos/derivations"
     - script: ./nixos/derivations/make-iso.nix

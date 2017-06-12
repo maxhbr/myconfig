@@ -6,3 +6,6 @@ hostid
 result
 *.tar.gz
 *.qcow2
+.stack-work
+*.hi
+*.o

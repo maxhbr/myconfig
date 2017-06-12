@@ -1,5 +1,4 @@
 #!/bin/bash
-# ~/.xmonad/myinformation.sh
 
 ###############################################################################
 ## Wifi
@@ -32,7 +31,7 @@ else
   echo -n "<fc=#ff0000>¬RF</fc> "
 fi
 
-~/.xmonad/mymailinfo.sh
+~/.xmonad/bin/mymailinfo.sh
 
 ###############################################################################
 ## count processes

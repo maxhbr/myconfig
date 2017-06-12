@@ -20,6 +20,9 @@ this contains the nixos configuration of my machines.
 ## `./background`
 this contains desktop background images (all created by myself).
 
+## `./xmonad`
+this contains my xmonad configuration.
+
 ## `./misc`
 just some miscellaneous stuff.
 

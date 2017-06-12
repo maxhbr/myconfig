@@ -10,10 +10,11 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
        , lowerOnStart = True
        , commands =
          [ Run StdinReader
-         , Run MultiCpu [ "-t","Cpu:<total0> <total1> <total2> <total3> <total4> <total5> <total6> <total7>"
-                        , "-L","30" ,"-H","60"
-                        , "-h","#FFB6B0" ,"-l","#CEFFAC" ,"-n","#FFFFCC"
-                        , "-w","3" ] 10
+         -- , Run MultiCpu [ "-t","Cpu:<total0> <total1> <total2> <total3> <total4> <total5> <total6> <total7>"
+         --                , "-L","30" ,"-H","60"
+         --                , "-h","#FFB6B0" ,"-l","#CEFFAC" ,"-n","#FFFFCC"
+         --                , "-w","3" ] 10
+         , Run Cpu [] 10
          , Run Memory ["-t","Mem: <usedratio>%"] 10
          , Run TopProc ["-t","<both1>"] 10
          , Run TopMem ["-t","<both1>"] 10
@@ -23,15 +24,14 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
          , Run DynNetwork [ "-L","0" ,"-H","32"
                           , "--normal","green", "--high","red" ] 10
          , Run Wireless "wlp3s0" [ "-t", "<essid> <qualitybar>" ] 60
-         , Run BatteryN [ "BAT0", "BAT1" ]
-                        [ "-t", "Bat: <left>%<watts> => <timeleft>"
-                        , "-L", "10" , "-H", "80"
-                        , "-p", "3"
-                        , "--"
-                        , "-i", ""
-                        , "-O", "Bat: <left>%<watts>"
-                        , "-L", "-15" , "-H", "-5"
-                        , "-l", "red" , "-m", "blue" , "-h", "green" ] 600 "bat"
+         , Run Battery [ "-t", "Bat: <left>%<watts>W => <timeleft>"
+                       , "-L", "10" , "-H", "80"
+                       , "-p", "3"
+                       , "--"
+                       , "-i", ""
+                       , "-O", "Bat: <left>%<watts>"
+                       , "-L", "-15" , "-H", "-5"
+                       , "-l", "red" , "-m", "blue" , "-h", "green" ] 600
          , Run Mail [ ("<fc=green>Mail! </fc>", "~/Mail/mail/INBOX")
                     , ("<fc=yellow>TNG! </fc>", "~/Mail/tng/INBOX")
                     , ("<fc=green>+</fc>", "~/Mail/alfa/INBOX") ] "mail"
@@ -39,7 +39,7 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
          ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %StdinReader% }{ <fc=#888888><action=`urxvtc -name ScratchHtop -e bash -c htop`>%multicpu% (%top%) %coretemp% %memory% (%topmem%)</action> %kbd%|</fc> <action=`xbacklight =10`>%bat%</action> |  <fc=#ffffff><action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action></fc> | <action=`urxvtc -name ScratchNMTUI -e bash -c 'sudo nmtui`>%dynnetwork% %wlp3s0wi%</action> | %date% "
+       , template = " %StdinReader% }{ <action=`urxvtc -name ScratchNMTUI -e bash -c 'sudo nmtui`>%dynnetwork% %wlp3s0wi%</action> | <fc=#888888><action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu% (%top%) %coretemp% %memory% (%topmem%)</action> %kbd%|</fc> <action=`xbacklight =10`>%battery%</action> |  <fc=#ffffff><action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action></fc> | %date% "
        }
 
 -- vim: set ft=haskell :

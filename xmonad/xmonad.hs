@@ -99,6 +99,7 @@ import           XMonad.Layout.Grid -- testing
 import qualified Data.Map                    as M
 import qualified XMonad.StackSet             as W
 
+import XMonad.MyConfig.Utils
 import XMonad.MyConfig.Common
 import XMonad.MyConfig.Scratchpads
 import XMonad.MyConfig.ToggleFollowFocus
@@ -382,7 +383,7 @@ myConfig xmproc = withUrgencyHook myUrgencyHook $
       , handleEventHook    = myEventHook
       , startupHook        = myStartupHook
       , logHook            = dynamicLogWithPP xmobarPP
-                             { ppOutput  = hPutStrLn xmproc
+                             { ppOutput  = hPutStrLn xmproc . shortenStatus
                              , ppCurrent = xmobarColor "#ee9a00" "" . wrap "<" ">"
                              , ppSort    = scratchpadPPSort
                              , ppTitle   = (" " ++) . xmobarColor "#ee9a00" ""
