@@ -3,6 +3,5 @@ set -e
 
 # nix-env remove old generations ##########################################
 type "nix-env" &> /dev/null && {
-    nix-channel --update
-    nix-env --upgrade
+    nix-env -I nixpkgs=/etc/nix/nixpkgs --upgrade
 }

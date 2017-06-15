@@ -34,8 +34,10 @@ sudo rsync --filter="protect /hardware-configuration.nix" \
 echo "* $(tput bold)nixos-rebuild$(tput sgr0) ..."
 exec sudo \
     NIX_CURL_FLAGS='--retry=1000' \
+    NIX_PATH='nixpkgs=/etc/nix/nixpkgs:nixos-config=/etc/nixos/configuration.nix' \
     nixos-rebuild --show-trace \
                   -I nixos-config=/etc/nixos/configuration.nix \
+                  -I nixpkgs=/etc/nix/nixpkgs \
                   --upgrade \
                   --keep-failed \
                   --fallback ${1:-switch}

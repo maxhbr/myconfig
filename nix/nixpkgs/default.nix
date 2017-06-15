@@ -1,28 +1,20 @@
+args:
 let
   simple-config = {
     allowUnfree = true;
   };
 
-  # unstabler = (import (fetchTarball http://nixos.org/channels/nixpkgs-unstable/nixexprs.tar.xz) { config = simple-config; });
-  unstable = (import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) { config = simple-config; });
+  unstable = (import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) {
+    config = simple-config;
+  });
+  inherit (unstable) callPackage;
+
   myOverlays = [ (pkgsself: pkgssuper: {
     modemmanager = callPackage ./pkgs/modemmanager {};
     inherit (unstable) libproxy networkmanager networkmanagerapplet libqmi libmbim; # modemmanager;
-
-    freetype_subpixel = pkgs.freetype.override {
-      useEncumberedCode = true;
-      useInfinality = false;
-    };
   })];
 
-  pkgs = (import (fetchTarball http://nixos.org/channels/nixos-17.03/nixexprs.tar.xz) { config = simple-config;
-    overlays = myOverlays;
-  });
-
-  inherit (unstable) callPackage;
-
   myOverrides = rec {
-    inherit (pkgs) libproxy networkmanager networkmanagerapplet libqmi libmbim modemmanager;
     inherit (unstable) ranger tmux;
     inherit (unstable) vim vimNox vimHugeX;
     inherit (unstable) rxvt_unicode_with-plugins rxvt_unicode;
@@ -46,13 +38,22 @@ let
     otfcc = callPackage pkgs/otfcc { inherit premake5; };
     iosevka = callPackage pkgs/iosevka { inherit otfcc; };
     imposevka = callPackage pkgs/iosevka/imposevka.nix { inherit otfcc; };
+
+    freetype_subpixel = pkgs.freetype.override {
+      useEncumberedCode = true;
+      useInfinality = false;
+    };
   };
 
+  pkgs = (import (fetchTarball http://nixos.org/channels/nixos-17.03/nixexprs.tar.xz) {
+    config = {
+      allowUnfree = true;
+    } ;
+    overlays = myOverlays;
+  }) // myOverrides;
+
   myEnvs = import ./envs.nix {
-    pkgsWithUnstables = pkgs // myOverrides;
-    inherit unstable; # unstabler;
+    inherit pkgs unstable;
   };
-in simple-config // {
-  packageOverrides = super: let self = super.pkgs; in myEnvs // myOverrides;
-  overlays = myOverlays;
-}
+in pkgs // myEnvs // { nixos = {}; }
+
