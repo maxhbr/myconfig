@@ -57,6 +57,9 @@
     l           = log
     lg          = log --oneline
     sup         = submodule update
+    sdiff       = "!git diff && git submodule foreach 'git diff'"
+    spush       = push --recurse-submodules=on-demand
+    supdate     = submodule update --remote --merge
     unstage     = reset HEAD --
     untrack     = rm --cached
     unadd       = rm --cached

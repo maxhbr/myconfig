@@ -23,7 +23,7 @@
 
     # pkgs.em7455-udev-rules
   ];
-  # systemd.services.ModemManager.enable = true;
+  systemd.services.ModemManager.enable = true;
 
   # networking.networkmanager.basePackages = with pkgs; {
   #   inherit networkmanager modemmanager wpa_supplicant
