@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, unstable, ... }:
 
 {
   imports = [
@@ -41,16 +41,13 @@
   nix = {
     useSandbox = true;
     readOnlyStore = true;
-    buildCores = 4;
 
     binaryCachePublicKeys = [
        "hydra.cryp.to-1:8g6Hxvnp/O//5Q1bjjMTd5RO8ztTsG8DKPOAg9ANr2g=" # crypt.to
        "hydra.snabb.co-1:zPzKSJ1mynGtYEVbUR0QVZf9TLcaygz/OyzHlWo5AMM=" # snabb.co
-       # "ryantrinkle.com-1:JJiAKaRv9mWgpVAz8dwewnZe0AzzEAzPkagE9SP5NWI=" # reflex-frp
     ];
     trustedBinaryCaches = [
       "https://cache.nixos.org" "https://hydra.snabb.co" "http://hydra.cryp.to/"
-      # "https://nixcache.reflex-frp.org"
     ];
     binaryCaches = [
       "https://cache.nixos.org" "https://hydra.snabb.co" "http://hydra.cryp.to/"

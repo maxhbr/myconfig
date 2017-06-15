@@ -3,9 +3,21 @@ let
     allowUnfree = true;
   };
 
-  pkgs = (import (fetchTarball http://nixos.org/channels/nixos-17.03/nixexprs.tar.xz) { config = simple-config; });
+  # unstabler = (import (fetchTarball http://nixos.org/channels/nixpkgs-unstable/nixexprs.tar.xz) { config = simple-config; });
   unstable = (import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) { config = simple-config; });
-  unstabler = (import (fetchTarball http://nixos.org/channels/nixpkgs-unstable/nixexprs.tar.xz) { config = simple-config; });
+  myOverlays = [ (pkgsself: pkgssuper: {
+    modemmanager = callPackage ./pkgs/modemmanager {};
+    inherit (unstable) libproxy networkmanager networkmanagerapplet libqmi libmbim; # modemmanager;
+
+    freetype_subpixel = pkgs.freetype.override {
+      useEncumberedCode = true;
+      useInfinality = false;
+    };
+  })];
+
+  pkgs = (import (fetchTarball http://nixos.org/channels/nixos-17.03/nixexprs.tar.xz) { config = simple-config;
+    overlays = myOverlays;
+  });
 
   inherit (unstable) callPackage;
 
@@ -23,27 +35,23 @@ let
     inherit (unstable) dmenu;
     inherit (unstable) mutt-with-sidebar alot;
     inherit (unstable) weechat;
-    # inherit (unstable) citrix_receiver;
 
+    # inherit (unstable) citrix_receiver;
     # citrix_receiver = callPackage pkgs/citrix-receiver {};
 
-    idea-ultimate = callPackage ./pkgs/idea/default.nix {};
+    idea-ultimate = callPackage ./pkgs/idea {};
 
     premake5 = callPackage pkgs/premake5 {};
     otfcc = callPackage pkgs/otfcc { inherit premake5; };
     iosevka = callPackage pkgs/iosevka { inherit otfcc; };
     imposevka = callPackage pkgs/iosevka/imposevka.nix { inherit otfcc; };
-
-    freetype_subpixel = pkgs.freetype.override {
-      useEncumberedCode = true;
-      useInfinality = false;
-    };
   };
 
   myEnvs = import ./envs.nix {
     pkgsWithUnstables = pkgs // myOverrides;
-    inherit unstable unstabler;
+    inherit unstable; # unstabler;
   };
 in simple-config // {
   packageOverrides = super: let self = super.pkgs; in myEnvs // myOverrides;
+  overlays = myOverlays;
 }

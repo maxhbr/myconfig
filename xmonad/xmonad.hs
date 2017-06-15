@@ -189,10 +189,14 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
           , ((m__, xK_Up   ), moveTo Prev NonEmptyWS) -- HiddenNonEmptyWS
           , ((ms_, xK_Down ), shiftToNext >> nextWS)
           , ((ms_, xK_Up   ), shiftToPrev >> prevWS)
-          , ((m__, xK_Right), nextScreen)
-          , ((m__, xK_Left ), prevScreen)
-          , ((ms_, xK_Right), shiftNextScreen)
-          , ((ms_, xK_Left ), shiftPrevScreen)
+          -- , ((m__, xK_Right), nextScreen)
+          -- , ((m__, xK_Left ), prevScreen)
+          -- , ((ms_, xK_Right), shiftNextScreen)
+          -- , ((ms_, xK_Left ), shiftPrevScreen)
+          , ((m__, xK_Left ), nextScreen)
+          , ((ms_, xK_Left ), shiftNextScreen)
+          , ((ms_, xK_Right), shiftPrevScreen)
+          , ((m__, xK_Right), prevScreen)
           , ((m__, xK_y    ), toggleWS' ["NSP"])
           , ((m__, xK_a    ), toggleWS' ["NSP"])]
         -- combineTwoKBs =
@@ -367,6 +371,7 @@ myStartupHook = do
 ------------------------------------------------------------------------
 -- General
 
+maincolor = "#ee9a00" :: String
 myConfig xmproc = withUrgencyHook myUrgencyHook $
   def { terminal             = "urxvtc"
       , focusFollowsMouse  = False -- see: focusFollow
@@ -375,7 +380,7 @@ myConfig xmproc = withUrgencyHook myUrgencyHook $
       , modMask            = mod1Mask
       , workspaces         = myWorkspaces
       , normalBorderColor  = "#333333"
-      , focusedBorderColor = "#dd0000"
+      , focusedBorderColor = maincolor -- "#dd0000"
       , keys               = myKeys
       , mouseBindings      = myMouseBindings
       , layoutHook         = myLayout
@@ -384,10 +389,10 @@ myConfig xmproc = withUrgencyHook myUrgencyHook $
       , startupHook        = myStartupHook
       , logHook            = dynamicLogWithPP xmobarPP
                              { ppOutput  = hPutStrLn xmproc . shortenStatus
-                             , ppCurrent = xmobarColor "#ee9a00" "" . wrap "<" ">"
+                             , ppCurrent = xmobarColor maincolor "" . wrap "<" ">"
                              , ppSort    = scratchpadPPSort
-                             , ppTitle   = (" " ++) . xmobarColor "#ee9a00" ""
-                             , ppVisible = xmobarColor "#ee9a00" ""
+                             , ppTitle   = (" " ++) . xmobarColor maincolor ""
+                             , ppVisible = xmobarColor maincolor ""
                              } >> updatePointer (0.5,0.5) (0.1,0.1)
       }
 

@@ -12,6 +12,8 @@
     ./notebook-generic.nix
   ];
 
+  nix.buildCores = 4;
+
   services.xserver = {
     videoDrivers = [ "intel" ];
     synaptics = {

@@ -8,7 +8,7 @@ XSOCK=/tmp/.X11-unix
 XAUTH=/tmp/.docker.xauth
 xauth nlist :0 | sed -e 's/^..../ffff/' | xauth -f $XAUTH nmerge -
 
-docker build -t mhuber/tex --rm=true --force-rm=true .
+# docker build -t mhuber/tex --rm=true --force-rm=true .
 docker run -it --net=host \
        -v $XSOCK:$XSOCK -e DISPLAY=$DISPLAY \
        -v $XAUTH:$XAUTH -e XAUTHORITY=$XAUTH \

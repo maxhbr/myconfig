@@ -141,7 +141,7 @@ alias uncolor='sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g"'
 #-------------------------------------------------------------------{{{
 
 alias rm='rm -I'
-alias cp='cp -vi'
+alias cp='cp -i'
 
 alias mv='mv -vi'
 # mkmv - creates a new directory and moves the file into it, in 1 step

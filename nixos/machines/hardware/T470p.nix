@@ -14,6 +14,8 @@
     ./wwan.nix
   ];
 
+  nix.buildCores = 8;
+
   hardware.bumblebee.enable = true;
   services.xserver = {
     videoDrivers = [ "intel" ];

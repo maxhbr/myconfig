@@ -118,12 +118,12 @@ sub undockedConfig{
         my $lidState = `cat /proc/acpi/button/lid/LID/state`;
         my $ok = 0;
         if($lidState =~ /open/){
-            addToXrandrCmd($lvdsOutput,"--mode 1920x1080 --pos 0x0 --rotate normal @{[isPrimary()]}");
+            addToXrandrCmd($lvdsOutput,"--mode 2560x1440 --pos 0x0 --rotate normal @{[isPrimary()]}");
             $ok = 1;
         }else{
             addToXrandrCmd($lvdsOutput,"--rotate normal --off");
         }
-        my $defaultPosition = $sameAs ? "--mode 1920x1080 --pos 0x0" : "--auto --right-of $lvdsOutput";
+        my $defaultPosition = $sameAs ? "--mode 2560x1440 --pos 0x0" : "--auto --right-of $lvdsOutput";
         foreach my $output (@mainOutputs) {
             if ($xrandr =~ /$output connected \(/ ||
                 $xrandr =~ /$output connected \w \(/ ||
@@ -146,13 +146,13 @@ sub undockedConfig{
 ################################################################################
 sub dockedConfig{
     sub setupDockedOutputs{
-        addToXrandrCmd($lvdsOutput,"--mode 1920x1080 --pos 0x0 --rotate normal");
+        addToXrandrCmd($lvdsOutput,"--mode 2560x1440 --pos 0x0 --rotate normal");
 
-        my $modifier = ($xrandr =~ /1920x1080\+1920\+0/) ? "--same-as" : "--right-of";
+        my $modifier = ($xrandr =~ /2560x1440\+2560\+0/) ? "--same-as" : "--right-of";
 
         foreach my $output (@dockedOutputs) {
             if ($xrandr =~ /$output connected/){
-                addToXrandrCmd($output,"--mode 1920x1080 $modifier $lvdsOutput --rotate $rotate --primary");
+                addToXrandrCmd($output,"--mode 2560x1440 $modifier $lvdsOutput --rotate $rotate --primary");
             }
         }
         runXrandrCmd();

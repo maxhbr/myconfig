@@ -7,6 +7,9 @@ cd $SRC
 echo "* $(tput bold)rsync$(tput sgr0) ..."
 sudo rsync --perms -r \
      "$SRC/nixpkgs-config.nix" "$SRC/envs.nix" "$SRC/pkgs" /etc/nix/
+mkdir -p ~/.config/nixpkgs/
+[[ -e ~/.config/nixpkgs/config.nix ]] || \
+    ln -s /etc/nix/nixpkgs-config.nix ~/.config/nixpkgs/config.nix
 
 # setup channels ##########################################################
 echo "* $(tput bold)setup channels$(tput sgr0) ..."

@@ -1,4 +1,4 @@
-{pkgsWithUnstables, unstable, unstabler}:
+{pkgsWithUnstables, unstable}:
 let
   mkEnv = name: paths: pkgsWithUnstables.buildEnv {
     inherit name paths;
