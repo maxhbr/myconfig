@@ -22,6 +22,7 @@ let
   inherit (unstable) callPackage;
 
   myOverrides = rec {
+    inherit (pkgs) libproxy networkmanager networkmanagerapplet libqmi libmbim modemmanager;
     inherit (unstable) ranger tmux;
     inherit (unstable) vim vimNox vimHugeX;
     inherit (unstable) rxvt_unicode_with-plugins rxvt_unicode;
