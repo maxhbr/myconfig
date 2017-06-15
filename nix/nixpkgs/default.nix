@@ -48,6 +48,7 @@ let
   pkgs = (import (fetchTarball http://nixos.org/channels/nixos-17.03/nixexprs.tar.xz) {
     config = {
       allowUnfree = true;
+      overrides = myOverrides;
     } ;
     overlays = myOverlays;
   }) // myOverrides;
@@ -55,5 +56,5 @@ let
   myEnvs = import ./envs.nix {
     inherit pkgs unstable;
   };
-in pkgs // myEnvs // { nixos = {}; }
+in pkgs // myEnvs
 
