@@ -2,6 +2,14 @@
 
 {
   environment.systemPackages = with pkgs; [
-    imageworkEnv
+    gimp-with-plugins
+    rawtherapee
+    geeqie
+    #krita
+
+    inkscape
+
+    blender
+    librecad
   ];
 }

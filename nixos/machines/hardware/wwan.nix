@@ -1,6 +1,8 @@
 { config, pkgs, ... }:
 
-{
+let
+  unstable = import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) {};
+in {
   # - https://askubuntu.com/questions/747959/sierra-e7455-mobile-broadband-modem
   #   > The Lenovo variant of the EM7455 has a feature we know as "FCC_AUTH" turned on. This disables the radio until the driver sends a "magic message" to the modem. This feature is well known from older Sierra modems. ModemManager supports the magic message for modems in QMI mode, but we have so far got away with ignoring it in MBIM mode. The EM7455 changes that...
   #   >
@@ -24,6 +26,10 @@
     # pkgs.em7455-udev-rules
   ];
   systemd.services.ModemManager.enable = true;
+  # nixpkgs.overlays = [(pkgsself: pkgssuper: {
+  #   # modemmanager = callPackage ./pkgs/modemmanager {};
+  #   inherit (unstable) libproxy networkmanager networkmanagerapplet libqmi libmbim modemmanager;
+  # })];
 
   # networking.networkmanager.basePackages = with pkgs; {
   #   inherit networkmanager modemmanager wpa_supplicant
