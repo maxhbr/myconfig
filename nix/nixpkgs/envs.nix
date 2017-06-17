@@ -1,10 +1,10 @@
-{pkgsWithUnstables, unstable}:
+{pkgs, unstable}:
 let
-  mkEnv = name: paths: pkgsWithUnstables.buildEnv {
+  mkEnv = name: paths: unstable.buildEnv {
     inherit name paths;
     ignoreCollisions = true;
   };
-in with pkgsWithUnstables; rec {
+in with pkgs; rec {
 
   adminEnv = mkEnv "adminEnv" [
     htop

@@ -1,7 +1,14 @@
 { config, pkgs, ... }:
-
-{
-  environment.systemPackages = [ pkgs.xmonadEnv ];
+let
+  unstable = (import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) {});
+in {
+  environment.systemPackages = (with pkgs; [
+    unstable.dmenu unclutter
+    xss-lock
+    libnotify dzen2 # xfce.xfce4notifyd # notify-osd
+  ]) ++ (with unstable.haskellPackages; [
+    xmonad xmobar yeganesh
+  ]);
 
   services.xserver = {
     windowManager = {

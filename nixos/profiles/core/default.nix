@@ -29,7 +29,26 @@
     # '';
     systemPackages = with pkgs; [
       kbd
-      coreEnv
+      # core:
+      wget curl
+      git git-lfs
+      unzip
+      nox
+      tree
+      # cli:
+      ranger
+      emacs vim
+      elinks w3m
+      tmux
+      manpages
+      taskwarrior
+      pass
+      # admin:
+      htop
+      iftop iptraf-ng iotop mtr bind
+      mkpasswd pwgen
+      usbutils
+      #others:
       pmount fuse
       cryptsetup
       rsnapshot

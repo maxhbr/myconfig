@@ -9,7 +9,16 @@
   ];
 
   environment.systemPackages = with pkgs; [
-    desktopEnv
+    arandr xrandr-invert-colors
+    xlibs.xmodmap xlibs.xset xlibs.setxkbmap
+    xclip
+    imagemagick
+  # gui applications
+    mupdf zathura llpp
+    feh scrot
+    xarchiver # gnome3.file-roller
+    mplayer
+    xdotool
   # gui applications
     chromium firefox-unwrapped qutebrowser
   # misc
