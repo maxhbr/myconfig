@@ -26,7 +26,7 @@ else
     echo 'get oh-my-zsh via sh -c "$(curl -fsSL https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"'
 fi
 # see: http://zsh.sourceforge.net/Doc/Release/Prompt-Expansion.html
-PROMPT='%T ${ret_status}%?%{$reset_color%} $(git_prompt_info)'
+PROMPT='%T ${ret_status}%?%{$reset_color%} $(git_prompt_info)%{$fg[cyan]%}%c%{$reset_color%} '
 RPROMPT='%{$fg[cyan]%}%~%{$reset_color%}'
 # RPROMPT=' [%L]'
 
