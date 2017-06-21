@@ -375,7 +375,7 @@ maincolor = "#ee9a00" :: String
 myConfig xmproc = withUrgencyHook myUrgencyHook $
   def { terminal             = "urxvtc"
       , focusFollowsMouse  = False -- see: focusFollow
-      , borderWidth        = 2
+      , borderWidth        = 3
       -- , modMask            = mod4Mask
       , modMask            = mod1Mask
       , workspaces         = myWorkspaces
@@ -393,7 +393,7 @@ myConfig xmproc = withUrgencyHook myUrgencyHook $
                              , ppSort    = scratchpadPPSort
                              , ppTitle   = (" " ++) . xmobarColor maincolor ""
                              , ppVisible = xmobarColor maincolor ""
-                             } >> updatePointer (0.5,0.5) (0.1,0.1)
+                             } >> updatePointer (0.5,0.5) (0.5,0.5)
       }
 
 ------------------------------------------------------------------------
