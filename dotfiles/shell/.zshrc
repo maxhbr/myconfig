@@ -25,6 +25,8 @@ else
     echo 'oh-my-zsh not found'
     echo 'get oh-my-zsh via sh -c "$(curl -fsSL https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"'
 fi
+PROMPT='%T ${ret_status}%? %{$fg[cyan]%}%c%{$reset_color%} '
+RPROMPT='$(git_prompt_info) [%L]'
 
 ###############################################################################
 # vi key bindings

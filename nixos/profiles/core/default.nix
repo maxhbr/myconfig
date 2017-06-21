@@ -53,6 +53,8 @@
       cryptsetup
       rsnapshot
       stow
+      # my backup tool
+      borgbackup
     ];
     variables = { TMP = "/tmp"; };
   };

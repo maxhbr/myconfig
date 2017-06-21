@@ -13,8 +13,8 @@ use threads;
 ##  config                                                                    ##
 ################################################################################
 my $lvdsOutput = "eDP1";
-my @mainOutputs = ("DP2", "DP1", "DP1-8", "HDMI1", "HDMI2");
-my @dockedOutputs = ("DP2-1", "DP2-2", "DP2-3");
+my @mainOutputs = ("DP2", "DP1", "DP1-8", "HDMI1", "HDMI2", "DP2-1", "DP2-2", "DP2-3");
+my @dockedOutputs = ();
 my $background = "/home/mhuber/.background-image";
 my @alsaOutputs = ("CODEC" => "on", "PCH" => "off");
 
@@ -93,7 +93,7 @@ sub configureSoundCard{
     # parameters are:
     #   name of device
     my $num = `cat /proc/asound/cards | grep -m1 $_[0] | cut -d' ' -f2`;
-    $num = '1' if looks_like_number($num);
+    $num = '0' if ! looks_like_number($num);
     $num = $_[0] if looks_like_number($_[0]);
 
     if (open(ASOUNDRC, ">@{[glob(\"~/.asoundrc\")]}")) {

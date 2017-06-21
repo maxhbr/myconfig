@@ -18,7 +18,7 @@
     ../profiles/openssh.nix
 
     ../profiles/vsftp.nix
-    
+
     ../profiles/desktop/vnc.nix
   ];
 }

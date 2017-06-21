@@ -6,6 +6,7 @@
     ./hardware/T470p.nix
     ./hardware/efi.nix
     ./hardware/exfat.nix
+    ./hardware/steamcontroller.nix
 
     ## software:
     ../profiles/desktop
@@ -14,6 +15,9 @@
     ../profiles/dev.nix
     ../profiles/work.nix
     ../profiles/desktop/imagework.nix
+
+    # ./hardware/steamcontroller.nix
+    # ../profiles/desktop/games.nix
 
     # ../profiles/vgrep.nix
 

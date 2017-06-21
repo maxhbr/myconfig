@@ -2,5 +2,5 @@
 
 postfix=$(date +%s | sha256sum | base64 | head -c 32 ; echo)
 mkdir -p "/tmp/incoChrome_$postfix" && \
-    chromium --incognito \
+    optirun chromium --incognito \
              --user-data-dir="/tmp/incoChrome_$postfix" # &disown

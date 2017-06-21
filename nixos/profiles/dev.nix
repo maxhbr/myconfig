@@ -1,7 +1,7 @@
 { config, pkgs, ... }:
 
 let
-  unstable = (import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) {});
+  unstable = (import <unstable> {});
 
   myclojureenv = pkgs.myEnvFun {
     name = "clojur";

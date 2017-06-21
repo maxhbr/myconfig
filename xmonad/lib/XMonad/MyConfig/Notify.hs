@@ -33,15 +33,15 @@ myNotify t = dzenConfig pc
     pc = onCurr (vCenter 22) >=> timeout t >=> background "darkgreen" >=> mkFont 18
     background color = addArgs ["-bg", color]
 
-myPopup :: Rational -> String -> X ()
-myPopup t = dzenConfig pc
+myPopup :: Int -> Rational -> String -> X ()
+myPopup width t = dzenConfig pc
   where
-    pc = onCurr (center 400 100) >=> timeout t >=> mkFont 80
+    pc = onCurr (hCenter width) >=> timeout t >=> mkFont 80
 
 popupCurDesktop :: X()
 popupCurDesktop = do
-  curName <- fmap (W.currentTag) $ gets windowset
-  myPopup 0.5 curName
+  curName <- fmap W.currentTag $ gets windowset
+  myPopup 400 0.5 curName
 
 -- popupConfig :: Prime
 -- popupConfig = do

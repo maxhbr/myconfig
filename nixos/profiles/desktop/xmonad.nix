@@ -1,6 +1,6 @@
 { config, pkgs, ... }:
 let
-  unstable = (import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) {});
+  unstable = (import <unstable> {});
 in {
   environment.systemPackages = (with pkgs; [
     unstable.dmenu unclutter

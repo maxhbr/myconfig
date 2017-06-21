@@ -93,7 +93,7 @@ import           XMonad.Layout.IfMax (IfMax(IfMax), ifMax)
 import           XMonad.Layout.Spacing
 import           XMonad.Layout.Gaps -- testing
 import           XMonad.Layout.PerScreen -- testing
-import           XMonad.Layout.Grid -- testing
+-- import           XMonad.Layout.Grid -- testing
 -- import           XMonad.Layout.WorkspaceDir
 
 import qualified Data.Map                    as M
@@ -273,9 +273,9 @@ myMouseBindings XConfig {XMonad.modMask = modm} = M.fromList
 -- Layouts / workspaces:
 myWorkspaces = map show [1..7] ++ ("web" : map show [9..15]) ++ ["vbox", "media"]
 
-myLayout = mkToggle (single FULL) $
-           smartBorders $
+myLayout = smartBorders $
            boringAuto $
+           mkToggle (single FULL) $
            modWorkspaces [ "vbox", "media" ] (Full |||) $
            avoidStrutsOn[U,D] $
            mkToggle (single MIRROR) $

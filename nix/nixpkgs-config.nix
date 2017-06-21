@@ -24,7 +24,5 @@ in {
     inherit (unstable) dmenu;
     inherit (unstable) mutt-with-sidebar alot;
     inherit (unstable) weechat;
-
-    # inherit (unstable) citrix_receiver;
   };
 }
