@@ -7,11 +7,11 @@ if [ "$EUID" -eq 0 ]; then
     exit 1
 fi
 
-cd "$(dirname $0)"
-SRC="$(pwd)"
+cd "$(dirname $0)/.."
+ROOT="$(pwd)"
 
 TMUX_NAME="rebuild_sh"
-logfile="_logs/$(date +%Y-%m-%d)-rebuild.sh.log"
+logfile="${ROOT}/_logs/$(date +%Y-%m-%d)-rebuild.sh.log"
 
 # wrap into tmux ##########################################################
 if test -z $TMUX && [[ $TERM != "screen" ]]; then
@@ -74,7 +74,7 @@ fi
 
 # run hooks ###############################################################
 shopt -s nullglob
-for f in $SRC/_hooks/*; do
+for f in $ROOT/scripts/_hooks/*; do
     [ -x $f ] && {
         echo "$(tput bold)****************************************************************************"
         echo "***$(tput sgr0) Run $(tput bold)$(basename $f)$(tput sgr0)"

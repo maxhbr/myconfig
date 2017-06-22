@@ -21,6 +21,8 @@
     xdotool
   # gui applications
     chromium firefox-unwrapped qutebrowser
+  # spellchecking
+    aspell aspellDicts.de aspellDicts.en
   # misc
     xf86_input_wacom
   ];

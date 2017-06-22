@@ -3,9 +3,10 @@ let
   unstable = (import <unstable> {});
 in {
   environment.systemPackages = (with pkgs; [
-    unstable.dmenu unclutter
+    unstable.dmenu unstable.dzen2
+     unclutter
     xss-lock
-    libnotify dzen2 # xfce.xfce4notifyd # notify-osd
+    libnotify # xfce.xfce4notifyd # notify-osd
   ]) ++ (with unstable.haskellPackages; [
     xmonad xmobar yeganesh
   ]);

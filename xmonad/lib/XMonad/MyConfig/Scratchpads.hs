@@ -45,7 +45,7 @@ scratchpads =
 
 scratchpadKBs =
   map (\(k,d) -> (k, namedScratchpadAction scratchpads d))
-  [ ((ms_, xK_minus), "scratchpad")
+  [ ((m__, xK_minus), "scratchpad")
   , ((m__, xK_i    ), "ScratchWeb")
   , ((ms_, xK_i    ), "ScratchMutt")
   , ((m__, xK_n    ), "notepad")

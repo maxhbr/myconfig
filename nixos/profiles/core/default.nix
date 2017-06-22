@@ -53,7 +53,6 @@
       cryptsetup
       rsnapshot
       stow
-      ispell
       # my backup tool
       borgbackup
     ];

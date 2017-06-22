@@ -124,7 +124,7 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       -- , ((m__, xK_Return), windows W.swapMaster)
       , ((m4m, xK_Return), windows W.swapMaster)
       -- , ((m__, xK_g     ), spawn "~/bin/emc || emacs")
-      , ((m__, xK_q     ), spawn "xmonad --recompile && xmonad --restart") -- Restart xmonad
+      , ((m__, xK_q     ), spawn "xmonad --recompile && sleep 1 && xmonad --restart") -- Restart xmonad
       , ((msc, xK_q     ), io exitSuccess) -- Quit xmonad
       -- , ((m__, xK_p     ), spawn "`dmenu_run`")
       , ((m__, xK_p     ), spawn "`dmenu_path | yeganesh`")
@@ -147,10 +147,10 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       ++ switchWorkspaceKBs
       where
         switchWorkspaceKBs =
-          -- mod-[1..9,0], Switch to workspace N
-          -- mod-shift-[1..9,0], Move client to workspace N
+          -- mod-[1..9], Switch to workspace N
+          -- mod-shift-[1..9], Move client to workspace N
           [((m, k), f i)
-              | (i, k) <- zip (XMonad.workspaces conf) ([xK_1 .. xK_9] ++ [xK_0])
+              | (i, k) <- zip (XMonad.workspaces conf) ([xK_1 .. xK_9])
               , (f, m) <- [ (\i -> windows (W.greedyView i) >> popupCurDesktop, m__)
                           , (windows . W.shift, ms_) ]]
         {-
