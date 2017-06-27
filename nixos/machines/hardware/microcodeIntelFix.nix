@@ -1,13 +1,12 @@
 { config, pkgs, ... }:
 
 # due to: https://www.heise.de/newsticker/meldung/Bug-in-aktuellen-Intel-Prozessoren-macht-die-Runde-3755660.htm
-let
-version = "20170511";
-in {
+{
+  hardware.cpu.intel.updateMicrocode = true;
   nixpkgs.overlays = [ ( self: super: {
     microcodeIntel = super.microcodeIntel.overrideAttrs (oldAttrs: rec {
-      inherit version;
       name = "microcode-intel-${version}";
+      version = "20170511";
 
       src = self.fetchurl {
         url = "http://downloadmirror.intel.com/26798/eng/microcode-${version}.tgz";
