@@ -17,6 +17,10 @@
   nix.buildCores = 8;
 
   hardware.bumblebee.enable = true;
+  hardware.opengl = {
+    driSupport = true;
+    driSupport32Bit = true;
+  };
   services.xserver = {
     videoDrivers = [ "intel" ];
     synaptics = {
@@ -40,4 +44,5 @@
       fingersMap = [ 0 0 0 ];
     };
   };
+  nixpkgs.overlays = [(import ../../../nix/overlays/microcodeIntel.nix)];
 }

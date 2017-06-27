@@ -12,11 +12,12 @@
 set -e
 
 if [ "$(id -u)" == "0" ]; then
-    echo "has to be called as root!"
+    echo "has to be called as __non__ root!"
     exit 1
 fi
 
-UUID="1c0be23b-7537-4a82-8af1-744d21c3e6bd"
+# UUID="1c0be23b-7537-4a82-8af1-744d21c3e6bd"
+UUID="3294d03a-f08b-433c-8f04-9cc2a3e9dc10"
 backupmount="/mnt/backup"
 backupdir="${backupmount}/borgbackup"
 repository="${backupdir}/$HOST.borg"
@@ -29,7 +30,7 @@ logfile="$logdir/$backupname.log"
 # functions
 help() {
     echo "run as:"
-    echo "    $0 [-h] [-i|-b]"
+    echo "    $0 [-h] [-i|-b|-p]"
     # man borg
 }
 
@@ -156,7 +157,7 @@ if [[ $doinit -eq 0 ]] &&
        [[ $dobackup -eq 0 ]] &&
        [[ $doborgprune -eq 0 ]] &&
        [[ $doborgmount -eq 0 ]]; then
-    echo "nothing to do"
+    help
     exit 0
 fi
 

@@ -10,13 +10,13 @@
 
     ## software:
     ../profiles/desktop
+    ../profiles/desktop/xfce.nix
     ../profiles/virtualization
     ../profiles/mail.nix
     ../profiles/dev.nix
     ../profiles/work.nix
     ../profiles/desktop/imagework.nix
 
-    # ./hardware/steamcontroller.nix
     # ../profiles/desktop/games.nix
 
     # ../profiles/vgrep.nix

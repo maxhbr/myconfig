@@ -7,8 +7,9 @@ if [ "$EUID" -eq 0 ]; then
     exit 1
 fi
 
-cd "$(dirname $0)/.."
-ROOT="$(pwd)"
+REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
+ROOT="$(dirname $REBUILD_SH)/.."
+cd "$ROOT"
 
 TMUX_NAME="rebuild_sh"
 logfile="${ROOT}/_logs/$(date +%Y-%m-%d)-rebuild.sh.log"
@@ -22,7 +23,7 @@ if test -z $TMUX && [[ $TERM != "screen" ]]; then
         exit 1
     }
     tmux -2 new-session -s $TMUX_NAME \
-         "command echo \"... wrapped into tmux\"; $0 $@; $SHELL" \; \
+         "command echo \"... wrapped into tmux\"; $REBUILD_SH $@; $SHELL" \; \
          set-option status-left "rebuild.sh "\; \
          set-option status-right "..."\; \
          set set-titles-string "${TMUX_NAME}@tmux" \

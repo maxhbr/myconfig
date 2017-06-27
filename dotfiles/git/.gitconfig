@@ -53,6 +53,9 @@
 	  rsAncestor  = "!f() { git reset --soft $(git merge-base master HEAD); }; f"
 
 
+	  mkBundle    = "!f() { git bundle create \"../$(basename $(pwd)).bundle\" --all; }; f"
+	
+
     mt          = mergetool --no-prompt
     l           = log
     lg          = log --oneline
