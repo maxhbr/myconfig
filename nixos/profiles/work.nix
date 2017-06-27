@@ -9,7 +9,7 @@ in {
     # citrix_receiver
     openjdk unstable.maven thrift gradle
     libreoffice
-    idea-ultimate
+    idea.idea-ultimate
   ];
   nixpkgs.overlays = [(import ../../nix/overlays/idea-ultimate.nix)];
 }

@@ -12,6 +12,7 @@
     ./notebook-generic.nix
     ./highres.nix
     ./wwan.nix
+    ./microcodeIntelFix.nix
   ];
 
   nix.buildCores = 8;
@@ -44,5 +45,4 @@
       fingersMap = [ 0 0 0 ];
     };
   };
-  nixpkgs.overlays = [(import ../../../nix/overlays/microcodeIntel.nix)];
 }
