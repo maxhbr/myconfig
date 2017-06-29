@@ -124,7 +124,7 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       -- , ((m__, xK_Return), windows W.swapMaster)
       , ((m4m, xK_Return), windows W.swapMaster)
       -- , ((m__, xK_g     ), spawn "~/bin/emc || emacs")
-      , ((m__, xK_q     ), spawn "xmonad --recompile && sleep 1 && xmonad --restart") -- Restart xmonad
+      , ((m__, xK_q     ), spawn "xmonad --recompile && sleep 0.1 && xmonad --restart") -- Restart xmonad
       , ((msc, xK_q     ), io exitSuccess) -- Quit xmonad
       -- , ((m__, xK_p     ), spawn "`dmenu_run`")
       , ((m__, xK_p     ), spawn "`dmenu_path | yeganesh`")

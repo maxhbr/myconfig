@@ -13,7 +13,7 @@ use threads;
 ##  config                                                                    ##
 ################################################################################
 my $lvdsOutput = "eDP1";
-my @mainOutputs = ("DP2", "DP1", "DP1-8", "HDMI1", "HDMI2", "DP2-1", "DP2-2", "DP2-3");
+my @mainOutputs = ("DP2", "DP1", "DP1-8", "HDMI1", "HDMI2", "DP2-1", "DP2-2", "DP2-3", "DP2-8");
 my @dockedOutputs = ();
 my $background = "/home/mhuber/.background-image";
 my @alsaOutputs = ("CODEC" => "on", "PCH" => "off");

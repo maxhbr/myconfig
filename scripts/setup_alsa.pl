@@ -26,6 +26,7 @@ sub setupSound{
         $num = '0' if ! looks_like_number($num);
         $num = $_[0] if looks_like_number($_[0]);
 
+        print "set alsa device to $_[0] == $num";
         if (open(ASOUNDRC, ">@{[glob(\"~/.asoundrc\")]}")) {
             print ASOUNDRC "#generated via ~/bin/myautosetup.pl\n";
             print ASOUNDRC "#Device is: $_[0]\n";

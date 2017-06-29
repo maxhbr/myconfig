@@ -21,6 +21,6 @@ done
 
 if [ ! -z ${DISPLAY+x} ]; then
     xmonad --recompile
-    sleep 1
+    sleep 0.1
     xmonad --restart
 fi
