@@ -94,14 +94,17 @@
     ls-assume-unchanged = !git ls-files -v | grep ^h | awk '{print $2}'
     assume-unchanged    = update-index --assume-unchanged
     assume-changed      = update-index --no-assume-unchanged
-
-    testPR      = "!f() { remote="${2:-origin}"; \
-                          branch="testpr/${remote}/${1}"; \
-                          git fetch "${remote}" "+refs/pull/${1}/merge:" \
-                          && ( git checkout -b "$branch" -qf FETCH_HEAD \
-                            || ( git checkout "$branch" \
+    testPR      = "!f() { [[ $(git diff --shortstat 2> /dev/null | tail -n1) != \"\" ]] && { \
+ 	                          echo \"git is unclean\"; \
+ 	                          return 1; \
+ 	                        }; \
+	                        remote=\"${2:-origin}\"; \
+                          branch=\"testpr/${remote}/${1}\"; \
+                          git fetch \"${remote}\" \"+refs/pull/${1}/merge:\" \
+                          && ( git checkout -b \"$branch\" -qf FETCH_HEAD \
+                            || ( git checkout \"$branch\" \
                               && git reset --hard FETCH_HEAD ) ) \
-                          || ( echo && echo "possible refs:" && git ls-remote $remote | grep "/merge"; ); \
+                          || ( echo && echo \"possible refs:\" && git ls-remote $remote | grep \"/merge\"; ); \
                         }; f"
 
     # git subtree:

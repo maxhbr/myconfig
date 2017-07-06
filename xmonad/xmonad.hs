@@ -150,7 +150,7 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
           -- mod-[1..9], Switch to workspace N
           -- mod-shift-[1..9], Move client to workspace N
           [((m, k), f i)
-              | (i, k) <- zip (XMonad.workspaces conf) ([xK_1 .. xK_9])
+              | (i, k) <- zip (XMonad.workspaces conf) ([xK_1 .. xK_9] ++ [xK_0])
               , (f, m) <- [ (\i -> windows (W.greedyView i) >> popupCurDesktop, m__)
                           , (windows . W.shift, ms_) ]]
         {-
@@ -275,9 +275,9 @@ myWorkspaces = map show [1..7] ++ ("web" : map show [9..15]) ++ ["vbox", "media"
 
 myLayout = smartBorders $
            boringAuto $
-           mkToggle (single FULL) $
            modWorkspaces [ "vbox", "media" ] (Full |||) $
            avoidStrutsOn[U,D] $
+           mkToggle (single FULL) $
            mkToggle (single MIRROR) $
            full ||| dtb ||| tiled
            -- (IfMax 1 full  (full ||| (IfMax 2 tiled (dtb ||| tiled))))

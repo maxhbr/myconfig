@@ -35,6 +35,7 @@
       unzip
       nox
       tree
+      stow
       # cli:
       ranger
       emacs vim
@@ -44,15 +45,16 @@
       taskwarrior
       pass
       # admin:
-      htop
-      iftop iptraf-ng iotop mtr bind
+      htop iftop iptraf-ng iotop
+      mtr bind
       mkpasswd pwgen
       usbutils
+      sysstat
+      tcpdump
+      cryptsetup
       #others:
       pmount fuse
-      cryptsetup
       rsnapshot
-      stow
       # my backup tool
       borgbackup
     ];

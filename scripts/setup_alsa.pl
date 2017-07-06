@@ -16,7 +16,7 @@ GetOptions(
 ) or die "Usage: $0 \n\t[--setSound=CardName/CardNumber]\n";
 ################################################################################
 # alsa:
-my @alsaOutputs = ("BT600" => "on", "CODEC" => "on", "PCH" => "off");
+my @alsaOutputs = ("BT600" => "on", "USB" => "on", "CODEC" => "on", "PCH" => "off");
 
 sub setupSound{
     sub configureSoundCard{
