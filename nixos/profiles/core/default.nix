@@ -100,9 +100,14 @@
     # };
   };
 
-  security.wrappers = {
-    pmount.source  = "${pkgs.pmount}/bin/pmount";
-    pumount.source  = "${pkgs.pmount}/bin/pumount";
+  security = {
+    sudo.extraConfig = ''
+      ALL  ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/systemctl suspend
+    '';
+    wrappers = {
+      pmount.source  = "${pkgs.pmount}/bin/pmount";
+      pumount.source  = "${pkgs.pmount}/bin/pumount";
+    };
   };
   programs.ssh.startAgent = true;
 }

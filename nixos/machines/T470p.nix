@@ -8,6 +8,8 @@
     ./hardware/exfat.nix
     ./hardware/steamcontroller.nix
 
+    # ./hardware/sdr.nix
+
     ## software:
     ../profiles/desktop
     ../profiles/desktop/xfce.nix

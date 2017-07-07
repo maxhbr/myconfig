@@ -490,8 +490,6 @@ myStopScreensaver(){
   # needs xdotool
   while true; do
     sleep $((60 * 4))
-    # xdotool mousemove_relative 1 1
-    # xdotool mousemove_relative -- -1 -1
     xdotool key shift
   done
 }

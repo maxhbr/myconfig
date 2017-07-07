@@ -25,4 +25,6 @@ in {
     inherit (unstable) mutt-with-sidebar alot;
     inherit (unstable) weechat;
   };
+
+   virtualbox.enableExtensionPack = true;
 }
