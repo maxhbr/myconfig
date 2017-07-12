@@ -216,11 +216,11 @@ alias pkill9="pkill --signal 9"
 # disk usage for humans
 duh() { test $# -eq 0 && set -- *; du -sch "$@" | sort -h; }
 
-alias ducks='du -cs * |sort -rn |head -11'
-alias ducksall='du -cs * |sort -rn'
-alias ducksALL='du -c --max-depth=1 ./ |sort -rn'
-alias hducks='du -cs .??* |sort -rn |head -11'
-alias hducksall='du -cs .??* |sort -rn'
+alias ducks='du -csh * |sort -rh |head -11'
+alias ducksall='du -csh * |sort -rh'
+alias ducksALL='du -ch --max-depth=1 ./ |sort -rh'
+alias hducks='du -csh .??* |sort -rh |head -11'
+alias hducksall='du -csh .??* |sort -rh'
 
 #have ranger && {
   ranger-cd() {

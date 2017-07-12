@@ -132,13 +132,27 @@
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f
 	required = true
-# [mergetool "fancymeld"]
-#   cmd = meld $LOCAL $BASE $REMOTE -o $MERGED --diff $LOCAL $BASE $REMOTE --diff $BASE $LOCAL --diff $BASE $REMOTE --auto-merge
+
+# stolen from https://stackoverflow.com/questions/1817370/using-ediff-as-git-mergetool
+[mergetool.ediff]
+    cmd = emacs --eval \"\
+(progn\
+  (defun ediff-write-merge-buffer ()\
+    (let ((file ediff-merge-store-file))\
+      (set-buffer ediff-buffer-C)\
+      (write-region (point-min) (point-max) file)\
+      (message \\\"Merge buffer saved in: %s\\\" file)\
+      (set-buffer-modified-p nil)\
+      (sit-for 1)))\
+  (setq ediff-quit-hook 'kill-emacs\
+        ediff-quit-merge-hook 'ediff-write-merge-buffer)\
+  (ediff-merge-files-with-ancestor \\\"$LOCAL\\\" \\\"$REMOTE\\\"\
+                                   \\\"$BASE\\\" nil \\\"$MERGED\\\"))\"
 [merge]
-  tool = meld
-  conflictstyle = diff3
+	tool = ediff
+	conflictstyle = diff3
 [diff]
-  tool = meld
+	tool = ediff
 
 [include]
   path = .gitconfig-local
