@@ -214,7 +214,7 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
     miscKBs =
       [ ((const 0,   0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
       , ((ms_, xK_s      ), spawn "xdotool mousemove 0 0; synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
-      , ((ms_, xK_z      ), spawn "~/bin/myautosetup.pl --primOutNr=1") -- auto
+      , ((ms_, xK_z      ), spawn "~/bin/myautosetup.pl") -- auto
       , ((msc, xK_z      ), spawn "~/bin/myautosetup.pl --rotate=left --primOutNr=1") -- auto
       -- , ((ms_, xK_y      ), spawn "slimlock") -- screenlocker
       , ((ms_, xK_y      ), spawn "xset s activate") -- screenlocker

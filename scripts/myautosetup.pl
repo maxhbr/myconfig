@@ -31,6 +31,13 @@ my $lidState = `cat /proc/acpi/button/lid/LID/state`;
 
 ################################################################################
 
+sub call{
+    print "$_[0]\n";
+    system($_[0]);
+}
+
+################################################################################
+
 { # clojure
     my $lvdsOutput = "eDP1";
     my @outputs = (
@@ -77,16 +84,16 @@ my $lidState = `cat /proc/acpi/button/lid/LID/state`;
     }
 
     sub turnOthersOff{
-        my $xrandrCmd = "xrandr";
+        my $xrandrCmd = "xrandr --auto";
         foreach my $output (@otherOutputs) {
             if ($xrandr =~ /\W$output /){
                 $xrandrCmd .= " --output $output --rotate normal --scale 1x1 --off";
             }
         }
-        system($xrandrCmd);
+        call($xrandrCmd);
     }
 
-    sub setupLeftToRight(){
+    sub setupLeftToRight{
         turnOthersOff();
 
         my $lastOutput = "";
@@ -96,34 +103,40 @@ my $lidState = `cat /proc/acpi/button/lid/LID/state`;
             $xrandrCmd .= (defined $resolutions{$output}) ? " --mode $resolutions{$output}" : " --auto";
             $xrandrCmd .= ($lastOutput eq "") ? " --pos 0x0" : " --right-of $lastOutput";
             $xrandrCmd .= " --rotate normal --scale 1x1";
-            system($xrandrCmd);
+            call($xrandrCmd);
             $lastOutput = $output;
         }
     }
 
-    # sub setupSameAs(){
-    #     turnOthersOff();
+    sub setupSameAsLVDS{
+        turnOthersOff();
 
-    #     my $master = $output->[0];
-    #     $primaryOutput = $master;
-    #     foreach my $output (@activeOutputs) {
-    #         my $xrandrCmd = "xrandr --output $output";
-    #         $xrandrCmd .= ($output eq $primaryOutput) ? " --primary" : "";
-    #         $xrandrCmd .= (defined $resolutions{$output}) ? " --mode $resolutions{$output}" : " --auto";
-    #         $xrandrCmd .= " --pos 0x0";
-    #         $xrandrCmd .= " --rotate normal --scale-from $resolutions{$master}";
-    #         system($xrandrCmd);
-    #         $lastOutput = $output;
-    #     }
-    # }
+        $primaryOutput = $lvdsOutput;
+        foreach my $output (@activeOutputs) {
+            my $xrandrCmd = "xrandr --output $output";
+            $xrandrCmd .= ($output eq $primaryOutput) ? " --primary" : "";
+            $xrandrCmd .= (defined $resolutions{$output}) ? " --mode $resolutions{$output}" : " --auto";
+            $xrandrCmd .= " --pos 0x0";
+            $xrandrCmd .= " --rotate normal --scale-from $resolutions{$lvdsOutput}";
+            call($xrandrCmd);
+        }
+    }
+
+    sub getPrimaryOutput{
+        return $primaryOutput;
+    }
 }
 sub setupX{
-    if($lidState =~ /open/){
+    if($lidState =~ /open/ || ! $sameAs){
         toggleAllOutputs();
     }else{
         addAllOutputs();
     }
-    setupLeftToRight();
+    if($sameAs){
+        setupSameAsLVDS();
+    }else{
+        setupLeftToRight();
+    }
 }
 
 ################################################################################
@@ -173,7 +186,7 @@ sub setupAlsa{
 ################################################################################
 
 sub setupBacklight{
-    $acPresent ? system("xbacklight =70") : system("xbacklight =100");
+    $acPresent ? call("xbacklight =70") : call("xbacklight =100");
 }
 
 ################################################################################
@@ -181,10 +194,9 @@ sub setupBacklight{
 sub setupWacom{
     my @wacomDevices = `xsetwacom --list devices | sed -e 's#.*id: \\(\\)#\\1#' | awk '{print \$1;}'`;
     chomp @wacomDevices;
-    my $primaryOutput = `xrandr | grep primary | cut -d" " -f1`;
-
     foreach my $wacomDevice (@wacomDevices) {
-        system("xsetwacom --set $wacomDevice MapToOutput ${primaryOutput}");
+        my $wacomCmd = "xsetwacom --set $wacomDevice MapToOutput @{[getPrimaryOutput()]}";
+        call($wacomCmd);
     }
 }
 
@@ -192,7 +204,7 @@ sub setupWacom{
 
 sub setupBackground{
     my $background = "/home/mhuber/.background-image";
-    system("feh --bg-scale \"$background\"");
+    call("feh --bg-scale \"$background\"");
 }
 
 ################################################################################
@@ -201,6 +213,7 @@ setupX() if !$noXrandr;
 setupAlsa();
 setupWacom();
 setupBacklight();
+setupBackground();
 
 ################################################################################
 #TODO:
