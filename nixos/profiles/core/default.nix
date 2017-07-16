@@ -1,6 +1,8 @@
 { config, pkgs, lib, unstable, ... }:
 
-{
+let
+  unstable = (import <unstable> {});
+in {
   imports = [
     ./oh-my-zsh.nix
     ./mhuber.nix
@@ -94,15 +96,20 @@
     nixosManual.showManual = true;
     acpid.enable = true;
     ntp.enable = true;
-    # emacs = {
-    #   enable = true;
-    #   # package = import /home/mhuber/.emacs.d { pkgs = pkgs; };
-    # };
+    emacs = {
+      enable = true;
+      install = true;
+      defaultEditor = true;
+      package = unstable.emacs;
+      # package = import /home/mhuber/.emacs.d { pkgs = pkgs; };
+    };
   };
 
   security = {
     sudo.extraConfig = ''
       ALL  ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/systemctl suspend
+      ALL  ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/systemctl reboot
+      ALL  ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/systemctl poweroff
     '';
     wrappers = {
       pmount.source  = "${pkgs.pmount}/bin/pmount";

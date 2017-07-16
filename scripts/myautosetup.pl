@@ -21,7 +21,7 @@ GetOptions(
     'noXrandr'   => \$noXrandr,
     'setSound=s' => \$alsaOutput,
     'sameAs'     => \$sameAs,
-    ) or die "Usage: $0 \n\t[--rotate=rotation]\n\t[--setSound=CardName/CardNumber]\n\t[--noXrandr]\n";
+    ) or die "Usage: $0 \n\t[--rotate=rotation]\n\t[--setSound=CardName/CardNumber]\n\t[--noXrandr|--sameAs]\n";
 
 my $acPresent = `acpi -a | grep -c on-line`;
 my $xrandr = `xrandr`;

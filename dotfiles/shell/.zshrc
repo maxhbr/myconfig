@@ -54,17 +54,12 @@ bindkey '^w' backward-kill-word
 # [[ -d $HOME/perl5/bin ]] && export PATH=$HOME/perl5/bin:$PATH
 [[ -d $HOME/.cabal/bin ]] && export PATH=$HOME/.cabal/bin:$PATH
 [[ -d $HOME/.local/bin ]] && export PATH=$HOME/.local/bin:$PATH
-[[ -d $HOME/.gem/ruby/2.3.0/bin ]] && {
-    export PATH=$PATH:$HOME/.gem/ruby/2.3.0/bin
-} || {
-    [[ -d $HOME/.gem/ruby/2.2.0/bin ]] && export PATH=$PATH:$HOME/.gem/ruby/2.2.0/bin
-}
 
-PATH="$HOME/perl5/bin${PATH+:}${PATH}"; export PATH;
-PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB+:}${PERL5LIB}"; export PERL5LIB;
-PERL_LOCAL_LIB_ROOT="$HOME/perl5${PERL_LOCAL_LIB_ROOT+:}${PERL_LOCAL_LIB_ROOT}"; export PERL_LOCAL_LIB_ROOT;
-PERL_MB_OPT="--install_base \"$HOME/perl5\""; export PERL_MB_OPT;
-PERL_MM_OPT="INSTALL_BASE=$HOME/perl5"; export PERL_MM_OPT;
+# PATH="$HOME/perl5/bin${PATH+:}${PATH}"; export PATH;
+# PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB+:}${PERL5LIB}"; export PERL5LIB;
+# PERL_LOCAL_LIB_ROOT="$HOME/perl5${PERL_LOCAL_LIB_ROOT+:}${PERL_LOCAL_LIB_ROOT}"; export PERL_LOCAL_LIB_ROOT;
+# PERL_MB_OPT="--install_base \"$HOME/perl5\""; export PERL_MB_OPT;
+# PERL_MM_OPT="INSTALL_BASE=$HOME/perl5"; export PERL_MM_OPT;
 
 [[ "$JAVA_HOME" ]] || JAVA_HOME=$(readlink -f $(which java) | sed "s:bin/java::")
 
@@ -78,7 +73,6 @@ SAVEHIST="${HISTSIZE}"
 export EDITOR="vim"
 export VISUAL="vim -p -X"
 export TMP="/tmp"
-[[ ! -d "${TMP}" ]] && mkdir "${TMP}"
 export TEMP="$TMP"
 export TMPDIR="$TMP"
 export TMPPREFIX="${TMPDIR}/zsh"
@@ -87,9 +81,6 @@ export MANWIDTH=${MANWIDTH:-80}
 
 #Python virtualenvs
 export WORKON_HOME=~/workspace/python/virtualenvs
-
-#paralleles compilieren mit haskell
-export ncpus=3
 
 ###############################################################################
 export PIP_REQUIRE_VIRTUALENV=true
@@ -103,8 +94,8 @@ alias -s djvu=zathura
 
 ###############################################################################
 [[ -f ~/.zshrc.private ]] && source ~/.zshrc.private
-[[ -d /nix/store/k1v2g5784sas2fc9fp6flq50fvsck5w7-taskwarrior-2.5.1/share/doc/task/scripts/zsh/ ]] &&
-    fpath=(/nix/store/k1v2g5784sas2fc9fp6flq50fvsck5w7-taskwarrior-2.5.1/share/doc/task/scripts/zsh/ $fpath)
+# [[ -d /nix/store/k1v2g5784sas2fc9fp6flq50fvsck5w7-taskwarrior-2.5.1/share/doc/task/scripts/zsh/ ]] &&
+#     fpath=(/nix/store/k1v2g5784sas2fc9fp6flq50fvsck5w7-taskwarrior-2.5.1/share/doc/task/scripts/zsh/ $fpath)
 
 ###############################################################################
 # Start tmux on ssh

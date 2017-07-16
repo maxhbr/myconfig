@@ -4,7 +4,8 @@
 Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
        , bgColor = "black"
        , fgColor = "grey"
-       , alpha = 50
+       -- , alpha = 50
+       , alpha = 100
        -- , position = TopW L 100
        , position = BottomW L 100
        , lowerOnStart = True
@@ -39,7 +40,7 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
          ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %StdinReader% }{ <action=`urxvtc -name ScratchNMTUI -e bash -c 'sudo nmtui`>%dynnetwork% %wlp3s0wi%</action> | <fc=#888888><action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu% (%top%) %coretemp% %memory% (%topmem%)</action> %kbd%|</fc> <action=`xbacklight =10`>%battery%</action> |  <fc=#ffffff><action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action></fc> | %date% "
+       , template = " %StdinReader% }{ <action=`urxvtc -name ScratchNMTUI -e bash -c 'sudo nmtui`>%dynnetwork% %wlp3s0wi%</action> | <action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu% (%top%) %coretemp% %memory% (%topmem%)</action> %kbd%| <action=`xbacklight =10`>%battery%</action> |  <fc=#ffffff><action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action></fc> | %date% "
        }
 
 -- vim: set ft=haskell :
