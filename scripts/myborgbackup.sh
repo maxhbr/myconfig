@@ -21,6 +21,7 @@ UUID="3294d03a-f08b-433c-8f04-9cc2a3e9dc10"
 backupmount="/mnt/backup"
 backupdir="${backupmount}/borgbackup"
 repository="${backupdir}/$HOST.borg"
+repositoryWork="${backupdir}/${HOST}-work.borg"
 logdir="${backupdir}/_logs"
 backupprefix="$(hostname)-"
 backupname="${backupprefix}$(date +%Y-%m-%d_%H:%M:%S)"
@@ -38,7 +39,7 @@ have() { type "$1" &> /dev/null; }
 
 myMountBackupHDD() {
     set -x
-    echo "0 0 0" | sudo tee /sys/class/scsi_host/host0/scan
+    echo "0 0 0" | sudo tee /sys/class/scsi_host/host*/scan || continue
     sleep 1
     sudo sudo mkdir -p $backupmount
     sudo umount /dev/disk/by-uuid/$UUID || continue
@@ -61,6 +62,7 @@ myInitialize() {
     echo "initialize the repository"
     set -x
     borg init --encryption none $repository
+    [[ -d ~/TNG ]] && borg init --encryption none $repositoryWork
     set +x
 }
 
@@ -71,6 +73,7 @@ myBackup() {
 /home/docker
 /home/*/tmp/
 /home/*/Downloads/
+/home/*/TNG/
 /home/*/.cache/
 /home/*/Bilder/workspace/
 /home/*/Desktop/games/
@@ -102,6 +105,18 @@ EXCLUDE
          --compression lz4 \
          "${repository}::${backupname}" \
          /home/mhuber/
+    [[ -d ~/TNG ]] && \
+        borg create \
+             --stats \
+             --verbose \
+             --progress \
+             --filter AME \
+             --show-rc \
+             --one-file-system \
+             --exclude-caches \
+             --compression lz4 \
+             "${repositoryWork}::${backupname}" \
+             /home/mhuber/TNG/
 
     have pacman && {
         pacman -Qeq > ${backupdir}/pacmanPakete.txt
@@ -116,13 +131,22 @@ myBorgprune() {
     echo "do the borg prune"
     set -x
     borg prune \
-        --stats \
-        --verbose \
-        --list \
-        --show-rc \
-        --keep-within=2d --keep-daily=7 --keep-weekly=4 --keep-monthly=6 \
-        --prefix "backupprefix" \
-        "$repository"
+         --stats \
+         --verbose \
+         --list \
+         --show-rc \
+         --keep-within=2d --keep-daily=7 --keep-weekly=4 --keep-monthly=6 \
+         --prefix "backupprefix" \
+         "$repository"
+    [[ -d ~/TNG ]] && \
+        borg prune \
+             --stats \
+             --verbose \
+             --list \
+             --show-rc \
+             --keep-within=2d --keep-daily=7 --keep-weekly=4 --keep-monthly=6 \
+             --prefix "backupprefix" \
+             "$repositoryWork"
     set +x
 }
 

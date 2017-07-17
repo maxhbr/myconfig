@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# call with
+#   $0 [-t] 
+
+# partially stolen from http://mjwall.com/blog/2013/10/04/how-i-use-emacs/
+
+visible_frames() {
+  emacsclient -a "" -e '(length (visible-frame-list))'
+}
+
+change_focus() {
+  emacsclient -n -e "(select-frame-set-input-focus (selected-frame))" > /dev/null
+}
+
+if [ "$1" = "-t" ] || [ -z "$DISPLAY" ]; then
+    if [[ "$#" -ne "0" ]]; then
+        emacsclient -a "" -t "$@"
+    else
+        emacsclient -a "" -t ./
+    fi
+else
+    test "$(visible_frames)" -eq "1" && change_focus
+
+    if [ "$(visible_frames)" -lt  "2" ]; then # need to create a frame
+        emacsclient -n -c "$@" && change_focus
+        # emacsclient -n -e "(apm-graphic-frame-init)" > /dev/null
+    else
+        change_focus
+        if [[ "$#" -ne "0" ]]; then
+            emacsclient -n "$@"
+        else
+            emacsclient -n ./
+        fi
+    fi
+fi
