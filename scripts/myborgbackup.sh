@@ -20,12 +20,33 @@ fi
 UUID="3294d03a-f08b-433c-8f04-9cc2a3e9dc10"
 backupmount="/mnt/backup"
 backupdir="${backupmount}/borgbackup"
-repository="${backupdir}/$HOST.borg"
-repositoryWork="${backupdir}/${HOST}-work.borg"
+repository="${backupdir}/$(hostname).borg"
+repositoryWork="${backupdir}/$(hostname)-work.borg"
 logdir="${backupdir}/_logs"
 backupprefix="$(hostname)-"
 backupname="${backupprefix}$(date +%Y-%m-%d_%H:%M:%S)"
 logfile="$logdir/$backupname.log"
+
+borgInitCmd="borg \
+    init --encryption none"
+borgCreateCmd="borg \
+    create \
+    --stats \
+    --verbose \
+    --progress \
+    --filter AME \
+    --show-rc \
+    --one-file-system \
+    --exclude-caches \
+    --compression lz4"
+borgPruneCmd="borg \
+    prune \
+    --stats \
+    --verbose \
+    --list \
+    --show-rc \
+    --keep-within=2d --keep-daily=7 --keep-weekly=4 --keep-monthly=6 \
+    --prefix \"backupprefix\""
 
 ################################################################################
 # functions
@@ -61,8 +82,8 @@ myUmountBackupHDD() {
 myInitialize() {
     echo "initialize the repository"
     set -x
-    borg init --encryption none $repository
-    [[ -d ~/TNG ]] && borg init --encryption none $repositoryWork
+    $borgInitCmd "$repository"
+    [[ -d ~/TNG ]] && $borgInitCmd "$repositoryWork"
     set +x
 }
 
@@ -93,28 +114,12 @@ myBackup() {
 /home/*/VirtualBox VMs/
 /home/*/Desktop/
 EXCLUDE
-    borg create \
-         --stats \
-         --verbose \
-         --progress \
-         --filter AME \
-         --show-rc \
-         --one-file-system \
-         --exclude-caches \
+    $borgCreateCmd \
          --exclude-from "${backupdir}/.excludes" \
-         --compression lz4 \
          "${repository}::${backupname}" \
          /home/mhuber/
     [[ -d ~/TNG ]] && \
-        borg create \
-             --stats \
-             --verbose \
-             --progress \
-             --filter AME \
-             --show-rc \
-             --one-file-system \
-             --exclude-caches \
-             --compression lz4 \
+        $borgCreateCmd \
              "${repositoryWork}::${backupname}" \
              /home/mhuber/TNG/
 
@@ -130,23 +135,9 @@ EXCLUDE
 myBorgprune() {
     echo "do the borg prune"
     set -x
-    borg prune \
-         --stats \
-         --verbose \
-         --list \
-         --show-rc \
-         --keep-within=2d --keep-daily=7 --keep-weekly=4 --keep-monthly=6 \
-         --prefix "backupprefix" \
-         "$repository"
+    $borgPruneCmd "$repository"
     [[ -d ~/TNG ]] && \
-        borg prune \
-             --stats \
-             --verbose \
-             --list \
-             --show-rc \
-             --keep-within=2d --keep-daily=7 --keep-weekly=4 --keep-monthly=6 \
-             --prefix "backupprefix" \
-             "$repositoryWork"
+        $borgPruneCmd "$repositoryWork"
     set +x
 }
 
@@ -154,7 +145,9 @@ myBorgmount() {
     echo "do the borg mount"
     set -x
     mkdir -p "${backupdir}/mnt"
-    borg mount -f "${repository}" "${backupdir}/mnt"
+    borg mount -f "$repository" "${backupdir}/mnt"
+    mkdir -p "${backupdir}/mnt-work"
+    borg mount -f "$repositoryWork" "${backupdir}/mnt-work"
     set +x
 }
 

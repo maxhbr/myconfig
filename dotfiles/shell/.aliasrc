@@ -715,7 +715,7 @@ getCert() {
 #   misc
 #-------------------------------------------------------------------{{{
 
-alias vbox="sudo modprobe vboxdrv && VirtualBox &disown"
+alias steam="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam --command \"optirun steam\""
 
 touchpadtoggle(){
   xdotool mousemove 0 0

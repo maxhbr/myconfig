@@ -1,25 +1,36 @@
 #!/usr/bin/env bash
 # call with
-#   $0 [-t] 
+#   $0 [-t|-k]
 
 # partially stolen from http://mjwall.com/blog/2013/10/04/how-i-use-emacs/
 
 visible_frames() {
-  emacsclient -a "" -e '(length (visible-frame-list))'
+    emacsclient -a "" -e '(length (visible-frame-list))'
 }
 
 change_focus() {
-  emacsclient -n -e "(select-frame-set-input-focus (selected-frame))" > /dev/null
+    emacsclient -n -e "(select-frame-set-input-focus (selected-frame))" > /dev/null
 }
 
-if [ "$1" = "-t" ] || [ -z "$DISPLAY" ]; then
+server_ok() {
+    emacsclient -a "false" -e "(boundp 'server-process)"
+}
+
+if [ "$1" = "-k" ]; then
+    if [ "t" == "$(server_ok)" ]; then
+        echo "Shutting down Emacs server"
+        emacsclient -e '(kill-emacs)'
+    else
+        echo "Emacs server not running"
+    fi
+elif [ "$1" = "-t" ] || [ -z "$DISPLAY" ]; then
     if [[ "$#" -ne "0" ]]; then
         emacsclient -a "" -t "$@"
     else
         emacsclient -a "" -t ./
     fi
 else
-    test "$(visible_frames)" -eq "1" && change_focus
+    [[ "$(visible_frames)" -eq "1" ]] && change_focus
 
     if [ "$(visible_frames)" -lt  "2" ]; then # need to create a frame
         emacsclient -n -c "$@" && change_focus
@@ -33,3 +44,32 @@ else
         fi
     fi
 fi
+
+
+# TODO:
+# - solve:
+#   > ...
+#   > Loading /home/mhuber/.emacs.d/.cache/spacemacs-buffer.el (source)...done
+#   > Starting new Ispell process /run/current-system/sw/bin/aspell with default dictionary...
+#   > Spacemacs is ready.
+#   > Unable to start the daemon.
+#   > Another instance of Emacs is running the server, either as daemon or interactively.
+#   > You can use emacsclient to connect to that Emacs process.
+#   > Wrote /home/mhuber/.emacs.d/.cache/places
+#   > Saving file /home/mhuber/.emacs.d/.cache/ido.last...
+#   > Wrote /home/mhuber/.emacs.d/.cache/ido.last
+#   > Error: server did not start correctly
+#   > Error: Could not start the Emacs daemon
+#   > /home/mhuber/bin/ec: Zeile 33: test: : Ganzzahliger Ausdruck erwartet.
+#   > Loading /home/mhuber/.emacs.d/.cache/spacemacs-buffer.el (source)...done
+#   > Starting new Ispell process /run/current-system/sw/bin/aspell with default dictionary...
+#   > Spacemacs is ready.
+#   > Unable to start the daemon.
+#   > Another instance of Emacs is running the server, either as daemon or interactively.
+#   > You can use emacsclient to connect to that Emacs process.
+#   > Wrote /home/mhuber/.emacs.d/.cache/places
+#   > Saving file /home/mhuber/.emacs.d/.cache/ido.last...
+#   > Wrote /home/mhuber/.emacs.d/.cache/ido.last
+#   > Error: server did not start correctly
+#   > Error: Could not start the Emacs daemon
+#   > /home/mhuber/bin/ec: Zeile 33: test: : Ganzzahliger Ausdruck erwartet.
