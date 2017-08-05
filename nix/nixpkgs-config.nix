@@ -26,5 +26,5 @@ in {
     inherit (unstable) weechat;
   };
 
-   virtualbox.enableExtensionPack = true;
+   # virtualbox.enableExtensionPack = true;
 }

@@ -206,6 +206,6 @@ if [[ $doborgmount -eq 1 ]]; then
 fi
 
 ################################################################################
-# finish
+# cleanup
 myUmountBackupHDD
 

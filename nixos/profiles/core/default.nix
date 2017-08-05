@@ -1,7 +1,9 @@
-{ config, pkgs, lib, unstable, ... }:
+{ config, pkgs, lib, ... }:
 
 let
-  unstable = (import <unstable> {});
+  unstable = (import <unstable> {
+    config = {allowUnfree = true;};
+  });
 in {
   imports = [
     ./oh-my-zsh.nix
@@ -9,7 +11,9 @@ in {
   ];
 
   boot = {
-    kernelPackages = pkgs.linuxPackages_latest;
+    # kernelPackages = pkgs.linuxPackages_latest;
+    # kernelPackages = pkgs.linuxPackages_testing;
+    # kernelPackages = unstable.linuxPackages_latest;
     kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
     cleanTmpDir = true;
     # tmpOnTmpfs = true;

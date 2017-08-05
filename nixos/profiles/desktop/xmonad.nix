@@ -11,6 +11,11 @@ in {
     xmonad xmobar yeganesh
   ]);
 
+  system.activationScripts.cleanupXmonadState =
+  ''
+    rm /home/mhuber/.xmonad/xmonad.state || true
+  '';
+
   services.xserver = {
     windowManager = {
       xmonad = {
