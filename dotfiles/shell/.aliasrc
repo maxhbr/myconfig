@@ -106,6 +106,7 @@ alias t="tig"
 alias tu='tig HEAD @{upstream}'
 alias ta="task"
 alias d="docker"
+alias dc="docker-compose"
 
 alias uncolor='sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g"'
 adddate() { # see http://serverfault.com/questions/310098/how-to-add-a-timestamp-to-bash-script-log
@@ -663,6 +664,8 @@ alias aws="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p 'aws' 'ec2_api_tools'"
 #-------------------------------------------------------------------}}}
 #   some networking
 #-------------------------------------------------------------------{{{
+
+alias wwan="sudo systemctl restart ModemManager.service && sudo watch -n 1 systemctl status ModemManager.service; sudo nmtui"
 
 startphp() { php -S 127.0.0.1:8080; }
 mydhcp() {

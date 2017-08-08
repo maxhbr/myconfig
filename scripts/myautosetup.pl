@@ -10,9 +10,40 @@ use Scalar::Util qw( looks_like_number );
 use threads;
 
 ################################################################################
+{ # pidfile handling
+    my $pidfile = "/tmp/myautosetup.pl.pid";
+
+    my $pid = $$;
+    if (-f $pidfile) {
+        my $oldpid;
+        open(my $fh, '<', $pidfile) or die "cannot open pidfile ($pidfile)";
+        {
+            local $/;
+            $oldpid = <$fh>;
+        }
+        close($fh);
+        chomp $oldpid;
+        if (kill(0, $oldpid)) {
+            die "Already running as $oldpid!";
+        } else {
+            unlink($pidfile);
+        }
+    }
+
+    open(my $fh, '>', $pidfile);
+    print $fh $pid;
+    close $fh;
+
+    sub cleanupPidfile {
+        unlink($pidfile)
+    }
+}
+
+################################################################################
 my $rotate = "normal";
 my $noXrandr = 0;
 my $sameAs = 0;
+my $allOff = 0;
 
 my $alsaOutput = "";
 
@@ -21,6 +52,7 @@ GetOptions(
     'noXrandr'   => \$noXrandr,
     'setSound=s' => \$alsaOutput,
     'sameAs'     => \$sameAs,
+    'allOff'     => \$allOff,
     ) or die "Usage: $0 \n\t[--rotate=rotation]\n\t[--setSound=CardName/CardNumber]\n\t[--noXrandr|--sameAs]\n";
 
 my $acPresent = `acpi -a | grep -c on-line`;
@@ -38,7 +70,7 @@ sub call{
 
 ################################################################################
 
-{ # clojure
+{ # xrandr
     my $lvdsOutput = "eDP1";
     my @outputs = (
         "DP1", "DP1-8",
@@ -72,15 +104,13 @@ sub call{
 
     sub toggleAllOutputs {
         foreach my $output (@outputs) {
-            if ($xrandr =~ /\W$output connected \(/ ||
-                $xrandr =~ /\W$output connected \w \(/ ){
-                push @activeOutputs, $output;
-                @otherOutputs = grep { $_ ne $output } @otherOutputs;
-                if($primaryOutput eq $lvdsOutput){
-                    $primaryOutput = $output;
-                }
+            if ($xrandr =~ /\W$output connected/ &&
+                $xrandr !~ /\W$output connected \(/ &&
+                $xrandr !~ /\W$output connected \w \(/ ){
+                return;
             }
         }
+        addAllOutputs();
     }
 
     sub turnOthersOff{
@@ -127,10 +157,12 @@ sub call{
     }
 }
 sub setupX{
-    if($lidState =~ /open/ || ! $sameAs){
-        toggleAllOutputs();
-    }else{
-        addAllOutputs();
+    if(!$allOff) {
+        if($lidState =~ /open/ || ! $sameAs){
+            toggleAllOutputs();
+        }else{
+            addAllOutputs();
+        }
     }
     if($sameAs){
         setupSameAsLVDS();
@@ -202,20 +234,26 @@ sub setupWacom{
 
 ################################################################################
 
-sub setupBackground{
+sub setupBackgroundAndUI{
     my $background = "/home/mhuber/.background-image";
     call("feh --bg-scale \"$background\"");
+
+    call("xrdb -merge ~/.Xresources");
 }
 
 ################################################################################
 
 setupX() if !$noXrandr;
 setupAlsa();
-setupWacom();
+setupWacom() if !$noXrandr; # needs `setupX()` to be run before the call here
 setupBacklight();
-setupBackground();
+setupBackgroundAndUI();
 
 ################################################################################
 #TODO:
 # system("setxkbmap -layout de,de -variant neo,nodeadkeys -option grp:shifts_toggle -option grp_led:scroll -option altwin:swap_lalt_lwin")
 # system("xset dpms 300 600 900");
+
+################################################################################
+
+cleanupPidfile();
