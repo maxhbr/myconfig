@@ -66,7 +66,7 @@ set mail_check=60
 
 set sleep_time = 0                          #Speed up folders switch
 
-set metoo = yes
+set metoo = no
 
 unset allow_8bit                            #u.U. verbesserte Darstellung von Umlauten
 set charset="utf-8"

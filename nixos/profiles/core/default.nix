@@ -50,6 +50,7 @@ in {
       manpages
       taskwarrior
       pass
+      ag
       # admin:
       htop iftop iptraf-ng iotop
       mtr bind

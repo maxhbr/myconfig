@@ -5,6 +5,7 @@ let
   });
 in {
   allowUnfree = true;
+  mplayer.useUnfreeCodecs = true;
   overrides = {
     # freetype_subpixel = pkgs.freetype.override {
     #   useEncumberedCode = true;

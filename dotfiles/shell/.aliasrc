@@ -4,6 +4,26 @@
 if [ $__HOME_ALIASRC_SOURCED ]; then return; fi
 __HOME_ALIASRC_SOURCED=1
 
+have() { type "$1" &> /dev/null; }
+confirm () {
+    # call with a prompt string or use a default
+    if [ -n "$BASH_VERSION" ]; then
+        read -r -p "${1:-Are you sure? [y/N]} " response
+    elif [ -n "$ZSH_VERSION" ]; then
+        echo "${1:-Are you sure? [y/N]} "
+        read response
+    fi
+    case $response in
+        [yY][eE][sS]|[yY])
+            true
+            ;;
+        *)
+            false
+            ;;
+    esac
+}
+
+
 # needs:
 # vim, tmux, sudo, mutt
 
@@ -51,8 +71,12 @@ man(){
         || which $@
 }
 
-grepr() { grep -rns --color=always "$@" | grep -v Binärdatei 2>/dev/null; }
-grepri() { grepr -i "$@" }
+have ag && {
+  alias grepr="ag"
+} || {
+  grepr() { grep -rns --color=always "$@" | grep -v Binärdatei 2>/dev/null; }
+  grepri() { grepr -i "$@" }
+}
 greprL() { grepr "$@" | less -R; }
 grepf() {
     # stolen from: https://www.manthanhd.com/2016/01/15/waiting-for-tomcat-to-start-up-in-a-script/
@@ -72,25 +96,6 @@ grepf() {
         echo >$FIFO
     }
     rm $FIFO
-}
-
-have() { type "$1" &> /dev/null; }
-confirm () {
-    # call with a prompt string or use a default
-    if [ -n "$BASH_VERSION" ]; then
-        read -r -p "${1:-Are you sure? [y/N]} " response
-    elif [ -n "$ZSH_VERSION" ]; then
-        echo "${1:-Are you sure? [y/N]} "
-        read response
-    fi
-    case $response in
-        [yY][eE][sS]|[yY])
-            true
-            ;;
-        *)
-            false
-            ;;
-    esac
 }
 
 
