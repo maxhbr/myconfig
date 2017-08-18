@@ -13,22 +13,24 @@
     ## software:
     ../profiles/desktop
     ../profiles/desktop/xfce.nix
-    ../profiles/virtualization
-    ../profiles/mail.nix
-    ../profiles/dev.nix
-    ../profiles/work.nix
+    # ../profiles/virtualization
+    # ../profiles/mail.nix
+    # ../profiles/dev.nix
+    # # ../profiles/work.nix
     ../profiles/desktop/imagework.nix
 
-    # ../profiles/desktop/games.nix
+    # # ../profiles/desktop/games.nix
 
-    # ../profiles/vgrep.nix
+    # # ../profiles/vgrep.nix
 
-    ## others
-    # ../profiles/desktop/vnc.nix
-    # ../profiles/desktop/games.nix
-    # ../profiles/vsftp.nix
-    ../profiles/irc.nix
+    # ## others
+    # # ../profiles/desktop/vnc.nix
+    # # ../profiles/desktop/games.nix
+    # # ../profiles/vsftp.nix
+    # ../profiles/irc.nix
   ];
+
+  myconfig.active-roles = [ "work" "virtualization" "mail" "dev" "irc" ];
 
   boot.initrd.supportedFilesystems = [ "luks" ];
   boot.initrd.luks.devices = [ {

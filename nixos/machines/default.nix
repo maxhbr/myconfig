@@ -18,7 +18,8 @@
   };
 
   imports = otherImports ++ [
-    ../profiles/core
+    ../core
+    ../roles
     (../machines + "/${hostName}.nix")
   ];
 }
