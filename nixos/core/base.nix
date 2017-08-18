@@ -6,8 +6,9 @@ let
   });
 in {
   imports = [
-    ./oh-my-zsh.nix
     ./mhuber.nix
+    ./oh-my-zsh.nix
+    ./hosts.nix
   ];
 
   boot = {

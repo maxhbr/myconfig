@@ -2,33 +2,19 @@
 
 {
   imports = [
-    ## hardware:
     ./hardware/T470p.nix
     ./hardware/efi.nix
     ./hardware/exfat.nix
     ./hardware/steamcontroller.nix
-
     # ./hardware/sdr.nix
-
-    ## software:
-    ../profiles/desktop
-    ../profiles/desktop/xfce.nix
-    ../profiles/virtualization
-    ../profiles/mail.nix
-    ../profiles/dev.nix
-    ../profiles/work.nix
-    ../profiles/desktop/imagework.nix
-
-    # ../profiles/desktop/games.nix
-
-    # ../profiles/vgrep.nix
-
-    ## others
-    # ../profiles/desktop/vnc.nix
-    # ../profiles/desktop/games.nix
-    # ../profiles/vsftp.nix
-    ../profiles/irc.nix
   ];
+
+  myconfig.active-roles = [
+   "desktop" "xmonad" "xfce" "vnc"
+   "mail" "irc"
+   "work" "virtualization" "dev"
+   "imagework"
+   ];
 
   boot.initrd.supportedFilesystems = [ "luks" ];
   boot.initrd.luks.devices = [ {

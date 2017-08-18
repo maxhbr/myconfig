@@ -6,7 +6,7 @@ let
   # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
   hostId = "${builtins.readFile /etc/nixos/hostid}";
 
-in import ./machines {
+in import ./core {
   system.copySystemConfiguration = true;
   inherit config hostName hostId;
   otherImports = [ ./hardware-configuration.nix ];
