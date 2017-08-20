@@ -8,17 +8,13 @@ in {
     };
   };
 
-################################################################################
-# desktop
+  imports = [
+    ./xmonad.nix
+    ./xfce.nix
+    ./vnc.nix
+  ];
+
   config = lib.mkIf config.myconfig.roles.desktop.enable {
-    # imports = [
-    #   ../../profiles/desktop/hosts.nix
-    # ];
-    imports = [
-      ./xmonad.nix
-      ./xfce.nix
-      ./vnc.nix
-    ];
 
     environment.systemPackages = with pkgs; [
       arandr xrandr-invert-colors
@@ -56,7 +52,7 @@ in {
           slim = {
             enable = true;
             defaultUser = "mhuber";
-            theme = ../static/slim-theme;
+            theme = ../../static/slim-theme;
           };
           sessionCommands = ''
             ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name left_ptr
