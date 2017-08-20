@@ -34,6 +34,8 @@ in
     ./desktop
     ./dev.nix
     ./emacs.nix
+    ./games.nix
+    ./imagework.nix
     ./irc.nix
     ./mail.nix
     ./openssh.nix
@@ -41,7 +43,7 @@ in
     ./taskserver.nix
     ./terminal.nix
     ./tex.nix
-    ./virtualization
+    ./virtualization.nix
     ./vsftp.nix
     ./wine.nix
     ./work.nix

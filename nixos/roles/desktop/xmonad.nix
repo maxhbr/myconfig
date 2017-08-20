@@ -4,7 +4,7 @@ let
 in {
   options = {
     myconfig.roles.xmonad = {
-      enable = lib.mkEnableOption "Xmonad desktop environment";
+      enable = lib.mkEnableOption "Xmonad Desktop environment";
     };
   };
 

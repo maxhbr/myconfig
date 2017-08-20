@@ -6,19 +6,29 @@ in {
     myconfig.roles.desktop = {
       enable = lib.mkEnableOption "Desktop environment";
     };
+    myconfig.roles.xmonad = {
+      enable = lib.mkOption {
+        default = true;
+        example = false;
+        description = "Whether to enable Xmonad desktop environment.";
+        type = lib.types.bool;
+      };
+    };
+    myconfig.roles.xfce = {
+      enable = lib.mkEnableOption "Xfce desktop environment";
+    };
+    myconfig.roles.vnc = {
+      enable = lib.mkEnableOption "VNC desktop environment";
+    };
   };
 
 ################################################################################
 # desktop
   config = lib.mkIf config.myconfig.roles.desktop.enable {
-    # imports = [
-    #   ../../profiles/desktop/hosts.nix
-    # ];
     imports = [
-      ./xmonad.nix
-      ./xfce.nix
-      ./vnc.nix
+      ../profiles/desktop/hosts.nix
     ];
+
 
     environment.systemPackages = with pkgs; [
       arandr xrandr-invert-colors
@@ -101,5 +111,43 @@ in {
         inconsolata
       ];
     };
+  } // lib.mkIf config.myconfig.roles.xmonad.enable {
+    # myconfig.roles.desktop.enable = true;
+    environment.systemPackages = (with pkgs; [
+      unstable.dmenu unstable.dzen2
+       unclutter
+      xss-lock
+      libnotify # xfce.xfce4notifyd # notify-osd
+    ]) ++ (with unstable.haskellPackages; [
+      xmonad xmobar yeganesh
+    ]);
+
+    system.activationScripts.cleanupXmonadState =
+    ''
+      rm /home/mhuber/.xmonad/xmonad.state || true
+    '';
+
+    services.xserver = {
+      windowManager = {
+        xmonad = {
+          enable = true;
+          enableContribAndExtras = true;
+        };
+        default = "xmonad";
+      };
+
+      desktopManager = {
+        xterm.enable = false;
+        default = "none";
+      };
+    };
+  } // lib.mkIf config.myconfig.roles.xfce.enable {
+    services.xserver.desktopManager.xfce.enable = true;
+  } // lib.mkIf config.myconfig.roles.vnc.enable {
+    environment.systemPackages = with pkgs; [
+      x11vnc
+    ];
+    networking.firewall.allowedUDPPorts = [ 5900 ];
+    networking.firewall.allowedTCPPorts = [ 5900 ];
   };
 }

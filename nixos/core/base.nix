@@ -8,6 +8,7 @@ in {
   imports = [
     ./mhuber.nix
     ./oh-my-zsh.nix
+    ./hosts.nix
   ];
 
   boot = {
