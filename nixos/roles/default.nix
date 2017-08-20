@@ -7,6 +7,24 @@ let
 
   cfg = config.myconfig;
 
+  # mkrole = (name: path: {
+  #   options = {
+  #     myconfig.roles.${name}.value = {
+  #       enable = lib.mkEnableOption "${name} role";
+  #     };
+  #     # myconfig.roles = listToAttrs [{
+  #     #   name = name;
+  #     #   value = {
+  #     #     enable = lib.mkEnableOption "${name} role";
+  #     #   };
+  #     # }];
+  #   };
+
+  #   config = lib.mkIf config.myconfig.roles.${name}.enable {
+  #     import path {inherit config lib pkgs;};
+  #   };
+  # });
+
 in
 
 {
