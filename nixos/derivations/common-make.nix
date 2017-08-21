@@ -4,7 +4,7 @@ let
     nixpkgs.config = import ../../nix/nixpkgs-config.nix;
   };
 
-  machineConfig = import ../machines {
+  machineConfig = import ../core {
     config = nixConfig;
     hostId = "12ABCDEF";
     hostName = machine;
@@ -17,7 +17,7 @@ in {
   users.extraUsers.root.initialPassword = lib.mkForce "dummy";
   users.extraUsers.root.openssh.authorizedKeys.keys = authorizedKeys;
   users.extraUsers.mhuber.openssh.authorizedKeys.keys = authorizedKeys;
-  
+
   environment.etc = {
     myconfig.source = ../../.;
   };
