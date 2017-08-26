@@ -15,8 +15,6 @@
       procmail
     ];
 
-    services.offlineimap = {
-      enable = true;
-    };
+    services.offlineimap.enable = true;
   };
 }

@@ -31,7 +31,7 @@ in
 
   imports = [
     ./clamav.nix
-    ./desktop
+    ./desktop.nix
     ./dev.nix
     ./emacs.nix
     ./games.nix
@@ -47,7 +47,7 @@ in
     ./vsftp.nix
     ./wine.nix
     ./work.nix
-    ];
+  ];
 
   options = {
 
