@@ -2,7 +2,6 @@
 
 {
   imports = [
-    ## hardware:
     ./hardware/grub.nix
     ./hardware/quadroFX4800.nix
     ./hardware/steamcontroller.nix

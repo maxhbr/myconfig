@@ -32,21 +32,16 @@ in
   imports = [
     ./clamav.nix
     ./desktop.nix
-    ./dev.nix
     ./emacs.nix
     ./games.nix
-    ./imagework.nix
     ./irc.nix
     ./mail.nix
     ./openssh.nix
-    ./sundtek.nix
+    ./software.nix
     ./taskserver.nix
     ./terminal.nix
-    ./tex.nix
     ./virtualization.nix
     ./vsftp.nix
-    ./wine.nix
-    ./work.nix
   ];
 
   options = {
