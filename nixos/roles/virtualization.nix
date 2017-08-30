@@ -11,6 +11,9 @@
     myconfig.roles.virtualization-vbox = {
       enable = lib.mkEnableOption "VBox Virtualization role";
     };
+    myconfig.roles.virtualization-qemu = {
+      enable = lib.mkEnableOption "Qemu Virtualization role";
+    };
   };
 
   imports = [
@@ -19,6 +22,7 @@
       config = lib.mkIf config.myconfig.roles.virtualization-docker.enable {
         environment.systemPackages = with pkgs; [
           docker
+          # docker-gc
           python35Packages.docker_compose
         ];
 
@@ -38,11 +42,20 @@
         virtualisation.virtualbox.host.enable = true;
       };
     }
+################################################################################
+    { # qemu
+      config = lib.mkIf config.myconfig.roles.virtualization-qemu.enable {
+        environment.systemPackages = with pkgs; [
+          qemu aqemu
+        ];
+      };
+    }
   ];
 
 ################################################################################
   config = lib.mkIf config.myconfig.roles.virtualization.enable {
     myconfig.roles.virtualization-docker.enable = true;
     myconfig.roles.virtualization-vbox.enable = true;
+    myconfig.roles.virtualization-qemu.enable = true;
   };
 }

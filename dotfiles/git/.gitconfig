@@ -14,7 +14,7 @@
     cma         = commit -am
     ca          = commit --amend
     caa         = commit --amend -a
-	  cac         = commit --patch --amend
+    cac         = commit --patch --amend
     co          = checkout
     # col         = "!f() { \
     #                     git checkout -b $2 $1/$2; \
@@ -38,8 +38,8 @@
     dd          = diff --word-diff=color
     dw          = diff --color-words="[^[:space:],;:_-]+"
     dt          = difftool --dir-diff
-	  dAncestor   = "!f() { git diff $(git merge-base master HEAD); }; f"
-	  dsAncestor  = "!f() { git diff --stat $(git merge-base master HEAD); }; f"
+    dAncestor   = "!f() { git diff $(git merge-base master HEAD); }; f"
+    dsAncestor  = "!f() { git diff --stat $(git merge-base master HEAD); }; f"
     changes     = diff --name-status -r
     diffstat    = diff --stat -r
     sortdiff    = !sh -c 'git diff "$@" | grep "^[+-]" | sort --key=1.2 | uniq -u -s1'
@@ -48,12 +48,12 @@
     ri          = rebase --interactive
     rc          = rebase --continue
     ra          = rebase --abort
-	  rMaster     = rebase --interactive master
-	  rAncestor   = "!f() { git rebase -i $(git merge-base master HEAD); }; f"
-	  rsAncestor  = "!f() { git reset --soft $(git merge-base master HEAD); }; f"
+    rMaster     = rebase --interactive master
+    rAncestor   = "!f() { git rebase -i $(git merge-base master HEAD); }; f"
+    rsAncestor  = "!f() { git reset --soft $(git merge-base master HEAD); }; f"
 
 
-	  mkBundle    = "!f() { git bundle create \"../$(basename $(pwd)).bundle\" --all; }; f"
+    mkBundle    = "!f() { git bundle create \"../$(basename $(pwd)).bundle\" --all; }; f"
 	
 
     mt          = mergetool --no-prompt
@@ -75,10 +75,10 @@
     remadd      = "!f() { \
 						       			git remote add $1 git@github.com:${1}/${2}.git; \
 	                 }; f"
-		ghc         = "!f() { \
-	                      if [ \"$#\" -ne 2 ]; then echo \"needs two arguments\"; exit 1; fi;\
-	                      git clone git@github.com:${1}/${2}.git ${1}-${2}; \
-	                  }; f"
+    ghc         = "!f() { \
+                        if [ \"$#\" -ne 2 ]; then echo \"needs two arguments\"; exit 1; fi;\
+                        git clone git@github.com:${1}/${2}.git ${1}-${2}; \
+                    }; f"
     remotes     = remote -v
 
     # Pretty graphs
@@ -90,7 +90,7 @@
 	  gl          = log --graph --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset) (%H)%C(yellow)%d%C(reset)%n%C(reverse)  %C(bold)%s %C(reset)%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'
 		gg          = log --graph --all --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %n%C(reverse)%C(bold)  %s %C(reset)%n%C(reverse) %C(reset) Author: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%n'
     # All commits, full commit info
-	  ggl         = log --graph --all --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset) (%H)%C(yellow)%d%C(reset)%n%C(reverse)  %C(bold)%s %C(reset)%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'
+    ggl         = log --graph --all --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset) (%H)%C(yellow)%d%C(reset)%n%C(reverse)  %C(bold)%s %C(reset)%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'
 
     ls-assume-unchanged = !git ls-files -v | grep ^h | awk '{print $2}'
     assume-unchanged    = update-index --assume-unchanged
@@ -99,7 +99,7 @@
  	                          echo \"git is unclean\"; \
  	                          return 1; \
  	                        }; \
-	                        remote=\"${2:-origin}\"; \
+                          remote=\"${2:-origin}\"; \
                           branch=\"testpr/${remote}/${1}\"; \
                           git fetch \"${remote}\" \"+refs/pull/${1}/merge:\" \
                           && ( git checkout -b \"$branch\" -qf FETCH_HEAD \
@@ -111,6 +111,9 @@
     # git subtree:
     sba         = "!f() { git subtree add --prefix $2 $1 master --squash; }; f" 
     sbu         = "!f() { git subtree pull --prefix $2 $1 master --squash; }; f" 
+
+    # typos
+    psuh = "push"
 [color]
     branch = auto
     diff = auto

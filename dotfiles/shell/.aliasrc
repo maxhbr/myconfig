@@ -379,14 +379,6 @@ my_power_settings() {
 #  docker 
 #-------------------------------------------------------------------{{{
 
-dclean(){
-    # remove all dangling volumes
-    docker volume ls -qf dangling=true |xargs -r docker volume rm
-
-    confirm "also do dcclean?" && dcclean
-    confirm "also do diclean?" && diclean
-}
-
 dcclean(){
     # call `dclean -a` to clean all containers
     docker ps -q $1 |xargs --no-run-if-empty docker rm
@@ -402,6 +394,14 @@ diclean(){
     }
 
     [[ "$1" == "-a" ]] && remAll || remUntagged
+}
+
+dclean(){
+    # remove all dangling volumes
+    docker volume ls -qf dangling=true |xargs -r docker volume rm
+
+    confirm "also do dcclean?" && dcclean $@
+    confirm "also do diclean?" && diclean $@
 }
 
 dssh(){
@@ -728,7 +728,7 @@ getCert() {
 #   misc
 #-------------------------------------------------------------------{{{
 
-alias steam="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam --command \"optirun steam\""
+alias steam="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam --command \"optirun steam\" &disown"
 
 touchpadtoggle(){
   xdotool mousemove 0 0

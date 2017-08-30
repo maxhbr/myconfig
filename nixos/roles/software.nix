@@ -132,9 +132,11 @@ in {
     }
 ################################################################################
     { # sundtek
-      environment.systemPackages = with pkgs; [
-        sundtek
-      ];
+      config = lib.mkIf config.myconfig.roles.sundtek.enable {
+        environment.systemPackages = with pkgs; [
+          sundtek
+        ];
+      };
     }
   ];
 }
