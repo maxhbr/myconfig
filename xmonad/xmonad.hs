@@ -24,6 +24,7 @@
 ------------------------------------------------------------------------
 -- Imports:
 import           Data.Foldable (foldMap)
+import           System.Process
 import           System.Exit ( exitSuccess )
 import           System.IO ( hPutStrLn )
 import           XMonad
@@ -113,35 +114,28 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
     ++ baclightControlKBs
     ++ layoutKBs
     ++ systemctlKBs
-    ++ [ ((m__, xK_i), runOrRaiseNext "firefox" (className =? "Firefox" <||> className =?  "chromium-browser" <||> className =? "Chromium-browser"))
-       , ((m__, 0xfc), runOrRaiseNext "~/bin/ec" (className =? "Emacs"))
-       , ((m__, 0xf6), raiseNext (className =? "jetbrains-phpstorm" <||> className =? "jetbrains-idea"))
-       ]
   where
     basicKBs =
       [ ((ms_            , xK_Return), spawn $ XMonad.terminal conf)
       , ((msc, xK_Return), spawn "urxvtd -q -f -o &")
       -- , ((m__, xK_Return), windows W.swapMaster)
       , ((m4m, xK_Return), windows W.swapMaster)
-      -- , ((m__, xK_g     ), spawn "~/bin/emc || emacs")
-      , ((m__, xK_q     ), spawn "xmonad --recompile && sleep 0.1 && xmonad --restart") -- Restart xmonad
-      , ((msc, xK_q     ), io exitSuccess) -- Quit xmonad
-      -- , ((m__, xK_p     ), spawn "`dmenu_run`")
+      , ((m__, xK_q     ), spawn "xmonad --recompile && sleep 0.1 && xmonad --restart")
+      , ((msc, xK_q     ), io exitSuccess)
       , ((m__, xK_p     ), spawn "`dmenu_path | yeganesh`")
       , ((m__, xK_x     ), shellPrompt defaultXPConfig)
-      -- , ((ms_, xK_x     ), changeDir def)
 
 
-      , ((ms_, xK_c     ), kill) -- close focused window
+      , ((ms_, xK_c     ), kill)
 
-      , ((m__, xK_Tab   ), windows W.focusDown) -- Move focus to the next window
-      , ((ms_, xK_Tab   ), focusDown) -- Move focus to the next window using BoringWindows
-      , ((m__, xK_u     ), focusUrgent)  -- focus urgent window
+      , ((m__, xK_Tab   ), windows W.focusDown)
+      , ((ms_, xK_Tab   ), focusDown)
+      , ((m__, xK_u     ), focusUrgent)
 
-      , ((m__, xK_j     ), windows W.focusDown) -- Move focus to the next window
-      , ((m__, xK_k     ), windows W.focusUp  ) -- Move focus to the previous window
-      , ((ms_, xK_j     ), windows W.swapDown  ) -- Swap the focused window with the next window
-      , ((ms_, xK_k     ), windows W.swapUp    ) -- Swap the focused window with the previous window
+      , ((m__, xK_j     ), windows W.focusDown)
+      , ((m__, xK_k     ), windows W.focusUp)
+      , ((ms_, xK_j     ), windows W.swapDown)
+      , ((ms_, xK_k     ), windows W.swapUp)
       , ((m__, xK_o     ), spawn "urxvtc -e bash -c 'EDITOR=vim ranger'")
       , ((m_c, xK_Return), spawn "urxvtc -e zsh -c 'ssh vserver'")
       , ((ms_, xK_p     ), spawn "passmenu")]
@@ -163,16 +157,16 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
               , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
          -}
     layoutKBs =
-      [ ((m__, xK_space ), sendMessage NextLayout) -- Rotate through the available layout algorithms
+      [ ((m__, xK_space ), sendMessage NextLayout)
       , ((ms_, xK_x     ), sendMessage $ Toggle MIRROR)
       , ((m__, xK_f     ), sendMessage $ Toggle FULL)
-      , ((ms_, xK_space ), setLayout $ XMonad.layoutHook conf) --  Reset the layouts on the current workspace to default
+      , ((ms_, xK_space ), setLayout $ XMonad.layoutHook conf)
       , ((m__, xK_m     ), withFocused minimizeWindow)
       , ((ms_, xK_m     ), sendMessage RestoreNextMinimizedWin)
 
       , ((m__, xK_t     ), withFocused $ windows . W.sink) -- Push window back into tiling
-      , ((m__, xK_comma ), sendMessage (IncMasterN 1)) -- Increment the number of windows in the master area
-      , ((m__, xK_period), sendMessage (IncMasterN (-1))) -- Deincrement the number of windows in the master area
+      , ((m__, xK_comma ), sendMessage (IncMasterN 1))
+      , ((m__, xK_period), sendMessage (IncMasterN (-1)))
 
       -- Shrink and Expand
       , ((m__, xK_h     ), sendMessage Shrink)
@@ -182,6 +176,11 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
 
       , ((m__, xK_b     ), sendMessage ToggleStruts)]
       ++ cycleWSKBs
+      ++ (map (\(a,b) -> (a,b >> popupCurDesktop))
+           [ ((m__, xK_i), runOrRaiseNext "firefox" (className =? "Firefox" <||> className =?  "chromium-browser" <||> className =? "Chromium-browser"))
+           , ((m__, 0xfc), runOrRaiseNext "~/bin/ec" (className =? "Emacs"))
+           , ((m__, 0xf6), raiseNext (className =? "jetbrains-phpstorm" <||> className =? "jetbrains-idea"))
+           ])
       -- ++ combineTwoKBs
       -- ++ subLayoutKBs
       where
@@ -233,10 +232,14 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       ++ volumeControlls
       where
         volumeControlls =
-          map (\(k,v) -> ((const 0, k), popupCmdOut "~/.xmonad/bin/myamixer.sh" (["Master"] ++ v)))
+          -- map (\(k,v) -> ((const 0, k), spawn ("~/.xmonad/bin/myamixer.sh " ++ v)))
+          map (\(k,v) -> ((const 0, k)
+                         , (liftIO (readProcess "/home/mhuber/.xmonad/bin/myamixer.sh" v []))
+                           >>= myDefaultPopup -- TODO: why is this not working?
+                         ))
             [ (0x1008ff12, ["toggle"])
             , (0x1008ff11, ["6dB-"])
-            , (0x1008ff13, ["unmute", "3dB+"])]
+            , (0x1008ff13, ["unmute","3dB+"])]
     baclightControlKBs =
       [((m__, xK_F1), spawnSelected def [ "xbacklight =50"
                                         , "xbacklight =25"
