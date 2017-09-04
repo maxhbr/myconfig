@@ -23,19 +23,21 @@
 
 ------------------------------------------------------------------------
 -- Imports:
-import           Data.Monoid
 import           Data.Foldable (foldMap)
-import           Control.Monad
 import           System.Exit ( exitSuccess )
 import           System.IO ( hPutStrLn )
 import           XMonad
 import           Graphics.X11.ExtraTypes.XF86()
 
+--------------------------------------------------------------------------------
+-- Prompt
 import           XMonad.Prompt ( defaultXPConfig )
 import           XMonad.Prompt.Shell ( shellPrompt )
 
+--------------------------------------------------------------------------------
+-- Hooks
 import           XMonad.Hooks.DynamicLog ( dynamicLogWithPP
-                                         , xmobarPP , defaultPP
+                                         , xmobarPP
                                          , PP(..)
                                          , xmobarColor
                                          , wrap )
@@ -44,15 +46,18 @@ import           XMonad.Hooks.ManageDocks ( avoidStrutsOn
                                           , manageDocks
                                           , docksEventHook
                                           , ToggleStruts(..) )
-import           XMonad.Hooks.ManageHelpers ( doFullFloat
-                                            , doCenterFloat )
+import           XMonad.Hooks.ManageHelpers ( doCenterFloat )
 import           XMonad.Hooks.UrgencyHook ( withUrgencyHook
-                                          , NoUrgencyHook(..) )
+                                          , focusUrgent )
 import           XMonad.Hooks.SetWMName ( setWMName )
 
+--------------------------------------------------------------------------------
+-- Util
 import           XMonad.Util.Run ( spawnPipe )
 import           XMonad.Util.Types ( Direction2D(..) )
 
+--------------------------------------------------------------------------------
+-- Actions
 import           XMonad.Actions.CycleWS ( nextWS, prevWS
                                         , toggleWS'
                                         , shiftToNext, shiftToPrev
@@ -60,45 +65,37 @@ import           XMonad.Actions.CycleWS ( nextWS, prevWS
                                         , shiftNextScreen, shiftPrevScreen
                                         , moveTo
                                         , Direction1D(..)
-                                        , WSType( NonEmptyWS )
-                                        , skipTags )
+                                        , WSType( NonEmptyWS ) )
 import           XMonad.Actions.UpdatePointer ( updatePointer )
 import           XMonad.Actions.GridSelect
+import           XMonad.Actions.WindowGo ( runOrRaiseNext, raiseNext )
 
+--------------------------------------------------------------------------------
+-- Layouts
 import           XMonad.Layout.BoringWindows( boringAuto
                                             , focusDown )
+import           XMonad.Layout.Gaps (gaps)
 import           XMonad.Layout.Named ( named )
 import           XMonad.Layout.NoBorders ( smartBorders )
 import           XMonad.Layout.Minimize ( minimize, minimizeWindow
                                         , MinimizeMsg(RestoreNextMinimizedWin) )
-import           XMonad.Layout.PerWorkspace ( onWorkspace, onWorkspaces, modWorkspace, modWorkspaces )
+import           XMonad.Layout.MultiToggle
+import           XMonad.Layout.MultiToggle.Instances
+import           XMonad.Layout.PerScreen (ifWider)
+import           XMonad.Layout.PerWorkspace ( modWorkspaces )
 import           XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall)
                                              , MirrorResize ( MirrorShrink
                                                             , MirrorExpand ) )
-import           XMonad.Layout.Simplest ( Simplest(Simplest) )
--- import           XMonad.Layout.SubLayouts ( subLayout
---                                           , pullGroup
---                                           , GroupMsg( MergeAll, UnMerge ) )
-import           XMonad.Layout.Tabbed ( addTabs
-                                      , shrinkText
-                                      , tabbedBottom
-                                      , Theme(..) )
-import           XMonad.Layout.Magnifier (magnifiercz)
-import           XMonad.Layout.MultiToggle
-import           XMonad.Layout.MultiToggle.Instances
-import           XMonad.Layout.Master (mastered)
--- testing layouts:
+import           XMonad.Layout.Spacing (spacing)
 import           XMonad.Layout.TwoPane (TwoPane(TwoPane))
-import           XMonad.Layout.IfMax (IfMax(IfMax), ifMax)
-import           XMonad.Layout.Spacing
-import           XMonad.Layout.Gaps -- testing
-import           XMonad.Layout.PerScreen -- testing
--- import           XMonad.Layout.Grid -- testing
--- import           XMonad.Layout.WorkspaceDir
 
+--------------------------------------------------------------------------------
+-- misc
 import qualified Data.Map                    as M
 import qualified XMonad.StackSet             as W
 
+--------------------------------------------------------------------------------
+-- MyConfig
 import XMonad.MyConfig.Utils
 import XMonad.MyConfig.Common
 import XMonad.MyConfig.Scratchpads
@@ -116,7 +113,10 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
     ++ baclightControlKBs
     ++ layoutKBs
     ++ systemctlKBs
-    -- ++ mpdKBs
+    ++ [ ((m__, xK_i), runOrRaiseNext "firefox" (className =? "Firefox" <||> className =?  "chromium-browser" <||> className =? "Chromium-browser"))
+       , ((m__, 0xfc), runOrRaiseNext "~/bin/ec" (className =? "Emacs"))
+       , ((m__, 0xf6), raiseNext (className =? "jetbrains-phpstorm" <||> className =? "jetbrains-idea"))
+       ]
   where
     basicKBs =
       [ ((ms_            , xK_Return), spawn $ XMonad.terminal conf)
@@ -136,6 +136,7 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
 
       , ((m__, xK_Tab   ), windows W.focusDown) -- Move focus to the next window
       , ((ms_, xK_Tab   ), focusDown) -- Move focus to the next window using BoringWindows
+      , ((m__, xK_u     ), focusUrgent)  -- focus urgent window
 
       , ((m__, xK_j     ), windows W.focusDown) -- Move focus to the next window
       , ((m__, xK_k     ), windows W.focusUp  ) -- Move focus to the previous window
@@ -232,16 +233,10 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       ++ volumeControlls
       where
         volumeControlls =
-          map (\(k,v) -> ((const 0, k), spawn v))
-            [ (0x1008ff12, "amixer -q set Master toggle")
-            , (0x1008ff11, "amixer -q set Master 6dB-")
-            , (0x1008ff13, "amixer -q set Master unmute 3dB+")]
-    -- mpdKBs =
-    --   [ ((m__, 0xfc), spawn "mpc -h mpd@192.168.178.26 --no-status prev")
-    --   , ((ms_, 0xfc), spawn "mpc -h mpd@192.168.178.26 --no-status volume -10")
-    --   , ((m__, 0xf6), spawn "mpc -h mpd@192.168.178.26 --no-status toggle")
-    --   , ((m__, 0xe4), spawn "mpc -h mpd@192.168.178.26 --no-status next")
-    --   , ((ms_, 0xe4), spawn "mpc -h mpd@192.168.178.26 --no-status volume +5")]
+          map (\(k,v) -> ((const 0, k), popupCmdOut "~/.xmonad/bin/myamixer.sh" (["Master"] ++ v)))
+            [ (0x1008ff12, ["toggle"])
+            , (0x1008ff11, ["6dB-"])
+            , (0x1008ff13, ["unmute", "3dB+"])]
     baclightControlKBs =
       [((m__, xK_F1), spawnSelected def [ "xbacklight =50"
                                         , "xbacklight =25"

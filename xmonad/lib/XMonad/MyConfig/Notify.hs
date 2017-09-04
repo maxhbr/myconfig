@@ -1,5 +1,5 @@
 module XMonad.MyConfig.Notify
-       ( myUrgencyHook, popupCurDesktop )
+       ( myUrgencyHook, popupCurDesktop, popupCmdOut )
        where
 -- needs `notify-osd` and `libnotify`
 -- See: https://pbrisbin.com/posts/using_notify_osd_for_xmonad_notifications/
@@ -13,6 +13,7 @@ import XMonad.Hooks.UrgencyHook
 import XMonad.Util.NamedWindows
 import qualified XMonad.StackSet as W
 import XMonad.Hooks.ServerMode
+import System.Process
 
 myUrgencyHook = MyUrgencyHook (myNotify 2)
 
@@ -42,6 +43,11 @@ popupCurDesktop :: X()
 popupCurDesktop = do
   curName <- fmap W.currentTag $ gets windowset
   myPopup 400 0.5 curName
+
+popupCmdOut :: String -> [String] -> X()
+popupCmdOut cmd args = do
+  cmdOut <- liftIO (readProcess cmd args [])
+  myPopup 400 0.5 cmdOut
 
 -- popupConfig :: Prime
 -- popupConfig = do

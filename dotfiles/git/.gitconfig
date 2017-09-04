@@ -49,7 +49,7 @@
     rc          = rebase --continue
     ra          = rebase --abort
     rMaster     = rebase --interactive master
-    rAncestor   = "!f() { git rebase -i $(git merge-base master HEAD); }; f"
+    rAncestor   = "!f() { git rebase -i $(git merge-base ${1:-master} HEAD); }; f"
     rsAncestor  = "!f() { git reset --soft $(git merge-base master HEAD); }; f"
 
 
@@ -160,3 +160,5 @@
 
 [include]
   path = .gitconfig-local
+[rerere]
+	enabled = true

@@ -9,7 +9,7 @@ target="$HOME/.xmonad"
 
 mkdir -p "$target"
 
-declare -a folders=(lib bin)
+declare -a folders=(lib bin neo)
 for folder in ${folders[@]}; do
     [[ -e "$target/$folder" ]] || ln -s "$src/$folder" "$target/$folder"
 done
