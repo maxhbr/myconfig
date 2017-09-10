@@ -21,6 +21,7 @@
     #                   }; f"
     cob         = checkout -b
     f           = "!f() { git fetch ${1:-\"--all\"}; }; f"
+	  pom         = pull --rebase origin master
 
     d           = diff
     d0          = diff HEAD

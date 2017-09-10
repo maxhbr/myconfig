@@ -2,6 +2,8 @@
 # call with
 #   $0 [-t|-k]
 
+set -e
+
 # partially stolen from http://mjwall.com/blog/2013/10/04/how-i-use-emacs/
 
 visible_frames() {
@@ -33,9 +35,11 @@ else
     [[ "$(visible_frames)" -eq "1" ]] && change_focus
 
     if [ "$(visible_frames)" -lt  "2" ]; then # need to create a frame
+        echo "no frame found..."
         emacsclient -n -c "$@" && change_focus
         # emacsclient -n -e "(apm-graphic-frame-init)" > /dev/null
     else
+        echo "frame found..."
         change_focus
         if [[ "$#" -ne "0" ]]; then
             emacsclient -n "$@"

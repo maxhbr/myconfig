@@ -52,6 +52,7 @@ in {
       taskwarrior
       pass
       ag
+      file
       # admin:
       htop iftop iptraf-ng iotop
       mtr bind

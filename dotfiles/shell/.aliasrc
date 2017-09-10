@@ -33,9 +33,14 @@ alias vi="/var/run/current-system/sw/bin/vim"
 
 if [ -x "$HOME/bin/ec" ]; then
   alias vim="$HOME/bin/ec -t"
+  alias emacs="$HOME/bin/ec"
 else
   alias vim="emacsclient -t"
+  emacs () {
+    command emacs "$@" &disown
+  }
 fi
+
 alias magit='ec -e "(magit-status \"$(pwd)\")"'
 alias pgp="gpg" #Typo
 alias vime="vim -u ~/.vimencrypt -x "
@@ -97,10 +102,6 @@ grepf() {
     }
     rm $FIFO
 }
-
-
-[[ -x ~/bin/stolen/ec ]] && alias emacs="$HOME/bin/stolen/ec"
-alias e="emacs"
 
 alias httptunnel="ssh -ND localhost:9567 vserver"
 
