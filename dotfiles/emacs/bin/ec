@@ -32,21 +32,22 @@ elif [ "$1" = "-t" ] || [ -z "$DISPLAY" ]; then
         emacsclient -a "" -t ./
     fi
 else
-    [[ "$(visible_frames)" -eq "1" ]] && change_focus
+    emacsclient -n -c "$@"
+    # [[ "$(visible_frames)" -eq "1" ]] && change_focus
 
-    if [ "$(visible_frames)" -lt  "2" ]; then # need to create a frame
-        echo "no frame found..."
-        emacsclient -n -c "$@" && change_focus
-        # emacsclient -n -e "(apm-graphic-frame-init)" > /dev/null
-    else
-        echo "frame found..."
-        change_focus
-        if [[ "$#" -ne "0" ]]; then
-            emacsclient -n "$@"
-        else
-            emacsclient -n ./
-        fi
-    fi
+    # if [ "$(visible_frames)" -lt  "2" ]; then # need to create a frame
+    #     echo "no frame found..."
+    #     emacsclient -n -c "$@" && change_focus
+    #     # emacsclient -n -e "(apm-graphic-frame-init)" > /dev/null
+    # else
+    #     echo "frame found..."
+    #     change_focus
+    #     if [[ "$#" -ne "0" ]]; then
+    #         emacsclient -n "$@"
+    #     else
+    #         emacsclient -n ./
+    #     fi
+    # fi
 fi
 
 
