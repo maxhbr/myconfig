@@ -37,10 +37,11 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
                     , ("<fc=yellow>TNG! </fc>", "~/Mail/tng/INBOX")
                     , ("<fc=green>+</fc>", "~/Mail/alfa/INBOX") ] "mail"
          -- , Run Date "%a %d.%m.%Y <fc=#ee9a00>%H:%M:%S</fc>" "date" 10
+         , Run PipeReader "/home/mhuber/.xmonad/notification.pipe" "notifications"
          ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %StdinReader% }{ <action=`urxvtc -name ScratchNMTUI -e bash -c 'sudo nmtui`>%dynnetwork% %wlp3s0wi%</action> | <action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu% (%top%) %coretemp% %memory% (%topmem%)</action> %kbd%| <action=`xbacklight =10`>%battery%</action> |  <fc=#ffffff><action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action></fc> | %date% "
+       , template = " %StdinReader% }{ %notifications% | <action=`urxvtc -name ScratchNMTUI -e bash -c 'sudo nmtui`>%dynnetwork% %wlp3s0wi%</action> | <action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu% (%top%) %coretemp% %memory% (%topmem%)</action> %kbd%| <action=`xbacklight =10`>%battery%</action> |  <fc=#ffffff><action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action></fc> | %date% "
        }
 
 -- vim: set ft=haskell :

@@ -244,7 +244,7 @@ sub setupBackgroundAndUI{
 ################################################################################
 
 setupX() if !$noXrandr;
-setupAlsa();
+# setupAlsa(); # deprecated in favor of pulseaudio
 setupWacom() if !$noXrandr; # needs `setupX()` to be run before the call here
 setupBacklight();
 setupBackgroundAndUI();

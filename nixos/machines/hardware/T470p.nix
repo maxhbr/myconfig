@@ -22,6 +22,11 @@
     driSupport = true;
     driSupport32Bit = true;
   };
+
+  boot.extraModprobeConfig = ''
+    options snd slots=snd-hda-intel
+  '';
+
   services.xserver = {
     videoDrivers = [ "intel" ];
     synaptics = {

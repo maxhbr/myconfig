@@ -20,6 +20,7 @@
 --
 -- Last modified: Sa Jul 23, 2016  02:15
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
+{-# LANGUAGE CPP #-}
 
 ------------------------------------------------------------------------
 -- Imports:
@@ -54,7 +55,7 @@ import           XMonad.Hooks.SetWMName ( setWMName )
 
 --------------------------------------------------------------------------------
 -- Util
-import           XMonad.Util.Run ( spawnPipe )
+import           XMonad.Util.Run ( runProcessWithInput, spawnPipe )
 import           XMonad.Util.Types ( Direction2D(..) )
 
 --------------------------------------------------------------------------------
@@ -232,14 +233,25 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       ++ volumeControlls
       where
         volumeControlls =
-          -- map (\(k,v) -> ((const 0, k), spawn ("~/.xmonad/bin/myamixer.sh " ++ v)))
+#if 1
+-- pulseaudio
+          map (\(k,args) -> ((const 0, k)
+                         , runProcessWithInput "/home/mhuber/.xmonad/bin/mypamixer.sh" args ""
+                           >>= myDefaultPopup . ("Vol: " ++)
+                         ))
+            [ (0x1008ff12, ["mute"])
+            , (0x1008ff11, ["-10%"])
+            , (0x1008ff13, ["+10%"])]
+#else
+-- alsa
           map (\(k,v) -> ((const 0, k)
-                         , (liftIO (readProcess "/home/mhuber/.xmonad/bin/myamixer.sh" v []))
-                           >>= myDefaultPopup -- TODO: why is this not working?
+                         , runProcessWithInput "/home/mhuber/.xmonad/bin/myamixer.sh" v ""
+                           >>= myDefaultPopup
                          ))
             [ (0x1008ff12, ["toggle"])
             , (0x1008ff11, ["6dB-"])
             , (0x1008ff13, ["unmute","3dB+"])]
+#endif
     baclightControlKBs =
       [((m__, xK_F1), spawnSelected def [ "xbacklight =50"
                                         , "xbacklight =25"

@@ -24,3 +24,6 @@ if [ ! -z ${DISPLAY+x} ]; then
     sleep 0.1
     xmonad --restart
 fi
+
+notification_pipe="$target/notification.pipe"
+[[ -p $notification_pipe ]] || mkfifo $notification_pipe

@@ -6,6 +6,7 @@
     ./hardware/efi.nix
     ./hardware/exfat.nix
     ./hardware/steamcontroller.nix
+    ./hardware/pulseaudio.nix
     # ./hardware/sdr.nix
   ];
 
