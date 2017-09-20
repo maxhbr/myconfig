@@ -43,6 +43,7 @@ in {
       nox
       tree
       stow
+      rlwrap
       # cli:
       ranger
       emacs vim
@@ -61,6 +62,7 @@ in {
       sysstat
       tcpdump
       cryptsetup
+      lsof
       #others:
       pmount fuse
       rsnapshot
