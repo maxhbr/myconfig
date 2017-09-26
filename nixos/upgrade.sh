@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
+
 # nixos-rebuild ###########################################################
 echo "* $(tput bold)nixos-rebuild$(tput sgr0) ..."
 exec sudo \

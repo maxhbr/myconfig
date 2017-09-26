@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 set -e
+echo "nixpkgsVersion of nixpkgs: $(nix-instantiate \
+    -I nixpkgs=http://nixos.org/channels/nixos-17.03/nixexprs.tar.xz \
+    --eval '<nixpkgs>' \
+    -A lib.nixpkgsVersion)"
+echo "nixpkgsVersion of unstable: $(nix-instantiate \
+    -I unstable=http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz \
+    --eval '<unstable>' \
+    -A lib.nixpkgsVersion)"
 
 echo "* $(tput bold)nix-env --upgrade$(tput sgr0) ..."
 env \

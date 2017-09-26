@@ -185,6 +185,13 @@ cdtemp() {
   pwd
 }
 
+cptemp() {
+  f=$(realpath $1)
+  cd $(mktemp -d)
+  cp $f ./
+  pwd
+}
+
 alias grep='grep --color=auto'
 alias fgrep='fgrep --color=auto'
 alias egrep='egrep --color=auto'
@@ -225,6 +232,7 @@ fi
 ff() { find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -iname '*'$*'*' -ls 2>/dev/null ; }
 ffd() { find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type d -iname '*'$*'*' -ls 2>/dev/null ; }
 ffa() { find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -iname '*'$*'*' -ls 2>/dev/null ; }
+ffg() { find . -type f -print0 | xargs -0 grep -lI "$*" ; }
 
 # Find a file with pattern $1 in name and Execute $2 on it:
 fe() { find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \; ; }

@@ -25,6 +25,7 @@
 ------------------------------------------------------------------------
 -- Imports:
 import           Data.Foldable (foldMap)
+import           Data.Ratio ((%))
 import           System.Process
 import           System.Exit ( exitSuccess )
 import           System.IO ( hPutStrLn )
@@ -90,6 +91,7 @@ import           XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall)
                                                             , MirrorExpand ) )
 import           XMonad.Layout.Spacing (spacing)
 import           XMonad.Layout.TwoPane (TwoPane(TwoPane))
+import           XMonad.Layout.IM -- (withIM)
 
 --------------------------------------------------------------------------------
 -- misc
@@ -287,6 +289,7 @@ myLayout = smartBorders $
            boringAuto $
            modWorkspaces [ "vbox", "media" ] (Full |||) $
            avoidStrutsOn[U,D] $
+           withIM (1%7) (Title "Tabs Outliner") $
            mkToggle (single FULL) $
            mkToggle (single MIRROR) $
            full ||| dtb ||| tiled
@@ -379,6 +382,18 @@ myStartupHook = do
   spawn "xss-lock -- slimlock"
 
 ------------------------------------------------------------------------
+-- Log hook:
+myLogHook xmproc = let
+  myXmobarPP = def { ppOutput  = hPutStrLn xmproc . shortenStatus
+                   , ppCurrent = xmobarColor maincolor "" . wrap "<" ">"
+                   , ppSort    = scratchpadPPSort
+                   , ppTitle   = (" " ++) . xmobarColor maincolor ""
+                   , ppVisible = xmobarColor maincolor ""
+                   }
+  in dynamicLogWithPP myXmobarPP
+     >> updatePointer (0.5,0.5) (0.5,0.5)
+
+------------------------------------------------------------------------
 -- General
 
 maincolor = "#ee9a00" :: String
@@ -397,13 +412,7 @@ myConfig xmproc = withUrgencyHook myUrgencyHook $
       , manageHook         = myManageHook
       , handleEventHook    = myEventHook
       , startupHook        = myStartupHook
-      , logHook            = dynamicLogWithPP xmobarPP
-                             { ppOutput  = hPutStrLn xmproc . shortenStatus
-                             , ppCurrent = xmobarColor maincolor "" . wrap "<" ">"
-                             , ppSort    = scratchpadPPSort
-                             , ppTitle   = (" " ++) . xmobarColor maincolor ""
-                             , ppVisible = xmobarColor maincolor ""
-                             } >> updatePointer (0.5,0.5) (0.5,0.5)
+      , logHook            = myLogHook xmproc
       }
 
 ------------------------------------------------------------------------

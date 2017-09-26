@@ -97,6 +97,7 @@ in {
            unclutter
           xss-lock
           libnotify # xfce.xfce4notifyd # notify-osd
+          wmctrl
         ]) ++ (with unstable.haskellPackages; [
           xmonad xmobar yeganesh
         ]);

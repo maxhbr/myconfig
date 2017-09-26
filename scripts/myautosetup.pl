@@ -75,6 +75,7 @@ sub call{
     my @outputs = (
         "DP1", "DP1-8",
         "DP2", "DP2-2", "DP2-3", "DP2-8", "DP2-1",
+        "DP3-1", "DP3-2", "DP3-3",
         "HDMI1", "HDMI2", "HDMI3"
         );
     my %resolutions = (
@@ -215,6 +216,10 @@ sub setupAlsa{
     }
 }
 
+sub setupPulseaudio{
+    system("pulseaudio -k");
+}
+
 ################################################################################
 
 sub setupBacklight{
@@ -245,6 +250,7 @@ sub setupBackgroundAndUI{
 
 setupX() if !$noXrandr;
 # setupAlsa(); # deprecated in favor of pulseaudio
+setupPulseaudio();
 setupWacom() if !$noXrandr; # needs `setupX()` to be run before the call here
 setupBacklight();
 setupBackgroundAndUI();

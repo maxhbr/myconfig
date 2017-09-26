@@ -1,5 +1,5 @@
 module XMonad.MyConfig.Notify
-       ( myUrgencyHook, popupCurDesktop, myDefaultPopup, myAlert )
+       ( myUrgencyHook, popupCurDesktop, myDefaultPopup )
        where
 -- needs `notify-osd` and `libnotify`
 -- See: https://pbrisbin.com/posts/using_notify_osd_for_xmonad_notifications/
@@ -30,29 +30,21 @@ instance UrgencyHook MyUrgencyHook where
 mkFont s = font $ "xft:inconsolata:pixelsize=" ++ show s ++ ":antialias=true:hinting=true"
 
 myNotify :: Rational -> String -> X ()
-myNotify t msg = do
-  dzenConfig pc msg
-  myAlert msg
+myNotify t = dzenConfig pc
   where
     pc = onCurr (vCenter 22) >=> timeout t >=> background "darkgreen" >=> mkFont 18
     background color = addArgs ["-bg", color]
 
 myPopup :: Int -> Rational -> String -> X ()
-myPopup width t s = do
-  dzenConfig pc s
-  -- myAlert s
+myPopup width t = dzenConfig pc
     where
       pc = onCurr (hCenter width) >=> timeout t >=> mkFont 80
 
 myDefaultPopup :: String -> X ()
-myDefaultPopup s = do
-  myPopup 400 0.5 s
-  myAlert s
-myDefaultPopupWOAlert :: String -> X ()
-myDefaultPopupWOAlert = myPopup 400 0.5
+myDefaultPopup = myPopup 400 0.5
 
 popupCurDesktop :: X()
-popupCurDesktop = (W.currentTag <$> gets windowset) >>= myDefaultPopupWOAlert . ("ws: " ++)
+popupCurDesktop = (W.currentTag <$> gets windowset) >>= myDefaultPopup . ("ws: " ++)
 
 -- popupCmdOut :: String -> [String] -> X()
 -- popupCmdOut cmd args = do
@@ -63,8 +55,3 @@ popupCurDesktop = (W.currentTag <$> gets windowset) >>= myDefaultPopupWOAlert . 
 -- popupConfig = do
 --   handleEventHook =+ serverModeEventHookF "XMONAD_POPUP" popup
 --   apply $ withUrgencyHook $ MyUrgencyHook popup
-
-myAlert :: String -> X ()
-myAlert a = let
-  rstrip = reverse . dropWhile isSpace . reverse
-  in spawn $ "echo '" ++ rstrip a ++ "' > /home/mhuber/.xmonad/notification.pipe"
