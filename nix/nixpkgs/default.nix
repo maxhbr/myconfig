@@ -9,10 +9,7 @@ let
   });
   inherit (unstable) callPackage;
 
-  myOverlays = [ (pkgsself: pkgssuper: {
-    modemmanager = callPackage ./pkgs/modemmanager {};
-    inherit (unstable) libproxy networkmanager networkmanagerapplet libqmi libmbim; # modemmanager;
-  })];
+  myOverlays = [];
 
   myOverrides = rec {
     inherit (unstable) ranger tmux;
