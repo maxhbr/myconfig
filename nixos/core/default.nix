@@ -15,7 +15,7 @@
   nixpkgs.config = import ../../nix/nixpkgs-config.nix;
 
   nix.nixPath = [
-    "nixpkgs=http://nixos.org/channels/nixos-17.03/nixexprs.tar.xz"
+    "nixpkgs=http://nixos.org/channels/nixos-17.09/nixexprs.tar.xz"
     "unstable=http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz"
     "nixpkgs-overlays=/etc/nix/overlays"
     "nixos-config=/etc/nixos/configuration.nix"

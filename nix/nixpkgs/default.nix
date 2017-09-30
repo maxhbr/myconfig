@@ -45,7 +45,7 @@ let
     };
   };
 
-  pkgs = (import (fetchTarball http://nixos.org/channels/nixos-17.03/nixexprs.tar.xz) {
+  pkgs = (import (fetchTarball http://nixos.org/channels/nixos-17.09/nixexprs.tar.xz) {
     config = {
       allowUnfree = true;
       overrides = myOverrides;
