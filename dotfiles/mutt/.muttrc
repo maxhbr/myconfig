@@ -26,6 +26,7 @@ macro index,pager M "<pipe-message>abook --add-email-quiet<return>" "add sender 
 macro index t "c=<tab><tab><tab>"
 
 bind index "^" imap-fetch-mail
+bind index g noop
 bind index gg first-entry
 bind index G last-entry
 
