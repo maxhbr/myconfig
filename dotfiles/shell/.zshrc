@@ -70,8 +70,8 @@ ZSHDDIR="${HOME}/.config/zsh.d"
 HISTSIZE=50000
 SAVEHIST="${HISTSIZE}"
 # export EDITOR="/usr/bin/vim"
-export EDITOR="vim"
-export VISUAL="vim -p -X"
+# export EDITOR="vim"
+# export VISUAL="vim -p -X"
 export TMP="/tmp"
 export TEMP="$TMP"
 export TMPDIR="$TMP"
@@ -79,10 +79,12 @@ export TMPPREFIX="${TMPDIR}/zsh"
 ## Use a default width of 80 for manpages for more convenient reading
 export MANWIDTH=${MANWIDTH:-80}
 
-#Python virtualenvs
-export WORKON_HOME=~/workspace/python/virtualenvs
+###############################################################################
+[[ -z $PULSE_SERVER ]] && export PULSE_SERVER="unix:/run/user/$(id -u)/pulse/native"
 
 ###############################################################################
+#Python virtualenvs
+export WORKON_HOME=~/workspace/python/virtualenvs
 export PIP_REQUIRE_VIRTUALENV=true
 
 ###############################################################################

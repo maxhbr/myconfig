@@ -64,8 +64,10 @@ in {
           openvpn networkmanager_openvpn
           rdesktop
           # citrix_receiver
-          openjdk unstable.maven thrift gradle
+          openjdk unstable.maven gradle
           libreoffice
+          hipchat
+          p7zip
         ];
       };
     }

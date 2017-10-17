@@ -125,7 +125,6 @@ in with pkgs; rec {
   workEnv = mkEnv "workEnv" [
     openvpn networkmanager_openvpn
     rdesktop
-    # citrix_receiver
     openjdk unstable.maven thrift gradle
     libreoffice
     idea-ultimate

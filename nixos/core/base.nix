@@ -55,8 +55,8 @@ in {
       ag
       file
       # admin:
-      htop iftop iptraf-ng iotop
-      mtr bind
+      htop iftop iptraf-ng iotop bmon
+      mtr bind bridge-utils
       mkpasswd pwgen
       usbutils
       sysstat

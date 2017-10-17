@@ -216,7 +216,7 @@ sub setupAlsa{
     }
 }
 
-sub setupPulseaudio{
+sub restartPulseaudio{
     system("pulseaudio -k");
 }
 
@@ -250,7 +250,7 @@ sub setupBackgroundAndUI{
 
 setupX() if !$noXrandr;
 # setupAlsa(); # deprecated in favor of pulseaudio
-setupPulseaudio();
+# restartPulseaudio();
 setupWacom() if !$noXrandr; # needs `setupX()` to be run before the call here
 setupBacklight();
 setupBackgroundAndUI();

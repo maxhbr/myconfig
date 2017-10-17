@@ -9,7 +9,7 @@
 
   config = lib.mkIf config.myconfig.roles.vsftp.enable {
     networking.firewall.allowedTCPPorts = [ 9136 ];
-    # networking.firewall.allowedUDPPorts = [ 9136 ];
+    networking.firewall.allowedUDPPorts = [ 9136 ];
     services.vsftpd = {
       enable = true;
       userlist = [ "mhuber" ];

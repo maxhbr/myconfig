@@ -384,6 +384,8 @@ my_power_settings() {
 
 # alias repairDevNull="sudo rm -f /dev/null; sudo mknod -m 666 /dev/null c 1 3"
 
+alias dmesg="dmesg -T"
+
 #-------------------------------------------------------------------}}}
 #  docker 
 #-------------------------------------------------------------------{{{

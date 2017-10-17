@@ -1,3 +1,3 @@
 self: super: {
-  citrix_reciever = self.callPackage ../pkgs/citrix-receiver {};
+  citrix_reciever_13_7 = self.callPackage ../pkgs/citrix-receiver {};
 }

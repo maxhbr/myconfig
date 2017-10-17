@@ -350,7 +350,9 @@ myManageHook = (composeAll (foldMap (\(a,cs) -> map (\c -> className =? c --> a)
                                                ,"qemu"
                                                ,"qemu-system-x86_64"
                                                ,"feh"
-                                               ,"Zenity"])
+                                               ,"Zenity"
+                                               ,"pinentry"
+                                               ,"Pinentry"])
                              , (doFloat, ["MPlayer"
                                          ,"Onboard"])
                              , (doShift "web", ["Firefox"]) --["Chromium" ,"chromium-browser" ,"Firefox"]

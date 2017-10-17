@@ -22,6 +22,7 @@
     cob         = checkout -b
     f           = "!f() { git fetch ${1:-\"--all\"}; }; f"
 	  pom         = pull --rebase origin master
+	  pum         = pull --rebase upstream master
 
     d           = diff
     d0          = diff HEAD
@@ -109,6 +110,8 @@
                           || ( echo && echo \"possible refs:\" && git ls-remote $remote | grep \"/merge\"; ); \
                         }; f"
 
+	  changeAuthor = commit --amend --no-edit --author
+
     # git subtree:
     sba         = "!f() { git subtree add --prefix $2 $1 master --squash; }; f" 
     sbu         = "!f() { git subtree pull --prefix $2 $1 master --squash; }; f" 
@@ -122,7 +125,11 @@
     status = auto
 [core]
     autocrlf = input
-    safecrlf = false
+	safecrlf = false
+[pull]
+	rebase = true
+[rebase]
+	autoStash = true
 [push]
     default = matching
 [giggle]
