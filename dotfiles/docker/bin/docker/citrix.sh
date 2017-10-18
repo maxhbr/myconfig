@@ -6,20 +6,23 @@ doBuild=0
 TMP=/tmp/citrix_sh
 ICACLIENT="icaclient_13.7.0.10276927_amd64.deb"
 CFG=receiverconfig.cr
-while getopts "hbi:c:" opt; do
+CERTS_DIR=./certs
+while getopts "hbi:c:s:" opt; do
     case "$opt" in
     h) echo "usage"
        echo "  initial build (and run):"
-       echo "    \$ $0 -b [-i icaclient_..._amd64.deb]"
+       echo "    \$ $0 -b [-i path/to/icaclient_..._amd64.deb] [-c path/to/receiverconfig.cr] [-s path/to/certs]"
        echo "  run:"
        echo "    \$ $0"
        exit 1
         ;;
     b) doBuild=1
         ;;
-    f) ICACLIENT=$OPTARG
+    i) ICACLIENT=$OPTARG
         ;;
     c) CFG=$OPTARG
+       ;;
+    s) CERTS_DIR=$OPTARG
        ;;
     esac
 done
@@ -27,30 +30,21 @@ done
 ################################################################################
 cd $(dirname $0)
 mkdir -p $TMP
-if [[ ! -f $ICACLIENT ]]; then
-    echo "please download the icaclient as debian package"
-    exit 1
-fi
-if [[ ! -f $CFG ]]; then
-    echo "please get the receiverconfig and place it here"
-    exit 1
-fi
 
 docker="$(docker info &> /dev/null || echo "sudo") docker"
 
 dockerfile() {
     dockerfilePath=$TMP/dockerfile.generated
-    mkdir -p certs
     cat <<EOF > $dockerfilePath
 FROM ubuntu:zesty
 ENV DEBIAN_FRONTEND noninteractive
 
-ADD $ICACLIENT /tmp
+ADD $(basename $ICACLIENT) /tmp
 RUN set -x \
  && apt-get update -q \
- && dpkg -i /tmp/$ICACLIENT || apt-get install -fy -qq
+ && dpkg -i /tmp/$(basename $ICACLIENT) || apt-get install -fy -qq
 
-ADD certs/ /opt/Citrix/ICAClient/keystore/cacerts/
+ADD *.crt /opt/Citrix/ICAClient/keystore/cacerts/
 RUN /opt/Citrix/ICAClient/util/ctx_rehash
 
 RUN set -x \
@@ -58,8 +52,8 @@ RUN set -x \
 USER citrix
 WORKDIR /home/citrix
 
-ADD $CFG ./
-CMD /opt/Citrix/ICAClient/util/new_store $CFG
+ADD $(basename $CFG) ./
+CMD /opt/Citrix/ICAClient/util/new_store $(basename $CFG)
 EOF
     echo $dockerfilePath
 }
@@ -96,7 +90,20 @@ run() {
 }
 
 build() {
-    cp -r $CFG certs $ICACLIENT $TMP
+    if [[ ! -f $ICACLIENT ]]; then
+        echo "please download the icaclient as debian package"
+        exit 1
+    fi
+    if [[ ! -f $CFG ]]; then
+        echo "please get the receiverconfig"
+        exit 1
+    fi
+    if [[ ! -d $CERTS_DIR ]]; then
+        echo "please set the folder for certificates"
+        exit 1
+    fi
+
+    cp -r $CFG $CERTS_DIR/*.crt $ICACLIENT $TMP
 
     $docker build \
             $TMP \
