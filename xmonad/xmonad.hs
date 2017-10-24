@@ -92,6 +92,8 @@ import           XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall)
 import           XMonad.Layout.Spacing (spacing)
 import           XMonad.Layout.TwoPane (TwoPane(TwoPane))
 import           XMonad.Layout.IM -- (withIM)
+  
+import           XMonad.Layout.IfMax
 
 --------------------------------------------------------------------------------
 -- misc
@@ -289,14 +291,12 @@ myLayout = smartBorders $
            boringAuto $
            modWorkspaces [ "vbox", "media" ] (Full |||) $
            avoidStrutsOn[U,D] $
+           named "" $
            withIM (1%7) (Title "Tabs Outliner") $
            mkToggle (single FULL) $
            mkToggle (single MIRROR) $
-           full ||| dtb ||| tiled
-           -- (IfMax 1 full  (full ||| (IfMax 2 tiled (dtb ||| tiled))))
+           (IfMax 1 full  ((IfMax 2 tiled (tiled ||| dtb)) ||| full))
   where
-    -- full1080 = named "fixed=" $
-    --            ifWider 1920 (gaps [(L,320),(U,180),(R,320),(D,180)] Full) Full
     baseSpacing = 10
     wqhdSpacing = 20
     wqhdGapping = (2560 - 1920) `div` 2 - wqhdSpacing + baseSpacing
@@ -307,29 +307,12 @@ myLayout = smartBorders $
                 ifWider 1920 (gaps [(L,wqhdGapping), (R,wqhdGapping)] Full) Full
     tiled     = named " " $
                 minimize $
-                -- addTabs shrinkText myTab $
                 mySpacing $
-                -- subLayout [] Simplest $
                 ResizableTall 1 (3/100) (1/2) []
-    -- dtb     = named "%" $
-    --     mySpacing $
-    --     mastered (1/100) (1/2) $
-    --     gaps [(D,10)] $
-    --     tabbedBottom shrinkText myTab
     dtb       = named "%" $
                 minimize $
                 mySpacing $
                 TwoPane (3/100) (1/2)
-    --options:
-    -- myTab     = def { activeColor         = "black"
-    --                 , inactiveColor       = "black"
-    --                 , urgentColor         = "yellow"
-    --                 , activeBorderColor   = "orange"
-    --                 , inactiveBorderColor = "#333333"
-    --                 , urgentBorderColor   = "black"
-    --                 , activeTextColor     = "orange"
-    --                 , inactiveTextColor   = "#666666"
-    --                 , decoHeight          = 14 }
 
 ------------------------------------------------------------------------
 -- Window rules:

@@ -34,6 +34,7 @@ in {
           xdotool
         # gui applications
           chromium firefox-unwrapped qutebrowser
+          google-chrome # for streaming and music
         # spellchecking
           aspell aspellDicts.de aspellDicts.en
         # misc

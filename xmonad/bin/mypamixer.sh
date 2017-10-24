@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-#stolen from: https://raw.githubusercontent.com/hallettj/dot-xmonad/master/home/bin/volume
+# stolen from: https://raw.githubusercontent.com/hallettj/dot-xmonad/master/home/bin/volume
+set -e
 
 change=$1
 cmd=${0##*/}
