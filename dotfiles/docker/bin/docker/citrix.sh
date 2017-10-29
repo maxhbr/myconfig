@@ -68,7 +68,7 @@ removeContainer() {
     set -e
 }
 
-run() {
+runCitrixWithName() {
     name=$1
 
     removeContainer $name
@@ -112,7 +112,7 @@ build() {
             --rm=true \
             --force-rm=true
 
-    run citrix-intermediate
+    runCitrixWithName citrix-intermediate
     $docker commit \
             --change "CMD /opt/Citrix/ICAClient/selfservice" \
             $($docker inspect --format="{{.Id}}" citrix-intermediate) \
@@ -122,4 +122,4 @@ build() {
 
 ################################################################################
 [[ $doBuild == 1 ]] && build
-run citrix
+runCitrixWithName citrix

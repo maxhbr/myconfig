@@ -27,7 +27,11 @@ else
 fi
 # see: http://zsh.sourceforge.net/Doc/Release/Prompt-Expansion.html
 PROMPT='%T ${ret_status}%?%{$reset_color%} $(git_prompt_info)%{$fg[cyan]%}%c%{$reset_color%} '
+if [ $IN_NIX_SHELL ]; then
+    PROMPT='%{$fg[red]%}nix-shell%{$reset_color%} '"$PROMPT"
+fi
 RPROMPT='%{$fg[cyan]%}%~%{$reset_color%}'
+
 # RPROMPT=' [%L]'
 
 ###############################################################################
@@ -66,17 +70,12 @@ bindkey '^w' backward-kill-word
 ###############################################################################
 ZDOTDIR=${ZDOTDIR:-${HOME}}
 ZSHDDIR="${HOME}/.config/zsh.d"
-#HISTFILE="${ZDOTDIR}/.zsh_history"
 HISTSIZE=50000
 SAVEHIST="${HISTSIZE}"
-# export EDITOR="/usr/bin/vim"
-# export EDITOR="vim"
-# export VISUAL="vim -p -X"
 export TMP="/tmp"
 export TEMP="$TMP"
 export TMPDIR="$TMP"
 export TMPPREFIX="${TMPDIR}/zsh"
-## Use a default width of 80 for manpages for more convenient reading
 export MANWIDTH=${MANWIDTH:-80}
 
 ###############################################################################
@@ -95,9 +94,11 @@ alias -s ps=zathura
 alias -s djvu=zathura
 
 ###############################################################################
-[[ -f ~/.zshrc.private ]] && source ~/.zshrc.private
-# [[ -d /nix/store/k1v2g5784sas2fc9fp6flq50fvsck5w7-taskwarrior-2.5.1/share/doc/task/scripts/zsh/ ]] &&
-#     fpath=(/nix/store/k1v2g5784sas2fc9fp6flq50fvsck5w7-taskwarrior-2.5.1/share/doc/task/scripts/zsh/ $fpath)
+if [ ! $IN_NIX_SHELL ]; then
+    [[ -f ~/.zshrc.private ]] && source ~/.zshrc.private
+    # [[ -d /nix/store/k1v2g5784sas2fc9fp6flq50fvsck5w7-taskwarrior-2.5.1/share/doc/task/scripts/zsh/ ]] &&
+    #     fpath=(/nix/store/k1v2g5784sas2fc9fp6flq50fvsck5w7-taskwarrior-2.5.1/share/doc/task/scripts/zsh/ $fpath)
+fi
 
 ###############################################################################
 # Start tmux on ssh
