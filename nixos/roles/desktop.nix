@@ -1,7 +1,5 @@
 { config, lib, pkgs, ... }:
-let
-  unstable = (import <unstable> {});
-in {
+{
   options = {
     myconfig.roles.desktop = {
       enable = lib.mkEnableOption "Desktop environment";
@@ -99,8 +97,10 @@ in {
           xss-lock
           libnotify # xfce.xfce4notifyd # notify-osd
           wmctrl
-        ]) ++ (with unstable.haskellPackages; [
-          xmonad xmobar yeganesh
+        ]) ++ (with pkgs.haskellPackages; [
+          xmobar
+        ]) ++ (with pkgs.unstable.haskellPackages; [
+          xmonad yeganesh
         ]);
 
         system.activationScripts.cleanupXmonadState =

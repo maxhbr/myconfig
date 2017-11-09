@@ -22,6 +22,7 @@
       config = lib.mkIf config.myconfig.roles.virtualization-docker.enable {
         environment.systemPackages = with pkgs; [
           docker
+          docker-machine
           # docker-gc
           python35Packages.docker_compose
         ];
@@ -40,6 +41,7 @@
           vagrant
         ];
         virtualisation.virtualbox.host.enable = true;
+        # virtualisation.virtualbox.host.headless = true;
       };
     }
 ################################################################################

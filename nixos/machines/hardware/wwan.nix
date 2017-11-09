@@ -1,8 +1,5 @@
 { config, pkgs, ... }:
-
-let
-  unstable = (import <unstable> {});
-in {
+{
   environment.systemPackages = with pkgs; [
     libqmi
     libmbim

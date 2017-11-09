@@ -1,10 +1,6 @@
 { config, pkgs, lib, ... }:
 
-let
-  unstable = (import <unstable> {
-    config = {allowUnfree = true;};
-  });
-in {
+{
   imports = [
     ./mhuber.nix
     ./oh-my-zsh.nix
@@ -38,26 +34,26 @@ in {
       kbd
       # core:
       wget curl
-      git git-lfs
+      unstable.git unstable.git-lfs
       unzip
-      nox
+      unstable.nox
       tree
       stow
       rlwrap
       # cli:
       ranger
-      emacs vim
-      elinks w3m
-      tmux
+      unstable.emacs unstable.vim
+      unstable.elinks unstable.w3m
+      unstable.tmux
       manpages
       taskwarrior
       pass
-      ag
+      unstable.ag
       file
       # admin:
-      htop iftop iptraf-ng iotop bmon
-      mtr bind bridge-utils
-      mkpasswd pwgen
+      unstable.htop unstable.iftop unstable.iptraf-ng unstable.iotop unstable.bmon
+      unstable.mtr  unstable.bind bridge-utils
+      unstable.mkpasswd unstable.pwgen
       usbutils
       sysstat
       tcpdump
@@ -77,14 +73,13 @@ in {
     readOnlyStore = true;
 
     binaryCachePublicKeys = [
-       "hydra.cryp.to-1:8g6Hxvnp/O//5Q1bjjMTd5RO8ztTsG8DKPOAg9ANr2g=" # crypt.to
        "hydra.snabb.co-1:zPzKSJ1mynGtYEVbUR0QVZf9TLcaygz/OyzHlWo5AMM=" # snabb.co
     ];
     trustedBinaryCaches = [
-      "https://cache.nixos.org" "https://hydra.snabb.co" "http://hydra.cryp.to/"
+      "https://cache.nixos.org" "https://hydra.snabb.co"
     ];
     binaryCaches = [
-      "https://cache.nixos.org" "https://hydra.snabb.co" "http://hydra.cryp.to/"
+      "https://cache.nixos.org" "https://hydra.snabb.co"
     ];
 
     extraOptions = ''
@@ -109,7 +104,7 @@ in {
       enable = true;
       install = true;
       defaultEditor = true;
-      package = unstable.emacs;
+      package = pkgs.unstable.emacs;
       # package = import /home/mhuber/.emacs.d { pkgs = pkgs; };
     };
   };

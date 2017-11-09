@@ -26,9 +26,6 @@ let
     inherit (unstable) mutt-with-sidebar alot;
     inherit (unstable) weechat;
 
-    # inherit (unstable) citrix_receiver;
-    # citrix_receiver = callPackage pkgs/citrix-receiver {};
-
     idea-ultimate = callPackage ./pkgs/idea {};
 
     premake5 = callPackage pkgs/premake5 {};
