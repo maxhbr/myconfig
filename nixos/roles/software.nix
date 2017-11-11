@@ -58,22 +58,22 @@ in {
 ################################################################################
     { # work
       config = lib.mkIf config.myconfig.roles.work.enable {
-        # nixpkgs.overlays =
-        #   [(self: super: 
-        #     let
-        #       version = "0.9.3";
-        #       name = "thrift-${version}";
-        #     in {
-        #       thrift93 = super.thrift.overrideAttrs ( oldAttrs: {
-        #         version = version;
-        #         name = name;
+        nixpkgs.overlays =
+          [(self: super: 
+            let
+              version = "0.9.3";
+              name = "thrift-${version}";
+            in {
+              thrift93 = super.thrift.overrideAttrs ( oldAttrs: {
+                version = version;
+                name = name;
             
-        #         src = self.fetchurl {
-        #           url = "http://archive.apache.org/dist/thrift/${version}/${name}.tar.gz";
-        #           sha256 = "17lnchan9q3qdg222rgjjai6819j9k755s239phdv6n0183hlx5h";
-        #         };
-        #       });
-        #     })];
+                src = self.fetchurl {
+                  url = "http://archive.apache.org/dist/thrift/${version}/${name}.tar.gz";
+                  sha256 = "17lnchan9q3qdg222rgjjai6819j9k755s239phdv6n0183hlx5h";
+                };
+              });
+            })];
         environment.systemPackages = with pkgs; [
           openvpn networkmanager_openvpn
           rdesktop
@@ -82,7 +82,7 @@ in {
           libreoffice
           hipchat
           p7zip
-          # thrift93
+          thrift93
         ];
       };
     }

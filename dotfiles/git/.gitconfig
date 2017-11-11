@@ -3,6 +3,8 @@
     name = maximilianhuber
     email = mail@maximilian-huber.de
     signingkey = 32CA3654
+[core]
+	  logAllRefUpdates = always
 [alias]
     s           = status
     s           = status --short --branch
