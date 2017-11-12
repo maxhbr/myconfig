@@ -55,7 +55,7 @@
                 theme = ../static/slim-theme;
               };
               sessionCommands = ''
-                ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name left_ptr
+                ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name ${pkgs.vanilla-dmz}/share/icons/Vanilla-DMZ/cursors/left_ptr 32
                 if test -e $HOME/.Xresources; then
                   ${pkgs.xorg.xrdb}/bin/xrdb --merge $HOME/.Xresources
                 fi
@@ -91,17 +91,20 @@
     { # xmonad
       config = lib.mkIf (config.myconfig.roles.desktop.enable && config.myconfig.roles.xmonad.enable) {
         # myconfig.roles.desktop.enable = true;
-        environment.systemPackages = (with pkgs; [
-          unstable.dmenu unstable.dzen2
-           unclutter
-          xss-lock
-          libnotify # xfce.xfce4notifyd # notify-osd
-          wmctrl
-        ]) ++ (with pkgs.haskellPackages; [
-          xmobar
-        ]) ++ (with pkgs.unstable.haskellPackages; [
-          xmonad yeganesh
-        ]);
+        environment.systemPackages = let
+            find-cursor = pkgs.callPackage ../../nix/pkgs/find-cursor {};
+          in (with pkgs; [
+              unstable.dmenu unstable.dzen2
+              unclutter
+              xss-lock
+              libnotify # xfce.xfce4notifyd # notify-osd
+              wmctrl
+              find-cursor
+            ]) ++ (with pkgs.haskellPackages; [
+              xmobar
+            ]) ++ (with pkgs.unstable.haskellPackages; [
+              xmonad yeganesh
+            ]);
 
         system.activationScripts.cleanupXmonadState =
         ''

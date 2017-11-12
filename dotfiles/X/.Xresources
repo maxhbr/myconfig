@@ -1,6 +1,6 @@
 ! ~/.Xresources
-Xcursor.size:  16
-Xcursor.theme: Vanilla-DMZ-AA
+! Xcursor.size: 64
+! Xcursor.theme: Vanilla-DMZ-AA
 
 *utf8: 1
 
