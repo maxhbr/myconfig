@@ -28,17 +28,22 @@ function current_volume {
   local sink="$1"
   # From https://unix.stackexchange.com/a/230533
   sinks="$(pactl list sinks)"
-  echo "$sinks" | grep -q "Stumm: ja"
-  muted=$?
-  # if ;then
-  if [ $muted -eq 0 ]; then
-      echo -n "("
+  mute=false
+  if echo "$sinks" \
+          | grep "Mute:\|Stumm:" \
+          | head -n $(( $sink + 1 )) \
+          | tail -n 1 \
+          | grep -q "Mute: yes\|Stumm: ja"; then
+      mute=true
   fi
-  echo -n "$(echo "$sinks" | grep '^[[:space:]]Volume:\|^[[:space:]]Lautstärke:' | \
-      head -n $(( $sink + 1 )) | tail -n 1 | sed -e 's,.* \([0-9][0-9]*\)%.*,\1,')"
-  if [ $muted -eq 0 ]; then
-      echo -n ")"
-  fi
+
+  [[ "$mute" = true ]] && echo -n "("
+  echo -n "$(echo "$sinks" \
+                 | grep '^[[:space:]]Volume:\|^[[:space:]]Lautstärke:' \
+                 | head -n $(( $sink + 1 )) \
+                 | tail -n 1 \
+                 | sed -e 's,.* \([0-9][0-9]*\)%.*,\1,')"
+  [[ "$mute" = true ]] && echo -n ")"
 }
 
 SINK=$(running_sink)

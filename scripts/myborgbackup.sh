@@ -60,10 +60,10 @@ have() { type "$1" &> /dev/null; }
 
 myMountBackupHDD() {
     set -x
-    echo "0 0 0" | sudo tee /sys/class/scsi_host/host*/scan || continue
+    echo "0 0 0" | sudo tee /sys/class/scsi_host/host*/scan || true
     sleep 1
     sudo sudo mkdir -p $backupmount
-    sudo umount /dev/disk/by-uuid/$UUID || continue
+    sudo umount /dev/disk/by-uuid/$UUID || true
     sudo mount /dev/disk/by-uuid/$UUID $backupmount
     sudo mkdir -p "$backupdir"
     sudo chown -c $USER "$backupdir"

@@ -6,23 +6,22 @@
 [core]
 	  logAllRefUpdates = always
 [alias]
-    s           = status
     s           = status --short --branch
+	  b           = branch -vv
     a           = add
     c           = commit
-    cm          = commit -m
+    cf          = commit --fixup
+		cm          = commit -m
     chunk       = commit --patch
     chunkammend = commit --patch --amend
     cma         = commit -am
+    cfa         = commit -a --fixup
     ca          = commit --amend
     caa         = commit --amend -a
     cac         = commit --patch --amend
     co          = checkout
-    # col         = "!f() { \
-    #                     git checkout -b $2 $1/$2; \
-    #                   }; f"
     cob         = checkout -b
-    f           = "!f() { git fetch ${1:-\"--all\"}; }; f"
+	  f           = "!f() { git fetch ${1:-\"--all\"}; }; f"
 	  pom         = pull --rebase origin master
 	  pum         = pull --rebase upstream master
 
@@ -49,11 +48,11 @@
     sortdiff    = !sh -c 'git diff "$@" | grep "^[+-]" | sort --key=1.2 | uniq -u -s1'
     
 
-    ri          = rebase --interactive
+    ri          = rebase --autosquash --interactive
     rc          = rebase --continue
     ra          = rebase --abort
-    rMaster     = rebase --interactive master
-    rAncestor   = "!f() { git rebase -i $(git merge-base ${1:-master} HEAD); }; f"
+    rMaster     = rebase --autosquash --interactive master
+    rAncestor   = "!f() { git rebase --autosquash --interactive $(git merge-base ${1:-master} HEAD); }; f"
     rsAncestor  = "!f() { git reset --soft $(git merge-base master HEAD); }; f"
 
 
@@ -63,6 +62,7 @@
     mt          = mergetool --no-prompt
     l           = log
     lg          = log --oneline
+    sinit       = submodule init
     sup         = submodule update
     sdiff       = "!git diff && git submodule foreach 'git diff'"
     spush       = push --recurse-submodules=on-demand

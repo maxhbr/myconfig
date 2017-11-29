@@ -203,8 +203,7 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
           , ((ms_, xK_Right), shiftPrevScreen)
           , ((m__, xK_Right), prevScreen)
           , ((m__, xK_y    ), toggleWS' ["NSP"])
-          , ((m__, xK_a    ), toggleWS' ["NSP"])]
-        -- combineTwoKBs =
+          , ((m__, xK_a    ), toggleWS' ["NSP"])] -- combineTwoKBs =
         --   [((msc, xK_l ), sendMessage $ Move L)]
         -- subLayoutKBs =
         --   map (\(k,v) -> ((m_c, k), sendMessage $ pullGroup v))
@@ -242,7 +241,7 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
 -- pulseaudio
           map (\(k,args) -> ((const 0, k)
                          , runProcessWithInput "/home/mhuber/.xmonad/bin/mypamixer.sh" args ""
-                           >>= myDefaultPopup . ("Vol: " ++)
+                           >>= myDefaultPopup . ("V: " ++)
                          ))
             [ (0x1008ff12, ["mute"])
             , (0x1008ff11, ["-10%"])
@@ -384,7 +383,7 @@ myLogHook xmproc = let
 
 maincolor = "#ee9a00" :: String
 myConfig xmproc = withUrgencyHook myUrgencyHook $
-  def { terminal             = "urxvtc"
+  def { terminal           = "urxvtc"
       , focusFollowsMouse  = False -- see: focusFollow
       , borderWidth        = 3
       -- , modMask            = mod4Mask

@@ -4,7 +4,8 @@
   (interactive)
   (switch-to-buffer (other-buffer (current-buffer) 1)))
                                         ; TODO: if (other-buffer (current-buffer) 1) = buffer-menu
-(evil-leader/set-key "," 'switch-to-previous-buffer)
+(evil-leader/set-key "," 'switch-to-previous-buffer
+                     "dt" 'delete-trailing-whitespace)
 
 (defun my-window-killer ()
   "closes the window, and deletes the buffer if it's the last window open."

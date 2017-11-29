@@ -316,6 +316,18 @@ countFilesByTypes() {
     | sort  -rn
 }
 
+finddupes() {
+  # from: http://www.commandlinefu.com/commands/view/3555/find-duplicate-files-based-on-size-first-then-md5-hash 
+  find -not -empty -type f -printf "%s\n" \
+    | sort -rn \
+    | uniq -d \
+    | xargs -I{} -n1 find -type f -size {}c -print0 \
+    | xargs -0 md5sum \
+    | sort \
+    | uniq -w32 --all-repeated=separatae \
+    | cut -d' ' -f2-
+}
+
 #-------------------------------------------------------------------}}}
 #   system control
 #-------------------------------------------------------------------{{{
@@ -739,7 +751,7 @@ getCert() {
 #   misc
 #-------------------------------------------------------------------{{{
 
-alias steam="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam --command \"optirun steam\" &disown"
+alias steam="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam --command \"optirun steam\""
 
 touchpadtoggle(){
   xdotool mousemove 0 0
