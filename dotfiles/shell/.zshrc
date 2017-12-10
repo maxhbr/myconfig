@@ -7,6 +7,9 @@ if [ -z $ZSH ]; then
     export ZSH="$HOME/.oh-my-zsh"
 fi
 
+mkdir -p ~/.oh-my-zsh-cache
+export ZSH_CACHE_DIR=~/.oh-my-zsh-cache
+
 if [ -d $ZSH ]; then
     ZSH_THEME="robbyrussell" # gallifrey
     # DISABLE_AUTO_UPDATE="true"

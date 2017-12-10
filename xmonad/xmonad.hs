@@ -128,7 +128,7 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       , ((m__, xK_q     ), spawn "xmonad --recompile && sleep 0.1 && xmonad --restart")
       , ((msc, xK_q     ), io exitSuccess)
       , ((m__, xK_p     ), spawn "`dmenu_path | yeganesh`")
-      , ((m__, xK_x     ), shellPrompt defaultXPConfig)
+      -- , ((m__, xK_x     ), shellPrompt defaultXPConfig)
 
 
       , ((ms_, xK_c     ), kill)

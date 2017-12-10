@@ -40,10 +40,10 @@ exec &> >(tee -a $logfile)
 set -e
 
 # check, if connected #####################################################
-if ! ping -c1 cloud.github.com > /dev/null 2>&1; then
+if ! ping -c1 heise.de > /dev/null 2>&1; then
   echo "**** not connected (ping) ****"
   # check again ###########################################################
-  if ! wget -O - cloud.github.com > /dev/null 2>&1; then
+  if ! wget -O - heise.de > /dev/null 2>&1; then
     echo "**** not connected (wget) ****"
     exit 1
   fi

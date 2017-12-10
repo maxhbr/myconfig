@@ -336,7 +336,9 @@ explicitly specified that a variable should be set before a package is loaded,
 you should place your code here."
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  ;; export code as listings
+  ;; org: https://stackoverflow.com/questions/11670654/how-to-resize-images-in-org-mode
+  (setq org-image-actual-width nil)
+  ;; org: export code as listings
   (setq org-latex-listings  t)
   (require 'ox-latex)
   (add-to-list 'org-latex-packages-alist '("" "listings"))

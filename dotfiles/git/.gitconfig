@@ -24,6 +24,7 @@
 	  f           = "!f() { git fetch ${1:-\"--all\"}; }; f"
 	  pom         = pull --rebase origin master
 	  pum         = pull --rebase upstream master
+	  cp          = cherry-pick
 
     d           = diff
     d0          = diff HEAD
