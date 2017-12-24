@@ -285,7 +285,7 @@ myMouseBindings XConfig {XMonad.modMask = modm} = M.fromList
 
 ------------------------------------------------------------------------
 -- Layouts / workspaces:
-myWorkspaces = map show [1..7] ++ ("web" : map show [9..15]) ++ ["vbox", "media"]
+myWorkspaces = map show [1..7] ++ ("web" : map show [9..10]) ++ ["vbox", "media"]
 
 myLayout = smartBorders $
            boringAuto $
