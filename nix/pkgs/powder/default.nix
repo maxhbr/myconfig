@@ -8,7 +8,7 @@ stdenv.mkDerivation {
     sha256 = "070346921ee83bc40943b1e1cb576ab3222cecc319fe10f5c138a4deec85e861";
   };
 
-  buildInputs = [ pkgs.SDL ];
+  buildInputs = [ pkgs.SDL pkgs.gcc5 ];
 
   buildPhase = ''
     patchShebangs .
