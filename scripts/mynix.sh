@@ -4,9 +4,15 @@
 # - https://github.com/sigma/docker-mynix/
 set -e
 
-createTGZ() {
-    set -x
+log() {
+    echo "#####################################################################"
+    echo "#####################################################################"
+    echo "#### $@"
+    echo "#####################################################################"
+    echo "#####################################################################"
+}
 
+createTGZ() {
     # create target nix location
     mkdir -p ${NIX_NEW_HOME}/overlays
     mkdir -p ${NIX_NEW_HOME}/store
@@ -20,19 +26,29 @@ self: super:
         storeDir = "${NIX_NEW_HOME}/store";
         stateDir = "${NIX_NEW_HOME}/var";
     };
+
+    libmpc = super.libmpc.overrideDerivation (oldAttrs: {
+        src = super.fetchurl {
+            url = "http://ftp.nluug.nl/gnu/mpc/mpc-1.0.3.tar.gz";
+            sha256 = "1hzci2zrrd7v3g1jk35qindq05hbl0bhjcyyisq9z209xb3fqzb1";
+        };
+    });
 }
 EOF
 
     # make sure we have the latest nix. In particular we want overlays (in nix 1.11.8+)
+    log update nix
     nix-channel --update && nix-env -u -j $(nproc)
 
     mkdir -p ${HOME}/.config/nixpkgs/
     ln -s ${NIX_NEW_HOME}/overlays ${HOME}/.config/nixpkgs/overlays
 
     # create a nix version that targets the custom location
+    log Stage 1
     nix-env -i nix nss-cacert -j $(nproc)
 
     # create a nix version that also *lives* in the custom location
+    log Stage 2
     nix-env -i nix nss-cacert -j $(nproc)
 
     # find the user-environment that just got created
@@ -83,7 +99,7 @@ if [ "$1" == "createTGZ" ]; then
     createTGZ
 else
     createContainer
-    runContainer
+    time runContainer
     if [ "$1" == "boostrap" ]; then
         bootstrap
     fi

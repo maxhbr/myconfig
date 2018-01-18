@@ -297,6 +297,9 @@ exl() {
         # *.7z) 7z x $file ;;
         # *.jar) unzip $file ;;
         # *.deb) ar xv $file ;;
+        *.jar) unzip -l $file ;;
+        *.war) unzip -l $file ;;
+        *.ear) unzip -l $file ;;
         *)
           echo "'$file' cannot be listed via exl(), more info:"
           file $file
@@ -750,6 +753,10 @@ getCert() {
 #-------------------------------------------------------------------}}}
 #   misc
 #-------------------------------------------------------------------{{{
+
+meld() {
+  command meld "$@" &disown
+}
 
 alias steam="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam --command \"optirun steam\""
 

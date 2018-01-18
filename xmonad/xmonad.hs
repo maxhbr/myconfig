@@ -26,7 +26,6 @@
 -- Imports:
 import           Data.Foldable (foldMap)
 import           Data.Ratio ((%))
-import           System.Process
 import           System.Exit ( exitSuccess )
 import           System.IO ( hPutStrLn )
 import           XMonad
@@ -34,13 +33,10 @@ import           Graphics.X11.ExtraTypes.XF86()
 
 --------------------------------------------------------------------------------
 -- Prompt
-import           XMonad.Prompt ( defaultXPConfig )
-import           XMonad.Prompt.Shell ( shellPrompt )
 
 --------------------------------------------------------------------------------
 -- Hooks
 import           XMonad.Hooks.DynamicLog ( dynamicLogWithPP
-                                         , xmobarPP
                                          , PP(..)
                                          , xmobarColor
                                          , wrap )
@@ -92,7 +88,7 @@ import           XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall)
 import           XMonad.Layout.Spacing (spacing)
 import           XMonad.Layout.TwoPane (TwoPane(TwoPane))
 import           XMonad.Layout.IM -- (withIM)
-  
+
 import           XMonad.Layout.IfMax
 
 --------------------------------------------------------------------------------
@@ -335,7 +331,8 @@ myManageHook = (composeAll (foldMap (\(a,cs) -> map (\c -> className =? c --> a)
                                                ,"feh"
                                                ,"Zenity"
                                                ,"pinentry"
-                                               ,"Pinentry"])
+                                               ,"Pinentry"
+                                               ,"zoom"])
                              , (doFloat, ["MPlayer"
                                          ,"Onboard"])
                              , (doShift "web", ["Firefox"]) --["Chromium" ,"chromium-browser" ,"Firefox"]
