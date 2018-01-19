@@ -119,8 +119,11 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
     basicKBs =
       [ ((ms_            , xK_Return), spawn $ XMonad.terminal conf)
       , ((msc, xK_Return), spawn "urxvtd -q -f -o &")
-      -- , ((m__, xK_Return), windows W.swapMaster)
+#if 1
       , ((m4m, xK_Return), windows W.swapMaster)
+#else
+      , ((m__, xK_Return), windows W.swapMaster)
+#endif
       , ((m__, xK_q     ), spawn "xmonad --recompile && sleep 0.1 && xmonad --restart")
       , ((msc, xK_q     ), io exitSuccess)
       , ((m__, xK_p     ), spawn "`dmenu_path | yeganesh`")
@@ -177,11 +180,11 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
 
       , ((m__, xK_b     ), sendMessage ToggleStruts)]
       ++ cycleWSKBs
-      ++ (map (\(a,b) -> (a,b >> popupCurDesktop))
+      ++ map (\(a,b) -> (a,b >> popupCurDesktop))
            [ ((m__, xK_i), runOrRaiseNext "firefox" (className =? "Firefox" <||> className =?  "chromium-browser" <||> className =? "Chromium-browser"))
            , ((m__, 0xfc), runOrRaiseNext "~/bin/ec" (className =? "Emacs"))
            , ((m__, 0xf6), raiseNext (className =? "jetbrains-phpstorm" <||> className =? "jetbrains-idea"))
-           ])
+           ]
       -- ++ combineTwoKBs
       -- ++ subLayoutKBs
       where
@@ -190,16 +193,20 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
           , ((m__, xK_Up   ), moveTo Prev NonEmptyWS) -- HiddenNonEmptyWS
           , ((ms_, xK_Down ), shiftToNext >> nextWS)
           , ((ms_, xK_Up   ), shiftToPrev >> prevWS)
-          -- , ((m__, xK_Right), nextScreen)
-          -- , ((m__, xK_Left ), prevScreen)
-          -- , ((ms_, xK_Right), shiftNextScreen)
-          -- , ((ms_, xK_Left ), shiftPrevScreen)
+#if 1
           , ((m__, xK_Left ), nextScreen)
+          , ((m__, xK_Right), prevScreen)
           , ((ms_, xK_Left ), shiftNextScreen)
           , ((ms_, xK_Right), shiftPrevScreen)
-          , ((m__, xK_Right), prevScreen)
+#else
+          , ((m__, xK_Right), nextScreen)
+          , ((m__, xK_Left ), prevScreen)
+          , ((ms_, xK_Right), shiftNextScreen)
+          , ((ms_, xK_Left ), shiftPrevScreen)
+#endif
           , ((m__, xK_y    ), toggleWS' ["NSP"])
-          , ((m__, xK_a    ), toggleWS' ["NSP"])] -- combineTwoKBs =
+          , ((m__, xK_a    ), toggleWS' ["NSP"])]
+        -- combineTwoKBs =
         --   [((msc, xK_l ), sendMessage $ Move L)]
         -- subLayoutKBs =
         --   map (\(k,v) -> ((m_c, k), sendMessage $ pullGroup v))
@@ -215,17 +222,23 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       [ ((const 0,   0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
       , ((m__, xK_s      ), spawn "find-cursor")
       , ((ms_, xK_s      ), spawn "xdotool mousemove 0 0; synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
-      , ((ms_, xK_z      ), spawn "~/bin/myautosetup.pl") -- auto
-      , ((msc, xK_z      ), spawn "~/bin/myautosetup.pl --rotate=left --primOutNr=1") -- auto
-      -- , ((ms_, xK_y      ), spawn "slimlock") -- screenlocker
+      , ((ms_, xK_z      ), spawn "~/bin/myautosetup.pl")
+      , ((msc, xK_z      ), spawn "~/bin/myautosetup.pl --rotate=left --primOutNr=1")
+#if 1
       , ((ms_, xK_y      ), spawn "xset s activate") -- screenlocker
+#else
+      , ((ms_, xK_y      ), spawn "slimlock") -- screenlocker
+#endif
 
+#if 1
       -- invert Colors (does not work with retdshift)
-      -- alternative command:  "xcalib -i -a"
       , ((m__,  xK_Home   ), spawn "xrandr-invert-colors")
+#else
+      , ((m__,  xK_Home   ), spawn "xcalib -i -a")
+#endif
 
-      , ((m__,  xK_Print  ), spawn "scrot ~/screen_%Y-%m-%d_%H-%M-%S.png -d 1") -- screenshot
-      , ((ms_,  xK_Print  ), spawn "~/bin/screenshot.sh") -- or: "bash -c \"import -frame ~/screen_`date +%Y-%m-%d_%H-%M-%S`.png\"")
+      , ((m__,  xK_Print  ), spawn "~/bin/screenshot.sh") -- or: "bash -c \"import -frame ~/screen_`date +%Y-%m-%d_%H-%M-%S`.png\"")
+      , ((ms_,  xK_Print  ), spawn "scrot ~/screen_%Y-%m-%d_%H-%M-%S.png -d 1") -- screenshot
 
       -- keyboard layouts
       , ((m__,  xK_F2     ), spawn "feh ~/.xmonad/neo/neo_Ebenen_1_2_3_4.png")
@@ -291,7 +304,7 @@ myLayout = smartBorders $
            withIM (1%7) (Title "Tabs Outliner") $
            mkToggle (single FULL) $
            mkToggle (single MIRROR) $
-           (IfMax 1 full  ((IfMax 2 tiled (tiled ||| dtb)) ||| full))
+           IfMax 1 full  (IfMax 2 tiled (tiled ||| dtb) ||| full)
   where
     baseSpacing = 10
     wqhdSpacing = 20
@@ -326,18 +339,17 @@ myLayout = smartBorders $
 --
 myManageHook = (composeAll (foldMap (\(a,cs) -> map (\c -> className =? c --> a) cs)
                              [ (doCenterFloat, ["Xmessage"
-                                               ,"qemu"
-                                               ,"qemu-system-x86_64"
+                                               ,"qemu","qemu-system-x86_64"
                                                ,"feh"
                                                ,"Zenity"
-                                               ,"pinentry"
-                                               ,"Pinentry"
+                                               ,"pinentry","Pinentry"
                                                ,"zoom"])
                              , (doFloat, ["MPlayer"
                                          ,"Onboard"])
-                             , (doShift "web", ["Firefox"]) --["Chromium" ,"chromium-browser" ,"Firefox"]
-                             , (doShift "vbox", ["Virtualbox"
-                                                ,"VirtualBox"])
+                             , (doShift "web", ["Firefox"
+                                               ,"Chromium","chromium-browser"
+                                               ,"franz","Franz"])
+                             , (doShift "vbox", ["Virtualbox","VirtualBox"])
                              , (doShift "media", ["Steam"])
                              , (doIgnore, ["desktop_window"
                                           ,"kdesktop"]) ]))
@@ -359,7 +371,7 @@ myEventHook = fullscreenEventHook
 myStartupHook :: X ()
 myStartupHook = do
   setWMName "LG3D"
-  spawn "killall unclutter; unclutter"
+  spawn "pkill unclutter; unclutter"
   spawn "xset s 900"
   spawn "xss-lock -- slimlock"
 

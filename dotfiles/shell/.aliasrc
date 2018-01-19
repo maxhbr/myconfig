@@ -758,6 +758,10 @@ meld() {
   command meld "$@" &disown
 }
 
+Franz() {
+  command Franz "$@" &disown
+}
+
 alias steam="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam --command \"optirun steam\""
 
 touchpadtoggle(){

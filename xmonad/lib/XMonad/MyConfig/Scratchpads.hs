@@ -10,7 +10,7 @@ import           XMonad.Util.NamedScratchpad ( NamedScratchpad(..)
                                              , namedScratchpadAction
                                              , namedScratchpadFilterOutWorkspace
                                              , namedScratchpadManageHook )
-import           XMonad.Hooks.DynamicLog ( defaultPP, PP(..))
+import           XMonad.Hooks.DynamicLog ( def, PP(..))
 import qualified XMonad.StackSet             as W
 
 import XMonad.MyConfig.Common
@@ -53,4 +53,4 @@ scratchpadKBs =
 
 scratchpadHook = namedScratchpadManageHook scratchpads
 
-scratchpadPPSort = (. namedScratchpadFilterOutWorkspace) <$> ppSort defaultPP
+scratchpadPPSort = (. namedScratchpadFilterOutWorkspace) <$> ppSort def

@@ -1,3 +1,3 @@
 self: super: {
-  powder = self.callPackage ../pkgs/powder {};
+  powder = super.callPackage ../pkgs/powder {};
 }

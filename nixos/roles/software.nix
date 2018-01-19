@@ -1,36 +1,36 @@
 { config, lib, pkgs, ... }:
 
 let
-  myclojureenv = pkgs.myEnvFun {
-    name = "clojur";
-    buildInputs = with pkgs; [
-      leiningen clojure
-    ];
-  };
-  mypythonenv = pkgs.myEnvFun {
-    name = "python";
-    buildInputs = with pkgs; [
-      python python3 python35Packages.bpython
-    ];
-  };
-  myrubyenv = pkgs.myEnvFun {
-    name = "ruby";
-    buildInputs = with pkgs; [
-      ruby
-    ];
-  };
-  myschemeenv = pkgs.myEnvFun {
-    name = "scheme";
-    buildInputs = with pkgs; [
-      chicken
-    ];
- };
- myrustenv = pkgs.myEnvFun {
-   name = "rust";
-     buildInputs = with pkgs; [
-       rustc
-   ];
- };
+ #  myclojureenv = pkgs.myEnvFun {
+ #    name = "clojure";
+ #    buildInputs = with pkgs; [
+ #      leiningen clojure
+ #    ];
+ #  };
+ #  mypythonenv = pkgs.myEnvFun {
+ #    name = "python";
+ #    buildInputs = with pkgs; [
+ #      python python3 python35Packages.bpython
+ #    ];
+ #  };
+ #  myrubyenv = pkgs.myEnvFun {
+ #    name = "ruby";
+ #    buildInputs = with pkgs; [
+ #      ruby
+ #    ];
+ #  };
+ #  myschemeenv = pkgs.myEnvFun {
+ #    name = "scheme";
+ #    buildInputs = with pkgs; [
+ #      chicken
+ #    ];
+ # };
+ # myrustenv = pkgs.myEnvFun {
+ #   name = "rust";
+ #     buildInputs = with pkgs; [
+ #       rustc
+ #   ];
+ # };
 
 in {
   options = {
@@ -59,7 +59,7 @@ in {
     { # work
       config = lib.mkIf config.myconfig.roles.work.enable {
         nixpkgs.overlays =
-          [(self: super: 
+          [(self: super:
             let
               version = "0.9.3";
               name = "thrift-${version}";
@@ -67,7 +67,7 @@ in {
               thrift93 = super.thrift.overrideAttrs ( oldAttrs: {
                 version = version;
                 name = name;
-            
+
                 src = self.fetchurl {
                   url = "http://archive.apache.org/dist/thrift/${version}/${name}.tar.gz";
                   sha256 = "17lnchan9q3qdg222rgjjai6819j9k755s239phdv6n0183hlx5h";
@@ -79,8 +79,8 @@ in {
           rdesktop
           # citrix_receiver
           unstable.openjdk unstable.maven unstable.gradle
-          libreoffice
-          hipchat
+          # libreoffice
+          hipchat franz
           p7zip
           thrift93
         ];
@@ -94,7 +94,7 @@ in {
           unstable.stack unstable.cabal-install unstable.cabal2nix
           gnumake cmake automake
 
-          myclojureenv mypythonenv myrubyenv myschemeenv myrustenv
+          # myclojureenv mypythonenv myrubyenv myschemeenv myrustenv
 
           cloc
 

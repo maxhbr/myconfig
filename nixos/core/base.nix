@@ -68,6 +68,15 @@
     variables = { TMP = "/tmp"; };
   };
 
+  nixpkgs.overlays = [(
+    self: super: {
+      pass = super.pass.overrideDerivation ( drv: {
+        # should work for 1.7.1
+        patches = drv.patches ++ [ ./patches/pass_-_copy_by_default.diff ];
+      });
+    }
+  )];
+
   nix = {
     useSandbox = true;
     readOnlyStore = true;
