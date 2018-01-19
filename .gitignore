@@ -10,3 +10,4 @@ result
 *.hi
 *.o
 xmonad/dist
+_inWork
