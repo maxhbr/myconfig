@@ -14,19 +14,20 @@ index e3cd145..05c4e65 100755
  	    $PROGRAM grep search-string
  	        Search for password files containing search-string when decrypted.
  	    $PROGRAM insert [--echo,-e | --multiline,-m] [--force,-f] pass-name
-@@ -345,13 +347,14 @@ cmd_init() {
+@@ -345,12 +347,13 @@ cmd_init() {
  }
  
  cmd_show() {
 -	local opts selected_line clip=0 qrcode=0
-+	local opts selected_line=1 clip=1 qrcode=0
- 	opts="$($GETOPT -o q::c:: -l qrcode::,clip:: -n "$PROGRAM" -- "$@")"
+-	opts="$($GETOPT -o q::c:: -l qrcode::,clip:: -n "$PROGRAM" -- "$@")"
++	local opts selected_line clip=1 qrcode=0
++	opts="$($GETOPT -o q::c::p:: -l qrcode::,clip::,clip:: -n "$PROGRAM" -- "$@")"
  	local err=$?
  	eval set -- "$opts"
  	while true; do case $1 in
- 		-q|--qrcode) qrcode=1; selected_line="${2:-1}"; shift 2 ;;
+-		-q|--qrcode) qrcode=1; selected_line="${2:-1}"; shift 2 ;;
++		-q|--qrcode) clip=0; qrcode=1; selected_line="${2:-1}"; shift 2 ;;
  		-c|--clip) clip=1; selected_line="${2:-1}"; shift 2 ;;
-+		-p|--print) clip=0; selected_line="${2:-1}"; shift 2 ;;
++		-p|--print) clip=0; unset selected_line; shift 2 ;;
  		--) shift; break ;;
  	esac done
- 
