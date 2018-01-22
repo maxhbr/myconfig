@@ -222,6 +222,7 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       [ ((const 0,   0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
       , ((m__, xK_s      ), spawn "find-cursor")
       , ((ms_, xK_s      ), spawn "xdotool mousemove 0 0; synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
+      , ((m__, xK_z      ), spawn "~/bin/myautosetup.pl --onlyIfChanged")
       , ((ms_, xK_z      ), spawn "~/bin/myautosetup.pl")
       , ((msc, xK_z      ), spawn "~/bin/myautosetup.pl --rotate=left --primOutNr=1")
 #if 1

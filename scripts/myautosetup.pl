@@ -7,6 +7,7 @@ use warnings;
 use Getopt::Long qw( GetOptions );
 use Term::ANSIColor qw( colored );
 use Scalar::Util qw( looks_like_number );
+use Digest::MD5 qw(md5_base64);
 use threads;
 
 ################################################################################
@@ -44,19 +45,20 @@ my $rotate = "normal";
 my $noXrandr = 0;
 my $sameAs = 0;
 my $allOff = 0;
+my $onlyIfChanged = 0;
 
 my $alsaOutput = "";
 
 GetOptions(
-    'rotate=s'   => \$rotate,
-    'noXrandr'   => \$noXrandr,
-    'setSound=s' => \$alsaOutput,
-    'sameAs'     => \$sameAs,
-    'allOff'     => \$allOff,
+    'rotate=s'      => \$rotate,
+    'noXrandr'      => \$noXrandr,
+    'setSound=s'    => \$alsaOutput,
+    'sameAs'        => \$sameAs,
+    'allOff'        => \$allOff,
+    'onlyIfChanged' => \$onlyIfChanged,
     ) or die "Usage: $0 \n\t[--rotate=rotation]\n\t[--setSound=CardName/CardNumber]\n\t[--noXrandr|--sameAs]\n";
 
 my $acPresent = `acpi -a | grep -c on-line`;
-my $xrandr = `xrandr`;
 my $lidState = `cat /proc/acpi/button/lid/LID/state`;
 # my $wifiState = `nmcli dev wifi`;
 # my $atWork = $wifiState =~ /TNG/;
@@ -66,6 +68,48 @@ my $lidState = `cat /proc/acpi/button/lid/LID/state`;
 sub call{
     print "$_[0]\n";
     system($_[0]);
+}
+
+################################################################################
+
+my $xrandr = `xrandr`;
+
+{ # xrandr env hash
+    my $envHashFile = "/tmp/myautosetup.pl.envHash";
+
+    sub getCalculatedEnvHash {
+        my ( $xrandrOutput ) = @_;
+        $xrandrOutput = `xrandr` if (! defined $xrandrOutput);
+        return md5_base64("$xrandrOutput $lidState");
+    }
+
+    sub getOldEnvHash {
+        my $oldEnvHash = "";
+        if (-f $envHashFile) {
+            if(open my $file, '<', $envHashFile) {
+                $oldEnvHash = <$file>;
+                chomp $oldEnvHash;
+                close $file;
+            }
+        }
+        return $oldEnvHash;
+    }
+
+    sub isEnvUnchanged {
+        return getCalculatedEnvHash($xrandr) eq getOldEnvHash();
+    }
+
+    sub writeCurHashToFile {
+        my $envHash = getCalculatedEnvHash();
+        open(my $file, '>', $envHashFile);
+        print $file $envHash;
+        close $file;
+    }
+}
+
+if ($onlyIfChanged && isEnvUnchanged()) {
+    print "nothing to do\n";
+    exit 0;
 }
 
 ################################################################################
@@ -170,6 +214,7 @@ sub setupX{
     }else{
         setupLeftToRight();
     }
+    writeCurHashToFile();
 }
 
 ################################################################################
@@ -216,10 +261,6 @@ sub setupAlsa{
     }
 }
 
-sub restartPulseaudio{
-    system("pulseaudio -k");
-}
-
 ################################################################################
 
 sub setupBacklight{
@@ -250,7 +291,6 @@ sub setupBackgroundAndUI{
 
 setupX() if !$noXrandr;
 # setupAlsa(); # deprecated in favor of pulseaudio
-# restartPulseaudio();
 setupWacom() if !$noXrandr; # needs `setupX()` to be run before the call here
 setupBacklight();
 setupBackgroundAndUI();
