@@ -73,7 +73,18 @@ in {
                   sha256 = "17lnchan9q3qdg222rgjjai6819j9k755s239phdv6n0183hlx5h";
                 };
               });
-            })];
+            })
+           (self: super: {
+              idea-ultimate = super.idea.idea-ultimate.overrideDerivation (innersuper: rec {
+                name = "idea-ultimate-${version}";
+                version = "2017.3.3";
+                src = super.fetchurl {
+                  url = "https://download.jetbrains.com/idea/ideaIU-${version}.tar.gz";
+                  sha256 = "0mbyb31kc9d52hnbn9dclbw0q9y0c6pi8351rbq68jphslm3i9q5";
+                };
+              });
+            })
+          ];
         environment.systemPackages = with pkgs; [
           openvpn networkmanager_openvpn
           rdesktop
@@ -83,6 +94,7 @@ in {
           hipchat franz
           p7zip
           thrift93
+          idea-ultimate
         ];
       };
     }
@@ -125,7 +137,7 @@ in {
       };
     }
 ################################################################################
-    { # wine 
+    { # wine
       config = lib.mkIf config.myconfig.roles.wine.enable {
         environment.systemPackages = with pkgs; [
           wineStaging
@@ -134,7 +146,7 @@ in {
       };
     }
 ################################################################################
-    { # tex 
+    { # tex
       config = lib.mkIf config.myconfig.roles.tex.enable {
         environment.systemPackages = with pkgs; [
           (pkgs.texLiveAggregationFun {
