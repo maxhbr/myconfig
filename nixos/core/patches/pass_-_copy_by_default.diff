@@ -20,7 +20,7 @@ index e3cd145..05c4e65 100755
  cmd_show() {
 -	local opts selected_line clip=0 qrcode=0
 -	opts="$($GETOPT -o q::c:: -l qrcode::,clip:: -n "$PROGRAM" -- "$@")"
-+	local opts selected_line clip=1 qrcode=0
++	local opts selected_line=0 clip=1 qrcode=0
 +	opts="$($GETOPT -o q::c::p:: -l qrcode::,clip::,clip:: -n "$PROGRAM" -- "$@")"
  	local err=$?
  	eval set -- "$opts"

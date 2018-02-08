@@ -124,7 +124,8 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
 #else
       , ((m__, xK_Return), windows W.swapMaster)
 #endif
-      , ((m__, xK_q     ), spawn "xmonad --recompile && sleep 0.1 && xmonad --restart")
+      , ((m__, xK_q     ), spawn "xmonad --restart")
+      , ((ms_, xK_q     ), spawn "xmonad --recompile && sleep 0.1 && xmonad --restart")
       , ((msc, xK_q     ), io exitSuccess)
       , ((m__, xK_p     ), spawn "`dmenu_path | yeganesh`")
       -- , ((m__, xK_x     ), shellPrompt defaultXPConfig)
@@ -310,18 +311,29 @@ myLayout = smartBorders $
     baseSpacing = 10
     wqhdSpacing = 20
     wqhdGapping = (2560 - 1920) `div` 2 - wqhdSpacing + baseSpacing
-    mySpacing l = ifWider 1920 (spacing wqhdSpacing l)
-                               (ifWider 1919 (spacing baseSpacing l) l)
+    myUprightGapping l = ifWider 1440 l $
+                         ifWider 1439 (gaps [(U,wqhdGapping), (D,wqhdGapping)] l) l
+    myUprightMirroring l = ifWider 1440 l $
+                           ifWider 1439 (Mirror l) l
+    mySpacing l = ifWider 1920 (spacing wqhdSpacing l) $
+                  ifWider 1919 (spacing baseSpacing l) $
+                  ifWider 1439 (spacing wqhdSpacing l)
+                  l
     full      = named "=" $
                 mySpacing $
-                ifWider 1920 (gaps [(L,wqhdGapping), (R,wqhdGapping)] Full) Full
+                ifWider 1920 (gaps [(L,wqhdGapping), (R,wqhdGapping)] Full) $
+                myUprightGapping Full
     tiled     = named " " $
                 minimize $
                 mySpacing $
+                myUprightGapping $
+                myUprightMirroring $
                 ResizableTall 1 (3/100) (1/2) []
     dtb       = named "%" $
                 minimize $
                 mySpacing $
+                myUprightGapping $
+                myUprightMirroring $
                 TwoPane (3/100) (1/2)
 
 ------------------------------------------------------------------------
@@ -344,6 +356,7 @@ myManageHook = (composeAll (foldMap (\(a,cs) -> map (\c -> className =? c --> a)
                                                ,"feh"
                                                ,"Zenity"
                                                ,"pinentry","Pinentry"
+                                               ,"pavucontrol","Pavucontrol"
                                                ,"zoom"])
                              , (doFloat, ["MPlayer"
                                          ,"Onboard"])

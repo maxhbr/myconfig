@@ -43,18 +43,23 @@
             (self: super:
              let
                name = "idea-ultimate-${version}";
-               version = "2017.3.3";
+               version = "2017.3.4";
+               sha256 = "1g5zaz6aak1qk31ia601fhrmqda4z4lx76wac7h08z1izab3gwyi";
                oldVersion = "2017.2.5"; # super.lib.getVersion super.idea.idea-ultimate;
                overlayIsNewer =  super.lib.versionOlder oldVersion version;
-             in super.lib.optionalAttrs overlayIsNewer {
-               idea-ultimate = super.idea.idea-ultimate.overrideAttrs ( oldAttrs: {
-                 inherit name version;
-                 src = super.fetchurl {
-                   url = "https://download.jetbrains.com/idea/ideaIU-${version}.tar.gz";
-                   sha256 = "0mbyb31kc9d52hnbn9dclbw0q9y0c6pi8351rbq68jphslm3i9q5";
-                 };
-               });
-             })];
+             in if overlayIsNewer
+                then {
+                  idea-ultimate = super.idea.idea-ultimate.overrideAttrs ( oldAttrs: {
+                    inherit name version;
+                    src = super.fetchurl {
+                      url = "https://download.jetbrains.com/idea/ideaIU-${version}.tar.gz";
+                      inherit sha256;
+                    };
+                  });
+                } else {
+                 idea-ultimate = super.idea.idea-ultimate;
+                }
+            )];
         environment.systemPackages = with pkgs; [
           openvpn networkmanager_openvpn
           rdesktop

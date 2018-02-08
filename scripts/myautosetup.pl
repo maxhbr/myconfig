@@ -214,7 +214,9 @@ sub setupX{
     }else{
         setupLeftToRight();
     }
+
     writeCurHashToFile();
+    system("xmonad --restart");
 }
 
 ################################################################################
