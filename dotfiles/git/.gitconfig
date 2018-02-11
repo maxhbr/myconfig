@@ -1,6 +1,6 @@
 # partially stolen from https://github.com/quchen/dotfiles/
 [user]
-    name = maximilianhuber
+    name = Maximilian Huber
     email = mail@maximilian-huber.de
     signingkey = 32CA3654
 [core]
@@ -168,8 +168,8 @@
 	conflictstyle = diff3
 [diff]
 	tool = ediff
-
-[include]
-  path = .gitconfig-local
 [rerere]
 	enabled = true
+
+[includeIf  "gitdir:~/TNG/"]
+  path = ~/.gitconfig-tng
