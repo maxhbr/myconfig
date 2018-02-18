@@ -598,7 +598,11 @@ have nix-env && {
   alias nix-zsh="nix-shell -p zsh --run zsh"
   alias nixTest="NIXPKGS_ALLOW_UNFREE=1 nix-shell --run zsh -p"
   nixRun() {
+    if [ "$#" -eq "2" ]; then
+      NIXPKGS_ALLOW_UNFREE=1 nix-shell -p "$1" --command "$2"
+    else
       NIXPKGS_ALLOW_UNFREE=1 nix-shell -p "$1" --command "$1"
+    fi
   }
   alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
   alias nixse="nix-env -qaP | grep -i"

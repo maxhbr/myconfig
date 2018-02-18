@@ -16,6 +16,12 @@
     chunkammend = commit --patch --amend
     cma         = commit -am
     cfa         = commit -a --fixup
+    cfa0         = commit -a --fixup HEAD
+    cfa1         = commit -a --fixup HEAD~
+    cfa2         = commit -a --fixup HEAD~2
+    cfa3         = commit -a --fixup HEAD~3
+    cfa4         = commit -a --fixup HEAD~4
+    cfa5         = commit -a --fixup
     ca          = commit --amend
     caa         = commit --amend -a
     cac         = commit --patch --amend
@@ -28,14 +34,14 @@
 
     d           = diff
     d0          = diff HEAD
-    d1          = diff HEAD~1
+    d1          = diff HEAD~
     d2          = diff HEAD~2
     d3          = diff HEAD~3
     d4          = diff HEAD~4
     dstaged     = diff --staged
     ds          = diff --stat -r
     ds0         = diff --stat -r HEAD
-    ds1         = diff --stat -r HEAD~1
+    ds1         = diff --stat -r HEAD~
     ds2         = diff --stat -r HEAD~2
     ds3         = diff --stat -r HEAD~3
     ds4         = diff --stat -r HEAD~4
