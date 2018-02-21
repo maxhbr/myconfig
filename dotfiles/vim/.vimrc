@@ -1042,6 +1042,7 @@ iabbrev BRr Best regards<cr>Maximilian
 iabbrev KRr Kind regards<cr>Maximilian
 iabbrev vlt vielleicht
 iabbrev mgl möglicherweise
+iabbrev mglw möglicherweise
 
 " correct some typos
 iabbrev adn and

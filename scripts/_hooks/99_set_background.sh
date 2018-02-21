@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # set desktop background ##################################################
-ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../../"
+ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../.."
 src="${ROOT}/background/background-image"
 target="$HOME/.background-image"
 

@@ -361,8 +361,8 @@ myManageHook = (composeAll (foldMap (\(a,cs) -> map (\c -> className =? c --> a)
                              , (doFloat, ["MPlayer"
                                          ,"Onboard"])
                              , (doShift "web", ["Firefox"
-                                               ,"Chromium","chromium-browser"
-                                               ,"franz","Franz"])
+                                               ,"Chromium","chromium-browser"])
+                             , (doShift "10", ["franz","Franz"])
                              , (doShift "vbox", ["Virtualbox","VirtualBox"])
                              , (doShift "media", ["Steam"])
                              , (doIgnore, ["desktop_window"
