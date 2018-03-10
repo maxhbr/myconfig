@@ -471,6 +471,9 @@ dstop(){
 #  vagrant
 #-------------------------------------------------------------------{{{
 
+alias vup="vagrant up"
+alias vreload="vagrant reload"
+alias vhalt="vagrant halt"
 alias vssh="vagrant ssh"
 
 #-------------------------------------------------------------------}}}

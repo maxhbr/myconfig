@@ -48,7 +48,7 @@ HISTSIZE=10000
 SAVEHIST="${HISTSIZE}"
 # export EDITOR="/usr/bin/vim"
 export EDITOR="vim"
-export VISUAL="vim -p -X"
+export VISUAL="vim" # -p -X"
 export TMP="$HOME/tmp"
 [[ ! -d "${TMP}" ]] && mkdir "${TMP}"
 export TEMP="$TMP"
