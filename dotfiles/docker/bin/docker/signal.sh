@@ -28,10 +28,6 @@ EOF
 }
 
 run() {
-    $docker rm \
-            --force signal \
-            >/dev/null 2>&1 || true
-
     local TMP=$TMP/signal_sh
     mkdir -p $TMP
     XSOCK=$TMP/.X11-unix
@@ -40,13 +36,23 @@ run() {
         | sed -e 's/^..../ffff/' \
         | xauth -f $XAUTH nmerge -
 
-    $docker run -ti \
-            -v $XSOCK:$XSOCK -e DISPLAY=$DISPLAY \
-            -v $XAUTH:$XAUTH -e XAUTHORITY=$XAUTH \
-            --volume /dev/snd:/dev/snd \
-            --volume /tmp/.X11-unix:/tmp/.X11-unix \
-            --name=signal \
-            signal
+    if [ ! "$($docker ps -aq -f name=signal)" ]; then
+        $docker run \
+                -v $XSOCK:$XSOCK -e DISPLAY=$DISPLAY \
+                -v $XAUTH:$XAUTH -e XAUTHORITY=$XAUTH \
+                --volume /dev/snd:/dev/snd \
+                --volume /tmp/.X11-unix:/tmp/.X11-unix \
+                --name=signal \
+                signal
+    else
+        $docker start signal
+    fi
+}
+
+rm() {
+    $docker rm \
+            --force signal \
+            >/dev/null 2>&1 || true
 }
 
 ################################################################################
