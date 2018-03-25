@@ -43,8 +43,8 @@
             (self: super:
              let
                name = "idea-ultimate-${version}";
-               version = "2017.3.4";
-               sha256 = "1g5zaz6aak1qk31ia601fhrmqda4z4lx76wac7h08z1izab3gwyi";
+               version = "2017.3.5";
+               sha256 = "1kngqgwwi08xm0dzix5b4vihnka98x03hhrrjlifdck6i9c5zb2j";
                oldVersion = "2017.2.5"; # super.lib.getVersion super.idea.idea-ultimate;
                overlayIsNewer =  super.lib.versionOlder oldVersion version;
              in if overlayIsNewer
