@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
-#
-#  written by maximilian-huber.de
+# Copyright 2016 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 use strict;
 use warnings;
 

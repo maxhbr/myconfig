@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 
 echo "remove..."
 docker rm --force mediaclient >/dev/null 2>&1

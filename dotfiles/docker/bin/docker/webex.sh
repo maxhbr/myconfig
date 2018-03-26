@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# written by: maximilian.huber@tngtech.com
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 # based on: https://github.com/fgsch/docker-webex
 #    by Federico G. Schwindt <fgsch@lodoss.net>
 # and: http://stackoverflow.com/a/25280523

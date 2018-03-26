@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2016 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 
 git filter-branch --prune-empty --index-filter 'git rm -rf --cached --ignore-unmatch $1' --tag-name-filter cat -- --all
 

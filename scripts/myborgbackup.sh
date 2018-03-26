@@ -1,4 +1,6 @@
 #!/usr/bin/env nix-shell
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 #! nix-shell -i bash -p borgbackup
 
 # TODO:

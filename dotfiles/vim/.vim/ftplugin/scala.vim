@@ -1,3 +1,5 @@
+" Copyright 2016 Maximilian Huber <oss@maximilian-huber.de>
+" SPDX-License-Identifier: MIT
 " Vim plugin that generates new Scala source file when you type
 "    vim nonexistent.scala.
 " Scripts tries to detect package name from the directory path, e. g.

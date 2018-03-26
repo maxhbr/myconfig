@@ -1,3 +1,5 @@
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 { stdenv, fetchurl, unzip, pkgs }:
 # based on: https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=powder
 stdenv.mkDerivation {

@@ -1,11 +1,9 @@
 #!/bin/sh
-#
-# Written by Maximilian-Huber.de
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 #
 # initially create $STATUSFILE with the content "0"
 #   $ echo "0" > $STATUSFILE
-#
-# Last modified: So Sep 27, 2015  08:48
 #
 set -ex
 

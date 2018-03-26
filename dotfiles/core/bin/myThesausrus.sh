@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 #
 # ./myThesausrus.sh WORD1 [WORD2 [...]]
 # 

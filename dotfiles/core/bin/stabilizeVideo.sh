@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 #
 # This needs extensivly many disk space. The temorary files are created in the
 # folder, from which this script is called

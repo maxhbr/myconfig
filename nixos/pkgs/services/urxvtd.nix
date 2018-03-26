@@ -1,3 +1,5 @@
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 { config, lib, pkgs, ... }:
 # see https://github.com/Lassulus/nixos-config/blob/master/pkgs/urxvtd.nix
 

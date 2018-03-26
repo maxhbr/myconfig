@@ -1,8 +1,5 @@
-# ~/.zlogin
-#
-# written by maximilian-huber.de
-#
-# Last modified: Fri Aug 01, 2014  08:56
+# Copyright 2016 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 
 # my login manager
 [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]] && exec startx

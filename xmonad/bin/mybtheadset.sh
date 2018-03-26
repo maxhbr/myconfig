@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 # see: http://anderspapitto.com/posts/2016-11-07-scripting_pulseaudio_bluetooth_jack.html
 
 set -e

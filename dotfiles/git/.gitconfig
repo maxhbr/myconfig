@@ -1,4 +1,6 @@
 # partially stolen from https://github.com/quchen/dotfiles/
+# Copyright 2017-2018 Maximilian Huber
+# SPDX-License-Identifier: MIT
 [user]
     name = Maximilian Huber
     email = mail@maximilian-huber.de
@@ -119,7 +121,14 @@
                           || ( echo && echo \"possible refs:\" && git ls-remote $remote | grep \"/merge\"; ); \
                         }; f"
 
-	  changeAuthor = commit --amend --no-edit --author
+	  #stolen from: https://stackoverflow.com/questions/16307091/make-git-status-show-unmodified-unchanged-tracked-files
+	  ls-fstatus = "! cd $PWD/$GIT_PREFIX; git ls-files -cdmoskt --abbrev=8 | while read -r line; do \
+	                    fn=$(echo \"$line\" | sed \"s/.*\\s\\([[:print:]]\\+\\)/\\1/\"); \
+		                  st=$(git status -s \"$fn\" | printf \"%-02s \" $(sed \"s/\\([[:print:]]\\+\\)\\s.*/\\1/\")); \
+                      echo \"$st- $line\"; \
+	                done"
+
+		changeAuthor = commit --amend --no-edit --author
 
     # git subtree:
     sba         = "!f() { git subtree add --prefix $2 $1 master --squash; }; f" 

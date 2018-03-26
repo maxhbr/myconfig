@@ -1,3 +1,5 @@
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 # stolen from: https://github.com/NixOS/nixpkgs/issues/25264#issuecomment-298178317
 let
   system = builtins.currentSystem;

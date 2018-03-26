@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 #
 # a verry basic script, for runing qemu
 #
@@ -18,11 +20,6 @@
 #       modprobe tun
 #       vde_switch -tap tap0 -daemon -mod 660 -group users
 #       ip addr add 192.168.100.254/24 dev tap0
-
-#
-#   written by maximilian-huber.de
-# Last modified: Mon Feb 09, 2015  07:58
-#
 
 ###############################################################################
 ##  variables  ################################################################

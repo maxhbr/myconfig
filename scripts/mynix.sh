@@ -1,4 +1,6 @@
 #!/usr/bin/env sh
+# Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 # based on / copied from:
 # - http://yann.hodique.info/blog/nix-in-custom-location/
 # - https://github.com/sigma/docker-mynix/

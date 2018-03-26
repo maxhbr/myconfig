@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 ###############################################################################
 ## Mailstatus
 if ! test `find /tmp/mailrun-sh-log -mmin -2`; then

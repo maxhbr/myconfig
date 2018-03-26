@@ -1,7 +1,6 @@
+" Copyright 2016 Maximilian Huber <oss@maximilian-huber.de>
+" SPDX-License-Identifier: MIT
 " Mainly stolen from somewhere
-"
-" Last Modified: Tue Aug 19, 2014  07:11
-"
 if has("autocmd")
   " If buffer modified, update any 'Last modified: ' in the first 20 lines.
   " Restores cursor and window position using save_cursor variable.

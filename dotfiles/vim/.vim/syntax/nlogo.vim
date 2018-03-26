@@ -1,3 +1,5 @@
+" Copyright 2016 Maximilian Huber <oss@maximilian-huber.de>
+" SPDX-License-Identifier: MIT
 " Vim syntax file
 " Language:     NetLogo 3beta2
 " Maintainer:   Steven Stoddard <sstoddar@uiuc.edu>

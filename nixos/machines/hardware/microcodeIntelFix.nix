@@ -1,3 +1,5 @@
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 { config, pkgs, ... }:
 
 # due to: https://www.heise.de/newsticker/meldung/Bug-in-aktuellen-Intel-Prozessoren-macht-die-Runde-3755660.htm

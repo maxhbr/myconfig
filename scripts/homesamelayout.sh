@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 # |------------+-----|
 # | eDP1/HDMI1 | DP2 |
 # |------------+-----|

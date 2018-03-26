@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 # stolen from: https://raw.githubusercontent.com/hallettj/dot-xmonad/master/home/bin/volume
 set -e
 

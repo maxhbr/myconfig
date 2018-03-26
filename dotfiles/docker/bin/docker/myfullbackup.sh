@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-#
-# Written by Maximilian-Huber.de
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 
 set -e
 

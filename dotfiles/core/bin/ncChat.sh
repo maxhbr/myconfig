@@ -1,12 +1,11 @@
 #!/bin/sh
+# Copyright 2014-2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 # ~/bin/ncChat.sh
 #
 # uses ncat (or netcat or nc) for encrypted chatting over LAN
 #
 # partly from: http://www.nixaid.com/linux/network/encrypted-chat-with-netcat
-#
-# written by maximilian-huber.de
-# Last modified: Thu Aug 14, 2014  04:53
 
 if [[ "$1" == "-h" ]] ||  [[ "$1" == "--help" ]]; then
   echo "ncChat.sh -h"

@@ -1,3 +1,5 @@
+-- Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+-- SPDX-License-Identifier: MIT
 -- stolen from: https://wiki.haskell.org/Xmonad/Config_archive/adamvo's_xmonad.hs
 
 module XMonad.MyConfig.ToggleFollowFocus

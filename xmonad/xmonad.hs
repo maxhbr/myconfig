@@ -1,3 +1,5 @@
+-- Copyright 2017-2018 Maximilian Huber <oss@maximilian-huber.de>
+-- SPDX-License-Identifier: MIT
 -- ~/.xmonad/xmonad.hs
 -- needs xorg-xmessage for error messages
 --
@@ -15,10 +17,6 @@
 --  xcalib       invert colors
 --  xmobar       bar
 --  pass         password manager
---
--- written by maximilian-huber.de
---
--- Last modified: Sa Jul 23, 2016  02:15
 {-# OPTIONS_GHC -W -fwarn-unused-imports -fno-warn-missing-signatures #-}
 {-# LANGUAGE CPP #-}
 

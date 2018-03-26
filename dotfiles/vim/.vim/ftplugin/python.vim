@@ -1,3 +1,5 @@
+" Copyright 2016 Maximilian Huber <oss@maximilian-huber.de>
+" SPDX-License-Identifier: MIT
 let g:pydiction_location = '~/.vim/pydiction/complete-dict'
 " au FocusLost *.py :write
 " au FocusLost *.py :echo "autoSaved"

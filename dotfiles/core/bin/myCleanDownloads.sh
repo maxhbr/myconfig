@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 
 DOW="/home/hubi/Downloads"
 OLD="/home/hubi/Downloads/old"

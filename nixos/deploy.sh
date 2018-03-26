@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 SRC="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $SRC
 

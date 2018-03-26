@@ -1,3 +1,5 @@
+" Copyright 2016 Maximilian Huber <oss@maximilian-huber.de>
+" SPDX-License-Identifier: MIT
 " minimal git/svn wrapper written by maximilian-huber.de
 "
 " Last Modified: Mon Aug 25, 2014  05:26

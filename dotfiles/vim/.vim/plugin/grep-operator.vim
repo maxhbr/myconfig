@@ -1,7 +1,5 @@
-"
-"
-" Last Modified: Tue Aug 19, 2014  07:12
-"
+" Copyright 2014-2016 Maximilian Huber <oss@maximilian-huber.de>
+" SPDX-License-Identifier: MIT
 
 if 0 " grep operator?
   nnoremap <leader>g :set operatorfunc=<SID>GrepOperator<cr>g@

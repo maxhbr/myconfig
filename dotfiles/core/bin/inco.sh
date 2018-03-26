@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 
 # sudo systemctl start tor.service
 postfix=$(date +%s | sha256sum | base64 | head -c 32 ; echo)

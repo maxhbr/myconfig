@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 
 command -v tmux >/dev/null 2>&1 || return 1
 

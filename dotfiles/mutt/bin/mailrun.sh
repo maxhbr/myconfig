@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright 2015-2016 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 # ~/bin/mailrun.sh
 #
 # This script runs periodicaly "offlineimap -o"
@@ -10,8 +12,6 @@
 # - the log is saved to /tmp/mailrun-log
 # - the routine _monitor() checks, if offlineimap is alive, by checking wether
 #   the log file changes
-#
-# Last modified: Thu Apr 02, 2015  07:07
 
 PID=$$
 PIDFILE=/tmp/mailrun-sh-pid

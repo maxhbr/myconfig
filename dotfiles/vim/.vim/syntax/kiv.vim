@@ -1,3 +1,5 @@
+" Copyright 2016 Maximilian Huber <oss@maximilian-huber.de>
+" SPDX-License-Identifier: MIT
 " Quit if syntax file is already loaded
 if version < 600
   syntax clear

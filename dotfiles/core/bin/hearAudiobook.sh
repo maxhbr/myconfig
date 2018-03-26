@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 #
 # hearAudiobook.sh [-e=ext] [-p=player] [-c=count] [folder]
 #
@@ -7,8 +9,6 @@
 #    quitted and saved
 #  * globbing does not match for multiple file extensions (find does not sort
 #    the files correctly)
-#
-# written by: maximilian-huber.de (2015)
 
 mCount="0"                     # maximal conut of played tracks
 count="0"                      # current number of track

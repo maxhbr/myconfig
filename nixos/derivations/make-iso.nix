@@ -1,4 +1,6 @@
 #!/usr/bin/env nix-build
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 # build an ISO image that will auto install NixOS and reboot
 # $ nix-build make-iso.nix
 # delete with

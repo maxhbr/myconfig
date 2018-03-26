@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# written by: maximilian.huber@tngtech.com
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 set -e
 
 doBuild=0
