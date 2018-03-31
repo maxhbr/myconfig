@@ -22,8 +22,8 @@
     { # desktop
       config = lib.mkIf config.myconfig.roles.desktop.enable {
         nixpkgs.overlays = [
-          (self: super:{myBackgrounds = super.callPackage ../../background {};})
-          (self: super:{mySlimTheme = super.callPackage ../../background/mySlimTheme.nix { myBackgrounds = self.pkgs.myBackgrounds; };})
+          (self: super:{myBackgrounds = super.callPackage ../static/background {};})
+          (self: super:{mySlimTheme = super.callPackage ../static/background/mySlimTheme.nix { myBackgrounds = self.pkgs.myBackgrounds; };})
         ];
 
         environment.systemPackages = with pkgs; [

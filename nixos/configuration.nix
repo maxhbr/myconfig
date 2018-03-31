@@ -7,15 +7,12 @@ let
   hostName = "${builtins.readFile /etc/nixos/hostname}";
   # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
   hostId = "${builtins.readFile /etc/nixos/hostid}";
-  # echo -n "/home/user/myconfig/nixos" | sudo tee /etc/nixos/confighome
-  configRoot = "${builtins.readFile /etc/nixos/confighome}";
 
-in import /. + configRoot {
+in import ./core {
   system.copySystemConfiguration = true;
   inherit config hostName hostId;
-
-  otherImports = [ ./hardware-configuration.nix ];
+  otherImports = [ /etc/nixos/hardware-configuration.nix ];
 } // {  environment.etc = {
-     nixos-orig.source = configRoot;
+    nixos-orig.source = ./.;
   };
 }
