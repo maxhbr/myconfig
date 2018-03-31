@@ -4,12 +4,4 @@
 
 # set desktop background ##################################################
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../.."
-$ROOT/background/randomizeBackground.sh
-src="${ROOT}/background/background-image"
-target="$HOME/.background-image"
-
-[[ -e "$target" ]] && rm "$target"
-ln -s "$src" "$target"
-
-# TODO: --bg-scale or --bg-center depending on dimensions
-feh --bg-scale "$target"
+$ROOT/background/scripts/myRandomBackground.sh

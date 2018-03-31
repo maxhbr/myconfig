@@ -21,6 +21,11 @@
 ################################################################################
     { # desktop
       config = lib.mkIf config.myconfig.roles.desktop.enable {
+        nixpkgs.overlays = [
+          (self: super:{myBackgrounds = super.callPackage ../../background {};})
+          (self: super:{mySlimTheme = super.callPackage ../../background/mySlimTheme.nix { myBackgrounds = self.pkgs.myBackgrounds; };})
+        ];
+
         environment.systemPackages = with pkgs; [
           arandr xrandr-invert-colors
           xlibs.xmodmap xlibs.xset xlibs.setxkbmap
@@ -40,6 +45,8 @@
           aspell aspellDicts.de aspellDicts.en
         # misc
           xf86_input_wacom
+        # mine
+          myBackgrounds
         ];
 
         services = {
@@ -55,16 +62,15 @@
               slim = {
                 enable = true;
                 defaultUser = "mhuber";
-                theme = ../static/slim-theme;
+                theme = "${pkgs.mySlimTheme}/share";
               };
               sessionCommands = ''
-                ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name ${pkgs.vanilla-dmz}/share/icons/Vanilla-DMZ/cursors/left_ptr 32
+                ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name ${pkgs.vanilla-dmz}/share/icons/Vanilla-DMZ/cursors/left_ptr 32 &disown
                 if test -e $HOME/.Xresources; then
-                  ${pkgs.xorg.xrdb}/bin/xrdb --merge $HOME/.Xresources
+                  ${pkgs.xorg.xrdb}/bin/xrdb --merge $HOME/.Xresources &disown
                 fi
-                if test -e $HOME/.background-image; then
-                  ${pkgs.feh}/bin/feh --bg-scale "$HOME/.background-image"
-                fi
+                ${pkgs.myBackgrounds}/bin/myRandomBackground &disown
+                ${pkgs.xss-lock}/bin/xss-lock ${pkgs.myBackgrounds}/bin/myScreenLock &disown
               '';
             };
 
@@ -106,7 +112,7 @@
             ]) ++ (with pkgs.haskellPackages; [
               xmobar
             ]) ++ (with pkgs.unstable.haskellPackages; [
-              xmonad yeganesh
+              yeganesh
             ]);
 
         system.activationScripts.cleanupXmonadState =

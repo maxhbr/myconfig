@@ -20,10 +20,8 @@ getRandomBGFile() {
     rand=$[$RANDOM % ${#bgs[@]}]
     img="${bgs[$rand]}"
 
-    (>&2 echo "\$1 is: $1")
     if [ "$1" ]; then
         if [ -d "$DIR/$1" ]; then
-            (>&2 echo "yay, we made it")
             echo "$DIR/$1/${bgs[$rand]}"
             return
         fi

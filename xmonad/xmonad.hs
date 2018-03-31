@@ -385,7 +385,7 @@ myStartupHook = do
   setWMName "LG3D"
   spawn "pkill unclutter; unclutter"
   spawn "xset s 900"
-  spawn "xss-lock -- slimlock"
+  -- spawn "xss-lock -- slimlock"
 
 ------------------------------------------------------------------------
 -- Log hook:

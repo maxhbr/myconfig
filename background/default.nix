@@ -4,8 +4,9 @@ stdenv.mkDerivation rec {
   version = "0.1";
   name = "my-backgrounds-${version}";
 
-  src = ./.;
-
+  src = builtins.filterSource
+    (path: type: baseNameOf path != "slim-theme")
+    ./.;
 
   buildInputs = with pkgs; [ imagemagick coreutils ];
 
@@ -19,8 +20,8 @@ stdenv.mkDerivation rec {
     done
 
     sed -i 's%feh%${pkgs.feh}/bin/feh%' scripts/myRandomBackground.sh
-    sed -i 's%i3lock%${pkgs.i3lock}/bin/i3lock%' scripts/myi3lock.sh
-    sed -i 's%xrandr%${pkgs.xorg.xrandr}/bin/xrandr%' scripts/myi3lock.sh
+    sed -i 's%i3lock%${pkgs.i3lock}/bin/i3lock%' scripts/myScreenLock.sh
+    sed -i 's%xrandr%${pkgs.xorg.xrandr}/bin/xrandr%' scripts/myScreenLock.sh
   '';
   installPhase = ''
     share="$out/share"
@@ -30,7 +31,7 @@ stdenv.mkDerivation rec {
     bin="$out/bin"
     mkdir -p $bin
     cp scripts/myRandomBackground.sh $bin/myRandomBackground
-    cp scripts/myi3lock.sh $bin/myi3lock
+    cp scripts/myScreenLock.sh $bin/myScreenLock
     for exe in $bin/*; do
       chmod +x "$exe"
       sed -i 's%^DIR.*%DIR="'"$out"'/share"%' "$exe"

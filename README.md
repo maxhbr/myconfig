@@ -25,6 +25,3 @@ this contains my xmonad configuration.
 
 ## `./misc`
 just some miscellaneous stuff.
-
-## `./archlinux` (unused)
-this contains configuration related to my (currently not used) archlinux setup.
