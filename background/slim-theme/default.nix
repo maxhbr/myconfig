@@ -1,16 +1,18 @@
-{ pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv, myBackgrounds ? (pkgs.callPackage ./. { inherit pkgs stdenv; })}:
+{ pkgs ? import <nixpkgs> {},
+  stdenv ? pkgs.stdenv,
+  background ? (pkgs.callPackage ./.. { inherit pkgs stdenv; })}:
 
 stdenv.mkDerivation rec {
   version = "0.1";
   name = "my-slim-theme-${version}";
 
-  src = ./slim-theme;
+  src = ./.;
 
 
   buildInputs = with pkgs; [ imagemagick coreutils ];
 
   buildPhase = ''
-    ln -s ${myBackgrounds}/share/romben3.png background.png
+    ln -s ${background}/share/romben3.png background.png
   '';
   installPhase = ''
     share="$out/share"

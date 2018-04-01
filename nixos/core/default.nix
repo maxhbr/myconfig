@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 { config, hostName, hostId,
   otherImports ? [],
+  otherOverlays ? [],
   ... }:
 
 {
@@ -15,9 +16,9 @@
   networking.hostName = "${hostName}";
 
   nixpkgs.config = import ../../nix/nixpkgs-config.nix;
-  nixpkgs.overlays = [(self: super: {
+  nixpkgs.overlays = otherOverlays ++ [(self: super: {
     unstable = import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) { inherit (super) config; };
-  })] ;
+  })];
 
   nix.nixPath = [
     # "nixpkgs=http://nixos.org/channels/nixos-17.09/nixexprs.tar.xz"
