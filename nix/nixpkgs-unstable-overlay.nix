@@ -1,6 +1,6 @@
 self: super:
 let
-  spec = builtins.fromJSON (builtins.readFile ./nixpkgs.json);
+  # spec = builtins.fromJSON (builtins.readFile ./nixpkgs.json);
   # unstableSrc = super.fetchFromGitHub {
   #   owner = "NixOS";
   #   repo  = "nixpkgs";

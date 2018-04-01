@@ -21,18 +21,20 @@ set -e
 # rsync file to target folder #############################################
 echo "* $(tput bold)rsync$(tput sgr0) ..."
 cd /etc/nixos
-sudo nix-build "$SRC/packageNixconfig.nix"
-sudo ln -s configuration.nix result/configuration.nix
-# sudo rm -rf /etc/nixos/static/background
-# sudo rsync --filter="protect /hardware-configuration.nix" \
-#            --filter="protect /hostname" \
-#            --filter="protect /hostid" \
-#            --filter="exclude,s *.gitignore" \
-#            --filter="exclude,s *.gitmodules" \
-#            --filter="exclude,s *.git" \
-#            --filter="exclude .*.swp" \
-#            --filter="exclude .#*" \
-#            --filter="exclude result" \
-#            --delete --recursive --perms --copy-links \
-#            "$SRC/" /etc/nixos/
-# sudo cp -r "$SRC/../background" /etc/nixos/static/
+sudo rm -rf /etc/nixos/static/background
+sudo rsync --filter="protect /hardware-configuration.nix" \
+           --filter="protect /hostname" \
+           --filter="protect /hostid" \
+           --filter="exclude,s *.gitignore" \
+           --filter="exclude,s *.gitmodules" \
+           --filter="exclude,s *.git" \
+           --filter="exclude .*.swp" \
+           --filter="exclude .#*" \
+           --filter="exclude result" \
+           --delete --recursive --perms --copy-links \
+           "$SRC/" /etc/nixos/
+sudo cp -r "$SRC/../background" /etc/nixos/static/
+
+# TODO: new idea: package config with nix
+# sudo nix-build "$SRC/packageNixconfig.nix"
+# sudo ln -s configuration.nix result/configuration.nix
