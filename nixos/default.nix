@@ -13,7 +13,10 @@ let
 in import ./core {
   system.copySystemConfiguration = true;
   inherit config hostName hostId;
-  otherImports = [ /etc/nixos/hardware-configuration.nix ];
+  otherImports = [ /etc/nixos/hardware-configuration.nix ]
+    ++ (if builtins.pathExists /etc/nixos/configuration.old.nix
+        then [/etc/nixos/configuration.old.nix]
+        else []);
   inherit otherOverlays;
 } // {  environment.etc = {
     nixos-orig.source = ./.;

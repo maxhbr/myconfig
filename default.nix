@@ -10,8 +10,7 @@ let
   };
 in {
   inherit maxhbr;
-  nixSrc = /home/mhuber/myconfig/nix;
-  # nixosSrc = pkgs.callPackage ./nixos/packageNixconfig.nix { inherit pkgs stdenv; };
-  nixosSrc = /home/mhuber/myconfig/nixos;
+  nixSrc = ./nix;
+  nixosSrc = ./nixos;
   overlays = [(self: super: { inherit maxhbr; })];
 }

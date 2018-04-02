@@ -3,9 +3,8 @@
 { config, pkgs, lib, ... }:
 
 let
-  myconfigPath = /home/mhuber/myconfig;
+  myconfigPath = /myconfig;
   myconfig = import myconfigPath { inherit pkgs; };
-# in import "${myconfig.nixosSource}" {
 in import myconfig.nixosSrc {
   inherit config pkgs lib;
   otherOverlays = myconfig.overlays;
