@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv }:
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation {
   version = "0.1";
   name = "maxhbr-nixos-config-src";
 
@@ -10,7 +10,7 @@ stdenv.mkDerivation rec {
     (path: type: baseNameOf path != "result" && baseNameOf path != "packageNixconfig.nix")
     ./.;
 
-  buildPhase = "";
+  # buildPhase = "";
   installPhase = ''
     mkdir -p $out
     cp -r * $out

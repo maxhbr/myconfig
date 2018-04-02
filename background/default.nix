@@ -1,3 +1,5 @@
+# Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 { pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv }:
 
 stdenv.mkDerivation rec {

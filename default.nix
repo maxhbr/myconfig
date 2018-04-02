@@ -5,12 +5,13 @@
 let
   background = pkgs.callPackage ./background { inherit pkgs stdenv; };
   maxhbr = {
-    nixosSource = pkgs.callPackage ./nixos { inherit pkgs stdenv; };
-    # nixSource = pkgs.callPackage ./nix { inherit pkgs stdenv; };
     inherit background;
     slim-theme = pkgs.callPackage ./background/slim-theme { inherit pkgs stdenv background; };
   };
 in {
   inherit maxhbr;
+  nixSrc = /home/mhuber/myconfig/nix;
+  # nixosSrc = pkgs.callPackage ./nixos/packageNixconfig.nix { inherit pkgs stdenv; };
+  nixosSrc = /home/mhuber/myconfig/nixos;
   overlays = [(self: super: { inherit maxhbr; })];
 }
