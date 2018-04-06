@@ -21,10 +21,10 @@
 ################################################################################
     { # desktop
       config = lib.mkIf config.myconfig.roles.desktop.enable {
-        # nixpkgs.overlays = [
-        #   (self: super:{myBackgrounds = super.callPackage ../static/background {};})
-        #   (self: super:{mySlimTheme = super.callPackage ../static/background/mySlimTheme.nix { myBackgrounds = self.pkgs.myBackgrounds; };})
-        # ];
+        nixpkgs.overlays = [(self: super: rec {
+          myconfig-background = super.callPackage ../../background { pkgs = self; stdenv = super.stdenv; };
+          myconfig-slim-theme = super.callPackage ../../background/slim-theme { pkgs = self; stdenv = super.stdenv; background = myconfig-background; };
+        })];
 
         environment.systemPackages = with pkgs; [
           arandr xrandr-invert-colors
@@ -46,7 +46,7 @@
         # misc
           xf86_input_wacom
         # mine
-          maxhbr.background
+          myconfig-background
         ];
 
         services = {
@@ -62,15 +62,15 @@
               slim = {
                 enable = true;
                 defaultUser = "mhuber";
-                theme = "${pkgs.maxhbr.slim-theme}/share";
+                theme = "${pkgs.myconfig-slim-theme}/share";
               };
               sessionCommands = ''
                 ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name ${pkgs.vanilla-dmz}/share/icons/Vanilla-DMZ/cursors/left_ptr 32 &disown
                 if test -e $HOME/.Xresources; then
                   ${pkgs.xorg.xrdb}/bin/xrdb --merge $HOME/.Xresources &disown
                 fi
-                ${pkgs.maxhbr.background}/bin/myRandomBackground &disown
-                ${pkgs.xss-lock}/bin/xss-lock ${pkgs.maxhbr.background}/bin/myScreenLock &disown
+                ${pkgs.myconfig-background}/bin/myRandomBackground &disown
+                ${pkgs.xss-lock}/bin/xss-lock ${pkgs.myconfig-background}/bin/myScreenLock &disown
               '';
             };
 
@@ -115,10 +115,7 @@
               yeganesh
             ]);
 
-        system.activationScripts.cleanupXmonadState =
-        ''
-          rm /home/mhuber/.xmonad/xmonad.state || true
-        '';
+        system.activationScripts.cleanupXmonadState = "rm /home/mhuber/.xmonad/xmonad.state || true";
 
         services.xserver = {
           windowManager = {

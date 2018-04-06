@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
+set -e
 
 type "nix-env" &> /dev/null && {
     if [ "$((RANDOM%100))" -gt 90 ]; then

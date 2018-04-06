@@ -1,16 +1,23 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv }:
-
+self: super:
 let
-  background = pkgs.callPackage ./background { inherit pkgs stdenv; };
-  maxhbr = {
-    inherit background;
-    slim-theme = pkgs.callPackage ./background/slim-theme { inherit pkgs stdenv background; };
-  };
+  packageSources = {dir, name, pattern ? "*"}:
+    super.stdenv.mkDerivation {
+      # version = "0.1";
+      inherit name;
+
+      src = dir;
+      installPhase = ''
+        mkdir -p $out
+        cp -r ${pattern} $out
+      '';
+    };
 in {
-  inherit maxhbr;
-  nixSrc = ./nix;
-  nixosSrc = ./nixos;
-  overlays = [(self: super: { inherit maxhbr; })];
+  maxhbr = rec {
+    nixosSrc = super.callPackage (packageSources { dir = ./nixos; name = "nixosSrc"; });
+    nixSrc = super.callPackage (packageSources { dir = ./nix; name = "nixSrc"; });
+    dotfiles = super.callPackage (packageSources { dir = ./dotfiles; name = "dotfiles"; });
+    scripts = super.callPackage (packageSources { dir = ./dotfiles; name = "scripts"; pattern = "*.{sh,pl}" });
+  };
 }
