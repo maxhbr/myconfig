@@ -21,7 +21,7 @@
   })];
 
   nix.nixPath = [
-    # "nixpkgs=http://nixos.org/channels/nixos-17.09/nixexprs.tar.xz"
+    # "nixpkgs=http://nixos.org/channels/nixos-18.03/nixexprs.tar.xz"
     # "unstable=http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz"
     "nixpkgs=http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz"
     "nixpkgs-overlays=/etc/nix/overlays"

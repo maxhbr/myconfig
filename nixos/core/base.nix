@@ -9,20 +9,8 @@
     ./hosts.nix
   ];
 
-  nixpkgs.config.permittedInsecurePackages = [
-    "linux-4.13.16"
-  ];
   boot = {
-    kernelPackages = let
-      versionLatest = lib.getVersion pkgs.linuxPackages_latest.kernel;
-      version4_13 = lib.getVersion pkgs.linuxPackages_4_13.kernel;
-      latestIsNewer =  lib.versionOlder version4_13 versionLatest;
-      in if latestIsNewer
-         then pkgs.linuxPackages_latest
-         else pkgs.linuxPackages_4_13;
-    # kernelPackages = pkgs.linuxPackages_latest;
-    # kernelPackages = pkgs.linuxPackages_testing;
-    # kernelPackages = unstable.linuxPackages_latest;
+    kernelPackages = pkgs.linuxPackages_latest;
     kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
     cleanTmpDir = true;
     # tmpOnTmpfs = true;
