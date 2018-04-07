@@ -10,7 +10,7 @@ if [ "$EUID" -eq 0 ]; then
 fi
 
 REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
-ROOT="$(dirname $REBUILD_SH)/.."
+ROOT="$(dirname $REBUILD_SH)"
 cd "$ROOT"
 
 # wrap into tmux ##########################################################
@@ -75,12 +75,21 @@ else
 fi
 
 # run hooks ###############################################################
-shopt -s nullglob
-for f in $ROOT/scripts/_hooks/*; do
-    [ -x $f ] && {
-        echo "$(tput bold)****************************************************************************"
-        echo "***$(tput sgr0) Run $(tput bold)$(basename $f)$(tput sgr0)"
-        $f
-    }
+scripts=(
+    './nix/deploy.sh'
+    './nixos/deploy.sh'
+    './nixos/upgrade.sh'
+    './nixos/cleanup.sh'
+    './nix/cleanup.sh'
+    './nix/upgrade.sh'
+    './dotfiles/deploy.sh'
+    './xmonad/deploy.sh'
+    './scripts/create_and_update_repos.pl'
+    './scripts/xrdb_merge.sh'
+   )
+for script in ${scripts[@]}; do
+    echo "$(tput bold)****************************************************************************"
+    echo "***$(tput sgr0) Run $(tput bold)$script$(tput sgr0)"
+    $script
 done
 

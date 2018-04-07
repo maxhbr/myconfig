@@ -27,7 +27,7 @@
 
   environment = {
     interactiveShellInit = ''
-      alias upg='~/myconfig/scripts/rebuild.sh'
+      alias upg='~/scripts/rebuild.sh'
     '';
     # shellInit = ''
     # '';

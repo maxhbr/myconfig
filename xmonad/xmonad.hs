@@ -131,8 +131,9 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
 
       , ((ms_, xK_c     ), kill)
 
-      , ((m__, xK_Tab   ), windows W.focusDown)
+      , ((m_c, xK_Tab   ), windows W.focusDown)
       , ((ms_, xK_Tab   ), focusDown)
+      , ((m__, xK_Tab   ), windows W.focusUp >> windows W.shiftMaster)
       , ((m__, xK_u     ), focusUrgent)
 
       , ((m__, xK_j     ), windows W.focusDown)
