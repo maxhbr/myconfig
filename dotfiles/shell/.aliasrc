@@ -628,16 +628,16 @@ have nix-env && {
 
   alias nix-shell-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-shell"
 
-  [ -x ~/myconfig/scripts/rebuild.sh ] && {
-    alias upg="~/myconfig/scripts/rebuild.sh"
-    alias nixupg="~/myconfig/scripts/rebuild.sh"
-    alias nixosupg="~/myconfig/scripts/rebuild.sh"
-  } || {
-    alias nixupg="nix-channel --update && nix-env --upgrade"
-    alias upg='nixupg'
-    #nixos
-    alias nixosupg="sudo nixos-rebuild switch --fallback --upgrade"
-  }
+  # [ -x ~/myconfig/scripts/rebuild.sh ] && {
+  #   alias upg="~/myconfig/scripts/rebuild.sh"
+  #   alias nixupg="~/myconfig/scripts/rebuild.sh"
+  #   alias nixosupg="~/myconfig/scripts/rebuild.sh"
+  # } || {
+  #   alias nixupg="nix-channel --update && nix-env --upgrade"
+  #   alias upg='nixupg'
+  #   #nixos
+  #   alias nixosupg="sudo nixos-rebuild switch --fallback --upgrade"
+  # }
 
   freeStoreSpace() {
     for folder in /nix/store/*-nixos-vm; do

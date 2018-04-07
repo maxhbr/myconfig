@@ -5,11 +5,11 @@
 # TODO:
 # - see also:
 #   - https://github.com/ShikherVerma/i3lock-multimonitor/blob/master/lock
-#   - 
 
 set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
+LOG="/tmp/myScreenLock.sh.log"
 
 . $DIR/myBgs.sh
 
@@ -22,6 +22,7 @@ getScreenHeigth() {
 }
 
 lockWithRandom() {
+    echo "lock at: $(date)" | tee -a $LOG
     i3lock -t -i "$(getRandomBGFile $(getScreenHeigth))" -c 000000
 }
 

@@ -13,10 +13,8 @@ REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
 ROOT="$(dirname $REBUILD_SH)/.."
 cd "$ROOT"
 
-TMUX_NAME="rebuild_sh"
-logfile="${ROOT}/_logs/$(date +%Y-%m-%d)-rebuild.sh.log"
-
 # wrap into tmux ##########################################################
+TMUX_NAME="rebuild_sh"
 if test -z $TMUX && [[ $TERM != "screen" ]]; then
     echo "wrap into tmux ..."
     tmux has-session -t $TMUX_NAME 2>/dev/null
@@ -34,11 +32,12 @@ if test -z $TMUX && [[ $TERM != "screen" ]]; then
 fi
 
 # prepare logging #########################################################
-mkdir -p _logs
-
+mkdir -p "${ROOT}/_logs/"
+logfile="${ROOT}/_logs/$(date +%Y-%m-%d)-rebuild.sh.log"
 echo -e "\n\n\n\n\n\n\n" >> $logfile
 exec &> >(tee -a $logfile)
 
+###########################################################################
 set -e
 
 # check, if connected #####################################################

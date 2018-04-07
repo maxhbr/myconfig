@@ -26,6 +26,9 @@
   };
 
   environment = {
+    interactiveShellInit = ''
+      alias upg='~/myconfig/scripts/rebuild.sh'
+    '';
     # shellInit = ''
     # '';
     # loginShellInit = ''
