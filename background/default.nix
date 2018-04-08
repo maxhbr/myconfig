@@ -3,7 +3,7 @@
 { pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv }:
 
 stdenv.mkDerivation rec {
-  version = "0.1";
+  version = "1.0";
   name = "my-backgrounds-${version}";
 
   src = builtins.filterSource

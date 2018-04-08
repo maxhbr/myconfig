@@ -9,8 +9,9 @@
   imports = otherImports ++ [
     ./base.nix
     ../roles
-    (../machines + "/${hostName}.nix")
-  ];
+  ] ++ (if builtins.pathExists (../machines + "/${hostName}.nix")
+        then [(../machines + "/${hostName}.nix")]
+        else []);
 
   networking.hostId = "${hostId}";
   networking.hostName = "${hostName}";

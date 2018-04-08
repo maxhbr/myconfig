@@ -8,9 +8,8 @@ pkgs:
   # virtualbox.enableExtensionPack = true;
 
   packageOverrides = pkgs_: with pkgs_; {
-    all = with pkgs; buildEnv {
-      name = "all";
-      paths = [];
-    };
+    find-cursor = pkgs_.callPackage ./pkgs/find-cursor {};
+    myconfig-background = pkgs_.callPackage ../background { pkgs = self; stdenv = super.stdenv; };
+    myconfig-slim-theme = pkgs_.callPackage ../background/slim-theme { pkgs = self; stdenv = super.stdenv; background = myconfig-background; };
   };
 }

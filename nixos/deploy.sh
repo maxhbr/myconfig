@@ -9,6 +9,6 @@ echo "* $(tput bold)generate $config$(tput sgr0) ..."
 if [[ ! -f $config ]] || [[ $(wc -l <$config) -eq 1 ]]; then
     echo "import $SRC" | sudo tee $config
 else
-    echo "/etc/nixos/configuration.nix contains unexpected content"
+    echo "$config contains unexpected content"
     exit 1
 fi

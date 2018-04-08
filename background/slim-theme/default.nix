@@ -15,7 +15,7 @@ stdenv.mkDerivation rec {
     ln -s ${background}/share/romben3.png background.png
   '';
   installPhase = ''
-    share="$out/share"
+    share="$out/share/slim-theme"
     mkdir -p $share
 
     cp -r * $share

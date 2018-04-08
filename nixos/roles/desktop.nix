@@ -21,11 +21,6 @@
 ################################################################################
     { # desktop
       config = lib.mkIf config.myconfig.roles.desktop.enable {
-        nixpkgs.overlays = [(self: super: rec {
-          myconfig-background = super.callPackage ../../background { pkgs = self; stdenv = super.stdenv; };
-          myconfig-slim-theme = super.callPackage ../../background/slim-theme { pkgs = self; stdenv = super.stdenv; background = myconfig-background; };
-        })];
-
         environment.systemPackages = with pkgs; [
           arandr xrandr-invert-colors
           xlibs.xmodmap xlibs.xset xlibs.setxkbmap
@@ -45,8 +40,6 @@
           aspell aspellDicts.de aspellDicts.en
         # misc
           xf86_input_wacom
-        # mine
-          myconfig-background
         ];
 
         services = {
@@ -62,7 +55,7 @@
               slim = {
                 enable = true;
                 defaultUser = "mhuber";
-                theme = "${pkgs.myconfig-slim-theme}/share";
+                # theme = "${pkgs.myconfig-slim-theme}/share/slim-theme";
               };
               sessionCommands = ''
                 ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name ${pkgs.vanilla-dmz}/share/icons/Vanilla-DMZ/cursors/left_ptr 32 &disown
@@ -100,9 +93,7 @@
     { # xmonad
       config = lib.mkIf (config.myconfig.roles.desktop.enable && config.myconfig.roles.xmonad.enable) {
         # myconfig.roles.desktop.enable = true;
-        environment.systemPackages = let
-            find-cursor = pkgs.callPackage ../../nix/pkgs/find-cursor {};
-          in (with pkgs; [
+        environment.systemPackages = (with pkgs; [
               unstable.dmenu unstable.dzen2
               unclutter
               xss-lock

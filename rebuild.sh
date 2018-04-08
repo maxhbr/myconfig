@@ -74,18 +74,19 @@ else
     echo "... git directory is unclean, it will not be updated"
 fi
 
-# run hooks ###############################################################
-scripts=(
-    './nix/deploy.sh'
-    './nixos/deploy.sh'
-    './nixos/upgrade.sh'
-    './nixos/cleanup.sh'
-    './nix/cleanup.sh'
-    './nix/upgrade.sh'
-    './dotfiles/deploy.sh'
-    './xmonad/deploy.sh'
-    './scripts/create_and_update_repos.pl'
-    './scripts/xrdb_merge.sh'
+# run scripts #############################################################
+myconfig="$(nix-build default.nix  --add-root myconfig -A myconfig)"
+declare -a scripts=(
+    "$myconfig/nix/deploy.sh"
+    "$myconfig/nixos/deploy.sh"
+    "$myconfig/nixos/upgrade.sh"
+    "$myconfig/nixos/cleanup.sh"
+    "$myconfig/nix/cleanup.sh"
+    "./nix/upgrade.sh"
+    "./dotfiles/deploy.sh"
+    "./xmonad/deploy.sh"
+    "$myconfig/scripts/create_and_update_repos.pl"
+    "$myconfig/scripts/xrdb_merge.sh"
    )
 for script in ${scripts[@]}; do
     echo "$(tput bold)****************************************************************************"
