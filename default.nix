@@ -13,7 +13,13 @@ let
       version = "1.0";
       inherit name;
 
-      src = dir;
+      src = builtins.filterSource
+        (path: type: let
+           basename = baseNameOf path;
+         in if type == "directory" then basename != ".git"
+            else if type == "symlink" then builtins.match "^result(|-.*)$" basename == null
+            else builtins.match "^((|\..*)\.sw[a-z]|.*~)$" basename == null)
+        dir;
       inherit buildPhase;
       installPhase = ''
         mkdir -p $out/${name}
@@ -36,8 +42,10 @@ let
       dir = ./nix;
       name = "nix";
       buildPhase = ''
-        sed -i -e '/myconfig-background =/ s%= .*%= "${background}";%' nixpkgs-config.nix
-        sed -i -e '/myconfig-slim-theme =/ s%= .*%= "${slim-theme}";%' nixpkgs-config.nix
+        sed -i -e '/dotfiles =/ s%= .*%= "${dotfiles}";%' nixpkgs-config.nix
+        sed -i -e '/scripts =/ s%= .*%= "${scripts}";%' nixpkgs-config.nix
+        sed -i -e '/background =/ s%= .*%= "${background}";%' nixpkgs-config.nix
+        sed -i -e '/slim-theme =/ s%= .*%= "${slim-theme}";%' nixpkgs-config.nix
       '';
     }) {};
     nixosSrc = pkgs.callPackage (packageSources {

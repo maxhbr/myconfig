@@ -55,15 +55,15 @@
               slim = {
                 enable = true;
                 defaultUser = "mhuber";
-                # theme = "${pkgs.myconfig-slim-theme}/share/slim-theme";
+                # theme = "${pkgs.myconfig.slim-theme}/share/slim-theme";
               };
               sessionCommands = ''
                 ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name ${pkgs.vanilla-dmz}/share/icons/Vanilla-DMZ/cursors/left_ptr 32 &disown
                 if test -e $HOME/.Xresources; then
                   ${pkgs.xorg.xrdb}/bin/xrdb --merge $HOME/.Xresources &disown
                 fi
-                ${pkgs.myconfig-background}/bin/myRandomBackground &disown
-                ${pkgs.xss-lock}/bin/xss-lock ${pkgs.myconfig-background}/bin/myScreenLock &disown
+                ${pkgs.myconfig.background}/bin/myRandomBackground &disown
+                ${pkgs.xss-lock}/bin/xss-lock ${pkgs.myconfig.background}/bin/myScreenLock &disown
               '';
             };
 

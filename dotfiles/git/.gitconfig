@@ -79,6 +79,7 @@
     unstage     = reset HEAD --
     untrack     = rm --cached
     unadd       = rm --cached
+	  unrm        = "!f() { git reset -- $@ ; git checkout -- $@; }; f"
 
     whatis      = show -s --pretty='tformat:%h (%s, %ad)' --date=short
     pwhatis     = show -s --pretty='tformat:%h, %s, %ad' --date=short

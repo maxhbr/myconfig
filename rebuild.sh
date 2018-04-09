@@ -54,7 +54,6 @@ exec &> >(tee -a $logfile)
 # check, if connected #####################################################
 if ! ping -c1 heise.de > /dev/null 2>&1; then
     log "not connected" "ping"
-    # check again ###########################################################
     if ! wget -O - heise.de > /dev/null 2>&1; then
         log "not connected" "wget"
         exit 1
@@ -85,8 +84,17 @@ else
     echo "... git directory is unclean, it will not be updated"
 fi
 
+###########################################################################
+##  run  ##################################################################
+###########################################################################
+
+# temporary use local configuration #######################################
+log "temporary" "link configurations to dev source"
+./nix/_deploy.sh
+./nixos/_deploy.sh
+
 # run scripts #############################################################
-runCmd "./nixos/prepare.sh"
+runCmd "./nixos/_prepare.sh"
 log "nix-build" "myconfig"
 myconfig="$(nix-build default.nix  --add-root myconfig -A myconfig)"
 log "install" "$myconfig"

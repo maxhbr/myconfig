@@ -7,9 +7,15 @@ pkgs:
   # packageOverrides = myconfig.overlays;
   # virtualbox.enableExtensionPack = true;
 
+  myconfig = import ../. {};
+
   packageOverrides = pkgs_: with pkgs_; {
     find-cursor = pkgs_.callPackage ./pkgs/find-cursor {};
-    myconfig-background = pkgs_.callPackage ../background { pkgs = self; stdenv = super.stdenv; };
-    myconfig-slim-theme = pkgs_.callPackage ../background/slim-theme { pkgs = self; stdenv = super.stdenv; background = myconfig-background; };
+    myconfig = {
+      dotfiles = myconfig.dotfiles;
+      scripts = myconfig.scripts;
+      background = myconfig.background;
+      slim-theme = myconfig.slim-theme;
+    };
   };
 }
