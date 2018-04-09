@@ -1,5 +1,7 @@
 { system ? builtins.currentSystem, ... }@args:
-# see: https://www.reddit.com/r/NixOS/comments/4btjnf/fully_setting_up_a_custom_private_nix_repository/?st=jfqxd3k1&sh=92cbc8b5
+# see:
+# - https://www.reddit.com/r/NixOS/comments/4btjnf/fully_setting_up_a_custom_private_nix_repository/?st=jfqxd3k1&sh=92cbc8b5
+# - http://sandervanderburg.blogspot.de/2014/07/managing-private-nix-packages-outside.html
 let
   pkgs = import <nixpkgs> { inherit system; };
 
@@ -46,7 +48,8 @@ let
       '';
     }) {};
     dotfiles = pkgs.callPackage (packageSources { dir = ./dotfiles; name = "dotfiles"; }) {};
-    scripts =  pkgs.callPackage (packageSources { dir = ./scripts; name = "scripts"; pattern = "*.{sh,pl}"; }) {};
+    # scripts = pkgs.callPackage (packageSources { dir = ./scripts; name = "scripts"; pattern = "*.{sh,pl}"; }) {};
+    scripts = callPackage ./scripts { inherit pkgs; stdenv = pkgs.stdenv; };
     myconfig = pkgs.buildEnv {
       name = "myconfig";
       paths = [

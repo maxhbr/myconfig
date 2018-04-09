@@ -222,9 +222,9 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       [ ((const 0,   0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
       , ((m__, xK_s      ), spawn "find-cursor")
       , ((ms_, xK_s      ), spawn "xdotool mousemove 0 0; synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
-      , ((m__, xK_z      ), spawn "~/bin/myautosetup.pl --onlyIfChanged")
-      , ((ms_, xK_z      ), spawn "~/bin/myautosetup.pl")
-      , ((msc, xK_z      ), spawn "~/bin/myautosetup.pl --rotate=left --primOutNr=1")
+      , ((m__, xK_z      ), spawn "myautosetup.pl --onlyIfChanged")
+      , ((ms_, xK_z      ), spawn "myautosetup.pl")
+      , ((msc, xK_z      ), spawn "myautosetup.pl --rotate=left --primOutNr=1")
 #if 1
       , ((ms_, xK_y      ), spawn "xset s activate") -- screenlocker
 #else
@@ -238,8 +238,10 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       , ((m__,  xK_Home   ), spawn "xcalib -i -a")
 #endif
 
-      , ((m__,  xK_Print  ), spawn "~/bin/screenshot.sh") -- or: "bash -c \"import -frame ~/screen_`date +%Y-%m-%d_%H-%M-%S`.png\"")
-      , ((ms_,  xK_Print  ), spawn "scrot ~/screen_%Y-%m-%d_%H-%M-%S.png -d 1") -- screenshot
+      , ((m__,  xK_Print  ), spawn "screenshot.sh")
+         -- or:
+         -- - "bash -c \"import -frame ~/screen_`date +%Y-%m-%d_%H-%M-%S`.png\"")
+         -- - "mkdir -p ~/_screenshots/ && scrot ~/_screenshots/screen_%Y-%m-%d_%H-%M-%S.png -d 1"
 
       -- keyboard layouts
       , ((m__,  xK_F2     ), spawn "feh ~/.xmonad/neo/neo_Ebenen_1_2_3_4.png")
@@ -386,7 +388,6 @@ myStartupHook = do
   setWMName "LG3D"
   spawn "pkill unclutter; unclutter"
   spawn "xset s 900"
-  -- spawn "xss-lock -- slimlock"
 
 ------------------------------------------------------------------------
 -- Log hook:
