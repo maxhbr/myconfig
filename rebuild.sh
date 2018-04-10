@@ -5,7 +5,7 @@
 #  written by maximilian-huber.de
 set -e
 
-if [ "$(id -u)" -eq "$(stat -c '%u' $0)" ]; then
+if [ "$(id -u)" -ne "$(stat -c '%u' $0)" ]; then
     echo "you should run this script as the user, which owns $0"
     exit 1
 fi
@@ -29,6 +29,14 @@ logH3() {
     text=$2
     echo "*** $prefix $(tput bold)$text$(tput sgr0)"
 }
+logINFO() {
+    text=$1
+    echo "$(tput setaf 3)$(tput bold)*** INFO: $(tput bold)$text$(tput sgr0)"
+}
+logERR() {
+    text=$1
+    echo "$(tput setaf 1)$(tput bold)*** ERR: $(tput bold)$text$(tput sgr0)"
+}
 runCmd() {
     folder=$1
     cmd=$2
@@ -45,7 +53,7 @@ TMUX_NAME="rebuild_sh"
 if test -z $TMUX && [[ $TERM != "screen" ]]; then
     logH2 "wrap into tmux ..."
     tmux has-session -t $TMUX_NAME 2>/dev/null && {
-        echo "already running somewhere"
+        logERR "already running somewhere"
         exit 1
     }
     tmux -2 new-session -s $TMUX_NAME \
@@ -54,7 +62,7 @@ if test -z $TMUX && [[ $TERM != "screen" ]]; then
          set-option status-right "..."\; \
          set set-titles-string "${TMUX_NAME}@tmux" \
         && exit 0
-    echo "tmux failed to start, running without tmux"
+    logERR "tmux failed to start, running without tmux"
 fi
 
 # prepare logging #########################################################
@@ -65,9 +73,9 @@ exec &> >(tee -a $logfile)
 
 # check, if connected #####################################################
 if ! ping -c1 heise.de > /dev/null 2>&1; then
-    logH2 "not connected" "ping"
+    logERR "not connected" "ping"
     if ! wget -O - heise.de > /dev/null 2>&1; then
-        logH2 "not connected" "wget"
+        logERR "not connected" "wget"
         exit 1
     fi
 fi
@@ -88,12 +96,12 @@ if git diff-index --quiet HEAD --; then
         # run updatet version of script ###################################
         exec $0
     elif [ $REMOTE = $BASE ]; then
-        echo "... need to push"
+        logINFO "need to push"
     else
-        echo "... diverged"
+        logERR "diverged"
     fi
 else
-    echo "... git directory is unclean, it will not be updated"
+    logINFO "git directory is unclean, it will not be updated"
 fi
 
 ###########################################################################
@@ -106,19 +114,23 @@ runCmd ./nix deploy
 runCmd ./nixos deploy
 
 # run scripts #############################################################
-runCmd ./nixos prepare
+logH1 "handle:" "prepare"
+for folder in ${folders[@]}; do
+    runCmd $folder prepare
+done
+
 logH1 "nix-build" "myconfig"
 myconfig="$(nix-build default.nix --add-root myconfig -A myconfig)"
 
 if [ -z "$myconfig" ]; then
-    echo "failed to build \$myconfig with nix"
+    logERR "failed to build \$myconfig with nix"
     exit 1
 fi
 
 declare -a folders=("$myconfig/nix" "$myconfig/nixos" "./dotfiles" "./xmonad")
 declare -a commands=("deploy" "upgrade" "cleanup")
 for cmd in ${commands[@]}; do
-    logH1 "handle" "$cmd"
+    logH1 "handle:" "$cmd"
     for folder in ${folders[@]}; do
         runCmd $folder $cmd
     done
