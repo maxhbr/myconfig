@@ -69,6 +69,13 @@
 
           };
 
+          cron = {
+            enable = true;
+            systemCronJobs = [
+              "*/10 * * * *  mhuber ${pkgs.myconfig.background}/bin/myRandomBackground >> /tmp/cronout 2>&1"
+            ];
+          };
+
           redshift = {
             enable = true;
             latitude = "48.2";

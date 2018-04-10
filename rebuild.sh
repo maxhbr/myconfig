@@ -30,29 +30,10 @@ logH3() {
     echo "*** $prefix $(tput bold)$text$(tput sgr0)"
 }
 runCmd() {
-    script=$1
-    logH2 "Run" "$script"
-    $script
-}
-runWithGate() {
-    script=$1
-    gate="$(dirname $script)/_gate.sh"
-    if [[ -x $gate ]]; then
-        $gate && $script \
-           || echo "... skip: $script"
-    else
-        $script
-    fi
-}
-runAndLogWithGate() {
-    script=$1
-    gate="$(dirname $script)/_gate.sh"
-    if [[ -x $gate ]]; then
-        $gate && runCmd $script \
-                || echo "... skip: $script"
-    else
-        runCmd $script
-    fi
+    folder=$1
+    cmd=$2
+    logH2 "Run" "$cmd of $folder"
+    $folder/default.sh $cmd
 }
 
 REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -122,11 +103,11 @@ fi
 
 # temporary use local configuration #######################################
 logH1 "temporary" "link configurations to dev source"
-runCmd ./nix/_deploy.sh
-runCmd ./nixos/_deploy.sh
+runCmd ./nix deploy
+runCmd ./nixos deploy
 
 # run scripts #############################################################
-runCmd ./nixos/_prepare.sh
+runCmd ./nixos prepare
 logH1 "nix-build" "myconfig"
 myconfig="$(nix-build default.nix --add-root myconfig -A myconfig)"
 
@@ -136,20 +117,11 @@ if [ -z "$myconfig" ]; then
 fi
 
 declare -a folders=("$myconfig/nix" "$myconfig/nixos" "./dotfiles" "./xmonad")
-declare -a scriptTypes=("_deploy.sh" "_upgrade.sh" "_cleanup.sh")
-for scriptType in ${scriptTypes[@]}; do
-    logH1 "handle" "$scriptType"
+declare -a commands=("deploy" "upgrade" "cleanup")
+for cmd in ${commands[@]}; do
+    logH1 "handle" "$cmd"
     for folder in ${folders[@]}; do
-        gate="$folder/_gate.sh"
-        if [[ -x $gate ]] && ! $gate; then
-            echo "... skip folder $folder"
-            continue
-        fi
-
-        script="$folder/$scriptType"
-        if [[ -x $script ]]; then
-            runCmd $script
-        fi
+        runCmd $folder $cmd
     done
 done
 
