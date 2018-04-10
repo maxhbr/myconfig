@@ -2,6 +2,7 @@
 # Copyright 2017-2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 set -e
+
 echo "* $(tput bold)nix-env --upgrade$(tput sgr0) ..."
 NIX_PATH=
 NIX_CURL_FLAGS='--retry=1000' \

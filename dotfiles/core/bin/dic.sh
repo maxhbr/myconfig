@@ -29,11 +29,11 @@ dic(){
 
 ################################################################################
 # run
-if [ $# = 0 ]; then
+if [ $# -eq 0 ]; then
     rlwrap $0 --rlwrap $@
+else
+    if [ "$1" == "--rlwrap" ]; then
+        shift
+    fi
+    dic $@
 fi
-if [ "$1" = "--rlwrap" ]; then
-    shift
-fi
-
-dic $@

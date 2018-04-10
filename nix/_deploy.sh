@@ -6,10 +6,8 @@ set -e
 echo "* $(tput bold)deploy nix configuration$(tput sgr0) ..."
 SRC="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-[[ ! -L /etc/nix/pkgs ]] && \
-    sudo ln -s "$SRC/pkgs" /etc/nix/pkgs
-[[ ! -L /etc/nix/overlays ]] && \
-    sudo ln -s "$SRC/overlays" /etc/nix/overlays
+sudo ln -sf "$SRC/pkgs" /etc/nix/pkgs
+sudo ln -sf "$SRC/overlays" /etc/nix/overlays
 
 config=/etc/nix/nixpkgs-config.nix
 echo "* $(tput bold)generate $config$(tput sgr0) ..."

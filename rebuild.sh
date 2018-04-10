@@ -5,22 +5,54 @@
 #  written by maximilian-huber.de
 set -e
 
+###########################################################################
+
 if [ "$EUID" -eq 0 ]; then
     echo "you should run this script as user"
     exit 1
 fi
 
-log() {
+logH1() {
     prefix=$1
     text=$2
     echo
     echo "$(tput bold)****************************************************************************"
     echo "***$(tput sgr0) $prefix $(tput bold)$text$(tput sgr0)"
 }
+logH2() {
+    prefix=$1
+    text=$2
+    echo "$(tput bold)***$(tput sgr0) $prefix $(tput bold)$text$(tput sgr0)"
+}
+logH3() {
+    prefix=$1
+    text=$2
+    echo "*** $prefix $(tput bold)$text$(tput sgr0)"
+}
 runCmd() {
     script=$1
-    log "Run" "$script"
+    logH2 "Run" "$script"
     $script
+}
+runWithGate() {
+    script=$1
+    gate="$(dirname $script)/_gate.sh"
+    if [[ -x $gate ]]; then
+        $gate && $script \
+           || echo "... skip: $script"
+    else
+        $script
+    fi
+}
+runAndLogWithGate() {
+    script=$1
+    gate="$(dirname $script)/_gate.sh"
+    if [[ -x $gate ]]; then
+        $gate && runCmd $script \
+                || echo "... skip: $script"
+    else
+        runCmd $script
+    fi
 }
 
 REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -30,7 +62,7 @@ cd "$ROOT"
 # wrap into tmux ##########################################################
 TMUX_NAME="rebuild_sh"
 if test -z $TMUX && [[ $TERM != "screen" ]]; then
-    log "wrap into tmux ..."
+    logH2 "wrap into tmux ..."
     set -x
     tmux has-session -t $TMUX_NAME 2>/dev/null && {
         echo "already running somewhere"
@@ -53,15 +85,15 @@ exec &> >(tee -a $logfile)
 
 # check, if connected #####################################################
 if ! ping -c1 heise.de > /dev/null 2>&1; then
-    log "not connected" "ping"
+    logH2 "not connected" "ping"
     if ! wget -O - heise.de > /dev/null 2>&1; then
-        log "not connected" "wget"
+        logH2 "not connected" "wget"
         exit 1
     fi
 fi
 
 # update git directory if clean ###########################################
-log "update config" ""
+logH1 "update config" ""
 if git diff-index --quiet HEAD --; then
     git fetch
     UPSTREAM=${1:-'@{u}'}
@@ -89,28 +121,37 @@ fi
 ###########################################################################
 
 # temporary use local configuration #######################################
-log "temporary" "link configurations to dev source"
-./nix/_deploy.sh
-./nixos/_deploy.sh
+logH1 "temporary" "link configurations to dev source"
+runCmd ./nix/_deploy.sh
+runCmd ./nixos/_deploy.sh
 
 # run scripts #############################################################
-runCmd "./nixos/_prepare.sh"
-log "nix-build" "myconfig"
-myconfig="$(nix-build default.nix  --add-root myconfig -A myconfig)"
-log "install" "$myconfig"
-nix-env -i ./result
-declare -a scripts=(
-    "$myconfig/nix/_deploy.sh"
-    "$myconfig/nixos/_deploy.sh"
-    "$myconfig/nixos/_upgrade.sh"
-    "$myconfig/nixos/_cleanup.sh"
-    "$myconfig/nix/_cleanup.sh"
-    "$myconfig/nix/_upgrade.sh"
-    "./dotfiles/_deploy.sh"
-    "./xmonad/_deploy.sh"
-    "$myconfig/bin/create_and_update_repos.pl"
-    "$myconfig/bin/xrdb_merge.sh"
-   )
-for script in ${scripts[@]}; do
-    runCmd $script
+runCmd ./nixos/_prepare.sh
+logH1 "nix-build" "myconfig"
+myconfig="$(nix-build default.nix --add-root myconfig -A myconfig)"
+
+if [ -z "$myconfig" ]; then
+    echo "failed to build \$myconfig with nix"
+    exit 1
+fi
+
+declare -a folders=("$myconfig/nix" "$myconfig/nixos" "./dotfiles" "./xmonad")
+declare -a scriptTypes=("_deploy.sh" "_upgrade.sh" "_cleanup.sh")
+for scriptType in ${scriptTypes[@]}; do
+    logH1 "handle" "$scriptType"
+    for folder in ${folders[@]}; do
+        gate="$folder/_gate.sh"
+        if [[ -x $gate ]] && ! $gate; then
+            echo "... skip folder $folder"
+            continue
+        fi
+
+        script="$folder/$scriptType"
+        if [[ -x $script ]]; then
+            runCmd $script
+        fi
+    done
 done
+
+logH1 "install" "$myconfig"
+nix-env -i ./result
