@@ -29,5 +29,10 @@ upgrade() {
     fi
 }
 
-([[ ! -n "$(type -t $1)" ]] || [ "$(type -t $1)" != "function" ] ) && exit 0
-$@
+if [ $# -eq 0 ]; then
+    deploy
+    upgrade
+else
+    ([[ ! -n "$(type -t $1)" ]] || [ "$(type -t $1)" != "function" ] ) && exit 0
+    $@
+fi

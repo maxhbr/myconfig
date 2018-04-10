@@ -11,8 +11,8 @@ gate() {
 
 deploy() {
     nixSrcDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    sudo ln -sf "$nixSrcDir/pkgs" /etc/nix/pkgs
-    sudo ln -sf "$nixSrcDir/overlays" /etc/nix/overlays
+    sudo ln -sfn "$nixSrcDir/pkgs" /etc/nix/pkgs
+    sudo ln -sfn "$nixSrcDir/overlays" /etc/nix/overlays
 
     configTarget=/etc/nix/nixpkgs-configTarget.nix
     echo "* $(tput bold)generate $configTarget$(tput sgr0) ..."
@@ -44,6 +44,12 @@ cleanup() {
     fi
 }
 
-([[ ! -n "$(type -t $1)" ]] || [ "$(type -t $1)" != "function" ] ) && exit 0
 gate
-$@
+if [ $# -eq 0 ]; then
+    deploy
+    upgrade
+    cleanup
+else
+    ([[ ! -n "$(type -t $1)" ]] || [ "$(type -t $1)" != "function" ] ) && exit 0
+    $@
+fi

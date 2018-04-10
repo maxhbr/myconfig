@@ -5,12 +5,12 @@
 #  written by maximilian-huber.de
 set -e
 
-###########################################################################
-
-if [ "$EUID" -eq 0 ]; then
-    echo "you should run this script as user"
+if [ "$(id -u)" -eq "$(stat -c '%u' $0)" ]; then
+    echo "you should run this script as the user, which owns $0"
     exit 1
 fi
+
+###########################################################################
 
 logH1() {
     prefix=$1
@@ -44,7 +44,6 @@ cd "$ROOT"
 TMUX_NAME="rebuild_sh"
 if test -z $TMUX && [[ $TERM != "screen" ]]; then
     logH2 "wrap into tmux ..."
-    set -x
     tmux has-session -t $TMUX_NAME 2>/dev/null && {
         echo "already running somewhere"
         exit 1
@@ -125,5 +124,6 @@ for cmd in ${commands[@]}; do
     done
 done
 
+# install nix package in place ############################################
 logH1 "install" "$myconfig"
 nix-env -i ./result

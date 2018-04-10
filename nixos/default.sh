@@ -64,6 +64,13 @@ cleanup() {
     }
 }
 
-([[ ! -n "$(type -t $1)" ]] || [ "$(type -t $1)" != "function" ] ) && exit 0
 gate
-$@
+if [ $# -eq 0 ]; then
+    prepare
+    deploy
+    upgrade
+    cleanup
+else
+    ([[ ! -n "$(type -t $1)" ]] || [ "$(type -t $1)" != "function" ] ) && exit 0
+    $@
+fi
