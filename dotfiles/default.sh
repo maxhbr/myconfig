@@ -7,24 +7,23 @@ set -e
 deploy() {
     echo "* $(tput bold)dotfiles$(tput sgr0) ..."
 
-    dotfiles="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-
-    user=$(stat -c '%U' $0)
-    userGroup=$(stat -c '%G' $0)
 
     if [ ! -d $HOME ]; then
         echo "user dir does not exist"
         exit 1
     fi
 
-    ################################################################################
+    dotfiles="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     cd "$dotfiles"
 
-    add_stow_params=""
+    add_stow_params="" # "--restow"
     if git diff-index --quiet HEAD --; then
         echo "git is clean, adopt files ..."
         add_stow_params="--adopt"
     fi
+
+    user=$(stat -c '%U' $HOME)
+    userGroup=$(stat -c '%G' $HOME)
 
     dirs=$(find . -mindepth 1 -maxdepth 1 -type d -not -name "_*" -exec basename {} \;)
     for dir in $dirs; do

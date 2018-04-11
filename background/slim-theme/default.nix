@@ -12,13 +12,16 @@ stdenv.mkDerivation rec {
   buildInputs = with pkgs; [ imagemagick coreutils ];
 
   buildPhase = ''
-    ln -s ${background}/share/romben3.png background.png
+    mkdir -p my-slim-theme
+    cp ${background}/share/romben3.png my-slim-theme/background.png
+    mv panel.png slim.theme my-slim-theme
+    tar -czf my-slim-theme.tar.gz my-slim-theme
+    # ${pkgs.zip}/bin/zip -r my-slim-theme.zip my-slim-theme
   '';
   installPhase = ''
-    share="$out/share/slim-theme"
+    share="$out/share"
     mkdir -p $share
-
-    cp -r * $share
+    cp -r my-slim-theme* $share
   '';
 
   meta = with stdenv.lib; {

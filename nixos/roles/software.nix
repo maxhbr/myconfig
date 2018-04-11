@@ -99,7 +99,7 @@
           gimp-with-plugins
           rawtherapee
           geeqie
-          #krita
+          # krita
 
           inkscape
 

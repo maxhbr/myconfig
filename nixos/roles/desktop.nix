@@ -55,7 +55,11 @@
               slim = {
                 enable = true;
                 defaultUser = "mhuber";
-                # theme = "${pkgs.myconfig.slim-theme}/share/slim-theme";
+                autoLogin = true;
+                # TODO: this is no longer working!
+                # theme = "${pkgs.myconfig.slim-theme}/share/my-slim-theme";
+                # theme = "${pkgs.myconfig.slim-theme}/share/my-slim-theme.tar.gz";
+                # theme = "${pkgs.myconfig.slim-theme}/share/my-slim-theme.zip";
               };
               sessionCommands = ''
                 ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name ${pkgs.vanilla-dmz}/share/icons/Vanilla-DMZ/cursors/left_ptr 32 &disown

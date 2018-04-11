@@ -75,6 +75,9 @@ man(){
         || /run/current-system/sw/bin/man $@ 2>/dev/null \
         || which $@
 }
+whichf() {
+   readlink -f $(which $@)
+}
 
 have ag && {
   alias grepr="ag"

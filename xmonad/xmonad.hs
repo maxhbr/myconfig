@@ -131,9 +131,14 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
 
       , ((ms_, xK_c     ), kill)
 
+#if 0
+      , ((m__, xK_Tab   ), windows W.focusDown)
+      , ((m_c, xK_Tab   ), windows W.focusUp >> windows W.shiftMaster)
+#else
       , ((m_c, xK_Tab   ), windows W.focusDown)
-      , ((ms_, xK_Tab   ), focusDown)
       , ((m__, xK_Tab   ), windows W.focusUp >> windows W.shiftMaster)
+#endif
+      , ((ms_, xK_Tab   ), focusDown)
       , ((m__, xK_u     ), focusUrgent)
 
       , ((m__, xK_j     ), windows W.focusDown)
@@ -182,7 +187,7 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
       ++ cycleWSKBs
       ++ map (\(a,b) -> (a,b >> popupCurDesktop))
            [ ((m__, xK_i), runOrRaiseNext "firefox" (className =? "Firefox" <||> className =?  "chromium-browser" <||> className =? "Chromium-browser"))
-           , ((m__, 0xfc), runOrRaiseNext "~/bin/ec" (className =? "Emacs"))
+           , ((m__, 0xfc), runOrRaiseNext "ec" (className =? "Emacs"))
            , ((m__, 0xf6), raiseNext (className =? "jetbrains-phpstorm" <||> className =? "jetbrains-idea"))
            ]
       -- ++ combineTwoKBs
@@ -221,8 +226,9 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
     miscKBs =
       [ ((const 0,   0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
       , ((m__, xK_s      ), spawn "find-cursor")
-      , ((ms_, xK_s      ), spawn "xdotool mousemove 0 0; synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
-      , ((m_c,  xK_s      ), toggleFF) -- toggle mouse follow focus
+      , ((m_c, xK_s      ), toggleFF) -- toggle mouse follow focus
+      , ((ms_, xK_s      ), toggleUP) -- toggle mouse update pointer
+      , ((msc, xK_s      ), spawn "xdotool mousemove 0 0; synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
       , ((m__, xK_z      ), spawn "myautosetup.pl --onlyIfChanged")
       , ((ms_, xK_z      ), spawn "myautosetup.pl")
       , ((msc, xK_z      ), spawn "myautosetup.pl --rotate=left --primOutNr=1")
@@ -400,7 +406,7 @@ myLogHook xmproc = let
                    , ppVisible = xmobarColor maincolor ""
                    }
   in dynamicLogWithPP myXmobarPP
-     >> updatePointer (0.5,0.5) (0.5,0.5)
+     >> updatePointerIfFollowFoucs
 
 ------------------------------------------------------------------------
 -- General
