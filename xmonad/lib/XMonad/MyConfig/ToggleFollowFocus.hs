@@ -1,16 +1,11 @@
 -- Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 -- SPDX-License-Identifier: MIT
 -- stolen from: https://wiki.haskell.org/Xmonad/Config_archive/adamvo's_xmonad.hs
-
-
--- , ((m__,  xK_s      ), toggleFF) -- toggle mouse follow focus
--- , ((msc,  xK_s      ), toggleUP) -- toggle mouse update pointer
-
 module XMonad.MyConfig.ToggleFollowFocus
        ( focusFollow
-       , toggleFF
-       , toggleUP
        , updatePointerIfFollowFoucs
+       , toggleFF
+       -- , ((m__,  xK_s      ), toggleFF) -- toggle mouse follow focus
        ) where
 import           XMonad
 import qualified XMonad.Util.ExtensibleState as XS
@@ -31,16 +26,8 @@ focusFollow e@(CrossingEvent {ev_window=w, ev_event_type=t})
     whenX (XS.gets getFocusFollow) (focus w) >> return (All True)
 focusFollow _ = return (All True)
 
-toggleFF = XS.modify $ FocusFollow . not . getFocusFollow
-
-newtype UpdatePointer = UpdatePointer {getUpdatePointer :: Bool} deriving (Typeable,Read,Show)
-instance ExtensionClass UpdatePointer where
-    initialValue = UpdatePointer True
-    extensionType = PersistentExtension
-
 -- updatePointerIfFollowFoucs
 updatePointerIfFollowFoucs = whenX (XS.gets getFocusFollow) $
-  whenX (XS.gets getUpdatePointer) $
   updatePointer (0.5,0.5) (0.5,0.5)
 
-toggleUP = XS.modify $ UpdatePointer . not . getUpdatePointer
+toggleFF = XS.modify $ FocusFollow . not . getFocusFollow

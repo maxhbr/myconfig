@@ -13,7 +13,7 @@ stdenv.mkDerivation rec {
 
   buildPhase = ''
     mkdir -p my-slim-theme
-    cp ${background}/share/romben3.png my-slim-theme/background.png
+    cp ${background}/romben3.png my-slim-theme/background.png
     mv panel.png slim.theme my-slim-theme
     tar -czf my-slim-theme.tar.gz my-slim-theme
     # ${pkgs.zip}/bin/zip -r my-slim-theme.zip my-slim-theme

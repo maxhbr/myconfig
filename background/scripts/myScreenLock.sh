@@ -11,8 +11,6 @@ set -e
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
 LOG="/tmp/myScreenLock.sh.log"
 
-. $DIR/myBgs.sh
-
 getScreenHeigth() {
     xrandr --current |
         grep '*' |
@@ -23,7 +21,7 @@ getScreenHeigth() {
 
 lockWithRandom() {
     echo "lock at: $(date)" | tee -a $LOG
-    i3lock -t -i "$(getRandomBGFile $(getScreenHeigth))" -c 000000
+    i3lock -t -i "$($DIR/getRandomBG.sh $(getScreenHeigth))" -c 000000
 }
 
 lockWithRandom

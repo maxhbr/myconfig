@@ -4,22 +4,12 @@
 set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
-LINK="$HOME/.background-image"
 
 [ -z "$DISPLAY" ] && \
     export DISPLAY=:0
 
-. $DIR/myBgs.sh
-
-linkRandomToHome() {
-    cd $(dirname $0)
-    rm $LINK
-    ln -s $(getRandomBGFile) $LINK
-    echo "$LINK"
-}
-
 setRandomWithFeh() {
-    feh --bg-scale "$(linkRandomToHome)"
+    feh --bg-scale "$($DIR/getRandomBG.sh)"
 }
 
 setRandomWithFeh

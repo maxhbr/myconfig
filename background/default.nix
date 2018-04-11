@@ -26,9 +26,8 @@ stdenv.mkDerivation rec {
     sed -i 's%xrandr%${pkgs.xorg.xrandr}/bin/xrandr%' scripts/myScreenLock.sh
   '';
   installPhase = ''
-    share="$out/share"
-    mkdir -p $share
-    cp -r *.png 1080 1440 2160 myBgs.sh $share/
+    mkdir -p $out
+    cp -r *.png 1080 1440 2160 getRandomBG.sh $out
 
     bin="$out/bin"
     mkdir -p $bin
@@ -36,7 +35,7 @@ stdenv.mkDerivation rec {
     cp scripts/myScreenLock.sh $bin/myScreenLock
     for exe in $bin/*; do
       chmod +x "$exe"
-      sed -i 's%^DIR.*%DIR="'"$out"'/share"%' "$exe"
+      sed -i 's%^DIR.*%DIR="'"$out"'"%' "$exe"
     done
   '';
 
