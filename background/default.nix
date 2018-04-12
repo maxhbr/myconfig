@@ -21,22 +21,28 @@ stdenv.mkDerivation rec {
       convert "$img" -resize 3840x2160\> "2160/$img"
     done
 
-    sed -i 's%feh%${pkgs.feh}/bin/feh%' scripts/myRandomBackground.sh
-    sed -i 's%i3lock%${pkgs.i3lock}/bin/i3lock%' scripts/myScreenLock.sh
-    sed -i 's%xrandr%${pkgs.xorg.xrandr}/bin/xrandr%' scripts/myScreenLock.sh
+    # link default background
+    ln -s romben3.png background.png
+
+    sed -i 's%feh%${pkgs.feh}/bin/feh%' bg.sh
+    sed -i 's%i3lock%${pkgs.i3lock}/bin/i3lock%' bg.sh
+    sed -i 's%xrandr%${pkgs.xorg.xrandr}/bin/xrandr%' bg.sh
   '';
   installPhase = ''
-    mkdir -p $out
-    cp -r *.png 1080 1440 2160 getRandomBG.sh $out
+    share=$out/share
+    mkdir -p $share
+    cp -r *.png 1080 1440 2160 $share
+
+    sed -i 's%^DIR.*%DIR="'"$share"'"%' bg.sh
 
     bin="$out/bin"
     mkdir -p $bin
-    cp scripts/myRandomBackground.sh $bin/myRandomBackground
-    cp scripts/myScreenLock.sh $bin/myScreenLock
-    for exe in $bin/*; do
-      chmod +x "$exe"
-      sed -i 's%^DIR.*%DIR="'"$out"'"%' "$exe"
-    done
+    cp bg.sh "$bin/.bg.sh"
+
+
+    printf "#!${pkgs.bash}/bin/bash\n${pkgs.bash}/bin/bash $bin/.bg.sh --set" > $bin/myRandomBackground
+    printf "#!${pkgs.bash}/bin/bash\n${pkgs.bash}/bin/bash $bin/.bg.sh --lock" > $bin/myScreenLock
+    chmod +x $bin/{*,.bg.sh}
   '';
 
   meta = with stdenv.lib; {
