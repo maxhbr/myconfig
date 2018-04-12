@@ -285,9 +285,8 @@ sub setupWacom{
 ################################################################################
 
 sub setupBackgroundAndUI{
-    my $background = "/home/mhuber/.background-image";
-    call("feh --bg-scale \"$background\"");
-
+    my $backgroundCmd = "../background/bg.sh --set";
+    call($backgroundCmd);
     call("xrdb -merge ~/.Xresources");
 }
 

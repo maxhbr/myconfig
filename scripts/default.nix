@@ -1,6 +1,6 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv }:
+{ pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv, background }:
 
 stdenv.mkDerivation rec {
   version = "1.0";
@@ -8,6 +8,9 @@ stdenv.mkDerivation rec {
 
   src = ./.;
 
+  buildPhase = ''
+    sed -i -e '/backgroundCmd =/ s%= .*%= "${background}/bin/myRandomBackground";%' myautosetup.pl
+  '';
   installPhase = ''
     bin="$out/bin"
     mkdir -p $bin

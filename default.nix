@@ -56,7 +56,7 @@ let
       '';
     }) {};
     dotfiles = pkgs.callPackage (packageSources { dir = ./dotfiles; name = "dotfiles"; }) {};
-    scripts = callPackage ./scripts { inherit pkgs; stdenv = pkgs.stdenv; };
+    scripts = callPackage ./scripts { inherit pkgs background; stdenv = pkgs.stdenv; };
     myconfig = pkgs.buildEnv {
       name = "myconfig";
       paths = [

@@ -28,7 +28,7 @@ upgrade() {
     echo "* $(tput bold)nix-env --upgrade$(tput sgr0) ..."
     NIX_PATH=
     NIX_CURL_FLAGS='--retry=1000' \
-                  nix-env -I nixpkgs=http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz \
+                  nix-env -I nixpkgs=channel:nixos-unstable \
                   -I nixpkgs-overlays=/etc/nix/overlays \
                   --show-trace \
                   --upgrade

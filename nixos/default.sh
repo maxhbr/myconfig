@@ -42,7 +42,7 @@ upgrade() {
     exec sudo \
          NIX_CURL_FLAGS='--retry=1000' \
          nixos-rebuild --show-trace --keep-failed \
-         -I nixpkgs=http://nixos.org/channels/nixos-18.03/nixexprs.tar.xz \
+         -I nixpkgs=channel:nixos-18.03 \
          -I nixpkgs-overlays=/etc/nix/overlays \
          -I nixos-configTarget=/etc/nixos/configuration.nix \
          --upgrade \
