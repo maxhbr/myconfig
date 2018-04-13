@@ -3,17 +3,9 @@
 # SPDX-License-Identifier: MIT
 set -e
 
-# bgs=("quint4.png"
-#      "penrose_4k_color.png"
-#      "quint3.png"
-#      "quint5.png"
-#      "quint7.png"
-#      "romben3.png"
-#      "romben.png")
-
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../background"
 cd $DIR
-bgs=(*.png)
+bgs=(*.png) # bgs=("quint4.png" "penrose_4k_color.png" "quint3.png" "quint5.png" "quint7.png" "romben3.png" "romben.png")
 
 getRandomBG() {
     rand=$[$RANDOM % ${#bgs[@]}]
@@ -33,7 +25,6 @@ setRandomWithFeh() {
         export DISPLAY=:0
     feh --bg-scale "$(getRandomBG)"
 }
-
 
 getScreenHeigth() {
     xrandr --current |

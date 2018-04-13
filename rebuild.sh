@@ -79,9 +79,9 @@ wrapIntoTmux() {
 
 checkIfConnected() {
     if ! ping -c1 heise.de > /dev/null 2>&1; then
-        logERR "not connected" "ping"
+        logERR "not connected: ping"
         if ! wget -O - heise.de > /dev/null 2>&1; then
-            logERR "not connected" "wget"
+            logERR "not connected: wget"
             exit 1
         fi
     fi
