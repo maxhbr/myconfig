@@ -123,7 +123,8 @@ echo -e "\n\n\n\n\n\n\n" >> $logfile
 exec &> >(tee -a $logfile)
 
 # misc ####################################################################
-wrapIntoTmux
+[[ "$1" != "--no-tmux" ]] &&\
+    wrapIntoTmux
 checkIfConnected
 handleGit
 

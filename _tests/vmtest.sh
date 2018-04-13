@@ -11,7 +11,7 @@ qumuCmd=$(readlink -f $1)
 expectFile=$(mktemp)
 
 cat <<SCRIPT > "$expectFile"
-set timeout 150
+set timeout -1
 set log [lindex $argv 0]
 spawn $1
 
@@ -26,6 +26,16 @@ spawn $1
 expect "myconfig-vm% "
 send "uname -a\r"
 expect -re ".*NixOS.*"
+
+expect "myconfig-vm% "
+send "git clone https://github.com/maxhbr/myconfig ~/myconfig\r"
+expect "myconfig-vm% "
+send "echo -n HOSTNAME | sudo tee /etc/nixos/hostname\r"
+expect "myconfig-vm% "
+send "cksum /etc/machine-id | while read c rest; do printf \"%x\" $c; done | sudo tee /etc/nixos/hostid\r"
+expect "myconfig-vm% "
+send "~/myconfig/rebuild.sh --no-tmux\r"
+
 
 expect "myconfig-vm% "
 send "sudo shutdown -h now\r"
