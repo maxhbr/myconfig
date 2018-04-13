@@ -38,7 +38,7 @@ executable xmonad
   build-depends:       base >=4.9 && <4.10
                      , xmonad
                      , xmonad-contrib
-                     , myxmonad
+                     , maxhbr-xmonad-config
 
                      , containers
                      , X11
