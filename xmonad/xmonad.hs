@@ -63,7 +63,6 @@ import           XMonad.Actions.CycleWS ( nextWS, prevWS
                                         , moveTo
                                         , Direction1D(..)
                                         , WSType( NonEmptyWS ) )
-import           XMonad.Actions.UpdatePointer ( updatePointer )
 import           XMonad.Actions.GridSelect
 import           XMonad.Actions.WindowGo ( runOrRaiseNext, raiseNext )
 
