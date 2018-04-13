@@ -3,16 +3,8 @@ resolver: lts-8.18
 packages:
 - .
 nix:
-  packages:
-    - gmp
-    - x11
-    - xorg.libXinerama
-    - xorg.libXext
-    - xorg.libX11
-    - xorg.libXrandr
-    - xorg.libXft
-    - xorg.libXrender
-  # shell-file: shell.nix
+  packages: []
+  shell-file: shell.nix
 extra-deps: []
 flags: {}
 extra-package-dbs: []
