@@ -7,7 +7,7 @@
 let
   # echo -n "HOSTNAME" | sudo tee /etc/nixos/hostname
   hostName = "${builtins.readFile /etc/nixos/hostname}";
-  # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
+  # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done | sudo tee /etc/nixos/hostid
   hostId = "${builtins.readFile /etc/nixos/hostid}";
 
 in import ./core {

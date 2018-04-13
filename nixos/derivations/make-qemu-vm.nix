@@ -1,14 +1,13 @@
 #!/usr/bin/env nix-build
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-# build an ISO image that will auto install NixOS and reboot
 # $ nix-build make-qemu-vm.nix --arg machine \"mobile\"
 # delete with
 # $ nix-store --delete <result>
 #
 # stolen from https://github.com/snabblab/snabblab-nixos/blob/master/make-iso.nix
 
-{ machine ? "vm" }:
+{ machine ? "myconfig-vm" }:
 
 let
   config = (import <nixpkgs/nixos/lib/eval-config.nix> {
