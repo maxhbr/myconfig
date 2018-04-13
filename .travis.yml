@@ -8,8 +8,11 @@ matrix:
       install: cd xmonad && stack setup && stack build
       script: cd xmonad && stack test
     - script: nix-shell --packages nixpkgs-lint --run "nixpkgs-lint -f  $TRAVIS_BUILD_DIR/"
-    - script: ./nixos/derivations/make-qemu-vm.nix
-    - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine \"T470p\"
+    - script: ./nixos/derivations/make-qemu-vm.nix && ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm
+    # # dies becaus of: out of disk
+    # - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine \"T470p\"
+
+    #Old:
     # # - script: nix-shell --packages nixpkgs-lint --run "nixpkgs-lint -f  $TRAVIS_BUILD_DIR/nixos/derivations"
     # # - script: NIX_CONF_DIR="$TRAVIS_BUILD_DIR/nix" nix-build --show-trace "$TRAVIS_BUILD_DIR/nixos/derivations"
     # # - script: ./nixos/derivations/make-iso.nix
