@@ -21,6 +21,7 @@ matrix:
       script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm
     - script: docker build -t myconfig --build-arg TERM --rm=true --force-rm=true .
     - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine '"T470p"'
+    - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine '"workstation"'
   allow_failures:
     # dies because of missind Xrandr libraries
     - before_install: nix-channel --list && nix-env -i stack
@@ -28,6 +29,7 @@ matrix:
       script: cd xmonad && stack test
     # dies becaus of: out of disk
     - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine '"T470p"'
+    - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine '"workstation"'
 
     #Old:
     # # - script: nix-shell --packages nixpkgs-lint --run "nixpkgs-lint -f  $TRAVIS_BUILD_DIR/nixos/derivations"
