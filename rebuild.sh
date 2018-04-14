@@ -1,8 +1,7 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nix-shell
+#! nix-shell -I nixpkgs=channel:nixos-18.03 -i bash -p ncurses git wget
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-#
-#  written by maximilian-huber.de
 set -e
 
 if [ "$(id -u)" -ne "$(stat -c '%u' $0)" ]; then
