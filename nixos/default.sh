@@ -26,6 +26,7 @@ prepare() {
 
 deploy() {
     echo "* $(tput bold)generate $configTarget$(tput sgr0) ..."
+    sudo mkdir -p /etc/nixos
     configTarget=/etc/nixos/configuration.nix
     configSrcDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     if [[ ! -f $configTarget ]] || [[ $(wc -l <$configTarget) -eq 1 ]]; then
@@ -64,7 +65,10 @@ cleanup() {
     }
 }
 
-gate
+gate || {
+    echo "... skip"
+    exit 0
+}
 if [ $# -eq 0 ]; then
     prepare
     deploy

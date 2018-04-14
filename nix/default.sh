@@ -10,6 +10,7 @@ gate() {
 }
 
 deploy() {
+    sudo mkdir -p /etc/nix
     nixSrcDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     sudo ln -sfn "$nixSrcDir/pkgs" /etc/nix/pkgs
     sudo ln -sfn "$nixSrcDir/overlays" /etc/nix/overlays
@@ -44,7 +45,10 @@ cleanup() {
     fi
 }
 
-gate
+gate || {
+    echo "... skip"
+    exit 0
+}
 if [ $# -eq 0 ]; then
     deploy
     upgrade

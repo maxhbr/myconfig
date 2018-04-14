@@ -1,4 +1,5 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nix-shell
+#! nix-shell -i bash -p stow
 # Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 
@@ -6,7 +7,6 @@ set -e
 
 deploy() {
     echo "* $(tput bold)dotfiles$(tput sgr0) ..."
-
 
     if [ ! -d $HOME ]; then
         echo "user dir does not exist"
