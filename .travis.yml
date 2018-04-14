@@ -15,7 +15,7 @@ matrix:
     - script: nix-shell --packages nixpkgs-lint --run "nixpkgs-lint -f  $TRAVIS_BUILD_DIR/"
     - install: ./nixos/derivations/make-qemu-vm.nix
       script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm
-    - script: docker build -t myconfig --build-arg TERM --rm=true --force-rm=true 
+    - script: docker build -t myconfig --build-arg TERM --rm=true --force-rm=true .
     # # dies becaus of: out of disk
     # - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine \"T470p\"
 

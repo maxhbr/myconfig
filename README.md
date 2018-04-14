@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/maxhbr/myconfig.svg?branch=master)](https://travis-ci.org/maxhbr/myconfig)
+
 Here I collect all configuration files of my machines. Currently I use
 - nixos
 - xmonad
