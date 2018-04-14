@@ -16,12 +16,16 @@ matrix:
     - before_install: nix-channel --list && nix-env -i stack
       install: cd xmonad && stack setup && stack build
       script: cd xmonad && stack test
-    - script: nix-shell --packages nixpkgs-lint --run "nixpkgs-lint -f  $TRAVIS_BUILD_DIR/"
+    - script: nix-shell -p nixpkgs-lint --run "nixpkgs-lint -f  ./"
     - install: ./nixos/derivations/make-qemu-vm.nix
       script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm
-    - script: docker build -t myconfig --build-arg TERM --rm=true --force-rm=true .
+    - script: docker build -t myconfig --build-arg TERM --build-arg NIX_PATH --rm=true --force-rm=true .
     - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine '"T470p"'
     - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine '"workstation"'
+    - script: ./nixos/derivations/make-iso.nix
+    # TODO: emacs / spacemacs config test
+    # - install: #somehow setup emacs dotfiles
+    #   script: emacs --batch --eval '(byte-recompile-directory "~/.emacs.d")' && emacs --debug-init -nw --exec "(save-buffers-kill-emacs)"
   allow_failures:
     # dies because of missind Xrandr libraries
     - before_install: nix-channel --list && nix-env -i stack
@@ -29,16 +33,8 @@ matrix:
       script: cd xmonad && stack test
     # dies becaus of: out of disk
     - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine '"T470p"'
+    # allowed failure
     - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine '"workstation"'
-
-    #Old:
-    # # - script: nix-shell --packages nixpkgs-lint --run "nixpkgs-lint -f  $TRAVIS_BUILD_DIR/nixos/derivations"
-    # # - script: NIX_CONF_DIR="$TRAVIS_BUILD_DIR/nix" nix-build --show-trace "$TRAVIS_BUILD_DIR/nixos/derivations"
-    # # - script: ./nixos/derivations/make-iso.nix
-    # # # - script: ./nixos/derivations/make-qemu-vm.nix --arg machine \"mobile\"
-    # # # - script: ./nixos/derivations/make-qemu-vm.nix --arg machine \"vbox\"
-    # # - script: ./nixos/derivations/make-qemu-vm.nix --arg machine \"workstation\"
-    # # # - script: ./nixos/derivations/make-qemu-vm.nix --arg machine \"mobile\" && ( set -ex; cmdpid=$BASHPID; (sleep 300; kill $cmdpid 2>/dev/null) & ./result/bin/run-vm-vm -nographic && false ) ; [[ $? -eq 143 ]]
 
 notifications:
   email:

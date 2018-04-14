@@ -1,3 +1,15 @@
-.stack-work
+hardware-configuration.nix
+hostname
+hostid
+*.log
+*.orig
 result
+*.tar.gz
 *.qcow2
+.stack-work
+*.hi
+*.o
+xmonad/dist
+_inWork
+result
+.vagrant
