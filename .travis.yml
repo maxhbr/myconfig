@@ -13,28 +13,43 @@ matrix:
   include:
     - before_install: nix-channel --list
       script: nix-build default.nix -A myconfig
+    - script: docker build -t myconfig --build-arg TERM --build-arg NIX_PATH --rm=true --force-rm=true .
+    - install: ./nixos/derivations/make-qemu-vm.nix
+      script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm
+
+################################################################################
+## tests that do not actually test anything (never fail)
+    - script: nix-shell -p nixpkgs-lint --run "nixpkgs-lint -f  ./"
+
+################################################################################
+## tests that are allowed to fail (but succeed on local execution)
     - before_install: nix-channel --list && nix-env -i stack
       install: cd xmonad && stack setup && stack build
       script: cd xmonad && stack test
-    - script: nix-shell -p nixpkgs-lint --run "nixpkgs-lint -f  ./"
-    - install: ./nixos/derivations/make-qemu-vm.nix
+    - install: ./nixos/derivations/make-qemu-vm.nix --arg machine '"T470p"'
       script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm
-    - script: docker build -t myconfig --build-arg TERM --build-arg NIX_PATH --rm=true --force-rm=true .
-    - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine '"T470p"'
-    - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine '"workstation"'
+    - install: ./nixos/derivations/make-qemu-vm.nix
+      script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm --arg machine '"workstation"'
     - script: ./nixos/derivations/make-iso.nix
+
+################################################################################
+## tests that are not yet implemented
     # TODO: emacs / spacemacs config test
     # - install: #somehow setup emacs dotfiles
     #   script: emacs --batch --eval '(byte-recompile-directory "~/.emacs.d")' && emacs --debug-init -nw --exec "(save-buffers-kill-emacs)"
+
   allow_failures:
-    # dies because of missind Xrandr libraries
+### dies because of missind Xrandr libraries
     - before_install: nix-channel --list && nix-env -i stack
       install: cd xmonad && stack setup && stack build
       script: cd xmonad && stack test
-    # dies becaus of: out of disk
-    - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine '"T470p"'
-    # allowed failure
-    - script: ./nixos/derivations/make-qemu-vm.nix -I nixpkgs=channel:nixos-18.03 --arg machine '"workstation"'
+### dies becaus of: out of disk
+    - install: ./nixos/derivations/make-qemu-vm.nix --arg machine '"T470p"'
+      script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm
+    - install: ./nixos/derivations/make-qemu-vm.nix
+      script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm --arg machine '"workstation"'
+### dies becaus of: time out
+    - script: ./nixos/derivations/make-iso.nix
 
 notifications:
   email:
