@@ -38,8 +38,8 @@ let
     );
 
   self = rec {
-    background = callPackage ./background { inherit pkgs; stdenv = pkgs.stdenv; };
-    slim-theme = callPackage ./background/slim-theme { inherit pkgs background; stdenv = pkgs.stdenv; };
+    background = callPackage ./background { inherit pkgs; };
+    slim-theme = callPackage ./background/slim-theme { inherit pkgs background; };
     nixSrc = packageSources {
       dir = ./nix;
       name = "nix";
@@ -58,7 +58,7 @@ let
       '';
     };
     dotfiles = packageSources { dir = ./dotfiles; name = "dotfiles"; };
-    scripts = callPackage ./scripts { inherit pkgs background; stdenv = pkgs.stdenv; };
+    scripts = callPackage ./scripts { inherit pkgs background; };
     myconfig = pkgs.buildEnv {
       name = "myconfig";
       paths = [

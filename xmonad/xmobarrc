@@ -53,7 +53,7 @@ Config { font = "xft:inconsolata:pixelsize=17:antialias=true:hinting=true"
          -- , Run TopMem ["-t","<both1>"] 10
          , Run Kbd [ ("de(nodeadkeys)", "| <fc=#ee9a00>de</fc> ")
                    , ("de(neo)", "") ]
-         , Run Com "/home/mhuber/.xmonad/bin/miscStatus.sh" ["| <fc=#ffff00>", "</fc> "] "misc" 60
+         , Run Com "/home/mhuber/.xmonad/bin/miscStatus.sh" ["|", "<fc=#ffff00>", "</fc>"] "misc" 60
          , Run Battery [ "-t", "<fc=#999999>B:</fc><left><fc=#999999>%</fc> <watts><fc=#999999>W</fc> <timeleft>"
                        , "-L", "10" , "-H", "80"
                        , "--low"      , "red"
