@@ -84,6 +84,8 @@
           cloc
           gitAndTools.gitFull
           gitAndTools.tig
+          python
+          python3
         ] ++ (with pkgs.unstable.haskellPackages; [
           # cabal-install
           ghc hlint pandoc

@@ -24,9 +24,6 @@ confirm () {
 }
 
 
-# needs:
-# vim, tmux, sudo, mutt
-
 alias asdf="setxkbmap -layout de,de -variant neo,nodeadkeys -option grp:shifts_toggle -option grp_led:scroll -option altwin:swap_lalt_lwin"
 
 alias vi="/var/run/current-system/sw/bin/vim"
@@ -67,6 +64,8 @@ fi
 alias sudo="sudo "
 
 alias visudo='sudo EDITOR=vim visudo'
+
+alias mutt=neomutt
 
 alias ssh="TERM=xterm ssh"
 

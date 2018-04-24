@@ -50,10 +50,6 @@ urxvt.perl-lib: /usr/lib/urxvt/perl/
 urxvt.perl-ext-common:  default,matcher,tabbed,font-size,clipboard,url-select,keyboard-select
 urxvt.matcher.button:   1
 
-URxvt.tabbed.tabbar-fg: 8
-URxvt.tabbed.tabbar-bg: 0
-URxvt.tabbed.tab-fg:    2
-URxvt.tabbed.tab-bg:    0
 URxvt.tabbed.autohide: yes
 
 URxvt.keysym.C-Up:     perl:font-size:increase
@@ -82,6 +78,10 @@ URxvt*fading:  30
 ! URxvt.foreground: #eeeeec
 ! URxvt.color4: RoyalBlue
 ! URxvt.color12: RoyalBlue
+! URxvt.tabbed.tabbar-fg: 8
+! URxvt.tabbed.tabbar-bg: 0
+! URxvt.tabbed.tab-fg:    2
+! URxvt.tabbed.tab-bg:    0
 
 !!!!! light:
 !!!!! from: https://adventurist.me/posts/0087
@@ -143,3 +143,8 @@ urxvt*color12: #4078F2
 urxvt*color13: #A626A4
 urxvt*color14: #0184BC
 urxvt*color15: #ffffff
+
+URxvt.tabbed.tabbar-fg: 8
+URxvt.tabbed.tabbar-bg: 15
+URxvt.tabbed.tab-fg:    2
+URxvt.tabbed.tab-bg:    15

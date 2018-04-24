@@ -18,6 +18,7 @@ prepare() {
             # use hosts file from https://github.com/StevenBlack/hosts (MIT)
             curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts |
                 grep ^0 > "$DIR/static/extrahosts"
+            echo "0.0.0.0 navigationshilfe1.t-online.de" >> "$DIR/static/extrahosts"
         } || {
             echo "do not update hots file"
         }
