@@ -4,6 +4,9 @@ module XMonad.MyConfig.Common
        where
 import           XMonad
 
+
+mapToWithModM c = map (\((m,k),v) -> ((m (modMask c),k),v))
+
  {-
 /---- meta
 |/--- shift

@@ -127,6 +127,9 @@ if ($onlyIfChanged && isEnvUnchanged()) {
     my %resolutions = (
         $lvdsOutput => "2560x1440",
         );
+    my %customizations = (
+        "DP3-2" => "--rotate right"
+        );
 
     my $primaryOutput = $lvdsOutput;
     my @activeOutputs = ();
@@ -180,6 +183,7 @@ if ($onlyIfChanged && isEnvUnchanged()) {
             $xrandrCmd .= (defined $resolutions{$output}) ? " --mode $resolutions{$output}" : " --auto";
             $xrandrCmd .= ($lastOutput eq "") ? " --pos 0x0" : " --right-of $lastOutput";
             $xrandrCmd .= " --rotate normal --scale 1x1";
+            $xrandrCmd .= (defined $customizations{$output}) ? " $customizations{$output}" : "";
             call($xrandrCmd);
             $lastOutput = $output;
         }

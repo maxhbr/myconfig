@@ -1,7 +1,9 @@
 -- Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 -- SPDX-License-Identifier: MIT
 module XMonad.MyConfig.Notify
-       ( myUrgencyHook, popupCurDesktop, myDefaultPopup )
+       ( myUrgencyHook
+       , popupCurDesktop
+       , myDefaultPopup )
        where
 -- needs `notify-osd` and `libnotify`
 -- See: https://pbrisbin.com/posts/using_notify_osd_for_xmonad_notifications/
@@ -10,13 +12,12 @@ module XMonad.MyConfig.Notify
 
 import Data.Char (isSpace)
 import           XMonad
-import XMonad.Util.Dzen
--- import XMonad.Config.Prime.Monadic
-import XMonad.Hooks.UrgencyHook
-import XMonad.Util.NamedWindows
-import qualified XMonad.StackSet as W
-import XMonad.Hooks.ServerMode
-import Control.Applicative
+import           XMonad.Util.Dzen
+import           XMonad.Hooks.UrgencyHook
+import           XMonad.Util.NamedWindows
+import           qualified XMonad.StackSet as W
+import           XMonad.Hooks.ServerMode
+import           Control.Applicative
 
 myUrgencyHook = MyUrgencyHook (myNotify 2)
 
@@ -34,7 +35,7 @@ mkFont s = font $ "xft:inconsolata:pixelsize=" ++ show s ++ ":antialias=true:hin
 myNotify :: Rational -> String -> X ()
 myNotify t = dzenConfig pc
   where
-    pc = onCurr (vCenter 22) >=> timeout t >=> background "darkgreen" >=> mkFont 18
+    pc = onCurr (hCenter 700) >=> timeout t >=> background "darkgreen" >=> mkFont 18
     background color = addArgs ["-bg", color]
 
 myPopup :: Int -> Rational -> String -> X ()

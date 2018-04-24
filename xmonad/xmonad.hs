@@ -39,13 +39,12 @@ import           XMonad.Hooks.DynamicLog ( dynamicLogWithPP
                                          , xmobarColor
                                          , wrap )
 import           XMonad.Hooks.EwmhDesktops ( fullscreenEventHook )
-import           XMonad.Hooks.ManageDocks ( avoidStrutsOn
-                                          , manageDocks
-                                          , docksEventHook
+import           XMonad.Hooks.ManageDocks ( docks
+                                          , avoidStrutsOn
                                           , ToggleStruts(..) )
 import           XMonad.Hooks.ManageHelpers ( doCenterFloat )
-import           XMonad.Hooks.UrgencyHook ( withUrgencyHook
-                                          , focusUrgent )
+import           XMonad.Hooks.UrgencyHook ( focusUrgent 
+                                          , withUrgencyHook)
 import           XMonad.Hooks.SetWMName ( setWMName )
 
 --------------------------------------------------------------------------------
@@ -103,13 +102,12 @@ import XMonad.MyConfig.Notify
 
 ------------------------------------------------------------------------
 -- Key bindings:
-myKeys conf@XConfig {XMonad.modMask = modm} =
+myKeys conf =
   M.fromList $
-  map (\((m,k),v) -> ((m modm,k),v)) $
+  mapToWithModM conf $
        basicKBs
     ++ miscKBs
-    ++ scratchpadKBs
-    ++ baclightControlKBs
+    ++ backlightControlKBs
     ++ layoutKBs
     ++ systemctlKBs
   where
@@ -225,7 +223,6 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
     miscKBs =
       [ ((const 0,   0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
       , ((m__, xK_s      ), spawn "find-cursor")
-      , ((m_c, xK_s      ), toggleFF) -- toggle mouse follow focus
       , ((msc, xK_s      ), spawn "xdotool mousemove 0 0; synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
       , ((m__, xK_z      ), spawn "myautosetup.pl --onlyIfChanged")
       , ((ms_, xK_z      ), spawn "myautosetup.pl")
@@ -273,7 +270,7 @@ myKeys conf@XConfig {XMonad.modMask = modm} =
             , (0x1008ff11, ["6dB-"])
             , (0x1008ff13, ["unmute","3dB+"])]
 #endif
-    baclightControlKBs =
+    backlightControlKBs =
       [((m__, xK_F1), spawnSelected def [ "xbacklight =50"
                                         , "xbacklight =25"
                                         , "xbacklight +10"
@@ -356,7 +353,8 @@ myLayout = smartBorders $
 -- To match on the WM_NAME, you can use 'title' in the same way that
 -- 'className' and 'resource' are used below.
 --
-myManageHook = (composeAll (foldMap (\(a,cs) -> map (\c -> className =? c --> a) cs)
+myManageHook = let
+  baseHooks = (foldMap (\(a,cs) -> map (\c -> className =? c --> a) cs)
                              [ (doCenterFloat, ["Xmessage"
                                                ,"qemu","qemu-system-x86_64"
                                                ,"feh"
@@ -372,9 +370,12 @@ myManageHook = (composeAll (foldMap (\(a,cs) -> map (\c -> className =? c --> a)
                              , (doShift "vbox", ["Virtualbox","VirtualBox"])
                              , (doShift "media", ["Steam"])
                              , (doIgnore, ["desktop_window"
-                                          ,"kdesktop"]) ]))
-               <+> scratchpadHook
-               <+> manageDocks
+                                          ,"kdesktop"]) ])
+  -- see:
+  -- - https://www.reddit.com/r/xmonad/comments/78uq0p/how_do_you_deal_with_intellij_idea_completion/?st=jgdc0si0&sh=7d79c956
+  -- - https://youtrack.jetbrains.com/issue/IDEA-112015#comment=27-2498787
+  ideaPopupHook = [ appName =? "sun-awt-X11-XWindowPeer" <&&> className =? "jetbrains-idea" --> doIgnore ]
+  in composeAll (baseHooks ++ ideaPopupHook)
 
 ------------------------------------------------------------------------
 -- Event handling:
@@ -383,8 +384,6 @@ myManageHook = (composeAll (foldMap (\(a,cs) -> map (\c -> className =? c --> a)
 -- combine event hooks use mappend or mconcat from Data.Monoid.
 --
 myEventHook = fullscreenEventHook
-              <+> docksEventHook
-              <+> focusFollow
 
 ------------------------------------------------------------------------
 -- Startup hook:
@@ -404,29 +403,30 @@ myLogHook xmproc = let
                    , ppVisible = xmobarColor maincolor ""
                    }
   in dynamicLogWithPP myXmobarPP
-     >> updatePointerIfFollowFoucs
 
 ------------------------------------------------------------------------
 -- General
 
 maincolor = "#ee9a00" :: String
 myConfig xmproc = withUrgencyHook myUrgencyHook $
-  def { terminal           = "urxvtc"
-      , focusFollowsMouse  = False -- see: focusFollow
-      , borderWidth        = 3
-      -- , modMask            = mod4Mask
-      , modMask            = mod1Mask
-      , workspaces         = myWorkspaces
-      , normalBorderColor  = "#333333"
-      , focusedBorderColor = maincolor -- "#dd0000"
-      , keys               = myKeys
-      , mouseBindings      = myMouseBindings
-      , layoutHook         = myLayout
-      , manageHook         = myManageHook
-      , handleEventHook    = myEventHook
-      , startupHook        = myStartupHook
-      , logHook            = myLogHook xmproc
-      }
+                  applyMyScratchpads $
+                  applyFollowFocus $
+                  docks $
+                  def { terminal           = "urxvtc"
+                      , borderWidth        = 3
+                      -- , modMask            = mod4Mask
+                      , modMask            = mod1Mask
+                      , workspaces         = myWorkspaces
+                      , normalBorderColor  = "#333333"
+                      , focusedBorderColor = maincolor -- "#dd0000"
+                      , keys               = myKeys
+                      , mouseBindings      = myMouseBindings
+                      , layoutHook         = myLayout
+                      , manageHook         = myManageHook
+                      , handleEventHook    = myEventHook
+                      , startupHook        = myStartupHook
+                      , logHook            = myLogHook xmproc
+                      }
 
 ------------------------------------------------------------------------
 -- Now run xmonad
