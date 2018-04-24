@@ -19,7 +19,7 @@ import XMonad.MyConfig.Common
 
 applyMyScratchpads :: XConfig a -> XConfig a
 applyMyScratchpads c = c { manageHook = manageHook c <+> scratchpadHook c
-                       } `additionalKeys` (mapToWithModM c (scratchpadKBs c))
+                         } `additionalKeys` (mapToWithModM c (scratchpadKBs c))
 
 -- Scratchpads
 --

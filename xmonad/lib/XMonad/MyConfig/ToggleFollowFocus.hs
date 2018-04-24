@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: MIT
 -- stolen from: https://wiki.haskell.org/Xmonad/Config_archive/adamvo's_xmonad.hs
 module XMonad.MyConfig.ToggleFollowFocus
-       ( applyFollowFocus
+       ( applyMyFollowFocus
        ) where
 import           XMonad
 import qualified XMonad.Util.ExtensibleState as XS
@@ -12,11 +12,11 @@ import           XMonad.Util.EZConfig (additionalKeys)
 
 import XMonad.MyConfig.Common
 
-applyFollowFocus :: XConfig a -> XConfig a
-applyFollowFocus c = c { handleEventHook   = focusFollow <+> handleEventHook c
-                       , logHook           = updatePointerIfFollowFoucs >> logHook c
-                       , focusFollowsMouse = False
-                       } `additionalKeys` [((m__ (modMask c), xK_s), toggleFF)]
+applyMyFollowFocus :: XConfig a -> XConfig a
+applyMyFollowFocus c = c { handleEventHook   = focusFollow <+> handleEventHook c
+                         , logHook           = updatePointerIfFollowFoucs >> logHook c
+                         , focusFollowsMouse = False
+                         } `additionalKeys` (mapToWithModM c [((m__, xK_s), toggleFF)])
 
 -- Toggle follow Mouse
 -- from: http://www.haskell.org/haskellwiki/Xmonad/Config_archive/adamvo's_xmonad.hs

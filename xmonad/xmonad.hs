@@ -99,6 +99,7 @@ import XMonad.MyConfig.Common
 import XMonad.MyConfig.Scratchpads
 import XMonad.MyConfig.ToggleFollowFocus
 import XMonad.MyConfig.Notify
+import XMonad.MyConfig.MyLayoutLayer
 
 ------------------------------------------------------------------------
 -- Key bindings:
@@ -108,7 +109,6 @@ myKeys conf =
        basicKBs
     ++ miscKBs
     ++ backlightControlKBs
-    ++ layoutKBs
     ++ systemctlKBs
   where
     basicKBs =
@@ -162,59 +162,6 @@ myKeys conf =
               | (k, sc) <- zip [xK_w, xK_e, xK_r] [0..]
               , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
          -}
-    layoutKBs =
-      [ ((m__, xK_space ), sendMessage NextLayout)
-      , ((ms_, xK_x     ), sendMessage $ Toggle MIRROR)
-      , ((m__, xK_f     ), sendMessage $ Toggle FULL)
-      , ((ms_, xK_space ), setLayout $ XMonad.layoutHook conf)
-      , ((m__, xK_m     ), withFocused minimizeWindow)
-      , ((ms_, xK_m     ), sendMessage RestoreNextMinimizedWin)
-
-      , ((m__, xK_t     ), withFocused $ windows . W.sink) -- Push window back into tiling
-      , ((m__, xK_comma ), sendMessage (IncMasterN 1))
-      , ((m__, xK_period), sendMessage (IncMasterN (-1)))
-
-      -- Shrink and Expand
-      , ((m__, xK_h     ), sendMessage Shrink)
-      , ((m__, xK_l     ), sendMessage Expand)
-      , ((ms_, xK_h     ), sendMessage MirrorShrink)
-      , ((ms_, xK_l     ), sendMessage MirrorExpand)
-
-      , ((m__, xK_b     ), sendMessage ToggleStruts)]
-      ++ cycleWSKBs
-      ++ map (\(a,b) -> (a,b >> popupCurDesktop))
-           [ ((m__, xK_i), runOrRaiseNext "firefox" (className =? "Firefox" <||> className =?  "chromium-browser" <||> className =? "Chromium-browser"))
-           , ((m__, 0xfc), runOrRaiseNext "ec" (className =? "Emacs"))
-           , ((m__, 0xf6), raiseNext (className =? "jetbrains-phpstorm" <||> className =? "jetbrains-idea"))
-           ]
-      -- ++ combineTwoKBs
-      -- ++ subLayoutKBs
-      where
-        cycleWSKBs = map (\(a,b) -> (a,b >> popupCurDesktop))
-          [ ((m__, xK_Down ), moveTo Next NonEmptyWS) -- HiddenNonEmptyWS
-          , ((m__, xK_Up   ), moveTo Prev NonEmptyWS) -- HiddenNonEmptyWS
-          , ((ms_, xK_Down ), shiftToNext >> nextWS)
-          , ((ms_, xK_Up   ), shiftToPrev >> prevWS)
-#if 1
-          , ((m__, xK_Left ), nextScreen)
-          , ((m__, xK_Right), prevScreen)
-          , ((ms_, xK_Left ), shiftNextScreen)
-          , ((ms_, xK_Right), shiftPrevScreen)
-#else
-          , ((m__, xK_Right), nextScreen)
-          , ((m__, xK_Left ), prevScreen)
-          , ((ms_, xK_Right), shiftNextScreen)
-          , ((ms_, xK_Left ), shiftPrevScreen)
-#endif
-          , ((m__, xK_y    ), toggleWS' ["NSP"])
-          , ((m__, xK_a    ), toggleWS' ["NSP"])]
-        -- combineTwoKBs =
-        --   [((msc, xK_l ), sendMessage $ Move L)]
-        -- subLayoutKBs =
-        --   map (\(k,v) -> ((m_c, k), sendMessage $ pullGroup v))
-        --     [(xK_h,L),(xK_l,R),(xK_k,U),(xK_j,D)]
-        --     ++ [ ((m_c, xK_m), withFocused (sendMessage . MergeAll))
-        --        , ((m_c, xK_u), withFocused (sendMessage . UnMerge))]
     systemctlKBs =
       map (\(k,v) -> (k, spawn $ "systemctl " ++ v))
         [ ((ms_, xK_F10), "suspend")
@@ -286,60 +233,6 @@ myKeys conf =
                                         , "xbacklight =0" ])]
 
 ------------------------------------------------------------------------
--- Mouse bindings:
-myMouseBindings XConfig {XMonad.modMask = modm} = M.fromList
-  [ ((modm, button1), \w -> focus w
-                            >> mouseMoveWindow w
-                            >> windows W.shiftMaster)
-  , ((modm, button2), \w -> focus w
-                            >> windows W.shiftMaster)
-  , ((modm, button3), \w -> focus w
-                            >> mouseResizeWindow w
-                            >> windows W.shiftMaster) ]
-
-------------------------------------------------------------------------
--- Layouts / workspaces:
-myWorkspaces = map show [1..7] ++ ("web" : map show [9..10]) ++ ["vbox", "media"]
-
-myLayout = smartBorders $
-           boringAuto $
-           modWorkspaces [ "vbox", "media" ] (Full |||) $
-           avoidStrutsOn[U,D] $
-           named "" $
-           withIM (1%7) (Title "Tabs Outliner") $
-           mkToggle (single FULL) $
-           mkToggle (single MIRROR) $
-           IfMax 1 full  (IfMax 2 tiled (tiled ||| dtb) ||| full)
-  where
-    baseSpacing = 10
-    wqhdSpacing = 20
-    wqhdGapping = (2560 - 1920) `div` 2 - wqhdSpacing + baseSpacing
-    myUprightGapping l = ifWider 1440 l $
-                         ifWider 1439 (gaps [(U,wqhdGapping), (D,wqhdGapping)] l) l
-    myUprightMirroring l = ifWider 1440 l $
-                           ifWider 1439 (Mirror l) l
-    mySpacing l = ifWider 1920 (spacing wqhdSpacing l) $
-                  ifWider 1919 (spacing baseSpacing l) $
-                  ifWider 1439 (spacing wqhdSpacing l)
-                  l
-    full      = named "=" $
-                mySpacing $
-                ifWider 1920 (gaps [(L,wqhdGapping), (R,wqhdGapping)] Full) $
-                myUprightGapping Full
-    tiled     = named " " $
-                minimize $
-                mySpacing $
-                myUprightGapping $
-                myUprightMirroring $
-                ResizableTall 1 (3/100) (1/2) []
-    dtb       = named "%" $
-                minimize $
-                mySpacing $
-                myUprightGapping $
-                myUprightMirroring $
-                TwoPane (3/100) (1/2)
-
-------------------------------------------------------------------------
 -- Window rules:
 -- Execute arbitrary actions and WindowSet manipulations when managing
 -- a new window. You can use this to, for example, always float a
@@ -378,14 +271,6 @@ myManageHook = let
   in composeAll (baseHooks ++ ideaPopupHook)
 
 ------------------------------------------------------------------------
--- Event handling:
--- Defines a custom handler function for X Events. The function should
--- return (All True) if the default handler is to be run afterwards. To
--- combine event hooks use mappend or mconcat from Data.Monoid.
---
-myEventHook = fullscreenEventHook
-
-------------------------------------------------------------------------
 -- Startup hook:
 myStartupHook :: X ()
 myStartupHook = do
@@ -407,23 +292,20 @@ myLogHook xmproc = let
 ------------------------------------------------------------------------
 -- General
 
+normalcolor = "#333333" :: String
 maincolor = "#ee9a00" :: String
 myConfig xmproc = withUrgencyHook myUrgencyHook $
                   applyMyScratchpads $
-                  applyFollowFocus $
-                  docks $
+                  applyMyFollowFocus $
+                  applyMyLayoutModifications $
                   def { terminal           = "urxvtc"
                       , borderWidth        = 3
-                      -- , modMask            = mod4Mask
-                      , modMask            = mod1Mask
-                      , workspaces         = myWorkspaces
-                      , normalBorderColor  = "#333333"
-                      , focusedBorderColor = maincolor -- "#dd0000"
+                      , modMask            = mod1Mask --  mod4Mask
+                      , normalBorderColor  = normalcolor
+                      , focusedBorderColor = maincolor
                       , keys               = myKeys
-                      , mouseBindings      = myMouseBindings
                       , layoutHook         = myLayout
                       , manageHook         = myManageHook
-                      , handleEventHook    = myEventHook
                       , startupHook        = myStartupHook
                       , logHook            = myLogHook xmproc
                       }
