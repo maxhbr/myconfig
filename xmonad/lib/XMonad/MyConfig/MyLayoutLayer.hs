@@ -110,7 +110,6 @@ myLayout = smartBorders $
                 TwoPane (3/100) (1/2)
 
 layoutKBs conf =
-  mapToWithModM conf $
   [ ((m__, xK_space ), sendMessage NextLayout)
   , ((ms_, xK_x     ), sendMessage $ Toggle MIRROR)
   , ((m__, xK_f     ), sendMessage $ Toggle FULL)
@@ -135,9 +134,41 @@ layoutKBs conf =
        , ((m__, 0xfc), runOrRaiseNext "ec" (className =? "Emacs"))
        , ((m__, 0xf6), raiseNext (className =? "jetbrains-phpstorm" <||> className =? "jetbrains-idea"))
        ]
+  ++ switchWorkspaceKBs
+  ++ focusKBs
   -- ++ combineTwoKBs
   -- ++ subLayoutKBs
   where
+    switchWorkspaceKBs =
+      -- mod-[1..9], Switch to workspace N
+      -- mod-shift-[1..9], Move client to workspace N
+      [((m, k), f i)
+          | (i, k) <- zip (XMonad.workspaces conf) ([xK_1 .. xK_9] ++ [xK_0])
+          , (f, m) <- [ (\i -> windows (W.greedyView i) >> popupCurDesktop, m__)
+                      , (windows . W.shift, ms_) ]]
+    {-
+    switchPhysicalKBs =
+      -- mod-{w,e,r}, Switch to physical/Xinerama screens 1, 2, or 3
+      -- mod-shift-{w,e,r}, Move client to screen 1, 2, or 3
+      [((m .|. m__, k), screenWorkspace sc >>= flip whenJust (windows . f))
+          | (k, sc) <- zip [xK_w, xK_e, xK_r] [0..]
+          , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
+     -}
+    focusKBs =
+      [ ((ms_, xK_Tab   ), focusDown)
+#if 0
+      , ((m__, xK_Tab   ), windows W.focusDown)
+      , ((m_c, xK_Tab   ), windows W.focusUp >> windows W.shiftMaster)
+#else
+      , ((m_c, xK_Tab   ), windows W.focusDown)
+      , ((m__, xK_Tab   ), windows W.focusUp >> windows W.shiftMaster)
+#endif
+
+      , ((m__, xK_j     ), windows W.focusDown)
+      , ((m__, xK_k     ), windows W.focusUp)
+      , ((ms_, xK_j     ), windows W.swapDown)
+      , ((ms_, xK_k     ), windows W.swapUp)
+      ]
     cycleWSKBs = map (\(a,b) -> (a,b >> popupCurDesktop))
       [ ((m__, xK_Down ), moveTo Next NonEmptyWS) -- HiddenNonEmptyWS
       , ((m__, xK_Up   ), moveTo Prev NonEmptyWS) -- HiddenNonEmptyWS
@@ -179,10 +210,10 @@ myMouseBindings XConfig {XMonad.modMask = modm} = M.fromList
 applyMyLayoutModifications :: XConfig a -> XConfig a
 applyMyLayoutModifications c = let
   addLayoutkeys :: XConfig a -> XConfig a
-  addLayoutkeys c = additionalKeys c (layoutKBs c)
+  addLayoutkeys conf = applyMyKBs (layoutKBs conf) conf
   in docks $
      addLayoutkeys $
      c { workspaces      = myWorkspaces
-       , handleEventHook = fullscreenEventHook <+> (handleEventHook c)
+       , handleEventHook = fullscreenEventHook <+> handleEventHook c
        , mouseBindings   = myMouseBindings
        }

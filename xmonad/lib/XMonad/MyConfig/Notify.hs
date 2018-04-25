@@ -1,7 +1,8 @@
 -- Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 -- SPDX-License-Identifier: MIT
+{-# LANGUAGE FlexibleContexts #-}
 module XMonad.MyConfig.Notify
-       ( myUrgencyHook
+       ( applyMyUrgencyHook
        , popupCurDesktop
        , myDefaultPopup )
        where
@@ -10,14 +11,18 @@ module XMonad.MyConfig.Notify
 --  and https://wiki.haskell.org/Xmonad/Config_archive/doitan%27s_xmonad.hs
 --  and https://github.com/lierdakil/xmonad-config/blob/master/Local/Popup.hs
 
-import Data.Char (isSpace)
 import           XMonad
 import           XMonad.Util.Dzen
+import           XMonad.Util.EZConfig (additionalKeys)
 import           XMonad.Hooks.UrgencyHook
 import           XMonad.Util.NamedWindows
 import           qualified XMonad.StackSet as W
-import           XMonad.Hooks.ServerMode
-import           Control.Applicative
+
+import XMonad.MyConfig.Common
+
+applyMyUrgencyHook :: (LayoutClass a Window) => XConfig a -> XConfig a
+applyMyUrgencyHook c = withUrgencyHook myUrgencyHook c
+                      `additionalKeys` mapToWithModM c [((m__, xK_u     ), focusUrgent)]
 
 myUrgencyHook = MyUrgencyHook (myNotify 2)
 

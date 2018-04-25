@@ -1,11 +1,17 @@
 -- Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 -- SPDX-License-Identifier: MIT
 module XMonad.MyConfig.Common
-       where
+    ( m__, ms_, m_c, msc, m4m
+    , applyMyKBs
+    , mapToWithModM
+    ) where
 import           XMonad
+import           XMonad.Util.EZConfig (additionalKeys)
 
-
-mapToWithModM c = map (\((m,k),v) -> ((m (modMask c),k),v))
+mapToWithModM :: XConfig a -> [((KeyMask -> KeyMask, KeySym), X ())] -> [((KeyMask, KeySym), X ())]
+mapToWithModM conf = map (\((m,k),v) -> ((m (modMask conf),k),v))
+applyMyKBs :: [((KeyMask -> KeyMask, KeySym), X ())] -> XConfig a -> XConfig a
+applyMyKBs myKBs conf = additionalKeys conf $ mapToWithModM conf myKBs
 
  {-
 /---- meta

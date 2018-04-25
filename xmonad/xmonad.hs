@@ -39,53 +39,17 @@ import           XMonad.Hooks.DynamicLog ( dynamicLogWithPP
                                          , xmobarColor
                                          , wrap )
 import           XMonad.Hooks.EwmhDesktops ( fullscreenEventHook )
-import           XMonad.Hooks.ManageDocks ( docks
-                                          , avoidStrutsOn
-                                          , ToggleStruts(..) )
 import           XMonad.Hooks.ManageHelpers ( doCenterFloat )
-import           XMonad.Hooks.UrgencyHook ( focusUrgent 
-                                          , withUrgencyHook)
 import           XMonad.Hooks.SetWMName ( setWMName )
 
 --------------------------------------------------------------------------------
 -- Util
-import           XMonad.Util.Run ( runProcessWithInput, spawnPipe )
+import           XMonad.Util.Run ( spawnPipe )
 import           XMonad.Util.Types ( Direction2D(..) )
 
 --------------------------------------------------------------------------------
 -- Actions
-import           XMonad.Actions.CycleWS ( nextWS, prevWS
-                                        , toggleWS'
-                                        , shiftToNext, shiftToPrev
-                                        , nextScreen, prevScreen
-                                        , shiftNextScreen, shiftPrevScreen
-                                        , moveTo
-                                        , Direction1D(..)
-                                        , WSType( NonEmptyWS ) )
 import           XMonad.Actions.GridSelect
-import           XMonad.Actions.WindowGo ( runOrRaiseNext, raiseNext )
-
---------------------------------------------------------------------------------
--- Layouts
-import           XMonad.Layout.BoringWindows( boringAuto
-                                            , focusDown )
-import           XMonad.Layout.Gaps (gaps)
-import           XMonad.Layout.Named ( named )
-import           XMonad.Layout.NoBorders ( smartBorders )
-import           XMonad.Layout.Minimize ( minimize, minimizeWindow
-                                        , MinimizeMsg(RestoreNextMinimizedWin) )
-import           XMonad.Layout.MultiToggle
-import           XMonad.Layout.MultiToggle.Instances
-import           XMonad.Layout.PerScreen (ifWider)
-import           XMonad.Layout.PerWorkspace ( modWorkspaces )
-import           XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall)
-                                             , MirrorResize ( MirrorShrink
-                                                            , MirrorExpand ) )
-import           XMonad.Layout.Spacing (spacing)
-import           XMonad.Layout.TwoPane (TwoPane(TwoPane))
-import           XMonad.Layout.IM -- (withIM)
-
-import           XMonad.Layout.IfMax
 
 --------------------------------------------------------------------------------
 -- misc
@@ -94,12 +58,14 @@ import qualified XMonad.StackSet             as W
 
 --------------------------------------------------------------------------------
 -- MyConfig
+import XMonad.MyConfig
 import XMonad.MyConfig.Utils
 import XMonad.MyConfig.Common
 import XMonad.MyConfig.Scratchpads
 import XMonad.MyConfig.ToggleFollowFocus
 import XMonad.MyConfig.Notify
 import XMonad.MyConfig.MyLayoutLayer
+import XMonad.MyConfig.MyMiscLayers
 
 ------------------------------------------------------------------------
 -- Key bindings:
@@ -108,7 +74,6 @@ myKeys conf =
   mapToWithModM conf $
        basicKBs
     ++ miscKBs
-    ++ backlightControlKBs
     ++ systemctlKBs
   where
     basicKBs =
@@ -128,40 +93,9 @@ myKeys conf =
 
       , ((ms_, xK_c     ), kill)
 
-#if 0
-      , ((m__, xK_Tab   ), windows W.focusDown)
-      , ((m_c, xK_Tab   ), windows W.focusUp >> windows W.shiftMaster)
-#else
-      , ((m_c, xK_Tab   ), windows W.focusDown)
-      , ((m__, xK_Tab   ), windows W.focusUp >> windows W.shiftMaster)
-#endif
-      , ((ms_, xK_Tab   ), focusDown)
-      , ((m__, xK_u     ), focusUrgent)
-
-      , ((m__, xK_j     ), windows W.focusDown)
-      , ((m__, xK_k     ), windows W.focusUp)
-      , ((ms_, xK_j     ), windows W.swapDown)
-      , ((ms_, xK_k     ), windows W.swapUp)
       , ((m__, xK_o     ), spawn "urxvtc -e bash -c 'EDITOR=vim ranger'")
       , ((m_c, xK_Return), spawn "urxvtc -e zsh -c 'ssh vserver'")
       , ((ms_, xK_p     ), spawn "passmenu")]
-      ++ switchWorkspaceKBs
-      where
-        switchWorkspaceKBs =
-          -- mod-[1..9], Switch to workspace N
-          -- mod-shift-[1..9], Move client to workspace N
-          [((m, k), f i)
-              | (i, k) <- zip (XMonad.workspaces conf) ([xK_1 .. xK_9] ++ [xK_0])
-              , (f, m) <- [ (\i -> windows (W.greedyView i) >> popupCurDesktop, m__)
-                          , (windows . W.shift, ms_) ]]
-        {-
-        switchPhysicalKBs =
-          -- mod-{w,e,r}, Switch to physical/Xinerama screens 1, 2, or 3
-          -- mod-shift-{w,e,r}, Move client to screen 1, 2, or 3
-          [((m .|. m__, k), screenWorkspace sc >>= flip whenJust (windows . f))
-              | (k, sc) <- zip [xK_w, xK_e, xK_r] [0..]
-              , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
-         -}
     systemctlKBs =
       map (\(k,v) -> (k, spawn $ "systemctl " ++ v))
         [ ((ms_, xK_F10), "suspend")
@@ -195,42 +129,6 @@ myKeys conf =
       -- keyboard layouts
       , ((m__,  xK_F2     ), spawn "feh ~/.xmonad/neo/neo_Ebenen_1_2_3_4.png")
       , ((m__,  xK_F3     ), spawn "feh ~/.xmonad/neo/neo_Ebenen_1_2_5_6.png")]
-      ++ volumeControlls
-      where
-        volumeControlls =
-#if 1
--- pulseaudio
-          map (\(k,args) -> ((const 0, k)
-                         , runProcessWithInput "/home/mhuber/.xmonad/bin/mypamixer.sh" args ""
-                           >>= myDefaultPopup . ("V: " ++)
-                         ))
-            [ (0x1008ff12, ["mute"])
-            , (0x1008ff11, ["-10%"])
-            , (0x1008ff13, ["+10%"])]
-#else
--- alsa
-          map (\(k,v) -> ((const 0, k)
-                         , runProcessWithInput "/home/mhuber/.xmonad/bin/myamixer.sh" v ""
-                           >>= myDefaultPopup
-                         ))
-            [ (0x1008ff12, ["toggle"])
-            , (0x1008ff11, ["6dB-"])
-            , (0x1008ff13, ["unmute","3dB+"])]
-#endif
-    backlightControlKBs =
-      [((m__, xK_F1), spawnSelected def [ "xbacklight =50"
-                                        , "xbacklight =25"
-                                        , "xbacklight +10"
-                                        , "xbacklight =75"
-                                        , "xbacklight -10"
-                                        , "xbacklight =10"
-                                        , "xbacklight =5"
-                                        , "xbacklight +1"
-                                        , "xbacklight =3"
-                                        , "xbacklight =100"
-                                        , "xbacklight =1"
-                                        , "xbacklight -1"
-                                        , "xbacklight =0" ])]
 
 ------------------------------------------------------------------------
 -- Window rules:
@@ -294,21 +192,24 @@ myLogHook xmproc = let
 
 normalcolor = "#333333" :: String
 maincolor = "#ee9a00" :: String
-myConfig xmproc = withUrgencyHook myUrgencyHook $
-                  applyMyScratchpads $
-                  applyMyFollowFocus $
-                  applyMyLayoutModifications $
-                  def { terminal           = "urxvtc"
-                      , borderWidth        = 3
-                      , modMask            = mod1Mask --  mod4Mask
-                      , normalBorderColor  = normalcolor
-                      , focusedBorderColor = maincolor
-                      , keys               = myKeys
-                      , layoutHook         = myLayout
-                      , manageHook         = myManageHook
-                      , startupHook        = myStartupHook
-                      , logHook            = myLogHook xmproc
-                      }
+myConfig xmproc =
+  applyMyBacklightControlLayer $
+  applyMyVolumeControlLayer $
+  applyMyUrgencyHook $
+  applyMyScratchpads $
+  applyMyFollowFocus $
+  applyMyLayoutModifications $
+  def { terminal           = "urxvtc"
+      , borderWidth        = 3
+      , modMask            = mod1Mask --  mod4Mask
+      , normalBorderColor  = normalcolor
+      , focusedBorderColor = maincolor
+      , keys               = myKeys
+      , layoutHook         = myLayout
+      , manageHook         = myManageHook
+      , startupHook        = myStartupHook
+      , logHook            = myLogHook xmproc
+      }
 
 ------------------------------------------------------------------------
 -- Now run xmonad
