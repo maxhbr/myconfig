@@ -1,8 +1,30 @@
 -- Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 -- SPDX-License-Identifier: MIT
-module XMonad.MyConfig.Utils
-       ( shortenStatus
-       ) where
+{-# LANGUAGE CPP #-}
+module XMonad.MyConfig.MyLogHookLayer
+    ( applyMyLogHook
+    ) where
+
+import           System.IO ( hPutStrLn )
+import           XMonad
+import           XMonad.Hooks.DynamicLog ( dynamicLogWithPP
+                                         , PP(..)
+                                         , xmobarColor
+                                         , wrap )
+
+import XMonad.MyConfig.Scratchpads ( scratchpadPPSort )
+
+applyMyLogHook xmproc c =
+  let
+    maincolor = focusedBorderColor c
+    myXmobarPP = def { ppOutput  = hPutStrLn xmproc . shortenStatus
+                     , ppCurrent = xmobarColor maincolor "" . wrap "<" ">"
+                     , ppSort    = scratchpadPPSort
+                     , ppTitle   = (" " ++) . xmobarColor maincolor ""
+                     , ppVisible = xmobarColor maincolor ""
+                     }
+    myLogHook = dynamicLogWithPP myXmobarPP
+  in c { logHook = myLogHook }
 
 shortenPaths :: String -> String
 shortenPaths ('~':('/': p)) = "~/" ++ shortenPaths' "" p

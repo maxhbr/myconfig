@@ -136,6 +136,7 @@ layoutKBs conf =
        ]
   ++ switchWorkspaceKBs
   ++ focusKBs
+  -- ++ switchPhysicalKBs
   -- ++ combineTwoKBs
   -- ++ subLayoutKBs
   where
