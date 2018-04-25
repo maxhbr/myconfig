@@ -12,6 +12,10 @@ import           XMonad
 import           Graphics.X11.ExtraTypes.XF86()
 
 --------------------------------------------------------------------------------
+-- Actions
+import           XMonad.Actions.WindowGo ( runOrRaiseNext, raiseNext )
+
+--------------------------------------------------------------------------------
 -- Hooks
 import           XMonad.Hooks.DynamicLog ( dynamicLogWithPP
                                          , PP(..)
@@ -32,14 +36,16 @@ import qualified XMonad.StackSet             as W
 --------------------------------------------------------------------------------
 -- MyConfig
 import XMonad.MyConfig.Common
+import XMonad.MyConfig.Commands
 import XMonad.MyConfig.MyMiscKBs ( backlightControlKBs , volumeControlKBs )
 import XMonad.MyConfig.MyLayoutLayer ( myLayout )
+import XMonad.MyConfig.Notify ( popupCurDesktop )
 
 normalcolor = "#333333" :: String
 maincolor = "#ee9a00" :: String
 
 coreConfig =
-  def { terminal           = "urxvtc"
+  def { terminal           = terminalCMD
       , borderWidth        = 3
       , modMask            = mod1Mask --  mod4Mask
       , normalBorderColor  = normalcolor
@@ -93,8 +99,8 @@ myManageHook = let
 myStartupHook :: X ()
 myStartupHook = do
   setWMName "LG3D"
-  spawn "pkill unclutter; unclutter"
-  spawn "xset s 900"
+  spawn ("pkill unclutter; " ++ unclutterCMD)
+  spawn (xsetCMD ++ " s 900")
 
 ------------------------------------------------------------------------
 -- Key bindings:
@@ -102,6 +108,7 @@ myKeys conf =
   M.fromList $
   mapToWithModM conf $
        basicKBs
+    ++ raiseKBs
     ++ miscKBs
     ++ systemctlKBs
     ++ backlightControlKBs
@@ -109,7 +116,7 @@ myKeys conf =
   where
     basicKBs =
       [ ((ms_            , xK_Return), spawn $ XMonad.terminal conf)
-      , ((msc, xK_Return), spawn "urxvtd -q -f -o &")
+      , ((msc, xK_Return), spawn (terminalServerCMD ++ " &"))
 #if 1
       , ((m4m, xK_Return), windows W.swapMaster)
 #else
@@ -118,45 +125,43 @@ myKeys conf =
       , ((m__, xK_q     ), spawn "xmonad --restart")
       , ((ms_, xK_q     ), spawn "xmonad --recompile && sleep 0.1 && xmonad --restart")
       , ((msc, xK_q     ), io exitSuccess)
-      , ((m__, xK_p     ), spawn "`dmenu_path | yeganesh`")
+      , ((m__, xK_p     ), spawn ("`" ++ dmenuPathCMD ++ " | " ++ yeganeshCMD ++ "`"))
       -- , ((m__, xK_x     ), shellPrompt defaultXPConfig)
+      , ((ms_, xK_space ), setLayout $ layoutHook conf) -- reset layout
 
 
       , ((ms_, xK_c     ), kill)
 
-      , ((m__, xK_o     ), spawn "urxvtc -e bash -c 'EDITOR=vim ranger'")
-      , ((m_c, xK_Return), spawn "urxvtc -e zsh -c 'ssh vserver'")
-      , ((ms_, xK_p     ), spawn "passmenu")]
+      , ((m_c, xK_Return), spawn (terminalCMD ++ " -e " ++ zshCMD ++ " -c 'ssh vserver'"))
+      , ((ms_, xK_p     ), spawn passmenuCMD)]
     systemctlKBs =
       map (\(k,v) -> (k, spawn $ "systemctl " ++ v))
         [ ((ms_, xK_F10), "suspend")
         , ((msc, xK_F11), "reboot")
         , ((msc, xK_F12), "poweroff")]
+    raiseKBs = map (\(a,b) -> (a,b >> popupCurDesktop))
+       [ ((m__, xK_i), runOrRaiseNext firefoxCMD (className =? "Firefox" <||> className =?  "chromium-browser" <||> className =? "Chromium-browser"))
+       , ((m__, 0xfc), runOrRaiseNext editorCMD (className =? "Emacs"))
+       , ((m__, 0xf6), raiseNext (className =? "jetbrains-phpstorm" <||> className =? "jetbrains-idea"))
+       ]
     miscKBs =
-      [ ((const 0,   0x1008ffa9), spawn "synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
-      , ((m__, xK_s      ), spawn "find-cursor")
-      , ((msc, xK_s      ), spawn "xdotool mousemove 0 0; synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')")
-      , ((m__, xK_z      ), spawn "myautosetup.pl --onlyIfChanged")
-      , ((ms_, xK_z      ), spawn "myautosetup.pl")
-      , ((msc, xK_z      ), spawn "myautosetup.pl --rotate=left --primOutNr=1")
+      [ ((const 0,   0x1008ffa9), spawn (synclientCMD ++ " TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')"))
+      , ((m__, xK_s      ), spawn findCursorCMD)
+      , ((msc, xK_s      ), spawn (xdotoolCMD ++ " mousemove 0 0; " ++ synclientCMD ++ " TouchpadOff=$(" ++ synclientCMD ++ " -l | grep -c 'TouchpadOff.*=.*0')"))
+      , ((m__, xK_z      ), spawn (myautosetupCMD ++ " --onlyIfChanged"))
+      , ((ms_, xK_z      ), spawn myautosetupCMD)
+      , ((msc, xK_z      ), spawn (myautosetupCMD ++ " --rotate=left --primOutNr=1"))
 #if 1
-      , ((ms_, xK_y      ), spawn "xset s activate") -- screenlocker
+      , ((ms_, xK_y      ), spawn (xsetCMD ++ " s activate")) -- screenlocker
 #else
       , ((ms_, xK_y      ), spawn "slimlock") -- screenlocker
 #endif
 
-#if 1
       -- invert Colors (does not work with retdshift)
-      , ((m__,  xK_Home   ), spawn "xrandr-invert-colors")
-#else
-      , ((m__,  xK_Home   ), spawn "xcalib -i -a")
-#endif
+      , ((m__,  xK_Home   ), spawn invertColorsCMD)
 
-      , ((m__,  xK_Print  ), spawn "screenshot.sh")
-         -- or:
-         -- - "bash -c \"import -frame ~/screen_`date +%Y-%m-%d_%H-%M-%S`.png\"")
-         -- - "mkdir -p ~/_screenshots/ && scrot ~/_screenshots/screen_%Y-%m-%d_%H-%M-%S.png -d 1"
+      , ((m__,  xK_Print  ), spawn screenshotCMD)
 
       -- keyboard layouts
-      , ((m__,  xK_F2     ), spawn "feh ~/.xmonad/neo/neo_Ebenen_1_2_3_4.png")
-      , ((m__,  xK_F3     ), spawn "feh ~/.xmonad/neo/neo_Ebenen_1_2_5_6.png")]
+      , ((m__,  xK_F2     ), spawn (fehCMD ++ " ~/.xmonad/neo/neo_Ebenen_1_2_3_4.png"))
+      , ((m__,  xK_F3     ), spawn (fehCMD ++ " ~/.xmonad/neo/neo_Ebenen_1_2_5_6.png"))]

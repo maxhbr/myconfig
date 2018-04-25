@@ -25,7 +25,6 @@ import           XMonad.Actions.CycleWS ( nextWS, prevWS
                                         , moveTo
                                         , Direction1D(..)
                                         , WSType( NonEmptyWS ) )
-import           XMonad.Actions.WindowGo ( runOrRaiseNext, raiseNext )
 
 --------------------------------------------------------------------------------
 -- Hooks
@@ -69,7 +68,18 @@ import qualified XMonad.StackSet             as W
 import XMonad.MyConfig.Common
 import XMonad.MyConfig.Notify (popupCurDesktop)
 
-myWorkspaces = map show [1..7] ++ ("web" : map show [9..10]) ++ ["vbox", "media"]
+
+applyMyLayoutModifications :: XConfig a -> XConfig a
+applyMyLayoutModifications c = let
+  myWorkspaces :: [String]
+  myWorkspaces = map show [1..7] ++ ("web" : map show [9..10]) ++ ["vbox", "media"]
+  addLayoutkeys :: XConfig a -> XConfig a
+  addLayoutkeys conf = applyMyKBs (layoutKBs conf) conf
+  in docks $
+     addLayoutkeys $
+     c { workspaces      = myWorkspaces
+       , handleEventHook = fullscreenEventHook <+> handleEventHook c
+       , mouseBindings   = myMouseBindings }
 
 myLayout = smartBorders $
            boringAuto $
@@ -113,7 +123,6 @@ layoutKBs conf =
   [ ((m__, xK_space ), sendMessage NextLayout)
   , ((ms_, xK_x     ), sendMessage $ Toggle MIRROR)
   , ((m__, xK_f     ), sendMessage $ Toggle FULL)
-  -- , ((ms_, xK_space ), setLayout $ myLayout)
   , ((m__, xK_m     ), withFocused minimizeWindow)
   , ((ms_, xK_m     ), sendMessage RestoreNextMinimizedWin)
 
@@ -127,13 +136,8 @@ layoutKBs conf =
   , ((ms_, xK_h     ), sendMessage MirrorShrink)
   , ((ms_, xK_l     ), sendMessage MirrorExpand)
 
-  , ((m__, xK_b     ), sendMessage ToggleStruts)]
+  , ((m__, xK_b     ), sendMessage ToggleStruts) ]
   ++ cycleWSKBs
-  ++ map (\(a,b) -> (a,b >> popupCurDesktop))
-       [ ((m__, xK_i), runOrRaiseNext "firefox" (className =? "Firefox" <||> className =?  "chromium-browser" <||> className =? "Chromium-browser"))
-       , ((m__, 0xfc), runOrRaiseNext "ec" (className =? "Emacs"))
-       , ((m__, 0xf6), raiseNext (className =? "jetbrains-phpstorm" <||> className =? "jetbrains-idea"))
-       ]
   ++ switchWorkspaceKBs
   ++ focusKBs
   -- ++ switchPhysicalKBs
@@ -147,22 +151,14 @@ layoutKBs conf =
           | (i, k) <- zip (XMonad.workspaces conf) ([xK_1 .. xK_9] ++ [xK_0])
           , (f, m) <- [ (\i -> windows (W.greedyView i) >> popupCurDesktop, m__)
                       , (windows . W.shift, ms_) ]]
-    {-
-    switchPhysicalKBs =
-      -- mod-{w,e,r}, Switch to physical/Xinerama screens 1, 2, or 3
-      -- mod-shift-{w,e,r}, Move client to screen 1, 2, or 3
-      [((m .|. m__, k), screenWorkspace sc >>= flip whenJust (windows . f))
-          | (k, sc) <- zip [xK_w, xK_e, xK_r] [0..]
-          , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
-     -}
     focusKBs =
       [ ((ms_, xK_Tab   ), focusDown)
 #if 0
       , ((m__, xK_Tab   ), windows W.focusDown)
       , ((m_c, xK_Tab   ), windows W.focusUp >> windows W.shiftMaster)
 #else
-      , ((m_c, xK_Tab   ), windows W.focusDown)
       , ((m__, xK_Tab   ), windows W.focusUp >> windows W.shiftMaster)
+      , ((m_c, xK_Tab   ), windows W.focusDown)
 #endif
 
       , ((m__, xK_j     ), windows W.focusDown)
@@ -188,6 +184,12 @@ layoutKBs conf =
 #endif
       , ((m__, xK_y    ), toggleWS' ["NSP"])
       , ((m__, xK_a    ), toggleWS' ["NSP"])]
+    -- switchPhysicalKBs =
+    --   -- mod-{w,e,r}, Switch to physical/Xinerama screens 1, 2, or 3
+    --   -- mod-shift-{w,e,r}, Move client to screen 1, 2, or 3
+    --   [((m .|. m__, k), screenWorkspace sc >>= flip whenJust (windows . f))
+    --       | (k, sc) <- zip [xK_w, xK_e, xK_r] [0..]
+    --       , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
     -- combineTwoKBs =
     --   [((msc, xK_l ), sendMessage $ Move L)]
     -- subLayoutKBs =
@@ -207,14 +209,3 @@ myMouseBindings XConfig {XMonad.modMask = modm} = M.fromList
   , ((modm, button3), \w -> focus w
                             >> mouseResizeWindow w
                             >> windows W.shiftMaster) ]
-
-applyMyLayoutModifications :: XConfig a -> XConfig a
-applyMyLayoutModifications c = let
-  addLayoutkeys :: XConfig a -> XConfig a
-  addLayoutkeys conf = applyMyKBs (layoutKBs conf) conf
-  in docks $
-     addLayoutkeys $
-     c { workspaces      = myWorkspaces
-       , handleEventHook = fullscreenEventHook <+> handleEventHook c
-       , mouseBindings   = myMouseBindings
-       }
