@@ -5,7 +5,17 @@ with (import <nixpkgs> {});
 
 haskell.lib.buildStackProject {
   inherit ghc;
-  name = "myxmonadEnv";
+  name = "maxhbr-xmonad-config";
+  version = "1.0";
+  isLibrary = true;
+  isExecutable = true;
+  src = builtins.filterSource
+    (path: type: let
+      basename = baseNameOf path;
+      in if type == "symlink" then builtins.match "^result(|-.*)$" basename == null
+        else builtins.match "^((|\..*)\.(sw[a-z]|hi|o)|.*~)$" basename == null)
+    ./.;
+  configureFlags = [ "-W -fwarn-unused-imports -fno-warn-missing-signatures" ];
   buildInputs = [ gmp
                   x11
                   xorg.libXinerama
@@ -13,6 +23,5 @@ haskell.lib.buildStackProject {
                   xorg.libX11
                   xorg.libXrandr
                   xorg.libXft
-                  xorg.libXrender
-                  ];
+                  xorg.libXrender ];
 }

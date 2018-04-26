@@ -26,17 +26,23 @@ library
 
                      , containers
                      , X11
-  exposed-modules:     XMonad.MyConfig.Utils
+  exposed-modules:     XMonad.MyConfig
+  other-modules:       XMonad.MyConfig.Commands
                      , XMonad.MyConfig.Common
+                     , XMonad.MyConfig.Core
+                     , XMonad.MyConfig.MyLayoutLayer
+                     , XMonad.MyConfig.MyLogHookLayer
+                     , XMonad.MyConfig.MyMiscKBs
+                     , XMonad.MyConfig.Notify
                      , XMonad.MyConfig.Scratchpads
                      , XMonad.MyConfig.ToggleFollowFocus
-                     , XMonad.MyConfig.Notify
+
 
 executable xmonad
   main-is:             xmonad.hs
   -- other-modules:       
   -- other-extensions:    
-  build-depends:       base >=4.9 && <4.10
+  build-depends:       base
                      , xmonad
                      , xmonad-contrib
                      , maxhbr-xmonad-config

@@ -124,6 +124,7 @@
             xmonad = {
               enable = true;
               enableContribAndExtras = true;
+              extraPackages = haskellPackages: [ pkgs.myconfig.xmonad-config ];
             };
             default = "xmonad";
           };

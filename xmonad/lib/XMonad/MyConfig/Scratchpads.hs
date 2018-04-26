@@ -16,6 +16,7 @@ import           XMonad.Hooks.DynamicLog ( def, PP(..))
 import qualified XMonad.StackSet             as W
 
 import XMonad.MyConfig.Common
+import XMonad.MyConfig.Commands
 
 applyMyScratchpads :: XConfig a -> XConfig a
 applyMyScratchpads c = c { manageHook = manageHook c <+> scratchpadHook c
@@ -28,7 +29,7 @@ scratchpads c =
   let
     mkTermCmd name cmd = "SHLVL=0 " ++ (terminal c) ++ " -name " ++ name ++ " -e " ++ cmd
   in
-    [ NS "scratchpad" (mkTermCmd "Scratchpad" "~/.xmonad/bin/tmux-scratch.sh")
+    [ NS "scratchpad" (mkTermCmd "Scratchpad" (pathToXmonadBins ++ "tmux-scratch.sh"))
         (resource =? "Scratchpad")
         (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
     , NS "ScratchWeb" "Chromium" (resource =? "Chromium") nonFloating

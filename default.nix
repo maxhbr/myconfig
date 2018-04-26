@@ -1,3 +1,5 @@
+# Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 { system ? builtins.currentSystem, ... }@args:
 # see:
 # - https://www.reddit.com/r/NixOS/comments/4btjnf/fully_setting_up_a_custom_private_nix_repository/?st=jfqxd3k1&sh=92cbc8b5
@@ -38,8 +40,6 @@ let
     );
 
   self = rec {
-    background = callPackage ./background { inherit pkgs; };
-    slim-theme = callPackage ./background/slim-theme { inherit pkgs background; };
     nixSrc = packageSources {
       dir = ./nix;
       name = "nix";
@@ -59,6 +59,9 @@ let
     };
     dotfiles = packageSources { dir = ./dotfiles; name = "dotfiles"; };
     scripts = callPackage ./scripts { inherit pkgs background; };
+    xmonad-config = pkgs.haskellPackages.callPackage ./xmonad { inherit pkgs; };
+    background = callPackage ./background { inherit pkgs; };
+    slim-theme = callPackage ./background/slim-theme { inherit pkgs background; };
     myconfig = pkgs.buildEnv {
       name = "myconfig";
       paths = [
@@ -66,6 +69,7 @@ let
         nixSrc
         dotfiles
         scripts
+        xmonad-config
         background
         slim-theme
       ];
