@@ -7,13 +7,11 @@ module XMonad.MyConfig
     ( runMyConfig
     ) where
 
-import           Data.List ( iterate )
 import           XMonad
 import           XMonad.Util.Run ( spawnPipe )
 
 --------------------------------------------------------------------------------
 -- MyConfig
-import XMonad.MyConfig.Common
 import XMonad.MyConfig.Core ( coreConfig )
 import XMonad.MyConfig.Scratchpads ( applyMyScratchpads )
 import XMonad.MyConfig.ToggleFollowFocus ( applyMyFollowFocus )
