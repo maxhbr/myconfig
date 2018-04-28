@@ -30,8 +30,12 @@ upgrade() {
 }
 
 if [ $# -eq 0 ]; then
-    deploy
-    upgrade
+    if nixos-version; then
+        xmonad --restart
+    else
+        deploy
+        upgrade
+    fi
 else
     ([[ ! -n "$(type -t $1)" ]] || [ "$(type -t $1)" != "function" ] ) && exit 0
     $@

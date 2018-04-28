@@ -59,7 +59,8 @@ let
     };
     dotfiles = packageSources { dir = ./dotfiles; name = "dotfiles"; };
     scripts = callPackage ./scripts { inherit pkgs background; };
-    my-xmonad = callHaskellPackage ./xmonad { inherit pkgs; myConfigScripts = scripts; };
+    my-xmonad-misc = callPackage ./xmonad/misc.nix { inherit pkgs; };
+    my-xmonad = callHaskellPackage ./xmonad { inherit pkgs scripts; };
     background = callPackage ./background { inherit pkgs; };
     slim-theme = callPackage ./background/slim-theme { inherit pkgs background; };
     myconfig = pkgs.buildEnv {

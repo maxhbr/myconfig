@@ -1,4 +1,4 @@
-{ pkgs, mkDerivation, base, containers, process, stdenv, X11, xmonad, xmonad-contrib, myConfigScripts }:
+{ pkgs, mkDerivation, base, containers, process, stdenv, X11, xmonad, xmonad-contrib, scripts }:
 let
   binDir = ./bin;
   xmobarrc = ./xmobarrc;
@@ -47,7 +47,7 @@ in mkDerivation {
     replace htop ${pkgs.htop}
 
     sed -i -e '/pathToXmonadBins *=/ s%= .*%= "${binDir}/";%' $cmdsFile
-    sed -i -e '/pathToMyconfigBins *=/ s%= .*%= "${myConfigScripts}/bin/";%' $cmdsFile
+    sed -i -e '/pathToMyconfigBins *=/ s%= .*%= "${scripts}/bin/";%' $cmdsFile
     sed -i -e 's%~/.xmonad/xmobarrc%${xmobarrc}%g' lib/XMonad/MyConfig.hs
   '';
 
