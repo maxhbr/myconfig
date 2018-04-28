@@ -1,28 +1,35 @@
 -- Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 -- SPDX-License-Identifier: MIT
-module XMonad.MyConfig.Common
-    ( m__, ms_, m_c, msc, m4m
-    , applyMyKBs
-    , mapToWithModM
-    ) where
-import           XMonad
-import           XMonad.Util.EZConfig (additionalKeys)
+module XMonad.MyConfig.Variables
+    where
 
-mapToWithModM :: XConfig a -> [((KeyMask -> KeyMask, KeySym), X ())] -> [((KeyMask, KeySym), X ())]
-mapToWithModM conf = map (\((m,k),v) -> ((m (modMask conf),k),v))
-applyMyKBs :: [((KeyMask -> KeyMask, KeySym), X ())] -> XConfig a -> XConfig a
-applyMyKBs myKBs conf = additionalKeys conf $ mapToWithModM conf myKBs
 
- {-
-/---- meta
-|/--- shift
-||/-- control
-|||
-vvv -}
-m__, ms_, m_c, msc, m4m :: KeyMask -> KeyMask
-m__ = id
-ms_ = \m -> m .|. shiftMask
-m_c = \m -> m .|. controlMask
-msc = \m -> m .|. shiftMask .|. controlMask
-m4m = const mod4Mask
+pathToXmonadBins   = "~/.xmonad/bin/"
+pathToXmonadShare  = "~/.xmonad/share/"
+pathToMyconfigBins = ""
+
+terminalCMD        = "urxvtc"
+terminalServerCMD  = "urxvtd -q -f -o"
+bashCMD            = "bash"
+zshCMD             = "zsh"
+editorCMD          = "ec"
+dmenuPathCMD       = "dmenu_path"
+yeganeshCMD        = "yeganesh"
+passmenuCMD        = "passmenu"
+firefoxCMD         = "firefox"
+findCursorCMD      = "find-cursor"
+xdotoolCMD         = "xdotool"
+synclientCMD       = "synclient"
+xsetCMD            = "xset"
+invertColorsCMD    = "xrandr-invert-colors"
+-- or: "xcalib -i -a"
+fehCMD             = "feh"
+unclutterCMD       = "unclutter"
+htopCMD            = "htop"
+
+myautosetupCMD     = pathToMyconfigBins ++ "myautosetup.pl"
+screenshotCMD      = pathToMyconfigBins ++ "screenshot.sh"
+-- or:
+-- - "bash -c \"import -frame ~/screen_`date +%Y-%m-%d_%H-%M-%S`.png\"")
+-- - "mkdir -p ~/_screenshots/ && scrot ~/_screenshots/screen_%Y-%m-%d_%H-%M-%S.png -d 1"
 

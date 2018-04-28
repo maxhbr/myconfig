@@ -24,12 +24,12 @@ in mkDerivation {
 
   patchPhase = ''
     set -e
-    cmdsFile=lib/XMonad/MyConfig/Commands.hs
+    variablesFile=lib/XMonad/MyConfig/Variables.hs
 
     replace() {
       old=$1
       new=$2/bin/$1
-      sed -i -e 's%"'$old'%"'$new'%g' $cmdsFile
+      sed -i -e 's%"'$old'%"'$new'%g' $variablesFile
     }
 
     replace urxvtc ${pkgs.rxvt_unicode_with-plugins}
@@ -47,9 +47,9 @@ in mkDerivation {
     replace unclutter ${pkgs.unclutter}
     replace htop ${pkgs.htop}
 
-    sed -i -e '/pathToXmonadBins *=/ s%= .*%= "${my-xmonad-misc}/bin/";%' $cmdsFile
-    sed -i -e '/pathToXmonadShare *=/ s%= .*%= "${my-xmonad-misc}/share/";%' $cmdsFile
-    sed -i -e '/pathToMyconfigBins *=/ s%= .*%= "${scripts}/bin/";%' $cmdsFile
+    sed -i -e '/pathToXmonadBins *=/ s%= .*%= "${my-xmonad-misc}/bin/";%' $variablesFile
+    sed -i -e '/pathToXmonadShare *=/ s%= .*%= "${my-xmonad-misc}/share/";%' $variablesFile
+    sed -i -e '/pathToMyconfigBins *=/ s%= .*%= "${scripts}/bin/";%' $variablesFile
     sed -i -e 's%~/.xmonad/xmobarrc%${my-xmonad-misc}/share/xmobarrc%g' lib/XMonad/MyConfig.hs
   '';
 
