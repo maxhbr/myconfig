@@ -5,7 +5,6 @@ module XMonad.MyConfig.Core
     ( coreConfig
     ) where
 
-import           Data.List ( iterate )
 import           Data.Foldable ( foldMap )
 import           System.Exit ( exitSuccess )
 import           XMonad
@@ -17,16 +16,8 @@ import           XMonad.Actions.WindowGo ( runOrRaiseNext, raiseNext )
 
 --------------------------------------------------------------------------------
 -- Hooks
-import           XMonad.Hooks.DynamicLog ( dynamicLogWithPP
-                                         , PP(..)
-                                         , xmobarColor
-                                         , wrap )
 import           XMonad.Hooks.ManageHelpers ( doCenterFloat )
 import           XMonad.Hooks.SetWMName ( setWMName )
-
---------------------------------------------------------------------------------
--- Util
-import           XMonad.Util.Run ( spawnPipe )
 
 --------------------------------------------------------------------------------
 -- misc

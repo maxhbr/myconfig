@@ -9,7 +9,6 @@ module XMonad.MyConfig.MyLayoutLayer
 import           Data.Ratio ((%))
 
 import XMonad
-import           XMonad.Util.EZConfig (additionalKeys)
 
 --------------------------------------------------------------------------------
 -- Util
@@ -28,15 +27,10 @@ import           XMonad.Actions.CycleWS ( nextWS, prevWS
 
 --------------------------------------------------------------------------------
 -- Hooks
-import           XMonad.Hooks.DynamicLog ( dynamicLogWithPP
-                                         , PP(..)
-                                         , xmobarColor
-                                         , wrap )
 import           XMonad.Hooks.EwmhDesktops ( fullscreenEventHook )
 import           XMonad.Hooks.ManageDocks ( docks
                                           , avoidStrutsOn
                                           , ToggleStruts(..) )
-import           XMonad.Hooks.ManageHelpers ( doCenterFloat )
 
 --------------------------------------------------------------------------------
 -- Layouts

@@ -8,7 +8,7 @@ module XMonad.MyConfig.Scratchpads
 import XMonad
 import           XMonad.Util.EZConfig (additionalKeys)
 import           XMonad.Util.NamedScratchpad ( NamedScratchpad(..)
-                                             , customFloating , nonFloating
+                                             , customFloating
                                              , namedScratchpadAction
                                              , namedScratchpadFilterOutWorkspace
                                              , namedScratchpadManageHook )

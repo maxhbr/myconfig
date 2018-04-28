@@ -55,7 +55,7 @@
               slim = {
                 enable = true;
                 defaultUser = "mhuber";
-                # autoLogin = true;
+                autoLogin = true;
                 # TODO: this is no longer working!
                 # theme = "${pkgs.myconfig.slim-theme}/share/my-slim-theme";
                 # theme = "${pkgs.myconfig.slim-theme}/share/my-slim-theme.tar.gz";
@@ -122,18 +122,17 @@
 
         services.xserver = {
           windowManager = {
-            xmonad = {
-              enable = true;
-              enableContribAndExtras = true;
-              # extraPackages = haskellPackages: [ pkgs.myconfig.xmonad-config ];
-            };
-            default = "xmonad";
+            # xmonad = {
+            #   enable = true;
+            #   enableContribAndExtras = true;
+            #   # extraPackages = haskellPackages: [ pkgs.myconfig.xmonad-config ];
+            # };
+            default = "myXmonad";
             session = [{
               name = "myXmonad";
               start = ''
                 LOG=/tmp/myXmnad.log
                 exec &> >(tee -a $LOG)
-                ls -alF ${pkgs.myconfig.my-xmonad}/bin/xmonad
                 ${pkgs.myconfig.my-xmonad}/bin/xmonad &
                 waitPID=$!
               '';
