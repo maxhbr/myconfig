@@ -9,7 +9,10 @@ in mkDerivation {
   src = builtins.filterSource
     (path: type: let
       basename = baseNameOf path;
-      in if type == "directory" then basename != ".stack-work"
+      in if type == "directory" then (basename != ".stack-work" &&
+                                      basename != "dist" &&
+                                      basename != "bin" &&
+                                      basename != "share" )
         else if type == "symlink" then builtins.match "^result(|-.*)$" basename == null
           else builtins.match "^((|\..*)\.(sw[a-z]|hi|o)|.*~)$" basename == null)
     ./.;
