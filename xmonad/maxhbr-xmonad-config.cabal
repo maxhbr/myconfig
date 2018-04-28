@@ -27,7 +27,7 @@ library
                      , containers
                      , X11
   exposed-modules:     XMonad.MyConfig
-  other-modules:       XMonad.MyConfig.Commands
+  other-modules:       XMonad.MyConfig.Variables
                      , XMonad.MyConfig.Common
                      , XMonad.MyConfig.Core
                      , XMonad.MyConfig.MyLayoutLayer

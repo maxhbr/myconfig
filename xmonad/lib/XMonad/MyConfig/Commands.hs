@@ -1,10 +1,11 @@
 -- Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 -- SPDX-License-Identifier: MIT
-module XMonad.MyConfig.Commands
+module XMonad.MyConfig.Variables
     where
 
 
 pathToXmonadBins   = "~/.xmonad/bin/"
+pathToXmonadShare  = "~/.xmonad/share/"
 pathToMyconfigBins = ""
 
 terminalCMD        = "urxvtc"

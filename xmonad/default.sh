@@ -11,7 +11,7 @@ deploy() {
 
     # deploy ##################################################################
     mkdir -p "$target"
-    declare -a files=(lib bin neo xmonad.hs xmobarrc)
+    declare -a files=(lib bin share xmonad.hs xmobarrc)
     for file in ${files[@]}; do
         [[ -e "$target/$file" ]] || ln -s "$xmonadSrc/$file" "$target/$file"
     done

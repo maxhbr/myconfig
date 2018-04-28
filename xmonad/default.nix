@@ -1,10 +1,11 @@
-{ pkgs, mkDerivation, base, containers, process, stdenv, X11, xmonad, xmonad-contrib, scripts }:
+# Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
+{ pkgs, mkDerivation, base, containers, process, stdenv, X11, xmonad, xmonad-contrib, scripts, my-xmonad-misc }:
 let
-  binDir = ./bin;
-  xmobarrc = ./xmobarrc;
-in mkDerivation {
-  pname = "maxhbr-xmonad-config";
   version = "1.0";
+in mkDerivation {
+  inherit version;
+  pname = "my-xmonad-${version}";
   src = builtins.filterSource
     (path: type: let
       basename = baseNameOf path;
@@ -46,9 +47,10 @@ in mkDerivation {
     replace unclutter ${pkgs.unclutter}
     replace htop ${pkgs.htop}
 
-    sed -i -e '/pathToXmonadBins *=/ s%= .*%= "${binDir}/";%' $cmdsFile
+    sed -i -e '/pathToXmonadBins *=/ s%= .*%= "${my-xmonad-misc}/bin/";%' $cmdsFile
+    sed -i -e '/pathToXmonadShare *=/ s%= .*%= "${my-xmonad-misc}/share/";%' $cmdsFile
     sed -i -e '/pathToMyconfigBins *=/ s%= .*%= "${scripts}/bin/";%' $cmdsFile
-    sed -i -e 's%~/.xmonad/xmobarrc%${xmobarrc}%g' lib/XMonad/MyConfig.hs
+    sed -i -e 's%~/.xmonad/xmobarrc%${my-xmonad-misc}/share/xmobarrc%g' lib/XMonad/MyConfig.hs
   '';
 
   description = "my xmonad configuration";

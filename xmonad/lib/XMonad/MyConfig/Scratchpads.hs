@@ -16,7 +16,7 @@ import           XMonad.Hooks.DynamicLog ( def, PP(..))
 import qualified XMonad.StackSet as W
 
 import XMonad.MyConfig.Common
-import XMonad.MyConfig.Commands
+import XMonad.MyConfig.Variables
 
 applyMyScratchpads :: XConfig a -> XConfig a
 applyMyScratchpads c = c { manageHook = manageHook c <+> scratchpadHook c

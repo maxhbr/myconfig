@@ -21,13 +21,13 @@ import           XMonad.Hooks.SetWMName ( setWMName )
 
 --------------------------------------------------------------------------------
 -- misc
-import qualified Data.Map                    as M
-import qualified XMonad.StackSet             as W
+import qualified Data.Map        as M
+import qualified XMonad.StackSet as W
 
 --------------------------------------------------------------------------------
 -- MyConfig
 import XMonad.MyConfig.Common
-import XMonad.MyConfig.Commands
+import XMonad.MyConfig.Variables
 import XMonad.MyConfig.MyMiscKBs ( backlightControlKBs , volumeControlKBs )
 import XMonad.MyConfig.MyLayoutLayer ( myLayout )
 import XMonad.MyConfig.Notify ( popupCurDesktop )
@@ -154,5 +154,5 @@ myKeys conf =
       , ((m__,  xK_Print  ), spawn screenshotCMD)
 
       -- keyboard layouts
-      , ((m__,  xK_F2     ), spawn (fehCMD ++ " ~/.xmonad/neo/neo_Ebenen_1_2_3_4.png"))
-      , ((m__,  xK_F3     ), spawn (fehCMD ++ " ~/.xmonad/neo/neo_Ebenen_1_2_5_6.png"))]
+      , ((m__,  xK_F2     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_3_4.png"))
+      , ((m__,  xK_F3     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_5_6.png"))]

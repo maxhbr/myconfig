@@ -4,6 +4,7 @@
 
 let
   xmobarrc = ./xmobarrc;
+  share = ./share;
 in stdenv.mkDerivation rec {
   version = "1.0";
   name = "my-xmonad-misc-${version}";
@@ -19,7 +20,8 @@ in stdenv.mkDerivation rec {
 
     cp * $bin
 
-    cp ${xmobrrc} $share
-    sed -i -e 's%/home/mhuber/.xmonad/bin%$bin%g' $share/xmobarrc
+    cp ${xmobarrc} $share/xmobarrc
+    sed -i -e 's%/home/mhuber/.xmonad/bin%'"$bin"'%g' $share/xmobarrc
+    cp ${share}/* $share
   '';
 }
