@@ -87,27 +87,32 @@ checkIfConnected() {
 }
 
 handleGit() {
-    logH1 "update config" ""
-    if git diff-index --quiet HEAD --; then
-        git fetch
-        UPSTREAM=${1:-'@{u}'}
-        LOCAL=$(git rev-parse @)
-        REMOTE=$(git rev-parse "$UPSTREAM")
-        BASE=$(git merge-base @ "$UPSTREAM")
-        if [ $LOCAL = $REMOTE ]; then
-            echo "... up-to-date"
-        elif [ $LOCAL = $BASE ]; then
-            echo "* pull ..."
-            git pull --rebase || continue
-            logH1 "run" "updatet version of script"
-            exec $0
-        elif [ $REMOTE = $BASE ]; then
-            logINFO "need to push"
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    if [[ "$BRANCH" == "master" ]]; then
+        logH1 "update config" ""
+        if git diff-index --quiet HEAD --; then
+            git fetch
+            UPSTREAM=${1:-'@{u}'}
+            LOCAL=$(git rev-parse @)
+            REMOTE=$(git rev-parse "$UPSTREAM")
+            BASE=$(git merge-base @ "$UPSTREAM")
+            if [ $LOCAL = $REMOTE ]; then
+                echo "... up-to-date"
+            elif [ $LOCAL = $BASE ]; then
+                echo "* pull ..."
+                git pull --rebase || continue
+                logH1 "run" "updatet version of script"
+                exec $0
+            elif [ $REMOTE = $BASE ]; then
+                logINFO "need to push"
+            else
+                logERR "diverged"
+            fi
         else
-            logERR "diverged"
+            logINFO "git directory is unclean, it will not be updated"
         fi
     else
-        logINFO "git directory is unclean, it will not be updated"
+        logINFO "git branch is not master, do not handle git"
     fi
 }
 
@@ -146,7 +151,7 @@ if [ -z "$myconfig" ]; then
     exit 1
 fi
 
-declare -a folders=("$myconfig/nixos" "$myconfig/nix" "./dotfiles" "./xmonad")
+declare -a folders=("$myconfig/nixos" "$myconfig/nix" "./dotfiles") #  "./xmonad"
 declare -a commands=("deploy" "upgrade" "cleanup")
 for cmd in ${commands[@]}; do
     logH1 "handle:" "$cmd"

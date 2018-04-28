@@ -1,5 +1,8 @@
-{ pkgs, mkDerivation, base, containers, process, stdenv, X11, xmonad, xmonad-contrib }:
-mkDerivation {
+{ pkgs, mkDerivation, base, containers, process, stdenv, X11, xmonad, xmonad-contrib, myConfigScripts }:
+let
+  binDir = ./bin;
+  xmobarrc = ./xmobarrc;
+in mkDerivation {
   pname = "maxhbr-xmonad-config";
   version = "1.0";
   src = builtins.filterSource
@@ -18,7 +21,6 @@ mkDerivation {
     base containers X11 xmonad xmonad-contrib
   ];
 
-  #configurePhase = ''
   patchPhase = ''
     set -e
     cmdsFile=lib/XMonad/MyConfig/Commands.hs
@@ -36,17 +38,18 @@ mkDerivation {
     replace dmenu_path ${pkgs.dmenu}
     replace yeganesh ${pkgs.haskellPackages.yeganesh}
     replace passmenu ${pkgs.pass}
+    replace find-cursor ${pkgs.find-cursor}
     replace xdotool ${pkgs.xdotool}
     replace synclient ${pkgs.xorg.xf86inputsynaptics}
     replace xrandr-invert-colors ${pkgs.xrandr-invert-colors}
     replace feh ${pkgs.feh}
     replace unclutter ${pkgs.unclutter}
-  '';
+    replace htop ${pkgs.htop}
 
-  # installPhase = ''
-  #   mkdir -p $out/bin
-  #   cp -r bin/* $out/bin
-  # '';
+    sed -i -e '/pathToXmonadBins *=/ s%= .*%= "${binDir}/";%' $cmdsFile
+    sed -i -e '/pathToMyconfigBins *=/ s%= .*%= "${myConfigScripts}/bin/";%' $cmdsFile
+    sed -i -e 's%~/.xmonad/xmobarrc%${xmobarrc}%g' lib/XMonad/MyConfig.hs
+  '';
 
   description = "my xmonad configuration";
   license = stdenv.lib.licenses.mit;

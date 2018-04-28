@@ -24,6 +24,7 @@ invertColorsCMD    = "xrandr-invert-colors"
 -- or: "xcalib -i -a"
 fehCMD             = "feh"
 unclutterCMD       = "unclutter"
+htopCMD            = "htop"
 
 myautosetupCMD     = pathToMyconfigBins ++ "myautosetup.pl"
 screenshotCMD      = pathToMyconfigBins ++ "screenshot.sh"

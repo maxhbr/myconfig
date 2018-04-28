@@ -16,7 +16,7 @@ in {
       scripts = myconfig.scripts;
       background = myconfig.background;
       slim-theme = myconfig.slim-theme;
-      xmonad-config = myconfig.xmonad-config;
+      my-xmonad = myconfig.my-xmonad;
     };
   };
 }
