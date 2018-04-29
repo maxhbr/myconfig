@@ -151,7 +151,7 @@ if [ -z "$myconfig" ]; then
     exit 1
 fi
 
-declare -a folders=("$myconfig/nixos" "$myconfig/nix" "./dotfiles") #  "./xmonad"
+declare -a folders=("$myconfig/nixos" "$myconfig/nix" "./dotfiles" "./xmonad")
 declare -a commands=("deploy" "upgrade" "cleanup")
 for cmd in ${commands[@]}; do
     logH1 "handle:" "$cmd"

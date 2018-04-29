@@ -28,22 +28,8 @@ alias asdf="setxkbmap -layout de,de -variant neo,nodeadkeys -option grp:shifts_t
 
 alias vi="/var/run/current-system/sw/bin/vim"
 
-if [ -x "$HOME/bin/ec" ]; then
-  alias vim="$HOME/bin/ec -t"
-  alias emacs="$HOME/bin/ec"
-else
-  alias vim="emacsclient -t"
-  emacs () {
-    command emacs "$@" &disown
-  }
-fi
-
 alias magit='ec -e "(magit-status \"$(pwd)\")"'
 alias pgp="gpg" #Typo
-alias vime="vim -u ~/.vimencrypt -x "
-alias gvime="gvim -u ~/.vimencrypt -x "
-alias tvim="tmux new vim"
-alias svim="sudo /usr/bin/vim -u /home/mhuber/.vimrc "
 
 alias tmux="tmux -2"
 alias tmx="tmux attach-session || tmux"
@@ -79,6 +65,7 @@ whichf() {
 }
 
 have ag && {
+  alias ag="ag --hidden"
   alias grepr="ag"
 } || {
   grepr() { grep -rns --color=always "$@" | grep -v Binärdatei 2>/dev/null; }

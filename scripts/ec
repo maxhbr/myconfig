@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
+#
+#
+# partially stolen from
+# - http://mjwall.com/blog/2013/10/04/how-i-use-emacs/
+# - https://gist.github.com/alexmurray/337ac19014d769f4b219
+# - https://www.emacswiki.org/emacs/EmacsClient
+#
+#
+# call with
+#   $0 [-t|-k]
+set -e
+
+if [ "$1" = "-k" ]; then
+    server_ok=$(emacsclient -a "false" -e "(boundp 'server-process)")
+    if [ "t" == "$server_ok" ]; then
+        echo "Shutting down Emacs server"
+        emacsclient -e '(kill-emacs)'
+    else
+        echo "Emacs server not running"
+    fi
+elif [ "$1" = "-nw" ] || [ "$1" = "-t" ] || [ "$1" = "--tty" ] || [ -z "$DISPLAY" ]; then
+    if [[ "$#" -ne "0" ]]; then
+        exec emacsclient --alternate-editor="" --tty "$@"
+    else
+        exec emacsclient --alternate-editor="" --tty ./
+    fi
+else
+    ############################################################################
+    # option 1
+    if [ "$1" = "--wait" ]; then
+        shift
+        exec emacsclient --alternate-editor="" --create-frame "$@"
+    else
+        exec emacsclient --no-wait --alternate-editor="" --create-frame "$@"
+    fi
+
+    ############################################################################
+    # option 2
+    # emacsclient -n -c "$@"
+
+    ############################################################################
+    # option 3
+    # visible_frames() {
+    #     emacsclient -a "" -e '(length (visible-frame-list))'
+    # }
+    # change_focus() {
+    #     emacsclient -n -e "(select-frame-set-input-focus (selected-frame))" > /dev/null
+    # }
+    # [[ "$(visible_frames)" -eq "1" ]] && change_focus
+    # if [ "$(visible_frames)" -lt  "2" ]; then # need to create a frame
+    #     echo "no frame found..."
+    #     emacsclient -n -c "$@" && change_focus
+    #     # emacsclient -n -e "(apm-graphic-frame-init)" > /dev/null
+    # else
+    #     echo "frame found..."
+    #     change_focus
+    #     if [[ "$#" -ne "0" ]]; then
+    #         emacsclient -n "$@"
+    #     else
+    #         emacsclient -n ./
+    #     fi
+    # fi
+fi
+
+################################################################################
+# old script:
+
+# args="-a \"\""
+# guiArgs="-nc"
+# termArgs="-t"
+
+# socketFile="/tmp/emacs1000/server"
+# if [ -x $socketFile ]; then
+#     args="$args -s $socketFile"
+# fi
+
+# if [ "$1" = "-forceTerminal" ]; then
+#     IS_GRAPHICAL=false
+#     shift
+# else
+#     if [ -z "$DISPLAY" ]; then
+#         IS_GRAPHICAL=true
+#     else
+#         IS_GRAPHICAL=$(emacs --batch -Q --eval='(if (fboundp '"'"'tool-bar-mode) (message "true") (message "false"))' 2>&1)
+#     fi
+# fi
+
+# if $IS_GRAPHICAL; then
+#     args="$args $guiArgs"
+# else
+#     args="$args $termArgs"
+# fi
+
+# if [ $# -eq 0 ]; then
+#     eval "emacsclient $args ./"
+# else
+#     eval "emacsclient $args \"$@\""
+# fi

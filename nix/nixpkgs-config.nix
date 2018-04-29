@@ -10,7 +10,6 @@ in {
   # virtualbox.enableExtensionPack = true;
 
   packageOverrides = pkgs_: with pkgs_; {
-    find-cursor = pkgs_.callPackage ./pkgs/find-cursor {};
     myconfig = {
       dotfiles = myconfig.dotfiles;
       scripts = myconfig.scripts;

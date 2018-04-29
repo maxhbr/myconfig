@@ -1,6 +1,6 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, mkDerivation, base, containers, process, stdenv, X11, xmonad, xmonad-contrib, scripts, my-xmonad-misc }:
+{ pkgs, mkDerivation, base, containers, process, stdenv, X11, xmonad, xmonad-contrib, scripts, my-xmonad-misc, find-cursor }:
 let
   version = "1.0";
 in mkDerivation {
@@ -14,7 +14,8 @@ in mkDerivation {
                                       basename != "bin" &&
                                       basename != "share" )
         else if type == "symlink" then builtins.match "^result(|-.*)$" basename == null
-          else builtins.match "^((|\..*)\.(sw[a-z]|hi|o)|.*~)$" basename == null)
+          else (builtins.match "^((|\..*)\.(sw[a-z]|hi|o)|.*~)$" basename == null &&
+                basename != "default.sh"))
     ./.;
   isLibrary = true;
   isExecutable = false;
@@ -42,7 +43,7 @@ in mkDerivation {
     replace dmenu_path ${pkgs.dmenu}
     replace yeganesh ${pkgs.haskellPackages.yeganesh}
     replace passmenu ${pkgs.pass}
-    replace find-cursor ${pkgs.find-cursor}
+    replace find-cursor ${find-cursor}
     replace xdotool ${pkgs.xdotool}
     replace synclient ${pkgs.xorg.xf86inputsynaptics}
     replace xrandr-invert-colors ${pkgs.xrandr-invert-colors}

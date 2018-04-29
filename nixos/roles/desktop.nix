@@ -110,7 +110,6 @@
               xss-lock
               libnotify # xfce.xfce4notifyd # notify-osd
               wmctrl
-              find-cursor
             ]) ++ (with pkgs.haskellPackages; [
               xmobar
             ]) ++ (with pkgs.unstable.haskellPackages; [

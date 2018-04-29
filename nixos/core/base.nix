@@ -26,8 +26,14 @@
   };
 
   environment = {
+    variables = {
+      TMP = "/tmp";
+      EDITOR = "${pkgs.myconfig.scripts}/bin/editor";
+    };
     interactiveShellInit = ''
       alias upg='~/myconfig/rebuild.sh'
+      alias vim="${pkgs.myconfig.scripts}/bin/ec -t"
+      alias emacs="${pkgs.myconfig.scripts}/bin/ec"
     '';
     # shellInit = ''
     # '';
@@ -68,7 +74,6 @@
       # my backup tool
       borgbackup
     ];
-    variables = { TMP = "/tmp"; };
   };
 
   nixpkgs.overlays = [(
@@ -115,7 +120,7 @@
     emacs = {
       enable = true;
       install = true;
-      defaultEditor = true;
+      defaultEditor = false;
       package = pkgs.unstable.emacs;
       # package = import /home/mhuber/.emacs.d { pkgs = pkgs; };
     };

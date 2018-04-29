@@ -30,6 +30,10 @@ deploy() {
     sudo mkdir -p /etc/nixos
     configTarget=/etc/nixos/configuration.nix
     configSrcDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    if [[ ! -f /etc/nixos/hostid ]]; then
+        echo "set hostid:"
+        cksum /etc/machine-id | while read c rest; do printf "%x" $c; done | sudo tee /etc/nixos/hostid
+    fi
     if [[ ! -f $configTarget ]] || [[ $(wc -l <$configTarget) -eq 1 ]]; then
         echo "import $configSrcDir" | sudo tee $configTarget
     else

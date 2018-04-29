@@ -6,6 +6,11 @@ set -e
 echo "* $(tput bold)deploy xmonad$(tput sgr0) ..."
 
 deploy() {
+    if nixos-version > /dev/null; then
+        echo "xmonad configuration is deployed via nix"
+        return
+    fi
+
     xmonadSrc="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     target="$HOME/.xmonad"
 
@@ -23,19 +28,19 @@ deploy() {
 upgrade() {
     echo "* $(tput bold)recompile and restart xmonad$(tput sgr0) ..."
     if [ ! -z ${DISPLAY+x} ]; then
-        xmonad --recompile
-        sleep 0.1
-        xmonad --restart
+        if nixos-version > /dev/null; then
+            xmonad --restart
+        else
+            xmonad --recompile
+            sleep 0.1
+            xmonad --restart
+        fi
     fi
 }
 
 if [ $# -eq 0 ]; then
-    if nixos-version; then
-        xmonad --restart
-    else
-        deploy
-        upgrade
-    fi
+    deploy
+    upgrade
 else
     ([[ ! -n "$(type -t $1)" ]] || [ "$(type -t $1)" != "function" ] ) && exit 0
     $@
