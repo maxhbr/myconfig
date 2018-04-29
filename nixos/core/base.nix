@@ -28,7 +28,6 @@
   environment = {
     variables = {
       TMP = "/tmp";
-      EDITOR = "${pkgs.myconfig.scripts}/bin/editor";
     };
     interactiveShellInit = ''
       alias upg='~/myconfig/rebuild.sh'
@@ -120,7 +119,7 @@
     emacs = {
       enable = true;
       install = true;
-      defaultEditor = false;
+      defaultEditor = true;
       package = pkgs.unstable.emacs;
       # package = import /home/mhuber/.emacs.d { pkgs = pkgs; };
     };

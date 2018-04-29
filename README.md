@@ -4,7 +4,7 @@ Here I collect all configuration files of my machines. Currently I use
 - OS: **[NixOS](https://nixos.org/)**
 - Window Manager: **[xmonad](http://xmonad.org/)** (with: xmobar, dmenu + yeganesh)
 - EDITOR: emacs ([spacemacs](http://spacemacs.org/))
-- SHELL: zsh (with: oh-m̀y-zsh)
+- SHELL: zsh (with: oh-my-zsh)
 - Email Client: neomutt (with: offlineimap)
 - Keyboard layout: [neo2](https://www.neo-layout.org/) 
 

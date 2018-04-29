@@ -11,8 +11,8 @@ stdenv.mkDerivation rec {
   buildPhase = ''
     sed -i -e '/backgroundCmd =/ s%= .*%= "${background}/bin/myRandomBackground";%' myautosetup.pl
     sed -i -e 's%emacsclient%${pkgs.emacs}/bin/emacsclient%g' ec
-    cp ec editor
-    sed -i -e 's%= "--wait"%!= "--no-wait"%g' editor
+    # cp ec editor
+    # sed -i -e 's%= "--wait"%!= "--no-wait"%g' editor
   '';
   installPhase = ''
     bin="$out/bin"
