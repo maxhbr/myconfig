@@ -1,7 +1,6 @@
-#!/usr/bin/env nix-shell
+#!/usr/bin/env bash
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-#! nix-shell -i bash -p borgbackup
 
 # TODO:
 # - via SSH?
@@ -18,6 +17,8 @@ if [ "$(id -u)" == "0" ]; then
     exit 1
 fi
 
+borgCmd="borg"
+
 # UUID="1c0be23b-7537-4a82-8af1-744d21c3e6bd"
 UUID="3294d03a-f08b-433c-8f04-9cc2a3e9dc10"
 backupmount="/mnt/backup"
@@ -29,9 +30,9 @@ backupprefix="$(hostname)-"
 backupname="${backupprefix}$(date +%Y-%m-%d_%H:%M:%S)"
 logfile="$logdir/$backupname.log"
 
-borgInitCmd="borg \
+borgInitCmd="$borgCmd \
     init --encryption none"
-borgCreateCmd="borg \
+borgCreateCmd="$borgCmd \
     create \
     --stats \
     --verbose \
@@ -41,7 +42,7 @@ borgCreateCmd="borg \
     --one-file-system \
     --exclude-caches \
     --compression lz4"
-borgPruneCmd="borg \
+borgPruneCmd="$borgCmd \
     prune \
     --stats \
     --verbose \
@@ -147,9 +148,9 @@ myBorgmount() {
     echo "do the borg mount"
     set -x
     mkdir -p "${backupdir}/mnt"
-    borg mount -f "$repository" "${backupdir}/mnt"
+    $borgCmd mount -f "$repository" "${backupdir}/mnt"
     mkdir -p "${backupdir}/mnt-work"
-    borg mount -f "$repositoryWork" "${backupdir}/mnt-work"
+    $borgCmd mount -f "$repositoryWork" "${backupdir}/mnt-work"
     set +x
 }
 
