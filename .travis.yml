@@ -18,7 +18,10 @@ matrix:
       env: NAME="build myconfig within docker"
     - install: ./nixos/derivations/make-qemu-vm.nix
       script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm
-      env: NAME="vmtest (minimal vm)"
+      env: NAME="vmtest (empty configuration)"
+    - install: ./nixos/derivations/make-qemu-vm.nix --arg machine '"minimal"'
+      script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm
+      env: NAME="vmtest (minimal configuration)"
 
 ################################################################################
 ## tests that do not actually test anything (never fail)
@@ -33,10 +36,10 @@ matrix:
       env: NAME="build xmonad with stack"
     - install: ./nixos/derivations/make-qemu-vm.nix --arg machine '"T470p"'
       script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm
-      env: NAME="vmtest (T470p config)"
+      env: NAME="vmtest (T470p configuration)"
     - install: ./nixos/derivations/make-qemu-vm.nix
       script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm --arg machine '"workstation"'
-      env: NAME="vmtest (workstation config)"
+      env: NAME="vmtest (workstation configuration)"
     - script: ./nixos/derivations/make-iso.nix
       env: NAME="make-iso.nix"
 
