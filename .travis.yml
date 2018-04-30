@@ -59,10 +59,10 @@ matrix:
 ### dies becaus of: out of disk
     - install: ./nixos/derivations/make-qemu-vm.nix --arg machine '"T470p"'
       script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm
-      env: NAME="vmtest (T470p config)"
+      env: NAME="vmtest (T470p configuration)"
     - install: ./nixos/derivations/make-qemu-vm.nix
       script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm --arg machine '"workstation"'
-      env: NAME="vmtest (workstation config)"
+      env: NAME="vmtest (workstation configuration)"
 ### dies becaus of: time out
     - script: ./nixos/derivations/make-iso.nix
       env: NAME="make-iso.nix"

@@ -13,6 +13,7 @@ import           XMonad.Util.Run ( spawnPipe )
 --------------------------------------------------------------------------------
 -- MyConfig
 import XMonad.MyConfig.Core ( coreConfig )
+import XMonad.MyConfig.Variables
 import XMonad.MyConfig.Scratchpads ( applyMyScratchpads )
 import XMonad.MyConfig.ToggleFollowFocus ( applyMyFollowFocus )
 import XMonad.MyConfig.Notify ( applyMyUrgencyHook )
@@ -20,15 +21,15 @@ import XMonad.MyConfig.MyLayoutLayer ( applyMyLayoutModifications )
 import XMonad.MyConfig.MyLogHookLayer ( applyMyLogHook )
 
 runMyConfig = do
-  xmproc <- spawnPipe "xmobar ~/.xmonad/xmobarrc"
+  xmproc <- spawnPipe (xmobarCMD ++ " " ++ pathToXmobarConfig)
   xmonad $ myConfig xmproc
 
 myConfig xmproc = let
   layers :: (LayoutClass a Window) => [XConfig a -> XConfig a]
-  layers = [applyMyLayoutModifications
+  layers = [ applyMyLayoutModifications
            , applyMyUrgencyHook
            , applyMyScratchpads
            , applyMyFollowFocus
            , applyMyLogHook xmproc
            ]
-  in foldl (\ c -> (\ f -> f c)) coreConfig layers
+  in foldl (\ c f -> f c) coreConfig layers

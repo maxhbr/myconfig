@@ -5,6 +5,11 @@ set -e
 
 echo "* $(tput bold)deploy nix configuration$(tput sgr0) ..."
 
+nixEnvCMD="nix-env"
+nixEnvCMD="$nixEnvCMD -I nixpkgs=channel:nixos-unstable"
+nixEnvCMD="$nixEnvCMD -I nixpkgs-overlays=/etc/nix/overlays"
+nixEnvCMD="$nixEnvCMD -I nixos-config=/etc/nixos/configuration.nix"
+
 gate() {
     type "nix-env" &> /dev/null
 }
@@ -29,8 +34,7 @@ upgrade() {
     echo "* $(tput bold)nix-env --upgrade$(tput sgr0) ..."
     NIX_PATH=
     NIX_CURL_FLAGS='--retry=1000' \
-                  nix-env -I nixpkgs=channel:nixos-unstable \
-                  -I nixpkgs-overlays=/etc/nix/overlays \
+                  $nixEnvCMD \
                   --show-trace \
                   --upgrade
 }
@@ -38,8 +42,10 @@ upgrade() {
 cleanup() {
     if [ "$((RANDOM%100))" -gt 90 ]; then
         echo "* nix-env --delete-generations 30d ..."
-        nix-env --delete-generations 30d
-        sudo nix-env --delete-generations 30d
+        $nixEnvCMD \
+            --delete-generations 30d
+        sudo $nixEnvCMD \
+            --delete-generations 30d
     else
         echo "* $(tput bold)do not$(tput sgr0) nix-env --delete-generations 30d ..."
     fi

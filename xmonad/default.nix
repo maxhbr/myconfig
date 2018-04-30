@@ -36,6 +36,7 @@ in mkDerivation {
       sed -i -e 's%"'$old'%"'$new'%g' $variablesFile
     }
 
+    replace xmobar ${pkgs.haskellPackages.xmobar}
     replace urxvtc ${pkgs.rxvt_unicode_with-plugins}
     replace urxvtd ${pkgs.rxvt_unicode_with-plugins}
     replace bash ${pkgs.bash}
@@ -51,10 +52,10 @@ in mkDerivation {
     replace unclutter ${pkgs.unclutter}
     replace htop ${pkgs.htop}
 
+    sed -i -e '/pathToXmobarConfig *=/ s%= .*%= "${my-xmonad-misc}/share/xmobarrc";%' $variablesFile
     sed -i -e '/pathToXmonadBins *=/ s%= .*%= "${my-xmonad-misc}/bin/";%' $variablesFile
     sed -i -e '/pathToXmonadShare *=/ s%= .*%= "${my-xmonad-misc}/share/";%' $variablesFile
     sed -i -e '/pathToMyconfigBins *=/ s%= .*%= "${scripts}/bin/";%' $variablesFile
-    sed -i -e 's%~/.xmonad/xmobarrc%${my-xmonad-misc}/share/xmobarrc%g' lib/XMonad/MyConfig.hs
   '';
 
   description = "my xmonad configuration";

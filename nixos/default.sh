@@ -50,7 +50,7 @@ upgrade() {
          nixos-rebuild --show-trace --keep-failed \
          -I nixpkgs=channel:nixos-18.03 \
          -I nixpkgs-overlays=/etc/nix/overlays \
-         -I nixos-configTarget=/etc/nixos/configuration.nix \
+         -I nixos-config=/etc/nixos/configuration.nix \
          --upgrade \
          --fallback ${1:-switch}
 }
