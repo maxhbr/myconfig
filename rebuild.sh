@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p nix ncurses git wget tmux
+#! nix-shell -i bash -p nix ncurses git wget tmux glibcLocales
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 set -e
@@ -139,7 +139,8 @@ runCmd ./nixos deploy
 
 # run scripts #############################################################
 logH1 "handle:" "prepare"
-for folder in ${folders[@]}; do
+declare -a prepareFolders=("./nixos" "./nix" "./dotfiles" "./xmonad")
+for folder in ${prepareFolders[@]}; do
     runCmd $folder prepare
 done
 

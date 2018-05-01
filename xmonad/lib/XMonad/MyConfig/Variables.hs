@@ -3,6 +3,8 @@
 module XMonad.MyConfig.Variables
     where
 
+import           XMonad
+import           XMonad.Actions.WindowGo ( runOrRaiseNext, raiseNext )
 
 pathToXmobarConfig = "~/.xmonad/xmobarrc"
 pathToXmonadBins   = "~/.xmonad/bin/"
@@ -19,6 +21,7 @@ dmenuPathCMD       = "dmenu_path"
 yeganeshCMD        = "yeganesh"
 passmenuCMD        = "passmenu"
 firefoxCMD         = "firefox"
+browserCMD         = "chromium-browser"
 findCursorCMD      = "find-cursor"
 xdotoolCMD         = "xdotool"
 synclientCMD       = "synclient"
@@ -28,6 +31,7 @@ invertColorsCMD    = "xrandr-invert-colors"
 fehCMD             = "feh"
 unclutterCMD       = "unclutter"
 htopCMD            = "htop"
+pavucontrolCMD     = "pavucontrol"
 
 myautosetupCMD     = pathToMyconfigBins ++ "myautosetup.pl"
 screenshotCMD      = pathToMyconfigBins ++ "screenshot.sh"
@@ -35,3 +39,7 @@ screenshotCMD      = pathToMyconfigBins ++ "screenshot.sh"
 -- - "bash -c \"import -frame ~/screen_`date +%Y-%m-%d_%H-%M-%S`.png\"")
 -- - "mkdir -p ~/_screenshots/ && scrot ~/_screenshots/screen_%Y-%m-%d_%H-%M-%S.png -d 1"
 
+browserX     = runOrRaiseNext browserCMD (className =? "Firefox" <||> className =? "Firefox-bin" <||> className =?  "chromium-browser" <||> className =? "Chromium-browser")
+editorX      = runOrRaiseNext editorCMD (className =? "Emacs")
+pavucontrolX = runOrRaiseNext pavucontrolCMD (className =? "pavucontrol" <||> className =? "Pavucontrol")
+  

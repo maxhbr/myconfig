@@ -28,6 +28,7 @@
   environment = {
     variables = {
       TMP = "/tmp";
+      BROWSER = "${pkgs.chromium}/bin/chromium-browser";
     };
     interactiveShellInit = ''
       alias upg='~/myconfig/rebuild.sh'

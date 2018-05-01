@@ -131,12 +131,12 @@ myKeys conf =
         , ((msc, xK_F11), "reboot")
         , ((msc, xK_F12), "poweroff")]
     raiseKBs = map (\(a,b) -> (a,b >> popupCurDesktop))
-       [ ((m__, xK_i), runOrRaiseNext firefoxCMD (className =? "Firefox" <||> className =?  "chromium-browser" <||> className =? "Chromium-browser"))
-       , ((m__, 0xfc), runOrRaiseNext editorCMD (className =? "Emacs"))
+       [ ((m__, xK_i), browserX)
+       , ((m__, 0xfc), editorX)
        , ((m__, 0xf6), raiseNext (className =? "jetbrains-phpstorm" <||> className =? "jetbrains-idea"))
-       ]
+       , ((const 0, 0x1008ffb2), pavucontrolX)]
     miscKBs =
-      [ ((const 0,   0x1008ffa9), spawn (synclientCMD ++ " TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')"))
+      [ ((const 0,   0x1008ffa9), spawn (synclientCMD ++ " TouchpadOff=$(" ++ synclientCMD ++ " -l | grep -c 'TouchpadOff.*=.*0')"))
       , ((m__, xK_s      ), spawn findCursorCMD)
       , ((msc, xK_s      ), spawn (xdotoolCMD ++ " mousemove 0 0; " ++ synclientCMD ++ " TouchpadOff=$(" ++ synclientCMD ++ " -l | grep -c 'TouchpadOff.*=.*0')"))
       , ((m__, xK_z      ), spawn (myautosetupCMD ++ " --onlyIfChanged"))

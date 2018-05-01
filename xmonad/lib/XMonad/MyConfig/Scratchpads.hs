@@ -46,8 +46,8 @@ scratchpads c =
 
 scratchpadKBs c =
   map (\(k,d) -> (k, namedScratchpadAction (scratchpads c) d))
-  [ ((m__, xK_minus), "scratchpad")
-  , ((ms_, xK_i    ), "ScratchMutt")
+  [ ((m__, xK_minus),       "scratchpad")
+  , ((ms_, xK_i    ),       "ScratchMutt")
   ]
 
 scratchpadHook c = namedScratchpadManageHook (scratchpads c)

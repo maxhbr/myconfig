@@ -41,9 +41,11 @@ in mkDerivation {
     replace urxvtd ${pkgs.rxvt_unicode_with-plugins}
     replace bash ${pkgs.bash}
     replace zsh ${pkgs.zsh}
-    replace dmenu_path ${pkgs.dmenu}
-    replace yeganesh ${pkgs.haskellPackages.yeganesh}
+    replace dmenu_path ${pkgs.unstable.dmenu}
+    replace yeganesh ${pkgs.unstable.haskellPackages.yeganesh}
     replace passmenu ${pkgs.pass}
+    replace firefox ${pkgs.firefox}
+    replace chromium-browser ${pkgs.chromium}
     replace find-cursor ${find-cursor}
     replace xdotool ${pkgs.xdotool}
     replace synclient ${pkgs.xorg.xf86inputsynaptics}
@@ -51,6 +53,7 @@ in mkDerivation {
     replace feh ${pkgs.feh}
     replace unclutter ${pkgs.unclutter}
     replace htop ${pkgs.htop}
+    replace pavucontrol ${pkgs.pavucontrol}
 
     sed -i -e '/pathToXmobarConfig *=/ s%= .*%= "${my-xmonad-misc}/share/xmobarrc";%' $variablesFile
     sed -i -e '/pathToXmonadBins *=/ s%= .*%= "${my-xmonad-misc}/bin/";%' $variablesFile

@@ -105,8 +105,8 @@
       config = lib.mkIf (config.myconfig.roles.desktop.enable && config.myconfig.roles.xmonad.enable) {
         # myconfig.roles.desktop.enable = true;
         environment.systemPackages = (with pkgs; [
-              unstable.dmenu unstable.dzen2
-              unclutter
+              unstable.dmenu
+              unstable.dzen2
               xss-lock
               libnotify # xfce.xfce4notifyd # notify-osd
               wmctrl
