@@ -36,7 +36,6 @@ library
                      , XMonad.MyConfig.Notify
                      , XMonad.MyConfig.Scratchpads
                      , XMonad.MyConfig.ToggleFollowFocus
-                     , XMonad.MyConfig.MyAutospawnLayer
 
 
 executable xmonad
