@@ -8,7 +8,7 @@ module XMonad.MyConfig.MyLayoutLayer
 
 import           Data.Ratio ((%))
 
-import XMonad
+import           XMonad
 
 --------------------------------------------------------------------------------
 -- Util
@@ -40,7 +40,7 @@ import           XMonad.Layout.Gaps (gaps)
 import           XMonad.Layout.Named ( named )
 import           XMonad.Layout.NoBorders ( smartBorders )
 import           XMonad.Layout.Minimize ( minimize, minimizeWindow
-                                        , MinimizeMsg(RestoreNextMinimizedWin) )
+                                        , MinimizeMsg( RestoreNextMinimizedWin ) )
 import           XMonad.Layout.MultiToggle
 import           XMonad.Layout.MultiToggle.Instances
 import           XMonad.Layout.PerScreen (ifWider)
@@ -48,8 +48,8 @@ import           XMonad.Layout.PerWorkspace ( modWorkspaces )
 import           XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall)
                                              , MirrorResize ( MirrorShrink
                                                             , MirrorExpand ) )
-import           XMonad.Layout.Spacing (spacing)
-import           XMonad.Layout.TwoPane (TwoPane(TwoPane))
+import           XMonad.Layout.Spacing ( spacing )
+import           XMonad.Layout.TwoPane ( TwoPane( TwoPane ) )
 import           XMonad.Layout.IM -- (withIM)
 
 import           XMonad.Layout.IfMax
@@ -68,7 +68,7 @@ applyMyLayoutModifications c = let
   myWorkspaces :: [String]
   myWorkspaces = map show [1..7] ++ ("web" : map show [9..10]) ++ ["vbox", "media"]
   addLayoutkeys :: XConfig a -> XConfig a
-  addLayoutkeys conf = applyMyKBs (layoutKBs conf) conf
+  addLayoutkeys conf = applyMyKBs' layoutKBs conf
   in docks $
      addLayoutkeys $
      c { workspaces      = myWorkspaces

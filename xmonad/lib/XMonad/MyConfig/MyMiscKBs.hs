@@ -12,7 +12,6 @@ import           XMonad.Util.Run ( runProcessWithInput )
 import           XMonad.Actions.GridSelect
 
 import XMonad.MyConfig.Common
-import XMonad.MyConfig.Variables
 import XMonad.MyConfig.Notify
 
 restartXmonadKBs :: FilePath -> [((KeyMask -> KeyMask, KeySym), X ())]

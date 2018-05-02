@@ -27,7 +27,6 @@ import qualified XMonad.StackSet as W
 --------------------------------------------------------------------------------
 -- MyConfig
 import XMonad.MyConfig.Common
-import XMonad.MyConfig.Variables
 import XMonad.MyConfig.MyMiscKBs ( restartXmonadKBs, backlightControlKBs , volumeControlKBs )
 import XMonad.MyConfig.MyLayoutLayer ( myLayout )
 import XMonad.MyConfig.Notify ( popupCurDesktop )

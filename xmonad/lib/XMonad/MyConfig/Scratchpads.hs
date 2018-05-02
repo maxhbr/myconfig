@@ -5,7 +5,7 @@ module XMonad.MyConfig.Scratchpads
        , scratchpadPPSort)
        where
 
-import XMonad
+import           XMonad
 import           XMonad.Util.EZConfig (additionalKeys)
 import           XMonad.Util.NamedScratchpad ( NamedScratchpad(..)
                                              , customFloating
@@ -16,7 +16,6 @@ import           XMonad.Hooks.DynamicLog ( def, PP(..))
 import qualified XMonad.StackSet as W
 
 import XMonad.MyConfig.Common
-import XMonad.MyConfig.Variables
 
 applyMyScratchpads :: XConfig a -> XConfig a
 applyMyScratchpads c = c { manageHook = manageHook c <+> scratchpadHook c
