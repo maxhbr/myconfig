@@ -15,7 +15,7 @@ in mkDerivation {
                                       basename != "share" )
         else if type == "symlink" then builtins.match "^result(|-.*)$" basename == null
           else (builtins.match "^((|\..*)\.(sw[a-z]|hi|o)|.*~)$" basename == null &&
-                basename != "default.sh"))
+                builtins.match "\.sh$" basename == null))
     ./.;
   isLibrary = true;
   isExecutable = false;

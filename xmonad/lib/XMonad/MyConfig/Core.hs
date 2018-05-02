@@ -12,7 +12,7 @@ import           Graphics.X11.ExtraTypes.XF86()
 
 --------------------------------------------------------------------------------
 -- Actions
-import           XMonad.Actions.WindowGo ( runOrRaiseNext, raiseNext )
+import           XMonad.Actions.WindowGo ( raiseNext )
 
 --------------------------------------------------------------------------------
 -- Hooks
@@ -28,20 +28,20 @@ import qualified XMonad.StackSet as W
 -- MyConfig
 import XMonad.MyConfig.Common
 import XMonad.MyConfig.Variables
-import XMonad.MyConfig.MyMiscKBs ( backlightControlKBs , volumeControlKBs )
+import XMonad.MyConfig.MyMiscKBs ( restartXmonadKBs, backlightControlKBs , volumeControlKBs )
 import XMonad.MyConfig.MyLayoutLayer ( myLayout )
 import XMonad.MyConfig.Notify ( popupCurDesktop )
 
 normalcolor = "#333333" :: String
 maincolor = "#ee9a00" :: String
 
-coreConfig =
+coreConfig executablePath =
   def { terminal           = terminalCMD
       , borderWidth        = 3
       , modMask            = mod1Mask --  mod4Mask
       , normalBorderColor  = normalcolor
       , focusedBorderColor = maincolor
-      , keys               = myKeys
+      , keys               = myKeys executablePath
       , layoutHook         = myLayout
       , manageHook         = myManageHook
       , startupHook        = myStartupHook
@@ -95,13 +95,14 @@ myStartupHook = do
 
 ------------------------------------------------------------------------
 -- Key bindings:
-myKeys conf =
+myKeys executablePath conf =
   M.fromList $
   mapToWithModM conf $
        basicKBs
     ++ raiseKBs
     ++ miscKBs
     ++ systemctlKBs
+    ++ restartXmonadKBs executablePath
     ++ backlightControlKBs
     ++ volumeControlKBs
   where
@@ -113,8 +114,6 @@ myKeys conf =
 #else
       , ((m__, xK_Return), windows W.swapMaster)
 #endif
-      , ((m__, xK_q     ), spawn "xmonad --restart")
-      , ((ms_, xK_q     ), spawn "xmonad --recompile && sleep 0.1 && xmonad --restart")
       , ((msc, xK_q     ), io exitSuccess)
       , ((m__, xK_p     ), spawn ("`" ++ dmenuPathCMD ++ " | " ++ yeganeshCMD ++ "`"))
       -- , ((m__, xK_x     ), shellPrompt defaultXPConfig)

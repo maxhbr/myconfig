@@ -7,6 +7,8 @@ module XMonad.MyConfig
     ( runMyConfig
     ) where
 
+import           System.Environment ( getExecutablePath )
+
 import           XMonad
 import           XMonad.Util.Run ( spawnPipe )
 
@@ -22,9 +24,10 @@ import XMonad.MyConfig.MyLogHookLayer ( applyMyLogHook )
 
 runMyConfig = do
   xmproc <- spawnPipe (xmobarCMD ++ " " ++ pathToXmobarConfig)
-  xmonad $ myConfig xmproc
+  executablePath <- getExecutablePath
+  xmonad $ myConfig xmproc executablePath
 
-myConfig xmproc = let
+myConfig xmproc executablePath = let
   layers :: (LayoutClass a Window) => [XConfig a -> XConfig a]
   layers = [ applyMyLayoutModifications
            , applyMyUrgencyHook
@@ -32,4 +35,4 @@ myConfig xmproc = let
            , applyMyFollowFocus
            , applyMyLogHook xmproc
            ]
-  in foldl (\ c f -> f c) coreConfig layers
+  in foldl (\ c f -> f c) (coreConfig executablePath) layers

@@ -4,12 +4,13 @@ module XMonad.MyConfig.Variables
     where
 
 import           XMonad
-import           XMonad.Actions.WindowGo ( runOrRaiseNext, raiseNext )
+import           XMonad.Actions.WindowGo ( runOrRaiseNext )
 
 pathToXmobarConfig = "~/.xmonad/xmobarrc"
 pathToXmonadBins   = "~/.xmonad/bin/"
 pathToXmonadShare  = "~/.xmonad/share/"
 pathToMyconfigBins = ""
+pathToMyXmonadBin  = ""
 
 xmobarCMD          = "xmobar"
 terminalCMD        = "urxvtc"
@@ -42,4 +43,3 @@ screenshotCMD      = pathToMyconfigBins ++ "screenshot.sh"
 browserX     = runOrRaiseNext browserCMD (className =? "Firefox" <||> className =? "Firefox-bin" <||> className =?  "chromium-browser" <||> className =? "Chromium-browser")
 editorX      = runOrRaiseNext editorCMD (className =? "Emacs")
 pavucontrolX = runOrRaiseNext pavucontrolCMD (className =? "pavucontrol" <||> className =? "Pavucontrol")
-  
