@@ -1,29 +1,46 @@
 -- Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 -- SPDX-License-Identifier: MIT
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
 module XMonad.MyConfig.MyLogHookLayer
-    ( applyMyLogHook
+    ( getXMProcs
+    , applyMyLogHook
     ) where
 
+import           GHC.IO.Handle (Handle ())
 import           System.IO ( hPutStrLn )
 import           XMonad
+import           XMonad.Util.Run ( spawnPipe )
 import           XMonad.Hooks.DynamicLog ( dynamicLogWithPP
                                          , PP(..)
                                          , xmobarColor
                                          , wrap )
 
+import XMonad.MyConfig.Common
 import XMonad.MyConfig.Scratchpads ( scratchpadPPSort )
+import XMonad.Layout.IndependentScreens
 
-applyMyLogHook xmproc c =
+
+mkXmobarCommand (S s) = unwords ([xmobarCMD, "-x", show s, pathToXmobarConfig] ++ additinalConfig s)
+  where
+    additinalConfig 0 = []
+    additinalConfig _ = ["-t", " %StdinReader% }{ %date% "]
+
+getXMProcs :: IO([Handle])
+getXMProcs = do
+  nScreens <- countScreens
+  mapM (spawnPipe . mkXmobarCommand) [0 .. nScreens-1]
+
+applyMyLogHook xmprocs c =
   let
     maincolor = focusedBorderColor c
-    myXmobarPP = def { ppOutput  = hPutStrLn xmproc . shortenStatus
+    myXmobarPP xmproc = def { ppOutput  = hPutStrLn xmproc . shortenStatus
                      , ppCurrent = xmobarColor maincolor "" . wrap "<" ">"
                      , ppSort    = scratchpadPPSort
                      , ppTitle   = (" " ++) . xmobarColor maincolor ""
                      , ppVisible = xmobarColor maincolor ""
                      }
-    myLogHook = dynamicLogWithPP myXmobarPP
+    myLogHook = mapM_ dynamicLogWithPP $ map myXmobarPP xmprocs
   in c { logHook = myLogHook }
 
 shortenPaths :: String -> String

@@ -10,7 +10,6 @@ module XMonad.MyConfig
 import           System.Environment ( getExecutablePath )
 
 import           XMonad
-import           XMonad.Util.Run ( spawnPipe )
 
 --------------------------------------------------------------------------------
 -- MyConfig
@@ -20,20 +19,21 @@ import XMonad.MyConfig.Scratchpads ( applyMyScratchpads )
 import XMonad.MyConfig.ToggleFollowFocus ( applyMyFollowFocus )
 import XMonad.MyConfig.Notify ( applyMyUrgencyHook )
 import XMonad.MyConfig.MyLayoutLayer ( applyMyLayoutModifications )
-import XMonad.MyConfig.MyLogHookLayer ( applyMyLogHook )
+import XMonad.MyConfig.MyLogHookLayer ( getXMProcs , applyMyLogHook )
+import XMonad.Layout.IndependentScreens
 
 runMyConfig = do
-  xmproc <- spawnPipe (xmobarCMD ++ " " ++ pathToXmobarConfig)
+  xmprocs <-getXMProcs
   executablePath <- getExecutablePath
-  xmonad $ myConfig xmproc executablePath
+  xmonad $ myConfig xmprocs executablePath
 
-myConfig xmproc executablePath = let
+myConfig xmprocs executablePath = let
   layers :: (LayoutClass a Window) => [XConfig a -> XConfig a]
   layers = [ applyMyLayoutModifications
            , applyMyRestartKBs executablePath
            , applyMyUrgencyHook
            , applyMyScratchpads
            , applyMyFollowFocus
-           , applyMyLogHook xmproc
+           , applyMyLogHook xmprocs
            ]
   in foldl (\ c f -> f c) coreConfig layers
