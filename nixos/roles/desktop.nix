@@ -104,20 +104,13 @@
     { # xmonad
       config = lib.mkIf (config.myconfig.roles.desktop.enable && config.myconfig.roles.xmonad.enable) {
         # myconfig.roles.desktop.enable = true;
-        environment.systemPackages = (with pkgs; [
-              unstable.dmenu
+        environment.systemPackages = with pkgs; [
               unstable.dzen2
-              xss-lock
               libnotify # xfce.xfce4notifyd # notify-osd
               wmctrl
-            ]) ++ (with pkgs.haskellPackages; [
-              xmobar
-            ]) ++ (with pkgs.unstable.haskellPackages; [
-              yeganesh
-            ]);
+            ];
 
         system.activationScripts.cleanupXmonadState = "rm /home/mhuber/.xmonad/xmonad.state || true";
-
 
         services.xserver = {
           windowManager = {

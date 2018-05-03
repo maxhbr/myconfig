@@ -14,7 +14,7 @@ import           XMonad.Util.Run ( spawnPipe )
 
 --------------------------------------------------------------------------------
 -- MyConfig
-import XMonad.MyConfig.Core ( coreConfig )
+import XMonad.MyConfig.Core ( coreConfig, applyMyRestartKBs )
 import XMonad.MyConfig.Variables
 import XMonad.MyConfig.Scratchpads ( applyMyScratchpads )
 import XMonad.MyConfig.ToggleFollowFocus ( applyMyFollowFocus )
@@ -30,9 +30,10 @@ runMyConfig = do
 myConfig xmproc executablePath = let
   layers :: (LayoutClass a Window) => [XConfig a -> XConfig a]
   layers = [ applyMyLayoutModifications
+           , applyMyRestartKBs executablePath
            , applyMyUrgencyHook
            , applyMyScratchpads
            , applyMyFollowFocus
            , applyMyLogHook xmproc
            ]
-  in foldl (\ c f -> f c) (coreConfig executablePath) layers
+  in foldl (\ c f -> f c) coreConfig layers

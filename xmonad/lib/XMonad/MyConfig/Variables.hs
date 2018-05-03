@@ -3,6 +3,8 @@
 module XMonad.MyConfig.Variables
     where
 
+import           System.FilePath
+
 import           XMonad
 import           XMonad.Actions.WindowGo ( runOrRaiseNext )
 
@@ -39,6 +41,14 @@ screenshotCMD      = pathToMyconfigBins ++ "screenshot.sh"
 -- or:
 -- - "bash -c \"import -frame ~/screen_`date +%Y-%m-%d_%H-%M-%S`.png\"")
 -- - "mkdir -p ~/_screenshots/ && scrot ~/_screenshots/screen_%Y-%m-%d_%H-%M-%S.png -d 1"
+
+myLauncherCMD = let
+  additionalPath = if isAbsolute dmenuPathCMD
+                   then "PATH=$PATH:" ++ (takeDirectory dmenuPathCMD)
+                   else ""
+  in "x=$(" ++ additionalPath ++ " " ++ yeganeshCMD ++ " -x --) && exec $x"
+-- or:
+-- - "`dmenu_path | yeganesh`"
 
 browserX     = runOrRaiseNext browserCMD (className =? "Firefox" <||> className =? "Firefox-bin" <||> className =?  "chromium-browser" <||> className =? "Chromium-browser")
 editorX      = runOrRaiseNext editorCMD (className =? "Emacs")

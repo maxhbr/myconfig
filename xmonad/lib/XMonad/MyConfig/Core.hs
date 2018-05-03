@@ -3,6 +3,7 @@
 {-# LANGUAGE CPP #-}
 module XMonad.MyConfig.Core
     ( coreConfig
+    , applyMyRestartKBs
     ) where
 
 import           Data.Foldable ( foldMap )
@@ -12,12 +13,17 @@ import           Graphics.X11.ExtraTypes.XF86()
 
 --------------------------------------------------------------------------------
 -- Actions
+import           XMonad.Actions.GridSelect
 import           XMonad.Actions.WindowGo ( raiseNext )
 
 --------------------------------------------------------------------------------
 -- Hooks
 import           XMonad.Hooks.ManageHelpers ( doCenterFloat )
 import           XMonad.Hooks.SetWMName ( setWMName )
+
+--------------------------------------------------------------------------------
+-- Utils
+import           XMonad.Util.Run ( runProcessWithInput )
 
 --------------------------------------------------------------------------------
 -- misc
@@ -27,24 +33,27 @@ import qualified XMonad.StackSet as W
 --------------------------------------------------------------------------------
 -- MyConfig
 import XMonad.MyConfig.Common
-import XMonad.MyConfig.MyMiscKBs ( restartXmonadKBs, backlightControlKBs , volumeControlKBs )
 import XMonad.MyConfig.MyLayoutLayer ( myLayout )
-import XMonad.MyConfig.Notify ( popupCurDesktop )
+import XMonad.MyConfig.Notify ( popupCurDesktop, myDefaultPopup )
 
 normalcolor = "#333333" :: String
 maincolor = "#ee9a00" :: String
 
-coreConfig executablePath =
+coreConfig =
   def { terminal           = terminalCMD
       , borderWidth        = 3
       , modMask            = mod1Mask --  mod4Mask
       , normalBorderColor  = normalcolor
       , focusedBorderColor = maincolor
-      , keys               = myKeys executablePath
+      , keys               = myKeys
       , layoutHook         = myLayout
       , manageHook         = myManageHook
       , startupHook        = myStartupHook
       }
+
+applyMyRestartKBs executablePath =
+  applyMyKBs [ ((m__, xK_q     ), spawn (executablePath ++ " --restart"))
+             , ((ms_, xK_q     ), spawn (executablePath ++ " --recompile && sleep 0.1 && " ++ executablePath ++ " --restart")) ]
 
 ------------------------------------------------------------------------
 -- Window rules:
@@ -94,14 +103,13 @@ myStartupHook = do
 
 ------------------------------------------------------------------------
 -- Key bindings:
-myKeys executablePath conf =
+myKeys conf =
   M.fromList $
   mapToWithModM conf $
        basicKBs
     ++ raiseKBs
     ++ miscKBs
     ++ systemctlKBs
-    ++ restartXmonadKBs executablePath
     ++ backlightControlKBs
     ++ volumeControlKBs
   where
@@ -114,7 +122,7 @@ myKeys executablePath conf =
       , ((m__, xK_Return), windows W.swapMaster)
 #endif
       , ((msc, xK_q     ), io exitSuccess)
-      , ((m__, xK_p     ), spawn ("`" ++ dmenuPathCMD ++ " | " ++ yeganeshCMD ++ "`"))
+      , ((m__, xK_p     ), spawn myLauncherCMD)
       -- , ((m__, xK_x     ), shellPrompt defaultXPConfig)
       , ((ms_, xK_space ), setLayout $ layoutHook conf) -- reset layout
 
@@ -154,3 +162,40 @@ myKeys executablePath conf =
       -- keyboard layouts
       , ((m__,  xK_F2     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_3_4.png"))
       , ((m__,  xK_F3     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_5_6.png"))]
+
+backlightControlKBs, volumeControlKBs :: [((KeyMask -> KeyMask, KeySym), X ())]
+backlightControlKBs = [((m__, xK_F1), spawnSelected def [ "xbacklight =50"
+                                                        , "xbacklight =25"
+                                                        , "xbacklight +10"
+                                                        , "xbacklight =75"
+                                                        , "xbacklight -10"
+                                                        , "xbacklight =10"
+                                                        , "xbacklight =5"
+                                                        , "xbacklight +1"
+                                                        , "xbacklight =3"
+                                                        , "xbacklight =100"
+                                                        , "xbacklight =1"
+                                                        , "xbacklight -1"
+                                                        , "xbacklight =0" ])]
+
+volumeControlKBs =
+#if 1
+-- pulseaudio
+  map (\(k,args) -> ((const 0, k)
+                 , runProcessWithInput (pathToXmonadBins ++ "mypamixer.sh") args ""
+                   >>= myDefaultPopup . ("V: " ++)
+                 ))
+    [ (0x1008ff12, ["mute"])
+    , (0x1008ff11, ["-10%"])
+    , (0x1008ff13, ["+10%"])]
+#else
+-- alsa
+  map (\(k,v) -> ((const 0, k)
+                 , runProcessWithInput (pathToXmonadBins ++ "myamixer.sh") v ""
+                   >>= myDefaultPopup
+                 ))
+    [ (0x1008ff12, ["toggle"])
+    , (0x1008ff11, ["6dB-"])
+    , (0x1008ff13, ["unmute","3dB+"])]
+#endif
+
