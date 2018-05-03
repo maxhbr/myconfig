@@ -1,0 +1,17 @@
+-- -*- mode: haskell -*-
+-- ~/.xmonad/xmobarrc
+-- see http://projects.haskell.org/xmobar/
+
+Config { font = "xft:inconsolata:pixelsize=17:antialias=true:hinting=true"
+       , bgColor = "black"
+       , fgColor = "grey"
+       , position = BottomW L 100
+       , lowerOnStart = True
+       , allDesktops = True
+       , commands = [ Run StdinReader ]
+       , sepChar = "%"
+       , alignSep = "}{"
+       , template = " %StdinReader% }{ %date% "
+       }
+
+-- vim: set ft=haskell :

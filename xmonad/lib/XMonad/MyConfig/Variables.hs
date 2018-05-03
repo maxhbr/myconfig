@@ -9,6 +9,7 @@ import           XMonad
 import           XMonad.Actions.WindowGo ( runOrRaiseNext )
 
 pathToXmobarConfig = "~/.xmonad/xmobarrc"
+pathToXmobarMinConfig = "~/.xmonad/xmobarrc.minimal"
 pathToXmonadBins   = "~/.xmonad/bin/"
 pathToXmonadShare  = "~/.xmonad/share/"
 pathToMyconfigBins = ""

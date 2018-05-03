@@ -4,6 +4,7 @@
 
 let
   xmobarrc = ./xmobarrc;
+  xmobarrcMin = ./xmobarrc.minimal;
   share = ./share;
 in stdenv.mkDerivation rec {
   version = "1.0";
@@ -21,6 +22,7 @@ in stdenv.mkDerivation rec {
     cp * $bin
 
     cp ${xmobarrc} $share/xmobarrc
+    cp ${xmobarrcMin} $share/xmobarrc.minimal
     sed -i -e 's%/home/mhuber/.xmonad/bin%'"$bin"'%g' $share/xmobarrc
     cp ${share}/* $share
   '';

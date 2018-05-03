@@ -12,50 +12,47 @@ in mkDerivation {
       in if type == "directory" then (basename != ".stack-work" &&
                                       basename != "dist" &&
                                       basename != "bin" &&
-                                      basename != "share" )
+                                      basename != "share")
         else if type == "symlink" then builtins.match "^result(|-.*)$" basename == null
           else (builtins.match "^((|\..*)\.(sw[a-z]|hi|o)|.*~)$" basename == null &&
                 builtins.match "\.sh$" basename == null))
     ./.;
   isLibrary = true;
   isExecutable = false;
-  libraryHaskellDepends = [
-    base containers process X11 xmonad xmonad-contrib
-  ];
-  executableHaskellDepends = [
-    base containers X11 xmonad xmonad-contrib
-  ];
+  libraryHaskellDepends    = [base containers process X11 xmonad xmonad-contrib];
+  executableHaskellDepends = [base containers         X11 xmonad xmonad-contrib];
 
   patchPhase = ''
     set -e
     variablesFile=lib/XMonad/MyConfig/Variables.hs
 
-    replace() {
+    addAbsoluteBinaryPath() {
       old=$1
       new=$2/bin/$1
       sed -i -e 's%"'$old'%"'$new'%g' $variablesFile
     }
 
-    replace xmobar ${pkgs.haskellPackages.xmobar}
-    replace urxvtc ${pkgs.rxvt_unicode_with-plugins}
-    replace urxvtd ${pkgs.rxvt_unicode_with-plugins}
-    replace bash ${pkgs.bash}
-    replace zsh ${pkgs.zsh}
-    replace dmenu_path ${pkgs.unstable.dmenu}
-    replace yeganesh ${pkgs.unstable.haskellPackages.yeganesh}
-    replace passmenu ${pkgs.pass}
-    replace firefox ${pkgs.firefox}
-    replace chromium-browser ${pkgs.chromium}
-    replace find-cursor ${find-cursor}
-    replace xdotool ${pkgs.xdotool}
-    replace synclient ${pkgs.xorg.xf86inputsynaptics}
-    replace xrandr-invert-colors ${pkgs.xrandr-invert-colors}
-    replace feh ${pkgs.feh}
-    replace unclutter ${pkgs.unclutter}
-    replace htop ${pkgs.htop}
-    replace pavucontrol ${pkgs.pavucontrol}
+    addAbsoluteBinaryPath xmobar ${pkgs.haskellPackages.xmobar}
+    addAbsoluteBinaryPath urxvtc ${pkgs.rxvt_unicode_with-plugins}
+    addAbsoluteBinaryPath urxvtd ${pkgs.rxvt_unicode_with-plugins}
+    addAbsoluteBinaryPath bash ${pkgs.bash}
+    addAbsoluteBinaryPath zsh ${pkgs.zsh}
+    addAbsoluteBinaryPath dmenu_path ${pkgs.unstable.dmenu}
+    addAbsoluteBinaryPath yeganesh ${pkgs.unstable.haskellPackages.yeganesh}
+    addAbsoluteBinaryPath passmenu ${pkgs.pass}
+    addAbsoluteBinaryPath firefox ${pkgs.firefox}
+    addAbsoluteBinaryPath chromium-browser ${pkgs.chromium}
+    addAbsoluteBinaryPath find-cursor ${find-cursor}
+    addAbsoluteBinaryPath xdotool ${pkgs.xdotool}
+    addAbsoluteBinaryPath synclient ${pkgs.xorg.xf86inputsynaptics}
+    addAbsoluteBinaryPath xrandr-invert-colors ${pkgs.xrandr-invert-colors}
+    addAbsoluteBinaryPath feh ${pkgs.feh}
+    addAbsoluteBinaryPath unclutter ${pkgs.unclutter}
+    addAbsoluteBinaryPath htop ${pkgs.htop}
+    addAbsoluteBinaryPath pavucontrol ${pkgs.pavucontrol}
 
     sed -i -e '/pathToXmobarConfig *=/ s%= .*%= "${my-xmonad-misc}/share/xmobarrc";%' $variablesFile
+    sed -i -e '/pathToXmobarMinConfig *=/ s%= .*%= "${my-xmonad-misc}/share/xmobarrc.minimal";%' $variablesFile
     sed -i -e '/pathToXmonadBins *=/ s%= .*%= "${my-xmonad-misc}/bin/";%' $variablesFile
     sed -i -e '/pathToXmonadShare *=/ s%= .*%= "${my-xmonad-misc}/share/";%' $variablesFile
     sed -i -e '/pathToMyconfigBins *=/ s%= .*%= "${scripts}/bin/";%' $variablesFile
