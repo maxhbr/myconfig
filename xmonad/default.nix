@@ -18,7 +18,7 @@ in mkDerivation {
                 builtins.match "\.sh$" basename == null))
     ./.;
   isLibrary = true;
-  isExecutable = false;
+  isExecutable = true;
   libraryHaskellDepends    = [base containers process X11 xmonad xmonad-contrib];
   executableHaskellDepends = [base containers         X11 xmonad xmonad-contrib];
 
@@ -30,6 +30,12 @@ in mkDerivation {
       old=$1
       new=$2/bin/$1
       sed -i -e 's%"'$old'%"'$new'%g' $variablesFile
+    }
+
+    replaceConfigValue() {
+      key=$1
+      value=$2
+      sed -i -e '/'"$key"' *=/ s%= .*%= "'"$value"'";%' $variablesFile
     }
 
     addAbsoluteBinaryPath xmobar ${pkgs.haskellPackages.xmobar}
@@ -50,12 +56,13 @@ in mkDerivation {
     addAbsoluteBinaryPath unclutter ${pkgs.unclutter}
     addAbsoluteBinaryPath htop ${pkgs.htop}
     addAbsoluteBinaryPath pavucontrol ${pkgs.pavucontrol}
+    addAbsoluteBinaryPath xbacklight ${pkgs.xorg.xbacklight}
 
-    sed -i -e '/pathToXmobarConfig *=/ s%= .*%= "${my-xmonad-misc}/share/xmobarrc";%' $variablesFile
-    sed -i -e '/pathToXmobarMinConfig *=/ s%= .*%= "${my-xmonad-misc}/share/xmobarrc.minimal";%' $variablesFile
-    sed -i -e '/pathToXmonadBins *=/ s%= .*%= "${my-xmonad-misc}/bin/";%' $variablesFile
-    sed -i -e '/pathToXmonadShare *=/ s%= .*%= "${my-xmonad-misc}/share/";%' $variablesFile
-    sed -i -e '/pathToMyconfigBins *=/ s%= .*%= "${scripts}/bin/";%' $variablesFile
+    replaceConfigValue pathToXmobarConfig "${my-xmonad-misc}/share/xmobarrc"
+    replaceConfigValue pathToXmobarMinConfig "${my-xmonad-misc}/share/xmobarrc.minimal"
+    replaceConfigValue pathToXmonadBins "${my-xmonad-misc}/bin/"
+    replaceConfigValue pathToXmonadShare "${my-xmonad-misc}/share/"
+    replaceConfigValue pathToMyconfigBins "${scripts}/bin/"
   '';
 
   description = "my xmonad configuration";

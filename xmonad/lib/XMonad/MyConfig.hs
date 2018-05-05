@@ -5,16 +5,21 @@
 {-# LANGUAGE FlexibleContexts #-}
 module XMonad.MyConfig
     ( runMyConfig
+    , composeMyConfig
     ) where
 
 import           System.Environment ( getExecutablePath )
+import           GHC.IO.Handle ( Handle (..) )
+import           System.FilePath ( FilePath (..) )
 
 import           XMonad
 
 --------------------------------------------------------------------------------
 -- MyConfig
-import XMonad.MyConfig.Core ( coreConfig, applyMyRestartKBs )
 import XMonad.MyConfig.Variables
+
+import XMonad.MyConfig.Core ( coreConfig, applyMyRestartKBs )
+import XMonad.MyConfig.MyManageHookLayer ( applyMyManageHook )
 import XMonad.MyConfig.Scratchpads ( applyMyScratchpads )
 import XMonad.MyConfig.ToggleFollowFocus ( applyMyFollowFocus )
 import XMonad.MyConfig.Notify ( applyMyUrgencyHook )
@@ -22,15 +27,19 @@ import XMonad.MyConfig.MyLayoutLayer ( applyMyLayoutModifications )
 import XMonad.MyConfig.MyLogHookLayer ( getXMProcs , applyMyLogHook )
 import XMonad.Layout.IndependentScreens
 
+runMyConfig :: IO ()
 runMyConfig = do
   xmprocs <-getXMProcs
   executablePath <- getExecutablePath
-  xmonad $ myConfig xmprocs executablePath
+  xmonad $ composeMyConfig xmprocs executablePath
 
-myConfig xmprocs executablePath = let
+-- composeMyConfig :: (LayoutClass a Window)
+--                 => [Handle] -> FilePath -> XConfig a
+composeMyConfig xmprocs executablePath = let
   layers :: (LayoutClass a Window) => [XConfig a -> XConfig a]
   layers = [ applyMyLayoutModifications
            , applyMyRestartKBs executablePath
+           , applyMyManageHook
            , applyMyUrgencyHook
            , applyMyScratchpads
            , applyMyFollowFocus

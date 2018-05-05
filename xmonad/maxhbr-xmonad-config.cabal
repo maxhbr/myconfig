@@ -35,6 +35,7 @@ library
                      , XMonad.MyConfig.Notify
                      , XMonad.MyConfig.Scratchpads
                      , XMonad.MyConfig.ToggleFollowFocus
+                     , XMonad.MyConfig.MyManageHookLayer
 
 
 executable xmonad

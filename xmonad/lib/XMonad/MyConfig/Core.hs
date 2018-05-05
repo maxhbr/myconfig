@@ -7,6 +7,7 @@ module XMonad.MyConfig.Core
     ) where
 
 import           Data.Foldable ( foldMap )
+import           System.FilePath
 import           System.Exit ( exitSuccess )
 import           XMonad
 import           Graphics.X11.ExtraTypes.XF86()
@@ -18,12 +19,13 @@ import           XMonad.Actions.WindowGo ( raiseNext )
 
 --------------------------------------------------------------------------------
 -- Hooks
-import           XMonad.Hooks.ManageHelpers ( doCenterFloat )
 import           XMonad.Hooks.SetWMName ( setWMName )
+
 
 --------------------------------------------------------------------------------
 -- Utils
 import           XMonad.Util.Run ( runProcessWithInput )
+import           XMonad.Actions.WindowGo ( runOrRaiseNext )
 
 --------------------------------------------------------------------------------
 -- misc
@@ -39,59 +41,22 @@ import XMonad.MyConfig.Notify ( popupCurDesktop, myDefaultPopup )
 normalcolor = "#333333" :: String
 maincolor = "#ee9a00" :: String
 
+myModMask = mod1Mask -- or: mod4Mask
+
 coreConfig =
   def { terminal           = terminalCMD
+      , modMask            = myModMask
       , borderWidth        = 3
-      , modMask            = mod1Mask --  mod4Mask
       , normalBorderColor  = normalcolor
       , focusedBorderColor = maincolor
       , keys               = myKeys
       , layoutHook         = myLayout
-      , manageHook         = myManageHook
       , startupHook        = myStartupHook
       }
 
 applyMyRestartKBs executablePath =
   applyMyKBs [ ((m__, xK_q     ), spawn (executablePath ++ " --restart"))
              , ((ms_, xK_q     ), spawn (executablePath ++ " --recompile && sleep 0.1 && " ++ executablePath ++ " --restart")) ]
-
-------------------------------------------------------------------------
--- Window rules:
--- Execute arbitrary actions and WindowSet manipulations when managing
--- a new window. You can use this to, for example, always float a
--- particular program, or have a client always appear on a particular
--- workspace.
---
--- To find the property name associated with a program, use
--- > xprop | grep WM_CLASS
--- and click on the client you're interested in.
---
--- To match on the WM_NAME, you can use 'title' in the same way that
--- 'className' and 'resource' are used below.
---
-myManageHook = let
-  baseHooks = (foldMap (\(a,cs) -> map (\c -> className =? c --> a) cs)
-                             [ (doCenterFloat, ["Xmessage"
-                                               ,"qemu","qemu-system-x86_64"
-                                               ,"feh"
-                                               ,"Zenity"
-                                               ,"pinentry","Pinentry"
-                                               ,"pavucontrol","Pavucontrol"
-                                               ,"zoom"])
-                             , (doFloat, ["MPlayer"
-                                         ,"Onboard"])
-                             , (doShift "web", ["Firefox"
-                                               ,"Chromium","chromium-browser"])
-                             , (doShift "10", ["franz","Franz"])
-                             , (doShift "vbox", ["Virtualbox","VirtualBox"])
-                             , (doShift "media", ["Steam"])
-                             , (doIgnore, ["desktop_window"
-                                          ,"kdesktop"]) ])
-  -- see:
-  -- - https://www.reddit.com/r/xmonad/comments/78uq0p/how_do_you_deal_with_intellij_idea_completion/?st=jgdc0si0&sh=7d79c956
-  -- - https://youtrack.jetbrains.com/issue/IDEA-112015#comment=27-2498787
-  ideaPopupHook = [ appName =? "sun-awt-X11-XWindowPeer" <&&> className =? "jetbrains-idea" --> doIgnore ]
-  in composeAll (baseHooks ++ ideaPopupHook)
 
 ------------------------------------------------------------------------
 -- Startup hook:
@@ -113,6 +78,17 @@ myKeys conf =
     ++ backlightControlKBs
     ++ volumeControlKBs
   where
+    browserX     = runOrRaiseNext browserCMD (className =? "Firefox" <||> className =? "Firefox-bin" <||> className =?  "chromium-browser" <||> className =? "Chromium-browser")
+    editorX      = runOrRaiseNext editorCMD (className =? "Emacs")
+    pavucontrolX = runOrRaiseNext pavucontrolCMD (className =? "pavucontrol" <||> className =? "Pavucontrol")
+
+    myLauncherCMD = let
+      additionalPath = if isAbsolute dmenuPathCMD
+                       then "PATH=$PATH:" ++ takeDirectory dmenuPathCMD
+                       else ""
+      in "x=$(" ++ additionalPath ++ " " ++ yeganeshCMD ++ " -x --) && exec $x"
+    -- - "`dmenu_path | yeganesh`"
+
     basicKBs =
       [ ((ms_            , xK_Return), spawn $ XMonad.terminal conf)
       , ((msc, xK_Return), spawn (terminalServerCMD ++ " &"))
@@ -153,30 +129,28 @@ myKeys conf =
 #else
       , ((ms_, xK_y      ), spawn "slimlock") -- screenlocker
 #endif
-
-      -- invert Colors (does not work with retdshift)
       , ((m__,  xK_Home   ), spawn invertColorsCMD)
-
       , ((m__,  xK_Print  ), spawn screenshotCMD)
 
       -- keyboard layouts
       , ((m__,  xK_F2     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_3_4.png"))
-      , ((m__,  xK_F3     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_5_6.png"))]
+      , ((m__,  xK_F3     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_5_6.png"))
+      ]
 
 backlightControlKBs, volumeControlKBs :: [((KeyMask -> KeyMask, KeySym), X ())]
-backlightControlKBs = [((m__, xK_F1), spawnSelected def [ "xbacklight =50"
-                                                        , "xbacklight =25"
-                                                        , "xbacklight +10"
-                                                        , "xbacklight =75"
-                                                        , "xbacklight -10"
-                                                        , "xbacklight =10"
-                                                        , "xbacklight =5"
-                                                        , "xbacklight +1"
-                                                        , "xbacklight =3"
-                                                        , "xbacklight =100"
-                                                        , "xbacklight =1"
-                                                        , "xbacklight -1"
-                                                        , "xbacklight =0" ])]
+backlightControlKBs = [((m__, xK_F1), spawnSelected def [ xbacklightCMD ++ " =50"
+                                                        , xbacklightCMD ++ " =25"
+                                                        , xbacklightCMD ++ " +10"
+                                                        , xbacklightCMD ++ " =75"
+                                                        , xbacklightCMD ++ " -10"
+                                                        , xbacklightCMD ++ " =10"
+                                                        , xbacklightCMD ++ " =5"
+                                                        , xbacklightCMD ++ " +1"
+                                                        , xbacklightCMD ++ " =3"
+                                                        , xbacklightCMD ++ " =100"
+                                                        , xbacklightCMD ++ " =1"
+                                                        , xbacklightCMD ++ " -1"
+                                                        , xbacklightCMD ++ " =0" ])]
 
 volumeControlKBs =
 #if 1

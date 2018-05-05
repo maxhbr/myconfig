@@ -40,6 +40,7 @@
           aspell aspellDicts.de aspellDicts.en
         # misc
           xf86_input_wacom
+          libnotify # xfce.xfce4notifyd # notify-osd
         ];
 
         services = {
@@ -103,14 +104,7 @@
 ################################################################################
     { # xmonad
       config = lib.mkIf (config.myconfig.roles.desktop.enable && config.myconfig.roles.xmonad.enable) {
-        # myconfig.roles.desktop.enable = true;
-        environment.systemPackages = with pkgs; [
-              unstable.dzen2
-              libnotify # xfce.xfce4notifyd # notify-osd
-              wmctrl
-            ];
-
-        system.activationScripts.cleanupXmonadState = "rm /home/mhuber/.xmonad/xmonad.state || true";
+        # system.activationScripts.cleanupXmonadState = "rm $HOME/.xmonad/xmonad.state || true";
 
         services.xserver = {
           windowManager = {
@@ -123,13 +117,11 @@
             session = [{
               name = "myXmonad";
               start = ''
-                LOG=/tmp/myXmnad.log
-                exec &> >(tee -a $LOG)
+                exec &> >(tee -a /tmp/myXmonad.log)
                 ${pkgs.myconfig.my-xmonad}/bin/xmonad &
                 waitPID=$!
               '';
-           }];
-
+            }];
           };
 
           desktopManager = {
