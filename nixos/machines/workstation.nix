@@ -9,8 +9,8 @@
     ./hardware/steamcontroller.nix
   ];
   myconfig.active-roles = [
-    "desktop" "xmonad" "xfce" "vnc"
-    "mail" "irc"
+    "xmonad" "xfce"
+    "mail"
     "work" "virtualization" "dev"
     "imagework"
     "games" "wine"

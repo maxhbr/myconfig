@@ -9,12 +9,11 @@
     ./hardware/exfat.nix
     ./hardware/steamcontroller.nix
     ./hardware/pulseaudio.nix
-    # ./hardware/sdr.nix
   ];
 
   myconfig.active-roles = [
-    "desktop" "xmonad" "xfce" "vnc"
-    "mail" "irc"
+    "xmonad" "xfce" "vnc"
+    "mail"
     "work" "virtualization" "dev"
     "imagework"
   ];

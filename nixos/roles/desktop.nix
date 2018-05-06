@@ -4,7 +4,7 @@
 {
   options = {
     myconfig.roles.desktop = {
-      enable = lib.mkEnableOption "Desktop environment";
+      enable = lib.mkEnableOption "Desktop environment (this is implied by the orher options here)";
     };
     myconfig.roles.xmonad = {
       enable = lib.mkEnableOption "Xmonad Desktop environment";
@@ -20,28 +20,36 @@
   imports = [
 ################################################################################
     { # desktop
-      config = lib.mkIf config.myconfig.roles.desktop.enable {
-        environment.systemPackages = with pkgs; [
-          arandr xrandr-invert-colors
-          xlibs.xmodmap xlibs.xset xlibs.setxkbmap
-          xclip
-          imagemagick
-        # gui applications
-          mupdf zathura llpp
-          feh scrot
-          xarchiver # gnome3.file-roller
-          mplayer
-          xdotool
-        # gui applications
-          chromium firefox-unwrapped qutebrowser
-          google-chrome # for streaming and music
-          browserpass
-        # spellchecking
-          aspell aspellDicts.de aspellDicts.en
-        # misc
-          xf86_input_wacom
-          libnotify # xfce.xfce4notifyd # notify-osd
-        ];
+      config = lib.mkIf (config.myconfig.roles.desktop.enable ||
+                         config.myconfig.roles.xmonad.enable ||
+                         config.myconfig.roles.xfce.enable ||
+                         config.myconfig.roles.vnc.enable) {
+        environment = {
+          systemPackages = with pkgs; [
+            arandr
+            xlibs.xmodmap xlibs.xset xlibs.setxkbmap
+            xclip
+            imagemagick
+          # gui applications
+            mupdf zathura llpp
+            feh scrot
+            xarchiver # gnome3.file-roller
+            mplayer
+            xdotool
+          # gui applications
+            chromium firefox-unwrapped qutebrowser
+            google-chrome # for streaming and music
+            browserpass
+          # spellchecking
+            aspell aspellDicts.de aspellDicts.en
+          # misc
+            xf86_input_wacom
+            libnotify # xfce.xfce4notifyd # notify-osd
+          ];
+          interactiveShellInit = ''
+            alias file-roller='${pkgs.xarchiver}/bin/xarchiver'
+          '';
+        };
 
         services = {
           xserver = {
@@ -67,7 +75,7 @@
                 if test -e $HOME/.Xresources; then
                   ${pkgs.xorg.xrdb}/bin/xrdb --merge $HOME/.Xresources &disown
                 fi
-                ${pkgs.myconfig.background}/bin/myRandomBackground &disown
+                # ${pkgs.myconfig.background}/bin/myRandomBackground &disown
                 ${pkgs.xss-lock}/bin/xss-lock ${pkgs.myconfig.background}/bin/myScreenLock &disown
               '';
             };
@@ -100,10 +108,19 @@
           ];
         };
       };
+      imports = [{
+        environment.systemPackages = with pkgs; [
+          hplipWithPlugin
+        ];
+        services.printing = {
+          enable = true;
+          drivers = [ pkgs.gutenprint pkgs.hplip ];
+        };
+      }];
     }
 ################################################################################
     { # xmonad
-      config = lib.mkIf (config.myconfig.roles.desktop.enable && config.myconfig.roles.xmonad.enable) {
+      config = lib.mkIf (config.myconfig.roles.xmonad.enable) {
         # system.activationScripts.cleanupXmonadState = "rm $HOME/.xmonad/xmonad.state || true";
 
         services.xserver = {
@@ -130,40 +147,31 @@
           };
         };
       };
+      imports = [{
+        environment.systemPackages = with pkgs; [
+          rxvt_unicode_with-plugins rxvt_unicode.terminfo
+        ];
+        services.urxvtd = {
+          enable = true;
+          # users = [ "mhuber" ];
+          # urxvtPackage = pkgs.rxvt_unicode_with-plugins;
+        };
+      }];
     }
 ################################################################################
     { # xfce
-      config = lib.mkIf (config.myconfig.roles.desktop.enable && config.myconfig.roles.xfce.enable) {
+      config = lib.mkIf config.myconfig.roles.xfce.enable {
         services.xserver.desktopManager.xfce.enable = true;
       };
     }
 ################################################################################
     { # vnc
-      config =lib.mkIf (config.myconfig.roles.desktop.enable && config.myconfig.roles.vnc.enable) {
+      config = lib.mkIf config.myconfig.roles.vnc.enable {
         environment.systemPackages = with pkgs; [
           x11vnc
         ];
         networking.firewall.allowedUDPPorts = [ 5900 ];
         networking.firewall.allowedTCPPorts = [ 5900 ];
-      };
-    }
-    {
-      environment.systemPackages = with pkgs; [
-        hplipWithPlugin
-      ];
-      services.urxvtd = {
-        enable = true;
-        # users = [ "mhuber" ];
-        # urxvtPackage = pkgs.rxvt_unicode_with-plugins;
-      };
-    }
-    {
-      environment.systemPackages = with pkgs; [
-        rxvt_unicode_with-plugins rxvt_unicode.terminfo
-      ];
-      services.printing = {
-        enable = true;
-        drivers = [ pkgs.gutenprint pkgs.hplip ];
       };
     }
   ];
