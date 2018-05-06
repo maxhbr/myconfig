@@ -8,33 +8,41 @@ module XMonad.MyConfig
     , composeMyConfig
     ) where
 
-import           System.Environment ( getExecutablePath )
-import           GHC.IO.Handle ( Handle (..) )
-import           System.FilePath ( FilePath (..) )
-
+import           System.Environment ( getExecutablePath, getArgs, )
+import           Control.Monad ( when )
 import           XMonad
+
+import           XMonad.Util.Replace ( replace )
 
 --------------------------------------------------------------------------------
 -- MyConfig
-import XMonad.MyConfig.Variables
-
 import XMonad.MyConfig.Core ( coreConfig, applyMyRestartKBs )
 import XMonad.MyConfig.MyManageHookLayer ( applyMyManageHook )
 import XMonad.MyConfig.Scratchpads ( applyMyScratchpads )
 import XMonad.MyConfig.ToggleFollowFocus ( applyMyFollowFocus )
 import XMonad.MyConfig.Notify ( applyMyUrgencyHook )
 import XMonad.MyConfig.MyLayoutLayer ( applyMyLayoutModifications )
-import XMonad.MyConfig.MyLogHookLayer ( getXMProcs , applyMyLogHook )
-import XMonad.Layout.IndependentScreens
+import XMonad.MyConfig.MyLogHookLayer ( getXMProcs, applyMyLogHook )
+
+-- runMyConfig :: IO ()
+-- runMyConfig = do
+--   xmprocs <-getXMProcs
+--   executablePath <- getExecutablePath
+--   xmonad $ composeMyConfig xmprocs executablePath
 
 runMyConfig :: IO ()
 runMyConfig = do
-  xmprocs <-getXMProcs
-  executablePath <- getExecutablePath
-  xmonad $ composeMyConfig xmprocs executablePath
+  args <- getArgs
 
--- composeMyConfig :: (LayoutClass a Window)
---                 => [Handle] -> FilePath -> XConfig a
+  when ("--myreplace" `elem` args) $ do
+    putStrLn "try to replace current window manager ..."
+    replace
+
+  xmprocs <- getXMProcs
+  executablePath <- getExecutablePath
+  putStrLn ("try to launch: " ++ executablePath)
+  launch $ composeMyConfig xmprocs executablePath
+
 composeMyConfig xmprocs executablePath = let
   layers :: (LayoutClass a Window) => [XConfig a -> XConfig a]
   layers = [ applyMyLayoutModifications

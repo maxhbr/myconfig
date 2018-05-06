@@ -18,37 +18,38 @@ import qualified XMonad.StackSet as W
 import XMonad.MyConfig.Common
 
 applyMyScratchpads :: XConfig a -> XConfig a
-applyMyScratchpads c = c { manageHook = manageHook c <+> scratchpadHook c
-                         } `additionalKeys` (mapToWithModM c (scratchpadKBs c))
+applyMyScratchpads c = let
 
--- Scratchpads
---
-scratchpads :: XConfig a -> [NamedScratchpad]
-scratchpads c =
-  let
-    mkTermCmd name cmd = "SHLVL=0 " ++ (terminal c) ++ " -name " ++ name ++ " -e " ++ cmd
-  in
-    [ NS "scratchpad" (mkTermCmd "Scratchpad" (pathToXmonadBins ++ "tmux-scratch.sh"))
-        (resource =? "Scratchpad")
-        (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
-        {-(customFloating $ W.RationalRect (1/64) (3/128) (31/32) (31/32))-}
-   , NS "ScratchMutt" (mkTermCmd "ScratchMutt" (bashCMD ++ " -c \"~/bin/mailclient.sh\""))
-       (resource =? "ScratchMutt")
-       (customFloating $ W.RationalRect (1/24) (3/20) (5/6) (4/5))
-   , NS "ScratchHtop" (mkTermCmd "ScratchHtop" (bashCMD ++ " -c " ++ htopCMD))
-       (resource =? "ScratchHtop")
-       (customFloating $ W.RationalRect (1/10) (1/10) (4/5) (4/5))
-   , NS "ScratchNMTUI" (mkTermCmd "ScratchHtop" (bashCMD ++ " -c " ++ htopCMD))
-       (resource =? "ScratchNMTUI")
-       (customFloating $ W.RationalRect (1/10) (1/10) (4/5) (4/5))
-   ]
+    -- Scratchpads
+    --
+    scratchpads :: [NamedScratchpad]
+    scratchpads =
+      let
+        mkTermCmd :: String -> String -> String
+        mkTermCmd name cmd = "SHLVL=0 " ++ terminal c ++ " -name " ++ name ++ " -e " ++ cmd
+      in
+        [ NS "scratchpad" (mkTermCmd "Scratchpad" (pathToXmonadBins ++ "tmux-scratch.sh"))
+            (resource =? "Scratchpad")
+            (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
+       , NS "ScratchMutt" (mkTermCmd "ScratchMutt" (bashCMD ++ " -c \"~/bin/mailclient.sh\""))
+           (resource =? "ScratchMutt")
+           (customFloating $ W.RationalRect (1/24) (3/20) (5/6) (4/5))
+       , NS "ScratchHtop" (mkTermCmd "ScratchHtop" (bashCMD ++ " -c " ++ htopCMD))
+           (resource =? "ScratchHtop")
+           (customFloating $ W.RationalRect (1/10) (1/10) (4/5) (4/5))
+       , NS "ScratchNMTUI" (mkTermCmd "ScratchHtop" (bashCMD ++ " -c " ++ htopCMD))
+           (resource =? "ScratchNMTUI")
+           (customFloating $ W.RationalRect (1/10) (1/10) (4/5) (4/5))
+       ]
 
-scratchpadKBs c =
-  map (\(k,d) -> (k, namedScratchpadAction (scratchpads c) d))
-  [ ((m__, xK_minus),       "scratchpad")
-  , ((ms_, xK_i    ),       "ScratchMutt")
-  ]
+    scratchpadKBs = map (\(k,d) -> (k, namedScratchpadAction scratchpads d))
+                        [ ((m__, xK_minus), "scratchpad")
+                        , ((ms_, xK_i    ), "ScratchMutt")
+                        ]
 
-scratchpadHook c = namedScratchpadManageHook (scratchpads c)
+    scratchpadHook = namedScratchpadManageHook scratchpads
+
+  in c { manageHook = manageHook c <+> scratchpadHook
+       } `additionalKeys` mapToWithModM c scratchpadKBs
 
 scratchpadPPSort = (. namedScratchpadFilterOutWorkspace) <$> ppSort def

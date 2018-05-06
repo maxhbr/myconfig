@@ -8,5 +8,6 @@ set -e
 DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 set -x
 result="$(nix-build --no-out-link --keep-failed "$DIR/.." -A my-xmonad)"
-$result/bin/xmonad --restart
+# $result/bin/xmonad --restart
+$result/bin/xmonad --myreplace
 

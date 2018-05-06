@@ -6,10 +6,10 @@ module XMonad.MyConfig.Core
     , applyMyRestartKBs
     ) where
 
-import           Data.Foldable ( foldMap )
 import           System.FilePath
 import           System.Exit ( exitSuccess )
 import           XMonad
+import           XMonad.Operations (restart)
 import           Graphics.X11.ExtraTypes.XF86()
 
 --------------------------------------------------------------------------------
@@ -55,8 +55,10 @@ coreConfig =
       }
 
 applyMyRestartKBs executablePath =
-  applyMyKBs [ ((m__, xK_q     ), spawn (executablePath ++ " --restart"))
-             , ((ms_, xK_q     ), spawn (executablePath ++ " --recompile && sleep 0.1 && " ++ executablePath ++ " --restart")) ]
+  applyMyKBs [ ((m__, xK_q     ), restart executablePath True)
+             , ((m_c, xK_q     ), spawn (executablePath ++ " --restart"))
+             , ((ms_, xK_q     ), spawn (executablePath ++ " --recompile && sleep 0.1 && " ++ executablePath ++ " --restart"))
+             ]
 
 ------------------------------------------------------------------------
 -- Startup hook:
@@ -97,13 +99,11 @@ myKeys conf =
 #else
       , ((m__, xK_Return), windows W.swapMaster)
 #endif
-      , ((msc, xK_q     ), io exitSuccess)
+      , ((ms_, xK_c     ), kill)
       , ((m__, xK_p     ), spawn myLauncherCMD)
+      , ((msc, xK_q     ), io exitSuccess)
       -- , ((m__, xK_x     ), shellPrompt defaultXPConfig)
       , ((ms_, xK_space ), setLayout $ layoutHook conf) -- reset layout
-
-
-      , ((ms_, xK_c     ), kill)
 
       , ((m_c, xK_Return), spawn (terminalCMD ++ " -e " ++ zshCMD ++ " -c 'ssh vserver'"))
       , ((ms_, xK_p     ), spawn passmenuCMD)]
@@ -123,14 +123,9 @@ myKeys conf =
       , ((msc, xK_s      ), spawn (xdotoolCMD ++ " mousemove 0 0; " ++ synclientCMD ++ " TouchpadOff=$(" ++ synclientCMD ++ " -l | grep -c 'TouchpadOff.*=.*0')"))
       , ((m__, xK_z      ), spawn (myautosetupCMD ++ " --onlyIfChanged"))
       , ((ms_, xK_z      ), spawn myautosetupCMD)
-      , ((msc, xK_z      ), spawn (myautosetupCMD ++ " --rotate=left --primOutNr=1"))
-#if 1
       , ((ms_, xK_y      ), spawn (xsetCMD ++ " s activate")) -- screenlocker
-#else
-      , ((ms_, xK_y      ), spawn "slimlock") -- screenlocker
-#endif
-      , ((m__,  xK_Home   ), spawn invertColorsCMD)
-      , ((m__,  xK_Print  ), spawn screenshotCMD)
+      , ((m__, xK_Home   ), spawn invertColorsCMD)
+      , ((m__, xK_Print  ), spawn screenshotCMD)
 
       -- keyboard layouts
       , ((m__,  xK_F2     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_3_4.png"))
