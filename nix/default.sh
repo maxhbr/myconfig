@@ -37,14 +37,13 @@ upgrade() {
                   $nixEnvCMD \
                   --show-trace \
                   --upgrade
+    echo "new generation: $($nixEnvCMD --list-generations | tail -1)"
 }
 
 cleanup() {
     if [ "$((RANDOM%100))" -gt 90 ]; then
         echo "* nix-env --delete-generations 30d ..."
         $nixEnvCMD \
-            --delete-generations 30d
-        sudo $nixEnvCMD \
             --delete-generations 30d
     else
         echo "* $(tput bold)do not$(tput sgr0) nix-env --delete-generations 30d ..."

@@ -29,13 +29,11 @@
             arandr
             xlibs.xmodmap xlibs.xset xlibs.setxkbmap
             xclip
-            imagemagick
           # gui applications
             mupdf zathura llpp
-            feh scrot
+            feh imagemagick # scrot
             xarchiver # gnome3.file-roller
             mplayer
-            xdotool
           # gui applications
             chromium firefox-unwrapped qutebrowser
             google-chrome # for streaming and music

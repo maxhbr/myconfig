@@ -125,17 +125,24 @@ diffCurrentSystemDeps() {
     newFile=$(mktemp)
 
     nix-store -qR $(readlink -f /run/current-system/) |
-        # sed 's/^[^-]*-//g' |
-        while read line ; do echo "$(tput bold)$(sed 's/^[^-]*-//g' <<< $line)$(tput sgr0) $line" ; done |
+        sed 's/^[^-]*-//g' |
+        # while read line ; do echo "$(sed 's/^[^-]*-//g' <<< $line) $line" ; done |
         sort -u > $newFile
 
     if [[ -f $1 ]]; then
         oldFile=$1
 
         logH1 "diff" "system dependencies"
-        if ! diff -bdyZ --color=always -W 100 $oldFile $newFile | grep '\(<\|>\||\)'; then
-            echo "... no diff"
-        fi
+
+        sdiff -bBWs $oldFile $newFile |
+            while read; do
+                line="$REPLY"
+                case $line in
+                    *'>'* ) echo "$(tput setaf 2)$line$(tput sgr0)" ;;
+                    *'<'* ) echo "$(tput setaf 1)$line$(tput sgr0)" ;;
+                    *'|'* ) echo "$(tput setaf 3)$line$(tput sgr0)" ;;
+                esac
+            done
 
         rm $oldFile $newFile
     else

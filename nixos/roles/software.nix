@@ -67,7 +67,7 @@
           # rdesktop
           unstable.openjdk unstable.maven unstable.gradle
           # libreoffice
-          hipchat franz
+          hipchat franz zoom-us
           p7zip
           thrift93
           idea-ultimate
