@@ -17,6 +17,8 @@ cd "$ROOT"
 ##  function  #############################################################
 ###########################################################################
 
+have() { type "$1" &> /dev/null; }
+
 logH1() {
     prefix=$1
     text=$2
@@ -55,7 +57,7 @@ runCmd() {
 }
 
 wrapIntoTmux() {
-    type "tmux" &> /dev/null && {
+    have "tmux" && {
         TMUX_NAME="rebuild_sh"
         if test -z $TMUX && [[ $TERM != "screen" ]]; then
             logH2 "wrap into tmux ..."
@@ -116,6 +118,31 @@ handleGit() {
     fi
 }
 
+
+diffCurrentSystemDeps() {
+    have nix-store || return 0
+
+    newFile=$(mktemp)
+
+    nix-store -qR $(readlink -f /run/current-system/) |
+        # sed 's/^[^-]*-//g' |
+        while read line ; do echo "$(tput bold)$(sed 's/^[^-]*-//g' <<< $line)$(tput sgr0) $line" ; done |
+        sort -u > $newFile
+
+    if [[ -f $1 ]]; then
+        oldFile=$1
+
+        logH1 "diff" "system dependencies"
+        if ! diff -bdyZ --color=always -W 100 $oldFile $newFile | grep '\(<\|>\||\)'; then
+            echo "... no diff"
+        fi
+
+        rm $oldFile $newFile
+    else
+        echo $newFile
+    fi
+}
+
 ###########################################################################
 ##  run  ##################################################################
 ###########################################################################
@@ -132,6 +159,9 @@ exec &> >(tee -a $logfile)
 checkIfConnected
 handleGit
 
+# save current state of system dependencies ###############################
+currentSystemDeps=$(diffCurrentSystemDeps)
+
 # temporary use local configuration #######################################
 logH1 "temporary" "link configurations to dev source"
 runCmd ./nix deploy
@@ -145,14 +175,14 @@ for folder in ${prepareFolders[@]}; do
 done
 
 logH1 "nix-build" "myconfig"
-myconfig="$(nix-build default.nix --add-root myconfig -A myconfig)"
+myconfig="$(nix-build default.nix --add-root myconfig --no-out-link -A myconfig)"
 
 if [ -z "$myconfig" ]; then
     logERR "failed to build \$myconfig with nix"
     exit 1
 fi
 
-declare -a folders=("$myconfig/nixos" "$myconfig/nix" "./dotfiles" "./xmonad")
+declare -a folders=("$myconfig/nixos" "$myconfig/nix" "./dotfiles") # "./xmonad"
 declare -a commands=("deploy" "upgrade" "cleanup")
 for cmd in ${commands[@]}; do
     logH1 "handle:" "$cmd"
@@ -161,6 +191,9 @@ for cmd in ${commands[@]}; do
     done
 done
 
+# show differences in system dependencies #################################
+diffCurrentSystemDeps $currentSystemDeps
+
 # install nix package in place ############################################
 logH1 "install" "$myconfig"
-nix-env -i ./result
+nix-env -i "$myconfig"

@@ -40,7 +40,7 @@ mkFont s = font $ "xft:inconsolata:pixelsize=" ++ show s ++ ":antialias=true:hin
 myNotify :: Rational -> String -> X ()
 myNotify t = dzenConfig pc
   where
-    pc = onCurr (hCenter 700) >=> timeout t >=> background "darkgreen" >=> mkFont 18
+    pc = onCurr (hCenter 1400) >=> timeout t >=> background "darkgreen" >=> mkFont 32
     background color = addArgs ["-bg", color]
 
 myPopup :: Int -> Rational -> String -> X ()

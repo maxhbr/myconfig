@@ -95,6 +95,10 @@
                     }; f"
     remotes     = remote -v
 
+    # stolen from: https://stevenharman.net/git-clean-delete-already-merged-branches
+    listMergedBranches = "!f() { git branch --merged master | grep -v \"* master\"; }; f"
+    listMergedBranchesAndDelete = "!f() { git branch --merged master | grep -v \"* master\" | xargs -n 1 git branch -d; }; f"
+
     # Pretty graphs
     lol         = log --graph --decorate --pretty=oneline --abbrev-commit
     lola        = log --graph --decorate --pretty=oneline --abbrev-commit --all
@@ -180,10 +184,12 @@
   (ediff-merge-files-with-ancestor \\\"$LOCAL\\\" \\\"$REMOTE\\\"\
                                    \\\"$BASE\\\" nil \\\"$MERGED\\\"))\"
 [merge]
-	tool = ediff
+	tool = meld
+	# tool = ediff
 	conflictstyle = diff3
 [diff]
-	tool = ediff
+	tool = meld
+	# tool = ediff
 [rerere]
 	enabled = true
 

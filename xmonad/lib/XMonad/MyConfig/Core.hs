@@ -57,7 +57,7 @@ coreConfig =
 applyMyRestartKBs executablePath =
   applyMyKBs [ ((m__, xK_q     ), restart executablePath True)
              , ((m_c, xK_q     ), spawn (executablePath ++ " --restart"))
-             , ((ms_, xK_q     ), spawn (executablePath ++ " --recompile && sleep 0.1 && " ++ executablePath ++ " --restart"))
+             -- , ((ms_, xK_q     ), spawn (executablePath ++ " --recompile && sleep 0.1 && " ++ executablePath ++ " --restart"))
              ]
 
 ------------------------------------------------------------------------

@@ -64,7 +64,7 @@
             )];
         environment.systemPackages = with pkgs; [
           openvpn networkmanager_openvpn
-          rdesktop
+          # rdesktop
           unstable.openjdk unstable.maven unstable.gradle
           # libreoffice
           hipchat franz
@@ -79,13 +79,14 @@
       config = lib.mkIf config.myconfig.roles.dev.enable {
         environment.systemPackages = with pkgs; [
           meld
-          unstable.stack unstable.cabal-install unstable.cabal2nix
           gnumake cmake automake
           cloc
           gitAndTools.gitFull
-          gitAndTools.tig
-          python
-          python3
+          unstable.gitAndTools.tig
+
+          python python3
+
+          unstable.stack unstable.cabal-install unstable.cabal2nix
         ] ++ (with pkgs.unstable.haskellPackages; [
           # cabal-install
           ghc hlint pandoc
@@ -100,10 +101,9 @@
         environment.systemPackages = with pkgs; [
           gimp-with-plugins
           rawtherapee
-          geeqie
+          unstable.geeqie
           # krita
-
-          inkscape
+          # inkscape
 
           # blender
           librecad

@@ -6,7 +6,6 @@ Config { font = "xft:inconsolata:pixelsize=17:antialias=true:hinting=true"
        , bgColor = "black"
        , fgColor = "grey"
        -- , alpha = 175
-       -- , position = TopW L 100
        , position = BottomW L 100
        -- , border = TopB
        -- , borderColor =  "#ee9a00"
