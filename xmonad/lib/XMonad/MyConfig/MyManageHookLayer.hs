@@ -8,7 +8,7 @@ import           XMonad
 
 import           XMonad.Hooks.ManageHelpers ( doCenterFloat )
 
-applyMyManageHook c = c { manageHook = (manageHook c) <+> myManageHook }
+applyMyManageHook c = c { manageHook = manageHook c <+> myManageHook }
 
 ------------------------------------------------------------------------
 -- Window rules:
@@ -25,25 +25,26 @@ applyMyManageHook c = c { manageHook = (manageHook c) <+> myManageHook }
 -- 'className' and 'resource' are used below.
 --
 myManageHook = let
-  baseHooks = foldMap (\(a,cs) -> map (\c -> className =? c --> a) cs)
-                            [ (doCenterFloat, ["Xmessage"
-                                              ,"qemu","qemu-system-x86_64"
-                                              ,"feh"
-                                              ,"Zenity"
-                                              ,"pinentry","Pinentry"
-                                              ,"pavucontrol","Pavucontrol"
-                                              ,"zoom"])
-                            , (doFloat, ["MPlayer"
-                                        ,"Onboard"])
-                            , (doShift "web", ["Firefox"
-                                              ,"Chromium","chromium-browser"])
-                            , (doShift "10", ["franz","Franz"])
-                            , (doShift "vbox", ["Virtualbox","VirtualBox"])
-                            , (doShift "media", ["Steam"])
-                            , (doIgnore, ["desktop_window"
-                                         ,"kdesktop"]) ]
-  -- see:
-  -- - https://www.reddit.com/r/xmonad/comments/78uq0p/how_do_you_deal_with_intellij_idea_completion/?st=jgdc0si0&sh=7d79c956
-  -- - https://youtrack.jetbrains.com/issue/IDEA-112015#comment=27-2498787
-  ideaPopupHook = [ appName =? "sun-awt-X11-XWindowPeer" <&&> className =? "jetbrains-idea" --> doIgnore ]
-  in composeAll (baseHooks ++ ideaPopupHook)
+    hooksByRole = [ stringProperty "WM_WINDOW_ROLE" =? "GtkFileChooserDialog" --> doCenterFloat ]
+    hooksByClassName = foldMap (\(a,cs) -> map (\c -> className =? c --> a) cs)
+                               [ (doCenterFloat, ["Xmessage"
+                                                 ,"qemu","qemu-system-x86_64"
+                                                 ,"feh"
+                                                 ,"Zenity"
+                                                 ,"pinentry","Pinentry"
+                                                 ,"pavucontrol","Pavucontrol"
+                                                 ,"zoom"])
+                               , (doFloat, ["MPlayer"
+                                           ,"Onboard"])
+                               , (doShift "web", ["Firefox"
+                                                 ,"Chromium","chromium-browser"])
+                               , (doShift "10", ["franz","Franz"])
+                               , (doShift "vbox", ["Virtualbox","VirtualBox"])
+                               , (doShift "media", ["Steam"])
+                               , (doIgnore, ["desktop_window"
+                                            ,"kdesktop"]) ]
+    -- see:
+    -- - https://www.reddit.com/r/xmonad/comments/78uq0p/how_do_you_deal_with_intellij_idea_completion/?st=jgdc0si0&sh=7d79c956
+    -- - https://youtrack.jetbrains.com/issue/IDEA-112015#comment=27-2498787
+    ideaPopupHook = [ appName =? "sun-awt-X11-XWindowPeer" <&&> className =? "jetbrains-idea" --> doIgnore ]
+  in composeAll (hooksByRole ++ hooksByClassName ++ ideaPopupHook)
