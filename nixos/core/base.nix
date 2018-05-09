@@ -61,13 +61,14 @@
       file
       # admin:
       unstable.htop unstable.iftop unstable.iptraf-ng unstable.iotop unstable.bmon
-      unstable.mtr  unstable.bind bridge-utils
-      unstable.mkpasswd unstable.pwgen
+      unstable.mtr unstable.bind bridge-utils
+      unstable.pwgen # unstable.mkpasswd
       usbutils
       sysstat
       tcpdump
       cryptsetup
       lsof
+      psmisc # contains: killall, pstree
       #others:
       pmount fuse
       rsnapshot

@@ -13,8 +13,6 @@ prepare() {
         DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
         [[ ! -f "$DIR/static/extrahosts" || "$(find "$DIR/static/extrahosts" -mtime +1)" != "" ]] && {
             echo "* $(tput bold)update hosts blacklist$(tput sgr0) ..."
-            # curl http://someonewhocares.org/hosts/hosts | \
-                #             #     sed -e '/<localhost>/,/<\/localhost>/d' > static/extrahosts
             # use hosts file from https://github.com/StevenBlack/hosts (MIT)
             curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts |
                 grep ^0 > "$DIR/static/extrahosts"
@@ -45,7 +43,7 @@ deploy() {
 upgrade() {
     echo "* $(tput bold)nixos-rebuild$(tput sgr0) ..."
     NIX_PATH=
-    exec sudo \
+    sudo \
          NIX_CURL_FLAGS='--retry=1000' \
          nixos-rebuild --show-trace --keep-failed \
          -I nixpkgs=channel:nixos-18.03 \
@@ -53,6 +51,7 @@ upgrade() {
          -I nixos-config=/etc/nixos/configuration.nix \
          --upgrade \
          --fallback ${1:-switch}
+    echo "new generation: $(sudo nix-env -p /nix/var/nix/profiles/system --list-generations | head -1)"
 }
 
 cleanup() {
