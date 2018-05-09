@@ -33,15 +33,7 @@ Config { font = "xft:inconsolata:pixelsize=17:antialias=true:hinting=true"
                    , "--normal"   , "orange"
                    , "--high"     , "red"
                    ] 10
-         -- , Run CoreTemp [ "-t", "<fc=#999999>@</fc><core0> <core1> <core2> <core3><fc=#999999>C</fc>"
-         --                , "--Low"      , "70"
-         --                , "--High"     , "80"
-         --                -- , "--low"      , "green"
-         --                , "--normal"   , "orange"
-         --                , "--high"     , "red"
-         --                ] 60
          , Run Com "/home/mhuber/.xmonad/bin/getCoreTemp.sh" ["<fc=#999999>@</fc>", "<fc=#999999>C</fc>", "orange", "red"] "coretemp" 60
-         -- , Run TopProc ["-t","<both1>"] 10
          , Run Memory ["-t","<fc=#999999>M:</fc><usedratio><fc=#999999>%</fc>"
                       , "--Low"      , "60"
                       , "--High"     , "90"
@@ -49,7 +41,6 @@ Config { font = "xft:inconsolata:pixelsize=17:antialias=true:hinting=true"
                       , "--normal"   , "orange"
                       , "--high"     , "red"
                       ] 10
-         -- , Run TopMem ["-t","<both1>"] 10
          , Run Kbd [ ("de(nodeadkeys)", "| <fc=#ee9a00>de</fc> ")
                    , ("de(neo)", "") ]
          , Run Com "/home/mhuber/.xmonad/bin/miscStatus.sh" ["|", "<fc=#ffff00>", "</fc>"] "misc" 60
