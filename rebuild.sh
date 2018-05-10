@@ -20,45 +20,45 @@ cd "$ROOT"
 have() { type "$1" &> /dev/null; }
 
 logH1() {
-    prefix=$1
-    text=$2
+    local prefix=$1
+    local text=$2
     echo
     echo "$(tput bold)****************************************************************************"
     echo "***$(tput sgr0) $prefix $(tput bold)$text$(tput sgr0)"
 }
 
 logH2() {
-    prefix=$1
-    text=$2
+    local prefix=$1
+    local text=$2
     echo "$(tput bold)***$(tput sgr0) $prefix $(tput bold)$text$(tput sgr0)"
 }
 
 logH3() {
-    prefix=$1
-    text=$2
+    local prefix=$1
+    local text=$2
     echo "*** $prefix $(tput bold)$text$(tput sgr0)"
 }
 
 logINFO() {
-    text=$1
+    local text=$1
     echo "$(tput setaf 3)$(tput bold)*** INFO: $(tput bold)$text$(tput sgr0)"
 }
 
 logERR() {
-    text=$1
+    local text=$1
     echo "$(tput setaf 1)$(tput bold)*** ERR: $(tput bold)$text$(tput sgr0)"
 }
 
 runCmd() {
-    folder=$1
-    cmd=$2
+    local folder=$1
+    local cmd=$2
     logH2 "Run" "$cmd of $folder"
     $folder/default.sh $cmd
 }
 
 wrapIntoTmux() {
     have "tmux" && {
-        TMUX_NAME="rebuild_sh"
+        local TMUX_NAME="rebuild_sh"
         if test -z $TMUX && [[ $TERM != "screen" ]]; then
             logH2 "wrap into tmux ..."
             tmux has-session -t $TMUX_NAME 2>/dev/null && {
@@ -89,15 +89,15 @@ checkIfConnected() {
 }
 
 handleGit() {
-    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    local BRANCH=$(git rev-parse --abbrev-ref HEAD)
     if [[ "$BRANCH" == "master" ]]; then
         logH1 "update config" ""
         if git diff-index --quiet HEAD --; then
             git fetch
-            UPSTREAM=${1:-'@{u}'}
-            LOCAL=$(git rev-parse @)
-            REMOTE=$(git rev-parse "$UPSTREAM")
-            BASE=$(git merge-base @ "$UPSTREAM")
+            local UPSTREAM=${1:-'@{u}'}
+            local LOCAL=$(git rev-parse @)
+            local REMOTE=$(git rev-parse "$UPSTREAM")
+            local BASE=$(git merge-base @ "$UPSTREAM")
             if [ $LOCAL = $REMOTE ]; then
                 echo "... up-to-date"
             elif [ $LOCAL = $BASE ]; then
@@ -118,31 +118,51 @@ handleGit() {
     fi
 }
 
-
 diffCurrentSystemDeps() {
     have nix-store || return 0
+    [[ -e $1 ]] || return 0
 
-    newFile=$(mktemp)
+    local profileRoot=$1
+    local newFile=$(mktemp)
 
-    nix-store -qR $(readlink -f /run/current-system/) |
+    # nix-store -qR $(readlink -f $profileRoot) |
+    nix-store -qR $profileRoot |
         sed 's/^[^-]*-//g' |
         # while read line ; do echo "$(sed 's/^[^-]*-//g' <<< $line) $line" ; done |
         sort -u > $newFile
 
-    if [[ -f $1 ]]; then
-        oldFile=$1
+    if [[ -f $2 ]]; then
+        local oldFile=$2
 
-        logH1 "diff" "system dependencies"
+        logH2 "diff dependencies of $profileRoot"
 
         sdiff -bBWs $oldFile $newFile |
             while read; do
                 line="$REPLY"
                 case $line in
-                    *'>'* ) echo "$(tput setaf 2)$line$(tput sgr0)" ;;
                     *'<'* ) echo "$(tput setaf 1)$line$(tput sgr0)" ;;
+                    *'>'* ) echo "$(tput setaf 2)$line$(tput sgr0)" ;;
                     *'|'* ) echo "$(tput setaf 3)$line$(tput sgr0)" ;;
                 esac
             done
+
+        rm $oldFile $newFile
+    else
+        echo $newFile
+    fi
+}
+
+diffDiskUsage() {
+    [[ -e /dev/dm-2 ]] || return 0
+
+    local newFile=$(mktemp)
+    df -h --output="pcent,used" /dev/dm-2 > $newFile
+
+    if [[ -f $1 ]]; then
+        local oldFile=$1
+
+        logH2 "diff disk usage"
+        sdiff -bBW $oldFile $newFile
 
         rm $oldFile $newFile
     else
@@ -161,35 +181,45 @@ echo -e "\n\n\n\n\n\n\n" >> $logfile
 exec &> >(tee -a $logfile)
 
 # misc ####################################################################
-[[ "$1" != "--no-tmux" ]] &&\
+[[ "$1" != "--no-tmux" ]] && \
     wrapIntoTmux
 checkIfConnected
 handleGit
 
 # save current state of system dependencies ###############################
-currentSystemDeps=$(diffCurrentSystemDeps)
+currentSystemDeps=$(diffCurrentSystemDeps /run/current-system/)
+currentUserDeps=$(diffCurrentSystemDeps ~/.nix-profile)
+currentDiskUsage=$(diffDiskUsage)
 
 # temporary use local configuration #######################################
 logH1 "temporary" "link configurations to dev source"
-runCmd ./nix deploy
 runCmd ./nixos deploy
+runCmd ./nix deploy
 
 # run scripts #############################################################
 logH1 "handle:" "prepare"
-declare -a prepareFolders=("./nixos" "./nix" "./dotfiles" "./xmonad")
+declare -a prepareFolders=("./nixos"
+                           "./nix"
+                           "./dotfiles"
+                           # "./xmonad"
+                          )
 for folder in ${prepareFolders[@]}; do
     runCmd $folder prepare
 done
 
 logH1 "nix-build" "myconfig"
-myconfig="$(nix-build default.nix --add-root myconfig --no-out-link -A myconfig)"
+myconfig="$(nix-build default.nix --add-root myconfig --out-link myconfig.out-link -A myconfig)"
 
 if [ -z "$myconfig" ]; then
     logERR "failed to build \$myconfig with nix"
     exit 1
 fi
 
-declare -a folders=("$myconfig/nixos" "$myconfig/nix" "./dotfiles") # "./xmonad"
+declare -a folders=("$myconfig/nixos"
+                    "$myconfig/nix"
+                    "./dotfiles"
+                    # "./xmonad"
+                   )
 declare -a commands=("deploy" "upgrade" "cleanup")
 for cmd in ${commands[@]}; do
     logH1 "handle:" "$cmd"
@@ -198,9 +228,13 @@ for cmd in ${commands[@]}; do
     done
 done
 
-# show differences in system dependencies #################################
-diffCurrentSystemDeps $currentSystemDeps
-
-# install nix package in place ############################################
+# install nix package #####################################################
 logH1 "install" "$myconfig"
 nix-env -i "$myconfig"
+
+###########################################################################
+# show differences in system stats ########################################
+logH1 "show" "stat differences"
+diffCurrentSystemDeps /run/current-system/ $currentSystemDeps
+diffCurrentSystemDeps ~/.nix-profile $currentUserDeps
+diffDiskUsage $currentDiskUsage
