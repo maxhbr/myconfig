@@ -170,6 +170,20 @@ diffDiskUsage() {
     fi
 }
 
+handleStatDiffs() {
+    local currentSystemDeps=$(diffCurrentSystemDeps /run/current-system/)
+    local currentUserDeps=$(diffCurrentSystemDeps ~/.nix-profile)
+    local currentDiskUsage=$(diffDiskUsage)
+
+    showStatDifferences() {
+        logH1 "show" "stat differences"
+        diffCurrentSystemDeps /run/current-system/ $currentSystemDeps
+        diffCurrentSystemDeps ~/.nix-profile $currentUserDeps
+        diffDiskUsage $currentDiskUsage
+    }
+    trap showStatDifferences EXIT ERR INT TERM
+}
+
 ###########################################################################
 ##  run  ##################################################################
 ###########################################################################
@@ -186,10 +200,8 @@ exec &> >(tee -a $logfile)
 checkIfConnected
 handleGit
 
-# save current state of system dependencies ###############################
-currentSystemDeps=$(diffCurrentSystemDeps /run/current-system/)
-currentUserDeps=$(diffCurrentSystemDeps ~/.nix-profile)
-currentDiskUsage=$(diffDiskUsage)
+# save current state and show them on exit ################################
+handleStatDiffs
 
 # temporary use local configuration #######################################
 logH1 "temporary" "link configurations to dev source"
@@ -231,10 +243,3 @@ done
 # install nix package #####################################################
 logH1 "install" "$myconfig"
 nix-env -i "$myconfig"
-
-###########################################################################
-# show differences in system stats ########################################
-logH1 "show" "stat differences"
-diffCurrentSystemDeps /run/current-system/ $currentSystemDeps
-diffCurrentSystemDeps ~/.nix-profile $currentUserDeps
-diffDiskUsage $currentDiskUsage
