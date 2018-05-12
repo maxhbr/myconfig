@@ -10,7 +10,7 @@ import           System.FilePath
 import           System.Exit ( exitSuccess )
 import           XMonad
 import           XMonad.Operations (restart)
-import           Graphics.X11.ExtraTypes.XF86()
+import           Graphics.X11.ExtraTypes.XF86( xF86XK_MonBrightnessUp, xF86XK_MonBrightnessDown )
 
 --------------------------------------------------------------------------------
 -- Actions
@@ -101,6 +101,7 @@ myKeys conf =
 #endif
       , ((ms_, xK_c     ), kill)
       , ((m__, xK_p     ), spawn myLauncherCMD)
+      , ((ms_, xK_q     ), spawn (pathToXmonadBins ++ "stopWM.sh"))
       , ((msc, xK_q     ), io exitSuccess)
       -- , ((m__, xK_x     ), shellPrompt defaultXPConfig)
       , ((ms_, xK_space ), setLayout $ layoutHook conf) -- reset layout
@@ -133,19 +134,22 @@ myKeys conf =
       ]
 
 backlightControlKBs, volumeControlKBs :: [((KeyMask -> KeyMask, KeySym), X ())]
-backlightControlKBs = [((m__, xK_F1), spawnSelected def [ xbacklightCMD ++ " =50"
-                                                        , xbacklightCMD ++ " =25"
-                                                        , xbacklightCMD ++ " +10"
-                                                        , xbacklightCMD ++ " =75"
-                                                        , xbacklightCMD ++ " -10"
-                                                        , xbacklightCMD ++ " =10"
-                                                        , xbacklightCMD ++ " =5"
-                                                        , xbacklightCMD ++ " +1"
-                                                        , xbacklightCMD ++ " =3"
-                                                        , xbacklightCMD ++ " =100"
-                                                        , xbacklightCMD ++ " =1"
-                                                        , xbacklightCMD ++ " -1"
-                                                        , xbacklightCMD ++ " =0" ])]
+backlightControlKBs = [ ((m__, xK_F1), spawnSelected def [ xbacklightCMD ++ " =50"
+                                                         , xbacklightCMD ++ " =25"
+                                                         , xbacklightCMD ++ " +10"
+                                                         , xbacklightCMD ++ " =75"
+                                                         , xbacklightCMD ++ " -10"
+                                                         , xbacklightCMD ++ " =10"
+                                                         , xbacklightCMD ++ " =5"
+                                                         , xbacklightCMD ++ " +1"
+                                                         , xbacklightCMD ++ " =3"
+                                                         , xbacklightCMD ++ " =100"
+                                                         , xbacklightCMD ++ " =1"
+                                                         , xbacklightCMD ++ " -1"
+                                                         , xbacklightCMD ++ " =0" ])
+                      , ((const 0, xF86XK_MonBrightnessUp)   , spawn (xbacklightCMD ++ " -inc 10%"))
+                      , ((const 0, xF86XK_MonBrightnessDown) , spawn (xbacklightCMD ++ " -dec 10%"))
+                      ]
 
 volumeControlKBs =
 #if 1

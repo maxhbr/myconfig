@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 
 have() { type "$1" &> /dev/null; }
 
 have nix-shell && {
     have speedtest-cli || {
         echo "start via nix-shell"
-        exec nix-shell -p speedtest-cli --command $0 $@
+        exec nix-shell -p speedtest-cli wget --command $0 $@
     }
 }
-
 
 CSV=~/myspeedtest_sh.csv
 LOG=~/myspeedtest_sh.log
@@ -37,7 +38,6 @@ run() {
     fi
     echo "end: $(date)"
 }
-
 
 if [[ $1 == "--loop" ]]; then
     while run; do

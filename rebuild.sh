@@ -170,20 +170,6 @@ diffDiskUsage() {
     fi
 }
 
-handleStatDiffs() {
-    local currentSystemDeps=$(diffCurrentSystemDeps /run/current-system/)
-    local currentUserDeps=$(diffCurrentSystemDeps ~/.nix-profile)
-    local currentDiskUsage=$(diffDiskUsage)
-
-    showStatDifferences() {
-        logH1 "show" "stat differences"
-        diffCurrentSystemDeps /run/current-system/ $currentSystemDeps
-        diffCurrentSystemDeps ~/.nix-profile $currentUserDeps
-        diffDiskUsage $currentDiskUsage
-    }
-    trap showStatDifferences EXIT ERR INT TERM
-}
-
 ###########################################################################
 ##  run  ##################################################################
 ###########################################################################
@@ -201,7 +187,17 @@ checkIfConnected
 handleGit
 
 # save current state and show them on exit ################################
-handleStatDiffs
+currentSystemDeps=$(diffCurrentSystemDeps /run/current-system/)
+currentUserDeps=$(diffCurrentSystemDeps ~/.nix-profile)
+currentDiskUsage=$(diffDiskUsage)
+
+showStatDifferences() {
+    logH1 "show" "stat differences"
+    diffCurrentSystemDeps /run/current-system/ $currentSystemDeps
+    diffCurrentSystemDeps ~/.nix-profile $currentUserDeps
+    diffDiskUsage $currentDiskUsage
+}
+trap showStatDifferences EXIT ERR INT TERM
 
 # temporary use local configuration #######################################
 logH1 "temporary" "link configurations to dev source"
@@ -221,7 +217,6 @@ done
 
 logH1 "nix-build" "myconfig"
 myconfig="$(nix-build default.nix --add-root myconfig --out-link myconfig.out-link -A myconfig)"
-
 if [ -z "$myconfig" ]; then
     logERR "failed to build \$myconfig with nix"
     exit 1
