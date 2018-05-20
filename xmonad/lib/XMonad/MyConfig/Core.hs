@@ -67,6 +67,7 @@ myStartupHook = do
   setWMName "LG3D"
   spawn ("pkill unclutter; " ++ unclutterCMD)
   spawn (xsetCMD ++ " s 900")
+  spawn batteryMonitorCMD
 
 ------------------------------------------------------------------------
 -- Key bindings:

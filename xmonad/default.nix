@@ -5,7 +5,7 @@ let
   version = "1.0";
 in mkDerivation {
   inherit version;
-  pname = "my-xmonad-${version}";
+  pname = "my-xmonad";
   src = builtins.filterSource
     (path: type: let
       basename = baseNameOf path;
@@ -43,8 +43,8 @@ in mkDerivation {
     addAbsoluteBinaryPath urxvtd ${pkgs.rxvt_unicode_with-plugins}
     addAbsoluteBinaryPath bash ${pkgs.bash}
     addAbsoluteBinaryPath zsh ${pkgs.zsh}
-    addAbsoluteBinaryPath dmenu_path ${pkgs.unstable.dmenu}
-    addAbsoluteBinaryPath yeganesh ${pkgs.unstable.haskellPackages.yeganesh}
+    addAbsoluteBinaryPath dmenu_path ${pkgs.dmenu} #$#{pkgs.unstable.dmenu}
+    addAbsoluteBinaryPath yeganesh ${pkgs.haskellPackages.yeganesh} #$#{pkgs.unstable.haskellPackages.yeganesh}
     addAbsoluteBinaryPath passmenu ${pkgs.pass}
     addAbsoluteBinaryPath firefox ${pkgs.firefox}
     addAbsoluteBinaryPath chromium-browser ${pkgs.chromium}

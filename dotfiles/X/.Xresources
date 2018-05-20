@@ -32,8 +32,8 @@ URxvt*termName: rxvt-256color
 URxvt*scrollBar: false
 URxvt*scrollBar_right: false
 URxvt*scrollstyle: plain
-URxvt.internalBorder: 0
-URxvt.externalBorder: 0
+URxvt.internalBorder: 5
+URxvt.externalBorder: 5
 
 !! URxvt -> font
 URxvt.font:             xft:inconsolata:pixelsize=19:antialias=true:hinting=true,             xft:DejaVu Sans Mono:pixelsize=17:antialias=true:hinting=true

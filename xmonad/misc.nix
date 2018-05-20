@@ -12,6 +12,11 @@ in stdenv.mkDerivation rec {
 
   src = ./bin;
 
+  patchPhase = ''
+    sed -i -e 's%xmessage%${pkgs.xorg.xmessage}/bin/xmessage%g' battery-monitor.sh
+    sed -i -e 's%acpi %${pkgs.acpi}/bin/acpi %g' battery-monitor.sh
+  '';
+
   buildPhase = "";
 
   installPhase = ''

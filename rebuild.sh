@@ -190,12 +190,15 @@ handleGit
 currentSystemDeps=$(diffCurrentSystemDeps /run/current-system/)
 currentUserDeps=$(diffCurrentSystemDeps ~/.nix-profile)
 currentDiskUsage=$(diffDiskUsage)
+startTime=$(date)
 
 showStatDifferences() {
-    logH1 "show" "stat differences"
+    logH1 "show" "stats"
     diffCurrentSystemDeps /run/current-system/ $currentSystemDeps
     diffCurrentSystemDeps ~/.nix-profile $currentUserDeps
     diffDiskUsage $currentDiskUsage
+    echo "...start: $startTime"
+    echo "...end: $(date)"
 }
 trap showStatDifferences EXIT ERR INT TERM
 

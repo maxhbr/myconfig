@@ -42,7 +42,8 @@ myManageHook = let
                                , (doShift "vbox", ["Virtualbox","VirtualBox"])
                                , (doShift "media", ["Steam"])
                                , (doIgnore, ["desktop_window"
-                                            ,"kdesktop"]) ]
+                                            ,"kdesktop"
+                                            ,"xmessage","Xmessage"]) ]
     -- see:
     -- - https://www.reddit.com/r/xmonad/comments/78uq0p/how_do_you_deal_with_intellij_idea_completion/?st=jgdc0si0&sh=7d79c956
     -- - https://youtrack.jetbrains.com/issue/IDEA-112015#comment=27-2498787
