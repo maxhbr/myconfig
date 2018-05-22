@@ -90,11 +90,34 @@ in
         inherit background pkgs;
       };
   in
-    import nixpkgs (args // {
+    import (nixpkgs + "/pkgs/top-level") (args // {
+      localSystem = { system = builtins.currentSystem; };
       overlays = let
           baseOverlays = [
             (self: super: {
-              unstable = import unstableNixpkgs args;
+              unstable = import (unstableNixpkgs + "/pkgs/top-level") (args //
+                { localSystem = { system = builtins.currentSystem; }; }
+              );
+            })
+            (self: super: {
+              myconfig = {
+                # nixosSrc
+                # nixSrc
+                # dotfiles
+                inherit scripts my-xmonad background slim-theme;
+              };
+              # myconfig = self.buildEnv {
+              #   name = "myconfig";
+              #   paths = [
+              #     nixosSrc
+              #     nixSrc
+              #     dotfiles
+              #     scripts
+              #     my-xmonad
+              #     background
+              #     slim-theme
+              #   ];
+              # };
             })
           ];
           path = ./overlays;
@@ -104,25 +127,10 @@ in
                                      (builtins.attrNames content));
         in
           overlays ++ baseOverlays ++ overlaysFromFolders;
-      config = config // {
+      config = pkgs: {
         allowUnfree = true;
         mplayer.useUnfreeCodecs = true;
         # packageOverrides = myconfig.overlays;
         # virtualbox.enableExtensionPack = true;
-
-        packageOverrides = pkgs_: with pkgs_; rec {
-          myconfig = pkgs_.buildEnv {
-            name = "myconfig";
-            paths = [
-              nixosSrc
-              nixSrc
-              dotfiles
-              scripts
-              my-xmonad
-              background
-              slim-theme
-            ];
-          };
-        };
       };
     })

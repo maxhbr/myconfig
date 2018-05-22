@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: MIT
 set -e
 
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 gate() {
     [ -d /etc/nixos ]
     nixos-version &> /dev/null
@@ -10,7 +12,6 @@ gate() {
 
 prepare() {
     type "curl" &> /dev/null && {
-        DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
         [[ ! -f "$DIR/static/extrahosts" || "$(find "$DIR/static/extrahosts" -mtime +1)" != "" ]] && {
             echo "* $(tput bold)update hosts blacklist$(tput sgr0) ..."
             # use hosts file from https://github.com/StevenBlack/hosts (MIT)
@@ -46,11 +47,9 @@ upgrade() {
     sudo \
          NIX_CURL_FLAGS='--retry=1000' \
          nixos-rebuild --show-trace --keep-failed \
-         -I nixpkgs=channel:nixos-18.03 \
-         -I nixpkgs-overlays=/etc/nix/overlays \
-         -I nixos-config=/etc/nixos/configuration.nix \
-         --upgrade \
-         --fallback ${1:-switch}
+             -I nixpkgs=$(dirname $DIR)/nixpkgs \
+             --upgrade \
+             --fallback ${1:-switch}
     echo "new generation: $(sudo nix-env -p /nix/var/nix/profiles/system --list-generations | head -1)"
 }
 
