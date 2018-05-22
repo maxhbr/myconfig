@@ -1,10 +1,6 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, hostName, hostId,
-  otherImports ? [],
-  otherOverlays ? [],
-  ... }:
-
+{ hostName, hostId, otherImports ? [], ... }:
 {
   imports = otherImports ++ [
     ./base.nix
@@ -16,18 +12,13 @@
   networking.hostId = "${hostId}";
   networking.hostName = "${hostName}";
 
-  nixpkgs.config = import ../../nix/nixpkgs-config.nix;
-  nixpkgs.overlays = otherOverlays ++ [(self: super: {
-    unstable = import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) { inherit (super) config; };
-  })];
-
-  nix.nixPath = [
-    # "nixpkgs=channel:nixos-18.03"
-    # "unstable=channel:nixos-unstable"
-    "nixpkgs=channel:nixos-unstable"
-    "nixpkgs-overlays=/etc/nix/overlays"
-    "nixos-config=/etc/nixos/configuration.nix"
-  ];
+  # nix.nixPath = [
+  #   # "nixpkgs=channel:nixos-18.03"
+  #   # "unstable=channel:nixos-unstable"
+  #   ("nixpkgs=" + <nixpkgs>)
+  #   # "nixpkgs-overlays=/etc/nix/overlays"
+  #   # "nixos-config=/etc/nixos/configuration.nix"
+  # ];
 
   # nixpkgs.overlays = nixpkgs.config.overlays;
   boot.kernel.sysctl = {
