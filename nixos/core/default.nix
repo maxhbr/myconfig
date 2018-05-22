@@ -16,10 +16,7 @@
   networking.hostId = "${hostId}";
   networking.hostName = "${hostName}";
 
-  nixpkgs.config = import ../../nix/nixpkgs-config.nix;
-  nixpkgs.overlays = otherOverlays ++ [(self: super: {
-    unstable = import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) { inherit (super) config; };
-  })];
+  # nixpkgs.config = import ../../nix/nixpkgs-config.nix;
 
   nix.nixPath = [
     # "nixpkgs=channel:nixos-18.03"

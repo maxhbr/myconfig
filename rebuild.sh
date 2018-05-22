@@ -204,8 +204,8 @@ trap showStatDifferences EXIT ERR INT TERM
 
 # temporary use local configuration #######################################
 logH1 "temporary" "link configurations to dev source"
-runCmd ./nixos deploy
-runCmd ./nix deploy
+# runCmd ./nixos deploy
+# runCmd ./nix deploy
 
 # run scripts #############################################################
 logH1 "handle:" "prepare"
