@@ -207,7 +207,8 @@ logH1 "temporary" "link configurations to dev source"
 runCmd ./nixos deploy
 
 # run scripts #############################################################
-declare -a folders=("./nixos"
+declare -a folders=("./nixpkgs"
+                    "./nixos"
                     "./dotfiles"
                     # "./xmonad"
                    )
