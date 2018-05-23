@@ -208,36 +208,15 @@ runCmd ./nixos deploy
 runCmd ./nix deploy
 
 # run scripts #############################################################
-logH1 "handle:" "prepare"
-declare -a prepareFolders=("./nixos"
-                           "./nix"
-                           "./dotfiles"
-                           # "./xmonad"
-                          )
-for folder in ${prepareFolders[@]}; do
-    runCmd $folder prepare
-done
-
-logH1 "nix-build" "myconfig"
-myconfig="$(nix-build default.nix --add-root myconfig --out-link myconfig.out-link -A myconfig)"
-if [ -z "$myconfig" ]; then
-    logERR "failed to build \$myconfig with nix"
-    exit 1
-fi
-
-declare -a folders=("$myconfig/nixos"
-                    "$myconfig/nix"
+declare -a folders=("./nixos"
+                    "./nix"
                     "./dotfiles"
                     # "./xmonad"
                    )
-declare -a commands=("deploy" "upgrade" "cleanup")
+declare -a commands=("prepare" "deploy" "upgrade" "cleanup")
 for cmd in ${commands[@]}; do
     logH1 "handle:" "$cmd"
     for folder in ${folders[@]}; do
         runCmd $folder $cmd
     done
 done
-
-# install nix package #####################################################
-logH1 "install" "$myconfig"
-nix-env -i "$myconfig"

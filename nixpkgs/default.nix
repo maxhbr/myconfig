@@ -28,55 +28,55 @@ in
     callPackage = pkgs.lib.callPackageWith pkgs;
     callHaskellPackage = pkgs.haskellPackages.callPackage;
 
-    packageSources = ({dir, name, pattern ? "*", buildPhase ? ""}:
-      pkgs.callPackage (
-        { ... }:
-        pkgs.stdenv.mkDerivation {
-          version = "1.0";
-          inherit name;
+    # packageSources = ({dir, name, pattern ? "*", buildPhase ? ""}:
+    #   pkgs.callPackage (
+    #     { ... }:
+    #     pkgs.stdenv.mkDerivation {
+    #       version = "1.0";
+    #       inherit name;
 
-          src = builtins.filterSource
-            (path: type: let
-               basename = baseNameOf path;
-             in if type == "directory" then basename != ".git"
-                else if type == "symlink" then builtins.match "^result(|-.*)$" basename == null
-                else builtins.match "^((|\..*)\.sw[a-z]|.*~)$" basename == null)
-            dir;
-          inherit buildPhase;
-          installPhase = ''
-            mkdir -p $out/${name}
-            cp -r ${pattern} $out/${name}
-          '';
+    #       src = builtins.filterSource
+    #         (path: type: let
+    #            basename = baseNameOf path;
+    #          in if type == "directory" then basename != ".git"
+    #             else if type == "symlink" then builtins.match "^result(|-.*)$" basename == null
+    #             else builtins.match "^((|\..*)\.sw[a-z]|.*~)$" basename == null)
+    #         dir;
+    #       inherit buildPhase;
+    #       installPhase = ''
+    #         mkdir -p $out/${name}
+    #         cp -r ${pattern} $out/${name}
+    #       '';
 
-          meta = with pkgs.stdenv.lib; {
-            description = "package for " + name;
-            homepage = "https://github.com/maxhbr/myconfig";
-            license = licenses.mit;
-            platforms = platforms.unix;
-            maintainers = [ ];
-          };
-        }) {}
-      );
+    #       meta = with pkgs.stdenv.lib; {
+    #         description = "package for " + name;
+    #         homepage = "https://github.com/maxhbr/myconfig";
+    #         license = licenses.mit;
+    #         platforms = platforms.unix;
+    #         maintainers = [ ];
+    #       };
+    #     }) {}
+    #   );
 
-      nixSrc = packageSources {
-        dir = ../nix;
-        name = "nix";
-        buildPhase = ''
-          sed -i -e '/dotfiles =/ s%= .*%= "${dotfiles}";%' nixpkgs-config.nix
-          sed -i -e '/scripts =/ s%= .*%= "${scripts}";%' nixpkgs-config.nix
-          sed -i -e '/background =/ s%= .*%= "${background}";%' nixpkgs-config.nix
-          sed -i -e '/slim-theme =/ s%= .*%= "${slim-theme}";%' nixpkgs-config.nix
-          sed -i -e '/my-xmonad =/ s%= .*%= "${my-xmonad}";%' nixpkgs-config.nix
-        '';
-      };
-      nixosSrc = packageSources {
-        dir = ../nixos;
-        name = "nixos";
-        buildPhase = ''
-          sed -i -e '/nixpkgs\.config =/ s%= .*%= import ${nixSrc}/nix/nixpkgs-config.nix;%' core/default.nix
-        '';
-      };
-      dotfiles = packageSources { dir = ../dotfiles; name = "dotfiles"; };
+    #   nixSrc = packageSources {
+    #     dir = ../nix;
+    #     name = "nix";
+    #     buildPhase = ''
+    #       sed -i -e '/dotfiles =/ s%= .*%= "${dotfiles}";%' nixpkgs-config.nix
+    #       sed -i -e '/scripts =/ s%= .*%= "${scripts}";%' nixpkgs-config.nix
+    #       sed -i -e '/background =/ s%= .*%= "${background}";%' nixpkgs-config.nix
+    #       sed -i -e '/slim-theme =/ s%= .*%= "${slim-theme}";%' nixpkgs-config.nix
+    #       sed -i -e '/my-xmonad =/ s%= .*%= "${my-xmonad}";%' nixpkgs-config.nix
+    #     '';
+    #   };
+    #   nixosSrc = packageSources {
+    #     dir = ../nixos;
+    #     name = "nixos";
+    #     buildPhase = ''
+    #       sed -i -e '/nixpkgs\.config =/ s%= .*%= import ${nixSrc}/nix/nixpkgs-config.nix;%' core/default.nix
+    #     '';
+    #   };
+    #   dotfiles = packageSources { dir = ../dotfiles; name = "dotfiles"; };
       scripts = callPackage ../scripts {
         inherit background pkgs;
       };
@@ -110,12 +110,12 @@ in
             })
             (self: super: {
               myconfig = {
-                inherit scripts my-xmonad background slim-theme;
-                # all = self.buildEnv {
-                #   name = "myconfig-all";
-                #   paths = [nixosSrc nixSrc dotfiles scripts my-xmonad background slim-theme];
-                #   pathsToLink = [ "/share" "/bin" ];
-                # };
+                inherit scripts my-xmonad background slim-theme; # nixosSrc nixSrc dotfiles
+                all = self.buildEnv {
+                  name = "myconfig-all";
+                  paths = [scripts my-xmonad background slim-theme]; # nixosSrc nixSrc dotfiles
+                  pathsToLink = [ "/share" "/bin" ];
+                };
               };
             })
           ];

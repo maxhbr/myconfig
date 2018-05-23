@@ -50,6 +50,7 @@ upgrade() {
          -I nixpkgs-overlays=/etc/nix/overlays \
          -I nixos-config=/etc/nixos/configuration.nix \
          --upgrade \
+         --fast \
          --fallback ${1:-switch}
     echo "new generation: $(sudo nix-env -p /nix/var/nix/profiles/system --list-generations | head -1)"
 }

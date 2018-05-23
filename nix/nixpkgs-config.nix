@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 pkgs:
 let
-  myconfig = import ../. {};
+  mypkgs = import ../. {};
 in {
   allowUnfree = true;
   mplayer.useUnfreeCodecs = true;
@@ -10,12 +10,6 @@ in {
   # virtualbox.enableExtensionPack = true;
 
   packageOverrides = pkgs_: with pkgs_; {
-    myconfig = {
-      dotfiles = myconfig.dotfiles;
-      scripts = myconfig.scripts;
-      background = myconfig.background;
-      slim-theme = myconfig.slim-theme;
-      my-xmonad = myconfig.my-xmonad;
-    };
+    inherit (mypkgs) myconfig;
   };
 }

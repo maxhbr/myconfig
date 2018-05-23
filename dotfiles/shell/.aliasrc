@@ -594,6 +594,7 @@ alias mtw="myTexWrapper.sh"
 
 have nix-env && {
   #nix
+  alias nix-env="nix-env --file '<nixpkgs>'"
   alias nixin="nix-env -iA"
   alias nixin-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -iA"
   alias nix-zsh="nix-shell -p zsh --run zsh"
@@ -639,6 +640,8 @@ have nix-env && {
     nix-collect-garbage -d
     sudo nix-collect-garbage -d
   }
+
+  alias steam="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam --command \"optirun steam\""
 }
 
 have pacman && {
@@ -771,8 +774,6 @@ meld() {
 Franz() {
   command Franz "$@" &disown
 }
-
-alias steam="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam --command \"optirun steam\""
 
 touchpadtoggle(){
   xdotool mousemove 0 0

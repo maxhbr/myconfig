@@ -22,11 +22,13 @@
   })];
 
   nix.nixPath = [
-    # "nixpkgs=channel:nixos-18.03"
-    # "unstable=channel:nixos-unstable"
-    "nixpkgs=channel:nixos-unstable"
-    "nixpkgs-overlays=/etc/nix/overlays"
-    "nixos-config=/etc/nixos/configuration.nix"
+    "nixpkgs=/home/mhuber/myconfig/nixpkgs"
+    "nixos-config=/home/mhuber/myconfig/nixos/default.nix"
+    # # "nixpkgs=channel:nixos-18.03"
+    # # "unstable=channel:nixos-unstable"
+    # "nixpkgs=channel:nixos-unstable"
+    # "nixpkgs-overlays=/etc/nix/overlays"
+    # "nixos-config=/etc/nixos/configuration.nix"
   ];
 
   # nixpkgs.overlays = nixpkgs.config.overlays;
