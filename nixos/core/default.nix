@@ -16,7 +16,16 @@
   networking.hostId = "${hostId}";
   networking.hostName = "${hostName}";
 
-  nixpkgs.config = import ../../nix/nixpkgs-config.nix;
+  nixpkgs.config = let
+      mypkgs = import ./../.. {};
+    in
+      pkgs: {
+        allowUnfree = true;
+        mplayer.useUnfreeCodecs = true;
+        packageOverrides = pkgs_: with pkgs_; {
+          inherit (mypkgs) myconfig;
+        };
+      };
   nixpkgs.overlays = otherOverlays ++ [(self: super: {
     unstable = import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) { inherit (super) config; };
   })];
