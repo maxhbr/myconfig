@@ -1,9 +1,6 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, hostName, hostId,
-  otherImports ? [],
-  otherOverlays ? [],
-  ... }:
+{ hostName, hostId, otherImports ? [], ... }:
 
 {
   imports = otherImports ++ [
@@ -16,31 +13,6 @@
   networking.hostId = "${hostId}";
   networking.hostName = "${hostName}";
 
-  nixpkgs.config = let
-      mypkgs = import ./../.. {};
-    in
-      pkgs: {
-        allowUnfree = true;
-        mplayer.useUnfreeCodecs = true;
-        packageOverrides = pkgs_: with pkgs_; {
-          inherit (mypkgs) myconfig;
-        };
-      };
-  nixpkgs.overlays = otherOverlays ++ [(self: super: {
-    unstable = import (fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) { inherit (super) config; };
-  })];
-
-  nix.nixPath = [
-    "nixpkgs=/home/mhuber/myconfig/nixpkgs"
-    "nixos-config=/home/mhuber/myconfig/nixos/default.nix"
-    # # "nixpkgs=channel:nixos-18.03"
-    # # "unstable=channel:nixos-unstable"
-    # "nixpkgs=channel:nixos-unstable"
-    # "nixpkgs-overlays=/etc/nix/overlays"
-    # "nixos-config=/etc/nixos/configuration.nix"
-  ];
-
-  # nixpkgs.overlays = nixpkgs.config.overlays;
   boot.kernel.sysctl = {
     # "fs.inotify.max_user_watches" = 524288;
     "vm.swappiness" = 1;

@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: MIT
 set -e
 
+configSrcDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 gate() {
     [ -d /etc/nixos ]
     nixos-version &> /dev/null
@@ -10,8 +12,7 @@ gate() {
 
 prepare() {
     type "curl" &> /dev/null && {
-        DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-        [[ ! -f "$DIR/static/extrahosts" || "$(find "$DIR/static/extrahosts" -mtime +1)" != "" ]] && {
+        [[ ! -f "$configSrcDir/static/extrahosts" || "$(find "$configSrcDir/static/extrahosts" -mtime +1)" != "" ]] && {
             echo "* $(tput bold)update hosts blacklist$(tput sgr0) ..."
             # use hosts file from https://github.com/StevenBlack/hosts (MIT)
             curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts |
@@ -27,13 +28,15 @@ deploy() {
     echo "* $(tput bold)generate $configTarget$(tput sgr0) ..."
     sudo mkdir -p /etc/nixos
     configTarget=/etc/nixos/configuration.nix
-    configSrcDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     if [[ ! -f /etc/nixos/hostid ]]; then
         echo "set hostid:"
-        cksum /etc/machine-id | while read c rest; do printf "%x" $c; done | sudo tee /etc/nixos/hostid
+        cksum /etc/machine-id |
+            while read c rest; do printf "%x" $c; done |
+            sudo tee /etc/nixos/hostid
     fi
     if [[ ! -f $configTarget ]] || [[ $(wc -l <$configTarget) -eq 1 ]]; then
-        echo "import $configSrcDir" | sudo tee $configTarget
+        echo "import $configSrcDir" |
+            sudo tee $configTarget
     else
         echo "$configTarget contains unexpected content"
         exit 1
@@ -42,16 +45,14 @@ deploy() {
 
 upgrade() {
     echo "* $(tput bold)nixos-rebuild$(tput sgr0) ..."
-    NIX_PATH=
+    echo "... DEBUG: NIX_PATH=$NIX_PATH"
     sudo \
          NIX_CURL_FLAGS='--retry=1000' \
-         nixos-rebuild --show-trace --keep-failed \
-         -I nixpkgs=channel:nixos-18.03 \
-         -I nixpkgs-overlays=/etc/nix/overlays \
-         -I nixos-config=/etc/nixos/configuration.nix \
-         --upgrade \
-         --fast \
-         --fallback ${1:-switch}
+         nixos-rebuild \
+             --show-trace --keep-failed \
+             -I myconfigPath=$(dirname $configSrcDir) \
+             --upgrade \
+             --fallback ${1:-switch}
     echo "new generation: $(sudo nix-env -p /nix/var/nix/profiles/system --list-generations | head -1)"
 }
 

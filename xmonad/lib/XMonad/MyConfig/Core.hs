@@ -58,6 +58,12 @@ applyMyRestartKBs executablePath =
   applyMyKBs [ ((m__, xK_q     ), restart executablePath True)
              , ((m_c, xK_q     ), spawn (executablePath ++ " --restart"))
              -- , ((ms_, xK_q     ), spawn (executablePath ++ " --recompile && sleep 0.1 && " ++ executablePath ++ " --restart"))
+             , ((m__, xK_z      ), do
+                   spawn (myautosetupCMD ++ " --onlyIfChanged")
+                   restart executablePath True)
+             , ((ms_, xK_z      ), do
+                   spawn myautosetupCMD
+                   restart executablePath True)
              ]
 
 ------------------------------------------------------------------------
@@ -123,8 +129,6 @@ myKeys conf =
       [ ((const 0,   0x1008ffa9), spawn (synclientCMD ++ " TouchpadOff=$(" ++ synclientCMD ++ " -l | grep -c 'TouchpadOff.*=.*0')"))
       , ((m__, xK_s      ), spawn findCursorCMD)
       , ((msc, xK_s      ), spawn (xdotoolCMD ++ " mousemove 0 0; " ++ synclientCMD ++ " TouchpadOff=$(" ++ synclientCMD ++ " -l | grep -c 'TouchpadOff.*=.*0')"))
-      , ((m__, xK_z      ), spawn (myautosetupCMD ++ " --onlyIfChanged"))
-      , ((ms_, xK_z      ), spawn myautosetupCMD)
       , ((ms_, xK_y      ), spawn (xsetCMD ++ " s activate")) -- screenlocker
       , ((m__, xK_Home   ), spawn invertColorsCMD)
       , ((m__, xK_Print  ), spawn screenshotCMD)

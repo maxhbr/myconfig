@@ -1,10 +1,5 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-
-# see:
-# - https://www.reddit.com/r/NixOS/comments/4btjnf/fully_setting_up_a_custom_private_nix_repository/?st=jfqxd3k1&sh=92cbc8b5
-# - http://sandervanderburg.blogspot.de/2014/07/managing-private-nix-packages-outside.html
-
 let
   # stable_json = builtins.fromJSON (builtins.readFile ./stable.json);
   # unstable_json = builtins.fromJSON (builtins.readFile ./unstable.json);
@@ -26,7 +21,6 @@ in
     pkgs = import nixpkgs args;
 
     callPackage = pkgs.lib.callPackageWith pkgs;
-    callHaskellPackage = pkgs.haskellPackages.callPackage;
 
     # packageSources = ({dir, name, pattern ? "*", buildPhase ? ""}:
     #   pkgs.callPackage (
@@ -58,74 +52,85 @@ in
     #     }) {}
     #   );
 
-    #   nixSrc = packageSources {
-    #     dir = ../nix;
-    #     name = "nix";
-    #     buildPhase = ''
-    #       sed -i -e '/dotfiles =/ s%= .*%= "${dotfiles}";%' nixpkgs-config.nix
-    #       sed -i -e '/scripts =/ s%= .*%= "${scripts}";%' nixpkgs-config.nix
-    #       sed -i -e '/background =/ s%= .*%= "${background}";%' nixpkgs-config.nix
-    #       sed -i -e '/slim-theme =/ s%= .*%= "${slim-theme}";%' nixpkgs-config.nix
-    #       sed -i -e '/my-xmonad =/ s%= .*%= "${my-xmonad}";%' nixpkgs-config.nix
-    #     '';
-    #   };
-    #   nixosSrc = packageSources {
-    #     dir = ../nixos;
-    #     name = "nixos";
-    #     buildPhase = ''
-    #       sed -i -e '/nixpkgs\.config =/ s%= .*%= import ${nixSrc}/nix/nixpkgs-config.nix;%' core/default.nix
-    #     '';
-    #   };
-    #   dotfiles = packageSources { dir = ../dotfiles; name = "dotfiles"; };
-      scripts = callPackage ../scripts {
-        inherit background pkgs;
-      };
-      my-xmonad = callHaskellPackage ../xmonad {
-        inherit pkgs scripts;
-        my-xmonad-misc = callPackage ../xmonad/misc.nix { inherit pkgs; };
-        find-cursor = callPackage ../xmonad/find-cursor.nix { inherit pkgs; };
-      };
-      background = callPackage ../background { inherit pkgs; };
-      slim-theme = callPackage ../background/slim-theme {
-        inherit background pkgs;
-      };
+    # nixSrc = packageSources {
+    #   dir = ../nix;
+    #   name = "nix";
+    #   buildPhase = ''
+    #     sed -i -e '/dotfiles =/ s%= .*%= "${dotfiles}";%' nixpkgs-config.nix
+    #     sed -i -e '/scripts =/ s%= .*%= "${scripts}";%' nixpkgs-config.nix
+    #     sed -i -e '/background =/ s%= .*%= "${background}";%' nixpkgs-config.nix
+    #     sed -i -e '/slim-theme =/ s%= .*%= "${slim-theme}";%' nixpkgs-config.nix
+    #     sed -i -e '/my-xmonad =/ s%= .*%= "${my-xmonad}";%' nixpkgs-config.nix
+    #   '';
+    # };
+    # nixosSrc = packageSources {
+    #   dir = ../nixos;
+    #   name = "nixos";
+    #   buildPhase = ''
+    #     sed -i -e '/nixpkgs\.config =/ s%= .*%= import ${nixSrc}/nix/nixpkgs-config.nix;%' core/default.nix
+    #   '';
+    # };
+    # dotfiles = packageSources { dir = ../dotfiles; name = "dotfiles"; };
+    scripts = callPackage ../scripts {
+      inherit background pkgs;
+    };
+    my-xmonad = pkgs.haskellPackages.callPackage ../xmonad {
+      inherit pkgs scripts;
+      my-xmonad-misc = callPackage ../xmonad/misc.nix { inherit pkgs; };
+      find-cursor = callPackage ../xmonad/find-cursor.nix { inherit pkgs; };
+    };
+    background = callPackage ../background { inherit pkgs; };
+    slim-theme = callPackage ../background/slim-theme {
+      inherit background pkgs;
+    };
 
-      config = pkgs: {
-        allowUnfree = true;
-        mplayer.useUnfreeCodecs = true;
-        # virtualbox.enableExtensionPack = true;
-      };
-  in
-    import (nixpkgs + "/pkgs/top-level") (args // {
-      localSystem = { system = builtins.currentSystem; };
-      overlays = let
-          baseOverlays = [
-            (self: super: {
-              unstable = import (unstableNixpkgs + "/pkgs/top-level") (args //
-                {
-                  inherit config;
-                  localSystem = { system = builtins.currentSystem;};
-                }
-              );
-            })
-            (self: super: {
-              myconfig = {
-                inherit scripts my-xmonad background slim-theme; # nixosSrc nixSrc dotfiles
-                all = self.buildEnv {
-                  name = "myconfig-all";
-                  paths = [scripts my-xmonad background slim-theme]; # nixosSrc nixSrc dotfiles
-                  pathsToLink = [ "/share" "/bin" ];
-                };
+    config = pkgs: {
+      allowUnfree = true;
+      mplayer.useUnfreeCodecs = true;
+      # virtualbox.enableExtensionPack = true;
+    };
+
+    allOverlays = let
+        baseOverlays = [
+          (self: super: {
+            unstable = import (unstableNixpkgs + "/pkgs/top-level") (args //
+              {
+                inherit config;
+                localSystem = { system = builtins.currentSystem;};
+              }
+            );
+          })
+          (self: super: {
+            myconfig = {
+              inherit scripts my-xmonad background slim-theme; # nixosSrc nixSrc dotfiles
+              all = self.buildEnv {
+                name = "myconfig-all";
+                paths = [scripts my-xmonad background slim-theme]; # nixosSrc nixSrc dotfiles
+                pathsToLink = [ "/share" "/bin" ];
               };
-            })
-          ];
-          overlaysFromFolders = let
-              path = ./overlays;
-              content = builtins.readDir path;
-            in map (n: import (path + ("/" + n)))
-                 (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
-                   (builtins.attrNames content));
-        in
-          overlays ++ baseOverlays ++ overlaysFromFolders;
-        inherit config;
-    })
+            };
+          })
+        ];
+        overlaysFromFolders = let
+            path = ./overlays;
+            content = builtins.readDir path;
+          in map (n: import (path + ("/" + n)))
+               (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
+                 (builtins.attrNames content));
+      in
+        overlays ++ baseOverlays ++ overlaysFromFolders;
+  in
+    import (nixpkgs + "/pkgs/top-level") ({
+      inherit config;
+      localSystem = { system = builtins.currentSystem; };
+      overlays = allOverlays;
+    }) // {
+      # expose some internals to be used in nixos configuration
+      # TODO: that should not be necessary
+      myconfig-misc = {
+        inherit
+          nixpkgs unstableNixpkgs
+          config;
+        overlays = allOverlays;
+      };
+    }
