@@ -1,39 +1,27 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 let
-  stable_json = builtins.fromJSON (builtins.readFile ./nixos-18.03.json);
-  unstable_json = builtins.fromJSON (builtins.readFile ./nixos-unstable.json);
+  loadNixpkgs = { jsonFile, fallbackUrl }: 
+    if builtins.pathExists jsonFile
+    then let
+        json = builtins.fromJSON (builtins.readFile jsonFile);
+      in builtins.fetchTarball {
+           url = "https://github.com/NixOS/nixpkgs/archive/${json.rev}.tar.gz";
+           inherit (json) sha256;
+         }
+    else builtins.fetchTarball fallbackUrl;
 
-  nixpkgs = builtins.fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/${stable_json.rev}.tar.gz";
-    sha256 = stable_json.outputSha256;
+  nixpkgs = loadNixpkgs {
+    jsonFile = ./nixos-18.03.json;
+    fallbackUrl = http://nixos.org/channels/nixos-18.03/nixexprs.tar.xz;
   };
-  unstableNixpkgs = builtins.fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/${unstable_json.rev}.tar.gz";
-    sha256 = unstable_json.outputSha256;
+  unstableNixpkgs = loadNixpkgs {
+    jsonFile = ./nixos-unstable.json;
+    fallbackUrl = http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz;
   };
-
-  # nixpkgs = builtins.fetchTarball http://nixos.org/channels/nixos-18.03/nixexprs.tar.xz;
-  # unstableNixpkgs = builtins.fetchTarball http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz;
 in
-  { overlays ? [] , ... } @ args:
+  { overlays ? [] , ... }@args:
   let
-    pkgs = import nixpkgs args;
-
-    callPackage = pkgs.lib.callPackageWith pkgs;
-
-    scripts = callPackage ../scripts {
-      inherit background pkgs;
-    };
-    my-xmonad = pkgs.haskellPackages.callPackage ../xmonad {
-      inherit pkgs scripts;
-      my-xmonad-misc = callPackage ../xmonad/misc.nix { inherit pkgs; };
-      find-cursor = callPackage ../xmonad/find-cursor.nix { inherit pkgs; };
-    };
-    background = callPackage ../background { inherit pkgs; };
-    slim-theme = callPackage ../background/slim-theme {
-      inherit background pkgs;
-    };
 
     config = pkgs: {
       allowUnfree = true;
@@ -51,15 +39,30 @@ in
               }
             );
           })
-          (self: super: {
-            myconfig = {
-              inherit scripts my-xmonad background slim-theme; # nixosSrc nixSrc dotfiles
-              all = self.buildEnv {
-                name = "myconfig-all";
-                paths = [scripts my-xmonad background slim-theme]; # nixosSrc nixSrc dotfiles
-                pathsToLink = [ "/share" "/bin" ];
-              };
-            };
+          (funs: pkgs: let
+             callPackage = funs.lib.callPackageWith pkgs;
+
+             scripts = callPackage ../scripts {
+               inherit background pkgs;
+             };
+             my-xmonad = funs.haskellPackages.callPackage ../xmonad {
+               inherit pkgs scripts;
+               my-xmonad-misc = callPackage ../xmonad/misc.nix { inherit pkgs; };
+               find-cursor = callPackage ../xmonad/find-cursor.nix { inherit pkgs; };
+             };
+             background = callPackage ../background { inherit pkgs; };
+             slim-theme = callPackage ../background/slim-theme {
+               inherit background pkgs;
+             };
+           in {
+             myconfig = {
+               inherit scripts my-xmonad background slim-theme;
+               all = funs.buildEnv {
+                 name = "myconfig-all";
+                 paths = [scripts my-xmonad background slim-theme];
+                 pathsToLink = [ "/share" "/bin" ];
+               };
+             };
           })
         ];
         overlaysFromFolders = let

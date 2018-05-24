@@ -46,11 +46,14 @@ deploy() {
 upgrade() {
     echo "* $(tput bold)nixos-rebuild$(tput sgr0) ..."
     echo "... DEBUG: NIX_PATH=$NIX_PATH"
+    myconfigDir=$(dirname $configSrcDir)
     sudo \
          NIX_CURL_FLAGS='--retry=1000' \
          nixos-rebuild \
              --show-trace --keep-failed \
-             -I myconfigPath=$(dirname $configSrcDir) \
+             -I myconfigPath=$myconfigDir \
+             -I nixpkgs=$myconfigDir/nixpkgs \
+             -I nixos-config=$configSrcDir \
              --upgrade \
              --fallback ${1:-switch}
     echo "new generation: $(sudo nix-env -p /nix/var/nix/profiles/system --list-generations | head -1)"

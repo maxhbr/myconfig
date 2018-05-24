@@ -22,14 +22,14 @@ in
     environment.etc = {
       nixos-orig.source = ./.;
     };
-    
+
     # TODO: this should not be necessary, the nixpkgs in ./../../nixpkgs should already be configured and contain the overlays
     nixpkgs = {
       inherit (mypkgs.myconfig-misc) config overlays;
     };
 
     nix.nixPath = [
-      ("nixpkgs=" + <myconfigPath> + "/nixpkgs")
-      ("nixos-config=" + <myconfigPath> + "/nixos")
+      "nixpkgs=/home/mhuber/myconfig/nixpkgs"
+      "nixos-config=/home/mhuber/myconfig/nixos"
     ];
   }
