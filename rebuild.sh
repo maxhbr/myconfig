@@ -13,6 +13,11 @@ REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
 ROOT="$(dirname $REBUILD_SH)"
 cd "$ROOT"
 
+[[ "$1" == "--fast" ]] && {
+    shift
+    args="--fast"
+}
+
 ###########################################################################
 ##  function  #############################################################
 ###########################################################################
@@ -181,8 +186,10 @@ echo -e "\n\n\n\n\n\n\n" >> $logfile
 exec &> >(tee -a $logfile)
 
 # misc ####################################################################
-[[ "$1" != "--no-tmux" ]] && \
+[[ "$1" != "--no-tmux" ]] && {
+    shift
     wrapIntoTmux
+}
 checkIfConnected
 handleGit
 
@@ -216,6 +223,6 @@ declare -a commands=("prepare" "deploy" "upgrade" "cleanup")
 for cmd in ${commands[@]}; do
     logH1 "handle:" "$cmd"
     for folder in ${folders[@]}; do
-        runCmd $folder $cmd
+        runCmd $folder $cmd $args
     done
 done

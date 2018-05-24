@@ -16,8 +16,8 @@ prepare() {
             echo "* $(tput bold)update hosts blacklist$(tput sgr0) ..."
             # use hosts file from https://github.com/StevenBlack/hosts (MIT)
             curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts |
-                grep ^0 > "$DIR/static/extrahosts"
-            echo "0.0.0.0 navigationshilfe1.t-online.de" >> "$DIR/static/extrahosts"
+                grep ^0 > "$configSrcDir/static/extrahosts"
+            echo "0.0.0.0 navigationshilfe1.t-online.de" >> "$configSrcDir/static/extrahosts"
         } || {
             echo "do not update hots file"
         }
@@ -45,6 +45,12 @@ deploy() {
 
 upgrade() {
     echo "* $(tput bold)nixos-rebuild$(tput sgr0) ..."
+
+    [[ "$1" == "--fast" ]] && {
+        echo "build fast"
+        args="--fast"
+    }
+
     echo "... DEBUG: NIX_PATH=$NIX_PATH"
     myconfigDir=$(dirname $configSrcDir)
     sudo \
@@ -55,6 +61,7 @@ upgrade() {
              -I nixpkgs=$myconfigDir/nixpkgs \
              -I nixos-config=$configSrcDir \
              --upgrade \
+             $args \
              --fallback ${1:-switch}
     echo "new generation: $(sudo nix-env -p /nix/var/nix/profiles/system --list-generations | head -1)"
 }

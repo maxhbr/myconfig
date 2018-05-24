@@ -10,6 +10,18 @@ gate() {
     nix-env --version &> /dev/null
 }
 
+prefetchRevForChannel() {
+    channel=$1
+    rev=$2
+
+    tarball="https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz"
+    prefetchOutput=$(nix-prefetch-url --unpack --print-path --type sha256 $tarball)
+    hash=$(echo "$prefetchOutput" | head -1)
+    path=$(echo "$prefetchOutput" | tail -1)
+
+    echo '{"url":"'$tarball'","rev": "'$rev'","sha256":"'$hash'","path":"'$path'"}' | tee $target
+}
+
 updateForChannel() {
     channel=$1
 
@@ -28,12 +40,25 @@ updateForChannel() {
         fi
     fi
 
-    tarball="https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz"
-    prefetchOutput=$(nix-prefetch-url --unpack --print-path --type sha256 $tarball)
-    hash=$(echo "$prefetchOutput" | head -1)
-    path=$(echo "$prefetchOutput" | tail -1)
+    prefetchRevForChannel $channel $rev
+}
 
-    echo '{"url":"'$tarball'","rev": "'$rev'","sha256":"'$hash'","path":"'$path'"}' | tee $target
+onlyPrefetchForChannel() {
+    channel=$1
+
+    target="$nixpkgsDir/${channel}.json"
+
+    if [[ ! -f $target ]]; then
+        echo "... the json file $target does not exist"
+    fi
+
+    path=$(cat $target | jq -r .path)
+    if [[ ! -d $path ]]; then
+        echo "** prefetch is necessary for $channel"
+
+        rev=$(cat $target | jq -r .rev)
+        prefetchRevForChannel $channel $rev
+    fi
 }
 
 setupNixosFolder() {
@@ -67,8 +92,13 @@ setupNixosFolder() {
 
 prepare() {
     echo "* $(tput bold)upgrade nixpks version$(tput sgr0) ..."
-    updateForChannel nixos-18.03
-    updateForChannel nixos-unstable
+    if [[ "$1" == "--fast" ]]; then
+        onlyPrefetchForChannel nixos-18.03
+        onlyPrefetchForChannel nixos-unstable
+    else
+        updateForChannel nixos-18.03
+        updateForChannel nixos-unstable
+    fi
 }
 
 deploy() {
