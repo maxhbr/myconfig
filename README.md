@@ -2,10 +2,10 @@
 
 Here I collect all configuration files of my machines. Currently I use
 - OS: **[NixOS](https://nixos.org/)**
-- Window Manager: **[xmonad](http://xmonad.org/)** (with: xmobar, dmenu + yeganesh)
+- Window Manager: **[xmonad](http://xmonad.org/)** (with: [xmobar](https://github.com/jaor/xmobar), [dmenu](https://tools.suckless.org/dmenu/) + [yeganesh](http://dmwit.com/yeganesh/))
 - EDITOR: emacs ([spacemacs](http://spacemacs.org/))
-- SHELL: zsh (with: oh-my-zsh)
-- Email Client: neomutt (with: offlineimap)
+- SHELL: zsh (with: [oh-my-zsh](http://ohmyz.sh/))
+- Email Client: [neomutt](https://neomutt.org/) (with: [offlineimap](http://www.offlineimap.org/))
 - Keyboard layout: [neo2](https://www.neo-layout.org/) 
 
 # How to bootstrap
@@ -25,6 +25,11 @@ $ ~/myconfig/dotfiles/default.sh
 $ [...]
 ```
 
+## just use the my nixpkgs
+```
+$ export NIX_PATH=nixpkgs=/path/to/myconfig/nixpkgs
+```
+
 # Structure
 
 My system configuration is managed by the script `./rebuild.sh` and is on NixOS packaged via nix.
@@ -32,18 +37,18 @@ My system configuration is managed by the script `./rebuild.sh` and is on NixOS 
 ## `./scripts`
 this folder contains scripts, which I use to manage my system
 
-## `./dotfiles`
-this folder contains my dotfiles grouped by their topic. There is also a script
-`deploy.sh` to deploy them via `stow`.
-
-## `./xmonad`
-this contains my xmonad configuration.
+## `./nixpkgs`
+this contains the nixpkgs
 
 ## `./nixos`
 this contains the nixos configuration of my machines.
 
-## `./nix`
-this contains the nixos configuration of nix.
+## `./xmonad`
+this contains my xmonad configuration.
+
+## `./dotfiles`
+this folder contains my dotfiles grouped by their topic. There is also a script
+`deploy.sh` to deploy them via `stow`.
 
 ## `./background`
 this contains desktop background images (all created by myself, CC-by-nd-4.0).

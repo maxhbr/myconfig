@@ -50,6 +50,8 @@ onlyPrefetchForChannel() {
 
     if [[ ! -f $target ]]; then
         echo "... the json file $target does not exist"
+        updateForChannel $channel
+        return
     fi
 
     path=$(cat $target | jq -r .path)
