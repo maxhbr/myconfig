@@ -28,40 +28,6 @@
 ################################################################################
     { # work
       config = lib.mkIf config.myconfig.roles.work.enable {
-        nixpkgs.overlays =
-          [(self: super:
-            let
-              version = "0.9.3";
-              name = "thrift-${version}";
-            in {
-              thrift93 = super.thrift.overrideAttrs ( oldAttrs: {
-                inherit name version;
-                src = self.fetchurl {
-                  url = "http://archive.apache.org/dist/thrift/${version}/${name}.tar.gz";
-                  sha256 = "17lnchan9q3qdg222rgjjai6819j9k755s239phdv6n0183hlx5h";
-                };
-              });
-            })
-            (self: super:
-             let
-               name = "idea-ultimate-${version}";
-               version = "2018.1.2";
-               sha256 = "041swacdkcv6dp7y146ra4zm3vj66pgnphhg69ifq2y8v7yz1a60";
-               oldVersion = "2017.2.5"; # super.lib.getVersion super.idea.idea-ultimate;
-               overlayIsNewer =  super.lib.versionOlder oldVersion version;
-             in if overlayIsNewer
-                then {
-                  idea-ultimate = super.idea.idea-ultimate.overrideAttrs ( oldAttrs: {
-                    inherit name version;
-                    src = super.fetchurl {
-                      url = "https://download.jetbrains.com/idea/ideaIU-${version}.tar.gz";
-                      inherit sha256;
-                    };
-                  });
-                } else {
-                 idea-ultimate = super.idea.idea-ultimate;
-                }
-            )];
         environment.systemPackages = with pkgs; [
           openvpn networkmanager_openvpn
           # rdesktop

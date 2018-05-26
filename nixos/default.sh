@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 set -e
 
-configSrcDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+. "$(dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )")/common.sh"
 
 gate() {
     [ -d /etc/nixos ]
@@ -12,20 +12,20 @@ gate() {
 
 prepare() {
     type "curl" &> /dev/null && {
-        [[ ! -f "$configSrcDir/static/extrahosts" || "$(find "$configSrcDir/static/extrahosts" -mtime +1)" != "" ]] && {
+        [[ ! -f "$nixosConfigDir/static/extrahosts" || "$(find "$nixosConfigDir/static/extrahosts" -mtime +1)" != "" ]] && {
             echo "* $(tput bold)update hosts blacklist$(tput sgr0) ..."
             # use hosts file from https://github.com/StevenBlack/hosts (MIT)
             curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts |
-                grep ^0 > "$configSrcDir/static/extrahosts"
-            echo "0.0.0.0 navigationshilfe1.t-online.de" >> "$configSrcDir/static/extrahosts"
+                grep ^0 > "$nixosConfigDir/static/extrahosts"
+            echo "0.0.0.0 navigationshilfe1.t-online.de" >> "$nixosConfigDir/static/extrahosts"
         } || echo "do not update hots file"
     }
 }
 
 deploy() {
-    echo "* $(tput bold)generate $configTarget$(tput sgr0) ..."
+    logH3 "generate" "$configTarget"
     sudo mkdir -p /etc/nixos
-    configTarget=/etc/nixos/configuration.nix
+    local configTarget=/etc/nixos/configuration.nix
     if [[ ! -f /etc/nixos/hostid ]]; then
         echo "set hostid:"
         cksum /etc/machine-id |
@@ -48,17 +48,16 @@ upgrade() {
     [[ "$MYCONFIG_ARGS" == *"--fast"* ]] &&
         args="--fast"
 
-    echo "* $(tput bold)nixos-rebuild $args$(tput sgr0) ..."
+    logH3 "nixos-rebuild" "$args"
 
     echo "... DEBUG: NIX_PATH=$NIX_PATH"
-    myconfigDir=$(dirname $configSrcDir)
     sudo \
          NIX_CURL_FLAGS='--retry=1000' \
          nixos-rebuild \
              --show-trace --keep-failed \
              -I myconfigPath=$myconfigDir \
-             -I nixpkgs=$myconfigDir/nixpkgs \
-             -I nixos-config=$configSrcDir \
+             -I nixpkgs=$nixpkgsDir \
+             -I nixos-config=$nixosConfigDir \
              --upgrade \
              $args \
              --fallback ${1:-switch}

@@ -10,8 +10,8 @@ deploy() {
 
     echo "* $(tput bold)deploy xmonad$(tput sgr0) ..."
 
-    xmonadSrc="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    target="$HOME/.xmonad"
+    local xmonadSrc="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    local target="$HOME/.xmonad"
 
     # deploy ##################################################################
     mkdir -p "$target"

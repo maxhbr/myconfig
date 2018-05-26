@@ -23,13 +23,15 @@ in
       nixos-orig.source = ./.;
     };
 
-    # TODO: this should not be necessary, the nixpkgs in ./../../nixpkgs should already be configured and contain the overlays
     nixpkgs = {
-      inherit (mypkgs.myconfig-misc) config overlays;
+      config = import ../nix/nixpkgs-config.nix;
+      overlays = let
+          path = ../nix/overlays;
+          content = builtins.readDir path;
+        in map (n: import (path + ("/" + n)))
+             (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
+               (builtins.attrNames content));
     };
-
-    nix.nixPath = [
-      "nixpkgs=/home/mhuber/myconfig/nixpkgs"
-      "nixos-config=/home/mhuber/myconfig/nixos"
-    ];
-  }
+  } // (if builtins.pathExists ../nix/nixPath.nix
+        then { nix.nixPath = import ../nix/nixPath.nix; }
+        else {})

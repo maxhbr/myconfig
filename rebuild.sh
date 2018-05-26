@@ -13,41 +13,11 @@ REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
 ROOT="$(dirname $REBUILD_SH)"
 cd "$ROOT"
 
+. common.sh
+
 ###########################################################################
 ##  function  #############################################################
 ###########################################################################
-
-have() { type "$1" &> /dev/null; }
-
-logH1() {
-    local prefix=$1
-    local text=$2
-    echo
-    echo "$(tput bold)****************************************************************************"
-    echo "***$(tput sgr0) $prefix $(tput bold)$text$(tput sgr0)"
-}
-
-logH2() {
-    local prefix=$1
-    local text=$2
-    echo "$(tput bold)***$(tput sgr0) $prefix $(tput bold)$text$(tput sgr0)"
-}
-
-logH3() {
-    local prefix=$1
-    local text=$2
-    echo "*** $prefix $(tput bold)$text$(tput sgr0)"
-}
-
-logINFO() {
-    local text=$1
-    echo "$(tput setaf 3)$(tput bold)*** INFO: $(tput bold)$text$(tput sgr0)"
-}
-
-logERR() {
-    local text=$1
-    echo "$(tput setaf 1)$(tput bold)*** ERR: $(tput bold)$text$(tput sgr0)"
-}
 
 runCmd() {
     local folder=$1
@@ -73,9 +43,7 @@ wrapIntoTmux() {
                 && exit 0
             logERR "tmux failed to start, running without tmux"
         fi
-    } || {
-        logINFO "tmux not installed"
-    }
+    } || logINFO "tmux not installed"
 }
 
 checkIfConnected() {
@@ -125,7 +93,6 @@ diffCurrentSystemDeps() {
     local profileRoot=$1
     local newFile=$(mktemp)
 
-    # nix-store -qR $(readlink -f $profileRoot) |
     nix-store -qR $profileRoot |
         sed 's/^[^-]*-//g' |
         # while read line ; do echo "$(sed 's/^[^-]*-//g' <<< $line) $line" ; done |
@@ -174,19 +141,22 @@ diffDiskUsage() {
 ##  run  ##################################################################
 ###########################################################################
 
+###########################################################################
 # prepare logging #########################################################
 mkdir -p "${ROOT}/_logs/"
 logfile="${ROOT}/_logs/$(date +%Y-%m-%d)-rebuild.sh.log"
 echo -e "\n\n\n\n\n\n\n" >> $logfile
 exec &> >(tee -a $logfile)
 
-# misc ####################################################################
+###########################################################################
+# prepare misc stuff ######################################################
 [[ "$1" != "--no-tmux" ]] && {
     wrapIntoTmux
 } || shift
 checkIfConnected
 handleGit
 
+###########################################################################
 # save current state and show them on exit ################################
 currentSystemDeps=$(diffCurrentSystemDeps /run/current-system/)
 currentUserDeps=$(diffCurrentSystemDeps ~/.nix-profile)
@@ -203,8 +173,9 @@ showStatDifferences() {
 }
 trap showStatDifferences EXIT ERR INT TERM
 
+###########################################################################
 # run scripts #############################################################
-declare -a folders=("./nixpkgs" "./nixos" "./dotfiles" "./xmonad")
+declare -a folders=("./nix" "./nixos" "./dotfiles" "./xmonad")
 declare -a commands=("prepare" "deploy" "upgrade" "cleanup")
 for cmd in ${commands[@]}; do
     logH1 "handle:" "$cmd"
