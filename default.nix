@@ -23,5 +23,6 @@ in {
       paths = [scripts my-xmonad background slim-theme];
       pathsToLink = [ "/share" "/bin" ];
     };
+    nixos-config = import ./nixos;
   };
 }

@@ -13,11 +13,6 @@ REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
 ROOT="$(dirname $REBUILD_SH)"
 cd "$ROOT"
 
-[[ "$1" == "--fast" ]] && {
-    shift
-    args="--fast"
-}
-
 ###########################################################################
 ##  function  #############################################################
 ###########################################################################
@@ -214,6 +209,6 @@ declare -a commands=("prepare" "deploy" "upgrade" "cleanup")
 for cmd in ${commands[@]}; do
     logH1 "handle:" "$cmd"
     for folder in ${folders[@]}; do
-        runCmd $folder $cmd $args
+        MYCONFIG_ARGS=$@ runCmd $folder $cmd
     done
 done

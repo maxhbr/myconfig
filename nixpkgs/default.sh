@@ -94,7 +94,7 @@ setupNixosFolder() {
 
 prepare() {
     echo "* $(tput bold)upgrade nixpks version$(tput sgr0) ..."
-    if [[ "$1" == "--fast" ]]; then
+    if [[ "$MYCONFIG_ARGS" == *"--fast"* ]]; then
         onlyPrefetchForChannel nixos-18.03
         onlyPrefetchForChannel nixos-unstable
     else

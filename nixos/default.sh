@@ -18,9 +18,7 @@ prepare() {
             curl https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts |
                 grep ^0 > "$configSrcDir/static/extrahosts"
             echo "0.0.0.0 navigationshilfe1.t-online.de" >> "$configSrcDir/static/extrahosts"
-        } || {
-            echo "do not update hots file"
-        }
+        } || echo "do not update hots file"
     }
 }
 
@@ -35,8 +33,11 @@ deploy() {
             sudo tee /etc/nixos/hostid
     fi
     if [[ ! -f $configTarget ]] || [[ $(wc -l <$configTarget) -eq 1 ]]; then
-        echo "import $configSrcDir" |
-            sudo tee $configTarget
+        line="let mypkgs = import <nixpkgs> {}; in mypkgs.myconfig.nixos-config"
+        if ! grep -q "$line" "$configTarget"; then
+            echo "$line" |
+                sudo tee $configTarget
+        fi
     else
         echo "$configTarget contains unexpected content"
         exit 1
@@ -44,12 +45,10 @@ deploy() {
 }
 
 upgrade() {
-    echo "* $(tput bold)nixos-rebuild$(tput sgr0) ..."
-
-    [[ "$1" == "--fast" ]] && {
-        echo "build fast"
+    [[ "$MYCONFIG_ARGS" == *"--fast"* ]] &&
         args="--fast"
-    }
+
+    echo "* $(tput bold)nixos-rebuild $args$(tput sgr0) ..."
 
     echo "... DEBUG: NIX_PATH=$NIX_PATH"
     myconfigDir=$(dirname $configSrcDir)
