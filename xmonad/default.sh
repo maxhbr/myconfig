@@ -3,13 +3,12 @@
 # SPDX-License-Identifier: MIT
 set -e
 
-echo "* $(tput bold)deploy xmonad$(tput sgr0) ..."
-
 deploy() {
     if nixos-version > /dev/null; then
-        echo "xmonad configuration is deployed via nix"
         return
     fi
+
+    echo "* $(tput bold)deploy xmonad$(tput sgr0) ..."
 
     xmonadSrc="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     target="$HOME/.xmonad"
@@ -26,6 +25,10 @@ deploy() {
 }
 
 upgrade() {
+    if nixos-version > /dev/null; then
+        return
+    fi
+
     echo "* $(tput bold)recompile and restart xmonad$(tput sgr0) ..."
     if [ ! -z ${DISPLAY+x} ]; then
         if nixos-version > /dev/null; then

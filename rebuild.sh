@@ -187,9 +187,8 @@ exec &> >(tee -a $logfile)
 
 # misc ####################################################################
 [[ "$1" != "--no-tmux" ]] && {
-    shift
     wrapIntoTmux
-}
+} || shift
 checkIfConnected
 handleGit
 
@@ -209,16 +208,8 @@ showStatDifferences() {
 }
 trap showStatDifferences EXIT ERR INT TERM
 
-# temporary use local configuration #######################################
-logH1 "temporary" "link configurations to dev source"
-runCmd ./nixos deploy
-
 # run scripts #############################################################
-declare -a folders=("./nixpkgs"
-                    "./nixos"
-                    "./dotfiles"
-                    # "./xmonad"
-                   )
+declare -a folders=("./nixpkgs" "./nixos" "./dotfiles" "./xmonad")
 declare -a commands=("prepare" "deploy" "upgrade" "cleanup")
 for cmd in ${commands[@]}; do
     logH1 "handle:" "$cmd"
