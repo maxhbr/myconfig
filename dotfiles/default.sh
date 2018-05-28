@@ -5,6 +5,7 @@
 
 set -e
 
+dotfiles="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 deploy() {
     echo "* $(tput bold)dotfiles$(tput sgr0) ..."
 
@@ -13,7 +14,6 @@ deploy() {
         exit 1
     fi
 
-    dotfiles="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     cd "$dotfiles"
 
     add_stow_params="" # "--restow"
@@ -34,10 +34,19 @@ deploy() {
              -exec chown $user:$userGroup "$HOME/"{} \;
         stow $add_stow_params -t $HOME -d $dotfiles $@ $dir
     done
+
+    # create and update some repos in the user space
+    $dotfiles/create_and_update_repos.pl
 }
+
+upgrade() {
+    $dotfiles/xrdb_merge.sh
+}
+
 
 if [ $# -eq 0 ]; then
     deploy
+    upgrade
 else
     ([[ ! -n "$(type -t $1)" ]] || [ "$(type -t $1)" != "function" ] ) && exit 0
     $@

@@ -415,6 +415,11 @@ dclean(){
     # remove all dangling volumes
     docker volume ls -qf dangling=true |xargs -r docker volume rm
 
+    # remove all dangling networks
+    docker network prune
+    # remove more stull (what does that remove exactly?)
+    docker system prune
+
     confirm "also do dcclean?" && dcclean $@
     confirm "also do diclean?" && diclean $@
 }
