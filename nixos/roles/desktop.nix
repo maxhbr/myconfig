@@ -135,8 +135,10 @@
               name = "myXmonad";
               start = ''
                 exec &> >(tee -a /tmp/myXmonad.log)
+                echo -e "\n\n$(date)\n\n"
                 ${pkgs.myconfig.my-xmonad}/bin/xmonad &
                 waitPID=$!
+                ${pkgs.myconfig.background}/bin/myRandomBackground &
               '';
             }];
           };

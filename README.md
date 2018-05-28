@@ -30,31 +30,31 @@ $ [...]
 $ export NIX_PATH=nixpkgs=/path/to/myconfig/nixpkgs
 ```
 
-# Structure
+# How it is composed
 
-My system configuration is managed by the script `./rebuild.sh` and is on NixOS packaged via nix.
+The top level script `rebuild.sh` calls the `prepare`, `deploy`, `upgrade` and `cleanup` phases for all `default.sh` files in the corresponding folders.
 
-## `./scripts`
-this folder contains scripts, which I use to manage my system
+Some notable folders are
+- `./scripts`, containing central scripts used to manage my system, e.g. for backups or automatic setup of xrandr configuration
+  - this contains, among others, the scripts
+    - `myautosetup.pl`, which sets up the environment depending on monitor configuration and more
+    - `myborgbackup.sh`, my core backup script
+    - `ec`, which calls emacs for me
+- `./nix`, containing the configuration for nix, overlays, custom packages and also the `nixpkgs` checkouts
+- `./nixos`, containing the complete nixos configuration for multiple hosts (the hostname defines, which configuration is taken)
+  - this imports
+    - the folder `./xmonad` via the top level `./default.nix`
+    - the configuration `./nix/nixpkgs-config.nix`
+    - the overlays from `./nix/overlays`
+    directly
+- `./dotfiles`, containing some dotfiles, which are deployed via stow and should also work on non-NixOS Linux machines
+  - for `emacs`, `git`, `mutt`, `shell` (e.g. `zsh`) and `core` (some scripts and more used frequently)
+- `./xmonad`, my custom configuration of xmonad, packaged as lib via nix or stack
+- `./background`, containing some self made desktop backgrounds
 
-## `./nixpkgs`
-this contains the nixpkgs
+On top level there is also a file `./default.nix` which defines an overlay containing packages corresponding to the parts of myconfig.
 
-## `./nixos`
-this contains the nixos configuration of my machines.
-
-## `./xmonad`
-this contains my xmonad configuration.
-
-## `./dotfiles`
-this folder contains my dotfiles grouped by their topic. There is also a script
-`deploy.sh` to deploy them via `stow`.
-
-## `./background`
-this contains desktop background images (all created by myself, CC-by-nd-4.0).
-
-## `./misc`
-just some miscellaneous stuff.
+On nixos the central folder is `./nixos`, which imports the top level overlay definition to also build xmonad, my backgrounds and more.
 
 # License
 This project is licensed under MIT (see [./LICENSE](./LICENSE))

@@ -58,12 +58,6 @@ applyMyRestartKBs executablePath =
   applyMyKBs [ ((m__, xK_q     ), restart executablePath True)
              , ((m_c, xK_q     ), spawn (executablePath ++ " --restart"))
              -- , ((ms_, xK_q     ), spawn (executablePath ++ " --recompile && sleep 0.1 && " ++ executablePath ++ " --restart"))
-             , ((m__, xK_z      ), do
-                   spawn (myautosetupCMD ++ " --onlyIfChanged")
-                   restart executablePath True)
-             , ((ms_, xK_z      ), do
-                   spawn myautosetupCMD
-                   restart executablePath True)
              ]
 
 ------------------------------------------------------------------------
@@ -134,8 +128,10 @@ myKeys conf =
       , ((m__, xK_Print  ), spawn screenshotCMD)
 
       -- keyboard layouts
-      , ((m__,  xK_F2     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_3_4.png"))
-      , ((m__,  xK_F3     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_5_6.png"))
+      , ((m__, xK_F2     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_3_4.png"))
+      , ((m__, xK_F3     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_5_6.png"))
+      , ((m__, xK_z      ), spawn (myautosetupCMD ++ " --onlyIfChanged"))
+      , ((ms_, xK_z      ), spawn myautosetupCMD)
       ]
 
 backlightControlKBs, volumeControlKBs :: [((KeyMask -> KeyMask, KeySym), X ())]

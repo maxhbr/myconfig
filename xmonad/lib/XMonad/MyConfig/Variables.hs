@@ -35,7 +35,7 @@ xbacklightCMD      = "xbacklight"
 
 myautosetupCMD     = pathToMyconfigBins ++ "myautosetup.pl"
 screenshotCMD      = pathToMyconfigBins ++ "screenshot.sh"
-batteryMonitorCMD  = pathToMyconfigBins ++ "battery-monitor.sh"
+batteryMonitorCMD  = pathToXmonadBins ++ "battery-monitor.sh"
 -- or:
 -- - "bash -c \"import -frame ~/screen_`date +%Y-%m-%d_%H-%M-%S`.png\"")
 -- - "mkdir -p ~/_screenshots/ && scrot ~/_screenshots/screen_%Y-%m-%d_%H-%M-%S.png -d 1"
