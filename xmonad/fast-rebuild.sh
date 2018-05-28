@@ -7,7 +7,9 @@
 set -e
 DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 set -x
-result="$(nix-build --no-out-link --keep-failed "$DIR/.." -A my-xmonad)"
-# $result/bin/xmonad --restart
-$result/bin/xmonad --myreplace
 
+result="$(nix-build '<nixpkgs>' -I nixpkgs=$DIR/../nix/nixpkgs --no-out-link --keep-failed -A myconfig.my-xmonad)"
+
+echo -e "\n\n\nresult is $result\n"
+
+$DIR/bin/run-in-xephyr.sh -b $result/bin/xmonad
