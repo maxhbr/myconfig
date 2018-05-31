@@ -24,7 +24,7 @@ prepare() {
 
 deploy() {
     logH3 "generate" "$configTarget"
-    sudo mkdir -p /etc/nixos
+    [[ ! -d /etc/nixos ]] && sudo mkdir -p /etc/nixos
     local configTarget=/etc/nixos/configuration.nix
     if [[ ! -f /etc/nixos/hostid ]]; then
         echo "set hostid:"
@@ -45,6 +45,8 @@ deploy() {
 }
 
 upgrade() {
+    cmd=switch
+
     [[ "$MYCONFIG_ARGS" == *"--fast"* ]] &&
         args="--fast"
 
@@ -61,10 +63,10 @@ upgrade() {
              --upgrade \
              $args \
              --fallback ${1:-switch}
-    echo "new generation: $(sudo nix-env -p /nix/var/nix/profiles/system --list-generations | head -1)"
 }
 
 cleanup() {
+    echo "current generation: $(sudo nix-env -p /nix/var/nix/profiles/system --list-generations | head -1)"
     type "nix-collect-garbage" &> /dev/null && {
         if [ "$((RANDOM%100))" -gt 90 ]; then
             echo "* nix-collect-garbage --delete-generations 30d ..."

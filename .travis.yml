@@ -7,12 +7,12 @@ services:
 
 env:
   global:
-    - NIX_PATH="nixpkgs=channel:nixos-18.03"
+    - NIX_PATH="nixpkgs=channel:nixos-18.03:nixpkgs-overlays=$TRAVIS_BUILD_DIR/nix/overlays"
 
 matrix:
   include:
     - before_install: nix-channel --list
-      script: nix-build default.nix -A myconfig
+      script: nix-build '<nixpkgs>' -A myconfig
       env: NAME="nix-build default.nix -A myconfig"
     - script: docker build -t myconfig --build-arg TERM --build-arg NIX_PATH --rm=true --force-rm=true .
       env: NAME="build myconfig within docker"

@@ -1,8 +1,14 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, mkDerivation, base, containers, process, stdenv, X11, xmonad, xmonad-contrib, scripts, my-xmonad-misc, find-cursor }:
+{ pkgs, mkDerivation, base, containers, process, stdenv, X11, xmonad, xmonad-contrib, scripts, callPackage }:
 let
   version = "1.0";
+  my-xmonad-misc = callPackage ./misc.nix {
+    inherit pkgs;
+  };
+  find-cursor = callPackage ./find-cursor.nix {
+    inherit pkgs;
+  };
 in mkDerivation {
   inherit version;
   pname = "my-xmonad";

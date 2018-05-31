@@ -8,12 +8,6 @@ funs: pkgs: let
   };
   my-xmonad = funs.haskellPackages.callPackage ./xmonad {
     inherit pkgs scripts;
-    my-xmonad-misc = callPackage ./xmonad/misc.nix {
-      inherit pkgs;
-    };
-    find-cursor = callPackage ./xmonad/find-cursor.nix {
-      inherit pkgs;
-    };
   };
   background = callPackage ./background {
     inherit pkgs;

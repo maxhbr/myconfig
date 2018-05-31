@@ -1,3 +1,4 @@
+nixpkgs
 nixpkgs-unstable
 nixPath.nix
 nixPath.sh

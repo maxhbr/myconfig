@@ -34,7 +34,7 @@ prepareDirs() {
     if [[ "$remotes" != *'NixOS-nixpkgs'* ]]; then
         git remote add NixOS-nixpkgs https://github.com/NixOS/nixpkgs
     fi
-    git fetch NixOS-nixpkgs master
+    git fetch NixOS-nixpkgs
     if [[ ! -f "$nixpkgsDir/.git" ]]; then
         git worktree add "$nixpkgsDir" HEAD
     fi
@@ -97,10 +97,12 @@ prepare() {
 }
 
 deploy() {
-    sudo mkdir -p /etc/nix
     configTarget=/etc/nix/nixpkgs-config.nix
     echo "* $(tput bold)update $configTarget$(tput sgr0) ..."
-    sudo cp "$nixConfigDir/nixpkgs-config.nix" $configTarget
+    if ! cmp "$nixConfigDir/nixpkgs-config.nix" $configTarget >/dev/null 2>&1; then
+        sudo mkdir -p /etc/nix
+        sudo cp "$nixConfigDir/nixpkgs-config.nix" $configTarget
+    fi
 }
 
 upgrade() {

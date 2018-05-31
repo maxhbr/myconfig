@@ -25,12 +25,7 @@ in
 
     nixpkgs = {
       config = import ../nix/nixpkgs-config.nix;
-      overlays = let
-          path = ../nix/overlays;
-          content = builtins.readDir path;
-        in map (n: import (path + ("/" + n)))
-             (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
-               (builtins.attrNames content));
+      overlays = import ../nix/all-overlays.nix;
     };
   } // (if builtins.pathExists ../nix/nixPath.nix
         then { nix.nixPath = import ../nix/nixPath.nix; }
