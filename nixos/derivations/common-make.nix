@@ -1,13 +1,8 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ machine, pkgs, lib, ... }:
+{ machine, lib, ... }:
 let
-  nixConfig = {
-    nixpkgs.config = import ../../nix/nixpkgs-config.nix;
-  };
-
   machineConfig = import ../core {
-    config = nixConfig;
     hostId = "12ABCDEF";
     hostName = machine;
   };

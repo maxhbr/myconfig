@@ -5,18 +5,16 @@
 # delete with
 # $ nix-store --delete <result>
 #
-# stolen from https://github.com/snabblab/snabblab-nixos/blob/master/make-iso.nix
-
+# based on https://github.com/snabblab/snabblab-nixos/blob/master/make-iso.nix
 { machine ? "myconfig-vm" }:
 
 let
   config = (import <nixpkgs/nixos/lib/eval-config.nix> {
+    pkgs = import ../../nix/pkgs.nix;
     system = "x86_64-linux";
     modules = [
       <nixpkgs/nixos/modules/virtualisation/qemu-vm.nix>
-      ({ pkgs, lib, ... }: import ./common-make.nix {
-        inherit pkgs lib machine;
-      } // {
+      (args: import ./common-make.nix (args // { inherit machine; }) // {
         virtualisation.memorySize = 1024;
         virtualisation.diskSize = 1024;
         virtualisation.graphics = false;

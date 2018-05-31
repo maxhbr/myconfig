@@ -8,10 +8,10 @@ while sleep 31; do
     acpi_data=$(acpi -b)
     status=$(echo -n "$acpi_data" | awk -F'[,:%]' '{print $2}')
     capacity=$(echo -n "$acpi_data" | awk -F'[,:%]' '{print $3}')
-    echo "Status: $status; Capacity: $capacity; was_notified: $was_notified; acpi_data: $acpi_data"
 
     case $status in
         "Discharging")
+            # echo "Status: $status; Capacity: $capacity; was_notified: $was_notified; acpi_data: $acpi_data"
             if [[ "$capacity" -lt 7 ]]; then
                 bash -c 'echo "Battery critical, suspending"; $acpi_data' | xmessage -nearmouse -file -&
                 sleep 5

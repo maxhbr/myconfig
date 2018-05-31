@@ -25,7 +25,7 @@ in
 
     nixpkgs = {
       config = import ../nix/nixpkgs-config.nix;
-      overlays = import ../nix/all-overlays.nix;
+      overlays = import ../nix/nixpkgs-overlays.nix;
     };
   } // (if builtins.pathExists ../nix/nixPath.nix
         then { nix.nixPath = import ../nix/nixPath.nix; }
