@@ -58,7 +58,9 @@ handleChannel() {
 prepare() {
     if git diff-index --quiet HEAD --; then
         handleChannel "nixpkgs" nixos-18.03
-        handleChannel "nixpkgs-unstable" nixos-unstable
+        # handleChannel "nixpkgs-unstable" nixos-unstable
+
+        $nixConfigDir/nixpkgs-unstable/default.sh
     else
         logINFO "git is unclean, do not update nixpkgs repos"
     fi
