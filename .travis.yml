@@ -16,9 +16,6 @@ matrix:
       env: NAME="nix-build default.nix -A myconfig"
     - script: docker build -t myconfig --build-arg TERM --build-arg NIX_PATH --rm=true --force-rm=true .
       env: NAME="build myconfig within docker"
-    - install: ./nixos/derivations/make-qemu-vm.nix
-      script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm
-      env: NAME="vmtest (empty configuration)"
     - install: ./nixos/derivations/make-qemu-vm.nix --arg machine '"minimal"'
       script: ./_tests/vmtest.sh ./result/bin/run-myconfig-vm-vm
       env: NAME="vmtest (minimal configuration)"

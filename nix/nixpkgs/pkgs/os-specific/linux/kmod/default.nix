@@ -1,0 +1,43 @@
+{ stdenv, buildPackages, lib, fetchurl, autoreconfHook, pkgconfig, libxslt, xz }:
+
+let
+  systems = [ "/run/current-system/kernel-modules" "/run/booted-system/kernel-modules" "" ];
+  modulesDirs = lib.concatMapStringsSep ":" (x: "${x}/lib/modules") systems;
+
+in stdenv.mkDerivation rec {
+  name = "kmod-${version}";
+  version = "25";
+
+  src = fetchurl {
+    url = "mirror://kernel/linux/utils/kernel/kmod/${name}.tar.xz";
+    sha256 = "1kgixs4m3jvwk7fb3d18n6j77qhgi9qfv4csj35rs5ancr4ycrbi";
+  };
+
+  nativeBuildInputs = [ autoreconfHook pkgconfig libxslt ];
+  buildInputs = [ xz ];
+  # HACK until BUG issue #21191 is addressed
+  crossAttrs.preUnpack = ''PATH="${buildPackages.xz}/bin''${PATH:+:}$PATH"'';
+
+  configureFlags = [
+    "--sysconfdir=/etc"
+    "--with-xz"
+    "--with-modulesdirs=${modulesDirs}"
+  ];
+
+  patches = [ ./module-dir.patch ];
+
+  postInstall = ''
+    for prog in rmmod insmod lsmod modinfo modprobe depmod; do
+      ln -sv $out/bin/kmod $out/bin/$prog
+    done
+
+    # Backwards compatibility
+    ln -s bin $out/sbin
+  '';
+
+  meta = {
+    homepage = https://www.kernel.org/pub/linux/utils/kernel/kmod/;
+    description = "Tools for loading and managing Linux kernel modules";
+    platforms = stdenv.lib.platforms.linux;
+  };
+}

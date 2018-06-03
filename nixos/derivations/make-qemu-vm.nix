@@ -6,7 +6,7 @@
 # $ nix-store --delete <result>
 #
 # based on https://github.com/snabblab/snabblab-nixos/blob/master/make-iso.nix
-{ machine ? "myconfig-vm" }:
+{ machine ? "minimal" }:
 
 let
   config = (import <nixpkgs/nixos/lib/eval-config.nix> {

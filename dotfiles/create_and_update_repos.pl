@@ -1,8 +1,7 @@
-#!/usr/bin/env perl
+#!/usr/bin/env nix-shell
+#! nix-shell -i perl -p perl
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-#
-#  written by maximilian-huber.de
 
 use strict;
 use warnings;
@@ -11,15 +10,8 @@ use Cwd qw( abs_path );
 use File::Path qw( make_path );
 use Term::ANSIColor qw( colored );
 
-my %toLink = (
-    'https://github.com/syl20bnr/spacemacs'                => '~/.emacs.d',
-    # 'https://github.com/robbyrussell/oh-my-zsh.git'        => '~/.oh-my-zsh',
-    # 'https://github.com/zsh-users/zsh-syntax-highlighting' => '~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting',
-    # 'https://github.com/AndreaCrotti/yasnippet-snippets'   => '~/.emacs.d/snippets',
-    # 'https://github.com/jwiegley/use-package'              => '~/.emacs.d/use-package',
-    # 'https://github.com/monky-hs/monky'                    => '~/.xmonad/monky',
-    'https://github.com/jrosdahl/maildirproc'              => '~/Mail/maildirproc'
-    );
+my %toLink = ('https://github.com/syl20bnr/spacemacs'   => '~/.emacs.d',
+              'https://github.com/jrosdahl/maildirproc' => '~/Mail/maildirproc');
 
 while ( my ($url, $target) = each(%toLink) ) {
     print "update: @{[colored(['bold green'], $target,'')]}\n";
