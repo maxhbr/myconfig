@@ -67,7 +67,7 @@ prepare() {
 
     nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixpkgs-overlays=$overlaysDir\" \"nixos-config=$nixosConfigDir\"]; }"
     nix_path_file="/etc/nixos/imports/nixPath.nix"
-    if [[ "$(cat $nix_path_file)" != *"$nix_path_string"* ]]; then
+    if [[ "$(cat $nix_path_file 2>/dev/null)" != *"$nix_path_string"* ]]; then
         sudo mkdir -p /etc/nixos/imports
         echo $nix_path_string |
             sudo tee $nix_path_file
