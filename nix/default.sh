@@ -51,8 +51,16 @@ getLatestRevForChannel() {
 updateDirForRev() {
     local dir=$1
     local rev=$2
-    echo "... set to rev=[$rev]"
-    (cd $dir; git checkout $rev)
+
+    (
+        cd $dir
+        if [[ $(git log --pretty=%H | head -1) != *"$rev"* ]]; then
+            echo "... set dir=[$dir] to rev=[$rev]"
+            git checkout $rev
+        else
+            echo "... dir=[$dir] is already at rev=[$rev]"
+        fi
+    )
 }
 
 updateDirForChannel() {
@@ -92,8 +100,7 @@ prepare() {
     handleChannel "$nixpkgsDir" nixos-18.03
     handleChannel "$nixpkgsUnstableDir" nixos-unstable
 
-    echo "[\"nixpkgs=$nixpkgsDir\" \"nixpkgs-overlays=$overlaysDir\" \"nixos-config=$nixosConfigDir\"]" |
-        tee "$nixConfigDir/nixPath.nix"
+    echo "[\"nixpkgs=$nixpkgsDir\" \"nixpkgs-overlays=$overlaysDir\" \"nixos-config=$nixosConfigDir\"]" > "$nixConfigDir/nixPath.nix"
 }
 
 deploy() {

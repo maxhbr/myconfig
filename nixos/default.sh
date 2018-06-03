@@ -52,7 +52,6 @@ upgrade() {
 
     logH3 "nixos-rebuild" "$args"
 
-    echo "... DEBUG: NIX_PATH=$NIX_PATH"
     sudo \
          NIX_CURL_FLAGS='--retry=1000' \
          nixos-rebuild \

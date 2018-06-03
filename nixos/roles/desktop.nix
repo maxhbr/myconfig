@@ -43,6 +43,7 @@
           # misc
             xf86_input_wacom
             libnotify # xfce.xfce4notifyd # notify-osd
+            vanilla-dmz
           ];
           interactiveShellInit = ''
             alias file-roller='${pkgs.xarchiver}/bin/xarchiver'
@@ -69,11 +70,11 @@
                 # theme = "${pkgs.myconfig.slim-theme}/share/my-slim-theme.zip";
               };
               sessionCommands = ''
-                ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name ${pkgs.vanilla-dmz}/share/icons/Vanilla-DMZ/cursors/left_ptr 32 &disown
+                ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name ${pkgs.vanilla-dmz}/share/icons/Vanilla-DMZ/cursors/left_ptr 128 &disown
                 if test -e $HOME/.Xresources; then
                   ${pkgs.xorg.xrdb}/bin/xrdb --merge $HOME/.Xresources &disown
                 fi
-                # ${pkgs.myconfig.background}/bin/myRandomBackground &disown
+                ${pkgs.myconfig.background}/bin/myRandomBackground &disown
                 ${pkgs.xss-lock}/bin/xss-lock ${pkgs.myconfig.background}/bin/myScreenLock &disown
               '';
             };
@@ -138,7 +139,6 @@
                 echo -e "\n\n$(date)\n\n"
                 ${pkgs.myconfig.my-xmonad}/bin/xmonad &
                 waitPID=$!
-                ${pkgs.myconfig.background}/bin/myRandomBackground &
               '';
             }];
           };
