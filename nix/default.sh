@@ -10,11 +10,6 @@ gate() {
     nix-env --version &> /dev/null
 }
 
-gate || {
-    echo "... skip"
-    exit 0
-}
-
 buildNixCmd() {
     local nixEnvCMD="nix-env"
     if [[ -d $nixpkgsUnstableDir ]]; then
@@ -28,79 +23,53 @@ buildNixCmd() {
     echo $nixEnvCMD
 }
 
-prepareDirs() {
+# getLatestRevForChannel() {
+#     local channel=$1
+#     curl -L -s "https://nixos.org/channels/${channel}/git-revision"
+# }
+
+addRemotesIfNecessary() {
     cd $myconfigDir
-    remotes=$(git remote)
-    if [[ "$remotes" != *'NixOS-nixpkgs'* ]]; then
-        git remote add NixOS-nixpkgs https://github.com/NixOS/nixpkgs
+    local remotes=$(git remote)
+    if [[ "$remotes" != *'NixOS-nixpkgs-channels'* ]]; then
+        git remote add NixOS-nixpkgs-channels https://github.com/NixOS/nixpkgs-channels
     fi
-    git fetch NixOS-nixpkgs
-    if [[ ! -f "$nixpkgsDir/.git" ]]; then
-        git worktree add "$nixpkgsDir" HEAD
-    fi
-    if [[ ! -f "$nixpkgsUnstableDir/.git" ]]; then
-        git worktree add "$nixpkgsUnstableDir" HEAD
-    fi
-}
-
-getLatestRevForChannel() {
-    local channel=$1
-    curl -L -s "https://nixos.org/channels/${channel}/git-revision"
-}
-
-updateDirForRev() {
-    local dir=$1
-    local rev=$2
-
-    (
-        cd $dir
-        if [[ $(git log --pretty=%H | head -1) != *"$rev"* ]]; then
-            echo "... set dir=[$dir] to rev=[$rev]"
-            git checkout $rev
-        else
-            echo "... dir=[$dir] is already at rev=[$rev]"
-        fi
-    )
-}
-
-updateDirForChannel() {
-    local dir=$1
-    local channel=$2
-
-    local latestRev=$(getLatestRevForChannel $channel | tee "$nixConfigDir/$channel.rev")
-    updateDirForRev $dir $latestRev
-}
-
-updateDirForRevByChannel() {
-    local dir=$1
-    local channel=$2
-
-    local currentRev=$(cat "$nixConfigDir/$channel.rev")
-    updateDirForRev $dir $currentRev
 }
 
 handleChannel() {
-    local dir=$1
+    local dir=nix/$1
     local channel=$2
 
     if [[ "$MYCONFIG_ARGS" == *"--fast"* ]]; then
-        echo "* $(tput bold)setup for channel=[$channel]$(tput sgr0) ..."
-        updateDirForRevByChannel $dir $channel
+        echo "skip"
     else
-        echo "* $(tput bold)upgrade for channel=[$channel]$(tput sgr0) ..."
-        updateDirForChannel $dir $channel
+        addRemotesIfNecessary
+
+        cd $myconfigDir
+        git fetch NixOS-nixpkgs-channels $channel
+        if [ ! -f "$dir/default.nix" ]; then
+            git subtree add --prefix $dir NixOS-nixpkgs-channels $channel --squash
+        else
+            git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
+        fi
     fi
 }
 
 prepare() {
-    prepareDirs
+    if git diff-index --quiet HEAD --; then
+        handleChannel "nixpkgs" nixos-18.03
+        handleChannel "nixpkgs-unstable" nixos-unstable
+    else
+        logINFO "git is unclean, do not update nixpkgs repos"
+    fi
 
-    (cd "$nixpkgsDir"; git fetch origin)
-
-    handleChannel "$nixpkgsDir" nixos-18.03
-    handleChannel "$nixpkgsUnstableDir" nixos-unstable
-
-    echo "[\"nixpkgs=$nixpkgsDir\" \"nixpkgs-overlays=$overlaysDir\" \"nixos-config=$nixosConfigDir\"]" > "$nixConfigDir/nixPath.nix"
+    nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixpkgs-overlays=$overlaysDir\" \"nixos-config=$nixosConfigDir\"]; }"
+    nix_path_file="/etc/nixos/imports/nixPath.nix"
+    if [[ "$(cat $nix_path_file)" != *"$nix_path_string"* ]]; then
+        sudo mkdir -p /etc/nixos/imports
+        echo $nix_path_string |
+            sudo tee $nix_path_file
+    fi
 }
 
 deploy() {
@@ -132,6 +101,11 @@ cleanup() {
     fi
 }
 
+
+gate || {
+    echo "... skip"
+    exit 0
+}
 if [ $# -eq 0 ]; then
     prepare
     upgrade
