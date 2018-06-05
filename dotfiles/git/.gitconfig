@@ -6,14 +6,14 @@
     email = mail@maximilian-huber.de
     signingkey = 32CA3654
 [core]
-	  logAllRefUpdates = always
+    logAllRefUpdates = always
 [alias]
     s           = status --short --branch
-	  b           = branch -vv
+    b           = branch -vv
     a           = add
     c           = commit
     cf          = commit --fixup
-		cm          = commit -m
+     cm          = commit -m
     chunk       = commit --patch
     chunkammend = commit --patch --amend
     cma         = commit -am
@@ -29,10 +29,10 @@
     cac         = commit --patch --amend
     co          = checkout
     cob         = checkout -b
-	  f           = "!f() { git fetch ${1:-\"--all\"}; }; f"
-	  pom         = pull --rebase origin master
-	  pum         = pull --rebase upstream master
-	  cp          = cherry-pick
+    f           = "!f() { git fetch ${1:-\"--all\"}; }; f"
+    pom         = pull --rebase origin master
+    pum         = pull --rebase upstream master
+    cp          = cherry-pick
 
     d           = diff
     d0          = diff HEAD
@@ -55,7 +55,6 @@
     changes     = diff --name-status -r
     diffstat    = diff --stat -r
     sortdiff    = !sh -c 'git diff "$@" | grep "^[+-]" | sort --key=1.2 | uniq -u -s1'
-    
 
     ri          = rebase --autosquash --interactive
     rc          = rebase --continue
@@ -66,7 +65,7 @@
 
 
     mkBundle    = "!f() { git bundle create \"../$(basename $(pwd)).bundle\" --all; }; f"
-	
+
 
     mt          = mergetool --no-prompt
     l           = log
@@ -79,7 +78,7 @@
     unstage     = reset HEAD --
     untrack     = rm --cached
     unadd       = rm --cached
-	  unrm        = "!f() { git reset -- $@ ; git checkout -- $@; }; f"
+    unrm        = "!f() { git reset -- $@ ; git checkout -- $@; }; f"
 
     whatis      = show -s --pretty='tformat:%h (%s, %ad)' --date=short
     pwhatis     = show -s --pretty='tformat:%h, %s, %ad' --date=short
@@ -87,8 +86,8 @@
     new         = !sh -c 'git log $1@{1}..$1@{0} "$@"'
 
     remadd      = "!f() { \
-						       			git remote add $1 git@github.com:${1}/${2}.git; \
-	                 }; f"
+                   			git remote add $1 git@github.com:${1}/${2}.git; \
+                   }; f"
     ghc         = "!f() { \
                         if [ \"$#\" -ne 2 ]; then echo \"needs two arguments\"; exit 1; fi;\
                         git clone git@github.com:${1}/${2}.git ${1}-${2}; \
@@ -105,8 +104,8 @@
     # Up to current commit, medium commit info
     g           = log --graph --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %n%C(reverse)%C(bold)  %s %C(reset)%n%C(reverse) %C(reset) Author: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%n'
     # Long, full commit info
-	  gl          = log --graph --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset) (%H)%C(yellow)%d%C(reset)%n%C(reverse)  %C(bold)%s %C(reset)%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'
-		gg          = log --graph --all --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %n%C(reverse)%C(bold)  %s %C(reset)%n%C(reverse) %C(reset) Author: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%n'
+    gl          = log --graph --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset) (%H)%C(yellow)%d%C(reset)%n%C(reverse)  %C(bold)%s %C(reset)%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'
+    gg          = log --graph --all --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %n%C(reverse)%C(bold)  %s %C(reset)%n%C(reverse) %C(reset) Author: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%n'
     # All commits, full commit info
     ggl         = log --graph --all --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset) (%H)%C(yellow)%d%C(reset)%n%C(reverse)  %C(bold)%s %C(reset)%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'
 
@@ -114,9 +113,9 @@
     assume-unchanged    = update-index --assume-unchanged
     assume-changed      = update-index --no-assume-unchanged
     testPR      = "!f() { [[ $(git diff --shortstat 2> /dev/null | tail -n1) != \"\" ]] && { \
- 	                          echo \"git is unclean\"; \
- 	                          return 1; \
- 	                        }; \
+                              echo \"git is unclean\"; \
+                              return 1; \
+                            }; \
                           remote=\"${2:-origin}\"; \
                           branch=\"testpr/${remote}/${1}\"; \
                           git fetch \"${remote}\" \"+refs/pull/${1}/merge:\" \
@@ -126,18 +125,20 @@
                           || ( echo && echo \"possible refs:\" && git ls-remote $remote | grep \"/merge\"; ); \
                         }; f"
 
-	  #stolen from: https://stackoverflow.com/questions/16307091/make-git-status-show-unmodified-unchanged-tracked-files
-	  ls-fstatus = "! cd $PWD/$GIT_PREFIX; git ls-files -cdmoskt --abbrev=8 | while read -r line; do \
-	                    fn=$(echo \"$line\" | sed \"s/.*\\s\\([[:print:]]\\+\\)/\\1/\"); \
-		                  st=$(git status -s \"$fn\" | printf \"%-02s \" $(sed \"s/\\([[:print:]]\\+\\)\\s.*/\\1/\")); \
+    #stolen from: https://stackoverflow.com/questions/16307091/make-git-status-show-unmodified-unchanged-tracked-files
+    ls-fstatus = "! cd $PWD/$GIT_PREFIX; git ls-files -cdmoskt --abbrev=8 | while read -r line; do \
+                      fn=$(echo \"$line\" | sed \"s/.*\\s\\([[:print:]]\\+\\)/\\1/\"); \
+                      st=$(git status -s \"$fn\" | printf \"%-02s \" $(sed \"s/\\([[:print:]]\\+\\)\\s.*/\\1/\")); \
                       echo \"$st- $line\"; \
-	                done"
+                  done"
 
-		changeAuthor = commit --amend --no-edit --author
+    changeAuthor = commit --amend --no-edit --author
+
+    snapshot = "!git stash save \"snapshot: $(date)\" && git stash apply \"stash@{0}\""
 
     # git subtree:
-    sba         = "!f() { git subtree add --prefix $2 $1 master --squash; }; f" 
-    sbu         = "!f() { git subtree pull --prefix $2 $1 master --squash; }; f" 
+    sba         = "!f() { git subtree add --prefix $2 $1 master --squash; }; f"
+    sbu         = "!f() { git subtree pull --prefix $2 $1 master --squash; }; f"
 
     # typos
     psuh = "push"
@@ -148,11 +149,11 @@
     status = auto
 [core]
     autocrlf = input
-	safecrlf = false
+    safecrlf = false
 [pull]
-	rebase = true
+    rebase = true
 [rebase]
-	autoStash = true
+    autoStash = true
 [push]
     default = matching
 [giggle]
@@ -162,11 +163,11 @@
     main-window-view = HistoryView
     file-view-vpane-position = 652
 [credential]
-	helper = cache --timeout=3600
+    helper = cache --timeout=3600
 [filter "lfs"]
-	clean = git-lfs clean -- %f
-	smudge = git-lfs smudge -- %f
-	required = true
+    clean = git-lfs clean -- %f
+    smudge = git-lfs smudge -- %f
+    required = true
 
 # stolen from https://stackoverflow.com/questions/1817370/using-ediff-as-git-mergetool
 [mergetool.ediff]
@@ -184,14 +185,14 @@
   (ediff-merge-files-with-ancestor \\\"$LOCAL\\\" \\\"$REMOTE\\\"\
                                    \\\"$BASE\\\" nil \\\"$MERGED\\\"))\"
 [merge]
-	tool = meld
-	# tool = ediff
-	conflictstyle = diff3
+    tool = meld
+    # tool = ediff
+    conflictstyle = diff3
 [diff]
-	tool = meld
-	# tool = ediff
+    tool = meld
+    # tool = ediff
 [rerere]
-	enabled = true
+    enabled = true
 
 [includeIf  "gitdir:~/TNG/"]
-  path = ~/.gitconfig-tng
+    path = ~/.gitconfig-tng

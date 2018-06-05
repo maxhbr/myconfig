@@ -4,6 +4,5 @@ pkgs:
 {
   allowUnfree = true;
   mplayer.useUnfreeCodecs = true;
-  # packageOverrides = myconfig.overlays;
   # virtualbox.enableExtensionPack = true;
 }

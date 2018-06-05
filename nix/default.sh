@@ -50,20 +50,23 @@ handleChannel() {
         if [ ! -f "$dir/default.nix" ]; then
             git subtree add --prefix $dir NixOS-nixpkgs-channels $channel --squash
         else
-            git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
+            if git diff-index --quiet HEAD --; then
+                git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
+            else
+                logINFO "stash local changes to allow subtree pull"
+                git stash
+                git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
+                git stash pop
+            fi
         fi
     fi
 }
 
 prepare() {
-    if git diff-index --quiet HEAD --; then
-        handleChannel "nixpkgs" nixos-18.03
-        # handleChannel "nixpkgs-unstable" nixos-unstable
+    handleChannel "nixpkgs" nixos-18.03
+    # handleChannel "nixpkgs-unstable" nixos-unstable
 
-        $nixConfigDir/nixpkgs-unstable/default.sh
-    else
-        logINFO "git is unclean, do not update nixpkgs repos"
-    fi
+    $nixConfigDir/nixpkgs-unstable/default.sh
 
     nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixpkgs-overlays=$overlaysDir\" \"nixos-config=$nixosConfigDir\"]; }"
     nix_path_file="/etc/nixos/imports/nixPath.nix"

@@ -6,10 +6,15 @@ cd "$( dirname "${BASH_SOURCE[0]}" )"
 echo "** update $channel"
 
 rev=$(curl -L -s "https://nixos.org/channels/${channel}/git-revision")
-echo $rev > ./${channel}.rev
 
-tarball="https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz"
-prefetchOutput=$(nix-prefetch-url --unpack --print-path --type sha256 $tarball)
-hash=$(echo "$prefetchOutput" | head -1)
-path=$(echo "$prefetchOutput" | tail -1)
-echo '{"url":"'$tarball'","rev": "'$rev'","sha256":"'$hash'","path":"'$path'"}' > ./${channel}.json
+if ! grep -q $rev ./${channel}.rev; then
+    echo $rev > ./${channel}.rev
+
+    tarball="https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz"
+    prefetchOutput=$(nix-prefetch-url --unpack --print-path --type sha256 $tarball)
+    hash=$(echo "$prefetchOutput" | head -1)
+    path=$(echo "$prefetchOutput" | tail -1)
+    echo '{"url":"'$tarball'","rev": "'$rev'","sha256":"'$hash'","path":"'$path'"}' > ./${channel}.json
+else
+    echo "... ./${channel}.rev file is already up to date, at rev=[$rev]"
+fi
