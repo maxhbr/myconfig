@@ -135,6 +135,9 @@
     changeAuthor = commit --amend --no-edit --author
 
     snapshot = "!git stash save \"snapshot: $(date)\" && git stash apply \"stash@{0}\""
+    # see: https://stackoverflow.com/questions/11269256/how-to-name-and-retrieve-a-stash-by-name-in-git
+    sshow = "!f() { git stash show stash^{/$*} -p; }; f"
+    sapply = "!f() { git stash apply stash^{/$*}; }; f"
 
     # git subtree:
     sba         = "!f() { git subtree add --prefix $2 $1 master --squash; }; f"

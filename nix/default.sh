@@ -54,9 +54,9 @@ handleChannel() {
                 git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
             else
                 logINFO "stash local changes to allow subtree pull"
-                git stash
+                git stash push -m "autostash for nix/default.sh"
                 git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
-                git stash pop
+                git stash pop "stash@{0}"
             fi
         fi
     fi
