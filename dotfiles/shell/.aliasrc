@@ -713,9 +713,6 @@ alias aws="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p 'aws' 'ec2_api_tools'"
 #   some networking
 #-------------------------------------------------------------------{{{
 
-alias wwan="sudo systemctl start ModemManager.service && sudo watch -n 1 systemctl status ModemManager.service; sudo nmtui"
-alias wwan-f="sudo systemctl restart ModemManager.service && sudo watch -n 1 systemctl status ModemManager.service; sudo nmtui"
-
 startphp() { php -S 127.0.0.1:8080; }
 mydhcp() {
   sudo ip link set $1 up
