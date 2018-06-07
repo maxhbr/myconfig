@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p curl
+#! nix-shell -i bash -p curl gitMinimal
 # Copyright 2016-2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 set -e
@@ -41,7 +41,7 @@ handleChannel() {
     local channel=$2
 
     if [[ "$MYCONFIG_ARGS" == *"--fast"* ]]; then
-        echo "skip"
+        echo "skip handling $channel (in $dir)"
     else
         addRemotesIfNecessary
 
@@ -56,7 +56,7 @@ handleChannel() {
                 logINFO "stash local changes to allow subtree pull"
                 git stash push -m "autostash for nix/default.sh"
                 git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
-                git stash pop "stash@{0}"
+                git stash pop "stash@{0}" 1> /dev/null
             fi
         fi
     fi
