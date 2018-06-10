@@ -33,7 +33,7 @@ instance UrgencyHook MyUrgencyHook where
       withWindowSet . (. W.findTag w) . flip whenJust . flash =<< getName w
     where
       flash name index =
-        pop (show name ++ " requests your attention on workspace " ++ index)
+        pop (show name ++ " @ " ++ index)
 
 mkFont s = font $ "xft:inconsolata:pixelsize=" ++ show s ++ ":antialias=true:hinting=true"
 
