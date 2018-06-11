@@ -470,7 +470,7 @@ alias vstart="vagrant up"
 alias vreload="vagrant reload"
 alias vhalt="vagrant halt"
 alias vdown="vagrant halt"
-alias vssh="vagrant ssh"
+alias vssh="vagrant ssh || vagrant up && vagrant ssh"
 alias vdestroy="vagrant destroy"
 
 #-------------------------------------------------------------------}}}
