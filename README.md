@@ -25,10 +25,16 @@ $ ~/myconfig/dotfiles/default.sh
 $ [...]
 ```
 
-## just use the my nixpkgs
+## just use the nixpkgs
 ```
-$ export NIX_PATH=nixpkgs=/path/to/myconfig/nixpkgs
+$ export NIX_PATH=nixpkgs=/path/to/myconfig/nix/nixpkgs:nixpkgs-overlays=/path/to/myconfig/nix/overlays
 ```
+or
+```
+$ export NIX_PATH=nixpkgs=/path/to/myconfig/nix/nixpkgs-unstable
+```
+
+The versions of the nixpkgs can be upgraded via `./nix/default.sh` and `./nix/nixpkgs-unstable/default.sh` (also called from `./nix/default.sh`).
 
 # How it is composed
 
