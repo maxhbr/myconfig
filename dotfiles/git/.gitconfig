@@ -92,6 +92,10 @@
                         if [ \"$#\" -ne 2 ]; then echo \"needs two arguments\"; exit 1; fi;\
                         git clone git@github.com:${1}/${2}.git ${1}-${2}; \
                     }; f"
+    glc         = "!f() { \
+                        if [ \"$#\" -ne 2 ]; then echo \"needs two arguments\"; exit 1; fi;\
+                        git clone git@gitlab.com:${1}/${2}.git ${1}-${2}; \
+                    }; f"
     remotes     = remote -v
 
     # stolen from: https://stevenharman.net/git-clean-delete-already-merged-branches

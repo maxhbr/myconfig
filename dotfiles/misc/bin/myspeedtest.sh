@@ -2,12 +2,17 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 
+if [[ "$1" == "--help" ]]; then
+    echo "usage:"
+    echo "   $0 [--loop] [--csv]"
+fi
+
 have() { type "$1" &> /dev/null; }
 
 have nix-shell && {
     have speedtest-cli || {
         echo "start via nix-shell"
-        exec nix-shell -p speedtest-cli wget --command $0 $@
+        exec nix-shell -p speedtest-cli wget --command "$0 $@"
     }
 }
 
@@ -25,24 +30,29 @@ checkIfConnected() {
 }
 
 run() {
-    echo "start: $(date)"
-    if checkIfConnected; then
-        if [[ -f $CSV ]]; then
-            speedtest-cli --csv-header
+    if [[ $1 == "--csv" ]]; then
+        echo "start: $(date)"
+        if checkIfConnected; then
+            if [[ -f $CSV ]]; then
+                speedtest-cli --csv-header
+            else
+                speedtest-cli --csv-header | tee $CSV
+            fi
+            speedtest-cli --csv | tee -a $CSV
         else
-            speedtest-cli --csv-header | tee $CSV
+            echo ",,-- not connected --,$(date --utc +"%FT%T.%6NZ"),,,,,," | tee -a $CSV
         fi
-        speedtest-cli --csv | tee -a $CSV
+        echo "end: $(date)"
     else
-        echo ",,-- not connected --,$(date --utc +"%FT%T.%6NZ"),,,,,," | tee -a $CSV
+        speedtest-cli --simple
     fi
-    echo "end: $(date)"
 }
 
 if [[ $1 == "--loop" ]]; then
-    while run; do
+    shift
+    while run $@; do
         sleep 300
     done
 else
-    run
+    run $@
 fi
