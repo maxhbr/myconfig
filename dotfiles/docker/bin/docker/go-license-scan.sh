@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-
+#
+# src: https://github.com/src-d/go-license-detector
+# blog: https://blog.sourced.tech/post/gld/
+#
 # to run:
 # $ $0 build
 # $ $0 https://github.com/src-d/go-git
@@ -27,9 +30,18 @@ run() {
     $docker rm \
             --force go-license-detector \
             >/dev/null 2>&1 || true
-    $docker run \
-            --name=go-license-detector \
-            go-license-detector $@
+
+    if [[ -d "$1" ]]; then
+        workdir=$(readlink -f "$1")
+        $docker run \
+                --name=go-license-detector \
+                -v "$workdir:/toScan" \
+                go-license-detector /toScan
+    else
+        $docker run \
+                --name=go-license-detector \
+                go-license-detector $@
+    fi
 }
 
 ################################################################################

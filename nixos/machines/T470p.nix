@@ -18,6 +18,9 @@
     "imagework"
   ];
 
+  # Notebook has unnusual behaviour, try to find root cause:
+  hardware.mcelog.enable = true;
+
   boot.initrd.supportedFilesystems = [ "luks" ];
   boot.initrd.luks.devices = [{
     device = "/dev/disk/by-uuid/fc9ecff5-e0c5-4cff-bb5c-08a745c76e3c";

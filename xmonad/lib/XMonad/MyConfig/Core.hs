@@ -135,22 +135,25 @@ myKeys conf =
       ]
 
 backlightControlKBs, volumeControlKBs :: [((KeyMask -> KeyMask, KeySym), X ())]
-backlightControlKBs = [ ((m__, xK_F1), spawnSelected def [ xbacklightCMD ++ " =50"
-                                                         , xbacklightCMD ++ " =25"
-                                                         , xbacklightCMD ++ " +10"
-                                                         , xbacklightCMD ++ " =75"
-                                                         , xbacklightCMD ++ " -10"
-                                                         , xbacklightCMD ++ " =10"
-                                                         , xbacklightCMD ++ " =5"
-                                                         , xbacklightCMD ++ " +1"
-                                                         , xbacklightCMD ++ " =3"
-                                                         , xbacklightCMD ++ " =100"
-                                                         , xbacklightCMD ++ " =1"
-                                                         , xbacklightCMD ++ " -1"
-                                                         , xbacklightCMD ++ " =0" ])
-                      , ((const 0, xF86XK_MonBrightnessUp)   , spawn (xbacklightCMD ++ " -inc 10%"))
-                      , ((const 0, xF86XK_MonBrightnessDown) , spawn (xbacklightCMD ++ " -dec 10%"))
-                      ]
+backlightControlKBs = let
+     xbacklightCMDs = [ "=50"
+                      , "=25"
+                      , "+10"
+                      , "=75"
+                      , "-10"
+                      , "=10"
+                      , "=5"
+                      , "+1"
+                      , "=3"
+                      , "=100"
+                      , "=1"
+                      , "-1"
+                      , "=0" ]
+     xbacklightRunSelectedConf = map (\ s -> (s, spawn (xbacklightCMD ++ " " ++ s))) xbacklightCMDs
+  in [ ((m__, xK_F1), runSelectedAction def xbacklightRunSelectedConf)
+     , ((const 0, xF86XK_MonBrightnessUp)   , spawn (xbacklightCMD ++ " -inc 10%"))
+     , ((const 0, xF86XK_MonBrightnessDown) , spawn (xbacklightCMD ++ " -dec 10%"))
+     ]
 
 volumeControlKBs =
 #if 1

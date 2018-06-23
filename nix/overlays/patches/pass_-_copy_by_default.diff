@@ -11,7 +11,7 @@ index e3cd145..05c4e65 100755
  	        If put on the clipboard, it will be cleared in $CLIP_TIME seconds.
 +	    $PROGRAM [show] [--print[=line-number],-p[line-number]] pass-name
 +	        Show existing password on stdout.
- 	    $PROGRAM grep search-string
+ 	    $PROGRAM grep [GREPOPTIONS] search-string
  	        Search for password files containing search-string when decrypted.
  	    $PROGRAM insert [--echo,-e | --multiline,-m] [--force,-f] pass-name
 @@ -345,12 +347,13 @@ cmd_init() {
