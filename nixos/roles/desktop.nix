@@ -72,7 +72,7 @@
               sessionCommands = ''
                 ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name ${pkgs.vanilla-dmz}/share/icons/Vanilla-DMZ/cursors/left_ptr 128 &disown
                 if test -e $HOME/.Xresources; then
-                  ${pkgs.xorg.xrdb}/bin/xrdb --merge $HOME/.Xresources &disown
+                  ${pkgs.xorg.xrdb}/bin/xrdb -merge $HOME/.Xresources &disown
                 fi
                 ${pkgs.myconfig.background}/bin/myRandomBackground &disown
                 ${pkgs.xss-lock}/bin/xss-lock ${pkgs.myconfig.background}/bin/myScreenLock &disown

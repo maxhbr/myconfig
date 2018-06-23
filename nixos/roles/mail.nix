@@ -17,6 +17,9 @@
       procmail
     ];
 
-    services.offlineimap.enable = true;
+    services.offlineimap = {
+      enable = true;
+      path = with pkgs; [ unstable.notmuch ]
+    };
   };
 }
