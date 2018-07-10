@@ -19,7 +19,7 @@
 
   nix.buildCores = 8;
 
-  hardware.bumblebee.enable = true;
+  hardware.bumblebee.enable = false; # not used ?
   hardware.opengl = {
     driSupport = true;
     driSupport32Bit = true;

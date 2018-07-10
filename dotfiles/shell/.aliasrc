@@ -458,6 +458,7 @@ dsaveAllRunning() {
 }
 
 dstop(){
+    docker update --restart=no $(docker ps -a -q)
     docker ps -q |xargs docker stop
 }
 
@@ -763,6 +764,9 @@ getCert() {
 #-------------------------------------------------------------------}}}
 #   misc
 #-------------------------------------------------------------------{{{
+
+alias wttr="curl -H 'Accept-Language: de' wttr.in"
+alias wetter="curl -H 'Accept-Language: de' wttr.in/Augsburg"
 
 # see:
 # - https://github.com/NixOS/nixpkgs/issues/3107

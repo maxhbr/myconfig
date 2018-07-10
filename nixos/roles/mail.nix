@@ -19,7 +19,7 @@
 
     services.offlineimap = {
       enable = true;
-      path = with pkgs; [ unstable.notmuch ]
+      path = with pkgs; [ unstable.notmuch ];
     };
   };
 }
