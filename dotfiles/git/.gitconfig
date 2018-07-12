@@ -96,6 +96,11 @@
                         if [ \"$#\" -ne 2 ]; then echo \"needs two arguments\"; exit 1; fi;\
                         git clone git@gitlab.com:${1}/${2}.git ${1}-${2}; \
                     }; f"
+    gbc         = "!f() { \
+                        if [ \"$#\" -ne 2 ]; then echo \"needs two arguments\"; exit 1; fi;\
+                        git clone https://bitbucket.org/${1}/${2} ${1}-${2}; \
+                    }; f"
+    remotes     = remote -v
     remotes     = remote -v
 
     # stolen from: https://stevenharman.net/git-clean-delete-already-merged-branches

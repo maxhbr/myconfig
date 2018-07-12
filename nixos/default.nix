@@ -7,9 +7,6 @@ let
   hostName = "${builtins.readFile /etc/nixos/hostname}";
   # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done | sudo tee /etc/nixos/hostid
   hostId = "${builtins.readFile /etc/nixos/hostid}";
-
-  mypkgs = import <nixpkgs> {};
-
 in
   import ./core {
     system.copySystemConfiguration = true;
