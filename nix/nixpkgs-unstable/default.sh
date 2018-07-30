@@ -1,6 +1,6 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-channel=nixos-unstable
+channel=nixos-unstable-small
 
 cd "$( dirname "${BASH_SOURCE[0]}" )"
 echo "** update $channel"
