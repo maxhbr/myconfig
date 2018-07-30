@@ -17,7 +17,7 @@
 #
 
 let
-  channel = "nixos-unstable";
+  channel = "nixpkgs-unstable";
   jsonFile = ./. + (channel + ".json");
   revFile = ./. + (channel + ".rev");
   fallbackUrl = "http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz";
