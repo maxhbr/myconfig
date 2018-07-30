@@ -63,7 +63,7 @@ handleChannel() {
 }
 
 prepare() {
-    handleChannel "nixpkgs" nixos-18.03
+    handleChannel "nixpkgs" nixos-18.03-small
     # handleChannel "nixpkgs-unstable" nixos-unstable
 
     $nixConfigDir/nixpkgs-unstable/default.sh
