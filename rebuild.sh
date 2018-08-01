@@ -36,7 +36,7 @@ wrapIntoTmux() {
                 exit 1
             }
             tmux -2 new-session -s $TMUX_NAME \
-                 "command echo \"... wrapped into tmux\"; $REBUILD_SH $@; $SHELL" \; \
+                 "command echo \"... wrapped into tmux\"; $REBUILD_SH $@; read -n 1 -s -r -p \"Press any key to continue\"" \; \
                  set-option status-left "rebuild.sh "\; \
                  set-option status-right "..."\; \
                  set set-titles-string "${TMUX_NAME}@tmux" \
