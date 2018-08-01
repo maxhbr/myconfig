@@ -171,7 +171,12 @@ showStatDifferences() {
     echo "...start: $startTime"
     echo "...end: $(date)"
 }
-trap showStatDifferences EXIT ERR INT TERM
+
+setupExitTrap() {
+    local msg=$1
+    local cmd="code=\$?; if [[ \"\$code\" -ne 0 ]]; then logERR \"at $msg\"; logERR \"error code is: \$code\"; fi; showStatDifferences; exit \$code"
+    trap "$cmd" EXIT ERR INT TERM
+}
 
 ###########################################################################
 # run scripts #############################################################
@@ -180,6 +185,9 @@ declare -a commands=("prepare" "deploy" "upgrade" "cleanup")
 for cmd in ${commands[@]}; do
     logH1 "handle:" "$cmd"
     for folder in ${folders[@]}; do
+        setupExitTrap "$cmd for $folder"
         MYCONFIG_ARGS=$@ runCmd $folder $cmd
     done
 done
+trap "" EXIT ERR INT TERM
+showStatDifferences
