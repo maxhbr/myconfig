@@ -37,6 +37,7 @@
           p7zip
           thrift93
           idea-ultimate
+          dia
         ];
       };
     }

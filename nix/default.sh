@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: MIT
 set -e
 
-. "$(dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )")/common.sh"
+. "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../common.sh"
 
 gate() {
     nix-env --version &> /dev/null
@@ -44,6 +44,8 @@ handleChannel() {
         echo "skip handling $channel (in $dir)"
     else
         addRemotesIfNecessary
+
+        logINFO "the channel $channel was last updated $(git log --format="%cr" remotes/NixOS-nixpkgs-channels/$channel -1)"
 
         cd $myconfigDir
         git fetch NixOS-nixpkgs-channels $channel

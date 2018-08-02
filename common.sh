@@ -46,17 +46,17 @@ logH3() {
 
 logINFO() {
     local text=$1
-    echo "$(tput setaf 3)$(tput bold)*** INFO: $(tput bold)$text$(tput sgr0)"
+    echo "$(tput setaf 6)$(tput bold)*** INFO: $text$(tput sgr0)"
 }
 
 logWARN() {
     local text=$1
-    echo "$(tput setaf 3)$(tput bold)*** WARN: $(tput bold)$text$(tput sgr0)"
+    echo "$(tput setaf 3)$(tput bold)*** WARN: $text$(tput sgr0)"
 }
 
 logERR() {
     local text=$1
-    echo "$(tput setaf 1)$(tput bold)*** ERR: $(tput bold)$text$(tput sgr0)"
+    echo "$(tput setaf 1)$(tput bold)*** ERR: $text$(tput sgr0)"
 }
 
 export -f have

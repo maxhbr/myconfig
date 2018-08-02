@@ -168,8 +168,8 @@ showStatDifferences() {
     diffCurrentSystemDeps /run/current-system/ $currentSystemDeps
     diffCurrentSystemDeps ~/.nix-profile $currentUserDeps
     diffDiskUsage $currentDiskUsage
-    echo "...start: $startTime"
-    echo "...end: $(date)"
+    echo "... start: $startTime"
+    echo "...   end: $(date)"
 }
 
 setupExitTrap() {
