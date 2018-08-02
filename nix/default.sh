@@ -66,9 +66,12 @@ handleChannel() {
 
 prepare() {
     handleChannel "nixpkgs" nixos-18.03-small
-    # handleChannel "nixpkgs-unstable" nixos-unstable
 
-    $nixConfigDir/nixpkgs-unstable/default.sh
+    if [[ -x $nixConfigDir/nixpkgs-unstable/default.sh ]]; then
+        $nixConfigDir/nixpkgs-unstable/default.sh
+    else
+        handleChannel "nixpkgs-unstable" nixos-unstable
+    fi
 
     nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixpkgs-overlays=$overlaysDir\" \"nixos-config=$nixosConfigDir\"]; }"
     nix_path_file="/etc/nixos/imports/nixPath.nix"
@@ -115,6 +118,7 @@ gate || {
 }
 if [ $# -eq 0 ]; then
     prepare
+    deploy
     upgrade
     cleanup
 else
