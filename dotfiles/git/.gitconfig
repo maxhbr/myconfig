@@ -30,8 +30,8 @@
     co          = checkout
     cob         = checkout -b
     f           = "!f() { git fetch ${1:-\"--all\"}; }; f"
-    pom         = pull --rebase origin master
-    pum         = pull --rebase upstream master
+	  fum         = "!f() { if [[ \"$(git remote)\" != *'upstream'* ]]; then git fetch origin master:master; else git fetch upstream master:master; fi; }; f"
+	  pum         = "!f() { if [[ \"$(git remote)\" != *'upstream'* ]]; then git pull --rebase origin master; else git pull --rebase upstream master; fi; }; f"
     cp          = cherry-pick
 
     d           = diff
