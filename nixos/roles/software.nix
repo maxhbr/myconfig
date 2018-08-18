@@ -32,7 +32,7 @@
           openvpn networkmanager_openvpn
           # rdesktop
           unstable.openjdk unstable.maven unstable.gradle
-          # libreoffice
+          libreoffice
           zoom-us unstable.rambox # franz hipchat
           p7zip
           thrift93
