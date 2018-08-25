@@ -15,8 +15,9 @@
   hardware.bluetooth.enable = true;
 
   services = {
-    # logind.extraConfig = "HandleLidSwitch=ignore\nHandlePowerKey=suspend";
-    logind.extraConfig = "HandleLidSwitch=suspend\nHandlePowerKey=suspend";
+    logind.lidSwitch = "suspend";
+    logind.lidSwitchDocked = "suspend";
+    logind.extraConfig = "HandlePowerKey=suspend";
     xserver.synaptics = {
       enable = true;
       twoFingerScroll = true;
