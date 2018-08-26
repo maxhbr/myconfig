@@ -11,7 +11,7 @@
 
   config = lib.mkIf config.myconfig.roles.mail.enable {
     environment.systemPackages = with pkgs; [
-      unstable.neomutt # mutt-with-sidebar
+      neomutt
       offlineimap msmtp gnupg abook urlview unstable.notmuch
       sxiv
       procmail
