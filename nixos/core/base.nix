@@ -45,7 +45,7 @@
       wget curl
       unstable.git unstable.git-lfs
       unzip
-      unstable.nox
+      # unstable.nox # no longer works for my setup
       tree
       stow
       rlwrap

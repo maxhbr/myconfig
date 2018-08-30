@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p curl gitMinimal
+#! nix-shell -i bash -p curl gitMinimal git-lfs
 # Copyright 2016-2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 set -e

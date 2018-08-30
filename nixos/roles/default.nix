@@ -44,6 +44,7 @@ in
     ./terminal.nix
     ./virtualization.nix
     ./vsftp.nix
+    ./work.nix
   ];
 
   options = {
