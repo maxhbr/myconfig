@@ -21,7 +21,7 @@
       idea-ultimate
       dia
     ];
-    services.nfs.server.enable = true;
-    services.nfs.server.exports = "";
+    # services.nfs.server.enable = true;
+    # services.nfs.server.exports = "";
   };
 }
