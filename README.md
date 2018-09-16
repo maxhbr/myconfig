@@ -47,9 +47,10 @@ Some notable folders are
     - `myborgbackup.sh`, my core backup script
     - `ec`, which calls emacs for me
 - `./nix`, containing the configuration for nix, overlays, custom packages and also the `nixpkgs`
-  - the `/nix/nixpkgs` are taken from the stable branch of nixos-latest via `git subtree`
+  - the nxpkgs at  `/nix/nixpkgs` are taken from the stable branch of nixos-latest via `git subtree`
     - it is by default updated updated, when `rebuild.sh` is ran
   - the `/nix/nixpkgs-unstable` contains a `default.nix` which pulls the package definitions on the fly
+  - the `/nix/overlays` folder contains my overlays and some custom packages in `/nix/overlays/pkgs` (added as overlays)
 - `./nixos`, containing the complete nixos configuration for multiple hosts (the hostname defines, which configuration is taken)
   - this imports
     - the folder `./xmonad` via the top level `./default.nix`
