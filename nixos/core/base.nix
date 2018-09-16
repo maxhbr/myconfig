@@ -29,13 +29,11 @@
     variables = {
       TMP = "/tmp";
       BROWSER = "${pkgs.chromium}/bin/chromium-browser";
-      ALTERNATE_EDITOR = "";
     };
     interactiveShellInit = ''
       alias upg='~/myconfig/rebuild.sh'
-      alias vim="${pkgs.unstable.emacs}/bin/emacs -t"
-      alias emacs="${pkgs.unstable.emacs}/bin/emacs"
-      alias ec="${pkgs.unstable.emacs}/bin/emacs"
+      alias vim="${pkgs.myconfig.scripts}/bin/ec -t"
+      alias emacs="${pkgs.myconfig.scripts}/bin/ec"
     '';
     # shellInit = ''
     # '';

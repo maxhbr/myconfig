@@ -10,6 +10,7 @@ stdenv.mkDerivation rec {
 
   buildPhase = ''
     sed -i -e '/backgroundCmd =/ s%= .*%= "${background}/bin/myRandomBackground";%' myautosetup.pl
+    sed -i -e 's%emacsclient%${pkgs.emacs}/bin/emacsclient%g' ec
     sed -i -e '/borgCmd=/ s%=.*%="${pkgs.borgbackup}/bin/borg";%' myborgbackup.sh
   '';
   installPhase = ''

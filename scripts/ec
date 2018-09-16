@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
+#
+#
+# partially stolen from
+# - http://mjwall.com/blog/2013/10/04/how-i-use-emacs/
+# - https://gist.github.com/alexmurray/337ac19014d769f4b219
+# - https://www.emacswiki.org/emacs/EmacsClient
+#
+#
+# call with
+#   $0 [-t|-k|--wait]
+set -e
+
+if [ "$1" = "-k" ]; then
+    server_ok=$(emacsclient -a "false" -e "(boundp 'server-process)")
+    if [ "t" == "$server_ok" ]; then
+        echo "Shutting down Emacs server"
+        emacsclient -e '(kill-emacs)'
+    else
+        echo "Emacs server not running"
+    fi
+elif [ "$1" = "-nw" ] || [ "$1" = "-t" ] || [ "$1" = "--tty" ] || [ -z "$DISPLAY" ]; then
+    if [[ "$#" -ne "0" ]]; then
+        exec emacsclient --alternate-editor="" --tty "$@"
+    else
+        exec emacsclient --alternate-editor="" --tty ./
+    fi
+else
+    if [ "$1" = "--wait" ]; then
+        shift
+        exec emacsclient --alternate-editor="" --create-frame "$@"
+    else
+        exec emacsclient --no-wait --alternate-editor="" --create-frame "$@"
+    fi
+fi
