@@ -2,6 +2,27 @@
 ;; This file is loaded by Spacemacs at startup.
 ;; It must be stored in your home directory.
 
+;; Automagical EmacsClient functionality
+;; stolen from: https://www.reddit.com/r/emacs/comments/4586eq/quick_emacs_snippet_to_automatically_use/
+;;
+;; Basically, if Emacs is already running, this shunts things over to
+;; the existing Emacs; otherwise, it readies itself to accept said
+;; shunting.
+;;
+;; This operates by detecting the existence of an Emacs server socket
+;; file.  If a socket is found ("/tmp/emacs$UID/server"), Emacs will
+;; spin up emacsclient and immediately exit itself.  Otherwise, Emacs
+;; will start a new server.
+(defun server-already-running-p () "Is Emacs already running?"
+       (file-exists-p (format "/tmp/emacs%s/server" (user-uid))))
+(defun server-shunt () "Shunts to emacsclient"
+       (let ((args (append '("emacsclient" "-a" "\"\"" "-c" "-n")
+                           (cdr command-line-args))))
+         (shell-command (substring (format "%S" args) 1 -1))
+         (kill-emacs)))
+(unless (featurep 'server)
+  (if (server-already-running-p) (server-shunt) (server-start)))
+
 (defun dotspacemacs/layers ()
   "Configuration Layers declaration.
 You should not put any user code in this function besides modifying the variable

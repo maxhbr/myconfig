@@ -1,4 +1,4 @@
-#written by maximilian-huber.de
+# written by maximilian-huber.de
 # ~/.aliasrc
 
 if [ $__HOME_ALIASRC_SOURCED ]; then return; fi
@@ -28,7 +28,7 @@ alias asdf="setxkbmap -layout de,de -variant neo,nodeadkeys -option grp:shifts_t
 
 alias vi="/var/run/current-system/sw/bin/vim"
 
-alias magit='ec -e "(magit-status \"$(pwd)\")"'
+alias magit='emacs -e "(magit-status \"$(pwd)\")"'
 alias pgp="gpg" #Typo
 
 alias tmux="tmux -2"
@@ -46,7 +46,6 @@ if [ -n "$BASH_VERSION" ]; then
   fi
 fi
 
-# makes "sudo vi" to "sudo vim"
 alias sudo="sudo "
 
 alias visudo='sudo EDITOR=vim visudo'
