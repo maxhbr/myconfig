@@ -44,6 +44,6 @@ stop() {
 if [ $# -eq 0 ]; then
     start
 else
-    ([[ ! -n "$(type -t $1)" ]] || [ "$(type -t $1)" != "function" ] ) && exit 0
+    ([[ ! -n "$(type -t $1)" ]] || [ "$(type -t $1)" != "function" ] ) && exit 1
     $@
 fi

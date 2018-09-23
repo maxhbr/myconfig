@@ -114,7 +114,7 @@
       enable = true;
       install = true;
       defaultEditor = true;
-      package = pkgs.unstable.emacs;
+      package = pkgs.emacs;
       # package = import /home/mhuber/.emacs.d { pkgs = pkgs; };
     };
   };

@@ -1,0 +1,4 @@
+.git
+nix/nixpkgs
+nixos/static/extrahosts
+_logs
