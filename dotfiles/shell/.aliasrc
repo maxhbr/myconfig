@@ -648,7 +648,7 @@ have nix-env && {
     sudo nix-collect-garbage -d
   }
 
-  alias steam="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam --command \"optirun steam\""
+  # alias steam="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam --command \"optirun steam\""
 }
 
 have pacman && {

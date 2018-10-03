@@ -49,7 +49,7 @@
       config = lib.mkIf config.myconfig.roles.imagework.enable {
         environment.systemPackages = with pkgs; [
           gimp-with-plugins
-          rawtherapee
+          rawtherapee darktable
           unstable.geeqie
           # krita
           # inkscape

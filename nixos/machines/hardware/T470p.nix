@@ -20,10 +20,6 @@
   nix.buildCores = 8;
 
   hardware.bumblebee.enable = false; # not used ?
-  hardware.opengl = {
-    driSupport = true;
-    driSupport32Bit = true;
-  };
 
   boot.extraModprobeConfig = ''
     options snd slots=snd-hda-intel

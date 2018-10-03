@@ -11,6 +11,7 @@
 
   config = lib.mkIf config.myconfig.roles.work.enable {
     environment.systemPackages = with pkgs; [
+      thunderbird
       openvpn networkmanager_openvpn
       # rdesktop
       unstable.openjdk unstable.maven unstable.gradle

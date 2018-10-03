@@ -16,6 +16,7 @@
     "mail"
     "work" "virtualization" "dev"
     "imagework"
+    "games"
   ];
 
   boot.initrd.supportedFilesystems = [ "luks" ];

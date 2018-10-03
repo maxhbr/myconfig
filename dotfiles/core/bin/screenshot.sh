@@ -10,6 +10,7 @@ output="$output_dir/$(date +%Y-%m-%d_%H:%M:%S).png"
 mkdir -p "$output_dir"
 mkdir -p "$old_dir"
 
-set -x
+echo "## clean up old screenshots ..."
 find "$output_dir" -maxdepth 1 -mtime +10 -type f -print -exec mv {} "$old_dir" \;
+echo "## take screenshot $output ..."
 import "$output"
