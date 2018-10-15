@@ -60,7 +60,7 @@
       unstable.ag
       file
       # admin:
-      unstable.htop unstable.iftop unstable.iptraf-ng unstable.iotop unstable.bmon
+      unstable.htop unstable.iftop unstable.iptraf-ng unstable.iotop unstable.bmon s-tui
       unstable.mtr unstable.bind bridge-utils
       unstable.pwgen # unstable.mkpasswd
       usbutils

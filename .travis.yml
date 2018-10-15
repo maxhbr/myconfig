@@ -7,7 +7,7 @@ services:
 
 env:
   global:
-    - NIX_PATH="nixpkgs=channel:nixos-18.03:nixpkgs-overlays=$TRAVIS_BUILD_DIR/nix/overlays"
+    - NIX_PATH="nixpkgs=channel:nixos-18.09:nixpkgs-overlays=$TRAVIS_BUILD_DIR/nix/overlays"
 
 matrix:
   include:
