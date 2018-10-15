@@ -32,7 +32,9 @@
   recently</link> and the
   <link
     xlink:href="https://github.com/NixOS/nixpkgs/pulls?q=is%3Apr+is%3Aopen+sort%3Aupdated-asc">least
-  recently</link> updated pull-requests.
+  recently</link> updated pull-requests. We highly encourage looking at
+  <link xlink:href="https://github.com/NixOS/nixpkgs/pulls?q=is%3Apr+is%3Aopen+review%3Anone+status%3Asuccess+-label%3A%222.status%3A+work-in-progress%22+no%3Aproject+no%3Aassignee+no%3Amilestone">
+  this list of ready to merge, unreviewed pull requests</link>.
  </para>
  <para>
   When reviewing a pull request, please always be nice and polite.
@@ -54,7 +56,7 @@
   meant as examples. Their usage is optional and the reviewer is free to adapt
   them to their liking.
  </para>
- <section>
+ <section xml:id="reviewing-contributions-package-updates">
   <title>Package updates</title>
 
   <para>
@@ -103,9 +105,9 @@
     <itemizedlist>
      <listitem>
       <para>
-       mention-bot usually notifies GitHub users based on the submitted
-       changes, but it can happen that it misses some of the package
-       maintainers.
+       <link xlink:href="https://help.github.com/articles/about-codeowners/">CODEOWNERS</link>
+       will make GitHub notify users based on the submitted changes, but it can
+       happen that it misses some of the package maintainers.
       </para>
      </listitem>
     </itemizedlist>
@@ -177,7 +179,7 @@ $ git rebase --onto nixos-unstable BASEBRANCH FETCH_HEAD <co
           <varname>BASEBRANCH</varname> the base branch of the pull-request.
          </para>
         </callout>
-        <callout arearefs='reviewing-rebase-3'>
+        <callout arearefs='reviewing-rebase-4'>
          <para>
           Rebasing the pull-request changes to the nixos-unstable branch.
          </para>
@@ -206,7 +208,7 @@ $ nix-shell -p nox --run "nox-review -k pr PRNUMBER"
    </listitem>
   </itemizedlist>
 
-  <example>
+  <example xml:id="reviewing-contributions-sample-package-update">
    <title>Sample template for a package update review</title>
 <screen>
 ##### Reviewed points
@@ -224,7 +226,7 @@ $ nix-shell -p nox --run "nox-review -k pr PRNUMBER"
 </screen>
   </example>
  </section>
- <section>
+ <section xml:id="reviewing-contributions-new-packages">
   <title>New packages</title>
 
   <para>
@@ -318,7 +320,7 @@ $ nix-shell -p nox --run "nox-review -k pr PRNUMBER"
    </listitem>
   </itemizedlist>
 
-  <example>
+  <example xml:id="reviewing-contributions-sample-new-package">
    <title>Sample template for a new package review</title>
 <screen>
 ##### Reviewed points
@@ -344,7 +346,7 @@ $ nix-shell -p nox --run "nox-review -k pr PRNUMBER"
 </screen>
   </example>
  </section>
- <section>
+ <section xml:id="reviewing-contributions-module-updates">
   <title>Module updates</title>
 
   <para>
@@ -377,8 +379,9 @@ $ nix-shell -p nox --run "nox-review -k pr PRNUMBER"
     <itemizedlist>
      <listitem>
       <para>
-       Mention-bot notify GitHub users based on the submitted changes, but it
-       can happen that it miss some of the package maintainers.
+       <link xlink:href="https://help.github.com/articles/about-codeowners/">CODEOWNERS</link>
+       will make GitHub notify users based on the submitted changes, but it can
+       happen that it misses some of the package maintainers.
       </para>
      </listitem>
     </itemizedlist>
@@ -440,7 +443,7 @@ $ nix-shell -p nox --run "nox-review -k pr PRNUMBER"
    </listitem>
   </itemizedlist>
 
-  <example>
+  <example xml:id="reviewing-contributions-sample-module-update">
    <title>Sample template for a module update review</title>
 <screen>
 ##### Reviewed points
@@ -461,7 +464,7 @@ $ nix-shell -p nox --run "nox-review -k pr PRNUMBER"
 </screen>
   </example>
  </section>
- <section>
+ <section xml:id="reviewing-contributions-new-modules">
   <title>New modules</title>
 
   <para>
@@ -539,7 +542,7 @@ $ nix-shell -p nox --run "nox-review -k pr PRNUMBER"
    </listitem>
   </itemizedlist>
 
-  <example>
+  <example xml:id="reviewing-contributions-sample-new-module">
    <title>Sample template for a new module review</title>
 <screen>
 ##### Reviewed points
@@ -561,7 +564,7 @@ $ nix-shell -p nox --run "nox-review -k pr PRNUMBER"
 </screen>
   </example>
  </section>
- <section>
+ <section xml:id="reviewing-contributions-other-submissions">
   <title>Other submissions</title>
 
   <para>
@@ -582,7 +585,7 @@ $ nix-shell -p nox --run "nox-review -k pr PRNUMBER"
    pull requests fitting this category.
   </para>
  </section>
- <section>
+ <section xml:id="reviewing-contributions--merging-pull-requests">
   <title>Merging pull-requests</title>
 
   <para>
@@ -605,9 +608,11 @@ policy.
 
   <para>
    In a case a contributor leaves definitively the Nix community, he should
-   create an issue or notify the mailing list with references of packages and
-   modules he maintains so the maintainership can be taken over by other
-   contributors.
+   create an issue or post on
+   <link
+   xlink:href="https://discourse.nixos.org">Discourse</link> with
+   references of packages and modules he maintains so the maintainership can be
+   taken over by other contributors.
   </para>
  </section>
 </chapter>

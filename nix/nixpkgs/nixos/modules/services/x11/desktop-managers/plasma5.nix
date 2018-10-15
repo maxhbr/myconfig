@@ -7,7 +7,7 @@ let
   xcfg = config.services.xserver;
   cfg = xcfg.desktopManager.plasma5;
 
-  inherit (pkgs) kdeApplications plasma5 libsForQt5 qt5 xorg;
+  inherit (pkgs) kdeApplications plasma5 libsForQt5 qt5;
 
 in
 
@@ -81,6 +81,7 @@ in
           kconfig
           kconfigwidgets
           kcoreaddons
+          kdoctools
           kdbusaddons
           kdeclarative
           kded
@@ -174,7 +175,10 @@ in
         ++ lib.optional config.services.colord.enable colord-kde
         ++ lib.optionals config.services.samba.enable [ kdenetwork-filesharing pkgs.samba ];
 
-      environment.pathsToLink = [ "/share" ];
+      environment.pathsToLink = [ 
+        # FIXME: modules should link subdirs of `/share` rather than relying on this
+        "/share" 
+      ];
 
       environment.etc = singleton {
         source = xcfg.xkbDir;
@@ -221,6 +225,8 @@ in
       security.pam.services.sddm.enableKwallet = true;
       security.pam.services.slim.enableKwallet = true;
 
+      # Update the start menu for each user that is currently logged in
+      system.userActivationScripts.plasmaSetup = "${pkgs.libsForQt5.kservice}/bin/kbuildsycoca5";
     })
   ];
 

@@ -1,12 +1,12 @@
-{ stdenv, fetchurl, pkgconfig, file, gnome3, itstool, libxml2, intltool }:
+{ stdenv, fetchurl, pkgconfig, gnome3, itstool, libxml2, intltool }:
 
 stdenv.mkDerivation rec {
   name = "gnome-user-docs-${version}";
-  version = "3.26.2.1";
+  version = "3.28.2";
 
   src = fetchurl {
     url = "mirror://gnome/sources/gnome-user-docs/${gnome3.versionBranch version}/${name}.tar.xz";
-    sha256 = "93136f5baffd160c14e1b39f0ac60b9768975edac2da2b30c945faef534af8f5";
+    sha256 = "0gg1rgg15lbgjdwpwlqazfjv8sm524ys024qsd4n09jlgx21jscd";
   };
 
   passthru = {

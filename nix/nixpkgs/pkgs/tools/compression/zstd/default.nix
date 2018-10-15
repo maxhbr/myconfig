@@ -1,20 +1,28 @@
 { stdenv, fetchFromGitHub, gnugrep
+, fixDarwinDylibNames
+, file
 , legacySupport ? false }:
 
 stdenv.mkDerivation rec {
   name = "zstd-${version}";
-  version = "1.3.3";
+  version = "1.3.5";
 
   src = fetchFromGitHub {
-    sha256 = "15h9i9ygry0znlmvll5r21lzwgyqzynaw9q2wbj4bcn7zjy4c1pn";
+    sha256 = "0fpv8k16s14g0r552mhbh0mkr716cqy41d2znyrvks6qfphkgir4";
     rev = "v${version}";
     repo = "zstd";
     owner = "facebook";
   };
 
+  buildInputs = stdenv.lib.optional stdenv.isDarwin fixDarwinDylibNames;
+
   makeFlags = [
     "ZSTD_LEGACY_SUPPORT=${if legacySupport then "1" else "0"}"
   ];
+
+  checkInputs = [ file ];
+  doCheck = false; # fails with "zstd: --list does not support reading from standard input"
+                   # probably a bug
 
   installFlags = [
     "PREFIX=$(out)"
@@ -40,7 +48,7 @@ stdenv.mkDerivation rec {
       speed is preserved and remain roughly the same at all settings, a
       property shared by most LZ compression algorithms, such as zlib.
     '';
-    homepage = http://www.zstd.net/;
+    homepage = https://facebook.github.io/zstd/;
     # The licence of the CLI programme is GPLv2+, that of the library BSD-2.
     license = with licenses; [ gpl2Plus bsd2 ];
 

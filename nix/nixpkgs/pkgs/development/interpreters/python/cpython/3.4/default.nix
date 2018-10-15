@@ -1,4 +1,4 @@
-{ stdenv, fetchurl
+{ stdenv, fetchurl, fetchpatch
 , bzip2
 , expat
 , libffi
@@ -15,7 +15,7 @@
 , CF, configd
 , python-setup-hook
 # For the Python package set
-, pkgs, packageOverrides ? (self: super: {})
+, packageOverrides ? (self: super: {})
 }:
 
 assert x11Support -> tcl != null
@@ -29,7 +29,6 @@ let
   majorVersion = "3.4";
   minorVersion = "9";
   minorVersionSuffix = "";
-  pythonVersion = majorVersion;
   version = "${majorVersion}.${minorVersion}${minorVersionSuffix}";
   libPrefix = "python${majorVersion}";
   sitePackages = "lib/${libPrefix}/site-packages";
@@ -38,6 +37,8 @@ let
     zlib bzip2 expat lzma libffi gdbm sqlite readline ncurses openssl ]
     ++ optionals x11Support [ tcl tk libX11 xproto ]
     ++ optionals stdenv.isDarwin [ CF configd ];
+
+  hasDistutilsCxxPatch = !(stdenv.cc.isGNU or false);
 
 in stdenv.mkDerivation {
   name = "python3-${version}";
@@ -69,6 +70,16 @@ in stdenv.mkDerivation {
     ./ld_library_path.patch
   ] ++ optionals (x11Support && stdenv.isDarwin) [
     ./use-correct-tcl-tk-on-darwin.patch
+  ] ++ optionals hasDistutilsCxxPatch [
+    # Fix for http://bugs.python.org/issue1222585
+    # Upstream distutils is calling C compiler to compile C++ code, which
+    # only works for GCC and Apple Clang. This makes distutils to call C++
+    # compiler when needed.
+    (fetchpatch {
+      url = "https://bugs.python.org/file47046/python-3.x-distutils-C++.patch";
+      sha256 = "0dgdn9k2kmw4wh90vdnjcrnn97ylxgx7mbn9l87fwz6j501jqvk8";
+      extraPrefix = "";
+    })
   ];
 
   postPatch = ''
@@ -96,7 +107,10 @@ in stdenv.mkDerivation {
     "--without-ensurepip"
     "--with-system-expat"
     "--with-system-ffi"
-  ];
+  ]
+    # Never even try to use lchmod on linux,
+    # don't rely on detecting glibc-isms.
+  ++ optional stdenv.hostPlatform.isLinux "ac_cv_func_lchmod=no";
 
   preConfigure = ''
     for i in /usr /sw /opt /pkg; do	# improve purity
@@ -161,9 +175,12 @@ in stdenv.mkDerivation {
   '';
 
   passthru = let
-    pythonPackages = callPackage ../../../../../top-level/python-packages.nix {python=self; overrides=packageOverrides;};
+    pythonPackages = callPackage ../../../../../top-level/python-packages.nix {
+      python = self;
+      overrides = packageOverrides;
+    };
   in rec {
-    inherit libPrefix sitePackages x11Support;
+    inherit libPrefix sitePackages x11Support hasDistutilsCxxPatch;
     executable = "${libPrefix}m";
     buildEnv = callPackage ../../wrapper.nix { python = self; inherit (pythonPackages) requiredPythonModules; };
     withPackages = import ../../with-packages.nix { inherit buildEnv pythonPackages;};
@@ -175,6 +192,8 @@ in stdenv.mkDerivation {
   };
 
   enableParallelBuilding = true;
+
+  doCheck = false; # expensive, and fails
 
   meta = {
     homepage = http://python.org;

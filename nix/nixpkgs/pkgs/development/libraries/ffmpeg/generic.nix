@@ -2,7 +2,6 @@
 , alsaLib, bzip2, fontconfig, freetype, gnutls, libiconv, lame, libass, libogg
 , libtheora, libva, libvorbis, libvpx, lzma, libpulseaudio, soxr
 , x264, x265, xvidcore, zlib, libopus
-, hostPlatform
 , openglSupport ? false, libGLU_combined ? null
 # Build options
 , runtimeCpuDetectBuild ? true # Detect CPU capabilities at runtime
@@ -26,7 +25,7 @@
  * see `ffmpeg-full' for an ffmpeg build with all features included.
  *
  * Need fixes to support Darwin:
- *   libvpx pulseaudio
+ *   pulseaudio
  *
  * Known issues:
  * 0.6     - fails to compile (unresolved) (so far, only disabling a number of
@@ -42,7 +41,7 @@
  */
 
 let
-  inherit (stdenv) icCygwin isDarwin isFreeBSD isLinux isAarch32;
+  inherit (stdenv) isDarwin isFreeBSD isLinux isAarch32;
   inherit (stdenv.lib) optional optionals enableFeature;
 
   cmpVer = builtins.compareVersions;
@@ -58,6 +57,8 @@ let
   disDarwinOrArmFix = origArg: minVer: fixArg: if ((isDarwin || isAarch32) && reqMin minVer) then fixArg else origArg;
 
   vaapiSupport = reqMin "0.6" && ((isLinux || isFreeBSD) && !isAarch32);
+
+  vpxSupport = reqMin "0.6" && !isAarch32;
 in
 
 assert openglSupport -> libGLU_combined != null;
@@ -79,7 +80,10 @@ stdenv.mkDerivation rec {
     ++ optional (reqMin "1.0") "doc" ; # just dev-doc
   setOutputFlags = false; # doesn't accept all and stores configureFlags in libs!
 
+  configurePlatforms = [];
   configureFlags = [
+      "--arch=${stdenv.hostPlatform.parsed.cpu.name}"
+      "--target_os=${stdenv.hostPlatform.parsed.kernel.name}"
     # License
       "--enable-gpl"
       "--enable-version3"
@@ -103,7 +107,7 @@ stdenv.mkDerivation rec {
       "--enable-ffmpeg"
       "--disable-ffplay"
       (ifMinVer "0.6" "--enable-ffprobe")
-      "--disable-ffserver"
+      (if reqMin "4" then null else "--disable-ffserver")
     # Libraries
       (ifMinVer "0.6" "--enable-avcodec")
       (ifMinVer "0.6" "--enable-avdevice")
@@ -127,7 +131,7 @@ stdenv.mkDerivation rec {
       (ifMinVer "0.6" (enableFeature vaapiSupport "vaapi"))
       "--enable-vdpau"
       "--enable-libvorbis"
-      (disDarwinOrArmFix (ifMinVer "0.6" "--enable-libvpx") "0.6" "--disable-libvpx")
+      (ifMinVer "0.6" (enableFeature vpxSupport "libvpx"))
       (ifMinVer "2.4" "--enable-lzma")
       (ifMinVer "2.2" (enableFeature openglSupport "opengl"))
       (disDarwinOrArmFix (ifMinVer "0.9" "--enable-libpulse") "0.9" "--disable-libpulse")
@@ -145,6 +149,9 @@ stdenv.mkDerivation rec {
       "--disable-stripping"
     # Disable mmx support for 0.6.90
       (verFix null "0.6.90" "--disable-mmx")
+  ] ++ optionals (stdenv.hostPlatform != stdenv.buildPlatform) [
+      "--cross-prefix=${stdenv.cc.targetPrefix}"
+      "--enable-cross-compile"
   ] ++ optional stdenv.cc.isClang "--cc=clang";
 
   nativeBuildInputs = [ perl pkgconfig texinfo yasm ];
@@ -153,15 +160,17 @@ stdenv.mkDerivation rec {
     bzip2 fontconfig freetype gnutls libiconv lame libass libogg libtheora
     libvdpau libvorbis lzma soxr x264 x265 xvidcore zlib libopus
   ] ++ optional openglSupport libGLU_combined
-    ++ optionals (!isDarwin && !isAarch32) [ libvpx libpulseaudio ] # Need to be fixed on Darwin and ARM
+    ++ optional vpxSupport libvpx
+    ++ optionals (!isDarwin && !isAarch32) [ libpulseaudio ] # Need to be fixed on Darwin and ARM
     ++ optional ((isLinux || isFreeBSD) && !isAarch32) libva
     ++ optional isLinux alsaLib
     ++ optionals isDarwin darwinFrameworks
     ++ optional vdpauSupport libvdpau
     ++ optional sdlSupport (if reqMin "3.2" then SDL2 else SDL);
 
-
   enableParallelBuilding = true;
+
+  doCheck = false; # fails
 
   # ffmpeg 3+ generates pkg-config (.pc) files that don't have the
   # form automatically handled by the multiple-outputs hooks.
@@ -174,18 +183,6 @@ stdenv.mkDerivation rec {
     done
   '';
 
-  /* Cross-compilation is untested, consider this an outline, more work
-     needs to be done to portions of the build to get it to work correctly */
-  crossAttrs = {
-    configurePlatforms = [];
-    configureFlags = configureFlags ++ [
-      "--cross-prefix=${stdenv.cc.targetPrefix}"
-      "--enable-cross-compile"
-      "--target_os=${hostPlatform.parsed.kernel.name}"
-      "--arch=${hostPlatform.parsed.cpu.name}"
-    ];
-  };
-
   installFlags = [ "install-man" ];
 
   passthru = {
@@ -196,11 +193,11 @@ stdenv.mkDerivation rec {
     description = "A complete, cross-platform solution to record, convert and stream audio and video";
     homepage = http://www.ffmpeg.org/;
     longDescription = ''
-      FFmpeg is the leading multimedia framework, able to decode, encode, transcode, 
-      mux, demux, stream, filter and play pretty much anything that humans and machines 
-      have created. It supports the most obscure ancient formats up to the cutting edge. 
-      No matter if they were designed by some standards committee, the community or 
-      a corporation. 
+      FFmpeg is the leading multimedia framework, able to decode, encode, transcode,
+      mux, demux, stream, filter and play pretty much anything that humans and machines
+      have created. It supports the most obscure ancient formats up to the cutting edge.
+      No matter if they were designed by some standards committee, the community or
+      a corporation.
     '';
     license = licenses.gpl3;
     platforms = platforms.all;

@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, jre, makeWrapper, bash,
+{ stdenv, fetchurl, jre, makeWrapper, bash, coreutils, gnugrep, gnused,
   majorVersion ? "1.0" }:
 
 let
@@ -23,6 +23,11 @@ let
       scalaVersion = "2.12";
       sha256 = "1fxn6i0kanwksj1dhcnlni0cn542k50wdg8jkwhfmf4qq8yfl90m";
     };
+    "1.1" = {
+      kafkaVersion = "1.1.0";
+      scalaVersion = "2.12";
+      sha256 = "04idhsr6pbkb0xkx38faxv2pn5nkjcflz6wl4s3ka82h1fbq74j9";
+    };
   };
 in
 
@@ -37,7 +42,7 @@ stdenv.mkDerivation rec {
     inherit sha256;
   };
 
-  buildInputs = [ jre makeWrapper bash ];
+  buildInputs = [ jre makeWrapper bash gnugrep gnused coreutils ];
 
   installPhase = ''
     mkdir -p $out
@@ -45,6 +50,7 @@ stdenv.mkDerivation rec {
 
     mkdir -p $out/bin
     cp bin/kafka* $out/bin
+    cp bin/connect* $out/bin
 
     # allow us the specify logging directory using env
     substituteInPlace $out/bin/kafka-run-class.sh \
@@ -54,7 +60,7 @@ stdenv.mkDerivation rec {
       wrapProgram $p \
         --set JAVA_HOME "${jre}" \
         --set KAFKA_LOG_DIR "/tmp/apache-kafka-logs" \
-        --prefix PATH : "${bash}/bin"
+        --prefix PATH : "${bash}/bin:${coreutils}/bin:${gnugrep}/bin:${gnused}/bin"
     done
     chmod +x $out/bin\/*
   '';

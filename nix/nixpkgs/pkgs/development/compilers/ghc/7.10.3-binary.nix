@@ -65,6 +65,7 @@ stdenv.mkDerivation rec {
     # Some scripts used during the build need to have their shebangs patched
     ''
       patchShebangs ghc-${version}/utils/
+      patchShebangs ghc-${version}/configure
     '' +
 
     # Strip is harmful, see also below. It's important that this happens
@@ -152,7 +153,10 @@ stdenv.mkDerivation rec {
     [ $(./main) == "yes" ]
   '';
 
-  passthru = { targetPrefix = ""; };
+  passthru = {
+    targetPrefix = "";
+    enableShared = true;
+  };
 
   meta.license = stdenv.lib.licenses.bsd3;
   meta.platforms = ["x86_64-linux" "i686-linux" "x86_64-darwin" "armv7l-linux"];

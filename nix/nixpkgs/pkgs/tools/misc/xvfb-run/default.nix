@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, makeWrapper, xkbcomp, xorgserver, getopt
+{ stdenv, fetchurl, makeWrapper, xorgserver, getopt
 , xauth, utillinux, which, fontsConf, gawk, coreutils }:
 let
   xvfb_run = fetchurl {
@@ -14,6 +14,7 @@ stdenv.mkDerivation {
     cp ${xvfb_run} $out/bin/xvfb-run
 
     chmod a+x $out/bin/xvfb-run
+    patchShebangs $out/bin/xvfb-run
     wrapProgram $out/bin/xvfb-run \
       --set FONTCONFIG_FILE "${fontsConf}" \
       --prefix PATH : ${stdenv.lib.makeBinPath [ getopt xorgserver xauth which utillinux gawk coreutils ]}

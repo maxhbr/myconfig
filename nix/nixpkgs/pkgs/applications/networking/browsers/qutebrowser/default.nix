@@ -1,4 +1,4 @@
-{ stdenv, lib, fetchurl, fetchzip, fetchpatch, python3Packages
+{ stdenv, lib, fetchurl, fetchzip, python3Packages
 , makeWrapper, wrapGAppsHook, qtbase, glib-networking
 , asciidoc, docbook_xml_dtd_45, docbook_xsl, libxml2
 , libxslt, gst_all_1 ? null
@@ -12,11 +12,11 @@ assert withMediaPlayback -> gst_all_1 != null;
 let
   pdfjs = stdenv.mkDerivation rec {
     name = "pdfjs-${version}";
-    version = "1.7.225";
+    version = "1.10.100";
 
     src = fetchzip {
-      url = "https://github.com/mozilla/pdf.js/releases/download/v${version}/${name}-dist.zip";
-      sha256 = "0bsmbz7bbh0zpd70dlhss4fjdw7zq356091wld9s7kxnb2rixqd8";
+      url = "https://github.com/mozilla/pdf.js/releases/download/${version}/${name}-dist.zip";
+      sha256 = "04df4cf6i6chnggfjn6m1z9vb89f01a0l9fj5rk21yr9iirq9rkq";
       stripRoot = false;
     };
 
@@ -27,27 +27,13 @@ let
   };
 
 in python3Packages.buildPythonApplication rec {
-  name = "qutebrowser-${version}${versionPostfix}";
-  namePrefix = "";
-  version = "1.3.3";
-  versionPostfix = "";
+  pname = "qutebrowser";
+  version = "1.4.1";
 
   # the release tarballs are different from the git checkout!
   src = fetchurl {
-    url = "https://github.com/qutebrowser/qutebrowser/releases/download/v${version}/${name}.tar.gz";
-    sha256 = "01lrbkddm4wagx4hq6cz5qwvb8q8nlz0xa35k317gvr3pmnvgjk8";
-  };
-
-  patches = fetchpatch {
-    name = "CVE-2018-10895.patch";
-    url = https://github.com/qutebrowser/qutebrowser/commit/c2ff32d92ba9bf40ff53498ee04a4124d4993c85.patch;
-    excludes = [
-      "tests/end2end/data/misc/qutescheme_csrf.html"
-      "tests/end2end/features/qutescheme.feature"
-      "tests/end2end/test_invocations.py"
-      "tests/unit/browser/webkit/network/test_filescheme.py"
-    ];
-    sha256 = "0mf0b7659xfvg1v45v6kv8cb1cjzb9y30rvikn76bi3w10j9dysv";
+    url = "https://github.com/qutebrowser/qutebrowser/releases/download/v${version}/${pname}-${version}.tar.gz";
+    sha256 = "0n2z92vb91gpfchdm9wsm712r9grbvxwdp4npl5c1nbq247dxwm3";
   };
 
   # Needs tox
@@ -72,7 +58,7 @@ in python3Packages.buildPythonApplication rec {
   ];
 
   postPatch = ''
-    sed -i "s,/usr/share/qutebrowser,$out/share/qutebrowser,g" qutebrowser/utils/standarddir.py
+    sed -i "s,/usr/share/,$out/share/,g" qutebrowser/utils/standarddir.py
   '' + lib.optionalString withPdfReader ''
     sed -i "s,/usr/share/pdf.js,${pdfjs},g" qutebrowser/browser/pdfjs.py
   '';

@@ -10,7 +10,7 @@
   abstract. Take, for instance, this Apache HTTP Server configuration:
 <programlisting>
 {
-  services.httpd.virtualHosts =
+  <xref linkend="opt-services.httpd.virtualHosts"/> =
     [ { hostName = "example.org";
         documentRoot = "/webroot";
         adminAddr = "alice@example.org";
@@ -40,7 +40,7 @@ let
     };
 in
 {
-  services.httpd.virtualHosts =
+  <xref linkend="opt-services.httpd.virtualHosts"/> =
     [ exampleOrgCommon
       (exampleOrgCommon // {
         enableSSL = true;
@@ -62,7 +62,7 @@ in
   Thus, you also could have written:
 <programlisting>
 {
-  services.httpd.virtualHosts =
+  <xref linkend="opt-services.httpd.virtualHosts"/> =
     let exampleOrgCommon = <replaceable>...</replaceable>; in
     [ exampleOrgCommon
       (exampleOrgCommon // { <replaceable>...</replaceable> })
@@ -81,7 +81,7 @@ in
   as follows:
 <programlisting>
 {
-  services.httpd.virtualHosts =
+  <xref linkend="opt-services.httpd.virtualHosts"/> =
     let
       makeVirtualHost = name:
         { hostName = name;
@@ -107,7 +107,7 @@ in
   which applies another function to every element in a list:
 <programlisting>
 {
-  services.httpd.virtualHosts =
+  <xref linkend="opt-services.httpd.virtualHosts"/> =
     let
       makeVirtualHost = <replaceable>...</replaceable>;
     in map makeVirtualHost
@@ -125,7 +125,7 @@ in
   <emphasis>set</emphasis> as its argument, like this:
 <programlisting>
 {
-  services.httpd.virtualHosts =
+  <xref linkend="opt-services.httpd.virtualHosts"/> =
     let
       makeVirtualHost = { name, root }:
         { hostName = name;

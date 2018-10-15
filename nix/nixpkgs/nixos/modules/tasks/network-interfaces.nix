@@ -1,4 +1,4 @@
-{ config, options, lib, pkgs, utils, stdenv, ... }:
+{ config, options, lib, pkgs, utils, ... }:
 
 with lib;
 with utils;
@@ -26,7 +26,7 @@ let
     executable = true;
     destination = "/bin/bridge-stp";
     text = ''
-      #!${pkgs.stdenv.shell} -e
+      #!${pkgs.runtimeShell} -e
       export PATH="${pkgs.mstpd}/bin"
 
       BRIDGES=(${concatStringsSep " " (attrNames rstpBridges)})
@@ -45,51 +45,6 @@ let
       exit 1
     '';
   });
-
-  # Collect all interfaces that are defined for a device
-  # as device:interface key:value pairs.
-  wlanDeviceInterfaces =
-    let
-      allDevices = unique (mapAttrsToList (_: v: v.device) cfg.wlanInterfaces);
-      interfacesOfDevice = d: filterAttrs (_: v: v.device == d) cfg.wlanInterfaces;
-    in
-      genAttrs allDevices (d: interfacesOfDevice d);
-
-  # Convert device:interface key:value pairs into a list, and if it exists,
-  # place the interface which is named after the device at the beginning.
-  wlanListDeviceFirst = device: interfaces:
-    if hasAttr device interfaces
-    then mapAttrsToList (n: v: v//{_iName=n;}) (filterAttrs (n: _: n==device) interfaces) ++ mapAttrsToList (n: v: v//{_iName=n;}) (filterAttrs (n: _: n!=device) interfaces)
-    else mapAttrsToList (n: v: v // {_iName = n;}) interfaces;
-
-  # udev script that configures a physical wlan device and adds virtual interfaces
-  wlanDeviceUdevScript = device: interfaceList: pkgs.writeScript "wlan-${device}-udev-script" ''
-    #!${pkgs.stdenv.shell}
-
-    # Change the wireless phy device to a predictable name.
-    if [ -e "/sys/class/net/${device}/phy80211/name" ]; then
-      ${pkgs.iw}/bin/iw phy `${pkgs.coreutils}/bin/cat /sys/class/net/${device}/phy80211/name` set name ${device} || true
-    fi
-
-    # Crate new, virtual interfaces and configure them at the same time
-    ${flip concatMapStrings (drop 1 interfaceList) (i: ''
-    ${pkgs.iw}/bin/iw dev ${device} interface add ${i._iName} type ${i.type} \
-      ${optionalString (i.type == "mesh" && i.meshID != null) "mesh_id ${i.meshID}"} \
-      ${optionalString (i.type == "monitor" && i.flags != null) "flags ${i.flags}"} \
-      ${optionalString (i.type == "managed" && i.fourAddr != null) "4addr ${if i.fourAddr then "on" else "off"}"} \
-      ${optionalString (i.mac != null) "addr ${i.mac}"}
-    '')}
-
-    # Reconfigure and rename the default interface that already exists
-    ${flip concatMapStrings (take 1 interfaceList) (i: ''
-      ${pkgs.iw}/bin/iw dev ${device} set type ${i.type}
-      ${optionalString (i.type == "mesh" && i.meshID != null) "${pkgs.iw}/bin/iw dev ${device} set meshid ${i.meshID}"}
-      ${optionalString (i.type == "monitor" && i.flags != null) "${pkgs.iw}/bin/iw dev ${device} set monitor ${i.flags}"}
-      ${optionalString (i.type == "managed" && i.fourAddr != null) "${pkgs.iw}/bin/iw dev ${device} set 4addr ${if i.fourAddr then "on" else "off"}"}
-      ${optionalString (i.mac != null) "${pkgs.iproute}/bin/ip link set dev ${device} address ${i.mac}"}
-      ${optionalString (device != i._iName) "${pkgs.iproute}/bin/ip link set dev ${device} name ${i._iName}"}
-    '')}
-  '';
 
   # We must escape interfaces due to the systemd interpretation
   subsystemDevice = interface:
@@ -386,7 +341,7 @@ in
         You should try to make this ID unique among your machines. You can
         generate a random 32-bit ID using the following commands:
 
-        <literal>cksum /etc/machine-id | while read c rest; do printf "%x" $c; done</literal>
+        <literal>head -c 8 /etc/machine-id</literal>
 
         (this derives it from the machine-id that systemd generates) or
 
@@ -489,7 +444,7 @@ in
     networking.interfaces = mkOption {
       default = {};
       example =
-        { eth0.ipv4 = [ {
+        { eth0.ipv4.addresses = [ {
             address = "131.211.84.78";
             prefixLength = 25;
           } ];
@@ -1158,7 +1113,7 @@ in
             # The script creates the required, new WLAN interfaces interfaces and configures the
             # existing, default interface.
             curInterfaceScript = device: current: new: pkgs.writeScript "udev-run-script-wlan-interfaces-${device}.sh" ''
-              #!${pkgs.stdenv.shell}
+              #!${pkgs.runtimeShell}
               # Change the wireless phy device to a predictable name.
               ${pkgs.iw}/bin/iw phy `${pkgs.coreutils}/bin/cat /sys/class/net/$INTERFACE/phy80211/name` set name ${device}
 
@@ -1177,7 +1132,7 @@ in
 
             # Udev script to execute for a new WLAN interface. The script configures the new WLAN interface.
             newInterfaceScript = device: new: pkgs.writeScript "udev-run-script-wlan-interfaces-${new._iName}.sh" ''
-              #!${pkgs.stdenv.shell}
+              #!${pkgs.runtimeShell}
               # Configure the new interface
               ${pkgs.iw}/bin/iw dev ${new._iName} set type ${new.type}
               ${optionalString (new.type == "mesh" && new.meshID!=null) "${pkgs.iw}/bin/iw dev ${device} set meshid ${new.meshID}"}

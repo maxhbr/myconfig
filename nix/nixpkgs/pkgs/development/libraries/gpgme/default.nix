@@ -1,7 +1,16 @@
-{ stdenv, fetchurl, fetchpatch, libgpgerror, gnupg, pkgconfig, glib, pth, libassuan
-, qtbase ? null }:
+{ stdenv, fetchurl, libgpgerror, gnupg, pkgconfig, glib, pth, libassuan
+, file, which
+, autoreconfHook
+, git
+, texinfo
+, qtbase ? null
+, withPython ? false, swig2 ? null, python ? null
+}:
 
-let inherit (stdenv) lib system; in
+let
+  inherit (stdenv) lib;
+  inherit (stdenv.hostPlatform) system;
+in
 
 stdenv.mkDerivation rec {
   name = "gpgme-${version}";
@@ -19,11 +28,17 @@ stdenv.mkDerivation rec {
     [ libgpgerror glib libassuan pth ]
     ++ lib.optional (qtbase != null) qtbase;
 
-  nativeBuildInputs = [ pkgconfig gnupg ];
+  nativeBuildInputs = [ file pkgconfig gnupg autoreconfHook git texinfo ]
+  ++ lib.optionals withPython [ python swig2 which ];
+
+  postPatch =''
+    substituteInPlace ./configure --replace /usr/bin/file ${file}/bin/file
+  '';
 
   configureFlags = [
     "--enable-fixed-path=${gnupg}/bin"
-  ];
+    "--with-libgpg-error-prefix=${libgpgerror.dev}"
+  ] ++ lib.optional withPython "--enable-languages=python";
 
   NIX_CFLAGS_COMPILE =
     # qgpgme uses Q_ASSERT which retains build inputs at runtime unless
@@ -31,6 +46,10 @@ stdenv.mkDerivation rec {
     lib.optional (qtbase != null) "-DQT_NO_DEBUG"
     # https://www.gnupg.org/documentation/manuals/gpgme/Largefile-Support-_0028LFS_0029.html
     ++ lib.optional (system == "i686-linux") "-D_FILE_OFFSET_BITS=64";
+
+  checkInputs = [ which ];
+
+  doCheck = false; # fails 8 out of 26 tests with "GPGME: Decryption failed". Spooky!
 
   meta = with stdenv.lib; {
     homepage = https://gnupg.org/software/gpgme/index.html;

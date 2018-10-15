@@ -88,8 +88,8 @@ in rec {
         (all nixos.tests.env)
         (all nixos.tests.ipv6)
         (all nixos.tests.i3wm)
-        # 2018-06-02: keymap tests temporarily removed from tested job
-        # because of non-deterministic failures blocking the channel.
+        # 2018-06-06: keymap tests temporarily removed from tested job
+        # since non-deterministic failure are blocking the channel (#41538)
         #(all nixos.tests.keymap.azerty)
         #(all nixos.tests.keymap.colemak)
         #(all nixos.tests.keymap.dvorak)
@@ -117,10 +117,10 @@ in rec {
         (all nixos.tests.nfs4)
         (all nixos.tests.openssh)
         (all nixos.tests.php-pcre)
-        (all nixos.tests.predictable-interface-names.vm-test-run-predictableInterfaceNames)
-        (all nixos.tests.predictable-interface-names.vm-test-run-predictableInterfaceNames-with-networkd)
-        (all nixos.tests.predictable-interface-names.vm-test-run-unpredictableInterfaceNames)
-        (all nixos.tests.predictable-interface-names.vm-test-run-unpredictableInterfaceNames-with-networkd)
+        (all nixos.tests.predictable-interface-names.predictable)
+        (all nixos.tests.predictable-interface-names.unpredictable)
+        (all nixos.tests.predictable-interface-names.predictableNetworkd)
+        (all nixos.tests.predictable-interface-names.unpredictableNetworkd)
         (all nixos.tests.printing)
         (all nixos.tests.proxy)
         (all nixos.tests.sddm.default)

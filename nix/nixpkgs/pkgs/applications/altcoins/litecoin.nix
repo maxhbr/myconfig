@@ -2,24 +2,28 @@
 , pkgconfig, autoreconfHook
 , openssl, db48, boost, zlib, miniupnpc
 , glib, protobuf, utillinux, qt4, qrencode
-, withGui, libevent }:
+, AppKit
+, withGui ? true, libevent
+}:
 
 with stdenv.lib;
+
 stdenv.mkDerivation rec {
 
   name = "litecoin" + (toString (optional (!withGui) "d")) + "-" + version;
-  version = "0.15.1";
+  version = "0.16.0";
 
   src = fetchFromGitHub {
     owner = "litecoin-project";
     repo = "litecoin";
     rev = "v${version}";
-    sha256 = "01q0lj0grabyfh67ar984m9lv9xs0rakadkci8jpfbp8xw166r40";
+    sha256 = "1g79sbplkn2bnb17i2kyh1d64bjl3ihbx83n0xssvjaajn56hbzw";
   };
 
   nativeBuildInputs = [ pkgconfig autoreconfHook ];
   buildInputs = [ openssl db48 boost zlib
                   miniupnpc glib protobuf utillinux libevent ]
+                  ++ optionals stdenv.isDarwin [ AppKit ]
                   ++ optionals withGui [ qt4 qrencode ];
 
   configureFlags = [ "--with-boost-libdir=${boost.out}/lib" ]
@@ -39,6 +43,7 @@ stdenv.mkDerivation rec {
     homepage = https://litecoin.org/;
     platforms = platforms.unix;
     license = licenses.mit;
-    maintainers = with maintainers; [ offline AndersonTorres ];  
+    broken = stdenv.isDarwin;
+    maintainers = with maintainers; [ offline AndersonTorres ];
   };
 }

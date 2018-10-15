@@ -1,5 +1,4 @@
-{ stdenv, lib, fetchFromGitHub, fetchpatch, removeReferencesTo, which, go_1_9, go-bindata, makeWrapper, rsync
-, iptables, coreutils
+{ stdenv, lib, fetchFromGitHub, removeReferencesTo, which, go_1_10, go-bindata, makeWrapper, rsync
 , components ? [
     "cmd/kubeadm"
     "cmd/kubectl"
@@ -7,7 +6,7 @@
     "cmd/kube-apiserver"
     "cmd/kube-controller-manager"
     "cmd/kube-proxy"
-    "plugin/cmd/kube-scheduler"
+    "cmd/kube-scheduler"
     "test/e2e/e2e.test"
   ]
 }:
@@ -16,16 +15,16 @@ with lib;
 
 stdenv.mkDerivation rec {
   name = "kubernetes-${version}";
-  version = "1.9.8";
+  version = "1.11.3";
 
   src = fetchFromGitHub {
     owner = "kubernetes";
     repo = "kubernetes";
     rev = "v${version}";
-    sha256 = "00abs626rhgz5l2ij8jbyws4g3lnb9ipima1q83q0nlj7ksaqz7d";
+    sha256 = "1gwb5gs9l0adv3qc70wf8dwvbjh1mmgd3hh1jkwsbbnach28dvzb";
   };
 
-  buildInputs = [ removeReferencesTo makeWrapper which go_1_9 rsync go-bindata ];
+  buildInputs = [ removeReferencesTo makeWrapper which go_1_10 rsync go-bindata ];
 
   outputs = ["out" "man" "pause"];
 
@@ -39,7 +38,7 @@ stdenv.mkDerivation rec {
     patchShebangs ./hack
   '';
 
-  WHAT="--use_go_build ${concatStringsSep " " components}";
+  WHAT="${concatStringsSep " " components}";
 
   postBuild = ''
     ./hack/generate-docs.sh
@@ -53,8 +52,11 @@ stdenv.mkDerivation rec {
     cp build/pause/pause "$pause/bin/pause"
     cp -R docs/man/man1 "$man/share/man"
 
+    cp cluster/addons/addon-manager/namespace.yaml $out/share
     cp cluster/addons/addon-manager/kube-addons.sh $out/bin/kube-addons
     patchShebangs $out/bin/kube-addons
+    substituteInPlace $out/bin/kube-addons \
+      --replace /opt/namespace.yaml $out/share/namespace.yaml
     wrapProgram $out/bin/kube-addons --set "KUBECTL_BIN" "$out/bin/kubectl"
 
     $out/bin/kubectl completion bash > $out/share/bash-completion/completions/kubectl
@@ -62,14 +64,14 @@ stdenv.mkDerivation rec {
   '';
 
   preFixup = ''
-    find $out/bin $pause/bin -type f -exec remove-references-to -t ${go_1_9} '{}' +
+    find $out/bin $pause/bin -type f -exec remove-references-to -t ${go_1_10} '{}' +
   '';
 
   meta = {
     description = "Production-Grade Container Scheduling and Management";
     license = licenses.asl20;
-    homepage = http://kubernetes.io;
-    maintainers = with maintainers; [offline];
+    homepage = https://kubernetes.io;
+    maintainers = with maintainers; [johanot offline];
     platforms = platforms.unix;
   };
 }

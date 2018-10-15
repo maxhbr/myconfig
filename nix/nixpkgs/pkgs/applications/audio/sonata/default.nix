@@ -1,10 +1,10 @@
-{ lib, stdenv, fetchFromGitHub, pkgconfig, intltool, wrapGAppsHook
+{ stdenv, fetchFromGitHub, pkgconfig, intltool, wrapGAppsHook
 , python3Packages, gnome3, gtk3, gobjectIntrospection}:
 
 let
-  inherit (python3Packages) buildPythonApplication python isPy3k dbus-python pygobject3 mpd2;
+  inherit (python3Packages) buildPythonApplication isPy3k dbus-python pygobject3 mpd2;
 in buildPythonApplication rec {
-  name = "sonata-${version}";
+  pname = "sonata";
   version = "1.7b1";
 
   src = fetchFromGitHub {
@@ -19,7 +19,7 @@ in buildPythonApplication rec {
   nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
     intltool wrapGAppsHook
-    gnome3.gnome-themes-standard gnome3.defaultIconTheme
+    gnome3.defaultIconTheme
     gnome3.gsettings-desktop-schemas
   ];
 
@@ -27,8 +27,6 @@ in buildPythonApplication rec {
     # Remove "Local MPD" tab which is not suitable for NixOS.
     sed -i '/localmpd/d' sonata/consts.py
   '';
-
-  propagatedUserEnvPkgs = [ gnome3.gnome-themes-standard ];
 
   propagatedBuildInputs = [
     gobjectIntrospection gtk3 pygobject3

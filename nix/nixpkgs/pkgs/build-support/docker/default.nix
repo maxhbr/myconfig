@@ -1,5 +1,4 @@
 {
-  callPackage,
   coreutils,
   docker,
   e2fsprogs,
@@ -10,7 +9,7 @@
   lib,
   pkgs,
   pigz,
-  nixUnstable,
+  nix,
   perl,
   runCommand,
   rsync,
@@ -32,7 +31,37 @@ rec {
     inherit pkgs buildImage pullImage shadowSetup buildImageWithNixDb;
   };
 
-  pullImage = callPackage ./pull.nix {};
+  pullImage = let
+    fixName = name: builtins.replaceStrings ["/" ":"] ["-" "-"] name;
+  in
+    { imageName
+      # To find the digest of an image, you can use skopeo:
+      # see doc/functions.xml
+    , imageDigest
+    , sha256
+    , os ? "linux"
+    , arch ? "amd64"
+      # This used to set a tag to the pulled image
+    , finalImageTag ? "latest"
+    , name ? fixName "docker-image-${imageName}-${finalImageTag}.tar"
+    }:
+
+    runCommand name {
+      inherit imageName imageDigest;
+      imageTag = finalImageTag;
+      impureEnvVars = pkgs.stdenv.lib.fetchers.proxyImpureEnvVars;
+      outputHashMode = "flat";
+      outputHashAlgo = "sha256";
+      outputHash = sha256;
+
+      nativeBuildInputs = lib.singleton (pkgs.skopeo);
+      SSL_CERT_FILE = "${pkgs.cacert.out}/etc/ssl/certs/ca-bundle.crt";
+
+      sourceURL = "docker://${imageName}@${imageDigest}";
+      destNameTag = "${imageName}:${finalImageTag}";
+    } ''
+      skopeo --override-os ${os} --override-arch ${arch} copy "$sourceURL" "docker-archive://$out:$destNameTag"
+    '';
 
   # We need to sum layer.tar, not a directory, hence tarsum instead of nix-hash.
   # And we cannot untar it, because then we cannot preserve permissions ecc.
@@ -229,7 +258,7 @@ rec {
     '';
 
   nixRegistration = contents: runCommand "nix-registration" {
-    buildInputs = [ nixUnstable perl ];
+    buildInputs = [ nix perl ];
     # For obtaining the closure of `contents'.
     exportReferencesGraph =
       let contentsList = if builtins.isList contents then contents else [ contents ];
@@ -325,7 +354,9 @@ rec {
     extraCommands ? ""
   }:
     # Generate an executable script from the `runAsRoot` text.
-    let runAsRootScript = shellScript "run-as-root.sh" runAsRoot;
+    let
+      runAsRootScript = shellScript "run-as-root.sh" runAsRoot;
+      extraCommandsScript = shellScript "extra-commands.sh" extraCommands;
     in runWithOverlay {
       name = "docker-layer-${name}";
 
@@ -363,7 +394,7 @@ rec {
       '';
 
       postUmount = ''
-        (cd layer; eval "${extraCommands}")
+        (cd layer; ${extraCommandsScript})
 
         echo "Packing layer..."
         mkdir $out
@@ -389,8 +420,8 @@ rec {
   buildImage = args@{
     # Image name.
     name,
-    # Image tag.
-    tag ? "latest",
+    # Image tag, when null then the nix output hash will be used.
+    tag ? null,
     # Parent image, to append to.
     fromImage ? null,
     # Name of the parent image; will be read from the image otherwise.
@@ -419,11 +450,18 @@ rec {
       baseName = baseNameOf name;
 
       # Create a JSON blob of the configuration. Set the date to unix zero.
-      baseJson = writeText "${baseName}-config.json" (builtins.toJSON {
-        inherit created config;
-        architecture = "amd64";
-        os = "linux";
-      });
+      baseJson = let
+          pure = writeText "${baseName}-config.json" (builtins.toJSON {
+            inherit created config;
+            architecture = "amd64";
+            os = "linux";
+          });
+          impure = runCommand "${baseName}-config.json"
+            { buildInputs = [ jq ]; }
+            ''
+               jq ".created = \"$(TZ=utc date --iso-8601="seconds")\"" ${pure} > $out
+            '';
+        in if created == "now" then impure else pure;
 
       layer =
         if runAsRoot == null
@@ -440,12 +478,19 @@ rec {
         buildInputs = [ jshon pigz coreutils findutils jq ];
         # Image name and tag must be lowercase
         imageName = lib.toLower name;
-        imageTag = lib.toLower tag;
+        imageTag = if tag == null then "" else lib.toLower tag;
         inherit fromImage baseJson;
         layerClosure = writeReferencesToFile layer;
         passthru.buildArgs = args;
         passthru.layer = layer;
       } ''
+        ${lib.optionalString (tag == null) ''
+          outName="$(basename "$out")"
+          outHash=$(echo "$outName" | cut -d - -f 1)
+
+          imageTag=$outHash
+        ''}
+
         # Print tar contents:
         # 1: Interpreted as relative to the root directory
         # 2: With no trailing slashes on directories
@@ -539,7 +584,7 @@ rec {
         currentID=$layerID
         while [[ -n "$currentID" ]]; do
           layerChecksum=$(sha256sum image/$currentID/layer.tar | cut -d ' ' -f1)
-          imageJson=$(echo "$imageJson" | jq ".history |= [{\"created\": \"${created}\"}] + .")
+          imageJson=$(echo "$imageJson" | jq ".history |= [{\"created\": \"$(jq -r .created ${baseJson})\"}] + .")
           imageJson=$(echo "$imageJson" | jq ".rootfs.diff_ids |= [\"sha256:$layerChecksum\"] + .")
           manifestJson=$(echo "$manifestJson" | jq ".[0].Layers |= [\"$currentID/layer.tar\"] + .")
 
@@ -560,7 +605,7 @@ rec {
         chmod -R a-w image
 
         echo "Cooking the image..."
-        tar -C image --hard-dereference --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --xform s:'./':: -c . | pigz -nT > $out
+        tar -C image --hard-dereference --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --xform s:'^./':: -c . | pigz -nT > $out
 
         echo "Finished."
       '';
@@ -581,7 +626,7 @@ rec {
         echo "         be better to only have one layer that contains a nix store."
         # This requires Nix 1.12 or higher
         export NIX_REMOTE=local?root=$PWD
-        ${nixUnstable}/bin/nix-store --load-db < ${nixRegistration contents}/db.dump
+        ${nix}/bin/nix-store --load-db < ${nixRegistration contents}/db.dump
 
         # We fill the store in order to run the 'verify' command that
         # generates hash and size of output paths.
@@ -592,7 +637,7 @@ rec {
         storePaths=$(cat ${nixRegistration contents}/storePaths)
         echo "Copying everything to /nix/store (will take a while)..."
         cp -prd $storePaths nix/store/
-        ${nixUnstable}/bin/nix-store --verify --check-contents
+        ${nix}/bin/nix-store --verify --check-contents
 
         mkdir -p nix/var/nix/gcroots/docker/
         for i in ${lib.concatStringsSep " " contents}; do

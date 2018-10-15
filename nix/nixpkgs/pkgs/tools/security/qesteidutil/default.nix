@@ -19,6 +19,13 @@ stdenv.mkDerivation rec {
     fetchSubmodules = true;
   };
 
+  patches = [
+    (fetchpatch {
+      url = https://github.com/open-eid/qesteidutil/commit/868e8245f2481e29e1154e168ac92d32e93a5425.patch;
+      sha256 = "0pwrkd8inf0qaf7lcchmj558k6z34ah672zcb722aa5ybbif0lkn";
+    })
+  ];
+
   nativeBuildInputs = [ pkgconfig ];
   buildInputs = [ cmake ccid qttools pcsclite qttranslations
                   hicolor-icon-theme

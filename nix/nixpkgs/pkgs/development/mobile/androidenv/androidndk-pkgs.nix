@@ -1,4 +1,4 @@
-{ lib, hostPlatform, targetPlatform
+{ lib, stdenv
 , makeWrapper
 , runCommand, wrapBintoolsWith, wrapCCWith
 , buildAndroidndk, androidndk, targetAndroidndkPkgs
@@ -12,6 +12,9 @@ let
   # than we do. We don't just use theirs because ours are less ambiguous and
   # some builds need that clarity.
   ndkInfoFun = { config, ... }: {
+    "x86_64-apple-darwin" = {
+      double = "darwin-x86_64";
+    };
     "x86_64-unknown-linux-gnu" = {
       double = "linux-x86_64";
     };
@@ -23,7 +26,7 @@ let
     "armv7a-unknown-linux-androideabi" = {
       arch = "arm";
       triple = "arm-linux-androideabi";
-      gccVer = "4.8";
+      gccVer = "4.9";
     };
     "aarch64-unknown-linux-android" = {
       arch = "arm64";
@@ -33,8 +36,8 @@ let
   }.${config} or
     (throw "Android NDK doesn't support ${config}, as far as we know");
 
-  hostInfo = ndkInfoFun hostPlatform;
-  targetInfo = ndkInfoFun targetPlatform;
+  hostInfo = ndkInfoFun stdenv.hostPlatform;
+  targetInfo = ndkInfoFun stdenv.targetPlatform;
 
 in
 
@@ -51,22 +54,28 @@ rec {
       mkdir -p $out/bin
       for prog in ${ndkBinDir}/${targetInfo.triple}-*; do
         prog_suffix=$(basename $prog | sed 's/${targetInfo.triple}-//')
-        ln -s $prog $out/bin/${targetPlatform.config}-$prog_suffix
+        ln -s $prog $out/bin/${stdenv.targetPlatform.config}-$prog_suffix
       done
     '';
 
   binutils = wrapBintoolsWith {
     bintools = binaries;
     libc = targetAndroidndkPkgs.libraries;
+    extraBuildCommands = ''
+      echo "--build-id" >> $out/nix-support/libc-ldflags
+    '';
   };
 
   gcc = wrapCCWith {
     cc = binaries;
     bintools = binutils;
     libc = targetAndroidndkPkgs.libraries;
-    extraBuildCommands = lib.optionalString targetPlatform.isAarch32 (let
-        p =  targetPlatform.platform.gcc or {}
-          // targetPlatform.parsed.abi;
+    extraBuildCommands = ''
+      echo "-D__ANDROID_API__=${stdenv.targetPlatform.sdkVer}" >> $out/nix-support/cc-cflags
+    ''
+    + lib.optionalString stdenv.targetPlatform.isAarch32 (let
+        p =  stdenv.targetPlatform.platform.gcc or {}
+          // stdenv.targetPlatform.parsed.abi;
         flags = lib.concatLists [
           (lib.optional (p ? arch) "-march=${p.arch}")
           (lib.optional (p ? cpu) "-mcpu=${p.cpu}")
@@ -78,10 +87,10 @@ rec {
         ];
       in ''
         sed -E -i \
-          $out/bin/${targetPlatform.config}-cc \
-          $out/bin/${targetPlatform.config}-c++ \
-          $out/bin/${targetPlatform.config}-gcc \
-          $out/bin/${targetPlatform.config}-g++ \
+          $out/bin/${stdenv.targetPlatform.config}-cc \
+          $out/bin/${stdenv.targetPlatform.config}-c++ \
+          $out/bin/${stdenv.targetPlatform.config}-gcc \
+          $out/bin/${stdenv.targetPlatform.config}-g++ \
           -e '130i    extraBefore+=(-Wl,--fix-cortex-a8)' \
           -e 's|^(extraBefore=)\(\)$|\1(${builtins.toString flags})|'
       '')
@@ -98,10 +107,20 @@ rec {
   # We use androidndk from the previous stage, else we waste time or get cycles
   # cross-compiling packages to wrap incorrectly wrap binaries we don't include
   # anyways.
-  libraries = {
-    name = "bionic-prebuilt";
-    type = "derivation";
-    outPath = "${buildAndroidndk}/libexec/${buildAndroidndk.name}/platforms/android-${hostPlatform.sdkVer}/arch-${hostInfo.arch}/usr/";
-    drvPath = throw "fake derivation, build ${buildAndroidndk} to use";
-  };
+  libraries =
+    let
+      includePath = if buildAndroidndk.version == "10e" then
+          "${buildAndroidndk}/libexec/${buildAndroidndk.name}/platforms/android-${stdenv.hostPlatform.sdkVer}/arch-${hostInfo.arch}/usr/include/"
+        else
+          "${buildAndroidndk}/libexec/${buildAndroidndk.name}/sysroot/usr/include";
+      libPath = "${buildAndroidndk}/libexec/${buildAndroidndk.name}/platforms/android-${stdenv.hostPlatform.sdkVer}/arch-${hostInfo.arch}/usr/lib/";
+    in
+    runCommand "bionic-prebuilt" {} ''
+      mkdir -p $out
+      cp -r ${includePath} $out/include
+      chmod +w $out/include
+      ${lib.optionalString (lib.versionOlder "10e" buildAndroidndk.version)
+        "ln -s $out/include/${hostInfo.triple}/asm $out/include/asm"}
+      ln -s ${libPath} $out/lib
+    '';
 }

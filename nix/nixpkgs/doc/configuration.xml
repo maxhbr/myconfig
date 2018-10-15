@@ -16,6 +16,12 @@
   </listitem>
   <listitem>
    <para>
+    The package isn't intended to run on the given system, as none of its
+    <literal>meta.platforms</literal> match the given system.
+   </para>
+  </listitem>
+  <listitem>
+   <para>
     The package's <literal>meta.license</literal> is set to a license which is
     considered to be unfree.
    </para>
@@ -94,6 +100,46 @@
     </para>
    </listitem>
   </itemizedlist>
+ </section>
+ <section xml:id="sec-allow-unsupported-system">
+  <title>Installing packages on unsupported systems</title>
+
+  <para>
+   There are also two ways to try compiling a package which has been marked as
+   unsuported for the given system.
+  </para>
+
+  <itemizedlist>
+   <listitem>
+    <para>
+     For allowing the build of a broken package once, you can use an
+     environment variable for a single invocation of the nix tools:
+<programlisting>$ export NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1</programlisting>
+    </para>
+   </listitem>
+   <listitem>
+    <para>
+     For permanently allowing broken packages to be built, you may add
+     <literal>allowUnsupportedSystem = true;</literal> to your user's
+     configuration file, like this:
+<programlisting>
+{
+  allowUnsupportedSystem = true;
+}
+</programlisting>
+    </para>
+   </listitem>
+  </itemizedlist>
+
+  <para>
+   The difference between an a package being unsupported on some system and
+   being broken is admittedly a bit fuzzy. If a program
+   <emphasis>ought</emphasis> to work on a certain platform, but doesn't, the
+   platform should be included in <literal>meta.platforms</literal>, but marked
+   as broken with e.g. <literal>meta.broken =
+   !hostPlatform.isWindows</literal>. Of course, this begs the question of what
+   "ought" means exactly. That is left to the package maintainer.
+  </para>
  </section>
  <section xml:id="sec-allow-unfree">
   <title>Installing unfree packages</title>
@@ -332,7 +378,7 @@
     myPackages = pkgs.buildEnv {
       name = "my-packages";
       paths = [ aspell bc coreutils ffmpeg nixUnstable emscripten jq nox silver-searcher ];
-      pathsToLink = [ "/share/man" "/share/doc" /bin" ];
+      pathsToLink = [ "/share/man" "/share/doc" "/bin" ];
       extraOutputsToInstall = [ "man" "doc" ];
     };
   };
@@ -370,7 +416,7 @@ cp ${myProfile} $out/etc/profile.d/my-profile.sh
         nox
         silver-searcher
       ];
-      pathsToLink = [ "/share/man" "/share/doc" /bin" "/etc" ];
+      pathsToLink = [ "/share/man" "/share/doc" "/bin" "/etc" ];
       extraOutputsToInstall = [ "man" "doc" ];
     };
   };

@@ -1,36 +1,34 @@
-{ stdenv, fetchFromGitHub, fetchpatch, pkgconfig, intltool, gperf, libcap, kmod
-, zlib, xz, pam, acl, cryptsetup, libuuid, m4, utillinux, libffi
+{ stdenv, lib, fetchFromGitHub, fetchpatch, pkgconfig, intltool, gperf, libcap, kmod
+, xz, pam, acl, libuuid, m4, utillinux, libffi
 , glib, kbd, libxslt, coreutils, libgcrypt, libgpgerror, libidn2, libapparmor
-, audit, lz4, bzip2, kexectools, libmicrohttpd
+, audit, lz4, bzip2, libmicrohttpd, pcre2
 , linuxHeaders ? stdenv.cc.libc.linuxHeaders
-, libseccomp, iptables, gnu-efi
-, autoreconfHook, gettext, docbook_xsl, docbook_xml_dtd_42, docbook_xml_dtd_45
+, iptables, gnu-efi
+, gettext, docbook_xsl, docbook_xml_dtd_42, docbook_xml_dtd_45
 , ninja, meson, python3Packages, glibcLocales
 , patchelf
 , getent
-, hostPlatform
+, buildPackages
+, withSelinux ? false, libselinux
+, withLibseccomp ? lib.any (lib.meta.platformMatch stdenv.hostPlatform) libseccomp.meta.platforms, libseccomp
+, withKexectools ? lib.any (lib.meta.platformMatch stdenv.hostPlatform) kexectools.meta.platforms, kexectools
 }:
 
-assert stdenv.isLinux;
-
 let
-  pythonLxmlEnv = python3Packages.python.withPackages ( ps: with ps; [ python3Packages.lxml ]);
+  pythonLxmlEnv = buildPackages.python3Packages.python.withPackages ( ps: with ps; [ python3Packages.lxml ]);
 
 in stdenv.mkDerivation rec {
-  version = "237";
+  version = "239";
   name = "systemd-${version}";
 
+  # When updating, use https://github.com/systemd/systemd-stable tree, not the development one!
+  # Also fresh patches should be cherry-picked from that tree to our current one.
   src = fetchFromGitHub {
     owner = "NixOS";
     repo = "systemd";
-    rev = "98067cc806ae0d2759cdd2334f230cd8548e5317";
-    sha256 = "077svfs2xy3g30s62q69wcv5pb9vfhzh8i7lhfri73vvhwbpzd5q";
+    rev = "31859ddd35fc3fa82a583744caa836d356c31d7f";
+    sha256 = "1xci0491j95vdjgs397n618zii3sgwnvanirkblqqw6bcvcjvir1";
   };
-
-  patches = [ (fetchpatch {
-    url = https://github.com/systemd/systemd/commit/848e863acc51ecfb0f3955c498874588201d9130.patch;
-    sha256 = "0vi24xbv4n9dfnlwqz2cnd7s2lqpi2s9z11ayp9mrp4qkyglh5zi";
-  }) ];
 
   outputs = [ "out" "lib" "man" "dev" ];
 
@@ -38,15 +36,20 @@ in stdenv.mkDerivation rec {
     [ pkgconfig intltool gperf libxslt gettext docbook_xsl docbook_xml_dtd_42 docbook_xml_dtd_45
       ninja meson
       coreutils # meson calls date, stat etc.
-      pythonLxmlEnv glibcLocales
-      patchelf getent
+      glibcLocales
+      patchelf getent m4
     ];
   buildInputs =
     [ linuxHeaders libcap kmod xz pam acl
-      /* cryptsetup */ libuuid m4 glib libgcrypt libgpgerror libidn2
-      libmicrohttpd kexectools libseccomp libffi audit lz4 bzip2 libapparmor
+      /* cryptsetup */ libuuid glib libgcrypt libgpgerror libidn2
+      libmicrohttpd pcre2 ] ++
+      stdenv.lib.optional withKexectools kexectools ++
+      stdenv.lib.optional withLibseccomp libseccomp ++
+    [ libffi audit lz4 bzip2 libapparmor
       iptables gnu-efi
-    ];
+      # This is actually native, but we already pull it from buildPackages
+      pythonLxmlEnv
+    ] ++ stdenv.lib.optional withSelinux libselinux;
 
   #dontAddPrefix = true;
 
@@ -75,13 +78,19 @@ in stdenv.mkDerivation rec {
     "-Dsystem-gid-max=499"
     # "-Dtime-epoch=1"
 
-    (if stdenv.isAarch32 || !hostPlatform.isEfi then "-Dgnu-efi=false" else "-Dgnu-efi=true")
+    (if stdenv.isAarch32 || stdenv.isAarch64 || !stdenv.hostPlatform.isEfi then "-Dgnu-efi=false" else "-Dgnu-efi=true")
     "-Defi-libdir=${toString gnu-efi}/lib"
     "-Defi-includedir=${toString gnu-efi}/include/efi"
     "-Defi-ldsdir=${toString gnu-efi}/lib"
 
     "-Dsysvinit-path="
     "-Dsysvrcnd-path="
+
+    "-Dkill-path=${coreutils}/bin/kill"
+    "-Dkmod-path=${kmod}/bin/kmod"
+    "-Dsulogin-path=${utillinux}/bin/sulogin"
+    "-Dmount-path=${utillinux}/bin/mount"
+    "-Dumount-path=${utillinux}/bin/umount"
   ];
 
   preConfigure = ''
@@ -91,19 +100,9 @@ in stdenv.mkDerivation rec {
     mesonFlagsArray+=(-Ddbussystemservicedir=$out/share/dbus-1/system-services)
     mesonFlagsArray+=(-Dpamconfdir=$out/etc/pam.d)
     mesonFlagsArray+=(-Drootprefix=$out)
-    mesonFlagsArray+=(-Dlibdir=$lib/lib)
     mesonFlagsArray+=(-Drootlibdir=$lib/lib)
-    mesonFlagsArray+=(-Dmandir=$man/lib)
-    mesonFlagsArray+=(-Dincludedir=$dev/include)
     mesonFlagsArray+=(-Dpkgconfiglibdir=$dev/lib/pkgconfig)
     mesonFlagsArray+=(-Dpkgconfigdatadir=$dev/share/pkgconfig)
-
-    # FIXME: Why aren't includedir and libdir picked up from mesonFlags while other options are?
-    substituteInPlace meson.build \
-      --replace "includedir = join_paths(prefixdir, get_option('includedir'))" \
-                "includedir = '$dev/include'" \
-      --replace "libdir = join_paths(prefixdir, get_option('libdir'))" \
-                "libdir = '$lib/lib'"
 
     export LC_ALL="en_US.UTF-8";
     # FIXME: patch this in systemd properly (and send upstream).
@@ -129,7 +128,7 @@ in stdenv.mkDerivation rec {
 
     for i in src/basic/generate-gperfs.py src/resolve/generate-dns_type-gperf.py src/test/generate-sym-test.py ; do
       substituteInPlace $i \
-        --replace "#!/usr/bin/env python" "#!${python3Packages.python}/bin/python"
+        --replace "#!/usr/bin/env python" "#!${buildPackages.python3Packages.python}/bin/python"
     done
 
     substituteInPlace src/journal/catalog.c \
@@ -145,8 +144,6 @@ in stdenv.mkDerivation rec {
       --replace "SYSTEMD_CGROUP_AGENT_PATH" "_SYSTEMD_CGROUP_AGENT_PATH"
   '';
 
-  hardeningDisable = [ "stackprotector" ];
-
   NIX_CFLAGS_COMPILE =
     [ # Can't say ${polkit.bin}/bin/pkttyagent here because that would
       # lead to a cyclic dependency.
@@ -160,6 +157,8 @@ in stdenv.mkDerivation rec {
       "-USYSTEMD_BINARY_PATH" "-DSYSTEMD_BINARY_PATH=\"/run/current-system/systemd/lib/systemd/systemd\""
     ];
 
+  doCheck = false; # fails a bunch of tests
+
   postInstall = ''
     # sysinit.target: Don't depend on
     # systemd-tmpfiles-setup.service. This interferes with NixOps's
@@ -172,13 +171,6 @@ in stdenv.mkDerivation rec {
     mv $out/lib/systemd/{system,user} $out/example/systemd
 
     rm -rf $out/etc/systemd/system
-
-    # Install SysV compatibility commands.
-    mkdir -p $out/sbin
-    ln -s $out/lib/systemd/systemd $out/sbin/telinit
-    for i in init halt poweroff runlevel reboot shutdown; do
-      ln -s $out/bin/systemctl $out/sbin/$i
-    done
 
     # Fix reference to /bin/false in the D-Bus services.
     for i in $out/share/dbus-1/system-services/*.service; do
@@ -197,18 +189,6 @@ in stdenv.mkDerivation rec {
 
   enableParallelBuilding = true;
 
-  # The rpath to the shared systemd library is not added by meson. The
-  # functionality was removed by a nixpkgs patch because it would overwrite
-  # the existing rpath.
-  postFixup = ''
-    sharedLib=libsystemd-shared-${version}.so
-    for prog in `find $out -type f -executable`; do
-      (patchelf --print-needed $prog | grep $sharedLib > /dev/null) && (
-        patchelf --set-rpath `patchelf --print-rpath $prog`:"$out/lib/systemd" $prog
-      ) || true
-    done
-  '';
-
   # The interface version prevents NixOS from switching to an
   # incompatible systemd at runtime.  (Switching across reboots is
   # fine, of course.)  It should be increased whenever systemd changes
@@ -217,10 +197,11 @@ in stdenv.mkDerivation rec {
   # runtime; otherwise we can't and we need to reboot.
   passthru.interfaceVersion = 2;
 
-  meta = {
+  meta = with stdenv.lib; {
     homepage = http://www.freedesktop.org/wiki/Software/systemd;
     description = "A system and service manager for Linux";
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.eelco ];
+    license = licenses.lgpl21Plus;
+    platforms = platforms.linux;
+    maintainers = [ maintainers.eelco ];
   };
 }

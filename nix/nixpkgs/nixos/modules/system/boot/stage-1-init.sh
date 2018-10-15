@@ -251,12 +251,22 @@ checkFS() {
     # Skip fsck for bcachefs - not implemented yet.
     if [ "$fsType" = bcachefs ]; then return 0; fi
 
+    # Skip fsck for nilfs2 - not needed by design and no fsck tool for this filesystem.
+    if [ "$fsType" = nilfs2 ]; then return 0; fi
+
     # Skip fsck for inherently readonly filesystems.
     if [ "$fsType" = squashfs ]; then return 0; fi
 
     # If we couldn't figure out the FS type, then skip fsck.
     if [ "$fsType" = auto ]; then
         echo 'cannot check filesystem with type "auto"!'
+        return 0
+    fi
+
+    # Device might be already mounted manually 
+    # e.g. NBD-device or the host filesystem of the file which contains encrypted root fs
+    if mount | grep -q "^$device on "; then
+        echo "skip checking already mounted $device"
         return 0
     fi
 
@@ -404,14 +414,6 @@ lustrateRoot () {
 }
 
 
-
-# Try to resume - all modules are loaded now.
-if test -e /sys/power/tuxonice/resume; then
-    if test -n "$(cat /sys/power/tuxonice/resume)"; then
-        echo 0 > /sys/power/tuxonice/user_interface/enabled
-        echo 1 > /sys/power/tuxonice/do_resume || echo "failed to resume..."
-    fi
-fi
 
 if test -e /sys/power/resume -a -e /sys/power/disk; then
     if test -n "@resumeDevice@" && waitDevice "@resumeDevice@"; then

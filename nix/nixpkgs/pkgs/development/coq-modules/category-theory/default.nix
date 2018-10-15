@@ -3,15 +3,15 @@
 let param =
   {
     "8.6" = {
-      version = "20171214";
-      rev = "babf9c013506da1dbd67171e4a3ae87fdb7e9d00";
-      sha256 = "16fsf4cggx9s9fkijnpi4g614nmdb2yx7inzqqn070f8p959qcrd";
+      version = "20180709";
+      rev = "3b9ba7b26a64d49a55e8b6ccea570a7f32c11ead";
+      sha256 = "0f2nr8dgn1ab7hr7jrdmr1zla9g9h8216q4yf4wnff9qkln8sbbs";
     };
 
     "8.7" = {
-      version = "20171214";
-      rev = "babf9c013506da1dbd67171e4a3ae87fdb7e9d00";
-      sha256 = "16fsf4cggx9s9fkijnpi4g614nmdb2yx7inzqqn070f8p959qcrd";
+      version = "20180709";
+      rev = "3b9ba7b26a64d49a55e8b6ccea570a7f32c11ead";
+      sha256 = "0f2nr8dgn1ab7hr7jrdmr1zla9g9h8216q4yf4wnff9qkln8sbbs";
     };
 
   }."${coq.coq-version}"
@@ -36,7 +36,7 @@ stdenv.mkDerivation rec {
   '';
 
   meta = with stdenv.lib; {
-    homepage = git://github.com/jwiegley/category-theory.git;
+    homepage = https://github.com/jwiegley/category-theory;
     description = "A formalization of category theory in Coq for personal study and practical work";
     maintainers = with maintainers; [ jwiegley ];
     platforms = coq.meta.platforms;

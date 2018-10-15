@@ -21,21 +21,21 @@ stdenv.mkDerivation rec {
   # The build enables -O2 by default for everything else.
   hardeningDisable = stdenv.lib.optional stdenv.cc.isClang "fortify";
 
-  depsBuildBuild = stdenv.lib.optional stdenv.isCross buildPackages.stdenv.cc;
-
   # Accepted upstream, should be in next update: #42150, https://dev.gnupg.org/T4034
   patches = [ ./fix-jent-locking.patch ];
+
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
 
   buildInputs = [ libgpgerror ]
     ++ stdenv.lib.optional stdenv.isDarwin gettext
     ++ stdenv.lib.optional enableCapabilities libcap;
 
-  preConfigure = if stdenv.isCross then ''
+  preConfigure = stdenv.lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
     # This is intentional: gpg-error-config is a shell script that will work during the build
     mkdir -p "$NIX_BUILD_TOP"/bin
     ln -s ${libgpgerror.dev}/bin/gpg-error-config "$NIX_BUILD_TOP/bin"
     export PATH="$NIX_BUILD_TOP/bin:$PATH"
-  '' else null;
+  '';
 
   # Make sure libraries are correct for .pc and .la files
   # Also make sure includes are fixed for callers who don't use libgpgcrypt-config

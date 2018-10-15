@@ -4,15 +4,19 @@ with python.pkgs;
 
 buildPythonApplication rec {
   pname = "mkdocs";
-  version = "0.17.2";
-  name = "${pname}-${version}";
+  version = "0.17.5";
 
   src = fetchFromGitHub {
     owner = "mkdocs";
     repo = "mkdocs";
     rev = version;
-    sha256 = "0hpjs9qj0nr57a249yv8xvl61d3d2rrdfqxp1fm28z77l2xjj772";
+    sha256 = "1l1dahpwqikmww3yx2m6j2134npk8vcikg9klsmpqjpza8nigwzw";
   };
+
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace "tornado>=4.1,<5.0" "tornado>=4.1"
+  '';
 
   checkInputs = [
     nose nose-exclude mock

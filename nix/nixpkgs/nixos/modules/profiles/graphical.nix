@@ -1,7 +1,7 @@
 # This module defines a NixOS configuration with the Plasma 5 desktop.
 # It's used by the graphical installation CD.
 
-{ config, pkgs, ... }:
+{ pkgs, ... }:
 
 {
   services.xserver = {
@@ -11,5 +11,5 @@
     libinput.enable = true; # for touchpad support on many laptops
   };
 
-  environment.systemPackages = [ pkgs.glxinfo ];
+  environment.systemPackages = [ pkgs.glxinfo pkgs.firefox ];
 }

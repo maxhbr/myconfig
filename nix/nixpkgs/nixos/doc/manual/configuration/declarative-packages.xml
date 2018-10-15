@@ -8,11 +8,11 @@
  <para>
   With declarative package management, you specify which packages you want on
   your system by setting the option
-  <option>environment.systemPackages</option>. For instance, adding the
+  <xref linkend="opt-environment.systemPackages"/>. For instance, adding the
   following line to <filename>configuration.nix</filename> enables the Mozilla
   Thunderbird email application:
 <programlisting>
-environment.systemPackages = [ pkgs.thunderbird ];
+<xref linkend="opt-environment.systemPackages"/> = [ pkgs.thunderbird ];
 </programlisting>
   The effect of this specification is that the Thunderbird package from Nixpkgs
   will be built or downloaded as part of the system when you run
@@ -33,8 +33,8 @@ nixos.firefox   firefox-23.0   Mozilla Firefox - the browser, reloaded
 
  <para>
   To “uninstall” a package, simply remove it from
-  <option>environment.systemPackages</option> and run <command>nixos-rebuild
-  switch</command>.
+  <xref linkend="opt-environment.systemPackages"/> and run
+  <command>nixos-rebuild switch</command>.
  </para>
 
  <xi:include href="customizing-packages.xml" />

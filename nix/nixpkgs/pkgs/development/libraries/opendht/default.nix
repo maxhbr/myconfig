@@ -6,20 +6,20 @@
 , pkgconfig
 , nettle
 , gnutls
-, libmsgpack
+, msgpack
 , readline
 , libargon2
 }:
 
 stdenv.mkDerivation rec {
   name = "opendht-${version}";
-  version = "1.5.0";
+  version = "1.7.4";
 
   src = fetchFromGitHub {
     owner = "savoirfairelinux";
     repo = "opendht";
     rev = "${version}";
-    sha256 = "0zkxvs3vdlc4yzhfi2jh02bsnhh50fbfigqhnkmbx69lssnkyr05";
+    sha256 = "1wqib5plak9bw2bla7y4qyjqi0b00kf8mfwlml16qj3i0aq6h2cp";
   };
 
   buildInputs = [
@@ -29,7 +29,7 @@ stdenv.mkDerivation rec {
     pkgconfig
     nettle
     gnutls
-    libmsgpack
+    msgpack
     readline
     libargon2
   ];

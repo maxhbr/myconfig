@@ -42,7 +42,7 @@ $ systemd-cgls
   process would get 1/1001 of the cgroup’s CPU time.) You can limit a
   service’s CPU share in <filename>configuration.nix</filename>:
 <programlisting>
-systemd.services.httpd.serviceConfig.CPUShares = 512;
+<link linkend="opt-systemd.services._name_.serviceConfig">systemd.services.httpd.serviceConfig</link>.CPUShares = 512;
 </programlisting>
   By default, every cgroup has 1024 CPU shares, so this will halve the CPU
   allocation of the <literal>httpd.service</literal> cgroup.
@@ -55,7 +55,7 @@ systemd.services.httpd.serviceConfig.CPUShares = 512;
   instance, to limit <literal>httpd.service</literal> to 512 MiB of RAM
   (excluding swap):
 <programlisting>
-systemd.services.httpd.serviceConfig.MemoryLimit = "512M";
+<link linkend="opt-systemd.services._name_.serviceConfig">systemd.services.httpd.serviceConfig</link>.MemoryLimit = "512M";
 </programlisting>
  </para>
  <para>

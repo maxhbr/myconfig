@@ -3,6 +3,7 @@
 , withJava ? false
 , withPrimus ? false
 , extraPkgs ? pkgs: [ ] # extra packages to add to targetPkgs
+, extraProfile ? "" # string to append to profile
 , nativeOnly ? false
 , runtimeOnly ? false
 }:
@@ -15,13 +16,15 @@ let
       pciutils
       python2
       # Games' dependencies
-      xlibs.xrandr
+      xorg.xrandr
       which
       # Needed by gdialog, including in the steam-runtime
       perl
       # Open URLs
       xdg_utils
       iana-etc
+      # Steam Play / Proton
+      python3
     ] ++ lib.optional withJava jdk
       ++ lib.optional withPrimus primus
       ++ extraPkgs pkgs;
@@ -51,12 +54,13 @@ in buildFHSUserEnv rec {
 
   multiPkgs = pkgs: with pkgs; [
     # These are required by steam with proper errors
-    xlibs.libXcomposite
-    xlibs.libXtst
-    xlibs.libXrandr
-    xlibs.libXext
-    xlibs.libX11
-    xlibs.libXfixes
+    xorg.libXcomposite
+    xorg.libXtst
+    xorg.libXrandr
+    xorg.libXext
+    xorg.libX11
+    xorg.libXfixes
+    libGL
 
     # Not formally in runtime but needed by some games
     gst_all_1.gstreamer
@@ -144,7 +148,6 @@ in buildFHSUserEnv rec {
     SDL2_mixer
     gstreamer
     gst-plugins-base
-    libGLU
     libappindicator-gtk2
     libcaca
     libcanberra
@@ -178,7 +181,7 @@ in buildFHSUserEnv rec {
 
   profile = ''
     export STEAM_RUNTIME=${if nativeOnly then "0" else "/steamrt"}
-  '';
+  '' + extraProfile;
 
   runScript = writeScript "steam-wrapper.sh" ''
     #!${stdenv.shell}

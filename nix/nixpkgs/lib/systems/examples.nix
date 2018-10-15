@@ -8,6 +8,14 @@ rec {
   #
   # Linux
   #
+  powernv = {
+    config = "powerpc64le-unknown-linux-gnu";
+    platform = platforms.powernv;
+  };
+  musl-power = {
+    config = "powerpc64le-unknown-linux-musl";
+    platform = platforms.powernv;
+  };
 
   sheevaplug = rec {
     config = "armv5tel-unknown-linux-gnueabi";
@@ -32,20 +40,23 @@ rec {
   armv5te-android-prebuilt = rec {
     config = "armv5tel-unknown-linux-androideabi";
     sdkVer = "21";
+    ndkVer = "10e";
     platform = platforms.armv5te-android;
     useAndroidPrebuilt = true;
   };
 
   armv7a-android-prebuilt = rec {
     config = "armv7a-unknown-linux-androideabi";
-    sdkVer = "21";
+    sdkVer = "24";
+    ndkVer = "17c";
     platform = platforms.armv7a-android;
     useAndroidPrebuilt = true;
   };
 
   aarch64-android-prebuilt = rec {
     config = "aarch64-unknown-linux-android";
-    sdkVer = "21";
+    sdkVer = "24";
+    ndkVer = "17c";
     platform = platforms.aarch64-multiplatform;
     useAndroidPrebuilt = true;
   };
@@ -94,16 +105,42 @@ rec {
   #
 
   iphone64 = {
-    config = "aarch64-apple-darwin14";
-    arch = "arm64";
-    libc = "libSystem";
+    config = "aarch64-apple-ios";
+    # config = "aarch64-apple-darwin14";
+    sdkVer = "10.2";
+    xcodeVer = "8.2";
+    xcodePlatform = "iPhoneOS";
+    useiOSPrebuilt = true;
     platform = {};
   };
 
   iphone32 = {
-    config = "arm-apple-darwin10";
-    arch = "armv7-a";
-    libc = "libSystem";
+    config = "armv7a-apple-ios";
+    # config = "arm-apple-darwin10";
+    sdkVer = "10.2";
+    xcodeVer = "8.2";
+    xcodePlatform = "iPhoneOS";
+    useiOSPrebuilt = true;
+    platform = {};
+  };
+
+  iphone64-simulator = {
+    config = "x86_64-apple-ios";
+    # config = "x86_64-apple-darwin14";
+    sdkVer = "10.2";
+    xcodeVer = "8.2";
+    xcodePlatform = "iPhoneSimulator";
+    useiOSPrebuilt = true;
+    platform = {};
+  };
+
+  iphone32-simulator = {
+    config = "i686-apple-ios";
+    # config = "i386-apple-darwin11";
+    sdkVer = "10.2";
+    xcodeVer = "8.2";
+    xcodePlatform = "iPhoneSimulator";
+    useiOSPrebuilt = true;
     platform = {};
   };
 

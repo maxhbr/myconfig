@@ -14,8 +14,8 @@
 containers.database =
   { config =
       { config, pkgs, ... }:
-      { services.postgresql.enable = true;
-        services.postgresql.package = pkgs.postgresql96;
+      { <xref linkend="opt-services.postgresql.enable"/> = true;
+      <xref linkend="opt-services.postgresql.package"/> = pkgs.postgresql96;
       };
   };
 </programlisting>
@@ -32,11 +32,11 @@ containers.database =
   change the network configuration. You can give a container its own network as
   follows:
 <programlisting>
-containers.database =
-  { privateNetwork = true;
-    hostAddress = "192.168.100.10";
-    localAddress = "192.168.100.11";
-  };
+containers.database = {
+  <link linkend="opt-containers._name_.privateNetwork">privateNetwork</link> = true;
+  <link linkend="opt-containers._name_.hostAddress">hostAddress</link> = "192.168.100.10";
+  <link linkend="opt-containers._name_.localAddress">localAddress</link> = "192.168.100.11";
+};
 </programlisting>
   This gives the container a private virtual Ethernet interface with IP address
   <literal>192.168.100.11</literal>, which is hooked up to a virtual Ethernet

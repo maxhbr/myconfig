@@ -2,9 +2,10 @@
 
 with lib;
 
-let cfg = config.systemd; in
-
-rec {
+let
+  cfg = config.systemd;
+  lndir = "${pkgs.xorg.lndir}/bin/lndir";
+in rec {
 
   shellEscape = s: (replaceChars [ "\\" ] [ "\\\\" ] s);
 
@@ -72,10 +73,18 @@ rec {
     optional (attr ? ${name} && !(min <= attr.${name} && max >= attr.${name}))
       "Systemd ${group} field `${name}' is outside the range [${toString min},${toString max}]";
 
+  assertMinimum = name: min: group: attr:
+    optional (attr ? ${name} && attr.${name} < min)
+      "Systemd ${group} field `${name}' must be greater than or equal to ${toString min}";
+
   assertOnlyFields = fields: group: attr:
     let badFields = filter (name: ! elem name fields) (attrNames attr); in
     optional (badFields != [ ])
       "Systemd ${group} has extra fields [${concatStringsSep " " badFields}].";
+
+  assertInt = name: group: attr:
+    optional (attr ? ${name} && !isInt attr.${name})
+      "Systemd ${group} field `${name}' is not an integer";
 
   checkUnitConfig = group: checks: attrs: let
     # We're applied at the top-level type (attrsOf unitOption), so the actual
@@ -142,7 +151,13 @@ rec {
       for i in ${toString cfg.packages}; do
         for fn in $i/etc/systemd/${type}/* $i/lib/systemd/${type}/*; do
           if ! [[ "$fn" =~ .wants$ ]]; then
-            ln -s $fn $out/
+            if [[ -d "$fn" ]]; then
+              targetDir="$out/$(basename "$fn")"
+              mkdir -p "$targetDir"
+              ${lndir} "$fn" "$targetDir"
+            else
+              ln -s $fn $out/
+            fi
           fi
         done
       done
@@ -157,7 +172,7 @@ rec {
           if [ "$(readlink -f $i/$fn)" = /dev/null ]; then
             ln -sfn /dev/null $out/$fn
           else
-            mkdir $out/$fn.d
+            mkdir -p $out/$fn.d
             ln -s $i/$fn $out/$fn.d/overrides.conf
           fi
        else

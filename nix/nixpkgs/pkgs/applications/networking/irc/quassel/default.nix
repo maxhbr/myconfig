@@ -4,7 +4,7 @@
 , tag ? "" # tag added to the package name
 , static ? false # link statically
 
-, stdenv, fetchurl, fetchpatch, cmake, makeWrapper, dconf
+, stdenv, fetchurl, cmake, makeWrapper, dconf
 , qtbase, qtscript
 , phonon, libdbusmenu, qca-qt5
 
@@ -24,18 +24,16 @@ let
     buildCore = monolithic || daemon;
 in
 
-assert stdenv.isLinux;
-
 assert monolithic -> !client && !daemon;
 assert client || daemon -> !monolithic;
 assert !buildClient -> !withKDE; # KDE is used by the client only
 
 let
   edf = flag: feature: [("-D" + feature + (if flag then "=ON" else "=OFF"))];
-  source = import ./source.nix { inherit fetchurl fetchpatch; };
+  source = import ./source.nix { inherit fetchurl; };
 
 in with stdenv; mkDerivation rec {
-  inherit (source) src version patches;
+  inherit (source) src version;
 
   name = "quassel${tag}-${version}";
 
@@ -72,6 +70,8 @@ in with stdenv; mkDerivation rec {
         wrapProgram "$out/bin/quassel${lib.optionalString client "client"}" \
           --prefix GIO_EXTRA_MODULES : "${dconf}/lib/gio/modules"
     '';
+
+  patches = [ ./qt5_11.patch ];
 
   meta = with stdenv.lib; {
     homepage = https://quassel-irc.org/;

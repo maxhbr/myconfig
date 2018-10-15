@@ -3,7 +3,7 @@
 }:
 
 buildPythonPackage rec {
-  name = "moinmoin";
+  pname = "moinmoin";
   version = "1.9.9";
 
   # SyntaxError in setup.py
@@ -28,7 +28,7 @@ buildPythonPackage rec {
   meta = with lib; {
     description = "Advanced, easy to use and extensible WikiEngine";
 
-    homepage = "http://moinmo.in/";
+    homepage = "https://moinmo.in/";
 
     license = licenses.gpl2Plus;
   };

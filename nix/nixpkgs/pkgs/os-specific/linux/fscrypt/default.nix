@@ -1,8 +1,8 @@
-{ stdenv, buildGo110Package, fetchFromGitHub, pam }:
+{ stdenv, buildGoPackage, fetchFromGitHub, pam }:
 
 # Don't use this for anything important yet!
 
-buildGo110Package rec {
+buildGoPackage rec {
   name = "fscrypt-${version}";
   version = "0.2.4";
 
