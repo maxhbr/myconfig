@@ -12,17 +12,11 @@ let
   # /var/lib/misc is for dnsmasq.leases.
   stateDirs = "/var/lib/NetworkManager /var/lib/dhclient /var/lib/misc";
 
-  dns =
-    if cfg.useDnsmasq then "dnsmasq"
-    else if config.services.resolved.enable then "systemd-resolved"
-    else if config.services.unbound.enable then "unbound"
-    else "default";
-
   configFile = writeText "NetworkManager.conf" ''
     [main]
     plugins=keyfile
     dhcp=${cfg.dhcp}
-    dns=${dns}
+    dns=${cfg.dns}
 
     [keyfile]
     ${optionalString (cfg.unmanaged != [])
@@ -40,6 +34,8 @@ let
 
     [device]
     wifi.scan-rand-mac-address=${if cfg.wifi.scanRandMacAddress then "yes" else "no"}
+
+    ${cfg.extraConfig}
   '';
 
   /*
@@ -119,6 +115,14 @@ in {
           configured. If enabled, a group <literal>networkmanager</literal>
           will be created. Add all users that should have permission
           to change network settings to this group.
+        '';
+      };
+
+      extraConfig = mkOption {
+        type = types.lines;
+        default = "";
+        description = ''
+          Configuration appended to the generated NetworkManager.conf.
         '';
       };
 
@@ -208,14 +212,74 @@ in {
         };
       };
 
-      useDnsmasq = mkOption {
-        type = types.bool;
-        default = false;
+      dns = mkOption {
+        type = types.enum [ "default" "dnsmasq" "unbound" "systemd-resolved" "none" ];
+        default = "default";
         description = ''
-          Enable NetworkManager's dnsmasq integration. NetworkManager will run
-          dnsmasq as a local caching nameserver, using a "split DNS"
-          configuration if you are connected to a VPN, and then update
-          resolv.conf to point to the local nameserver.
+          Set the DNS (<literal>resolv.conf</literal>) processing mode.
+          </para>
+          <para>
+          Options:
+          <variablelist>
+          <varlistentry>
+            <term><literal>"default"</literal></term>
+            <listitem><para>
+              NetworkManager will update <literal>/etc/resolv.conf</literal> to
+              reflect the nameservers provided by currently active connections.
+            </para></listitem>
+          </varlistentry>
+          <varlistentry>
+            <term><literal>"dnsmasq"</literal></term>
+            <listitem>
+              <para>
+                Enable NetworkManager's dnsmasq integration. NetworkManager will
+                run dnsmasq as a local caching nameserver, using a "split DNS"
+                configuration if you are connected to a VPN, and then update
+                <literal>resolv.conf</literal> to point to the local nameserver.
+              </para>
+              <para>
+                It is possible to pass custom options to the dnsmasq instance by
+                adding them to files in the
+                <literal>/etc/NetworkManager/dnsmasq.d/</literal> directory.
+              </para>
+              <para>
+                When multiple upstream servers are available, dnsmasq will
+                initially contact them in parallel and then use the fastest to
+                respond, probing again other servers after some time.  This
+                behavior can be modified passing the
+                <literal>all-servers</literal> or <literal>strict-order</literal>
+                options to dnsmasq (see the manual page for more details).
+              </para>
+              <para>
+                Note that this option causes NetworkManager to launch and manage
+                its own instance of the dnsmasq daemon, which is
+                <emphasis>not</emphasis> the same as setting
+                <literal>services.dnsmasq.enable = true;</literal>.
+              </para>
+            </listitem>
+          </varlistentry>
+          <varlistentry>
+            <term><literal>"unbound"</literal></term>
+            <listitem><para>
+              NetworkManager will talk to unbound and dnssec-triggerd,
+              providing a "split DNS" configuration with DNSSEC support.
+              <literal>/etc/resolv.conf</literal> will be managed by
+              dnssec-trigger daemon.
+            </para></listitem>
+          </varlistentry>
+          <varlistentry>
+            <term><literal>"systemd-resolved"</literal></term>
+            <listitem><para>
+              NetworkManager will push the DNS configuration to systemd-resolved.
+            </para></listitem>
+          </varlistentry>
+          <varlistentry>
+            <term><literal>"none"</literal></term>
+            <listitem><para>
+              NetworkManager will not modify resolv.conf.
+            </para></listitem>
+          </varlistentry>
+          </variablelist>
         '';
       };
 
@@ -225,7 +289,7 @@ in {
             source = mkOption {
               type = types.path;
               description = ''
-                A script.
+                Path to the hook script.
               '';
             };
 
@@ -233,12 +297,28 @@ in {
               type = types.enum (attrNames dispatcherTypesSubdirMap);
               default = "basic";
               description = ''
-                Dispatcher hook type. Only basic hooks are currently available.
+                Dispatcher hook type. Look up the hooks described at
+                <link xlink:href="https://developer.gnome.org/NetworkManager/stable/NetworkManager.html">https://developer.gnome.org/NetworkManager/stable/NetworkManager.html</link>
+                and choose the type depending on the output folder.
+                You should then filter the event type (e.g., "up"/"down") from within your script.
               '';
             };
           };
         });
         default = [];
+        example = literalExample ''
+        [ {
+              source = pkgs.writeText "upHook" '''
+
+                if [ "$2" != "up" ]; then
+                    logger "exit: event $2 != up"
+                fi
+
+                # coreutils and iproute are in PATH too
+                logger "Device $DEVICE_IFACE coming up"
+            ''';
+            type = "basic";
+        } ]'';
         description = ''
           A list of scripts which will be executed in response to  network  events.
         '';
@@ -263,8 +343,9 @@ in {
           default = false;
           description = ''
             Enabling this option requires the
-            <option>networking.networkmanager.useDnsmasq</option> option to be
-            enabled too. If enabled, the directories defined by the
+            <option>networking.networkmanager.dns</option> option to be
+            set to <literal>dnsmasq</literal>. If enabled, the directories
+            defined by the
             <option>networking.networkmanager.dynamicHosts.hostsDirs</option>
             option will be set up when the service starts. The dnsmasq instance
             managed by NetworkManager will then watch those directories for
@@ -313,10 +394,10 @@ in {
       { assertion = config.networking.wireless.enable == false;
         message = "You can not use networking.networkmanager with networking.wireless";
       }
-      { assertion = !dynamicHostsEnabled || (dynamicHostsEnabled && cfg.useDnsmasq);
+      { assertion = !dynamicHostsEnabled || (dynamicHostsEnabled && cfg.dns == "dnsmasq");
         message = ''
-          To use networking.networkmanager.dynamicHosts you also need to enable
-          networking.networkmanager.useDnsmasq
+          To use networking.networkmanager.dynamicHosts you also need to set
+          networking.networkmanager.dns = "dnsmasq"
         '';
       }
     ];
@@ -325,25 +406,25 @@ in {
       { source = configFile;
         target = "NetworkManager/NetworkManager.conf";
       }
-      { source = "${networkmanager-openvpn}/etc/NetworkManager/VPN/nm-openvpn-service.name";
+      { source = "${networkmanager-openvpn}/lib/NetworkManager/VPN/nm-openvpn-service.name";
         target = "NetworkManager/VPN/nm-openvpn-service.name";
       }
-      { source = "${networkmanager-vpnc}/etc/NetworkManager/VPN/nm-vpnc-service.name";
+      { source = "${networkmanager-vpnc}/lib/NetworkManager/VPN/nm-vpnc-service.name";
         target = "NetworkManager/VPN/nm-vpnc-service.name";
       }
-      { source = "${networkmanager-openconnect}/etc/NetworkManager/VPN/nm-openconnect-service.name";
+      { source = "${networkmanager-openconnect}/lib/NetworkManager/VPN/nm-openconnect-service.name";
         target = "NetworkManager/VPN/nm-openconnect-service.name";
       }
-      { source = "${networkmanager-fortisslvpn}/etc/NetworkManager/VPN/nm-fortisslvpn-service.name";
+      { source = "${networkmanager-fortisslvpn}/lib/NetworkManager/VPN/nm-fortisslvpn-service.name";
         target = "NetworkManager/VPN/nm-fortisslvpn-service.name";
       }
-      { source = "${networkmanager-l2tp}/etc/NetworkManager/VPN/nm-l2tp-service.name";
+      { source = "${networkmanager-l2tp}/lib/NetworkManager/VPN/nm-l2tp-service.name";
         target = "NetworkManager/VPN/nm-l2tp-service.name";
       }
-      { source = "${networkmanager_strongswan}/etc/NetworkManager/VPN/nm-strongswan-service.name";
+      { source = "${networkmanager_strongswan}/lib/NetworkManager/VPN/nm-strongswan-service.name";
         target = "NetworkManager/VPN/nm-strongswan-service.name";
       }
-      { source = "${networkmanager-iodine}/etc/NetworkManager/VPN/nm-iodine-service.name";
+      { source = "${networkmanager-iodine}/lib/NetworkManager/VPN/nm-iodine-service.name";
         target = "NetworkManager/VPN/nm-iodine-service.name";
       }
     ] ++ optional (cfg.appendNameservers == [] || cfg.insertNameservers == [])
@@ -353,6 +434,7 @@ in {
       ++ lib.imap1 (i: s: {
         inherit (s) source;
         target = "NetworkManager/dispatcher.d/${dispatcherTypesSubdirMap.${s.type}}03userscript${lib.fixedWidthNumber 4 i}";
+        mode = "0544";
       }) cfg.dispatcherScripts
       ++ optional (dynamicHostsEnabled)
            { target = "NetworkManager/dnsmasq.d/dyndns.conf";
@@ -363,7 +445,7 @@ in {
 
     environment.systemPackages = cfg.packages;
 
-    users.extraGroups = [{
+    users.groups = [{
       name = "networkmanager";
       gid = config.ids.gids.networkmanager;
     }
@@ -371,7 +453,7 @@ in {
       name = "nm-openvpn";
       gid = config.ids.gids.nm-openvpn;
     }];
-    users.extraUsers = [{
+    users.users = [{
       name = "nm-openvpn";
       uid = config.ids.uids.nm-openvpn;
       extraGroups = [ "networkmanager" ];
@@ -408,6 +490,14 @@ in {
         Type = "oneshot";
         RemainAfterExist = true;
       };
+    };
+
+    systemd.services."NetworkManager-dispatcher" = {
+      wantedBy = [ "network.target" ];
+      restartTriggers = [ configFile ];
+
+      # useful binaries for user-specified hooks
+      path = [ pkgs.iproute pkgs.utillinux pkgs.coreutils ];
     };
 
     # Turn off NixOS' network management

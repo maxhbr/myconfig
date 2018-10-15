@@ -23,14 +23,29 @@ let
 
   cfg = config.virtualisation;
 
-  qemuGraphics = if cfg.graphics then "" else "-nographic";
-  kernelConsole = if cfg.graphics then "" else "console=${qemuSerialDevice}";
-  ttys = [ "tty1" "tty2" "tty3" "tty4" "tty5" "tty6" ];
+  qemuGraphics = lib.optionalString (!cfg.graphics) "-nographic";
+
+  consoles = lib.concatMapStringsSep " " (c: "console=${c}") cfg.qemu.consoles;
+
+  # XXX: This is very ugly and in the future we really should use attribute
+  # sets to build ALL of the QEMU flags instead of this mixed mess of Nix
+  # expressions and shell script stuff.
+  mkDiskIfaceDriveFlag = idx: driveArgs: let
+    inherit (cfg.qemu) diskInterface;
+    # The drive identifier created by incrementing the index by one using the
+    # shell.
+    drvId = "drive$((${idx} + 1))";
+    # NOTE: DO NOT shell escape, because this may contain shell variables.
+    commonArgs = "index=${idx},id=${drvId},${driveArgs}";
+    isSCSI = diskInterface == "scsi";
+    devArgs = "${diskInterface}-hd,drive=${drvId}";
+    args = "-drive ${commonArgs},if=none -device lsi53c895a -device ${devArgs}";
+  in if isSCSI then args else "-drive ${commonArgs},if=${diskInterface}";
 
   # Shell script to start the VM.
   startVM =
     ''
-      #! ${pkgs.stdenv.shell}
+      #! ${pkgs.runtimeShell}
 
       NIX_DISK_IMAGE=$(readlink -f ''${NIX_DISK_IMAGE:-${config.virtualisation.diskImage}})
 
@@ -68,7 +83,7 @@ let
         if ! test -e "empty$idx.qcow2"; then
             ${qemu}/bin/qemu-img create -f qcow2 "empty$idx.qcow2" "${toString size}M"
         fi
-        extraDisks="$extraDisks -drive index=$idx,file=$(pwd)/empty$idx.qcow2,if=${cfg.qemu.diskInterface},werror=report"
+        extraDisks="$extraDisks ${mkDiskIfaceDriveFlag "$idx" "file=$(pwd)/empty$idx.qcow2,werror=report"}"
         idx=$((idx + 1))
       '')}
 
@@ -83,23 +98,23 @@ let
           -virtfs local,path=$TMPDIR/xchg,security_model=none,mount_tag=xchg \
           -virtfs local,path=''${SHARED_DIR:-$TMPDIR/xchg},security_model=none,mount_tag=shared \
           ${if cfg.useBootLoader then ''
-            -drive index=0,id=drive1,file=$NIX_DISK_IMAGE,if=${cfg.qemu.diskInterface},cache=writeback,werror=report \
-            -drive index=1,id=drive2,file=$TMPDIR/disk.img,media=disk \
+            ${mkDiskIfaceDriveFlag "0" "file=$NIX_DISK_IMAGE,cache=writeback,werror=report"} \
+            ${mkDiskIfaceDriveFlag "1" "file=$TMPDIR/disk.img,media=disk"} \
             ${if cfg.useEFIBoot then ''
               -pflash $TMPDIR/bios.bin \
             '' else ''
             ''}
           '' else ''
-            -drive index=0,id=drive1,file=$NIX_DISK_IMAGE,if=${cfg.qemu.diskInterface},cache=writeback,werror=report \
+            ${mkDiskIfaceDriveFlag "0" "file=$NIX_DISK_IMAGE,cache=writeback,werror=report"} \
             -kernel ${config.system.build.toplevel}/kernel \
             -initrd ${config.system.build.toplevel}/initrd \
-            -append "$(cat ${config.system.build.toplevel}/kernel-params) init=${config.system.build.toplevel}/init regInfo=${regInfo}/registration ${kernelConsole} $QEMU_KERNEL_PARAMS" \
+            -append "$(cat ${config.system.build.toplevel}/kernel-params) init=${config.system.build.toplevel}/init regInfo=${regInfo}/registration ${consoles} $QEMU_KERNEL_PARAMS" \
           ''} \
           $extraDisks \
           ${qemuGraphics} \
           ${toString config.virtualisation.qemu.options} \
           $QEMU_OPTS \
-          $@
+          "$@"
     '';
 
 
@@ -141,9 +156,6 @@ let
             --partition-guid=2:970C694F-AFD0-4B99-B750-CDB7A329AB6F \
             --hybrid 2 \
             --recompute-chs /dev/vda
-          . /sys/class/block/vda2/uevent
-          mknod /dev/vda2 b $MAJOR $MINOR
-          . /sys/class/block/vda/uevent
           ${pkgs.dosfstools}/bin/mkfs.fat -F16 /dev/vda2
           export MTOOLS_SKIP_CHECK=1
           ${pkgs.mtools}/bin/mlabel -i /dev/vda2 ::boot
@@ -233,9 +245,10 @@ in
         default = true;
         description =
           ''
-            Whether to run QEMU with a graphics window, or access
-            the guest computer serial port through the host tty.
-          '';
+            Whether to run QEMU with a graphics window, or in nographic mode.
+            Serial console will be enabled on both settings, but this will
+            change the preferred console.
+            '';
       };
 
     virtualisation.cores =
@@ -317,6 +330,23 @@ in
           description = "Options passed to QEMU.";
         };
 
+      consoles = mkOption {
+        type = types.listOf types.str;
+        default = let
+          consoles = [ "${qemuSerialDevice},115200n8" "tty0" ];
+        in if cfg.graphics then consoles else reverseList consoles;
+        example = [ "console=tty1" ];
+        description = ''
+          The output console devices to pass to the kernel command line via the
+          <literal>console</literal> parameter, the primary console is the last
+          item of this list.
+
+          By default it enables both serial console and
+          <literal>tty0</literal>. The preferred console (last one) is based on
+          the value of <option>virtualisation.graphics</option>.
+        '';
+      };
+
       networkingOptions =
         mkOption {
           default = [
@@ -338,10 +368,16 @@ in
         mkOption {
           default = "virtio";
           example = "scsi";
-          type = types.str;
+          type = types.enum [ "virtio" "scsi" "ide" ];
+          description = "The interface used for the virtual hard disks.";
+        };
+
+      guestAgent.enable =
+        mkOption {
+          default = true;
+          type = types.bool;
           description = ''
-            The interface used for the virtual hard disks
-            (<literal>virtio</literal> or <literal>scsi</literal>).
+            Enable the Qemu guest agent.
           '';
         };
     };
@@ -494,6 +530,8 @@ in
 
     # Don't run ntpd in the guest.  It should get the correct time from KVM.
     services.timesyncd.enable = false;
+
+    services.qemuGuest.enable = cfg.qemu.guestAgent.enable;
 
     system.build.vm = pkgs.runCommand "nixos-vm" { preferLocalBuild = true; }
       ''

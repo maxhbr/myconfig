@@ -1,7 +1,7 @@
-{ stdenv, fetchFromGitHub, pythonPackages, openssl }:
+{ stdenv, fetchFromGitHub, python2Packages, openssl }:
 
-pythonPackages.buildPythonApplication rec {
-  name = "pybitmessage-${version}";
+python2Packages.buildPythonApplication rec {
+  pname = "pybitmessage";
 
   version = "0.6.3.2";
 
@@ -12,7 +12,7 @@ pythonPackages.buildPythonApplication rec {
     sha256 = "1lmhbpwsqh1v93krlqqhafw2pc3y0qp8zby186yllbph6s8kdp35";
   };
 
-  propagatedBuildInputs = with pythonPackages; [ msgpack-python pyqt4 numpy pyopencl ] ++ [ openssl ];
+  propagatedBuildInputs = with python2Packages; [ msgpack-python pyqt4 numpy pyopencl ] ++ [ openssl ];
 
   preConfigure = ''
     # Remove interaction and misleading output

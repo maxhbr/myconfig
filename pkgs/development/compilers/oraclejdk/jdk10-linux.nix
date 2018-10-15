@@ -2,11 +2,9 @@
 , stdenv
 , requireFile
 , makeWrapper
-, unzip
 , file
 , xorg ? null
 , packageType ? "JDK" # JDK, JRE, or ServerJRE
-, pluginSupport ? true
 , glib
 , libxml2
 , ffmpeg_2
@@ -25,7 +23,6 @@
 , setJavaClassPath
 }:
 
-assert stdenv.system == "x86_64-linux";
 assert swingSupport -> xorg != null;
 
 let
@@ -153,6 +150,7 @@ let result = stdenv.mkDerivation rec {
   meta = with stdenv.lib; {
     license = licenses.unfree;
     platforms = [ "x86_64-linux" ]; # some inherit jre.meta.platforms
+    knownVulnerabilities = [ "Support ended in September 2018.  Use OpenJDK or JDK 8." ];
   };
 
 }; in result

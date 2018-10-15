@@ -1,4 +1,6 @@
-{ lib, stdenv, fetchurlBoot, buildPackages, enableThreading ? stdenv ? glibc, fetchpatch }:
+{ lib, stdenv, fetchurlBoot, buildPackages
+, enableThreading ? stdenv ? glibc, makeWrapper
+}:
 
 with lib;
 
@@ -21,6 +23,8 @@ let
   libcLib = lib.getLib libc;
   crossCompiling = stdenv.buildPlatform != stdenv.hostPlatform;
   common = { version, sha256 }: stdenv.mkDerivation (rec {
+    inherit version;
+
     name = "perl-${version}";
 
     src = fetchurlBoot {
@@ -29,7 +33,8 @@ let
     };
 
     # TODO: Add a "dev" output containing the header files.
-    outputs = [ "out" "man" "devdoc" ];
+    outputs = [ "out" "man" "devdoc" ] ++
+      stdenv.lib.optional crossCompiling "dev";
     setOutputFlags = false;
 
     patches =
@@ -45,7 +50,8 @@ let
         })
       ++ optional stdenv.isSunOS ./ld-shared.patch
       ++ optional stdenv.isDarwin ./cpp-precomp.patch
-      ++ optional (stdenv.isDarwin && versionAtLeast version "5.24") ./sw_vers.patch;
+      ++ optional (stdenv.isDarwin && versionAtLeast version "5.24") ./sw_vers.patch
+      ++ optional crossCompiling ./MakeMaker-cross.patch;
 
     postPatch = ''
       pwd="$(type -P pwd)"
@@ -91,15 +97,11 @@ let
         sed -i 's,\(libswanted.*\)pthread,\1,g' Configure
       '';
 
-    preBuild = optionalString (!(stdenv ? cc && stdenv.cc.nativeTools))
-      ''
-        # Make Cwd work on NixOS (where we don't have a /bin/pwd).
-        substituteInPlace dist/PathTools/Cwd.pm --replace "'/bin/pwd'" "'$(type -tP pwd)'"
-      '';
-
     setupHook = ./setup-hook.sh;
 
     passthru.libPrefix = "lib/perl5/site_perl";
+
+    doCheck = false; # some tests fail, expensive
 
     # TODO: it seems like absolute paths to some coreutils is required.
     postInstall =
@@ -117,55 +119,75 @@ let
               if stdenv.cc.cc or null != null then stdenv.cc.cc else "/no-such-path"
             }" /no-such-path \
           --replace "$man" /no-such-path
+      '' + stdenv.lib.optionalString crossCompiling
+      ''
+        mkdir -p $dev/lib/perl5/cross_perl/${version}
+        for dir in cnf/{stub,cpan}; do
+          cp -r $dir/* $dev/lib/perl5/cross_perl/${version}
+        done
+
+        mkdir -p $dev/bin
+        install -m755 miniperl $dev/bin/perl
+
+        export runtimeArch="$(ls $out/lib/perl5/site_perl/${version})"
+        # wrapProgram should use a runtime-native SHELL by default, but
+        # it actually uses a buildtime-native one. If we ever fix that,
+        # we'll need to fix this to use a buildtime-native one.
+        #
+        # Adding the arch-specific directory is morally incorrect, as
+        # miniperl can't load the native modules there. However, it can
+        # (and sometimes needs to) load and run some of the pure perl
+        # code there, so we add it anyway. When needed, stubs can be put
+        # into $dev/lib/perl5/cross_perl/${version}.
+        wrapProgram $dev/bin/perl --prefix PERL5LIB : \
+          "$dev/lib/perl5/cross_perl/${version}:$out/lib/perl5/${version}:$out/lib/perl5/${version}/$runtimeArch"
       ''; # */
 
     meta = {
       homepage = https://www.perl.org/;
       description = "The standard implementation of the Perl 5 programmming language";
+      license = licenses.artistic1;
       maintainers = [ maintainers.eelco ];
       platforms = platforms.all;
     };
   } // stdenv.lib.optionalAttrs (stdenv.buildPlatform != stdenv.hostPlatform) rec {
-    crossVersion = "1.1.8";
+    crossVersion = "1.2";
 
     perl-cross-src = fetchurlBoot {
       url = "https://github.com/arsv/perl-cross/releases/download/${crossVersion}/perl-cross-${crossVersion}.tar.gz";
-      sha256 = "072j491rpz2qx2sngbg4flqh4lx5865zyql7b9lqm6s1kknjdrh8";
+      sha256 = "02cic7lk91hgmsg8klkm2kv88m2a8y22m4m8gl4ydxbap2z7g42r";
     };
 
-    # https://github.com/arsv/perl-cross/issues/60
-    perl-cross-gcc7-patch = fetchpatch {
-      url = "https://github.com/arsv/perl-cross/commit/07208bc1707b8be3ea170c62c59120020cf0f87f.patch";
-      sha256 = "1gh8w9m5if2s0lrx2x8f8grp74d1l6d46m8jglpjm5a1kf55j810";
-    };
-
-    depsBuildBuild = [ buildPackages.stdenv.cc ];
+    depsBuildBuild = [ buildPackages.stdenv.cc makeWrapper ];
 
     postUnpack = ''
       unpackFile ${perl-cross-src}
-      cd perl-cross-*
-      patch -Np1 -i ${perl-cross-gcc7-patch}
-      cd ..
       cp -R perl-cross-${crossVersion}/* perl-${version}/
     '';
 
     configurePlatforms = [ "build" "host" "target" ];
+
+    # TODO merge setup hooks
+    setupHook = ./setup-hook-cross.sh;
   });
 in rec {
-  perl = perl524;
-
   perl522 = common {
     version = "5.22.4";
     sha256 = "1yk1xn4wmnrf2ph02j28khqarpyr24qwysjzkjnjv7vh5dygb7ms";
   };
 
   perl524 = common {
-    version = "5.24.3";
-    sha256 = "1m2px85kq2fyp2d4rx3bw9kg3car67qfqwrs5vlv96dx0x8rl06b";
+    version = "5.24.4";
+    sha256 = "0w0r6v5k5hw5q1k3p4c7krcxidkj2qzsj5dlrlrxhm01n7fksbxz";
   };
 
   perl526 = common {
-    version = "5.26.1";
-    sha256 = "1p81wwvr5jb81m41d07kfywk5gvbk0axdrnvhc2aghcdbr4alqz7";
+    version = "5.26.2";
+    sha256 = "03gpnxx1g6hvlh0v4aqx00580h787sfywp1vlvw64q2xcbm9qbsp";
+  };
+
+  perl528 = common {
+    version = "5.28.0";
+    sha256 = "1a3f822lcl8dr8v0hk80yyhpzqlljg49z9flb48rs3nbsij9z4ky";
   };
 }

@@ -1,6 +1,6 @@
 { pkgs, fetchFromGitHub, stdenv, gtk3, udev, desktop-file-utils
 , shared-mime-info, intltool, pkgconfig, wrapGAppsHook, ffmpegthumbnailer
-, jmtpfs, ifuseSupport ? false, ifuse ? null, lsof, udisks2, hicolor-icon-theme, adwaita-icon-theme }:
+, jmtpfs, ifuseSupport ? false, ifuse ? null, lsof, udisks2 }:
 
 stdenv.mkDerivation rec {
   name = "spacefm-${version}";
@@ -24,6 +24,10 @@ stdenv.mkDerivation rec {
   postInstall = ''
     rm -f $out/etc/spacefm/spacefm.conf
     ln -s /etc/spacefm/spacefm.conf $out/etc/spacefm/spacefm.conf
+  '';
+
+  preFixup = ''
+    gappsWrapperArgs+=(--prefix XDG_DATA_DIRS : "${shared-mime-info}/share")
   '';
 
   nativeBuildInputs = [ pkgconfig ];

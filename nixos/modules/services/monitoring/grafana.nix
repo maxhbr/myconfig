@@ -235,7 +235,7 @@ in {
         but without GF_ prefix
       '';
       default = {};
-      type = types.attrsOf types.str;
+      type = with types; attrsOf (either str path);
     };
   };
 
@@ -265,7 +265,7 @@ in {
       '';
     };
 
-    users.extraUsers.grafana = {
+    users.users.grafana = {
       uid = config.ids.uids.grafana;
       description = "Grafana user";
       home = cfg.dataDir;

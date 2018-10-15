@@ -1,21 +1,21 @@
 { stdenv, intltool, fetchurl, webkitgtk, pkgconfig, gtk3, glib
 , file, librsvg, gnome3, gdk_pixbuf
-, dbus-glib, dbus_libs, telepathy-glib, telepathy-farstream
+, telepathy-glib, telepathy-farstream
 , clutter-gtk, clutter-gst, gst_all_1, cogl, gnome-online-accounts
 , gcr, libsecret, folks, libpulseaudio, telepathy-mission-control
 , telepathy-logger, libnotify, clutter, libsoup, gnutls
 , evolution-data-server, yelp-xsl
 , libcanberra-gtk3, p11-kit, farstream, libtool, shared-mime-info
-, bash, wrapGAppsHook, itstool, libxml2, libxslt, icu, libgee
+, wrapGAppsHook, itstool, libxml2, libxslt, icu, libgee
 , isocodes, enchant, libchamplain, geoclue2, geocode-glib, cheese, libgudev }:
 
 stdenv.mkDerivation rec {
   name = "empathy-${version}";
-  version = "3.12.14";
+  version = "3.25.90";
 
   src = fetchurl {
     url = "mirror://gnome/sources/empathy/${gnome3.versionBranch version}/${name}.tar.xz";
-    sha256 = "7d86942ce97edd10ade0e6ae6a210d35e4d627fe4d223377d71fd1840bc6e3a3";
+    sha256 = "0sn10fcymc6lyrabk7vx8lpvlaxxkqnmcwj9zdkfa8qf3388k4nc";
   };
 
   passthru = {

@@ -1,6 +1,6 @@
 { stdenv, fetchurl, openssl, zlib, asciidoc, libxml2, libxslt
-, docbook_xml_xslt, pkgconfig, luajit
-, gzip, bzip2, xz
+, docbook_xsl, pkgconfig, luajit
+, groff, gzip, bzip2, xz
 , python, wrapPython, pygments, markdown
 }:
 
@@ -9,7 +9,7 @@ stdenv.mkDerivation rec {
   version = "1.2.1";
 
   src = fetchurl {
-    url = "http://git.zx2c4.com/cgit/snapshot/${name}.tar.xz";
+    url = "https://git.zx2c4.com/cgit/snapshot/${name}.tar.xz";
     sha256 = "1gw2j5xc5qdx2hwiwkr8h6kgya7v9d9ff9j32ga1dys0cca7qm1w";
   };
 
@@ -23,7 +23,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ pkgconfig ] ++ [ python wrapPython ];
   buildInputs = [
-    openssl zlib asciidoc libxml2 libxslt docbook_xml_xslt luajit
+    openssl zlib asciidoc libxml2 libxslt docbook_xsl luajit
   ];
   pythonPath = [ pygments markdown ];
 
@@ -32,6 +32,9 @@ stdenv.mkDerivation rec {
         -e 's|"bzip2"|"${bzip2.bin}/bin/bzip2"|' \
         -e 's|"xz"|"${xz.bin}/bin/xz"|' \
         -i ui-snapshot.c
+
+    substituteInPlace filters/html-converters/man2html \
+      --replace 'groff' '${groff}/bin/groff'
   '';
 
   # Give cgit a git source tree and pass configuration parameters (as make

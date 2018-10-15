@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, writeText, nss, python
+{ stdenv, fetchurl, nss, python
 , blacklist ? []
 , includeEmail ? false
 }:
@@ -19,6 +19,8 @@ stdenv.mkDerivation rec {
   name = "nss-cacert-${nss.version}";
 
   src = nss.src;
+
+  outputs = [ "out" "unbundled" ];
 
   nativeBuildInputs = [ python ];
 
@@ -50,6 +52,10 @@ stdenv.mkDerivation rec {
   installPhase = ''
     mkdir -pv $out/etc/ssl/certs
     cp -v ca-bundle.crt $out/etc/ssl/certs
+    # install individual certs in unbundled output
+    mkdir -pv $unbundled/etc/ssl/certs
+    cp -v *.crt $unbundled/etc/ssl/certs
+    rm -f $unbundled/etc/ssl/certs/ca-bundle.crt  # not wanted in unbundled
   '';
 
   setupHook = ./setup-hook.sh;

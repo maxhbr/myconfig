@@ -1,26 +1,40 @@
-{ stdenv, fetchurl, pkgconfig, gnome3, gtk3, wrapGAppsHook
-, intltool, itstool, libxml2, systemd }:
+{ stdenv, fetchurl, meson, ninja, pkgconfig, gnome3, glib, gtk3, wrapGAppsHook, desktop-file-utils
+, gettext, itstool, libxml2, libxslt, docbook_xsl, docbook_xml_dtd_43, systemd, python3 }:
 
 stdenv.mkDerivation rec {
   name = "gnome-logs-${version}";
-  version = "3.26.3";
+  version = "3.28.5";
 
   src = fetchurl {
     url = "mirror://gnome/sources/gnome-logs/${gnome3.versionBranch version}/${name}.tar.xz";
-    sha256 = "0cbzl38haz1m6y7gcbvvab0jcrva781izhp8xv2dzmma4xlzdw0k";
+    sha256 = "0zw6nx1hckv46hn978g57anp4zq4alvz9dpwibgx02wb6gq1r23a";
   };
+
+  mesonFlags = [
+    "-Dtests=true"
+    "-Dman=true"
+  ];
+
+  nativeBuildInputs = [
+    (python3.withPackages (pkgs: with pkgs; [ dogtail ]))
+    meson ninja pkgconfig wrapGAppsHook gettext itstool desktop-file-utils
+    libxml2 libxslt docbook_xsl docbook_xml_dtd_43
+  ];
+  buildInputs = [ glib gtk3 systemd gnome3.gsettings-desktop-schemas gnome3.defaultIconTheme ];
+
+  postPatch = ''
+    chmod +x meson_post_install.py
+    patchShebangs meson_post_install.py
+  '';
+
+  doCheck = true;
 
   passthru = {
-    updateScript = gnome3.updateScript { packageName = "gnome-logs"; attrPath = "gnome3.gnome-logs"; };
+    updateScript = gnome3.updateScript {
+      packageName = "gnome-logs";
+      attrPath = "gnome3.gnome-logs";
+    };
   };
-
-  configureFlags = [ "--disable-tests" ];
-
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [
-    gtk3 wrapGAppsHook intltool itstool libxml2
-    systemd gnome3.gsettings-desktop-schemas gnome3.defaultIconTheme
-  ];
 
   meta = with stdenv.lib; {
     homepage = https://wiki.gnome.org/Apps/Logs;

@@ -2,11 +2,11 @@
 
 stdenv.mkDerivation rec {
   name = "git-extras-${version}";
-  version = "4.4.0";
+  version = "4.6.0";
 
   src = fetchurl {
     url = "https://github.com/tj/git-extras/archive/${version}.tar.gz";
-    sha256 = "0vb8syyr5nbvmkj5g4rb1p8rqxb2hyl25gbyf4rd0b972d7iihhn";
+    sha256 = "1jp5wi2h4jqbrjv0iqa45s0f9h3n5k1dxs89jkhg5n5k9jjs7fp3";
   };
 
   dontBuild = true;

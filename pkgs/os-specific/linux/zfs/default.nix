@@ -4,10 +4,12 @@
 
 # Userspace dependencies
 , zlib, libuuid, python, attr, openssl
+, libtirpc
 , nfs-utils
+, gawk, gnugrep, gnused, systemd
 
 # Kernel dependencies
-, kernel ? null, spl ? null, splUnstable ? null, splLegacyCrypto ? null
+, kernel ? null, spl ? null
 }:
 
 with stdenv.lib;
@@ -22,7 +24,7 @@ let
     , rev ? "zfs-${version}"
     , isUnstable ? false
     , isLegacyCrypto ? false
-    , incompatibleKernelVersion ? null } @ args:
+    , incompatibleKernelVersion ? null }:
     if buildKernel &&
       (incompatibleKernelVersion != null) &&
         versionAtLeast kernel.version incompatibleKernelVersion then
@@ -43,14 +45,18 @@ let
 
       postPatch = optionalString buildKernel ''
         patchShebangs scripts
+      '' + optionalString stdenv.hostPlatform.isMusl ''
+        substituteInPlace config/user-libtirpc.m4 \
+          --replace /usr/include/tirpc ${libtirpc}/include/tirpc
       '';
 
       nativeBuildInputs = [ autoreconfHook nukeReferences ]
-         ++ optional buildKernel (kernel.moduleBuildDependencies ++ [ perl ]);
+        ++ optional buildKernel (kernel.moduleBuildDependencies ++ [ perl ]);
       buildInputs =
            optionals buildKernel [ spl ]
         ++ optionals buildUser [ zlib libuuid python attr ]
-        ++ optionals (buildUser && (isUnstable || isLegacyCrypto)) [ openssl ];
+        ++ optionals (buildUser && (isUnstable || isLegacyCrypto)) [ openssl ]
+        ++ optional stdenv.hostPlatform.isMusl [ libtirpc ];
 
       # for zdb to get the rpath to libgcc_s, needed for pthread_cancel to work
       NIX_CFLAGS_LINK = "-lgcc_s";
@@ -77,6 +83,9 @@ let
         do
           substituteInPlace "$f" --replace "/lib/udev/vdev_id" "$out/lib/udev/vdev_id"
         done
+        substituteInPlace ./cmd/vdev_id/vdev_id \
+          --replace "PATH=/bin:/sbin:/usr/bin:/usr/sbin" \
+          "PATH=${makeBinPath [ coreutils gawk gnused gnugrep systemd ]}"
 
         ./autogen.sh
         configureFlagsArray+=("--libexecdir=$out/libexec")
@@ -84,7 +93,7 @@ let
 
       configureFlags = [
         "--with-config=${configFile}"
-        ] ++ optionals buildUser [
+      ] ++ optionals buildUser [
         "--with-dracutdir=$(out)/lib/dracut"
         "--with-udevdir=$(out)/lib/udev"
         "--with-systemdunitdir=$(out)/etc/systemd/system"
@@ -94,10 +103,11 @@ let
         "--sysconfdir=/etc"
         "--localstatedir=/var"
         "--enable-systemd"
-        ] ++ optionals buildKernel [
-        "--with-spl=${spl}/libexec/spl"
+      ] ++ optionals buildKernel [
         "--with-linux=${kernel.dev}/lib/modules/${kernel.modDirVersion}/source"
         "--with-linux-obj=${kernel.dev}/lib/modules/${kernel.modDirVersion}/build"
+      ] ++ optionals (buildKernel && spl != null) [
+        "--with-spl=${spl}/libexec/spl"
       ];
 
       enableParallelBuilding = true;
@@ -148,12 +158,12 @@ in {
   # to be adapted
   zfsStable = common {
     # comment/uncomment if breaking kernel versions are known
-    incompatibleKernelVersion = null;
+    # incompatibleKernelVersion = null;
 
     # this package should point to the latest release.
-    version = "0.7.9";
+    version = "0.7.11";
 
-    sha256 = "0krpxrvnda2jx6l71xhw9fsksyp2a6h9l9asppac3szsd1n7fp9n";
+    sha256 = "0m9wkq6wf4cg8w38s3avd0bvybnv0avqwxk3gwz9rgb9rn0m98jg";
 
     extraPatches = [
       (fetchpatch {
@@ -170,43 +180,19 @@ in {
     incompatibleKernelVersion = null;
 
     # this package should point to a version / git revision compatible with the latest kernel release
-    version = "2018-05-22";
+    version = "2018-08-13";
 
-    rev = "ba863d0be4cbfbea938b10e49fb6ff459ac9ec20";
-    sha256 = "11dhigw1gybalwg2m6si148b6w195dj2lw38snqf6576wb5zndd0";
+    rev = "64e96969a88c21aebb2f8d982a8c345e55a2ae6c";
+    sha256 = "164fvsf9zqvq3vafnvjxafjl8gihmfqfsjwsmky16i90a6hs96gf";
     isUnstable = true;
 
     extraPatches = [
       (fetchpatch {
-        url = "https://github.com/Mic92/zfs/compare/${rev}...nixos-zfs-2018-02-02.patch";
-        sha256 = "1gqmgqi39qhk5kbbvidh8f2xqq25vj58i9x0wjqvcx6a71qj49ch";
+        url = "https://github.com/Mic92/zfs/compare/${rev}...nixos-zfs-2018-08-13.patch";
+        sha256 = "1sdcr1w2jp3djpwlf1f91hrxxmc34q0jl388smdkxh5n5bpw5gzw";
       })
     ];
 
-    spl = splUnstable;
+    spl = null;
   };
-
-  # TODO: Remove this module before 18.09
-  # also remove boot.zfs.enableLegacyCrypto
-  zfsLegacyCrypto = common {
-    # comment/uncomment if breaking kernel versions are known
-    incompatibleKernelVersion = null;
-
-    # this package should point to a version / git revision compatible with the latest kernel release
-    version = "2018-02-01";
-
-    rev = "4c46b99d24a6e71b3c72462c11cb051d0930ad60";
-    sha256 = "011lcp2x44jgfzqqk2gjmyii1v7rxcprggv20prxa3c552drsx3c";
-    isUnstable = true;
-
-    extraPatches = [
-      (fetchpatch {
-        url = "https://github.com/Mic92/zfs/compare/4c46b99d24a6e71b3c72462c11cb051d0930ad60...nixos-zfs-2018-02-01.patch";
-        sha256 = "1gqmgqi39qhk5kbbvidh8f2xqq25vj58i9x0wjqvcx6a71qj49ch";
-      })
-    ];
-
-    spl = splLegacyCrypto;
-  };
-
 }

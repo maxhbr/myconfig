@@ -1,15 +1,15 @@
 { stdenv, fetchurl, intltool, pkgconfig
 , gnome3, ncurses, gobjectIntrospection, vala, libxml2, gnutls
-, fetchFromGitHub, autoconf, automake, libtool, gtk-doc, gperf, pcre2
+, gperf, pcre2
 }:
 
 stdenv.mkDerivation rec {
   name = "vte-${version}";
-  version = "0.50.2";
+  version = "0.52.2";
 
   src = fetchurl {
     url = "mirror://gnome/sources/vte/${gnome3.versionBranch version}/${name}.tar.xz";
-    sha256 = "79dd316bfaff48f2fb74d066baae0d830e1f44436796fe410a57297e5c5f09cf";
+    sha256 = "1br6kg0wzf1wmww1hadihhcpqbamalqmbppfdzjvzk1ayp75f9hg";
   };
 
   passthru = {
@@ -19,7 +19,12 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [ gobjectIntrospection intltool pkgconfig vala gperf libxml2 ];
   buildInputs = [ gnome3.glib gnome3.gtk3 ncurses ];
 
-  propagatedBuildInputs = [ gnutls pcre2 ];
+  propagatedBuildInputs = [
+    # Required by vte-2.91.pc.
+    gnome3.gtk3
+    gnutls
+    pcre2
+  ];
 
   preConfigure = "patchShebangs .";
 

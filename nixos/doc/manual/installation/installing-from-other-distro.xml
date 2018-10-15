@@ -47,7 +47,7 @@
     Short version:
    </para>
 <screen>
-$ bash &lt;(curl https://nixos.org/nix/install)
+$ curl https://nixos.org/nix/install | sh
 $ . $HOME/.nix-profile/etc/profile.d/nix.sh # …or open a fresh shell</screen>
    <para>
     More details in the
@@ -131,7 +131,7 @@ $ nix-channel --add https://nixos.org/channels/nixos-<replaceable>version</repla
     this to your <literal>configuration.nix</literal>:
    </para>
 <programlisting>
-boot.loader.grub.extraEntries = ''
+<xref linkend="opt-boot.loader.grub.extraEntries"/> = ''
   menuentry "Ubuntu" {
     search --set=ubuntu --fs-uuid 3cc3e652-0c1f-4800-8451-033754f68e6e
     configfile "($ubuntu)/boot/grub/grub.cfg"
@@ -178,7 +178,7 @@ $ sudo useradd -u 30000 -g nixbld -G nixbld nixbld</screen>
 $ sudo userdel nixbld
 $ sudo groupdel nixbld</screen>
    <para>
-    If you do not wish to keep the Nix package mananager installed either, run
+    If you do not wish to keep the Nix package manager installed either, run
     something like <literal>sudo rm -rv ~/.nix-* /nix</literal> and remove the
     line that the Nix installer added to your <literal>~/.profile</literal>.
    </para>
@@ -210,7 +210,9 @@ $ sudo groupdel nixbld</screen>
     or to lock the account with <literal>sudo passwd -l root</literal> if you
     use <literal>sudo</literal>)
    </para>
-<programlisting>users.users.root.initialHashedPassword = "";</programlisting>
+<programlisting>
+<link linkend="opt-users.users._name__.initialHashedPassword">users.users.root.initialHashedPassword</link> = "";
+              </programlisting>
   </listitem>
   <listitem>
    <para>
@@ -283,13 +285,15 @@ $ sudo groupdel nixbld</screen>
    </para>
 <screen>
 $ sudo touch /etc/NIXOS
-$ sudo touch /etc/NIXOS_LUSTRATE</screen>
+$ sudo touch /etc/NIXOS_LUSTRATE
+            </screen>
    <para>
     Let's also make sure the NixOS configuration files are kept once we reboot
     on NixOS:
    </para>
 <screen>
-$ echo etc/nixos | sudo tee -a /etc/NIXOS_LUSTRATE</screen>
+$ echo etc/nixos | sudo tee -a /etc/NIXOS_LUSTRATE
+            </screen>
   </listitem>
   <listitem>
    <para>

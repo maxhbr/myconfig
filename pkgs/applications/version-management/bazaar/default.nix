@@ -1,5 +1,4 @@
 { stdenv, fetchurl, python2Packages
-, fetchpatch
 , withSFTP ? true
  }:
 

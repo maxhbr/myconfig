@@ -1,5 +1,5 @@
 {stdenv, fetchurl
-  , freeglut, ghostscriptX, imagemagick, fftw 
+  , freeglut, ghostscriptX, imagemagick, fftw
   , boehmgc, libGLU, libGL, mesa_noglu, ncurses, readline, gsl, libsigsegv
   , python, zlib, perl, texLive, texinfo, xz
 , darwin
@@ -9,11 +9,11 @@ let
   s = # Generated upstream information
   rec {
     baseName="asymptote";
-    version="2.41";
+    version="2.47";
     name="${baseName}-${version}";
-    hash="1w7fbq6gy65g0mxg6wdxi7v178c5yxvh9yrnv3bzm4sjzf4pwvhx";
-    url="https://freefr.dl.sourceforge.net/project/asymptote/2.41/asymptote-2.41.src.tgz";
-    sha256="1w7fbq6gy65g0mxg6wdxi7v178c5yxvh9yrnv3bzm4sjzf4pwvhx";
+    hash="0zc24n2vwzxdfmcppqfk3fkqlb4jmvswzi3bz232kxl7dyiyb971";
+    url="https://freefr.dl.sourceforge.net/project/asymptote/2.47/asymptote-2.47.src.tgz";
+    sha256="0zc24n2vwzxdfmcppqfk3fkqlb4jmvswzi3bz232kxl7dyiyb971";
   };
   buildInputs = [
    ghostscriptX imagemagick fftw
@@ -35,7 +35,7 @@ stdenv.mkDerivation {
 
   preConfigure = ''
     export HOME="$PWD"
-    patchShebangs . 
+    patchShebangs .
     sed -e 's@epswrite@eps2write@g' -i runlabel.in
     xz -d < ${texinfo.src} | tar --wildcards -x texinfo-'*'/doc/texinfo.tex
     cp texinfo-*/doc/texinfo.tex doc/
@@ -51,7 +51,9 @@ stdenv.mkDerivation {
     rmdir $out/share/info/asymptote
     rm $out/share/info/dir
 
-    rm -rf "$out"/share/texmf
+    rm -rfv "$out"/share/texmf
+    mkdir -pv "$out"/share/emacs/site-lisp/${s.name}
+    mv -v "$out"/share/asymptote/*.el "$out"/share/emacs/site-lisp/${s.name}
   '';
 
   enableParallelBuilding = true;
@@ -61,6 +63,7 @@ stdenv.mkDerivation {
     description =  "A tool for programming graphics intended to replace Metapost";
     license = licenses.gpl3Plus;
     maintainers = [ maintainers.raskin maintainers.peti ];
+    broken = stdenv.isDarwin;  # https://github.com/vectorgraphics/asymptote/issues/69
     platforms = platforms.linux ++ platforms.darwin;
   };
 }

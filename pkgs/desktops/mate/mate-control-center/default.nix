@@ -5,11 +5,11 @@
 
 stdenv.mkDerivation rec {
   name = "mate-control-center-${version}";
-  version = "1.20.0";
+  version = "1.21.0";
 
   src = fetchurl {
     url = "http://pub.mate-desktop.org/releases/${mate.getRelease version}/${name}.tar.xz";
-    sha256 = "0qq3ln40w7lxa7qvbvbsgdq1c5ybzqw3bw2x4z6y6brl4c77sbh7";
+    sha256 = "0m40jr1midh5fzk3k97sydihlqfqjvzxlgmkx8w2j30a09h7230w";
   };
 
   nativeBuildInputs = [
@@ -37,7 +37,7 @@ stdenv.mkDerivation rec {
     mate.mate-settings-daemon
   ];
 
-  configureFlags = "--disable-update-mimedb";
+  configureFlags = [ "--disable-update-mimedb" ];
 
   meta = with stdenv.lib; {
     description = "Utilities to configure the MATE desktop";

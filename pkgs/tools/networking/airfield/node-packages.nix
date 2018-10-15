@@ -58,13 +58,13 @@ let
         sha512 = "32NDda82rhwD9/JBCCkB+MRYDp0oSvlo2IL6rQWA10PQi7tDUM3eqMSltXmY+Oyl/7N3P3qNtAlv7X0d9bI28w==";
       };
     };
-    "bcrypt-pbkdf-1.0.2" = {
+    "bcrypt-pbkdf-1.0.1" = {
       name = "bcrypt-pbkdf";
       packageName = "bcrypt-pbkdf";
-      version = "1.0.2";
+      version = "1.0.1";
       src = fetchurl {
-        url = "https://registry.npmjs.org/bcrypt-pbkdf/-/bcrypt-pbkdf-1.0.2.tgz";
-        sha1 = "a4301d389b6a43f9b67ff3ca11a3f6637e360e9e";
+        url = "https://registry.npmjs.org/bcrypt-pbkdf/-/bcrypt-pbkdf-1.0.1.tgz";
+        sha1 = "63bc5dcb61331b92bc05fd528953c33462a06f8d";
       };
     };
     "buffer-crc32-0.1.1" = {
@@ -607,13 +607,13 @@ let
         sha512 = "5/4etnCkd9c8gwgowi5/om/mYO5ajCaOgdzj/oW+0eQV9WxKBDZw5+ycmKmeaTXjInS/W0BzpGLo2xR2aBwZdg==";
       };
     };
-    "uuid-3.3.2" = {
+    "uuid-3.3.0" = {
       name = "uuid";
       packageName = "uuid";
-      version = "3.3.2";
+      version = "3.3.0";
       src = fetchurl {
-        url = "https://registry.npmjs.org/uuid/-/uuid-3.3.2.tgz";
-        sha512 = "yXJmeNaw3DnnKAOKJE51sL/ZaYfWJRl1pK9dr19YFCu0ObS231AB1/LbqTKRAQ5kw8A90rA6fr4riOUpTZvQZA==";
+        url = "https://registry.npmjs.org/uuid/-/uuid-3.3.0.tgz";
+        sha512 = "ijO9N2xY/YaOqQ5yz5c4sy2ZjWmA6AR6zASb/gdpeKZ8+948CxwfMW9RrKVk5may6ev8c0/Xguu32e2Llelpqw==";
       };
     };
     "verror-1.10.0" = {
@@ -779,7 +779,7 @@ in
       sources."asynckit-0.4.0"
       sources."aws-sign2-0.7.0"
       sources."aws4-1.7.0"
-      sources."bcrypt-pbkdf-1.0.2"
+      sources."bcrypt-pbkdf-1.0.1"
       sources."caseless-0.12.0"
       sources."co-4.6.0"
       sources."combined-stream-1.0.6"
@@ -816,7 +816,7 @@ in
       sources."tough-cookie-2.3.4"
       sources."tunnel-agent-0.6.0"
       sources."tweetnacl-0.14.5"
-      sources."uuid-3.3.2"
+      sources."uuid-3.3.0"
       sources."verror-1.10.0"
     ];
     buildInputs = globalBuildInputs;

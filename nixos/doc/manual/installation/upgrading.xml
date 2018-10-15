@@ -52,10 +52,13 @@
    </listitem>
   </itemizedlist>
   To see what channels are available, go to
-  <link
-xlink:href="https://nixos.org/channels"/>. (Note that the URIs of the
+  <link xlink:href="https://nixos.org/channels"/>. (Note that the URIs of the
   various channels redirect to a directory that contains the channel’s latest
-  version and includes ISO images and VirtualBox appliances.)
+  version and includes ISO images and VirtualBox appliances.) Please note that
+  during the release process, channels that are not yet released will be
+  present here as well. See the Getting NixOS page
+  <link xlink:href="https://nixos.org/nixos/download.html"/> to find the newest
+  supported stable release.
  </para>
  <para>
   When you first install NixOS, you’re automatically subscribed to the NixOS
@@ -109,14 +112,14 @@ nixos https://nixos.org/channels/nixos-unstable
    so in that case you will not be able to go back to your original channel.
   </para>
  </warning>
- <section>
+ <section xml:id="sec-upgrading-automatic">
   <title>Automatic Upgrades</title>
 
   <para>
    You can keep a NixOS system up-to-date automatically by adding the following
    to <filename>configuration.nix</filename>:
 <programlisting>
-system.autoUpgrade.enable = true;
+<xref linkend="opt-system.autoUpgrade.enable"/> = true;
 </programlisting>
    This enables a periodically executed systemd service named
    <literal>nixos-upgrade.service</literal>. It runs <command>nixos-rebuild
@@ -124,7 +127,7 @@ system.autoUpgrade.enable = true;
    current channel. (To see when the service runs, see <command>systemctl
    list-timers</command>.) You can also specify a channel explicitly, e.g.
 <programlisting>
-system.autoUpgrade.channel = https://nixos.org/channels/nixos-17.03;
+<xref linkend="opt-system.autoUpgrade.channel"/> = https://nixos.org/channels/nixos-17.03;
 </programlisting>
   </para>
  </section>

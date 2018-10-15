@@ -10,7 +10,7 @@ let
     };
 
     nodes = {
-      zookeeper1 = { config, ... }: {
+      zookeeper1 = { ... }: {
         services.zookeeper = {
           enable = true;
         };
@@ -18,7 +18,7 @@ let
         networking.firewall.allowedTCPPorts = [ 2181 ];
         virtualisation.memorySize = 1024;
       };
-      kafka = { config, ... }: {
+      kafka = { ... }: {
         services.apache-kafka = {
           enable = true;
           extraProperties = ''
@@ -65,4 +65,5 @@ in with pkgs; {
   kafka_0_10 = makeKafkaTest "kafka_0_10" apacheKafka_0_10;
   kafka_0_11 = makeKafkaTest "kafka_0_11" apacheKafka_0_11;
   kafka_1_0  = makeKafkaTest "kafka_1_0"  apacheKafka_1_0;
+  kafka_1_1  = makeKafkaTest "kafka_1_1"  apacheKafka_1_1;
 }

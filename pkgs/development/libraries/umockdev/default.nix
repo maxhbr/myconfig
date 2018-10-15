@@ -1,25 +1,34 @@
-{ stdenv, fetchFromGitHub, automake, autoconf, libtool, gtk-doc
+{ stdenv, fetchFromGitHub, autoreconfHook, umockdev, gobjectIntrospection
 , pkgconfig, glib, systemd, libgudev, vala }:
 
 stdenv.mkDerivation rec {
   name = "umockdev-${version}";
-  version = "0.11";
+  version = "0.12";
+
+  outputs = [ "bin" "out" "dev" "doc" ];
 
   src = fetchFromGitHub {
-    owner = "martinpitt";
-    repo = "umockdev";
-    rev = version;
-    sha256 ="1gpk2f03nad4qv084hx7549d68cqc1xibxm0ncanafm5xjz1hp55";
+    owner  = "martinpitt";
+    repo   = "umockdev";
+    rev    = version;
+    sha256 = "1j7kkxpqs991w3qdlb779gzv38l1vpnlk3laabi2ndk83j1wl5k2";
   };
 
-  buildInputs = [ glib systemd libgudev ];
-  nativeBuildInputs = [ automake autoconf libtool gtk-doc pkgconfig vala ];
+  # autoreconfHook complains if we try to build the documentation
+  postPatch = ''
+    echo 'EXTRA_DIST =' > docs/gtk-doc.make
+  '';
 
-  preConfigure = "NOCONFIGURE=1 ./autogen.sh";
+  buildInputs = [ glib systemd libgudev ];
+
+  nativeBuildInputs = [ autoreconfHook pkgconfig vala gobjectIntrospection ];
+
+  enableParallelBuilding = true;
 
   meta = with stdenv.lib; {
     description = "Mock hardware devices for creating unit tests";
     license = licenses.lgpl2;
-    maintainers = [ maintainers.ndowens ];
+    maintainers = with maintainers; [ ndowens ];
+    platforms = with platforms; linux;
   };
 }

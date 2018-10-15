@@ -1,22 +1,23 @@
-{ stdenv, buildPythonPackage, fetchurl,
+{ stdenv, buildPythonPackage, fetchPypi, isPy3k,
   numpy, django_colorful, pillow, psycopg2,
-  pyparsing, django, celery
+  pyparsing, django_2_1, celery, boto3
 }:
 buildPythonPackage rec {
-  version = "0.5";
+  version = "0.6";
   pname = "django-raster";
-  name = "${pname}-${version}";
 
-  src = fetchurl {
-    url = "mirror://pypi/d/django-raster/${name}.tar.gz";
-    sha256 = "0v1jldb13s4dqq1vaq8ghfv3743jpi9a9n05bqgjm8szlkq8s7ah";
+  disabled = !isPy3k;
+
+  src = fetchPypi {
+    inherit pname version;
+    sha256 = "9a0f8e71ebeeeb5380c6ca68e027e9de335f43bc15e89dd22e7a470c4eb7aeb8";
   };
 
   # Tests require a postgresql + postgis server
   doCheck = false;
 
   propagatedBuildInputs = [ numpy django_colorful pillow psycopg2
-                            pyparsing django celery ];
+                            pyparsing django_2_1 celery boto3 ];
 
   meta = with stdenv.lib; {
     description = "Basic raster data integration for Django";

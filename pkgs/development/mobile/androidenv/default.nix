@@ -2,6 +2,8 @@
 , includeSources ? true
 }:
 
+# TODO: use callPackage instead of import to avoid so many inherits
+
 rec {
   platformTools = import ./platform-tools.nix {
     inherit buildPackages pkgs;
@@ -23,15 +25,15 @@ rec {
     inherit (pkgs) stdenv fetchurl unzip;
   };
 
-  platforms = if (pkgs.stdenv.system == "i686-linux" || pkgs.stdenv.system == "x86_64-linux")
+  platforms = if (pkgs.stdenv.hostPlatform.system == "i686-linux" || pkgs.stdenv.hostPlatform.system == "x86_64-linux")
     then import ./platforms-linux.nix {
       inherit (pkgs) stdenv fetchurl unzip;
     }
-    else if pkgs.stdenv.system == "x86_64-darwin"
+    else if pkgs.stdenv.hostPlatform.system == "x86_64-darwin"
     then import ./platforms-macosx.nix {
       inherit (pkgs) stdenv fetchurl unzip;
     }
-    else throw "Platform: ${pkgs.stdenv.system} not supported!";
+    else throw "Platform: ${pkgs.stdenv.hostPlatform.system} not supported!";
 
   sysimages = import ./sysimages.nix {
     inherit (pkgs) stdenv fetchurl unzip;
@@ -46,11 +48,16 @@ rec {
   };
 
   androidsdk = import ./androidsdk.nix {
-    inherit (pkgs) stdenv fetchurl unzip makeWrapper;
-    inherit (pkgs) zlib glxinfo freetype fontconfig glib gtk2 atk libGLU_combined file alsaLib jdk coreutils libpulseaudio dbus;
-    inherit (pkgs.xorg) libX11 libXext libXrender libxcb libXau libXdmcp libXtst xkeyboardconfig;
+    inherit (pkgs) stdenv fetchurl unzip makeWrapper zlib
+                   glxinfo freetype fontconfig glib gtk2 atk
+                   libGLU_combined file alsaLib jdk coreutils
+                   libpulseaudio dbus fetchzip;
+    inherit (pkgs.xorg) libX11 libXext libXrender
+                        libxcb libXau libXdmcp libXtst xkeyboardconfig;
 
-    inherit platformTools buildTools support supportRepository platforms sysimages addons sources includeSources;
+    inherit platformTools buildTools support
+            supportRepository platforms sysimages
+            addons sources includeSources;
 
     stdenv_32bit = pkgs_i686.stdenv;
   };
@@ -215,14 +222,50 @@ rec {
     useInstantApps = true;
   };
 
-  androidndk = import ./androidndk.nix {
+  androidsdk_latest = androidsdk_8_0;
+
+  androidndk_10e = pkgs.callPackage ./androidndk.nix {
     inherit (buildPackages)
-      p7zip makeWrapper;
+      unzip makeWrapper;
     inherit (pkgs)
-      stdenv fetchurl zlib ncurses lib
+      stdenv fetchurl zlib ncurses5 lib python3 libcxx
       coreutils file findutils gawk gnugrep gnused jdk which;
     inherit platformTools;
+    version = "10e";
+    sha1s = {
+      x86_64-darwin = "6be8598e4ed3d9dd42998c8cb666f0ee502b1294";
+      x86_64-linux = "f692681b007071103277f6edc6f91cb5c5494a32";
+    };
   };
+
+  androidndk_16b = pkgs.callPackage ./androidndk.nix {
+    inherit (buildPackages)
+       unzip makeWrapper;
+    inherit (pkgs)
+      stdenv fetchurl zlib ncurses5 lib python3 libcxx
+      coreutils file findutils gawk gnugrep gnused jdk which;
+    inherit platformTools;
+    version = "16b";
+    sha1s = {
+      x86_64-darwin = "e51e615449b98c716cf912057e2682e75d55e2de";
+      x86_64-linux = "42aa43aae89a50d1c66c3f9fdecd676936da6128";
+    };
+  };
+
+  androidndk_17c = pkgs.callPackage ./androidndk.nix {
+    inherit (buildPackages)
+      unzip makeWrapper;
+    inherit (pkgs)
+      stdenv fetchurl zlib ncurses5 lib python3 libcxx
+      coreutils file findutils gawk gnugrep gnused jdk which;
+    inherit platformTools;
+    version = "17c";
+    sha1s = {
+      x86_64-darwin = "f97e3d7711497e3b4faf9e7b3fa0f0da90bb649c";
+      x86_64-linux = "12cacc70c3fd2f40574015631c00f41fb8a39048";
+    };
+  };
+  androidndk = androidndk_17c;
 
   androidndk_r8e = import ./androidndk_r8e.nix {
     inherit (buildPackages)
@@ -243,18 +286,40 @@ rec {
     inherit androidsdk;
   };
 
-  androidndkPkgs = import ./androidndk-pkgs.nix {
+  androidndkPkgs_17c = import ./androidndk-pkgs.nix {
     inherit (buildPackages)
       makeWrapper;
     inherit (pkgs)
-      lib hostPlatform targetPlatform
+      lib stdenv
       runCommand wrapBintoolsWith wrapCCWith;
     # buildPackages.foo rather than buildPackages.buildPackages.foo would work,
     # but for splicing messing up on infinite recursion for the variants we
     # *dont't* use. Using this workaround, but also making a test to ensure
     # these two really are the same.
-    buildAndroidndk = buildPackages.buildPackages.androidenv.androidndk;
-    inherit androidndk;
-    targetAndroidndkPkgs = targetPackages.androidenv.androidndkPkgs;
+    buildAndroidndk = buildPackages.buildPackages.androidenv.androidndk_17c;
+    androidndk = androidndk_17c;
+    targetAndroidndkPkgs = targetPackages.androidenv.androidndkPkgs_17c;
+  };
+  androidndkPkgs = androidndkPkgs_17c;
+
+  androidndkPkgs_10e = import ./androidndk-pkgs.nix {
+    inherit (buildPackages)
+      makeWrapper;
+    inherit (pkgs)
+      lib stdenv
+      runCommand wrapBintoolsWith wrapCCWith;
+    # buildPackages.foo rather than buildPackages.buildPackages.foo would work,
+    # but for splicing messing up on infinite recursion for the variants we
+    # *dont't* use. Using this workaround, but also making a test to ensure
+    # these two really are the same.
+    buildAndroidndk = buildPackages.buildPackages.androidenv.androidndk_10e;
+    androidndk = androidndk_10e;
+    targetAndroidndkPkgs = targetPackages.androidenv.androidndkPkgs_10e;
+  };
+
+  buildGradleApp = import ./build-gradle-app.nix {
+    inherit (pkgs) stdenv jdk gnumake gawk file runCommand
+                   which gradle fetchurl buildEnv;
+    inherit androidsdk androidndk;
   };
 }

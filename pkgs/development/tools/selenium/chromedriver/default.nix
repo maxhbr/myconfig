@@ -6,17 +6,17 @@ let
   allSpecs = {
     "x86_64-linux" = {
       system = "linux64";
-      sha256 = "13iyz6579yw4fk9dr4nf2pdj55v1iflj8yf9a4zz7qw5996d5yk7";
+      sha256 = "1iwmdkkxfmmiqzvj2bjh98db6j6zfb8s2m5kq15wmnq0g44gxski";
     };
 
     "x86_64-darwin" = {
       system = "mac64";
-      sha256 = "11xa31bxhrq0p7kd3j76dihp73abdbmbwdng5454m1wir6yj25f1";
+      sha256 = "1blp4ig5fm6ar8mxm78dc2gvv7n82mq3kqswbyjrcizl91qs4cpx";
     };
   };
 
-  spec = allSpecs."${stdenv.system}"
-    or (throw "missing chromedriver binary for ${stdenv.system}");
+  spec = allSpecs."${stdenv.hostPlatform.system}"
+    or (throw "missing chromedriver binary for ${stdenv.hostPlatform.system}");
 
   libs = stdenv.lib.makeLibraryPath [
     stdenv.cc.cc.lib
@@ -28,10 +28,10 @@ let
 in
 stdenv.mkDerivation rec {
   name = "chromedriver-${version}";
-  version = "2.35";
+  version = "2.41";
 
   src = fetchurl {
-    url = "http://chromedriver.storage.googleapis.com/${version}/chromedriver_${spec.system}.zip";
+    url = "https://chromedriver.storage.googleapis.com/${version}/chromedriver_${spec.system}.zip";
     sha256 = spec.sha256;
   };
 

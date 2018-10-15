@@ -1,8 +1,8 @@
-{ lib, stdenv, glibc, fetchurl, zlib, readline, libossp_uuid, openssl, libxml2, makeWrapper }:
+{ lib, stdenv, glibc, fetchurl, zlib, readline, libossp_uuid, openssl, libxml2, makeWrapper, tzdata }:
 
 let
 
-  common = { version, sha256, psqlSchema } @ args:
+  common = { version, sha256, psqlSchema }:
    let atLeast = lib.versionAtLeast version; in stdenv.mkDerivation (rec {
     name = "postgresql-${version}";
 
@@ -22,14 +22,19 @@ let
 
     makeFlags = [ "world" ];
 
+    NIX_CFLAGS_COMPILE = [ "-I${libxml2.dev}/include/libxml2" ];
+
+    # Otherwise it retains a reference to compiler and fails; see #44767.  TODO: better.
+    preConfigure = "CC=${stdenv.cc.targetPrefix}cc";
+
     configureFlags = [
       "--with-openssl"
       "--with-libxml"
       "--sysconfdir=/etc"
       "--libdir=$(lib)/lib"
-    ]
-      ++ lib.optional (stdenv.isDarwin)  "--with-uuid=e2fs"
-      ++ lib.optional (!stdenv.isDarwin) "--with-ossp-uuid";
+      "--with-system-tzdata=${tzdata}/share/zoneinfo"
+      (if stdenv.isDarwin then "--with-uuid=e2fs" else "--with-ossp-uuid")
+    ];
 
     patches =
       [ (if atLeast "9.4" then ./disable-resolve_symlinks-94.patch else ./disable-resolve_symlinks.patch)
@@ -74,6 +79,8 @@ let
         # initdb needs access to "locale" command from glibc.
         wrapProgram $out/bin/initdb --prefix PATH ":" ${glibc.bin}/bin
       '';
+
+    doInstallCheck = false; # needs a running daemon?
 
     disallowedReferences = [ stdenv.cc ];
 

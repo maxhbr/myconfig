@@ -23,7 +23,7 @@ let
     options =
       let
         scrubbedEval = evalModules {
-          modules = [ { nixpkgs.system = config.nixpkgs.system; } ] ++ baseModules;
+          modules = [ { nixpkgs.localSystem = config.nixpkgs.localSystem; } ] ++ baseModules;
           args = (config._module.args) // { modules = [ ]; };
           specialArgs = { pkgs = scrubDerivations "pkgs" pkgs; };
         };
@@ -43,8 +43,14 @@ let
 
   helpScript = pkgs.writeScriptBin "nixos-help"
     ''
-      #! ${pkgs.stdenv.shell} -e
-      browser="$BROWSER"
+      #! ${pkgs.runtimeShell} -e
+      # Finds first executable browser in a colon-separated list.
+      # (see how xdg-open defines BROWSER)
+      browser="$(
+        IFS=: ; for b in $BROWSER; do
+          [ -n "$(type -P "$b" || true)" ] && echo "$b" && break
+        done
+      )"
       if [ -z "$browser" ]; then
         browser="$(type -P xdg-open || true)"
         if [ -z "$browser" ]; then
@@ -99,7 +105,7 @@ in
 
     services.nixosManual.browser = mkOption {
       type = types.path;
-      default = "${pkgs.w3m-nox}/bin/w3m";
+      default = "${pkgs.w3m-nographics}/bin/w3m";
       description = ''
         Browser used to show the manual.
       '';
@@ -112,10 +118,10 @@ in
 
     system.build.manual = manual;
 
-    environment.systemPackages =
-      [ manual.manual helpScript ]
-      ++ optionals config.services.xserver.enable [desktopItem pkgs.nixos-icons]
-      ++ optional config.programs.man.enable manual.manpages;
+    environment.systemPackages = []
+      ++ optionals config.services.xserver.enable [ desktopItem pkgs.nixos-icons ]
+      ++ optional  config.documentation.man.enable manual.manpages
+      ++ optionals config.documentation.doc.enable [ manual.manual helpScript ];
 
     boot.extraTTYs = mkIf cfg.showManual ["tty${toString cfg.ttyNumber}"];
 

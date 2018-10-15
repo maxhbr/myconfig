@@ -3,12 +3,12 @@
 }:
 
 stdenv.mkDerivation rec {
-  version = "0.47";
+  version = "0.49";
   name = "gource-${version}";
 
   src = fetchurl {
     url = "https://github.com/acaudwell/Gource/releases/download/${name}/${name}.tar.gz";
-    sha256 = "1llqwdnfa1pff8bxk27qsqff1fcg0a9kfdib0rn7p28vl21n1cgj";
+    sha256 = "12hf5ipcsp9dxsqn84n4kr63xaiskrnf5a084wr29qk171lj7pd9";
   };
 
   nativeBuildInputs = [ pkgconfig ];

@@ -15,15 +15,18 @@ stdenv.mkDerivation {
   buildPhase = "ant";
 }
 </programlisting>
-  Note that <varname>jdk</varname> is an alias for the OpenJDK.
+  Note that <varname>jdk</varname> is an alias for the OpenJDK (self-built
+  where available, or pre-built via Zulu). Platforms with OpenJDK not (yet) in
+  Nixpkgs (<literal>Aarch32</literal>, <literal>Aarch64</literal>) point to the
+  (unfree) <literal>oraclejdk</literal>.
  </para>
 
  <para>
   JAR files that are intended to be used by other packages should be installed
-  in <filename>$out/share/java</filename>. The OpenJDK has a stdenv setup hook
-  that adds any JARs in the <filename>share/java</filename> directories of the
-  build inputs to the <envar>CLASSPATH</envar> environment variable. For
-  instance, if the package <literal>libfoo</literal> installs a JAR named
+  in <filename>$out/share/java</filename>. JDKs have a stdenv setup hook that
+  add any JARs in the <filename>share/java</filename> directories of the build
+  inputs to the <envar>CLASSPATH</envar> environment variable. For instance, if
+  the package <literal>libfoo</literal> installs a JAR named
   <filename>foo.jar</filename> in its <filename>share/java</filename>
   directory, and another package declares the attribute
 <programlisting>
@@ -60,15 +63,18 @@ installPhase =
  </para>
 
  <para>
-  It is possible to use a different Java compiler than <command>javac</command>
-  from the OpenJDK. For instance, to use the Eclipse Java Compiler:
+  Note all JDKs passthru <literal>home</literal>, so if your application
+  requires environment variables like <envar>JAVA_HOME</envar> being set, that
+  can be done in a generic fashion with the <literal>--set</literal> argument
+  of <literal>makeWrapper</literal>:
 <programlisting>
-buildInputs = [ jre ant ecj ];
+  --set JAVA_HOME ${jdk.home}
 </programlisting>
-  (Note that here you don’t need the full JDK as an input, but just the JRE.)
-  The ECJ has a stdenv setup hook that sets some environment variables to cause
-  Ant to use ECJ, but this doesn’t work with all Ant files. Similarly, you
-  can use the GNU Java Compiler:
+ </para>
+
+ <para>
+  It is possible to use a different Java compiler than <command>javac</command>
+  from the OpenJDK. For instance, to use the GNU Java Compiler:
 <programlisting>
 buildInputs = [ gcj ant ];
 </programlisting>
