@@ -39,8 +39,7 @@ import           XMonad.Layout.BoringWindows( boringAuto
 import           XMonad.Layout.Gaps (gaps)
 import           XMonad.Layout.Named ( named )
 import           XMonad.Layout.NoBorders ( smartBorders )
-import           XMonad.Layout.Minimize ( minimize, minimizeWindow
-                                        , MinimizeMsg( RestoreNextMinimizedWin ) )
+import           XMonad.Layout.Minimize ( minimize ) -- , minimizeWindow , MinimizeMsg( RestoreNextMinimizedWin )
 import           XMonad.Layout.MultiToggle
 import           XMonad.Layout.MultiToggle.Instances
 import           XMonad.Layout.PerScreen (ifWider)
@@ -117,8 +116,8 @@ layoutKBs conf =
   [ ((m__, xK_space ), sendMessage NextLayout)
   , ((ms_, xK_x     ), sendMessage $ Toggle MIRROR)
   , ((m__, xK_f     ), sendMessage $ Toggle FULL)
-  , ((m__, xK_m     ), withFocused minimizeWindow)
-  , ((ms_, xK_m     ), sendMessage RestoreNextMinimizedWin)
+  -- , ((m__, xK_m     ), withFocused minimizeWindow)
+  -- , ((ms_, xK_m     ), sendMessage RestoreNextMinimizedWin)
 
   , ((m__, xK_t     ), withFocused $ windows . W.sink) -- Push window back into tiling
   , ((m__, xK_comma ), sendMessage (IncMasterN 1))

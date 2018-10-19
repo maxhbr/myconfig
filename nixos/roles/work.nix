@@ -16,7 +16,7 @@
       # rdesktop
       unstable.openjdk unstable.maven unstable.gradle
       libreoffice
-      zoom-us unstable.rambox # franz hipchat
+      zoom-us rambox # franz hipchat
       p7zip
       thrift93
       idea-ultimate
