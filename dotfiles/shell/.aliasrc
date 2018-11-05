@@ -510,6 +510,9 @@ zathura() {
 llpp() {
   command llpp "$@" &disown
 }
+sxiv() {
+  command sxiv "$@" &disown
+}
 
 #   printing
 

@@ -37,6 +37,7 @@
           # gui applications
             chromium firefox-unwrapped qutebrowser
             google-chrome # for streaming and music
+            signal-desktop
             # browserpass
           # spellchecking
             aspell aspellDicts.de aspellDicts.en
