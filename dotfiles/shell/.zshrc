@@ -77,9 +77,6 @@ ZDOTDIR=${ZDOTDIR:-${HOME}}
 ZSHDDIR="${HOME}/.config/zsh.d"
 HISTSIZE=50000
 SAVEHIST="${HISTSIZE}"
-export TMP="/tmp"
-export TEMP="$TMP"
-export TMPDIR="$TMP"
 export TMPPREFIX="${TMPDIR}/zsh"
 export MANWIDTH=${MANWIDTH:-80}
 
