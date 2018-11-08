@@ -8870,6 +8870,8 @@ with pkgs;
 
   acl = callPackage ../development/libraries/acl { };
 
+  acsccid = callPackage ../tools/security/acsccid { };
+
   activemq = callPackage ../development/libraries/apache-activemq { };
 
   adns = callPackage ../development/libraries/adns { };
@@ -18695,9 +18697,9 @@ with pkgs;
       saslSupport = false;
       sasl = cyrus_sasl;
     })
-    subversion18 subversion19 subversion_1_10;
+    subversion18 subversion19 subversion_1_10 subversion_1_11;
 
-  subversion = subversion_1_10;
+  subversion = subversion_1_11;
 
   subversionClient = appendToName "client" (pkgs.subversion.override {
     bdbSupport = false;
