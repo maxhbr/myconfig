@@ -31,8 +31,11 @@
 
         virtualisation.docker = {
             enable = true;
-            extraOptions = "-g /home/docker";
+            extraOptions = "--data-root /home/docker";
             storageDriver = "overlay2";
+            # socketActivation = false;
+            autoPrune.enable = true;
+            package = pkgs.unstable.docker-edge;
         };
       };
     }
