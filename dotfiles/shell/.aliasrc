@@ -769,6 +769,22 @@ getCert() {
 #   misc
 #-------------------------------------------------------------------{{{
 
+mountExfat() {
+  src="$(readlink -f $1)"
+  if [[ ! -e "$src" ]]; then
+    echo "$src is not a file"
+    return 1
+  fi
+  if [[ "$src" != "/dev/"* ]]; then
+    echo "$src is not in /dev/"
+    return 2
+  fi
+  target="${src/\/dev//media}"
+  echo $target
+  sudo mkdir -p "$target"
+  sudo mount -o uid=$(id -u) -o gid=$(id -g) -t exfat "$src" "$target"
+}
+
 alias slic3r-prusa3d="env LANG=C nix-shell -p unstable.slic3r-prusa3d --command slic3r-prusa3d"
 
 alias wttr="curl -H 'Accept-Language: de' wttr.in"
