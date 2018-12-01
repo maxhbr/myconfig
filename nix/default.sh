@@ -65,7 +65,7 @@ handleChannel() {
 }
 
 prepare() {
-    handleChannel "nixpkgs" nixos-18.09-small
+    handleChannel "nixpkgs" "$nixStableChannel"
 
     if [[ -x $nixConfigDir/nixpkgs-unstable/default.sh ]]; then
         $nixConfigDir/nixpkgs-unstable/default.sh
