@@ -1,5 +1,5 @@
 # pcre functionality is tested in nixos/tests/php-pcre.nix
-{ lib, stdenv, fetchurl, flex, bison, autoconf
+{ lib, stdenv, fetchurl, flex, bison
 , mysql, libxml2, readline, zlib, curl, postgresql, gettext
 , openssl, pcre, pkgconfig, sqlite, config, libjpeg, libpng, freetype
 , libxslt, libmcrypt, bzip2, icu, openldap, cyrus_sasl, libmhash, freetds
@@ -12,7 +12,6 @@ let
   generic =
   { version
   , sha256
-  , extraPatches ? []
   , imapSupport ? config.php.imap or (!stdenv.isDarwin)
   , ldapSupport ? config.php.ldap or true
   , mhashSupport ? config.php.mhash or true
@@ -66,7 +65,7 @@ let
 
       enableParallelBuilding = true;
 
-      nativeBuildInputs = [ pkgconfig autoconf ];
+      nativeBuildInputs = [ pkgconfig ];
       buildInputs = [ flex bison pcre ]
         ++ optional stdenv.isLinux systemd
         ++ optionals imapSupport [ uwimap openssl pam ]
@@ -183,8 +182,6 @@ let
 
         configureFlags+=(--with-config-file-path=$out/etc \
           --includedir=$dev/include)
-
-        ./buildconf --force
       '';
 
       postInstall = ''
@@ -213,7 +210,7 @@ let
         outputsToInstall = [ "out" "dev" ];
       };
 
-      patches = [ ./fix-paths-php7.patch ] ++ extraPatches;
+      patches = [ ./fix-paths-php7.patch ];
 
       postPatch = optional stdenv.isDarwin ''
         substituteInPlace configure --replace "-lstdc++" "-lc++"
@@ -226,19 +223,35 @@ let
     };
 
 in {
-  php71 = generic {
-    version = "7.1.24";
-    sha256 = "02qy76krbdhlbkzs9k1sa5mgmj0qnbb8gcf1j3q0cq3z7kkj9pk6";
+  # Because of an upstream bug: https://bugs.php.net/bug.php?id=76826
+  # We can't update the darwin versions because they simply don't compile at
+  # all due to a bug in the intl extensions.
+  #
+  # The bug so far is present in 7.1.21, 7.1.22, 7.2.9, 7.2.10.
 
-    # https://bugs.php.net/bug.php?id=76826
-    extraPatches = optional stdenv.isDarwin ./php71-darwin-isfinite.patch;
-  };
+  php71 = generic (
+    if stdenv.isDarwin then
+      {
+        version = "7.1.20";
+        sha256 = "0i8xd6p4zdg8fl6f0j430raanlshsshr3s3jlm72b0gvi1n4f6rs";
+      }
+    else
+      {
+        version = "7.1.22";
+        sha256 = "0qz74qdlk19cw478f42ckyw5r074y0fg73r2bzlhm0dar0cizsf8";
+      }
+  );
 
-  php72 = generic {
-    version = "7.2.12";
-    sha256 = "1dpnbsv4bdlc5v40ddddi971f456jp1qrn89w5di1dj70g1c895p";
-
-    # https://bugs.php.net/bug.php?id=76826
-    extraPatches = optional stdenv.isDarwin ./php72-darwin-isfinite.patch;
-  };
+  php72 = generic (
+    if stdenv.isDarwin then
+      {
+        version = "7.2.8";
+        sha256 = "1rky321gcvjm0npbfd4bznh36an0y14viqcvn4yzy3x643sni00z";
+      }
+    else
+      {
+        version = "7.2.10";
+        sha256 = "17fsvdi6ihjghjsz9kk2li2rwrknm2ccb6ys0xmn789116d15dh1";
+      }
+  );
 }
