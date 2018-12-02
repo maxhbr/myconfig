@@ -64,7 +64,6 @@
               slim = {
                 enable = true;
                 defaultUser = "mhuber";
-                autoLogin = true;
                 # TODO: this is no longer working!
                 # theme = "${pkgs.myconfig.slim-theme}/share/my-slim-theme";
                 # theme = "${pkgs.myconfig.slim-theme}/share/my-slim-theme.tar.gz";

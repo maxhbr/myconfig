@@ -26,4 +26,6 @@
     preLVM = true;
     allowDiscards = true;
   }];
+
+  services.xserver.displayManager.slim.autoLogin = true;
 }
