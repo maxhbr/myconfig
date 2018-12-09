@@ -12,6 +12,7 @@
 {
   imports = [
     ./notebook-generic.nix
+    ./ssd.nix
     ./highres.nix
     ./wwan.nix
     ./microcodeIntelFix.nix
