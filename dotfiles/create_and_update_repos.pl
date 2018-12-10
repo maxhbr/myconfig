@@ -25,7 +25,7 @@ while ( my ($url, $target) = each(%toLink) ) {
             system("git","checkout","-t","origin/master");
         }else{
             chdir($target);
-            system("git","pull");
+            system("git","pull", "origin", "master");
         }
     }else{
         print "the parent directory of $target does not exist\n";

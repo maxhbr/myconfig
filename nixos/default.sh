@@ -78,6 +78,9 @@ cleanup() {
             echo "* $(tput bold)do not$(tput sgr0) nix-collect-garbage --delete-generations 30d"
         fi
     }
+    have gpgconf && \
+        gpgconf --kill all
+
 }
 
 gate || {

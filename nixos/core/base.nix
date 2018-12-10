@@ -99,11 +99,9 @@
     '';
   };
 
-  system = {
-    activationScripts.media = ''
-      mkdir -m 0755 -p /media /share
-    '';
-  };
+  system.activationScripts.media = ''
+    mkdir -m 0755 -p /media /share
+  '';
 
   services = {
     nixosManual.showManual = true;
