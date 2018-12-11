@@ -26,7 +26,7 @@
           docker
           docker-machine
           # docker-gc
-          python35Packages.docker_compose
+          python36Packages.docker_compose
         ];
 
         virtualisation.docker = {
