@@ -179,7 +179,7 @@
     clean = git-lfs clean -- %f
     smudge = git-lfs smudge -- %f
     required = true
-	process = git-lfs filter-process
+    process = git-lfs filter-process
 
 # stolen from https://stackoverflow.com/questions/1817370/using-ediff-as-git-mergetool
 [mergetool.ediff]
