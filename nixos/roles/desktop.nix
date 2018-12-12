@@ -91,6 +91,13 @@
             # temperature.day = 5500;
             # temperature.night = 3500;
           };
+
+          printing = {
+            enable = true;
+            drivers = [ pkgs.gutenprint pkgs.hplip ];
+            # add hp-printer with:
+            # $ nix run nixpkgs.hplipWithPlugin -c sudo hp-setup
+          };
         };
 
         fonts = {
@@ -103,15 +110,6 @@
           ];
         };
       };
-      imports = [{
-        environment.systemPackages = with pkgs; [
-          hplipWithPlugin
-        ];
-        services.printing = {
-          enable = true;
-          drivers = [ pkgs.gutenprint pkgs.hplip ];
-        };
-      }];
     }
 ################################################################################
     { # xmonad
