@@ -43,26 +43,25 @@
       kbd
       # core:
       wget curl
-      unstable.git unstable.git-lfs
+      git git-lfs
       unzip
-      # unstable.nox # no longer works for my setup
       tree
       stow
       rlwrap
       # cli:
       ranger
-      unstable.emacs unstable.vim
-      unstable.elinks unstable.w3m
-      unstable.tmux
+      unstable.emacs vim
+      elinks w3m
+      tmux
       manpages
       taskwarrior
       pass
-      unstable.ag
+      ag
       file
       # admin:
-      unstable.htop unstable.iftop unstable.iptraf-ng unstable.iotop unstable.bmon s-tui
-      unstable.mtr unstable.bind bridge-utils
-      unstable.pwgen # unstable.mkpasswd
+      htop iftop iptraf-ng iotop bmon s-tui
+      mtr bind bridge-utils
+      pwgen # unstable.mkpasswd
       usbutils
       sysstat
       tcpdump

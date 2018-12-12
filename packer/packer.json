@@ -33,29 +33,14 @@
             ]
         }
     ],
-    "provisioners": [
-        {
-            "type": "shell",
-            "inline": [
-                "cd /myconfig",
-
-                "sudo ./nixos/writeHostName.sh empty",
-                "sudo rm /etc/nixos/configuration.nix",
-
-                "git lfs fetch",
-                "git checkout .",
-                "git config user.email \"packer@myconfig\"",
-                "git config user.name \"packer\"",
-
-                "sudo ./rebuild.sh --no-tmux"
-            ]
-        }
-    ],
-    "post-processors": [
-        {
-            "type": "vagrant",
-            "output": "myconfig-{{.Provider}}.box"
-        }
-    ]
+    "provisioners": [{
+        "type": "shell",
+        "execute_command": "sudo sh '{{.Path}}'",
+        "script": "scripts/postinstall.sh"
+    }],
+    "post-processors": [{
+        "type": "vagrant",
+        "output": "myconfig-{{.Provider}}.box"
+    }]
 }
 
