@@ -5,4 +5,6 @@
 {
   imports = [];
   myconfig.active-roles = [ ];
+
+  services.printing.enable = false;
 }

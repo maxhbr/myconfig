@@ -38,12 +38,15 @@
             "type": "shell",
             "inline": [
                 "cd /myconfig",
+
+                "sudo ./nixos/writeHostName.sh empty",
+                "sudo rm /etc/nixos/configuration.nix",
+
                 "git lfs fetch",
                 "git checkout .",
                 "git config user.email \"packer@myconfig\"",
                 "git config user.name \"packer\"",
-                "sudo ./nixos/writeHostName.sh minimal",
-                "sudo rm /etc/nixos/configuration.nix",
+
                 "sudo ./rebuild.sh --no-tmux"
             ]
         }

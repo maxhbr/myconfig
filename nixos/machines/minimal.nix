@@ -4,5 +4,5 @@
 
 {
   imports = [];
-  myconfig.active-roles = [ "desktop" "xmonad" "mail" ];
+  myconfig.active-roles = [ "xmonad" ];
 }

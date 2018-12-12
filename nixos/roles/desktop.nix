@@ -3,9 +3,6 @@
 { config, lib, pkgs, ... }:
 {
   options = {
-    myconfig.roles.desktop = {
-      enable = lib.mkEnableOption "Desktop environment (this is implied by the orher options here)";
-    };
     myconfig.roles.xmonad = {
       enable = lib.mkEnableOption "Xmonad Desktop environment";
     };
@@ -20,8 +17,7 @@
   imports = [
 ################################################################################
     { # desktop
-      config = lib.mkIf (config.myconfig.roles.desktop.enable ||
-                         config.myconfig.roles.xmonad.enable ||
+      config = lib.mkIf (config.myconfig.roles.xmonad.enable ||
                          config.myconfig.roles.xfce.enable ||
                          config.myconfig.roles.vnc.enable) {
         environment = {
