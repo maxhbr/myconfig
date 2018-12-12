@@ -30,3 +30,6 @@ mount $SDX1 /mnt
 nixos-generate-config --root /mnt
 
 git clone https://github.com/maxhbr/myconfig /mnt/myconfig
+cd /mnt/myconfig
+git lfs install
+git lfs pull

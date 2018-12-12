@@ -14,6 +14,8 @@
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/packer/nixos/users-vagrant.nix |tee /mnt/etc/nixos/users.nix<enter><wait>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/packer/nixos/vagrant.nix |tee /mnt/etc/nixos/vagrant.nix<enter><wait>",
 
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/packer/myconfig.bundle |tee /mnt/myconfig.bundle<enter><wait10>",
+
                 "nixos-install --no-root-passwd && reboot<enter>"
             ],
             "guest_additions_mode": "disable",
@@ -33,11 +35,8 @@
             ]
         }
     ],
-    "provisioners": [{
-        "type": "shell",
-        "execute_command": "sudo sh '{{.Path}}'",
-        "script": "scripts/postinstall.sh"
-    }],
+    "provisioners": [
+    ],
     "post-processors": [{
         "type": "vagrant",
         "output": "myconfig-{{.Provider}}.box"

@@ -17,4 +17,16 @@
     # "fs.inotify.max_user_watches" = 524288;
     "vm.swappiness" = 1;
   };
+
+  users= {
+    extraUsers.myconfig = {
+      isNormalUser = true;
+      group = "myconfig";
+      uid = 999;
+      home = "/home/myconfig";
+      createHome = true;
+      shell = "";
+    };
+    extraGroups.myconfig.gid = 999;
+  };
 }

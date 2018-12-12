@@ -15,6 +15,7 @@ in {
       group = "mhuber";
       uid = 1000;
       extraGroups = [
+        "myconfig"
         "wheel"
         "audio" "video"
         "dialout"
