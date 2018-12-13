@@ -6,7 +6,7 @@
   environment = {
     systemPackages = with pkgs; [
       oh-my-zsh
-      unstable.zsh-syntax-highlighting
+      # unstable.zsh-syntax-highlighting
     ];
     shells = ["/run/current-system/sw/bin/zsh"];
   };

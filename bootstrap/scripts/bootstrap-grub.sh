@@ -25,11 +25,9 @@ SDX2="$(fdisk -l "$SDX" | grep '^/dev' | cut -d' ' -f1 | sed -n 2p)"
 
 mkfs.ext4 -L root $SDX1
 mkswap -L swap $SDX2
-swapon $SDX3
+swapon $SDX2
 mount $SDX1 /mnt
 nixos-generate-config --root /mnt
 
-git clone https://github.com/maxhbr/myconfig /mnt/myconfig
-cd /mnt/myconfig
-git lfs install
-git lfs pull
+lsblk
+df -h

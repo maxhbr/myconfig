@@ -1,0 +1,64 @@
+{
+    "builders": [
+        {
+            "type": "virtualbox-iso",
+            "boot_wait": "40s",
+            "boot_command": [
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/scripts/bootstrap-grub.sh > /root/bootstrap.sh<enter><wait>",
+                "chmod +x /root/bootstrap.sh<enter>",
+                "BOOTSTRAP=YES /root/bootstrap.sh /dev/sda<enter><wait40>",
+
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/nixos/configuration.nix |tee /mnt/etc/nixos/configuration.nix<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/nixos/configuration.nix |tee /mnt/etc/nixos/configuration.old.nix<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/nixos/guest-virtualbox.nix |tee /mnt/etc/nixos/guest.nix<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/nixos/users-vagrant.nix |tee /mnt/etc/nixos/users.nix<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/nixos/vagrant.nix |tee /mnt/etc/nixos/vagrant.nix<enter>",
+                "<wait>",
+
+                "nixos-install --no-root-passwd && ",
+
+                "reboot<enter>"
+            ],
+            "guest_additions_mode": "disable",
+            "guest_os_type": "Linux_64",
+            "http_directory": "./",
+            "iso_checksum": "7176dab4ec08215fdc67c8d72889fe7dac7f3eb6f8d18059cc0936f236dd51db",
+            "iso_checksum_type": "sha256",
+            "iso_url": "https://d3g5gsiof5omrk.cloudfront.net/nixos/18.09/nixos-18.09.1636.b144dfa3b27/nixos-minimal-18.09.1636.b144dfa3b27-x86_64-linux.iso",
+            "shutdown_command": "sudo shutdown -h now",
+            "ssh_username": "root",
+            "ssh_private_key_file": "keys/vagrant.key",
+            "ssh_wait_timeout": "20m",
+            "virtualbox_version_file": ".vbox_version",
+            "vboxmanage": [
+                ["modifyvm", "{{.Name}}", "--memory", "4096"],
+                ["modifyvm", "{{.Name}}", "--cpus", "3"]
+            ]
+        }
+    ],
+    "provisioners": [
+        {
+            "destination": "/",
+            "source": "./../../myconfig",
+            "type": "file"
+        },
+        {
+            "type": "shell",
+            "inline": [
+                "rm -rf /myconfig/_logs",
+                "rm -rf /myconfig/packer/packe_cache",
+                "rm -rf /myconfig/packer/*.box"
+            ]
+        },
+        {
+            "type": "shell",
+            "execute_command": "sudo sh '{{.Path}}' || true",
+            "script": "scripts/postinstall.sh"
+        }
+    ],
+    "post-processors": [{
+        "type": "vagrant",
+        "output": "myconfig-{{.Provider}}.box"
+    }]
+}
+

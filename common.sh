@@ -3,6 +3,11 @@
 ###########################################################################
 
 nixStableChannel=nixos-18.09-small
+# nixUnstableChannel=nixos-unstable
+# nixUnstableChannel=nixos-unstable-small
+# nixUnstableChannel=nixpkgs-unstable
+nixUnstableChannel=nixos-18.09-small
+
 export myconfigDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 export nixConfigDir="$myconfigDir/nix"
 export nixpkgsDir="$nixConfigDir/nixpkgs"

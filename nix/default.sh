@@ -70,7 +70,7 @@ prepare() {
     if [[ -x $nixConfigDir/nixpkgs-unstable/default.sh ]]; then
         $nixConfigDir/nixpkgs-unstable/default.sh
     else
-        handleChannel "nixpkgs-unstable" nixos-unstable
+        handleChannel "nixpkgs-unstable" "$nixUnstableChannel"
     fi
 
     nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixpkgs-overlays=$overlaysDir\" \"nixos-config=$nixosConfigDir\"]; }"

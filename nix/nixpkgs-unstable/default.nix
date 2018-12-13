@@ -8,18 +8,17 @@
 #  prefetchOutput=$(nix-prefetch-url --unpack --print-path --type sha256 $tarball)
 #  hash=$(echo "$prefetchOutput" | head -1)
 #  path=$(echo "$prefetchOutput" | tail -1)
-#  echo '{"url":"'$tarball'","rev": "'$rev'","sha256":"'$hash'","path":"'$path'"}' > ./${channel}.json
+#  echo '{"url":"'$tarball'","rev": "'$rev'","sha256":"'$hash'","path":"'$path'"}' > ./channel.json
 #
 
 ## generate rev file with:
 #
-#  curl -L -s "https://nixos.org/channels/${channel}/git-revision" > ./${channel}.rev
+#  curl -L -s "https://nixos.org/channels/${channel}/git-revision" > ./channel.rev
 #
 
 let
-  channel = "nixpkgs-unstable";
-  jsonFile = ./. + (channel + ".json");
-  revFile = ./. + (channel + ".rev");
+  jsonFile = ./. + "channel.json";
+  revFile = ./. + "channel.rev";
   fallbackUrl = "http://nixos.org/channels/nixos-unstable/nixexprs.tar.xz";
   nixpkgs = if builtins.pathExists jsonFile
     then let

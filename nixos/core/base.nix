@@ -107,13 +107,6 @@
     acpid.enable = true;
     ntp.enable = true;
     nscd.enable = true;
-    emacs = {
-      enable = true;
-      install = true;
-      defaultEditor = true;
-      package = pkgs.emacs;
-      # package = import /home/mhuber/.emacs.d { pkgs = pkgs; };
-    };
   };
 
   security = {

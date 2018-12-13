@@ -28,5 +28,13 @@
       enable = true;
     };
     environment.systemPackages = with pkgs; [ emacs ];
+
+    # services.emacs = {
+    #   enable = true;
+    #   install = true;
+    #   defaultEditor = true;
+    #   package = pkgs.emacs;
+    #   # package = import /home/mhuber/.emacs.d { pkgs = pkgs; };
+    # };
   };
 }
