@@ -1,10 +1,12 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-channel="$nixUnstableChannel"
+
 
 cd "$( dirname "${BASH_SOURCE[0]}" )"
 . "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../../common.sh"
 logH3 "update" "$channel"
+
+channel="$nixUnstableChannel"
 
 rev=$(curl -L -s "https://nixos.org/channels/${channel}/git-revision")
 
