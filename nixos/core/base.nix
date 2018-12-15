@@ -41,6 +41,7 @@
     # '';
     systemPackages = with pkgs; [
       kbd
+
       # core:
       wget curl
       git git-lfs
@@ -48,9 +49,10 @@
       tree
       stow
       rlwrap
+
       # cli:
       ranger
-      unstable.emacs vim
+      emacs vim
       elinks w3m
       tmux
       manpages
@@ -58,6 +60,7 @@
       pass
       ag
       file
+
       # admin:
       htop iftop iptraf-ng iotop bmon s-tui
       mtr bind bridge-utils
@@ -68,9 +71,11 @@
       cryptsetup
       lsof
       psmisc # contains: killall, pstree
+
       #others:
       pmount fuse
       rsnapshot
+
       # my backup tool
       borgbackup
     ];

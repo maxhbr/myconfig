@@ -8,33 +8,13 @@ ROOT="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 cd "$ROOT"
 
 echo "##########################################################################"
-echo "## Cleanup"
-rm myconfig_virtualbox.box || true
-if [[ -d _vup ]]; then
-    pushd _vup
-    vagrant destroy -f || true
-    popd
-    rm -rf _vup
-fi
-vagrant box remove myconfig || true
-
-echo "##########################################################################"
 echo "## Build"
+rm myconfig-virtualbox.box || true
 time packer build packer.json
 du -h myconfig-virtualbox.box
 
 echo "##########################################################################"
 echo "## To Vagrant"
+vagrant box remove myconfig || true
 time vagrant box add myconfig myconfig-virtualbox.box
-sleep 10
-time vagrant plugin install vagrant-nixos
-sleep 10
-
-echo "##########################################################################"
-echo "## Test Vagrant"
-mkdir -p _vup
-cd _vup
-vagrant init myconfig
-sleep 10
-vagrant up
-vagrant ssh
+# time vagrant plugin install vagrant-nixos

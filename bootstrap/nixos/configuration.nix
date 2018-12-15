@@ -1,18 +1,15 @@
 { config, pkgs, ... }:
 
 {
-  imports = [ 
-    ./hardware-configuration.nix 
+  imports = [
+    ./hardware-configuration.nix
     ./guest.nix
     ./users.nix
     ./vagrant.nix
+    ./mhuber.nix
   ];
-
-  # we always want git and vim
-  environment.systemPackages = with pkgs; [ 
+  environment.systemPackages = with pkgs; [
     git git-lfs
     vim
   ];
-
-
 }

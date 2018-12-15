@@ -45,8 +45,6 @@ deploy() {
 }
 
 upgrade() {
-    cmd=switch
-
     [[ "$MYCONFIG_ARGS" == *"--fast"* ]] &&
         args="--fast"
 
@@ -61,7 +59,7 @@ upgrade() {
              -I nixos-config=$nixosConfigDir \
              --upgrade \
              $args \
-             --fallback ${1:-switch}
+             --fallback ${NIXOS_REBUILD_CMD:-switch}
 }
 
 cleanup() {
@@ -78,9 +76,9 @@ cleanup() {
             echo "* $(tput bold)do not$(tput sgr0) nix-collect-garbage --delete-generations 30d"
         fi
     }
-    have gpgconf && \
+    if have gpgconf; then
         gpgconf --kill all
-
+    fi
 }
 
 gate || {

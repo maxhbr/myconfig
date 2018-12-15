@@ -2,16 +2,17 @@
 
 set -ex
 
-cd /myconfig
+cd /home/mhuber/myconfig
 
 ./nixos/writeHostName.sh empty
-rm /etc/nixos/configuration.nix
+mv /etc/nixos/configuration.nix /etc/nixos/configuration.old.nix
+sed -i '/mhuber/d' /etc/nixos/configuration.old.nix
 
 git config user.email "packer@myconfig"
 git config user.name "packer"
 
-#MYCONFIG_ARGS="--fast"
-nix/default.sh
-#MYCONFIG_ARGS="--fast"
-nixos/default.sh
+MYCONFIG_ARGS="--fast" nix/default.sh
+MYCONFIG_ARGS="--fast" NIXOS_REBUILD_CMD="boot" nixos/default.sh
+
+chmod -R mhuber:mhuber /home/mhuber/myconfig
 
