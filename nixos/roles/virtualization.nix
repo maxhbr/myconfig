@@ -35,7 +35,7 @@
             storageDriver = "overlay2";
             # socketActivation = false;
             autoPrune.enable = true;
-            package = pkgs.unstable.docker-edge;
+            package = pkgs.docker-edge;
         };
       };
     }

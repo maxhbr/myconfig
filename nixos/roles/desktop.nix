@@ -114,7 +114,7 @@
 ################################################################################
     { # xmonad
       config = lib.mkIf (config.myconfig.roles.xmonad.enable) {
-        environment.systemPackages = with pkgs; [ unstable.dzen2 ];
+        environment.systemPackages = with pkgs; [ dzen2 ];
 
         # system.activationScripts.cleanupXmonadState = "rm $HOME/.xmonad/xmonad.state || true";
 

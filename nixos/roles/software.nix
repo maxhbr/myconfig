@@ -30,12 +30,12 @@
           gnumake cmake automake
           cloc
           gitAndTools.gitFull
-          unstable.gitAndTools.tig
+          gitAndTools.tig
 
           python python3
 
-          unstable.stack unstable.cabal-install unstable.cabal2nix
-        ] ++ (with pkgs.unstable.haskellPackages; [
+          stack cabal-install cabal2nix
+        ] ++ (with pkgs.haskellPackages; [
           # cabal-install
           ghc hlint pandoc
           pointfree pointful
@@ -50,7 +50,7 @@
         environment.systemPackages = with pkgs; [
           gimp-with-plugins
           rawtherapee darktable
-          # unstable.geeqie
+          geeqie
           # krita
           # inkscape
 

@@ -34,6 +34,41 @@
                 ["modifyvm", "{{.Name}}", "--memory", "8192"],
                 ["modifyvm", "{{.Name}}", "--cpus", "4"]
             ]
+        },
+        {
+            "type": "qemu",
+            "iso_url": "https://d3g5gsiof5omrk.cloudfront.net/nixos/18.09/nixos-18.09.1636.b144dfa3b27/nixos-minimal-18.09.1636.b144dfa3b27-x86_64-linux.iso",
+            "iso_checksum": "7176dab4ec08215fdc67c8d72889fe7dac7f3eb6f8d18059cc0936f236dd51db",
+            "iso_checksum_type": "sha256",
+            "output_directory": "output_myconfig",
+            "shutdown_command": "sudo shutdown -h now",
+            "disk_size": 40000,
+            "format": "qcow2",
+            "accelerator": "kvm",
+            "http_directory": "./../",
+            "ssh_username": "root",
+            "ssh_private_key_file": "keys/vagrant.key",
+            "ssh_timeout": "20m",
+            "vm_name": "myconfig_test",
+            "net_device": "virtio-net",
+            "disk_interface": "virtio",
+            "boot_wait": "40s",
+            "boot_command": [
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/bootstrap/scripts/bootstrap-grub.sh > /root/bootstrap.sh<enter><wait>",
+                "chmod +x /root/bootstrap.sh<enter>",
+
+                "BOOTSTRAP=YES /root/bootstrap.sh /dev/vda && \\<enter>",
+
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/bootstrap/nixos/configuration.nix |tee /mnt/etc/nixos/configuration.nix && \\<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/bootstrap/nixos/guest-virtualbox.nix |tee /mnt/etc/nixos/guest.nix && \\<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/bootstrap/nixos/users-vagrant.nix |tee /mnt/etc/nixos/users.nix && \\<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/bootstrap/nixos/vagrant.nix |tee /mnt/etc/nixos/vagrant.nix && \\<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/nixos/core/mhuber.nix |tee /mnt/etc/nixos/mhuber.nix && \\<enter>",
+
+                "nixos-install --no-root-passwd && ",
+
+                "reboot<enter>"
+            ]
         }
     ],
     "provisioners": [
@@ -50,10 +85,8 @@
             "type": "shell",
             "inline": [
                 "set -x",
-                "ls -alF /home/mhuber/myconfig/",
-                "rm -rf /home/mhuber/myconfig/_logs",
-                "rm -rf /home/mhuber/myconfig/bootstrap/packe_cache",
-                "rm -rf /home/mhuber/myconfig/bootstrap/*.box"
+                "cd /home/mhuber/myconfig/",
+                "git clean -dfX"
             ]
         },
         {
@@ -61,6 +94,14 @@
             "execute_command": "sudo sh '{{.Path}}'",
             "script": "scripts/postinstall.sh",
             "expect_disconnect": true
+        },
+        {
+            "type": "shell",
+            "inline": [
+                "set -x",
+                "cd /tmp",
+                "sudo su mhuber -c \"/home/mhuber/myconfig/rebuild.sh --no-tmux\""
+            ]
         }
     ],
     "post-processors": [{

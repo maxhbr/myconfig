@@ -37,7 +37,7 @@ import           XMonad.Hooks.ManageDocks ( docks
 -- Layouts
 import           XMonad.Layout.BoringWindows( boringAuto
                                             , focusDown )
-import           XMonad.Layout.Gaps (gaps)
+import           XMonad.Layout.Gaps (gaps, GapMessage(ToggleGaps))
 import           XMonad.Layout.Named ( named )
 import           XMonad.Layout.NoBorders ( smartBorders )
 import           XMonad.Layout.Minimize ( minimize )
@@ -48,7 +48,7 @@ import           XMonad.Layout.PerWorkspace ( modWorkspaces )
 import           XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall)
                                              , MirrorResize ( MirrorShrink
                                                             , MirrorExpand ) )
-import           XMonad.Layout.Spacing ( spacing )
+import           XMonad.Layout.Spacing ( spacingRaw, Border(..), toggleWindowSpacingEnabled, toggleScreenSpacingEnabled)
 import           XMonad.Layout.TwoPane ( TwoPane( TwoPane ) )
 import           XMonad.Layout.IM -- (withIM)
 
@@ -92,23 +92,28 @@ myLayout = smartBorders $
                          ifWider 1439 (gaps [(U,wqhdGapping), (D,wqhdGapping)] l) l
     myUprightMirroring l = ifWider 1440 l $
                            ifWider 1439 (Mirror l) l
-    mySpacing l = ifWider 1920 (spacing wqhdSpacing l) $
-                  ifWider 1919 (spacing baseSpacing l) $
-                  ifWider 1439 (spacing wqhdSpacing l)
-                  l
+
+    mySpacing l = let
+        spacing w = spacingRaw False (Border 0 wIntegral 0 wIntegral) True (Border wIntegral 0 wIntegral 0) True
+          where
+            wIntegral =  fromIntegral w
+      in ifWider 1920 (spacing wqhdSpacing l) $
+         ifWider 1919 (spacing baseSpacing l) $
+         ifWider 1439 (spacing wqhdSpacing l)
+         l
     full      = named "=" $
                 mySpacing $
                 ifWider 1920 (gaps [(L,wqhdGapping), (R,wqhdGapping)] Full) $
                 myUprightGapping Full
     tiled     = named " " $
-                minimize $
                 mySpacing $
+                minimize $
                 myUprightGapping $
                 myUprightMirroring $
                 ResizableTall 1 (3/100) (1/2) []
     dtb       = named "%" $
-                minimize $
                 mySpacing $
+                minimize $
                 myUprightGapping $
                 myUprightMirroring $
                 TwoPane (3/100) (1/2)
@@ -117,6 +122,10 @@ layoutKBs conf =
   [ ((m__, xK_space ), sendMessage NextLayout)
   , ((ms_, xK_x     ), sendMessage $ Toggle MIRROR)
   , ((m__, xK_f     ), sendMessage $ Toggle FULL)
+  , ((ms_, xK_f     ), do
+        sendMessage $ ToggleGaps
+        toggleScreenSpacingEnabled
+        toggleWindowSpacingEnabled)
   , ((m__, xK_m     ), withFocused minimizeWindow)
   , ((ms_, xK_m     ), withLastMinimized maximizeWindowAndFocus)
 

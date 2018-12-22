@@ -12,7 +12,7 @@
   ];
 
   myconfig.active-roles = [
-    "xmonad" "vnc" # "xfce"
+    "xmonad" "xfce" # "vnc"
     "mail"
     "work" "virtualization" "dev"
     "imagework"

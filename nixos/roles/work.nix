@@ -14,10 +14,9 @@
       thunderbird
       openvpn networkmanager_openvpn
       # rdesktop
-      unstable.openjdk unstable.maven unstable.gradle
+      openjdk maven gradle
       libreoffice
-      # unstable.zoom-us
-      rambox # franz hipchat
+      zoom-us rambox # franz hipchat
       p7zip
       thrift93
       idea-ultimate

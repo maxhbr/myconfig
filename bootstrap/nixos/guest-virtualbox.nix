@@ -14,6 +14,8 @@
   # load missing module (should be fixed by 14.02 propper)
   boot.kernelModules = [ "vboxsf" ];
 
+  virtualisation.virtualbox.guest.x11 = true;
+
   # Enable the OpenSSH daemon.
   services.openssh.enable = true;
   services.openssh.permitRootLogin = "yes";

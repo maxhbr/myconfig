@@ -10,7 +10,7 @@ cd "$ROOT"
 echo "##########################################################################"
 echo "## Build"
 rm myconfig-virtualbox.box || true
-time packer build packer.json
+time packer build packer.json -on-error=ask -only=virtualbox-iso
 du -h myconfig-virtualbox.box
 
 echo "##########################################################################"
