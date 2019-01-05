@@ -15,7 +15,11 @@
     ./ssd.nix
     ./highres.nix
     ./wwan.nix
-    ./microcodeIntelFix.nix
+    # ./microcodeIntelFix.nix
+    ./nixos-hardware/common/cpu/intel
+    ./nixos-hardware/common/pc/laptop
+    ./nixos-hardware/common/pc/laptop/acpi_call.nix
+    ./nixos-hardware/common/pc/ssd.nix
   ];
 
   nix.buildCores = 8;
