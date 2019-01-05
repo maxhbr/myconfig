@@ -39,7 +39,7 @@ myManageHook = let
                                , (doShift "web", ["Firefox"
                                                  ,"Chromium","chromium-browser"])
                                , (doShift "10", ["franz","Franz"])
-                               , (doShift "vbox", ["Virtualbox","VirtualBox"])
+                               -- , (doShift "vbox", ["Virtualbox","VirtualBox"])
                                , (doShift "media", ["Steam"])
                                , (doIgnore, ["desktop_window"
                                             ,"kdesktop"
