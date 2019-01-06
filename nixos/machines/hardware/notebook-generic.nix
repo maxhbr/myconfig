@@ -18,10 +18,15 @@
     logind.lidSwitch = "suspend";
     logind.lidSwitchDocked = "suspend";
     logind.extraConfig = "HandlePowerKey=suspend";
-    xserver.synaptics = {
-      enable = true;
-      twoFingerScroll = true;
-      vertEdgeScroll = false;
+    xserver.libinput = {
+      naturalScrolling = true;
+      disableWhileTyping = true;
+      tappingDragLock = false;
     };
+    # xserver.synaptics = {
+    #   enable = true;
+    #   twoFingerScroll = true;
+    #   vertEdgeScroll = false;
+    # };
   };
 }

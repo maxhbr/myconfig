@@ -3,5 +3,9 @@
 { config, pkgs, ... }:
 
 {
+  imports = [
+    ./nixos-hardware/common/pc/ssd
+  ];
+
   fileSystems."/".options = [ "noatime" "nodiratime" "discard" ];
 }
