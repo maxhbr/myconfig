@@ -1,6 +1,6 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 
 #
 #
@@ -19,38 +19,45 @@
     ./nixos-hardware/common/cpu/intel
     ./nixos-hardware/common/pc/laptop
     ./nixos-hardware/common/pc/laptop/acpi_call.nix
+
+    { # config for libinput
+      config = lib.mkIf (config.services.xserver.libinput.enable) {
+        services.xserver.libinput.accelSpeed = "0.15";
+      };
+    }
+    { # config for synaptics (unused?)
+      config = lib.mkIf (config.services.xserver.synaptics.enable) {
+        services.xserver.synaptics = {
+          minSpeed = "1";
+          maxSpeed = "1";
+          accelFactor = "0.15";
+          # see: https://major.io/2013/08/24/get-a-rock-solid-linux-touchpad-configuration-for-the-lenovo-x1-carbon/
+          additionalOptions = ''
+            Option "VertScrollDelta" "-50"
+            Option "HorizScrollDelta" "-50"
+
+            # accurate tap-to-click!
+            Option "FingerLow" "50"
+            Option "FingerHigh" "55"
+
+            Option "AccelerationProfile" "2"
+            Option "ConstantDeceleration" "4"
+          '';
+          buttonsMap = [ 1 3 2 ];
+          tapButtons = false;
+          fingersMap = [ 0 0 0 ];
+        };
+      };
+    }
   ];
 
   nix.buildCores = 8;
 
-  hardware.bumblebee.enable = false; # not used ?
+  hardware.bumblebee.enable = false;
 
   boot.extraModprobeConfig = ''
     options snd slots=snd-hda-intel
   '';
 
-  services.xserver = {
-    videoDrivers = [ "intel" ];
-    libinput.accelSpeed = "0.15";
-    # synaptics = {
-    #   minSpeed = "1";
-    #   maxSpeed = "1";
-    #   accelFactor = "0.15";
-    #   # see: https://major.io/2013/08/24/get-a-rock-solid-linux-touchpad-configuration-for-the-lenovo-x1-carbon/
-    #   additionalOptions = ''
-    #     Option "VertScrollDelta" "-50"
-    #     Option "HorizScrollDelta" "-50"
-
-    #     # accurate tap-to-click!
-    #     Option "FingerLow" "50"
-    #     Option "FingerHigh" "55"
-
-    #     Option "AccelerationProfile" "2"
-    #     Option "ConstantDeceleration" "4"
-    #   '';
-    #   buttonsMap = [ 1 3 2 ];
-    #   tapButtons = false;
-    #   fingersMap = [ 0 0 0 ];
-    # };
-  };
+  services.xserver.videoDrivers = [ "intel" ];
 }

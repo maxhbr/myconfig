@@ -29,6 +29,7 @@
     variables = {
       TMP = "/tmp";
       BROWSER = "${pkgs.chromium}/bin/chromium-browser";
+      EDITOR = "${pkgs.myconfig.scripts}/bin/ec -t";
     };
     interactiveShellInit = ''
       alias upg='~/myconfig/rebuild.sh'
