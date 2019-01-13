@@ -57,7 +57,7 @@
         {
             "type": "shell",
             "execute_command": "sudo sh '{{.Path}}'",
-            "script": "scripts/postinstall.sh",
+            "script": "scripts/postinstall.sh minimal",
             "expect_disconnect": true
         },
         {
