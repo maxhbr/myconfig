@@ -16,4 +16,7 @@
     "games" "wine"
     "vsftp" "openssh"
   ];
+
+  services.xserver.displayManager.slim.autoLogin = true;
+  services.xserver.windowManager.default = "xfce";
 }
