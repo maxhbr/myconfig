@@ -7,6 +7,7 @@
     ./hardware/grub.nix
     ./hardware/quadroFX4800.nix
     ./hardware/steamcontroller.nix
+    ./hardware/pulseaudio.nix
   ];
   myconfig.active-roles = [
     "xmonad" "xfce"
