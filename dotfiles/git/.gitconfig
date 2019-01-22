@@ -32,6 +32,7 @@
     f           = "!f() { git fetch ${1:-\"--all\"}; }; f"
 	  fum         = "!f() { if [[ \"$(git remote)\" != *'upstream'* ]]; then git fetch origin master:master; else git fetch upstream master:master; fi; }; f"
 	  pum         = "!f() { if [[ \"$(git remote)\" != *'upstream'* ]]; then git pull --rebase=interactive origin master; else git pull --rebase=interactive upstream master; fi; }; f"
+	  up          = "!git remote update -p; git merge --ff-only @{u}"
     cp          = cherry-pick
 
     d           = diff
@@ -151,6 +152,13 @@
     sba         = "!f() { git subtree add --prefix $2 $1 master --squash; }; f"
     sbu         = "!f() { git subtree pull --prefix $2 $1 master --squash; }; f"
 
+	  # testing:
+    recap = "!f() { local default=$(git config user.email); git log --all --pretty=format:'%Cred%h%Creset - %s%Cgreen (%cr) %Cblue<%aN>' --no-merges --author=${1:-$default} ${@:2}; }; f"
+    incoming = "!git remote update -p; git log ..@{u}"
+    outgoing = log @{u}..
+    unmerged = !git branch -r --no-merged | grep -v HEAD | xargs -L1 git --no-pager log --pretty=tformat:'%Cgreen%d%Creset - %h by %an (%Cblue%ar%Creset)' -1
+    merged = !git branch -r --merged | grep -v HEAD | xargs -L1 git --no-pager log --pretty=tformat:'%Cgreen%d%Creset - %h by %an (%Cblue%ar%Creset)' -1
+
     # typos
     psuh = "push"
 [color]
@@ -174,7 +182,7 @@
     main-window-view = HistoryView
     file-view-vpane-position = 652
 [credential]
-    helper = cache --timeout=3600
+	helper = /run/current-system/sw/bin/pass-git-helper
 [filter "lfs"]
     clean = git-lfs clean -- %f
     smudge = git-lfs smudge -- %f
@@ -200,11 +208,19 @@
     tool = meld
     # tool = ediff
     conflictstyle = diff3
+    ff = false
 [diff]
     tool = meld
     # tool = ediff
 [rerere]
     enabled = true
+
+[url "git@github.com:"]
+    insteadOf = github:
+    pushInsteadOf = github:
+ 
+[github]
+    user = maxhbr
 
 [includeIf  "gitdir:~/TNG/"]
     path = ~/.gitconfig-tng

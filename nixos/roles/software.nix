@@ -31,6 +31,7 @@
           cloc
           gitAndTools.gitFull
           gitAndTools.tig
+          pass-git-helper
 
           python python3
 
