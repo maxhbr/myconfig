@@ -12,7 +12,7 @@ self: super:
 {
   zoom-us = super.zoom-us.overrideAttrs ( oldAttrs: {
     fixupPhase = ''
-sed -n -i 'p;1a export QT_DEBUG_PLUGINS=0' $out/bin/zoom-us
+sed -n -i 'p;1a export QT_DEBUG_PLUGINS=1' $out/bin/zoom-us
 sed -n -i 'p;1a export LIBGL_ALWAYS_SOFTWARE=1' $out/bin/zoom-us
     '';
   });
