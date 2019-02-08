@@ -16,6 +16,7 @@
       # rdesktop
       openjdk maven gradle
       libreoffice
+      zoom-us
       rambox # franz hipchat
       p7zip
       thrift
