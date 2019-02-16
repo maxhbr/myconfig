@@ -35,9 +35,10 @@ let
                  }
          else builtins.fetchTarball fallbackUrl;
 in
-  { overlays ? [] , ... }@args:
+  { overlays ? [] , localSystem ? {}, ... }@args:
   import (nixpkgs + "/pkgs/top-level") (args // {
-    localSystem = { system = builtins.currentSystem; };
+    localSystem = (if args ? localSystem then {}
+                   else { system = builtins.currentSystem; }) // localSystem;
     config = import ../nixpkgs-config.nix;
     overlays = (import ../nixpkgs-overlays.nix) ++ overlays;
   })

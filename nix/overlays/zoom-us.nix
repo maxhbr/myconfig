@@ -7,6 +7,12 @@
 #  - https://github.com/NixOS/nixpkgs/issues/43350
 #  - https://github.com/NixOS/nixpkgs/issues/47608
 
+# let
+  # unstableTarball = fetchTarball https://github.com/NixOS/nixpkgs-channels/archive/nixos-unstable.tar.gz;
+    # unstableFromTarball = import unstableTarball {
+      #   config = super.config;
+        # };
+        # in
 
 self: super:
 {

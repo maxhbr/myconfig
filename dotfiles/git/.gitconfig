@@ -66,6 +66,7 @@
 
 
     mkBundle    = "!f() { git bundle create \"../$(basename $(pwd)).bundle\" --all; }; f"
+    mkBundleDated = "!f() { git bundle create \"../$(date '+%Y-%m-%d')_$(basename $(pwd)).bundle\" --all; }; f"
 
 
     mt          = mergetool --no-prompt

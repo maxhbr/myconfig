@@ -34,9 +34,19 @@ getScreenHeigth() {
         cut -d 'x' -f2
 }
 
+waitForUnlock() {
+    while sleep 10; do
+        if ! pidof i3lock &> /dev/null; then
+            echo "unlock at: $(date)" | tee -a "/tmp/myScreenLock.sh.log"
+            return
+        fi
+    done
+}
+
 lockWithRandom() {
     echo "lock at: $(date)" | tee -a "/tmp/myScreenLock.sh.log"
     i3lock -t -i "$(getRandomBG $(getScreenHeigth))" -c 000000
+    waitForUnlock &
 }
 
 case $1 in

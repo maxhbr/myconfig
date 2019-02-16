@@ -479,13 +479,7 @@ alias vdestroy="vagrant destroy"
 #   multimedia
 #-------------------------------------------------------------------{{{
 
-myStopScreensaver(){
-  # needs xdotool
-  while true; do
-    sleep $((60 * 4))
-    xdotool key shift
-  done
-}
+alias myStopScreensaver='myStopScreensaver.sh'
 
 mdump() { mplayer -dumpstream "${1}" -dumpfile ${2}.mp4; }
 mdir() {
