@@ -3,17 +3,17 @@
 funs: pkgs: let
   callPackage = funs.lib.callPackageWith pkgs;
 
-  scripts = callPackage ./scripts {
-    inherit background pkgs;
-  };
-  my-xmonad = funs.haskellPackages.callPackage ./xmonad {
-    inherit pkgs scripts;
-  };
   background = callPackage ./background {
     inherit pkgs;
   };
   slim-theme = callPackage ./background/slim-theme {
     inherit background pkgs;
+  };
+  scripts = callPackage ./scripts {
+    inherit background pkgs;
+  };
+  my-xmonad = funs.haskellPackages.callPackage ./xmonad {
+    inherit scripts pkgs;
   };
 in {
   myconfig = {

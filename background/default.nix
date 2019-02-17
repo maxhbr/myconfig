@@ -28,6 +28,7 @@ stdenv.mkDerivation rec {
     sed -i 's%i3lock%${pkgs.i3lock}/bin/i3lock%' bg.sh
     sed -i 's%xrandr%${pkgs.xorg.xrandr}/bin/xrandr%' bg.sh
   '';
+
   installPhase = ''
     share=$out/share
     mkdir -p $share
@@ -39,10 +40,10 @@ stdenv.mkDerivation rec {
     mkdir -p $bin
     cp bg.sh "$bin/.bg.sh"
 
-
     printf "#!${pkgs.bash}/bin/bash\n${pkgs.bash}/bin/bash $bin/.bg.sh --set" > $bin/myRandomBackground
     printf "#!${pkgs.bash}/bin/bash\n${pkgs.bash}/bin/bash $bin/.bg.sh --lock" > $bin/myScreenLock
-    chmod +x $bin/{*,.bg.sh}
+    chmod +x $bin/*
+    chmod -x $bin/.bg.sh
   '';
 
   meta = with stdenv.lib; {
