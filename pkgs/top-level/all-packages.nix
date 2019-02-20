@@ -6321,11 +6321,9 @@ with pkgs;
     then callPackage adoptopenjdk-bin-11-packages-linux.jdk-openj9 {}
     else callPackage adoptopenjdk-bin-11-packages-darwin.jdk-openj9 {};
 
-  # openj9 jre builds for mac are currently missing (upstream)
-  #adoptopenjdk-jre-openj9-bin-11 = if stdenv.isLinux
-  #  then callPackage adoptopenjdk-bin-11-packages-linux.jre-openj9 {}
-  #  else callPackage adoptopenjdk-bin-11-packages-darwin.jre-openj9 {};
-  adoptopenjdk-jre-openj9-bin-11 = callPackage adoptopenjdk-bin-11-packages-linux.jre-openj9 {};
+  adoptopenjdk-jre-openj9-bin-11 = if stdenv.isLinux
+    then callPackage adoptopenjdk-bin-11-packages-linux.jre-openj9 {}
+    else callPackage adoptopenjdk-bin-11-packages-darwin.jre-openj9 {};
 
   adoptopenjdk-bin = adoptopenjdk-hotspot-bin-11;
   adoptopenjdk-jre-bin = adoptopenjdk-jre-hotspot-bin-11;
@@ -11745,7 +11743,7 @@ with pkgs;
   qt56 = recurseIntoAttrs (makeOverridable
     (import ../development/libraries/qt-5/5.6) {
       inherit newScope;
-      inherit stdenv fetchurl makeSetupHook;
+      inherit stdenv fetchurl fetchpatch makeSetupHook;
       bison = bison2; # error: too few arguments to function 'int yylex(...
       inherit cups;
       harfbuzz = harfbuzzFull;
@@ -11759,7 +11757,7 @@ with pkgs;
   qt59 = recurseIntoAttrs (makeOverridable
     (import ../development/libraries/qt-5/5.9) {
       inherit newScope;
-      inherit stdenv fetchurl makeSetupHook;
+      inherit stdenv fetchurl fetchpatch makeSetupHook;
       bison = bison2; # error: too few arguments to function 'int yylex(...
       inherit cups;
       harfbuzz = harfbuzzFull;
