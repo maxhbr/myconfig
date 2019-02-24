@@ -118,6 +118,7 @@
     gg          = log --graph --all --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %n%C(reverse)%C(bold)  %s %C(reset)%n%C(reverse) %C(reset) Author: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%n'
     # All commits, full commit info
     ggl         = log --graph --all --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset) (%H)%C(yellow)%d%C(reset)%n%C(reverse)  %C(bold)%s %C(reset)%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'
+    ggls         = log --graph --all --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset) (%H)%C(yellow)%d%C(reset)%n%C(reverse)  %C(bold)%s %C(reset)%n'
 
     ls-assume-unchanged = !git ls-files -v | grep ^h | awk '{print $2}'
     assume-unchanged    = update-index --assume-unchanged

@@ -5,7 +5,7 @@ set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../background"
 cd $DIR
-bgs=(*.png) # bgs=("quint4.png" "penrose_4k_color.png" "quint3.png" "quint5.png" "quint7.png" "romben3.png" "romben.png")
+bgs=(*.png)
 
 getRandomBG() {
     rand=$[$RANDOM % ${#bgs[@]}]
