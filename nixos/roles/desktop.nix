@@ -31,9 +31,9 @@
             xarchiver # gnome3.file-roller
             mplayer
           # gui applications
-            chromium firefox-unwrapped qutebrowser
+            unstable.chromium unstable.firefox-unwrapped qutebrowser
             google-chrome # for streaming and music
-            signal-desktop
+            unstable.signal-desktop
             # browserpass
           # spellchecking
             aspell aspellDicts.de aspellDicts.en

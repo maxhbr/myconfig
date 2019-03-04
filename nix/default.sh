@@ -12,21 +12,12 @@ gate() {
 
 buildNixCmd() {
     local nixEnvCMD="nix-env"
-    if [[ -d $nixpkgsUnstableDir ]]; then
-        nixEnvCMD="$nixEnvCMD -I nixpkgs=$nixpkgsUnstableDir"
-    else
-        nixEnvCMD="$nixEnvCMD -I nixpkgs=$nixpkgsDir"
-    fi
+    nixEnvCMD="$nixEnvCMD -I nixpkgs=$nixpkgsDir"
     nixEnvCMD="$nixEnvCMD -I nixpkgs-overlays=$overlaysDir"
     nixEnvCMD="$nixEnvCMD -I nixos-config=$nixosConfigDir"
 
     echo $nixEnvCMD
 }
-
-# getLatestRevForChannel() {
-#     local channel=$1
-#     curl -L -s "https://nixos.org/channels/${channel}/git-revision"
-# }
 
 addRemotesIfNecessary() {
     cd $myconfigDir
@@ -66,12 +57,7 @@ handleChannel() {
 
 prepare() {
     handleChannel "nixpkgs" "$nixStableChannel"
-
-    if [[ -x $nixConfigDir/nixpkgs-unstable/default.sh ]]; then
-        $nixConfigDir/nixpkgs-unstable/default.sh
-    else
-        handleChannel "nixpkgs-unstable" "$nixUnstableChannel"
-    fi
+    $nixConfigDir/overlays/nixpkgs-unstable/default.sh
 
     nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixpkgs-overlays=$overlaysDir\" \"nixos-config=$nixosConfigDir\"]; }"
     nix_path_file="/etc/nixos/imports/nixPath.nix"

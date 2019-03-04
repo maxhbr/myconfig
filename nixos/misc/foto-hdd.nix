@@ -7,6 +7,6 @@
   fileSystems."/home/mhuber/Bilder/hdd" =
     { device = "/dev/disk/by-uuid/a462ff79-65d7-46ec-a68d-22282c8aafee";
       fsType = "ext4";
-      options = ["auto,nofail,x-systemd.device-timeout=1,sync,users,rw"];
+      options = ["auto,nofail,x-systemd.device-timeout=1,sync,users,rw,discard,noatime"];
     };
 }

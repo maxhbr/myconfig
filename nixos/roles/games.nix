@@ -9,7 +9,7 @@
   };
 
   config = lib.mkIf config.myconfig.roles.games.enable {
-    environment.systemPackages = with pkgs; [
+    environment.systemPackages = with pkgs.unstable; [
       steam
     ];
 

@@ -49,9 +49,9 @@
     { # imagework
       config = lib.mkIf config.myconfig.roles.imagework.enable {
         environment.systemPackages = with pkgs; [
-          gimp-with-plugins
-          rawtherapee darktable
-          geeqie
+          unstable.gimp-with-plugins
+          rawtherapee unstable.darktable
+          unstable.geeqie
           # krita
           # inkscape
 
