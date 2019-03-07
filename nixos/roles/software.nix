@@ -51,7 +51,7 @@
         environment.systemPackages = with pkgs; [
           unstable.gimp-with-plugins
           rawtherapee unstable.darktable
-          unstable.geeqie
+          unstable.geeqie unstable.gthumb
           # krita
           # inkscape
 

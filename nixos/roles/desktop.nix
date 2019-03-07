@@ -31,7 +31,7 @@
             xarchiver # gnome3.file-roller
             mplayer
           # gui applications
-            unstable.chromium unstable.firefox-unwrapped qutebrowser
+            chromium unstable.firefox-unwrapped qutebrowser
             google-chrome # for streaming and music
             unstable.signal-desktop
             # browserpass
