@@ -15,6 +15,10 @@ funs: pkgs: let
   my-xmonad = funs.haskellPackages.callPackage ./xmonad {
     inherit scripts pkgs;
   };
+
+  photo-scripts = callPackage ./photo-scripts {
+    inherit pkgs;
+  };
 in {
   myconfig = {
     inherit scripts my-xmonad background slim-theme;
@@ -25,4 +29,5 @@ in {
     };
     nixos-config = import ./nixos;
   };
+  inherit photo-scripts;
 }
