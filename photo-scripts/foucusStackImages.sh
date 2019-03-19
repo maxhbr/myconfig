@@ -7,28 +7,37 @@
 #        https://github.com/pulsar123/Macro-scripts
 
 set -e
+trap times EXIT
 
-# ENFUSE_PROJECTOR_ARG=""
+################################################################################
+##  parse arguments parse arguments  ###########################################
+################################################################################
+
 ENFUSE_PROJECTOR_ARG="--gray-projector=l-star"
-# ENFUSE_PROJECTOR_ARG="--contrast-window-size=5"
-# ENFUSE_PROJECTOR_ARG="--contrast-edge-scale=0.3"
+case $1 in
+    --mode1)
+        shift
+        ;;
+    --mode2)
+        shift
+        ENFUSE_PROJECTOR_ARG=""
+        ;;
+    --mode3)
+        shift
+        ENFUSE_PROJECTOR_ARG="--contrast-window-size=5"
+        ;;
+    --mode4)
+        shift
+        ENFUSE_PROJECTOR_ARG="--contrast-edge-scale=0.3"
+        ;;
+esac
 ENFUSE_ARGS="--exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask $ENFUSE_PROJECTOR_ARG"
 
-if [[ $# -ne 1 ]]; then
-    echo "requires exactly one argument: the prefix"
+if [[ $# -lt 2 ]]; then
+    echo "requires exactly more than two arguments"
     exit 1
 fi
-prefix="$1"
-
-# files=( "$@" )
-
-tmpdir=$(mktemp -d)
-echo "tmpdir is: $tmpdir"
-
-ls -1 "$prefix"*.tif 2>/dev/null > "$tmpdir/List"
-firstFile=$(basename $(head -1 "$tmpdir/List"))
-firstFile="${firstFile%.*}"
-firstFile="${firstFile%_*}"
+files=( "$@" )
 
 ################################################################################
 ##  functions  #################################################################
@@ -48,6 +57,14 @@ find_next_filename() {
     echo "${name}_${count}${extension}"
 }
 
+find_out_filename() {
+    local firstFile=$(basename "${files[0]}")
+    firstFile="${firstFile%.*}"
+    firstFile="${firstFile%_*}"
+
+    find_next_filename "${firstFile}_STACKED" ".tif"
+}
+
 create_slab() {
     local i=$1
     local j=$2
@@ -62,16 +79,17 @@ create_slab() {
     fi
     echo "Slab=$i, range $k1 - $k2, $(($k2-$k1+1)) frames"
 
+    mkdir -p "${outFileWithoutExt}/"
     enfuse $ENFUSE_ARGS \
-           --output=$(printf "${firstFile}_SLAB%04d" $i).tif \
-           $(cat "$tmpdir/List" | sed -n $(($k1+1)),$(($k2+1))p)
+           --output=$(printf "${outFileWithoutExt}/${outFileWithoutExt}_SLAB%04d" $i).tif \
+           ${files[@]:$(($k1+1)):$(($k2+1))}
 }
 
 align_with_slabs() {
     local over=0.3 # Overlap on each side (fraction), for each slab
     local Nover_min=2 # Overlap should be at least that many images
 
-    local N=$(cat "$tmpdir/List"|wc -l)
+    local N=${#files[@]}
     local N1=$(($N-1))
 
     local Size=$(echo $N| awk '{print int(sqrt($1))}') # Size of each slab (not including the overlap
@@ -89,7 +107,7 @@ align_with_slabs() {
     echo "First stage (creating multiple slabs)"
     local j=0
     for ((i=0; i<$Nslabs; i++)); do
-        create_slab $i $j $N1 "$Size" "$Nover"
+        create_slab $i $j $N1 $Size $Nover
         if [[ $j -lt $Slast ]]; then
             j=$(($j+1))
         fi
@@ -97,21 +115,21 @@ align_with_slabs() {
 
     echo "Second stage - merging all slabs into final stacked photo"
     enfuse $ENFUSE_ARGS \
-           --output="${firstFile}_STACKED.tif" \
-           "${firstFile}_SLAB"*.tif
+           --output="${outFile}" \
+           "${outFileWithoutExt}/${outFileWithoutExt}_SLAB"*.tif
 }
-
-# align_directly() {
-#     enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask                           --output="${firstFile}_STACKED_alt1.tif" "$prefix"*.tif | sed -e 's/^/alt1:  /' &
-#     enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask --gray-projector=l-star   --output="${firstFile}_STACKED_alt2.tif" "$prefix"*.tif | sed -e 's/^/alt2:  /' &
-#     enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask --contrast-window-size=5  --output="${firstFile}_STACKED_alt3.tif" "$prefix"*.tif | sed -e 's/^/alt3:  /' &
-#     enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask --contrast-edge-scale=0.3 --output="${firstFile}_STACKED_alt4.tif" "$prefix"*.tif | sed -e 's/^/alt4:  /' &
-#     wait
-# }
 
 ################################################################################
 ##  run  #######################################################################
 ################################################################################
 
-align_with_slabs
-# align_directly
+outFile=$(find_out_filename)
+outFileWithoutExt="${outFile%.*}"
+
+if [[ "${#files[@]}" -gt 10 ]]; then
+    align_with_slabs
+else
+    enfuse $ENFUSE_ARGS \
+           --output="${outFile}" \
+           ${files[@]}
+fi

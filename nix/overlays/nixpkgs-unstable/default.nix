@@ -42,7 +42,7 @@ let
     { config = import ../../nixpkgs-config.nix; };
 in
 self: super: {
-  nixos-unstable = mkPkgs "nixos-unstable";
-  nixos-unstable-small = mkPkgs "nixos-unstable-small";
-  unstable = mkPkgs "nixpkgs-unstable";
+  nixos-unstable = super.nixos-unstable or {} // mkPkgs "nixos-unstable";
+  nixos-unstable-small = super.nixos-unstable-small or {} // mkPkgs "nixos-unstable-small";
+  unstable = super.unstable or {} // mkPkgs "nixpkgs-unstable";
 }
