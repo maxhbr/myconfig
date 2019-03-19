@@ -9,13 +9,7 @@
     ./hardware/steamcontroller.nix
     ./hardware/pulseaudio.nix
   ];
-  myconfig.active-roles = [
-    "xmonad" "xfce"
-    "virtualization" "dev"
-    "imagework"
-    "games" "wine"
-    "vsftp" "openssh"
-  ];
+  myconfig.active-roles = import ./workstation.roles.nix;
 
   services.xserver.displayManager.slim.autoLogin = true;
   services.xserver.windowManager.default = "xfce";

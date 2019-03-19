@@ -4,5 +4,5 @@
 
 {
   imports = [];
-  myconfig.active-roles = [ "xmonad" "xfce" ];
+  myconfig.active-roles = import ./minimal.roles.nix;
 }

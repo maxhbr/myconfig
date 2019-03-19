@@ -11,13 +11,7 @@
     ./hardware/pulseaudio.nix
   ];
 
-  myconfig.active-roles = [
-    "xmonad" "xfce" # "vnc"
-    "mail"
-    "work" "virtualization" "dev"
-    "imagework"
-    "games"
-  ];
+  myconfig.active-roles = import ./T470.roles.nix;
 
   boot.initrd.supportedFilesystems = [ "luks" ];
   boot.initrd.luks.devices = [{
