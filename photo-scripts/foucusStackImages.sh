@@ -8,11 +8,19 @@
 
 set -e
 
+# ENFUSE_PROJECTOR_ARG=""
+ENFUSE_PROJECTOR_ARG="--gray-projector=l-star"
+# ENFUSE_PROJECTOR_ARG="--contrast-window-size=5"
+# ENFUSE_PROJECTOR_ARG="--contrast-edge-scale=0.3"
+ENFUSE_ARGS="--exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask $ENFUSE_PROJECTOR_ARG"
+
 if [[ $# -ne 1 ]]; then
     echo "requires exactly one argument: the prefix"
     exit 1
 fi
 prefix="$1"
+
+# files=( "$@" )
 
 tmpdir=$(mktemp -d)
 echo "tmpdir is: $tmpdir"
@@ -21,6 +29,24 @@ ls -1 "$prefix"*.tif 2>/dev/null > "$tmpdir/List"
 firstFile=$(basename $(head -1 "$tmpdir/List"))
 firstFile="${firstFile%.*}"
 firstFile="${firstFile%_*}"
+
+################################################################################
+##  functions  #################################################################
+################################################################################
+
+find_next_filename() {
+    local name=$1
+    local extension=$2
+    if [[ ! -e "$name$extension" ]]; then
+        echo "$name$extension"
+        return 0
+    fi
+    local count=1
+    while [[ -e "${name}_${count}${extension}" ]]; do
+        count=$((count+1))
+    done
+    echo "${name}_${count}${extension}"
+}
 
 create_slab() {
     local i=$1
@@ -36,7 +62,9 @@ create_slab() {
     fi
     echo "Slab=$i, range $k1 - $k2, $(($k2-$k1+1)) frames"
 
-    enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask --gray-projector=l-star --output=$(printf "${firstFile}_SLAB%04d" $i).tif $(cat "$tmpdir/List" | sed -n $(($k1+1)),$(($k2+1))p)
+    enfuse $ENFUSE_ARGS \
+           --output=$(printf "${firstFile}_SLAB%04d" $i).tif \
+           $(cat "$tmpdir/List" | sed -n $(($k1+1)),$(($k2+1))p)
 }
 
 align_with_slabs() {
@@ -68,16 +96,22 @@ align_with_slabs() {
     done
 
     echo "Second stage - merging all slabs into final stacked photo"
-    enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask --gray-projector=l-star --output="${firstFile}_STACKED.tif" "${firstFile}_SLAB"*.tif
+    enfuse $ENFUSE_ARGS \
+           --output="${firstFile}_STACKED.tif" \
+           "${firstFile}_SLAB"*.tif
 }
 
-align_directly() {
-    enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask                           --output="${firstFile}_STACKED_alt1.tif" "$prefix"*.tif | sed -e 's/^/alt1:  /' &
-    enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask --gray-projector=l-star   --output="${firstFile}_STACKED_alt2.tif" "$prefix"*.tif | sed -e 's/^/alt2:  /' &
-    enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask --contrast-window-size=5  --output="${firstFile}_STACKED_alt3.tif" "$prefix"*.tif | sed -e 's/^/alt3:  /' &
-    enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask --contrast-edge-scale=0.3 --output="${firstFile}_STACKED_alt4.tif" "$prefix"*.tif | sed -e 's/^/alt4:  /' &
-    wait
-}
+# align_directly() {
+#     enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask                           --output="${firstFile}_STACKED_alt1.tif" "$prefix"*.tif | sed -e 's/^/alt1:  /' &
+#     enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask --gray-projector=l-star   --output="${firstFile}_STACKED_alt2.tif" "$prefix"*.tif | sed -e 's/^/alt2:  /' &
+#     enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask --contrast-window-size=5  --output="${firstFile}_STACKED_alt3.tif" "$prefix"*.tif | sed -e 's/^/alt3:  /' &
+#     enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask --contrast-edge-scale=0.3 --output="${firstFile}_STACKED_alt4.tif" "$prefix"*.tif | sed -e 's/^/alt4:  /' &
+#     wait
+# }
+
+################################################################################
+##  run  #######################################################################
+################################################################################
 
 align_with_slabs
-align_directly
+# align_directly

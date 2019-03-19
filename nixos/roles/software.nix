@@ -49,6 +49,7 @@
     { # imagework
       config = lib.mkIf config.myconfig.roles.imagework.enable {
         environment.systemPackages = with pkgs; [
+          photo-scripts
           unstable.gimp-with-plugins
           rawtherapee unstable.darktable
           unstable.geeqie unstable.gthumb
