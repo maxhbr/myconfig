@@ -6,9 +6,7 @@
 # https://github.com/flyingcircusio/nixpkgs/blob/fc-15.09-dev/nixos/modules/flyingcircus/roles/default.nix
 
 let
-
   cfg = config.myconfig;
-
 in
 
 {
@@ -22,6 +20,7 @@ in
     ./mail.nix
     ./openssh.nix
     ./software.nix
+    ./sundtek.nix
     ./taskserver.nix
     ./terminal.nix
     ./virtualization.nix
