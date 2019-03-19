@@ -11,7 +11,7 @@
     ./hardware/pulseaudio.nix
   ];
 
-  myconfig.active-roles = import ./T470.roles.nix;
+  myconfig.active-roles = import ./T470p.roles.nix;
 
   boot.initrd.supportedFilesystems = [ "luks" ];
   boot.initrd.luks.devices = [{

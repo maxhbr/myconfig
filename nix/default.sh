@@ -77,13 +77,13 @@ deploy() {
     fi
 }
 
-upgrade() {
-    echo "* $(tput bold)nix-env --upgrade$(tput sgr0) ..."
-    NIX_CURL_FLAGS='--retry=1000' \
-                  $(buildNixCmd) \
-                  --show-trace \
-                  --upgrade
-}
+# upgrade() {
+#     echo "* $(tput bold)nix-env --upgrade$(tput sgr0) ..."
+#     NIX_CURL_FLAGS='--retry=1000' \
+#                   $(buildNixCmd) \
+#                   --show-trace \
+#                   --upgrade
+# }
 
 cleanup() {
     if [ "$((RANDOM%100))" -gt 90 ]; then
@@ -105,7 +105,7 @@ gate || {
 if [ $# -eq 0 ]; then
     prepare
     deploy
-    upgrade
+    # upgrade
     cleanup
 else
     ([[ ! -n "$(type -t $1)" ]] || [ "$(type -t $1)" != "function" ] ) && exit 0

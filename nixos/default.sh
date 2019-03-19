@@ -60,6 +60,9 @@ upgrade() {
              --upgrade \
              $args \
              --fallback ${NIXOS_REBUILD_CMD:-switch}
+
+    # update user packages
+    have nix-rebuild && nix-rebuild || nix-env -r -iA userPackages
 }
 
 cleanup() {

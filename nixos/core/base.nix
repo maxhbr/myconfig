@@ -49,36 +49,6 @@
       unzip
       tree
       stow
-      rlwrap
-
-      # cli:
-      ranger
-      emacs vim
-      elinks w3m
-      tmux
-      manpages
-      taskwarrior
-      pass
-      ag
-      file
-
-      # admin:
-      htop iftop iptraf-ng iotop bmon s-tui
-      mtr bind bridge-utils
-      pwgen # unstable.mkpasswd
-      usbutils
-      sysstat
-      tcpdump
-      cryptsetup
-      lsof
-      psmisc # contains: killall, pstree
-
-      #others:
-      pmount fuse
-      rsnapshot
-
-      # my backup tool
-      borgbackup
     ];
   };
 

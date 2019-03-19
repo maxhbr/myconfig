@@ -6,6 +6,8 @@
 #   https://discourse.nixos.org/t/declarative-package-management-for-normal-users/1823
 #
 
+self: super:
+
 let
   hostName = "${builtins.readFile /etc/nixos/hostname}";
   rolesFile = ../machines/. + ("/" + hostName + ".roles.nix");
@@ -15,7 +17,6 @@ let
 
 in
 
-self: super:
 {
   userPackages = super.userPackages or {} // {
     ############################################################################
@@ -35,13 +36,44 @@ self: super:
 
       nix-env -f '<nixpkgs>' -r -iA userPackages "$@"
 
-      echo "installed:"
+      echo "installed user packages:"
       nix-env --query | cat
     '';
 
     ############################################################################
     # Custom packages:
     myconfig = self.myconfig.all;
+
+    inherit (self)
+      # cli:
+      ranger
+      emacs vim
+      elinks w3m
+      tmux
+      manpages
+      taskwarrior
+      pass
+      ag
+      file
+      rlwrap
+
+      # admin:
+      htop iftop iptraf-ng iotop bmon s-tui
+      mtr bind bridge-utils
+      pwgen # unstable.mkpasswd
+      usbutils
+      sysstat
+      tcpdump
+      cryptsetup
+      lsof
+      psmisc # contains: killall, pstree
+
+      #others:
+      pmount fuse
+      rsnapshot
+
+      # my backup tool
+      borgbackup;
   } // super.lib.foldr (m1: m2: m1 // m2)
                        {}
                        (map (role: import (./. + ("/" + role + ".nix")) { pkgs = self; })
