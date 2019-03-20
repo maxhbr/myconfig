@@ -32,25 +32,26 @@ backupname="${backupprefix}$(date +%Y-%m-%d_%H:%M:%S)"
 logfile="$logdir/$backupname.log"
 
 borgInitCmd="$borgCmd \
-    init --encryption none"
+    init \
+        --encryption none"
 borgCreateCmd="$borgCmd \
     create \
-    --stats \
-    --verbose \
-    --progress \
-    --filter AME \
-    --show-rc \
-    --one-file-system \
-    --exclude-caches \
-    --compression lz4"
+        --stats \
+        --verbose \
+        --progress \
+        --filter AME \
+        --show-rc \
+        --one-file-system \
+        --exclude-caches \
+        --compression lz4"
 borgPruneCmd="$borgCmd \
     prune \
-    --stats \
-    --verbose \
-    --list \
-    --show-rc \
-    --keep-within=2d --keep-daily=7 --keep-weekly=4 --keep-monthly=6 \
-    --prefix \"backupprefix\""
+        --stats \
+        --verbose \
+        --list \
+        --show-rc \
+        --keep-within=2d --keep-daily=7 --keep-weekly=4 --keep-monthly=6 \
+        --prefix \"backupprefix\""
 
 ################################################################################
 # functions

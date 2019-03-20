@@ -12,12 +12,12 @@ stdenv.mkDerivation rec {
     # replace nix-shell headers
     find . -iname '*.sh' \
         -exec sed -i "1s%.*%#!/usr/bin/env bash%" {} \; \
-        -exec sed -e '2d' {} \;
+        -exec sed -i -e '2d' {} \;
 
     sed -i -e '/backgroundCmd =/ s%= .*%= "${background}/bin/myRandomBackground";%' myautosetup.pl
     sed -i -e 's%emacsclient%${pkgs.emacs}/bin/emacsclient%g' ec
     sed -i -e '/borgCmd=/ s%=.*%="${pkgs.borgbackup}/bin/borg";%' myborgbackup.sh
-    sed -i -e 's%sudo%${pkgs.sudo}/bin/sudo%' myborgbackup.sh 
+    # sed -i -e 's%sudo%${pkgs.sudo}/bin/sudo%' myborgbackup.sh 
     sed -i -e 's%xrandr%${pkgs.xorg.xrandr}/bin/xrandr%' homesamelayout.sh 
   '';
   installPhase = ''

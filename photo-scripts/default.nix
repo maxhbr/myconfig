@@ -12,11 +12,12 @@ stdenv.mkDerivation rec {
     # replace nix-shell headers
     find . -iname '*.sh' \
         -exec sed -i "1s%.*%#!/usr/bin/env bash%" {} \; \
-        -exec sed -e '2d' {} \;
+        -exec sed -i -e '2d' {} \;
 
     # hardlink binaries
     sed -i -e 's%align_image_stack%${pkgs.hugin}/bin/align_image_stack%g' alignImages.sh
     sed -i -e 's%enfuse%${pkgs.enblend-enfuse}/bin/enfuse%g' foucusStackImages.sh
+    sed -i -e 's%convert%${pkgs.imagemagick}/bin/convert%g' cropImages.sh
   '';
 
   installPhase = ''

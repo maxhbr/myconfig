@@ -153,6 +153,8 @@ exec &> >(tee -a $logfile)
 [[ "$1" != "--no-tmux" ]] && {
     wrapIntoTmux
 } || shift
+# call sudo here, to ask for password early
+sudo echo "go ..."
 checkIfConnected
 handleGit
 
