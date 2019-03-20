@@ -20,6 +20,7 @@ funs: pkgs: let
     inherit pkgs;
   };
 
+  # based on: https://gist.github.com/LnL7/570349866bb69467d0caf5cb175faa74
   userPackages = pkgs.userPackages or {} // {
     ############################################################################
     # Default packages:
@@ -35,16 +36,11 @@ funs: pkgs: let
     # script to update
     nix-rebuild = pkgs.writeScriptBin "nix-rebuild" ''
       #!${pkgs.stdenv.shell}
-      set -e
       if ! command -v nix-env &>/dev/null; then
         echo "warning: nix-env was not found in PATH, add nix to userPackages" >&2
         PATH=${funs.nix}/bin:$PATH
       fi
-
-      nix-env -f '<nixpkgs>' -r -iA userPackages "$@"
-
-      echo "installed user packages:"
-      nix-env --query | cat
+      exec nix-env -f '<nixpkgs>' -r -iA userPackages "$@"
     '';
 
     ############################################################################

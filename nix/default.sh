@@ -87,6 +87,8 @@ upgrade() {
 
     echo "installed user packages:"
     nix-env --query | sed 's/^/    /'
+    echo "installed root packages:"
+    sudo nix-env --query | sed 's/^/    /'
 }
 
 cleanup() {
