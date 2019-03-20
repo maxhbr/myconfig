@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p nix ncurses git wget tmux glibcLocales
+#! nix-shell -i zsh -p nix ncurses git wget tmux glibcLocales
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 set -e

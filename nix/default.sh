@@ -15,6 +15,7 @@ buildNixCmd() {
     nixEnvCMD="$nixEnvCMD -I nixpkgs=$nixpkgsDir"
     nixEnvCMD="$nixEnvCMD -I nixpkgs-overlays=$overlaysDir"
     nixEnvCMD="$nixEnvCMD -I nixos-config=$nixosConfigDir"
+    nixEnvCMD="$nixEnvCMD --file <nixpkgs>"
 
     echo $nixEnvCMD
 }
@@ -27,7 +28,7 @@ addRemotesIfNecessary() {
     fi
 }
 
-handleChannel() {
+handleChannelAsSubtree() {
     local dir=nix/$1
     local channel=$2
 
@@ -56,7 +57,7 @@ handleChannel() {
 }
 
 prepare() {
-    handleChannel "nixpkgs" "$nixStableChannel"
+    handleChannelAsSubtree "nixpkgs" "$nixStableChannel"
     $nixConfigDir/overlays/nixpkgs-unstable/default.sh
 
     nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixpkgs-overlays=$overlaysDir\" \"nixos-config=$nixosConfigDir\"]; }"
@@ -70,8 +71,8 @@ prepare() {
 
 deploy() {
     configTarget=/etc/nix/nixpkgs-config.nix
-    echo "* $(tput bold)update $configTarget$(tput sgr0) ..."
     if ! cmp "$nixConfigDir/nixpkgs-config.nix" $configTarget >/dev/null 2>&1; then
+        echo "* $(tput bold)update $configTarget$(tput sgr0) ..."
         sudo mkdir -p /etc/nix
         sudo cp "$nixConfigDir/nixpkgs-config.nix" $configTarget
     fi
@@ -82,10 +83,10 @@ upgrade() {
     NIX_CURL_FLAGS='--retry=1000' \
                   $(buildNixCmd) \
                   --show-trace \
-                  --upgrade
-    have nix-rebuild && \
-        nix-rebuild || \
-            nix-env -r -iA userPackages
+                  -r -iA myconfig.userPackages
+
+    echo "installed user packages:"
+    nix-env --query | sed 's/^/    /'
 }
 
 cleanup() {
