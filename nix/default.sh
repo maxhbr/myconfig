@@ -83,6 +83,9 @@ upgrade() {
                   $(buildNixCmd) \
                   --show-trace \
                   --upgrade
+    have nix-rebuild && \
+        nix-rebuild || \
+            nix-env -r -iA userPackages
 }
 
 cleanup() {

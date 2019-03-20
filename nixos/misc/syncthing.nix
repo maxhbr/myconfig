@@ -5,7 +5,7 @@
 
 {
   services.syncthing = {
-    enable = false;
+    enable = true;
     user = "mhuber";
     group = "mhuber";
     dataDir = "/home/mhuber/syncthing";
