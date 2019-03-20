@@ -7,8 +7,10 @@ module XMonad.MyConfig.MyLayoutLayer
     ) where
 
 import           Data.Ratio ((%))
+import           Data.Maybe ( isJust )
 
 import           XMonad
+import           XMonad.StackSet ( stack, tag )
 
 --------------------------------------------------------------------------------
 -- Util
@@ -23,7 +25,7 @@ import           XMonad.Actions.CycleWS ( nextWS, prevWS
                                         , shiftNextScreen, shiftPrevScreen
                                         , moveTo
                                         , Direction1D(..)
-                                        , WSType( NonEmptyWS ) )
+                                        , WSType( WSIs ) )
 import           XMonad.Actions.Minimize ( minimizeWindow, withLastMinimized, maximizeWindowAndFocus )
 
 --------------------------------------------------------------------------------
@@ -63,10 +65,11 @@ import XMonad.MyConfig.Common
 import XMonad.MyConfig.Notify (popupCurDesktop)
 
 
+myCoreWorkspaces, myWorkspaces :: [String]
+myCoreWorkspaces = "web" : map show [9..10]
+myWorkspaces = map show [1..7] ++ myCoreWorkspaces ++ ["vbox", "media"] ++ map show [13..18]
 applyMyLayoutModifications :: XConfig a -> XConfig a
 applyMyLayoutModifications c = let
-  myWorkspaces :: [String]
-  myWorkspaces = map show [1..7] ++ ("web" : map show [9..10]) ++ ["vbox", "media"]
   addLayoutkeys :: XConfig a -> XConfig a
   addLayoutkeys conf = applyMyKBs' layoutKBs conf
   in docks $
@@ -169,37 +172,42 @@ layoutKBs conf =
       , ((ms_, xK_j     ), windows W.swapDown)
       , ((ms_, xK_k     ), windows W.swapUp)
       ]
-    cycleWSKBs = map (\(a,b) -> (a,b >> popupCurDesktop))
-      [ ((m__, xK_Down ), moveTo Next NonEmptyWS) -- HiddenNonEmptyWS
-      , ((m__, xK_Up   ), moveTo Prev NonEmptyWS) -- HiddenNonEmptyWS
-      , ((ms_, xK_Down ), shiftToNext >> nextWS)
-      , ((ms_, xK_Up   ), shiftToPrev >> prevWS)
+    cycleWSKBs = let
+        nonEmptyNonMinorWS = WSIs $ do
+           let ne = isJust . stack -- equals NonEmptyWS in XMonad.Actions.CycleWS
+           let mw = not . (`elem` myCoreWorkspaces) . tag
+           return (\w -> ne w && mw w)
+      in map (\(a,b) -> (a,b >> popupCurDesktop))
+        [ ((m__, xK_Down ), moveTo Next nonEmptyNonMinorWS) -- HiddenNonEmptyWS
+        , ((m__, xK_Up   ), moveTo Prev nonEmptyNonMinorWS) -- HiddenNonEmptyWS
+        , ((ms_, xK_Down ), shiftToNext >> nextWS)
+        , ((ms_, xK_Up   ), shiftToPrev >> prevWS)
 #if 1
-      , ((m__, xK_Left ), nextScreen)
-      , ((m__, xK_Right), prevScreen)
-      , ((ms_, xK_Left ), shiftNextScreen)
-      , ((ms_, xK_Right), shiftPrevScreen)
+        , ((m__, xK_Left ), nextScreen)
+        , ((m__, xK_Right), prevScreen)
+        , ((ms_, xK_Left ), shiftNextScreen)
+        , ((ms_, xK_Right), shiftPrevScreen)
 #else
-      , ((m__, xK_Right), nextScreen)
-      , ((m__, xK_Left ), prevScreen)
-      , ((ms_, xK_Right), shiftNextScreen)
-      , ((ms_, xK_Left ), shiftPrevScreen)
+        , ((m__, xK_Right), nextScreen)
+        , ((m__, xK_Left ), prevScreen)
+        , ((ms_, xK_Right), shiftNextScreen)
+        , ((ms_, xK_Left ), shiftPrevScreen)
 #endif
-      , ((m__, xK_y    ), toggleWS' ["NSP"])
-      , ((m__, xK_a    ), toggleWS' ["NSP"])]
-    -- switchPhysicalKBs =
-    --   -- mod-{w,e,r}, Switch to physical/Xinerama screens 1, 2, or 3
-    --   -- mod-shift-{w,e,r}, Move client to screen 1, 2, or 3
-    --   [((m .|. m__, k), screenWorkspace sc >>= flip whenJust (windows . f))
-    --       | (k, sc) <- zip [xK_w, xK_e, xK_r] [0..]
-    --       , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
-    -- combineTwoKBs =
-    --   [((msc, xK_l ), sendMessage $ Move L)]
-    -- subLayoutKBs =
-    --   map (\(k,v) -> ((m_c, k), sendMessage $ pullGroup v))
-    --     [(xK_h,L),(xK_l,R),(xK_k,U),(xK_j,D)]
-    --     ++ [ ((m_c, xK_m), withFocused (sendMessage . MergeAll))
-    --        , ((m_c, xK_u), withFocused (sendMessage . UnMerge))]
+        , ((m__, xK_y    ), toggleWS' ["NSP"])
+        , ((m__, xK_a    ), toggleWS' ["NSP"])]
+      -- switchPhysicalKBs =
+      --   -- mod-{w,e,r}, Switch to physical/Xinerama screens 1, 2, or 3
+      --   -- mod-shift-{w,e,r}, Move client to screen 1, 2, or 3
+      --   [((m .|. m__, k), screenWorkspace sc >>= flip whenJust (windows . f))
+      --       | (k, sc) <- zip [xK_w, xK_e, xK_r] [0..]
+      --       , (f, m) <- [(W.view, 0), (W.shift, shiftMask)]]
+      -- combineTwoKBs =
+      --   [((msc, xK_l ), sendMessage $ Move L)]
+      -- subLayoutKBs =
+      --   map (\(k,v) -> ((m_c, k), sendMessage $ pullGroup v))
+      --     [(xK_h,L),(xK_l,R),(xK_k,U),(xK_j,D)]
+      --     ++ [ ((m_c, xK_m), withFocused (sendMessage . MergeAll))
+      --        , ((m_c, xK_u), withFocused (sendMessage . UnMerge))]
 
 ------------------------------------------------------------------------
 -- Mouse bindings:
