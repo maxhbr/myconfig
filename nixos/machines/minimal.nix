@@ -4,4 +4,5 @@
 
 {
   imports = [];
+  myconfig.active-roles = [ "xmonad" "xfce" ];
 }

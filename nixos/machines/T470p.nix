@@ -11,6 +11,14 @@
     ./hardware/pulseaudio.nix
   ];
 
+  myconfig.active-roles = [
+    "xmonad" "xfce" # "vnc"
+    "mail"
+    "work" "virtualization" "dev"
+    "imagework"
+    "games"
+  ];
+
   boot.initrd.supportedFilesystems = [ "luks" ];
   boot.initrd.luks.devices = [{
     device = "/dev/disk/by-uuid/fc9ecff5-e0c5-4cff-bb5c-08a745c76e3c";
