@@ -25,18 +25,6 @@
             arandr
             xlibs.xmodmap xlibs.xset xlibs.setxkbmap
             xclip
-          # gui applications
-            mupdf zathura llpp
-            feh imagemagick # scrot
-            xarchiver # gnome3.file-roller
-            mplayer
-          # gui applications
-            chromium unstable.firefox-unwrapped qutebrowser
-            google-chrome # for streaming and music
-            unstable.signal-desktop
-            # browserpass
-          # spellchecking
-            aspell aspellDicts.de aspellDicts.en
           # misc
             xf86_input_wacom
             libnotify # xfce.xfce4notifyd # notify-osd

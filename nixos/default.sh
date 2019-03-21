@@ -60,6 +60,8 @@ upgrade() {
              --upgrade \
              $args \
              --fallback ${NIXOS_REBUILD_CMD:-switch}
+    logH3 "nix-rebuild" "declerative rebuild of nix userspace environment"
+    ./nixos/userPackages/bin/nix-rebuild.sh
 }
 
 cleanup() {

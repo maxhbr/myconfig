@@ -20,32 +20,27 @@ funs: pkgs: let
     inherit pkgs;
   };
 
-  # based on: https://gist.github.com/LnL7/570349866bb69467d0caf5cb175faa74
-  userPackages = pkgs.userPackages or {} // {
-    ############################################################################
-    # Default packages:
-    cacert = funs.cacert;
-    nix = funs.nix; # don't enable this on multi-user.
-    myconfig-all = funs.buildEnv {
-      name = "myconfig-all";
-      paths = [scripts my-xmonad background slim-theme];
-      pathsToLink = [ "/share" "/bin" ];
-    };
+  # # based on: https://gist.github.com/LnL7/570349866bb69467d0caf5cb175faa74
+  # userPackages = pkgs.userPackages or {} // {
+  #   ############################################################################
+  #   # Default packages:
+  #   cacert = funs.cacert;
+  #   nix = funs.nix; # don't enable this on multi-user.
 
-    ############################################################################
-    # script to update
-    nix-rebuild = pkgs.writeScriptBin "nix-rebuild" ''
-      #!${pkgs.stdenv.shell}
-      if ! command -v nix-env &>/dev/null; then
-        echo "warning: nix-env was not found in PATH, add nix to userPackages" >&2
-        PATH=${funs.nix}/bin:$PATH
-      fi
-      exec nix-env -f '<nixpkgs>' -r -iA userPackages "$@"
-    '';
+  #   ############################################################################
+  #   # script to update
+  #   nix-rebuild = pkgs.writeScriptBin "nix-rebuild" ''
+  #     #!${pkgs.stdenv.shell}
+  #     if ! command -v nix-env &>/dev/null; then
+  #       echo "warning: nix-env was not found in PATH, add nix to userPackages" >&2
+  #       PATH=${funs.nix}/bin:$PATH
+  #     fi
+  #     exec nix-env -f '<nixpkgs>' -r -iA userPackages "$@"
+  #   '';
 
-    ############################################################################
-    # Custom packages:
-  };
+  #   ############################################################################
+  #   # Custom packages:
+  # };
 in {
   myconfig = {
     nixos-config = import ./nixos;
@@ -53,8 +48,12 @@ in {
       scripts
       my-xmonad
       background
-      slim-theme
-      userPackages;
+      slim-theme;
+    myconfig-all = funs.buildEnv {
+      name = "myconfig-all";
+      paths = [scripts my-xmonad background slim-theme];
+      pathsToLink = [ "/share" "/bin" ];
+    };
   };
   inherit photo-scripts;
 }
