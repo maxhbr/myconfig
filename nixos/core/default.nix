@@ -6,7 +6,10 @@
   imports = otherImports ++ [
     ./base.nix
     ../roles
-  ] ++ (if builtins.pathExists (../machines + "/${hostName}.nix")
+  ] ++ (if builtins.pathExists (../machines + "/${hostName}.roles.nix")
+        then [{myconfig.active-roles = import (../machines + "/${hostName}.roles.nix");}]
+        else [])
+    ++ (if builtins.pathExists (../machines + "/${hostName}.nix")
         then [(../machines + "/${hostName}.nix")]
         else []);
 

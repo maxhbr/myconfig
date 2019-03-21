@@ -9,11 +9,4 @@
     ./hardware/exfat.nix
     ./hardware/pulseaudio.nix
   ];
-
-  myconfig.active-roles = [
-    "xmonad"
-    "work" "virtualization" "dev"
-    "imagework"
-  ];
-
 }

@@ -9,14 +9,6 @@
     ./hardware/steamcontroller.nix
     ./hardware/pulseaudio.nix
   ];
-  myconfig.active-roles = [
-    "xmonad" "xfce"
-    "virtualization" "dev"
-    "imagework"
-    "games" "wine"
-    "vsftp" "openssh"
-  ];
-
   services.xserver.displayManager.slim.autoLogin = true;
   services.xserver.windowManager.default = "xfce";
 }
