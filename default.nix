@@ -19,28 +19,6 @@ funs: pkgs: let
   photo-scripts = callPackage ./photo-scripts {
     inherit pkgs;
   };
-
-  # # based on: https://gist.github.com/LnL7/570349866bb69467d0caf5cb175faa74
-  # userPackages = pkgs.userPackages or {} // {
-  #   ############################################################################
-  #   # Default packages:
-  #   cacert = funs.cacert;
-  #   nix = funs.nix; # don't enable this on multi-user.
-
-  #   ############################################################################
-  #   # script to update
-  #   nix-rebuild = pkgs.writeScriptBin "nix-rebuild" ''
-  #     #!${pkgs.stdenv.shell}
-  #     if ! command -v nix-env &>/dev/null; then
-  #       echo "warning: nix-env was not found in PATH, add nix to userPackages" >&2
-  #       PATH=${funs.nix}/bin:$PATH
-  #     fi
-  #     exec nix-env -f '<nixpkgs>' -r -iA userPackages "$@"
-  #   '';
-
-  #   ############################################################################
-  #   # Custom packages:
-  # };
 in {
   myconfig = {
     nixos-config = import ./nixos;

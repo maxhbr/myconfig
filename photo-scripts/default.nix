@@ -16,7 +16,7 @@ stdenv.mkDerivation rec {
 
     # hardlink binaries
     sed -i -e 's%align_image_stack%${pkgs.hugin}/bin/align_image_stack%g' alignImages.sh
-    sed -i -e 's%enfuse%${pkgs.enblend-enfuse}/bin/enfuse%g' foucusStackImages.sh
+    sed -i -e 's%enfuse%${pkgs.enblend-enfuse}/bin/enfuse%g' focusStackImages.sh
     sed -i -e 's%convert%${pkgs.imagemagick}/bin/convert%g' cropImages.sh
   '';
 
