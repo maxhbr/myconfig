@@ -47,10 +47,11 @@ handleChannelAsSubtree() {
             if git diff-index --quiet HEAD --; then
                 git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
             else
-                logINFO "stash local changes to allow subtree pull"
-                git stash push -m "autostash for nix/default.sh"
-                git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
-                git stash pop "stash@{0}" 1> /dev/null
+                logERR "uncommitted changes, do not update $channel"
+                # logINFO "stash local changes to allow subtree pull"
+                # git stash push -m "autostash for nix/default.sh"
+                # git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
+                # git stash pop "stash@{0}" 1> /dev/null
             fi
         fi
     fi
@@ -78,6 +79,8 @@ deploy() {
     fi
 }
 
+# upgrade is no longer necessary, due to user-packages in /nixos
+#
 # upgrade() {
 #     echo "* $(tput bold)nix-env --upgrade$(tput sgr0) ..."
 #     NIX_CURL_FLAGS='--retry=1000' \

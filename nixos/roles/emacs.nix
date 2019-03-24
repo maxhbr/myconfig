@@ -27,7 +27,7 @@
       };
       enable = true;
     };
-    environment.systemPackages = with pkgs; [ emacs ];
+    environment.systemPackages = with pkgs; [ emacs aspell aspellDicts.de aspellDicts.en  ];
 
     # services.emacs = {
     #   enable = true;
