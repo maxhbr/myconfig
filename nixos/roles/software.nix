@@ -46,22 +46,6 @@
       };
     }
 ################################################################################
-    { # imagework
-      config = lib.mkIf config.myconfig.roles.imagework.enable {
-        environment.systemPackages = with pkgs; [
-          photo-scripts
-          unstable.gimp-with-plugins
-          rawtherapee unstable.darktable
-          unstable.geeqie unstable.gthumb
-          # krita
-          # inkscape
-
-          # blender
-          librecad
-        ];
-      };
-    }
-################################################################################
     { # wine
       config = lib.mkIf config.myconfig.roles.wine.enable {
         environment.systemPackages = with pkgs; [

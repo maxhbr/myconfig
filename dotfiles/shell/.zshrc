@@ -35,8 +35,7 @@ PROMPT='%T ${ret_status}%?%{$reset_color%} $(git_prompt_info)%{$fg[cyan]%}%c%{$r
 if [ $IN_NIX_SHELL ]; then
     PROMPT='%{$fg[red]%}nix-shell%{$reset_color%} '"$PROMPT"
 fi
-RPROMPT='%{$fg[cyan]%}%~%{$reset_color%}'
-
+# RPROMPT='%{$fg[cyan]%}%~%{$reset_color%}'
 # RPROMPT=' [%L]'
 
 ###############################################################################

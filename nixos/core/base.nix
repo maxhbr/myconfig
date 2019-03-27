@@ -57,7 +57,7 @@
       elinks w3m
       tmux
       manpages
-      taskwarrior
+      # taskwarrior
       pass
       ag
       file
