@@ -17,7 +17,7 @@
       organisations.my-company.users = [ "mhuber" ];
     };
     # networking.firewall.allowedTCPPorts = [ ];
-    systemPackages = with pkgs; [
+    environment.systemPackages = with pkgs; [
       taskwarrior
     ];
   };

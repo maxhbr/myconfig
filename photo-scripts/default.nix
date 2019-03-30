@@ -18,6 +18,7 @@ stdenv.mkDerivation rec {
     sed -i -e 's%align_image_stack%${pkgs.hugin}/bin/align_image_stack%g' alignImages.sh
     sed -i -e 's%enfuse%${pkgs.enblend-enfuse}/bin/enfuse%g' focusStackImages.sh
     sed -i -e 's%convert%${pkgs.imagemagick}/bin/convert%g' cropImages.sh
+    sed -i -e 's%convert%${pkgs.imagemagick}/bin/convert%g' scale-images-for-web.sh
   '';
 
   installPhase = ''

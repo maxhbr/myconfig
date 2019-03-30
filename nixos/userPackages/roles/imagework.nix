@@ -11,5 +11,5 @@ with pkgs; [
   # inkscape
 
   # blender
-  librecad
+  librecad freecad
 ]
