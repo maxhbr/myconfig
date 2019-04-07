@@ -110,6 +110,14 @@ adddate() { # see http://serverfault.com/questions/310098/how-to-add-a-timestamp
     done
 }
 
+xclipToX() {
+    xclip <(xclip -selection c -o)
+}
+
+xclipToCtrl() {
+    xclip -selection c <(xclip -o)
+}
+
 #--------------------------------------------------------------------
 #   file specific
 #-------------------------------------------------------------------{{{
