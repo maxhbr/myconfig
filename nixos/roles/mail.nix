@@ -15,6 +15,7 @@
       offlineimap msmtp gnupg abook urlview notmuch
       sxiv
       procmail
+      unstable.astroid
     ];
 
     services.offlineimap = {
