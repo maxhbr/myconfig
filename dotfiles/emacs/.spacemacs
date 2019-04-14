@@ -65,6 +65,8 @@ values."
      (org :variables org-enable-reveal-js-support t)
      ;; set in org-file: #+REVEAL_ROOT: http://cdn.jsdelivr.net/reveal.js/3.0.0/
 
+     notmutch
+
      ;; (shell :variables
      ;;        shell-default-height 30
      ;;        shell-default-position 'bottom)
