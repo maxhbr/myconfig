@@ -4,6 +4,8 @@
 pkgs:
 with pkgs; [
   photo-scripts
+  gphoto2 gphoto2fs
+
   unstable.gimp-with-plugins
   rawtherapee unstable.darktable
   unstable.geeqie unstable.gthumb
@@ -11,5 +13,6 @@ with pkgs; [
   # inkscape
 
   # blender
-  librecad freecad
+  librecad # 2D
+  freecad # 3D
 ]

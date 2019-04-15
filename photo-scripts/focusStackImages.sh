@@ -77,7 +77,7 @@ create_slab() {
     if [[ $k2 -gt $N1 ]]; then
         k2=$N1
     fi
-    echo "Slab=$i, range $k1 - $k2, $(($k2-$k1+1)) frames"
+    echo "Slab=$i, range $k1 - $k2 of $N1, $(($k2-$k1+1)) frames"
 
     mkdir -p "${outFileWithoutExt}/"
     enfuse $ENFUSE_ARGS \
@@ -124,6 +124,7 @@ align_with_slabs() {
 ################################################################################
 
 outFile=$(find_out_filename)
+touch $outFile # claim the out file and overwrite it if done
 outFileWithoutExt="${outFile%.*}"
 
 if [[ "${#files[@]}" -gt 10 ]]; then
