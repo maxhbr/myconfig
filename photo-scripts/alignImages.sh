@@ -19,6 +19,7 @@ OPT="-l"
 firstFile=$(basename $1)
 firstFile="${firstFile%.*}"
 tmpdir=$(mktemp -d)
+trap "{ rm -f $tmpdir; }" EXIT
 echo "tmpdir is: $tmpdir"
 
 my_align() {
