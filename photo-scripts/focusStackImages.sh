@@ -7,7 +7,6 @@
 #        https://github.com/pulsar123/Macro-scripts
 
 set -e
-trap times EXIT
 
 ################################################################################
 ##  parse arguments parse arguments  ###########################################
@@ -15,6 +14,15 @@ trap times EXIT
 
 ENFUSE_PROJECTOR_ARG="--gray-projector=l-star"
 case $1 in
+    --help)
+        cat<<EOF
+  $0 [--mode1] img [img [img ...]]
+  $0 --mode2   img [img [img ...]]
+  $0 --mode3   img [img [img ...]]
+  $0 --mode4   img [img [img ...]]
+EOF
+        exit 0
+        ;;
     --mode1)
         shift
         ;;
@@ -38,6 +46,7 @@ if [[ $# -lt 2 ]]; then
     exit 1
 fi
 files=( "$@" )
+trap times EXIT
 
 ################################################################################
 ##  functions  #################################################################

@@ -3,6 +3,13 @@
 
 set -e
 
+if [[ "$1" == "--help" ]]; then
+    cat<<EOF
+  $0 img [img [img ...]]
+EOF
+    exit 0
+fi
+
 size=2000
 
 scale() {

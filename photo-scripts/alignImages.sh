@@ -8,6 +8,14 @@
 
 set -e
 
+
+if [[ "$1" == "--help" ]]; then
+    cat<<EOF
+  $0 img [img [img ...]]
+EOF
+    exit 0
+fi
+
 if [[ $# -lt 2 ]]; then
     echo "less that two arguments, nothing to align"
     exit 1
