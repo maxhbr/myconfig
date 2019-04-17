@@ -39,9 +39,7 @@
         ] ++ (with pkgs.haskellPackages; [
           # cabal-install
           ghc hlint pandoc
-          pointfree pointful
-        ]) ++ (with pkgs.haskellPackages; [
-            hdevtools
+          hdevtools
         ]);
       };
     }

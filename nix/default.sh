@@ -40,7 +40,7 @@ handleChannelAsSubtree() {
         logINFO "the channel $channel was last updated $(git log --format="%cr" remotes/NixOS-nixpkgs-channels/$channel -1)"
 
         cd $myconfigDir
-        git fetch NixOS-nixpkgs-channels $channel
+        git fetch NixOS-nixpkgs-channels -- $channel
         if [ ! -f "$dir/default.nix" ]; then
             git subtree add --prefix $dir NixOS-nixpkgs-channels $channel --squash
         else
