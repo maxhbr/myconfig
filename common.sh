@@ -2,7 +2,7 @@
 ##  variables  ############################################################
 ###########################################################################
 
-nixStableChannel=nixos-18.09-small
+nixStableChannel=nixos-19.03-small
 
 export myconfigDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 export nixConfigDir="$myconfigDir/nix"
