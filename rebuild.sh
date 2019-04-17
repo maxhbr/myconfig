@@ -70,7 +70,7 @@ handleGit() {
                 echo "... up-to-date"
             elif [ $LOCAL = $BASE ]; then
                 echo "* pull ..."
-                git pull --rebase || continue
+                git pull --rebase || true
                 logH1 "run" "updatet version of script"
                 exec $0
             elif [ $REMOTE = $BASE ]; then
@@ -184,9 +184,9 @@ setupExitTrap() {
 # run scripts #############################################################
 declare -a folders=("./nix" "./nixos" "./dotfiles" "./xmonad")
 declare -a commands=("prepare" "deploy" "upgrade" "cleanup")
-for cmd in ${commands[@]}; do
+for cmd in "${commands[@]}"; do
     logH1 "handle:" "$cmd"
-    for folder in ${folders[@]}; do
+    for folder in "${folders[@]}"; do
         setupExitTrap "$cmd for $folder"
         MYCONFIG_ARGS=$@ runCmd $folder $cmd
     done
