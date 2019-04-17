@@ -110,6 +110,7 @@ myBackup() {
 /home/*/.nox/
 /home/*/.m2/
 /home/*/.compose-cache/
+/home/*/.config/GIMP/*/backups
 */.Trash*/
 /nix/
 /tmp/
