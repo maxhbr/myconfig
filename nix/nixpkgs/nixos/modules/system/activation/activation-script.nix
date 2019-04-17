@@ -21,7 +21,8 @@ let
     [ coreutils
       gnugrep
       findutils
-      glibc # needed for getent
+      getent
+      stdenv.cc.libc # nscd in update-users-groups.pl
       shadow
       nettools # needed for hostname
       utillinux # needed for mount and mountpoint
@@ -173,14 +174,6 @@ in
     system.activationScripts.var =
       ''
         # Various log/runtime directories.
-
-        mkdir -m 0755 -p /run/nix/current-load # for distributed builds
-        mkdir -m 0700 -p /run/nix/remote-stores
-
-        mkdir -m 0755 -p /var/log
-
-        touch /var/log/wtmp /var/log/lastlog # must exist
-        chmod 644 /var/log/wtmp /var/log/lastlog
 
         mkdir -m 1777 -p /var/tmp
 

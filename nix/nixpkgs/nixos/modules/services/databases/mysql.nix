@@ -29,20 +29,6 @@ let
   installOptions =
     "${mysqldAndInstallOptions} ${lib.optionalString isMysqlAtLeast57 "--insecure"}";
 
-  myCnf = pkgs.writeText "my.cnf"
-  ''
-    [mysqld]
-    port = ${toString cfg.port}
-    ${optionalString (cfg.bind != null) "bind-address = ${cfg.bind}" }
-    ${optionalString (cfg.replication.role == "master" || cfg.replication.role == "slave") "log-bin=mysql-bin"}
-    ${optionalString (cfg.replication.role == "master" || cfg.replication.role == "slave") "server-id = ${toString cfg.replication.serverId}"}
-    ${optionalString (cfg.ensureUsers != [])
-    ''
-      plugin-load-add = auth_socket.so
-    ''}
-    ${cfg.extraOptions}
-  '';
-
 in
 
 {
@@ -157,7 +143,7 @@ in
           option is changed. This means that users created and permissions assigned once through this option or
           otherwise have to be removed manually.
         '';
-        example = [
+        example = literalExample ''[
           {
             name = "nextcloud";
             ensurePermissions = {
@@ -170,7 +156,7 @@ in
               "*.*" = "SELECT, LOCK TABLES";
             };
           }
-        ];
+        ]'';
       };
 
       # FIXME: remove this option; it's a really bad idea.
@@ -241,6 +227,21 @@ in
 
     environment.systemPackages = [mysql];
 
+    environment.etc."my.cnf".text =
+    ''
+      [mysqld]
+      port = ${toString cfg.port}
+      datadir = ${cfg.dataDir}
+      ${optionalString (cfg.bind != null) "bind-address = ${cfg.bind}" }
+      ${optionalString (cfg.replication.role == "master" || cfg.replication.role == "slave") "log-bin=mysql-bin"}
+      ${optionalString (cfg.replication.role == "master" || cfg.replication.role == "slave") "server-id = ${toString cfg.replication.serverId}"}
+      ${optionalString (cfg.ensureUsers != [])
+      ''
+        plugin-load-add = auth_socket.so
+      ''}
+      ${cfg.extraOptions}
+    '';
+
     systemd.services.mysql = let
       hasNotify = (cfg.package == pkgs.mariadb);
     in {
@@ -248,6 +249,7 @@ in
 
         after = [ "network.target" ];
         wantedBy = [ "multi-user.target" ];
+        restartTriggers = [ config.environment.etc."my.cnf".source ];
 
         unitConfig.RequiresMountsFor = "${cfg.dataDir}";
 
@@ -262,7 +264,7 @@ in
             if ! test -e ${cfg.dataDir}/mysql; then
                 mkdir -m 0700 -p ${cfg.dataDir}
                 chown -R ${cfg.user} ${cfg.dataDir}
-                ${mysql}/bin/mysql_install_db ${installOptions}
+                ${mysql}/bin/mysql_install_db --defaults-file=/etc/my.cnf ${installOptions}
                 touch /tmp/mysql_init
             fi
 
@@ -273,7 +275,8 @@ in
         serviceConfig = {
           Type = if hasNotify then "notify" else "simple";
           RuntimeDirectory = "mysqld";
-          ExecStart = "${mysql}/bin/mysqld --defaults-extra-file=${myCnf} ${mysqldOptions}";
+          # The last two environment variables are used for starting Galera clusters
+          ExecStart = "${mysql}/bin/mysqld --defaults-file=/etc/my.cnf ${mysqldOptions} $_WSREP_NEW_CLUSTER $_WSREP_START_POSITION";
         };
 
         postStart = ''

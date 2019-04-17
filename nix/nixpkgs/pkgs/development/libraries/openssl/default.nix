@@ -1,5 +1,5 @@
-{ stdenv, fetchurl, buildPackages, perl
-, withCryptodev ? false, cryptodevHeaders
+{ stdenv, fetchurl, buildPackages, perl, coreutils
+, withCryptodev ? false, cryptodev
 , enableSSL2 ? false
 , static ? false
 }:
@@ -7,7 +7,7 @@
 with stdenv.lib;
 
 let
-  common = args@{ version, sha256, patches ? [] }: stdenv.mkDerivation rec {
+  common = args@{ version, sha256, patches ? [], withDocs ? false }: stdenv.mkDerivation rec {
     name = "openssl-${version}";
 
     src = fetchurl {
@@ -25,24 +25,28 @@ let
         substituteInPlace "$a" \
           --replace /bin/rm rm
       done
+    '' + optionalString (versionAtLeast version "1.1.1") ''
+      substituteInPlace config --replace '/usr/bin/env' '${coreutils}/bin/env'
     '' + optionalString (versionAtLeast version "1.1.0" && stdenv.hostPlatform.isMusl) ''
       substituteInPlace crypto/async/arch/async_posix.h \
         --replace '!defined(__ANDROID__) && !defined(__OpenBSD__)' \
                   '!defined(__ANDROID__) && !defined(__OpenBSD__) && 0'
     '';
 
-    outputs = [ "bin" "dev" "out" "man" ];
+    outputs = [ "bin" "dev" "out" "man" ] ++ optional withDocs "doc";
     setOutputFlags = false;
     separateDebugInfo = stdenv.hostPlatform.isLinux;
 
     nativeBuildInputs = [ perl ];
-    buildInputs = stdenv.lib.optional withCryptodev cryptodevHeaders;
+    buildInputs = stdenv.lib.optional withCryptodev cryptodev;
 
     # TODO(@Ericson2314): Improve with mass rebuild
     configurePlatforms = [];
     configureScript = {
         "x86_64-darwin"  = "./Configure darwin64-x86_64-cc";
         "x86_64-solaris" = "./Configure solaris64-x86_64-gcc";
+        "armv6l-linux" = "./Configure linux-armv4 -march=armv6";
+        "armv7l-linux" = "./Configure linux-armv4 -march=armv7-a";
       }.${stdenv.hostPlatform.system} or (
         if stdenv.hostPlatform == stdenv.buildPlatform
           then "./config"
@@ -83,6 +87,7 @@ let
     '' +
     ''
       mkdir -p $bin
+      substituteInPlace $out/bin/c_rehash --replace ${buildPackages.perl} ${perl}
       mv $out/bin $bin/
 
       mkdir $dev
@@ -126,10 +131,17 @@ in {
     ];
   };
 
-  openssl_1_1_0 = common {
-    version = "1.1.0i";
-    sha256 = "16fgaf113p6s5ixw227sycvihh3zx6f6rf0hvjjhxk68m12cigzb";
-    patches = [ ./nix-ssl-cert-file.patch ];
+  openssl_1_1 = common {
+    version = "1.1.1b";
+    sha256 = "0jza8cmznnyiia43056dij1jdmz62dx17wsn0zxksh9h6817nmaw";
+    patches = [
+      ./1.1/nix-ssl-cert-file.patch
+
+      (if stdenv.hostPlatform.isDarwin
+       then ./1.1/use-etc-ssl-certs-darwin.patch
+       else ./1.1/use-etc-ssl-certs.patch)
+    ];
+    withDocs = true;
   };
 
 }

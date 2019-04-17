@@ -1,18 +1,18 @@
-{ stdenv, fetchFromGitHub, cmake, libarcus, stb }:
+{ stdenv, fetchFromGitHub, fetchpatch, cmake, libarcus, stb, protobuf }:
 
 stdenv.mkDerivation rec {
   name = "curaengine-${version}";
-  version = "3.4.1";
+  version = "3.6.0";
 
   src = fetchFromGitHub {
     owner = "Ultimaker";
     repo = "CuraEngine";
     rev = version;
-    sha256 = "083jmhzmb60rmqw0fhbnlxyblzkmpn3k6zc75xq90x5g3h60wib4";
+    sha256 = "1iwmblvs3qw57698i8bbazyxha18bj9irnkcscdb0596g8q93fcm";
   };
 
   nativeBuildInputs = [ cmake ];
-  buildInputs = [ libarcus stb ];
+  buildInputs = [ libarcus stb protobuf ];
 
   cmakeFlags = [ "-DCURA_ENGINE_VERSION=${version}" ];
 

@@ -38,6 +38,7 @@ stdenv.mkDerivation rec {
     "--enable-pc-files"
     "--enable-symlinks"
     "--with-manpage-format=normal"
+    "--disable-stripping"
   ] ++ lib.optional unicode "--enable-widec"
     ++ lib.optional (!withCxx) "--without-cxx"
     ++ lib.optional (abiVersion == "5") "--with-abi-version=5"
@@ -163,11 +164,10 @@ stdenv.mkDerivation rec {
       ported to OS/2 Warp!
     '';
 
-    homepage = http://www.gnu.org/software/ncurses/;
+    homepage = https://www.gnu.org/software/ncurses/;
 
     license = lib.licenses.mit;
     platforms = lib.platforms.all;
-    maintainers = [ lib.maintainers.wkennington ];
   };
 
   passthru = {

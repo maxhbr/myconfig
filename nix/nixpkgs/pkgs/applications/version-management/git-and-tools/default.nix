@@ -30,7 +30,15 @@ let
 
   git = appendToName "minimal" gitBase;
 
+  git-absorb = callPackage ./git-absorb {
+    inherit (darwin.apple_sdk.frameworks) Security;
+  };
+
+  git-appraise = callPackage ./git-appraise {};
+
   git-fame = callPackage ./git-fame {};
+
+  gita = callPackage ./gita {};
 
   # The full-featured Git.
   gitFull = gitBase.override {
@@ -55,6 +63,8 @@ let
 
   git-annex-remote-rclone = callPackage ./git-annex-remote-rclone { };
 
+  git-bug = callPackage ./git-bug { };
+
   # support for bugzilla
   git-bz = callPackage ./git-bz { };
 
@@ -72,6 +82,8 @@ let
 
   git-hub = callPackage ./git-hub { };
 
+  git-ignore = callPackage ./git-ignore { };
+
   git-imerge = callPackage ./git-imerge { };
 
   git-octopus = callPackage ./git-octopus { };
@@ -86,6 +98,8 @@ let
 
   git-remote-hg = callPackage ./git-remote-hg { };
 
+  git-reparent = callPackage ./git-reparent { };
+
   git-secret = callPackage ./git-secret { };
 
   git-secrets = callPackage ./git-secrets { };
@@ -93,6 +107,8 @@ let
   git-stree = callPackage ./git-stree { };
 
   git-sync = callPackage ./git-sync { };
+
+  git-test = callPackage ./git-test { };
 
   git2cl = callPackage ./git2cl { };
 
@@ -110,7 +126,11 @@ let
 
   hubUnstable = throw "use gitAndTools.hub instead";
 
+  lab = callPackage ./lab { };
+
   pre-commit = callPackage ./pre-commit { };
+
+  pass-git-helper = python3Packages.callPackage ./pass-git-helper { };
 
   qgit = qt5.callPackage ./qgit { };
 

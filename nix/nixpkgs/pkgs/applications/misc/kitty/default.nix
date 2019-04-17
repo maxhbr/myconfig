@@ -2,29 +2,29 @@
   harfbuzz, fontconfig, pkgconfig, ncurses, imagemagick, xsel,
   libstartup_notification, libX11, libXrandr, libXinerama, libXcursor,
   libxkbcommon, libXi, libXext, wayland-protocols, wayland,
-  which
+  which, dbus
 }:
 
 with python3Packages;
 buildPythonApplication rec {
-  version = "0.11.3";
-  name = "kitty-${version}";
+  pname = "kitty";
+  version = "0.13.3";
   format = "other";
 
   src = fetchFromGitHub {
     owner = "kovidgoyal";
     repo = "kitty";
     rev = "v${version}";
-    sha256 = "1fql8ayxvip8hgq9gy0dhqfvngv13gh5bf71vnc3agd80kzq1n73";
+    sha256 = "1y0vd75j8g61jdj8miml79w5ri3pqli5rv9iq6zdrxvzfa4b2rmb";
   };
 
   buildInputs = [
     fontconfig glfw ncurses libunistring harfbuzz libX11
     libXrandr libXinerama libXcursor libxkbcommon libXi libXext
-    wayland-protocols wayland
+    wayland-protocols wayland dbus
   ];
 
-  nativeBuildInputs = [ pkgconfig which sphinx ];
+  nativeBuildInputs = [ pkgconfig which sphinx ncurses ];
 
   outputs = [ "out" "terminfo" ];
 
@@ -35,14 +35,8 @@ buildPythonApplication rec {
     })
   ];
 
-  postPatch = ''
-    substituteInPlace docs/Makefile \
-      --replace 'python3 .. +launch $(shell which sphinx-build)' \
-                'PYTHONPATH=$PYTHONPATH:.. HOME=$TMPDIR/nowhere $(shell which sphinx-build)'
-    '';
-
   buildPhase = ''
-    python3 setup.py linux-package
+    ${python.interpreter} setup.py linux-package
   '';
 
   installPhase = ''
@@ -51,6 +45,12 @@ buildPythonApplication rec {
     cp -r linux-package/{bin,share,lib} $out
     wrapProgram "$out/bin/kitty" --prefix PATH : "$out/bin:${stdenv.lib.makeBinPath [ imagemagick xsel ]}"
     runHook postInstall
+
+    # ZSH completions need to be invoked with `source`:
+    # https://github.com/kovidgoyal/kitty/blob/8ceb941051b89b7c50850778634f0b6137aa5e6e/docs/index.rst#zsh
+    mkdir -p "$out/share/"{bash-completion/completions,fish/vendor_completions.d,zsh/site-functions}
+    "$out/bin/kitty" + complete setup fish > "$out/share/fish/vendor_completions.d/kitty.fish"
+    "$out/bin/kitty" + complete setup bash > "$out/share/bash-completion/completions/kitty.bash"
   '';
 
   postInstall = ''

@@ -71,14 +71,13 @@ in stdenv.mkDerivation rec {
 
   src = chromium.upstream-info.binary;
 
+  nativeBuildInputs = [ patchelf makeWrapper ];
   buildInputs = [
-    patchelf makeWrapper
-
     # needed for GSETTINGS_SCHEMAS_PATH
     gsettings-desktop-schemas glib gtk
 
     # needed for XDG_ICON_DIRS
-    gnome.defaultIconTheme
+    gnome.adwaita-icon-theme
   ];
 
   unpackPhase = ''

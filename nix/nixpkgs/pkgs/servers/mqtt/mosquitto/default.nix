@@ -2,7 +2,10 @@
 , openssl, libuuid, libwebsockets, c-ares, libuv
 , systemd ? null }:
 
-stdenv.mkDerivation rec {
+let
+  withSystemd = stdenv.isLinux;
+
+in stdenv.mkDerivation rec {
   name = "mosquitto-${version}";
   version = "1.5.8";
 
@@ -31,7 +34,7 @@ stdenv.mkDerivation rec {
 
   buildInputs = [
     openssl libuuid libwebsockets c-ares libuv
-  ];
+  ] ++ lib.optional withSystemd systemd;
 
   nativeBuildInputs = [ cmake docbook_xsl libxslt ];
 
@@ -40,7 +43,7 @@ stdenv.mkDerivation rec {
   cmakeFlags = [
     "-DWITH_THREADING=ON"
     "-DWITH_WEBSOCKETS=ON"
-  ];
+  ] ++ lib.optional withSystemd "-DWITH_SYSTEMD=ON";
 
   meta = with stdenv.lib; {
     description = "An open source MQTT v3.1/3.1.1 broker";

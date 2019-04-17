@@ -1,4 +1,8 @@
-{stdenv, fetchurl}:
+{ stdenv
+, lib
+, fetchurl
+, optimize ? false # impure
+}:
 stdenv.mkDerivation rec {
   name = "nauty-${version}";
   version = "26r11";
@@ -6,13 +10,27 @@ stdenv.mkDerivation rec {
     url = "http://pallini.di.uniroma1.it/nauty${version}.tar.gz";
     sha256 = "05z6mk7c31j70md83396cdjmvzzip1hqb88pfszzc6k4gy8h3m2y";
   };
+  outputs = [ "out" "dev" ];
+  configureFlags = lib.optionals (!optimize) [
+    # Prevent nauty from sniffing some cpu features. While those are very
+    # widely available, it can lead to nasty bugs when they are not available:
+    # https://groups.google.com/forum/#!topic/sage-packaging/Pe4SRDNYlhA
+    "--disable-popcnt"
+    "--disable-clz"
+  ];
   buildInputs = [];
   installPhase = ''
-    mkdir -p "$out"/{bin,share/doc/nauty}
+    mkdir -p "$out"/{bin,share/doc/nauty} "$dev"/{lib,include/nauty}
 
-    cp $(find . -type f -perm -111 \! -name '*.*' ) "$out/bin"
+    find . -type f -perm -111 \! -name '*.*' \! -name configure -exec cp '{}' "$out/bin" \;
     cp [Rr][Ee][Aa][Dd]* COPYRIGHT This* [Cc]hange* "$out/share/doc/nauty"
+
+    cp *.h $dev/include/nauty
+    for i in *.a; do
+      cp "$i" "$dev/lib/lib$i";
+    done
   '';
+  checkTarget = "checks";
   meta = {
     inherit version;
     description = ''Programs for computing automorphism groups of graphs and digraphs'';

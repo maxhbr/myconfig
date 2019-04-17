@@ -1,5 +1,5 @@
 { stdenv, fetchurl, fetchpatch, autoreconfHook, pkgconfig, glib, expat, pam, perl
-, intltool, spidermonkey_52 , gobjectIntrospection, libxslt, docbook_xsl, dbus
+, intltool, spidermonkey_52 , gobject-introspection, libxslt, docbook_xsl, dbus
 , docbook_xml_dtd_412, gtk-doc, coreutils
 , useSystemd ? stdenv.isLinux, systemd
 , doCheck ? stdenv.isLinux
@@ -42,10 +42,10 @@ stdenv.mkDerivation rec {
   outputs = [ "bin" "dev" "out" ]; # small man pages in $bin
 
   nativeBuildInputs =
-    [ gtk-doc pkgconfig autoreconfHook intltool gobjectIntrospection perl ]
+    [ gtk-doc pkgconfig autoreconfHook intltool gobject-introspection perl ]
     ++ [ libxslt docbook_xsl docbook_xml_dtd_412 ]; # man pages
   buildInputs =
-    [ glib expat pam spidermonkey_52 gobjectIntrospection ]
+    [ glib expat pam spidermonkey_52 gobject-introspection ]
     ++ stdenv.lib.optional useSystemd systemd;
 
   NIX_CFLAGS_COMPILE = " -Wno-deprecated-declarations "; # for polkit 0.114 and glib 2.56
@@ -77,13 +77,6 @@ stdenv.mkDerivation rec {
   ] ++ stdenv.lib.optional (!doCheck) "--disable-test";
 
   makeFlags = "INTROSPECTION_GIRDIR=$(out)/share/gir-1.0 INTROSPECTION_TYPELIBDIR=$(out)/lib/girepository-1.0";
-
-  # The following is required on grsecurity/PaX due to spidermonkey's JIT
-  postBuild = stdenv.lib.optionalString stdenv.isLinux ''
-    paxmark mr src/polkitbackend/.libs/polkitd
-  '' + stdenv.lib.optionalString (stdenv.isLinux && doCheck) ''
-    paxmark mr test/polkitbackend/.libs/polkitbackendjsauthoritytest
-  '';
 
   installFlags=["datadir=$(out)/share" "sysconfdir=$(out)/etc"];
 

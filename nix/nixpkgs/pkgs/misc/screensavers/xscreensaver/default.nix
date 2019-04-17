@@ -38,7 +38,7 @@ stdenv.mkDerivation rec {
       wrapProgram $out/bin/xscreensaver-text \
         --prefix PATH : ${stdenv.lib.makeBinPath [xorg.appres]}
       wrapProgram $out/bin/xscreensaver-getimage-file \
-        --set PERL5LIB "$out/${perlPackages.perl.libPrefix}:${with perlPackages; stdenv.lib.makePerlPath [
+        --set PERL5LIB "$out/${perlPackages.perl.libPrefix}:${with perlPackages; makePerlPath [
               EncodeLocale HTTPDate HTTPMessage IOSocketSSL LWP LWPProtocolHttps
               MozillaCA NetHTTP NetSSLeay TryTiny URI
               ]}"

@@ -5,10 +5,9 @@
 , pango, systemd, libXScrnSaver, libcxx, libpulseaudio }:
 
 stdenv.mkDerivation rec {
+
     pname = "discord";
     version = "0.0.9";
-
-    name = "${pname}-${version}";
 
     src = fetchurl {
         url = "https://cdn.discordapp.com/apps/linux/${version}/${pname}-${version}.tar.gz";

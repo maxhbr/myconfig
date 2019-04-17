@@ -27,6 +27,7 @@ let
       ++ (overrides.buildInputs or [ ]);
 
     qmakeFlags = [
+      "CONFIG+=c++11"
       "CONFIG+=shared"
       "CONFIG+=no-g15"
       "CONFIG+=packaged"
@@ -62,7 +63,7 @@ let
       description = "Low-latency, high quality voice chat software";
       homepage = https://mumble.info;
       license = licenses.bsd3;
-      maintainers = with maintainers; [ jgeerds wkennington ];
+      maintainers = with maintainers; [ jgeerds ];
       platforms = platforms.linux;
     };
   });

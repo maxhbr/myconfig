@@ -1,24 +1,24 @@
-{ stdenv, rustPlatform, fetchFromGitHub, cmake, pkgconfig, zlib, libiconv, darwin }:
+{ stdenv, rustPlatform, fetchFromGitHub, cmake, pkgconfig, zlib
+, Security, libiconv
+}:
 
 rustPlatform.buildRustPackage rec {
   name    = "bat-${version}";
-  version = "0.6.1";
+  version = "0.10.0";
 
   src = fetchFromGitHub {
     owner  = "sharkdp";
     repo   = "bat";
     rev    = "v${version}";
-    sha256 = "19xmj3a3npx4v1mlvd31r3icml73mxjq6la5qifb2i35ciqnx9bd";
+    sha256 = "1q22lbyrwh58vhznpjpkiaa8v4qv6a3a8lrxzaypd8wg78p9dca6";
     fetchSubmodules = true;
   };
 
-  cargoSha256 = "062vvpj514h85h9gm3jipp6z256cnnbxbjy7ja6bm7i6bpglyvvi";
+  cargoSha256 = "0npj2rf4vr45gq3qwqq6kqnv9dh58v5lpx0gsmy2qrq44dxb75rq";
 
   nativeBuildInputs = [ cmake pkgconfig zlib ];
 
-  buildInputs = [ libiconv ] ++ stdenv.lib.optionals stdenv.isDarwin [
-    darwin.apple_sdk.frameworks.Security
-  ];
+  buildInputs = stdenv.lib.optionals stdenv.isDarwin [ Security libiconv ];
 
   postInstall = ''
     install -m 444 -Dt $out/share/man/man1 doc/bat.1

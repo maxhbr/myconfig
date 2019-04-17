@@ -106,6 +106,25 @@ let
       '';
     };
 
+    bind = {
+      exporterConfig = {
+        enable = true;
+      };
+      metricProvider = {
+        services.bind.enable = true;
+        services.bind.extraConfig = ''
+          statistics-channels {
+            inet 127.0.0.1 port 8053 allow { localhost; };
+          };
+        '';
+      };
+      exporterTest = ''
+        waitForUnit("prometheus-bind-exporter.service");
+        waitForOpenPort(9119);
+        succeed("curl -sSf http://localhost:9119/metrics" | grep -q 'bind_query_recursions_total 0');
+      '';
+    };
+
     dovecot = {
       exporterConfig = {
         enable = true;
@@ -240,6 +259,25 @@ let
         waitForUnit("prometheus-surfboard-exporter.service");
         waitForOpenPort(9239);
         succeed("curl -sSf localhost:9239/metrics | grep -q 'surfboard_up 1'");
+      '';
+    };
+
+    tor = {
+      exporterConfig = {
+        enable = true;
+      };
+      metricProvider = {
+        # Note: this does not connect the test environment to the Tor network.
+        # Client, relay, bridge or exit connectivity are disabled by default.
+        services.tor.enable = true;
+        services.tor.controlPort = 9051;
+      };
+      exporterTest = ''
+        waitForUnit("tor.service");
+        waitForOpenPort(9051);
+        waitForUnit("prometheus-tor-exporter.service");
+        waitForOpenPort(9130);
+        succeed("curl -sSf localhost:9130/metrics | grep -q 'tor_version{.\\+} 1'");
       '';
     };
 

@@ -73,7 +73,7 @@ in let
   # whatever arguments it doesn't explicitly provide. This way,
   # `all-packages.nix` doesn't know more than it needs too.
   #
-  # It's OK that `args` doesn't include default arguemtns from this file:
+  # It's OK that `args` doesn't include default arguments from this file:
   # they'll be deterministically inferred. In fact we must *not* include them,
   # because it's important that if some parameter which affects the default is
   # substituted with a different argument, the default is re-inferred.
@@ -83,6 +83,14 @@ in let
   # compiling toolchains and 32-bit packages on x86_64). In both those cases we
   # want the provided non-native `localSystem` argument to affect the stdenv
   # chosen.
+  #
+  # NB!!! This thing gets its `config` argument from `args`, i.e. it's actually
+  # `config0`. It is important to keep it to `config0` format (as opposed to the
+  # result of `evalModules`, i.e. the `config` variable above) throughout all
+  # nixpkgs evaluations since the above function `config0 -> config` implemented
+  # via `evalModules` is not idempotent. In other words, if you add `config` to
+  # `newArgs`, expect strange very hard to debug errors! (Yes, I'm speaking from
+  # experience here.)
   nixpkgsFun = newArgs: import ./. (args // newArgs);
 
   # Partially apply some arguments for building bootstraping stage pkgs

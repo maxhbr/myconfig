@@ -4,13 +4,13 @@
 
 buildPythonApplication rec {
   pname = "backblaze-b2";
-  version = "1.3.6";
+  version = "1.3.8";
 
   src = fetchFromGitHub {
     owner = "Backblaze";
     repo = "B2_Command_Line_Tool";
     rev = "v${version}";
-    sha256 = "12axb0c56razfhrx1l62sjvdrbg6vz0yyqph2mxyjza1ywpb93b5";
+    sha256 = "1y4z4w6fj92rh9mrjsi0nmnzcmrj5jikarq2vs5qznvjdjm62igw";
   };
 
   propagatedBuildInputs = [ arrow futures logfury requests six tqdm ];
@@ -33,7 +33,7 @@ buildPythonApplication rec {
   postInstall = ''
     mv "$out/bin/b2" "$out/bin/backblaze-b2"
 
-    sed 's/^have b2 \&\&$/_have backblaze-b2 \&\&/'  -i contrib/bash_completion/b2
+    sed 's/^_have b2 \&\&$/_have backblaze-b2 \&\&/'  -i contrib/bash_completion/b2
     sed 's/^\(complete -F _b2\) b2/\1 backblaze-b2/' -i contrib/bash_completion/b2
 
     mkdir -p "$out/etc/bash_completion.d"

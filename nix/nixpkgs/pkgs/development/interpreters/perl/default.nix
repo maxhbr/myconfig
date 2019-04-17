@@ -1,4 +1,4 @@
-{ lib, stdenv, fetchurlBoot, buildPackages
+{ lib, stdenv, fetchurl, buildPackages
 , enableThreading ? stdenv ? glibc, makeWrapper
 }:
 
@@ -27,7 +27,7 @@ let
 
     name = "perl-${version}";
 
-    src = fetchurlBoot {
+    src = fetchurl {
       url = "mirror://cpan/src/5.0/${name}.tar.gz";
       inherit sha256;
     };
@@ -37,20 +37,21 @@ let
       stdenv.lib.optional crossCompiling "dev";
     setOutputFlags = false;
 
+    disallowedReferences = [ stdenv.cc ];
+
     patches =
-      [ ]
-      # Do not look in /usr etc. for dependencies.
-      ++ optional (versionOlder version "5.26") ./no-sys-dirs.patch
-      ++ optional (versionAtLeast version "5.26") ./no-sys-dirs-5.26.patch
-      ++ optional (versionAtLeast version "5.24") (
+      [
+        # Do not look in /usr etc. for dependencies.
+        (if (versionOlder version "5.29.6") then ./no-sys-dirs-5.26.patch else ./no-sys-dirs-5.29.patch)
+      ]
+      ++ optional (versionOlder version "5.29.6")
         # Fix parallel building: https://rt.perl.org/Public/Bug/Display.html?id=132360
-        fetchurlBoot {
+        (fetchurl {
           url = "https://rt.perl.org/Public/Ticket/Attachment/1502646/807252/0001-Fix-missing-build-dependency-for-pods.patch";
           sha256 = "1bb4mldfp8kq1scv480wm64n2jdsqa3ar46cjp1mjpby8h5dr2r0";
         })
       ++ optional stdenv.isSunOS ./ld-shared.patch
-      ++ optional stdenv.isDarwin ./cpp-precomp.patch
-      ++ optional (stdenv.isDarwin && versionAtLeast version "5.24") ./sw_vers.patch
+      ++ optionals stdenv.isDarwin [ ./cpp-precomp.patch ./sw_vers.patch ]
       ++ optional crossCompiling ./MakeMaker-cross.patch;
 
     postPatch = ''
@@ -77,6 +78,7 @@ let
         "-Dlocincpth=${libcInc}/include"
         "-Dloclibpth=${libcLib}/lib"
       ]
+      ++ optionals ((builtins.match ''5\.[0-9]*[13579]\..+'' version) != null) [ "-Dusedevel" "-Uversiononly" ]
       ++ optional stdenv.isSunOS "-Dcc=gcc"
       ++ optional enableThreading "-Dusethreads";
 
@@ -86,7 +88,10 @@ let
 
     enableParallelBuilding = !crossCompiling;
 
-    preConfigure = optionalString (!crossCompiling) ''
+    preConfigure = ''
+        substituteInPlace ./Configure --replace '`LC_ALL=C; LANGUAGE=C; export LC_ALL; export LANGUAGE; $date 2>&1`' 'Thu Jan  1 00:00:01 UTC 1970'
+        substituteInPlace ./Configure --replace '$uname -a' '$uname --kernel-name --machine --operating-system'
+      '' + optionalString (!crossCompiling) ''
         configureFlags="$configureFlags -Dprefix=$out -Dman1dir=$out/share/man/man1 -Dman3dir=$out/share/man/man3"
       '' + optionalString (stdenv.isAarch32 || stdenv.isMips) ''
         configureFlagsArray=(-Dldflags="-lm -lrt")
@@ -118,6 +123,7 @@ let
           --replace "${
               if stdenv.cc.cc or null != null then stdenv.cc.cc else "/no-such-path"
             }" /no-such-path \
+          --replace "${stdenv.cc}" /no-such-path \
           --replace "$man" /no-such-path
       '' + stdenv.lib.optionalString crossCompiling
       ''
@@ -151,11 +157,11 @@ let
       platforms = platforms.all;
     };
   } // stdenv.lib.optionalAttrs (stdenv.buildPlatform != stdenv.hostPlatform) rec {
-    crossVersion = "1.2";
+    crossVersion = "276849e62f472c1b241d9e7b38a28e4cc9f98563"; # Dez 02, 2018
 
-    perl-cross-src = fetchurlBoot {
-      url = "https://github.com/arsv/perl-cross/releases/download/${crossVersion}/perl-cross-${crossVersion}.tar.gz";
-      sha256 = "02cic7lk91hgmsg8klkm2kv88m2a8y22m4m8gl4ydxbap2z7g42r";
+    perl-cross-src = fetchurl {
+      url = "https://github.com/arsv/perl-cross/archive/${crossVersion}.tar.gz";
+      sha256 = "1fpr1m9lgkwdp1vmdr0s6gvmcpd0m8q6jwn024bkczc2h37bdynd";
     };
 
     depsBuildBuild = [ buildPackages.stdenv.cc makeWrapper ];
@@ -171,23 +177,15 @@ let
     setupHook = ./setup-hook-cross.sh;
   });
 in rec {
-  perl522 = common {
-    version = "5.22.4";
-    sha256 = "1yk1xn4wmnrf2ph02j28khqarpyr24qwysjzkjnjv7vh5dygb7ms";
-  };
-
-  perl524 = common {
-    version = "5.24.4";
-    sha256 = "0w0r6v5k5hw5q1k3p4c7krcxidkj2qzsj5dlrlrxhm01n7fksbxz";
-  };
-
-  perl526 = common {
-    version = "5.26.3";
-    sha256 = "14y46c1cnrfnd1k5nk6fj5w5vxna5xav6pmk44qaabr9x06y8nmp";
-  };
-
+  # the latest Maint version
   perl528 = common {
     version = "5.28.1";
     sha256 = "0iy3as4hnbjfyws4in3j9d6zhhjxgl5m95i5n9jy2bnzcpz8bgry";
+  };
+
+  # the latest Devel version
+  perldevel = common {
+    version = "5.29.6";
+    sha256 = "0wj2bia8s30788f69mf5s533l72zbhqpdr85kkk97yrh1c9sgcd6";
   };
 }

@@ -1,4 +1,4 @@
-{ stdenv, buildPythonPackage, fetchPypi, python
+{ stdenv, buildPythonPackage, fetchPypi, fetchpatch, python
 , unittest2, scripttest, pytz, pylint, mock
 , testtools, pbr, tempita, decorator, sqlalchemy
 , six, sqlparse, testrepository
@@ -11,6 +11,12 @@ buildPythonPackage rec {
     inherit pname version;
     sha256 = "1bngmbcry97kwhrxwm0d74zg9qg7gmiws6rd78xshyfgpcqdmylc";
   };
+
+  # See: https://review.openstack.org/#/c/608382/
+  patches = [ (fetchpatch {
+    url = https://github.com/openstack/sqlalchemy-migrate/pull/18.patch;
+    sha256 = "1qyfq2m7w7xqf0r9bc2x42qcra4r9k9l9g1jy5j0fvlb6bvvjj07";
+  }) ];
 
   checkInputs = [ unittest2 scripttest pytz mock testtools testrepository ];
   propagatedBuildInputs = [ pbr tempita decorator sqlalchemy six sqlparse ];
@@ -32,11 +38,8 @@ buildPythonPackage rec {
     ${python.interpreter} setup.py test
   '';
 
-  # Tests fail on hydra sometimes
-  doCheck = false;
-
   meta = with stdenv.lib; {
-    homepage = http://code.google.com/p/sqlalchemy-migrate/;
+    homepage = https://github.com/openstack/sqlalchemy-migrate;
     description = "Schema migration tools for SQLAlchemy";
     license = licenses.asl20;
     maintainers = with maintainers; [ makefu ];

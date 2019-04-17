@@ -1,6 +1,7 @@
 { stdenv, fetch, cmake, libxml2, llvm, version, clang-tools-extra_src, python
 , fixDarwinDylibNames
 , enableManpages ? false
+, enablePolly ? false # TODO: get this info from llvm (passthru?)
 }:
 
 let
@@ -30,6 +31,9 @@ let
       "-DSPHINX_OUTPUT_MAN=ON"
       "-DSPHINX_OUTPUT_HTML=OFF"
       "-DSPHINX_WARNINGS_AS_ERRORS=OFF"
+    ] ++ stdenv.lib.optionals enablePolly [
+      "-DWITH_POLLY=ON"
+      "-DLINK_POLLY_INTO_TOOLS=ON"
     ];
 
     patches = [ ./purity.patch ];
@@ -43,6 +47,9 @@ let
       sed -i '1s,^,find_package(Sphinx REQUIRED)\n,' docs/CMakeLists.txt
     '' + stdenv.lib.optionalString stdenv.hostPlatform.isMusl ''
       sed -i -e 's/lgcc_s/lgcc_eh/' lib/Driver/ToolChains/*.cpp
+    '' + stdenv.lib.optionalString stdenv.hostPlatform.isDarwin ''
+      substituteInPlace tools/extra/clangd/CMakeLists.txt \
+        --replace "NOT HAVE_CXX_ATOMICS64_WITHOUT_LIB" FALSE
     '';
 
     outputs = [ "out" "lib" "python" ];

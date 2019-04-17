@@ -17,7 +17,8 @@
 , installjdk ? true
 , pluginSupport ? true
 , installjce ? false
-, licenseAccepted ? false
+, config
+, licenseAccepted ? config.oraclejdk.accept_license or false
 , glib
 , libxml2
 , libav_0_8
@@ -104,14 +105,6 @@ let result = stdenv.mkDerivation rec {
 
   installPhase = ''
     cd ..
-
-    # Set PaX markings
-    exes=$(file $sourceRoot/bin/* $sourceRoot/jre/bin/* 2> /dev/null | grep -E 'ELF.*(executable|shared object)' | sed -e 's/: .*$//')
-    for file in $exes; do
-      paxmark m "$file" || true
-      # On x86 for heap sizes over 700MB disable SEGMEXEC and PAGEEXEC as well.
-      ${stdenv.lib.optionalString stdenv.isi686 ''paxmark msp "$file"''}
-    done
 
     if test -z "$installjdk"; then
       mv $sourceRoot/jre $out
@@ -207,4 +200,4 @@ let result = stdenv.mkDerivation rec {
     platforms = [ "i686-linux" "x86_64-linux" "armv7l-linux" "aarch64-linux" ]; # some inherit jre.meta.platforms
   };
 
-}; in result
+}; in stdenv.lib.trivial.warn "Public updates for Oracle Java SE 8 released after January 2019 will not be available for business, commercial or production use without a commercial license. See https://java.com/en/download/release_notice.jsp for more information." result

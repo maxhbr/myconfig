@@ -1,5 +1,5 @@
 {stdenv, fetchurl, fetchFromBitbucket, autoreconfHook, gtkdoc, gettext
-, pkgconfig, glib, libxml2, gobjectIntrospection, gnome-common, unzip
+, pkgconfig, glib, libxml2, gobject-introspection, gnome-common, unzip
 }:
 
 stdenv.mkDerivation rec {
@@ -16,8 +16,8 @@ stdenv.mkDerivation rec {
 
   core_zip = fetchurl {
     # please update if an update is available
-    url = "http://www.unicode.org/Public/cldr/33/core.zip";
-    sha256 = "1faq1p5dmxpkczz6cjfsry7piksgym19cq2kf4jj2v885h490d7s";
+    url = "http://www.unicode.org/Public/cldr/33.1/core.zip";
+    sha256 = "0f195aald02ng3ch2q1wf59b5lwp2bi1cd8ia7572pbyy2w8w8cp";
   };
 
   language_subtag_registry = fetchurl {
@@ -36,7 +36,7 @@ stdenv.mkDerivation rec {
     ''--with-locale-alias=${stdenv.cc.libc}/share/locale/locale.alias''
   ];
 
-  buildInputs = [ gettext glib libxml2 gobjectIntrospection gnome-common
+  buildInputs = [ gettext glib libxml2 gobject-introspection gnome-common
     unzip ];
   nativeBuildInputs = [ autoreconfHook gtkdoc gettext pkgconfig ];
 

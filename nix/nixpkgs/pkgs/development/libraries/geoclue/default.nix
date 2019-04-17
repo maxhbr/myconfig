@@ -1,48 +1,62 @@
-{ fetchurl, stdenv, intltool, pkgconfig, glib, json-glib, libsoup, geoip
-, dbus, dbus-glib, modemmanager, avahi, glib-networking, wrapGAppsHook, gobjectIntrospection
+{ stdenv, fetchFromGitLab, intltool, meson, ninja, pkgconfig, gtk-doc, docbook_xsl, docbook_xml_dtd_412, glib, json-glib, libsoup, libnotify, gdk_pixbuf
+, modemmanager, avahi, glib-networking, python3, wrapGAppsHook, gobject-introspection, vala
+, withDemoAgent ? false
 }:
 
 with stdenv.lib;
 
 stdenv.mkDerivation rec {
-  name = "geoclue-2.4.8";
+  name = "geoclue-${version}";
+  version = "2.5.1";
 
-  src = fetchurl {
-    url = "https://www.freedesktop.org/software/geoclue/releases/2.4/${name}.tar.xz";
-    sha256 = "08yg1r7m0n9hwyvcy769qkmkf8lslqwv69cjfffwnc3zm5km25qj";
+  src = fetchFromGitLab {
+    domain = "gitlab.freedesktop.org";
+    owner = "geoclue";
+    repo = "geoclue";
+    rev = version;
+    sha256 = "0vww6irijw5ss7vawkdi5z5wdpcgw4iqljn5vs3vbd4y3d0lzrbs";
   };
 
-  outputs = [ "out" "dev" ];
-
-  nativeBuildInputs = [
-    pkgconfig intltool wrapGAppsHook gobjectIntrospection
+  patches = [
+    ./add-option-for-installation-sysconfdir.patch
   ];
 
-  buildInputs = [ glib json-glib libsoup geoip
-     dbus dbus-glib avahi
-   ] ++ optionals (!stdenv.isDarwin) [ modemmanager ];
+  outputs = [ "out" "dev" "devdoc" ];
 
-  propagatedBuildInputs = [ dbus dbus-glib glib glib-networking ];
+  nativeBuildInputs = [
+    pkgconfig intltool meson ninja wrapGAppsHook python3 vala gobject-introspection
+    # devdoc
+    gtk-doc docbook_xsl docbook_xml_dtd_412
+  ];
 
-  preConfigure = ''
-     substituteInPlace configure --replace "-Werror" ""
-  '';
+  buildInputs = [
+    glib json-glib libsoup avahi
+  ] ++ optionals withDemoAgent [
+    libnotify gdk_pixbuf
+  ] ++ optionals (!stdenv.isDarwin) [ modemmanager ];
 
-  configureFlags = [ "--with-systemdsystemunitdir=$(out)/etc/systemd/system" "--enable-introspection" ] ++
-                   optionals stdenv.isDarwin [
-                       "--disable-silent-rules"
-                       "--disable-3g-source"
-                       "--disable-cdma-source"
-                       "--disable-modem-gps-source"
-                       "--disable-nmea-source" ];
+  propagatedBuildInputs = [ glib glib-networking ];
 
-  postInstall = ''
-    sed -i $dev/lib/pkgconfig/libgeoclue-2.0.pc -e "s|includedir=.*|includedir=$dev/include|"
+  mesonFlags = [
+    "-Dsystemd-system-unit-dir=${placeholder "out"}/etc/systemd/system"
+    "-Ddemo-agent=${if withDemoAgent then "true" else "false"}"
+    "--sysconfdir=/etc"
+    "-Dsysconfdir_install=${placeholder "out"}/etc"
+  ] ++ optionals stdenv.isDarwin [
+    "-D3g-source=false"
+    "-Dcdma-source=false"
+    "-Dmodem-gps-source=false"
+    "-Dnmea-source=false"
+  ];
+
+  postPatch = ''
+    chmod +x demo/install-file.py
+    patchShebangs demo/install-file.py
   '';
 
   meta = with stdenv.lib; {
     description = "Geolocation framework and some data providers";
-    homepage = https://freedesktop.org/wiki/Software/GeoClue/;
+    homepage = https://gitlab.freedesktop.org/geoclue/geoclue/wikis/home;
     maintainers = with maintainers; [ raskin garbas ];
     platforms = with platforms; linux ++ darwin;
     license = licenses.lgpl2;
