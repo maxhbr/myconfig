@@ -29,12 +29,9 @@
 
 # Media support (implies audio support)
 , mediaSupport ? false
-, gstreamer
-, gst-plugins-base
-, gst-plugins-good
-, gst-ffmpeg
-, gmp
 , ffmpeg
+
+, gmp
 
 # Pluggable transport dependencies
 , python27
@@ -42,7 +39,7 @@
 # Wrapper runtime
 , coreutils
 , glibcLocales
-, defaultIconTheme
+, gnome3
 , runtimeShell
 , shared-mime-info
 , gsettings-desktop-schemas
@@ -85,19 +82,8 @@ let
   ]
   ++ optionals pulseaudioSupport [ libpulseaudio ]
   ++ optionals mediaSupport [
-    gstreamer
-    gst-plugins-base
-    gmp
     ffmpeg
   ];
-
-  gstPluginsPath = concatMapStringsSep ":" (x:
-    "${x}/lib/gstreamer-0.10") [
-      gstreamer
-      gst-plugins-base
-      gst-plugins-good
-      gst-ffmpeg
-    ];
 
   # Library search path for the fte transport
   fteLibPath = makeLibraryPath [ stdenv.cc.cc gmp ];
@@ -266,7 +252,7 @@ stdenv.mkDerivation rec {
     EOF
 
     WRAPPER_XDG_DATA_DIRS=${concatMapStringsSep ":" (x: "${x}/share") [
-      defaultIconTheme
+      gnome3.adwaita-icon-theme
       shared-mime-info
     ]}
     WRAPPER_XDG_DATA_DIRS+=":"${concatMapStringsSep ":" (x: "${x}/share/gsettings-schemas/${x.name}") [
@@ -365,10 +351,6 @@ stdenv.mkDerivation rec {
       TOR_SKIP_LAUNCH="\''${TOR_SKIP_LAUNCH:-}" \
       TOR_CONTROL_PORT="\''${TOR_CONTROL_PORT:-}" \
       TOR_SOCKS_PORT="\''${TOR_SOCKS_PORT:-}" \
-      \
-      GST_PLUGIN_SYSTEM_PATH="${optionalString mediaSupport gstPluginsPath}" \
-      GST_REGISTRY="/dev/null" \
-      GST_REGISTRY_UPDATE="no" \
       \
       FONTCONFIG_FILE="$FONTCONFIG_FILE" \
       \

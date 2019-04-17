@@ -12,6 +12,8 @@ in
 
   options.powerManagement = {
 
+    # TODO: This should be aliased to powerManagement.cpufreq.governor.
+    # https://github.com/NixOS/nixpkgs/pull/53041#commitcomment-31825338
     cpuFreqGovernor = mkOption {
       type = types.nullOr types.str;
       default = null;

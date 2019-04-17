@@ -1,7 +1,6 @@
 { stdenv, fetchFromGitHub, sqlite, pkgconfig, autoreconfHook, pmccabe
 , xapian, glib, gmime, texinfo , emacs, guile
 , gtk3, webkitgtk24x-gtk3, libsoup, icu
-, gst-plugins-base
 , withMug ? false }:
 
 stdenv.mkDerivation rec {
@@ -27,7 +26,7 @@ stdenv.mkDerivation rec {
 
   buildInputs = [
     sqlite xapian glib gmime texinfo emacs guile libsoup icu
-  ] ++ stdenv.lib.optionals withMug [ gtk3 webkitgtk24x-gtk3 gst-plugins-base ];
+  ] ++ stdenv.lib.optionals withMug [ gtk3 webkitgtk24x-gtk3 ];
 
   nativeBuildInputs = [ pkgconfig autoreconfHook pmccabe ];
 

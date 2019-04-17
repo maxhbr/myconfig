@@ -1,15 +1,28 @@
-{ lib, fetchFromGitHub, buildPythonPackage, cython, slurm }:
+{ lib, fetchFromGitHub, fetchpatch, buildPythonPackage, cython, slurm }:
 
 buildPythonPackage rec {
   pname = "pyslurm";
-  version = "20180811";
+  version = "18-08-3";
 
   src = fetchFromGitHub {
     repo = "pyslurm";
     owner = "PySlurm";
-    rev = "2d4f0553de971309b7e465d4d64528b8a5fafb05";
-    sha256 = "1cy57gyvvmzx0c8fx4h6p8dgan0ay6pdivdf24k1xiancjnw20xr";
+    rev = version;
+    sha256 = "1rymx106xa99wd4n44s7jw0w41spg39y1ji4fgn01yk7wjfrdrwg";
   };
+
+  # Needed for patch below to apply
+  prePatch = ''
+    sed -i -e '/__max_slurm_hex_version__ = "0x1208/c__max_slurm_hex_version__ = "0x120804"' setup.py
+  '';
+
+  patches = [
+    # Implements a less strict slurm version check
+    (fetchpatch {
+      url = "https://github.com/PySlurm/pyslurm/commit/d3703f2d58b5177d29092fe1aae1f7a96da61765.diff";
+      sha256 = "1s41z9bhzhplgg08p1llc3i8zw20r1479s04y0l1vx0ak51b6w0k";
+    })
+  ];
 
   buildInputs = [ cython slurm ];
   setupPyBuildFlags = [ "--slurm-lib=${slurm}/lib" "--slurm-inc=${slurm.dev}/include" ];

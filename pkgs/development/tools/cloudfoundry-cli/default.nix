@@ -2,7 +2,7 @@
 
 buildGoPackage rec {
   name = "cloudfoundry-cli-${version}";
-  version = "6.37.0";
+  version = "6.41.0";
 
   goPackagePath = "code.cloudfoundry.org/cli";
 
@@ -12,10 +12,8 @@ buildGoPackage rec {
     owner = "cloudfoundry";
     repo = "cli";
     rev = "v${version}";
-    sha256 = "1v4f1fyydpzkfir46g4ppbf3zmk3ym6kxswpkdjls8h3dbb2fbnv";
+    sha256 = "1dkd0lfq55qpnxsrigffaqm2nlcxr0bm0jsl4rsjlmb8p2vgpx8b";
   };
-
-  outputs = [ "out" ];
 
   makeTarget = let hps = stdenv.hostPlatform.system; in
     if hps == "x86_64-darwin" then
@@ -34,9 +32,8 @@ buildGoPackage rec {
   '';
 
   installPhase = ''
-    install -Dm555 out/cf "$out/bin/cf"
-    remove-references-to -t ${go} "$out/bin/cf"
-    install -Dm444 -t "$out/share/bash-completion/completions/" "$src/ci/installers/completion/cf"
+    install -Dm555 out/cf "$bin/bin/cf"
+    install -Dm444 -t "$bin/share/bash-completion/completions/" "$src/ci/installers/completion/cf"
   '';
 
   meta = with stdenv.lib; {

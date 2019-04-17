@@ -3,10 +3,8 @@
 , docbook_xml_dtd_42, readline, talloc
 , popt, iniparser, libbsd, libarchive, libiconv, gettext
 , krb5Full, zlib, openldap, cups, pam, avahi, acl, libaio, fam, libceph, glusterfs
-, gnutls
-, ncurses, libunwind, libibverbs, librdmacm, systemd
+, gnutls, ncurses, libunwind, systemd
 
-, enableInfiniband ? false
 , enableLDAP ? false
 , enablePrinting ? false
 , enableMDNS ? false
@@ -35,17 +33,9 @@ stdenv.mkDerivation rec {
     [ ./4.x-no-persistent-install.patch
       ./patch-source3__libads__kerberos_keytab.c.patch
       ./4.x-no-persistent-install-dynconfig.patch
-
-      # conditionall disable MacOS incompatible tests
       (fetchpatch {
         url = "https://patch-diff.githubusercontent.com/raw/samba-team/samba/pull/107.patch";
         sha256 = "0r6q34vjj0bdzmcbnrkad9rww58k4krbwicv4gs1g3dj49skpvd6";
-      })
-
-      (fetchpatch {
-        name = "CVE-2019-3824.patch";
-        url = "https://attachments.samba.org/attachment.cgi?id=14859";
-        sha256 = "02qf3zr55mzbimqdv01k3b22jjb084vfr5zabapyr5h1f588mw0q";
       })
     ];
 
@@ -55,7 +45,6 @@ stdenv.mkDerivation rec {
       libbsd libarchive zlib fam libiconv gettext libunwind krb5Full
     ]
     ++ optionals stdenv.isLinux [ libaio systemd ]
-    ++ optionals (enableInfiniband && stdenv.isLinux) [ libibverbs librdmacm ]
     ++ optional enableLDAP openldap
     ++ optional (enablePrinting && stdenv.isLinux) cups
     ++ optional enableMDNS avahi
@@ -113,7 +102,6 @@ stdenv.mkDerivation rec {
     homepage = https://www.samba.org/;
     description = "The standard Windows interoperability suite of programs for Linux and Unix";
     license = licenses.gpl3;
-    maintainers = with maintainers; [ wkennington ];
     platforms = platforms.unix;
   };
 }

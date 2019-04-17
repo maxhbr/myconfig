@@ -160,6 +160,20 @@ let
      '';
   };
 
+  gitlab-rails = pkgs.stdenv.mkDerivation rec {
+    name = "gitlab-rails";
+    buildInputs = [ pkgs.makeWrapper ];
+    dontBuild = true;
+    unpackPhase = ":";
+    installPhase = ''
+      mkdir -p $out/bin
+      makeWrapper ${cfg.packages.gitlab.rubyEnv}/bin/rails $out/bin/gitlab-rails \
+          ${concatStrings (mapAttrsToList (name: value: "--set ${name} '${value}' ") gitlabEnv)} \
+          --set PATH '${lib.makeBinPath [ pkgs.nodejs pkgs.gzip pkgs.git pkgs.gnutar config.services.postgresql.package pkgs.coreutils pkgs.procps ]}:$PATH' \
+          --run 'cd ${cfg.packages.gitlab}/share/gitlab'
+     '';
+  };
+
   smtpSettings = pkgs.writeText "gitlab-smtp-settings.rb" ''
     if Rails.env.production?
       Rails.application.config.action_mailer.delivery_method = :smtp
@@ -309,7 +323,6 @@ in {
 
       initialRootPassword = mkOption {
         type = types.str;
-        default = "UseNixOS!";
         description = ''
           Initial password of the root account if this is a new install.
         '';
@@ -440,7 +453,7 @@ in {
 
   config = mkIf cfg.enable {
 
-    environment.systemPackages = [ pkgs.git gitlab-rake cfg.packages.gitlab-shell ];
+    environment.systemPackages = [ pkgs.git gitlab-rake gitlab-rails cfg.packages.gitlab-shell ];
 
     # Redis is required for the sidekiq queue runner.
     services.redis.enable = mkDefault true;
@@ -630,10 +643,6 @@ in {
             GITLAB_ROOT_PASSWORD='${cfg.initialRootPassword}' GITLAB_ROOT_EMAIL='${cfg.initialRootEmail}'
           touch "${cfg.statePath}/db-seeded"
         fi
-
-        # The gitlab:shell:setup regenerates the authorized_keys file so that
-        # the store path to the gitlab-shell in it gets updated
-        ${pkgs.sudo}/bin/sudo -u ${cfg.user} -H force=yes ${gitlab-rake}/bin/gitlab-rake gitlab:shell:setup
 
         # The gitlab:shell:create_hooks task seems broken for fixing links
         # so we instead delete all the hooks and create them anew

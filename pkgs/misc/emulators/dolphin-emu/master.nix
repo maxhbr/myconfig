@@ -20,13 +20,13 @@ let
   };
 in stdenv.mkDerivation rec {
   name = "dolphin-emu-${version}";
-  version = "2018-08-17";
+  version = "2019-02-16";
 
   src = fetchFromGitHub {
     owner = "dolphin-emu";
     repo = "dolphin";
-    rev = "12a5fd80bde3c1f5557ea647ebb127d37e74040d";
-    sha256 = "0sk3jn5sm9fabs5bvwy75zw2szrb19qqwns2ypzqpgd4d5zjrs4x";
+    rev = "286aafd4ed2949f0b93230fee969c6a32fe75f07";
+    sha256 = "0l0cpq8s7wnng7mhbnzf4v84zggqsqdykrzfyz5avvbv9pla7jwp";
   };
 
   enableParallelBuilding = true;
@@ -71,9 +71,9 @@ in stdenv.mkDerivation rec {
   '';
 
   meta = with stdenv.lib; {
-    homepage = "http://dolphin-emu.org";
-    description = "Gamecube/Wii/Triforce emulator for x86_64 and ARM";
-    license = licenses.gpl2;
+    homepage = "https://dolphin-emu.org";
+    description = "Gamecube/Wii/Triforce emulator for x86_64 and ARMv8";
+    license = licenses.gpl2Plus;
     maintainers = with maintainers; [ MP2E ];
     branch = "master";
     # x86_32 is an unsupported platform.

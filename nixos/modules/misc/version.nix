@@ -36,13 +36,14 @@ in
     nixos.revision = mkOption {
       internal = true;
       type = types.str;
-      default = lib.trivial.revisionWithDefault "master";
+      default = trivial.revisionWithDefault "master";
       description = "The Git revision from which this NixOS configuration was built.";
     };
 
     nixos.codeName = mkOption {
       readOnly = true;
       type = types.str;
+      default = trivial.codeName;
       description = "The NixOS release code name (e.g. <literal>Emu</literal>).";
     };
 
@@ -65,7 +66,7 @@ in
     defaultChannel = mkOption {
       internal = true;
       type = types.str;
-      default = https://nixos.org/channels/nixos-18.09;
+      default = https://nixos.org/channels/nixos-19.03;
       description = "Default NixOS channel to which the root user is subscribed.";
     };
 
@@ -79,9 +80,6 @@ in
       version = mkDefault (cfg.release + cfg.versionSuffix);
       revision      = mkIf (pathIsDirectory gitRepo) (mkDefault            gitCommitId);
       versionSuffix = mkIf (pathIsDirectory gitRepo) (mkDefault (".git." + gitCommitId));
-
-      # Note: the first letter is bumped on every release.  It's an animal.
-      codeName = "Jellyfish";
     };
 
     # Generate /etc/os-release.  See
@@ -95,6 +93,7 @@ in
         VERSION_CODENAME=${toLower cfg.codeName}
         VERSION_ID="${cfg.version}"
         PRETTY_NAME="NixOS ${cfg.version} (${cfg.codeName})"
+        LOGO="nix-snowflake"
         HOME_URL="https://nixos.org/"
         SUPPORT_URL="https://nixos.org/nixos/support.html"
         BUG_REPORT_URL="https://github.com/NixOS/nixpkgs/issues"

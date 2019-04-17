@@ -1,24 +1,19 @@
 { stdenv, fetchurl, fetchpatch, lib, pkgconfig, utillinux, libcap, libtirpc, libevent
 , sqlite, kerberos, kmod, libuuid, keyutils, lvm2, systemd, coreutils, tcp_wrappers
-, buildEnv
+, buildEnv, python3
 }:
 
 let
   statdPath = lib.makeBinPath [ systemd utillinux coreutils ];
+in
 
-  # Not nice; feel free to find a nicer solution.
-  kerberosEnv = buildEnv {
-    name = "kerberos-env-${kerberos.version}";
-    paths = with lib; [ (getDev kerberos) (getLib kerberos) ];
-  };
-
-in stdenv.mkDerivation rec {
+stdenv.mkDerivation rec {
   name = "nfs-utils-${version}";
-  version = "2.3.2";
+  version = "2.3.3";
 
   src = fetchurl {
     url = "https://kernel.org/pub/linux/utils/nfs-utils/${version}/${name}.tar.xz";
-    sha256 = "06av6cjf8h18dpaxh8cd1awsra75zf6s5sj5r2z5g7scbj051ziw";
+    sha256 = "08k36d7l8yqylscnln3p85lcfwi7r7g6n3bnslgmzc1i71wk92zn";
   };
 
   # libnfsidmap is built together with nfs-utils from the same source,
@@ -30,19 +25,27 @@ in stdenv.mkDerivation rec {
   buildInputs = [
     libtirpc libcap libevent sqlite lvm2
     libuuid keyutils kerberos tcp_wrappers
+    python3
   ];
 
   enableParallelBuilding = true;
 
+  preConfigure =
+    ''
+      substituteInPlace configure \
+        --replace '$dir/include/gssapi' ${lib.getDev kerberos}/include/gssapi \
+        --replace '$dir/bin/krb5-config' ${lib.getDev kerberos}/bin/krb5-config
+    '';
+
+  #configureScript = "bash -x configure";
+
   configureFlags =
     [ "--enable-gss"
       "--with-statedir=/var/lib/nfs"
-      "--with-krb5=${kerberosEnv}"
-      "--with-systemd=$(out)/etc/systemd/system"
+      "--with-krb5=${lib.getLib kerberos}"
+      "--with-systemd=${placeholder "out"}/etc/systemd/system"
       "--enable-libmount-mount"
-      # need an absolute path to lib output here.
-      # TODO: use ${placeholder lib} when nix 1.1 is no longer supported
-      "--with-pluginpath=@lib@/lib/libnfsidmap" # this installs libnfsidmap
+      "--with-pluginpath=${placeholder "lib"}/lib/libnfsidmap" # this installs libnfsidmap
     ]
     ++ lib.optional (stdenv ? glibc) "--with-rpcgen=${stdenv.glibc.bin}/bin/rpcgen";
 
@@ -75,11 +78,6 @@ in stdenv.mkDerivation rec {
       sed '1i#include <stdint.h>' -i support/nsm/rpc.c
     '';
 
-  # TODO: remove when placeholders are allowed (see configureFlags)
-  postConfigure = ''
-    substituteInPlace support/include/config.h --replace '@lib@' "$lib"
-  '';
-
   makeFlags = [
     "sbindir=$(out)/bin"
     "generator_dir=$(out)/etc/systemd/system-generators"
@@ -103,6 +101,8 @@ in stdenv.mkDerivation rec {
 
   # One test fails on mips.
   doCheck = !stdenv.isMips;
+
+  disallowedReferences = [ (lib.getDev kerberos) ];
 
   meta = with stdenv.lib; {
     description = "Linux user-space NFS utilities";

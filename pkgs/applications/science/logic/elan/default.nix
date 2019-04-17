@@ -1,6 +1,6 @@
-{ stdenv, pkgconfig, curl, openssl, zlib, fetchFromGitHub, rustPlatform_1_31 }:
+{ stdenv, pkgconfig, curl, openssl, zlib, fetchFromGitHub, rustPlatform }:
 
-rustPlatform_1_31.buildRustPackage rec {
+rustPlatform.buildRustPackage rec {
   name = "elan-${version}";
   version = "0.7.5";
 

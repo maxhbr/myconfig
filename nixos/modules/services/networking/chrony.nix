@@ -12,7 +12,7 @@ let
     ${concatMapStringsSep "\n" (server: "server " + server) cfg.servers}
 
     ${optionalString
-      cfg.initstepslew.enabled
+      (cfg.initstepslew.enabled && (cfg.servers != []))
       "initstepslew ${toString cfg.initstepslew.threshold} ${concatStringsSep " " cfg.initstepslew.servers}"
     }
 
@@ -92,6 +92,8 @@ in
       };
 
     services.timesyncd.enable = mkForce false;
+
+    systemd.services.systemd-timedated.environment = { SYSTEMD_TIMEDATED_NTP_SERVICES = "chronyd.service"; };
 
     systemd.services.chronyd =
       { description = "chrony NTP daemon";

@@ -247,18 +247,22 @@ rec {
      on hackage. This can be used as a test for the source distribution,
      assuming the build fails when packaging mistakes are in the cabal file.
    */
-  buildFromSdist = pkg: lib.overrideDerivation pkg (drv: {
-    unpackPhase = let src = sdistTarball pkg; tarname = "${pkg.pname}-${pkg.version}"; in ''
-      echo "Source tarball is at ${src}/${tarname}.tar.gz"
-      tar xf ${src}/${tarname}.tar.gz
-      cd ${pkg.pname}-*
-    '';
+  buildFromSdist = pkg: overrideCabal pkg (drv: {
+    src = "${sdistTarball pkg}/${pkg.pname}-${pkg.version}.tar.gz";
+
+    # Revising and jailbreaking the cabal file has been handled in sdistTarball
+    revision = null;
+    editedCabalFile = null;
+    jailbreak = false;
   });
 
   /* Build the package in a strict way to uncover potential problems.
      This includes buildFromSdist and failOnAllWarnings.
    */
   buildStrictly = pkg: buildFromSdist (failOnAllWarnings pkg);
+
+  /* Disable core optimizations, significantly speeds up build time */
+  disableOptimization = pkg: appendConfigureFlag pkg "--disable-optimization";
 
   /* Turn on most of the compiler warnings and fail the build if any
      of them occur. */

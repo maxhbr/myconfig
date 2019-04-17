@@ -19,6 +19,8 @@ let
     '';
 
     postInstall = ''
+      wrapPythonProgramsIn "$out/bin" "$out $PYTHONPATH"
+
       for m in docs/man/man1/*; do
         install -vD $m -t $man/share/man/man1
       done
@@ -30,7 +32,7 @@ let
     dontPatchShebangs = false;
 
     propagatedBuildInputs = with py.pkgs; [
-      pycrypto paramiko jinja2 pyyaml httplib2 boto six netaddr dnspython jmespath
+      pycrypto paramiko jinja2 pyyaml httplib2 boto six netaddr dnspython jmespath dopy
     ] ++ stdenv.lib.optional windowsSupport pywinrm;
 
     meta = with stdenv.lib; {
@@ -60,6 +62,11 @@ in rec {
     sha256  = "10pakw9k9wd3cy1qk3ah2253ph7c7h3qzpal4k0s5lschzgy2fh0";
   };
 
-  ansible2 = ansible_2_6;
+  ansible_2_7 = generic {
+    version = "2.7.6";
+    sha256  = "0f7b2ghm34ql8yv90wr0ngd6w7wyvnlcxpc3snkj86kcjsnmx1bd";
+  };
+
+  ansible2 = ansible_2_7;
   ansible  = ansible2;
 }

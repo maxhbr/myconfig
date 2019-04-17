@@ -1,18 +1,19 @@
 { stdenv, buildPythonPackage, fetchPypi, pythonOlder
 , cryptography
-, bcrypt, gssapi, libnacl, libsodium, nettle, pyopenssl }:
+, bcrypt, gssapi, libnacl, libsodium, nettle, pyopenssl
+, openssl }:
 
 buildPythonPackage rec {
   pname = "asyncssh";
-  version = "1.13.3";
+  version = "1.15.1";
   disabled = pythonOlder "3.4";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "eb5b190badc5cd2a506a1b6ced3e92f948166974eef7d1abab61acc67aa379e6";
+    sha256 = "f2065a8b3af0c514c8de264e7b01f08df5213b707bacb7e7c080bd46c3e3bc35";
   };
 
-  propagatedBuildInputs = [ 
+  propagatedBuildInputs = [
     bcrypt
     cryptography
     gssapi
@@ -22,6 +23,8 @@ buildPythonPackage rec {
     pyopenssl
   ];
 
+  checkInputs = [ openssl ];
+
   # Disables windows specific test (specifically the GSSAPI wrapper for Windows)
   postPatch = ''
     rm ./tests/sspi_stub.py
@@ -29,8 +32,8 @@ buildPythonPackage rec {
 
   meta = with stdenv.lib; {
     description = "Provides an asynchronous client and server implementation of the SSHv2 protocol on top of the Python asyncio framework";
-    homepage = https://pypi.python.org/pypi/asyncssh;
-    license = licenses.epl10;
+    homepage    = https://pypi.python.org/pypi/asyncssh;
+    license     = licenses.epl20;
     maintainers = with maintainers; [ worldofpeace ];
   };
 }

@@ -29,6 +29,7 @@ existing packages here and modify it as necessary.
   stdenv, fetchurl, fetchpatch, makeSetupHook,
   bison, cups ? null, harfbuzz, libGL, perl,
   gstreamer, gst-plugins-base,
+  cf-private,
 
   # options
   developerBuild ? false,
@@ -48,6 +49,7 @@ let
   patches = {
     qtbase = [
       ./qtbase.patch
+      ./qtbase-fixguicmake.patch
       (fetchpatch {
         name = "CVE-2018-15518.patch";
         url = "https://codereview.qt-project.org/gitweb?p=qt/qtbase.git;a=patch;h=28a6e642af2ccb454dd019f551c2908753f76f08";
@@ -68,8 +70,7 @@ let
     qtscript = [ ./qtscript.patch ];
     qtserialport = [ ./qtserialport.patch ];
     qttools = [ ./qttools.patch ];
-    qtwebengine = [ ./qtwebengine-seccomp.patch ]
-      ++ optional stdenv.needsPax ./qtwebengine-paxmark-mksnapshot.patch;
+    qtwebengine = [ ./qtwebengine-seccomp.patch ];
     qtwebkit = [ ./qtwebkit.patch ];
     qtvirtualkeyboard = [
       (fetchpatch {
@@ -132,7 +133,9 @@ let
       /* qtactiveqt = not packaged */
       /* qtandroidextras = not packaged */
       /* qtcanvas3d = not packaged */
-      qtconnectivity = callPackage ../modules/qtconnectivity.nix {};
+      qtconnectivity = callPackage ../modules/qtconnectivity.nix {
+        inherit cf-private;
+      };
       qtdeclarative = callPackage ../modules/qtdeclarative.nix {};
       qtdoc = callPackage ../modules/qtdoc.nix {};
       qtgraphicaleffects = callPackage ../modules/qtgraphicaleffects.nix {};

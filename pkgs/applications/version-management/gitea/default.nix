@@ -6,7 +6,7 @@
 with stdenv.lib;
 
 buildGoPackage rec {
-  name = "gitea";
+  pname = "gitea";
   version = "1.7.6";
 
   src = fetchFromGitHub {

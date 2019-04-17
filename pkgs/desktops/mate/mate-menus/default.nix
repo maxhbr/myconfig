@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, pkgconfig, intltool, glib, gobjectIntrospection, python, mate }:
+{ stdenv, fetchurl, pkgconfig, intltool, glib, gobject-introspection, python, mate }:
 
 stdenv.mkDerivation rec {
   name = "mate-menus-${version}";
@@ -9,7 +9,7 @@ stdenv.mkDerivation rec {
     sha256 = "18y4nka38dqqxycxpf7ig4vmrk4i05xqqjk4fxr1ghkj60xxyxz2";
   };
 
-  nativeBuildInputs = [ pkgconfig intltool gobjectIntrospection ];
+  nativeBuildInputs = [ pkgconfig intltool gobject-introspection ];
 
   buildInputs = [ glib python ];
 

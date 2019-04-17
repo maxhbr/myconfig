@@ -1,6 +1,9 @@
-{ system ? builtins.currentSystem }:
+{ system ? builtins.currentSystem,
+  config ? {},
+  pkgs ? import ../.. { inherit system config; }
+}:
 
-with import ../lib/testing.nix { inherit system; };
+with import ../lib/testing.nix { inherit system pkgs; };
 with pkgs.lib;
 
 {
@@ -61,6 +64,7 @@ with pkgs.lib;
     machine =
       { config, pkgs, ... }:
       { services.gitea.enable = true;
+        services.gitea.disableRegistration = true;
       };
 
     testScript = ''
@@ -69,6 +73,7 @@ with pkgs.lib;
       $machine->waitForUnit('gitea.service');
       $machine->waitForOpenPort('3000');
       $machine->succeed("curl --fail http://localhost:3000/");
+      $machine->succeed("curl --fail http://localhost:3000/user/sign_up | grep 'Registration is disabled. Please contact your site administrator.'");
     '';
   };
 }

@@ -59,6 +59,7 @@ let
 
     [Wayland]
     EnableHidpi=${if cfg.enableHidpi then "true" else "false"}
+    SessionDir=${dmcfg.session.desktops}/share/wayland-sessions
 
     ${optionalString cfg.autoLogin.enable ''
     [Autologin]
@@ -209,8 +210,6 @@ in
     ];
 
     services.xserver.displayManager.job = {
-      logToFile = true;
-
       environment = {
         # Load themes from system environment
         QT_PLUGIN_PATH = "/run/current-system/sw/" + pkgs.qt5.qtbase.qtPluginPrefix;
@@ -265,7 +264,9 @@ in
     };
 
     environment.etc."sddm.conf".source = cfgFile;
-    environment.pathsToLink = [ "/share/sddm/themes" ];
+    environment.pathsToLink = [ 
+      "/share/sddm" 
+    ];
 
     users.groups.sddm.gid = config.ids.gids.sddm;
 

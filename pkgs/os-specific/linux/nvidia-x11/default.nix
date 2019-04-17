@@ -1,4 +1,4 @@
-{ lib, callPackage, fetchurl }:
+{ lib, callPackage, fetchurl, stdenv }:
 
 let
   generic = args: callPackage (import ./generic.nix args) { };
@@ -16,7 +16,20 @@ let
 in
 rec {
   # Policy: use the highest stable version as the default (on our master).
-  stable = generic {
+  stable = if stdenv.hostPlatform.system == "x86_64-linux" then stable_415 else legacy_390;
+
+  # No active beta right now
+  beta = stable;
+
+  stable_415 = generic {
+    version = "415.27";
+    sha256_64bit = "12ylf1h1wpgkd0g7r30c33hhhialn315k5sbxyzks0rm42k7cay8";
+    settingsSha256 = "0m8hfxb6fhanqlkkk4ayn1blgdsvnn0ipxdl19ifdl200ln6j053";
+    persistencedSha256 = "0i6ik6xv6rnwcd6vg5xrxcd9g7nzca3vkiy2srbv0simw86nwgdz";
+  };
+
+  # Last one supporting x86
+  legacy_390 = generic {
     version = "390.87";
     sha256_32bit = "0rlr1f4lnpb8c4qz4w5r8xw5gdy9bzz26qww45qyl1qav3wwaaaw";
     sha256_64bit = "07k1kq8lkgbvjyr2dnbxcz6nppcwpq17wf925w8kfq78345hla9q";
@@ -25,9 +38,6 @@ rec {
 
     patches = lib.optional (kernel.meta.branch == "4.19") ./drm_mode_connector.patch;
   };
-
-  beta = stable; # not enough interest to maintain beta ATM
-
 
   legacy_340 = generic {
     version = "340.107";
@@ -65,6 +75,6 @@ rec {
         '';
     in applyPatches [ "fix-typos" ];
     patches = maybePatch_drm_legacy;
-    broken = lib.versionAtLeast kernel.version "4.18";
+    broken = stdenv.lib.versionAtLeast kernel.version "4.18";
   };
 }

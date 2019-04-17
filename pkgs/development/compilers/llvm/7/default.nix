@@ -29,9 +29,15 @@ let
   in {
 
     llvm = callPackage ./llvm.nix { };
+    llvm-polly = callPackage ./llvm.nix { enablePolly = true; };
 
     clang-unwrapped = callPackage ./clang {
       inherit clang-tools-extra_src;
+    };
+    clang-polly-unwrapped = callPackage ./clang {
+      inherit clang-tools-extra_src;
+      llvm = tools.llvm-polly;
+      enablePolly = true;
     };
 
     llvm-manpages = lowPrio (tools.llvm.override {
@@ -59,6 +65,7 @@ let
 
     libcxxClang = wrapCCWith rec {
       cc = tools.clang-unwrapped;
+      libcxx = targetLlvmLibraries.libcxx;
       extraPackages = [
         targetLlvmLibraries.libcxx
         targetLlvmLibraries.libcxxabi
