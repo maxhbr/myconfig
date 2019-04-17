@@ -3,6 +3,10 @@
 THIS_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 
 case $1 in
+    unraw)
+        shift
+        "$THIS_DIR/convertFromRaw.sh" $@
+        ;;
     align)
         shift
         "$THIS_DIR/alignImages.sh" $@
@@ -27,35 +31,36 @@ case $1 in
         shift
         "$THIS_DIR/buildSimpleGallery.sh" $@
         ;;
+    rename)
+        shift
+        "$THIS_DIR/rename.sh" $@
+        ;;
     *)
         cat<<EOF
 usage:
+  unraw ... [raws]
+    convert RAW images to 48-bit TIFFs
+
   align ... [imgs]
+    align multiple images via hugin
+
   stack ... [imgs]
+    focus stack (possibly aligned) images via enfuse
+
   crop ... [imgs]
+    crop a bunch of images
+
   init [dirToImport]
+    create my default folder structure and optionally import files which were shot in the last 24h
+
   scale [imgs]
+    scale images for easy upload to chat
+
   gallery [imgs]
+    create a simple html gallery via fgallery command line tool
 
-################################################################################
-align:
-$("$THIS_DIR/alignImages.sh" --help)
-
-################################################################################
-stack:
-$("$THIS_DIR/focusStackImages.sh" --help)
-
-################################################################################
-crop:
-$("$THIS_DIR/cropImages.sh" --help)
-
-################################################################################
-scale:
-$("$THIS_DIR/scale-images-for-web.sh" --help)
-
-################################################################################
-gallery:
-$("$THIS_DIR/buildSimpleGallery.sh" --help)
+  rename [imgs]
+    rename a jpg to my naming scheme
 EOF
         ;;
 esac

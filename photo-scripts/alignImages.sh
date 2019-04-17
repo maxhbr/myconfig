@@ -8,7 +8,6 @@
 
 set -e
 
-
 if [[ "$1" == "--help" ]]; then
     cat<<EOF
   $0 img [img [img ...]]

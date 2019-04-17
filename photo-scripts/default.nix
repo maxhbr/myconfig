@@ -15,11 +15,13 @@ stdenv.mkDerivation rec {
         -exec sed -i -e '2d' {} \;
 
     # hardlink binaries
+    sed -i -e 's%dcraw%${pkgs.dcraw}/bin/dcraw%g' convertFromRaw.sh
     sed -i -e 's%align_image_stack%${pkgs.hugin}/bin/align_image_stack%g' alignImages.sh
     sed -i -e 's%enfuse%${pkgs.enblend-enfuse}/bin/enfuse%g' focusStackImages.sh
     sed -i -e 's%convert%${pkgs.imagemagick}/bin/convert%g' cropImages.sh
     sed -i -e 's%convert%${pkgs.imagemagick}/bin/convert%g' scale-images-for-web.sh
     sed -i -e 's%fgallery%${pkgs.fgallery}/bin/fgallery%g' buildSimpleGallery.sh
+    sed -i -e 's%jhead%${pkgs.jhead}/bin/jhead%g' rename.sh
   '';
 
   installPhase = ''
