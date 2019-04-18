@@ -5,39 +5,42 @@ THIS_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 case $1 in
     unraw)
         shift
-        "$THIS_DIR/convertFromRaw.sh" $@
+        time "$THIS_DIR/convertFromRaw.sh" $@
         ;;
     align)
         shift
-        "$THIS_DIR/alignImages.sh" $@
+        time "$THIS_DIR/alignImages.sh" $@
         ;;
     stack)
         shift
-        "$THIS_DIR/focusStackImages.sh" $@
+        time "$THIS_DIR/focusStackImages.sh" $@
         ;;
     crop)
         shift
-        "$THIS_DIR/cropImages.sh" $@
+        time "$THIS_DIR/cropImages.sh" $@
         ;;
     init)
         shift
-        "$THIS_DIR/initFotoDir.sh" $@
+        time "$THIS_DIR/initFotoDir.sh" $@
         ;;
     scale)
         shift
-        "$THIS_DIR/scale-images-for-web.sh" $@
+        time "$THIS_DIR/scale-images-for-web.sh" $@
         ;;
     gallery)
         shift
-        "$THIS_DIR/buildSimpleGallery.sh" $@
+        time "$THIS_DIR/buildSimpleGallery.sh" $@
         ;;
     rename)
         shift
-        "$THIS_DIR/rename.sh" $@
+        time "$THIS_DIR/rename.sh" $@
         ;;
     *)
         cat<<EOF
 usage:
+  init [dirToImport]
+    create my default folder structure and optionally import files which were shot in the last 24h
+
   unraw ... [raws]
     convert RAW images to 48-bit TIFFs
 
@@ -50,9 +53,6 @@ usage:
   crop ... [imgs]
     crop a bunch of images
 
-  init [dirToImport]
-    create my default folder structure and optionally import files which were shot in the last 24h
-
   scale [imgs]
     scale images for easy upload to chat
 
@@ -61,6 +61,12 @@ usage:
 
   rename [imgs]
     rename a jpg to my naming scheme
+
+example workflow for focus stacking:
+  $0 init /media/mmcblk0p1/DCIM/117MSDCF
+  $0 unraw <subset of imported raw files>
+  $0 align <resulting files from unraw>
+  $0 stack <resulting files from align>
 EOF
         ;;
 esac

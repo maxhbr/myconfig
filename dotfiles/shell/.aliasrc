@@ -509,6 +509,12 @@ rawtherapee() { command rawtherapee "$@" & }
 zathura() {
   command zathura "$@" &disown
 }
+gimp() {
+  command gimp "$@" &disown
+}
+gthumb() {
+  command gthumb "$@" &disown
+}
 llpp() {
   command llpp "$@" &disown
 }

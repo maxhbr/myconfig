@@ -16,10 +16,10 @@ ENFUSE_PROJECTOR_ARG="--gray-projector=l-star"
 case $1 in
     --help)
         cat<<EOF
-  $0 [--mode1] img [img [img ...]]
-  $0 --mode2   img [img [img ...]]
-  $0 --mode3   img [img [img ...]]
-  $0 --mode4   img [img [img ...]]
+  $0 [--mode1] [--reverse] img [img [img ...]]
+  $0 --mode2   [--reverse] img [img [img ...]]
+  $0 --mode3   [--reverse] img [img [img ...]]
+  $0 --mode4   [--reverse] img [img [img ...]]
 EOF
         exit 0
         ;;
@@ -41,11 +41,27 @@ EOF
 esac
 ENFUSE_ARGS="--exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask $ENFUSE_PROJECTOR_ARG"
 
+if [[ $1 == "--reverse" ]]; then
+    shift
+    files=( "$@" )
+
+    min=0
+    max=$(( ${#files[@]} -1 ))
+
+    while [[ min -lt max ]]; do
+        x="${files[$min]}"
+        files[$min]="${files[$max]}"
+        files[$max]="$x"
+        (( min++, max-- ))
+    done
+else
+    files=( "$@" )
+fi
+
 if [[ $# -lt 2 ]]; then
     echo "requires exactly more than two arguments"
     exit 1
 fi
-files=( "$@" )
 trap times EXIT
 
 ################################################################################
@@ -91,7 +107,7 @@ create_slab() {
     mkdir -p "${outFileWithoutExt}/"
     enfuse $ENFUSE_ARGS \
            --output=$(printf "${outFileWithoutExt}/${outFileWithoutExt}_SLAB%04d" $i).tif \
-           ${files[@]:$(($k1+1)):$(($k2+1))}
+           ${files[@]:$(($k1+1)):$(($k2-$k1+1))}
 }
 
 align_with_slabs() {
@@ -136,7 +152,7 @@ outFile=$(find_out_filename)
 touch $outFile # claim the out file and overwrite it if done
 outFileWithoutExt="${outFile%.*}"
 
-if [[ "${#files[@]}" -gt 10 ]]; then
+if [[ "${#files[@]}" -gt 100 ]]; then
     align_with_slabs
 else
     enfuse $ENFUSE_ARGS \

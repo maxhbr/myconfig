@@ -53,11 +53,11 @@ wait
 for name in $tmpdir/part1_*; do
     N1=`echo $(basename $name) |cut -b 7-10`
     N2=`echo $middle $N1 | awk '{printf "%04d\n", $1-$2}'`
-    mv $name "${firstFile}_ALIGN${N2}.tif"
+    mv $name "${firstFile}_${N}_ALIGN${N2}.tif"
 done
 
 for name in $tmpdir/part2_*; do
     N1=`echo $(basename $name) |cut -b 7-10`
     N2=`echo $middle $N1 | awk '{printf "%04d\n", $1+$2}'`
-    mv $name "${firstFile}_ALIGN${N2}.tif"
+    mv $name "${firstFile}_${N}_ALIGN${N2}.tif"
 done
