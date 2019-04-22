@@ -1,5 +1,7 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i bash -p hugin
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 
 # based on Macro-scripts package (a complete Open Source workflow for processing macro focus stacking photographs)
 # Written by Sergey Mashchenko

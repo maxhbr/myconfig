@@ -1,25 +1,27 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i bash
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 
 set -e
 
 # this matches the settings in
 #  - darktable:
-#      $(FILE_FOLDER)/1_processed/../2_final/../0_converted/$(EXIF_YEAR)$(EXIF_MONTH)$(EXIF_DAY)_$(FILE_NAME)_dt
+#      $(FILE_FOLDER)/../2_processed/../0_processed/$(EXIF_YEAR)$(EXIF_MONTH)$(EXIF_DAY)_$(FILE_NAME)_dt
 #  - rawtherapee:
 #      TODO
+
+mkdir -p \
+      0_raw \
+      1_converted \
+      2_processed
 
 if [[ "$1" && -d "$1" ]]; then
     find "$1" \
          -mtime -1 \
-         -exec cp "{}" $(pwd) \;
-fi
+         -exec cp "{}" "$(pwd)/0_raw" \;
 
-mkdir -p \
-      0_converted \
-      1_processed \
-      2_final
-
-if ! pgrep -x "gthumb" > /dev/null; then
-    gthumb ./ &disown
+    if ! pgrep -x "gthumb" > /dev/null; then
+        gthumb ./0_raw &disown
+    fi
 fi

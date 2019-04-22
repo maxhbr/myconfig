@@ -1,5 +1,7 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i bash -p dcraw exiftool
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 
 getDirnameInWorkspace() {
     local file=$(readlink -f "$1")
@@ -42,7 +44,7 @@ getDataFromImage() {
 
     if [[ "$extension" == "arw" ]]; then
         getDataFromRawImage "$exifImage"
-    elif [[ "$extension" == "jpg" ]]; then
+    else
         getDataFromJpgImage "$exifImage"
     fi
 }

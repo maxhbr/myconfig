@@ -1,5 +1,7 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i bash -p fgallery
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 
 set -e
 

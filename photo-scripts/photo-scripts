@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 
 THIS_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 
@@ -33,7 +35,11 @@ case $1 in
         ;;
     rename)
         shift
-        time "$THIS_DIR/rename.sh" $@
+        "$THIS_DIR/rename.sh" $@
+        ;;
+    info)
+        shift
+        "$THIS_DIR/mkInfoJSON.sh" $@
         ;;
     *)
         cat<<EOF
@@ -61,6 +67,9 @@ usage:
 
   rename [imgs]
     rename a jpg to my naming scheme
+
+  info img [srcImg]
+    generate json that describes the generated file
 
 example workflow for focus stacking:
   $0 init /media/mmcblk0p1/DCIM/117MSDCF
