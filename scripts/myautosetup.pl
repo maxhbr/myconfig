@@ -120,6 +120,7 @@ if ($onlyIfChanged && isEnvUnchanged()) {
         "DP1", "DP1-8",
         "DP2", "DP2-2", "DP2-3", "DP2-8", "DP2-1",
         "DP3-1", "DP3-2", "DP3-3",
+        "DP3-1-8",
         "HDMI1", "HDMI2", "HDMI3"
         );
     my %resolutions = (
