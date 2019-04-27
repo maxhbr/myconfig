@@ -11,14 +11,33 @@
 assert stdenv.lib.versionAtLeast perl.version "5.28.1";
 let
   inherit (stdenv.lib) maintainers;
-  self = _self // overrides;
+  self = _self // (overrides pkgs);
   _self = with self; {
 
   inherit perl;
 
   callPackage = pkgs.newScope self;
 
-  buildPerlPackage = callPackage ../development/perl-modules/generic { };
+  # Check whether a derivation provides a perl module.
+  hasPerlModule = drv: drv ? perlModule ;
+
+  requiredPerlModules = drvs: let
+    modules = stdenv.lib.filter hasPerlModule drvs;
+  in stdenv.lib.unique ([perl] ++ modules ++ stdenv.lib.concatLists (stdenv.lib.catAttrs "requiredPerlModules" modules));
+
+  # Convert derivation to a perl module.
+  toPerlModule = drv:
+    drv.overrideAttrs( oldAttrs: {
+      # Use passthru in order to prevent rebuilds when possible.
+      passthru = (oldAttrs.passthru or {}) // {
+        perlModule = perl;
+        requiredPerlModules = requiredPerlModules drv.propagatedBuildInputs;
+      };
+    });
+
+  buildPerlPackage = callPackage ../development/perl-modules/generic {
+    inherit toPerlModule;
+  };
 
   # Helper functions for packages that use Module::Build to build.
   buildPerlModule = { buildInputs ? [], ... } @ args:
@@ -8126,7 +8145,7 @@ let
     };
     outputs = [ "out" ];
     buildInputs = [ pkgs.apacheHttpd pkgs.apr pkgs.aprutil ApacheTest ExtUtilsXSBuilder ];
-    propagatedBuildInputs = [ mod_perl2 ];
+    propagatedBuildInputs = [ (pkgs.apacheHttpdPackages.mod_perl.override { inherit perl; }) ];
     makeMakerFlags = "--with-apache2-src=${pkgs.apacheHttpd.dev} --with-apache2-apxs=${pkgs.apacheHttpd.dev}/bin/apxs --with-apache2-httpd=${pkgs.apacheHttpd.out}/bin/httpd --with-apr-config=${pkgs.apr.dev}/bin/apr-1-config --with-apu-config=${pkgs.aprutil.dev}/bin/apu-1-config";
     preConfigure = ''
       # override broken prereq check
@@ -8137,11 +8156,30 @@ let
       '';
     installPhase = ''
       mkdir $out
+
+      # install the library
       make install DESTDIR=$out
       cp -r $out/${pkgs.apacheHttpd.dev}/. $out/.
       cp -r $out/$out/. $out/.
+
+      # install the perl module
+      pushd glue/perl
+      perl Makefile.PL
+      make install DESTDIR=$out
+      cp -r $out/${perl}/lib/perl5 $out/lib/
+      popd
+
+      # install the apache module
+      # https://computergod.typepad.com/home/2007/06/webgui_and_suse.html
+      # NOTE: if using the apache module you must use "apreq" as the module name, not "apreq2"
+      # services.httpd.extraModules = [ { name = "apreq"; path = "''${pkgs.perlPackages.libapreq2}/modules/mod_apreq2.so"; } ];
+      pushd module
+      make install DESTDIR=$out
+      cp -r $out/${pkgs.apacheHttpd.out}/modules $out/
+      popd
+
       rm -r $out/nix
-      '';
+    '';
     doCheck = false; # test would need to start apache httpd
     meta = {
       license = stdenv.lib.licenses.asl20;
