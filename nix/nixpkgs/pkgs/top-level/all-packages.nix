@@ -5590,6 +5590,8 @@ in
 
   sonata = callPackage ../applications/audio/sonata { };
 
+  soundkonverter = kdeApplications.callPackage ../applications/audio/soundkonverter {};
+
   souper = callPackage ../development/compilers/souper { };
 
   sparsehash = callPackage ../development/libraries/sparsehash { };
@@ -20352,6 +20354,8 @@ in
 
   xkblayout-state = callPackage ../applications/misc/xkblayout-state { };
 
+  xmobar = haskellPackages.xmobar;
+
   xmonad-log = callPackage ../tools/misc/xmonad-log { };
 
   xmonad-with-packages = callPackage ../applications/window-managers/xmonad/wrapper.nix {
@@ -23365,5 +23369,4 @@ in
   newlibCross = callPackage ../development/misc/newlib {
     stdenv = crossLibcStdenv;
   };
-
 }
