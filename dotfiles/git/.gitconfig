@@ -36,6 +36,7 @@
     cp          = cherry-pick
 
     d           = diff
+	  dm          = diff master
     d0          = diff HEAD
     d1          = diff HEAD~
     d2          = diff HEAD~2
@@ -67,6 +68,8 @@
 
     mkBundle    = "!f() { git bundle create \"../$(basename $(pwd)).bundle\" --all; }; f"
     mkBundleDated = "!f() { git bundle create \"../$(date '+%Y-%m-%d')_$(basename $(pwd)).bundle\" --all; }; f"
+
+	  am          = "am -3" # Always use "-3" with "git am" to make sure you get conflict markers.
 
 
     mt          = mergetool --no-prompt
