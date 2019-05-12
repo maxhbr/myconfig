@@ -137,6 +137,18 @@ diffDiskUsage() {
     fi
 }
 
+handleGitPostExecution () {
+    git diff --stat
+    if ! git diff-index --quiet HEAD --; then
+        read -r -p "commit state as \"update after rebuild.sh\"? [y/N] " response
+        response=${response,,}    # tolower
+        if [[ "$response" =~ ^(yes|y)$ ]]; then
+            git commit -am "update after rebuild.sh"
+            git psuh origin master
+        fi
+    fi
+}
+
 ###########################################################################
 ##  run  ##################################################################
 ###########################################################################
@@ -193,3 +205,4 @@ for cmd in "${commands[@]}"; do
 done
 trap "" EXIT ERR INT TERM
 showStatDifferences
+handleGitPostExecution
