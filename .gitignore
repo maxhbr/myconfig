@@ -12,6 +12,7 @@ result
 .#*
 xmonad/dist
 _inWork
+_misc
 result
 result-*
 .vagrant
