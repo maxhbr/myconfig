@@ -205,4 +205,5 @@ for cmd in "${commands[@]}"; do
 done
 trap "" EXIT ERR INT TERM
 showStatDifferences
+
 handleGitPostExecution

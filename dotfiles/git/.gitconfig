@@ -35,6 +35,9 @@
 	  up          = "!git remote update -p; git merge --ff-only @{u}"
     cp          = cherry-pick
 
+	  pushb       = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git push \"$@\" \"$branchname\"; fi; }; f"
+	  pullb       = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git pull \"$@\" \"$branchname\"; fi; }; f"
+
     d           = diff
 	  dm          = diff master
     d0          = diff HEAD
