@@ -56,6 +56,17 @@ checkIfConnected() {
     fi
 }
 
+handleGitPostExecution () {
+    git diff --stat
+    if ! git diff-index --quiet HEAD --; then
+        read -r -p "commit state as \"update after rebuild.sh\"? [y/N] " response
+        response=${response,,}    # tolower
+        if [[ "$response" =~ ^(yes|y)$ ]]; then
+            git commit -am "update after rebuild.sh"
+        fi
+    fi
+}
+
 handleGit() {
     local BRANCH=$(git rev-parse --abbrev-ref HEAD)
     if [[ "$BRANCH" == "master" ]]; then
@@ -79,7 +90,12 @@ handleGit() {
                 logERR "diverged"
             fi
         else
-            logINFO "git directory is unclean, it will not be updated"
+            logINFO "git directory is unclean"
+            read -r -p "commit state as \"update before rebuild.sh\"? [y/N] " response
+            response=${response,,}    # tolower
+            if [[ "$response" =~ ^(yes|y)$ ]]; then
+                git commit -am "update before rebuild.sh"
+            fi
         fi
     else
         logINFO "git branch is not master, do not handle git"
@@ -134,18 +150,6 @@ diffDiskUsage() {
         rm $oldFile $newFile
     else
         echo $newFile
-    fi
-}
-
-handleGitPostExecution () {
-    git diff --stat
-    if ! git diff-index --quiet HEAD --; then
-        read -r -p "commit state as \"update after rebuild.sh\"? [y/N] " response
-        response=${response,,}    # tolower
-        if [[ "$response" =~ ^(yes|y)$ ]]; then
-            git commit -am "update after rebuild.sh"
-            git psuh origin master
-        fi
     fi
 }
 
