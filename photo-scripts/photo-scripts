@@ -17,6 +17,10 @@ case $1 in
         shift
         time "$THIS_DIR/focusStackImages.sh" $@
         ;;
+    both)
+        shift
+        time "$THIS_DIR/focusStackImages.sh" $("$THIS_DIR/alignImages.sh" $@)
+        ;;
     crop)
         shift
         time "$THIS_DIR/cropImages.sh" $@
@@ -55,6 +59,10 @@ usage:
 
   stack ... [imgs]
     focus stack (possibly aligned) images via enfuse
+
+  both ... [imgs]
+    this should align and than focus stack
+    TODO: the arguments should be passed to stack, not only align
 
   crop ... [imgs]
     crop a bunch of images

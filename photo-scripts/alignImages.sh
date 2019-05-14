@@ -29,7 +29,7 @@ firstFile=$(basename $1)
 firstFile="${firstFile%.*}"
 tmpdir=$(mktemp -d)
 trap "{ rm -f $tmpdir; }" EXIT
-echo "tmpdir is: $tmpdir"
+(>&2 echo "tmpdir is: $tmpdir")
 
 my_align() {
     prefix="$tmpdir/${1}_"
@@ -40,7 +40,7 @@ my_align() {
 files=("$@")
 N=$#
 middle=$(($N / 2 - 1))
-echo N=$N, middle=$middle
+(>&2 echo N=$N, middle=$middle)
 
 # Reversing the order of files in the first half:
 for f in "${files[@]:0:$middle+1}"; do
@@ -55,11 +55,15 @@ wait
 for name in $tmpdir/part1_*; do
     N1=`echo $(basename $name) |cut -b 7-10`
     N2=`echo $middle $N1 | awk '{printf "%04d\n", $1-$2}'`
-    mv $name "${firstFile}_${N}_ALIGN${N2}.tif"
+    out="${firstFile}_${N}_ALIGN${N2}.tif"
+    mv $name "$out"
+    echo "$out"
 done
 
 for name in $tmpdir/part2_*; do
     N1=`echo $(basename $name) |cut -b 7-10`
     N2=`echo $middle $N1 | awk '{printf "%04d\n", $1+$2}'`
-    mv $name "${firstFile}_${N}_ALIGN${N2}.tif"
+    out="${firstFile}_${N}_ALIGN${N2}.tif"
+    mv $name "$out"
+    echo "$out"
 done
