@@ -56,17 +56,6 @@ checkIfConnected() {
     fi
 }
 
-handleGitPostExecution () {
-    git diff --stat
-    if ! git diff-index --quiet HEAD --; then
-        read -r -p "commit state as \"update after rebuild.sh\"? [y/N] " response
-        response=${response,,}    # tolower
-        if [[ "$response" =~ ^(yes|y)$ ]]; then
-            git commit -am "update after rebuild.sh"
-        fi
-    fi
-}
-
 handleGit() {
     local BRANCH=$(git rev-parse --abbrev-ref HEAD)
     if [[ "$BRANCH" == "master" ]]; then
@@ -95,6 +84,7 @@ handleGit() {
             response=${response,,}    # tolower
             if [[ "$response" =~ ^(yes|y)$ ]]; then
                 git commit -am "update before rebuild.sh"
+                handleGit
             fi
         fi
     else
@@ -150,6 +140,17 @@ diffDiskUsage() {
         rm $oldFile $newFile
     else
         echo $newFile
+    fi
+}
+
+handleGitPostExecution () {
+    git diff --stat
+    if ! git diff-index --quiet HEAD --; then
+        read -r -p "commit state as \"update after rebuild.sh\"? [y/N] " response
+        response=${response,,}    # tolower
+        if [[ "$response" =~ ^(yes|y)$ ]]; then
+            git commit -am "update after rebuild.sh"
+        fi
     fi
 }
 
