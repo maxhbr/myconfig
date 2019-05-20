@@ -9,6 +9,10 @@
 #        https://github.com/pulsar123/Macro-scripts
 # manpage: https://www.cybercom.net/~dcoffin/dcraw/dcraw.1.html
 
+# TODO:
+#  why produce the generated files the following warning:
+# Warning: TIFFDecoder: no TIFFTAG_SAMPLEFORMAT or TIFFTAG_DATATYPE, guessing pixeltype 'UINT16'.
+
 set -e
 
 if [[ "$1" == "--help" ]]; then
