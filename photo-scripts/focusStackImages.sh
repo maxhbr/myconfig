@@ -94,17 +94,18 @@ find_out_filename() {
 
 create_slab() {
     local i=$1
-    local j=$2
-    local N1=$3
-    local Size=$4
-    local Nover=$5
+    local Nslabs=$2
+    local j=$3
+    local N1=$4
+    local Size=$5
+    local Nover=$6
 
     local k1=$(($i*$Size+$j)) # First file to include in the slab
     local k2=$((($i+1)*$Size+$j+$Nover-1)) # Last file to include in the slab
     if [[ $k2 -gt $N1 ]]; then
         k2=$N1
     fi
-    echo "Slab=$i, range $k1 - $k2 of $N1, $(($k2-$k1+1)) frames"
+    echo "Slab=$i of $Nslabs, range $k1 - $k2 of $N1, $(($k2-$k1+1)) frames"
 
     mkdir -p "${outFileWithoutExt}/"
     enfuse $ENFUSE_ARGS \
@@ -134,7 +135,7 @@ align_with_slabs() {
     echo "First stage (creating multiple slabs)"
     local j=0
     for ((i=0; i<$Nslabs; i++)); do
-        create_slab $i $j $N1 $Size $Nover
+        create_slab $i $Nslabs $j $N1 $Size $Nover
         if [[ $j -lt $Slast ]]; then
             j=$(($j+1))
         fi
