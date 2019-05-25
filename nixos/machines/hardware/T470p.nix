@@ -52,7 +52,7 @@
 
   nix.buildCores = 8;
 
-  hardware.bumblebee.enable = false;
+  hardware.bumblebee.enable = true;
 
   boot.extraModprobeConfig = ''
     options snd slots=snd-hda-intel
