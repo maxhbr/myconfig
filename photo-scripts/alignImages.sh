@@ -8,8 +8,7 @@
 # links: https://pulsar124.fandom.com/wiki/Open_Source_workflow_for_macro_focus_stacking
 #        https://github.com/pulsar123/Macro-scripts
 
-
-set -e
+set -euo pipefail
 
 if [[ "$1" == "--help" ]]; then
     cat<<EOF
@@ -29,10 +28,15 @@ OPT="-l"
 
 
 my_align() {
-    prefix="$1"
+    local prefix="$1"
     shift
     (set -x
      >&2 align_image_stack "$OPT" --use-given-order -m -a $prefix $@)
+    local generatedFiles="$(ls -1q "$prefix"* | wc -l)"
+    if [ "$#" -gt "$generatedFiles" ]; then
+        (>&2 echo "$(tput bold)failed! expected $# but got only $generatedFiles$(tput sgr0)")
+        return 1
+    fi
     for name in "$prefix"*; do
         echo "$name"
     done
