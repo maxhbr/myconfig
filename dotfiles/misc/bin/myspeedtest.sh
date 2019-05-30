@@ -54,5 +54,6 @@ if [[ $1 == "--loop" ]]; then
         sleep 300
     done
 else
+    (1>&2 date)
     run $@
 fi
