@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p borg sudo
+#! nix-shell -i bash -p borgbackup 
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 
@@ -120,14 +120,18 @@ myBackup() {
 /home/*/VirtualBox VMs/
 /home/*/Desktop/
 EXCLUDE
+    cat <<EXCLUDE > "${backupdir}/.tng.excludes"
+*/PIP/_*
+EXCLUDE
     $borgCreateCmd \
          --exclude-from "${backupdir}/.excludes" \
          "${repository}::${backupname}" \
          /home/mhuber/
     [[ -d ~/TNG ]] && \
         $borgCreateCmd \
-             "${repositoryWork}::${backupname}" \
-             /home/mhuber/TNG/
+            --exclude-from "${backupdir}/.tng.excludes" \
+            "${repositoryWork}::${backupname}" \
+            /home/mhuber/TNG/
 
     have pacman && {
         pacman -Qeq > ${backupdir}/pacmanPakete.txt
