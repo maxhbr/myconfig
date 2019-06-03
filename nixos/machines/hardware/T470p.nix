@@ -19,6 +19,9 @@
     ./nixos-hardware/common/pc/laptop
     ./nixos-hardware/common/pc/laptop/acpi_call.nix
 
+    ./bumblebee.nix
+    # ./intel-graphics.nix
+
     { # config for libinput
       config = lib.mkIf (config.services.xserver.libinput.enable) {
         services.xserver.libinput.accelSpeed = "0.15";
@@ -52,11 +55,8 @@
 
   nix.buildCores = 8;
 
-  hardware.bumblebee.enable = true;
 
   boot.extraModprobeConfig = ''
     options snd slots=snd-hda-intel
   '';
-
-  services.xserver.videoDrivers = [ "intel" ];
 }
