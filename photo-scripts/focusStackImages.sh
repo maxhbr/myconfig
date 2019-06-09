@@ -14,7 +14,7 @@ set -e
 ##  parse arguments parse arguments  ###########################################
 ################################################################################
 
-ENFUSE_PROJECTOR_ARG="--gray-projector=l-star"
+ENFUSE_ARGS="--gray-projector=l-star"
 case $1 in
     --help)
         cat<<EOF
@@ -22,6 +22,7 @@ case $1 in
   $0 --mode2   [--reverse] img [img [img ...]]
   $0 --mode3   [--reverse] img [img [img ...]]
   $0 --mode4   [--reverse] img [img [img ...]]
+  $0 --mode... [--reverse] img [img [img ...]]
 EOF
         exit 0
         ;;
@@ -30,18 +31,25 @@ EOF
         ;;
     --mode2)
         shift
-        ENFUSE_PROJECTOR_ARG=""
+        ENFUSE_ARGS=""
         ;;
     --mode3)
         shift
-        ENFUSE_PROJECTOR_ARG="--contrast-window-size=5"
+        ENFUSE_ARGS="--contrast-window-size=5"
         ;;
     --mode4)
         shift
-        ENFUSE_PROJECTOR_ARG="--contrast-edge-scale=0.3"
+        ENFUSE_ARGS="--contrast-edge-scale=0.3"
+        ;;
+    --mode5)
+        shift
+        ENFUSE_ARGS="--contrast-edge-scale=31 --contrast-min-curvature=11"
+        ;;
+    --mode6)
+        shift
+        ENFUSE_ARGS="--gray-projector=luminance"
         ;;
 esac
-ENFUSE_ARGS="--exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask $ENFUSE_PROJECTOR_ARG"
 
 if [[ $1 == "--reverse" ]]; then
     shift
@@ -65,6 +73,7 @@ if [[ $# -lt 2 ]]; then
     exit 1
 fi
 trap times EXIT
+
 
 ################################################################################
 ##  functions  #################################################################
@@ -92,6 +101,19 @@ find_out_filename() {
     find_next_filename "${firstFile}_STACKED" ".tif"
 }
 
+call_enfuse() {
+    local outputFile="$1"
+    shift
+
+    mkdir -p "${outputFile}-masks"
+    enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 \
+           --hard-mask \
+           $ENFUSE_ARGS \
+           --save-masks="${outputFile}-masks/softmask-%04n.tif:${outputFile}-masks/hardmask-%04n.tif" \
+           --output="$outputFile" \
+           $@
+}
+
 create_slab() {
     local i=$1
     local Nslabs=$2
@@ -108,8 +130,7 @@ create_slab() {
     echo "Slab=$i of $Nslabs, range $k1 - $k2 of $N1, $(($k2-$k1+1)) frames"
 
     mkdir -p "${outFileWithoutExt}/"
-    enfuse $ENFUSE_ARGS \
-           --output=$(printf "${outFileWithoutExt}/${outFileWithoutExt}_SLAB%04d" $i).tif \
+    call_enfuse $(printf "${outFileWithoutExt}/${outFileWithoutExt}_SLAB%04d" $i).tif \
            ${files[@]:$(($k1+1)):$(($k2-$k1+1))}
 }
 
@@ -142,8 +163,7 @@ align_with_slabs() {
     done
 
     echo "Second stage - merging all slabs into final stacked photo"
-    enfuse $ENFUSE_ARGS \
-           --output="${outFile}" \
+    call_enfuse "${outFile}" \
            "${outFileWithoutExt}/${outFileWithoutExt}_SLAB"*.tif
 }
 
@@ -154,11 +174,9 @@ align_with_slabs() {
 outFile=$(find_out_filename)
 touch $outFile # claim the out file and overwrite it if done
 outFileWithoutExt="${outFile%.*}"
-
 if [[ "${#files[@]}" -gt 100 ]]; then
     align_with_slabs
 else
-    enfuse $ENFUSE_ARGS \
-           --output="${outFile}" \
+    call_enfuse "${outFile}" \
            ${files[@]}
 fi

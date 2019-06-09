@@ -18,6 +18,7 @@ mkdir -p \
 
 if [[ "$1" && -d "$1" ]]; then
     find "$1" \
+         -type f \
          -mtime -1 \
          -exec cp "{}" "$(pwd)/0_raw" \;
 
