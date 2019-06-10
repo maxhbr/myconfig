@@ -14,40 +14,42 @@ set -e
 ##  parse arguments parse arguments  ###########################################
 ################################################################################
 
-ENFUSE_ARGS="--gray-projector=l-star"
 case $1 in
     --help)
         cat<<EOF
-  $0 [--mode1] [--reverse] img [img [img ...]]
-  $0 --mode2   [--reverse] img [img [img ...]]
-  $0 --mode3   [--reverse] img [img [img ...]]
-  $0 --mode4   [--reverse] img [img [img ...]]
-  $0 --mode... [--reverse] img [img [img ...]]
+  $0 [--proj1|--proj2|...] [--opts1|--opts2|...] [--reverse] img [img [img ...]]
 EOF
         exit 0
         ;;
-    --mode1)
+esac
+
+
+ENFUSE_ARGS="--gray-projector=l-star"
+case $1 in
+    --proj1)
         shift
         ;;
-    --mode2)
+    --proj2)
         shift
         ENFUSE_ARGS=""
         ;;
-    --mode3)
+    --proj3)
+        shift
+        ENFUSE_ARGS="--gray-projector=luminance"
+        ;;
+esac
+case $1 in
+    --opts1)
         shift
         ENFUSE_ARGS="--contrast-window-size=5"
         ;;
-    --mode4)
+    --opts2)
         shift
         ENFUSE_ARGS="--contrast-edge-scale=0.3"
         ;;
-    --mode5)
+    --opts3)
         shift
         ENFUSE_ARGS="--contrast-edge-scale=31 --contrast-min-curvature=11"
-        ;;
-    --mode6)
-        shift
-        ENFUSE_ARGS="--gray-projector=luminance"
         ;;
 esac
 
@@ -68,11 +70,11 @@ else
     files=( "$@" )
 fi
 
-if [[ $# -lt 2 ]]; then
-    echo "requires exactly more than two arguments"
+if [[ "${#files[@]}" -lt 2 ]]; then
+    echo "requires more than one images"
     exit 1
 fi
-trap times EXIT
+trap "times; exit" EXIT
 
 
 ################################################################################
@@ -131,7 +133,7 @@ create_slab() {
 
     mkdir -p "${outFileWithoutExt}/"
     call_enfuse $(printf "${outFileWithoutExt}/${outFileWithoutExt}_SLAB%04d" $i).tif \
-           ${files[@]:$(($k1+1)):$(($k2-$k1+1))}
+                ${files[@]:$(($k1+1)):$(($k2-$k1+1))}
 }
 
 align_with_slabs() {
@@ -164,7 +166,7 @@ align_with_slabs() {
 
     echo "Second stage - merging all slabs into final stacked photo"
     call_enfuse "${outFile}" \
-           "${outFileWithoutExt}/${outFileWithoutExt}_SLAB"*.tif
+                "${outFileWithoutExt}/${outFileWithoutExt}_SLAB"*.tif
 }
 
 ################################################################################
@@ -178,5 +180,6 @@ if [[ "${#files[@]}" -gt 100 ]]; then
     align_with_slabs
 else
     call_enfuse "${outFile}" \
-           ${files[@]}
+                ${files[@]}
 fi
+
