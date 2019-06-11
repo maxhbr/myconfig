@@ -28,7 +28,7 @@ applyMyScratchpads c = let
         mkTermCmd :: String -> String -> String
         mkTermCmd name cmd = "SHLVL=0 " ++ terminal c ++ " -name " ++ name ++ " -e " ++ cmd
         mkEmacsCmd :: String -> String -> String
-        mkEmacsCmd name cmd = "SHLVL=0 " ++ emacs ++ " -name " ++ name ++ " -e \"" ++ cmd ++ "\""
+        mkEmacsCmd name cmd = emacsCMD ++ " -name " ++ name ++ " -e \"" ++ cmd ++ "\""
       in
         [ NS "scratchpad" (mkTermCmd "Scratchpad" (pathToXmonadBins ++ "tmux-scratch.sh"))
             (resource =? "Scratchpad")
@@ -49,7 +49,8 @@ applyMyScratchpads c = let
 
     scratchpadKBs = map (\(k,d) -> (k, namedScratchpadAction scratchpads d))
                         [ ((m__, xK_minus), "scratchpad")
-                        , ((ms_, xK_i    ), "ScratchMutt")
+                        , ((ms_, xK_i    ), "ScratchMu4e")
+                        , ((msc, xK_i    ), "ScratchMutt")
                         ]
 
     scratchpadHook = namedScratchpadManageHook scratchpads

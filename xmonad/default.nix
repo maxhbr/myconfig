@@ -49,6 +49,7 @@ in mkDerivation {
     addAbsoluteBinaryPath urxvtd ${pkgs.rxvt_unicode_with-plugins}
     addAbsoluteBinaryPath bash ${pkgs.bash}
     addAbsoluteBinaryPath zsh ${pkgs.zsh}
+    addAbsoluteBinaryPath emacs ${pkgs.emacs}
     addAbsoluteBinaryPath dmenu_path ${pkgs.dmenu} #$#{pkgs.unstable.dmenu}
     addAbsoluteBinaryPath yeganesh ${pkgs.haskellPackages.yeganesh} #$#{pkgs.unstable.haskellPackages.yeganesh}
     addAbsoluteBinaryPath passmenu ${pkgs.pass}
