@@ -62,10 +62,14 @@ values."
      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
      ;; reveal.js support for org-mode
      ;; https://github.com/syl20bnr/spacemacs/tree/master/layers/%2Bemacs/org#revealjs-support
-     (org :variables org-enable-reveal-js-support t)
+     (org :variables
+          org-enable-reveal-js-support t)
      ;; set in org-file: #+REVEAL_ROOT: http://cdn.jsdelivr.net/reveal.js/3.0.0/
 
-     notmutch
+     ;; notmutch
+     (mu4e :variables
+           mu4e-installation-path "/run/current-system/sw/share/emacs/site-lisp"
+           mu4e-use-maildirs-extension t)
 
      ;; (shell :variables
      ;;        shell-default-height 30
@@ -393,6 +397,91 @@ you should place your code here."
   ;; editorconfig
   ;; from https://gitter.im/syl20bnr/spacemacs/archives/2016/05/04
   (add-hook 'after-change-major-mode-hook 'editorconfig-apply 'append)
+
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; mu4e
+  ;; partially from:
+  ;; - https://notanumber.io/2016-10-03/better-email-with-mu4e/
+  ;; - http://develop.spacemacs.org/layers/+email/mu4e/README.html
+  ;; - https://www.reddit.com/r/NixOS/comments/6duud4/adding_mu4e_to_emacs_loadpath/
+  ;; - https://zmalltalker.com/linux/mu.html
+
+  (defun mu4e-message-maildir-matches (msg rx)
+    (when rx
+      (if (listp rx)
+          ;; If rx is a list, try each one for a match
+          (or (mu4e-message-maildir-matches msg (car rx))
+              (mu4e-message-maildir-matches msg (cdr rx)))
+        ;; Not a list, check rx
+        (string-match rx (mu4e-message-field msg :maildir)))))
+
+
+
+  (add-hook 'mu4e-compose-mode-hook 'flyspell-mode)
+  (setq mu4e-maildir "~/Mail/"
+        mu4e-get-mail-command "offlineimap -o"
+        mu4e-attachment-dir  "~/Downloads"
+        ;; This enabled the thread like viewing of email similar to gmail's UI.
+        mu4e-headers-include-related t
+
+
+        mu4e-contexts `(
+                        ,(make-mu4e-context
+                          :name "mail"
+                          :enter-func (lambda () (mu4e-message "Switch to the Private context"))
+                          :match-func (lambda (msg)
+                                        (when msg
+                                          (mu4e-message-maildir-matches msg "^/mail"))) ;; (mu4e-message-contact-field-matches msg :to "mail@maximilian-huber.de")))
+                          ;; :leave-func (lambda () (mu4e-clear-caches))
+                          :vars '(  ( user-mail-address . "mail@maximilian-huber.de"  )
+                                    ( user-full-name . "Maximilian Huber" )
+                                    ( mu4e-sent-folder . "/mail/Sent" )
+                                    ( mu4e-trash-folder . "/mail/Trash" )
+                                    ( mu4e-drafts-folder . "/mail/Drafts" )
+                                    ( mu4e-refile-folder . "/mail/Archive" )
+                                    ( mu4e-compose-signature . (concat
+                                                                "Maximilian Huber\n"
+                                                                "maximilian-huber.de\n"))))
+                        ,(make-mu4e-context
+                          :name "TNG"
+                          :enter-func (lambda () (mu4e-message "Switch to the Work context"))
+                          :match-func (lambda (msg)
+                                        (when msg
+                                          (mu4e-message-maildir-matches msg "^/tng"))) ;; (mu4e-message-contact-field-matches msg :to "maximilian.huber@tngtech.com")))
+                          ;; :leave-func (lambda () (mu4e-clear-caches))
+                          :vars '(  ( user-mail-address . "maximilian.huber@tngtech.com" )
+                                    ( user-full-name . "Maximilian Huber" )
+                                    ( mu4e-sent-folder . "/tng/Sent" )
+                                    ( mu4e-trash-folder . "/tng/Trash" )
+                                    ( mu4e-drafts-folder . "/tng/Drafts" )
+                                    ( mu4e-refile-folder . "/tng/Archive" )
+                                    ( mu4e-compose-signature . (concat
+                                                                "tbd.\n")))))
+        mu4e-bookmarks '(("\\\\Inbox" "Inbox" ?i)
+                         ("flag:unread" "Unread messages" ?u)
+                         ("date:today..now" "Today's messages" ?t)
+                         ("date:7d..now" "Last 7 days" ?w)
+			                   ("mime:image/*" "Messages with images" ?p)))
+
+  (defun choose-msmtp-account ()
+    (if (message-mail-p)
+        (save-excursion
+          (let*
+              ((from (save-restriction
+                       (message-narrow-to-headers)
+                       (message-fetch-field "from")))
+               (account
+                (cond
+                 ((string-match "mail@maximilian-huber.de" from) "mail")
+                 ((string-match "maximilian.huber@tngtech.com" from) "tng"))))
+            (setq message-sendmail-extra-arguments (list '"-a" account))))))
+
+  (setq message-send-mail-function 'message-send-mail-with-sendmail
+        sendmail-program "/run/current-system/sw/bin/msmtp"
+        user-full-name "Maximilian Huber")
+  (setq message-sendmail-envelope-from 'header)
+  (add-hook 'message-send-mail-hook 'choose-msmtp-account)
   )
 
 ;; Do not write anything past this comment. This is where Emacs will
@@ -405,7 +494,10 @@ you should place your code here."
  '(evil-want-Y-yank-to-eol nil)
  '(package-selected-packages
    (quote
-    (org-category-capture ghub treepy graphql groovy-mode winum psci purescript-mode psc-ide sql-indent restclient-helm ob-restclient ob-http company-restclient restclient know-your-http-well org-mime ox-reveal adoc-mode markup-faces editorconfig phpunit phpcbf php-extras php-auto-yasnippets drupal-mode php-mode csv-mode powerline pcre2el spinner alert log4e gntp markdown-mode hydra parent-mode projectile request haml-mode gitignore-mode fringe-helper git-gutter+ git-gutter flyspell-correct seq pos-tip flycheck pkg-info epl flx magit magit-popup git-commit with-editor smartparens iedit anzu evil goto-chg undo-tree highlight diminish web-completion-data ghc haskell-mode company inf-ruby bind-map bind-key yasnippet packed auctex f dash s helm avy helm-core async auto-complete popup vimrc-mode dactyl-mode web-beautify livid-mode skewer-mode simple-httpd json-mode json-snatcher json-reformat js2-refactor multiple-cursors js2-mode js-doc company-tern dash-functional tern coffee-mode yapfify pyvenv pytest pyenv-mode py-isort pip-requirements live-py-mode hy-mode helm-pydoc cython-mode company-anaconda anaconda-mode pythonic toml-mode racer flycheck-rust cargo rust-mode fuzzy yaml-mode ws-butler window-numbering which-key web-mode volatile-highlights vi-tilde-fringe uuidgen use-package toc-org tagedit spacemacs-theme spaceline smeargle slim-mode scss-mode sass-mode rvm ruby-tools ruby-test-mode rubocop rspec-mode robe restart-emacs rbenv rake rainbow-delimiters quelpa pug-mode popwin persp-mode paradox orgit org-projectile org-present org-pomodoro org-plus-contrib org-download org-bullets open-junk-file neotree move-text mmm-mode minitest markdown-toc magit-gitflow macrostep lorem-ipsum linum-relative link-hint less-css-mode intero info+ indent-guide ido-vertical-mode hungry-delete htmlize hlint-refactor hl-todo hindent highlight-parentheses highlight-numbers highlight-indentation hide-comnt help-fns+ helm-themes helm-swoop helm-projectile helm-mode-manager helm-make helm-hoogle helm-gitignore helm-flx helm-descbinds helm-css-scss helm-company helm-c-yasnippet helm-ag haskell-snippets google-translate golden-ratio gnuplot gitconfig-mode gitattributes-mode git-timemachine git-messenger git-link git-gutter-fringe git-gutter-fringe+ gh-md flyspell-correct-helm flycheck-pos-tip flycheck-haskell flx-ido fill-column-indicator fancy-battery eyebrowse expand-region exec-path-from-shell evil-visualstar evil-visual-mark-mode evil-unimpaired evil-tutor evil-surround evil-search-highlight-persist evil-numbers evil-nerd-commenter evil-mc evil-matchit evil-magit evil-lisp-state evil-indent-plus evil-iedit-state evil-exchange evil-escape evil-ediff evil-args evil-anzu eval-sexp-fu emmet-mode elisp-slime-nav dumb-jump diff-hl define-word company-web company-statistics company-ghci company-ghc company-cabal company-auctex column-enforce-mode cmm-mode clean-aindent-mode chruby bundler auto-yasnippet auto-highlight-symbol auto-dictionary auto-compile aggressive-indent adaptive-wrap ace-window ace-link ace-jump-helm-line ac-ispell))))
+    (mu4e-maildirs-extension mu4e-alert ht org-category-capture ghub treepy graphql groovy-mode winum psci purescript-mode psc-ide sql-indent restclient-helm ob-restclient ob-http company-restclient restclient know-your-http-well org-mime ox-reveal adoc-mode markup-faces editorconfig phpunit phpcbf php-extras php-auto-yasnippets drupal-mode php-mode csv-mode powerline pcre2el spinner alert log4e gntp markdown-mode hydra parent-mode projectile request haml-mode gitignore-mode fringe-helper git-gutter+ git-gutter flyspell-correct seq pos-tip flycheck pkg-info epl flx magit magit-popup git-commit with-editor smartparens iedit anzu evil goto-chg undo-tree highlight diminish web-completion-data ghc haskell-mode company inf-ruby bind-map bind-key yasnippet packed auctex f dash s helm avy helm-core async auto-complete popup vimrc-mode dactyl-mode web-beautify livid-mode skewer-mode simple-httpd json-mode json-snatcher json-reformat js2-refactor multiple-cursors js2-mode js-doc company-tern dash-functional tern coffee-mode yapfify pyvenv pytest pyenv-mode py-isort pip-requirements live-py-mode hy-mode helm-pydoc cython-mode company-anaconda anaconda-mode pythonic toml-mode racer flycheck-rust cargo rust-mode fuzzy yaml-mode ws-butler window-numbering which-key web-mode volatile-highlights vi-tilde-fringe uuidgen use-package toc-org tagedit spacemacs-theme spaceline smeargle slim-mode scss-mode sass-mode rvm ruby-tools ruby-test-mode rubocop rspec-mode robe restart-emacs rbenv rake rainbow-delimiters quelpa pug-mode popwin persp-mode paradox orgit org-projectile org-present org-pomodoro org-plus-contrib org-download org-bullets open-junk-file neotree move-text mmm-mode minitest markdown-toc magit-gitflow macrostep lorem-ipsum linum-relative link-hint less-css-mode intero info+ indent-guide ido-vertical-mode hungry-delete htmlize hlint-refactor hl-todo hindent highlight-parentheses highlight-numbers highlight-indentation hide-comnt help-fns+ helm-themes helm-swoop helm-projectile helm-mode-manager helm-make helm-hoogle helm-gitignore helm-flx helm-descbinds helm-css-scss helm-company helm-c-yasnippet helm-ag haskell-snippets google-translate golden-ratio gnuplot gitconfig-mode gitattributes-mode git-timemachine git-messenger git-link git-gutter-fringe git-gutter-fringe+ gh-md flyspell-correct-helm flycheck-pos-tip flycheck-haskell flx-ido fill-column-indicator fancy-battery eyebrowse expand-region exec-path-from-shell evil-visualstar evil-visual-mark-mode evil-unimpaired evil-tutor evil-surround evil-search-highlight-persist evil-numbers evil-nerd-commenter evil-mc evil-matchit evil-magit evil-lisp-state evil-indent-plus evil-iedit-state evil-exchange evil-escape evil-ediff evil-args evil-anzu eval-sexp-fu emmet-mode elisp-slime-nav dumb-jump diff-hl define-word company-web company-statistics company-ghci company-ghc company-cabal company-auctex column-enforce-mode cmm-mode clean-aindent-mode chruby bundler auto-yasnippet auto-highlight-symbol auto-dictionary auto-compile aggressive-indent adaptive-wrap ace-window ace-link ace-jump-helm-line ac-ispell)))
+ '(psc-ide-add-import-on-completion t t)
+ '(psc-ide-rebuild-on-save nil t)
+ '(send-mail-function (quote sendmail-send-it)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.

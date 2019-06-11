@@ -29,6 +29,7 @@ alias asdf="setxkbmap -layout de,de -variant neo,nodeadkeys -option grp:shifts_t
 alias vi="/var/run/current-system/sw/bin/vim"
 
 alias magit='ec -e "(magit-status \"$(pwd)\")"'
+alias mu4e='ec -e "(mu4e)"'
 alias pgp="gpg" #Typo
 
 alias tmux="tmux -2"
