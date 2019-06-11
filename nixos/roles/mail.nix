@@ -16,6 +16,7 @@
       sxiv
       procmail
       unstable.astroid
+      mu
     ];
 
     services.offlineimap = {
