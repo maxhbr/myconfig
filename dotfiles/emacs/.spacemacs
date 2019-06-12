@@ -401,91 +401,10 @@ you should place your code here."
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; mu4e
-  ;; partially from:
-  ;; - https://notanumber.io/2016-10-03/better-email-with-mu4e/
-  ;; - http://develop.spacemacs.org/layers/+email/mu4e/README.html
-  ;; - https://www.reddit.com/r/NixOS/comments/6duud4/adding_mu4e_to_emacs_loadpath/
-  ;; - https://zmalltalker.com/linux/mu.html
-
-  (defun mu4e-message-maildir-matches (msg rx)
-    (when rx
-      (if (listp rx)
-          ;; If rx is a list, try each one for a match
-          (or (mu4e-message-maildir-matches msg (car rx))
-              (mu4e-message-maildir-matches msg (cdr rx)))
-        ;; Not a list, check rx
-        (string-match rx (mu4e-message-field msg :maildir)))))
-
-
-
-  (add-hook 'mu4e-compose-mode-hook 'flyspell-mode)
-  (add-to-list 'mu4e-view-actions '("View in browser" . mu4e-action-view-in-browser) t)
-  (setq mu4e-maildir "~/Mail/"
-        mu4e-get-mail-command "offlineimap -o"
-        mu4e-attachment-dir  "~/Downloads"
-        ;; This enabled the thread like viewing of email similar to gmail's UI.
-        mu4e-headers-include-related t
-        mu4e-view-show-images t
-
-        mu4e-update-interval 300
-
-        mu4e-contexts `(
-                        ,(make-mu4e-context
-                          :name "mail"
-                          :enter-func (lambda () (mu4e-message "Switch to the Private context"))
-                          :match-func (lambda (msg)
-                                        (when msg
-                                          (mu4e-message-maildir-matches msg "^/mail"))) ;; (mu4e-message-contact-field-matches msg :to "mail@maximilian-huber.de")))
-                          :leave-func (lambda () (mu4e-clear-caches))
-                          :vars '(  ( user-mail-address . "mail@maximilian-huber.de"  )
-                                    ( user-full-name . "Maximilian Huber" )
-                                    ( mu4e-sent-folder . "/mail/Sent" )
-                                    ( mu4e-trash-folder . "/mail/Trash" )
-                                    ( mu4e-drafts-folder . "/mail/Drafts" )
-                                    ( mu4e-refile-folder . "/mail/Archive" )
-                                    ( mu4e-compose-signature . (concat
-                                                                "Maximilian Huber\n"
-                                                                "maximilian-huber.de\n"))))
-                        ,(make-mu4e-context
-                          :name "TNG"
-                          :enter-func (lambda () (mu4e-message "Switch to the Work context"))
-                          :match-func (lambda (msg)
-                                        (when msg
-                                          (mu4e-message-maildir-matches msg "^/tng"))) ;; (mu4e-message-contact-field-matches msg :to "maximilian.huber@tngtech.com")))
-                          :leave-func (lambda () (mu4e-clear-caches))
-                          :vars '(  ( user-mail-address . "maximilian.huber@tngtech.com" )
-                                    ( user-full-name . "Maximilian Huber" )
-                                    ( mu4e-sent-folder . "/tng/Sent" )
-                                    ( mu4e-trash-folder . "/tng/Trash" )
-                                    ( mu4e-drafts-folder . "/tng/Drafts" )
-                                    ( mu4e-refile-folder . "/tng/Archive" )
-                                    ( mu4e-compose-signature . (concat
-                                                                "tbd.\n")))))
-        mu4e-bookmarks '(("\\\\Inbox" "Inbox" ?i)
-                         ("flag:unread" "Unread messages" ?u)
-                         ("date:today..now" "Today's messages" ?t)
-                         ("date:7d..now" "Last 7 days" ?w)
-			                   ("mime:image/*" "Messages with images" ?p)))
-
-  (defun choose-msmtp-account ()
-    (if (message-mail-p)
-        (save-excursion
-          (let*
-              ((from (save-restriction
-                       (message-narrow-to-headers)
-                       (message-fetch-field "from")))
-               (account
-                (cond
-                 ((string-match "mail@maximilian-huber.de" from) "mail")
-                 ((string-match "maximilian.huber@tngtech.com" from) "tng"))))
-            (setq message-sendmail-extra-arguments (list '"-a" account))))))
-
-  (setq message-send-mail-function 'message-send-mail-with-sendmail
-        sendmail-program "/run/current-system/sw/bin/msmtp"
-        user-full-name "Maximilian Huber")
-  (setq message-sendmail-envelope-from 'header)
-  (add-hook 'message-send-mail-hook 'choose-msmtp-account)
-  )
+  (let ((mu4e-config "~/Maildir/config/mu4e-config.el"))
+    (when (file-exists-p mu4e-config)
+      (load-file mu4e-config)
+      (maildir/mu4econfig))))
 
 ;; Do not write anything past this comment. This is where Emacs will
 ;; auto-generate custom variable definitions.

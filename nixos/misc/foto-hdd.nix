@@ -9,4 +9,9 @@
       fsType = "ext4";
       options = ["auto,nofail,x-systemd.device-timeout=1,sync,users,rw,discard,noatime"];
     };
+  fileSystems."/home/mhuber/Bilder/ssd" =
+    { device = "/dev/disk/by-uuid/a63df934-7f65-46d9-9553-eef773e826ee";
+      fsType = "ext4";
+      options = ["auto,nofail,x-systemd.device-timeout=1,sync,users,rw,discard,noatime"];
+    };
 }

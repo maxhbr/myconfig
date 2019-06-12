@@ -80,7 +80,7 @@ handleGit() {
             fi
         else
             logINFO "git directory is unclean"
-            read -r -p "commit state as \"update before rebuild.sh\"? [y/N] " response
+            read -t 10 -r -p "commit state as \"update before rebuild.sh\"? [y/N] " response
             response=${response,,}    # tolower
             if [[ "$response" =~ ^(yes|y)$ ]]; then
                 git commit -am "update before rebuild.sh"
