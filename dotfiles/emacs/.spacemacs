@@ -65,11 +65,16 @@ values."
      (org :variables
           org-enable-reveal-js-support t)
      ;; set in org-file: #+REVEAL_ROOT: http://cdn.jsdelivr.net/reveal.js/3.0.0/
+     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+     ;; email reading stuff
      ;; notmutch
      (mu4e :variables
            mu4e-installation-path "/run/current-system/sw/share/emacs/site-lisp"
            mu4e-use-maildirs-extension t)
+     ;; gnus
+     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
      ;; (shell :variables
      ;;        shell-default-height 30
@@ -77,6 +82,7 @@ values."
      spell-checking
      syntax-checking
      version-control
+
      mykeybindings
      mythriftlayer
      mynixmode
@@ -404,7 +410,13 @@ you should place your code here."
   (let ((mu4e-config "~/Maildir/config/mu4e-config.el"))
     (when (file-exists-p mu4e-config)
       (load-file mu4e-config)
-      (maildir/mu4econfig))))
+      (maildir/mu4econfig)))
+  ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; ;; gnus
+  ;; (let ((gnus-config "~/Maildir/config/gnus-config.el"))
+  ;;   (when (file-exists-p gnus-config)
+  ;;     (load-file gnus-config)))
+  )
 
 ;; Do not write anything past this comment. This is where Emacs will
 ;; auto-generate custom variable definitions.

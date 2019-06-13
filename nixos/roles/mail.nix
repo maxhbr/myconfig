@@ -17,6 +17,7 @@
       procmail
       unstable.astroid
       mu isync
+      gnome3.gnome-keyring # necessary for mu4e?
     ];
 
     services.offlineimap = {

@@ -3,18 +3,12 @@
 ##############################################################################
 set mbox_type=Maildir
 
-source ~/.mutt/mutt-accounts
-source ~/.mutt/editlabel.mutt
+source ~/Maildir/config/mutt/mutt-accounts
+source ~/Maildir/config/mutt/editlabel.mutt
 
 ##############################################################################
 # Keybindings
 ##############################################################################
-macro index,pager AB "<save-message>~/Mail/mail/Sort.Billing<enter>" \
-    "move message to the billing archive"
-macro index,pager AJ "<save-message>~/Mail/mail/Sort.Job.Gen<enter>" \
-    "move message to the web archive"
-macro index,pager AP "<save-message>~/Mail/mail/Sort.Private<enter>" \
-    "move message to the private archive"
 
 # Move message(s) to Spam/Verified by pressing "S"
 macro index S "<tag-prefix><enter-command>unset resolve<enter><tag-prefix><clear-flag>N<tag-prefix><enter-command>set resolve<enter><tag-prefix><save-message>=Spam.Verified<enter>" "file as Spam"
@@ -36,7 +30,7 @@ bind compose p pgp-menu
 macro compose Y pfy "Send without GPG"
 
 
-# set trash='/home/mhuber/Mail/Trash'
+# set trash='/home/mhuber/Maildir/Trash'
 # bind index D purge-message
 
 ##############################################################################
@@ -60,7 +54,7 @@ set folder_format="%2C %8s %d %t %N %f"     #Format des Datei-Browsers
 set pager_index_lines=10                    #Anzahl der angezeigten Mails in der Übersicht
 set editor="vim +11"                         #Editor, der zum Verfassen der E-Mail benutzt wird, hier Vim beginnend auf Zeile 11
 set beep_new                                # bell on new mails
-set header_cache=$HOME/Mail/.hcache
+set header_cache=$HOME/Maildir/.hcache
 
 set timeout=15
 set mail_check=60
@@ -184,9 +178,9 @@ macro pager B '<enter-command>toggle sidebar_visible<enter><redraw-screen>'
 # ##############################################################################
 # # notmuch
 # ##############################################################################
-# source ~/.mutt/notmuch-mutt.rc
+# source ~/Maildir/config/mutt/notmuch-mutt.rc
 
 ##############################################################################
 # Colors
 ##############################################################################
-source ~/.mutt/mutt-colors-light
+source ~/Maildir/config/mutt/mutt-colors-light

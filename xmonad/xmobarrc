@@ -56,9 +56,9 @@ Config { font = "xft:inconsolata:pixelsize=17:antialias=true:hinting=true"
                        , "-L", "-15" , "-H", "-5"
                        , "-l", "red" , "-m", "blue" , "-h", "green"
                        ] 600
-         , Run Mail [ ("<fc=green>Mail! </fc>", "~/Mail/mail/INBOX")
-                    , ("<fc=yellow>TNG! </fc>", "~/Mail/tng/INBOX")
-                    , ("<fc=green>+</fc>", "~/Mail/alfa/INBOX") ] "mail"
+         , Run Mail [ ("<fc=green>Mail! </fc>", "~/Maildir/mail/INBOX")
+                    , ("<fc=yellow>TNG! </fc>", "~/Maildir/tng/INBOX")
+                    , ("<fc=green>+</fc>", "~/Maildir/alfa/INBOX") ] "mail"
          ]
        , sepChar = "%"
        , alignSep = "}{"
