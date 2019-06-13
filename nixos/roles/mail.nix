@@ -21,7 +21,7 @@
     ];
 
     services.offlineimap = {
-      enable = true;
+      enable = false;
       path = with pkgs; [ notmuch ];
     };
   };
