@@ -28,6 +28,7 @@
     caa         = commit -s --amend -a
     cac         = commit -s --patch --amend
     co          = checkout
+    cot         = checkout --track
     cob         = checkout -b
     f           = "!f() { git fetch ${1:-\"--all\"}; }; f"
 	  fum         = "!f() { if [[ \"$(git remote)\" != *'upstream'* ]]; then git fetch origin master:master; else git fetch upstream master:master; fi; }; f"
