@@ -16,6 +16,7 @@ stdenv.mkDerivation rec {
 
     # hardlink binaries
     sed -i -e 's%dcraw%${pkgs.dcraw}/bin/dcraw%g' convertFromRaw.sh
+    sed -i -e 's%convert%${pkgs.imagemagick}/bin/convert%g' convertFromTiff.sh
     sed -i -e 's%dcraw%${pkgs.dcraw}/bin/dcraw%g' mkInfoJSON.sh
     sed -i -e 's%exiftool%${pkgs.exiftool}/bin/exiftool%g' mkInfoJSON.sh
     sed -i -e 's%align_image_stack%${pkgs.hugin}/bin/align_image_stack%g' alignImages.sh

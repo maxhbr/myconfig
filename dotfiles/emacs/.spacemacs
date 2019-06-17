@@ -69,11 +69,13 @@ values."
 
      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
      ;; email reading stuff
-     ;; notmutch
      (mu4e :variables
            mu4e-installation-path "/run/current-system/sw/share/emacs/site-lisp"
-           mu4e-use-maildirs-extension t)
-     ;; gnus
+           mu4e-use-maildirs-extension t
+           mu4e-enable-notifications t
+           mu4e-enable-mode-line t)
+     gnus
+     notmuch
      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
      ;; (shell :variables
@@ -409,13 +411,17 @@ you should place your code here."
   ;; mu4e
   (let ((mu4e-config "~/Maildir/config/mu4e-config.el"))
     (when (file-exists-p mu4e-config)
-      (load-file mu4e-config)
-      (maildir/mu4econfig)))
-  ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  ;; ;; gnus
-  ;; (let ((gnus-config "~/Maildir/config/gnus-config.el"))
-  ;;   (when (file-exists-p gnus-config)
-  ;;     (load-file gnus-config)))
+      (load-file mu4e-config)))
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; gnus
+  (let ((gnus-config "~/Maildir/config/gnus-config.el"))
+    (when (file-exists-p gnus-config)
+      (load-file gnus-config)))
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; notmuch
+  (let ((notmuch-config "~/Maildir/config/notmuch-config.el"))
+    (when (file-exists-p notmuch-config)
+      (load-file notmuch-config)))
   )
 
 ;; Do not write anything past this comment. This is where Emacs will

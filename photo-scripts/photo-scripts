@@ -9,6 +9,10 @@ case $1 in
         shift
         time "$THIS_DIR/convertFromRaw.sh" $@
         ;;
+    untiff)
+        shift
+        time "$THIS_DIR/convertFromTiff.sh" $@
+        ;;
     align)
         shift
         time "$THIS_DIR/alignImages.sh" $@
@@ -53,6 +57,9 @@ usage:
 
   unraw ... [raws]
     convert RAW images to 48-bit TIFFs
+
+  untiff ... [raws]
+    convert Tiff images to PNGs
 
   align ... [imgs]
     align multiple images via hugin
