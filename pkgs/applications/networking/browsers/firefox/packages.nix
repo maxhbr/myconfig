@@ -10,10 +10,10 @@ rec {
 
   firefox = common rec {
     pname = "firefox";
-    ffversion = "67.0.2";
+    ffversion = "67.0.3";
     src = fetchurl {
       url = "mirror://mozilla/firefox/releases/${ffversion}/source/firefox-${ffversion}.source.tar.xz";
-      sha512 = "289bhd8ynanb2zpclzaqqyz4082w529kcf3fd7li3k4pn0ayvkxfv4kmmhfz4xxrwsx6f489ffcj9a48ckk1czi9kykvj3i6ni0mnhl";
+      sha512 = "218d699mpnb8h6h24l79ar9b2gg0scqj4xwbk7p45x2arhjbhn3wq4pkzq434gcn3a1ybfkqpyifnnpv787kj4mqbdfq3cminj7al67";
     };
 
     patches = [
@@ -67,10 +67,10 @@ rec {
 
   firefox-esr-60 = common rec {
     pname = "firefox-esr";
-    ffversion = "60.7.0esr";
+    ffversion = "60.7.1esr";
     src = fetchurl {
       url = "mirror://mozilla/firefox/releases/${ffversion}/source/firefox-${ffversion}.source.tar.xz";
-      sha512 = "1armp7nmzn864l42nasw0zqsp8y1zj4vhgbm99c49a435m44c8p66qrjxy6rn2haqsy76i9x5zf8ph2d014ap6g5yhidj7iymbjh5f2";
+      sha512 = "23l1sxg50w78zf93296szpyg5mksh18y3ihb4fgdw5qmpxvqsn0aiwwik903gf5fsgbjk0w0gynsy6xdbav862xjkq5j6gvyrr2hzjr";
     };
 
     patches = [
