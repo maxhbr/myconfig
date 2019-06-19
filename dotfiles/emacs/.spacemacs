@@ -75,7 +75,7 @@ values."
            mu4e-enable-notifications t
            mu4e-enable-mode-line t)
      gnus
-     notmuch
+     ;; notmuch
      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
      ;; (shell :variables
@@ -417,11 +417,16 @@ you should place your code here."
   (let ((gnus-config "~/Maildir/config/gnus-config.el"))
     (when (file-exists-p gnus-config)
       (load-file gnus-config)))
+  ;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; ;; notmuch
+  ;; (let ((notmuch-config "~/Maildir/config/notmuch-config.el"))
+  ;;   (when (file-exists-p notmuch-config)
+  ;;     (load-file notmuch-config)))
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  ;; notmuch
-  (let ((notmuch-config "~/Maildir/config/notmuch-config.el"))
-    (when (file-exists-p notmuch-config)
-      (load-file notmuch-config)))
+  ;; mutt
+  (let ((mutt-config "~/Maildir/config/mutt-config.el"))
+    (when (file-exists-p mutt-config)
+      (load-file mutt-config)))
   )
 
 ;; Do not write anything past this comment. This is where Emacs will
