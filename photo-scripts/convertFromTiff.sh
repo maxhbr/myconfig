@@ -10,7 +10,12 @@ untiffFile() {
     if [[ -f "$pngFile" ]]; then
         echo "ERROR: the file $pngFile already exists!"
     else
-        convert "$file" "$pngFile"
+        # see: https://stackoverflow.com/questions/27267073/imagemagick-lossless-max-compression-for-png
+        convert -depth 24 \
+                -define png:compression-filter=2 \
+                -define png:compression-level=9 \
+                -define png:compression-strategy=1 \
+                "$file" "$pngFile"
     fi
 }
 
