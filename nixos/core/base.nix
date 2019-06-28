@@ -72,6 +72,7 @@
       cryptsetup
       lsof
       psmisc # contains: killall, pstree
+      lm_sensors
 
       #others:
       pmount fuse
