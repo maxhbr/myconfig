@@ -11,8 +11,13 @@
   ...
 }@attrs:
 let
-  mergeInputs = name: lib.concatLists (lib.catAttrs name
-    ([attrs] ++ inputsFrom));
+  mergeInputs = name:
+    let
+      op = item: sum: sum ++ item."${name}" or [];
+      nul = [];
+      list = [attrs] ++ inputsFrom;
+    in
+      lib.foldr op nul list;
 
   rest = builtins.removeAttrs attrs [
     "inputsFrom"
@@ -20,7 +25,6 @@ let
     "nativeBuildInputs"
     "propagatedBuildInputs"
     "propagatedNativeBuildInputs"
-    "shellHook"
   ];
 in
 
@@ -32,9 +36,6 @@ stdenv.mkDerivation ({
   nativeBuildInputs = mergeInputs "nativeBuildInputs";
   propagatedBuildInputs = mergeInputs "propagatedBuildInputs";
   propagatedNativeBuildInputs = mergeInputs "propagatedNativeBuildInputs";
-
-  shellHook = lib.concatStringsSep "\n" (lib.catAttrs "shellHook"
-    (lib.reverseList inputsFrom ++ [attrs]));
 
   nobuildPhase = ''
     echo
