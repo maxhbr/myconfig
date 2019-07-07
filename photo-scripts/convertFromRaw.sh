@@ -27,11 +27,11 @@ fi
 if [[ "$1" == "-l" ]]; then
     shift
     echo "Using linear color space"
-    opts="-4"
+    opts="-4 -W"
     # Linear 16-bit, same as -6 -W -g 1 1
 elif [[ "$1" == "-default" ]]; then
     echo "Using default color space"
-    opts=""
+    opts="-W"
 else
     echo "Using sRGB color space"
     opts="-6 -W -g 2.4 12.92"
