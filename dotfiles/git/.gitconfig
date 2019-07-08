@@ -18,12 +18,12 @@
     chunkammend = commit --patch --amend
     cma         = commit -s -am
     cfa         = commit -a --fixup
-    cfa0         = commit -a --fixup HEAD
-    cfa1         = commit -a --fixup HEAD~
-    cfa2         = commit -a --fixup HEAD~2
-    cfa3         = commit -a --fixup HEAD~3
-    cfa4         = commit -a --fixup HEAD~4
-    cfa5         = commit -a --fixup
+    cfa0        = commit -a --fixup HEAD
+    cfa1        = commit -a --fixup HEAD~
+    cfa2        = commit -a --fixup HEAD~2
+    cfa3        = commit -a --fixup HEAD~3
+    cfa4        = commit -a --fixup HEAD~4
+    cfa5        = commit -a --fixup
     ca          = commit -s --amend
     caa         = commit -s --amend -a
     cac         = commit -s --patch --amend
@@ -36,9 +36,9 @@
 	  up          = "!git remote update -p; git merge --ff-only @{u}"
     cp          = cherry-pick
 
-	  pushb       = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git push \"$@\" \"$branchname\"; fi; }; f"
-	  pushbf       = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git push \"$@\" \"+$branchname\"; fi; }; f"
-	  pullb       = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git pull \"$@\" \"$branchname\"; fi; }; f"
+	  pushb       = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git push \"${1:-origin}\" \"$branchname\"; fi; }; f"
+	  pushbf      = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git push \"${1:-origin}\" \"+$branchname\"; fi; }; f"
+	  pullb       = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git pull \"${1:-origin}\" \"$branchname\"; fi; }; f"
 
     d           = diff
 	  dm          = diff master
