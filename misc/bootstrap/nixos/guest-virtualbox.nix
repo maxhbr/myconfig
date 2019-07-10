@@ -5,15 +5,12 @@
 #
 
 {
-
   # Use the GRUB 2 boot loader.
   boot.loader.grub.enable = true;
   boot.loader.grub.version = 2;
   boot.loader.grub.device = "/dev/sda";
 
-  # load missing module (should be fixed by 14.02 propper)
-  boot.kernelModules = [ "vboxsf" ];
-
+  # boot.kernelModules = [ "vboxsf" ];
   virtualisation.virtualbox.guest.x11 = true;
 
   # Enable the OpenSSH daemon.
@@ -25,5 +22,4 @@
   # Use the old ethX naming system for the moment.
   # http://www.freedesktop.org/wiki/Software/systemd/PredictableNetworkInterfaceNames/
   networking.usePredictableInterfaceNames = false;
-
 }
