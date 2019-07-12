@@ -6,7 +6,7 @@ with pkgs; [
   photo-scripts
   gphoto2 gphoto2fs
 
-  unstable.gimp-with-plugins
+  gimp-with-plugins
   rawtherapee unstable.darktable
   unstable.geeqie unstable.gthumb
   # krita

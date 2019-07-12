@@ -54,12 +54,12 @@ upgrade() {
          NIX_CURL_FLAGS='--retry=1000' \
          nixos-rebuild \
              --show-trace --keep-failed \
-             -I myconfigPath=$myconfigDir \
-             -I nixpkgs=$nixpkgsDir \
-             -I nixos-config=$nixosConfigDir \
              --upgrade \
+             -I myconfigPath=$myconfigDir \
+             -I nixos-config=$nixosConfigDir \
              $args \
              --fallback ${NIXOS_REBUILD_CMD:-switch}
+             #-I nixpkgs=$nixpkgsDir \
     logH3 "nix-rebuild" "declerative rebuild of nix userspace environment"
     ./nixos/userPackages/bin/nix-rebuild.sh
 }

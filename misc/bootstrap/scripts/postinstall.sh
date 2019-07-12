@@ -14,6 +14,7 @@ sed -i '/mhuber/d' /etc/nixos/configuration.old.nix
 git config user.email "${USER}@${hostName}"
 git config user.name "${USER}"
 
+export NIXPKGS_ALLOW_UNFREE=1
 MYCONFIG_ARGS="--fast" nix/default.sh
 MYCONFIG_ARGS="--fast" NIXOS_REBUILD_CMD="boot" nixos/default.sh
 

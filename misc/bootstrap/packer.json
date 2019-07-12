@@ -1,16 +1,35 @@
 {
     "builders": [
         {
-            "type": "virtualbox-iso",
+            "type": "qemu",
+            "output_directory": "qemu_out",
+            "shutdown_command": "sudo -S shutdown -P now",
+            "disk_size": 40960,
+            "memory": 8192,
+            "format": "qcow2",
+            "accelerator": "kvm",
+            "ssh_username": "root",
+            "ssh_private_key_file": "keys/vagrant.key",
+            "ssh_timeout": "20m",
+            "vm_name": "myconfig_bootstrap_test",
+            "net_device": "virtio-net",
+            "disk_interface": "virtio",
+            "headless": true,
+
+            "iso_url": "https://releases.nixos.org/nixos/19.03/nixos-19.03.173068.9ec7625cee5/nixos-minimal-19.03.173068.9ec7625cee5-x86_64-linux.iso",
+            "iso_checksum": "42dfcb781956c2bba809212fbc214bb2b4284bb716ec35edf72713953cb3f613",
+            "http_directory": "./../../",
+            "iso_checksum_type": "sha256",
+
             "boot_wait": "40s",
             "boot_command": [
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/scripts/bootstrap-grub.sh > /root/bootstrap.sh<enter><wait>",
                 "chmod +x /root/bootstrap.sh<enter>",
 
-                "BOOTSTRAP=YES /root/bootstrap.sh /dev/sda && \\<enter>",
+                "BOOTSTRAP=YES /root/bootstrap.sh /dev/vda && \\<enter>",
 
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/configuration.nix |tee /mnt/etc/nixos/configuration.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/guest-virtualbox.nix |tee /mnt/etc/nixos/guest.nix && \\<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/guest-qemu.nix |tee /mnt/etc/nixos/guest.nix && \\<enter>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/users-vagrant.nix |tee /mnt/etc/nixos/users.nix && \\<enter>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/vagrant.nix |tee /mnt/etc/nixos/vagrant.nix && \\<enter>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/nixos/core/mhuber.nix |tee /mnt/etc/nixos/mhuber.nix && \\<enter>",
@@ -18,21 +37,6 @@
                 "nixos-install --no-root-passwd && ",
 
                 "reboot<enter>"
-            ],
-            "guest_additions_mode": "disable",
-            "guest_os_type": "Linux_64",
-            "http_directory": "./../../",
-            "iso_url": "https://releases.nixos.org/nixos/19.03/nixos-19.03.173068.9ec7625cee5/nixos-minimal-19.03.173068.9ec7625cee5-x86_64-linux.iso",
-            "iso_checksum": "42dfcb781956c2bba809212fbc214bb2b4284bb716ec35edf72713953cb3f613",
-            "iso_checksum_type": "sha256",
-            "shutdown_command": "sudo shutdown -h now",
-            "ssh_username": "root",
-            "ssh_private_key_file": "keys/vagrant.key",
-            "ssh_wait_timeout": "20m",
-            "virtualbox_version_file": ".vbox_version",
-            "vboxmanage": [
-                ["modifyvm", "{{.Name}}", "--memory", "8192"],
-                ["modifyvm", "{{.Name}}", "--cpus", "4"]
             ]
         }
     ],
@@ -69,9 +73,15 @@
             ]
         }
     ],
-    "post-processors": [{
-        "type": "vagrant",
-        "output": "myconfig-{{.Provider}}.box"
-    }]
+    "post-processors": [
+        {
+            "type": "compress",
+            "format": "tar.gz"
+        },
+        {
+            "type": "vagrant",
+            "output": "myconfig-{{.Provider}}.box"
+        }
+    ]
 }
 

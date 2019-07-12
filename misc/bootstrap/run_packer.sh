@@ -10,11 +10,11 @@ cd "$ROOT"
 echo "##########################################################################"
 echo "## Build"
 rm myconfig-virtualbox.box || true
-time packer build -on-error=ask -only=virtualbox-iso packer.json
-du -h myconfig-virtualbox.box
+time packer build -on-error=ask -only=qemu packer.json
+# du -h myconfig-virtualbox.box
 
-echo "##########################################################################"
-echo "## To Vagrant"
-vagrant box remove myconfig || true
-time vagrant box add myconfig myconfig-virtualbox.box
-# time vagrant plugin install vagrant-nixos
+# echo "##########################################################################"
+# echo "## To Vagrant"
+# vagrant box remove myconfig || true
+# time vagrant box add myconfig myconfig-virtualbox.box
+# # time vagrant plugin install vagrant-nixos
