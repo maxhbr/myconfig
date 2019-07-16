@@ -4,7 +4,7 @@
 {
   options = {
     myconfig.roles.games = {
-      enable = lib.mkEnableOption "Games role";
+      enable = (lib.mkEnableOption "Games role") && config.services.xserver.enable;
     };
   };
 

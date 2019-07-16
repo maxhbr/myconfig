@@ -1,31 +1,129 @@
-# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2017-2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ hostName, hostId, otherImports ? [], ... }:
+{ config, pkgs, lib, ... }:
 
 {
-  imports = otherImports ++ [
-    ./base.nix
-    ../roles
-  ] ++ (if builtins.pathExists (../machines + "/${hostName}.nix")
-        then [(../machines + "/${hostName}.nix")]
-        else []);
+  imports = [
+    ./oh-my-zsh.nix
+  ];
 
-  networking.hostId = "${hostId}";
-  networking.hostName = "${hostName}";
-
-  boot.kernel.sysctl = {
-    # "fs.inotify.max_user_watches" = 524288;
-    "vm.swappiness" = 1;
+  boot = {
+    kernelPackages = pkgs.linuxPackages_latest;
+    kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
+    cleanTmpDir = true;
+    # tmpOnTmpfs = true;
   };
 
-  users= {
-    extraUsers.myconfig = {
-      isNormalUser = false;
-      group = "myconfig";
-      uid = 999;
-      home = "/home/myconfig";
-      createHome = true;
+  networking = {
+    networkmanager.enable = true;
+    firewall = {
+      enable = true;
+      # allowedTCPPorts = [ 80 443 ];
+      allowPing = false;
     };
-    extraGroups.myconfig.gid = 999;
   };
+
+  environment = {
+    variables = {
+      TMP = "/tmp";
+      BROWSER = "${pkgs.chromium}/bin/chromium-browser";
+      EDITOR = "${pkgs.myconfig.scripts}/bin/ec -t";
+    };
+    interactiveShellInit = ''
+      alias upg='~/myconfig/rebuild.sh'
+      alias vim="${pkgs.myconfig.scripts}/bin/ec -t"
+      alias emacs="${pkgs.myconfig.scripts}/bin/ec"
+    '';
+    # shellInit = ''
+    # '';
+    # loginShellInit = ''
+    # '';
+    systemPackages = with pkgs; [
+      kbd
+
+      # core:
+      wget curl
+      git git-lfs
+      unzip
+      tree
+      stow
+      rlwrap
+
+      # cli:
+      ranger
+      emacs vim
+      elinks w3m
+      tmux
+      manpages
+      # taskwarrior
+      pass
+      ag
+      file
+
+      # admin:
+      htop iftop iptraf-ng iotop bmon s-tui
+      mtr bind bridge-utils
+      pwgen # unstable.mkpasswd
+      usbutils
+      sysstat
+      tcpdump
+      cryptsetup
+      lsof
+      psmisc # contains: killall, pstree
+      lm_sensors
+
+      #others:
+      pmount fuse
+      rsnapshot
+
+      # my backup tool
+      borgbackup
+    ];
+  };
+
+  nix = {
+    useSandbox = true;
+    readOnlyStore = true;
+
+    binaryCachePublicKeys = [
+       "hydra.snabb.co-1:zPzKSJ1mynGtYEVbUR0QVZf9TLcaygz/OyzHlWo5AMM=" # snabb.co
+    ];
+    trustedBinaryCaches = [
+      "https://cache.nixos.org" "https://hydra.snabb.co"
+    ];
+    binaryCaches = [
+      "https://cache.nixos.org" "https://hydra.snabb.co"
+    ];
+
+    extraOptions = ''
+      gc-keep-outputs = true
+      gc-keep-derivations = true
+      auto-optimise-store = true
+      binary-caches-parallel-connections = 10
+    '';
+  };
+
+  system.activationScripts.media = ''
+    mkdir -m 0755 -p /media /share
+  '';
+
+  services = {
+    nixosManual.showManual = true;
+    acpid.enable = true;
+    ntp.enable = true;
+    nscd.enable = true;
+  };
+
+  security = {
+    sudo.extraConfig = ''
+      ALL  ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/systemctl suspend
+      ALL  ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/systemctl reboot
+      ALL  ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/systemctl poweroff
+    '';
+    wrappers = {
+      pmount.source  = "${pkgs.pmount}/bin/pmount";
+      pumount.source  = "${pkgs.pmount}/bin/pumount";
+    };
+  };
+  programs.ssh.startAgent = true;
 }

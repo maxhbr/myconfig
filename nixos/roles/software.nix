@@ -46,10 +46,10 @@
 ################################################################################
     { # wine
       config = lib.mkIf config.myconfig.roles.wine.enable {
-        environment.systemPackages = with pkgs; [
-          wineStaging
-          winetricks
-        ];
+        environment.systemPackages = if config.services.xserver.enable then
+            with pkgs; [wineStaging winetricks];
+          else
+            []
       };
     }
 ################################################################################
