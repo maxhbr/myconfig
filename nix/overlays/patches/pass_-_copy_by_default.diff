@@ -1,0 +1,34 @@
+diff --git a/src/password-store.sh b/src/password-store.sh
+index 7264ffc..2230045 100755
+--- a/src/password-store.sh
++++ b/src/password-store.sh
+@@ -265,8 +265,10 @@ cmd_usage() {
+ 	    $PROGRAM find pass-names...
+ 	    	List passwords that match pass-names.
+ 	    $PROGRAM [show] [--clip[=line-number],-c[line-number]] pass-name
+-	        Show existing password and optionally put it on the clipboard.
++	        Put existing password on the clipboard.
+ 	        If put on the clipboard, it will be cleared in $CLIP_TIME seconds.
++	    $PROGRAM [show] [--print[=line-number],-p[line-number]] pass-name
++	        Show existing password on stdout.
+ 	    $PROGRAM grep [GREPOPTIONS] search-string
+ 	        Search for password files containing search-string when decrypted.
+ 	    $PROGRAM insert [--echo,-e | --multiline,-m] [--force,-f] pass-name
+@@ -346,13 +348,14 @@ cmd_init() {
+ }
+ 
+ cmd_show() {
+-	local opts selected_line clip=0 qrcode=0
+-	opts="$($GETOPT -o q::c:: -l qrcode::,clip:: -n "$PROGRAM" -- "$@")"
++	local opts selected_line=0 clip=1 qrcode=0
++	opts="$($GETOPT -o q::c::p:: -l qrcode::,clip::,clip:: -n "$PROGRAM" -- "$@")"
+ 	local err=$?
+ 	eval set -- "$opts"
+ 	while true; do case $1 in
+-		-q|--qrcode) qrcode=1; selected_line="${2:-1}"; shift 2 ;;
++		-q|--qrcode) clip=0; qrcode=1; selected_line="${2:-1}"; shift 2 ;;
+ 		-c|--clip) clip=1; selected_line="${2:-1}"; shift 2 ;;
++		-p|--print) clip=0; unset selected_line; shift 2 ;;
+ 		--) shift; break ;;
+ 	esac done
+ 
