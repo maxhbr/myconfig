@@ -13,7 +13,7 @@
   imports = [
     ./notebook-generic.nix
     ./ssd.nix
-    ./highres.nix
+    # ./highres.nix
     ./wwan.nix
     ./nixos-hardware/common/cpu/intel
     ./nixos-hardware/common/pc/laptop
