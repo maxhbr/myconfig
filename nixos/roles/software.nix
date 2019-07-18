@@ -10,9 +10,6 @@
     myconfig.roles.imagework = {
       enable = lib.mkEnableOption "Imagework role";
     };
-    myconfig.roles.wine = {
-      enable = lib.mkEnableOption "Wine role";
-    };
     myconfig.roles.tex = {
       enable = lib.mkEnableOption "Tex role";
     };
@@ -41,15 +38,6 @@
           ghc hlint pandoc
           hdevtools
         ]);
-      };
-    }
-################################################################################
-    { # wine
-      config = lib.mkIf config.myconfig.roles.wine.enable {
-        environment.systemPackages = with pkgs; [
-          wineStaging
-          winetricks
-        ];
       };
     }
 ################################################################################
