@@ -5,6 +5,6 @@
 pkgs:
 with pkgs; [
   # see: https://nixos.wiki/wiki/Wine
-  (wine.override { wineBuild = "wine64"; })
-  (winetricks.override { wine = (wine.override { wineBuild = "wine64"; }); })
+  (wine.override { wineBuild = "wineWow"; })
+  (winetricks.override { wine = (wine.override { wineBuild = "wineWow"; }); })
 ]

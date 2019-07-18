@@ -12,7 +12,6 @@ gate() {
 
 deploy() {
     logH3 "nix-rebuild" "declerative rebuild of nix userspace environment"
-    set -x
     nix-env $NIX_PATH_ARGS \
         --set -f "$(readlink -f "$(dirname ${BASH_SOURCE[0]})")" --argstr name "$(whoami)-user-env-$(date -I)"
 }

@@ -13,7 +13,7 @@ fi
 
 set -x
 
-if [[ ! -f  $file]]; then
+if [[ ! -f  $file ]]; then
     sudo fallocate -l $size $file
     sudo chmod 600 $file
     sudo mkswap $file
