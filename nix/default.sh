@@ -22,9 +22,9 @@ deploy() {
 cleanup() {
     if [ "$((RANDOM%100))" -gt 90 ]; then
         echo "* nix-env --delete-generations 30d ..."
-        $(buildNixCmd) \
+        nix-env $NIX_PATH_ARGS \
             --delete-generations 30d
-        sudo $(buildNixCmd) \
+        sudo nix-env $NIX_PATH_ARGS \
             --delete-generations 30d
     else
         echo "* $(tput bold)do not$(tput sgr0) nix-env --delete-generations 30d ..."

@@ -58,14 +58,9 @@ logERR() {
     echo "$(tput setaf 1)$(tput bold)*** ERR: $text$(tput sgr0)"
 }
 
-buildNixCmd() {
-    echo"nix-env $NIX_PATH_ARGS --file <nixpkgs>"
-}
-
 export -f have
 export -f logH1
 export -f logH2
 export -f logH3
 export -f logINFO
 export -f logERR
-export -f buildNixCmd
