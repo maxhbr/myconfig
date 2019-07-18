@@ -36,7 +36,7 @@ wrapIntoTmux() {
                 exit 1
             }
             tmux -2 new-session -s $TMUX_NAME \
-                 "command echo \"... wrapped into tmux\"; $REBUILD_SH $@; read -t 1 -n 10000 discard; read -n 1 -s -r -p \"Press any key to continue\"" \; \
+                 "command echo \"... wrapped into tmux\"; NIX_PATH=\"$NIX_PATH\" $REBUILD_SH $@; read -t 1 -n 10000 discard; read -n 1 -s -r -p \"Press any key to continue\"" \; \
                  set-option status-left "rebuild.sh"\; \
                  set-option status-right "started at $(date) "\; \
                  set set-titles-string "${TMUX_NAME}@tmux" \
@@ -199,7 +199,7 @@ setupExitTrap() {
 
 ###########################################################################
 # run scripts #############################################################
-declare -a folders=("./nix" "./nixos" "./dotfiles" "./xmonad")
+declare -a folders=("./nix" "./nixos" "./dotfiles" "./xmonad" "./userPackages")
 declare -a commands=("prepare" "deploy" "upgrade" "cleanup")
 for cmd in "${commands[@]}"; do
     logH1 "handle:" "$cmd"

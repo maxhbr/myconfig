@@ -4,11 +4,11 @@
 {
   options = {
     myconfig.roles.games = {
-      enable = (lib.mkEnableOption "Games role") && config.services.xserver.enable;
+      enable = (lib.mkEnableOption "Games role");
     };
   };
 
-  config = lib.mkIf config.myconfig.roles.games.enable {
+  config = lib.mkIf (config.myconfig.roles.games.enable && config.services.xserver.enable) {
     environment.systemPackages = with pkgs.unstable; [
       steam
     ];

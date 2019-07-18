@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: MIT
 pkgs:
 with pkgs; [
-  # support both 32- and 64-bit applications
-  (wine.override { wineBuild = "wineWow"; })
-  # (winetricks.override { wine = wineWowPackages.staging; })
+  # see: https://nixos.wiki/wiki/Wine
+  (wine.override { wineBuild = "wine64"; })
+  (winetricks.override { wine = (wine.override { wineBuild = "wine64"; }); })
 ]

@@ -4,6 +4,7 @@
 
 {
   imports = [
+    ./mhuber.nix
     ./oh-my-zsh.nix
   ];
 

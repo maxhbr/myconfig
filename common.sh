@@ -7,14 +7,15 @@ nixStableChannel=nixos-19.03
 
 export myconfigDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 export nixConfigDir="$myconfigDir/nix"
-# export nixpkgsDir="$nixConfigDir/nixpkgs"
-# export nixpkgsUnstableDir="$nixConfigDir/nixpkgs-unstable"
-# export overlaysDir="$nixConfigDir/overlays"
-# export nixosConfigDir="$myconfigDir/nixos"
+export nixpkgsDir="$nixConfigDir/nixpkgs"
+export nixpkgsUnstableDir="$nixConfigDir/nixpkgs-unstable"
+export overlaysDir="$nixConfigDir/overlays"
+export nixosConfigDir="$myconfigDir/nixos"
 
-NIX_PATH="channel:$nixStableChannel"
-# NIX_PATH="$NIX_PATH:nixpkgs-overlays=$overlaysDir:nixos-config=$nixosConfigDir:myconfig=$myconfigDir"
+NIX_PATH="channel:$nixStableChannel:nixpkgs-overlays=$overlaysDir:nixos-config=$nixosConfigDir:myconfig=$myconfigDir"
+NIX_PATH_ARGS="-I nixpkgs=channel:$nixStableChannel -I nixpkgs-overlays=$overlaysDir -I nixos-config=$nixosConfigDir -I myconfig=$myconfigDir"
 export NIX_PATH
+export NIX_PATH_ARGS
 
 ###########################################################################
 ##  function  #############################################################
@@ -57,9 +58,14 @@ logERR() {
     echo "$(tput setaf 1)$(tput bold)*** ERR: $text$(tput sgr0)"
 }
 
+buildNixCmd() {
+    echo"nix-env $NIX_PATH_ARGS --file <nixpkgs>"
+}
+
 export -f have
 export -f logH1
 export -f logH2
 export -f logH3
 export -f logINFO
 export -f logERR
+export -f buildNixCmd

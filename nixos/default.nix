@@ -1,6 +1,6 @@
 # Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, ... }:
+{ config, pkgs, ... }:
 
 let
   # echo -n "HOSTNAME" | sudo tee /etc/nixos/hostname
@@ -8,7 +8,6 @@ let
   # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done | sudo tee /etc/nixos/hostid
   hostId = "${builtins.readFile /etc/nixos/hostid}";
 in {
-  inherit config;
   networking.hostId = "${hostId}";
   networking.hostName = "${hostName}";
   system.copySystemConfiguration = true;
@@ -41,7 +40,7 @@ in {
   ]
   # the machine specific configuration is placed at ./machines/<hostName>.nix
     ++ (let
-          path = (./machines + "/${hostName}.nix")
+          path = (./machines + "/${hostName}.nix");
         in if builtins.pathExists path
            then [path]
            else [])
