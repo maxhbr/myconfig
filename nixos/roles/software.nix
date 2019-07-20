@@ -10,6 +10,9 @@
     myconfig.roles.imagework = {
       enable = lib.mkEnableOption "Imagework role";
     };
+    myconfig.roles.wine = {
+     enable = lib.mkEnableOption "Wine role";
+    };
     myconfig.roles.tex = {
       enable = lib.mkEnableOption "Tex role";
     };
@@ -38,6 +41,21 @@
           ghc hlint pandoc
           hdevtools
         ]);
+      };
+    }
+  ################################################################################
+    { # wine
+      config = let
+          wineCfg = {
+            wineBuild = "wineWow";
+            gstreamerSupport = false;
+          };
+        in lib.mkIf config.myconfig.roles.wine.enable {
+        environment.systemPackages = with pkgs; [
+          (wine.override wineCfg)
+          (winetricks.override {wine = wine.override wineCfg;})
+        ];
+        hardware.opengl.driSupport32Bit = true;
       };
     }
 ################################################################################
