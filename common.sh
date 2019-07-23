@@ -11,9 +11,14 @@ export nixpkgsDir="$nixConfigDir/nixpkgs"
 export nixpkgsUnstableDir="$nixConfigDir/nixpkgs-unstable"
 export overlaysDir="$nixConfigDir/overlays"
 export nixosConfigDir="$myconfigDir/nixos"
+if [[ -f "$nixpkgsDir/default.nix" ]]; then
+    nixpkgs="$nixpkgsDir"
+else
+    nixpkgs="channel:$nixStableChannel"
+fi
 
-NIX_PATH="channel:$nixStableChannel:nixpkgs-overlays=$overlaysDir:nixos-config=$nixosConfigDir:myconfig=$myconfigDir"
-NIX_PATH_ARGS="-I nixpkgs=channel:$nixStableChannel -I nixpkgs-overlays=$overlaysDir -I nixos-config=$nixosConfigDir -I myconfig=$myconfigDir"
+NIX_PATH="nixpkgs=$nixpkgs:nixpkgs-overlays=$overlaysDir:nixos-config=$nixosConfigDir:myconfig=$myconfigDir"
+NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixpkgs-overlays=$overlaysDir -I nixos-config=$nixosConfigDir -I myconfig=$myconfigDir"
 export NIX_PATH
 export NIX_PATH_ARGS
 
