@@ -10,6 +10,56 @@ gate() {
     nix-env --version &> /dev/null
 }
 
+addRemotesIfNecessary() {
+    cd $myconfigDir
+    local remotes=$(git remote)
+    if [[ "$remotes" != *'NixOS-nixpkgs-channels'* ]]; then
+        git remote add NixOS-nixpkgs-channels https://github.com/NixOS/nixpkgs-channels
+    fi
+}
+
+handleChannelAsSubtree() {
+    local dir=nix/$1
+    local channel=$2
+
+    if [[ "$MYCONFIG_ARGS" == *"--fast"* ]]; then
+        echo "skip handling $channel (in $dir)"
+    else
+        addRemotesIfNecessary
+
+        logINFO "the channel $channel was last updated $(git log --format="%cr" remotes/NixOS-nixpkgs-channels/$channel -1)"
+
+        cd $myconfigDir
+        git fetch NixOS-nixpkgs-channels -- $channel
+        if [ ! -f "$dir/default.nix" ]; then
+            git subtree add --prefix $dir NixOS-nixpkgs-channels $channel --squash
+        else
+            if git diff-index --quiet HEAD --; then
+                git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
+            else
+                logERR "uncommitted changes, do not update $channel"
+                # logINFO "stash local changes to allow subtree pull"
+                # git stash push -m "autostash for nix/default.sh"
+                # git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
+                # git stash pop "stash@{0}" 1> /dev/null
+            fi
+        fi
+    fi
+}
+
+prepare() {
+    handleChannelAsSubtree "nixpkgs" "$nixStableChannel"
+    $nixConfigDir/overlays/nixpkgs-unstable/default.sh
+
+    nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixpkgs-overlays=$overlaysDir\" \"nixos-config=$nixosConfigDir\"]; }"
+    nix_path_file="/etc/nixos/imports/nixPath.nix"
+    if [[ "$(cat $nix_path_file 2>/dev/null)" != *"$nix_path_string"* ]]; then
+        sudo mkdir -p /etc/nixos/imports
+        echo $nix_path_string |
+            sudo tee $nix_path_file
+    fi
+}
+
 deploy() {
     configTarget=/etc/nix/nixpkgs-config.nix
     if ! cmp "$nixConfigDir/nixpkgs-config.nix" $configTarget >/dev/null 2>&1; then
@@ -37,6 +87,7 @@ gate || {
     exit 0
 }
 if [ $# -eq 0 ]; then
+    prepare
     deploy
     cleanup
 else
