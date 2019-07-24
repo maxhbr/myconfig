@@ -17,7 +17,7 @@ set -e
 
 if [[ "$1" == "--help" ]]; then
     cat<<EOF
-  $0 [-wb wb-raw-img] [-l|-default] [-q0|-q1|-q2|-q3] raw [raw [raw ...]]
+  $0 [-wb wb-raw-img|--skip1] [-l|-default] [-q0|-q1|-q2|-q3] raw [raw [raw ...]]
 EOF
     exit 0
 fi
@@ -52,6 +52,9 @@ calculateWB() {
 if [[ "$1" == "-wb" ]]; then
     shift
     opts="-r $(calculateWB "$1")"
+    shift
+elif [[ $1 == "--skip1" ]]; then
+    shift
     shift
 else
     # use the whitebalance from the raw image

@@ -17,7 +17,7 @@ set -e
 case $1 in
     --help)
         cat<<EOF
-  $0 [--proj1|--proj2|...] [--opts1|--opts2|...] [--reverse] img [img [img ...]]
+  $0 [--proj1|--proj2|...] [--opts1|--opts2|...] [--reverse|--skip1] img [img [img ...]]
 EOF
         exit 0
         ;;
@@ -67,6 +67,10 @@ if [[ $1 == "--reverse" ]]; then
         (( min++, max-- ))
     done
 else
+    if [[ $1 == "--skip1" ]]; then
+        shift
+        shift
+    fi
     files=( "$@" )
 fi
 

@@ -12,7 +12,7 @@ set -euo pipefail
 
 if [[ "$1" == "--help" ]]; then
     cat<<EOF
-  $0 img [img [img ...]]
+  $0 [--skip1] img [img [img ...]]
 EOF
     exit 0
 fi
@@ -94,5 +94,10 @@ main() {
         exit 1
     fi
 }
+
+if [[ $1 == "--skip1" ]]; then
+    shift
+    shift
+fi
 
 main $@

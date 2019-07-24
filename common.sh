@@ -23,7 +23,7 @@ export NIX_PATH
 export NIX_PATH_ARGS
 
 ###########################################################################
-##  function  #############################################################
+##  functions  ############################################################
 ###########################################################################
 
 have() { type "$1" &> /dev/null; }
@@ -31,36 +31,36 @@ have() { type "$1" &> /dev/null; }
 logH1() {
     local prefix=$1
     local text=$2
-    echo
-    echo "$(tput bold)****************************************************************************"
-    echo "***$(tput sgr0) $prefix $(tput bold)$text$(tput sgr0)"
+    >&2 echo
+    >&2 echo "$(tput bold)****************************************************************************"
+    >&2 echo "***$(tput sgr0) $prefix $(tput bold)$text$(tput sgr0)"
 }
 
 logH2() {
     local prefix=$1
     local text=$2
-    echo "$(tput bold)***$(tput sgr0) $prefix $(tput bold)$text$(tput sgr0)"
+    >&2 echo "$(tput bold)***$(tput sgr0) $prefix $(tput bold)$text$(tput sgr0)"
 }
 
 logH3() {
     local prefix=$1
     local text=$2
-    echo "*** $prefix $(tput bold)$text$(tput sgr0)"
+    >&2 echo "*** $prefix $(tput bold)$text$(tput sgr0)"
 }
 
 logINFO() {
     local text=$1
-    echo "$(tput setaf 6)$(tput bold)*** INFO: $text$(tput sgr0)"
+    >&2 echo "$(tput setaf 6)$(tput bold)*** INFO: $text$(tput sgr0)"
 }
 
 logWARN() {
     local text=$1
-    echo "$(tput setaf 3)$(tput bold)*** WARN: $text$(tput sgr0)"
+    >&2 echo "$(tput setaf 3)$(tput bold)*** WARN: $text$(tput sgr0)"
 }
 
 logERR() {
     local text=$1
-    echo "$(tput setaf 1)$(tput bold)*** ERR: $text$(tput sgr0)"
+    >&2 echo "$(tput setaf 1)$(tput bold)*** ERR: $text$(tput sgr0)"
 }
 
 export -f have
