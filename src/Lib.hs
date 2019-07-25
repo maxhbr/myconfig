@@ -13,11 +13,15 @@ import qualified Data.Text.IO as Text
 
 import MyPhoto.MyPhoto
 import MyPhoto.Actions.UnRAW as X
+import MyPhoto.Actions.UnTiff as X
 import MyPhoto.Actions.Align as X
 import MyPhoto.Actions.Stack as X
 
 actions :: Map String PrePAction
-actions = Map.fromList [("unraw", unRAW), ("align", align), ("stack", stack)]
+actions = Map.fromList [ ("unraw", unRAW)
+                       , ("untiff", unTiff)
+                       , ("align", align)
+                       , ("stack", stack)]
 
 type ComposeActionsState = (PAction, [String], Maybe PrePAction)
 composeActions :: [String] -> (PAction, [Img])
@@ -32,7 +36,8 @@ composeActions = let
       Just preAct2 -> (act <> preAct opts, [], Just preAct2)
       Nothing      -> (act, opts ++ [opt], Just preAct)
 
-  in (\case
+  in (\(act, imgs) -> (act <> logSeparator "Result:", imgs))
+     . (\case
          (act, imgs, Nothing) -> (act, imgs)
          (act, opts, Just preAct) -> (act <> preAct opts, []))
      . foldl composeActions' (mempty, [], Nothing)

@@ -24,6 +24,7 @@ dependencies:
 - text
 - containers
 - filepath
+- directory
 - transformers
 - process
 

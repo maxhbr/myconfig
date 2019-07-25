@@ -2,4 +2,4 @@ module MyPhoto.Actions.Stack
     ( stack
     ) where
 
-stack = udefined
+stack = undefined

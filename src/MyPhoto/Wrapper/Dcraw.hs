@@ -4,10 +4,6 @@ module MyPhoto.Wrapper.Dcraw
   , calculateWhitebalance
   ) where
 
-import           System.FilePath
-import           System.Console.GetOpt
-import           Control.Monad
-import           Data.Maybe (fromMaybe)
 import           Data.List (find, isPrefixOf)
 import           System.Process
 import           System.Exit
@@ -62,7 +58,7 @@ getImageSize img = let
         echo "$wb"
     }
 -}
-calculateWhitebalance :: FilePath -> IO String
+calculateWhitebalance :: FilePath -> IO [String]
 calculateWhitebalance wbImg = let
     multipliersPrefix = "multipliers "
     getDcrawWBArgs :: (Int, Int) -> [String]
@@ -81,6 +77,10 @@ calculateWhitebalance wbImg = let
     err <- hGetContents herr
     case exitCode of
       ExitSuccess -> case find (multipliersPrefix `isPrefixOf`) (lines err) of
-                       Just l  -> return (drop (length multipliersPrefix) l)
+                       Just l  -> let
+                         multipliers = words (drop (length multipliersPrefix) l)
+                         in do
+                           putStrLn ("multipliers: " ++ show multipliers)
+                           return multipliers
                        Nothing -> fail ("Failed to find multipliers in " ++ show err)
       _           -> fail ("Failed to calculate WB of " ++ wbImg ++ " with " ++ show exitCode)
