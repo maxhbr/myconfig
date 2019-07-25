@@ -2,4 +2,6 @@ module MyPhoto.Actions.Align
     ( align
     ) where
 
-align = undefined
+import MyPhoto.MyPhoto
+
+align args = mempty

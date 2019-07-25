@@ -10,16 +10,19 @@ import           Control.Monad
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
+import           System.Exit
 
 import MyPhoto.MyPhoto
 import MyPhoto.Actions.UnRAW as X
 import MyPhoto.Actions.UnTiff as X
+import MyPhoto.Actions.Crop as X
 import MyPhoto.Actions.Align as X
 import MyPhoto.Actions.Stack as X
 
 actions :: Map String PrePAction
 actions = Map.fromList [ ("unraw", unRAW)
                        , ("untiff", unTiff)
+                       , ("crop", crop)
                        , ("align", align)
                        , ("stack", stack)]
 
@@ -42,11 +45,28 @@ composeActions = let
          (act, opts, Just preAct) -> (act <> preAct opts, []))
      . foldl composeActions' (mempty, [], Nothing)
 
+help :: IO ()
+help = do
+  putStrLn "myphoto action [actArg [actArg ..]] [action [actArg [actArg ..]] ..] -- [img [img ...]]"
+  putStrLn ""
+  mapM_ (\(k,preAct) -> do
+            putStrLn ""
+            putStrLn k
+            runPAction (preAct ["-h"]) [] >>= \case
+              Left err -> putStrLn err
+              _        -> mempty
+            ) (Map.assocs actions)
+
 runMyPhoto :: IO ()
 runMyPhoto = do
   args <- getArgs
+
+  when (args == ["-h"]) $ do
+    help
+    exitSuccess
+
   let (act, imgs) = composeActions args
   result <- runPAction act imgs
   case result of
     Left err   -> putStrLn err
-    Right imgs -> mapM_ putStrLn imgs
+    Right imgs' -> mapM_ putStrLn imgs'

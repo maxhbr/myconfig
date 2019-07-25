@@ -2,4 +2,6 @@ module MyPhoto.Actions.Stack
     ( stack
     ) where
 
-stack = undefined
+import MyPhoto.MyPhoto
+
+stack args = mempty
