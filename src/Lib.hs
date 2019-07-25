@@ -13,15 +13,11 @@ import qualified Data.Text.IO as Text
 
 import MyPhoto.MyPhoto
 import MyPhoto.Actions.UnRAW as X
+import MyPhoto.Actions.Align as X
+import MyPhoto.Actions.Stack as X
 
 actions :: Map String PrePAction
-actions = Map.fromList [("unraw", unRAW)]
-
-{-
- - unraw -q1 -wb
- - align
- - -- img1 img2
- -}
+actions = Map.fromList [("unraw", unRAW), ("align", align), ("stack", stack)]
 
 type ComposeActionsState = (PAction, [String], Maybe PrePAction)
 composeActions :: [String] -> (PAction, [Img])
