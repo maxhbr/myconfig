@@ -34,15 +34,15 @@ composeActions = let
     composeActions' (act, opts, Nothing) opt = case opt `Map.lookup` actions of
       Just preAct -> (act, [], Just preAct) -- TODO: assert that otps were empty
       Nothing     -> (act, opts ++ [opt], Nothing)
-    composeActions' (act, opts, Just preAct) "--" = (act <> preAct opts, [], Nothing)
+    composeActions' (act, opts, Just preAct) "--" = (act <> logSeparator "" <> preAct opts, [], Nothing)
     composeActions' (act, opts, Just preAct) opt  = case opt `Map.lookup` actions of
-      Just preAct2 -> (act <> preAct opts, [], Just preAct2)
+      Just preAct2 -> (act <> logSeparator "" <> preAct opts, [], Just preAct2)
       Nothing      -> (act, opts ++ [opt], Just preAct)
 
-  in (\(act, imgs) -> (act <> logSeparator "Result:", imgs))
+  in (\(act, imgs) -> (act <> logSeparator "" <> logSeparator "Result:", imgs))
      . (\case
          (act, imgs, Nothing) -> (act, imgs)
-         (act, opts, Just preAct) -> (act <> preAct opts, []))
+         (act, opts, Just preAct) -> (act <> logSeparator "" <> preAct opts, []))
      . foldl composeActions' (mempty, [], Nothing)
 
 help :: IO ()
