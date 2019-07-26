@@ -2,5 +2,5 @@ resolver: lts-13.29
 packages:
 - .
 nix:
-  packages: [dcraw, enblend-enfuse, hugin, imagemagick, fgallery] 
+  packages: [dcraw, enblend-enfuse, hugin, imagemagick, fgallery, sxiv] 
 

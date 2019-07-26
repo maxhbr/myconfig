@@ -18,13 +18,18 @@ import MyPhoto.Actions.UnTiff as X
 import MyPhoto.Actions.Crop as X
 import MyPhoto.Actions.Align as X
 import MyPhoto.Actions.Stack as X
+import MyPhoto.Actions.Show as X
+import MyPhoto.Actions.Wait as X
 
 actions :: Map String PrePAction
 actions = Map.fromList [ ("unraw", unRAW)
                        , ("untiff", unTiff)
                        , ("crop", crop)
                        , ("align", align)
-                       , ("stack", stack)]
+                       , ("stack", stack)
+                       , ("wait", waitPAct)
+                       , ("show", showImgs)
+                       ]
 
 type ComposeActionsState = (PAction, [String], Maybe PrePAction)
 composeActions :: [String] -> (PAction, [Img])
