@@ -19,7 +19,11 @@ waitForSeconds s imgs = do
   threadDelay ms
   return (Right imgs)
 
+
+help :: String
+help = "wait [-s SECONDS]"
+
 waitPAct :: PrePAction
-waitPAct ["-h"] = undefined
+waitPAct ["-h"] = PAction (\_ -> pure (Left help))
 waitPAct [] = logSeparator "Wait for key" <> PAction waitForConfirm
 waitPAct ["-s", s] = logSeparator ("Wait for " ++ s ++ " seconds") <> PAction (waitForSeconds s)

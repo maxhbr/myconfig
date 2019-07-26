@@ -56,6 +56,7 @@ help = do
   putStrLn ""
   mapM_ (\(k,preAct) -> do
             putStrLn ""
+            putStrLn line
             putStrLn k
             runPAction (preAct ["-h"]) [] >>= \case
               Left err -> putStrLn err

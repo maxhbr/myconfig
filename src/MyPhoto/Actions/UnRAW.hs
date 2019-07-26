@@ -5,7 +5,7 @@ module MyPhoto.Actions.UnRAW
 import           System.FilePath
 import           System.Console.GetOpt
 import           Control.Monad
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (maybe)
 import           System.Process
 import           System.Exit
 
@@ -66,11 +66,10 @@ options =
       "graycard image used for whitebalance (otherwise whitebalance information in RAW is used)"
   , Option [] ["wb1"]
       (NoArg (\opts -> opts { optWhitebalance = WBFromFirstImage}))
-      "use first images as graycard image for whitebalance (otherwise whitebalance information in RAW is used)"
+      "use first image as graycard image for whitebalance (otherwise whitebalance information in RAW is used)"
   , Option ['q'] []
       (OptArg ((\f opts -> opts { optQuality = f })
-               . fromMaybe 3
-               . (fmap (read :: String -> Int)))
+               . maybe 3 (read :: String -> Int))
               "QUALITY_LEVEL")
       "set quality level"
   , Option ['l'] ["linearColorspace"]

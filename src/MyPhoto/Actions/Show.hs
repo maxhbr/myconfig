@@ -6,13 +6,13 @@ import           System.Process
 
 import MyPhoto.MyPhoto
 
-help :: String
-help = "show IMG [IMG ...]"
-
 showImgsImpl :: [Img] -> PActionBody
 showImgsImpl imgs = do
   createProcess (proc "sxiv" imgs)
   return (Right imgs)
+
+help :: String
+help = "show IMG [IMG ...]"
 
 showImgs :: PrePAction
 showImgs ["-h"] = PAction (\_ -> pure (Left help))
