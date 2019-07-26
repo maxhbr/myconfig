@@ -27,6 +27,8 @@ dependencies:
 - directory
 - transformers
 - process
+- temporary
+- unix
 
 library:
   source-dirs: src

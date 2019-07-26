@@ -25,6 +25,7 @@ unTiffImpl1 removeTiff img = let
            , "-define", "png:compression-strategy=1"]
     png = calculateUntiffedName img
   in do
+    putStrLn (img ++ " --> " ++ png)
     (_, _, _, pHandle) <- createProcess (proc "convert" (args ++ [img, png]))
     exitCode <- waitForProcess pHandle
     unless (exitCode == ExitSuccess) $

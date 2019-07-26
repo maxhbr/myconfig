@@ -27,6 +27,15 @@ logStr msg = PAction $
   \imgs -> do
     putStrLn msg
     return (Right imgs)
+
+line :: String
+line = "################################################################################"
+endLine :: PAction
+endLine = PAction $
+  \imgs -> do
+    putStrLn ("## (#=" ++ show (length imgs) ++ ")")
+    putStrLn line
+    return (Right imgs)
 logSeparator :: String -> PAction
-logSeparator "" = logStr "##\n################################################################################"
-logSeparator msg = logStr ("################################################################################\n## " ++ msg)
+logSeparator "" = logStr line
+logSeparator msg = logStr ( line ++"\n## " ++ msg)
