@@ -25,20 +25,32 @@ This implemments parts of my image handling workflow in a composable way. For ex
 ## Modules:
 ### UnRAW
 Takes raw files and converts them to 48bit tiff.
+
+Depends on `dcraw` providing the binary `dcraw`.
 ### UnTiff
 Takes tiff files and converts them to lossless compressed png files.
+
+Depends on `imagemagick` providing the binary `convert`.
 ### Align
 Takes images (tiff, png or jpg) and aligns them.
+
+Depends on `hugin` providing the binary `align-image-stack`.
 ### Stack
 Takes (aligned) images and does focus stacking on them.
+
+Depends on `enblend-enfuse` providing the binary `enfuse`.
 ### Show
 Shows the result in an image viewer.
+
+Depends on `sxiv` providing the binary `sxiv`.
 ### Minor modules:
 #### Copy
 #### Wait
 ## Not yet ported modules:
 ### Galery
 Create a simple static HTML galery of images.
+
+Depends on `fgallery`.
 ### Init
 Initially create the folder structure and optionally import files
 ## Not yet implemented modules:
