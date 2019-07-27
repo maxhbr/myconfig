@@ -13,7 +13,8 @@ import           System.IO.Temp
 import           Text.Printf
 import           System.Posix.Files (touchFile)
 
-import MyPhoto.MyPhoto
+import MyPhoto.Model
+import MyPhoto.Utils
 
 data Projection
   = Proj1

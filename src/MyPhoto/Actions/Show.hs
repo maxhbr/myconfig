@@ -4,7 +4,8 @@ module MyPhoto.Actions.Show
 
 import           System.Process
 
-import MyPhoto.MyPhoto
+import MyPhoto.Model
+import MyPhoto.Utils
 
 showImgsImpl :: [Img] -> PActionBody
 showImgsImpl imgs = do

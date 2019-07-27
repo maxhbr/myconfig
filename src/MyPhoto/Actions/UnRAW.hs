@@ -9,7 +9,8 @@ import           Data.Maybe (maybe)
 import           System.Process
 import           System.Exit
 
-import MyPhoto.MyPhoto
+import MyPhoto.Model
+import MyPhoto.Utils
 import MyPhoto.Wrapper.Dcraw
 
 data ColorSpace

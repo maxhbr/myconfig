@@ -6,7 +6,8 @@ import           System.Process
 import           System.IO
 import           Control.Concurrent
 
-import MyPhoto.MyPhoto
+import MyPhoto.Model
+import MyPhoto.Utils
 
 waitForConfirm :: [Img] -> PActionBody
 waitForConfirm imgs = do

@@ -12,7 +12,8 @@ import           System.Process
 import           System.Exit
 import           GHC.IO.Handle (hGetContents)
 
-import MyPhoto.MyPhoto
+import MyPhoto.Model
+import MyPhoto.Utils
 
 calculateUntiffedName :: Img -> Img
 calculateUntiffedName = (`replaceExtension` "png")

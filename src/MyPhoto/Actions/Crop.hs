@@ -13,7 +13,8 @@ import           System.Process
 import           System.Exit
 import           GHC.IO.Handle (hGetContents)
 
-import MyPhoto.MyPhoto
+import MyPhoto.Model
+import MyPhoto.Utils
 
 calculateCroppedName :: String -> Img -> Img
 calculateCroppedName addition img = let

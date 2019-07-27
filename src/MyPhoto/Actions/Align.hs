@@ -12,7 +12,8 @@ import           System.Directory
 import           System.IO.Temp
 import           Text.Printf
 
-import MyPhoto.MyPhoto
+import MyPhoto.Model
+import MyPhoto.Utils
 
 data Options
   = Options

@@ -1,6 +1,6 @@
 module Main where
 
-import Lib
+import MyPhoto.MyPhoto (runMyPhoto)
 
 main :: IO ()
 main = runMyPhoto
