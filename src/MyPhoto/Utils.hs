@@ -5,6 +5,8 @@ module MyPhoto.Utils
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Control.Monad ((>=>))
+import           System.FilePath (takeExtension)
+import qualified Data.Char as C
 
 import MyPhoto.Model
 
@@ -27,7 +29,20 @@ logSeparator "" = logStr line
 logSeparator msg = logStr ( line ++"\n## " ++ msg)
 
 filterByExtension :: [String] -> PAction
-filterByExtension = undefined
+filterByExtension exts = let
+    lowerExts = map (map C.toLower) exts
+    hasOneOfTheExtensions :: FilePath -> Bool
+    hasOneOfTheExtensions img = let
+        ext = (map C.toLower . takeExtension) img
+      in ext `elem` lowerExts
+  in PAction $
+    \imgs -> do
+      putStr ("### filter by extension: " ++ show exts)
+      let oldLength = length imgs
+          imgs' = filter hasOneOfTheExtensions imgs
+          newLength = length imgs'
+      putStrLn (" (#=" ++ show oldLength ++ ") -> (#=" ++ show newLength ++ ")")
+      return (Right imgs')
 
 assertThatAllExist :: PAction
 assertThatAllExist = undefined

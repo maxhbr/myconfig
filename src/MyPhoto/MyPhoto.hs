@@ -20,15 +20,18 @@ import MyPhoto.Utils as X
 import MyPhoto.Actions.UnRAW as X
 import MyPhoto.Actions.UnTiff as X
 import MyPhoto.Actions.Crop as X
+import MyPhoto.Actions.Copy as X
 import MyPhoto.Actions.Align as X
 import MyPhoto.Actions.Stack as X
 import MyPhoto.Actions.Show as X
 import MyPhoto.Actions.Wait as X
+import MyPhoto.Actions.Write as X
 
 actions :: Map String PrePAction
 actions = Map.fromList [ ("unraw", unRAW)
                        , ("untiff", unTiff)
                        , ("crop", crop)
+                       , ("copy", copy)
                        , ("align", align)
                        , ("stack", stack)
                        , ("wait", waitPAct)

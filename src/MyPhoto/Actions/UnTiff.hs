@@ -42,5 +42,5 @@ unTiffImpl removeTiff imgs = do
 
 unTiff :: PrePAction
 unTiff [] = logSeparator "Run UnTiff" <> PAction (unTiffImpl False)
-unTiff ["--rm"] = logSeparator "Run UnTiff" <> PAction (unTiffImpl True)
+unTiff ["--rm"] = logSeparator "Run UnTiff (with --rm)" <> PAction (unTiffImpl True)
 unTiff _ = PAction $ \_ -> pure (Left "Usage: untiff [--rm] files...")
