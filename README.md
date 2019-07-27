@@ -1,6 +1,6 @@
 # myphoto
 
-This implemments parts of my image handling workflow in a composable way. For example the following command
+This implements parts of my image handling workflow in a composable way. For example the following command
 ```
 ./myphoto.sh unraw --wb1 \
              untiff --rm \
@@ -21,6 +21,8 @@ This implemments parts of my image handling workflow in a composable way. For ex
 - converts the stacked result from tiff to png, but keeping the tiff this time
 - copys the final png to the folder `../results`
 - shows the result
+
+The script `./myphoto.sh` is just a thin wrapper and can be substituted with the built haskell binary.
 
 ## Modules:
 ### UnRAW
@@ -46,6 +48,7 @@ Depends on `sxiv` providing the binary `sxiv`.
 ### Minor modules:
 #### Copy
 #### Wait
+
 ## Not yet ported modules:
 ### Galery
 Create a simple static HTML galery of images.
@@ -53,5 +56,14 @@ Create a simple static HTML galery of images.
 Depends on `fgallery`.
 ### Init
 Initially create the folder structure and optionally import files
+
 ## Not yet implemented modules:
-#### Link
+### Link
+### Branching
+### Edit
+Open images in Gimp
+### Develop
+Open images in Darktable
+
+# TODOs:
+- configurable image viewers
