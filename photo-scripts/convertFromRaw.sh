@@ -88,7 +88,7 @@ elif [[ "$1" == "-q2" ]]; then
     opts="$opts -q 2"
 elif [[ "$1" == "-q3" ]]; then
     shift
-    opts="$opts -q 3"
+    opts="$opts -q3"
 fi
 
 # RAW images conversion to 48-bit TIFFs:

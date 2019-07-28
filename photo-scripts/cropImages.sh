@@ -44,7 +44,7 @@ cropImage() {
     input=$1
     output="${input%.*}_CROPPED.${input##*.}"
     echo "$input --> $output"
-    convert "$input" -crop "+${left}+${top}" -crop "-${right}-${bottom}" "$outputgg"
+    convert "$input" -crop "+${left}+${top}" -crop "-${right}-${bottom}" "$output"
 }
 
 for img in "$@"; do
