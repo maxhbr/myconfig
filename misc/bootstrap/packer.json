@@ -2,6 +2,24 @@
     "builders": [
         {
             "type": "virtualbox-iso",
+            "shutdown_command": "sudo shutdown -h now",
+            "ssh_username": "root",
+            "ssh_private_key_file": "keys/vagrant.key",
+            "ssh_wait_timeout": "20m",
+            "guest_os_type": "Linux_64",
+            "guest_additions_mode": "disable",
+            "virtualbox_version_file": ".vbox_version",
+            "vboxmanage": [
+                ["modifyvm", "{{.Name}}", "--memory", "8192"],
+                ["modifyvm", "{{.Name}}", "--cpus", "4"]
+            ]
+
+            "iso_url": "https://releases.nixos.org/nixos/19.03/nixos-19.03.173068.9ec7625cee5/nixos-minimal-19.03.173068.9ec7625cee5-x86_64-linux.iso",
+            "iso_checksum": "42dfcb781956c2bba809212fbc214bb2b4284bb716ec35edf72713953cb3f613",
+            "iso_checksum_type": "sha256",
+
+            "http_directory": "./../../",
+
             "boot_wait": "40s",
             "boot_command": [
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/scripts/bootstrap-grub.sh > /root/bootstrap.sh<enter><wait>",
@@ -19,21 +37,6 @@
 
                 "reboot<enter>"
             ],
-            "guest_additions_mode": "disable",
-            "guest_os_type": "Linux_64",
-            "http_directory": "./../../",
-            "iso_url": "https://releases.nixos.org/nixos/19.03/nixos-19.03.173068.9ec7625cee5/nixos-minimal-19.03.173068.9ec7625cee5-x86_64-linux.iso",
-            "iso_checksum": "42dfcb781956c2bba809212fbc214bb2b4284bb716ec35edf72713953cb3f613",
-            "iso_checksum_type": "sha256",
-            "shutdown_command": "sudo shutdown -h now",
-            "ssh_username": "root",
-            "ssh_private_key_file": "keys/vagrant.key",
-            "ssh_wait_timeout": "20m",
-            "virtualbox_version_file": ".vbox_version",
-            "vboxmanage": [
-                ["modifyvm", "{{.Name}}", "--memory", "8192"],
-                ["modifyvm", "{{.Name}}", "--cpus", "4"]
-            ]
         },
         {
             "type": "qemu",
@@ -53,8 +56,9 @@
 
             "iso_url": "https://releases.nixos.org/nixos/19.03/nixos-19.03.173068.9ec7625cee5/nixos-minimal-19.03.173068.9ec7625cee5-x86_64-linux.iso",
             "iso_checksum": "42dfcb781956c2bba809212fbc214bb2b4284bb716ec35edf72713953cb3f613",
-            "http_directory": "./../../",
             "iso_checksum_type": "sha256",
+
+            "http_directory": "./../../",
 
             "boot_wait": "40s",
             "boot_command": [

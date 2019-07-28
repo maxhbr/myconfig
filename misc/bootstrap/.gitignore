@@ -6,3 +6,4 @@
 /iso
 /vendor
 /packer_cache
+/output-virtualbox-iso
