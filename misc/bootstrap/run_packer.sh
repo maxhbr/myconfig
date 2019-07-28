@@ -10,7 +10,6 @@ cd "$ROOT"
 build_with_qemu() {
     echo "##########################################################################"
     echo "## Build"
-    rm myconfig-virtualbox.box || true
     time packer build -on-error=ask -only=qemu packer.json
 }
 
@@ -32,4 +31,8 @@ build_with_virtualbox() {
 case "$1" in
     qemu) build_with_qemu ;;
     vbox) build_with_virtualbox ;;
+    *) cat <<EOF
+$0 [qemu|vbox]
+EOF
+       ;;
 esac
