@@ -15,10 +15,6 @@ funs: pkgs: let
   my-xmonad = funs.haskellPackages.callPackage ./xmonad {
     inherit scripts pkgs;
   };
-
-  photo-scripts = callPackage ./photo-scripts {
-    inherit pkgs;
-  };
 in {
   myconfig = {
     nixos-config = import ./nixos;
@@ -33,5 +29,4 @@ in {
       pathsToLink = [ "/share" "/bin" ];
     };
   };
-  inherit photo-scripts;
 }

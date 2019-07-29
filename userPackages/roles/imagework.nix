@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: MIT
 pkgs:
 with pkgs; [
-  photo-scripts
   gphoto2 gphoto2fs
 
   gimp-with-plugins
