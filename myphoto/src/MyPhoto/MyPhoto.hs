@@ -31,7 +31,7 @@ actions :: Map String PrePAction
 actions = Map.fromList [ ("unraw", unRAW)
                        , ("untiff", unTiff)
                        , ("crop", crop)
-                       , ("copy", copy)
+                       , ("copy", copyPAct)
                        , ("align", align)
                        , ("stack", stack)
                        , ("wait", waitPAct)

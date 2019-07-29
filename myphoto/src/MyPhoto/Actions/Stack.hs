@@ -41,6 +41,7 @@ data Options
   , optHelp       :: Bool
   , optProjection :: Projection
   , optOpts       :: Opts
+  , optSaveMasks  :: Bool
   } deriving Show
 
 defaultOptions :: Options
@@ -50,6 +51,7 @@ defaultOptions
   , optHelp       = False
   , optProjection = Proj1
   , optOpts       = Opts1
+  , optSaveMasks  = False -- TODO
   }
 
 options :: [OptDescr (Options -> Options)]
@@ -89,33 +91,31 @@ getEnfuseArgs :: Options -> [String]
 getEnfuseArgs opts = let
     focusStackArgs = ["--exposure-weight=0", "--saturation-weight=0", "--contrast-weight=1"]
     hardMaskArgs = ["--hard-mask"]
-    verbosityArgs = if optVerbose opts
-                    then ["-v"]
-                    else []
+    verbosityArgs = ["-v" | optVerbose opts]
   in verbosityArgs
      ++ focusStackArgs
      ++ hardMaskArgs
-     ++ (projectionToArgs (optProjection opts))
-     ++ (optsToArgs (optOpts opts))
+     ++ projectionToArgs (optProjection opts)
+     ++ optsToArgs (optOpts opts)
 
-getOutArguments :: Img -> IO (Img, [String])
-getOutArguments img = let
+getOutArguments :: Options -> Img -> IO (Img, [String])
+getOutArguments opts img = let
     (bn,ext) = splitExtensions img
     outFile = bn ++ "_STACKED" ++ ext
     outMasksFolder = outFile ++ "-masks"
   in do
     appendFile outFile ""
-    return (outFile, ["--output=" ++ outFile ++ "" ])
-    -- createDirectory outMasksFolder
-    -- return ["--save-masks=\"" ++ outMasksFolder ++ "/softmask-%04n.tif:" ++ outMasksFolder ++ "/hardmask-%04n.tif\""
-    --        , "--output=" ++ outFile ++ "" ]
+    when (optSaveMasks opts) $
+      createDirectoryIfMissing True outMasksFolder
+    return (outFile, ( "--output=" ++ outFile ++ "" ) :
+                     ["--save-masks=\"" ++ outMasksFolder ++ "/softmask-%04n.tif:" ++ outMasksFolder ++ "/hardmask-%04n.tif\"" | optSaveMasks opts])
 
 stackImpl :: [String] -> [Img] -> PActionBody
 stackImpl args imgs = do
   (opts, nonOpts) <- getMyOpts args
   let enfuseArgs = getEnfuseArgs opts
 
-  (outFile, outArgs) <- getOutArguments (head imgs)
+  (outFile, outArgs) <- getOutArguments opts (head imgs)
 
   (_, _, _, pHandle) <- createProcess (proc "enfuse" (enfuseArgs
                                                       ++ outArgs
