@@ -18,5 +18,5 @@
   ];
 
   services.xserver.displayManager.slim.autoLogin = true;
-  services.xserver.windowManager.default = pkgs.lib.mkForce "xfce";
+  # services.xserver.windowManager.default = pkgs.lib.mkForce "xfce";
 }
