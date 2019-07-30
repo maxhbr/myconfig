@@ -48,8 +48,10 @@ handleChannelAsSubtree() {
 }
 
 prepare() {
-    handleChannelAsSubtree "nixpkgs" "$nixStableChannel"
-    $nixConfigDir/overlays/nixpkgs-unstable/default.sh
+    if [[ "$HOST" == "$my_main_host" ]]; then
+        handleChannelAsSubtree "nixpkgs" "$nixStableChannel"
+        $nixConfigDir/overlays/nixpkgs-unstable/default.sh
+    fi
 
     nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixpkgs-overlays=$overlaysDir\" \"nixos-config=$nixosConfigDir\"]; }"
     nix_path_file="/etc/nixos/imports/nixPath.nix"
