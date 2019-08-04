@@ -9,7 +9,7 @@ with pkgs; [
   # rdesktop
   openjdk maven gradle
   libreoffice
-  unstable.zoom-us
+  zoom-us # unstable.zoom-us
   rambox # franz hipchat
   p7zip
   thrift
