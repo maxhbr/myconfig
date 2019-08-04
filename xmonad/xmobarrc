@@ -35,9 +35,9 @@ Config { font = "xft:inconsolata:pixelsize=17:antialias=true:hinting=true"
                    ] 10
          , Run Com "/home/mhuber/.xmonad/bin/getCoreTemp.sh" ["<fc=#999999>@</fc>", "<fc=#999999>C</fc>", "orange", "red"] "coretemp" 60
          , Run Memory ["-t","<fc=#999999>M:</fc><usedratio><fc=#999999>% (<used>)</fc>"
-                      , "--Low"      , "60"
-                      , "--High"     , "90"
-                      -- , "--low"      , "green"
+                      , "--Low"      , "8000"
+                      , "--High"     , "16000"
+                      , "--low"      , "green"
                       , "--normal"   , "orange"
                       , "--high"     , "red"
                       ] 10

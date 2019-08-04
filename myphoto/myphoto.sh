@@ -11,11 +11,14 @@ if [[ "$1" == "init" ]]; then
     if [[ "$1" == "--" ]]; then
         shift
     fi
+    set -x
     exec "$root/unported/initFotoDir.sh" "$@"
 fi
 
 stack --stack-yaml "$stackyaml"\
       build
+
+echo "run:..."
 stack --stack-yaml "$stackyaml" \
       exec -- myphoto-exe \
       "$@"

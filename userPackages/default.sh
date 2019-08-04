@@ -10,7 +10,7 @@ gate() {
     nix-env --version &> /dev/null
 }
 
-deploy() {
+upgrade() {
     logH3 "nix-rebuild" "declerative rebuild of nix userspace environment"
     nix-env $NIX_PATH_ARGS \
         --set -f "$(readlink -f "$(dirname ${BASH_SOURCE[0]})")" --argstr name "$(whoami)-user-env-$(date -I)"
@@ -21,7 +21,7 @@ gate || {
     exit 0
 }
 if [ $# -eq 0 ]; then
-    deploy
+    upgrade
 else
     ([[ ! -n "$(type -t $1)" ]] || [ "$(type -t $1)" != "function" ] ) && exit 0
     $@
