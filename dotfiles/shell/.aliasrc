@@ -184,9 +184,9 @@ cdtemp() {
 }
 
 cptemp() {
-  f=$(realpath $1)
+  f=$(readlink -f $1)
   cd $(mktemp -d)
-  cp $f ./
+  cp -r $f ./
   pwd
 }
 
