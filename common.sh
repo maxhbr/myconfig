@@ -5,6 +5,8 @@
 # nixStableChannel=nixos-19.03-small
 nixStableChannel=nixos-19.03
 
+export COMMON_SH_WAS_SOURCED="true"
+
 export my_main_host='T470p'
 
 export myconfigDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
