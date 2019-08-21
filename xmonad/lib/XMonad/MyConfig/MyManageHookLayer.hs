@@ -36,8 +36,8 @@ myManageHook = let
                                                  ,"zoom"])
                                , (doFloat, ["MPlayer"
                                            ,"Onboard"])
-                               , (doShift "web", ["Firefox"
-                                                 ,"Chromium","chromium-browser"])
+                               -- , (doShift "web", ["Firefox"
+                               --                   ,"Chromium","chromium-browser"])
                                , (doShift "10", ["franz","Franz"])
                                -- , (doShift "vbox", ["Virtualbox","VirtualBox"])
                                , (doShift "media", ["Steam"])
