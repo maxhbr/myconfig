@@ -150,5 +150,5 @@ unRAWimpl args imgs = do
 unRAW :: PrePAction
 unRAW ["-h"] = PAction (\_ -> pure (Left help))
 unRAW args   = logSeparator "Run UnRAW"
-  <> filterByExtension [".arw", ".raw", ".nef"]
-  <> PAction (unRAWimpl args)
+               <> filterByExtension [".arw", ".raw", ".nef"]
+               <> PAction (unRAWimpl args)

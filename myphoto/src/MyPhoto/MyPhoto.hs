@@ -25,7 +25,8 @@ import MyPhoto.Actions.Align as X
 import MyPhoto.Actions.Stack as X
 import MyPhoto.Actions.Show as X
 import MyPhoto.Actions.Wait as X
-import MyPhoto.Actions.Write as X
+import MyPhoto.Actions.Pwd as X
+import MyPhoto.Actions.Skip as X
 
 actions :: Map String PrePAction
 actions = Map.fromList [ ("unraw", unRAW)
@@ -36,6 +37,8 @@ actions = Map.fromList [ ("unraw", unRAW)
                        , ("stack", stack)
                        , ("wait", waitPAct)
                        , ("show", showImgs)
+                       , ("pwd", pwdPAct)
+                       , ("skip", skipPAct)
                        ]
 
 type ComposeActionsState = (PAction, [String], Maybe PrePAction)

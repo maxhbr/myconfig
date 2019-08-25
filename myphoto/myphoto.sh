@@ -2,6 +2,7 @@
 
 set -e
 
+curPwd="$(pwd)"
 root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 stackyaml="$root/stack.yaml"
 
@@ -21,4 +22,5 @@ stack --stack-yaml "$stackyaml"\
 echo "run:..."
 stack --stack-yaml "$stackyaml" \
       exec -- myphoto-exe \
+      "pwd" "$curPwd" \
       "$@"

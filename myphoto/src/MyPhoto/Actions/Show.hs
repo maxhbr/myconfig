@@ -17,5 +17,5 @@ help = "show IMG [IMG ...]"
 
 showImgs :: PrePAction
 showImgs ["-h"] = PAction (\_ -> pure (Left help))
-showImgs [] = logSeparator "Run Show" <> PAction showImgsImpl
-showImgs args = PAction (\_ -> fail ("show does not expect any arguments, got: " ++ show args))
+showImgs []     = logSeparator "Run Show" <> PAction showImgsImpl
+showImgs args   = PAction (\_ -> fail ("show does not expect any arguments, got: " ++ show args))

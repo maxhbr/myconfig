@@ -127,4 +127,4 @@ stackImpl args imgs = do
 
 stack :: PrePAction
 stack ["-h"] = PAction (\_ -> pure (Left help))
-stack args = logSeparator "Run stack" <> PAction (stackImpl args)
+stack args   = logSeparator "Run stack" <> PAction (stackImpl args)

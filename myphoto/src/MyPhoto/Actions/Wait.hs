@@ -21,10 +21,10 @@ waitForSeconds s imgs = do
   return (Right imgs)
 
 
-help :: String
-help = "wait [-s SECONDS]"
+help :: PAction
+help = PAction $ \_ -> pure (Left (unlines [ "wait [-s SECONDS]" ]))
 
 waitPAct :: PrePAction
-waitPAct ["-h"] = PAction (\_ -> pure (Left help))
-waitPAct [] = logSeparator "Wait for key" <> PAction waitForConfirm
+waitPAct ["-h"]    = help
+waitPAct []        = logSeparator "Wait for key" <> PAction waitForConfirm
 waitPAct ["-s", s] = logSeparator ("Wait for " ++ s ++ " seconds") <> PAction (waitForSeconds s)
