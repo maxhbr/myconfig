@@ -5,7 +5,7 @@ Here I collect all configuration files of my machines. Currently I use
 - Window Manager: **[xmonad](http://xmonad.org/)** (with: [xmobar](https://github.com/jaor/xmobar), [dmenu](https://tools.suckless.org/dmenu/) + [yeganesh](http://dmwit.com/yeganesh/))
 - EDITOR: emacs ([spacemacs](http://spacemacs.org/))
 - SHELL: zsh (with: [oh-my-zsh](http://ohmyz.sh/))
-- Email Client: [neomutt](https://neomutt.org/) (with: [offlineimap](http://www.offlineimap.org/))
+- Email Client: ~~[neomutt](https://neomutt.org/) (with: [offlineimap](http://www.offlineimap.org/))~~ [mu4e](https://www.djcbsoftware.nl/code/mu/mu4e.html) with mbsync
 - Keyboard layout: [neo2](https://www.neo-layout.org/) 
 
 # How to bootstrap
