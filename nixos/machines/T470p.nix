@@ -17,6 +17,7 @@
     "work" "virtualization" "dev" "wine"
     "imagework"
     "games"
+    "iot"
   ];
 
   swapDevices = [ {

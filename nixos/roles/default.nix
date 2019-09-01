@@ -45,6 +45,7 @@ in
     ./virtualization.nix
     ./vsftp.nix
     ./work.nix
+    ./iot.nix
   ];
 
   options = {
