@@ -66,13 +66,17 @@ options =
       (ReqArg (\f opts -> opts { optProjection = case f of
                                    "1" -> Proj1
                                    "2" -> Proj2
-                                   "3" -> Proj3}) "PROJECTION_NUMBER")
+                                   "3" -> Proj3
+                                   _   -> Proj1
+                               }) "PROJECTION_NUMBER")
       "choos kind of projection"
   , Option ['o'] ["opts"]
       (ReqArg (\f opts -> opts { optOpts = case f of
                                    "1" -> Opts1
                                    "2" -> Opts2
-                                   "3" -> Opts3}) "OPTS_NUMBER")
+                                   "3" -> Opts3
+                                   _   -> Opts1
+                               }) "OPTS_NUMBER")
       "choos kind of opts"
   ]
 
@@ -112,7 +116,7 @@ getOutArguments opts img = let
 
 stackImpl :: [String] -> [Img] -> PActionBody
 stackImpl args imgs = do
-  (opts, nonOpts) <- getMyOpts args
+  (opts, _) <- getMyOpts args
   let enfuseArgs = getEnfuseArgs opts
 
   (outFile, outArgs) <- getOutArguments opts (head imgs)

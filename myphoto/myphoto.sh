@@ -6,6 +6,7 @@ curPwd="$(pwd)"
 root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 stackyaml="$root/stack.yaml"
 
+trap times EXIT
 
 if [[ "$1" == "init" ]]; then
     shift
