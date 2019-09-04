@@ -154,6 +154,16 @@ handleGitPostExecution () {
     fi
 }
 
+handlePostExecutionHooks () {
+    if [[ -d "$ROOT/misc/post_install_hooks" ]]; then
+        find "$ROOT/misc/post_install_hooks" \
+             -type f \
+             -iname '*.sh' \
+             -print \
+             -exec {} \;
+    fi
+}
+
 ###########################################################################
 ##  run  ##################################################################
 ###########################################################################
@@ -211,4 +221,5 @@ done
 trap "" EXIT ERR INT TERM
 showStatDifferences
 
+handlePostExecutionHooks
 handleGitPostExecution

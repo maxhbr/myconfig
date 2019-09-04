@@ -443,6 +443,26 @@ you should place your code here."
  '(paradox-github-token t)
  '(psc-ide-add-import-on-completion t t)
  '(psc-ide-rebuild-on-save nil t)
+ '(safe-local-variable-values
+   (quote
+    ((eval setq flycheck-clang-include-path
+           (append
+            (split-string
+             (shell-command-to-string
+              (format "%s %s" "python3 -c \"
+import json
+import sys
+dat = json.load(open(sys.argv[1]))
+print('\\n'.join(dat['configurations'][1]['includePath']))\""
+                      (expand-file-name
+                       (concat
+                        (projectile-project-root)
+                        "code/rail/.vscode/c_cpp_properties.json")))))
+            (mapcar
+             (quote expand-file-name)
+             (quote
+              ("~/.platformio/packages/toolchain-xtensa32/bin/../lib/gcc/xtensa-esp32-elf/5.2.0/include" "~/.platformio/packages/toolchain-xtensa32/bin/../lib/gcc/xtensa-esp32-elf/5.2.0/include-fixed" "~/.platformio/packages/toolchain-xtensa32/bin/../lib/gcc/xtensa-esp32-elf/5.2.0/../../../../xtensa-esp32-elf/include" "~/.platformio/packages/toolchain-xtensa32/bin/../xtensa-esp32-elf/sysroot/usr/include" "~/.platformio/packages/toolchain-xtensa32/xtensa-esp32-elf/include/c++/5.2.0" "~/.platformio/packages/toolchain-xtensa32/xtensa-esp32-elf/include/c++/5.2.0/xtensa-esp32-elf")))))
+     (intent-tabs-mode))))
  '(send-mail-function (quote sendmail-send-it)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
