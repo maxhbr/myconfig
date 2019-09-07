@@ -47,6 +47,11 @@
     d2          = diff HEAD~2
     d3          = diff HEAD~3
     d4          = diff HEAD~4
+    d1d         = diff master@{1day}...master
+    d2d         = diff master@{2day}...master
+    d3d         = diff master@{3day}...master
+    d4d         = diff master@{4day}...master
+    d1w         = diff master@{1week}...master
     dstaged     = diff --staged
     ds          = diff --stat -r
     ds0         = diff --stat -r HEAD
