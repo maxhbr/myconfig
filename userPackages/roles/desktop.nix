@@ -9,7 +9,7 @@ with pkgs; [
   xarchiver # gnome3.file-roller
   mplayer
 # gui applications
-  chromium unstable.firefox-unwrapped qutebrowser
+  chromium unstable.firefox qutebrowser
   google-chrome # for streaming and music
   # browserpass
 # spellchecking
