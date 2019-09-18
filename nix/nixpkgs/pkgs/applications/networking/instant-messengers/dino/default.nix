@@ -14,14 +14,14 @@
 , icu
  }:
 
-stdenv.mkDerivation rec {
-  name = "dino-unstable-2019-02-06";
+stdenv.mkDerivation {
+  name = "dino-unstable-2019-09-12";
 
   src = fetchFromGitHub {
     owner = "dino";
     repo = "dino";
-    rev = "864196d2acef3db047160b9da5803805067276c3";
-    sha256 = "10nyq9marclzbkxisackp402gimgs7gb0llgjm922c593c5h39cq";
+    rev = "c8f2b80978706c4c53deb7ddfb8188c751bcb291";
+    sha256 = "17lc6xiarb174g1hgjfh1yjrr0l2nzc3kba8xp5niwakbx7qicqr";
     fetchSubmodules = true;
   };
 
