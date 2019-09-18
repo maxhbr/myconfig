@@ -2,7 +2,7 @@
 , gnome2, gtk3, atk, at-spi2-atk, cairo, pango, gdk_pixbuf, glib, freetype, fontconfig
 , dbus, libX11, xorg, libXi, libXcursor, libXdamage, libXrandr, libXcomposite
 , libXext, libXfixes, libXrender, libXtst, libXScrnSaver, nss, nspr, alsaLib
-, cups, expat, udev, libnotify, libuuid
+, cups, expat, udev, libnotify, libuuid, at-spi2-core
 # Unfortunately this also overwrites the UI language (not just the spell
 # checking language!):
 , hunspellDicts, spellcheckerLanguage ? null # E.g. "de_DE"
@@ -25,6 +25,7 @@ let
     alsaLib
     atk
     at-spi2-atk
+    at-spi2-core
     cairo
     cups
     dbus
@@ -57,11 +58,11 @@ let
 
 in stdenv.mkDerivation rec {
   name = "signal-desktop-${version}";
-  version = "1.25.3";
+  version = "1.27.2";
 
   src = fetchurl {
     url = "https://updates.signal.org/desktop/apt/pool/main/s/signal-desktop/signal-desktop_${version}_amd64.deb";
-    sha256 = "0f7pip4d97xixwf667xpi50r0r65givvmry862zhp2cq24bs0693";
+    sha256 = "08qh7867bc6z6mdbdilqdacx67n0kaxl3m4m97k0jxhd093a8xfz";
   };
 
   phases = [ "unpackPhase" "installPhase" ];
