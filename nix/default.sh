@@ -2,7 +2,7 @@
 #! nix-shell -i bash -p curl gitMinimal git-lfs
 # Copyright 2016-2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-set -ex
+set -e
 
 . "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../common.sh"
 
