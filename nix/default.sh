@@ -2,7 +2,7 @@
 #! nix-shell -i bash -p curl gitMinimal git-lfs
 # Copyright 2016-2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-set -e
+set -ex
 
 . "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../common.sh"
 
@@ -48,7 +48,7 @@ handleChannelAsSubtree() {
 }
 
 prepare() {
-    if [[ "$HOST" == "$my_main_host" ]]; then
+    if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
         handleChannelAsSubtree "nixpkgs" "$nixStableChannel"
         $nixConfigDir/overlays/nixpkgs-unstable/default.sh
     fi
