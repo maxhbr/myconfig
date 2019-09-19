@@ -16,7 +16,7 @@
     "mail"
     "work" "virtualization" "dev" "wine"
     "imagework"
-    # "games"
+    "games"
     "iot"
   ];
 
