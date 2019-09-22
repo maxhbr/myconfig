@@ -174,6 +174,10 @@
     unmerged = !git branch -r --no-merged | grep -v HEAD | xargs -L1 git --no-pager log --pretty=tformat:'%Cgreen%d%Creset - %h by %an (%Cblue%ar%Creset)' -1
     merged = !git branch -r --merged | grep -v HEAD | xargs -L1 git --no-pager log --pretty=tformat:'%Cgreen%d%Creset - %h by %an (%Cblue%ar%Creset)' -1
 
+	  # https://stackoverflow.com/questions/18500016/undo-a-git-rerere-resolution-that-was-done-in-a-rebase
+	  unrerere = "rerere forget"
+	  unrerereall = "!f() { rm -rf .git/rr-cache; }; f"
+
     # typos
     psuh = "push"
 [color]
