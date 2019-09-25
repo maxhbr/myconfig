@@ -33,6 +33,8 @@
           gitAndTools.tig
           pass-git-helper
 
+          vscode-with-extensions
+
           python python3
 
           stack cabal-install cabal2nix
