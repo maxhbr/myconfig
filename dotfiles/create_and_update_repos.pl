@@ -10,7 +10,8 @@ use Cwd qw( abs_path );
 use File::Path qw( make_path );
 use Term::ANSIColor qw( colored );
 
-my %toLink = ('https://github.com/syl20bnr/spacemacs'   => '~/.emacs.d'
+my %toLink = ('https://github.com/syl20bnr/spacemacs'   => '~/.emacs.d',
+              'https://github.com/chisui/zsh-nix-shell' => '~/.zsh-nix-shell'
              # , 'https://github.com/jrosdahl/maildirproc' => '~/Mail/maildirproc'
     );
 
