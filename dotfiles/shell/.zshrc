@@ -26,6 +26,9 @@ if [ -d $ZSH ]; then
     # DISABLE_UNTRACKED_FILES_DIRTY="true"
 
     source $ZSH/oh-my-zsh.sh
+    if [[ -f ~/.zsh-nix-shell/zix-shell.plugin.zsh ]]; then
+        source ~/.zsh-nix-shell/zix-shell.plugin.zsh
+    fi
 else
     echo 'oh-my-zsh not found'
     echo 'get oh-my-zsh via sh -c "$(curl -fsSL https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"'

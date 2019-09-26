@@ -20,6 +20,7 @@ while ( my ($url, $target) = each(%toLink) ) {
     $target = (glob($target))[0];
     if ( -d dirname($target) ){
         if ( !-d "$target/.git" ){
+            mkdir($target,0755);
             chdir($target);
             system("git init");
             system("git","remote","add","origin",$url);
