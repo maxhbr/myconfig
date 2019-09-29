@@ -19,6 +19,7 @@ import MyPhoto.Utils as X
 
 import MyPhoto.Actions.UnRAW as X
 import MyPhoto.Actions.UnTiff as X
+import MyPhoto.Actions.ToJPG as X
 import MyPhoto.Actions.Crop as X
 import MyPhoto.Actions.Copy as X
 import MyPhoto.Actions.Align as X
@@ -31,6 +32,7 @@ import MyPhoto.Actions.Skip as X
 actions :: Map String PrePAction
 actions = Map.fromList [ ("unraw", unRAW)
                        , ("untiff", unTiff)
+                       , ("tojpg", toJPG)
                        , ("crop", crop)
                        , ("copy", copyPAct)
                        , ("align", align)
