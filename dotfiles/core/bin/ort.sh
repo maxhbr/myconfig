@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
-# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
+
+#
+# A simple script which generates the ort docker image on demand and wraps calls
+# to ort into a docker layer
+#
+# Based on Code from https://github.com/heremaps/oss-review-toolkit (Licensed under Apache-2.0)
+#
 
 set -e
 
@@ -95,9 +102,9 @@ case $1 in
     "--ortHelp") shift; ortHelp ;;
     "--help") cat<<EOF
 usage:
-  $0 analyze <folder>
-  $0 scan <yaml>
-  $0 report <yaml>
+  $0 --analyze <folder>
+  $0 --scan <yaml>
+  $0 --report <yaml>
   $0 [args]
   $0 --help
 
