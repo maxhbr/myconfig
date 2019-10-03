@@ -76,7 +76,7 @@ runOrt() {
            --rm \
            -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u $(id -u $USER):$(id -g $USER) \
            -v "$HOME/.ort/":"$HOME/.ort" -v "$HOME/.ort/cache":"$HOME/.cache" \
-           -v "$workdir":/workdir \
+           -v "$(readlink -f $workdir)":/workdir \
            -w /workdir \
            --net=host \
            ort --info \
