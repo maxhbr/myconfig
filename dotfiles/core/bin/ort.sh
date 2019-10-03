@@ -11,6 +11,29 @@
 
 set -e
 
+DEBUG_LEVEL="--info"
+case $1 in
+    "--no-debug") shift; DEBUG_LEVEL="" ;;
+    "--info") shift; ;;
+    "--debug") shift; DEBUG_LEVEL="--debug" ;;
+esac
+
+helpMsg() {
+    cat<<EOF
+usage:
+  $0 --all <folder>
+  $0 --analyze <folder>
+  $0 --download <yaml>
+  $0 --scan <yaml>
+  $0 --report <yaml>
+  $0 [args]
+  $0 --help
+
+Builds the ort image on demand.
+Remove the ort:latest image to enforce rebuild of the docker image.
+EOF
+}
+
 #################################################################################
 # function to build ort docker image
 #################################################################################
@@ -22,7 +45,7 @@ buildImageIfMissing() {
 
         docker build -t ort-build:latest - < $ORT/docker/build/Dockerfile
 
-        docker run -i \
+        docker run -i --rm \
                -v "$ORT":/workdir \
                -u $(id -u $USER):$(id -g $USER) \
                -w /workdir \
@@ -35,7 +58,7 @@ buildImageIfMissing() {
                --build-arg ORT_VERSION=$ORT_VERSION \
                -t ort:latest \
                -f $ORT/docker/run/Dockerfile $ORT/cli/build/distributions
-        docker tag ort:latest ort:"$ORT_VERSION"
+        docker tag ort:latest ort:"${ORT_VERSION//[+]/-}"
     else
         echo "docker image already build"
     fi
@@ -68,7 +91,17 @@ analyzeFolder() {
     [[ ! -d "$folderToScan" ]] && exit 1
 
     runOrt "$folderToScan" \
-           analyze -f JSON -i /workdir -o /workdir/_ort_analyzer
+           analyze -f JSON -i /workdir --output-dir /workdir/_ort_analyzer
+}
+
+downloadSource() {
+    local analyzeResult="$1"
+    [[ ! -f "$analyzeResult" ]] && exit 1
+
+    local analyzeResultFolder="$(readlink -f "$(dirname $analyzeResult)")"
+    local analyzeResultFile="$(basename $1)"
+    runOrt "$analyzeResultFolder" \
+           download --ort-file "$analyzeResultFile" --output-dir /workdir/_ort_download
 }
 
 scanAnalyzeResult() {
@@ -78,7 +111,7 @@ scanAnalyzeResult() {
     local analyzeResultFolder="$(readlink -f "$(dirname $analyzeResult)")"
     local analyzeResultFile="$(basename $1)"
     runOrt "$analyzeResultFolder" \
-           scan --ort-file "$analyzeResultFile" -o /workdir/_ort_scan
+           scan --ort-file "$analyzeResultFile" --output-dir /workdir/_ort_scan
 }
 
 reportScanResult() {
@@ -88,7 +121,16 @@ reportScanResult() {
     local scanResultFolder="$(readlink -f "$(dirname $scanResult)")"
     local scanResultFile="$(basename $1)"
     runOrt "$scanResultFolder" \
-           report -f StaticHtml,Notice,Excel,WebApp --ort-file "$scanResultFile" -o /workdir/_ort_report
+           report -f StaticHtml,Notice,Excel,WebApp --ort-file "$scanResultFile" --output-dir /workdir/_ort_report
+}
+
+doAll() {
+    local folderToScan="$1"
+    [[ ! -d "$folderToScan" ]] && exit 1
+
+    analyzeFolder "$folderToScan"
+    scanAnalyzeResult "$folderToScan/_ort_analyzer/analyzer-result.yml"
+    reportScanResult "$folderToScan/_ort_analyzer/_ort_scan/scan-result.yml"
 }
 
 #################################################################################
@@ -96,22 +138,13 @@ reportScanResult() {
 #################################################################################
 buildImageIfMissing
 case $1 in
+    "--all") shift; doAll "$@" ;;
     "--analyze") shift; analyzeFolder "$@" ;;
+    "--download") shift; downloadSource "$@" ;;
     "--scan") shift; scanAnalyzeResult "$@" ;;
     "--report") shift; reportScanResult "$@" ;;
     "--ortHelp") shift; ortHelp ;;
-    "--help") cat<<EOF
-usage:
-  $0 --analyze <folder>
-  $0 --scan <yaml>
-  $0 --report <yaml>
-  $0 [args]
-  $0 --help
-
-remove the ort:latest image to enforce rebuild of the docker image
-
-EOF
-        ;;
+    "--help") helpMsg ;;
     *) runOrt "$(pwd)" "$@" ;;
 esac
 times
