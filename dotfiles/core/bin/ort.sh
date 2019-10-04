@@ -67,15 +67,25 @@ buildImageIfMissing() {
 #################################################################################
 # function to run dockerized ort commands
 #################################################################################
+prepareDotOrt() {
+    declare -a types=("analyzer" "downloader" "scanner" )
+    for type in ${types[@]}; do
+        mkdir -p "$HOME/.ort/dockerHome/.ort/$type"
+        if [[ ! -e "$HOME/.ort/$type" ]]; then
+            ln -s "$HOME/.ort/dockerHome/.ort/$type" "$HOME/.ort/$type"
+        fi
+    done
+}
+
 runOrt() {
     workdir="$1"
     [[ ! -d "$workdir" ]] && exit 1
     shift
-    mkdir -p "$HOME/.ort/cache"
+    prepareDotOrt
     docker run -i \
            --rm \
            -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u $(id -u $USER):$(id -g $USER) \
-           -v "$HOME/.ort/":"$HOME/.ort" -v "$HOME/.ort/cache":"$HOME/.cache" \
+           -v "$HOME/.ort/dockerHome":"$HOME" \
            -v "$(readlink -f $workdir)":/workdir \
            -w /workdir \
            --net=host \
@@ -91,7 +101,7 @@ analyzeFolder() {
     [[ ! -d "$folderToScan" ]] && exit 1
 
     runOrt "$folderToScan" \
-           analyze -f JSON -i /workdir --output-dir /workdir/_ort_analyzer
+           analyze -i /workdir --output-dir /workdir/_ort_analyzer
 }
 
 downloadSource() {
@@ -128,9 +138,12 @@ doAll() {
     local folderToScan="$1"
     [[ ! -d "$folderToScan" ]] && exit 1
 
+    printf "\n\n\nanalyze: $folderToScan\n\n"
     analyzeFolder "$folderToScan"
-    scanAnalyzeResult "$folderToScan/_ort_analyzer/analyzer-result.yml"
-    reportScanResult "$folderToScan/_ort_analyzer/_ort_scan/scan-result.yml"
+    printf "\n\n\nscan: ${folderToScan}_ort_analyzer/analyzer-result.yml\n\n"
+    scanAnalyzeResult "${folderToScan}_ort_analyzer/analyzer-result.yml"
+    printf "\n\n\nreport: ${folderToScan}_ort_analyzer/_ort_scan/scan-result.yml\n\n"
+    reportScanResult "${folderToScan}_ort_analyzer/_ort_scan/scan-result.yml"
 }
 
 #################################################################################
