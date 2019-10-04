@@ -15,7 +15,7 @@ DEBUG_LEVEL="--info"
 case $1 in
     "--no-debug") shift; DEBUG_LEVEL="" ;;
     "--info") shift; ;;
-    "--debug") shift; DEBUG_LEVEL="--debug" ;;
+    "--debug") shift; DEBUG_LEVEL="--debug"; set -x ;;
 esac
 
 helpMsg() {
@@ -77,61 +77,80 @@ prepareDotOrt() {
     done
 }
 
+getOutFolder() {
+    local workdir="$(readlink -f "$1")"
+    local out="${workdir%_ort}_ort"
+    mkdir -p "$out"
+    echo "$out"
+}
+
 runOrt() {
-    workdir="$1"
+    local workdir="$(readlink -f "$1")"
     [[ ! -d "$workdir" ]] && exit 1
     shift
+
     prepareDotOrt
-    docker run -i \
-           --rm \
-           -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u $(id -u $USER):$(id -g $USER) \
-           -v "$HOME/.ort/dockerHome":"$HOME" \
-           -v "$(readlink -f $workdir)":/workdir \
-           -w /workdir \
-           --net=host \
-           ort --info \
-           $@
+
+    (set -x;
+     docker run -i \
+            --rm \
+            -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u $(id -u $USER):$(id -g $USER) \
+            -v "$HOME/.ort/dockerHome":"$HOME" \
+            -v "$workdir":/workdir -v "$(getOutFolder "$workdir")":/out \
+            -w /workdir \
+            --net=host \
+            ort --info \
+            $@
+     )
 }
 
 #################################################################################
 # actual calls to ort features
 #################################################################################
 analyzeFolder() {
-    local folderToScan="$1"
+    local folderToScan="$(readlink -f "$1")"
     [[ ! -d "$folderToScan" ]] && exit 1
 
+    local logfile="$(getOutFolder "$folderToScan")/analyzer.logfile"
     runOrt "$folderToScan" \
-           analyze -i /workdir --output-dir /workdir/_ort_analyzer
+           analyze -i /workdir --output-dir /out |
+        tee "$logfile"
 }
 
 downloadSource() {
-    local analyzeResult="$1"
+    local analyzeResult="$(readlink -f "$1")"
     [[ ! -f "$analyzeResult" ]] && exit 1
 
-    local analyzeResultFolder="$(readlink -f "$(dirname $analyzeResult)")"
+    local analyzeResultFolder="$(dirname $analyzeResult)"
     local analyzeResultFile="$(basename $1)"
+    local logfile="$(getOutFolder "$analyzeResultFolder")/downloader.logfile"
     runOrt "$analyzeResultFolder" \
-           download --ort-file "$analyzeResultFile" --output-dir /workdir/_ort_download
+           download --ort-file "$analyzeResultFile" --output-dir /out |
+        tee "$logfile"
 }
 
 scanAnalyzeResult() {
-    local analyzeResult="$1"
+    local analyzeResult="$(readlink -f "$1")"
     [[ ! -f "$analyzeResult" ]] && exit 1
 
-    local analyzeResultFolder="$(readlink -f "$(dirname $analyzeResult)")"
+    local analyzeResultFolder="$(dirname $analyzeResult)"
     local analyzeResultFile="$(basename $1)"
+    local logfile="$(getOutFolder "$analyzeResultFolder")/scanner.logfile"
     runOrt "$analyzeResultFolder" \
-           scan --ort-file "$analyzeResultFile" --output-dir /workdir/_ort_scan
+           scan --ort-file "$analyzeResultFile" --output-dir /out |
+        tee "$logfile"
 }
 
 reportScanResult() {
-    local scanResult="$1"
+    local scanResult="$(readlink -f "$1")"
     [[ ! -f "$scanResult" ]] && exit 1
 
-    local scanResultFolder="$(readlink -f "$(dirname $scanResult)")"
+    local scanResultFolder="$(dirname $scanResult)"
     local scanResultFile="$(basename $1)"
+    local logfile="$(getOutFolder "$scanResultFolder")/reporter.logfile"
     runOrt "$scanResultFolder" \
-           report -f StaticHtml,Notice,Excel,WebApp --ort-file "$scanResultFile" --output-dir /workdir/_ort_report
+           report -f StaticHtml,Notice,Excel,WebApp --ort-file "$scanResultFile" --output-dir /out |
+        tee "$logfile"
 }
 
 doAll() {
