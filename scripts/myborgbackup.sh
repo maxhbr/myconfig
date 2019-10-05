@@ -21,7 +21,8 @@ fi
 borgCmd="borg"
 
 # UUID="1c0be23b-7537-4a82-8af1-744d21c3e6bd"
-UUID="3294d03a-f08b-433c-8f04-9cc2a3e9dc10"
+# UUID="3294d03a-f08b-433c-8f04-9cc2a3e9dc10"
+UUID="75a54433-6d3a-46cf-bf60-bd889d99ed10"
 backupmount="/mnt/backup"
 backupdir="${backupmount}/borgbackup"
 repository="${backupdir}/$(hostname).borg"
@@ -194,6 +195,7 @@ myMountBackupHDD
 
 ################################################################################
 # setup log
+mkdir -p "$logdir"
 echo -e "\n\n\n\n\n\n\n" >> $logfile
 exec &> >(tee -a $logfile)
 

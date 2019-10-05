@@ -100,7 +100,8 @@ runOrt() {
             -w /workdir \
             --net=host \
             ort --info \
-            $@
+            $@;
+     times
      )
 }
 
@@ -110,6 +111,8 @@ runOrt() {
 analyzeFolder() {
     local folderToScan="$(readlink -f "$1")"
     [[ ! -d "$folderToScan" ]] && exit 1
+
+    printf "\n\n\nanalyze: $folderToScan\n\n"
 
     local logfile="$(getOutFolder "$folderToScan")/analyzer.logfile"
     runOrt "$folderToScan" \
@@ -133,6 +136,8 @@ scanAnalyzeResult() {
     local analyzeResult="$(readlink -f "$1")"
     [[ ! -f "$analyzeResult" ]] && exit 1
 
+    printf "\n\n\nscan: $analyzeResult\n\n"
+
     local analyzeResultFolder="$(dirname $analyzeResult)"
     local analyzeResultFile="$(basename $1)"
     local logfile="$(getOutFolder "$analyzeResultFolder")/scanner.logfile"
@@ -144,6 +149,8 @@ scanAnalyzeResult() {
 reportScanResult() {
     local scanResult="$(readlink -f "$1")"
     [[ ! -f "$scanResult" ]] && exit 1
+
+    printf "\n\n\nreport: $scanResult\n\n"
 
     local scanResultFolder="$(dirname $scanResult)"
     local scanResultFile="$(basename $1)"
@@ -157,12 +164,26 @@ doAll() {
     local folderToScan="$1"
     [[ ! -d "$folderToScan" ]] && exit 1
 
-    printf "\n\n\nanalyze: $folderToScan\n\n"
-    analyzeFolder "$folderToScan"
-    printf "\n\n\nscan: ${folderToScan}_ort_analyzer/analyzer-result.yml\n\n"
-    scanAnalyzeResult "${folderToScan}_ort_analyzer/analyzer-result.yml"
-    printf "\n\n\nreport: ${folderToScan}_ort_analyzer/_ort_scan/scan-result.yml\n\n"
-    reportScanResult "${folderToScan}_ort_analyzer/_ort_scan/scan-result.yml"
+    local outFolder=$(getOutFolder "$folderToScan")
+
+    local reportResult="$outFolder/scan-report-web-app.html"
+    if [[ ! -f "$reportResult" ]]; then
+        local scanResult="$outFolder/scan-result.yml"
+        if [[ ! -f "$scanResult" ]]; then
+            local analyzeResult="$outFolder/analyzer-result.yml"
+            if [[ ! -f "$analyzeResult" ]]; then
+                analyzeFolder "$folderToScan"
+            else
+                echo "skip analyze ..."
+            fi
+            scanAnalyzeResult "$analyzeResult"
+        else
+            echo "skip scan ..."
+        fi
+        reportScanResult "$scanResult"
+    else
+        echo "skip report ..."
+    fi
 }
 
 #################################################################################
