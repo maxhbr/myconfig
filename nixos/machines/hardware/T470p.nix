@@ -20,7 +20,8 @@
     ./nixos-hardware/common/pc/laptop/acpi_call.nix
 
     # ./bumblebee.nix
-    ./intel-graphics.nix
+    # ./intel-graphics.nix
+    ./optimus.nix
 
     { # config for libinput
       config = lib.mkIf (config.services.xserver.libinput.enable) {
