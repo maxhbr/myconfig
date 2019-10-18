@@ -9,7 +9,7 @@
 , fontconfig
 , freetype
 , gconf
-, gdk_pixbuf
+, gdk-pixbuf
 , glib
 , glibc
 , gtk2
@@ -50,6 +50,7 @@
 , gnupg
 , ffmpeg
 , runtimeShell
+, systemLocale ? config.i18n.defaultLocale or "en-US"
 }:
 
 let
@@ -57,8 +58,8 @@ let
   inherit (generated) version sources;
 
   mozillaPlatforms = {
-    "i686-linux" = "linux-i686";
-    "x86_64-linux" = "linux-x86_64";
+    i686-linux = "linux-i686";
+    x86_64-linux = "linux-x86_64";
   };
 
   arch = mozillaPlatforms.${stdenv.hostPlatform.system};
@@ -68,8 +69,6 @@ let
 
   sourceMatches = locale: source:
       (isPrefixOf source.locale locale) && source.arch == arch;
-
-  systemLocale = config.i18n.defaultLocale or "en-US";
 
   policies = {
     DisableAppUpdate = true;
@@ -105,7 +104,7 @@ stdenv.mkDerivation {
       fontconfig
       freetype
       gconf
-      gdk_pixbuf
+      gdk-pixbuf
       glib
       glibc
       gtk2
@@ -192,7 +191,7 @@ stdenv.mkDerivation {
   # update with:
   # $ nix-shell maintainers/scripts/update.nix --argstr package firefox-bin-unwrapped
   passthru.updateScript = import ./update.nix {
-    inherit stdenv name channel writeScript xidel coreutils gnused gnugrep gnupg curl runtimeShell;
+    inherit name channel writeScript xidel coreutils gnused gnugrep gnupg curl runtimeShell;
     baseUrl =
       if channel == "devedition"
         then "http://archive.mozilla.org/pub/devedition/releases/"
@@ -206,6 +205,6 @@ stdenv.mkDerivation {
       url = http://www.mozilla.org/en-US/foundation/trademarks/policy/;
     };
     platforms = builtins.attrNames mozillaPlatforms;
-    maintainers = with maintainers; [ garbas ];
+    maintainers = with maintainers; [ taku0 ];
   };
 }

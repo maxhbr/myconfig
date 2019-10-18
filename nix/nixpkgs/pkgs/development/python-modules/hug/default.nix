@@ -1,27 +1,26 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, isPy27
+{ lib , buildPythonPackage, fetchPypi, isPy27
 , falcon
+, pytestrunner
 , requests
 }:
 
 buildPythonPackage rec {
   pname = "hug";
-  version = "2.4.1";
+  version = "2.6.0";
   disabled = isPy27;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "7b633ebbed95f4c264a745cf91450007fe7004e1eaa5b02bf9b3ad28fdd62d08";
+    sha256 = "0iamrzjy8z1xibynkgfl6cn2sbm66awxbp75b26pi32fc41d0k50";
   };
 
+  nativeBuildInputs = [ pytestrunner ];
   propagatedBuildInputs = [ falcon requests ];
 
   # tests are not shipped in the tarball
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A Python framework that makes developing APIs as simple as possible, but no simpler";
     homepage = https://github.com/timothycrosley/hug;
     license = licenses.mit;

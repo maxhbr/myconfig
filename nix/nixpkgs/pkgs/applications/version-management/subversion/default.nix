@@ -19,10 +19,10 @@ let
 
   common = { version, sha256, extraBuildInputs ? [ ] }: stdenv.mkDerivation (rec {
     inherit version;
-    name = "subversion-${version}";
+    pname = "subversion";
 
     src = fetchurl {
-      url = "mirror://apache/subversion/${name}.tar.bz2";
+      url = "mirror://apache/subversion/${pname}-${version}.tar.bz2";
       inherit sha256;
     };
 
@@ -38,9 +38,10 @@ let
 
     patches = [ ./apr-1.patch ];
 
-    # SVN build seems broken on gcc5:
-    # https://gcc.gnu.org/gcc-5/porting_to.html
-    CPPFLAGS = "-P";
+    # We are hitting the following issue even with APR 1.6.x
+    # -> https://issues.apache.org/jira/browse/SVN-4813
+    # "-P" CPPFLAG is needed to build Python bindings and subversionClient
+    CPPFLAGS = [ "-P" ];
 
     configureFlags = [
       (stdenv.lib.withFeature bdbSupport "berkeley-db")
@@ -97,7 +98,7 @@ let
     meta = with stdenv.lib; {
       description = "A version control system intended to be a compelling replacement for CVS in the open source community";
       license = licenses.asl20;
-      homepage = http://subversion.apache.org/;
+      homepage = "http://subversion.apache.org/";
       maintainers = with maintainers; [ eelco lovek323 ];
       platforms = platforms.linux ++ platforms.darwin;
     };
@@ -110,11 +111,6 @@ let
   });
 
 in {
-  subversion18 = common {
-    version = "1.8.19";
-    sha256 = "1gp6426gkdza6ni2whgifjcmjb4nq34ljy07yxkrhlarvfq6ks2n";
-  };
-
   subversion19 = common {
     version = "1.9.12";
     sha256 = "15z33gdnfiqblm5515020wfdwnp2837r3hnparava6m2fgyiafiw";
@@ -126,9 +122,9 @@ in {
     extraBuildInputs = [ lz4 utf8proc ];
   };
 
-  subversion_1_11 = common {
-    version = "1.11.1";
-    sha256 = "1fv0psjxx5nxb4zmddyrma2bnv1bfff4p8ii6j8fqwjdr982gzcy";
+  subversion = common {
+    version = "1.12.2";
+    sha256 = "0wgpw3kzsiawzqk4y0xgh1z93kllxydgv4lsviim45y5wk4bbl1v";
     extraBuildInputs = [ lz4 utf8proc ];
   };
 }

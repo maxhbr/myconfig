@@ -40,7 +40,7 @@ in
   ###### interface
   options.services.kubernetes.pki = with lib.types; {
 
-    enable = mkEnableOption "Whether to enable easyCert issuer service.";
+    enable = mkEnableOption "easyCert issuer service";
 
     certs = mkOption {
       description = "List of certificate specs to feed to cert generator.";
@@ -353,6 +353,8 @@ in
           kubeletClientCaFile = mkDefault caCert;
           kubeletClientCertFile = mkDefault cfg.certs.apiserverKubeletClient.cert;
           kubeletClientKeyFile = mkDefault cfg.certs.apiserverKubeletClient.key;
+          proxyClientCertFile = mkDefault cfg.certs.apiserverProxyClient.cert;
+          proxyClientKeyFile = mkDefault cfg.certs.apiserverProxyClient.key;
         });
         controllerManager = mkIf top.controllerManager.enable {
           serviceAccountKeyFile = mkDefault cfg.certs.serviceAccount.key;

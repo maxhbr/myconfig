@@ -1,25 +1,21 @@
 { stdenv, buildPythonPackage
-, fetchPypi, isPy3k, linuxPackages, gcc5
+, fetchPypi, isPy3k, linuxPackages
 , fastrlock, numpy, six, wheel, pytest, mock
 , cudatoolkit, cudnn, nccl
 }:
 
 buildPythonPackage rec {
   pname = "cupy";
-  version = "5.2.0";
+  version = "6.2.0";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "664acff0e1094f0135acca8899318d300258b704e049b1ef0c59154912da53b2";
+    sha256 = "0d6liaavgqks772rqam53qha3yk6dfw24i0pj3izxvvawzhlp10z";
   };
 
   checkInputs = [
     pytest
     mock
-  ];
-
-  nativeBuildInputs = [
-    gcc5
   ];
 
   propagatedBuildInputs = [

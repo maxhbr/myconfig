@@ -1,5 +1,5 @@
 diff --git a/panels/color/cc-color-panel.c b/panels/color/cc-color-panel.c
-index ee26cfed9..10bd061f9 100644
+index 49ca35220..adefb87b9 100644
 --- a/panels/color/cc-color-panel.c
 +++ b/panels/color/cc-color-panel.c
 @@ -599,7 +599,7 @@ gcm_prefs_calibrate_cb (GtkWidget *widget, CcColorPanel *prefs)
@@ -55,10 +55,10 @@ index 96b25140c..1ad704d4a 100644
  typedef struct _TzDB TzDB;
  typedef struct _TzLocation TzLocation;
 diff --git a/panels/info/cc-info-overview-panel.c b/panels/info/cc-info-overview-panel.c
-index 7758271b1..fc57ce483 100644
+index 4541986db..da7826bfe 100644
 --- a/panels/info/cc-info-overview-panel.c
 +++ b/panels/info/cc-info-overview-panel.c
-@@ -192,7 +192,7 @@ load_gnome_version (char **version,
+@@ -187,7 +187,7 @@ load_gnome_version (char **version,
    gsize length;
    g_autoptr(VersionData) data = NULL;
  
@@ -68,10 +68,10 @@ index 7758271b1..fc57ce483 100644
                              &length,
                              &error))
 diff --git a/panels/network/connection-editor/net-connection-editor.c b/panels/network/connection-editor/net-connection-editor.c
-index 556b57fb8..6e34ad42b 100644
+index 9390a3308..d30b4a68e 100644
 --- a/panels/network/connection-editor/net-connection-editor.c
 +++ b/panels/network/connection-editor/net-connection-editor.c
-@@ -259,9 +259,9 @@ net_connection_editor_do_fallback (NetConnectionEditor *editor, const gchar *typ
+@@ -247,9 +247,9 @@ net_connection_editor_do_fallback (NetConnectionEditor *editor, const gchar *typ
          GError *error = NULL;
  
          if (editor->is_new_connection) {
@@ -84,10 +84,10 @@ index 556b57fb8..6e34ad42b 100644
          }
  
 diff --git a/panels/network/net-device-wifi.c b/panels/network/net-device-wifi.c
-index 4440b94df..c6105cd97 100644
+index 360fbfc72..870157a11 100644
 --- a/panels/network/net-device-wifi.c
 +++ b/panels/network/net-device-wifi.c
-@@ -1652,7 +1652,7 @@ device_wifi_edit (NetObject *object)
+@@ -1385,7 +1385,7 @@ device_wifi_edit (NetObject *object)
                  return;
          }
          uuid = nm_connection_get_uuid (NM_CONNECTION (connection));
@@ -97,10 +97,10 @@ index 4440b94df..c6105cd97 100644
          if (!g_spawn_command_line_async (cmdline, &error)) {
                  g_warning ("Failed to launch nm-connection-editor: %s", error->message);
 diff --git a/panels/network/net-device.c b/panels/network/net-device.c
-index 95b556eca..0b9d4cd22 100644
+index d73b537b9..e2ee54294 100644
 --- a/panels/network/net-device.c
 +++ b/panels/network/net-device.c
-@@ -194,7 +194,7 @@ net_device_edit (NetObject *object)
+@@ -197,7 +197,7 @@ net_device_edit (NetObject *object)
  
          connection = net_device_get_find_connection (device);
          uuid = nm_connection_get_uuid (connection);
@@ -110,11 +110,11 @@ index 95b556eca..0b9d4cd22 100644
          if (!g_spawn_command_line_async (cmdline, &error)) {
                  g_warning ("Failed to launch nm-connection-editor: %s", error->message);
 diff --git a/panels/printers/pp-host.c b/panels/printers/pp-host.c
-index 8af77e9a9..a1897b046 100644
+index f53ba217e..d24bcaeb9 100644
 --- a/panels/printers/pp-host.c
 +++ b/panels/printers/pp-host.c
-@@ -267,7 +267,7 @@ _pp_host_get_snmp_devices_thread (GSimpleAsyncResult *res,
-   data->devices->devices = NULL;
+@@ -256,7 +256,7 @@ _pp_host_get_snmp_devices_thread (GTask        *task,
+   devices = g_new0 (PpDevicesList, 1);
  
    argv = g_new0 (gchar *, 3);
 -  argv[0] = g_strdup ("/usr/lib/cups/backend/snmp");
@@ -123,16 +123,16 @@ index 8af77e9a9..a1897b046 100644
  
    /* Use SNMP to get printer's informations */
 diff --git a/panels/region/cc-region-panel.c b/panels/region/cc-region-panel.c
-index 1061466ea..9b3e7df43 100644
+index 35859526d..21486c917 100644
 --- a/panels/region/cc-region-panel.c
 +++ b/panels/region/cc-region-panel.c
-@@ -1273,10 +1273,10 @@ show_selected_layout (CcRegionPanel *self)
-         }
+@@ -755,10 +755,10 @@ row_layout_cb (CcRegionPanel *self,
+         layout_variant = cc_input_source_get_layout_variant (source);
  
-         if (variant && variant[0])
+         if (layout_variant && layout_variant[0])
 -                commandline = g_strdup_printf ("gkbd-keyboard-display -l \"%s\t%s\"",
 +                commandline = g_strdup_printf ("@libgnomekbd@/bin/gkbd-keyboard-display -l \"%s\t%s\"",
-                                                layout, variant);
+                                                layout, layout_variant);
          else
 -                commandline = g_strdup_printf ("gkbd-keyboard-display -l %s",
 +                commandline = g_strdup_printf ("@libgnomekbd@/bin/gkbd-keyboard-display -l %s",

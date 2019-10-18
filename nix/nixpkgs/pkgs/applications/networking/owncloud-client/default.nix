@@ -1,12 +1,12 @@
-{ stdenv, fetchurl, cmake, pkgconfig, qtbase, qtwebkit, qtkeychain, sqlite }:
+{ stdenv, fetchurl, mkDerivation, cmake, pkgconfig, qtbase, qtwebkit, qtkeychain, sqlite }:
 
-stdenv.mkDerivation rec {
-  name = "owncloud-client-${version}";
-  version = "2.5.3.11470";
+mkDerivation rec {
+  pname = "owncloud-client";
+  version = "2.5.4.11654";
 
   src = fetchurl {
     url = "https://download.owncloud.com/desktop/stable/owncloudclient-${version}.tar.xz";
-    sha256 = "0cznis8qadsnlgm046lxn8vmbxli6zp4b8nk93n53mkfxlcw355n";
+    sha256 = "0gsnry0786crbnpgg3f1vcqw6mwbz6svhm6mw3767qi4lb33jm31";
   };
 
   nativeBuildInputs = [ pkgconfig cmake ];

@@ -1,7 +1,7 @@
-{ stdenv, fetchFromGitHub, cmake, asciidoc }:
+{ stdenv, fetchFromGitHub, cmake, asciidoc, enableDrafts ? false }:
 
 stdenv.mkDerivation rec {
-  name = "zeromq-${version}";
+  pname = "zeromq";
   version = "4.3.2";
 
   src = fetchFromGitHub {
@@ -16,6 +16,8 @@ stdenv.mkDerivation rec {
   enableParallelBuilding = true;
 
   doCheck = false; # fails all the tests (ctest)
+
+  cmakeFlags = if enableDrafts then [ "-DENABLE_DRAFTS=ON" ] else null;
 
   meta = with stdenv.lib; {
     branch = "4";

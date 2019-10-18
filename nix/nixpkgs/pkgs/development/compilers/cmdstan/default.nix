@@ -1,6 +1,6 @@
 { stdenv, fetchurl, python, runtimeShell }:
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation {
   name = "cmdstan-2.17.1";
 
   src = fetchurl {
@@ -35,7 +35,7 @@ stdenv.mkDerivation rec {
       inference with Variational inference (ADVI) and penalized maximum
       likelihood estimation with Optimization (L-BFGS).
     '';
-    homepage = http://mc-stan.org/interfaces/cmdstan.html;
+    homepage = https://mc-stan.org/interfaces/cmdstan.html;
     license = stdenv.lib.licenses.bsd3;
     platforms = stdenv.lib.platforms.all;
   };

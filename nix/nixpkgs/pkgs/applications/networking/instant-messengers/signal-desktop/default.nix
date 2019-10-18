@@ -1,5 +1,5 @@
 { stdenv, lib, fetchurl, dpkg, wrapGAppsHook
-, gnome2, gtk3, atk, at-spi2-atk, cairo, pango, gdk_pixbuf, glib, freetype, fontconfig
+, gnome2, gtk3, atk, at-spi2-atk, cairo, pango, gdk-pixbuf, glib, freetype, fontconfig
 , dbus, libX11, xorg, libXi, libXcursor, libXdamage, libXrandr, libXcomposite
 , libXext, libXfixes, libXrender, libXtst, libXScrnSaver, nss, nspr, alsaLib
 , cups, expat, udev, libnotify, libuuid, at-spi2-core
@@ -32,7 +32,7 @@ let
     expat
     fontconfig
     freetype
-    gdk_pixbuf
+    gdk-pixbuf
     glib
     gnome2.GConf
     gtk3
@@ -57,8 +57,8 @@ let
   ];
 
 in stdenv.mkDerivation rec {
-  name = "signal-desktop-${version}";
-  version = "1.27.3"; # Please backport all updates to the stable channel.
+  pname = "signal-desktop";
+  version = "1.27.4"; # Please backport all updates to the stable channel.
   # All releases have a limited lifetime and "expire" 90 days after the release.
   # When releases "expire" the application becomes unusable until an update is
   # applied. The expiration date for the current release can be extracted with:
@@ -68,7 +68,7 @@ in stdenv.mkDerivation rec {
 
   src = fetchurl {
     url = "https://updates.signal.org/desktop/apt/pool/main/s/signal-desktop/signal-desktop_${version}_amd64.deb";
-    sha256 = "1c9arwnwa0lirvkwm0rfknabqn5gkznihxl1p2m6j7cs7hwhhsn2";
+    sha256 = "1aza1s70xzx9qkv7b5mpfi4zgdn5dq3rl03lx3jixij3x3pxg5sj";
   };
 
   phases = [ "unpackPhase" "installPhase" ];

@@ -1,8 +1,8 @@
-{ stdenv, buildGoPackage, fetchFromGitHub, go }:
+{ stdenv, buildGoPackage, fetchFromGitHub }:
 
 buildGoPackage rec {
-  name = "cloudfoundry-cli-${version}";
-  version = "6.43.0";
+  pname = "cloudfoundry-cli";
+  version = "6.46.1";
 
   goPackagePath = "code.cloudfoundry.org/cli";
 
@@ -12,7 +12,7 @@ buildGoPackage rec {
     owner = "cloudfoundry";
     repo = "cli";
     rev = "v${version}";
-    sha256 = "0nigc8h5g9kb1max7nz74jzd8nmsxd3pfx7piimq9drlkh17v5kr";
+    sha256 = "0dqrkimwhw016icgyf4cyipzy6vdz5jgickm33xxd9018dh3ibwq";
   };
 
   makeTarget = let hps = stdenv.hostPlatform.system; in

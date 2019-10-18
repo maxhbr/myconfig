@@ -136,6 +136,7 @@ stdenv.mkDerivation (rec {
     crateVersion = crate.version;
     crateDescription = crate.description or "";
     crateAuthors = if crate ? authors && lib.isList crate.authors then crate.authors else [];
+    crateHomepage = crate.homepage or "";
     crateType =
       if lib.attrByPath ["procMacro"] false crate then ["proc-macro"] else
       if lib.attrByPath ["plugin"] false crate then ["dylib"] else
@@ -149,7 +150,7 @@ stdenv.mkDerivation (rec {
       inherit crateName buildDependencies completeDeps completeBuildDeps crateDescription
               crateFeatures crateRenames libName build workspace_member release libPath crateVersion
               extraLinkFlags extraRustcOpts
-              crateAuthors verbose colors target_os;
+              crateAuthors crateHomepage verbose colors target_os;
     };
     buildPhase = buildCrate {
       inherit crateName dependencies

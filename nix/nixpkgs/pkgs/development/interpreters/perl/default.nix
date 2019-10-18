@@ -1,4 +1,4 @@
-{ config, lib, stdenv, fetchurl, buildPackages, callPackage
+{ config, lib, stdenv, fetchurl, pkgs, buildPackages, callPackage
 , enableThreading ? stdenv ? glibc, makeWrapper
 }:
 
@@ -23,7 +23,7 @@ let
   libcLib = lib.getLib libc;
   crossCompiling = stdenv.buildPlatform != stdenv.hostPlatform;
 
-  common = { self, version, sha256 }: stdenv.mkDerivation (rec {
+  common = { perl, buildPerl, version, sha256 }: stdenv.mkDerivation (rec {
     inherit version;
 
     name = "perl-${version}";
@@ -43,7 +43,9 @@ let
     patches =
       [
         # Do not look in /usr etc. for dependencies.
-        (if (versionOlder version "5.29.6") then ./no-sys-dirs-5.26.patch else ./no-sys-dirs-5.29.patch)
+        (if (versionOlder version "5.29.6") then ./no-sys-dirs-5.26.patch
+         else if (versionOlder version "5.31.1") then ./no-sys-dirs-5.29.patch
+         else ./no-sys-dirs-5.31.patch)
       ]
       ++ optional (versionOlder version "5.29.6")
         # Fix parallel building: https://rt.perl.org/Public/Bug/Display.html?id=132360
@@ -106,14 +108,14 @@ let
     setupHook = ./setup-hook.sh;
 
     passthru = rec {
-      interpreter = "${self}/bin/perl";
+      interpreter = "${perl}/bin/perl";
       libPrefix = "lib/perl5/site_perl";
       pkgs = callPackage ../../../top-level/perl-packages.nix {
-        perl = self;
+        inherit perl buildPerl;
         overrides = config.perlPackageOverrides or (p: {}); # TODO: (self: super: {}) like in python
       };
       buildEnv = callPackage ./wrapper.nix {
-        perl = self;
+        inherit perl;
         inherit (pkgs) requiredPerlModules;
       };
       withPackages = f: buildEnv.override { extraLibs = f pkgs; };
@@ -171,11 +173,11 @@ let
       priority = 6; # in `buildEnv' (including the one inside `perl.withPackages') the library files will have priority over files in `perl`
     };
   } // stdenv.lib.optionalAttrs (stdenv.buildPlatform != stdenv.hostPlatform) rec {
-    crossVersion = "276849e62f472c1b241d9e7b38a28e4cc9f98563"; # Dez 02, 2018
+    crossVersion = "980998f7d11baf97284426ca91f84681d49a08f5"; # Jul 20, 2019
 
     perl-cross-src = fetchurl {
       url = "https://github.com/arsv/perl-cross/archive/${crossVersion}.tar.gz";
-      sha256 = "1fpr1m9lgkwdp1vmdr0s6gvmcpd0m8q6jwn024bkczc2h37bdynd";
+      sha256 = "1hg3k2rhjs5gclrm05z87nvlh4j9pg7mkm9998h9gy6mzk8224q5";
     };
 
     depsBuildBuild = [ buildPackages.stdenv.cc makeWrapper ];
@@ -190,18 +192,28 @@ let
     # TODO merge setup hooks
     setupHook = ./setup-hook-cross.sh;
   });
-in rec {
-  # the latest Maint version
+in {
+  # Maint version
   perl528 = common {
-    self = perl528;
-    version = "5.28.1";
-    sha256 = "0iy3as4hnbjfyws4in3j9d6zhhjxgl5m95i5n9jy2bnzcpz8bgry";
+    perl = pkgs.perl528;
+    buildPerl = buildPackages.perl528;
+    version = "5.28.2";
+    sha256 = "1iynpsxdym4h76kgndmn3ykvwxhqz444xvaz8z2irsxkvmnlb5da";
+  };
+
+  # Maint version
+  perl530 = common {
+    perl = pkgs.perl530;
+    buildPerl = buildPackages.perl530;
+    version = "5.30.0";
+    sha256 = "1wkmz6xn3fswpqhz29akiklcxclnlykhp96a8bqcz36rak3i64l5";
   };
 
   # the latest Devel version
   perldevel = common {
-    self = perldevel;
-    version = "5.29.6";
-    sha256 = "0wj2bia8s30788f69mf5s533l72zbhqpdr85kkk97yrh1c9sgcd6";
+    perl = pkgs.perldevel;
+    buildPerl = buildPackages.perldevel;
+    version = "5.31.2";
+    sha256 = "00bdh9lmjb0m7dhk8mj7kab7cg2zn9zgw82y4hgkwydzg6d1jis0";
   };
 }

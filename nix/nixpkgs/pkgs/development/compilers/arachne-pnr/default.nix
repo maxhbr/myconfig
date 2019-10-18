@@ -3,8 +3,8 @@
 with builtins;
 
 stdenv.mkDerivation rec {
-  name = "arachne-pnr-${version}";
-  version = "2018.09.08";
+  pname = "arachne-pnr";
+  version = "2018.09.09";
 
   src = fetchFromGitHub {
     owner  = "yosyshq";

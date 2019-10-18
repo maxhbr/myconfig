@@ -1,13 +1,13 @@
 { stdenv, fetchFromGitHub, cmake }:
 
 stdenv.mkDerivation rec {
-  name = "snappy-${version}";
+  pname = "snappy";
   version = "1.1.7";
 
   src = fetchFromGitHub {
     owner = "google";
     repo = "snappy";
-    rev = "${version}";
+    rev = version;
     sha256 = "1x7r8sjmdqlqjz0xfiwdyrqpgaj5yrvrgb28ivgpvnxgar5qv6m2";
   };
 
@@ -18,6 +18,11 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [ cmake ];
 
   cmakeFlags = [ "-DBUILD_SHARED_LIBS=ON" "-DCMAKE_SKIP_BUILD_RPATH=OFF" ];
+
+  postInstall = ''
+    substituteInPlace "$out"/lib/cmake/Snappy/SnappyTargets.cmake \
+      --replace 'INTERFACE_INCLUDE_DIRECTORIES "''${_IMPORT_PREFIX}/include"' 'INTERFACE_INCLUDE_DIRECTORIES "'$dev'"'
+  '';
 
   checkTarget = "test";
 

@@ -37,6 +37,7 @@ let newPython = python3.override {
         sha256 = "c0abe3218b86533cca287e7057a37481883c07acef7814b70583406938214cc8";
       };
     });
+    pyyaml = super.pyyaml_3;
   };
 };
 
@@ -68,6 +69,11 @@ in newPython.pkgs.buildPythonApplication rec {
   checkPhase = ''
     export HOME="$TMP/conan-home"
     mkdir -p "$HOME"
+  '';
+
+  postPatch = ''
+    substituteInPlace conans/requirements_server.txt \
+      --replace "pluginbase>=0.5, < 1.0" "pluginbase>=0.5"
   '';
 
   meta = with lib; {

@@ -12,7 +12,7 @@ let
 
     isExecutable = true;
 
-    inherit (pkgs.buildPackages) python3;
+    inherit (pkgs) python3;
 
     systemd = config.systemd.package;
 
@@ -79,8 +79,7 @@ in {
 
       description = ''
         The resolution of the console. The following values are valid:
-        </para>
-        <para>
+
         <itemizedlist>
           <listitem><para>
             <literal>"0"</literal>: Standard UEFI 80x25 mode

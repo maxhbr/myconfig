@@ -5,7 +5,7 @@
 , qtbase
 }:
 with pythonPackages;
-buildPythonPackage rec {
+buildPythonPackage {
   pname = "qscintilla";
   version = qscintilla.version;
   src = qscintilla.src;
@@ -37,5 +37,6 @@ buildPythonPackage rec {
     license = licenses.lgpl21Plus;
     maintainers = with maintainers; [ lsix ];
     homepage = https://www.riverbankcomputing.com/software/qscintilla/;
+    broken = true;
   };
 }

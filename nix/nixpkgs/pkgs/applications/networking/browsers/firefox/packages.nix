@@ -1,19 +1,26 @@
-{ lib, callPackage, fetchurl, fetchFromGitHub, fetchpatch }:
+{ lib, callPackage, fetchurl, fetchFromGitHub, overrideCC, gccStdenv, gcc6 }:
 
 let
 
   common = opts: callPackage (import ./common.nix opts) {};
 
+  # Needed on older branches since rustc: 1.32.0 -> 1.33.0
+  missing-documentation-patch = fetchurl {
+    name = "missing-documentation.patch";
+    url = "https://aur.archlinux.org/cgit/aur.git/plain/deny_missing_docs.patch"
+        + "?h=firefox-esr&id=03bdd01f9cf";
+    sha256 = "1i33n3fgwc8d0v7j4qn7lbdax0an6swar12gay3q2nwrhg3ic4fb";
+  };
 in
 
 rec {
 
   firefox = common rec {
     pname = "firefox";
-    ffversion = "69.0.1";
+    ffversion = "69.0.2";
     src = fetchurl {
       url = "mirror://mozilla/firefox/releases/${ffversion}/source/firefox-${ffversion}.source.tar.xz";
-      sha512 = "0zvjwn17accmp9m55a9s12mw3cflsplysizfrpa3hy02na20w39g974d42fmxpk4zq4zqy4m17v2rpibibb0g7giy9rywndhaw3xrl9";
+      sha512 = "2ag1syrvlkch7vl151hkq8abf86p9v6b6gmgcbh26b8wfva1p1ss1x09h4w50zmcc6jq4q5mcxgf1sd9zna552jl90k1y4rqvrrzwl6";
     };
 
     patches = [
@@ -38,7 +45,7 @@ rec {
   # the web, there are many old useful plugins targeting offline
   # activities (e.g. ebook readers, syncronous translation, etc) that
   # will probably never be ported to WebExtensions API.
-  firefox-esr-52 = common rec {
+  firefox-esr-52 = (common rec {
     pname = "firefox-esr";
     ffversion = "52.9.0esr";
     src = fetchurl {
@@ -56,11 +63,9 @@ rec {
       description = "A web browser built from Firefox Extended Support Release source tree";
       knownVulnerabilities = [ "Support ended in August 2018." ];
     };
-    updateScript = callPackage ./update.nix {
-      attrPath = "firefox-esr-52-unwrapped";
-      ffversionSuffix = "esr";
-      versionKey = "ffversion";
-    };
+  }).override {
+    stdenv = overrideCC gccStdenv gcc6; # gcc7 fails with "undefined reference to `__divmoddi4'"
+    gtk3Support = false;
   };
 
   firefox-esr-60 = common rec {
@@ -78,6 +83,8 @@ rec {
       # this one is actually an omnipresent bug
       # https://bugzilla.mozilla.org/show_bug.cgi?id=1444519
       ./fix-pa-context-connect-retval.patch
+
+      missing-documentation-patch
     ];
 
     meta = firefox.meta // {
@@ -152,7 +159,7 @@ rec {
     };
   });
 
-in rec {
+in {
 
   icecat = iccommon rec {
     ffversion = "60.3.0";
@@ -165,6 +172,7 @@ in rec {
 
     patches = [
       ./no-buildconfig.patch
+      missing-documentation-patch
     ];
   };
 
@@ -241,7 +249,7 @@ in rec {
 
 in rec {
 
-  tor-browser-7-5 = (tbcommon rec {
+  tor-browser-7-5 = (tbcommon {
     ffversion = "52.9.0esr";
     tbversion = "7.5.6";
 
@@ -269,6 +277,10 @@ in rec {
       rev   = "0489ae3158cd8c0e16c2e78b94083d8cbf0209dc";
       sha256 = "0y5s7d8pg8ak990dp8d801j9823igaibfhv9hsa79nib5yllifzs";
     };
+
+    patches = [
+      missing-documentation-patch
+    ];
   };
 
   tor-browser = tor-browser-8-5;

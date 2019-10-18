@@ -1,6 +1,5 @@
 { stdenv, fetchFromGitHub
 , ninja
-, boost
 , meson
 , pkgconfig
 , wrapGAppsHook
@@ -12,7 +11,6 @@
 , python3Packages
 , file
 , cairo
-, sqlite
 , gettext
 , gnome3
 }:
@@ -76,7 +74,7 @@ python3Packages.buildPythonApplication rec {
   '';
 
   meta = with stdenv.lib; {
-    description = "A modern audio book player for Linux using GTK+ 3";
+    description = "A modern audio book player for Linux using GTK 3";
     homepage = https://cozy.geigi.de/;
     maintainers = [ maintainers.makefu ];
     license = licenses.gpl3;

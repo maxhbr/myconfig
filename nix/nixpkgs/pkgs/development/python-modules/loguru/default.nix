@@ -2,12 +2,12 @@
 
 buildPythonPackage rec {
   pname = "loguru";
-  version = "0.3.0";
+  version = "0.3.2";
   
   disabled = isPy27;
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1b2phizcx2wbdm5np0s16yd68fc0isqnm8qs6l9pmlrlyf9gm87j";
+    sha256 = "0apd3wcjbyhwzgw0fgzzn4dcgy10pqa8f1vf58d4hmszxvyqn4z3";
   };
 
   checkInputs = [ pytest colorama ];

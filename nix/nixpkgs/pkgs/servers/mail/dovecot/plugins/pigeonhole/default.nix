@@ -11,9 +11,6 @@ stdenv.mkDerivation rec {
 
   buildInputs = [ dovecot openssl ];
 
-  patches = [
-  ];
-
   preConfigure = ''
     substituteInPlace src/managesieve/managesieve-settings.c --replace \
       ".executable = \"managesieve\"" \
@@ -35,7 +32,7 @@ stdenv.mkDerivation rec {
     homepage = http://pigeonhole.dovecot.org/;
     description = "A sieve plugin for the Dovecot IMAP server";
     license = licenses.lgpl21;
-    maintainers = [ maintainers.rickynils ];
+    maintainers = with maintainers; [ rickynils globin ];
     platforms = platforms.unix;
   };
 }

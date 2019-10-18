@@ -2,6 +2,7 @@
 , python
 , groff
 , less
+, fetchpatch
 }:
 
 let
@@ -21,22 +22,23 @@ let
           sha256 = "48eb22f4f8461b1df5734a074b57042430fb06e1d61bd1e11b078c0fe6d7a1f1";
         };
       });
+      pyyaml = super.pyyaml_3;
     };
   };
 
 in py.pkgs.buildPythonApplication rec {
   pname = "awscli";
-  version = "1.16.106"; # N.B: if you change this, change botocore to a matching version too
+  version = "1.16.215"; # N.B: if you change this, change botocore to a matching version too
 
   src = py.pkgs.fetchPypi {
     inherit pname version;
-    sha256 = "169810cb895ac8608747e81480aebd2712f654ad2e49e1f1315f34d6052d5e2d";
+    sha256 = "13r32z8iyza4gvpf81l6l2ywv37yxi4bb08ry7cli5m6ny9xqlq8";
   };
 
   # No tests included
   doCheck = false;
 
-  propagatedBuildInputs = with py.pkgs; [
+  pythonPath = with py.pkgs; [
     botocore
     bcdoc
     s3transfer
@@ -47,6 +49,10 @@ in py.pkgs.buildPythonApplication rec {
     pyyaml
     groff
     less
+    urllib3
+    dateutil
+    jmespath
+    futures
   ];
 
   postInstall = ''

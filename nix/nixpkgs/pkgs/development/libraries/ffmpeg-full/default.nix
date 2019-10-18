@@ -52,6 +52,7 @@
 , bzip2 ? null
 , celt ? null # CELT decoder
 #, crystalhd ? null # Broadcom CrystalHD hardware acceleration
+, dav1d ? null # AV1 decoder (focused on speed and correctness)
 #, decklinkExtlib ? false, blackmagic-design-desktop-video ? null # Blackmagic Design DeckLink I/O support
 , fdkaacExtlib ? false, fdk_aac ? null # Fraunhofer FDK AAC de/encoder
 #, flite ? null # Flite (voice synthesis) support
@@ -75,7 +76,7 @@
 , libdc1394 ? null, libraw1394 ? null # IIDC-1394 grabbing (ieee 1394)
 , libiconv ? null
 #, libiec61883 ? null, libavc1394 ? null # iec61883 (also uses libraw1394)
-#, libmfx ? null # Hardware acceleration vis libmfx
+, libmfx ? null # Hardware acceleration vis libmfx
 , libmodplug ? null # ModPlug support
 , libmysofa ? null # HRTF support via SOFAlizer
 #, libnut ? null # NUT (de)muxer, native (de)muser exists
@@ -97,8 +98,7 @@
 , libXv ? null # Xlib support
 , libXext ? null # Xlib support
 , lzma ? null # xz-utils
-, nvenc ? false, nv-codec-headers ? null # NVIDIA NVENC support
-, callPackage # needed for NVENC to access external ffmpeg nvidia headers
+, nvenc ? !stdenv.isDarwin && !stdenv.isAarch64, nv-codec-headers ? null # NVIDIA NVENC support
 , openal ? null # OpenAL 1.1 capture support
 #, opencl ? null # OpenCL code
 , opencore-amr ? null # AMR-NB de/encoder & AMR-WB decoder
@@ -140,7 +140,7 @@
  *  Darwin frameworks
  */
 , Cocoa, CoreAudio, CoreServices, AVFoundation, MediaToolbox
-, VideoDecodeAcceleration, cf-private
+, VideoDecodeAcceleration
 }:
 
 /* Maintainer notes:
@@ -156,12 +156,16 @@
  *
  * Not packaged:
  *   aacplus avisynth cdio-paranoia crystalhd libavc1394 libiec61883
- *   libmxf libnut libquvi nvenc opencl openh264 oss shine twolame
+ *   libnut libquvi nvenc opencl openh264 oss shine twolame
  *   utvideo vo-aacenc vo-amrwbenc xvmc zvbi blackmagic-design-desktop-video
  *
  * Need fixes to support Darwin:
- *   frei0r, game-music-emu, gsm, libjack2, libssh, libvpx(stable 1.3.0), openal, openjpeg,
- *   pulseaudio, rtmpdump, samba, vid-stab, wavpack, x265. xavs
+ *   frei0r game-music-emu gsm libjack2 libmfx(intel-media-sdk) libssh
+ *   libvpx(stable 1.3.0) openal openjpeg pulseaudio rtmpdump samba vid-stab
+ *   wavpack x265 xavs
+ *
+ * Need fixes to support AArch64:
+ *   libmfx(intel-media-sdk) nvenc
  *
  * Not supported:
  *   stagefright-h264(android only)
@@ -175,7 +179,7 @@
  */
 
 let
-  inherit (stdenv) isCygwin isFreeBSD isLinux;
+  inherit (stdenv) isCygwin isDarwin isFreeBSD isLinux isAarch64;
   inherit (stdenv.lib) optional optionals optionalString enableFeature;
 in
 
@@ -189,6 +193,10 @@ assert nonfreeLicensing -> gplLicensing && version3Licensing;
  */
 assert networkBuild -> gnutls != null || opensslExtlib;
 assert pixelutilsBuild -> avutilLibrary;
+/*
+ *  Platform dependencies
+ */
+assert isDarwin -> !nvenc;
 /*
  *  Program dependencies
  */
@@ -229,18 +237,15 @@ assert openglExtlib -> libGLU_combined != null;
 assert opensslExtlib -> gnutls == null && openssl != null && nonfreeLicensing;
 
 stdenv.mkDerivation rec {
-  name = "ffmpeg-full-${version}";
-  version = "4.1.4";
+  pname = "ffmpeg-full";
+  version = "4.2.1";
 
   src = fetchurl {
     url = "https://www.ffmpeg.org/releases/ffmpeg-${version}.tar.xz";
-    sha256 = "1qd7a10gs12ifcp31gramcgqjl77swskjfp7cijibgyg5yl4kw7i";
+    sha256 = "1m5nkc61ihgcf0b2wabm0zyqa8sj3c0w8fi6kr879lb0kdzciiyf";
   };
-  patches = [(fetchpatch { # remove on update
-    name = "fix-hardcoded-tables.diff";
-    url = "http://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff_plain/c8232e50074f";
-    sha256 = "0jlksks4fjajby8fjk7rfp414gxfdgd6q9khq26i52xvf4kg2dw6";
-  })];
+
+  patches = [ ./prefer-libdav1d-over-libaom.patch ];
 
   prePatch = ''
     patchShebangs .
@@ -267,7 +272,7 @@ stdenv.mkDerivation rec {
      *  Build flags
      */
     # On some ARM platforms --enable-thumb
-    "--enable-shared --disable-static"
+    "--enable-shared"
     (enableFeature true "pic")
     (if stdenv.cc.isClang then "--cc=clang" else null)
     (enableFeature smallBuild "small")
@@ -323,6 +328,7 @@ stdenv.mkDerivation rec {
     (enableFeature (bzip2 != null) "bzlib")
     (enableFeature (celt != null) "libcelt")
     #(enableFeature crystalhd "crystalhd")
+    (enableFeature (dav1d != null) "libdav1d")
     #(enableFeature decklinkExtlib "decklink")
     (enableFeature (fdkaacExtlib && gplLicensing) "libfdk-aac")
     #(enableFeature (flite != null) "libflite")
@@ -347,7 +353,7 @@ stdenv.mkDerivation rec {
     (enableFeature (if isLinux then libdc1394 != null && libraw1394 != null else false) "libdc1394")
     (enableFeature (libiconv != null) "iconv")
     #(enableFeature (if isLinux then libiec61883 != null && libavc1394 != null && libraw1394 != null else false) "libiec61883")
-    #(enableFeature (libmfx != null) "libmfx")
+    (enableFeature (if isLinux && !isAarch64 then libmfx != null else false) "libmfx")
     (enableFeature (libmodplug != null) "libmodplug")
     (enableFeature (libmysofa != null) "libmysofa")
     #(enableFeature (libnut != null) "libnut")
@@ -410,7 +416,7 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [ perl pkgconfig texinfo yasm ];
 
   buildInputs = [
-    bzip2 celt fontconfig freetype frei0r fribidi game-music-emu gnutls gsm
+    bzip2 celt dav1d fontconfig freetype frei0r fribidi game-music-emu gnutls gsm
     libjack2 ladspaH lame libaom libass libbluray libbs2b libcaca libdc1394 libmodplug libmysofa
     libogg libopus libssh libtheora libvdpau libvorbis libvpx libwebp libX11
     libxcb libXv libXext lzma openal openjpeg libpulseaudio rtmpdump opencore-amr
@@ -420,10 +426,11 @@ stdenv.mkDerivation rec {
     ++ optionals nonfreeLicensing [ fdk_aac openssl ]
     ++ optional ((isLinux || isFreeBSD) && libva != null) libva
     ++ optionals isLinux [ alsaLib libraw1394 libv4l ]
+    ++ optional (isLinux && !isAarch64 && libmfx != null) libmfx
     ++ optional nvenc nv-codec-headers
     ++ optionals stdenv.isDarwin [ Cocoa CoreServices CoreAudio AVFoundation
                                    MediaToolbox VideoDecodeAcceleration
-                                   libiconv cf-private /* For _OBJC_EHTYPE_$_NSException */ ];
+                                   libiconv ];
 
   buildFlags = [ "all" ]
     ++ optional qtFaststartProgram "tools/qt-faststart"; # Build qt-faststart executable
@@ -431,14 +438,6 @@ stdenv.mkDerivation rec {
   # Hacky framework patching technique borrowed from the phantomjs2 package
   postInstall = optionalString qtFaststartProgram ''
     cp -a tools/qt-faststart $out/bin/
-  '' + optionalString stdenv.isDarwin ''
-    FILES=($(ls $out/bin/*))
-    FILES+=($(ls $out/lib/*.dylib))
-    for f in ''${FILES[@]}; do
-      if [ ! -h "$f" ]; then
-        install_name_tool -change ${cf-private}/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation /System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation "$f"
-      fi
-    done
   '';
 
   enableParallelBuilding = true;

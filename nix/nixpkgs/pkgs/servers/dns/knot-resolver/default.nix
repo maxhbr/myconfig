@@ -22,12 +22,12 @@ exportLuaPathsFor = luaPkgs: ''
 '';
 
 unwrapped = stdenv.mkDerivation rec {
-  name = "knot-resolver-${version}";
-  version = "4.1.0";
+  pname = "knot-resolver";
+  version = "4.2.2";
 
   src = fetchurl {
-    url = "https://secure.nic.cz/files/knot-resolver/${name}.tar.xz";
-    sha256 = "2fe470f9bb1007667cdd448f758087244b7195a0234c2b100a9beeed0a2d3e68";
+    url = "https://secure.nic.cz/files/knot-resolver/${pname}-${version}.tar.xz";
+    sha256 = "03b68dff16429aed7a5b0cea7189276c8056e8ecd567b678c2595d48d9a51458";
   };
 
   # https://gitlab.labs.nic.cz/knot/knot-resolver/issues/496
@@ -54,13 +54,10 @@ unwrapped = stdenv.mkDerivation rec {
     "-Dinstall_kresd_conf=disabled" # not really useful; examples are inside share/doc/
     "--default-library=static" # not used by anyone
   ]
-  # kres-cache-gc won't work on Darwin before 10.12 due to missing clock_gettime()
-  ++ optional stdenv.hostPlatform.isDarwin "-Dutils=disabled"
-  ++ optionals doInstallCheck [
-    "-Dunit_tests=enabled"
-    #"-Dconfig_tests=enabled" #FIXME: check-no-ca-store.diff - as gnutls isn't patched
+  ++ optional doInstallCheck "-Dunit_tests=enabled"
+  ++ optional (doInstallCheck && !stdenv.isDarwin) "-Dconfig_tests=enabled"
     #"-Dextra_tests=enabled" # not suitable as in-distro tests; many deps, too.
-  ];
+  ;
 
   postInstall = ''
     rm "$out"/lib/libkres.a
@@ -68,7 +65,7 @@ unwrapped = stdenv.mkDerivation rec {
 
   # aarch64: see https://github.com/wahern/cqueues/issues/223
   doInstallCheck = with stdenv; hostPlatform == buildPlatform && !hostPlatform.isAarch64;
-  installCheckInputs = [ cmocka which ];
+  installCheckInputs = [ cmocka which cacert ];
   installCheckPhase = ''
     meson test --print-errorlogs
   '';
@@ -82,12 +79,17 @@ unwrapped = stdenv.mkDerivation rec {
   };
 };
 
-wrapped-full = with luajitPackages; let
-    luaPkgs =  [
+# FIXME: revert this back after resolving
+# https://github.com/NixOS/nixpkgs/pull/63108#issuecomment-508670438
+wrapped-full =
+  with stdenv.lib;
+  with luajitPackages;
+  let
+    luaPkgs = [
       luasec luasocket # trust anchor bootstrap, prefill module
-      lfs # prefill module
-      # Almost all is for the 'http' module:
-      http cqueues fifo lpeg lpeg_patterns luaossl compat53 basexx
+      luafilesystem # prefill module
+      http # for http module; brings lots of deps; some are useful elsewhere
+      cqueues fifo lpeg lpeg_patterns luaossl compat53 basexx binaryheap
     ];
   in runCommand unwrapped.name
   {
@@ -97,12 +99,13 @@ wrapped-full = with luajitPackages; let
   }
   (exportLuaPathsFor luaPkgs
   + ''
-    mkdir -p "$out/sbin" "$out/share"
-    makeWrapper '${unwrapped}/sbin/kresd' "$out"/sbin/kresd \
+    mkdir -p "$out"/{bin,share}
+    makeWrapper '${unwrapped}/bin/kresd' "$out"/bin/kresd \
       --set LUA_PATH  "$LUA_PATH" \
       --set LUA_CPATH "$LUA_CPATH"
+
     ln -sr '${unwrapped}/share/man' "$out"/share/
-    ln -sr "$out"/{sbin,bin}
+    ln -sr "$out"/{bin,sbin}
 
     echo "Checking that 'http' module loads, i.e. lua search paths work:"
     echo "modules.load('http')" > test-http.lua

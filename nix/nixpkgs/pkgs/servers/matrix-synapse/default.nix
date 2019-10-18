@@ -1,20 +1,8 @@
-{ lib, stdenv, fetchFromGitHub, python3, openssl
+{ lib, stdenv, python3, openssl
 , enableSystemd ? stdenv.isLinux
 }:
 
-with python3.pkgs.override {
-  overrides = self: super: {
-    service-identity = super.service-identity.overrideAttrs (oldAttrs: rec {
-      version = "18.1.0";
-      src = fetchFromGitHub {
-        owner = "pyca";
-        repo = "service_identity";
-        rev = version;
-        sha256 = "1aw475ksmd4vpl8cwfdcsw2v063nbhnnxpy633sb75iqp9aazhlx";
-      };
-    });
-  };
-};
+with python3.pkgs;
 
 let
   matrix-synapse-ldap3 = buildPythonPackage rec {
@@ -35,11 +23,11 @@ let
 
 in buildPythonApplication rec {
   pname = "matrix-synapse";
-  version = "1.2.1";
+  version = "1.4.0";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0pr17n52vdq490q6c282nqnn51j5k0lf7mzaazpxjy4q86pxdfy5";
+    sha256 = "1y8yhzsf2lk2d7v4l61rpy4918c0qz276j79q88l9yazb6gw5pkk";
   };
 
   patches = [
@@ -48,6 +36,7 @@ in buildPythonApplication rec {
   ];
 
   propagatedBuildInputs = [
+    setuptools
     bcrypt
     bleach
     canonicaljson
@@ -94,6 +83,6 @@ in buildPythonApplication rec {
     homepage = https://matrix.org;
     description = "Matrix reference homeserver";
     license = licenses.asl20;
-    maintainers = with maintainers; [ ralith roblabla ekleog pacien ];
+    maintainers = with maintainers; [ ralith roblabla ekleog pacien ma27 ];
   };
 }

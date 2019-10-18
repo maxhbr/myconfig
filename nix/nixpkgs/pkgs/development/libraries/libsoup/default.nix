@@ -3,13 +3,12 @@
 , libpsl, python3 }:
 
 stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
   pname = "libsoup";
-  version = "2.64.2";
+  version = "2.66.4";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "1il6lyrmfi0hfh3ysw8w1qzc1rdz0igkb7dv6d8g5mmilnac3pbm";
+    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "0yc749ismwgkm61crc0iv0drhbdjn9iig71s2664y77f3r7rh243";
   };
 
   postPatch = ''
