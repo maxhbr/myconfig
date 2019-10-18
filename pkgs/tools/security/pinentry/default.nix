@@ -1,9 +1,21 @@
 { fetchurl, fetchpatch, stdenv, lib, pkgconfig
-, libgpgerror, libassuan, libcap ? null, libsecret ? null, ncurses ? null, gtk2 ? null, gcr ? null, qt ? null
+, libgpgerror, libassuan
+, libcap ? null, libsecret ? null, ncurses ? null, gtk2 ? null, gcr ? null
+, qt4 ? null, qt5 ? null
 , enableEmacs ? false
 }:
 
-stdenv.mkDerivation rec {
+assert qt5 != null -> qt4 == null;
+assert qt4 != null -> qt5 == null;
+
+let
+  mkDerivation =
+    if qt5 != null
+      then qt5.mkDerivation
+      else stdenv.mkDerivation;
+in
+
+mkDerivation rec {
   name = "pinentry-1.1.0";
 
   src = fetchurl {
@@ -11,7 +23,10 @@ stdenv.mkDerivation rec {
     sha256 = "0w35ypl960pczg5kp6km3dyr000m1hf0vpwwlh72jjkjza36c1v8";
   };
 
-  buildInputs = [ libgpgerror libassuan libcap libsecret gtk2 gcr ncurses qt ];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs =
+    [ libgpgerror libassuan libcap libsecret gtk2 gcr ncurses qt4 ]
+    ++ stdenv.lib.optional (qt5 != null) qt5.qtbase;
 
   prePatch = ''
     substituteInPlace pinentry/pinentry-curses.c --replace ncursesw ncurses
@@ -33,10 +48,11 @@ stdenv.mkDerivation rec {
     (stdenv.lib.enableFeature enableEmacs         "pinentry-emacs")
     (stdenv.lib.enableFeature (gtk2 != null)      "pinentry-gtk2")
     (stdenv.lib.enableFeature (gcr != null)       "pinentry-gnome3")
-    (stdenv.lib.enableFeature (qt != null)        "pinentry-qt")
-  ];
+    (stdenv.lib.enableFeature (qt4 != null || qt5 != null) "pinentry-qt")
 
-  nativeBuildInputs = [ pkgconfig ];
+    "--with-libassuan-prefix=${libassuan.dev}"
+    "--with-libgpg-error-prefix=${libgpgerror.dev}"
+  ];
 
   meta = with stdenv.lib; {
     homepage = http://gnupg.org/aegypten2/;
@@ -44,7 +60,7 @@ stdenv.mkDerivation rec {
     license = licenses.gpl2Plus;
     platforms = platforms.all;
     longDescription = ''
-      Pinentry provides a console and (optional) GTK+ and Qt GUIs allowing users
+      Pinentry provides a console and (optional) GTK and Qt GUIs allowing users
       to enter a passphrase when `gpg' or `gpg2' is run and needs it.
     '';
     maintainers = [ maintainers.ttuegel ];

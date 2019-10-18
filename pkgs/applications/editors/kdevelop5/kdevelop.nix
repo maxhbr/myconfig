@@ -7,16 +7,13 @@
 , libksysguard, konsole, llvmPackages, makeWrapper, kpurpose, boost
 }:
 
-let
-  qtVersion = "5.${lib.versions.minor qtbase.version}";
-in
 mkDerivation rec {
   pname = "kdevelop";
-  version = "5.3.3";
+  version = "5.4.2";
 
   src = fetchurl {
     url = "mirror://kde/stable/${pname}/${version}/src/${pname}-${version}.tar.xz";
-    sha256 = "0778587qvi268ab2fgggfl40cv2swgr8q891q1paflp3m1xirpff";
+    sha256 = "1i665m4jd1r5bl77pcfybpn9szxzccrajs4m0prqwhlj93d57qjj";
   };
 
   nativeBuildInputs = [
@@ -42,20 +39,14 @@ mkDerivation rec {
     "-DCLANG_BUILTIN_DIR=${llvmPackages.clang-unwrapped}/lib/clang/${(builtins.parseDrvName llvmPackages.clang.name).version}/include"
   ];
 
-  postPatch = ''
-    # FIXME: temporary until https://invent.kde.org/kde/kdevelop/merge_requests/8 is merged
-    substituteInPlace kdevplatform/language/backgroundparser/parsejob.cpp --replace \
-      'if (internalFilePath.startsWith(dataPath.canonicalPath() + QStringLiteral("/kdev"))) {' \
-      'if (internalFilePath.startsWith(dataPath.canonicalPath() + QStringLiteral("/kdev")) || localFile.startsWith(path + QStringLiteral("/kdev"))) {'
-  '';
+  dontWrapQtApps = true;
 
   postInstall = ''
     # The kdevelop! script (shell environment) needs qdbus and kioclient5 in PATH.
     wrapProgram "$out/bin/kdevelop!" \
       --prefix PATH ":" "${lib.makeBinPath [ qttools kde-cli-tools ]}"
 
-    wrapProgram "$out/bin/kdevelop" \
-      --prefix QT_PLUGIN_PATH : $out/lib/qt-${qtVersion}/plugins
+    wrapQtApp "$out/bin/kdevelop"
 
     # Fix the (now wrapped) kdevelop! to find things in right places:
     # - Fixup the one use where KDEV_BASEDIR is assumed to contain kdevelop.

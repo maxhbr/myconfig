@@ -5,7 +5,6 @@
   deepin }:
 
 stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
   pname = "deepin-mutter";
   version = "3.20.38";
 
@@ -44,8 +43,13 @@ stdenv.mkDerivation rec {
     xorg.libxkbfile
   ];
 
+  patches = [
+    ./deepin-mutter.plugins-dir.patch
+  ];
+
   postPatch = ''
-    searchHardCodedPaths
+    searchHardCodedPaths  # debugging
+    sed -i -e "s,Exec=deepin-mutter,Exec=$out/bin/deepin-mutter," data/mutter.desktop.in
   '';
 
   configureFlags = [
@@ -57,9 +61,13 @@ stdenv.mkDerivation rec {
     NOCONFIGURE=1 ./autogen.sh
   '';
 
+  postFixup = ''
+    searchHardCodedPaths $out  # debugging
+  '';
+
   enableParallelBuilding = true;
 
-  passthru.updateScript = deepin.updateScript { inherit name; };
+  passthru.updateScript = deepin.updateScript { inherit ;name = "${pname}-${version}"; };
 
   meta = with stdenv.lib; {
     description = "Base window manager for deepin, fork of gnome mutter";

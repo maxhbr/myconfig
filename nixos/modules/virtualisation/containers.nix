@@ -138,7 +138,7 @@ let
         --bind-ro=/nix/var/nix/daemon-socket \
         --bind="/nix/var/nix/profiles/per-container/$INSTANCE:/nix/var/nix/profiles" \
         --bind="/nix/var/nix/gcroots/per-container/$INSTANCE:/nix/var/nix/gcroots" \
-        --link-journal=try-guest \
+        ${optionalString (!cfg.ephemeral) "--link-journal=try-guest"} \
         --setenv PRIVATE_NETWORK="$PRIVATE_NETWORK" \
         --setenv HOST_BRIDGE="$HOST_BRIDGE" \
         --setenv HOST_ADDRESS="$HOST_ADDRESS" \
@@ -147,6 +147,7 @@ let
         --setenv LOCAL_ADDRESS6="$LOCAL_ADDRESS6" \
         --setenv HOST_PORT="$HOST_PORT" \
         --setenv PATH="$PATH" \
+        ${optionalString cfg.ephemeral "--ephemeral"} \
         ${if cfg.additionalCapabilities != null && cfg.additionalCapabilities != [] then
           ''--capability="${concatStringsSep " " cfg.additionalCapabilities}"'' else ""
         } \
@@ -247,6 +248,8 @@ let
 
     Type = "notify";
 
+    RuntimeDirectory = lib.optional cfg.ephemeral "containers/%i";
+
     # Note that on reboot, systemd-nspawn returns 133, so this
     # unit will be restarted. On poweroff, it returns 0, so the
     # unit won't be restarted.
@@ -334,7 +337,7 @@ let
 
   networkOptions = {
     hostBridge = mkOption {
-      type = types.nullOr types.string;
+      type = types.nullOr types.str;
       default = null;
       example = "br0";
       description = ''
@@ -384,7 +387,7 @@ let
     };
 
     hostAddress6 = mkOption {
-      type = types.nullOr types.string;
+      type = types.nullOr types.str;
       default = null;
       example = "fc00::1";
       description = ''
@@ -406,7 +409,7 @@ let
     };
 
     localAddress6 = mkOption {
-      type = types.nullOr types.string;
+      type = types.nullOr types.str;
       default = null;
       example = "fc00::2";
       description = ''
@@ -423,6 +426,7 @@ let
     {
       extraVeths = {};
       additionalCapabilities = [];
+      ephemeral = false;
       timeoutStartSec = "15s";
       allowedDevices = [];
       hostAddress = null;
@@ -450,7 +454,7 @@ in
       type = types.bool;
       default = !config.boot.isContainer;
       description = ''
-        Whether to enable support for nixos containers.
+        Whether to enable support for NixOS containers.
       '';
     };
 
@@ -470,20 +474,24 @@ in
                 merge = loc: defs: (import ../../lib/eval-config.nix {
                   inherit system;
                   modules =
-                    let extraConfig =
-                      { boot.isContainer = true;
-                        networking.hostName = mkDefault name;
-                        networking.useDHCP = false;
-                        assertions = [
-                          {
-                            assertion =  config.privateNetwork -> stringLength name < 12;
-                            message = ''
-                              Container name `${name}` is too long: When `privateNetwork` is enabled, container names can
-                              not be longer than 11 characters, because the container's interface name is derived from it.
-                              This might be fixed in the future. See https://github.com/NixOS/nixpkgs/issues/38509
-                            '';
-                          }
-                        ];
+                    let
+                      extraConfig = {
+                        _file = "module at ${__curPos.file}:${toString __curPos.line}";
+                        config = {
+                          boot.isContainer = true;
+                          networking.hostName = mkDefault name;
+                          networking.useDHCP = false;
+                          assertions = [
+                            {
+                              assertion =  config.privateNetwork -> stringLength name < 12;
+                              message = ''
+                                Container name `${name}` is too long: When `privateNetwork` is enabled, container names can
+                                not be longer than 11 characters, because the container's interface name is derived from it.
+                                This might be fixed in the future. See https://github.com/NixOS/nixpkgs/issues/38509
+                              '';
+                            }
+                          ];
+                        };
                       };
                     in [ extraConfig ] ++ (map (x: x.value) defs);
                   prefix = [ "containers" name ];
@@ -512,6 +520,26 @@ in
                 information.
               '';
             };
+
+            ephemeral = mkOption {
+              type = types.bool;
+              default = false;
+              description = ''
+                Runs container in ephemeral mode with the empty root filesystem at boot.
+                This way container will be bootstrapped from scratch on each boot
+                and will be cleaned up on shutdown leaving no traces behind.
+                Useful for completely stateless, reproducible containers.
+
+                Note that this option might require to do some adjustments to the container configuration,
+                e.g. you might want to set
+                <varname>systemd.network.networks.$interface.dhcpConfig.ClientIdentifier</varname> to "mac"
+                if you use <varname>macvlans</varname> option.
+                This way dhcp client identifier will be stable between the container restarts.
+
+                Note that the container journal will not be linked to the host if this option is enabled.
+              '';
+            };
+
             enableTun = mkOption {
               type = types.bool;
               default = false;
@@ -537,7 +565,7 @@ in
             };
 
             interfaces = mkOption {
-              type = types.listOf types.string;
+              type = types.listOf types.str;
               default = [];
               example = [ "eth1" "eth2" ];
               description = ''
@@ -672,12 +700,14 @@ in
     unit = {
       description = "Container '%i'";
 
-      unitConfig.RequiresMountsFor = [ "/var/lib/containers/%i" ];
+      unitConfig.RequiresMountsFor = "/var/lib/containers/%i";
 
       path = [ pkgs.iproute ];
 
-      environment.INSTANCE = "%i";
-      environment.root = "/var/lib/containers/%i";
+      environment = {
+        root = "/var/lib/containers/%i";
+        INSTANCE = "%i";
+      };
 
       preStart = preStartScript dummyConfig;
 
@@ -699,14 +729,14 @@ in
       serviceConfig = serviceDirectives dummyConfig;
     };
   in {
-    systemd.targets."multi-user".wants = [ "machines.target" ];
+    systemd.targets.multi-user.wants = [ "machines.target" ];
 
     systemd.services = listToAttrs (filter (x: x.value != null) (
       # The generic container template used by imperative containers
       [{ name = "container@"; value = unit; }]
       # declarative containers
       ++ (mapAttrsToList (name: cfg: nameValuePair "container@${name}" (let
-          config = cfg // (
+          containerConfig = cfg // (
           if cfg.enableTun then
             {
               allowedDevices = cfg.allowedDevices
@@ -716,19 +746,24 @@ in
             }
           else {});
         in
-          unit // {
-            preStart = preStartScript config;
-            script = startScript config;
-            postStart = postStartScript config;
-            serviceConfig = serviceDirectives config;
+          recursiveUpdate unit {
+            preStart = preStartScript containerConfig;
+            script = startScript containerConfig;
+            postStart = postStartScript containerConfig;
+            serviceConfig = serviceDirectives containerConfig;
+            unitConfig.RequiresMountsFor = lib.optional (!containerConfig.ephemeral) "/var/lib/containers/%i";
+            environment.root = if containerConfig.ephemeral then "/run/containers/%i" else "/var/lib/containers/%i";
           } // (
-          if config.autoStart then
+          if containerConfig.autoStart then
             {
               wantedBy = [ "machines.target" ];
               wants = [ "network.target" ];
               after = [ "network.target" ];
-              restartTriggers = [ config.path ];
-              reloadIfChanged = true;
+              restartTriggers = [
+                containerConfig.path
+                config.environment.etc."containers/${name}.conf".source
+              ];
+              restartIfChanged = true;
             }
           else {})
       )) config.containers)
@@ -789,5 +824,12 @@ in
     '';
 
     environment.systemPackages = [ pkgs.nixos-container ];
+
+    boot.kernelModules = [
+      "bridge"
+      "macvlan"
+      "tap"
+      "tun"
+    ];
   });
 }

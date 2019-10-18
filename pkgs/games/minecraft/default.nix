@@ -16,7 +16,7 @@
 , dbus
 , atk
 , gtk2-x11
-, gdk_pixbuf
+, gdk-pixbuf
 , glib
 , curl
 , freetype
@@ -54,7 +54,7 @@ let
     expat
     fontconfig
     freetype
-    gdk_pixbuf
+    gdk-pixbuf
     glib
     gnome2.GConf
     gnome2.pango

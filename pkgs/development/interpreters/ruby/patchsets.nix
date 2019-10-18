@@ -1,6 +1,6 @@
-{ patchSet, useRailsExpress, ops, patchLevel }:
+{ patchSet, useRailsExpress, ops, patchLevel, fetchpatch }:
 
-rec {
+{
   "2.3.8" = ops useRailsExpress [
     "${patchSet}/patches/ruby/2.3/head/railsexpress/01-skip-broken-tests.patch"
     "${patchSet}/patches/ruby/2.3/head/railsexpress/02-improve-gc-stats.patch"

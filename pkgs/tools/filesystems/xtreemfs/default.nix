@@ -1,7 +1,7 @@
 { stdenv, boost, fuse, openssl, cmake, attr, jdk, ant, which, file, python
 , lib, valgrind, makeWrapper, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation {
   src = fetchFromGitHub {
     # using unstable release because stable (v1.5.1) has broken repl java plugin
     rev = "7ddcb081aa125b0cfb008dc98addd260b8353ab3";
@@ -10,7 +10,7 @@ stdenv.mkDerivation rec {
     sha256 = "1hjmd32pla27zf98ghzz6r5ml8ry86m9dsryv1z01kxv5l95b3m0";
   };
 
-  name = "XtreemFS-${version}";
+  pname = "XtreemFS";
   version = "1.5.1.81";
 
   buildInputs = [ which attr makeWrapper python ];
@@ -66,5 +66,6 @@ stdenv.mkDerivation rec {
     maintainers = with lib.maintainers; [ raskin matejc ];
     platforms = lib.platforms.linux;
     license = lib.licenses.bsd3;
+    broken = true;  # does not support openssl 1.1
   };
 }

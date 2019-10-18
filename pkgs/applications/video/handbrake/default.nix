@@ -11,7 +11,7 @@
   # Codecs, audio
   libopus, lame, libvorbis, a52dec, speex, libsamplerate,
   # Text processing
-  libiconv, fribidi, fontconfig, freetype, libass, jansson, libxml2,
+  libiconv, fribidi, fontconfig, freetype, libass, jansson, libxml2, harfbuzz,
   # Optical media
   libdvdread, libdvdnav, libdvdcss, libbluray,
   useGtk ? true, wrapGAppsHook ? null,
@@ -44,7 +44,7 @@ stdenv.mkDerivation rec {
   buildInputs = [
     ffmpeg-full libogg libtheora x264 x265 libvpx
     libopus lame libvorbis a52dec speex libsamplerate
-    libiconv fribidi fontconfig freetype libass jansson libxml2
+    libiconv fribidi fontconfig freetype libass jansson libxml2 harfbuzz
     libdvdread libdvdnav libdvdcss libbluray
   ] ++ lib.optionals useGtk [
     glib gtk3 libappindicator-gtk3 libnotify
@@ -97,7 +97,7 @@ stdenv.mkDerivation rec {
       and containers. Very versatile and customizable.
       Package provides:
       CLI - `HandbrakeCLI`
-      GTK+ GUI - `ghb`
+      GTK GUI - `ghb`
     '';
     license = licenses.gpl2;
     maintainers = with maintainers; [ Anton-Latukha wmertens ];

@@ -24,24 +24,20 @@ assert brotliSupport -> brotli != null;
 assert gssSupport -> libkrb5 != null;
 
 stdenv.mkDerivation rec {
-  name = "curl-7.64.0";
+  name = "curl-7.65.3";
 
   src = fetchurl {
     urls = [
       "https://curl.haxx.se/download/${name}.tar.bz2"
       "https://github.com/curl/curl/releases/download/${lib.replaceStrings ["."] ["_"] name}/${name}.tar.bz2"
     ];
-    sha256 = "1szj9ia1snbfqzfcsk6hx1j7jhbqsy0f9k5d7x9xiy8w5lfblwym";
+    sha256 = "02g5zj4rq5sr15jzjqk70xk4k92i2pdmpq00xb4pnba8ps1mx18a";
   };
 
   patches = [
-    (fetchurl {
-      url = "https://github.com/curl/curl/commit/5fc28510a4664f4.patch";
-      name = "CVE-2019-5435.patch";
-      sha256 = "00w12yhq8q260n91i1xrynz3vn4w3lypgl19cm893s35pbvg7y17";
-    })
     # fetchpatch is way to hard due to bootstapping, and fetchurl from github isn't stable
     ./cve-2019-5481.diff
+    ./cve-2019-5482.diff
   ];
 
   outputs = [ "bin" "dev" "out" "man" "devdoc" ];
@@ -104,6 +100,7 @@ stdenv.mkDerivation rec {
 
   postInstall = ''
     moveToOutput bin/curl-config "$dev"
+  '' + stdenv.lib.optionalString scpSupport ''
     sed '/^dependency_libs/s|${libssh2.dev}|${libssh2.out}|' -i "$out"/lib/*.la
   '' + stdenv.lib.optionalString gnutlsSupport ''
     ln $out/lib/libcurl.so $out/lib/libcurl-gnutls.so

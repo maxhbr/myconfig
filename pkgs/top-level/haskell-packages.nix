@@ -71,6 +71,12 @@ in {
       buildLlvmPackages = buildPackages.llvmPackages_6;
       llvmPackages = pkgs.llvmPackages_6;
     };
+    ghc881 = callPackage ../development/compilers/ghc/8.8.1.nix {
+      bootPkgs = packages.ghc863Binary;
+      inherit (buildPackages.python3Packages) sphinx;
+      buildLlvmPackages = buildPackages.llvmPackages_7;
+      llvmPackages = pkgs.llvmPackages_7;
+    };
     ghcHEAD = callPackage ../development/compilers/ghc/head.nix {
       bootPkgs = packages.ghc863Binary;
       inherit (buildPackages.python3Packages) sphinx;
@@ -99,7 +105,7 @@ in {
         (pkgs.lib.attrNames compiler);
     in pkgs.recurseIntoAttrs (pkgs.lib.genAttrs
       integerSimpleGhcNames
-      (name: compiler."${name}".override { enableIntegerSimple = true; }));
+      (name: compiler.${name}.override { enableIntegerSimple = true; }));
   };
 
   # Default overrides that are applied to all package sets.
@@ -140,6 +146,11 @@ in {
       ghc = bh.compiler.ghc865;
       compilerConfig = callPackage ../development/haskell-modules/configuration-ghc-8.6.x.nix { };
     };
+    ghc881 = callPackage ../development/haskell-modules {
+      buildHaskellPackages = bh.packages.ghc881;
+      ghc = bh.compiler.ghc881;
+      compilerConfig = callPackage ../development/haskell-modules/configuration-ghc-8.8.x.nix { };
+    };
     ghcHEAD = callPackage ../development/haskell-modules {
       buildHaskellPackages = bh.packages.ghcHEAD;
       ghc = bh.compiler.ghcHEAD;
@@ -165,9 +176,9 @@ in {
       integerSimpleGhcNames = pkgs.lib.filter
         (name: ! builtins.elem name integerSimpleExcludes)
         (pkgs.lib.attrNames packages);
-    in pkgs.lib.genAttrs integerSimpleGhcNames (name: packages."${name}".override {
-      ghc = bh.compiler.integer-simple."${name}";
-      buildHaskellPackages = bh.packages.integer-simple."${name}";
+    in pkgs.lib.genAttrs integerSimpleGhcNames (name: packages.${name}.override {
+      ghc = bh.compiler.integer-simple.${name};
+      buildHaskellPackages = bh.packages.integer-simple.${name};
       overrides = _self : _super : {
         integer-simple = null;
         integer-gmp = null;

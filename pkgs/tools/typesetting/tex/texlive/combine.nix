@@ -87,7 +87,8 @@ in buildEnv {
     export TEXMFSYSVAR="$out/share/texmf-var"
     export PERL5LIB="$out/share/texmf/scripts/texlive"
   '' +
-    # patch texmf-{dist,local} -> texmf to be sure
+    # patch texmf-dist  -> $out/share/texmf
+    # patch texmf-local -> $out/share/texmf-local
     # TODO: perhaps do lua actions?
     # tried inspiration from install-tl, sub do_texmf_cnf
   ''
@@ -99,8 +100,7 @@ in buildEnv {
         rm ./texmfcnf.lua
         sed \
           -e 's,texmf-dist,texmf,g' \
-          -e 's,texmf-local,texmf,g' \
-          -e "s,\(TEXMFLOCAL[ ]*=[ ]*\)[^\,]*,\1\"$out/share/texmf\",g" \
+          -e "s,\(TEXMFLOCAL[ ]*=[ ]*\)[^\,]*,\1\"$out/share/texmf-local\",g" \
           -e "s,\$SELFAUTOLOC,$out,g" \
           -e "s,selfautodir:/,$out/share/,g" \
           -e "s,selfautodir:,$out/share/,g" \
@@ -116,7 +116,6 @@ in buildEnv {
       rm ./texmf.cnf
       sed \
         -e 's,texmf-dist,texmf,g' \
-        -e 's,texmf-local,texmf,g' \
         -e "s,\$SELFAUTOLOC,$out,g" \
         -e "s,\$SELFAUTODIR,$out/share,g" \
         -e "s,\$SELFAUTOPARENT,$out/share,g" \
@@ -126,7 +125,7 @@ in buildEnv {
 
       patchCnfLua "./texmfcnf.lua"
 
-      rm updmap.cfg
+      mkdir $out/share/texmf-local
     )
   '' +
     # updmap.cfg seems like not needing changes
@@ -137,9 +136,9 @@ in buildEnv {
     script =
       writeText "hyphens.sed" (
         # pick up the header
-        "1,/^\% from/p;"
+        "1,/^% from/p;"
         # pick up all sections matching packages that we combine
-        + lib.concatMapStrings (pname: "/^\% from ${pname}:$/,/^\%/p;\n") pnames
+        + lib.concatMapStrings (pname: "/^% from ${pname}:$/,/^%/p;\n") pnames
       );
   in ''
     (
@@ -215,7 +214,7 @@ in buildEnv {
     texlinks.sh "$out/bin" && wrapBin
     (perl `type -P fmtutil.pl` --sys --all || true) | grep '^fmtutil' # too verbose
     #texlinks.sh "$out/bin" && wrapBin # do we need to regenerate format links?
-    perl `type -P updmap.pl` --sys --syncwithtrees --force
+    echo y | perl `type -P updmap.pl` --sys --syncwithtrees --force
     perl `type -P mktexlsr.pl` ./share/texmf-* # to make sure
   '' +
     # install (wrappers for) scripts, based on a list from upstream texlive

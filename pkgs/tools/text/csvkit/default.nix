@@ -2,15 +2,26 @@
 
 python3.pkgs.buildPythonApplication rec {
   pname = "csvkit";
-  version = "1.0.3";
+  version = "1.0.4";
 
   src = python3.pkgs.fetchPypi {
     inherit pname version;
-    sha256 = "a6c859c1321d4697dc41252877249091681297f093e08d9c1e1828a6d52c260c";
+    sha256 = "1830lb95rh1iyi3drlwxzb6y3pqkii0qiyzd40c1kvhvaf1s6lqk";
   };
 
   propagatedBuildInputs = with python3.pkgs; [
-    agate agate-excel agate-dbf agate-sql six
+    agate
+    agate-excel
+    agate-dbf
+    # sql test fail with agate-sql-0.5.4
+    (agate-sql.overridePythonAttrs(old: rec {
+      version = "0.5.3";
+      src = python3.pkgs.fetchPypi {
+        inherit (old) pname;
+        inherit version;
+        sha256 = "1d6rbahmdix7xi7ma2v86fpk5yi32q5dba5vama35w5mmn2pnyw7";
+      };}))
+    six
   ];
 
   checkInputs = with python3.pkgs; [

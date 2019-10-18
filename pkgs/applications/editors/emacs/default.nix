@@ -1,15 +1,16 @@
-{ stdenv, lib, fetchpatch, fetchurl, ncurses, xlibsWrapper, libXaw, libXpm
+{ stdenv, lib, fetchurl, ncurses, xlibsWrapper, libXaw, libXpm
 , Xaw3d, libXcursor,  pkgconfig, gettext, libXft, dbus, libpng, libjpeg, libungif
 , libtiff, librsvg, gconf, libxml2, imagemagick, gnutls, libselinux
-, alsaLib, cairo, acl, gpm, cf-private, AppKit, GSS, ImageIO, m17n_lib, libotf
+, alsaLib, cairo, acl, gpm, AppKit, GSS, ImageIO, m17n_lib, libotf
 , systemd ? null
 , withX ? !stdenv.isDarwin
 , withNS ? stdenv.isDarwin
 , withGTK2 ? false, gtk2-x11 ? null
 , withGTK3 ? true, gtk3-x11 ? null, gsettings-desktop-schemas ? null
-, withXwidgets ? false, webkitgtk ? null, wrapGAppsHook ? null, glib-networking ? null
+, withXwidgets ? false, webkitgtk ? null, wrapGAppsHook ? null
 , withCsrc ? true
 , srcRepo ? false, autoconf ? null, automake ? null, texinfo ? null
+, siteStart ? ./site-start.el
 }:
 
 assert (libXft != null) -> libpng != null;      # probably a bug
@@ -30,12 +31,12 @@ let
 in
 stdenv.mkDerivation rec {
   name = "emacs-${version}${versionModifier}";
-  version = "26.1";
+  version = "26.3";
   versionModifier = "";
 
   src = fetchurl {
     url = "mirror://gnu/emacs/${name}.tar.xz";
-    sha256 = "0b6k1wq44rc8gkvxhi1bbjxbz3cwg29qbq8mklq2az6p1hjgrx0w";
+    sha256 = "119ldpk7sgn9jlpyngv5y4z3i7bb8q3xp4p0qqi7i5nq39syd42d";
   };
 
   enableParallelBuilding = true;
@@ -43,13 +44,6 @@ stdenv.mkDerivation rec {
   patches = [
     ./clean-env.patch
     ./tramp-detect-wrapped-gvfsd.patch
-
-    # should drop this at next package update
-    (fetchpatch {
-      name = "support-hunspell-1.7.0-in-ispell.el.patch";
-      url = "https://git.savannah.gnu.org/cgit/emacs.git/patch/?id=2925ce5a7ec1424cfaea9f2f86bd3cab27832584";
-      sha256 = "0w7cgw6zgr7phbivb98innps1rlqf5q2lhwkrwdmai8sbca5bd11";
-    })
   ];
 
   postPatch = lib.optionalString srcRepo ''
@@ -67,21 +61,21 @@ stdenv.mkDerivation rec {
     ++ lib.optionals stdenv.isLinux [ dbus libselinux systemd ]
     ++ lib.optionals withX
       [ xlibsWrapper libXaw Xaw3d libXpm libpng libjpeg libungif libtiff librsvg libXft
-        imagemagick gconf ]
+        gconf ]
+    ++ lib.optionals (withX || withNS) [ imagemagick ]
     ++ lib.optionals (stdenv.isLinux && withX) [ m17n_lib libotf ]
     ++ lib.optional (withX && withGTK2) gtk2-x11
     ++ lib.optionals (withX && withGTK3) [ gtk3-x11 gsettings-desktop-schemas ]
     ++ lib.optional (stdenv.isDarwin && withX) cairo
     ++ lib.optionals (withX && withXwidgets) [ webkitgtk ]
-    ++ lib.optionals withNS [
-      AppKit GSS ImageIO
-      # Needed for CFNotificationCenterAddObserver symbols.
-      cf-private
-    ];
+    ++ lib.optionals withNS [ AppKit GSS ImageIO ];
 
   hardeningDisable = [ "format" ];
 
-  configureFlags = [ "--with-modules" ] ++
+  configureFlags = [
+    "--disable-build-details" # for a (more) reproducible build
+    "--with-modules"
+  ] ++
     (lib.optional stdenv.isDarwin
       (lib.withFeature withNS "ns")) ++
     (if withNS
@@ -107,7 +101,7 @@ stdenv.mkDerivation rec {
 
   postInstall = ''
     mkdir -p $out/share/emacs/site-lisp
-    cp ${./site-start.el} $out/share/emacs/site-lisp/site-start.el
+    cp ${siteStart} $out/share/emacs/site-lisp/site-start.el
     $out/bin/emacs --batch -f batch-byte-compile $out/share/emacs/site-lisp/site-start.el
 
     rm -rf $out/var
@@ -129,7 +123,7 @@ stdenv.mkDerivation rec {
     let libPath = lib.makeLibraryPath [
       libXcursor
     ];
-    in lib.optionalString (withX && toolkit == "lucid") ''
+    in lib.optionalString (stdenv.isLinux && withX && toolkit == "lucid") ''
       patchelf --set-rpath \
         "$(patchelf --print-rpath "$out/bin/emacs"):${libPath}" \
         "$out/bin/emacs"

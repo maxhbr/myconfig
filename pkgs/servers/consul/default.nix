@@ -1,8 +1,8 @@
 { stdenv, buildGoPackage, fetchFromGitHub }:
 
 buildGoPackage rec {
-  name = "consul-${version}";
-  version = "1.4.4";
+  pname = "consul";
+  version = "1.6.0";
   rev = "v${version}";
 
   goPackagePath = "github.com/hashicorp/consul";
@@ -17,9 +17,9 @@ buildGoPackage rec {
   # to apply your changes as patches on top of a release commit.
   src = fetchFromGitHub {
     owner = "hashicorp";
-    repo = "consul";
+    repo = pname;
     inherit rev;
-    sha256 = "1dg6kdkk2rgzlpvwbxvrlb9mc3z0pg2s5wmhn6da6rs7hq9vdffz";
+    sha256 = "16rngyv9dp19gjbjwfvnmlfxbq67fxs55hgvvcyn9mplm1j0bb52";
   };
 
   preBuild = ''

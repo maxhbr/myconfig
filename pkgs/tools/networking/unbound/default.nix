@@ -1,22 +1,13 @@
-{ stdenv, fetchurl, fetchpatch, openssl, nettle, expat, libevent, dns-root-data }:
+{ stdenv, fetchurl, openssl, nettle, expat, libevent, dns-root-data }:
 
 stdenv.mkDerivation rec {
-  name = "unbound-${version}";
-  version = "1.9.0";
+  pname = "unbound";
+  version = "1.9.4";
 
   src = fetchurl {
-    url = "https://unbound.net/downloads/${name}.tar.gz";
-    sha256 = "05xrb8havr2vgjsdy7n85kgnvk1mg7qwhjp4a8n6pg4jhd5zjnj1";
+    url = "https://unbound.net/downloads/${pname}-${version}.tar.gz";
+    sha256 = "1c2bjm13x8bkw0ds1mhn9ivd2gzmfrb0x5y76bkz09a04bxjagix";
   };
-
-  patches = [
-    (fetchpatch {
-      name = "cve-2019-16866.diff";
-      url = "https://github.com/NLnetLabs/unbound/commit/b60c4a472c8.diff";
-      includes = [ "util/data/msgparse.c" ];
-      sha256 = "0id0mac9413pbc3z6yjha1sg7syxnari1qinxv5dp5jl98n1752p";
-    })
-  ];
 
   outputs = [ "out" "lib" "man" ]; # "dev" would only split ~20 kB
 
@@ -56,7 +47,7 @@ stdenv.mkDerivation rec {
     description = "Validating, recursive, and caching DNS resolver";
     license = licenses.bsd3;
     homepage = https://www.unbound.net;
-    maintainers = with maintainers; [ ehmry fpletz ];
+    maintainers = with maintainers; [ ehmry fpletz globin ];
     platforms = stdenv.lib.platforms.unix;
   };
 }

@@ -1,20 +1,14 @@
 { stdenv, fetchurl, fetchpatch }:
 
 stdenv.mkDerivation rec {
-  name = "expat-2.2.6";
+  name = "expat-2.2.7";
 
   src = fetchurl {
     url = "mirror://sourceforge/expat/${name}.tar.bz2";
-    sha256 = "1wl1x93b5w457ddsdgj0lh7yjq4q6l7wfbgwhagkc8fm2qkkrd0p";
+    sha256 = "067cfhqwiswm4zynw7xaxl59mrrimaiyjhnn8byxma1i98pi1jfb";
   };
 
   patches = [
-    (fetchpatch {
-      name = "CVE-2018-20843.patch";
-      url = "https://github.com/libexpat/libexpat/commit/11f8838bf99ea0a6f0b76f9760c43704d00c4ff6.patch";
-      sha256 = "1i7bq9sp2k5348dvbfv26bprzv6ka1abf0j5ixjaff9alndm4f19";
-      stripLen = 1;
-    })
     (fetchpatch {
       name = "CVE-2019-15903.patch";
       url = "https://sources.debian.org/data/main/e/expat/2.2.7-2/debian/patches/CVE-2019-15903_Deny_internal_entities_closing_the_doctype.patch";

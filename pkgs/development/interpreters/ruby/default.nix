@@ -3,6 +3,7 @@
 , zlib, openssl, gdbm, ncurses, readline, groff, libyaml, libffi, autoreconfHook, bison
 , autoconf, libiconv, libobjc, libunwind, Foundation
 , buildEnv, bundler, bundix
+, makeWrapper, buildRubyGem, defaultGemConfig
 } @ args:
 
 let
@@ -11,14 +12,7 @@ let
   opString = lib.optionalString;
   patchSet = import ./rvm-patchsets.nix { inherit fetchFromGitHub; };
   config = import ./config.nix { inherit fetchFromSavannah; };
-  rubygemsSrc = import ./rubygems-src.nix { inherit fetchurl; };
-  rubygemsPatch = fetchpatch {
-    url = "https://github.com/zimbatm/rubygems/compare/v2.6.6...v2.6.6-nix.patch";
-    sha256 = "0297rdb1m6v75q8665ry9id1s74p9305dv32l95ssf198liaihhd";
-  };
-  unpackdir = obj:
-    lib.removeSuffix ".tgz"
-      (lib.removeSuffix ".tar.gz" obj.name);
+  rubygems = import ./rubygems { inherit stdenv lib fetchurl; };
 
   # Contains the ruby version heuristics
   rubyVersion = import ./ruby-version.nix { inherit lib; };
@@ -33,24 +27,33 @@ let
     ver = version;
     tag = ver.gitTag;
     atLeast25 = lib.versionAtLeast ver.majMin "2.5";
-    baseruby = self.override { useRailsExpress = false; };
+    baseruby = self.override {
+      useRailsExpress = false;
+      docSupport = false;
+      rubygemsSupport = false;
+    };
     self = lib.makeOverridable (
       { stdenv, buildPackages, lib
       , fetchurl, fetchpatch, fetchFromSavannah, fetchFromGitHub
       , useRailsExpress ? true
+      , rubygemsSupport ? true
       , zlib, zlibSupport ? true
       , openssl, opensslSupport ? true
       , gdbm, gdbmSupport ? true
       , ncurses, readline, cursesSupport ? true
-      , groff, docSupport ? false
+      , groff, docSupport ? true
       , libyaml, yamlSupport ? true
       , libffi, fiddleSupport ? true
       , autoreconfHook, bison, autoconf
       , buildEnv, bundler, bundix
       , libiconv, libobjc, libunwind, Foundation
+      , makeWrapper, buildRubyGem, defaultGemConfig
       }:
-      let rubySrc =
-        if useRailsExpress then fetchFromGitHub {
+      stdenv.mkDerivation rec {
+        pname = "ruby";
+        inherit version;
+
+        src = if useRailsExpress then fetchFromGitHub {
           owner  = "ruby";
           repo   = "ruby";
           rev    = tag;
@@ -59,19 +62,11 @@ let
           url = "https://cache.ruby-lang.org/pub/ruby/${ver.majMin}/ruby-${ver}.tar.gz";
           sha256 = sha256.src;
         };
-      in
-      stdenv.mkDerivation rec {
-        name = "ruby-${version}";
-
-        srcs = [ rubySrc rubygemsSrc ];
-        sourceRoot =
-          if useRailsExpress then
-            rubySrc.name
-          else
-            unpackdir rubySrc;
 
         # Have `configure' avoid `/usr/bin/nroff' in non-chroot builds.
         NROFF = if docSupport then "${groff}/bin/nroff" else null;
+
+        outputs = [ "out" ] ++ lib.optional docSupport "devdoc";
 
         nativeBuildInputs = [ autoreconfHook bison ]
           ++ (op docSupport groff)
@@ -95,15 +90,14 @@ let
 
         patches =
           (import ./patchsets.nix {
-            inherit patchSet useRailsExpress ops;
+            inherit patchSet useRailsExpress ops fetchpatch;
             patchLevel = ver.patchLevel;
-          })."${ver.majMinTiny}";
+          }).${ver.majMinTiny};
 
-        postUnpack = ''
-          cp -r ${unpackdir rubygemsSrc} ${sourceRoot}/rubygems
-          pushd ${sourceRoot}/rubygems
-          patch -p1 < ${rubygemsPatch}
-          popd
+        postUnpack = opString rubygemsSupport ''
+          rm -rf $sourceRoot/{lib,test}/rubygems*
+          cp -r ${rubygems}/lib/rubygems* $sourceRoot/lib
+          cp -r ${rubygems}/test/rubygems $sourceRoot/test
         '';
 
         postPatch = if atLeast25 then ''
@@ -130,6 +124,10 @@ let
           ++ op (stdenv.hostPlatform != stdenv.buildPlatform)
              "--with-baseruby=${buildRuby}";
 
+        preConfigure = opString docSupport ''
+          configureFlagsArray+=("--with-ridir=$devdoc/share/ri")
+        '';
+
         # fails with "16993 tests, 2229489 assertions, 105 failures, 14 errors, 89 skips"
         # mostly TZ- and patch-related tests
         # TZ- failures are caused by nix sandboxing, I didn't investigate others
@@ -144,11 +142,6 @@ let
         installFlags = stdenv.lib.optionalString docSupport "install-doc";
         # Bundler tries to create this directory
         postInstall = ''
-          # Update rubygems
-          pushd rubygems
-          ${buildRuby} setup.rb --destdir $GEM_HOME
-          popd
-
           # Remove unnecessary groff reference from runtime closure, since it's big
           sed -i '/NROFF/d' $out/lib/ruby/*/*/rbconfig.rb
 
@@ -158,12 +151,26 @@ let
           addGemPath() {
             addToSearchPath GEM_PATH \$1/${passthru.gemPath}
           }
+          addRubyLibPath() {
+            addToSearchPath RUBYLIB \$1/lib/ruby/site_ruby
+            addToSearchPath RUBYLIB \$1/lib/ruby/site_ruby/${ver.libDir}
+            addToSearchPath RUBYLIB \$1/lib/ruby/site_ruby/${ver.libDir}/${stdenv.targetPlatform.system}
+          }
 
           addEnvHooks "$hostOffset" addGemPath
+          addEnvHooks "$hostOffset" addRubyLibPath
           EOF
-        '' + opString useRailsExpress ''
-          rbConfig=$(find $out/lib/ruby -name rbconfig.rb)
 
+          rbConfig=$(find $out/lib/ruby -name rbconfig.rb)
+        '' + opString docSupport ''
+          # Prevent the docs from being included in the closure
+          sed -i "s|\$(DESTDIR)$devdoc|\$(datarootdir)/\$(RI_BASE_NAME)|" $rbConfig
+          sed -i "s|'--with-ridir=$devdoc/share/ri'||" $rbConfig
+
+          # Add rbconfig shim so ri can find docs
+          mkdir -p $devdoc/lib/ruby/site_ruby
+          cp ${./rbconfig.rb} $devdoc/lib/ruby/site_ruby/rbconfig.rb
+        '' + opString useRailsExpress ''
           # Prevent the baseruby from being included in the closure.
           sed -i '/^  CONFIG\["BASERUBY"\]/d' $rbConfig
           sed -i "s|'--with-baseruby=${baseruby}/bin/ruby'||" $rbConfig
@@ -188,6 +195,12 @@ let
             ruby = self;
           };
 
+          inherit (import ../../ruby-modules/with-packages {
+            inherit lib stdenv makeWrapper buildRubyGem buildEnv;
+            gemConfig = defaultGemConfig;
+            ruby = self;
+          }) withPackages gems;
+
           # deprecated 2016-09-21
           majorVersion = ver.major;
           minorVersion = ver.minor;
@@ -198,14 +211,6 @@ let
     ) args; in self;
 
 in {
-  ruby_2_3 = generic {
-    version = rubyVersion "2" "3" "8" "";
-    sha256 = {
-      src = "1gwsqmrhpx1wanrfvrsj3j76rv888zh7jag2si2r14qf8ihns0dm";
-      git = "0158fg1sx6l6applbq0831kl8kzx5jacfl9lfg0shfzicmjlys3f";
-    };
-  };
-
   ruby_2_4 = generic {
     version = rubyVersion "2" "4" "9" "";
     sha256 = {

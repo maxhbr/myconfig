@@ -1,10 +1,11 @@
-{ stdenv, fetchFromGitHub, luaPackages, cairo, librsvg, cmake, imagemagick, pkgconfig, gdk_pixbuf
+{ stdenv, fetchFromGitHub, luaPackages, cairo, librsvg, cmake, imagemagick, pkgconfig, gdk-pixbuf
 , xorg, libstartup_notification, libxdg_basedir, libpthreadstubs
 , xcb-util-cursor, makeWrapper, pango, gobject-introspection
 , which, dbus, nettools, git, doxygen
 , xmlto, docbook_xml_dtd_45, docbook_xsl, findXMLCatalogs
 , libxkbcommon, xcbutilxrm, hicolor-icon-theme
 , asciidoctor
+, fontsConf
 , gtk3Support ? false, gtk3 ? null
 }:
 
@@ -12,7 +13,7 @@
 assert gtk3Support -> gtk3 != null;
 
 with luaPackages; stdenv.mkDerivation rec {
-  name = "awesome-${version}";
+  pname = "awesome";
   version = "4.3";
 
   src = fetchFromGitHub {
@@ -31,10 +32,15 @@ with luaPackages; stdenv.mkDerivation rec {
     xmlto docbook_xml_dtd_45
     docbook_xsl findXMLCatalogs
     asciidoctor
+    ldoc
   ];
 
+  outputs = [ "out" "doc" ];
+
+  FONTCONFIG_FILE = toString fontsConf;
+
   propagatedUserEnvPkgs = [ hicolor-icon-theme ];
-  buildInputs = [ cairo librsvg dbus gdk_pixbuf gobject-introspection
+  buildInputs = [ cairo librsvg dbus gdk-pixbuf gobject-introspection
                   git lgi libpthreadstubs libstartup_notification
                   libxdg_basedir lua nettools pango xcb-util-cursor
                   xorg.libXau xorg.libXdmcp xorg.libxcb xorg.libxshmfence

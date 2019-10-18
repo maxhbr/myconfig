@@ -1,4 +1,4 @@
-{ fetchurl, lib, unzip, nettools, pythonPackages, texinfo }:
+{ fetchurl, lib, nettools, pythonPackages, texinfo }:
 
 # FAILURES: The "running build_ext" phase fails to compile Twisted
 # plugins, because it tries to write them into Twisted's (immutable)
@@ -7,7 +7,7 @@
 
 pythonPackages.buildPythonApplication rec {
   version = "1.13.0";
-  name = "tahoe-lafs-${version}";
+  pname = "tahoe-lafs";
   namePrefix = "";
 
   src = fetchurl {
@@ -50,16 +50,14 @@ pythonPackages.buildPythonApplication rec {
 
   nativeBuildInputs = with pythonPackages; [ sphinx texinfo ];
 
-  buildInputs = with pythonPackages; [ unzip numpy mock ];
-
   # The `backup' command requires `sqlite3'.
   propagatedBuildInputs = with pythonPackages; [
     twisted foolscap nevow simplejson zfec pycryptopp darcsver
     setuptoolsTrial setuptoolsDarcs pycrypto pyasn1 zope_interface
-    service-identity pyyaml magic-wormhole treq
+    service-identity pyyaml magic-wormhole treq characteristic
   ];
 
-  checkInputs = with pythonPackages; [ hypothesis twisted ];
+  checkInputs = with pythonPackages; [ mock hypothesis twisted ];
 
   # Install the documentation.
   postInstall = ''
@@ -67,8 +65,8 @@ pythonPackages.buildPythonApplication rec {
       cd docs
 
       make singlehtml
-      mkdir -p "$doc/share/doc/${name}"
-      cp -rv _build/singlehtml/* "$doc/share/doc/${name}"
+      mkdir -p "$doc/share/doc/${pname}-${version}"
+      cp -rv _build/singlehtml/* "$doc/share/doc/${pname}-${version}"
 
       make info
       mkdir -p "$info/share/info"
@@ -92,5 +90,6 @@ pythonPackages.buildPythonApplication rec {
     license = [ lib.licenses.gpl2Plus /* or */ "TGPPLv1+" ];
     maintainers = with lib.maintainers; [ MostAwesomeDude ];
     platforms = lib.platforms.gnu ++ lib.platforms.linux;
+    broken = true;
   };
 }

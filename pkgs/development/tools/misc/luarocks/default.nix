@@ -1,4 +1,4 @@
-{stdenv, fetchurl
+{stdenv, fetchFromGitHub
 , curl, makeWrapper, which, unzip
 , lua
 # for 'luarocks pack'
@@ -7,19 +7,18 @@
 , cmake
 }:
 
-let
-in
-
 stdenv.mkDerivation rec {
-  pname="luarocks";
-  version="2.4.4";
+  pname = "luarocks";
+  version = "3.2.1";
 
-  src = fetchurl {
-    url="http://luarocks.org/releases/luarocks-${version}.tar.gz";
-    sha256="0d7rl60dwh52qh5pfsphgx5ypp7k190h9ri6qpr2yx9kvqrxyf1r";
+  src = fetchFromGitHub {
+    owner = "luarocks";
+    repo = "luarocks";
+    rev = "v${version}";
+    sha256 = "0viiafmb8binksda79ah828q1dfnb6jsqlk7vyndl2xvx9yfn4y2";
   };
 
-  patches = [ ./darwin.patch ];
+  patches = [ ./darwin-3.1.3.patch ];
   preConfigure = ''
     lua -e "" || {
         luajit -e "" && {
