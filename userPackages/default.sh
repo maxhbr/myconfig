@@ -13,7 +13,8 @@ gate() {
 upgrade() {
     logH3 "nix-rebuild" "declerative rebuild of nix userspace environment"
     nix-env $NIX_PATH_ARGS \
-        --set -f "$(readlink -f "$(dirname ${BASH_SOURCE[0]})")" --argstr name "$(whoami)-user-env-$(date -I)"
+            --set -f "$(readlink -f "$(dirname ${BASH_SOURCE[0]})")" --argstr name "$(whoami)-user-env-$(date -I)" \
+            -v
 }
 
 gate || {

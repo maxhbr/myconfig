@@ -35,7 +35,9 @@ handleChannelAsSubtree() {
             git subtree add --prefix $dir NixOS-nixpkgs-channels $channel --squash
         else
             if git diff-index --quiet HEAD --; then
-                git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
+                (set -x;
+                 git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
+                )
             else
                 logERR "uncommitted changes, do not update $channel"
                 # logINFO "stash local changes to allow subtree pull"
