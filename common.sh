@@ -2,7 +2,7 @@
 ##  variables  ############################################################
 ###########################################################################
 
-# nixStableChannel=nixos-19.03-small
+# nixStableChannel=nixos-19.09-small
 nixStableChannel=nixos-19.09
 
 export COMMON_SH_WAS_SOURCED="true"

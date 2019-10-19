@@ -74,8 +74,6 @@
 
           redshift = {
             enable = true;
-            latitude = "48.2";
-            longitude = "10.8";
             # temperature.day = 5500;
             # temperature.night = 3500;
           };
@@ -87,6 +85,8 @@
             # $ nix run nixpkgs.hplipWithPlugin -c sudo hp-setup
           };
         };
+        location.latitude = 48.2;
+        location.longitude = 10.8;
 
         fonts = {
           enableFontDir = true;
