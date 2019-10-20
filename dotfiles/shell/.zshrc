@@ -18,7 +18,7 @@ if [ -d $ZSH ]; then
     # export UPDATE_ZSH_DAYS=13
     ENABLE_CORRECTION="false"
     COMPLETION_WAITING_DOTS="true"
-    plugins=(git zsh-syntax-highlighting) # rake ruby
+    plugins=(git) # rake ruby
 
     # Uncomment the following line if you want to disable marking untracked files
     # under VCS as dirty. This makes repository status check for large repositories
