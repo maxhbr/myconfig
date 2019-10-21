@@ -33,7 +33,7 @@ myManageHook = let
                                                  ,"Zenity"
                                                  ,"pinentry","Pinentry"
                                                  ,"pavucontrol","Pavucontrol"
-                                                 ,"zoom"])
+                                                 ,"zoom","zoom-us"])
                                , (doFloat, ["MPlayer"
                                            ,"Onboard"])
                                -- , (doShift "web", ["Firefox"
