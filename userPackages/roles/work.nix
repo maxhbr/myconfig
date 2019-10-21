@@ -12,7 +12,7 @@ with pkgs; [
   zoom-us # unstable.zoom-us
   rambox # franz hipchat
   p7zip
-  thrift
+  thrift011
   idea-ultimate
   dia
 ]

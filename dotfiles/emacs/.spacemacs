@@ -411,7 +411,8 @@ you should place your code here."
   ;; mu4e
   (let ((mu4e-config "~/Maildir/config/mu4e-config.el"))
     (when (file-exists-p mu4e-config)
-      (load-file mu4e-config)))
+      (eval-after-load 'mu4e
+         (load-file mu4e-config))))
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; gnus
   (let ((gnus-config "~/Maildir/config/gnus-config.el"))
