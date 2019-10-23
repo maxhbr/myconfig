@@ -13,6 +13,6 @@ with pkgs; [
   rambox # franz hipchat
   p7zip
   thrift011
-  idea-ultimate
+  idea-ultimate jetbrains.phpstorm
   dia
 ]
