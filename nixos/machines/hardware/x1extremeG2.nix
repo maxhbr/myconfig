@@ -14,6 +14,7 @@
     ./notebook-generic.nix
     ./ssd.nix
     ./wwan.nix
+    ./lowres.nix
     ./nixos-hardware/lenovo/thinkpad/x1-extreme/gen2/default.nix
 
     { # config for libinput
