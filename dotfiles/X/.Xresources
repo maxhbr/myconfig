@@ -36,10 +36,10 @@ URxvt.internalBorder: 5
 URxvt.externalBorder: 5
 
 !! URxvt -> font
-URxvt.font:             xft:inconsolata:pixelsize=19:antialias=true:hinting=true,             xft:DejaVu Sans Mono:pixelsize=17:antialias=true:hinting=true
-URxvt.boldFont:         xft:inconsolata:bold:pixelsize=19:antialias=true:hinting=true,        xft:DejaVu Sans Mono:bold:pixelsize=16:antialias=true:hinting=true
-URxvt.italicFont:       xft:inconsolata:italic:pixelsize=19:antialias=true:hinting=true,      xft:DejaVu Sans Mono:italic:pixelsize=17:antialias=true:hinting=true
-URxvt.bolditalicFont:   xft:inconsolata:bold:italic:pixelsize=19:antialias=true:hinting=true, xft:DejaVu Sans Mono:bold:italic:pixelsize=17:antialias=true:hinting=true
+URxvt.font:             xft:inconsolata:pixelsize=17:antialias=true:hinting=true,             xft:DejaVu Sans Mono:pixelsize=15:antialias=true:hinting=true
+URxvt.boldFont:         xft:inconsolata:bold:pixelsize=17:antialias=true:hinting=true,        xft:DejaVu Sans Mono:bold:pixelsize=14:antialias=true:hinting=true
+URxvt.italicFont:       xft:inconsolata:italic:pixelsize=17:antialias=true:hinting=true,      xft:DejaVu Sans Mono:italic:pixelsize=15:antialias=true:hinting=true
+URxvt.bolditalicFont:   xft:inconsolata:bold:italic:pixelsize=17:antialias=true:hinting=true, xft:DejaVu Sans Mono:bold:italic:pixelsize=15:antialias=true:hinting=true
 ! xft:Iosevka:pixelsize=17:antialias=true:hinting=true,
 ! xft:Iosevka:bold:pixelsize=17:antialias=true:hinting=true,
 ! xft:Iosevka:italic:pixelsize=17:antialias=true:hinting=true,
