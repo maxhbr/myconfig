@@ -1,73 +1,113 @@
-[![Build Status](https://travis-ci.org/maxhbr/myconfig.svg?branch=master)](https://travis-ci.org/maxhbr/myconfig)
+<p align="center">
+  <a href="https://nixos.org/nixos"><img src="https://nixos.org/logo/nixos-hires.png" width="500px" alt="NixOS logo" /></a>
+</p>
 
-Here I collect all configuration files of my machines. Currently I use
-- OS: **[NixOS](https://nixos.org/)**
-- Window Manager: **[xmonad](http://xmonad.org/)** (with: [xmobar](https://github.com/jaor/xmobar), [dmenu](https://tools.suckless.org/dmenu/) + [yeganesh](http://dmwit.com/yeganesh/))
-- EDITOR: emacs ([spacemacs](http://spacemacs.org/))
-- SHELL: zsh (with: [oh-my-zsh](http://ohmyz.sh/))
-- Email Client: ~~[neomutt](https://neomutt.org/) (with: [offlineimap](http://www.offlineimap.org/))~~ [mu4e](https://www.djcbsoftware.nl/code/mu/mu4e.html) with mbsync
-- Keyboard layout: [neo2](https://www.neo-layout.org/) 
+<p align="center">
+  <a href="https://www.codetriage.com/nixos/nixpkgs"><img src="https://www.codetriage.com/nixos/nixpkgs/badges/users.svg" alt="Code Triagers badge" /></a>
+  <a href="https://opencollective.com/nixos"><img src="https://opencollective.com/nixos/tiers/supporter/badge.svg?label=Supporter&color=brightgreen" alt="Open Collective supporters" /></a>
+</p>
 
-# How to bootstrap
-## on NixOS:
-(first install NixOS, e.g. with [this guide](https://gist.github.com/martijnvermaat/76f2e24d0239470dd71050358b4d5134))
-```bash
-$ git clone https://github.com/maxhbr/myconfig ~/myconfig
-$ echo -n "HOSTNAME" | sudo tee /etc/nixos/hostname
-$ ~/myconfig/rebuild.sh
-```
+[Nixpkgs](https://github.com/nixos/nixpkgs) is a collection of over
+40,000 software packages that can be installed with the
+[Nix](https://nixos.org/nix/) package manager. It also implements
+[NixOS](https://nixos.org/nixos/), a purely-functional Linux distribution.
 
-## on other OS:
-```bash
-$ git clone https://github.com/maxhbr/myconfig ~/myconfig
-$ ~/myconfig/xmonad/default.sh
-$ ~/myconfig/dotfiles/default.sh
-$ [...]
-```
+# Manuals
 
-## just use the nixpkgs
-```
-$ export NIX_PATH=nixpkgs=/path/to/myconfig/nix/nixpkgs:nixpkgs-overlays=/path/to/myconfig/nix/overlays
-```
-or
-```
-$ export NIX_PATH=nixpkgs=/path/to/myconfig/nix/nixpkgs-unstable
-```
+* [NixOS Manual](https://nixos.org/nixos/manual) - how to install, configure, and maintain a purely-functional Linux distribution
+* [Nixpkgs Manual](https://nixos.org/nixpkgs/manual/) - contributing to Nixpkgs and using programming-language-specific Nix expressions
+* [Nix Package Manager Manual](https://nixos.org/nix/manual) - how to write Nix expresssions (programs), and how to use Nix command line tools
 
-The versions of the nixpkgs can be upgraded via `./nix/default.sh` and `./nix/nixpkgs-unstable/default.sh` (also called from `./nix/default.sh`).
+# Community
 
-# How it is composed
+* [Discourse Forum](https://discourse.nixos.org/)
+* [IRC - #nixos on freenode.net](irc://irc.freenode.net/#nixos)
+* [NixOS Weekly](https://weekly.nixos.org/)
+* [Community-maintained wiki](https://nixos.wiki/)
 
-The top level script `rebuild.sh` calls the `prepare`, `deploy`, `upgrade` and `cleanup` phases for all `default.sh` files in the corresponding folders.
+# Other Project Repositories
 
-Some notable folders are
-- `./scripts`, containing central scripts used to manage my system, e.g. for backups or automatic setup of xrandr configuration
-  - this contains, among others, the scripts
-    - `myautosetup.pl`, which sets up the environment depending on monitor configuration and more
-    - `myborgbackup.sh`, my core backup script
-    - `ec`, which calls emacs for me
-- `./nix`, containing the configuration for nix, overlays, custom packages and also the `nixpkgs`
-  - the nxpkgs at  `/nix/nixpkgs` are taken from the stable branch of nixos-latest via `git subtree`
-    - it is by default updated updated, when `rebuild.sh` is ran
-  - the `/nix/nixpkgs-unstable` contains a `default.nix` which pulls the package definitions on the fly
-  - the `/nix/overlays` folder contains my overlays and some custom packages in `/nix/overlays/pkgs` (added as overlays)
-- `./nixos`, containing the complete nixos configuration for multiple hosts (the hostname defines, which configuration is taken)
-  - this imports
-    - the folder `./xmonad` via the top level `./default.nix`
-    - the configuration `./nix/nixpkgs-config.nix`
-    - the overlays from `./nix/overlays`
-    directly
-- `./dotfiles`, containing some dotfiles, which are deployed via stow and should also work on non-NixOS Linux machines
-  - for `emacs`, `git`, `mutt`, `shell` (e.g. `zsh`) and `core` (some scripts and more used frequently)
-- `./xmonad`, my custom configuration of xmonad, packaged as lib via `nix` or `stack`
-- `./background`, containing some self made desktop backgrounds
+The sources of all offical Nix-related projects are in the [NixOS
+organization on GitHub](https://github.com/NixOS/). Here are some of
+the main ones:
 
-On top level there is also a file `./default.nix` which defines an overlay containing packages corresponding to the parts of myconfig.
+* [Nix](https://github.com/NixOS/nix) - the purely functional package manager
+* [NixOps](https://github.com/NixOS/nixops) - the tool to remotely deploy NixOS machines
+* [Nix RFCs](https://github.com/NixOS/rfcs) - the formal process for making substantial changes to the community
+* [NixOS homepage](https://github.com/NixOS/nixos-homepage) - the [NixOS.org](https://nixos.org) website
+* [hydra](https://github.com/NixOS/hydra) - our continuous integration system
+* [NixOS Artwork](https://github.com/NixOS/nixos-artwork) - NixOS artwork
 
-On nixos the central folder is `./nixos`, which imports the top level overlay definition to also build xmonad, my backgrounds and more.
+# Continuous Integration and Distribution
+
+Nixpkgs and NixOS are built and tested by our continuous integration
+system, [Hydra](https://hydra.nixos.org/).
+
+* [Continuous package builds for unstable/master](https://hydra.nixos.org/jobset/nixos/trunk-combined)
+* [Continuous package builds for the NixOS 19.09 release](https://hydra.nixos.org/jobset/nixos/release-19.09)
+* [Tests for unstable/master](https://hydra.nixos.org/job/nixos/trunk-combined/tested#tabs-constituents)
+* [Tests for the NixOS 19.09 release](https://hydra.nixos.org/job/nixos/release-19.09/tested#tabs-constituents)
+
+Artifacts successfully built with Hydra are published to cache at
+https://cache.nixos.org/. When successful build and test criteria are
+met, the Nixpkgs expressions are distributed via [Nix
+channels](https://nixos.org/nix/manual/#sec-channels). The channels
+are provided via a read-only mirror of the Nixpkgs repository called
+[nixpkgs-channels](https://github.com/NixOS/nixpkgs-channels).
+
+# Contributing
+
+Nixpkgs is among the most active projects on GitHub. While thousands
+of open issues and pull requests might seem a lot at first, it helps
+consider it in the context of the scope of the project. Nixpkgs
+describes how to build over 40,000 pieces of software and implements a
+Linux distribution. The [GitHub Insights](https://github.com/NixOS/nixpkgs/pulse)
+page gives a sense of the project activity.
+
+Community contributions are always welcome through GitHub Issues and
+Pull Requests. When pull requests are made, our tooling automation bot,
+[OfBorg](https://github.com/NixOS/ofborg) will perform various checks
+to help ensure expression quality.
+
+The *Nixpkgs maintainers* are people who have assigned themselves to
+maintain specific individual packages. We encourage people who care
+about a package to assign themselves as a maintainer. When a pull
+request is made against a package, OfBorg will notify the appropriate
+maintainer(s). The *Nixpkgs committers* are people who have been given
+permission to merge.
+
+Most contributions are based on and merged into these branches:
+
+* `master` is the main branch where all small contributions go
+* `staging` is branched from master, changes that have a big impact on
+  Hydra builds go to this branch
+* `staging-next` is branched from staging and only fixes to stabilize
+  and security fixes with a big impact on Hydra builds should be
+  contributed to this branch. This branch is merged into master when
+  deemed of sufficiently high quality
+
+For more information about contributing to the project, please visit
+the [contributing page](https://github.com/NixOS/nixpkgs/blob/master/.github/CONTRIBUTING.md).
+
+# Donations
+
+The infrastructure for NixOS and related projects is maintained by a
+nonprofit organization, the [NixOS
+Foundation](https://nixos.org/nixos/foundation.html). To ensure the
+continuity and expansion of the NixOS infrastructure, we are looking
+for donations to our organization.
+
+You can donate to the NixOS foundation by using Open Collective:
+
+<a href="https://opencollective.com/nixos#support"><img src="https://opencollective.com/nixos/tiers/supporter.svg?width=890" /></a>
 
 # License
-This project is licensed under MIT (see [./LICENSE](./LICENSE))
-```
-SPDX-License-Identifier: MIT
-```
+
+Nixpkgs is licensed under the [MIT License](COPYING).
+
+Note: MIT license does not apply to the packages built by Nixpkgs,
+merely to the files in this repository (the Nix expressions, build
+scripts, NixOS modules, etc.). It also might not apply to patches
+included in Nixpkgs, which may be derivative works of the packages to
+which they apply. The aforementioned artifacts are all covered by the
+licenses of the respective packages.
