@@ -90,6 +90,7 @@ myLayout = smartBorders $
   where
     baseSpacing = 10
     wqhdSpacing = 20
+    hdGapping = 150
     wqhdGapping = (2560 - 1920) `div` 2 - wqhdSpacing + baseSpacing
     myUprightGapping l = ifWider 1440 l $
                          ifWider 1439 (gaps [(U,wqhdGapping), (D,wqhdGapping)] l) l
@@ -107,6 +108,7 @@ myLayout = smartBorders $
     full      = named "=" $
                 mySpacing $
                 ifWider 1920 (gaps [(L,wqhdGapping), (R,wqhdGapping)] Full) $
+                ifWider 1919 (gaps [(L,hdGapping), (R,hdGapping)] Full) $
                 myUprightGapping Full
     tiled     = named " " $
                 mySpacing $
@@ -126,7 +128,7 @@ layoutKBs conf =
   , ((ms_, xK_x     ), sendMessage $ Toggle MIRROR)
   , ((m__, xK_f     ), sendMessage $ Toggle FULL)
   , ((ms_, xK_f     ), do
-        sendMessage $ ToggleGaps
+        sendMessage ToggleGaps
         toggleScreenSpacingEnabled
         toggleWindowSpacingEnabled)
   , ((m__, xK_m     ), withFocused minimizeWindow)

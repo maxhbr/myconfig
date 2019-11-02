@@ -10,6 +10,9 @@
   };
 
   config = lib.mkIf config.myconfig.roles.openssh.enable {
-    services.openssh.enable = true;
+    services.openssh = {
+      enable = true;
+      passwordAuthentication = false;
+    };
   };
 }
