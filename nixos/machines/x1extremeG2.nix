@@ -18,6 +18,7 @@
     "imagework"
     "games" # "wine"
     "iot"
+    "openssh"
   ];
 
   # swapDevices = [ {
