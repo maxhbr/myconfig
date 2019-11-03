@@ -13,6 +13,7 @@
     services.openssh = {
       enable = true;
       passwordAuthentication = false;
+      forwardX11 = true;
     };
   };
 }
