@@ -14,7 +14,7 @@
   myconfig.active-roles = [
     "xmonad" "xfce" # "vnc"
     "mail"
-    "work" "virtualization-docker" "dev"
+    "work" "virtualization" "dev"
     "imagework"
     "games" # "wine"
     "iot"

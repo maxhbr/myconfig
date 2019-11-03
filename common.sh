@@ -7,7 +7,7 @@ nixStableChannel=nixos-19.09
 
 export COMMON_SH_WAS_SOURCED="true"
 
-export my_main_host='T470p'
+export my_main_host='x1extremeG2'
 
 export myconfigDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 export nixConfigDir="$myconfigDir/nix"
