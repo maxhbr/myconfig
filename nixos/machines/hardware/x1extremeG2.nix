@@ -9,7 +9,68 @@
 #
 #
 
-{
+let
+  ##############################################################################
+  # Graphics:
+  # See also:
+  # - https://nixos.wiki/wiki/Nvidia
+  # - https://nixos.org/nixos/manual/#sec-x11-graphics-cards-nvidia
+  ##############################################################################
+  # Only nvidia
+  rawNvidiaConf = {
+    services.xserver = {
+      videoDrivers = [ "nvidia" ];
+      # # screenSection = ''
+      # #   Identifier     "Screen1"
+      # #   Device         "Device1"
+      # #   Monitor        "Monitor1"
+      # #   DefaultDepth    24
+      # #   Option         "Stereo" "0"
+      # #   Option         "nvidiaXineramaInfoOrder" "DFP-2"
+      # #   Option         "metamodes" "HDMI-0: nvidia-auto-select +0+0, DP-0: nvidia-auto-select +2560+0"
+      # #   Option         "SLI" "Off"
+      # #   Option         "MultiGPU" "Off"
+      # #   Option         "BaseMosaic" "off"
+      # # '';
+      # # extraDisplaySettings = ''
+      # #   Depth       24
+      # # '';
+      # # # monitorSection = ''
+      # # # '';
+      # deviceSection = ''
+      #   Identifier     "Device1"
+      #   Driver         "nvidia"
+      #   VendorName     "NVIDIA Corporation"
+      #   BoardName      "GeForce GTX 1650"
+      # '';
+    };
+  };
+  ##############################################################################
+  # Bumblebee
+  bumblebeeConf = {
+    hardware.bumblebee.enable = true;
+    environment.systemPackages = with pkgs; [ bumblebee xorg.xf86videointel ];
+  };
+  ##############################################################################
+  # Optimus Prime
+  optimusPrimeConf = {
+    services.xserver.videoDrivers = [ "intel" "nvidia" ];
+    hardware.nvidia = {
+      optimus_prime = {
+        enable = true;
+        # sync.enable = true;
+        # offload.enable = true; # see: https://github.com/NixOS/nixpkgs/pull/66601
+
+        # Bus ID of the NVIDIA GPU. You can find it using lspci, either under 3D or VGA
+        nvidiaBusId = "PCI:1:0:0";
+        # Bus ID of the Intel GPU. You can find it using lspci, either under 3D or VGA
+        intelBusId = "PCI:0:2:0";
+      };
+      modesetting.enable = true;
+    };
+  };
+  ##############################################################################
+in {
   imports = [
     ./notebook-generic.nix
     ./ssd.nix
@@ -21,57 +82,18 @@
         services.xserver.libinput.accelSpeed = "0.15";
       };
     }
-
-    # Graphics:
-    # See also:
-    # - https://nixos.wiki/wiki/Nvidia
-    # - https://nixos.org/nixos/manual/#sec-x11-graphics-cards-nvidia
     {
       # Blacklist nouveau
       boot.extraModprobeConfig = "install nouveau /run/current-system/sw/bin/false";
       boot.blacklistedKernelModules = ["nouveau"];
     }
-    # {
-    #   services.xserver = {
-    #     videoDrivers = [ "nvidia" ];
-    #     # # screenSection = ''
-    #     # #   Identifier     "Screen1"
-    #     # #   Device         "Device1"
-    #     # #   Monitor        "Monitor1"
-    #     # #   DefaultDepth    24
-    #     # #   Option         "Stereo" "0"
-    #     # #   Option         "nvidiaXineramaInfoOrder" "DFP-2"
-    #     # #   Option         "metamodes" "HDMI-0: nvidia-auto-select +0+0, DP-0: nvidia-auto-select +2560+0"
-    #     # #   Option         "SLI" "Off"
-    #     # #   Option         "MultiGPU" "Off"
-    #     # #   Option         "BaseMosaic" "off"
-    #     # # '';
-    #     # # extraDisplaySettings = ''
-    #     # #   Depth       24
-    #     # # '';
-    #     # # # monitorSection = ''
-    #     # # # '';
-    #     # deviceSection = ''
-    #     #   Identifier     "Device1"
-    #     #   Driver         "nvidia"
-    #     #   VendorName     "NVIDIA Corporation"
-    #     #   BoardName      "GeForce GTX 1650"
-    #     # '';
-    #   };
-    # }
-    # {
-    #   hardware.bumblebee.enable = true;
-    # }
-    {
-      services.xserver.videoDrivers = [ "intel" "nvidia" ];
-      hardware.nvidia.optimus_prime.enable = true;
-      # Bus ID of the NVIDIA GPU. You can find it using lspci, either under 3D or VGA
-      hardware.nvidia.optimus_prime.nvidiaBusId = "PCI:1:0:0";
-      # Bus ID of the Intel GPU. You can find it using lspci, either under 3D or VGA
-      hardware.nvidia.optimus_prime.intelBusId = "PCI:0:2:0";
-    }
-  ];
 
+    ############################################################################
+    # chosen graphics driver setup:
+    bumblebeeConf
+    # optimusPrimeConf
+    # rawNvidiaConf
+  ];
 
   nix.buildCores = 8;
 

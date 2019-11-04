@@ -5,7 +5,8 @@
 let
   hasVBox = config.virtualisation.virtualbox.host.enable;
   hasDocker = config.virtualisation.docker.enable;
-  hasnm = config.networking.networkmanager.enable;
+  hasNM = config.networking.networkmanager.enable;
+  hasBB = config.hardware.bumblebee.enable;
 
 in {
   users = {
@@ -20,9 +21,10 @@ in {
         "audio" "video"
         "dialout"
         "input" ]
-        ++ pkgs.lib.optional hasnm "networkmanager"
+        ++ pkgs.lib.optional hasNM "networkmanager"
         ++ pkgs.lib.optional hasVBox "vboxusers"
-        ++ pkgs.lib.optional hasDocker "docker";
+        ++ pkgs.lib.optional hasDocker "docker"
+        ++ pkgs.lib.optional hasBB "bumblebee";
       home = "/home/mhuber";
       createHome = true;
       shell = "/run/current-system/sw/bin/zsh";

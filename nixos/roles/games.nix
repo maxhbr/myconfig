@@ -13,9 +13,12 @@
       steam
     ];
 
-    hardware.opengl = {
-      driSupport = true;
-      driSupport32Bit = true;
+    hardware= {
+      opengl = {
+        driSupport = true;
+        driSupport32Bit = true;
+      };
+      pulseaudio.support32Bit = true;
     };
     networking.firewall.allowedUDPPorts = [ 27031 27036 ];
     networking.firewall.allowedTCPPorts = [ 27036 27037 ];
