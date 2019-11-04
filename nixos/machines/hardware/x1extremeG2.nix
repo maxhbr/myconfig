@@ -90,8 +90,8 @@ in {
 
     ############################################################################
     # chosen graphics driver setup:
-    bumblebeeConf
-    # optimusPrimeConf
+    # bumblebeeConf
+    optimusPrimeConf
     # rawNvidiaConf
   ];
 
