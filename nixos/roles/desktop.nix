@@ -6,6 +6,9 @@
     myconfig.roles.xmonad = {
       enable = lib.mkEnableOption "Xmonad Desktop environment";
     };
+    myconfig.roles.sway = {
+      enable = lib.mkEnableOption "Sway desktop environment";
+    };
     myconfig.roles.xfce = {
       enable = lib.mkEnableOption "Xfce desktop environment";
     };
@@ -18,6 +21,7 @@
 ################################################################################
     { # desktop
       config = lib.mkIf (config.myconfig.roles.xmonad.enable ||
+                         config.myconfig.roles.sway.enable ||
                          config.myconfig.roles.xfce.enable ||
                          config.myconfig.roles.vnc.enable) {
         environment = {
@@ -141,6 +145,15 @@
           # urxvtPackage = pkgs.rxvt_unicode_with-plugins;
         };
       }];
+    }
+################################################################################
+    { # sway
+      config = lib.mkIf config.myconfig.roles.sway.enable {
+        programs.sway.enable = true;
+        environment.systemPackages = with pkgs; [
+          grim # for screenshots
+        ];
+      };
     }
 ################################################################################
     { # xfce

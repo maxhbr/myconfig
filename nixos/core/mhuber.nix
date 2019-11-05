@@ -7,6 +7,7 @@ let
   hasDocker = config.virtualisation.docker.enable;
   hasNM = config.networking.networkmanager.enable;
   hasBB = config.hardware.bumblebee.enable;
+  hasSway = config.programs.sway.enable;
 
 in {
   users = {
@@ -24,7 +25,9 @@ in {
         ++ pkgs.lib.optional hasNM "networkmanager"
         ++ pkgs.lib.optional hasVBox "vboxusers"
         ++ pkgs.lib.optional hasDocker "docker"
-        ++ pkgs.lib.optional hasBB "bumblebee";
+        ++ pkgs.lib.optional hasBB "bumblebee"
+        ++ pkgs.lib.optional hasSway "sway"
+        ;
       home = "/home/mhuber";
       createHome = true;
       shell = "/run/current-system/sw/bin/zsh";
