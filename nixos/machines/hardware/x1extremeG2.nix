@@ -10,14 +10,20 @@
 #
 
 let
+
   ##############################################################################
   # Graphics:
   # See also:
   # - https://nixos.wiki/wiki/Nvidia
   # - https://nixos.org/nixos/manual/#sec-x11-graphics-cards-nvidia
   ##############################################################################
-  # Only nvidia
-  rawNvidiaConf = {
+  blacklistNouveau = {
+    # Blacklist nouveau
+    boot.extraModprobeConfig = "install nouveau /run/current-system/sw/bin/false";
+    boot.blacklistedKernelModules = ["nouveau"];
+  };
+  ##############################################################################
+  rawNvidiaConf = blacklistNouveau // {
     services.xserver = {
       videoDrivers = [ "nvidia" ];
       # # screenSection = ''
@@ -46,14 +52,32 @@ let
     };
   };
   ##############################################################################
-  # Bumblebee
-  bumblebeeConf = {
-    hardware.bumblebee.enable = true;
+  rawNouveauConf = {
+    services.xserver.videoDrivers = [ "nouveau" ];
+  };
+  ##############################################################################
+  rawIntelConf = {
+    services.xserver.videoDrivers = [ "intel" ];
+  };
+  ##############################################################################
+  bumblebeeConf = blacklistNouveau // {
+    hardware.bumblebee = {
+      enable = true;
+      connectDisplay = true;
+    };
     environment.systemPackages = with pkgs; [ bumblebee xorg.xf86videointel ];
   };
   ##############################################################################
-  # Optimus Prime
-  optimusPrimeConf = {
+  bumblebeeNouveauConf = {
+    hardware.bumblebee = {
+      enable = true;
+      connectDisplay = true;
+      driver = "nouveau";
+    };
+    environment.systemPackages = with pkgs; [ bumblebee xorg.xf86videointel ];
+  };
+  ##############################################################################
+  optimusPrimeConf = blacklistNouveau // {
     services.xserver.videoDrivers = [ "intel" "nvidia" ];
     hardware.nvidia = {
       optimus_prime = {
@@ -70,6 +94,7 @@ let
     };
   };
   ##############################################################################
+
 in {
   imports = [
     ./notebook-generic.nix
@@ -77,22 +102,12 @@ in {
     ./lowres.nix
     ./nixos-hardware/lenovo/thinkpad/x1-extreme/gen2/default.nix
 
-    { # config for libinput
-      config = lib.mkIf (config.services.xserver.libinput.enable) {
-        services.xserver.libinput.accelSpeed = "0.15";
-      };
-    }
-    {
-      # Blacklist nouveau
-      boot.extraModprobeConfig = "install nouveau /run/current-system/sw/bin/false";
-      boot.blacklistedKernelModules = ["nouveau"];
-    }
-
-    ############################################################################
-    # chosen graphics driver setup:
-    bumblebeeConf
-    # optimusPrimeConf
+    rawIntelConf
     # rawNvidiaConf
+    # rawNouveauConf
+    # bumblebeeConf
+    # bumblebeeNouveauConf
+    # optimusPrimeConf
   ];
 
   nix.buildCores = 8;
@@ -100,4 +115,9 @@ in {
   boot.extraModprobeConfig = ''
     options snd slots=snd-hda-intel
   '';
+
+  # config for libinput
+  config = lib.mkIf (config.services.xserver.libinput.enable) {
+    services.xserver.libinput.accelSpeed = "0.15";
+  };
 }
