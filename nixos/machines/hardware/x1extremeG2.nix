@@ -102,10 +102,10 @@ in {
     ./lowres.nix
     ./nixos-hardware/lenovo/thinkpad/x1-extreme/gen2/default.nix
 
-    rawIntelConf
+    # rawIntelConf
     # rawNvidiaConf
     # rawNouveauConf
-    # bumblebeeConf
+    bumblebeeConf
     # bumblebeeNouveauConf
     # optimusPrimeConf
   ];
@@ -117,7 +117,8 @@ in {
   '';
 
   # config for libinput
-  config = lib.mkIf (config.services.xserver.libinput.enable) {
+} // (
+  lib.mkIf (config.services.xserver.libinput.enable) {
     services.xserver.libinput.accelSpeed = "0.15";
-  };
-}
+  }
+)
