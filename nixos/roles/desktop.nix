@@ -39,6 +39,31 @@
           '';
         };
 
+        services.printing = {
+          enable = true;
+          drivers = [ pkgs.gutenprint pkgs.hplip ];
+          # add hp-printer with:
+          # $ nix run nixpkgs.hplipWithPlugin -c sudo hp-setup
+        };
+        
+        location.latitude = 48.2;
+        location.longitude = 10.8;
+
+        fonts = {
+          enableFontDir = true;
+          enableGhostscriptFonts = true;
+          fonts = with pkgs; [
+            dejavu_fonts
+            corefonts
+            inconsolata
+          ];
+        };
+      };
+    }
+    { # desktop (x server related)
+      config = lib.mkIf (config.myconfig.roles.xmonad.enable ||
+                        config.myconfig.roles.xfce.enable ||
+                        config.myconfig.roles.vnc.enable) {
         services = {
           xserver = {
             enable = true;
@@ -66,7 +91,6 @@
                 ${pkgs.xss-lock}/bin/xss-lock ${pkgs.myconfig.background}/bin/myScreenLock &disown
               '';
             };
-
           };
 
           cron = {
@@ -82,24 +106,6 @@
             # temperature.night = 3500;
           };
 
-          printing = {
-            enable = true;
-            drivers = [ pkgs.gutenprint pkgs.hplip ];
-            # add hp-printer with:
-            # $ nix run nixpkgs.hplipWithPlugin -c sudo hp-setup
-          };
-        };
-        location.latitude = 48.2;
-        location.longitude = 10.8;
-
-        fonts = {
-          enableFontDir = true;
-          enableGhostscriptFonts = true;
-          fonts = with pkgs; [
-            dejavu_fonts
-            corefonts
-            inconsolata
-          ];
         };
       };
     }
