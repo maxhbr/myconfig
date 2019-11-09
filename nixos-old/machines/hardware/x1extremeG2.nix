@@ -110,6 +110,8 @@ in {
     # optimusPrimeConf
   ];
 
+  nix.buildCores = 8;
+
   boot.extraModprobeConfig = ''
     options snd slots=snd-hda-intel
   '';
