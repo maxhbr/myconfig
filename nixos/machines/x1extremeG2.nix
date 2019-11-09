@@ -28,7 +28,7 @@
 
   boot.initrd.supportedFilesystems = [ "luks" ];
   boot.initrd.luks.devices = [{
-    device = "/dev/disk/by-uuid/0b3b85df-65ef-4b2b-8073-a62c5a7346dc";
+    device = "/dev/disk/by-uuid/2118a468-c2c3-4304-b7d3-32f8e19da49f";
     name = "crypted";
     preLVM = true;
     allowDiscards = true;
