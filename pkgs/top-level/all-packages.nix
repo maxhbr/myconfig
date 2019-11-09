@@ -13648,6 +13648,7 @@ in
   stxxl = callPackage ../development/libraries/stxxl { parallel = true; };
 
   sqlite = lowPrio (callPackage ../development/libraries/sqlite { });
+  sqlite_3_30 = callPackage ../development/libraries/sqlite/3-30.nix { };
 
   sqlite-analyzer = lowPrio (callPackage ../development/libraries/sqlite/analyzer.nix { });
 
@@ -13676,6 +13677,14 @@ in
       echo "D 2019-03-09T15:45:46" > manifest
       echo -n "8250984a368079bb1838d48d99f8c1a6282e00bc" > manifest.uuid
     '';
+
+    patchFlags = "-p0";
+    patches = [
+      # Fixes CVE-2019-16168 for non-amalgamated 3.27.2 as the other patch used
+      # within the sqlite package itself does not apply here.
+      ../development/libraries/sqlite/CVE-2019-16168_3_27_backport.patch
+    ];
+
   });
 
   dqlite = callPackage ../development/libraries/dqlite { };
@@ -18231,6 +18240,7 @@ in
       libpng = libpng_apng;
       python = python2;
       gnused = gnused_422;
+      sqlite = sqlite_3_30;
       inherit (darwin.apple_sdk.frameworks) CoreMedia ExceptionHandling
                                             Kerberos AVFoundation MediaToolbox
                                             CoreLocation Foundation AddressBook;
@@ -22341,7 +22351,7 @@ in
 
   superTuxKart = callPackage ../games/super-tux-kart { };
 
-  synthv1 = callPackage ../applications/audio/synthv1 { };
+  synthv1 = libsForQt5.callPackage ../applications/audio/synthv1 { };
 
   t4kcommon = callPackage ../games/t4kcommon { };
 
