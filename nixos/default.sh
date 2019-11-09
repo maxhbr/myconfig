@@ -31,7 +31,7 @@ upgrade() {
              $NIX_PATH_ARGS \
              --show-trace --keep-failed \
              --upgrade \
-             -I nixos-config="$HOME/myconfig/nixosnew/default.nix" \
+             -I nixos-config="$nixosConfigDir/default.nix" \
              $args \
              --fallback ${NIXOS_REBUILD_CMD:-switch}
 }

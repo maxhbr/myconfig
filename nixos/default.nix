@@ -6,6 +6,7 @@ let
   hostId = "${builtins.readFile /etc/nixos/hostid}";
 in {
   imports = [
+    /etc/nixos/hardware-configuration.nix
     modules/core.nix
     modules/mhuber.nix
   ]
