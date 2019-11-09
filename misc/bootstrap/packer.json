@@ -14,8 +14,8 @@
                 ["modifyvm", "{{.Name}}", "--cpus", "4"]
             ],
 
-            "iso_url": "https://releases.nixos.org/nixos/19.03/nixos-19.03.173068.9ec7625cee5/nixos-minimal-19.03.173068.9ec7625cee5-x86_64-linux.iso",
-            "iso_checksum": "42dfcb781956c2bba809212fbc214bb2b4284bb716ec35edf72713953cb3f613",
+            "iso_url": "https://releases.nixos.org/nixos/19.09/nixos-19.09.1125.d628521d0b7/nixos-graphical-19.09.1125.d628521d0b7-x86_64-linux.iso",
+            "iso_checksum": "3787ffff7f1a6fd9a5a61ad3255c9b8386da94b96af2e5809ec4d82693134807",
             "iso_checksum_type": "sha256",
 
             "http_directory": "./../../",
