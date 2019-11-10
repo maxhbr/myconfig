@@ -11,6 +11,10 @@ gate() {
 }
 
 deploy() {
+    if [[ -f /etc/nixos/configuration.nix ]]; then
+        echo "/etc/nixos/configuration.nix should not exist"
+        exit 1
+    fi
     if [[ ! -f /etc/nixos/hostid ]]; then
         echo "set hostid:"
         cksum /etc/machine-id |

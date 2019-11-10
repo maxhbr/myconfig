@@ -4,7 +4,7 @@
 
 {
   imports = [
-    ./openssh.nix
+    ../openssh.nix
   ];
   config = {
     import <nixpkgs/nixos/modules/services/x11/terminal-server.nix> {
