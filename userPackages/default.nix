@@ -22,8 +22,8 @@ buildEnv {
                      (builtins.filter (n: builtins.match ".*\\.nix" n != null)
                                       (builtins.attrNames content)))
   ) ++ [
-      myconfig.scripts
-      myconfig.background
+    myconfig.scripts
+    myconfig.background
 
     # To allow easily seeing which nixpkgs version the profile was built from, place the version string in ~/.nix-profile/nixpkgs-version
     (writeTextFile {name = "nixpkgs-version"; destination = "/nixpkgs-version"; text = lib.version;})

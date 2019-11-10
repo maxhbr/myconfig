@@ -2,8 +2,8 @@
 ##  variables  ############################################################
 ###########################################################################
 
-# nixStableChannel=nixos-19.09-small
-nixStableChannel=nixos-19.09
+# export nixStableChannel=nixos-19.09-small
+export nixStableChannel=nixos-19.09
 
 export COMMON_SH_WAS_SOURCED="true"
 
@@ -21,8 +21,8 @@ else
     nixpkgs="channel:$nixStableChannel"
 fi
 
-NIX_PATH="nixpkgs=$nixpkgs:nixpkgs-overlays=$overlaysDir:nixos-config=$nixosConfigDir:myconfig=$myconfigDir"
-NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixpkgs-overlays=$overlaysDir -I nixos-config=$nixosConfigDir -I myconfig=$myconfigDir"
+NIX_PATH="nixpkgs=$nixpkgs:nixpkgs-overlays=$overlaysDir:nixos-config=$nixosConfigDir/default.nix:myconfig=$myconfigDir"
+NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixpkgs-overlays=$overlaysDir -I nixos-config=$nixosConfigDir/default.nix -I myconfig=$myconfigDir"
 export NIX_PATH
 export NIX_PATH_ARGS
 
