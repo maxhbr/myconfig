@@ -66,14 +66,14 @@ handleGit() {
             local LOCAL=$(git rev-parse @)
             local REMOTE=$(git rev-parse "$UPSTREAM")
             local BASE=$(git merge-base @ "$UPSTREAM")
-            if [ $LOCAL == $REMOTE ]; then
+            if [ "x$LOCAL" == "x$REMOTE" ]; then
                 echo "... up-to-date"
-            elif [ $LOCAL == $BASE ]; then
+            elif [ "x$LOCAL" == "x$BASE" ]; then
                 echo "* pull ..."
                 git pull --rebase || true
                 logH1 "run" "updatet version of script"
                 exec $0
-            elif [ $REMOTE == $BASE ]; then
+            elif [ "x$REMOTE" == "x$BASE" ]; then
                 logINFO "need to push"
             else
                 logERR "diverged"
