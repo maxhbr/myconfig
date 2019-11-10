@@ -4,11 +4,7 @@
 {
   config = {
     environment.systemPackages = with pkgs; [
-      clamav
+      sundtek
     ];
-    services.clamav = {
-      daemon.enable = true;
-      updater.enable = true;
-    };
   };
 }

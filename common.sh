@@ -21,8 +21,8 @@ else
     nixpkgs="channel:$nixStableChannel"
 fi
 
-NIX_PATH="nixpkgs=$nixpkgs:nixpkgs-overlays=$overlaysDir:myconfig=$myconfigDir"
-NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixpkgs-overlays=$overlaysDir -I myconfig=$myconfigDir"
+NIX_PATH="nixpkgs=$nixpkgs:nixpkgs-overlays=$overlaysDir:nixos-config=$nixosConfigDir/default.nix:myconfig=$myconfigDir"
+NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixpkgs-overlays=$overlaysDir -I nixos-config=$nixosConfigDir/default.nix -I myconfig=$myconfigDir"
 export NIX_PATH
 export NIX_PATH_ARGS
 

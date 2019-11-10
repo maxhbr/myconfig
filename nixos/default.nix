@@ -9,6 +9,7 @@ in {
     /etc/nixos/hardware-configuration.nix
     modules/core.nix
     modules/mhuber.nix
+    modules/emacs.nix
   ]
   # the machine specific configuration is placed at ./machines/<hostName>.nix
     ++ (let
@@ -61,15 +62,12 @@ in {
     };
 
     environment = {
-      # variables = {
-      #   TMP = "/tmp";
-      #   EDITOR = "${pkgs.myconfig.scripts}/bin/ec -t";
-      # };
-      # interactiveShellInit = ''
-      #   alias upg='~/myconfig/rebuild.sh'
-      #   alias vim="${pkgs.myconfig.scripts}/bin/ec -t"
-      #   alias emacs="${pkgs.myconfig.scripts}/bin/ec"
-      # '';
+      variables = {
+        TMP = "/tmp";
+      };
+      interactiveShellInit = ''
+        alias upg='~/myconfig/rebuild.sh'
+      '';
 
       # shellInit = ''
       # '';

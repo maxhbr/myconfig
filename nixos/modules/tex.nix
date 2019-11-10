@@ -4,11 +4,13 @@
 {
   config = {
     environment.systemPackages = with pkgs; [
-      clamav
+      (pkgs.texLiveAggregationFun {
+        paths = [
+          pkgs.texLive pkgs.texLiveExtra
+          pkgs.texLiveBeamer
+          pkgs.texLiveCMSuper
+        ];
+      })
     ];
-    services.clamav = {
-      daemon.enable = true;
-      updater.enable = true;
-    };
   };
 }
