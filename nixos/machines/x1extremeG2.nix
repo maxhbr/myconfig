@@ -16,6 +16,7 @@
     ../modules/mail.nix
     ../modules/virtualization
     ../modules/service/openssh.nix
+    ../modules/service/syncthing.nix
   ];
 
   config = {
