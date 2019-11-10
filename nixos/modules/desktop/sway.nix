@@ -13,7 +13,7 @@
     programs.sway = {
       enable = true;
       extraSessionCommands = ''
-      xrdb ~/.Xresources
+      # xrdb ~/.Xresources
       export SDL_VIDEODRIVER=wayland
       # needs qt5.qtwayland in systemPackages
       export QT_QPA_PLATFORM=wayland
