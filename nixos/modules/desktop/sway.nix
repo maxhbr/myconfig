@@ -23,9 +23,14 @@
       export _JAVA_AWT_WM_NONREPARENTING=1
       '';
     };
-    environment.systemPackages = with pkgs; [
+    environment = {
+    systemPackages = with pkgs; [
       grim # for screenshots
       qt5.qtwayland
     ];
+    loginShellInit = ''
+      [[ -z $DISPLAY && $XDG_VTNR -eq 6 ]] && exec sway --my-next-gpu-wont-be-nvidia
+    '';
+    };
   };
 }
