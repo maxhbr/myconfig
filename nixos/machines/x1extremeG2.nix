@@ -15,10 +15,7 @@
     # ../modules/desktop/xfce.nix
     ../modules/mail.nix
     ../modules/virtualization
-    ../modules/dev
-    ../modules/work
-    ../modules/openssh.nix
-    ../modules/imagework
+    ../modules/service/openssh.nix
   ];
 
   config = {
