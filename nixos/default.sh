@@ -10,6 +10,10 @@ gate() {
     nixos-version &> /dev/null
 }
 
+prepare() {
+    $nixosConfigDir/modules/desktop/extrahosts/default.sh
+}
+
 deploy() {
     if [[ -f /etc/nixos/configuration.nix ]]; then
         echo "/etc/nixos/configuration.nix should not exist"
@@ -43,6 +47,7 @@ gate || {
     exit 0
 }
 if [ $# -eq 0 ]; then
+    prepare
     deploy
     upgrade
 else

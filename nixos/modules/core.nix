@@ -1,4 +1,4 @@
-# Copyright 2017-2018 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { config, pkgs, lib, ... }:
 
