@@ -4,17 +4,18 @@
 # SPDX-License-Identifier: MIT
 set -e
 
+. "$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )/common.sh"
+
+logH1 "Setup xdg-mime"
 setupXdgMime() {
     mimetype="$1"
     app="${2}.desktop"
 
-    echo "setup $app for $mimetype"
     if [[ "$(xdg-mime query default "$mimetype")" != *"$app"* ]]; then
+        logH3 "setup $app for $mimetype"
         set -x
         xdg-mime default "$app" "$mimetype"
         set +x
-    else
-        echo "... already done"
     fi
 }
 
