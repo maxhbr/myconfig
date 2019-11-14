@@ -121,10 +121,11 @@ if ($onlyIfChanged && isEnvUnchanged()) {
         "DP2", "DP2-2", "DP2-3", "DP2-8", "DP2-1",
         "DP3-1", "DP3-2", "DP3-3",
         "DP3-1-8",
-        "HDMI1", "HDMI2", "HDMI3"
+        "HDMI1", "HDMI2", "HDMI3",
+        "VIRTUAL1", "VIRTUAL2", "VIRTUAL3", "VIRTUAL4", "VIRTUAL5"
         );
     my %resolutions = (
-        $lvdsOutput => "2560x1440",
+        $lvdsOutput => "1920x1080",
         );
     my %customizations = (
         "DP3-2" => "--rotate right"
