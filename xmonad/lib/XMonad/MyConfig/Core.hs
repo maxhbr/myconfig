@@ -136,23 +136,22 @@ myKeys conf =
 
 backlightControlKBs, volumeControlKBs :: [((KeyMask -> KeyMask, KeySym), X ())]
 backlightControlKBs = let
-     xbacklightCMDs = [ "=50"
-                      , "=25"
-                      , "+10"
-                      , "=75"
-                      , "-10"
-                      , "=10"
-                      , "=5"
-                      , "+1"
-                      , "=3"
-                      , "=100"
-                      , "=1"
-                      , "-1"
-                      , "=0" ]
-     xbacklightRunSelectedConf = map (\ s -> (s, spawn (xbacklightCMD ++ " " ++ s))) xbacklightCMDs
-  in [ ((m__, xK_F1), runSelectedAction def xbacklightRunSelectedConf)
-     , ((const 0, xF86XK_MonBrightnessUp)   , spawn (xbacklightCMD ++ " -inc 10%"))
-     , ((const 0, xF86XK_MonBrightnessDown) , spawn (xbacklightCMD ++ " -dec 10%"))
+     backlightCMDs =
+       [ "-S 50"
+       , "-S 25"
+       , "-A 10"
+       , "-S 75"
+       , "-U 10"
+       , "-S 10"
+       , "-S 5"
+       , "-A 1"
+       , "-S 3"
+       , "-S 100"
+       , "-S 1"
+       , "-U 1"
+       , "-S 0" ]
+     backlightRunSelectedConf = map (\ s -> (s, spawn (lightCMD ++ " " ++ s))) backlightCMDs
+  in [ ((m__, xK_F1), runSelectedAction def backlightRunSelectedConf)
      ]
 
 volumeControlKBs =

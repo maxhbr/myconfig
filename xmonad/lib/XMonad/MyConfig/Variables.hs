@@ -32,7 +32,7 @@ fehCMD             = "feh"
 unclutterCMD       = "unclutter"
 htopCMD            = "htop"
 pavucontrolCMD     = "pavucontrol"
-xbacklightCMD      = "xbacklight"
+lightCMD           = "light"
 
 myautosetupCMD     = pathToMyconfigBins ++ "myautosetup.pl"
 screenshotCMD      = pathToMyconfigBins ++ "screenshot.sh"

@@ -216,3 +216,11 @@ bar {
         inactive_workspace #32323200 #32323200 #5c5c5c
     }
 }
+
+input "2:10:TPPS/2 Elan TrackPoint" {
+    tap enabled
+    natural_scroll enabled
+}
+seat seat0 xcursor_theme default 128
+
+exec xrdb ~/.Xresources

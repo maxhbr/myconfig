@@ -63,7 +63,7 @@ in mkDerivation {
     addAbsoluteBinaryPath unclutter ${pkgs.unclutter}
     addAbsoluteBinaryPath htop ${pkgs.htop}
     addAbsoluteBinaryPath pavucontrol ${pkgs.pavucontrol}
-    addAbsoluteBinaryPath xbacklight ${pkgs.xorg.xbacklight}
+    addAbsoluteBinaryPath light ${pkgs.light}
 
     replaceConfigValue pathToXmobarConfig "${my-xmonad-misc}/share/xmobarrc"
     replaceConfigValue pathToXmobarMinConfig "${my-xmonad-misc}/share/xmobarrc.minimal"
