@@ -21,13 +21,10 @@
         enableCtrlAltBackspace = true;
 
         displayManager = {
-          slim = {
+          lightdm = {
             enable = true;
-            defaultUser = "mhuber";
-            # TODO: this is no longer working!
-            # theme = "${pkgs.myconfig.slim-theme}/share/my-slim-theme";
-            # theme = "${pkgs.myconfig.slim-theme}/share/my-slim-theme.tar.gz";
-            # theme = "${pkgs.myconfig.slim-theme}/share/my-slim-theme.zip";
+            # autologin.user = "mhuber";
+            background = "${pkgs.myconfig.background}/share/romben3.png";
           };
           sessionCommands = ''
             ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name ${pkgs.vanilla-dmz}/share/icons/Vanilla-DMZ/cursors/left_ptr 128 &disown

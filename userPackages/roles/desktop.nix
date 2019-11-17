@@ -6,7 +6,6 @@ with pkgs; [
 # gui applications
   mupdf zathura llpp
   feh imagemagick # scrot
-  xarchiver # gnome3.file-roller
   mplayer
 # gui applications
   chromium unstable.firefox qutebrowser

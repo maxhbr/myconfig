@@ -28,7 +28,7 @@
       preLVM = true;
       allowDiscards = true;
     }];
-    services.xserver.displayManager.slim.autoLogin = true;
+    # services.xserver.displayManager.slim.autoLogin = true;
   };
 
   # myconfig.active-roles = [

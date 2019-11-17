@@ -13,6 +13,7 @@
         arandr
         xlibs.xmodmap xlibs.xset xlibs.setxkbmap
         xclip
+        xarchiver
       # misc
         xf86_input_wacom
         libnotify # xfce.xfce4notifyd # notify-osd
