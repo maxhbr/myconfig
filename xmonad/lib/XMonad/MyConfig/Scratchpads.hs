@@ -35,7 +35,7 @@ applyMyScratchpads c = let
             (customFloating $ W.RationalRect (1/12) (1/10) (5/6) (4/5))
        , NS "ScratchMu4e" (mkEmacsCmd "ScratchMu4e" "")
            (resource =? "ScratchMu4e")
-           (customFloating $ W.RationalRect (1/24) (3/20) (5/6) (4/5))
+           (customFloating $ W.RationalRect (1/24) (3/20) (4/6) (3/5))
        , NS "ScratchMutt" (mkTermCmd "ScratchMutt" (bashCMD ++ " -c \"~/bin/mailclient.sh\""))
            (resource =? "ScratchMutt")
            (customFloating $ W.RationalRect (1/24) (3/20) (5/6) (4/5))
