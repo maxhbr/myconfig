@@ -17,6 +17,7 @@
     ../modules/virtualization
     ../modules/service/openssh.nix
     # ../modules/service/syncthing.nix
+    ../modules/work.nix
   ];
 
   config = {
@@ -28,16 +29,5 @@
       preLVM = true;
       allowDiscards = true;
     }];
-    # services.xserver.displayManager.slim.autoLogin = true;
   };
-
-  # myconfig.active-roles = [
-  #   "xmonad" "xfce" "sway" # "vnc"
-  #   "mail"
-  #   "work" "virtualization" "dev"
-  #   "imagework"
-  #   "games" # "wine"
-  #   "iot"
-  #   "openssh"
-  # ];
 }
