@@ -7,7 +7,7 @@ with pkgs; [
   thunderbird
   openvpn networkmanager_openvpn
   # rdesktop
-  openjdk maven gradle
+  openjdk11 maven gradle
   libreoffice
   zoom-us # unstable.zoom-us
   rambox # franz hipchat
