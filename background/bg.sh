@@ -7,6 +7,10 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../background"
 cd $DIR
 bgs=(*.png)
 
+LOG_FOLDER="$HOME/myconfig/_logs"
+mkdir -p "$LOG_FOLDER"
+LOG_FILE="$LOG_FOLDER/$(date +%Y-%m-%d)-myScreenLock.sh.log"
+
 getRandomBG() {
     rand=$[$RANDOM % ${#bgs[@]}]
     img="${bgs[$rand]}"
@@ -37,14 +41,14 @@ getScreenHeigth() {
 waitForUnlock() {
     while sleep 10; do
         if ! pidof i3lock &> /dev/null; then
-            echo "unlock at: $(date)" | tee -a "/tmp/myScreenLock.sh.log"
+            echo "unlock at: $(date)" | tee -a "$LOG_FILE"
             return
         fi
     done
 }
 
 lockWithRandom() {
-    echo "lock at: $(date)" | tee -a "/tmp/myScreenLock.sh.log"
+    echo "lock at: $(date)" | tee -a "$LOG_FILE"
     i3lock -t -i "$(getRandomBG $(getScreenHeigth))" -c 000000
     waitForUnlock &
 }

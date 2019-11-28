@@ -57,8 +57,8 @@ URxvt.keysym.C-Down:   perl:font-size:decrease
 URxvt.keysym.C-S-Up:   perl:font-size:incglobal
 URxvt.keysym.C-S-Down: perl:font-size:decglobal
 
-URxvt.urlLauncher:          qutebrowser
-URxvt.url-select.launcher:  qutebrowser
+URxvt.urlLauncher:          xdg-open
+URxvt.url-select.launcher:  xdg-open
 URxvt.url-select.underline: true
 URxvt.keysym.M-u:           perl:url-select:select_next
 URxvt.keysym.M-Escape:      perl:keyboard-select:activate
