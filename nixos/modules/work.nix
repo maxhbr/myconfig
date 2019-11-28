@@ -5,8 +5,8 @@
 {
   imports = [
     ./dev/jdk.nix
+    ./dnsmasq.nix
   ];
-
   environment = {
     systemPackages = with pkgs; [
       openvpn networkmanager_openvpn
