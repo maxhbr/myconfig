@@ -10,6 +10,7 @@
   environment = {
     systemPackages = with pkgs; [
       openvpn networkmanager_openvpn
+      openconnect networkmanager-openconnect
       libreoffice
       zoom-us
       rambox

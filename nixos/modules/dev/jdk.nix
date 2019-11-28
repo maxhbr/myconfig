@@ -16,9 +16,15 @@
       ln -s ${pkgs.openjdk12} $out/pkgs/openjdk12
     '';
 
+    nixpkgs.overlays = [(self: super: {
+      maven = super.maven.override {
+        jdk = self.openjdk11;
+      };
+    })];
+
     environment = {
       systemPackages = with pkgs; [
-        jdk8 jdk11 jdk12
+        openjdk openjdk8 openjdk11 openjdk12
         maven gradle
       ];
       variables = {
