@@ -11,6 +11,7 @@
     systemPackages = with pkgs; [
       openvpn networkmanager_openvpn
       openconnect networkmanager-openconnect
+      strongswan networkmanager_strongswan
       libreoffice
       zoom-us
       rambox

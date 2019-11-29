@@ -97,12 +97,12 @@ alias -s pdf=zathura
 alias -s ps=zathura
 alias -s djvu=zathura
 
-###############################################################################
-if [ ! $IN_NIX_SHELL ]; then
-    [[ -f ~/.zshrc.private ]] && source ~/.zshrc.private
-    # [[ -d /nix/store/k1v2g5784sas2fc9fp6flq50fvsck5w7-taskwarrior-2.5.1/share/doc/task/scripts/zsh/ ]] &&
-    #     fpath=(/nix/store/k1v2g5784sas2fc9fp6flq50fvsck5w7-taskwarrior-2.5.1/share/doc/task/scripts/zsh/ $fpath)
-fi
+# ###############################################################################
+# if [ ! $IN_NIX_SHELL ]; then
+#     [[ -f ~/.zshrc.private ]] && source ~/.zshrc.private
+#     # [[ -d /nix/store/k1v2g5784sas2fc9fp6flq50fvsck5w7-taskwarrior-2.5.1/share/doc/task/scripts/zsh/ ]] &&
+#     #     fpath=(/nix/store/k1v2g5784sas2fc9fp6flq50fvsck5w7-taskwarrior-2.5.1/share/doc/task/scripts/zsh/ $fpath)
+# fi
 
 ###############################################################################
 # Start tmux on ssh
