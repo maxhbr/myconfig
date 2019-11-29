@@ -12,6 +12,7 @@
       openvpn networkmanager_openvpn
       openconnect networkmanager-openconnect
       strongswan networkmanager_strongswan
+      networkmanagerapplet
       libreoffice
       zoom-us
       rambox

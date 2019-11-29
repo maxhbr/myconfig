@@ -18,6 +18,8 @@
         xf86_input_wacom
         libnotify # xfce.xfce4notifyd # notify-osd
         vanilla-dmz
+
+        networkmanager_dmenu
       ];
       interactiveShellInit = ''
         alias file-roller='${pkgs.xarchiver}/bin/xarchiver'
