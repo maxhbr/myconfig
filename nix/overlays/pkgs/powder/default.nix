@@ -1,5 +1,11 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
+
+# build with:
+# nix-build \
+#     --keep-failed \
+#     -E 'with import <nixpkgs> {}; callPackage ./default.nix {}'
+
 { stdenv, fetchurl, unzip, pkgs }:
 # based on: https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=powder
 stdenv.mkDerivation {
@@ -17,13 +23,17 @@ stdenv.mkDerivation {
     ./buildall.sh --use-home-dir
   '';
 
+  patches = [
+    ./powder-117-gcc6.patch # see: https://gitweb.gentoo.org/repo/gentoo.git/commit/?id=0b360332de4c8f4ab442180cb9312262733b4cad
+  ];
+
   installPhase = ''
     install -Dm755 powder "$out/bin/powder"
   '';
 
   meta = with stdenv.lib; {
     homepage = http://zincland.com/powder;
-    description = "A graphical roguelike, originally designed for the Game Boy Advanc";
+    description = "A graphical roguelike, originally designed for the Game Boy Advance";
     license = licenses.unfree;
     platforms = platforms.linux;
     maintainers = [ "mail@maximilian-huber.de" ];
