@@ -70,7 +70,7 @@ have ag && {
   alias grepr="ag"
 } || {
   grepr() { grep -rns --color=always "$@" | grep -v Binärdatei 2>/dev/null; }
-  grepri() { grepr -i "$@" }
+  grepri() { grepr -i "$@"; }
 }
 greprL() { grepr "$@" | less -R; }
 grepf() {
@@ -157,7 +157,7 @@ cdStack() {
     read "input?Where to go: "
   fi
   if [ -n "$input" ]; then
-    if [ $input -eq $input 2>/dev/null ]; then
+    if [ $input -eq $input ]; then
       cd ~$input
     fi
   fi
@@ -198,7 +198,7 @@ alias egrep='egrep --color=auto'
 mktar() { tar cvf  "${1%%/}.tar"     "${1%%/}/"; }
 mktgz() { tar cvzf "${1%%/}.tar.gz"  "${1%%/}/"; }
 mktbz() { tar cvjf "${1%%/}.tar.bz2" "${1%%/}/"; }
-mkzip() { zip -r $1 $1 }
+mkzip() { zip -r $1 $1; }
 
 alias pkill9="pkill --signal 9"
 
@@ -450,7 +450,7 @@ dssh(){
             read "input?Num of container: "
         fi
         if [ -n "$input" ]; then
-            if [ $input -eq $input 2>/dev/null ]; then
+            if [ $input -eq $input ]; then
                 containerID="$(echo $containers | sed "${input}q;d" | awk '{print $1;}')"
             fi
         fi
@@ -870,11 +870,14 @@ myXnest() {
 #   some functions
 #-------------------------------------------------------------------{{{
 
-mvnDebug() {
-  $(dirname $(dirname $(readlink -f $(which mvn))))/maven/bin/mvnDebug $@
-  # JAVA_OPTS="${JAVA_OPTS} -Xdebug -Xrunjdwp:transport=dt_socket,address=8000,server=y,suspend=y" mvn $@
+have mvnDebug || {
+  have mvn && {
+    mvnDebug() {
+      $(dirname $(dirname $(readlink -f $(which mvn))))/maven/bin/mvnDebug $@
+      # JAVA_OPTS="${JAVA_OPTS} -Xdebug -Xrunjdwp:transport=dt_socket,address=8000,server=y,suspend=y" mvn $@
+    }
+  }
 }
-
 
 mycompTime() { #compare the speed of two ($1, $2) commands (loop $3 times)
   if [ $# -ne 3 ]; then return 1; fi
