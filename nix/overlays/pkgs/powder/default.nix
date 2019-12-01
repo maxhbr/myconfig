@@ -9,11 +9,11 @@
 { stdenv, fetchurl, unzip, pkgs }:
 # based on: https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=powder
 stdenv.mkDerivation {
-  name = "powder117";
+  name = "powder118";
 
   src = fetchurl {
-    url = "http://zincland.com/powder/release/powder117_src.tar.gz";
-    sha256 = "070346921ee83bc40943b1e1cb576ab3222cecc319fe10f5c138a4deec85e861";
+    url = "http://zincland.com/powder/release/powder118_src.tar.gz";
+    sha256 = "1mzk338sz7g77k09pw6cb47lg60si76x2mrm83r1zpf7f8wjz0af";
   };
 
   buildInputs = [ pkgs.SDL pkgs.gcc5 ];
