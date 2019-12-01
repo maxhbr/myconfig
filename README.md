@@ -66,6 +66,22 @@ On top level there is also a file `./default.nix` which defines an overlay conta
 
 On nixos the central folder is `./nixos`, which imports the top level overlay definition to also build xmonad, my backgrounds and more.
 
+# Notes
+To use https for pulling:
+```
+$ cat .git/config
+[...]
+[remote "origin"]
+	url = https://github.com/maxhbr/myconfig
+	pushurl = git@github.com:maxhbr/myconfig.git
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[branch "master"]
+	remote = origin
+	merge = refs/heads/master
+	pushRemote = origin
+[...]
+```
+
 # License
 This project is licensed under MIT (see [./LICENSE](./LICENSE))
 ```
