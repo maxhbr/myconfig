@@ -28,7 +28,10 @@
         maven gradle
       ];
       variables = {
-        JAVA_HOME = "/run/current-system/pkgs/openjdk11";
+        JAVA_8_HOME = "/run/current-system/pkgs/openjdk8/lib/openjdk";
+        JAVA_11_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk";
+        JAVA_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk";
+        JAVA_12_HOME = "/run/current-system/pkgs/openjdk12/lib/openjdk";
       };
     };
   };
