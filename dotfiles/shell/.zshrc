@@ -33,6 +33,9 @@ else
     echo 'oh-my-zsh not found'
     echo 'get oh-my-zsh via sh -c "$(curl -fsSL https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"'
 fi
+
+###############################################################################
+# PROMPT and RPROMPT
 # see: http://zsh.sourceforge.net/Doc/Release/Prompt-Expansion.html
 PROMPT='%T ${ret_status}%?%{$reset_color%} $(git_prompt_info)%{$fg[cyan]%}%c%{$reset_color%} '
 if [ $IN_NIX_SHELL ]; then

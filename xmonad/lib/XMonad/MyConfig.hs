@@ -23,7 +23,7 @@ import XMonad.MyConfig.ToggleFollowFocus ( applyMyFollowFocus )
 import XMonad.MyConfig.Notify ( applyMyUrgencyHook )
 import XMonad.MyConfig.MyLayoutLayer ( applyMyLayoutModifications )
 import XMonad.MyConfig.MyLogHookLayer ( getXMProcs, applyMyLogHook )
-
+import XMonad.Hooks.EwmhDesktops (ewmh)
 -- runMyConfig :: IO ()
 -- runMyConfig = do
 --   xmprocs <-getXMProcs
@@ -52,5 +52,8 @@ composeMyConfig xmprocs executablePath = let
            , applyMyScratchpads
            , applyMyFollowFocus
            , applyMyLogHook xmprocs
+           , ewmh -- EWMH should prevent input grab without focus grab:
+                  -- see: https://github.com/xmonad/xmonad/issues/45#issuecomment-442064582
+                  --   Use EWMH handling, because some programs grab input focus without window focus. With EWMH enabled, this won't happenj
            ]
   in foldl (\ c f -> f c) coreConfig layers
