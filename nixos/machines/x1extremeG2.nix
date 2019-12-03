@@ -14,7 +14,7 @@
     # ../modules/desktop/xfce.nix
     ../modules/desktop/games
     ../modules/mail.nix
-    ../modules/virtualization/docker.nix
+    ../modules/virtualization
     ../modules/service/openssh.nix
     # ../modules/service/syncthing.nix
     ../modules/work.nix
