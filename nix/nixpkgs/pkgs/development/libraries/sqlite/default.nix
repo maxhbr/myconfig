@@ -10,24 +10,18 @@ in
 
 stdenv.mkDerivation rec {
   pname = "sqlite";
-  version = "3.28.0";
+  version = "3.30.0";
 
   # NB! Make sure to update analyzer.nix src (in the same directory).
   src = fetchurl {
     url = "https://sqlite.org/2019/sqlite-autoconf-${archiveVersion version}.tar.gz";
-    sha256 = "1hxpi45crbqp6lacl7z611lna02k956m9bsy2bjzrbb2y23546yn";
+    sha256 = "0n7w839y55dc3qqf2zv8xk6238cc6mpx24q4w5amwic7g96cza70";
   };
 
   outputs = [ "bin" "dev" "out" ];
   separateDebugInfo = stdenv.isLinux;
 
   buildInputs = [ zlib ] ++ optionals interactive [ readline ncurses ];
-
-  patches = [
-    # CVE-2019-16168: backported patch for a division by zero caused crash
-    # Once we can upgrade to >= 3.30 this should be removed.
-    ./CVE-2019-16168.patch
-  ];
 
   configureFlags = [ "--enable-threadsafe" ] ++ optional interactive "--enable-readline";
 

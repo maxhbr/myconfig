@@ -6,6 +6,7 @@
 , profiledCompiler ? false
 , staticCompiler ? false
 , enableShared ? true
+, enableLTO ? true
 , texinfo ? null
 , perl ? null # optional, for texi2pod (then pod2man)
 , gmp, mpfr, libmpc, gettext, which
@@ -184,8 +185,9 @@ stdenv.mkDerivation ({
 
       gmp mpfr libmpc libelf isl
 
-      enablePlugin
+      enableLTO
       enableMultilib
+      enablePlugin
       enableShared
 
       langC
@@ -268,9 +270,6 @@ stdenv.mkDerivation ({
       stdenv.lib.platforms.freebsd ++
       stdenv.lib.platforms.illumos ++
       stdenv.lib.platforms.darwin;
-
-    # See #40038
-    broken = stdenv.isDarwin;
   };
 }
 

@@ -14,7 +14,7 @@
 
 buildPythonPackage rec {
   pname = "uvicorn";
-  version = "0.9.0";
+  version = "0.10.4";
   disabled = isPy27;
 
   src = fetchFromGitHub {
@@ -41,6 +41,12 @@ buildPythonPackage rec {
   checkInputs = [ pytest requests ];
   checkPhase = ''
     pytest
+  '';
+
+  # LICENCE.md gets propagated without this, causing collisions
+  # see https://github.com/encode/uvicorn/issues/392
+  postInstall = ''
+    rm $out/LICENSE.md
   '';
 
   meta = with lib; {

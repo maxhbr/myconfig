@@ -10,8 +10,7 @@
 # Needed for running tests:
 , qtbase, xvfb_run
 
-# For weboob, which only supports Python 2.x:
-, python2Packages
+, python3Packages
 }:
 
 stdenv.mkDerivation rec {
@@ -29,7 +28,7 @@ stdenv.mkDerivation rec {
   enableParallelBuilding = true;
 
   nativeBuildInputs = [
-    doxygen extra-cmake-modules graphviz kdoctools python2Packages.wrapPython
+    doxygen extra-cmake-modules graphviz kdoctools python3Packages.wrapPython
     wrapQtAppsHook
   ];
 
@@ -41,10 +40,10 @@ stdenv.mkDerivation rec {
 
     # Put it into buildInputs so that CMake can find it, even though we patch
     # it into the interface later.
-    python2Packages.weboob
+    python3Packages.weboob
   ];
 
-  weboobPythonPath = [ python2Packages.weboob ];
+  weboobPythonPath = [ python3Packages.weboob ];
 
   postInstall = ''
     buildPythonPath "$weboobPythonPath"
