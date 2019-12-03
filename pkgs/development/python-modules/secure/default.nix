@@ -1,4 +1,4 @@
-{ lib, buildPythonPackage, fetchFromGitHub, isPy27
+{ lib, buildPythonPackage, fetchFromGitHub
 , maya
 , requests
 }:
@@ -6,7 +6,6 @@
 buildPythonPackage rec {
   version = "0.2.1";
   pname = "secure";
-  disabled = isPy27;
 
   src = fetchFromGitHub {
     owner = "typeerror";

@@ -7,6 +7,7 @@
 , libtirpc
 , nfs-utils
 , gawk, gnugrep, gnused, systemd
+, smartmontools, sysstat, sudo
 
 # Kernel dependencies
 , kernel ? null
@@ -19,7 +20,7 @@ let
 
   common = { version
     , sha256
-    , extraPatches
+    , extraPatches ? []
     , rev ? "zfs-${version}"
     , isUnstable ? false
     , incompatibleKernelVersion ? null }:
@@ -103,6 +104,7 @@ let
       installFlags = [
         "sysconfdir=\${out}/etc"
         "DEFAULT_INITCONF_DIR=\${out}/default"
+        "INSTALL_MOD_PATH=\${out}"
       ];
 
       postInstall = optionalString buildKernel ''
@@ -128,6 +130,13 @@ let
         # Add Bash completions.
         install -v -m444 -D -t $out/share/bash-completion/completions contrib/bash_completion.d/zfs
         (cd $out/share/bash-completion/completions; ln -s zfs zpool)
+      '';
+
+      postFixup = ''
+        path="PATH=${makeBinPath [ coreutils gawk gnused gnugrep utillinux smartmontools sysstat sudo ]}"
+        for i in $out/libexec/zfs/zpool.d/*; do
+          sed -i "2i$path" $i
+        done
       '';
 
       outputs = [ "out" ] ++ optionals buildUser [ "lib" "dev" ];
@@ -157,10 +166,6 @@ in {
     version = "0.8.2";
 
     sha256 = "0miax0h2wg4b2kn8n93804faajy2n1sh25knyy2hg3k77nlr4pni";
-
-    extraPatches = [
-      ./build-fixes-0.8.patch
-    ];
   };
 
   zfsUnstable = common {
@@ -172,9 +177,5 @@ in {
 
     sha256 = "0miax0h2wg4b2kn8n93804faajy2n1sh25knyy2hg3k77nlr4pni";
     isUnstable = true;
-
-    extraPatches = [
-      ./build-fixes-0.8.patch
-    ];
   };
 }

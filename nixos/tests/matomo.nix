@@ -34,6 +34,10 @@ let
 in {
   matomo = matomoTest pkgs.matomo // {
     name = "matomo";
-    meta.maintainers = with maintainers; [ florianjacob kiwi ];
+    meta.maintainers = with maintainers; [ florianjacob kiwi mmilata ];
+  };
+  matomo-beta = matomoTest pkgs.matomo-beta // {
+    name = "matomo-beta";
+    meta.maintainers = with maintainers; [ florianjacob kiwi mmilata ];
   };
 }

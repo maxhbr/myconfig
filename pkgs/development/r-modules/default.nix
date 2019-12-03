@@ -249,7 +249,7 @@ let
     ChemmineOB = [ pkgs.openbabel pkgs.pkgconfig ];
     cit = [ pkgs.gsl_1 ];
     curl = [ pkgs.curl.dev ];
-    data_table = lib.optional stdenv.isDarwin pkgs.llvmPackages.openmp;
+    data_table = [pkgs.zlib.dev] ++ lib.optional stdenv.isDarwin pkgs.llvmPackages.openmp;
     devEMF = [ pkgs.xorg.libXft.dev pkgs.x11 ];
     diversitree = [ pkgs.gsl_1 pkgs.fftw ];
     EMCluster = [ pkgs.liblapack ];
@@ -276,8 +276,8 @@ let
     jqr = [ pkgs.jq.dev ];
     KFKSDS = [ pkgs.gsl_1 ];
     kza = [ pkgs.fftw.dev ];
-    libamtrack = [ pkgs.gsl_1 ];
     magick = [ pkgs.imagemagick.dev ];
+    ModelMetrics = lib.optional stdenv.isDarwin pkgs.llvmPackages.openmp;
     mvabund = [ pkgs.gsl_1 ];
     mwaved = [ pkgs.fftw.dev ];
     ncdf4 = [ pkgs.netcdf ];
@@ -311,7 +311,7 @@ let
     rgdal = [ pkgs.proj.dev pkgs.gdal ];
     rgeos = [ pkgs.geos ];
     rggobi = [ pkgs.ggobi pkgs.gtk2.dev pkgs.libxml2.dev ];
-    rgl = [ pkgs.libGLU_combined pkgs.xlibsWrapper ];
+    rgl = [ pkgs.libGLU pkgs.libGL pkgs.xlibsWrapper ];
     Rglpk = [ pkgs.glpk ];
     RGtk2 = [ pkgs.gtk2.dev ];
     rhdf5 = [ pkgs.zlib ];
@@ -325,8 +325,7 @@ let
     rmatio = [ pkgs.zlib.dev ];
     Rmpfr = [ pkgs.gmp pkgs.mpfr.dev ];
     Rmpi = [ pkgs.openmpi ];
-    RMariaDB = [ pkgs.mariadb.connector-c.dev ];
-    RMySQL = [ pkgs.zlib pkgs.mysql.connector-c.dev pkgs.openssl.dev ];
+    RMySQL = [ pkgs.zlib pkgs.libmysqlclient pkgs.openssl.dev ];
     RNetCDF = [ pkgs.netcdf pkgs.udunits ];
     RODBCext = [ pkgs.libiodbc ];
     RODBC = [ pkgs.libiodbc ];
@@ -359,6 +358,7 @@ let
     stringi = [ pkgs.icu.dev ];
     survSNP = [ pkgs.gsl_1 ];
     sysfonts = [ pkgs.zlib pkgs.libpng pkgs.freetype.dev ];
+    systemfonts = [ pkgs.fontconfig.dev pkgs.freetype.dev ];
     TAQMNGR = [ pkgs.zlib.dev ];
     tesseract = [ pkgs.tesseract pkgs.leptonica ];
     tiff = [ pkgs.libtiff.dev ];
@@ -426,6 +426,7 @@ let
     spate = [ pkgs.pkgconfig ];
     stringi = [ pkgs.pkgconfig ];
     sysfonts = [ pkgs.pkgconfig ];
+    systemfonts = [ pkgs.pkgconfig ];
     tesseract = [ pkgs.pkgconfig ];
     Cairo = [ pkgs.pkgconfig ];
     Rsymphony = [ pkgs.pkgconfig pkgs.doxygen pkgs.graphviz pkgs.subversion ];
@@ -452,6 +453,8 @@ let
     quadprog = [ pkgs.libiconv ];
     randomForest = [ pkgs.libiconv ];
     sundialr = [ pkgs.libiconv ];
+    ucminf = [ pkgs.libiconv ];
+    glmnet = [ pkgs.libiconv ];
   };
 
   packagesRequireingX = [
@@ -647,7 +650,6 @@ let
     "SimpleTable"
     "SOLOMON"
     "soundecology"
-    "SPACECAP"
     "spacodiR"
     "spatsurv"
     "sqldf"
@@ -735,6 +737,11 @@ let
         + lib.optionalString stdenv.isDarwin " -fopenmp";
     });
 
+    ModelMetrics = old.ModelMetrics.overrideDerivation (attrs: {
+      NIX_CFLAGS_COMPILE = attrs.NIX_CFLAGS_COMPILE
+        + lib.optionalString stdenv.isDarwin " -fopenmp";
+    });
+
     rpf = old.rpf.overrideDerivation (attrs: {
       patchPhase = "patchShebangs configure";
     });
@@ -813,13 +820,8 @@ let
       LIBAPPARMOR_HOME = pkgs.libapparmor;
     });
 
-    RMariaDB = old.RMariaDB.overrideDerivation (attrs: {
-      preConfigure = ''
-        patchShebangs configure
-      '';
-    });
-
     RMySQL = old.RMySQL.overrideDerivation (attrs: {
+      MYSQL_DIR="${pkgs.libmysqlclient}";
       preConfigure = ''
         patchShebangs configure
       '';
@@ -951,6 +953,10 @@ let
     });
 
     rlang = old.rlang.overrideDerivation (attrs: {
+      preConfigure = "patchShebangs configure";
+    });
+
+    systemfonts = old.systemfonts.overrideDerivation (attrs: {
       preConfigure = "patchShebangs configure";
     });
 

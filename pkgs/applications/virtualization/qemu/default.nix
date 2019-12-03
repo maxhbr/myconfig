@@ -35,16 +35,15 @@ let
 in
 
 stdenv.mkDerivation rec {
-  version = "4.0.1";
-  name = "qemu-"
-    + stdenv.lib.optionalString xenSupport "xen-"
-    + stdenv.lib.optionalString hostCpuOnly "host-cpu-only-"
-    + stdenv.lib.optionalString nixosTestRunner "for-vm-tests-"
-    + version;
+  version = "4.1.0";
+  pname = "qemu"
+    + stdenv.lib.optionalString xenSupport "-xen"
+    + stdenv.lib.optionalString hostCpuOnly "-host-cpu-only"
+    + stdenv.lib.optionalString nixosTestRunner "-for-vm-tests";
 
   src = fetchurl {
     url = "https://wiki.qemu.org/download/qemu-${version}.tar.bz2";
-    sha256 = "11mv5sh9qb5mp6rcr527hbg1r2mi64qjbrr2w65wgdwrb6a1rg8h";
+    sha256 = "1bpl6hwiw1jdxk4xmqp10qgki0dji0l2rzr10dyhyk8d85vxxw29";
   };
 
   nativeBuildInputs = [ python python.pkgs.sphinx pkgconfig flex bison ];
@@ -78,15 +77,6 @@ stdenv.mkDerivation rec {
     ./no-etc-install.patch
     ./fix-qemu-ga.patch
     ./9p-ignore-noatime.patch
-    (fetchpatch {
-      url = "https://git.qemu.org/?p=qemu.git;a=patch;h=d52680fc932efb8a2f334cc6993e705ed1e31e99";
-      name = "CVE-2019-12155.patch";
-      sha256 = "0h2q71mcz3gvlrbfkqcgla74jdg73hvzcrwr4max2ckpxx8x9207";
-    })
-    (fetchpatch {
-      url = "https://sources.debian.org/data/main/q/qemu/1:3.1+dfsg-8+deb10u2/debian/patches/qemu-bridge-helper-restrict-interface-name-to-IFNAMSIZ-CVE-2019-13164.patch";
-      sha256 = "1ypcdlpg3nap0kg9xkrgrqw33j5ah4j7l4i2cp6d5ap8vrw9nn3l";
-    })
   ] ++ optional nixosTestRunner ./force-uid0-on-9p.patch
     ++ optionals stdenv.hostPlatform.isMusl [
     (fetchpatch {

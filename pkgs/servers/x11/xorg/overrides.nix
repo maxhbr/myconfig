@@ -629,8 +629,8 @@ self: super:
           libAppleWM xorgproto
         ];
 
-        # XQuartz patchset
         patches = [
+          # XQuartz patchset
           (fetchpatch {
             url = "https://github.com/XQuartz/xorg-server/commit/e88fd6d785d5be477d5598e70d105ffb804771aa.patch";
             sha256 = "1q0a30m1qj6ai924afz490xhack7rg4q3iig2gxsjjh98snikr1k";
