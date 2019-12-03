@@ -24,11 +24,6 @@ import XMonad.MyConfig.Notify ( applyMyUrgencyHook )
 import XMonad.MyConfig.MyLayoutLayer ( applyMyLayoutModifications )
 import XMonad.MyConfig.MyLogHookLayer ( getXMProcs, applyMyLogHook )
 import XMonad.Hooks.EwmhDesktops (ewmh)
--- runMyConfig :: IO ()
--- runMyConfig = do
---   xmprocs <-getXMProcs
---   executablePath <- getExecutablePath
---   xmonad $ composeMyConfig xmprocs executablePath
 
 runMyConfig :: IO ()
 runMyConfig = do
