@@ -54,12 +54,11 @@ in {
 
     # option definitions
     boot = {
-      kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
+      # kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
       kernel.sysctl = {
         # "fs.inotify.max_user_watches" = 524288;
         "vm.swappiness" = 1;
       };
-      cleanTmpDir = true;
       # tmpOnTmpfs = true;
     };
 

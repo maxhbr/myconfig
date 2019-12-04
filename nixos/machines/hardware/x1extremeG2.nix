@@ -102,12 +102,13 @@ in {
     ./lowres.nix
     ./nixos-hardware/lenovo/thinkpad/x1-extreme/gen2/default.nix
 
-    rawIntelConf
+    # rawIntelConf
     # rawNvidiaConf
     # rawNouveauConf
-    # bumblebeeConf
+    bumblebeeConf
     # bumblebeeNouveauConf
     # optimusPrimeConf
+    # ./prime-render-offload.nix
   ];
 
   boot.extraModprobeConfig = ''

@@ -9,7 +9,7 @@
   ];
 
   boot = {
-    kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
+    # kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
     cleanTmpDir = true;
     # tmpOnTmpfs = true;
   };

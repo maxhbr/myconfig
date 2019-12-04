@@ -18,7 +18,7 @@
       rambox
       p7zip
       thrift011
-      idea-ultimate jetbrains.phpstorm
+      idea-ultimate # jetbrains.phpstorm
       dia
     ];
   };
