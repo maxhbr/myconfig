@@ -2,8 +2,12 @@
 
 stdenv.mkDerivation rec {
   pname = "cask";
+  version = "0.8.4";
 
-  inherit (emacsPackages.melpaStablePackages.cask) src version;
+  src = fetchurl {
+    url = "https://github.com/cask/cask/archive/v${version}.tar.gz";
+    sha256 = "02f8bb20b33b23fb11e7d2a1d282519dfdb8b3090b9672448b8c2c2cacd3e478";
+  };
 
   doCheck = true;
 
@@ -21,11 +25,11 @@ stdenv.mkDerivation rec {
 
   installPhase = ''
     mkdir -p $out/bin
-    mkdir -p $out/templates
+    mkdir -p $out/share/emacs/site-lisp/cask/templates
     mkdir -p $out/share/emacs/site-lisp/cask/bin
     install -Dm644 *.el *.elc $out/share/emacs/site-lisp/cask
     install -Dm755 bin/cask $out/share/emacs/site-lisp/cask/bin
-    install -Dm644 templates/* $out/templates/
+    install -Dm644 templates/* $out/share/emacs/site-lisp/cask/templates/
     touch $out/.no-upgrade
     ln -s $out/share/emacs/site-lisp/cask/bin/cask $out/bin/cask
   '';

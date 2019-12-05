@@ -1,23 +1,22 @@
-{ stdenv, mkDerivation, fetchFromGitHub, pkgconfig, avfs, dde-daemon,
-  dde-dock, dde-polkit-agent, dde-qt-dbus-factory, deepin,
-  deepin-anything, deepin-desktop-schemas, deepin-gettext-tools,
-  deepin-movie-reborn, deepin-shortcut-viewer, deepin-terminal,
-  disomaster, dtkcore, dtkwidget, ffmpegthumbnailer, file, glib,
-  gnugrep, gsettings-qt, gvfs, jemalloc, kcodecs, libX11, libsecret,
-  polkit, polkit-qt, poppler, procps, qmake, qt5integration,
-  qtmultimedia, qtsvg, qttools, qtx11extras, runtimeShell, samba,
-  shadow, taglib, udisks2-qt5, xdg-user-dirs, xorg, zlib,
-  wrapGAppsHook }:
+{ stdenv, mkDerivation, fetchFromGitHub, pkgconfig, avfs, dde-daemon, dde-dock,
+  dde-polkit-agent, dde-qt-dbus-factory, deepin, deepin-anything,
+  deepin-desktop-schemas, deepin-gettext-tools, deepin-movie-reborn,
+  deepin-shortcut-viewer, deepin-terminal, dtkcore, dtkwidget,
+  ffmpegthumbnailer, file, glib, gnugrep, gsettings-qt, gvfs,
+  jemalloc, kcodecs, libX11, libsecret, polkit, polkit-qt, poppler,
+  procps, qmake, qt5integration, qtmultimedia, qtsvg, qttools,
+  qtx11extras, runtimeShell, samba, shadow, taglib, udisks2-qt5,
+  xdg-user-dirs, xorg, zlib, wrapGAppsHook }:
 
 mkDerivation rec {
   pname = "dde-file-manager";
-  version = "5.0.0";
+  version = "4.8.6.4";
 
   src = fetchFromGitHub {
     owner = "linuxdeepin";
     repo = pname;
     rev = version;
-    sha256 = "0n2nl09anqdq0n5yn688n385rn81lcpybs0sa8m311k3k9ndkkyr";
+    sha256 = "1m0ykw5a91rm5xcah8bzk21xsambqvncj8104ihdhf9h0z9kdmm2";
   };
 
   nativeBuildInputs = [
@@ -40,7 +39,6 @@ mkDerivation rec {
     deepin-movie-reborn.dev
     deepin-shortcut-viewer
     deepin-terminal
-    disomaster
     dtkcore
     dtkwidget
     ffmpegthumbnailer

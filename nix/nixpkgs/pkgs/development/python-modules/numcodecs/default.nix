@@ -11,11 +11,11 @@
 
 buildPythonPackage rec {
   pname = "numcodecs";
-  version = "0.6.4";
+  version = "0.6.3";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "ef4843d5db4d074e607e9b85156835c10d006afc10e175bda62ff5412fca6e4d";
+    sha256 = "086qwlyi01rpgyyyy8bmhh9i7hpksyz33ldci3wdwmhiblyl362y";
   };
 
   nativeBuildInputs = [

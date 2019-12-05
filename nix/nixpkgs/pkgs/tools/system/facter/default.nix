@@ -2,30 +2,29 @@
 
 stdenv.mkDerivation rec {
   pname = "facter";
-  version = "3.14.6";
+  version = "3.13.2";
 
   src = fetchFromGitHub {
-    sha256 = "1zfff1mpdwnlnm8dmmlvysw2zdsnglgk5nvhhzx8zyk0zyz0nj54";
+    sha256 = "1yaj1qlyzsaffzpm4zmzm53mc6bhpzka8wc3dfk909nzykxg34zf";
     rev = version;
-    repo = pname;
+    repo = "facter";
     owner = "puppetlabs";
   };
 
   CXXFLAGS = "-fpermissive -Wno-error=catch-value";
   NIX_LDFLAGS = "-lblkid";
 
-  cmakeFlags = [ 
-    "-DFACTER_RUBY=${ruby}/lib/libruby.so"
-    "-DRUBY_LIB_INSTALL=${placeholder "out"}/lib/ruby"
-  ];
+  cmakeFlags = [ "-DFACTER_RUBY=${ruby}/lib/libruby.so" ];
 
-  nativeBuildInputs = [ cmake ];
-  buildInputs = [ boost cpp-hocon curl leatherman libwhereami libyamlcpp openssl ruby utillinux ];
+  # since we cant expand $out in cmakeFlags
+  preConfigure = "cmakeFlags+=\" -DRUBY_LIB_INSTALL=$out/lib/ruby\"";
+
+  buildInputs = [ boost cmake cpp-hocon curl leatherman libwhereami libyamlcpp openssl ruby utillinux ];
 
   enableParallelBuilding = true;
 
   meta = with stdenv.lib; {
-    homepage = "https://github.com/puppetlabs/facter";
+    homepage = https://github.com/puppetlabs/facter;
     description = "A system inventory tool";
     license = licenses.asl20;
     maintainers = [ maintainers.womfoo ];

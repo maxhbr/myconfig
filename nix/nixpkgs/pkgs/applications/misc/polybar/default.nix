@@ -1,5 +1,5 @@
 { cairo, cmake, fetchFromGitHub, libXdmcp, libpthreadstubs, libxcb, pcre, pkgconfig
-, python3, stdenv, xcbproto, xcbutil, xcbutilcursor, xcbutilimage
+, python2, stdenv, xcbproto, xcbutil, xcbutilcursor, xcbutilimage
 , xcbutilrenderutil, xcbutilwm, xcbutilxrm, makeWrapper
 
 # optional packages-- override the variables ending in 'Support' to enable or
@@ -24,16 +24,15 @@ assert nlSupport     -> ! iwSupport && libnl         != null;
 assert i3Support     -> ! i3GapsSupport && jsoncpp != null && i3      != null;
 assert i3GapsSupport -> ! i3Support     && jsoncpp != null && i3-gaps != null;
 
-let xcbproto-py3 = xcbproto.override { python = python3; };
-in stdenv.mkDerivation rec {
+stdenv.mkDerivation rec {
     pname = "polybar";
-    version = "3.4.1";
+    version = "3.4.0";
 
     src = fetchFromGitHub {
-      owner = pname;
+      owner = "jaagr";
       repo = pname;
       rev = version;
-      sha256 = "1z1m6dxh2i5vsnkzaccb9j02ab05wgmcgig5d0l9w856g5jp3zmy";
+      sha256 = "1g3zj0788cdlm8inpl19279bw8zjcy7dzj7q4f1l2d8c8g1jhv0m";
       fetchSubmodules = true;
     };
 
@@ -46,12 +45,12 @@ in stdenv.mkDerivation rec {
         having a black belt in shell scripting.
       '';
       license = licenses.mit;
-      maintainers = with maintainers; [ afldcr filalex77 ];
-      platforms = platforms.linux;
+      maintainers = [ maintainers.afldcr ];
+      platforms = platforms.unix;
     };
 
     buildInputs = [
-      cairo libXdmcp libpthreadstubs libxcb pcre python3 xcbproto-py3 xcbutil
+      cairo libXdmcp libpthreadstubs libxcb pcre python2 xcbproto xcbutil
       xcbutilcursor xcbutilimage xcbutilrenderutil xcbutilwm xcbutilxrm
 
       (if alsaSupport   then alsaLib       else null)

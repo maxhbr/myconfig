@@ -1,5 +1,5 @@
 { config, lib, stdenv, fetchurl, pkgs, buildPackages, callPackage
-, enableThreading ? stdenv ? glibc, coreutils, makeWrapper
+, enableThreading ? stdenv ? glibc, makeWrapper
 }:
 
 with lib;
@@ -35,7 +35,7 @@ let
 
     # TODO: Add a "dev" output containing the header files.
     outputs = [ "out" "man" "devdoc" ] ++
-      optional crossCompiling "dev";
+      stdenv.lib.optional crossCompiling "dev";
     setOutputFlags = false;
 
     disallowedReferences = [ stdenv.cc ];
@@ -57,20 +57,12 @@ let
       ++ optionals stdenv.isDarwin [ ./cpp-precomp.patch ./sw_vers.patch ]
       ++ optional crossCompiling ./MakeMaker-cross.patch;
 
-    # This is not done for native builds because pwd may need to come from
-    # bootstrap tools when building bootstrap perl.
-    postPatch = (if crossCompiling then ''
+    postPatch = ''
+      pwd="$(type -P pwd)"
       substituteInPlace dist/PathTools/Cwd.pm \
-        --replace "/bin/pwd" '${coreutils}/bin/pwd'
+        --replace "/bin/pwd" "$pwd"
+    '' + stdenv.lib.optionalString crossCompiling ''
       substituteInPlace cnf/configure_tool.sh --replace "cc -E -P" "cc -E"
-    '' else ''
-      substituteInPlace dist/PathTools/Cwd.pm \
-        --replace "/bin/pwd" "$(type -P pwd)"
-    '') +
-    # Perl's build system uses the src variable, and its value may end up in
-    # the output in some cases (when cross-compiling)
-    ''
-      unset src
     '';
 
     # Build a thread-safe Perl with a dynamic libperls.o.  We need the
@@ -93,7 +85,7 @@ let
       ++ optional stdenv.isSunOS "-Dcc=gcc"
       ++ optional enableThreading "-Dusethreads";
 
-    configureScript = optionalString (!crossCompiling) "${stdenv.shell} ./Configure";
+    configureScript = stdenv.lib.optionalString (!crossCompiling) "${stdenv.shell} ./Configure";
 
     dontAddPrefix = !crossCompiling;
 
@@ -148,7 +140,7 @@ let
             }" /no-such-path \
           --replace "${stdenv.cc}" /no-such-path \
           --replace "$man" /no-such-path
-      '' + optionalString crossCompiling
+      '' + stdenv.lib.optionalString crossCompiling
       ''
         mkdir -p $dev/lib/perl5/cross_perl/${version}
         for dir in cnf/{stub,cpan}; do
@@ -180,7 +172,7 @@ let
       platforms = platforms.all;
       priority = 6; # in `buildEnv' (including the one inside `perl.withPackages') the library files will have priority over files in `perl`
     };
-  } // optionalAttrs (stdenv.buildPlatform != stdenv.hostPlatform) rec {
+  } // stdenv.lib.optionalAttrs (stdenv.buildPlatform != stdenv.hostPlatform) rec {
     crossVersion = "980998f7d11baf97284426ca91f84681d49a08f5"; # Jul 20, 2019
 
     perl-cross-src = fetchurl {

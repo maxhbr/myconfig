@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, pkgconfig, libxml2, gtk, libSM, shared-mime-info }:
+{ stdenv, fetchurl, pkgconfig, libxml2, gtk, libSM, shared-mime-info, hicolor-icon-theme }:
 
 let
   version = "2.11";
@@ -12,7 +12,7 @@ in stdenv.mkDerivation {
   };
 
   nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ libxml2 gtk shared-mime-info libSM ];
+  buildInputs = [ libxml2 gtk shared-mime-info hicolor-icon-theme libSM ];
   NIX_LDFLAGS = [ "-ldl" "-lm" ];
 
   patches = [

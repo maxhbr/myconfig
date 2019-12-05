@@ -1,16 +1,24 @@
-{ stdenv, lib, fetchurl, libiconv, xz }:
+{ stdenv, lib, fetchurl, libiconv, xz, bison, automake115x, autoconf }:
 
+let allowBisonDependency = !stdenv.isDarwin; in
 stdenv.mkDerivation rec {
   pname = "gettext";
-  version = "0.20.1";
+  version = "0.19.8.1";
 
   src = fetchurl {
     url = "mirror://gnu/gettext/${pname}-${version}.tar.gz";
-    sha256 = "0p3zwkk27wm2m2ccfqm57nj7vqkmfpn7ja1nf65zmhz8qqs5chb6";
+    sha256 = "0hsw28f9q9xaggjlsdp2qmbp2rbd1mp0njzan2ld9kiqwkq2m57z";
   };
   patches = [
     ./absolute-paths.diff
-    ./gettext.git-2336451ed68d91ff4b5ae1acbc1eca30e47a86a9.patch
+    (fetchurl {
+      name = "CVE-2018-18751.patch";
+      url = "https://git.savannah.gnu.org/gitweb/?p=gettext.git;a=patch;h=dce3a16e5e9368245735e29bf498dcd5e3e474a4";
+      sha256 = "1lpjwwcjr1sb879faj0xyzw02kma0ivab6xwn3qciy13qy6fq5xn";
+    })
+  ] ++ lib.optionals (!allowBisonDependency) [
+    # Only necessary for CVE-2018-18751.patch:
+    ./CVE-2018-18751-bison.patch
   ];
 
   outputs = [ "out" "man" "doc" "info" ];
@@ -21,6 +29,10 @@ stdenv.mkDerivation rec {
 
   configureFlags = [
      "--disable-csharp" "--with-xz"
+     # avoid retaining reference to CF during stdenv bootstrap
+  ] ++ lib.optionals stdenv.isDarwin [
+    "gt_cv_func_CFPreferencesCopyAppValue=no"
+    "gt_cv_func_CFLocaleCopyCurrent=no"
   ] ++ stdenv.lib.optionals (stdenv.hostPlatform != stdenv.buildPlatform) [
     # On cross building, gettext supposes that the wchar.h from libc
     # does not fulfill gettext needs, so it tries to work with its
@@ -42,6 +54,14 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [
     xz
     xz.bin
+  ]
+  # Only necessary for CVE-2018-18751.patch (unless CVE-2018-18751-bison.patch
+  # is also applied):
+  ++ lib.optional allowBisonDependency bison
+  ++ [
+    # Only necessary for CVE-2018-18751.patch:
+    automake115x
+    autoconf
   ];
   # HACK, see #10874 (and 14664)
   buildInputs = stdenv.lib.optional (!stdenv.isLinux && !stdenv.hostPlatform.isCygwin) libiconv;

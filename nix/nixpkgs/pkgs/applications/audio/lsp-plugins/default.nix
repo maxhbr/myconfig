@@ -5,13 +5,13 @@
 
 stdenv.mkDerivation rec {
   pname = "lsp-plugins";
-  version = "1.1.10";
+  version = "1.1.9";
 
   src = fetchFromGitHub {
     owner = "sadko4u";
     repo = pname;
     rev = "${pname}-${version}";
-    sha256 = "09gmwzh1gq1q2lxn8fc1bpdh02h8vr7r0i040c1nx256wgfsarqb";
+    sha256 = "1dzpl7f354rwp37bkr9h2yyafykcdn6m1qqfshqg77fj0pcsw8r2";
   };
 
   nativeBuildInputs = [ pkgconfig php expat ];
@@ -154,6 +154,6 @@ stdenv.mkDerivation rec {
       homepage = https://lsp-plug.in;
       maintainers = with maintainers; [ magnetophon ];
       license = licenses.gpl2;
-      platforms = [ "x86_64-linux" ];
+      platforms = platforms.linux;
     };
 }

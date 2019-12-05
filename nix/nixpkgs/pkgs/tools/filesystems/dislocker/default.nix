@@ -1,14 +1,14 @@
-{ stdenv
-, fetchFromGitHub
+{ stdenv, fetchFromGitHub
 , cmake
-, mbedtls
-, fuse
+, polarssl , fuse
 }:
-
-
-stdenv.mkDerivation rec {
-  pname = "dislocker";
+with stdenv.lib;
+let
   version = "0.7.1";
+in
+stdenv.mkDerivation {
+  pname = "dislocker";
+  inherit version;
 
   src = fetchFromGitHub {
     owner = "aorimn";
@@ -17,10 +17,9 @@ stdenv.mkDerivation rec {
     sha256 = "1crh2sg5x1kgqmdrl1nmrqwxjykxa4zwnbggcpdn97mj2gvdw7sb";
   };
 
-  nativeBuildInputs = [ cmake ];
-  buildInputs = [ fuse mbedtls ];
+  buildInputs = [ cmake fuse polarssl ];
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Read BitLocker encrypted partitions in Linux";
     homepage    = https://github.com/aorimn/dislocker;
     license     = licenses.gpl2;

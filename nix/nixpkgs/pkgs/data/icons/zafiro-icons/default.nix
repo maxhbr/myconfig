@@ -1,23 +1,17 @@
-{ stdenv, fetchFromGitHub, gtk3, hicolor-icon-theme }:
+{ stdenv, fetchFromGitHub, gtk3 }:
 
 stdenv.mkDerivation rec {
   pname = "zafiro-icons";
-  version = "1.0";
+  version = "0.9";
 
   src = fetchFromGitHub {
     owner = "zayronxio";
     repo = pname;
-    rev = "${version}";
-    sha256 = "0gy3c0jkj1icnwcs23b6km9cj9cccv8y5z1w11nfdv91cq3mdhmb";
+    rev = "v${version}";
+    sha256 = "0zmnhih4gz8bidyzf1wimy85z7zx9i29mv1zirmykpqj819g7mx9";
   };
 
   nativeBuildInputs = [ gtk3 ];
-
-  propagatedBuildInputs = [
-    hicolor-icon-theme
-  ];
-
-  dontDropIconThemeCache = true;
 
   installPhase = ''
     mkdir -p $out/share/icons/Zafiro-icons

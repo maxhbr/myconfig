@@ -1,7 +1,6 @@
 { pkgs
 , buildPythonPackage
 , fetchPypi
-, isPy38
 , python
 , nose
 , mock
@@ -22,7 +21,6 @@ buildPythonPackage rec {
     ${python.interpreter} tests/test.py default
   '';
 
-  doCheck = (!isPy38); # hmac functionality has changed
   checkInputs = [ nose mock ];
   propagatedBuildInputs = [ requests httpretty ];
 

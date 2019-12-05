@@ -1,4 +1,4 @@
-import ./make-test-python.nix ({ pkgs, ...} : {
+import ./make-test.nix ({ pkgs, ...} : {
   name = "zookeeper";
   meta = with pkgs.stdenv.lib.maintainers; {
     maintainers = [ nequissimus ];
@@ -15,20 +15,14 @@ import ./make-test-python.nix ({ pkgs, ...} : {
   };
 
   testScript = ''
-    start_all()
+    startAll;
 
-    server.wait_for_unit("zookeeper")
-    server.wait_for_unit("network.target")
-    server.wait_for_open_port(2181)
+    $server->waitForUnit("zookeeper");
+    $server->waitForUnit("network.target");
+    $server->waitForOpenPort(2181);
 
-    server.wait_until_succeeds(
-        "${pkgs.zookeeper}/bin/zkCli.sh -server localhost:2181 create /foo bar"
-    )
-    server.wait_until_succeeds(
-        "${pkgs.zookeeper}/bin/zkCli.sh -server localhost:2181 set /foo hello"
-    )
-    server.wait_until_succeeds(
-        "${pkgs.zookeeper}/bin/zkCli.sh -server localhost:2181 get /foo | grep hello"
-    )
+    $server->waitUntilSucceeds("${pkgs.zookeeper}/bin/zkCli.sh -server localhost:2181 create /foo bar");
+    $server->waitUntilSucceeds("${pkgs.zookeeper}/bin/zkCli.sh -server localhost:2181 set /foo hello");
+    $server->waitUntilSucceeds("${pkgs.zookeeper}/bin/zkCli.sh -server localhost:2181 get /foo | grep hello");
   '';
 })

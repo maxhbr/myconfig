@@ -1,4 +1,4 @@
-import ./make-test-python.nix ({ pkgs, ... }:
+import ./make-test.nix ({ pkgs, ... }:
 
 {
   name = "morty";
@@ -22,9 +22,11 @@ import ./make-test-python.nix ({ pkgs, ... }:
   testScript =
     { ... }:
     ''
-      mortyProxyWithKey.wait_for_unit("default.target")
-      mortyProxyWithKey.wait_for_open_port(3001)
-      mortyProxyWithKey.succeed("curl -L 127.0.0.1:3001 | grep MortyProxy")
+      $mortyProxyWithKey->waitForUnit("default.target");
+
+      $mortyProxyWithKey->waitForOpenPort(3001);
+      $mortyProxyWithKey->succeed("curl -L 127.0.0.1:3001 | grep MortyProxy");
+
     '';
 
 })

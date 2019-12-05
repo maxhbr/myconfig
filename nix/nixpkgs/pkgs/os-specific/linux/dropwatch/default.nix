@@ -3,16 +3,17 @@
 
 stdenv.mkDerivation rec {
   pname = "dropwatch";
-  version = "1.5.1";
+  version = "1.5";
 
   src = fetchFromGitHub {
     owner = "nhorman";
     repo = pname;
-    rev = "v${version}";
-    sha256 = "1qmax0l7z1qik42c949fnvjh5r6awk4gpgzdsny8iwnmwzjyp8b8";
+    rev = version;
+    sha256 = "085hyyl28v0vpxfnmzchl97fjfnzj46ynhkg6y4i6h194y0d99m7";
   };
 
   nativeBuildInputs = [ autoreconfHook pkgconfig ];
+
   buildInputs = [ libbfd libnl ncurses readline zlib ];
 
   # To avoid running into https://sourceware.org/bugzilla/show_bug.cgi?id=14243 we need to define:
@@ -24,8 +25,8 @@ stdenv.mkDerivation rec {
   enableParallelBuilding = true;
 
   meta = with stdenv.lib; {
-    description = "Linux kernel dropped packet monitor";
-    homepage = "https://github.com/nhorman/dropwatch";
+    description = "Kernel dropped packet monitor";
+    homepage = https://github.com/nhorman/dropwatch;
     license = licenses.gpl2;
     platforms = platforms.linux;
     maintainers = [ maintainers.c0bw3b ];

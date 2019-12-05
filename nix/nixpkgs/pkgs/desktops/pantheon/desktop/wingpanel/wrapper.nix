@@ -1,6 +1,5 @@
 { lib
-, wrapGAppsHook
-, glib
+, makeWrapper
 , symlinkJoin
 , wingpanel
 , wingpanelIndicators
@@ -14,27 +13,17 @@ in
 symlinkJoin {
   name = "${wingpanel.name}-with-indicators";
 
-  paths = [
-    wingpanel
-  ] ++ selectedIndicators;
+  paths = [ wingpanel ] ++ selectedIndicators;
 
-  buildInputs = [
-    glib
-    wrapGAppsHook
-  ] ++ (lib.forEach selectedIndicators (x: x.buildInputs))
-    ++ selectedIndicators;
+  buildInputs = [ makeWrapper ];
 
   # We have to set SWITCHBOARD_PLUGS_PATH because wingpanel-applications-menu
   # has a plugin to search switchboard settings
   postBuild = ''
-    make_glib_find_gsettings_schemas
-
-    gappsWrapperArgs+=(
-      --set WINGPANEL_INDICATORS_PATH "$out/lib/wingpanel"
-      --set SWITCHBOARD_PLUGS_PATH "${switchboard-with-plugs}/lib/switchboard"
-    )
-
-    wrapGAppsHook
+    wrapProgram $out/bin/wingpanel \
+      --set WINGPANEL_INDICATORS_PATH "$out/lib/wingpanel" \
+      --set SWITCHBOARD_PLUGS_PATH "${switchboard-with-plugs}/lib/switchboard" \
+      --suffix XDG_DATA_DIRS : ${lib.concatMapStringsSep ":" (indicator: ''${indicator}/share/gsettings-schemas/${indicator.name}'') selectedIndicators}
   '';
 
   inherit (wingpanel) meta;

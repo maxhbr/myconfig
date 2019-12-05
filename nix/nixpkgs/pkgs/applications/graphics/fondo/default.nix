@@ -2,7 +2,6 @@
 , fetchFromGitHub
 , fetchpatch
 , pantheon
-, vala
 , pkgconfig
 , meson
 , ninja
@@ -32,7 +31,7 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [
     meson
     ninja
-    vala
+    pantheon.vala
     pkgconfig
     python3
     wrapGAppsHook

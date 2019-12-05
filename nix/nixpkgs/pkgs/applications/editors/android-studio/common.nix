@@ -3,7 +3,6 @@
 { alsaLib
 , bash
 , buildFHSUserEnv
-, cacert
 , coreutils
 , dbus
 , expat
@@ -153,16 +152,7 @@ let
   # environment is used as a work around for that.
   fhsEnv = buildFHSUserEnv {
     name = "${drvName}-fhs-env";
-    multiPkgs = pkgs: [
-      pkgs.ncurses5
-
-      # Flutter can only search for certs Fedora-way.
-      (runCommand "fedoracert" {}
-        ''
-        mkdir -p $out/etc/pki/tls/
-        ln -s ${cacert}/etc/ssl/certs $out/etc/pki/tls/certs
-        '')
-    ];
+    multiPkgs = pkgs: [ pkgs.ncurses5 ];
   };
 in runCommand
   drvName

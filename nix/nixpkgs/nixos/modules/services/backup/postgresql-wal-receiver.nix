@@ -169,14 +169,13 @@ in {
     systemd.services = with attrsets; mapAttrs' (name: config: nameValuePair "postgresql-wal-receiver-${name}" {
       description = "PostgreSQL WAL receiver (${name})";
       wantedBy = [ "multi-user.target" ];
-      startLimitIntervalSec = 0; # retry forever, useful in case of network disruption
 
       serviceConfig = {
         User = "postgres";
         Group = "postgres";
         KillSignal = "SIGINT";
         Restart = "always";
-        RestartSec = 60;
+        RestartSec = 30;
       };
 
       inherit (config) environment;

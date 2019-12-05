@@ -5,12 +5,12 @@
 }:
 
 buildPythonPackage rec {
-  version = "0.9.6";
+  version = "0.9.5";
   pname = "DataModelDict";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "857d4bf33f0b26ca718bd821fda7502dd6fb15aa09201b1fbdfaf4dfc85b8f6c";
+    sha256 = "afa15c137c09e7d937e31c8956fd8092be0251c9869a6b7c1d0f81c0901bc47d";
   };
 
   propagatedBuildInputs = [ xmltodict ];

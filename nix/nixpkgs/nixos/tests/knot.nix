@@ -1,4 +1,4 @@
-import ./make-test-python.nix ({ pkgs, lib, ...} :
+import ./make-test.nix ({ pkgs, lib, ...} :
 let
   common = {
     networking.firewall.enable = false;
@@ -30,10 +30,6 @@ let
   };
 in {
   name = "knot";
-  meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ hexa ];
-  };
-
 
   nodes = {
     master = { lib, ... }: {
@@ -165,35 +161,37 @@ in {
     slave4 = (lib.head nodes.slave.config.networking.interfaces.eth1.ipv4.addresses).address;
     slave6 = (lib.head nodes.slave.config.networking.interfaces.eth1.ipv6.addresses).address;
   in ''
-    import re
+    startAll;
 
-    start_all()
+    $client->waitForUnit("network.target");
+    $master->waitForUnit("knot.service");
+    $slave->waitForUnit("knot.service");
 
-    client.wait_for_unit("network.target")
-    master.wait_for_unit("knot.service")
-    slave.wait_for_unit("knot.service")
+    sub assertResponse {
+      my ($knot, $query_type, $query, $expected) = @_;
+      my $out = $client->succeed("khost -t $query_type $query $knot");
+      $client->log("$knot replies with: $out");
+      chomp $out;
+      die "DNS query for $query ($query_type) against $knot gave '$out' instead of '$expected'"
+        if ($out !~ $expected);
+    }
 
+    foreach ("${master4}", "${master6}", "${slave4}", "${slave6}") {
+      subtest $_, sub {
+        assertResponse($_, "SOA", "example.com", qr/start of authority.*?noc\.example\.com/);
+        assertResponse($_, "A", "example.com", qr/has no [^ ]+ record/);
+        assertResponse($_, "AAAA", "example.com", qr/has no [^ ]+ record/);
 
-    def test(host, query_type, query, pattern):
-        out = client.succeed(f"khost -t {query_type} {query} {host}").strip()
-        client.log(f"{host} replied with: {out}")
-        assert re.search(pattern, out), f'Did not match "{pattern}"'
+        assertResponse($_, "A", "www.example.com", qr/address 192.0.2.1$/);
+        assertResponse($_, "AAAA", "www.example.com", qr/address 2001:db8::1$/);
 
+        assertResponse($_, "NS", "sub.example.com", qr/nameserver is ns\d\.example\.com.$/);
+        assertResponse($_, "A", "sub.example.com", qr/address 192.0.2.2$/);
+        assertResponse($_, "AAAA", "sub.example.com", qr/address 2001:db8::2$/);
 
-    for host in ("${master4}", "${master6}", "${slave4}", "${slave6}"):
-        with subtest(f"Interrogate {host}"):
-            test(host, "SOA", "example.com", r"start of authority.*noc\.example\.com\.")
-            test(host, "A", "example.com", r"has no [^ ]+ record")
-            test(host, "AAAA", "example.com", r"has no [^ ]+ record")
-
-            test(host, "A", "www.example.com", r"address 192.0.2.1$")
-            test(host, "AAAA", "www.example.com", r"address 2001:db8::1$")
-
-            test(host, "NS", "sub.example.com", r"nameserver is ns\d\.example\.com.$")
-            test(host, "A", "sub.example.com", r"address 192.0.2.2$")
-            test(host, "AAAA", "sub.example.com", r"address 2001:db8::2$")
-
-            test(host, "RRSIG", "www.example.com", r"RR set signature is")
-            test(host, "DNSKEY", "example.com", r"DNSSEC key is")
+        assertResponse($_, "RRSIG", "www.example.com", qr/RR set signature is/);
+        assertResponse($_, "DNSKEY", "example.com", qr/DNSSEC key is/);
+      };
+    }
   '';
 })

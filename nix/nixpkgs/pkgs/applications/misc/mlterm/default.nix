@@ -7,11 +7,11 @@
 
 stdenv.mkDerivation rec {
   pname = "mlterm";
-  version = "3.8.9";
+  version = "3.8.8";
 
   src = fetchurl {
     url = "mirror://sourceforge/project/mlterm/01release/${pname}-${version}/${pname}-${version}.tar.gz";
-    sha256 = "1iy7wq953gcnygr1d04h5ddvhpmy8l575n5is2w0rj3ck31ihpqd";
+    sha256 = "1jq3fv2wqhszfipkzj8d0lykr6g0zzksn7xy4d3kwincmzfskv7k";
   };
 
   nativeBuildInputs = [ pkgconfig autoconf ];
@@ -86,9 +86,8 @@ stdenv.mkDerivation rec {
   };
 
   meta = with stdenv.lib; {
-    description = "Multi Lingual TERMinal emulator on X11";
     homepage = http://mlterm.sourceforge.net/;
-    license = licenses.bsd3;
+    license = licenses.bsd2;
     maintainers = with maintainers; [ vrthra ramkromberg ];
     platforms = with platforms; linux;
   };

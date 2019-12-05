@@ -21,8 +21,6 @@ stdenv.mkDerivation rec {
 
   configureFlags = [ "VMOD_DIR=$(out)/lib/varnish/vmods" ];
 
-  NIX_CFLAGS_COMPILE = [ "-Wno-error=deprecated-declarations" ];
-
   doCheck = true;
 
   meta = with stdenv.lib; {

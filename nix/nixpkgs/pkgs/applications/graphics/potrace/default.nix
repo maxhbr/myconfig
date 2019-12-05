@@ -2,19 +2,16 @@
 
 stdenv.mkDerivation rec {
   pname = "potrace";
-  version = "1.16";
+  version = "1.15";
 
   src = fetchurl {
     url = "http://potrace.sourceforge.net/download/${version}/potrace-${version}.tar.gz";
-    sha256 = "1k3sxgjqq0jnpk9xxys05q32sl5hbf1lbk1gmfxcrmpdgnhli0my";
+    sha256 = "17ajildjp14shsy339xarh1lw1p0k60la08ahl638a73mh23kcx9";
   };
 
   configureFlags = [ "--with-libpotrace" ];
 
   buildInputs = [ zlib ];
-
-  enableParallelBuilding = true;
-  doCheck = true;
 
   meta = with stdenv.lib; {
     homepage = http://potrace.sourceforge.net/;

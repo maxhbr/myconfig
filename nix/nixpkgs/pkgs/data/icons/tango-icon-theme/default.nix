@@ -1,5 +1,5 @@
 { stdenv, fetchurl, intltool, pkgconfig, iconnamingutils, imagemagick, librsvg
-, gtk/*any version*/, hicolor-icon-theme
+, gtk/*any version*/
 }:
 
 stdenv.mkDerivation rec {
@@ -14,12 +14,6 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ pkgconfig ];
   buildInputs = [ intltool iconnamingutils imagemagick librsvg ];
-
-  propagatedBuildInputs = [
-    hicolor-icon-theme
-  ];
-
-  dontDropIconThemeCache = true;
 
   configureFlags = [ "--enable-png-creation" ];
 

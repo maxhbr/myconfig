@@ -1,4 +1,4 @@
-{ stdenv, fetchzip, wxGTK30, pkgconfig, file, gettext,
+{ stdenv, fetchurl, wxGTK30, pkgconfig, file, gettext, gtk2,
   libvorbis, libmad, libjack2, lv2, lilv, serd, sord, sratom, suil, alsaLib, libsndfile, soxr, flac, lame,
   expat, libid3tag, ffmpeg, soundtouch, /*, portaudio - given up fighting their portaudio.patch */
   autoconf, automake, libtool
@@ -7,12 +7,12 @@
 with stdenv.lib;
 
 stdenv.mkDerivation rec {
-  version = "2.3.3";
+  version = "2.3.2";
   pname = "audacity";
 
-  src = fetchzip {
+  src = fetchurl {
     url = "https://github.com/audacity/audacity/archive/Audacity-${version}.tar.gz";
-    sha256 = "0ddc03dbm4ixy877czmwd03fpjgr3y68bxfgb6n2q6cv4prp30ig";
+    sha256 = "0cf7fr1qhyyylj8g9ax1rq5sb887bcv5b8d7hwlcfwamzxqpliyc";
   };
 
   preConfigure = /* we prefer system-wide libs */ ''
@@ -43,11 +43,12 @@ stdenv.mkDerivation rec {
     "-lswscale"
   ];
 
-  nativeBuildInputs = [ pkgconfig autoconf automake libtool ];
+  nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
     file gettext wxGTK30 expat alsaLib
-    libsndfile soxr libid3tag libjack2 lv2 lilv serd sord sratom suil wxGTK30.gtk
+    libsndfile soxr libid3tag libjack2 lv2 lilv serd sord sratom suil gtk2
     ffmpeg libmad lame libvorbis flac soundtouch
+    autoconf automake libtool # for the preConfigure phase
   ]; #ToDo: detach sbsms
 
   enableParallelBuilding = true;
@@ -59,7 +60,7 @@ stdenv.mkDerivation rec {
     description = "Sound editor with graphical UI";
     homepage = http://audacityteam.org/;
     license = licenses.gpl2Plus;
-    platforms = intersectLists platforms.linux platforms.x86; # fails on ARM
+    platforms = with platforms; linux;
     maintainers = with maintainers; [ the-kenny ];
   };
 }

@@ -13,12 +13,12 @@
 
 buildPythonPackage rec {
   pname = "ipykernel";
-  version = "5.1.2";
+  version = "5.1.1";
   disabled = pythonOlder "3.4";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "04jx6ihj3zpj4c7acqa14gl37mpdnbgmfm4nvv97xkjc1cz920xm";
+    sha256 = "173nm29g85w8cac3fg40b27qaq26g41wgg6qn79ql1hq4w2n5sgh";
   };
 
   checkInputs = [ pytest nose ];
@@ -36,9 +36,6 @@ buildPythonPackage rec {
   checkPhase = ''
     HOME=$(mktemp -d) pytest ipykernel -k "not (test_sys_path or test_sys_path_profile_dir or test_complete)"
   '';
-
-  # Some of the tests use localhost networking.
-  __darwinAllowLocalNetworking = true;
 
   meta = {
     description = "IPython Kernel for Jupyter";

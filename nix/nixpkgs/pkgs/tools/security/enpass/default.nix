@@ -1,7 +1,7 @@
 { stdenv, fetchurl, dpkg, xorg
-, glib, libGLU, libGL, libpulseaudio, zlib, dbus, fontconfig, freetype
+, glib, libGLU_combined, libpulseaudio, zlib, dbus, fontconfig, freetype
 , gtk3, pango
-, makeWrapper , python2Packages, lib
+, makeWrapper , python, pythonPackages, lib
 , lsof, curl, libuuid, cups, mesa
 }:
 
@@ -19,7 +19,7 @@ let
   # used of both wrappers and libpath
   libPath = lib.makeLibraryPath (with xorg; [
     mesa.drivers
-    libGLU libGL
+    libGLU_combined
     fontconfig
     freetype
     libpulseaudio
@@ -84,9 +84,9 @@ let
       name = "enpass-update-script";
       SCRIPT =./update_script.py;
 
-      buildInputs = with python2Packages; [python requests pathlib2 six attrs ];
+      buildInputs = with pythonPackages; [python requests pathlib2 six attrs ];
       shellHook = ''
-        exec python $SCRIPT --target pkgs/tools/security/enpass/data.json --repo ${baseUrl}
+      exec python $SCRIPT --target pkgs/tools/security/enpass/data.json --repo ${baseUrl}
       '';
 
     };

@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, makeWrapper, perl, ebtables, ipset, iptables, nixosTests }:
+{ stdenv, fetchurl, makeWrapper, perl, ebtables, ipset, iptables }:
 
 stdenv.mkDerivation rec {
   version = "2.4.1";
@@ -20,8 +20,6 @@ stdenv.mkDerivation rec {
       wrapProgram "$i" --prefix PATH : "${iptables}/bin:${ipset}/bin:${ebtables}/bin"
     done
   '';
-
-  passthru.tests.ferm = nixosTests.ferm;
 
   meta = {
     homepage = http://ferm.foo-projects.org/;

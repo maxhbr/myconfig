@@ -1,7 +1,7 @@
 { stdenv, buildPythonPackage, fetchPypi
 , requests
 , testfixtures, mock, requests_toolbelt
-, betamax, betamax-serializers, betamax-matchers, pytest
+, betamax, betamax-serializers, betamax-matchers
 }:
 
 buildPythonPackage rec {
@@ -24,12 +24,7 @@ buildPythonPackage rec {
     betamax-serializers
     betamax-matchers
     requests_toolbelt
-    pytest
   ];
-
-  checkPhase = ''
-    pytest
-  '';
 
   meta = with stdenv.lib; {
     description = "Low-level communication layer for PRAW";

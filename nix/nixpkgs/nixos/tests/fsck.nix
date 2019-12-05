@@ -1,4 +1,4 @@
-import ./make-test-python.nix {
+import ./make-test.nix {
   name = "fsck";
 
   machine = { lib, ... }: {
@@ -14,18 +14,16 @@ import ./make-test-python.nix {
   };
 
   testScript = ''
-    machine.wait_for_unit("default.target")
+    $machine->waitForUnit('default.target');
 
-    with subtest("root fs is fsckd"):
-        machine.succeed("journalctl -b | grep 'fsck.ext4.*/dev/vda'")
+    subtest "root fs is fsckd", sub {
+      $machine->succeed('journalctl -b | grep "fsck.ext4.*/dev/vda"');
+    };
 
-    with subtest("mnt fs is fsckd"):
-        machine.succeed("journalctl -b | grep 'fsck.*/dev/vdb.*clean'")
-        machine.succeed(
-            "grep 'Requires=systemd-fsck@dev-vdb.service' /run/systemd/generator/mnt.mount"
-        )
-        machine.succeed(
-            "grep 'After=systemd-fsck@dev-vdb.service' /run/systemd/generator/mnt.mount"
-        )
+    subtest "mnt fs is fsckd", sub {
+      $machine->succeed('journalctl -b | grep "fsck.*/dev/vdb.*clean"');
+      $machine->succeed('grep "Requires=systemd-fsck@dev-vdb.service" /run/systemd/generator/mnt.mount');
+      $machine->succeed('grep "After=systemd-fsck@dev-vdb.service" /run/systemd/generator/mnt.mount');
+    };
   '';
 }

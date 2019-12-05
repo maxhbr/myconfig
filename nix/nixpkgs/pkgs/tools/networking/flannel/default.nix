@@ -9,6 +9,8 @@ buildGoPackage rec {
 
   goPackagePath = "github.com/coreos/flannel";
 
+  hardeningDisable = [ "fortify" ];
+
   src = fetchFromGitHub {
     inherit rev;
     owner = "coreos";

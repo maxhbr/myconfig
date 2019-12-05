@@ -7,9 +7,8 @@
 , gmp, mpfr, libmpc, libelf, isl
 , cloog ? null
 
-, enableLTO
-, enableMultilib
 , enablePlugin
+, enableMultilib
 , enableShared
 
 , langC
@@ -104,7 +103,7 @@ let
 
     # Basic configuration
     ++ [
-      (lib.enableFeature enableLTO "lto")
+      "--enable-lto"
       "--disable-libstdcxx-pch"
       "--without-included-gettext"
       "--with-system-zlib"

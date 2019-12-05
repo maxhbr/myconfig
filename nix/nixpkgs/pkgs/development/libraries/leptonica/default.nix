@@ -16,9 +16,7 @@ stdenv.mkDerivation rec {
   enableParallelBuilding = true;
 
   checkInputs = [ which gnuplot ];
-
-  # Fails on pngio_reg for unknown reason
-  doCheck = false; # !stdenv.isDarwin;
+  doCheck = !stdenv.isDarwin;
 
   meta = {
     description = "Image processing and analysis library";

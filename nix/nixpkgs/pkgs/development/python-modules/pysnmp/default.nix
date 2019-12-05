@@ -8,14 +8,12 @@
 
 buildPythonPackage rec {
   pname = "pysnmp";
-  version = "4.4.12";
+  version = "4.4.11";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1acbfvpbr45i137s00mbhh21p71ywjfw3r8z0ybcmjjqz7rbwg8c";
+    sha256 = "1v7vz045pami4nx5hfvk8drarcswjclb0pfmg932x95fddbdx2zy";
   };
-
-  patches = [ ./setup.py-Fix-the-setuptools-version-check.patch ];
 
   # NameError: name 'mibBuilder' is not defined
   doCheck = false;

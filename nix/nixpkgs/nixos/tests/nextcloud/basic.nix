@@ -1,4 +1,4 @@
-import ../make-test-python.nix ({ pkgs, ...}: let
+import ../make-test.nix ({ pkgs, ...}: let
   adminpass = "notproduction";
   adminuser = "root";
 in {
@@ -50,15 +50,11 @@ in {
       diff <(echo 'hi') <(${pkgs.rclone}/bin/rclone cat nextcloud:test-shared-file)
     '';
   in ''
-    start_all()
-    nextcloud.wait_for_unit("multi-user.target")
-    nextcloud.succeed("curl -sSf http://nextcloud/login")
-    nextcloud.succeed(
-        "${withRcloneEnv} ${copySharedFile}"
-    )
-    client.wait_for_unit("multi-user.target")
-    client.succeed(
-        "${withRcloneEnv} ${diffSharedFile}"
-    )
+    startAll();
+    $nextcloud->waitForUnit("multi-user.target");
+    $nextcloud->succeed("curl -sSf http://nextcloud/login");
+    $nextcloud->succeed("${withRcloneEnv} ${copySharedFile}");
+    $client->waitForUnit("multi-user.target");
+    $client->succeed("${withRcloneEnv} ${diffSharedFile}");
   '';
 })

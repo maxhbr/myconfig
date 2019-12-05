@@ -1,8 +1,7 @@
 { stdenv
 , buildPythonPackage
 , fetchPypi
-, libGL
-, libGLU
+, libGLU_combined
 , xorg
 , future
 , pytest
@@ -35,9 +34,9 @@ buildPythonPackage rec {
         for name in names:
             path = None
             if name == 'GL':
-                path = '${libGL}/lib/libGL${ext}'
+                path = '${libGLU_combined}/lib/libGL${ext}'
             elif name == 'GLU':
-                path = '${libGLU}/lib/libGLU${ext}'
+                path = '${libGLU_combined}/lib/libGLU${ext}'
             elif name == 'c':
                 path = '${glibc}/lib/libc${ext}.6'
             elif name == 'X11':

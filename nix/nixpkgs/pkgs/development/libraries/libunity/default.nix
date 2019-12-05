@@ -43,11 +43,6 @@ stdenv.mkDerivation {
     libdbusmenu
   ];
 
-  patches = [
-    # See: https://gitlab.gnome.org/GNOME/vala/issues/766
-    ./fix-vala.patch
-  ];
-
   preConfigure = ''
     intltoolize
   '';

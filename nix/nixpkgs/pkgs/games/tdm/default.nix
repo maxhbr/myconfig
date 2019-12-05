@@ -1,5 +1,5 @@
 { stdenv, fetchurl, binutils-unwrapped, scons, gnum4, p7zip, glibc_multi, mesa
-, xorg, libGLU, libGL, openal
+, xorg, libGLU_combined, openal
 , lib, makeWrapper, makeDesktopItem }:
 
 let
@@ -29,7 +29,7 @@ in stdenv.mkDerivation {
   buildInputs = [
     glibc_multi mesa.dev xorg.libX11.dev openal
     xorg.libXext.dev xorg.libXxf86vm.dev
-    libGL libGLU
+    libGLU_combined
   ];
   unpackPhase = ''
     7z x $src
@@ -86,7 +86,7 @@ EOF
   '';
 
   postInstall = ''
-    wrapProgram $out/bin/tdm --suffix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ libGL libGLU ]}
+    wrapProgram $out/bin/tdm --suffix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ libGLU_combined ]}
   '';
 
   enableParallelBuilding = true;
@@ -96,7 +96,7 @@ EOF
     description = "The Dark Mod - stealth FPS inspired by the Thief series";
     homepage = "http://www.thedarkmod.com";
     license = licenses.gpl3;
-    maintainers = with maintainers; [ cizra ];
+    maintainers = with maintainers; [ cf6b88f ];
     platforms = with platforms; [ "x86_64-linux" ];  # tdm also supports x86, but I don't have a x86 install at hand to test.
   };
 }

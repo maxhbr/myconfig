@@ -8,11 +8,11 @@ with stdenv.lib;
 let
   boolToCmake = x: if x then "ON" else "OFF";
 
-  rev    = "1.8.0";
-  sha256 = "0q3a8x3iih25xkp2bm842sm2hxlb8hxlls4qmvj7vzwrh4lvsl7b";
+  rev    = "2deeadeff214e975c9f7508bc8a24fa05a1a0c32";
+  sha256 = "09yhym2lxmn3xbhw5fcxawnmvms5jd9fw9m7x2wzil7yvy4vwdjn";
 
   pname   = "monosat";
-  version = rev;
+  version = substring 0 7 sha256;
 
   src = fetchFromGitHub {
     owner = "sambayless";
@@ -25,11 +25,7 @@ let
     inherit src;
     buildInputs = [ cmake zlib gmp jdk8 ];
 
-    cmakeFlags = [
-      "-DBUILD_STATIC=OFF"
-      "-DJAVA=${boolToCmake includeJava}"
-      "-DGPL=${boolToCmake includeGplCode}"
-    ];
+    cmakeFlags = [ "-DJAVA=${boolToCmake includeJava}" "-DGPL=${boolToCmake includeGplCode}" ];
 
     postInstall = optionalString includeJava ''
       mkdir -p $out/share/java
@@ -43,7 +39,7 @@ let
       platforms   = platforms.unix;
       license     = if includeGplCode then licenses.gpl2 else licenses.mit;
       homepage    = https://github.com/sambayless/monosat;
-      maintainers = [ maintainers.acairncross ];
+      broken = true;
     };
   };
 
@@ -55,15 +51,18 @@ let
 
     propagatedBuildInputs = [ core cython ];
 
-    # This tells setup.py to use cython, which should produce faster bindings
+    # This tells setup.py to use cython
     MONOSAT_CYTHON = true;
 
     # The relative paths here don't make sense for our Nix build
+    # Also, let's use cython since it should produce faster bindings
     # TODO: do we want to just reference the core monosat library rather than copying the
     # shared lib? The current setup.py copies the .dylib/.so...
     postPatch = ''
+
       substituteInPlace setup.py \
-        --replace 'library_dir = "../../../../"' 'library_dir = "${core}/lib/"'
+        --replace '../../../../libmonosat.dylib' '${core}/lib/libmonosat.dylib' \
+        --replace '../../../../libmonosat.so'  '${core}/lib/libmonosat.so'
     '';
   };
 in core

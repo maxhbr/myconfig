@@ -1,24 +1,24 @@
-{ stdenv, requireFile, unzip, rlwrap, bash, zlib }:
+{ stdenv, requireFile, unzip, rlwrap, bash }:
 
 assert (stdenv.hostPlatform.system == "i686-linux");
 
 let
   libPath = stdenv.lib.makeLibraryPath
-    [ stdenv.cc.libc stdenv.cc.cc zlib ];
+    [ stdenv.cc.libc stdenv.cc.cc ];
 in
 stdenv.mkDerivation rec {
   pname = "kdbplus";
-  version = "3.6";
+  version = "3.3";
 
-  src = requireFile rec {
+  src = requireFile {
     message = ''
       Nix can't download kdb+ for you automatically. Go to
       http://kx.com and download the free, 32-bit version for
-      Linux. Then run "nix-prefetch-url file://\$PWD/${name}" in
-      the directory where you saved it. Note you need version ${version}.
+      Linux. Then run "nix-prefetch-url file://\$PWD/linux.zip" in
+      the directory where you saved it. Note you need version 3.3.
     '';
-    name   = "linuxx86.zip";
-    sha256 = "0w6znd9warcqx28vf648n0vgmxyyy9kvsfpsfw37d1kp5finap4p";
+    name   = "linux.zip";
+    sha256 = "5fd0837599e24f0f437a8314510888a86ab0787684120a8fcf592299800aa940";
   };
 
   dontStrip = true;

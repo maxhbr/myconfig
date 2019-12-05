@@ -2,11 +2,10 @@
 , pkgconfig, gettext, gobject-introspection, libnotify, gnutls, libgcrypt
 , gtk3, wayland, libwebp, enchant2, xorg, libxkbcommon, epoxy, at-spi2-core
 , libxml2, libsoup, libsecret, libxslt, harfbuzz, libpthreadstubs, pcre, nettle, libtasn1, p11-kit
-, libidn, libedit, readline, libGL, libGLU, libintl, openjpeg
+, libidn, libedit, readline, libGLU_combined, libintl, openjpeg
 , enableGeoLocation ? true, geoclue2, sqlite
 , enableGtk2Plugins ? false, gtk2 ? null
 , gst-plugins-base, gst-plugins-bad, woff2
-, bubblewrap, libseccomp, xdg-dbus-proxy, substituteAll
 }:
 
 assert enableGeoLocation -> geoclue2 != null;
@@ -16,7 +15,7 @@ assert stdenv.isDarwin -> !enableGtk2Plugins;
 with stdenv.lib;
 stdenv.mkDerivation rec {
   pname = "webkitgtk";
-  version = "2.26.2";
+  version = "2.24.4";
 
   meta = {
     description = "Web content rendering engine, GTK port";
@@ -29,15 +28,11 @@ stdenv.mkDerivation rec {
 
   src = fetchurl {
     url = "https://webkitgtk.org/releases/${pname}-${version}.tar.xz";
-    sha256 = "04k5h0sid9azsqz9pyq436v1rx4lnfrhvmcgmicqb0c0g9iz103b";
+    sha256 = "1n3x5g1z6rg9n1ssna7wi0z6zlprjm4wzk544v14wqi6q0lv2s46";
   };
 
-  patches = optionals stdenv.isLinux [
-    (substituteAll {
-      src = ./fix-bubblewrap-paths.patch;
-      inherit (builtins) storeDir;
-    })
-    ./libglvnd-headers.patch
+  patches = optionals stdenv.isDarwin [
+    ## TODO add necessary patches for Darwin
   ];
 
   postPatch = ''
@@ -46,9 +41,8 @@ stdenv.mkDerivation rec {
 
   cmakeFlags = [
   "-DPORT=GTK"
-  "-DUSE_LIBHYPHEN=OFF"
+  "-DUSE_LIBHYPHEN=0"
   "-DENABLE_INTROSPECTION=ON"
-  "-DUSE_WPE_RENDERER=OFF"
   ]
   ++ optional (!enableGtk2Plugins) "-DENABLE_PLUGIN_PROCESS_GTK2=OFF"
   ++ optional stdenv.isLinux "-DENABLE_GLES2=ON"
@@ -75,19 +69,15 @@ stdenv.mkDerivation rec {
     libintl libwebp enchant2 libnotify gnutls pcre nettle libidn libgcrypt woff2
     libxml2 libsecret libxslt harfbuzz libpthreadstubs libtasn1 p11-kit openjpeg
     sqlite gst-plugins-base gst-plugins-bad libxkbcommon epoxy at-spi2-core
-    libGL libGLU
   ] ++ optional enableGeoLocation geoclue2
     ++ optional enableGtk2Plugins gtk2
     ++ (with xorg; [ libXdmcp libXt libXtst libXdamage ])
-    ++ optionals stdenv.isDarwin [ libedit readline ]
-    ++ optionals stdenv.isLinux [
-      wayland bubblewrap libseccomp xdg-dbus-proxy
-  ];
+    ++ optionals stdenv.isDarwin [ libedit readline libGLU_combined ]
+    ++ optional stdenv.isLinux wayland;
 
   propagatedBuildInputs = [
     libsoup gtk3
   ];
 
   outputs = [ "out" "dev" ];
-
 }

@@ -1,4 +1,4 @@
-import ./make-test-python.nix ({ pkgs, ...} : {
+import ./make-test.nix ({ pkgs, ...} : {
   name = "cfssl";
 
   machine = { config, lib, pkgs, ... }:
@@ -60,8 +60,8 @@ import ./make-test-python.nix ({ pkgs, ...} : {
     });
   in
     ''
-      machine.wait_for_unit("cfssl.service")
-      machine.wait_until_succeeds("${cfsslrequest}")
-      machine.succeed("ls /tmp/certificate-key.pem")
+      $machine->waitForUnit('cfssl.service');
+      $machine->waitUntilSucceeds('${cfsslrequest}');
+      $machine->succeed('ls /tmp/certificate-key.pem');
     '';
 })

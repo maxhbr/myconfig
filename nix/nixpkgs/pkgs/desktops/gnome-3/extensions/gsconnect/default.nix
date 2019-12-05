@@ -1,16 +1,16 @@
 { stdenv, fetchFromGitHub, substituteAll, python3, openssl, folks, gsound
 , meson, ninja, libxml2, pkgconfig, gobject-introspection, wrapGAppsHook
-, glib, gtk3, at-spi2-core, upower, openssh, gnome3, gjs }:
+, glib, gtk3, at-spi2-core, upower, openssh, gnome3 }:
 
 stdenv.mkDerivation rec {
   pname = "gnome-shell-gsconnect";
-  version = "27";
+  version = "23";
 
   src = fetchFromGitHub {
     owner = "andyholmes";
     repo = "gnome-shell-extension-gsconnect";
     rev = "v${version}";
-    sha256 = "0bpg7hl81wir3c15ri8kbvr6xhalpkfmcyazwmmwyj5lxpn40ykk";
+    sha256 = "011asrhkly9zhvnng2mh9v06yw39fx244pmqz5yk9rd9m4c32xid";
   };
 
   patches = [
@@ -18,6 +18,7 @@ stdenv.mkDerivation rec {
     (substituteAll {
       src = ./fix-paths.patch;
       gapplication = "${glib.bin}/bin/gapplication";
+      mutter_gsettings_path = glib.getSchemaPath gnome3.mutter;
     })
   ];
 
@@ -39,8 +40,8 @@ stdenv.mkDerivation rec {
     gsound
     upower
     gnome3.caribou
-    gjs # for running daemon
-    gnome3.evolution-data-server # for libebook-contacts typelib
+    gnome3.gjs # for running daemon
+    gnome3.evolution-data-server # folks.py requires org.gnome.Evolution.DefaultSources gsettings; TODO: hardcode the schema path to the library (similarly to https://github.com/NixOS/nixpkgs/issues/47226)
   ];
 
   mesonFlags = [
@@ -75,8 +76,8 @@ stdenv.mkDerivation rec {
   postFixup = ''
     # Let’s wrap the daemons
     for file in $out/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/service/{{daemon,nativeMessagingHost}.js,components/folks.py}; do
-      echo "Wrapping program $file"
-      wrapGApp "$file"
+      echo "Wrapping program ''${file}"
+      wrapProgram "''${file}" "''${gappsWrapperArgs[@]}"
     done
   '';
 

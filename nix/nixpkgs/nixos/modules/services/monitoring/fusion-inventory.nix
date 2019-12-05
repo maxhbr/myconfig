@@ -49,7 +49,6 @@ in {
     users.users = singleton {
       name = "fusion-inventory";
       description = "FusionInventory user";
-      isSystemUser = true;
     };
 
     systemd.services.fusion-inventory = {

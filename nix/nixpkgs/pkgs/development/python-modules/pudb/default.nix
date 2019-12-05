@@ -8,11 +8,11 @@
 
 buildPythonPackage rec {
   pname = "pudb";
-  version = "2019.2";
+  version = "2019.1";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1p2qizb35f9lfhklldzrn8g9mwiar3zmpc44463h5n1ln40ymw78";
+    sha256 = "19imrr17jnkd6fd2w1zzh63z0hcipg5b9v2x4svqm5c08p3cyc5c";
   };
 
   propagatedBuildInputs = [ pygments urwid ];

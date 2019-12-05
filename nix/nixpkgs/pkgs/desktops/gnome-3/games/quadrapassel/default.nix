@@ -1,16 +1,18 @@
 { stdenv, fetchurl, pkgconfig, gtk3, gnome3, gdk-pixbuf
-, librsvg, gsound, libmanette
+, librsvg, libcanberra-gtk3, libmanette
 , gettext, itstool, libxml2, clutter, clutter-gtk, wrapGAppsHook
 , meson, ninja, python3, vala, desktop-file-utils
 }:
 
-stdenv.mkDerivation rec {
+let
   pname = "quadrapassel";
-  version = "3.34.1";
+in stdenv.mkDerivation rec {
+  name = "${pname}-${version}";
+  version = "3.32.0";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/quadrapassel/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "1qh6hx90lqag2hby94jc68xnz4i6b2a253x4yp6xz025fpacv6mk";
+    url = "mirror://gnome/sources/quadrapassel/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
+    sha256 = "1zhi1957knz9dm98drn2dh95mr33sdch590yddh1f8r6bzsfjvpy";
   };
 
   nativeBuildInputs = [
@@ -20,8 +22,10 @@ stdenv.mkDerivation rec {
   ];
   buildInputs = [
     gtk3 gdk-pixbuf librsvg libmanette
-    gsound clutter libxml2 clutter-gtk
+    libcanberra-gtk3 clutter libxml2 clutter-gtk
   ];
+
+  enableParallelBuilding = true;
 
   passthru = {
     updateScript = gnome3.updateScript {

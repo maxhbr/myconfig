@@ -1,7 +1,7 @@
 { stdenv, fetchFromGitHub, ocaml, findlib, ocamlbuild, dune }:
 let
   pname = "cppo";
-  webpage = "https://github.com/ocaml-community/${pname}";
+  webpage = "http://mjambon.com/${pname}.html";
 in
 assert stdenv.lib.versionAtLeast ocaml.version "3.12";
 

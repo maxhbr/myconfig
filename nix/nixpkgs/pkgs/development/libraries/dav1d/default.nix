@@ -1,32 +1,30 @@
 { stdenv, fetchFromGitLab
 , meson, ninja, nasm, pkgconfig
-, withTools ? false # "dav1d" binary
-, withExamples ? false, SDL2 # "dav1dplay" binary
+, withTools ? false, SDL2
 , useVulkan ? false, libplacebo, vulkan-loader, vulkan-headers
 }:
 
-assert useVulkan -> withExamples;
+assert useVulkan -> withTools;
 
 stdenv.mkDerivation rec {
   pname = "dav1d";
-  version = "0.5.1";
+  version = "0.4.0";
 
   src = fetchFromGitLab {
     domain = "code.videolan.org";
     owner = "videolan";
     repo = pname;
     rev = version;
-    sha256 = "08cgccp7xvwn24w9iab4fzi18x3m6xyvvnz36qf7clcz0aqbfb9w";
+    sha256 = "1fbalfzw8j00vwbrh9h8kjdx6h99dr10vmvbpg3rhsspmxq9h66h";
   };
 
   nativeBuildInputs = [ meson ninja nasm pkgconfig ];
   # TODO: doxygen (currently only HTML and not build by default).
-  buildInputs = stdenv.lib.optional withExamples SDL2
+  buildInputs = stdenv.lib.optional withTools SDL2
     ++ stdenv.lib.optionals useVulkan [ libplacebo vulkan-loader vulkan-headers ];
 
   mesonFlags= [
     "-Denable_tools=${stdenv.lib.boolToString withTools}"
-    "-Denable_examples=${stdenv.lib.boolToString withExamples}"
   ];
 
   meta = with stdenv.lib; {

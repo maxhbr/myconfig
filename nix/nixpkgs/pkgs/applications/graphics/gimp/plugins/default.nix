@@ -8,33 +8,31 @@ let
   inherit (pkgs) stdenv fetchurl pkgconfig intltool glib fetchFromGitHub;
   inherit (gimp) targetPluginDir targetScriptDir;
 
-  pluginDerivation = a: let
-    name = a.name or "${a.pname}-${a.version}";
-  in stdenv.mkDerivation ({
+  pluginDerivation = a: stdenv.mkDerivation ({
     prePhases = "extraLib";
     extraLib = ''
       installScripts(){
-        mkdir -p $out/${targetScriptDir}/${name};
-        for p in "$@"; do cp "$p" -r $out/${targetScriptDir}/${name}; done
+        mkdir -p $out/${targetScriptDir};
+        for p in "$@"; do cp "$p" $out/${targetScriptDir}; done
       }
       installPlugins(){
-        mkdir -p $out/${targetPluginDir}/${name};
-        for p in "$@"; do cp "$p" -r $out/${targetPluginDir}/${name}; done
+        mkdir -p $out/${targetPluginDir};
+        for p in "$@"; do cp "$p" $out/${targetPluginDir}; done
       }
     '';
   }
   // a
   // {
-      name = "gimp-plugin-${name}";
+      name = "gimp-plugin-${a.name or "${a.pname}-${a.version}"}";
       buildInputs = [ gimp gimp.gtk glib ] ++ (a.buildInputs or []);
       nativeBuildInputs = [ pkgconfig intltool ] ++ (a.nativeBuildInputs or []);
     }
   );
 
-  scriptDerivation = {src, ...}@attrs : pluginDerivation ({
-    phases = [ "extraLib" "installPhase" ];
+  scriptDerivation = {name, src} : pluginDerivation {
+    inherit name; phases = "extraLib installPhase";
     installPhase = "installScripts ${src}";
-  } // attrs);
+  };
 
 in
 
@@ -48,7 +46,6 @@ stdenv.lib.makeScope pkgs.newScope (self: with self; {
       url = https://ftp.gimp.org/pub/gimp/plug-ins/v2.6/gap/gimp-gap-2.6.0.tar.bz2;
       sha256 = "1jic7ixcmsn4kx2cn32nc5087rk6g8xsrz022xy11yfmgvhzb0ql";
     };
-    NIX_LDFLAGS = [ "-lm" ];
     patchPhase = ''
       sed -e 's,^\(GIMP_PLUGIN_DIR=\).*,\1'"$out/${gimp.name}-plugins", \
        -e 's,^\(GIMP_DATA_DIR=\).*,\1'"$out/share/${gimp.name}", -i configure
@@ -68,20 +65,13 @@ stdenv.lib.makeScope pkgs.newScope (self: with self; {
        Filters/Generic/FFT Forward
        Filters/Generic/FFT Inverse
     */
-    name = "fourier-0.4.3";
+    name = "fourier-0.4.1";
     buildInputs = with pkgs; [ fftw ];
-
-    src = fetchurl {
-      url = "https://www.lprp.fr/files/old-web/soft/gimp/${name}.tar.gz";
-      sha256 = "0mf7f8vaqs2madx832x3kcxw3hv3w3wampvzvaps1mkf2kvrjbsn";
-    };
-
+    postInstall = "fail";
     installPhase = "installPlugins fourier";
-
-    meta = with stdenv.lib; {
-      description = "GIMP plug-in to do the fourier transform";
-      homepage = "https://people.via.ecp.fr/~remi/soft/gimp/gimp_plugin_en.php3#fourier";
-      license = with licenses; [ gpl3Plus ];
+    src = fetchurl {
+      url = "http://registry.gimp.org/files/${name}.tar.gz";
+      sha256 = "1pr3y3zl9w8xs1circdrxpr98myz9m8wfzy022al79z4pdanwvs1";
     };
   };
 
@@ -141,7 +131,6 @@ stdenv.lib.makeScope pkgs.newScope (self: with self; {
       Filters/Enhance/Wavelet sharpen
     */
     name = "wavelet-sharpen-0.1.2";
-    NIX_LDFLAGS = [ "-lm" ];
     src = fetchurl {
       url = http://registry.gimp.org/files/wavelet-sharpen-0.1.2.tar.gz;
       sha256 = "0vql1k67i21g5ivaa1jh56rg427m0icrkpryrhg75nscpirfxxqw";
@@ -163,9 +152,7 @@ stdenv.lib.makeScope pkgs.newScope (self: with self; {
     installPhase = "installPlugins src/gimp-lqr-plugin";
   };
 
-  gmic = pkgs.gmic-qt.override {
-    variant = "gimp";
-  };
+  gmic = pkgs.gmic.gimpPlugin;
 
   ufraw = pkgs.ufraw.gimpPlugin;
 
@@ -206,7 +193,6 @@ stdenv.lib.makeScope pkgs.newScope (self: with self; {
       url = http://tir.astro.utoledo.edu/jdsmith/code/eb/exposure-blend.scm;
       sha256 = "1b6c9wzpklqras4wwsyw3y3jp6fjmhnnskqiwm5sabs8djknfxla";
     };
-    meta.broken = true;
   };
 
   lightning = scriptDerivation {

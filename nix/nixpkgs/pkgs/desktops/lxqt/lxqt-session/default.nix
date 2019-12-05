@@ -34,7 +34,7 @@ mkDerivation rec {
     description = "An alternative session manager ported from the original razor-session";
     homepage = https://github.com/lxqt/lxqt-session;
     license = licenses.lgpl21;
-    platforms = platforms.linux;
+    platforms = with platforms; unix;
     maintainers = with maintainers; [ romildo ];
   };
 }

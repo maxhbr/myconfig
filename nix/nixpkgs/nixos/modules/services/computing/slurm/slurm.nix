@@ -18,7 +18,7 @@ let
       ${optionalString (cfg.controlAddr != null) ''controlAddr=${cfg.controlAddr}''}
       ${toString (map (x: "NodeName=${x}\n") cfg.nodeName)}
       ${toString (map (x: "PartitionName=${x}\n") cfg.partitionName)}
-      PlugStackConfig=${plugStackConfig}/plugstack.conf
+      PlugStackConfig=${plugStackConfig}
       ProctrackType=${cfg.procTrackType}
       ${cfg.extraConfig}
     '';
@@ -39,8 +39,6 @@ let
      DbdHost=${cfg.dbdserver.dbdHost}
      SlurmUser=${cfg.user}
      StorageType=accounting_storage/mysql
-     StorageUser=${cfg.dbdserver.storageUser}
-     ${optionalString (cfg.dbdserver.storagePass != null) "StoragePass=${cfg.dbdserver.storagePass}"}
      ${cfg.dbdserver.extraConfig}
    '';
 
@@ -50,6 +48,7 @@ let
     name = "etc-slurm";
     paths = [ configFile cgroupConfig plugStackConfig ] ++ cfg.extraConfigPaths;
   };
+
 in
 
 {
@@ -87,37 +86,6 @@ in
           '';
         };
 
-        storageUser = mkOption {
-          type = types.str;
-          default = cfg.user;
-          description = ''
-            Database user name.
-          '';
-        };
-
-        storagePass = mkOption {
-          type = types.nullOr types.str;
-          default = null;
-          description = ''
-            Database password. Note that this password will be publicable
-            readable in the nix store. Use <option>configFile</option>
-            to store the and config file and password outside the nix store.
-          '';
-        };
-
-        configFile = mkOption {
-          type = types.nullOr types.str;
-          default = null;
-          description = ''
-            Path to <literal>slurmdbd.conf</literal>. The password for the database connection
-            is stored in the config file. Use this option to specfify a path
-            outside the nix store. If this option is unset a configuration file
-            will be generated. See also:
-            <citerefentry><refentrytitle>slurmdbd.conf</refentrytitle>
-            <manvolnum>8</manvolnum></citerefentry>.
-          '';
-        };
-
         extraConfig = mkOption {
           type = types.lines;
           default = "";
@@ -144,7 +112,7 @@ in
 
       package = mkOption {
         type = types.package;
-        default = pkgs.slurm.override { enableX11 = ! cfg.enableSrunX11; };
+        default = pkgs.slurm;
         defaultText = "pkgs.slurm";
         example = literalExample "pkgs.slurm-full";
         description = ''
@@ -210,14 +178,9 @@ in
           If enabled srun will accept the option "--x11" to allow for X11 forwarding
           from within an interactive session or a batch job. This activates the
           slurm-spank-x11 module. Note that this option also enables
-          <option>services.openssh.forwardX11</option> on the client.
+          'services.openssh.forwardX11' on the client.
 
           This option requires slurm to be compiled without native X11 support.
-          The default behavior is to re-compile the slurm package with native X11
-          support disabled if this option is set to true.
-
-          To use the native X11 support add <literal>PrologFlags=X11</literal> in <option>extraConfig</option>.
-          Note that this method will only work RSA SSH host keys.
         '';
       };
 
@@ -393,11 +356,7 @@ in
       requires = [ "munged.service" "mysql.service" ];
 
       # slurm strips the last component off the path
-      environment.SLURM_CONF =
-        if (cfg.dbdserver.configFile == null) then
-          "${slurmdbdConf}/slurm.conf"
-        else
-          cfg.dbdserver.configFile;
+      environment.SLURM_CONF = "${slurmdbdConf}/slurm.conf";
 
       serviceConfig = {
         Type = "forking";

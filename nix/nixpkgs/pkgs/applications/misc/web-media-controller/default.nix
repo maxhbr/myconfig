@@ -2,13 +2,13 @@
 
 stdenv.mkDerivation rec {
   pname = "wmc-mpris";
-  version = "0.1.0";
+  version = "unstable-2019-07-24";
 
   src = fetchFromGitHub {
     owner = "f1u77y";
     repo = pname;
-    rev = "v${version}";
-    sha256 = "1zcnaf9g55cbj9d2zlsr0i15qh0w9gp5jmxkm6dcp1j6yd7j3ymc";
+    rev = "3b92847c576662732984ad791d6c7899a39f7787";
+    sha256 = "0q19z0zx53pd237x529rif21kliklwzjrdddx8jfr9hgghjv9giq";
   };
 
   nativeBuildInputs = [ cmake pkgconfig ];

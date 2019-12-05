@@ -3,7 +3,7 @@
   pkgs ? import ../.. { inherit system config; }
 }:
 
-with import ../lib/testing-python.nix { inherit system pkgs; };
+with import ../lib/testing.nix { inherit system pkgs; };
 
 let
   inherit (pkgs) lib;
@@ -26,13 +26,13 @@ let
       testScript = { nodes, ... }: let
         user = nodes.machine.config.users.users.alice;
       in ''
-        start_all()
-        machine.wait_for_text("(?i)select your user")
-        machine.screenshot("sddm")
-        machine.send_chars("${user.password}\n")
-        machine.wait_for_file("${user.home}/.Xauthority")
-        machine.succeed("xauth merge ${user.home}/.Xauthority")
-        machine.wait_for_window("^IceWM ")
+        startAll;
+        $machine->waitForText(qr/select your user/i);
+        $machine->screenshot("sddm");
+        $machine->sendChars("${user.password}\n");
+        $machine->waitForFile("/home/alice/.Xauthority");
+        $machine->succeed("xauth merge ~alice/.Xauthority");
+        $machine->waitForWindow("^IceWM ");
       '';
     };
 
@@ -57,13 +57,11 @@ let
         services.xserver.desktopManager.default = "none";
       };
 
-      testScript = { nodes, ... }: let
-        user = nodes.machine.config.users.users.alice;
-      in ''
-        start_all()
-        machine.wait_for_file("${user.home}/.Xauthority")
-        machine.succeed("xauth merge ${user.home}/.Xauthority")
-        machine.wait_for_window("^IceWM ")
+      testScript = { ... }: ''
+        startAll;
+        $machine->waitForFile("/home/alice/.Xauthority");
+        $machine->succeed("xauth merge ~alice/.Xauthority");
+        $machine->waitForWindow("^IceWM ");
       '';
     };
   };

@@ -1,6 +1,6 @@
 { stdenv, fetchurl, dpkg
 , alsaLib, atk, cairo, cups, curl, dbus, expat, fontconfig, freetype, glib
-, gnome2, gnome3, libnotify, libxcb, nspr, nss, systemd, xorg, wrapGAppsHook }:
+, gnome2, gnome3, libnotify, libxcb, nspr, nss, systemd, xorg }:
 
 let
 
@@ -57,7 +57,7 @@ in stdenv.mkDerivation {
 
   inherit src;
 
-  buildInputs = [ dpkg wrapGAppsHook gnome3.gtk ];
+  buildInputs = [ dpkg ];
   dontUnpack = true;
 
   buildCommand = ''
@@ -76,7 +76,6 @@ in stdenv.mkDerivation {
       patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" "$file" || true
       patchelf --set-rpath ${rpath}:$out/share/mongodb-compass "$file" || true
     done
-    wrapGAppsHook $out/bin/mongodb-compass
   '';
 
   meta = with stdenv.lib; {

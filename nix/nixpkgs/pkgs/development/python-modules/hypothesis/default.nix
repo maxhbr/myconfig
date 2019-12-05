@@ -1,5 +1,5 @@
 { lib, buildPythonPackage, fetchFromGitHub
-, isPy3k, attrs, coverage, enum34, pexpect
+, isPy3k, attrs, coverage, enum34
 , doCheck ? true, pytest, pytest_xdist, flaky, mock
 }:
 buildPythonPackage rec {
@@ -9,7 +9,7 @@ buildPythonPackage rec {
   # pytz fake_factory django numpy pytest
   # If you need these, you can just add them to your environment.
 
-  version = "4.41.0";
+  version = "4.7.3";
   pname = "hypothesis";
 
   # Use github tarballs that includes tests
@@ -17,14 +17,14 @@ buildPythonPackage rec {
     owner = "HypothesisWorks";
     repo = "hypothesis-python";
     rev = "hypothesis-python-${version}";
-    sha256 = "09bpwp4kdywkmzci969m57w0yy8c31kzwg60vg4mvrmmgyi2cfzv";
+    sha256 = "03l4hp0p7i2k04arnqkav0ygc23ml46dy3cfrlwviasrj7yzk5hc";
   };
 
   postUnpack = "sourceRoot=$sourceRoot/hypothesis-python";
 
   propagatedBuildInputs = [ attrs coverage ] ++ lib.optional (!isPy3k) [ enum34 ];
 
-  checkInputs = [ pytest pytest_xdist flaky mock pexpect ];
+  checkInputs = [ pytest pytest_xdist flaky mock ];
   inherit doCheck;
 
   checkPhase = ''

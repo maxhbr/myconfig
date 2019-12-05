@@ -1,6 +1,4 @@
-{ stdenv, fetchgit, coreutils, ocamlPackages, zlib, pcre, neko }:
-
-let inherit (ocamlPackages) ocaml camlp4; in
+{ stdenv, fetchgit, coreutils, ocaml, zlib, pcre, neko, camlp4 }:
 
 let
   generic = { version, sha256, prePatch }:

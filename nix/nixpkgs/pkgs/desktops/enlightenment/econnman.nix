@@ -22,8 +22,8 @@ stdenv.mkDerivation rec {
   meta = {
     description = "A user interface for the connman network connection manager";
     homepage = https://enlightenment.org/;
-    license = stdenv.lib.licenses.lgpl3;
+    maintainers = with stdenv.lib.maintainers; [ matejc tstrobel ftrvxmtrx ];
     platforms = stdenv.lib.platforms.linux;
-    maintainers = with stdenv.lib.maintainers; [ matejc tstrobel ftrvxmtrx romildo ];
+    license = stdenv.lib.licenses.lgpl3;
   };
 }

@@ -1,7 +1,7 @@
-{ lib
+{ stdenv
 , buildPythonPackage
 , fetchPypi
-, isPy27
+, unittest2
 , funcsigs
 , six
 , pbr
@@ -10,14 +10,15 @@
 
 buildPythonPackage rec {
   pname = "mock";
-  version = "3.0.5";
+  version = "2.0.0";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "83657d894c90d5681d62155c82bda9c1187827525880eda8ff5df4ec813437c3";
+    sha256 = "1flbpksir5sqrvq2z0dp8sl4bzbadg21sj4d42w3klpdfvgvcn5i";
   };
 
-  propagatedBuildInputs = [ six pbr ] ++ lib.optionals isPy27 [ funcsigs ];
+  buildInputs = [ unittest2 ];
+  propagatedBuildInputs = [ funcsigs six pbr ];
 
   # On PyPy for Python 2.7 in particular, Mock's tests have a known failure.
   # Mock upstream has a decoration to disable the failing test and make
@@ -29,10 +30,10 @@ buildPythonPackage rec {
     ${python.interpreter} -m unittest discover
   '';
 
-  meta = with lib; {
+  meta = with stdenv.lib; {
     description = "Mock objects for Python";
     homepage = http://python-mock.sourceforge.net/;
-    license = licenses.bsd2;
+    license = stdenv.lib.licenses.bsd2;
   };
 
 }

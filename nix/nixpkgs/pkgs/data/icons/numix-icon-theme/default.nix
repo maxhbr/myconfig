@@ -2,26 +2,20 @@
 
 stdenv.mkDerivation rec {
   pname = "numix-icon-theme";
-  version = "19.09.20";
+  version = "18.07.17";
 
   src = fetchFromGitHub {
     owner = "numixproject";
     repo = pname;
     rev = version;
-    sha256 = "0pn3x0mmsph777lwhg890ck366p31bjl3755h4pv161ym08d4z9w";
+    sha256 = "0clh55kmhc52d33dfm2c6h3lg6ddfh8a088ir9lv1camn9kj55bd";
   };
 
-  nativeBuildInputs = [ gtk3 ];
-
-  propagatedBuildInputs = [
-    hicolor-icon-theme
-  ];
-
-  dontDropIconThemeCache = true;
+  nativeBuildInputs = [ gtk3 hicolor-icon-theme ];
 
   installPhase = ''
     mkdir -p $out/share/icons
-    cp -a Numix{,-Light} $out/share/icons/
+    mv Numix{,-Light} $out/share/icons
   '';
 
   postFixup = ''

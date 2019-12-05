@@ -1,56 +1,36 @@
-{ akonadi-contacts
-, cmake
-, fetchgit
-, gnupg
-, gpgme
-, kcontacts
-, kf5gpgmepp
+{ mkDerivation
 , lib
-, mimetic
-, mkDerivation
-, pkgconfig
-, qgpgme
+, fetchurl
+, cmake
 , qtbase
-, qtkeychain
-, qttools
 , qtwebkit
+, qttools
 }:
 
 mkDerivation rec {
   pname = "trojita";
-  version = "0.7.20190618";
+  version = "0.7";
 
-  src = fetchgit {
-    url = "https://anongit.kde.org/trojita.git";
-    rev = "90b417b131853553c94ff93aef62abaf301aa8f1";
-    sha256 = "0xpxq5bzqaa68lkz90wima5q2m0mdcn0rvnigb66lylb4n20mnql";
+  src = fetchurl {
+    url = "mirror://sourceforge/trojita/trojita/${pname}-${version}.tar.xz";
+    sha256 = "1n9n07md23ny6asyw0xpih37vlwzp7vawbkprl7a1bqwfa0si3g0";
   };
 
   buildInputs = [
-    akonadi-contacts
-    gpgme
-    kcontacts
-    mimetic
-    qgpgme
     qtbase
-    qtkeychain
     qtwebkit
-    mimetic
-    kf5gpgmepp
   ];
 
   nativeBuildInputs = [
     cmake
-    pkgconfig
     qttools
-    gnupg
   ];
+
 
   meta = with lib; {
     description = "A Qt IMAP e-mail client";
-    homepage = "http://trojita.flaska.net/";
+    homepage = http://trojita.flaska.net/;
     license = with licenses; [ gpl2 gpl3 ];
-    maintainers = with maintainers; [ ehmry ];
     platforms = platforms.linux;
   };
 

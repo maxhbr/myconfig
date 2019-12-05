@@ -10,11 +10,11 @@
 
 buildPythonPackage rec {
   pname = "ssdeep";
-  version = "3.4";
+  version = "3.3";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0px8k4fjbkjb717bg2v7rjhm4iclrxzq7sh0hfqs55f4ddqi0m8v";
+    sha256 = "255de1f034652b3ed21920221017e70e570b1644f9436fea120ae416175f4ef5";
   };
 
   buildInputs = [ pkgs.ssdeep pytestrunner ];

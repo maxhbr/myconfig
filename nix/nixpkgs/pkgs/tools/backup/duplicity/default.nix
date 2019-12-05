@@ -2,8 +2,7 @@
 , gnutar
 , par2cmdline
 , utillinux
-, rsync
-, backblaze-b2, makeWrapper }:
+, rsync, makeWrapper }:
 
 python2Packages.buildPythonApplication rec {
   pname = "duplicity";
@@ -41,10 +40,10 @@ python2Packages.buildPythonApplication rec {
   ];
 
   buildInputs = [ librsync makeWrapper python2Packages.wrapPython ];
-  propagatedBuildInputs = [ backblaze-b2 ] ++ (with python2Packages; [
+  propagatedBuildInputs = with python2Packages; [
     boto cffi cryptography ecdsa enum idna pygobject3 fasteners
-    ipaddress lockfile paramiko pyasn1 pycrypto six pydrive
-  ]);
+    ipaddress lockfile paramiko pyasn1 pycrypto six
+  ];
   checkInputs = [
     gnupg  # Add 'gpg' to PATH.
     gnutar  # Add 'tar' to PATH.

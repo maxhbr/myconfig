@@ -38,6 +38,9 @@ let
     clean = removeSelfDep (orig // {
       # overrides of texlive.tlpdb
 
+      dvidvi = orig.dvidvi // {
+        hasRunfiles = false; # only contains docs that's in bin.core.doc already
+      };
       texlive-msg-translations = orig.texlive-msg-translations // {
         hasRunfiles = false; # only *.po for tlmgr
       };
@@ -105,12 +108,8 @@ let
       # Common packages should get served from the binary cache anyway.
       # See discussions, e.g. https://github.com/NixOS/nixpkgs/issues/24683
       urlPrefixes = args.urlPrefixes or [
-        # Mirror hosted by @veprbl
-        http://146.185.144.154/texlive-2019
-
-        # TODO: Upgrade to the final snapshot of the packages before 20.03
-        #http://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2019/tlnet-final/archive
-        #ftp://tug.org/texlive/historic/2019/tlnet-final/archive
+        http://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2018/tlnet-final/archive
+        ftp://tug.org/texlive/historic/2018/tlnet-final/archive
       ];
 
       src = fetchurl { inherit urls sha512; };
@@ -179,7 +178,7 @@ in
           })
         )
         { inherit (tl)
-            scheme-basic scheme-context scheme-full scheme-gust scheme-infraonly
+            scheme-basic scheme-context scheme-full scheme-gust
             scheme-medium scheme-minimal scheme-small scheme-tetex;
         }
     );

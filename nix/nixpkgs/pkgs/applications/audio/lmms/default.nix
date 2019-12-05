@@ -1,9 +1,9 @@
 { stdenv, fetchFromGitHub, cmake, pkgconfig, alsaLib ? null, fftwFloat, fltk13
 , fluidsynth_1 ? null, lame ? null, libgig ? null, libjack2 ? null, libpulseaudio ? null
 , libsamplerate, libsoundio ? null, libsndfile, libvorbis ? null, portaudio ? null
-, qtbase, qtx11extras, qttools, SDL ? null, mkDerivation }:
+, qtbase, qtx11extras, qttools, SDL ? null }:
 
-mkDerivation rec {
+stdenv.mkDerivation rec {
   pname = "lmms";
   version = "1.2.0-rc7";
 
@@ -43,7 +43,7 @@ mkDerivation rec {
     description = "DAW similar to FL Studio (music production software)";
     homepage = https://lmms.io;
     license = licenses.gpl2Plus;
-    platforms = [ "x86_64-linux" "i686-linux" ];
+    platforms = platforms.linux;
     maintainers = with maintainers; [ goibhniu yegortimoshenko ];
   };
 }

@@ -1,52 +1,24 @@
-{ stdenv
-, fetchurl
-, cmake
-, ninja
-, pkgconfig
-, intltool
-, vala
-, wrapGAppsHook
-, gcr
-, libpeas
-, gtk3
-, webkitgtk
-, sqlite
-, gsettings-desktop-schemas
-, libsoup
-, glib-networking
-, json-glib
-, libarchive
+{ stdenv, fetchurl, cmake, ninja, pkgconfig, intltool, vala, wrapGAppsHook, gcr, libpeas
+, gtk3, webkitgtk, sqlite, gsettings-desktop-schemas, libsoup, glib-networking
 }:
 
 stdenv.mkDerivation rec {
   pname = "midori";
-  version = "9.0";
+  version = "7";
 
   src = fetchurl {
-    url = "https://github.com/midori-browser/core/releases/download/v${version}/midori-v${version}.tar.gz";
-    sha256 = "05i04qa83dnarmgkx4xsk6fga5lw1lmslh4rb3vhyyy4ala562jy";
+    url = "https://github.com/midori-browser/core/releases/download/v${version}/midori-v${version}.0.tar.gz";
+    sha256 = "0ffdnjp55s0ci737vlhxikb2nihghwlb6mjcjzpgpnzi47vjqnwh";
   };
 
   nativeBuildInputs = [
-    cmake
-    intltool
-    ninja
-    pkgconfig
-    vala
-    wrapGAppsHook
+    pkgconfig cmake ninja intltool vala wrapGAppsHook
   ];
 
   buildInputs = [
-    (libsoup.override { gnomeSupport = true; })
-    gcr
+    gtk3 webkitgtk sqlite gsettings-desktop-schemas gcr
+    (libsoup.override { gnomeSupport = true; }) libpeas
     glib-networking
-    gsettings-desktop-schemas
-    gtk3
-    libpeas
-    sqlite
-    webkitgtk
-    json-glib
-    libarchive
   ];
 
   meta = with stdenv.lib; {

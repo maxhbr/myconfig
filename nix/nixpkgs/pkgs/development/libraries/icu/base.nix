@@ -63,16 +63,10 @@ let
     # remove dependency on bootstrap-tools in early stdenv build
     postInstall = stdenv.lib.optionalString stdenv.isDarwin ''
       sed -i 's/INSTALL_CMD=.*install/INSTALL_CMD=install/' $out/lib/icu/${version}/pkgdata.inc
-    '' + (let
-      replacements = [
-        { from = "\${prefix}/include"; to = "${placeholder "dev"}/include"; } # --cppflags-searchpath
-        { from = "\${pkglibdir}/Makefile.inc"; to = "${placeholder "dev"}/lib/icu/Makefile.inc"; } # --incfile
-        { from = "\${pkglibdir}/pkgdata.inc"; to = "${placeholder "dev"}/lib/icu/pkgdata.inc"; } # --incpkgdatafile
-      ];
-    in ''
+    '' + ''
       substituteInPlace "$dev/bin/icu-config" \
-        ${lib.concatMapStringsSep " " (r: "--replace '${r.from}' '${r.to}'") replacements}
-    '');
+        --replace \''${pkglibdir}/Makefile.inc "$dev/lib/icu/Makefile.inc"
+    '';
 
     postFixup = ''moveToOutput lib/icu "$dev" '';
   };

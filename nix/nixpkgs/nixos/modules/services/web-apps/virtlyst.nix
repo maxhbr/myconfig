@@ -54,7 +54,6 @@ in
       home = stateDir;
       createHome = true;
       group = mkIf config.virtualisation.libvirtd.enable "libvirtd";
-      isSystemUser = true;
     };
 
     systemd.services.virtlyst = {

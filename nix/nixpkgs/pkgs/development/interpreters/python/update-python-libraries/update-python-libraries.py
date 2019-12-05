@@ -6,9 +6,9 @@ You can pass in multiple files or paths.
 
 You'll likely want to use
 ``
-  $ ./update-python-libraries ../../pkgs/development/python-modules/**/default.nix
+  $ ./update-python-libraries ../../pkgs/development/python-modules/*
 ``
-to update all non-pinned libraries in that folder.
+to update all libraries in that folder.
 """
 
 import argparse
@@ -227,10 +227,6 @@ def _determine_extension(text, fetcher):
                 src_format = 'setuptools'
             elif src_format == 'flit':
                 raise ValueError("Don't know how to update a Flit package.")
-            elif src_format == 'other':
-                raise ValueError("Don't know how to update a format='other' package.")
-            elif src_format == 'pyproject':
-                raise ValueError("Don't know how to update a pyproject package.")
             extension = FORMATS[src_format]
 
     elif fetcher == 'fetchurl':

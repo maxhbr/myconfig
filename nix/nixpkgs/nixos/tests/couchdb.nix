@@ -1,4 +1,4 @@
-import ./make-test-python.nix ({ pkgs, lib, ...}:
+import ./make-test.nix ({ pkgs, lib, ...}:
 
 with lib;
 
@@ -35,42 +35,22 @@ with lib;
         fi
       '';
   in ''
-    start_all()
+    startAll;
 
-    couchdb1.wait_for_unit("couchdb.service")
-    couchdb1.wait_until_succeeds(
-        "${curlJqCheck "GET" "" ".couchdb" "Welcome"}"
-    )
-    couchdb1.wait_until_succeeds(
-        "${curlJqCheck "GET" "_all_dbs" ". | length" "2"}"
-    )
-    couchdb1.succeed("${curlJqCheck "PUT" "foo" ".ok" "true"}")
-    couchdb1.succeed(
-        "${curlJqCheck "GET" "_all_dbs" ". | length" "3"}"
-    )
-    couchdb1.succeed(
-        "${curlJqCheck "DELETE" "foo" ".ok" "true"}"
-    )
-    couchdb1.succeed(
-        "${curlJqCheck "GET" "_all_dbs" ". | length" "2"}"
-    )
+    $couchdb1->waitForUnit("couchdb.service");
+    $couchdb1->waitUntilSucceeds("${curlJqCheck "GET" "" ".couchdb" "Welcome"}");
+    $couchdb1->waitUntilSucceeds("${curlJqCheck "GET" "_all_dbs" ". | length" "2"}");
+    $couchdb1->succeed("${curlJqCheck "PUT" "foo" ".ok" "true"}");
+    $couchdb1->succeed("${curlJqCheck "GET" "_all_dbs" ". | length" "3"}");
+    $couchdb1->succeed("${curlJqCheck "DELETE" "foo" ".ok" "true"}");
+    $couchdb1->succeed("${curlJqCheck "GET" "_all_dbs" ". | length" "2"}");
 
-    couchdb2.wait_for_unit("couchdb.service")
-    couchdb2.wait_until_succeeds(
-        "${curlJqCheck "GET" "" ".couchdb" "Welcome"}"
-    )
-    couchdb2.wait_until_succeeds(
-        "${curlJqCheck "GET" "_all_dbs" ". | length" "0"}"
-    )
-    couchdb2.succeed("${curlJqCheck "PUT" "foo" ".ok" "true"}")
-    couchdb2.succeed(
-        "${curlJqCheck "GET" "_all_dbs" ". | length" "1"}"
-    )
-    couchdb2.succeed(
-        "${curlJqCheck "DELETE" "foo" ".ok" "true"}"
-    )
-    couchdb2.succeed(
-        "${curlJqCheck "GET" "_all_dbs" ". | length" "0"}"
-    )
+    $couchdb2->waitForUnit("couchdb.service");
+    $couchdb2->waitUntilSucceeds("${curlJqCheck "GET" "" ".couchdb" "Welcome"}");
+    $couchdb2->waitUntilSucceeds("${curlJqCheck "GET" "_all_dbs" ". | length" "0"}");
+    $couchdb2->succeed("${curlJqCheck "PUT" "foo" ".ok" "true"}");
+    $couchdb2->succeed("${curlJqCheck "GET" "_all_dbs" ". | length" "1"}");
+    $couchdb2->succeed("${curlJqCheck "DELETE" "foo" ".ok" "true"}");
+    $couchdb2->succeed("${curlJqCheck "GET" "_all_dbs" ". | length" "0"}");
   '';
 })

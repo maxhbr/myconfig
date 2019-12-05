@@ -4,21 +4,18 @@
 , setuptools_scm
 , pytest
 , pytest-flake8
-, more-itertools
 }:
 
 buildPythonPackage rec {
   pname = "zipp";
-  version = "0.6.0";
+  version = "0.5.1";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "3718b1cbcd963c7d4c5511a8240812904164b7f381b647143a89d3b98f9bcd8e";
+    sha256 = "ca943a7e809cc12257001ccfb99e3563da9af99d52f261725e96dfe0f9275bc3";
   };
 
   nativeBuildInputs = [ setuptools_scm ];
-
-  propagatedBuildInputs = [ more-itertools ];
 
   checkInputs = [ pytest pytest-flake8 ];
 

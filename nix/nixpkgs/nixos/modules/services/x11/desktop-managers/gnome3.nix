@@ -30,10 +30,6 @@ let
 
      cp -f ${pkgs.gnome3.gnome-shell}/share/gsettings-schemas/*/glib-2.0/schemas/*.gschema.override $out/share/gsettings-schemas/nixos-gsettings-overrides/glib-2.0/schemas
 
-     ${optionalString flashbackEnabled ''
-       cp -f ${pkgs.gnome3.gnome-flashback}/share/gsettings-schemas/*/glib-2.0/schemas/*.gschema.override $out/share/gsettings-schemas/nixos-gsettings-overrides/glib-2.0/schemas
-     ''}
-
      chmod -R a+w $out/share/gsettings-schemas/nixos-gsettings-overrides
      cat - > $out/share/gsettings-schemas/nixos-gsettings-overrides/glib-2.0/schemas/nixos-defaults.gschema.override <<- EOF
        [org.gnome.desktop.background]
@@ -161,10 +157,10 @@ in
 
       environment.systemPackages = cfg.sessionPath;
 
-      environment.sessionVariables.GNOME_SESSION_DEBUG = mkIf cfg.debug "1";
+      environment.variables.GNOME_SESSION_DEBUG = mkIf cfg.debug "1";
 
       # Override GSettings schemas
-      environment.sessionVariables.NIX_GSETTINGS_OVERRIDES_DIR = "${nixos-gsettings-desktop-schemas}/share/gsettings-schemas/nixos-gsettings-overrides/glib-2.0/schemas";
+      environment.variables.NIX_GSETTINGS_OVERRIDES_DIR = "${nixos-gsettings-desktop-schemas}/share/gsettings-schemas/nixos-gsettings-overrides/glib-2.0/schemas";
 
        # If gnome3 is installed, build vim for gtk3 too.
       nixpkgs.config.vim.gui = "gtk3";
@@ -183,13 +179,6 @@ in
       security.pam.services.gnome-screensaver = {
         enableGnomeKeyring = true;
       };
-
-      systemd.packages = with pkgs.gnome3; [
-        gnome-flashback
-      ] ++ (map
-        (wm: gnome-flashback.mkSystemdTargetForWm {
-          inherit (wm) wmName;
-        }) cfg.flashback.customSessions);
 
       services.dbus.packages = [
         pkgs.gnome3.gnome-screensaver
@@ -240,7 +229,6 @@ in
       services.colord.enable = mkDefault true;
       services.gnome3.chrome-gnome-shell.enable = mkDefault true;
       services.gnome3.glib-networking.enable = true;
-      services.gnome3.gnome-initial-setup.enable = mkDefault true;
       services.gnome3.gnome-remote-desktop.enable = mkDefault true;
       services.gnome3.gnome-settings-daemon.enable = true;
       services.gnome3.gnome-user-share.enable = mkDefault true;
@@ -248,8 +236,7 @@ in
       services.gvfs.enable = true;
       services.system-config-printer.enable = (mkIf config.services.printing.enable (mkDefault true));
       services.telepathy.enable = mkDefault true;
-
-      systemd.packages = with pkgs.gnome3; [ vino gnome-session ];
+      systemd.packages = [ pkgs.gnome3.vino ];
 
       services.avahi.enable = mkDefault true;
 
@@ -278,26 +265,6 @@ in
         source-sans-pro
       ];
 
-      ## Enable soft realtime scheduling, only supported on wayland ##
-
-      security.wrappers.".gnome-shell-wrapped" = {
-        source = "${pkgs.gnome3.gnome-shell}/bin/.gnome-shell-wrapped";
-        capabilities = "cap_sys_nice=ep";
-      };
-
-      systemd.user.services.gnome-shell-wayland = let
-        gnomeShellRT = with pkgs.gnome3; pkgs.runCommand "gnome-shell-rt" {} ''
-          mkdir -p $out/bin/
-          cp ${gnome-shell}/bin/gnome-shell $out/bin
-          sed -i "s@${gnome-shell}/bin/@${config.security.wrapperDir}/@" $out/bin/gnome-shell
-        '';
-      in {
-        # Note we need to clear ExecStart before overriding it
-        serviceConfig.ExecStart = ["" "${gnomeShellRT}/bin/gnome-shell"];
-        # Do not use the default environment, it provides a broken PATH
-        environment = mkForce {};
-      };
-
       # Adapt from https://gitlab.gnome.org/GNOME/gnome-build-meta/blob/gnome-3-32/elements/core/meta-gnome-core-shell.bst
       environment.systemPackages = with pkgs.gnome3; [
         adwaita-icon-theme
@@ -309,7 +276,7 @@ in
         gnome-shell
         gnome-shell-extensions
         gnome-themes-extra
-        pkgs.gnome-user-docs
+        gnome-user-docs
         pkgs.orca
         pkgs.glib # for gsettings
         pkgs.gnome-menus
@@ -362,10 +329,10 @@ in
 
       # Let nautilus find extensions
       # TODO: Create nautilus-with-extensions package
-      environment.sessionVariables.NAUTILUS_EXTENSION_DIR = "${config.system.path}/lib/nautilus/extensions-3.0";
+      environment.variables.NAUTILUS_EXTENSION_DIR = "${config.system.path}/lib/nautilus/extensions-3.0";
 
       # Override default mimeapps for nautilus
-      environment.sessionVariables.XDG_DATA_DIRS = [ "${mimeAppsList}/share" ];
+      environment.variables.XDG_DATA_DIRS = [ "${mimeAppsList}/share" ];
 
       environment.pathsToLink = [
         "/share/nautilus-python/extensions"

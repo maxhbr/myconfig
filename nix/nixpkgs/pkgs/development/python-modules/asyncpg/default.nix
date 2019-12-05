@@ -3,13 +3,20 @@
 
 buildPythonPackage rec {
   pname = "asyncpg";
-  version = "0.20.0";
+  version = "0.18.3";
   disabled = !isPy3k;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0yjszgg1zbbsfxj1gv17ymc2hcfvymkvg69dvpvwy0dqspjxq0ma";
+    sha256 = "0rrch478ww6ipmh3617sb2jzwsq4w7pjcck869p35zb0mk5fr9aq";
   };
+
+  patches = [
+    (fetchpatch {
+      url = "https://github.com/MagicStack/asyncpg/commit/aaeb7076e5acb045880b46155014c0640624797e.patch";
+      sha256 = "0l420cmk7469wgb1xq2rxinvja1f2brb5cm4smj2s2wqgymbrf6h";
+    })
+  ];
 
   checkInputs = [
     uvloop

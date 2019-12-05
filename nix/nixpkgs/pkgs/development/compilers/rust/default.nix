@@ -1,9 +1,3 @@
-{ rustcVersion
-, rustcSha256
-, bootstrapVersion
-, bootstrapHashes
-, selectRustPackage
-}:
 { stdenv, lib
 , buildPackages
 , newScope, callPackage
@@ -11,14 +5,6 @@
 , llvmPackages_5
 , pkgsBuildTarget, pkgsBuildBuild
 }: rec {
-  toRustTarget = platform: with platform.parsed; let
-    cpu_ = {
-      "armv7a" = "armv7";
-      "armv7l" = "armv7";
-      "armv6l" = "arm";
-    }.${cpu.name} or cpu.name;
-  in "${cpu_}-${vendor.name}-${kernel.name}${lib.optionalString (abi.name != "unknown") "-${abi.name}"}";
-
   makeRustPlatform = { rustc, cargo, ... }: {
     rust = {
       inherit rustc cargo;
@@ -50,27 +36,21 @@
   # cycles / purify builds). In this way, nixpkgs would be in control of all
   # bootstrapping.
   packages = {
-    prebuilt = callPackage ./bootstrap.nix {
-      version = bootstrapVersion;
-      hashes = bootstrapHashes;
-    };
+    prebuilt = callPackage ./bootstrap.nix {};
     stable = lib.makeScope newScope (self: let
       # Like `buildRustPackages`, but may also contain prebuilt binaries to
       # break cycle. Just like `bootstrapTools` for nixpkgs as a whole,
       # nothing in the final package set should refer to this.
       bootstrapRustPackages = self.buildRustPackages.overrideScope' (_: _:
         lib.optionalAttrs (stdenv.buildPlatform == stdenv.hostPlatform)
-          (selectRustPackage buildPackages).packages.prebuilt);
+          buildPackages.rust.packages.prebuilt);
       bootRustPlatform = makeRustPlatform bootstrapRustPackages;
     in {
       # Packages suitable for build-time, e.g. `build.rs`-type stuff.
-      buildRustPackages = (selectRustPackage buildPackages).packages.stable;
+      buildRustPackages = buildPackages.rust.packages.stable;
       # Analogous to stdenv
       rustPlatform = makeRustPlatform self.buildRustPackages;
       rustc = self.callPackage ./rustc.nix ({
-        version = rustcVersion;
-        sha256 = rustcSha256;
-
         # Use boot package set to break cycle
         rustPlatform = bootRustPlatform;
       } // lib.optionalAttrs (stdenv.cc.isClang && stdenv.hostPlatform == stdenv.buildPlatform) {

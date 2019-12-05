@@ -63,7 +63,6 @@ let
       "systemd-logind.service"
       "autovt@.service"
       "systemd-user-sessions.service"
-      "dbus-org.freedesktop.import1.service"
       "dbus-org.freedesktop.machine1.service"
       "user@.service"
       "user-runtime-dir@.service"
@@ -146,7 +145,6 @@ let
       "user.slice"
       "machine.slice"
       "machines.target"
-      "systemd-importd.service"
       "systemd-machined.service"
       "systemd-nspawn@.service"
 

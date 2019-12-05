@@ -1,4 +1,4 @@
-{ stdenv, fetchFromGitHub, which, withFont ? "" }:
+{ stdenv, fetchFromGitHub, bash, which, withFont ? "" }:
 
 stdenv.mkDerivation rec {
   version = "2.0.0";
@@ -12,7 +12,7 @@ stdenv.mkDerivation rec {
   dontPatchShebangs = true;
   buildInputs = [ which ];
   patchPhase = ''
-    patchShebangs install.sh
+    sed -i -e 's|/bin/bash|${bash}/bin/bash|g' install.sh
     sed -i -e 's|font_dir="\$HOME/.local/share/fonts|font_dir="$out/share/fonts/truetype|g' install.sh
   '';
   installPhase = ''

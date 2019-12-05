@@ -2,13 +2,13 @@
 
 stdenv.mkDerivation rec {
   pname = "libyaml-cpp";
-  version = "0.6.3";
+  version = "0.6.2";
 
   src = fetchFromGitHub {
     owner = "jbeder";
     repo = "yaml-cpp";
     rev = "yaml-cpp-${version}";
-    sha256 = "0ykkxzxcwwiv8l8r697gyqh1nl582krpvi7m7l6b40ijnk4pw30s";
+    sha256 = "16lclpa487yghf9019wymj419wkyx4795wv9q7539hhimajw9kpb";
   };
 
   outputs = [ "out" "dev" ];

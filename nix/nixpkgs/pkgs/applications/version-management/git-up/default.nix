@@ -1,18 +1,17 @@
-{ stdenv, fetchurl, pythonPackages, git }:
+{ stdenv, fetchurl, python2Packages, git }:
 
-pythonPackages.buildPythonApplication rec {
+python2Packages.buildPythonApplication rec {
+  version = "1.4.2";
   pname = "git-up";
-  version = "1.6.1";
 
-  src = pythonPackages.fetchPypi {
-    inherit pname version;
-    sha256 = "0gs791yb0cndg9879vayvcj329jwhzpk6wrf9ri12l5hg8g490za";
+  src = fetchurl {
+    url = "mirror://pypi/g/git-up/${pname}-${version}.zip";
+    sha256 = "121ia5gyjy7js6fbsx9z98j2qpq7rzwpsj8gnfvsbz2d69g0vl7q";
   };
 
-  # git should be on path for tool to work correctly
-  propagatedBuildInputs = [ git ] ++ (with pythonPackages; [ click colorama docopt GitPython six termcolor ]);
+  buildInputs = [ git ] ++ (with python2Packages; [ nose ]);
+  propagatedBuildInputs = with python2Packages; [ click colorama docopt GitPython six termcolor ];
 
-  checkInputs = [ git pythonPackages.nose ]; # git needs to be on path
   # 1. git fails to run as it cannot detect the email address, so we set it
   # 2. $HOME is by default not a valid dir, so we have to set that too
   # https://github.com/NixOS/nixpkgs/issues/12591
@@ -23,7 +22,7 @@ pythonPackages.buildPythonApplication rec {
     '';
 
   postInstall = ''
-    rm -r $out/${pythonPackages.python.sitePackages}/PyGitUp/tests
+    rm -r $out/${python2Packages.python.sitePackages}/PyGitUp/tests
   '';
 
   meta = with stdenv.lib; {
@@ -32,5 +31,6 @@ pythonPackages.buildPythonApplication rec {
     license = licenses.mit;
     maintainers = with maintainers; [ peterhoeg ];
     platforms = platforms.all;
+    broken = true; # Incompatible with Git 2.15 object store.
   };
 }

@@ -45,7 +45,7 @@ mkDerivation rec {
     description = "Tools to configure LXQt and the underlying operating system";
     homepage = https://github.com/lxqt/lxqt-config;
     license = licenses.lgpl21;
-    platforms = platforms.linux;
+    platforms = with platforms; unix;
     maintainers = with maintainers; [ romildo ];
   };
 

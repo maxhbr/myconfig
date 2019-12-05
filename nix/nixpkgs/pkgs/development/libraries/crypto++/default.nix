@@ -1,47 +1,49 @@
-{ stdenv, fetchFromGitHub, nasm, which }:
+{ fetchFromGitHub, stdenv }:
 
-with stdenv.lib;
 stdenv.mkDerivation rec {
   pname = "crypto++";
-  version = "8.2.0";
-  underscoredVersion = strings.replaceStrings ["."] ["_"] version;
+  majorVersion = "5.6";
+  version = "${majorVersion}.5";
 
   src = fetchFromGitHub {
     owner = "weidai11";
     repo = "cryptopp";
-    rev = "CRYPTOPP_${underscoredVersion}";
-    sha256 = "01zrrzjn14yhkb9fzzl57vmh7ig9a6n6fka45f8za0gf7jpcq3mj";
+    rev = "CRYPTOPP_5_6_5";
+    sha256 = "1yk7jyf4va9425cg05llskpls2jm7n3jwy2hj5jm74zkr4mwpvl7";
   };
 
-  postPatch = ''
-    substituteInPlace GNUmakefile \
-        --replace "AR = libtool" "AR = ar" \
-        --replace "ARFLAGS = -static -o" "ARFLAGS = -cru"
+  patches = stdenv.lib.concatLists [
+    (stdenv.lib.optional (stdenv.hostPlatform.system != "i686-cygwin") ./dll.patch)
+    (stdenv.lib.optional stdenv.hostPlatform.isDarwin ./GNUmakefile-darwin.patch)
+  ];
+
+
+  configurePhase = ''
+      sed -i GNUmakefile \
+        -e 's|-march=native|-fPIC|g' \
+        -e '/^CXXFLAGS =/s|-g ||'
   '';
 
-  nativeBuildInputs = optionals stdenv.hostPlatform.isx86 [ nasm which ];
-
-  preBuild = optionalString stdenv.hostPlatform.isx86 "${stdenv.shell} rdrand-nasm.sh";
-  makeFlags = [ "PREFIX=${placeholder "out"}" ];
-  buildFlags = [ "shared" "libcryptopp.pc" ];
   enableParallelBuilding = true;
 
-  doCheck = true;
-
-  preInstall = "rm libcryptopp.a"; # built for checks but we don't install static lib into the nix store
-  installTargets = "install-lib";
+  makeFlags = [ "PREFIX=$(out)" ];
+  buildFlags = [ "libcryptopp.so" ];
   installFlags = [ "LDCONF=true" ];
-  postInstall = optionalString (!stdenv.hostPlatform.isDarwin) ''
-    ln -sr $out/lib/libcryptopp.so.${version} $out/lib/libcryptopp.so.${versions.majorMinor version}
-    ln -sr $out/lib/libcryptopp.so.${version} $out/lib/libcryptopp.so.${versions.major version}
+
+  doCheck = true;
+  checkPhase = "LD_LIBRARY_PATH=`pwd` make test";
+
+  # prefer -fPIC and .so to .a; cryptotest.exe seems superfluous
+  postInstall = ''
+    rm "$out"/lib/*.a -r "$out/bin"
+    ln -sf "$out"/lib/libcryptopp.so.${version} "$out"/lib/libcryptopp.so.${majorVersion}
   '';
 
-  meta = {
+  meta = with stdenv.lib; {
     description = "Crypto++, a free C++ class library of cryptographic schemes";
-    homepage = "https://cryptopp.com/";
-    changelog = "https://raw.githubusercontent.com/weidai11/cryptopp/CRYPTOPP_${underscoredVersion}/History.txt";
-    license = with licenses; [ boost publicDomain ];
+    homepage = http://cryptopp.com/;
+    license = licenses.boost;
     platforms = platforms.all;
-    maintainers = with maintainers; [ c0bw3b ];
+    maintainers = [ ];
   };
 }

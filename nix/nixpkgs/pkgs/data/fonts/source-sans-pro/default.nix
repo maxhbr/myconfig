@@ -1,11 +1,9 @@
 { lib, fetchzip }:
 
-let
-  version = "3.006";
-in fetchzip {
-  name = "source-sans-pro-${version}";
+fetchzip {
+  name = "source-sans-pro-2.045";
 
-  url = "https://github.com/adobe-fonts/source-sans-pro/releases/download/${version}R/source-sans-pro-${version}R.zip";
+  url = https://github.com/adobe-fonts/source-sans-pro/releases/download/2.045R-ro%2F1.095R-it/source-sans-pro-2.045R-ro-1.095R-it.zip;
 
   postFetch = ''
     mkdir -p $out/share/fonts/{opentype,truetype,variable}
@@ -14,7 +12,7 @@ in fetchzip {
     unzip -j $downloadedFile "*/VAR/*.otf" -d $out/share/fonts/variable
   '';
 
-  sha256 = "11jd50cqiq2s0z39rclg73iiw2j5yzgs1glfs9psw5wbbisgysmr";
+  sha256 = "0xjdp226ybdcfylbpfsdgnz2bf4pj4qv1wfs6fv22hjxlzqfixf3";
 
   meta = with lib; {
     homepage = https://adobe-fonts.github.io/source-sans-pro/;

@@ -1,4 +1,4 @@
-{ stdenv, cacert, git, rust, cargo, rustc, fetchcargo, buildPackages, windows }:
+{ stdenv, cacert, git, cargo, rustc, fetchcargo, buildPackages, windows }:
 
 { name ? "${args.pname}-${args.version}"
 , cargoSha256 ? "unset"
@@ -13,12 +13,8 @@
 , cargoUpdateHook ? ""
 , cargoDepsHook ? ""
 , cargoBuildFlags ? []
-, # Set to true to verify if the cargo dependencies are up to date.
-  # This will change the value of cargoSha256.
-  verifyCargoDeps ? false
 , buildType ? "release"
 , meta ? {}
-, target ? null
 
 , cargoVendorDir ? null
 , ... } @ args:
@@ -30,7 +26,6 @@ let
   cargoDeps = if cargoVendorDir == null
     then fetchcargo {
         inherit name src srcs sourceRoot cargoUpdateHook;
-        copyLockfile = verifyCargoDeps;
         patches = cargoPatches;
         sha256 = cargoSha256;
       }
@@ -46,13 +41,17 @@ let
       cargoDepsCopy="$sourceRoot/${cargoVendorDir}"
     '';
 
-  rustTarget = if target == null then rust.toRustTarget stdenv.hostPlatform else target;
+  hostConfig = stdenv.hostPlatform.config;
+
+  rustHostConfig = {
+    x86_64-pc-mingw32 = "x86_64-pc-windows-gnu";
+  }.${hostConfig} or hostConfig;
 
   ccForBuild="${buildPackages.stdenv.cc}/bin/${buildPackages.stdenv.cc.targetPrefix}cc";
   cxxForBuild="${buildPackages.stdenv.cc}/bin/${buildPackages.stdenv.cc.targetPrefix}c++";
   ccForHost="${stdenv.cc}/bin/${stdenv.cc.targetPrefix}cc";
   cxxForHost="${stdenv.cc}/bin/${stdenv.cc.targetPrefix}c++";
-  releaseDir = "target/${rustTarget}/${buildType}";
+  releaseDir = "target/${rustHostConfig}/${buildType}";
 in
 
 stdenv.mkDerivation (args // {
@@ -82,35 +81,16 @@ stdenv.mkDerivation (args // {
       --subst-var-by vendor "$(pwd)/$cargoDepsCopy"
 
     cat >> .cargo/config <<'EOF'
-    [target."${rust.toRustTarget stdenv.buildPlatform}"]
+    [target."${stdenv.buildPlatform.config}"]
     "linker" = "${ccForBuild}"
     ${stdenv.lib.optionalString (stdenv.buildPlatform.config != stdenv.hostPlatform.config) ''
-    [target."${rustTarget}"]
+    [target."${rustHostConfig}"]
     "linker" = "${ccForHost}"
-    ${# https://github.com/rust-lang/rust/issues/46651#issuecomment-433611633
-      stdenv.lib.optionalString (stdenv.hostPlatform.isMusl && stdenv.hostPlatform.isAarch64) ''
-    "rustflags" = [ "-C", "target-feature=+crt-static", "-C", "link-arg=-lgcc" ]
-    ''}
     ''}
     EOF
 
     unset cargoDepsCopy
     export RUST_LOG=${logLevel}
-  '' + stdenv.lib.optionalString verifyCargoDeps ''
-    if ! diff source/Cargo.lock $cargoDeps/Cargo.lock ; then
-      echo
-      echo "ERROR: cargoSha256 is out of date."
-      echo
-      echo "Cargo.lock is not the same in $cargoDeps."
-      echo
-      echo "To fix the issue:"
-      echo '1. Use "1111111111111111111111111111111111111111111111111111" as the cargoSha256 value'
-      echo "2. Build the derivation and wait it to fail with a hash mismatch"
-      echo "3. Copy the 'got: sha256:' value back into the cargoSha256 field"
-      echo
-
-      exit 1
-    fi
   '' + (args.postUnpack or "");
 
   configurePhase = args.configurePhase or ''
@@ -124,13 +104,13 @@ stdenv.mkDerivation (args // {
     (
     set -x
     env \
-      "CC_${rust.toRustTarget stdenv.buildPlatform}"="${ccForBuild}" \
-      "CXX_${rust.toRustTarget stdenv.buildPlatform}"="${cxxForBuild}" \
-      "CC_${rust.toRustTarget stdenv.hostPlatform}"="${ccForHost}" \
-      "CXX_${rust.toRustTarget stdenv.hostPlatform}"="${cxxForHost}" \
+      "CC_${stdenv.buildPlatform.config}"="${ccForBuild}" \
+      "CXX_${stdenv.buildPlatform.config}"="${cxxForBuild}" \
+      "CC_${stdenv.hostPlatform.config}"="${ccForHost}" \
+      "CXX_${stdenv.hostPlatform.config}"="${cxxForHost}" \
       cargo build \
         ${stdenv.lib.optionalString (buildType == "release") "--release"} \
-        --target ${rustTarget} \
+        --target ${rustHostConfig} \
         --frozen ${concatStringsSep " " cargoBuildFlags}
     )
 

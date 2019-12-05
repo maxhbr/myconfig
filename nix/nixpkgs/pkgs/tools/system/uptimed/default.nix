@@ -2,10 +2,10 @@
 
 stdenv.mkDerivation rec {
   pname = "uptimed";
-  version = "0.4.2";
+  version = "0.4.1";
 
   src = fetchFromGitHub {
-    sha256 = "0wnnpjfxnycigqj6hag0n6p5piss8cv40y9jda72d9s4df5n91z8";
+    sha256 = "0hqs7n3agayckwdgwadzw5shpdh4h1inqgvp4zr5fi324pj5x80j";
     rev = "v${version}";
     repo = "uptimed";
     owner = "rpodgorny";

@@ -6,10 +6,9 @@
 , libxml2, zlib, lz4
 , openldap, lttng-ust
 , babeltrace, gperf
-, gtest
 , cunit, snappy
 , rocksdb, makeWrapper
-, leveldb, oathToolkit
+, leveldb, oathToolkit, removeReferencesTo
 
 # Optional Dependencies
 , yasm ? null, fcgi ? null, expat ? null
@@ -109,14 +108,14 @@ in rec {
     nativeBuildInputs = [
       cmake
       pkgconfig which git python3Packages.wrapPython makeWrapper
-      python3Packages.python # for the toPythonPath function
       (ensureNewerSourcesHook { year = "1980"; })
     ];
 
     buildInputs = cryptoLibsMap.${cryptoStr} ++ [
       boost ceph-python-env libxml2 optYasm optLibatomic_ops optLibs3
-      malloc zlib openldap lttng-ust babeltrace gperf gtest cunit
+      malloc zlib openldap lttng-ust babeltrace gperf cunit
       snappy rocksdb lz4 oathToolkit leveldb
+      removeReferencesTo
     ] ++ optionals stdenv.isLinux [
       linuxHeaders utillinux libuuid udev keyutils optLibaio optLibxfs optZfs
       # ceph 14
@@ -125,52 +124,54 @@ in rec {
       optFcgi optExpat optCurl optFuse optLibedit
     ];
 
-    pythonPath = [ ceph-python-env "${placeholder "out"}/${ceph-python-env.sitePackages}" ];
-
     preConfigure =''
       substituteInPlace src/common/module.c --replace "/sbin/modinfo"  "modinfo"
       substituteInPlace src/common/module.c --replace "/sbin/modprobe" "modprobe"
+      # Since Boost 1.67 this seems to have changed
+      substituteInPlace CMakeLists.txt --replace "list(APPEND BOOST_COMPONENTS python)" "list(APPEND BOOST_COMPONENTS python37)"
+      substituteInPlace src/CMakeLists.txt --replace "Boost::python " "Boost::python37 "
 
       # for pybind/rgw to find internal dep
       export LD_LIBRARY_PATH="$PWD/build/lib:$LD_LIBRARY_PATH"
       # install target needs to be in PYTHONPATH for "*.pth support" check to succeed
+      export PYTHONPATH=${ceph-python-env}/lib/python3.7/site-packages:$lib/lib/python3.7/site-packages/:$out/lib/python3.7/site-packages/
 
-      patchShebangs src/script src/spdk src/test src/tools
+      patchShebangs src/spdk
     '';
 
     cmakeFlags = [
       "-DWITH_PYTHON3=ON"
       "-DWITH_SYSTEM_ROCKSDB=OFF"
-      "-DCMAKE_INSTALL_DATADIR=${placeholder "lib"}/lib"
-
 
       "-DWITH_SYSTEM_BOOST=ON"
-      "-DWITH_SYSTEM_ROCKSDB=ON"
-      "-DWITH_SYSTEM_GTEST=ON"
-      "-DMGR_PYTHON_VERSION=${ceph-python-env.python.pythonVersion}"
       "-DWITH_SYSTEMD=OFF"
       "-DWITH_TESTS=OFF"
       # TODO breaks with sandbox, tries to download stuff with npm
       "-DWITH_MGR_DASHBOARD_FRONTEND=OFF"
     ];
 
+    preFixup = ''
+      find $lib -type f -exec remove-references-to -t $out '{}' +
+      mv $out/share/ceph/mgr $lib/lib/ceph/
+    '';
+
     postFixup = ''
+      export PYTHONPATH="${ceph-python-env}/lib/python3.7/site-packages:$lib/lib/ceph/mgr:$out/lib/python3.7/site-packages/"
       wrapPythonPrograms
-      wrapProgram $out/bin/ceph-mgr --prefix PYTHONPATH ":" "$(toPythonPath ${placeholder "out"}):$(toPythonPath ${ceph-python-env})"
+      wrapProgram $out/bin/ceph-mgr --prefix PYTHONPATH ":" "${ceph-python-env}/lib/python3.7/site-packages:$lib/lib/ceph/mgr:$out/lib/python3.7/site-packages/"
+      wrapProgram $out/bin/ceph-volume --prefix PYTHONPATH ":" "${ceph-python-env}/lib/python3.7/site-packages:$lib/lib/ceph/mgr:$out/lib/python3.7/site-packages/"
     '';
 
     enableParallelBuilding = true;
 
     outputs = [ "out" "lib" "dev" "doc" "man" ];
 
-    doCheck = false; # uses pip to install things from the internet
-
     meta = {
       homepage = https://ceph.com/;
       description = "Distributed storage system";
       license = with licenses; [ lgpl21 gpl2 bsd3 mit publicDomain ];
       maintainers = with maintainers; [ adev ak krav johanot ];
-      platforms = [ "x86_64-linux" ];
+      platforms = platforms.unix;
     };
 
     passthru.version = version;
@@ -182,7 +183,7 @@ in rec {
         description = "Tools needed to mount Ceph's RADOS Block Devices";
         license = with licenses; [ lgpl21 gpl2 bsd3 mit publicDomain ];
         maintainers = with maintainers; [ adev ak johanot krav ];
-        platforms = [ "x86_64-linux" ];
+        platforms = platforms.unix;
       };
     } ''
       mkdir -p $out/{bin,etc,lib/python3.7/site-packages}

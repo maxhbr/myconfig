@@ -1,23 +1,23 @@
 { buildPythonPackage, lib, fetchFromGitHub
 , click, numpy, pyparsing
-, pytest, hypothesis
+, pytest
 }:
 
 buildPythonPackage rec {
   pname = "snuggs";
-  version = "1.4.7";
+  version = "1.4.3";
 
   # Pypi doesn't ship the tests, so we fetch directly from GitHub
   src = fetchFromGitHub {
     owner = "mapbox";
     repo = pname;
     rev = version;
-    sha256 = "1p3lh9s2ylsnrzbs931y2vn7mp2y2xskgqmh767c9l1a33shfgwf";
+    sha256 = "198nbgkhlg4ik2i1r2cp900iqlairh2hnii2y8v5wy1qk3rv0s9g";
   };
 
   propagatedBuildInputs = [ click numpy pyparsing ];
 
-  checkInputs = [ pytest hypothesis ];
+  checkInputs = [ pytest ];
   checkPhase = "pytest test_snuggs.py";
 
   meta = with lib; {

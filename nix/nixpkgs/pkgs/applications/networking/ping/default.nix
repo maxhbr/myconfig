@@ -2,13 +2,13 @@
 , fetchFromGitHub
 , meson
 , ninja
-, vala
 , pkgconfig
 , pantheon
 , python3
 , glib
 , gtk3
 , gtksourceview
+, hicolor-icon-theme
 , json-glib
 , libsoup
 , libgee
@@ -28,7 +28,7 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [
     meson
     ninja
-    vala
+    pantheon.vala
     pkgconfig
     python3
     wrapGAppsHook
@@ -38,6 +38,7 @@ stdenv.mkDerivation rec {
     glib
     gtk3
     gtksourceview
+    hicolor-icon-theme
     json-glib
     libgee
     libsoup

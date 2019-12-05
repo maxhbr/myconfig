@@ -7,16 +7,11 @@ with lib;
 let
 
   cfg = config.services.tumbler;
+  tumbler = cfg.package;
 
 in
 
 {
-
-  imports = [
-    (mkRemovedOptionModule
-      [ "services" "tumbler" "package" ]
-      "")
-  ];
 
   ###### interface
 
@@ -25,6 +20,13 @@ in
     services.tumbler = {
 
       enable = mkEnableOption "Tumbler, A D-Bus thumbnailer service";
+
+      package = mkOption {
+        type = types.package;
+        default = pkgs.xfce4-14.tumbler;
+        description = "Which tumbler package to use";
+        example = pkgs.xfce4-12.tumbler;
+      };
 
     };
 
@@ -35,11 +37,11 @@ in
 
   config = mkIf cfg.enable {
 
-    environment.systemPackages = with pkgs.xfce; [
+    environment.systemPackages = [
       tumbler
     ];
 
-    services.dbus.packages = with pkgs.xfce; [
+    services.dbus.packages = [
       tumbler
     ];
 

@@ -30,14 +30,14 @@ stdenv.mkDerivation {
 
   buildFlags = "setup.data build";
 
-  preBuild = "mkdir -p $out/lib/ocaml/${ocaml.version}/site-lib/stublibs";
+  preBuild = "mkdir -p $out/lib/ocaml/${ocaml.version}/site-lib/cryptokit";
 
   meta = {
     homepage = http://pauillac.inria.fr/~xleroy/software.html;
     description = "A library of cryptographic primitives for OCaml";
     platforms = ocaml.meta.platforms or [];
     maintainers = [
-      stdenv.lib.maintainers.maggesi
+      stdenv.lib.maintainers.z77z
     ];
   };
 }

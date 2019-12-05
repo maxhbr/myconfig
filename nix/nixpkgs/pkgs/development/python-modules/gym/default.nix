@@ -1,24 +1,19 @@
 { lib
 , buildPythonPackage, fetchPypi
-, numpy, requests, six, pyglet, scipy, cloudpickle
+, numpy, requests, six, pyglet, scipy
 }:
 
 buildPythonPackage rec {
   pname = "gym";
-  version = "0.15.4";
+  version = "0.12.5";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "3b930cbe1c76bbd30455b5e82ba723dea94159a5f988e927f443324bf7cc7ddd";
+    sha256 = "027422f59b662748eae3420b804e35bbf953f62d40cd96d2de9f842c08de822e";
   };
 
-  postPatch = ''
-    substituteInPlace setup.py \
-      --replace "pyglet>=1.2.0,<=1.3.2" "pyglet"
-  '';
-
   propagatedBuildInputs = [
-    numpy requests six pyglet scipy cloudpickle
+    numpy requests six pyglet scipy
   ];
 
   # The test needs MuJoCo that is not free library.

@@ -69,9 +69,9 @@ in
 
     installPhase =
       if system == "x86_64-darwin" then ''
-        mkdir -p "$out/Applications/${longName}.app" $out/bin
-        cp -r ./* "$out/Applications/${longName}.app"
-        ln -s "$out/Applications/${longName}.app/Contents/Resources/app/bin/code" $out/bin/${executableName}
+        mkdir -p $out/lib/vscode $out/bin
+        cp -r ./* $out/lib/vscode
+        ln -s $out/lib/vscode/Contents/Resources/app/bin/${executableName} $out/bin
       '' else ''
         mkdir -p $out/lib/vscode $out/bin
         cp -r ./* $out/lib/vscode

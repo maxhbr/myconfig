@@ -10,6 +10,7 @@
 , rustPlatform
 , pkgconfig
 , gtksourceview
+, hicolor-icon-theme
 , glib
 , libhandy
 , gtk3
@@ -60,6 +61,7 @@ rustPlatform.buildRustPackage rec {
     gst_all_1.gstreamer
     gtk3
     gtksourceview
+    hicolor-icon-theme
     libhandy
     openssl
     sqlite

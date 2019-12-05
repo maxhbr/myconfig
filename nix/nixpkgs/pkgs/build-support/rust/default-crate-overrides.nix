@@ -15,6 +15,11 @@ in
       ++ stdenv.lib.optionals stdenv.isDarwin [ CoreFoundation Security libiconv ];
   };
 
+  cargo-vendor = attrs: {
+    buildInputs = [ openssl zlib curl ]
+      ++ stdenv.lib.optionals stdenv.isDarwin [ Security ];
+  };
+
   libz-sys = attrs: {
     buildInputs = [ pkgconfig zlib ];
     extraLinkFlags = ["-L${zlib.out}/lib"];

@@ -29,7 +29,7 @@ in buildFHSUserEnv {
 
     # Dolphin
     bluez ffmpeg gettext portaudio wxGTK30 miniupnpc mbedtls lzo sfml gsm
-    wavpack orc nettle gmp pcre vulkan-loader
+    wavpack gnutls-kdh orc nettle gmp pcre vulkan-loader
 
     # DOSBox
     SDL_net SDL_sound
@@ -104,9 +104,6 @@ in buildFHSUserEnv {
     # WINE
     cups lcms2 mpg123 cairo unixODBC samba4 sane-backends openldap
     ocl-icd utillinux
-
-    # Winetricks
-    fribidi
   ] ++ xorgDeps pkgs;
 
   extraInstallCommands = ''

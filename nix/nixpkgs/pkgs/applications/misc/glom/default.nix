@@ -30,7 +30,6 @@
 , postgresql
 , gnome3
 , gobject-introspection
-, yelp-tools
 , wrapGAppsHook
 }:
 
@@ -68,7 +67,7 @@ in stdenv.mkDerivation rec {
     libtool
     mm-common
     intltool
-    yelp-tools
+    gnome3.yelp-tools
     itstool
     doxygen
     graphviz

@@ -8,6 +8,11 @@ let
   ldmcfg = dmcfg.lightdm;
   cfg = ldmcfg.greeters.pantheon;
 
+  xgreeters = pkgs.linkFarm "pantheon-greeter-xgreeters" [{
+    path = "${pkgs.pantheon.elementary-greeter}/share/xgreeters/io.elementary.greeter.desktop";
+    name = "io.elementary.greeter.desktop";
+  }];
+
 in
 {
   options = {
@@ -28,10 +33,17 @@ in
 
   config = mkIf (ldmcfg.enable && cfg.enable) {
 
+    warnings = [
+      ''
+        The Pantheon greeter is suboptimal in NixOS and can possibly put you in
+        a situation where you cannot start a session when switching desktopManagers.
+      ''
+    ];
+
     services.xserver.displayManager.lightdm.greeters.gtk.enable = false;
 
     services.xserver.displayManager.lightdm.greeter = mkDefault {
-      package = pkgs.pantheon.elementary-greeter.xgreeters;
+      package = xgreeters;
       name = "io.elementary.greeter";
     };
 

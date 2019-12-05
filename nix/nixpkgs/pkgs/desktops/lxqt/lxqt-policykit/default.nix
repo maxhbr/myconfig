@@ -37,7 +37,7 @@ mkDerivation rec {
     description = "The LXQt PolicyKit agent";
     homepage = https://github.com/lxqt/lxqt-policykit;
     license = licenses.lgpl21;
-    platforms = platforms.linux;
+    platforms = with platforms; unix;
     maintainers = with maintainers; [ romildo ];
   };
 }

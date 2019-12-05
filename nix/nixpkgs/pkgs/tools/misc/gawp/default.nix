@@ -16,10 +16,4 @@ buildGoPackage rec {
   };
 
   goDeps = ./deps.nix;
-
-  meta = {
-    homepage = "https://github.com/martingallagher/gawp";
-    description = "A simple, configurable, file watching, job execution tool";
-    license = stdenv.lib.licenses.asl20;
-  };
 }

@@ -10,6 +10,7 @@
 , libappindicator
 , intltool
 , wmctrl
+, hicolor-icon-theme
 , xvfb_run
 }:
 
@@ -35,6 +36,7 @@ python27Packages.buildPythonApplication rec  {
   buildInputs = [
     gnome3.adwaita-icon-theme
     gobject-introspection
+    hicolor-icon-theme
     keybinder3
     libappindicator
     libnotify

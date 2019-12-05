@@ -15,13 +15,13 @@ with lib;
 
 stdenv.mkDerivation rec {
   pname = "kubernetes";
-  version = "1.16.3";
+  version = "1.15.6";
 
   src = fetchFromGitHub {
     owner = "kubernetes";
     repo = "kubernetes";
     rev = "v${version}";
-    sha256 = "0s2k7ik2aa7knh25r0qki7ldr3g9h87dgi8nm64j8n0yy4xvg2h3";
+    sha256 = "1sk76ddhpiv0b2jhmlf3d38y6p64fgj4cpg9d3h92lmah3fqndgk";
   };
 
   buildInputs = [ removeReferencesTo makeWrapper which go rsync go-bindata ];
@@ -73,7 +73,7 @@ stdenv.mkDerivation rec {
     description = "Production-Grade Container Scheduling and Management";
     license = licenses.asl20;
     homepage = https://kubernetes.io;
-    maintainers = with maintainers; [johanot offline saschagrunert];
+    maintainers = with maintainers; [johanot offline];
     platforms = platforms.unix;
   };
 }

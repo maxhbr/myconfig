@@ -29,7 +29,6 @@ with pkgs;
         isPy36 = pythonVersion == "3.6";
         isPy37 = pythonVersion == "3.7";
         isPy38 = pythonVersion == "3.8";
-        isPy39 = pythonVersion == "3.9";
         isPy2 = lib.strings.substring 0 1 pythonVersion == "2";
         isPy3 = lib.strings.substring 0 1 pythonVersion == "3";
         isPy3k = isPy3;
@@ -46,7 +45,7 @@ with pkgs;
         inherit hasDistutilsCxxPatch pythonForBuild;
   };
 
-in rec {
+in {
 
   python27 = callPackage ./cpython/2.7 {
     self = python27;
@@ -113,23 +112,19 @@ in rec {
     inherit passthruFun;
   };
 
-  python39 = callPackage ./cpython {
-    self = python39;
+  # Minimal versions of Python (built without optional dependencies)
+  python3Minimal = (callPackage ./cpython {
+    self = python3Minimal;
     sourceVersion = {
       major = "3";
-      minor = "9";
-      patch = "0";
-      suffix = "a1";
+      minor = "7";
+      patch = "4";
+      suffix = "";
     };
-    sha256 = "02b337kvzb6ncqab21xnayh562zpz6bqzjmh35iy9l48zgpkvf1n";
+    sha256 = "0gxiv5617zd7dnqm5k9r4q2188lk327nf9jznwq9j6b8p0s92ygv";
     inherit (darwin) CF configd;
     inherit passthruFun;
-  };
 
-  # Minimal versions of Python (built without optional dependencies)
-  python3Minimal = (python37.override {
-    self = python3Minimal;
-    pythonForBuild = pkgs.buildPackages.python3Minimal;
     # strip down that python version as much as possible
     openssl = null;
     readline = null;
@@ -203,11 +198,6 @@ in rec {
     pythonVersion = "3.6";
     inherit passthruFun;
     ncurses = ncurses5;
-  };
-
-  graalpython37 = callPackage ./graalpython/default.nix {
-    self = pythonInterpreters.graalpython37;
-    inherit passthruFun;
   };
 
 })

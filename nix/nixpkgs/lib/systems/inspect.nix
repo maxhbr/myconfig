@@ -21,7 +21,6 @@ rec {
     isSparc        = { cpu = { family = "sparc"; }; };
     isWasm         = { cpu = { family = "wasm"; }; };
     isMsp430       = { cpu = { family = "msp430"; }; };
-    isVc4          = { cpu = { family = "vc4"; }; };
     isAvr          = { cpu = { family = "avr"; }; };
     isAlpha        = { cpu = { family = "alpha"; }; };
     isJavaScript   = { cpu = cpuTypes.js; };

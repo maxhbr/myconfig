@@ -1,20 +1,16 @@
-{ lib, mkDerivation, fetchurl, poppler_utils, pkgconfig, libpng
+{ stdenv, mkDerivation,  fetchurl, poppler_utils, pkgconfig, libpng
 , imagemagick, libjpeg, fontconfig, podofo, qtbase, qmake, icu, sqlite
 , unrarSupport ? false, chmlib, python2Packages, libusb1, libmtp
-, xdg_utils, makeDesktopItem, removeReferencesTo
+, xdg_utils, makeDesktopItem, wrapGAppsHook, removeReferencesTo, qt5
 }:
 
-let
-  pypkgs = python2Packages;
-
-in
 mkDerivation rec {
   pname = "calibre";
-  version = "3.48.0";
+  version = "3.47.1";
 
   src = fetchurl {
     url = "https://download.calibre-ebook.com/${version}/${pname}-${version}.tar.xz";
-    sha256 = "034m89h7j2088p324i1kya33dfldmqyynjxk3w98xiqkz7q2hi82";
+    sha256 = "17lz6rawlv268vv8i5kj59rswsipq3c14066adaz1paw54zr62dk";
   };
 
   patches = [
@@ -24,10 +20,10 @@ mkDerivation rec {
     # - switches the version update from enabled to disabled by default
     ./no_updates_dialog.patch
     # the unrar patch is not from debian
-  ] ++ lib.optional (!unrarSupport) ./dont_build_unrar_plugin.patch;
+  ] ++ stdenv.lib.optional (!unrarSupport) ./dont_build_unrar_plugin.patch;
 
   prePatch = ''
-    sed -i "/pyqt_sip_dir/ s:=.*:= '${pypkgs.pyqt5_with_qtwebkit}/share/sip/PyQt5':"  \
+    sed -i "/pyqt_sip_dir/ s:=.*:= '${python2Packages.pyqt5_with_qtwebkit}/share/sip/PyQt5':"  \
       setup/build_environment.py
 
     # Remove unneeded files and libs
@@ -39,21 +35,17 @@ mkDerivation rec {
 
   enableParallelBuilding = true;
 
-  nativeBuildInputs = [ pkgconfig qmake removeReferencesTo ];
-
-  CALIBRE_PY3_PORT = builtins.toString pypkgs.isPy3k;
+  nativeBuildInputs = [ pkgconfig qmake removeReferencesTo wrapGAppsHook ];
 
   buildInputs = [
     poppler_utils libpng imagemagick libjpeg
     fontconfig podofo qtbase chmlib icu sqlite libusb1 libmtp xdg_utils
-  ] ++ (with pypkgs; [
-    apsw cssselect css-parser dateutil dnspython feedparser html5-parser lxml markdown netifaces pillow
+  ] ++ (with python2Packages; [
+    apsw cssselect css-parser dateutil dnspython html5-parser lxml markdown mechanize netifaces pillow
     python pyqt5_with_qtwebkit sip
-    regex msgpack beautifulsoup4 html2text
+    regex msgpack beautifulsoup4
     # the following are distributed with calibre, but we use upstream instead
     odfpy
-  ]) ++ lib.optionals (!pypkgs.isPy3k) (with pypkgs; [
-    mechanize
   ]);
 
   installPhase = ''
@@ -68,8 +60,8 @@ mkDerivation rec {
     export FC_LIB_DIR=${fontconfig.lib}/lib
     export PODOFO_INC_DIR=${podofo.dev}/include/podofo
     export PODOFO_LIB_DIR=${podofo.lib}/lib
-    export SIP_BIN=${pypkgs.sip}/bin/sip
-    ${pypkgs.python.interpreter} setup.py install --prefix=$out
+    export SIP_BIN=${python2Packages.sip}/bin/sip
+    ${python2Packages.python.interpreter} setup.py install --prefix=$out
 
     PYFILES="$out/bin/* $out/lib/calibre/calibre/web/feeds/*.py
       $out/lib/calibre/calibre/ebooks/metadata/*.py
@@ -119,7 +111,7 @@ mkDerivation rec {
     genericName = "E-book library management";
     icon = "@out@/share/calibre/images/library.png";
     comment = "Manage, convert, edit, and read e-books";
-    mimeType = lib.concatStringsSep ";" [
+    mimeType = stdenv.lib.concatStringsSep ";" [
       "application/x-mobipocket-subscription"
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       "text/html"
@@ -182,9 +174,9 @@ mkDerivation rec {
     extraEntries = "NoDisplay=true";
   };
 
-  meta = with lib; {
+  meta = with stdenv.lib; {
     description = "Comprehensive e-book software";
-    homepage = "https://calibre-ebook.com";
+    homepage = https://calibre-ebook.com;
     license = with licenses; if unrarSupport then unfreeRedistributable else gpl3;
     maintainers = with maintainers; [ domenkozar pSub AndersonTorres ];
     platforms = platforms.linux;

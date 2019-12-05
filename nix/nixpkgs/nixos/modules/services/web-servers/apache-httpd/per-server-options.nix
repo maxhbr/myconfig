@@ -133,6 +133,12 @@ with lib;
     '';
   };
 
+  extraSubservices = mkOption {
+    type = types.listOf types.unspecified;
+    default = [];
+    description = "Extra subservices to enable in the webserver.";
+  };
+
   enableUserDir = mkOption {
     type = types.bool;
     default = false;

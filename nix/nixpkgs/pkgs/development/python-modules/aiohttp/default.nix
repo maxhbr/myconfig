@@ -19,41 +19,29 @@
 , pytest-mock
 , trustme
 , brotlipy
-, freezegun
 }:
 
 buildPythonPackage rec {
   pname = "aiohttp";
-  version = "3.6.2";
+  version = "3.5.4";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "09pkw6f1790prnrq0k8cqgnf1qy57ll8lpmc6kld09q7zw4vi6i5";
+    sha256 = "9c4c83f4fa1938377da32bc2d59379025ceeee8e24b89f72fcbccd8ca22dc9bf";
   };
 
   disabled = pythonOlder "3.5";
 
   checkInputs = [
     pytestrunner pytest gunicorn pytest-timeout async_generator pytest_xdist
-    pytest-mock pytestcov trustme brotlipy freezegun
+    pytest-mock pytestcov trustme brotlipy
   ];
 
   propagatedBuildInputs = [ attrs chardet multidict async-timeout yarl ]
     ++ lib.optionals (pythonOlder "3.7") [ idna-ssl typing-extensions ];
 
-  # disable tests which attempt to do loopback connections
   checkPhase = ''
-    cd tests
-    pytest -k "not get_valid_log_format_exc \
-               and not test_access_logger_atoms \
-               and not aiohttp_request_coroutine \
-               and not server_close_keepalive_connection \
-               and not connector \
-               and not client_disconnect \
-               and not handle_keepalive_on_closed_connection \
-               and not partially_applied_handler \
-               and not middleware" \
-      --ignore=test_connector.py
+    pytest -k "not test__get_valid_log_format_exc and not test_access_logger_atoms"
   '';
 
   meta = with lib; {

@@ -56,18 +56,17 @@ let
     "websocket-client"
     "wrapt"
     "sentry-sdk"
-    "werkzeug" # 0.16 just deprecates some stuff
   ];
 
 in py.pkgs.buildPythonApplication rec {
   pname = "OctoPrint";
-  version = "1.3.12";
+  version = "1.3.11";
 
   src = fetchFromGitHub {
     owner  = "foosel";
     repo   = "OctoPrint";
     rev    = version;
-    sha256 = "1lmqssgwjyhknjf3x58g7cr0fqz7fs5a3rl07r69wfpch63ranyd";
+    sha256 = "1102ki1819wsmkfg4riz4i0hjlr3w6nsvk8wrzqq0lc0s5ycf4jx";
   };
 
   propagatedBuildInputs = with py.pkgs; [
@@ -76,7 +75,7 @@ in py.pkgs.buildPythonApplication rec {
     psutil pyserial flask_login netaddr markdown sockjs-tornado
     pylru pyyaml sarge feedparser netifaces click websocket_client
     scandir chainmap future futures wrapt monotonic emoji
-    frozendict cachelib sentry-sdk typing filetype
+    frozendict cachelib sentry-sdk typing
   ] ++ lib.optionals stdenv.isDarwin [ py.pkgs.appdirs ];
 
   checkInputs = with py.pkgs; [ nose mock ddt ];
@@ -97,6 +96,6 @@ in py.pkgs.buildPythonApplication rec {
     homepage = https://octoprint.org/;
     description = "The snappy web interface for your 3D printer";
     license = licenses.agpl3;
-    maintainers = with maintainers; [ abbradar gebner ];
+    maintainers = with maintainers; [ abbradar ];
   };
 }

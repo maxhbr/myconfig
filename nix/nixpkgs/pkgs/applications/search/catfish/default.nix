@@ -1,17 +1,17 @@
 { stdenv, fetchurl, file, which, intltool, gobject-introspection,
-  findutils, xdg_utils, dconf, gtk3, pythonPackages,
+  findutils, xdg_utils, gnome3, gtk3, pythonPackages, hicolor-icon-theme,
   wrapGAppsHook
 }:
 
 pythonPackages.buildPythonApplication rec {
   majorver = "1.4";
-  minorver = "10";
+  minorver = "7";
   version = "${majorver}.${minorver}";
   pname = "catfish";
 
   src = fetchurl {
     url = "https://archive.xfce.org/src/apps/${pname}/${majorver}/${pname}-${version}.tar.bz2";
-    sha256 = "0g9l5sv5d7wmyb23cvpz5mpvjnxiqjh25v9gr5qzhcah202a0wr5";
+    sha256 = "1s97jb1r07ff40jnz8zianpn1f0c67hssn8ywdi2g7njfb4amjj8";
   };
 
   nativeBuildInputs = [
@@ -19,21 +19,20 @@ pythonPackages.buildPythonApplication rec {
     file
     which
     intltool
-    gobject-introspection # for setup hook populating GI_TYPELIB_PATH
+    gobject-introspection
     wrapGAppsHook
   ];
 
   buildInputs = [
     gtk3
-    dconf
+    gnome3.dconf
     pythonPackages.pyxdg
     pythonPackages.ptyprocess
     pythonPackages.pycairo
-    gobject-introspection # Temporary fix, see https://github.com/NixOS/nixpkgs/issues/56943
+    hicolor-icon-theme
   ];
 
   propagatedBuildInputs = [
-    pythonPackages.dbus-python
     pythonPackages.pygobject3
     pythonPackages.pexpect
     xdg_utils
@@ -54,7 +53,7 @@ pythonPackages.buildPythonApplication rec {
 
   meta = with stdenv.lib; {
     homepage = https://docs.xfce.org/apps/catfish/start;
-    description = "Handy file search tool";
+    description = "A handy file search tool";
     longDescription = ''
       Catfish is a handy file searching tool. The interface is
       intentionally lightweight and simple, using only GTK 3.

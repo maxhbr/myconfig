@@ -41,7 +41,6 @@ in stdenv.mkDerivation rec {
   ++ (stdenv.lib.optionals mpiSupport [ "--enable-parallel-tests" "CC=${mpi}/bin/mpicc" ]);
 
   meta = {
-      description = "Libraries for the Unidata network Common Data Format";
       platforms = stdenv.lib.platforms.unix;
       homepage = https://www.unidata.ucar.edu/software/netcdf/;
       license = {

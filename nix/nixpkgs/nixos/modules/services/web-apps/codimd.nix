@@ -893,7 +893,6 @@ in
       extraGroups = cfg.groups;
       home = cfg.workDir;
       createHome = true;
-      isSystemUser = true;
     };
 
     systemd.services.codimd = {

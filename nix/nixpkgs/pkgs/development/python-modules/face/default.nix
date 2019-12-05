@@ -2,11 +2,11 @@
 
 buildPythonPackage rec {
   pname = "face";
-  version = "19.1.2";
+  version = "0.1.0";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "38c94ec17a4d6f9628f094b697faca0f802f4028071ce8cbdb3116d4cde772a3";
+    sha256 = "0zdp5qlrhxf4dypvvd0zr7zxj2svkz9wblp37vgw01wvcy9b1ds7";
   };
 
   propagatedBuildInputs = [ boltons ];

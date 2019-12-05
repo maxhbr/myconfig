@@ -1,17 +1,17 @@
-{ stdenv, fetchFromGitHub, python3Packages}:
+{ stdenv, fetchFromGitHub, python2Packages, fontforge }:
 
 stdenv.mkDerivation rec {
   pname = "xits-math";
-  version = "1.301";
+  version = "1.200";
 
   src = fetchFromGitHub {
     owner = "alif-type";
     repo = "xits";
     rev = "v${version}";
-    sha256 = "043g0gnjc7wn1szvrs0rc1vvrq1qmhqh45b0y2kwrlxsgprpv8ll";
+    sha256 = "0s1qqqg3zv9k4wqn1vkx0z895fjccg96n58syc1d5f2wba9kyfcm";
   };
 
-  nativeBuildInputs = (with python3Packages; [ python fonttools fontforge ]);
+  nativeBuildInputs = [ fontforge ] ++ (with python2Packages; [ python fonttools ]);
 
   postPatch = ''
     rm *.otf
@@ -22,7 +22,7 @@ stdenv.mkDerivation rec {
   '';
 
   meta = with stdenv.lib; {
-    homepage = "https://github.com/alif-type/xits";
+    homepage = https://github.com/khaledhosny/xits-math;
     description = "OpenType implementation of STIX fonts with math support";
     license = licenses.ofl;
     platforms = platforms.all;

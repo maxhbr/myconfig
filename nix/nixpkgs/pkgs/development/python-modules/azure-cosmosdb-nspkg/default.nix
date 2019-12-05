@@ -22,7 +22,7 @@ buildPythonPackage rec {
 
   meta = with lib; {
     description = "This is the Microsoft Azure CosmosDB namespace package";
-    homepage = "https://github.com/Azure/azure-sdk-for-python";
+    homepage = https://github.com/Azure/azure-cosmos-table-python/tree/master/azure-cosmosdb-nspkg;
     license = licenses.mit;
     maintainers = with maintainers; [ mwilsoninsight ];
   };

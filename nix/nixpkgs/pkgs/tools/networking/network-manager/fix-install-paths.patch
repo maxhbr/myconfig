@@ -1,8 +1,6 @@
-diff --git a/meson.build b/meson.build
-index 4105a9c80..3d912557f 100644
 --- a/meson.build
 +++ b/meson.build
-@@ -884,9 +884,9 @@ meson.add_install_script(
+@@ -925,9 +925,9 @@
    join_paths('tools', 'meson-post-install.sh'),
    nm_datadir,
    nm_bindir,
@@ -14,11 +12,9 @@ index 4105a9c80..3d912557f 100644
    enable_docs ? 'install_docs' : '',
    nm_mandir,
  )
-diff --git a/src/settings/plugins/ifcfg-rh/meson.build b/src/settings/plugins/ifcfg-rh/meson.build
-index 58acdcfcb..e3a16d597 100644
 --- a/src/settings/plugins/ifcfg-rh/meson.build
 +++ b/src/settings/plugins/ifcfg-rh/meson.build
-@@ -69,7 +69,7 @@ install_data(
+@@ -70,7 +70,7 @@
  )
  
  meson.add_install_script('sh', '-c',

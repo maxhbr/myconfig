@@ -32,13 +32,13 @@ in
     environment.etc = optionals (cfg.profiles != {})
       (mapAttrsToList mkDconfProfile cfg.profiles);
 
-    services.dbus.packages = [ pkgs.dconf ];
+    services.dbus.packages = [ pkgs.gnome3.dconf ];
 
     # For dconf executable
-    environment.systemPackages = [ pkgs.dconf ];
+    environment.systemPackages = [ pkgs.gnome3.dconf ];
 
     # Needed for unwrapped applications
-    environment.variables.GIO_EXTRA_MODULES = mkIf cfg.enable [ "${pkgs.dconf.lib}/lib/gio/modules" ];
+    environment.variables.GIO_EXTRA_MODULES = mkIf cfg.enable [ "${pkgs.gnome3.dconf.lib}/lib/gio/modules" ];
   };
 
 }

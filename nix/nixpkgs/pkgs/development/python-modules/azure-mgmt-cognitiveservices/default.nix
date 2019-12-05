@@ -8,12 +8,12 @@
 
 buildPythonPackage rec {
   pname = "azure-mgmt-cognitiveservices";
-  version = "5.0.0";
+  version = "4.0.0";
 
   src = fetchPypi {
     inherit pname version;
     extension = "zip";
-    sha256 = "1m7v3rfkvmdgghrpz15fm8pvmmhi40lcwfxdm2kxh7mx01r5l906";
+    sha256 = "05zbgy1d6mschqv6y14byr4nwdnv48x9skx4rbsbz1fcqqx3j2sd";
   };
 
   propagatedBuildInputs = [
@@ -27,7 +27,7 @@ buildPythonPackage rec {
 
   meta = with lib; {
     description = "This is the Microsoft Azure Cognitive Services Management Client Library";
-    homepage = "https://github.com/Azure/azure-sdk-for-python";
+    homepage = https://github.com/Azure/sdk-for-python/tree/master/azure-mgmt-cognitiveservices;
     license = licenses.mit;
     maintainers = with maintainers; [ mwilsoninsight ];
   };

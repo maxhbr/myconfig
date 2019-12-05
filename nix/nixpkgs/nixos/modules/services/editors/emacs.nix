@@ -95,7 +95,13 @@ in {
 
     environment.systemPackages = [ cfg.package editorScript desktopApplicationFile ];
 
-    environment.variables.EDITOR = mkIf cfg.defaultEditor (mkOverride 900 "${editorScript}/bin/emacseditor");
+    environment.variables = {
+      # This is required so that GTK applications launched from Emacs
+      # get properly themed:
+      GTK_DATA_PREFIX = "${config.system.path}";
+    } // (if cfg.defaultEditor then {
+        EDITOR = mkOverride 900 "${editorScript}/bin/emacseditor";
+      } else {});
   };
 
   meta.doc = ./emacs.xml;

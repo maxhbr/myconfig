@@ -36,10 +36,10 @@ let
     attrs ? meta.license;
 
   hasWhitelistedLicense = assert areLicenseListsValid; attrs:
-    hasLicense attrs && lib.lists.any (l: builtins.elem l whitelist) (lib.lists.toList attrs.meta.license);
+    hasLicense attrs && builtins.elem attrs.meta.license whitelist;
 
   hasBlacklistedLicense = assert areLicenseListsValid; attrs:
-    hasLicense attrs && lib.lists.any (l: builtins.elem l blacklist) (lib.lists.toList attrs.meta.license);
+    hasLicense attrs && builtins.elem attrs.meta.license blacklist;
 
   allowBroken = config.allowBroken or false
     || builtins.getEnv "NIXPKGS_ALLOW_BROKEN" == "1";
@@ -75,7 +75,7 @@ let
     allowInsecurePredicate attrs ||
     builtins.getEnv "NIXPKGS_ALLOW_INSECURE" == "1";
 
-  showLicense = license: toString (map (l: l.shortName or "unknown") (lib.lists.toList license));
+  showLicense = license: license.shortName or "unknown";
 
   pos_str = meta: meta.position or "«unknown-file»";
 

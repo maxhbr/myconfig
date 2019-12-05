@@ -1,13 +1,13 @@
 { stdenv, fetchFromGitHub, autoreconfHook, bison, flex, openssl, gnutls }:
 
 stdenv.mkDerivation rec {
-  name = "charybdis-4.1.2";
+  name = "charybdis-4.1.1";
 
   src = fetchFromGitHub {
     owner = "charybdis-ircd";
     repo = "charybdis";
     rev = name;
-    sha256 = "1lndk0yp27qm8bds4jd204ynxcq92fqmpfb0kkcla5zgky3miks3";
+    sha256 = "0wvssc8b1xq6svcqrwxrpc1ga8ip0sksv73wwbk8na0pmysdvpg0";
   };
 
   postPatch = ''
@@ -28,7 +28,7 @@ stdenv.mkDerivation rec {
 
   meta = with stdenv.lib; {
     description = "IRCv3 server designed to be highly scalable";
-    homepage    = https://github.com/charybdis-ircd/charybdis;
+    homepage    = http://atheme.org/projects/charybdis.html;
     license     = licenses.gpl2;
     maintainers = with maintainers; [ lassulus fpletz ];
     platforms   = platforms.unix;

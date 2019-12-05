@@ -19,6 +19,9 @@ assertExecutable() {
 #                         the environment
 # --unset       VAR     : remove VAR from the environment
 # --run         COMMAND : run command before the executable
+#                         The command can push extra flags to a magic list
+#                         variable extraFlagsArray, which are then added to
+#                         the invocation of the executable
 # --add-flags   FLAGS   : add FLAGS to invocation of executable
 
 # --prefix          ENV SEP VAL   : suffix/prefix ENV with VAL, separated by SEP
@@ -106,8 +109,12 @@ makeWrapper() {
         fi
     done
 
+    # Note: extraFlagsArray is an array containing additional flags
+    # that may be set by --run actions.
+    # Silence warning about unexpanded extraFlagsArray:
+    # shellcheck disable=SC2016
     echo exec ${argv0:+-a \"$argv0\"} \""$original"\" \
-         "$flagsBefore" '"$@"' >> "$wrapper"
+         "$flagsBefore" '"${extraFlagsArray[@]}"' '"$@"' >> "$wrapper"
 
     chmod +x "$wrapper"
 }

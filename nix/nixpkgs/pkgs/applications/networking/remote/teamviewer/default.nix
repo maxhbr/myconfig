@@ -6,11 +6,11 @@
 
 mkDerivation rec {
   pname = "teamviewer";
-  version = "14.7.1965";
+  version = "14.5.1691";
 
   src = fetchurl {
     url = "https://dl.tvcdn.de/download/linux/version_14x/teamviewer_${version}_amd64.deb";
-    sha256 = "056050x173y450apl096vw8g3b3kvrd2b4xpj706nw6jdxsnhfbp";
+    sha256 = "1dzvjyvcqcah6z1dvw4zvmbdn8iks9j2909slbkksavn1rp3akxc";
   };
 
   unpackPhase = ''
@@ -54,7 +54,6 @@ mkDerivation rec {
   '';
 
   dontStrip = true;
-  preferLocalBuild = true;
 
   meta = with lib; {
     homepage = http://www.teamviewer.com;

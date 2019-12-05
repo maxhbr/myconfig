@@ -112,8 +112,6 @@ rec {
     msp430   = { bits = 16; significantByte = littleEndian; family = "msp430"; };
     avr      = { bits = 8; family = "avr"; };
 
-    vc4      = { bits = 32; significantByte = littleEndian; family = "vc4"; };
-
     js       = { bits = 32; significantByte = littleEndian; family = "js"; };
   };
 
@@ -332,7 +330,6 @@ rec {
         }
       ];
     };
-    gnuabi64     = { abi = "64"; };
 
     musleabi     = { float = "soft"; };
     musleabihf   = { float = "hard"; };

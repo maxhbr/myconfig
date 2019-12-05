@@ -1,6 +1,5 @@
 { stdenv
 , fetchFromGitHub
-, vala
 , meson
 , ninja
 , pkgconfig
@@ -9,6 +8,7 @@
 , gettext
 , glib
 , gtk3
+, hicolor-icon-theme
 , libgee
 , wrapGAppsHook }:
 
@@ -27,7 +27,7 @@ stdenv.mkDerivation rec {
     gettext
     meson
     ninja
-    vala
+    pantheon.vala
     pkgconfig
     python3
     wrapGAppsHook
@@ -36,13 +36,9 @@ stdenv.mkDerivation rec {
   buildInputs = [
     glib
     gtk3
+    hicolor-icon-theme
     pantheon.granite
     libgee
-  ];
-
-  patches = [
-    # See: https://github.com/donadigo/appeditor/issues/88
-    ./fix-build-vala-0.46.patch
   ];
 
   postPatch = ''

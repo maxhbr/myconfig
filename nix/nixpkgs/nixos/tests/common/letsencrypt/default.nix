@@ -62,7 +62,17 @@ let
   siteDomain = "letsencrypt.org";
   siteCertFile = snakeOilCerts.${siteDomain}.cert;
   siteKeyFile = snakeOilCerts.${siteDomain}.key;
-  pebble = pkgs.pebble;
+  pebble = pkgs.pebble.overrideAttrs (attrs: {
+    # The pebble directory endpoint is /dir when the bouder (official
+    # ACME server) is /directory. Sadly, this endpoint is hardcoded,
+    # we have to patch it.
+    #
+    # Tried to upstream, that said upstream maintainers rather keep
+    # this custom endpoint to test ACME clients robustness. See
+    # https://github.com/letsencrypt/pebble/issues/283#issuecomment-545123242
+    patches = [ ./0001-Change-ACME-directory-endpoint-to-directory.patch ];
+  });
+
   resolver = let
     message = "You need to define a resolver for the letsencrypt test module.";
     firstNS = lib.head config.networking.nameservers;

@@ -1,56 +1,54 @@
-{ stdenv, lib
-, kernel
-, fetchurl
-, pkgconfig, meson, ninja
-, libbsd, numactl, libbpf, zlib, libelf, jansson, openssl, libpcap
-, doxygen, python3
-, shared ? false }:
+{ stdenv, lib, kernel, fetchurl, pkgconfig, numactl, shared ? false }:
 
 let
+
   kver = kernel.modDirVersion or null;
+
   mod = kernel != null;
 
 in stdenv.mkDerivation rec {
   name = "dpdk-${version}" + lib.optionalString mod "-${kernel.version}";
-  version = "19.08.2";
+  version = "17.11.2";
 
   src = fetchurl {
     url = "https://fast.dpdk.org/rel/dpdk-${version}.tar.xz";
-    sha256 = "141bqqy4w6nzs9z70x7yv94a4gmxjfal46pxry9bwdh3zi1jwnyd";
+    sha256 = "19m5l3jkrns8r1zbjb6ry18w50ff36kbl5b5g6pfcp9p57sfisd2";
   };
 
-  nativeBuildInputs = [
-    doxygen
-    meson
-    ninja
-    pkgconfig
-    python3
-    python3.pkgs.sphinx
-  ];
-  buildInputs = [
-    jansson
-    libbpf
-    libbsd
-    libelf
-    libpcap
-    numactl
-    openssl.dev
-    zlib
-  ] ++ lib.optionals mod kernel.moduleBuildDependencies;
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ numactl ] ++ lib.optional mod kernel.moduleBuildDependencies;
+
+  RTE_KERNELDIR = if mod then "${kernel.dev}/lib/modules/${kver}/build" else "/var/empty";
+  RTE_TARGET = "x86_64-native-linuxapp-gcc";
+
+  # we need sse3 instructions to build
+  NIX_CFLAGS_COMPILE = [ "-msse3" ];
+  hardeningDisable = [ "pic" ];
 
   postPatch = ''
-    patchShebangs config/arm
+    cat >>config/defconfig_$RTE_TARGET <<EOF
+# Build static or shared libraries.
+CONFIG_RTE_BUILD_SHARED_LIB=${if shared then "y" else "n"}
+EOF
+  '' + lib.optionalString (!mod) ''
+    cat >>config/defconfig_$RTE_TARGET <<EOF
+# Do not build kernel modules.
+CONFIG_RTE_EAL_IGB_UIO=n
+CONFIG_RTE_KNI_KMOD=n
+EOF
   '';
 
-  mesonFlags = [
-    "-Denable_docs=true"
-    "-Denable_kmods=${if kernel != null then "true" else "false"}"
-  ]
-  ++ lib.optionals (shared == false) [
-    "-Ddefault_library=static"
-  ]
-  ++ lib.optional stdenv.isx86_64 "-Dmachine=nehalem"
-  ++ lib.optional (kernel != null) "-Dkernel_dir=${kernel.dev}/lib/modules/${kernel.modDirVersion}";
+  configurePhase = ''
+    make T=${RTE_TARGET} config
+  '';
+
+  installTargets = [ "install-runtime" "install-sdk" "install-kmod" ]; # skip install-doc
+
+  installFlags = [
+    "prefix=$(out)"
+  ] ++ lib.optionals mod [
+    "kerneldir=$(kmod)/lib/modules/${kver}"
+  ];
 
   outputs = [ "out" ] ++ lib.optional mod "kmod";
 
@@ -60,7 +58,7 @@ in stdenv.mkDerivation rec {
     description = "Set of libraries and drivers for fast packet processing";
     homepage = http://dpdk.org/;
     license = with licenses; [ lgpl21 gpl2 bsd2 ];
-    platforms =  platforms.linux;
-    maintainers = with maintainers; [ domenkozar magenbluten orivej ];
+    platforms =  [ "x86_64-linux" ];
+    maintainers = with maintainers; [ domenkozar orivej ];
   };
 }

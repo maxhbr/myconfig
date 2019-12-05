@@ -21,18 +21,22 @@
 , blis
 , wasabi
 , srsly
-, catalogue
 , setuptools
 }:
 
 buildPythonPackage rec {
   pname = "spacy";
-  version = "2.2.3";
+  version = "2.1.8";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0shfjk6nhm6gzp5p88pz5k7bkg5dr3x9yvandkayqb2vsvkwj50x";
+    sha256 = "1dja0crbai2n1l19m0hkv2fkj9r6zzy5ijd6dffp60v7lrch8lcw";
   };
+
+  prePatch = ''
+    substituteInPlace setup.py \
+      --replace "plac<1.0.0,>=0.9.6" "plac>=0.9.6"
+  '';
 
   propagatedBuildInputs = [
    numpy
@@ -52,7 +56,6 @@ buildPythonPackage rec {
    blis
    wasabi
    srsly
-   catalogue
    setuptools
   ] ++ lib.optional (pythonOlder "3.4") pathlib;
 

@@ -23,9 +23,6 @@ buildPythonPackage rec {
     py.test
   '';
 
-  # Some of the tests use localhost networking.
-  __darwinAllowLocalNetworking = true;
-
   meta = with lib; {
     description = "Pure-Python, bring-your-own-I/O implementation of HTTP/1.1";
     license = licenses.mit;

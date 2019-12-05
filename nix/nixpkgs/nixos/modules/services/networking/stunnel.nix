@@ -57,13 +57,7 @@ let
       };
 
       CAPath = mkOption {
-        type = types.nullOr types.path;
-        default = null;
-        description = "Path to a directory containing certificates to validate against.";
-      };
-
-      CAFile = mkOption {
-        type = types.nullOr types.path;
+        type = types.path;
         default = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
         description = "Path to a file containing certificates to validate against.";
       };
@@ -202,7 +196,6 @@ in
                verifyChain = ${yesNo v.verifyChain}
                verifyPeer = ${yesNo v.verifyPeer}
                ${optionalString (v.CAPath != null) "CApath = ${v.CAPath}"}
-               ${optionalString (v.CAFile != null) "CAFile = ${v.CAFile}"}
                ${optionalString (v.verifyHostname != null) "checkHost = ${v.verifyHostname}"}
                OCSPaia = yes
 
@@ -223,12 +216,6 @@ in
       };
     };
 
-    meta.maintainers = with maintainers; [
-      # Server side
-      lschuermann
-      # Client side
-      das_j
-    ];
   };
 
 }

@@ -1,4 +1,4 @@
-import ./make-test-python.nix ({ pkgs, ...} : {
+import ./make-test.nix ({ pkgs, ...} : {
   name = "transmission";
   meta = with pkgs.stdenv.lib.maintainers; {
     maintainers = [ coconnor ];
@@ -14,8 +14,8 @@ import ./make-test-python.nix ({ pkgs, ...} : {
 
   testScript =
     ''
-      start_all()
-      machine.wait_for_unit("transmission")
-      machine.shutdown()
+      startAll;
+      $machine->waitForUnit("transmission");
+      $machine->shutdown;
     '';
 })

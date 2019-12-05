@@ -331,17 +331,6 @@ in
           '';
       };
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.iptables;
-        defaultText = "pkgs.iptables";
-        example = literalExample "pkgs.iptables-nftables-compat";
-        description =
-          ''
-            The iptables package to use for running the firewall service."
-          '';
-      };
-
       logRefusedConnections = mkOption {
         type = types.bool;
         default = true;
@@ -547,7 +536,7 @@ in
 
     networking.firewall.trustedInterfaces = [ "lo" ];
 
-    environment.systemPackages = [ cfg.package ] ++ cfg.extraPackages;
+    environment.systemPackages = [ pkgs.iptables ] ++ cfg.extraPackages;
 
     boot.kernelModules = (optional cfg.autoLoadConntrackHelpers "nf_conntrack")
       ++ map (x: "nf_conntrack_${x}") cfg.connectionTrackingModules;
@@ -566,7 +555,7 @@ in
       before = [ "network-pre.target" ];
       after = [ "systemd-modules-load.service" ];
 
-      path = [ cfg.package ] ++ cfg.extraPackages;
+      path = [ pkgs.iptables ] ++ cfg.extraPackages;
 
       # FIXME: this module may also try to load kernel modules, but
       # containers don't have CAP_SYS_MODULE.  So the host system had

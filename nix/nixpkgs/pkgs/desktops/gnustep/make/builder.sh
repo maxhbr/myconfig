@@ -16,7 +16,7 @@ wrapGSMake() {
 
 export GNUSTEP_CONFIG_FILE="$config"
 
-exec "$wrapped" "\$@"
+exec "$wrapped" "\$@" "\${extraFlagsArray[@]}"
 EOF
     chmod +x "$program"
 }

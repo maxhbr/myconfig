@@ -3,7 +3,6 @@
 , fetchurl
 , nose
 , six
-, setuptools
 , isPy3k
 }:
 
@@ -18,7 +17,7 @@ buildPythonPackage {
   };
 
   checkInputs = [ nose ];
-  propagatedBuildInputs = [ six setuptools ];
+  propagatedBuildInputs = [ six ];
 
   checkPhase = "LC_ALL=C nosetests";
 

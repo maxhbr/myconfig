@@ -1,14 +1,11 @@
 { stdenv
 , fetchFromGitHub
 , pantheon
-, meson
-, ninja
-, gettext
 }:
 
 stdenv.mkDerivation rec {
   pname = "elementary-wallpapers";
-  version = "5.5.0";
+  version = "5.3";
 
   repoName = "wallpapers";
 
@@ -16,14 +13,8 @@ stdenv.mkDerivation rec {
     owner = "elementary";
     repo = repoName;
     rev = version;
-    sha256 = "0c63nds2ylqgcp39s13mfwhipgyw8cirn0bhybp291l5g86ii6s3";
+    sha256 = "1i0zf9gzhwm8hgq5cp1xnxipqjvgzd9wfiicz612hgp6ivc0z0ag";
   };
-
-  nativeBuildInputs = [
-    gettext
-    meson
-    ninja
-  ];
 
   passthru = {
     updateScript = pantheon.updateScript {
@@ -31,6 +22,14 @@ stdenv.mkDerivation rec {
       attrPath = pname;
     };
   };
+
+  dontBuild = true;
+  dontConfigure = true;
+
+  installPhase = ''
+    mkdir -p $out/share/backgrounds/elementary
+    cp -av *.jpg $out/share/backgrounds/elementary
+  '';
 
   meta = with stdenv.lib; {
     description = "Collection of wallpapers for elementary";

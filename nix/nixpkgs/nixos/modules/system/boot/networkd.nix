@@ -10,7 +10,7 @@ let
 
   checkLink = checkUnitConfig "Link" [
     (assertOnlyFields [
-      "Description" "Alias" "MACAddressPolicy" "MACAddress" "NamePolicy" "Name" "OriginalName"
+      "Description" "Alias" "MACAddressPolicy" "MACAddress" "NamePolicy" "OriginalName"
       "MTUBytes" "BitsPerSecond" "Duplex" "AutoNegotiation" "WakeOnLan" "Port"
       "TCPSegmentationOffload" "TCP6SegmentationOffload" "GenericSegmentationOffload"
       "GenericReceiveOffload" "LargeReceiveOffload" "RxChannels" "TxChannels"
@@ -923,8 +923,6 @@ in
   };
 
   config = mkIf config.systemd.network.enable {
-
-    users.users.systemd-network.group = "systemd-network";
 
     systemd.additionalUpstreamSystemUnits = [
       "systemd-networkd.service" "systemd-networkd-wait-online.service"

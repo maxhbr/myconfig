@@ -30,7 +30,6 @@ let
     "json"
     "mail"
     "minio"
-    "nextcloud"
     "nginx"
     "node"
     "postfix"

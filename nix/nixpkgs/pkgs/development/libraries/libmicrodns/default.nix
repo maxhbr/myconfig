@@ -5,14 +5,14 @@
 }:
 
 stdenv.mkDerivation rec {
-  version = "0.1.0";
+  version = "0.0.10";
   pname = "libmicrodns";
 
   src = fetchFromGitHub {
     owner = "videolabs";
     repo = pname;
     rev = version;
-    sha256 = "1pmf461zn35spbpbls1ih68ki7f8g8xjwhzr2csy63nnyq2k9jji";
+    sha256 = "1xvl9k49ng35wbsqmnjnyqvkyjf8dcq2ywsq3jp3wh0rgmxhq2fh";
   };
 
   nativeBuildInputs = [

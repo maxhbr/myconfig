@@ -3,9 +3,6 @@
 , fetchpatch
 , pkgconfig
 , gettext
-, docbook_xsl
-, docbook_xml_dtd_43
-, gtk-doc
 , meson
 , ninja
 , python3
@@ -27,6 +24,7 @@
 , libxkbcommon
 , gmp
 , gnome3
+, hicolor-icon-theme
 , gsettings-desktop-schemas
 , sassc
 , x11Support ? stdenv.isLinux
@@ -36,7 +34,6 @@
 , wayland-protocols
 , xineramaSupport ? stdenv.isLinux
 , cupsSupport ? stdenv.isLinux
-, withGtkDoc ? stdenv.isLinux
 , cups ? null
 , AppKit
 , Cocoa
@@ -48,41 +45,35 @@ with stdenv.lib;
 
 stdenv.mkDerivation rec {
   pname = "gtk+3";
-  version = "3.24.12";
+  version = "3.24.10";
 
-  outputs = [ "out" "dev" ] ++ optional withGtkDoc "devdoc";
+  outputs = [ "out" "dev" ];
   outputBin = "dev";
 
-  setupHooks = [
-    ./hooks/gtk3-clean-immodules-cache.sh
-    ./hooks/drop-icon-theme-cache.sh
-  ];
+  setupHook = ./gtk3-setup-hook.sh;
 
   src = fetchurl {
     url = "mirror://gnome/sources/gtk+/${stdenv.lib.versions.majorMinor version}/gtk+-${version}.tar.xz";
-    sha256 = "10xyyhlfb0yk4hglngxh2zsv9xrxkqv343df8h01dvagc6jyp10k";
+    sha256 = "00qvq1r96ikdalv7xzgng1kad9i0rcahqk01gwhxl3xrw83z3a1m";
   };
 
   patches = [
-    ./patches/3.0-immodules.cache.patch
+    ./3.0-immodules.cache.patch
     (fetchpatch {
       name = "Xft-setting-fallback-compute-DPI-properly.patch";
       url = "https://bug757142.bugzilla-attachments.gnome.org/attachment.cgi?id=344123";
       sha256 = "0g6fhqcv8spfy3mfmxpyji93k8d4p4q4fz1v9a1c1cgcwkz41d7p";
     })
     # https://gitlab.gnome.org/GNOME/gtk/merge_requests/1002
-    ./patches/01-build-Fix-path-handling-in-pkgconfig.patch
+    ./01-build-Fix-path-handling-in-pkgconfig.patch
   ] ++ optionals stdenv.isDarwin [
     # X11 module requires <gio/gdesktopappinfo.h> which is not installed on Darwin
     # let’s drop that dependency in similar way to how other parts of the library do it
     # e.g. https://gitlab.gnome.org/GNOME/gtk/blob/3.24.4/gtk/gtk-launch.c#L31-33
-    ./patches/3.0-darwin-x11.patch
+    ./3.0-darwin-x11.patch
   ];
 
-  separateDebugInfo = stdenv.isLinux;
-
   mesonFlags = [
-    "-Dgtk_doc=${boolToString withGtkDoc}"
     "-Dtests=false"
   ];
 
@@ -112,17 +103,14 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [
     gettext
     gobject-introspection
+    hicolor-icon-theme # setup-hook
     makeWrapper
     meson
     ninja
     pkgconfig
     python3
     sassc
-    setupHooks
-  ] ++ optionals withGtkDoc [
-    docbook_xml_dtd_43
-    docbook_xsl
-    gtk-doc
+    setupHook
   ];
 
   buildInputs = [
@@ -204,7 +192,7 @@ stdenv.mkDerivation rec {
     '';
     homepage = https://www.gtk.org/;
     license = licenses.lgpl2Plus;
-    maintainers = with maintainers; [ raskin vcunat lethalman worldofpeace ];
+    maintainers = with maintainers; [ raskin vcunat lethalman ];
     platforms = platforms.all;
   };
 }

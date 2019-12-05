@@ -22,7 +22,7 @@ assert (stdenv.hostPlatform != stdenv.buildPlatform) -> !enableSharedLibraries;
 let
   # Used when creating a versioned symlinks of libLLVM.dylib
   versionSuffixes = with stdenv.lib;
-    let parts = splitVersion version; in
+    let parts = splitString "." version; in
     imap (i: _: concatStringsSep "." (take i parts)) parts;
 in
 

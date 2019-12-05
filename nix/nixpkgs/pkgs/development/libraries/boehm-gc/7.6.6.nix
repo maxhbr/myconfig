@@ -8,7 +8,7 @@ stdenv.mkDerivation rec {
 
   src = fetchurl {
     urls = [
-      "https://www.hboehm.info/gc/gc_source/gc-${version}.tar.gz"
+      "http://www.hboehm.info/gc/gc_source/gc-${version}.tar.gz"
       "https://github.com/ivmai/bdwgc/releases/download/v${version}/gc-${version}.tar.gz"
     ];
     sha256 = "1p1r015a7jbpvkkbgzv1y8nxrbbp6dg0mq3ksi6ji0qdz3wfss79";
@@ -63,10 +63,10 @@ stdenv.mkDerivation rec {
       C or C++ programs, though that is not its primary goal.
     '';
 
-    homepage = https://hboehm.info/gc/;
+    homepage = http://hboehm.info/gc/;
 
     # non-copyleft, X11-style license
-    license = https://hboehm.info/gc/license.txt;
+    license = http://hboehm.info/gc/license.txt;
 
     maintainers = [ ];
     platforms = stdenv.lib.platforms.all;

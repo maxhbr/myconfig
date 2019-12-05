@@ -16,7 +16,7 @@
 # See the NixOS manual for how to run this test:
 # https://nixos.org/nixos/manual/index.html#sec-running-nixos-tests-interactively
 
-import ./make-test-python.nix ({ pkgs, ...} :
+import ./make-test.nix ({ pkgs, ...} :
 
 let
   allowESP = "iptables --insert INPUT --protocol ESP --jump ACCEPT";
@@ -142,7 +142,7 @@ in {
 
   };
   testScript = ''
-    start_all()
-    carol.wait_until_succeeds("ping -c 1 alice")
+    startAll();
+    $carol->waitUntilSucceeds("ping -c 1 alice");
   '';
 })

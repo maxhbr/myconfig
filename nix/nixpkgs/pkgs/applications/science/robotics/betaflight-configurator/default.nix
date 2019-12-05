@@ -1,22 +1,22 @@
 {stdenv, fetchurl, unzip, makeDesktopItem, nwjs, wrapGAppsHook, gsettings-desktop-schemas, gtk3 }:
 
 let
-  pname = "betaflight-configurator";
+  strippedName = "betaflight-configurator";
   desktopItem = makeDesktopItem {
-    name = pname;
-    exec = pname;
-    icon = pname;
+    name = strippedName;
+    exec = strippedName;
+    icon = "${strippedName}-icon.png";
     comment = "Betaflight configuration tool";
     desktopName = "Betaflight Configurator";
     genericName = "Flight controller configuration tool";
   };
 in
 stdenv.mkDerivation rec {
-  inherit pname;
-  version = "10.6.0";
+  name = "${strippedName}-${version}";
+  version = "10.5.1";
   src = fetchurl {
-    url = "https://github.com/betaflight/${pname}/releases/download/${version}/${pname}_${version}_linux64.zip";
-    sha256 = "09hayzhwangh8b81r038p320vbg0xxlyzrdp9pcmfyxp6s00xslw";
+    url = "https://github.com/betaflight/betaflight-configurator/releases/download/${version}/${strippedName}_${version}_linux64.zip";
+    sha256 = "1l4blqgaqfrnydk05q6pwdqdhcly2f8nwzrv0749cqmfiinh8ygc";
   };
 
   nativeBuildInputs = [ wrapGAppsHook ];
@@ -25,13 +25,14 @@ stdenv.mkDerivation rec {
   
   installPhase = ''
     mkdir -p $out/bin \
-             $out/opt/${pname}
+             $out/opt/${strippedName} \
+             $out/share/icons
 
-    cp -r . $out/opt/${pname}/
-    install -m 444 -D icon/bf_icon_128.png $out/share/icons/hicolor/128x128/apps/${pname}.png
+    cp -r . $out/opt/${strippedName}/
+    cp icon/*_icon_128.png $out/share/icons/${strippedName}-icon.png
     cp -r ${desktopItem}/share/applications $out/share/
 
-    makeWrapper ${nwjs}/bin/nw $out/bin/${pname} --add-flags $out/opt/${pname}
+    makeWrapper ${nwjs}/bin/nw $out/bin/${strippedName} --add-flags $out/opt/${strippedName}
   '';
 
   meta = with stdenv.lib; {

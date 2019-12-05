@@ -4,7 +4,10 @@ stdenv.mkDerivation {
   name = "schroedinger-1.0.11";
 
   src = fetchurl {
-    url = https://download.videolan.org/contrib/schroedinger-1.0.11.tar.gz;
+    urls = [
+      http://diracvideo.org/download/schroedinger/schroedinger-1.0.11.tar.gz
+      https://download.videolan.org/contrib/schroedinger-1.0.11.tar.gz
+    ];
     sha256 = "04prr667l4sn4zx256v1z36a0nnkxfdqyln48rbwlamr6l3jlmqy";
   };
 
@@ -24,8 +27,7 @@ stdenv.mkDerivation {
   ];
 
   meta = with stdenv.lib; {
-    description = "An implementation of the Dirac video codec in ANSI C";
-    homepage = "https://sourceforge.net/projects/schrodinger/";
+    homepage = http://diracvideo.org/;
     maintainers = [ maintainers.spwhitt ];
     license = [ licenses.mpl11 licenses.lgpl2 licenses.mit ];
     platforms = platforms.unix;

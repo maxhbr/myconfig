@@ -631,14 +631,6 @@ in
         setgid = true;
       };
 
-      security.wrappers.mailq = {
-        program = "mailq";
-        source = "${pkgs.postfix}/bin/mailq";
-        group = setgidGroup;
-        setuid = false;
-        setgid = true;
-      };
-
       security.wrappers.postqueue = {
         program = "postqueue";
         source = "${pkgs.postfix}/bin/postqueue";

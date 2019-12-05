@@ -1,4 +1,4 @@
-{ lib, fetchFromGitHub, buildDunePackage, ocaml, mdx }:
+{ stdenv, fetchFromGitHub, buildDunePackage, mdx }:
 
 buildDunePackage rec {
   pname = "printbox";
@@ -13,14 +13,14 @@ buildDunePackage rec {
     sha256 = "16nwwpp13hzlcm9xqfxc558afm3i5s802dkj69l9s2vp04lgms5n";
   };
 
-  checkInputs = lib.optional doCheck mdx;
+  checkInputs = [ mdx ];
 
-  doCheck = !lib.versionAtLeast ocaml.version "4.08";
+  doCheck = true;
 
   meta = {
     homepage = https://github.com/c-cube/printbox/;
     description = "Allows to print nested boxes, lists, arrays, tables in several formats";
-    license = lib.licenses.isc;
-    maintainers = [ lib.maintainers.romildo ];
+    license = stdenv.lib.licenses.isc;
+    maintainers = [ stdenv.lib.maintainers.romildo ];
   };
 }

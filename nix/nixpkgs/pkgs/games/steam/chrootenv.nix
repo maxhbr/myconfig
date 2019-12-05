@@ -86,14 +86,14 @@ in buildFHSUserEnv rec {
     xorg.xkeyboardconfig
     xorg.libpciaccess
     ## screeps dependencies
-    gtk3
+    gnome3.gtk
     dbus
     zlib
     glib
     atk
     cairo
     freetype
-    gdk-pixbuf
+    gdk_pixbuf
     pango
     fontconfig
   ] ++ (if (!nativeOnly) then [

@@ -19,6 +19,6 @@ stdenv.mkDerivation rec {
     homepage = http://tasktools.org;
     license = licenses.mit;
     maintainers = with maintainers; [ matthiasbeyer ];
-    platforms = platforms.unix;
+    platforms = platforms.linux;
   };
 }

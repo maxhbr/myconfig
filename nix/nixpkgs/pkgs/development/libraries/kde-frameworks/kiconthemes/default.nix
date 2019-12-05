@@ -2,7 +2,7 @@
   mkDerivation, lib, copyPathsToStore,
   extra-cmake-modules,
   breeze-icons, karchive, kcoreaddons, kconfigwidgets, ki18n, kitemviews,
-  qtbase, qtsvg, qttools,
+  qtbase, qtsvg,
 }:
 
 mkDerivation {
@@ -13,5 +13,5 @@ mkDerivation {
   buildInputs = [
     breeze-icons karchive kcoreaddons kconfigwidgets ki18n kitemviews
   ];
-  propagatedBuildInputs = [ qtbase qtsvg qttools ];
+  propagatedBuildInputs = [ qtbase qtsvg ];
 }

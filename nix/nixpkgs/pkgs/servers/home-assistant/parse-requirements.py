@@ -33,9 +33,7 @@ PKG_SET = 'python3Packages'
 # the following can be used to choose one of them
 PKG_PREFERENCES = {
     # Use python3Packages.youtube-dl-light instead of python3Packages.youtube-dl
-    'youtube-dl': 'youtube-dl-light',
-    'tensorflow-bin': 'tensorflow',
-    'tensorflowWithoutCuda': 'tensorflow'
+    'youtube-dl': 'youtube-dl-light'
 }
 
 def get_version():

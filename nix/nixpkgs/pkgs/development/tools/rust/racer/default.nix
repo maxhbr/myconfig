@@ -2,16 +2,16 @@
 
 rustPlatform.buildRustPackage rec {
   pname = "racer";
-  version = "2.1.27";
+  version = "2.1.22";
 
   src = fetchFromGitHub {
     owner = "racer-rust";
     repo = "racer";
     rev = "v${version}";
-    sha256 = "1ajj515ck5n0mzig77xnq1qgb2s4gf6ahgd5mab91406jvij9qf3";
+    sha256 = "1n808h4jqxkvpjwmj8jgi4y5is5zvr8vn42mwb3yi13mix32cysa";
   };
 
-  cargoSha256 = "0ki5j5gh59c92a0w43kzljpiamv2jvyk4m2w8qldfyl5kaa40dxb";
+  cargoSha256 = "0njaa9vk2i9g1c6sq20b7ls97nl532rfv3is7d8dwz51nrwk6jxs";
 
   buildInputs = [ makeWrapper ]
                 ++ stdenv.lib.optional stdenv.isDarwin Security;
@@ -21,7 +21,7 @@ rustPlatform.buildRustPackage rec {
 
   RUST_SRC_PATH = rustPlatform.rustcSrc;
   postInstall = ''
-    wrapProgram $out/bin/racer --set-default RUST_SRC_PATH ${rustPlatform.rustcSrc}
+    wrapProgram $out/bin/racer --set-default RUST_SRC_PATH $rustcSrc
   '';
 
   checkPhase = ''
@@ -31,8 +31,7 @@ rustPlatform.buildRustPackage rec {
       --skip util::test_get_rust_src_path_not_rust_source_tree \
       --skip extern --skip completes_pub_fn --skip find_crate_doc \
       --skip follows_use_local_package --skip follows_use_for_reexport \
-      --skip follows_rand_crate --skip get_completion_in_example_dir \
-      --skip test_resolve_global_path_in_modules
+      --skip follows_rand_crate --skip get_completion_in_example_dir
   '';
 
   doInstallCheck = true;

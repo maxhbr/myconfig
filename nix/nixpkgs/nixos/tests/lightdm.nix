@@ -1,4 +1,4 @@
-import ./make-test-python.nix ({ pkgs, ...} : {
+import ./make-test.nix ({ pkgs, ...} : {
   name = "lightdm";
   meta = with pkgs.stdenv.lib.maintainers; {
     maintainers = [ aszlig worldofpeace ];
@@ -18,12 +18,12 @@ import ./make-test-python.nix ({ pkgs, ...} : {
   testScript = { nodes, ... }: let
     user = nodes.machine.config.users.users.alice;
   in ''
-    start_all()
-    machine.wait_for_text("${user.description}")
-    machine.screenshot("lightdm")
-    machine.send_chars("${user.password}\n")
-    machine.wait_for_file("${user.home}/.Xauthority")
-    machine.succeed("xauth merge ${user.home}/.Xauthority")
-    machine.wait_for_window("^IceWM ")
+    startAll;
+    $machine->waitForText(qr/${user.description}/);
+    $machine->screenshot("lightdm");
+    $machine->sendChars("${user.password}\n");
+    $machine->waitForFile("/home/alice/.Xauthority");
+    $machine->succeed("xauth merge ~alice/.Xauthority");
+    $machine->waitForWindow("^IceWM ");
   '';
 })

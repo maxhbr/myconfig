@@ -12,10 +12,7 @@
 # needed for beautiful.gtk to work
 assert gtk3Support -> gtk3 != null;
 
-stdenv.mkDerivation rec {
-  lgi = luaPackages.lgi;
-  lua = luaPackages.lua;
-  ldoc = luaPackages.ldoc;
+with luaPackages; stdenv.mkDerivation rec {
   pname = "awesome";
   version = "4.3";
 
@@ -52,11 +49,8 @@ stdenv.mkDerivation rec {
                   xcbutilxrm ]
                   ++ stdenv.lib.optional gtk3Support gtk3;
 
-  cmakeFlags = [
-    #"-DGENERATE_MANPAGES=ON"
-    "-DOVERRIDE_VERSION=${version}"
-  ] ++ stdenv.lib.optional luaPackages.isLuaJIT "-DLUA_LIBRARY=${lua}/lib/libluajit-5.1.so"
-  ;
+  #cmakeFlags = "-DGENERATE_MANPAGES=ON";
+  cmakeFlags = "-DOVERRIDE_VERSION=${version}";
 
   GI_TYPELIB_PATH = "${pango.out}/lib/girepository-1.0";
   # LUA_CPATH and LUA_PATH are used only for *building*, see the --search flags

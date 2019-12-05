@@ -9,8 +9,8 @@ import ./make-test.nix ({ lib, ... }:
     {
       services.mailcatcher.enable = true;
 
-      services.ssmtp.enable = true;
-      services.ssmtp.hostName = "localhost:1025";
+      networking.defaultMailServer.directDelivery = true;
+      networking.defaultMailServer.hostName = "localhost:1025";
 
       environment.systemPackages = [ pkgs.mailutils ];
     };

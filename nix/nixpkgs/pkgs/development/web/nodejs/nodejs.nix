@@ -53,30 +53,12 @@ in
     };
 
     buildInputs = optionals stdenv.isDarwin [ CoreServices ApplicationServices ]
-      ++ [ zlib libuv openssl http-parser icu ];
+      ++ [ python2 zlib libuv openssl http-parser icu ];
 
-    nativeBuildInputs = [ which utillinux pkgconfig python2 ]
+    nativeBuildInputs = [ which utillinux pkgconfig ]
       ++ optionals stdenv.isDarwin [ xcbuild ];
 
-    configureFlags = let
-      isCross = stdenv.hostPlatform != stdenv.buildPlatform;
-      host = stdenv.hostPlatform.platform;
-      isArm = stdenv.hostPlatform.isArm;
-    in sharedConfigureFlags ++ [
-      "--without-dtrace"
-    ] ++ (optionals isCross [
-      "--cross-compiling"
-      "--without-intl"
-      "--without-snapshot"
-    ]) ++ (optionals (isCross && isArm && hasAttr "fpu" host.gcc) [
-      "--with-arm-fpu=${host.gcc.fpu}"
-    ]) ++ (optionals (isCross && isArm && hasAttr "float-abi" host.gcc) [
-      "--with-arm-float-abi=${host.gcc.float-abi}"
-    ]) ++ (optionals (isCross && isArm) [
-      "--dest-cpu=arm"
-    ]) ++ extraConfigFlags;
-
-    configurePlatforms = [];
+    configureFlags = sharedConfigureFlags ++ [ "--without-dtrace" ] ++ extraConfigFlags;
 
     dontDisableStatic = true;
 
@@ -114,7 +96,7 @@ in
     postInstall = ''
       PATH=$out/bin:$PATH patchShebangs $out
 
-      ${optionalString (enableNpm && stdenv.hostPlatform == stdenv.buildPlatform) ''
+      ${optionalString enableNpm ''
         mkdir -p $out/share/bash-completion/completions/
         $out/bin/npm completion > $out/share/bash-completion/completions/npm
         for dir in "$out/lib/node_modules/npm/man/"*; do

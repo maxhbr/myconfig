@@ -41,7 +41,10 @@ let
     inherit (config.system.nixos-generate-config) configuration;
   };
 
-  nixos-option = pkgs.callPackage ./nixos-option { };
+  nixos-option = makeProg {
+    name = "nixos-option";
+    src = ./nixos-option.sh;
+  };
 
   nixos-version = makeProg {
     name = "nixos-version";
@@ -117,11 +120,7 @@ in
         # Some programs need SUID wrappers, can be configured further or are
         # started in user sessions.
         # programs.mtr.enable = true;
-        # programs.gnupg.agent = {
-        #   enable = true;
-        #   enableSSHSupport = true;
-        #   pinentryFlavor = "gnome3";
-        # };
+        # programs.gnupg.agent = { enable = true; enableSSHSupport = true; };
 
         # List services that you want to enable:
 

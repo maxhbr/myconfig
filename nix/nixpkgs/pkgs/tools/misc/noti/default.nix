@@ -3,16 +3,18 @@
 
 buildGoPackage rec {
   pname = "noti";
-  version = "3.3.0";
+  version = "3.2.0";
 
   src = fetchFromGitHub {
     owner = "variadico";
     repo = "noti";
     rev = version;
-    sha256 = "1644bivjcky07n3rrm83vsms7hw47p4hnp2536q0z3qca5jyri2f";
+    sha256 = "1lw1wmw2m83m0s5znb4gliywjpg74qrhrj6rwpcb5p352c4vbwxs";
   };
 
   buildInputs = lib.optional stdenv.isDarwin Cocoa;
+  # TODO: Remove this when we update apple_sdk
+  NIX_CFLAGS_COMPILE = lib.optional stdenv.isDarwin "-fno-objc-arc";
 
   goPackagePath = "github.com/variadico/noti";
 
@@ -34,7 +36,7 @@ buildGoPackage rec {
     '';
     homepage = https://github.com/variadico/noti;
     license = licenses.mit;
-    maintainers = with maintainers; [ stites marsam ];
+    maintainers = with maintainers; [ stites ];
     platforms = platforms.all;
   };
 }

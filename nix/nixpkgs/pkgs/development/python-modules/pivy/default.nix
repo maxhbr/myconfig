@@ -17,7 +17,7 @@ buildPythonPackage rec {
 
   buildInputs = with pkgs; with xorg; [
     coin3d soqt qt5.qtbase
-    libGLU libGL
+    libGLU_combined
     libXi libXext libSM libICE libX11
   ];
 

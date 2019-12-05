@@ -1,7 +1,7 @@
 { lib, fetchzip }:
 
 let
-  version = "3.0.4";
+  version = "3.0.3";
 in fetchzip rec {
   name = "overpass-${version}";
 
@@ -12,10 +12,10 @@ in fetchzip rec {
     mkdir -p $out/share/doc/${name}    ; unzip -j $downloadedFile \*.md  -d $out/share/doc/${name}
   '';
 
-  sha256 = "13b4yam0nycclccxidzj2fa3nwms5qji7gfkixdnl4ybf0f56b64";
+  sha256 = "1m6p7rrlyqikjvypp4698sn0lp3a4z0z5al4swblfhg8qaxzv5pg";
 
   meta = with lib; {
-    homepage = "https://overpassfont.org/";
+    homepage = http://overpassfont.org/;
     description = "Font heavily inspired by Highway Gothic";
     license = licenses.ofl;
     platforms = platforms.all;

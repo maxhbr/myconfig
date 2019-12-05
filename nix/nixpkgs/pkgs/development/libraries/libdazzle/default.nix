@@ -1,28 +1,35 @@
 { stdenv, fetchurl, ninja, meson, pkgconfig, vala, gobject-introspection, libxml2
-, gtk-doc, docbook_xsl, docbook_xml_dtd_43, dbus, xvfb_run, glib, gtk3, gnome3 }:
+, gtk-doc, docbook_xsl, docbook_xml_dtd_43, glibcLocales, dbus, xvfb_run, glib, gtk3, gnome3 }:
 
-stdenv.mkDerivation rec {
+let
+  version = "3.32.3";
   pname = "libdazzle";
-  version = "3.34.1";
+in
+stdenv.mkDerivation {
+  name = "${pname}-${version}";
 
   outputs = [ "out" "dev" "devdoc" ];
   outputBin = "dev";
 
   src = fetchurl {
     url = "mirror://gnome/sources/libdazzle/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "01cmcrd75b7ns7j2b4p6h7pv68vjhkcl9zbvzzx7pf4vknxir61x";
+    sha256 = "1s37hv12ikfzhvh86qzgmfcjm3wvp12l2vsr0whl5xmm2harp3bc";
   };
 
-  nativeBuildInputs = [ ninja meson pkgconfig vala gobject-introspection libxml2 gtk-doc docbook_xsl docbook_xml_dtd_43 dbus xvfb_run ];
+  nativeBuildInputs = [ ninja meson pkgconfig vala gobject-introspection libxml2 gtk-doc docbook_xsl docbook_xml_dtd_43 glibcLocales dbus xvfb_run ];
   buildInputs = [ glib gtk3 ];
 
   mesonFlags = [
     "-Denable_gtk_doc=true"
   ];
 
-  doCheck = true;
+  LC_ALL = "en_US.UTF-8";
+
+  # https://gitlab.gnome.org/GNOME/libdazzle/issues/25
+  doCheck = false;
 
   checkPhase = ''
+    export NO_AT_BRIDGE=1
     xvfb-run -s '-screen 0 800x600x24' dbus-run-session \
       --config-file=${dbus.daemon}/share/dbus-1/session.conf \
       meson test --print-errorlogs

@@ -1,21 +1,20 @@
-{ stdenv, buildPythonPackage, fetchPypi, python
-, google_api_core, grpcio, pytest, mock, setuptools }:
+{ stdenv, buildPythonPackage, fetchPypi
+, google_api_core, grpcio, pytest, mock }:
 
 buildPythonPackage rec {
   pname = "google-cloud-core";
-  version = "1.0.3";
+  version = "0.29.1";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "10750207c1a9ad6f6e082d91dbff3920443bdaf1c344a782730489a9efa802f1";
+    sha256 = "d85b1aaaf3bad9415ad1d8ee5eadce96d7007a82f13ce0a0629a003a11e83f29";
   };
 
-  propagatedBuildInputs = [ google_api_core grpcio setuptools ];
+  propagatedBuildInputs = [ google_api_core grpcio ];
   checkInputs = [ pytest mock ];
 
   checkPhase = ''
-    cd tests
-    ${python.interpreter} -m unittest discover
+    py.test
   '';
 
   meta = with stdenv.lib; {

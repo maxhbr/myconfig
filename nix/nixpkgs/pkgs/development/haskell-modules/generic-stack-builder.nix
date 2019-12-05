@@ -20,10 +20,6 @@ let
 
 in stdenv.mkDerivation (args // {
 
-  # Doesn't work in the sandbox. Pass `--option sandbox relaxed` or
-  # `--option sandbox false` to be able to build this
-  __noChroot = true;
-
   buildInputs = buildInputs
     ++ lib.optional (stdenv.hostPlatform.libc == "glibc") glibcLocales;
 

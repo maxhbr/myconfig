@@ -34,7 +34,7 @@
 , libgnome
 , libgnomeui
 , gnome3
-, libGLU, libGL
+, libGLU_combined
 , nspr
 , nss
 , pango
@@ -116,7 +116,7 @@ stdenv.mkDerivation {
       libcanberra-gtk2
       libgnome
       libgnomeui
-      libGLU libGL
+      libGLU_combined
       nspr
       nss
       pango

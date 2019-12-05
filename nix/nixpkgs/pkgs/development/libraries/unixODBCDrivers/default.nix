@@ -1,4 +1,4 @@
-{ fetchurl, stdenv, unixODBC, cmake, postgresql, mysql, sqlite, zlib, libxml2, dpkg, lib, openssl, kerberos, libuuid, patchelf, libiconv, fetchFromGitHub }:
+{ fetchurl, stdenv, unixODBC, cmake, postgresql, mysql, mariadb, sqlite, zlib, libxml2, dpkg, lib, openssl, kerberos, libuuid, patchelf }:
 
 # I haven't done any parameter tweaking.. So the defaults provided here might be bad
 
@@ -29,42 +29,30 @@
 
   mariadb = stdenv.mkDerivation rec {
     pname = "mariadb-connector-odbc";
-    version = "3.1.4";
+    version = "2.0.10";
 
-    src = fetchFromGitHub {
-      owner = "MariaDB";
-      repo = "mariadb-connector-odbc";
-      rev = version;
-      sha256 = "1kbz5mng9vx89cw2sx7gsvhbv4h86zwp31fr0hxqing3cwxhkfgw";
-      # this driver only seems to build correctly when built against the mariadb-connect-c subrepo
-      # (see https://github.com/NixOS/nixpkgs/issues/73258)
-      fetchSubmodules = true;
+    src = fetchurl {
+      url = "https://downloads.mariadb.org/interstitial/connector-odbc-${version}/src/${pname}-${version}-ga-src.tar.gz";
+      sha256 = "0b6ximy0dg0xhqbrm1l7pn8hjapgpmddi67kh54h6i9cq9hqfdvz";
     };
 
     nativeBuildInputs = [ cmake ];
-    buildInputs = [ unixODBC openssl libiconv ];
-
-    preConfigure = ''
-      # we don't want to build a .pkg
-      sed -i 's/ADD_SUBDIRECTORY(osxinstall)//g' CMakeLists.txt
-    '';
+    buildInputs = [ unixODBC mariadb.connector-c ];
 
     cmakeFlags = [
-      "-DWITH_OPENSSL=ON"
-      # on darwin this defaults to ON but we want to build against unixODBC
-      "-DWITH_IODBC=OFF"
+      "-DMARIADB_INCLUDE_DIR=${mariadb.connector-c}/include/mariadb"
     ];
 
     passthru = {
       fancyName = "MariaDB";
-      driver = if stdenv.isDarwin then "lib/libmaodbc.dylib" else "lib/libmaodbc.so";
+      driver = "lib/libmaodbc.so";
     };
 
     meta = with stdenv.lib; {
       description = "MariaDB ODBC database driver";
       homepage =  https://downloads.mariadb.org/connector-odbc/;
       license = licenses.gpl2;
-      platforms = platforms.linux ++ platforms.darwin;
+      platforms = platforms.linux;
     };
   };
 

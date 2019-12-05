@@ -1,4 +1,4 @@
-{ stdenv, fetchPypi, buildPythonPackage, nose, mock, glibcLocales, isPy3k, isPy38 }:
+{ stdenv, fetchPypi, buildPythonPackage, nose, mock, glibcLocales, isPy3k }:
 
 buildPythonPackage rec {
   pname = "parameterized";
@@ -10,8 +10,7 @@ buildPythonPackage rec {
   };
 
   # Tests require some python3-isms but code works without.
-  # python38 is not fully supported yet
-  doCheck = isPy3k && (!isPy38);
+  doCheck = isPy3k;
 
   checkInputs = [ nose mock glibcLocales ];
 

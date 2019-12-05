@@ -4,7 +4,6 @@ with lib;
 
 let
   cfg = config.programs.mtr;
-
 in {
   options = {
     programs.mtr = {
@@ -16,22 +15,13 @@ in {
           setcap wrapper for it.
         '';
       };
-
-      package = mkOption {
-        type = types.package;
-        default = pkgs.mtr;
-        description = ''
-          The package to use.
-        '';
-      };
     };
   };
 
   config = mkIf cfg.enable {
-    environment.systemPackages = with pkgs; [ cfg.package ];
-
+    environment.systemPackages = with pkgs; [ mtr ];
     security.wrappers.mtr-packet = {
-      source = "${cfg.package}/bin/mtr-packet";
+      source = "${pkgs.mtr}/bin/mtr-packet";
       capabilities = "cap_net_raw+p";
     };
   };

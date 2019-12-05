@@ -2,13 +2,13 @@
 
 buildPythonPackage rec{
   pname = "periodictable";
-  version = "1.5.1";
+  version = "1.5.0";
 
   propagatedBuildInputs = [numpy pyparsing];
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0qd7rjhlnb2xxi7rhpidh9pabg2m4rq6zhdcsyiymni8mgjm8dfg";
+    sha256 = "1cjk6aqcz41nxm4fpriz01vqdafd6g57cjk0wh1iklk5cx6c085h";
   };
 
   meta = {

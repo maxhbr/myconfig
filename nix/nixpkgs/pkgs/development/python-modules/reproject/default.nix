@@ -10,13 +10,13 @@
 
 buildPythonPackage rec {
   pname = "reproject";
-  version = "0.5.1";
+  version = "0.4";
 
   doCheck = false; # tests require pytest-astropy
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "069rha55cbm8vsi1qf8zydds42lgkcc97sd57hmjw1mgiz025xrp";
+    sha256 = "dbbb18a8b211292c7ce61121b8538fc279540337be1c05cabc7570c5aca6d734";
   };
 
   propagatedBuildInputs = [ numpy astropy astropy-healpix astropy-helpers scipy ];

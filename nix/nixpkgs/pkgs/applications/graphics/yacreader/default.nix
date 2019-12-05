@@ -1,17 +1,14 @@
-{ mkDerivation, lib, fetchFromGitHub, qmake, poppler, pkgconfig, libunarr
-, libGLU, qtdeclarative, qtgraphicaleffects, qtmultimedia, qtquickcontrols
-, qtscript
+{ stdenv, fetchurl, qmake, poppler, pkgconfig, libunarr, libGLU
+, qtdeclarative, qtgraphicaleffects, qtmultimedia, qtquickcontrols, qtscript
 }:
 
-mkDerivation rec {
+stdenv.mkDerivation rec {
   pname = "yacreader";
-  version = "9.6.2";
+  version = "9.5.0";
 
-  src = fetchFromGitHub {
-    owner = "YACReader";
-    repo = pname;
-    rev = version;
-    sha256 = "1s7kb72skhr364kq8wr2i012jjmaz2vzcz526h0b2bch8921wrnf";
+  src = fetchurl {
+    url = "https://github.com/YACReader/yacreader/releases/download/${version}/${pname}-${version}-src.tar.xz";
+    sha256 = "0cv5y76kjvsqsv4fp99j8np5pm4m76868i1nn40q6hy573dmxwm6";
   };
 
   nativeBuildInputs = [ qmake pkgconfig ];
@@ -22,7 +19,7 @@ mkDerivation rec {
 
   meta = {
     description = "A comic reader for cross-platform reading and managing your digital comic collection";
-    homepage = "http://www.yacreader.com";
-    license = lib.licenses.gpl3;
+    homepage = http://www.yacreader.com;
+    license = stdenv.lib.licenses.gpl3;
   };
 }

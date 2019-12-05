@@ -51,7 +51,8 @@ let
   # that we can disable the autospawn feature in programs that
   # are built with PulseAudio support (like KDE).
   clientConf = writeText "client.conf" ''
-    autospawn=no
+    autospawn=${if nonSystemWide then "yes" else "no"}
+    ${optionalString nonSystemWide "daemon-binary=${binary}"}
     ${cfg.extraClientConf}
   '';
 

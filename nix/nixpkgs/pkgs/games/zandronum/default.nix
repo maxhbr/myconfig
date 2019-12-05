@@ -9,14 +9,13 @@ let
   sqlite = callPackage ./sqlite.nix { };
   clientLibPath = lib.makeLibraryPath [ fluidsynth ];
 
-in stdenv.mkDerivation rec {
-  pname = "zandronum${suffix}";
-  version = "3.0.1";
+in stdenv.mkDerivation {
+  name = "zandronum${suffix}-3.0";
 
   src = fetchhg {
     url = "https://bitbucket.org/Torr_Samaho/zandronum-stable";
-    rev = "ZA_${version}";
-    sha256 = "16v5b6wfrmabs3ky6isbfhlrqdjrr1pvfxlxwk0im02kcpxxw9qw";
+    rev = "dd3c3b57023f";
+    sha256 = "1f8pd8d2zjwdp6v9anp9yrkdbfhd2mp7svmnna0jiqgxjw6wkyls";
   };
 
   # zandronum tries to download sqlite now when running cmake, don't let it

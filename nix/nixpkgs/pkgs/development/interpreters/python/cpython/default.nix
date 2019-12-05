@@ -17,7 +17,6 @@
 # For the Python package set
 , packageOverrides ? (self: super: {})
 , buildPackages
-, pythonForBuild ? buildPackages.${"python${sourceVersion.major}${sourceVersion.minor}"}
 , sourceVersion
 , sha256
 , passthruFun
@@ -64,7 +63,7 @@ let
 
   hasDistutilsCxxPatch = !(stdenv.cc.isGNU or false);
 
-  inherit pythonForBuild;
+  pythonForBuild = buildPackages.${"python${sourceVersion.major}${sourceVersion.minor}"};
 
   pythonForBuildInterpreter = if stdenv.hostPlatform == stdenv.buildPlatform then
     "$out/bin/python"

@@ -1,6 +1,6 @@
 # Test for NixOS' container support.
 
-import ./make-test-python.nix ({ pkgs, ...} : {
+import ./make-test.nix ({ pkgs, ...} : {
   name = "containers-hosts";
   meta = with pkgs.stdenv.lib.maintainers; {
     maintainers = [ montag451 ];
@@ -42,11 +42,11 @@ import ./make-test-python.nix ({ pkgs, ...} : {
     };
 
   testScript = ''
-    start_all()
-    machine.wait_for_unit("default.target")
+    startAll;
+    $machine->waitForUnit("default.target");
 
-    with subtest("Ping the containers using the entries added in /etc/hosts"):
-        for host in "simple.containers", "netmask.containers":
-            machine.succeed(f"ping -n -c 1 {host}")
+    # Ping the containers using the entries added in /etc/hosts
+    $machine->succeed("ping -n -c 1 simple.containers");
+    $machine->succeed("ping -n -c 1 netmask.containers");
   '';
 })

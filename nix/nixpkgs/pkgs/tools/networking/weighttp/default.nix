@@ -14,7 +14,5 @@ stdenv.mkDerivation rec {
 
   meta = {
     platforms = stdenv.lib.platforms.unix;
-    homepage = https://redmine.lighttpd.net/projects/weighttp/wiki;
-    description = "A lightweight and simple webserver benchmarking tool";
   };
 }

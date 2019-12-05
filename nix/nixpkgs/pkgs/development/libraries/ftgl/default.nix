@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, freetype, libGL, libGLU, OpenGL }:
+{ stdenv, fetchurl, freetype, libGLU_combined, OpenGL }:
 
 let
   name = "ftgl-2.1.3-rc5";
@@ -15,7 +15,7 @@ stdenv.mkDerivation {
     ++ (if stdenv.isDarwin then
       [ OpenGL ]
     else
-      [ libGL libGLU ])
+      [ libGLU_combined ])
     ;
 
   enableParallelBuilding = true;

@@ -2,13 +2,13 @@
 
 stdenv.mkDerivation rec {
   pname = "xchm";
-  version = "1.31";
+  version = "1.30";
 
   src = fetchFromGitHub {
     owner = "rzvncj";
     repo = "xCHM";
     rev = version;
-    sha256 = "1mzafbpc1c211byf8bnwl13by7vi8xvxlaykyrajb1bj0ynbmmgp";
+    sha256 = "1sjvh06m8jbb28k6y3knas3nkh1dfvff4mlwjs33x12ilhddhr8v";
   };
 
   nativeBuildInputs = [ autoreconfHook ];

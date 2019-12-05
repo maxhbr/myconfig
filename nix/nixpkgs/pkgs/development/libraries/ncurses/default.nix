@@ -141,7 +141,6 @@ stdenv.mkDerivation rec {
     moveToOutput "bin/tset" "$out"
     moveToOutput "bin/captoinfo" "$out"
     moveToOutput "bin/infotocap" "$out"
-    moveToOutput "bin/infocmp" "$out"
   '';
 
   preFixup = lib.optionalString (!stdenv.hostPlatform.isCygwin && !enableStatic) ''

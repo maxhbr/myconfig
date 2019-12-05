@@ -3,11 +3,11 @@
 stdenv.mkDerivation rec {
   pname = "verbiste";
 
-  version = "0.1.47";
+  version = "0.1.46";
 
   src = fetchurl {
     url = "https://perso.b2b2c.ca/~sarrazip/dev/${pname}-${version}.tar.gz";
-    sha256 = "02kzin3pky2q2jnihrch8y0hy043kqqmzxq8j741x80kl0j1qxkm";
+    sha256 = "13l8b8mbkdds955sn42hzrjzj48lg1drpd7vhpcjxadckbvlh1p0";
   };
 
   nativeBuildInputs = [ pkgconfig ];

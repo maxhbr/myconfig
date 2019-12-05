@@ -2,17 +2,17 @@
 
 buildPythonApplication rec {
   pname = "rfc-bibtex";
-  version = "0.3.2";
+  version = "0.2.1";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "60419a2043ef37ac2438f3eae7a3207d0a4cb2dd56ab21697f874a35ee52927f";
+    sha256 = "1p8xjgq4rig1jgqy5jqh34mbifxgxsyyxh8sizwz2wyixf8by8lq";
   };
 
   disabled = !isPy3k;
 
   meta = with stdenv.lib; {
-    homepage = https://github.com/iluxonchik/rfc-bibtex/;
+    homepage = ttps://github.com/iluxonchik/rfc-bibtex/;
     description = "Generate Bibtex entries for IETF RFCs and Internet-Drafts";
     license = licenses.mit;
     maintainers = with maintainers; [ teto ];

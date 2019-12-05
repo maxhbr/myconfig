@@ -8,6 +8,11 @@ let
   ldmcfg = dmcfg.lightdm;
   cfg = ldmcfg.greeters.mini;
 
+  xgreeters = pkgs.linkFarm "lightdm-mini-greeter-xgreeters" [{
+    path = "${pkgs.lightdm-mini-greeter}/share/xgreeters/lightdm-mini-greeter.desktop";
+    name = "lightdm-mini-greeter.desktop";
+  }];
+
   miniGreeterConf = pkgs.writeText "lightdm-mini-greeter.conf"
     ''
     [greeter]
@@ -85,7 +90,7 @@ in
     services.xserver.displayManager.lightdm.greeters.gtk.enable = false;
 
     services.xserver.displayManager.lightdm.greeter = mkDefault {
-      package = pkgs.lightdm-mini-greeter.xgreeters;
+      package = xgreeters;
       name = "lightdm-mini-greeter";
     };
 

@@ -16,13 +16,13 @@
 
 stdenv.mkDerivation rec {
   pname = "switchboard-plug-sound";
-  version = "2.2.2";
+  version = "2.2.1";
 
   src = fetchFromGitHub {
     owner = "elementary";
     repo = pname;
     rev = version;
-    sha256 = "1aa9wgaz34glrrnilnqis3k0bnx2a2ir38j493y4d0klkjkwyn5k";
+    sha256 = "0frml591r82j7hf1zlccgv8pzk3w10x470f9nzvdgdjpz0r776k2";
   };
 
   passthru = {
@@ -47,6 +47,8 @@ stdenv.mkDerivation rec {
     pulseaudio
     switchboard
   ];
+
+  PKG_CONFIG_SWITCHBOARD_2_0_PLUGSDIR = "${placeholder "out"}/lib/switchboard";
 
   meta = with stdenv.lib; {
     description = "Switchboard Sound Plug";

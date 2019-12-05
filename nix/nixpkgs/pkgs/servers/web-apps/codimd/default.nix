@@ -1,7 +1,7 @@
 { stdenv, fetchFromGitHub, fetchpatch, makeWrapper
-, which, nodejs, mkYarnPackage, python2 }:
+, which, nodejs, yarn2nix, python2 }:
 
-mkYarnPackage rec {
+yarn2nix.mkYarnPackage rec {
   name = "codimd";
   version = "1.5.0";
 

@@ -32,7 +32,7 @@
 , libgnomeui
 , libnotify
 , gnome3
-, libGLU, libGL
+, libGLU_combined
 , nspr
 , nss
 , pango
@@ -126,7 +126,7 @@ stdenv.mkDerivation {
       libgnome
       libgnomeui
       libnotify
-      libGLU libGL
+      libGLU_combined
       nspr
       nss
       pango

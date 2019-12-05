@@ -32,7 +32,8 @@ in rec {
     tests = {
       inherit (nixos'.tests)
         containers-imperative
-        containers-ip
+        containers-ipv4
+        containers-ipv6
         firewall
         ipv6
         login

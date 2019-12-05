@@ -1,4 +1,4 @@
-import ../make-test-python.nix ({ lib, ... }:
+import ../make-test.nix ({ lib, ... }:
 
 {
   name = "initrd-network-ssh";
@@ -35,31 +35,25 @@ import ../make-test-python.nix ({ lib, ... }:
     client =
       { config, ... }:
       {
-        environment.etc = {
-          knownHosts = {
-            text = concatStrings [
-              "server,"
-              "${toString (head (splitString " " (
-                toString (elemAt (splitString "\n" config.networking.extraHosts) 2)
-              )))} "
-              "${readFile ./dropbear.pub}"
-            ];
-          };
-          sshKey = {
-            source = ./openssh.priv; # dont use this anywhere else
-            mode = "0600";
-          };
+        environment.etc.knownHosts = {
+          text = concatStrings [
+            "server,"
+            "${toString (head (splitString " " (
+              toString (elemAt (splitString "\n" config.networking.extraHosts) 2)
+            )))} "
+            "${readFile ./dropbear.pub}"
+          ];
         };
       };
   };
 
   testScript = ''
-    start_all()
-    client.wait_for_unit("network.target")
-    client.wait_until_succeeds("ping -c 1 server")
-    client.succeed(
-        "ssh -i /etc/sshKey -o UserKnownHostsFile=/etc/knownHosts server 'touch /fnord'"
-    )
-    client.shutdown()
+    startAll;
+    $client->waitForUnit("network.target");
+    $client->copyFileFromHost("${./openssh.priv}","/etc/sshKey");
+    $client->succeed("chmod 0600 /etc/sshKey");
+    $client->waitUntilSucceeds("ping -c 1 server");
+    $client->succeed("ssh -i /etc/sshKey -o UserKnownHostsFile=/etc/knownHosts server 'touch /fnord'");
+    $client->shutdown;
   '';
 })

@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, SDL, libjack2, libGLU, libGL, pkgconfig }:
+{ stdenv, fetchurl, SDL, libjack2, libGLU_combined, pkgconfig }:
 
 stdenv.mkDerivation rec {
   pname = "jack_oscrolloscope";
@@ -10,7 +10,7 @@ stdenv.mkDerivation rec {
   };
 
   nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ SDL libjack2 libGLU libGL ];
+  buildInputs = [ SDL libjack2 libGLU_combined ];
 
   installPhase = ''
     mkdir -p $out/bin

@@ -1,59 +1,19 @@
-{ stdenv
-, fetchurl
-, atk
-, cairo
-, desktop-file-utils
-, evolution-data-server
-, gcr
-, gettext
-, glib
-, gnome3
-, gpgme
-, gtk3
-, gtksourceview3
-, gtkspell3
-, libcryptui
-, libxml2
-, meson
-, ninja
-, pkgconfig
-, sqlite
-, wrapGAppsHook
-}:
+{ stdenv, fetchurl, pkgconfig, intltool
+, libxml2, desktop-file-utils, wrapGAppsHook, evolution-data-server, gtkspell3, gpgme, libcryptui
+, glib, gtk3, gtksourceview3, sqlite, cairo, atk, gcr, gnome3 }:
 
 stdenv.mkDerivation rec {
   pname = "almanah";
-  version = "0.12.0";
+  version = "0.11.1";
 
   src = fetchurl {
     url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "09rxx4s4c34d1axza6ayss33v78p44r9bpx058shllh1sf5avpcb";
+    sha256 = "1g0fyykq8bs3x1xqc0l0bk9zazcrxja784m68myymv1zfqqnp9h0";
   };
 
-  nativeBuildInputs = [
-    desktop-file-utils
-    gettext
-    libxml2
-    meson
-    ninja
-    pkgconfig
-    wrapGAppsHook
-  ];
+  nativeBuildInputs = [ pkgconfig intltool libxml2 desktop-file-utils wrapGAppsHook ];
 
-  buildInputs = [
-    atk
-    cairo
-    evolution-data-server
-    gcr
-    glib
-    gnome3.evolution
-    gpgme
-    gtk3
-    gtksourceview3
-    gtkspell3
-    libcryptui
-    sqlite
-  ];
+  buildInputs = [ glib gtk3 gtksourceview3 sqlite cairo atk gcr gtkspell3 evolution-data-server gnome3.evolution gpgme libcryptui ];
 
   passthru = {
     updateScript = gnome3.updateScript {

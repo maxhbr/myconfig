@@ -2,7 +2,7 @@
 , libjack2, gettext, intltool, guile_2_0, lilypond
 , glib, libxml2, librsvg, libsndfile, aubio
 , gtk3, gtksourceview, evince, fluidsynth, rubberband
-, portaudio, portmidi, fftw, wrapGAppsHook }:
+, portaudio, portmidi, fftw, makeWrapper }:
 
 stdenv.mkDerivation rec {
   pname = "denemo";
@@ -14,21 +14,17 @@ stdenv.mkDerivation rec {
   };
 
   buildInputs = [
-    libjack2 guile_2_0 lilypond glib libxml2 librsvg libsndfile
+    libjack2 gettext guile_2_0 lilypond pkgconfig glib libxml2 librsvg libsndfile
     aubio gtk3 gtksourceview evince fluidsynth rubberband portaudio fftw portmidi
+    makeWrapper
   ];
 
-  preFixup = ''
-    gappsWrapperArgs+=(
-      --prefix PATH : "${lilypond}/bin"
-    )
+  postInstall = ''
+    wrapProgram $out/bin/denemo --prefix PATH : ${lilypond}/bin
   '';
 
   nativeBuildInputs = [
-    wrapGAppsHook
     intltool
-    gettext
-    pkgconfig
   ];
 
   meta = with stdenv.lib; {

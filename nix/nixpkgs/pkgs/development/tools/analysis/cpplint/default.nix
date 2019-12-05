@@ -1,6 +1,6 @@
-{ lib, python3Packages, fetchFromGitHub }:
+{ lib, pythonPackages, fetchFromGitHub }:
 
-python3Packages.buildPythonApplication rec {
+pythonPackages.buildPythonApplication rec {
   pname = "cpplint";
   version = "1.3.0";
 

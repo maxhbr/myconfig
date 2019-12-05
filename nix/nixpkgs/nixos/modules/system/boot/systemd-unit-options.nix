@@ -24,7 +24,7 @@ in rec {
       in
         if isList (head defs'')
         then concatLists defs''
-        else mergeEqualOption loc defs';
+        else mergeOneOption loc defs';
   };
 
   sharedOptions = {

@@ -461,10 +461,7 @@ in
 
     systemd.services.httpd.after = optional (cfg.database.createLocally && cfg.database.type == "mysql") "mysql.service";
 
-    users.users.${user} = {
-      group = group;
-      isSystemUser = true;
-    };
+    users.users.${user}.group = group;
 
     environment.systemPackages = [ mediawikiScripts ];
   };

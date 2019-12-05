@@ -1,33 +1,35 @@
-{ lib, fetchFromGitHub, ocamlPackages }:
+{ stdenv, fetchFromGitHub, ocamlPackages }:
 
 with ocamlPackages; buildDunePackage rec {
   pname = "ocamlformat";
-  version = "0.11.0";
+  version = "0.8";
 
-  minimumOCamlVersion = "4.06";
+  minimumOCamlVersion = "4.05";
 
   src = fetchFromGitHub {
     owner = "ocaml-ppx";
     repo = pname;
     rev = version;
-    sha256 = "0zvjn71jd4d3znnpgh0yphb2w8ggs457b6bl6cg1fmpdgxnds6yx";
+    sha256 = "1i7rsbs00p43362yv7z7dw0qsnv7vjf630qk676qvfg7kg422w6j";
   };
 
   buildInputs = [
+    base
     cmdliner
     fpath
     ocaml-migrate-parsetree
-    odoc
-    re
     stdio
-    uuseg
-    uutf
   ];
+
+  configurePhase = ''
+    patchShebangs tools/gen_version.sh
+    tools/gen_version.sh src/Version.ml version
+  '';
 
   meta = {
     inherit (src.meta) homepage;
     description = "Auto-formatter for OCaml code";
-    maintainers = [ lib.maintainers.Zimmi48 ];
-    license = lib.licenses.mit;
+    maintainers = [ stdenv.lib.maintainers.Zimmi48 ];
+    license = stdenv.lib.licenses.mit;
   };
 }

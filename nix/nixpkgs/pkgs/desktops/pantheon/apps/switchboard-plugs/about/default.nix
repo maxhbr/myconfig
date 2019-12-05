@@ -11,18 +11,17 @@
 , gtk3
 , switchboard
 , pciutils
-, elementary-feedback
 }:
 
 stdenv.mkDerivation rec {
   pname = "switchboard-plug-about";
-  version = "2.6.1";
+  version = "2.5.2";
 
   src = fetchFromGitHub {
     owner = "elementary";
     repo = pname;
     rev = version;
-    sha256 = "1z58d21xrjghvjx0ng53pcxwdk2f5d00dvngcyjja0kf7sixba71";
+    sha256 = "11diwz2aj45yqkxdija8ny0sgm0wl2905gl3799cdl12ss9ffndp";
   };
 
   passthru = {
@@ -47,15 +46,17 @@ stdenv.mkDerivation rec {
 
   patches = [
     (substituteAll {
-      src = ./fix-paths.patch;
+      src = ./lspci-path.patch;
       inherit pciutils;
-      elementary_feedback = elementary-feedback;
     })
+    ./remove-update-button.patch
   ];
+
+  PKG_CONFIG_SWITCHBOARD_2_0_PLUGSDIR = "${placeholder "out"}/lib/switchboard";
 
   meta = with stdenv.lib; {
     description = "Switchboard About Plug";
-    homepage = https://github.com/elementary/switchboard-plug-about;
+    homepage = https://github.com/elementary/witchboard-plug-about;
     license = licenses.gpl3Plus;
     platforms = platforms.linux;
     maintainers = pantheon.maintainers;

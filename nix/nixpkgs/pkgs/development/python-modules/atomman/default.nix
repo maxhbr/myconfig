@@ -1,33 +1,34 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, isPy27
-, cython
-, datamodeldict
-, matplotlib
-, numericalunits
-, numpy
-, pandas
-, pytest
-, scipy
-, toolz
+{ stdenv
+, buildPythonPackage
+, fetchPypi
 , xmltodict
+, datamodeldict
+, numpy
+, matplotlib
+, scipy
+, pandas
+, cython
+, numericalunits
+, pytest
 }:
 
 buildPythonPackage rec {
-  version = "1.3.0";
+  version = "1.2.6";
   pname = "atomman";
-  disabled = isPy27;
 
-  src = fetchFromGitHub {
-    owner = "usnistgov";
-    repo  = "atomman";
-    rev = "v${version}";
-    sha256 = "09pfykd96wmw00s3kgabghykjn8b4yjml4ybpi7kwy7ygdmzcx51";
+  src = fetchPypi {
+    inherit pname version;
+    sha256 = "19501bfdf7e66090764a0ccbecf85a128b46333ea232c2137fa4345512b8b502";
   };
 
   checkInputs = [ pytest ];
-  propagatedBuildInputs = [ xmltodict datamodeldict numpy matplotlib scipy pandas cython numericalunits toolz ];
+  propagatedBuildInputs = [ xmltodict datamodeldict numpy matplotlib scipy pandas cython numericalunits ];
+
+  # tests not included with Pypi release
+  doCheck = false;
 
   checkPhase = ''
-    py.test tests -k 'not test_atomic'
+    py.test tests
   '';
 
   meta = with stdenv.lib; {

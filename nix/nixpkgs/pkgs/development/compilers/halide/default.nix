@@ -3,7 +3,7 @@
 }:
 
 let
-  version = "2019_08_27";
+  version = "2018_02_15";
 
 in llvmPackages.stdenv.mkDerivation {
 
@@ -13,7 +13,7 @@ in llvmPackages.stdenv.mkDerivation {
     owner = "halide";
     repo = "Halide";
     rev = "release_${version}";
-    sha256 = "09xf8v9zyxx2fn6s1yzjkyzcf9zyzrg3x5vivgd2ljzbfhm8wh7n";
+    sha256 = "14lmpbxydx7ii0pxds6rgq5vw4i6yfjsq0bai1l5wwpv1rnwmbxd";
   };
 
   patches = [ ./nix.patch ];
@@ -58,7 +58,7 @@ in llvmPackages.stdenv.mkDerivation {
     description = "C++ based language for image processing and computational photography";
     homepage = "https://halide-lang.org";
     license = licenses.mit;
-    platforms = [ "i686-linux" "x86_64-linux" ];
+    platforms = platforms.linux;
     maintainers = [ maintainers.ck3d ];
   };
 }

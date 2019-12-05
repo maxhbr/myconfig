@@ -35,7 +35,7 @@ buildPythonPackage rec {
 
   meta = with pkgs.lib; {
     description = "This is the Microsoft Azure Resource Management common code";
-    homepage = "https://github.com/Azure/azure-sdk-for-python";
+    homepage = https://pypi.org/project/azure-mgmt-common;
     license = licenses.mit;
     maintainers = with maintainers; [ olcai mwilsoninsight ];
   };

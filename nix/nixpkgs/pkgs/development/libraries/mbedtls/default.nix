@@ -12,7 +12,7 @@
 stdenv.mkDerivation rec {
   pname = "mbedtls";
   name = "mbedtls-${version}";
-  version = "2.16.3"; # nixpkgs-update: no auto update
+  version = "2.16.3";
 
   src = fetchFromGitHub {
     owner = "ARMmbed";

@@ -2,11 +2,11 @@
 
 stdenv.mkDerivation rec {
   pname = "subsonic";
-  version = "6.1.6";
+  version = "6.1.5";
 
   src = fetchurl {
     url = "mirror://sourceforge/subsonic/subsonic-${version}-standalone.tar.gz";
-    sha256 = "180qdk8mnc147az8v9rmc1kgf8b13mmq88l195gjdwiqpflqzdyz";
+    sha256 = "1xz3flxd5hxcvvg1izzxpv5rxwb5zprk92vsgvmcniy7j7r66936";
   };
 
   inherit jre;

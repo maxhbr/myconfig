@@ -10,7 +10,7 @@ stdenv.mkDerivation rec {
 
   buildInputs = [ libpng SDL2 libGL libjpeg SDL2_ttf libvorbis gettext physfs ];
 
-  dontPatchELF = true;
+  dontPatchElf = true;
 
   patchPhase = ''
     sed -i -e 's@\./data@'$out/share/neverball/data@ share/base_config.h Makefile

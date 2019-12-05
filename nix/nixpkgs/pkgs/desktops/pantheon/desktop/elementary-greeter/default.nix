@@ -1,34 +1,12 @@
-{ stdenv
-, fetchFromGitHub
-, linkFarm
-, substituteAll
-, elementary-greeter
-, pantheon
-, pkgconfig
-, meson
-, ninja
-, vala
-, desktop-file-utils
-, gtk3
-, granite
-, libgee
-, elementary-settings-daemon
-, mutter
-, elementary-icon-theme
-, wingpanel-with-indicators
-, elementary-gtk-theme
-, nixos-artwork
-, lightdm
-, gdk-pixbuf
-, clutter-gtk
-, dbus
-, accountsservice
-, wrapGAppsHook
-}:
+{ stdenv, fetchFromGitHub, pantheon, pkgconfig, substituteAll, meson
+, ninja, vala, desktop-file-utils, gtk3, granite, libgee, elementary-settings-daemon
+, gnome-desktop, mutter, elementary-icon-theme, wingpanel-with-indicators
+, elementary-gtk-theme, nixos-artwork, lightdm, numlockx
+, clutter-gtk, libGL, dbus, wrapGAppsHook }:
 
 stdenv.mkDerivation rec {
   pname = "elementary-greeter";
-  version = "5.0.1";
+  version = "3.3.1";
 
   repoName = "greeter";
 
@@ -36,7 +14,7 @@ stdenv.mkDerivation rec {
     owner = "elementary";
     repo = repoName;
     rev = version;
-    sha256 = "0qy6iw71p8hv6fpcr7p3hqbzlcpxrz18qdm1inannq68d0pxfx76";
+    sha256 = "1vkq4z0hrmvzv4sh2qkxjajdxcycd1zj97a3pc8n4yb858pqfyzc";
   };
 
   passthru = {
@@ -44,11 +22,6 @@ stdenv.mkDerivation rec {
       inherit repoName;
       attrPath = pname;
     };
-
-    xgreeters = linkFarm "pantheon-greeter-xgreeters" [{
-      path = "${elementary-greeter}/share/xgreeters/io.elementary.greeter.desktop";
-      name = "io.elementary.greeter.desktop";
-    }];
   };
 
   nativeBuildInputs = [
@@ -61,18 +34,31 @@ stdenv.mkDerivation rec {
   ];
 
   buildInputs = [
-    accountsservice
-    clutter-gtk # else we get could not generate cargs for mutter-clutter-2
-    elementary-gtk-theme
+    clutter-gtk
     elementary-icon-theme
+    elementary-gtk-theme
     elementary-settings-daemon
-    gdk-pixbuf
+    gnome-desktop
     granite
     gtk3
     libgee
+    libGL
     lightdm
     mutter
     wingpanel-with-indicators
+  ];
+
+  patches = [
+    (substituteAll {
+      src = ./gsd.patch;
+      elementary_settings_daemon = "${elementary-settings-daemon}/libexec/";
+    })
+    (substituteAll {
+      src = ./numlockx.patch;
+      inherit numlockx;
+    })
+    ./01-sysconfdir-install.patch
+    ./hardcode-theme.patch
   ];
 
   mesonFlags = [
@@ -80,18 +66,6 @@ stdenv.mkDerivation rec {
     "--sbindir=${placeholder "out"}/bin"
     # baked into the program for discovery of the greeter configuration
     "--sysconfdir=/etc"
-    # We use the patched gnome-settings-daemon
-    "-Dubuntu-patched-gsd=true"
-    "-Dgsd-dir=${elementary-settings-daemon}/libexec/" # trailing slash is needed
-  ];
-
-  patches = [
-    ./sysconfdir-install.patch
-    # Needed until https://github.com/elementary/greeter/issues/360 is fixed
-    (substituteAll {
-      src = ./hardcode-fallback-background.patch;
-      default_wallpaper = "${nixos-artwork.wallpapers.simple-dark-gray}/share/artwork/gnome/nix-wallpaper-simple-dark-gray.png";
-    })
   ];
 
   preFixup = ''
@@ -102,19 +76,18 @@ stdenv.mkDerivation rec {
       # for `wingpanel -g`
       --prefix PATH : "${wingpanel-with-indicators}/bin"
 
-      # for the compositor
+      # TODO: they should be using meson for this
+      # See: https://github.com/elementary/greeter/blob/19c0730fded4e9ddec5a491f0e78f83c7c04eb59/src/PantheonGreeter.vala#L451
       --prefix PATH : "$out/bin"
     )
   '';
 
   postFixup = ''
-    # Use NixOS default wallpaper
-    substituteInPlace $out/etc/lightdm/io.elementary.greeter.conf \
-      --replace "#default-wallpaper=/usr/share/backgrounds/elementaryos-default" \
-      "default-wallpaper=${nixos-artwork.wallpapers.simple-dark-gray}/share/artwork/gnome/nix-wallpaper-simple-dark-gray.png"
-
     substituteInPlace $out/share/xgreeters/io.elementary.greeter.desktop \
-      --replace "Exec=io.elementary.greeter" "Exec=$out/bin/io.elementary.greeter"
+      --replace  "Exec=io.elementary.greeter" "Exec=$out/bin/io.elementary.greeter"
+
+    substituteInPlace $out/etc/lightdm/io.elementary.greeter.conf \
+      --replace "#default-wallpaper=/usr/share/backgrounds/elementaryos-default" "default-wallpaper=${nixos-artwork.wallpapers.simple-dark-gray}/share/artwork/gnome/nix-wallpaper-simple-dark-gray.png"
   '';
 
   meta = with stdenv.lib; {

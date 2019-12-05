@@ -3,7 +3,7 @@
 #   2. jenkins user can be extended on both master and slave
 #   3. jenkins service not started on slave node
 
-import ./make-test-python.nix ({ pkgs, ...} : {
+import ./make-test.nix ({ pkgs, ...} : {
   name = "jenkins";
   meta = with pkgs.stdenv.lib.maintainers; {
     maintainers = [ bjornfor coconnor domenkozar eelco ];
@@ -33,17 +33,18 @@ import ./make-test-python.nix ({ pkgs, ...} : {
   };
 
   testScript = ''
-    start_all()
+    startAll;
 
-    master.wait_for_unit("jenkins")
+    $master->waitForUnit("jenkins");
 
-    assert "Authentication required" in master.succeed("curl http://localhost:8080")
+    $master->mustSucceed("curl http://localhost:8080 | grep 'Authentication required'");
 
-    for host in master, slave:
-        groups = host.succeed("sudo -u jenkins groups")
-        assert "jenkins" in groups
-        assert "users" in groups
+    print $master->execute("sudo -u jenkins groups");
+    $master->mustSucceed("sudo -u jenkins groups | grep jenkins | grep users");
 
-    slave.fail("systemctl is-enabled jenkins.service")
+    print $slave->execute("sudo -u jenkins groups");
+    $slave->mustSucceed("sudo -u jenkins groups | grep jenkins | grep users");
+
+    $slave->mustFail("systemctl is-enabled jenkins.service");
   '';
 })

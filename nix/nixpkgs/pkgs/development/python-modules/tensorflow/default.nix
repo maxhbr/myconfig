@@ -5,18 +5,12 @@
 # Python libraries
 , numpy, tensorflow-tensorboard, backports_weakref, mock, enum34, absl-py
 , future, setuptools, wheel, keras-preprocessing, keras-applications, google-pasta
-, functools32
-, opt-einsum
 , termcolor, grpcio, six, wrapt, protobuf, tensorflow-estimator
 # Common deps
 , git, swig, which, binutils, glibcLocales, cython
 # Common libraries
 , jemalloc, openmpi, astor, gast, grpc, sqlite, openssl, jsoncpp, re2
 , curl, snappy, flatbuffers, icu, double-conversion, libpng, libjpeg, giflib
-# Upsteam by default includes cuda support since tensorflow 1.15. We could do
-# that in nix as well. It would make some things easier and less confusing, but
-# it would also make the default tensorflow package unfree. See
-# https://groups.google.com/a/tensorflow.org/forum/#!topic/developers/iRCt5m4qUz0
 , cudaSupport ? false, nvidia_x11 ? null, cudatoolkit ? null, cudnn ? null, nccl ? null
 # XLA without CUDA is broken
 , xlaSupport ? cudaSupport
@@ -39,13 +33,7 @@ let
 
   cudatoolkit_joined = symlinkJoin {
     name = "${cudatoolkit.name}-merged";
-    paths = [
-      cudatoolkit.lib
-      cudatoolkit.out
-      # for some reason some of the required libs are in the targets/x86_64-linux
-      # directory; not sure why but this works around it
-      "${cudatoolkit}/targets/${stdenv.system}"
-    ];
+    paths = [ cudatoolkit.out cudatoolkit.lib ];
   };
 
   cudatoolkit_cc_joined = symlinkJoin {
@@ -67,12 +55,12 @@ let
 
   tfFeature = x: if x then "1" else "0";
 
-  version = "1.15.0";
+  version = "1.14.0";
   variant = if cudaSupport then "-gpu" else "";
   pname = "tensorflow${variant}";
 
   pythonEnv = python.withPackages (_:
-    [ # python deps needed during wheel build time (not runtime, see the buildPythonPackage part for that)
+    [ # python deps needed during wheel build time
       numpy
       keras-preprocessing
       protobuf
@@ -86,7 +74,6 @@ let
       wheel
   ] ++ lib.optionals (!isPy3k)
   [ future
-    functools32
     mock
   ]);
 
@@ -97,7 +84,7 @@ let
       owner = "tensorflow";
       repo = "tensorflow";
       rev = "v${version}";
-      sha256 = "1j8vysfblkyydrr67qr3i7kvaq5ygnjlx8hw9a9pc95ac462jq7i";
+      sha256 = "06jvwlsm14b8rqwd8q8796r0vmn0wk64s4ps2zg0sapkmp9vvcmi";
     };
 
     patches = [
@@ -113,15 +100,12 @@ let
         sha256 = "1m2qmwv1ysqa61z6255xggwbq6mnxbig749bdvrhnch4zydxb4di";
       })
 
-      ./tf-1.15-bazel-1.0.patch
-
+      # https://github.com/tensorflow/tensorflow/issues/29220
       (fetchpatch {
-        # be compatible with gast >0.2 instead of only gast 0.2.2
-        name = "gast-update.patch";
-        url = "https://github.com/tensorflow/tensorflow/commit/85751ad6c7f5fd12c6c79545d96896cba92fa8b4.patch";
-        sha256 = "077cpj0kzyqxzdya1dwh8df17zfzhqn7c685hx6iskvw2979zg2n";
+        name = "bazel-0.27.patch";
+        url = "https://github.com/tensorflow/tensorflow/commit/cfccbdb8c4a92dd26382419dceb4d934c2380391.patch";
+        sha256 = "1l56wjia2c4685flsfkkgy471wx3c66wyv8khspv06zchj0k0liw";
       })
-      ./lift-gast-restriction.patch
     ];
 
     # On update, it can be useful to steal the changes from gentoo
@@ -173,6 +157,7 @@ let
       # "com_github_googleapis_googleapis"
       # "com_github_googlecloudplatform_google_cloud_cpp"
       "com_google_protobuf"
+      "com_google_protobuf_cc"
       "com_googlesource_code_re2"
       "curl"
       "cython"
@@ -190,11 +175,11 @@ let
       "lmdb"
       "nasm"
       # "nsync" # not packaged in nixpkgs
-      "opt_einsum_archive"
       "org_sqlite"
       "pasta"
       "pcre"
       "png_archive"
+      "protobuf_archive"
       "six_archive"
       "snappy"
       "swig"
@@ -268,7 +253,6 @@ let
     bazelFlags = [
       # temporary fixes to make the build work with bazel 0.27
       "--incompatible_no_support_tools_in_action_inputs=false"
-      "--incompatible_use_native_patch=false"
     ];
     bazelBuildFlags = [
       "--config=opt" # optimize using the flags set in the configure phase
@@ -282,9 +266,9 @@ let
 
       # cudaSupport causes fetch of ncclArchive, resulting in different hashes
       sha256 = if cudaSupport then
-        "1rbg8w8pjf15hpvzrclsi19lhsrwdns6f8psb1wz35ay0ggdw8c0"
+        "196pm3ynfafqlcxah07hkvphf536hpix1ydgsynr1yg08aynlvvx"
       else
-        "0d8wq89iz9vrzvr971mgdclxxjcjr32r7aj817h019x3pc53qnwx";
+        "138r85n27ijzwxfwb5pcfyb79v14368jpckw0vmciz6pwf11bd9g";
     };
 
     buildAttrs = {
@@ -327,9 +311,7 @@ let
       license = licenses.asl20;
       maintainers = with maintainers; [ jyp abbradar ];
       platforms = platforms.linux;
-      # The py2 build fails due to some issue importing protobuf. Possibly related to the fix in
-      # https://github.com/akesandgren/easybuild-easyblocks/commit/1f2e517ddfd1b00a342c6abb55aef3fd93671a2b
-      broken = !(xlaSupport -> cudaSupport) || !isPy3k;
+      broken = !(xlaSupport -> cudaSupport);
     };
   };
 
@@ -363,11 +345,9 @@ in buildPythonPackage {
     termcolor
     wrapt
     grpcio
-    opt-einsum
   ] ++ lib.optionals (!isPy3k) [
     mock
-    future
-    functools32
+    future # FIXME
   ] ++ lib.optionals (pythonOlder "3.4") [
     backports_weakref enum34
   ] ++ lib.optionals withTensorboard [
@@ -386,26 +366,7 @@ in buildPythonPackage {
   # TODO try to run them anyway
   # TODO better test (files in tensorflow/tools/ci_build/builds/*test)
   checkPhase = ''
-    ${python.interpreter} <<EOF
-    # A simple "Hello world"
-    import tensorflow as tf
-    hello = tf.constant("Hello, world!")
-    sess = tf.Session()
-    sess.run(hello)
-
-    # Fit a simple model to random data
-    import numpy as np
-    np.random.seed(0)
-    tf.random.set_random_seed(0)
-    model = tf.keras.models.Sequential([
-        tf.keras.layers.Dense(1, activation="linear")
-    ])
-    model.compile(optimizer="sgd", loss="mse")
-
-    x = np.random.uniform(size=(1,1))
-    y = np.random.uniform(size=(1,))
-    model.fit(x, y, epochs=1)
-    EOF
+    ${python.interpreter} -c "import tensorflow"
   '';
 
   passthru.libtensorflow = bazel-build.out;

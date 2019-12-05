@@ -557,6 +557,7 @@ in
           default = !( dmconf.auto.enable
                     || dmconf.gdm.enable
                     || dmconf.sddm.enable
+                    || dmconf.slim.enable
                     || dmconf.xpra.enable );
       in mkIf (default) true;
 

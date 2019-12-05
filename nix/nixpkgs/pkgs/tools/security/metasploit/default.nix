@@ -28,7 +28,7 @@ in stdenv.mkDerivation rec {
 
   buildInputs = [ makeWrapper ];
 
-  dontPatchELF = true; # stay away from exploit executables
+  dontPatchelf = true; # stay away from exploit executables
 
   installPhase = ''
     mkdir -p $out/{bin,share/msf}

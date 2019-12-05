@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, autoreconfHook, libGL, libGLU }:
+{ stdenv, fetchurl, autoreconfHook, libGLU_combined }:
 
 let version = "1.0.1"; in
 
@@ -12,7 +12,7 @@ stdenv.mkDerivation rec {
   };
 
   nativeBuildInputs = [ autoreconfHook ];
-  buildInputs = [ libGL libGLU ];
+  buildInputs = [ libGLU_combined ];
 
   meta = with stdenv.lib; {
     homepage = http://dri.freedesktop.org/wiki/S3TC;

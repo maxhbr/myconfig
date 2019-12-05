@@ -28,7 +28,6 @@ stdenv.mkDerivation rec {
 
   meta = with stdenv.lib; {
     license = licenses.gpl2;
-    description = "A hex editor";
     maintainers = with maintainers; [ peterhoeg bkchr ];
     platforms = platforms.linux;
   };

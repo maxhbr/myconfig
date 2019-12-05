@@ -1,5 +1,5 @@
 {stdenv, fetchurl, fetchpatch, scons, SDL, SDL_image, boost, libpng, SDL_mixer
-, pkgconfig, libGLU, libGL}:
+, pkgconfig, libGLU_combined}:
 let
   s = # Generated upstream information
   {
@@ -14,7 +14,7 @@ in
 stdenv.mkDerivation {
   inherit (s) name version;
   nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [scons SDL SDL_image boost libpng SDL_mixer libGLU libGL];
+  buildInputs = [scons SDL SDL_image boost libpng SDL_mixer libGLU_combined];
   src = fetchurl {
     inherit (s) url sha256;
   };

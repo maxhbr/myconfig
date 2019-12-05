@@ -28,7 +28,7 @@ buildPythonPackage rec {
 
   meta = with pkgs.lib; {
     description = "Microsoft Azure SDK for Python";
-    homepage = "https://github.com/Azure/azure-sdk-for-python";
+    homepage = "https://azure.microsoft.com/en-us/develop/python/";
     license = licenses.asl20;
     maintainers = with maintainers; [ olcai ];
   };

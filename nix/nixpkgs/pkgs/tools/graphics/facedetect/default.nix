@@ -12,13 +12,13 @@ stdenv.mkDerivation rec {
   };
 
   buildInputs = [ python2Packages.python python2Packages.wrapPython ];
-  pythonPath = [ python2Packages.numpy python2Packages.opencv4 ];
+  pythonPath = [ python2Packages.numpy python2Packages.opencv ];
 
   phases = [ "unpackPhase" "patchPhase" "installPhase" ];
 
   patchPhase = ''
     substituteInPlace facedetect \
-      --replace /usr/share/opencv "${python2Packages.opencv4}/share/opencv4"
+      --replace /usr/share/opencv "${python2Packages.opencv}/share/OpenCV"
   '';
 
   installPhase = ''

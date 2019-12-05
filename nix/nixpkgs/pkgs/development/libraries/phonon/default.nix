@@ -1,27 +1,22 @@
-{ stdenv
-, lib
-, fetchurl
-, cmake
-, libGLU
-, libGL
-, pkgconfig
-, libpulseaudio
-, extra-cmake-modules
-, qtbase
-, qttools
-, debug ? false
-}:
+{ stdenv, lib, fetchurl, cmake, libGLU_combined, pkgconfig, libpulseaudio
+, qt4 ? null, extra-cmake-modules ? null, qtbase ? null, qttools ? null
+, withQt5 ? false
+, debug ? false }:
 
 with lib;
 
 let
-  soname = "phonon4qt5";
+  v = "4.10.3";
+
+  soname = if withQt5 then "phonon4qt5" else "phonon";
   buildsystemdir = "share/cmake/${soname}";
 in
 
-stdenv.mkDerivation rec {
-  pname = "phonon";
-  version = "4.11.1";
+assert withQt5 -> qtbase != null;
+assert withQt5 -> qttools != null;
+
+stdenv.mkDerivation {
+  name = "phonon-${if withQt5 then "qt5" else "qt4"}-${v}";
 
   meta = {
     homepage = https://phonon.kde.org/;
@@ -32,31 +27,25 @@ stdenv.mkDerivation rec {
   };
 
   src = fetchurl {
-    url = "mirror://kde/stable/phonon/${version}/phonon-${version}.tar.xz";
-    sha256 = "0bfy8iqmjhlg3ma3iqd3kxjc2zkzpjgashbpf5x17y0dc2i1whxl";
+    url = "mirror://kde/stable/phonon/${v}/phonon-${v}.tar.xz";
+    sha256 = "15f2vndpqfcivifzl1s07r0wkavpfrjln1p46cwfk85gd5b192rf";
   };
 
-  buildInputs = [
-    libGLU
-    libGL
-    libpulseaudio
-    qtbase
-    qttools
-  ];
+  buildInputs =
+    [ libGLU_combined libpulseaudio ]
+    ++ (if withQt5 then [ qtbase qttools ] else [ qt4 ]);
 
-  nativeBuildInputs = [
-    cmake
-    pkgconfig
-    extra-cmake-modules
-  ];
+  nativeBuildInputs =
+    [ cmake pkgconfig ]
+    ++ optional withQt5 extra-cmake-modules;
 
   outputs = [ "out" "dev" ];
 
   NIX_CFLAGS_COMPILE = "-fPIC";
 
-  cmakeFlags = [
-    "-DCMAKE_BUILD_TYPE=${if debug then "Debug" else "Release"}"
-  ];
+  cmakeFlags =
+    [ "-DCMAKE_BUILD_TYPE=${if debug then "Debug" else "Release"}" ]
+    ++ optional withQt5 "-DPHONON_BUILD_PHONON4QT5=ON";
 
   preConfigure = ''
     cmakeFlags+=" -DPHONON_QT_MKSPECS_INSTALL_DIR=''${!outputDev}/mkspecs"
@@ -74,8 +63,10 @@ stdenv.mkDerivation rec {
     sed -i cmake/FindPhononInternal.cmake \
         -e "/set(INCLUDE_INSTALL_DIR/ c set(INCLUDE_INSTALL_DIR \"''${!outputDev}/include\")"
 
+    ${optionalString withQt5 ''
     sed -i cmake/FindPhononInternal.cmake \
         -e "/set(PLUGIN_INSTALL_DIR/ c set(PLUGIN_INSTALL_DIR \"$qtPluginPrefix/..\")"
+    ''}
 
     sed -i CMakeLists.txt \
         -e "/set(BUILDSYSTEM_INSTALL_DIR/ c set(BUILDSYSTEM_INSTALL_DIR \"''${!outputDev}/${buildsystemdir}\")"

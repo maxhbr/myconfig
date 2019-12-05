@@ -132,7 +132,7 @@ mkDerivation {
   '';
 
   dontStrip = true;
-  dontPatchELF = true;
+  dontPatchElf = true;
 
   updateScript = import ./update.nix { inherit writeScript runtimeShell; };
 

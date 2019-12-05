@@ -1,4 +1,4 @@
-{ stdenv, fetchFromGitHub }:
+{stdenv, fetchFromGitHub}:
 stdenv.mkDerivation rec {
   pname = "clac";
   version = "0.0.0.20170503";
@@ -10,7 +10,8 @@ stdenv.mkDerivation rec {
     sha256 = "0j8p1npgq32s377c9lw959h5i2csq4yb27cvg7av17bji46816bv";
   };
 
-  makeFlags = [ "PREFIX=$(out)" ];
+  buildInputs = [];
+  makeFlags = ["PREFIX=$(out)"];
 
   postInstall = ''
     mkdir -p "$out/share/doc/${pname}"

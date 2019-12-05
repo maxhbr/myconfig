@@ -16,13 +16,13 @@
 
 stdenv.mkDerivation rec {
   pname = "switchboard-plug-network";
-  version = "2.2.0";
+  version = "2.1.4";
 
   src = fetchFromGitHub {
     owner = "elementary";
     repo = pname;
     rev = version;
-    sha256 = "0zg4bxrrw1nmm91yp8ymji7mha2wcjrwljcnpcvxq7lf8f2k0145";
+    sha256 = "12lvcc15jngzsa40fjhxa6kccs58h5qq4lqrc7lcx5przmfaik8k";
   };
 
   passthru = {
@@ -49,11 +49,13 @@ stdenv.mkDerivation rec {
 
   patches = [
     (substituteAll {
-      src = ./fix-paths.patch;
-      inherit networkmanagerapplet;
+      src = ./nma.patch;
+      networkmanagerapplet = networkmanagerapplet;
     })
   ];
 
+
+  PKG_CONFIG_SWITCHBOARD_2_0_PLUGSDIR = "${placeholder "out"}/lib/switchboard";
 
   meta = with stdenv.lib; {
     description = "Switchboard Networking Plug";

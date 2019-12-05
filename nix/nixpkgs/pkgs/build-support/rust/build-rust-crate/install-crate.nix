@@ -1,26 +1,24 @@
 crateName: metadata:
 ''
   runHook preInstall
-  # always create $out even if we do not have binaries. We are detecting binary targets during compilation, if those are missing there is no way to only have $lib
-  mkdir $out
+  mkdir -p $out
   if [[ -s target/env ]]; then
-    mkdir -p $lib
-    cp target/env $lib/env
+    cp target/env $out/env
   fi
   if [[ -s target/link.final ]]; then
-    mkdir -p $lib/lib
-    cp target/link.final $lib/lib/link
+    mkdir -p $out/lib
+    cp target/link.final $out/lib/link
   fi
   if [[ "$(ls -A target/lib)" ]]; then
-    mkdir -p $lib/lib
-    cp target/lib/* $lib/lib #*/
-    for library in $lib/lib/*.so $lib/lib/*.dylib; do #*/
-      ln -s $library $(echo $library | sed -e "s/-${metadata}//")
+    mkdir -p $out/lib
+    cp target/lib/* $out/lib #*/
+    for lib in $out/lib/*.so $out/lib/*.dylib; do #*/
+      ln -s $lib $(echo $lib | sed -e "s/-${metadata}//")
     done
   fi
   if [[ "$(ls -A target/build)" ]]; then # */
-    mkdir -p $lib/lib
-    cp -r target/build/* $lib/lib # */
+    mkdir -p $out/lib
+    cp -r target/build/* $out/lib # */
   fi
   if [[ -d target/bin ]]; then
     if [[ "$(ls -A target/bin)" ]]; then

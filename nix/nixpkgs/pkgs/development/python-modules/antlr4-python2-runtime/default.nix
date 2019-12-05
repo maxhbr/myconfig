@@ -1,21 +1,18 @@
-{ lib, buildPythonPackage, isPy3k, python
-, antlr4
-}:
+{ stdenv, fetchPypi, buildPythonPackage, isPy3k }:
 
 buildPythonPackage rec {
   pname = "antlr4-python2-runtime";
-  inherit (antlr4.runtime.cpp) version src;
+  version = "4.7.2";
   disabled = isPy3k;
 
-  sourceRoot = "source/runtime/Python2";
+  src = fetchPypi {
+    inherit pname version;
+    sha256 = "04ljic5wnqpizln8q3c78pqrckz6q5nb433if00j1mlyv2yja22q";
+  };
 
-  checkPhase = ''
-    ${python.interpreter} tests/TestTokenStreamRewriter.py
-  '';
-
-  meta = with lib; {
+  meta = {
     description = "Runtime for ANTLR";
     homepage = "https://www.antlr.org/";
-    license = licenses.bsd3;
+    license = stdenv.lib.licenses.bsd3;
   };
 }

@@ -29,7 +29,7 @@ with super;
     # Parse out a version number without the Lua version inserted
     version = with pkgs.lib; let
       version' = super.cqueues.version;
-      rel = splitVersion version';
+      rel = splitString "." version';
       date = head rel;
       rev = last (splitString "-" (last rel));
     in "${date}-${rev}";
@@ -105,7 +105,7 @@ with super;
     ];
     buildInputs = [
       pkgs.glib
-      pkgs.gobject-introspection
+      pkgs.gobjectIntrospection
     ];
     patches = [
       (pkgs.fetchpatch {
@@ -154,12 +154,12 @@ with super;
   luadbi-mysql = super.luadbi-mysql.override({
     extraVariables = ''
       -- Can't just be /include and /lib, unfortunately needs the trailing 'mysql'
-      MYSQL_INCDIR='${pkgs.libmysqlclient}/include/mysql';
-      MYSQL_LIBDIR='${pkgs.libmysqlclient}/lib/mysql';
+      MYSQL_INCDIR='${pkgs.lib.getDev pkgs.mysql.connector-c}/include/mysql';
+      MYSQL_LIBDIR='${pkgs.mysql.connector-c}/lib/mysql';
     '';
     buildInputs = [
       pkgs.mysql.client
-      pkgs.libmysqlclient
+      pkgs.mysql.connector-c
     ];
   });
 
@@ -224,7 +224,7 @@ with super;
   });
 
   luasystem = super.luasystem.override({
-    buildInputs = pkgs.lib.optionals pkgs.stdenv.isLinux [
+    buildInputs = [
       pkgs.glibc
     ];
   });
@@ -273,26 +273,10 @@ with super;
      sed -i 's,\(option(WITH_SHARED_LIBUV.*\)OFF,\1ON,' CMakeLists.txt
      rm -rf deps/libuv
     '';
-
-    buildInputs = [ pkgs.libuv ];
-
-    passthru = {
-      libluv = self.luv.override ({
-        preBuild = self.luv.preBuild + ''
-          sed -i 's,\(option(BUILD_MODULE.*\)ON,\1OFF,' CMakeLists.txt
-          sed -i 's,\(option(BUILD_SHARED_LIBS.*\)OFF,\1ON,' CMakeLists.txt
-          sed -i 's,${"\${INSTALL_INC_DIR}"},${placeholder "out"}/include/luv,' CMakeLists.txt
-        '';
-
-        nativeBuildInputs = [ pkgs.fixDarwinDylibNames ];
-
-        # Fixup linking libluv.dylib, for some reason it's not linked against lua correctly.
-        NIX_LDFLAGS = pkgs.lib.optionalString pkgs.stdenv.isDarwin
-          (if isLuaJIT then "-lluajit-${lua.luaversion}" else "-llua");
-      });
-    };
+    propagatedBuildInputs = [
+      pkgs.libuv
+    ];
   });
-
 
   rapidjson = super.rapidjson.override({
     preBuild = ''
