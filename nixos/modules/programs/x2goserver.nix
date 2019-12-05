@@ -69,7 +69,6 @@ in {
     users.users.x2go = {
       home = "/var/lib/x2go/db";
       group = "x2go";
-      isSystemUser = true;
     };
 
     security.wrappers.x2gosqliteWrapper = {

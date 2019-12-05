@@ -3,17 +3,17 @@
 , alsaLib
 , glib
 , gst_all_1
-, libGLU, libGL
+, libGLU_combined
 , xorg
 }:
 
 stdenv.mkDerivation rec {
   pname = "kodelife";
-  version = "0.8.7.105";
+  version = "0.8.3.93";
 
   src = fetchzip {
     url = "https://hexler.net/pub/${pname}/${pname}-${version}-linux-x86_64.zip";
-    sha256 = "0ld4lwigzwlikx04qy3gskqqg0wzlk8m3ccrd704ifl8lsp46n5r";
+    sha256 = "1gidh0745g5mc8h5ypm2wamv1paymnrq3nh3yx1j70jwjg8v2v7g";
   };
 
   dontConfigure = true;
@@ -33,7 +33,7 @@ stdenv.mkDerivation rec {
       glib
       gst_all_1.gstreamer
       gst_all_1.gst-plugins-base
-      libGLU libGL
+      libGLU_combined
       xorg.libX11
     ];
   in ''

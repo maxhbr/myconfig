@@ -79,7 +79,8 @@ in
         Using Pantheon without LightDM as a displayManager will break screenlocking from the UI.
       '';
 
-    services.xserver.displayManager.lightdm.greeters.pantheon.enable = mkDefault true;
+    services.xserver.displayManager.lightdm.enable = mkDefault true;
+    services.xserver.displayManager.lightdm.greeters.gtk.enable = mkDefault true;
 
     # If not set manually Pantheon session cannot be started
     # Known issue of https://github.com/NixOS/nixpkgs/pull/43992
@@ -97,6 +98,10 @@ in
               export LD_LIBRARY_PATH=$LD_LIBRARY_PATH''${LD_LIBRARY_PATH:+:}${p}/lib
             fi
           '') cfg.sessionPath}
+
+          # Settings from elementary-default-settings
+          export GTK_CSD=1
+          export GTK_MODULES=$GTK_MODULES:pantheon-filechooser-module
       fi
     '';
 
@@ -109,9 +114,8 @@ in
     services.pantheon.files.enable = mkDefault true;
     services.tumbler.enable = mkDefault true;
     services.system-config-printer.enable = (mkIf config.services.printing.enable (mkDefault true));
-    services.dbus.packages = with pkgs.pantheon; [
-      switchboard-plug-power
-      elementary-default-settings
+    services.dbus.packages = [
+      pkgs.pantheon.switchboard-plug-power
     ];
     services.pantheon.contractor.enable = mkDefault true;
     services.gnome3.at-spi2-core.enable = true;
@@ -157,14 +161,9 @@ in
     networking.networkmanager.enable = mkDefault true;
 
     # Override GSettings schemas
-    environment.sessionVariables.NIX_GSETTINGS_OVERRIDES_DIR = "${nixos-gsettings-desktop-schemas}/share/gsettings-schemas/nixos-gsettings-overrides/glib-2.0/schemas";
+    environment.variables.NIX_GSETTINGS_OVERRIDES_DIR = "${nixos-gsettings-desktop-schemas}/share/gsettings-schemas/nixos-gsettings-overrides/glib-2.0/schemas";
 
-    environment.sessionVariables.GNOME_SESSION_DEBUG = optionalString cfg.debug "1";
-
-    # Settings from elementary-default-settings
-    environment.sessionVariables.GTK_CSD = "1";
-    environment.sessionVariables.GTK_MODULES = "pantheon-filechooser-module";
-    environment.etc."gtk-3.0/settings.ini".source = "${pkgs.pantheon.elementary-default-settings}/etc/gtk-3.0/settings.ini";
+    environment.variables.GNOME_SESSION_DEBUG = optionalString cfg.debug "1";
 
     environment.pathsToLink = [
       # FIXME: modules should link subdirs of `/share` rather than relying on this

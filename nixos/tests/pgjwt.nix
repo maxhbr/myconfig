@@ -1,5 +1,12 @@
-import ./make-test-python.nix ({ pkgs, lib, ...}:
-
+import ./make-test.nix ({ pkgs, lib, ...}:
+let
+  test = with pkgs; runCommand "patch-test" {
+    nativeBuildInputs = [ pgjwt ];
+  }
+  ''
+    sed -e '12 i CREATE EXTENSION pgcrypto;\nCREATE EXTENSION pgtap;\nSET search_path TO tap,public;' ${pgjwt.src}/test.sql > $out;
+  '';
+in
 with pkgs; {
   name = "pgjwt";
   meta = with lib.maintainers; {
@@ -22,13 +29,9 @@ with pkgs; {
     pgProve = "${pkgs.perlPackages.TAPParserSourceHandlerpgTAP}";
   in
   ''
-    start_all()
-    master.wait_for_unit("postgresql")
-    master.succeed(
-        "${pkgs.gnused}/bin/sed -e '12 i CREATE EXTENSION pgcrypto;\\nCREATE EXTENSION pgtap;\\nSET search_path TO tap,public;' ${pgjwt.src}/test.sql > /tmp/test.sql"
-    )
-    master.succeed(
-        "${pkgs.sudo}/bin/sudo -u ${sqlSU} PGOPTIONS=--search_path=tap,public ${pgProve}/bin/pg_prove -d postgres -v -f /tmp/test.sql"
-    )
+    startAll;
+    $master->waitForUnit("postgresql");
+    $master->copyFileFromHost("${test}","/tmp/test.sql");
+    $master->succeed("${pkgs.sudo}/bin/sudo -u ${sqlSU} PGOPTIONS=--search_path=tap,public ${pgProve}/bin/pg_prove -d postgres -v -f /tmp/test.sql");
   '';
 })

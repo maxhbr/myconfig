@@ -7,7 +7,7 @@
 , json_c
 , libtool
 , pkgconfig
-, python3
+, python2
 }:
 
 stdenv.mkDerivation rec {
@@ -29,7 +29,7 @@ stdenv.mkDerivation rec {
     intltool
     libtool
     pkgconfig
-    python3
+    python2
   ];
 
   buildInputs = [
@@ -42,10 +42,6 @@ stdenv.mkDerivation rec {
   ];
 
   doCheck = true;
-
-  postPatch = ''
-    sed 's|python2|python|' -i autogen.sh
-  '';
 
   preConfigure = "./autogen.sh";
 

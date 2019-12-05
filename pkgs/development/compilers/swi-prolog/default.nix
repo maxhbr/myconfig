@@ -1,15 +1,13 @@
-{ stdenv, fetchFromGitHub, jdk, gmp, readline, openssl, unixODBC, zlib
+{ stdenv, fetchgit, jdk, gmp, readline, openssl, unixODBC, zlib
 , libarchive, db, pcre, libedit, libossp_uuid, libXpm
-, libSM, libXt, freetype, pkgconfig, fontconfig
-, cmake, libyaml, Security
-, libjpeg, libX11, libXext, libXft, libXinerama
+, libSM, libXt, freetype, pkgconfig, fontconfig, makeWrapper ? stdenv.isDarwin
+, git, cacert, cmake, libyaml
 , extraLibraries ? [ jdk unixODBC libXpm libSM libXt freetype fontconfig ]
 , extraPacks     ? []
-, withGui ? false
 }:
 
 let
-  version = "8.1.15";
+  version = "8.1.4";
   packInstall = swiplPath: pack:
     ''${swiplPath}/bin/swipl -g "pack_install(${pack}, [package_directory(\"${swiplPath}/lib/swipl/pack\"), silent(true), interactive(false)])." -t "halt."
     '';
@@ -18,37 +16,59 @@ stdenv.mkDerivation {
   pname = "swi-prolog";
   inherit version;
 
-  src = fetchFromGitHub {
-    owner = "SWI-Prolog";
-    repo = "swipl-devel";
+  src = fetchgit {
+    url = "https://github.com/SWI-Prolog/swipl-devel";
     rev = "V${version}";
-    sha256 = "0czbrscx2s4079nmwvipp9cnwfny16m3fpnp823llm7wyljchgvq";
-    fetchSubmodules = true;
+    sha256 = "0qxa6f5dypwczxajlf0l736adbjb17cbak3qsh5g04hpv2bxm6dh";
   };
 
-  nativeBuildInputs = [ cmake pkgconfig ];
-
-  buildInputs = [ gmp readline openssl
+  buildInputs = [ cacert git cmake gmp readline openssl
     libarchive libyaml db pcre libedit libossp_uuid
-    zlib ]
-  ++ stdenv.lib.optionals (withGui && !stdenv.isDarwin) [ libXpm libX11 libXext libXft libXinerama libjpeg ]
+    zlib pkgconfig ]
   ++ extraLibraries
-  ++ stdenv.lib.optional stdenv.isDarwin Security;
+  ++ stdenv.lib.optional stdenv.isDarwin makeWrapper;
 
   hardeningDisable = [ "format" ];
 
-  cmakeFlags = [ "-DSWIPL_INSTALL_IN_LIB=ON" ];
+  configureFlags = [
+    "--with-world"
+    "--enable-gmp"
+    "--enable-shared"
+  ];
 
-  postInstall = builtins.concatStringsSep "\n"
+  installPhase = ''
+    mkdir -p $out
+    mkdir build
+    cd build
+    ${cmake}/bin/cmake -DCMAKE_INSTALL_PREFIX=$out ..
+    cd ../
+    make
+    make install
+    make clean
+    mkdir -p $out/lib/swipl/pack
+  ''
+  + builtins.concatStringsSep "\n"
   ( builtins.map (packInstall "$out") extraPacks
   );
 
-  meta = {
-    homepage = "https://www.swi-prolog.org";
-    description = "A Prolog compiler and interpreter";
-    license = stdenv.lib.licenses.bsd2;
+  # For macOS: still not fixed in upstream: "abort trap 6" when called
+  # through symlink, so wrap binary.
+  # We reinvent wrapProgram here but omit argv0 pass in order to not
+  # break PAKCS package build. This is also safe for SWI-Prolog, since
+  # there is no wrapping environment and hence no need to spoof $0
+  postInstall = stdenv.lib.optionalString stdenv.isDarwin ''
+    local prog="$out/bin/swipl"
+    local hidden="$(dirname "$prog")/.$(basename "$prog")"-wrapped
+    mv $prog $hidden
+    makeWrapper $hidden $prog
+  '';
 
-    platforms = stdenv.lib.platforms.linux ++ stdenv.lib.optionals (!withGui) stdenv.lib.platforms.darwin;
+  meta = {
+    homepage = http://www.swi-prolog.org/;
+    description = "A Prolog compiler and interpreter";
+    license = "LGPL";
+
+    platforms = stdenv.lib.platforms.unix;
     maintainers = [ stdenv.lib.maintainers.meditans ];
   };
 }

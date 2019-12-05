@@ -1,12 +1,15 @@
 { stdenv
+, lib
 , buildPythonPackage
 , fetchFromGitHub
 , pytest
+, configparser
+, isPy3k
 }:
 
 buildPythonPackage rec {
   pname = "Send2Trash";
-  version = "1.5.0";
+  version = "1.4.2";
 
   src = fetchFromGitHub {
     owner = "hsoft";
@@ -16,10 +19,10 @@ buildPythonPackage rec {
   };
 
   doCheck = !stdenv.isDarwin;
-  checkPhase = "HOME=$TMPDIR pytest";
-  checkInputs = [ pytest ];
+  checkPhase = "HOME=. py.test";
+  checkInputs = [ pytest ] ++ lib.optional (!isPy3k) configparser;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Send file to trash natively under macOS, Windows and Linux";
     homepage = https://github.com/hsoft/send2trash;
     license = licenses.bsd3;

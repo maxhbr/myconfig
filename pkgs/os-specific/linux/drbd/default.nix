@@ -10,8 +10,7 @@ stdenv.mkDerivation rec {
 
   patches = [ ./pass-force.patch ];
 
-  nativeBuildInputs = [ flex ];
-  buildInputs = [ perl ];
+  buildInputs = [ flex perl ];
 
   configureFlags = [
     "--without-distro"

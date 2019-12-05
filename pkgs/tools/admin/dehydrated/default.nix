@@ -1,7 +1,10 @@
-{ stdenv, coreutils, curl, diffutils, gawk, gnugrep, gnused, openssl, makeWrapper, fetchFromGitHub, installShellFiles }:
-stdenv.mkDerivation rec {
-  pname = "dehydrated";
+{ stdenv, coreutils, curl, diffutils, gawk, gnugrep, gnused, openssl, makeWrapper, fetchFromGitHub }:
+let
+  pkgName = "dehydrated";
   version = "0.6.5";
+in
+stdenv.mkDerivation rec {
+  name = pkgName + "-" + version;
 
   src = fetchFromGitHub {
     owner = "lukas2511";
@@ -10,16 +13,9 @@ stdenv.mkDerivation rec {
     sha256 = "14k7ykry16zp09i0bqb5pqaclvnjcb6p3x8knm9v5q0bdvlplkjv";
   };
 
-  nativeBuildInputs = [ makeWrapper installShellFiles ];
+  buildInputs = [ makeWrapper ];
 
   installPhase = ''
-    installManPage docs/man/dehydrated.1
-
-    mkdir -p "$out/share/docs/dehydrated"
-    cp docs/*.md "$out/share/docs/dehydrated"
-    cp -r docs/examples "$out/share/docs/dehydrated"
-    cp {CHANGELOG,LICENSE,README.md} "$out/share/docs/dehydrated"
-
     mkdir -p $out/bin
     cp -a dehydrated $out/bin
     wrapProgram "$out/bin/dehydrated" --prefix PATH : "${stdenv.lib.makeBinPath [ openssl coreutils gnused gnugrep diffutils curl gawk ]}"

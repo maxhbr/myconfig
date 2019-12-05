@@ -1,4 +1,4 @@
-import ./make-test-python.nix ({ pkgs, lib, ... }:
+import ./make-test.nix ({ pkgs, ... }:
   let
     track = pkgs.fetchurl {
       # Sourced from http://freemusicarchive.org/music/Blue_Wave_Theory/Surf_Music_Month_Challenge/Skyhawk_Beach_fade_in
@@ -46,87 +46,74 @@ import ./make-test-python.nix ({ pkgs, lib, ... }:
     };
 
   nodes =
-    { client =
+    { client = 
       { ... }: { };
 
       serverALSA =
-        { ... }: lib.mkMerge [
-          (mkServer {
-            mpd = defaultMpdCfg // {
-              network.listenAddress = "any";
-              extraConfig = ''
-                audio_output {
-                  type "alsa"
-                  name "ALSA"
-                  mixer_type "null"
-                }
-              '';
-            };
-            musicService = with defaultMpdCfg; musicService { inherit user group musicDirectory; };
-          })
-          { networking.firewall.allowedTCPPorts = [ 6600 ]; }
-        ];
+        { ... }: (mkServer {
+          mpd = defaultMpdCfg // {
+            network.listenAddress = "any";
+            extraConfig = ''
+              audio_output {
+                type "alsa"
+                name "ALSA"
+                mixer_type "null"
+              }
+            '';
+          };
+
+          musicService = with defaultMpdCfg; musicService { inherit user group musicDirectory; };
+        }) // { networking.firewall.allowedTCPPorts = [ 6600 ]; };
 
       serverPulseAudio =
-        { ... }: lib.mkMerge [
-          (mkServer {
-            mpd = defaultMpdCfg // {
-              extraConfig = ''
-                audio_output {
-                  type "pulse"
-                  name "The Pulse"
-                }
-              '';
-            };
+        { ... }: (mkServer {
+          mpd = defaultMpdCfg // {
+            extraConfig = ''
+              audio_output {
+                type "pulse"
+                name "The Pulse"
+              }
+            '';
+          };
 
-            musicService = with defaultCfg; musicService { inherit user group musicDirectory; };
-          })
-          {
-            hardware.pulseaudio = {
-              enable = true;
-              systemWide = true;
-              tcp.enable = true;
-              tcp.anonymousClients.allowAll = true;
-            };
-            systemd.services.mpd.environment.PULSE_SERVER = "localhost";
-          }
-        ];
+          musicService = with defaultCfg; musicService { inherit user group musicDirectory; };
+        }) // { hardware.pulseaudio.enable = true; };
     };
 
   testScript = ''
-    mpc = "${pkgs.mpc_cli}/bin/mpc --wait"
+    my $mpc = "${pkgs.mpc_cli}/bin/mpc --wait";
 
     # Connects to the given server and attempts to play a tune.
-    def play_some_music(server):
-        server.wait_for_unit("mpd.service")
-        server.succeed(f"{mpc} update")
-        _, tracks = server.execute(f"{mpc} ls")
+    sub play_some_music {
+        my $server = $_[0];
 
-        for track in tracks.splitlines():
-            server.succeed(f"{mpc} add {track}")
+        $server->waitForUnit("mpd.service");
+        $server->succeed("$mpc update");
+        my @tracks = $server->execute("$mpc ls");
 
-        _, added_tracks = server.execute(f"{mpc} listall")
+        for my $track (split(/\n/, $tracks[1])) {
+            $server->succeed("$mpc add $track");
+        };
 
-        # Check we succeeded adding audio tracks to the playlist
-        assert len(added_tracks.splitlines()) > 0
+        my @added_tracks = $server->execute("$mpc listall");
+        (length $added_tracks[1]) > 0 or die "Failed to add audio tracks to the playlist.";
 
-        server.succeed(f"{mpc} play")
+        $server->succeed("$mpc play");
 
-        _, output = server.execute(f"{mpc} status")
-        # Assure audio track is playing
-        assert "playing" in output
+        my @status = $server->execute("$mpc status");
+        my @output = split(/\n/, $status[1]);
+        $output[1] =~ /.*playing.*/ or die "Audio track is not playing, as expected.";
 
-        server.succeed(f"{mpc} stop")
+        $server->succeed("$mpc stop");
+    };
 
+    play_some_music($serverALSA);
+    play_some_music($serverPulseAudio);
 
-    play_some_music(serverALSA)
-    play_some_music(serverPulseAudio)
-
-    client.wait_for_unit("multi-user.target")
-    client.succeed(f"{mpc} -h serverALSA status")
+    $client->succeed("$mpc -h serverALSA status");
 
     # The PulseAudio-based server is configured not to accept external client connections
     # to perform the following test:
-    client.fail(f"{mpc} -h serverPulseAudio status")
+    $client->fail("$mpc -h serverPulseAudio status");
   '';
 })

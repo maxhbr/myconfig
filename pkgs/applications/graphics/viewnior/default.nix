@@ -18,6 +18,10 @@ stdenv.mkDerivation rec {
       shared-mime-info glib gdk-pixbuf perl
     ];
 
+  preFixup = ''
+    rm $out/share/icons/*/icon-theme.cache
+  '';
+
   meta = {
     description = "Fast and simple image viewer";
     longDescription =

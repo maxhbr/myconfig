@@ -1,18 +1,19 @@
-{ buildPythonPackage, fetchPypi, stdenv
+{ buildPythonPackage, fetchurl, stdenv, isPy27
 , nose, pillow, prettytable, pyyaml, dateutil, gdata
 , requests, mechanize, feedparser, lxml, gnupg, pyqt5
-, libyaml, simplejson, cssselect, pdfminer
+, libyaml, simplejson, cssselect, futures, pdfminer
 , termcolor, google_api_python_client, html2text
 , unidecode
 }:
 
 buildPythonPackage rec {
   pname = "weboob";
-  version = "1.5";
+  version = "1.3";
+  disabled = ! isPy27;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1c9z9gid1mbm1cakb2wj6jjkbrmji8y8ac46iqpih9x1h498bhbs";
+  src = fetchurl {
+    url = "https://symlink.me/attachments/download/356/${pname}-${version}.tar.gz";
+    sha256 = "0m5yh49lplvb57dfilczh65ky35fshp3g7ni31pwfxwqi1f7i4f9";
   };
 
   postPatch = ''
@@ -36,7 +37,7 @@ buildPythonPackage rec {
 
   propagatedBuildInputs = [ pillow prettytable pyyaml dateutil
     gdata requests mechanize feedparser lxml gnupg pyqt5 libyaml
-    simplejson cssselect pdfminer termcolor
+    simplejson cssselect futures pdfminer termcolor
     google_api_python_client html2text unidecode ];
 
   checkPhase = ''
@@ -49,3 +50,4 @@ buildPythonPackage rec {
     license = stdenv.lib.licenses.agpl3;
   };
 }
+

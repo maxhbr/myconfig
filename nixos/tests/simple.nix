@@ -1,4 +1,4 @@
-import ./make-test-python.nix ({ pkgs, ...} : {
+import ./make-test.nix ({ pkgs, ...} : {
   name = "simple";
   meta = with pkgs.stdenv.lib.maintainers; {
     maintainers = [ eelco ];
@@ -10,8 +10,8 @@ import ./make-test-python.nix ({ pkgs, ...} : {
 
   testScript =
     ''
-      start_all()
-      machine.wait_for_unit("multi-user.target")
-      machine.shutdown()
+      startAll;
+      $machine->waitForUnit("multi-user.target");
+      $machine->shutdown;
     '';
 })

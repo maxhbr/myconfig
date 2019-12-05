@@ -39,7 +39,7 @@ common =
         ++ lib.optionals (!is20) [ curl perl ]
         ++ lib.optionals fromGit [ autoreconfHook autoconf-archive bison flex libxml2 libxslt docbook5 docbook_xsl_ns jq ];
 
-      buildInputs = [ curl openssl sqlite xz bzip2 nlohmann_json ]
+      buildInputs = [ curl openssl sqlite xz bzip2 (nlohmann_json.override { multipleHeaders = true; }) ]
         ++ lib.optional (stdenv.isLinux || stdenv.isDarwin) libsodium
         ++ lib.optionals is20 [ brotli boost editline ]
         ++ lib.optional withLibseccomp libseccomp
@@ -174,10 +174,10 @@ in rec {
   };
 
   nixStable = callPackage common (rec {
-    name = "nix-2.3.1";
+    name = "nix-2.3";
     src = fetchurl {
       url = "http://nixos.org/releases/nix/${name}/${name}.tar.xz";
-      sha256 = "bb6578e9f20eebab6d78469ecc59c450ac54f276e5a86a882015d98fecb1bc7b";
+      sha256 = "b1d1b4d87390941fc64b19776f1ed9e3871231d38f5a1f295dd13925acd3a98d";
     };
 
     inherit storeDir stateDir confDir boehmgc;

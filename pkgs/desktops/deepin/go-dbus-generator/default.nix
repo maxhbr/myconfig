@@ -2,7 +2,7 @@
 
 stdenv.mkDerivation rec {
   pname = "go-dbus-generator";
-  version = "5.0.0";
+  version = "0.6.6";
 
   src = fetchFromGitHub {
     owner = "linuxdeepin";

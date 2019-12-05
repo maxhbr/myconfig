@@ -5,7 +5,8 @@ buildDunePackage {
 
   inherit (lwt) src version;
 
-  propagatedBuildInputs = [ lwt ppx_tools_versioned ];
+  buildInputs = [ ppx_tools_versioned ];
+  propagatedBuildInputs = [ lwt ];
 
   meta = {
     description = "Ppx syntax extension for Lwt";

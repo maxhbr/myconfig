@@ -1,4 +1,4 @@
-{ stdenv, fetchFromGitHub, pkgconfig, vte, gtk, pcre2 }:
+{ stdenv, fetchFromGitHub, pkgconfig, vte, gtk }:
 
 stdenv.mkDerivation {
   pname = "stupidterm";
@@ -6,7 +6,7 @@ stdenv.mkDerivation {
 
   nativeBuildInputs = [ pkgconfig ];
 
-  buildInputs = [ vte gtk pcre2 ];
+  buildInputs = [ vte gtk ];
 
   src = fetchFromGitHub {
     owner = "esmil";

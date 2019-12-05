@@ -116,7 +116,6 @@ in {
     users.users = optionalAttrs (cfg.user == "unit") (singleton {
       name = "unit";
       group = cfg.group;
-      isSystemUser = true;
     });
 
     users.groups = optionalAttrs (cfg.group == "unit") (singleton {

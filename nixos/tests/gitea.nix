@@ -3,7 +3,7 @@
   pkgs ? import ../.. { inherit system config; }
 }:
 
-with import ../lib/testing-python.nix { inherit system pkgs; };
+with import ../lib/testing.nix { inherit system pkgs; };
 with pkgs.lib;
 
 {
@@ -18,11 +18,11 @@ with pkgs.lib;
       };
 
     testScript = ''
-      start_all()
+      startAll;
 
-      machine.wait_for_unit("gitea.service")
-      machine.wait_for_open_port(3000)
-      machine.succeed("curl --fail http://localhost:3000/")
+      $machine->waitForUnit('gitea.service');
+      $machine->waitForOpenPort('3000');
+      $machine->succeed("curl --fail http://localhost:3000/");
     '';
   };
 
@@ -37,11 +37,11 @@ with pkgs.lib;
       };
 
     testScript = ''
-      start_all()
+      startAll;
 
-      machine.wait_for_unit("gitea.service")
-      machine.wait_for_open_port(3000)
-      machine.succeed("curl --fail http://localhost:3000/")
+      $machine->waitForUnit('gitea.service');
+      $machine->waitForOpenPort('3000');
+      $machine->succeed("curl --fail http://localhost:3000/");
     '';
   };
 
@@ -56,14 +56,12 @@ with pkgs.lib;
       };
 
     testScript = ''
-      start_all()
+      startAll;
 
-      machine.wait_for_unit("gitea.service")
-      machine.wait_for_open_port(3000)
-      machine.succeed("curl --fail http://localhost:3000/")
-      machine.succeed(
-          "curl --fail http://localhost:3000/user/sign_up | grep 'Registration is disabled. Please contact your site administrator.'"
-      )
+      $machine->waitForUnit('gitea.service');
+      $machine->waitForOpenPort('3000');
+      $machine->succeed("curl --fail http://localhost:3000/");
+      $machine->succeed("curl --fail http://localhost:3000/user/sign_up | grep 'Registration is disabled. Please contact your site administrator.'");
     '';
   };
 }

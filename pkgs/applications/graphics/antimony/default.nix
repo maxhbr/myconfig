@@ -1,5 +1,5 @@
 { stdenv, fetchFromGitHub, libpng, python3
-, libGLU, libGL, qtbase, wrapQtAppsHook, ncurses
+, libGLU_combined, qtbase, wrapQtAppsHook, ncurses
 , cmake, flex, lemon
 }:
 
@@ -29,7 +29,7 @@ in
 
     buildInputs = [
       libpng python3 python3.pkgs.boost
-      libGLU libGL qtbase wrapQtAppsHook
+      libGLU_combined qtbase wrapQtAppsHook
       ncurses
     ];
 

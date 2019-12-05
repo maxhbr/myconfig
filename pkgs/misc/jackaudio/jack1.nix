@@ -18,7 +18,7 @@ stdenv.mkDerivation rec {
   version = "0.125.0";
 
   src = fetchurl {
-    url = "https://jackaudio.org/downloads/jack-audio-connection-kit-${version}.tar.gz";
+    url = "http://jackaudio.org/downloads/jack-audio-connection-kit-${version}.tar.gz";
     sha256 = "0i6l25dmfk2ji2lrakqq9icnwjxklgcjzzk65dmsff91z2zva5rm";
   };
 
@@ -32,8 +32,8 @@ stdenv.mkDerivation rec {
 
   meta = with stdenv.lib; {
     description = "JACK audio connection kit";
-    homepage = https://jackaudio.org;
-    license = with licenses; [ gpl2 lgpl21 ];
+    homepage = http://jackaudio.org;
+    license = "GPL";
     platforms = platforms.unix;
   };
 }

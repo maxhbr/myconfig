@@ -55,7 +55,7 @@ stdenv.mkDerivation rec {
 
   meta = with stdenv.lib; {
     description = "Fast, small, webkit based browser framework extensible in Lua";
-    homepage    = https://luakit.github.io/;
+    homepage    = http://luakit.org;
     license     = licenses.gpl3;
     platforms   = platforms.linux; # Only tested linux
   };

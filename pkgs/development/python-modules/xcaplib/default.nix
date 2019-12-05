@@ -8,13 +8,13 @@
 
 buildPythonPackage rec {
   pname = "python-xcaplib";
-  version = "1.2.1";
+  version = "1.2.0";
   disabled = isPy3k;
 
   src = fetchdarcs {
     url = "http://devel.ag-projects.com/repositories/${pname}";
     rev = "release-${version}";
-    sha256 = "15ww8f0a9zh37mypw5s4q1qk44cwf7jlhc9q1z4vjlpvnzimg54v";
+    sha256 = "0vna5r4ihv7z1yx6r93954jqskcxky77znzy1m9dg9vna1dgwfdn";
   };
 
   propagatedBuildInputs = [ eventlib application ];

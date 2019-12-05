@@ -131,7 +131,6 @@ in
     users.users.${user} = {
       description = "Zabbix Agent daemon user";
       inherit group;
-      isSystemUser = true;
     };
 
     users.groups.${group} = { };

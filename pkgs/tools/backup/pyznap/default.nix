@@ -1,21 +1,16 @@
 { lib
 , buildPythonApplication
 , fetchPypi
-, setuptools
 }:
 
 buildPythonApplication rec {
   pname = "pyznap";
-  version = "1.4.3";
+  version = "1.2.1";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "00xpw6rmkq5cfjfw23mv0917wfzvb5zxj420p6yh0rnl3swh7gi8";
+    sha256 = "0pnngr4zdxkf6b570ikzvkrm3a8fr47w6crjaw7ln094qkniywvj";
   };
-
-  propagatedBuildInputs = [
-    setuptools
-  ];  
 
   # tests aren't included in the PyPI packages
   doCheck = false;

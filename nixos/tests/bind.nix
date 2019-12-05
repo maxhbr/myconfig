@@ -1,4 +1,4 @@
-import ./make-test-python.nix {
+import ./make-test.nix {
   name = "bind";
 
   machine = { pkgs, lib, ... }: {
@@ -20,8 +20,8 @@ import ./make-test-python.nix {
   };
 
   testScript = ''
-    machine.wait_for_unit("bind.service")
-    machine.wait_for_open_port(53)
-    machine.succeed("host 192.168.0.1 127.0.0.1 | grep -qF ns.example.org")
+    $machine->waitForUnit('bind.service');
+    $machine->waitForOpenPort(53);
+    $machine->succeed('host 192.168.0.1 127.0.0.1 | grep -qF ns.example.org');
   '';
 }

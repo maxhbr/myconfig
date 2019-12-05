@@ -62,6 +62,7 @@ rec {
         ];
         mesonFlags = (args.mesonFlags or []) ++ [ "-Ddefault_library=static" ];
       });
+      static = true;
     };
 
 

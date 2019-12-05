@@ -1,17 +1,17 @@
 { fetchurl, fetchpatch, stdenv, pkgconfig, libgcrypt, libassuan, libksba
-, libgpgerror, libiconv, npth, gettext, texinfo, buildPackages
+, libgpgerror, libiconv, npth, gettext, texinfo, pcsclite, sqlite
+, buildPackages
 
 # Each of the dependencies below are optional.
 # Gnupg can be built without them at the cost of reduced functionality.
-, guiSupport ? true, enableMinimal ? false
-, adns ? null , bzip2 ? null , gnutls ? null , libusb ? null , openldap ? null
-, pcsclite ? null , pinentry ? null , readline ? null , sqlite ? null , zlib ?
-null
+, pinentry ? null, guiSupport ? true
+, adns ? null, gnutls ? null, libusb ? null, openldap ? null
+, readline ? null, zlib ? null, bzip2 ? null
 }:
 
 with stdenv.lib;
 
-assert guiSupport -> pinentry != null && enableMinimal == false;
+assert guiSupport -> pinentry != null;
 
 stdenv.mkDerivation rec {
   pname = "gnupg";
@@ -24,9 +24,9 @@ stdenv.mkDerivation rec {
   };
 
   depsBuildBuild = [ buildPackages.stdenv.cc ];
-  nativeBuildInputs = [ pkgconfig texinfo ];
+  nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
-    libgcrypt libassuan libksba libiconv npth gettext
+    libgcrypt libassuan libksba libiconv npth gettext texinfo
     readline libusb gnutls adns openldap zlib bzip2 sqlite
   ];
 
@@ -37,7 +37,7 @@ stdenv.mkDerivation rec {
   postPatch = ''
     sed -i 's,hkps://hkps.pool.sks-keyservers.net,hkps://keys.openpgp.org,g' \
         configure doc/dirmngr.texi doc/gnupg.info-1
-  '' + stdenv.lib.optionalString ( stdenv.isLinux && pcsclite != null) ''
+  '' + stdenv.lib.optionalString stdenv.isLinux ''
     sed -i 's,"libpcsclite\.so[^"]*","${stdenv.lib.getLib pcsclite}/lib/libpcsclite.so",g' scd/scdaemon.c
   ''; #" fix Emacs syntax highlighting :-(
 
@@ -50,14 +50,7 @@ stdenv.mkDerivation rec {
     "--with-npth-prefix=${npth}"
   ] ++ optional guiSupport "--with-pinentry-pgm=${pinentry}/${pinentryBinaryPath}";
 
-  postInstall = if enableMinimal
-  then ''
-    rm -r $out/{libexec,sbin,share}
-    for f in `find $out/bin -type f -not -name gpg`
-    do
-      rm $f
-    done
-  '' else ''
+  postInstall = ''
     mkdir -p $out/lib/systemd/user
     for f in doc/examples/systemd-user/*.{service,socket} ; do
       substitute $f $out/lib/systemd/user/$(basename $f) \

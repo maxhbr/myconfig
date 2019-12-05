@@ -111,13 +111,17 @@ stdenv.mkDerivation {
 
   installPhase =
     ''
+      set -u
+
       mkdir -p $out/bin $out/nix-support
 
       wrap() {
         local dst="$1"
         local wrapper="$2"
         export prog="$3"
+        set +u
         substituteAll "$wrapper" "$out/bin/$dst"
+        set -u
         chmod +x "$out/bin/$dst"
       }
     ''
@@ -159,6 +163,8 @@ stdenv.mkDerivation {
         [[ -e "$underlying" ]] || continue
         wrap ${targetPrefix}$variant ${./ld-wrapper.sh} $underlying
       done
+
+      set +u
     '';
 
   emulation = let
@@ -184,7 +190,6 @@ stdenv.mkDerivation {
       else if targetPlatform.isMsp430 then "msp430"
       else if targetPlatform.isAvr then "avr"
       else if targetPlatform.isAlpha then "alpha"
-      else if targetPlatform.isVc4 then "vc4"
       else throw "unknown emulation for platform: ${targetPlatform.config}";
     in if targetPlatform.useLLVM or false then ""
        else targetPlatform.platform.bfdEmulation or (fmt + sep + arch);
@@ -200,7 +205,11 @@ stdenv.mkDerivation {
   ];
 
   postFixup =
-    optionalString (libc != null) (''
+    ''
+      set -u
+    ''
+
+    + optionalString (libc != null) (''
       ##
       ## General libc support
       ##
@@ -298,6 +307,7 @@ stdenv.mkDerivation {
     ''
 
     + ''
+      set +u
       substituteAll ${./add-flags.sh} $out/nix-support/add-flags.sh
       substituteAll ${./add-hardening.sh} $out/nix-support/add-hardening.sh
       substituteAll ${../wrapper-common/utils.bash} $out/nix-support/utils.bash

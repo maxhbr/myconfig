@@ -122,9 +122,9 @@ let
   haskellSrc2nix = { name, src, sha256 ? null, extraCabal2nixOptions ? "" }:
     let
       sha256Arg = if sha256 == null then "--sha256=" else ''--sha256="${sha256}"'';
-    in buildPackages.stdenv.mkDerivation {
+    in pkgs.buildPackages.stdenv.mkDerivation {
       name = "cabal2nix-${name}";
-      nativeBuildInputs = [ buildPackages.cabal2nix ];
+      nativeBuildInputs = [ pkgs.buildPackages.cabal2nix ];
       preferLocalBuild = true;
       allowSubstitutes = false;
       phases = ["installPhase"];
@@ -137,7 +137,7 @@ let
       '';
   };
 
-  all-cabal-hashes-component = name: version: buildPackages.runCommand "all-cabal-hashes-component-${name}-${version}" {} ''
+  all-cabal-hashes-component = name: version: pkgs.runCommand "all-cabal-hashes-component-${name}-${version}" {} ''
     tar --wildcards -xzvf ${all-cabal-hashes} \*/${name}/${version}/${name}.{json,cabal}
     mkdir -p $out
     mv */${name}/${version}/${name}.{json,cabal} $out
@@ -181,10 +181,7 @@ in package-set { inherit pkgs stdenv callPackage; } self // {
     #    '... foo = self.callHackage "foo" "1.5.3" {}; ...'
     callHackage = name: version: callPackageKeepDeriver (self.hackage2nix name version);
 
-    # callHackageDirect
-    #   :: { pkg :: Text, ver :: Text, sha256 :: Text }
-    #   -> AttrSet
-    #   -> HaskellPackage
+    # callHackageDirect :: Text -> Text -> AttrSet -> HaskellPackage
     #
     # This function does not depend on all-cabal-hashes and therefore will work
     # for any version that has been released on hackage as opposed to only

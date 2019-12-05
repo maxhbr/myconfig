@@ -6,7 +6,7 @@
 , libsecret, libsoup, spice-protocol, spice-gtk, epoxy, at-spi2-core
 , openssl, gsettings-desktop-schemas, json-glib
 # The themes here are soft dependencies; only icons are missing without them.
-, gnome3
+, hicolor-icon-theme, gnome3
 }:
 
 with stdenv.lib;
@@ -30,7 +30,7 @@ stdenv.mkDerivation rec {
     pcre libdbusmenu-gtk3 libappindicator-gtk3
     libvncserver libpthreadstubs libXdmcp libxkbcommon
     libsecret libsoup spice-protocol spice-gtk epoxy at-spi2-core
-    openssl gnome3.adwaita-icon-theme json-glib
+    openssl hicolor-icon-theme gnome3.adwaita-icon-theme json-glib
   ];
 
   cmakeFlags = [

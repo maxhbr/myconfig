@@ -14,7 +14,7 @@
     <para>
      <emphasis>Stable channels</emphasis>, such as
      <literal
-    xlink:href="https://nixos.org/channels/nixos-19.09">nixos-19.09</literal>.
+         xlink:href="https://nixos.org/channels/nixos-19.09">nixos-19.09</literal>.
      These only get conservative bug fixes and package upgrades. For instance,
      a channel update may cause the Linux kernel on your system to be upgraded
      from 4.19.34 to 4.19.38 (a minor bug fix), but not from
@@ -38,7 +38,7 @@
     <para>
      <emphasis>Small channels</emphasis>, such as
      <literal
-    xlink:href="https://nixos.org/channels/nixos-19.09-small">nixos-19.09-small</literal>
+         xlink:href="https://nixos.org/channels/nixos-19.09-small">nixos-19.09-small</literal>
      or
      <literal
     xlink:href="https://nixos.org/channels/nixos-unstable-small">nixos-unstable-small</literal>.

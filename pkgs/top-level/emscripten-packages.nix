@@ -81,8 +81,7 @@ rec {
     });            
   
   xmlmirror = pkgs.buildEmscriptenPackage rec {
-    pname = "xmlmirror";
-    version = "unstable-2016-06-05";
+    name = "xmlmirror";
 
     buildInputs = [ pkgconfig autoconf automake libtool gnumake libxml2 nodejs openjdk json_c ];
     nativeBuildInputs = [ pkgconfig zlib ];
@@ -114,7 +113,7 @@ rec {
     
     installPhase = ''
       mkdir -p $out/share
-      mkdir -p $doc/share/${pname}
+      mkdir -p $doc/share/${name}
       
       cp Demo* $out/share
       cp -R codemirror-5.12 $out/share
@@ -125,7 +124,7 @@ rec {
       cp *.html $out/share
       cp *.json $out/share
       cp *.rng $out/share
-      cp README.md $doc/share/${pname}
+      cp README.md $doc/share/${name}
     '';
     checkPhase = ''
       

@@ -14,19 +14,17 @@
 , mutter
 , json-glib
 , python3
-, elementary-gtk-theme
-, elementary-icon-theme
 }:
 
 stdenv.mkDerivation rec {
   pname = "wingpanel";
-  version = "2.2.6";
+  version = "2.2.5";
 
   src = fetchFromGitHub {
     owner = "elementary";
     repo = pname;
     rev = version;
-    sha256 = "0q5jhg3gpcjfzfi7g33fv8pb916cqsgk6543b82yy97c20902ap9";
+    sha256 = "15pl3km8jfmlgrrb2fcabdd0rkc849arz6sc3vz6azzpln7gxbq7";
   };
 
   passthru = {
@@ -46,8 +44,6 @@ stdenv.mkDerivation rec {
   ];
 
   buildInputs = [
-    elementary-gtk-theme
-    elementary-icon-theme
     gala
     granite
     gtk3

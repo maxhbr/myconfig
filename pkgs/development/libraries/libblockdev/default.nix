@@ -6,13 +6,13 @@
 }:
 stdenv.mkDerivation rec {
   pname = "libblockdev";
-  version = "2.23";
+  version = "2.22";
 
   src = fetchFromGitHub {
     owner = "storaged-project";
     repo = "libblockdev";
     rev = "${version}-1";
-    sha256 = "09gp9h05vy3llhnrg98gny8g57kgwnbi8522qyzjwyv7nmhs4zhz";
+    sha256 = "03y4ps37wbi9p1136q0xzgshfnrjg4lgy8pgm1a3ihfcjnbwrbnq";
   };
 
   outputs = [ "out" "dev" "devdoc" ];

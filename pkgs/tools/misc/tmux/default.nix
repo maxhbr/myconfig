@@ -1,12 +1,4 @@
-{ stdenv
-, fetchFromGitHub
-, autoreconfHook
-, pkgconfig
-, makeWrapper
-, bison
-, ncurses
-, libevent
-}:
+{ stdenv, fetchFromGitHub, autoreconfHook, ncurses, libevent, pkgconfig, makeWrapper }:
 
 let
 
@@ -21,28 +13,20 @@ in
 
 stdenv.mkDerivation rec {
   pname = "tmux";
-  version = "3.0";
+  version = "2.9a";
 
   outputs = [ "out" "man" ];
 
   src = fetchFromGitHub {
-    owner = "tmux";
-    repo = "tmux";
+    owner = pname;
+    repo = pname;
     rev = version;
-    sha256 = "0772hajzgpl4cvb9l2bma9hmnh4jg1phvqr2gg4292w34n5dsl3k";
+    sha256 = "040plbgxlz14q5p0p3wapr576jbirwripmsjyq3g1nxh76jh1ipg";
   };
 
-  nativeBuildInputs = [
-    pkgconfig
-    autoreconfHook
-    bison
-  ];
+  nativeBuildInputs = [ pkgconfig autoreconfHook ];
 
-  buildInputs = [
-    ncurses
-    libevent
-    makeWrapper
-  ];
+  buildInputs = [ ncurses libevent makeWrapper ];
 
   configureFlags = [
     "--sysconfdir=/etc"
@@ -55,7 +39,7 @@ stdenv.mkDerivation rec {
   '';
 
   meta = {
-    homepage = "http://tmux.github.io/";
+    homepage = http://tmux.github.io/;
     description = "Terminal multiplexer";
 
     longDescription =

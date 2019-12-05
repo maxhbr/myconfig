@@ -1,20 +1,20 @@
 { stdenv, fetchFromGitHub, makeWrapper, qmake, pkgconfig, boost, gdal, proj
-, qtbase, qtsvg, qtwebview, qtwebkit }:
+, qtbase, qtsvg, qtwebkit }:
 
 stdenv.mkDerivation rec {
   pname = "merkaartor";
-  version = "unstable-2019-11-12";
+  version = "0.18.3";
 
   src = fetchFromGitHub {
     owner = "openstreetmap";
     repo = "merkaartor";
-    rev = "29b3388680a03f1daac0037a2b504ea710da879a";
-    sha256 = "0h3d3srzl06p2ajq911j05zr4vkl88qij18plydx45yqmvyvh0xz";
+    rev = version;
+    sha256 = "0ls3q8m1hxiwyrypy6qca8wczhl4969ncl0sszfdwfv70rzxjk88";
   };
 
   nativeBuildInputs = [ makeWrapper qmake pkgconfig ];
 
-  buildInputs = [ boost gdal proj qtbase qtsvg qtwebview qtwebkit ];
+  buildInputs = [ boost gdal proj qtbase qtsvg qtwebkit ];
 
   enableParallelBuilding = true;
 

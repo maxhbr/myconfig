@@ -1,13 +1,12 @@
 { stdenv, fetchpatch, python, buildPythonPackage, isPy37
-, protobuf, google_apputils, pyext, libcxx, isPy27
+, protobuf, google_apputils, pyext, libcxx
 , disabled, doCheck ? true }:
 
 with stdenv.lib;
 
 buildPythonPackage {
   inherit (protobuf) name src version;
-  inherit disabled;
-  doCheck = doCheck && !isPy27; # setuptools>=41.4 no longer collects correctly on python2
+  inherit disabled doCheck;
 
   NIX_CFLAGS_COMPILE =
     # work around python distutils compiling C++ with $CC
@@ -60,7 +59,6 @@ buildPythonPackage {
   meta = {
     description = "Protocol Buffers are Google's data interchange format";
     homepage = https://developers.google.com/protocol-buffers/;
-    license = licenses.bsd3;
   };
 
   passthru.protobuf = protobuf;

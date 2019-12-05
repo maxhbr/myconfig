@@ -1,36 +1,40 @@
-{ lib, fetchFromGitHub, python3 }:
+{ stdenv, fetchFromGitHub, makeWrapper, python3Packages }:
 
-python3.pkgs.buildPythonApplication rec {
+stdenv.mkDerivation rec {
   pname = "theHarvester";
-  version = "3.1";
+  version = "3.0.6";
 
   src = fetchFromGitHub {
     owner = "laramies";
     repo = pname;
-    rev = "V${version}";
-    sha256 = "0lxzxfa9wbzim50d2jmd27i57szd0grm1dfayhnym86jn01qpvn3";
+    rev = version;
+    sha256 = "0f33a7sfb5ih21yp1wspb03fxsls1m14yizgrw0srfirm2a6aa0c";
   };
 
-  propagatedBuildInputs = with python3.pkgs; [ 
-    aiodns beautifulsoup4 dns grequests netaddr
-    plotly pyyaml requests retrying shodan texttable
-  ];
+  nativeBuildInputs = [ makeWrapper ];
 
-  checkInputs = [ python3.pkgs.pytest ];
+  # add dependencies
+  propagatedBuildInputs = with python3Packages; [ requests beautifulsoup4 plotly ];
 
-  checkPhase = "runHook preCheck ; pytest tests/test_myparser.py ; runHook postCheck";
-  # We don't run other tests (discovery modules) because they require network access
+  installPhase = ''
+    # create dirs
+    mkdir -p $out/share/${pname} $out/bin
 
-  meta = with lib; {
+    # move project code
+    mv * $out/share/${pname}/
+
+    # make project runnable
+    chmod +x $out/share/${pname}/theHarvester.py
+    ln -s $out/share/${pname}/theHarvester.py $out/bin
+
+    wrapProgram "$out/bin/theHarvester.py" --prefix PYTHONPATH : $out/share/${pname}:$PYTHONPATH
+  '';
+
+  meta = with stdenv.lib; {
     description = "Gather E-mails, subdomains and names from different public sources";
-    longDescription = ''
-      theHarvester is a very simple, yet effective tool designed to be used in the early
-      stages of a penetration test. Use it for open source intelligence gathering and
-      helping to determine an entity's external threat landscape on the internet. The tool
-      gathers emails, names, subdomains, IPs, and URLs using multiple public data sources.
-    '';
     homepage = "https://github.com/laramies/theHarvester";
-    maintainers = with maintainers; [ c0bw3b treemo ];
+    platforms = platforms.all;
+    maintainers = with maintainers; [ treemo ];
     license = licenses.gpl2;
   };
 }

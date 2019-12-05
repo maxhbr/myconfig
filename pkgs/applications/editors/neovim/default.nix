@@ -13,7 +13,7 @@ with stdenv.lib;
 
 let
   neovimLuaEnv = lua.withPackages(ps:
-    (with ps; [ lpeg luabitop mpack ]
+    (with ps; [ mpack lpeg luabitop ]
     ++ optionals doCheck [
         nvim-client luv coxpcall busted luafilesystem penlight inspect
       ]
@@ -21,13 +21,13 @@ let
 in
   stdenv.mkDerivation rec {
     pname = "neovim-unwrapped";
-    version = "0.4.3";
+    version = "0.3.8";
 
     src = fetchFromGitHub {
       owner = "neovim";
       repo = "neovim";
       rev = "v${version}";
-      sha256 = "03p7pic7hw9yxxv7fbgls1f42apx3lik2k6mpaz1a109ngyc5kaj";
+      sha256 = "15flii3p4g9f65xy9jpkb8liajrvhm5ck4j39z6d6b1nkxr6ghwb";
     };
 
     patches = [
@@ -41,15 +41,14 @@ in
     enableParallelBuilding = true;
 
     buildInputs = [
-      gperf
       libtermkey
       libuv
-      libvterm-neovim
-      lua.pkgs.luv.libluv
       msgpack
       ncurses
-      neovimLuaEnv
+      libvterm-neovim
       unibilium
+      gperf
+      neovimLuaEnv
     ] ++ optional withJemalloc jemalloc
       ++ optional stdenv.isDarwin libiconv
       ++ optionals doCheck [ glibcLocales procps ]
@@ -78,12 +77,9 @@ in
     disallowedReferences = [ stdenv.cc ];
 
     cmakeFlags = [
-      "-DGPERF_PRG=${gperf}/bin/gperf"
       "-DLUA_PRG=${neovimLuaEnv.interpreter}"
+      "-DGPERF_PRG=${gperf}/bin/gperf"
     ]
-    # FIXME: this is verry messy and strange.
-    ++ optional (!stdenv.isDarwin) "-DLIBLUV_LIBRARY=${lua.pkgs.luv}/lib/lua/${lua.luaversion}/luv.so"
-    ++ optional (stdenv.isDarwin) "-DLIBLUV_LIBRARY=${lua.pkgs.luv.libluv}/lib/lua/${lua.luaversion}/libluv.dylib"
     ++ optional doCheck "-DBUSTED_PRG=${neovimLuaEnv}/bin/busted"
     ++ optional (!lua.pkgs.isLuaJIT) "-DPREFER_LUA=ON"
     ;

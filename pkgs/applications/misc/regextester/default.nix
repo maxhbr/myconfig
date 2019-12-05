@@ -1,6 +1,5 @@
 { stdenv
 , fetchFromGitHub
-, vala
 , gettext
 , libxml2
 , pkgconfig
@@ -26,7 +25,7 @@ stdenv.mkDerivation rec {
   };
 
   nativeBuildInputs = [
-    vala
+    pantheon.vala
     gettext
     gobject-introspection
     libxml2

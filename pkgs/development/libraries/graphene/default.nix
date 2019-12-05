@@ -60,7 +60,7 @@ stdenv.mkDerivation rec {
 
   passthru = {
     tests = {
-      installedTests = nixosTests.installed-tests.graphene;
+      installedTests = nixosTests.graphene;
     };
   };
 

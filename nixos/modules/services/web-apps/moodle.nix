@@ -309,9 +309,7 @@ in
 
     systemd.services.httpd.after = optional mysqlLocal "mysql.service" ++ optional pgsqlLocal "postgresql.service";
 
-    users.users.${user} = {
-      group = group;
-      isSystemUser = true;
-    };
+    users.users.${user}.group = group;
+
   };
 }

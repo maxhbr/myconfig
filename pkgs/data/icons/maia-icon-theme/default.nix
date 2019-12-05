@@ -21,11 +21,9 @@ stdenv.mkDerivation {
     kdeFrameworks.kwindowsystem
   ];
 
-  propagatedBuildInputs = [
+  buildInputs = [
     hicolor-icon-theme
   ];
-
-  dontDropIconThemeCache = true;
 
   postFixup = ''
     for theme in $out/share/icons/*; do

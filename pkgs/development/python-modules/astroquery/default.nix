@@ -13,12 +13,16 @@
 
 buildPythonPackage rec {
   pname = "astroquery";
-  version = "0.3.10";
+  version = "0.3.9";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1ce57a8792c7d5d74206d797d379de6da35d56be433ea5840c41a49f202e2fab";
+    sha256 = "0zw3xp2rfc6h2v569iqsyvzhfnzp7bfjb7jrj61is1hrqw1cqjrb";
   };
+
+  # Fix tests using conftest.py from HEAD in the upstream GitHub
+  # repository.
+  patches = [ ./conftest-astropy-3-fix.patch ];
 
   propagatedBuildInputs = [ astropy requests keyring beautifulsoup4 html5lib ];
 

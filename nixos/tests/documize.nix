@@ -1,4 +1,4 @@
-import ./make-test-python.nix ({ pkgs, lib, ...} : {
+import ./make-test.nix ({ pkgs, lib, ...} : {
   name = "documize";
   meta = with pkgs.stdenv.lib.maintainers; {
     maintainers = [ ma27 ];
@@ -29,34 +29,30 @@ import ./make-test-python.nix ({ pkgs, lib, ...} : {
   };
 
   testScript = ''
-    start_all()
+    startAll;
 
-    machine.wait_for_unit("documize-server.service")
-    machine.wait_for_open_port(3000)
+    $machine->waitForUnit("documize-server.service");
+    $machine->waitForOpenPort(3000);
 
-    dbhash = machine.succeed(
-        "curl -f localhost:3000 | grep 'property=\"dbhash' | grep -Po 'content=\"\\K[^\"]*'"
-    )
+    my $dbhash = $machine->succeed("curl -f localhost:3000 "
+                                  . " | grep 'property=\"dbhash' "
+                                  . " | grep -Po 'content=\"\\K[^\"]*'"
+                                  );
 
-    dbhash = dbhash.strip()
+    chomp($dbhash);
 
-    machine.succeed(
-        (
-            "curl -X POST"
-            " --data 'dbname=documize'"
-            " --data 'dbhash={}'"
-            " --data 'title=NixOS'"
-            " --data 'message=Docs'"
-            " --data 'firstname=John'"
-            " --data 'lastname=Doe'"
-            " --data 'email=john.doe@nixos.org'"
-            " --data 'password=verysafe'"
-            " -f localhost:3000/api/setup"
-        ).format(dbhash)
-    )
+    $machine->succeed("curl -X POST "
+                      . "--data 'dbname=documize' "
+                      . "--data 'dbhash=$dbhash' "
+                      . "--data 'title=NixOS' "
+                      . "--data 'message=Docs' "
+                      . "--data 'firstname=John' "
+                      . "--data 'lastname=Doe' "
+                      . "--data 'email=john.doe\@nixos.org' "
+                      . "--data 'password=verysafe' "
+                      . "-f localhost:3000/api/setup"
+                    );
 
-    machine.succeed(
-        'test "$(curl -f localhost:3000/api/public/meta | jq ".title" | xargs echo)" = "NixOS"'
-    )
+    $machine->succeed('test "$(curl -f localhost:3000/api/public/meta | jq ".title" | xargs echo)" = "NixOS"');
   '';
 })

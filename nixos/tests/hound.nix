@@ -1,5 +1,5 @@
 # Test whether `houndd` indexes nixpkgs
-import ./make-test-python.nix ({ pkgs, ... } : {
+import ./make-test.nix ({ pkgs, ... } : {
   name = "hound";
   meta = with pkgs.stdenv.lib.maintainers; {
     maintainers = [ grahamc ];
@@ -46,14 +46,13 @@ import ./make-test-python.nix ({ pkgs, ... } : {
     };
   };
 
-  testScript = ''
-    start_all()
+  testScript =
+    '' startAll;
 
-    machine.wait_for_unit("network.target")
-    machine.wait_for_unit("hound.service")
-    machine.wait_for_open_port(6080)
-    machine.wait_until_succeeds(
-        "curl http://127.0.0.1:6080/api/v1/search\?stats\=fosho\&repos\=\*\&rng=%3A20\&q\=hi\&files\=\&i=nope | grep 'Filename' | grep 'hello'"
-    )
-  '';
+       $machine->waitForUnit("network.target");
+       $machine->waitForUnit("hound.service");
+       $machine->waitForOpenPort(6080);
+       $machine->waitUntilSucceeds('curl http://127.0.0.1:6080/api/v1/search\?stats\=fosho\&repos\=\*\&rng=%3A20\&q\=hi\&files\=\&i=nope | grep "Filename" | grep "hello"');
+
+    '';
 })

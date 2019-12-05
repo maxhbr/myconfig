@@ -1,4 +1,4 @@
-{ stdenv, lib, fetchurl, makeDesktopItem, SDL, SDL_net, SDL_sound, libGLU, libGL, libpng, graphicsmagick }:
+{ stdenv, lib, fetchurl, makeDesktopItem, SDL, SDL_net, SDL_sound, libGLU_combined, libpng, graphicsmagick }:
 
 stdenv.mkDerivation rec {
   name = "dosbox-0.74-3";
@@ -10,7 +10,7 @@ stdenv.mkDerivation rec {
 
   hardeningDisable = [ "format" ];
 
-  buildInputs = [ SDL SDL_net SDL_sound libGLU libGL libpng ];
+  buildInputs = [ SDL SDL_net SDL_sound libGLU_combined libpng ];
 
   nativeBuildInputs = [ graphicsmagick ];
 

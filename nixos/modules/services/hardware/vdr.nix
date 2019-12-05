@@ -66,7 +66,6 @@ in {
     users.users.vdr = {
       group = "vdr";
       home = libDir;
-      isSystemUser = true;
     };
 
     users.groups.vdr = {};

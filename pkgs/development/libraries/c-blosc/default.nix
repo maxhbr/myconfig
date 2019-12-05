@@ -2,13 +2,13 @@
 
 stdenv.mkDerivation rec {
   pname = "c-blosc";
-  version = "1.17.0";
+  version = "1.16.3";
 
   src = fetchFromGitHub {
     owner = "Blosc";
     repo = "c-blosc";
     rev = "v${version}";
-    sha256 = "0c4vh7kyxm57jclk8jlcnc11w7nd2m81qk454gav58aji85w16hg";
+    sha256 = "1c58wkf34rp5wh9qp09zdk7zcfn037sk56p4xq1g0vapbnglv603";
   };
 
   buildInputs = [ cmake ];
@@ -17,7 +17,7 @@ stdenv.mkDerivation rec {
 
   meta = with stdenv.lib; {
     description = "A blocking, shuffling and loss-less compression library";
-    homepage = https://www.blosc.org;
+    homepage = http://www.blosc.org;
     license = licenses.bsd3;
     platforms = platforms.all;
   };

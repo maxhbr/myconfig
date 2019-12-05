@@ -44,8 +44,7 @@ in
       serviceConfig = {
         DynamicUser = true;
         Restart = "always";
-        ExecStart = "${pkg}/bin/beanstalkd -l ${cfg.listen.address} -p ${toString cfg.listen.port} -b $STATE_DIRECTORY";
-        StateDirectory = "beanstalkd";
+        ExecStart = "${pkg}/bin/beanstalkd -l ${cfg.listen.address} -p ${toString cfg.listen.port}";
       };
     };
 

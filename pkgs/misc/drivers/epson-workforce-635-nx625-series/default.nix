@@ -13,11 +13,7 @@ in stdenv.mkDerivation rec {
   version = "1.0.1";
 
   src = fetchurl {
-    # NOTE: Don't forget to update the webarchive link too!
-    urls = [
-      "https://download.ebz.epson.net/dsc/op/stable/SRPMS/${name}-${version}-1lsb3.2.src.rpm"
-      "https://web.archive.org/web/https://download.ebz.epson.net/dsc/op/stable/SRPMS/${name}-${version}-1lsb3.2.src.rpm"
-    ];
+    url = "https://download.ebz.epson.net/dsc/op/stable/SRPMS/${name}-${version}-1lsb3.2.src.rpm";
     sha256 = "19nb2h0y9rvv6rg7j262f8sqap9kjvz8kmisxnjg1w0v19zb9zf2";
   };
   sourceRoot = srcdirs.filter;

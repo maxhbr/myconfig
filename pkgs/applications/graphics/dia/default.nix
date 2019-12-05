@@ -1,6 +1,6 @@
 { stdenv, fetchgit, autoconf, automake, libtool, gtk2, pkgconfig, perlPackages,
 libxml2, gettext, python, libxml2Python, docbook5, docbook_xsl,
-libxslt, intltool, libart_lgpl, withGNOME ? false, libgnomeui,
+libxslt, intltool, libart_lgpl, withGNOME ? false, libgnomeui, hicolor-icon-theme,
 gtk-mac-integration-gtk2 }:
 
 stdenv.mkDerivation {
@@ -15,7 +15,7 @@ stdenv.mkDerivation {
 
   buildInputs =
     [ gtk2 libxml2 gettext python libxml2Python docbook5
-      libxslt docbook_xsl libart_lgpl ]
+      libxslt docbook_xsl libart_lgpl hicolor-icon-theme ]
       ++ stdenv.lib.optional withGNOME libgnomeui
       ++ stdenv.lib.optional stdenv.isDarwin gtk-mac-integration-gtk2;
 

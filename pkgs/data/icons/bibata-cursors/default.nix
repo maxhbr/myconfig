@@ -1,6 +1,6 @@
-{ stdenvNoCC, fetchFromGitHub, gnome-themes-extra, inkscape, xcursorgen }:
+{ fetchFromGitHub, gnome-themes-extra, inkscape, stdenv, xcursorgen }:
 
-stdenvNoCC.mkDerivation rec {
+stdenv.mkDerivation rec {
   pname = "bibata-cursors";
   version = "0.4.1";
 
@@ -31,7 +31,7 @@ stdenvNoCC.mkDerivation rec {
     cp -pr Bibata_* $out/share/icons/
   '';
 
-  meta = with stdenvNoCC.lib; {
+  meta = with stdenv.lib; {
     description = "Material Based Cursor";
     homepage = https://github.com/KaizIqbal/Bibata_Cursor;
     license = licenses.gpl3;

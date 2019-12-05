@@ -31,11 +31,10 @@ stdenv.mkDerivation rec {
   };
 
   patches = [
-    # fix build with libecal 2.0
+    # fix build with e-d-s 3.32
     (fetchpatch {
-      name = "gnome-todo-eds-libecal-2.0.patch";
-      url = "https://src.fedoraproject.org/rpms/gnome-todo/raw/bed44b8530f3c79589982e03b430b3a125e9bceb/f/gnome-todo-eds-libecal-2.0.patch";
-      sha256 = "1ghrz973skal36j90wm2z13m3panw983r6y0k7z9gpj5lxgz92mq";
+      url = https://gitlab.gnome.org/GNOME/gnome-todo/commit/6cdabc4dd0c6c804a093b94c269461ce376fed4f.patch;
+      sha256 = "08ldgyxv9216dgr8y9asqd7j2y82y9yqnqhkqaxc9i8a67yz1gzy";
     })
   ];
   postPatch = ''

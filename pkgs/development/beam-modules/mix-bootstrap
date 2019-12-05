@@ -25,7 +25,8 @@
 -record(data, {version
               , erl_libs
               , root
-              , name}).
+              , name
+              , registry_snapshot}).
 -define(LOCAL_HEX_REGISTRY, "registry.ets").
 
 main(Args) ->
@@ -50,7 +51,8 @@ gather_required_data_from_the_environment(_) ->
     {ok, #data{ version = guard_env("version")
               , erl_libs = os:getenv("ERL_LIBS", [])
               , root = code:root_dir()
-              , name = guard_env("name")}}.
+              , name = guard_env("name")
+              , registry_snapshot = guard_env("HEX_REGISTRY_SNAPSHOT")}}.
 
 -spec guard_env(string()) -> string().
 guard_env(Name) ->

@@ -11,9 +11,6 @@
 
 { lib, ... }:
 
-let
-  inherit (lib) types;
-in
 {
   options = {
 
@@ -22,7 +19,6 @@ in
       description = ''
         The user IDs used in NixOS.
       '';
-      type = types.attrsOf types.int;
     };
 
     ids.gids = lib.mkOption {
@@ -30,7 +26,6 @@ in
       description = ''
         The group IDs used in NixOS.
       '';
-      type = types.attrsOf types.int;
     };
 
   };
@@ -133,7 +128,7 @@ in
       tcpcryptd = 93; # tcpcryptd uses a hard-coded uid. We patch it in Nixpkgs to match this choice.
       firebird = 95;
       #keys = 96; # unused
-      #haproxy = 97; # DynamicUser as of 2019-11-08
+      haproxy = 97;
       mongodb = 98;
       openldap = 99;
       #users = 100; # unused
@@ -333,7 +328,7 @@ in
       qemu-libvirtd = 301;
       # kvm = 302; # unused
       # render = 303; # unused
-      # zeronet = 304; # removed 2019-01-03
+      zeronet = 304;
       lirc = 305;
       lidarr = 306;
       slurm = 307;
@@ -448,7 +443,7 @@ in
       #tcpcryptd = 93; # unused
       firebird = 95;
       keys = 96;
-      #haproxy = 97; # DynamicUser as of 2019-11-08
+      haproxy = 97;
       #mongodb = 98; # unused
       openldap = 99;
       munin = 102;
@@ -634,7 +629,7 @@ in
       qemu-libvirtd = 301;
       kvm = 302; # default udev rules from systemd requires these
       render = 303; # default udev rules from systemd requires these
-      # zeronet = 304; # removed 2019-01-03
+      zeronet = 304;
       lirc = 305;
       lidarr = 306;
       slurm = 307;

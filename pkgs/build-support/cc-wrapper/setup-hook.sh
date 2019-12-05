@@ -54,6 +54,8 @@
 # For more details, read the individual files where the mechanisms used to
 # accomplish this will be individually documented.
 
+set -u
+
 # Skip setup hook if we're neither a build-time dep, nor, temporarily, doing a
 # native compile.
 #
@@ -118,3 +120,4 @@ export NIX_HARDENING_ENABLE
 
 # No local scope in sourced file
 unset -v role_pre role_post
+set +u

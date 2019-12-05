@@ -98,16 +98,6 @@ in
         populate the ./files/boot (/boot) directory.
       '';
     };
-
-    compressImage = mkOption {
-      type = types.bool;
-      default = true;
-      description = ''
-        Whether the SD image should be compressed using
-        <command>bzip2</command>.
-      '';
-    };
-
   };
 
   config = {
@@ -128,23 +118,17 @@ in
 
     sdImage.storePaths = [ config.system.build.toplevel ];
 
-    system.build.sdImage = pkgs.callPackage ({ stdenv, dosfstools, e2fsprogs, mtools, libfaketime, utillinux, bzip2 }: stdenv.mkDerivation {
+    system.build.sdImage = pkgs.callPackage ({ stdenv, dosfstools, e2fsprogs, mtools, libfaketime, utillinux }: stdenv.mkDerivation {
       name = config.sdImage.imageName;
 
-      nativeBuildInputs = [ dosfstools e2fsprogs mtools libfaketime utillinux bzip2 ];
-
-      inherit (config.sdImage) compressImage;
+      nativeBuildInputs = [ dosfstools e2fsprogs mtools libfaketime utillinux ];
 
       buildCommand = ''
         mkdir -p $out/nix-support $out/sd-image
         export img=$out/sd-image/${config.sdImage.imageName}
 
         echo "${pkgs.stdenv.buildPlatform.system}" > $out/nix-support/system
-        if test -n "$compressImage"; then
-          echo "file sd-image $img.bz2" >> $out/nix-support/hydra-build-products
-        else
-          echo "file sd-image $img" >> $out/nix-support/hydra-build-products
-        fi
+        echo "file sd-image $img" >> $out/nix-support/hydra-build-products
 
         # Gap in front of the first partition, in MiB
         gap=8
@@ -184,19 +168,14 @@ in
         # Verify the FAT partition before copying it.
         fsck.vfat -vn firmware_part.img
         dd conv=notrunc if=firmware_part.img of=$img seek=$START count=$SECTORS
-        if test -n "$compressImage"; then
-            bzip2 $img
-        fi
       '';
     }) {};
 
     boot.postBootCommands = ''
       # On the first boot do some maintenance tasks
       if [ -f /nix-path-registration ]; then
-        set -euo pipefail
-        set -x
         # Figure out device names for the boot device and root filesystem.
-        rootPart=$(${pkgs.utillinux}/bin/findmnt -n -o SOURCE /)
+        rootPart=$(readlink -f /dev/disk/by-label/NIXOS_SD)
         bootDevice=$(lsblk -npo PKNAME $rootPart)
 
         # Resize the root partition and the filesystem to fit the disk

@@ -1,20 +1,11 @@
 { stable, branch, version, sha256Hash }:
 
-{ stdenv, python3, fetchFromGitHub }:
+{ stdenv, python3Packages, fetchFromGitHub }:
 
 let
-  python = python3.override {
-    packageOverrides = self: super: {
-      jsonschema = super.jsonschema.overridePythonAttrs (oldAttrs: rec {
-        version = "2.6.0";
-        src = oldAttrs.src.override {
-          inherit version;
-          sha256 = "00kf3zmpp9ya4sydffpifn0j0mzm342a2vzh82p6r0vh10cg7xbg";
-        };
-      });
-    };
-  };
-in python.pkgs.buildPythonPackage rec {
+  pythonPackages = python3Packages;
+
+in pythonPackages.buildPythonPackage rec {
   name = "${pname}-${version}";
   pname = "gns3-gui";
 
@@ -25,11 +16,11 @@ in python.pkgs.buildPythonPackage rec {
     sha256 = sha256Hash;
   };
 
-  propagatedBuildInputs = with python.pkgs; [
+  propagatedBuildInputs = with pythonPackages; [
     raven psutil jsonschema # tox for check
     # Runtime dependencies
-    sip (pyqt5.override { withWebSockets = true; }) distro setuptools
-  ];
+    sip (pyqt5.override { withWebSockets = true; })
+  ] ++ stdenv.lib.optional (!stable) pythonPackages.distro;
 
   doCheck = false; # Failing
 

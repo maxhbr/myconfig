@@ -39,7 +39,7 @@ mkDerivation rec {
     description = "LXQt Qt platform integration plugin";
     homepage = https://github.com/lxqt/lxqt-qtplugin;
     license = licenses.lgpl21;
-    platforms = platforms.linux;
+    platforms = with platforms; unix;
     maintainers = with maintainers; [ romildo ];
   };
 }

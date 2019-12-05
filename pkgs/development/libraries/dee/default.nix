@@ -1,12 +1,11 @@
 { stdenv
 , fetchgit
-, fetchpatch
 , pkgconfig
 , glib
 , icu
 , gobject-introspection
 , dbus-glib
-, vala
+, vala_0_40
 , python3
 , autoreconfHook
 }:
@@ -19,26 +18,20 @@ stdenv.mkDerivation rec {
 
   src = fetchgit {
     url = "https://git.launchpad.net/ubuntu/+source/dee";
-    rev = "import/1.2.7+17.10.20170616-4ubuntu3";
-    sha256 = "09blrdj7229vscp4mkg0fabmcvc6jdpamvblrq86rbky7j2nnwlk";
+    rev = "import/1.2.7+17.10.20170616-4ubuntu1";
+    sha256 = "0q3d9d6ahcyibp6x23g1wvjfcppjh9v614s328yjmx47216z7394";
   };
 
   patches = [
     "${src}/debian/patches/gtkdocize.patch"
     "${src}/debian/patches/strict-prototype.patch"
-    "${src}/debian/patches/vapi-skip-properties.patch"
-
-    # Fixes glib 2.62 deprecations
-    (fetchpatch {
-      name = "dee-1.2.7-deprecated-g_type_class_add_private.patch";
-      url = "https://src.fedoraproject.org/rpms/dee/raw/1a9a4ce3377074fabfca653ffe0287cd73aef82f/f/dee-1.2.7-deprecated-g_type_class_add_private.patch";
-      sha256 = "13nyprq7bb7lnzkcb7frcpzidbl836ycn5bvmwa2k0nhmj6ycbx5";
-    })
+    "${src}/debian/patches/icu-pkg-config.patch"
   ];
 
   nativeBuildInputs = [
     pkgconfig
-    vala
+    # https://gitlab.gnome.org/GNOME/vala/issues/803
+    vala_0_40
     autoreconfHook
     gobject-introspection
     python3

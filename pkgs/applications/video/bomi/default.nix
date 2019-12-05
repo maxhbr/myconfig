@@ -1,6 +1,6 @@
 { config, stdenv, fetchFromGitHub
 , fetchpatch, pkgconfig, perl, python, which
-, libX11, libxcb, libGLU, libGL
+, libX11, libxcb, libGLU_combined
 , qtbase, qtdeclarative, qtquickcontrols, qttools, qtx11extras, qmake, makeWrapper
 , libchardet
 , ffmpeg
@@ -56,7 +56,7 @@ stdenv.mkDerivation rec {
   buildInputs = with stdenv.lib;
                 [ libX11
                   libxcb
-                  libGLU libGL
+                  libGLU_combined
                   qtbase
                   qtx11extras
                   qtdeclarative

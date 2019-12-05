@@ -1,23 +1,17 @@
-{ stdenv
-, fetchFromGitHub
-, cmake
-, gflags
-, libsodium
-, protobuf
-}:
+{ stdenv, fetchFromGitHub, cmake, ninja, gflags, libsodium, protobuf }:
 
 stdenv.mkDerivation rec {
   pname = "eternal-terminal";
-  version = "6.0.4";
+  version = "5.1.10";
 
   src = fetchFromGitHub {
     owner = "MisterTea";
-    repo = "EternalTerminal";
-    rev = "et-v${version}";
-    sha256 = "05hbcbbxpvwm17ascnrwrz413kp3i94kp4px3vqx0f635rm41dqc";
+    repo = "EternalTCP";
+    rev = "refs/tags/et-v${version}";
+    sha256 = "0jh89229bd9s82h3aj6faaybwr5xvnk8w2kgz47gq263pz021zpl";
   };
 
-  nativeBuildInputs = [ cmake ];
+  nativeBuildInputs = [ cmake ninja ];
   buildInputs = [ gflags libsodium protobuf ];
 
   meta = with stdenv.lib; {
@@ -25,6 +19,6 @@ stdenv.mkDerivation rec {
     license = licenses.asl20;
     homepage = https://mistertea.github.io/EternalTerminal/;
     platforms = platforms.linux ++ platforms.darwin;
-    maintainers = with maintainers; [ dezgeg pingiun ];
+    maintainers = [ maintainers.dezgeg ];
   };
 }

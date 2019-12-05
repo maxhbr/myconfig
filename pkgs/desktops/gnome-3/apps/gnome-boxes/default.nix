@@ -1,123 +1,48 @@
-{ stdenv
-, fetchurl
-, meson
-, ninja
-, wrapGAppsHook
-, pkgconfig
-, gettext
-, itstool
-, libvirt-glib
-, glib
-, gobject-introspection
-, libxml2
-, gtk3
-, gtk-vnc
-, freerdp
-, libvirt
-, spice-gtk
-, python3
-, spice-protocol
-, libsoup
-, libosinfo
-, systemd
-, tracker
-, tracker-miners
-, vala
-, libcap
-, yajl
-, gmp
-, gdbm
-, cyrus_sasl
-, gnome3
-, librsvg
-, desktop-file-utils
-, mtools
-, cdrkit
-, libcdio
-, libusb
-, libarchive
-, acl
-, libgudev
-, libsecret
-, libcap_ng
-, numactl
-, xen
-, libapparmor
-, json-glib
-, webkitgtk
-, vte
-, glib-networking
+{ stdenv, fetchurl, meson, ninja, wrapGAppsHook, pkgconfig, gettext, itstool, libvirt-glib
+, glib, gobject-introspection, libxml2, gtk3, gtk-vnc, freerdp, libvirt, spice-gtk, python3
+, spice-protocol, libsoup, libosinfo, systemd, tracker, tracker-miners, vala
+, libcap, yajl, gmp, gdbm, cyrus_sasl, gnome3, librsvg, desktop-file-utils
+, mtools, cdrkit, libcdio, libusb, libarchive, acl, libgudev, libsecret
+, libcap_ng, numactl, xen, libapparmor, json-glib, webkitgtk, vte
 }:
 
-stdenv.mkDerivation rec {
+# TODO: ovirt (optional)
+
+let
+  version = "3.32.1";
+in stdenv.mkDerivation rec {
   pname = "gnome-boxes";
-  version = "3.34.2";
+  inherit version;
 
   src = fetchurl {
     url = "mirror://gnome/sources/gnome-boxes/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "1rqdjf61cbi3zcpzr6cfkj3lcfrdlhs20bl65lxw2xrwk4jn0ph5";
+    sha256 = "159sxii3g4s5pjb4s4i3kc4q162w5vicp4g6wvk1y2yv68bgmcl4";
   };
 
   doCheck = true;
 
   nativeBuildInputs = [
-    desktop-file-utils
-    gettext
-    gobject-introspection
-    itstool
-    meson
-    ninja
-    pkgconfig
-    python3
-    vala
-    wrapGAppsHook
+    meson ninja vala pkgconfig gettext itstool wrapGAppsHook gobject-introspection desktop-file-utils python3
   ];
 
   # Required for USB redirection PolicyKit rules file
-  propagatedUserEnvPkgs = [
-    spice-gtk
-  ];
+  propagatedUserEnvPkgs = [ spice-gtk ];
 
   buildInputs = [
-    acl
-    cyrus_sasl
-    freerdp
-    gdbm
-    glib
-    glib-networking
-    gmp
-    gnome3.adwaita-icon-theme
-    gtk-vnc
-    gtk3
-    json-glib
-    libapparmor
-    libarchive
-    libcap
-    libcap_ng
-    libgudev
-    libosinfo
-    librsvg
-    libsecret
-    libsoup
-    libusb
-    libvirt
-    libvirt-glib
-    libxml2
-    numactl
-    spice-gtk
-    spice-protocol
-    systemd
-    tracker
-    tracker-miners
-    vte
-    webkitgtk
-    xen
-    yajl
+    libvirt-glib glib gtk3 gtk-vnc freerdp libxml2
+    libvirt spice-gtk spice-protocol libsoup json-glib webkitgtk libosinfo systemd
+    tracker tracker-miners libcap yajl gmp gdbm cyrus_sasl libusb libarchive
+    gnome3.adwaita-icon-theme librsvg acl libgudev libsecret
+    libcap_ng numactl xen libapparmor vte
   ];
 
   preFixup = ''
     gappsWrapperArgs+=(--prefix PATH : "${stdenv.lib.makeBinPath [ mtools cdrkit libcdio ]}")
   '';
+
+  mesonFlags = [
+    "-Dovirt=false"
+  ];
 
   postPatch = ''
     chmod +x build-aux/post_install.py # patchShebangs requires executable file
@@ -126,8 +51,8 @@ stdenv.mkDerivation rec {
 
   passthru = {
     updateScript = gnome3.updateScript {
-      packageName = pname;
-      attrPath = "gnome3.${pname}";
+      packageName = "gnome-boxes";
+      attrPath = "gnome3.gnome-boxes";
     };
   };
 
@@ -136,6 +61,6 @@ stdenv.mkDerivation rec {
     homepage = https://wiki.gnome.org/Apps/Boxes;
     license = licenses.gpl3;
     platforms = platforms.linux;
-    maintainers = gnome3.maintainers;
+    maintainers = with maintainers; [ bjornfor ];
   };
 }

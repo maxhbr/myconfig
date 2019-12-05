@@ -1,25 +1,19 @@
-{ stdenv, fetchFromGitHub, python3Packages }:
+{ stdenv, fetchFromGitHub, python2Packages }:
 
-python3Packages.buildPythonApplication rec {
+python2Packages.buildPythonApplication rec {
   pname = "zeronet";
-  version = "0.7.1";
+  version = "0.6.5";
   format = "other";
 
   src = fetchFromGitHub {
     owner = "HelloZeroNet";
     repo = "ZeroNet";
     rev = "v${version}";
-    sha256 = "04prgicm0yjh2klcxdgwx1mvlsxxi2bdkzfcvysvixbgq20wjvdk";
+    sha256 = "1b9jg525jq40czyw9xh9ck90fl9rzrdmzl2mzhqqhz23idb60j4a";
   };
 
-  propagatedBuildInputs = with python3Packages; [
-    gevent msgpack base58 merkletools rsa pysocks pyasn1 websocket_client
-    gevent-websocket rencode bitcoinlib maxminddb pyopenssl
-  ];
-
-  buildPhase = ''
-    ${python3Packages.python.interpreter} -O -m compileall .
-  '';
+  propagatedBuildInputs = with python2Packages; [ msgpack gevent ];
+  buildPhase = "${python2Packages.python.interpreter} -O -m compileall .";
 
   installPhase = ''
     mkdir -p $out/share
@@ -29,7 +23,7 @@ python3Packages.buildPythonApplication rec {
   postFixup = ''
     makeWrapper "$out/share/zeronet.py" "$out/bin/zeronet" \
       --set PYTHONPATH "$PYTHONPATH" \
-      --set PATH ${python3Packages.python}/bin
+      --set PATH ${python2Packages.python}/bin
   '';
 
   meta = with stdenv.lib; {

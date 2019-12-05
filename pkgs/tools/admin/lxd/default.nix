@@ -1,7 +1,7 @@
 { stdenv, pkgconfig, lxc, buildGoPackage, fetchurl
 , makeWrapper, acl, rsync, gnutar, xz, btrfs-progs, gzip, dnsmasq
-, squashfsTools, iproute, iptables, ebtables, libcap, libco-canonical, dqlite
-, raft-canonical, sqlite-replication
+, squashfsTools, iproute, iptables, ebtables, libcap, dqlite
+, sqlite-replication
 , writeShellScriptBin, apparmor-profiles, apparmor-parser
 , criu
 , bash
@@ -9,20 +9,21 @@
 
 buildGoPackage rec {
   pname = "lxd";
-  version = "3.18";
+  version = "3.13";
 
   goPackagePath = "github.com/lxc/lxd";
 
   src = fetchurl {
     url = "https://github.com/lxc/lxd/releases/download/${pname}-${version}/${pname}-${version}.tar.gz";
-    sha256 = "1p8g2gbwgn3kln5rxddpc2fxk8bvf026wjiqip2b0vvpi7h3955h";
+    sha256 = "1kasnzd8hw9biyx8avbjmpfax1pdbp9g543g8hs6xpksmk93hl82";
   };
 
   preBuild = ''
     # unpack vendor
     pushd go/src/github.com/lxc/lxd
-    rm _dist/src/github.com/lxc/lxd
-    cp -r _dist/src/* ../../..
+    rm dist/src/github.com/lxc/lxd
+    cp -r dist/src/* ../../..
+    rm -r dist
     popd
   '';
 
@@ -44,14 +45,13 @@ buildGoPackage rec {
   '';
 
   nativeBuildInputs = [ pkgconfig makeWrapper ];
-  buildInputs = [ lxc acl libcap libco-canonical.dev dqlite.dev
-                  raft-canonical.dev sqlite-replication ];
+  buildInputs = [ lxc acl libcap dqlite sqlite-replication ];
 
   meta = with stdenv.lib; {
     description = "Daemon based on liblxc offering a REST API to manage containers";
     homepage = https://linuxcontainers.org/lxd/;
     license = licenses.asl20;
-    maintainers = with maintainers; [ fpletz wucke13 ];
+    maintainers = with maintainers; [ fpletz ];
     platforms = platforms.linux;
   };
 }

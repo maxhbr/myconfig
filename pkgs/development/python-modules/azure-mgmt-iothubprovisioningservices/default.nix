@@ -36,7 +36,7 @@ buildPythonPackage rec {
 
   meta = with lib; {
     description = "This is the Microsoft Azure IoTHub Provisioning Services Client Library";
-    homepage = "https://github.com/Azure/azure-sdk-for-python";
+    homepage = https://docs.microsoft.com/en-us/python/api/overview/azure/iot?view=azure-python;
     license = licenses.mit;
     maintainers = with maintainers; [ jonringer mwilsoninsight ];
   };

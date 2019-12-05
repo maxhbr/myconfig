@@ -35,7 +35,7 @@ mkDerivation rec {
     description = "LXQt system administration tool";
     homepage = https://github.com/lxqt/lxqt-admin;
     license = licenses.lgpl21;
-    platforms = platforms.linux;
+    platforms = with platforms; unix;
     maintainers = with maintainers; [ romildo ];
   };
 }

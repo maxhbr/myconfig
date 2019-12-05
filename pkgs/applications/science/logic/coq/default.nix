@@ -7,9 +7,8 @@
 
 { stdenv, fetchFromGitHub, writeText, pkgconfig
 , ocamlPackages, ncurses
-, buildIde ? true
+, buildIde ? !(stdenv.lib.versionAtLeast version "8.10" && stdenv.isDarwin) # GTK3 at version 3.24.10 on darwin has wrong gdkconfig.h
 , glib, gnome3, wrapGAppsHook
-, darwin
 , csdp ? null
 , version
 }:
@@ -30,7 +29,6 @@ let
    "8.9.0" = "1dkgdjc4n1m15m1p724hhi5cyxpqbjw6rxc5na6fl3v4qjjfnizh";
    "8.9.1" = "1xrq6mkhpq994bncmnijf8jwmwn961kkpl4mwwlv7j3dgnysrcv2";
    "8.10.0" = "138jw94wp4mg5dgjc2asn8ng09ayz1mxdznq342n0m469j803gzg";
-   "8.10.1" = "072v2zkjzf7gj48137wpr3c9j0hg9pdhlr5l8jrgrwynld8fp7i4";
   }.${version};
   coq-version = stdenv.lib.versions.majorMinor version;
   versionAtLeast = stdenv.lib.versionAtLeast coq-version;
@@ -109,7 +107,6 @@ self = stdenv.mkDerivation {
   ++ stdenv.lib.optionals buildIde
     (if versionAtLeast "8.10"
      then [ ocamlPackages.lablgtk3-sourceview3 glib gnome3.defaultIconTheme wrapGAppsHook ]
-     ++ stdenv.lib.optional stdenv.isDarwin darwin.apple_sdk.frameworks.Cocoa
      else [ ocamlPackages.lablgtk ]);
 
   postPatch = ''
@@ -124,7 +121,7 @@ self = stdenv.mkDerivation {
   setupHook = writeText "setupHook.sh" ''
     addCoqPath () {
       if test -d "''$1/lib/coq/${coq-version}/user-contrib"; then
-        export COQPATH="''${COQPATH-}''${COQPATH:+:}''$1/lib/coq/${coq-version}/user-contrib/"
+        export COQPATH="''${COQPATH}''${COQPATH:+:}''$1/lib/coq/${coq-version}/user-contrib/"
       fi
     }
 

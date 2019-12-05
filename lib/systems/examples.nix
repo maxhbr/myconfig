@@ -118,12 +118,6 @@ rec {
     config = "avr";
   };
 
-  vc4 = {
-    config = "vc4-elf";
-    libc = "newlib";
-    platform = {};
-  };
-
   arm-embedded = {
     config = "arm-none-eabi";
     libc = "newlib";

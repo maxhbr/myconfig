@@ -1,4 +1,4 @@
-{ stdenv, lib, fetchzip, xorg, hicolor-icon-theme }:
+{ stdenv, lib, fetchzip, xorg }:
 
 stdenv.mkDerivation rec {
   pname = "vanilla-dmz";
@@ -8,10 +8,6 @@ stdenv.mkDerivation rec {
     sha256 = "1l0c0svk7dy0d7icg7j2181wdn3fvks5gmyqnvjk749ppy5ks8mj";
   };
   buildInputs = [ xorg.xcursorgen ];
-  propagatedBuildInputs = [
-    hicolor-icon-theme
-  ];
-  dontDropIconThemeCache = true;
   buildPhase = ''
     cd DMZ-White/pngs; ./make.sh; cd -
     cd DMZ-Black/pngs; ./make.sh; cd -

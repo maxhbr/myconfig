@@ -20,7 +20,7 @@ mkDerivation rec {
     description = "Themes, graphics and icons for LXQt";
     homepage = https://github.com/lxqt/lxqt-themes;
     license = licenses.lgpl21;
-    platforms = platforms.linux;
+    platforms = with platforms; unix;
     maintainers = with maintainers; [ romildo ];
   };
 }

@@ -1,9 +1,9 @@
-{ stdenv, lib, fetchurl, autoconf, automake, pkgconfig, libtool
+{ stdenv, lib, fetchurl, fetchpatch, autoconf, automake, pkgconfig, libtool
 , gtk2, halibut, ncurses, perl, darwin
 }:
 
 stdenv.mkDerivation rec {
-  version = "0.73";
+  version = "0.71";
   pname = "putty";
 
   src = fetchurl {
@@ -11,15 +11,23 @@ stdenv.mkDerivation rec {
       "https://the.earth.li/~sgtatham/putty/${version}/${pname}-${version}.tar.gz"
       "ftp://ftp.wayne.edu/putty/putty-website-mirror/${version}/${pname}-${version}.tar.gz"
     ];
-    sha256 = "076z34jpik2dmlwxicvf1djjgnahcqv12rjhmb9yq6ml7x0bbc1x";
+    sha256 = "1f66iss0kqk982azmxbk4xfm2i1csby91vdvly6cr04pz3i1r4rg";
   };
 
-  # glib-2.62 deprecations
-  NIX_CFLAGS_COMPILE = [ "-DGLIB_DISABLE_DEPRECATION_WARNINGS" ];
+  patches = [
+    (fetchpatch {
+      name = "CVE-2019-17069.patch";
+      url = "https://git.tartarus.org/?p=simon/putty.git;a=patch;h=69201ad8936fe0ff1b8723b7a43accb5e9f1c888";
+      sha256 = "1gblwc2r26ikb26b22f2r61b2lkjf80pbclfb5dhhkkqal6kbvga";
+    })
+  ];
 
   preConfigure = lib.optionalString stdenv.hostPlatform.isUnix ''
     perl mkfiles.pl
     ( cd doc ; make );
+    sed -e '/AM_PATH_GTK(/d' \
+        -e '/AC_OUTPUT/iAM_PROG_CC_C_O' \
+        -e '/AC_OUTPUT/iAM_PROG_AR' -i configure.ac
     ./mkauto.sh
     cd unix
   '' + lib.optionalString stdenv.hostPlatform.isWindows ''

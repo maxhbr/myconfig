@@ -23,15 +23,10 @@ python3Packages.buildPythonApplication rec {
 
   doCheck = false; # There are no tests.
 
-  postInstall = ''
+  postBuild = ''
     mkdir -p $out/share
     cp -r share $out/
-    # autostart file
-    cp -r $out/lib/python*/site-packages/etc $out/etc/
     glib-compile-schemas --strict $out/share/glib-2.0/schemas
-    for i in $(find $out -name "*.desktop"); do
-      substituteInPlace $i --replace /usr $out
-    done
   '';
 
   meta = with lib; {

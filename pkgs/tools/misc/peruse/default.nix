@@ -26,8 +26,6 @@ in mkDerivation {
   pathsToLink = [ "/etc/xdg/peruse.knsrc"];
 
   meta = with lib; {
-    homepage = "https://peruse.kde.org";
-    description = "A comic book reader";
     license = licenses.gpl2;
     maintainers = with maintainers; [ peterhoeg ];
   };

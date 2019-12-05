@@ -27,8 +27,8 @@ buildPythonPackage rec {
   ];
 
   postInstall = lib.optionalString isPy3k ''
-    rm $out/${python.sitePackages}/azure/__init__.py
-    rm $out/${python.sitePackages}/azure/mgmt/__init__.py
+    rm -f $out/${python.sitePackages}/azure/__init__.py
+    rm -f $out/${python.sitePackages}/azure/mgmt/__init__.py
   '';
 
   # has no tests
@@ -36,7 +36,7 @@ buildPythonPackage rec {
 
   meta = with lib; {
     description = "This is the Microsoft Azure DNS Management Client Library";
-    homepage = "https://github.com/Azure/azure-sdk-for-python";
+    homepage = https://docs.microsoft.com/en-us/python/api/overview/azure/dns?view=azure-python;
     license = licenses.mit;
     maintainers = with maintainers; [ jonringer mwilsoninsight ];
   };

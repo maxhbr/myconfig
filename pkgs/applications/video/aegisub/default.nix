@@ -1,7 +1,7 @@
 { config, stdenv, fetchurl
 , libX11, wxGTK
 , libiconv, fontconfig, freetype
-, libGLU, libGL
+, libGLU_combined
 , libass, fftw, ffms
 , ffmpeg, pkgconfig, zlib # Undocumented (?) dependencies
 , icu, boost, intltool # New dependencies
@@ -33,7 +33,7 @@ stdenv.mkDerivation rec {
   postPatch = "sed '1i#include <unicode/unistr.h>' -i src/utils.cpp";
 
   buildInputs = with stdenv.lib;
-  [ pkgconfig intltool libX11 wxGTK fontconfig freetype libGLU libGL
+  [ pkgconfig intltool libX11 wxGTK fontconfig freetype libGLU_combined
     libass fftw ffms ffmpeg zlib icu boost boost.out libiconv
   ]
     ++ optional spellcheckSupport hunspell

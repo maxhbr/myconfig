@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, pkgconfig, ncurses, glib, libmaxminddb }:
+{ stdenv, fetchurl, pkgconfig, geoipWithDatabase, ncurses, glib }:
 
 stdenv.mkDerivation rec {
   version = "1.3";
@@ -10,13 +10,13 @@ stdenv.mkDerivation rec {
   };
 
   configureFlags = [
-    "--enable-geoip=mmdb"
+    "--enable-geoip"
     "--enable-utf8"
   ];
 
   nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
-    libmaxminddb
+    geoipWithDatabase
     ncurses
     glib
   ];

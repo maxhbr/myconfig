@@ -1,6 +1,6 @@
-{ stdenv, fetchgit, pkgconfig, linkFarm, lightdm-enso-os-greeter
+{ stdenv, fetchgit, pkgconfig
 , dbus, pcre, epoxy, libXdmcp, at-spi2-core, libxklavier, libxkbcommon, libpthreadstubs
-, gtk3, vala, cmake, libgee, libX11, lightdm, gdk-pixbuf, clutter-gtk, wrapGAppsHook, librsvg }:
+, gtk3, vala, cmake, libgee, libX11, lightdm, gdk-pixbuf, clutter-gtk }:
 
 stdenv.mkDerivation {
   version = "0.2.1";
@@ -12,21 +12,12 @@ stdenv.mkDerivation {
     sha256 = "11jm181jq1vbn83h235avpdxz7pqq6prqyzki5yryy53mkj4kgxz";
   };
 
-  patches = [
-    ./fix-paths.patch
-  ];
-
-  nativeBuildInputs = [
-    cmake
-    pkgconfig
-    vala
-    wrapGAppsHook
-  ];
-
   buildInputs = [
     dbus
     gtk3
     pcre
+    vala
+    cmake
     epoxy
     libgee
     libX11
@@ -38,21 +29,31 @@ stdenv.mkDerivation {
     at-spi2-core
     libxkbcommon
     libpthreadstubs
-    librsvg
   ];
+
+  nativeBuildInputs = [
+    pkgconfig
+  ];
+
+  postPatch = ''
+    sed -i "s@\''${CMAKE_INSTALL_PREFIX}/@@" greeter/CMakeLists.txt
+  '';
 
   preConfigure = ''
     cd greeter
   '';
 
-  passthru.xgreeters = linkFarm "enso-os-greeter-xgreeters" [{
-    path = "${lightdm-enso-os-greeter}/share/xgreeters/pantheon-greeter.desktop";
-    name = "pantheon-greeter.desktop";
-  }];
+  installFlags = [
+    "DESTDIR=$(out)"
+  ];
+
+  preFixup = ''
+    mv $out/usr/* $out
+    rm -r $out/usr
+  '';
 
   postFixup = ''
-    substituteInPlace $out/share/xgreeters/pantheon-greeter.desktop \
-      --replace "pantheon-greeter" "$out/bin/pantheon-greeter"
+    rm -r $out/sbin
   '';
 
   meta = with stdenv.lib; {

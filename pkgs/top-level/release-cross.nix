@@ -143,8 +143,9 @@ in
 
   x86_64-musl = mapTestOnCross lib.systems.examples.musl64 linuxCommon;
 
-  android64 = mapTestOnCross lib.systems.examples.aarch64-android-prebuilt linuxCommon;
-  android32 = mapTestOnCross lib.systems.examples.armv7a-android-prebuilt linuxCommon;
+  /* Linux on Aarch64 */
+  android64 = mapTestOnCross lib.systems.examples.aarch64-android-prebuilt (linuxCommon // {
+  });
 
   wasi32 = mapTestOnCross lib.systems.examples.wasi32 wasiCommon;
 

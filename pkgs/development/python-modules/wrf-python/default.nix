@@ -1,20 +1,19 @@
-{lib, fetchFromGitHub, pythonOlder, buildPythonPackage, gfortran, mock, xarray, wrapt, numpy, netcdf4, setuptools}:
+{lib, fetchFromGitHub, pythonOlder, buildPythonPackage, gfortran, mock, xarray, wrapt, numpy, netcdf4}:
 
 buildPythonPackage rec {
   pname = "wrf-python";
-  version = "1.3.2";
+  version = "1.3.1.1";
 
   src = fetchFromGitHub {
     owner = "NCAR";
     repo = "wrf-python";
     rev = version;
-    sha256 = "1rklkki54z5392cpwwy78bnmsy2ghc187l3j7nv0rzn6jk5bvyi7";
+    sha256 = "12mm7x1r5md6x28vmwyh6k655pgsv6knj8ycmjbxxk8bk7qsj74h";
   };
 
   propagatedBuildInputs = [
     wrapt
     numpy
-    setuptools
     xarray
   ];
 

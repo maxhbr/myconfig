@@ -31,7 +31,7 @@ let
     };
   };
 
-in import ./make-test-python.nix {
+in import ./make-test.nix {
   name = "prometheus";
 
   nodes = {
@@ -173,73 +173,67 @@ in import ./make-test-python.nix {
   testScript = { nodes, ... } : ''
     # Before starting the other machines we first make sure that our S3 service is online
     # and has a bucket added for thanos:
-    s3.start()
-    s3.wait_for_unit("minio.service")
-    s3.wait_for_open_port(${toString minioPort})
-    s3.succeed(
-        "mc config host add minio "
-        + "http://localhost:${toString minioPort} "
-        + "${s3.accessKey} ${s3.secretKey} S3v4",
-        "mc mb minio/thanos-bucket",
-    )
+    $s3->start;
+    $s3->waitForUnit("minio.service");
+    $s3->waitForOpenPort(${toString minioPort});
+    $s3->succeed(
+      "mc config host add minio " .
+      "http://localhost:${toString minioPort} ${s3.accessKey} ${s3.secretKey} S3v4");
+    $s3->succeed("mc mb minio/thanos-bucket");
 
     # Now that s3 has started we can start the other machines:
-    for machine in prometheus, query, store:
-        machine.start()
+    $prometheus->start;
+    $query->start;
+    $store->start;
 
     # Check if prometheus responds to requests:
-    prometheus.wait_for_unit("prometheus.service")
-    prometheus.wait_for_open_port(${toString queryPort})
-    prometheus.succeed("curl -s http://127.0.0.1:${toString queryPort}/metrics")
+    $prometheus->waitForUnit("prometheus.service");
+    $prometheus->waitForOpenPort(${toString queryPort});
+    $prometheus->succeed("curl -s http://127.0.0.1:${toString queryPort}/metrics");
 
     # Let's test if pushing a metric to the pushgateway succeeds:
-    prometheus.wait_for_unit("pushgateway.service")
-    prometheus.succeed(
-        "echo 'some_metric 3.14' | "
-        + "curl --data-binary \@- "
-        + "http://127.0.0.1:${toString pushgwPort}/metrics/job/some_job"
-    )
+    $prometheus->waitForUnit("pushgateway.service");
+    $prometheus->succeed(
+      "echo 'some_metric 3.14' | " .
+      "curl --data-binary \@- http://127.0.0.1:${toString pushgwPort}/metrics/job/some_job");
 
     # Now check whether that metric gets ingested by prometheus.
     # Since we'll check for the metric several times on different machines
     # we abstract the test using the following function:
 
     # Function to check if the metric "some_metric" has been received and returns the correct value.
-    def wait_for_metric(machine):
-        return machine.wait_until_succeeds(
-            "curl -sf 'http://127.0.0.1:${toString queryPort}/api/v1/query?query=some_metric' | "
-            + "jq '.data.result[0].value[1]' | grep '\"3.14\"'"
-        )
+    local *Machine::waitForMetric = sub {
+      my ($self) = @_;
+      $self->waitUntilSucceeds(
+        "curl -sf 'http://127.0.0.1:${toString queryPort}/api/v1/query?query=some_metric' " .
+        "| jq '.data.result[0].value[1]' | grep '\"3.14\"'");
+    };
 
-
-    wait_for_metric(prometheus)
+    $prometheus->waitForMetric;
 
     # Let's test if the pushgateway persists metrics to the configured location.
-    prometheus.wait_until_succeeds("test -e /var/lib/prometheus-pushgateway/metrics")
+    $prometheus->waitUntilSucceeds("test -e /var/lib/prometheus-pushgateway/metrics");
 
     # Test thanos
-    prometheus.wait_for_unit("thanos-sidecar.service")
+    $prometheus->waitForUnit("thanos-sidecar.service");
 
     # Test if the Thanos query service can correctly retrieve the metric that was send above.
-    query.wait_for_unit("thanos-query.service")
-    wait_for_metric(query)
+    $query->waitForUnit("thanos-query.service");
+    $query->waitForMetric;
 
     # Test if the Thanos sidecar has correctly uploaded its TSDB to S3, if the
     # Thanos storage service has correctly downloaded it from S3 and if the Thanos
     # query service running on $store can correctly retrieve the metric:
-    store.wait_for_unit("thanos-store.service")
-    wait_for_metric(store)
+    $store->waitForUnit("thanos-store.service");
+    $store->waitForMetric;
 
-    store.wait_for_unit("thanos-compact.service")
+    $store->waitForUnit("thanos-compact.service");
 
     # Test if the Thanos bucket command is able to retrieve blocks from the S3 bucket
     # and check if the blocks have the correct labels:
-    store.succeed(
-        "thanos bucket ls "
-        + "--objstore.config-file=${nodes.store.config.services.thanos.store.objstore.config-file} "
-        + "--output=json | "
-        + "jq .thanos.labels.some_label | "
-        + "grep 'required by thanos'"
-    )
+    $store->succeed(
+      "thanos bucket ls" .
+      " --objstore.config-file=${nodes.store.config.services.thanos.store.objstore.config-file}" .
+      " --output=json | jq .thanos.labels.some_label | grep 'required by thanos'");
   '';
 }

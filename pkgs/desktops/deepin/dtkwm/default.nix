@@ -1,14 +1,15 @@
-{ stdenv, mkDerivation, fetchFromGitHub, fetchpatch, pkgconfig, qmake, qtx11extras, dtkcore, deepin }:
+{ stdenv, mkDerivation, fetchFromGitHub, pkgconfig, qmake, qtx11extras, dtkcore,
+  deepin }:
 
 mkDerivation rec {
   pname = "dtkwm";
-  version = "2.0.12";
+  version = "2.0.11";
 
   src = fetchFromGitHub {
     owner = "linuxdeepin";
     repo = pname;
     rev = version;
-    sha256 = "0rdzzqsggqarldwb4yp5s4sf5czicgxbdmibjn0pw32129r2d1g3";
+    sha256 = "10l89i84vsh5knq9wg2php7vfg5rj5c9hrrl9rjlcidn1rz8yx6f";
   };
 
   nativeBuildInputs = [
@@ -19,14 +20,6 @@ mkDerivation rec {
   buildInputs = [
     dtkcore
     qtx11extras
-  ];
-
-  patches = [
-    # Set DTK_MODULE_NAME
-    (fetchpatch {
-      url = "https://github.com/linuxdeepin/dtkwm/commit/2490891a.patch";
-      sha256 = "0krydxjpnaihkgs1n49b6mcf3rd3lkispcnkb1j5vpfs9hp9f48j";
-    })
   ];
 
   outRef = placeholder "out";

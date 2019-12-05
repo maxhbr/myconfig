@@ -1,4 +1,4 @@
-{ stdenv, fetchFromGitHub, postgresql }:
+{ stdenv, fetchFromGitHub }:
 
 stdenv.mkDerivation {
   pname = "pgjwt";
@@ -23,7 +23,6 @@ stdenv.mkDerivation {
       sign() and verify() functions to create and verify JSON Web Tokens.
     '';
     license = licenses.mit;
-    platforms = postgresql.meta.platforms;
     maintainers = with maintainers; [spinus];
   };
 }

@@ -7,7 +7,7 @@
 , bash
 , glib
 , glibcLocales
-, dconf
+, gnome3
 , gobject-introspection
 , gsettings-desktop-schemas
 , gtk3
@@ -66,7 +66,7 @@ python3.pkgs.buildPythonApplication rec {
   buildInputs = [
     bash
     glib
-    dconf
+    gnome3.dconf
     gsettings-desktop-schemas
     gtk3
     hunspell
@@ -89,7 +89,7 @@ python3.pkgs.buildPythonApplication rec {
   ];
 
   propagatedUserEnvPkgs = [
-    dconf
+    gnome3.dconf
   ];
 
   checkInputs = [

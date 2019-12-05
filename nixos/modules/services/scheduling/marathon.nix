@@ -93,6 +93,6 @@ in {
       };
     };
 
-    users.users.${cfg.user}.isSystemUser = true;
+    users.users.${cfg.user} = { };
   };
 }

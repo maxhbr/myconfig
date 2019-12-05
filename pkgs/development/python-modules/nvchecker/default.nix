@@ -1,20 +1,22 @@
-{ stdenv, buildPythonPackage, fetchPypi, pythonOlder, pytest, setuptools, structlog, pytest-asyncio, flaky, tornado, pycurl, pytest-httpbin }:
+{ stdenv, buildPythonPackage, fetchPypi, pythonOlder, pytest, setuptools, structlog, pytest-asyncio, flaky, tornado, pycurl }:
 
 buildPythonPackage rec {
   pname = "nvchecker";
-  version = "1.5";
+  version = "1.4.4";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0973f7c3ea5ad65fb19837e8915882a9f2c2f21f5c2589005478697391fea2fd";
+    sha256 = "6276ed2a897a30ccd71bfd7cf9e6b7842f37f3d5a86d7a70fe46f437c62b1875";
   };
 
   propagatedBuildInputs = [ setuptools structlog tornado pycurl ];
-  checkInputs = [ pytest pytest-asyncio flaky pytest-httpbin ];
+  checkInputs = [ pytest pytest-asyncio flaky ];
 
-  # disable `test_ubuntupkg` because it requires network
+  # requires network access
+  doCheck = false;
+
   checkPhase = ''
-    py.test -m "not needs_net" --ignore=tests/test_ubuntupkg.py
+    py.test
   '';
 
   disabled = pythonOlder "3.5";

@@ -1,16 +1,16 @@
-{ stdenv, mkDerivation, fetchFromGitHub, fetchpatch, cmake, pkgconfig, qttools, qtx11extras,
+{ stdenv, mkDerivation, fetchFromGitHub, cmake, pkgconfig, qttools, qtx11extras,
   dtkcore, dtkwidget, ffmpeg, ffmpegthumbnailer, mpv, pulseaudio,
   libdvdnav, libdvdread, xorg, deepin }:
 
 mkDerivation rec {
   pname = "deepin-movie-reborn";
-  version = "5.0.0";
+  version = "3.2.24";
 
   src = fetchFromGitHub {
     owner = "linuxdeepin";
     repo = pname;
     rev = version;
-    sha256 = "0cly8q0514a58s3h3wsvx9yxar7flz6i2q8xkrkfjias22b3z7b0";
+    sha256 = "16mxym7dm6qk90q2w7xqm62047rq0lirrjmnnpaxshzaww9gngkh";
   };
 
   outputs = [ "out" "dev" ];
@@ -19,7 +19,6 @@ mkDerivation rec {
     cmake
     pkgconfig
     qttools
-    deepin.setupHook
   ];
 
   buildInputs = [
@@ -38,24 +37,11 @@ mkDerivation rec {
     xorg.xcbproto
   ];
 
-  patches = [
-    # fix: build failed if cannot find dtk-settings tool
-    (fetchpatch {
-      url = "https://github.com/linuxdeepin/deepin-movie-reborn/commit/fbb307b.patch";
-      sha256 = "0915za0khki0729rvcfpxkh6vxhqwc47cgcmjc90kfq1004221vx";
-    })
-  ];
-
   NIX_LDFLAGS = "-ldvdnav";
 
-
   postPatch = ''
-    searchHardCodedPaths  # debugging
-
+    sed -i src/CMakeLists.txt -e "s,/usr/lib/dtk2,${dtkcore}/lib/dtk2,"
     sed -i src/libdmr/libdmr.pc.in -e "s,/usr,$out," -e 's,libdir=''${prefix}/,libdir=,'
-
-    substituteInPlace src/deepin-movie.desktop \
-      --replace "Exec=deepin-movie" "Exec=$out/bin/deepin-movie"
   '';
 
   passthru.updateScript = deepin.updateScript { inherit ;name = "${pname}-${version}"; };

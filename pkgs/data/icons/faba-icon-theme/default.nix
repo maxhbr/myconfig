@@ -1,4 +1,4 @@
-{ stdenv, fetchFromGitHub, meson, ninja, python3, gtk3, pantheon, hicolor-icon-theme }:
+{ stdenv, fetchFromGitHub, meson, ninja, python3, gtk3, pantheon }:
 
 stdenv.mkDerivation rec {
   name = "${package-name}-${version}";
@@ -13,12 +13,6 @@ stdenv.mkDerivation rec {
   };
 
   nativeBuildInputs = [ meson ninja python3 gtk3 pantheon.elementary-icon-theme ];
-
-  propagatedBuildInputs = [
-    hicolor-icon-theme
-  ];
-
-  dontDropIconThemeCache = true;
 
   postPatch = ''
     patchShebangs meson/post_install.py

@@ -71,7 +71,6 @@ in
       group = config.users.users.gollum.name;
       description = "Gollum user";
       createHome = false;
-      isSystemUser = true;
     };
 
     users.groups.gollum = { };

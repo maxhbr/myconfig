@@ -1,4 +1,4 @@
-import ./make-test-python.nix ({ lib, ...}:
+import ./make-test.nix ({ lib, ...}:
 
 {
   name = "jellyfin";
@@ -9,8 +9,8 @@ import ./make-test-python.nix ({ lib, ...}:
     { services.jellyfin.enable = true; };
 
   testScript = ''
-    machine.wait_for_unit("jellyfin.service")
-    machine.wait_for_open_port(8096)
-    machine.succeed("curl --fail http://localhost:8096/")
+    $machine->waitForUnit('jellyfin.service');
+    $machine->waitForOpenPort('8096');
+    $machine->succeed("curl --fail http://localhost:8096/");
   '';
 })

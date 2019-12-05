@@ -1,6 +1,6 @@
 { stdenv, fetchurl, makeWrapper
 , xorg, imlib2, libjpeg, libpng
-, curl, libexif, jpegexiforient, perlPackages }:
+, curl, libexif, perlPackages }:
 
 with stdenv.lib;
 
@@ -25,7 +25,7 @@ stdenv.mkDerivation rec {
 
   installTargets = [ "install" ];
   postInstall = ''
-    wrapProgram "$out/bin/feh" --prefix PATH : "${makeBinPath [ libjpeg jpegexiforient ]}" \
+    wrapProgram "$out/bin/feh" --prefix PATH : "${libjpeg.bin}/bin" \
                                --add-flags '--theme=feh'
   '';
 

@@ -1,4 +1,4 @@
-{ stdenv, stdenv49, gccStdenv, llvmPackages
+{ stdenv, stdenv49, gcc9Stdenv, llvmPackages_8
 , lib, fetchurl, fetchpatch, fetchFromGitHub
 
 , cmake, ninja, which, findutils, m4, gawk
@@ -8,8 +8,8 @@
 let
   vsmakeBuild = import ./vsmake.nix args;
   cmakeBuild = import ./cmake.nix (args // {
-    gccStdenv    = gccStdenv;
-    llvmPackages = llvmPackages;
+    gccStdenv    = gcc9Stdenv;
+    llvmPackages = llvmPackages_8;
   });
 
   python3-six-patch = fetchpatch {
@@ -69,9 +69,9 @@ in with builtins; {
   # ------------------------------------------------------
 
   foundationdb61 = cmakeBuild {
-    version = "6.1.12";
+    version = "6.1.10";
     branch  = "release-6.1";
-    sha256  = "1yh5hx6rim41m0dwhnb2pcwz67wlnk0zwvyw845d36b29gwy58ab";
+    sha256  = "1v278zlrki3da2i2258j2b4rk4fq6d9bj623z01bjrvmaqxc2gry";
 
     patches = [
       ./patches/clang-libcxx.patch

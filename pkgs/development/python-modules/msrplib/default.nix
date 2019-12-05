@@ -8,12 +8,12 @@
 
 buildPythonPackage rec {
   pname = "python-msrplib";
-  version = "0.19.2";
+  version = "0.19";
 
   src = fetchdarcs {
     url = "http://devel.ag-projects.com/repositories/${pname}";
     rev = "release-${version}";
-    sha256 = "0d0krwv4hhspjgppnvh0iz51bvdbz23cjasgrppip7x8b00514gz";
+    sha256 = "0jqvvssbwzq7bwqn3wrjfnpj8zb558mynn2visnlrcma6b57yhwd";
   };
 
   propagatedBuildInputs = [ eventlib application gnutls ];

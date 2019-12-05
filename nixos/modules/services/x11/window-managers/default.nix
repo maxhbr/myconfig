@@ -11,7 +11,6 @@ in
     ./2bwm.nix
     ./afterstep.nix
     ./bspwm.nix
-    ./cwm.nix
     ./dwm.nix
     ./evilwm.nix
     ./exwm.nix

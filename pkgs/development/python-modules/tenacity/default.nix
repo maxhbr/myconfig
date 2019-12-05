@@ -1,26 +1,28 @@
 { lib, buildPythonPackage, fetchPypi, isPy27
-, pbr, six, futures, monotonic, setuptools_scm
+, pbr, six, futures, monotonic
 , pytest, sphinx, tornado
 }:
 
 buildPythonPackage rec {
   pname = "tenacity";
-  version = "5.1.5";
+  version = "5.0.4";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "e664bd94f088b17f46da33255ae33911ca6a0fe04b156d334b601a4ef66d3c5f";
+    sha256 = "06sp12cn8zcb7rqklq91f6mxhvrdq5cs0p3pdiazacqcmvvwbhx0";
   };
 
-  nativeBuildInputs = [ pbr setuptools_scm ];
+  nativeBuildInputs = [ pbr ];
   propagatedBuildInputs = [ six ]
     ++ lib.optionals isPy27 [ futures monotonic ];
 
   checkInputs = [ pytest sphinx tornado ];
-  checkPhase = if isPy27 then ''
+  checkPhase = (if isPy27 then ''
     pytest --ignore='tenacity/tests/test_asyncio.py'
   '' else ''
     pytest
+  '') + ''
+    sphinx-build -a -E -W -b doctest doc/source doc/build
   '';
 
   meta = with lib; {

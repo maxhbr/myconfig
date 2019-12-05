@@ -21,7 +21,7 @@
 # User-agent info
 , lsb-release
 # rt2rtng
-, python3
+, python2
 # Testing
 , gtest
 # Fixup
@@ -36,17 +36,17 @@ let
     gst-libav
   ];
   # For the rt2rtng utility for converting bookmark file to -ng format
-  pythonInputs = with python3.pkgs; [ python lxml ];
+  pythonInputs = with python2.pkgs; [ python2 lxml ];
 in
 stdenv.mkDerivation rec {
   pname = "radiotray-ng";
-  version = "0.2.7";
+  version = "0.2.6";
 
   src = fetchFromGitHub {
     owner = "ebruck";
-    repo = pname;
+    repo = "radiotray-ng";
     rev = "v${version}";
-    sha256 = "1v2nsz7s0jj0wmqabzk6akcf1353rachm1lfq77hxbq9z5pw8pgb";
+    sha256 = "0khrfxjas2ldh0kksq7l811srqy16ahjxchvz0hhykx5hykymxlb";
   };
 
   nativeBuildInputs = [ cmake pkgconfig wrapGAppsHook makeWrapper ];

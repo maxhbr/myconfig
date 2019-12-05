@@ -8,8 +8,6 @@
 , pydbus
 , pygobject3
 , pyserial
-, setuptools
-, dbus-python
 
 , file
 , acpi
@@ -24,17 +22,15 @@
 
 buildPythonPackage rec {
   pname = "py3status";
-  version = "3.21";
+  version = "3.19";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "c208c680d1511e8c1dc950a930d3ee1b83f2dbfaac1308cd43c4773810fee89b";
+    sha256 = "10ikvdx39phr7n01qa6y9i5lqg3blv0d6y1pwqniczaf558cfp3l";
   };
 
   doCheck = false;
-  propagatedBuildInputs = [
-    pytz requests tzlocal i3ipc pydbus pygobject3 pyserial setuptools dbus-python
-  ];
+  propagatedBuildInputs = [ pytz requests tzlocal i3ipc pydbus pygobject3 pyserial ];
   buildInputs = [ file ];
   prePatch = ''
     sed -i -e "s|'file|'${file}/bin/file|" py3status/parse_config.py

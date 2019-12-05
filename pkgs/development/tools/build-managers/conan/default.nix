@@ -1,4 +1,4 @@
-{ lib, python3, git, pkgconfig }:
+{ lib, python3, git }:
 
 let newPython = python3.override {
   packageOverrides = self: super: {
@@ -37,17 +37,28 @@ let newPython = python3.override {
         sha256 = "c0abe3218b86533cca287e7057a37481883c07acef7814b70583406938214cc8";
       };
     });
+    pyyaml = super.pyyaml_3;
   };
 };
 
 in newPython.pkgs.buildPythonApplication rec {
-  version = "1.12.3";
+  version = "1.12.0";
   pname = "conan";
 
   src = newPython.pkgs.fetchPypi {
     inherit pname version;
-    sha256 = "1cnfy9b57apps4bfai6r67g0mrvgnqa154z9idv0kf93k1nvx53g";
+    sha256 = "0hgy3wfy96likdchz42h9mawfjw4dxx7k2iinrrlhph7128kji1j";
   };
+  checkInputs = [
+    git
+  ] ++ (with newPython.pkgs; [
+    codecov
+    mock
+    node-semver
+    nose
+    parameterized
+    webtest
+  ]);
 
   propagatedBuildInputs = with newPython.pkgs; [
     colorama deprecation distro fasteners bottle
@@ -55,30 +66,14 @@ in newPython.pkgs.buildPythonApplication rec {
     pyjwt pylint pyyaml requests six tqdm
   ];
 
-  checkInputs = [
-    pkgconfig
-    git
-  ] ++ (with newPython.pkgs; [
-    codecov
-    mock
-    pytest
-    node-semver
-    nose
-    parameterized
-    webtest
-  ]);
-
   checkPhase = ''
-    export HOME=$TMPDIR
-    pytest conans/test/{utils,unittests} \
-      -k 'not SVN and not ToolsNetTest'
+    export HOME="$TMP/conan-home"
+    mkdir -p "$HOME"
   '';
 
   postPatch = ''
     substituteInPlace conans/requirements_server.txt \
       --replace "pluginbase>=0.5, < 1.0" "pluginbase>=0.5"
-    substituteInPlace conans/requirements.txt \
-      --replace "PyYAML>=3.11, <3.14.0" "PyYAML"
   '';
 
   meta = with lib; {

@@ -8,11 +8,11 @@
 
 buildPythonPackage rec {
   pname = "google-cloud-bigquery-datatransfer";
-  version = "0.4.1";
+  version = "0.3.0";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "9ef431c0747d92dd5d5d4038aab96215dfd20c59235ece99a96d8329792cbcdb";
+    sha256 = "02bf1a508ffbc730904fd8a5e7d7c33946f0aa539127c1b1e235dfdedd7bc9a5";
   };
 
   checkInputs = [ pytest mock ];

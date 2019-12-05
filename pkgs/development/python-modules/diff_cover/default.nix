@@ -1,23 +1,10 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, inflect
-, jinja2
-, jinja2_pluralize
-, pygments
-, six
-# test dependencies
-, coverage
-, flake8
-, mock
-, nose
-, pycodestyle
-, pyflakes
-, pylint
-, pytest
-}:
+{ stdenv, buildPythonPackage, fetchPypi, jinja2, jinja2_pluralize, pygments,
+  six, inflect, mock, nose, coverage, pycodestyle, flake8, pyflakes, git,
+  pylint, pydocstyle, fetchpatch, glibcLocales }:
 
 buildPythonPackage rec {
   pname = "diff_cover";
-  version = "2.4.1";
+  version = "1.0.2";
 
   preCheck = ''
     export LC_ALL=en_US.UTF-8;
@@ -25,17 +12,20 @@ buildPythonPackage rec {
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "12h91rvbrf9qmdmj5nfqhcd3bpwq1pvk990bag4hyxcf86qlzds4";
+    sha256 = "1wbp0kfv2mjxwnq2jlqmwvb71fywwc4x4azxi7ll5dll6nhjyd61";
   };
+
+  patches = [
+    (fetchpatch {
+      name = "tests-fix.patch";
+      url = "https://github.com/Bachmann1234/diff-cover/commit/85c30959c8ed2aa3848f400095a2418f15bb7777.patch";
+      sha256 = "0xni4syrxww9kdv8495f416vqgfdys4w2hgf5rdi35hy3ybfslh0";
+    })
+  ];
 
   propagatedBuildInputs = [ jinja2 jinja2_pluralize pygments six inflect ];
 
-  checkInputs = [ mock coverage pytest nose pylint pyflakes pycodestyle ];
-
-  # ignore tests which try to write files
-  checkPhase = ''
-    pytest -k 'not added_file_pylint_console and not file_does_not_exist'
-  '';
+  checkInputs = [ mock nose coverage pycodestyle flake8 pyflakes pylint pydocstyle git glibcLocales ];
 
   meta = with stdenv.lib; {
     description = "Automatically find diff lines that need test coverage";

@@ -1,4 +1,4 @@
-{ stdenv, fetchgit, fetchpatch, autoreconfHook
+{ stdenv, fetchgit, autoreconfHook
 , pkgconfig, libtool, boost, SDL
 , glib, pango, gettext, curl, xorg
 , libpng, libjpeg, giflib, speex, atk
@@ -6,9 +6,7 @@
 # renderers
 , enableAGG    ? true,  agg   ? null
 , enableCairo  ? false, cairo ? null
-, enableOpenGL ? false
-, libGLU ? null
-, libGL  ? null
+, enableOpenGL ? false, libGLU_combined  ? null
 
 # GUI toolkits
 , enableGTK ? true,  gtk2 ? null, gnome2 ? null
@@ -47,7 +45,7 @@ in
 # renderers
 assert enableAGG    -> available agg;
 assert enableCairo  -> available cairo;
-assert enableOpenGL -> all available [ libGLU libGL ];
+assert enableOpenGL -> available libGLU_combined;
 
 # GUI toolkits
 assert enableGTK -> all available [ gtk2 gnome2.gtkglext gnome2.GConf ];
@@ -59,7 +57,7 @@ assert enableFFmpeg    -> available ffmpeg_2 ;
 
 # misc
 assert enableJemalloc -> available jemalloc;
-assert enableHwAccel  -> all available [ libGLU libGL ];
+assert enableHwAccel  -> available libGLU_combined;
 assert enablePlugins  -> all available [ xulrunner npapi_sdk ];
 
 assert length toolkits  == 0 -> throw "at least one GUI toolkit must be enabled";
@@ -87,20 +85,13 @@ stdenv.mkDerivation {
     libpng libjpeg giflib pango atk
   ] ++ optional  enableAGG       agg
     ++ optional  enableCairo     cairo
+    ++ optional  enableOpenGL    libGLU_combined
     ++ optional  enableQt        qt4
     ++ optional  enableFFmpeg    ffmpeg_2
     ++ optional  enableJemalloc  jemalloc
-    ++ optional  enableHwAccel   [ libGL libGLU ]
-    ++ optionals enableOpenGL    [ libGL libGLU ]
+    ++ optional  enableHwAccel   libGLU_combined
     ++ optionals enablePlugins   [ xulrunner npapi_sdk ]
     ++ optionals enableGTK       [ gtk2 gnome2.gtkglext gnome2.GConf ];
-
-  patches = [
-    (fetchpatch { # fix compilation due to bad detection of libgif version: https://savannah.gnu.org/patch/index.php?9873
-      url = "https://savannah.gnu.org/patch/download.php?file_id=47859";
-      sha256 = "0aimayzgi5065gkcfcr8d5lkd9c0471q7dqmln42hjzq847n6d5y";
-    })
-  ];
 
   configureFlags = with stdenv.lib; [
     "--with-boost-incl=${boost.dev}/include"

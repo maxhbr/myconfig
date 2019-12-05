@@ -47,7 +47,6 @@ in
       name = cfg.user;
       description = "usbmuxd user";
       group = cfg.group;
-      isSystemUser = true;
     };
 
     users.groups = optional (cfg.group == defaultUserGroup) {

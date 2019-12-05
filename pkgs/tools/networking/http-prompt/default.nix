@@ -1,6 +1,6 @@
-{ stdenv, fetchFromGitHub, python3Packages, httpie }:
+{ stdenv, fetchFromGitHub, pythonPackages, httpie }:
 
-python3Packages.buildPythonApplication rec {
+pythonPackages.buildPythonApplication rec {
   pname = "http-prompt";
   version = "1.0.0";
 
@@ -11,11 +11,11 @@ python3Packages.buildPythonApplication rec {
     sha256 = "0kngz2izcqjphbrdkg489p0xmf65xjc8ki1a2szcc8sgwc7z74xy";
   };
 
-  propagatedBuildInputs = with python3Packages; [
+  propagatedBuildInputs = with pythonPackages; [
     click
     httpie
     parsimonious
-    (python.pkgs.callPackage ../../../development/python-modules/prompt_toolkit/1.nix {})
+    prompt_toolkit
     pygments
     six
   ];
@@ -30,5 +30,6 @@ python3Packages.buildPythonApplication rec {
     license = licenses.mit;
     maintainers = with maintainers; [ matthiasbeyer ];
     platforms = platforms.linux ++ platforms.darwin;
+    broken = true;
   };
 }

@@ -10,13 +10,13 @@
 
 buildPythonPackage rec {
   pname = "mozlog";
-  version = "4.2.0";
+  version = "3.8";
 
   disabled = isPy3k;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "dc85cfb9d47af6811f2367f471de7028c36204340c5e68a928115409ea75d9a9";
+    sha256 = "00x28z6diw06gakb5isbfha5z2n63yyncv4za303nsgzxvlihmx0";
   };
 
   propagatedBuildInputs = [ blessings mozterm six ];

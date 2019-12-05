@@ -1,6 +1,6 @@
 let
   commonConfig = ./common/letsencrypt/common.nix;
-in import ./make-test-python.nix {
+in import ./make-test.nix {
   name = "acme";
 
   nodes = rec {
@@ -12,11 +12,8 @@ in import ./make-test-python.nix {
       networking.extraHosts = ''
         ${config.networking.primaryIPAddress} standalone.com
       '';
-      security.acme = {
-        server = "https://acme-v02.api.letsencrypt.org/dir";
-        certs."standalone.com" = {
-            webroot = "/var/lib/acme/acme-challenges";
-        };
+      security.acme.certs."standalone.com" = {
+        webroot = "/var/lib/acme/acme-challenges";
       };
       systemd.targets."acme-finished-standalone.com" = {};
       systemd.services."acme-standalone.com" = {
@@ -57,8 +54,6 @@ in import ./make-test-python.nix {
         '';
       };
 
-      security.acme.server = "https://acme-v02.api.letsencrypt.org/dir";
-
       nesting.clone = [
         ({pkgs, ...}: {
 
@@ -90,44 +85,39 @@ in import ./make-test-python.nix {
       newServerSystem = nodes.webserver2.config.system.build.toplevel;
       switchToNewServer = "${newServerSystem}/bin/switch-to-configuration test";
     in
-    # Note, wait_for_unit does not work for oneshot services that do not have RemainAfterExit=true,
+    # Note, waitForUnit does not work for oneshot services that do not have RemainAfterExit=true,
     # this is because a oneshot goes from inactive => activating => inactive, and never
     # reaches the active state. To work around this, we create some mock target units which
     # get pulled in by the oneshot units. The target units linger after activation, and hence we
     # can use them to probe that a oneshot fired. It is a bit ugly, but it is the best we can do
     ''
-      client.start()
-      letsencrypt.start()
-      acmeStandalone.start()
+      $client->start;
+      $letsencrypt->start;
+      $acmeStandalone->start;
 
-      letsencrypt.wait_for_unit("default.target")
-      letsencrypt.wait_for_unit("pebble.service")
+      $letsencrypt->waitForUnit("default.target");
+      $letsencrypt->waitForUnit("pebble.service");
 
-      with subtest("can request certificate with HTTPS-01 challenge"):
-          acmeStandalone.wait_for_unit("default.target")
-          acmeStandalone.succeed("systemctl start acme-standalone.com.service")
-          acmeStandalone.wait_for_unit("acme-finished-standalone.com.target")
+      subtest "can request certificate with HTTPS-01 challenge", sub {
+        $acmeStandalone->waitForUnit("default.target");
+        $acmeStandalone->succeed("systemctl start acme-standalone.com.service");
+        $acmeStandalone->waitForUnit("acme-finished-standalone.com.target");
+      };
 
-      client.wait_for_unit("default.target")
+      $client->waitForUnit("default.target");
 
-      client.succeed("curl https://acme-v02.api.letsencrypt.org:15000/roots/0 > /tmp/ca.crt")
-      client.succeed(
-          "curl https://acme-v02.api.letsencrypt.org:15000/intermediate-keys/0 >> /tmp/ca.crt"
-      )
+      $client->succeed('curl https://acme-v02.api.letsencrypt.org:15000/roots/0 > /tmp/ca.crt');
+      $client->succeed('curl https://acme-v02.api.letsencrypt.org:15000/intermediate-keys/0 >> /tmp/ca.crt');
 
-      with subtest("Can request certificate for nginx service"):
-          webserver.wait_for_unit("acme-finished-a.example.com.target")
-          client.succeed(
-              "curl --cacert /tmp/ca.crt https://a.example.com/ | grep -qF 'hello world'"
-          )
+      subtest "Can request certificate for nginx service", sub {
+        $webserver->waitForUnit("acme-finished-a.example.com.target");
+        $client->succeed('curl --cacert /tmp/ca.crt https://a.example.com/ | grep -qF "hello world"');
+      };
 
-      with subtest("Can add another certificate for nginx service"):
-          webserver.succeed(
-              "/run/current-system/fine-tune/child-1/bin/switch-to-configuration test"
-          )
-          webserver.wait_for_unit("acme-finished-b.example.com.target")
-          client.succeed(
-              "curl --cacert /tmp/ca.crt https://b.example.com/ | grep -qF 'hello world'"
-          )
+      subtest "Can add another certificate for nginx service", sub {
+        $webserver->succeed("/run/current-system/fine-tune/child-1/bin/switch-to-configuration test");
+        $webserver->waitForUnit("acme-finished-b.example.com.target");
+        $client->succeed('curl --cacert /tmp/ca.crt https://b.example.com/ | grep -qF "hello world"');
+      };
     '';
 }

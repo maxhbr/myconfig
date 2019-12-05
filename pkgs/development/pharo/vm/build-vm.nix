@@ -5,7 +5,7 @@
 , glibc
 , openssl
 , libgit2
-, libGLU, libGL
+, libGLU_combined
 , freetype
 , xorg
 , alsaLib
@@ -85,7 +85,7 @@ stdenv.mkDerivation rec {
     libs = [
       cairo
       libgit2
-      libGLU libGL
+      libGLU_combined
       freetype
       openssl
       libuuid
@@ -139,7 +139,7 @@ stdenv.mkDerivation rec {
     glibc
     openssl
     gcc48
-    libGLU libGL
+    libGLU_combined
     freetype
     xorg.libX11
     xorg.libICE

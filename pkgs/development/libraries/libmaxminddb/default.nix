@@ -12,7 +12,7 @@ stdenv.mkDerivation rec {
   meta = with stdenv.lib; {
     description = "C library for working with MaxMind geolocation DB files";
     homepage = https://github.com/maxmind/libmaxminddb;
-    license = licenses.asl20;
+    license = licenses.apsl20;
     platforms = platforms.all;
     maintainers = [ maintainers.vcunat ];
   };

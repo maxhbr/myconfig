@@ -1,88 +1,96 @@
-{ stdenv, lib, pkgs, fetchFromGitHub, nodejs, nodePackages, remarshal
-, ttfautohint-nox, otfcc
+{
+  stdenv, lib,
+  fetchFromGitHub, fetchurl,
+  nodejs, ttfautohint-nox, otfcc,
 
-# Custom font set options.
-# See https://github.com/be5invis/Iosevka#build-your-own-style
-# Ex:
-# privateBuildPlan = {
-#   family = "Iosevka Expanded";
-#
-#   design = [
-#     "sans"
-#     "expanded"
-#   ];
-# };
-, privateBuildPlan ? null
-  # Extra parameters. Can be used for ligature mapping.
-  # It must be a raw toml string.
-  #
-  # Ex:
-  # [[iosevka.compLig]]
-  # unicode = 57808 # 0xe1d0
-  # featureTag = 'XHS0'
-  # sequence = "+>"
-, extraParameters ? null
+  # Custom font set options.
+  # See https://github.com/be5invis/Iosevka#build-your-own-style
+  design ? [], upright ? [], italic ? [], oblique ? [],
+  family ? null, weights ? [],
   # Custom font set name. Required if any custom settings above.
-, set ? null }:
+  set ? null
+}:
 
-assert (privateBuildPlan != null) -> set != null;
+assert (design != []) -> set != null;
+assert (upright != []) -> set != null;
+assert (italic != []) -> set != null;
+assert (oblique != []) -> set != null;
+assert (family != null) -> set != null;
+assert (weights != []) -> set != null;
 
-stdenv.mkDerivation rec {
-  pname = if set != null then "iosevka-${set}" else "iosevka";
+let
+  installPackageLock = import ./package-lock.nix { inherit fetchurl lib; };
+in
 
-  version = "2.3.2";
+let pname = if set != null then "iosevka-${set}" else "iosevka"; in
 
+let
+  version = "1.14.3";
+  name = "${pname}-${version}";
   src = fetchFromGitHub {
     owner = "be5invis";
-    repo = "Iosevka";
+    repo ="Iosevka";
     rev = "v${version}";
-    sha256 = "0s0vdvp1sn8p2pi2xm9n05pabk30ki7wjlmr0zz0nkhidb8apw6k";
+    sha256 = "0ba8hwxi88bp2jb9xfhk95nnlv8ykl74cv62xr4ybzm3b8ahpwqf";
   };
+in
 
-  nativeBuildInputs = [
-    nodejs
-    nodePackages."iosevka-build-deps-../../data/fonts/iosevka"
-    remarshal
-    otfcc
-    ttfautohint-nox
-  ];
+with lib;
+let unwords = concatStringsSep " "; in
 
-  privateBuildPlanJSON =
-    builtins.toJSON { buildPlans.${pname} = privateBuildPlan; };
-  inherit extraParameters;
-  passAsFile = [ "privateBuildPlanJSON" "extraParameters" ];
+let
+  param = name: options:
+    if options != [] then "${name}='${unwords options}'" else null;
+  config = unwords (lib.filter (x: x != null) [
+    (param "design" design)
+    (param "upright" upright)
+    (param "italic" italic)
+    (param "oblique" oblique)
+    (if family != null then "family='${family}'" else null)
+    (param "weights" weights)
+  ]);
+  custom = design != [] || upright != [] || italic != [] || oblique != []
+    || family != null || weights != [];
+in
+
+stdenv.mkDerivation {
+  inherit name pname version src;
+
+  nativeBuildInputs = [ nodejs ttfautohint-nox otfcc ];
+
+  passAsFile = [ "installPackageLock" ];
+  installPackageLock = installPackageLock ./package-lock.json;
+
+  preConfigure = ''
+    HOME=$TMPDIR
+    source "$installPackageLockPath";
+    npm --offline rebuild
+  '';
 
   configurePhase = ''
     runHook preConfigure
-    ${lib.optionalString (privateBuildPlan != null) ''
-      remarshal -i "$privateBuildPlanJSONPath" -o private-build-plans.toml -if json -of toml
-    ''}
-    ${lib.optionalString (extraParameters != null) ''
-      echo -e "\n" >> parameters.toml
-      cat "$extraParametersPath" >> parameters.toml
-    ''}
-    ln -s ${
-      nodePackages."iosevka-build-deps-../../data/fonts/iosevka"
-    }/lib/node_modules/iosevka-build-deps/node_modules .
+
+    ${optionalString custom ''make custom-config set=${set} ${config}''}
+
     runHook postConfigure
   '';
 
-  buildPhase = ''
-    runHook preBuild
-    npm run build -- ttf::$pname
-    runHook postBuild
-  '';
+  makeFlags = lib.optionals custom [ "custom" "set=${set}" ];
 
   installPhase = ''
+    runHook preInstall
+
     fontdir="$out/share/fonts/$pname"
     install -d "$fontdir"
     install "dist/$pname/ttf"/* "$fontdir"
+
+    runHook postInstall
   '';
 
   enableParallelBuilding = true;
 
   meta = with stdenv.lib; {
-    homepage = "https://be5invis.github.io/Iosevka";
+    homepage = https://be5invis.github.io/Iosevka/;
     downloadPage = "https://github.com/be5invis/Iosevka/releases";
     description = ''
       Slender monospace sans-serif and slab-serif typeface inspired by Pragmata
@@ -90,12 +98,6 @@ stdenv.mkDerivation rec {
     '';
     license = licenses.ofl;
     platforms = platforms.all;
-    maintainers = with maintainers; [
-      cstrahan
-      jfrankenau
-      ttuegel
-      babariviere
-      rileyinman
-    ];
+    maintainers = with maintainers; [ cstrahan jfrankenau ttuegel ];
   };
 }

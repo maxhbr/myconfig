@@ -52,7 +52,7 @@ stdenv.mkDerivation rec {
     homepage = https://github.com/ingydotnet/git-subrepo;
     description = "Git submodule alternative";
     license = licenses.mit;
-    platforms = platforms.unix ++ platforms.darwin;
+    platforms = platforms.linux;
     maintainers = [ maintainers.ryantrinkle ];
   };
 }

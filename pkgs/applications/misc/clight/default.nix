@@ -1,18 +1,18 @@
 { lib, stdenv, fetchFromGitHub
 , dbus, cmake, pkgconfig, bash-completion
-, gsl, popt, clightd, systemd, libconfig, libmodule
+, gsl, popt, clightd, systemd, libconfig
 , withGeoclue ? true, geoclue2
 , withUpower ? true, upower }:
 
 stdenv.mkDerivation rec {
   pname = "clight";
-  version = "4.0";
+  version = "3.1";
 
   src = fetchFromGitHub {
     owner = "FedeDP";
     repo = "Clight";
     rev = version;
-    sha256 = "101fp9kwmfmfffpdvv41wf96kdjw0b16xk49g43w32a5wlr74zrq";
+    sha256 = "0rzcr1x9h4llnmklhgzs9r7xwhsrw1qkqvfffkp8fs90nycaqx81";
   };
 
   # bash-completion.pc completionsdir=${bash-completion.out}
@@ -42,7 +42,6 @@ stdenv.mkDerivation rec {
     systemd
     geoclue2
     libconfig
-    libmodule
   ] ++ optional withGeoclue geoclue2
     ++ optional withUpower upower;
 

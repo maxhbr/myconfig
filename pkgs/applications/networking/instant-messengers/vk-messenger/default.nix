@@ -1,19 +1,19 @@
 { stdenv, fetchurl, rpmextract, autoPatchelfHook
-, xorg, gtk3, gnome2, nss, alsaLib, udev, libnotify }:
+, xorg, gtk2, gnome2, nss, alsaLib, udev, libnotify }:
 
 let
-  version = "4.5.2";
+  version = "4.0.1";
 in stdenv.mkDerivation {
   pname = "vk-messenger";
   inherit version;
   src = {
     i686-linux = fetchurl {
       url = "https://desktop.userapi.com/rpm/master/vk-${version}.i686.rpm";
-      sha256 = "11xsdmvd2diq3m61si87x2c08nap0vakcypm90wjmdjwayg3fdlw";
+      sha256 = "0mgppa9qnhix64zp40dc05yc9klsc7qiwcgw7pwq2wm7m3fz3nm8";
     };
     x86_64-linux = fetchurl {
       url = "https://desktop.userapi.com/rpm/master/vk-${version}.x86_64.rpm";
-      sha256 = "0j65d6mwj6rxczi0p9fsr6jh37jxw3a3h6w67xwgdvibb7lf3gbb";
+      sha256 = "0ra0y4dfx4gfa1r3lm6v42j7c9pf7a8vh12kxv3wkg3pvijwgdsm";
     };
   }.${stdenv.system} or (throw "Unsupported system: ${stdenv.system}");
 
@@ -21,7 +21,7 @@ in stdenv.mkDerivation {
   buildInputs = (with xorg; [
     libXdamage libXtst libXScrnSaver libxkbfile
   ]) ++ [
-    gtk3 nss alsaLib
+    gtk2 gnome2.GConf nss alsaLib
   ];
   runtimeDependencies = [ udev.lib libnotify ];
 
@@ -49,5 +49,6 @@ in stdenv.mkDerivation {
     license = licenses.unfree;
     maintainers = [ maintainers.gnidorah ];
     platforms = ["i686-linux" "x86_64-linux"];
+    hydraPlatforms = [];
   };
 }

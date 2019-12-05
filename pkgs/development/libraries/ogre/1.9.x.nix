@@ -1,5 +1,5 @@
 { fetchFromGitHub, stdenv, lib
-, cmake, libGLU, libGL
+, cmake, libGLU_combined
 , freetype, freeimage, zziplib, xorgproto, libXrandr
 , libXaw, freeglut, libXt, libpng, boost, ois
 , libX11, libXmu, libSM, pkgconfig
@@ -27,7 +27,7 @@ stdenv.mkDerivation rec {
   enableParallelBuilding = true;
 
   buildInputs =
-   [ cmake libGLU libGL
+   [ cmake libGLU_combined
      freetype freeimage zziplib xorgproto libXrandr
      libXaw freeglut libXt libpng boost ois
      libX11 libXmu libSM pkgconfig

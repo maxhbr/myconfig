@@ -1,4 +1,3 @@
-
 { mkDerivation, lib, fetchurl, cmake, gettext, pkgconfig, extra-cmake-modules
 , qtquickcontrols, qtwebkit, qttools, kde-cli-tools, qtbase
 , kconfig, kdeclarative, kdoctools, kiconthemes, ki18n, kitemmodels, kitemviews
@@ -10,11 +9,11 @@
 
 mkDerivation rec {
   pname = "kdevelop";
-  version = "5.4.4";
+  version = "5.4.2";
 
   src = fetchurl {
     url = "mirror://kde/stable/${pname}/${version}/src/${pname}-${version}.tar.xz";
-    sha256 = "1cangz3ghz39sxxggp2p7kqy2ncgs0r3i19c341b5xbkcxw2y20h";
+    sha256 = "1i665m4jd1r5bl77pcfybpn9szxzccrajs4m0prqwhlj93d57qjj";
   };
 
   nativeBuildInputs = [

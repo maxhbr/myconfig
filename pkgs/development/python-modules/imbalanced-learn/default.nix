@@ -24,8 +24,7 @@ buildPythonPackage rec {
     # or very large dependencies (keras + tensorflow)
     py.test imblearn -k 'not estimator \
                          and not classification \
-                         and not _generator \
-                         and not show_versions'
+                         and not _generator'
   '';
 
   meta = with stdenv.lib; {

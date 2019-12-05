@@ -6,7 +6,6 @@ with pkgs;
   pass-audit = callPackage ./audit.nix {
     pythonPackages = python3Packages;
   };
-  pass-checkup = callPackage ./checkup.nix {};
   pass-import = callPackage ./import.nix {
     pythonPackages = python3Packages;
   };

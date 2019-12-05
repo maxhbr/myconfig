@@ -1,53 +1,47 @@
-{ stdenv, fetchFromGitHub, python2Packages, help2man, installShellFiles }:
+{ stdenv, fetchFromGitHub, python2Packages, help2man }:
 
-let
-  # py3 is supposedly working in version 0.9.3 but the tests fail so stick to py2
-  pypkgs = python2Packages;
-
-in
-pypkgs.buildPythonApplication rec {
+python2Packages.buildPythonApplication rec {
   pname = "crudini";
-  version = "0.9.3";
+  version = "0.9";
 
   src = fetchFromGitHub {
     owner  = "pixelb";
     repo   = "crudini";
     rev    = version;
-    sha256 = "0298hvg0fpk0m0bjpwryj3icksbckwqqsr9w1ain55wf5s0v24k3";
+    sha256 = "0x9z9lsygripj88gadag398pc9zky23m16wmh8vbgw7ld1nhkiav";
   };
 
-  nativeBuildInputs = [ help2man installShellFiles ];
+  nativeBuildInputs = [ help2man ];
+  propagatedBuildInputs = with python2Packages; [ iniparse ];
 
-  propagatedBuildInputs = with pypkgs; [ iniparse ];
+  doCheck = true;
 
-  postPatch = ''
-    substituteInPlace crudini-help \
-      --replace ./crudini $out/bin/crudini
-    substituteInPlace tests/test.sh \
-      --replace ..: $out/bin:
+  prePatch = ''
+    # make runs the unpatched version in src so we need to patch them in addition to tests
+    patchShebangs .
+  '';
+
+  postBuild = ''
+    make all
   '';
 
   postInstall = ''
-    # this just creates the man page
-    make all
+    mkdir -p $out/share/{man/man1,doc/crudini}
 
-    install -Dm444 -t $out/share/doc/${pname} README EXAMPLES
-    installManPage *.1
+    cp README EXAMPLES $out/share/doc/crudini/
+    for f in *.1 ; do
+      gzip -c $f > $out/share/man/man1/$(basename $f).gz
+    done
   '';
 
   checkPhase = ''
-    runHook preCheck
-
     pushd tests >/dev/null
-    bash ./test.sh
-    popd >/dev/null
-
-    runHook postCheck
+    ./test.sh
   '';
 
   meta = with stdenv.lib; {
     description = "A utility for manipulating ini files ";
-    homepage = "https://www.pixelbeat.org/programs/crudini/";
+    homepage = http://www.pixelbeat.org/programs/crudini/;
     license = licenses.gpl2;
     maintainers = with maintainers; [ peterhoeg ];
   };

@@ -13,6 +13,8 @@
 , udev
 , wingpanel
 , libgee
+, elementary-icon-theme
+, wrapGAppsHook
 }:
 
 stdenv.mkDerivation rec {
@@ -38,10 +40,12 @@ stdenv.mkDerivation rec {
     pkgconfig
     python3
     vala
+    wrapGAppsHook
   ];
 
   buildInputs = [
     bamf
+    elementary-icon-theme
     granite
     gtk3
     libgee

@@ -1,10 +1,9 @@
 { stdenv, fetchPypi, fetchpatch
 , buildPythonApplication, python, pythonOlder
-, mock, nose, pathpy, pyhamcrest, pytest_4
+, mock, nose, pathpy, pyhamcrest, pytest
 , glibcLocales, parse, parse-type, six
 , traceback2
 }:
-
 buildPythonApplication rec {
   pname = "behave";
   version = "1.2.6";
@@ -22,7 +21,7 @@ buildPythonApplication rec {
     })
   ];
 
-  checkInputs = [ mock nose pathpy pyhamcrest pytest_4 ];
+  checkInputs = [ mock nose pathpy pyhamcrest pytest ];
   buildInputs = [ glibcLocales ];
   propagatedBuildInputs = [ parse parse-type six ] ++ stdenv.lib.optional (pythonOlder "3.0") traceback2;
 

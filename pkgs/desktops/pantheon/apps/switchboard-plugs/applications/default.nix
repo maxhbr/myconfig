@@ -13,13 +13,13 @@
 
 stdenv.mkDerivation rec {
   pname = "switchboard-plug-applications";
-  version = "2.1.6";
+  version = "2.1.5";
 
   src = fetchFromGitHub {
     owner = "elementary";
     repo = pname;
     rev = version;
-    sha256 = "19l979sdn9jzibvn98ag3ys28ka7zqlsbs0gj2gs9jcxhzngrxvg";
+    sha256 = "1c4agff456625kycacpsww7c9jsnsg1rqps96r7cvn9zq371b5ir";
   };
 
   passthru = {
@@ -41,6 +41,8 @@ stdenv.mkDerivation rec {
     libgee
     switchboard
   ];
+
+  PKG_CONFIG_SWITCHBOARD_2_0_PLUGSDIR = "${placeholder "out"}/lib/switchboard";
 
   meta = with stdenv.lib; {
     description = "Switchboard Applications Plug";

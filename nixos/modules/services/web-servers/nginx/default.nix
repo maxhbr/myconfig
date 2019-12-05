@@ -61,10 +61,7 @@ let
 
     ${optionalString (cfg.httpConfig == "" && cfg.config == "") ''
     http {
-      # The mime type definitions included with nginx are very incomplete, so
-      # we use a list of mime types from the mailcap package, which is also
-      # used by most other Linux distributions by default.
-      include ${pkgs.mailcap}/etc/nginx/mime.types;
+      include ${cfg.package}/conf/mime.types;
       include ${cfg.package}/conf/fastcgi.conf;
       include ${cfg.package}/conf/uwsgi_params;
 
@@ -97,6 +94,7 @@ let
 
       ${optionalString (cfg.recommendedGzipSettings) ''
         gzip on;
+        gzip_disable "msie6";
         gzip_proxied any;
         gzip_comp_level 5;
         gzip_types

@@ -2,22 +2,25 @@
 
 buildGoPackage rec {
   pname = "git-lfs";
-  version = "2.8.0";
+  version = "2.7.2";
+
+  goPackagePath = "github.com/git-lfs/git-lfs";
 
   src = fetchFromGitHub {
     rev = "v${version}";
     owner = "git-lfs";
     repo = "git-lfs";
-    sha256 = "17x9q4g1acf51bxr9lfmd2ym7w740n4ghdi0ncmma77kwabw9d3x";
+    sha256 = "1nf40rbdz901vsahg5cm09pznpina6wimmxl0lmh8pn0mi51yzvc";
   };
 
-  goPackagePath = "github.com/git-lfs/git-lfs";
-
-  subPackages = [ "." ];
-
   preBuild = ''
-    cd go/src/${goPackagePath}
+    pushd go/src/github.com/git-lfs/git-lfs
     go generate ./commands
+    popd
+  '';
+
+  postInstall = ''
+    rm -v $bin/bin/{man,script,cmd}
   '';
 
   meta = with stdenv.lib; {

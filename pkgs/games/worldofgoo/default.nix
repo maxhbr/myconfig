@@ -1,5 +1,5 @@
 { stdenv, requireFile
-, libX11, libXext, libXau, libxcb, libXdmcp , SDL, SDL_mixer, libvorbis, libGLU, libGL
+, libX11, libXext, libXau, libxcb, libXdmcp , SDL, SDL_mixer, libvorbis, libGLU_combined
 , runtimeShell
 , demo ? false }:
 
@@ -47,7 +47,7 @@ stdenv.mkDerivation rec {
 
   # XXX: stdenv.lib.makeLibraryPath doesn't pick up /lib64
   libPath = stdenv.lib.makeLibraryPath [ stdenv.cc.cc stdenv.cc.libc ]
-    + ":" + stdenv.lib.makeLibraryPath [libX11 libXext libXau libxcb libXdmcp SDL SDL_mixer libvorbis libGLU libGL ]
+    + ":" + stdenv.lib.makeLibraryPath [libX11 libXext libXau libxcb libXdmcp SDL SDL_mixer libvorbis libGLU_combined ]
     + ":" + stdenv.cc.cc + "/lib64";
 
   installPhase = ''

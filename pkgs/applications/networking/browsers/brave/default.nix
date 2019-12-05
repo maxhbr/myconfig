@@ -82,11 +82,11 @@ in
 
 stdenv.mkDerivation rec {
   pname = "brave";
-  version = "1.0.0";
+  version = "0.69.128";
 
   src = fetchurl {
     url = "https://github.com/brave/brave-browser/releases/download/v${version}/brave-browser_${version}_amd64.deb";
-    sha256 = "0mfwwyc00v6kny1fh20kaad8b6sshaxrlf35z9qcdsbm4n19wg1l";
+    sha256 = "1w5p2hbn14k239fbqrbxkw9h3p8wm7cdyjcyvrsss57fj00j8s4r";
   };
 
   dontConfigure = true;
@@ -151,7 +151,7 @@ stdenv.mkDerivation rec {
       contribute to your favorite creators automatically.
     '';
     license = licenses.mpl20;
-    maintainers = with maintainers; [ uskudnik rht ];
+    maintainers = [ maintainers.uskudnik ];
     platforms = [ "x86_64-linux" ];
   };
 }

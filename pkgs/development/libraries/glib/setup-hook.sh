@@ -1,11 +1,9 @@
 
 make_glib_find_gsettings_schemas() {
     # For packages that need gschemas of other packages (e.g. empathy)
-    for maybe_dir in "$1"/share/gsettings-schemas/*; do
-        if [[ -d "$maybe_dir/glib-2.0/schemas" ]]; then
-            addToSearchPath GSETTINGS_SCHEMAS_PATH "$maybe_dir"
-        fi
-    done
+    if [ -d "$1"/share/gsettings-schemas/*/glib-2.0/schemas ]; then
+        addToSearchPath GSETTINGS_SCHEMAS_PATH "$1/share/gsettings-schemas/"*
+    fi
 }
 addEnvHooks "$hostOffset" make_glib_find_gsettings_schemas
 

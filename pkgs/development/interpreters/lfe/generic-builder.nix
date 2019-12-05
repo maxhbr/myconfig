@@ -9,9 +9,9 @@
 }:
 
 let
-  inherit (stdenv.lib) getVersion versionAtLeast versions;
+  inherit (stdenv.lib) getVersion versionAtLeast splitString head;
 
-  mainVersion = versions.major (getVersion erlang);
+  mainVersion = head (splitString "." (getVersion erlang));
 
   proper = buildHex {
     name = "proper";

@@ -1,14 +1,8 @@
-{ stdenv, fetchurl, pkgconfig, openssl ? null, gnutls ? null, gmp, libxml2, stoken, zlib, fetchgit, darwin } :
+{ stdenv, fetchurl, pkgconfig, vpnc, openssl ? null, gnutls ? null, gmp, libxml2, stoken, zlib } :
 
 assert (openssl != null) == (gnutls == null);
 
-let vpnc = fetchgit {
-  url = "git://git.infradead.org/users/dwmw2/vpnc-scripts.git";
-  rev = "c84fb8e5a523a647a01a1229a9104db934e19f00";
-  sha256 = "01xdclx0y3x66mpbdr77n4ilapwzjz475h32q88ml9gnq6phjxrs";
-};
-
-in stdenv.mkDerivation rec {
+stdenv.mkDerivation rec {
   pname = "openconnect";
   version = "8.05";
 
@@ -20,22 +14,21 @@ in stdenv.mkDerivation rec {
   };
 
   outputs = [ "out" "dev" ];
-  
+
   configureFlags = [
-    "--with-vpnc-script=${vpnc}/vpnc-script"
+    "--with-vpnc-script=${vpnc}/etc/vpnc/vpnc-script"
     "--disable-nls"
     "--without-openssl-version-check"
   ];
 
-  buildInputs = [ openssl gnutls gmp libxml2 stoken zlib ]
-    ++ stdenv.lib.optional stdenv.isDarwin darwin.apple_sdk.frameworks.PCSC;
   nativeBuildInputs = [ pkgconfig ];
+  propagatedBuildInputs = [ vpnc openssl gnutls gmp libxml2 stoken zlib ];
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "VPN Client for Cisco's AnyConnect SSL VPN";
     homepage = http://www.infradead.org/openconnect/;
-    license = licenses.lgpl21;
-    maintainers = with maintainers; [ pradeepchhetri tricktron ];
-    platforms = stdenv.lib.platforms.linux ++ stdenv.lib.platforms.darwin;
+    license = stdenv.lib.licenses.lgpl21;
+    maintainers = with stdenv.lib.maintainers; [ pradeepchhetri ];
+    platforms = stdenv.lib.platforms.linux;
   };
 }

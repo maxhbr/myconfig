@@ -1,6 +1,6 @@
 { stdenv, lib, buildPythonPackage, fetchPypi, astroid, six, isort,
   mccabe, configparser, backports_functools_lru_cache, singledispatch,
-  pytest, pytestrunner, pyenchant, setuptools }:
+  pytest, pytestrunner, pyenchant }:
 
 buildPythonPackage rec {
   pname = "pylint";
@@ -13,7 +13,7 @@ buildPythonPackage rec {
 
   checkInputs = [ pytest pytestrunner pyenchant ];
 
-  propagatedBuildInputs = [ astroid six isort mccabe configparser backports_functools_lru_cache singledispatch setuptools ];
+  propagatedBuildInputs = [ astroid six isort mccabe configparser backports_functools_lru_cache singledispatch ];
 
   postPatch = lib.optionalString stdenv.isDarwin ''
     # Remove broken darwin test

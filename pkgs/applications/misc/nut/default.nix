@@ -1,27 +1,17 @@
 { stdenv, fetchurl, pkgconfig, neon, libusb, openssl, udev, avahi, freeipmi
-, libtool, makeWrapper, autoreconfHook, fetchpatch
-}:
+, libtool, makeWrapper, nss }:
 
 stdenv.mkDerivation rec {
-  pname = "nut";
-  version = "2.7.4";
+  name = "nut-2.7.4";
 
   src = fetchurl {
-    url = "https://networkupstools.org/source/2.7/${pname}-${version}.tar.gz";
+    url = "http://www.networkupstools.org/source/2.7/${name}.tar.gz";
     sha256 = "19r5dm07sfz495ckcgbfy0pasx0zy3faa0q7bih69lsjij8q43lq";
   };
 
-  patches = [
-    (fetchpatch {
-      # Fix build with openssl >= 1.1.0
-      url = "https://github.com/networkupstools/nut/commit/612c05efb3c3b243da603a3a050993281888b6e3.patch";
-      sha256 = "0jdbii1z5sqyv24286j5px65j7b3gp8zk3ahbph83pig6g46m3hs";
-    })
-  ];
+  buildInputs = [ neon libusb openssl udev avahi freeipmi libtool nss ];
 
-  buildInputs = [ neon libusb openssl udev avahi freeipmi ];
-
-  nativeBuildInputs = [ autoreconfHook libtool pkgconfig makeWrapper ];
+  nativeBuildInputs = [ pkgconfig makeWrapper ];
 
   configureFlags =
     [ "--with-all"
@@ -36,6 +26,7 @@ stdenv.mkDerivation rec {
 
   enableParallelBuilding = true;
 
+
   postInstall = ''
     wrapProgram $out/bin/nut-scanner --prefix LD_LIBRARY_PATH : \
       "$out/lib:${neon}/lib:${libusb.out}/lib:${avahi}/lib:${freeipmi}/lib"
@@ -48,7 +39,7 @@ stdenv.mkDerivation rec {
       interface for monitoring and administering UPS, PDU and SCD hardware.
       It uses a layered approach to connect all of the parts.
     '';
-    homepage = https://networkupstools.org/;
+    homepage = http://www.networkupstools.org/;
     repositories.git = https://github.com/networkupstools/nut.git;
     platforms = platforms.linux;
     maintainers = [ maintainers.pierron ];

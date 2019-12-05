@@ -1,13 +1,12 @@
 {
 stdenv, fetchFromGitHub, cmake, makeWrapper
-,qtbase, qttools, python, libGLU, libGL
+,qtbase, qttools, python, libGLU_combined
 ,libXt, qtx11extras, qtxmlpatterns
-, mkDerivation
 }:
 
-mkDerivation rec {
+stdenv.mkDerivation rec {
   pname = "paraview";
-  version = "5.6.3";
+  version = "5.6.0";
 
   # fetching from GitHub instead of taking an "official" source
   # tarball because of missing submodules there
@@ -15,7 +14,7 @@ mkDerivation rec {
     owner = "Kitware";
     repo = "ParaView";
     rev = "v${version}";
-    sha256 = "0zcij59pg47c45gfddnpbin13w16smzhcbivzm1k4pg4366wxq1q";
+    sha256 = "1j13yfdgcv4yzfr449i4c8r4rs1c9zr6qd3igr4vv3ani8zixkzi";
     fetchSubmodules = true;
   };
 
@@ -43,7 +42,7 @@ mkDerivation rec {
   buildInputs = [
     python
     python.pkgs.numpy
-    libGLU libGL
+    libGLU_combined
     libXt
     qtbase
     qtx11extras

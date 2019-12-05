@@ -1,4 +1,4 @@
-import ./make-test-python.nix ({ pkgs, lib, ... }:
+import ./make-test.nix ({ pkgs, lib, ... }:
 
 with lib;
 
@@ -20,14 +20,14 @@ with lib;
   };
 
   testScript = ''
-    machine.start()
-    machine.wait_for_x()
+    $machine->start;
+    $machine->waitForX;
 
     # confirm proper startup
-    machine.wait_for_unit("yabar.service", "bob")
-    machine.sleep(10)
-    machine.wait_for_unit("yabar.service", "bob")
+    $machine->waitForUnit("yabar.service", "bob");
+    $machine->sleep(10);
+    $machine->waitForUnit("yabar.service", "bob");
 
-    machine.screenshot("top_bar")
+    $machine->screenshot("top_bar");
   '';
 })

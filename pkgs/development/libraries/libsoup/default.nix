@@ -1,14 +1,14 @@
 { stdenv, fetchurl, glib, libxml2, meson, ninja, pkgconfig, gnome3
 , gnomeSupport ? true, sqlite, glib-networking, gobject-introspection, vala
-, libpsl, python3, brotli }:
+, libpsl, python3 }:
 
 stdenv.mkDerivation rec {
   pname = "libsoup";
-  version = "2.68.2";
+  version = "2.66.4";
 
   src = fetchurl {
     url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "0crr9qprmacr626fx83cx81ggk85zsgxr4mn577kpzj6m40k1bai";
+    sha256 = "0yc749ismwgkm61crc0iv0drhbdjn9iig71s2664y77f3r7rh243";
   };
 
   postPatch = ''
@@ -17,16 +17,15 @@ stdenv.mkDerivation rec {
 
   outputs = [ "out" "dev" ];
 
-  buildInputs = [ python3 sqlite libpsl brotli ];
+  buildInputs = [ python3 sqlite libpsl ];
   nativeBuildInputs = [ meson ninja pkgconfig gobject-introspection vala ];
   propagatedBuildInputs = [ glib libxml2 ];
 
   mesonFlags = [
     "-Dtls_check=false" # glib-networking is a runtime dependency, not a compile-time dependency
-    "-Dgssapi=disabled"
-    "-Dvapi=enabled"
+    "-Dgssapi=false"
+    "-Dvapi=true"
     "-Dgnome=${if gnomeSupport then "true" else "false"}"
-    "-Dntlm=disabled"
   ];
 
   doCheck = false; # ERROR:../tests/socket-test.c:37:do_unconnected_socket_test: assertion failed (res == SOUP_STATUS_OK): (2 == 200)

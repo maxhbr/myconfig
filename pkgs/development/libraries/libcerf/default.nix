@@ -1,19 +1,16 @@
-{ stdenv, lib, fetchurl, cmake, perl }:
+{ stdenv, lib, fetchurl }:
 
-stdenv.mkDerivation rec {
-  pname = "libcerf";
-  version = "1.13";
+stdenv.mkDerivation {
+  name = "libcerf-1.5";
 
   src = fetchurl {
-    url = "https://jugit.fz-juelich.de/mlz/libcerf/-/archive/v${version}/libcerf-v${version}.tar.gz";
-    sha256 = "01d3fr4qa0080xdgp66mjbsa884qivn9y83p7rdyz2l3my0rysg4";
+    url = "http://apps.jcns.fz-juelich.de/src/libcerf/libcerf-1.5.tgz";
+    sha256 = "11jwr8ql4a9kmv04ycgwk4dsqnlv4l65a8aa0x1i3y7zwx3w2vg3";
   };
-
-  nativeBuildInputs = [ cmake perl ];
 
   meta = with lib; {
     description = "Complex error (erf), Dawson, Faddeeva, and Voigt function library";
-    homepage = https://jugit.fz-juelich.de/mlz/libcerf;
+    homepage = http://apps.jcns.fz-juelich.de/doku/sc/libcerf;
     license = licenses.mit;
     maintainers = with maintainers; [ orivej ];
     platforms = platforms.all;

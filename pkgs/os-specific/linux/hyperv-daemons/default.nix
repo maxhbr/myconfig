@@ -1,10 +1,7 @@
-{ stdenv, lib, python, kernel, makeWrapper, writeText
-, gawk, iproute }:
+{ stdenv, lib, python, kernel, makeWrapper, writeText }:
 
 let
-  libexec = "libexec/hypervkvpd";
-
-  daemons = stdenv.mkDerivation rec {
+  daemons = stdenv.mkDerivation {
     pname = "hyperv-daemons-bin";
     inherit (kernel) src version;
 
@@ -13,15 +10,10 @@ let
     # as of 4.9 compilation will fail due to -Werror=format-security
     hardeningDisable = [ "format" ];
 
-    postPatch = ''
+    preConfigure = ''
       cd tools/hv
-      substituteInPlace hv_kvp_daemon.c \
-        --replace /usr/libexec/hypervkvpd/ $out/${libexec}/
     '';
 
-    # We don't actually need the hv_get_{dhcp,dns}_info scripts on NixOS in
-    # their current incarnation but with them in place, we stop the spam of
-    # errors in the log.
     installPhase = ''
       runHook preInstall
 
@@ -29,9 +21,7 @@ let
         install -Dm755 hv_''${f}_daemon -t $out/bin
       done
 
-      install -Dm755 lsvmbus             $out/bin/lsvmbus
-      install -Dm755 hv_get_dhcp_info.sh $out/${libexec}/hv_get_dhcp_info
-      install -Dm755 hv_get_dns_info.sh  $out/${libexec}/hv_get_dns_info
+      install -Dm755 hv_get_dns_info.sh lsvmbus -t $out/bin
 
       # I don't know why this isn't being handled automatically by fixupPhase
       substituteInPlace $out/bin/lsvmbus \
@@ -41,8 +31,8 @@ let
     '';
 
     postFixup = ''
-      wrapProgram $out/bin/hv_kvp_daemon \
-        --prefix PATH : $out/bin:${lib.makeBinPath [ gawk iproute ]}
+      # kvp needs to be able to find the script(s)
+      wrapProgram $out/bin/hv_kvp_daemon --prefix PATH : $out/bin
     '';
   };
 
@@ -66,19 +56,24 @@ let
 
 in stdenv.mkDerivation {
   pname = "hyperv-daemons";
+
   inherit (kernel) version;
 
   # we just stick the bins into out as well as it requires "out"
   outputs = [ "bin" "lib" "out" ];
 
+  phases = [ "installPhase" ];
+
   buildInputs = [ daemons ];
 
-  buildCommand = ''
+  installPhase = ''
     system=$lib/lib/systemd/system
 
-    install -Dm444 ${service "fcopy" "file copy (FCOPY)" "hv_fcopy" } $system/hv-fcopy.service
-    install -Dm444 ${service "kvp"   "key-value pair (KVP)"     ""  } $system/hv-kvp.service
-    install -Dm444 ${service "vss"   "volume shadow copy (VSS)" ""  } $system/hv-vss.service
+    mkdir -p $system
+
+    cp ${service "fcopy" "file copy (FCOPY)" "hv_fcopy" } $system/hv-fcopy.service
+    cp ${service "kvp"   "key-value pair (KVP)"     ""  } $system/hv-kvp.service
+    cp ${service "vss"   "volume shadow copy (VSS)" ""  } $system/hv-vss.service
 
     cat > $system/hyperv-daemons.target <<EOF
     [Unit]
@@ -107,7 +102,7 @@ in stdenv.mkDerivation {
       Microsoft calls their guest agents "Integration Services" which is why
       we use that name here.
     '';
-    homepage = "https://kernel.org";
+    homepage = https://kernel.org;
     maintainers = with maintainers; [ peterhoeg ];
     platforms = kernel.meta.platforms;
   };

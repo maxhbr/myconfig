@@ -74,7 +74,7 @@ stdenv.mkDerivation rec {
     };
 
     tests = {
-      installedTests = nixosTests.installed-tests.libgdata;
+      installedTests = nixosTests.libgdata;
     };
   };
 

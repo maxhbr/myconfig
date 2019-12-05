@@ -1,30 +1,17 @@
-{ lib, buildPythonPackage, fetchPypi, isPy3k
-, colorama
-, coverage
-, termstyle
-, lxml
-, unidecode
-, mock
-, backports_shutil_get_terminal_size
-}:
+{ lib, buildPythonPackage, fetchPypi, isPy3k, colorama, coverage, termstyle, unidecode, mock, backports_shutil_get_terminal_size }:
 
 buildPythonPackage rec {
   pname = "green";
-  version = "3.0.0";
+  version = "2.13.1";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "17cfgq0s02p5cjrsvcicqxiq6kflahjsd9pm03f054x7lpvqi5cv";
+    sha256 = "ea6e2699a2e58df834d2c845fb2b076c12d4835daecfcb658c6bd5583ebf4b7d";
   };
 
   propagatedBuildInputs = [
-    colorama coverage termstyle unidecode lxml
+    colorama coverage termstyle unidecode
   ] ++ lib.optionals (!isPy3k) [ mock backports_shutil_get_terminal_size ];
-
-  # let green run it's own test suite
-  checkPhase = ''
-    $out/bin/green green
-  '';
 
   meta = with lib; {
     description = "Python test runner";

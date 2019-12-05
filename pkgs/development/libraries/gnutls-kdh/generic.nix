@@ -90,6 +90,5 @@ stdenv.mkDerivation {
     license = licenses.lgpl21Plus;
     maintainers = with maintainers; [ leenaars ];
     platforms = platforms.all;
-    broken = true;
   };
 }

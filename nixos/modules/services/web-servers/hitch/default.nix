@@ -102,10 +102,7 @@ with lib;
 
     environment.systemPackages = [ pkgs.hitch ];
 
-    users.users.hitch = {
-      group = "hitch";
-      isSystemUser = true;
-    };
+    users.users.hitch.group = "hitch";
     users.groups.hitch = {};
   };
 }

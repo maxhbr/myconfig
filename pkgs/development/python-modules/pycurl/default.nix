@@ -41,8 +41,7 @@ buildPythonPackage rec {
                      and not test_keyfunction_bogus_return \
                      and not test_libcurl_ssl_gnutls \
                      and not test_libcurl_ssl_nss \
-                     and not test_libcurl_ssl_openssl" \
-                 --ignore=tests/getinfo_test.py
+                     and not test_libcurl_ssl_openssl"
   '';
 
   preConfigure = ''

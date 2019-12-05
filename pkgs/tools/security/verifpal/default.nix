@@ -1,27 +1,23 @@
-{ lib
-, fetchgit
-, buildGoPackage
-, pigeon
-}:
-
+{ lib, fetchFromGitHub, buildGoPackage, pigeon }:
 buildGoPackage rec {
   pname = "verifpal";
-  version = "0.7.5";
+  version = "0.2";
 
   goPackagePath = "github.com/SymbolicSoft/verifpal";
   goDeps = ./deps.nix;
 
-  src = fetchgit {
-    url = "https://source.symbolic.software/verifpal/verifpal.git";
+  src = fetchFromGitHub {
+    owner = "SymbolicSoft";
+    repo = pname;
     rev = version;
-    sha256 = "0njgn6j5qg5kgid6ddv23axhw5gwjbayhdjkj4ya08mnxndr284m";
+    sha256 = "08a0xvgg94k6vq91ylvgi97kpkjbw0rw172v2dzwl2rfpzkigk1r";
   };
-
-  nativeBuildInputs = [ pigeon ];
 
   postPatch = ''
     sed -e 's|/bin/echo |echo |g' -i Makefile
   '';
+
+  buildInputs = [ pigeon ];
 
   buildPhase = ''
     make -C go/src/$goPackagePath parser linux
@@ -37,6 +33,6 @@ buildGoPackage rec {
     description = "Cryptographic protocol analysis for students and engineers";
     maintainers = with lib.maintainers; [ zimbatm ];
     license = with lib.licenses; [ gpl3 ];
-    platforms = [ "x86_64-linux" ];
+    platforms = ["x86_64-linux"];
   };
 }

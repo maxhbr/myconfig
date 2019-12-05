@@ -1,9 +1,9 @@
 args @ { fetchurl, ... }:
-rec {
+{
   baseName = ''cl-csv'';
   version = ''20180831-git'';
 
-  parasites = [ "cl-csv/test" ];
+  parasites = [ "cl-csv/speed-test" "cl-csv/test" ];
 
   description = ''Facilities for reading and writing CSV format files'';
 
@@ -34,4 +34,4 @@ rec {
     (alexandria cl-interpol cl-ppcre cl-unicode flexi-streams iterate
      lisp-unit2 named-readtables)
     VERSION 20180831-git SIBLINGS (cl-csv-clsql cl-csv-data-table) PARASITES
-    (cl-csv/test)) */
+    (cl-csv/speed-test cl-csv/test)) */

@@ -1,5 +1,4 @@
 { buildPythonApplication
-, isPy3k
 , daemonize
 , dbus-python
 , fetchFromGitHub
@@ -12,6 +11,7 @@
 , setproctitle
 , stdenv
 , wrapGAppsHook
+, isPy3k
 }:
 
 let

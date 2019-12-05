@@ -1,22 +1,22 @@
 { lib, fetchFromGitHub, buildDunePackage
-, base64, bos, core, lwt_react, ocamlgraph, rresult, tyxml
+, core, lwt ? ocaml_lwt, ocaml_lwt, ocamlgraph, rresult, tyxml
 }:
 
 buildDunePackage rec {
   pname = "bistro";
-  version = "0.5.0";
+  version = "0.4.0";
   src = fetchFromGitHub {
     owner = "pveber";
     repo = pname;
     rev = "v${version}";
-    sha256 = "114gq48cpj2mvycypa9lfyqqb26wa2gkdfwkcqhnx7m6sdwv9a38";
+    sha256 = "0bxnggm4nkyl2iqwj4f5afw8lj5miq2rqsc9qfrlmg4g4rr3zh1c";
   };
 
-  buildInputs = [ base64 bos lwt_react ocamlgraph rresult tyxml ];
+  buildInputs = [ lwt ocamlgraph rresult tyxml ];
 
   propagatedBuildInputs = [ core ];
 
-  minimumOCamlVersion = "4.07";
+  minimumOCamlVersion = "4.04";
 
   meta = {
     inherit (src.meta) homepage;

@@ -9,11 +9,11 @@
 
 buildPythonPackage rec {
   pname = "pathos";
-  version = "0.2.5";
+  version = "0.2.3";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "21ae2cb1d5a76dcf57d5fe93ae8719c7339f467e246163650c08ccf35b87c846";
+    sha256 = "954c5b0a8b257c375e35d311c65fa62a210a3d65269195557de38418ac9f61f9";
   };
 
   propagatedBuildInputs = [ dill pox ppft multiprocess ];

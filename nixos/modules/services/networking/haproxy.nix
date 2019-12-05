@@ -1,16 +1,7 @@
 { config, lib, pkgs, ... }:
-
 let
   cfg = config.services.haproxy;
-
-  haproxyCfg = pkgs.writeText "haproxy.conf" ''
-    global
-      # needed for hot-reload to work without dropping packets in multi-worker mode
-      stats socket /run/haproxy/haproxy.sock mode 600 expose-fd listeners level user
-
-    ${cfg.config}
-  '';
-
+  haproxyCfg = pkgs.writeText "haproxy.conf" cfg.config;
 in
 with lib;
 {
@@ -34,7 +25,9 @@ with lib;
           <filename>haproxy.conf</filename>.
         '';
       };
+
     };
+
   };
 
   config = mkIf cfg.enable {
@@ -49,16 +42,21 @@ with lib;
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
-        DynamicUser = true;
-        Type = "notify";
-        # when running the config test, don't be quiet so we can see what goes wrong
-        ExecStartPre = "${pkgs.haproxy}/sbin/haproxy -c -f ${haproxyCfg}";
-        ExecStart = "${pkgs.haproxy}/sbin/haproxy -Ws -f ${haproxyCfg}";
-        Restart = "on-failure";
-        RuntimeDirectory = "haproxy";
-        # needed in case we bind to port < 1024
-        AmbientCapabilities = "CAP_NET_BIND_SERVICE";
+        Type = "forking";
+        PIDFile = "/run/haproxy.pid";
+        ExecStartPre = "${pkgs.haproxy}/sbin/haproxy -c -q -f ${haproxyCfg}";
+        ExecStart = "${pkgs.haproxy}/sbin/haproxy -D -f ${haproxyCfg} -p /run/haproxy.pid";
+        ExecReload = "-${pkgs.bash}/bin/bash -c \"exec ${pkgs.haproxy}/sbin/haproxy -D -f ${haproxyCfg} -p /run/haproxy.pid -sf $MAINPID\"";
       };
     };
+
+    environment.systemPackages = [ pkgs.haproxy ];
+
+    users.users.haproxy = {
+      group = "haproxy";
+      uid = config.ids.uids.haproxy;
+    };
+
+    users.groups.haproxy.gid = config.ids.uids.haproxy;
   };
 }

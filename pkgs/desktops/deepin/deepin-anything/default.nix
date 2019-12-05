@@ -3,7 +3,7 @@
 
 mkDerivation rec {
   pname = "deepin-anything";
-  version = "5.0.1";
+  version = "0.1.0";
 
   src = fetchFromGitHub {
     owner = "linuxdeepin";

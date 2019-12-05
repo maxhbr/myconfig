@@ -15,7 +15,7 @@ stdenv.mkDerivation rec {
 
   meta = with stdenv.lib; {
     description = "Texture packer and resource bundler";
-    platforms = [ "i686-linux" "x86_64-linux" ]; # fails on Darwin and AArch64
+    platforms = platforms.unix;
     homepage = https://github.com/andrewrk/rucksack;
     license = licenses.mit;
     maintainers = [ maintainers.andrewrk ];

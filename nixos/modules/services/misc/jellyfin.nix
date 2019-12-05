@@ -41,10 +41,7 @@ in
     };
 
     users.users = mkIf (cfg.user == "jellyfin") {
-      jellyfin = {
-        group = cfg.group;
-        isSystemUser = true;
-      };
+      jellyfin.group = cfg.group;
     };
 
     users.groups = mkIf (cfg.group == "jellyfin") {

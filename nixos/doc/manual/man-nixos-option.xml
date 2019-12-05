@@ -19,10 +19,14 @@
    </arg>
 
    <arg>
-    <option>--all</option>
+    <option>--verbose</option>
    </arg>
 
    <arg>
+    <option>--xml</option>
+   </arg>
+
+   <arg choice="plain">
     <replaceable>option.name</replaceable>
    </arg>
   </cmdsynopsis>
@@ -58,11 +62,22 @@
    </varlistentry>
    <varlistentry>
     <term>
-     <option>--all</option>
+     <option>--verbose</option>
     </term>
     <listitem>
      <para>
-      Print the values of all options.
+      This option enables verbose mode, which currently is just the Bash
+      <command>set</command> <option>-x</option> debug mode.
+     </para>
+    </listitem>
+   </varlistentry>
+   <varlistentry>
+    <term>
+     <option>--xml</option>
+    </term>
+    <listitem>
+     <para>
+      This option causes the output to be rendered as XML.
      </para>
     </listitem>
    </varlistentry>

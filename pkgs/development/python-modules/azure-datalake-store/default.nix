@@ -11,11 +11,11 @@
 
 buildPythonPackage rec {
   pname = "azure-datalake-store";
-  version = "0.0.48";
+  version = "0.0.45";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "d27c335783d4add00b3a5f709341e4a8009857440209e15a739a9a96b52386f7";
+    sha256 = "1k2wkpdv30wjmi53zdcsa5xfqw8gyak39na73ja6rb7wy8196wbd";
   };
 
   propagatedBuildInputs = [
@@ -32,7 +32,7 @@ buildPythonPackage rec {
 
   meta = with lib; {
     description = "This project is the Python filesystem library for Azure Data Lake Store";
-    homepage = "https://github.com/Azure/azure-sdk-for-python";
+    homepage = https://docs.microsoft.com/en-us/python/api/overview/azure/data-lake-store?view=azure-python;
     license = licenses.mit;
     maintainers = with maintainers; [ mwilsoninsight ];
   };

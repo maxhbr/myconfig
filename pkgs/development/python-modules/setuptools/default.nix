@@ -1,62 +1,36 @@
 { stdenv
 , buildPythonPackage
-, fetchFromGitHub
+, fetchPypi
 , python
 , wrapPython
 , unzip
 , callPackage
 , bootstrapped-pip
-, lib
-, pipInstallHook
-, setuptoolsBuildHook
 }:
 
-let
+buildPythonPackage rec {
   pname = "setuptools";
-  version = "41.6.0";
-
-  # Create an sdist of setuptools
-  sdist = stdenv.mkDerivation rec {
-    name = "${pname}-${version}-sdist.tar.gz";
-
-    src = fetchFromGitHub {
-      owner = "pypa";
-      repo = pname;
-      rev = "v${version}";
-      sha256 = "0j7bfxq9fwa55ijzw8zn9aa2z2zx4lw2n4jbn1662pjg7v62knv1";
-      name = "${pname}-${version}-source";
-    };
-
-    buildPhase = ''
-      ${python.pythonForBuild.interpreter} bootstrap.py
-      ${python.pythonForBuild.interpreter} setup.py sdist --formats=gztar
-    '';
-
-    installPhase = ''
-      echo "Moving sdist..."
-      mv dist/*.tar.gz $out
-    '';
-  };
-in buildPythonPackage rec {
-  inherit pname version;
-  # Because of bootstrapping we don't use the setuptoolsBuildHook that comes with format="setuptools" directly.
-  # Instead, we override it to remove setuptools to avoid a circular dependency.
-  # The same is done for pip and the pipInstallHook.
+  version = "41.2.0";
   format = "other";
 
-  src = sdist;
+  src = fetchPypi {
+    inherit pname version;
+    extension = "zip";
+    sha256 = "66b86bbae7cc7ac2e867f52dc08a6bd064d938bac59dfec71b9b565dd36d6012";
+  };
 
-  nativeBuildInputs = [
-    bootstrapped-pip
-    (pipInstallHook.override{pip=null;})
-    (setuptoolsBuildHook.override{setuptools=null; wheel=null;})
-  ];
+  # There is nothing to build
+  dontBuild = true;
 
-  preBuild = lib.strings.optionalString (!stdenv.hostPlatform.isWindows) ''
-    export SETUPTOOLS_INSTALL_WINDOWS_SPECIFIC_FILES=0
+  nativeBuildInputs = [ bootstrapped-pip ];
+
+  installPhase = ''
+      dst=$out/${python.sitePackages}
+      mkdir -p $dst
+      export PYTHONPATH="$dst:$PYTHONPATH"
+      ${python.pythonForBuild.interpreter} setup.py install --prefix=$out
+      wrapPythonPrograms
   '';
-
-  pipInstallFlags = [ "--ignore-installed" ];
 
   # Adds setuptools to nativeBuildInputs causing infinite recursion.
   catchConflicts = false;

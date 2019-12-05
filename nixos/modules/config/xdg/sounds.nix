@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, ... }:
 
 with lib;
 {
@@ -14,10 +14,6 @@ with lib;
   };
 
   config = mkIf config.xdg.sounds.enable {
-    environment.systemPackages = [
-      pkgs.sound-theme-freedesktop
-    ];
-
     environment.pathsToLink = [
       "/share/sounds"
     ];

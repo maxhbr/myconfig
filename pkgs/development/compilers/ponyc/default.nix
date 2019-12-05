@@ -1,18 +1,18 @@
-{ stdenv, fetchFromGitHub, llvm, makeWrapper, pcre2, coreutils, which, libressl, libxml2,
+{ stdenv, fetchFromGitHub, llvm, makeWrapper, pcre2, coreutils, which, libressl,
   cc ? stdenv.cc, lto ? !stdenv.isDarwin }:
 
 stdenv.mkDerivation ( rec {
   pname = "ponyc";
-  version = "0.33.0";
+  version = "0.30.0";
 
   src = fetchFromGitHub {
     owner = "ponylang";
     repo = pname;
     rev = version;
-    sha256 = "0a0sw902nrayg0s1zrkhfpvrmdqw19nif67hsv0ijrckcq37bjcz";
+    sha256 = "1gs9x4rw4mfv499j3k1brm8gbz7pjl8dyr7v68pa2f563cbzwaq9";
   };
 
-  buildInputs = [ llvm makeWrapper which libxml2 ];
+  buildInputs = [ llvm makeWrapper which ];
   propagatedBuildInputs = [ cc ];
 
   # Disable problematic networking tests

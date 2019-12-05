@@ -1,30 +1,12 @@
 { stdenv, fetchurl, makeWrapper, php }:
 
-let
-  versions = {
-    matomo = {
-      version = "3.11.0";
-      sha256 = "1fbnmmzzsi3dfm9qm30wypxjcazl37mryaik9mlrb19hnp2md40q";
-    };
-
-    matomo-beta = {
-      version = "3.12.0";
-      beta = 3;
-      sha256 = "1n7b8cag7rpi6y4145cll2irz3in4668jkiicy06wm5nq6lb4bdf";
-    };
-  };
-  common = pname: {version, sha256, beta ? null}:
-    let fullVersion = version + stdenv.lib.optionalString (beta != null) "-b${toString beta}";
-  name = "${pname}-${fullVersion}";
-in
-
 stdenv.mkDerivation rec {
-  inherit name;
-  version = fullVersion;
+  pname = "matomo";
+  version = "3.11.0";
 
   src = fetchurl {
     url = "https://builds.matomo.org/matomo-${version}.tar.gz";
-    inherit sha256;
+    sha256 = "1fbnmmzzsi3dfm9qm30wypxjcazl37mryaik9mlrb19hnp2md40q";
   };
 
   nativeBuildInputs = [ makeWrapper ];
@@ -52,7 +34,7 @@ stdenv.mkDerivation rec {
   installPhase = ''
     runHook preInstall
 
-    # copy everything to share/, used as webroot folder, and then remove what's known to be not needed
+    # copy evertything to share/, used as webroot folder, and then remove what's known to be not needed
     mkdir -p $out/share
     cp -ra * $out/share/
     # tmp/ is created by matomo in PIWIK_USER_PATH
@@ -66,33 +48,11 @@ stdenv.mkDerivation rec {
     runHook postInstall
   '';
 
-  filesToFix = [
-    "misc/composer/build-xhprof.sh"
-    "misc/composer/clean-xhprof.sh"
-    "misc/cron/archive.sh"
-    "plugins/Installation/FormDatabaseSetup.php"
-    "vendor/leafo/lessphp/package.sh"
-    "vendor/pear/archive_tar/sync-php4"
-    "vendor/szymach/c-pchart/coverage.sh"
-  ];
-
-  # This fixes the consistency check in the admin interface
-  postFixup = ''
-    pushd $out/share > /dev/null
-    for f in $filesToFix; do
-      length="$(wc -c "$f" | cut -d' ' -f1)"
-      hash="$(md5sum "$f" | cut -d' ' -f1)"
-      sed -i "s:\\(\"$f\"[^(]*(\\).*:\\1\"$length\", \"$hash\"),:g" config/manifest.inc.php
-    done
-    popd > /dev/null
-  '';
-
   meta = with stdenv.lib; {
     description = "A real-time web analytics application";
     license = licenses.gpl3Plus;
     homepage = https://matomo.org/;
     platforms = platforms.all;
-    maintainers = with maintainers; [ florianjacob kiwi ];
+    maintainers = [ maintainers.florianjacob ];
   };
-};
-in stdenv.lib.mapAttrs common versions
+}

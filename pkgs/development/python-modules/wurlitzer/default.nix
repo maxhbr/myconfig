@@ -1,22 +1,18 @@
 { lib
 , buildPythonPackage
 , fetchPypi
-, isPy27
 , mock
 , pytest
-, selectors2
 }:
 
 buildPythonPackage rec {
   pname = "wurlitzer";
-  version = "2.0.0";
+  version = "1.0.3";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0xndv47iwc9k8cp5r9r1z3r0xww0r5x5b7qsmn39gk2gsg0119c6";
+    sha256 = "0nab45pfgqdxhhyshf717xfzniss2h3bx19zdaq9gqr6v8lw6wpr";
   };
-
-  propagatedBuildInputs = lib.optionals isPy27 [ selectors2 ];
 
   checkInputs = [ mock pytest ];
 

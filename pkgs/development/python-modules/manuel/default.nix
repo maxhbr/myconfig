@@ -1,7 +1,6 @@
 { stdenv
 , buildPythonPackage
 , fetchPypi
-, isPy27
 , six
 , zope_testing
 }:
@@ -9,7 +8,6 @@
 buildPythonPackage rec {
   pname = "manuel";
   version = "1.10.1";
-  disabled = isPy27;
 
   src = fetchPypi {
     inherit pname version;

@@ -15,16 +15,6 @@
     };
     version = "3.15.0";
   };
-  coderay = {
-    groups = ["default"];
-    platforms = [];
-    source = {
-      remotes = ["https://rubygems.org"];
-      sha256 = "15vav4bhcc2x3jmi3izb11l4d9f3xv8hp2fszb7iqmpsccv1pz4y";
-      type = "gem";
-    };
-    version = "1.1.2";
-  };
   ethon = {
     dependencies = ["ffi"];
     source = {
@@ -36,14 +26,12 @@
   };
   faraday = {
     dependencies = ["multipart-post"];
-    groups = ["default"];
-    platforms = [];
     source = {
       remotes = ["https://rubygems.org"];
-      sha256 = "0jk2bar4x6miq2cr73lv0lsbmw4cymiljvp29xb85jifsb3ba6az";
+      sha256 = "0s72m05jvzc1pd6cw1i289chas399q0a14xrwg4rvkdwy7bgzrh0";
       type = "gem";
     };
-    version = "0.17.0";
+    version = "0.15.4";
   };
   faraday_middleware = {
     dependencies = ["faraday"];
@@ -55,14 +43,12 @@
     version = "0.13.1";
   };
   ffi = {
-    groups = ["default"];
-    platforms = [];
     source = {
       remotes = ["https://rubygems.org"];
-      sha256 = "0cbads5da12lb3j0mg2hjrd57s5qkkairxh2y6r9bqyblb5b8xbw";
+      sha256 = "06mvxpjply8qh4j3fj9wh08kdzwkbnvsiysh0vrhlk5cwxzjmblh";
       type = "gem";
     };
-    version = "1.11.2";
+    version = "1.11.1";
   };
   gh = {
     dependencies = ["addressable" "backports" "faraday" "multi_json" "net-http-persistent" "net-http-pipeline"];
@@ -98,25 +84,13 @@
     };
     version = "2.4.3";
   };
-  method_source = {
-    groups = ["default"];
-    platforms = [];
-    source = {
-      remotes = ["https://rubygems.org"];
-      sha256 = "1pviwzvdqd90gn6y7illcdd9adapw8fczml933p5vl739dkvl3lq";
-      type = "gem";
-    };
-    version = "0.9.2";
-  };
   multi_json = {
-    groups = ["default"];
-    platforms = [];
     source = {
       remotes = ["https://rubygems.org"];
-      sha256 = "0xy54mjf7xg41l8qrg1bqri75agdqmxap9z466fjismc1rn2jwfr";
+      sha256 = "1rl0qy4inf1mp8mybfk56dfga0mvx97zwpmq5xmiwl5r770171nv";
       type = "gem";
     };
-    version = "1.14.1";
+    version = "1.13.1";
   };
   multipart-post = {
     source = {
@@ -141,17 +115,6 @@
       type = "gem";
     };
     version = "1.0.1";
-  };
-  pry = {
-    dependencies = ["coderay" "method_source"];
-    groups = ["default"];
-    platforms = [];
-    source = {
-      remotes = ["https://rubygems.org"];
-      sha256 = "1mh312k3y94sj0pi160wpia0ps8f4kmzvm505i6bvwynfdh7v30g";
-      type = "gem";
-    };
-    version = "0.11.3";
   };
   pusher-client = {
     dependencies = ["json" "websocket"];

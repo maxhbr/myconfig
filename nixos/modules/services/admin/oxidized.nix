@@ -89,7 +89,6 @@ in
       group = cfg.group;
       home = cfg.dataDir;
       createHome = true;
-      isSystemUser = true;
     };
 
     systemd.services.oxidized = {

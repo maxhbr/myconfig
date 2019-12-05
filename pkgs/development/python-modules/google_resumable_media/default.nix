@@ -3,22 +3,21 @@
 , fetchPypi
 , six
 , requests
-, setuptools
 , pytest
 , mock
 }:
 
 buildPythonPackage rec {
   pname = "google-resumable-media";
-  version = "0.4.1";
+  version = "0.3.2";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "cdeb8fbb3551a665db921023603af2f0d6ac59ad8b48259cb510b8799505775f";
+    sha256 = "3e38923493ca0d7de0ad91c31acfefc393c78586db89364e91cb4f11990e51ba";
   };
 
   checkInputs = [ pytest mock ];
-  propagatedBuildInputs = [ requests setuptools six ];
+  propagatedBuildInputs = [ six requests ];
 
   checkPhase = ''
     py.test tests/unit

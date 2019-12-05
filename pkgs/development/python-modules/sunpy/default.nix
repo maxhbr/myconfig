@@ -1,5 +1,4 @@
-{ stdenv
-, lib
+{ lib
 , buildPythonPackage
 , fetchFromGitHub
 , numpy
@@ -27,14 +26,14 @@
 
 buildPythonPackage rec {
   pname = "sunpy";
-  version = "1.0.6";
+  version = "1.0.2";
   disabled = pythonOlder "3.6";
 
   src = fetchFromGitHub {
     owner = "sunpy";
     repo = pname;
     rev = "v${version}";
-    sha256 = "0j2yfhfxgi95rig8cfp9lvszb7694gq90jvs0xrb472hwnzgh2sk";
+    sha256 = "0dmfzxxsjjax9wf2ljyl4z07pxbshrj828zi5qnsa9rgk4148q9x";
   };
 
   propagatedBuildInputs = [
@@ -68,11 +67,8 @@ buildPythonPackage rec {
     export HOME=$(mktemp -d)
   '';
 
-  # darwin has write permission issues
-  doCheck = stdenv.isLinux;
-  # ignore documentation tests
   checkPhase = ''
-    pytest sunpy -k 'not rst'
+    pytest sunpy -k "not test_rotation"
   '';
 
   meta = with lib; {

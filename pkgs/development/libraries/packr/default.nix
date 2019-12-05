@@ -5,18 +5,16 @@
 
 buildGoModule rec {
   pname = "packr";
-  version = "2.7.1";
+  version = "2.5.2";
 
   src = fetchFromGitHub {
     owner = "gobuffalo";
     repo = pname;
     rev = "v${version}";
-    sha256 = "0m5kl2fq8gf1v4vllgag2xl8fd382sdgqrcdb8f5alsnrdn08kb9";
+    sha256 = "1ciffa5xbd93fylwz93wr4m4fj83dcla55dmdshaqz28rbsapnc1";
   };
 
-  subPackages = [ "packr" "v2/packr2" ];
-
-  modSha256 = "0afhkvivma16bi8rz3kwcsz9mhmcn4zm6rrymxkvazx6b844hcdv";
+  modSha256 = "086gydrl3i35hawb5m7rsb4a0llcpdpgid1xfw2z9n6jkwkclw4n";
 
   meta = with lib; {
     description = "The simple and easy way to embed static files into Go binaries";

@@ -1,19 +1,4 @@
-{ stdenv
-, fetchurl
-, fetchpatch
-, meson
-, ninja
-, pkgconfig
-, python3
-, gobject-introspection
-, gtk-doc
-, docbook_xsl
-, docbook_xml_dtd_412
-, glib
-, gupnp-igd
-, gst_all_1
-, gnutls
-}:
+{ stdenv, fetchurl, fetchpatch, meson, ninja, pkgconfig, python3, gobject-introspection, gtk-doc, docbook_xsl, docbook_xml_dtd_412, glib, gupnp-igd, gst_all_1, gnutls }:
 
 stdenv.mkDerivation rec {
   name = "libnice-0.1.16";
@@ -36,40 +21,27 @@ stdenv.mkDerivation rec {
   ];
 
   nativeBuildInputs = [
-    meson
-    ninja
-    pkgconfig
-    python3
-    gobject-introspection
-
-    # documentation
+    meson ninja pkgconfig python3 gobject-introspection
     gtk-doc
-    docbook_xsl
-    docbook_xml_dtd_412
+    # Without these, enabling the 'gtk_doc' gives us `FAILED: meson-install`
+    docbook_xsl docbook_xml_dtd_412
   ];
-
-  buildInputs = [
-    gst_all_1.gstreamer
-    gst_all_1.gst-plugins-base
-    gnutls
-    gupnp-igd
-  ];
-
-  propagatedBuildInputs = [
-    glib
-  ];
+  buildInputs = [ gst_all_1.gstreamer gst_all_1.gst-plugins-base gnutls ];
+  propagatedBuildInputs = [ glib gupnp-igd ];
 
   mesonFlags = [
+    # Enables all features, so that we know when new dependencies are necessary.
+    "-Dauto_features=enabled"
     "-Dgtk_doc=enabled" # Disabled by default as of libnice-0.1.15
     "-Dexamples=disabled" # requires many dependencies and probably not useful for our users
   ];
 
-  # Tests are flaky
-  # see https://github.com/NixOS/nixpkgs/pull/53293#issuecomment-453739295
-  doCheck = false;
+  # TODO; see #53293 etc.
+  #doCheck = true;
 
   meta = with stdenv.lib; {
-    description = "GLib ICE implementation";
+    homepage = https://nice.freedesktop.org/wiki/;
+    description = "The GLib ICE implementation";
     longDescription = ''
       Libnice is an implementation of the IETF's Interactice Connectivity
       Establishment (ICE) standard (RFC 5245) and the Session Traversal
@@ -77,7 +49,6 @@ stdenv.mkDerivation rec {
 
       It provides a GLib-based library, libnice and a Glib-free library,
       libstun as well as GStreamer elements.'';
-    homepage = "https://nice.freedesktop.org/wiki/";
     platforms = platforms.linux;
     license = with licenses; [ lgpl21 mpl11 ];
   };

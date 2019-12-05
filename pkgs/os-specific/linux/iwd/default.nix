@@ -8,17 +8,16 @@
 , docutils
 , readline
 , python3Packages
-, systemd
 }:
 
 stdenv.mkDerivation rec {
   pname = "iwd";
-  version = "1.1";
+  version = "0.22";
 
   src = fetchgit {
     url = https://git.kernel.org/pub/scm/network/wireless/iwd.git;
     rev = version;
-    sha256 = "1rvsr5i79wpdicghplrxamb4qbkdm5cpgw3mk0rsqzwwj6d6l0vs";
+    sha256 = "0mjc08ayq2k7sinqanrlm97dn88dxkqkyk2vqqcx1nqjvwvbpbsp";
   };
 
   nativeBuildInputs = [
@@ -30,9 +29,8 @@ stdenv.mkDerivation rec {
 
   buildInputs = [
     ell
-    python3Packages.python
     readline
-    systemd
+    python3Packages.python
   ];
 
   pythonPath = [
@@ -41,14 +39,13 @@ stdenv.mkDerivation rec {
   ];
 
   configureFlags = [
-    "--enable-external-ell"
-    "--enable-wired"
-    "--localstatedir=/var/"
+    "--with-dbus-datadir=${placeholder "out"}/etc/"
     "--with-dbus-busdir=${placeholder "out"}/share/dbus-1/system-services/"
-    "--with-dbus-datadir=${placeholder "out"}/share/"
-    "--with-systemd-modloaddir=${placeholder "out"}/etc/modules-load.d/" # maybe
     "--with-systemd-unitdir=${placeholder "out"}/lib/systemd/system/"
-    "--with-systemd-networkdir=${placeholder "out"}/lib/systemd/network/"
+    "--with-systemd-modloaddir=${placeholder "out"}/etc/modules-load.d/" # maybe
+    "--localstatedir=/var/"
+    "--enable-wired"
+    "--enable-external-ell"
   ];
 
   postUnpack = ''
@@ -68,18 +65,16 @@ stdenv.mkDerivation rec {
 
   postFixup = ''
     substituteInPlace $out/share/dbus-1/system-services/net.connman.ead.service \
-      --replace /bin/false ${coreutils}/bin/false
+                      --replace /bin/false ${coreutils}/bin/false
     substituteInPlace $out/share/dbus-1/system-services/net.connman.iwd.service \
-      --replace /bin/false ${coreutils}/bin/false
+                      --replace /bin/false ${coreutils}/bin/false
   '';
-
-  enableParallelBuilding = true;
 
   meta = with stdenv.lib; {
     homepage = https://git.kernel.org/pub/scm/network/wireless/iwd.git;
     description = "Wireless daemon for Linux";
     license = licenses.lgpl21;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ dtzWill fpletz ];
+    maintainers = [ maintainers.mic92 ];
   };
 }

@@ -1,21 +1,21 @@
 # This test runs rabbitmq and checks if rabbitmq is up and running.
 
-import ./make-test-python.nix ({ pkgs, ... }: {
+import ./make-test.nix ({ pkgs, ... }: {
   name = "rabbitmq";
   meta = with pkgs.stdenv.lib.maintainers; {
     maintainers = [ eelco offline ];
   };
 
-  machine = {
-    services.rabbitmq.enable = true;
+  nodes = {
+    one = { ... }: {
+      services.rabbitmq.enable = true;
+    };
   };
 
   testScript = ''
-    machine.start()
+    startAll;
 
-    machine.wait_for_unit("rabbitmq.service")
-    machine.wait_until_succeeds(
-        'su -s ${pkgs.stdenv.shell} rabbitmq -c "rabbitmqctl status"'
-    )
+    $one->waitForUnit("rabbitmq.service");
+    $one->waitUntilSucceeds("su -s ${pkgs.stdenv.shell} rabbitmq -c \"rabbitmqctl status\"");
   '';
 })

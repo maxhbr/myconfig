@@ -2,8 +2,7 @@
 , openal, glm, freetype, libGLU, SDL2, epoxy
 , dejavu_fonts, inkscape, optipng, imagemagick
 , withCrashReporter ? !stdenv.isDarwin
-,   qtbase ? null
-,   wrapQtAppsHook ? null
+,   qt5  ? null
 ,   curl ? null
 ,   gdb  ? null
 }:
@@ -21,14 +20,15 @@ stdenv.mkDerivation {
     sha256 = "0c88djyzjna17wjcvkgsfx3011m1rba5xdzdldy1hjmafpqgb4jj";
   };
 
+
   nativeBuildInputs = [
     cmake inkscape imagemagick optipng
-  ] ++ optionals withCrashReporter [ wrapQtAppsHook ];
+  ];
 
   buildInputs = [
     zlib boost openal glm
     freetype libGLU SDL2 epoxy
-  ] ++ optionals withCrashReporter [ qtbase curl ]
+  ] ++ optionals withCrashReporter [ qt5.qtbase curl ]
     ++ optionals stdenv.isLinux    [ gdb ];
 
   cmakeFlags = [
@@ -38,23 +38,20 @@ stdenv.mkDerivation {
   ];
 
   enableParallelBuilding = true;
-  dontWrapQtApps = true;
 
   postInstall = ''
     ln -sf \
       ${dejavu_fonts}/share/fonts/truetype/DejaVuSansMono.ttf \
       $out/share/games/arx/misc/dejavusansmono.ttf
-  '' + optionalString withCrashReporter ''
-    wrapQtApp "$out/libexec/arxcrashreporter"
   '';
-
+  
   meta = {
     description = ''
       A cross-platform, open source port of Arx Fatalis, a 2002
       first-person role-playing game / dungeon crawler
       developed by Arkane Studios.
     '';
-    homepage = https://arx-libertatis.org/;
+    homepage = http://arx-libertatis.org/;
     license = licenses.gpl3;
     maintainers = with maintainers; [ rnhmjoj ];
     platforms = platforms.linux;

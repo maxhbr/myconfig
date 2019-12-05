@@ -1,14 +1,14 @@
-{ mkDerivation, lib, fetchFromGitHub, pkgconfig, gtk3, qtbase, qmake, qtx11extras }:
+{ mkDerivation, lib, fetchFromGitHub, pkgconfig, gtk3, qtbase, qmake }:
 
 mkDerivation rec {
   pname = "qgnomeplatform";
-  version = "0.6.0";
+  version = "0.5";
 
   src = fetchFromGitHub {
     owner = "FedoraQt";
     repo = "QGnomePlatform";
     rev = version;
-    sha256 = "0fb1mzs6sx76bl7f0z2xhc0jq6y1c55jrw1v3na8577is6g5ji0a";
+    sha256 = "01ncj21cxd5p7pch6p3zbhv5wp0dgn9vy5hrw54g49fmqnbb1ymz";
   };
 
   nativeBuildInputs = [
@@ -19,14 +19,11 @@ mkDerivation rec {
   buildInputs = [
     gtk3
     qtbase
-    qtx11extras
   ];
 
   postPatch = ''
     # Fix plugin dir
-    substituteInPlace decoration/decoration.pro \
-      --replace "\$\$[QT_INSTALL_PLUGINS]" "$out/$qtPluginPrefix"
-    substituteInPlace theme/theme.pro \
+    substituteInPlace qgnomeplatform.pro \
       --replace "\$\$[QT_INSTALL_PLUGINS]" "$out/$qtPluginPrefix"
   '';
 

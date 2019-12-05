@@ -7,7 +7,7 @@
 , openssl
 , gcc
 , libgit2
-, libGLU, libGL
+, libGLU_combined
 , freetype
 , xorg
 , alsaLib

@@ -1,18 +1,19 @@
-{ stdenv, fetchFromGitHub, cmake, openssh
+{ stdenv, fetchurl, cmake, openssh
 , gfortran, mpi, openblasCompat
 } :
 
 
 stdenv.mkDerivation rec {
   pname = "scalapack";
-  version = "2.1";
+  version = "2.0.2";
 
-  src = fetchFromGitHub {
-    owner = "Reference-ScaLAPACK";
-    repo = pname;
-    rev = "v${version}";
-    sha256 = "042q9kc383h7y0had9a37702z4s0szavss063ljvfdsbjy07gzb1";
+  src = fetchurl {
+    url = "http://www.netlib.org/scalapack/scalapack-${version}.tgz";
+    sha256 = "0p1r61ss1fq0bs8ynnx7xq4wwsdvs32ljvwjnx6yxr8gd6pawx0c";
   };
+
+  # patch to rename outdated MPI functions
+  patches = [ ./openmpi4.patch ];
 
   nativeBuildInputs = [ cmake openssh ];
   buildInputs = [ mpi gfortran openblasCompat ];

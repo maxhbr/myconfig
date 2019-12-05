@@ -40,7 +40,6 @@ in
       cni.config = mkDefault [{
         name = "mynet";
         type = "flannel";
-        cniVersion = "0.3.1";
         delegate = {
           isDefaultGateway = true;
           bridge = "docker0";

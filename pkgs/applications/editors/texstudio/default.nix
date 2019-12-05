@@ -1,7 +1,6 @@
-{ lib, mkDerivation, fetchFromGitHub, qmake, qtbase, qtscript, qtsvg,
-  wrapQtAppsHook, poppler, zlib, pkgconfig }:
+{ stdenv, fetchFromGitHub, qt5, poppler, zlib, pkgconfig}:
 
-mkDerivation rec {
+stdenv.mkDerivation rec {
   pname = "texstudio";
   version = "2.12.16";
 
@@ -12,12 +11,12 @@ mkDerivation rec {
     sha256 = "0ck65fvz6mzfpqdb1ndgyvgxdnslrwhdr1swgck4gaghcrgbg3gq";
   };
 
-  nativeBuildInputs = [ qmake wrapQtAppsHook pkgconfig ];
-  buildInputs = [ qtbase qtscript qtsvg poppler zlib ];
+  nativeBuildInputs = [ qt5.qmake pkgconfig ];
+  buildInputs = [ qt5.qtbase qt5.qtscript qt5.qtsvg poppler zlib ];
 
   qmakeFlags = [ "NO_APPDATA=True" ];
 
-  meta = with lib; {
+  meta = with stdenv.lib; {
     description = "TeX and LaTeX editor";
     longDescription=''
 	Fork of TeXMaker, this editor is a full fledged IDE for

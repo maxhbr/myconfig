@@ -15,7 +15,6 @@ stdenv.mkDerivation {
     chmod a+x "$out"/bin/*
 
     substituteAll "${./setup-hook.sh}" "setup-hook-parsed"
-    addEnvHooks(){ true; };
     source setup-hook-parsed
     setLisp "${lisp}"
     echo "$NIX_LISP"

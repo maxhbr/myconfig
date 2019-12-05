@@ -9,11 +9,7 @@ in
     inherit version;
 
     src = fetchurl {
-      # NOTE: Don't forget to update the webarchive link too!
-      urls = [
-        "https://download.ebz.epson.net/dsc/op/stable/SRPMS/epson-inkjet-printer-201207w-${version}-1lsb3.2.src.rpm"
-        "https://web.archive.org/web/https://download.ebz.epson.net/dsc/op/stable/SRPMS/epson-inkjet-printer-201207w-${version}-1lsb3.2.src.rpm"
-      ];
+      url = "https://download.ebz.epson.net/dsc/op/stable/SRPMS/epson-inkjet-printer-201207w-${version}-1lsb3.2.src.rpm";
       sha256 = "1ixnhn2dk83nh9v8sdivzgc2bm9z2phvsbx8bc6ainbjq6vn7lns";
     };
 

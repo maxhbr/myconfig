@@ -1,4 +1,4 @@
-{ stdenv, fetchFromGitHub, cmake, libGLU, libGL, freeglut
+{ stdenv, fetchFromGitHub, cmake, libGLU_combined, freeglut
 , Cocoa,  OpenGL
 }:
 
@@ -18,7 +18,7 @@ stdenv.mkDerivation {
   };
 
   nativeBuildInputs = [ cmake ];
-  buildInputs = stdenv.lib.optionals stdenv.isLinux [ libGLU libGL freeglut ]
+  buildInputs = stdenv.lib.optionals stdenv.isLinux [ libGLU_combined freeglut ]
     ++ stdenv.lib.optionals stdenv.isDarwin [ Cocoa OpenGL ];
 
   patches = [ ./gwen-narrowing.patch ];

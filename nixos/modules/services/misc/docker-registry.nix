@@ -145,13 +145,11 @@ in {
     };
 
     users.users.docker-registry =
-      (if cfg.storagePath != null
+      if cfg.storagePath != null
       then {
         createHome = true;
         home = cfg.storagePath;
       }
-      else {}) // {
-        isSystemUser = true;
-      };
+      else {};
   };
 }

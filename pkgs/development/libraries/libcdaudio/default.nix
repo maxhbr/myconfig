@@ -8,8 +8,6 @@ stdenv.mkDerivation {
   };
 
   meta = {
-    description = "A portable library for controlling audio CDs";
-    homepage = "http://libcdaudio.sourceforge.net";
     platforms = stdenv.lib.platforms.linux;
     license = stdenv.lib.licenses.lgpl2;
   };

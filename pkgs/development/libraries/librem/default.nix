@@ -16,8 +16,7 @@ stdenv.mkDerivation rec {
   ++ stdenv.lib.optional (stdenv.cc.libc != null) "SYSROOT=${stdenv.lib.getDev stdenv.cc.libc}"
   ;
   meta = {
-    description = " A library for real-time audio and video processing";
-    homepage = "http://www.creytiv.com/rem.html";
+    homepage = http://www.creytiv.com/rem.html;
     platforms = with stdenv.lib.platforms; linux;
     maintainers = with stdenv.lib.maintainers; [raskin];
     license = stdenv.lib.licenses.bsd3;

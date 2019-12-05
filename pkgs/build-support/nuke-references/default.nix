@@ -3,11 +3,10 @@
 # path (/nix/store/eeee...).  This is useful for getting rid of
 # dependencies that you know are not actually needed at runtime.
 
-{ stdenvNoCC, perl }:
+{ stdenv, perl }:
 
-stdenvNoCC.mkDerivation {
+stdenv.mkDerivation {
   name = "nuke-references";
   builder = ./builder.sh;
-  # FIXME: get rid of perl dependency.
   inherit perl;
 }

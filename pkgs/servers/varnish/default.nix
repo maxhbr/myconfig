@@ -1,8 +1,8 @@
 { stdenv, fetchurl, pcre, libxslt, groff, ncurses, pkgconfig, readline, libedit
-, python3, makeWrapper }:
+, python2, python3, makeWrapper }:
 
 let
-  common = { version, sha256, extraNativeBuildInputs ? [] }:
+  common = { version, sha256, python, extraNativeBuildInputs ? [] }:
     stdenv.mkDerivation rec {
       pname = "varnish";
       inherit version;
@@ -12,11 +12,11 @@ let
         inherit sha256;
       };
 
-      passthru.python = python3;
+      passthru.python = python;
 
-      nativeBuildInputs = with python3.pkgs; [ pkgconfig docutils sphinx ];
+      nativeBuildInputs = with python.pkgs; [ pkgconfig docutils ] ++ extraNativeBuildInputs;
       buildInputs = [
-        pcre libxslt groff ncurses readline libedit makeWrapper python3
+        pcre libxslt groff ncurses readline libedit makeWrapper python
       ];
 
       buildFlags = "localstatedir=/var/spool";
@@ -40,16 +40,20 @@ let
     };
 in
 {
-  varnish60 = common {
-    version = "6.0.5";
-    sha256 = "11aw202s7zdp5qp66hii5nhgm2jk0d86pila7gqrnjgc7x8fs8a0";
+  varnish4 = common {
+    version = "4.1.10";
+    sha256 = "08kwx0il6cqxsx3897042plh1yxjaanbaqjbspfl0xgvyvxk6j1n";
+    python = python2;
   };
-  varnish62 = common {
-    version = "6.2.2";
-    sha256 = "10s3qdvb95pkwp3wxndrigb892h0109yqr8dw4smrhfi0knhnfk5";
+  varnish5 = common {
+    version = "5.2.1";
+    sha256 = "1cqlj12m426c1lak1hr1fx5zcfsjjvka3hfirz47hvy1g2fjqidq";
+    python = python2;
   };
-  varnish63 = common {
-    version = "6.3.1";
-    sha256 = "0xa14pd68zpi5hxcax3arl14rcmh5d1cdwa8gv4l5f23mmynr8ni";
+  varnish6 = common {
+    version = "6.2.1";
+    sha256 = "15qfvw3fp05bgyspcm6gbsnxhs430p4z3fwz5kkd1z68jb90b3pj";
+    python = python3;
+    extraNativeBuildInputs = [ python3.pkgs.sphinx ];
   };
 }

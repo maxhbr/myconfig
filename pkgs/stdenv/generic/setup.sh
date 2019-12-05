@@ -17,6 +17,10 @@ fi
 # code). The hooks for <hookName> are the shell function or variable
 # <hookName>, and the values of the shell array ‘<hookName>Hooks’.
 runHook() {
+    local oldOpts="-u"
+    shopt -qo nounset || oldOpts="+u"
+    set -u # May be called from elsewhere, so do `set -u`.
+
     local hookName="$1"
     shift
     local hooksSlice="${hookName%Hook}Hooks[@]"
@@ -26,8 +30,10 @@ runHook() {
     # undefined.
     for hook in "_callImplicitHook 0 $hookName" ${!hooksSlice+"${!hooksSlice}"}; do
         _eval "$hook" "$@"
+        set -u # To balance `_eval`
     done
 
+    set "$oldOpts"
     return 0
 }
 
@@ -35,6 +41,10 @@ runHook() {
 # Run all hooks with the specified name, until one succeeds (returns a
 # zero exit code). If none succeed, return a non-zero exit code.
 runOneHook() {
+    local oldOpts="-u"
+    shopt -qo nounset || oldOpts="+u"
+    set -u # May be called from elsewhere, so do `set -u`.
+
     local hookName="$1"
     shift
     local hooksSlice="${hookName%Hook}Hooks[@]"
@@ -46,8 +56,10 @@ runOneHook() {
             ret=0
             break
         fi
+        set -u # To balance `_eval`
     done
 
+    set "$oldOpts"
     return "$ret"
 }
 
@@ -58,13 +70,17 @@ runOneHook() {
 # environment variables) and from shell scripts (as functions). If you
 # want to allow multiple hooks, use runHook instead.
 _callImplicitHook() {
+    set -u
     local def="$1"
     local hookName="$2"
     if declare -F "$hookName" > /dev/null; then
+        set +u
         "$hookName"
     elif type -p "$hookName" > /dev/null; then
+        set +u
         source "$hookName"
     elif [ -n "${!hookName:-}" ]; then
+        set +u
         eval "${!hookName}"
     else
         return "$def"
@@ -80,10 +96,13 @@ _callImplicitHook() {
 # command can take them
 _eval() {
     if declare -F "$1" > /dev/null 2>&1; then
+        set +u
         "$@" # including args
     else
+        set +u
         eval "$1"
     fi
+    # `run*Hook` reenables `set -u`
 }
 
 
@@ -171,12 +190,12 @@ addToSearchPath() {
 # so it is defined here but tried after the hook.
 _addRpathPrefix() {
     if [ "${NIX_NO_SELF_RPATH:-0}" != 1 ]; then
-        export NIX_LDFLAGS="-rpath $1/lib ${NIX_LDFLAGS-}"
+        export NIX_LDFLAGS="-rpath $1/lib $NIX_LDFLAGS"
         if [ -n "${NIX_LIB64_IN_SELF_RPATH:-}" ]; then
-            export NIX_LDFLAGS="-rpath $1/lib64 ${NIX_LDFLAGS-}"
+            export NIX_LDFLAGS="-rpath $1/lib64 $NIX_LDFLAGS"
         fi
         if [ -n "${NIX_LIB32_IN_SELF_RPATH:-}" ]; then
-            export NIX_LDFLAGS="-rpath $1/lib32 ${NIX_LDFLAGS-}"
+            export NIX_LDFLAGS="-rpath $1/lib32 $NIX_LDFLAGS"
         fi
     fi
 }
@@ -248,8 +267,6 @@ for i in $initialPath; do
     fi
 done
 
-unset i
-
 if (( "${NIX_DEBUG:-0}" >= 1 )); then
     echo "initial path: $PATH"
 fi
@@ -279,11 +296,11 @@ declare -a pkgsBuildBuild pkgsBuildHost pkgsBuildTarget
 declare -a pkgsHostHost pkgsHostTarget
 declare -a pkgsTargetTarget
 
-declare -a pkgBuildAccumVars=(pkgsBuildBuild pkgsBuildHost pkgsBuildTarget)
-declare -a pkgHostAccumVars=(pkgsHostHost pkgsHostTarget)
-declare -a pkgTargetAccumVars=(pkgsTargetTarget)
+declare -ra pkgBuildAccumVars=(pkgsBuildBuild pkgsBuildHost pkgsBuildTarget)
+declare -ra pkgHostAccumVars=(pkgsHostHost pkgsHostTarget)
+declare -ra pkgTargetAccumVars=(pkgsTargetTarget)
 
-declare -a pkgAccumVarVars=(pkgBuildAccumVars pkgHostAccumVars pkgTargetAccumVars)
+declare -ra pkgAccumVarVars=(pkgBuildAccumVars pkgHostAccumVars pkgTargetAccumVars)
 
 
 # Hooks
@@ -292,11 +309,11 @@ declare -a envBuildBuildHooks envBuildHostHooks envBuildTargetHooks
 declare -a envHostHostHooks envHostTargetHooks
 declare -a envTargetTargetHooks
 
-declare -a pkgBuildHookVars=(envBuildBuildHook envBuildHostHook envBuildTargetHook)
-declare -a pkgHostHookVars=(envHostHostHook envHostTargetHook)
-declare -a pkgTargetHookVars=(envTargetTargetHook)
+declare -ra pkgBuildHookVars=(envBuildBuildHook envBuildHostHook envBuildTargetHook)
+declare -ra pkgHostHookVars=(envHostHostHook envHostTargetHook)
+declare -ra pkgTargetHookVars=(envTargetTargetHook)
 
-declare -a pkgHookVarVars=(pkgBuildHookVars pkgHostHookVars pkgTargetHookVars)
+declare -ra pkgHookVarVars=(pkgBuildHookVars pkgHostHookVars pkgTargetHookVars)
 
 # Add env hooks for all sorts of deps with the specified host offset.
 addEnvHooks() {
@@ -312,26 +329,26 @@ addEnvHooks() {
 
 # Propagated dep files
 
-declare -a propagatedBuildDepFiles=(
+declare -ra propagatedBuildDepFiles=(
     propagated-build-build-deps
     propagated-native-build-inputs # Legacy name for back-compat
     propagated-build-target-deps
 )
-declare -a propagatedHostDepFiles=(
+declare -ra propagatedHostDepFiles=(
     propagated-host-host-deps
     propagated-build-inputs # Legacy name for back-compat
 )
-declare -a propagatedTargetDepFiles=(
+declare -ra propagatedTargetDepFiles=(
     propagated-target-target-deps
 )
-declare -a propagatedDepFilesVars=(
+declare -ra propagatedDepFilesVars=(
     propagatedBuildDepFiles
     propagatedHostDepFiles
     propagatedTargetDepFiles
 )
 
 # Platform offsets: build = -1, host = 0, target = 1
-declare -a allPlatOffsets=(-1 0 1)
+declare -ra allPlatOffsets=(-1 0 1)
 
 
 # Mutually-recursively find all build inputs. See the dependency section of the
@@ -472,7 +489,11 @@ activatePackage() {
     (( "$hostOffset" <= "$targetOffset" )) || exit -1
 
     if [ -f "$pkg" ]; then
+        local oldOpts="-u"
+        shopt -qo nounset || oldOpts="+u"
+        set +u
         source "$pkg"
+        set "$oldOpts"
     fi
 
     # Only dependencies whose host platform is guaranteed to match the
@@ -491,7 +512,11 @@ activatePackage() {
     fi
 
     if [[ -f "$pkg/nix-support/setup-hook" ]]; then
+        local oldOpts="-u"
+        shopt -qo nounset || oldOpts="+u"
+        set +u
         source "$pkg/nix-support/setup-hook"
+        set "$oldOpts"
     fi
 }
 
@@ -569,13 +594,6 @@ _addToEnv() {
 
 # Run the package-specific hooks set by the setup-hook scripts.
 _addToEnv
-
-
-# Unset setup-specific declared variables
-unset allPlatOffsets
-unset pkgBuildAccumVars pkgHostAccumVars pkgTargetAccumVars pkgAccumVarVars
-unset pkgBuildHookVars pkgHostHookVars pkgTargetHookVars pkgHookVarVars
-unset propagatedDepFilesVars
 
 
 _addRpathPrefix "$out"
@@ -787,17 +805,14 @@ dumpVars() {
 # Utility function: echo the base name of the given path, with the
 # prefix `HASH-' removed, if present.
 stripHash() {
-    local strippedName casematchOpt=0
+    local strippedName
     # On separate line for `set -e`
-    strippedName="$(basename -- "$1")"
-    shopt -q nocasematch && casematchOpt=1
-    shopt -u nocasematch
-    if [[ "$strippedName" =~ ^[a-z0-9]{32}- ]]; then
-        echo "${strippedName:33}"
+    strippedName="$(basename "$1")"
+    if echo "$strippedName" | grep -q '^[a-z0-9]\{32\}-'; then
+        echo "$strippedName" | cut -c34-
     else
         echo "$strippedName"
     fi
-    if (( casematchOpt )); then shopt -s nocasematch; fi
 }
 
 
@@ -1249,11 +1264,19 @@ showPhaseHeader() {
 
 genericBuild() {
     if [ -f "${buildCommandPath:-}" ]; then
+        local oldOpts="-u"
+        shopt -qo nounset || oldOpts="+u"
+        set +u
         source "$buildCommandPath"
+        set "$oldOpts"
         return
     fi
     if [ -n "${buildCommand:-}" ]; then
+        local oldOpts="-u"
+        shopt -qo nounset || oldOpts="+u"
+        set +u
         eval "$buildCommand"
+        set "$oldOpts"
         return
     fi
 
@@ -1283,7 +1306,11 @@ genericBuild() {
 
         # Evaluate the variable named $curPhase if it exists, otherwise the
         # function named $curPhase.
+        local oldOpts="-u"
+        shopt -qo nounset || oldOpts="+u"
+        set +u
         eval "${!curPhase:-$curPhase}"
+        set "$oldOpts"
 
         if [ "$curPhase" = unpackPhase ]; then
             cd "${sourceRoot:-.}"

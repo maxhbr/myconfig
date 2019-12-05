@@ -31,8 +31,8 @@ yes
   '';
 
   meta = {
-    description = "Open source host-based instrusion detection system";
-    homepage = https://www.ossec.net;
+    description = "Open soruce host-based instrusion detection system";
+    homepage = http://www.ossec.net;
     license = stdenv.lib.licenses.gpl2;
     platforms = stdenv.lib.platforms.linux;
   };

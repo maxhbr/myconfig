@@ -138,7 +138,6 @@ in
     users.users = singleton {
       name = hansUser;
       description = "Hans daemon user";
-      isSystemUser = true;
     };
   };
 

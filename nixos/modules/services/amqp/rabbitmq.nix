@@ -80,7 +80,7 @@ in {
       configItems = mkOption {
         default = {};
         type = types.attrsOf types.str;
-        example = literalExample ''
+        example = ''
           {
             "auth_backends.1.authn" = "rabbit_auth_backend_ldap";
             "auth_backends.1.authz" = "rabbit_auth_backend_internal";

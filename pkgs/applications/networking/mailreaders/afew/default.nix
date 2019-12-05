@@ -1,19 +1,19 @@
-{ stdenv, python3Packages, notmuch }:
+{ stdenv, pythonPackages, notmuch }:
 
-python3Packages.buildPythonApplication rec {
+pythonPackages.buildPythonApplication rec {
   pname = "afew";
   version = "2.0.0";
 
-  src = python3Packages.fetchPypi {
+  src = pythonPackages.fetchPypi {
     inherit pname version;
     sha256 = "0j60501nm242idf2ig0h7p6wrg58n5v2p6zfym56v9pbvnbmns0s";
   };
 
-  nativeBuildInputs = with python3Packages; [ sphinx setuptools_scm ];
+  nativeBuildInputs = with pythonPackages; [ sphinx setuptools_scm ];
 
-  propagatedBuildInputs = with python3Packages; [
-    python3Packages.setuptools python3Packages.notmuch chardet dkimpy
-  ] ++ stdenv.lib.optional (!python3Packages.isPy3k) subprocess32;
+  propagatedBuildInputs = with pythonPackages; [
+    pythonPackages.setuptools pythonPackages.notmuch chardet dkimpy
+  ] ++ stdenv.lib.optional (!pythonPackages.isPy3k) subprocess32;
 
   makeWrapperArgs = [
     ''--prefix PATH ':' "${notmuch}/bin"''
@@ -22,7 +22,7 @@ python3Packages.buildPythonApplication rec {
   outputs = [ "out" "doc" ];
 
   postBuild =  ''
-    ${python3Packages.python.interpreter} setup.py build_sphinx -b html,man
+    python setup.py build_sphinx -b html,man
   '';
 
   postInstall = ''

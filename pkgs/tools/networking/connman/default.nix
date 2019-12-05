@@ -26,8 +26,8 @@ stdenv.mkDerivation rec {
   configureFlags = [
     "--sysconfdir=\${out}/etc"
     "--localstatedir=/var"
-    "--with-dbusconfdir=${placeholder "out"}/share"
-    "--with-dbusdatadir=${placeholder "out"}/share"
+    "--with-dbusconfdir=\${out}/etc"
+    "--with-dbusdatadir=\${out}/usr/share"
     "--disable-maintainer-mode"
     "--enable-openconnect=builtin"
     "--with-openconnect=${openconnect}/sbin/openconnect"

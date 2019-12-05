@@ -2,11 +2,11 @@
 
 stdenv.mkDerivation rec {
   pname = "libisofs";
-  version = "1.5.2";
+  version = "1.5.0";
 
   src = fetchurl {
     url = "http://files.libburnia-project.org/releases/${pname}-${version}.tar.gz";
-    sha256 = "002mcyqwg625a8hqvsrmgm26mhhfwj0j7rahfhsqirmk02b16npg";
+    sha256 = "001l3akf3wb6msl9man776w560iqyvsbwwzs7d7y7msx13irspys";
   };
 
   buildInputs = [ attr zlib ];

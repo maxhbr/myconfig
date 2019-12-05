@@ -18,6 +18,7 @@ let
     ''}
     state_file          "${cfg.dataDir}/state"
     sticker_file        "${cfg.dataDir}/sticker.sql"
+    log_file            "syslog"
     user                "${cfg.user}"
     group               "${cfg.group}"
 
@@ -180,7 +181,6 @@ in {
         ProtectKernelModules = true;
         RestrictAddressFamilies = "AF_INET AF_INET6 AF_UNIX AF_NETLINK";
         RestrictNamespaces = true;
-        Restart = "always";
       };
     };
 

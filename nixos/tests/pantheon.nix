@@ -1,10 +1,9 @@
-import ./make-test-python.nix ({ pkgs, ...} :
+import ./make-test.nix ({ pkgs, ...} :
 
 {
   name = "pantheon";
-
   meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = pkgs.pantheon.maintainers;
+    maintainers = [ worldofpeace ];
   };
 
   machine = { ... }:
@@ -22,38 +21,35 @@ import ./make-test-python.nix ({ pkgs, ...} :
 
   testScript = { nodes, ... }: let
     user = nodes.machine.config.users.users.alice;
-    bob = nodes.machine.config.users.users.bob;
   in ''
-    machine.wait_for_unit("display-manager.service")
+    startAll;
 
-    with subtest("Test we can see usernames in elementary-greeter"):
-        machine.wait_for_text("${user.description}")
-        # OCR was struggling with this one.
-        # machine.wait_for_text("${bob.description}")
-        machine.screenshot("elementary_greeter_lightdm")
+    # Wait for display manager to start
+    $machine->waitForText(qr/${user.description}/);
+    $machine->screenshot("lightdm");
 
-    with subtest("Login with elementary-greeter"):
-        machine.send_chars("${user.password}\n")
-        machine.wait_for_x()
-        machine.wait_for_file("${user.home}/.Xauthority")
-        machine.succeed("xauth merge ${user.home}/.Xauthority")
+    # Log in
+    $machine->sendChars("${user.password}\n");
+    $machine->waitForFile("/home/alice/.Xauthority");
+    $machine->succeed("xauth merge ~alice/.Xauthority");
 
-    with subtest("Check that logging in has given the user ownership of devices"):
-        machine.succeed("getfacl -p /dev/snd/timer | grep -q ${user.name}")
+    # Check if "pantheon-shell" components actually start
+    $machine->waitUntilSucceeds("pgrep gala");
+    $machine->waitForWindow(qr/gala/);
+    $machine->waitUntilSucceeds("pgrep wingpanel");
+    $machine->waitForWindow("wingpanel");
+    $machine->waitUntilSucceeds("pgrep plank");
+    $machine->waitForWindow(qr/plank/);
 
-    # TODO: DBus API could eliminate this? Pantheon uses Bamf.
-    with subtest("Check if pantheon session components actually start"):
-        machine.wait_until_succeeds("pgrep gala")
-        machine.wait_for_window("gala")
-        machine.wait_until_succeeds("pgrep wingpanel")
-        machine.wait_for_window("wingpanel")
-        machine.wait_until_succeeds("pgrep plank")
-        machine.wait_for_window("plank")
+    # Check that logging in has given the user ownership of devices.
+    $machine->succeed("getfacl /dev/snd/timer | grep -q alice");
 
-    with subtest("Open elementary terminal"):
-        machine.execute("su - ${user.name} -c 'DISPLAY=:0 io.elementary.terminal &'")
-        machine.wait_for_window("io.elementary.terminal")
-        machine.sleep(20)
-        machine.screenshot("screen")
+    # Open elementary terminal
+    $machine->execute("su - alice -c 'DISPLAY=:0.0 io.elementary.terminal &'");
+    $machine->waitForWindow(qr/io.elementary.terminal/);
+
+    # Take a screenshot of the desktop
+    $machine->sleep(20);
+    $machine->screenshot("screen");
   '';
 })

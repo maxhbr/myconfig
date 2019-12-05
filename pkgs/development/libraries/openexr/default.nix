@@ -55,8 +55,7 @@ stdenv.mkDerivation rec {
   doCheck = false; # fails 1 of 1 tests
 
   meta = with stdenv.lib; {
-    description = "A high dynamic-range (HDR) image file format";
-    homepage = "https://www.openexr.com/";
+    homepage = https://www.openexr.com/;
     license = licenses.bsd3;
     platforms = platforms.all;
   };

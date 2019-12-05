@@ -3,19 +3,27 @@
 
 { stdenv
 , fetchFromGitHub
-, fetchpatch
 , cairo
-, graphicsmagick
+, imagemagick
 , pkg-config
 , pngquant
-, python3
+, python2
 , which
 , zopfli
-, noto-fonts-emoji
 }:
 
 let
   version = "12.1.2";
+
+  # Cannot use noto-fonts-emoji.src since it is too old
+  # and still tries to use vendored pngquant.
+  notoSrc = fetchFromGitHub {
+    name = "noto";
+    owner = "googlefonts";
+    repo = "noto-emoji";
+    rev = "833a43d03246a9325e748a2d783006454d76ff66";
+    sha256 = "1g6ikzk8banm3ihqm9g27ggjq2mn1b1hq3zhpl13lxid6mp60s4a";
+  };
 
   twemojiSrc = fetchFromGitHub {
     name = "twemoji";
@@ -25,40 +33,34 @@ let
     sha256 = "0vzmlp83vnk4njcfkn03jcc1vkg2rf12zf5kj3p3a373xr4ds1zn";
   };
 
+  python = python2.withPackages (pp: with pp; [
+    nototools
+  ]);
 in
 stdenv.mkDerivation rec {
   pname = "twitter-color-emoji";
   inherit version;
 
   srcs = [
-    noto-fonts-emoji.src
+    notoSrc
     twemojiSrc
   ];
 
-  sourceRoot = noto-fonts-emoji.src.name;
+  sourceRoot = notoSrc.name;
 
   postUnpack = ''
     chmod -R +w ${twemojiSrc.name}
-    mv ${twemojiSrc.name} ${noto-fonts-emoji.src.name}
+    mv ${twemojiSrc.name} ${notoSrc.name}
   '';
 
   nativeBuildInputs = [
     cairo
-    graphicsmagick
+    imagemagick
     pkg-config
     pngquant
-    python3
-    python3.pkgs.nototools
+    python
     which
     zopfli
-  ];
-
-  patches = [
-    # ImageMagick -> GrahphicsMagick
-    (fetchpatch {
-      url = "https://src.fedoraproject.org/rpms/twitter-twemoji-fonts/raw/3bc176c10ced2824fe03da5ff561e22a36bf8ccd/f/noto-emoji-use-gm.patch";
-      sha256 = "0yfmfzaaiq5163c06172g4r734aysiqyv1s28siv642vqzsqh4i2";
-    })
   ];
 
   postPatch = let

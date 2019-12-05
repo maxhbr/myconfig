@@ -2,18 +2,14 @@
 
 buildPythonPackage rec {
   pname = "Cerberus";
-  version = "1.3.2";
+  version = "1.3.1";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "12cm547hpypqd7bwcl4wr4w6varibc1dagzicg5qbp86yaa6cbih";
+    sha256 = "0be48fc0dc84f83202a5309c0aa17cd5393e70731a1698a50d118b762fbe6875";
   };
 
   checkInputs = [ pytestrunner pytest ];
-
-  checkPhase = ''
-    pytest -k 'not nested_oneofs'
-  '';
 
   meta = with stdenv.lib; {
     homepage = http://python-cerberus.org/;

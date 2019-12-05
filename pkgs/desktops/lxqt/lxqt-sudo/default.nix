@@ -31,7 +31,7 @@ mkDerivation rec {
     description = "GUI frontend for sudo/su";
     homepage = https://github.com/lxqt/lxqt-sudo;
     license = licenses.lgpl21;
-    platforms = platforms.linux;
+    platforms = with platforms; unix;
     maintainers = with maintainers; [ romildo ];
   };
 }

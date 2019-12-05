@@ -1,21 +1,27 @@
-{ lib, buildDunePackage, fetchurl, seq }:
+{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg }:
 
-buildDunePackage rec {
-  minimumOCamlVersion = "4.03";
-  pname = "psq";
-  version = "0.2.0";
+if !stdenv.lib.versionAtLeast ocaml.version "4.02"
+then throw "psq is not available for OCaml ${ocaml.version}"
+else
+
+stdenv.mkDerivation rec {
+  name = "ocaml${ocaml.version}-psq-${version}";
+  version = "0.1.0";
 
   src = fetchurl {
-    url = "https://github.com/pqwy/psq/releases/download/v${version}/psq-v${version}.tbz";
-    sha256 = "1j4lqkq17rskhgcrpgr4n1m1a2b1x35mlxj6f9g05rhpmgvgvknk";
+    url = "https://github.com/pqwy/psq/releases/download/v${version}/psq-${version}.tbz";
+    sha256 = "08ghgdivbjrxnaqc3hsb69mr9s2ql5ds0fb97b7z6zimzqibz6lp";
   };
 
-  propagatedBuildInputs = [ seq ];
+  buildInputs = [ ocaml findlib ocamlbuild topkg ];
+
+  inherit (topkg) buildPhase installPhase;
 
   meta = {
     description = "Functional Priority Search Queues for OCaml";
     homepage = "https://github.com/pqwy/psq";
-    maintainers = [ lib.maintainers.vbgl ];
-    license = lib.licenses.isc;
+    maintainers = [ stdenv.lib.maintainers.vbgl ];
+    license = stdenv.lib.licenses.isc;
+    inherit (ocaml.meta) platforms;
   };
 }

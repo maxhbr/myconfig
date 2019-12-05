@@ -1,23 +1,25 @@
-{ lib, buildGoModule, fetchFromGitHub }:
+{ lib, buildGoPackage, fetchFromGitHub }:
 
-buildGoModule {
+buildGoPackage {
   pname = "echoip";
-  version = "unstable-2019-07-12";
+  version = "unstable-2018-11-20";
+
+  goPackagePath = "github.com/mpolden/echoip";
 
   src = fetchFromGitHub {
     owner = "mpolden";
     repo = "echoip";
-    rev = "fb5fac92d2173c2a5b07ed4ecc7b5fefe8484ed2";
-    sha256 = "17gkh1qfxasvxy25lmjdwk5fsjkcp7lmw9si3xzf01m7qnj5zi4b";
+    rev = "4bfaf671b9f75a7b2b37543b2991401cbf57f1f0";
+    sha256 = "0n5d9i8cc5lqgy5apqd3zhyl3h1xjacf612z8xpvbm75jnllcvxy";
   };
 
-  modSha256 = "025p891klwpid5fw4z39fimgfkwgkcwqpn5276hflzdp1hfv35ly";
+  goDeps = ./deps.nix;
 
-  outputs = [ "out" "index" ];
+  outputs = [ "bin" "out" ];
 
   postInstall = ''
-    mkdir -p $index
-    cp $src/index.html $index/index.html
+    mkdir -p $out
+    cp $src/index.html $out/index.html
   '';
 
   meta = with lib; {

@@ -35,7 +35,7 @@ stdenv.mkDerivation ({
 
   meta = with stdenv.lib; {
     description = "An optimized parsing and printing library for the JSON format";
-    homepage = "https://github.com/ocaml-community/${pname}";
+    homepage = "http://mjambon.com/${pname}.html";
     license = licenses.bsd3;
     maintainers = [ maintainers.vbgl ];
     platforms = ocaml.meta.platforms or [];

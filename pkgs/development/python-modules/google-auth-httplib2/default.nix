@@ -1,5 +1,4 @@
 { lib
-, isPy3k
 , buildPythonPackage
 , fetchPypi
 , flask
@@ -32,9 +31,6 @@ buildPythonPackage rec {
   checkPhase = ''
     py.test
   '';
-
-  # ImportError: No module named google.auth
-  doCheck = isPy3k;
 
   meta = {
     description = "Google Authentication Library: httplib2 transport";

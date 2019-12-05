@@ -9,12 +9,12 @@
 
 buildPythonPackage rec {
   pname = "azure-mgmt-signalr";
-  version = "0.3.0";
+  version = "0.2.0";
 
   src = fetchPypi {
     inherit pname version;
     extension = "zip";
-    sha256 = "08b2i6wz9n13h77ahay1hvmg8abk2vvs7kn4y7xip9gi6ij8fv0a";
+    sha256 = "0k39hf6r2rfy2wyxd9czha2mwmcqf6sc1v69jyh6ml3slbliivlz";
   };
 
   propagatedBuildInputs = [
@@ -29,7 +29,7 @@ buildPythonPackage rec {
 
   meta = with lib; {
     description = "This is the Microsoft Azure SignalR Client Library";
-    homepage = "https://github.com/Azure/azure-sdk-for-python";
+    homepage = https://github.com/Azure/azure-sdk-for-python/tree/master/azure-mgmt-signalr;
     license = licenses.mit;
     maintainers = with maintainers; [ mwilsoninsight ];
   };

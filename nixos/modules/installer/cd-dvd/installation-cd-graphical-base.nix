@@ -22,7 +22,20 @@ with lib;
     });
   '';
 
-  services.xserver.enable = true;
+  services.xserver = {
+    enable = true;
+
+    # Don't start the X server by default.
+    autorun = mkForce false;
+
+    # Automatically login as nixos.
+    displayManager.slim = {
+      enable = true;
+      defaultUser = "nixos";
+      autoLogin = true;
+    };
+
+  };
 
   # Provide networkmanager for easy wireless configuration.
   networking.networkmanager.enable = true;

@@ -20,13 +20,13 @@ let
 
 in stdenv.mkDerivation rec {
   pname = "screenFetch";
-  version = "3.9.1";
+  version = "3.8.0";
 
   src = fetchFromGitHub {
     owner  = "KittyKatt";
     repo   = "screenFetch";
     rev    = "v${version}";
-    sha256 = "04l8aqr474pb115nagn9f6y48jw92n1qfszgw7dbhgl4mpn95lcr";
+    sha256 = "00ibv72cb7cqfpljyzgvajhbp0clqsqliz18nyv83bfy3gkf2qs8";
   };
 
   nativeBuildInputs = [ makeWrapper ];

@@ -53,7 +53,6 @@ let
               services.flannel.iface = "eth1";
               services.kubernetes = {
                 addons.dashboard.enable = true;
-                proxy.hostname = "${masterName}.${domain}";
 
                 easyCerts = true;
                 inherit (machine) roles;

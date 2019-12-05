@@ -59,14 +59,8 @@
   };
 
   export_kernel_fpu_functions = {
-    "4.14" = {
-      name = "export_kernel_fpu_functions";
-      patch = ./export_kernel_fpu_functions_4_14.patch;
-    };
-    "5.3" = {
-      name = "export_kernel_fpu_functions";
-      patch = ./export_kernel_fpu_functions_5_3.patch;
-    };
+    name = "export_kernel_fpu_functions";
+    patch = ./export_kernel_fpu_functions.patch;
   };
 
   # patches from https://lkml.org/lkml/2019/7/15/1748

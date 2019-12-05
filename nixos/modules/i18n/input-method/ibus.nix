@@ -55,7 +55,7 @@ in
 
     # Without dconf enabled it is impossible to use IBus
     environment.systemPackages = with pkgs; [
-      dconf ibusAutostart
+      gnome3.dconf ibusAutostart
     ];
 
     environment.variables = {

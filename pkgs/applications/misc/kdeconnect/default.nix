@@ -16,7 +16,6 @@
 , sshfs
 , makeWrapper
 , kwayland
-, kio
 }:
 
 mkDerivation rec {
@@ -31,7 +30,7 @@ mkDerivation rec {
   buildInputs = [
     libfakekey libXtst
     ki18n kiconthemes kcmutils kconfigwidgets kdbusaddons knotifications
-    qca-qt5 qtx11extras makeWrapper kwayland kio
+    qca-qt5 qtx11extras makeWrapper kwayland
   ];
 
   nativeBuildInputs = [ extra-cmake-modules kdoctools ];

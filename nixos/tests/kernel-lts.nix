@@ -1,4 +1,4 @@
-import ./make-test-python.nix ({ pkgs, ...} : {
+import ./make-test.nix ({ pkgs, ...} : {
   name = "kernel-lts";
   meta = with pkgs.stdenv.lib.maintainers; {
     maintainers = [ nequissimus ];
@@ -11,7 +11,7 @@ import ./make-test-python.nix ({ pkgs, ...} : {
 
   testScript =
     ''
-      assert "Linux" in machine.succeed("uname -s")
-      assert "${pkgs.linuxPackages.kernel.version}" in machine.succeed("uname -a")
+      $machine->succeed("uname -s | grep 'Linux'");
+      $machine->succeed("uname -a | grep '${pkgs.linuxPackages.kernel.version}'");
     '';
 })

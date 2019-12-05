@@ -19,8 +19,7 @@ buildPythonPackage rec {
   });
 
   checkPhase = ''
-    PATH=$PATH:$out/bin pytest . -k "not test_plain_text_output_format \
-                                     and not test_auto_install"
+    PATH=$PATH:$out/bin pytest . -k "not test_plain_text_output_format"
   '';
   checkInputs = [ pytest mock utillinux ];
 

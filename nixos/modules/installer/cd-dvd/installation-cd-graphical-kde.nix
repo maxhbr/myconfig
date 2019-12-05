@@ -11,15 +11,7 @@ with lib;
   services.xserver = {
     desktopManager.plasma5 = {
       enable = true;
-    };
-
-    # Automatically login as nixos.
-    displayManager.sddm = {
-      enable = true;
-      autoLogin = {
-        enable = true;
-        user = "nixos";
-      };
+      enableQt4Support = false;
     };
   };
 
@@ -30,8 +22,14 @@ with lib;
 
   system.activationScripts.installerDesktop = let
 
-    # Comes from documentation.nix when xserver and nixos.enable are true.
-    manualDesktopFile = "/run/current-system/sw/share/applications/nixos-manual.desktop";
+    manualDesktopFile = pkgs.writeScript "nixos-manual.desktop" ''
+      [Desktop Entry]
+      Version=1.0
+      Type=Application
+      Name=NixOS Manual
+      Exec=firefox ${config.system.build.manual.manual}/share/doc/nixos/index.html
+      Icon=text-html
+    '';
 
     homeDir = "/home/nixos/";
     desktopDir = homeDir + "Desktop/";

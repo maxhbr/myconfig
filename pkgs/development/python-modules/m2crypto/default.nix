@@ -1,9 +1,7 @@
 { stdenv
-, lib
 , fetchpatch
 , buildPythonPackage
 , fetchPypi
-, pythonOlder
 , swig2
 , openssl
 , typing
@@ -30,7 +28,7 @@ buildPythonPackage rec {
   nativeBuildInputs = [ swig2 ];
   buildInputs = [ swig2 openssl ];
 
-  propagatedBuildInputs = lib.optional (pythonOlder "3.5") typing;
+  propagatedBuildInputs = [ typing ];
 
   preConfigure = ''
     substituteInPlace setup.py --replace "self.openssl = '/usr'" "self.openssl = '${openssl.dev}'"

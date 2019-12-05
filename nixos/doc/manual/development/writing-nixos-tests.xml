@@ -8,7 +8,7 @@
  <para>
   A NixOS test is a Nix expression that has the following structure:
 <programlisting>
-import ./make-test-python.nix {
+import ./make-test.nix {
 
   # Either the configuration of a single machine:
   machine =
@@ -27,11 +27,11 @@ import ./make-test-python.nix {
 
   testScript =
     ''
-      <replaceable>Python code…</replaceable>
+      <replaceable>Perl code…</replaceable>
     '';
 }
 </programlisting>
-  The attribute <literal>testScript</literal> is a bit of Python code that
+  The attribute <literal>testScript</literal> is a bit of Perl code that
   executes the test (described below). During the test, it will start one or
   more virtual machines, the configuration of which is described by the
   attribute <literal>machine</literal> (if you need only one machine in your
@@ -96,27 +96,26 @@ xlink:href="https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/virtualis
  </para>
 
  <para>
-  The test script is a sequence of Python statements that perform various
+  The test script is a sequence of Perl statements that perform various
   actions, such as starting VMs, executing commands in the VMs, and so on. Each
   virtual machine is represented as an object stored in the variable
-  <literal><replaceable>name</replaceable></literal> if this is also the
-  identifier of the machine in the declarative config.
-  If you didn't specify multiple machines using the <literal>nodes</literal>
-  attribute, it is just <literal>machine</literal>.
-  The following example starts the machine, waits until it has finished booting,
-  then executes a command and checks that the output is more-or-less correct:
+  <literal>$<replaceable>name</replaceable></literal>, where
+  <replaceable>name</replaceable> is the identifier of the machine (which is
+  just <literal>machine</literal> if you didn’t specify multiple machines
+  using the <literal>nodes</literal> attribute). For instance, the following
+  starts the machine, waits until it has finished booting, then executes a
+  command and checks that the output is more-or-less correct:
 <programlisting>
-machine.start()
-machine.wait_for_unit("default.target")
-if not "Linux" in machine.succeed("uname"):
-  raise Exception("Wrong OS")
+$machine->start;
+$machine->waitForUnit("default.target");
+$machine->succeed("uname") =~ /Linux/ or die;
 </programlisting>
   The first line is actually unnecessary; machines are implicitly started when
-  you first execute an action on them (such as <literal>wait_for_unit</literal>
+  you first execute an action on them (such as <literal>waitForUnit</literal>
   or <literal>succeed</literal>). If you have multiple machines, you can speed
   up the test by starting them in parallel:
 <programlisting>
-start_all()
+startAll;
 </programlisting>
  </para>
 
@@ -188,7 +187,7 @@ start_all()
    </varlistentry>
    <varlistentry>
     <term>
-     <methodname>get_screen_text</methodname>
+     <methodname>getScreenText</methodname>
     </term>
     <listitem>
      <para>
@@ -205,7 +204,7 @@ start_all()
    </varlistentry>
    <varlistentry>
     <term>
-     <methodname>send_monitor_command</methodname>
+     <methodname>sendMonitorCommand</methodname>
     </term>
     <listitem>
      <para>
@@ -216,23 +215,23 @@ start_all()
    </varlistentry>
    <varlistentry>
     <term>
-     <methodname>send_keys</methodname>
+     <methodname>sendKeys</methodname>
     </term>
     <listitem>
      <para>
       Simulate pressing keys on the virtual keyboard, e.g.,
-      <literal>send_keys("ctrl-alt-delete")</literal>.
+      <literal>sendKeys("ctrl-alt-delete")</literal>.
      </para>
     </listitem>
    </varlistentry>
    <varlistentry>
     <term>
-     <methodname>send_chars</methodname>
+     <methodname>sendChars</methodname>
     </term>
     <listitem>
      <para>
       Simulate typing a sequence of characters on the virtual keyboard, e.g.,
-      <literal>send_keys("foobar\n")</literal> will type the string
+      <literal>sendKeys("foobar\n")</literal> will type the string
       <literal>foobar</literal> followed by the Enter key.
      </para>
     </listitem>
@@ -273,7 +272,7 @@ start_all()
    </varlistentry>
    <varlistentry>
     <term>
-     <methodname>wait_until_succeeds</methodname>
+     <methodname>waitUntilSucceeds</methodname>
     </term>
     <listitem>
      <para>
@@ -283,7 +282,7 @@ start_all()
    </varlistentry>
    <varlistentry>
     <term>
-     <methodname>wait_until_fails</methodname>
+     <methodname>waitUntilFails</methodname>
     </term>
     <listitem>
      <para>
@@ -293,7 +292,7 @@ start_all()
    </varlistentry>
    <varlistentry>
     <term>
-     <methodname>wait_for_unit</methodname>
+     <methodname>waitForUnit</methodname>
     </term>
     <listitem>
      <para>
@@ -303,7 +302,7 @@ start_all()
    </varlistentry>
    <varlistentry>
     <term>
-     <methodname>wait_for_file</methodname>
+     <methodname>waitForFile</methodname>
     </term>
     <listitem>
      <para>
@@ -313,7 +312,7 @@ start_all()
    </varlistentry>
    <varlistentry>
     <term>
-     <methodname>wait_for_open_port</methodname>
+     <methodname>waitForOpenPort</methodname>
     </term>
     <listitem>
      <para>
@@ -324,7 +323,7 @@ start_all()
    </varlistentry>
    <varlistentry>
     <term>
-     <methodname>wait_for_closed_port</methodname>
+     <methodname>waitForClosedPort</methodname>
     </term>
     <listitem>
      <para>
@@ -334,7 +333,7 @@ start_all()
    </varlistentry>
    <varlistentry>
     <term>
-     <methodname>wait_for_x</methodname>
+     <methodname>waitForX</methodname>
     </term>
     <listitem>
      <para>
@@ -344,13 +343,13 @@ start_all()
    </varlistentry>
    <varlistentry>
     <term>
-     <methodname>wait_for_text</methodname>
+     <methodname>waitForText</methodname>
     </term>
     <listitem>
      <para>
       Wait until the supplied regular expressions matches the textual contents
       of the screen by using optical character recognition (see
-      <methodname>get_screen_text</methodname>).
+      <methodname>getScreenText</methodname>).
      </para>
      <note>
       <para>
@@ -362,23 +361,23 @@ start_all()
    </varlistentry>
    <varlistentry>
     <term>
-     <methodname>wait_for_window</methodname>
+     <methodname>waitForWindow</methodname>
     </term>
     <listitem>
      <para>
       Wait until an X11 window has appeared whose name matches the given
-      regular expression, e.g., <literal>wait_for_window("Terminal")</literal>.
+      regular expression, e.g., <literal>waitForWindow(qr/Terminal/)</literal>.
      </para>
     </listitem>
    </varlistentry>
    <varlistentry>
     <term>
-     <methodname>copy_file_from_host</methodname>
+     <methodname>copyFileFromHost</methodname>
     </term>
     <listitem>
      <para>
       Copies a file from host to machine, e.g.,
-      <literal>copy_file_from_host("myfile", "/etc/my/important/file")</literal>.
+      <literal>copyFileFromHost("myfile", "/etc/my/important/file")</literal>.
      </para>
      <para>
       The first argument is the file on the host. The file needs to be
@@ -398,8 +397,8 @@ start_all()
      </para>
      <para>
 <programlisting>
-machine.systemctl("list-jobs --no-pager") # runs `systemctl list-jobs --no-pager`
-machine.systemctl("list-jobs --no-pager", "any-user") # spawns a shell for `any-user` and runs `systemctl --user list-jobs --no-pager`
+$machine->systemctl("list-jobs --no-pager"); // runs `systemctl list-jobs --no-pager`
+$machine->systemctl("list-jobs --no-pager", "any-user"); // spawns a shell for `any-user` and runs `systemctl --user list-jobs --no-pager`
 </programlisting>
      </para>
     </listitem>
@@ -409,14 +408,14 @@ machine.systemctl("list-jobs --no-pager", "any-user") # spawns a shell for `any-
 
  <para>
   To test user units declared by <literal>systemd.user.services</literal> the
-  optional <literal>user</literal> argument can be used:
+  optional <literal>$user</literal> argument can be used:
 <programlisting>
-machine.start()
-machine.wait_for_x()
-machine.wait_for_unit("xautolock.service", "x-session-user")
+$machine->start;
+$machine->waitForX;
+$machine->waitForUnit("xautolock.service", "x-session-user");
 </programlisting>
-  This applies to <literal>systemctl</literal>, <literal>get_unit_info</literal>,
-  <literal>wait_for_unit</literal>, <literal>start_job</literal> and
-  <literal>stop_job</literal>.
+  This applies to <literal>systemctl</literal>, <literal>getUnitInfo</literal>,
+  <literal>waitForUnit</literal>, <literal>startJob</literal> and
+  <literal>stopJob</literal>.
  </para>
 </section>

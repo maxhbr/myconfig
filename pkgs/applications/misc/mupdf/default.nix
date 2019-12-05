@@ -9,7 +9,8 @@ let
 
   # OpenJPEG version is hardcoded in package source
   openJpegVersion = with stdenv;
-    lib.versions.majorMinor (lib.getVersion openjpeg);
+    lib.concatStringsSep "." (lib.lists.take 2
+      (lib.splitString "." (lib.getVersion openjpeg)));
 
 
 in stdenv.mkDerivation rec {
@@ -64,7 +65,6 @@ in stdenv.mkDerivation rec {
     EOF
 
     moveToOutput "bin" "$bin"
-    ln -s "$bin/bin/mupdf-x11" "$bin/bin/mupdf"
     mkdir -p $bin/share/applications
     cat > $bin/share/applications/mupdf.desktop <<EOF
     [Desktop Entry]

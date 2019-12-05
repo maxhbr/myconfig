@@ -1,18 +1,16 @@
-{ stdenv, wayland, wayland-protocols, xorgserver, xkbcomp, xkeyboard_config, epoxy, libxslt, libunwind, makeWrapper, egl-wayland }:
+{ stdenv, wayland, wayland-protocols, xorgserver, xkbcomp, xkeyboard_config, epoxy, libxslt, libunwind, makeWrapper }:
 
 with stdenv.lib;
 
 xorgserver.overrideAttrs (oldAttrs: {
 
   name = "xwayland-${xorgserver.version}";
-  buildInputs = oldAttrs.buildInputs ++ [ egl-wayland ];
   propagatedBuildInputs = oldAttrs.propagatedBuildInputs
     ++ [wayland wayland-protocols epoxy libxslt makeWrapper libunwind];
   configureFlags = [
     "--disable-docs"
     "--disable-devel-docs"
     "--enable-xwayland"
-    "--enable-xwayland-eglstream"
     "--disable-xorg"
     "--disable-xvfb"
     "--disable-xnest"

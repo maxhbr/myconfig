@@ -1,6 +1,6 @@
 {
   mkDerivation, lib,
-  extra-cmake-modules, qttools,
+  extra-cmake-modules,
   attica, kconfig, kconfigwidgets, kglobalaccel, ki18n, kiconthemes, kitemviews,
   ktextwidgets, kwindowsystem, qtbase, sonnet,
 }:
@@ -13,5 +13,5 @@ mkDerivation {
     attica kglobalaccel ki18n kiconthemes kitemviews ktextwidgets kwindowsystem
     sonnet
   ];
-  propagatedBuildInputs = [ kconfig kconfigwidgets qtbase qttools ];
+  propagatedBuildInputs = [ kconfig kconfigwidgets qtbase ];
 }

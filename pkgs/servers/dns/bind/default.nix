@@ -10,11 +10,11 @@ assert enablePython -> python3 != null;
 
 stdenv.mkDerivation rec {
   pname = "bind";
-  version = "9.14.8";
+  version = "9.14.7";
 
   src = fetchurl {
     url = "https://ftp.isc.org/isc/bind9/${version}/${pname}-${version}.tar.gz";
-    sha256 = "0xm0xrpgxq6gk6r6aa2w0lygnq02y1p614dmyjdmlsfnrrsslig5";
+    sha256 = "07998nx0yv3xy8c62b1ira9qygsgvpljwcgb47ypzxq8b57gb86f";
   };
 
   outputs = [ "out" "lib" "dev" "man" "dnsutils" "host" ];
@@ -29,6 +29,8 @@ stdenv.mkDerivation rec {
     ++ lib.optional stdenv.isLinux libcap
     ++ lib.optional enableSeccomp libseccomp
     ++ lib.optional enablePython (python3.withPackages (ps: with ps; [ ply ]));
+
+  STD_CDEFINES = [ "-DDIG_SIGCHASE=1" ]; # support +sigchase
 
   depsBuildBuild = [ buildPackages.stdenv.cc ];
 
@@ -63,7 +65,6 @@ stdenv.mkDerivation rec {
     moveToOutput bin/host $host
 
     moveToOutput bin/dig $dnsutils
-    moveToOutput bin/delv $dnsutils
     moveToOutput bin/nslookup $dnsutils
     moveToOutput bin/nsupdate $dnsutils
 

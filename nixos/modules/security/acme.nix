@@ -20,16 +20,6 @@ let
         '';
       };
 
-      server = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = ''
-          ACME Directory Resource URI. Defaults to let's encrypt
-          production endpoint,
-          https://acme-v02.api.letsencrypt.org/directory, if unset.
-        '';
-      };
-
       domain = mkOption {
         type = types.str;
         default = name;
@@ -119,15 +109,7 @@ in
 {
 
   ###### interface
-  imports = [
-    (mkRemovedOptionModule [ "security" "acme" "production" ] ''
-      Use security.acme.server to define your staging ACME server URL instead.
 
-      To use the let's encrypt staging server, use security.acme.server =
-      "https://acme-staging-v02.api.letsencrypt.org/directory".
-    ''
-    )
-  ];
   options = {
     security.acme = {
 
@@ -147,16 +129,6 @@ in
         '';
       };
 
-      server = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = ''
-          ACME Directory Resource URI. Defaults to let's encrypt
-          production endpoint,
-          <literal>https://acme-v02.api.letsencrypt.org/directory</literal>, if unset.
-        '';
-      };
-
       preliminarySelfsigned = mkOption {
         type = types.bool;
         default = true;
@@ -167,6 +139,20 @@ in
 
           With preliminary self-signed certificate the webserver can be started and
           can later reload the correct ACME certificates.
+        '';
+      };
+
+      production = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          If set to true, use Let's Encrypt's production environment
+          instead of the staging environment. The main benefit of the
+          staging environment is to get much higher rate limits.
+
+          See
+          <literal>https://letsencrypt.org/docs/staging-environment</literal>
+          for more detail.
         '';
       };
 
@@ -212,7 +198,7 @@ in
                           ++ optionals (data.email != null) [ "--email" data.email ]
                           ++ concatMap (p: [ "-f" p ]) data.plugins
                           ++ concatLists (mapAttrsToList (name: root: [ "-d" (if root == null then name else "${name}:${root}")]) data.extraDomains)
-                          ++ optionals (cfg.server != null || data.server != null) ["--server" (if data.server == null then cfg.server else data.server)];
+                          ++ optionals (!cfg.production) ["--server" "https://acme-staging-v02.api.letsencrypt.org/directory"];
                 acmeService = {
                   description = "Renew ACME Certificate for ${cert}";
                   after = [ "network.target" "network-online.target" ];
@@ -224,12 +210,6 @@ in
                   environment.REQUESTS_CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt";
                   serviceConfig = {
                     Type = "oneshot";
-                    # With RemainAfterExit the service is considered active even
-                    # after the main process having exited, which means when it
-                    # gets changed, the activation phase restarts it, meaning
-                    # the permissions of the StateDirectory get adjusted
-                    # according to the specified group
-                    RemainAfterExit = true;
                     SuccessExitStatus = [ "0" "1" ];
                     User = data.user;
                     Group = data.group;

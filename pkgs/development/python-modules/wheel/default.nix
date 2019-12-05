@@ -2,7 +2,7 @@
 , setuptools
 , pip
 , buildPythonPackage
-, fetchFromGitHub
+, fetchPypi
 , pytest
 , pytestcov
 , coverage
@@ -15,12 +15,9 @@ buildPythonPackage rec {
   version = "0.33.6";
   format = "other";
 
-  src = fetchFromGitHub {
-    owner = "pypa";
-    repo = pname;
-    rev = version;
-    sha256 = "1bg4bxazsjxp621ymaykd8l75k7rvcvwawlipmjk7nsrl72l4p0s";
-    name = "${pname}-${version}-source";
+  src = fetchPypi {
+    inherit pname version;
+    sha256 = "10c9da68765315ed98850f8e048347c3eb06dd81822dc2ab1d4fde9dc9702646";
   };
 
   checkInputs = [ pytest pytestcov coverage ];

@@ -1,25 +1,25 @@
-{ stdenv, fetchFromGitHub, pkgconfig, cmake, ninja, vala_0_40,
+{ stdenv, fetchFromGitHub, pkgconfig, cmake, ninja, vala,
   gettext, at-spi2-core, dbus, epoxy, expect, gtk3, json-glib,
   libXdmcp, libgee, libpthreadstubs, librsvg, libsecret, libtasn1,
-  libxcb, libxkbcommon, p11-kit, pcre, vte, wnck, libselinux, gnutls, pcre2,
+  libxcb, libxkbcommon, p11-kit, pcre, vte, wnck, libselinux,
   libsepol, utillinux, deepin-menu, deepin-shortcut-viewer, deepin, wrapGAppsHook }:
 
 stdenv.mkDerivation rec {
   pname = "deepin-terminal";
-  version = "5.0.0";
+  version = "3.2.6";
 
   src = fetchFromGitHub {
     owner = "linuxdeepin";
     repo = "deepin-terminal";
     rev = version;
-    sha256 = "1929saj828b438d07caw3cjhqq60v6gni7mi3fqrg9wdjz81xwv7";
+    sha256 = "09s5gvzfxfb353kb61x1b6z3h2aqgln3s3mah3f3zkf5y8hrp2pj";
   };
 
   nativeBuildInputs = [
     pkgconfig
     cmake
     ninja
-    vala_0_40 # xcb.vapi:411.3-411.48: error: missing return statement at end of subroutine body
+    vala
     gettext
     libselinux libsepol utillinux # required by gio
     deepin.setupHook
@@ -47,8 +47,6 @@ stdenv.mkDerivation rec {
     pcre
     vte
     wnck
-    gnutls
-    pcre2
   ];
 
   postPatch = ''

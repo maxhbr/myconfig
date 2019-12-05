@@ -99,10 +99,7 @@ in
 
     environment.systemPackages = [ pkg ];
 
-    users.users.${user} = {
-      group = group;
-      isSystemUser = true;
-    };
+    users.users.${user}.group = group;
     users.groups.${group} = { };
 
     systemd.tmpfiles.rules = [

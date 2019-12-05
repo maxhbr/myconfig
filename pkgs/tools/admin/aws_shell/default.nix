@@ -1,16 +1,20 @@
 { stdenv
+, buildPythonPackage
+, fetchPypi
 , awscli
+, prompt_toolkit
+, boto3
+, configobj
+, pygments
 }:
-
-with awscli.python.pkgs;
 
 buildPythonPackage rec {
   pname = "aws-shell";
-  version = "0.2.1";
+  version = "0.2.0";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "2044b0ef78c7542c392f2cee4b74a4439545c63dda0a3e28b712fff53e8e5823";
+    sha256 = "b46a673b81254e5e014297e08c9ecab535773aa651ca33dc3786a1fd612f9810";
   };
 
   # Why does it propagate packages that are used for testing?
@@ -20,7 +24,6 @@ buildPythonPackage rec {
     boto3
     configobj
     pygments
-    pyyaml
   ];
 
   #Checks are failing due to missing TTY, which won't exist.

@@ -1,5 +1,6 @@
-{ stdenv
-, fetchurl
+{ fetchFromGitLab
+, stdenv
+, fetchpatch
 , meson
 , ninja
 , pkgconfig
@@ -33,9 +34,6 @@
 , texlive
 , t1lib
 , gst_all_1
-, gtk-doc
-, docbook-xsl-nons
-, docbook_xml_dtd_43
 , supportMultimedia ? true # PDF multimedia
 , libgxps
 , supportXPS ? true # Open XML Paper Specification via libgxps
@@ -43,14 +41,24 @@
 
 stdenv.mkDerivation rec {
   pname = "evince";
-  version = "3.34.2";
+  version = "3.32.0";
 
-  outputs = [ "out" "dev" "devdoc" ];
-
-  src = fetchurl {
-    url = "mirror://gnome/sources/evince/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "05q6v9lssd21623mnj2p49clj9v9csw9kay7n4nklki025grbh1w";
+  src = fetchFromGitLab {
+    domain = "gitlab.gnome.org";
+    owner = "GNOME";
+    repo = pname;
+    rev = version;
+    sha256 = "1klq8j70q8r8hyqv1wi6jcx8g76yh46bh8614y82zzggn4cx6y3r";
   };
+
+
+  patches = [
+    (fetchpatch {
+      name = "CVE-2019-11459.patch";
+      url = "https://gitlab.gnome.org/GNOME/evince/commit/3e38d5ad724a042eebadcba8c2d57b0f48b7a8c7.patch";
+      sha256 = "1ds6iwr2r9i86nwrly8cx7p1kbvf1gljjplcffa67znxqmwx4n74";
+    })
+  ];
 
   postPatch = ''
     chmod +x meson_post_install.py
@@ -58,42 +66,39 @@ stdenv.mkDerivation rec {
   '';
 
   nativeBuildInputs = [
-    appstream
-    docbook-xsl-nons
-    docbook_xml_dtd_43
-    gettext
-    gobject-introspection
-    gtk-doc
-    itstool
     meson
     ninja
     pkgconfig
-    python3
-    wrapGAppsHook
+    gobject-introspection
+    gettext
+    itstool
     yelp-tools
+    appstream
+    wrapGAppsHook
+    python3
   ];
 
   buildInputs = [
-    adwaita-icon-theme
-    atk
-    dbus # only needed to find the service directory
-    djvulibre
-    gdk-pixbuf
-    ghostscriptX
     glib
-    gnome-desktop
-    gsettings-desktop-schemas
-    gspell
     gtk3
-    libarchive
-    librsvg
-    libsecret
-    libspectre
-    libxml2
     pango
+    atk
+    gdk-pixbuf
+    libxml2
+    gsettings-desktop-schemas
     poppler
-    t1lib
+    ghostscriptX
+    djvulibre
+    libspectre
+    libarchive
+    libsecret
+    librsvg
+    adwaita-icon-theme
+    gspell
+    gnome-desktop
+    dbus # only needed to find the service directory
     texlive.bin.core # kpathsea for DVI support
+    t1lib
   ] ++ stdenv.lib.optional supportXPS libgxps
     ++ stdenv.lib.optionals supportMultimedia (with gst_all_1; [
       gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav ]);
@@ -101,6 +106,7 @@ stdenv.mkDerivation rec {
   mesonFlags = [
     "-Dnautilus=false"
     "-Dps=enabled"
+    "-Dgtk_doc=false"
   ];
 
   NIX_CFLAGS_COMPILE = "-I${glib.dev}/include/gio-unix-2.0";

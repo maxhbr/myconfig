@@ -1,5 +1,5 @@
 { fetchurl, stdenv, gtk, pkgconfig, libgsf, libofx, intltool, wrapGAppsHook
-, libsoup, gnome3 }:
+, hicolor-icon-theme, libsoup, gnome3 }:
 
 stdenv.mkDerivation rec {
   pname = "grisbi";
@@ -11,7 +11,7 @@ stdenv.mkDerivation rec {
   };
 
   nativeBuildInputs = [ pkgconfig wrapGAppsHook ];
-  buildInputs = [ gtk libgsf libofx intltool libsoup
+  buildInputs = [ gtk libgsf libofx intltool hicolor-icon-theme libsoup
     gnome3.adwaita-icon-theme ];
 
   meta = with stdenv.lib; {

@@ -1,17 +1,14 @@
-{ stdenv, fetchFromGitHub, cmake }:
+{ stdenv, fetchurl, cmake }:
 
 stdenv.mkDerivation rec {
   pname = "timewarrior";
-  version = "1.2.0";
+  version = "1.1.1";
 
   enableParallelBuilding = true;
 
-  src = fetchFromGitHub {
-    owner = "GothenburgBitFactory";
-    repo = "timewarrior";
-    rev = "v${version}";
-    sha256 = "0ci8kb7gdp1dsv6xj30nbz8lidrmn50pbriw26wv8mdhs17rfk7w";
-    fetchSubmodules = true;
+  src = fetchurl {
+    url = "https://taskwarrior.org/download/timew-${version}.tar.gz";
+    sha256 = "1jfcfzdwk5qqhxznj1bgy0sx3lnp3z5lqr9kch9a7iazwmi9lz8z";
   };
 
   nativeBuildInputs = [ cmake ];

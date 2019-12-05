@@ -8,29 +8,33 @@
 
 buildPythonPackage rec {
   pname = "pytest-repeat";
-  version = "0.8.0";
+  version = "0.7.0";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1nbdmklpi0ra1jnfm032wz96y9nxdlcr4m9sjlnffwm7n4x43g2j";
+    sha256 = "0axbrpqal3cqw9zq6dakdbg49pnf5gvyvq6yn93hp1ayc7fnhzk3";
   };
 
-  nativeBuildInputs = [
-    setuptools_scm
+  # fixes support for pytest >3.6. Should be droppable during the
+  # next bump.
+  patches = [
+    (fetchpatch {
+      url = https://github.com/pytest-dev/pytest-repeat/commit/f94b6940e3651b7593aca5a7a987eb56abe04cb1.patch;
+      sha256 = "00da1gmpq9pslcmm8pw93jcbp8j2zymzqdsm6jq3xinkvjpsbmny";
+    })
   ];
 
-  checkInputs = [
-    pytest
-  ];
+  buildInputs = [ setuptools_scm ];
+  checkInputs = [ pytest ];
 
   checkPhase = ''
-    pytest
+    py.test
   '';
 
-  meta = with lib; {
+  meta = {
     description = "Pytest plugin for repeating tests";
-    homepage = "https://github.com/pytest-dev/pytest-repeat";
-    license = licenses.mpl20;
-    maintainers = with maintainers; [ costrouc ];
+    homepage = https://github.com/pytest-dev/pytest-repeat;
+    maintainers = with lib.maintainers; [ costrouc ];
+    license = lib.licenses.mpl20;
   };
 }

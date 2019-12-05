@@ -1,14 +1,15 @@
-{ stdenv, antlr3_4, libantlr3c, jre, mbedtls, fetchFromGitHub
+{ stdenv, antlr3_4, libantlr3c, jre, polarssl, fetchFromGitHub
   , cmake, zlib, bctoolbox
 }:
 
 stdenv.mkDerivation rec {
-  pname = "belle-sip";
+  baseName = "belle-sip";
   version = "1.6.3";
+  name = "${baseName}-${version}";
 
   src = fetchFromGitHub {
     owner = "BelledonneCommunications";
-    repo = pname;
+    repo = baseName;
     rev = version;
     sha256 = "0q70db1klvhca1af29bm9paka3gyii5hfbzrj4178gclsg7cj8fk";
   };
@@ -23,14 +24,18 @@ stdenv.mkDerivation rec {
     "-Wno-error=cast-function-type"
   ];
 
-  propagatedBuildInputs = [ antlr3_4 libantlr3c mbedtls bctoolbox ];
+  propagatedBuildInputs = [ antlr3_4 libantlr3c polarssl bctoolbox ];
+
+  configureFlags = [
+    "--with-polarssl=${polarssl}"
+  ];
 
   # Fails to build with lots of parallel jobs
   enableParallelBuilding = false;
 
   meta = with stdenv.lib; {
-    homepage = https://linphone.org/technical-corner/belle-sip;
-    description = "Modern library implementing SIP (RFC 3261) transport, transaction and dialog layers";
+    homepage = http://www.linphone.org/index.php/eng;
+    description = "A Voice-over-IP phone";
     license = licenses.gpl2;
     platforms = platforms.all;
   };

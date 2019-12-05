@@ -1,4 +1,4 @@
-{ stdenv
+{ gcc8Stdenv
 , ctags
 , appstream-glib
 , desktop-file-utils
@@ -13,6 +13,7 @@
 , gtk-doc
 , gtk3
 , gtksourceview4
+, hicolor-icon-theme
 , json-glib
 , jsonrpc-glib
 , libdazzle
@@ -22,7 +23,6 @@
 , ninja
 , ostree
 , pcre
-, pcre2
 , pkgconfig
 , python3
 , sysprof
@@ -33,16 +33,20 @@
 , wrapGAppsHook
 , dbus
 , xvfb_run
-, glib
 }:
 
+let
+  # Does not build with GCC 7
+  # https://gitlab.gnome.org/GNOME/gnome-builder/issues/868
+  stdenv = gcc8Stdenv;
+in
 stdenv.mkDerivation rec {
   pname = "gnome-builder";
-  version = "3.34.1";
+  version = "3.32.4";
 
   src = fetchurl {
     url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "19018pq94cxf6fywd7fsmy98x56by5zfmh140pl530gaaw84cvhb";
+    sha256 = "0xip58m206p8wa28p0a3y4ykylzr5xzmirjl3dspg4j25r08i8qr";
   };
 
   nativeBuildInputs = [
@@ -52,6 +56,7 @@ stdenv.mkDerivation rec {
     docbook_xml_dtd_43
     gobject-introspection
     gtk-doc
+    hicolor-icon-theme
     (meson.override ({ inherit stdenv; }))
     ninja
     pkgconfig
@@ -77,7 +82,6 @@ stdenv.mkDerivation rec {
     libxml2
     ostree
     pcre
-    pcre2
     python3
     sysprof
     template-glib
@@ -95,8 +99,6 @@ stdenv.mkDerivation rec {
   prePatch = ''
     patchShebangs build-aux/meson/post_install.py
   '';
-
-  NIX_CFLAGS_COMPILE = "-I${glib.dev}/include/gio-unix-2.0";
 
   mesonFlags = [
     "-Dpython_libprefix=${python3.libPrefix}"

@@ -4,7 +4,7 @@ with pkgs;
 with lib;
 
 let
-  cfg = config.services.connman;
+  cfg = config.networking.connman;
   configFile = pkgs.writeText "connman.conf" ''
     [General]
     NetworkInterfaceBlacklist=${concatStringsSep "," cfg.networkInterfaceBlacklist}
@@ -17,7 +17,7 @@ in {
 
   options = {
 
-    services.connman = {
+    networking.connman = {
 
       enable = mkOption {
         type = types.bool;
@@ -71,13 +71,13 @@ in {
 
     assertions = [{
       assertion = !config.networking.useDHCP;
-      message = "You can not use services.connman with networking.useDHCP";
+      message = "You can not use services.networking.connman with services.networking.useDHCP";
     }{
       assertion = config.networking.wireless.enable;
-      message = "You must use services.connman with networking.wireless";
+      message = "You must use services.networking.connman with services.networking.wireless";
     }{
       assertion = !config.networking.networkmanager.enable;
-      message = "You can not use services.connman with networking.networkmanager";
+      message = "You can not use services.networking.connman with services.networking.networkmanager";
     }];
 
     environment.systemPackages = [ connman ];

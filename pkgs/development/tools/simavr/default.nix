@@ -1,6 +1,6 @@
 { stdenv, fetchFromGitHub, libelf, which, pkgconfig, freeglut
 , avrgcc, avrlibc
-, libGLU, libGL
+, libGLU_combined
 , GLUT }:
 
 stdenv.mkDerivation rec {
@@ -23,7 +23,7 @@ stdenv.mkDerivation rec {
   ];
 
   nativeBuildInputs = [ which pkgconfig avrgcc ];
-  buildInputs = [ libelf freeglut libGLU libGL ]
+  buildInputs = [ libelf freeglut libGLU_combined ]
     ++ stdenv.lib.optional stdenv.isDarwin GLUT;
 
   # Hack to avoid TMPDIR in RPATHs.

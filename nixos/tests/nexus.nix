@@ -3,7 +3,7 @@
 #   2. nexus service can startup on server (creating database and all other initial stuff)
 #   3. the web application is reachable via HTTP
 
-import ./make-test-python.nix ({ pkgs, ...} : {
+import ./make-test.nix ({ pkgs, ...} : {
   name = "nexus";
   meta = with pkgs.stdenv.lib.maintainers; {
     maintainers = [ ironpinguin ma27 ];
@@ -22,11 +22,11 @@ import ./make-test-python.nix ({ pkgs, ...} : {
   };
 
   testScript = ''
-    start_all()
+    startAll;
 
-    server.wait_for_unit("nexus")
-    server.wait_for_open_port(8081)
+    $server->waitForUnit("nexus");
+    $server->waitForOpenPort(8081);
 
-    server.succeed("curl -f 127.0.0.1:8081")
+    $server->succeed("curl -f 127.0.0.1:8081");
   '';
 })

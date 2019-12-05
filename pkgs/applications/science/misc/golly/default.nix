@@ -1,15 +1,15 @@
-{stdenv, fetchurl, wxGTK, perl, python2, zlib, libGLU, libGL, libX11}:
+{stdenv, fetchurl, wxGTK, perl, python2, zlib, libGLU_combined, libX11}:
 stdenv.mkDerivation rec {
   pname = "golly";
-  version = "3.3";
+  version = "3.2";
 
   src = fetchurl {
-    sha256 = "1j3ksnar4rdam4xiyspgyrs1pifbvxfxkrn65brkwxpx39mpgzc8";
+    sha256 = "0cg9mbwmf4q6qxhqlnzrxh9y047banxdb8pd3hgj3smmja2zf0jd";
     url="mirror://sourceforge/project/golly/golly/golly-${version}/golly-${version}-src.tar.gz";
   };
 
   buildInputs = [
-    wxGTK perl python2 zlib libGLU libGL libX11
+    wxGTK perl python2 zlib libGLU_combined libX11
   ];
 
   setSourceRoot = ''

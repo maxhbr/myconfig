@@ -15,20 +15,19 @@
 , mock
 , pythonAtLeast
 , isPy3k
-, pytest
 }:
 
 buildPythonPackage rec {
   pname = "fs";
-  version = "2.4.11";
+  version = "2.4.8";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "cc99d476b500f993df8ef697b96dc70928ca2946a455c396a566efe021126767";
+    sha256 = "5e19251e939b10d50e4b58b0cf2862851794abcf4aa4387b67c69dd61e97b3dc";
   };
 
   buildInputs = [ glibcLocales ];
-  checkInputs = [ nose pyftpdlib mock psutil pytest ];
+  checkInputs = [ nose pyftpdlib mock psutil ];
   propagatedBuildInputs = [ six appdirs pytz ]
     ++ lib.optionals (!isPy3k) [ backports_os ]
     ++ lib.optionals (!pythonAtLeast "3.6") [ typing ]
@@ -38,7 +37,7 @@ buildPythonPackage rec {
   LC_ALL="en_US.utf-8";
 
   checkPhase = ''
-    HOME=$(mktemp -d) pytest -k 'not user_data_repr' --ignore=tests/test_opener.py
+    HOME=$(mktemp -d) nosetests tests []
   '';
 
   meta = with lib; {

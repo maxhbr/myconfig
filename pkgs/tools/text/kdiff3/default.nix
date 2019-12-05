@@ -1,7 +1,7 @@
 {
   mkDerivation, lib, fetchurl,
   extra-cmake-modules, kdoctools, wrapGAppsHook,
-  kcrash, kconfig, kinit, kparts, kiconthemes
+  kcrash, kconfig, kinit, kparts
 }:
 
 mkDerivation rec {
@@ -15,7 +15,7 @@ mkDerivation rec {
 
   nativeBuildInputs = [ extra-cmake-modules kdoctools wrapGAppsHook ];
 
-  propagatedBuildInputs = [ kconfig kcrash kinit kparts kiconthemes ];
+  propagatedBuildInputs = [ kconfig kcrash kinit kparts ];
 
   meta = with lib; {
     homepage = http://kdiff3.sourceforge.net/;

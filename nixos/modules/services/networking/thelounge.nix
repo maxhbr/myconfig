@@ -56,7 +56,6 @@ in {
     users.users.thelounge = {
       description = "thelounge service user";
       group = "thelounge";
-      isSystemUser = true;
     };
     users.groups.thelounge = {};
     systemd.services.thelounge = {

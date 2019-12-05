@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, python, wxGTK29, mupen64plus, SDL, libX11, libGLU, libGL
+{ stdenv, fetchurl, python, wxGTK29, mupen64plus, SDL, libX11, libGLU_combined
 , wafHook }:
 
 stdenv.mkDerivation {
@@ -9,7 +9,7 @@ stdenv.mkDerivation {
   };
 
   nativeBuildInputs = [ wafHook ];
-  buildInputs = [ python wxGTK29 SDL libX11 libGLU libGL ];
+  buildInputs = [ python wxGTK29 SDL libX11 libGLU_combined ];
 
   preConfigure = ''
     tar xf ${mupen64plus.src}
