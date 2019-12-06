@@ -103,9 +103,9 @@ in {
     ./nixos-hardware/lenovo/thinkpad/x1-extreme/gen2/default.nix
 
     # rawIntelConf
-    # rawNvidiaConf
+    rawNvidiaConf
     # rawNouveauConf
-    bumblebeeConf
+    # bumblebeeConf
     # bumblebeeNouveauConf
     # optimusPrimeConf
     # ./prime-render-offload.nix
