@@ -10,4 +10,8 @@
     ../modules/auto-upgrade.nix
     ../modules/gc.nix
   ];
+
+  config = {
+    system.autoUpgrade.allowReboot = true;
+  };
 }
