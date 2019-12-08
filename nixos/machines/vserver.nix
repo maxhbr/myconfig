@@ -6,5 +6,6 @@
     ./hardware/grub.nix
     # modules
     ../modules/service/openssh.nix
+    ../modules/service/wireguard-server.nix
   ];
 }
