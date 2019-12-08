@@ -1,13 +1,13 @@
-# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, lib, pkgs, ... }:
+{ config, ... }:
 
 {
   config =  {
     services.openssh = {
       enable = true;
       passwordAuthentication = false;
-      forwardX11 = true;
+      forwardX11 = config.services.xserver.enable;
     };
   };
 }

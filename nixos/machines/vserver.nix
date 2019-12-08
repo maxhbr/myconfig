@@ -3,6 +3,7 @@
 { pkgs, ... }:
 {
   imports = [
+    ./hardware/grub.nix
     # modules
     ../modules/service/openssh.nix
   ];
