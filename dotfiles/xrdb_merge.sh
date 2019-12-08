@@ -3,6 +3,11 @@
 # SPDX-License-Identifier: MIT
 set -e
 
-if [ -f ~/.Xresources ] && [ ! -z ${DISPLAY+x} ]; then
-    xrdb -merge ~/.Xresources
+. "$(dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )")/common.sh"
+if have xrdb; then
+    if [ -f ~/.Xresources ] && [ ! -z ${DISPLAY+x} ]; then
+        logH3 "run xrdb -merge ~/.Xresources"
+        xrdb -merge ~/.Xresources
+    fi
 fi
+
