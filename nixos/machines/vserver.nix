@@ -7,5 +7,7 @@
     # modules
     ../modules/service/openssh.nix
     ../modules/service/wireguard-server.nix
+    ../modules/auto-upgrade.nix
+    ../modules/gc.nix
   ];
 }
