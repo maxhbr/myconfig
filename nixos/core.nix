@@ -46,7 +46,7 @@
       tmux
       manpages
       # taskwarrior
-      pass
+      pass gopass
       ag
       file
 

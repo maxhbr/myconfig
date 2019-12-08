@@ -2,23 +2,27 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 {
-  imports = [
+  imports = [ # hardware:
     ./hardware/x1extremeG2.nix
     ./hardware/efi.nix
     ./hardware/exfat.nix
     ./hardware/steamcontroller.nix
     ./hardware/pulseaudio.nix
-    # modules
+  ] ++ [ # modules:
     ../modules/emacs.nix
     ../modules/desktop/xmonad.nix
     ../modules/desktop/sway.nix
     # ../modules/desktop/xfce.nix
-    ../modules/desktop/games
     ../modules/mail.nix
     ../modules/virtualization
     ../modules/service/openssh.nix
     # ../modules/service/syncthing.nix
     ../modules/work.nix
+    ../modules/dev/haskell.nix
+    ../modules/dev/misc.nix
+    ## fun
+    ../modules/desktop/games
+    ../modules/desktop/imagework.nix
   ];
 
   config = {

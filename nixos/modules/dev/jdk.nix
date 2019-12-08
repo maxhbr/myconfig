@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 {
+  imports = [
+    ./common.nix
+  ];
   config = {
     # generates:
     # - /run/booted-system/pkgs/openjdk8

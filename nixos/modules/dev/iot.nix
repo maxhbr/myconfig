@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: MIT
 { config, lib, pkgs, ... }:
 {
+  imports = [
+    ./common.nix
+  ];
   config = {
     environment.systemPackages = with pkgs.unstable; [
       platformio

@@ -24,6 +24,17 @@
         vanilla-dmz
 
         networkmanager_dmenu
+
+        # gui applications
+        mupdf zathura llpp
+        feh imagemagick # scrot
+        mplayer
+        # gui applications
+        chromium unstable.firefox qutebrowser
+        google-chrome # for streaming and music
+        # browserpass
+        # spellchecking
+        aspell aspellDicts.de aspellDicts.en
       ];
       interactiveShellInit = ''
         alias file-roller='${pkgs.xarchiver}/bin/xarchiver'

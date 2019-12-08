@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 {
+  imports = [
+    ./common.nix
+  ];
   config = {
     environment.systemPackages = with pkgs; [
       (pkgs.texLiveAggregationFun {
