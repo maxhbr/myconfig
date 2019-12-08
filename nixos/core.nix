@@ -3,11 +3,6 @@
 { config, pkgs, lib, ... }:
 
 {
-  imports = [
-    ./mhuber.nix
-    ./oh-my-zsh.nix
-  ];
-
   boot = {
     # kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
     cleanTmpDir = true;
@@ -25,13 +20,9 @@
   environment = {
     variables = {
       TMP = "/tmp";
-      BROWSER = "${pkgs.chromium}/bin/chromium-browser";
-      EDITOR = "${pkgs.myconfig.scripts}/bin/ec -t";
     };
     interactiveShellInit = ''
       alias upg='~/myconfig/rebuild.sh'
-      alias vim="${pkgs.myconfig.scripts}/bin/ec -t"
-      alias emacs="${pkgs.myconfig.scripts}/bin/ec"
     '';
     # shellInit = ''
     # '';

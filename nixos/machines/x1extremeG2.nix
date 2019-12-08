@@ -9,6 +9,7 @@
     ./hardware/steamcontroller.nix
     ./hardware/pulseaudio.nix
     # modules
+    ../modules/emacs.nix
     ../modules/desktop/xmonad.nix
     ../modules/desktop/sway.nix
     # ../modules/desktop/xfce.nix

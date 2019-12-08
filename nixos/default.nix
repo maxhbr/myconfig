@@ -7,9 +7,9 @@ let
 in {
   imports = [
     /etc/nixos/hardware-configuration.nix
-    modules/core.nix
-    modules/mhuber.nix
-    modules/emacs.nix
+    ./core.nix
+    ./mhuber.nix
+    ./oh-my-zsh.nix
   ]
   # the machine specific configuration is placed at ./machines/<hostName>.nix
     ++ (let
