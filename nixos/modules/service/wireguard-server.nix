@@ -9,7 +9,6 @@
 # $ wg genkey > ~/wireguard-keys/private
 # $ wg pubkey < ~/wireguard-keys/private > ~/wireguard-keys/public
 
-
 { pkgs, ... }:
 {
   config = {
