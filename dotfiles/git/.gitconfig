@@ -236,4 +236,4 @@
     user = maxhbr
 
 [includeIf  "gitdir:~/TNG/"]
-    path = ~/.gitconfig-tng
+    path = ~/TNG/gitconfig

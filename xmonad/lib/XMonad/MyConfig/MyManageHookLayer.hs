@@ -40,7 +40,7 @@ myManageHook = let
                                --                   ,"Chromium","chromium-browser"])
                                , (doShift "10", ["franz","Franz"])
                                -- , (doShift "vbox", ["Virtualbox","VirtualBox"])
-                               , (doShift "media", ["Steam", "Wfica"])
+                               , (doShift "media", ["Steam", "Wfica", "Wfica_Seamless"])
                                , (doIgnore, ["desktop_window"
                                             ,"kdesktop"
                                             ,"xmessage","Xmessage"]) ]
