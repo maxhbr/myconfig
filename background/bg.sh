@@ -7,9 +7,9 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../background"
 cd $DIR
 bgs=(*.png)
 
-LOG_FOLDER="$HOME/myconfig/_logs"
+LOG_FOLDER="$HOME/_myScreenLock"
 mkdir -p "$LOG_FOLDER"
-LOG_FILE="$LOG_FOLDER/$(date +%Y-%m-%d)-myScreenLock.sh.log"
+LOG_FILE="$LOG_FOLDER/$(date '+%Y-%V')-myScreenLock.sh.log"
 
 getRandomBG() {
     rand=$[$RANDOM % ${#bgs[@]}]
