@@ -23,6 +23,7 @@
     ## fun
     ../modules/desktop/games
     ../modules/desktop/imagework.nix
+    ../modules/smarthome.nix
   ];
 
   config = {

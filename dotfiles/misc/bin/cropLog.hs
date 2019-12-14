@@ -7,6 +7,13 @@ import           Data.Text (Text)
 import qualified Data.Text    as Text
 import qualified Data.Text.IO as Text
 
+{-
+ - TODOs:
+ - * TODO: add line numbers from original file
+ - * TODO: support regual expressions or wildcards
+ - * TODO: support STDIN
+ -}
+
 usage :: IO ()
 usage = do
   putStrLn "usage: "
