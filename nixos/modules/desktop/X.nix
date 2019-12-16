@@ -11,7 +11,7 @@
   };
 
   config = {
-    systemPackages = with pkgs; [ xdotool ];
+    environment.systemPackages = with pkgs; [ xdotool ];
     services = {
       xserver = {
         enable = true;
