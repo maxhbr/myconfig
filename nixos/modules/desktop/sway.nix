@@ -24,13 +24,13 @@
       '';
     };
     environment = {
-    systemPackages = with pkgs; [
-      grim # for screenshots
-      qt5.qtwayland
-    ];
-    loginShellInit = ''
-      [[ -z $DISPLAY && $XDG_VTNR -eq 6 ]] && exec sway --my-next-gpu-wont-be-nvidia
-    '';
+      systemPackages = with pkgs; [
+        grim # for screenshots
+        qt5.qtwayland
+      ];
+      loginShellInit = ''
+        [[ -z $DISPLAY && $XDG_VTNR -eq 6 ]] && exec sway --my-next-gpu-wont-be-nvidia
+      '';
     };
   };
 }
