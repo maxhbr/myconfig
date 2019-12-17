@@ -159,6 +159,7 @@ layoutKBs conf =
           | (i, k) <- zip (XMonad.workspaces conf) ([xK_1 .. xK_9] ++ [xK_0])
           , (f, m) <- [ (\i -> windows (W.greedyView i) >> popupCurDesktop, m__)
                       , (windows . W.shift, ms_) ]]
+      ++ [((msc, xK_m    ), (windows . W.shift) "NSP" )]
     focusKBs =
       [ ((ms_, xK_Tab   ), focusDown)
 #if 0
