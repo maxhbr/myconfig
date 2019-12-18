@@ -31,6 +31,7 @@
     cot         = checkout --track
     cob         = checkout -b
     f           = "!f() { git fetch ${1:-\"--all\"}; }; f"
+    fb           = "!f() { git fetch --prune ${1:-\"--all\"}; }; f"
 	  fum         = "!f() { if [[ \"$(git remote)\" != *'upstream'* ]]; then git fetch origin master:master; else git fetch upstream master:master; fi; }; f"
 	  pum         = "!f() { if [[ \"$(git remote)\" != *'upstream'* ]]; then git pull --rebase=interactive origin master; else git pull --rebase=interactive upstream master; fi; }; f"
 	  up          = "!git remote update -p; git merge --ff-only @{u}"
