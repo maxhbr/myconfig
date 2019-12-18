@@ -148,6 +148,18 @@
                               && git reset --hard FETCH_HEAD ) ) \
                           || ( echo && echo \"possible refs:\" && git ls-remote $remote | grep \"/merge\"; ); \
                         }; f"
+    testMR      = "!f() { [[ $(git diff --shortstat 2> /dev/null | tail -n1) != \"\" ]] && { \
+                              echo \"git is unclean\"; \
+                              return 1; \
+                            }; \
+                          remote=\"${2:-origin}\"; \
+                          branch=\"testpr/${remote}/${1}\"; \
+                          git fetch \"${remote}\" \"+refs/merge-requests/${1}/head:\" \
+                          && ( git checkout -b \"$branch\" -qf FETCH_HEAD \
+                            || ( git checkout \"$branch\" \
+                              && git reset --hard FETCH_HEAD ) ) \
+                          || ( echo && echo \"possible refs:\" && git ls-remote $remote | grep \"/merge\"; ); \
+                        }; f"
 
     #stolen from: https://stackoverflow.com/questions/16307091/make-git-status-show-unmodified-unchanged-tracked-files
     ls-fstatus = "! cd $PWD/$GIT_PREFIX; git ls-files -cdmoskt --abbrev=8 | while read -r line; do \

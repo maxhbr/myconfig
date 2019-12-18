@@ -67,11 +67,11 @@ import XMonad.MyConfig.Notify (popupCurDesktop)
 
 myCoreWorkspaces, myWorkspaces :: [String]
 myCoreWorkspaces = "web" : map show [9..10]
-myWorkspaces = map show [1..7] ++ myCoreWorkspaces ++ ["vbox", "media"] ++ map show [13..18]
+myWorkspaces = map show [1..7] ++ myCoreWorkspaces ++ ["vbox", "media"] ++ map show [13..20] ++ ["NSP"]
 applyMyLayoutModifications :: XConfig a -> XConfig a
 applyMyLayoutModifications c = let
   addLayoutkeys :: XConfig a -> XConfig a
-  addLayoutkeys conf = applyMyKBs' layoutKBs conf
+  addLayoutkeys = applyMyKBs' layoutKBs
   in docks $
      addLayoutkeys $
      c { workspaces      = myWorkspaces

@@ -115,13 +115,13 @@ if ($onlyIfChanged && isEnvUnchanged()) {
 ################################################################################
 
 { # xrandr
-    my $lvdsOutput = "eDP1";
+    my $lvdsOutput = "DP-2"; #"eDP1";
     my @outputs = (
         "DP1", "DP1-8",
         "DP2", "DP2-2", "DP2-3", "DP2-8", "DP2-1",
         "DP3-1", "DP3-2", "DP3-3",
         "DP3-1-8",
-        "DP-0", "DP-1", "DP-2", "DP-1.1", "DP-1.3",
+        "DP-0", "DP-1", "DP-1.1", "DP-1.3", # "DP-2",
         "HDMI-0",
         "HDMI1", "HDMI2", "HDMI3",
         "VIRTUAL1", "VIRTUAL2", "VIRTUAL3", "VIRTUAL4", "VIRTUAL5"
