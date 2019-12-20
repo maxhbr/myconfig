@@ -10,6 +10,7 @@ in {
     ./core.nix
     ./mhuber.nix
     ./oh-my-zsh.nix
+    ./userPackages.nix
   ]
   # the machine specific configuration is placed at ./machines/<hostName>.nix
     ++ (let

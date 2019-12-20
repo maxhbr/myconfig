@@ -1,9 +1,8 @@
 {  pkgs, ... }:
 {
   config = {
-    environment.systemPackages = with pkgs.unstable; [
-      steam
-      powder
+    userPackages = with pkgs.unstable; [
+      steam powder
     ];
 
     hardware= {
