@@ -68,6 +68,7 @@ bindkey '^w' backward-kill-word
 # [[ -d $HOME/perl5/bin ]] && export PATH=$HOME/perl5/bin:$PATH
 [[ -d $HOME/.cabal/bin ]] && export PATH=$HOME/.cabal/bin:$PATH
 [[ -d $HOME/.local/bin ]] && export PATH=$HOME/.local/bin:$PATH
+[[ -d $HOME/.screenlayout ]] && export PATH=$PATH:$HOME/.screenlayout
 
 # PATH="$HOME/perl5/bin${PATH+:}${PATH}"; export PATH;
 # PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB+:}${PERL5LIB}"; export PERL5LIB;
