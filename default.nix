@@ -19,10 +19,9 @@ in {
       scripts
       my-xmonad
       background
-      slim-theme;
     myconfig-all = funs.buildEnv {
       name = "myconfig-all";
-      paths = [scripts my-xmonad background slim-theme];
+      paths = [scripts my-xmonad background];
       pathsToLink = [ "/share" "/bin" ];
     };
   };

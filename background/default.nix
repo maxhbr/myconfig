@@ -6,9 +6,7 @@ stdenv.mkDerivation rec {
   version = "1.0";
   name = "my-backgrounds-${version}";
 
-  src = builtins.filterSource
-    (path: type: baseNameOf path != "slim-theme")
-    ./.;
+  src = ./.;
 
   buildInputs = with pkgs; [ imagemagick coreutils ];
 
