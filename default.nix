@@ -18,7 +18,7 @@ in {
     inherit
       scripts
       my-xmonad
-      background
+      background;
     myconfig-all = funs.buildEnv {
       name = "myconfig-all";
       paths = [scripts my-xmonad background];
