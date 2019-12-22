@@ -6,9 +6,6 @@ funs: pkgs: let
   background = callPackage ./background {
     inherit pkgs;
   };
-  slim-theme = callPackage ./background/slim-theme {
-    inherit background pkgs;
-  };
   scripts = callPackage ./scripts {
     inherit background pkgs;
   };
