@@ -50,6 +50,10 @@ let
       #   BoardName      "GeForce GTX 1650"
       # '';
     };
+     boot.kernelParams = [
+      "acpi_backlight=vendor"
+      "video.use_native_backlight=1"
+    ];
   };
   ##############################################################################
   rawNouveauConf = {
