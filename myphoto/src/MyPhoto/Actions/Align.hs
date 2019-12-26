@@ -87,8 +87,9 @@ callAlignImageStackByHalves args tmpdir imgs = let
 copyAndRenameImages :: (Int -> String) -> [Img] -> IO [Img]
 copyAndRenameImages renamer imgs = mapM (\(img, i) -> do
                                             let out = renamer i
-                                            copyFile img out
-                                            return out) (zip imgs [1..])
+                                            altOut <- findAltFileOfFile out
+                                            copyFile img altOut
+                                            return altOut) (zip imgs [1..])
 
 alignImpl :: [String] -> [Img] -> PActionBody
 alignImpl args imgs = do

@@ -1,6 +1,6 @@
-resolver: lts-13.29
+resolver: lts-14.18
 packages:
 - .
 nix:
-  packages: [dcraw, enblend-enfuse, hugin, imagemagick, fgallery, sxiv] 
+  packages: [dcraw, enblend-enfuse, hugin, imagemagick, fgallery, sxiv, libffi] 
 

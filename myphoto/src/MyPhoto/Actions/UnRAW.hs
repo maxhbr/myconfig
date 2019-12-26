@@ -118,7 +118,11 @@ getDcrawArgs opts = let
     addOutputFormaArgs :: ([String], [Img]) -> IO ([String], [Img])
     addOutputFormaArgs (args,imgs) = pure (args ++ ["-T"], imgs)
   in \imgs -> do
-    (dcrawArgs, imgs') <- addVerbosityArgs opts ([], imgs) >>= addWhiteBalanceArgs opts >>= addColorspaceArgs opts >>= addQualityArgs opts >>= addOutputFormaArgs
+    (dcrawArgs, imgs') <- addVerbosityArgs opts ([], imgs)
+      >>= addWhiteBalanceArgs opts
+      >>= addColorspaceArgs opts
+      >>= addQualityArgs opts
+      >>= addOutputFormaArgs
     when (optDebug opts) $ do
       putStrLn "dcrawArgs:"
       print dcrawArgs

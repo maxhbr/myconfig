@@ -11,7 +11,6 @@ import           System.Exit
 import           System.Directory
 import           System.IO.Temp
 import           Text.Printf
-import           System.Posix.Files (touchFile)
 
 import MyPhoto.Model
 import MyPhoto.Utils
@@ -105,10 +104,10 @@ getEnfuseArgs opts = let
 getOutArguments :: Options -> Img -> IO (Img, [String])
 getOutArguments opts img = let
     (bn,ext) = splitExtensions img
-    outFile = bn ++ "_STACKED" ++ ext
-    outMasksFolder = outFile ++ "-masks"
   in do
+    outFile <- findOutFile (bn ++ "_STACKED") ext
     appendFile outFile ""
+    let outMasksFolder = outFile ++ "-masks"
     when (optSaveMasks opts) $
       createDirectoryIfMissing True outMasksFolder
     return (outFile, ( "--output=" ++ outFile ++ "" ) :

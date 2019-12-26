@@ -7,6 +7,8 @@ import qualified Data.Text as Text
 import           Control.Monad ((>=>))
 import           System.FilePath (takeExtension)
 import qualified Data.Char as C
+import           System.Directory (doesFileExist)
+import           System.FilePath
 
 import MyPhoto.Model
 
@@ -46,3 +48,28 @@ filterByExtension exts = let
 
 assertThatAllExist :: PAction
 assertThatAllExist = undefined
+
+findAltFileOfFile :: FilePath -> IO FilePath
+findAltFileOfFile file = let
+    (bn,ext) = splitExtensions file
+  in findOutFile bn ext
+
+findOutFile :: String -> String -> IO FilePath
+findOutFile bn ext = let
+  findOutFile' :: Int -> IO FilePath
+  findOutFile' i = do
+    let fn = bn ++ "_" ++ show i ++ ext
+    exists <- doesFileExist fn
+    if exists
+      then findOutFile' (i + 1)
+      else return fn
+  touchFile :: FilePath -> IO FilePath
+  touchFile fn = do
+    writeFile fn ""
+    return fn
+  in do
+    let fn = bn ++ ext
+    exists <- doesFileExist fn
+    (if exists
+      then findOutFile' 1
+      else return fn) >>= touchFile

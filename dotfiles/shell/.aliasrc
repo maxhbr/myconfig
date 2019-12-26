@@ -791,7 +791,12 @@ mountExfat() {
   target="${src/\/dev//media}"
   echo $target
   sudo mkdir -p "$target"
-  sudo mount -o uid=$(id -u) -o gid=$(id -g) -t exfat "$src" "$target"
+  sudo mount \
+      -o nonempty \
+      -o uid=$(id -u) \
+      -o gid=$(id -g) \
+      -t exfat \
+      "$src" "$target"
 }
 
 alias slic3r-prusa3d="env LANG=C nix-shell -p unstable.slic3r-prusa3d --command slic3r-prusa3d"
