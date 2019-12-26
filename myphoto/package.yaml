@@ -31,6 +31,7 @@ dependencies:
 - unix
 - async
 - SafeSemaphore
+- split
 
 library:
   source-dirs: src
