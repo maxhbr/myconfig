@@ -35,5 +35,10 @@
       preLVM = true;
       allowDiscards = true;
     }];
+
+    # option definitions
+    boot.kernel.sysctl = {
+      "vm.swappiness" = 1;
+    };
   };
 }

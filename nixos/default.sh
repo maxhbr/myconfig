@@ -31,16 +31,19 @@ upgrade() {
     [[ "$MYCONFIG_ARGS" == *"--fast"* ]] &&
         args="--fast"
 
-    logH3 "nixos-rebuild" "$args"
 
-    sudo \
-         NIX_CURL_FLAGS='--retry=1000' \
-         nixos-rebuild \
-             $NIX_PATH_ARGS \
-             --show-trace --keep-failed \
-             --upgrade \
-             $args \
-             --fallback ${NIXOS_REBUILD_CMD:-switch}
+    nixCmd="sudo \
+        NIX_CURL_FLAGS='--retry=1000' \
+        nixos-rebuild \
+        $NIX_PATH_ARGS \
+        --show-trace --keep-failed \
+        $args \
+        --fallback"
+
+    logH3 "nixos-rebuild without upgrade" "$args"
+    $nixCmd ${NIXOS_REBUILD_CMD:-switch}
+    logH3 "nixos-rebuild with upgrade" "$args"
+    $nixCmd  --upgrade ${NIXOS_REBUILD_CMD:-switch}
 }
 gate || {
     echo "... skip"
