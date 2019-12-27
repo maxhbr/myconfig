@@ -15,6 +15,8 @@ import           System.Exit
 import           System.FilePath
 import           System.Process
 
+import           Debug.Trace
+
 import MyPhoto.Model
 import MyPhoto.Utils
 
@@ -114,7 +116,9 @@ optionsToFilenameAppendix o = let
     optsOptionsToFilenameAppendix Options {optOpts = Opts1} = "o1"
     optsOptionsToFilenameAppendix Options {optOpts = Opts2} = "o2"
     optsOptionsToFilenameAppendix Options {optOpts = Opts3} = "o3"
-  in "_" ++ projectionOptionsToFilenameAppendix o ++ optsOptionsToFilenameAppendix o
+    chunkOptionsToFilenameAppendix Options {optChunks = Nothing } = ""
+    chunkOptionsToFilenameAppendix Options {optChunks = Just n }  = "c" ++ show n
+  in "_" ++ projectionOptionsToFilenameAppendix o ++ optsOptionsToFilenameAppendix o ++ chunkOptionsToFilenameAppendix o
 
 help :: String
 help = let
@@ -165,83 +169,87 @@ getOutArguments opts img = let
 runEnfuse :: (Img, Img -> IO [String], [String]) -> [Img] -> PActionBody
 runEnfuse _ [img] = return (Right [img])
 runEnfuse (outFile, outArgsFun, enfuseArgs) imgs' = do
-      outArgs <- outArgsFun outFile
-      (_, _, _, pHandle) <- createProcess (proc "enfuse" (enfuseArgs
-                                                          ++ outArgs
-                                                          ++ imgs'))
-      exitCode <- waitForProcess pHandle
+  putStrLn (">>>>>>>>>>>>>>>>>>>>>>>> start >> " ++ outFile)
+  outArgs <- outArgsFun outFile
+  (_, _, _, pHandle) <- createProcess (proc "enfuse" (enfuseArgs
+                                                      ++ outArgs
+                                                      ++ imgs'))
+  exitCode <- waitForProcess pHandle
 
-      case exitCode of
-        ExitSuccess -> do
-          putStrLn ("### done with " ++ outFile)
-          return (Right [outFile])
-        _           -> do
-          let msg = "Stack of " ++ outFile ++ " failed with " ++ show exitCode
-          putStrLn ("### " ++ msg)
-          return (Left msg)
+  case exitCode of
+    ExitSuccess -> do
+      putStrLn ("<<<<<<<<<<<<<<<<<<<<<<<<< done << " ++ outFile)
+      return (Right [outFile])
+    _           -> do
+      let msg = "Stack of " ++ outFile ++ " failed with " ++ show exitCode
+      putStrLn ("### " ++ msg)
+      return (Left msg)
+
+foldResults :: Either String [Img] -> Either String [Img] -> Either String [Img]
+foldResults (Left err1)   (Left err2)   = Left (unlines [err1, err2])
+foldResults r1@(Left _)   _             = r1
+foldResults (Right imgs1) (Right imgs2) = Right (imgs1 ++ imgs2)
+foldResults _             r2@(Left _)   = r2
+
+calculateNextChunkSize :: Options -> [Img] -> Maybe Int
+calculateNextChunkSize opts imgs = let
+    numOfImages = length imgs
+  in case optChunks opts of
+    Nothing             -> Nothing
+    Just maxChunkSize | numOfImages <= 2
+                        -> Nothing
+                      | numOfImages <= maxChunkSize
+                        -> Nothing
+                      | numOfImages <= maxChunkSize * maxChunkSize
+                        -> Just (maximum [numOfImages `div` (ceiling ((fromIntegral numOfImages) / (fromIntegral maxChunkSize))), 2])
+                      | numOfImages > maxChunkSize * maxChunkSize
+                        -> Just (numOfImages `div` maxChunkSize)
 
 stackImpl :: [String] -> [Img] -> PActionBody
-stackImpl args imgs = let
-    foldResults :: Either String [Img] -> Either String [Img] -> Either String [Img]
-    foldResults (Left err1)   (Left err2)   = Left (unlines [err1, err2])
-    foldResults r1@(Left _)   _             = r1
-    foldResults (Right imgs1) (Right imgs2) = Right (imgs1 ++ imgs2)
-    foldResults _             r2@(Left _)   = r2
+stackImpl args = let
 
     stackImpl'' :: (MS.MSem Int) -> Options -> (Img, Img -> IO [String], [String]) -> [Img] -> PActionBody
-    stackImpl'' sem opts (outFile, outArgsFun, enfuseArgs) imgs' = let
-        numOfImages = length imgs'
-        sizeToReduceTo = case optChunks opts of
-          Nothing                                                        -> Nothing
-          Just maxChunkSize | numOfImages <= maxChunkSize                -> Nothing
-                            | numOfImages <= maxChunkSize * maxChunkSize -> Just maxChunkSize
-                            | otherwise                                  -> Just (numOfImages `div` maxChunkSize)
-      in case sizeToReduceTo of
-        Nothing -> do
-          putStrLn ("### use enfuse to calculate " ++ outFile)
-          when (optVerbose opts) $
-            putStrLn ("#### " ++ (show imgs'))
+    stackImpl'' sem opts (outFile, outArgsFun, enfuseArgs) imgs = case (calculateNextChunkSize opts imgs) of
+      Nothing -> (MS.with sem . runEnfuse (outFile, outArgsFun, enfuseArgs)) imgs
+      Just maxChunkSize -> let
+          chunks = chunksOf maxChunkSize imgs
+          numberOfChunks = length chunks
+          (bn,ext) = splitExtensions outFile
+          partOutFileFun i = bn ++ "_CHUNK" ++ show i ++ "of" ++ show numberOfChunks ++ ext
+          fun (i,chunk) = stackImpl'' sem opts (partOutFileFun i, outArgsFun, enfuseArgs) chunk
+        in do
+          putStrLn ("#### use " ++ show numberOfChunks ++ " chunks of maxChunkSize " ++ show maxChunkSize ++ " to calculate " ++ outFile)
+          results <- mapConcurrently fun (zip [1..] chunks)
 
-          runEnfuse (outFile, outArgsFun, enfuseArgs) imgs'
-        Just maxChunkSize -> let
-            chunks = chunksOf (numOfImages `div` (ceiling ((fromIntegral numOfImages) / (fromIntegral maxChunkSize)))) imgs'
-            numberOfChunks = length chunks
-          in do
-            when (optVerbose opts) $ do
-              putStrLn ("#### use " ++ show numberOfChunks ++ " chunks to calculate " ++ outFile)
-            results <- mapConcurrently (MS.with sem . (\(i,c) -> do
-                                let (bn,ext) = splitExtensions outFile
-                                partOutFile <- findOutFile (bn ++ "_CHUNK_" ++ show i ++ "-" ++ show numberOfChunks) ext
+          case foldl foldResults (Right []) results of
+            Right imgs -> stackImpl'' sem opts (outFile, outArgsFun, enfuseArgs) imgs
+            err        -> return err
 
-                                stackImpl'' sem opts (partOutFile, outArgsFun, enfuseArgs) c)) (zip [1..] chunks)
-            case foldl foldResults (Right []) results of
-              Right imgs' -> stackImpl'' sem opts (outFile, outArgsFun, enfuseArgs) imgs'
-              Left err    -> return (Left err)
-
-    stackImpl' :: (MS.MSem Int) -> Options -> PActionBody
-    stackImpl' sem opts = let
+    stackImpl' :: (MS.MSem Int) -> Options -> [Img] -> PActionBody
+    stackImpl' sem opts imgs = let
         enfuseArgs = getEnfuseArgs opts
       in do
         (outFile, outArgsFun) <- getOutArguments opts (head imgs)
         stackImpl'' sem opts (outFile, outArgsFun, enfuseArgs) imgs
-  in do
-  (opts, _) <- getMyOpts args
-  sem <- MS.new (fromMaybe 1 (optConcurrent opts)) -- semathore to limit number of parallel threads
-  if optAll opts
-    then do
-      results <- mapConcurrently (MS.with sem . (stackImpl' sem))
-        [ opts {optAll = False, optProjection = Proj1, optOpts = Opts1}
-        , opts {optAll = False, optProjection = Proj1, optOpts = Opts2}
-        , opts {optAll = False, optProjection = Proj1, optOpts = Opts3}
-        , opts {optAll = False, optProjection = Proj2, optOpts = Opts1}
-        , opts {optAll = False, optProjection = Proj2, optOpts = Opts2}
-        , opts {optAll = False, optProjection = Proj2, optOpts = Opts3}
-        , opts {optAll = False, optProjection = Proj3, optOpts = Opts1}
-        , opts {optAll = False, optProjection = Proj3, optOpts = Opts2}
-        , opts {optAll = False, optProjection = Proj3, optOpts = Opts3}
-        ]
-      return (foldl foldResults (Right []) results)
-    else stackImpl' sem opts
+
+  in \imgs -> do
+    (opts, _) <- getMyOpts args
+    sem <- MS.new (fromMaybe 1 (optConcurrent opts)) -- semathore to limit number of parallel threads
+    if optAll opts
+      then do
+        results <- mapConcurrently (\opts' -> stackImpl' sem opts' imgs)
+          [ opts {optAll = False, optProjection = Proj1, optOpts = Opts1}
+          , opts {optAll = False, optProjection = Proj1, optOpts = Opts2}
+          , opts {optAll = False, optProjection = Proj1, optOpts = Opts3}
+          , opts {optAll = False, optProjection = Proj2, optOpts = Opts1}
+          , opts {optAll = False, optProjection = Proj2, optOpts = Opts2}
+          , opts {optAll = False, optProjection = Proj2, optOpts = Opts3}
+          , opts {optAll = False, optProjection = Proj3, optOpts = Opts1}
+          , opts {optAll = False, optProjection = Proj3, optOpts = Opts2}
+          , opts {optAll = False, optProjection = Proj3, optOpts = Opts3}
+          ]
+        return (foldl foldResults (Right []) results)
+      else stackImpl' sem opts imgs
 
 stack :: PrePAction
 stack ["-h"] = PAction (\_ -> pure (Left help))
