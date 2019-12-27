@@ -2,15 +2,14 @@ module MyPhoto.Actions.UnTiff
     ( unTiff
     ) where
 
-import           System.FilePath
-import           System.Directory
-import           System.Console.GetOpt
+import           Control.Concurrent.Async ( mapConcurrently )
+import           Control.Concurrent.MSem as MS
 import           Control.Monad
-import           Data.Maybe (fromMaybe)
-import           Data.List (find, isPrefixOf)
-import           System.Process
+import           GHC.Conc ( numCapabilities )
+import           System.Directory
 import           System.Exit
-import           GHC.IO.Handle (hGetContents)
+import           System.FilePath
+import           System.Process
 
 import MyPhoto.Model
 import MyPhoto.Utils
@@ -37,7 +36,8 @@ unTiffImpl1 removeTiff img = let
 
 unTiffImpl :: Bool -> [Img] -> PActionBody
 unTiffImpl removeTiff imgs = do
-  pngs <- mapM (unTiffImpl1 removeTiff) imgs
+  sem <- MS.new numCapabilities -- semathore to limit number of parallel threads
+  pngs <- mapConcurrently (MS.with sem . unTiffImpl1 removeTiff) imgs
   return (Right pngs)
 
 unTiff :: PrePAction
