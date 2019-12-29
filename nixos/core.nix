@@ -75,15 +75,8 @@
     useSandbox = true;
     readOnlyStore = true;
 
-    binaryCachePublicKeys = [
-      # "hydra.snabb.co-1:zPzKSJ1mynGtYEVbUR0QVZf9TLcaygz/OyzHlWo5AMM=" # snabb.co
-    ];
-    trustedBinaryCaches = [
-      "https://cache.nixos.org" # "https://hydra.snabb.co"
-    ];
-    binaryCaches = [
-      "https://cache.nixos.org" "https://hydra.snabb.co"
-    ];
+    trustedBinaryCaches = ["https://cache.nixos.org"];
+    binaryCaches = ["https://cache.nixos.org"];
 
     extraOptions = ''
       gc-keep-outputs = true
