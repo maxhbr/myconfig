@@ -19,10 +19,5 @@ in {
       scripts
       my-xmonad
       background;
-    myconfig-all = funs.buildEnv {
-      name = "myconfig-all";
-      paths = [scripts my-xmonad background];
-      pathsToLink = [ "/share" "/bin" ];
-    };
   };
 }
