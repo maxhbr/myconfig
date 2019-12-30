@@ -19,9 +19,6 @@ deploy() {
     for file in ${files[@]}; do
         [[ -e "$target/$file" ]] || ln -s "$xmonadSrc/$file" "$target/$file"
     done
-
-    # notification_pipe="$target/notification.pipe"
-    # [[ -p $notification_pipe ]] || mkfifo $notification_pipe
 }
 
 upgrade() {

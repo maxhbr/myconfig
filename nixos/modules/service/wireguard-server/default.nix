@@ -34,16 +34,12 @@
         ips = [ "10.199.199.1/24" ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
         listenPort = 51820;
         privateKeyFile = "/home/mhuber/wireguard-keys/private";
-        peers = [
-          { # x1extreme
-            publicKey = "qrlimRa0itwJ8i1HdRGSrCeCJAIzRIaIP3YTe4szpXg=";
-            allowedIPs = [ "10.199.199.2/32" ];
-          }
-          { # mobile
-            publicKey = "Gy61ZXoyxpwk+pIq+TMHANhwPiMve2uRTKi+c8NKQFw=";
-            allowedIPs = [ "10.199.199.3/32" ];
-          }
-        ];
+        peers = let
+            path = ./peers;
+            content = builtins.readDir path;
+          in map (n: import (path + ("/" + n)) pkgs)
+                 (builtins.filter (n: builtins.match ".*\\.nix" n != null)
+                                  (builtins.attrNames content));
       };
     };
   };
