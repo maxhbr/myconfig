@@ -1,0 +1,31 @@
+# Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
+
+# see: https://nixos.wiki/wiki/Wireguard
+
+{ pkgs, ... }:
+{
+  config = {
+    environment.systemPackages = with pkgs; [
+      wireguard
+    ];
+
+    networking.wireguard.interfaces = {
+      wg0 = {
+        ips = [ "$CLIENT_IP/24" ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
+        privateKeyFile = "/home/mhuber/wireguard-keys/private";
+
+        peers = [
+          {
+            publicKey = "$SERVER_PUBLIC_KEY";
+            # allowedIPs = [ "0.0.0.0/0" ];
+            # Or forward only particular subnets
+            allowedIPs = [ "10.199.199.1/24" ];
+            endpoint = "$SERVER_IP:51820";
+            persistentKeepalive = 25; # Send keepalives every 25 seconds. Important to keep NAT tables alive.
+          }
+        ];
+      };
+    };
+  };
+}
