@@ -39,6 +39,10 @@
             publicKey = "qrlimRa0itwJ8i1HdRGSrCeCJAIzRIaIP3YTe4szpXg=";
             allowedIPs = [ "10.199.199.2/32" ];
           }
+          { # mobile
+            publicKey = "Gy61ZXoyxpwk+pIq+TMHANhwPiMve2uRTKi+c8NKQFw=";
+            allowedIPs = [ "10.199.199.3/32" ];
+          }
         ];
       };
     };

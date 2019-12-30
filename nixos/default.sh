@@ -40,11 +40,17 @@ upgrade() {
         $args \
         --fallback"
 
+    # first run
     logH3 "nixos-rebuild without upgrade" "$args"
     $nixCmd ${NIXOS_REBUILD_CMD:-switch}
-    logH3 "nixos-rebuild with upgrade" "$args"
-    $nixCmd  --upgrade ${NIXOS_REBUILD_CMD:-switch}
+
+    # second run
+    if [[ "$MYCONFIG_ARGS" != *"--fast"* ]]; then
+        logH3 "nixos-rebuild with upgrade" "$args"
+        $nixCmd  --upgrade ${NIXOS_REBUILD_CMD:-switch}
+    fi
 }
+
 gate || {
     echo "... skip"
     exit 0
