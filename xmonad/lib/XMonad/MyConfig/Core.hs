@@ -125,13 +125,13 @@ myKeys conf =
       , ((msc, xK_s      ), spawn (xdotoolCMD ++ " mousemove 0 0; " ++ synclientCMD ++ " TouchpadOff=$(" ++ synclientCMD ++ " -l | grep -c 'TouchpadOff.*=.*0')"))
       , ((ms_, xK_y      ), spawn (xsetCMD ++ " s activate")) -- screenlocker
       , ((m__, xK_Home   ), spawn invertColorsCMD)
-      , ((m__, xK_Print  ), spawn screenshotCMD)
+      -- , ((m__, xK_Print  ), spawn screenshotCMD)
 
       -- keyboard layouts
       , ((m__, xK_F2     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_3_4.png"))
       , ((m__, xK_F3     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_5_6.png"))
-      , ((m__, xK_z      ), spawn (myautosetupCMD ++ " --onlyIfChanged"))
-      , ((ms_, xK_z      ), spawn myautosetupCMD)
+      -- , ((m__, xK_z      ), spawn (myautosetupCMD ++ " --onlyIfChanged"))
+      -- , ((ms_, xK_z      ), spawn myautosetupCMD)
       ]
 
 backlightControlKBs, volumeControlKBs :: [((KeyMask -> KeyMask, KeySym), X ())]

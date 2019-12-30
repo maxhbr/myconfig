@@ -209,7 +209,7 @@ setupExitTrap() {
 
 ###########################################################################
 # run scripts #############################################################
-declare -a folders=("./nix" "./nixos" "./dotfiles" "./xmonad")
+declare -a folders=("./nix" "./nixos" "./dotfiles" "./userPackages" "./xmonad")
 declare -a commands=("prepare" "deploy" "upgrade" "cleanup")
 for cmd in "${commands[@]}"; do
     logH1 "handle:" "$cmd"

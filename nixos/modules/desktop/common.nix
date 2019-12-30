@@ -16,7 +16,6 @@
     environment = {
       variables = {
         BROWSER = "${pkgs.chromium}/bin/chromium-browser";
-        EDITOR = "${pkgs.myconfig.scripts}/bin/ec -t";
       };
       systemPackages = with pkgs; [
         arandr
@@ -43,8 +42,6 @@
       ];
       interactiveShellInit = ''
         alias file-roller='${pkgs.xarchiver}/bin/xarchiver'
-        alias vim="${pkgs.myconfig.scripts}/bin/ec -t"
-        alias emacs="${pkgs.myconfig.scripts}/bin/ec"
       '';
     };
 

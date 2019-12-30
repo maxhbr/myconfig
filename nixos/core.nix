@@ -23,6 +23,7 @@
     };
     interactiveShellInit = ''
       alias upg='~/myconfig/rebuild.sh'
+      alias myborgbackup.sh=${./bin/myborgbackup.sh}
     '';
     # shellInit = ''
     # '';

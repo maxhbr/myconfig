@@ -20,8 +20,6 @@
           name = "userPackages";
           extraOutputsToInstall = ["out" "bin" "lib"];
           paths = config.userPackages ++ [
-            self.myconfig.scripts
-
             # To allow easily seeing which nixpkgs version the profile was built from, place the version string in ~/.nix-profile/nixpkgs-version
             (super.writeTextFile {name = "nixpkgs-version"; destination = "/nixpkgs-version"; text = self.lib.version;})
             (super.writeTextFile {name = "nixpkgs-unstable-version"; destination = "/nixpkgs-unstable-version"; text = self.unstable.lib.version;})
@@ -30,18 +28,19 @@
             (super.writeTextFile {
               name = "break-nix-env-manifest";
               destination = "/manifest.nix";
-              text = ''
-                throw \'\'
+                throw ''\''
                   Your user environment is a buildEnv which is incompatible with
                   nix-env's built-in env builder. Edit your home expression and run
                   update-profile instead!
-                \'\'
+                ''\''
               '';
+              #'' <- fix syntax highlighting issues
             })
           ];
         };
       })
     ];
+    # TODO: this should be realized by nix-env by the user
     environment.systemPackages = with pkgs; [ userPackages ];
   };
 }

@@ -11,6 +11,7 @@
 
   config = {
     environment.systemPackages = with pkgs; [
+      pkgs.myconfig.my-xmonad
       dzen2
       rxvt_unicode_with-plugins rxvt_unicode.terminfo
     ];

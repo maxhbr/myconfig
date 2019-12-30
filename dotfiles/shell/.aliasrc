@@ -640,6 +640,8 @@ have nix-env && {
 
   alias nix-shell-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-shell"
 
+  alias why-depends-nixos="nix why-depends /run/current-system"
+
   # [ -x ~/myconfig/scripts/rebuild.sh ] && {
   #   alias upg="~/myconfig/scripts/rebuild.sh"
   #   alias nixupg="~/myconfig/scripts/rebuild.sh"

@@ -291,8 +291,6 @@ sub setupWacom{
 ################################################################################
 
 sub setupBackgroundAndUI{
-    my $backgroundCmd = "../background/bg.sh --set";
-    call($backgroundCmd);
     call("xrdb -merge ~/.Xresources");
 }
 
@@ -302,7 +300,7 @@ setupX() if !$noXrandr;
 # setupAlsa(); # deprecated in favor of pulseaudio
 setupWacom() if !$noXrandr; # needs `setupX()` to be run before the call here
 setupBacklight();
-setupBackgroundAndUI();
+setupUI();
 
 ################################################################################
 #TODO:

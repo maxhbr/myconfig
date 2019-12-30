@@ -1,6 +1,6 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv, background }:
+{ pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv }:
 
 stdenv.mkDerivation rec {
   version = "1.0";
@@ -14,10 +14,7 @@ stdenv.mkDerivation rec {
         -exec sed -i "1s%.*%#!/usr/bin/env bash%" {} \; \
         -exec sed -i -e '2d' {} \;
 
-    sed -i -e '/backgroundCmd =/ s%= .*%= "${background}/bin/myRandomBackground";%' myautosetup.pl
-    sed -i -e 's%emacsclient%${pkgs.emacs}/bin/emacsclient%g' ec
     sed -i -e '/borgCmd=/ s%=.*%="${pkgs.borgbackup}/bin/borg";%' myborgbackup.sh
-    # sed -i -e 's%sudo%${pkgs.sudo}/bin/sudo%' myborgbackup.sh
   '';
   installPhase = ''
     bin="$out/bin"

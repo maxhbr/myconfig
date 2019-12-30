@@ -6,17 +6,17 @@ funs: pkgs: let
   background = callPackage ./background {
     inherit pkgs;
   };
-  scripts = callPackage ./scripts {
-    inherit background pkgs;
-  };
+#  scripts = callPackage ./scripts {
+#    inherit background pkgs;
+#  };
   my-xmonad = funs.haskellPackages.callPackage ./xmonad {
-    inherit scripts pkgs;
+    inherit pkgs;
   };
 in {
   myconfig = {
     nixos-config = import ./nixos;
     inherit
-      scripts
+#      scripts
       my-xmonad
       background;
   };

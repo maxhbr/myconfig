@@ -7,7 +7,6 @@ pathToXmobarConfig = "~/.xmonad/xmobarrc"
 pathToXmobarMinConfig = "~/.xmonad/xmobarrc.minimal"
 pathToXmonadBins   = "~/.xmonad/bin/"
 pathToXmonadShare  = "~/.xmonad/share/"
-pathToMyconfigBins = ""
 pathToMyXmonadBin  = ""
 
 xmobarCMD          = "xmobar"
@@ -34,8 +33,6 @@ htopCMD            = "htop"
 pavucontrolCMD     = "pavucontrol"
 lightCMD           = "light"
 
-myautosetupCMD     = pathToMyconfigBins ++ "myautosetup.pl"
-screenshotCMD      = pathToMyconfigBins ++ "screenshot.sh"
 batteryMonitorCMD  = pathToXmonadBins ++ "battery-monitor.sh"
 -- or:
 -- - "bash -c \"import -frame ~/screen_`date +%Y-%m-%d_%H-%M-%S`.png\"")

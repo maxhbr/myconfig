@@ -1,6 +1,6 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv, scripts, mkDerivation, base, containers, process, X11, xmonad, xmonad-contrib, callPackage }:
+{ pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv, mkDerivation, base, containers, process, X11, xmonad, xmonad-contrib, callPackage }:
 let
   version = "1.0";
   my-xmonad-misc = callPackage ./misc.nix {
@@ -69,7 +69,6 @@ in mkDerivation {
     replaceConfigValue pathToXmobarMinConfig "${my-xmonad-misc}/share/xmobarrc.minimal"
     replaceConfigValue pathToXmonadBins "${my-xmonad-misc}/bin/"
     replaceConfigValue pathToXmonadShare "${my-xmonad-misc}/share/"
-    replaceConfigValue pathToMyconfigBins "${scripts}/bin/"
   '';
 
   description = "my xmonad configuration";
