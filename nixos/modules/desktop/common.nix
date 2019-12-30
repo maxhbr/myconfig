@@ -7,6 +7,11 @@
   ];
 
   config = {
+    userPackages = with pkgs; [
+      myconfig.background
+    ];
+
+
 
     environment = {
       variables = {

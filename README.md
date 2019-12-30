@@ -82,6 +82,11 @@ $ cat .git/config
 [...]
 ```
 
+For shallow cloning:
+```
+$ git clone --depth 1 "https://github.com/maxhbr/myconfig" --branch "master" --single-branch "$HOME/myconfig"
+```
+
 # License
 This project is licensed under MIT (see [./LICENSE](./LICENSE))
 ```

@@ -21,7 +21,6 @@
           extraOutputsToInstall = ["out" "bin" "lib"];
           paths = config.userPackages ++ [
             self.myconfig.scripts
-            self.myconfig.background
 
             # To allow easily seeing which nixpkgs version the profile was built from, place the version string in ~/.nix-profile/nixpkgs-version
             (super.writeTextFile {name = "nixpkgs-version"; destination = "/nixpkgs-version"; text = self.lib.version;})
