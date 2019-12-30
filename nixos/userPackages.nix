@@ -28,6 +28,7 @@
             (super.writeTextFile {
               name = "break-nix-env-manifest";
               destination = "/manifest.nix";
+              text = ''
                 throw ''\''
                   Your user environment is a buildEnv which is incompatible with
                   nix-env's built-in env builder. Edit your home expression and run
