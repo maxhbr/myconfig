@@ -25,19 +25,19 @@
      # This allows the wireguard server to route your traffic to the internet and hence be like a VPN
      # For this to work you have to set the dnsserver IP of your router (or dnsserver of choice) in your clients
      extraCommands = ''
-      iptables -t nat -A POSTROUTING -s 10.100.0.0/24 -o eth0 -j MASQUERADE
+      iptables -t nat -A POSTROUTING -s 10.199.199.0/24 -o eth0 -j MASQUERADE
       '';
     };
 
     networking.wireguard.interfaces = {
       wg0 = {
-        ips = [ "10.100.0.1/24" ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
+        ips = [ "10.199.199.1/24" ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
         listenPort = 51820;
         privateKeyFile = "/home/mhuber/wireguard-keys/private";
         peers = [
           { # x1extreme
             publicKey = "qrlimRa0itwJ8i1HdRGSrCeCJAIzRIaIP3YTe4szpXg=";
-            allowedIPs = [ "10.100.0.2/32" ];
+            allowedIPs = [ "10.199.199.2/32" ];
           }
         ];
       };
