@@ -75,8 +75,8 @@
     useSandbox = true;
     readOnlyStore = true;
 
-    trustedBinaryCaches = ["https://cache.nixos.org"];
-    binaryCaches = ["https://cache.nixos.org"];
+    trustedBinaryCaches = [ "https://cache.nixos.org" ];
+    binaryCaches = [ "https://cache.nixos.org" ];
 
     extraOptions = ''
       gc-keep-outputs = true
