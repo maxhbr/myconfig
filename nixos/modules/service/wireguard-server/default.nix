@@ -37,7 +37,7 @@
         peers = let
             path = ./peers;
             content = builtins.readDir path;
-          in map (n: import (path + ("/" + n)) pkgs)
+          in map (n: import (path + ("/" + n)))
                  (builtins.filter (n: builtins.match ".*\\.nix" n != null)
                                   (builtins.attrNames content));
       };
