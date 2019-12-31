@@ -8,38 +8,35 @@
 
   config = {
     userPackages = with pkgs; [
-      myconfig.background
+      my-backgrounds
+
+      arandr
+      xlibs.xmodmap xlibs.xset xlibs.setxkbmap
+      xclip
+      xarchiver
+      # misc
+      xf86_input_wacom
+      libnotify # xfce.xfce4notifyd # notify-osd
+      vanilla-dmz
+
+      networkmanager_dmenu
+
+      # gui applications
+      mupdf zathura llpp
+      feh imagemagick # scrot
+      mplayer
+      # gui applications
+      chromium unstable.firefox qutebrowser
+      google-chrome # for streaming and music
+      # browserpass
+      # spellchecking
+      aspell aspellDicts.de aspellDicts.en
     ];
-
-
 
     environment = {
       variables = {
         BROWSER = "${pkgs.chromium}/bin/chromium-browser";
       };
-      systemPackages = with pkgs; [
-        arandr
-        xlibs.xmodmap xlibs.xset xlibs.setxkbmap
-        xclip
-        xarchiver
-      # misc
-        xf86_input_wacom
-        libnotify # xfce.xfce4notifyd # notify-osd
-        vanilla-dmz
-
-        networkmanager_dmenu
-
-        # gui applications
-        mupdf zathura llpp
-        feh imagemagick # scrot
-        mplayer
-        # gui applications
-        chromium unstable.firefox qutebrowser
-        google-chrome # for streaming and music
-        # browserpass
-        # spellchecking
-        aspell aspellDicts.de aspellDicts.en
-      ];
       interactiveShellInit = ''
         alias file-roller='${pkgs.xarchiver}/bin/xarchiver'
       '';
