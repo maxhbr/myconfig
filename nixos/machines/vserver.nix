@@ -6,7 +6,7 @@
     ./hardware/grub.nix
     # modules
     ../modules/service/openssh.nix
-    ../modules/service/wireguard-server/
+    ../modules/service/wireguard-server
     ../modules/auto-upgrade.nix
     ../modules/gc.nix
   ];
