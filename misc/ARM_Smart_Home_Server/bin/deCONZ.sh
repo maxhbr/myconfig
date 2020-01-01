@@ -72,6 +72,7 @@ run() {
         -e DECONZ_DEVICE="$DEVICE" \
         -e DECONZ_WEB_PORT=9080 \
         -e DECONZ_WS_PORT=9443 \
+        --user "$(id -u $DECONZ_USER)":"$(id -g $DECONZ_USER)" \
         marthoc/deconz
 }
 
