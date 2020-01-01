@@ -4,7 +4,7 @@
 # - https://hub.docker.com/r/marthoc/deconz
 
 set -e
-DECONZ="${DECONZ:/home/deconz}"
+DECONZ="${DECONZ:-/home/deconz}"
 DECONZ_USER="${DECONZ_USER:-deconz}"
 
 have() { type "$1" &> /dev/null; }
