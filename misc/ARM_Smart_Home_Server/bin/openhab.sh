@@ -41,6 +41,7 @@ run() {
     sudo docker run \
          --name openhab \
          --net=host \
+         --restart=unless-stopped \
          $args \
          -v "$OHAB/conf":/openhab/conf \
          -v "$OHAB/userdata":/openhab/userdata \
@@ -50,7 +51,6 @@ run() {
          -e GROUP_ID="$(id -g $OHAB_USER)" \
          -e OPENHAB_HTTP_PORT="8080" \
          -e OPENHAB_HTTPS_PORT="8443" \
-         --restart=unless-stopped \
          openhab/openhab:latest
 }
 
