@@ -27,8 +27,8 @@ update() {
     sudo docker stop deconz && sudo docker rm deconz || true
     sudo docker pull marthoc/deconz:latest
 }
-# updateFirmware() {
-# #     Updating Conbee/RaspBee Firmware
+updateFirmware() {
+#     Updating Conbee/RaspBee Firmware
 
 # # Firmware updates from the web UI will fail silently. Instead, an interactive utility script is provided as part of this Docker image that you can use to flash your device's firmware. The script has been tested and verified to work for Conbee on amd64 Debian linux and armhf Raspbian Stretch and RaspBee on armhf Raspbian Stretch. To use it, follow the below instructions:
 
@@ -40,7 +40,8 @@ update() {
 
 # #     docker stop [container name] or docker-compose down to stop your running deCONZ container (you must do this or the firmware update will fail).
 
-# #     Invoke the firmware update script: docker run -it --rm --entrypoint "/firmware-update.sh" --privileged --cap-add=ALL -v /dev:/dev -v /lib/modules:/lib/modules -v /sys:/sys marthoc/deconz
+# #     Invoke the firmware update script:
+    sudo docker run -it --rm --entrypoint "/firmware-update.sh" --privileged --cap-add=ALL -v /dev:/dev -v /lib/modules:/lib/modules -v /sys:/sys marthoc/deconz
 
 # #     Follow the prompts:
 
@@ -49,7 +50,7 @@ update() {
 # #     If the device/path and file name look OK, type Y to start flashing!
 
 # #     Restart your deCONZ container (docker start [container name] or docker-compose up).
-# }
+}
 run() {
     args=""
     if [[ -f /etc/localtime ]]; then
@@ -76,5 +77,8 @@ run() {
 
 setup
 update
+if [[ "$1" == "update-firmware"]]; then
+    updateFirmware
+fi
 run
 
