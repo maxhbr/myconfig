@@ -43,12 +43,16 @@ let
       # # '';
       # # # monitorSection = ''
       # # # '';
-      # deviceSection = ''
-      #   Identifier     "Device1"
-      #   Driver         "nvidia"
-      #   VendorName     "NVIDIA Corporation"
-      #   BoardName      "GeForce GTX 1650"
-      # '';
+      deviceSection = ''
+        Option   "Backlight"      "gmux_backlight"
+        Option   "RegistryDwords" "EnableBrightnessControl=1"
+      '';
+      # Identifier     "Device1"
+      # Driver         "nvidia"
+      # VendorName     "NVIDIA Corporation"
+      # BoardName      "GeForce GTX 1650"
+      # Option   "NoLogo"         "TRUE"
+      # # Option   "DPI"            "96 x 96"
     };
      boot.kernelParams = [
       "acpi_backlight=vendor"
