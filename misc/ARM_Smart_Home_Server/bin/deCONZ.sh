@@ -78,7 +78,7 @@ run() {
 
 setup
 update
-if [[ "$1" == "update-firmware"]]; then
+if [[ "$1" == "update-firmware" ]]; then
     updateFirmware
 fi
 run
