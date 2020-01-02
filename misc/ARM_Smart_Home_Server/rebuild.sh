@@ -42,4 +42,5 @@ have docker || {
 }
 
 "$ROOT/bin/openhab.sh"
+"$ROOT/bin/deCONZ.sh"
 
