@@ -11,7 +11,7 @@ have() { type "$1" &> /dev/null; }
 
 sudo apt-get update
 sudo apt-get upgrade -y
-sudo apt-get install -y git vim tmux curl
+sudo apt-get install -y git vim tmux curl mosh
 
 have nix || {
     curl https://nixos.org/nix/install | sh
