@@ -66,6 +66,7 @@
       #others:
       pmount fuse
       rsnapshot
+      mosh
 
       # my backup tool
       borgbackup
