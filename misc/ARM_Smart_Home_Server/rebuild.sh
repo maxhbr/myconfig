@@ -17,11 +17,11 @@ have nix || {
     curl https://nixos.org/nix/install | sh
 }
 
-have flirc || {
-    curl apt.flirc.tv/install.sh > /tmp/flirc.install.sh
-    chmod +x /tmp/flirc.install.sh
-    sudo /tmp/flirc.install.sh -y
-}
+# have flirc || {
+#     curl apt.flirc.tv/install.sh > /tmp/flirc.install.sh
+#     chmod +x /tmp/flirc.install.sh
+#     sudo /tmp/flirc.install.sh -y
+# }
 
 have wg || {
     sudo add-apt-repository ppa:wireguard/wireguard
