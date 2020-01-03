@@ -62,7 +62,7 @@ handleGit() {
         logH1 "update config" ""
         if git diff-index --quiet HEAD --; then
             git fetch
-            local UPSTREAM=${1:-'@{u}'}
+            local UPSTREAM='@{u}'
             local LOCAL=$(git rev-parse @)
             local REMOTE=$(git rev-parse "$UPSTREAM")
             local BASE=$(git merge-base @ "$UPSTREAM")
@@ -81,8 +81,7 @@ handleGit() {
         else
             logINFO "git directory is unclean"
             read -t 10 -r -p "commit state as \"update before rebuild.sh\"? [y/N] " response || true
-            response=${response,,}    # tolower
-            if [[ "$response" =~ ^(yes|y)$ ]]; then
+            if [[ "${response,,}" =~ ^(yes|y)$ ]]; then
                 git commit -am "update before rebuild.sh"
                 handleGit
             fi
