@@ -7,29 +7,26 @@ read -p 'PrivateKey: ' privkey
 read -p 'Endpoint: ' endpoint
 read -p 'Ip last nr: ' nr
 
-sudo mkdir -p /etc/network/interfaces.d
-cat <<EOF | sudo tee /etc/network/interfaces.d/wg0.conf
-auto wg0
-iface wg0 inet static
-        address 10.199.199.$nr
-        netmask 255.255.255.0
-        pre-up ip link add wg0 type wireguard
-        pre-up wg setconf wg0 /etc/wireguard/wg0.conf
-        up ip link set wg0 up
-        post-up ip route add 10.199.199.0/24 via 10.199.199.1 dev wg0
-        down ip link delete wg0
-EOF
-
-sudo mkdir -p /etc/wireguard
-cat <<EOF | sudo tee /etc/wireguard/wg0.conf
+ipspace="10.199.199"
+port=51820
+wg0conf="/etc/wireguard/wg0.conf"
+sudo mkdir -p "$(dirname "$wg0conf")"
+cat <<EOF | sudo tee "$wg0conf"
 [Interface]
+Address = $ipspace.$nr/24
+ListenPort = 42223
 PrivateKey = $privkey
-ListenPort = 51820
+#PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eno1 -j MASQUERADE; ip6tables -A FORWARD -i wg0 -j ACCEPT; ip6tables -t nat -A POSTROUTING -o eno1 -j MASQUERADE
+#PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eno1 -j MASQUERADE; ip6tables -D FORWARD -i wg0 -j ACCEPT; ip6tables -t nat -D POSTROUTING -o eno1 -j MASQUERADE
 
 [Peer]
 PublicKey = $pubkey
-Endpoint = $endpoint:51820
-AllowedIPs = 10.199.199.0/24
+Endpoint = $endpoint:$port
+#PresharedKey = [... PRESHARED Key ...]
+AllowedIPs = $ipspace.0/24
+PersistentKeepalive = 25
 EOF
 sudo chmod 0600 /etc/wireguard/wg0.conf
+
+
 

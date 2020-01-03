@@ -26,7 +26,8 @@ have nix || {
 have wg || {
     sudo add-apt-repository ppa:wireguard/wireguard
     sudo apt-get update
-    sudo apt-get install -y wireguard-dkms wireguard-tools
+    sudo apt-get install -y wireguard-dkms wireguard-tools ifupdown
+    sudo ufw allow 51820
 }
 
 if [[ ! -d "$HOME/myconfig" ]]; then
