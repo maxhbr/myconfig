@@ -10,6 +10,7 @@ read -p 'Ip last nr: ' nr
 ipspace="10.199.199"
 port=51820
 wg0conf="/etc/wireguard/wg0.conf"
+
 sudo mkdir -p "$(dirname "$wg0conf")"
 cat <<EOF | sudo tee "$wg0conf"
 [Interface]
@@ -27,6 +28,4 @@ AllowedIPs = $ipspace.0/24
 PersistentKeepalive = 25
 EOF
 sudo chmod 0600 /etc/wireguard/wg0.conf
-
-
 
