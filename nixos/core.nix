@@ -7,6 +7,7 @@
     # kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
     cleanTmpDir = true;
     # tmpOnTmpfs = true;
+    crashDump.enable = true;
   };
 
   networking = {
