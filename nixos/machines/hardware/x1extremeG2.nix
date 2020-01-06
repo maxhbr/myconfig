@@ -64,7 +64,7 @@ let
     services.xserver.videoDrivers = [ "nouveau" ];
   };
   ##############################################################################
-  rawIntelConf = {
+  rawIntelConf = blacklistNouveau // {
     services.xserver.videoDrivers = [ "intel" ];
   };
   ##############################################################################
@@ -110,6 +110,9 @@ in {
     ./lowres.nix
     ./nixos-hardware/lenovo/thinkpad/x1-extreme/gen2/default.nix
 
+    ##############################################################################
+    ##  choos setup for graphics  ################################################
+    ##############################################################################
     # rawIntelConf
     rawNvidiaConf
     # rawNouveauConf
