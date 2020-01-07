@@ -49,10 +49,6 @@ upgrade() {
         logH3 "nixos-rebuild with upgrade" "$args"
         $nixCmd  --upgrade ${NIXOS_REBUILD_CMD:-switch}
     fi
-
-    logH3 "break imperative nix-env" ""
-    nix-env $NIX_PATH_ARGS \
-            --set -f "$(readlink -f "$(dirname ${BASH_SOURCE[0]})")/break-imperatie-nix-env"
 }
 
 gate || {

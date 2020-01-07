@@ -11,6 +11,7 @@ in {
     ./mhuber.nix
     ./oh-my-zsh.nix
     ./userPackages.nix
+    ./home-manager
   ]
   # the machine specific configuration is placed at ./machines/<hostName>.nix
     ++ (let
