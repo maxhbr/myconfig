@@ -3,18 +3,16 @@
 { pkgs, ... }:
 
 let
+  jsonFile = ./. + "home-manager.json";
+  json = builtins.fromJSON (builtins.readFile jsonFile);
   home-manager = builtins.fetchGit {
     url = "https://github.com/rycee/home-manager.git";
-    rev = "10d2c4e7e49d4c9ff0782a2d72ceaf117aacbee9";
-    ref = "release-19.09";
+    inherit (json) rev ref;
   };
 in
 {
   imports = [
     "${home-manager}/nixos"
   ];
-
-  home-manager.users.mhuber = {
-  };
 }
 

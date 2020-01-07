@@ -1,8 +1,11 @@
+#!/usr/bin/env bash
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 
 cd "$( dirname "${BASH_SOURCE[0]}" )"
-. "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../../../common.sh"
+. "$(pwd )/../../../common.sh"
+
+set -e
 
 handleChannel() {
     local channel=$1

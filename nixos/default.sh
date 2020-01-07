@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: MIT
 set -e
 
-. "$(dirname "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )")/common.sh"
+thisdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+. "$thisdir/../common.sh"
 
 gate() {
     [ -d /etc/nixos ]
@@ -31,7 +32,6 @@ upgrade() {
     [[ "$MYCONFIG_ARGS" == *"--fast"* ]] &&
         args="--fast"
 
-
     nixCmd="sudo \
         NIX_CURL_FLAGS='--retry=1000' \
         nixos-rebuild \
@@ -46,6 +46,7 @@ upgrade() {
 
     # second run
     if [[ "$MYCONFIG_ARGS" != *"--fast"* ]]; then
+        $thisdir/home-manager/update.sh
         logH3 "nixos-rebuild with upgrade" "$args"
         $nixCmd  --upgrade ${NIXOS_REBUILD_CMD:-switch}
     fi

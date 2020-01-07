@@ -7,31 +7,33 @@
   ];
 
   config = {
-    userPackages = with pkgs; [
-      my-backgrounds
+    home-manager.users.mhuber = {
+      home.packages = with pkgs; [
+        my-backgrounds
 
-      arandr
-      xlibs.xmodmap xlibs.xset xlibs.setxkbmap
-      xclip
-      xarchiver
-      # misc
-      xf86_input_wacom
-      libnotify # xfce.xfce4notifyd # notify-osd
-      vanilla-dmz
+        arandr
+        xlibs.xmodmap xlibs.xset xlibs.setxkbmap
+        xclip
+        xarchiver
+        # misc
+        xf86_input_wacom
+        libnotify # xfce.xfce4notifyd # notify-osd
+        vanilla-dmz
 
-      networkmanager_dmenu
+        networkmanager_dmenu
 
-      # gui applications
-      mupdf zathura llpp
-      feh imagemagick # scrot
-      mplayer
-      # gui applications
-      chromium unstable.firefox qutebrowser
-      google-chrome # for streaming and music
-      # browserpass
-      # spellchecking
-      aspell aspellDicts.de aspellDicts.en
-    ];
+        # gui applications
+        mupdf zathura llpp
+        feh imagemagick # scrot
+        mplayer
+        # gui applications
+        chromium unstable.firefox qutebrowser
+        google-chrome # for streaming and music
+        # browserpass
+        # spellchecking
+        aspell aspellDicts.de aspellDicts.en
+      ];
+    };
 
     environment = {
       variables = {
