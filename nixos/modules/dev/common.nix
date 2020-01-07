@@ -7,8 +7,6 @@
       meld
       gnumake cmake automake
       cloc
-      gitAndTools.gitFull
-      gitAndTools.tig
       pass-git-helper
     ] ++ lib.optional config.services.xserver.enable vscode-with-extensions);
   };

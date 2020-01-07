@@ -9,7 +9,8 @@ in {
     /etc/nixos/hardware-configuration.nix
     ./core.nix
     ./mhuber.nix
-    ./oh-my-zsh.nix
+    ./modules/git
+    ./modules/zsh
     ./userPackages.nix
     ./home-manager
   ]
