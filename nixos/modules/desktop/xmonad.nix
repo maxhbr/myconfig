@@ -10,11 +10,13 @@
   };
 
   config = {
-    environment.systemPackages = with pkgs; [
-      pkgs.my-xmonad
-      dzen2
-      rxvt_unicode_with-plugins rxvt_unicode.terminfo
-    ];
+    home-manager.users.mhuber = {
+      home.packages = with pkgs; [
+        pkgs.my-xmonad
+        dzen2
+        rxvt_unicode_with-plugins rxvt_unicode.terminfo
+      ];
+    };
 
     # system.activationScripts.cleanupXmonadState = "rm $HOME/.xmonad/xmonad.state || true";
 

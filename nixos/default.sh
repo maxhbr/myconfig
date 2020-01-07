@@ -47,6 +47,7 @@ upgrade() {
     # second run
     if [[ "$MYCONFIG_ARGS" != *"--fast"* ]]; then
         $thisdir/home-manager/update.sh
+        $thisdir/modules/emacs/update.sh
         logH3 "nixos-rebuild with upgrade" "$args"
         $nixCmd  --upgrade ${NIXOS_REBUILD_CMD:-switch}
     fi

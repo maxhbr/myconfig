@@ -40,8 +40,10 @@ ntmx(){
   tmux attach-session -t "$n" || tmux new -s "$n"
 }
 if test -z $TMUX && [[ $TERM != "screen" ]]; then
-if [ -n "$BASH_VERSION" ]; then
-    bind '"\C-n":" ntmx\C-m"'
+  if [ -n "$BASH_VERSION" ]; then
+    if [[ $- == *i* ]]; then
+      bind '"\C-n":" ntmx\C-m"'
+    fi
   elif [ -n "$ZSH_VERSION" ]; then
     bindkey -s '^n' '^qntmx\n'
   fi
@@ -221,7 +223,9 @@ ranger-cd() {
   rm -f -- "$tempfile"
 }
 if [ -n "$BASH_VERSION" ]; then
-  bind '"\C-o":" ranger-cd\C-m"'
+  if [[ $- == *i* ]]; then
+    bind '"\C-o":" ranger-cd\C-m"'
+  fi
 elif [ -n "$ZSH_VERSION" ]; then
   bindkey -s '^o' '^qranger-cd\n'
 fi

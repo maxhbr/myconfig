@@ -1,48 +1,76 @@
-# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
-{
+let
+  jsonFile = ./. + "/spacemacs.json";
+  json = builtins.fromJSON (builtins.readFile jsonFile);
+  my-emacs-wrapper = with pkgs; writeScriptBin "ec" ''
+#!${stdenv.shell}
+# Copyright 2018-2020 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
+#
+#
+# partially stolen from
+# - http://mjwall.com/blog/2013/10/04/how-i-use-emacs/
+# - https://gist.github.com/alexmurray/337ac19014d769f4b219
+# - https://www.emacswiki.org/emacs/EmacsClient
+#
+#
+# call with
+#   $0 [-t|-d|-k|--wait]
+set -e
+
+if [ "$1" = "-k" ]; then
+    server_ok=$(${emacs}/bin/emacsclient -a "false" -e "(boundp 'server-process)")
+    if [ "t" == "$server_ok" ]; then
+        echo "Shutting down Emacs server"
+        ${emacs}/bin/emacsclient -e '(kill-emacs)'
+    else
+        echo "Emacs server not running"
+    fi
+elif [ "$1" = "-d" ]; then
+    ${emacs}/bin/emacs --daemon --user=$USER
+elif [ "$1" = "-nw" ] || [ "$1" = "-t" ] || [ "$1" = "--tty" ] || [ -z "$DISPLAY" ]; then
+    if [[ "$#" -ne "0" ]]; then
+        exec ${emacs}/bin/emacsclient --alternate-editor="" --tty "$@"
+    else
+        exec ${emacs}/bin/emacsclient --alternate-editor="" --tty ./
+    fi
+else
+    if [ "$1" = "--wait" ]; then
+        shift
+        exec ${emacs}/bin/emacsclient --alternate-editor="" --create-frame "$@"
+    else
+        exec ${emacs}/bin/emacsclient --no-wait --alternate-editor="" --create-frame "$@"
+    fi
+fi
+  '';
+in {
   config = {
-    nixpkgs.overlays = [
-      (final: previous: {
-        my-emacs-wrapper = previous.stdenv.mkDerivation rec {
-          version = "1.0";
-          name = "my-emacs-wrapper-${version}";
-
-          src = ./.;
-
-          buildPhase = ''
-            # replace nix-shell headers
-            find . -iname '*.sh' \
-              -exec sed -i "1s%.*%#!/usr/bin/env bash%" {} \; \
-              -exec sed -i -e '2d' {} \;
-
-            sed -i -e 's%emacsclient%${pkgs.emacs}/bin/emacsclient%g' ec
-          '';
-          installPhase = ''
-            bin="$out/bin"
-            mkdir -p $bin
-            cp ec $bin
-          '';
-
-          meta = with previous.stdenv.lib; {
-            description = "My small wrapper around emacs";
-            homepage = https://github.com/maxhbr/myconfig;
-            license =  licenses.mit;
-            platforms = platforms.unix;
-            maintainers = [ ];
+    home-manager.users.mhuber = {
+      home.packages = with pkgs; [ my-emacs-wrapper emacs aspell aspellDicts.de aspellDicts.en ];
+      home.file = {
+        ".emacs.d" = {
+          source = builtins.fetchGit {
+            url = "https://github.com/syl20bnr/spacemacs.git";
+            inherit (json) rev ref;
           };
+          recursive = true;
         };
-      })
-    ];
+        ".spacemacs".source = ./spacemacs;
+        ".emacs.d/private" = {
+          source = ./emacs.d/private;
+          recursive = true;
+        };
+      };
+    };
     environment = {
-      systemPackages = with pkgs; [ my-emacs-wrapper emacs aspell aspellDicts.de aspellDicts.en ];
       variables = {
-        EDITOR = "${pkgs.my-emacs-wrapper}/bin/ec -t";
+        EDITOR = "${my-emacs-wrapper}/bin/ec -t";
       };
       interactiveShellInit = ''
-        alias vim="${pkgs.my-emacs-wrapper}/bin/ec -t"
-        alias emacs="${pkgs.my-emacs-wrapper}/bin/ec"
+        alias vim="${my-emacs-wrapper}/bin/ec -t"
+        alias emacs="${my-emacs-wrapper}/bin/ec"
       '';
     };
 
@@ -64,13 +92,5 @@
       };
       enable = true;
     };
-
-    # services.emacs = {
-    #   enable = true;
-    #   install = true;
-    #   defaultEditor = true;
-    #   package = pkgs.emacs;
-    #   # package = import /home/mhuber/.emacs.d { pkgs = pkgs; };
-    # };
   };
 }

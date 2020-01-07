@@ -6,12 +6,12 @@
 set -e
 
 cd "$( dirname "${BASH_SOURCE[0]}" )"
-. "$(pwd )/../../common.sh"
-repo="rycee/home-manager"
+. "$(pwd )/../../../common.sh"
+repo="syl20bnr/spacemacs"
 outName="$(basename "$repo")"
 outRev="${outName}.rev"
 outJson="${outName}.json"
-branch=release-19.09
+branch=master
 
 update() {
     logH3 "update $outName on branch" "$branch"

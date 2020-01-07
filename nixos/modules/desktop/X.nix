@@ -11,7 +11,15 @@
   };
 
   config = {
-    environment.systemPackages = with pkgs; [ xdotool ];
+    home-manager.users.mhuber = {
+      home.packages = with pkgs; [
+        arandr
+        xlibs.xmodmap xlibs.xset xlibs.setxkbmap
+        xclip
+        xdotool
+      ];
+    };
+
     services = {
       xserver = {
         enable = true;

@@ -3,18 +3,20 @@
 { pkgs, ... }:
 {
   config = {
-    environment.systemPackages = with pkgs; [
-      gphoto2 gphoto2fs
+    home-manager.users.mhuber = {
+      home.packages = with pkgs; [
+        gphoto2 gphoto2fs
 
-      gimp-with-plugins
-      rawtherapee unstable.darktable
-      unstable.geeqie unstable.gthumb
-      # krita
-      # inkscape
+        gimp-with-plugins
+        rawtherapee unstable.darktable
+        unstable.geeqie unstable.gthumb
+        # krita
+        # inkscape
 
-      # blender
-      librecad # 2D
-      freecad # 3D
-    ];
+        # blender
+        librecad # 2D
+        freecad # 3D
+      ];
+    };
   };
 }
