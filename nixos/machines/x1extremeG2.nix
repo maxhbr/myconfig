@@ -18,7 +18,7 @@
     ../modules/service/openssh.nix
     # ../modules/service/syncthing.nix
     ../modules/work.nix
-    ../modules/dev/haskell.nix
+    ../modules/dev/haskell
     ../modules/dev/misc.nix
     ## fun
     ../modules/desktop/games

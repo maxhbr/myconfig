@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MIT
 { config, pkgs, ... }:
 
+# TODO: package scripts
+
 {
   config = {
     home-manager.users.mhuber = {

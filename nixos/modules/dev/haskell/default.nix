@@ -3,15 +3,19 @@
 { pkgs, ... }:
 {
   imports = [
-    ./common.nix
+    ../common.nix
   ];
   config = {
-    environment.systemPackages = with pkgs; [
+    home-manager.users.mhuber = {
+    home.packages = with pkgs; [
       stack cabal-install cabal2nix
     ] ++ (with pkgs.haskellPackages; [
       # cabal-install
       ghc hlint pandoc
       hdevtools
     ]);
+    home.file = {
+    ".ghci".source = ./ghci;
+    };
   };
 }
