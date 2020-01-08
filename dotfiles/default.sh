@@ -34,9 +34,6 @@ deploy() {
              -exec chown $user:$userGroup "$HOME/"{} \;
         stow $add_stow_params -t $HOME -d $dotfiles $@ $dir
     done
-
-    # create and update some repos in the user space
-    $dotfiles/create_and_update_repos.pl
 }
 
 upgrade() {
