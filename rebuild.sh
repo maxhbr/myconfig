@@ -13,7 +13,7 @@ REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
 ROOT="$(dirname $REBUILD_SH)"
 cd "$ROOT"
 
-. common.sh
+. lib/common.sh
 
 ###########################################################################
 ##  function  #############################################################
@@ -207,17 +207,68 @@ setupExitTrap() {
 }
 
 ###########################################################################
-# run scripts #############################################################
-declare -a folders=("./nix" "./nixos" "./dotfiles" "./xmonad")
-declare -a commands=("prepare" "deploy" "upgrade" "cleanup")
-for cmd in "${commands[@]}"; do
-    logH1 "handle:" "$cmd"
-    for folder in "${folders[@]}"; do
-        setupExitTrap "$cmd for $folder"
-        MYCONFIG_ARGS=$@ runCmd $folder $cmd
-    done
-done
-trap "" EXIT ERR INT TERM
+# run #####################################################################
+prepare() {
+    if [[ -f /etc/nixos/configuration.nix ]]; then
+        echo "/etc/nixos/configuration.nix should not exist"
+        exit 1
+    fi
+    if [[ ! -f /etc/nixos/hostid ]]; then
+        echo "set hostid:"
+        cksum /etc/machine-id |
+            while read c rest; do printf "%x" $c; done |
+            sudo tee /etc/nixos/hostid
+    fi
+    if [[ -f /etc/nix/nixpkgs-config.nix ]]; then
+        echo "/etc/nix/nixpkgs-config.nix should not exist"
+        exit 1
+    fi
+}
+
+realize() {
+
+    if [[ "$1" == "--fast" ]]; then
+        args="--fast"
+    else
+        args="--upgrade"
+    fi
+
+    sudo \
+        NIX_CURL_FLAGS='--retry=1000' \
+        nixos-rebuild \
+        $NIX_PATH_ARGS \
+        --show-trace --keep-failed \
+        $args \
+        --fallback \
+        ${NIXOS_REBUILD_CMD:-switch}
+}
+
+update() {
+    ./nix/update.sh
+    ./lib/home-manager/update.sh
+    ./modules/emacs/update.sh
+    ./modules/extrahosts/default.sh
+}
+
+cleanup() {
+    if [ "$((RANDOM%100))" -gt 90 ]; then
+        echo "* nix-env --delete-generations 30d ..."
+        nix-env $NIX_PATH_ARGS \
+                --delete-generations 30d
+        sudo nix-env $NIX_PATH_ARGS \
+             --delete-generations 30d
+    else
+        echo "* $(tput bold)do not$(tput sgr0) nix-env --delete-generations 30d ..."
+    fi
+}
+
+prepare
+realize --fast
+update
+realize
+
+# end run #################################################################
+###########################################################################
 showStatDifferences
 
 handlePostExecutionHooks

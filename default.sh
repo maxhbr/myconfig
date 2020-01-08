@@ -4,7 +4,7 @@
 set -e
 
 thisdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-. "$thisdir/../common.sh"
+. "$thisdir/lib/common.sh"
 
 gate() {
     [ -d /etc/nixos ]
