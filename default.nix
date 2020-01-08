@@ -9,7 +9,7 @@ in {
     /etc/nixos/hardware-configuration.nix
     ./core.nix
     ./mhuber.nix
-    ./home-manager
+    ./lib/home-manager
     ./modules/core.nix
   ]
   # the machine specific configuration is placed at ./machines/<hostName>.nix
