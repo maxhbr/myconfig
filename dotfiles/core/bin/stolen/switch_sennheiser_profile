@@ -9,22 +9,32 @@ set -o pipefail
 export LC_ALL=C
 
 function main {
-  readonly sennheiser_profile="$(pactl list cards | grep 'MB 660' -C10)"
+  readonly sennheiser_profile="$(pactl list cards \
+                                     | awk '/MB 660/' RS="\n\n" ORS="\n\n")"
   if [[ -z "$sennheiser_profile" ]]; then
     echo "could not determine \$sennheiser_profile, headset probably not connected"
     exit 1
   fi
-  readonly pactl_name="$(echo $sennheiser_profile | grep 'Name: ' | tail -n1 | sed -r 's/.*Name://' | cut -d' ' -f2)"
+  readonly pactl_name="$(printf "$sennheiser_profile" \
+                             | grep 'Name: ' \
+                             | tail -n1 \
+                             | sed -r 's/.*Name://' \
+                             | cut -d' ' -f2)"
   if [[ -z "$pactl_name" ]]; then
     echo "could not determine \$pactl_name, headset probably not connected"
     exit 1
   fi
-  readonly pactl_active_profile="$(echo $sennheiser_profile | grep -oP 'Active Profile: ([^ ]+)' | sed -r 's/.*: *//')"
+  readonly pactl_active_profile="$(printf "$sennheiser_profile" \
+                                       | grep -oP 'Active Profile: ([^ ]+)' \
+                                       | sed -r 's/.*: *//')"
   if [[ -z "$pactl_active_profile" ]]; then
     echo "could not determine \$pactl_active_profile, headset probably not connected"
     exit 1
   fi
-  readonly pactl_other_profile="$(echo $sennheiser_profile | grep -oP 'profile.s.: .+' | sed -r 's/.*: *//;s/, //' | sed -r "s/${pactl_active_profile}//")"
+  readonly pactl_other_profile="$(printf "$sennheiser_profile" \
+                                      | grep -oP 'profile.s.: .+' \
+                                      | sed -r 's/.*: *//;s/, //' \
+                                      | sed -r "s/${pactl_active_profile}//")"
   if [[ -z "$pactl_other_profile" ]]; then
     echo "could not determine \$pactl_other_profile, headset probably not connected"
     exit 1

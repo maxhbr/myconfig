@@ -22,6 +22,8 @@
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
         ag
+        # taskwarrior
+        pass gopass
       ];
       home.file = {
         ".agignore" = {
@@ -52,7 +54,6 @@
         git git-lfs
         unzip
         tree
-        stow
         rlwrap
 
         # cli:
@@ -61,8 +62,6 @@
         elinks w3m
         tmux
         manpages
-        # taskwarrior
-        pass gopass
         file
 
         # admin:
