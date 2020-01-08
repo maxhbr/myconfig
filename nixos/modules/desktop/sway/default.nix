@@ -10,7 +10,7 @@
     home-manager.users.mhuber = {
       home.file = {
         ".config/sway/config".source = ./config/sway/config;
-      }
+      };
       home.packages = with pkgs; [
         grim # for screenshots
         qt5.qtwayland

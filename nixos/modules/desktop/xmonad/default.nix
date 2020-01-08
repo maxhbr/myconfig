@@ -1,7 +1,11 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
-{
+let
+  my-xmonad = pkgs.haskellPackages.callPackage ./myXmonad {
+    inherit pkgs;
+  };
+in {
   imports = [
     ../X.nix
   ];
@@ -9,10 +13,11 @@
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
-        pkgs.my-xmonad
+        my-xmonad
         dzen2
         rxvt_unicode_with-plugins rxvt_unicode.terminfo
       ];
+      xsession.windowManager.command = "${my-xmonad}/bin/xmonad";
     };
 
     # system.activationScripts.cleanupXmonadState = "rm $HOME/.xmonad/xmonad.state || true";
@@ -20,18 +25,13 @@
     services = {
       xserver = {
         windowManager = {
-          # xmonad = {
-          #   enable = true;
-          #   enableContribAndExtras = true;
-          #   # extraPackages = haskellPackages: [ pkgs.myconfig.xmonad-config ];
-          # };
           default = "myXmonad";
           session = [{
             name = "myXmonad";
             start = ''
               exec &> >(tee -a /tmp/myXmonad.log)
               echo -e "\n\n$(date)\n\n"
-              ${pkgs.my-xmonad}/bin/xmonad &
+              ${my-xmonad}/bin/xmonad &
               waitPID=$!
             '';
           }];
