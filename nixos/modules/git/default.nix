@@ -8,17 +8,18 @@
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
-        git git-lfs
+        git-lfs
+        gitAndTools.gitFull
         gitAndTools.tig
         pass-git-helper
       ];
       home.file = {
         ".gitconfig".source = ./gitconfig;
       };
-      programs.git = {
-        package = pkgs.gitAndTools.gitFull;
-        enable = true;
-      };
+      # programs.git = {
+      #   package = pkgs.gitAndTools.gitFull;
+      #   enable = true;
+      # };
     };
   };
 }

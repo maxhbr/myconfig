@@ -43,7 +43,7 @@
 
       # cli:
       ranger
-      emacs vim
+      vim
       elinks w3m
       tmux
       manpages
