@@ -7,15 +7,16 @@
   ];
   config = {
     home-manager.users.mhuber = {
-    home.packages = with pkgs; [
-      stack cabal-install cabal2nix
-    ] ++ (with pkgs.haskellPackages; [
-      # cabal-install
-      ghc hlint pandoc
-      hdevtools
-    ]);
-    home.file = {
-    ".ghci".source = ./ghci;
+      home.packages = with pkgs; [
+        stack cabal-install cabal2nix
+      ] ++ (with pkgs.haskellPackages; [
+        # cabal-install
+        ghc hlint pandoc
+        hdevtools
+      ]);
+      home.file = {
+      ".ghci".source = ./ghci;
+      };
     };
   };
 }
