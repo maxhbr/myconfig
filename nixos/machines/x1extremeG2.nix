@@ -10,8 +10,8 @@
     ./hardware/pulseaudio.nix
   ] ++ [ # modules:
     ../modules/emacs
-    ../modules/desktop/xmonad.nix
-    ../modules/desktop/sway.nix
+    ../modules/desktop/xmonad
+    ../modules/desktop/sway
     # ../modules/desktop/xfce.nix
     ../modules/mail.nix
     ../modules/virtualization

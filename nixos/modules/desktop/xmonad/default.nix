@@ -3,11 +3,8 @@
 { pkgs, ... }:
 {
   imports = [
-    ./X.nix
+    ../X.nix
   ];
-
-  options = {
-  };
 
   config = {
     home-manager.users.mhuber = {
