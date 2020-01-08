@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  gmvn = with pkgs; writeScriptBin "gmvn" ''
+  gmvn = with pkgs; writeScriptBin "ec" ''
 #!${stdenv.shell}
 
 # is a substitute for `mvn`, but creates a local repository for each git project
@@ -16,7 +16,7 @@ if [[ $RESULT -eq 0 ]]; then
 fi
 
 echo "repo is: $repo"
-exec ${pkgs.mvn}/bin/mvn \
+exec ${pkgs.maven}/bin/mvn \
   -Dmaven.repo.local="$repo" \
   "$@"
   '';
@@ -45,14 +45,12 @@ in
       };
     })];
 
-    home-manager.users.mhuber = {
-      home.packages = with pkgs; [
+    environment = {
+      systemPackages = with pkgs; [
         openjdk openjdk8 openjdk11 openjdk12
         maven gradle
         gmvn
       ];
-    };
-    environment = {
       variables = {
         JAVA_8_HOME = "/run/current-system/pkgs/openjdk8/lib/openjdk";
         JAVA_11_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk";

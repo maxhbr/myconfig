@@ -13,7 +13,7 @@
     ../modules/desktop/xmonad
     ../modules/desktop/sway
     # ../modules/desktop/xfce.nix
-    ../modules/mail.nix
+    ../modules/mail
     ../modules/virtualization
     ../modules/service/openssh.nix
     # ../modules/service/syncthing.nix
