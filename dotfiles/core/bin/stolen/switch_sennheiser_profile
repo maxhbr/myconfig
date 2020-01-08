@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 
 # stolen from: https://github.com/mihaeu/dotfiles/blob/master/scripts/switch_sennheiser_profile (MIT)
- 
+
 set -o errexit
 set -o nounset
 set -o pipefail
- 
+
+export LC_ALL=C
+
 function main {
-  readonly sennheiser_profile="$(pactl list cards | grep 'MB 660 MS' -C10)"
+  readonly sennheiser_profile="$(pactl list cards | grep 'MB 660' -C10)"
   if [[ -z "$sennheiser_profile" ]]; then
     echo "could not determine \$sennheiser_profile, headset probably not connected"
     exit 1
@@ -27,9 +29,9 @@ function main {
     echo "could not determine \$pactl_other_profile, headset probably not connected"
     exit 1
   fi
- 
+
   pactl set-card-profile "${pactl_name}" "${pactl_other_profile}"
   echo "$pactl_other_profile"
 }
- 
+
 main "$@"
