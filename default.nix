@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ pkgs, ... }:
 let
   # echo -n "HOSTNAME" | sudo tee /etc/nixos/hostname
   hostName = "${builtins.readFile /etc/nixos/hostname}";
@@ -11,7 +11,6 @@ in {
     ./mhuber.nix
     ./home-manager
     ./modules/core.nix
-    ./userPackages.nix
   ]
   # the machine specific configuration is placed at ./machines/<hostName>.nix
     ++ (let
@@ -33,9 +32,9 @@ in {
                          (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
                            (builtins.attrNames content))
            else [])
-  # all files in ./misc are sourced
+  # all files in ./imports are sourced
     ++ (let
-          path = ./misc;
+          path = ./imports;
         in if builtins.pathExists path
            then let
                   content = builtins.readDir path;
@@ -50,8 +49,8 @@ in {
     system.copySystemConfiguration = true;
 
     nixpkgs = {
-      config = import ../nix/nixpkgs-config.nix;
-      overlays = import ../nix/nixpkgs-overlays.nix;
+      config = import ./nix/nixpkgs-config.nix;
+      overlays = import ./nix/nixpkgs-overlays.nix;
     };
   };
 }
