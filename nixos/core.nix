@@ -18,6 +18,18 @@
     };
   };
 
+  home-manager.users.mhuber = {
+    home.packages = with pkgs; [
+      ag
+    ];
+    home.file = {
+      ".agignore" = {
+        text = ''
+/.git/
+        '';
+      };
+  };
+
   environment = {
     variables = {
       TMP = "/tmp";
@@ -49,7 +61,6 @@
       manpages
       # taskwarrior
       pass gopass
-      ag
       file
 
       # admin:

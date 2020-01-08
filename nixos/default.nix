@@ -11,6 +11,8 @@ in {
     ./mhuber.nix
     ./modules/git
     ./modules/zsh
+    ./modules/tmux
+    ./modules/dotfiles
     ./userPackages.nix
     ./home-manager
   ]

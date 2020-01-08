@@ -1,15 +1,17 @@
+# Copyright 2019-2020 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 { pkgs, ... }:
+
 {
-  imports = [
-    # paths to other modules
-  ];
-
-  options = {
-    # option declarations
-  };
-
   config = {
-    environment.systemPackages = with pkgs; [vagrant];
+    home-manager.users.mhuber = {
+      home.packages = with pkgs; [
+        vagrant
+      ];
+      home.file = {
+        ".vagrant.d/Vagrantfile".source = ./vagrant.d/Vagrantfile;
+      };
+    };
     virtualisation.virtualbox.host.enable = true;
   };
 }

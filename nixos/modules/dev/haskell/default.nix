@@ -15,7 +15,8 @@
         hdevtools
       ]);
       home.file = {
-      ".ghci".source = ./ghci;
+        ".ghci".source = ./ghci;
+        ".stack/config.yaml".source = ./stack/config.yaml;
       };
     };
   };

@@ -7,10 +7,10 @@
 {
   config = {
     home-manager.users.mhuber = {
-      home.packages = with pkgs; [
-        git-lfs
-        gitAndTools.gitFull
-        gitAndTools.tig
+      home.packages = with pkgs.gitAndTools; [
+        gitFull
+        tig
+        pkgs.git-lfs git-fame git-gone
         pass-git-helper
       ];
       home.file = {
