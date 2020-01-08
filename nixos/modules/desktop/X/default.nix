@@ -3,7 +3,7 @@
 { pkgs, ... }:
 {
   imports = [
-    ./common.nix
+    ../common.nix
   ];
 
   options = {
@@ -18,6 +18,11 @@
         xclip
         xdotool
       ];
+      home.file = {
+        ".fontconfig/fonts.conf".source = ./fontconfig/fonts.conf;
+        ".config/zathura/zathurarc".source = ./config/zathura/zathurarc;
+      };
+      xresources.extraConfig = builtins.readFile ./Xresources;
     };
 
     services = {

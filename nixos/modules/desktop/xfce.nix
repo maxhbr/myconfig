@@ -3,7 +3,7 @@
 { pkgs, ... }:
 {
   imports = [
-    ./X.nix
+    ./X
   ];
 
   config = {

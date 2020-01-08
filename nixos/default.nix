@@ -12,6 +12,7 @@ in {
     ./modules/git
     ./modules/zsh
     ./modules/tmux
+    ./modules/vim
     ./userPackages.nix
     ./home-manager
   ]

@@ -7,7 +7,7 @@ let
   };
 in {
   imports = [
-    ../X.nix
+    ../X
   ];
 
   config = {
