@@ -42,11 +42,7 @@ in {
           default = "none";
         };
       };
-      urxvtd = {
-        enable = true;
-        # users = [ "mhuber" ];
-        # urxvtPackage = pkgs.rxvt_unicode_with-plugins;
-      };
+      urxvtd.enable = true;
     };
   };
 }
