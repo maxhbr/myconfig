@@ -7,17 +7,19 @@
     ./dev/jdk.nix
     ./dnsmasq.nix
   ];
-  environment.systemPackages = with pkgs; [
-    openvpn networkmanager_openvpn
-    openconnect networkmanager-openconnect
-    strongswan networkmanager_strongswan
-    networkmanagerapplet
-    libreoffice
-    zoom-us
-    rambox
-    p7zip
-    thrift011
-    idea-ultimate # jetbrains.phpstorm
-    dia
-  ];
+  home-manager.users.mhuber = {
+    home.packages = with pkgs; [
+      openvpn networkmanager_openvpn
+      openconnect networkmanager-openconnect
+      strongswan networkmanager_strongswan
+      networkmanagerapplet
+      libreoffice
+      zoom-us
+      rambox
+      p7zip
+      thrift011
+      idea-ultimate # jetbrains.phpstorm
+      dia
+    ];
+  };
 }

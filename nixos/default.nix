@@ -9,12 +9,9 @@ in {
     /etc/nixos/hardware-configuration.nix
     ./core.nix
     ./mhuber.nix
-    ./modules/git
-    ./modules/zsh
-    ./modules/tmux
-    ./modules/vim
-    ./userPackages.nix
     ./home-manager
+    ./modules/core.nix
+    ./userPackages.nix
   ]
   # the machine specific configuration is placed at ./machines/<hostName>.nix
     ++ (let

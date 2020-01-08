@@ -2,10 +2,6 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 {
-  imports = [
-    ./extrahosts
-  ];
-
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [

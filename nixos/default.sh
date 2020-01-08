@@ -11,10 +11,6 @@ gate() {
     nixos-version &> /dev/null
 }
 
-prepare() {
-    $nixosConfigDir/modules/desktop/extrahosts/default.sh
-}
-
 deploy() {
     if [[ -f /etc/nixos/configuration.nix ]]; then
         echo "/etc/nixos/configuration.nix should not exist"
@@ -48,6 +44,8 @@ upgrade() {
     if [[ "$MYCONFIG_ARGS" != *"--fast"* ]]; then
         $thisdir/home-manager/update.sh
         $thisdir/modules/emacs/update.sh
+        $thisdir/modules/extrahosts/default.sh
+
         logH3 "nixos-rebuild with upgrade" "$args"
         $nixCmd  --upgrade ${NIXOS_REBUILD_CMD:-switch}
     fi
@@ -58,7 +56,6 @@ gate || {
     exit 0
 }
 if [ $# -eq 0 ]; then
-    prepare
     deploy
     upgrade
 else
