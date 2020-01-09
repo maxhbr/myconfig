@@ -1,7 +1,32 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
-{
+let
+  inco = with pkgs; writeScriptBin "inco.sh" ''
+#!${stdenv.shell}
+set -e
+postfix=$(date +%s | sha256sum | base64 | head -c 32 ; echo)
+mkdir -p "/tmp/incoChrome_$postfix"
+${chromium}/bin/chromium --incognito \
+    --user-data-dir="/tmp/incoChrome_$postfix" \
+    $@ &disown
+  '';
+  mkscreenshot = with pkgs; writeScriptBin "mkscreenshot.sh" ''
+#!${stdenv.shell}
+set -e
+output_dir="$HOME/_screenshots"
+old_dir="$output_dir/_old"
+output="$output_dir/$(date +%Y-%m-%d_%H:%M:%S).png"
+mkdir -p "$output_dir"
+mkdir -p "$old_dir"
+
+echo "## clean up old screenshots ..."
+find "$output_dir" -maxdepth 1 -mtime +10 -type f -print -exec mv {} "$old_dir" \;
+
+echo "## take screenshot $output ..."
+${imagemagick}/bin/import "$output"
+  '';
+in {
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
@@ -15,9 +40,9 @@
         # gui applications
         mupdf zathura llpp
         xarchiver
-        feh imagemagick # scrot
+        feh imagemagick mkscreenshot # scrot
         mplayer
-        chromium unstable.firefox qutebrowser
+        chromium inco unstable.firefox qutebrowser
         google-chrome # for streaming and music
         # spellchecking
         aspell aspellDicts.de aspellDicts.en

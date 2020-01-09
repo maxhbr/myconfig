@@ -1,7 +1,17 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
-{
+let
+  mkstopscreensaver = with pkgs; writeScriptBin "myStopScreensaver.sh" ''
+#!${stdenv.shell}
+printf "run: "
+while true; do
+    printf "."
+    sleep $((60 * 4))
+    ${xdotool}/bin/xdotool key shift
+done
+  '';
+in {
   imports = [
     ../common.nix
   ];
