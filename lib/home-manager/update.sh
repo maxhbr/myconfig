@@ -6,7 +6,8 @@
 set -e
 
 cd "$( dirname "${BASH_SOURCE[0]}" )"
-. "$(pwd )/../../common.sh"
+. "$(pwd )/../../lib/common.sh"
+
 repo="rycee/home-manager"
 outName="$(basename "$repo")"
 outRev="${outName}.rev"
