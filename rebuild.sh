@@ -253,7 +253,7 @@ realize() {
 
 update() {
     ./nix/update.sh
-    ./updateNixosHardware.sh
+    ./machines/hardware/updateNixosHardware.sh
     ./lib/home-manager/update.sh
     ./modules/emacs/update.sh
     ./modules/extrahosts/default.sh
