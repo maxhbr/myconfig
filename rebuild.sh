@@ -56,9 +56,13 @@ checkIfConnected() {
     fi
 }
 
+isBranchMaster() {
+    ( cd "$ROOT";
+      [[ "$(git rev-parse --abbrev-ref HEAD)" == "master" ]] )
+}
+
 handleGit() {
-    local BRANCH=$(git rev-parse --abbrev-ref HEAD)
-    if [[ "$BRANCH" == "master" ]]; then
+    if isBranchMaster; then
         logH1 "update config" ""
         if git diff-index --quiet HEAD --; then
             git fetch
@@ -143,12 +147,14 @@ diffDiskUsage() {
 }
 
 handleGitPostExecution () {
-    git diff --stat
-    if ! git diff-index --quiet HEAD --; then
-        read -r -p "commit state as \"update after rebuild.sh\"? [y/N] " response
-        response=${response,,}    # tolower
-        if [[ "$response" =~ ^(yes|y)$ ]]; then
-            git commit -am "update after rebuild.sh"
+    if isBranchMaster; then
+        git diff --stat
+        if ! git diff-index --quiet HEAD --; then
+            read -r -p "commit state as \"update after rebuild.sh\"? [y/N] " response
+            response=${response,,}    # tolower
+            if [[ "$response" =~ ^(yes|y)$ ]]; then
+                git commit -am "update after rebuild.sh"
+            fi
         fi
     fi
 }
@@ -264,8 +270,10 @@ cleanup() {
 }
 
 prepare
-realize --fast
-update
+if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" && isBranchMaster ]]; then
+    realize --fast
+    update
+fi
 realize
 # cleanup
 

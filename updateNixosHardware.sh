@@ -5,7 +5,7 @@
 
 set -e
 
-. "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../common.sh"
+. "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/lib/common.sh"
 
 addRemotesIfNecessary() {
     local remotes=$(git remote)

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 cd "$( dirname "${BASH_SOURCE[0]}" )"
-. "$(pwd )/../../../common.sh"
+. "$(pwd )/../../../lib/common.sh"
 
 set -e
 
