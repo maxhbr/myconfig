@@ -4,11 +4,7 @@
 # SPDX-License-Identifier: MIT
 set -e
 
-. "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../common.sh"
-
-gate() {
-    nix-env --version &> /dev/null
-}
+. "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../lib/common.sh"
 
 addRemotesIfNecessary() {
     cd $myconfigDir
@@ -40,16 +36,12 @@ handleChannelAsSubtree() {
                 )
             else
                 logERR "uncommitted changes, do not update $channel"
-                # logINFO "stash local changes to allow subtree pull"
-                # git stash push -m "autostash for nix/default.sh"
-                # git subtree pull --prefix $dir NixOS-nixpkgs-channels $channel --squash
-                # git stash pop "stash@{0}" 1> /dev/null
             fi
         fi
     fi
 }
 
-prepare() {
+update() {
     if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
         handleChannelAsSubtree "nixpkgs" "$nixStableChannel"
         $nixConfigDir/overlays/nixpkgs-unstable/default.sh
@@ -64,37 +56,4 @@ prepare() {
     fi
 }
 
-deploy() {
-    configTarget=/etc/nix/nixpkgs-config.nix
-    if ! cmp "$nixConfigDir/nixpkgs-config.nix" $configTarget >/dev/null 2>&1; then
-        echo "* $(tput bold)update $configTarget$(tput sgr0) ..."
-        sudo mkdir -p /etc/nix
-        sudo cp "$nixConfigDir/nixpkgs-config.nix" $configTarget
-    fi
-}
-
-cleanup() {
-    if [ "$((RANDOM%100))" -gt 90 ]; then
-        echo "* nix-env --delete-generations 30d ..."
-        nix-env $NIX_PATH_ARGS \
-            --delete-generations 30d
-        sudo nix-env $NIX_PATH_ARGS \
-            --delete-generations 30d
-    else
-        echo "* $(tput bold)do not$(tput sgr0) nix-env --delete-generations 30d ..."
-    fi
-}
-
-
-gate || {
-    echo "... skip"
-    exit 0
-}
-if [ $# -eq 0 ]; then
-    prepare
-    deploy
-    cleanup
-else
-    ([[ ! -n "$(type -t $1)" ]] || [ "$(type -t $1)" != "function" ] ) && exit 0
-    $@
-fi
+update

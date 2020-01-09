@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: MIT
 set -e
 
-. "$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )/common.sh"
+. "$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )/lib/common.sh"
 
 logH1 "Setup xdg-mime"
 setupXdgMime() {

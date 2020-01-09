@@ -1,9 +1,11 @@
 {  pkgs, ... }:
 {
   config = {
-    userPackages = with pkgs.unstable; [
-      steam powder
-    ];
+    home-manager.users.mhuber = {
+      home.packages = with pkgs; [
+        steam powder
+      ];
+    };
 
     hardware= {
       opengl = {

@@ -10,12 +10,12 @@ export COMMON_SH_WAS_SOURCED="true"
 
 export my_main_host='x1extremeG2'
 
-export myconfigDir="$( readlink -f "$( dirname "${BASH_SOURCE[0]}" )" )"
+export myconfigDir="$( readlink -f "$( dirname "${BASH_SOURCE[0]}" )/.." )"
 export nixConfigDir="$myconfigDir/nix"
 export nixpkgsDir="$nixConfigDir/nixpkgs"
 export nixpkgsUnstableDir="$nixConfigDir/nixpkgs-unstable"
 export overlaysDir="$nixConfigDir/overlays"
-export nixosConfigDir="$myconfigDir/nixos"
+export nixosConfigDir="$myconfigDir"
 if [[ -f "$nixpkgsDir/default.nix" ]]; then
     nixpkgs="$nixpkgsDir"
 else

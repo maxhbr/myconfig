@@ -5,7 +5,7 @@
 
 set -e
 
-. "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../common.sh"
+. "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/lib/common.sh"
 
 addRemotesIfNecessary() {
     local remotes=$(git remote)
@@ -16,7 +16,7 @@ addRemotesIfNecessary() {
 
 updateNixosHardware() {
     git fetch NixOS-nixos-hardware master
-    git subtree pull --prefix nixos/machines/hardware/nixos-hardware NixOS-nixos-hardware master --squash
+    git subtree pull --prefix machines/hardware/nixos-hardware NixOS-nixos-hardware master --squash
 }
 
 cd $myconfigDir

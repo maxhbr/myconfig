@@ -10,10 +10,10 @@ if [ "$(id -u)" -ne "$(stat -c '%u' $0)" ]; then
 fi
 
 REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
-ROOT="$(dirname $REBUILD_SH)"
-cd "$ROOT"
+cd "$(dirname $REBUILD_SH)"
+ROOT="$(pwd)"
 
-. common.sh
+. lib/common.sh
 
 ###########################################################################
 ##  function  #############################################################
@@ -56,9 +56,16 @@ checkIfConnected() {
     fi
 }
 
+isBranchMaster() {
+    if [[ "$(cd "$ROOT"; git rev-parse --abbrev-ref HEAD)" == "master" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 handleGit() {
-    local BRANCH=$(git rev-parse --abbrev-ref HEAD)
-    if [[ "$BRANCH" == "master" ]]; then
+    if isBranchMaster; then
         logH1 "update config" ""
         if git diff-index --quiet HEAD --; then
             git fetch
@@ -143,12 +150,13 @@ diffDiskUsage() {
 }
 
 handleGitPostExecution () {
-    git diff --stat
-    if ! git diff-index --quiet HEAD --; then
-        read -r -p "commit state as \"update after rebuild.sh\"? [y/N] " response
-        response=${response,,}    # tolower
-        if [[ "$response" =~ ^(yes|y)$ ]]; then
-            git commit -am "update after rebuild.sh"
+    if isBranchMaster; then
+        git diff --stat
+        if ! git diff-index --quiet HEAD --; then
+            read -r -p "commit state as \"update after rebuild.sh\"? [y/N] " response
+            if [[ "${response,,}" =~ ^(yes|y)$ ]]; then
+                git commit -am "update after rebuild.sh"
+            fi
         fi
     fi
 }
@@ -179,9 +187,9 @@ exec &> >(tee -a $logfile)
 [[ "$1" != "--no-tmux" ]] && {
     wrapIntoTmux
 } || shift
+checkIfConnected
 # call sudo here, to ask for password early
 sudo echo "go ..."
-checkIfConnected
 handleGit
 
 ###########################################################################
@@ -207,17 +215,78 @@ setupExitTrap() {
 }
 
 ###########################################################################
-# run scripts #############################################################
-declare -a folders=("./nix" "./nixos" "./dotfiles" "./xmonad")
-declare -a commands=("prepare" "deploy" "upgrade" "cleanup")
-for cmd in "${commands[@]}"; do
-    logH1 "handle:" "$cmd"
-    for folder in "${folders[@]}"; do
-        setupExitTrap "$cmd for $folder"
-        MYCONFIG_ARGS=$@ runCmd $folder $cmd
-    done
-done
-trap "" EXIT ERR INT TERM
+# run #####################################################################
+prepare() {
+    if [[ -f /etc/nixos/configuration.nix ]]; then
+        echo "/etc/nixos/configuration.nix should not exist"
+        exit 1
+    fi
+    if [[ ! -f /etc/nixos/hostid ]]; then
+        echo "set hostid:"
+        cksum /etc/machine-id |
+            while read c rest; do printf "%x" $c; done |
+            sudo tee /etc/nixos/hostid
+    fi
+    if [[ -f /etc/nix/nixpkgs-config.nix ]]; then
+        echo "/etc/nix/nixpkgs-config.nix should not exist"
+        exit 1
+    fi
+}
+
+realize() {
+    if [[ "$1" == "--fast" ]]; then
+        args="--fast"
+    else
+        args="--upgrade"
+    fi
+
+    logH3 "nixos-rebuild with \$args:" "$args"
+    sudo \
+        NIX_CURL_FLAGS='--retry=1000' \
+        nixos-rebuild \
+        $NIX_PATH_ARGS \
+        --show-trace --keep-failed \
+        $args \
+        --fallback \
+        ${NIXOS_REBUILD_CMD:-switch}
+}
+
+update() {
+    ./nix/update.sh
+    ./updateNixosHardware.sh
+    ./lib/home-manager/update.sh
+    ./modules/emacs/update.sh
+    ./modules/extrahosts/default.sh
+}
+
+cleanup() {
+    if [ "$((RANDOM%100))" -gt 90 ]; then
+        echo "* nix-env --delete-generations 30d ..."
+        nix-env $NIX_PATH_ARGS \
+                --delete-generations 30d
+        sudo nix-env $NIX_PATH_ARGS \
+             --delete-generations 30d
+    else
+        echo "* $(tput bold)do not$(tput sgr0) nix-env --delete-generations 30d ..."
+    fi
+}
+
+prepare
+if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
+    if isBranchMaster; then
+        realize --fast
+        update
+    else
+        logINFO "git branch is not master, do not update"
+    fi
+else
+    logINFO "host is not main host, do not update"
+fi
+realize
+# cleanup
+
+# end run #################################################################
+###########################################################################
 showStatDifferences
 
 handlePostExecutionHooks

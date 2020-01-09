@@ -1,22 +1,25 @@
-# Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { config, pkgs, lib, ... }:
 
 {
+  imports = [
+    ./mhuber.nix
+    ./networking.nix
+    ./nix.nix
+
+    ../git
+    ../vim
+    ../tmux
+    ../zsh
+  ];
+
   config = {
     boot = {
       # kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
       cleanTmpDir = true;
       # tmpOnTmpfs = true;
       crashDump.enable = true;
-    };
-
-    networking = {
-      networkmanager.enable = true;
-      firewall = {
-        enable = true;
-        allowPing = false;
-      };
     };
 
     home-manager.users.mhuber = {
@@ -139,21 +142,6 @@ export PROMPT_COMMAND='history -a'
       ];
     };
 
-    nix = {
-      useSandbox = true;
-      readOnlyStore = true;
-
-      trustedBinaryCaches = [ "https://cache.nixos.org" ];
-      binaryCaches = [ "https://cache.nixos.org" ];
-
-      extraOptions = ''
-        gc-keep-outputs = true
-        gc-keep-derivations = true
-        auto-optimise-store = true
-        binary-caches-parallel-connections = 10
-      '';
-    };
-
     system.activationScripts.media = ''
       mkdir -m 0755 -p /media
     '';
@@ -178,4 +166,5 @@ export PROMPT_COMMAND='history -a'
     };
     programs.ssh.startAgent = true;
   };
+
 }
