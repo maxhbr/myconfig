@@ -226,13 +226,13 @@ prepare() {
 }
 
 realize() {
-
     if [[ "$1" == "--fast" ]]; then
         args="--fast"
     else
         args="--upgrade"
     fi
 
+    logH3 "nixos-rebuild with \$args:" "$args"
     sudo \
         NIX_CURL_FLAGS='--retry=1000' \
         nixos-rebuild \
@@ -245,6 +245,7 @@ realize() {
 
 update() {
     ./nix/update.sh
+    ./updateNixosHardware.sh
     ./lib/home-manager/update.sh
     ./modules/emacs/update.sh
     ./modules/extrahosts/default.sh
@@ -266,6 +267,7 @@ prepare
 realize --fast
 update
 realize
+# cleanup
 
 # end run #################################################################
 ###########################################################################
