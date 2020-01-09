@@ -10,8 +10,8 @@ if [ "$(id -u)" -ne "$(stat -c '%u' $0)" ]; then
 fi
 
 REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
-ROOT="$(dirname $REBUILD_SH)"
-cd "$ROOT"
+cd "$(dirname $REBUILD_SH)"
+ROOT="$(pwd)"
 
 . lib/common.sh
 
@@ -57,8 +57,11 @@ checkIfConnected() {
 }
 
 isBranchMaster() {
-    ( cd "$ROOT";
-      [[ "$(git rev-parse --abbrev-ref HEAD)" == "master" ]] )
+    if [[ "$(cd "$ROOT"; git rev-parse --abbrev-ref HEAD)" == "master" ]]; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 handleGit() {
@@ -151,8 +154,7 @@ handleGitPostExecution () {
         git diff --stat
         if ! git diff-index --quiet HEAD --; then
             read -r -p "commit state as \"update after rebuild.sh\"? [y/N] " response
-            response=${response,,}    # tolower
-            if [[ "$response" =~ ^(yes|y)$ ]]; then
+            if [[ "${response,,}" =~ ^(yes|y)$ ]]; then
                 git commit -am "update after rebuild.sh"
             fi
         fi
@@ -185,9 +187,9 @@ exec &> >(tee -a $logfile)
 [[ "$1" != "--no-tmux" ]] && {
     wrapIntoTmux
 } || shift
+checkIfConnected
 # call sudo here, to ask for password early
 sudo echo "go ..."
-checkIfConnected
 handleGit
 
 ###########################################################################
@@ -270,9 +272,15 @@ cleanup() {
 }
 
 prepare
-if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" && isBranchMaster ]]; then
-    realize --fast
-    update
+if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
+    if isBranchMaster; then
+        realize --fast
+        update
+    else
+        logINFO "git branch is not master, do not update"
+    fi
+else
+    logINFO "host is not main host, do not update"
 fi
 realize
 # cleanup
