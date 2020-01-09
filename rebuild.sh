@@ -271,19 +271,22 @@ cleanup() {
     fi
 }
 
-prepare
-if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
-    if isBranchMaster; then
-        realize --fast
-        update
+run() {
+    prepare
+    if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
+        if isBranchMaster; then
+            realize --fast
+            update
+        else
+            logINFO "git branch is not master, do not update"
+        fi
     else
-        logINFO "git branch is not master, do not update"
+        logINFO "host is not main host, do not update"
     fi
-else
-    logINFO "host is not main host, do not update"
-fi
-realize
-# cleanup
+    realize
+    cleanup
+}
+run
 
 # end run #################################################################
 ###########################################################################

@@ -5,7 +5,7 @@
 
 set -e
 
-. "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../../lib/common.sh"
+. "$( dirname "${BASH_SOURCE[0]}" )/../../lib/common.sh"
 
 addRemotesIfNecessary() {
     local remotes=$(git remote)
@@ -20,6 +20,10 @@ updateNixosHardware() {
 }
 
 cd $myconfigDir
-addRemotesIfNecessary
-updateNixosHardware
+if git diff-index --quiet HEAD --; then
+    addRemotesIfNecessary
+    updateNixosHardware
+else
+    logERR "uncommitted changes, do not update nixos-hardware"
+fi
 
