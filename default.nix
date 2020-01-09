@@ -50,5 +50,13 @@ in {
       config = import ./nix/nixpkgs-config.nix;
       overlays = import ./nix/nixpkgs-overlays.nix;
     };
+    home-manager.users.mhuber = {
+      home.file = {
+        ".config/nixpkgs/config.nix".source = ./nix/nixpkgs-config.nix;
+      };
+    };
+    environment.etc = {
+      "nix/nixpkgs-config.nix".source = ./nix/nixpkgs-config.nix;
+    };
   };
 }

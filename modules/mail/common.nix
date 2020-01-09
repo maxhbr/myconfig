@@ -6,10 +6,16 @@
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
-        offlineimap msmtp gnupg abook urlview notmuch
+        abook urlview notmuch
         sxiv
-        procmail
         unstable.astroid
+      ];
+    };
+    environment = {
+      systemPackages = with pkgs; [
+        offlineimap gnupg
+        msmtp
+        procmail
         isync
       ];
     };

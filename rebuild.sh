@@ -217,8 +217,8 @@ setupExitTrap() {
 ###########################################################################
 # run #####################################################################
 prepare() {
-    if [[ -f /etc/nixos/configuration.nix ]]; then
-        echo "/etc/nixos/configuration.nix should not exist"
+    if [[ ! -f /etc/nixos/hostname ]]; then
+        echo "/etc/nixos/hostname should exist"
         exit 1
     fi
     if [[ ! -f /etc/nixos/hostid ]]; then
@@ -227,8 +227,8 @@ prepare() {
             while read c rest; do printf "%x" $c; done |
             sudo tee /etc/nixos/hostid
     fi
-    if [[ -f /etc/nix/nixpkgs-config.nix ]]; then
-        echo "/etc/nix/nixpkgs-config.nix should not exist"
+    if [[ -f /etc/nixos/configuration.nix ]]; then
+        echo "/etc/nixos/configuration.nix should not exist"
         exit 1
     fi
 }
