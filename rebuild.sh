@@ -3,6 +3,7 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 set -e
+set -o pipefail
 
 if [ "$(id -u)" -ne "$(stat -c '%u' $0)" ]; then
     echo "you should run this script as the user, which owns $0"
