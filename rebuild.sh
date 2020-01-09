@@ -241,15 +241,14 @@ realize() {
     fi
 
     logH3 "nixos-rebuild with \$args:" "$args"
-    sudo \
+    time sudo \
         NIX_CURL_FLAGS='--retry=1000' \
         nixos-rebuild \
         $NIX_PATH_ARGS \
         --show-trace --keep-failed \
         $args \
         --fallback \
-        ${NIXOS_REBUILD_CMD:-switch} \
-        | sed -e 's/^/['"$args"'] /'
+        ${NIXOS_REBUILD_CMD:-switch} | sed -e 's/^/['"$args"'] /'
 }
 
 update() {
