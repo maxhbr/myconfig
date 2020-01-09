@@ -11,6 +11,14 @@ ${chromium}/bin/chromium --incognito \
     --user-data-dir="/tmp/incoChrome_$postfix" \
     $@ &disown
   '';
+  pipechrome = with pkgs; writeScriptBin "pipechrome" ''
+#!${stdenv.shell}
+${chromium}/bin/chromium "data:text/html;base64,$(base64 -w 0 <&0)" &> /dev/null
+  '';
+  pipefox = with pkgs; writeScriptBin "pipefox" ''
+#!${stdenv.shell}
+${unstable.firefox}/bin/firefox "data:text/html;base64,$(base64 -w 0 <&0)" &> /dev/null
+  '';
   mkscreenshot = with pkgs; writeScriptBin "mkscreenshot.sh" ''
 #!${stdenv.shell}
 set -e
@@ -42,7 +50,9 @@ in {
         xarchiver
         feh imagemagick mkscreenshot # scrot
         mplayer
-        chromium inco unstable.firefox qutebrowser
+        chromium inco pipechrome
+        unstable.firefox pipefox
+        qutebrowser
         google-chrome # for streaming and music
         # spellchecking
         aspell aspellDicts.de aspellDicts.en

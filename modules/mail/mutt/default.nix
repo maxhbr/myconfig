@@ -4,6 +4,7 @@
 let
   mailclient-sh = pkgs.writeScriptBin "mailclient.sh" (builtins.readFile ./bin/mailclient.sh);
   mailrun-sh = pkgs.writeScriptBin "mailrun.sh" (builtins.readFile ./bin/mailrun.sh);
+  mutt-bgrun = pkgs.writeScriptBin "mutt-bgrun" (builtins.readFile ./bin/mutt-bgrun);
 in
 {
   imports = [ ../common.nix ];
@@ -13,6 +14,7 @@ in
         neomutt
         urlview
         sxiv
+        mutt-bgrun
         # mailclient-sh
         # mailrun-sh offlineimap
       ];
