@@ -248,7 +248,8 @@ realize() {
         --show-trace --keep-failed \
         $args \
         --fallback \
-        ${NIXOS_REBUILD_CMD:-switch}
+        ${NIXOS_REBUILD_CMD:-switch} \
+        | sed -e 's/^/['"$args"'] /'
 }
 
 update() {
