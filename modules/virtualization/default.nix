@@ -1,4 +1,4 @@
 {...}:
 {
-  imports = [ ./docker.nix  ./qemu.nix  ./vbox.nix ];
+  imports = [ ./docker  ./qemu.nix  ./vbox ];
 }

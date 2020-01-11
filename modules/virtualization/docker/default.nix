@@ -9,11 +9,24 @@
   };
 
   config = {
+    home-manager.users.mhuber = {
+      home.packages = with pkgs; [
+        docker_compose
+      ];
+      home.file = {
+        "bin" = {
+          source = ./bin;
+          recursive = true;
+        };
+        "dockerfiles" = {
+          source = ./bin;
+          recursive = true;
+        };
+      };
+    };
     environment.systemPackages = with pkgs; [
       docker
       docker-machine
-      # docker-gc
-      docker_compose
     ];
 
     virtualisation.docker = {
