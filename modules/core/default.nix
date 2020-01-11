@@ -12,6 +12,8 @@
     ../vim
     ../tmux
     ../zsh
+
+    ../other-dotfiles
   ];
 
   config = {

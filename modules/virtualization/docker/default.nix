@@ -14,7 +14,7 @@
         docker_compose
       ];
       home.file = {
-        "bin" = {
+        "bin/docker" = {
           source = ./bin;
           recursive = true;
         };
