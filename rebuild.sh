@@ -20,13 +20,6 @@ ROOT="$(pwd)"
 ##  function  #############################################################
 ###########################################################################
 
-runCmd() {
-    local folder=$1
-    local cmd=$2
-    logH2 "Run" "$cmd of $folder"
-    $folder/default.sh $cmd
-}
-
 wrapIntoTmux() {
     have "tmux" && {
         local TMUX_NAME="rebuild_sh"
