@@ -14,7 +14,7 @@ REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
 cd "$(dirname $REBUILD_SH)"
 ROOT="$(pwd)"
 
-. lib/common.sh
+. ./common.sh
 
 ###########################################################################
 ##  function  #############################################################
@@ -255,9 +255,9 @@ realize() {
 update() {
     ./nix/update.sh
     ./machines/hardware/updateNixosHardware.sh
-    ./lib/home-manager/update.sh
+    ./default.nix.d/home-manager/update.sh
+    ./default.nix.d/extrahosts/update.sh
     ./modules/emacs/update.sh
-    ./modules/extrahosts/default.sh
 }
 
 cleanup() {

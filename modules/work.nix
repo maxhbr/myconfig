@@ -5,7 +5,6 @@
 {
   imports = [
     ./dev/jdk.nix
-    ./dnsmasq.nix
   ];
   home-manager.users.mhuber = {
     home.packages = with pkgs; [

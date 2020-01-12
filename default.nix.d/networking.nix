@@ -4,8 +4,8 @@
 
 {
   imports = [
-    ../dnsmasq.nix
-    ../extrahosts
+    ./dnsmasq.nix
+    ./extrahosts
   ];
   config = {
     networking = {

@@ -4,16 +4,18 @@
 
 {
   imports = [
+    ./home-manager
+
     ./mhuber.nix
     ./networking.nix
     ./nix.nix
 
-    ../git
-    ../vim
-    ../tmux
-    ../zsh
+    ./git
+    ./vim
+    ./tmux
+    ./zsh
 
-    ../other-dotfiles
+    ../modules/other-dotfiles
   ];
 
   config = {

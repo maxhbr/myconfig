@@ -6,5 +6,5 @@
 set -e
 
 cd "$( dirname "${BASH_SOURCE[0]}" )"
-. ./../../lib/common.sh
+. ./../../common.sh
 updateRefAndJson rycee/home-manager release-19.09

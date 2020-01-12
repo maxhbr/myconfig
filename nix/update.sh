@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: MIT
 set -e
 
-. "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../lib/common.sh"
+. "$( dirname "${BASH_SOURCE[0]}" )/../common.sh"
 
 addRemotesIfNecessary() {
     cd $myconfigDir

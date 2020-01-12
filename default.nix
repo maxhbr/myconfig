@@ -6,9 +6,8 @@ let
   hostId = "${builtins.readFile /etc/nixos/hostid}";
 in {
   imports = [
+    ./default.nix.d
     /etc/nixos/hardware-configuration.nix
-    ./lib
-    ./modules/core
   ]
   # the machine specific configuration is placed at ./machines/<hostName>.nix
     ++ (let
