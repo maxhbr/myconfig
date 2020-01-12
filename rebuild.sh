@@ -321,6 +321,8 @@ cleanup() {
                 --delete-generations 30d
         sudo nix-env $NIX_PATH_ARGS \
              --delete-generations 30d
+        sudo nix-collect-garbage \
+             --delete-older-than 30d
     else
         echo "* $(tput bold)do not$(tput sgr0) nix-env --delete-generations 30d ..."
     fi
