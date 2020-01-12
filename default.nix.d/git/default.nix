@@ -14,6 +14,7 @@
       ];
       home.file = {
         ".gitconfig".source = ./gitconfig;
+        ".config/pass-git-helper/git-pass-mapping.ini".source = ./config/pass-git-helper/git-pass-mapping.ini;
       };
       programs.git = {
         package = pkgs.gitAndTools.gitFull;
