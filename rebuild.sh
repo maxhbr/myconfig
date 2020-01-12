@@ -235,7 +235,7 @@ realize() {
         args="--upgrade"
     fi
     NIXOS_REBUILD_CMD=${NIXOS_REBUILD_CMD:-switch}
-    logH3 "nixos-rebuild" "\$NIXOS_REBUILD_CMD=$NIXOS_REBUILD_CMD \$args=$args"
+    logH1 "nixos-rebuild" "\$NIXOS_REBUILD_CMD=$NIXOS_REBUILD_CMD \$args=$args"
     logINFO "$NIX_PATH_ARGS"
     time sudo \
         NIX_CURL_FLAGS='--retry=1000' \
@@ -247,51 +247,69 @@ realize() {
         $NIXOS_REBUILD_CMD | sed -e 's/^/['"$args"'] /'
 }
 
-handleChannelAsSubtree() {
-    local prefix=$1
-    local channel=$2
-
-    if [[ "$MYCONFIG_ARGS" == *"--fast"* ]]; then
-        echo "skip handling $channel (in $prefix)"
-    else
-        (cd $myconfigDir
-         local remotes=$(git remote)
-         if [[ "$remotes" != *'NixOS-nixpkgs-channels'* ]]; then
-             git remote add NixOS-nixpkgs-channels https://github.com/NixOS/nixpkgs-channels
-         fi)
-
-        logINFO "the channel $channel was last updated $(git log --format="%cr" remotes/NixOS-nixpkgs-channels/$channel -1)"
-
-        cd $myconfigDir
-        git fetch NixOS-nixpkgs-channels -- $channel
-        if [ ! -f "$prefix/default.nix" ]; then
-            git subtree add --prefix $prefix NixOS-nixpkgs-channels $channel --squash
-        else
-            if git diff-index --quiet HEAD --; then
-                (set -x;
-                 git subtree pull --prefix $prefix NixOS-nixpkgs-channels $channel --squash
-                )
-            else
-                logERR "uncommitted changes, do not update $channel"
-            fi
-        fi
+updateSubtree() {
+    if ! git diff-index --quiet HEAD --; then
+        logERR "uncommitted changes, do not update $channel"
     fi
+
+    local remoteName=$1
+    local remoteURL=$2
+    local prefix=$3
+    local branch=$4
+
+    cd $myconfigDir
+    local remotes=$(git remote)
+    if [[ "$remotes" != *"$remoteName"* ]]; then
+        git remote add "$remoteName" "$remoteURL"
+        git subtree split --rejoin --prefix="$prefix" HEAD
+    fi
+
+    git fetch "$remoteName" -- "$branch"
+    logINFO "the channel $branch was last updated $(git log --format="%cr" remotes/$remoteName/$channel -1)"
+    (set -x;
+     git subtree pull --prefix $prefix "$remoteName" "$branch" --squash)
 }
 
 updateNixpkgs() {
-    if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
-        handleChannelAsSubtree "nixpkgs" "$nixStableChannel"
-    fi
+    updateSubtree \
+        NixOS-nixpkgs-channels https://github.com/NixOS/nixpkgs-channels \
+        "nixpkgs" \
+        "$nixStableChannel"
+}
+
+updateNixosHardware() {
+    updateSubtree \
+        NixOS-nixos-hardware https://github.com/NixOS/nixos-hardware \
+        "modules/hardware/nixos-hardware/" \
+        "master"
 }
 
 update() {
-    updateNixpkgs
-    ./default.nix.d/home-manager/update.sh
-    ./default.nix.d/extrahosts/update.sh
-    ./default.nix.d/nixpkgs-unstable/default.sh
-    ./modules/hardware/updateNixosHardware.sh
-    ./modules/emacs/update.sh
-    ./modules/desktop/my-wallpapers/update.sh
+    if [[ "$MYCONFIG_ARGS" == *"--fast"* ]]; then
+        logINFO "skip updating"
+    else
+        if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
+            if git diff-index --quiet HEAD --; then
+                logH1 "update" "nixpkgs"
+                updateNixpkgs
+                logH1 "update" "NixosHardware"
+                ./modules/hardware/updateNixosHardware.sh
+            else
+                logINFO "skip updating subtrees, not clean"
+            fi
+
+            logH3 "update" "home-manager"
+            ./default.nix.d/home-manager/update.sh
+            logH3 "update" "extrahosts"
+            ./default.nix.d/extrahosts/update.sh
+            logH3 "update" "nixpkgs-unstable"
+            ./default.nix.d/nixpkgs-unstable/default.sh
+            logH3 "update" "emacs"
+            ./modules/emacs/update.sh
+            logH3 "update" "my-wallpapers"
+            ./modules/desktop/my-wallpapers/update.sh
+        fi
+    fi
 }
 
 cleanup() {
