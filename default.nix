@@ -4,6 +4,7 @@ let
   hostName = "${builtins.readFile /etc/nixos/hostname}";
   # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done | sudo tee /etc/nixos/hostid
   hostId = "${builtins.readFile /etc/nixos/hostid}";
+
   importall = path:
     if builtins.pathExists path
       then let
@@ -36,11 +37,13 @@ in {
       config = import ./nix/nixpkgs-config.nix;
       overlays = import ./nix/nixpkgs-overlays.nix;
     };
+
     home-manager.users.mhuber = {
       home.file = {
         ".config/nixpkgs/config.nix".source = ./nix/nixpkgs-config.nix;
       };
     };
+
     environment.etc = {
       "nix/nixpkgs-config.nix".source = ./nix/nixpkgs-config.nix;
     };
