@@ -15,8 +15,6 @@ let
       else [];
 in {
   imports = [/etc/nixos/hardware-configuration.nix]
-  # all files in /etc/nixos/imports are sourced
-    ++ (importall /etc/nixos/imports)
   # all files in ./imports are sourced
     ++ (importall ./imports)
   # the machine specific configuration is placed at ./hosts/<hostName>.nix
