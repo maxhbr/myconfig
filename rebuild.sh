@@ -219,6 +219,13 @@ prepare() {
         echo "/etc/nixos/configuration.nix should not exist"
         exit 1
     fi
+
+    nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixos-config=$nixpkgsDir\"]; }"
+    nix_path_file="$myconfigDir/imports/nixPath.nix"
+    if [[ "$(cat $nix_path_file 2>/dev/null)" != *"$nix_path_string"* ]]; then
+        echo $nix_path_string |
+            tee $nix_path_file
+    fi
 }
 
 realize() {
@@ -274,13 +281,6 @@ handleChannelAsSubtree() {
 updateNixpkgs() {
     if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
         handleChannelAsSubtree "nixpkgs" "$nixStableChannel"
-    fi
-
-    nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixos-config=$nixosConfigDir\"]; }"
-    nix_path_file="$myconfigDir/imports/nixPath.nix"
-    if [[ "$(cat $nix_path_file 2>/dev/null)" != *"$nix_path_string"* ]]; then
-        echo $nix_path_string |
-            tee $nix_path_file
     fi
 }
 

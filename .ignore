@@ -1,4 +1,4 @@
 .git
-nix/nixpkgs
-nixos/static/extrahosts
+nixpkgs
+default.nix.d/extrahosts/extrahosts
 _logs

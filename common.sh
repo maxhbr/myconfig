@@ -11,19 +11,15 @@ export COMMON_SH_WAS_SOURCED="true"
 export my_main_host='x1extremeG2'
 
 export myconfigDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-export nixConfigDir="$myconfigDir/nix"
-export nixpkgsDir="$nixConfigDir/nixpkgs"
-export nixpkgsUnstableDir="$nixConfigDir/nixpkgs-unstable"
-export overlaysDir="$nixConfigDir/overlays"
-export nixosConfigDir="$myconfigDir"
+export nixpkgsDir="$myconfigDir/nixpkgs"
 if [[ -f "$nixpkgsDir/default.nix" ]]; then
     nixpkgs="$nixpkgsDir"
 else
     nixpkgs="channel:$nixStableChannel"
 fi
 
-NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfigDir/default.nix"
-NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$nixosConfigDir/default.nix"
+NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$myconfigDir/default.nix"
+NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/default.nix"
 export NIX_PATH
 export NIX_PATH_ARGS
 
