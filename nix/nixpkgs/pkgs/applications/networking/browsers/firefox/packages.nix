@@ -88,6 +88,7 @@ rec {
 
     meta = firefox.meta // {
       description = "A web browser built from Firefox Extended Support Release source tree";
+      knownVulnerabilities = [ "Support ended around October 2019." ];
     };
     updateScript = callPackage ./update.nix {
       attrPath = "firefox-esr-60-unwrapped";
@@ -173,6 +174,7 @@ in {
       ./no-buildconfig.patch
       missing-documentation-patch
     ];
+    meta.knownVulnerabilities = [ "Support ended around October 2019." ];
   };
 
   # Similarly to firefox-esr-52 above.
@@ -260,6 +262,7 @@ in rec {
       rev   = "95bb92d552876a1f4260edf68fda5faa3eb36ad8";
       sha256 = "1ykn3yg4s36g2cpzxbz7s995c33ij8kgyvghx38z4i8siaqxdddy";
     };
+    meta.knownVulnerabilities = [ "Support ended in August 2018." ];
   }).override {
     gtk3Support = false;
   };
@@ -276,6 +279,7 @@ in rec {
       rev   = "0489ae3158cd8c0e16c2e78b94083d8cbf0209dc";
       sha256 = "0y5s7d8pg8ak990dp8d801j9823igaibfhv9hsa79nib5yllifzs";
     };
+    meta.knownVulnerabilities = [ "Support ended around October 2019." ];
 
     patches = [
       missing-documentation-patch
