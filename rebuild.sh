@@ -292,8 +292,10 @@ update() {
             if git diff-index --quiet HEAD --; then
                 logH1 "update" "nixpkgs"
                 updateNixpkgs
-                logH1 "update" "NixosHardware"
-                ./modules/hardware/updateNixosHardware.sh
+                if git diff-index --quiet HEAD --; then
+                    logH1 "update" "NixosHardware"
+                    updateNixosHardware
+                fi
             else
                 logINFO "skip updating subtrees, not clean"
             fi
