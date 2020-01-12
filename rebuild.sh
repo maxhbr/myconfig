@@ -220,7 +220,7 @@ prepare() {
         exit 1
     fi
 
-    nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixos-config=$nixpkgsDir\"]; }"
+    nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixos-config=$myconfigDir\"]; }"
     nix_path_file="$myconfigDir/imports/nixPath.nix"
     if [[ "$(cat $nix_path_file 2>/dev/null)" != *"$nix_path_string"* ]]; then
         echo $nix_path_string |
