@@ -22,9 +22,6 @@ exec ${pkgs.maven}/bin/mvn \
   '';
 in
 {
-  imports = [
-    ./common.nix
-  ];
   config = {
     # generates:
     # - /run/booted-system/pkgs/openjdk8
