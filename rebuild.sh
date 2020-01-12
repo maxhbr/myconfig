@@ -229,6 +229,7 @@ realize() {
     fi
     NIXOS_REBUILD_CMD=${NIXOS_REBUILD_CMD:-switch}
     logH3 "nixos-rebuild" "\$NIXOS_REBUILD_CMD=$NIXOS_REBUILD_CMD \$args=$args"
+    logINFO "$NIX_PATH_ARGS"
     time sudo \
         NIX_CURL_FLAGS='--retry=1000' \
         nixos-rebuild \

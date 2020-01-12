@@ -33,19 +33,11 @@ in {
     networking.hostName = "${hostName}";
     system.copySystemConfiguration = true;
 
-    nixpkgs = {
-      config = import ./nix/nixpkgs-config.nix;
-      overlays = import ./nix/nixpkgs-overlays.nix;
+    nixpkgs.config = pkgs: {
+      allowUnfree = true;
     };
-
     home-manager.users.mhuber = {
-      home.file = {
-        ".config/nixpkgs/config.nix".source = ./nix/nixpkgs-config.nix;
-      };
-    };
-
-    environment.etc = {
-      "nix/nixpkgs-config.nix".source = ./nix/nixpkgs-config.nix;
+      nixpkgs.config.allowUnfree = true;
     };
   };
 }
