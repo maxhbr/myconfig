@@ -248,7 +248,6 @@ realize() {
 }
 
 updateSubtree() {
-    set -x
     if ! git diff-index --quiet HEAD --; then
         logERR "uncommitted changes, do not update $channel"
     fi
@@ -265,7 +264,7 @@ updateSubtree() {
     fi
 
     git fetch "$remoteName" -- "$branch"
-    logINFO "the channel $branch was last updated $(git log --format="%cr" remotes/$remoteName/$channel -1)"
+    logINFO "the channel $branch was last updated $(git log --format="%cr" remotes/$remoteName/$branch -1)"
     (set -x;
      git subtree pull --prefix $prefix "$remoteName" "$branch" --squash)
 }
