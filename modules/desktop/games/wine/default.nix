@@ -6,12 +6,12 @@ let
     wineBuild = "wineWow";
     gstreamerSupport = false;
   };
-  mywine = pkgs.wine.override wineCfg
-  mywinetricks = (pkgs.winetricks.override {wine = mywine;})
+  mywine = pkgs.wine.override wineCfg;
+  mywinetricks = (pkgs.winetricks.override {wine = mywine;});
 
-  cosmoteer = wrap {
+  cosmoteer = with pkgs; wrap {
     name   = "cosmoteer";
-    paths  = [ wget mywine ];
+    paths  = [ wget mywine mywinetricks ];
     script = builtins.readFile ./bin/cosmoteer.sh;
  };
 in {

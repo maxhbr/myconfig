@@ -7,7 +7,7 @@ let
 in {
   imports = [
     /etc/nixos/hardware-configuration.nix
-    ./lib/home-manager
+    ./lib
     ./modules/core
   ]
   # the machine specific configuration is placed at ./machines/<hostName>.nix
