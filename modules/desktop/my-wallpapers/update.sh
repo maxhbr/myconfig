@@ -7,4 +7,4 @@ set -e
 
 cd "$( dirname "${BASH_SOURCE[0]}" )"
 . ./../../../common.sh
-updateShaFromURL "https://github.com/maxhbr/wallpapers/archive/master.zip" maxhbr-wallpapers
+updateRefAndJson maxhbr/wallpapers master maxhbr-wallpapers

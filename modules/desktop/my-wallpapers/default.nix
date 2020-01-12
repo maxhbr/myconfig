@@ -4,7 +4,9 @@
 let
   jsonFile = ./. + "/maxhbr-wallpapers.json";
   json = builtins.fromJSON (builtins.readFile jsonFile);
-  my-wallpapers-source = pkgs.fetchzip json;
+  my-wallpapers-source = pkgs.fetchFromGitHub {
+    inherit (json) owner repo rev sha256;
+  };
 in {
   config = {
     nixpkgs.overlays = [(self: super: {

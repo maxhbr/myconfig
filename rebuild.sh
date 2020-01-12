@@ -245,6 +245,7 @@ update() {
     ./default.nix.d/home-manager/update.sh
     ./default.nix.d/extrahosts/update.sh
     ./modules/emacs/update.sh
+    ./modules/desktop/my-wallpapers/update.sh
 }
 
 cleanup() {
