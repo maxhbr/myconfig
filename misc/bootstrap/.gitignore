@@ -1,9 +1,0 @@
-.DS_Store
-/*.box
-/.bundle
-/.vagrant
-/Gemfile.lock
-/iso
-/vendor
-/packer_cache
-/output-virtualbox-iso

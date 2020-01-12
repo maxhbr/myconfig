@@ -1,3 +1,0 @@
-* Configs
-** with sway
-- https://www.notabug.org/jbranso/guix-config/src/master/sway.scm
