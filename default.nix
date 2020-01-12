@@ -4,41 +4,28 @@ let
   hostName = "${builtins.readFile /etc/nixos/hostname}";
   # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done | sudo tee /etc/nixos/hostid
   hostId = "${builtins.readFile /etc/nixos/hostid}";
+  importall = path:
+    if builtins.pathExists path
+      then let
+          content = builtins.readDir path;
+        in map (n: import (path + ("/" + n)))
+          (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
+              (builtins.attrNames content))
+      else [];
 in {
-  imports = [
-    ./default.nix.d
-    /etc/nixos/hardware-configuration.nix
-  ]
+  imports = [/etc/nixos/hardware-configuration.nix]
+  # all files in /etc/nixos/imports are sourced
+    ++ (importall /etc/nixos/imports)
+  # all files in ./imports are sourced
+    ++ (importall ./imports)
   # the machine specific configuration is placed at ./machines/<hostName>.nix
     ++ (let
           path = (./machines + "/${hostName}.nix");
         in if builtins.pathExists path
-           then [path]
-           else [])
-  # old configuration can be placed at /etc/nixos/configuration.old.nix
-    ++ (if builtins.pathExists /etc/nixos/configuration.old.nix
-        then [/etc/nixos/configuration.old.nix]
-        else [])
-  # all files in /etc/nixos/imports are sourced
-    ++ (let
-          path = /etc/nixos/imports;
-        in if builtins.pathExists path
-           then let
-                  content = builtins.readDir path;
-                in map (n: import (path + ("/" + n)))
-                         (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
-                           (builtins.attrNames content))
-           else [])
-  # all files in ./imports are sourced
-    ++ (let
-          path = ./imports;
-        in if builtins.pathExists path
-           then let
-                  content = builtins.readDir path;
-                in map (n: import (path + ("/" + n)))
-                         (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
-                           (builtins.attrNames content))
-           else []);
+             then [path]
+             else [])
+  # all files in ./default.nix.d are sourced
+    ++ (importall ./default.nix.d);
 
   config = {
     networking.hostId = "${hostId}";

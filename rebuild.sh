@@ -185,13 +185,17 @@ exec &> >(tee -a $logfile)
 
 ###########################################################################
 # prepare misc stuff ######################################################
-[[ "$1" != "--no-tmux" ]] && {
-    wrapIntoTmux
-} || shift
-checkIfConnected
-# call sudo here, to ask for password early
-sudo echo "go ..."
-handleGit
+[[ "$1" == "--dry-run" ]] || {
+    [[ "$1" != "--no-tmux" ]] && {
+        wrapIntoTmux
+    } || shift
+    checkIfConnected
+    # call sudo here, to ask for password early
+    sudo echo "go ..."
+    [[ "$1" != "--no-git" ]] && {
+        handleGit
+    } || shift
+}
 
 ###########################################################################
 # save current state and show them on exit ################################
@@ -240,8 +244,8 @@ realize() {
     else
         args="--upgrade"
     fi
-
-    logH3 "nixos-rebuild with \$args:" "$args"
+    NIXOS_REBUILD_CMD=${NIXOS_REBUILD_CMD:-switch}
+    logH3 "nixos-rebuild" "\$NIXOS_REBUILD_CMD=$NIXOS_REBUILD_CMD \$args=$args"
     time sudo \
         NIX_CURL_FLAGS='--retry=1000' \
         nixos-rebuild \
@@ -249,7 +253,7 @@ realize() {
         --show-trace --keep-failed \
         $args \
         --fallback \
-        ${NIXOS_REBUILD_CMD:-switch} | sed -e 's/^/['"$args"'] /'
+        $NIXOS_REBUILD_CMD | sed -e 's/^/['"$args"'] /'
 }
 
 update() {
@@ -273,21 +277,27 @@ cleanup() {
 }
 
 run() {
-    prepare
-    if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
-        if isBranchMaster; then
-            realize --fast
-            update
-        else
-            logINFO "git branch is not master, do not update"
-        fi
+    if [[ "$1" == "--dry-run" ]]; then
+        NIXOS_REBUILD_CMD="dry-run"
     else
-        logINFO "host is not main host, do not update"
+        prepare
+        if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
+            if isBranchMaster; then
+                realize --fast
+                update
+            else
+                logINFO "git branch is not master, do not update"
+            fi
+        else
+            logINFO "host is not main host, do not update"
+        fi
     fi
     realize
-    cleanup
+    [[ "$1" == "--dry-run" ]] || {
+        cleanup
+    }
 }
-run
+run $@
 
 # end run #################################################################
 ###########################################################################

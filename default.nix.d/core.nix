@@ -4,17 +4,6 @@
 
 {
   imports = [
-    ./home-manager
-
-    ./mhuber.nix
-    ./networking.nix
-    ./nix.nix
-
-    ./git
-    ./vim
-    ./tmux
-    ./zsh
-
     ../modules/other-dotfiles
   ];
 

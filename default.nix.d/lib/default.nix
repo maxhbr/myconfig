@@ -1,8 +1,5 @@
 { pkgs, ... }:
 {
-  imports = [
-    ./home-manager
-  ];
   config = {
     nixpkgs.overlays = [(self: super: with super; with super.lib; {
       # stolen from: http://chriswarbo.net/projects/nixos/useful_hacks.html
