@@ -248,6 +248,7 @@ realize() {
 }
 
 updateSubtree() {
+    set -x
     if ! git diff-index --quiet HEAD --; then
         logERR "uncommitted changes, do not update $channel"
     fi
@@ -257,7 +258,6 @@ updateSubtree() {
     local prefix=$3
     local branch=$4
 
-    cd $myconfigDir
     local remotes=$(git remote)
     if [[ "$remotes" != *"$remoteName"* ]]; then
         git remote add "$remoteName" "$remoteURL"
@@ -285,6 +285,7 @@ updateNixosHardware() {
 }
 
 update() {
+    cd $myconfigDir
     if [[ "$MYCONFIG_ARGS" == *"--fast"* ]]; then
         logINFO "skip updating"
     else
