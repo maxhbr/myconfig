@@ -1,5 +1,9 @@
 {  pkgs, ... }:
 {
+  imports = [
+    ./wine
+  ];
+
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [

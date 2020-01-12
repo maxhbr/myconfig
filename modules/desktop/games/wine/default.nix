@@ -6,12 +6,20 @@ let
     wineBuild = "wineWow";
     gstreamerSupport = false;
   };
+  mywine = pkgs.wine.override wineCfg
+  mywinetricks = (pkgs.winetricks.override {wine = mywine;})
+
+  cosmoteer = wrap {
+    name   = "cosmoteer";
+    paths  = [ wget mywine ];
+    script = builtins.readFile ./bin/cosmoteer.sh;
+ };
 in {
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
-        (wine.override wineCfg)
-        (winetricks.override {wine = wine.override wineCfg;})
+        mywine mywinetricks
+        cosmoteer
       ];
     };
     hardware.opengl.driSupport32Bit = true;
