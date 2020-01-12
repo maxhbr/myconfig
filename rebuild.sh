@@ -162,16 +162,6 @@ handleGitPostExecution () {
     fi
 }
 
-handlePostExecutionHooks () {
-    if [[ -d "$ROOT/misc/post_install_hooks" ]]; then
-        find "$ROOT/misc/post_install_hooks" \
-             -type f \
-             -iname '*.sh' \
-             -print \
-             -exec {} \;
-    fi
-}
-
 ###########################################################################
 ##  run  ##################################################################
 ###########################################################################
@@ -276,6 +266,16 @@ cleanup() {
     fi
 }
 
+handlePostExecutionHooks () {
+    if [[ -d "$ROOT/misc/post_install_hooks" ]]; then
+        find "$ROOT/misc/post_install_hooks" \
+             -type f \
+             -iname '*.sh' \
+             -print \
+             -exec {} \;
+    fi
+}
+
 run() {
     if [[ "$1" == "--dry-run" ]]; then
         NIXOS_REBUILD_CMD="dry-run"
@@ -295,13 +295,14 @@ run() {
     realize
     [[ "$1" == "--dry-run" ]] || {
         cleanup
+        handlePostExecutionHooks
     }
 }
 run $@
 
 # end run #################################################################
 ###########################################################################
-showStatDifferences
-
-handlePostExecutionHooks
-handleGitPostExecution
+[[ "$1" == "--dry-run" ]] || {
+    showStatDifferences
+    handleGitPostExecution
+}
