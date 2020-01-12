@@ -35,11 +35,12 @@ echo "## take screenshot $output ..."
 ${imagemagick}/bin/import "$output"
   '';
 in {
+  imports = [
+    ./my-wallpapers
+  ];
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
-        my-backgrounds
-
         # misc
         libnotify # xfce.xfce4notifyd # notify-osd
 

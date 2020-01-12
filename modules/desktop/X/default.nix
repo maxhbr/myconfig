@@ -48,15 +48,15 @@ in {
           lightdm = {
             enable = true;
             # autologin.user = "mhuber";
-            background = "${pkgs.my-backgrounds}/share/romben3.png";
+            background = "${pkgs.my-wallpapers}/share/romben3.png";
           };
           sessionCommands = ''
             ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name ${pkgs.vanilla-dmz}/share/icons/Vanilla-DMZ/cursors/left_ptr 128 &disown
             if test -e $HOME/.Xresources; then
               ${pkgs.xorg.xrdb}/bin/xrdb -merge $HOME/.Xresources &disown
             fi
-            ${pkgs.my-backgrounds}/bin/myRandomBackground &disown
-            ${pkgs.xss-lock}/bin/xss-lock ${pkgs.my-backgrounds}/bin/myScreenLock &disown
+            ${pkgs.my-wallpapers}/bin/myRandomBackground &disown
+            ${pkgs.xss-lock}/bin/xss-lock ${pkgs.my-wallpapers}/bin/myScreenLock &disown
           '';
         };
       };
@@ -64,7 +64,7 @@ in {
       cron = {
         enable = true;
         systemCronJobs = [
-          "*/10 * * * *  mhuber ${pkgs.my-backgrounds}/bin/myRandomBackground >> /tmp/cronout 2>&1"
+          "*/10 * * * *  mhuber ${pkgs.my-wallpapers}/bin/myRandomBackground >> /tmp/cronout 2>&1"
         ];
       };
 

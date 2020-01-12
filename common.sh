@@ -102,4 +102,18 @@ updateRefAndJson() {
     fi
 }
 
+updateShaFromURL() {
+    local url="$1"
+    local basename=$(basename "$url")
+    local outJson=${2:-$basename}.json
+
+    if curl --output /dev/null --silent --head --fail "$url"; then
+        sha256="$(nix-prefetch-url --type sha256 "$url")"
+        echo "{ \"sha256\": \"$sha256\", \"url\": \"$url\" }" | tee "$outJson"
+    else
+        echo "url=[$url] does not exist"
+    fi
+}
+
 export -f updateRefAndJson
+export -f updateShaFromURL
