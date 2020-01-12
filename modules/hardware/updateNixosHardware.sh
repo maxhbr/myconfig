@@ -17,7 +17,7 @@ addRemotesIfNecessary() {
 
 updateNixosHardware() {
     git fetch NixOS-nixos-hardware master
-    git subtree pull --prefix" $(realpath --relative-to="$myconfigDir" "$thisdir/nixos-hardware")" NixOS-nixos-hardware master --squash
+    git subtree pull --prefix "$(realpath --relative-to="$myconfigDir" "$thisdir/nixos-hardware")" NixOS-nixos-hardware master --squash
 }
 
 cd $myconfigDir
