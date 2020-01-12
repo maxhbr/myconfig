@@ -2,13 +2,14 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 {
-  imports = [ # hardware:
-    ./hardware/x1extremeG2.nix
-    ./hardware/efi.nix
-    ./hardware/exfat.nix
-    ./hardware/steamcontroller.nix
-    ./hardware/pulseaudio.nix
-  ] ++ [ # modules:
+  imports = [
+    # hardware:
+    ../modules/hardware/x1extremeG2.nix
+    ../modules/hardware/efi.nix
+    ../modules/hardware/exfat.nix
+    ../modules/hardware/steamcontroller.nix
+    ../modules/hardware/pulseaudio.nix
+    # core
     ../modules/emacs
     ../modules/desktop/xmonad
     ../modules/desktop/sway

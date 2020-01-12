@@ -18,9 +18,9 @@ in {
     ++ (importall /etc/nixos/imports)
   # all files in ./imports are sourced
     ++ (importall ./imports)
-  # the machine specific configuration is placed at ./machines/<hostName>.nix
+  # the machine specific configuration is placed at ./hosts/<hostName>.nix
     ++ (let
-          path = (./machines + "/${hostName}.nix");
+          path = (./hosts + "/${hostName}.nix");
         in if builtins.pathExists path
              then [path]
              else [])
