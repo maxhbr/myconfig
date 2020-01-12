@@ -81,7 +81,7 @@ EOF
 
 DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 
-result="$(nix-build '<nixpkgs>' -I nixpkgs=$DIR/../nix/nixpkgs --no-out-link --keep-failed -A myconfig.my-xmonad)"
+result="$(nix-build '<nixpkgs>' -I nixpkgs=$DIR/../nixpkgs --no-out-link --keep-failed -A myconfig.my-xmonad)"
 
 echo -e "\n\n\nresult is $result\n"
 
