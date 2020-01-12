@@ -44,7 +44,6 @@ handleChannelAsSubtree() {
 update() {
     if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
         handleChannelAsSubtree "nixpkgs" "$nixStableChannel"
-        $nixConfigDir/overlays/nixpkgs-unstable/default.sh
     fi
 
     nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixpkgs-overlays=$overlaysDir\" \"nixos-config=$nixosConfigDir\"]; }"

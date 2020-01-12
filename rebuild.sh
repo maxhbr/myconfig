@@ -241,9 +241,10 @@ realize() {
 
 update() {
     ./nix/update.sh
-    ./modules/hardware/updateNixosHardware.sh
     ./default.nix.d/home-manager/update.sh
     ./default.nix.d/extrahosts/update.sh
+    ./default.nix.d/nixpkgs-unstable/default.sh
+    ./modules/hardware/updateNixosHardware.sh
     ./modules/emacs/update.sh
     ./modules/desktop/my-wallpapers/update.sh
 }

@@ -17,7 +17,7 @@
 #
 #  curl -L -s "https://nixos.org/channels/${channel}/git-revision" > ./${channel}.rev
 #
-
+{ pkgs, config, ... }:
 let
   mkPkgs = channel: let
       jsonFile = ./. + channel + ".json";
@@ -39,10 +39,13 @@ let
            else let
                fallbackUrl = "http://nixos.org/channels/" + channel + "/nixexprs.tar.xz";
              in builtins.fetchTarball fallbackUrl)
-    { config = import ../../nixpkgs-config.nix; };
-in
-self: super: {
-  nixos-unstable = super.nixos-unstable or {} // mkPkgs "nixos-unstable";
-  nixos-unstable-small = super.nixos-unstable-small or {} // mkPkgs "nixos-unstable-small";
-  unstable = super.unstable or {} // mkPkgs "nixpkgs-unstable";
+    { config = config.nixpkgs.config; };
+in {
+  config = {
+    nixpkgs.overlays = [(self: super: {
+      nixos-unstable = super.nixos-unstable or {} // mkPkgs "nixos-unstable";
+      nixos-unstable-small = super.nixos-unstable-small or {} // mkPkgs "nixos-unstable-small";
+      unstable = super.unstable or {} // mkPkgs "nixpkgs-unstable";
+    })];
+  };
 }
