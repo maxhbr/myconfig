@@ -1,6 +1,4 @@
 * My dotfiles / system configuration / utils / stuff
-[[https://travis-ci.org/maxhbr/myconfig.svg?branch=master]] [[https://travis-ci.org/maxhbr/myconfig][travis-ci]]
-
 Currently I use
 - OS: **[[https://nixos.org/][NixOS]]**
 - [[https://github.com/rycee/home-manager][home-manager]] for dotfiles and and user env, with some help by stow

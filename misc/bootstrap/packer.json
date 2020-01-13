@@ -31,7 +31,7 @@
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/guest-virtualbox.nix |tee /mnt/etc/nixos/guest.nix && \\<enter>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/users-vagrant.nix |tee /mnt/etc/nixos/users.nix && \\<enter>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/vagrant.nix |tee /mnt/etc/nixos/vagrant.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/nixos/core/mhuber.nix |tee /mnt/etc/nixos/mhuber.nix && \\<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/default.nix.d/mhuber.nix |tee /mnt/etc/nixos/mhuber.nix && \\<enter>",
 
                 "nixos-install --no-root-passwd && ",
 
@@ -71,7 +71,7 @@
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/guest-qemu.nix |tee /mnt/etc/nixos/guest.nix && \\<enter>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/users-vagrant.nix |tee /mnt/etc/nixos/users.nix && \\<enter>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/vagrant.nix |tee /mnt/etc/nixos/vagrant.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/nixos/core/mhuber.nix |tee /mnt/etc/nixos/mhuber.nix && \\<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/default.nix.d/mhuber.nix |tee /mnt/etc/nixos/mhuber.nix && \\<enter>",
 
                 "nixos-install --no-root-passwd && ",
 

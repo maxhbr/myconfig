@@ -32,7 +32,9 @@ case "$1" in
     qemu) build_with_qemu ;;
     vbox) build_with_virtualbox ;;
     *) cat <<EOF
-$0 [qemu|vbox]
+usage:
+\$ $0 qemu
+\$ $0 vbox
 EOF
        ;;
 esac
