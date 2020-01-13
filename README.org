@@ -1,6 +1,5 @@
 * My dotfiles / system configuration / utils / stuff
-
-[![Build Status](https://travis-ci.org/maxhbr/myconfig.svg?branch=master)](https://travis-ci.org/maxhbr/myconfig)
+[[https://travis-ci.org/maxhbr/myconfig.svg?branch=master]] [[https://travis-ci.org/maxhbr/myconfig][travis-ci]]
 
 Currently I use
 - OS: **[[https://nixos.org/][NixOS]]**
@@ -10,6 +9,7 @@ Currently I use
 - SHELL: zsh (with: [[http://ohmyz.sh/][oh-my-zsh]])
 - Email Client: [[https://www.djcbsoftware.nl/code/mu/mu4e.html][mu4e]] with mbsync
 - Keyboard layout: [[https://www.neo-layout.org/][neo2]]
+- my wallpapers: [[https://github.com/maxhbr/wallpapers][maxhbr/wallpapers]]
 
 * How to bootstrap
 ** on NixOS:
