@@ -489,25 +489,6 @@ alias vssh="vagrant ssh"
 alias vdestroy="vagrant destroy"
 
 #-------------------------------------------------------------------}}}
-#   multimedia
-#-------------------------------------------------------------------{{{
-
-alias myStopScreensaver='myStopScreensaver.sh'
-
-mdump() { mplayer -dumpstream "${1}" -dumpfile ${2}.mp4; }
-mdir() {
-  mplayer -shuffle -playlist \
-    <(find "$PWD/$1" -type f -iregex ".*/.*\.\(wma\|mp3\|acc\|ogg\|flac\)")
-}
-
-#rename all images
-#alias myrenameAllImages="jhead -autorot -nf%y%m%d-%f **/*.jpg"
-alias myrenameImg="jhead -autorot -nf%y%m%d-%f"
-
-geeqie() { command geeqie "$@" & }
-rawtherapee() { command rawtherapee "$@" & }
-
-#-------------------------------------------------------------------}}}
 #   documente / printing
 #-------------------------------------------------------------------{{{
 

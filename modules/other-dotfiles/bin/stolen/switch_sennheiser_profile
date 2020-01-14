@@ -40,8 +40,12 @@ function main {
     exit 1
   fi
 
-  pactl set-card-profile "${pactl_name}" "${pactl_other_profile}"
-  echo "$pactl_other_profile"
+  readonly pactl_first_other_profile="$(printf "$pactl_other_profile" \
+                                            | head -1 \
+                                            | cut -f 1 -d " ")"
+
+  pactl set-card-profile "${pactl_name}" "${pactl_first_other_profile}"
+  echo "$pactl_first_other_profile"
 }
 
 main "$@"
