@@ -18,7 +18,6 @@
     ./nixos-hardware/lenovo/thinkpad/x1-extreme/gen2/default.nix
     ./ssd.nix
     ./lowres.nix
-    ./wacom.nix
 
     ##############################################################################
     ##  choos setup for graphics  ################################################

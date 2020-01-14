@@ -3,15 +3,6 @@
 { config, pkgs, lib, ... }:
 
 {
-  imports = [
-    ../../modules/vim
-    ../../modules/zsh
-    ../../modules/tmux
-    ../../modules/pass
-    ../../modules/git
-    ../../modules/other-dotfiles
-  ];
-
   config = {
     boot = {
       # kernelModules = [ "fuse" "kvm-intel" "coretemp" ];

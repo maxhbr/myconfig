@@ -6,12 +6,26 @@ let
   hostId = "${builtins.readFile /etc/nixos/hostid}";
   # for bootstrapping
   importall = import ./lib/helper/importall.nix;
+
+  default-modules = [
+    ./modules/nixos.core
+    ./modules/vim
+    ./modules/zsh
+    ./modules/tmux
+    ./modules/pass
+    ./modules/git
+    ./modules/nixos.networking
+    ./modules/nixos.nix.nix
+    ./modules/nixos.nixpkgs-unstable
+    ./modules/other-dotfiles
+    ./modules/user.mhuber.nix
+  ];
+
 in {
   imports = [/etc/nixos/hardware-configuration.nix ./lib]
+    ++ default-modules
   # all files in ./imports are sourced
     ++ (importall ./imports)
-  # all files in ./hosts/common.d are sourced as baseline
-    ++ (importall ./hosts/common.d)
   # the machine specific configuration is placed at ./hosts/<hostName>.nix
     ++ (let
           path = (./hosts + "/${hostName}.nix");
@@ -24,8 +38,18 @@ in {
     networking.hostName = "${hostName}";
     system.copySystemConfiguration = true;
 
-    nixpkgs.config = pkgs: {
-      allowUnfree = true;
+    nixpkgs = {
+      config = pkgs: {
+        allowUnfree = true;
+      };
+      overlays = let
+          path = ./overlays;
+          content = builtins.readDir path;
+        in if builtins.pathExists path
+          then map (n: import (path + ("/" + n)))
+                (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
+                  (builtins.attrNames content))
+          else [];
     };
     home-manager.users.mhuber = {
       nixpkgs.config.allowUnfree = true;

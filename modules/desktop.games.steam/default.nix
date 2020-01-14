@@ -1,5 +1,8 @@
 { pkgs, ... }:
 {
+  imports = [
+    ./steamcontroller.nix
+  ];
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [

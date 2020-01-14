@@ -7,7 +7,6 @@
     ../modules/hardware/x1extremeG2.nix
     ../modules/hardware/efi.nix
     ../modules/hardware/exfat.nix
-    ../modules/hardware/steamcontroller.nix
     ../modules/hardware/pulseaudio.nix
     # core
     ../modules/emacs
@@ -26,7 +25,7 @@
     ## fun
     ../modules/desktop.games.steam
     ../modules/desktop.games.powder
-    ../modules/imagework.nix
+    ../modules/imagework
     ../modules/smarthome.nix
   ];
 

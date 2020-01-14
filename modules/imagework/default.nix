@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 {
+  imports = [
+    ./wacom.nix
+  ];
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
