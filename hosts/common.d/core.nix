@@ -4,7 +4,12 @@
 
 {
   imports = [
-    ../modules/other-dotfiles
+    ../../modules/vim
+    ../../modules/zsh
+    ../../modules/tmux
+    ../../modules/pass
+    ../../modules/git
+    ../../modules/other-dotfiles
   ];
 
   config = {

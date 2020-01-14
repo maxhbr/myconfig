@@ -4,27 +4,20 @@ let
   hostName = "${builtins.readFile /etc/nixos/hostname}";
   # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done | sudo tee /etc/nixos/hostid
   hostId = "${builtins.readFile /etc/nixos/hostid}";
-
-  importall = path:
-    if builtins.pathExists path
-      then let
-          content = builtins.readDir path;
-        in map (n: import (path + ("/" + n)))
-          (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
-              (builtins.attrNames content))
-      else [];
+  # for bootstrapping
+  importall = import ./lib/helper/importall.nix;
 in {
-  imports = [/etc/nixos/hardware-configuration.nix]
+  imports = [/etc/nixos/hardware-configuration.nix ./lib]
   # all files in ./imports are sourced
     ++ (importall ./imports)
+  # all files in ./hosts/common.d are sourced as baseline
+    ++ (importall ./hosts/common.d)
   # the machine specific configuration is placed at ./hosts/<hostName>.nix
     ++ (let
           path = (./hosts + "/${hostName}.nix");
         in if builtins.pathExists path
              then [path]
-             else [])
-  # all files in ./default.nix.d are sourced
-    ++ (importall ./default.nix.d);
+             else []);
 
   config = {
     networking.hostId = "${hostId}";
