@@ -309,7 +309,7 @@ update() {
             logH3 "update" "emacs"
             ./modules/emacs/update.sh
             logH3 "update" "my-wallpapers"
-            ./modules/desktop/my-wallpapers/update.sh
+            ./modules/desktop.common/my-wallpapers/update.sh
         fi
     fi
 }
