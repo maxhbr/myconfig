@@ -3,7 +3,7 @@
 { pkgs, ... }:
 
 {
-  imports = [ ../common.nix ];
+  imports = [ ../mail.common ];
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [

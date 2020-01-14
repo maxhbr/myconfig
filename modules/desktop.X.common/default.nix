@@ -13,7 +13,7 @@ done
   '';
 in {
   imports = [
-    ../common.nix
+    ../desktop.common
   ];
 
   options = {

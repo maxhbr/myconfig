@@ -3,7 +3,7 @@
 { config, lib, pkgs, ... }:
 {
   imports = [
-    ./common.nix
+    ./dev.nix
   ];
   config = {
     environment.systemPackages = with pkgs.unstable; [

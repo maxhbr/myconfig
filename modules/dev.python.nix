@@ -3,14 +3,11 @@
 { pkgs, ... }:
 {
   imports = [
-    ./X.nix
+    ./dev.nix
   ];
-
   config = {
     environment.systemPackages = with pkgs; [
-      x11vnc
+      python python3
     ];
-    networking.firewall.allowedUDPPorts = [ 5900 ];
-    networking.firewall.allowedTCPPorts = [ 5900 ];
   };
 }

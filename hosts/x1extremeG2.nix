@@ -11,19 +11,22 @@
     ../modules/hardware/pulseaudio.nix
     # core
     ../modules/emacs
-    ../modules/desktop/xmonad
-    ../modules/desktop/sway
-    # ../modules/desktop/xfce.nix
-    ../modules/mail
-    ../modules/virtualization
-    ../modules/service/openssh.nix
-    # ../modules/service/syncthing.nix
+    ../modules/desktop.X.xmonad
+    ../modules/desktop.Wayland.sway
+    # ../modules/desktop.X.xfce.nix
+    ../modules/mail.mu4e
+    ../modules/mail.mutt
+    ../modules/virtualization.docker
+    ../modules/virtualization.vbox
+    ../modules/virtualization.qemu.nix
+    ../modules/service.openssh.nix
+    # ../modules/service.syncthing.nix
     ../modules/work
     ../modules/dev.haskell
-    ../modules/dev/misc.nix
     ## fun
-    ../modules/desktop/games
-    ../modules/desktop/imagework.nix
+    ../modules/desktop.games.steam
+    ../modules/desktop.games.powder
+    ../modules/imagework.nix
     ../modules/smarthome.nix
   ];
 

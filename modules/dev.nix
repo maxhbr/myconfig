@@ -8,6 +8,7 @@
       gnumake cmake automake
       cloc
       pass-git-helper
+      jq
     ] ++ lib.optional config.services.xserver.enable vscode-with-extensions);
   };
 }

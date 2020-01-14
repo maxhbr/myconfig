@@ -3,11 +3,14 @@
 { pkgs, ... }:
 {
   imports = [
-    ./common.nix
+    ./desktop.X.common
   ];
+
   config = {
     environment.systemPackages = with pkgs; [
-      jq
+      x11vnc
     ];
+    networking.firewall.allowedUDPPorts = [ 5900 ];
+    networking.firewall.allowedTCPPorts = [ 5900 ];
   };
 }

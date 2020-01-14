@@ -3,7 +3,7 @@
 { pkgs, ... }:
 {
   imports = [
-    ../common.nix
+    ../desktop.common
   ];
 
   config = {

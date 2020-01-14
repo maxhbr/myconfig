@@ -3,11 +3,10 @@
 { pkgs, ... }:
 {
   imports = [
-    ./common.nix
+    ./desktop.X.common
   ];
+
   config = {
-    environment.systemPackages = with pkgs; [
-      python python3
-    ];
+    services.xserver.desktopManager.xfce.enable = true;
   };
 }
