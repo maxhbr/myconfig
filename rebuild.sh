@@ -303,13 +303,13 @@ update() {
             logH3 "update" "home-manager"
             ./lib/home-manager/update.sh
             logH3 "update" "extrahosts"
-            ./modules/nixos.networking/extrahosts/update.sh
+            ./modules/core/nixos.networking/extrahosts/update.sh
             logH3 "update" "nixpkgs-unstable"
-            ./modules/nixos.nixpkgs-unstable/default.sh
+            ./modules/core/nixos.nixpkgs-unstable/default.sh
             logH3 "update" "emacs"
             ./modules/emacs/update.sh
             logH3 "update" "my-wallpapers"
-            ./modules/desktop.common/my-wallpapers/update.sh
+            ./modules/desktop/common/my-wallpapers/update.sh
         fi
     fi
 }
