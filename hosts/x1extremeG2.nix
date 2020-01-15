@@ -8,20 +8,11 @@
     ../modules/hardware/efi.nix
     ../modules/hardware/exfat.nix
     ../modules/hardware/pulseaudio.nix
-    # core
-    ../modules/emacs
-    ../modules/desktop.X.xmonad
-    ../modules/desktop.Wayland.sway
-    # ../modules/desktop.X.xfce.nix
-    ../modules/mail.mu4e
-    ../modules/mail.mutt
-    ../modules/virtualization.docker
-    ../modules/virtualization.vbox
-    ../modules/virtualization.qemu.nix
+    ../profiles/desktop.nix
+    ../profiles/mail.nix
+    ../profiles/dev.nix
+    ../profiles/work.nix
     ../modules/service.openssh.nix
-    # ../modules/service.syncthing.nix
-    ../modules/work
-    ../modules/dev.haskell
     ## fun
     ../modules/desktop.games.steam
     ../modules/desktop.games.powder
