@@ -1,8 +1,9 @@
 {...}: {
   imports = [
     ../emacs
-    ./desktop.Wayland.sway
-    ./desktop.X.xfce.nix
-    ./desktop.X.xmonad
+    ./Wayland.sway
+    ./X.xfce.nix
+    ./X.xmonad
+    ./pulseaudio.nix
   ];
 }

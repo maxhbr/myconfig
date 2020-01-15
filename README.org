@@ -20,7 +20,26 @@ $ ~/myconfig/rebuild.sh
 
 * How it is composed
 
-tbd.
+- Entrypoint is the file `./default.nix`.
+- It loads the corresponding `./hosts/${host}.nix`, depending on the content of `/etc/nixos/hostname`
+- This then loads profiles and composes the configuration.
+
+** Modules
+
+| Modules     | Description                                                |
+|-------------+------------------------------------------------------------|
+| *core*      | This profile is loaded on every machine                    |
+| *core/zsh*  | Zsh dotfiles, aliasrc, other shell stuff                   |
+| *core/vim*  | (currently unused) vim config                              |
+| *core/git*  | Gitconfig and some related scripts                         |
+| *core/tmux* | Tmux configuration                                         |
+| *emacs*     | Dotfiles for a spacemacs based emacs setup                 |
+| *desktop*   | Contains all the stuff for the graphical UI, mainly xmonad |
+| *dev*       |                                                            |
+| *mail*      | Email client and configuration                             |
+| *work*      | Some not-fun stuff                                         |
+| *gaming*    | Some fun stuff                                             |
+| *misc*      |                                                            |
 
 * Notes
 To use https for pulling:

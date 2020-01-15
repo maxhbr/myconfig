@@ -4,10 +4,10 @@
 {
   imports = [
     # hardware:
-    ../modules/hardware/x1extremeG2.nix
-    ../modules/hardware/efi.nix
-    ../modules/hardware/exfat.nix
-    ../modules/hardware/pulseaudio.nix
+    ./hardware/x1extremeG2.nix
+    ./hardware/efi.nix
+    ./hardware/exfat.nix
+    # configuration
     ../modules/desktop
     ../modules/mail
     ../modules/dev

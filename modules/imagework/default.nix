@@ -4,6 +4,7 @@
 {
   imports = [
     ./wacom.nix
+    ./exfat.nix
   ];
   config = {
     home-manager.users.mhuber = {
