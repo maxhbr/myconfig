@@ -8,7 +8,7 @@ let
   importall = import ./lib/helper/importall.nix;
 
 in {
-  imports = [/etc/nixos/hardware-configuration.nix ./lib ./profiles/core]
+  imports = [/etc/nixos/hardware-configuration.nix ./lib ./profiles/core.nix]
   # all files in ./imports are sourced
     ++ (importall ./imports)
   # the machine specific configuration is placed at ./hosts/<hostName>.nix
