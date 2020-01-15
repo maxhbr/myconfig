@@ -25,21 +25,28 @@ $ ~/myconfig/rebuild.sh
 - This then loads profiles and composes the configuration.
 
 ** Modules
-
-| Modules     | Description                                                |
-|-------------+------------------------------------------------------------|
-| *core*      | This profile is loaded on every machine                    |
-| *core/zsh*  | Zsh dotfiles, aliasrc, other shell stuff                   |
-| *core/vim*  | (currently unused) vim config                              |
-| *core/git*  | Gitconfig and some related scripts                         |
-| *core/tmux* | Tmux configuration                                         |
-| *emacs*     | Dotfiles for a spacemacs based emacs setup                 |
-| *desktop*   | Contains all the stuff for the graphical UI, mainly xmonad |
-| *dev*       |                                                            |
-| *mail*      | Email client and configuration                             |
-| *work*      | Some not-fun stuff                                         |
-| *gaming*    | Some fun stuff                                             |
-| *misc*      |                                                            |
+The top level modules and other interesting ones are:
+| Modules                    | Description                                                |
+|----------------------------+------------------------------------------------------------|
+| *core*                     | This profile is loaded on every machine                    |
+| *core/zsh*                 | Zsh dotfiles, aliasrc, other shell stuff                   |
+| *core/vim*                 | (currently unused) vim config                              |
+| *core/git*                 | Gitconfig and some related scripts                         |
+| *core/tmux*                | Tmux configuration                                         |
+| *emacs*                    | Dotfiles for a spacemacs based emacs setup                 |
+| *desktop*                  | Contains all the stuff for the graphical UI, mainly xmonad |
+| *desktop/X.xmonad*         | My xmonad configuration                                    |
+| *desktop/Wayland.sway*     | (currently unused) configuration for sway                  |
+| *desktop/X.vnc*            | Adds an VNC server                                         |
+| *desktop/X.terminal*       | For setting up an terminal server                          |
+| *dev*                      |                                                            |
+| *mail*                     | Email client and configuration                             |
+| *work*                     | Some not-fun stuff                                         |
+| *gaming*                   | Some fun stuff                                             |
+| *imagework*                | Applications used for editing of photographs               |
+| *server*                   | Configuration for an headless server                       |
+| *service.wireguard-server* | The server configuration for wireguard                     |
+| *misc*                     | Some other stuff                                           |
 
 * Notes
 To use https for pulling:
