@@ -7,23 +7,8 @@ let
   # for bootstrapping
   importall = import ./lib/helper/importall.nix;
 
-  default-modules = [
-    ./modules/nixos.core
-    ./modules/vim
-    ./modules/zsh
-    ./modules/tmux
-    ./modules/pass
-    ./modules/git
-    ./modules/nixos.networking
-    ./modules/nixos.nix.nix
-    ./modules/nixos.nixpkgs-unstable
-    ./modules/other-dotfiles
-    ./modules/user.mhuber.nix
-  ];
-
 in {
-  imports = [/etc/nixos/hardware-configuration.nix ./lib]
-    ++ default-modules
+  imports = [/etc/nixos/hardware-configuration.nix ./lib ./profiles/core]
   # all files in ./imports are sourced
     ++ (importall ./imports)
   # the machine specific configuration is placed at ./hosts/<hostName>.nix
