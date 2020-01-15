@@ -7,7 +7,7 @@ let
   };
 in {
   imports = [
-    ../desktop.X.common
+    ../X.common
   ];
 
   config = {

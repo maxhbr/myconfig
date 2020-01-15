@@ -6,13 +6,11 @@
     # hardware:
     ./hardware/x1extremeG2.nix
     ./hardware/efi.nix
-    ./hardware/exfat.nix
     # configuration
     ../modules/desktop
     ../modules/mail
     ../modules/dev
     ../modules/work
-    ../modules/misc/service.openssh.nix
     ## fun
     ../modules/imagework
     ../modules/misc/smarthome.nix

@@ -13,7 +13,7 @@ done
   '';
 in {
   imports = [
-    ../desktop.common
+    ../common
   ];
 
   options = {

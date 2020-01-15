@@ -3,7 +3,7 @@
 { pkgs, ... }:
 {
   imports = [
-    ./desktop.X.common
+    ./X.common
   ];
 
   config = {
