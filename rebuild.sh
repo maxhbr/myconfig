@@ -301,11 +301,11 @@ update() {
             fi
 
             logH3 "update" "home-manager"
-            ./default.nix.d/home-manager/update.sh
+            ./lib/home-manager/update.sh
             logH3 "update" "extrahosts"
-            ./default.nix.d/extrahosts/update.sh
+            ./modules/nixos.networking/extrahosts/update.sh
             logH3 "update" "nixpkgs-unstable"
-            ./default.nix.d/nixpkgs-unstable/default.sh
+            ./modules/nixos.nixpkgs-unstable/default.sh
             logH3 "update" "emacs"
             ./modules/emacs/update.sh
             logH3 "update" "my-wallpapers"
