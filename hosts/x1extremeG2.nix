@@ -14,10 +14,10 @@
     ../profiles/work.nix
     ../modules/service.openssh.nix
     ## fun
-    ../modules/desktop.games.steam
-    ../modules/desktop.games.powder
     ../modules/imagework
     ../modules/smarthome.nix
+    ../modules/desktop.games.steam
+    ../modules/desktop.games.powder
   ];
 
   config = {
