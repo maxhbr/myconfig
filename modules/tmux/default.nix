@@ -22,7 +22,7 @@ let
 in {
   environment.shellAliases = {
     tx = "tmux new-session -A -s $USER";
-    tmx = "tmux attach-session || tmux"
+    tmx = "tmux attach-session || tmux";
   };
   # TODO: ntmx with keybindings
 

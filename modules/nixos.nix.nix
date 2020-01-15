@@ -7,6 +7,12 @@
       useSandbox = true;
       readOnlyStore = true;
 
+      autoOptimiseStore = true;
+      optimise.automatic = true;
+
+      allowedUsers = [ "@wheel" ];
+      trustedUsers = [ "root" "@wheel" ];
+
       trustedBinaryCaches = [ "https://cache.nixos.org" ];
       binaryCaches = [ "https://cache.nixos.org" ];
 
