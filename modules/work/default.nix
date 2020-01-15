@@ -5,7 +5,7 @@
 {
   imports = [
     ./jdk.nix
-    ../dev.nix
+    ../dev
   ];
   config = {
     nixpkgs.overlays = map (n: import n) [

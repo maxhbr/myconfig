@@ -8,16 +8,15 @@
     ../modules/hardware/efi.nix
     ../modules/hardware/exfat.nix
     ../modules/hardware/pulseaudio.nix
-    ../profiles/desktop.nix
-    ../profiles/mail.nix
-    ../profiles/dev.nix
-    ../profiles/work.nix
-    ../modules/service.openssh.nix
+    ../modules/desktop
+    ../modules/mail
+    ../modules/dev
+    ../modules/work
+    ../modules/misc/service.openssh.nix
     ## fun
     ../modules/imagework
-    ../modules/smarthome.nix
-    ../modules/desktop.games.steam
-    ../modules/desktop.games.powder
+    ../modules/misc/smarthome.nix
+    ../modules/gaming
   ];
 
   config = {
