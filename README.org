@@ -35,7 +35,8 @@ The top level modules and other interesting ones are:
 | Modules                     | Description                                                |
 |-----------------------------+------------------------------------------------------------|
 | *core*                      | This profile is loaded on every machine                    |
-| *core/zsh*                  | Zsh dotfiles, aliasrc, other shell stuff                   |
+| *core/shell.common*         | Shell stuff, like the  aliasrc                             |
+| *core/zsh*                  | Zsh dotfiles, other shell stuff                            |
 | *core/vim*                  | (currently unused) vim config                              |
 | *core/git*                  | Gitconfig and some related scripts                         |
 | *core/tmux*                 | Tmux configuration                                         |
