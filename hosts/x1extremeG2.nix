@@ -3,6 +3,7 @@
 { pkgs, ... }:
 {
   imports = [
+    ./minimal.nix
     # hardware:
     ./hardware/x1extremeG2.nix
     ./hardware/efi.nix
@@ -18,7 +19,6 @@
   ];
 
   config = {
-    boot.kernelPackages = pkgs.unstable.linuxPackages_latest;
     boot.initrd.supportedFilesystems = [ "luks" ];
     boot.initrd.luks.devices = [{
       device = "/dev/disk/by-uuid/2118a468-c2c3-4304-b7d3-32f8e19da49f";

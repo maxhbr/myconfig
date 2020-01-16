@@ -234,6 +234,7 @@ realize() {
     else
         args="--upgrade"
     fi
+
     NIXOS_REBUILD_CMD=${NIXOS_REBUILD_CMD:-switch}
     logH1 "nixos-rebuild" "\$NIXOS_REBUILD_CMD=$NIXOS_REBUILD_CMD \$args=$args"
     logINFO "$NIX_PATH_ARGS"
@@ -340,7 +341,7 @@ handlePostExecutionHooks () {
 
 run() {
     if [[ "$1" == "--dry-run" ]]; then
-        NIXOS_REBUILD_CMD="dry-run"
+        export NIXOS_REBUILD_CMD="dry-run"
     else
         prepare
         if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then

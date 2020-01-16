@@ -8,10 +8,22 @@ let
   importall = import ./lib/helper/importall.nix;
 
 in {
-  imports = [/etc/nixos/hardware-configuration.nix ./lib ./modules/core]
-  # all files in ./imports are sourced
+  imports = [
+    /etc/nixos/hardware-configuration.nix
+    ./lib
+    ./modules/core
+  ]
+    # the machine specific configuration is placed at ./hosts/<hostName>.nix
+    ++ (let
+          path = /etc/nixos/hardware-configuration.nix;
+        in if builtins.pathExists path
+             then [path]
+             else [])
+    # all files in /etc/nixos/imports are sourced
+    ++ (importall /etc/nixos/imports)
+    # all files in ./imports are sourced
     ++ (importall ./imports)
-  # the machine specific configuration is placed at ./hosts/<hostName>.nix
+    # the machine specific configuration is placed at ./hosts/<hostName>.nix
     ++ (let
           path = (./hosts + "/${hostName}.nix");
         in if builtins.pathExists path

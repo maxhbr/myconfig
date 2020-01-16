@@ -1,7 +1,7 @@
 { config, pkgs, ... }:
 
 #
-# This file contains configuration specific to running OS as a virtualbox guest.
+# This file contains configuration specific to running OS as a qemu guest.
 #
 
 {
