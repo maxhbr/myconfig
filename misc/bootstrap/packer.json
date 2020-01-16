@@ -13,7 +13,7 @@
                 ["modifyvm", "{{.Name}}", "--memory", "8192"],
                 ["modifyvm", "{{.Name}}", "--cpus", "4"]
             ],
-            "headless": true,
+            "headless": false,
 
             "iso_url": "https://releases.nixos.org/nixos/19.09/nixos-19.09.1861.eb65d1dae62/nixos-minimal-19.09.1861.eb65d1dae62-x86_64-linux.iso",
             "iso_checksum": "4f91031a9aea9fa0508787392ce68c99fda8976fc8dbb2bfc97dbbc4822c32c6",
@@ -55,7 +55,7 @@
             "vm_name": "myconfig_bootstrap_test",
             "net_device": "virtio-net",
             "disk_interface": "virtio",
-            "headless": true,
+            "headless": false,
 
             "iso_url": "https://releases.nixos.org/nixos/19.09/nixos-19.09.1861.eb65d1dae62/nixos-minimal-19.09.1861.eb65d1dae62-x86_64-linux.iso",
             "iso_checksum": "4f91031a9aea9fa0508787392ce68c99fda8976fc8dbb2bfc97dbbc4822c32c6",

@@ -6,20 +6,20 @@
 { config, pkgs, ... }:
 let
   gopassWrapper = with pkgs; writeScriptBin "gopass_wrapper.sh" ''
-#!${stdenv.shell}
-if [ -f ~/.gpg-agent-info ] && [ -n "$(${procps}/bin/pgrep gpg-agent)" ]; then
-	source ~/.gpg-agent-info
-	export GPG_AGENT_INFO
-else
-	eval $(${gnupg}/bin/gpg-agent --daemon)
-fi
-export GPG_TTY="$(tty)"
+    #!${stdenv.shell}
+    if [ -f ~/.gpg-agent-info ] && [ -n "$(${procps}/bin/pgrep gpg-agent)" ]; then
+      source ~/.gpg-agent-info
+      export GPG_AGENT_INFO
+    else
+      eval $(${gnupg}/bin/gpg-agent --daemon)
+    fi
+    export GPG_TTY="$(tty)"
 
-${gopass}/bin/gopass jsonapi listen
+    ${gopass}/bin/gopass jsonapi listen
 
-exit $?
+    exit $?
   '';
-n {
+in {
   config = {
     home-manager.users.mhuber = {
       home.file = {
