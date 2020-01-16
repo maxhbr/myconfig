@@ -1,0 +1,1 @@
+../../modules/core/zsh/zshrc

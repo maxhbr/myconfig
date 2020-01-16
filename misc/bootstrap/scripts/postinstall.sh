@@ -14,7 +14,7 @@ git config user.email "${USER}@${hostName}"
 git config user.name "${USER}"
 
 export NIXPKGS_ALLOW_UNFREE=1
-./rebuild.sh --fast
+./rebuild.sh --no-tmux --fast
 
 chown -R mhuber:mhuber /home/mhuber/myconfig
 
