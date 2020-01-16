@@ -14,8 +14,7 @@
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
         ag
-        # taskwarrior
-        pass gopass
+        taskwarrior
       ];
       home.file = {
         ".config/htop/htoprc" = {

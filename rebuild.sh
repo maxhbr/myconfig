@@ -227,7 +227,7 @@ prepare() {
             tee $nix_path_file
     fi
 
-    sudo mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/$USER
+    sudo mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/$my_user
 }
 
 realize() {

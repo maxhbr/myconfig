@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: MIT
 { config, pkgs, ... }:
 {
+  imports = [
+    ./gopassbridge.nix
+  ];
   config = {
     nixpkgs.overlays = [
       (self: super: let
@@ -22,6 +25,7 @@
       home.packages = with pkgs; [
         pass
         pass-git-helper
+        gopass
       ];
       home.file = {
         ".config/pass-git-helper/git-pass-mapping.ini".source = ./config/pass-git-helper/git-pass-mapping.ini;

@@ -3,9 +3,8 @@
 {
   imports = [
     ./hardware-configuration.nix
-    ./guest.nix
-    ./users.nix
-    ./vagrant.nix
+    ./imports/guest.nix
+    ./imports/users.nix
     ./mhuber.nix
   ];
   environment.systemPackages = with pkgs; [

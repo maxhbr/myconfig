@@ -13,7 +13,7 @@
                 ["modifyvm", "{{.Name}}", "--memory", "8192"],
                 ["modifyvm", "{{.Name}}", "--cpus", "4"]
             ],
-            "headless": false,
+            "headless": true,
 
             "iso_url": "https://releases.nixos.org/nixos/19.09/nixos-19.09.1861.eb65d1dae62/nixos-minimal-19.09.1861.eb65d1dae62-x86_64-linux.iso",
             "iso_checksum": "4f91031a9aea9fa0508787392ce68c99fda8976fc8dbb2bfc97dbbc4822c32c6",
@@ -29,9 +29,10 @@
 
                 "BOOTSTRAP=YES $HOME/bootstrap.sh /dev/sda && \\<enter>",
 
+                "mkdir -p /mnt/etc/nixos/imports/ && \\<enter>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/configuration.nix |tee /mnt/etc/nixos/configuration.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/guest-virtualbox.nix |tee /mnt/etc/nixos/guest.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/users-vagrant.nix |tee /mnt/etc/nixos/users.nix && \\<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/guest-virtualbox.nix |tee /mnt/etc/nixos/imports/guest.nix && \\<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/users-vagrant.nix |tee /mnt/etc/nixos/imports/users.nix && \\<enter>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/vagrant.nix |tee /mnt/etc/nixos/vagrant.nix && \\<enter>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/modules/core/user.mhuber.nix |tee /mnt/etc/nixos/mhuber.nix && \\<enter>",
 
@@ -54,7 +55,7 @@
             "vm_name": "myconfig_bootstrap_test",
             "net_device": "virtio-net",
             "disk_interface": "virtio",
-            "headless": false,
+            "headless": true,
 
             "iso_url": "https://releases.nixos.org/nixos/19.09/nixos-19.09.1861.eb65d1dae62/nixos-minimal-19.09.1861.eb65d1dae62-x86_64-linux.iso",
             "iso_checksum": "4f91031a9aea9fa0508787392ce68c99fda8976fc8dbb2bfc97dbbc4822c32c6",
@@ -69,9 +70,11 @@
 
                 "BOOTSTRAP=YES /root/bootstrap.sh /dev/vda && \\<enter>",
 
+
+                "mkdir -p /mnt/etc/nixos/imports/ && \\<enter>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/configuration.nix |tee /mnt/etc/nixos/configuration.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/guest-qemu.nix |tee /mnt/etc/nixos/guest.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/users-vagrant.nix |tee /mnt/etc/nixos/users.nix && \\<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/guest-qemu.nix |tee /mnt/etc/nixos/import/guest.nix && \\<enter>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/users-vagrant.nix |tee /mnt/etc/nixos/imports/users.nix && \\<enter>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/vagrant.nix |tee /mnt/etc/nixos/vagrant.nix && \\<enter>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/modules/core/user.mhuber.nix |tee /mnt/etc/nixos/mhuber.nix && \\<enter>",
 

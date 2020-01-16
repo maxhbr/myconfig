@@ -9,6 +9,7 @@ export nixStableChannel=nixos-19.09
 export COMMON_SH_WAS_SOURCED="true"
 
 export my_main_host='x1extremeG2'
+export my_user='mhuber'
 
 export myconfigDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 export nixpkgsDir="$myconfigDir/nixpkgs"
@@ -18,8 +19,8 @@ else
     nixpkgs="channel:$nixStableChannel"
 fi
 
-NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$myconfigDir/default.nix"
-NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/default.nix"
+NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$myconfigDir/default.nix:myuser=$my_user"
+NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/default.nix -I myuser=$my_user"
 export NIX_PATH
 export NIX_PATH_ARGS
 
