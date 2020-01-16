@@ -19,21 +19,34 @@ ${gopass}/bin/gopass jsonapi listen
 
 exit $?
   '';
-in {
+n {
   config = {
     home-manager.users.mhuber = {
       home.file = {
         ".mozilla/native-messaging-hosts/com.justwatch.gopass.json" = {
           text = ''
-{
-    "name": "com.justwatch.gopass",
-    "description": "Gopass wrapper to search and return passwords",
-    "path": "${gopassWrapper}/bin/gopass_wrapper.sh",
-    "type": "stdio",
-    "allowed_extensions": [
-        "{eec37db0-22ad-4bf1-9068-5ae08df8c7e9}"
-    ]
-}
+            {
+                "name": "com.justwatch.gopass",
+                "description": "Gopass wrapper to search and return passwords",
+                "path": "${gopassWrapper}/bin/gopass_wrapper.sh",
+                "type": "stdio",
+                "allowed_extensions": [
+                    "{eec37db0-22ad-4bf1-9068-5ae08df8c7e9}"
+                ]
+            }
+          '';
+        };
+        ".config/chromium/NativeMessagingHosts/com.justwatch.gopass.json" = {
+          text = ''
+            {
+                "name": "com.justwatch.gopass",
+                "description": "Gopass wrapper to search and return passwords",
+                "path": "${gopassWrapper}/bin/gopass_wrapper.sh",
+                "type": "stdio",
+                "allowed_origins": [
+                    "chrome-extension://kkhfnlkhiapbiehimabddjbimfaijdhk/"
+                ]
+            }
           '';
         };
       };
