@@ -32,6 +32,7 @@
       };
       shellAliases = {
         upg = "~/myconfig/rebuild.sh";
+        upg-dry = "~/myconfig/rebuild.sh --dry-run";
       };
       systemPackages = with pkgs; [
         kbd
@@ -45,7 +46,7 @@
         vim
 
         # admin:
-        mtr bind bridge-utils
+        bind bridge-utils
         sysstat
         cryptsetup
         lsof
@@ -70,8 +71,12 @@
       acpid.enable = true;
       ntp.enable = true;
       nscd.enable = true;
+      earlyoom.enable = true;
     };
 
     programs.ssh.startAgent = true;
+    programs.thefuck.enable = true;
+    programs.firejail.enable = true;
+    programs.mtr.enable = true;
   };
 }

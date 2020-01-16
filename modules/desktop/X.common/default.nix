@@ -3,22 +3,18 @@
 { pkgs, ... }:
 let
   mkstopscreensaver = with pkgs; writeScriptBin "myStopScreensaver.sh" ''
-#!${stdenv.shell}
-printf "run: "
-while true; do
-    printf "."
-    sleep $((60 * 4))
-    ${xdotool}/bin/xdotool key shift
-done
+    #!${stdenv.shell}
+    printf "run: "
+    while true; do
+        printf "."
+        sleep $((60 * 4))
+        ${xdotool}/bin/xdotool key shift
+    done
   '';
 in {
   imports = [
     ../common
   ];
-
-  options = {
-    # option declarations
-  };
 
   config = {
     home-manager.users.mhuber = {
@@ -74,5 +70,18 @@ in {
         # temperature.night = 3500;
       };
     };
+    environment = {
+      systemPackages = with pkgs; [
+        vanilla-dmz
+      ];
+    };
+    nixpkgs.overlays = [(final: prev: {
+      # set default cursor theme when installed
+      cursor = prev.writeTextDir "share/icons/default/index.theme" ''
+        [icon theme]
+        Inherits=Vanilla-DMZ
+        Size=128
+      '';
+    })];
   };
 }

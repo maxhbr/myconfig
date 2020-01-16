@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
+  dejavu_nerdfont = pkgs.callPackage ./pkgs/dejavu-nerdfont.nix { };
   inco = with pkgs; writeScriptBin "inco.sh" ''
 #!${stdenv.shell}
 set -e
@@ -88,11 +89,14 @@ in {
     fonts = {
       enableFontDir = true;
       enableGhostscriptFonts = true;
+
       fonts = with pkgs; [
-        dejavu_fonts
+        dejavu_fonts dejavu_nerdfont
         corefonts
         inconsolata
       ];
+      fontconfig.defaultFonts.monospace =
+        [ "DejaVu Sans Mono Nerd Font Complete Mono" ];
     };
   };
 }

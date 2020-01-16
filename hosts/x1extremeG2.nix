@@ -17,6 +17,8 @@
     ../modules/imagework
     ../modules/misc/smarthome.nix
     ../modules/gaming
+    # disable spectre and 
+    ../modules/make-linux-fast-again.nix
   ];
 
   config = {

@@ -50,11 +50,12 @@
         script = ''
           historyfile=/home/mhuber/.zsh_history
           backupdir="$historyfile"_backups
-          mkdir -p $backupdir
-          backup=$backupdir/.zsh_history_$(date '+%Y-%V')
+          backup=$backupdir/$(date '+%Y-%V').zsh_history.gz
           if [[ ! -f $backup ]]; then
+            mkdir -p $backupdir
             echo "Time: $(date)." >> $backupdir/zsh-history-backup-timer.log
-            cp  /home/mhuber/.zsh_history $backup
+            ${pkgs.gzip}/bin/gzip -k $historyfile
+            mv $historyfile.gz $backup
           fi
         '';
       };

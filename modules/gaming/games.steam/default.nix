@@ -6,7 +6,7 @@
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
-        steam
+        steam steam-run
       ];
     };
 
