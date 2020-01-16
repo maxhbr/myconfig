@@ -20,7 +20,7 @@ let
     exit $?
   '';
 in {
-  config = {
+  config = lib.mkIf config.services.xserver.enable {
     home-manager.users.mhuber = {
       home.file = {
         ".mozilla/native-messaging-hosts/com.justwatch.gopass.json" = {
