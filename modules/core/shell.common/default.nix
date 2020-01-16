@@ -8,6 +8,13 @@
   ];
   config = {
     home-manager.users.mhuber = {
+      programs.bat = {
+        enable = true;
+        config = {
+          pager = "less -FR";
+          theme = "Monokai Extended Light";
+        };
+      };
       home.file = {
         ".aliasrc".source = ./aliasrc;
         ".bashrc" = {
@@ -35,7 +42,6 @@
 export PROMPT_COMMAND='history -a'
           '';
         };
-        ".config/bat/config".source = ./bat.config;
         ".config/htop/htoprc" = {
           text = ''
 fields=0 48 17 18 38 39 40 2 46 47 111 49 1
@@ -83,7 +89,6 @@ right_meter_modes=2 2 2 2 2 1 1
         elinks w3m
         manpages
         file
-        bat
 
         # admin:
         htop iftop iptraf-ng iotop bmon s-tui
@@ -94,7 +99,7 @@ right_meter_modes=2 2 2 2 2 1 1
 
       ];
       shellAliases = {
-        cat = "${pkgs.bat}/bin/bat";
+        cat = "${pkgs.bat}/bin/bat --theme=\"Monokai Extended Light\"";
         ps = "${pkgs.procs}/bin/procs";
       };
     };
