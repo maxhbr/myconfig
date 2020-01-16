@@ -226,6 +226,8 @@ prepare() {
         echo $nix_path_string |
             tee $nix_path_file
     fi
+
+    sudo mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/$USER
 }
 
 realize() {

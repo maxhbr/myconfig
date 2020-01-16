@@ -5,7 +5,7 @@ Currently I use
 - Window Manager: **[[http://xmonad.org/][xmonad]]** (with: [[https://github.com/jaor/xmobar][xmobar]], [[https://tools.suckless.org/dmenu/][dmenu]] + [[http://dmwit.com/yeganesh/][yeganesh]])
 - EDITOR: emacs with [[http://spacemacs.org/][spacemacs]]
 - SHELL: zsh (with: [[http://ohmyz.sh/][oh-my-zsh]])
-- Email Client: ‘+mutt with offlineimap+’ `+mutt with offlineimap+` [[https://www.djcbsoftware.nl/code/mu/mu4e.html][mu4e]] with mbsync
+- Email Client: +mutt with offlineimap+ [[https://www.djcbsoftware.nl/code/mu/mu4e.html][mu4e]] with mbsync
 - Keyboard layout: [[https://www.neo-layout.org/][neo2]]
 - my wallpapers: [[https://github.com/maxhbr/wallpapers][maxhbr/wallpapers]]
 
