@@ -38,3 +38,5 @@ usage:
 EOF
        ;;
 esac
+
+times
