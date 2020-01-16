@@ -98,11 +98,15 @@ right_meter_modes=2 2 2 2 2 1 1
         pmount fuse
 
       ];
+      interactiveShellInit = ''
+        eval $(${pkgs.thefuck}/bin/thefuck --alias)
+      '';
       shellAliases = {
         cat = "${pkgs.bat}/bin/bat --theme=\"Monokai Extended Light\"";
         ps = "${pkgs.procs}/bin/procs";
       };
     };
+    programs.thefuck.enable = true;
 
     security = {
       sudo.extraConfig = ''
