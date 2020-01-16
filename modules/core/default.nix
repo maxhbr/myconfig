@@ -10,7 +10,6 @@
     ./nixos.networking
     ./nixos.nix.nix
     ./nixos.nixpkgs-unstable
-    ./other-dotfiles
     ./user.mhuber.nix
   ];
   config = {

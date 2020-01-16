@@ -69,6 +69,10 @@ right_meter_modes=2 2 2 2 2 1 1
             /.git/
           '';
         };
+        ".config/ranger" = {
+          source = ./ranger;
+          recursive = true;
+        };
       };
     };
     environment = {

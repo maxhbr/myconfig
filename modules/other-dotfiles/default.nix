@@ -9,10 +9,6 @@
           source = ./bin;
           recursive = true;
         };
-        ".config/ranger" = {
-          source = ./config/ranger;
-          recursive = true;
-        };
       };
     };
   };

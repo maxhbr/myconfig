@@ -12,6 +12,7 @@
     ../modules/mail
     ../modules/dev
     ../modules/work
+    ../modules/other-dotfiles
     ## fun
     ../modules/imagework
     ../modules/misc/smarthome.nix
