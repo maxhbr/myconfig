@@ -1,9 +1,6 @@
 ! Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 ! SPDX-License-Identifier: MIT
 ! ~/.Xresources
-Xcursor.size: 128
-Xcursor.theme: Vanilla-DMZ
-
 *utf8: 1
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -14,137 +11,7 @@ Xft.hintstyle: hintfull
 Xft.hinting: 1
 Xft.antialias: 1
 Xft.rgba: rgb
-! Xft.dpi: 120
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !! Xterm
 xterm*loginShell: true
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! URxvt
-URxvt*saveLines: 12000
-URxvt*reverseVideo: false
-URxvt*loginShell: true
-URxvt.urgentOnBell: true
-URxvt*termName: rxvt-256color
-
-!! URxvt -> style
-URxvt*scrollBar: false
-URxvt*scrollBar_right: false
-URxvt*scrollstyle: plain
-URxvt.internalBorder: 5
-URxvt.externalBorder: 5
-
-!! URxvt -> font
-URxvt.font:             xft:inconsolata:pixelsize=17:antialias=true:hinting=true,             xft:DejaVu Sans Mono:pixelsize=15:antialias=true:hinting=true
-URxvt.boldFont:         xft:inconsolata:bold:pixelsize=17:antialias=true:hinting=true,        xft:DejaVu Sans Mono:bold:pixelsize=14:antialias=true:hinting=true
-URxvt.italicFont:       xft:inconsolata:italic:pixelsize=17:antialias=true:hinting=true,      xft:DejaVu Sans Mono:italic:pixelsize=15:antialias=true:hinting=true
-URxvt.bolditalicFont:   xft:inconsolata:bold:italic:pixelsize=17:antialias=true:hinting=true, xft:DejaVu Sans Mono:bold:italic:pixelsize=15:antialias=true:hinting=true
-! xft:Iosevka:pixelsize=17:antialias=true:hinting=true,
-! xft:Iosevka:bold:pixelsize=17:antialias=true:hinting=true,
-! xft:Iosevka:italic:pixelsize=17:antialias=true:hinting=true,
-! xft:Iosevka:bold:italic:pixelsize=17:antialias=true:hinting=true,
-
-!! URxvt -> libs
-urxvt.perl-lib: /usr/lib/urxvt/perl/
-urxvt.perl-ext-common:  default,matcher,tabbed,font-size,clipboard,url-select,keyboard-select
-urxvt.matcher.button:   1
-
-URxvt.tabbed.autohide: yes
-
-URxvt.keysym.C-Up:     perl:font-size:increase
-URxvt.keysym.C-Down:   perl:font-size:decrease
-URxvt.keysym.C-S-Up:   perl:font-size:incglobal
-URxvt.keysym.C-S-Down: perl:font-size:decglobal
-
-URxvt.urlLauncher:          xdg-open
-URxvt.url-select.launcher:  xdg-open
-URxvt.url-select.underline: true
-URxvt.keysym.M-u:           perl:url-select:select_next
-URxvt.keysym.M-Escape:      perl:keyboard-select:activate
-URxvt.keysym.M-s:           perl:keyboard-select:search
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!! URxvt color theme
-URxvt.depth: 32
-
-URxvt*transparent: true
-
-URxvt*fading:  30
-
-! !!!!!! dark:
-! URxvt.shading: 20
-! URxvt.background: #2e3436
-! URxvt.foreground: #eeeeec
-! URxvt.color4: RoyalBlue
-! URxvt.color12: RoyalBlue
-! URxvt.tabbed.tabbar-fg: 8
-! URxvt.tabbed.tabbar-bg: 0
-! URxvt.tabbed.tab-fg:    2
-! URxvt.tabbed.tab-bg:    0
-
-!!!!! light:
-!!!!! from: https://adventurist.me/posts/0087
-! PaperColour Theme
-
-! URxvt.foreground: #4D4D4C
-! URxvt.background: #EEEEEE
-
-! ! black
-! URxvt.color0: #EDEDED
-! URxvt.color8: #969694
-
-! ! red
-! URxvt.color1: #D7005F
-! URxvt.color9: #D7005F
-
-! ! green
-! URxvt.color2: #718C00
-! URxvt.color10: #718C00
-
-! ! yellow / orange
-! URxvt.color3: #D75F00
-! URxvt.color11: #D75F00
-
-! ! blue
-
-! URxvt.color4: #4271AE
-! URxvt.color12: #4271AE
-
-! ! magenta
-! URxvt.color5: #8959A8
-! URxvt.color13: #8959A8
-
-! ! cyan
-! URxvt.color6: #3E999F
-! URxvt.color14: #3E999F
-
-! ! white
-! URxvt.color7: #4D4D4C
-! URxvt.color15: #F5F5F5
-
-URxvt.shading: 195
-urxvt*background: #f9f9f9
-urxvt*foreground: #383a42
-urxvt*cursorColor: #d0d0d0
-urxvt*color0: #000000
-urxvt*color1: #E45649
-urxvt*color2: #50A14F
-urxvt*color3: #986801
-urxvt*color4: #4078F2
-urxvt*color5: #A626A4
-urxvt*color6: #0184BC
-urxvt*color7: #A0A1A7
-urxvt*color8: #5c6370
-urxvt*color9: #e06c75
-urxvt*color10: #50A14F
-urxvt*color11: #986801
-urxvt*color12: #4078F2
-urxvt*color13: #A626A4
-urxvt*color14: #0184BC
-urxvt*color15: #ffffff
-
-URxvt.tabbed.tabbar-fg: 8
-URxvt.tabbed.tabbar-bg: 15
-URxvt.tabbed.tab-fg:    2
-URxvt.tabbed.tab-bg:    15

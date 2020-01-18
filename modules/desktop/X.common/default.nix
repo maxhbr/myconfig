@@ -14,6 +14,7 @@ let
 in {
   imports = [
     ../common
+    ./big-cursor.nix
   ];
 
   config = {
@@ -47,7 +48,6 @@ in {
             background = "${pkgs.my-wallpapers}/share/romben3.png";
           };
           sessionCommands = ''
-            ${pkgs.xlibs.xsetroot}/bin/xsetroot -cursor_name ${pkgs.vanilla-dmz}/share/icons/Vanilla-DMZ/cursors/left_ptr 128 &disown
             if test -e $HOME/.Xresources; then
               ${pkgs.xorg.xrdb}/bin/xrdb -merge $HOME/.Xresources &disown
             fi
@@ -70,18 +70,5 @@ in {
         # temperature.night = 3500;
       };
     };
-    environment = {
-      systemPackages = with pkgs; [
-        vanilla-dmz
-      ];
-    };
-    nixpkgs.overlays = [(final: prev: {
-      # set default cursor theme when installed
-      cursor = prev.writeTextDir "share/icons/default/index.theme" ''
-        [icon theme]
-        Inherits=Vanilla-DMZ
-        Size=128
-      '';
-    })];
   };
 }

@@ -8,6 +8,7 @@ let
 in {
   imports = [
     ../X.common
+    ../urxvt.nix
   ];
 
   config = {
@@ -15,7 +16,6 @@ in {
       home.packages = with pkgs; [
         my-xmonad
         dzen2
-        rxvt_unicode_with-plugins rxvt_unicode.terminfo
       ];
       xsession.windowManager.command = "${my-xmonad}/bin/xmonad";
     };
@@ -42,7 +42,6 @@ in {
           default = "none";
         };
       };
-      urxvtd.enable = true;
     };
   };
 }
