@@ -28,8 +28,6 @@ alias asdf="setxkbmap -layout de,de -variant neo,nodeadkeys -option grp:shifts_t
 
 alias vi="/var/run/current-system/sw/bin/vim"
 
-alias magit='ec -e "(magit-status \"$(pwd)\")"'
-alias mu4e='ec -e "(mu4e)"'
 alias pgp="gpg" #Typo
 
 alias tmux="tmux -2"
@@ -95,13 +93,6 @@ grepf() {
     rm $FIFO
 }
 
-alias httptunnel="ssh -ND localhost:9567 vserver"
-
-alias g="git"
-alias gs="git status"
-
-alias t="tig"
-alias tu='tig HEAD @{upstream}'
 alias ta="task"
 alias d="docker"
 alias dc="docker-compose"

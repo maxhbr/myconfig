@@ -1,7 +1,9 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { config, pkgs, ... }:
-{
+let
+  wireguardKeypairToPassStore = with pkgs; writeScriptBin "wireguardKeypairToPassStore.sh" (lib.fileContents ./wireguardKeypairToPassStore.sh);
+in {
   imports = [
     ./gopassbridge.nix
   ];
@@ -26,6 +28,7 @@
         pass
         pass-git-helper
         gopass
+        wireguardKeypairToPassStore
       ];
       home.file = {
         ".config/pass-git-helper/git-pass-mapping.ini".source = ./config/pass-git-helper/git-pass-mapping.ini;

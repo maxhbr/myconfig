@@ -2,9 +2,18 @@
 # SPDX-License-Identifier: MIT
 { config, pkgs, ... }:
 
+
 # TODO: package scripts
 {
   config = {
+    environment = {
+      shellAliases = {
+        g = "git";
+        gs = "git s";
+        t = "tig";
+        tu = "tig HEAD @{upstream}";
+      };
+    };
     home-manager.users.mhuber = {
       home.packages = with pkgs.gitAndTools; [
         tig

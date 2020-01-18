@@ -69,9 +69,13 @@ in {
         EDITOR = "${my-emacs-wrapper}/bin/ec -t";
       };
       interactiveShellInit = ''
-        alias vim="${my-emacs-wrapper}/bin/ec -t"
-        alias emacs="${my-emacs-wrapper}/bin/ec"
       '';
+      shellAliases = {
+        vim = "${my-emacs-wrapper}/bin/ec -t";
+        emacs = "${my-emacs-wrapper}/bin/ec";
+        magit = "${my-emacs-wrapper}/bin/ec -e \"(magit-status \\\"$(pwd)\\\")\"";
+        mu4e = "${pkgs.emacs}/bin/emacs -name ScratchMu4e &disown";
+      };
     };
 
     # systemd.user.services.emacs = {

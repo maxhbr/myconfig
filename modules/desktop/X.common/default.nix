@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  mkstopscreensaver = with pkgs; writeScriptBin "myStopScreensaver.sh" ''
+  myStopScreensaver = with pkgs; writeScriptBin "myStopScreensaver" ''
     #!${stdenv.shell}
     printf "run: "
     while true; do
@@ -24,6 +24,7 @@ in {
         xlibs.xmodmap xlibs.xset xlibs.setxkbmap
         xclip
         xdotool
+        myStopScreensaver
       ];
       home.file = {
         ".fontconfig/fonts.conf".source = ./fontconfig/fonts.conf;
