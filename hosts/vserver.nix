@@ -3,11 +3,9 @@
 { pkgs, ... }:
 {
   imports = [
-    ../modules/hardware/grub.nix
-    ../modules/service/openssh.nix
-    ../modules/service/wireguard-server
-    ../modules/auto-upgrade.nix
-    ../modules/gc.nix
+    ./hardware/grub.nix
+    ../modules/server/
+    ../modules/server/service.wireguard-server
   ];
 
   config = {
