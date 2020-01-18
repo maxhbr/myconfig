@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  dejavu_nerdfont = pkgs.callPackage ./pkgs/dejavu-nerdfont.nix { };
   inco = with pkgs; writeScriptBin "inco.sh" ''
 #!${stdenv.shell}
 set -e
@@ -38,6 +37,7 @@ ${imagemagick}/bin/import "$output"
 in {
   imports = [
     ./my-wallpapers
+    ./fonts.nix
   ];
   config = {
     home-manager.users.mhuber = {
@@ -84,19 +84,6 @@ in {
       drivers = with pkgs; [ gutenprint hplip ];
       # add hp-printer with:
       # $ nix run nixpkgs.hplipWithPlugin -c sudo hp-setup
-    };
-
-    fonts = {
-      enableFontDir = true;
-      enableGhostscriptFonts = true;
-
-      fonts = with pkgs; [
-        dejavu_fonts dejavu_nerdfont
-        corefonts
-        inconsolata
-      ];
-      fontconfig.defaultFonts.monospace =
-        [ "DejaVu Sans Mono Nerd Font Complete Mono" ];
     };
   };
 }
