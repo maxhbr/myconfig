@@ -4,7 +4,7 @@
 {
   imports = [
     ./hardware/grub.nix
-    ../modules/server/
+    ../modules/server
     ../modules/server/service.wireguard-server
   ];
 
