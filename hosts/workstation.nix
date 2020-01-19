@@ -4,10 +4,10 @@
 
 {
   imports = [
-    ../modules/hardware/grub.nix
-    ../modules/hardware/quadroFX4800.nix
-    ../modules/hardware/steamcontroller.nix
-    ../modules/hardware/pulseaudio.nix
+    ./grub.nix
+    ./quadroFX4800.nix
+    ./steamcontroller.nix
+    ./pulseaudio.nix
     # other modules
     ../modules/desktop/xmonad.nix
     ../modules/desktop/xfce.nix

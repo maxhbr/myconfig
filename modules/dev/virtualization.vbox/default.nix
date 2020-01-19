@@ -13,5 +13,17 @@
       };
     };
     virtualisation.virtualbox.host.enable = true;
+    environment = {
+      shellAliases = {
+        vup = "vagrant up";
+        vstart = "vagrant up";
+        vreload = "vagrant reload";
+        vhalt = "vagrant halt";
+        vstop = "vagrant halt";
+        vdown = "vagrant halt";
+        vssh = "vagrant ssh";
+        vdestroy = "vagrant destroy";
+      };
+    };
   };
 }

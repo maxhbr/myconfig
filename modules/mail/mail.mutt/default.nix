@@ -28,5 +28,8 @@ in
         ".mailcap".source = ./mailcap;
       };
     };
+    environment.shellAliases = {
+      mutt = "neomutt";
+    };
   };
 }

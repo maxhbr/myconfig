@@ -15,11 +15,11 @@
         scrollOnKeystroke = true; # TODO
         searchWrap = false;
         urgentOnBell = true;
-        font = "inconsolata 17";
+        font = "inconsolata 14";
         scrollbackLines = 10000;
         browser = "${pkgs.xdg_utils}/xdg-open";
         cursorBlink = "system";
-        cursorShape = "ibeam"; # type = types.nullOr (types.enum [ "block" "underline" "ibeam" ]);
+        cursorShape = "block"; # type = types.nullOr (types.enum [ "block" "underline" "ibeam" ]);
         scrollbar = "off";
 
         backgroundColor = "rgba(249, 249, 249, 1)";
@@ -33,7 +33,7 @@
         hintsBackgroundColor = null;
         hintsForegroundColor = null;
         hintsBorderColor = null;
-        hintsBorderWidth = null;
+        hintsBorderWidth = "5";
         hintsFont = null;
         hintsPadding = null;
         hintsRoundness = null;

@@ -30,29 +30,10 @@ alias vi="/var/run/current-system/sw/bin/vim"
 
 alias pgp="gpg" #Typo
 
-alias tmux="tmux -2"
-alias tmx="tmux attach-session || tmux"
-ntmx(){
-  # name sessions automatically, depending on the current dir
-  n=$(echo $(basename "$(pwd)") | sed "s/\./_/g")
-  tmux attach-session -t "$n" || tmux new -s "$n"
-}
-if test -z $TMUX && [[ $TERM != "screen" ]]; then
-  if [ -n "$BASH_VERSION" ]; then
-    if [[ $- == *i* ]]; then
-      bind '"\C-n":" ntmx\C-m"'
-    fi
-  elif [ -n "$ZSH_VERSION" ]; then
-    bindkey -s '^n' '^qntmx\n'
-  fi
-fi
-
 # makes "sudo vi" to "sudo vim"
 alias sudo="sudo "
 
 alias visudo='sudo EDITOR=vim visudo'
-
-alias mutt=neomutt
 
 alias ssh="TERM=xterm ssh"
 
@@ -67,12 +48,7 @@ whichf() {
 
 have ag && {
   alias ag="ag --hidden"
-  alias grepr="ag"
-} || {
-  grepr() { grep -rns --color=always "$@" | grep -v Binärdatei 2>/dev/null; }
-  grepri() { grepr -i "$@"; }
 }
-greprL() { grepr "$@" | less -R; }
 grepf() {
     # stolen from: https://www.manthanhd.com/2016/01/15/waiting-for-tomcat-to-start-up-in-a-script/
     if [ $# -ne 2 ]; then
@@ -94,22 +70,12 @@ grepf() {
 }
 
 alias ta="task"
-alias d="docker"
-alias dc="docker-compose"
 
 alias uncolor='sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g"'
 adddate() { # see http://serverfault.com/questions/310098/how-to-add-a-timestamp-to-bash-script-log
     while IFS= read -r line; do
         echo "$(date) $line"
     done
-}
-
-xclipToX() {
-    xclip <(xclip -selection c -o)
-}
-
-xclipToCtrl() {
-    xclip -selection c <(xclip -o)
 }
 
 #--------------------------------------------------------------------
@@ -395,102 +361,11 @@ my_power_settings() {
 alias dmesg="dmesg -T"
 
 #-------------------------------------------------------------------}}}
-#  docker 
-#-------------------------------------------------------------------{{{
-
-dcclean(){
-    # call `dclean -a` to clean all containers
-    docker ps -q $1 |xargs --no-run-if-empty docker rm
-}
-
-diclean(){
-    # call `dclean -a` to clean all images
-    remAll() {
-        docker images -q -a |xargs -r docker rmi
-    }
-    remUntagged() {
-        docker images | awk '/^<none>/ {print $3}' |xargs -r docker rmi
-    }
-
-    [[ "$1" == "-a" ]] && remAll || remUntagged
-}
-
-dclean(){
-    # remove all dangling volumes
-    docker volume ls -qf dangling=true |xargs -r docker volume rm
-
-    # remove all dangling networks
-    docker network prune
-    # remove more stull (what does that remove exactly?)
-    docker system prune
-
-    confirm "also do dcclean?" && dcclean $@
-    confirm "also do diclean?" && diclean $@
-}
-
-dssh(){
-    containerID=""
-    [ $1 ] && {
-        containerID=$1
-    } || {
-        containers="$(docker ps | tail -n +2)"
-
-        echo "choose number of container:"
-        echo
-        echo $containers | nl
-
-        if [ -n "$BASH_VERSION" ]; then
-            read -p "Num of container: " input
-        elif [ -n "$ZSH_VERSION" ]; then
-            read "input?Num of container: "
-        fi
-        if [ -n "$input" ]; then
-            if [ $input -eq $input ]; then
-                containerID="$(echo $containers | sed "${input}q;d" | awk '{print $1;}')"
-            fi
-        fi
-    }
-    [ "$containerID" ] && docker exec -i -t "$containerID" bash
-}
-
-dsaveAllRunning() {
-    docker ps --format "{{.Image}}" |\
-        while read -r image ; do
-            echo "save image $image to tar..."
-            docker save -o "$image.tar" "$image"
-        done
-}
-
-dstop(){
-    docker update --restart=no $(docker ps -a -q)
-    docker ps -q |xargs docker stop
-}
-
-#-------------------------------------------------------------------}}}
-#  vagrant
-#-------------------------------------------------------------------{{{
-
-alias vup="vagrant up"
-alias vstart="vagrant up"
-alias vreload="vagrant reload"
-alias vhalt="vagrant halt"
-alias vstop="vagrant halt"
-alias vdown="vagrant halt"
-alias vssh="vagrant ssh"
-alias vdestroy="vagrant destroy"
-
-#-------------------------------------------------------------------}}}
 #   documente / printing
 #-------------------------------------------------------------------{{{
 
 zathura() {
   command zathura "$@" &disown
-}
-gimp() {
-  command gimp "$@" &disown
-}
-gthumb() {
-  command gthumb "$@" &disown
 }
 llpp() {
   command llpp "$@" &disown
@@ -512,6 +387,8 @@ mystartcups() {
     sleep 2
   }
 }
+
+#   PDFs
 
 # pdf zu A5 Broschüre
 lprBookPre() {
@@ -539,8 +416,6 @@ alias myPdfCrop="pdfcrop --margins \"20 30 20 40\""
 
 alias myPdfCollect="gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -sOutputFile=collected.pdf *.pdf"
 
-#   PDFs
-
 # Extract range of Pages From a PDF
 # from: http://www.linuxjournal.com/content/tech-tip-extract-pages-pdf
 myPdfpextr() {
@@ -556,32 +431,6 @@ myPdfreducesize() {
   gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/screen\
     -dNOPAUSE -dQUIET -dBATCH -sOutputFile=${1%.pdf}-small.pdf $1
 }
-
-#   LaTeX
-
-mylatexmk(){
-    # TODO: in work
-    [[ -z $TMUX ]] || {
-        SESSION=$(tmux list-panes -F "#S")
-        MAIN=$(grep -l '\\documentclass' *tex)
-        tmux send-keys \
-             "latexmk -pdf -synctex=1 -outdir=\".latexmk_files\" -pvc $MAIN" 'C-m'
-        tmux split-window -t $SESSION:1 -h
-        tmux send-keys "vim --servername $(basename $(dirname $MAIN))" 'C-m'
-    }
-}
-
-mylualatexmk(){
-    grep -l '\\documentclass' *tex | \
-        xargs latexmk -pdflatex=lualatex -pdf -synctex=1 -outdir=".lualatexmk_files" -pvc
-}
-
-myxelatexmk(){
-    grep -l '\\documentclass' *tex | \
-        xargs latexmk -pdflatex=xelatex -pdf -synctex=1 -outdir=".xelatexmk_files" -pvc
-}
-
-alias mtw="myTexWrapper.sh"
 
 #-------------------------------------------------------------------}}}
 #   package management
@@ -618,17 +467,6 @@ have nix-env && {
 
   alias why-depends-nixos="nix why-depends /run/current-system"
 
-  # [ -x ~/myconfig/scripts/rebuild.sh ] && {
-  #   alias upg="~/myconfig/scripts/rebuild.sh"
-  #   alias nixupg="~/myconfig/scripts/rebuild.sh"
-  #   alias nixosupg="~/myconfig/scripts/rebuild.sh"
-  # } || {
-  #   alias nixupg="nix-channel --update && nix-env --upgrade"
-  #   alias upg='nixupg'
-  #   #nixos
-  #   alias nixosupg="sudo nixos-rebuild switch --fallback --upgrade"
-  # }
-
   freeStoreSpace() {
     for folder in /nix/store/*-nixos-vm; do
       nix-store --delete $folder;
@@ -637,8 +475,6 @@ have nix-env && {
     nix-collect-garbage -d
     sudo nix-collect-garbage -d
   }
-
-  # alias steam="NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam --command \"optirun steam\""
 }
 
 have pacman && {

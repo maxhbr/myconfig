@@ -33,6 +33,16 @@ in {
       xresources.extraConfig = builtins.readFile ./Xresources;
     };
 
+    environment.interactiveShellInit = ''
+      xclipToX() {
+        ${pkgs.xclip}/bin/xclip <(${pkgs.xclip}/bin/xclip -selection c -o)
+      }
+
+      xclipToCtrl() {
+        ${pkgs.xclip}/bin/xclip -selection c <(${pkgs.xclip}/bin/xclip -o)
+      }
+    '';
+
     services = {
       xserver = {
         enable = true;

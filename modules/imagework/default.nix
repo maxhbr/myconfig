@@ -22,5 +22,13 @@
         freecad # 3D
       ];
     };
+    environment.interactiveShellInit = ''
+gimp() {
+  command gimp "$@" &disown
+}
+gthumb() {
+  command gthumb "$@" &disown
+}
+    '';
   };
 }
