@@ -8,7 +8,6 @@ let
 in {
   imports = [
     ../X.common
-    ../urxvt.nix
   ];
 
   config = {

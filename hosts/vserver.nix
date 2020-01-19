@@ -3,7 +3,10 @@
 { pkgs, ... }:
 {
   imports = [
+    ./minimal.nix
+    # hardware:
     ./hardware/grub.nix
+    # configuration
     ../modules/server
     ../modules/server/service.wireguard-server
   ];

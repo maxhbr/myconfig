@@ -38,6 +38,8 @@ in {
   imports = [
     ./my-wallpapers
     ./fonts.nix
+    ../urxvt.nix
+    ../termite.nix
   ];
   config = {
     home-manager.users.mhuber = {
