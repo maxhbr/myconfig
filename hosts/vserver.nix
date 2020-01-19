@@ -3,7 +3,6 @@
 { pkgs, ... }:
 {
   imports = [
-    ./minimal.nix
     # hardware:
     ./hardware/grub.nix
     # configuration
