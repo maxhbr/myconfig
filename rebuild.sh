@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: MIT
 set -e
 set -o pipefail
+shopt -s lastpipe
 
 if [ "$(id -u)" -ne "$(stat -c '%u' $0)" ]; then
     echo "you should run this script as the user, which owns $0"
@@ -92,6 +93,20 @@ handleGit() {
     fi
 }
 
+generateDiff() {
+    oldFile=$1
+    newFile=$2
+    sdiff -bBWs $oldFile $newFile |
+        while read; do
+            line="$REPLY"
+            case $line in
+                *'<'* ) echo "$(tput setaf 1)$line$(tput sgr0)" ;;
+                *'>'* ) echo "$(tput setaf 2)$line$(tput sgr0)" ;;
+                *'|'* ) echo "$(tput setaf 3)$line$(tput sgr0)" ;;
+            esac
+        done
+}
+
 diffCurrentSystemDeps() {
     have nix-store || return 0
     [[ -e $1 ]] || return 0
@@ -108,18 +123,20 @@ diffCurrentSystemDeps() {
         local oldFile=$2
 
         logH2 "diff dependencies of $profileRoot"
-
-        sdiff -bBWs $oldFile $newFile |
-            while read; do
-                line="$REPLY"
-                case $line in
-                    *'<'* ) echo "$(tput setaf 1)$line$(tput sgr0)" ;;
-                    *'>'* ) echo "$(tput setaf 2)$line$(tput sgr0)" ;;
-                    *'|'* ) echo "$(tput setaf 3)$line$(tput sgr0)" ;;
-                esac
-            done
-
+        generateDiff $oldFile $newFile
         rm $oldFile $newFile
+    else
+        echo $newFile
+    fi
+}
+
+diffGenerations() {
+    local newFile=$(mktemp)
+    sudo nix-env --list-generations --profile /nix/var/nix/profiles/system > $newFile
+    if [ $# -eq 1 ]; then
+        local oldFile="$1"
+        logH2 "diff nixos generations"
+        generateDiff $oldFile $newFile
     else
         echo $newFile
     fi
@@ -185,6 +202,7 @@ exec &> >(tee -a $logfile)
 currentSystemDeps=$(diffCurrentSystemDeps /run/current-system/)
 currentUserDeps=$(diffCurrentSystemDeps ~/.nix-profile)
 currentDiskUsage=$(diffDiskUsage)
+currentNixosGenerations=$(diffGenerations)
 startTime=$(date)
 
 showStatDifferences() {
@@ -192,6 +210,7 @@ showStatDifferences() {
     diffCurrentSystemDeps /run/current-system/ $currentSystemDeps
     diffCurrentSystemDeps ~/.nix-profile $currentUserDeps
     diffDiskUsage $currentDiskUsage
+    diffGenerations "$currentNixosGenerations"
     echo "... start: $startTime"
     echo "...   end: $(date)"
 }
@@ -317,7 +336,15 @@ update() {
     fi
 }
 
+listGenerations() {
+    logINFO "current nixos generations:"
+    sudo nix-env --list-generations --profile /nix/var/nix/profiles/system |
+        (head -n3 && echo "..." && tail -n3)
+}
+
 cleanup() {
+    logH2 "cleanup" "nixos and nix-env"
+    listGenerations
     if [ "$((RANDOM%100))" -gt 90 ]; then
         echo "* nix-env --delete-generations 30d ..."
         nix-env $NIX_PATH_ARGS \
@@ -326,6 +353,7 @@ cleanup() {
              --delete-generations 30d
         sudo nix-collect-garbage \
              --delete-older-than 30d
+        listGenerations
     else
         echo "* $(tput bold)do not$(tput sgr0) nix-env --delete-generations 30d ..."
     fi
