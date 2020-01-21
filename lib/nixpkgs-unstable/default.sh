@@ -4,7 +4,7 @@
 
 set -e
 cd "$( dirname "${BASH_SOURCE[0]}" )"
-. "$(pwd )/../../../common.sh"
+. "$(pwd )/../../common.sh"
 
 handleChannel() {
     local channel=$1

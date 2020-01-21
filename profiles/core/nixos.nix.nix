@@ -10,8 +10,8 @@
       autoOptimiseStore = true;
       optimise.automatic = true;
 
-      # allowedUsers = [ "@wheel" ];
-      # trustedUsers = [ "root" "@wheel" ];
+      allowedUsers = [ "@wheel" "@builders" "mhuber" ];
+      trustedUsers = [ "root" "@wheel" "@builders" "mhuber" ];
 
       trustedBinaryCaches = [ "https://cache.nixos.org" ];
       binaryCaches = [ "https://cache.nixos.org" ];

@@ -9,7 +9,6 @@
     ./myborgbackup
     ./nixos.networking
     ./nixos.nix.nix
-    ./nixos.nixpkgs-unstable
     ./user.mhuber.nix
   ];
   config = {

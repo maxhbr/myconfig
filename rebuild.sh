@@ -207,10 +207,11 @@ startTime=$(date)
 
 showStatDifferences() {
     logH1 "show" "stats"
+    set -e
     diffCurrentSystemDeps /run/current-system/ $currentSystemDeps
     diffCurrentSystemDeps ~/.nix-profile $currentUserDeps
-    diffDiskUsage $currentDiskUsage
     diffGenerations "$currentNixosGenerations"
+    diffDiskUsage $currentDiskUsage
     echo "... start: $startTime"
     echo "...   end: $(date)"
 }
@@ -327,7 +328,7 @@ update() {
             logH3 "update" "extrahosts"
             ./profiles/core/nixos.networking/extrahosts/update.sh
             logH3 "update" "nixpkgs-unstable"
-            ./profiles/core/nixos.nixpkgs-unstable/default.sh
+            ./lib/nixpkgs-unstable/default.sh
             logH3 "update" "emacs"
             ./profiles/emacs/update.sh
             logH3 "update" "my-wallpapers"
@@ -336,15 +337,8 @@ update() {
     fi
 }
 
-listGenerations() {
-    logINFO "current nixos generations:"
-    sudo nix-env --list-generations --profile /nix/var/nix/profiles/system |
-        (head -n3 && echo "..." && tail -n3)
-}
-
 cleanup() {
     logH2 "cleanup" "nixos and nix-env"
-    listGenerations
     if [ "$((RANDOM%100))" -gt 90 ]; then
         echo "* nix-env --delete-generations 30d ..."
         nix-env $NIX_PATH_ARGS \
