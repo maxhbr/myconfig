@@ -34,6 +34,7 @@ in
       ln -s ${pkgs.openjdk8} $out/pkgs/openjdk8
       ln -s ${pkgs.openjdk11} $out/pkgs/openjdk11
       ln -s ${pkgs.openjdk12} $out/pkgs/openjdk12
+      ln -s ${pkgs.maven} $out/pkgs/maven
     '';
 
     nixpkgs.overlays = [(self: super: {

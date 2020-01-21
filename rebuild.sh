@@ -93,7 +93,7 @@ handleGit() {
     fi
 }
 
-generateDiff() {
+generateDiffFromTmpfiles() {
     oldFile=$1
     newFile=$2
     sdiff -bBWs $oldFile $newFile |
@@ -105,6 +105,7 @@ generateDiff() {
                 *'|'* ) echo "$(tput setaf 3)$line$(tput sgr0)" ;;
             esac
         done
+    rm $oldFile $newFile
 }
 
 diffCurrentSystemDeps() {
@@ -123,8 +124,7 @@ diffCurrentSystemDeps() {
         local oldFile=$2
 
         logH2 "diff dependencies of $profileRoot"
-        generateDiff $oldFile $newFile
-        rm $oldFile $newFile
+        generateDiffFromTmpfiles $oldFile $newFile
     else
         echo $newFile
     fi
@@ -133,10 +133,10 @@ diffCurrentSystemDeps() {
 diffGenerations() {
     local newFile=$(mktemp)
     sudo nix-env --list-generations --profile /nix/var/nix/profiles/system > $newFile
-    if [ $# -eq 1 ]; then
+    if [[ -f $1 ]]; then
         local oldFile="$1"
         logH2 "diff nixos generations"
-        generateDiff $oldFile $newFile
+        generateDiffFromTmpfiles $oldFile $newFile
     else
         echo $newFile
     fi
