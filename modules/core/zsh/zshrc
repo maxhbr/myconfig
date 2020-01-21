@@ -57,6 +57,7 @@ bindkey '^w' backward-kill-word
 
 ###############################################################################
 
+[[ -f zshrc ]] && source zshrc
 [[ -f ~/.aliasrc ]] && source ~/.aliasrc
 [[ -f ~/.aliasrc-private ]] && source ~/.aliasrc-private
 [[ -d $HOME/bin ]] && {
