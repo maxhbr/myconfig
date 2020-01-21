@@ -8,15 +8,15 @@
     ./quadroFX4800.nix
     ./steamcontroller.nix
     ./pulseaudio.nix
-    # other modules
-    ../modules/desktop/xmonad.nix
-    ../modules/desktop/xfce.nix
-    ../modules/desktop/games
-    ../modules/virtualization
-    ../modules/wine.nix
-    ../modules/service/openssh.nix
-    ../modules/service/syncthing.nix
-    ../modules/service/vsftp.nix
+    # other profiles
+    ../profiles/desktop/xmonad.nix
+    ../profiles/desktop/xfce.nix
+    ../profiles/desktop/games
+    ../profiles/virtualization
+    ../profiles/wine.nix
+    ../profiles/service/openssh.nix
+    ../profiles/service/syncthing.nix
+    ../profiles/service/vsftp.nix
   ];
 
   config = {

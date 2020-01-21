@@ -11,7 +11,7 @@ in {
   imports = [
     /etc/nixos/hardware-configuration.nix
     ./lib
-    ./modules/core
+    ./profiles/core
   ]
     # the machine specific configuration is placed at ./hosts/<hostName>.nix
     ++ (let

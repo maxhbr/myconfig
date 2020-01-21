@@ -6,8 +6,8 @@
     # hardware:
     ./hardware/grub.nix
     # configuration
-    ../modules/server
-    ../modules/server/service.wireguard-server
+    ../profiles/server
+    ../profiles/server/service.wireguard-server
   ];
 
   config = {

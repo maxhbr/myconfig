@@ -8,15 +8,15 @@
     ./hardware/x1extremeG2.nix
     ./hardware/efi.nix
     # configuration
-    ../modules/desktop
-    ../modules/mail
-    ../modules/dev
-    ../modules/work
-    ../modules/other-dotfiles
+    ../profiles/desktop
+    ../profiles/mail
+    ../profiles/dev
+    ../profiles/work
+    ../profiles/other-dotfiles
     ## fun
-    ../modules/imagework
-    ../modules/misc/smarthome.nix
-    ../modules/gaming
+    ../profiles/imagework
+    ../profiles/misc/smarthome.nix
+    ../profiles/gaming
   ];
 
   config = {
