@@ -56,6 +56,7 @@
             echo "Time: $(date)." >> $backupdir/zsh-history-backup-timer.log
             ${pkgs.gzip}/bin/gzip -k $historyfile
             mv $historyfile.gz $backup
+            chown mhuber:mhuber $backup
           fi
         '';
       };
