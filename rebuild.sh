@@ -347,7 +347,6 @@ cleanup() {
              --delete-generations 30d
         sudo nix-collect-garbage \
              --delete-older-than 30d
-        listGenerations
     else
         echo "* $(tput bold)do not$(tput sgr0) nix-env --delete-generations 30d ..."
     fi
