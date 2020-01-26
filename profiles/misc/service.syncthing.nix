@@ -4,6 +4,9 @@
 
 {
   config = {
+    # home-manager.users.mhuber = {
+    #   services.syncthing.enable = true;
+    # };
     services.syncthing = {
       enable = true;
       user = "mhuber";

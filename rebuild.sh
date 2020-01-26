@@ -96,7 +96,7 @@ handleGit() {
 generateDiffFromTmpfiles() {
     oldFile=$1
     newFile=$2
-    sdiff -bBWs $oldFile $newFile |
+    (set +e; sdiff -bBWs $oldFile $newFile |
         while read; do
             line="$REPLY"
             case $line in
@@ -104,8 +104,8 @@ generateDiffFromTmpfiles() {
                 *'>'* ) echo "$(tput setaf 2)$line$(tput sgr0)" ;;
                 *'|'* ) echo "$(tput setaf 3)$line$(tput sgr0)" ;;
             esac
-        done
-    rm $oldFile $newFile
+        done;
+     rm $oldFile $newFile)
 }
 
 diffCurrentSystemDeps() {
@@ -207,10 +207,9 @@ startTime=$(date)
 
 showStatDifferences() {
     logH1 "show" "stats"
-    set -e
+    diffGenerations "$currentNixosGenerations"
     diffCurrentSystemDeps /run/current-system/ $currentSystemDeps
     diffCurrentSystemDeps ~/.nix-profile $currentUserDeps
-    diffGenerations "$currentNixosGenerations"
     diffDiskUsage $currentDiskUsage
     echo "... start: $startTime"
     echo "...   end: $(date)"

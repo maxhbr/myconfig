@@ -12,6 +12,7 @@
     ../profiles/mail
     ../profiles/dev
     ../profiles/work
+    ../profiles/misc/service.syncthing.nix
     ## fun
     ../profiles/imagework
     ../profiles/misc/smarthome.nix
