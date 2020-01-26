@@ -97,9 +97,11 @@ right_meter_modes=2 2 2 2 2 1 1
         tcpdump
         pmount fuse
 
+        (writeScriptBin "myspeedtest.sh" (builtins.readFile ./bin/myspeedtest.sh))
       ];
       interactiveShellInit = ''
         eval $(${pkgs.thefuck}/bin/thefuck --alias)
+        hgrep() { history | egrep "$@"; }
       '';
       shellAliases = {
         cat = "${pkgs.bat}/bin/bat --theme=\"Monokai Extended Light\"";

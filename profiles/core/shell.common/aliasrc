@@ -607,113 +607,13 @@ mountExfat() {
       "$src" "$target"
 }
 
-alias slic3r-prusa3d="env LANG=C nix-shell -p unstable.slic3r-prusa3d --command slic3r-prusa3d"
-
-alias wttr="curl -H 'Accept-Language: de' wttr.in"
-alias wetter="curl -H 'Accept-Language: de' wttr.in/Augsburg"
-
-# see:
-# - https://github.com/NixOS/nixpkgs/issues/3107
-# - https://productforums.google.com/forum/#!msg/chromecast/G3E2ENn-YZI/s7Xoz6ICCwAJ
-alias allowChromecast="sudo iptables -I INPUT -p udp -m udp -s 192.168.0.0/16 --match multiport --dports 1900,5353 -j ACCEPT"
-
 meld() {
   command meld "$@" &disown
-}
-
-Franz() {
-  command Franz "$@" &disown
-}
-
-rambox() {
-  command rambox "$@" &disown
 }
 
 touchpadtoggle(){
   xdotool mousemove 0 0
   synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')
-}
-
-hgrep() { history | egrep "$@"; }
-
-alias tes="myThesausrus.sh"
-alias dic="dic.sh"
-
-# #have tmux && {
-#   run_under_tmux() {
-#     # Run $1 under session or attach if such session already exist.
-#     # $2 is optional path, if no specified, will use $1 from $PATH.
-#     # If you need to pass extra variables, use $2 for it as in example below..
-#     # Example usage:
-#     #  torrent() { run_under_tmux 'rtorrent' '/usr/local/rtorrent-git/bin/rtorrent'; }
-#     #  mutt() { run_under_tmux 'mutt'; }
-#     #  irc() { run_under_tmux 'irssi' "TERM='screen' command irssi"; }
-
-#     # There is a bug in linux's libevent...
-#     # export EVENT_NOEPOLL=1
-
-#     command -v tmux >/dev/null 2>&1 || return 1
-
-#     if [ -z "$1" ]; then return 1; fi
-#     local name="$1"
-#     if [ -n "$2" ]; then
-#       local file_path="$2"
-#     else
-#       local file_path="command ${name}"
-#     fi
-
-#     if tmux has-session -t "${name}" 2>/dev/null; then
-#       tmux attach -d -t "${name}"
-#     else
-#       tmux new-session -s "${name}" "${file_path}" \; set-option status \; set set-titles-string "${name} (tmux@${HOST})"
-#     fi
-#   }
-#   # have mutt && mutt() { run_under_tmux 'mutt'; }
-#   # have ncmpcpp && ncmpcpp() { run_under_tmux 'ncmpcpp'; }
-#   #have finch && finch() { run_under_tmux 'finch'; }
-#   #have ekg2 && ekg2() { run_under_tmux 'ekg2'; }
-# #}
-
-myXnest() {
-  Xnest :1 &
-  export DISPLAY=localhost:1
-}
-
-#-------------------------------------------------------------------}}}
-#   some functions
-#-------------------------------------------------------------------{{{
-
-have mvnDebug || {
-  have mvn && {
-    mvnDebug() {
-      $(dirname $(dirname $(readlink -f $(which mvn))))/maven/bin/mvnDebug $@
-      # JAVA_OPTS="${JAVA_OPTS} -Xdebug -Xrunjdwp:transport=dt_socket,address=8000,server=y,suspend=y" mvn $@
-    }
-  }
-}
-
-mycompTime() { #compare the speed of two ($1, $2) commands (loop $3 times)
-  if [ $# -ne 3 ]; then return 1; fi
-  type $1 >/dev/null 2>&1 || return 2
-  type $2 >/dev/null 2>&1 || return 3
-  printf 1
-  time for ((i=0; i<${3:-10}; i++)) ; do $1 ; done >/dev/null 2>&1
-  printf 2
-  time for ((i=0; i<${3:-10}; i++)) ; do $2 ; done >/dev/null 2>&1
-}
-
-# Repeat n times command
-myRepeat() {
-  # example: myRepeat 10 ls
-  local i max
-  max=$1; shift;
-  for ((i=1; i <= max ; i++)); do
-    eval "$@";
-  done
-}
-
-myclock(){
-  while sleep 1;do tput sc;tput cup 0 $(($(tput cols)-29));date;tput rc;done &
 }
 
 #}}}

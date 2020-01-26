@@ -10,6 +10,7 @@
     ./nixos.networking
     ./nixos.nix.nix
     ./user.mhuber.nix
+    ./dic.nix
   ];
   config = {
     boot = {

@@ -67,9 +67,13 @@ in {
       variables = {
         BROWSER = "${pkgs.chromium}/bin/chromium-browser";
       };
-      interactiveShellInit = ''
-        alias file-roller='${pkgs.xarchiver}/bin/xarchiver'
-      '';
+      shellAliases = {
+        file-roller = "${pkgs.xarchiver}/bin/xarchiver";
+        # see:
+        # - https://github.com/NixOS/nixpkgs/issues/3107
+        # - https://productforums.google.com/forum/#!msg/chromecast/G3E2ENn-YZI/s7Xoz6ICCwAJ
+        allowChromecast = "sudo ${pkgs.iptables}/bin/iptables -I INPUT -p udp -m udp -s 192.168.0.0/16 --match multiport --dports 1900,5353 -j ACCEPT";
+      };
     };
 
     programs.light.enable = true;

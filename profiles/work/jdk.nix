@@ -49,6 +49,9 @@ in
         maven gradle
         gmvn
       ];
+      shellAliases = {
+        mvnDebug = "${pkgs.maven}/maven/bin/mvnDebug";
+      };
       variables = {
         JAVA_8_HOME = "/run/current-system/pkgs/openjdk8/lib/openjdk";
         JAVA_11_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk";

@@ -10,6 +10,11 @@
   };
   environment.systemPackages = with pkgs; [
     pavucontrol pamix
+    (writeScriptBin "switch_sennheiser_profile" ''
+    #!${stdenv.shell}
+    export PATH=$PATH:${pulseaudio}/bin:${bash}/bin
+    ${./bin/switch_sennheiser_profile}
+    '')
   ];
   nixpkgs.config.pulseaudio = true;
 }

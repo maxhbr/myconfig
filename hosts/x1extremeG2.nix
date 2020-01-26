@@ -12,7 +12,6 @@
     ../profiles/mail
     ../profiles/dev
     ../profiles/work
-    ../profiles/other-dotfiles
     ## fun
     ../profiles/imagework
     ../profiles/misc/smarthome.nix
