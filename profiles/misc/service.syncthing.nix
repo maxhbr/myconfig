@@ -11,7 +11,7 @@
       enable = true;
       user = "mhuber";
       group = "mhuber";
-      # dataDir = "/home/mhuber";
+      dataDir = "/home/mhuber";
       openDefaultPorts = false;
     };
   };

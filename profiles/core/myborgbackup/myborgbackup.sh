@@ -18,12 +18,53 @@ if [ "$(id -u)" == "0" ]; then
     exit 1
 fi
 
+help() {
+    echo "run as:"
+    echo "    $0 [-h] [-s] [-i|-b|-p]"
+    # man borg
+}
+
+################################################################################
+# parse input
+usessh=0
+doinit=0
+dobackup=0
+doborgprune=0
+doborgmount=0
+while getopts "h?sibpm" opt; do
+    case "$opt" in
+        h|\?)
+            help
+            exit 0
+            ;;
+        s) usessh=1;;
+        i) doinit=1;;
+        b) dobackup=1;;
+        p) doborgprune=1;;
+        m) doborgmount=1;;
+    esac
+done
+
+if [[ $doinit -eq 0 ]] &&
+       [[ $dobackup -eq 0 ]] &&
+       [[ $doborgprune -eq 0 ]] &&
+       [[ $doborgmount -eq 0 ]]; then
+    help
+    exit 0
+fi
+
+################################################################################
+
 borgCmd="borg"
 
 # UUID="1c0be23b-7537-4a82-8af1-744d21c3e6bd"
 # UUID="3294d03a-f08b-433c-8f04-9cc2a3e9dc10"
 UUID="75a54433-6d3a-46cf-bf60-bd889d99ed10"
-backupmount="/mnt/backup"
+if [[ $usessh -eq 0 ]]; then
+    backupmount="/mnt/backup"
+else
+    backupmount="pi:/mnt/backup"
+fi
 backupdir="${backupmount}/borgbackup"
 repository="${backupdir}/$(hostname).borg"
 repositoryWork="${backupdir}/$(hostname)-work.borg"
@@ -56,12 +97,6 @@ borgPruneCmd="$borgCmd \
 
 ################################################################################
 # functions
-help() {
-    echo "run as:"
-    echo "    $0 [-h] [-i|-b|-p]"
-    # man borg
-}
-
 have() { type "$1" &> /dev/null; }
 
 myMountBackupHDD() {
@@ -163,41 +198,19 @@ myBorgmount() {
 }
 
 ################################################################################
-# parse input
-doinit=0
-dobackup=0
-doborgprune=0
-doborgmount=0
-while getopts "h?ibpm" opt; do
-    case "$opt" in
-        h|\?)
-            help
-            exit 0
-            ;;
-        i) doinit=1;;
-        b) dobackup=1;;
-        p) doborgprune=1;;
-        m) doborgmount=1;;
-    esac
-done
-
-if [[ $doinit -eq 0 ]] &&
-       [[ $dobackup -eq 0 ]] &&
-       [[ $doborgprune -eq 0 ]] &&
-       [[ $doborgmount -eq 0 ]]; then
-    help
-    exit 0
+# prepare and mount
+if [[ $usessh -eq 0 ]]; then
+    myMountBackupHDD
 fi
 
 ################################################################################
-# prepare and mount
-myMountBackupHDD
-
-################################################################################
 # setup log
-mkdir -p "$logdir"
-echo -e "\n\n\n\n\n\n\n" >> $logfile
-exec &> >(tee -a $logfile)
+if [[ $usessh -eq 0 ]]; then
+    # TODO: logging for ssh
+    mkdir -p "$logdir"
+    echo -e "\n\n\n\n\n\n\n" >> $logfile
+    exec &> >(tee -a $logfile)
+fi
 
 ################################################################################
 # run
@@ -219,5 +232,7 @@ fi
 
 ################################################################################
 # cleanup
-myUmountBackupHDD
+if [[ $usessh -eq 0 ]]; then
+    myUmountBackupHDD
+fi
 

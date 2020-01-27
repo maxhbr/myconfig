@@ -10,7 +10,7 @@ let
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 
-dic(){
+dicImpl(){
     if [[ "$#" -eq 0 ]]; then
         ${ncurses}/bin/tput bold
         ${ncurses}/bin/tput setaf 6
@@ -43,7 +43,7 @@ else
     if [ "$1" == "--rlwrap" ]; then
         shift
     fi
-    $0 $@
+    dicImpl $@
 fi
   '';
 in {

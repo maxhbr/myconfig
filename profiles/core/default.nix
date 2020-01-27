@@ -32,6 +32,7 @@
       };
       shellAliases = {
         upg = "~/myconfig/rebuild.sh";
+        upg-fast = "~/myconfig/rebuild.sh --fast";
         upg-dry = "~/myconfig/rebuild.sh --dry-run";
       };
       systemPackages = with pkgs; [
