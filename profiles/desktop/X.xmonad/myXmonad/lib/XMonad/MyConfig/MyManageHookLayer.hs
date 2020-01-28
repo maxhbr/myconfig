@@ -6,7 +6,14 @@ module XMonad.MyConfig.MyManageHookLayer
 
 import           XMonad
 
-import           XMonad.Hooks.ManageHelpers ( doCenterFloat )
+import           XMonad.StackSet (RationalRect (..))
+import           XMonad.Hooks.ManageHelpers ( composeOne, (-?>)
+                                            , doCenterFloat
+                                            , doSideFloat, Side (..)
+                                            , doRectFloat
+                                            , doFullFloat
+                                            , transience
+                                            , isDialog, isFullscreen)
 
 applyMyManageHook c = c { manageHook = manageHook c <+> myManageHook }
 
@@ -25,21 +32,20 @@ applyMyManageHook c = c { manageHook = manageHook c <+> myManageHook }
 -- 'className' and 'resource' are used below.
 --
 myManageHook = let
-    hooksByRole = [ stringProperty "WM_WINDOW_ROLE" =? "GtkFileChooserDialog" --> doCenterFloat ]
-    hooksByClassName = foldMap (\(a,cs) -> map (\c -> className =? c --> a) cs)
+    hookForDialogs = isDialog -?> doCenterFloat
+    fullscreenHook = isFullscreen -?> doFullFloat
+    gtkFileChooserHook = stringProperty "WM_WINDOW_ROLE" =? "GtkFileChooserDialog" -?> doCenterFloat
+    hooksByClassName = foldMap (\(a,cs) -> map (\c -> className =? c -?> a) cs)
                                [ (doCenterFloat, ["Xmessage"
-                                                 ,"qemu","qemu-system-x86_64"
-                                                 ,"feh"
                                                  ,"Zenity"
                                                  ,"pinentry","Pinentry"
-                                                 ,"pavucontrol","Pavucontrol"
-                                                 ,"zoom","zoom-us"])
+                                                 ,"feh"])
+                               , (doSideFloat NE, ["zoom","zoom-us"])
+                               , (doRectFloat (RationalRect 0.1 0.1 0.4 0.4), ["pavucontrol","Pavucontrol"])
                                , (doFloat, ["MPlayer"
                                            ,"Onboard"])
-                               -- , (doShift "web", ["Firefox"
-                               --                   ,"Chromium","chromium-browser"])
-                               , (doShift "10", ["franz","Franz"])
-                               -- , (doShift "vbox", ["Virtualbox","VirtualBox"])
+                               , (doShift "10", ["franz","Franz"
+                                                ,"rambox"])
                                , (doShift "media", ["Steam", "Wfica", "Wfica_Seamless"])
                                , (doIgnore, ["desktop_window"
                                             ,"kdesktop"
@@ -47,5 +53,5 @@ myManageHook = let
     -- see:
     -- - https://www.reddit.com/r/xmonad/comments/78uq0p/how_do_you_deal_with_intellij_idea_completion/?st=jgdc0si0&sh=7d79c956
     -- - https://youtrack.jetbrains.com/issue/IDEA-112015#comment=27-2498787
-    ideaPopupHook = [ appName =? "sun-awt-X11-XWindowPeer" <&&> className =? "jetbrains-idea" --> doIgnore ]
-  in composeAll (hooksByRole ++ hooksByClassName ++ ideaPopupHook)
+    ideaPopupHook = appName =? "sun-awt-X11-XWindowPeer" <&&> className =? "jetbrains-idea" --> doIgnore
+  in composeAll (composeOne ([hookForDialogs, transience, fullscreenHook, gtkFileChooserHook] ++ hooksByClassName) : [ideaPopupHook])
