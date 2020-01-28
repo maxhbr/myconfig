@@ -10,7 +10,6 @@ import           System.FilePath
 import           System.Exit ( exitSuccess )
 import           XMonad
 import           XMonad.Operations (restart)
-import           Graphics.X11.ExtraTypes.XF86( xF86XK_MonBrightnessUp, xF86XK_MonBrightnessDown )
 
 --------------------------------------------------------------------------------
 -- Actions
