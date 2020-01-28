@@ -130,8 +130,9 @@ myInitialize() {
 
 myBackup() {
     echo "do the backup"
+    T=$(mktemp -d)
     set -x
-    cat <<EXCLUDE > "${backupdir}/.excludes"
+    cat <<EXCLUDE > "${T}/_excludes"
 /home/docker
 /home/*/tmp/
 /home/*/Downloads/
@@ -156,26 +157,20 @@ myBackup() {
 /home/*/VirtualBox VMs/
 /home/*/Desktop/
 EXCLUDE
-    cat <<EXCLUDE > "${backupdir}/.tng.excludes"
+    cat <<EXCLUDE > "${T}/_tng.excludes"
 */PIP/_*
 EXCLUDE
     $borgCreateCmd \
-         --exclude-from "${backupdir}/.excludes" \
+         --exclude-from "${T}/_excludes" \
          "${repository}::${backupname}" \
          /home/mhuber/
     [[ -d ~/TNG ]] && \
         $borgCreateCmd \
-            --exclude-from "${backupdir}/.tng.excludes" \
+            --exclude-from "${T}/_tng.excludes" \
             "${repositoryWork}::${backupname}" \
             /home/mhuber/TNG/
-
-    have pacman && {
-        pacman -Qeq > ${backupdir}/pacmanPakete.txt
-    }
-    have nix && {
-        nix-store -q --references /var/run/current-system/sw | cut -d'-' -f2- > ${backupdir}/nixPakete.txt
-    }
     set +x
+    rm -r "$T"
 }
 
 myBorgprune() {
