@@ -11,7 +11,6 @@ jobs:
     - uses: actions/checkout@v1
     - name: Install Nix
       uses: cachix/install-nix-action@v6
-    - run: echo -n -e "{...}: {fileSystems.\"/\" = { device = \"/dev/sda1\"; fsType = \"ext4\";}; fileSystems.\"/boot\" ={ device = \"/dev/sda1\"; fsType = \"vfat\";}; }" > ./imports/dummy-hardware-configuration.nix
     - name: build nixos configuration
-      run: ./test/test-nixos-configuration.sh 
+      run: ./test/test-nixos-configuration.sh --ci
 

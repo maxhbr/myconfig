@@ -5,6 +5,12 @@
 
 set -ex
 
+if [[ "$1" == "--ci" ]]; then
+    cat <<EOF > "$myconfigDir/imports/dummy-hardware-configuration.nix"
+{...}: {fileSystems."/" = { device = "/dev/sda1"; fsType = "ext4";}; fileSystems."/boot" ={ device = "/dev/sda1"; fsType = "vfat";}; }
+EOF
+fi
+
 time \
     nix-build '<nixpkgs/nixos>' \
               $NIX_PATH_ARGS \
