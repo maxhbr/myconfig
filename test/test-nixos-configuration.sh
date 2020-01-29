@@ -3,12 +3,11 @@
 
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../common.sh"
 
-set -x
+set -ex
 
-nix-build '<nixpkgs/nixos>' \
-          $NIX_PATH_ARGS \
-          -A system \
-          --show-trace --keep-failed \
-          --arg configuration "$myconfigDir/default.nix"
-
-times
+time \
+    nix-build '<nixpkgs/nixos>' \
+              $NIX_PATH_ARGS \
+              -A system \
+              --show-trace --keep-failed \
+              --arg configuration "$myconfigDir/default.nix"
