@@ -12,17 +12,12 @@ let
   importall = import ./lib/helper/importall.nix;
 
 in {
-  imports = [
-    /etc/nixos/hardware-configuration.nix
-    ./lib
-    ./profiles/core
-  ]
-    # the machine specific configuration is placed at ./hosts/<hostName>.nix
-    ++ (let
-          path = /etc/nixos/hardware-configuration.nix;
-        in if builtins.pathExists path
-             then [path]
-             else [])
+  imports = (let
+      path = /etc/nixos/hardware-configuration.nix;
+    in if builtins.pathExists path
+       then [path]
+       else [])
+    ++ [ ./lib ./profiles/core ]
     # all files in /etc/nixos/imports are sourced
     ++ (importall /etc/nixos/imports)
     # all files in ./imports are sourced
