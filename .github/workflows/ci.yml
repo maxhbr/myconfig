@@ -11,9 +11,6 @@ jobs:
     - uses: actions/checkout@v1
     - name: Install Nix
       uses: cachix/install-nix-action@v6
-    - name: Run a one-line script
-      run: echo Hello, world!
-    - name: Run a multi-line script
-      run: |
-        echo Add other actions to build,
-        echo test, and deploy your project.
+    - name: build nixos configuration
+      run: ./test/test-nixos-configuration.sh 
+
