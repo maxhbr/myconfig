@@ -40,7 +40,7 @@ myManageHook = let
                                                  ,"Zenity"
                                                  ,"pinentry","Pinentry"
                                                  ,"feh"])
-                               , (doSideFloat NE, ["zoom","zoom-us"])
+                               , (doSideFloat NC, ["zoom","zoom-us"])
                                , (doRectFloat (RationalRect 0.1 0.05 0.3 0.9), ["pavucontrol","Pavucontrol"])
                                , (doFloat, ["MPlayer"
                                            ,"Onboard"])
@@ -53,6 +53,5 @@ myManageHook = let
     -- see:
     -- - https://www.reddit.com/r/xmonad/comments/78uq0p/how_do_you_deal_with_intellij_idea_completion/?st=jgdc0si0&sh=7d79c956
     -- - https://youtrack.jetbrains.com/issue/IDEA-112015#comment=27-2498787
-    ideaPopupHook = appName =? "sun-awt-X11-XWindowPeer" <&&> className =? "jetbrains-idea" --> doIgnore
-  in composeAll (composeOne (transience :(hooksByClassName ++ [hookForDialogs, fullscreenHook, gtkFileChooserHook])) : [ideaPopupHook])
-  -- in composeAll (composeOne (hooksByClassName ++ [gtkFileChooserHook]) : [ideaPopupHook])
+    ideaPopupHook = appName =? "sun-awt-X11-XWindowPeer" <&&> className =? "jetbrains-idea" -?> doIgnore
+  in composeOne (ideaPopupHook :(transience :(hooksByClassName ++ [hookForDialogs, fullscreenHook, gtkFileChooserHook])))
