@@ -7,7 +7,11 @@ set -ex
 
 if [[ "$1" == "--ci" ]]; then
     cat <<EOF > "$myconfigDir/imports/dummy-hardware-configuration.nix"
-{...}: {fileSystems."/" = { device = "/dev/sda1"; fsType = "ext4";}; fileSystems."/boot" ={ device = "/dev/sda1"; fsType = "vfat";}; }
+{...}: {
+  fileSystems."/" = { device = "/dev/sda1"; fsType = "ext4";};
+  fileSystems."/boot" ={ device = "/dev/sda1"; fsType = "vfat";};
+  boot.loader.grub.devices = [ "/dev/sda1" ];
+}
 EOF
 fi
 
@@ -17,3 +21,4 @@ time \
               -A system \
               --show-trace --keep-failed \
               --arg configuration "$myconfigDir/default.nix"
+du -sch $(nix-store -qR ./result)
