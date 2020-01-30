@@ -21,4 +21,3 @@ time \
               -A system \
               --show-trace --keep-failed \
               --arg configuration "$myconfigDir/default.nix"
-du -sch $(nix-store -qR ./result)

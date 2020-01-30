@@ -13,4 +13,5 @@ jobs:
       uses: cachix/install-nix-action@v6
     - name: build nixos configuration
       run: ./test/test-nixos-configuration.sh --ci
+    - run: du -sch $(nix-store -qR ./result)
 

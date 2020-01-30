@@ -1,8 +1,9 @@
+[[https://github.com/maxhbr/myconfig/workflows/CI/badge.svg]]
 * My dotfiles / system configuration / utils / stuff
 Currently I use
-- OS: **[[https://nixos.org/][NixOS]]**
+- OS: *[[https://nixos.org/][NixOS]]*
 - [[https://github.com/rycee/home-manager][home-manager]] for dotfiles and and user env, with some help by stow
-- Window Manager: **[[http://xmonad.org/][xmonad]]** (with: [[https://github.com/jaor/xmobar][xmobar]], [[https://tools.suckless.org/dmenu/][dmenu]] + [[http://dmwit.com/yeganesh/][yeganesh]])
+- Window Manager: *[[http://xmonad.org/][xmonad]]* (with: [[https://github.com/jaor/xmobar][xmobar]], [[https://tools.suckless.org/dmenu/][dmenu]] + [[http://dmwit.com/yeganesh/][yeganesh]])
 - EDITOR: emacs with [[http://spacemacs.org/][spacemacs]]
 - SHELL: zsh (with: [[http://ohmyz.sh/][oh-my-zsh]])
 - Email Client: +mutt with offlineimap+ [[https://www.djcbsoftware.nl/code/mu/mu4e.html][mu4e]] with mbsync
