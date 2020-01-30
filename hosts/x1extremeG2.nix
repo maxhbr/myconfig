@@ -3,16 +3,12 @@
 { pkgs, ... }:
 {
   imports = [
-    ./minimal.nix
+    ./base.nix
     # hardware:
     ./hardware/x1extremeG2.nix
     ./hardware/efi.nix
-    # configuration
-    ../profiles/desktop
-    ../profiles/mail
-    ../profiles/dev
+    # modules
     ../profiles/work
-    ../profiles/misc/service.syncthing.nix
     ## fun
     ../profiles/imagework
     ../profiles/misc/smarthome.nix

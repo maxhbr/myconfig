@@ -13,6 +13,7 @@ if [[ "$1" == "--ci" ]]; then
   boot.loader.grub.devices = [ "/dev/sda1" ];
 }
 EOF
+    echo -n "base" | sudo tee "$myconfigDir/hostname"
 fi
 
 time \
