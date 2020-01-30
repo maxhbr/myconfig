@@ -224,15 +224,15 @@ setupExitTrap() {
 ###########################################################################
 # run #####################################################################
 prepare() {
-    if [[ ! -f /etc/nixos/hostname ]]; then
-        echo "/etc/nixos/hostname should exist"
+    if [[ ! -f "$myconfigDir/hostname" ]]; then
+        echo "$myconfigDir/hostname should exist"
         exit 1
     fi
-    if [[ ! -f /etc/nixos/hostid ]]; then
+    if [[ ! -f "$myconfigDir/hostid" ]]; then
         echo "set hostid:"
         cksum /etc/machine-id |
             while read c rest; do printf "%x" $c; done |
-            sudo tee /etc/nixos/hostid
+            sudo tee "$myconfigDir/hostid"
     fi
     if [[ -f /etc/nixos/configuration.nix ]]; then
         echo "/etc/nixos/configuration.nix should not exist"

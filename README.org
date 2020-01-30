@@ -15,14 +15,15 @@ Currently I use
 first install NixOS, e.g. with the scripts in [[./misc/bootstrap]] or [[https://gist.github.com/martijnvermaat/76f2e24d0239470dd71050358b4d5134][this guide]]. Then
 #+BEGIN_SRC bash
 $ git clone https://github.com/maxhbr/myconfig ~/myconfig
-$ echo -n "HOSTNAME" | sudo tee /etc/nixos/hostname
-$ ~/myconfig/rebuild.sh
+$ cd ~/myconfig
+$ echo -n "HOSTNAME" | sudo tee ./hostname
+$ ./rebuild.sh
 #+END_SRC
 
 * How it is composed
 
 - Entrypoint is the file ~./default.nix~.
-- It loads the corresponding ~./hosts/${host}.nix~, depending on the content of ~/etc/nixos/hostname~
+- It loads the corresponding ~./hosts/${host}.nix~, depending on the content of ~./hostname~
 - This then loads profiles and composes the configuration.
 
 ** Hosts

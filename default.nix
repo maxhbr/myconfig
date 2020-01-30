@@ -1,12 +1,12 @@
 { pkgs, ... }:
 let
-  # echo -n "HOSTNAME" | sudo tee /etc/nixos/hostname
-  hostName = if builtins.pathExists /etc/nixos/hostname
-             then builtins.readFile /etc/nixos/hostname
+  # echo -n "HOSTNAME" | sudo tee ./hostname
+  hostName = if builtins.pathExists ./hostname
+             then builtins.readFile ./hostname
              else "minimal";
-  # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done | sudo tee /etc/nixos/hostid
-  hostId = if builtins.pathExists /etc/nixos/hostid
-           then builtins.readFile /etc/nixos/hostid
+  # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done | sudo tee ./hostid
+  hostId = if builtins.pathExists ./hostid
+           then builtins.readFile ./hostid
            else "12345678";
   # for bootstrapping
   importall = import ./lib/helper/importall.nix;
