@@ -6,6 +6,6 @@
     ./dev.python.nix
     ./virtualization.docker
     ./virtualization.qemu.nix
-    ./virtualization.vbox
+    # ./virtualization.vbox
   ];
 }

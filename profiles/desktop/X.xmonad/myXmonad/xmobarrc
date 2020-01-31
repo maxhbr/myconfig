@@ -19,7 +19,7 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
                           , "--normal"   , "orange"
                           , "--high"     , "red"
                           ] 10
-         , Run Wireless "wlp3s0" [ "-t", "<essid> <qualitybar>"
+         , Run Wireless "wlp82s0" [ "-t", "<essid> <qualitybar>"
                                  , "-L", "20"
                                  , "-H", "35"
                                  , "-l", "red"

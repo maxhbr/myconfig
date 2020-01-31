@@ -2,9 +2,6 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 {
-  imports = [
-  ];
-
   config = {
     boot.kernelPackages = pkgs.unstable.linuxPackages_latest;
   };

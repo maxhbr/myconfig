@@ -256,7 +256,7 @@ realize() {
         args="--upgrade"
     fi
 
-    NIXOS_REBUILD_CMD=${NIXOS_REBUILD_CMD:-switch}
+    local NIXOS_REBUILD_CMD=${NIXOS_REBUILD_CMD:-switch}
     logH1 "nixos-rebuild" "\$NIXOS_REBUILD_CMD=$NIXOS_REBUILD_CMD \$args=$args"
     logINFO "$NIX_PATH_ARGS"
     time sudo \
@@ -310,7 +310,7 @@ update() {
     if [[ "$MYCONFIG_ARGS" == *"--fast"* ]]; then
         logINFO "skip updating"
     else
-        if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
+        if [[ "$(cat $myconfigDir/hostname)" == "$my_main_host" ]]; then
             if git diff-index --quiet HEAD --; then
                 logH1 "update" "nixpkgs"
                 updateNixpkgs
@@ -362,26 +362,30 @@ handlePostExecutionHooks () {
 }
 
 run() {
-    if [[ "$1" == "--dry-run" ]]; then
-        export NIXOS_REBUILD_CMD="dry-run"
-    else
-        prepare
-        if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
-            if isBranchMaster; then
-                realize --fast
-                update
-            else
-                logINFO "git branch is not master, do not update"
-            fi
+    if [[ "$MYCONFIG_ARGS" != *"--fast"* ]]; then
+        if [[ "$1" == "--dry-run" ]]; then
+            export NIXOS_REBUILD_CMD="dry-run"
         else
-            logINFO "host is not main host, do not update"
+            prepare
+            if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
+                if isBranchMaster; then
+                    realize --fast
+                    update
+                else
+                    logINFO "git branch is not master, do not update"
+                fi
+            else
+                logINFO "host is not main host, do not update"
+            fi
         fi
+        realize
+        [[ "$1" == "--dry-run" ]] || {
+            cleanup
+            handlePostExecutionHooks
+        }
+    else
+        realize --fast
     fi
-    realize
-    [[ "$1" == "--dry-run" ]] || {
-        cleanup
-        handlePostExecutionHooks
-    }
 }
 run $@
 
