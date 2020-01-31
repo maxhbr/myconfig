@@ -6,6 +6,7 @@
 set -ex
 
 if [[ "$1" == "--ci" ]]; then
+    shift
     cat <<EOF > "$myconfigDir/imports/dummy-hardware-configuration.nix"
 {...}: {
   fileSystems."/" = { device = "/dev/sda1"; fsType = "ext4";};
@@ -13,7 +14,12 @@ if [[ "$1" == "--ci" ]]; then
   boot.loader.grub.devices = [ "/dev/sda1" ];
 }
 EOF
-    echo -n "base" | sudo tee "$myconfigDir/hostname"
+
+    if [[ "$1" ]]; then
+        echo -n "$1" | sudo tee "$myconfigDir/hostname"
+    else
+        echo -n "base" | sudo tee "$myconfigDir/hostname"
+    fi
 fi
 
 time \
