@@ -1,4 +1,4 @@
-[[https://github.com/maxhbr/myconfig/workflows/CI/badge.svg]]
+[[https://github.com/maxhbr/myconfig/actions][CI state]]: [[https://github.com/maxhbr/myconfig/workflows/CI/badge.svg]]
 * My dotfiles / system configuration / utils / stuff
 Currently I use
 - OS: *[[https://nixos.org/][NixOS]]*

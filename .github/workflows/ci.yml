@@ -2,16 +2,20 @@ name: CI
 
 on: [push]
 
+
 jobs:
   build:
 
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        host: [minimal, base, vserver, x1extremeG2]
 
     steps:
     - uses: actions/checkout@v1
     - name: Install Nix
       uses: cachix/install-nix-action@v6
     - name: build nixos configuration
-      run: ./test/test-nixos-configuration.sh --ci
-    - run: du -sch $(nix-store -qR ./result)
+      run: ./test/test-nixos-configuration.sh --ci ${{ matrix.host }}
 
