@@ -13,5 +13,8 @@ in {
   imports = [
     "${home-manager}/nixos"
   ];
+  config = {
+    system.activationScripts.genProfileManagementDirs = "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/mhuber";
+  };
 }
 

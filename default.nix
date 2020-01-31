@@ -10,7 +10,6 @@ let
            else "12345678";
   # for bootstrapping
   importall = import ./lib/helper/importall.nix;
-
 in {
   imports = (let
       path = /etc/nixos/hardware-configuration.nix;
@@ -26,29 +25,11 @@ in {
     ++ (let
           path = (./hosts + "/${hostName}.nix");
         in if builtins.pathExists path
-             then [path]
-             else []);
+           then [path]
+           else []);
 
   config = {
-    networking.hostId = "${hostId}";
-    networking.hostName = "${hostName}";
-    system.copySystemConfiguration = true;
-
-    nixpkgs = {
-      config = pkgs: {
-        allowUnfree = true;
-      };
-      overlays = let
-          path = ./overlays;
-          content = builtins.readDir path;
-        in if builtins.pathExists path
-          then map (n: import (path + ("/" + n)))
-                (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
-                  (builtins.attrNames content))
-          else [];
-    };
-    home-manager.users.mhuber = {
-      nixpkgs.config.allowUnfree = true;
-    };
+    networking.hostId = hostId;
+    networking.hostName = hostName;
   };
 }
