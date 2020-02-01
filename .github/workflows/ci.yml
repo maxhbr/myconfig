@@ -10,7 +10,7 @@ jobs:
 
     strategy:
       matrix:
-        host: [minimal, base, vserver]
+        host: [minimal, vserver]
 
     steps:
     - uses: actions/checkout@v1
