@@ -10,12 +10,16 @@ jobs:
 
     strategy:
       matrix:
-        host: [minimal, base, vserver]
+        config:
+          - { hostname: minimal }
+          - { hostname: base, allow_failure: true }
+          - { hostname: vserver }
       fail-fast: false
 
     steps:
     - uses: actions/checkout@v1
     - name: Install Nix
       uses: cachix/install-nix-action@v6
-    - run: ./test/test-nixos-configuration.sh --ci ${{ matrix.host }}
+    - run: ./test/test-nixos-configuration.sh --ci ${{ matrix.config.hostname }}
+      continue-on-error: ${{ matrix.config.allow_failure }}
 
