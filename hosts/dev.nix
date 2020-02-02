@@ -3,9 +3,8 @@
 { pkgs, ... }:
 {
   imports = [
-    ./minimal.nix
+    ./base.nix
     # configuration
-    ../profiles/desktop
-    ../profiles/mail
+    ../profiles/dev
   ];
 }

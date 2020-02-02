@@ -10,7 +10,8 @@ jobs:
 
     strategy:
       matrix:
-        host: [minimal, vserver]
+        host: [minimal, base, vserver]
+        fail-fast: false
 
     steps:
     - uses: actions/checkout@v1

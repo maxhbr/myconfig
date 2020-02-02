@@ -79,6 +79,8 @@ in {
         enable = true;
         # temperature.day = 5500;
         # temperature.night = 3500;
+        # brightness.day = "0.8";
+        # brightness.night = "0.5";
       };
     };
   };

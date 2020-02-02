@@ -45,7 +45,11 @@ let
       # # Option   "DPI"            "96 x 96"
     };
      boot.kernelParams = [
-      "acpi_backlight=vendor"
+      # "acpi_backlight=vendor"
+      "acpi_backlight=native"
+      # "acpi_backlight=video"
+      # "acpi_backlight=none"
+      "nomodeset"
       "video.use_native_backlight=1"
     ];
   };
