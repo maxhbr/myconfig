@@ -301,7 +301,7 @@ updateNixpkgs() {
 updateNixosHardware() {
     updateSubtree \
         NixOS-nixos-hardware https://github.com/NixOS/nixos-hardware \
-        "hosts/hardware/nixos-hardware/" \
+        "profiles/hardware/nixos-hardware/" \
         "master"
 }
 

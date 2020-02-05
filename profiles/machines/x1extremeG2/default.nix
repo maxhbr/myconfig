@@ -3,16 +3,16 @@
 { pkgs, ... }:
 {
   imports = [
-    ./base.nix
+    ../dev
     # hardware:
-    ./hardware/x1extremeG2.nix
-    ./hardware/efi.nix
+    ./x1extremeG2.nix
+    ../../hardware/efi.nix
     # modules
-    ../profiles/work
+    ../../work
     ## fun
-    ../profiles/imagework
-    ../profiles/misc/smarthome.nix
-    ../profiles/gaming
+    ../../imagework
+    ../../misc/smarthome.nix
+    ../../gaming
   ];
 
   config = {

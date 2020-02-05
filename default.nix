@@ -23,7 +23,7 @@ in {
     ++ (importall ./imports)
     # the machine specific configuration is placed at ./hosts/<hostName>.nix
     ++ (let
-          path = (./hosts + "/${hostName}.nix");
+          path = (./profiles/machines + "/${hostName}");
         in if builtins.pathExists path
            then [path]
            else []);

@@ -3,8 +3,8 @@
 { pkgs, ... }:
 {
   imports = [
-    ./base.nix
+    ../base
     # configuration
-    ../profiles/dev
+    ../../dev
   ];
 }

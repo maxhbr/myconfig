@@ -14,15 +14,15 @@
 
 {
   imports = [
-    ./notebook-generic.nix
-    ./nixos-hardware/lenovo/thinkpad/x1-extreme/gen2/default.nix
-    ./ssd.nix
-    ./lowres.nix
+    ../../hardware/notebook-generic.nix
+    ../../hardware/nixos-hardware/lenovo/thinkpad/x1-extreme/gen2/default.nix
+    ../../hardware/ssd.nix
+    ../../hardware/lowres.nix
 
     ##############################################################################
     ##  choos setup for graphics  ################################################
     ##############################################################################
-    (import ./gtx1650.nix).rawNvidiaConf
+    (import ../../hardware/gtx1650.nix).rawNvidiaConf
   ];
 
   boot.extraModprobeConfig = ''
