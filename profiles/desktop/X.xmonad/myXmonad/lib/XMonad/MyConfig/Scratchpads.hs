@@ -28,6 +28,7 @@ applyMyScratchpads c = let
         mkTermCmd :: String -> String -> String
         mkTermCmd name cmd = "SHLVL=0 " ++ terminal c ++ " -name " ++ name ++ " -e " ++ cmd
         mkEmacsCmd :: String -> String -> String
+        mkEmacsCmd name "" = emacsCMD ++ " -name " ++ name
         mkEmacsCmd name cmd = emacsCMD ++ " -name " ++ name ++ " -e \"" ++ cmd ++ "\""
       in
         [ NS "scratchpad" (mkTermCmd "Scratchpad" (pathToXmonadBins ++ "tmux-scratch.sh"))
