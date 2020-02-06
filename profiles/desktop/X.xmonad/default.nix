@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  my-xmonad = pkgs.haskellPackages.callPackage ./myXmonad {
+  my-xmonad = pkgs.haskellPackages.callPackage ./myXMonad {
     inherit pkgs;
   };
 in {

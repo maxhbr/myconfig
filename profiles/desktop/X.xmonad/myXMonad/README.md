@@ -3,9 +3,9 @@
 Currently my Xmonad Configuration is packaged via [nix](https://nixos.org/nix/) and deployed via the following lines in my nixos configuration (see [./../nixos/roles/desktop.nix]):
 ```nix
 services.xserver.windowManager = {
-  default = "myXmonad";
+  default = "myXMonad";
   session = [{
-    name = "myXmonad";
+    name = "myXMonad";
     start = ''
       LOG=/tmp/myXmnad.log
       exec &> >(tee -a $LOG)
