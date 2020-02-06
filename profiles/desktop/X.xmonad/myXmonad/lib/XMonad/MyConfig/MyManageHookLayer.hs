@@ -9,7 +9,6 @@ import           XMonad
 import           XMonad.StackSet (RationalRect (..))
 import           XMonad.Hooks.ManageHelpers ( composeOne, (-?>)
                                             , doCenterFloat
-                                            , doSideFloat, Side (..)
                                             , doRectFloat
                                             , doFullFloat
                                             , transience
@@ -40,7 +39,7 @@ myManageHook = let
                                                  ,"Zenity"
                                                  ,"pinentry","Pinentry"
                                                  ,"feh"])
-                               , (doSideFloat NC, ["zoom","zoom-us"])
+                               , (doRectFloat (RationalRect 0.85 0.2 0.95 0.7), ["zoom","zoom-us"])
                                , (doRectFloat (RationalRect 0.1 0.05 0.3 0.9), ["pavucontrol","Pavucontrol"])
                                , (doFloat, ["MPlayer"
                                            ,"Onboard"])

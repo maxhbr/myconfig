@@ -3,15 +3,16 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 module XMonad.MyConfig.MyLogHookLayer
-    ( getXMProcs
-    , applyMyLogHook
+    ( applyMyLogHook
+    , runXmobar
     ) where
 
 import           GHC.IO.Handle (Handle ())
 import           System.IO ( hPutStrLn )
 import           XMonad
-import           XMonad.Util.Run ( spawnPipe )
+import           XMonad.Util.Run ( safeSpawn )
 import           XMonad.Hooks.DynamicLog ( dynamicLogWithPP
+                                         , dynamicLogString, xmonadPropLog
                                          , PP(..)
                                          , xmobarColor
                                          , wrap )
@@ -20,29 +21,20 @@ import XMonad.MyConfig.Common
 import XMonad.MyConfig.Scratchpads ( scratchpadPPSort )
 import XMonad.Layout.IndependentScreens
 
-getXMProcs :: IO [Handle]
-getXMProcs = let
-    additinalConfig 0 = [pathToXmobarConfig]
-    additinalConfig _ = [pathToXmobarMinConfig]
-    mkXmobarCommand (S s) = unwords ([xmobarCMD, "-x", show s] ++ additinalConfig s)
-  in do
-    nScreens <- countScreens
-    mapM (spawnPipe . mkXmobarCommand) [0 .. nScreens-1]
+runXmobar :: IO ()
+runXmobar = safeSpawn xmobarCMD []
 
-applyMyLogHook xmprocs c =
+applyMyLogHook c =
   let
     maincolor = focusedBorderColor c
-    myXmobarPP xmproc s = def { ppOutput  = hPutStrLn xmproc
-                              , ppCurrent = xmobarColor maincolor "" . wrap "<" ">"
-                              , ppSort    = scratchpadPPSort
-                              , ppTitle   = if s == 0
-                                            then (" " ++) . shortenStatus . xmobarColor maincolor ""
-                                            else (const "")
-                              , ppVisible = xmobarColor maincolor ""
-                              }
+    myXmobarPP = def { ppCurrent = xmobarColor maincolor "" . wrap "<" ">"
+                     , ppSort    = scratchpadPPSort
+                     , ppTitle   = (" " ++) . shortenStatus . xmobarColor maincolor ""
+                     , ppVisible = xmobarColor maincolor ""
+                     }
 
     myLogHook :: X ()
-    myLogHook = mapM_ dynamicLogWithPP $ zipWith myXmobarPP xmprocs [0..]
+    myLogHook = dynamicLogString myXmobarPP >>= xmonadPropLog
   in c { logHook = myLogHook }
 
 shortenStatus :: String -> String

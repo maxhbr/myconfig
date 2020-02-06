@@ -3,8 +3,8 @@
 -- see http://projects.haskell.org/xmobar/
 
 Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
-       , bgColor = "black"
-       , fgColor = "grey"
+       , bgColor = "#fbf8ef"
+       , fgColor = "black"
        -- , alpha = 175
        , position = BottomW L 100
        -- , border = TopB
@@ -12,28 +12,27 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
        , lowerOnStart = True
        , allDesktops = True
        , commands =
-         [ Run StdinReader
+         [ Run XMonadLog
          , Run DynNetwork [ "--Low"      ,  "500000"
                           , "--High"     , "1500000"
                           -- , "--low"      , "green"
-                          , "--normal"   , "orange"
-                          , "--high"     , "red"
+                          , "--normal"   , "darkorange"
+                          , "--high"     , "darkred"
                           ] 10
          , Run Wireless "wlp82s0" [ "-t", "<essid> <qualitybar>"
                                  , "-L", "20"
                                  , "-H", "35"
-                                 , "-l", "red"
-                                 , "-n", "orange"
+                                 , "-l", "darkred"
+                                 , "-n", "darkorange"
                                  -- , "-h", "green"
                                  ] 60
          , Run Cpu [ "--template" , "<fc=#999999>C:</fc><total><fc=#999999>%</fc>"
                    , "--Low"      , "50"
                    , "--High"     , "85"
                    -- , "--low"      , "green"
-                   , "--normal"   , "orange"
-                   , "--high"     , "red"
+                   , "--normal"   , "darkorange"
+                   , "--high"     , "darkred"
                    ] 10
-         -- , Run Com "/home/mhuber/.xmonad/bin/getCoreTemp.sh" ["<fc=#999999>@</fc>", "<fc=#999999>C</fc>", "orange", "red"] "coretemp" 60
          , Run MultiCoreTemp ["-t", "Temp: <avg>°C | <avgpc>%"
                              , "-L", "60", "-H", "80"
                              , "-l", "green", "-n", "yellow", "-h", "red"
@@ -41,18 +40,18 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
          , Run Memory ["-t","<fc=#999999>M:</fc><usedratio><fc=#999999>% (<used>)</fc>"
                       , "--Low"      , "8000"
                       , "--High"     , "16000"
-                      , "--low"      , "green"
-                      , "--normal"   , "orange"
-                      , "--high"     , "red"
+                      , "--low"      , "darkgreen"
+                      , "--normal"   , "darkorange"
+                      , "--high"     , "darkred"
                       ] 10
          , Run Kbd [ ("de(nodeadkeys)", "| <fc=#ee9a00>de</fc> ")
                    , ("de(neo)", "") ]
-         , Run Com "/home/mhuber/.xmonad/bin/miscStatus.sh" ["|", "<fc=#ffff00>", "</fc>"] "misc" 60
+         , Run Com "isVPN" ["|", "<fc=#ffff00>", "</fc>"] "isVPN" 60
          , Run Battery [ "-t", "<fc=#999999>B:</fc><left><fc=#999999>%</fc> <watts><fc=#999999>W</fc> <timeleft>"
                        , "-L", "10" , "-H", "80"
-                       , "--low"      , "red"
-                       , "--normal"   , "orange"
-                       -- , "--high"     , "green"
+                       , "--low"      , "darkred"
+                       , "--normal"   , "darkorange"
+                       -- , "--high"     , "darkgreen"
                        , "-p", "3"
                        , "--"
                        , "-i", ""
@@ -60,13 +59,13 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
                        , "-L", "-15" , "-H", "-5"
                        , "-l", "red" , "-m", "blue" , "-h", "green"
                        ] 600
-         , Run Mail [ ("<fc=green>Mail! </fc>", "~/Maildir/mail/INBOX")
-                    , ("<fc=yellow>TNG! </fc>", "~/Maildir/tng/INBOX")
-                    , ("<fc=green>+</fc>", "~/Maildir/alfa/INBOX") ] "mail"
+         , Run Mail [ ("<fc=darkgreen>Mail! </fc>", "~/Maildir/mail/INBOX")
+                    , ("<fc=#7285c3>TNG! </fc>", "~/Maildir/tng/INBOX")
+                    , ("<fc=darkgreen>+</fc>", "~/Maildir/alfa/INBOX") ] "mail"
          ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %StdinReader% }{ <action=`urxvtc -name ScratchNMTUI -e bash -c nmtui`>%dynnetwork% %wlp82s0wi%</action> | <action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu%%mulicoretemp% %memory%</action> %kbd%%misc%| <action=`xbacklight =10`>%battery%</action> | <fc=#ffffff><action=`urxvtc -name ScratchMutt -e bash -c ~/bin/mailclient.sh`>%mail%</action></fc> | %date% "
+       , template = " %XMonadLog% }{ <action=`urxvtc -name ScratchNMTUI -e bash -c nmtui`>%dynnetwork% %wlp82s0wi%</action> | <action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu%%mulicoretemp% %memory%</action> %kbd%%isvpn%| <action=`xbacklight =10`>%battery%</action> | <fc=#7285c3>%mail%</fc> | %date% "
        }
 
 -- vim: set ft=haskell :

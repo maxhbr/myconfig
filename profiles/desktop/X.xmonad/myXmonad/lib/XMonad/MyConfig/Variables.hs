@@ -3,14 +3,10 @@
 module XMonad.MyConfig.Variables
     where
 
-pathToXmobarConfig = "~/.xmonad/xmobarrc"
-pathToXmobarMinConfig = "~/.xmonad/xmobarrc.minimal"
 pathToXmonadBins   = "~/.xmonad/bin/"
 pathToXmonadShare  = "~/.xmonad/share/"
-pathToMyXmonadBin  = ""
 
 xmobarCMD          = "xmobar"
-terminalCMD        = "urxvtc"
 terminalServerCMD  = "urxvtd -q -f -o"
 bashCMD            = "bash"
 zshCMD             = "zsh"

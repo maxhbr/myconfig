@@ -9,7 +9,6 @@ module XMonad.MyConfig
     ) where
 
 import           System.Environment ( getExecutablePath, getArgs, )
-import           Control.Monad ( when )
 import           XMonad
 
 import           XMonad.Util.Replace ( replace )
@@ -22,23 +21,31 @@ import XMonad.MyConfig.Scratchpads ( applyMyScratchpads )
 import XMonad.MyConfig.ToggleFollowFocus ( applyMyFollowFocus )
 import XMonad.MyConfig.Notify ( applyMyUrgencyHook )
 import XMonad.MyConfig.MyLayoutLayer ( applyMyLayoutModifications )
-import XMonad.MyConfig.MyLogHookLayer ( getXMProcs, applyMyLogHook )
+import XMonad.MyConfig.MyLogHookLayer ( applyMyLogHook, runXmobar )
 import XMonad.Hooks.EwmhDesktops (ewmh)
 
 runMyConfig :: IO ()
 runMyConfig = do
+  runXmobar
+
   args <- getArgs
 
-  when ("--myreplace" `elem` args) $ do
-    putStrLn "try to replace current window manager ..."
-    replace
-
-  xmprocs <- getXMProcs
   executablePath <- getExecutablePath
-  putStrLn ("try to launch: " ++ executablePath)
-  launch $ composeMyConfig xmprocs executablePath
+  let conf = composeMyConfig executablePath
 
-composeMyConfig xmprocs executablePath = let
+  if null args
+    then do
+      putStrLn ("try to launch: " ++ executablePath)
+      xmonad conf
+    else if "--myreplace" `elem` args
+      then do
+        putStrLn "try to replace current window manager ..."
+        replace
+      else do
+        putStrLn ("try to run xmonad: " ++ executablePath)
+        xmonad conf
+
+composeMyConfig executablePath = let
   layers :: (LayoutClass a Window) => [XConfig a -> XConfig a]
   layers = [ applyMyLayoutModifications
            , applyMyRestartKBs executablePath
@@ -46,7 +53,7 @@ composeMyConfig xmprocs executablePath = let
            , applyMyUrgencyHook
            , applyMyScratchpads
            , applyMyFollowFocus
-           , applyMyLogHook xmprocs
+           , applyMyLogHook
            , ewmh -- EWMH should prevent input grab without focus grab:
                   -- see: https://github.com/xmonad/xmonad/issues/45#issuecomment-442064582
                   --   Use EWMH handling, because some programs grab input focus without window focus. With EWMH enabled, this won't happenj

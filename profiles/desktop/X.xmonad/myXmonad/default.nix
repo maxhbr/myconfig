@@ -3,6 +3,9 @@
 { pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv, mkDerivation, base, containers, process, X11, xmonad, xmonad-contrib, callPackage }:
 let
   version = "1.0";
+  my-xmobar = callPackage ../myXmobar {
+    inherit pkgs;
+  };
   my-xmonad-misc = callPackage ./misc.nix {
     inherit pkgs;
   };
@@ -44,14 +47,13 @@ in mkDerivation {
       sed -i -e '/'"$key"' *=/ s%= .*%= "'"$value"'";%' $variablesFile
     }
 
-    addAbsoluteBinaryPath xmobar ${pkgs.haskellPackages.xmobar}
     addAbsoluteBinaryPath urxvtc ${pkgs.rxvt_unicode_with-plugins}
     addAbsoluteBinaryPath urxvtd ${pkgs.rxvt_unicode_with-plugins}
     addAbsoluteBinaryPath bash ${pkgs.bash}
     addAbsoluteBinaryPath zsh ${pkgs.zsh}
     addAbsoluteBinaryPath emacs ${pkgs.emacs}
-    addAbsoluteBinaryPath dmenu_path ${pkgs.dmenu} #$#{pkgs.unstable.dmenu}
-    addAbsoluteBinaryPath yeganesh ${pkgs.haskellPackages.yeganesh} #$#{pkgs.unstable.haskellPackages.yeganesh}
+    addAbsoluteBinaryPath dmenu_path ${pkgs.dmenu}
+    addAbsoluteBinaryPath yeganesh ${pkgs.haskellPackages.yeganesh}
     addAbsoluteBinaryPath passmenu ${pkgs.pass}
     addAbsoluteBinaryPath firefox ${pkgs.firefox}
     addAbsoluteBinaryPath chromium-browser ${pkgs.chromium}
@@ -65,8 +67,7 @@ in mkDerivation {
     addAbsoluteBinaryPath pavucontrol ${pkgs.pavucontrol}
     addAbsoluteBinaryPath light ${pkgs.light}
 
-    replaceConfigValue pathToXmobarConfig "${my-xmonad-misc}/share/xmobarrc"
-    replaceConfigValue pathToXmobarMinConfig "${my-xmonad-misc}/share/xmobarrc.minimal"
+    replaceConfigValue xmobarCMD "${my-xmobar}/bin/xmobarXmonad"
     replaceConfigValue pathToXmonadBins "${my-xmonad-misc}/bin/"
     replaceConfigValue pathToXmonadShare "${my-xmonad-misc}/share/"
   '';

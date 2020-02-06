@@ -5,7 +5,7 @@
 Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
        , bgColor = "black"
        , fgColor = "grey"
-       , position = BottomW L 100
+       , position = TopW L 100
        , lowerOnStart = True
        , allDesktops = True
        , commands = [ Run StdinReader ]
