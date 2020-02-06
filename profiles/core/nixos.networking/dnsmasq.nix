@@ -5,7 +5,6 @@
 {
   services.dnsmasq = {
     enable = true;
-    servers = [ "8.8.8.8" "8.8.4.4" ];
     extraConfig = ''
 conf-dir=/etc/dnsmasq.d
 '';
