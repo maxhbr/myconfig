@@ -7,6 +7,7 @@ pathToXmonadBins   = "~/.xmonad/bin/"
 pathToXmonadShare  = "~/.xmonad/share/"
 
 xmobarCMD          = "xmobar"
+terminalCMD        = "urxvtc"
 terminalServerCMD  = "urxvtd -q -f -o"
 bashCMD            = "bash"
 zshCMD             = "zsh"
