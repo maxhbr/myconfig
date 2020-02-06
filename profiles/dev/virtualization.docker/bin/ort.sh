@@ -43,22 +43,7 @@ buildImageIfMissing() {
         trap 'rm -rf $ORT' EXIT
         git clone https://github.com/heremaps/oss-review-toolkit/ $ORT
 
-        docker build -t ort-build:latest - < $ORT/docker/build/Dockerfile
-
-        docker run -i --rm \
-               -v "$ORT":/workdir \
-               -u $(id -u $USER):$(id -g $USER) \
-               -w /workdir \
-               --net=host \
-               ort-build \
-               ./gradlew --no-daemon --stacktrace :cli:installDist :cli:distTar
-
-        ORT_VERSION=$(cat $ORT/model/src/main/resources/VERSION)
-        docker build \
-               --build-arg ORT_VERSION=$ORT_VERSION \
-               -t ort:latest \
-               -f $ORT/docker/run/Dockerfile $ORT/cli/build/distributions
-        docker tag ort:latest ort:"${ORT_VERSION//[+]/-}"
+        docker build -t ort:latest $ORT
     else
         echo "docker image already build"
     fi

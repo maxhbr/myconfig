@@ -4,10 +4,10 @@
 {
   imports = [
     # hardware:
-    ./hardware/grub.nix
+    ../../hardware/grub.nix
     # configuration
-    ../profiles/server
-    ../profiles/server/service.wireguard-server
+    ../../server
+    ../../server/service.wireguard-server
   ];
 
   config = {
