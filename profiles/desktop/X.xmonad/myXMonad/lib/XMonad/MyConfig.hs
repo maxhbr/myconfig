@@ -15,7 +15,7 @@ import           XMonad.Util.Replace ( replace )
 
 --------------------------------------------------------------------------------
 -- MyConfig
-import XMonad.MyConfig.Core ( coreConfig, applyMyRestartKBs )
+import XMonad.MyConfig.Core ( coreConfig )
 import XMonad.MyConfig.MyManageHookLayer ( applyMyManageHook )
 import XMonad.MyConfig.Scratchpads ( applyMyScratchpads )
 import XMonad.MyConfig.ToggleFollowFocus ( applyMyFollowFocus )
@@ -31,24 +31,20 @@ runMyConfig = do
   args <- getArgs
 
   executablePath <- getExecutablePath
-  let conf = composeMyConfig executablePath
+  putStrLn ("xmonad is: " ++ executablePath)
+  let conf = composeMyConfig
 
   if null args
-    then do
-      putStrLn ("try to launch: " ++ executablePath)
-      xmonad conf
+    then xmonad conf
     else if "--myreplace" `elem` args
       then do
         putStrLn "try to replace current window manager ..."
         replace
-      else do
-        putStrLn ("try to run xmonad: " ++ executablePath)
-        xmonad conf
+      else xmonad conf
 
-composeMyConfig executablePath = let
+composeMyConfig = let
   layers :: (LayoutClass a Window) => [XConfig a -> XConfig a]
   layers = [ applyMyLayoutModifications
-           , applyMyRestartKBs executablePath
            , applyMyManageHook
            , applyMyUrgencyHook
            , applyMyScratchpads

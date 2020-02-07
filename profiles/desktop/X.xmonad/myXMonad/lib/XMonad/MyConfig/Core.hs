@@ -3,7 +3,6 @@
 {-# LANGUAGE CPP #-}
 module XMonad.MyConfig.Core
     ( coreConfig
-    , applyMyRestartKBs
     ) where
 
 import           System.FilePath
@@ -53,12 +52,6 @@ coreConfig =
       , startupHook        = myStartupHook
       }
 
-applyMyRestartKBs executablePath =
-  applyMyKBs [ ((m__, xK_q     ), restart executablePath True)
-             , ((m_c, xK_q     ), spawn (executablePath ++ " --restart"))
-             -- , ((ms_, xK_q     ), spawn (executablePath ++ " --recompile && sleep 0.1 && " ++ executablePath ++ " --restart"))
-             ]
-
 ------------------------------------------------------------------------
 -- Startup hook:
 myStartupHook :: X ()
@@ -100,6 +93,8 @@ myKeys conf =
 #endif
       , ((ms_, xK_c     ), kill)
       , ((m__, xK_p     ), spawn myLauncherCMD)
+      , ((m__, xK_q     ), restart "xmonad" True)
+      , ((m_c, xK_q     ), spawn ("xmonad" ++ " --restart"))
       , ((ms_, xK_q     ), spawn (pathToXmonadBins ++ "stopWM.sh"))
       , ((msc, xK_q     ), io exitSuccess)
       -- , ((m__, xK_x     ), shellPrompt defaultXPConfig)

@@ -29,13 +29,15 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
          , Run Cpu [ "--template" , "<fc=#999999>C:</fc><total><fc=#999999>%</fc>"
                    , "--Low"      , "50"
                    , "--High"     , "85"
-                   -- , "--low"      , "green"
+                   , "--low"      , "darkgreen"
                    , "--normal"   , "darkorange"
                    , "--high"     , "darkred"
                    ] 10
-         , Run MultiCoreTemp ["-t", "Temp: <avg>°C | <avgpc>%"
+         , Run MultiCoreTemp ["-t", "@<avg>°C"
                              , "-L", "60", "-H", "80"
-                             , "-l", "green", "-n", "yellow", "-h", "red"
+                             , "-l", "darkgreen"
+                             , "-n", "darkorange"
+                             , "-h", "darkred"
                              , "--", "--mintemp", "20", "--maxtemp", "100"] 50
          , Run Memory ["-t","<fc=#999999>M:</fc><usedratio><fc=#999999>% (<used>)</fc>"
                       , "--Low"      , "8000"
@@ -44,9 +46,7 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
                       , "--normal"   , "darkorange"
                       , "--high"     , "darkred"
                       ] 10
-         , Run Kbd [ ("de(nodeadkeys)", "| <fc=#ee9a00>de</fc> ")
-                   , ("de(neo)", "") ]
-         , Run Com "isVPN" ["|", "<fc=#ffff00>", "</fc>"] "isVPN" 60
+         , Run Com "isvpn" ["|", "<fc=#7285c3>", "</fc>"] "" 60
          , Run Battery [ "-t", "<fc=#999999>B:</fc><left><fc=#999999>%</fc> <watts><fc=#999999>W</fc> <timeleft>"
                        , "-L", "10" , "-H", "80"
                        , "--low"      , "darkred"
@@ -65,7 +65,7 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
          ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %XMonadLog% }{ <action=`urxvtc -name ScratchNMTUI -e bash -c nmtui`>%dynnetwork% %wlp82s0wi%</action> | <action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu%%mulicoretemp% %memory%</action> %kbd%%isvpn%| <action=`xbacklight =10`>%battery%</action> | <fc=#7285c3>%mail%</fc> | %date% "
+       , template = " %XMonadLog% }{ <action=`urxvtc -name ScratchNMTUI -e bash -c nmtui`>%dynnetwork% %wlp82s0wi%</action> | <action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu%%multicoretemp% %memory%</action> %isvpn%| <action=`xbacklight =10`>%battery%</action> | <fc=#7285c3>%mail%</fc> | %date% "
        }
 
 -- vim: set ft=haskell :

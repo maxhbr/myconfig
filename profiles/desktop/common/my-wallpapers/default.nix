@@ -14,7 +14,7 @@ in {
     })];
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
-        my-wallpapers
+        my-wallpapers my-wallpapers-source
       ];
     };
   };

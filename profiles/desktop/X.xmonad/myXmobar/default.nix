@@ -6,7 +6,7 @@ let
   xmobarrc = ./xmobarrc;
   xmobarrcTop = ./xmobarrc.top;
 
-  isVPN = with pkgs; writeScriptBin "isVPN" ''
+  isvpn = with pkgs; writeScriptBin "isvpn" ''
 #!${stdenv.shell}
 delimiter=$1
 startcol=$2
@@ -22,14 +22,17 @@ fi
   xmobarXmonad = with pkgs; writeScriptBin "xmobarXmonad" ''
 #!${stdenv.shell}
 set -ex
-PATH=$PATH:${isVPN}/bin/
+export PATH=$PATH:${isvpn}/bin/
 ${xmobar}/bin/xmobar ${xmobarrc}
   '';
   xmobarDmesg = with pkgs; writeScriptBin "xmobarDmesg" ''
 #!${stdenv.shell}
 set -o pipefail
 set -ex
-${utillinux}/bin/dmesg -w | ${xmobar}/bin/xmobar ${xmobarrcTop}
+fun () {
+  ${utillinux}/bin/dmesg -w | ${xmobar}/bin/xmobar ${xmobarrcTop}
+}
+fun &disown
   '';
 in pkgs.buildEnv {
   name = "my-xmobar";
