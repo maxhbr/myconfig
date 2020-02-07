@@ -2,8 +2,11 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  my-xmonad = pkgs.haskellPackages.callPackage ./myXMonad {
+  my-xmobar = pkgs.callPackage ./myXmobar {
     inherit pkgs;
+ };
+  my-xmonad = pkgs.haskellPackages.callPackage ./myXMonad {
+    inherit pkgs my-xmobar;
   };
 in {
   imports = [
@@ -14,6 +17,8 @@ in {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
         my-xmonad
+        my-xmobar
+
         dzen2
       ];
       xsession.windowManager.command = "${my-xmonad}/bin/xmonad";

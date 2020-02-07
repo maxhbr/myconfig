@@ -35,8 +35,8 @@ in pkgs.buildEnv {
   name = "my-xmobar";
   extraOutputsToInstall = ["bin"];
   paths = [
+    xmobar
     xmobarXmonad
     xmobarDmesg
-    isVPN
   ];
 }
