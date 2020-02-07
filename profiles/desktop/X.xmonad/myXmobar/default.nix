@@ -35,7 +35,7 @@ in pkgs.buildEnv {
   name = "my-xmobar";
   extraOutputsToInstall = ["bin"];
   paths = [
-    xmobar
+    pkgs.xmobar
     xmobarXmonad
     xmobarDmesg
   ];

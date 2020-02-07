@@ -7,19 +7,15 @@ module XMonad.MyConfig.MyLogHookLayer
     , runXmobar
     ) where
 
-import           GHC.IO.Handle (Handle ())
-import           System.IO ( hPutStrLn )
 import           XMonad
 import           XMonad.Util.Run ( safeSpawn )
-import           XMonad.Hooks.DynamicLog ( dynamicLogWithPP
-                                         , dynamicLogString, xmonadPropLog
+import           XMonad.Hooks.DynamicLog ( dynamicLogString, xmonadPropLog
                                          , PP(..)
                                          , xmobarColor
                                          , wrap )
 
 import XMonad.MyConfig.Common
 import XMonad.MyConfig.Scratchpads ( scratchpadPPSort )
-import XMonad.Layout.IndependentScreens
 
 runXmobar :: IO ()
 runXmobar = safeSpawn xmobarCMD []
