@@ -8,14 +8,18 @@ stdenv.mkDerivation rec {
 
   src = ./.;
 
+  patchPhase = ''
+    sed -i -e 's%xmessage%${pkgs.xorg.xmessage}/bin/xmessage%g' battery-monitor.sh
+    sed -i -e 's%acpi %${pkgs.acpi}/bin/acpi %g' battery-monitor.sh
+  '';
+
   buildPhase = "";
 
   installPhase = ''
-    share=$out/share
     bin=$out/bin
-    mkdir -p $share $bin
+    mkdir -p $bin
 
-    cp bin/* $bin
-    cp share/* $share
+    cp battery-monitor.sh $bin
+    chmod +x "$bin/battery-monitor.sh"
   '';
 }
