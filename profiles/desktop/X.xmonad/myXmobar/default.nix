@@ -30,7 +30,7 @@ ${xmobar}/bin/xmobar ${xmobarrc}
 set -o pipefail
 set -ex
 fun () {
-  ${utillinux}/bin/dmesg -w | ${xmobar}/bin/xmobar ${xmobarrcTop}
+  ${utillinux}/bin/dmesg -w -T | ${xmobar}/bin/xmobar ${xmobarrcTop}
 }
 fun &disown
   '';
