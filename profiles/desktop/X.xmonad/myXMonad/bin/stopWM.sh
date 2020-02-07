@@ -30,9 +30,11 @@ wait_for_termination() {
 for win in $(wmctrl -l | awk '{print $1}'); do
     wmctrl -ic $win;
     wait_for_termination $win 10;
-    if [[ $? != 0 ]]; then
-        notify-send -u critical "Cannot quit" "At least an application couldn't be closed."
-        exit -1
+    if [[ "$1" != "-f" ]]; then
+        if [[ $? != 0 ]]; then
+            notify-send -u critical "Cannot quit" "At least an application couldn't be closed."
+            exit -1
+        fi
     fi
 done
 

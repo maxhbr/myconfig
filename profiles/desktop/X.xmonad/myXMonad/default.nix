@@ -3,9 +3,8 @@
 { pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv, mkDerivation, base, containers, process, X11, xmonad, xmonad-contrib, callPackage, my-xmobar }:
 let
   version = "1.0";
-  my-xmonad-misc = callPackage ./misc.nix {
-    inherit pkgs;
-  };
+  my-xmonad-scripts = ./bin;
+  my-xmonad-share = ./share;
   find-cursor = callPackage ./find-cursor.nix {
     inherit pkgs;
   };
@@ -65,8 +64,8 @@ in mkDerivation {
     addAbsoluteBinaryPath light ${pkgs.light}
 
     replaceConfigValue xmobarCMD "${my-xmobar}/bin/xmobarXmonad"
-    replaceConfigValue pathToXmonadBins "${my-xmonad-misc}/bin/"
-    replaceConfigValue pathToXmonadShare "${my-xmonad-misc}/share/"
+    replaceConfigValue pathToXmonadBins "${my-xmonad-scripts}/"
+    replaceConfigValue pathToXmonadShare "${my-xmonad-share}/"
   '';
 
   description = "my xmonad configuration";
