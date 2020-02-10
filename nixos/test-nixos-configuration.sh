@@ -15,7 +15,8 @@ fi
 
 if [[ "$1" == "--ci" ]]; then
     shift
-    cat <<EOF > "$myconfigDir/imports/dummy-hardware-configuration.nix"
+    if [[ ! -f "$myconfigDir/hostname" ]]; then
+        cat <<EOF > "$myconfigDir/imports/dummy-hardware-configuration.nix"
 {...}: {
   fileSystems."/" = { device = "/dev/sda1"; fsType = "ext4";};
   fileSystems."/boot" ={ device = "/dev/sda1"; fsType = "vfat";};
@@ -23,11 +24,14 @@ if [[ "$1" == "--ci" ]]; then
 }
 EOF
 
-    if [[ "$1" ]]; then
-        echo -n "$1" | sudo tee "$myconfigDir/hostname"
-        shift
-    else
-        echo -n "base" | sudo tee "$myconfigDir/hostname"
+        if [[ "$1" ]]; then
+            if [[ -d "$myconfigDir/nixos/$1" ]]; then
+                echo -n "$1" | tee "$myconfigDir/hostname"
+                shift
+            fi
+        else
+            echo -n "base" | tee "$myconfigDir/hostname"
+        fi
     fi
 fi
 
@@ -41,4 +45,4 @@ time \
               $args \
               -A system \
               --show-trace --keep-failed \
-              --arg configuration "$myconfigDir/default.nix"
+              --arg configuration "$nixosConfig"

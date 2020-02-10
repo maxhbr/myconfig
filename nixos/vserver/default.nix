@@ -3,8 +3,10 @@
 { pkgs, ... }:
 {
   imports = [
-    ../base
+    ../headless
+    # hardware:
+    ../hardware/grub.nix
     # configuration
-    ../../dev
+    ./modules/server/service.wireguard-server
   ];
 }

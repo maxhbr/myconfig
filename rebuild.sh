@@ -303,7 +303,7 @@ updateNixpkgs() {
 updateNixosHardware() {
     updateSubtree \
         NixOS-nixos-hardware https://github.com/NixOS/nixos-hardware \
-        "profiles/hardware/nixos-hardware/" \
+        "nixos/hardware/nixos-hardware/" \
         "master"
 }
 
@@ -327,13 +327,13 @@ update() {
             logH3 "update" "home-manager"
             ./lib/home-manager/update.sh
             logH3 "update" "extrahosts"
-            ./profiles/core/nixos.networking/extrahosts/update.sh
+            ./nixos/core/modules/nixos.networking/extrahosts/update.sh
             logH3 "update" "nixpkgs-unstable"
             ./lib/nixpkgs-unstable/default.sh
             logH3 "update" "emacs"
             ./profiles/emacs/update.sh
             logH3 "update" "my-wallpapers"
-            ./profiles/desktop/common/my-wallpapers/update.sh
+            ./nixos/desktop/modules/common/my-wallpapers/update.sh
         fi
     fi
 }

@@ -1,16 +1,16 @@
 { config, pkgs, lib, ... }:
 {
   imports = [
-    ./vim
-    ./zsh
-    ./tmux
-    ./pass
-    ./git
-    ./myborgbackup
-    ./nixos.networking
-    ./nixos.nix.nix
-    ./user.mhuber.nix
-    ./dic.nix
+    ./modules/vim
+    ./modules/zsh
+    ./modules/tmux
+    ./modules/pass
+    ./modules/git
+    ./modules/myborgbackup
+    ./modules/nixos.networking
+    ./modules/nixos.nix.nix
+    ./modules/user.mhuber.nix
+    ./modules/dic.nix
   ];
   config = {
     boot = {

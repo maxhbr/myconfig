@@ -20,6 +20,6 @@ jobs:
     - uses: actions/checkout@v1
     - name: Install Nix
       uses: cachix/install-nix-action@v6
-    - run: ./test/test-nixos-configuration.sh --ci ${{ matrix.config.hostname }}
+    - run: ./nixos/test-nixos-configuration.sh --ci ${{ matrix.config.hostname }}
       continue-on-error: ${{ matrix.config.allow_failure }}
 

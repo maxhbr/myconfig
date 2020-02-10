@@ -6,13 +6,13 @@
     ../dev
     # hardware:
     ./x1extremeG2.nix
-    ../../hardware/efi.nix
+    ../hardware/efi.nix
     # modules
-    ../../work
+    ./modules/work
     ## fun
-    ../../imagework
-    ../../misc/smarthome.nix
-    ../../gaming
+    ./modules/imagework
+    ./modules/smarthome.nix
+    ./modules/gaming
   ];
 
   config = {

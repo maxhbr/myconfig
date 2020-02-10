@@ -3,11 +3,11 @@
 { pkgs, ... }:
 {
   imports = [
-    # hardware:
-    ../../hardware/grub.nix
+    ../core
     # configuration
-    ../../server
-    ../../server/service.wireguard-server
+    ./modules/nixos.auto-upgrade.nix
+    ./modules/service.openssh.nix
+    ./modules/service.vsftp.nix
   ];
 
   config = {
