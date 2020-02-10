@@ -6,12 +6,12 @@
     ../dev
     # hardware:
     ./x1extremeG2.nix
-    ../../hardware/efi.nix
+    ../hardware/efi.nix
     # modules
     ./modules/work
     ## fun
     ./modules/imagework
-    ./modules/misc/smarthome.nix
+    ./modules/smarthome.nix
     ./modules/gaming
   ];
 

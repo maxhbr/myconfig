@@ -17,9 +17,10 @@ if [[ -f "$nixpkgsDir/default.nix" ]]; then
 else
     nixpkgs="channel:$nixStableChannel"
 fi
+nixosConfig="$myconfigDir/nixos/default.nix"
 
-NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$myconfigDir/default.nix"
-NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/default.nix"
+NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfig"
+NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$nixosConfig"
 export NIX_PATH
 export NIX_PATH_ARGS
 
