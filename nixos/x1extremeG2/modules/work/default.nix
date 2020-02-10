@@ -11,7 +11,6 @@
       ./thrift011.nix
       ./thrift012.nix
       ./thrift93.nix
-      ./zoom-us.nix
     ];
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
