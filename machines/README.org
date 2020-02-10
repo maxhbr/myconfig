@@ -1,0 +1,15 @@
+* Hierarchy any layering of configurations
+#+BEGIN_SRC 
+core
+├── base
+│   └── desktop
+│       └── dev
+│           └── x1extremeG2
+└── headless
+    └── vserver
+#+END_SRC
+** core
+** desktop
+** dev
+** x1extremeG2
+** vserver
