@@ -16,7 +16,7 @@ pre="$delimiter $startcol"
 post="$endcol "
 
 if ${nettools}/bin/ifconfig tun0 &> /dev/null; then
-  echo -n "$pre"'BTSync'"$post"
+  echo -n "$pre"'VPN'"$post"
 fi
   '';
   xmobarXmonad = with pkgs; writeScriptBin "xmobarXmonad" ''
