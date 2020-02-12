@@ -28,19 +28,9 @@ runMyConfig :: IO ()
 runMyConfig = do
   runXmobar
 
-  args <- getArgs
-
   executablePath <- getExecutablePath
   putStrLn ("xmonad is: " ++ executablePath)
-  let conf = composeMyConfig
-
-  if null args
-    then xmonad conf
-    else if "--myreplace" `elem` args
-      then do
-        putStrLn "try to replace current window manager ..."
-        replace
-      else xmonad conf
+  xmonad composeMyConfig
 
 composeMyConfig = let
   layers :: (LayoutClass a Window) => [XConfig a -> XConfig a]

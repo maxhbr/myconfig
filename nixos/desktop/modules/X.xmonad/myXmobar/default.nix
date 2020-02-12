@@ -21,9 +21,16 @@ fi
   '';
   xmobarXmonad = with pkgs; writeScriptBin "xmobarXmonad" ''
 #!${stdenv.shell}
-set -ex
+set -e
 export PATH=$PATH:${isvpn}/bin/
-${xmobar}/bin/xmobar ${xmobarrc}
+pidfile=/tmp/xmobarXmonad.pid
+if [[ -f $pidfile ]]; then
+  kill $(cat $pidfile) || true
+  rm $pidfile
+fi
+set -x
+${xmobar}/bin/xmobar ${xmobarrc} &
+echo $! > $pidfile
   '';
   xmobarDmesg = with pkgs; writeScriptBin "xmobarDmesg" ''
 #!${stdenv.shell}

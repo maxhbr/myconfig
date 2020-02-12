@@ -8,7 +8,7 @@ module XMonad.MyConfig.MyLogHookLayer
     ) where
 
 import           XMonad
-import           XMonad.Util.Run ( safeSpawn )
+import           XMonad.Util.Run ( safeSpawnProg )
 import           XMonad.Hooks.DynamicLog ( dynamicLogString, xmonadPropLog
                                          , PP(..)
                                          , xmobarColor
@@ -18,7 +18,7 @@ import XMonad.MyConfig.Common
 import XMonad.MyConfig.Scratchpads ( scratchpadPPSort )
 
 runXmobar :: IO ()
-runXmobar = safeSpawn xmobarCMD []
+runXmobar = safeSpawnProg xmobarCMD
 
 applyMyLogHook c =
   let
