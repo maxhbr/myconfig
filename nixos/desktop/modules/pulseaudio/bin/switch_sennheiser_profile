@@ -8,11 +8,13 @@ set -o pipefail
 
 export LC_ALL=C
 
-if [[ "$1" == "-h" ]]; then
-    cat <<EOF
+if [[ $# -eq 1 ]]; then
+    if [[ "$1" == "-h" ]]; then
+        cat <<EOF
   \$ $0 [h|m|-h]
 EOF
-    exit 0
+        exit 0
+    fi
 fi
 
 function main {
@@ -33,31 +35,36 @@ function main {
         exit 1
     fi
 
-    if [[ "$1" == "h" ]]; then
-        readonly pactl_target_profile="headset_head_unit"
-    elif [[ "$1" == "m" ]]; then
-        readonly pactl_target_profile="a2dp_sink"
+    if [[ $# -eq 1 ]]; then
+        if [[ "$1" == "h" ]]; then
+            readonly pactl_target_profile="headset_head_unit"
+        elif [[ "$1" == "m" ]]; then
+            readonly pactl_target_profile="a2dp_sink"
+        else
+            echo "unsupported argument $1"
+            exit 1
+        fi
     else
         readonly pactl_active_profile="$(printf "$sennheiser_profile" \
-                                       | grep -oP 'Active Profile: ([^ ]+)' \
-                                       | sed -r 's/.*: *//')"
+                                           | grep -oP 'Active Profile: ([^ ]+)' \
+                                           | sed -r 's/.*: *//')"
         if [[ -z "$pactl_active_profile" ]]; then
             echo "could not determine \$pactl_active_profile, headset probably not connected"
             exit 1
         fi
 
         readonly pactl_other_profile="$(printf "$sennheiser_profile" \
-                                      | grep -oP 'profile.s.: .+' \
-                                      | sed -r 's/.*: *//;s/, //' \
-                                      | sed -r "s/${pactl_active_profile}//")"
+                                          | grep -oP 'profile.s.: .+' \
+                                          | sed -r 's/.*: *//;s/, //' \
+                                          | sed -r "s/${pactl_active_profile}//")"
         if [[ -z "$pactl_other_profile" ]]; then
             echo "could not determine \$pactl_other_profile, headset probably not connected"
             exit 1
         fi
 
         readonly pactl_target_profile="$(printf "$pactl_other_profile" \
-                                       | head -1 \
-                                       | cut -f 1 -d " ")"
+                                           | head -1 \
+                                           | cut -f 1 -d " ")"
     fi
 
     pactl set-card-profile "${pactl_name}" "${pactl_target_profile}"
