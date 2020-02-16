@@ -12,7 +12,7 @@ let
 in
 {
   imports = [
-    ./dev.nix
+    ./dev.core.nix
   ];
   config = {
     home-manager.users.mhuber = {

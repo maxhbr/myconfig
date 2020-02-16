@@ -3,7 +3,7 @@
 { pkgs, ... }:
 {
   imports = [
-    ./dev.nix
+    ./dev.core.nix
   ];
   config = {
     environment.systemPackages = with pkgs; [
