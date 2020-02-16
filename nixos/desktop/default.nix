@@ -6,5 +6,7 @@
     ./modules/X.xfce.nix
     ./modules/X.xmonad
     ./modules/pulseaudio
+    
+    ./modules/service.syncthing.nix
   ];
 }
