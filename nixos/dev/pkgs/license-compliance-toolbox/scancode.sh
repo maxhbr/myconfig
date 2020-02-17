@@ -5,6 +5,12 @@ set -e
 
 tag=scancode:latest
 
+help() {
+    cat <<EOF
+$ $0 [-fr] [-ex] PATH_TO_WORKDIR [args]
+EOF
+}
+
 forceRebuild() {
     docker rmi $tag || true
 }
@@ -12,7 +18,7 @@ forceRebuild() {
 buildImageIfMissing() {
     if [[ "$(docker images -q $tag 2> /dev/null)" == "" ]]; then
         docker build -t $tag - <<EOF
-FROM python:2.7
+FROM python:3.6
 
 RUN apt-get update && apt-get install bzip2 xz-utils zlib1g libxml2-dev libxslt1-dev
 
@@ -67,6 +73,26 @@ runScancode() {
     )
 }
 
+runExtractcode() {
+    local workdir="$(readlink -f "$1")"
+    [[ ! -d "$workdir" ]] && exit 1
+    bn="$(basename "$workdir")"
+    shift
+    (set -x;
+     docker run -i \
+            --rm \
+            -u $(id -u $USER):$(id -g $USER) \
+            -v "$workdir":/workdir \
+            -w /workdir \
+            --net=host \
+            $tag \
+            /scancode-toolkit/extractcode --verbose \
+            /workdir \
+            $@;
+     times
+    )
+}
+
 #################################################################################
 # main
 #################################################################################
@@ -75,5 +101,11 @@ if [[ "$1" == "-fr" ]]; then
     forceRebuild
 fi
 buildImageIfMissing
-runScancode $@
+
+if [[ "$1" == "-ex" ]]; then
+    shift
+    runExtractcode $@
+else
+    runScancode $@
+fi
 
