@@ -4,6 +4,7 @@
 [user]
     name = Maximilian Huber
     email = gh@maxhbr.de
+    useConfigOnly = true
     signingkey = 32CA3654
 [core]
     logAllRefUpdates = always
