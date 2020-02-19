@@ -17,6 +17,7 @@
           "input" ]
           ++ pkgs.lib.optional config.virtualisation.virtualbox.host.enable "vboxusers"
           ++ pkgs.lib.optional config.virtualisation.docker.enable "docker"
+          ++ pkgs.lib.optional config.virtualisation.libvirtd.enable "kvm"
           ++ pkgs.lib.optional config.networking.networkmanager.enable "networkmanager"
           ++ pkgs.lib.optional config.hardware.bumblebee.enable "bumblebee"
           ++ pkgs.lib.optional config.programs.sway.enable "sway"
@@ -44,6 +45,10 @@
       consoleKeyMap = "neo";
       defaultLocale = "de_DE.UTF-8";
       supportedLocales = ["de_DE.UTF-8/UTF-8" "en_US.UTF-8/UTF-8"];
+    };
+
+    home-manager.users.mhuber = {
+      nixpkgs.config.allowUnfree = true;
     };
   };
 }

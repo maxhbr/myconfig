@@ -22,9 +22,5 @@
                   (builtins.attrNames content))
           else [];
     };
-    home-manager.users.mhuber = {
-      nixpkgs.config.allowUnfree = true;
-    };
   };
-
 }
