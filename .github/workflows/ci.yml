@@ -23,3 +23,14 @@ jobs:
     - run: ./nixos/test-nixos-configuration.sh --ci ${{ matrix.config.hostname }}
       continue-on-error: ${{ matrix.config.allow_failure }}
 
+  build-iso:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install Nix
+      uses: cachix/install-nix-action@v6
+    - run: ./nixos/iso-rebuild.sh base
+
+
