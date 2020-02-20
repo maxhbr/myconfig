@@ -14,7 +14,7 @@
         allowUnfree = true;
       };
       overlays = let
-          path = ../overlays;
+          path = ./overlays;
           content = builtins.readDir path;
         in if builtins.pathExists path
           then map (n: import (path + ("/" + n)))
