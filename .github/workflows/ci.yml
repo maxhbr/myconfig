@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         config:
-          - { hostname: minimal }
+          - { hostname: core }
           - { hostname: base, allow_failure: true }
           - { hostname: vserver }
       fail-fast: false

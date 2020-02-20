@@ -7,6 +7,6 @@
     # hardware:
     ../hardware/grub.nix
     # configuration
-    ./modules/server/service.wireguard-server
+    ./modules/service.wireguard-server
   ];
 }
