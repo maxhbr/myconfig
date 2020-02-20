@@ -363,6 +363,7 @@ you should place your code here."
   (add-to-list 'org-latex-packages-alist '("" "color"))
   (setq org-latex-inputenc-alist '(("utf8" . "utf8x")))
   (setq org-latex-default-packages-alist (cons '("mathletters" "ucs" nil) org-latex-default-packages-alist))
+  (setq org-agenda-files '("~/org"))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; magit config
@@ -405,8 +406,6 @@ you should place your code here."
   ;; editorconfig
   ;; from https://gitter.im/syl20bnr/spacemacs/archives/2016/05/04
   (add-hook 'after-change-major-mode-hook 'editorconfig-apply 'append)
-
-  (setq org-agenda-files '("~/org"))
 
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

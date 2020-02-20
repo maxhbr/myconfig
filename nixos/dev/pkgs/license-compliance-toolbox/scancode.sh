@@ -66,7 +66,7 @@ runScancode() {
             /workdir \
             --license-text --license-text-diagnostics \
             --json "/out/${bn}.scancode.json" --json-pp "/out/${bn}.scancode.pp.json" --csv "/out/${bn}.scancode.csv" \
-            --spdx-rdf "/out/${bn}.scancode.rdf.xml" --spdx-tv "/out/${bn}.scancode.pp.spdx" --html-app "/out/${bn}.scancode.html" \
+            --spdx-rdf "/out/${bn}.scancode.rdf.xml" --spdx-tv "/out/${bn}.scancode.spdx" --html-app "/out/${bn}.scancode.html" \
             --strip-root \
             $@;
      times
