@@ -406,6 +406,8 @@ you should place your code here."
   ;; from https://gitter.im/syl20bnr/spacemacs/archives/2016/05/04
   (add-hook 'after-change-major-mode-hook 'editorconfig-apply 'append)
 
+  (setq org-agenda-files '("~/org"))
+
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; mu4e
