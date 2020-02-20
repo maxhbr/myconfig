@@ -11,14 +11,13 @@ drv=$(nix-build \
           --no-out-link \
           iso.nix \
           --argstr hostName "$hostName")
-set +x
-
 out=$drv/iso/nixos.iso
 du -h $out
 cp $out "$myconfigDir/../nixos-${hostName}.iso"
 
+set +x
 times
 cat <<EOF
 run with:
-$ qemu-kvm -boot d -cdrom ./nixos-dev.iso -m 32000 -cpu host -smp 6
+$ qemu-kvm -boot d -cdrom ISO_FILE -m 32000 -cpu host -smp 6
 EOF

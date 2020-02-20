@@ -14,7 +14,7 @@ let
     config = {
       networking.hostName = hostName;
       isoImage.contents = [ { source = ../.;
-                              target = "home/mhuber/myconfig"; } ];
+                              target = "myconfig"; } ];
     };
   };
 
