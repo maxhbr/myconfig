@@ -325,7 +325,7 @@ update() {
             fi
 
             logH3 "update" "home-manager"
-            ./lib/home-manager/update.sh
+            ./nixos/lib/home-manager/update.sh
             logH3 "update" "extrahosts"
             ./nixos/core/modules/nixos.networking/extrahosts/update.sh
             logH3 "update" "nixpkgs-unstable"
