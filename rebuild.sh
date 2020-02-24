@@ -369,7 +369,7 @@ run() {
             export NIXOS_REBUILD_CMD="dry-run"
         else
             prepare
-            if [[ "$(cat /etc/nixos/hostname)" == "$my_main_host" ]]; then
+            if [[ "$(cat $myconfigDir/hostname)" == "$my_main_host" ]]; then
                 if isBranchMaster; then
                     realize --fast
                     update

@@ -6,8 +6,10 @@
     ./dev.core.nix
   ];
   config = {
-    environment.systemPackages = with pkgs; [
-      python python3
-    ];
+    home-manager.users.mhuber = {
+      home.packages = with pkgs; [
+        python python3
+      ];
+    };
   };
 }

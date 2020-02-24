@@ -6,9 +6,11 @@
     ./dev.core.nix
   ];
   config = {
-    environment.systemPackages = with pkgs.unstable; [
-      platformio
-    ];
+    home-manager.users.mhuber = {
+      home.packages = with pkgs; [
+        platformio
+      ];
+    };
 
     nixpkgs.config.packageOverrides = pkgs: {
       platformio-udev-rules = pkgs.writeTextFile {

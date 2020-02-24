@@ -3,8 +3,6 @@
 { pkgs, ... }:
 {
   config = {
-    environment.systemPackages = with pkgs; [
-      wireshark
-    ];
+    programs.wireshark.enable = true;
   };
 }
