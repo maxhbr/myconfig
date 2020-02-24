@@ -331,7 +331,7 @@ update() {
             logH3 "update" "nixpkgs-unstable"
             ./nixos/lib/nixpkgs-unstable/update.sh
             logH3 "update" "emacs"
-            ./profiles/emacs/update.sh
+            ./nixos/base/modules/update.sh
             logH3 "update" "my-wallpapers"
             ./nixos/desktop/modules/common/my-wallpapers/update.sh
         fi
