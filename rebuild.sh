@@ -329,7 +329,7 @@ update() {
             logH3 "update" "extrahosts"
             ./nixos/core/modules/nixos.networking/extrahosts/update.sh
             logH3 "update" "nixpkgs-unstable"
-            ./nixos/lib/nixpkgs-unstable/default.sh
+            ./nixos/lib/nixpkgs-unstable/update.sh
             logH3 "update" "emacs"
             ./profiles/emacs/update.sh
             logH3 "update" "my-wallpapers"
