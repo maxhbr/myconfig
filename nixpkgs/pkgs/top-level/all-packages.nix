@@ -1766,6 +1766,8 @@ in
 
   klaus = with pythonPackages; toPythonApplication klaus;
 
+  kramdown-rfc2629 = callPackage ../tools/text/kramdown-rfc2629 { };
+
   lcdproc = callPackage ../servers/monitoring/lcdproc { };
 
   languagetool = callPackage ../tools/text/languagetool {  };
@@ -1945,7 +1947,7 @@ in
   riot-desktop = callPackage ../applications/networking/instant-messengers/riot/riot-desktop.nix { };
 
   riot-web = callPackage ../applications/networking/instant-messengers/riot/riot-web.nix {
-    conf = config.riot-web.conf or null;
+    conf = config.riot-web.conf or {};
   };
 
   ripasso-cursive = callPackage ../tools/security/ripasso/cursive.nix {};
@@ -5670,7 +5672,7 @@ in
 
   openmodelica = callPackage ../applications/science/misc/openmodelica { };
 
-  qarte = callPackage ../applications/video/qarte { };
+  qarte = libsForQt5.callPackage ../applications/video/qarte { };
 
   qlcplus = libsForQt5.callPackage ../applications/misc/qlcplus { };
 
@@ -8309,6 +8311,15 @@ in
   inherit (rustPackages) cargo rustc rustPlatform;
   inherit (rust) makeRustPlatform;
 
+  rust_1_41 = callPackage ../development/compilers/rust_1_41 {
+    inherit (darwin.apple_sdk.frameworks) CoreFoundation Security;
+  };
+
+  rustPackages_1_41 = rust_1_41.packages.stable;
+  rustPlatform_1_41 = rustPackages_1_41.rustPlatform;
+  rustc_1_41 = rustPackages_1_41.rustc;
+  cargo_1_41 = rustPackages_1_41.cargo;
+
   buildRustCrate = callPackage ../build-support/rust/build-rust-crate { };
   buildRustCrateHelpers = callPackage ../build-support/rust/build-rust-crate/helpers.nix { };
   buildRustCrateTests = recurseIntoAttrs (callPackage ../build-support/rust/build-rust-crate/test { }).tests;
@@ -8375,6 +8386,12 @@ in
   rust-cbindgen = callPackage ../development/tools/rust/cbindgen {
     inherit (darwin.apple_sdk.frameworks) Security;
   };
+
+  rust-cbindgen_0_1_13 = callPackage ../development/tools/rust/cbindgen/0_1_13.nix {
+    inherit (darwin.apple_sdk.frameworks) Security;
+    rustPlatform = rustPlatform_1_41;
+  };
+
   rustup = callPackage ../development/tools/rust/rustup {
     inherit (darwin.apple_sdk.frameworks) CoreServices Security;
   };
@@ -12816,7 +12833,7 @@ in
   nss = lowPrio (callPackage ../development/libraries/nss { });
 
   # newer NSS version for newer firefox stable releases
-  nss_3_48 = callPackage ../development/libraries/nss/3_48.nix { };
+  nss_3_49_2 = callPackage ../development/libraries/nss/3_49_2.nix { };
 
   nssTools = nss.tools;
 
@@ -23890,7 +23907,7 @@ in
 
   mupen64plus = callPackage ../misc/emulators/mupen64plus { };
 
-  muse = callPackage ../applications/audio/muse { };
+  muse = libsForQt5.callPackage ../applications/audio/muse { };
 
   musly = callPackage ../applications/audio/musly { };
 
