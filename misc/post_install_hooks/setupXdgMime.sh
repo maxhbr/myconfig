@@ -4,7 +4,9 @@
 # SPDX-License-Identifier: MIT
 set -e
 
-. "$( dirname "${BASH_SOURCE[0]}" )/../../common.sh"
+cd "$( dirname "${BASH_SOURCE[0]}" )"
+common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
+. "$common"
 
 logH1 "Setup xdg-mime"
 setupXdgMime() {

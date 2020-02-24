@@ -6,5 +6,7 @@
 set -e
 
 cd "$( dirname "${BASH_SOURCE[0]}" )"
-. ./../../../common.sh
+common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
+. "$common"
+
 updateRefAndJson rycee/home-manager release-19.09
