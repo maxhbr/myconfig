@@ -6,5 +6,5 @@
 set -e
 
 cd "$( dirname "${BASH_SOURCE[0]}" )"
-. ./../../../../common.sh
+. ./../../../../../common.sh
 updateRefAndJson maxhbr/wallpapers master maxhbr-wallpapers
