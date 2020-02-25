@@ -15,6 +15,7 @@ in {
   imports = [
     ../common
     ./big-cursor.nix
+    ./autorandr.nix
   ];
 
   config = {
