@@ -11,6 +11,16 @@ let
         ${xdotool}/bin/xdotool key shift
     done
   '';
+  myInvert = with pkgs; writeScriptBin "myInvert" ''
+    #!${stdenv.shell}
+    ${pkgs.systemd}/bin/systemctl --user stop redshift
+    ${xrandr-invert-colors}/bin/xrandr-invert-colors
+  '';
+  mySetBrightness = with pkgs; writeScriptBin "mySetBrightness" ''
+    #!${stdenv.shell}
+    ${pkgs.systemd}/bin/systemctl --user stop redshift
+    ${pkgs.xorg.xrandr}/bin/xrandr --output DP-2 --brightness $1
+  '';
 in {
   imports = [
     ../common
@@ -26,6 +36,8 @@ in {
         xclip
         xdotool
         myStopScreensaver
+        xrandr-invert-colors myInvert
+        mySetBrightness
       ];
       home.file = {
         ".fontconfig/fonts.conf".source = ./fontconfig/fonts.conf;

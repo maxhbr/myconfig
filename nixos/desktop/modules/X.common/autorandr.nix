@@ -5,7 +5,7 @@ let
   resetXrandr = with pkgs; writeScriptBin "resetXrandr" ''
     #!${stdenv.shell}
     ${pkgs.systemd}/bin/systemctl --user start redshift
-    ${pkgs.xrandr}/bin/xrandr --output DP-2 --brightness 1
+    ${pkgs.xorg.xrandr}/bin/xrandr --output DP-2 --brightness 1
   '';
 
 in {
