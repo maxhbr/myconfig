@@ -19,13 +19,13 @@ let
   mySetBrightness = with pkgs; writeScriptBin "mySetBrightness" ''
     #!${stdenv.shell}
     ${pkgs.systemd}/bin/systemctl --user stop redshift
-    ${pkgs.xorg.xrandr}/bin/xrandr --output DP-2 --brightness $1
+    ${pkgs.xorg.xrandr}/bin/xrandr --output DP-2 --brightness $${1:-1}
   '';
 in {
   imports = [
     ../common
     ./big-cursor.nix
-    ./autorandr.nix
+    ./autorandr
   ];
 
   config = {
