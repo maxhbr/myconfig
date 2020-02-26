@@ -28,5 +28,14 @@
     boot.kernel.sysctl = {
       "vm.swappiness" = 1;
     };
+
+    home-manager.users.mhuber = {
+      home.file = {
+        ".config/autorandr/" = {
+          source = ./autorandr;
+          recursive = true;
+        };
+      };
+    };
   };
 }

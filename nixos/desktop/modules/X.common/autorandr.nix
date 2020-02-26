@@ -15,10 +15,6 @@ in {
         autorandr
       ];
       home.file = {
-        ".config/autorandr/" = {
-          source = ./config;
-          recursive = true;
-        };
         ".config/autorandr/postswitch.d/resetXrandr".source = "${resetXrandr}/bin/resetXrandr";
       };
     };

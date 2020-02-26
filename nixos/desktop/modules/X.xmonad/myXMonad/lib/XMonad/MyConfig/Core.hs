@@ -125,7 +125,7 @@ myKeys conf =
       , ((m__, xK_F3     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_5_6.png"))
       , ((m__, xK_z      ), spawn (xAutoSetupCMD ++ " --change"))
       , ((ms_, xK_z      ), spawn (xAutoSetupCMD ++ " common"))
-      , ((msc, xK_z      ), spawn (xAutoSetupCMD ++ " default"))
+      , ((m_c, xK_z      ), spawn (xAutoSetupCMD ++ " --force default"))
       ]
 
 backlightControlKBs, volumeControlKBs :: [((KeyMask -> KeyMask, KeySym), X ())]

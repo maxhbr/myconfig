@@ -25,7 +25,7 @@ in {
   imports = [
     ../common
     ./big-cursor.nix
-    ./autorandr
+    ./autorandr.nix
   ];
 
   config = {

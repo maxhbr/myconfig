@@ -57,7 +57,7 @@ in mkDerivation {
     addAbsoluteBinaryPath xdotool ${pkgs.xdotool}
     addAbsoluteBinaryPath synclient ${pkgs.xorg.xf86inputsynaptics}
     addAbsoluteBinaryPath xrandr-invert-colors ${pkgs.xrandr-invert-colors}
-    addAbsoluteBinaryPath autorandr {pkgs.autorandr}
+    addAbsoluteBinaryPath autorandr ${pkgs.autorandr}
     addAbsoluteBinaryPath feh ${pkgs.feh}
     addAbsoluteBinaryPath unclutter ${pkgs.unclutter}
     addAbsoluteBinaryPath htop ${pkgs.htop}
