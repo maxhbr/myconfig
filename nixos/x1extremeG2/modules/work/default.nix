@@ -19,7 +19,7 @@
         strongswan networkmanager_strongswan
         networkmanagerapplet
         libreoffice
-        zoom-us
+        zoom-us bluejeans-gui
         rambox
         p7zip
         thrift011
