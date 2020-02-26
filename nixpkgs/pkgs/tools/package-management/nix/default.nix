@@ -173,10 +173,10 @@ in rec {
   };
 
   nixStable = callPackage common (rec {
-    name = "nix-2.3.2";
+    name = "nix-2.3.3";
     src = fetchurl {
       url = "http://nixos.org/releases/nix/${name}/${name}.tar.xz";
-      sha256 = "9fea4b52db0b296dcf05d36f7ecad9f48396af3a682bb21e31f8d04c469beef8";
+      sha256 = "332fffb8dfc33eab854c136ef162a88cec15b701def71fa63714d160831ba224";
     };
 
     inherit storeDir stateDir confDir boehmgc;
@@ -197,10 +197,10 @@ in rec {
 
   nixFlakes = lib.lowPrio (callPackage common rec {
     name = "nix-2.4${suffix}";
-    suffix = "pre20200207_d2032ed";
+    suffix = "pre20200220_4a4521f";
     src = fetchurl {
-      url = "https://hydra.nixos.org/build/111815420/download/3/nix-2.4${suffix}.tar.xz";
-      sha256 = "e72a20efeee4ccc704cca3a06de9185fb8742bc7ef1a62af5896ec0f379b9ceb";
+      url = "https://hydra.nixos.org/build/113373394/download/3/nix-2.4${suffix}.tar.xz";
+      sha256 = "31fe87c40f40a590bc8f575283725d5f04ecb9aebb6b404f679d77438d75265d";
     };
 
     inherit storeDir stateDir confDir boehmgc;
