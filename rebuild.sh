@@ -134,7 +134,7 @@ diffCurrentSystemDeps() {
 
 diffGenerations() {
     local newFile=$(mktemp)
-    sudo nix-env --list-generations --profile /nix/var/nix/profiles/system > $newFile
+    { sudo nix-env --list-generations --profile /nix/var/nix/profiles/system || return; }> $newFile
     if [[ -f $1 ]]; then
         local oldFile="$1"
         logH2 "diff nixos generations"
