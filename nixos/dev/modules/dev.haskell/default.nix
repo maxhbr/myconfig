@@ -7,9 +7,9 @@
   ];
   config = {
     home-manager.users.mhuber = {
-      home.packages = with pkgs.unstable; [
+      home.packages = with pkgs; [
         stack cabal-install cabal2nix
-      ] ++ (with pkgs.unstable.haskellPackages; [
+      ] ++ (with pkgs.haskellPackages; [
         # cabal-install
         ghc hlint pandoc
         hdevtools
