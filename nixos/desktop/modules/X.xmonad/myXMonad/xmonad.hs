@@ -11,7 +11,6 @@
 --  scrot        screenshot tool
 --  imagemagic   screenshot tool
 --  slim         screenlock tool
---  xss-lock     automatic locking
 --  unclutter    to hide mouse pointer
 --  urxvt        terminal
 --  xcalib       invert colors

@@ -47,6 +47,7 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
                       , "--high"     , "darkred"
                       ] 10
          , Run Com "isvpn" ["|", "<fc=#7285c3>", "</fc>"] "" 60
+         , Run Com "hasXssLock" ["|", "<fc=darkred>", "</fc>"] "" 60
          , Run Battery [ "-t", "<fc=#999999>B:</fc><left><fc=#999999>%</fc> <watts><fc=#999999>W</fc> <timeleft>"
                        , "-L", "10" , "-H", "80"
                        , "--low"      , "darkred"
@@ -65,7 +66,7 @@ Config { font = "xft:inconsolata:pixelsize=15:antialias=true:hinting=true"
          ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %XMonadLog% }{ <action=`urxvtc -name ScratchNMTUI -e bash -c nmtui`>%dynnetwork% %wlp82s0wi%</action> | <action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu%%multicoretemp% %memory%</action> %isvpn%| <action=`xbacklight =10`>%battery%</action> | <fc=#7285c3>%mail%</fc> | %date% "
+       , template = " %XMonadLog% }{ <action=`urxvtc -name ScratchNMTUI -e bash -c nmtui`>%dynnetwork% %wlp82s0wi%</action> | <action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu%%multicoretemp% %memory%</action> %isvpn% %hasXssLock%| <action=`xbacklight =10`>%battery%</action> | <fc=#7285c3>%mail%</fc> | %date% "
        }
 
 -- vim: set ft=haskell :

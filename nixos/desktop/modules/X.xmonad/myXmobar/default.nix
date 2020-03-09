@@ -19,10 +19,23 @@ if ${nettools}/bin/ifconfig tun0 &> /dev/null; then
   echo -n "$pre"'VPN'"$post"
 fi
   '';
+  hasXssLock = with pkgs; writeScriptBin "hasXssLock" ''
+#!${stdenv.shell}
+delimiter=$1
+startcol=$2
+endcol=$3
+
+pre="$delimiter $startcol"
+post="$endcol "
+
+if ! ${procps}/bin/pgrep xss-lock &> /dev/null; then
+  echo -n "$pre"'!XSS-LOCK'"$post"
+fi
+'';
   xmobarXmonad = with pkgs; writeScriptBin "xmobarXmonad" ''
 #!${stdenv.shell}
 set -e
-export PATH=$PATH:${isvpn}/bin/
+export PATH=$PATH:${isvpn}/bin/:${hasXssLock}/bin/
 pidfile=/tmp/xmobarXmonad.pid
 if [[ -f $pidfile ]]; then
   kill $(cat $pidfile) || true

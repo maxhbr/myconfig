@@ -56,6 +56,11 @@ in {
       }
     '';
 
+    programs.xss-lock = {
+      enable = true;
+      lockerCommand = "${pkgs.my-wallpapers}/bin/myScreenLock";
+    };
+
     services = {
       xserver = {
         enable = true;
@@ -76,7 +81,6 @@ in {
               ${pkgs.xorg.xrdb}/bin/xrdb -merge $HOME/.Xresources &disown
             fi
             ${pkgs.my-wallpapers}/bin/myRandomBackground &disown
-            ${pkgs.xss-lock}/bin/xss-lock ${pkgs.my-wallpapers}/bin/myScreenLock &disown
           '';
         };
       };
