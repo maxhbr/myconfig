@@ -13,17 +13,19 @@ let
   '';
   myInvert = with pkgs; writeScriptBin "myInvert" ''
     #!${stdenv.shell}
-    ${pkgs.systemd}/bin/systemctl --user stop redshift
+    ${systemd}/bin/systemctl --user stop redshift
     ${xrandr-invert-colors}/bin/xrandr-invert-colors
   '';
   mySetBrightness = with pkgs; writeScriptBin "mySetBrightness" ''
     #!${stdenv.shell}
-    ${pkgs.systemd}/bin/systemctl --user stop redshift
-    ${pkgs.xorg.xrandr}/bin/xrandr --output DP-2 --brightness $${1:-1}
+    ${systemd}/bin/systemctl --user stop redshift
+    ${xorg.xrandr}/bin/xrandr --output DP-2 --brightness $${1:-1}
   '';
   myXsecurelock = with pkgs; writeScriptBin "myXsecurelock" ''
     #!${stdenv.shell}
-    env XSECURELOCK_SAVER=saver_blank XSECURELOCK_PASSWORD_PROMPT=time xsecurelock
+    export XSECURELOCK_SAVER=saver_blank
+    export XSECURELOCK_PASSWORD_PROMPT=time
+    ${xsecurelock}/bin/xsecurelock
   '';
 
 in {
