@@ -21,6 +21,11 @@ let
     ${pkgs.systemd}/bin/systemctl --user stop redshift
     ${pkgs.xorg.xrandr}/bin/xrandr --output DP-2 --brightness $${1:-1}
   '';
+  myXsecurelock = with pkgs; writeScriptBin "myXsecurelock" ''
+    #!${stdenv.shell}
+    env XSECURELOCK_SAVER=saver_blank XSECURELOCK_PASSWORD_PROMPT=time xsecurelock
+  '';
+
 in {
   imports = [
     ../common
@@ -58,9 +63,10 @@ in {
 
     programs.xss-lock = {
       enable = true;
-      lockerCommand = "${pkgs.my-wallpapers}/bin/myScreenLock";
+      # lockerCommand = "${pkgs.my-wallpapers}/bin/myScreenLock";
+      lockerCommand = "${myXsecurelock}/bin/myXsecurelock";
+      extraOptions = ["-n" "${myXsecurelock}/libexec/xsecurelock/dimmer" "-l"];
     };
-
     services = {
       xserver = {
         enable = true;
