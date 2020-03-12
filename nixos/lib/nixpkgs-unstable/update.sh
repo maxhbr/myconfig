@@ -10,7 +10,8 @@ common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
 handleChannel() {
     local channel=$1
     logH3 "update" "$channel"
-    local rev=$(curl -L -s "https://nixos.org/channels/${channel}/git-revision")
+    local releaseUrl="$(curl -Ls -o /dev/null -w %{url_effective} "https://channels.nixos.org/${channel}")"
+    local rev=$(curl -L -s "$releaseUrl/git-revision")
     updateRefAndJson NixOS/nixpkgs $rev $channel
 }
 

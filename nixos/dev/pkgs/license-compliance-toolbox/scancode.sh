@@ -31,7 +31,7 @@ RUN set -x \
  && tar xzvf master.tar.gz -C scancode-toolkit --strip-components=1 \
  && ./scancode-toolkit/scancode --help
 
-WORKDIR workdir
+WORKDIR out
 
 RUN pwd
 CMD /scancode-toolkit/scancode --help
@@ -58,7 +58,6 @@ runScancode() {
             --rm \
             -u $(id -u $USER):$(id -g $USER) \
             -v "$workdir":/workdir -v "$(getOutFolder "$workdir")":/out \
-            -w /workdir \
             --net=host \
             $tag \
             /scancode-toolkit/scancode \
@@ -83,7 +82,6 @@ runExtractcode() {
             --rm \
             -u $(id -u $USER):$(id -g $USER) \
             -v "$workdir":/workdir \
-            -w /workdir \
             --net=host \
             $tag \
             /scancode-toolkit/extractcode --verbose \

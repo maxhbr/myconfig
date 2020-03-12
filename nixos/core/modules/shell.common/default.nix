@@ -102,6 +102,7 @@ right_meter_modes=2 2 2 2 2 1 1
       interactiveShellInit = ''
         eval $(${pkgs.thefuck}/bin/thefuck --alias)
         hgrep() { history | egrep "$@"; }
+        killPort() { kill $(${pkgs.lsof}/bin/lsof -t -i:$1); }
       '';
       shellAliases = {
         cat = "${pkgs.bat}/bin/bat --theme=\"Monokai Extended Light\"";
