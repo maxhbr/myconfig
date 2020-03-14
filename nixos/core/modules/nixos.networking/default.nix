@@ -8,7 +8,7 @@ let
   '';
 in {
   imports = [
-    # ./dnsmasq.nix
+    ./dnsmasq.nix
     ./extrahosts
   ];
   config = {
