@@ -7,4 +7,7 @@
     # hardware:
     ../hardware/efi.nix
   ];
+  config = {
+    networking.wireless.enable = true;
+  };
 }
