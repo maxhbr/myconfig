@@ -12,10 +12,21 @@ let
     ];
 
     config = {
-      # networking.hostName = hostName;
+      networking.hostName = "myconfig";
       networking.wireless.enable = false;
-      isoImage.contents = [ { source = ../.;
-                              target = "myconfig"; } ];
+
+      # add myconfig to iso
+      isoImage.contents = [
+        # folders
+        { source = ./.; target = "myconfig/nixos"; }
+        { source = ../misc; target = "myconfig/misc"; }
+        { source = ../nixpkgs; target = "myconfig/nixpkgs"; }
+        # files
+        { source = ../common.sh; target = "myconfig/common.sh"; }
+        { source = ../rebuild.sh; target = "myconfig/rebuild.sh"; }
+        { source = ../README.org; target = "myconfig/README.org"; }
+        { source = ../LICENSE; target = "myconfig/LICENSE"; }
+      ];
     };
   };
 
