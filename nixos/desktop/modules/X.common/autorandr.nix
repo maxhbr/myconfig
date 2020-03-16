@@ -45,6 +45,12 @@ in {
         ".config/autorandr/postswitch.d/setupWacom".source = "${setupWacom}/bin/setupWacom";
       };
     };
+    environment = {
+      shellAliases = {
+        autosetup = "${pkgs.autorandr}/bin/autorandr --change";
+        mobile = "${pkgs.autorandr}/bin/autorandr mobile";
+      };
+    };
     services.autorandr.enable = true;
   };
 }

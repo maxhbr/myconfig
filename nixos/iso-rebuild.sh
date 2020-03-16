@@ -11,9 +11,9 @@ drv=$(nix-build \
           --no-out-link \
           iso.nix \
           --argstr hostName "$hostName")
-out=$drv/iso/nixos.iso
-du -h $out
-cp $out "$myconfigDir/../nixos-${hostName}.iso"
+out=("$drv/iso/nixos"*".iso")
+du -h "$out"
+install -m 644 "$out" "$myconfigDir/../nixos-${hostName}.iso"
 
 set +x
 times

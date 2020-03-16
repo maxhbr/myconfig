@@ -9,12 +9,79 @@
 
 set -e
 
+################################################################################
+##  functions  #################################################################
+################################################################################
+
 help() {
     cat <<EOF
 usage:
   $ BOOTSTRAP=YES $0 /dev/SDX [pass] [vg_name] [mnt]
+  $ BOOTSTRAP=YES $0 /dev/SDX "" [vg_name] [mnt]
 EOF
 }
+
+mkEfiPartitions() {
+    parted $SDX -- mklabel gpt
+    parted $SDX -- mkpart primary 512MiB 100%
+    parted $SDX -- mkpart ESP fat32 1MiB 512MiB
+    parted $SDX -- set 2 boot on
+}
+
+mkLegacyPartitions() {
+    parted ${SDX} -- mklabel msdos
+    parted ${SDX} -- mkpart primary 1MiB -8GiB
+    parted ${SDX} -- mkpart primary linux-swap -8GiB 100%
+}
+
+mkLuks() {
+    local luksDev="$1"
+
+    echo -n "$PASSPHRASE" | cryptsetup --batch-mode luksFormat "$luksDev" -
+    echo -n "$PASSPHRASE" | cryptsetup --batch-mode luksOpen "$luksDev" enc-pv -
+}
+
+mkSwap() {
+    local swapDev="$1"
+
+    mkswap -L swap "$swapDev"
+    swapon "$swapDev"
+}
+
+formatRoot() {
+    local rootDev="$1"
+
+    mkfs.ext4 -L root "$rootDev"
+}
+
+formatBoot() {
+    local bootDev="$1"
+
+    mkfs.fat -F 32 -n boot "$bootDev"
+}
+
+mkLVM() {
+    local lvmDev="$1"
+
+    pvcreate "$lvmDev"
+    vgcreate "$VG_NAME" "$lvmDev"
+
+    lvcreate -L 8G -n swap "$VG_NAME"
+    lvcreate -l '100%FREE' -n root "$VG_NAME"
+
+    mkSwap "/dev/$VG_NAME/swap"
+    formatRoot "/dev/$VG_NAME/root"
+}
+
+doMounting() {
+    mount /dev/disk/by-label/root "$MNT"
+    mkdir -p "$MNT/boot"
+    mount /dev/disk/by-label/boot "$MNT/boot"
+}
+
+################################################################################
+##  prepare  ###################################################################
+################################################################################
 
 if [[ "$BOOTSTRAP" != "YES" ]]; then
     help
@@ -48,48 +115,28 @@ if [ "$(ls -A $MNT)" ]; then
     exit 1
 fi
 
+################################################################################
+##  run  #######################################################################
+################################################################################
+
 set -x
 
-################################################################################
-# do the partitioning
-
-# parted ${SDX} -- mklabel msdos
-# parted ${SDX} -- mkpart primary 1MiB -8GiB
-# parted ${SDX} -- mkpart primary linux-swap -8GiB 100%
-parted $SDX -- mklabel gpt
-parted $SDX -- mkpart primary 512MiB 100%
-parted $SDX -- mkpart ESP fat32 1MiB 512MiB
-parted $SDX -- set 2 boot on
-
+if [[ -d /sys/firmware/efi/efivars ]]; then
+    mkEfiPartitions
+else
+    mkLegacyPartitions
+fi
 SDX1="$(fdisk -l "$SDX" | grep '^/dev' | cut -d' ' -f1 | sed -n 1p)"
 SDX2="$(fdisk -l "$SDX" | grep '^/dev' | cut -d' ' -f1 | sed -n 2p)"
 
-################################################################################
-# create encrypted volume with luks
+formatBoot "$SDX2"
+if [[ -z "$PASSPHRASE" ]]; then
+    mkLVM "$SDX1"
+else
+    mkLuks "$SDX1"
+    mkLVM /dev/mapper/enc-pv
+fi
 
-echo -n "$PASSPHRASE" | cryptsetup --batch-mode luksFormat $SDX1 -
-echo -n "$PASSPHRASE" | cryptsetup --batch-mode luksOpen $SDX1 enc-pv -
-
-################################################################################
-# create the LVM
-
-pvcreate /dev/mapper/enc-pv
-vgcreate "$VG_NAME" /dev/mapper/enc-pv
-lvcreate -L 8G -n swap "$VG_NAME"
-lvcreate -l '100%FREE' -n root "$VG_NAME"
-
-################################################################################
-# formatting and mounting
-
-mkfs.ext4 -L root "/dev/$VG_NAME/root"
-mkswap -L swap "/dev/$VG_NAME/swap"
-swapon "/dev/$VG_NAME/swap"
-mkfs.fat -F 32 -n boot $SDX2
-mount /dev/disk/by-label/root "$MNT"
-mkdir -p "$MNT/boot"
-mount /dev/disk/by-label/boot "$MNT/boot"
-
-################################################################################
-# bootstrap configuration
+doMounting
 
 nixos-generate-config --root "$MNT"

@@ -5,14 +5,15 @@ let
   myisoconfig = { ... }: {
     imports = [
       ./lib
-      "${nixpkgs}/nixos/modules/installer/cd-dvd/iso-image.nix"
+      "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-base.nix"
       "${nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
       (./. + "/${hostName}")
       ./headless/modules/service.openssh.nix
     ];
 
     config = {
-      networking.hostName = hostName;
+      # networking.hostName = hostName;
+      networking.wireless.enable = false;
       isoImage.contents = [ { source = ../.;
                               target = "myconfig"; } ];
     };
