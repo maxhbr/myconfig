@@ -4,9 +4,7 @@ let
 in {
   config = {
     home-manager.users.mhuber = {
-      home.packages = with pkgs; [
-        powder
-      ];
+      home.packages = [ powder ];
     };
   };
 }

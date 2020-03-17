@@ -103,11 +103,6 @@ if [[ ! -e "$SDX" ]]; then
     help
     exit 1
 fi
-if vgdisplay -c  | cut -f 1 -d ":" | tr -d '[:space:]' | grep -q '^'"$VG_NAME"'$'; then
-    echo "$VG_NAME already present on system"
-    help
-    exit 1
-fi
 mkdir -p "$MNT"
 if [ "$(ls -A $MNT)" ]; then
     echo "$MNT not empty"
@@ -121,20 +116,24 @@ fi
 
 set -x
 
-if [[ -d /sys/firmware/efi/efivars ]]; then
-    mkEfiPartitions
+if vgdisplay -c  | cut -f 1 -d ":" | tr -d '[:space:]' | grep -q '^'"$VG_NAME"'$'; then
+    echo "$VG_NAME already present on system"
 else
-    mkLegacyPartitions
-fi
-SDX1="$(fdisk -l "$SDX" | grep '^/dev' | cut -d' ' -f1 | sed -n 1p)"
-SDX2="$(fdisk -l "$SDX" | grep '^/dev' | cut -d' ' -f1 | sed -n 2p)"
+    if [[ -d /sys/firmware/efi/efivars ]]; then
+        mkEfiPartitions
+    else
+        mkLegacyPartitions
+    fi
+    SDX1="$(fdisk -l "$SDX" | grep '^/dev' | cut -d' ' -f1 | sed -n 1p)"
+    SDX2="$(fdisk -l "$SDX" | grep '^/dev' | cut -d' ' -f1 | sed -n 2p)"
 
-formatBoot "$SDX2"
-if [[ -z "$PASSPHRASE" ]]; then
-    mkLVM "$SDX1"
-else
-    mkLuks "$SDX1"
-    mkLVM /dev/mapper/enc-pv
+    formatBoot "$SDX2"
+    if [[ -z "$PASSPHRASE" ]]; then
+        mkLVM "$SDX1"
+    else
+        mkLuks "$SDX1"
+        mkLVM /dev/mapper/enc-pv
+    fi
 fi
 
 doMounting

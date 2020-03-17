@@ -24,10 +24,10 @@
             "boot_wait": "60s",
             "boot_command": [
                 "sudo su<enter><wait>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/scripts/bootstrap-grub.sh > $HOME/bootstrap.sh<enter><wait>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/scripts/bootstrap.sh > $HOME/bootstrap.sh<enter><wait>",
                 "chmod +x $HOME/bootstrap.sh<enter>",
 
-                "BOOTSTRAP=YES $HOME/bootstrap.sh /dev/sda && \\<enter>",
+                "BOOTSTRAP=YES $HOME/bootstrap.sh /dev/sda \"\" && \\<enter>",
 
                 "mkdir -p /mnt/etc/nixos/imports/ && \\<enter>",
                 "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/configuration.nix |tee /mnt/etc/nixos/configuration.nix && \\<enter>",
@@ -65,10 +65,10 @@
 
             "boot_wait": "60s",
             "boot_command": [
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/scripts/bootstrap-grub.sh > /root/bootstrap.sh<enter><wait>",
+                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/scripts/bootstrap.sh > /root/bootstrap.sh<enter><wait>",
                 "chmod +x /root/bootstrap.sh<enter>",
 
-                "BOOTSTRAP=YES /root/bootstrap.sh /dev/vda && \\<enter>",
+                "BOOTSTRAP=YES /root/bootstrap.sh /dev/vda \"\" && \\<enter>",
 
 
                 "mkdir -p /mnt/etc/nixos/imports/ && \\<enter>",

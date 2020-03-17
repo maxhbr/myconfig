@@ -2,6 +2,9 @@
 { system ? "x86_64-linux", hostName ? "dev" }:
 let
   nixpkgs = ../nixpkgs;
+  builtConfig = (import ../nixpkgs/nixos {
+    configuration = import ./default.nix { pkgs = nixpkgs; };
+  }).system;
   myisoconfig = { ... }: {
     imports = [
       ./lib
@@ -14,6 +17,8 @@ let
     config = {
       networking.hostName = "myconfig";
       networking.wireless.enable = false;
+
+      environment.systemPackages = [ builtConfig ];
 
       # add myconfig to iso
       isoImage.contents = [
