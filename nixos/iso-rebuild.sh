@@ -12,12 +12,14 @@ drv=$(nix-build \
           iso.nix \
           --argstr hostName "$hostName")
 out=("$drv/iso/nixos"*".iso")
+finalOut="nixos-${hostName}.iso"
 du -h "$out"
-install -m 644 "$out" "$myconfigDir/../nixos-${hostName}.iso"
+install -m 644 "$out" "$myconfigDir/../$finalOut"
 
 set +x
 times
 cat <<EOF
 run with:
-$ qemu-kvm -boot d -cdrom ISO_FILE -m 32000 -cpu host -smp 6
+$ qemu-kvm -boot d -cdrom $finalOut -m 32000 -cpu host -smp 6
+$ sudo dd if=$finalOut of=/dev/sdX bs=4M
 EOF

@@ -14,7 +14,7 @@
         gimp-with-plugins
         rawtherapee unstable.darktable
         unstable.geeqie unstable.gthumb
-        # krita
+        krita
         # inkscape
 
         # blender
