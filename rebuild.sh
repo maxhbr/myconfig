@@ -226,15 +226,11 @@ setupExitTrap() {
 ###########################################################################
 # run #####################################################################
 prepare() {
-    if [[ ! -f "$myconfigDir/hostname" ]]; then
-        echo "$myconfigDir/hostname should exist"
-        exit 1
-    fi
-    if [[ ! -f "$myconfigDir/hostid" ]]; then
+    if [[ ! -f "/etc/nixos/hostid" ]]; then
         echo "set hostid:"
         cksum /etc/machine-id |
             while read c rest; do printf "%x" $c; done |
-            sudo tee "$myconfigDir/hostid"
+            sudo tee "/etc/nixos/hostid"
     fi
     if [[ -f /etc/nixos/configuration.nix ]]; then
         echo "/etc/nixos/configuration.nix should not exist"
@@ -312,7 +308,7 @@ update() {
     if [[ "$MYCONFIG_ARGS" == *"--fast"* ]]; then
         logINFO "skip updating"
     else
-        if [[ "$(cat $myconfigDir/hostname)" == "$my_main_host" ]]; then
+        if [[ "$(hostname)" == "$my_main_host" ]]; then
             if git diff-index --quiet HEAD --; then
                 logH1 "update" "nixpkgs"
                 updateNixpkgs
@@ -369,7 +365,7 @@ run() {
             export NIXOS_REBUILD_CMD="dry-run"
         else
             prepare
-            if [[ "$(cat $myconfigDir/hostname)" == "$my_main_host" ]]; then
+            if [[ "$(hostname)" == "$my_main_host" ]]; then
                 if isBranchMaster; then
                     realize --fast
                     update
