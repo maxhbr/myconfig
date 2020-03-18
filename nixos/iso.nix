@@ -5,15 +5,12 @@
 let
   nixpkgs = ../nixpkgs;
   preBuiltConfig = (import ../nixpkgs/nixos {
-    configuration = (import ./entrypoint.nix {
-      hostname = secondaryHostName;
-    }) {
+    configuration = import (./. + hostName) {
       pkgs = nixpkgs;
     };
   }).system;
   myisoconfig = { ... }: {
     imports = [
-      ./lib
       "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
       "${nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
       (./. + "/${hostName}")
@@ -24,7 +21,9 @@ let
       networking.hostName = "myconfig";
       networking.wireless.enable = false;
 
-      environment.systemPackages = [ preBuiltConfig ];
+      environment.systemPackages = if hostName == secondaryHostName
+                                   then []
+                                   else [ preBuiltConfig ];
 
       # add myconfig to iso
       isoImage.contents = [

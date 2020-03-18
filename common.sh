@@ -20,7 +20,7 @@ fi
 
 nixosConfig="$myconfigDir/nixos/host-$(hostname)"
 if [[ ! -d "$nixosConfig" ]]; then
-    nixosConfig="$myconfigDir/nixos/base"
+    nixosConfig="$myconfigDir/nixos/host-minimal"
 fi
 
 NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfig"
