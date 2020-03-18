@@ -237,7 +237,7 @@ prepare() {
         exit 1
     fi
 
-    nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixos-config=$myconfigDir\"]; }"
+    nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixos-config=$nixosConfig\"]; }"
     nix_path_file="$myconfigDir/imports/nixPath.nix"
     if [[ "$(cat $nix_path_file 2>/dev/null)" != *"$nix_path_string"* ]]; then
         echo $nix_path_string |
@@ -337,15 +337,9 @@ update() {
 cleanup() {
     logH2 "cleanup" "nixos and nix-env"
     if [ "$((RANDOM%100))" -gt 90 ]; then
-        echo "* nix-env --delete-generations 30d ..."
-        nix-env $NIX_PATH_ARGS \
-                --delete-generations 30d
-        sudo nix-env $NIX_PATH_ARGS \
-             --delete-generations 30d
-        sudo nix-collect-garbage \
-             --delete-older-than 30d
+        ./nixos/gc.sh
     else
-        echo "* $(tput bold)do not$(tput sgr0) nix-env --delete-generations 30d ..."
+        echo "* $(tput bold)do not$(tput sgr0) gc ..."
     fi
 }
 

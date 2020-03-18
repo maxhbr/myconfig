@@ -1,9 +1,15 @@
 # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
-{ system ? "x86_64-linux", hostName ? "dev" }:
+{ system ? "x86_64-linux"
+, hostName ? "dev"
+, secondaryHostName ? hostName }:
 let
   nixpkgs = ../nixpkgs;
-  builtConfig = (import ../nixpkgs/nixos {
-    configuration = import ./default.nix { pkgs = nixpkgs; };
+  preBuiltConfig = (import ../nixpkgs/nixos {
+    configuration = (import ./entrypoint.nix {
+      hostname = secondaryHostName;
+    }) {
+      pkgs = nixpkgs;
+    };
   }).system;
   myisoconfig = { ... }: {
     imports = [
@@ -18,7 +24,7 @@ let
       networking.hostName = "myconfig";
       networking.wireless.enable = false;
 
-      environment.systemPackages = [ builtConfig ];
+      environment.systemPackages = [ preBuiltConfig ];
 
       # add myconfig to iso
       isoImage.contents = [

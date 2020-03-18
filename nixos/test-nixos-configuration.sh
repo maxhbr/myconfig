@@ -1,54 +1,64 @@
 #!/usr/bin/env bash
 # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
 
-# $ $0 [--no-bc] [--ci [base]] [--check]
+help() {
+    cat <<EOF
+  $ $0 [--no-bc] [--ci] [--hostname hostname] [--check]
+EOF
+}
 
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../common.sh"
 
 set -e
-args=""
+ARGS=""
+IN_CI=NO
+while [[ $# -gt 0 ]]; do
+    key="$1"
+    case $key in
+        --no-bc)
+            ARGS="$args --option binary-caches ''"
+            shift
+            ;;
+        --check)
+            ARGS="$args --check"
+            shift
+            ;;
+        --ci)
+            IN_CI=YES
+            ;;
+        --hostname)
+            nixosConfig="$myconfigDir/nixos/host-${2}.nix"
+            if [[ ! -f "$nixosConfig" ]]; then
+                help
+                exit 2
+            fi
+            shift
+            shift
+            ;;
+        *)
+            help
+            exit 1
+            ;;
+    esac
+done
+NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$nixosConfig"
 
-if [[ "$1" == "--no-bc" ]]; then
-    shift
-    args="$args --option binary-caches ''"
-fi
-
-if [[ "$1" == "--ci" ]]; then
-    shift
-    if [[ ! -f "$myconfigDir/hostname" ]]; then
-        cat <<EOF > "$myconfigDir/imports/dummy-hardware-configuration.nix"
+if [[ "$IN_CI" == "YES" ]]; then
+    cat <<EOF > "$myconfigDir/imports/dummy-hardware-configuration.nix"
 {...}: {
   fileSystems."/" = { device = "/dev/sdXX"; fsType = "ext4"; };
   fileSystems."/boot" = { device = "/dev/sdXY"; fsType = "vfat"; };
   boot.loader.grub.devices = [ "/dev/sdXY" ];
 }
 EOF
-
-        if [[ "$1" ]]; then
-            if [[ -d "$myconfigDir/nixos/$1" ]]; then
-                echo -n "$1" | tee "$myconfigDir/hostname"
-                shift
-            fi
-        else
-            echo -n "base" | tee "$myconfigDir/hostname"
-        fi
-    else
-        echo "this system is already provisioned, can't run this test"
-        exit 1
-    fi
-fi
-
-if [[ "$1" == "--check" ]]; then
-    shift
-    args="$args --check"
 fi
 
 set -x
 
 time \
-    nix-build '<nixpkgs/nixos>' \
+    nix-build '../nixpkgs/nixos' \
               $NIX_PATH_ARGS \
-              $args \
+              $ARGS \
               -A system \
               --no-out-link \
               --show-trace --keep-failed \
