@@ -336,7 +336,8 @@ update() {
 
 cleanup() {
     logH2 "cleanup" "nixos and nix-env"
-    if [ "$((RANDOM%100))" -gt 90 ]; then
+    pcent=$(echo $(df -h /  --output=pcent | tail -1 | cut -d'%' -f1))
+    if [[ "$pcen" -gt 90 || "$((RANDOM%100))" -gt 90 ]]; then
         ./nixos/gc.sh
     else
         echo "* $(tput bold)do not$(tput sgr0) gc ..."
