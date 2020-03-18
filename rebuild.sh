@@ -321,11 +321,11 @@ update() {
             fi
 
             logH3 "update" "home-manager"
-            ./nixos/lib/home-manager/update.sh
+            ./nixos/core/lib/home-manager/update.sh
             logH3 "update" "extrahosts"
             ./nixos/core/modules/nixos.networking/extrahosts/update.sh
             logH3 "update" "nixpkgs-unstable"
-            ./nixos/lib/nixpkgs-unstable/update.sh
+            ./nixos/core/lib/nixpkgs-unstable/update.sh
             logH3 "update" "emacs"
             ./nixos/base/modules/emacs/update.sh
             logH3 "update" "my-wallpapers"

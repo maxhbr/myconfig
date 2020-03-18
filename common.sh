@@ -18,9 +18,9 @@ else
     nixpkgs="channel:$nixStableChannel"
 fi
 
-nixosConfig="$myconfigDir/nixos/host-$(hostname).nix"
-if [[ ! -f "$nixosConfig" ]]; then
-    nixosConfig="$myconfigDir/nixos/default.nix"
+nixosConfig="$myconfigDir/nixos/host-$(hostname)"
+if [[ ! -d "$nixosConfig" ]]; then
+    nixosConfig="$myconfigDir/nixos/base"
 fi
 
 NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfig"
