@@ -18,6 +18,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+    - run: df -h
+    - run: free
     - name: Install Nix
       uses: cachix/install-nix-action@v6
     - run: cd ./nixos && ./test-nixos-configuration.sh --ci --hostname ${{ matrix.config.hostname }}
