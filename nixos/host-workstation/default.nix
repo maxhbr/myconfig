@@ -4,6 +4,7 @@
 
 {
   imports = [
+    ../imports.nix
     ./grub.nix
     ./quadroFX4800.nix
     ./steamcontroller.nix
@@ -20,6 +21,7 @@
   ];
 
   config = {
+    networking.hostName = "workstation";
     services.xserver.displayManager.slim.autoLogin = true;
     # services.xserver.windowManager.default = pkgs.lib.mkForce "xfce";
   };

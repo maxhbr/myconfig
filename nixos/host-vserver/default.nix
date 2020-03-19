@@ -3,10 +3,14 @@
 { pkgs, ... }:
 {
   imports = [
+    ../imports.nix
     ../headless
     # hardware:
     ../hardware/grub.nix
     # configuration
     ./modules/service.wireguard-server
   ];
+  config = {
+    networking.hostName = "vserver";
+  };
 }
