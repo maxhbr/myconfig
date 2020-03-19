@@ -21,10 +21,10 @@ nix-env $NIX_PATH_ARGS \
         --delete-generations $age
 echo "* sudo nix-env --delete-generations $age ..."
 sudo nix-env $NIX_PATH_ARGS \
-             --delete-generations $age
+             --delete-generations $age || echo "failed, probably when waiting for sudo PW"
 echo "* sudo nix-collect-garbage --delete-older-than $age ..."
 sudo nix-collect-garbage \
-     --delete-older-than $age
+     --delete-older-than $age || echo "failed, probably when waiting for sudo PW"
 
 after=$(logUsage)
 
