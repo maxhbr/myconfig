@@ -8,6 +8,14 @@ set -e
 
 age=${1:-30d}
 
+logUsage() {
+    o=$(mktemp)
+    df -h --output=file,used,pcent /nix/store > "$o"
+    echo $o
+}
+
+before=$(logUsage)
+
 echo "* nix-env --delete-generations $age ..."
 nix-env $NIX_PATH_ARGS \
         --delete-generations $age
@@ -17,3 +25,9 @@ sudo nix-env $NIX_PATH_ARGS \
 echo "* sudo nix-collect-garbage --delete-older-than $age ..."
 sudo nix-collect-garbage \
      --delete-older-than $age
+
+after=$(logUsage)
+
+echo "* difference in usage:"
+diff -y "$before" "$after"
+rm "$before" "$after"

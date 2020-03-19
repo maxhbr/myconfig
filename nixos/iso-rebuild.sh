@@ -15,7 +15,7 @@ out=("$drv/iso/nixos"*".iso")
 finalOut="nixos-${hostName}.iso"
 du -h "$out"
 install -m 644 "$out" "$myconfigDir/../$finalOut"
-sudo nix-store --delete "$out"
+./gc.sh
 
 set +x
 times
