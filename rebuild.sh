@@ -236,8 +236,11 @@ prepare() {
         echo "/etc/nixos/configuration.nix should not exist"
         exit 1
     fi
+    if [[ -f "/etc/nixos/hardware-configuration.nix" && ! -L "$myconfigImports/hardware-configuration.nix" ]]; then
+        ln -s "/etc/nixos/hardware-configuration.nix" "$myconfigImports/hardware-configuration.nix"
+    fi
 
-    nix_path_string="{ nix.nixPath = [\"nixpkgs=$nixpkgsDir\" \"nixos-config=$nixosConfig\"]; }"
+    nix_path_string="{ nix.nixPath = [ $(echo '"'"$NIX_PATH"'"' | sed 's/:/" "/g') ]; }"
     nix_path_file="$myconfigDir/imports/nixPath.nix"
     if [[ "$(cat $nix_path_file 2>/dev/null)" != *"$nix_path_string"* ]]; then
         echo $nix_path_string |
@@ -265,6 +268,10 @@ realize() {
         $args \
         --fallback \
         $NIXOS_REBUILD_CMD | sed -e 's/^/['"$args"'] /'
+    if [[ "$NIXOS_REBUILD_CMD" == "switch" ]]; then
+        logH1 "nix path-info" "-hS /run/current-system"
+        nix path-info -hS /run/current-system
+    fi
 }
 
 updateSubtree() {

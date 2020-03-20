@@ -11,6 +11,7 @@ export COMMON_SH_WAS_SOURCED="true"
 export my_main_host='x1extremeG2'
 
 export myconfigDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+export myconfigImports="$myconfigDir/imports"
 export nixpkgsDir="$myconfigDir/nixpkgs"
 if [[ -f "$nixpkgsDir/default.nix" ]]; then
     nixpkgs="$nixpkgsDir"
@@ -23,8 +24,8 @@ if [[ ! -d "$nixosConfig" ]]; then
     nixosConfig="$myconfigDir/nixos/host-minimal"
 fi
 
-NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfig"
-NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$nixosConfig"
+NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfig:myconfig-imports=$myconfigImports"
+NIX_PATH_ARGS="-I '$(echo "$NIX_PATH" | sed "s/:/' -I '/g")'"
 export NIX_PATH
 export NIX_PATH_ARGS
 

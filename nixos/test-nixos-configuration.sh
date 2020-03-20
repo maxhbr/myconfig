@@ -25,12 +25,16 @@ while [[ $# -gt 0 ]]; do
             ;;
         --ci)
             IN_CI=YES
+            shift
             ;;
         --hostname)
-            nixosConfig="$myconfigDir/nixos/host-${2}.nix"
-            if [[ ! -f "$nixosConfig" ]]; then
-                help
-                exit 2
+            nixosConfig="$myconfigDir/nixos/host-${2}"
+            if [[ ! -d "$nixosConfig" ]]; then
+                nixosConfig="$myconfigDir/nixos/${2}"
+                if [[ ! -d "$nixosConfig" ]]; then
+                    help
+                    exit 2
+                fi
             fi
             shift
             shift
@@ -44,22 +48,27 @@ done
 NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$nixosConfig"
 
 if [[ "$IN_CI" == "YES" ]]; then
-    cat <<EOF > "$myconfigDir/imports/dummy-hardware-configuration.nix"
+    tmpImports=$(mktemp -d)
+    NIX_PATH_ARGS="$NIX_PATH_ARGS -I nixos-imports=$tmpImports"
+    cat <<EOF > "$tmpImports/dummy-hardware-configuration.nix"
 {...}: {
   fileSystems."/" = { device = "/dev/sdXX"; fsType = "ext4"; };
   fileSystems."/boot" = { device = "/dev/sdXY"; fsType = "vfat"; };
   boot.loader.grub.devices = [ "/dev/sdXY" ];
 }
 EOF
+else
+    NIX_PATH_ARGS="$NIX_PATH_ARGS -I nixos-imports=$myconfigImports"
 fi
 
 set -x
 
-time \
-    nix-build '../nixpkgs/nixos' \
-              $NIX_PATH_ARGS \
-              $ARGS \
-              -A system \
-              --no-out-link \
-              --show-trace --keep-failed \
-              --arg configuration "$nixosConfig"
+out=$(nix-build '../nixpkgs/nixos' \
+                $NIX_PATH_ARGS \
+                $ARGS \
+                -A system \
+                --no-out-link \
+                --show-trace --keep-failed \
+                --arg configuration "$nixosConfig")
+nix path-info -hS $out
+times
