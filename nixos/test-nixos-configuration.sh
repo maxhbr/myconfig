@@ -57,6 +57,8 @@ if [[ "$IN_CI" == "YES" ]]; then
   boot.loader.grub.devices = [ "/dev/sdXY" ];
 }
 EOF
+    ls "$tmpImports"
+    grep fileSystem "$tmpImports/dummy-hardware-configuration.nix"
 else
     NIX_PATH_ARGS="$NIX_PATH_ARGS -I nixos-imports=$myconfigImports"
 fi
