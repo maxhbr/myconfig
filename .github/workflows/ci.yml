@@ -22,7 +22,7 @@ jobs:
     - run: free
     - name: Install Nix
       uses: cachix/install-nix-action@v6
-    - run: cd ./nixos && ./test-nixos-configuration.sh --ci --hostname ${{ matrix.config.hostname }}
+    - run: cd ./nixos && ./test-nixos-configuration.sh --hostname ${{ matrix.config.hostname }}
       continue-on-error: ${{ matrix.config.allow_failure }}
 
   build-iso:
