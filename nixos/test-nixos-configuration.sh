@@ -54,11 +54,10 @@ if [[ "$IN_CI" == "YES" ]]; then
 {...}: {
   fileSystems."/" = { device = "/dev/sdXX"; fsType = "ext4"; };
   fileSystems."/boot" = { device = "/dev/sdXY"; fsType = "vfat"; };
-  boot.loader.grub.devices = [ "/dev/sdXY" ];
+  # boot.loader.grub.devices = [ "/dev/sdXY" ];
+  boot.loader.grub.device = "/dev/sdXY";
 }
 EOF
-    ls "$tmpImports"
-    grep fileSystem "$tmpImports/dummy-hardware-configuration.nix"
 else
     NIX_PATH_ARGS="$NIX_PATH_ARGS -I nixos-imports=$myconfigImports"
 fi
