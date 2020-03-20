@@ -46,16 +46,17 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$nixosConfig"
+NIX_PATH=""
 
 if [[ "$IN_CI" == "YES" ]]; then
     tmpImports=$(mktemp -d)
+    trap 'ret=$?; rm -r "$tmpImports" 2>/dev/null; exit $ret' 0
     NIX_PATH_ARGS="$NIX_PATH_ARGS -I nixos-imports=$tmpImports"
     cat <<EOF > "$tmpImports/dummy-hardware-configuration.nix"
 {...}: {
   fileSystems."/" = { device = "/dev/sdXX"; fsType = "ext4"; };
   fileSystems."/boot" = { device = "/dev/sdXY"; fsType = "vfat"; };
-  # boot.loader.grub.devices = [ "/dev/sdXY" ];
-  boot.loader.grub.device = "/dev/sdXY";
+  boot.loader.grub.devices = [ "/dev/sdXY" ];
 }
 EOF
 else
@@ -71,5 +72,9 @@ out=$(nix-build '../nixpkgs/nixos' \
                 --no-out-link \
                 --show-trace --keep-failed \
                 --arg configuration "$nixosConfig")
+if [[ -z "$out" ]]; then
+    exit 1
+fi
+
 nix path-info -hS $out
 times

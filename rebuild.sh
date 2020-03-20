@@ -236,13 +236,17 @@ prepare() {
         echo "/etc/nixos/configuration.nix should not exist"
         exit 1
     fi
-    if [[ -f "/etc/nixos/hardware-configuration.nix" && ! -L "$myconfigImports/hardware-configuration.nix" ]]; then
-        ln -s "/etc/nixos/hardware-configuration.nix" "$myconfigImports/hardware-configuration.nix"
+    if [[ -f "/etc/nixos/hardware-configuration.nix" ]]; then
+        if ! cmp "/etc/nixos/hardware-configuration.nix" "$nixosConfig/hardware-configuration.nix" >/dev/null 2>&1; then
+            logH1 "update" "$nixosConfig/hardware-configuration.nix"
+            cat "/etc/nixos/hardware-configuration.nix" | tee "$nixosConfig/hardware-configuration.nix"
+        fi
     fi
 
     nix_path_string="{ nix.nixPath = [ $(echo '"'"$NIX_PATH"'"' | sed 's/:/" "/g') ]; }"
     nix_path_file="$myconfigDir/imports/nixPath.nix"
     if [[ "$(cat $nix_path_file 2>/dev/null)" != *"$nix_path_string"* ]]; then
+        logH1 "update" "$myconfigDir/imports/nixPath.nix"
         echo $nix_path_string |
             tee $nix_path_file
     fi

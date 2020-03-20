@@ -3,6 +3,7 @@
 { pkgs, ... }:
 {
   imports = [
+    ./hardware-configuration.nix
     ../dev
     # hardware:
     ./x1extremeG2.nix
