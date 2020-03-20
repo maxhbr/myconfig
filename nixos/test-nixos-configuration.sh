@@ -3,7 +3,7 @@
 
 help() {
     cat <<EOF
-  $ $0 [--no-bc] [--ci] [--hostname hostname] [--check]
+  $ $0 [--no-bc] [--hostname hostname] [--check]
 EOF
 }
 
@@ -11,7 +11,6 @@ EOF
 
 set -e
 ARGS=""
-IN_CI=NO
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
@@ -23,15 +22,24 @@ while [[ $# -gt 0 ]]; do
             ARGS="$args --check"
             shift
             ;;
-        --ci)
-            IN_CI=YES
-            shift
-            ;;
         --hostname)
             nixosConfig="$myconfigDir/nixos/host-${2}"
             if [[ ! -d "$nixosConfig" ]]; then
-                nixosConfig="$myconfigDir/nixos/${2}"
-                if [[ ! -d "$nixosConfig" ]]; then
+                nixosProfile="$myconfigDir/nixos/${2}"
+                if [[ -d "$nixosProfile" ]]; then
+                    nixosConfig=$(mktemp -d)
+                    trap 'ret=$?; rm "'"$nixosConfig"'/default.nix"; rmdir "'"$nixosConfig"'" 2>/dev/null; exit $ret' 0
+                    cat <<EOF > "$nixosConfig/default.nix"
+{...}: {
+  imports = [ $nixosProfile ];
+  config = {
+    fileSystems."/" = { device = "/dev/sdXX"; fsType = "ext4"; };
+    fileSystems."/boot" = { device = "/dev/sdXY"; fsType = "vfat"; };
+    boot.loader.grub.devices = [ "/dev/sdXY" ];
+  };
+}
+EOF
+                else
                     help
                     exit 2
                 fi
@@ -47,21 +55,6 @@ while [[ $# -gt 0 ]]; do
 done
 NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$nixosConfig"
 NIX_PATH=""
-
-if [[ "$IN_CI" == "YES" ]]; then
-    tmpImports=$(mktemp -d)
-    trap 'ret=$?; rm -r "$tmpImports" 2>/dev/null; exit $ret' 0
-    NIX_PATH_ARGS="$NIX_PATH_ARGS -I nixos-imports=$tmpImports"
-    cat <<EOF > "$tmpImports/dummy-hardware-configuration.nix"
-{...}: {
-  fileSystems."/" = { device = "/dev/sdXX"; fsType = "ext4"; };
-  fileSystems."/boot" = { device = "/dev/sdXY"; fsType = "vfat"; };
-  boot.loader.grub.devices = [ "/dev/sdXY" ];
-}
-EOF
-else
-    NIX_PATH_ARGS="$NIX_PATH_ARGS -I nixos-imports=$myconfigImports"
-fi
 
 set -x
 

@@ -12,7 +12,7 @@ jobs:
       matrix:
         config:
           - { hostname: core }
-          # - { hostname: base, allow_failure: true }
+          - { hostname: base }
           - { hostname: vserver }
       fail-fast: false
 
@@ -25,23 +25,23 @@ jobs:
     - run: cd ./nixos && ./test-nixos-configuration.sh --ci --hostname ${{ matrix.config.hostname }}
       continue-on-error: ${{ matrix.config.allow_failure }}
 
-  # build-iso:
+  build-iso:
 
-  #   runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
 
-  #   strategy:
-  #     matrix:
-  #       config:
-  #         - { hostname: core }
-  #         # - { hostname: base, allow_failure: true }
-  #         # - { hostname: vserver }
-  #     fail-fast: false
+    strategy:
+      matrix:
+        config:
+          - { hostname: core }
+          # - { hostname: base, allow_failure: true }
+          # - { hostname: vserver }
+      fail-fast: false
 
-  #   steps:
-  #   - uses: actions/checkout@v1
-  #   - name: Install Nix
-  #     uses: cachix/install-nix-action@v6
-  #   - run: cd ./nixos && ./iso-rebuild.sh ${{ matrix.config.hostname }}
-  #     continue-on-error: ${{ matrix.config.allow_failure }}
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install Nix
+      uses: cachix/install-nix-action@v6
+    - run: cd ./nixos && ./iso-rebuild.sh ${{ matrix.config.hostname }}
+      continue-on-error: ${{ matrix.config.allow_failure }}
 
 
