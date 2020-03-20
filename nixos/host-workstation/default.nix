@@ -4,6 +4,7 @@
 
 {
   imports = [
+    /etc/nixos/hardware-configuration.nix
     ./grub.nix
     ./quadroFX4800.nix
     ./steamcontroller.nix

@@ -3,6 +3,7 @@
 { pkgs, ... }:
 {
   imports = [
+    ./hardware-configuration.nix
     ../headless
     # hardware:
     ../hardware/grub.nix
