@@ -64,19 +64,19 @@ NIX_PATH=""
 
 set -x
 
-out=$(nix-build '../nixpkgs/nixos' \
-                $NIX_PATH_ARGS \
-                $ARGS \
-                -A system \
-                --no-out-link \
-                --show-trace --keep-failed \
-                --arg configuration "$nixosConfig")
-if [[ "$DRYRUN" == "YES" ]]; then
-    exit 0
-fi
-if [[ -z "$out" ]]; then
-    exit 1
-fi
+out=$(set -x;
+    nix-build '../nixpkgs/nixos' \
+              $NIX_PATH_ARGS \
+              $ARGS \
+              -A system \
+              --no-out-link \
+              --show-trace --keep-failed \
+              --arg configuration "$nixosConfig")
+if [[ "$DRYRUN" != "YES" ]]; then
+    if [[ -z "$out" ]]; then
+        exit 1
+    fi
 
-nix path-info -hS $out
+    nix path-info -hS $out
+fi
 times

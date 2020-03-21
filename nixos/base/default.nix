@@ -6,6 +6,6 @@
     ./modules/mail
   ];
   config = {
-    boot.kernelPackages = pkgs.unstable.linuxPackages_5_4;
+    boot.kernelPackages = pkgs.linuxPackages_latest;
   };
 }
