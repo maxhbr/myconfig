@@ -9,6 +9,7 @@
     ../hardware/quadroFX4800.nix
     # other profiles
     ../desktop
+    ../desktop/modules/X.xfce.nix
     #../profiles/desktop/xfce.nix
     #../profiles/desktop/games
     #../profiles/virtualization
