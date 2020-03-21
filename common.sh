@@ -4,7 +4,7 @@
 
 # export nixStableChannel=nixos-unstable
 # export nixStableChannel=nixos-19.09-small
-export nixStableChannel=nixos-19.09
+export nixStableChannel=nixos-20.03
 
 export COMMON_SH_WAS_SOURCED="true"
 
