@@ -11,15 +11,21 @@ EOF
 
 set -e
 ARGS=""
+DRYRUN=NO
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
         --no-bc)
-            ARGS="$args --option binary-caches ''"
+            ARGS="$ARGS --option binary-caches ''"
             shift
             ;;
         --check)
-            ARGS="$args --check"
+            ARGS="$ARGS --check"
+            shift
+            ;;
+        --dry-run)
+            ARGS="$ARGS --dry-run"
+            DRYRUN=YES
             shift
             ;;
         --hostname)
@@ -65,6 +71,9 @@ out=$(nix-build '../nixpkgs/nixos' \
                 --no-out-link \
                 --show-trace --keep-failed \
                 --arg configuration "$nixosConfig")
+if [[ "$DRYRUN" == "YES" ]]; then
+    exit 0
+fi
 if [[ -z "$out" ]]; then
     exit 1
 fi
