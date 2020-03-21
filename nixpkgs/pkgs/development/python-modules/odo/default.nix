@@ -13,7 +13,7 @@
 
 buildPythonPackage rec {
   pname = "odo";
-  version= "unstable-2019-07-16";
+  version= "unstable-2018-09-21";
 
   src = fetchFromGitHub {
     owner = "blaze";
@@ -24,12 +24,15 @@ buildPythonPackage rec {
 
   checkInputs = [
     pytest
+    dask
   ];
 
   propagatedBuildInputs = [
-    dask
     datashape
     numpy
+    pandas
+    toolz
+    multipledispatch
     networkx
   ];
 
@@ -46,12 +49,11 @@ buildPythonPackage rec {
                and not test_numpy_asserts_type_after_dataframe"
   '';
 
-  doCheck = false; # Many failing tests
-
   meta = with lib; {
     homepage = https://github.com/ContinuumIO/odo;
     description = "Data migration utilities";
     license = licenses.bsdOriginal;
     maintainers = with maintainers; [ fridh costrouc ];
+    broken = true; # no longer compatible with dask>=2.0
   };
 }

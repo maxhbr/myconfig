@@ -1,4 +1,4 @@
-{ newScope, config, stdenv, llvmPackages_8
+{ newScope, config, stdenv, llvmPackages_9
 , makeWrapper, ed
 , glib, gtk3, gnome3, gsettings-desktop-schemas
 , libva ? null
@@ -7,7 +7,6 @@
 
 # package customization
 , channel ? "stable"
-, enableNaCl ? false
 , gnomeSupport ? false, gnome ? null
 , gnomeKeyringSupport ? false
 , proprietaryCodecs ? true
@@ -20,8 +19,8 @@
 }:
 
 let
-  stdenv = llvmPackages_8.stdenv;
-  llvmPackages = llvmPackages_8;
+  stdenv = llvmPackages_9.stdenv;
+  llvmPackages = llvmPackages_9;
 
   callPackage = newScope chromium;
 
@@ -31,9 +30,7 @@ let
     upstream-info = (callPackage ./update.nix {}).getChannel channel;
 
     mkChromiumDerivation = callPackage ./common.nix {
-      inherit enableNaCl gnomeSupport gnome
-              gnomeKeyringSupport proprietaryCodecs cupsSupport pulseSupport
-              useVaapi;
+      inherit gnome gnomeSupport gnomeKeyringSupport proprietaryCodecs cupsSupport pulseSupport useVaapi;
     };
 
     browser = callPackage ./browser.nix { inherit channel enableWideVine; };

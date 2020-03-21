@@ -44,15 +44,16 @@
 , shared-mime-info
 , gsettings-desktop-schemas
 
+# Hardening
+, graphene-hardened-malloc
+, useHardenedMalloc ? graphene-hardened-malloc != null && builtins.elem stdenv.system graphene-hardened-malloc.meta.platforms
+
 # Whether to disable multiprocess support to work around crashing tabs
 # TODO: fix the underlying problem instead of this terrible work-around
 , disableContentSandbox ? true
 
 # Extra preferences
 , extraPrefs ? ""
-
-# For meta
-, tor-browser-bundle
 }:
 
 with stdenv.lib;
@@ -89,19 +90,19 @@ let
   fteLibPath = makeLibraryPath [ stdenv.cc.cc gmp ];
 
   # Upstream source
-  version = "9.0.5";
+  version = "9.0.6";
 
   lang = "en-US";
 
   srcs = {
     x86_64-linux = fetchurl {
       url = "https://dist.torproject.org/torbrowser/${version}/tor-browser-linux64-${version}_${lang}.tar.xz";
-      sha256 = "1d4c3mrvqd6v086mwn3rnv776y2j3y45agnd0k5njqnmr53ybn2s";
+      sha256 = "1vk1pww8zmpjd5snyfz0if9v17g140ymlp6navxp28snzlffahss";
     };
 
     i686-linux = fetchurl {
       url = "https://dist.torproject.org/torbrowser/${version}/tor-browser-linux32-${version}_${lang}.tar.xz";
-      sha256 = "040nh79hjkg5afvzshzhp7588dbi1pcpjsyk8phfqaapds74ma8y";
+      sha256 = "0bhikdilfz31iilgb48mayy9f4lilycq24pqsrq7w3dqdjg4v55v";
     };
   };
 in
@@ -243,6 +244,9 @@ stdenv.mkDerivation rec {
     GeoIPv6File $TBB_IN_STORE/TorBrowser/Data/Tor/geoip6
     EOF
 
+    WRAPPER_LD_PRELOAD=${optionalString useHardenedMalloc
+      "${graphene-hardened-malloc}/lib/libhardened_malloc.so"}
+
     WRAPPER_XDG_DATA_DIRS=${concatMapStringsSep ":" (x: "${x}/share") [
       gnome3.adwaita-icon-theme
       shared-mime-info
@@ -325,6 +329,8 @@ stdenv.mkDerivation rec {
     #
     # XDG_DATA_DIRS is set to prevent searching system dirs (looking for .desktop & icons)
     exec env -i \
+      LD_PRELOAD=$WRAPPER_LD_PRELOAD \
+      \
       TZ=":" \
       TZDIR="\''${TZDIR:-}" \
       LOCALE_ARCHIVE="\$LOCALE_ARCHIVE" \
@@ -385,10 +391,18 @@ stdenv.mkDerivation rec {
 
   meta = with stdenv.lib; {
     description = "Tor Browser Bundle built by torproject.org";
-    longDescription = tor-browser-bundle.meta.longDescription;
+    longDescription = ''
+      Tor Browser Bundle is a bundle of the Tor daemon, Tor Browser (heavily patched version of
+      Firefox), several essential extensions for Tor Browser, and some tools that glue those
+      together with a convenient UI.
+
+      `tor-browser-bundle-bin` package is the official version built by torproject.org patched with
+      `patchelf` to work under nix and with bundled scripts adapted to the read-only nature of
+      the `/nix/store`.
+    '';
     homepage = "https://www.torproject.org/";
     platforms = attrNames srcs;
-    maintainers = with maintainers; [ offline matejc doublec thoughtpolice joachifm ];
+    maintainers = with maintainers; [ offline matejc doublec thoughtpolice joachifm hax404 cap ];
     hydraPlatforms = [];
     # MPL2.0+, GPL+, &c.  While it's not entirely clear whether
     # the compound is "libre" in a strict sense (some components place certain

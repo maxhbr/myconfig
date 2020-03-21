@@ -21,14 +21,14 @@
 with python3Packages;
 buildPythonApplication rec {
   pname = "kitty";
-  version = "0.14.6";
+  version = "0.16.0";
   format = "other";
 
   src = fetchFromGitHub {
     owner = "kovidgoyal";
     repo = "kitty";
     rev = "v${version}";
-    sha256 = "1rb5ys9xsdhd2qa3kz5gqzz111c6b14za98va6hlglk69wqlmb51";
+    sha256 = "1bszyddar0g1gdz67h8rd3gbrdhi6ahjg7j14cjiqxm1938z9ajf";
   };
 
   buildInputs = [
@@ -64,19 +64,19 @@ buildPythonApplication rec {
   outputs = [ "out" "terminfo" ];
 
   patches = [
+    ./fix-paths.patch
+  ] ++ stdenv.lib.optionals stdenv.isLinux [
     (substituteAll {
-      src = ./fix-paths.patch;
+      src = ./library-paths.patch;
       libstartup_notification = "${libstartup_notification}/lib/libstartup-notification-1.so";
+      libcanberra = "${libcanberra}/lib/libcanberra.so";
+      libEGL = "${stdenv.lib.getLib libGL}/lib/libEGL.so.1";
     })
   ] ++ stdenv.lib.optionals stdenv.isDarwin [
     ./no-lto.patch
     ./no-werror.patch
     ./png2icns.patch
   ];
-
-  preConfigure  = stdenv.lib.optional (!stdenv.isDarwin) ''
-    substituteInPlace glfw/egl_context.c --replace "libEGL.so.1" "${stdenv.lib.getLib libGL}/lib/libEGL.so.1"
-  '';
 
   buildPhase = if stdenv.isDarwin then ''
     ${python.interpreter} setup.py kitty.app --update-check-interval=0
@@ -89,7 +89,7 @@ buildPythonApplication rec {
     mkdir -p $out
     ${if stdenv.isDarwin then ''
     mkdir "$out/bin"
-    ln -s ../Applications/kitty.app/Contents/MacOS/kitty-deref-symlink "$out/bin/kitty"
+    ln -s ../Applications/kitty.app/Contents/MacOS/kitty "$out/bin/kitty"
     mkdir "$out/Applications"
     cp -r kitty.app "$out/Applications/kitty.app"
     '' else ''

@@ -1,23 +1,23 @@
 { stdenv, fetchFromGitHub, gettext, makeWrapper, tcl, which, writeScript
 , ncurses, perl , cyrus_sasl, gss, gpgme, kerberos, libidn, libxml2, notmuch, openssl
-, lmdb, libxslt, docbook_xsl, docbook_xml_dtd_42, mailcap, runtimeShell
+, lmdb, libxslt, docbook_xsl, docbook_xml_dtd_42, mailcap, runtimeShell, sqlite
 }:
 
 stdenv.mkDerivation rec {
-  version = "20180716";
+  version = "20200313";
   pname = "neomutt";
 
   src = fetchFromGitHub {
     owner  = "neomutt";
     repo   = "neomutt";
-    rev    = "neomutt-${version}";
-    sha256 = "0im2kkahkr04q04irvcimfawxi531ld6wrsa92r2m7l10gmijkl8";
+    rev    = version;
+    sha256 = "1k4k07l6h5krc3fx928qvdq3ssw9fxn95aj7k885xlckd2i1lnb5";
   };
 
   buildInputs = [
     cyrus_sasl gss gpgme kerberos libidn ncurses
     notmuch openssl perl lmdb
-    mailcap
+    mailcap sqlite
   ];
 
   nativeBuildInputs = [
@@ -50,6 +50,7 @@ stdenv.mkDerivation rec {
   '';
 
   configureFlags = [
+    "--enable-autocrypt"
     "--gpgme"
     "--gss"
     "--lmdb"
@@ -79,7 +80,7 @@ stdenv.mkDerivation rec {
     description = "A small but very powerful text-based mail client";
     homepage    = http://www.neomutt.org;
     license     = licenses.gpl2Plus;
-    maintainers = with maintainers; [ cstrahan erikryb jfrankenau vrthra ];
+    maintainers = with maintainers; [ cstrahan erikryb jfrankenau vrthra ma27 ];
     platforms   = platforms.unix;
   };
 }

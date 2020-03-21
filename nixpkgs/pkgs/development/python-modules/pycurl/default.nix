@@ -37,7 +37,7 @@ buildPythonPackage rec {
 
   # skip impure or flakey tests
   checkPhase = ''
-    pytest tests -k "not test_ssl_in_static_libs \
+    HOME=$TMPDIR pytest tests -k "not test_ssl_in_static_libs \
                      and not test_keyfunction \
                      and not test_keyfunction_bogus_return \
                      and not test_libcurl_ssl_gnutls \

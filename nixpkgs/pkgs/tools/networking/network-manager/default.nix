@@ -1,20 +1,20 @@
-{ stdenv, fetchurl, substituteAll, intltool, pkgconfig, fetchpatch, dbus, dbus-glib
+{ stdenv, fetchurl, substituteAll, intltool, pkgconfig, fetchpatch, dbus
 , gnome3, systemd, libuuid, polkit, gnutls, ppp, dhcp, iptables, python3, vala
 , libgcrypt, dnsmasq, bluez5, readline, libselinux, audit
 , gobject-introspection, modemmanager, openresolv, libndp, newt, libsoup
 , ethtool, gnused, iputils, kmod, jansson, gtk-doc, libxslt
 , docbook_xsl, docbook_xml_dtd_412, docbook_xml_dtd_42, docbook_xml_dtd_43
-, openconnect, curl, meson, ninja, libpsl }:
+, openconnect, curl, meson, ninja, libpsl, mobile-broadband-provider-info, runtimeShell }:
 
 let
   pythonForDocs = python3.withPackages (pkgs: with pkgs; [ pygobject3 ]);
 in stdenv.mkDerivation rec {
   pname = "network-manager";
-  version = "1.18.4";
+  version = "1.22.8";
 
   src = fetchurl {
     url = "mirror://gnome/sources/NetworkManager/${stdenv.lib.versions.majorMinor version}/NetworkManager-${version}.tar.xz";
-    sha256 = "0pnh1wr2p1fqa5pr945fr3lngfc5ccfrmgddqsg55lxnjpv0ggd3";
+    sha256 = "0kxbgln78lb1cxhd79vbpdbncsb0cppr15fycgqb9df6f8nbj4cm";
   };
 
   outputs = [ "out" "dev" "devdoc" "man" "doc" ];
@@ -33,7 +33,7 @@ in stdenv.mkDerivation rec {
     # to enable link-local connections
     "-Dudev_dir=${placeholder "out"}/lib/udev"
     "-Dresolvconf=${openresolv}/bin/resolvconf"
-    "-Ddbus_conf_dir=${placeholder "out"}/etc/dbus-1/system.d"
+    "-Ddbus_conf_dir=${placeholder "out"}/share/dbus-1/system.d"
     "-Dsystemdsystemunitdir=${placeholder "out"}/etc/systemd/system"
     "-Dkernel_firmware_dir=/run/current-system/firmware"
     "--sysconfdir=/etc"
@@ -41,10 +41,9 @@ in stdenv.mkDerivation rec {
     "-Dcrypto=gnutls"
     "-Dsession_tracking=systemd"
     "-Dmodem_manager=true"
+    "-Dpolkit_agent=true"
     "-Dnmtui=true"
     "-Ddocs=true"
-    # TODO: legacy library, will be *removed* in next release!
-    "-Dlibnm_glib=true"
     "-Dtests=no"
     "-Dqt=false"
     # Allow using iwd when configured to do so
@@ -55,39 +54,30 @@ in stdenv.mkDerivation rec {
   patches = [
     (substituteAll {
       src = ./fix-paths.patch;
-      inherit iputils kmod openconnect ethtool gnused dbus;
-      inherit (stdenv) shell;
+      inherit iputils kmod openconnect ethtool gnused systemd;
+      inherit runtimeShell;
     })
 
     # Meson does not support using different directories during build and
     # for installation like Autotools did with flags passed to make install.
     ./fix-install-paths.patch
-
-    # Fixes https://github.com/NixOS/nixpkgs/issues/72330
-    # Upstream MR: https://gitlab.freedesktop.org/NetworkManager/NetworkManager/merge_requests/323
-    (fetchpatch {
-      url = "https://gitlab.freedesktop.org/NetworkManager/NetworkManager/commit/ed03fcbd17a7f73faad2adf7bf21ae77ad93740d.patch";
-      sha256 = "1vv9c1i499900kjnisirby3jz9b99nwcm87r9x20xp4p73zpq2ry";
-    })
   ];
 
   buildInputs = [
-    systemd libselinux audit libpsl libuuid polkit ppp libndp curl
+    systemd libselinux audit libpsl libuuid polkit ppp libndp curl mobile-broadband-provider-info
     bluez5 dnsmasq gobject-introspection modemmanager readline newt libsoup jansson
   ];
 
-  propagatedBuildInputs = [ dbus-glib gnutls libgcrypt ];
+  propagatedBuildInputs = [ gnutls libgcrypt ];
 
   nativeBuildInputs = [
     meson ninja intltool pkgconfig
-    vala gobject-introspection
-    dbus-glib # for dbus-binding-tool
+    vala gobject-introspection dbus
     # Docs
     gtk-doc libxslt docbook_xsl docbook_xml_dtd_412 docbook_xml_dtd_42 docbook_xml_dtd_43 pythonForDocs
   ];
 
   doCheck = false; # requires /sys, the net
-
 
   postPatch = ''
     patchShebangs ./tools
@@ -114,7 +104,7 @@ in stdenv.mkDerivation rec {
     homepage = https://wiki.gnome.org/Projects/NetworkManager;
     description = "Network configuration and management tool";
     license = licenses.gpl2Plus;
-    maintainers = with maintainers; [ phreedom domenkozar obadz ];
+    maintainers = with maintainers; [ phreedom domenkozar obadz worldofpeace ];
     platforms = platforms.linux;
   };
 }

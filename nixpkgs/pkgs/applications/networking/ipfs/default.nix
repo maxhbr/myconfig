@@ -2,19 +2,21 @@
 
 buildGoModule rec {
   pname = "ipfs";
-  version = "0.4.21";
+  version = "0.4.23";
   rev = "v${version}";
-
-  goPackagePath = "github.com/ipfs/go-ipfs";
 
   src = fetchFromGitHub {
     owner = "ipfs";
     repo = "go-ipfs";
     inherit rev;
-    sha256 = "0jlj89vjy4nw3x3j45r16y8bph5ss5lp907pjgqvad0naxbf99b0";
+    sha256 = "19m1bhqf1jghdv2ngdnjdk1kvjcxbkgm1ccdkmkabv4ii43h8jwm";
   };
 
-  modSha256 = "0d9rq0hig9jwv9jfajfyj2111arikqzdnyhf5aqkwahcblpx54iy";
+  postPatch = ''
+    rm -rf test/dependencies
+  '';
+
+  modSha256 = "12m4ind1s8zaa6kssblc28z2cafy20w2jp80kzif39hg5ar9bijm";
 
   meta = with stdenv.lib; {
     description = "A global, versioned, peer-to-peer filesystem";

@@ -1,31 +1,56 @@
-{ lib, go, buildGoPackage, fetchFromGitHub }:
+{ lib, go, buildGoPackage, fetchFromGitHub, mkYarnPackage }:
 
 let
-  goPackagePath = "github.com/prometheus/prometheus";
-in
-buildGoPackage rec {
-  pname = "prometheus";
-  version = "2.13.0";
-
-  inherit goPackagePath;
+  version = "2.15.2";
 
   src = fetchFromGitHub {
     rev = "v${version}";
     owner = "prometheus";
     repo = "prometheus";
-    sha256 = "08fmicgrv9b37qapmqjbif19c9181mpp7abd2yrpc3xpyjd3h687";
+    sha256 = "0gl11qqbq57vkx226n8z4x07fwvly5f21y6dn20kjh2fxigmrb2n";
   };
+
+  webui = mkYarnPackage {
+    src = "${src}/web/ui/react-app";
+    packageJSON = ./webui-package.json;
+    yarnNix = ./webui-yarndeps.nix;
+
+    # The standard yarn2nix directory management causes build failures with
+    # Prometheus's webui due to using relative imports into node_modules. Use
+    # an extremely simplified version of it instead.
+    configurePhase = "ln -s $node_modules node_modules";
+    buildPhase = "PUBLIC_URL=. yarn build";
+    installPhase = "mv build $out";
+    distPhase = "true";
+  };
+in buildGoPackage rec {
+  pname = "prometheus";
+  inherit src version;
+
+  goPackagePath = "github.com/prometheus/prometheus";
+
+  postPatch = ''
+    ln -s ${webui.node_modules} web/ui/react-app/node_modules
+    ln -s ${webui} web/ui/static/react
+  '';
 
   buildFlagsArray = let
     t = "${goPackagePath}/vendor/github.com/prometheus/common/version";
-  in ''
-    -ldflags=
-       -X ${t}.Version=${version}
-       -X ${t}.Revision=unknown
-       -X ${t}.Branch=unknown
-       -X ${t}.BuildUser=nix@nixpkgs
-       -X ${t}.BuildDate=unknown
-       -X ${t}.GoVersion=${lib.getVersion go}
+  in [
+    "-tags=builtinassets"
+    ''
+      -ldflags=
+         -X ${t}.Version=${version}
+         -X ${t}.Revision=unknown
+         -X ${t}.Branch=unknown
+         -X ${t}.BuildUser=nix@nixpkgs
+         -X ${t}.BuildDate=unknown
+         -X ${t}.GoVersion=${lib.getVersion go}
+    ''
+  ];
+
+  preBuild = ''
+    make -C go/src/${goPackagePath} assets
   '';
 
   preInstall = ''

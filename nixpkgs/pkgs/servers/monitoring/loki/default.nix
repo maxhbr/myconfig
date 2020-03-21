@@ -21,18 +21,18 @@ buildGoPackage rec {
   '';
 
   nativeBuildInputs = [ makeWrapper ];
-  buildInputs = [ systemd.dev ];
+  buildInputs = stdenv.lib.optionals stdenv.isLinux [ systemd.dev ];
 
-  preFixup = ''
+  preFixup = stdenv.lib.optionalString stdenv.isLinux ''
     wrapProgram $bin/bin/promtail \
       --prefix LD_LIBRARY_PATH : "${systemd.lib}/lib"
   '';
 
   meta = with stdenv.lib; {
-    description = "Like Prometheus, but for logs.";
+    description = "Like Prometheus, but for logs";
     license = licenses.asl20;
-    homepage = "https://grafana.com/loki";
-    maintainers = with maintainers; [ willibutz globin ];
-    platforms = platforms.linux;
+    homepage = "https://grafana.com/oss/loki/";
+    maintainers = with maintainers; [ willibutz globin mmahut ];
+    platforms = platforms.unix;
   };
 }

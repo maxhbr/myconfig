@@ -19,9 +19,8 @@ browser:
 let
   wrapper =
     { browserName ? browser.browserName or (lib.getName browser)
-    , name ? browserName + "-" + lib.getVersion browser # TODO delete, it's just for compat
-    , pname ? lib.getName name
-    , version ? lib.getVersion name
+    , pname ? browserName
+    , version ? lib.getVersion browser
     , desktopName ? # browserName with first letter capitalized
       (lib.toUpper (lib.substring 0 1 browserName) + lib.substring 1 (-1) browserName)
     , nameSuffix ? ""
@@ -156,9 +155,9 @@ let
 
         install -D -t $out/share/applications $desktopItem/share/applications/*
 
-        mkdir -p $out/lib/mozilla
+        mkdir -p $out/lib/mozilla/native-messaging-hosts
         for ext in ${toString nativeMessagingHosts}; do
-            lndir -silent $ext/lib/mozilla $out/lib/mozilla
+            ln -sLt $out/lib/mozilla/native-messaging-hosts $ext/lib/mozilla/native-messaging-hosts/*
         done
 
         # For manpages, in case the program supplies them

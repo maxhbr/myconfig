@@ -44,7 +44,7 @@ let
 
     buildFlags = [ "world" ];
 
-    NIX_CFLAGS_COMPILE = [ "-I${libxml2.dev}/include/libxml2" ];
+    NIX_CFLAGS_COMPILE = "-I${libxml2.dev}/include/libxml2";
 
     # Otherwise it retains a reference to compiler and fails; see #44767.  TODO: better.
     preConfigure = "CC=${stdenv.cc.targetPrefix}cc";
@@ -81,8 +81,8 @@ let
     postInstall =
       ''
         moveToOutput "lib/pgxs" "$out" # looks strange, but not deleting it
-        moveToOutput "lib/libpgcommon.a" "$out"
-        moveToOutput "lib/libpgport.a" "$out"
+        moveToOutput "lib/libpgcommon*.a" "$out"
+        moveToOutput "lib/libpgport*.a" "$out"
         moveToOutput "lib/libecpg*" "$out"
 
         # Prevent a retained dependency on gcc-wrapper.
@@ -109,6 +109,17 @@ let
     doCheck = !stdenv.isDarwin;
     # autodetection doesn't seem to able to find this, but it's there.
     checkTarget = "check";
+
+    preCheck =
+      # On musl, comment skip the following tests, because they break due to
+      #     ! ERROR:  could not load library "/build/postgresql-11.5/tmp_install/nix/store/...-postgresql-11.5-lib/lib/libpqwalreceiver.so": Error loading shared library libpq.so.5: No such file or directory (needed by /build/postgresql-11.5/tmp_install/nix/store/...-postgresql-11.5-lib/lib/libpqwalreceiver.so)
+      # See also here:
+      #     https://git.alpinelinux.org/aports/tree/main/postgresql/disable-broken-tests.patch?id=6d7d32c12e073a57a9e5946e55f4c1fbb68bd442
+      if stdenv.hostPlatform.isMusl then ''
+        substituteInPlace src/test/regress/parallel_schedule \
+          --replace "subscription" "" \
+          --replace "object_address" ""
+      '' else null;
 
     doInstallCheck = false; # needs a running daemon?
 
@@ -197,6 +208,14 @@ in self: {
     psqlSchema = "11.1"; # should be 11, but changing it is invasive
     sha256 = "04x343i4v0w4jf1v5ial8rwsizs1qhdjfbanbnibdys6i0xfjjij";
     this = self.postgresql_11;
+    inherit self;
+  };
+
+  postgresql_12 = self.callPackage generic {
+    version = "12.2";
+    psqlSchema = "12";
+    sha256 = "1pmmd59pvfs50gsi728bw9f1jl59xghsjdanfimph0659x6cq7dd";
+    this = self.postgresql_12;
     inherit self;
   };
 

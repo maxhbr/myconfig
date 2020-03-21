@@ -1,7 +1,5 @@
 { config, lib, pkgs, utils, ... }:
 
-# TODO: support non-postgresql
-
 with lib;
 
 let
@@ -190,6 +188,11 @@ let
   '';
 
 in {
+
+  imports = [
+    (mkRenamedOptionModule [ "services" "gitlab" "stateDir" ] [ "services" "gitlab" "statePath" ])
+    (mkRemovedOptionModule [ "services" "gitlab" "satelliteDir" ] "")
+  ];
 
   options = {
     services.gitlab = {
@@ -630,20 +633,14 @@ in {
     # Use postfix to send out mails.
     services.postfix.enable = mkDefault true;
 
-    users.users = [
-      { name = cfg.user;
-        group = cfg.group;
+    users.users.${cfg.user} =
+      { group = cfg.group;
         home = "${cfg.statePath}/home";
         shell = "${pkgs.bash}/bin/bash";
         uid = config.ids.uids.gitlab;
-      }
-    ];
+      };
 
-    users.groups = [
-      { name = cfg.group;
-        gid = config.ids.gids.gitlab;
-      }
-    ];
+    users.groups.${cfg.group}.gid = config.ids.gids.gitlab;
 
     systemd.tmpfiles.rules = [
       "d /run/gitlab 0755 ${cfg.user} ${cfg.group} -"

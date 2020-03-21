@@ -9,6 +9,13 @@ stdenv.mkDerivation rec {
     sha256 = "0myv8l886gmlh9nh4j3q5549idxnl51hf9cw20yxfqbwd47l13ca";
   };
 
+  # https://github.com/NLnetLabs/unbound/pull/90
+  postPatch = ''
+    substituteInPlace validator/val_secalgo.c \
+      --replace '&nettle_secp_256r1' 'nettle_get_secp_256r1()' \
+      --replace '&nettle_secp_384r1' 'nettle_get_secp_384r1()'
+  '';
+
   outputs = [ "out" "lib" "man" ]; # "dev" would only split ~20 kB
 
   buildInputs = [ openssl nettle expat libevent ];
@@ -26,6 +33,10 @@ stdenv.mkDerivation rec {
   ];
 
   installFlags = [ "configfile=\${out}/etc/unbound/unbound.conf" ];
+
+  postInstall = ''
+    make unbound-event-install
+  '';
 
   preFixup = stdenv.lib.optionalString (stdenv.isLinux && !stdenv.hostPlatform.isMusl) # XXX: revisit
     # Build libunbound again, but only against nettle instead of openssl.

@@ -172,6 +172,7 @@ in {
 
     users.users.magnetico = {
       description = "Magnetico daemons user";
+      isSystemUser = true;
     };
 
     systemd.services.magneticod = {
@@ -211,5 +212,7 @@ in {
     ];
 
   };
+
+  meta.maintainers = with lib.maintainers; [ rnhmjoj ];
 
 }

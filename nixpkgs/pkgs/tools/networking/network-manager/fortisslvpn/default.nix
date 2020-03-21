@@ -1,5 +1,5 @@
 { stdenv, fetchurl, substituteAll, openfortivpn, intltool, pkgconfig, file, gtk3,
-networkmanager, ppp, libsecret, withGnome ? true, gnome3 }:
+networkmanager, ppp, libsecret, withGnome ? true, gnome3, fetchpatch, networkmanagerapplet }:
 
 let
   pname = "NetworkManager-fortisslvpn";
@@ -17,10 +17,15 @@ in stdenv.mkDerivation {
       src = ./fix-paths.patch;
       inherit openfortivpn;
     })
+    # Don't use etc/dbus-1/system.d
+    (fetchpatch {
+      url = "https://gitlab.gnome.org/GNOME/NetworkManager-fortisslvpn/merge_requests/11.patch";
+      sha256 = "0l7l2r1njh62lh2pf497ibf99sgkvjsj58xr76qx3jxgq9zfw6n9";
+    })
   ];
 
   buildInputs = [ openfortivpn networkmanager ppp ]
-    ++ stdenv.lib.optionals withGnome [ gtk3 libsecret gnome3.networkmanagerapplet ];
+    ++ stdenv.lib.optionals withGnome [ gtk3 libsecret networkmanagerapplet ];
 
   nativeBuildInputs = [ intltool pkgconfig file ];
 
