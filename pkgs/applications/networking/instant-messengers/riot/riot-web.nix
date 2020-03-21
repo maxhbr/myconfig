@@ -4,21 +4,19 @@
 # Versions of `riot-web` and `riot-desktop` should be kept in sync.
 
 let
-  privacyOverrides = writeText "riot-config-privacy.json" (builtins.toJSON {
+  noPhoningHome = {
     disable_guests = true; # disable automatic guest account registration at matrix.org
     piwik = false; # disable analytics
-  });
-  userOverrides = writeText "riot-config-user.json" (
-    with builtins; if isAttrs conf then toJSON conf else conf
-  );
+  };
+  configOverrides = writeText "riot-config-overrides.json" (builtins.toJSON (noPhoningHome // conf));
 
 in stdenv.mkDerivation rec {
   pname = "riot-web";
-  version = "1.5.10";
+  version = "1.5.13";
 
   src = fetchurl {
     url = "https://github.com/vector-im/riot-web/releases/download/v${version}/riot-v${version}.tar.gz";
-    sha256 = "1c11x8903p38c0f9k3ff4pnpb3n7hzs4pj6g65a4cvp6jgg1zfnn";
+    sha256 = "0xghpf9rv7ns5aipc6n517qd9dp50rr93arvx6r36kqhkdyzbfad";
   };
 
   installPhase = ''
@@ -26,12 +24,7 @@ in stdenv.mkDerivation rec {
 
     mkdir -p $out/
     cp -R . $out/
-
-    ${jq}/bin/jq -s '.[0] * .[1] * .[2]' \
-      "config.sample.json" \
-      "${privacyOverrides}" \
-      "${userOverrides}" \
-      > "$out/config.json"
+    ${jq}/bin/jq -s '.[0] * .[1]' "config.sample.json" "${configOverrides}" > "$out/config.json"
 
     runHook postInstall
   '';

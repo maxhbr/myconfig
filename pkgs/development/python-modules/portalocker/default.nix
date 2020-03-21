@@ -1,6 +1,7 @@
 { buildPythonPackage
 , fetchPypi
 , lib
+, fetchpatch
 , sphinx
 , flake8
 , pytest

@@ -1,6 +1,7 @@
 { stdenv
 , buildPythonPackage
 , fetchPypi
+, isPy27
 , pbr
 , pytest
 , isPy3k
@@ -18,7 +19,9 @@ buildPythonPackage rec {
 
   buildInputs = [ pbr ];
   checkInputs = [ pytest ];
-  propagatedBuildInputs = [ ];
+
+  # test suite uses new async primitives
+  doCheck = !isPy27;
 
   meta = with stdenv.lib; {
     homepage = https://github.com/codingjoe/ssdp;

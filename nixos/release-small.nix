@@ -32,8 +32,7 @@ in rec {
     tests = {
       inherit (nixos'.tests)
         containers-imperative
-        containers-ipv4
-        containers-ipv6
+        containers-ip
         firewall
         ipv6
         login
@@ -90,37 +89,34 @@ in rec {
       maintainers = [ lib.maintainers.eelco ];
     };
     constituents =
-      let all = x: map (system: x + ".${system}") supportedSystems; in
-      lib.flatten [
-        "nixpkgs.tarball"
-        (all "nixpkgs.jdk")
-        "nixos.channel"
+      [ "nixos.channel"
+        "nixos.dummy.x86_64-linux"
+        "nixos.iso_minimal.x86_64-linux"
         "nixos.manual.x86_64-linux"
-        (all "nixos.iso_minimal")
-        (all "nixos.dummy")
-        (all "nixos.tests.containers-imperative")
-        (all "nixos.tests.containers-ipv4")
-        (all "nixos.tests.containers-ipv6")
-        (all "nixos.tests.firewall")
-        (all "nixos.tests.ipv6")
-        (all "nixos.tests.login")
-        (all "nixos.tests.misc")
-        (all "nixos.tests.nat.firewall-conntrack")
-        (all "nixos.tests.nat.firewall")
-        (all "nixos.tests.nat.standalone")
-        (all "nixos.tests.nfs3")
-        (all "nixos.tests.openssh")
-        (all "nixos.tests.php-pcre")
-        (all "nixos.tests.predictable-interface-names.predictable")
-        (all "nixos.tests.predictable-interface-names.predictableNetworkd")
-        (all "nixos.tests.predictable-interface-names.unpredictable")
-        (all "nixos.tests.predictable-interface-names.unpredictableNetworkd")
-        (all "nixos.tests.proxy")
-        (all "nixos.tests.simple")
-        (all "nixos.tests.installer.lvm")
-        (all "nixos.tests.installer.separateBoot")
-        (all "nixos.tests.installer.simple")
-        (all "nixos.tests.boot.biosCdrom")
+        "nixos.tests.boot.biosCdrom.x86_64-linux"
+        "nixos.tests.containers-imperative.x86_64-linux"
+        "nixos.tests.containers-ip.x86_64-linux"
+        "nixos.tests.firewall.x86_64-linux"
+        "nixos.tests.installer.lvm.x86_64-linux"
+        "nixos.tests.installer.separateBoot.x86_64-linux"
+        "nixos.tests.installer.simple.x86_64-linux"
+        "nixos.tests.ipv6.x86_64-linux"
+        "nixos.tests.login.x86_64-linux"
+        "nixos.tests.misc.x86_64-linux"
+        "nixos.tests.nat.firewall-conntrack.x86_64-linux"
+        "nixos.tests.nat.firewall.x86_64-linux"
+        "nixos.tests.nat.standalone.x86_64-linux"
+        "nixos.tests.nfs3.simple.x86_64-linux"
+        "nixos.tests.openssh.x86_64-linux"
+        "nixos.tests.php-pcre.x86_64-linux"
+        "nixos.tests.predictable-interface-names.predictable.x86_64-linux"
+        "nixos.tests.predictable-interface-names.predictableNetworkd.x86_64-linux"
+        "nixos.tests.predictable-interface-names.unpredictable.x86_64-linux"
+        "nixos.tests.predictable-interface-names.unpredictableNetworkd.x86_64-linux"
+        "nixos.tests.proxy.x86_64-linux"
+        "nixos.tests.simple.x86_64-linux"
+        "nixpkgs.jdk.x86_64-linux"
+        "nixpkgs.tarball"
       ];
   };
 

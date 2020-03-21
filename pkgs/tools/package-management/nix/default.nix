@@ -40,7 +40,7 @@ common =
         ++ lib.optionals (!is20) [ curl perl ]
         ++ lib.optionals is24 [ jq ];
 
-      buildInputs = [ curl openssl sqlite xz bzip2 (nlohmann_json.override { multipleHeaders = true; }) ]
+      buildInputs = [ curl openssl sqlite xz bzip2 nlohmann_json ]
         ++ lib.optional (stdenv.isLinux || stdenv.isDarwin) libsodium
         ++ lib.optionals is20 [ brotli boost editline ]
         ++ lib.optionals is24 [ libarchive rustc cargo ]
@@ -59,7 +59,7 @@ common =
       propagatedBuildInputs = [ boehmgc ];
 
       # Seems to be required when using std::atomic with 64-bit types
-      NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.system == "armv6l-linux") "-latomic";
+      NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.system == "armv5tel-linux" || stdenv.hostPlatform.system == "armv6l-linux") "-latomic";
 
       preConfigure =
         # Copy libboost_context so we don't get all of Boost in our closure.
@@ -96,9 +96,9 @@ common =
            # RISC-V support in progress https://github.com/seccomp/libseccomp/pull/50
         ++ lib.optional (!withLibseccomp) "--disable-seccomp-sandboxing";
 
-      makeFlags = "profiledir=$(out)/etc/profile.d";
+      makeFlags = [ "profiledir=$(out)/etc/profile.d" ];
 
-      installFlags = "sysconfdir=$(out)/etc";
+      installFlags = [ "sysconfdir=$(out)/etc" ];
 
       doInstallCheck = true; # not cross
 
@@ -173,10 +173,10 @@ in rec {
   };
 
   nixStable = callPackage common (rec {
-    name = "nix-2.3.3";
+    name = "nix-2.3.2";
     src = fetchurl {
       url = "http://nixos.org/releases/nix/${name}/${name}.tar.xz";
-      sha256 = "332fffb8dfc33eab854c136ef162a88cec15b701def71fa63714d160831ba224";
+      sha256 = "9fea4b52db0b296dcf05d36f7ecad9f48396af3a682bb21e31f8d04c469beef8";
     };
 
     inherit storeDir stateDir confDir boehmgc;

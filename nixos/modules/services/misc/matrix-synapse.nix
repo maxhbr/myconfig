@@ -111,6 +111,9 @@ app_service_config_files: ${builtins.toJSON cfg.app_service_config_files}
 
 ${cfg.extraConfig}
 '';
+
+  hasLocalPostgresDB = let args = cfg.database_args; in
+    usePostgresql && (!(args ? host) || (elem args.host [ "localhost" "127.0.0.1" "::1" ]));
 in {
   options = {
     services.matrix-synapse = {
@@ -352,13 +355,6 @@ in {
           else "sqlite3";
         description = ''
           The database engine name. Can be sqlite or psycopg2.
-        '';
-      };
-      create_local_database = mkOption {
-        type = types.bool;
-        default = true;
-        description = ''
-          Whether to create a local database automatically.
         '';
       };
       database_name = mkOption {
@@ -657,57 +653,52 @@ in {
   };
 
   config = mkIf cfg.enable {
-    users.users = [
-      { name = "matrix-synapse";
+    assertions = [
+      { assertion = hasLocalPostgresDB -> config.services.postgresql.enable;
+        message = ''
+          Cannot deploy matrix-synapse with a configuration for a local postgresql database
+            and a missing postgresql service. Since 20.03 it's mandatory to manually configure the
+            database (please read the thread in https://github.com/NixOS/nixpkgs/pull/80447 for
+            further reference).
+
+            If you
+            - try to deploy a fresh synapse, you need to configure the database yourself. An example
+              for this can be found in <nixpkgs/nixos/tests/matrix-synapse.nix>
+            - update your existing matrix-synapse instance, you simply need to add `services.postgresql.enable = true`
+              to your configuration.
+
+          For further information about this update, please read the release-notes of 20.03 carefully.
+        '';
+      }
+    ];
+
+    users.users.matrix-synapse = { 
         group = "matrix-synapse";
         home = cfg.dataDir;
         createHome = true;
         shell = "${pkgs.bash}/bin/bash";
         uid = config.ids.uids.matrix-synapse;
-      } ];
+      };
 
-    users.groups = [
-      { name = "matrix-synapse";
-        gid = config.ids.gids.matrix-synapse;
-      } ];
-
-    services.postgresql.enable = mkIf usePostgresql (mkDefault true);
+    users.groups.matrix-synapse = {
+      gid = config.ids.gids.matrix-synapse;
+    };
 
     systemd.services.matrix-synapse = {
       description = "Synapse Matrix homeserver";
-      after = [ "network.target" "postgresql.service" ];
+      after = [ "network.target" ] ++ optional hasLocalPostgresDB "postgresql.service";
       wantedBy = [ "multi-user.target" ];
       preStart = ''
         ${cfg.package}/bin/homeserver \
           --config-path ${configFile} \
           --keys-directory ${cfg.dataDir} \
           --generate-keys
-      '' + optionalString (usePostgresql && cfg.create_local_database) ''
-        if ! test -e "${cfg.dataDir}/db-created"; then
-          ${pkgs.sudo}/bin/sudo -u ${pg.superUser} \
-            ${pg.package}/bin/createuser \
-            --login \
-            --no-createdb \
-            --no-createrole \
-            --encrypted \
-            ${cfg.database_user}
-          ${pkgs.sudo}/bin/sudo -u ${pg.superUser} \
-            ${pg.package}/bin/createdb \
-            --owner=${cfg.database_user} \
-            --encoding=UTF8 \
-            --lc-collate=C \
-            --lc-ctype=C \
-            --template=template0 \
-            ${cfg.database_name}
-          touch "${cfg.dataDir}/db-created"
-        fi
       '';
       serviceConfig = {
         Type = "notify";
         User = "matrix-synapse";
         Group = "matrix-synapse";
         WorkingDirectory = cfg.dataDir;
-        PermissionsStartOnly = true;
         ExecStart = ''
           ${cfg.package}/bin/homeserver \
             ${ concatMapStringsSep "\n  " (x: "--config-path ${x} \\") ([ configFile ] ++ cfg.extraConfigFiles) }
@@ -724,6 +715,12 @@ in {
       The `trusted_third_party_id_servers` option as been removed in `matrix-synapse` v1.4.0
       as the behavior is now obsolete.
     '')
+    (mkRemovedOptionModule [ "services" "matrix-synapse" "create_local_database" ] ''
+      Database configuration must be done manually. An exemplary setup is demonstrated in
+      <nixpkgs/nixos/tests/matrix-synapse.nix>
+    '')
   ];
+
+  meta.doc = ./matrix-synapse.xml;
 
 }

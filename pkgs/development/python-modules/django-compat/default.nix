@@ -1,6 +1,9 @@
 { stdenv, buildPythonPackage, fetchFromGitHub, python,
   django, six
 }:
+if stdenv.lib.versionAtLeast django.version "2.0"
+then throw "django-compat requires django < 2.0"
+else
 buildPythonPackage rec {
   pname = "django-compat";
   version = "1.0.15";
@@ -12,6 +15,10 @@ buildPythonPackage rec {
     rev = "v${version}";
     sha256 = "1pr6v38ahrsvxlgmcx69s4b5q5082f44gzi4h3c32sccdc4pwqxp";
   };
+
+  patches = [
+    ./fix-tests.diff
+  ];
 
   checkPhase = ''
     runHook preCheck

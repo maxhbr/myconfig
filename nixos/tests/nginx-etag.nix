@@ -1,4 +1,4 @@
-import ./make-test.nix {
+import ./make-test-python.nix {
   name = "nginx-etag";
 
   nodes = {
@@ -6,7 +6,7 @@ import ./make-test.nix {
       networking.firewall.enable = false;
       services.nginx.enable = true;
       services.nginx.virtualHosts.server = {
-        root = pkgs.runCommand "testdir" {} ''
+        root = pkgs.runCommandLocal "testdir" {} ''
           mkdir "$out"
           cat > "$out/test.js" <<EOF
           document.getElementById('foobar').setAttribute('foo', 'bar');
@@ -21,7 +21,7 @@ import ./make-test.nix {
 
       nesting.clone = lib.singleton {
         services.nginx.virtualHosts.server = {
-          root = lib.mkForce (pkgs.runCommand "testdir2" {} ''
+          root = lib.mkForce (pkgs.runCommandLocal "testdir2" {} ''
             mkdir "$out"
             cat > "$out/test.js" <<EOF
             document.getElementById('foobar').setAttribute('foo', 'yay');
@@ -72,16 +72,18 @@ import ./make-test.nix {
     inherit (nodes.server.config.system.build) toplevel;
     newSystem = "${toplevel}/fine-tune/child-1";
   in ''
-    startAll;
+    start_all()
 
-    $server->waitForUnit('nginx.service');
-    $client->waitForUnit('multi-user.target');
-    $client->execute('test-runner &');
-    $client->waitForFile('/tmp/passed_stage1');
+    server.wait_for_unit("nginx.service")
+    client.wait_for_unit("multi-user.target")
+    client.execute("test-runner &")
+    client.wait_for_file("/tmp/passed_stage1")
 
-    $server->succeed('${newSystem}/bin/switch-to-configuration test >&2');
-    $client->succeed('touch /tmp/proceed');
+    server.succeed(
+        "${newSystem}/bin/switch-to-configuration test >&2"
+    )
+    client.succeed("touch /tmp/proceed")
 
-    $client->waitForFile('/tmp/passed');
+    client.wait_for_file("/tmp/passed")
   '';
 }

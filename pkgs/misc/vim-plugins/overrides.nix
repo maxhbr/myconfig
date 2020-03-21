@@ -14,6 +14,9 @@
 # coc-go dependency
 , go
 
+# deoplete-khard dependency
+, khard
+
 # vim-go dependencies
 , asmfmt, delve, errcheck, godef, golint
 , gomodifytags, gotags, gotools, go-motion
@@ -52,16 +55,16 @@ self: super: {
   };
 
   LanguageClient-neovim = let
-    version = "0.1.146";
+    version = "0.1.156";
     LanguageClient-neovim-src = fetchurl {
       url = "https://github.com/autozimu/LanguageClient-neovim/archive/${version}.tar.gz";
-      sha256 = "1xm98pyzf2dlh04ijjf3nkh37lyqspbbjddkjny1g06xxb4kfxnk";
+      sha256 = "0bf2va6lpgw7wqpwpfidijbzphhvw48hyc2b529qv12vwgnd1shq";
     };
     LanguageClient-neovim-bin = rustPlatform.buildRustPackage {
       name = "LanguageClient-neovim-bin";
       src = LanguageClient-neovim-src;
 
-      cargoSha256 = "0dixvmwq611wg2g3rp1n1gqali46904fnhb90gcpl9a1diqb34sh";
+      cargoSha256 = "1w8g7pxwnjqp9zi47h4lz2mcg5daldsk5z72h8cjj750wng8a82c";
       buildInputs = stdenv.lib.optionals stdenv.isDarwin [ CoreServices ];
 
       # FIXME: Use impure version of CoreFoundation because of missing symbols.
@@ -81,17 +84,6 @@ self: super: {
       substituteInPlace "$out"/share/vim-plugins/LanguageClient-neovim/autoload/LanguageClient.vim \
         --replace "let l:path = s:root . '/bin/'" "let l:path = '${LanguageClient-neovim-bin}' . '/bin/'"
     '';
-  };
-
-  # do not auto-update this one, as the name clashes with vim-snippets
-  vim-docbk-snippets = buildVimPluginFrom2Nix {
-    pname = "vim-docbk-snippets";
-    version = "2017-11-02";
-    src = fetchgit {
-      url = "https://github.com/jhradilek/vim-snippets";
-      rev = "69cce66defdf131958f152ea7a7b26c21ca9d009";
-      sha256 = "1363b2fmv69axrl2hm74dmx51cqd8k7rk116890qllnapzw1zjgc";
-    };
   };
 
   clang_complete = super.clang_complete.overrideAttrs(old: {
@@ -134,14 +126,15 @@ self: super: {
   });
 
   # Only official releases contains the required index.js file
+  # NB: Make sure you pick a rev from the release branch!
   coc-nvim = buildVimPluginFrom2Nix rec {
     pname = "coc-nvim";
-    version = "0.0.74";
+    version = "2020-01-05";
     src = fetchFromGitHub {
       owner = "neoclide";
       repo = "coc.nvim";
-      rev = "v${version}";
-      sha256 = "1s4nib2mnhagd0ymx254vf7l1iijwrh2xdqn3bdm4f1jnip81r10";
+      rev = "984779f2f825626aa9d441746d8b4ee079137c65";
+      sha256 = "0w7qnhi7wikr789h3w5p59l8wd81czpvbzbdanf8klf9ap4ma3yg";
     };
   };
 
@@ -177,6 +170,10 @@ self: super: {
     '';
   });
 
+  defx-nvim = super.defx-nvim.overrideAttrs(old: {
+    dependencies = with super; [ nvim-yarp ];
+  });
+
   deoplete-fish = super.deoplete-fish.overrideAttrs(old: {
     dependencies = with super; [ deoplete-nvim vim-fish ];
   });
@@ -189,6 +186,17 @@ self: super: {
       popd
       find ./rplugin/ -name "ujson*.so" -exec mv -v {} ./rplugin/python3/ \;
    '';
+  });
+
+  deoplete-khard = super.deoplete-khard.overrideAttrs(old: {
+    dependencies = [ self.deoplete-nvim ];
+    passthru.python3Dependencies = ps: [ (ps.toPythonModule khard) ];
+    meta = {
+      description = "Address-completion for khard via deoplete";
+      homepage = "https://github.com/nicoe/deoplete-khard";
+      license = stdenv.lib.licenses.mit;
+      maintainers = with stdenv.lib.maintainers; [ jorsn ];
+    };
   });
 
   ensime-vim = super.ensime-vim.overrideAttrs(old: {
@@ -397,13 +405,14 @@ self: super: {
     '';
   });
 
+  vim-metamath = super.vim-metamath.overrideAttrs(old: {
+    preInstall = "cd vim";
+  });
+
   vim-snipmate = super.vim-snipmate.overrideAttrs(old: {
     dependencies = with super; [ vim-addon-mw-utils tlib_vim ];
   });
 
-  vim-terraform = super.vim-terraform.overrideAttrs(oa: {
-    patches = (oa.patches or []) ++ lib.singleton ./vim-terraform-fix-event.patch;
-  });
 
   vim-wakatime = super.vim-wakatime.overrideAttrs(old: {
     buildInputs = [ python ];
@@ -447,8 +456,8 @@ self: super: {
   youcompleteme = super.youcompleteme.overrideAttrs(old: {
     buildPhase = ''
       substituteInPlace plugin/youcompleteme.vim \
-        --replace "'ycm_python_interpreter_path', '''" \
-        "'ycm_python_interpreter_path', '${python3}/bin/python'"
+        --replace "'ycm_path_to_python_interpreter', '''" \
+        "'ycm_path_to_python_interpreter', '${python3}/bin/python3'"
 
       rm -r third_party/ycmd
       ln -s ${ycmd}/lib/ycmd third_party
@@ -470,6 +479,10 @@ self: super: {
       description = "code-completion for python using python-jedi";
       license = stdenv.lib.licenses.mit;
     };
+  });
+
+  lf-vim = super.lf-vim.overrideAttrs(old: {
+    dependencies = with super; [ bclose-vim ];
   });
 
   vim-stylish-haskell = super.vim-stylish-haskell.overrideAttrs (old: {

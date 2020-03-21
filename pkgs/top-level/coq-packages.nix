@@ -16,6 +16,7 @@ let
       category-theory = callPackage ../development/coq-modules/category-theory { };
       Cheerios = callPackage ../development/coq-modules/Cheerios {};
       CoLoR = callPackage ../development/coq-modules/CoLoR {};
+      coq-bits = callPackage ../development/coq-modules/coq-bits {};
       coq-elpi = callPackage ../development/coq-modules/coq-elpi {};
       coq-ext-lib = callPackage ../development/coq-modules/coq-ext-lib {};
       coq-extensible-records = callPackage ../development/coq-modules/coq-extensible-records {};
@@ -30,13 +31,14 @@ let
       flocq = callPackage ../development/coq-modules/flocq {};
       gappalib = callPackage ../development/coq-modules/gappalib {};
       heq = callPackage ../development/coq-modules/heq {};
+      hierarchy-builder = callPackage ../development/coq-modules/hierarchy-builder {};
       HoTT = callPackage ../development/coq-modules/HoTT {};
       interval = callPackage ../development/coq-modules/interval {};
       InfSeqExt = callPackage ../development/coq-modules/InfSeqExt {};
       iris = callPackage ../development/coq-modules/iris {};
       ltac2 = callPackage ../development/coq-modules/ltac2 {};
       math-classes = callPackage ../development/coq-modules/math-classes { };
-      inherit (callPackage ../development/coq-modules/mathcomp { })
+      inherit (callPackage ../development/coq-modules/mathcomp {})
         mathcompGen mathcompGenSingle ssreflect
 
         mathcompCorePkgs mathcomp
@@ -127,7 +129,10 @@ in rec {
     version = "8.9.1";
   };
   coq_8_10 = callPackage ../applications/science/logic/coq {
-    version = "8.10.0";
+    version = "8.10.2";
+  };
+  coq_8_11 = callPackage ../applications/science/logic/coq {
+    version = "8.11.0";
   };
 
   coqPackages_8_5 = mkCoqPackages coq_8_5;
@@ -136,6 +141,7 @@ in rec {
   coqPackages_8_8 = mkCoqPackages coq_8_8;
   coqPackages_8_9 = mkCoqPackages coq_8_9;
   coqPackages_8_10 = mkCoqPackages coq_8_10;
+  coqPackages_8_11 = mkCoqPackages coq_8_11;
   coqPackages = recurseIntoAttrs (lib.mapDerivationAttrset lib.dontDistribute
     coqPackages_8_9
   );
