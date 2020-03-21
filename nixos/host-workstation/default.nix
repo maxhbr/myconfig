@@ -4,20 +4,18 @@
 
 {
   imports = [
-    /etc/nixos/hardware-configuration.nix
-    ./grub.nix
-    ./quadroFX4800.nix
-    ./steamcontroller.nix
-    ./pulseaudio.nix
+    ./hardware-configuration.nix
+    ../hardware/grub.nix
+    ../hardware/quadroFX4800.nix
     # other profiles
-    ../profiles/desktop/xmonad.nix
-    ../profiles/desktop/xfce.nix
-    ../profiles/desktop/games
-    ../profiles/virtualization
-    ../profiles/wine.nix
-    ../profiles/service/openssh.nix
-    ../profiles/service/syncthing.nix
-    ../profiles/service/vsftp.nix
+    ../desktop
+    #../profiles/desktop/xfce.nix
+    #../profiles/desktop/games
+    #../profiles/virtualization
+    #../profiles/wine.nix
+    #../profiles/service/openssh.nix
+    #../profiles/service/syncthing.nix
+    #../profiles/service/vsftp.nix
   ];
 
   config = {
