@@ -23,6 +23,6 @@
     networking.hostName = "workstation";
     services.xserver.displayManager.slim.autoLogin = true;
     boot.kernelPackages = lib.mkForce pkgs.unstable.linuxPackages_4_14;
-    services.xserver.windowManager.default = pkgs.lib.mkForce "xfce";
+    # services.xserver.windowManager.default = pkgs.lib.mkForce "xfce";
   };
 }
