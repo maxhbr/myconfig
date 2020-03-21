@@ -1,6 +1,6 @@
 # Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 
 {
   imports = [
@@ -21,6 +21,7 @@
   config = {
     networking.hostName = "workstation";
     services.xserver.displayManager.slim.autoLogin = true;
-    # services.xserver.windowManager.default = pkgs.lib.mkForce "xfce";
+    boot.kernelPackages = lib.mkForce pkgs.unstable.linuxPackages_4_14;
+    services.xserver.windowManager.default = pkgs.lib.mkForce "xfce";
   };
 }
