@@ -8,6 +8,7 @@
     ../hardware/grub.nix
     ../hardware/quadroFX4800.nix
     # other profiles
+    ../headless
     ../desktop
     ../desktop/modules/X.xfce.nix
     #../profiles/desktop/xfce.nix
