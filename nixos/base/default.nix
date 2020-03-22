@@ -1,11 +1,11 @@
-{ pkgs, ...}: {
+{ pkgs, lib, config, ...}: {
   imports = [
     ../core
     # modules
     ./modules/emacs
     ./modules/mail
   ];
-  # config = {
-  #   boot.kernelPackages = pkgs.linuxPackages_latest;
-  # };
+  config = lib.mkIf (! config.virtualisation.virtualbox.host.enable) {
+    boot.kernelPackages = pkgs.linuxPackages_latest;
+  };
 }
