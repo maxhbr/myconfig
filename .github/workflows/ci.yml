@@ -15,7 +15,6 @@ jobs:
           - { hostname: base }
           - { hostname: dev }
           - { hostname: x1extremeG2 }
-          - { hostname: workstation }
           - { hostname: headless }
           - { hostname: vserver }
       fail-fast: false
