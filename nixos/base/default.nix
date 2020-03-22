@@ -5,7 +5,7 @@
     ./modules/emacs
     ./modules/mail
   ];
-  config = {
-    boot.kernelPackages = pkgs.linuxPackages_latest;
-  };
+  # config = {
+  #   boot.kernelPackages = pkgs.linuxPackages_latest;
+  # };
 }

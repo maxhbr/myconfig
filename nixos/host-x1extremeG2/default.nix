@@ -21,12 +21,11 @@
     networking.hostName = "x1extremeG2";
 
     boot.initrd.supportedFilesystems = [ "luks" ];
-    boot.initrd.luks.devices = [{
+    boot.initrd.luks.devices.crypted = {
       device = "/dev/disk/by-uuid/2118a468-c2c3-4304-b7d3-32f8e19da49f";
-      name = "crypted";
       preLVM = true;
       allowDiscards = true;
-    }];
+    };
 
     # option definitions
     boot.kernel.sysctl = {

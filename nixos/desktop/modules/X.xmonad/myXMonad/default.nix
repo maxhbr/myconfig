@@ -43,8 +43,8 @@ in mkDerivation {
       sed -i -e '/'"$key"' *=/ s%= .*%= "'"$value"'";%' $variablesFile
     }
 
-    addAbsoluteBinaryPath urxvtc ${pkgs.rxvt_unicode_with-plugins}
-    addAbsoluteBinaryPath urxvtd ${pkgs.rxvt_unicode_with-plugins}
+    addAbsoluteBinaryPath urxvtc ${pkgs.rxvt_unicode-with-plugins}
+    addAbsoluteBinaryPath urxvtd ${pkgs.rxvt_unicode-with-plugins}
     addAbsoluteBinaryPath bash ${pkgs.bash}
     addAbsoluteBinaryPath zsh ${pkgs.zsh}
     addAbsoluteBinaryPath emacs ${pkgs.emacs}

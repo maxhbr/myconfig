@@ -22,7 +22,7 @@
         zoom-us bluejeans-gui
         rambox
         p7zip
-        thrift011
+        thrift
         idea-ultimate # jetbrains.phpstorm
         dia
       ];

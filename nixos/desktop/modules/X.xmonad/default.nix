@@ -28,8 +28,8 @@ in {
 
     services = {
       xserver = {
+        displayManager.defaultSession = "none+myXmonad";
         windowManager = {
-          default = "myXmonad";
           session = [{
             name = "myXmonad";
             start = ''
@@ -41,10 +41,7 @@ in {
           }];
         };
 
-        desktopManager = {
-          xterm.enable = false;
-          default = "none";
-        };
+        desktopManager.xterm.enable = false;
       };
     };
   };

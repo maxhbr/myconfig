@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  urxvt = pkgs.rxvt_unicode_with-plugins;
+  urxvt = pkgs.rxvt_unicode-with-plugins;
 in {
   config = {
     home-manager.users.mhuber = {

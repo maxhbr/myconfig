@@ -40,9 +40,9 @@
     location.latitude = 48.2;
     location.longitude = 10.8;
 
+    console.font = "lat9w-16";
+    console.keyMap = "neo";
     i18n = {
-      consoleFont = "lat9w-16";
-      consoleKeyMap = "neo";
       defaultLocale = "de_DE.UTF-8";
       supportedLocales = ["de_DE.UTF-8/UTF-8" "en_US.UTF-8/UTF-8"];
     };
