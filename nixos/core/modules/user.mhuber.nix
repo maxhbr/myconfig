@@ -46,9 +46,5 @@
       defaultLocale = "de_DE.UTF-8";
       supportedLocales = ["de_DE.UTF-8/UTF-8" "en_US.UTF-8/UTF-8"];
     };
-
-    home-manager.users.mhuber = {
-      nixpkgs.config.allowUnfree = true;
-    };
   };
 }

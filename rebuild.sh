@@ -225,24 +225,23 @@ setupExitTrap() {
 
 ###########################################################################
 # run #####################################################################
-prepare() {
+prepare_update_hostid_file() {
     if [[ ! -f "/etc/nixos/hostid" ]]; then
         echo "set hostid:"
         cksum /etc/machine-id |
             while read c rest; do printf "%x" $c; done |
             sudo tee "/etc/nixos/hostid"
     fi
-    if [[ -f /etc/nixos/configuration.nix ]]; then
-        echo "/etc/nixos/configuration.nix should not exist"
-        exit 1
-    fi
+}
+prepare_update_hardware_configuration() {
     if [[ -f "/etc/nixos/hardware-configuration.nix" ]]; then
         if ! cmp "/etc/nixos/hardware-configuration.nix" "$nixosConfig/hardware-configuration.nix" >/dev/null 2>&1; then
             logH1 "update" "$nixosConfig/hardware-configuration.nix"
             cat "/etc/nixos/hardware-configuration.nix" | tee "$nixosConfig/hardware-configuration.nix"
         fi
     fi
-
+}
+prepare_update_nix_path_file() {
     nix_path_string="{ nix.nixPath = [ $(echo '"'"$NIX_PATH"'"' | sed 's/:/" "/g') ]; }"
     nix_path_file="$myconfigDir/imports/nixPath.nix"
     if [[ "$(cat $nix_path_file 2>/dev/null)" != *"$nix_path_string"* ]]; then
@@ -250,8 +249,26 @@ prepare() {
         echo $nix_path_string |
             tee $nix_path_file
     fi
-
+}
+prepare_create_folders_for_home_manager() {
     sudo mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/$my_user
+}
+prepare_create_nix_store_key() {
+    if [[ ! -f ~/.config/nix/pk ]]; then
+        mkdir -p ~/.config/nix/
+        nix-store --generate-binary-cache-key machine.$(hostname) ~/.config/nix/sk ~/.config/nix/pk
+    fi
+}
+prepare() {
+    if [[ -f /etc/nixos/configuration.nix ]]; then
+        echo "/etc/nixos/configuration.nix should not exist"
+        exit 1
+    fi
+    prepare_update_hostid_file
+    prepare_update_hardware_configuration
+    prepare_update_nix_path_file
+    prepare_create_folders_for_home_manager
+    prepare_create_nix_store_key
 }
 
 realize() {
