@@ -10,11 +10,12 @@ in {
   imports = [
     ./lib
     ./modules/core.nix
+    ./modules/gnupg.nix
     ./modules/vim
     ./modules/zsh
     ./modules/tmux
-    ./modules/pass
     ./modules/git
+    ./modules/pass
     ./modules/myborgbackup
     ./modules/nixos.networking
     ./modules/nixos.nix.nix
