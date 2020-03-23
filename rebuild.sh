@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p nix ncurses git wget tmux glibcLocales
+#! nix-shell -i bash -p nix ncurses git wget tmux glibcLocales openssl
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 set -e
@@ -254,9 +254,18 @@ prepare_create_folders_for_home_manager() {
     sudo mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/$my_user
 }
 prepare_create_nix_store_key() {
+    # https://github.com/NixOS/nix/issues/2330#issuecomment-410505837
     if [[ ! -f ~/.config/nix/pk ]]; then
+        logH1 "generate" "~/.config/nix/pk and ~/.config/nix/sk"
         mkdir -p ~/.config/nix/
         nix-store --generate-binary-cache-key machine.$(hostname) ~/.config/nix/sk ~/.config/nix/pk
+        cat ~/.config/nix/pk
+    fi
+    # https://blog.joel.mx/posts/how-to-use-nix-copy-closure-step-by-step
+    if [[ ! -f /etc/nix/signing-key.sec ]]; then
+        logH1 "generate" "signing-key at /etc/nix/signing-key.sec and /etc/nix/signing-key.pub"
+        (umask 277 && sudo openssl genrsa -out /etc/nix/signing-key.sec 2048)
+        sudo openssl rsa -in /etc/nix/signing-key.sec -pubout | sudo tee /etc/nix/signing-key.pub
     fi
 }
 prepare() {

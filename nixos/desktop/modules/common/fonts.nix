@@ -10,10 +10,6 @@
 {
   config = {
     nixpkgs.overlays = [(self: super: {
-      jetbrains-mono = super.callPackage (super.fetchurl {
-        url = "https://raw.githubusercontent.com/marsam/nixpkgs/35bdbf487bf98538f2ad31b61329482a192d6697/pkgs/data/fonts/jetbrains-mono/default.nix";
-        sha256 = "176d7prq83s37w25yrr6f31vihj9ywrq1z18nw9695nvxnlcf5sy";
-      }) {};
       dejavu_nerdfont = super.callPackage ./pkgs/dejavu-nerdfont.nix { };
     })];
 
@@ -25,7 +21,6 @@
         dejavu_fonts dejavu_nerdfont
         corefonts
         inconsolata
-        jetbrains-mono
       ];
       fontconfig.defaultFonts.monospace = [
         "DejaVu Sans Mono Nerd Font Complete Mono"
