@@ -142,7 +142,7 @@ reportScanResult() {
     local scanResultFile="$(basename $1)"
     local logfile="$(getOutFolder "$scanResultFolder")/reporter.logfile"
     runOrt "$scanResultFolder" \
-           report -f StaticHtml,Excel,WebApp --ort-file "$scanResultFile" --output-dir /out |
+           report -f StaticHtml,WebApp,Excel,NoticeByPackage,NoticeSummary --ort-file "$scanResultFile" --output-dir /out |
         tee "$logfile"
 }
 

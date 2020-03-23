@@ -39,7 +39,7 @@ myManageHook = let
                                                  ,"Zenity"
                                                  ,"pinentry","Pinentry"
                                                  ,"feh"])
-                               , (doRectFloat (RationalRect 0.85 0.2 0.12 0.7), ["zoom","zoom-us"])
+                               , (doRectFloat (RationalRect 0.65 0.2 0.32 0.7), ["zoom","zoom-us"])
                                , (doRectFloat (RationalRect 0.1 0.05 0.3 0.9), ["pavucontrol","Pavucontrol"])
                                , (doFloat, ["MPlayer"
                                            ,"Onboard"])
