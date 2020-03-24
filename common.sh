@@ -9,7 +9,7 @@ if [[ "$COMMON_SH_WAS_SOURCED" != "true" ]]; then
     export my_main_host='x1extremeG2'
 
     export myconfigDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    export nixpkgsDir="$myconfigDir/nixpkgs"
+    export nixpkgs="$myconfigDir/nixpkgs"
 
     nixosConfig="$myconfigDir/nixos/host-$(hostname)"
     if [[ ! -d "$nixosConfig" ]]; then
@@ -17,7 +17,7 @@ if [[ "$COMMON_SH_WAS_SOURCED" != "true" ]]; then
     fi
     export nixosConfig
 
-    NIX_PATH="nixpkgs=$nixpkgsDir:nixos-config=$nixosConfig"
+    NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfig"
     NIX_PATH_ARGS="-I '$(echo "$NIX_PATH" | sed "s/:/' -I '/g")'"
     export NIX_PATH
     export NIX_PATH_ARGS

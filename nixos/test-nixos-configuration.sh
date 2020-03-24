@@ -35,7 +35,7 @@ while [[ $# -gt 0 ]]; do
                 if [[ -d "$nixosProfile" ]]; then
                     nixosConfig=$(mktemp -d)
                     trap 'ret=$?; rm "'"$nixosConfig"'/default.nix"; rmdir "'"$nixosConfig"'" 2>/dev/null; exit $ret' 0
-                    cat <<EOF > "$nixosConfig/default.nix"
+                    cat <<EOF | tee "$nixosConfig/default.nix"
 {...}: {
   imports = [ $nixosProfile ];
   config = {
