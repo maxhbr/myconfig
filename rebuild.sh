@@ -18,6 +18,12 @@ ROOT="$(pwd)"
 . ./common.sh
 
 ###########################################################################
+##  variables  ############################################################
+###########################################################################
+
+export nixStableChannel=nixos-20.03
+
+###########################################################################
 ##  function  #############################################################
 ###########################################################################
 
@@ -289,6 +295,7 @@ realize() {
 
     local NIXOS_REBUILD_CMD=${NIXOS_REBUILD_CMD:-switch}
     logH1 "nixos-rebuild" "\$NIXOS_REBUILD_CMD=$NIXOS_REBUILD_CMD \$args=$args"
+    logINFO "nixStableChannel=$nixStableChannel"
     logINFO "$NIX_PATH_ARGS"
     time sudo \
         NIX_CURL_FLAGS='--retry=1000' \
@@ -327,6 +334,7 @@ updateSubtree() {
 }
 
 updateNixpkgs() {
+    logH1 "update nixpkgs" "nixStableChannel=$nixStableChannel"
     updateSubtree \
         NixOS-nixpkgs-channels https://github.com/NixOS/nixpkgs-channels \
         "nixpkgs" \
