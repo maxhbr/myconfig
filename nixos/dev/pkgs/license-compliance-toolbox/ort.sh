@@ -42,7 +42,7 @@ buildImageIfMissing() {
     if [[ "$(docker images -q ort:latest 2> /dev/null)" == "" ]]; then
         ORT=$(mktemp -d)
         trap 'rm -rf $ORT' EXIT
-        git clone https://github.com/heremaps/oss-review-toolkit/ $ORT
+        git clone https://github.com/oss-review-toolkit/ort $ORT
 
         docker build -t $tag $ORT
     else
