@@ -23,14 +23,14 @@
     ##  choos setup for graphics  ################################################
     ##############################################################################
     (import ../hardware/gtx1650.nix).rawNvidiaConf
+    (lib.mkIf (config.services.xserver.libinput.enable) {
+      services.xserver.libinput.accelSpeed = "0.15";
+    })
   ];
 
-  boot.extraModprobeConfig = ''
-    options snd slots=snd-hda-intel
-  '';
-} // (
-  # config for libinput
-  lib.mkIf (config.services.xserver.libinput.enable) {
-    services.xserver.libinput.accelSpeed = "0.15";
-  }
-)
+  config = {
+    boot.extraModprobeConfig = ''
+      options snd slots=snd-hda-intel
+    '';
+  };
+}
