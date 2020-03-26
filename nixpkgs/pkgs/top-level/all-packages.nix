@@ -2130,6 +2130,7 @@ in
 
   rsyslog = callPackage ../tools/system/rsyslog {
     hadoop = null; # Currently Broken
+    libksi = null; # Currently Broken
   };
 
   rsyslog-light = rsyslog.override {
@@ -6771,7 +6772,7 @@ in
 
   textadept = callPackage ../applications/editors/textadept { };
 
-  texworks = callPackage ../applications/editors/texworks { };
+  texworks = libsForQt5.callPackage ../applications/editors/texworks { };
 
   thc-hydra = callPackage ../tools/security/thc-hydra { };
 
@@ -8898,7 +8899,6 @@ in
   swift = callPackage ../development/compilers/swift { };
 
   swiProlog = callPackage ../development/compilers/swi-prolog {
-    openssl = openssl_1_0_2;
     inherit (darwin.apple_sdk.frameworks) Security;
   };
   swiPrologWithGui = swiProlog.override { withGui = true; };
@@ -9325,7 +9325,7 @@ in
   python36Full = python36.override{x11Support=true;};
   python37Full = python37.override{x11Support=true;};
   python38Full = python38.override{x11Support=true;};
-  python39Full = python38.override{x11Support=true;};
+  python39Full = python39.override{x11Support=true;};
 
   # pythonPackages further below, but assigned here because they need to be in sync
   pythonPackages = python.pkgs;
@@ -15863,6 +15863,8 @@ in
   systemd-journal2gelf = callPackage ../tools/system/systemd-journal2gelf { };
 
   syncserver = callPackage ../servers/syncserver { };
+
+  tailscale = callPackage ../servers/tailscale { };
 
   thanos = callPackage ../servers/monitoring/thanos { };
 
@@ -22682,10 +22684,12 @@ in
 
   monero = callPackage ../applications/blockchains/monero {
     inherit (darwin.apple_sdk.frameworks) CoreData IOKit PCSC;
+    pythonProtobuf = python3Packages.protobuf.override { protobuf = protobuf3_10; };
   };
 
   monero-gui = libsForQt5.callPackage ../applications/blockchains/monero-gui {
     boost = boost16x;
+    protobuf = protobuf3_10;
   };
 
   masari = callPackage ../applications/blockchains/masari.nix { boost = boost165; };
