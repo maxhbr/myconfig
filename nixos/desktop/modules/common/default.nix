@@ -57,7 +57,6 @@ in {
         chromium inco pipechrome
         unstable.firefox pipefox
         qutebrowser
-        google-chrome # for streaming and music
         # spellchecking
         aspell aspellDicts.de aspellDicts.en
       ];
