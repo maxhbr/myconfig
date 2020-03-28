@@ -48,6 +48,15 @@ getOutFolder() {
     echo "$out"
 }
 
+getNumberOfThreads() {
+    cores=$(nproc)
+    if [[ "$cores" -ge 2 ]]; then
+        echo $((cores / 2))
+    else
+        echo 1
+    fi
+}
+
 runScancode() {
     local workdir="$(readlink -f "$1")"
     [[ ! -d "$workdir" ]] && exit 1
@@ -61,6 +70,7 @@ runScancode() {
             --net=host \
             $tag \
             /scancode-toolkit/scancode \
+            -n $(getNumberOfThreads) \
             --license --copyright --package --info \
             /workdir \
             --license-text --license-text-diagnostics \
