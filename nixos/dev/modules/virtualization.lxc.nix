@@ -35,6 +35,31 @@ profiles:
 cluster: null
 EOF
 '';
+  lxdMyTeardown = with pkgs; writeScriptBin "lxdMyTeardown" ''
+#!${stdenv.shell}
+echo "##########################################################################"
+sudo ${pkgs.lxd}/bin/lxc list
+echo "lxc delete <whatever came from list>"
+
+echo "##########################################################################"
+sudo ${pkgs.lxd}/bin/lxc image list
+echo "lxc image delete <whatever came from list>"
+
+echo "##########################################################################"
+sudo ${pkgs.lxd}/bin/lxc network list
+echo "lxc network delete <whatever came from list>"
+sudo ${pkgs.lxd}/bin/lxc network delete lxdbr0 || true
+
+echo "##########################################################################"
+echo '{"config": {}}' | sudo lxc profile edit default
+
+echo "##########################################################################"
+sudo ${pkgs.lxd}/bin/lxc storage volume list default
+echo "lxc storage volume delete default <whatever came from list>"
+
+echo "##########################################################################"
+sudo ${pkgs.lxd}/bin/lxc storage delete default
+'';
   lxcList = with pkgs; writeScriptBin "lxcList" ''
 #!${stdenv.shell}
 set -ex
@@ -49,7 +74,7 @@ in {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
         lxc lxcList
-        lxd lxdMyInit
+        lxd lxdMyInit lxdMyTeardown
       ];
     };
     virtualisation = {
