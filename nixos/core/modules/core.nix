@@ -50,8 +50,8 @@
       mkdir -m 0755 -p /media
     '';
 
+    documentation.nixos.enable = true;
     services = {
-      nixosManual.showManual = true;
       acpid.enable = true;
       ntp.enable = true;
       nscd.enable = true;

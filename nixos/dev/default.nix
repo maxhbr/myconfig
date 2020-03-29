@@ -10,6 +10,7 @@
     ./modules/virtualization.docker
     ./modules/virtualization.qemu.nix
     ./modules/virtualization.vbox
+    # ./modules/virtualization.lxc.nix
   ];
   config = {
     environment.systemPackages = [
