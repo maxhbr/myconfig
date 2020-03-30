@@ -10,7 +10,7 @@
     ../hardware/efi.nix
     # modules
     ./modules/work
-    # ./modules/dnsmasq.nix
+    ./modules/dnsmasq.nix
     ## fun
     ./modules/imagework
     ./modules/smarthome.nix
