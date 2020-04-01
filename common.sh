@@ -81,19 +81,22 @@ if [[ "$COMMON_SH_WAS_SOURCED" != "true" ]]; then
 
         logH3 "update $outRev from $repo on branch" "$branch"
         local rev="$(nix-shell -p curl --command "curl -s \"https://api.github.com/repos/$repo/commits/${branch}\"" | nix-shell -p jq --command "jq -r '.sha'")"
+        if [[ "$rev" != "null" ]]; then
+            if ! grep -q $rev "$outRev" 2>/dev/null; then
+                echo $rev > "$outRev"
 
-        if ! grep -q $rev "$outRev" 2>/dev/null; then
-            echo $rev > "$outRev"
-
-            local url="https://github.com/$repo"
-            local tarball="https://github.com/$repo/archive/${rev}.tar.gz"
-            prefetchOutput=$(nix-prefetch-url --unpack --print-path --type sha256 $tarball)
-            local hash=$(echo "$prefetchOutput" | head -1)
-            local path=$(echo "$prefetchOutput" | tail -1)
-            echo '{"url":"'$tarball'","rev": "'$rev'","sha256":"'$hash'","path":"'$path'","ref": "'$branch'", "url": "'$url'", "owner": "'$repoUser'", "repo": "'$repoName'"}' > "./$outJson"
-            logINFO "... updated $outRev to rev=[$rev]"
+                local url="https://github.com/$repo"
+                local tarball="https://github.com/$repo/archive/${rev}.tar.gz"
+                prefetchOutput=$(nix-prefetch-url --unpack --print-path --type sha256 $tarball)
+                local hash=$(echo "$prefetchOutput" | head -1)
+                local path=$(echo "$prefetchOutput" | tail -1)
+                echo '{"url":"'$tarball'","rev": "'$rev'","sha256":"'$hash'","path":"'$path'","ref": "'$branch'", "url": "'$url'", "owner": "'$repoUser'", "repo": "'$repoName'"}' > "./$outJson"
+                logINFO "... updated $outRev to rev=[$rev]"
+            else
+                logINFO "... $outRev file is already up to date, at rev=[$rev]"
+            fi
         else
-            logINFO "... $outRev file is already up to date, at rev=[$rev]"
+            logWARN "... failed to update $repo, potentially hit rate limiting of github"
         fi
     }
 

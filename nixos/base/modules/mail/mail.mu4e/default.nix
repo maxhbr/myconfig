@@ -11,5 +11,10 @@
         gnome3.gnome-keyring # necessary for mu4e?
       ];
     };
+    environment = {
+      shellAliases = {
+        mu4e = "${pkgs.emacs}/bin/emacs -name ScratchMu4e &disown";
+      };
+    };
   };
 }

@@ -18,9 +18,6 @@
         openconnect networkmanager-openconnect
         strongswan networkmanager_strongswan
         networkmanagerapplet
-        libreoffice
-        zoom-us bluejeans-gui
-        rambox
         p7zip
         thrift
         idea-ultimate # jetbrains.phpstorm

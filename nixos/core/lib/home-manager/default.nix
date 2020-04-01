@@ -15,6 +15,14 @@ in {
   ];
   config = {
     system.activationScripts.genProfileManagementDirs = "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/mhuber";
+    systemd.services.mk-hm-dirs =
+      { serviceConfig.Type = "oneshot";
+        script = ''
+          mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/mhuber
+          chown mhuber /nix/var/nix/{profiles,gcroots}/per-user/mhuber
+        '';
+        wantedBy = ["home-manager-mhuber.service"];
+      };
   };
 }
 
