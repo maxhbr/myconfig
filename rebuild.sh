@@ -14,6 +14,7 @@ fi
 REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
 cd "$(dirname $REBUILD_SH)"
 ROOT="$(pwd)"
+MYCONFIG_ARGS="$@"
 
 . ./common.sh
 

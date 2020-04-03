@@ -28,7 +28,7 @@ in {
       shellAliases = {
         upg = "~/myconfig/rebuild.sh";
         upg-fast = "~/myconfig/rebuild.sh --fast";
-        upg-fast-no-tmux = "~/myconfig/rebuild.sh --no-tmux --fast";
+        upg-fast-no-tmux = "~/myconfig/rebuild.sh --no-tmux --no-git --fast";
         upg-dry = "~/myconfig/rebuild.sh --dry-run";
       };
     };
