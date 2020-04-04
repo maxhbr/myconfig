@@ -1,7 +1,7 @@
 { stdenv, callPackage, lib, fetchurl, fetchFromGitHub
 , runCommand, runCommandCC, makeWrapper, recurseIntoAttrs
 # this package (through the fixpoint glass)
-, bazel
+, bazel_self
 , lr, xe, zip, unzip, bash, writeCBin, coreutils
 , which, gawk, gnused, gnutar, gnugrep, gzip, findutils
 # updater
@@ -25,11 +25,11 @@
 }:
 
 let
-  version = "2.0.0";
+  version = "0.29.1";
 
   src = fetchurl {
     url = "https://github.com/bazelbuild/bazel/releases/download/${version}/bazel-${version}-dist.zip";
-    sha256 = "1fvc7lakdczim1i99hrwhwx2w75afd3q9fgbhrx7i3pnav3a6kbj";
+    sha256 = "1rcd6xy61n07n7m6dgcw23275r8z3gkwmqdkd48nwrq8yb7m4al7";
   };
 
   # Update with `eval $(nix-build -A bazel.updater)`,
@@ -49,12 +49,12 @@ let
       srcs.io_bazel_rules_sass
       srcs.platforms
       (if stdenv.hostPlatform.isDarwin
-       then srcs."java_tools_javac11_darwin-v7.0.zip"
-       else srcs."java_tools_javac11_linux-v7.0.zip")
-      srcs."coverage_output_generator-v2.0.zip"
+       then srcs."java_tools_javac11_darwin-v4.0.zip"
+       else srcs."java_tools_javac11_linux-v4.0.zip")
+      srcs."coverage_output_generator-v1.0.zip"
       srcs.build_bazel_rules_nodejs
-      srcs."android_tools_pkg-0.12.tar.gz"
-      srcs."0.28.3.tar.gz"
+      srcs."android_tools_pkg-0.8.tar.gz"
+      srcs."0.27.1.tar.gz"
       srcs.rules_pkg
       srcs.rules_cc
       srcs.rules_java
@@ -110,7 +110,7 @@ let
   remote_java_tools = stdenv.mkDerivation {
     name = "remote_java_tools_${system}";
 
-    src = srcDepsSet."java_tools_javac11_${system}-v7.0.zip";
+    src = srcDepsSet."java_tools_javac11_${system}-v4.0.zip";
 
     nativeBuildInputs = [ autoPatchelfHook unzip ];
     buildInputs = [ gcc-unwrapped ];
@@ -160,6 +160,7 @@ stdenv.mkDerivation rec {
     # This is breaking the build of any C target. This patch removes the last
     # argument if it's found to be an empty string.
     ../trim-last-argument-to-gcc-if-empty.patch
+    ./glibc.patch
 
     # --experimental_strict_action_env (which may one day become the default
     # see bazelbuild/bazel#2574) hardcodes the default
@@ -246,7 +247,7 @@ stdenv.mkDerivation rec {
             touch $out
           '');
 
-      bazelWithNixHacks = bazel.override { enableNixHacks = true; };
+      bazelWithNixHacks = bazel_self.override { enableNixHacks = true; };
 
       bazel-examples = fetchFromGitHub {
         owner = "bazelbuild";
@@ -326,6 +327,14 @@ stdenv.mkDerivation rec {
   postPatch = let
 
     darwinPatches = ''
+      bazelLinkFlags () {
+        eval set -- "$NIX_LDFLAGS"
+        local flag
+        for flag in "$@"; do
+          printf ' -Wl,%s' "$flag"
+        done
+      }
+
       # Disable Bazel's Xcode toolchain detection which would configure compilers
       # and linkers from Xcode instead of from PATH
       export BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
@@ -335,14 +344,14 @@ stdenv.mkDerivation rec {
 
       # Framework search paths aren't added by bintools hook
       # https://github.com/NixOS/nixpkgs/pull/41914
-      export NIX_LDFLAGS="$NIX_LDFLAGS -F${CoreFoundation}/Library/Frameworks -F${CoreServices}/Library/Frameworks -F${Foundation}/Library/Frameworks"
+      export NIX_LDFLAGS+=" -F${CoreFoundation}/Library/Frameworks -F${CoreServices}/Library/Frameworks -F${Foundation}/Library/Frameworks"
 
       # libcxx includes aren't added by libcxx hook
       # https://github.com/NixOS/nixpkgs/pull/41589
       export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -isystem ${libcxx}/include/c++/v1"
 
       # don't use system installed Xcode to run clang, use Nix clang instead
-      sed -i -E "s;/usr/bin/xcrun (--sdk macosx )?clang;${stdenv.cc}/bin/clang $NIX_CFLAGS_COMPILE $NIX_LDFLAGS -framework CoreFoundation;g" \
+      sed -i -E "s;/usr/bin/xcrun (--sdk macosx )?clang;${stdenv.cc}/bin/clang $NIX_CFLAGS_COMPILE $(bazelLinkFlags) -framework CoreFoundation;g" \
         scripts/bootstrap/compile.sh \
         src/tools/xcode/realpath/BUILD \
         src/tools/xcode/stdredirect/BUILD \

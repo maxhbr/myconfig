@@ -471,7 +471,7 @@ in {
         pools.nextcloud = {
           user = "nextcloud";
           group = "nginx";
-          phpOptions = phpOptionsExtensions + phpOptionsStr;
+          phpOptions = phpOptionsStr;
           phpPackage = phpPackage;
           phpEnv = {
             NEXTCLOUD_CONFIG_DIR = "${cfg.home}/config";
@@ -564,7 +564,7 @@ in {
                 add_header Referrer-Policy no-referrer;
                 access_log off;
               '';
-              "~ \\.(?:png|html|ttf|ico|jpg|jpeg)$".extraConfig = ''
+              "~ \\.(?:png|html|ttf|ico|jpg|jpeg|bcmap|mp4|webm)$".extraConfig = ''
                 try_files $uri /index.php$request_uri;
                 access_log off;
               '';
