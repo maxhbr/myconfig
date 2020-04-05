@@ -5,12 +5,12 @@
 set -e
 cd "$myconfigDir/nixos"
 set -x
-hostName=${1:-dev}
+hostConfig=${1:-dev.nix}
 drv=$(nix-build \
           --show-trace \
           --no-out-link \
           iso.nix \
-          --argstr hostName "$hostName")
+          --argstr hostConfig "$hostConfig")
 out=("$drv/iso/nixos"*".iso")
 finalOut="nixos-${hostName}.iso"
 du -h "$out"

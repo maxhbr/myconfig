@@ -1,11 +1,11 @@
 # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
 { system ? "x86_64-linux"
-, hostName ? "dev"
-, secondaryHostName ? hostName }:
+, hostConfig ? "dev.nix"
+, secondaryHostConfig ? hostConfig }:
 let
   nixpkgs = ../nixpkgs;
   preBuiltConfig = (import ../nixpkgs/nixos {
-    configuration = import (./. + hostName) {
+    configuration = import (./. + hostConfig) {
       pkgs = nixpkgs;
     };
   }).system;
@@ -13,7 +13,7 @@ let
     imports = [
       "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
       "${nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
-      (./. + "/${hostName}")
+      (./. + "/${hostConfig}")
       ./headless/modules/service.openssh.nix
     ];
 
@@ -21,7 +21,7 @@ let
       networking.hostName = "myconfig";
       networking.wireless.enable = false;
 
-      environment.systemPackages = if hostName == secondaryHostName
+      environment.systemPackages = if hostConfig == secondaryHostConfig
                                    then []
                                    else [ preBuiltConfig ];
 
