@@ -3,7 +3,7 @@
 { pkgs, ... }:
 {
   imports = [
-    ../core
+    ./core.nix
     # configuration
     ./modules/nixos.auto-upgrade.nix
     ./modules/service.openssh.nix

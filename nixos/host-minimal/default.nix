@@ -3,7 +3,7 @@
 { pkgs, ... }:
 {
   imports = [
-    ../dev
+    ../dev.nix
   ];
 
   config = {

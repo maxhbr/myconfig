@@ -30,7 +30,7 @@ let
 
 in {
   imports = [
-    ../common
+    ../desktop.common
     ./big-cursor.nix
     ./autorandr.nix
   ];

@@ -8,16 +8,9 @@
     ../hardware/grub.nix
     ../hardware/quadroFX4800.nix
     # other profiles
-    ../headless
-    ../desktop
-    ../desktop/modules/X.xfce.nix
-    #../profiles/desktop/xfce.nix
-    #../profiles/desktop/games
-    #../profiles/virtualization
-    #../profiles/wine.nix
-    #../profiles/service/openssh.nix
-    #../profiles/service/syncthing.nix
-    #../profiles/service/vsftp.nix
+    ../headless.nix
+    ../desktop.nix
+    ../modules/X.xfce.nix
   ];
 
   config = {

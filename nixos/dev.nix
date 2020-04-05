@@ -1,8 +1,8 @@
 { pkgs, ...}: {
   imports = [
-    ../desktop
+    ./desktop.nix
     # modules
-    ./modules/dev.core.nix
+    ./modules/dev.core
     ./modules/dev.haskell
     ./modules/dev.iot.nix
     ./modules/dev.python.nix

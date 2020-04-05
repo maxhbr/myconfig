@@ -4,7 +4,7 @@
 
 {
   imports = [
-    ./X.common
+    ./desktop.X.common
     ./service.openssh.nix
   ];
   config = {

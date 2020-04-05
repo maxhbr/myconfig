@@ -1,6 +1,6 @@
 { pkgs, lib, config, ...}: {
   imports = [
-    ../core
+    ./core.nix
     # modules
     ./modules/emacs
     ./modules/mail

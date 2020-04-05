@@ -4,11 +4,11 @@
 {
   imports = [
     ./hardware-configuration.nix
-    ../headless
+    ../headless.nix
     # hardware:
     ../hardware/grub.nix
     # configuration
-    ./modules/service.wireguard-server
+    ../modules/service.wireguard-server
   ];
   config = {
     networking.hostName = "vserver";

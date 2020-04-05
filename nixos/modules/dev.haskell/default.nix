@@ -3,7 +3,7 @@
 { pkgs, ... }:
 {
   imports = [
-    ../dev.core.nix
+    ../dev.core
   ];
   config = {
     home-manager.users.mhuber = {
