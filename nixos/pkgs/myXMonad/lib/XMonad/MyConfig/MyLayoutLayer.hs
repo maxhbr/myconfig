@@ -196,8 +196,7 @@ layoutKBs conf =
         , ((ms_, xK_Right), shiftNextScreen)
         , ((ms_, xK_Left ), shiftPrevScreen)
 #endif
-        , ((m__, xK_y    ), toggleWS' ["NSP"])
-        , ((m__, xK_a    ), toggleWS' ["NSP"])]
+        , ((m__, xK_y    ), toggleWS' ["NSP"])]
       -- switchPhysicalKBs =
       --   -- mod-{w,e,r}, Switch to physical/Xinerama screens 1, 2, or 3
       --   -- mod-shift-{w,e,r}, Move client to screen 1, 2, or 3

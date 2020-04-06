@@ -2,15 +2,15 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  my-xmobar = pkgs.callPackage ./myXmobar {
+  my-xmobar = pkgs.callPackage ../pkgs/myXmobar {
     inherit pkgs;
  };
-  my-xmonad = pkgs.haskellPackages.callPackage ./myXMonad {
+  my-xmonad = pkgs.haskellPackages.callPackage ../pkgs/myXMonad {
     inherit pkgs my-xmobar;
   };
 in {
   imports = [
-    ../desktop.X.common
+    ./desktop.X.common
   ];
 
   config = {
