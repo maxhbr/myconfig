@@ -1,6 +1,6 @@
 { pkgs, ... }:
 let
-  powder = pkgs.callPackage ./powder {};
+  powder = pkgs.callPackage ../pkgs/powder {};
 in {
   config = {
     home-manager.users.mhuber = {

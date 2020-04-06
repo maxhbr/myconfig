@@ -14,7 +14,7 @@ let
       "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
       "${nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
       (./. + "/${hostConfig}")
-      ./headless/modules/service.openssh.nix
+      ./modules/service.openssh.nix
     ];
 
     config = {
