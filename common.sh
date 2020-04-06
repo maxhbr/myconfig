@@ -8,7 +8,13 @@ if [[ "$COMMON_SH_WAS_SOURCED" != "true" ]]; then
     ###########################################################################
     export my_main_host='x1extremeG2'
 
-    export myconfigDir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    if [ -n "$BASH_VERSION" ]; then
+        common_sh="${BASH_SOURCE[0]}"
+    elif [ -n "$ZSH_VERSION" ]; then
+        common_sh="${(%):-%N}"
+    fi
+    myconfigDir="$(readlink -f $(dirname "$common_sh"))"
+
     export nixpkgs="$myconfigDir/nixpkgs"
 
     nixosConfig="$myconfigDir/nixos/host-$(hostname)"
@@ -63,12 +69,21 @@ if [[ "$COMMON_SH_WAS_SOURCED" != "true" ]]; then
         >&2 echo "$(tput setaf 1)$(tput bold)*** ERR: $text$(tput sgr0)"
     }
 
-    export -f have
-    export -f logH1
-    export -f logH2
-    export -f logH3
-    export -f logINFO
-    export -f logERR
+    if [ -n "$BASH_VERSION" ]; then
+        export -f have
+        export -f logH1
+        export -f logH2
+        export -f logH3
+        export -f logINFO
+        export -f logERR
+    elif [ -n "$ZSH_VERSION" ]; then
+        export have
+        export logH1
+        export logH2
+        export logH3
+        export logINFO
+        export logERR
+    fi
 
     updateRefAndJson() {
         local repo="$1"
@@ -113,7 +128,12 @@ if [[ "$COMMON_SH_WAS_SOURCED" != "true" ]]; then
         fi
     }
 
-    export -f updateRefAndJson
-    export -f updateShaFromURL
+    if [ -n "$BASH_VERSION" ]; then
+        export -f updateRefAndJson
+        export -f updateShaFromURL
+    elif [ -n "$ZSH_VERSION" ]; then
+        export updateRefAndJson
+        export updateShaFromURL
+    fi
 fi
 

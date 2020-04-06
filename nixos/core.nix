@@ -1,6 +1,6 @@
 { config, pkgs, lib, ... }: let
   importall = import ./lib/helper/importall.nix;
-  myconfigImports = importall ../../imports;
+  myconfigImports = importall ../imports;
 
   # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done | sudo tee ./hostid
   hostId = if builtins.pathExists /etc/nixos/hostid
