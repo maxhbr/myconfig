@@ -17,9 +17,10 @@
       };
       pulseaudio.support32Bit = true;
     };
-    networking.firewall = {
-      allowedUDPPorts = [ 27031 27036 ];
-      allowedTCPPorts = [ 27036 27037 ];
-    };
+    # for sharing / viewing via steam
+    # networking.firewall = {
+    #   allowedUDPPorts = [ 27031 27036 ];
+    #   allowedTCPPorts = [ 27036 27037 ];
+    # };
   };
 }
