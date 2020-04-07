@@ -379,7 +379,7 @@ update() {
             logH3 "update" "emacs"
             ./nixos/modules/emacs/update.sh
             logH3 "update" "my-wallpapers"
-            ./nixos/modules/common/my-wallpapers/update.sh
+            ./nixos/modules/desktop.common/my-wallpapers/update.sh
         fi
     fi
 }
