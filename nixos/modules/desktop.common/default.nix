@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  inco = with pkgs; writeScriptBin "inco.sh" ''
-#!${stdenv.shell}
+  inco = with pkgs; writeShellScriptBin "inco.sh" ''
 set -e
 postfix=$(date +%s | sha256sum | base64 | head -c 32 ; echo)
 mkdir -p "/tmp/incoChrome_$postfix"
@@ -11,16 +10,13 @@ ${chromium}/bin/chromium --incognito \
     --user-data-dir="/tmp/incoChrome_$postfix" \
     $@ &disown
   '';
-  pipechrome = with pkgs; writeScriptBin "pipechrome" ''
-#!${stdenv.shell}
+  pipechrome = with pkgs; writeShellScriptBin "pipechrome" ''
 ${chromium}/bin/chromium "data:text/html;base64,$(base64 -w 0 <&0)" &> /dev/null
   '';
-  pipefox = with pkgs; writeScriptBin "pipefox" ''
-#!${stdenv.shell}
+  pipefox = with pkgs; writeShellScriptBin "pipefox" ''
 ${unstable.firefox}/bin/firefox "data:text/html;base64,$(base64 -w 0 <&0)" &> /dev/null
   '';
-  mkscreenshot = with pkgs; writeScriptBin "mkscreenshot.sh" ''
-#!${stdenv.shell}
+  mkscreenshot = with pkgs; writeShellScriptBin "mkscreenshot.sh" ''
 set -e
 output_dir="$HOME/_screenshots"
 old_dir="$output_dir/_old"
@@ -32,8 +28,8 @@ echo "## clean up old screenshots ..."
 find "$output_dir" -maxdepth 1 -mtime +10 -type f -print -exec mv {} "$old_dir" \;
 
 echo "## take screenshot $output ..."
-${imagemagick}/bin/import "$output"
-  '';
+${xfce.xfce4-screenshooter}/bin/xfce4-screenshooter --region --open cat > "$output"
+  ''; # or use imagemagick: ${imagemagick}/bin/import "$output"
 in {
   imports = [
     ./my-wallpapers
