@@ -141,7 +141,9 @@ diffCurrentSystemDeps() {
 
 diffGenerations() {
     local newFile=$(mktemp)
-    { sudo nix-env --list-generations --profile /nix/var/nix/profiles/system || return; }> $newFile
+    { sudo --preserve-env=NIX_PATH \
+           nix-env \
+           --list-generations --profile /nix/var/nix/profiles/system || return; }> $newFile
     if [[ -f $1 ]]; then
         local oldFile="$1"
         logH2 "diff nixos generations"
@@ -299,13 +301,15 @@ realize() {
     logINFO "nixStableChannel=$nixStableChannel"
     logINFO "$NIX_PATH_ARGS"
     time sudo \
-        NIX_CURL_FLAGS='--retry=1000' \
-        nixos-rebuild \
-        $NIX_PATH_ARGS \
-        --show-trace --keep-failed \
-        $args \
-        --fallback \
-        $NIXOS_REBUILD_CMD | sed -e 's/^/['"$args"'] /'
+         -E \
+         --preserve-env=NIX_PATH \
+         NIX_CURL_FLAGS='--retry=1000' \
+         nixos-rebuild \
+         $NIX_PATH_ARGS \
+         --show-trace --keep-failed \
+         $args \
+         --fallback \
+         $NIXOS_REBUILD_CMD | sed -e 's/^/['"$args"'] /'
     if [[ "$NIXOS_REBUILD_CMD" == "switch" ]]; then
         logH1 "nix path-info" "-hS /run/current-system"
         nix path-info -hS /run/current-system
@@ -367,15 +371,15 @@ update() {
             fi
 
             logH3 "update" "home-manager"
-            ./nixos/core/lib/home-manager/update.sh
+            ./nixos/lib/home-manager/update.sh
             logH3 "update" "extrahosts"
-            ./nixos/core/modules/nixos.networking/extrahosts/update.sh
+            ./nixos/modules/nixos.networking/extrahosts/update.sh
             logH3 "update" "nixpkgs-unstable"
-            ./nixos/core/lib/nixpkgs-unstable/update.sh
+            ./nixos/lib/nixpkgs-unstable/update.sh
             logH3 "update" "emacs"
-            ./nixos/base/modules/emacs/update.sh
+            ./nixos/modules/emacs/update.sh
             logH3 "update" "my-wallpapers"
-            ./nixos/desktop/modules/common/my-wallpapers/update.sh
+            ./nixos/modules/common/my-wallpapers/update.sh
         fi
     fi
 }

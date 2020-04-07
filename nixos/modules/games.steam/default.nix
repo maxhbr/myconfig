@@ -1,0 +1,26 @@
+{ pkgs, ... }:
+{
+  imports = [
+    ./steamcontroller.nix
+  ];
+  config = {
+    home-manager.users.mhuber = {
+      home.packages = with pkgs; [
+        steam steam-run
+      ];
+    };
+
+    hardware= {
+      opengl = {
+        driSupport = true;
+        driSupport32Bit = true;
+      };
+      pulseaudio.support32Bit = true;
+    };
+    # for sharing / viewing via steam
+    # networking.firewall = {
+    #   allowedUDPPorts = [ 27031 27036 ];
+    #   allowedTCPPorts = [ 27036 27037 ];
+    # };
+  };
+}

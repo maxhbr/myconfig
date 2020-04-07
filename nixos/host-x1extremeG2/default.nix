@@ -4,18 +4,18 @@
 {
   imports = [
     ./hardware-configuration.nix
-    ../dev
+    ../dev.nix
     # hardware:
     ./x1extremeG2.nix
     ../hardware/efi.nix
     # modules
-    ./modules/work
-    # ./modules/dnsmasq.nix
-    ./modules/misc-desktop-tools.nix
+    ../modules/work
+    # ../modules/dnsmasq.nix
+    ../modules/misc-desktop-tools.nix
     ## fun
-    ./modules/imagework
-    ./modules/smarthome.nix
-    ./modules/gaming
+    ../modules/imagework
+    ../modules/smarthome.nix
+    ../gaming.nix
   ];
 
   config = {

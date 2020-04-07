@@ -3,10 +3,13 @@
 { pkgs, ... }:
 {
   imports = [
-    ../dev.nix
+    ./dev.core
   ];
-
   config = {
-    networking.hostName = "minimal";
+    home-manager.users.mhuber = {
+      home.packages = with pkgs; [
+        python python3
+      ];
+    };
   };
 }

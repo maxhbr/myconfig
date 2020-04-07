@@ -3,10 +3,10 @@
 { pkgs, ... }:
 {
   imports = [
-    ../dev.nix
+    ./desktop.X.common
   ];
 
   config = {
-    networking.hostName = "minimal";
+    services.xserver.desktopManager.xfce.enable = true;
   };
 }
