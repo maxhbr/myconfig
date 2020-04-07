@@ -13,7 +13,7 @@ if [[ "$COMMON_SH_WAS_SOURCED" != "true" ]]; then
     elif [ -n "$ZSH_VERSION" ]; then
         common_sh="${(%):-%N}"
     fi
-    myconfigDir="$(readlink -f $(dirname "$common_sh"))"
+    export myconfigDir="$(readlink -f $(dirname "$common_sh"))"
 
     export nixpkgs="$myconfigDir/nixpkgs"
 

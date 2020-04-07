@@ -3,7 +3,7 @@
 
 help() {
     cat <<EOF
-  $ $0 [--no-bc] [--hostname hostname] [--check]
+  $ $0 [--dry-run] [--no-bc] [--hostname hostname] [--check]
 EOF
 }
 
