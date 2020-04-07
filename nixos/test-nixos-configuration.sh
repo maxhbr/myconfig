@@ -29,10 +29,11 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --hostname)
+            set -x
             nixosConfig="$myconfigDir/nixos/host-${2}"
             if [[ ! -d "$nixosConfig" ]]; then
-                nixosProfile="$myconfigDir/nixos/${2}"
-                if [[ -d "$nixosProfile" ]]; then
+                nixosProfile="$myconfigDir/nixos/${2}.nix"
+                if [[ -f "$nixosProfile" ]]; then
                     nixosConfig=$(mktemp -d)
                     trap 'ret=$?; rm "'"$nixosConfig"'/default.nix"; rmdir "'"$nixosConfig"'" 2>/dev/null; exit $ret' 0
                     cat <<EOF | tee "$nixosConfig/default.nix"
