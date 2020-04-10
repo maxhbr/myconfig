@@ -10,8 +10,7 @@
   };
   environment.systemPackages = with pkgs; [
     pavucontrol pamix
-    (writeScriptBin "switch_sennheiser_profile" ''
-    #!${stdenv.shell}
+    (writeShellScriptBin "mb660_switch_profile" ''
     export PATH=$PATH:${pulseaudio}/bin:${bash}/bin
     ${./bin/switch_sennheiser_profile}
     '')

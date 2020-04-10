@@ -2,14 +2,19 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  resetXrandr = with pkgs; writeScriptBin "resetXrandr" ''
-    #!${stdenv.shell}
+  resetXrandr = with pkgs; writeShellScriptBin "resetXrandr" ''
     sleep 1
-    ${pkgs.systemd}/bin/systemctl --user start redshift
-    ${pkgs.xorg.xrandr}/bin/xrandr --output DP-2 --brightness 1
+    ${systemd}/bin/systemctl --user start redshift
+    ${xorg.xrandr}/bin/xrandr --output DP-2 --brightness 1
   '';
-  setupWacom = with pkgs; writeScriptBin "setupWacom" ''
-    #!${stdenv.shell}
+  xrandrUnpan = with pkgs; writeShellScriptBin "xrandrUnpan" ''
+    set -ex
+    ${xorg.xrandr}/bin/xrandr $(${xorg.xrandr}/bin/xrandr --listmonitors |
+        grep '^ ' |
+        sed 's%/[0-9]*%%g' |
+        awk '{print "--output " $4 " --panning " $3 "/tracking:" $3 "/border:0/0/0/0"}')
+  '';
+  setupWacom = with pkgs; writeShellScriptBin "setupWacom" ''
     set -e
     sleep 1
     getOutput() {
@@ -32,8 +37,7 @@ let
          ${xf86_input_wacom}/bin/xsetwacom set "$id" MapToOutput "$output"
        done
   '';
-  setupHuion = with pkgs; writeScriptBin "setupHuion" ''
-    #!${stdenv.shell}
+  setupHuion = with pkgs; writeShellScriptBin "setupHuion" ''
     set -e
     sleep 1
     id=$(${xorg.xinput}/bin/xinput --list --id-only "Tablet Monitor Pen Pen (0)" || true)
@@ -67,6 +71,7 @@ in {
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
+        xrandrUnpan
         autorandr
         setupWacom setupHuion
       ];
