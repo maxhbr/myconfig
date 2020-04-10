@@ -303,7 +303,7 @@ realize() {
     time sudo \
          -E \
          --preserve-env=NIX_PATH \
-         NIX_CURL_FLAGS='--retry=1000' \
+         NIX_CURL_FLAGS='-sS' \
          nixos-rebuild \
          $NIX_PATH_ARGS \
          --show-trace --keep-failed \
