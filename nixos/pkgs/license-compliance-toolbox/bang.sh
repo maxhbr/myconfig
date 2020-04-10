@@ -2,8 +2,9 @@
 
 set -e
 
-tag=bang:latest
-mytag=mybang:latest
+shelltag=bang:latest
+runnertag=bangrunner:latest
+postgrestag=bangpostgres:latest
 
 help() {
     cat <<EOF
@@ -12,29 +13,29 @@ EOF
 }
 
 forceRebuild() {
-    docker rmi $mytag || true
-    docker rmi $tag || true
+    docker rmi $runnertag || true
+    docker rmi $shelltag || true
+    docker rmi $postgrestag || true
 }
 
 buildImageIfMissing() {
-    if [[ "$(docker images -q $mytag 2> /dev/null)" == "" ]]; then
-        if [[ "$(docker images -q $tag 2> /dev/null)" == "" ]]; then
-            BANG=$(mktemp -d)
-            trap 'rm -rf $BANG' EXIT
-            git clone https://github.com/armijnhemel/binaryanalysis-ng $BANG
-
-            docker build -t $tag $BANG
-            rm -rf $BANG
+    BANG=$(mktemp -d)
+    trap 'rm -rf $BANG' EXIT
+    if [[ "$(docker images -q $runnertag 2> /dev/null)" == "" ]]; then
+        if [[ "$(docker images -q $shelltag 2> /dev/null)" == "" ]]; then
+            BANGSHELL="$BANG/shell"
+            mkdir -p $BANGSHELL
+            git clone https://github.com/armijnhemel/binaryanalysis-ng $BANGSHELL
+            docker build -t $shelltag $BANGSHELL
         else
-            echo "docker image $tag already build"
+            echo "docker image $shelltag already build"
         fi
-
-        MYBANG=$(mktemp -d)
-        trap 'rm -rf $MYBANG' EXIT
-        cat <<EOF >"$MYBANG/bang.config"
+        BANGRUNNER="$BANG/runner"
+        mkdir -p $BANGRUNNER
+        cat <<EOF >"$BANGRUNNER/bang.config"
 [configuration]
-baseunpackdirectory = /out/tmp
-temporarydirectory = /out/tmp
+baseunpackdirectory = /out
+temporarydirectory = /out
 threads            = 0
 #removescandirectory = no
 #logging = yes
@@ -48,50 +49,59 @@ runfilescans = yes
 postgresql_user     = bang
 postgresql_password = bang
 postgresql_db       = bang
-postgresql_error_fatal = no
-#postgresql_host = 127.0.0.1
-#postgresql_port = 5432
+postgresql_error_fatal = yes
+postgresql_host = postgres
+postgresql_port = 5432
 
 [elasticsearch]
 elastic_enabled = no
 elastic_user = bang
 elastic_password = bangbang
 elastic_index = bang
-#elastic_connectionerrorfatal = yes
-#elastic_host = 127.0.0.1
-#elastic_port = 9200
+elastic_connectionerrorfatal = yes
+elastic_host = elastic
+elastic_port = 9200
 EOF
-        cat <<EOF >"$MYBANG/entrypoint.sh"
+        cat <<EOF >"$BANGRUNNER/entrypoint.sh"
 #!/usr/bin/env bash
-set -e
-input=/in
-mkdir -p /out/tmp
-find "\$input" \
-    -type f \
-    -print \
-    -exec python3 bang-scanner \
+set -ex
+# python3 /binaryanalysis-ng-maintenance/database/nsrlimporter.py \
+#         -c /bang.config \
+#         -d /out
+sleep 2
+python3 bang-scanner \
+        -d /out \
+        -t /out \
         -c /bang.config \
-        -f "{}" \;
-python3 bangshell
+        -d /in
 EOF
-        cat <<EOF >"$MYBANG/Dockerfile"
-FROM $tag
-# TODO: postgres
-# RUN set -x \
-#  && dnf update -y \
-#  && dnf install -y postgresql-server \
-#                    postgresql-contrib \
-#  && postgresql-setup initdb
-# TODO: eclasticsearch
+        git clone https://github.com/armijnhemel/binaryanalysis-ng-maintenance $BANGRUNNER/binaryanalysis-ng-maintenance
+        cat <<EOF >"$BANGRUNNER/Dockerfile"
+FROM $shelltag
+RUN dnf update -y && \
+    dnf install -y binutils
+COPY ./binaryanalysis-ng-maintenance /binaryanalysis-ng-maintenance
 COPY bang.config /
 COPY entrypoint.sh /
 RUN set -x \
  && chmod +x /entrypoint.sh
 ENTRYPOINT /entrypoint.sh
 EOF
-        docker build -t "$mytag" "$MYBANG"
+        docker build -t "$runnertag" "$BANGRUNNER"
     else
-        echo "docker image $mytag already build"
+        echo "docker image $runnertag already build"
+    fi
+    if [[ "$(docker images -q $postgrestag 2> /dev/null)" == "" ]]; then
+        set -ex
+        BANGPOSTGRES="$BANG/postgres"
+        git clone https://github.com/armijnhemel/binaryanalysis-ng-maintenance $BANGPOSTGRES
+        cat <<EOF >$BANGPOSTGRES/Dockerfile
+FROM postgres:latest
+RUN apt-get update \
+ && apt-get install -y python3
+COPY database/nsrl-init.sql /docker-entrypoint-initdb.d/
+EOF
+        docker build -t "$postgrestag" "$BANGPOSTGRES"
     fi
 }
 
@@ -102,35 +112,41 @@ getOutFolder() {
     echo "$out"
 }
 
-runBangShell() {
-    local out="$(readlink -f "$1")"
-    [[ ! -d "$out" ]] && exit 1
-    shift
-    (set -x;
-     docker run -i \
-            --rm \
-            -u $(id -u $USER):$(id -g $USER) \
-            -v "$out":/out  \
-            --net=host \
-            $tag;
-     times
-    )
-}
-
 runBang() {
     local in="$(readlink -f "$1")"
-    [[ ! -d "$in" ]] && exit 1
-    bn="$(basename "$in")"
     shift
-    (set -x;
-     docker run -i \
-            --rm \
-            -u $(id -u $USER):$(id -g $USER) \
-            -v "$in":/in -v "$(getOutFolder "$in")":/out \
-            --net=host \
-            $mytag;
-     times
-    )
+    [[ ! -d "$in" ]] && exit 1
+    local out="$(getOutFolder "$in")"
+
+    cat <<EOF >"$out/docker-compose.yml"
+version: "3.7"
+services:
+  runner:
+    image: $runnertag
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - $in:/in:ro
+      - $out:/out
+  postgres:
+    image: $postgrestag
+    environment:
+      POSTGRES_DB: bang
+      POSTGRES_USER: bang
+      POSTGRES_PASSWORD: bang
+    volumes:
+      - $out/_postgres:/var/lib/postgresql/data
+  redis:
+    image: redis:latest
+    volumes:
+      - $out/_redis:/data
+EOF
+    (cd "$out";
+     docker-compose up \
+                    --abort-on-container-exit \
+                    --exit-code-from postgres;
+     docker-compose down)
 }
 
 #################################################################################
@@ -142,10 +158,5 @@ if [[ "$1" == "-fr" ]]; then
 fi
 buildImageIfMissing
 
-if [[ "$1" == "-shell" ]]; then
-    shift
-    runBangShell "$@"
-else
-    runBang "$@"
-fi
+runBang "$@"
 
