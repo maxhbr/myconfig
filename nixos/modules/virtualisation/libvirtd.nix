@@ -216,7 +216,7 @@ in {
     systemd.services.libvirtd = {
       requires = [ "libvirtd-config.service" ];
       after = [ "systemd-udev-settle.service" "libvirtd-config.service" ]
-              ++ optional vswitch.enable "vswitchd.service";
+              ++ optional vswitch.enable "ovs-vswitchd.service";
 
       environment.LIBVIRTD_ARGS = escapeShellArgs (
         [ "--config" configFile

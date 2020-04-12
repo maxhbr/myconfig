@@ -30,11 +30,11 @@ let
 in
 mkDerivation rec {
   pname = "calibre";
-  version = "4.8.0";
+  version = "4.12.0";
 
   src = fetchurl {
     url = "https://download.calibre-ebook.com/${version}/${pname}-${version}.tar.xz";
-    sha256 = "1lk44qh3hzqhpz2b00iik7cgjg4xm36qjh2pxflkjnbk691gbpqk";
+    sha256 = "144vl5p0adcywcqaarrriq5zd8q5i934yfjg9himiq1vdp9vy4fi";
   };
 
   patches = [
@@ -166,6 +166,7 @@ mkDerivation rec {
   disallowedReferences = [ podofo.dev ];
 
   calibreDesktopItem = makeDesktopItem {
+    fileValidation = false; # fails before substitution
     name = "calibre-gui";
     desktopName = "calibre";
     exec = "@out@/bin/calibre --detach %F";
@@ -212,6 +213,7 @@ mkDerivation rec {
   };
 
   ebookEditDesktopItem = makeDesktopItem {
+    fileValidation = false; # fails before substitution
     name = "calibre-edit-book";
     desktopName = "Edit E-book";
     genericName = "E-book Editor";
@@ -224,6 +226,7 @@ mkDerivation rec {
   };
 
   ebookViewerDesktopItem = makeDesktopItem {
+    fileValidation = false; # fails before substitution
     name = "calibre-ebook-viewer";
     desktopName = "E-book Viewer";
     genericName = "E-book Viewer";
