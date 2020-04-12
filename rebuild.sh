@@ -22,7 +22,7 @@ MYCONFIG_ARGS="$@"
 ##  variables  ############################################################
 ###########################################################################
 
-export nixStableChannel=nixos-20.03
+export nixStableChannel=nixos-unstable
 
 ###########################################################################
 ##  function  #############################################################
@@ -59,6 +59,7 @@ checkIfConnected() {
 }
 
 isBranchMaster() {
+    return 0
     if [[ "$(cd "$ROOT"; git rev-parse --abbrev-ref HEAD)" == "master" ]]; then
         return 0
     else
