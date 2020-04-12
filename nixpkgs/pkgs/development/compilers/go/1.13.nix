@@ -43,8 +43,7 @@ stdenv.mkDerivation rec {
     ++ optionals stdenv.isLinux [ stdenv.cc.libc.out ]
     ++ optionals (stdenv.hostPlatform.libc == "glibc") [ stdenv.cc.libc.static ];
 
-
-  propagatedBuildInputs = optionals stdenv.isDarwin [ Security Foundation ];
+  depsTargetTargetPropagated = optionals stdenv.isDarwin [ Security Foundation ];
 
   hardeningDisable = [ "all" ];
 
@@ -239,7 +238,7 @@ stdenv.mkDerivation rec {
     homepage = http://golang.org/;
     description = "The Go Programming language";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ cstrahan orivej velovix mic92 rvolosatovs kalbasit ];
+    maintainers = with maintainers; [ cstrahan orivej mic92 rvolosatovs kalbasit Frostman ];
     platforms = platforms.linux ++ platforms.darwin;
   };
 }

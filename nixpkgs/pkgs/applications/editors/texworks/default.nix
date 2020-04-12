@@ -5,13 +5,13 @@
 
 mkDerivation rec {
   pname = "texworks";
-  version = "0.6.3";
+  version = "0.6.5";
 
   src = fetchFromGitHub {
     owner = "TeXworks";
     repo = "texworks";
     rev = "release-${version}";
-    sha256 = "1ljfl784z7dmh6f1qacqhc6qhcaqdzw033yswbvpvkkck0lsk2mr";
+    sha256 = "1lw1p4iyzxypvjhnav11g6rwf6gx7kyzwy2iprvv8zzpqcdkjp2z";
   };
 
   nativeBuildInputs = [ cmake pkg-config ];
@@ -24,7 +24,7 @@ mkDerivation rec {
 
   meta = with lib; {
     description = "Simple TeX front-end program inspired by TeXShop";
-    homepage = http://www.tug.org/texworks/;
+    homepage = "http://www.tug.org/texworks/";
     license = licenses.gpl2Plus;
     maintainers = with maintainers; [ dotlambda ];
     platforms = with platforms; linux;

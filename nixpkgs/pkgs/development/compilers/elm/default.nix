@@ -52,14 +52,6 @@ let
             }));
 
             elm-instrument = justStaticExecutables (overrideCabal (self.callPackage ./packages/elm-instrument.nix {}) (drv: {
-              patches = [(
-                # GHC 8.8.1 and Cabal >= 1.25.0 support
-                # https://github.com/zwilias/elm-instrument/pull/3
-                fetchpatch {
-                  url = "https://github.com/turboMaCk/elm-instrument/commit/4272db2aea742c8b54509e536fa4f35d04f95da5.patch";
-                  sha256 = "1d1lc43lp3x5jfhlyb1b7na7nj1g1i1vc1np26pcisg9c2s7gjz6";
-                }
-              )];
               prePatch = ''
                 sed "s/desc <-.*/let desc = \"${drv.version}\"/g" Setup.hs --in-place
               '';
@@ -91,11 +83,11 @@ let
           inherit nodejs pkgs;
           inherit (stdenv.hostPlatform) system;
         };
-    in with hsPkgs.elmPkgs; rec {
+    in with hsPkgs.elmPkgs; {
       elm-test = patchBinwrap [elmi-to-json] nodePkgs.elm-test;
       elm-verify-examples = patchBinwrap [elmi-to-json] nodePkgs.elm-verify-examples;
       elm-coverage =
-        let patched = patchBinwrap [elm elmi-to-json] nodePkgs.elm-coverage;
+        let patched = patchBinwrap [elmi-to-json] nodePkgs.elm-coverage;
         in patched.override {
           preRebuild = ''
             sed 's/\"install\".*/\"install\":\"echo no-op\"/g' --in-place package.json

@@ -45,11 +45,11 @@
 
 stdenv.mkDerivation rec {
   pname = "tracker-miners";
-  version = "2.3.1";
+  version = "2.3.3";
 
   src = fetchurl {
     url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "1q4hlpl3nkr0y13rzkwryyajnpy5s661z8n82dw1rskrg9mf07bv";
+    sha256 = "dHKqKNeGJiDTyiu+w7ED31R9cxnBLpWn96qfn23uSxk=";
   };
 
   nativeBuildInputs = [
@@ -125,7 +125,6 @@ stdenv.mkDerivation rec {
   passthru = {
     updateScript = gnome3.updateScript {
       packageName = pname;
-      attrPath = "gnome3.${pname}";
       versionPolicy = "none";
     };
   };

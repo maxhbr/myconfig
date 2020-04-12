@@ -39,6 +39,7 @@ in
   buildbot = handleTest ./buildbot.nix {};
   caddy = handleTest ./caddy.nix {};
   cadvisor = handleTestOn ["x86_64-linux"] ./cadvisor.nix {};
+  cage = handleTest ./cage.nix {};
   cassandra = handleTest ./cassandra.nix {};
   ceph-single-node = handleTestOn ["x86_64-linux"] ./ceph-single-node.nix {};
   ceph-multi-node = handleTestOn ["x86_64-linux"] ./ceph-multi-node.nix {};
@@ -96,6 +97,7 @@ in
   fontconfig-default-fonts = handleTest ./fontconfig-default-fonts.nix {};
   freeswitch = handleTest ./freeswitch.nix {};
   fsck = handleTest ./fsck.nix {};
+  gerrit = handleTest ./gerrit.nix {};
   gotify-server = handleTest ./gotify-server.nix {};
   grocy = handleTest ./grocy.nix {};
   gitdaemon = handleTest ./gitdaemon.nix {};
@@ -138,10 +140,12 @@ in
   initrd-network-ssh = handleTest ./initrd-network-ssh {};
   initrdNetwork = handleTest ./initrd-network.nix {};
   installer = handleTest ./installer.nix {};
+  iodine = handleTest ./iodine.nix {};
   ipv6 = handleTest ./ipv6.nix {};
   jackett = handleTest ./jackett.nix {};
   jellyfin = handleTest ./jellyfin.nix {};
   jenkins = handleTest ./jenkins.nix {};
+  jirafeau = handleTest ./jirafeau.nix {};
   kafka = handleTest ./kafka.nix {};
   keepalived = handleTest ./keepalived.nix {};
   kerberos = handleTest ./kerberos/default.nix {};
@@ -150,6 +154,7 @@ in
   kernel-testing = handleTest ./kernel-testing.nix {};
   keymap = handleTest ./keymap.nix {};
   knot = handleTest ./knot.nix {};
+  krb5 = discoverTests (import ./krb5 {});
   kubernetes.dns = handleTestOn ["x86_64-linux"] ./kubernetes/dns.nix {};
   # kubernetes.e2e should eventually replace kubernetes.rbac when it works
   #kubernetes.e2e = handleTestOn ["x86_64-linux"] ./kubernetes/e2e.nix {};
@@ -165,6 +170,7 @@ in
   #logstash = handleTest ./logstash.nix {};
   lorri = handleTest ./lorri/default.nix {};
   magnetico = handleTest ./magnetico.nix {};
+  magic-wormhole-mailbox-server = handleTest ./magic-wormhole-mailbox-server.nix {};
   mailcatcher = handleTest ./mailcatcher.nix {};
   mathics = handleTest ./mathics.nix {};
   matomo = handleTest ./matomo.nix {};
@@ -235,7 +241,7 @@ in
   peerflix = handleTest ./peerflix.nix {};
   pgjwt = handleTest ./pgjwt.nix {};
   pgmanage = handleTest ./pgmanage.nix {};
-  php-pcre = handleTest ./php-pcre.nix {};
+  php = handleTest ./php {};
   plasma5 = handleTest ./plasma5.nix {};
   plotinus = handleTest ./plotinus.nix {};
   postgis = handleTest ./postgis.nix {};
@@ -251,6 +257,7 @@ in
   prosodyMysql = handleTest ./xmpp/prosody-mysql.nix {};
   proxy = handleTest ./proxy.nix {};
   quagga = handleTest ./quagga.nix {};
+  quorum = handleTest ./quorum.nix {};
   rabbitmq = handleTest ./rabbitmq.nix {};
   radarr = handleTest ./radarr.nix {};
   radicale = handleTest ./radicale.nix {};
@@ -287,7 +294,7 @@ in
   systemd-confinement = handleTest ./systemd-confinement.nix {};
   systemd-timesyncd = handleTest ./systemd-timesyncd.nix {};
   systemd-networkd-vrf = handleTest ./systemd-networkd-vrf.nix {};
-  systemd-networkd-wireguard = handleTest ./systemd-networkd-wireguard.nix {};
+  systemd-networkd = handleTest ./systemd-networkd.nix {};
   systemd-nspawn = handleTest ./systemd-nspawn.nix {};
   pdns-recursor = handleTest ./pdns-recursor.nix {};
   taskserver = handleTest ./taskserver.nix {};
@@ -307,6 +314,7 @@ in
   vault = handleTest ./vault.nix {};
   victoriametrics = handleTest ./victoriametrics.nix {};
   virtualbox = handleTestOn ["x86_64-linux"] ./virtualbox.nix {};
+  wg-quick = handleTest ./wireguard/wg-quick.nix {};
   wireguard = handleTest ./wireguard {};
   wireguard-generated = handleTest ./wireguard/generated.nix {};
   wireguard-namespaces = handleTest ./wireguard/namespaces.nix {};

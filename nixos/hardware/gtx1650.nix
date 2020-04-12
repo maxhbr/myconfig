@@ -96,15 +96,15 @@ let
     };
   };
   ##############################################################################
-  # primeRenderOffload = {...}: {
-  #   # waits for: https://github.com/NixOS/nixpkgs/pull/66601
-  #   config = {
-  #     services.xserver.videoDrivers = [ "nvidia" ];
-  #     hardware.nvidia.prime.offload.enable = true;
-  #     hardware.nvidia.prime.nvidiaBusId = "PCI:1:0:0";
-  #     hardware.nvidia.prime.intelBusId = "PCI:0:2:0";
-  #   };
-  # };
+  primeRenderOffload = {...}: {
+    # waits for: https://github.com/NixOS/nixpkgs/pull/66601
+    config = {
+      services.xserver.videoDrivers = [ "nvidia" ];
+      hardware.nvidia.prime.offload.enable = true;
+      hardware.nvidia.prime.nvidiaBusId = "PCI:1:0:0";
+      hardware.nvidia.prime.intelBusId = "PCI:0:2:0";
+    };
+  };
 
 in {
   inherit
@@ -114,6 +114,6 @@ in {
     bumblebeeConf
     bumblebeeNouveauConf
     optimusPrimeConf
-    # primeRenderOffload
+    primeRenderOffload
     ;
 }

@@ -1,4 +1,4 @@
-{ stdenv, lib, fetchFromGitHub, fetchurl, fetchpatch, makeWrapper
+{ stdenv, lib, fetchFromGitHub, fetchurl, makeWrapper
 , coreutils, git, gmp, nettools, openssl, readline, tzdata, libxml2, libyaml
 , boehmgc, libatomic_ops, pcre, libevent, libiconv, llvm, clang, which, zlib, pkgconfig
 , callPackage }:
@@ -44,10 +44,10 @@ let
     ++ stdenv.lib.optionals stdenv.isDarwin [ libiconv ];
 
 
-  generic = ({ version, sha256, binary, doCheck ? true, extraBuildInputs ? [], patches ? [] }:
+  generic = ({ version, sha256, binary, doCheck ? true, extraBuildInputs ? [] }:
   lib.fix (compiler: stdenv.mkDerivation {
     pname = "crystal";
-    inherit doCheck version patches;
+    inherit doCheck version;
 
     src = fetchFromGitHub {
       owner  = "crystal-lang";
@@ -246,13 +246,6 @@ in rec {
     version = "0.32.1";
     sha256  = "120ndi3nhh2r52hjvhwfb49cdggr1bzdq6b8xg7irzavhjinfza6";
     binary = binaryCrystal_0_31;
-    patches = [
-      # https://github.com/crystal-lang/crystal/pull/8673, can be removed in 0.33.0
-      (fetchpatch {
-        url = "https://github.com/crystal-lang/crystal/commit/0ae289dd05aa372fa37a7c6fc6777810a2f42d26.patch";
-        sha256 = "0dsqppnbdxfqk7xb554mlklwc30jyhkyq8lc1diwz8ng9c1qlqfa";
-      })
-    ];
   };
 
   crystal = crystal_0_32;

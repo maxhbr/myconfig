@@ -53,7 +53,7 @@ buildPythonPackage rec {
   # force using installed/compiled uvloop vs source by moving tests to temp dir
   preCheck = ''
     export TEST_DIR=$(mktemp -d)
-    cp -r $TMP/$sourceRoot/tests $TEST_DIR
+    cp -r tests $TEST_DIR
     pushd $TEST_DIR
   '';
   postCheck = ''

@@ -128,256 +128,6 @@ See https://github.com/NixOS/nixpkgs/pull/71684 for details.
      It was created so Geary could function properly outside of GNOME.
     </para>
    </listitem>
-   <listitem>
-     <para>
-       <filename>./config/console.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./hardware/brillo.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./hardware/tuxedo-keyboard.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./programs/bandwhich.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./programs/bash-my-aws.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./programs/liboping.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./programs/traceroute.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/backup/sanoid.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/backup/syncoid.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/backup/zfs-replication.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/continuous-integration/buildkite-agents.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/databases/victoriametrics.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/desktops/gnome3/gnome-initial-setup.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/desktops/neard.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/games/openarena.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/hardware/fancontrol.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/mail/sympa.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/misc/freeswitch.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/misc/mame.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/monitoring/do-agent.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/monitoring/prometheus/xmpp-alerts.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/network-filesystems/orangefs/server.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/network-filesystems/orangefs/client.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/networking/3proxy.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/networking/corerad.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/networking/dnscrypt-proxy2.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/networking/go-shadowsocks2.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/networking/ntp/chrony.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/networking/ntp/ntpd.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/networking/ntp/openntpd.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/networking/shorewall.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/networking/shorewall6.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/networking/spacecookie.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/networking/trickster.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/networking/v2ray.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/networking/xandikos.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/networking/yggdrasil.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/web-apps/dokuwiki.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/web-apps/gotify-server.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/web-apps/grocy.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/web-apps/ihatemoney</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/web-apps/moinmoin.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/web-apps/trac.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/web-apps/trilium.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/web-apps/shiori.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/web-servers/ttyd.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/x11/picom.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/x11/hardware/digimend.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./services/x11/imwheel.nix</filename>
-     </para>
-   </listitem>
-   <listitem>
-     <para>
-       <filename>./virtualisation/cri-o.nix</filename>
-     </para>
-   </listitem>
   </itemizedlist>
 
  </section>
@@ -395,6 +145,17 @@ See https://github.com/NixOS/nixpkgs/pull/71684 for details.
   </para>
 
   <itemizedlist>
+   <listitem>
+    <para>
+     The <package>dhcpcd</package> package <link xlink:href="https://roy.marples.name/archives/dhcpcd-discuss/0002621.html">
+     does not request IPv4 addresses for tap and bridge interfaces anymore by default</link>.
+     In order to still get an address on a bridge interface, one has to disable
+     <literal>networking.useDHCP</literal> and explicitly enable
+     <literal>networking.interfaces.&lt;name&gt;.useDHCP</literal> on
+     every interface, that should get an address via DHCP. This way, dhcpcd
+     is configured in an explicit way about which interface to run on.
+    </para>
+   </listitem>
    <listitem>
     <para>
       GnuPG is now built without support for a graphical passphrase entry
@@ -998,10 +759,10 @@ auth required pam_succeed_if.so uid >= 1000 quiet
       </listitem>
       <listitem>
        <para>
-        Deploy a newer version of Hydra to activate the DB optimizations. You can choose from
-        either <package>hydra-unstable</package> (latest <literal>master</literal> compiled
-        against <package>nixUnstable</package>) and <package>hydra-flakes</package> (latest
-        version with flake-support).
+        Deploy a newer version of Hydra to activate the DB optimizations. This can be done by
+        using <package>hydra-unstable</package>. This package already includes
+        <link xlink:href="https://github.com/nixos/rfcs/pull/49">flake-support</link> and is
+        therefore compiled against <package>pkgs.nixFlakes</package>.
         <warning>
          <para>
           If your <link linkend="opt-system.stateVersion">stateVersion</link> is set to

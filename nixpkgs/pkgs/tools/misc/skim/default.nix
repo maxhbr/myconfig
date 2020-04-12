@@ -1,21 +1,29 @@
-{ stdenv, fetchFromGitHub, rustPlatform }:
+{ stdenv, fetchFromGitHub, rustPlatform, fetchpatch }:
 
 rustPlatform.buildRustPackage rec {
   pname = "skim";
-  version = "0.7.0";
+  version = "0.8.1";
 
   src = fetchFromGitHub {
     owner = "lotabout";
     repo = pname;
     rev = "v${version}";
-    sha256 = "0is6zymvy673f1g466i3ayi4jawdl7pm9l3cbdxcw32h3snbkgqp";
+    sha256 = "0xjb8slrlkrzdqvzmf63lq6rgggrjw3hf9an6h8xf6vizz1vfni0";
   };
 
   outputs = [ "out" "vim" ];
 
-  cargoSha256 = "1dl530ac8i4wdw7lziskl7rhh3ak9ykcws3kpy64808kxg3b1jnz";
+  cargoSha256 = "14p4ppbl2mak21jvxpbd1b28jaw2629bc8kv7875cdzy3ksxyji3";
 
-  patchPhase = ''
+  patches = [
+    # Fix bash completion. Remove with the next release
+    (fetchpatch {
+      url = "https://github.com/lotabout/skim/commit/60ca3484090c2e73a1de396500c73a6ad6e0bde9.patch";
+      sha256 = "07nibr13vmxscbwavrckhcbsvxwkpan4a6ml0qfr1ny36xbc6y3p";
+    })
+  ];
+
+  postPatch = ''
     sed -i -e "s|expand('<sfile>:h:h')|'$out'|" plugin/skim.vim
   '';
 

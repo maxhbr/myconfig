@@ -1,12 +1,13 @@
 { stdenv, removeReferencesTo, pkgsBuildBuild, pkgsBuildHost, pkgsBuildTarget
 , fetchurl, file, python3
-, llvm_9, darwin, git, cmake, rust, rustPlatform
+, llvm_9, darwin, cmake, rust, rustPlatform
 , pkgconfig, openssl
 , which, libffi
 , withBundledLLVM ? false
 , enableRustcDev ? true
 , version
 , sha256
+, patches ? []
 }:
 
 let
@@ -104,6 +105,8 @@ in stdenv.mkDerivation rec {
   # the rust build system complains that nix alters the checksums
   dontFixLibtool = true;
 
+  inherit patches;
+
   postPatch = ''
     patchShebangs src/etc
 
@@ -122,7 +125,7 @@ in stdenv.mkDerivation rec {
   dontUseCmakeConfigure = true;
 
   nativeBuildInputs = [
-    file python3 rustPlatform.rust.rustc git cmake
+    file python3 rustPlatform.rust.rustc cmake
     which libffi removeReferencesTo pkgconfig
   ];
 

@@ -66,6 +66,16 @@ in
       '';
     };
 
+    boot.initrd.network.flushBeforeStage2 = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Whether to clear the configuration of the interfaces that were set up in
+        the initrd right before stage 2 takes over. Stage 2 will do the regular network
+        configuration based on the NixOS networking options.
+      '';
+    };
+
     boot.initrd.network.udhcpc.extraArgs = mkOption {
       default = [];
       type = types.listOf types.str;
@@ -125,6 +135,13 @@ in
       ''
 
       + cfg.postCommands);
+
+    boot.initrd.postMountCommands = mkIf cfg.flushBeforeStage2 ''
+      for iface in $ifaces; do
+        ip address flush "$iface"
+        ip link down "$iface"
+      done
+    '';
 
   };
 
