@@ -59,7 +59,6 @@ checkIfConnected() {
 }
 
 isBranchMaster() {
-    return 0
     if [[ "$(cd "$ROOT"; git rev-parse --abbrev-ref HEAD)" == "master" ]]; then
         return 0
     else
