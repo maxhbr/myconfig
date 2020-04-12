@@ -7,8 +7,8 @@
 , coreutils
 , docutils
 , readline
+, openssl
 , python3Packages
-, systemd
 }:
 
 stdenv.mkDerivation rec {
@@ -32,8 +32,9 @@ stdenv.mkDerivation rec {
     ell
     python3Packages.python
     readline
-    systemd
   ];
+
+  checkInputs = [ openssl ];
 
   pythonPath = [
     python3Packages.dbus-python
@@ -54,6 +55,8 @@ stdenv.mkDerivation rec {
   postUnpack = ''
     patchShebangs .
   '';
+
+  doCheck = true;
 
   postInstall = ''
     cp -a test/* $out/bin/

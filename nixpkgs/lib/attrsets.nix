@@ -4,7 +4,7 @@
 let
   inherit (builtins) head tail length;
   inherit (lib.trivial) and;
-  inherit (lib.strings) concatStringsSep;
+  inherit (lib.strings) concatStringsSep sanitizeDerivationName;
   inherit (lib.lists) fold concatMap concatLists;
 in
 
@@ -310,7 +310,7 @@ rec {
       path' = builtins.storePath path;
       res =
         { type = "derivation";
-          name = builtins.unsafeDiscardStringContext (builtins.substring 33 (-1) (baseNameOf path'));
+          name = sanitizeDerivationName (builtins.substring 33 (-1) (baseNameOf path'));
           outPath = path';
           outputs = [ "out" ];
           out = res;
@@ -472,6 +472,20 @@ rec {
 
   /* Pick the outputs of packages to place in buildInputs */
   chooseDevOutputs = drvs: builtins.map getDev drvs;
+
+  /* Make various Nix tools consider the contents of the resulting
+     attribute set when looking for what to build, find, etc.
+
+     This function only affects a single attribute set; it does not
+     apply itself recursively for nested attribute sets.
+   */
+  recurseIntoAttrs =
+    attrs: attrs // { recurseForDerivations = true; };
+
+  /* Undo the effect of recurseIntoAttrs.
+   */
+  dontRecurseIntoAttrs =
+    attrs: attrs // { recurseForDerivations = false; };
 
   /*** deprecated stuff ***/
 

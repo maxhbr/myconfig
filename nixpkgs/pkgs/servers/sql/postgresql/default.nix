@@ -3,7 +3,7 @@ let
   generic =
       # dependencies
       { stdenv, lib, fetchurl, makeWrapper
-      , glibc, zlib, readline, openssl, openssl_1_0_2, icu, systemd, libossp_uuid
+      , glibc, zlib, readline, openssl, icu, systemd, libossp_uuid
       , pkgconfig, libxml2, tzdata
 
       # This is important to obtain a version of `libpq` that does not depend on systemd.
@@ -32,10 +32,9 @@ let
     setOutputFlags = false; # $out retains configureFlags :-/
 
     buildInputs =
-      [ zlib readline libxml2 makeWrapper ]
+      [ zlib readline openssl libxml2 makeWrapper ]
       ++ lib.optionals icuEnabled [ icu ]
       ++ lib.optionals enableSystemd [ systemd ]
-      ++ [ (if atLeast "9.5" then openssl else openssl_1_0_2) ]
       ++ lib.optionals (!stdenv.isDarwin) [ libossp_uuid ];
 
     nativeBuildInputs = lib.optionals icuEnabled [ pkgconfig ];
@@ -175,6 +174,9 @@ let
       cp --target-directory=$out/bin ${postgresql}/bin/{postgres,pg_config,pg_ctl}
       wrapProgram $out/bin/postgres --set NIX_PGLIBDIR $out/lib
     '';
+
+    passthru.version = postgresql.version;
+    passthru.psqlSchema = postgresql.psqlSchema;
   };
 
 in self: {

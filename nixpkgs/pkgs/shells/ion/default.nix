@@ -11,7 +11,7 @@ rustPlatform.buildRustPackage rec {
     sha256 = "0r5c87cs8jlc9kpb6bi2aypldw1lngf6gzjirf13gi7iy4q08ik7";
   };
 
-  cargoSha256 = "0rpq2zy7563z00i1ms0pyyyaplr3hlfagj8c4syc0dw0vbkqhzzw";
+  cargoSha256 = "1ph3r3vspy700mb8pica8478v9arqz07k2nzpbrdkdkqgfcwlgcg";
 
   meta = with stdenv.lib; {
     description = "Modern system shell with simple (and powerful) syntax";

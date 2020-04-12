@@ -48,7 +48,7 @@ with stdenv.lib;
 
 stdenv.mkDerivation rec {
   pname = "gtk+3";
-  version = "3.24.13";
+  version = "3.24.14";
 
   outputs = [ "out" "dev" ] ++ optional withGtkDoc "devdoc";
   outputBin = "dev";
@@ -60,7 +60,7 @@ stdenv.mkDerivation rec {
 
   src = fetchurl {
     url = "mirror://gnome/sources/gtk+/${stdenv.lib.versions.majorMinor version}/gtk+-${version}.tar.xz";
-    sha256 = "1a9hi7k59q0kqx0n3xhsk1ly23w9g9ncllnay1756g0yrww5qxsc";
+    sha256 = "120yz5gxqbv7sgdbcy4i0b6ixm8jpjzialdrqs0gv15q7bwnjk8w";
   };
 
   patches = [
@@ -70,6 +70,11 @@ stdenv.mkDerivation rec {
       url = "https://bug757142.bugzilla-attachments.gnome.org/attachment.cgi?id=344123";
       sha256 = "0g6fhqcv8spfy3mfmxpyji93k8d4p4q4fz1v9a1c1cgcwkz41d7p";
     })
+    # https://gitlab.gnome.org/GNOME/gtk/-/merge_requests/1528
+    (fetchpatch {
+      url = "https://gitlab.gnome.org/GNOME/gtk/-/commit/3c28751dee115e969a58a733f2f19e71062b9d2d.patch";
+      sha256 = "1rqrmymwd22dsiy7agjw13mcyic3by6020rxyaw7zslnmyzfiwc3";
+    })
     # https://gitlab.gnome.org/GNOME/gtk/merge_requests/1002
     ./patches/01-build-Fix-path-handling-in-pkgconfig.patch
   ] ++ optionals stdenv.isDarwin [
@@ -77,9 +82,6 @@ stdenv.mkDerivation rec {
     # let’s drop that dependency in similar way to how other parts of the library do it
     # e.g. https://gitlab.gnome.org/GNOME/gtk/blob/3.24.4/gtk/gtk-launch.c#L31-33
     ./patches/3.0-darwin-x11.patch
-    # 3.24.13 failed to ship a header file
-    # https://gitlab.gnome.org/GNOME/gtk/issues/2279
-    ./patches/missing-header.patch
   ];
 
   separateDebugInfo = stdenv.isLinux;

@@ -16,8 +16,6 @@ let
 
     buildDunePackage = callPackage ../build-support/ocaml/dune.nix {};
 
-    buildDune2Package = buildDunePackage.override { dune = dune_2; };
-
     alcotest = callPackage ../development/ocaml-modules/alcotest {};
 
     alcotest-lwt = callPackage ../development/ocaml-modules/alcotest/lwt.nix {};
@@ -232,9 +230,9 @@ let
 
     dune_2 = callPackage ../development/tools/ocaml/dune/2.nix { };
 
-    dune-configurator = callPackage ../development/ocaml-modules/dune-configurator { buildDunePackage = buildDune2Package; };
+    dune-configurator = callPackage ../development/ocaml-modules/dune-configurator { };
 
-    dune-private-libs = callPackage ../development/ocaml-modules/dune-private-libs { buildDunePackage = buildDune2Package; };
+    dune-private-libs = callPackage ../development/ocaml-modules/dune-private-libs { };
 
     earley = callPackage ../development/ocaml-modules/earley { };
 
@@ -348,6 +346,11 @@ let
     git-unix = callPackage ../development/ocaml-modules/git-unix { };
 
     gmetadom = callPackage ../development/ocaml-modules/gmetadom { };
+
+    graphics =
+    if lib.versionOlder "4.09" ocaml.version
+    then callPackage ../development/ocaml-modules/graphics { }
+    else null;
 
     graphql = callPackage ../development/ocaml-modules/graphql { };
 
@@ -545,6 +548,10 @@ let
       lwt = ocaml_lwt;
     };
 
+    npy = callPackage ../development/ocaml-modules/npy {
+      inherit (pkgs.python3Packages) numpy;
+    };
+
     num = if lib.versionOlder "4.06" ocaml.version
       then callPackage ../development/ocaml-modules/num {}
       else null;
@@ -580,6 +587,8 @@ let
 
     ocaml_gettext = callPackage ../development/ocaml-modules/ocaml-gettext { };
 
+    gettext-stub = callPackage ../development/ocaml-modules/ocaml-gettext/stub.nix { };
+
     ocamlgraph = callPackage ../development/ocaml-modules/ocamlgraph { };
 
     ocaml_http = callPackage ../development/ocaml-modules/http { };
@@ -607,6 +616,8 @@ let
     pgocaml = callPackage ../development/ocaml-modules/pgocaml {};
 
     pgocaml_ppx = callPackage ../development/ocaml-modules/pgocaml/ppx.nix {};
+
+    ocaml-r = callPackage ../development/ocaml-modules/ocaml-r { };
 
     ocaml-sat-solvers = callPackage ../development/ocaml-modules/ocaml-sat-solvers { };
 
@@ -1225,5 +1236,5 @@ in let inherit (pkgs) callPackage; in rec
 
   ocamlPackages_latest = ocamlPackages_4_10;
 
-  ocamlPackages = ocamlPackages_4_08;
+  ocamlPackages = ocamlPackages_4_09;
 }

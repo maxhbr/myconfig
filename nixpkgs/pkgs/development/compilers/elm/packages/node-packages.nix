@@ -103,13 +103,13 @@ let
         sha512 = "MPtoySlAZQ37VoLaPcTHCu1RWJ4llDkULYZIzOYxlhxBqYPB0RsRlmMU0R6tahtFe27mIdkHV+551ZWV4PLmVw==";
       };
     };
-    "@types/node-13.9.4" = {
+    "@types/node-13.9.1" = {
       name = "_at_types_slash_node";
       packageName = "@types/node";
-      version = "13.9.4";
+      version = "13.9.1";
       src = fetchurl {
-        url = "https://registry.npmjs.org/@types/node/-/node-13.9.4.tgz";
-        sha512 = "uzaaDXey/NI2l7kU+xCgWu852Dh/zmf6ZKApc0YQEQpY4DaiZFmLN29E6SLHJfSedj3iNWAndSwfSBpEDadJfg==";
+        url = "https://registry.npmjs.org/@types/node/-/node-13.9.1.tgz";
+        sha512 = "E6M6N0blf/jiZx8Q3nb0vNaswQeEyn0XlupO+xN6DtJ6r6IT4nXrTry7zhIfYvFCl3/8Cu6WIysmUBKiqV0bqQ==";
       };
     };
     "@types/responselike-1.0.0" = {
@@ -526,13 +526,13 @@ let
         sha512 = "AKcdTnFSWATd5/GCPRxr2ChwIJ85CeyrEyjRHlKxQ56d4XJMGym0uAiKn0xbLOGOl3+yRpOTi484dVCEc5AUzQ==";
       };
     };
-    "cacheable-lookup-2.0.1" = {
+    "cacheable-lookup-2.0.0" = {
       name = "cacheable-lookup";
       packageName = "cacheable-lookup";
-      version = "2.0.1";
+      version = "2.0.0";
       src = fetchurl {
-        url = "https://registry.npmjs.org/cacheable-lookup/-/cacheable-lookup-2.0.1.tgz";
-        sha512 = "EMMbsiOTcdngM/K6gV/OxF2x0t07+vMOWxZNSCRQMjO2MY2nhZQ6OYhOOpyQrbhqsgtvKGI7hcq6xjnA92USjg==";
+        url = "https://registry.npmjs.org/cacheable-lookup/-/cacheable-lookup-2.0.0.tgz";
+        sha512 = "s2piO6LvA7xnL1AR03wuEdSx3BZT3tIJpZ56/lcJwzO/6DTJZlTs7X3lrvPxk6d1PlDe6PrVe2TjlUIZNFglAQ==";
       };
     };
     "cacheable-request-2.1.4" = {
@@ -1265,13 +1265,13 @@ let
         sha512 = "+uw1inIHVPQoaVuHzRyXd21icM+cnt4CzD5rW+NC1wjOUSTOs+Te7FOv7AhN7vS9x/oIyhLP5PR1H+phQAHu5Q==";
       };
     };
-    "es-abstract-1.17.5" = {
+    "es-abstract-1.17.4" = {
       name = "es-abstract";
       packageName = "es-abstract";
-      version = "1.17.5";
+      version = "1.17.4";
       src = fetchurl {
-        url = "https://registry.npmjs.org/es-abstract/-/es-abstract-1.17.5.tgz";
-        sha512 = "BR9auzDbySxOcfog0tLECW8l28eRGpDpU3Dm3Hp4q/N+VtLTmyj4EUN088XZWQDW/hzj6sYRDXeOFsaAODKvpg==";
+        url = "https://registry.npmjs.org/es-abstract/-/es-abstract-1.17.4.tgz";
+        sha512 = "Ae3um/gb8F0mui/jPL+QiqmglkUsaQf7FwBEHYIFkztkneosu9imhqHpBzQ3h1vit8t5iQ74t6PEVvphBZiuiQ==";
       };
     };
     "es-to-primitive-1.2.1" = {
@@ -1841,13 +1841,13 @@ let
         sha512 = "LwaxwyZ72Lk7vZINtNNrywX0ZuLyStrdDtabefZKAY5ZGJhVtgdznluResxNmPitE0SAO+O26sWTHeKSI2wMBA==";
       };
     };
-    "glob-parent-5.1.1" = {
+    "glob-parent-5.1.0" = {
       name = "glob-parent";
       packageName = "glob-parent";
-      version = "5.1.1";
+      version = "5.1.0";
       src = fetchurl {
-        url = "https://registry.npmjs.org/glob-parent/-/glob-parent-5.1.1.tgz";
-        sha512 = "FnI+VGOpnlGHWZxthPGR+QhR78fuiK0sNLkHQv+bL9fQi57lNNdquIbna/WrfROrolq8GK5Ek6BiMwqL/voRYQ==";
+        url = "https://registry.npmjs.org/glob-parent/-/glob-parent-5.1.0.tgz";
+        sha512 = "qjtRgnIVmOfnKUE3NJAQEdk+lKrxfw8t5ke7SXtfMTHcjsBfOfWXCQfdb30zfDoZQ2IRSIiidmjtbHZPZ++Ihw==";
       };
     };
     "globby-11.0.0" = {
@@ -1859,13 +1859,13 @@ let
         sha512 = "iuehFnR3xu5wBBtm4xi0dMe92Ob87ufyu/dHwpDYfbcpYpIbrO5OnS8M1vWvrBhSGEJ3/Ecj7gnX76P8YxpPEg==";
       };
     };
-    "got-10.7.0" = {
+    "got-10.6.0" = {
       name = "got";
       packageName = "got";
-      version = "10.7.0";
+      version = "10.6.0";
       src = fetchurl {
-        url = "https://registry.npmjs.org/got/-/got-10.7.0.tgz";
-        sha512 = "aWTDeNw9g+XqEZNcTjMMZSy7B7yE9toWOFYip7ofFTLleJhvZwUxxTxkTpKvF+p1SAA4VHmuEy7PiHTHyq8tJg==";
+        url = "https://registry.npmjs.org/got/-/got-10.6.0.tgz";
+        sha512 = "3LIdJNTdCFbbJc+h/EH0V5lpNpbJ6Bfwykk21lcQvQsEcrzdi/ltCyQehFHLzJ/ka0UMH4Slg0hkYvAZN9qUDg==";
       };
     };
     "got-8.3.2" = {
@@ -2939,13 +2939,13 @@ let
         sha512 = "WRoDn//mXBiJ1H40rqa3vH0toePwSsGb45iInWlTySa+Uu4k3tYUSxa2v1KqAiLtvlrSzaExqS1gtk96A9zvEA==";
       };
     };
-    "mkdirp-0.5.4" = {
+    "mkdirp-0.5.3" = {
       name = "mkdirp";
       packageName = "mkdirp";
-      version = "0.5.4";
+      version = "0.5.3";
       src = fetchurl {
-        url = "https://registry.npmjs.org/mkdirp/-/mkdirp-0.5.4.tgz";
-        sha512 = "iG9AK/dJLtJ0XNgTuDbSyNS3zECqDlAhnQW4CsNxBG3LQJBbHmRX1egw39DmtOdCAqY+dKXV+sgPgilNWUKMVw==";
+        url = "https://registry.npmjs.org/mkdirp/-/mkdirp-0.5.3.tgz";
+        sha512 = "P+2gwrFqx8lhew375MQHHeTlY8AuOJSrGf0R5ddkEndUkmwpgUob/vQuBD1V22/Cw1/lJr4x+EjllSezBThzBg==";
       };
     };
     "moment-2.24.0" = {
@@ -3488,13 +3488,13 @@ let
         sha1 = "6309f4e0e5fa913ec1c69307ae364b4b377c9e7b";
       };
     };
-    "picomatch-2.2.2" = {
+    "picomatch-2.2.1" = {
       name = "picomatch";
       packageName = "picomatch";
-      version = "2.2.2";
+      version = "2.2.1";
       src = fetchurl {
-        url = "https://registry.npmjs.org/picomatch/-/picomatch-2.2.2.tgz";
-        sha512 = "q0M/9eZHzmr0AulXyPwNfZjtwZ/RBZlbN3K3CErVrk50T2ASYI7Bye0EvekFY3IP1Nt2DHu0re+V2ZHIpMkuWg==";
+        url = "https://registry.npmjs.org/picomatch/-/picomatch-2.2.1.tgz";
+        sha512 = "ISBaA8xQNmwELC7eOjqFKMESB2VIqt4PPDD0nsS95b/9dZXvVKOlz9keMSnoGGKcOHXfTvDD6WMaRoSc9UuhRA==";
       };
     };
     "pify-3.0.0" = {
@@ -3578,13 +3578,13 @@ let
         sha1 = "f052a28da70e618917ef0a8ac34c1ae5a68286b3";
       };
     };
-    "psl-1.8.0" = {
+    "psl-1.7.0" = {
       name = "psl";
       packageName = "psl";
-      version = "1.8.0";
+      version = "1.7.0";
       src = fetchurl {
-        url = "https://registry.npmjs.org/psl/-/psl-1.8.0.tgz";
-        sha512 = "RIdOzyoavK+hA18OGGWDqUTsCLhtA7IcZ/6NCs4fFJaHBDab+pDDmDIByWFRQJq2Cd7r1OoQxBGKOaztq+hjIQ==";
+        url = "https://registry.npmjs.org/psl/-/psl-1.7.0.tgz";
+        sha512 = "5NsSEDv8zY70ScRnOTn7bK7eanl2MvFrOrS/R6x+dBt5g1ghnj9Zv90kO8GwT8gxcu2ANyFprnFYB85IogIJOQ==";
       };
     };
     "pump-3.0.0" = {
@@ -3722,13 +3722,13 @@ let
         sha512 = "crk4Qu3pmXwgxdSgGhgA/eXiJAPQiX4GMOZZMXnqKxHX7TaoL+3gQVo/WeuAiogr07DpnfjIMpXXa+PAIvwPGQ==";
       };
     };
-    "readdirp-3.4.0" = {
+    "readdirp-3.3.0" = {
       name = "readdirp";
       packageName = "readdirp";
-      version = "3.4.0";
+      version = "3.3.0";
       src = fetchurl {
-        url = "https://registry.npmjs.org/readdirp/-/readdirp-3.4.0.tgz";
-        sha512 = "0xe001vZBnJEK+uKcj8qOhyAKPzIT+gStxWr3LCB0DwcXR5NZJ3IaC+yGnHCYzB/S7ov3m3EEbZI2zeNvX+hGQ==";
+        url = "https://registry.npmjs.org/readdirp/-/readdirp-3.3.0.tgz";
+        sha512 = "zz0pAkSPOXXm1viEwygWIPSPkcBYjW1xU5j/JBh5t9bGCJwa6f9+BJa6VaB2g+b55yVrmXzqkyLf4xaWYM0IkQ==";
       };
     };
     "regenerator-runtime-0.9.6" = {
@@ -5313,7 +5313,7 @@ in
       sources."performance-now-2.1.0"
       sources."process-nextick-args-1.0.7"
       sources."proxy-addr-2.0.6"
-      sources."psl-1.8.0"
+      sources."psl-1.7.0"
       sources."punycode-2.1.1"
       sources."qs-6.7.0"
       sources."range-parser-1.2.1"
@@ -5475,7 +5475,7 @@ in
       sources."get-caller-file-2.0.5"
       sources."getpass-0.1.7"
       sources."glob-7.1.4"
-      sources."glob-parent-5.1.1"
+      sources."glob-parent-5.1.0"
       sources."graceful-fs-4.2.3"
       sources."har-schema-2.0.0"
       sources."har-validator-5.1.3"
@@ -5511,7 +5511,7 @@ in
       sources."minimist-1.2.5"
       sources."minipass-2.9.0"
       sources."minizlib-1.3.3"
-      sources."mkdirp-0.5.4"
+      sources."mkdirp-0.5.3"
       sources."moment-2.24.0"
       sources."murmur-hash-js-1.0.0"
       sources."mustache-3.2.1"
@@ -5535,9 +5535,9 @@ in
       sources."path-is-absolute-1.0.1"
       sources."path-key-3.1.1"
       sources."performance-now-2.1.0"
-      sources."picomatch-2.2.2"
+      sources."picomatch-2.2.1"
       sources."pseudomap-1.0.2"
-      sources."psl-1.8.0"
+      sources."psl-1.7.0"
       sources."punycode-2.1.1"
       sources."qs-6.5.2"
       sources."readdirp-3.1.3"
@@ -5711,7 +5711,7 @@ in
       sources."ee-first-1.1.1"
       sources."encodeurl-1.0.2"
       sources."end-of-stream-1.4.4"
-      sources."es-abstract-1.17.5"
+      sources."es-abstract-1.17.4"
       sources."es-to-primitive-1.2.1"
       sources."escape-html-1.0.3"
       sources."escape-string-regexp-1.0.5"
@@ -6136,7 +6136,7 @@ in
       sources."fs-extra-2.0.0"
       sources."get-stream-5.1.0"
       sources."getpass-0.1.7"
-      sources."glob-parent-5.1.1"
+      sources."glob-parent-5.1.0"
       sources."globby-11.0.0"
       sources."graceful-fs-4.2.3"
       sources."har-schema-2.0.0"
@@ -6192,11 +6192,11 @@ in
       sources."path-to-regexp-0.1.7"
       sources."path-type-4.0.0"
       sources."performance-now-2.1.0"
-      sources."picomatch-2.2.2"
+      sources."picomatch-2.2.1"
       sources."pjson-1.0.9"
       sources."process-nextick-args-1.0.7"
       sources."proxy-addr-2.0.6"
-      sources."psl-1.8.0"
+      sources."psl-1.7.0"
       sources."pump-3.0.0"
       sources."punycode-2.1.1"
       sources."qs-6.7.0"
@@ -6333,7 +6333,7 @@ in
       sources."fresh-0.5.2"
       sources."fsevents-2.1.2"
       sources."get-stream-4.1.0"
-      sources."glob-parent-5.1.1"
+      sources."glob-parent-5.1.0"
       sources."has-ansi-2.0.0"
       sources."http-errors-1.7.3"
       sources."http-proxy-1.17.0"
@@ -6364,11 +6364,11 @@ in
       sources."parseurl-1.3.3"
       sources."path-key-2.0.1"
       sources."pem-1.14.2"
-      sources."picomatch-2.2.2"
+      sources."picomatch-2.2.1"
       sources."pseudomap-1.0.2"
       sources."pump-3.0.0"
       sources."range-parser-1.2.1"
-      sources."readdirp-3.4.0"
+      sources."readdirp-3.3.0"
       sources."requires-port-1.0.0"
       sources."semver-5.7.1"
       (sources."send-0.17.1" // {
@@ -6466,7 +6466,7 @@ in
       sources."fsevents-2.1.2"
       sources."getpass-0.1.7"
       sources."glob-7.1.6"
-      sources."glob-parent-5.1.1"
+      sources."glob-parent-5.1.0"
       sources."graceful-fs-4.2.3"
       sources."har-schema-2.0.0"
       sources."har-validator-5.1.3"
@@ -6494,7 +6494,7 @@ in
       sources."minimist-1.2.5"
       sources."minipass-2.9.0"
       sources."minizlib-1.3.3"
-      sources."mkdirp-0.5.4"
+      sources."mkdirp-0.5.3"
       sources."murmur-hash-js-1.0.0"
       sources."mustache-3.2.1"
       sources."nice-try-1.0.5"
@@ -6513,8 +6513,8 @@ in
       sources."path-is-absolute-1.0.1"
       sources."path-key-3.1.1"
       sources."performance-now-2.1.0"
-      sources."picomatch-2.2.2"
-      sources."psl-1.8.0"
+      sources."picomatch-2.2.1"
+      sources."psl-1.7.0"
       sources."punycode-2.1.1"
       sources."qs-6.5.2"
       sources."readdirp-3.2.0"
@@ -6573,9 +6573,9 @@ in
       sources."@types/cacheable-request-6.0.1"
       sources."@types/http-cache-semantics-4.0.0"
       sources."@types/keyv-3.1.1"
-      sources."@types/node-13.9.4"
+      sources."@types/node-13.9.1"
       sources."@types/responselike-1.0.0"
-      sources."cacheable-lookup-2.0.1"
+      sources."cacheable-lookup-2.0.0"
       sources."cacheable-request-7.0.1"
       sources."caw-2.0.1"
       (sources."clone-response-1.0.2" // {
@@ -6591,7 +6591,7 @@ in
       sources."fs-extra-8.1.0"
       sources."get-proxy-2.1.0"
       sources."get-stream-5.1.0"
-      sources."got-10.7.0"
+      sources."got-10.6.0"
       sources."graceful-fs-4.2.3"
       sources."has-symbol-support-x-1.4.2"
       sources."has-to-string-tag-x-1.4.1"
@@ -6718,7 +6718,7 @@ in
       sources."get-caller-file-2.0.5"
       sources."getpass-0.1.7"
       sources."glob-7.1.4"
-      sources."glob-parent-5.1.1"
+      sources."glob-parent-5.1.0"
       sources."graceful-fs-4.2.3"
       sources."har-schema-2.0.0"
       sources."har-validator-5.1.3"
@@ -6748,7 +6748,7 @@ in
       sources."minimist-1.2.5"
       sources."minipass-2.9.0"
       sources."minizlib-1.3.3"
-      sources."mkdirp-0.5.4"
+      sources."mkdirp-0.5.3"
       sources."murmur-hash-js-1.0.0"
       sources."mustache-3.2.1"
       sources."nice-try-1.0.5"
@@ -6769,8 +6769,8 @@ in
       sources."path-is-absolute-1.0.1"
       sources."path-key-3.1.1"
       sources."performance-now-2.1.0"
-      sources."picomatch-2.2.2"
-      sources."psl-1.8.0"
+      sources."picomatch-2.2.1"
+      sources."psl-1.7.0"
       sources."punycode-2.1.1"
       sources."qs-6.5.2"
       sources."readdirp-3.1.3"

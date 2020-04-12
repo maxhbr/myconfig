@@ -21,7 +21,7 @@ assert sendEmailSupport -> perlSupport;
 assert svnSupport -> perlSupport;
 
 let
-  version = "2.25.0";
+  version = "2.25.1";
   svn = subversionClient.override { perlBindings = perlSupport; };
 
   gitwebPerlLibs = with perlPackages; [ CGI HTMLParser CGIFast FCGI FCGIProcManager HTMLTagCloud ];
@@ -33,7 +33,7 @@ stdenv.mkDerivation {
 
   src = fetchurl {
     url = "https://www.kernel.org/pub/software/scm/git/git-${version}.tar.xz";
-    sha256 = "1l58v42aazj0x9276gk8r9mwyl9pgp9w99aakz4xfhzv7wd2jq60";
+    sha256 = "09lzwa183nblr6l8ib35g2xrjf9wm9yhk3szfvyzkwivdv69c9r2";
   };
 
   outputs = [ "out" ];
@@ -95,7 +95,15 @@ stdenv.mkDerivation {
   ++ stdenv.lib.optionals stdenv.isSunOS ["INSTALL=install" "NO_INET_NTOP=" "NO_INET_PTON="]
   ++ (if stdenv.isDarwin then ["NO_APPLE_COMMON_CRYPTO=1"] else ["sysconfdir=/etc"])
   ++ stdenv.lib.optionals stdenv.hostPlatform.isMusl ["NO_SYS_POLL_H=1" "NO_GETTEXT=YesPlease"]
-  ++ stdenv.lib.optional withpcre2 "USE_LIBPCRE2=1";
+  ++ stdenv.lib.optional withpcre2 "USE_LIBPCRE2=1"
+  # git-gui refuses to start with the version of tk distributed with
+  # macOS Catalina. We can prevent git from building the .app bundle
+  # by specifying an invalid tk framework. The postInstall step will
+  # then ensure that git-gui uses tcl/tk from nixpkgs, which is an
+  # acceptable version.
+  #
+  # See https://github.com/Homebrew/homebrew-core/commit/dfa3ccf1e7d3901e371b5140b935839ba9d8b706
+  ++ stdenv.lib.optional stdenv.isDarwin "TKFRAMEWORK=/nonexistent";
 
 
   postBuild = ''
@@ -139,8 +147,6 @@ stdenv.mkDerivation {
       # Install contrib stuff.
       mkdir -p $out/share/git
       cp -a contrib $out/share/git/
-      mkdir -p $out/share/emacs/site-lisp
-      ln -s "$out/share/git/contrib/emacs/"*.el $out/share/emacs/site-lisp/
       mkdir -p $out/share/bash-completion/completions
       ln -s $out/share/git/contrib/completion/git-completion.bash $out/share/bash-completion/completions/git
       mkdir -p $out/etc/bash_completion.d

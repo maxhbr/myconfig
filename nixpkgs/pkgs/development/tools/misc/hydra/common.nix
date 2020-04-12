@@ -4,7 +4,7 @@
 , guile, perl, postgresql, nukeReferences, git, boehmgc, nlohmann_json
 , docbook_xsl, openssh, gnused, coreutils, findutils, gzip, lzma, gnutar
 , rpm, dpkg, cdrkit, pixz, lib, boost, autoreconfHook, src ? null, version ? null
-, migration ? false
+, migration ? false, patches ? []
 }:
 
 with stdenv;
@@ -27,6 +27,7 @@ let
         CatalystPluginCaptcha
         CatalystPluginSessionStateCookie
         CatalystPluginSessionStoreFastMmap
+        CatalystPluginSmartURI
         CatalystPluginStackTrace
         CatalystRuntime
         CatalystTraitForRequestProxyBase
@@ -73,11 +74,11 @@ let
 in stdenv.mkDerivation rec {
   pname = "hydra";
 
-  inherit stdenv src version;
+  inherit stdenv src version patches;
 
   buildInputs =
     [ makeWrapper autoconf automake libtool unzip nukeReferences sqlite libpqxx
-      gitAndTools.topGit mercurial /*darcs*/ subversion bazaar openssl bzip2 libxslt
+      gitAndTools.top-git mercurial /*darcs*/ subversion bazaar openssl bzip2 libxslt
       perlDeps perl nix
       postgresql # for running the tests
       nlohmann_json
@@ -86,7 +87,7 @@ in stdenv.mkDerivation rec {
 
   hydraPath = lib.makeBinPath (
     [ sqlite subversion openssh nix coreutils findutils pixz
-      gzip bzip2 lzma gnutar unzip git gitAndTools.topGit mercurial /*darcs*/ gnused bazaar
+      gzip bzip2 lzma gnutar unzip git gitAndTools.top-git mercurial /*darcs*/ gnused bazaar
     ] ++ lib.optionals stdenv.isLinux [ rpm dpkg cdrkit ] );
 
   nativeBuildInputs = [ autoreconfHook pkgconfig ];
