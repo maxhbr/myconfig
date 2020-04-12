@@ -1,8 +1,10 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
-
-{
+let
+  jsonFile = ./. + "/chisui-zsh-nix-shell.json";
+  json = builtins.fromJSON (builtins.readFile jsonFile);
+in {
   imports = [
     ../shell.common
   ];
@@ -15,10 +17,7 @@
         ".profile".source = ./zprofile;
         ".zshrc.pre-oh-my-zsh".source = ./zshrc.pre-oh-my-zsh;
         ".zsh-nix-shell".source = pkgs.fetchFromGitHub {
-          owner = "chisui";
-          repo = "zsh-nix-shell";
-          rev = "master";
-          sha256 = "0l41ac5b7p8yyjvpfp438kw7zl9dblrpd7icjg1v3ig3xy87zv0n"; # TODO: autoupdate
+          inherit (json) owner repo rev sha256;
         };
       };
     };

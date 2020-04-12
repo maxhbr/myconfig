@@ -380,6 +380,8 @@ update() {
             ./nixos/modules/emacs/update.sh
             logH3 "update" "my-wallpapers"
             ./nixos/modules/desktop.common/my-wallpapers/update.sh
+            logH3 "update" "chisui/zsh-nix-shell"
+            ./nixos/modules/zsh/update.sh
         fi
     fi
 }
