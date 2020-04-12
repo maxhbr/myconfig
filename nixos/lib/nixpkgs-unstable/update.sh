@@ -19,3 +19,5 @@ handleChannel() {
 handleChannel nixos-unstable
 handleChannel nixos-unstable-small
 handleChannel nixpkgs-unstable
+handleChannel nixos-20.03
+handleChannel nixos-20.03-small
