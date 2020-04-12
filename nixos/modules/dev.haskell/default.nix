@@ -12,7 +12,7 @@
       ] ++ (with pkgs.haskellPackages; [
         # cabal-install
         ghc hlint pandoc
-        hdevtools
+        # hdevtools
       ]);
       home.file = {
         ".ghci".source = ./ghci;
