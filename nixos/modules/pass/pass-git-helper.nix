@@ -12,10 +12,10 @@ buildPythonApplication rec {
   version = "1.0.0";
 
   src = fetchFromGitHub {
-    sha256 = "1rvvwsq2yrf9lgcms5g15clah5grmz1wpf14f9wp2d3xh3df60ma";
-    rev = "81fca91e4867c0d6e461aabe88e469ed9bce7034";
-    repo = pname;
+    sha256 = "0nn475pqhywirdprla9ihyf7pz4pv5pfc5rvc09q602fv51zc6qs";
+    rev = "561c464f896edebff6d9cf3722dcb299f300ab99";
     owner = "languitar";
+    repo = pname;
   };
 
   patchPhase = ''
