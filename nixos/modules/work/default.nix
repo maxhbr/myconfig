@@ -22,6 +22,7 @@
         thrift
         idea-ultimate # jetbrains.phpstorm
         dia
+        insync
       ];
     };
   };
