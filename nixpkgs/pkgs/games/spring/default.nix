@@ -8,17 +8,17 @@
 stdenv.mkDerivation rec {
   pname = "spring";
   version = "104.0.1-${buildId}-g${shortRev}";
-  # usually the latest in https://github.com/spring/spring/commits/maintenance 
-  rev = "8ecf38a784ed3c4e3d67bc8d59839a77e0f0b83e";
+  # usually the latest in https://github.com/spring/spring/commits/maintenance
+  rev = "c4e1654d5d2758fb8bf8f5c9769dd4be2a3eb866";
   shortRev = builtins.substring 0 7 rev;
-  buildId = "1477";
+  buildId = "1482";
 
   # taken from https://github.com/spring/spring/commits/maintenance
   src = fetchFromGitHub {
     owner = "spring";
     repo = "spring";
     inherit rev;
-    sha256 = "0iai1wnd7msabgw2979cp2k54sgcfvidfmymhnck31jwbfa6y021";
+    sha256 = "1rnpn8i4m5spkf3jjndz17ldh4h09q7bh6zaxzmpgxilh8gjdj92";
     fetchSubmodules = true;
   };
 
@@ -56,10 +56,10 @@ stdenv.mkDerivation rec {
   '';
 
   meta = with stdenv.lib; {
-    homepage = https://springrts.com/;
+    homepage = "https://springrts.com/";
     description = "A powerful real-time strategy (RTS) game engine";
     license = licenses.gpl2;
-    maintainers = [ maintainers.phreedom maintainers.qknight maintainers.domenkozar ];
+    maintainers = [ maintainers.phreedom maintainers.qknight maintainers.domenkozar maintainers.sorki ];
     platforms = platforms.linux;
   };
 }
