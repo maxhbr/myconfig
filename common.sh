@@ -1,8 +1,6 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-if [[ "$COMMON_SH_WAS_SOURCED" != "true" ]]; then
-    export COMMON_SH_WAS_SOURCED="true"
-
+if ! type logH1 &>/dev/null; then
     ###########################################################################
     ##  variables  ############################################################
     ###########################################################################
@@ -32,7 +30,7 @@ if [[ "$COMMON_SH_WAS_SOURCED" != "true" ]]; then
     ##  functions  ############################################################
     ###########################################################################
 
-    have() { type "$1" &> /dev/null; }
+    have() { type "$1" &>/dev/null; }
 
     logH1() {
         local prefix=$1
