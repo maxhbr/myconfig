@@ -277,6 +277,11 @@ prepare_create_nix_store_key() {
         sudo openssl rsa -in /etc/nix/signing-key.sec -pubout | sudo tee /etc/nix/signing-key.pub
     fi
 }
+loadPrefetches() {
+    for file in "$myconfigDir/prefetches/"*; do
+        nix-prefetch-url "$file://$(readlink -f $file)"
+    done
+}
 prepare() {
     if [[ -f /etc/nixos/configuration.nix ]]; then
         echo "/etc/nixos/configuration.nix should not exist"
@@ -287,6 +292,8 @@ prepare() {
     prepare_update_nix_path_file
     prepare_create_folders_for_home_manager
     prepare_create_nix_store_key
+
+    loadPrefetches
 }
 
 realize() {

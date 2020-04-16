@@ -13,7 +13,7 @@ in {
         pass-git-helper
         jq
         cropLog
-        freemind xournal
+        freemind xournalpp
       ] ++ lib.optional config.services.xserver.enable vscode-with-extensions);
     };
   };
