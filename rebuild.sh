@@ -122,20 +122,21 @@ diffCurrentSystemDeps() {
     [[ -e $1 ]] || return 0
 
     local profileRoot=$1
-    local newFile=$(mktemp)
+    local outFile="${ROOT}/_logs/currentSystemDeps-$(hostname)-$(basename "$profileRoot")"
+    local oldOutFile="${outFile}.old"
 
-    nix-store -qR $profileRoot |
+    if [[ -f "$outFile" ]]; then
+        mv "$outFile" "$oldOutFile"
+    fi
+
+    nix-store -qR "$profileRoot" |
         sed 's/^[^-]*-//g' |
         # while read line ; do echo "$(sed 's/^[^-]*-//g' <<< $line) $line" ; done |
-        sort -u > $newFile
+        sort -u > "$outFile"
 
-    if [[ -f $2 ]]; then
-        local oldFile=$2
-
+    if [[ -f "$oldOutFile" ]]; then
         logH2 "diff dependencies of $profileRoot"
-        generateDiffFromTmpfiles $oldFile $newFile
-    else
-        echo $newFile
+        generateDiffFromTmpfiles "$oldOutFile" "$outFile"
     fi
 }
 
@@ -210,8 +211,6 @@ exec &> >(tee -a $logfile)
 
 ###########################################################################
 # save current state and show them on exit ################################
-currentSystemDeps=$(diffCurrentSystemDeps /run/current-system/)
-currentUserDeps=$(diffCurrentSystemDeps ~/.nix-profile)
 currentDiskUsage=$(diffDiskUsage)
 currentNixosGenerations=$(diffGenerations)
 startTime=$(date)
@@ -219,8 +218,8 @@ startTime=$(date)
 showStatDifferences() {
     logH1 "show" "stats"
     diffGenerations "$currentNixosGenerations"
-    diffCurrentSystemDeps /run/current-system/ $currentSystemDeps
-    diffCurrentSystemDeps ~/.nix-profile $currentUserDeps
+    diffCurrentSystemDeps /run/current-system/
+    diffCurrentSystemDeps ~/.nix-profile
     diffDiskUsage $currentDiskUsage
     echo "... start: $startTime"
     echo "...   end: $(date)"
@@ -277,7 +276,7 @@ prepare_create_nix_store_key() {
         sudo openssl rsa -in /etc/nix/signing-key.sec -pubout | sudo tee /etc/nix/signing-key.pub
     fi
 }
-loadPrefetches() {
+prepare_load_prefetches() {
     logH1 "prefetch" "$myconfigDir/prefetches/"
     for file in "$myconfigDir/prefetches/"*; do
         nix-prefetch-url "file://$(readlink -f $file)"
@@ -294,7 +293,7 @@ prepare() {
     prepare_create_folders_for_home_manager
     prepare_create_nix_store_key
 
-    loadPrefetches
+    prepare_load_prefetches
 }
 
 realize() {
