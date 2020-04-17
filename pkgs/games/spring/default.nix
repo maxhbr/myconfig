@@ -9,16 +9,16 @@ stdenv.mkDerivation rec {
   pname = "spring";
   version = "104.0.1-${buildId}-g${shortRev}";
   # usually the latest in https://github.com/spring/spring/commits/maintenance
-  rev = "c4e1654d5d2758fb8bf8f5c9769dd4be2a3eb866";
+  rev = "f266c8107b3e5dda5a78061ef00ca0ed8736d6f2";
   shortRev = builtins.substring 0 7 rev;
-  buildId = "1482";
+  buildId = "1486";
 
   # taken from https://github.com/spring/spring/commits/maintenance
   src = fetchFromGitHub {
     owner = "spring";
     repo = "spring";
     inherit rev;
-    sha256 = "1rnpn8i4m5spkf3jjndz17ldh4h09q7bh6zaxzmpgxilh8gjdj92";
+    sha256 = "1nx68d894yfmqc6df72hmk75ph26fqdvlmmq58cca0vbwpz9hf5v";
     fetchSubmodules = true;
   };
 

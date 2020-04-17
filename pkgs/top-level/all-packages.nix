@@ -92,6 +92,8 @@ in
 
   common-updater-scripts = callPackage ../common-updater/scripts.nix { };
 
+  genericUpdater = callPackage ../common-updater/generic-updater.nix { };
+
   ### Push NixOS tests inside the fixed point
 
   nixosTests = import ../../nixos/tests/all-tests.nix {
@@ -1809,7 +1811,7 @@ in
 
   fzy = callPackage ../tools/misc/fzy { };
 
-  g2o = callPackage ../development/libraries/g2o { };
+  g2o = libsForQt5.callPackage ../development/libraries/g2o { };
 
   gbsplay = callPackage ../applications/audio/gbsplay { };
 
@@ -2009,7 +2011,9 @@ in
 
   mididings = callPackage ../tools/audio/mididings { };
 
-  miniserve = callPackage ../tools/misc/miniserve { };
+  miniserve = callPackage ../tools/misc/miniserve {
+    inherit (darwin.apple_sdk.frameworks) Security;
+  };
 
   mkspiffs = callPackage ../tools/filesystems/mkspiffs { };
 
@@ -4036,6 +4040,8 @@ in
   hardinfo = callPackage ../tools/system/hardinfo { };
 
   hcxtools = callPackage ../tools/security/hcxtools { };
+
+  hcxdumptool = callPackage ../tools/security/hcxdumptool { };
 
   hdapsd = callPackage ../os-specific/linux/hdapsd { };
 
@@ -6201,6 +6207,8 @@ in
 
   richgo = callPackage ../development/tools/richgo {  };
 
+  rs = callPackage ../tools/text/rs { };
+
   rst2html5 = callPackage ../tools/text/rst2html5 { };
 
   rt = callPackage ../servers/rt { };
@@ -6742,7 +6750,10 @@ in
   sshpass = callPackage ../tools/networking/sshpass { };
 
   sslscan = callPackage ../tools/security/sslscan {
-    openssl = openssl_1_0_2.override { enableSSL2 = true; };
+    openssl = openssl_1_0_2.override {
+      enableSSL2 = true;
+      enableSSL3 = true;
+    };
   };
 
   sslmate = callPackage ../development/tools/sslmate { };
@@ -7103,6 +7114,8 @@ in
 
   txtw = callPackage ../tools/misc/txtw { };
 
+  tydra = callPackage ../tools/misc/tydra { };
+
   u9fs = callPackage ../servers/u9fs { };
 
   ua = callPackage ../tools/networking/ua { };
@@ -7158,6 +7171,8 @@ in
   urlscan = callPackage ../applications/misc/urlscan { };
 
   urlview = callPackage ../applications/misc/urlview {};
+
+  ursadb = callPackage ../servers/ursadb {};
 
   usbmuxd = callPackage ../tools/misc/usbmuxd {};
 
@@ -8001,8 +8016,6 @@ in
       useMacosReexportHack = true;
     };
   };
-  llvm-polly = llvmPackages_latest.llvm-polly;
-  clang-polly = llvmPackages_latest.clang.override { cc = llvmPackages_latest.clang-polly-unwrapped; };
 
   clang_10 = llvmPackages_10.clang;
   clang_9  = llvmPackages_9.clang;
@@ -8182,7 +8195,11 @@ in
   }));
 
   libstdcxxHook = makeSetupHook
-    { substitutions = { gcc = gcc-unwrapped; }; }
+    { substitutions = {
+        gcc = gcc-unwrapped;
+        targetConfig = stdenv.targetPlatform.config;
+      };
+    }
     ../development/compilers/gcc/libstdc++-hook.sh;
 
   crossLibcStdenv = overrideCC stdenv
@@ -8799,7 +8816,7 @@ in
     stdenv = gcc7Stdenv;
   });
 
-  llvmPackages_latest = llvmPackages_9; # llvmPackages_10: when out of RC
+  llvmPackages_latest = llvmPackages_10;
 
   lorri = callPackage ../tools/misc/lorri {
     inherit (darwin.apple_sdk.frameworks) CoreServices Security;
@@ -9024,6 +9041,8 @@ in
   rustracerd = callPackage ../development/tools/rust/racerd {
     inherit (darwin.apple_sdk.frameworks) Security;
   };
+  inherit (callPackage ../development/tools/rust/rust-analyzer { })
+    rust-analyzer-unwrapped rust-analyzer;
   rust-bindgen = callPackage ../development/tools/rust/bindgen { };
   rust-cbindgen = callPackage ../development/tools/rust/cbindgen {
     inherit (darwin.apple_sdk.frameworks) Security;
@@ -12075,6 +12094,12 @@ in
     libusb = libusb1;
   };
 
+  highfive = callPackage ../development/libraries/highfive { };
+
+  highfive-mpi = appendToName "mpi" (highfive.override {
+    hdf5 = hdf5-mpi;
+  });
+
   hiredis = callPackage ../development/libraries/hiredis { };
 
   hiredis-vip = callPackage ../development/libraries/hiredis-vip { };
@@ -12116,6 +12141,8 @@ in
   hydra-cli = callPackage ../development/tools/misc/hydra-cli { };
 
   hydraAntLogger = callPackage ../development/libraries/java/hydra-ant-logger { };
+
+  hydra-check = with python3.pkgs; toPythonApplication hydra-check;
 
   hyena = callPackage ../development/libraries/hyena { };
 
@@ -14196,6 +14223,8 @@ in
 
   readosm = callPackage ../development/libraries/readosm { };
 
+  kissfft = callPackage ../development/libraries/kissfft { };
+
   lambdabot = callPackage ../development/tools/haskell/lambdabot {
     haskellLib = haskell.lib;
   };
@@ -14223,6 +14252,8 @@ in
   lv2 = callPackage ../development/libraries/audio/lv2 { };
 
   lvtk = callPackage ../development/libraries/audio/lvtk { };
+
+  qm-dsp = callPackage ../development/libraries/audio/qm-dsp { };
 
   qradiolink = callPackage ../applications/radio/qradiolink { };
 
@@ -16623,11 +16654,6 @@ in
         kernelPatches.request_key_helper_updated
         kernelPatches.cpu-cgroup-v2."4.4"
         kernelPatches.modinst_arg_list_too_long
-        # https://github.com/NixOS/nixpkgs/issues/42755
-        # Remove these xen-netfront patches once they're included in
-        # upstream! Fixes https://github.com/NixOS/nixpkgs/issues/42755
-        kernelPatches.xen-netfront_fix_mismatched_rtnl_unlock
-        kernelPatches.xen-netfront_update_features_after_registering_netdev
       ];
   };
 
@@ -17796,6 +17822,8 @@ in
 
   hermit = callPackage ../data/fonts/hermit { };
 
+  humanity-icon-theme = callPackage ../data/icons/humanity-icon-theme { };
+
   hyperscrypt-font = callPackage ../data/fonts/hyperscrypt { };
 
   ia-writer-duospace = callPackage ../data/fonts/ia-writer-duospace { };
@@ -17880,6 +17908,8 @@ in
   libre-caslon = callPackage ../data/fonts/libre-caslon { };
 
   libre-franklin = callPackage ../data/fonts/libre-franklin { };
+
+  line-awesome = callPackage ../data/fonts/line-awesome { };
 
   lmmath = callPackage ../data/fonts/lmmath {};
 
@@ -18418,9 +18448,7 @@ in
 
   aqemu = libsForQt5.callPackage ../applications/virtualization/aqemu { };
 
-  ardour = callPackage ../applications/audio/ardour {
-    inherit (gnome2) libgnomecanvas libgnomecanvasmm;
-  };
+  ardour = callPackage ../applications/audio/ardour { };
 
   arelle = with python3Packages; toPythonApplication arelle;
 
@@ -19719,6 +19747,8 @@ in
   gpsbabel = libsForQt5.callPackage ../applications/misc/gpsbabel {
     inherit (darwin) IOKit;
   };
+
+  gpsbabel-gui = libsForQt5.callPackage ../applications/misc/gpsbabel/gui.nix { };
 
   gpscorrelate = callPackage ../applications/misc/gpscorrelate { };
 
@@ -22526,7 +22556,7 @@ in
 
   worldengine-cli = python3Packages.worldengine;
 
-  wpsoffice = callPackage ../applications/office/wpsoffice {};
+  wpsoffice = libsForQt5.callPackage ../applications/office/wpsoffice {};
 
   wrapFirefox = callPackage ../applications/networking/browsers/firefox/wrapper.nix { };
 
@@ -26273,7 +26303,7 @@ in
 
   xib2nib = callPackage ../development/tools/xib2nib {};
 
-  linode-cli = callPackage ../tools/virtualization/linode-cli { };
+  linode-cli = python3Packages.callPackage ../tools/virtualization/linode-cli {};
 
   hss = callPackage ../tools/networking/hss {};
 
@@ -26417,5 +26447,7 @@ in
   fluxboxlauncher = callPackage ../applications/misc/fluxboxlauncher {};
 
   btcdeb = callPackage ../applications/blockchains/btcdeb {};
+
+  jitsi-meet-electron = callPackage ../applications/networking/instant-messengers/jitsi-meet-electron { };
 
 }
