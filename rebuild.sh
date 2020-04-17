@@ -278,8 +278,9 @@ prepare_create_nix_store_key() {
     fi
 }
 loadPrefetches() {
+    logH1 "prefetch" "$myconfigDir/prefetches/"
     for file in "$myconfigDir/prefetches/"*; do
-        nix-prefetch-url "$file://$(readlink -f $file)"
+        nix-prefetch-url "file://$(readlink -f $file)"
     done
 }
 prepare() {

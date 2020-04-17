@@ -44,7 +44,6 @@ myManageHook = let
                                , (doFloat, ["MPlayer"
                                            ,"Onboard"])
                                , (doShift "10", ["franz","Franz"
-                                                ,"rambox"
                                                 ,"Telegram"
                                                 ,"slack","Slack"])
                                , (doShift "media", ["Steam", "Wfica", "Wfica_Seamless"])

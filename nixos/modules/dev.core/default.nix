@@ -3,6 +3,7 @@
 { pkgs, config, ... }:
 let
   cropLog = with pkgs; writeScriptBin "cropLog.hs" (lib.fileContents ./cropLog.hs);
+  freeplane = pkgs.callPackage ../../pkgs/freeplane {};
 in {
   config = {
     home-manager.users.mhuber = {
@@ -13,7 +14,7 @@ in {
         pass-git-helper
         jq
         cropLog
-        freemind xournalpp
+        freemind freeplane xournalpp
       ] ++ lib.optional config.services.xserver.enable vscode-with-extensions);
     };
   };
