@@ -105,6 +105,7 @@ handleGit() {
 generateDiffFromTmpfiles() {
     oldFile=$1
     newFile=$2
+    noRm=$3
     (set +e; sdiff -bBWs $oldFile $newFile |
         while read; do
             line="$REPLY"
@@ -114,7 +115,9 @@ generateDiffFromTmpfiles() {
                 *'|'* ) echo "$(tput setaf 3)$line$(tput sgr0)" ;;
             esac
         done;
-     rm $oldFile $newFile)
+     if [[ "$noRm" != "-no-rm" ]]; then
+         rm $oldFile $newFile
+     fi )
 }
 
 diffCurrentSystemDeps() {
@@ -136,7 +139,7 @@ diffCurrentSystemDeps() {
 
     if [[ -f "$oldOutFile" ]]; then
         logH2 "diff dependencies of $profileRoot"
-        generateDiffFromTmpfiles "$oldOutFile" "$outFile"
+        generateDiffFromTmpfiles "$oldOutFile" "$outFile" -no-rm
     fi
 }
 

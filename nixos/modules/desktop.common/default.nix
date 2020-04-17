@@ -35,7 +35,7 @@ in {
     ./my-wallpapers
     ./fonts.nix
     ../urxvt.nix
-    ../termite.nix
+    # ../termite.nix
   ];
   config = {
     home-manager.users.mhuber = {
