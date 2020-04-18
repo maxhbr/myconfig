@@ -141,6 +141,7 @@ diffCurrentSystemDeps() {
         logH2 "diff dependencies of $profileRoot"
         generateDiffFromTmpfiles "$oldOutFile" "$outFile" -no-rm
     fi
+    rm "$oldOutFile"
 }
 
 diffGenerations() {
