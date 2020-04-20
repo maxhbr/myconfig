@@ -1,5 +1,5 @@
 # from: https://github.com/NixOS/nixpkgs/pull/34752
-{ stdenv, fetchurl, unzip }:
+{ stdenv, fetchurl, unzip, makeWrapper }:
 
 stdenv.mkDerivation rec {
   version = "1.8.2";
@@ -11,7 +11,7 @@ stdenv.mkDerivation rec {
   };
 
   nativeBuildInputs = [
-    unzip
+    unzip makeWrapper
   ];
 
   unpackPhase = ''
@@ -21,7 +21,7 @@ stdenv.mkDerivation rec {
   installPhase = ''
     mkdir -p $out/{bin,share}
     cp -r freeplane-${version}/* $out/share
-    ln -s $out/share/freeplane.sh $out/bin/freeplane
+    makeWrapper $out/share/freeplane.sh $out/bin/freeplane
   '';
 
   meta = with stdenv.lib; {
