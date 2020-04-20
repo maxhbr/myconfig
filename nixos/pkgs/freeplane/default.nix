@@ -6,7 +6,7 @@ stdenv.mkDerivation rec {
   name = "freeplane-${version}";
 
   src = fetchurl {
-    url =  "https://sourceforge.net/projects/freeplane/files/freeplane%20stable/freeplane_bin-1.8.2.zip/download";
+    url = "https://sourceforge.net/projects/freeplane/files/freeplane%20stable/freeplane_bin-1.8.2.zip/download";
     sha512 = "1a1a24fdffc932e2bc4af93ea0cbef1e9fcb9c7a5e92bac490c6ac4ed5485ae92d353aa41d259e40df0b256c9958c3978e967eea6f8991ae621deb44bc6c22b6";
   };
 
