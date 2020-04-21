@@ -152,6 +152,7 @@ mapAliases ({
   gettextWithExpat = gettext; # 2016-02-19
   git-hub = gitAndTools.git-hub; # added 2016-04-29
   glib_networking = glib-networking; # added 2018-02-25
+  gmailieer = lieer; # added 2020-04-19
   gnome-mpv = celluloid; # added 2019-08-22
   gnome15 = throw "gnome15 has been removed from nixpkgs, as it's unmaintained and depends on deprecated libraries."; # added 2019-12-10
   gmic_krita_qt = gmic-qt-krita; # added 2019-09-07
@@ -237,7 +238,7 @@ mapAliases ({
   libGL_driver = mesa.drivers;
   libintlOrEmpty = stdenv.lib.optional (!stdenv.isLinux || stdenv.hostPlatform.libc != "glibc") gettext; # added 2018-03-14
   libjson_rpc_cpp = libjson-rpc-cpp; # added 2017-02-28
-  liblapackWithoutAtlas = liblapack; # added 2018-11-05
+  liblapackWithoutAtlas = lapack-reference; # added 2018-11-05
   liblrdf = lrdf; # added 2018-04-25
   libqrencode = qrencode;  # added 2019-01-01
   librdf = lrdf; # added 2020-03-22
@@ -249,6 +250,11 @@ mapAliases ({
   links = links2; # added 2016-01-31
   linux_rpi0 = linux_rpi1;
   linuxPackages_rpi0 = linuxPackages_rpi1;
+
+  # added 2020-04-04
+  linuxPackages_testing_hardened = throw "linuxPackages_testing_hardened has been removed, please use linuxPackages_latest_hardened";
+  linux_testing_hardened = throw "linux_testing_hardened has been removed, please use linux_latest_hardened";
+
   loadcaffe = throw "loadcaffe has been removed, as the upstream project has been abandoned"; # added 2020-03-28
   lttngTools = lttng-tools;  # added 2014-07-31
   lttngUst = lttng-ust;  # added 2014-07-31

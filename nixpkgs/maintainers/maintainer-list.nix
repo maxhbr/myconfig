@@ -4225,6 +4225,12 @@
     githubId = 32152;
     name = "Luka Blaskovic";
   };
+  lbpdt = {
+    email = "nix@pdtpartners.com";
+    github = "lbpdt";
+    githubId = 45168934;
+    name = "Louis Blin";
+  };
   ldelelis = {
     email = "ldelelis@est.frba.utn.edu.ar";
     github = "ldelelis";
@@ -6472,6 +6478,12 @@
       fingerprint = "92B2 904F D293 C94D C4C9  3E6B BFBA F4C9 75F7 6450";
     }];
   };
+  roastiek = {
+    email = "r.dee.b.b@gmail.com";
+    github = "roastiek";
+    githubId = 422802;
+    name = "Rostislav Beneš";
+  };
   rob = {
     email = "rob.vermaas@gmail.com";
     github = "rbvermaa";
@@ -7804,6 +7816,12 @@
     githubId = 563054;
     name = "Thomas Tuegel";
   };
+  turion = {
+    email = "programming@manuelbaerenz.de";
+    github = "turion";
+    githubId = 303489;
+    name = "Manuel Bärenz";
+  };
   tv = {
     email = "tv@krebsco.de";
     github = "4z3";
@@ -8115,6 +8133,12 @@
     githubId = 3889405;
     name = "vyp";
   };
+  wamserma = {
+    name = "Markus S. Wamser";
+    email = "github-dev@mail2013.wamser.eu";
+    github = "wamserma";
+    githubId = 60148;
+  };
   waynr = {
     name = "Wayne Warren";
     email = "wayne.warren.s@gmail.com";
@@ -8424,6 +8448,12 @@
     github = "zauberpony";
     githubId = 250877;
     name = "Elmar Athmer";
+  };
+  zakkor = {
+    email = "edward.dalbon@gmail.com";
+    github = "zakkor";
+    githubId = 6191421;
+    name = "Edward d'Albon";
   };
   zef = {
     email = "zef@zef.me";
