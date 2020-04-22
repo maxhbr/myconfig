@@ -2143,6 +2143,8 @@ in
 
   stagit = callPackage ../development/tools/stagit { };
 
+  statserial = callPackage ../tools/misc/statserial { };
+
   step-ca = callPackage ../tools/security/step-ca { };
 
   step-cli = callPackage ../tools/security/step-cli { };
@@ -6628,6 +6630,8 @@ in
   smu = callPackage ../tools/text/smu { };
 
   smugline = python3Packages.smugline;
+
+  sn0int = callPackage ../tools/security/sn0int { };
 
   snabb = callPackage ../tools/networking/snabb { } ;
 
@@ -13276,10 +13280,6 @@ in
 
   libtsm = callPackage ../development/libraries/libtsm { };
 
-  libtxc_dxtn = callPackage ../development/libraries/libtxc_dxtn { };
-
-  libtxc_dxtn_s2tc = callPackage ../development/libraries/libtxc_dxtn_s2tc { };
-
   libgeotiff = callPackage ../development/libraries/libgeotiff { };
 
   libu2f-host = callPackage ../development/libraries/libu2f-host { };
@@ -18544,6 +18544,8 @@ in
 
   aesop = callPackage ../applications/office/aesop { };
 
+  AusweisApp2 = libsForQt5.callPackage ../applications/misc/ausweisapp2 { };
+
   avidemux = libsForQt5.callPackage ../applications/video/avidemux { };
 
   avrdudess = callPackage ../applications/misc/avrdudess { };
@@ -19858,6 +19860,7 @@ in
   hugo = callPackage ../applications/misc/hugo { };
 
   hydrogen = callPackage ../applications/audio/hydrogen { };
+  hydrogen-unstable = qt5.callPackage ../applications/audio/hydrogen/unstable.nix { };
 
   hydroxide = callPackage ../applications/networking/hydroxide { };
 
