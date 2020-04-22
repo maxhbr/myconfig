@@ -282,9 +282,10 @@ prepare_create_nix_store_key() {
 }
 prepare_load_prefetches() {
     logH1 "prefetch" "$myconfigDir/prefetches/"
-    for file in "$myconfigDir/prefetches/"*; do
-        nix-prefetch-url "file://$(readlink -f $file)"
-    done
+    find "$myconfigDir/prefetches/" \
+          -not -path '*/\.*' \
+         -type f \
+         -exec  nix-prefetch-url "file://{}" \;
 }
 prepare() {
     if [[ -f /etc/nixos/configuration.nix ]]; then
