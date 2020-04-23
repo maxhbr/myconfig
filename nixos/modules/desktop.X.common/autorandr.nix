@@ -83,7 +83,7 @@ in {
     };
     environment = {
       shellAliases = {
-        autosetup = "${pkgs.autorandr}/bin/autorandr --change";
+        autosetup = "${pkgs.autorandr}/bin/autorandr --skip-options gamma,panning --change";
         mobile = "${pkgs.autorandr}/bin/autorandr mobile";
       };
     };
