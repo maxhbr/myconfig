@@ -1,8 +1,8 @@
 # Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, ... }:
-
-{
+{ config, pkgs, lib, ... }: let
+  importall = import ../lib/helper/importall.nix;
+in {
   imports = [
     ./hardware-configuration.nix
     ../hardware/grub.nix
@@ -11,7 +11,7 @@
     ../headless.nix
     ../desktop.nix
     ../modules/X.xfce.nix
-  ];
+  ] ++ importall ./imports;
 
   config = {
     networking.hostName = "workstation";

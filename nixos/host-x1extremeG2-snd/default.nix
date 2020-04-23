@@ -1,7 +1,8 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
-{
+{ pkgs, ... }: let
+  importall = import ../lib/helper/importall.nix;
+in {
   imports = [
     ./hardware-configuration.nix
     ../dev.nix
@@ -13,7 +14,7 @@
     ../modules/imagework
     ../modules/smarthome.nix
     ../gaming.nix
-  ];
+  ] ++ importall ./imports;
 
   config = {
     networking.hostName = "x1extremeG2-snd";

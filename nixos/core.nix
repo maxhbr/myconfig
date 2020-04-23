@@ -1,7 +1,4 @@
 { config, pkgs, lib, ... }: let
-  importall = import ./lib/helper/importall.nix;
-  myconfigImports = importall (./. + "host-" + config.networking.hostName + "/imports");
-
   # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done | sudo tee ./hostid
   hostId = if builtins.pathExists /etc/nixos/hostid
            then builtins.readFile /etc/nixos/hostid
@@ -21,7 +18,7 @@ in {
     ./modules/nixos.nix.nix
     ./modules/user.mhuber.nix
     ./modules/dic.nix
-  ] ++ myconfigImports;
+  ];
 
   config = {
     environment = {
