@@ -255,11 +255,12 @@ prepare_update_hardware_configuration() {
 }
 prepare_update_nix_path_file() {
     nix_path_string="{ nix.nixPath = [ $(echo '"'"$NIX_PATH"'"' | sed 's/:/" "/g') ]; }"
-    nix_path_file="$myconfigDir/imports/nixPath.nix"
+    nix_path_file="$nixosConfig/imports/nixPath.nix"
+    mkdir -p "$(dirname "$nix_path_file")"
     if [[ "$(cat $nix_path_file 2>/dev/null)" != *"$nix_path_string"* ]]; then
-        logH1 "update" "$myconfigDir/imports/nixPath.nix"
-        echo $nix_path_string |
-            tee $nix_path_file
+        logH1 "update" "$nix_path_file"
+        echo "$nix_path_string" |
+            tee "$nix_path_file"
     fi
 }
 prepare_create_folders_for_home_manager() {
