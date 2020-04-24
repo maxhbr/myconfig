@@ -9,6 +9,8 @@ in {
     # hardware:
     ../hardware/x1extremeG2.nix
     ../hardware/efi.nix
+    ./backup-hdd.nix
+    ./foto-hdd.nix
     # modules
     ../modules/work
     ../modules/misc-desktop-tools.nix
