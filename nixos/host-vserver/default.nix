@@ -5,6 +5,7 @@
 in {
   imports = [
     ./hardware-configuration.nix
+    ./nixPath.nix
     ../headless.nix
     # hardware:
     ../hardware/grub.nix

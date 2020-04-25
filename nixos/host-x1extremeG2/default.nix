@@ -4,6 +4,7 @@
   importall = import ../lib/helper/importall.nix;
 in {
   imports = [
+    ./nixPath.nix
     ./hardware-configuration.nix
     ../dev.nix
     # hardware:
