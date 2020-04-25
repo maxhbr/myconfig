@@ -255,8 +255,7 @@ prepare_update_hardware_configuration() {
 }
 prepare_update_nix_path_file() {
     nix_path_string="{ nix.nixPath = [ $(echo '"'"$NIX_PATH"'"' | sed 's/:/" "/g') ]; }"
-    nix_path_file="$nixosConfig/imports/nixPath.nix"
-    mkdir -p "$(dirname "$nix_path_file")"
+    nix_path_file="$myconfigDir/_nixPath.nix"
     if [[ "$(cat $nix_path_file 2>/dev/null)" != *"$nix_path_string"* ]]; then
         logH1 "update" "$nix_path_file"
         echo "$nix_path_string" |

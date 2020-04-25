@@ -21,3 +21,4 @@ myconfig.out-link
 **/imports/priv*
 **/imports/work*
 **/*secrets*
+_nixPath.nix

@@ -5,6 +5,7 @@
            else "12345678";
 in {
   imports = [
+    ../_nixPath.nix
     ./lib
     ./modules/core.nix
     ./modules/gnupg.nix
