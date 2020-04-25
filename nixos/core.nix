@@ -4,7 +4,12 @@
            then builtins.readFile /etc/nixos/hostid
            else "12345678";
   upg-pull = pkgs.writeShellScriptBin "upg-pull" ''
-  set -ex
+  set -e
+  if [ "$(id -u)" -ne "1000" ]; then
+    echo "you should run this script as the user, which owns $0"
+    exec sudo su -c "$0" "$(id -nu 1000)"
+  fi
+  set -x
   myconfigDir=$HOME/myconfig
   if [[ -d "$myconfigDir" ]]; then
     if [[ ! -d "$myconfigDir/.git" ]]; then

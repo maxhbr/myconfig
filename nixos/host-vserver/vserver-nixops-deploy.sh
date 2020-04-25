@@ -17,3 +17,6 @@ nixops deploy \
        --force-reboot
 
 nixops check -d $deployment
+
+nixops ssh-for-each -d vserver-nixops upg-pull
+
