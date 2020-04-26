@@ -9,7 +9,7 @@ let
   mywine = pkgs.wine.override wineCfg;
   mywinetricks = (pkgs.winetricks.override {wine = mywine;});
 
-  cosmoteer = with pkgs; wrap {
+  cosmoteer = with pkgs; helper.wrap {
     name   = "cosmoteer";
     paths  = [ wget mywine mywinetricks ];
     script = builtins.readFile ./bin/cosmoteer.sh;

@@ -8,10 +8,10 @@
 }:
 
 stdenv.mkDerivation rec {
-  name = "ktane-${version}";
-  version = "1.8.3";
+  name = "DungeonsofDredmor-${version}";
+  version = "1389995827";
 
-  src = ./Keep_Talking_and_Nobody_Explodes_1.8.3_-_StandaloneLinuxUniversal_Default.zip;
+  src = ./DungeonsofDredmor_Complete_linux_1389995827.tar.gz;
 
   nativeBuildInputs = [
     unzip
@@ -26,20 +26,20 @@ stdenv.mkDerivation rec {
   ];
 
   unpackPhase = ''
-    unzip $src
+    mkdir -p dod
+    tar -xf $src -C dod
   '';
 
   installPhase = ''
-    cd "Keep Talking and Nobody Explodes"
     mkdir -p $out/share
-    cp -r ktane_Data ktane.x86_64 $out/share
-    chmod +x $out/share/ktane.x86_64
+    ls
+    cp -r dod/* $out/share
     mkdir -p $out/bin
-    cat <<EOF >$out/bin/ktane
+    cat <<EOF >$out/bin/dod
     #!/bin/sh
-    steam-run $out/share/ktane.x86_64
+    steam-run $out/share/Dredmor
     EOF
-    chmod +x $out/bin/ktane
+    chmod +x $out/bin/dod
   '';
 
   meta = with stdenv.lib; {
