@@ -51,18 +51,18 @@ upgrade() {
             logINFO "skip updating subtrees, not clean"
         fi
 
-        logH3 "upgrade" "home-manager"
-        ./nixos/lib/home-manager/upgrade.sh
-        logH3 "upgrade" "extrahosts"
-        ./nixos/modules/nixos.networking/extrahosts/upgrade.sh
-        logH3 "upgrade" "nixpkgs-unstable"
-        ./nixos/lib/nixpkgs-unstable/upgrade.sh
-        logH3 "upgrade" "emacs"
-        ./nixos/modules/emacs/upgrade.sh
-        logH3 "upgrade" "my-wallpapers"
-        ./nixos/modules/desktop.common/my-wallpapers/upgrade.sh
-        logH3 "upgrade" "chisui/zsh-nix-shell"
-        ./nixos/modules/zsh/upgrade.sh
+        logH3 "update" "home-manager"
+        ./nixos/lib/home-manager/update.sh
+        logH3 "update" "extrahosts"
+        ./nixos/modules/nixos.networking/extrahosts/update.sh
+        logH3 "update" "nixpkgs-unstable"
+        ./nixos/lib/nixpkgs-unstable/update.sh
+        logH3 "update" "emacs"
+        ./nixos/modules/emacs/update.sh
+        logH3 "update" "my-wallpapers"
+        ./nixos/modules/desktop.common/my-wallpapers/update.sh
+        logH3 "update" "chisui/zsh-nix-shell"
+        ./nixos/modules/zsh/update.sh
     fi
 }
 
