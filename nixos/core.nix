@@ -38,7 +38,6 @@ in {
     ./modules/nixos.nix.nix
     ./modules/user.mhuber.nix
     ./modules/dic.nix
-    (import <nix-path-file>)
   ];
 
   config = {
@@ -51,6 +50,7 @@ in {
         upg-dry = "~/myconfig/rebuild.sh --dry-run";
       };
     };
+    nix.nixPath = [ "nixpkgs=/home/mhuber/myconfig/nixpkgs" ];
     assertions = [
       { assertion = config.networking.hostId != null;
         message = ''

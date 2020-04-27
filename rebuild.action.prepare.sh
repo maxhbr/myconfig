@@ -13,19 +13,14 @@ prepare_update_hostid_file() {
     fi
 }
 prepare_update_hardware_configuration() {
-    if [[ -f "/etc/nixos/hardware-configuration.nix" ]]; then
-        if ! cmp "/etc/nixos/hardware-configuration.nix" "$nixosConfig/hardware-configuration.nix" >/dev/null 2>&1; then
-            logH1 "update" "$nixosConfig/hardware-configuration.nix"
-            cat "/etc/nixos/hardware-configuration.nix" | tee "$nixosConfig/hardware-configuration.nix"
+    local nixosConfig="$myconfigDir/nixos/host-$(hostname)"
+    if [[ -d "$nixosConfig" ]]; then
+        if [[ -f "/etc/nixos/hardware-configuration.nix" ]]; then
+            if ! cmp "/etc/nixos/hardware-configuration.nix" "$nixosConfig/hardware-configuration.nix" >/dev/null 2>&1; then
+                logH1 "update" "$nixosConfig/hardware-configuration.nix"
+                cat "/etc/nixos/hardware-configuration.nix" | tee "$nixosConfig/hardware-configuration.nix"
+            fi
         fi
-    fi
-}
-prepare_update_nix_path_file() {
-    nix_path_string="{ nix.nixPath = [ $(echo '"'"$NIX_PATH"'"' | sed 's/:/" "/g') ]; }"
-    if [[ "$(cat $nix_path_file 2>/dev/null)" != *"$nix_path_string"* ]]; then
-        logH1 "update" "$nix_path_file"
-        echo "$nix_path_string" |
-            tee "$nix_path_file"
     fi
 }
 prepare_create_nix_store_key() {
