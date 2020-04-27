@@ -31,11 +31,6 @@ in {
       allowDiscards = true;
     };
 
-    # option definitions
-    boot.kernel.sysctl = {
-      "vm.swappiness" = 1;
-    };
-
     home-manager.users.mhuber = {
       home.file = {
         ".config/autorandr/" = {

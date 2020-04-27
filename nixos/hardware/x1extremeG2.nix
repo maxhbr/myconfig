@@ -16,7 +16,6 @@
   imports = [
     ../hardware/notebook-generic.nix
     ../hardware/nixos-hardware/lenovo/thinkpad/x1-extreme/gen2/default.nix
-    ../hardware/ssd.nix
     ../hardware/lowres.nix
 
     ##############################################################################
