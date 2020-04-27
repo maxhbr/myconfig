@@ -39,6 +39,9 @@ diffCurrentSystemDeps() {
 
     logH2 "diff dependencies of $profileRoot"
     generateDiffWithOld "$outFile"
+
+    logH1 "nix path-info" "-hS $profileRoot"
+    nix path-info -hS "$profileRoot"
 }
 
 diffGenerations() {
@@ -59,7 +62,6 @@ diffDiskUsage() {
     logH2 "diff disk usage"
     generateDiffWithOld "$outFile" "-bBW"
 }
-
 
 showStatDifferences() {
     logH1 "show" "stats"

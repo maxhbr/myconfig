@@ -2,13 +2,18 @@ let
   secrets = import ./nixops-secrets.nix;
   hostFromConfig = hostName:
     { config, pkgs, ... }:
-    (import ( ./nixos/host- + hostName) { inherit config pkgs; }) //
     { config =
         { deployment =
             { inherit (secrets."${hostName}") targetHost;
               targetEnv = "none";
             };
+          assertions =
+            [ { assertion = config.networking.hostName == hostName;
+                message = "hostname should be set!";
+              }
+            ];
         };
+      imports = [(./nixos/host- + hostName)];
     };
 
 in

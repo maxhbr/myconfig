@@ -18,8 +18,42 @@ MYCONFIG_ARGS="$@"
 ###########################################################################
 ##  variables  ############################################################
 ###########################################################################
-export DEPLOYMENT=myconfig-nixops
-export nixStableChannel=nixos-unstable
+DEPLOYMENT=myconfig-nixops
+nixStableChannel=nixos-unstable
+DO_GIT=true
+DO_UPGRADE=true
+USE_TMUX=true
+DRY_RUN=false
+
+POSITIONAL=()
+for i in "$@"; do
+    case $i in
+        --no-git)
+            DO_GIT=false
+            shift
+            ;;
+        --fast)
+            DO_UPGRADE=false
+            DO_GIT=false
+            shift
+            ;;
+        --no-tmux)
+            USE_TMUX=false
+            shift
+            ;;
+        --dry-run)
+            DO_UPGRADE=false
+            USE_TMUX=false
+            DRY_RUN=true
+            shift
+            ;;
+        *)
+            POSITIONAL+=("$1")
+            shift
+            ;;
+    esac
+done
+set -- "${POSITIONAL[@]}"
 
 . ./common.sh
 . ./rebuild.lib.wrapIntoTmux.sh
@@ -43,55 +77,45 @@ handlePostExecutionHooks () {
 
 ###########################################################################
 # prepare misc stuff ######################################################
-[[ "$1" == "--dry-run" ]] || {
-    [[ "$1" != "--no-tmux" ]] && {
+if ! $DRY_RUN; then
+    if $USE_TMUX; then
         wrapIntoTmux "$REBUILD_SH"
-    } || shift
+    fi
     checkIfConnected
     # call sudo here, to ask for password early
     sudo echo "go ..."
-    [[ "$1" != "--no-git" ]] && {
+    if $DO_GIT; then
         handleGit
-    } || shift
-}
+    fi
+fi
 setupLoging
 setupExitTrap "toplevel"
 
 ###########################################################################
 # run #####################################################################
-if [[ "$MYCONFIG_ARGS" != *"--fast"* ]]; then
-    if [[ "$1" == "--dry-run" ]]; then
-        export NIXOS_REBUILD_CMD="dry-run"
-    else
-        prepare
-        if [[ "$(hostname)" == "$my_main_host" ]]; then
-            if isBranchMaster; then
-                realize --fast
-                if [[ "$MYCONFIG_ARGS" == *"--fast"* ]]; then
-                    logINFO "skip updating"
-                else
-                    upgrade
-                fi
-            else
-                logINFO "git branch is not master, do not upgrade"
-            fi
+
+prepare
+if $DO_UPGRADE; then
+    if [[ "$(hostname)" == "$my_main_host" ]]; then
+        if isBranchMaster; then
+            realize $(hostname) $($DRY_RUN && echo "--dry-run")
+            upgrade
         else
-            logINFO "host is not main host, do not upgrade"
+            logINFO "git branch is not master, do not upgrade"
         fi
+    else
+        logINFO "host is not main host, do not upgrade"
     fi
-    realize
-    [[ "$1" == "--dry-run" ]] || {
-        cleanup
-        handlePostExecutionHooks
-    }
-else
-    realize --fast
+fi
+realize $(hostname) $($DRY_RUN && echo "--dry-run")
+if ! $DRY_RUN; then
+    cleanup
+    handlePostExecutionHooks
 fi
 # end run #################################################################
 ###########################################################################
 
 [[ "$1" == "--dry-run" ]] || {
-    showStatDifferences
     handleGitPostExecution
     # nixops check -d $DEPLOYMENT
 }
