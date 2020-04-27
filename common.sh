@@ -17,7 +17,7 @@ if ! type logH1 &>/dev/null; then
 
     export nixpkgs="$myconfigDir/nixpkgs"
 
-r   NIX_PATH="nixpkgs=$nixpkgs"
+    NIX_PATH="nixpkgs=$nixpkgs"
     NIX_PATH_ARGS="-I '$(echo "$NIX_PATH" | sed "s/:/' -I '/g")'"
     export NIX_PATH
     export NIX_PATH_ARGS
