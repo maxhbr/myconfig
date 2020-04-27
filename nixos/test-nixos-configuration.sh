@@ -44,7 +44,7 @@ while [[ $# -gt 0 ]]; do
     fileSystems."/boot" = { device = "/dev/sdXY"; fsType = "vfat"; };
     boot.loader.grub.devices = [ "/dev/sdXY" ];
     networking.hostName = "adHoc";
-    networking.hostId = "123456";
+    networking.hostId = "3cb6c31b";
   };
 }
 EOF
