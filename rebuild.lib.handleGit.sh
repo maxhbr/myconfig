@@ -56,29 +56,6 @@ handleGitPostExecution() {
     fi
 }
 
-updateSubtree() {
-    if ! git diff-index --quiet HEAD --; then
-        logERR "uncommitted changes, do not update $channel"
-    fi
-
-    local remoteName=$1
-    local remoteURL=$2
-    local prefix=$3
-    local branch=$4
-
-    local remotes=$(git remote)
-    if [[ "$remotes" != *"$remoteName"* ]]; then
-        git remote add "$remoteName" "$remoteURL"
-        git subtree split --rejoin --prefix="$prefix" HEAD
-    fi
-
-    git fetch "$remoteName" -- "$branch"
-    logINFO "the channel $branch was last updated $(git log --format="%cr" remotes/$remoteName/$branch -1)"
-    (set -x;
-     git subtree pull --prefix $prefix "$remoteName" "$branch" --squash)
-}
-
 export -f isBranchMaster
 export -f handleGit
 export -f handleGitPostExecution
-export -f updateSubtree
