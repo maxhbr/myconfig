@@ -20,11 +20,6 @@ let
       else pkgs.lib.mapAttrs (n: v: removeMaintainers v) set
     else set;
 
-  allSupportedNixpkgs = builtins.removeAttrs (removeMaintainers (import ../pkgs/top-level/release.nix {
-    supportedSystems = supportedSystems ++ limitedSupportedSystems;
-    nixpkgs = nixpkgsSrc;
-  })) [ "unstable" ];
-
 in rec {
 
   nixos = removeMaintainers (import ./release.nix {
@@ -120,6 +115,7 @@ in rec {
         (onFullSupported "nixos.tests.openssh")
         (onFullSupported "nixos.tests.pantheon")
         (onFullSupported "nixos.tests.php.fpm")
+        (onFullSupported "nixos.tests.php.httpd")
         (onFullSupported "nixos.tests.php.pcre")
         (onFullSupported "nixos.tests.plasma5")
         (onFullSupported "nixos.tests.predictable-interface-names.predictableNetworkd")
