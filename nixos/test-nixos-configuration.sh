@@ -12,6 +12,7 @@ EOF
 set -e
 ARGS=""
 DRYRUN=NO
+nixosConfig="$myconfigDir/nixos/host-$(hostname)"
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
@@ -65,7 +66,7 @@ EOF
             ;;
     esac
 done
-NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$nixosConfig -I nix-path-file=$nixosConfig/nixPath.nix"
+NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$nixosConfig"
 NIX_PATH=""
 
 set -x
