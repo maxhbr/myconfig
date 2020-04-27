@@ -49,9 +49,6 @@ while [[ $# -gt 0 ]]; do
   };
 }
 EOF
-                    cat <<EOF | tee "$nixosConfig/nixPath.nix"
-{ nix.nixPath = [ ]; }
-EOF
                 else
                     help
                     exit 2
