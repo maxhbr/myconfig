@@ -63,10 +63,10 @@ diffDiskUsage() {
 
 showStatDifferences() {
     logH1 "show" "stats"
-    diffGenerations
-    diffCurrentSystemDeps /run/current-system/
-    diffCurrentSystemDeps ~/.nix-profile
-    diffDiskUsage $currentDiskUsage
+    diffGenerations || logERR "failed: diffGenerations"
+    diffCurrentSystemDeps /run/current-system/ || logERR "failed: diffCurrentSystemDeps /run/current-system/"
+    diffCurrentSystemDeps ~/.nix-profile || logERR "failed: diffCurrentSystemDeps ~/.nix-profile"
+    diffDiskUsage || logERR "failed: diffDiskUsage"
 }
 
 setupExitTrap() {
