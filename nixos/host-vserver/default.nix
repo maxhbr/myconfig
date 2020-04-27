@@ -5,7 +5,6 @@
 in {
   imports = [
     ./hardware-configuration.nix
-    ./nixPath.nix
     ../headless.nix
     # hardware:
     ../hardware/grub.nix
@@ -14,5 +13,6 @@ in {
   ] ++ importall ./imports;
   config = {
     networking.hostName = "vserver";
+    networking.hostId = "49496f29";
   };
 }

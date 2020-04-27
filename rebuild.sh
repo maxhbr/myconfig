@@ -17,192 +17,21 @@ MYCONFIG_ARGS="$@"
 DEPLOYMENT=myconfig-nixops
 
 . ./common.sh
+. ./common.wrapIntoTmux.sh
+. ./common.diffState.sh
+. ./common.logging.sh
+. ./common.handleGit.sh
 
 ###########################################################################
 ##  variables  ############################################################
 ###########################################################################
-
 export nixStableChannel=nixos-unstable
-
-###########################################################################
-##  functions  ############################################################
-###########################################################################
-
-wrapIntoTmux() {
-    have "tmux" && {
-        local TMUX_NAME="rebuild_sh"
-        if test -z $TMUX && [[ $TERM != "screen" ]]; then
-            logH2 "wrap into tmux ..."
-            tmux has-session -t $TMUX_NAME 2>/dev/null && {
-                logERR "already running somewhere"
-                exit 1
-            }
-            tmux -2 new-session -s $TMUX_NAME \
-                    "command echo \"... wrapped into tmux\"; NIX_PATH=\"$NIX_PATH\" $REBUILD_SH $@; read -t 1 -n 10000 discard; read -n 1 -s -r -p \"Press any key to continue\"" \; \
-                    set-option status-left "rebuild.sh"\; \
-                    set-option status-right "started at $(date) "\; \
-                    set set-titles-string "${TMUX_NAME}@tmux" \
-                && exit 0
-            logERR "tmux failed to start, running without tmux"
-        fi
-    } || logINFO "tmux not installed"
-}
-
-checkIfConnected() {
-    if ! ping -c1 heise.de > /dev/null 2>&1; then
-        logERR "not connected: ping heise.de failed"
-        if ! wget -O - heise.de > /dev/null 2>&1; then
-            logERR "not connected: wget heise.de failed"
-            exit 1
-        fi
-    fi
-}
-
-isBranchMaster() {
-    if [[ "$(cd "$myconfigDir"; git rev-parse --abbrev-ref HEAD)" == "master" ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-handleGit() {
-    if isBranchMaster; then
-        logH1 "update config" ""
-        if git diff-index --quiet HEAD --; then
-            git fetch
-            local UPSTREAM='@{u}'
-            local LOCAL=$(git rev-parse @)
-            local REMOTE=$(git rev-parse "$UPSTREAM")
-            local BASE=$(git merge-base @ "$UPSTREAM")
-            if [ "x$LOCAL" == "x$REMOTE" ]; then
-                echo "... up-to-date"
-            elif [ "x$LOCAL" == "x$BASE" ]; then
-                echo "* pull ..."
-                git pull --rebase || true
-                logH1 "run" "updatet version of script"
-                exec $0
-            elif [ "x$REMOTE" == "x$BASE" ]; then
-                logINFO "need to push"
-            else
-                logERR "diverged"
-            fi
-        else
-            logINFO "git directory is unclean"
-            if [[ "$1" != "--fast" ]]; then
-                read -t 10 -r -p "commit state as \"update before rebuild.sh\"? [y/N] " response || true
-                if [[ "${response,,}" =~ ^(yes|y)$ ]]; then
-                    git commit -am "update before rebuild.sh"
-                    handleGit
-                fi
-            fi
-        fi
-    else
-        logINFO "git branch is not master, do not handle git"
-    fi
-}
-
-generateDiffFromTmpfiles() {
-    oldFile=$1
-    newFile=$2
-    noRm=$3
-    (set +e; sdiff -bBWs $oldFile $newFile |
-        while read; do
-            line="$REPLY"
-            case $line in
-                *'<'* ) echo "$(tput setaf 1)$line$(tput sgr0)" ;;
-                *'>'* ) echo "$(tput setaf 2)$line$(tput sgr0)" ;;
-                *'|'* ) echo "$(tput setaf 3)$line$(tput sgr0)" ;;
-            esac
-        done;
-     if [[ "$noRm" != "-no-rm" ]]; then
-         rm $oldFile $newFile
-     fi )
-}
-
-diffCurrentSystemDeps() {
-    have nix-store || return 0
-    [[ -e $1 ]] || return 0
-
-    local profileRoot=$1
-    local outFile="$logsDir/currentSystemDeps-$(hostname)-$(basename "$profileRoot")"
-    local oldOutFile="${outFile}.old"
-
-    if [[ -f "$outFile" ]]; then
-        mv "$outFile" "$oldOutFile"
-    fi
-
-    nix-store -qR "$profileRoot" |
-        sed 's/^[^-]*-//g' |
-        # while read line ; do echo "$(sed 's/^[^-]*-//g' <<< $line) $line" ; done |
-        sort -u > "$outFile"
-
-    if [[ -f "$oldOutFile" ]]; then
-        logH2 "diff dependencies of $profileRoot"
-        generateDiffFromTmpfiles "$oldOutFile" "$outFile" -no-rm
-    fi
-    rm "$oldOutFile"
-}
-
-diffGenerations() {
-    local newFile=$(mktemp)
-    { sudo --preserve-env=NIX_PATH \
-           nix-env \
-           --list-generations --profile /nix/var/nix/profiles/system || return; }> $newFile
-    if [[ -f $1 ]]; then
-        local oldFile="$1"
-        logH2 "diff nixos generations"
-        generateDiffFromTmpfiles $oldFile $newFile
-    else
-        echo $newFile
-    fi
-}
-
-diffDiskUsage() {
-    [[ -e /dev/dm-2 ]] || return 0
-
-    local newFile=$(mktemp)
-    df -h --output="pcent,used" /dev/dm-2 > $newFile
-
-    if [[ -f $1 ]]; then
-        local oldFile=$1
-
-        logH2 "diff disk usage"
-        sdiff -bBW $oldFile $newFile
-
-        rm $oldFile $newFile
-    else
-        echo $newFile
-    fi
-}
-
-handleGitPostExecution () {
-    if isBranchMaster; then
-        git diff --stat
-        if ! git diff-index --quiet HEAD --; then
-            read -r -p "commit state as \"update after rebuild.sh\"? [y/N] " response
-            if [[ "${response,,}" =~ ^(yes|y)$ ]]; then
-                git commit -am "update after rebuild.sh"
-            fi
-        fi
-    fi
-}
-
-###########################################################################
-##  run  ##################################################################
-###########################################################################
-
-###########################################################################
-# prepare logging #########################################################
-logfile="$logsDir/$(date +%Y-%m-%d)-rebuild.sh.log"
-echo -e "\n\n\n\n\n\n\n" >> $logfile
-exec &> >(tee -a $logfile)
 
 ###########################################################################
 # prepare misc stuff ######################################################
 [[ "$1" == "--dry-run" ]] || {
     [[ "$1" != "--no-tmux" ]] && {
-        wrapIntoTmux
+        wrapIntoTmux "$REBUILD_SH"
     } || shift
     checkIfConnected
     # call sudo here, to ask for password early
@@ -211,28 +40,8 @@ exec &> >(tee -a $logfile)
         handleGit
     } || shift
 }
-
-###########################################################################
-# save current state and show them on exit ################################
-currentDiskUsage=$(diffDiskUsage)
-currentNixosGenerations=$(diffGenerations)
-startTime=$(date)
-
-showStatDifferences() {
-    logH1 "show" "stats"
-    diffGenerations "$currentNixosGenerations"
-    diffCurrentSystemDeps /run/current-system/
-    diffCurrentSystemDeps ~/.nix-profile
-    diffDiskUsage $currentDiskUsage
-    echo "... start: $startTime"
-    echo "...   end: $(date)"
-}
-
-setupExitTrap() {
-    local msg=$1
-    local cmd="code=\$?; if [[ \"\$code\" -ne 0 ]]; then logERR \"at $msg\"; logERR \"error code is: \$code\"; fi; showStatDifferences; exit \$code"
-    trap "$cmd" EXIT ERR INT TERM
-}
+setupLoging
+setupExitTrap "toplevel"
 
 ###########################################################################
 # run #####################################################################
@@ -258,15 +67,11 @@ prepare_update_hardware_configuration() {
 }
 prepare_update_nix_path_file() {
     nix_path_string="{ nix.nixPath = [ $(echo '"'"$NIX_PATH"'"' | sed 's/:/" "/g') ]; }"
-    nix_path_file="$nixosConfig/nixPath.nix"
     if [[ "$(cat $nix_path_file 2>/dev/null)" != *"$nix_path_string"* ]]; then
         logH1 "update" "$nix_path_file"
         echo "$nix_path_string" |
             tee "$nix_path_file"
     fi
-}
-prepare_create_folders_for_home_manager() {
-    sudo mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/$my_user
 }
 prepare_create_nix_store_key() {
     # https://github.com/NixOS/nix/issues/2330#issuecomment-410505837
@@ -299,7 +104,6 @@ prepare() {
     prepare_update_hostid_file
     prepare_update_hardware_configuration
     prepare_update_nix_path_file
-    prepare_create_folders_for_home_manager
     prepare_create_nix_store_key
 
     prepare_load_prefetches
@@ -331,28 +135,6 @@ realize() {
         logH1 "nix path-info" "-hS /run/current-system"
         nix path-info -hS /run/current-system
     fi
-}
-
-updateSubtree() {
-    if ! git diff-index --quiet HEAD --; then
-        logERR "uncommitted changes, do not update $channel"
-    fi
-
-    local remoteName=$1
-    local remoteURL=$2
-    local prefix=$3
-    local branch=$4
-
-    local remotes=$(git remote)
-    if [[ "$remotes" != *"$remoteName"* ]]; then
-        git remote add "$remoteName" "$remoteURL"
-        git subtree split --rejoin --prefix="$prefix" HEAD
-    fi
-
-    git fetch "$remoteName" -- "$branch"
-    logINFO "the channel $branch was last updated $(git log --format="%cr" remotes/$remoteName/$branch -1)"
-    (set -x;
-     git subtree pull --prefix $prefix "$remoteName" "$branch" --squash)
 }
 
 updateNixpkgs() {
@@ -453,6 +235,7 @@ run() {
         realize --fast
     fi
 }
+
 run $@
 
 # end run #################################################################
@@ -460,5 +243,5 @@ run $@
 [[ "$1" == "--dry-run" ]] || {
     showStatDifferences
     handleGitPostExecution
-    nixops check -d $DEPLOYMENT
+    # nixops check -d $DEPLOYMENT
 }

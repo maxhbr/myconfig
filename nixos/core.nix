@@ -1,8 +1,5 @@
 { config, pkgs, lib, ... }: let
   # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done | sudo tee ./hostid
-  hostId = if builtins.pathExists /etc/nixos/hostid
-           then builtins.readFile /etc/nixos/hostid
-           else "12345678";
   upg-pull = pkgs.writeShellScriptBin "upg-pull" ''
   set -e
   if [ "$(id -u)" -ne "1000" ]; then
@@ -41,6 +38,7 @@ in {
     ./modules/nixos.nix.nix
     ./modules/user.mhuber.nix
     ./modules/dic.nix
+    (import <nix-path-file>)
   ];
 
   config = {
@@ -53,6 +51,17 @@ in {
         upg-dry = "~/myconfig/rebuild.sh --dry-run";
       };
     };
-    networking.hostId = hostId;
+    assertions = [
+      { assertion = config.networking.hostId != null;
+        message = ''
+          hostid should be set!
+          generate it with
+          $ cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
+        '';
+      }
+      { assertion = config.networking.hostName != "nixos";
+        message = "hostname should be set!";
+      }
+    ];
   };
 }

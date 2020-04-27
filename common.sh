@@ -23,7 +23,8 @@ if ! type logH1 &>/dev/null; then
     fi
     export nixosConfig
 
-    NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfig"
+    nix_path_file="$nixosConfig/nixPath.nix"
+    NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfig:nix-path-file=$nix_path_file"
     NIX_PATH_ARGS="-I '$(echo "$NIX_PATH" | sed "s/:/' -I '/g")'"
     export NIX_PATH
     export NIX_PATH_ARGS
@@ -128,12 +129,24 @@ if ! type logH1 &>/dev/null; then
         fi
     }
 
+    checkIfConnected() {
+        if ! ping -c1 heise.de > /dev/null 2>&1; then
+            logERR "not connected: ping heise.de failed"
+            if ! wget -O - heise.de > /dev/null 2>&1; then
+                logERR "not connected: wget heise.de failed"
+                exit 1
+            fi
+        fi
+    }
+
     if [ -n "$BASH_VERSION" ]; then
         export -f updateRefAndJson
         export -f updateShaFromURL
+        export -f checkIfConnected
     elif [ -n "$ZSH_VERSION" ]; then
         export updateRefAndJson
         export updateShaFromURL
+        export checkIfConnected
     fi
 fi
 

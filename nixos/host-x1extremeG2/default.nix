@@ -4,7 +4,6 @@
   importall = import ../lib/helper/importall.nix;
 in {
   imports = [
-    ./nixPath.nix
     ./hardware-configuration.nix
     ../dev.nix
     # hardware:
@@ -23,6 +22,7 @@ in {
 
   config = {
     networking.hostName = "x1extremeG2";
+    networking.hostId = "7634ddfe";
 
     boot.initrd.supportedFilesystems = [ "luks" ];
     boot.initrd.luks.devices.crypted = {
