@@ -17,10 +17,10 @@ MYCONFIG_ARGS="$@"
 DEPLOYMENT=myconfig-nixops
 
 . ./common.sh
-. ./common.wrapIntoTmux.sh
-. ./common.diffState.sh
-. ./common.logging.sh
-. ./common.handleGit.sh
+. ./rebuild.lib.wrapIntoTmux.sh
+. ./rebuild.lib.diffState.sh
+. ./rebuild.lib.logging.sh
+. ./rebuild.lib.handleGit.sh
 
 ###########################################################################
 ##  variables  ############################################################
