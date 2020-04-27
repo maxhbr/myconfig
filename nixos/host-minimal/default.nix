@@ -9,5 +9,6 @@ in {
 
   config = {
     networking.hostName = "minimal";
+    networking.hostId = "123456";
   };
 }
