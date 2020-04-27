@@ -1,26 +1,18 @@
 let
   secrets = import ./nixops-secrets.nix;
-in {
-  network.description = "myconfig";
-  x1extremeG2 =
+  hostFromConfig = hostName:
     { config, pkgs, ... }:
-    (import ./nixos/host-x1extremeG2 { inherit config pkgs; }) //
+    (import ( ./nixos/host- + hostName) { inherit config pkgs; }) //
     { config =
         { deployment =
-            { inherit (secrets.x1extremeG2) targetHost;
-              targetEnv = "none";
-            };
-        };
-    };
-  vserver =
-    { config, pkgs, ... }:
-    (import ./nixos/host-vserver { inherit config pkgs; }) //
-    { config =
-        { deployment =
-            { inherit (secrets.vserver) targetHost;
+            { inherit (secrets."${hostName}") targetHost;
               targetEnv = "none";
             };
         };
     };
 
+in
+{ network.description = "myconfig";
+  x1extremeG2 = hostFromConfig "x1extremeG2";
+  vserver = hostFromConfig "vserver";
 }

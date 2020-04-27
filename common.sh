@@ -12,6 +12,8 @@ if ! type logH1 &>/dev/null; then
         common_sh="${(%):-%N}"
     fi
     export myconfigDir="$(readlink -f $(dirname "$common_sh"))"
+    export logsDir="${myconfigDir}/_logs/"
+    mkdir -p "$logsDir"
 
     export nixpkgs="$myconfigDir/nixpkgs"
 

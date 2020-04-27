@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p nix ncurses git wget tmux glibcLocales openssl
+#! nix-shell -i bash -p nix ncurses git wget tmux glibcLocales openssl nixops
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 set -e
@@ -13,8 +13,8 @@ fi
 
 REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
 cd "$(dirname $REBUILD_SH)"
-ROOT="$(pwd)"
 MYCONFIG_ARGS="$@"
+DEPLOYMENT=myconfig-nixops
 
 . ./common.sh
 
@@ -25,7 +25,7 @@ MYCONFIG_ARGS="$@"
 export nixStableChannel=nixos-unstable
 
 ###########################################################################
-##  function  #############################################################
+##  functions  ############################################################
 ###########################################################################
 
 wrapIntoTmux() {
@@ -38,10 +38,10 @@ wrapIntoTmux() {
                 exit 1
             }
             tmux -2 new-session -s $TMUX_NAME \
-                 "command echo \"... wrapped into tmux\"; NIX_PATH=\"$NIX_PATH\" $REBUILD_SH $@; read -t 1 -n 10000 discard; read -n 1 -s -r -p \"Press any key to continue\"" \; \
-                 set-option status-left "rebuild.sh"\; \
-                 set-option status-right "started at $(date) "\; \
-                 set set-titles-string "${TMUX_NAME}@tmux" \
+                    "command echo \"... wrapped into tmux\"; NIX_PATH=\"$NIX_PATH\" $REBUILD_SH $@; read -t 1 -n 10000 discard; read -n 1 -s -r -p \"Press any key to continue\"" \; \
+                    set-option status-left "rebuild.sh"\; \
+                    set-option status-right "started at $(date) "\; \
+                    set set-titles-string "${TMUX_NAME}@tmux" \
                 && exit 0
             logERR "tmux failed to start, running without tmux"
         fi
@@ -59,7 +59,7 @@ checkIfConnected() {
 }
 
 isBranchMaster() {
-    if [[ "$(cd "$ROOT"; git rev-parse --abbrev-ref HEAD)" == "master" ]]; then
+    if [[ "$(cd "$myconfigDir"; git rev-parse --abbrev-ref HEAD)" == "master" ]]; then
         return 0
     else
         return 1
@@ -125,7 +125,7 @@ diffCurrentSystemDeps() {
     [[ -e $1 ]] || return 0
 
     local profileRoot=$1
-    local outFile="${ROOT}/_logs/currentSystemDeps-$(hostname)-$(basename "$profileRoot")"
+    local outFile="$logsDir/currentSystemDeps-$(hostname)-$(basename "$profileRoot")"
     local oldOutFile="${outFile}.old"
 
     if [[ -f "$outFile" ]]; then
@@ -194,8 +194,7 @@ handleGitPostExecution () {
 
 ###########################################################################
 # prepare logging #########################################################
-mkdir -p "${ROOT}/_logs/"
-logfile="${ROOT}/_logs/$(date +%Y-%m-%d)-rebuild.sh.log"
+logfile="$logsDir/$(date +%Y-%m-%d)-rebuild.sh.log"
 echo -e "\n\n\n\n\n\n\n" >> $logfile
 exec &> >(tee -a $logfile)
 
@@ -237,6 +236,10 @@ setupExitTrap() {
 
 ###########################################################################
 # run #####################################################################
+prepare_setup_nixops_deployment() {
+    nixops info -d $DEPLOYMENT || nixops create -d $DEPLOYMENT ./nixops.nix
+}
+
 prepare_update_hostid_file() {
     if [[ ! -f "/etc/nixos/hostid" ]]; then
         echo "set hostid:"
@@ -292,6 +295,7 @@ prepare() {
         echo "/etc/nixos/configuration.nix should not exist"
         exit 1
     fi
+    prepare_setup_nixops_deployment
     prepare_update_hostid_file
     prepare_update_hardware_configuration
     prepare_update_nix_path_file
@@ -304,6 +308,7 @@ prepare() {
 realize() {
     if [[ "$1" == "--fast" ]]; then
         args="--fast"
+        shift
     else
         args="--upgrade"
     fi
@@ -413,8 +418,8 @@ cleanup() {
 }
 
 handlePostExecutionHooks () {
-    if [[ -d "$ROOT/misc/post_install_hooks" ]]; then
-        find "$ROOT/misc/post_install_hooks" \
+    if [[ -d "$myconfigDir/misc/post_install_hooks" ]]; then
+        find "$myconfigDir/misc/post_install_hooks" \
              -type f \
              -iname '*.sh' \
              -print \
@@ -455,4 +460,5 @@ run $@
 [[ "$1" == "--dry-run" ]] || {
     showStatDifferences
     handleGitPostExecution
+    nixops check -d $DEPLOYMENT
 }
