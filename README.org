@@ -10,54 +10,54 @@ Currently I use
 - Keyboard layout: [[https://www.neo-layout.org/][neo2]]
 - my wallpapers: [[https://github.com/maxhbr/wallpapers][maxhbr/wallpapers]]
 
+*These notes are probably outdated*
+
 * How to bootstrap
 ** on NixOS:
 first install NixOS, e.g. with the scripts in [[./misc/bootstrap]] or [[https://gist.github.com/martijnvermaat/76f2e24d0239470dd71050358b4d5134][this guide]]. Then
 #+BEGIN_SRC bash
 $ git clone https://github.com/maxhbr/myconfig ~/myconfig
 $ cd ~/myconfig
-$ echo -n "HOSTNAME" | sudo tee ./hostname
 $ ./rebuild.sh
 #+END_SRC
 
 * How it is composed
 
-- Entrypoint is the file ~./default.nix~.
-- It loads the corresponding ~./hosts/${host}.nix~, depending on the content of ~./hostname~
-- This then loads profiles and composes the configuration.
+** Entrypoint
+- Entrypoint for configuration for the ~${hostname}~ is ~./nixos/host-${hostname}/~.
 
-** Hosts
-The folder ~./hosts~ contains the top-level files for my machines, which compose the configuration
-
-*** ~./hosts/hardware/~
+** ~./nixos/hardware/~
 This folder contains hardware related stuff. It uses the great repository [[https://github.com/NixOS/nixos-hardware][nixOS/nixos-hardware]] for additional configuration.
 
+** Profiles
+The profiles are stored in ~./nixos/~, e.g. ~./nixos/dev.nix~.
+
 ** Modules
-The top level modules and other interesting ones are:
-| Modules                           | Description                                                |
-|-----------------------------------+------------------------------------------------------------|
-| *core*                            | This profile is loaded on every machine                    |
-| *core/shell.common*               | Shell stuff, like the  aliasrc                             |
-| *core/zsh*                        | Zsh dotfiles, other shell stuff                            |
-| *core/vim*                        | (currently unused) vim config                              |
-| *core/git*                        | Gitconfig and some related scripts                         |
-| *core/tmux*                       | Tmux configuration                                         |
-| *emacs*                           | Dotfiles for a spacemacs based emacs setup                 |
-| desktop                           | Contains all the stuff for the graphical UI, mainly xmonad |
-| *desktop/X.xmonad*                | My xmonad configuration                                    |
-| desktop/Wayland.sway              | (currently unused) configuration for sway                  |
-| desktop/X.vnc                     | Adds an VNC server                                         |
-| desktop/X.terminal                | For setting up an terminal server                          |
-| *dev*                             | Some stuff necessary for programming and related tasks     |
-| *dev/virtualization.docker*       | Docker stuff                                               |
-| *dev/virtualization.vbox*         | Virtualbox stuff                                           |
-| *mail*                            | Email client and configuration                             |
-| *work*                            | Some not-fun stuff                                         |
-| *gaming*                          | Some fun stuff                                             |
-| *imagework*                       | Applications used for editing of photographs               |
-| *server*                          | Configuration for an headless server                       |
-| *server/service.wireguard-server* | The server configuration for wireguard                     |
-| *misc*                            | Some other stuff                                           |
+The modules are stored in ~./nixos/modules/~ and interesting ones are:
+| Modules                     | Description                                                |
+|-----------------------------+------------------------------------------------------------|
+| *core*                      | This profile is loaded on every machine                    |
+| *core.shell.common*         | Shell stuff, like the  aliasrc                             |
+| *core.zsh*                  | Zsh dotfiles, other shell stuff                            |
+| *core.vim*                  | (currently unused) vim config                              |
+| *core.git*                  | Gitconfig and some related scripts                         |
+| *core.tmux*                 | Tmux configuration                                         |
+| *emacs*                     | Dotfiles for a spacemacs based emacs setup                 |
+| desktop                     | Contains all the stuff for the graphical UI, mainly xmonad |
+| *desktop.X.xmonad*          | My xmonad configuration                                    |
+| desktop.Wayland.sway        | (currently unused) configuration for sway                  |
+| desktop.X.vnc               | Adds an VNC server                                         |
+| desktop.X.terminal          | For setting up an terminal server                          |
+| *dev*                       | Some stuff necessary for programming and related tasks     |
+| *dev.virtualization.docker* | Docker stuff                                               |
+| *dev.virtualization.vbox*   | Virtualbox stuff                                           |
+| *mail*                      | Email client and configuration                             |
+| *work*                      | Some not-fun stuff                                         |
+| *gaming*                    | Some fun stuff                                             |
+| *imagework*                 | Applications used for editing of photographs               |
+| *server*                    | Configuration for an headless server                       |
+| *service.wireguard-server*  | The server configuration for wireguard                     |
+| *misc*                      | Some other stuff                                           |
 
 ** Other Stuff
 *** ~./misc/bootstrap/~
