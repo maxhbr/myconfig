@@ -18,6 +18,15 @@ ${unstable.firefox}/bin/firefox "data:text/html;base64,$(base64 -w 0 <&0)" &> /d
   '';
   mkscreenshot = with pkgs; writeShellScriptBin "mkscreenshot.sh" ''
 set -e
+
+if [[ "$1" == "--help" ]]; then
+    cat <<EOF
+$0
+$0 full
+$0 window
+EOF
+fi
+
 output_dir="$HOME/_screenshots"
 old_dir="$output_dir/_old"
 output="$output_dir/$(date +%Y-%m-%d_%H:%M:%S).png"
@@ -28,7 +37,13 @@ echo "## clean up old screenshots ..."
 find "$output_dir" -maxdepth 1 -mtime +10 -type f -print -exec mv {} "$old_dir" \;
 
 echo "## take screenshot $output ..."
-${xfce.xfce4-screenshooter}/bin/xfce4-screenshooter --region --open cat > "$output"
+if [[ "$1" == "full" || "$1" = "f"* ]]; then
+   ${xfce.xfce4-screenshooter}/bin/xfce4-screenshooter --fullscreen --open cat > "$output"
+elif [[ "$1" == "window" || "$1" = "w"* ]]; then
+   ${xfce.xfce4-screenshooter}/bin/xfce4-screenshooter --window --open cat > "$output"
+else
+  ${xfce.xfce4-screenshooter}/bin/xfce4-screenshooter --region --open cat > "$output"
+fi
   ''; # or use imagemagick: ${imagemagick}/bin/import "$output"
 in {
   imports = [
