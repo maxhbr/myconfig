@@ -24,32 +24,33 @@ DO_GIT=true
 DO_UPGRADE=true
 USE_TMUX=true
 DRY_RUN=false
+TARGET="$(hostname)"
 
 POSITIONAL=()
-for i in "$@"; do
-    case $i in
-        --no-git)
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --no-git) shift
             DO_GIT=false
-            shift
             ;;
-        --fast)
+        --fast) shift
             DO_UPGRADE=false
             DO_GIT=false
-            shift
             ;;
-        --no-tmux)
+        --no-tmux) shift
             USE_TMUX=false
-            shift
             ;;
-        --dry-run)
+        --dry-run) shift
             DO_UPGRADE=false
             USE_TMUX=false
             DRY_RUN=true
+            ;;
+        --target) shift
+            DO_UPGRADE=false
+            TARGET=$1
             shift
             ;;
-        *)
+        *) shift
             POSITIONAL+=("$1")
-            shift
             ;;
     esac
 done
