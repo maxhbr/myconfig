@@ -77,5 +77,12 @@ setupExitTrap() {
     trap "$cmd" EXIT ERR INT TERM
 }
 
-export -f setupExitTrap
+runWithTrap() {
+    setupExitTrap "$1"
+    $@
+    setupExitTrap "---"
+}
+
 export -f showStatDifferences
+export -f setupExitTrap
+export -f runWithTrap

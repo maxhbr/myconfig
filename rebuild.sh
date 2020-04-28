@@ -63,18 +63,9 @@ set -- "${POSITIONAL[@]}"
 . ./rebuild.lib.handleGit.sh
 . ./rebuild.action.prepare.sh
 . ./rebuild.action.upgrade.sh
+. ./rebuild.action.hooks.sh
 . ./rebuild.action.realize.sh
 . ./rebuild.action.cleanup.sh
-
-handlePostExecutionHooks () {
-    if [[ -d "$myconfigDir/misc/post_install_hooks" ]]; then
-        find "$myconfigDir/misc/post_install_hooks" \
-             -type f \
-             -iname '*.sh' \
-             -print \
-             -exec {} \;
-    fi
-}
 
 ###########################################################################
 # prepare misc stuff ######################################################
@@ -83,24 +74,24 @@ if ! $DRY_RUN; then
         wrapIntoTmux "$REBUILD_SH"
     fi
     checkIfConnected
-    # call sudo here, to ask for password early
-    sudo echo "go ..."
     if $DO_GIT; then
         handleGit
     fi
 fi
+# call sudo here, to ask for password early
+sudo echo "go ..."
 setupLoging
-setupExitTrap "toplevel"
+setupExitTrap "---"
 
 ###########################################################################
 # run #####################################################################
 
-prepare
+runWithTrap prepare
 if $DO_UPGRADE; then
     if [[ "$(hostname)" == "$my_main_host" ]]; then
         if isBranchMaster; then
-            realize $(hostname) $($DRY_RUN && echo "--dry-run")
-            upgrade
+            runWithTrap realize $(hostname) $($DRY_RUN && echo "--dry-run")
+            runWithTrap upgrade
         else
             logINFO "git branch is not master, do not upgrade"
         fi
@@ -108,15 +99,15 @@ if $DO_UPGRADE; then
         logINFO "host is not main host, do not upgrade"
     fi
 fi
-realize $(hostname) $($DRY_RUN && echo "--dry-run")
+runWithTrap realize $(hostname) $($DRY_RUN && echo "--dry-run")
 if ! $DRY_RUN; then
-    cleanup
-    handlePostExecutionHooks
+    runWithTrap cleanup
+    runWithTrap handlePostExecutionHooks
 fi
 # end run #################################################################
 ###########################################################################
 
-[[ "$1" == "--dry-run" ]] || {
+if ! $DRY_RUN; then
     handleGitPostExecution
     # nixops check -d $DEPLOYMENT
-}
+fi
