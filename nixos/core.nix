@@ -38,30 +38,31 @@ in {
     ./modules/nixos.nix.nix
     ./modules/user.mhuber.nix
     ./modules/dic.nix
+    ./modules/service.openssh.nix
   ];
 
-  config = {
-    environment = {
-      systemPackages = [ upg-pull ];
-      shellAliases = {
-        upg = "~/myconfig/rebuild.sh";
-        upg-fast = "~/myconfig/rebuild.sh --fast";
-        upg-fast-no-tmux = "~/myconfig/rebuild.sh --no-tmux --no-git --fast";
-        upg-dry = "~/myconfig/rebuild.sh --dry-run";
+  config =
+    { environment =
+        { systemPackages = [ upg-pull ];
+          shellAliases =
+            { upg = "~/myconfig/rebuild.sh";
+              upg-fast = "~/myconfig/rebuild.sh --fast";
+              upg-fast-no-tmux = "~/myconfig/rebuild.sh --no-tmux --no-git --fast";
+              upg-dry = "~/myconfig/rebuild.sh --dry-run";
+            };
       };
+      nix.nixPath = [ ("nixpkgs=" + ../nixpkgs) "nixos-config=/dev/null" ];
+      assertions =
+        [ { assertion = config.networking.hostId != null;
+            message = ''
+              hostid should be set!
+              generate it with
+              $ cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
+            '';
+          }
+          { assertion = config.networking.hostName != "nixos";
+            message = "hostname should be set!";
+          }
+        ];
     };
-    nix.nixPath = [ "nixpkgs=/home/mhuber/myconfig/nixpkgs" ];
-    assertions = [
-      { assertion = config.networking.hostId != null;
-        message = ''
-          hostid should be set!
-          generate it with
-          $ cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
-        '';
-      }
-      { assertion = config.networking.hostName != "nixos";
-        message = "hostname should be set!";
-      }
-    ];
-  };
 }

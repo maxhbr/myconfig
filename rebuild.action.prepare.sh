@@ -53,7 +53,6 @@ prepare() {
     prepare_setup_nixops_deployment
     prepare_update_hostid_file
     prepare_update_hardware_configuration
-    prepare_update_nix_path_file
     prepare_create_nix_store_key
 
     prepare_load_prefetches

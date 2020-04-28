@@ -17,7 +17,12 @@ if ! type logH1 &>/dev/null; then
 
     export nixpkgs="$myconfigDir/nixpkgs"
 
-    NIX_PATH="nixpkgs=$nixpkgs"
+    nixosConfig="$myconfigDir/nixos/host-$(hostname)" # Why is this necessary?
+    if [[ ! -d "$nixosConfig" ]]; then
+        nixosConfig="$myconfigDir/nixos/host-minimal"
+    fi
+
+    NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfig"
     NIX_PATH_ARGS="-I '$(echo "$NIX_PATH" | sed "s/:/' -I '/g")'"
     export NIX_PATH
     export NIX_PATH_ARGS
