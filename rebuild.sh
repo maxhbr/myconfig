@@ -25,10 +25,25 @@ DO_UPGRADE=true
 USE_TMUX=true
 DRY_RUN=false
 TARGET="$(hostname)"
+FORCE_REBOOT=false
 
+ORIGINAL_ARGS="$@"
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --help) shift
+            cat<<EOF
+$0
+    [--no-git]         <-- skip handnling of git
+    [--fast]           <-- be fast ;)
+    [--no-tmux]        <-- do not wrap into tmux
+    [--dry-run]        <-- don't touch anything
+    [--target TARGET]  <-- deploy to other host
+    [--reboot]         <-- force reboot
+EOF
+            exit 0
+            ;;
+
         --no-git) shift
             DO_GIT=false
             ;;
@@ -49,6 +64,9 @@ while [[ $# -gt 0 ]]; do
             TARGET=$1
             shift
             ;;
+        --reboot) shift
+            FORCE_REBOOT=true
+            ;;
         *) shift
             POSITIONAL+=("$1")
             ;;
@@ -56,6 +74,9 @@ while [[ $# -gt 0 ]]; do
 done
 set -- "${POSITIONAL[@]}"
 
+###########################################################################
+##  imports  ##############################################################
+###########################################################################
 . ./common.sh
 . ./rebuild.lib.wrapIntoTmux.sh
 . ./rebuild.lib.diffState.sh
@@ -68,10 +89,14 @@ set -- "${POSITIONAL[@]}"
 . ./rebuild.action.cleanup.sh
 
 ###########################################################################
+##  run  ##################################################################
+###########################################################################
+
+###########################################################################
 # prepare misc stuff ######################################################
 if ! $DRY_RUN; then
     if $USE_TMUX; then
-        wrapIntoTmux "$REBUILD_SH"
+        wrapIntoTmux "$REBUILD_SH" "$ORIGINAL_ARGS"
     fi
     checkIfConnected
     if $DO_GIT; then
@@ -84,13 +109,12 @@ setupLoging
 setupExitTrap "---"
 
 ###########################################################################
-# run #####################################################################
-
+# core ####################################################################
 runWithTrap prepare
 if $DO_UPGRADE; then
     if [[ "$(hostname)" == "$my_main_host" ]]; then
         if isBranchMaster; then
-            runWithTrap realize $(hostname) $($DRY_RUN && echo "--dry-run")
+            runWithTrap realize $TARGET $($DRY_RUN && echo "--dry-run")
             runWithTrap upgrade
         else
             logINFO "git branch is not master, do not upgrade"
@@ -99,12 +123,12 @@ if $DO_UPGRADE; then
         logINFO "host is not main host, do not upgrade"
     fi
 fi
-runWithTrap realize $(hostname) $($DRY_RUN && echo "--dry-run")
+runWithTrap realize $TARGET $($DRY_RUN && echo "--dry-run")  $($FORCE_REBOOT && echo "--force-reboot")
 if ! $DRY_RUN; then
     runWithTrap cleanup
     runWithTrap handlePostExecutionHooks
 fi
-# end run #################################################################
+# end core ################################################################
 ###########################################################################
 
 if ! $DRY_RUN; then
