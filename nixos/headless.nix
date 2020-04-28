@@ -5,7 +5,6 @@
   imports = [
     ./core.nix
     # configuration
-    ./modules/nixos.auto-upgrade.nix
     ./modules/service.openssh.nix
     ./modules/service.vsftp.nix
   ];

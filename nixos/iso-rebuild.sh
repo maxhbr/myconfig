@@ -6,13 +6,15 @@ set -e
 cd "$myconfigDir/nixos"
 set -x
 hostConfig=${1:-dev.nix}
-drv=$(nix-build \
+NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/nixos/host-minimal"
+NIX_PATH=""
+drv=$(nix-build iso.nix \
+          $NIX_PATH_ARGS \
           --show-trace \
           --no-out-link \
-          iso.nix \
           --argstr hostConfig "$hostConfig")
 out=("$drv/iso/nixos"*".iso")
-finalOut="nixos-${hostName}.iso"
+finalOut="nixos-myconfig-${hostConfig}.iso"
 du -h "$out"
 install -m 644 "$out" "$myconfigDir/../$finalOut"
 ./gc.sh
