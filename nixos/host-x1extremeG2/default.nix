@@ -31,6 +31,10 @@ in {
       allowDiscards = true;
     };
 
+    services.openssh = {
+      listenAddresses = [ { addr = "127.0.0.1"; port = 22; } ];
+    };
+
     home-manager.users.mhuber = {
       home.file = {
         ".config/autorandr/" = {

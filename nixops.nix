@@ -6,6 +6,9 @@ let
         { deployment =
             { inherit (secrets."${hostName}") targetHost;
               targetEnv = "none";
+              # none.sshPrivateKey = 
+              # none.sshPublicKey =
+              # none.sshPublicKeyDeployed = 
             };
           assertions =
             [ { assertion = config.networking.hostName == hostName;
@@ -20,4 +23,5 @@ in
 { network.description = "myconfig";
   x1extremeG2 = hostFromConfig "x1extremeG2";
   vserver = hostFromConfig "vserver";
+  T470p = hostFromConfig "T470p";
 }
