@@ -22,8 +22,8 @@ set -e
 if [[ "$1" == "--help" ]]; then
     cat <<EOF
 $0
-$0 full
-$0 window
+$0 f[ull]
+$0 w[indow]
 EOF
 fi
 

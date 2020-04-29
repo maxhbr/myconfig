@@ -103,8 +103,6 @@ if ! $DRY_RUN; then
         handleGit
     fi
 fi
-# call sudo here, to ask for password early
-sudo echo "go ..."
 setupLoging
 setupExitTrap "---"
 
