@@ -15,11 +15,11 @@ in {
 
   config = {
     networking.hostName = "T470p";
-    networking.hostId = "8865d9be";
+    networking.hostId = "8bf4eff";
 
     boot.initrd.supportedFilesystems = [ "luks" ];
     boot.initrd.luks.devices.crypted = {
-      device = "/dev/disk/by-uuid/98375f3f-0366-421f-9ac6-fda1b5a2d5fe";
+      device = "/dev/disk/by-uuid/23fb2575-3ac8-41cd-acc2-29f6fee22702";
       preLVM = true;
       allowDiscards = true;
     };
@@ -28,5 +28,13 @@ in {
       logind.lidSwitch = lib.mkforce "ignore";
       logind.lidSwitchDocked = lib.mkforce "ignore";
     };
+
+    # This value determines the NixOS release from which the default
+    # settings for stateful data, like file locations and database versions
+    # on your system were taken. It‘s perfectly fine and recommended to leave
+    # this value at the release version of the first install of this system.
+    # Before changing this value read the documentation for this option
+    # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
+    system.stateVersion = lib.mkforce "20.09"; # Did you read the comment?
   };
 }

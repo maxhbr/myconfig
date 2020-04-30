@@ -24,4 +24,5 @@ in
   x1extremeG2 = hostFromConfig "x1extremeG2";
   vserver = hostFromConfig "vserver";
   T470p = hostFromConfig "T470p";
+  T470s = hostFromConfig "T470s";
 }
