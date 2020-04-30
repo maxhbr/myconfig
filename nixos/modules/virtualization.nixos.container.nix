@@ -6,7 +6,7 @@
         { nat =
             { enable = true;
               internalInterfaces = ["ve-+"];
-              externalInterface = "wlp82s0"; #"ens1u2u3u4u4";
+              externalInterface = "ens1u2u3u4u4";
             };
           networkmanager.unmanaged = [ "interface-name:ve-*" ];
         };
