@@ -14,8 +14,8 @@ in {
   ] ++ importall ./imports;
 
   config = {
-    networking.hostName = "T470p";
-    networking.hostId = "8bf4eff";
+    networking.hostName = "T470s";
+    networking.hostId = "8bf4efff";
 
     boot.initrd.supportedFilesystems = [ "luks" ];
     boot.initrd.luks.devices.crypted = {
@@ -25,8 +25,8 @@ in {
     };
 
     services = {
-      logind.lidSwitch = lib.mkforce "ignore";
-      logind.lidSwitchDocked = lib.mkforce "ignore";
+      logind.lidSwitch = lib.mkForce "ignore";
+      logind.lidSwitchDocked = lib.mkForce "ignore";
     };
 
     # This value determines the NixOS release from which the default
@@ -35,6 +35,6 @@ in {
     # this value at the release version of the first install of this system.
     # Before changing this value read the documentation for this option
     # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
-    system.stateVersion = lib.mkforce "20.09"; # Did you read the comment?
+    system.stateVersion = lib.mkForce "20.09"; # Did you read the comment?
   };
 }
