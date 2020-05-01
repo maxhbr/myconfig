@@ -49,7 +49,7 @@ in {
               upg-fast = "~/myconfig/rebuild.sh --fast";
               upg-fast-no-tmux = "~/myconfig/rebuild.sh --no-tmux --no-git --fast";
               upg-dry = "~/myconfig/rebuild.sh --dry-run";
-              upg-get-hostId = "cksum /etc/machine-id | while read c rest; do printf \"%x\" $c; done"
+              upg-get-hostId = "cksum /etc/machine-id | while read c rest; do printf \"%x\" $c; done";
             };
       };
       nix.nixPath = [ ("nixpkgs=" + ../nixpkgs) "nixos-config=/dev/null" ];

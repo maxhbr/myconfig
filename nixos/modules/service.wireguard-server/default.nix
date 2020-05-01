@@ -33,7 +33,7 @@
       wg0 = {
         ips = [ "10.199.199.1/24" ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
         listenPort = 51820;
-        privateKeyFile = "/home/mhuber/wireguard-keys/private";
+        privateKeyFile = "/run/keys/wg-private";
         peers = let
             path = ./peers;
             content = builtins.readDir path;
@@ -41,6 +41,12 @@
                  (builtins.filter (n: builtins.match ".*\\.nix" n != null)
                                   (builtins.attrNames content));
       };
+      # wg1 = {
+      #   ips = [ "10.199.203.1/24" ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
+      #   listenPort = 51820;
+      #   privateKeyFile = "/home/mhuber/wireguard-keys/private";
+      #   peers = [];
+      # };
     };
   };
 }

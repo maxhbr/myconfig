@@ -1,6 +1,6 @@
 let
   secrets = import ./nixops-secrets.nix;
-  hostFromConfig = hostName:
+  hostFromConfig = hostName: addConfig:
     { config, pkgs, ... }:
     { config =
         { deployment =
@@ -16,13 +16,30 @@ let
               }
             ];
         };
-      imports = [(./nixos/host- + hostName)];
+      imports =
+        [ (./nixos/host- + hostName)
+          addConfig
+        ];
     };
-
 in
 { network.description = "myconfig";
-  x1extremeG2 = hostFromConfig "x1extremeG2";
-  vserver = hostFromConfig "vserver";
-  T470p = hostFromConfig "T470p";
-  T470s = hostFromConfig "T470s";
+  x1extremeG2 = hostFromConfig "x1extremeG2" {};
+  vserver = hostFromConfig "vserver"
+    { deployment.keys =
+        { wg-private = {
+            text = builtins.readFile ../wireguard-keys/vserver/private;
+            user = "root";
+            group = "root";
+            permissions = "0400";
+          };
+          wg-public = {
+            text = builtins.readFile ../wireguard-keys/vserver/public;
+            user = "root";
+            group = "root";
+            permissions = "0400";
+          };
+       };
+    };
+  T470p = hostFromConfig "T470p" {};
+  T470s = hostFromConfig "T470s" {};
 }
