@@ -4,20 +4,19 @@
   importall = import ../lib/helper/importall.nix;
 in {
   imports = [
-    ./nixPath.nix
     ./hardware-configuration.nix
-    ../hardware/grub.nix
-    ../hardware/quadroFX4800.nix
+    ../hardware/efi.nix
     # other profiles
     ../headless.nix
-    ../desktop.nix
+    ../dev.nix
+    ../gaming.nix
     ../modules/X.xfce.nix
   ] ++ importall ./imports;
 
   config = {
     networking.hostName = "workstation";
+    networking.hostId = ;
     services.xserver.displayManager.slim.autoLogin = true;
-    boot.kernelPackages = lib.mkForce pkgs.unstable.linuxPackages_4_14;
     # services.xserver.windowManager.default = pkgs.lib.mkForce "xfce";
   };
 }

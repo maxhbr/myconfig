@@ -9,7 +9,7 @@ in {
     # hardware:
     ../hardware/grub.nix
     # configuration
-    ../modules/service.wireguard-server
+    ./service.wireguard-server
   ] ++ importall ./imports;
   config = {
     networking.hostName = "vserver";
