@@ -16,8 +16,10 @@ drv=$(nix-build iso.nix \
 out=("$drv/iso/nixos"*".iso")
 finalOut="nixos-myconfig-${hostConfig%.*}.iso"
 du -h "$out"
-install -m 644 "$out" "$myconfigDir/../$finalOut"
-./gc.sh
+mkdir -p "$HOME/Downloads/ISOs"
+install -m 644 "$out" "$HOME/Downloads/ISOs/$finalOut"
+
+./gc.sh || true
 
 set +x
 times
