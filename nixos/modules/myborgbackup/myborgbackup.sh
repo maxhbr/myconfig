@@ -115,7 +115,7 @@ myMountBackupHDD() {
 myUmountBackupHDD() {
     set -x
     sync
-    sudo umount /dev/disk/by-uuid/$UUID || echo "umount failed... continue"
+    sudo umount "$backupmount" || echo "umount failed... continue"
     # sudo hdparm -Y /dev/disk/by-uuid/$UUID
     set +x
 }
@@ -195,7 +195,9 @@ myBorgmount() {
 ################################################################################
 # prepare and mount
 if [[ $usessh -eq 0 ]]; then
-    myMountBackupHDD
+    if [[ ! -d $backupdir ]]; then
+        myMountBackupHDD
+    fi
 fi
 
 ################################################################################
