@@ -25,6 +25,8 @@ in {
           allowDiscards = true;
         };
 
+      services.xserver.videoDrivers = [ "amdgpu" ];
+
       # services.xserver.windowManager.default = pkgs.lib.mkForce "xfce";
 
       # This value determines the NixOS release from which the default
