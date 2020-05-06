@@ -18,7 +18,6 @@ in {
     { networking.hostName = "workstation";
       networking.hostId = "864d73f4";
 
-
       boot.initrd.supportedFilesystems = [ "luks" ];
       boot.initrd.luks.devices.crypted =
         { device = "/dev/disk/by-uuid/46fc7672-6bcc-4245-8d73-65c81cda0c58";
@@ -26,8 +25,6 @@ in {
           allowDiscards = true;
         };
 
-
-      services.xserver.displayManager.slim.autoLogin = true;
       # services.xserver.windowManager.default = pkgs.lib.mkForce "xfce";
 
       # This value determines the NixOS release from which the default
