@@ -4,7 +4,7 @@
 {
   config = {
     users = {
-      mutableUsers = true;
+      mutableUsers = false;
       extraUsers = {
         mhuber = {
           isNormalUser = true;
@@ -28,7 +28,10 @@
           home = "/home/mhuber";
           createHome = true;
           shell = "/run/current-system/sw/bin/zsh";
-          initialPassword = lib.mkForce "dummy";
+          # the hashed password is overwritten in the deployment
+          # default value is: "dummy"
+          # can be generated with: mkpasswd -m sha-512
+          hashedPassword = lib.mkDefault "$6$k.jpmgog4j7$fy.KHSO8nq39vALjOEf2KPZ7005BICQcPSDwJqbidrdgDyOz6MmONaqSSACUWVaMXI4SWPSXps82sP4o5xEfH.";
           openssh.authorizedKeys.keys = [
             "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDYUWsgqFqIHd3ftOC1W4j24wa1C4gjVt8yzdlqKn0KovLH5e4TdnMMkcoyVWAmrR/fxLCX0XbbUUAlwpA5mwxnyd5vBO7P+6tm9Z4I7rGW4EDxgRVA45/4qbe1DOW4qkYGf0MLidzq7xMXS7UIGcMZk1K0EIhj8tL1fPrPa8cV94/x5PAOGwXSALG3RFLH+8xxCOtean0/1Ev9+l+W19cp8+SwksjMCCbj1yrIgLPMaclMerZ6oUAKB6yXYkAoSSfVvSQLp9iRWwKkOAjDPvWCkKr4ICTKEY0z3lbhd587NwWmEUDAp9Z9rTNT5MVfKOGtlLVBMCB2rf0wmjuL/hlp"
           ];

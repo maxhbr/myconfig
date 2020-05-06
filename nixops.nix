@@ -15,7 +15,7 @@ let
                 message = "hostname should be set!";
               }
             ];
-        };
+        } // secrets."${hostName}".config;
       imports =
         [ (./nixos/host- + hostName)
           addConfig

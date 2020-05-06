@@ -73,13 +73,13 @@ in {
     package = pkgs.pulseaudioFull;
     extraConfig = "load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1";
   };
+  nixpkgs.overlays = [(self: super:
+    { helper = { inherit connectBtDevice; };
+    })];
+
   environment.systemPackages = with pkgs; [
     pavucontrol pamix
     mb660_switch_profile
-    (connectBtDevice {name = "mb660"; id = "00:16:94:30:A1:18";})
-    (connectBtDevice {name = "5200"; id = "E4:22:A5:3E:F4:3D";})
-    (connectBtDevice {name = "klim"; id = "1E:A8:2C:18:00:3D";})
-    (connectBtDevice {name = "wm25"; id = "03:A1:00:01:7B:13";})
   ];
   nixpkgs.config.pulseaudio = true;
 }
