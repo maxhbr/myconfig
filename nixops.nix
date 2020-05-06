@@ -24,6 +24,7 @@ let
 in
 { network.description = "myconfig";
   x1extremeG2 = hostFromConfig "x1extremeG2" {};
+  workstation = hostFromConfig "workstation" {};
   vserver = hostFromConfig "vserver"
     { deployment.keys =
         { wg-private = {
