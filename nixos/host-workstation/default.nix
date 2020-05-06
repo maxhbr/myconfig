@@ -11,7 +11,7 @@ in {
       ../dev.nix
       ../modules/imagework
       ../gaming.nix
-      ../modules/X.xfce.nix
+      ../modules/desktop.X.xfce.nix
     ] ++ importall ./imports;
 
   config =
