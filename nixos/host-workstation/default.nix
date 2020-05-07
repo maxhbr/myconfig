@@ -14,6 +14,7 @@ in {
       ../modules/desktop.X.xfce.nix
       ../modules/desktop.X.vnc.nix
       ../modules/desktop.X.rdp.nix
+      ../modules/games.doom3.nix
     ] ++ importall ./imports;
 
   config =
