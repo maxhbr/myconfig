@@ -24,7 +24,22 @@ let
 in
 { network.description = "myconfig";
   x1extremeG2 = hostFromConfig "x1extremeG2" {};
-  workstation = hostFromConfig "workstation" {};
+  workstation = hostFromConfig "workstation"
+    { deployment.keys =
+        { wg-private = {
+            text = builtins.readFile ../wireguard-keys/workstation/private;
+            user = "root";
+            group = "root";
+            permissions = "0400";
+          };
+          wg-public = {
+            text = builtins.readFile ../wireguard-keys/workstation/public;
+            user = "root";
+            group = "root";
+            permissions = "0400";
+          };
+       };
+    };
   vserver = hostFromConfig "vserver"
     { deployment.keys =
         { wg-private = {
