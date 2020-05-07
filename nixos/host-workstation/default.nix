@@ -10,8 +10,9 @@ in {
       ../headless.nix
       ../dev.nix
       ../modules/imagework
-      # ../gaming.nix
+      ../gaming.nix
       ../modules/desktop.X.xfce.nix
+      ../modules/desktop.X.vnc.nix
     ] ++ importall ./imports;
 
   config =
