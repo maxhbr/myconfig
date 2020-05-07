@@ -13,6 +13,7 @@ in {
       ../gaming.nix
       ../modules/desktop.X.xfce.nix
       ../modules/desktop.X.vnc.nix
+      ../modules/desktop.X.rdp.nix
     ] ++ importall ./imports;
 
   config =
