@@ -2,24 +2,36 @@ let
   secrets = import ./nixops-secrets.nix;
   hostFromConfig = hostName: addConfig:
     { config, pkgs, ... }@args:
-    { config =
-        { deployment.targetEnv = "none";
-          assertions =
-            [ { assertion = config.networking.hostName == hostName;
-                message = "hostname should be set!";
-              }
-            ];
-        } // secrets."${hostName}";
-      imports =
-        [ (./nixos/host- + hostName)
-          (addConfig args)
-        ];
-    };
+    let
+      secretsConfig = secrets."${hostName}" args;
+    in
+      { config =
+          { deployment.targetEnv = "none";
+            assertions =
+              [ { assertion = config.networking.hostName == hostName;
+                  message = "hostname should be set!";
+                }
+                { assertion = secretsConfig.users.users.mhuber.hashedPassword != null;
+                  message = "password should be set in ./nixops-secrets.nix";
+                }
+              ];
+          } // secretsConfig;
+        imports =
+          [ (./nixos/host- + hostName)
+            (addConfig args)
+          ];
+      };
 in
 { network.description = "myconfig";
   x1extremeG2 = hostFromConfig "x1extremeG2"
     ( {lib, ...}:
       { deployment.targetHost = lib.mkDefault "10.199.199.2";
+        environment.shellAliases =
+          { upg-workstation = "upg-fast --target workstation";
+            upg-workstation-reboot = "upg-fast --target workstation --reboot";
+            upg-vserver = "upg-fast --target vserver";
+            upg-vserver-reboot = "upg-fast --target vserver --reboot";
+          };
       });
   workstation = hostFromConfig "workstation"
     ( {lib, ...}:
