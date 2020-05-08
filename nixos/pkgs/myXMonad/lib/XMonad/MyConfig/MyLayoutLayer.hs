@@ -78,9 +78,10 @@ applyMyLayoutModifications c = let
        , handleEventHook = fullscreenEventHook <+> handleEventHook c
        , mouseBindings   = myMouseBindings }
 
-myLayout = smartBorders $
+myLayout = modWorkspaces [ "13" ] (Full |||) $
+           smartBorders $
            boringAuto $
-           modWorkspaces [ "vbox", "media", "13" ] (Full |||) $
+           modWorkspaces [ "vbox", "media" ] (Full |||) $
            avoidStrutsOn[U,D] $
            named "" $
            withIM (1%7) (Title "Tabs Outliner") $

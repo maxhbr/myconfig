@@ -3,19 +3,13 @@ let
   hostFromConfig = hostName: addConfig:
     { config, pkgs, ... }:
     { config =
-        { deployment =
-            { inherit (secrets."${hostName}") targetHost;
-              targetEnv = "none";
-              # none.sshPrivateKey = 
-              # none.sshPublicKey =
-              # none.sshPublicKeyDeployed = 
-            };
+        { deployment.targetEnv = "none";
           assertions =
             [ { assertion = config.networking.hostName == hostName;
                 message = "hostname should be set!";
               }
             ];
-        } // secrets."${hostName}".config;
+        } // secrets."${hostName}";
       imports =
         [ (./nixos/host- + hostName)
           addConfig
@@ -23,9 +17,12 @@ let
     };
 in
 { network.description = "myconfig";
-  x1extremeG2 = hostFromConfig "x1extremeG2" {};
+  x1extremeG2 = hostFromConfig "x1extremeG2"
+    { deployment.targetHost = "10.199.199.2";
+    };
   workstation = hostFromConfig "workstation"
-    { deployment.keys =
+    { deployment.targetHost = "10.199.199.5";
+      deployment.keys =
         { wg-private = {
             text = builtins.readFile ../wireguard-keys/workstation/private;
             user = "root";
@@ -41,7 +38,8 @@ in
        };
     };
   vserver = hostFromConfig "vserver"
-    { deployment.keys =
+    { deployment.targetHost = "10.199.199.1";
+      deployment.keys =
         { wg-private = {
             text = builtins.readFile ../wireguard-keys/vserver/private;
             user = "root";
