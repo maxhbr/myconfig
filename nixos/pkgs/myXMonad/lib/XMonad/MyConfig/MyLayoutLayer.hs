@@ -80,7 +80,7 @@ applyMyLayoutModifications c = let
 
 myLayout = smartBorders $
            boringAuto $
-           modWorkspaces [ "vbox", "media" ] (Full |||) $
+           modWorkspaces [ "vbox", "media", "13" ] (Full |||) $
            avoidStrutsOn[U,D] $
            named "" $
            withIM (1%7) (Title "Tabs Outliner") $

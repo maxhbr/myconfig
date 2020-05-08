@@ -46,7 +46,9 @@ myManageHook = let
                                , (doShift "10", ["franz","Franz"
                                                 ,"Telegram"
                                                 ,"slack","Slack"])
-                               , (doShift "media", ["Steam", "Wfica", "Wfica_Seamless"])
+                               , (doShift "media", ["Steam"])
+                               , (doShift "13", [ "Wfica", "Wfica_Seamless"
+                                                , "vncviewer", "Vncviewer"])
                                , (doIgnore, ["desktop_window"
                                             ,"kdesktop"
                                             ,"xmessage","Xmessage"]) ]

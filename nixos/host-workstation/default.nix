@@ -15,6 +15,7 @@ in {
       ../modules/desktop.X.vnc.nix
       ../modules/desktop.X.rdp.nix
       ../modules/games.doom3.nix
+      ../modules/games.wine
     ] ++ importall ./imports;
 
   config =

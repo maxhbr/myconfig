@@ -22,6 +22,7 @@ DEPLOYMENT=myconfig-nixops
 nixStableChannel=nixos-unstable
 DO_GIT=true
 DO_UPGRADE=true
+DO_POST_STUFF=true
 USE_TMUX=true
 DRY_RUN=false
 TARGET="$(hostname)"
@@ -49,6 +50,7 @@ EOF
             ;;
         --fast) shift
             DO_UPGRADE=false
+            DO_POST_STUFF=fast
             DO_GIT=false
             ;;
         --no-tmux) shift
@@ -123,8 +125,10 @@ if $DO_UPGRADE; then
 fi
 runWithTrap realize $TARGET $($DRY_RUN && echo "--dry-run")  $($FORCE_REBOOT && echo "--force-reboot")
 if ! $DRY_RUN; then
-    runWithTrap cleanup
-    runWithTrap handlePostExecutionHooks
+    if $DO_POST_STUFF; then
+        runWithTrap cleanup
+        runWithTrap handlePostExecutionHooks
+    fi
 fi
 # end core ################################################################
 ###########################################################################
