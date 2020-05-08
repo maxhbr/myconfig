@@ -50,7 +50,7 @@ EOF
             ;;
         --fast) shift
             DO_UPGRADE=false
-            DO_POST_STUFF=fast
+            DO_POST_STUFF=false
             DO_GIT=false
             ;;
         --no-tmux) shift

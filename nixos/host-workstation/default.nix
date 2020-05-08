@@ -25,8 +25,12 @@ in {
       boot.initrd.supportedFilesystems = [ "luks" ];
       boot.initrd.luks.devices.crypted =
         { device = "/dev/disk/by-uuid/46fc7672-6bcc-4245-8d73-65c81cda0c58";
+          keyFile = "/dev/disk/by-id/usb-JetFlash_Transcend_16GB_753K3Z31LDXXOPIT-0:0";
+          keyFileSize = 4096;
+          # keyFileOffset = $OFFSET;
           preLVM = true;
           allowDiscards = true;
+          fallbackToPassword = true;
         };
 
       services.xserver.videoDrivers = [ "amdgpu" ];

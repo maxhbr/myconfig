@@ -1,7 +1,7 @@
 let
-  secrets = import ./nixops-secrets.nix;
+  secrets = import ../secrets-myconfig/nixops-secrets.nix (import ./nixos-lib.nix);
   hostFromConfig = hostName: addConfig:
-    { config, pkgs, ... }@args:
+    { config, ... }@args:
     let
       secretsConfig = secrets."${hostName}" args;
     in
@@ -12,7 +12,7 @@ let
                   message = "hostname should be set!";
                 }
                 { assertion = secretsConfig.users.users.mhuber.hashedPassword != null;
-                  message = "password should be set in ./nixops-secrets.nix";
+                  message = "password should be overwritten in ./nixops-secrets.nix";
                 }
               ];
           } // secretsConfig;
@@ -21,6 +21,21 @@ let
             (addConfig args)
           ];
       };
+  workstationAsBuildMachine =
+    { nix.buildMachines =
+        [{ hostName = "workstation";
+           system = "x86_64-linux";
+           maxJobs = 6;
+           speedFactor = 2;
+           supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
+           mandatoryFeatures = [ ];
+        }];
+      nix.distributedBuilds = true;
+      # optional, useful when the builder has a faster internet connection than yours
+      nix.extraOptions =
+        '' builders-use-substitutes = true
+        '';
+    };
 in
 { network.description = "myconfig";
   x1extremeG2 = hostFromConfig "x1extremeG2"
@@ -32,43 +47,18 @@ in
             upg-vserver = "upg-fast --target vserver";
             upg-vserver-reboot = "upg-fast --target vserver --reboot";
           };
+        imports = [ workstationAsBuildMachine ];
       });
   workstation = hostFromConfig "workstation"
     ( {lib, ...}:
       { deployment.targetHost =  lib.mkDefault "10.199.199.5";
-        deployment.keys =
-          { wg-private =
-              { text = builtins.readFile ../wireguard-keys/workstation/private;
-                user = "root";
-                group = "root";
-                permissions = "0400";
-              };
-            wg-public =
-              { text = builtins.readFile ../wireguard-keys/workstation/public;
-                user = "root";
-                group = "root";
-                permissions = "0400";
-              };
-          };
       });
   vserver = hostFromConfig "vserver"
     ( {lib, ...}:
       { deployment.targetHost = lib.mkDefault "10.199.199.1";
-        deployment.keys =
-          { wg-private =
-              { text = builtins.readFile ../wireguard-keys/vserver/private;
-                user = "root";
-                group = "root";
-                permissions = "0400";
-              };
-            wg-public =
-              { text = builtins.readFile ../wireguard-keys/vserver/public;
-                user = "root";
-                group = "root";
-                permissions = "0400";
-              };
-          };
       });
-  T470p = hostFromConfig "T470p" ({...}: {});
-  T470s = hostFromConfig "T470s" ({...}: {});
+  T470p = hostFromConfig "T470p"
+    ({...}: {});
+  T470s = hostFromConfig "T470s"
+    ({...}: {});
 }
