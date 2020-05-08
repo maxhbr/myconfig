@@ -1,7 +1,7 @@
 let
-  secrets = import ../secrets-myconfig/nixops-secrets.nix (import ./nixos-lib.nix);
+  secrets = import ../secrets-myconfig (import ./nixops-lib.nix);
   hostFromConfig = hostName: addConfig:
-    { config, ... }@args:
+    { config, lib, ... }@args:
     let
       secretsConfig = secrets."${hostName}" args;
     in
@@ -15,7 +15,7 @@ let
                   message = "password should be overwritten in ./nixops-secrets.nix";
                 }
               ];
-          } // secretsConfig;
+          } // (lib.mkMerge secretsConfig);
         imports =
           [ (./nixos/host- + hostName)
             (addConfig args)
@@ -47,8 +47,7 @@ in
             upg-vserver = "upg-fast --target vserver";
             upg-vserver-reboot = "upg-fast --target vserver --reboot";
           };
-        imports = [ workstationAsBuildMachine ];
-      });
+      } // workstationAsBuildMachine );
   workstation = hostFromConfig "workstation"
     ( {lib, ...}:
       { deployment.targetHost =  lib.mkDefault "10.199.199.5";
