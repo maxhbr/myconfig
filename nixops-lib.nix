@@ -18,26 +18,18 @@
     { deployment.keys =
         { "id_${algo}" =
             { text = builtins.readFile (secretsRoot + "/ssh/${hostName}/.ssh/id_${algo}");
+              destDir = "/home/mhuber/.ssh";
               user = "mhuber";
               group = "mhuber";
               permissions = "0400";
             };
           "id_${algo}.pub" =
             { text = builtins.readFile (secretsRoot + "/ssh/${hostName}/.ssh/id_${algo}.pub");
+              destDir = "/home/mhuber/.ssh";
               user = "mhuber";
               group = "mhuber";
               permissions = "0444";
             };
-        };
-      systemd.services."id_${algo}-home-deploy" =
-        { after = [ "id_${algo}-key.service" "id_${algo}.pub-key.service" ];
-          wants = [ "id_${algo}-key.service" "id_${algo}.pub-key.service" ];
-          script = ''
-            mkdir -p /home/mhuber/.ssh
-            chown mhuber:mhuber /home/mhuber/.ssh
-            ln -s /run/keys/id_${algo} /home/mhuber/.ssh/id_${algo}
-            ln -s /run/keys/id_${algo}.pub /home/mhuber/.ssh/id_${algo}.pub
-          '';
         };
     };
 }

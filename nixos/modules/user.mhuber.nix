@@ -13,6 +13,7 @@
           extraGroups = [
             "myconfig"
             "wheel"
+            "keys"
             "audio" "video"
             "dialout"
             "input" ]
