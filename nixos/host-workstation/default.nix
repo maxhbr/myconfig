@@ -16,6 +16,7 @@ in {
       ../modules/desktop.X.rdp.nix
       ../modules/games.doom3.nix
       ../modules/games.wine
+      ../modules/games.lutris.nix
     ] ++ importall ./imports;
 
   config =
@@ -31,6 +32,11 @@ in {
           preLVM = true;
           allowDiscards = true;
           fallbackToPassword = true;
+        };
+
+      fileSystems."/mnt/lubuntu" =
+        { device = "/dev/disk/by-uuid/e3d8b271-deb4-4d4d-b58e-72137b667b24";
+          fsType = "ext4";
         };
 
       services.xserver.videoDrivers = [ "amdgpu" ];
