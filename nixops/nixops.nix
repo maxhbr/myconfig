@@ -27,11 +27,6 @@ with (import ./lib.nix);
                 upg-vserver = "upg-fast --target vserver";
                 upg-vserver-reboot = "upg-fast --target vserver --reboot";
               };
-            nix.sshServe.enable = true;
-            nix.sshServe.keys =
-              [ (getSecret "workstation" "ssh/id_rsa.pub")
-                (getSecret "vserver" "ssh/id_rsa.pub")
-              ];
           };
         imports =
           [ (deployWireguardKeys "x1extremeG2")
@@ -39,24 +34,27 @@ with (import ./lib.nix);
             (deploySSHUserKeys "x1extremeG2" "ed25519")
             (deploySSHUserKeys "x1extremeG2" "dsa")
             (deploySSHUserKeys "x1extremeG2" "ecdsa")
+            (setupNixServe
+              [ (getSecret "workstation" "ssh/id_rsa.pub")
+                (getSecret "vserver" "ssh/id_rsa.pub")
+              ])
           ];
        });
   workstation = mkHost "workstation"
     ( {lib, ...}:
       { config =
           { deployment.targetHost =  lib.mkDefault "10.199.199.5";
-            nix.sshServe.enable = true;
-            nix.sshServe.keys =
+          };
+        imports =
+          [ (deployWireguardKeys "workstation")
+            (deploySSHUserKeys "workstation" "rsa")
+            (setupNixServe
               [ (getSecret "x1extremeG2" "ssh/id_rsa.pub")
                 (getSecret "x1extremeG2" "ssh/id_ed2519.pub")
                 (getSecret "x1extremeG2" "ssh/id_dsa.pub")
                 (getSecret "x1extremeG2" "ssh/id_ecdsa.pub")
                 (getSecret "vserver" "ssh/id_rsa.pub")
-              ];
-          };
-        imports =
-          [ (deployWireguardKeys "workstation")
-            (deploySSHUserKeys "workstation" "rsa")
+              ])
           ];
       });
   vserver = mkHost "vserver"

@@ -66,4 +66,43 @@ rec
             };
         };
     };
+  setupNixServe =
+    keys:
+    { nix.sshServe =
+        { enable = true;
+          inherit keys;
+        };
+      services.openssh.extraConfig =
+        ''
+        Match User nix-ssh
+          AllowAgentForwarding no
+          AllowTcpForwarding no
+          PermitTTY no
+          PermitTunnel no
+          X11Forwarding no
+          ForceCommand nix-store --serve
+        Match All
+        '';
+    };
+  # # generate with:
+  # # $ nix-store --generate-binary-cache-key binarycache.example.com cache-priv-key.pem cache-pub-key.pem
+  # # see:
+  # # - https://nixos.wiki/wiki/Binary_Cache
+  # deployBinaryCacheKeys = hostName:
+  #   let
+  #     keyName = "cache-priv-key.pem";
+  #   in
+  #   { deployment.keys =
+  #       { "${keyName}" =
+  #           { text = builtins.readFile (secretsDir + "/${hostName}/binary-cache-keys/${keyName}");
+  #             user = "nix-serve";
+  #             group = "nix-serve";
+  #             permissions = "0400";
+  #           };
+  #       };
+  #     # services.nix-serve =
+  #     #   { enable = true;
+  #     #     secretKeyFile = "/run/keys/${keyName}";
+  #     #   };
+  #   };
 }
