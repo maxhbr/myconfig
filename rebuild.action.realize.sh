@@ -10,7 +10,7 @@ realize() {
             $NIX_PATH_ARGS \
             --show-trace --keep-failed \
             --fallback \
-            --deployment $DEPLOYMENT \
+            --deployment $NIXOPS_DEPLOYMENT \
             "$@" \
             --include "$targetHost")
 }

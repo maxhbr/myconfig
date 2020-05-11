@@ -19,6 +19,8 @@ MYCONFIG_ARGS="$@"
 ##  variables  ############################################################
 ###########################################################################
 DEPLOYMENT=myconfig-nixops
+NIXOPS_DEPLOYMENT=myconfig-nixops
+NIXOPS_STATE="$myconfigDir/nixops/secrets/myconfig-nixops.nixops"
 nixStableChannel=nixos-unstable
 DO_GIT=true
 DO_UPGRADE=true
@@ -135,5 +137,4 @@ fi
 
 if ! $DRY_RUN; then
     handleGitPostExecution
-    # nixops check -d $DEPLOYMENT
 fi
