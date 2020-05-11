@@ -72,17 +72,6 @@ rec
         { enable = true;
           inherit keys;
         };
-      services.openssh.extraConfig =
-        ''
-        Match User nix-ssh
-          AllowAgentForwarding no
-          AllowTcpForwarding no
-          PermitTTY no
-          PermitTunnel no
-          X11Forwarding no
-          ForceCommand nix-store --serve
-        Match All
-        '';
     };
   # # generate with:
   # # $ nix-store --generate-binary-cache-key binarycache.example.com cache-priv-key.pem cache-pub-key.pem
