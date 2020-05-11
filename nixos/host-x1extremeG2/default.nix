@@ -1,9 +1,9 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }: let
+{ pkgs, secretsLib, ... }: let
   importall = import ../lib/helper/importall.nix;
-in {
-  imports = [
+in
+{ imports = [
     ./hardware-configuration.nix
     ../dev.nix
     # hardware:
@@ -18,6 +18,7 @@ in {
     ../modules/imagework
     ../modules/smarthome.nix
     ../gaming.nix
+    # secrets
   ] ++ importall ./imports;
 
   config = {
