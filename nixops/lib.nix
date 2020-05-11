@@ -11,7 +11,7 @@ in
           (addConfig args)
           { deployment =
               let
-                ipFile = (secretsDir + "/${hostName}/ip")
+                ipFile = (secretsDir + "/${hostName}/ip");
               in lib.mkIf (builtins.pathExists ipFile)
               { targetHost = builtins.readFile ipFile;
               };

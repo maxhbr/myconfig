@@ -15,12 +15,14 @@ REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
 cd "$(dirname $REBUILD_SH)"
 MYCONFIG_ARGS="$@"
 
+. ./common.sh
+
 ###########################################################################
 ##  variables  ############################################################
 ###########################################################################
 DEPLOYMENT=myconfig-nixops
-NIXOPS_DEPLOYMENT=myconfig-nixops
-NIXOPS_STATE="$myconfigDir/nixops/secrets/myconfig-nixops.nixops"
+export NIXOPS_DEPLOYMENT=myconfig-nixops
+export NIXOPS_STATE="$myconfigDir/nixops/secrets/myconfig-nixops.nixops"
 nixStableChannel=nixos-unstable
 DO_GIT=true
 DO_UPGRADE=true
@@ -81,7 +83,6 @@ set -- "${POSITIONAL[@]}"
 ###########################################################################
 ##  imports  ##############################################################
 ###########################################################################
-. ./common.sh
 . ./rebuild.lib.wrapIntoTmux.sh
 . ./rebuild.lib.diffState.sh
 . ./rebuild.lib.logging.sh

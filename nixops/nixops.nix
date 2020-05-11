@@ -35,8 +35,8 @@ with (import ./lib.nix);
     ( {lib, ...}:
       { deployment.targetHost = lib.mkDefault "10.199.199.1";
       });
-  T470p = mkHost "T470p"
-    ({...}: {});
-  T470s = mkHost "T470s"
-    ({...}: {});
+  # T470p = mkHost "T470p"
+  #   ({...}: {});
+  # T470s = mkHost "T470s"
+  #   ({...}: {});
 }
