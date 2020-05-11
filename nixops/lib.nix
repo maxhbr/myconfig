@@ -1,7 +1,12 @@
 let
   secretsDir = ./secrets;
 in
-{ mkHost =
+rec
+{ getSecret =
+    hostName:
+    fileName:
+    builtins.readFile (secretsDir + "/${hostName}/${fileName}");
+  mkHost =
     hostName:
     addConfig:
     { config, lib, ... }@args:
@@ -30,13 +35,13 @@ in
   deployWireguardKeys = hostName:
     { deployment.keys =
         { wg-private =
-            { text = builtins.readFile (secretsDir + "/${hostName}/wireguard-keys/private");
+            { text = getSecret hostName "wireguard-keys/private";
               user = "root";
               group = "root";
               permissions = "0400";
             };
           wg-public =
-            { text = builtins.readFile (secretsDir + "/${hostName}/wireguard-keys/public");
+            { text = getSecret hostName "wireguard-keys/public";
               user = "root";
               group = "root";
               permissions = "0444";
@@ -46,14 +51,14 @@ in
   deploySSHUserKeys = hostName: algo:
     { deployment.keys =
         { "id_${algo}" =
-            { text = builtins.readFile (secretsDir + "/${hostName}/ssh/id_${algo}");
+            { text = getSecret hostName "ssh/id_${algo}";
               destDir = "/home/mhuber/.ssh";
               user = "mhuber";
               group = "mhuber";
               permissions = "0400";
             };
           "id_${algo}.pub" =
-            { text = builtins.readFile (secretsDir + "/${hostName}/ssh/id_${algo}.pub");
+            { text = getSecret hostName "ssh/id_${algo}.pub";
               destDir = "/home/mhuber/.ssh";
               user = "mhuber";
               group = "mhuber";
