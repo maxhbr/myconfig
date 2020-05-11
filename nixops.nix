@@ -7,23 +7,22 @@ let
     let
       secretsConfig = secrets."${hostName}" args;
     in
-      { config =
-          { deployment.targetEnv = "none";
-            assertions =
-              [ { assertion = config.networking.hostName == hostName;
-                  message = "hostname should be set!";
-                }
-                { assertion = secretsConfig.users.users.mhuber.hashedPassword != null;
-                  message = "password should be overwritten in ./nixops-secrets.nix";
-                }
-              ];
-            specialArgs = { inherit secretsLib; };
-          } // (lib.mkMerge secretsConfig);
-        imports =
-          [ (./nixos/host- + hostName)
-            (addConfig args)
-          ];
-      };
+    { config =
+        { deployment.targetEnv = "none";
+          assertions =
+            [ { assertion = config.networking.hostName == hostName;
+                message = "hostname should be set!";
+              }
+              { assertion = secretsConfig.users.users.mhuber.hashedPassword != null;
+                message = "password should be overwritten in ./nixops-secrets.nix";
+              }
+            ];
+        } // (lib.mkMerge secretsConfig);
+      imports =
+        [ (./nixos/host- + hostName)
+          (addConfig args)
+        ];
+    };
   workstationAsBuildMachine =
     { nix.buildMachines =
         [{ hostName = "workstation";

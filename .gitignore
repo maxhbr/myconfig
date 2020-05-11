@@ -20,4 +20,3 @@ myconfig.out-link
 *.iso
 **/imports/priv*
 **/imports/work*
-**/*secrets*
