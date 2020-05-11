@@ -27,4 +27,38 @@ in
           }
         ];
     };
+  deployWireguardKeys = hostName:
+    { deployment.keys =
+        { wg-private =
+            { text = builtins.readFile (secretsDir + "/${hostName}/wireguard-keys/private");
+              user = "root";
+              group = "root";
+              permissions = "0400";
+            };
+          wg-public =
+            { text = builtins.readFile (secretsDir + "/${hostName}/wireguard-keys/public");
+              user = "root";
+              group = "root";
+              permissions = "0444";
+            };
+        };
+    };
+  deploySSHUserKeys = hostName: algo:
+    { deployment.keys =
+        { "id_${algo}" =
+            { text = builtins.readFile (secretsDir + "/${hostName}/ssh/id_${algo}");
+              destDir = "/home/mhuber/.ssh";
+              user = "mhuber";
+              group = "mhuber";
+              permissions = "0400";
+            };
+          "id_${algo}.pub" =
+            { text = builtins.readFile (secretsDir + "/${hostName}/ssh/id_${algo}.pub");
+              destDir = "/home/mhuber/.ssh";
+              user = "mhuber";
+              group = "mhuber";
+              permissions = "0444";
+            };
+        };
+    };
 }
