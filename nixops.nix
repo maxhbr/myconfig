@@ -1,5 +1,7 @@
 let
-  secrets = import ../secrets-myconfig (import ./nixops-lib.nix);
+  secretsPath = ../secrets-myconfig;
+  secretsLib = import ./nixops-lib.nix secretsPath;
+  secrets = import secretsPath secretsLib;
   hostFromConfig = hostName: addConfig:
     { config, lib, ... }@args:
     let
@@ -15,6 +17,7 @@ let
                   message = "password should be overwritten in ./nixops-secrets.nix";
                 }
               ];
+            specialArgs = { inherit secretsLib; };
           } // (lib.mkMerge secretsConfig);
         imports =
           [ (./nixos/host- + hostName)
