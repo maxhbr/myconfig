@@ -38,6 +38,9 @@ with (import ./lib.nix);
               [ (getSecret "workstation" "ssh/id_rsa.pub")
                 (getSecret "vserver" "ssh/id_rsa.pub")
               ])
+            ({
+              nix.trustedBinaryCaches = [ ("ssh://nix-ssh@" + (getSecret "workstation" "ip")) ];
+            })
           ];
        });
   workstation = mkHost "workstation"
@@ -49,10 +52,7 @@ with (import ./lib.nix);
           [ (deployWireguardKeys "workstation")
             (deploySSHUserKeys "workstation" "rsa")
             (setupNixServe
-              [ (getSecret "x1extremeG2" "ssh/id_rsa.pub")
-                (getSecret "x1extremeG2" "ssh/id_ed2519.pub")
-                (getSecret "x1extremeG2" "ssh/id_dsa.pub")
-                (getSecret "x1extremeG2" "ssh/id_ecdsa.pub")
+              [ (getSecret "x1extremeG2" "ssh/id_ed25519.pub")
                 (getSecret "vserver" "ssh/id_rsa.pub")
               ])
           ];

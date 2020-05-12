@@ -1,5 +1,14 @@
 let
   secretsDir = ./secrets;
+  importall =
+    path:
+    if builtins.pathExists path
+      then let
+          content = builtins.readDir path;
+        in map (n: import (path + ("/" + n)))
+          (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
+              (builtins.attrNames content))
+      else [];
 in
 rec
 { getSecret =
@@ -30,7 +39,7 @@ rec
                 # }
               ];
           }
-        ];
+        ]; # + (importall (secretsDir + "/${hostName}/imports"));
     };
   deployWireguardKeys = hostName:
     { deployment.keys =
@@ -71,6 +80,10 @@ rec
     { nix.sshServe =
         { enable = true;
           inherit keys;
+        };
+      users.extraUsers.nix-ssh =
+        { openssh.authorizedKeys =
+            { inherit keys; };
         };
     };
   # # generate with:
