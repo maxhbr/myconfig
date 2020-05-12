@@ -8,6 +8,7 @@
         libreoffice
         zoom-us bluejeans-gui
         slack-dark tdesktop
+        remmina
       ];
     };
   };

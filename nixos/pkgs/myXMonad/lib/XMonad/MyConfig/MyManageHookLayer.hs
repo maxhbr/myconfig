@@ -48,7 +48,7 @@ myManageHook = let
                                                 ,"slack","Slack"])
                                , (doShift "media", ["Steam"])
                                , (doShift "13", [ "Wfica", "Wfica_Seamless"
-                                                , "vncviewer", "Vncviewer"])
+                                                , "vncviewer", "Vncviewer", "org.remmina.Remmina"])
                                , (doIgnore, ["desktop_window"
                                             ,"kdesktop"
                                             ,"xmessage","Xmessage"]) ]
