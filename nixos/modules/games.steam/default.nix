@@ -1,17 +1,17 @@
 { pkgs, lib, ... }:
 let
-  nativeOnly = true;
+  nativeOnly = false;
 in {
   imports = [
     ./steamcontroller.nix
+    (lib.mkIf nativeOnly { nixpkgs.config.allowBroken = true; })
   ];
   config = {
     home-manager.users.mhuber =
       { home.packages =
           with pkgs;
           [ (steam.override { inherit nativeOnly; })
-            steam-run
-            steam-run-native
+            (if nativeOnly then steam-run-native else steam-run)
           ];
         home.file =
           { ".local/share/Steam/compatibilitytools.d/Proton-5.6-GE-2" =
@@ -36,5 +36,5 @@ in {
       allowedUDPPorts = [ 27031 27036 ];
       allowedTCPPorts = [ 27036 27037 ];
     };
-  } // (lib.mkIf nativeOnly { nixpkgs.config.allowBroken = true; });
+  };
 }

@@ -1,20 +1,3 @@
-# let
-#   workstationAsBuildMachine =
-#     { nix.buildMachines =
-#         [{ hostName = "workstation";
-#            system = "x86_64-linux";
-#            maxJobs = 6;
-#            speedFactor = 2;
-#            supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
-#            mandatoryFeatures = [ ];
-#         }];
-#       nix.distributedBuilds = true;
-#       # optional, useful when the builder has a faster internet connection than yours
-#       nix.extraOptions =
-#         '' builders-use-substitutes = true
-#         '';
-#     };
-# in
 with (import ./lib.nix);
 { network.description = "myconfig";
   x1extremeG2 = mkHost "x1extremeG2"
@@ -38,9 +21,23 @@ with (import ./lib.nix);
               [ (getSecret "workstation" "ssh/id_rsa.pub")
                 (getSecret "vserver" "ssh/id_rsa.pub")
               ])
-            # ({
-            #   nix.trustedBinaryCaches = [ ("ssh://nix-ssh@" + (getSecret "workstation" "ip")) ];
-            # })
+            {
+              nix.trustedBinaryCaches = [ ("ssh://nix-ssh@" + (getSecret "workstation" "ip")) ];
+            }
+            { nix.buildMachines =
+                [{ hostName = (getSecret "workstation" "ip");
+                  system = "x86_64-linux";
+                  maxJobs = 6;
+                  speedFactor = 2;
+                  supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
+                  mandatoryFeatures = [ ];
+                }];
+              nix.distributedBuilds = true;
+              # optional, useful when the builder has a faster internet connection than yours
+              nix.extraOptions =
+                '' builders-use-substitutes = true
+                '';
+            }
           ];
        });
   workstation = mkHost "workstation"
