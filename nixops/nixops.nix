@@ -38,9 +38,9 @@ with (import ./lib.nix);
               [ (getSecret "workstation" "ssh/id_rsa.pub")
                 (getSecret "vserver" "ssh/id_rsa.pub")
               ])
-            ({
-              nix.trustedBinaryCaches = [ ("ssh://nix-ssh@" + (getSecret "workstation" "ip")) ];
-            })
+            # ({
+            #   nix.trustedBinaryCaches = [ ("ssh://nix-ssh@" + (getSecret "workstation" "ip")) ];
+            # })
           ];
        });
   workstation = mkHost "workstation"
