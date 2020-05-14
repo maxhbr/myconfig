@@ -19,7 +19,7 @@ in
     ../modules/smarthome.nix
     ../gaming.nix
     # secrets
-  ] ++ importall ./imports;
+  ];
 
   config = {
     networking.hostName = "x1extremeG2";

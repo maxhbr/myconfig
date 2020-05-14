@@ -17,7 +17,7 @@ in {
       ../modules/games.doom3.nix
       ../modules/games.wine
       ../modules/games.lutris.nix
-    ] ++ importall ./imports;
+    ];
 
   config =
     { networking.hostName = "workstation";

@@ -39,7 +39,7 @@ rec
                 # }
               ];
           }
-        ]; # + (importall (secretsDir + "/${hostName}/imports"));
+        ] ++ (importall (secretsDir + "/${hostName}/imports"));
     };
   deployWireguardKeys = hostName:
     { deployment.keys =

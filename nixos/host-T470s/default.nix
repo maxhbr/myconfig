@@ -11,7 +11,7 @@ in {
     ../hardware/efi.nix
     # modules
     ../modules/service.postgresql.nix
-  ] ++ importall ./imports;
+  ];
 
   config = {
     networking.hostName = "T470s";

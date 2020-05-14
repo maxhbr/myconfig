@@ -10,7 +10,7 @@ in {
     ../hardware/grub.nix
     # configuration
     ./service.wireguard-server
-  ] ++ importall ./imports;
+  ];
   config = {
     networking.hostName = "vserver";
     networking.hostId = "49496f29";
