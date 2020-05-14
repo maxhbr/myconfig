@@ -1,4 +1,4 @@
-. ../common.sh
+. ./common.sh
 
 setupLoging() {
     mkdir -p "${myconfigDir}/_logs/"

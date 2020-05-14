@@ -1,4 +1,4 @@
-. ../common.sh
+. ./common.sh
 
 upgradeSubtree() {
     if ! git diff-index --quiet HEAD --; then

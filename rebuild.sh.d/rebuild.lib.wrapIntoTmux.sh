@@ -1,4 +1,4 @@
-. ../common.sh
+. ./common.sh
 
 wrapIntoTmux() {
     local script="$1"

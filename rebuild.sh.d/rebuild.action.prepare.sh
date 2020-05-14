@@ -1,4 +1,4 @@
-. ../common.sh
+. ./common.sh
 
 prepare_setup_nixops_deployment() {
     nixops info -d $NIXOPS_DEPLOYMENT || nixops create -d $NIXOPS_DEPLOYMENT "$myconfigDir/nixops/nixops.nix"
@@ -40,10 +40,14 @@ prepare_create_nix_store_key() {
 }
 prepare_load_prefetches() {
     logH1 "prefetch" "$myconfigDir/prefetches/"
-    find "$myconfigDir/prefetches/" \
-          -not -path '*/\.*' \
-         -type f \
-         -exec  nix-prefetch-url "file://{}" \;
+    if [[ -d "$myconfigDir/prefetches/" ]]; then
+        find "$myconfigDir/prefetches/" \
+            -not -path '*/\.*' \
+            -type f \
+            -exec  nix-prefetch-url "file://{}" \;
+    else
+        echo "no folder ./prefetches"
+    fi
 }
 prepare() {
     if [[ -f /etc/nixos/configuration.nix ]]; then

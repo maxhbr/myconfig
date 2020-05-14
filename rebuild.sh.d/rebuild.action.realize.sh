@@ -1,4 +1,4 @@
-. ../common.sh
+. ./common.sh
 
 realize() {
     local targetHost="$1"
