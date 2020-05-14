@@ -44,6 +44,10 @@ with (import ./lib.nix);
     ( {lib, ...}:
       { config =
           { deployment.targetHost =  lib.mkDefault "10.199.199.5";
+            services.wakeonlan.interfaces =
+              [ { interface = "enp39s0";
+                  method = "magicpacket";
+              } ];
           };
         imports =
           [ (deployWireguardKeys "workstation")
