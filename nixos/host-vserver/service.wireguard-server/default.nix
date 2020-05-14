@@ -20,7 +20,7 @@
     networking.nat.externalInterface = "ens3";
     networking.nat.internalInterfaces = [ "wg0" ];
     networking.firewall = {
-      allowedUDPPorts = [ 51820 ];
+      allowedUDPPorts = [ 51820 51821 ];
 
      # This allows the wireguard server to route your traffic to the internet and hence be like a VPN
      # For this to work you have to set the dnsserver IP of your router (or dnsserver of choice) in your clients
@@ -41,12 +41,17 @@
                  (builtins.filter (n: builtins.match ".*\\.nix" n != null)
                                   (builtins.attrNames content));
       };
-      # wg1 = {
-      #   ips = [ "10.199.203.1/24" ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
-      #   listenPort = 51820;
-      #   privateKeyFile = "/home/mhuber/wireguard-keys/private";
-      #   peers = [];
-      # };
+      wg1 = {
+        ips = [ "10.199.203.1/24" ];
+        listenPort = 51821;
+        privateKeyFile = "/run/keys/wg-private";
+        peers =
+          [ { # T470s
+              publicKey = "tkc8XZWOxLKsgG82R17J2DikWXMq5qqCKOjQdWOjuX0=";
+              allowedIPs = [ "10.199.203.2/32" ];
+            }
+          ];
+      };
     };
   };
 }

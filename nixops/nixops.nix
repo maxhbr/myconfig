@@ -70,6 +70,10 @@ with (import ./lib.nix);
       });
   # T470p = mkHost "T470p"
   #   ({...}: {});
-  # T470s = mkHost "T470s"
-  #   ({...}: {});
+  T470s = mkHost "T470s"
+    ( {...}:
+      { imports =
+          [ (deployWireguardKeys "T470s")
+          ];
+      });
 }
