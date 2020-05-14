@@ -1,4 +1,4 @@
-. ./common.sh
+. ../common.sh
 
 prepare_setup_nixops_deployment() {
     nixops info -d $NIXOPS_DEPLOYMENT || nixops create -d $NIXOPS_DEPLOYMENT "$myconfigDir/nixops/nixops.nix"

@@ -1,4 +1,4 @@
-. ./common.sh
+. ../common.sh
 
 handlePostExecutionHooks() {
     if [[ -d "$myconfigDir/misc/post_install_hooks" ]]; then

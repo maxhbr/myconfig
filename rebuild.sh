@@ -83,15 +83,15 @@ set -- "${POSITIONAL[@]}"
 ###########################################################################
 ##  imports  ##############################################################
 ###########################################################################
-. ./rebuild.lib.wrapIntoTmux.sh
-. ./rebuild.lib.diffState.sh
-. ./rebuild.lib.logging.sh
-. ./rebuild.lib.handleGit.sh
-. ./rebuild.action.prepare.sh
-. ./rebuild.action.upgrade.sh
-. ./rebuild.action.hooks.sh
-. ./rebuild.action.realize.sh
-. ./rebuild.action.cleanup.sh
+. ./rebuild.sh.d/rebuild.lib.wrapIntoTmux.sh
+. ./rebuild.sh.d/rebuild.lib.diffState.sh
+. ./rebuild.sh.d/rebuild.lib.logging.sh
+. ./rebuild.sh.d/rebuild.lib.handleGit.sh
+. ./rebuild.sh.d/rebuild.action.prepare.sh
+. ./rebuild.sh.d/rebuild.action.upgrade.sh
+. ./rebuild.sh.d/rebuild.action.hooks.sh
+. ./rebuild.sh.d/rebuild.action.realize.sh
+. ./rebuild.sh.d/rebuild.action.cleanup.sh
 
 ###########################################################################
 ##  run  ##################################################################
