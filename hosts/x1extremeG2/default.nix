@@ -1,23 +1,21 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, secretsLib, ... }: let
-  importall = import ../lib/helper/importall.nix;
-in
+{ pkgs, secretsLib, ... }:
 { imports = [
     ./hardware-configuration.nix
-    ../dev.nix
+    ../../roles/dev.nix
     # hardware:
-    ../hardware/x1extremeG2.nix
-    ../hardware/efi.nix
+    ../../hardware/x1extremeG2.nix
+    ../../hardware/efi.nix
     ./backup-hdd.nix
     ./foto-hdd.nix
     # modules
-    ../modules/work
-    ../modules/misc-desktop-tools.nix
+    ../../modules/work
+    ../../modules/misc-desktop-tools.nix
     ## fun
-    ../modules/imagework
-    ../modules/smarthome.nix
-    ../gaming.nix
+    ../../modules/imagework
+    ../../modules/smarthome.nix
+    ../../roles/gaming.nix
     # secrets
   ];
 

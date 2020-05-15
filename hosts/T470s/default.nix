@@ -1,21 +1,25 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, lib, ... }: let
-  importall = import ../lib/helper/importall.nix;
-in {
+{ pkgs, lib, ... }:
+{
   imports = [
     ./hardware-configuration.nix
-    ../hardware/notebook-generic.nix
-    ../dev.nix
+    ../../hardware/notebook-generic.nix
+    ../../roles/dev.nix
     # hardware:
-    ../hardware/efi.nix
+    ../../hardware/efi.nix
     # modules
-    ../modules/service.postgresql.nix
+    ../../modules/service.postgresql.nix
   ];
 
   config = {
     networking.hostName = "T470s";
     networking.hostId = "8bf4efff";
+
+    networking.firewall = {
+      allowedUDPPorts = [ 5432 ];
+      allowedTCPPorts = [ 5432 ];
+    };
 
     boot.initrd.supportedFilesystems = [ "luks" ];
     boot.initrd.luks.devices.crypted = {
