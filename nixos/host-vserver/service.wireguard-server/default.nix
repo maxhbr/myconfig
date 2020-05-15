@@ -50,6 +50,10 @@
               publicKey = "tkc8XZWOxLKsgG82R17J2DikWXMq5qqCKOjQdWOjuX0=";
               allowedIPs = [ "10.199.203.2/32" ];
             }
+            { # NC
+              publicKey = "drtF/JL+NJu+EJDMv+j2GAXNA2tbB5gBE6NFBeOeMFA=";
+              allowedIPs = [ "10.199.203.3/32" ];
+            }
           ];
       };
     };
