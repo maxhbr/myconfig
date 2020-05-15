@@ -5,7 +5,7 @@
   imports = [
     ./core.nix
     # configuration
-    ./modules/service.vsftp.nix
+    ../modules/service.vsftp.nix
   ];
 
   config = {

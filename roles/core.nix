@@ -25,20 +25,20 @@
   '';
 in {
   imports = [
-    ./lib
-    ./modules/core.nix
-    ./modules/gnupg.nix
-    ./modules/vim
-    ./modules/zsh
-    ./modules/tmux
-    ./modules/git
-    ./modules/pass
-    ./modules/myborgbackup
-    ./modules/nixos.networking
-    ./modules/nixos.nix.nix
-    ./modules/user.mhuber.nix
-    ./modules/dic.nix
-    ./modules/service.openssh.nix
+    ../lib
+    ../modules/core.nix
+    ../modules/gnupg.nix
+    ../modules/vim
+    ../modules/zsh
+    ../modules/tmux
+    ../modules/git
+    ../modules/pass
+    ../modules/myborgbackup
+    ../modules/nixos.networking
+    ../modules/nixos.nix.nix
+    ../modules/user.mhuber.nix
+    ../modules/dic.nix
+    ../modules/service.openssh.nix
   ];
 
   config =

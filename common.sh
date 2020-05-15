@@ -17,7 +17,7 @@ if ! type logH1 &>/dev/null; then
 
     export nixpkgs="$myconfigDir/nixpkgs"
 
-    nixosConfig="$myconfigDir/nixos/host-$(hostname)" # Why is this necessary?
+    nixosConfig="$myconfigDir/hosts/$(hostname)" # Why is this necessary?
     if [[ ! -d "$nixosConfig" ]]; then
         nixosConfig="$myconfigDir/nixos/host-minimal"
     fi

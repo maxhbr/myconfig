@@ -20,7 +20,7 @@ rec
     addConfig:
     { config, lib, ... }@args:
     { imports =
-        [ (../nixos/host- + hostName)
+        [ (../hosts + "/${hostName}")
           (secretsDir + "/${hostName}")
           (addConfig args)
           { deployment =

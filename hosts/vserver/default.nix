@@ -1,13 +1,12 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }: let
-  importall = import ../lib/helper/importall.nix;
-in {
+{ pkgs, ... }:
+{
   imports = [
     ./hardware-configuration.nix
-    ../headless.nix
+    ../../roles/headless.nix
     # hardware:
-    ../hardware/grub.nix
+    ../../hardware/grub.nix
     # configuration
     ./service.wireguard-server
   ];

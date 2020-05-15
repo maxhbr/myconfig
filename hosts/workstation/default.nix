@@ -1,22 +1,21 @@
 # Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, ... }: let
-  importall = import ../lib/helper/importall.nix;
-in {
+{ config, pkgs, lib, ... }:
+{
   imports =
     [ ./hardware-configuration.nix
-      ../hardware/efi.nix
+      ../../hardware/efi.nix
       # other profiles
-      ../headless.nix
-      ../dev.nix
-      ../modules/imagework
-      ../gaming.nix
-      ../modules/desktop.X.xfce.nix
-      ../modules/desktop.X.vnc.nix
-      ../modules/desktop.X.rdp.nix
-      ../modules/games.doom3.nix
-      ../modules/games.wine
-      ../modules/games.lutris.nix
+      ../../roles/headless.nix
+      ../../roles/dev.nix
+      ../../modules/imagework
+      ../../roles/gaming.nix
+      ../../modules/desktop.X.xfce.nix
+      ../../modules/desktop.X.vnc.nix
+      ../../modules/desktop.X.rdp.nix
+      ../../modules/games.doom3.nix
+      ../../modules/games.wine
+      ../../modules/games.lutris.nix
     ];
 
   config =
