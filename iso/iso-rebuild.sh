@@ -8,9 +8,15 @@ set -x
 hostConfig=${1:-roles/dev.nix}
 NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/hosts/minimal"
 NIX_PATH=""
+if nix ping-store --store ssh://builder; then
+    jobCountArgs="-j0"
+else
+    jobCountArgs=""
+fi
+
 drv=$(nix-build iso.nix \
           $NIX_PATH_ARGS \
-          -j0 \
+          $jobCountArgs \
           --show-trace \
           --no-out-link \
           --argstr hostConfig "$hostConfig")

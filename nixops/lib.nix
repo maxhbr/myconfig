@@ -88,12 +88,31 @@ rec
         };
     };
 
+  setupAsBuildMachine =
+    authorizedKeys:
+    { users.extraUsers.nixBuild =
+        { name = "nixBuild";
+          useDefaultShell = true;
+          openssh.authorizedKeys.keys = authorizedKeys;
+        };
+      nix =
+        { allowedUsers = [ "nixBuild" ];
+          trustedUsers = [ "nixBuild" ];
+        };
+    };
+
+
+
   setupBuildSlave =
     host:
+    speedFactor:
     sshKeyText:
     publicKey:
+    let
+      keyName = "nixBuildPrivKey.${host}";
+    in
     { deployment.keys =
-        { nixBuildPrivKey =
+        { "${keyName}" =
             { text = sshKeyText;
               user = "root";
               group = "root";
@@ -104,11 +123,11 @@ rec
         [{ hostName = host;
            system = "x86_64-linux";
            maxJobs = 6;
-           speedFactor = 2;
            supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
            mandatoryFeatures = [ ];
            sshUser = "nixBuild";
-           inherit sshKey;
+           sshKey = "/run/keys/${keyName}";
+           inherit speedFactor;
         }];
       nix.distributedBuilds = true;
       # optional, useful when the builder has a faster internet connection than yours

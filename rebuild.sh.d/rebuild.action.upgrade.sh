@@ -52,17 +52,17 @@ upgrade() {
         fi
 
         logH3 "update" "home-manager"
-        ./nixos/lib/home-manager/update.sh
+        ./lib/home-manager/update.sh
         logH3 "update" "extrahosts"
-        ./nixos/modules/nixos.networking/extrahosts/update.sh
+        ./modules/nixos.networking/extrahosts/update.sh
         logH3 "update" "nixpkgs-unstable"
-        ./nixos/lib/nixpkgs-unstable/update.sh
+        ./lib/nixpkgs-unstable/update.sh
         logH3 "update" "emacs"
-        ./nixos/modules/emacs/update.sh
+        ./modules/emacs/update.sh
         logH3 "update" "my-wallpapers"
-        ./nixos/modules/desktop.common/my-wallpapers/update.sh
+        ./modules/desktop.common/my-wallpapers/update.sh
         logH3 "update" "chisui/zsh-nix-shell"
-        ./nixos/modules/zsh/update.sh
+        ./modules/zsh/update.sh
     fi
 }
 
