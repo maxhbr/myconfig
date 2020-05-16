@@ -4,16 +4,16 @@
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../common.sh"
 set -e
 cd "$myconfigDir/iso"
-set -x
 hostConfig=${1:-roles/dev.nix}
 NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/hosts/minimal"
 NIX_PATH=""
-if nix ping-store --store ssh://builder; then
+if nix ping-store --store ssh://192.168.178.90; then
     jobCountArgs="-j0"
 else
     jobCountArgs=""
 fi
 
+set -x
 drv=$(nix-build iso.nix \
           $NIX_PATH_ARGS \
           $jobCountArgs \

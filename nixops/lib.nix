@@ -101,8 +101,6 @@ rec
         };
     };
 
-
-
   setupBuildSlave =
     host:
     speedFactor:
@@ -115,8 +113,8 @@ rec
         { "${keyName}" =
             { text = sshKeyText;
               user = "root";
-              group = "root";
-              permissions = "0400";
+              group = "keys";
+              permissions = "0440";
             };
         };
       nix.buildMachines =
@@ -131,14 +129,22 @@ rec
         }];
       nix.distributedBuilds = true;
       # optional, useful when the builder has a faster internet connection than yours
-      nix.extraOptions =
-        '' builders-use-substitutes = true
-        '';
+      nix.extraOptions = ''
+        builders-use-substitutes = true
+      '';
       services.openssh.knownHosts =
         { "${host}" =
             { inherit publicKey;
             };
         };
+      programs.ssh.extraConfig = ''
+        Host builder.${host}
+             HostName ${host}
+             User nixBuild
+             IdentitiesOnly yes
+             IdentityFile /run/keys/${keyName}
+             StrictHostKeyChecking accept-new
+      '';
     };
 
   # # generate with:
