@@ -1,3 +1,28 @@
+let
+  workstationAsBuildMachine =
+    { nix.buildMachines =
+        [{ hostName = "10.199.199.5"; #(getSecret "workstation" "ip");
+           system = "x86_64-linux";
+           maxJobs = 6;
+           speedFactor = 2;
+           supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
+           mandatoryFeatures = [ ];
+           # sshKey = "/run/keys/nixBuildWorkstationPrivKey";
+           sshUser = "nixBuild";
+        }];
+      nix.distributedBuilds = true;
+      # optional, useful when the builder has a faster internet connection than yours
+      nix.extraOptions =
+        '' builders-use-substitutes = true
+        '';
+      services.openssh.knownHosts =
+        { "10.199.199.5" =
+            { publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEdhwPve+1dfpOwUKZ5c1Js/1sQeQGe1yvfcfGm0pk9W";
+            };
+        };
+    };
+
+in
 with (import ./lib.nix);
 { network.description = "myconfig";
   x1extremeG2 = mkHost "x1extremeG2"
@@ -24,20 +49,7 @@ with (import ./lib.nix);
             {
               nix.trustedBinaryCaches = [ ("ssh://nix-ssh@" + (getSecret "workstation" "ip")) ];
             }
-            { nix.buildMachines =
-                [{ hostName = (getSecret "workstation" "ip");
-                  system = "x86_64-linux";
-                  maxJobs = 6;
-                  speedFactor = 2;
-                  supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
-                  mandatoryFeatures = [ ];
-                }];
-              nix.distributedBuilds = true;
-              # optional, useful when the builder has a faster internet connection than yours
-              nix.extraOptions =
-                '' builders-use-substitutes = true
-                '';
-            }
+            (setupBuildSlave "10.199.199.5" (getSecret "x1extremeG2" "ssh/id_ed25519") "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEdhwPve+1dfpOwUKZ5c1Js/1sQeQGe1yvfcfGm0pk9W")
           ];
        });
   workstation = mkHost "workstation"
@@ -56,6 +68,16 @@ with (import ./lib.nix);
               [ (getSecret "x1extremeG2" "ssh/id_ed25519.pub")
                 (getSecret "vserver" "ssh/id_rsa.pub")
               ])
+            { users.extraUsers.nixBuild =
+                { name = "nixBuild";
+                  useDefaultShell = true;
+                  openssh.authorizedKeys.keys = [ (getSecret "x1extremeG2" "ssh/id_ed25519.pub") ];
+                };
+              nix =
+                { allowedUsers = [ "nixBuild" ];
+                  trustedUsers = [ "nixBuild" ];
+                };
+            }
           ];
       });
   vserver = mkHost "vserver"

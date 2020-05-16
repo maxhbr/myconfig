@@ -3,18 +3,19 @@
 
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../common.sh"
 set -e
-cd "$myconfigDir/nixos"
+cd "$myconfigDir/iso"
 set -x
-hostConfig=${1:-dev.nix}
-NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/nixos/host-minimal"
+hostConfig=${1:-roles/dev.nix}
+NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/hosts/minimal"
 NIX_PATH=""
 drv=$(nix-build iso.nix \
           $NIX_PATH_ARGS \
+          -j0 \
           --show-trace \
           --no-out-link \
           --argstr hostConfig "$hostConfig")
 out=("$drv/iso/nixos"*".iso")
-finalOut="nixos-myconfig-${hostConfig%.*}.iso"
+finalOut="nixos-myconfig-$(basename ${hostConfig%.*}).iso"
 du -h "$out"
 mkdir -p "$HOME/Downloads/ISOs"
 install -m 644 "$out" "$HOME/Downloads/ISOs/$finalOut"

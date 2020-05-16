@@ -75,6 +75,7 @@ rec
             };
         };
     };
+
   setupNixServe =
     keys:
     { nix.sshServe =
@@ -86,6 +87,41 @@ rec
             { inherit keys; };
         };
     };
+
+  setupBuildSlave =
+    host:
+    sshKeyText:
+    publicKey:
+    { deployment.keys =
+        { nixBuildPrivKey =
+            { text = sshKeyText;
+              user = "root";
+              group = "root";
+              permissions = "0400";
+            };
+        };
+      nix.buildMachines =
+        [{ hostName = host;
+           system = "x86_64-linux";
+           maxJobs = 6;
+           speedFactor = 2;
+           supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
+           mandatoryFeatures = [ ];
+           sshUser = "nixBuild";
+           inherit sshKey;
+        }];
+      nix.distributedBuilds = true;
+      # optional, useful when the builder has a faster internet connection than yours
+      nix.extraOptions =
+        '' builders-use-substitutes = true
+        '';
+      services.openssh.knownHosts =
+        { "${host}" =
+            { inherit publicKey;
+            };
+        };
+    };
+
   # # generate with:
   # # $ nix-store --generate-binary-cache-key binarycache.example.com cache-priv-key.pem cache-pub-key.pem
   # # see:

@@ -1,29 +1,19 @@
 # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
 { system ? "x86_64-linux"
-, hostConfig ? "dev.nix"
-, secondaryHostConfig ? hostConfig }:
+, hostConfig ? "roles/dev.nix" }:
 let
   nixpkgs = ../nixpkgs;
-  preBuiltConfig = (import ../nixpkgs/nixos {
-    configuration = import (./. + hostConfig) {
-      pkgs = nixpkgs;
-    };
-  }).system;
   myisoconfig = { ... }: {
     imports = [
       "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
       "${nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
-      (./. + "/${hostConfig}")
-      ./modules/service.openssh.nix
+      (../. + "/${hostConfig}")
+      ../modules/service.openssh.nix
     ];
 
     config = {
       networking.hostName = "myconfig";
       networking.wireless.enable = false;
-
-      environment.systemPackages = if hostConfig == secondaryHostConfig
-                                   then []
-                                   else [ preBuiltConfig ];
 
       # add myconfig to iso
       isoImage.contents = [
