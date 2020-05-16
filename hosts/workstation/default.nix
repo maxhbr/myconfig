@@ -8,7 +8,7 @@
       # other profiles
       ../../roles/headless.nix
       ../../roles/dev.nix
-      ../../modules/imagework
+      ../../roles/imagework
       ../../roles/gaming.nix
       ../../modules/desktop.X.xfce.nix
       ../../modules/desktop.X.vnc.nix

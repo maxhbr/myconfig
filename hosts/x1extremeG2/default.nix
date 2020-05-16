@@ -13,7 +13,7 @@
     ../../modules/work
     ../../modules/misc-desktop-tools.nix
     ## fun
-    ../../modules/imagework
+    ../../roles/imagework
     ../../modules/smarthome.nix
     ../../roles/gaming.nix
     # secrets

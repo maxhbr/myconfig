@@ -112,9 +112,9 @@ rec
     { deployment.keys =
         { "${keyName}" =
             { text = sshKeyText;
-              user = "root";
+              user = "mhuber";
               group = "keys";
-              permissions = "0440";
+              permissions = "0400";
             };
         };
       nix.buildMachines =

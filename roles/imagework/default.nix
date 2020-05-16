@@ -3,6 +3,7 @@
 { pkgs, ... }:
 {
   imports = [
+    ../desktop.nix
     ./wacom.nix
     ./exfat.nix
   ];
@@ -17,7 +18,7 @@
         krita
         # inkscape
 
-        # blender
+        blender
         librecad # 2D
         freecad # 3D
       ];
