@@ -41,6 +41,10 @@
         { device = "/dev/disk/by-uuid/e3d8b271-deb4-4d4d-b58e-72137b667b24";
           fsType = "ext4";
         };
+      fileSystems."/mnt/2tb-1" =
+        { device = "/dev/disk/by-uuid/51d362d8-5b73-4b92-84c3-9ff260062da6";
+          fsType = "ext4";
+        };
 
       services.xserver.videoDrivers = [ "amdgpu" ];
 
