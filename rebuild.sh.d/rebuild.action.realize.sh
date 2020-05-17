@@ -4,13 +4,14 @@ realize() {
     local targetHost="$1"
     shift
 
+    logH1 "deploy" "targetHost=$targetHost args=$args jobCountArgs=$jobCountArgs"
+
     if nix ping-store --store ssh://builder.192.168.178.90; then
         jobCountArgs="-j0"
     else
         jobCountArgs=""
     fi
 
-    logH1 "deploy" "targetHost=$targetHost args=$args jobCountArgs=$jobCountArgs"
     (set -x;
      nixops deploy \
             $NIX_PATH_ARGS \

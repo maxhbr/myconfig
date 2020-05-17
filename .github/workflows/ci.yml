@@ -23,7 +23,7 @@ jobs:
     - uses: actions/checkout@v1
     - name: Install Nix
       uses: cachix/install-nix-action@v6
-    - run: cd ./nixos && ./test-nixos-configuration.sh --dry-run --hostname ${{ matrix.config.hostname }}
+    - run: ./test-nixos-configuration.sh --dry-run --hostname ${{ matrix.config.hostname }}
 
   # build:
   #   runs-on: ubuntu-latest
@@ -39,7 +39,7 @@ jobs:
   #   - uses: actions/checkout@v1
   #   - name: Install Nix
   #     uses: cachix/install-nix-action@v6
-  #   - run: cd ./nixos && ./test-nixos-configuration.sh --hostname ${{ matrix.config.hostname }}
+  #   - run: ./test-nixos-configuration.sh --hostname ${{ matrix.config.hostname }}
 
   # build-iso:
   #   runs-on: ubuntu-latest
@@ -52,6 +52,6 @@ jobs:
   #   - uses: actions/checkout@v1
   #   - name: Install Nix
   #     uses: cachix/install-nix-action@v6
-  #   - run: cd ./nixos && ./iso-rebuild.sh ${{ matrix.config.hostname }}
+  #   - run: ./iso-rebuild.sh ${{ matrix.config.hostname }}
 
 

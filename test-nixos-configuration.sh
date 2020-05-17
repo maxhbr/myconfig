@@ -7,12 +7,12 @@ help() {
 EOF
 }
 
-. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../common.sh"
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/common.sh"
 
 set -e
 ARGS=""
 DRYRUN=NO
-nixosConfig="$myconfigDir/nixos/host-$(hostname)"
+nixosConfig="$myconfigDir/hosts/$(hostname)"
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
@@ -31,15 +31,15 @@ while [[ $# -gt 0 ]]; do
             ;;
         --hostname)
             set -x
-            nixosConfig="$myconfigDir/nixos/host-${2}"
+            nixosConfig="$myconfigDir/hosts/${2}"
             if [[ ! -d "$nixosConfig" ]]; then
-                nixosProfile="$myconfigDir/nixos/${2}.nix"
-                if [[ -f "$nixosProfile" ]]; then
+                nixosRole="$myconfigDir/roles/${2}.nix"
+                if [[ -f "$nixosRole" ]]; then
                     nixosConfig=$(mktemp -d)
                     trap 'ret=$?; rm "'"$nixosConfig"'/default.nix"; rmdir "'"$nixosConfig"'" 2>/dev/null; exit $ret' 0
                     cat <<EOF | tee "$nixosConfig/default.nix"
 {...}: {
-  imports = [ $nixosProfile ];
+  imports = [ $nixosRole ];
   config = {
     fileSystems."/" = { device = "/dev/sdXX"; fsType = "ext4"; };
     fileSystems."/boot" = { device = "/dev/sdXY"; fsType = "vfat"; };
@@ -69,7 +69,7 @@ NIX_PATH=""
 set -x
 
 out=$(set -x;
-    nix-build '../nixpkgs/nixos' \
+    nix-build './nixpkgs/nixos' \
               $NIX_PATH_ARGS \
               $ARGS \
               -A system \
