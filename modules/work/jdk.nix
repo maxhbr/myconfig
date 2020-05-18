@@ -26,14 +26,11 @@ in
     # generates:
     # - /run/booted-system/pkgs/openjdk8
     # - /run/current-system/pkgs/openjdk8
-    # - /nix/var/nix/profiles/system/pkgs/openjdk8
-    # - ...
     # see: https://discourse.nixos.org/t/always-symlinking-the-latest-jdk-to-a-certain-path/3099/6
     system.extraSystemBuilderCmds = ''
       mkdir -p $out/pkgs/
-      ln -s ${pkgs.jdk} $out/pkgs/openjdk8
+      ln -s ${pkgs.openjdk8_headless} $out/pkgs/openjdk8
       ln -s ${pkgs.jdk11} $out/pkgs/openjdk11
-      ln -s ${pkgs.jdk13} $out/pkgs/openjdk13
       ln -s ${pkgs.maven} $out/pkgs/maven
     '';
 
@@ -45,7 +42,7 @@ in
 
     environment = {
       systemPackages = with pkgs; [
-        jdk jdk11 jdk13
+        jdk11
         maven gradle
         gmvn
       ];
@@ -56,7 +53,6 @@ in
         JAVA_8_HOME = "/run/current-system/pkgs/openjdk8/lib/openjdk";
         JAVA_11_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk";
         JAVA_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk";
-        JAVA_13_HOME = "/run/current-system/pkgs/openjdk13/lib/openjdk";
       };
     };
   };

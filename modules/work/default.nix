@@ -18,7 +18,6 @@
         openconnect networkmanager-openconnect
         strongswan networkmanager_strongswan
         networkmanagerapplet
-        p7zip
         thrift
         idea-ultimate # jetbrains.phpstorm
         dia
