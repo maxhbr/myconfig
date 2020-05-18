@@ -118,7 +118,7 @@ rec
             };
         };
       nix.buildMachines =
-        [{ hostName = host;
+        [{ hostName = "builder.${host}";
            system = "x86_64-linux";
            maxJobs = 6;
            supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
@@ -133,7 +133,7 @@ rec
         builders-use-substitutes = true
       '';
       services.openssh.knownHosts =
-        { "${host}" =
+        { "builder.${host}" =
             { inherit publicKey;
             };
         };
@@ -144,6 +144,7 @@ rec
              IdentitiesOnly yes
              IdentityFile /run/keys/${keyName}
              StrictHostKeyChecking accept-new
+             ConnectTimeout 2
       '';
     };
 

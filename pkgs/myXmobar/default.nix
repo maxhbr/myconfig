@@ -1,11 +1,12 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv }:
+{ pkgs ? import <nixpkgs> {}
+, stdenv ? pkgs.stdenv
+, xmobarrc ? ./xmobarrc
+, xmobarrcTop ? ./xmobarrc.top
+}:
 
 let
-  xmobarrc = ./xmobarrc;
-  xmobarrcTop = ./xmobarrc.top;
-
   isvpn = with pkgs; writeScriptBin "isvpn" ''
 #!${stdenv.shell}
 delimiter=$1

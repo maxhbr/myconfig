@@ -16,7 +16,7 @@
     ../../roles/imagework
     ../../modules/smarthome.nix
     ../../roles/gaming.nix
-    # secrets
+    ../../modules/benchmarking.nix
   ];
 
   config = {
