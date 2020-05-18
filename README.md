@@ -45,6 +45,7 @@ See code for all available configurations.
 | [Dell XPS 15 9560][]              | `<nixos-hardware/dell/xps/15-9560>`                |
 | [Dell XPS 15 9560, intel only][]  | `<nixos-hardware/dell/xps/15-9560/intel>`          |
 | [Dell XPS 15 9560, nvidia only][] | `<nixos-hardware/dell/xps/15-9560/nvidia>`         |
+| [Google Pixelbook][]              | `<nixos-hardware/google/pixelbook>`                |
 | [Inverse Path USB armory][]       | `<nixos-hardware/inversepath/usbarmory>`           |
 | Lenovo IdeaPad Z510               | `<nixos-hardware/lenovo/ideapad/z510>`             |
 | Lenovo ThinkPad E495              | `<nixos-hardware/lenovo/thinkpad/e495>`            |
@@ -69,6 +70,7 @@ See code for all available configurations.
 | Lenovo ThinkPad X270              | `<nixos-hardware/lenovo/thinkpad/x270>`            |
 | Lenovo ThinkPad X280              | `<nixos-hardware/lenovo/thinkpad/x280>`            |
 | [Lenovo ThinkPad X1 (6th Gen)][]  | `<nixos-hardware/lenovo/thinkpad/x1/6th-gen>`      |
+| [Lenovo ThinkPad X1 (7th Gen)][]  | `<nixos-hardware/lenovo/thinkpad/x1/7th-gen>`      |
 | Lenovo ThinkPad X1 Extreme Gen 2  | `<nixos-hardware/lenovo/thinkpad/x1-extreme/gen2>` |
 | [Microsoft Surface Pro 3][]       | `<nixos-hardware/microsoft/surface-pro/3>`         |
 | PC Engines APU                    | `<nixos-hardware/pcengines/apu>`                   |
@@ -93,8 +95,10 @@ See code for all available configurations.
 [Dell XPS 15 9560]: dell/xps/15-9560
 [Dell XPS 15 9560, intel only]: dell/xps/15-9560/intel
 [Dell XPS 15 9560, nvidia only]: dell/xps/15-9560/nvidia
+[Google Pixelbook]: google/pixelbook
 [Inverse Path USB armory]: inversepath/usbarmory
 [Lenovo ThinkPad X1 (6th Gen)]: lenovo/thinkpad/x1/6th-gen
+[Lenovo ThinkPad X1 (7th Gen)]: lenovo/thinkpad/x1/7th-gen
 [Lenovo ThinkPad X260]: lenovo/thinkpad/x260
 [Microsoft Surface Pro 3]: microsoft/surface-pro/3
 [Raspberry Pi 2]: raspberry-pi/2
@@ -102,6 +106,7 @@ See code for all available configurations.
 [Purism Librem 13v3]: purism/librem/13v3
 [Purism Librem 13v5]: purism/librem/13v5
 [Toshiba Chromebook 2 `swanky`]: toshiba/swanky
+[Tuxedo InfinityBook v4]: nixos-hardware/tuxedo/infinitybook/v4
 
 ## How to contribute a new device profile
 
