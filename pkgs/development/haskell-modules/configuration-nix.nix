@@ -628,11 +628,6 @@ self: super: builtins.intersectAttrs super {
   http-download = dontCheck super.http-download;
   pantry = dontCheck super.pantry;
 
-  # Hadolint wants to build a statically linked binary by default.
-  hadolint = overrideCabal super.hadolint (drv: {
-    preConfigure = "sed -i -e /ld-options:/d hadolint.cabal";
-  });
-
   # gtk2hs-buildtools is listed in setupHaskellDepends, but we
   # need it during the build itself, too.
   cairo = addBuildTool super.cairo self.buildHaskellPackages.gtk2hs-buildtools;
@@ -732,4 +727,27 @@ self: super: builtins.intersectAttrs super {
           --prefix PATH : "${path}"
       '';
     });
+
+  # Tests access homeless-shelter.
+  hie-bios = dontCheck super.hie-bios;
+
+  # Compiling the readme throws errors and has no purpose in nixpkgs
+  aeson-gadt-th =
+    disableCabalFlag (doJailbreak (super.aeson-gadt-th)) "build-readme";
+
+  neuron = overrideCabal (super.neuron) (drv: {
+    # neuron expects the neuron-search script to be in PATH at built-time.
+    buildTools = [ pkgs.makeWrapper ];
+    preConfigure = ''
+      mkdir -p $out/bin
+      cp src-bash/neuron-search $out/bin/neuron-search
+      chmod +x $out/bin/neuron-search
+      wrapProgram $out/bin/neuron-search --prefix 'PATH' ':' ${
+        with pkgs;
+        lib.makeBinPath [ fzf ripgrep gawk bat findutils envsubst ]
+      }
+      PATH=$PATH:$out/bin
+    '';
+  });
+
 }
