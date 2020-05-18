@@ -33,7 +33,7 @@ upgradeNixpkgs() {
 upgradeNixosHardware() {
     upgradeSubtree \
         NixOS-nixos-hardware https://github.com/NixOS/nixos-hardware \
-        "nixos/hardware/nixos-hardware/" \
+        "hardware/nixos-hardware/" \
         "master"
 }
 
