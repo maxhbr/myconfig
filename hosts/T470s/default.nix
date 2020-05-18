@@ -8,8 +8,6 @@
     ../../roles/dev.nix
     # hardware:
     ../../hardware/efi.nix
-    # modules
-    ../../modules/service.postgresql.nix
   ];
 
   config = {
@@ -31,6 +29,16 @@
     services = {
       logind.lidSwitch = lib.mkForce "ignore";
       logind.lidSwitchDocked = lib.mkForce "ignore";
+      postgresql = {
+        enable = true;
+        package = pkgs.postgresql_10;
+        enableTCPIP = true;
+        authentication = pkgs.lib.mkOverride 10 ''
+          local all all trust
+          host all all ::1/128 trust
+          host all all 10.199.203.3/24 md5
+        '';
+      };
     };
 
     # This value determines the NixOS release from which the default
