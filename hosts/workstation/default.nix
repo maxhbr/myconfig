@@ -5,6 +5,30 @@
   imports =
     [ ./hardware-configuration.nix
       ../../hardware/efi.nix
+      ../../hardware/nixos-hardware/common/cpu/amd
+      ../../hardware/nixos-hardware/common/pc/ssd
+      { boot.initrd.supportedFilesystems = [ "luks" ];
+        boot.initrd.luks.devices.crypted =
+          { device = "/dev/disk/by-uuid/46fc7672-6bcc-4245-8d73-65c81cda0c58";
+            keyFile = "/dev/disk/by-id/usb-JetFlash_Transcend_16GB_753K3Z31LDXXOPIT-0:0";
+            keyFileSize = 4096;
+            preLVM = true;
+            allowDiscards = true;
+            fallbackToPassword = true;
+          };
+
+        fileSystems."/mnt/lubuntu" =
+          { device = "/dev/disk/by-uuid/e3d8b271-deb4-4d4d-b58e-72137b667b24";
+            fsType = "ext4";
+          };
+        fileSystems."/mnt/2tb-1" =
+          { device = "/dev/disk/by-uuid/51d362d8-5b73-4b92-84c3-9ff260062da6";
+            fsType = "ext4";
+          };
+      }
+      { hardware.enableRedistributableFirmware = true;
+        services.xserver.videoDrivers = [ "amdgpu" ];
+      }
       # other profiles
       ../../roles/headless.nix
       ../../roles/dev.nix
@@ -22,33 +46,9 @@
     { networking.hostName = "workstation";
       networking.hostId = "864d73f4";
 
-      boot.initrd.supportedFilesystems = [ "luks" ];
-      boot.initrd.luks.devices.crypted =
-        { device = "/dev/disk/by-uuid/46fc7672-6bcc-4245-8d73-65c81cda0c58";
-          keyFile = "/dev/disk/by-id/usb-JetFlash_Transcend_16GB_753K3Z31LDXXOPIT-0:0";
-          keyFileSize = 4096;
-          # keyFileOffset = $OFFSET;
-          preLVM = true;
-          allowDiscards = true;
-          fallbackToPassword = true;
-        };
-
       services.logind.extraConfig = ''
           HandlePowerKey=suspend
         '';
-
-      fileSystems."/mnt/lubuntu" =
-        { device = "/dev/disk/by-uuid/e3d8b271-deb4-4d4d-b58e-72137b667b24";
-          fsType = "ext4";
-        };
-      fileSystems."/mnt/2tb-1" =
-        { device = "/dev/disk/by-uuid/51d362d8-5b73-4b92-84c3-9ff260062da6";
-          fsType = "ext4";
-        };
-
-      services.xserver.videoDrivers = [ "amdgpu" ];
-
-      # services.xserver.windowManager.default = pkgs.lib.mkForce "xfce";
 
       # This value determines the NixOS release from which the default
       # settings for stateful data, like file locations and database versions

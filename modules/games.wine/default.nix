@@ -22,6 +22,10 @@ let
 
 in {
   config = {
+    nixpkgs.config.permittedInsecurePackages = [
+      "p7zip-16.02" # in winetricks
+    ];
+
     home-manager.users.mhuber = {
       home.packages = wowWinePkgs;
     };
