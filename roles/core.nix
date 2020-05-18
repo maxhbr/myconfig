@@ -1,4 +1,5 @@
-{ config, pkgs, lib, ... }: let
+{ config, pkgs, lib, ... }:
+let
   # cksum /etc/machine-id | while read c rest; do printf "%x" $c; done | sudo tee ./hostid
   upg-pull = pkgs.writeShellScriptBin "upg-pull" ''
   set -e
@@ -23,27 +24,33 @@
     ${pkgs.git}/bin/git clone https://github.com/maxhbr/myconfig "$myconfigDir"
   fi
   '';
-in {
-  imports = [
-    ../lib
-    ../modules/core.nix
-    ../modules/gnupg.nix
-    ../modules/vim
-    ../modules/zsh
-    ../modules/tmux
-    ../modules/git
-    ../modules/pass
-    ../modules/myborgbackup
-    ../modules/nixos.networking
-    ../modules/nixos.nix.nix
-    ../modules/user.mhuber.nix
-    ../modules/dic.nix
-    ../modules/service.openssh.nix
-  ];
+  myborgbackup = pkgs.callPackage ../pkgs/myborgbackup
+    { inherit pkgs;
+    };
+in
+{
+  imports =
+    [ ../lib
+      ../modules/core.nix
+      ../modules/gnupg.nix
+      ../modules/vim
+      ../modules/zsh
+      ../modules/tmux
+      ../modules/git
+      ../modules/pass
+      ../modules/nixos.networking
+      ../modules/nixos.nix.nix
+      ../modules/user.mhuber.nix
+      ../modules/dic.nix
+      ../modules/service.openssh.nix
+    ];
 
   config =
     { environment =
-        { systemPackages = [ upg-pull ];
+        { systemPackages =
+            [ upg-pull
+              myborgbackup
+            ];
           shellAliases =
             { upg = "~/myconfig/rebuild.sh";
               upg-fast = "~/myconfig/rebuild.sh --fast";
