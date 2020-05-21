@@ -54,6 +54,14 @@
               publicKey = "drtF/JL+NJu+EJDMv+j2GAXNA2tbB5gBE6NFBeOeMFA=";
               allowedIPs = [ "10.199.203.3/32" ];
             }
+            { # ST
+              publicKey = "nl1o+bOTXpr1xNrbUlNeR+ExRDOGNVeHe1Nz7aiU6BI=";
+              allowedIPs = [ "10.199.203.4/32" ];
+            }
+            { # JS
+              publicKey = "huIAnrTZwu7++3HsTRNkCSu77lieZQbMWPwURYiTYRY=";
+              allowedIPs = [ "10.199.203.5/32" ];
+            }
           ];
       };
     };

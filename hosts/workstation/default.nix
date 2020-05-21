@@ -40,6 +40,7 @@
       ../../modules/games.doom3.nix
       ../../modules/games.wine
       ../../modules/games.lutris.nix
+      ../../modules/benchmarking.nix
     ];
 
   config =

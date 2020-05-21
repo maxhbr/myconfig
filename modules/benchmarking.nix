@@ -5,16 +5,15 @@ let
   mybench = with pkgs; writeShellScriptBin "mybench" ''
     benchDir="$HOME/Desktop/mybench/$(hostname)"
     mkdir -p $benchDir
+    ${geekbench}/bin/geekbench5 | tee $benchDir/geekbench5
     ${openssl}/bin/openssl speed | tee $benchDir/sslspeed
-    ${geekbench}/bin/geekbench5 --save $benchDir/geekbench5
   '';
 in {
   config = {
     home-manager.users.mhuber = {
       home.packages =
         with pkgs;
-        [ geekbench
-          mybench
+        [ mybench
         ];
     };
   };
