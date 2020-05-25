@@ -1,5 +1,5 @@
 let
-  secretsDir = ./secrets;
+  secretsDir = ../secrets;
   importall =
     path:
     if builtins.pathExists path

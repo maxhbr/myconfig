@@ -22,7 +22,7 @@ MYCONFIG_ARGS="$@"
 ###########################################################################
 DEPLOYMENT=myconfig-nixops
 export NIXOPS_DEPLOYMENT=myconfig-nixops
-export NIXOPS_STATE="$myconfigDir/nixops/secrets/myconfig-nixops.nixops"
+export NIXOPS_STATE="$HOME/.myconfig-nixops.nixops"
 nixStableChannel=nixos-unstable
 DO_GIT=true
 DO_UPGRADE=true
