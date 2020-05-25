@@ -117,7 +117,7 @@ if ! $DRY_RUN; then
     checkIfConnected
     if $DO_GIT; then
         handleGit
-        home_git_commit "start of rebuild.sh"
+        home_git_commit "start of rebuild.sh" || true
     fi
 fi
 setupLoging "$TARGET"
@@ -151,5 +151,5 @@ fi
 
 if ! $DRY_RUN; then
     handleGitPostExecution
-    home_git_commit "end of rebuild.sh"
+    home_git_commit "end of rebuild.sh" || true
 fi

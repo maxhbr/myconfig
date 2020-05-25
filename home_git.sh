@@ -62,8 +62,6 @@ call_tig() {
     GIT_DIR="$GIT_DIR" GIT_WORK_TREE="$DIR" tig "$@"
 }
 
-set -x
-
 setup_on_demand
 if [[ "$1" == "tig" ]]; then
     shift
