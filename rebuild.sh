@@ -150,6 +150,8 @@ fi
 ###########################################################################
 
 if ! $DRY_RUN; then
-    handleGitPostExecution
-    home_git_commit "end of rebuild.sh" || true
+    if $DO_GIT; then
+        handleGitPostExecution
+        home_git_commit "end of rebuild.sh" || true
+    fi
 fi
