@@ -97,6 +97,7 @@ runWithTrap() {
 . ./rebuild.sh.d/rebuild.lib.wrapIntoTmux.sh
 . ./rebuild.sh.d/rebuild.lib.logging.sh
 . ./rebuild.sh.d/rebuild.lib.handleGit.sh
+. ./rebuild.sh.d/rebuild.action.handleHomeGit.sh
 . ./rebuild.sh.d/rebuild.action.prepare.sh
 . ./rebuild.sh.d/rebuild.action.upgrade.sh
 . ./rebuild.sh.d/rebuild.action.hooks.sh
@@ -116,6 +117,7 @@ if ! $DRY_RUN; then
     checkIfConnected
     if $DO_GIT; then
         handleGit
+        home_git_commit "start of rebuild.sh"
     fi
 fi
 setupLoging "$TARGET"
@@ -149,4 +151,5 @@ fi
 
 if ! $DRY_RUN; then
     handleGitPostExecution
+    home_git_commit "end of rebuild.sh"
 fi

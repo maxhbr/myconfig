@@ -52,21 +52,6 @@ EOF
         fi
         call_git submodule add "${SECRETS}.git" .myconfig.secrets
     fi
-
-#     GIT_MODULES="$DIR/.gitmodules"
-#     if [[ ! -f "$GIT_MODULES" ]]; then
-#         cat <<EOF > "$GIT_MODULES"
-# [submodule "myconfig"]
-# 	path = myconfig
-#   url = https://github.com/maxhbr/myconfig
-#   pushurl = git@github.com:maxhbr/myconfig.git
-# [submodule "secrets"]
-# 	path = .myconfig.secrets
-#   url = $SECRETS
-# EOF
-#         call_git add "$GIT_MODULES"
-#         call_git commit -m "add git modules file"
-#     fi
 }
 
 call_git() {
