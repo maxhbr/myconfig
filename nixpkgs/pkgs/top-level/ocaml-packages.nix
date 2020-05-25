@@ -36,8 +36,6 @@ let
 
     astring = callPackage ../development/ocaml-modules/astring { };
 
-    async_extra_p4 = callPackage ../development/ocaml-modules/async_extra { };
-
     async_kernel_p4 = callPackage ../development/ocaml-modules/async_kernel { };
 
     async_unix_p4 = callPackage ../development/ocaml-modules/async_unix { };
@@ -219,7 +217,12 @@ let
 
     dune = callPackage ../development/tools/ocaml/dune { };
 
-    dune_2 = callPackage ../development/tools/ocaml/dune/2.nix { };
+    dune_2 =
+      if lib.versionAtLeast ocaml.version "4.07"
+      then callPackage ../development/tools/ocaml/dune/2.nix { }
+      else if lib.versionAtLeast ocaml.version "4.02"
+      then pkgs.dune_2
+      else throw "dune_2 is not available for OCaml ${ocaml.version}";
 
     dune-build-info = callPackage ../development/ocaml-modules/dune-build-info { };
 
@@ -410,9 +413,7 @@ let
 
     js_of_ocaml-ppx = callPackage ../development/tools/ocaml/js_of_ocaml/ppx.nix {};
 
-    js_of_ocaml-ppx_deriving_json = callPackage ../development/tools/ocaml/js_of_ocaml/ppx_deriving_json.nix {
-      ppxlib = ppxlib.override { version = "0.12.0"; };
-    };
+    js_of_ocaml-ppx_deriving_json = callPackage ../development/tools/ocaml/js_of_ocaml/ppx_deriving_json.nix { };
 
     js_of_ocaml-tyxml = callPackage ../development/tools/ocaml/js_of_ocaml/tyxml.nix {};
 
@@ -812,7 +813,9 @@ let
 
     ppx_deriving_protobuf = callPackage ../development/ocaml-modules/ppx_deriving_protobuf {};
 
-    ppx_deriving_rpc = callPackage ../development/ocaml-modules/ppx_deriving_rpc {};
+    ppx_deriving_rpc = callPackage ../development/ocaml-modules/ppx_deriving_rpc {
+      ppxlib = ppxlib.override { legacy = true; };
+    };
 
     ppx_deriving_yojson = callPackage ../development/ocaml-modules/ppx_deriving_yojson {};
 
@@ -821,7 +824,6 @@ let
     ppx_import = callPackage ../development/ocaml-modules/ppx_import {};
 
     ppx_irmin = callPackage ../development/ocaml-modules/irmin/ppx.nix {
-      ppxlib = ppxlib.override { version = "0.12.0"; };
     };
 
     ppx_sqlexpr = callPackage ../development/ocaml-modules/sqlexpr/ppx.nix {};
@@ -962,20 +964,21 @@ let
     janeStreet =
     if lib.versionOlder "4.08" ocaml.version
     then import ../development/ocaml-modules/janestreet/0.13.nix {
-      inherit ctypes janePackage num octavius re;
+      inherit ctypes janePackage num octavius ppxlib re;
       inherit (pkgs) openssl;
-      ppxlib = ppxlib.override { version = "0.12.0"; };
     }
     else if lib.versionOlder "4.07" ocaml.version
     then import ../development/ocaml-modules/janestreet/0.12.nix {
-      inherit ctypes janePackage num octavius ppxlib re;
+      inherit ctypes janePackage num octavius re;
       inherit (pkgs) openssl;
+      ppxlib = ppxlib.override { legacy = true; };
     }
     else import ../development/ocaml-modules/janestreet {
       inherit janePackage ocamlbuild angstrom ctypes cryptokit;
       inherit magic-mime num ocaml-migrate-parsetree octavius ounit;
-      inherit ppx_deriving re ppxlib;
+      inherit ppx_deriving re;
       inherit (pkgs) openssl;
+      ppxlib = ppxlib.override { legacy = true; };
     };
 
     janeStreet_0_9_0 = import ../development/ocaml-modules/janestreet/old.nix {
@@ -1186,13 +1189,6 @@ let
       else if lib.versionOlder "4.02" ocaml.version
       then callPackage ../development/ocaml-modules/janestreet/async-unix.nix {}
       else async_unix_p4;
-
-    async_extra =
-      if lib.versionOlder "4.03" ocaml.version
-      then janeStreet.async_extra
-      else if lib.versionOlder "4.02" ocaml.version
-      then callPackage ../development/ocaml-modules/janestreet/async-extra.nix {}
-      else async_extra_p4;
 
     # Apps / from all-packages
 

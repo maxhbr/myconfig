@@ -1,12 +1,12 @@
-{ stdenv, fetchurl, lua, jemalloc, nixosTests }:
+{ stdenv, fetchurl, lua, pkgconfig, systemd, jemalloc, nixosTests }:
 
 stdenv.mkDerivation rec {
-  version = "6.0.1";
+  version = "6.0.3";
   pname = "redis";
 
   src = fetchurl {
     url = "http://download.redis.io/releases/${pname}-${version}.tar.gz";
-    sha256 = "0wzjjcjy2pyd3fwwcb9g936ichrrmj4xqi4wp9ic3vbr0i1nwxdq";
+    sha256 = "0fmvbhbgkrw75kqzgpklasylzff4zd0sxy2cvsrgg4pyh776v95w";
   };
 
   # Cross-compiling fixes
@@ -18,13 +18,14 @@ stdenv.mkDerivation rec {
     ''}
   '';
 
-  buildInputs = [ lua ];
+  buildInputs = [ lua pkgconfig ] ++ stdenv.lib.optional (stdenv.isLinux) systemd;
   # More cross-compiling fixes.
   # Note: this enables libc malloc as a temporary fix for cross-compiling.
   # Due to hardcoded configure flags in jemalloc, we can't cross-compile vendored jemalloc properly, and so we're forced to use libc allocator.
   # It's weird that the build isn't failing because of failure to compile dependencies, it's from failure to link them!
   makeFlags = [ "PREFIX=$(out)" ]
-    ++ stdenv.lib.optionals (stdenv.buildPlatform != stdenv.hostPlatform) [ "AR=${stdenv.cc.targetPrefix}ar" "RANLIB=${stdenv.cc.targetPrefix}ranlib" "MALLOC=libc" ];
+    ++ stdenv.lib.optionals (stdenv.buildPlatform != stdenv.hostPlatform) [ "AR=${stdenv.cc.targetPrefix}ar" "RANLIB=${stdenv.cc.targetPrefix}ranlib" "MALLOC=libc" ]
+    ++ stdenv.lib.optional (stdenv.isLinux) ["USE_SYSTEMD=yes"];
 
   enableParallelBuilding = true;
 

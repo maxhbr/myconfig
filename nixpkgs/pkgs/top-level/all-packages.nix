@@ -302,6 +302,8 @@ in
 
   pet = callPackage ../development/tools/pet { };
 
+  pkger = callPackage ../development/libraries/pkger { };
+
   run = callPackage ../development/tools/run { };
 
   mod = callPackage ../development/tools/mod { };
@@ -1859,6 +1861,8 @@ in
   gist = callPackage ../tools/text/gist { };
 
   gixy = callPackage ../tools/admin/gixy { };
+
+  glpaper = callPackage ../development/tools/glpaper { };
 
   gllvm = callPackage ../development/tools/gllvm { };
 
@@ -5878,6 +5882,8 @@ in
 
   fmodex = callPackage ../games/zandronum/fmod.nix { };
 
+  pdfminer = with python3Packages; toPythonApplication pdfminer;
+
   pdfmod = callPackage ../applications/misc/pdfmod { };
 
   pdf-quench = callPackage ../applications/misc/pdf-quench { };
@@ -8198,10 +8204,13 @@ in
 
   fpc = callPackage ../development/compilers/fpc { };
 
-  gambit = callPackage ../development/compilers/gambit { stdenv = gccStdenv; };
-  gambit-unstable = callPackage ../development/compilers/gambit/unstable.nix { stdenv = gccStdenv; };
-  gerbil = callPackage ../development/compilers/gerbil { stdenv = gccStdenv; };
-  gerbil-unstable = callPackage ../development/compilers/gerbil/unstable.nix { stdenv = gccStdenv; };
+  gambit = callPackage ../development/compilers/gambit { };
+  gambit-unstable = callPackage ../development/compilers/gambit/unstable.nix { };
+  gambit-support = callPackage ../development/compilers/gambit/gambit-support.nix { };
+  gerbil = callPackage ../development/compilers/gerbil { };
+  gerbil-unstable = callPackage ../development/compilers/gerbil/unstable.nix { };
+  gerbil-support = callPackage ../development/compilers/gerbil/gerbil-support.nix { };
+  gerbilPackages-unstable = gerbil-support.gerbilPackages-unstable; # NB: don't recurseIntoAttrs for (unstable!) libraries
 
   gccFun = callPackage (if stdenv.targetPlatform.isVc4 then ../development/compilers/gcc/6 else ../development/compilers/gcc/9);
   gcc = if stdenv.targetPlatform.isVc4 then gcc6 else gcc9;
@@ -9886,7 +9895,6 @@ in
 
   inherit (callPackage ../tools/admin/ansible { })
     ansible
-    ansible_2_6
     ansible_2_7
     ansible_2_8
     ansible_2_9;
@@ -10667,6 +10675,8 @@ in
   nixbang = callPackage ../development/tools/misc/nixbang {
     pythonPackages = python3Packages;
   };
+
+  nix-build-uncached = callPackage ../development/tools/misc/nix-build-uncached { };
 
   nexus = callPackage ../development/tools/repository-managers/nexus { };
 
@@ -16513,8 +16523,6 @@ in
 
   fwupd = callPackage ../os-specific/linux/firmware/fwupd { };
 
-  fwupdate = callPackage ../os-specific/linux/firmware/fwupdate { };
-
   fwts = callPackage ../os-specific/linux/fwts { };
 
   libossp_uuid = callPackage ../development/libraries/libossp-uuid { };
@@ -20975,6 +20983,10 @@ in
 
   polyphone = libsForQt5.callPackage ../applications/audio/polyphone { };
 
+  portfolio = callPackage ../applications/office/portfolio {
+    jre = openjdk11;
+  };
+
   ptex = callPackage ../development/libraries/ptex {};
 
   qbec = callPackage ../applications/networking/cluster/qbec { };
@@ -22369,11 +22381,9 @@ in
 
   vcv-rack = callPackage ../applications/audio/vcv-rack { };
 
-  vdirsyncer = callPackage ../tools/misc/vdirsyncer {
-    inherit (darwin.apple_sdk.frameworks) CoreServices Security;
-  };
+  vdirsyncer = with python3Packages; toPythonApplication vdirsyncer;
 
-  vdirsyncerStable = callPackage ../tools/misc/vdirsyncer/stable.nix { };
+  vdirsyncerStable = with python3Packages; toPythonApplication vdirsyncerStable;
 
   vdpauinfo = callPackage ../tools/X11/vdpauinfo { };
 
