@@ -45,12 +45,14 @@ rec
     { deployment.keys =
         { wg-private =
             { text = getSecret hostName "wireguard-keys/private";
+              destDir = "/etc/wireguard";
               user = "root";
               group = "root";
               permissions = "0400";
             };
           wg-public =
             { text = getSecret hostName "wireguard-keys/public";
+              destDir = "/etc/wireguard";
               user = "root";
               group = "root";
               permissions = "0444";
@@ -112,7 +114,8 @@ rec
     { deployment.keys =
         { "${keyName}" =
             { text = sshKeyText;
-              user = "mhuber";
+              destDir = "/etc/nix";
+              user = "root";
               group = "keys";
               permissions = "0400";
             };
@@ -124,7 +127,7 @@ rec
            supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
            mandatoryFeatures = [ ];
            sshUser = "nixBuild";
-           sshKey = "/run/keys/${keyName}";
+           sshKey = "/etc/nix/${keyName}";
            inherit speedFactor;
         }];
       nix.distributedBuilds = true;
@@ -142,7 +145,7 @@ rec
              HostName ${host}
              User nixBuild
              IdentitiesOnly yes
-             IdentityFile /run/keys/${keyName}
+             IdentityFile /etc/nix/${keyName}
              StrictHostKeyChecking accept-new
              ConnectTimeout 2
       '';

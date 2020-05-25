@@ -83,8 +83,18 @@ set -- "${POSITIONAL[@]}"
 ###########################################################################
 ##  imports  ##############################################################
 ###########################################################################
+setupExitTrap() {
+    local msg=$1
+    local cmd="code=\$?; if [[ \"\$code\" -ne 0 ]]; then logERR \"at $msg\"; logERR \"error code is: \$code\"; fi; exit \$code"
+    trap "$cmd" EXIT ERR INT TERM
+}
+
+runWithTrap() {
+    setupExitTrap "$1"
+    $@
+    setupExitTrap "---"
+}
 . ./rebuild.sh.d/rebuild.lib.wrapIntoTmux.sh
-. ./rebuild.sh.d/rebuild.lib.diffState.sh
 . ./rebuild.sh.d/rebuild.lib.logging.sh
 . ./rebuild.sh.d/rebuild.lib.handleGit.sh
 . ./rebuild.sh.d/rebuild.action.prepare.sh
@@ -108,7 +118,7 @@ if ! $DRY_RUN; then
         handleGit
     fi
 fi
-setupLoging
+setupLoging "$TARGET"
 setupExitTrap "---"
 
 ###########################################################################
@@ -128,6 +138,7 @@ if $DO_UPGRADE; then
 fi
 runWithTrap realize $TARGET $($DRY_RUN && echo "--dry-run")  $($FORCE_REBOOT && echo "--force-reboot")
 if ! $DRY_RUN; then
+    generateStats $TARGET
     if $DO_POST_STUFF; then
         runWithTrap cleanup
         runWithTrap handlePostExecutionHooks

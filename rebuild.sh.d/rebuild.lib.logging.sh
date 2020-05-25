@@ -1,8 +1,10 @@
 . ./common.sh
 
 setupLoging() {
-    mkdir -p "${myconfigDir}/_logs/"
-    logfile="${myconfigDir}/_logs/$(date +%Y-%m-%d)-myconfig.log"
+    local targetHost="$1"
+
+    mkdir -p "$logsDir"
+    local logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${targetHost}.log"
     echo -e "\n\n\n\n\n\n\n" >> $logfile
     exec &> >(tee -a $logfile)
 }

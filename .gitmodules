@@ -1,3 +1,0 @@
-[submodule "secrets"]
-	path = nixops/secrets
-	url = /home/mhuber/.secrets-myconfig

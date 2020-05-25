@@ -3,7 +3,7 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 
-. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../common.sh"
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/common.sh"
 set -e
 
 age=${1:-30d}
@@ -29,5 +29,7 @@ sudo nix-collect-garbage \
 after=$(logUsage)
 
 echo "* difference in usage:"
-diff -y "$before" "$after"
-rm "$before" "$after"
+{ set +e;
+  diff -y "$before" "$after";
+  rm "$before" "$after"
+}

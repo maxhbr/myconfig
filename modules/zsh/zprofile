@@ -11,22 +11,26 @@ mkdir -m700 -p $XDG_RUNTIME_DIR
 
 ###############################################################################
 [[ -d $HOME/bin ]] && {
-  export PATH=$HOME/bin:$PATH
-  [[ -d $HOME/bin/stolen ]] && export PATH=$PATH:$HOME/bin/stolen
-  [[ -d $HOME/bin/docker ]] && export PATH=$PATH:$HOME/bin/docker
+  PATH=$HOME/bin:$PATH
+  [[ -d $HOME/bin/stolen ]] && PATH=$PATH:$HOME/bin/stolen
+  [[ -d $HOME/bin/docker ]] && PATH=$PATH:$HOME/bin/docker
 }
-[[ -d $HOME/.perl/bin ]] && export PATH=$HOME/.perl/bin:$PATH
-[[ -d $HOME/.cabal/bin ]] && export PATH=$HOME/.cabal/bin:$PATH
-[[ -d $HOME/.local/bin ]] && export PATH=$HOME/.local/bin:$PATH
-[[ -d $HOME/.screenlayout ]] && export PATH=$PATH:$HOME/.screenlayout
+[[ -d $HOME/.perl/bin ]] && PATH=$HOME/.perl/bin:$PATH
+[[ -d $HOME/.cabal/bin ]] && PATH=$HOME/.cabal/bin:$PATH
+[[ -d $HOME/.local/bin ]] && PATH=$HOME/.local/bin:$PATH
+[[ -d $HOME/.screenlayout ]] && PATH=$PATH:$HOME/.screenlayout
+export PATH
 
 ###############################################################################
-[[ "$JAVA_HOME" ]] || JAVA_HOME=$(readlink -f $(which java) | sed "s:bin/java::")
+if type java &> /dev/null; then
+  [[ "$JAVA_HOME" ]] || export JAVA_HOME="$(readlink -f "$(which java)" | sed "s:bin/java::")"
+fi
 
 ###############################################################################
 [[ -z $PULSE_SERVER ]] && export PULSE_SERVER="unix:/run/user/$(id -u)/pulse/native"
 
 ###############################################################################
 #Python virtualenvs
-export WORKON_HOME=~/workspace/python/virtualenvs
+export WORKON_HOME=$HOME/workspace/python/virtualenvs
+mkdir -p $WORKON_HOME
 export PIP_REQUIRE_VIRTUALENV=true
