@@ -22,6 +22,14 @@
   config = {
     networking.hostName = "x1extremeG2";
     networking.hostId = "7634ddfe";
+    networking =
+      { nat =
+          { enable = true;
+            internalInterfaces = ["ve-+"];
+            externalInterface =   "wlp82s0";
+          };
+        networkmanager.unmanaged = [ "interface-name:ve-*" ];
+      };
 
     boot.initrd.supportedFilesystems = [ "luks" ];
     boot.initrd.luks.devices.crypted = {

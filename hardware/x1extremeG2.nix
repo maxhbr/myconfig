@@ -31,5 +31,8 @@
     boot.extraModprobeConfig = ''
       options snd slots=snd-hda-intel
     '';
+    services.tlp.extraConfig = ''
+      USB_BLACKLIST="0bda:8153"
+    ''; # see: https://askubuntu.com/a/1044128
   };
 }
