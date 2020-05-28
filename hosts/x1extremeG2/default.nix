@@ -38,6 +38,12 @@
       allowDiscards = true;
     };
 
+    fileSystems."/mnt/data" = {
+      device = "workstation:/data";
+      fsType = "nfs";
+      options = ["x-systemd.automount" "noauto"];
+    };
+
     services.openssh = {
       listenAddresses = [ { addr = "127.0.0.1"; port = 22; } ];
     };

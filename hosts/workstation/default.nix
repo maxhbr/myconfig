@@ -29,6 +29,7 @@
       { hardware.enableRedistributableFirmware = true;
         services.xserver.videoDrivers = [ "amdgpu" ];
       }
+      ./nfs.nix
       # other profiles
       ../../roles/headless.nix
       ../../roles/dev.nix

@@ -8,7 +8,10 @@
     ../modules/service.vsftp.nix
   ];
 
-  config = {
-    system.autoUpgrade.allowReboot = true;
-  };
+  config =
+    { home-manager.users.mhuber =
+        { home.packages = with pkgs; [vnstat]; };
+      system.autoUpgrade.allowReboot = true;
+      services.vnstat.enable = true;
+    };
 }
