@@ -27,10 +27,12 @@
           };
       }
       { hardware.enableRedistributableFirmware = true;
+        hardware.cpu.amd.updateMicrocode = true;
         services.xserver.videoDrivers = [ "amdgpu" ];
       }
-      ./services.nfs.nix
-      ./services.monitoring.nix
+      ./hardware.0xbea0000000000108.nix
+      ./service.nfs.nix
+      ./service.monitoring.nix
       # other profiles
       ../../roles/headless.nix
       ../../roles/dev.nix
