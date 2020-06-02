@@ -15,7 +15,7 @@
     ## fun
     ../../roles/imagework
     ../../modules/smarthome.nix
-    ../../roles/gaming.nix
+    ../../roles/gaming/default.minimal.nix
     ../../modules/benchmarking.nix
   ];
 

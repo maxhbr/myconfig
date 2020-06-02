@@ -41,13 +41,10 @@
       ../../roles/headless.nix
       ../../roles/dev.nix
       ../../roles/imagework
-      ../../roles/gaming.nix
+      ../../roles/gaming
       ../../modules/desktop.X.xfce.nix
       ../../modules/desktop.X.vnc.nix
       ../../modules/desktop.X.rdp.nix
-      ../../modules/games.doom3.nix
-      ../../modules/games.wine
-      ../../modules/games.lutris.nix
       ../../modules/benchmarking.nix
     ];
 
