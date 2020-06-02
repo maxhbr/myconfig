@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
+  
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 
@@ -35,32 +35,34 @@
           };
       }
     ];
-  config =
-    { boot.kernelParams =
-        [
-          #"amdgpu.dpm=0"
-                # PP_SCLK_DPM_MASK             = 1
-                # PP_MCLK_DPM_MASK             = 1
-                # PP_PCIE_DPM_MASK             = 0   This is PCIe Dynamic Power Managment..
-                # PP_SCLK_DEEP_SLEEP_MASK      = 1
-                # PP_POWER_CONTAINMENT_MASK    = 1
-                # PP_UVD_HANDSHAKE_MASK        = 1
-                # PP_SMC_VOLTAGE_CONTROL_MASK  = 1
-                # PP_VBI_TIME_SUPPORT_MASK     = 1
-                # PP_ULV_MASK                  = 1
-                # PP_ENABLE_GFX_CG_THRU_SMU    = 1
-                # PP_CLOCK_STRETCH_MASK        = 1
-                # PP_OD_FUZZY_FAN_CONTROL_MASK = 1
-                # PP_SOCCLK_DPM_MASK           = 1
-                # PP_DCEFCLK_DPM_MASK          = 1
-                # PP_OVERDRIVE_MASK            = 1
-                # PP_GFXOFF_MASK               = 1
-                # PP_ACG_MASK                  = 1
-                # PP_STUTTER_MODE              = 1
-                # PP_AVFS_MASK                 = 1
-          # "amdgpu.ppfeaturemask=0xfffffffb"
-          "amdgpu.ppfeaturemask=0xffffbffb" # PP_SCLK_DPM_MASK=1 PP_MCLK_DPM_MASK=0
-          # "amdgpu.ppfeaturemask=0xffffbffe" # PP_SCLK_DPM_MASK=0 PP_MCLK_DPM_MASK=1
-        ];
-    };
+  # config =
+  #   { boot.kernelParams =
+  #       [
+  #         # "amdgpu.dpm=0"
+  #               # PP_SCLK_DPM_MASK             = 1
+  #               # PP_MCLK_DPM_MASK             = 1
+  #               # PP_PCIE_DPM_MASK             = 0   This is PCIe Dynamic Power Managment..
+  #               # PP_SCLK_DEEP_SLEEP_MASK      = 1
+  #               # PP_POWER_CONTAINMENT_MASK    = 1
+  #               # PP_UVD_HANDSHAKE_MASK        = 1
+  #               # PP_SMC_VOLTAGE_CONTROL_MASK  = 1
+  #               # PP_VBI_TIME_SUPPORT_MASK     = 1
+  #               # PP_ULV_MASK                  = 1
+  #               # PP_ENABLE_GFX_CG_THRU_SMU    = 1
+  #               # PP_CLOCK_STRETCH_MASK        = 1
+  #               # PP_OD_FUZZY_FAN_CONTROL_MASK = 1
+  #               # PP_SOCCLK_DPM_MASK           = 1
+  #               # PP_DCEFCLK_DPM_MASK          = 1
+  #               # PP_OVERDRIVE_MASK            = 1
+  #               # PP_GFXOFF_MASK               = 1
+  #               # PP_ACG_MASK                  = 1
+  #               # PP_STUTTER_MODE              = 1
+  #               # PP_AVFS_MASK                 = 1
+  #         # "amdgpu.ppfeaturemask=0xfffffffb"
+  #         # "amdgpu.ppfeaturemask=0xffffbffb" # PP_SCLK_DPM_MASK=1 PP_MCLK_DPM_MASK=0
+  #         "amdgpu.ppfeaturemask=0xffffbffd" # PP_SCLK_DPM_MASK=1 PP_MCLK_DPM_MASK=0
+  #         # "amdgpu.ppfeaturemask=0xffffbffe" # PP_SCLK_DPM_MASK=0 PP_MCLK_DPM_MASK=1
+  #         # "idle=nomwait" "processor.max_cstate=5"
+  #       ];
+  #   };
 }
