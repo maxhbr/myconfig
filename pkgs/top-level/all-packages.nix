@@ -984,7 +984,11 @@ in
 
   glasgow = with python3Packages; toPythonApplication glasgow;
 
+  goimapnotify = callPackage ../tools/networking/goimapnotify { };
+
   gomatrix = callPackage ../applications/misc/gomatrix { };
+
+  gopacked = callPackage ../applications/misc/gopacked { };
 
   gucci = callPackage ../tools/text/gucci { };
 
@@ -2204,6 +2208,8 @@ in
     rainloop-standard;
 
   rav1e = callPackage ../tools/video/rav1e { };
+
+  razergenie = libsForQt5.callPackage ../applications/misc/razergenie { };
 
   ring-daemon = callPackage ../applications/networking/instant-messengers/ring-daemon { };
 
@@ -4708,6 +4714,8 @@ in
 
   matrix-appservice-slack = callPackage ../servers/matrix-synapse/matrix-appservice-slack {};
 
+  matrix-appservice-discord = callPackage ../servers/matrix-appservice-discord { };
+
   mautrix-telegram = recurseIntoAttrs (callPackage ../servers/mautrix-telegram { });
 
   mautrix-whatsapp = callPackage ../servers/mautrix-whatsapp { };
@@ -4829,9 +4837,9 @@ in
 
   nixnote2 = libsForQt5.callPackage ../applications/misc/nixnote2 { };
 
-  nodejs = hiPrio nodejs-10_x;
+  nodejs = hiPrio nodejs-12_x;
 
-  nodejs-slim = nodejs-slim-10_x;
+  nodejs-slim = nodejs-slim-12_x;
 
 
   nodejs-10_x = callPackage ../development/web/nodejs/v10.nix { };
@@ -4855,19 +4863,13 @@ in
   nodejs_latest = nodejs-14_x;
   nodejs-slim_latest = nodejs-slim-14_x;
 
-  nodePackages_13_x = dontRecurseIntoAttrs (callPackage ../development/node-packages/default-v13.nix {
-    nodejs = pkgs.nodejs-13_x;
+  nodePackages_latest = dontRecurseIntoAttrs (callPackage ../development/node-packages/default.nix {
+    nodejs = pkgs.nodejs_latest;
   });
 
-  nodePackages_12_x = dontRecurseIntoAttrs (callPackage ../development/node-packages/default-v12.nix {
-    nodejs = pkgs.nodejs-12_x;
+  nodePackages = dontRecurseIntoAttrs (callPackage ../development/node-packages/default.nix {
+    nodejs = pkgs.nodejs;
   });
-
-  nodePackages_10_x = dontRecurseIntoAttrs (callPackage ../development/node-packages/default-v10.nix {
-    nodejs = pkgs.nodejs-10_x;
-  });
-
-  nodePackages = nodePackages_10_x;
 
   now-cli = callPackage ../development/web/now-cli {};
 
@@ -8507,6 +8509,16 @@ in
     profiledCompiler = false;
   });
 
+  libgccjit = gcc9.cc.override {
+    name = "libgccjit";
+    langFortran = false;
+    langCC = false;
+    langC = false;
+    profiledCompiler = false;
+    langJit = true;
+    enableLTO = false;
+  };
+
   gcj = gcj6;
   gcj6 = wrapCC (gcc6.cc.override {
     name = "gcj";
@@ -9142,10 +9154,14 @@ in
   rust_1_42 = callPackage ../development/compilers/rust/1_42.nix {
     inherit (darwin.apple_sdk.frameworks) CoreFoundation Security;
   };
-  rust = rust_1_42;
+  rust_1_43 = callPackage ../development/compilers/rust/1_43.nix {
+    inherit (darwin.apple_sdk.frameworks) CoreFoundation Security;
+  };
+  rust = rust_1_43;
 
   rustPackages_1_42 = rust_1_42.packages.stable;
-  rustPackages = rustPackages_1_42;
+  rustPackages_1_43 = rust_1_43.packages.stable;
+  rustPackages = rustPackages_1_43;
 
   inherit (rustPackages) cargo clippy rustc rustPlatform;
   inherit (rust) makeRustPlatform;
@@ -9990,7 +10006,7 @@ in
   aws-adfs = with python3Packages; toPythonApplication aws-adfs;
 
   inherit (callPackages ../development/tools/electron { })
-    electron_4 electron_5 electron_6 electron_7 electron_8;
+    electron_4 electron_5 electron_6 electron_7 electron_8 electron_9;
 
   electron_3 = callPackage ../development/tools/electron/3.x.nix { };
   electron = electron_4;
@@ -10022,7 +10038,7 @@ in
 
   bam = callPackage ../development/tools/build-managers/bam {};
 
-  bazel = bazel_2;
+  bazel = bazel_3;
 
   bazel_0 = bazel_0_26;
 
@@ -10055,14 +10071,14 @@ in
     bazel_self = bazel_1;
   };
 
-  bazel_2 = callPackage ../development/tools/build-managers/bazel/bazel_2 {
+  bazel_3 = callPackage ../development/tools/build-managers/bazel/bazel_3 {
     inherit (darwin) cctools;
     inherit (darwin.apple_sdk.frameworks) CoreFoundation CoreServices Foundation;
     buildJdk = jdk8;
     buildJdkName = "jdk8";
     runJdk = jdk11_headless;
     stdenv = if stdenv.cc.isClang then llvmPackages_6.stdenv else stdenv;
-    bazel_self = bazel_2;
+    bazel_self = bazel_3;
   };
 
   bazel-buildtools = callPackage ../development/tools/build-managers/bazel/buildtools { };
@@ -12965,6 +12981,8 @@ in
 
   libftdi1 = callPackage ../development/libraries/libftdi/1.x.nix { };
 
+  libfyaml = callPackage ../development/libraries/libfyaml { };
+
   libgcrypt = callPackage ../development/libraries/libgcrypt { };
 
   libgcrypt_1_5 = callPackage ../development/libraries/libgcrypt/1.5.nix { };
@@ -13774,6 +13792,8 @@ in
   };
 
   mlt = callPackage ../development/libraries/mlt { ffmpeg = ffmpeg_4; };
+
+  mlv-app = libsForQt5.callPackage ../applications/video/mlv-app { };
 
   mono-addins = callPackage ../development/libraries/mono-addins { };
 
@@ -17658,6 +17678,7 @@ in
     ubootRaspberryPiZero
     ubootRock64
     ubootRockPro64
+    ubootROCPCRK3399
     ubootSheevaplug
     ubootSopine
     ubootUtilite
@@ -17827,6 +17848,8 @@ in
   carlito = callPackage ../data/fonts/carlito {};
 
   cascadia-code = callPackage ../data/fonts/cascadia-code { };
+
+  cde-gtk-theme = callPackage ../data/themes/cde-motif-theme { };
 
   charis-sil = callPackage ../data/fonts/charis-sil { };
 
@@ -18652,6 +18675,8 @@ in
 
   ardour = callPackage ../applications/audio/ardour { };
 
+  ardour_5 = lowPrio (callPackage ../applications/audio/ardour/5.nix { });
+
   arelle = with python3Packages; toPythonApplication arelle;
 
   argo = callPackage ../applications/networking/cluster/argo { };
@@ -18691,6 +18716,8 @@ in
   audio-recorder = callPackage ../applications/audio/audio-recorder { };
 
   autokey = callPackage ../applications/office/autokey { };
+
+  autotalent = callPackage ../applications/audio/autotalent { };
 
   autotrace = callPackage ../applications/graphics/autotrace {};
 
@@ -20395,7 +20422,7 @@ in
   kdevelop-pg-qt = libsForQt5.callPackage ../applications/editors/kdevelop5/kdevelop-pg-qt.nix { };
 
   kdevelop-unwrapped = libsForQt5.callPackage ../applications/editors/kdevelop5/kdevelop.nix {
-    llvmPackages = llvmPackages_7;
+    llvmPackages = llvmPackages_10;
   };
 
   kdev-php = libsForQt5.callPackage ../applications/editors/kdevelop5/kdev-php.nix { };
@@ -22253,6 +22280,8 @@ in
 
   taskwarrior = callPackage ../applications/misc/taskwarrior { };
 
+  dstask = callPackage ../applications/misc/dstask { };
+
   tasksh = callPackage ../applications/misc/tasksh { };
 
   taskserver = callPackage ../servers/misc/taskserver { };
@@ -22312,6 +22341,7 @@ in
 
   thunderbird = callPackage ../applications/networking/mailreaders/thunderbird {
     inherit (gnome2) libIDL;
+    inherit (rustPackages_1_42) rustc;
     libpng = libpng_apng;
     gtk3Support = true;
   };
