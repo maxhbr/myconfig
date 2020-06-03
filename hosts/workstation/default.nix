@@ -34,7 +34,6 @@
         hardware.cpu.amd.updateMicrocode = true;
         services.xserver.videoDrivers = [ "amdgpu" ];
       }
-      ./hardware.0xbea0000000000108.nix
       ./service.nfs.nix
       ./service.monitoring.nix
       # other profiles
