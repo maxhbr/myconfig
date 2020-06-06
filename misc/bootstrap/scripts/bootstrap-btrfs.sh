@@ -16,8 +16,7 @@ set -e
 help() {
     cat <<EOF
 usage:
-  $ BOOTSTRAP=YES $0 /dev/SDX [pass] [vg_name] [mnt]
-  $ BOOTSTRAP=YES $0 /dev/SDX "" [vg_name] [mnt]
+  $ BOOTSTRAP=YES $0 /dev/SDX [mnt]
 EOF
 }
 
@@ -86,9 +85,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 SDX="$1"
-PASSPHRASE=${2:-pass}
-VG_NAME=${3:-vg}
-MNT=${4:-/mnt}
+MNT=${2:-/mnt}
 
 if [[ ! -e "$SDX" ]]; then
     echo "$SDX not found"
