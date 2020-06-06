@@ -64,6 +64,17 @@ with (import ./lib.nix);
                ])
           ];
       });
+  nas = mkHost "nas"
+    ( {lib, ...}:
+      { config =
+          {
+          };
+        imports =
+          [ (deployWireguardKeys "nas")
+            (deploySSHUserKeys "nas" "rsa")
+          ];
+      });
+
   # T470p = mkHost "T470p"
   #   ({...}: {});
   T470s = mkHost "T470s"

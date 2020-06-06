@@ -32,7 +32,7 @@
       }
       { hardware.enableRedistributableFirmware = true;
         hardware.cpu.amd.updateMicrocode = true;
-        services.xserver.videoDrivers = [ "nvidia" ];
+        services.xserver.videoDrivers = [ "amdgpu" ];
       }
       ./service.nfs.nix
       ./service.monitoring.nix
