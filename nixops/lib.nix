@@ -78,6 +78,7 @@ rec
         };
     };
 
+  # https://nixos.wiki/wiki/Binary_Cache
   setupNixServe =
     keys:
     { nix.sshServe =
