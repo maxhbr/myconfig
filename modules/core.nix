@@ -61,6 +61,7 @@
         #others:
         rsnapshot
         mosh
+        sshfs
 
         # my backup tool
         borgbackup

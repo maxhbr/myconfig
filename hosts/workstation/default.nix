@@ -25,14 +25,10 @@
           { device = "/dev/disk/by-uuid/51d362d8-5b73-4b92-84c3-9ff260062da6";
             fsType = "ext4";
           };
-        fileSystems."/mnt/tng-backup" =
-          { device = "/dev/disk/by-uuid/480aaf1f-aae0-469e-911e-13f961b46ec3";
-            fsType = "ext4";
-          };
       }
       { hardware.enableRedistributableFirmware = true;
         hardware.cpu.amd.updateMicrocode = true;
-        services.xserver.videoDrivers = [ "amdgpu" ];
+        services.xserver.videoDrivers = [ "amdgpu" ]; # "nvidia"
       }
       ./service.nfs.nix
       ./service.monitoring.nix

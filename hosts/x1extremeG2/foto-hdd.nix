@@ -4,11 +4,6 @@
 { ... }:
 
 {
-  fileSystems."/home/mhuber/Bilder/hdd" =
-    { device = "/dev/disk/by-uuid/a462ff79-65d7-46ec-a68d-22282c8aafee";
-      fsType = "ext4";
-      options = ["auto,nofail,x-systemd.device-timeout=1,users,rw,discard,noatime"];
-    };
   fileSystems."/home/mhuber/Bilder/ssd" =
     { device = "/dev/disk/by-uuid/71560da1-8650-4d6a-a13a-e0a6f01e19ce";
       fsType = "ext4";
