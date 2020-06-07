@@ -31,9 +31,9 @@
         services.xserver.videoDrivers = [ "amdgpu" ]; # "nvidia"
       }
       ./service.nfs.nix
-      ./service.monitoring.nix
-      # other profiles
+      ../../modules/service.monitoring.nix
       ../../roles/headless.nix
+      # other profiles
       ../../roles/dev.nix
       ../../roles/imagework
       ../../roles/gaming

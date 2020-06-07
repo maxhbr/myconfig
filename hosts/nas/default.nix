@@ -23,6 +23,7 @@
       }
     ../../roles/headless.nix
     ../../modules/service.monitoring.nix
+    ../../modules/virtualization.docker
     # hardware:
     ../../hardware/efi.nix
     # configuration
