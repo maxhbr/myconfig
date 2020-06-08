@@ -7,6 +7,19 @@
     # hardware:
     ../../hardware/x1extremeG2.nix
     ../../hardware/efi.nix
+    { config =
+        { fileSystems."/mnt/workstation-nfs" = {
+            device = "workstation:/data";
+            fsType = "nfs";
+            options = ["x-systemd.automount" "noauto"];
+          };
+          fileSystems."/mnt/nas-nfs" = {
+            device = "nas:/data";
+            fsType = "nfs";
+            options = ["x-systemd.automount" "noauto"];
+          };
+        };
+    }
     ./backup-hdd.nix
     ./foto-hdd.nix
     # modules
@@ -36,12 +49,6 @@
       device = "/dev/disk/by-uuid/2118a468-c2c3-4304-b7d3-32f8e19da49f";
       preLVM = true;
       allowDiscards = true;
-    };
-
-    fileSystems."/mnt/data" = {
-      device = "workstation:/data";
-      fsType = "nfs";
-      options = ["x-systemd.automount" "noauto"];
     };
 
     services.openssh = {

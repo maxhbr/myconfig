@@ -16,7 +16,9 @@ mkCryptKeyfile() {
     >&2 echo "### generate Keyfile"
 
     (set -ex;
-     sudo dd bs=64 count=1 if=/dev/urandom of=$KEYFILE iflag=fullblock
+     if [[ ! -f "$KEYFILE" ]]; then
+         sudo dd bs=64 count=1 if=/dev/urandom of=$KEYFILE iflag=fullblock
+     fi
      sudo chmod 600 $KEYFILE
      sudo cp "$KEYFILE" "$WORKDIR"
     ) 1>&2
@@ -27,7 +29,7 @@ makePartition() {
     SDX="$1"
 
     (set -ex;
-     sudo parted -s $SDX -- mklabel gpt;
+     sudo parted -s $SDX -- mklabel gpt
      sudo parted -s $SDX -- mkpart primary 1MiB 100%
     ) 1>&2
 
@@ -37,17 +39,20 @@ makePartition() {
 encryptPartition() {
     >&2 echo "### encryptPartition $@"
     local partition="$1"
-    local name="data-$(basename "$partition")"
+    local name="$2"
+    local mapper="/dev/mapper/$name"
 
-    (set -ex;
-     sudo cryptsetup -q -y -v luksFormat "$partition" "$KEYFILE";
-     sudo cryptsetup -q luksHeaderBackup --header-backup-file "$WORKDIR/$(basename "$partition").header.bak" "$partition";
+    (set -ex
+     sudo cryptsetup -q -y -v luksFormat "$partition" "$KEYFILE"
+     sudo cryptsetup -q luksHeaderBackup --header-backup-file "$WORKDIR/$(basename "$partition").header.bak" "$partition"
      sudo cryptsetup -q open --key-file="$KEYFILE" --type luks "$partition" "$name"
 
-     sudo blkid "$partition"
+     [[ -e "$mapper" ]]
+
+     echo "$name UUID=$(sudo blkid -o value -s UUID "$partition") $KEYFILE luks,noearly" | tee "$WORKDIR/crypttab"
     ) 1>&2
 
-    echo "/dev/mapper/$name"
+    echo "$mapper"
 }
 
 calculateRaidLevel() {
@@ -71,7 +76,7 @@ partitionBtrfsRaid() {
     local nEncs="${#encs[@]}"
     local raidLevel="$(calculateRaidLevel "$nEncs")"
 
-    (set -x;
+    (set -ex
      sudo mkfs.btrfs -f -m $raidLevel -d $raidLevel ${encs[*]}
     ) 1>&2
 }
@@ -80,23 +85,32 @@ mountBtrfsRaid() {
     >&2 echo "### mountBtrfsRaid $@"
     local firstEnc="$1"
 
-    (set -ex;
-     sudo mkdir -p "$MOUNTPOINT";
-     sudo mount -t btrfs -o defaults,noatime,compress=zstd "$firstEnc" "$MOUNTPOINT";
-     sudo btrfs subvolume create "$MOUNTPOINT/@sub";
-     sudo umount "$MOUNTPOINT";
+    (set -ex
+     sudo mkdir -p "$MOUNTPOINT"
+     sudo mount -t btrfs -o defaults,noatime,compress=zstd "$firstEnc" "$MOUNTPOINT"
+     sudo btrfs subvolume create "$MOUNTPOINT/@sub"
+     sudo umount "$MOUNTPOINT"
      sudo mount -t btrfs -o defaults,noatime,compress=zstd,subvol=@sub "$firstEnc" "$MOUNTPOINT"
     ) 1>&2
+}
+
+getName() {
+    >&2 echo "### getName $@"
+    local i="$1"
+
+    echo "data${i}"
 }
 
 main() {
     >&2 echo "### main $@"
 
     mkCryptKeyfile
-    encs=()
+    local i=0
+    local encs=()
     for drive in "$@"; do
-        enc="$(encryptPartition "$(makePartition "$drive")")"
+        enc="$(encryptPartition "$(makePartition "$drive")" "$(getName $i)")"
         encs+=( "$enc" )
+        ((i=i+1))
     done
     partitionBtrfsRaid ${encs[*]}
     mountBtrfsRaid "${encs[0]}"

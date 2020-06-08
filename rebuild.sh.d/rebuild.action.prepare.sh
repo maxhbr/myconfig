@@ -1,7 +1,11 @@
 . ./common.sh
 
 prepare_setup_nixops_deployment() {
-    nixops info -d $NIXOPS_DEPLOYMENT || nixops create -d $NIXOPS_DEPLOYMENT "$myconfigDir/nixops/nixops.nix"
+    if nixops list --deployment "$NIXOPS_DEPLOYMENT" | grep -q "$NIXOPS_DEPLOYMENT"; then
+        nixops check -d $NIXOPS_DEPLOYMENT || true
+    else
+        nixops create -d $NIXOPS_DEPLOYMENT "$myconfigDir/nixops/nixops.nix"
+    fi
 }
 
 prepare_update_hostid_file() {

@@ -13,15 +13,35 @@
         # - https://gist.github.com/MaxXor/ba1665f47d56c24018a943bb114640d7
         systemd.packages = [ pkgs.systemd-cryptsetup-generator ];
         environment.etc.crypttab.text = ''
-          data1 UUID=6eba13f1-b805-4cc1-92d6-014e4a37e854 /etc/cryptkey luks,noearly
-          data2 UUID=28103c1e-b1df-4d28-b99f-1f3c3e474962 /etc/cryptkey luks,noearly
-          data3 UUID=d26bfce9-0df4-4563-8af7-6f0cc744a3c9 /etc/cryptkey luks,noearly
-          data4 UUID=dbf35925-d912-4a76-ad05-9e90ef5c21f0 /etc/cryptkey luks,noearly
+          data0 UUID=f435b742-75da-4a0b-894f-06f329afebb8 /etc/cryptkey luks,noearly
+          data1 UUID=327a652d-79b0-4740-950c-684d5b56e66d /etc/cryptkey luks,noearly
+          data2 UUID=da356132-803e-439b-886d-91d70048b7f9 /etc/cryptkey luks,noearly
+          data3 UUID=c5e77337-21ad-4338-987a-710201dd5636 /etc/cryptkey luks,noearly
         '';
-        fileSystems."/mnt/data" =
+        fileSystems."/mnt/data0" =
+          { device = "/dev/mapper/data0";
+            fsType = "btrfs";
+            options = [ "defaults" "noatime" "compress=zstd" "subvol=@sub" "nofail" "x-systemd.requires-mounts-for=/mnt/.data3" ];
+          };
+        fileSystems."/mnt/.data1" =
           { device = "/dev/mapper/data1";
             fsType = "btrfs";
-            options = [ "defaults" "noatime" "compress=zstd" "subvol=@sub" "nofail"  ];
+            options = [ "defaults" "noatime" "compress=zstd" "subvol=@sub" "nofail" ];
+          };
+        fileSystems."/mnt/.data2" =
+          { device = "/dev/mapper/data2";
+            fsType = "btrfs";
+            options = [ "defaults" "noatime" "compress=zstd" "subvol=@sub" "nofail" "x-systemd.requires-mounts-for=/mnt/.data1" ];
+          };
+        fileSystems."/mnt/.data3" =
+          { device = "/dev/mapper/data3";
+            fsType = "btrfs";
+            options = [ "defaults" "noatime" "compress=zstd" "subvol=@sub" "nofail" "x-systemd.requires-mounts-for=/mnt/.data2" ];
+          };
+
+        services.btrfs.autoScrub =
+          { enable = true;
+            # fileSystems = [ "/" "/mnt/v0" ];
           };
 
         ########################################################################
@@ -37,6 +57,7 @@
             options = ["auto,nofail,x-systemd.device-timeout=1,users,rw,discard,noatime"];
           };
       }
+    ./service.nfs.nix
     ../../roles/headless.nix
     ../../modules/service.monitoring.nix
     ../../modules/virtualization.docker
