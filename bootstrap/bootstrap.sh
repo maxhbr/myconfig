@@ -131,7 +131,7 @@ mkExt4() {
 mkRoot() {
     local dev="$1"
 
-    if [[ "$BTRFS" == "true"]]; then
+    if [[ "$BTRFS" == "true" ]]; then
         mkBTRFS "$dev"
     else
         mkExt4 "$dev"
@@ -161,6 +161,7 @@ else
         mkLuks "$SDX1"
         mkLVM /dev/mapper/enc-pv
     fi
+    sleep 10
     mkRoot "/dev/disk/by-label/root"
     mkBoot "$SDX2"
 fi

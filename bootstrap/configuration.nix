@@ -2,7 +2,11 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 { imports =
-    [ ../roles/dev.nix
+    [ ../lib
+      ../modules/core.nix
+      ../modules/user.mhuber.nix
+      ../modules/service.openssh.nix
+      /mnt/etc/nixos/connfiguration.nix
     ];
 
   config = {

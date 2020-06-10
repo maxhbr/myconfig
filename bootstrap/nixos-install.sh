@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-
-. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../../common.sh"
+ROOT="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+. "$ROOT/../../../common.sh"
 set -e
 cd "$nixpkgs/nixos"
 
@@ -13,6 +13,8 @@ set -x
 systemClosure=$(nix-build \
                     --show-trace \
                     --no-out-link \
+                    -I nixpkgs "$nixpkgs" \
+                    -I nixos-config "$ROOT/configuration.nix" \
                     $NIX_PATH_ARGS -A system)
 
 sudo nixos-install --no-root-passwd --system $systemClosure
