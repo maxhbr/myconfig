@@ -19,8 +19,6 @@
       options = [ "subvol=@" ];
     };
 
-  boot.initrd.luks.devices."enc-pv".device = "/dev/disk/by-uuid/38400e90-9da5-4fc4-8426-eaee6f537d72";
-
   fileSystems."/home" =
     { device = "/dev/disk/by-uuid/7dbd8485-67b8-4112-9ca9-e39e527aea20";
       fsType = "btrfs";

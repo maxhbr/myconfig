@@ -5,23 +5,19 @@
   imports =
     [ ./hardware-configuration.nix
       ../../hardware/efi.nix
-      ../../hardware/btrfs.nix
+      # ../../hardware/btrfs.nix
       ../../hardware/nixos-hardware/common/cpu/amd
       ../../hardware/nixos-hardware/common/pc/ssd
-      { boot.initrd.supportedFilesystems = [ "luks" ];
+      { boot.initrd.supportedFilesystems = [ "luks" "btrfs" ];
         boot.initrd.luks.devices.crypted =
-          { device = "/dev/disk/by-uuid/46fc7672-6bcc-4245-8d73-65c81cda0c58";
-            keyFile = "/dev/disk/by-id/usb-JetFlash_Transcend_16GB_753K3Z31LDXXOPIT-0:0";
-            keyFileSize = 4096;
-            preLVM = true;
-            allowDiscards = true;
-            fallbackToPassword = true;
+          { device = "/dev/disk/by-uuid/38400e90-9da5-4fc4-8426-eaee6f537d72";
+            # keyFile = "/dev/disk/by-id/usb-JetFlash_Transcend_16GB_753K3Z31LDXXOPIT-0:0";
+            # keyFileSize = 4096;
+            # preLVM = true;
+            # allowDiscards = true;
+            # fallbackToPassword = true;
           };
 
-        fileSystems."/mnt/lubuntu" =
-          { device = "/dev/disk/by-uuid/e3d8b271-deb4-4d4d-b58e-72137b667b24";
-            fsType = "ext4";
-          };
         fileSystems."/mnt/2tb-1" =
           { device = "/dev/disk/by-uuid/51d362d8-5b73-4b92-84c3-9ff260062da6";
             fsType = "ext4";
@@ -30,7 +26,6 @@
       { hardware.enableRedistributableFirmware = true;
         hardware.cpu.amd.updateMicrocode = true;
         services.xserver.videoDrivers = [ "amdgpu" ];
-        # services.xserver.videoDrivers = [ "nvidia" ];
       }
       ./service.nfs.nix
       ../../modules/service.monitoring.nix
