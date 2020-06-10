@@ -121,7 +121,6 @@ mkBTRFS() {
     mkdir -p $MNT/.snapshots
     mount -t btrfs -o compress=zstd,subvol=@snapshots "$btrfsDev" $MNT/.snapshots
 
-    mkdir -p $MNT/.swapfile/
     btrfs subvolume create $MNT/.swapfile/
 }
 
