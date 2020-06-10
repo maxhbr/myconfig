@@ -6,11 +6,11 @@
       ../modules/core.nix
       ../modules/user.mhuber.nix
       ../modules/service.openssh.nix
-      /mnt/etc/nixos/connfiguration.nix
+      /mnt/etc/nixos/configuration.nix
     ];
 
   config = {
     networking.hostName = "myconfig";
-    networking.hostId = "123456";
+    networking.hostId = "12345678";
   };
 }

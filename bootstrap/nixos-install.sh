@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-ROOT="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
-. "$ROOT/../../../common.sh"
+cd "$( dirname "${BASH_SOURCE[0]}" )"
+common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
+. "$common"
 set -e
+ROOT="$(pwd)"
 cd "$nixpkgs/nixos"
 
 if [[ ! -d "/mnt/etc/nixos/" ]]; then
@@ -9,12 +11,16 @@ if [[ ! -d "/mnt/etc/nixos/" ]]; then
     exit 1
 fi
 
-set -x
-systemClosure=$(nix-build \
-                    --show-trace \
-                    --no-out-link \
-                    -I nixpkgs "$nixpkgs" \
-                    -I nixos-config "$ROOT/configuration.nix" \
-                    $NIX_PATH_ARGS -A system)
+buildSystem() (
+    set -x
+    cd "$nixpkgs/nixos"
+    nix-build \
+        --show-trace \
+        --no-out-link \
+        -I nixpkgs "$nixpkgs" \
+        -I nixos-config "$ROOT/configuration.nix" \
+        -A system
+)
 
-sudo nixos-install --no-root-passwd --system $systemClosure
+set -x
+sudo nixos-install --no-root-passwd --system $(buildSystem)
