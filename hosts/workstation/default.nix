@@ -31,13 +31,14 @@
       ../../modules/service.monitoring.nix
       ../../roles/headless.nix
       # other profiles
-      # ../../roles/dev.nix
-      # ../../roles/imagework
+      ../../roles/desktop.nix
+      ../../roles/dev.nix
+      ../../roles/imagework
       ../../roles/gaming
       # ../../modules/desktop.X.xfce.nix
       # ../../modules/desktop.X.vnc.nix
       # ../../modules/desktop.X.rdp.nix
-      # ../../modules/benchmarking.nix
+      ../../modules/benchmarking.nix
     ];
 
   config =
@@ -47,6 +48,8 @@
       services.logind.extraConfig = ''
           HandlePowerKey=suspend
         '';
+
+      boot.kernelPackages = lib.mkForce pkgs.nixos-2003-small.linuxPackages_latest;
 
       # This value determines the NixOS release from which the default
       # settings for stateful data, like file locations and database versions
