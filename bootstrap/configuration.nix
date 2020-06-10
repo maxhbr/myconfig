@@ -3,15 +3,14 @@
 { pkgs, ... }:
 { imports =
     [ ../lib
-      ../modules/core.nix
-      ../modules/user.mhuber.nix
+      ../roles/core.nix
       ../modules/service.openssh.nix
       /mnt/etc/nixos/configuration.nix
       ../hardware/btrfs.nix
     ];
 
   config = {
-    networking.hostName = "myconfig";
+    networking.hostName = "bootstrapped";
     networking.hostId = "12345678";
   };
 }
