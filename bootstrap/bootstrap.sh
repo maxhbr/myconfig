@@ -124,7 +124,7 @@ mkBTRFS() {
     mkdir -p $MNT/.swapfile
     mount -t btrfs -o compress=zstd,subvol=@swapfile "$btrfsDev" $MNT/.swapfile
 
-    btrfs subvolume create $MNT/.swapfile/
+    # to exclude from snapshots:
     btrfs subvolume create $MNT/home/docker
 }
 

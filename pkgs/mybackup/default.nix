@@ -4,13 +4,13 @@
 
 stdenv.mkDerivation rec {
   version = "1.0";
-  name = "myborgbackup-${version}";
+  name = "mybackup-${version}";
 
   src = ./.;
 
   patchPhase = ''
     sed -i -e 's%borgCmd=.*%borgCmd=${pkgs.borgbackup}/bin/borg%g' myborgbackup.sh
-    sed -i -e 's%cryptsetupCmd=.*cryptsetupCmd=${pkgs.cryptsetup}/bin/cryptsetup%g' backupLuksHeader.sh
+    sed -i -e 's%cryptsetupCmd=.*%cryptsetupCmd=${pkgs.cryptsetup}/bin/cryptsetup%g' backupLuksHeader.sh
   '';
 
   buildPhase = "";
@@ -19,7 +19,7 @@ stdenv.mkDerivation rec {
     bin=$out/bin
     mkdir -p $bin
 
-    cp *.sh $bin
-    chmod +x "$bin/*.sh"
+    cp myborgbackup.sh backupLuksHeader.sh $bin
+    chmod +x $bin/myborgbackup.sh $bin/backupLuksHeader.sh
   '';
 }
