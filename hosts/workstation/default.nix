@@ -10,7 +10,7 @@
       ../../hardware/nixos-hardware/common/pc/ssd
       { boot.initrd.supportedFilesystems = [ "luks" "btrfs" ];
         boot.initrd.luks.devices.crypted =
-          { device = "/dev/disk/by-uuid/38400e90-9da5-4fc4-8426-eaee6f537d72";
+          { device = "/dev/disk/by-uuid/1ffeb5d7-29b7-41ee-9fe3-3c528be136db";
             # keyFile = "/dev/disk/by-id/usb-JetFlash_Transcend_16GB_753K3Z31LDXXOPIT-0:0";
             # keyFileSize = 4096;
             # preLVM = true;
