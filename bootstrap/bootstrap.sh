@@ -113,6 +113,7 @@ mkBTRFS() {
     btrfs subvolume create $MNT/@
     btrfs subvolume create $MNT/@home
     btrfs subvolume create $MNT/@snapshots
+    btrfs subvolume create $MNT/@swapfile
     umount $MNT/
 
     mount -t btrfs -o compress=zstd,subvol=@ "$btrfsDev" $MNT/
@@ -120,6 +121,8 @@ mkBTRFS() {
     mount -t btrfs -o compress=zstd,subvol=@home "$btrfsDev" $MNT/home
     mkdir -p $MNT/.snapshots
     mount -t btrfs -o compress=zstd,subvol=@snapshots "$btrfsDev" $MNT/.snapshots
+    mkdir -p $MNT/.swapfile
+    mount -t btrfs -o compress=zstd,subvol=@swapfile "$btrfsDev" $MNT/.swapfile
 
     btrfs subvolume create $MNT/.swapfile/
     btrfs subvolume create $MNT/home/docker
