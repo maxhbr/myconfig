@@ -14,11 +14,12 @@ fi
 buildSystem() (
     set -x
     cd "$nixpkgs/nixos"
+    export NIX_PATH=nixpkgs="$nixpkgs":nixos-config="$ROOT/configuration.nix"
     nix-build \
         --show-trace \
         --no-out-link \
-        -I nixpkgs "$nixpkgs" \
-        -I nixos-config "$ROOT/configuration.nix" \
+        -I nixpkgs="$nixpkgs" \
+        -I nixos-config="$ROOT/configuration.nix" \
         -A system
 )
 
