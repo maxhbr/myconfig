@@ -122,6 +122,7 @@ mkBTRFS() {
     mount -t btrfs -o compress=zstd,subvol=@snapshots "$btrfsDev" $MNT/.snapshots
 
     btrfs subvolume create $MNT/.swapfile/
+    btrfs subvolume create $MNT/home/docker
 }
 
 mkExt4() {
