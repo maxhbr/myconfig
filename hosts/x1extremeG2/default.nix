@@ -7,19 +7,19 @@
     # hardware:
     ../../hardware/x1extremeG2.nix
     ../../hardware/efi.nix
-    { config =
-        { fileSystems."/mnt/workstation-nfs" = {
-            device = "workstation:/data";
-            fsType = "nfs";
-            options = ["x-systemd.automount" "noauto"];
-          };
-          fileSystems."/mnt/nas-nfs" = {
-            device = "nas:/data";
-            fsType = "nfs";
-            options = ["x-systemd.automount" "noauto"];
-          };
-        };
-    }
+    # { config =
+    #     { fileSystems."/mnt/workstation-nfs" = {
+    #         device = "workstation:/data";
+    #         fsType = "nfs";
+    #         options = ["x-systemd.automount" "noauto"];
+    #       };
+    #       fileSystems."/mnt/nas-nfs" = {
+    #         device = "nas:/data";
+    #         fsType = "nfs";
+    #         options = ["x-systemd.automount" "noauto"];
+    #       };
+    #     };
+    # }
     ./backup-hdd.nix
     ./foto-hdd.nix
     # modules

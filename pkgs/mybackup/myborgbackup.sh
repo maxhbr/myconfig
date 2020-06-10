@@ -88,8 +88,10 @@ backupprefix="$(hostname)-"
 backupname="${backupprefix}$(date +%Y-%m-%d_%H:%M:%S)"
 logfile="$logdir/$backupname.log"
 
-sudo mkdir -p "$backupdir"
-sudo chown -c $USER "$backupdir"
+if [[ $usessh != true ]]; then
+    sudo mkdir -p "$backupdir"
+    sudo chown -c $USER "$backupdir"
+fi
 
 ################################################################################
 

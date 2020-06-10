@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p parted lvm2 cryptsetup utillinux
+#! nix-shell -i bash -p parted btrfsProgs lvm2 cryptsetup utillinux
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 
@@ -9,8 +9,10 @@
 
 set -e
 
+BTRFS=true
+
 ################################################################################
-##  functions  #################################################################
+##  prepare  ###################################################################
 ################################################################################
 
 help() {
@@ -20,68 +22,6 @@ usage:
   $ BOOTSTRAP=YES $0 /dev/SDX "" [vg_name] [mnt]
 EOF
 }
-
-mkEfiPartitions() {
-    parted $SDX -- mklabel gpt
-    parted $SDX -- mkpart primary 512MiB 100%
-    parted $SDX -- mkpart ESP fat32 1MiB 512MiB
-    parted $SDX -- set 2 boot on
-}
-
-mkLegacyPartitions() {
-    parted ${SDX} -- mklabel msdos
-    parted ${SDX} -- mkpart primary 1MiB -8GiB
-    parted ${SDX} -- mkpart primary linux-swap -8GiB 100%
-}
-
-mkLuks() {
-    local luksDev="$1"
-
-    echo -n "$PASSPHRASE" | cryptsetup --batch-mode luksFormat "$luksDev" -
-    echo -n "$PASSPHRASE" | cryptsetup --batch-mode luksOpen "$luksDev" enc-pv -
-}
-
-mkSwap() {
-    local swapDev="$1"
-
-    mkswap -L swap "$swapDev"
-    swapon "$swapDev"
-}
-
-formatRoot() {
-    local rootDev="$1"
-
-    mkfs.ext4 -L root "$rootDev"
-}
-
-formatBoot() {
-    local bootDev="$1"
-
-    mkfs.fat -F 32 -n boot "$bootDev"
-}
-
-mkLVM() {
-    local lvmDev="$1"
-
-    pvcreate "$lvmDev"
-    vgcreate "$VG_NAME" "$lvmDev"
-
-    lvcreate -L 8G -n swap "$VG_NAME"
-    lvcreate -l '100%FREE' -n root "$VG_NAME"
-
-    mkSwap "/dev/$VG_NAME/swap"
-    formatRoot "/dev/$VG_NAME/root"
-}
-
-doMounting() {
-    mount /dev/disk/by-label/root "$MNT"
-    mkdir -p "$MNT/boot"
-    mount /dev/disk/by-label/boot "$MNT/boot"
-}
-
-################################################################################
-##  prepare  ###################################################################
-################################################################################
 
 if [[ "$BOOTSTRAP" != "YES" ]]; then
     help
@@ -111,6 +51,94 @@ if [ "$(ls -A $MNT)" ]; then
 fi
 
 ################################################################################
+##  functions  #################################################################
+################################################################################
+
+mkEfiPartitions() {
+    parted $SDX -- mklabel gpt
+    parted $SDX -- mkpart primary 512MiB 100%
+    parted $SDX -- mkpart ESP fat32 1MiB 512MiB
+    parted $SDX -- set 2 boot on
+}
+
+mkLegacyPartitions() {
+    parted ${SDX} -- mklabel msdos
+    parted ${SDX} -- mkpart primary 1MiB -8GiB
+    parted ${SDX} -- mkpart primary linux-swap -8GiB 100%
+}
+
+mkLuks() {
+    local luksDev="$1"
+
+    echo -n "$PASSPHRASE" | cryptsetup --batch-mode luksFormat "$luksDev" -
+    echo -n "$PASSPHRASE" | cryptsetup --batch-mode luksOpen "$luksDev" enc-pv -
+}
+
+mkSwap() {
+    local swapDev="$1"
+
+    mkswap -L swap "$swapDev"
+    swapon "$swapDev"
+}
+
+mkBoot() {
+    local bootDev="$1"
+
+    mkfs.fat -F 32 -n boot "$bootDev"
+
+    mkdir -p "$MNT/boot"
+    mount /dev/disk/by-label/boot "$MNT/boot"
+}
+
+mkLVM() {
+    local lvmDev="$1"
+
+    pvcreate "$lvmDev"
+    vgcreate "$VG_NAME" "$lvmDev"
+
+    lvcreate -L 8G -n swap "$VG_NAME"
+    lvcreate -l '100%FREE' -n root "$VG_NAME"
+
+    mkSwap "/dev/$VG_NAME/swap"
+    mkRoot "/dev/$VG_NAME/root"
+}
+
+mkBTRFS() {
+    # see: https://gist.github.com/samdroid-apps/3723d30953af5e1d68d4ad5327e624c0
+    local btrfsDev="$1"
+
+    mkfs.btrfs -L root "$btrfsDev"
+
+    mount -t btrfs /dev/disk/by-label/root $MNT/
+    btrfs subvolume create $MNT/@
+    btrfs subvolume create $MNT/@home
+    btrfs subvolume create $MNT/@snapshots
+    umount $MNT/
+
+    mount -t btrfs -o compress=zstd,subvol=@ /dev/disk/by-label/root $MNT/
+    mount -t btrfs -o compress=zstd,subvol=@home /dev/disk/by-label/root $MNT/home
+    mount -t btrfs -o compress=zstd,subvol=@snapshots /dev/disk/by-label/root $MNT/.snapshots
+}
+
+mkExt4() {
+    local rootDev="$1"
+
+    mkfs.ext4 -L root "$rootDev"
+
+    mount /dev/disk/by-label/root "$MNT"
+}
+
+mkRoot() {
+    local dev="$1"
+
+    if [[ "$BTRFS" == "true"]]; then
+        mkBTRFS "$dev"
+    else
+        mkExt4 "$dev"
+    fi
+}
+
+################################################################################
 ##  run  #######################################################################
 ################################################################################
 
@@ -127,15 +155,14 @@ else
     SDX1="$(fdisk -l "$SDX" | grep '^/dev' | cut -d' ' -f1 | sed -n 1p)"
     SDX2="$(fdisk -l "$SDX" | grep '^/dev' | cut -d' ' -f1 | sed -n 2p)"
 
-    formatBoot "$SDX2"
     if [[ -z "$PASSPHRASE" ]]; then
         mkLVM "$SDX1"
     else
         mkLuks "$SDX1"
         mkLVM /dev/mapper/enc-pv
     fi
+    mkRoot "/dev/disk/by-label/root"
+    mkBoot "$SDX2"
 fi
-
-doMounting
 
 nixos-generate-config --root "$MNT"
