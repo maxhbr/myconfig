@@ -6,7 +6,6 @@
       ../roles/core.nix
       ../modules/service.openssh.nix
       /mnt/etc/nixos/configuration.nix
-      ../hardware/btrfs.nix
     ];
 
   config = {
