@@ -3,7 +3,13 @@
 { pkgs, ... }:
 { imports =
     [ ../lib
-      ../roles/core.nix
+      ../modules/core.nix
+      ../modules/vim
+      ../modules/zsh
+      ../modules/tmux
+      ../modules/user.mhuber.nix
+      ../modules/nixos.networking
+      ../modules/nixos.nix.nix
       ../modules/service.openssh.nix
       /mnt/etc/nixos/configuration.nix
     ];
