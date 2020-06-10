@@ -31,13 +31,13 @@
       ../../modules/service.monitoring.nix
       ../../roles/headless.nix
       # other profiles
-      ../../roles/dev.nix
-      ../../roles/imagework
+      # ../../roles/dev.nix
+      # ../../roles/imagework
       ../../roles/gaming
-      ../../modules/desktop.X.xfce.nix
-      ../../modules/desktop.X.vnc.nix
-      ../../modules/desktop.X.rdp.nix
-      ../../modules/benchmarking.nix
+      # ../../modules/desktop.X.xfce.nix
+      # ../../modules/desktop.X.vnc.nix
+      # ../../modules/desktop.X.rdp.nix
+      # ../../modules/benchmarking.nix
     ];
 
   config =
