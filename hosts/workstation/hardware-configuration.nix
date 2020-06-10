@@ -9,23 +9,42 @@
     ];
 
   boot.initrd.availableKernelModules = [ "nvme" "ahci" "xhci_pci" "usbhid" "usb_storage" "sd_mod" "sr_mod" ];
-  boot.initrd.kernelModules = [ "dm-snapshot" ];
+  boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-amd" ];
   boot.extraModulePackages = [ ];
 
   fileSystems."/" =
-    { device = "/dev/disk/by-uuid/7d235135-ebb3-4da3-8d43-59f9a90da129";
-      fsType = "ext4";
+    { device = "/dev/disk/by-uuid/5f92b838-729d-4d32-8c49-941c0b457372";
+      fsType = "btrfs";
+      options = [ "subvol=@" ];
+    };
+
+  boot.initrd.luks.devices."enc-pv".device = "/dev/disk/by-uuid/46fc7672-6bcc-4245-8d73-65c81cda0c58";
+
+  fileSystems."/home" =
+    { device = "/dev/disk/by-uuid/5f92b838-729d-4d32-8c49-941c0b457372";
+      fsType = "btrfs";
+      options = [ "subvol=@home" ];
+    };
+
+  fileSystems."/.snapshots" =
+    { device = "/dev/disk/by-uuid/5f92b838-729d-4d32-8c49-941c0b457372";
+      fsType = "btrfs";
+      options = [ "subvol=@snapshots" ];
+    };
+
+  fileSystems."/.swapfile" =
+    { device = "/dev/disk/by-uuid/5f92b838-729d-4d32-8c49-941c0b457372";
+      fsType = "btrfs";
+      options = [ "subvol=@swapfile" "compress=no" ];
     };
 
   fileSystems."/boot" =
-    { device = "/dev/disk/by-uuid/18EA-AB9E";
+    { device = "/dev/disk/by-uuid/BBBE-C340";
       fsType = "vfat";
     };
 
-  swapDevices =
-    [ { device = "/dev/disk/by-uuid/a3d160df-3b74-4a40-b26c-c716af6e2986"; }
-    ];
+  swapDevices = [ ];
 
   # High-DPI console
   console.font = lib.mkDefault "${pkgs.terminus_font}/share/consolefonts/ter-u28n.psf.gz";
