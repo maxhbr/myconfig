@@ -109,17 +109,17 @@ mkBTRFS() {
 
     mkfs.btrfs -L root "$btrfsDev"
 
-    mount -t btrfs /dev/disk/by-label/root $MNT/
+    mount -t btrfs "$btrfsDev" $MNT/
     btrfs subvolume create $MNT/@
     btrfs subvolume create $MNT/@home
     btrfs subvolume create $MNT/@snapshots
     umount $MNT/
 
-    mount -t btrfs -o compress=zstd,subvol=@ /dev/disk/by-label/root $MNT/
+    mount -t btrfs -o compress=zstd,subvol=@ "$btrfsDev" $MNT/
     mkdir -p $MNT/home
-    mount -t btrfs -o compress=zstd,subvol=@home /dev/disk/by-label/root $MNT/home
+    mount -t btrfs -o compress=zstd,subvol=@home "$btrfsDev" $MNT/home
     mkdir -p $MNT/.snapshots
-    mount -t btrfs -o compress=zstd,subvol=@snapshots /dev/disk/by-label/root $MNT/.snapshots
+    mount -t btrfs -o compress=zstd,subvol=@snapshots "$btrfsDev" $MNT/.snapshots
 
     mkdir -p $MNT/.swapfile/
     btrfs subvolume create $MNT/.swapfile/
