@@ -116,8 +116,13 @@ mkBTRFS() {
     umount $MNT/
 
     mount -t btrfs -o compress=zstd,subvol=@ /dev/disk/by-label/root $MNT/
+    mkdir -p $MNT/home
     mount -t btrfs -o compress=zstd,subvol=@home /dev/disk/by-label/root $MNT/home
+    mkdir -p $MNT/.snapshots
     mount -t btrfs -o compress=zstd,subvol=@snapshots /dev/disk/by-label/root $MNT/.snapshots
+
+    mkdir -p $MNT/.swapfile/
+    btrfs subvolume create $MNT/.swapfile/
 }
 
 mkExt4() {
@@ -134,7 +139,9 @@ mkRoot() {
     if [[ "$BTRFS" == "true" ]]; then
         mkBTRFS "$dev"
     else
-        mkExt4 "$dev"
+        mkLVM "$dev"
+        sleep 10
+        mkExt4 "/dev/disk/by-label/root"
     fi
 }
 
@@ -156,13 +163,11 @@ else
     SDX2="$(fdisk -l "$SDX" | grep '^/dev' | cut -d' ' -f1 | sed -n 2p)"
 
     if [[ -z "$PASSPHRASE" ]]; then
-        mkLVM "$SDX1"
+        mkRoot "$SDX1"
     else
         mkLuks "$SDX1"
-        mkLVM /dev/mapper/enc-pv
+        mkRoot /dev/mapper/enc-pv
     fi
-    sleep 10
-    mkRoot "/dev/disk/by-label/root"
     mkBoot "$SDX2"
 fi
 
