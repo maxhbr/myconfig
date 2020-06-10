@@ -24,7 +24,7 @@ let
     ${pkgs.git}/bin/git clone https://github.com/maxhbr/myconfig "$myconfigDir"
   fi
   '';
-  myborgbackup = pkgs.callPackage ../pkgs/myborgbackup
+  mybackup = pkgs.callPackage ../pkgs/mybackup
     { inherit pkgs;
     };
 in
@@ -49,7 +49,7 @@ in
     { environment =
         { systemPackages =
             [ upg-pull
-              myborgbackup
+              mybackup
             ];
           shellAliases =
             { upg = "~/myconfig/rebuild.sh";
