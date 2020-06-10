@@ -1343,6 +1343,8 @@ in {
 
   pytest-env = callPackage ../development/python-modules/pytest-env { };
 
+  pytest-factoryboy = callPackage ../development/python-modules/pytest-factoryboy { };
+
   pytest-flask = callPackage ../development/python-modules/pytest-flask { };
 
   pytest-mypy = callPackage ../development/python-modules/pytest-mypy { };
@@ -1364,6 +1366,8 @@ in {
   pytest-xvfb = callPackage ../development/python-modules/pytest-xvfb { };
 
   pytmx = callPackage ../development/python-modules/pytmx { };
+
+  pythonmagick = callPackage ../development/python-modules/pythonmagick { };
 
   python-binance = callPackage ../development/python-modules/python-binance { };
 
@@ -3116,6 +3120,8 @@ in {
   jupyterlab_server = callPackage ../development/python-modules/jupyterlab_server { };
 
   jupyterlab = callPackage ../development/python-modules/jupyterlab {};
+
+  jupyter-sphinx = callPackage ../development/python-modules/jupyter-sphinx { };
 
   jupytext = callPackage ../development/python-modules/jupytext { };
 

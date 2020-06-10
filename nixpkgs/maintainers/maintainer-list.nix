@@ -193,12 +193,6 @@
     githubId = 315003;
     name = "Adam Saponara";
   };
-  aepsil0n = {
-    email = "eduard.bopp@aepsil0n.de";
-    github = "aepsil0n";
-    githubId = 3098430;
-    name = "Eduard Bopp";
-  };
   aerialx = {
     email = "aaron+nixos@aaronlindsay.com";
     github = "AerialX";
@@ -2181,6 +2175,12 @@
     github = "edef1c";
     githubId = 50854;
     name = "edef";
+  };
+  edibopp = {
+    email = "eduard.bopp@aepsil0n.de";
+    github = "edibopp";
+    githubId = 3098430;
+    name = "Eduard Bopp";
   };
   emantor = {
     email = "rouven+nixos@czerwinskis.de";
@@ -4649,6 +4649,16 @@
     githubId = 26020062;
     name = "lumi";
   };
+  lunik1 = {
+    email = "ch.nixpkgs@themaw.xyz";
+    github = "lunik1";
+    githubId = 13547699;
+    name = "Corin Hoad";
+    keys = [{
+      longkeyid = "rsa2048/0x6A37DF9483188492";
+      fingerprint = "BA3A 5886 AE6D 526E 20B4  57D6 6A37 DF94 8318 8492";
+    }];
+  };
   luz = {
     email = "luz666@daum.net";
     github = "Luz";
@@ -6308,10 +6318,6 @@
     githubId = 23097564;
     name = "Nora Widdecke";
   };
-  pxc = {
-    email = "patrick.callahan@latitudeengineering.com";
-    name = "Patrick Callahan";
-  };
   pyrolagus = {
     email = "pyrolagus@gmail.com";
     github = "PyroLagus";
@@ -6980,6 +6986,12 @@
     githubId = 2343853;
     name = "Sean Zicari";
   };
+  seb314 = {
+    email = "sebastian@seb314.com";
+    github = "seb314";
+    githubId = 19472270;
+    name = "Sebastian";
+  };
   sellout = {
     email = "greg@technomadic.org";
     github = "sellout";
@@ -7049,6 +7061,12 @@
     github = "shahrukh330";
     githubId = 1588288;
     name = "Shahrukh Khan";
+  };
+  shamilton = {
+    email = "sgn.hamilton@protonmail.com";
+    github = "SCOTT-HAMILTON";
+    githubId = 24496705;
+    name = "Scott Hamilton";
   };
   shanemikel = {
     email = "shanepearlman@pm.me";
