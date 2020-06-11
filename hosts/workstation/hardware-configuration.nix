@@ -19,7 +19,14 @@
       options = [ "subvol=@" ];
     };
 
-  boot.initrd.luks.devices."enc-pv".device = "/dev/disk/by-uuid/2f8b0614-e22b-4ce6-80e1-04c136580106";
+  boot.initrd.luks.devices."enc-pv" =
+    { device = "/dev/disk/by-uuid/2f8b0614-e22b-4ce6-80e1-04c136580106";
+      keyFile = "/dev/disk/by-id/usb-JetFlash_Transcend_16GB_753K3Z31LDXXOPIT-0:0";
+      keyFileSize = 4096;
+      preLVM = true;
+      allowDiscards = true;
+      fallbackToPassword = true;
+    };
 
   fileSystems."/home" =
     { device = "/dev/disk/by-uuid/07300d85-1621-4ae7-afad-b04454560fdc";
