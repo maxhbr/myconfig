@@ -5,7 +5,7 @@
   imports =
     [ ./hardware-configuration.nix
       ../../hardware/efi.nix
-      # ../../hardware/btrfs.nix
+      ../../hardware/btrfs.nix
       ../../hardware/nixos-hardware/common/cpu/amd
       ../../hardware/nixos-hardware/common/pc/ssd
       { boot.initrd.supportedFilesystems = [ "luks" "btrfs" ];

@@ -36,7 +36,7 @@
   fileSystems."/.swapfile" =
     { device = "/dev/disk/by-uuid/07300d85-1621-4ae7-afad-b04454560fdc";
       fsType = "btrfs";
-      options = [ "subvol=@swapfile" ];
+      options = [ "compress=no" "subvol=@swapfile" ];
     };
 
   fileSystems."/boot" =
