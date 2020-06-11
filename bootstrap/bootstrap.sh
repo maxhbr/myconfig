@@ -122,7 +122,13 @@ mkBTRFS() {
     mkdir -p $MNT/.snapshots
     mount -t btrfs -o compress=zstd,subvol=@snapshots "$btrfsDev" $MNT/.snapshots
     mkdir -p $MNT/.swapfile
-    mount -t btrfs -o compress=zstd,subvol=@swapfile "$btrfsDev" $MNT/.swapfile
+    mount -t btrfs -o compress=no,subvol=@swapfile "$btrfsDev" $MNT/.swapfile
+
+    sudo touch $MNT/.swapfile/swapfile
+    sudo chattr +C $MNT/.swapfile/swapfile
+    sudo chmod 600 $MNT/.swapfile/swapfile
+    sudo fallocate -l20g $MNT/.swapfile/swapfile
+    sudo mkswap $MNT/.swapfile/swapfile
 
     # to exclude from snapshots:
     btrfs subvolume create $MNT/home/docker
