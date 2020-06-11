@@ -8,25 +8,6 @@
       ../../hardware/btrfs.nix
       ../../hardware/nixos-hardware/common/cpu/amd
       ../../hardware/nixos-hardware/common/pc/ssd
-      { boot.initrd.supportedFilesystems = [ "luks" "btrfs" ];
-        # boot.initrd.luks.devices.crypted =
-        #   { device = "/dev/disk/by-uuid/1ffeb5d7-29b7-41ee-9fe3-3c528be136db";
-        #     # keyFile = "/dev/disk/by-id/usb-JetFlash_Transcend_16GB_753K3Z31LDXXOPIT-0:0";
-        #     # keyFileSize = 4096;
-        #     # preLVM = true;
-        #     # allowDiscards = true;
-        #     # fallbackToPassword = true;
-        #   };
-
-        fileSystems."/mnt/2tb-1" =
-          { device = "/dev/disk/by-uuid/51d362d8-5b73-4b92-84c3-9ff260062da6";
-            fsType = "ext4";
-          };
-      }
-      { hardware.enableRedistributableFirmware = true;
-        hardware.cpu.amd.updateMicrocode = true;
-        services.xserver.videoDrivers = [ "amdgpu" ];
-      }
       ./service.nfs.nix
       ../../modules/service.monitoring.nix
       ../../roles/headless.nix
@@ -36,8 +17,8 @@
       ../../roles/imagework
       ../../roles/gaming
       # ../../modules/desktop.X.xfce.nix
-      # ../../modules/desktop.X.vnc.nix
-      # ../../modules/desktop.X.rdp.nix
+      ../../modules/desktop.X.vnc.nix
+      ../../modules/desktop.X.rdp.nix
       ../../modules/benchmarking.nix
     ];
 
@@ -48,6 +29,17 @@
       services.logind.extraConfig = ''
           HandlePowerKey=suspend
         '';
+
+      hardware.enableRedistributableFirmware = true;
+      hardware.cpu.amd.updateMicrocode = true;
+      services.xserver.videoDrivers = [ "amdgpu" ];
+
+      boot.initrd.supportedFilesystems = [ "luks" "btrfs" ];
+
+      fileSystems."/mnt/2tb-1" =
+        { device = "/dev/disk/by-uuid/51d362d8-5b73-4b92-84c3-9ff260062da6";
+          fsType = "ext4";
+        };
 
       boot.kernelPackages = lib.mkForce pkgs.nixos-2003-small.linuxPackages_latest;
 
