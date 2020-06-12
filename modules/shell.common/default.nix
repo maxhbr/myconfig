@@ -91,7 +91,7 @@ right_meter_modes=2 2 2 2 2 1 1
         file
 
         # admin:
-        htop iftop iptraf-ng iotop bmon s-tui
+        htop iftop iptraf-ng iotop bmon nmon s-tui
         pwgen # unstable.mkpasswd
         usbutils
         tcpdump
