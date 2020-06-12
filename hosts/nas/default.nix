@@ -27,6 +27,7 @@
     # ./4x500-hdds.raid.nix
     # ./service.nfs.nix
     ../../roles/headless.nix
+    ../../hardware/hdd-spinndown.nix
     ../../modules/service.monitoring.nix
     ../../modules/virtualization.docker
     # hardware:
