@@ -25,7 +25,7 @@
           };
       }
     # ./4x500-hdds.raid.nix
-    # ./service.nfs.nix
+    ./2x4000-hdds.raid.nix
     ../../roles/headless.nix
     ../../hardware/hdd-spinndown.nix
     ../../modules/service.monitoring.nix
