@@ -21,6 +21,13 @@ in {
                   };
                 recursive = true;
               };
+            ".local/share/Steam/compatibilitytools.d/Proton-5.9-GE-2-MF" =
+              { source = builtins.fetchTarball
+                  { url = "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/5.9-GE-2-MF/Proton-5.9-GE-2-MF.tar.gz";
+                    sha256 = "07chyahhkzl7d4p8pig43p1x6y8387pyjdlr275n0qha35jj2s8f";
+                  };
+                recursive = true;
+              };
           };
       };
 
