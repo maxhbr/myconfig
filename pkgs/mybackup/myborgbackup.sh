@@ -22,16 +22,21 @@ help() {
     echo "    $0 [-h] [-t TARGET] [-i|-b|-p]"
 }
 
+homedir="$HOME/.myborgbackup"
+mkdir -p "$homedir"
+passphraseFile="${homedir}/borg-passphrase"
+
 ################################################################################
 # parse input
-target="/mnt/backup"
+target=""
 targetWasMounted=false
 usessh=false
 doinit=false
 dobackup=false
 doborgprune=false
 doborgmount=false
-while getopts "h?ibpmt:" opt; do
+encryption=none
+while getopts "h?ibpmet:" opt; do
     case "$opt" in
         h|\?)
             help
@@ -42,6 +47,7 @@ while getopts "h?ibpmt:" opt; do
         b) dobackup=true;;
         p) doborgprune=true;;
         m) doborgmount=true;;
+        e) encryption=repokey; export BORG_PASSCOMMAND="cat $passphraseFile" ;;
     esac
 done
 
@@ -53,7 +59,10 @@ if $doinit &&
     exit 0
 fi
 
-if [[ $target == *":"* ]]; then
+if [[ -z "$target" ]]; then
+    echo "target has to be set via -t TARGET"
+    exit 1
+elif [[ $target == *":"* ]]; then
     usessh=true
 else
     if [[ $target == "/dev/"* ]]; then
@@ -80,7 +89,6 @@ fi
 borgCmd="borg"
 
 backupdir="${target}/borgbackup"
-homedir="$HOME/.myborgbackup"
 repository="${backupdir}/$(hostname).borg"
 repositoryWork="${backupdir}/$(hostname)-work.borg"
 logdir="${homedir}/_logs"
@@ -95,14 +103,39 @@ fi
 
 ################################################################################
 
+myKeyExport() {
+    local repository="$1"
+    local target="$2"
+    local borgKeyExportCmd="$borgCmd \
+            key export"
+
+    $borgKeyExportCmd "$repository" "$target.key"
+    $borgKeyExportCmd --paper "$repository" "$target.key.paper"
+    $borgKeyExportCmd --qr-html "$repository" "$target.key.html"
+}
+
 myInitialize() {
     local borgInitCmd="$borgCmd \
             init \
-                --encryption none"
+                --encryption $encryption"
     echo "initialize the repository"
     set -x
+
+    if [[ "$encryption" != "none" ]]; then
+        if [[ ! -f "$passphraseFile" ]]; then
+            head -c 32 /dev/urandom | base64 -w 0 > "$passphraseFile"
+            chmod 400 "$passphraseFile"
+        fi
+    fi
+
     $borgInitCmd "$repository"
     [[ -d ~/TNG ]] && $borgInitCmd "$repositoryWork"
+
+    if [[ "$encryption" != "none" ]]; then
+        myKeyExport "$repository" "$HOME/.myborgbackup/priv"
+        [[ -d ~/TNG ]] && myKeyExport "$repositoryWork"  "$HOME/.myborgbackup/work"
+    fi
+
     set +x
 }
 
@@ -121,29 +154,28 @@ myBackup() {
     echo "do the backup"
     set -x
     cat <<EXCLUDE > "${homedir}/_excludes"
-/home/docker
-/home/*/tmp/
-/home/*/Downloads/
-/home/*/TNG/
-/home/*/.cache/
-/home/*/Bilder/workspace/
-/home/*/Desktop/games/
-/home/*/.local/share/Steam/
-/home/*/.wine/
-/home/*/.cache/
-/home/*/.thumbnails/
-/home/*/.nox/
-/home/*/.m2/
-/home/*/.compose-cache/
-/home/*/.config/GIMP/*/backups
 */.Trash*/
-/nix/
-/tmp/
-/var/lib/docker/
-/var/cache/
-/var/tmp/
-/home/*/VirtualBox VMs/
-/home/*/Desktop/
+*/.cache/
+*/.compose-cache/
+*/.config/GIMP/*/backups
+*/.local/share/
+*/.local/share/Steam/
+*/.m2/
+*/.nox/
+*/.thumbnails/
+*/.wine/
+*/Bilder/workspace/
+*/Desktop/
+*/Desktop/games/
+*/Downloads/
+*/TNG/
+*/VirtualBox VMs/
+*/tmp/
+*.pyc
+*.ARW
+*.iso
+*.img
+*.ova
 EXCLUDE
     cat <<EXCLUDE > "${homedir}/_tng.excludes"
 */PIP/_*
