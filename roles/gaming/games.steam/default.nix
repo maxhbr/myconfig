@@ -10,7 +10,13 @@ in {
     home-manager.users.mhuber =
       { home.packages =
           with pkgs;
-          [ (steam.override { inherit nativeOnly; })
+          [ (steam.override {
+               extraPkgs = pkgs:
+                 [ mono gtk3 gtk3-x11 libgdiplus zlib
+                   libffi
+                 ];
+               inherit nativeOnly;
+            })
             (if nativeOnly then steam-run-native else steam-run)
           ];
         home.file =

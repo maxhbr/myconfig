@@ -41,6 +41,7 @@ rec
           }
         ] ++ (importall (secretsDir + "/${hostName}/imports"));
     };
+
   deployWireguardKeys = hostName:
     { deployment.keys =
         { wg-private =
@@ -59,6 +60,7 @@ rec
             };
         };
     };
+
   deploySSHUserKeys = hostName: algo:
     { deployment.keys =
         { "id_${algo}" =
@@ -74,6 +76,26 @@ rec
               user = "mhuber";
               group = "mhuber";
               permissions = "0444";
+            };
+        };
+    };
+
+  setupAsBackupTarget =
+    home:
+    keys:
+    { config =
+        { users =
+            { extraUsers.backup =
+                { isNormalUser = true;
+                  group = "backup";
+                  uid = 1100;
+                  inherit home;
+                  createHome = false;
+                  openssh.authorizedKeys =
+                    { inherit keys;
+                    };
+                };
+              extraGroups.backup.gid = 1100;
             };
         };
     };

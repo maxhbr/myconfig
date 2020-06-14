@@ -22,19 +22,9 @@ in
     ];
 
   config =
-    { environment =
-        { systemPackages =
-            [ upg-pull
-              mybackup
-            ];
-          shellAliases =
-            { upg = "~/myconfig/rebuild.sh";
-              upg-fast = "~/myconfig/rebuild.sh --fast";
-              upg-fast-no-tmux = "~/myconfig/rebuild.sh --no-tmux --no-git --fast";
-              upg-dry = "~/myconfig/rebuild.sh --dry-run";
-              upg-get-hostId = "cksum /etc/machine-id | while read c rest; do printf \"%x\" $c; done";
-            };
-      };
+    { environment.systemPackages =
+        [ mybackup
+        ];
       nix.nixPath = [ ("nixpkgs=" + ../nixpkgs) "nixos-config=/dev/null" ];
       assertions =
         [ { assertion = config.networking.hostId != null;
