@@ -2,239 +2,311 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 
-# TODO:
-# - via SSH?
-# - test prune
-
-# see:
-# - https://borgbackup.readthedocs.io/en/stable/
-# - https://thomas-leister.de/server-backups-mit-borg/
-
-set -e
-
-if [ "$(id -u)" == "0" ]; then
-    echo "has to be called as __non__ root!"
-    exit 1
-fi
-
-help() {
-    echo "run as:"
-    echo "    $0 [-h] [-t TARGET] [-i|-b|-p]"
-}
-
-homedir="$HOME/.myborgbackup"
-mkdir -p "$homedir"
-passphraseFile="${homedir}/borg-passphrase"
-
-################################################################################
-# parse input
-target=""
-targetWasMounted=false
-usessh=false
-doinit=false
-dobackup=false
-doborgprune=false
-doborgmount=false
-encryption=none
-while getopts "h?ibpmet:" opt; do
-    case "$opt" in
-        h|\?)
-            help
-            exit 0
-            ;;
-        t) target="$OPTARG";;
-        i) doinit=true;;
-        b) dobackup=true;;
-        p) doborgprune=true;;
-        m) doborgmount=true;;
-        e) encryption=repokey; export BORG_PASSCOMMAND="cat $passphraseFile" ;;
-    esac
-done
-
-if $doinit &&
-       $dobackup &&
-       $doborgprune &&
-       $doborgmount; then
-    help
-    exit 0
-fi
-
-if [[ -z "$target" ]]; then
-    echo "target has to be set via -t TARGET"
-    exit 1
-elif [[ $target == *":"* ]]; then
-    usessh=true
-else
-    if [[ $target == "/dev/"* ]]; then
-        set -x
-        echo "0 0 0" | sudo tee /sys/class/scsi_host/host*/scan || true
-        sleep 1
-        sudo mkdir -p "/mnt/backup"
-        sudo umount $target || true
-        sudo mount $target "/mnt/backup"
-        set +x
-        target="/mnt/backup"
-        targetWasMounted=true
-    fi
-
-    set -x
-    if [[ "$(df --output=source / | tail -1)" == "$(df --output=source "$target" | tail -1)" ]]; then
-        echo "same filesystem"
-        exit 3
-    fi
-fi
-
-################################################################################
+set -euo pipefail
 
 borgCmd="borg"
+borgMountDir="/mnt/borgMountDir"
 
-backupdir="${target}/borgbackup"
-repository="${backupdir}/$(hostname).borg"
-repositoryWork="${backupdir}/$(hostname)-work.borg"
-logdir="${homedir}/_logs"
-backupprefix="$(hostname)-"
-backupname="${backupprefix}$(date +%Y-%m-%d_%H:%M:%S)"
-logfile="$logdir/$backupname.log"
+show_help() {
+    >&2 cat <<EOF
+run as:
+    $0 b[ackup]
+         -n ALIAS
 
-if [[ $usessh != true ]]; then
-    sudo mkdir -p "$backupdir"
-    sudo chown -c $USER "$backupdir"
-fi
+    $0 i[nit]
+         -n ALIAS  -- alias for the backup
+         -s SOURCE -- what to backup, e.g. $HOME
+         -t TARGET -- e.g.
+                        - /dev/disk/by-uuid/...
+                        - /mnt/backup
+                        - backup@nas:/mnt/backup/
+         [-e]      -- enable encryption
 
-################################################################################
-
-myKeyExport() {
-    local repository="$1"
-    local target="$2"
-    local borgKeyExportCmd="$borgCmd \
-            key export"
-
-    $borgKeyExportCmd "$repository" "$target.key"
-    $borgKeyExportCmd --paper "$repository" "$target.key.paper"
-    $borgKeyExportCmd --qr-html "$repository" "$target.key.html"
+    $0 [-h]
+EOF
 }
 
-myInitialize() {
-    local borgInitCmd="$borgCmd \
-            init \
-                --encryption $encryption"
-    echo "initialize the repository"
-    set -x
+handleTarget() {
+    local target="$1"
 
-    if [[ "$encryption" != "none" ]]; then
-        if [[ ! -f "$passphraseFile" ]]; then
-            head -c 32 /dev/urandom | base64 -w 0 > "$passphraseFile"
-            chmod 400 "$passphraseFile"
+    if [[ $target != *":"* ]]; then
+        if [[ $target == "/dev/"* ]]; then
+            echo "0 0 0" | sudo tee /sys/class/scsi_host/host*/scan || true
+            sudo mkdir -p "$borgMountDir"
+            sudo umount $target || true
+            sudo mount $target "$borgMountDir"
+        fi
+
+        if [[ "$(df --output=source / | tail -1)" == "$(df --output=source "$target" | tail -1)" ]]; then
+            >&2 echo "backup should be made to another filesystem or to ssh, \$target=$target does not satisfy that"
+            exit 1
         fi
     fi
 
-    $borgInitCmd "$repository"
-    [[ -d ~/TNG ]] && $borgInitCmd "$repositoryWork"
-
-    if [[ "$encryption" != "none" ]]; then
-        myKeyExport "$repository" "$HOME/.myborgbackup/priv"
-        [[ -d ~/TNG ]] && myKeyExport "$repositoryWork"  "$HOME/.myborgbackup/work"
-    fi
-
-    set +x
+    echo "$target"
 }
 
-myBackup() {
-    local borgCreateCmd="$borgCmd \
-            create \
-                --stats \
-                --verbose \
-                --progress \
-                --filter AME \
-                --show-rc \
-                --one-file-system \
-                --exclude-caches \
-                --compression lz4"
-
-    echo "do the backup"
-    set -x
-    cat <<EXCLUDE > "${homedir}/_excludes"
+writeExcludes() {
+    local excludes="$1"
+    cat <<EOF >"$excludes"
+*.ARW
+*.img
+*.iso
+*.ova
+*.pyc
 */.Trash*/
 */.cache/
 */.compose-cache/
 */.config/GIMP/*/backups
+*/.gem/
+*/.gradle/
 */.local/share/
-*/.local/share/Steam/
 */.m2/
 */.nox/
+*/.npm/
+*/.ort/
 */.thumbnails/
 */.wine/
 */Bilder/workspace/
-*/Desktop/
-*/Desktop/games/
 */Downloads/
+*/PIP/_*
 */TNG/
 */VirtualBox VMs/
 */tmp/
-*.pyc
-*.ARW
-*.iso
-*.img
-*.ova
-EXCLUDE
-    cat <<EXCLUDE > "${homedir}/_tng.excludes"
-*/PIP/_*
-EXCLUDE
-    $borgCreateCmd \
-            --exclude-from "${homedir}/_excludes" \
-         "${repository}::${backupname}" \
-         /home/mhuber/
-    [[ -d ~/TNG ]] && \
-        $borgCreateCmd \
-            --exclude-from "${homedir}/_tng.excludes" \
-            "${repositoryWork}::${backupname}" \
-            /home/mhuber/TNG/
-    set +x
+EOF
 }
 
-myBorgprune() {
-    local borgPruneCmd="$borgCmd \
-            prune \
-                --stats \
-                --verbose \
-                --list \
-                --show-rc \
-                --keep-within=2d --keep-daily=7 --keep-weekly=4 --keep-monthly=6 \
-                --prefix \"backupprefix\""
-    echo "do the borg prune"
+doInitPreperations() {
+    >&2 echo "## doInitPreperations..."
+    local home="$1"
+    shift
+
+    if [[ -d "$home" ]]; then
+        >&2 echo "the folder \$home=$home already exists, probably already initialized"
+        exit 1
+    fi
+
+    local target=""
+    local source=""
+    local encryption=none
+
+    while [[ $# -gt 0 && "${1:-}" != "--" ]]; do
+        opt="$1"
+        case $opt in
+            -t) target="$2"
+                shift
+                shift
+                ;;
+            -s) source="$2"
+                shift
+                shift
+                ;;
+            -e) encryption="repokey"
+                shift
+                ;;
+            *) POSITIONAL+=("$1")
+               shift
+               ;;
+        esac
+    done
+
+    local prefix="$(hostname)-"
+    local repository=""
+    if [[ $target == "/dev/"* ]]; then
+        repository="${borgMountDir}/${prefix}${name}.borg"
+    else
+        repository="${target}/${prefix}${name}.borg"
+    fi
+    local excludes="$home/excludes"
+
+    mkdir -p "$home"
+    cat <<EOF | tee "$home/init"
+export name="$name"
+export target="$target"
+export prefix="$prefix"
+export repository="$repository"
+export source="$source"
+export encryption="$encryption"
+export excludes="$excludes"
+EOF
+    writeExcludes "$excludes"
+    if [[ "$encryption" != "none" ]]; then
+        local passphraseFile="$home/passphrase"
+
+        if [[ ! -f "$passphraseFile" ]]; then
+            head -c 32 /dev/urandom | base64 -w 0 > "$passphraseFile"
+            chmod 400 "$passphraseFile"
+        fi
+
+        echo "export BORG_PASSCOMMAND=\"cat '$passphraseFile'\"" | tee -a "$home/init"
+    fi
+}
+
+doInitActually() {
+    >&2 echo "## doInitActually..."
     set -x
-    $borgPruneCmd "$repository"
-    [[ -d ~/TNG ]] && \
-        $borgPruneCmd "$repositoryWork"
+    $borgCmd \
+        init \
+        --encryption "$encryption" \
+        "$repository"
+
+    if [[ "$encryption" != "none" ]]; then
+        $borgCmd key export "$repository" "$home/keyExport.txt"
+        $borgCmd key export --paper "$repository" "$home/keyExport.paper"
+        $borgCmd key export --qr-html "$repository" "$home/keyExport.html"
+    fi
     set +x
 }
 
-################################################################################
-# setup log
-mkdir -p "$logdir"
-echo -e "\n\n\n\n\n\n\n" >> $logfile
-exec &> >(tee -a $logfile)
+getBackupName() {
+    echo "$(hostname)-$(date +%Y-%m-%d_%H:%M:%S)"
+}
 
-################################################################################
-# run
-if $doinit; then
-    myInitialize
-fi
+doBackup() {
+    >&2 echo "## doBackup..."
+    local home="$1"
+    shift
 
-if $dobackup; then
-    myBackup
-fi
+    source "$home/init"
 
-if $doborgprune; then
-    myBorgprune
-fi
+    set -x
+    $borgCmd \
+        create \
+        --stats \
+        --verbose \
+        --progress \
+        --filter AME \
+        --show-rc \
+        --one-file-system \
+        --exclude-caches \
+        --compression lz4 \
+        --exclude-from "$excludes" \
+        "${repository}::$(getBackupName)" \
+        "${source}"
+    set +x
+}
 
-if $doborgmount; then
-    myBorgmount
-fi
+doPrune() {
+    >&2 echo "## doPrune..."
+    local home="$1"
+    shift
 
-################################################################################
-if $targetWasMounted; then
-    sudo umount "$target" || echo "umount failed... continue"
-fi
+    source "$home/init"
 
+    set -x
+    $borgCmd \
+        prune \
+        --stats \
+        --verbose \
+        --list \
+        --show-rc \
+        --keep-within=2d --keep-daily=7 --keep-weekly=4 --keep-monthly=6 \
+        --prefix "$prefix" \
+        "$repository"
+    set +x
+}
+
+doMount() {
+    >&2 echo "## doMount..."
+    local home="$1"
+    shift
+
+    set -x
+    $borgCmd \
+        mount \
+        --foreground \
+        $repository \
+        $(mktemp -d)
+    set +x
+}
+
+main() {
+    >&2 echo "# main..."
+    local name=""
+    local doInit=false
+    local doBackup=false
+    local doPrune=false
+    local doMount=false
+
+    while [[ $# -gt 0 && "${1:-}" != "--" ]]; do
+        opt="$1"
+        case $opt in
+            -h) show_help
+                exit 0
+                ;;
+            -n) name="$2"
+                shift
+                shift
+                ;;
+            init|i) doInit=true
+                  shift
+                  ;;
+            backup|b) doBackup=true
+                    shift
+                    ;;
+            prune) doPrune=true
+                   shift
+                   ;;
+            mount) doMount=true
+                   shift
+                   ;;
+            *) POSITIONAL+=("$1")
+               shift
+               ;;
+        esac
+    done
+
+    if [[ -z "$name" ]]; then
+        >&2 echo "a name is required"
+       exit 1
+    fi
+
+    local base="$HOME/.myborgbackup"
+    mkdir -p "$base"
+    local home="$base/$name"
+    local logfile="$home/logfile"
+
+    ############################################################################
+    # Run
+
+    if $doInit; then
+        doInitPreperations "$home" "${POSITIONAL[@]}"
+    fi
+
+    if [[ ! -d "$home" ]]; then
+        >&2 echo "\$home=$home not yet initialized"
+        exit 1
+    fi
+
+    echo -e "\n\n\n\n\n\n\n" >> $logfile
+    exec &> >(tee -a $logfile)
+
+    source "$home/init"
+    export target="$(handleTarget "$target")"
+
+    if $doInit; then
+        doInitActually "$home" "${POSITIONAL[@]}"
+    fi
+
+    borg info "$repository" --last 1
+
+    if $doBackup; then
+        doBackup "$home" "${POSITIONAL[@]}"
+    fi
+
+    if $doPrune; then
+        doPrune "$home" "${POSITIONAL[@]}"
+    fi
+
+    if $doMount; then
+        doMount "$home" "${POSITIONAL[@]}"
+    fi
+
+    if [[ -d "$target" ]]; then
+        if [[ "$(df --output=source / | tail -1)" == "$(df --output=source "$target" | tail -1)" ]]; then
+            sudo umount "$target" || echo "umount failed... continue"
+        fi
+    fi
+}
+
+main "$@"
