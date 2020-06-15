@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  gmvn = with pkgs; writeScriptBin "ec" ''
+  gmvn = with pkgs; writeScriptBin "gmvn" ''
 #!${stdenv.shell}
 
 # is a substitute for `mvn`, but creates a local repository for each git project
