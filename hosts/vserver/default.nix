@@ -11,8 +11,11 @@
     ./service.wireguard-server
     ../../modules/virtualization.docker
   ];
-  config = {
-    networking.hostName = "vserver";
-    networking.hostId = "49496f29";
-  };
+  config =
+    { networking.hostName = "vserver";
+      networking.hostId = "49496f29";
+
+      networking.firewall.allowedTCPPorts = [ 12345 ];
+      networking.firewall.allowedUDPPorts = [ 12345 ];
+    };
 }
