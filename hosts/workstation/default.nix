@@ -13,13 +13,16 @@
       ../../roles/headless.nix
       # other profiles
       ../../roles/desktop.nix
-      ../../roles/dev.nix
+      ../../modules/virtualization.docker
       ../../roles/imagework
       ../../roles/gaming
       # ../../modules/desktop.X.xfce.nix
       ../../modules/desktop.X.vnc.nix
       ../../modules/desktop.X.rdp.nix
       ../../modules/benchmarking.nix
+      { # for quickfix (due to usage of 20.03)
+        nixpkgs.config.allowBroken = true;
+      }
     ];
 
   config =

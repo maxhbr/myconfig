@@ -67,6 +67,21 @@ realize() {
     local targetHost="$1"
     shift
 
+    ############################################################################
+    # dirty fix due to driver incompatibilities:
+    if [[ "$targetHost" == "workstation" ]]; then
+
+        cat <<EOF
+TODO: workstation should use same nixpkgs as other hosts
+      Problem: mesa in unstable does not work in some games
+EOF
+
+        export nixpkgs="https://github.com/NixOS/nixpkgs/archive/20.03.tar.gz"
+        export NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfig"
+        export NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$nixosConfig"
+    fi
+    ############################################################################
+
     logH1 "deploy" "targetHost=$targetHost args=$args jobCountArgs=$jobCountArgs"
     (set -x;
      nixops deploy \
