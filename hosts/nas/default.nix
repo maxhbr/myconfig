@@ -35,7 +35,6 @@
     ../../hardware/efi.nix
     # configuration
     ./docker.openhab.nix
-    # ./docker.deCONZ.nix
     ./service.deconz.nix
   ];
   config = {
