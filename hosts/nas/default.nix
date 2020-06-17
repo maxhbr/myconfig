@@ -30,6 +30,7 @@
     ../../hardware/hdd-spinndown.nix
     ../../modules/service.monitoring.nix
     ../../modules/virtualization.docker
+    ../../modules/service.syncthing.nix
     # hardware:
     ../../hardware/efi.nix
     # configuration

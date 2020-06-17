@@ -4,15 +4,15 @@
 
 {
   config = {
-    # home-manager.users.mhuber = {
-    #   services.syncthing.enable = true;
-    # };
-    services.syncthing = {
-      enable = true;
-      user = "mhuber";
-      group = "mhuber";
-      dataDir = "/home/mhuber";
-      openDefaultPorts = false;
+    home-manager.users.mhuber = {
+      services.syncthing.enable = true;
     };
+    # services.syncthing = {
+    #   enable = true;
+    #   user = "mhuber";
+    #   group = "mhuber";
+    #   dataDir = "/home/mhuber";
+    #   openDefaultPorts = false;
+    # };
   };
 }
