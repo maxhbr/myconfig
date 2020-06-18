@@ -11,10 +11,6 @@
     ../modules/virtualization.qemu.nix
     ../modules/virtualization.vbox
     # ../modules/virtualization.lxc.nix
+    ../modules/programs.license-compliance-toolbox.nix
   ];
-  config = {
-    environment.systemPackages = [
-      (pkgs.callPackage ../pkgs/license-compliance-toolbox { inherit pkgs; })
-    ];
-  };
 }

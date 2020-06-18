@@ -14,6 +14,7 @@
       # other profiles
       ../../roles/desktop.nix
       ../../modules/virtualization.docker
+      ../../modules/programs.license-compliance-toolbox.nix
       ../../roles/imagework
       ../../roles/gaming
       # ../../modules/desktop.X.xfce.nix
