@@ -15,6 +15,7 @@ in {
         jq
         cropLog
         freeplane xournalpp
+        plantuml
       ] ++ lib.optional config.services.xserver.enable vscode-with-extensions);
     };
   };
