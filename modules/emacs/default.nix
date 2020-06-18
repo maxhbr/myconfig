@@ -45,10 +45,13 @@ else
     fi
 fi
   '';
+  emacsUpdate = with pkgs; writeScriptBin "emacsUpdate" ''
+  ${emacs}/bin/emacs --batch -l ~/.emacs.d/init.el --eval="(configuration-layer/update-packages t)"
+  '';
 in {
   config = {
     home-manager.users.mhuber = {
-      home.packages = with pkgs; [ my-emacs-wrapper emacs aspell aspellDicts.de aspellDicts.en ];
+      home.packages = with pkgs; [ my-emacs-wrapper emacs emacsUpdate aspell aspellDicts.de aspellDicts.en ];
       home.file = {
         ".emacs.d" = {
           source = builtins.fetchGit {

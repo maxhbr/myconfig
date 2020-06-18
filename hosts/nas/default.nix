@@ -35,7 +35,7 @@
     ../../hardware/efi.nix
     # configuration
     ./docker.openhab.nix
-    ./service.deconz.nix
+    ../../modules/service.deconz.nix
   ];
   config = {
     networking.hostName = "nas";
@@ -45,5 +45,18 @@
         HandlePowerKey=suspend
       '';
 
+    local.services.deconz =
+      let
+        deconz = pkgs.qt5.callPackage ../pkgs/deconz {};
+      in
+      { enable = true;
+        package = deconz;
+        device = "/dev/ttyACM0";
+        wsPort = 9443;
+        openFirewall = true;
+        allowRebootSystem = false;
+        allowRestartService = false;
+        allowSetSystemTime = false;
+      };
   };
 }
