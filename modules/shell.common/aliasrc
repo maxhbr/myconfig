@@ -451,9 +451,10 @@ have nix-env && {
     fi
   }
   alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
-  nixse() {
-    nix-env -qaP '.*'"$@"'.*'
-  }
+  nixse() (
+    set -o noglob
+    nix-env -qaP .*"$@".*
+  )
   alias nixse-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -qaP | grep -i"
   nixsel(){
       nix-env -qaP | grep $1 | less
