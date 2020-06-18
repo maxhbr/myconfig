@@ -47,7 +47,7 @@
 
     local.services.deconz =
       let
-        deconz = pkgs.qt5.callPackage ../pkgs/deconz {};
+        deconz = pkgs.qt5.callPackage ../../pkgs/deconz {};
       in
       { enable = true;
         package = deconz;
