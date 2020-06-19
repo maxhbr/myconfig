@@ -21,7 +21,7 @@ mkHostNixops "x1extremeG2"
             (getSecret "vserver" "ssh/id_rsa.pub")
           ])
         (setupBuildSlave (getSecret "workstation" "ip") 2 (getSecret "x1extremeG2" "ssh/id_ed25519") "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDtqOcfT93S4gCROVvhTxB3Imp4bnbrtzQRnF9oRLTDs")
-        # (setupBuildSlave workstationIp 0.5 (getSecret "x1extremeG2" "ssh/id_ed25519") "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDtqOcfT93S4gCROVvhTxB3Imp4bnbrtzQRnF9oRLTDs")
+        # (setupBuildSlave "10.199.199.5" 0.5 (getSecret "x1extremeG2" "ssh/id_ed25519") "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDtqOcfT93S4gCROVvhTxB3Imp4bnbrtzQRnF9oRLTDs")
       ];
     }
 )

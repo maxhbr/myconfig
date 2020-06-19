@@ -2,7 +2,7 @@
 
 getDeploymentNameFromHostname() {
     local hostname="$1"
-    echo "myconfig-${hostnme}"
+    echo "myconfig-${hostname}"
 }
 getDeploymentFileFromHostname() {
     local hostname="$1"
@@ -11,12 +11,14 @@ getDeploymentFileFromHostname() {
 
 setupNixopsDeployment() {
     local hostname="$1"
-    local nixopsDeployment="$(getDeploymentNameFromHostname "$hostnme")"
+    local nixopsDeployment="$(getDeploymentNameFromHostname "$hostname")"
+
+    logH1 "setup nixops" "hostname=$hostname nixopsDeployment=$nixopsDeployment"
 
     if nixops list --deployment "$nixopsDeployment" | grep -q "$nixopsDeployment"; then
         nixops check -d "$nixopsDeployment" || true
     else
-        nixops create -d "$nixopsDeployment" "$(getDeploymentFileFromHostname "$hostnme")"
+        nixops create -d "$nixopsDeployment" "$(getDeploymentFileFromHostname "$hostname")"
     fi
 }
 
@@ -87,6 +89,8 @@ realize() {
     local targetHost="$1"
     shift
     local nixopsDeployment="$(getDeploymentNameFromHostname "$targetHost")"
+
+    setupNixopsDeployment "$targetHost"
 
     ############################################################################
     # dirty fix due to driver incompatibilities:
