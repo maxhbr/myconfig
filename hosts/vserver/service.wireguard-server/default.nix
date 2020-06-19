@@ -33,7 +33,7 @@
       wg0 = {
         ips = [ "10.199.199.1/24" ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
         listenPort = 51820;
-        privateKeyFile = "/run/keys/wg-private";
+        privateKeyFile = "/etc/wireguard/wg-private";
         peers = let
             path = ./peers;
             content = builtins.readDir path;
@@ -44,7 +44,7 @@
       wg1 = {
         ips = [ "10.199.203.1/24" ];
         listenPort = 51821;
-        privateKeyFile = "/run/keys/wg-private";
+        privateKeyFile = "/etc/wireguard/wg-private";
         peers =
           [ { # T470s
               publicKey = "tkc8XZWOxLKsgG82R17J2DikWXMq5qqCKOjQdWOjuX0=";

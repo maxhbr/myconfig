@@ -41,6 +41,12 @@ rec
           }
         ] ++ (importall (secretsDir + "/${hostName}/imports"));
     };
+  mkHostNixops =
+    hostName:
+    addConfig:
+    { network.description = "myconfig-" + hostName;
+      "${hostName}" = mkHost hostName addConfig;
+    };
 
   deployWireguardKeys = hostName:
     { deployment.keys =

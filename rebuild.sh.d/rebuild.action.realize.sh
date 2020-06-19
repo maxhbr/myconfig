@@ -1,5 +1,27 @@
 . ./common.sh
 
+getDeploymentNameFromHostname() {
+    local hostname="$1"
+    echo "myconfig-${hostname}"
+}
+getDeploymentFileFromHostname() {
+    local hostname="$1"
+    echo "$myconfigDir/hosts/${hostname}/nixops.nix"
+}
+
+setupNixopsDeployment() {
+    local hostname="$1"
+    local nixopsDeployment="$(getDeploymentNameFromHostname "$hostname")"
+
+    logH1 "setup nixops" "hostname=$hostname nixopsDeployment=$nixopsDeployment"
+
+    if nixops list --deployment "$nixopsDeployment" | grep -q "$nixopsDeployment"; then
+        nixops check -d "$nixopsDeployment" || true
+    else
+        nixops create -d "$nixopsDeployment" "$(getDeploymentFileFromHostname "$hostname")"
+    fi
+}
+
 generateDiffWithOld() {
     local newFile=$1
     local defaultSdiffArgs="-bBWs"
@@ -23,9 +45,9 @@ generateDiffWithOld() {
 runOnHost() {
     local targetHost="$1"
     local cmd="$2"
-    shift
+    local nixopsDeployment="$(getDeploymentNameFromHostname "$targetHost")"
     nixops ssh \
-           --deployment $NIXOPS_DEPLOYMENT \
+           --deployment "$nixopsDeployment" \
            "$targetHost" \
            -- "$cmd"
 }
@@ -66,6 +88,9 @@ generateStats() {
 realize() {
     local targetHost="$1"
     shift
+    local nixopsDeployment="$(getDeploymentNameFromHostname "$targetHost")"
+
+    setupNixopsDeployment "$targetHost"
 
     ############################################################################
     # dirty fix due to driver incompatibilities:
@@ -88,7 +113,7 @@ EOF
             $NIX_PATH_ARGS \
             --show-trace --keep-failed \
             --fallback \
-            --deployment $NIXOPS_DEPLOYMENT \
+            --deployment "$nixopsDeployment" \
             "$@" \
             --include "$targetHost")
 }

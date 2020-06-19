@@ -20,8 +20,6 @@ MYCONFIG_ARGS="$@"
 ###########################################################################
 ##  variables  ############################################################
 ###########################################################################
-DEPLOYMENT=myconfig-nixops
-export NIXOPS_DEPLOYMENT=myconfig-nixops
 export NIXOPS_STATE="$HOME/.myconfig-nixops.nixops"
 nixStableChannel=nixos-unstable
 DO_GIT=true
