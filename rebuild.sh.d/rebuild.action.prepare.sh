@@ -1,13 +1,5 @@
 . ./common.sh
 
-prepare_setup_nixops_deployment() {
-    if nixops list --deployment "$NIXOPS_DEPLOYMENT" | grep -q "$NIXOPS_DEPLOYMENT"; then
-        nixops check -d $NIXOPS_DEPLOYMENT || true
-    else
-        nixops create -d $NIXOPS_DEPLOYMENT "$myconfigDir/nixops/nixops.nix"
-    fi
-}
-
 prepare_update_hostid_file() {
     if [[ ! -f "/etc/nixos/hostid" ]]; then
         echo "set hostid:"
@@ -16,6 +8,7 @@ prepare_update_hostid_file() {
             sudo tee "/etc/nixos/hostid"
     fi
 }
+
 prepare_update_hardware_configuration() {
     local nixosConfig="$myconfigDir/nixos/host-$(hostname)"
     if [[ -d "$nixosConfig" ]]; then
@@ -27,6 +20,7 @@ prepare_update_hardware_configuration() {
         fi
     fi
 }
+
 prepare_create_nix_store_key() {
     # https://github.com/NixOS/nix/issues/2330#issuecomment-410505837
     if [[ ! -f ~/.config/nix/pk ]]; then
@@ -42,6 +36,7 @@ prepare_create_nix_store_key() {
         sudo openssl rsa -in /etc/nix/signing-key.sec -pubout | sudo tee /etc/nix/signing-key.pub
     fi
 }
+
 prepare_load_prefetches() {
     logH1 "prefetch" "$myconfigDir/prefetches/"
     if [[ -d "$myconfigDir/prefetches/" ]]; then
@@ -53,12 +48,12 @@ prepare_load_prefetches() {
         echo "no folder ./prefetches"
     fi
 }
+
 prepare() {
     if [[ -f /etc/nixos/configuration.nix ]]; then
         echo "/etc/nixos/configuration.nix should not exist"
         exit 1
     fi
-    prepare_setup_nixops_deployment
     prepare_update_hostid_file
     prepare_update_hardware_configuration
     prepare_create_nix_store_key
