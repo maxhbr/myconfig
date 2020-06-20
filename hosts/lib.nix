@@ -50,6 +50,16 @@ rec
       "${hostName}" = mkHost hostName addConfig;
     };
 
+  fixIp =
+    hostName:
+    deviceName:
+    { networking.interfaces."${deviceName}".ipv4.addresses =
+        [ { address = builtins.readFile (secretsDir + "/${hostName}/ip");
+            prefixLength = 24;
+          }
+        ];
+    };
+
   deployWireguardKeys =
     hostName:
     { deployment.keys =
