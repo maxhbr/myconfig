@@ -15,6 +15,7 @@ rec
     hostName:
     fileName:
     builtins.readFile (secretsDir + "/${hostName}/${fileName}");
+
   mkHost =
     hostName:
     addConfig:
@@ -41,6 +42,7 @@ rec
           }
         ] ++ (importall (secretsDir + "/${hostName}/imports"));
     };
+
   mkHostNixops =
     hostName:
     addConfig:
@@ -48,7 +50,8 @@ rec
       "${hostName}" = mkHost hostName addConfig;
     };
 
-  deployWireguardKeys = hostName:
+  deployWireguardKeys =
+    hostName:
     { deployment.keys =
         { wg-private =
             { text = getSecret hostName "wireguard-keys/private";
@@ -67,7 +70,9 @@ rec
         };
     };
 
-  deploySSHUserKeys = hostName: algo:
+  deploySSHUserKeys =
+    hostName:
+    algo:
     { deployment.keys =
         { "id_${algo}" =
             { text = getSecret hostName "ssh/id_${algo}";
