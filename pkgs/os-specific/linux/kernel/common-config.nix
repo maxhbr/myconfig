@@ -206,8 +206,8 @@ let
       B43_PHY_HT            = option yes;
       BCMA_HOST_PCI         = option yes;
       RTW88                 = whenAtLeast "5.2" module;
-      RTW88_8822BE          = whenAtLeast "5.2" yes;
-      RTW88_8822CE          = whenAtLeast "5.2" yes;
+      RTW88_8822BE          = mkMerge [ (whenBetween "5.2" "5.8" yes) (whenAtLeast "5.8" module) ];
+      RTW88_8822CE          = mkMerge [ (whenBetween "5.2" "5.8" yes) (whenAtLeast "5.8" module) ];
     };
 
     fb = {
@@ -645,6 +645,8 @@ let
 
       SYSVIPC            = yes;  # System-V IPC
 
+      AIO                = yes;  # POSIX asynchronous I/O
+
       UNIX               = yes;  # Unix domain sockets.
 
       MD                 = yes;     # Device mapper (RAID, LVM, etc.)
@@ -727,6 +729,7 @@ let
       PSI = whenAtLeast "4.20" yes;
 
       MODVERSIONS        = whenOlder "4.9" yes;
+      MOUSE_ELAN_I2C_SMBUS = yes;
       MOUSE_PS2_ELANTECH = yes; # Elantech PS/2 protocol extension
       MTRR_SANITIZER     = yes;
       NET_FC             = yes; # Fibre Channel driver support
