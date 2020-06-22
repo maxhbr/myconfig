@@ -29,6 +29,7 @@ in
     { environment =
         { systemPackages =
             [ upg-pull
+              nixos-2003-small.nixops
             ];
           shellAliases =
             { upg = "~/myconfig/rebuild.sh";

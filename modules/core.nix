@@ -56,8 +56,6 @@
         psmisc # contains: killall, pstree
         lm_sensors
 
-        nixops
-
         #others:
         rsnapshot
         mosh

@@ -23,7 +23,7 @@
 
       services.snapper =
         { configs =
-            { 2x4t =
+            { "2x4t" =
                 { subvolume = "/mnt/2x4t";
                 };
             };

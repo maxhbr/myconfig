@@ -10,6 +10,5 @@
   environment.systemPackages = with pkgs; [
     git git-lfs
     vim
-    nixops
   ];
 }
