@@ -3614,7 +3614,7 @@ let
       sha256 = "3cc7126d5841107237a9be2dc5c7fbc167cf3c4b4ce34678a8448b850757014c";
     };
     propagatedBuildInputs = [ ClassMix ];
-    perlPreHook = stdenv.lib.optionalString stdenv.isi686 "export LD=$CC"; # fix undefined reference to `__stack_chk_fail_local'
+    perlPreHook = stdenv.lib.optionalString (stdenv.isi686 || stdenv.isDarwin) "export LD=$CC";
   };
 
   CryptIDEA = buildPerlPackage {
@@ -3734,7 +3734,7 @@ let
       sha256 = "93ebdfaaefcfe9ab683f0121c85f24475d8197f0bcec46018219e4111434dde3";
     };
     propagatedBuildInputs = [ DigestSHA1 ];
-    perlPreHook = stdenv.lib.optionalString stdenv.isi686 "export LD=$CC"; # fix undefined reference to `__stack_chk_fail_local'
+    perlPreHook = stdenv.lib.optionalString (stdenv.isi686 || stdenv.isDarwin) "export LD=$CC";
   };
 
   CryptRijndael = buildPerlPackage {
@@ -13855,6 +13855,22 @@ let
     };
     meta = {
       description = "Perl extension for manipulating IPv4/IPv6 addresses";
+    };
+  };
+
+  NetIPLite = buildPerlPackage {
+    pname = "Net-IP-Lite";
+    version = "0.03";
+    src = fetchurl {
+      url = "mirror://cpan/authors/id/A/AL/ALEXKOM/Net-IP-Lite-0.03.tar.gz";
+      sha256 = "c9916e6cfaa53be275379ce4b2a550ae176ddfab50dad43b43ed43e8267802a9";
+    };
+    buildInputs = [ TestException ];
+    meta = {
+      homepage = "https://metacpan.org/pod/Net::IP::Lite";
+      description = "Perl extension for manipulating IPv4/IPv6 addresses";
+      license = with stdenv.lib.licenses; [ artistic1 gpl1Plus ];
+      maintainers = [ maintainers.sgo ];
     };
   };
 

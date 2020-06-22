@@ -1256,6 +1256,8 @@ in {
 
   pynisher = callPackage ../development/python-modules/pynisher { };
 
+  pynput = callPackage ../development/python-modules/pynput { };
+
   pyparser = callPackage ../development/python-modules/pyparser { };
 
   pyres = callPackage ../development/python-modules/pyres { };
@@ -1925,7 +1927,9 @@ in {
 
   bids-validator = callPackage ../development/python-modules/bids-validator { };
 
-  binwalk = callPackage ../development/python-modules/binwalk { };
+  binwalk = callPackage ../development/python-modules/binwalk {
+    pyqtgraph = null;
+  };
 
   binwalk-full = appendToName "full" (self.binwalk.override {
     pyqtgraph = self.pyqtgraph;
@@ -2622,6 +2626,8 @@ in {
 
   libais = callPackage ../development/python-modules/libais { };
 
+  libevdev = callPackage ../development/python-modules/libevdev { };
+
   libfdt = toPythonModule (pkgs.dtc.override {
     inherit python;
     pythonSupport = true;
@@ -3246,6 +3252,8 @@ in {
 
   plaster-pastedeploy = callPackage ../development/python-modules/plaster-pastedeploy {};
 
+  playsound = callPackage ../development/python-modules/playsound { };
+
   plexapi = callPackage ../development/python-modules/plexapi { };
 
   plexauth = callPackage ../development/python-modules/plexauth { };
@@ -3454,6 +3462,8 @@ in {
 
   samplerate = callPackage ../development/python-modules/samplerate { };
 
+  screeninfo = callPackage ../development/python-modules/screeninfo { };
+
   ssdeep = callPackage ../development/python-modules/ssdeep { };
 
   ssdp = callPackage ../development/python-modules/ssdp { };
@@ -3475,6 +3485,8 @@ in {
   repoze_sphinx_autointerface =  callPackage ../development/python-modules/repoze_sphinx_autointerface { };
 
   setuptools-git = callPackage ../development/python-modules/setuptools-git { };
+
+  setuptools-lint = callPackage ../development/python-modules/setuptools-lint { };
 
   sievelib = callPackage ../development/python-modules/sievelib { };
 
@@ -5710,7 +5722,7 @@ in {
 
   rply = callPackage ../development/python-modules/rply {};
 
-  rpm = toPythonModule (pkgs.rpm.override{inherit python;});
+  rpm = disabledIf (!isPy3k) (toPythonModule (pkgs.rpm.override{ inherit python; }));
 
   rpmfluff = callPackage ../development/python-modules/rpmfluff {};
 
@@ -6795,7 +6807,9 @@ in {
 
   jenkins-job-builder = callPackage ../development/python-modules/jenkins-job-builder { };
 
-  dot2tex = callPackage ../development/python-modules/dot2tex { };
+  dot2tex = callPackage ../development/python-modules/dot2tex {
+    inherit (pkgs) graphviz;
+  };
 
   poezio = callPackage ../applications/networking/instant-messengers/poezio {
     inherit (pkgs) pkgconfig;

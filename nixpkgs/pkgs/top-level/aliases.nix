@@ -88,6 +88,7 @@ mapAliases ({
   cpp-gsl = microsoft_gsl; # added 2019-05-24
   cupsBjnp = cups-bjnp; # added 2016-01-02
   cups_filters = cups-filters; # added 2016-08
+  cquery = throw "cquery has been removed because it is abandoned by upstream. Consider switching to clangd or ccls instead."; # added 2020-06-15
   cv = progress; # added 2015-09-06
   d1x_rebirth = dxx-rebirth; # added 2018-04-25
   d2x_rebirth = dxx-rebirth; # added 2018-04-25
@@ -200,7 +201,6 @@ mapAliases ({
   gupnp_igd = gupnp-igd; # added 2018-02-25
   gupnptools = gupnp-tools;  # added 2015-12-19
   gutenberg = zola;  # added 2018-11-17
-  hamster-time-traker = throw "hamster-time-tracker has been removed from nixpkgs, as it was unmaintained."; # added 2019-12-10
   heimdalFull = heimdal; # added 2018-05-01
   hepmc = hepmc2; # added 2019-08-05
   hexen = throw "hexen (SDL port) has been removed: Abandoned by upstream."; # added 2019-12-11
@@ -252,6 +252,7 @@ mapAliases ({
   libjpeg_drop = libjpeg_original; # added 2020-06-05
   libjson_rpc_cpp = libjson-rpc-cpp; # added 2017-02-28
   liblapackWithoutAtlas = lapack-reference; # added 2018-11-05
+  liblastfm = libsForQt5.liblastfm; # added 2020-06-14
   liblrdf = lrdf; # added 2018-04-25
   libqrencode = qrencode;  # added 2019-01-01
   librdf = lrdf; # added 2020-03-22
