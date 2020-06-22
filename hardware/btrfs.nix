@@ -7,4 +7,8 @@
     priority = 0;
     size = 20480;
   }];
+  environment.systemPackages =
+    with pkgs;
+    [ snapper
+    ];
 }

@@ -48,6 +48,20 @@
           fsType = "ext4";
         };
 
+      services.snapper =
+        { snapshotInterval = "hourly";
+          cleanupInterval = "1d";
+          filters = null;
+          configs =
+            { home =
+                { subvolume = "/home";
+                  extraConfig = ''
+                    ALLOW_USERS="mhuber"
+                  '';
+                };
+            };
+        };
+
       boot.kernelPackages = lib.mkForce pkgs.nixos-2003-small.linuxPackages_latest;
 
       # This value determines the NixOS release from which the default

@@ -58,5 +58,19 @@
         allowRestartService = false;
         allowSetSystemTime = false;
       };
+
+      services.snapper =
+        { snapshotInterval = "hourly";
+          cleanupInterval = "1d";
+          filters = null;
+          configs =
+            { home =
+                { subvolume = "/home";
+                  extraConfig = ''
+                    ALLOW_USERS="mhuber"
+                  '';
+                };
+            };
+        };
   };
 }

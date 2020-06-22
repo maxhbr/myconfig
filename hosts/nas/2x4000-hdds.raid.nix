@@ -21,6 +21,14 @@
           options = [ "defaults" "noatime" "compress=zstd" "subvol=@sub" "nofail" ];
         };
 
+      services.snapper =
+        { configs =
+            { 2x4t =
+                { subvolume = "/mnt/2x4t";
+                };
+            };
+        };
+
       services.nfs.server =
         { enable = true;
           exports = ''
