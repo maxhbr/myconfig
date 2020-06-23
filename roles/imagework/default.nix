@@ -20,7 +20,7 @@
 
         blender
         librecad # 2D
-        freecad # 3D
+        nixos-2003-small.freecad # 3D
       ];
     };
     environment.interactiveShellInit = ''

@@ -459,6 +459,9 @@ have nix-env && {
   alias nix-shell-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-shell"
 
   alias why-depends-nixos="nix why-depends /run/current-system"
+  why-builds() {
+    find /nix/store -maxdepth 1 -name "*.drv" -print0 | xargs -0 ag "$@"
+  }
 
   freeStoreSpace() {
     for folder in /nix/store/*-nixos-vm; do
