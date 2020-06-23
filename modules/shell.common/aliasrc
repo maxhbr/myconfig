@@ -460,6 +460,8 @@ have nix-env && {
 
   alias why-depends-nixos="nix why-depends /run/current-system"
   why-builds() {
+    # args should be:
+    #  $path_to_drv or $hash
     find /nix/store -maxdepth 1 -name "*.drv" -print0 | xargs -0 ag "$@"
   }
 
