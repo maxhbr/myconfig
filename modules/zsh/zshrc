@@ -74,15 +74,3 @@ alias -s tex=vim
 alias -s pdf=zathura
 alias -s ps=zathura
 alias -s djvu=zathura
-
-###############################################################################
-# Start tmux on ssh
-if [ "$PS1" != "" -a "${SSH_TTY:-x}" != x ]; then
-  if test -z $TMUX && [[ $TERM != "screen" ]]; then
-    ( (tmux has-session -t remote && tmux attach-session -t remote) \
-      || (tmux -2 new-session -s remote) ) && exit 0
-    echo "tmux failed to start"
-  else
-    export DISPLAY=:0
-  fi
-fi

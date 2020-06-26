@@ -36,6 +36,7 @@
     # configuration
     ./docker.openhab.nix
     ../../modules/service.deconz.nix
+    ../../modules/kiosk/headless.kiosk.nix
   ];
   config = {
     networking.hostName = "nas";

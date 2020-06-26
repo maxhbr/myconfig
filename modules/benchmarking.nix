@@ -1,7 +1,5 @@
 { pkgs, ... }:
 let
-  blender-benchmark-launcher-cli = pkgs.callPackage ../pkgs/blender-benchmark-launcher-cli {};
-  blender-benchmark-launcher = pkgs.callPackage ../pkgs/blender-benchmark-launcher {};
   mybench = with pkgs; writeShellScriptBin "mybench" ''
     benchDir="$HOME/Desktop/mybench/$(hostname)"
     mkdir -p $benchDir
