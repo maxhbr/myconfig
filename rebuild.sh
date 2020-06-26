@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p nix ncurses git wget tmux glibcLocales openssl nixops
+#! nix-shell -i bash -p nix ncurses git wget glibcLocales openssl nixops
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 set -e
@@ -25,7 +25,6 @@ nixStableChannel=nixos-unstable
 DO_GIT=true
 DO_UPGRADE=true
 DO_POST_STUFF=true
-USE_TMUX=true
 DRY_RUN=false
 TARGET="$(hostname)"
 FORCE_REBOOT=false
@@ -39,7 +38,6 @@ while [[ $# -gt 0 ]]; do
 $0
     [--no-git]         <-- skip handnling of git
     [--fast]           <-- be fast ;)
-    [--no-tmux]        <-- do not wrap into tmux
     [--dry-run]        <-- don't touch anything
     [--target TARGET]  <-- deploy to other host
     [--reboot]         <-- force reboot
@@ -55,12 +53,8 @@ EOF
             DO_POST_STUFF=false
             DO_GIT=false
             ;;
-        --no-tmux) shift
-            USE_TMUX=false
-            ;;
         --dry-run) shift
             DO_UPGRADE=false
-            USE_TMUX=false
             DRY_RUN=true
             ;;
         --target) shift
@@ -92,7 +86,6 @@ runWithTrap() {
     $@
     setupExitTrap "---"
 }
-. ./rebuild.sh.d/rebuild.lib.wrapIntoTmux.sh
 . ./rebuild.sh.d/rebuild.lib.logging.sh
 . ./rebuild.sh.d/rebuild.lib.handleGit.sh
 . ./rebuild.sh.d/rebuild.action.handleHomeGit.sh
@@ -109,9 +102,6 @@ runWithTrap() {
 ###########################################################################
 # prepare misc stuff ######################################################
 if ! $DRY_RUN; then
-    if $USE_TMUX; then
-        wrapIntoTmux "$REBUILD_SH" "$ORIGINAL_ARGS"
-    fi
     checkIfConnected
     if $DO_GIT; then
         handleGit
