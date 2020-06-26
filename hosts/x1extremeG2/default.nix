@@ -4,7 +4,7 @@
 { imports =
     [ ./hardware-configuration.nix
       ../../roles/dev.nix
-      ../../roles/myconfig-master.nix
+      ../../roles/myconfig-master
       # hardware:
       ../../hardware/x1extremeG2.nix
       ../../hardware/efi.nix

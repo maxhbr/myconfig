@@ -24,19 +24,29 @@ let
     ${pkgs.git}/bin/git clone https://github.com/maxhbr/myconfig "$myconfigDir"
   fi
   '';
+  mk-upg-script =
+    name:
+    args:
+    with pkgs;
+    writeShellScriptBin name ''
+    exec /home/mhuber/myconfig/rebuild.sh ${args}
+    '';
 in
-{ config =
+{ imports =
+    [ ./user.myconfig.nix
+    ];
+  config =
     { environment =
         { systemPackages =
             with pkgs;
             [ upg-pull
+              (mk-upg-script "upg" "")
+              (mk-upg-script "upg-fast" "--fast")
+              (mk-upg-script "upg-dry" "--dry-run")
               nixos-2003-small.nixops
             ];
           shellAliases =
-            { upg = "~/myconfig/rebuild.sh";
-              upg-fast = "~/myconfig/rebuild.sh --no-git --fast";
-              upg-dry = "~/myconfig/rebuild.sh --dry-run";
-              upg-get-hostId = "cksum /etc/machine-id | while read c rest; do printf \"%x\" $c; done";
+            { upg-get-hostId = "cksum /etc/machine-id | while read c rest; do printf \"%x\" $c; done";
             };
         };
     };
