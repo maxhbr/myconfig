@@ -139,6 +139,12 @@
     githubId = 1517066;
     name = "Aiken Cairncross";
   };
+  aciceri = {
+    name = "Andrea Ciceri";
+    email = "andrea.ciceri@autistici.org";
+    github = "aciceri";
+    githubId = 2318843;
+  };
   acowley = {
     email = "acowley@gmail.com";
     github = "acowley";
@@ -312,6 +318,12 @@
     github = "alexbakker";
     githubId = 2387841;
     name = "Alexander Bakker";
+  };
+  alexbiehl = {
+    email = "alexbiehl@gmail.com";
+    github = "alexbiehl";
+    githubId = 1876617;
+    name = "Alex Biehl";
   };
   alexchapman = {
     email = "alex@farfromthere.net";
@@ -2460,6 +2472,12 @@
     githubId = 7432848;
     name = "Daniel Albert";
   };
+  eskytthe = {
+    email = "eskytthe@gmail.com";
+    github = "eskytthe";
+    githubId = 2544204;
+    name = "Erik Skytthe";
+  };
   Esteth = {
     email = "adam.copp@gmail.com";
     name = "Adam Copp";
@@ -3518,6 +3536,12 @@
     githubId = 117874;
     name = "Jeroen de Haas";
   };
+  jduan = {
+    name = "Jingjing Duan";
+    email = "duanjingjing@gmail.com";
+    github = "jduan";
+    githubId = 452450;
+  };
   jefdaj = {
     email = "jefdaj@gmail.com";
     github = "jefdaj";
@@ -3679,6 +3703,12 @@
     github = "joamaki";
     githubId = 1102396;
     name = "Jussi Maki";
+  };
+  jobojeha = {
+    email = "jobojeha@jeppener.de";
+    github = "jobojeha";
+    githubId = 60272884;
+    name = "Jonathan Jeppener-Haltenhoff";
   };
   joelburget = {
     email = "joelburget@gmail.com";
@@ -5002,6 +5032,10 @@
     github = "mdlayher";
     githubId = 1926905;
     name = "Matt Layher";
+    keys = [{
+      longkeyid = "rsa2048/0x77BFE531397EDE94";
+      fingerprint = "D709 03C8 0BE9 ACDC 14F0  3BFB 77BF E531 397E DE94";
+    }];
   };
   meditans = {
     email = "meditans@gmail.com";
@@ -8908,6 +8942,12 @@
     github = "xavierzwirtz";
     githubId = 474343;
     name = "Xavier Zwirtz";
+  };
+  ymarkus = {
+    name = "Yannick Markus";
+    email = "nixpkgs@ymarkus.dev";
+    github = "ymarkus";
+    githubId = 62380378;
   };
   ymeister = {
     name = "Yuri Meister";

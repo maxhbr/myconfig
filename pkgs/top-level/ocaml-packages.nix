@@ -531,6 +531,8 @@ let
 
     mirage-crypto-rng = callPackage ../development/ocaml-modules/mirage-crypto/rng.nix { };
 
+    mirage-crypto-rng-mirage = callPackage ../development/ocaml-modules/mirage-crypto/rng-mirage.nix { };
+
     mirage-device = callPackage ../development/ocaml-modules/mirage-device { };
 
     mirage-flow = callPackage ../development/ocaml-modules/mirage-flow { };
@@ -712,9 +714,7 @@ let
 
     phylogenetics = callPackage ../development/ocaml-modules/phylogenetics { };
 
-    piqi = callPackage ../development/ocaml-modules/piqi {
-      base64 = base64_2;
-    };
+    piqi = callPackage ../development/ocaml-modules/piqi { };
 
     piqi-ocaml = callPackage ../development/ocaml-modules/piqi-ocaml { };
 
