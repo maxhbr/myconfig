@@ -27,9 +27,8 @@ let
   mk-upg-script =
     name:
     args:
-    with pkgs;
-    writeShellScriptBin name ''
-    exec /home/mhuber/myconfig/rebuild.sh ${args}
+    pkgs.writeShellScriptBin name ''
+    exec /home/mhuber/myconfig/rebuild.sh ${args} "$@"
     '';
 in
 { imports =
@@ -43,6 +42,9 @@ in
               (mk-upg-script "upg" "")
               (mk-upg-script "upg-fast" "--fast")
               (mk-upg-script "upg-dry" "--dry-run")
+              (mk-upg-script "upg-workstation" "--fast --target workstation")
+              (mk-upg-script "upg-nas" "--fast --target nas")
+              (mk-upg-script "upg-vserver" "--fast --target vserver")
               nixos-2003-small.nixops
             ];
           shellAliases =

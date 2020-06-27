@@ -102,6 +102,7 @@ TODO: workstation should use same nixpkgs as other hosts
 EOF
 
         export nixpkgs="https://github.com/NixOS/nixpkgs/archive/20.03.tar.gz"
+        # export nixpkgs="https://github.com/NixOS/nixpkgs/archive/nixos-unstable-small.tar.gz"
         export NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfig"
         export NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$nixosConfig"
     fi

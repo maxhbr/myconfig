@@ -38,7 +38,12 @@ fi
 ###############################################################################
 # PROMPT and RPROMPT
 # see: http://zsh.sourceforge.net/Doc/Release/Prompt-Expansion.html
-PROMPT='%T ${ret_status}%?%{$reset_color%} $(git_prompt_info)%{$fg[cyan]%}%c%{$reset_color%} '
+PROMPT='${ret_status}%?%{$reset_color%} $(git_prompt_info)%{$fg[cyan]%}%c%{$reset_color%} '
+if [ "$PS1" != "" -a "${SSH_TTY:-x}" != x ]; then
+    PROMPT='%{$fg_bold[blue]%}%m '"$PROMPT"
+else
+    PROMPT='%T '"$PROMPT"
+fi
 if [ $IN_NIX_SHELL ]; then
     PROMPT='%{$fg[red]%}nix-shell%{$reset_color%} '"$PROMPT"
 fi

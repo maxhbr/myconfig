@@ -25,7 +25,6 @@ in
     { environment.systemPackages =
         [ mybackup
         ];
-      nix.nixPath = [ ("nixpkgs=" + ../nixpkgs) "nixos-config=/dev/null" ];
       assertions =
         [ { assertion = config.networking.hostId != null;
             message = ''
