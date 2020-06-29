@@ -71,6 +71,12 @@ in {
         # spellchecking
         aspell aspellDicts.de aspellDicts.en
       ];
+      xdg.mimeApps =
+        { enable = true;
+          defaultApplications."application/pdf" = [ "mupdf.desktop" ];
+          defaultApplications."image/jpeg" = [ "sxiv.desktop" ];
+          defaultApplications."image/png" = [ "sxiv.desktop" ];
+        };
     };
 
     environment = {

@@ -119,5 +119,6 @@ EOF
             --include "$targetHost")
 }
 
+export -f runOnHost
 export -f realize
 export -f generateStats

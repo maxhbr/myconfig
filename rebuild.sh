@@ -75,18 +75,6 @@ set -- "${POSITIONAL[@]}"
 ###########################################################################
 ##  imports  ##############################################################
 ###########################################################################
-setupExitTrap() {
-    local msg=$1
-    local cmd="code=\$?; if [[ \"\$code\" -ne 0 ]]; then logERR \"at $msg\"; logERR \"error code is: \$code\"; fi; exit \$code"
-    trap "$cmd" EXIT ERR INT TERM
-}
-
-runWithTrap() {
-    setupExitTrap "$1"
-    $@
-    setupExitTrap "---"
-}
-. ./rebuild.sh.d/rebuild.lib.logging.sh
 . ./rebuild.sh.d/rebuild.lib.handleGit.sh
 . ./rebuild.sh.d/rebuild.action.handleHomeGit.sh
 . ./rebuild.sh.d/rebuild.action.prepare.sh
@@ -108,8 +96,31 @@ if ! $DRY_RUN; then
         home_git_commit "start of rebuild.sh" || true
     fi
 fi
+
+setupLoging() {
+    local targetHost="$1"
+
+    mkdir -p "$logsDir"
+    local logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${targetHost}.log"
+    echo -e "\n\n\n\n\n\n\n" >> $logfile
+    exec &> >(tee -a $logfile)
+}
 setupLoging "$TARGET"
+
+###########################################################################
+# exit trap stuff #########################################################
+setupExitTrap() {
+    local msg=$1
+    local cmd="code=\$?; if [[ \"\$code\" -ne 0 ]]; then logERR \"at $msg\"; logERR \"error code is: \$code\"; fi; exit \$code"
+    trap "$cmd" EXIT ERR INT TERM
+}
 setupExitTrap "---"
+
+runWithTrap() {
+    setupExitTrap "$1"
+    $@
+    setupExitTrap "---"
+}
 
 ###########################################################################
 # core ####################################################################
