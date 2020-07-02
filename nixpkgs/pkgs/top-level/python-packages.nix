@@ -517,6 +517,8 @@ in {
 
   beanstalkc = callPackage ../development/python-modules/beanstalkc { };
 
+  beancount_docverif = callPackage ../development/python-modules/beancount_docverif { };
+
   bitarray = callPackage ../development/python-modules/bitarray { };
 
   bitcoinlib = callPackage ../development/python-modules/bitcoinlib { };
@@ -644,6 +646,8 @@ in {
   deeptoolsintervals = callPackage ../development/python-modules/deeptoolsintervals { };
 
   dkimpy = callPackage ../development/python-modules/dkimpy { };
+
+  diceware = callPackage ../development/python-modules/diceware { };
 
   dictionaries = callPackage ../development/python-modules/dictionaries { };
 
@@ -946,6 +950,8 @@ in {
     mpi = pkgs.openmpi;
   };
 
+  pytest-freezegun = callPackage ../development/python-modules/pytest-freezegun { };
+
   python-baseconv = callPackage ../development/python-modules/python-baseconv { };
 
   pycognito = callPackage ../development/python-modules/pycognito { };
@@ -971,6 +977,8 @@ in {
   nagiosplugin = callPackage ../development/python-modules/nagiosplugin { };
 
   nanomsg-python = callPackage ../development/python-modules/nanomsg-python { inherit (pkgs) nanomsg; };
+
+  nassl = callPackage ../development/python-modules/nassl { };
 
   nbsmoke = callPackage ../development/python-modules/nbsmoke { };
 
@@ -1416,6 +1424,8 @@ in {
 
   python-redis-lock = callPackage ../development/python-modules/python-redis-lock { };
 
+  python-rtmidi = callPackage ../development/python-modules/python-rtmidi { };
+
   python-sql = callPackage ../development/python-modules/python-sql { };
 
   python-snappy = callPackage ../development/python-modules/python-snappy {
@@ -1469,6 +1479,8 @@ in {
   rlp = callPackage ../development/python-modules/rlp { };
 
   rq = callPackage ../development/python-modules/rq { };
+
+  rtmidi-python = callPackage ../development/python-modules/rtmidi-python { };
 
   rx = callPackage ../development/python-modules/rx { };
 
@@ -1550,11 +1562,15 @@ in {
 
   spglib = callPackage ../development/python-modules/spglib { };
 
+  srvlookup = callPackage ../development/python-modules/srvlookup { };
+
   sshpubkeys = callPackage ../development/python-modules/sshpubkeys { };
 
   sshtunnel = callPackage ../development/python-modules/sshtunnel { };
 
   sslib = callPackage ../development/python-modules/sslib { };
+
+  sslyze = callPackage ../development/python-modules/sslyze { };
 
   statistics = callPackage ../development/python-modules/statistics { };
 
@@ -1585,6 +1601,8 @@ in {
   tableaudocumentapi = callPackage ../development/python-modules/tableaudocumentapi { };
 
   tesserocr = callPackage ../development/python-modules/tesserocr { };
+
+  tls-parser = callPackage ../development/python-modules/tls-parser { };
 
   trueskill = callPackage ../development/python-modules/trueskill { };
 
@@ -2945,6 +2963,8 @@ in {
 
   googletrans = callPackage ../development/python-modules/googletrans { };
 
+  gdown = callPackage ../development/python-modules/gdown { };
+
   gpapi = callPackage ../development/python-modules/gpapi { };
   gplaycli = callPackage ../development/python-modules/gplaycli { };
 
@@ -3177,6 +3197,8 @@ in {
   measurement = callPackage ../development/python-modules/measurement {};
 
   midiutil = callPackage ../development/python-modules/midiutil {};
+
+  mido = callPackage ../development/python-modules/mido { };
 
   misaka = callPackage ../development/python-modules/misaka {};
 
@@ -4035,6 +4057,8 @@ in {
 
   google_cloud_runtimeconfig = callPackage ../development/python-modules/google_cloud_runtimeconfig { };
 
+  google_cloud_secret_manager = callPackage ../development/python-modules/google_cloud_secret_manager { };
+
   google_cloud_securitycenter = callPackage ../development/python-modules/google_cloud_securitycenter { };
 
   google_cloud_spanner = callPackage ../development/python-modules/google_cloud_spanner { };
@@ -4469,6 +4493,8 @@ in {
     inherit (pkgs.darwin.apple_sdk.frameworks) CoreFoundation CoreServices;
   };
 
+  maestral = callPackage ../development/python-modules/maestral { };
+
   manifestparser = callPackage ../development/python-modules/marionette-harness/manifestparser.nix {};
   marionette_driver = callPackage ../development/python-modules/marionette-harness/marionette_driver.nix {};
   mozcrash = callPackage ../development/python-modules/marionette-harness/mozcrash.nix {};
@@ -4568,6 +4594,8 @@ in {
   })));
 
   mesonpep517 = callPackage ../development/python-modules/mesonpep517 { };
+
+  meshlabxml = callPackage ../development/python-modules/meshlabxml { };
 
   metaphone = callPackage ../development/python-modules/metaphone { };
 
@@ -4723,6 +4751,8 @@ in {
   nameparser = callPackage ../development/python-modules/nameparser { };
 
   names = callPackage ../development/python-modules/names { };
+
+  nbclient = callPackage ../development/python-modules/nbclient { };
 
   nbconflux = callPackage ../development/python-modules/nbconflux { };
 
@@ -5230,6 +5260,8 @@ in {
   pyatmo = callPackage ../development/python-modules/pyatmo { };
 
   pyaudio = callPackage ../development/python-modules/pyaudio { };
+
+  pycoin = callPackage ../development/python-modules/pycoin { };
 
   pysam = callPackage ../development/python-modules/pysam { };
 
@@ -6039,6 +6071,8 @@ in {
   tox = callPackage ../development/python-modules/tox { };
 
   tqdm = callPackage ../development/python-modules/tqdm { };
+
+  trytond = callPackage ../development/python-modules/trytond { };
 
   smmap = callPackage ../development/python-modules/smmap { };
 
@@ -7204,6 +7238,8 @@ in {
 
   suseapi = callPackage ../development/python-modules/suseapi { };
 
+  tensorboardx = callPackage ../development/python-modules/tensorboardx { };
+
   typed-ast = callPackage ../development/python-modules/typed-ast { };
 
   stripe = callPackage ../development/python-modules/stripe { };
@@ -7295,6 +7331,8 @@ in {
   ftfy = callPackage ../development/python-modules/ftfy { };
 
   murmurhash = callPackage ../development/python-modules/murmurhash { };
+
+  pkuseg = callPackage ../development/python-modules/pkuseg { };
 
   plac = callPackage ../development/python-modules/plac { };
 
