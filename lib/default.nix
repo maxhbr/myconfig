@@ -22,5 +22,6 @@
                   (builtins.attrNames content))
           else [];
     };
+    nix.nixPath = [ ("nixpkgs=" + ../nixpkgs) "nixos-config=/dev/null" ];
   };
 }

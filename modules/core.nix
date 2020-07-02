@@ -78,6 +78,12 @@
       earlyoom.enable = true;
     };
 
+    programs.bash.interactiveShellInit = ''
+       umask 027
+    '';
+    programs.zsh.interactiveShellInit = ''
+      umask 027
+    '';
     programs.ssh.startAgent = true;
     programs.firejail.enable = true;
     programs.mtr.enable = true;

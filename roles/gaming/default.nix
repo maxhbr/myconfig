@@ -10,7 +10,7 @@
         { home.packages = with pkgs;
             [ openra
               openrct2
-              xonotic
+              # xonotic
             ];
         };
     };

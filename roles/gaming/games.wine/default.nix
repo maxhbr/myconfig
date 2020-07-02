@@ -2,16 +2,16 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  winePkgs = with pkgs; [ wine winetricks playonlinux ];
+  winePkgs = with pkgs.unstable; [ wine winetricks playonlinux ];
   wowWinePkgs =
     let
       wineCfg = {
         wineBuild = "wineWow";
         gstreamerSupport = false;
       };
-      wowWine = pkgs.wine.override wineCfg;
-      wowWinetricks = (pkgs.winetricks.override {wine = wowWine;});
-      wowPlayonlinux = (pkgs.playonlinux.override {wine = wowWine;});
+      wowWine = pkgs.unstable.wine.override wineCfg;
+      wowWinetricks = (pkgs.unstable.winetricks.override {wine = wowWine;});
+      wowPlayonlinux = (pkgs.unstable.playonlinux.override {wine = wowWine;});
     in [ wowWine wowWinetricks wowPlayonlinux ];
   # cosmoteer = ( helper.wrap
   #    { name   = "cosmoteer";

@@ -9,7 +9,7 @@ in {
   config = {
     home-manager.users.mhuber =
       { home.packages =
-          with pkgs;
+          with pkgs.unstable;
           [ (steam.override {
                extraPkgs = pkgs:
                  [ mono gtk3 gtk3-x11 libgdiplus zlib
