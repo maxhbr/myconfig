@@ -15,6 +15,11 @@ let
       networking.hostName = "myconfig";
       networking.wireless.enable = false;
 
+      services.xserver.displayManager.lightdm.autoLogin =
+        { enable = true;
+          autoLogin.user = "mhuber";
+        };
+
       # add myconfig to iso
       isoImage.contents = [
         # folders
@@ -37,3 +42,7 @@ let
 in {
   iso = (evalNixos myisoconfig).config.system.build.isoImage;
 }
+
+
+
+

@@ -12,7 +12,6 @@
                 home = "/home/myconfig";
                 createHome = true;
                 shell = "/run/current-system/sw/bin/zsh";
-                hashedPassword = "";
                 # subUidRanges =
                 #   [ { startGid = 1000; count = 1; }
                 #   ];

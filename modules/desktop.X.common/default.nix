@@ -81,7 +81,6 @@ in {
         displayManager = {
           lightdm = {
             enable = true;
-            # autoLogin.user = "mhuber";
             background = "${pkgs.my-wallpapers}/share/romben3.png";
           };
           sessionCommands = ''

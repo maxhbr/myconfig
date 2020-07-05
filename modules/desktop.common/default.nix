@@ -76,12 +76,16 @@ in {
           defaultApplications."application/pdf" = [ "mupdf.desktop" ];
           defaultApplications."image/jpeg" = [ "sxiv.desktop" ];
           defaultApplications."image/png" = [ "sxiv.desktop" ];
+          defaultApplications."x-scheme-handler/http" = [ "firefox.desktop" "chromium.desktop" "qutebrowser.desktop" ];
+          defaultApplications."x-scheme-handler/https" = [ "firefox.desktop" "chromium.desktop" "qutebrowser.desktop" ];
+          defaultApplications."x-scheme-handler/slack" = [ "slack.desktop" ];
+          defaultApplications."x-scheme-handler/zoommtg" = [ "us.zoom.Zoom.desktop" ];
         };
     };
 
     environment = {
       variables = {
-        BROWSER = "${pkgs.chromium}/bin/chromium-browser";
+        BROWSER = "${pkgs.firefox}/bin/firefox";
       };
       shellAliases = {
         file-roller = "${pkgs.xarchiver}/bin/xarchiver";
