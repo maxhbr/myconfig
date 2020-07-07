@@ -1,0 +1,48 @@
+# Compose file which provides automagic building of NixOS SD images for AArch64 systems.
+# Use together with `docker-compose.emulation.yml` if a transparent emulation layer is required.
+
+# Comes out with sane defaults, feel free to configure as needed.
+# NOTE: the configuration used to build NixOS resides in the parent directory as `sd-image.nix`
+
+version: "3"
+
+services:
+  # Main container, requires no elevated privileges to run. Builds NixOS.
+  build-nixos:
+    build:
+      context: build-nixos
+      args:
+        IMAGE_BASE: $IMAGE_BASE
+        NIXPKGS_URL: "https://github.com/nixos/nixpkgs"
+        NIXPKGS_BRANCH: "release-20.03"
+        # Applies https://github.com/NixOS/nixpkgs/pull/82718 on top of the cloned tree.
+        # Enable this if your build fails due to cptofs errors (including "cannot allocate memory")
+        # or when having a filesystem resizing failure due to `resize2fs`.
+        # note: to disable, comment or remove this -- changing its value will have no effects.
+        # note: if changing this after having already executed `run.sh`, the containers need to
+        # be rebuilt with `./run.sh up --build`.
+        #APPLY_CPTOFS_PATCH: "y"
+        # Disables ZFS support in the installer. This can significantly reduce build times
+        # of the Raspberry Pi 4 image.
+        # note: if changing this after having already executed `run.sh`, the containers need to
+        # be rebuilt with `./run.sh up --build`.
+        #DISABLE_ZFS_IN_INSTALLER: "y"
+    working_dir: /home/nixos
+    # Main command line, left here so it can be changed easily. The container will:
+    # - setup the environment. This includes adding the Nix executables to $PATH, along with the
+    #   registration of an EXIT handler which will send a signal to `cleanup-qemu` when done.
+    # - wait until `setup-qemu` is done by attempting to run an AArch64 binary. This works out of
+    #   the box if running on AArch64.
+    # - build the actual SD image.
+    # - copy it to /build, which points by default to this directory.
+    command: [sh, -c, ". setup-env && \
+                       sh wait-for-qemu.sh && \
+                       nix-build \
+                         -A config.system.build.sdImage \
+                         --option system aarch64-linux \
+                         --option sandbox false \
+                         -I nixos-config=/build/config/sd-image.nix \
+                         nixpkgs/nixos/default.nix && \
+                       chmod u+w result/sd-image/* && sudo cp result/sd-image/* /build"]
+    volumes:
+    - ..:/build
