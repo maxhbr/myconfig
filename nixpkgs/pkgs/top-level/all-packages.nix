@@ -651,6 +651,8 @@ in
 
   almanah = callPackage ../applications/misc/almanah { };
 
+  alpine-make-vm-image = callPackage ../tools/virtualization/alpine-make-vm-image { };
+
   amazon-ecs-cli = callPackage ../tools/virtualization/amazon-ecs-cli { };
 
   amazon-glacier-cmd-interface = callPackage ../tools/backup/amazon-glacier-cmd-interface { };
@@ -677,6 +679,10 @@ in
   antora = callPackage ../development/tools/documentation/antora {};
 
   apfs-fuse = callPackage ../tools/filesystems/apfs-fuse { };
+
+  apk-tools = callPackage ../tools/package-management/apk-tools {
+    lua = lua5_3;
+  };
 
   apktool = callPackage ../development/tools/apktool {
     inherit (androidenv.androidPkgs_9_0) build-tools;
@@ -737,6 +743,8 @@ in
   asciinema = callPackage ../tools/misc/asciinema {};
 
   asciiquarium = callPackage ../applications/misc/asciiquarium {};
+
+  asls = callPackage ../development/tools/misc/asls { };
 
   asymptote = callPackage ../tools/graphics/asymptote {
     texLive = texlive.combine { inherit (texlive) scheme-small epsf cm-super texinfo; };
@@ -859,6 +867,8 @@ in
   bonfire = callPackage ../tools/misc/bonfire { };
 
   boulder = callPackage ../tools/admin/boulder { };
+
+  btrfs-heatmap = callPackage ../tools/filesystems/btrfs-heatmap { };
 
   buildbot = with python3Packages; toPythonApplication buildbot;
   buildbot-ui = with python3Packages; toPythonApplication buildbot-ui;
@@ -9284,7 +9294,7 @@ in
   };
   cargo-insta = callPackage ../development/tools/rust/cargo-insta { };
   cargo-make = callPackage ../development/tools/rust/cargo-make {
-    inherit (darwin.apple_sdk.frameworks) Security;
+    inherit (darwin.apple_sdk.frameworks) Security SystemConfiguration;
   };
   cargo-raze = callPackage ../development/tools/rust/cargo-raze {
     inherit (darwin.apple_sdk.frameworks) Security;
@@ -25735,6 +25745,8 @@ in
   dell-530cdn = callPackage ../misc/drivers/dell-530cdn {};
 
   dosbox = callPackage ../misc/emulators/dosbox { };
+
+  emu2 = callPackage ../misc/emulators/emu2 { };
 
   dpkg = callPackage ../tools/package-management/dpkg { };
 
