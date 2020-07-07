@@ -20,16 +20,19 @@ let
           autoLogin.user = "mhuber";
         };
 
+      # OpenSSH is forced to have an empty `wantedBy` on the installer system[1], this won't allow it
+      # to be automatically started. Override it with the normal value.
+      # [1] https://github.com/NixOS/nixpkgs/blob/9e5aa25/nixos/modules/profiles/installation-device.nix#L76
+      systemd.services.sshd.wantedBy = lib.mkOverride 40 [ "multi-user.target" ];
+
       # add myconfig to iso
       isoImage.contents = [
-        # folders
-        { source = ./.; target = "myconfig/nixos"; }
-        { source = ../misc; target = "myconfig/misc"; }
-        { source = ../nixpkgs; target = "myconfig/nixpkgs"; }
-        # files
-        { source = ../common.sh; target = "myconfig/common.sh"; }
-        { source = ../rebuild.sh; target = "myconfig/rebuild.sh"; }
-        { source = ../README.org; target = "myconfig/README.org"; }
+        # { source = ./.; target = "myconfig/nixos"; }
+        # { source = ../misc; target = "myconfig/misc"; }
+        # { source = ../nixpkgs; target = "myconfig/nixpkgs"; }
+        # { source = ../common.sh; target = "myconfig/common.sh"; }
+        # { source = ../rebuild.sh; target = "myconfig/rebuild.sh"; }
+        # { source = ../README.org; target = "myconfig/README.org"; }
         { source = ../LICENSE; target = "myconfig/LICENSE"; }
       ];
     };
