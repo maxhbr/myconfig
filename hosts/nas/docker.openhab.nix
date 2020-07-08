@@ -33,6 +33,7 @@
                   "-e" "GROUP_ID=1200"
                   "-e" "OPENHAB_HTTP_PORT=8080"
                   "-e" "OPENHAB_HTTPS_PORT=8443"
+                  "--memory=2g"
                 ];
             };
         };
