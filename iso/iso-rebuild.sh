@@ -26,7 +26,7 @@ du -h "$out"
 mkdir -p "$HOME/Downloads/ISOs"
 install -m 644 "$out" "$HOME/Downloads/ISOs/$finalOut"
 
-./gc.sh || true
+../gc.sh || true
 
 set +x
 times

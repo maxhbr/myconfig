@@ -3,7 +3,7 @@
 , hostConfig ? "roles/dev.nix" }:
 let
   nixpkgs = ../nixpkgs;
-  myisoconfig = { ... }: {
+  myisoconfig = { lib, ... }: {
     imports = [
       "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
       "${nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
@@ -17,7 +17,7 @@ let
 
       services.xserver.displayManager.lightdm.autoLogin =
         { enable = true;
-          autoLogin.user = "mhuber";
+          user = "mhuber";
         };
 
       # OpenSSH is forced to have an empty `wantedBy` on the installer system[1], this won't allow it
