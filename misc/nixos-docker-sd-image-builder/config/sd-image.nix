@@ -1,17 +1,13 @@
 { lib, ... }: {
   imports = [
-    # Select your destination system here. Available choices are:
-    # - generic-aarch64
-    # - rpi3 (alias for generic-aarch64)
-    # - rpi4
-    ./rpi3
+    ./rpi4
+    ../../../modules/service.openssh.nix
+    ../../../roles/core.nix
   ];
 
-  # The installer starts with a "nixos" user to allow installation, so add the SSH key to
-  # that user. Note that the key is, at the time of writing, put in `/etc/ssh/authorized_keys.d`
-  users.extraUsers.nixos.openssh.authorizedKeys.keys = [
-    "ssh-ed25519 ..."
-  ];
+  networking.hostName = "rpi4";
+  networking.hostId = "78acddde";
+  networking.networkmanager.enable = lib.mkForce false;
 
   # bzip2 compression takes loads of time with emulation, skip it. Enable this if you're low
   # on space.
@@ -24,21 +20,4 @@
 
   # Enable OpenSSH out of the box.
   services.sshd.enabled = true;
-
-  # Wireless networking (1). You might want to enable this if your Pi is not attached via Ethernet.
-  #networking.wireless = {
-  #  enable = true;
-  #  interfaces = [ "wlan0" ];
-  #  networks = {
-  #    "SSID" = {
-  #      psk = "password";
-  #    };
-  #  };
-  #};
-
-  # Wireless networking (2). Enables `wpa_supplicant` on boot.
-  #systemd.services.wpa_supplicant.wantedBy = lib.mkOverride 10 [ "default.target" ];
-
-  # NTP time sync.
-  #services.timesyncd.enable = true;
 }
