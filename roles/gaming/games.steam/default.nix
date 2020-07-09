@@ -9,15 +9,16 @@ in {
   config = {
     home-manager.users.mhuber =
       { home.packages =
-          with pkgs.unstable;
-          [ (steam.override {
-               extraPkgs = pkgs:
+          [ (pkgs.unstable.steam.override {
+               extraPkgs = innerPkgs:
+                 with innerPkgs;
                  [ mono gtk3 gtk3-x11 libgdiplus zlib
                    libffi
                  ];
                inherit nativeOnly;
             })
-            (if nativeOnly then steam-run-native else steam-run)
+            (with pkgs.unstable;
+             if nativeOnly then steam-run-native else steam-run)
           ];
         home.file =
           { ".local/share/Steam/compatibilitytools.d/Proton-5.6-GE-2" =

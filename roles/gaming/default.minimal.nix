@@ -2,7 +2,7 @@
   imports = [
     ./games.powder.nix
     ./games.steam
-    ./games.ktane.nix
+    # ./games.ktane.nix
   ];
   config =
     { home-manager.users.mhuber =

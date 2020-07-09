@@ -43,7 +43,7 @@
     networking.hostId = "29d93341";
 
     services.logind.extraConfig = ''
-        HandlePowerKey=suspend
+        HandlePowerKey=reboot
       '';
 
     local.services.deconz =

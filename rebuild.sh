@@ -33,6 +33,7 @@ DO_POST_STUFF=true
 DRY_RUN=false
 TARGET="$(hostname)"
 FORCE_REBOOT=false
+DO_SUSPEND=false
 
 ORIGINAL_ARGS="$@"
 POSITIONAL=()
@@ -69,6 +70,9 @@ EOF
             ;;
         --reboot) shift
             FORCE_REBOOT=true
+            ;;
+        --suspend) shift
+            DO_SUSPEND=true
             ;;
         *) shift
             POSITIONAL+=("$1")
@@ -154,6 +158,10 @@ fi
 ###########################################################################
 
 if ! $DRY_RUN; then
+    if $DO_SUSPEND; then
+        runOnHost $TARGET "systemctl suspend"
+    fi
+
     if $DO_GIT; then
         handleGitPostExecution
         home_git_commit "end of rebuild.sh" || true

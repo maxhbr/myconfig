@@ -8,6 +8,7 @@
       ../../hardware/btrfs.nix
       ../../hardware/nixos-hardware/common/cpu/amd
       ../../hardware/nixos-hardware/common/pc/ssd
+      ../../hardware/hdd-spinndown.nix
       ./4x500-hdds.raid.nix
       ../../modules/service.monitoring.nix
       ../../roles/headless.nix
