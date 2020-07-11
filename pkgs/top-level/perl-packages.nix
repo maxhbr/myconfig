@@ -1042,6 +1042,20 @@ let
     };
   };
 
+  BeanstalkClient = buildPerlPackage {
+    pname = "Beanstalk-Client";
+    version = "1.07";
+    src = fetchurl {
+      url = "mirror://cpan/authors/id/G/GB/GBARR/Beanstalk-Client-1.07.tar.gz";
+      sha256 = "3188ab1127f2caba97df65c84f69db0ec70c64e5d70f296f9a2674fa79c112cc";
+    };
+    propagatedBuildInputs = [ ClassAccessor YAMLSyck ];
+    meta = {
+      description = "Client to communicate with beanstalkd server";
+      license = with stdenv.lib.licenses; [ artistic1 gpl1Plus ];
+    };
+  };
+
   BerkeleyDB = buildPerlPackage {
     pname = "BerkeleyDB";
     version = "0.63";
@@ -2308,6 +2322,19 @@ let
     };
   };
 
+  CiscoIPPhone = buildPerlPackage {
+    pname = "Cisco-IPPhone";
+    version = "0.05";
+    src = fetchurl {
+      url = "mirror://cpan/authors/id/M/MR/MRPALMER/Cisco-IPPhone-0.05.tar.gz";
+      sha256 = "b03ca263f8f41a6ec545c5393213a3146d36bd45335ade99af51dd42ab6ee16d";
+    };
+    meta = {
+      description = "Package for creating Cisco IPPhone XML objects";
+      license = with stdenv.lib.licenses; [ artistic1 ];
+    };
+  };
+
   CLASS = buildPerlPackage {
     pname = "CLASS";
     version = "1.00";
@@ -2559,6 +2586,19 @@ let
       sha256 = "db1ba87ca9107f161fe9c1e9e7e267c0026defc26fe3e73bcad8ab8ffc18ef9d";
     };
     meta = {
+    };
+  };
+
+  ClassLoader = buildPerlPackage rec {
+    pname = "Class-Loader";
+    version = "2.03";
+    src = fetchurl {
+      url = "mirror://cpan/authors/id/V/VI/VIPUL/${pname}-${version}.tar.gz";
+      sha256 = "4fef2076ead60423454ff1f4e82859a9a9b9942b5fb8eee0c98b9c63c9f2b8e7";
+    };
+    meta = {
+      description = "Load modules and create objects on demand";
+      license = with stdenv.lib.licenses; [ artistic1 gpl1Plus ];
     };
   };
 
@@ -3679,6 +3719,20 @@ let
     };
   };
 
+  CryptRandom = buildPerlPackage rec {
+    pname = "Crypt-Random";
+    version = "1.52";
+    src = fetchurl {
+      url = "mirror://cpan/authors/id/V/VI/VIPUL/${pname}-${version}.tar.gz";
+      sha256 = "a93c06de409e6f2eb2e9868ea6d4e653d99f2f7900b2c1831e1f65ace0c4ef84";
+    };
+    propagatedBuildInputs = [ ClassLoader MathPari StatisticsChiSquare ];
+    meta = {
+      description = "Interface to /dev/random and /dev/urandom";
+      license = with stdenv.lib.licenses; [ artistic1 gpl1Plus ];
+    };
+  };
+
   CryptRandomSource = buildPerlModule {
     pname = "Crypt-Random-Source";
     version = "0.14";
@@ -3942,7 +3996,7 @@ let
       url = "mirror://cpan/authors/id/G/GT/GTERMARS/CSS-Minifier-XS-0.09.tar.gz";
       sha256 = "1myswrmh0sqp5xjpp03x45z8arfmgkjx0srl3r6kjsyzl1zrk9l8";
     };
-    perlPreHook = stdenv.lib.optionalString stdenv.isi686 "export LD=$CC"; # fix undefined reference to `__stack_chk_fail_local'
+    perlPreHook = stdenv.lib.optionalString (stdenv.isi686 || stdenv.isDarwin) "export LD=$CC";
     meta = {
       description = "XS based CSS minifier";
       license = with stdenv.lib.licenses; [ artistic1 gpl1Plus ];
@@ -7220,6 +7274,19 @@ let
     };
   };
 
+  FileGrep = buildPerlPackage {
+    pname = "File-Grep";
+    version = "0.02";
+    src = fetchurl {
+      url = "mirror://cpan/authors/id/M/MN/MNEYLON/File-Grep-0.02.tar.gz";
+      sha256 = "462e15274eb6278521407ea302d9eea7252cd44cab2382871f7de833d5f85632";
+    };
+    meta = {
+      description = "Find matches to a pattern in a series of files and related functions";
+      maintainers = [ maintainers.limeytexan ];
+    };
+  };
+
   FileHandleUnget = buildPerlPackage {
     pname = "FileHandle-Unget";
     version = "0.1634";
@@ -9839,7 +9906,7 @@ let
       url = "mirror://cpan/authors/id/G/GT/GTERMARS/JavaScript-Minifier-XS-0.11.tar.gz";
       sha256 = "1vlyhckpjbrg2v4dy9szsxxl0q44n0y1xl763mg2y2ym9g5144hm";
     };
-    perlPreHook = stdenv.lib.optionalString stdenv.isi686 "export LD=$CC"; # fix undefined reference to `__stack_chk_fail_local'
+    perlPreHook = stdenv.lib.optionalString (stdenv.isi686 || stdenv.isDarwin) "export LD=$CC";
     meta = {
       description = "XS based JavaScript minifier";
       license = with stdenv.lib.licenses; [ artistic1 gpl1Plus ];
@@ -11475,6 +11542,27 @@ let
     };
   };
 
+  MathPari = buildPerlPackage rec {
+    pname = "Math-Pari";
+    version = "2.030518";
+    nativeBuildInputs = [ pkgs.unzip ];
+    pariversion = "2.1.7";
+    pari_tgz = fetchurl {
+      url = "https://pari.math.u-bordeaux.fr/pub/pari/OLD/2.1/pari-${pariversion}.tgz";
+      sha256 = "1yjml5z1qdn258qh6329v7vib2gyx6q2np0s5ybci0rhmz6z4hli";
+    };
+    preConfigure = "cp ${pari_tgz} pari-${pariversion}.tgz";
+    makeMakerFlags = "pari_tgz=pari-${pariversion}.tgz";
+    src = fetchurl {
+      url = "mirror://cpan/authors/id/I/IL/ILYAZ/modules/${pname}-${version}.zip";
+      sha256 = "dc38955a9690be6bafa8de2526212377c3ec9fe8da5ec02263a9caf94b58bb91";
+    };
+    meta = {
+      description = "Perl interface to PARI";
+      license = with stdenv.lib.licenses; [ artistic1 gpl1Plus ];
+    };
+  };
+
   MathPlanePath = buildPerlPackage {
     pname = "Math-PlanePath";
     version = "127";
@@ -11682,6 +11770,31 @@ let
     meta = {
       description = "Tools for creating Meta objects to track custom metrics";
       license = with stdenv.lib.licenses; [ artistic1 gpl1Plus ];
+    };
+  };
+
+  MetaCPANClient = buildPerlPackage {
+    pname = "MetaCPAN-Client";
+    version = "2.026000";
+    src = fetchurl {
+      url = "mirror://cpan/authors/id/M/MI/MICKEY/MetaCPAN-Client-2.026000.tar.gz";
+      sha256 = "ee711619d59655dac1bd2e4b894ffeb3171bd73b1ed38ba4b7b07d3690f94465";
+    };
+
+    # Most tests are online, so we only include offline tests
+    postPatch = ''
+      substituteInPlace Makefile.PL \
+         --replace '"t/*.t t/api/*.t"' \
+        '"t/00-report-prereqs.t t/api/_get.t t/api/_get_or_search.t t/api/_search.t t/entity.t t/request.t t/resultset.t"'
+    '';
+
+    buildInputs = [ LWPProtocolhttps TestFatal TestNeeds ];
+    propagatedBuildInputs = [ IOSocketSSL JSONMaybeXS Moo NetSSLeay RefUtil SafeIsa TypeTiny URI ];
+    meta = {
+      homepage = "https://github.com/metacpan/metacpan-client";
+      description = "A comprehensive, DWIM-featured client to the MetaCPAN API";
+      license = with stdenv.lib.licenses; [ artistic1 gpl1Plus ];
+      maintainers = with maintainers; [ sgo ];
     };
   };
 
@@ -12343,6 +12456,22 @@ let
       description = "Real-time web framework";
       license = stdenv.lib.licenses.artistic2;
       maintainers = with maintainers; [ thoughtpolice sgo ];
+    };
+  };
+
+  MojoliciousPluginAssetPack = buildPerlPackage {
+    pname = "Mojolicious-Plugin-AssetPack";
+    version = "2.08";
+    src = fetchurl {
+      url = "mirror://cpan/authors/id/J/JH/JHTHORSEN/Mojolicious-Plugin-AssetPack-2.08.tar.gz";
+      sha256 = "585d9e056258b00590da109b4d5ee573fa3eb2248425247aebbfedac5a157152";
+    };
+    propagatedBuildInputs = [ FileWhich IPCRun3 Mojolicious JavaScriptMinifierXS CSSMinifierXS ];
+    meta = {
+      homepage = "https://github.com/jhthorsen/mojolicious-plugin-assetpack";
+      description = "Compress and convert css, less, sass, javascript and coffeescript files";
+      license = stdenv.lib.licenses.artistic2;
+      maintainers = with maintainers; [ sgo ];
     };
   };
 
@@ -17016,6 +17145,19 @@ let
     };
   };
 
+  StatisticsChiSquare = buildPerlPackage rec {
+    pname = "Statistics-ChiSquare";
+    version = "1.0000";
+    src = fetchurl {
+      url = "mirror://cpan/authors/id/D/DC/DCANTRELL/${pname}-${version}.tar.gz";
+      sha256 = "255a5a38336d048ddb9077222691e000984e907aae09a4ea695a9cfd49a1ddd0";
+    };
+    meta = {
+      description = "Implements the Chi Squared test, using pre-computed tables";
+      license = with stdenv.lib.licenses; [ artistic1 gpl1Plus ];
+    };
+  };
+
   StatisticsDescriptive = buildPerlModule {
     pname = "Statistics-Descriptive";
     version = "3.0702";
@@ -17676,11 +17818,11 @@ let
 
   SysVirt = buildPerlModule rec {
     pname = "Sys-Virt";
-    version = "6.2.0";
+    version = "6.3.0";
     src = assert version == pkgs.libvirt.version; pkgs.fetchgit {
       url = "git://libvirt.org/libvirt-perl.git";
-      rev = "799b243230163ff4f8dde6293da8a0e31e7c900e";
-      sha256 = "1k38d1ycx3ibgfzcr1iym7cvpwvygh6a2i5548m4qjb47vfi12rz";
+      rev = "v${version}";
+      sha256 = "0m75g0kf2dmllx5c1wxzszm1zakiqjighcsjbgq66674pvqf5mk7";
     };
     nativeBuildInputs = [ pkgs.pkgconfig ];
     buildInputs = [ pkgs.libvirt CPANChanges TestPod TestPodCoverage XMLXPath ];
@@ -21658,6 +21800,7 @@ let
       url = "mirror://cpan/authors/id/T/TO/TODDR/YAML-Syck-1.32.tar.gz";
       sha256 = "1fz9r9vvsmjkzvcbznxw65b319vkmwzd0ck09q9nwip00gn907fv";
     };
+    perlPreHook = stdenv.lib.optionalString stdenv.isDarwin "export LD=$CC";
     meta = {
       description = "Fast, lightweight YAML loader and dumper";
       license = stdenv.lib.licenses.mit;
