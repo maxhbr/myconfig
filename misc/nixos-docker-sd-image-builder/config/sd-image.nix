@@ -1,11 +1,11 @@
 { lib, ... }: {
   imports = [
-    ./rpi4
+    ./rpi3
     ../../../modules/service.openssh.nix
     ../../../roles/core.nix
   ];
 
-  networking.hostName = "rpi4";
+  networking.hostName = "rpi3";
   networking.hostId = "78acddde";
   networking.networkmanager.enable = lib.mkForce false;
 

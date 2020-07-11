@@ -1,5 +1,7 @@
-#!/bin/sh
+#!/usr/bin/env bash
 set -u
+
+exec &> >(tee "$(readlink -f "${BASH_SOURCE[0]}").log")
 
 if ! command -v "docker-compose" >/dev/null 2>&1; then
   echo "error: docker-compose is required to be in \$PATH to run this" >&2
