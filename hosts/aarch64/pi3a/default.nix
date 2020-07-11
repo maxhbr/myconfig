@@ -1,6 +1,6 @@
 { lib, ... }:
 { imports =
-    [ ./rpi3
+    [ ../nixos-docker-sd-image-builder/config/rpi3
       ../../../modules/service.openssh.nix
       ../../../roles/core.nix
       ../../../modules/kiosk/desktop.X.kiosk.nix
