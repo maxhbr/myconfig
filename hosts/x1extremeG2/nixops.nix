@@ -3,12 +3,6 @@ mkHostNixops "x1extremeG2"
 ( {lib, ...}:
   { config =
       { deployment.targetHost = lib.mkDefault "10.199.199.2";
-        environment.shellAliases =
-          { upg-workstation = "upg-fast --target workstation";
-            upg-workstation-reboot = "upg-fast --target workstation --reboot";
-            upg-vserver = "upg-fast --target vserver";
-            upg-vserver-reboot = "upg-fast --target vserver --reboot";
-          };
       };
     imports =
       [ (deployWireguardKeys "x1extremeG2")
