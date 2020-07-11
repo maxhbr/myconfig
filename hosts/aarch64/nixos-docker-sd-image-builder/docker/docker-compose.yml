@@ -34,7 +34,7 @@ services:
                          -A config.system.build.sdImage \
                          --option system aarch64-linux \
                          --option sandbox false \
-                         -I nixos-config=/myconfig/misc/nixos-docker-sd-image-builder/config/sd-image.nix \
+                         -I nixos-config=/myconfig/hosts/aarch64/pi3a/default.nix \
                          -I nixpkgs=/home/nixos/nixpkgs \
                          /myconfig/nixpkgs/nixos/default.nix && \
                        chmod u+w result/sd-image/* && sudo cp result/sd-image/* /myconfig"]

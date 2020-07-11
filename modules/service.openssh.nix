@@ -9,6 +9,7 @@
       passwordAuthentication = false;
       forwardX11 = config.services.xserver.enable;
     };
+    systemd.services.sshd.wantedBy = lib.mkOverride 40 [ "multi-user.target" ];
 
 #     environment.interactiveShellInit = ''
 # ###############################################################################
