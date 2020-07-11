@@ -39,4 +39,4 @@ services:
                          /myconfig/nixpkgs/nixos/default.nix && \
                        chmod u+w result/sd-image/* && sudo cp result/sd-image/* /myconfig"]
     volumes:
-    - ../../..:/myconfig
+    - ../../../..:/myconfig
