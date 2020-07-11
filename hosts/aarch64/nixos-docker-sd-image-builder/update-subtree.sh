@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-cd ../..
+cd ../../..
 git subtree pull \
-    --prefix=misc/nixos-docker-sd-image-builder \
+    --prefix=hosts/aarch64/nixos-docker-sd-image-builder \
     https://github.com/Robertof/nixos-docker-sd-image-builder master
