@@ -34,7 +34,7 @@
     # hardware:
     ../../hardware/efi.nix
     # configuration
-    ./docker.openhab.nix
+    # ./docker.openhab.nix
     ../../modules/service.deconz.nix
     # ../../modules/kiosk/headless.kiosk.nix
   ];

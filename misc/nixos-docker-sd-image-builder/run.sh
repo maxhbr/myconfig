@@ -52,3 +52,4 @@ fi
 
 set -x
 $DOCKER_COMPOSE $COMPOSE_ARGS $COMPOSE_ACTION "$@"
+times
