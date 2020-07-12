@@ -50,6 +50,7 @@ else
   fi
 fi
 
+export CONFIG="./hosts/aarch64/pi3a/default.nix"
 set -x
 $DOCKER_COMPOSE $COMPOSE_ARGS $COMPOSE_ACTION "$@"
 times
