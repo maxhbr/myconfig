@@ -1,6 +1,6 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
+{ pkgs, lib, config, ... }:
 let
   inco = with pkgs; writeShellScriptBin "inco.sh" ''
 set -e
@@ -68,7 +68,7 @@ in {
         qutebrowser
         # spellchecking
         aspell aspellDicts.de aspellDicts.en
-      ] ++ pkgs.lib.optional config.networking.networkmanager.enable networkmanager_dmenu;
+      ] ++ lib.optional config.networking.networkmanager.enable networkmanager_dmenu;
       xdg.mimeApps =
         { enable = true;
           defaultApplications."application/pdf" = [ "mupdf.desktop" ];

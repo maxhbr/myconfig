@@ -145,6 +145,7 @@ rec
         { allowedUsers = [ "nixBuild" ];
           trustedUsers = [ "nixBuild" ];
         };
+      boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
     };
 
   setupBuildSlave =
@@ -173,6 +174,16 @@ rec
            sshUser = "nixBuild";
            sshKey = "/etc/nix/${keyName}";
            inherit speedFactor;
+         }
+         { hostName = "builder.${host}";
+           system = "aarch64-linux";
+           maxJobs = 6;
+           supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
+           mandatoryFeatures = [ ];
+           sshUser = "nixBuild";
+           sshKey = "/etc/nix/${keyName}";
+           inherit speedFactor;
+
         }];
       nix.distributedBuilds = true;
       # optional, useful when the builder has a faster internet connection than yours
