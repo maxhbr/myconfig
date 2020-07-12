@@ -58,8 +58,6 @@ in {
         # misc
         libnotify # xfce.xfce4notifyd # notify-osd
 
-        networkmanager_dmenu
-
         # gui applications
         mupdf zathura llpp
         xarchiver
@@ -70,7 +68,7 @@ in {
         qutebrowser
         # spellchecking
         aspell aspellDicts.de aspellDicts.en
-      ];
+      ] ++ pkgs.lib.optional config.networking.networkmanager.enable networkmanager_dmenu;
       xdg.mimeApps =
         { enable = true;
           defaultApplications."application/pdf" = [ "mupdf.desktop" ];

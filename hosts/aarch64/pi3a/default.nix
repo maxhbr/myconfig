@@ -3,8 +3,7 @@
     [ ../nixos-docker-sd-image-builder/config/rpi3
       ../../../modules/service.openssh.nix
       ../../../roles/core.nix
-      ../../../modules/kiosk/desktop.X.kiosk.nix
-    ];
+    ]  ++ pkgs.lib.optional (builtins.pathExists ../../../secrets/common/wifi.QS3j.nix) ../../../secrets/common/wifi.QS3j.nix;
 
   networking.hostName = "pi3a";
   networking.hostId = "78acddde";
