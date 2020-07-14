@@ -1,26 +1,5 @@
 . ./common.sh
 
-prepare_update_hostid_file() {
-    if [[ ! -f "/etc/nixos/hostid" ]]; then
-        echo "set hostid:"
-        cksum /etc/machine-id |
-            while read c rest; do printf "%x" $c; done |
-            sudo tee "/etc/nixos/hostid"
-    fi
-}
-
-prepare_update_hardware_configuration() {
-    local nixosConfig="$myconfigDir/nixos/host-$(hostname)"
-    if [[ -d "$nixosConfig" ]]; then
-        if [[ -f "/etc/nixos/hardware-configuration.nix" ]]; then
-            if ! cmp "/etc/nixos/hardware-configuration.nix" "$nixosConfig/hardware-configuration.nix" >/dev/null 2>&1; then
-                logH1 "update" "$nixosConfig/hardware-configuration.nix"
-                cat "/etc/nixos/hardware-configuration.nix" | tee "$nixosConfig/hardware-configuration.nix"
-            fi
-        fi
-    fi
-}
-
 prepare_create_nix_store_key() {
     # https://github.com/NixOS/nix/issues/2330#issuecomment-410505837
     if [[ ! -f ~/.config/nix/pk ]]; then
@@ -54,8 +33,6 @@ prepare() {
         echo "/etc/nixos/configuration.nix should not exist"
         exit 1
     fi
-    prepare_update_hostid_file
-    prepare_update_hardware_configuration
     prepare_create_nix_store_key
 
     prepare_load_prefetches

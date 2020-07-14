@@ -30,7 +30,7 @@ upgradeNixpkgs() {
         "$nixStableChannel"
 }
 
-upgradeNixpkgs() {
+upgradeNixpkgsUnstable() {
     logH1 "upgrade nixpkgs-unstable" "nixUnstableChannel=$nixUnstableChannel"
     upgradeSubtree \
         NixOS-nixpkgs-channels https://github.com/NixOS/nixpkgs-channels \
@@ -53,7 +53,7 @@ upgrade() {
             upgradeNixpkgs
             if git diff-index --quiet HEAD --; then
                 logH1 "upgrade" "nixpkgs-unstable"
-                upgradeNixpkgs
+                upgradeNixpkgsUnstable
                 if git diff-index --quiet HEAD --; then
                     logH1 "upgrade" "NixosHardware"
                     upgradeNixosHardware
