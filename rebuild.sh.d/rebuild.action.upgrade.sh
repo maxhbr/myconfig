@@ -18,8 +18,14 @@ upgradeSubtree() {
 
     git fetch "$remoteName" -- "$branch"
     logINFO "the channel $branch was last upgraded $(git log --format="%cr" remotes/$remoteName/$branch -1)"
-    (set -x;
-     git subtree pull --prefix $prefix "$remoteName" "$branch" --squash)
+    if [[ ! -d $prefix ]]; then
+        (set -x;
+         git subtree add --prefix $prefix "$remoteName" "$branch" --squash)
+    else
+        (set -x;
+         git subtree pull --prefix $prefix "$remoteName" "$branch" --squash)
+    fi
+
 }
 
 upgradeNixpkgs() {
