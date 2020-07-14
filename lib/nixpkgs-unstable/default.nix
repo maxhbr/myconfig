@@ -29,7 +29,6 @@ in
       [(self: super:
         { nixos-unstable = super.nixos-unstable or {} // mkPkgs "nixos-unstable";
           nixos-unstable-small = super.nixos-unstable-small or {} // mkPkgs "nixos-unstable-small";
-          unstable = super.unstable or {} // mkPkgs "nixpkgs-unstable";
           nixos-2003 = super.unstable or {} // mkPkgs "nixos-20.03";
           nixos-2003-small = super.unstable or {} // mkPkgs "nixos-20.03-small";
         }
