@@ -41,7 +41,7 @@ rec
               ];
           }
         ] ++ (importall (secretsDir + "/${hostName}/imports"));
-      networking.domain = "maxhbr.de";
+      # networking.domain = "maxhbr.de";
     };
 
   mkHostNixops =
