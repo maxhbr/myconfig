@@ -15,7 +15,7 @@
       };
       overlays =
         [(self: super:
-            { unstable = super.unstable or {} // (import <nixpkgs-unstable> { config = config.nixpkgs.config; });
+            { unstable = super.unstable or {} // (import ../nixpkgs-unstable { config = config.nixpkgs.config; });
             }
         )] ++
         ( let

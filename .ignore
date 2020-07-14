@@ -1,4 +1,5 @@
 .git
 nixpkgs
+nixpkgs-unstable
 default.nix.d/extrahosts/extrahosts
 _logs

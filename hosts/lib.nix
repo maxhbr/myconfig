@@ -41,7 +41,7 @@ rec
               ];
           }
         ] ++ (importall (secretsDir + "/${hostName}/imports"));
-      # networking.domain = "maxhbr.de";
+      networking.domain = "maxhbr.de";
     };
 
   mkHostNixops =
@@ -54,11 +54,15 @@ rec
   fixIp =
     hostName:
     deviceName:
-    { networking.interfaces."${deviceName}".ipv4.addresses =
-        [ { address = builtins.readFile (secretsDir + "/${hostName}/ip");
-            prefixLength = 24;
-          }
-        ];
+    { networking =
+        { interfaces."${deviceName}".ipv4.addresses =
+            [ { address = builtins.readFile (secretsDir + "/${hostName}/ip");
+                prefixLength = 24;
+              }
+            ];
+          defaultGateway = "192.168.178.1";
+          nameservers = [ "8.8.8.8" ];
+        };
     };
 
   deployWireguardKeys =
