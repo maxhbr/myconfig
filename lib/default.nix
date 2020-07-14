@@ -1,4 +1,4 @@
-{ ... }:
+{ config, ... }:
 {
   imports = [
     ./helper.nix
@@ -13,15 +13,19 @@
       config = pkgs: {
         allowUnfree = true;
       };
-      overlays = let
-          path = ./overlays;
-          content = builtins.readDir path;
-        in if builtins.pathExists path
-          then map (n: import (path + ("/" + n)))
-                (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
-                  (builtins.attrNames content))
-          else [];
+      overlays =
+        [(self: super:
+            { unstable = super.unstable or {} // (import ../nixpkgs-unstable { config = config.nixpkgs.config; });
+            }
+        )] ++
+        ( let
+            path = ./overlays;
+            content = builtins.readDir path;
+          in if builtins.pathExists path
+            then map (n: import (path + ("/" + n)))
+                  (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
+                    (builtins.attrNames content))
+            else []);
     };
-    nix.nixPath = [ ("nixpkgs=" + ../nixpkgs) "nixos-config=/dev/null" ];
   };
 }

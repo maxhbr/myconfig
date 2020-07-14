@@ -18,8 +18,14 @@ upgradeSubtree() {
 
     git fetch "$remoteName" -- "$branch"
     logINFO "the channel $branch was last upgraded $(git log --format="%cr" remotes/$remoteName/$branch -1)"
-    (set -x;
-     git subtree pull --prefix $prefix "$remoteName" "$branch" --squash)
+    if [[ ! -d $prefix ]]; then
+        (set -x;
+         git subtree add --prefix $prefix "$remoteName" "$branch" --squash)
+    else
+        (set -x;
+         git subtree pull --prefix $prefix "$remoteName" "$branch" --squash)
+    fi
+
 }
 
 upgradeNixpkgs() {
@@ -28,6 +34,14 @@ upgradeNixpkgs() {
         NixOS-nixpkgs-channels https://github.com/NixOS/nixpkgs-channels \
         "nixpkgs" \
         "$nixStableChannel"
+}
+
+upgradeNixpkgsUnstable() {
+    logH1 "upgrade nixpkgs-unstable" "nixUnstableChannel=$nixUnstableChannel"
+    upgradeSubtree \
+        NixOS-nixpkgs-channels https://github.com/NixOS/nixpkgs-channels \
+        "nixpkgs-unstable" \
+        "$nixUnstableChannel"
 }
 
 upgradeNixosHardware() {
@@ -44,8 +58,12 @@ upgrade() {
             logH1 "upgrade" "nixpkgs"
             upgradeNixpkgs
             if git diff-index --quiet HEAD --; then
-                logH1 "upgrade" "NixosHardware"
-                upgradeNixosHardware
+                logH1 "upgrade" "nixpkgs-unstable"
+                upgradeNixpkgsUnstable
+                if git diff-index --quiet HEAD --; then
+                    logH1 "upgrade" "NixosHardware"
+                    upgradeNixosHardware
+                fi
             fi
         else
             logINFO "skip updating subtrees, not clean"

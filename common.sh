@@ -16,13 +16,14 @@ if ! type logH1 &>/dev/null; then
     mkdir -p "$logsDir"
 
     export nixpkgs="$myconfigDir/nixpkgs"
+    export nixpkgsUnstable="$myconfigDir/nixpkgs-unstable"
 
     nixosConfig="$myconfigDir/hosts/$(hostname)" # Why is this necessary?
     if [[ ! -d "$nixosConfig" ]]; then
         nixosConfig="$myconfigDir/nixos/host-minimal"
     fi
 
-    NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfig"
+    NIX_PATH="nixpkgs=$nixpkgs:nixpkgs-unstable=$nixpkgsUnstable:nixos-config=$nixosConfig"
     NIX_PATH_ARGS="-I '$(echo "$NIX_PATH" | sed "s/:/' -I '/g")'"
     export NIX_PATH
     export NIX_PATH_ARGS

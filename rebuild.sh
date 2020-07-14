@@ -27,8 +27,10 @@ fi
 ###########################################################################
 export NIXOPS_STATE="$HOME/.myconfig-nixops.nixops"
 nixStableChannel=nixos-unstable
+nixUnstableChannel=nixpkgs-unstable
 DO_GIT=true
 DO_UPGRADE=true
+DO_ONLY_UPGRADE=false
 DO_POST_STUFF=true
 DRY_RUN=false
 TARGET="$(hostname)"
@@ -44,6 +46,7 @@ while [[ $# -gt 0 ]]; do
 $0
     [--no-git]         <-- skip handnling of git
     [--fast]           <-- be fast ;)
+    [--only-upgrade]   <--
     [--dry-run]        <-- don't touch anything
     [--target TARGET]  <-- deploy to other host
     [--reboot]         <-- force reboot
@@ -58,6 +61,9 @@ EOF
             DO_UPGRADE=false
             DO_POST_STUFF=false
             DO_GIT=false
+            ;;
+        --only-upgrade) shift
+            DO_ONLY_UPGRADE=true
             ;;
         --dry-run) shift
             DO_UPGRADE=false
@@ -134,24 +140,28 @@ runWithTrap() {
 ###########################################################################
 # core ####################################################################
 runWithTrap prepare
-if $DO_UPGRADE; then
-    if [[ "$(hostname)" == "$my_main_host" ]]; then
-        if isBranchMaster; then
-            runWithTrap realize $TARGET $($DRY_RUN && echo "--dry-run")
-            runWithTrap upgrade
+if $DO_ONLY_UPGRADE; then
+    runWithTrap upgrade
+else
+    if $DO_UPGRADE; then
+        if [[ "$(hostname)" == "$my_main_host" ]]; then
+            if isBranchMaster; then
+                runWithTrap realize $TARGET $($DRY_RUN && echo "--dry-run")
+                runWithTrap upgrade
+            else
+                logINFO "git branch is not master, do not upgrade"
+            fi
         else
-            logINFO "git branch is not master, do not upgrade"
+            logINFO "host is not main host, do not upgrade"
         fi
-    else
-        logINFO "host is not main host, do not upgrade"
     fi
-fi
-runWithTrap realize $TARGET $($DRY_RUN && echo "--dry-run")  $($FORCE_REBOOT && echo "--force-reboot")
-if ! $DRY_RUN; then
-    generateStats $TARGET
-    if $DO_POST_STUFF; then
-        runWithTrap cleanup
-        runWithTrap handlePostExecutionHooks
+    runWithTrap realize $TARGET $($DRY_RUN && echo "--dry-run")  $($FORCE_REBOOT && echo "--force-reboot")
+    if ! $DRY_RUN; then
+        generateStats $TARGET
+        if $DO_POST_STUFF; then
+            runWithTrap cleanup
+            runWithTrap handlePostExecutionHooks
+        fi
     fi
 fi
 # end core ################################################################
