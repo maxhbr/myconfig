@@ -30,6 +30,14 @@ upgradeNixpkgs() {
         "$nixStableChannel"
 }
 
+upgradeNixpkgs() {
+    logH1 "upgrade nixpkgs-unstable" "nixUnstableChannel=$nixUnstableChannel"
+    upgradeSubtree \
+        NixOS-nixpkgs-channels https://github.com/NixOS/nixpkgs-channels \
+        "nixpkgs-unstable" \
+        "$nixUnstableChannel"
+}
+
 upgradeNixosHardware() {
     upgradeSubtree \
         NixOS-nixos-hardware https://github.com/NixOS/nixos-hardware \
@@ -44,8 +52,12 @@ upgrade() {
             logH1 "upgrade" "nixpkgs"
             upgradeNixpkgs
             if git diff-index --quiet HEAD --; then
-                logH1 "upgrade" "NixosHardware"
-                upgradeNixosHardware
+                logH1 "upgrade" "nixpkgs-unstable"
+                upgradeNixpkgs
+                if git diff-index --quiet HEAD --; then
+                    logH1 "upgrade" "NixosHardware"
+                    upgradeNixosHardware
+                fi
             fi
         else
             logINFO "skip updating subtrees, not clean"
