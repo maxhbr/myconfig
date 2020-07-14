@@ -9,7 +9,9 @@ mkHostNixops "workstation"
           } ];
       };
     imports =
-      [ (deployWireguardKeys "workstation")
+      [ (fixIp "workstation" "enp39s0")
+        ../../secrets/common/wifi.QS3j.nix
+        (deployWireguardKeys "workstation")
         (deploySSHUserKeys "workstation" "rsa")
         (setupNixServe
            [ (getSecret "x1extremeG2" "ssh/id_ed25519.pub")
@@ -22,7 +24,6 @@ mkHostNixops "workstation"
         #    "/mnt/4x500/backup"
         #    [ (getSecret "x1extremeG2" "ssh/id_ed25519.pub")
         #    ])
-        ../../secrets/common/wifi.QS3j.nix
       ];
   }
 )
