@@ -22,6 +22,7 @@ mkHostNixops "workstation"
         #    "/mnt/4x500/backup"
         #    [ (getSecret "x1extremeG2" "ssh/id_ed25519.pub")
         #    ])
+        ../../secrets/common/wifi.QS3j.nix
       ];
   }
 )

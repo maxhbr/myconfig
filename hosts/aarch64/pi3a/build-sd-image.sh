@@ -20,8 +20,9 @@ drv=$(nix-build \
     #     chmod u+w result/sd-image/* && sudo cp result/sd-image/* /myconfig"]
 out=("$drv/sd-image/"*)
 du -h "$out"
-mkdir -p "$HOME/Downloads/Images"
-cp "$out" "$HOME/Downloads/Images"
+
+mkdir -p "$myconfigDir/__out/pi3a"
+cp "$out" "$myconfigDir/__out/pi3a"
 
 set +x
 times

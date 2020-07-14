@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ pkgs, lib, ... }:
 { imports =
     [ <nixpkgs/nixos/modules/installer/cd-dvd/sd-image-raspberrypi4.nix>
       ../../../modules/service.openssh.nix

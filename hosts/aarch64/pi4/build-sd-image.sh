@@ -16,12 +16,10 @@ drv=$(nix-build \
     --no-out-link \
     --show-trace --keep-failed \
     "$nixpkgs/nixos/default.nix")
-# --option sandbox false \
-    #     chmod u+w result/sd-image/* && sudo cp result/sd-image/* /myconfig"]
 out=("$drv/sd-image/"*)
 du -h "$out"
-mkdir -p "$HOME/Downloads/Images"
-cp "$out" "$HOME/Downloads/Images"
+mkdir -p "$myconfigDir/__out/pi4"
+cp "$out" "$myconfigDir/__out/pi4"
 
 set +x
 times

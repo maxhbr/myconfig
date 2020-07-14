@@ -51,5 +51,6 @@ in
             { upg-get-hostId = "cksum /etc/machine-id | while read c rest; do printf \"%x\" $c; done";
             };
         };
+      boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
     };
 }
