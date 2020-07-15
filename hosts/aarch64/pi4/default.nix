@@ -4,6 +4,9 @@
       ../../../modules/service.openssh.nix
       ../../../roles/core.nix
       ../../../secrets/common/wifi.QS3j.nix
+      # testing:
+      ../../../modules/service.monitoring.nix
+      ../../../roles/headless.nix
     ];
 
   networking.hostName = "pi4";

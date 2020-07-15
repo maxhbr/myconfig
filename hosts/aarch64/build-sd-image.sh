@@ -8,11 +8,13 @@ common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
 . "$common"
 
 build() (
+    local hostname="$1"
     local nixpkgsDir="$nixpkgs"
+    set -x
     time nix-build \
          -A config.system.build.sdImage \
          --option system aarch64-linux \
-         -I nixos-config="$myconfigDir/hosts/aarch64/pi3a/default.nix" \
+         -I nixos-config="${myconfigDir}/hosts/aarch64/${hostname}/default.nix" \
          -I nixpkgs="$nixpkgsDir" \
          --no-out-link \
          --show-trace --keep-failed \
@@ -20,9 +22,13 @@ build() (
          "${nixpkgsDir}/nixos/default.nix"
 )
 
-set -x
-drv=$(build)
-out=("$drv/sd-image/"*)
-du -h "$out"
-install -D -v "$out" -t "$myconfigDir/__out/pi4"
-set +x
+buildAndCopy() {
+    local hostname="$1"
+    drv=$(build "$hostname")
+    out=("$drv/sd-image/"*)
+    du -h "$out"
+    install -D -v "$out" -t "$myconfigDir/__out/$hostname"
+    nix-store --delete "$drv"
+}
+
+buildAndCopy "$1"
