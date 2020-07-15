@@ -14,7 +14,7 @@ build() (
     time nix-build \
          -A config.system.build.sdImage \
          --option system aarch64-linux \
-         -I nixos-config="${myconfigDir}/hosts/aarch64/${hostname}/default.nix" \
+         -I nixos-config="${myconfigDir}/hosts/${hostname}/default.nix" \
          -I nixpkgs="$nixpkgsDir" \
          --no-out-link \
          --show-trace --keep-failed \
