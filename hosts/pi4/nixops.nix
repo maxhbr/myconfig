@@ -1,4 +1,4 @@
-with (import ../../lib.nix);
+with (import ../lib.nix);
 mkHostNixops "pi4"
 ( {lib, ...}:
   { imports =

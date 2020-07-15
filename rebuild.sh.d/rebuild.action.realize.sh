@@ -1,25 +1,24 @@
 . ./common.sh
 
 getDeploymentNameFromHostname() {
-    local targetHostDir="$1"
-    local targetHost="$(basename $1)"
-    echo "myconfig-${targetHost}"
+    local hostname="$1"
+    echo "myconfig-${hostname}"
 }
 getDeploymentFileFromHostname() {
-    local targetHostDir="$1"
-    echo "$myconfigDir/hosts/${targetHostDir}/nixops.nix"
+    local hostname="$1"
+    echo "$myconfigDir/hosts/${hostname}/nixops.nix"
 }
 
 setupNixopsDeployment() {
-    local targetHostDir="$1"
-    local nixopsDeployment="$(getDeploymentNameFromHostname "$targetHostDir")"
+    local hostname="$1"
+    local nixopsDeployment="$(getDeploymentNameFromHostname "$hostname")"
 
-    logH1 "setup nixops" "targetHostDir=$targetHostDir nixopsDeployment=$nixopsDeployment"
+    logH1 "setup nixops" "hostname=$hostname nixopsDeployment=$nixopsDeployment"
 
     if nixops list --deployment "$nixopsDeployment" | grep -q "$nixopsDeployment"; then
         nixops check -d "$nixopsDeployment" || true
     else
-        nixops create -d "$nixopsDeployment" "$(getDeploymentFileFromHostname "$targetHostDir")"
+        nixops create -d "$nixopsDeployment" "$(getDeploymentFileFromHostname "$hostname")"
     fi
 }
 
@@ -87,12 +86,11 @@ generateStats() {
 }
 
 realize() {
-    local targetHostDir="$1"
-    local targetHost="$(basename $1)"
+    local targetHost="$1"
     shift
-    local nixopsDeployment="$(getDeploymentNameFromHostname "$targetHostDir")"
+    local nixopsDeployment="$(getDeploymentNameFromHostname "$targetHost")"
 
-    setupNixopsDeployment "$targetHostDir"
+    setupNixopsDeployment "$targetHost"
 
     ############################################################################
     # dirty fix due to driver incompatibilities:
