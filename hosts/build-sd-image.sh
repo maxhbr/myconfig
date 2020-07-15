@@ -27,7 +27,7 @@ buildAndCopy() {
     drv=$(build "$hostname")
     out=("$drv/sd-image/"*)
     du -h "$out"
-    install -D -v "$out" -t "$myconfigDir/__out/$hostname"
+    install -D -m 644 -v "$out" -t "$myconfigDir/__out/$hostname"
     nix-store --delete "$drv"
 }
 

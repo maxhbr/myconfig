@@ -15,7 +15,7 @@ let
       networking.hostName = "myconfig";
       networking.wireless.enable = false;
 
-      services.xserver.displayManager.lightdm.autoLogin =
+      services.xserver.displayManager.autoLogin =
         { enable = true;
           user = "mhuber";
         };
