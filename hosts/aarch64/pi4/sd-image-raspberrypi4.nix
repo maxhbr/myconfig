@@ -1,0 +1,37 @@
+# based on:
+# <nixpkgs/nixos/modules/installer/cd-dvd/sd-image-raspberrypi4.nix>
+{ config, lib, pkgs, ... }:
+
+{
+  imports = [
+    <nixpkgs/nixos/modules/profiles/base.nix>
+    # <nixpkgs/nixos/modules/profiles/installation-device.nix>
+    <nixpkgs/nixos/modules/installer/cd-dvd/sd-image.nix>
+  ];
+
+  boot.loader.grub.enable = false;
+  boot.loader.raspberryPi.enable = true;
+  boot.loader.raspberryPi.version = 4;
+  boot.kernelPackages = pkgs.linuxPackages_rpi4;
+
+  boot.consoleLogLevel = lib.mkDefault 7;
+
+  sdImage = {
+    firmwareSize = 1024;
+    compressImage = false;
+
+    firmwarePartitionName = "NIXOS_BOOT";
+    # This is a hack to avoid replicating config.txt from boot.loader.raspberryPi
+    populateFirmwareCommands =
+      "${config.system.build.installBootLoader} ${config.system.build.toplevel} -d ./firmware";
+
+    # As the boot process is done entirely in the firmware partition.
+    populateRootCommands = "touch files/touched"; # See: https://github.com/NixOS/nixpkgs/pull/93175
+  };
+
+  fileSystems."/boot/firmware" = {
+    # This effectively "renames" the loaOf entry set in sd-image.nix
+    mountPoint = "/boot";
+    neededForBoot = true;
+  };
+}
