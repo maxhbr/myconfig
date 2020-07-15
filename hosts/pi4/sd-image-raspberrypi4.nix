@@ -9,6 +9,8 @@
     <nixpkgs/nixos/modules/installer/cd-dvd/sd-image.nix>
   ];
 
+  nixpkgs.system = "aarch64-linux";
+
   boot.loader.grub.enable = false;
   boot.loader.raspberryPi.enable = true;
   boot.loader.raspberryPi.version = 4;
