@@ -41,8 +41,12 @@ if [[ "$1" == "full" || "$1" = "f"* ]]; then
    ${xfce.xfce4-screenshooter}/bin/xfce4-screenshooter --fullscreen --open cat > "$output"
 elif [[ "$1" == "window" || "$1" = "w"* ]]; then
    ${xfce.xfce4-screenshooter}/bin/xfce4-screenshooter --window --open cat > "$output"
-else
+elif [[ -z "$1" ]]; then
   ${xfce.xfce4-screenshooter}/bin/xfce4-screenshooter --region --open cat > "$output"
+else
+  cat <<EOF
+$0 [f[ull]|w[indow]]
+EOF
 fi
   ''; # or use imagemagick: ${imagemagick}/bin/import "$output"
 in {

@@ -5,6 +5,8 @@
       ../../roles/core.nix
       ../../modules/service.monitoring.nix
       ../../roles/headless.nix
+      ../../modules/service.syncthing.nix
+      ./raspicam.nix
     ];
 
   networking.hostName = "pi4";

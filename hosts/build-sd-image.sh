@@ -31,7 +31,7 @@ build() (
 buildAndCopy() {
     local hostname="$1"
     drv=$(build "$hostname")
-    out=("$drv/sd-image/"*".img")
+    out=("$drv/sd-image/"*".img"*)
     du -h "$out"
     if [[ -z "$hostname" ]]; then
         local outDir="$myconfigDir/__out/aarch64"
@@ -45,9 +45,18 @@ buildAndCopy() {
 #!/usr/bin/env bash
 set -ex
 sdX="\$1"
-sudo dd if="$outDir/$(basename "$out")" of="\$sdX" bs=4M conv=sync
 EOF
+    if [[ "$out" == *.zst ]]; then
+    cat <<EOF | tee -a "$outDir/dd.sh"
+zstdcat "$outDir/$(basename "$out")" | sudo dd iflag=fullblock of="\$sdX" bs=4M conv=sync status=progress
+EOF
+    else
+        cat <<EOF | tee -a "$outDir/dd.sh"
+sudo dd if="$outDir/$(basename "$out")" of="\$sdX" bs=4M conv=sync status=progress
+EOF
+    fi
     chmod +x "$outDir/dd.sh"
+    echo "\$ $outDir/dd.sh"
 }
 
 buildAndCopy "$1"
