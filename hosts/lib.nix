@@ -156,6 +156,7 @@ rec
   setupBuildSlave =
     host:
     speedFactor:
+    systems:
     sshKeyText:
     publicKey:
     let
@@ -170,26 +171,15 @@ rec
               permissions = "0400";
             };
         };
-      nix.buildMachines =
-        [{ hostName = "builder.${host}";
-           system = "x86_64-linux";
-           maxJobs = 6;
-           supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
-           mandatoryFeatures = [ ];
-           sshUser = "nixBuild";
-           sshKey = "/etc/nix/${keyName}";
-           inherit speedFactor;
-         }
+      nix.buildMachines = map (system:
          { hostName = "builder.${host}";
-           system = "aarch64-linux";
            maxJobs = 6;
            supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
            mandatoryFeatures = [ ];
            sshUser = "nixBuild";
            sshKey = "/etc/nix/${keyName}";
-           inherit speedFactor;
-
-        }];
+           inherit speedFactor system;
+         }) systems;
       nix.distributedBuilds = true;
       # optional, useful when the builder has a faster internet connection than yours
       nix.extraOptions = ''

@@ -12,7 +12,13 @@
   boot.loader.grub.enable = false;
   boot.loader.generic-extlinux-compatible.enable = true;
 
+  hardware.enableRedistributableFirmware = true;
+
   boot.consoleLogLevel = lib.mkDefault 7;
+
+  boot.loader.raspberryPi.enable = true;
+  boot.loader.raspberryPi.version = 3;
+  boot.loader.raspberryPi.uboot.enable = true;
 
   # The serial ports listed here are:
   # - ttyS0: for Tegra (Jetson TX1)

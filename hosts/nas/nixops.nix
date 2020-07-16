@@ -19,6 +19,7 @@ mkHostNixops "nas"
         (setupBuildSlave
           (getSecret "workstation" "ip")
           2
+          ["x86_64-linux"]
           (getSecret "x1extremeG2" "ssh/id_ed25519")
           "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEdhwPve+1dfpOwUKZ5c1Js/1sQeQGe1yvfcfGm0pk9W")
         (setupAsBackupTarget

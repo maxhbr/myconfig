@@ -1,6 +1,6 @@
 { ... }:
 { imports =
-    [ ./sd-image-raspberrypi4.nix
+    [ ./hardware-configuration.nix
       ../../modules/service.openssh.nix
       ../../roles/core.nix
       ../../modules/service.monitoring.nix

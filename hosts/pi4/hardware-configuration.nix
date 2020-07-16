@@ -17,6 +17,8 @@
   boot.loader.raspberryPi.version = 4;
   boot.kernelPackages = pkgs.linuxPackages_rpi4;
 
+  hardware.enableRedistributableFirmware = true;
+
   boot.consoleLogLevel = lib.mkDefault 7;
 
   sdImage = {
