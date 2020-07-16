@@ -33,14 +33,24 @@ buildAndCopy() {
     out=("$drv/iso/nixos"*".iso")
     finalOut="nixos-myconfig-$(basename ${hostConfig%.*}).iso"
     du -h "$out"
-    install -D -m 644 -v "$out" -t "$myconfigDir/__out/iso/"
+    local outDir="$myconfigDir/__out/iso"
+    install -D -m 644 -v "$out" -t "$outDir"
     nix-store --delete "$drv"
+
+    cat <<EOF | tee "$outDir/dd.sh"
+#!/usr/bin/env bash
+set -ex
+sdX="\$1"
+sudo dd if="$outDir/$(basename "$out")" of="\$sdX" bs=4M conv=sync
+EOF
+    chmod +x "$outDir/dd.sh"
+
+    cat <<EOF | tee "$outDir/run-qemu.sh"
+#!/usr/bin/env bash
+set -ex
+qemu-kvm -boot d -cdrom "$outDir/$(basename "$out")" -m 32000 -cpu host -smp 6
+EOF
+    chmod +x "$outDir/run-qemu.sh"
 }
 
 buildAndCopy "${1:-roles/dev.nix}"
-
-cat <<EOF
-run with:
-$ qemu-kvm -boot d -cdrom $finalOut -m 32000 -cpu host -smp 6
-$ sudo dd if=$finalOut of=/dev/sdX bs=4M
-EOF

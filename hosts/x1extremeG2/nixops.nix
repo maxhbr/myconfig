@@ -5,7 +5,8 @@ mkHostNixops "x1extremeG2"
       { deployment.targetHost = lib.mkDefault "10.199.199.2";
       };
     imports =
-      [ (deployWireguardKeys "x1extremeG2")
+      [ ../../secrets/common/wifi.QS3j.nix
+        (deployWireguardKeys "x1extremeG2")
         (deploySSHUserKeys "x1extremeG2" "rsa")
         (deploySSHUserKeys "x1extremeG2" "ed25519")
         (deploySSHUserKeys "x1extremeG2" "dsa")

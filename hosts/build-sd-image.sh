@@ -25,10 +25,19 @@ build() (
 buildAndCopy() {
     local hostname="$1"
     drv=$(build "$hostname")
-    out=("$drv/sd-image/"*)
+    out=("$drv/sd-image/"*".img")
     du -h "$out"
-    install -D -m 644 -v "$out" -t "$myconfigDir/__out/$hostname"
+    local outDir="$myconfigDir/__out/$hostname"
+    install -D -m 644 -v "$out" -t "$outDir"
     nix-store --delete "$drv"
+
+    cat <<EOF | tee "$outDir/dd.sh"
+#!/usr/bin/env bash
+set -ex
+sdX="\$1"
+sudo dd if="$outDir/$(basename "$out")" of="\$sdX" bs=4M conv=sync
+EOF
+    chmod +x "$outDir/dd.sh"
 }
 
 buildAndCopy "$1"

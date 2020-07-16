@@ -2,6 +2,7 @@ hostname
 hostid
 *.log
 /_logs/
+/__out/
 *.orig
 result
 *.tar.gz
