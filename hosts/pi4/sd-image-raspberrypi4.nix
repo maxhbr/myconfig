@@ -1,5 +1,6 @@
 # based on:
 # <nixpkgs/nixos/modules/installer/cd-dvd/sd-image-raspberrypi4.nix>
+# this mainly removes the `installation-device` part
 { config, lib, pkgs, ... }:
 
 {

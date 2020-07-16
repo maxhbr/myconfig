@@ -1,6 +1,6 @@
-{ lib, ... }:
+{ ... }:
 { imports =
-    [ <nixpkgs/nixos/modules/installer/cd-dvd/sd-image-aarch64.nix>
+    [ ./sd-image-aarch64.nix
       ../../modules/service.openssh.nix
       ../../roles/core.nix
       ../../secrets/common/wifi.QS3j.nix
