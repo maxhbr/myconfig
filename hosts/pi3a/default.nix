@@ -9,9 +9,4 @@
 
   networking.hostName = "pi3a";
   networking.hostId = "78acddde";
-  sdImage.compressImage = false;
-
-  boot.loader.raspberryPi.firmwareConfig = ''
-    gpu_mem=72
-  '';
 }
