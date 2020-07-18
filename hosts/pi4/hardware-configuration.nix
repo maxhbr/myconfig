@@ -12,14 +12,13 @@
 
   nixpkgs.system = "aarch64-linux";
 
+  boot.consoleLogLevel = lib.mkDefault 7;
   boot.loader.grub.enable = false;
   boot.loader.raspberryPi.enable = true;
   boot.loader.raspberryPi.version = 4;
   boot.kernelPackages = pkgs.linuxPackages_rpi4;
 
   hardware.enableRedistributableFirmware = true;
-
-  boot.consoleLogLevel = lib.mkDefault 7;
 
   sdImage = {
     firmwareSize = 1024;
