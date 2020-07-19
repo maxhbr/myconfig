@@ -9,12 +9,22 @@ let
           (builtins.filter (n: builtins.match ".*\\.nix" n != null || builtins.pathExists (path + ("/" + n + "/default.nix")))
               (builtins.attrNames content))
       else [];
+  lib = import <nixpkgs/lib>;
 in
 rec
 { getSecret =
     hostName:
     fileName:
     builtins.readFile (secretsDir + "/${hostName}/${fileName}");
+
+  getSecretNoNewline =
+    hostName:
+    fileName:
+    lib.removeSuffix "\n" (getSecret hostName fileName);
+
+  makeOptionalBySecrets =
+    conf:
+    lib.mkIf (builtins.pathExists (secretsDir + "/README.md")) conf;
 
   mkHost =
     hostName:
@@ -56,14 +66,36 @@ rec
     deviceName:
     { networking =
         { interfaces."${deviceName}".ipv4.addresses =
-            [ { address = builtins.readFile (secretsDir + "/${hostName}/ip");
+            [ { address = getSecretNoNewline hostName "ip";
                 prefixLength = 24;
               }
             ];
           defaultGateway = "192.168.178.1";
-          nameservers = [ "8.8.8.8" ];
+          nameservers = [ "8.8.8.8" "8.8.4.4" ];
         };
     };
+
+  setupAsWireguardClient =
+    wgip:
+    ( { config, lib, pkgs, ... }@args:
+      makeOptionalBySecrets
+      { environment.systemPackages = [ pkgs.wireguard ];
+        networking.wireguard.interfaces =
+          { wg0 =
+              { ips = [ (wgip + "/24") ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
+                privateKeyFile = "/etc/wireguard/wg-private";
+                peers =
+                  [ { publicKey = getSecretNoNewline "vserver" "wireguard-keys/public";
+                      # allowedIPs = [ "0.0.0.0/0" ];
+                      # Or forward only particular subnets
+                      allowedIPs = [ "10.199.199.0/24" ];
+                      endpoint = ((getSecretNoNewline "vserver" "ip") + ":51820");
+                      persistentKeepalive = 25; # Send keepalives every 25 seconds. Important to keep NAT tables alive.
+                    }
+                ];
+              };
+          };
+      });
 
   deployWireguardKeys =
     hostName:

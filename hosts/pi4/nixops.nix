@@ -3,6 +3,7 @@ mkHostNixops "pi4"
 ( {lib, ...}:
   { imports =
       [ (fixIp "pi4" "eth0")
+        (deployWireguardKeys "pi4")
       ];
   }
 )

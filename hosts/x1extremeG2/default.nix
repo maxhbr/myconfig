@@ -30,7 +30,11 @@
       ../../roles/imagework
       ../../modules/smarthome.nix
       ../../roles/gaming/default.minimal.nix
-    ];
+    ] ++
+    (with (import ../lib.nix);
+      [ (setupAsWireguardClient "10.199.199.2")
+      ]
+    );
 
   config =
     { networking.hostName = "x1extremeG2";
