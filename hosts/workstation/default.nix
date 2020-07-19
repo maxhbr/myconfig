@@ -24,7 +24,11 @@
       { # for quickfix (due to usage of 20.03)
         nixpkgs.config.allowBroken = true;
       }
-    ];
+    ] ++
+    (with (import ../lib.nix);
+      [ (setupAsWireguardClient "10.199.199.5")
+      ]
+    );
 
   config =
     { networking.hostName = "workstation";

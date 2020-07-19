@@ -16,14 +16,14 @@ in
   networking.firewall.allowedTCPPorts = [ 32145 ];
   networking.firewall.allowedUDPPorts = [ 32145 ];
 
-  systemd.user.services.cam-stream-server = {
+  systemd.services.cam-stream-server = {
     description = "CamStreamServer";
     enable = true;
     serviceConfig = {
-      User = "mhuber";
+      #User = "mhuber";
       Type = "simple";
       ExecStart = "${streamcam}/bin/streamcam";
-      ExecStop = "pkill mjpg_streamer";
+      ExecStop = "${pkgs.procps}/bin/pkill mjpg_streamer";
       Restart = "always";
     };
     after = [ "multi-user.target" ];

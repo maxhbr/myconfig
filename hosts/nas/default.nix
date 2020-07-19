@@ -37,7 +37,11 @@
     # ./docker.openhab.nix
     ../../modules/service.deconz.nix
     # ../../modules/kiosk/headless.kiosk.nix
-  ];
+  ] ++
+    (with (import ../lib.nix);
+      [ (setupAsWireguardClient "10.199.199.6")
+      ]
+    );
   config = {
     networking.hostName = "nas";
     networking.hostId = "29d93341";
