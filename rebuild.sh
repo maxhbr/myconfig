@@ -34,6 +34,7 @@ DO_ONLY_UPGRADE=false
 DO_POST_STUFF=true
 DRY_RUN=false
 TARGET="$(hostname)"
+FORCE_RECREATE=false
 FORCE_REBOOT=false
 DO_SUSPEND=false
 
@@ -49,6 +50,7 @@ $0
     [--only-upgrade]   <--
     [--dry-run]        <-- don't touch anything
     [--target TARGET]  <-- deploy to other host
+    [--force-recreate] <-- delete existing deployment
     [--reboot]         <-- force reboot
 EOF
             exit 0
@@ -73,6 +75,13 @@ EOF
             DO_UPGRADE=false
             TARGET=$1
             shift
+            ;;
+        --force-recreate) shift
+            FORCE_RECREATE=true
+            # implies --fast:
+            DO_UPGRADE=false
+            DO_POST_STUFF=false
+            DO_GIT=false
             ;;
         --reboot) shift
             FORCE_REBOOT=true
@@ -155,7 +164,7 @@ else
             logINFO "host is not main host, do not upgrade"
         fi
     fi
-    runWithTrap realize $TARGET $($DRY_RUN && echo "--dry-run")  $($FORCE_REBOOT && echo "--force-reboot")
+    runWithTrap realize $TARGET $($FORCE_RECREATE && echo "--force-recreate") $($DRY_RUN && echo "--dry-run") $($FORCE_REBOOT && echo "--force-reboot")
     if ! $DRY_RUN; then
         generateStats $TARGET
         if $DO_POST_STUFF; then

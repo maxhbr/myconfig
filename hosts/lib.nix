@@ -182,7 +182,6 @@ rec
         { allowedUsers = [ "nixBuild" ];
           trustedUsers = [ "nixBuild" ];
         };
-      boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
     };
 
   setupBuildSlave =

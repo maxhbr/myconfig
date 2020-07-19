@@ -3,9 +3,10 @@ let
   streamcam = with pkgs; writeShellScriptBin "streamcam" ''
 ${pkgs.mjpg-streamer}/bin/mjpg_streamer \
   -i "input_uvc.so \
-  -d /dev/video0 \
-  -f 15 \
-  -r 1280x720" \
+    -d /dev/video0 \
+    -rot 180 \
+    -f 15 \
+    -r 1280x720" \
   -o "output_http.so -w /www -p 32145"
 '';
 in
@@ -20,7 +21,7 @@ in
     description = "CamStreamServer";
     enable = true;
     serviceConfig = {
-      #User = "mhuber";
+      User = "mhuber";
       Type = "simple";
       ExecStart = "${streamcam}/bin/streamcam";
       ExecStop = "${pkgs.procps}/bin/pkill mjpg_streamer";
@@ -30,8 +31,6 @@ in
     wantedBy = [ "multi-user.target" ];
   };
 
-  # These two parameters are the important ones to get the
-  # camera working. These will be appended to /boot/config.txt.
   boot.loader.raspberryPi.firmwareConfig = ''
     start_x=1
   '';

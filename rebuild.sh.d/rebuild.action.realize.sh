@@ -10,15 +10,27 @@ getDeploymentFileFromHostname() {
 }
 
 setupNixopsDeployment() {
-    local hostname="$1"
+    local hostname="$1"; shift
+    local FORCE_RECREATE=false
+    if [[ "$1" == "--force-recreate" ]]; then
+        FORCE_RECREATE=true
+        shift
+    fi
+
     local nixopsDeployment="$(getDeploymentNameFromHostname "$hostname")"
+    local nixopsDeploymentFile="$(getDeploymentFileFromHostname "$hostname")"
 
     logH1 "setup nixops" "hostname=$hostname nixopsDeployment=$nixopsDeployment"
 
     if nixops list --deployment "$nixopsDeployment" | grep -q "$nixopsDeployment"; then
-        nixops check -d "$nixopsDeployment" || true
+        if $FORCE_RECREATE; then
+            nixops delete -d "$nixopsDeployment" --force
+            nixops create -d "$nixopsDeployment" "$nixopsDeploymentFile"
+        else
+            nixops check -d "$nixopsDeployment" || true
+        fi
     else
-        nixops create -d "$nixopsDeployment" "$(getDeploymentFileFromHostname "$hostname")"
+        nixops create -d "$nixopsDeployment" "$nixopsDeploymentFile"
     fi
 }
 
@@ -86,11 +98,17 @@ generateStats() {
 }
 
 realize() {
-    local targetHost="$1"
-    shift
+    local targetHost="$1"; shift
+    local FORCE_RECREATE=false
+    if [[ "$1" == "--force-recreate" ]]; then
+        FORCE_RECREATE=true
+        shift
+    fi
+
     local nixopsDeployment="$(getDeploymentNameFromHostname "$targetHost")"
 
-    setupNixopsDeployment "$targetHost"
+
+    setupNixopsDeployment "$targetHost" $($FORCE_RECREATE && echo "--force-recreate")
 
     ############################################################################
     # dirty fix due to driver incompatibilities:
