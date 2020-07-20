@@ -34,6 +34,7 @@ DO_ONLY_UPGRADE=false
 DO_POST_STUFF=true
 DRY_RUN=false
 TARGET="$(hostname)"
+TARGET_WAS_CHANGED=false
 FORCE_RECREATE=false
 FORCE_REBOOT=false
 DO_SUSPEND=false
@@ -74,6 +75,7 @@ EOF
         --target) shift
             DO_UPGRADE=false
             TARGET=$1
+            TARGET_WAS_CHANGED=true
             shift
             ;;
         --force-recreate) shift
@@ -84,7 +86,9 @@ EOF
             DO_GIT=false
             ;;
         --reboot) shift
-            FORCE_REBOOT=true
+            if $TARGET_WAS_CHANGED; then
+              FORCE_REBOOT=true
+            fi
             ;;
         --suspend) shift
             DO_SUSPEND=true
@@ -94,6 +98,7 @@ EOF
             ;;
     esac
 done
+
 set -- "${POSITIONAL[@]}"
 
 ###########################################################################

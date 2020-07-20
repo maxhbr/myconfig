@@ -5,24 +5,6 @@ if [ $__HOME_ALIASRC_SOURCED ]; then return; fi
 __HOME_ALIASRC_SOURCED=1
 
 have() { type "$1" &> /dev/null; }
-confirm () {
-    # call with a prompt string or use a default
-    if [ -n "$BASH_VERSION" ]; then
-        read -r -p "${1:-Are you sure? [y/N]} " response
-    elif [ -n "$ZSH_VERSION" ]; then
-        echo "${1:-Are you sure? [y/N]} "
-        read response
-    fi
-    case $response in
-        [yY][eE][sS]|[yY])
-            true
-            ;;
-        *)
-            false
-            ;;
-    esac
-}
-
 
 alias asdf="setxkbmap -layout de,de -variant neo,nodeadkeys -option grp:shifts_toggle -option grp_led:scroll -option altwin:swap_lalt_lwin"
 
@@ -286,22 +268,13 @@ finddupes() {
     | xargs -I{} -n1 find -type f -size {}c -print0 \
     | xargs -0 md5sum \
     | sort \
-    | uniq -w32 --all-repeated=separatae \
+    | uniq -w32 --all-repeated=separate \
     | cut -d' ' -f2-
 }
 
 #-------------------------------------------------------------------}}}
 #   system control
 #-------------------------------------------------------------------{{{
-
-alias reboot="systemctl reboot"
-alias poweroff="systemctl poweroff"
-alias halt="systemctl poweroff"
-alias suspend="systemctl suspend"
-
-# alias clamscan="sudo clamscan --recursive --infected --bell"
-# alias clamclean="sudo clamscan --recursive --infected --bell --remove"
-# alias clamupd="sudo freshclam"
 
 # will show a list of all the currently loaded modules and all of their parameters
 # should be run as root
@@ -374,89 +347,25 @@ sxiv() {
   command sxiv "$@" &disown
 }
 
-#   printing
-
-mystartcups() {
-  [[  ! -f /tmp/myCupsStartet ]] && {
-    echo "starting CUPS"
-    sudo systemctl start avahi-daemon.service
-    # sudo systemctl start cups.service
-    sudo systemctl start org.cups.cupsd.service
-    sudo systemctl start cups-browsed.service
-    touch /tmp/myCupsStartet
-    sleep 2
-  }
-}
-
-#   PDFs
-
-# pdf zu A5 Broschüre
-lprBookPre() {
-  [[ -f $1 ]] && {
-    pdftops -paperw 420 -paperh 595 $1 - \
-      | psbook -q \
-      | ps2pdf14 - "${1%.pdf}-booklet.pdf"
-  } || { echo "file not found"; }
-}
-# druckt A5 Broschüren
-lprBook() {
-  mystartcups
-  [[ -f $1 ]] && {
-    pdftops -paperw 420 -paperh 595 $1 - \
-      | psbook -q \
-      | ps2pdf14 - - \
-      | lpr -o sides=two-sided-short-edge -o number-up=2 -o fit-to-page -o media=A4
-  } || { echo "file not found"; }
-}
-alias myLprBook=lprBook
-alias lprFit="lpr -o sides=two-sided-long-edge -o fit-to-page -o media=A4 "
-alias lprFitL="lpr -o sides=two-sided-short-edge -o landscape -o fit-to-page -o media=A4 "
-
-alias myPdfCrop="pdfcrop --margins \"20 30 20 40\""
-
-alias myPdfCollect="gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -sOutputFile=collected.pdf *.pdf"
-
-# Extract range of Pages From a PDF
-# from: http://www.linuxjournal.com/content/tech-tip-extract-pages-pdf
-myPdfpextr() {
-  [[ -z "$3" ]] && {
-    echo "myPdfpextr start end file"
-  } || {
-    gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dFirstPage=${1} \
-      -dLastPage=${2} -sOutputFile=${3%.pdf}_p${1}-p${2}.pdf ${3}
-  }
-}
-
-myPdfreducesize() {
-  gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/screen\
-    -dNOPAUSE -dQUIET -dBATCH -sOutputFile=${1%.pdf}-small.pdf $1
-}
-
 #-------------------------------------------------------------------}}}
 #   package management
 #-------------------------------------------------------------------{{{
 
 have nix-env && {
   #nix
-  alias nix-env="nix-env --file '<nixpkgs>'"
-  alias nixin="nix-env -iA"
   alias nixin-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -iA"
-  alias nix-zsh="nix-shell -p zsh --run zsh"
-  alias nixTest="NIXPKGS_ALLOW_UNFREE=1 nix-shell --run zsh -p"
+  alias nixTest="NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' --run zsh -p"
   nixRun() {
     if [ "$#" -eq "2" ]; then
-      NIXPKGS_ALLOW_UNFREE=1 nix-shell -p "$1" --command "$2"
+      NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' -p "$1" --command "$2"
     else
-      NIXPKGS_ALLOW_UNFREE=1 nix-shell -p "$1" --command "$1"
+      NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' -p "$1" --command "$1"
     fi
   }
-  alias nixColGarbage="nix-collect-garbage -d --delete-older-than 7d"
   alias nixse="nix-env -qaP"
   alias nixlist="nix-env -qa \*"
 
   alias nixrem="nix-env --uninstall"
-
-  alias nix-shell-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-shell"
 
   alias why-depends-nixos="nix why-depends /run/current-system"
   why-builds() {
@@ -475,53 +384,6 @@ have nix-env && {
   }
 }
 
-have pacman && {
-  # remove orphan pacman packages and delete packages in the cache, which are
-  # older than 30 days
-  myRemOrphans() {
-    if [[ ! -n $(pacman -Qdt) ]]; then
-      echo no orphans to remove
-    else
-      sudo pacman -Rs $(pacman -Qdtq)
-    fi
-
-    echo "$(find /var/cache/pacman/pkg/ -type f -mtime +100 | wc -l) old packages to remove from cache"
-    find /var/cache/pacman/pkg/ -type f -mtime +100 -exec sudo rm -v {} \;
-  }
-
-  # Pacman alias examples
-  alias pacupg='sudo pacman -Syu ; echo ; myRemOrphans'
-  alias pacin='sudo pacman -S'
-  alias pacins='sudo pacman -U'
-  alias pacre='sudo pacman -R'
-  alias pacrem='sudo pacman -Rns'
-  alias pacrep='pacman -Si'
-  alias pacreps='pacman -Ss'
-  alias pacloc='pacman -Qi'
-  alias paclocs='pacman -Qs'
-
-  have nix-env && {
-      alias upg='pacupg && nixupg'
-  } || {
-      alias upg='pacupg'
-  }
-
-  # Additional pacman alias examples
-  alias pacupd='sudo pacman -Sy && sudo abs'
-  alias pacinsd='sudo pacman -S --asdeps'
-  alias pacmir='sudo pacman -Syy'
-
-  #update via packer
-  alias packerupd="packer -Syu --aur"
-} || {
-  have apt-get && {
-    alias aptupd="sudo apt-get update && sudo apt-get upgrade"
-    alias aptin="sudo apt-get install"
-    alias aptre="sudo apt-get remove"
-    alias aptse="apt-cache search"
-  }
-}
-
 cabalupd() {
   cabal list --simple-output --installed \
     | awk '{print $1}' \
@@ -532,12 +394,6 @@ cabalupd() {
 #-------------------------------------------------------------------}}}
 #   some networking
 #-------------------------------------------------------------------{{{
-
-startphp() { php -S 127.0.0.1:8080; }
-mydhcp() {
-  sudo ip link set $1 up
-  sudo dhcpcd -w -B $1
-}
 
 # gen QR-Code for a WiFi:
 genQrCode(){
@@ -559,17 +415,6 @@ mynmap() {
 
 # Get IP (call with myip)
 myip() { myip=`elinks -dump http://checkip.dyndns.org:8245/`; echo "${myip}"; }
-
-myiscsiRoutine() {
-  # myiscsiRoutine UUID IP
-  #sudo systemctl start open-iscsi.service
-  #sudo iscsiadm -m discovery -t sendtargets -p $2
-
-  sudo iscsiadm -m node -p $2 --login
-  sleep 3
-  sudo mkdir -p /mnt/iscsi/
-  sudo mount /dev/disk/by-uuid/${1} /mnt/iscsi/
-}
 
 getCert() {
   if [[ "$#" -eq 0 ]]; then
@@ -607,11 +452,6 @@ mountExfat() {
 
 meld() {
   command meld "$@" &disown
-}
-
-touchpadtoggle(){
-  xdotool mousemove 0 0
-  synclient TouchpadOff=$(synclient -l | grep -c 'TouchpadOff.*=.*0')
 }
 
 #}}}
