@@ -523,6 +523,8 @@ in {
 
   biplist = callPackage ../development/python-modules/biplist { };
 
+  bip_utils = callPackage ../development/python-modules/bip_utils { };
+
   bitarray = callPackage ../development/python-modules/bitarray { };
 
   bitcoinlib = callPackage ../development/python-modules/bitcoinlib { };
@@ -5919,6 +5921,15 @@ in {
     });
   in if pythonOlder "3.5" then scipy_1_2 else scipy_;
 
+  scipy_1_3 = self.scipy.overridePythonAttrs(oldAttrs: rec {
+    version = "1.3.3";
+    src = oldAttrs.src.override {
+      inherit version;
+      sha256 = "02iqb7ws7fw5fd1a83hx705pzrw1imj7z0bphjsl4bfvw254xgv4";
+    };
+    doCheck = false;
+  });
+
   scikitimage = callPackage ../development/python-modules/scikit-image { };
 
   scikitlearn = let
@@ -6976,6 +6987,8 @@ in {
   pypeg2 = callPackage ../development/python-modules/pypeg2 { };
 
   torchvision = callPackage ../development/python-modules/torchvision { };
+
+  torchgpipe = callPackage ../development/python-modules/torchgpipe { };
 
   jenkinsapi = callPackage ../development/python-modules/jenkinsapi { };
 
