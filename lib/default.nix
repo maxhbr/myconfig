@@ -2,7 +2,7 @@
 {
   imports =
     [ ./helper.nix
-      ./nixpkgs-unstable
+      ./nix-nixPath
       ./home-manager
     ];
 
@@ -14,10 +14,6 @@
             { allowUnfree = true;
             };
           overlays =
-            [(self: super:
-                { unstable = super.unstable or {} // (import ../nixpkgs-unstable { config = config.nixpkgs.config; });
-                }
-            )] ++
             ( let
                 path = ./overlays;
                 content = builtins.readDir path;
@@ -27,10 +23,5 @@
                         (builtins.attrNames content))
                 else []);
         };
-      nix.nixPath =
-        [ ("nixpkgs=" + ../nixpkgs)
-          ("nixpkgs-unstable=" + ../nixpkgs-unstable)
-          "nixos-config=/dev/null"
-        ];
     };
 }

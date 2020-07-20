@@ -36,14 +36,6 @@ upgradeNixpkgs() {
         "$nixStableChannel"
 }
 
-upgradeNixpkgsUnstable() {
-    logH1 "upgrade nixpkgs-unstable" "nixUnstableChannel=$nixUnstableChannel"
-    upgradeSubtree \
-        NixOS-nixpkgs-channels https://github.com/NixOS/nixpkgs-channels \
-        "nixpkgs-unstable" \
-        "$nixUnstableChannel"
-}
-
 upgradeNixosHardware() {
     upgradeSubtree \
         NixOS-nixos-hardware https://github.com/NixOS/nixos-hardware \
@@ -58,12 +50,8 @@ upgrade() {
             logH1 "upgrade" "nixpkgs"
             upgradeNixpkgs
             if git diff-index --quiet HEAD --; then
-                logH1 "upgrade" "nixpkgs-unstable"
-                upgradeNixpkgsUnstable
-                if git diff-index --quiet HEAD --; then
-                    logH1 "upgrade" "NixosHardware"
-                    upgradeNixosHardware
-                fi
+                logH1 "upgrade" "NixosHardware"
+                upgradeNixosHardware
             fi
         else
             logINFO "skip updating subtrees, not clean"
@@ -71,10 +59,10 @@ upgrade() {
 
         logH3 "update" "home-manager"
         ./lib/home-manager/update.sh
+        logH3 "update" "nix-nixPath"
+        ./lib/nix-nixPath/update.sh
         logH3 "update" "extrahosts"
         ./modules/nixos.networking/extrahosts/update.sh
-        logH3 "update" "nixpkgs-unstable"
-        ./lib/nixpkgs-unstable/update.sh
         logH3 "update" "emacs"
         ./modules/emacs/update.sh
         logH3 "update" "my-wallpapers"
