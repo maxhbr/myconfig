@@ -17,15 +17,15 @@ build() (
     else
         local aarchConfig="${myconfigDir}/hosts/${hostname}/default.nix"
     fi
-        time nix-build \
-             -A config.system.build.sdImage \
-             --option system aarch64-linux \
-             -I nixos-config="${aarchConfig}" \
-             -I nixpkgs="$nixpkgsDir" \
-             --no-out-link \
-             --show-trace --keep-failed \
-             --option sandbox false \
-             "${nixpkgsDir}/nixos/default.nix"
+    time nix-build \
+         -A config.system.build.sdImage \
+         --option system aarch64-linux \
+         -I nixos-config="${aarchConfig}" \
+         -I nixpkgs="$nixpkgsDir" \
+         --no-out-link \
+         --show-trace --keep-failed \
+         --option sandbox false \
+         "${nixpkgsDir}/nixos/default.nix"
 )
 
 buildAndCopy() {

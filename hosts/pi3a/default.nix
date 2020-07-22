@@ -1,4 +1,3 @@
-with (import ../lib.nix);
 { ... }:
 { imports =
     [ ./hardware-configuration.nix
@@ -6,8 +5,12 @@ with (import ../lib.nix);
       ../../roles/core.nix
       ../../secrets/common/wifi.QS3j.nix
       ./raspicam.nix
-      (setupAsWireguardClient "10.199.199.7")
-    ];
+    ] ++
+    (with (import ../lib.nix);
+      [ (setupAsWireguardClient "10.199.199.7")
+      ]
+    );
+
 
   networking.hostName = "pi3a";
   networking.hostId = "78acddde";
