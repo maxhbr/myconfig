@@ -12,16 +12,22 @@ build() (
     local nixpkgsDir="$nixpkgs"
 
     set -x
-    if [[ -z "$hostname" ]]; then
+    if [[ "$hostname" == "pi0" ]]; then
+        arch="armv6l-linux"
+        local aarchConfig="${nixpkgsDir}/nixos/modules/installer/cd-dvd/sd-image-raspberrypi.nix"
+    elif [[ -z "$hostname" ]]; then
+        arch="aarch64-linux"
         local aarchConfig="${nixpkgsDir}/nixos/modules/installer/cd-dvd/sd-image-aarch64.nix"
     else
         local aarchConfig="${myconfigDir}/hosts/${hostname}/default.nix"
+        arch="$(grep "nixpkgs.system" "${myconfigDir}/hosts/${hostname}/hardware-configuration.nix" |
+            cut -d'"' -f 2)"
     fi
     time nix-build \
          -A config.system.build.sdImage \
-         --option system aarch64-linux \
          -I nixos-config="${aarchConfig}" \
          -I nixpkgs="$nixpkgsDir" \
+         --option system "$arch" \
          --no-out-link \
          --show-trace --keep-failed \
          --option sandbox false \
