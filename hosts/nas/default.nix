@@ -31,6 +31,7 @@
     ../../modules/service.monitoring.nix
     ../../modules/virtualization.docker
     ../../modules/service.syncthing.nix
+    ../../roles/imagework/exfat.nix
     # hardware:
     ../../hardware/efi.nix
     # configuration
