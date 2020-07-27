@@ -32,9 +32,10 @@
       services.nfs.server =
         { enable = true;
           exports = ''
-            /export       192.168.178.0/24(rw,fsid=0,insecure,no_subtree_check,crossmnt,fsid=0) 10.199.199.0/24(rw,fsid=0,insecure,no_subtree_check,crossmnt,fsid=0)
-            /export/data  192.168.178.0/24(rw,nohide,insecure,no_subtree_check)                 10.199.199.0/24(rw,nohide,insecure,no_subtree_check)
-            /export/guest 192.168.178.0/24(rw,nohide,insecure,no_subtree_check)                 10.199.199.0/24(rw,nohide,insecure,no_subtree_check)
+            /export        192.168.178.0/24(rw,fsid=0,insecure,no_subtree_check,crossmnt,fsid=0) 10.199.199.0/24(rw,fsid=0,insecure,no_subtree_check,crossmnt,fsid=0)
+            /export/data   192.168.178.0/24(rw,nohide,insecure,no_subtree_check)                 10.199.199.0/24(rw,nohide,insecure,no_subtree_check)
+            /export/bilder 192.168.178.0/24(rw,nohide,insecure,no_subtree_check)
+            /export/guest  192.168.178.0/24(rw,nohide,insecure,no_subtree_check)                 10.199.199.0/24(rw,nohide,insecure,no_subtree_check)
           '';
           statdPort = 4000;
           lockdPort = 4001;
@@ -48,6 +49,10 @@
       };
       fileSystems."/export/guest" = {
         device = "/mnt/2x4t/lvm-guest";
+        options = [ "bind" "x-systemd.requires-mounts-for=/mnt/2x4t" ];
+      };
+      fileSystems."/export/bilder" = {
+        device = "/mnt/2x4t/lvm-bilder";
         options = [ "bind" "x-systemd.requires-mounts-for=/mnt/2x4t" ];
       };
     };

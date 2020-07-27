@@ -40,6 +40,7 @@ in {
       home.packages = with pkgs; [
         arandr
         xlibs.xmodmap xlibs.xset xlibs.setxkbmap
+        xorg.xmessage
         xclip
         xdotool
         myStopScreensaver

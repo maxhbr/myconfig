@@ -17,6 +17,7 @@
       ../../modules/virtualization.docker
       ../../modules/programs.license-compliance-toolbox.nix
       ../../roles/imagework
+      ../../modules/dev.haskell
       ../../roles/gaming
       # ../../modules/desktop.X.xfce.nix
       ../../modules/desktop.X.vnc.nix
