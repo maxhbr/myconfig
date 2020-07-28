@@ -27,6 +27,9 @@
 gimp() {
   command gimp "$@" &disown
 }
+darktable() {
+  command darktable "$@" &disown
+  }
 gthumb() {
   command gthumb "$@" &disown
 }

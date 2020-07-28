@@ -171,6 +171,15 @@ rec
         };
     };
 
+  setupNasNFS =
+    name:
+    { fileSystems."/mnt/nas-${name}" =
+        { device = "nas:/${name}";
+          fsType = "nfs";
+          options = ["x-systemd.automount" "noauto"];
+        };
+    };
+
   setupAsBuildMachine =
     authorizedKeys:
     { users.extraUsers.nixBuild =
