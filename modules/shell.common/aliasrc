@@ -362,7 +362,7 @@ have nix-env && {
       NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' -p "$1" --command "$1"
     fi
   }
-  alias nixse="nix-env -qaP"
+  alias nixse="nix search"
   alias nixlist="nix-env -qa \*"
 
   alias nixrem="nix-env --uninstall"
