@@ -74,7 +74,8 @@ let
       akregator = callPackage ./akregator.nix {};
       ark = callPackage ./ark {};
       baloo-widgets = callPackage ./baloo-widgets.nix {};
-      bovo = callPackage ./bovo.nix {};
+      bovo = callPackage ./bovo.nix {};      
+      bomber = callPackage ./bomber.nix {};
       calendarsupport = callPackage ./calendarsupport.nix {};
       dolphin = callPackage ./dolphin.nix {};
       dolphin-plugins = callPackage ./dolphin-plugins.nix {};
@@ -83,6 +84,7 @@ let
       eventviews = callPackage ./eventviews.nix {};
       ffmpegthumbs = callPackage ./ffmpegthumbs.nix { };
       filelight = callPackage ./filelight.nix {};
+      granatier = callPackage ./granatier.nix {};
       grantleetheme = callPackage ./grantleetheme {};
       gwenview = callPackage ./gwenview.nix {};
       incidenceeditor = callPackage ./incidenceeditor.nix {};

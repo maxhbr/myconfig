@@ -1707,6 +1707,10 @@ in
     inherit (darwin.apple_sdk.frameworks) Security;
   };
 
+  dijo = callPackage ../tools/misc/dijo {
+    inherit (darwin.apple_sdk.frameworks) CoreServices;
+  };
+
   ding = callPackage ../applications/misc/ding {
     aspellDicts_de = aspellDicts.de;
     aspellDicts_en = aspellDicts.en;
@@ -2116,6 +2120,8 @@ in
   mkspiffs-presets = recurseIntoAttrs (callPackages ../tools/filesystems/mkspiffs/presets.nix { });
 
   mlarchive2maildir = callPackage ../applications/networking/mailreaders/mlarchive2maildir { };
+
+  molly-brown = callPackage ../servers/gemini/molly-brown { };
 
   monetdb = callPackage ../servers/sql/monetdb { };
 
@@ -3845,10 +3851,6 @@ in
   gnupg1orig = callPackage ../tools/security/gnupg/1.nix { };
   gnupg1compat = callPackage ../tools/security/gnupg/1compat.nix { };
   gnupg1 = gnupg1compat;    # use config.packageOverrides if you prefer original gnupg1
-  gnupg20 = callPackage ../tools/security/gnupg/20.nix {
-    guiSupport = stdenv.isDarwin;
-    pinentry = if stdenv.isDarwin then pinentry_mac else pinentry-gtk2;
-  };
   gnupg22 = callPackage ../tools/security/gnupg/22.nix {
     guiSupport = stdenv.isDarwin;
     pinentry = if stdenv.isDarwin then pinentry_mac else pinentry-gtk2;
@@ -4145,6 +4147,8 @@ in
   hasmail = callPackage ../applications/networking/mailreaders/hasmail { };
 
   hal-flash = callPackage ../os-specific/linux/hal-flash { };
+
+  hal-hardware-analyzer = libsForQt5.callPackage ../applications/science/electronics/hal-hardware-analyzer { };
 
   half = callPackage ../development/libraries/half { };
 
@@ -4901,10 +4905,6 @@ in
   nodejs-slim-12_x = callPackage ../development/web/nodejs/v12.nix {
     enableNpm = false;
   };
-  nodejs-13_x = callPackage ../development/web/nodejs/v13.nix { };
-  nodejs-slim-13_x = callPackage ../development/web/nodejs/v13.nix {
-    enableNpm = false;
-  };
   nodejs-14_x = callPackage ../development/web/nodejs/v14.nix { };
   nodejs-slim-14_x = callPackage ../development/web/nodejs/v14.nix {
     enableNpm = false;
@@ -5077,6 +5077,8 @@ in
     libwebsockets_3_2
     libwebsockets_4_0;
   libwebsockets = libwebsockets_3_2;
+
+  licensee = callPackage ../tools/package-management/licensee { };
 
   lidarr = callPackage ../servers/lidarr { };
 
@@ -5533,6 +5535,8 @@ in
 
   ngrep = callPackage ../tools/networking/ngrep { };
 
+  neuron-notes = haskell.lib.justStaticExecutables (haskell.lib.generateOptparseApplicativeCompletion "neuron" haskellPackages.neuron);
+
   ngrok = ngrok-2;
 
   ngrok-2 = callPackage ../tools/networking/ngrok-2 { };
@@ -5609,6 +5613,8 @@ in
 
 
   noise-repellent = callPackage ../applications/audio/noise-repellent { };
+
+  noisetorch = callPackage ../applications/audio/noisetorch { };
 
   notary = callPackage ../tools/security/notary { };
 
@@ -6113,7 +6119,10 @@ in
 
   podiff = callPackage ../tools/text/podiff { };
 
-  podman = callPackage ../applications/virtualization/podman/wrapper.nix { };
+  podman = if stdenv.isDarwin then
+    callPackage ../applications/virtualization/podman { }
+  else
+    callPackage ../applications/virtualization/podman/wrapper.nix { };
   podman-unwrapped = callPackage ../applications/virtualization/podman { };
 
   podman-compose = python3Packages.callPackage ../applications/virtualization/podman-compose {};
@@ -6445,6 +6454,8 @@ in
   rng-tools = callPackage ../tools/security/rng-tools { };
 
   rnnoise = callPackage ../development/libraries/rnnoise { };
+
+  rnnoise-plugin = callPackage ../development/libraries/rnnoise-plugin {};
 
   rnv = callPackage ../tools/text/xml/rnv { };
 
@@ -6866,6 +6877,8 @@ in
 
   speech-denoiser = callPackage ../applications/audio/speech-denoiser {};
 
+  splot = haskell.lib.justStaticExecutables haskellPackages.splot;
+
   squashfsTools = callPackage ../tools/filesystems/squashfs { };
 
   squashfs-tools-ng = callPackage ../tools/filesystems/squashfs-tools-ng { };
@@ -7176,12 +7189,7 @@ in
     inherit (darwin.apple_sdk.frameworks) Foundation;
   };
 
-  tor = callPackage ../tools/security/tor {
-    # remove this, when libevent's openssl is upgraded to 1_1_0 or newer.
-    libevent = libevent.override {
-      sslSupport = false;
-    };
-  };
+  tor = callPackage ../tools/security/tor { };
 
   tor-arm = callPackage ../tools/security/tor/tor-arm.nix { };
 
@@ -7332,6 +7340,8 @@ in
   uget = callPackage ../tools/networking/uget { };
 
   uget-integrator = callPackage ../tools/networking/uget-integrator { };
+  
+  ugrep = callPackage ../tools/text/ugrep { };
 
   uif2iso = callPackage ../tools/cd-dvd/uif2iso { };
 
@@ -7543,6 +7553,8 @@ in
   wootility = callPackage ../tools/misc/wootility {
     inherit (xorg) libxkbfile;
   };
+
+  wormhole-william = callPackage ../tools/networking/wormhole-william { };
 
   wpscan = callPackage ../tools/security/wpscan { };
 
@@ -8351,8 +8363,12 @@ in
   gerbil-support = callPackage ../development/compilers/gerbil/gerbil-support.nix { };
   gerbilPackages-unstable = gerbil-support.gerbilPackages-unstable; # NB: don't recurseIntoAttrs for (unstable!) libraries
 
-  gccFun = callPackage (if stdenv.targetPlatform.isVc4 then ../development/compilers/gcc/6 else ../development/compilers/gcc/9);
-  gcc = if stdenv.targetPlatform.isVc4 then gcc6 else gcc9;
+  gccFun = callPackage (if (with stdenv.targetPlatform; isVc4 || libc == "relibc")
+    then ../development/compilers/gcc/6
+    else ../development/compilers/gcc/9);
+  gcc = if (with stdenv.targetPlatform; isVc4 || libc == "relibc")
+    then gcc6 else gcc9;
+
   gcc-unwrapped = gcc.cc;
 
   gccStdenv = if stdenv.cc.isGNU then stdenv else stdenv.override {
@@ -8487,7 +8503,11 @@ in
     libcCross = if stdenv.targetPlatform != stdenv.buildPlatform then libcCross else null;
     threadsCross = if stdenv.targetPlatform != stdenv.buildPlatform then threadsCross else null;
 
-    isl = if !stdenv.isDarwin then isl_0_14 else null;
+    isl = if stdenv.isDarwin
+            then null
+          else if stdenv.targetPlatform.isRedox
+            then isl_0_17
+          else isl_0_14;
   }));
 
   gcc7 = lowPrio (wrapCC (callPackage ../development/compilers/gcc/7 {
@@ -8711,7 +8731,7 @@ in
 
   # Please update doc/languages-frameworks/haskell.section.md, “Our
   # current default compiler is”, if you bump this:
-  haskellPackages = dontRecurseIntoAttrs haskell.packages.ghc883;
+  haskellPackages = dontRecurseIntoAttrs haskell.packages.ghc884;
 
   inherit (haskellPackages) ghc;
 
@@ -8993,6 +9013,10 @@ in
       (callPackage ../development/compilers/oraclejdk/jdk8-linux.nix {
         inherit installjdk pluginSupport;
       });
+
+  oraclejdk11 = callPackage ../development/compilers/oraclejdk/jdk11-linux.nix { };
+
+  oraclejdk14 = callPackage ../development/compilers/oraclejdk/jdk14-linux.nix { };
 
   jasmin = callPackage ../development/compilers/jasmin { };
 
@@ -9289,10 +9313,14 @@ in
   rust_1_44 = callPackage ../development/compilers/rust/1_44.nix {
     inherit (darwin.apple_sdk.frameworks) CoreFoundation Security;
   };
-  rust = rust_1_44;
+  rust_1_45 = callPackage ../development/compilers/rust/1_45.nix {
+    inherit (darwin.apple_sdk.frameworks) CoreFoundation Security;
+  };
+  rust = rust_1_45;
 
   rustPackages_1_44 = rust_1_44.packages.stable;
-  rustPackages = rustPackages_1_44;
+  rustPackages_1_45 = rust_1_45.packages.stable;
+  rustPackages = rustPackages_1_45;
 
   inherit (rustPackages) cargo clippy rustc rustPlatform;
   inherit (rust) makeRustPlatform;
@@ -9660,7 +9688,7 @@ in
   kanif = callPackage ../applications/networking/cluster/kanif { };
 
   lumo = callPackage ../development/interpreters/clojurescript/lumo {
-    nodejs = nodejs-13_x;
+    nodejs = nodejs_latest;
   };
 
   lxappearance = callPackage ../desktops/lxde/core/lxappearance { };
@@ -10143,7 +10171,7 @@ in
 
   inherit (callPackages ../development/tools/electron { })
     electron_3 electron_4 electron_5 electron_6 electron_7 electron_8 electron_9;
-  electron = electron_4;
+  electron = electron_9;
 
   autobuild = callPackage ../development/tools/misc/autobuild { };
 
@@ -10868,6 +10896,8 @@ in
 
   mkdocs = callPackage ../development/tools/documentation/mkdocs { };
 
+  mockgen = callPackage ../development/tools/mockgen { };
+
   modd = callPackage ../development/tools/modd { };
 
   msgpack-tools = callPackage ../development/tools/msgpack-tools { };
@@ -11424,8 +11454,6 @@ in
   arrayfire = callPackage ../development/libraries/arrayfire {};
 
   arrow-cpp = callPackage ../development/libraries/arrow-cpp ({
-    # Workaround until #91984 is in, this will need to be removed later.
-    zstd = zstd.override { enableShared = false; };
   } // stdenv.lib.optionalAttrs (stdenv.hostPlatform.isi686 && stdenv.cc.isGNU) {
     stdenv = overrideCC stdenv buildPackages.gcc6; # hidden symbol `__divmoddi4'
   });
@@ -11586,7 +11614,13 @@ in
     ogre = ogre1_10;
   };
 
-  certbot = python3Packages.callPackage ../tools/admin/certbot { };
+  certbot = python3.pkgs.toPythonApplication python3.pkgs.certbot;
+
+  certbot-full = certbot.withPlugins (cp: with cp; [
+    certbot-dns-cloudflare
+    certbot-dns-rfc2136
+    certbot-dns-route53
+  ]);
 
   caf = callPackage ../development/libraries/caf {};
 
@@ -12038,6 +12072,7 @@ in
   gf2x = callPackage ../development/libraries/gf2x {};
 
   gd = callPackage ../development/libraries/gd {
+    automake = automake115x;
     libtiff = null;
     libXpm = null;
   };
@@ -12139,6 +12174,7 @@ in
     else if name == "libSystem" then targetPackages.darwin.xcode
     else if name == "nblibc" then targetPackages.netbsdCross.libc
     else if name == "wasilibc" then targetPackages.wasilibc or wasilibc
+    else if name == "relibc" then targetPackages.relibc or relibc
     else if stdenv.targetPlatform.isGhcjs then null
     else throw "Unknown libc ${name}";
 
@@ -12152,6 +12188,8 @@ in
   wasilibc = callPackage ../development/libraries/wasilibc {
     stdenv = crossLibcStdenv;
   };
+
+  relibc = callPackage ../development/libraries/relibc { };
 
   # Only supported on Linux, using glibc
   glibcLocales = if stdenv.hostPlatform.libc == "glibc" then callPackage ../development/libraries/glibc/locales.nix { } else null;
@@ -13046,7 +13084,9 @@ in
 
   libfido2 = callPackage ../development/libraries/libfido2 { };
 
-  libfilezilla = callPackage ../development/libraries/libfilezilla { };
+  libfilezilla = callPackage ../development/libraries/libfilezilla {
+    inherit (darwin.apple_sdk.frameworks) ApplicationServices;
+  };
 
   libfishsound = callPackage ../development/libraries/libfishsound { };
 
@@ -14108,6 +14148,7 @@ in
   };
 
   nss = lowPrio (callPackage ../development/libraries/nss { });
+  nss_3_44 = lowPrio (callPackage ../development/libraries/nss/3.44.nix { });
   nssTools = nss.tools;
 
   nss_wrapper = callPackage ../development/libraries/nss_wrapper { };
@@ -14211,6 +14252,8 @@ in
   openldap = callPackage ../development/libraries/openldap { };
 
   opencolorio = callPackage ../development/libraries/opencolorio { };
+
+  opendmarc = callPackage ../development/libraries/opendmarc { };
 
   ois = callPackage ../development/libraries/ois {};
 
@@ -14723,7 +14766,13 @@ in
 
   rubberband = callPackage ../development/libraries/rubberband { };
 
+  /* This package references ghc844, which we no longer have. Unfortunately, I
+     have been unable to mark it as "broken" in a way that the ofBorg bot
+     recognizes. Since I don't want to merge code into master that generates
+     evaluation errors, I have no other idea but to comment it out entirely.
+
   sad = callPackage ../applications/science/logic/sad { };
+   */
 
   safefile = callPackage ../development/libraries/safefile {};
 
@@ -15467,6 +15516,8 @@ in
   yubikey-personalization = callPackage ../tools/misc/yubikey-personalization { };
 
   yubikey-personalization-gui = libsForQt5.callPackage ../tools/misc/yubikey-personalization-gui { };
+
+  yubikey-agent = callPackage ../tools/security/yubikey-agent { };
 
   zchunk = callPackage ../development/libraries/zchunk { };
 
@@ -16257,6 +16308,13 @@ in
     inherit (darwin.apple_sdk.frameworks) CoreFoundation Security;
   };
 
+  mongodb-4_2 = callPackage ../servers/nosql/mongodb/v4_2.nix {
+    sasl = cyrus_sasl;
+    boost = boost169;
+    inherit (darwin) cctools;
+    inherit (darwin.apple_sdk.frameworks) CoreFoundation Security;
+  };
+
   nginx-sso = callPackage ../servers/nginx-sso { };
 
   percona-server56 = callPackage ../servers/sql/percona/5.6.x.nix { };
@@ -16864,9 +16922,7 @@ in
 
   directvnc = callPackage ../os-specific/linux/directvnc { };
 
-  dmraid = callPackage ../os-specific/linux/dmraid {
-    lvm2 = lvm2.override {enable_dmeventd = true;};
-  };
+  dmraid = callPackage ../os-specific/linux/dmraid { lvm2 = lvm2_dmeventd; };
 
   drbd = callPackage ../os-specific/linux/drbd { };
 
@@ -17385,6 +17441,8 @@ in
 
     x86_energy_perf_policy = callPackage ../os-specific/linux/x86_energy_perf_policy { };
 
+    xpadneo = callPackage ../os-specific/linux/xpadneo { };
+
     zenpower = callPackage ../os-specific/linux/zenpower { };
 
     inherit (callPackages ../os-specific/linux/zfs {
@@ -17573,6 +17631,10 @@ in
   lsscsi = callPackage ../os-specific/linux/lsscsi { };
 
   lvm2 = callPackage ../os-specific/linux/lvm2 { };
+  lvm2_dmeventd = callPackage ../os-specific/linux/lvm2 {
+    enableDmeventd = true;
+    enableCmdlib = true;
+  };
 
   mbelib = callPackage ../development/libraries/audio/mbelib { };
 
@@ -17661,6 +17723,8 @@ in
 
   gotags = callPackage ../development/tools/gotags { };
 
+  go-task = callPackage ../development/tools/go-task { };
+
   golint = callPackage ../development/tools/golint { };
 
   golangci-lint = callPackage ../development/tools/golangci-lint { };
@@ -17732,6 +17796,8 @@ in
   pam_ldap = callPackage ../os-specific/linux/pam_ldap { };
 
   pam_mount = callPackage ../os-specific/linux/pam_mount { };
+
+  pam_p11 = callPackage ../os-specific/linux/pam_p11 { };
 
   pam_pgsql = callPackage ../os-specific/linux/pam_pgsql { };
 
@@ -17892,14 +17958,6 @@ in
 
   # standalone cryptsetup generator for systemd
   systemd-cryptsetup-generator = callPackage ../os-specific/linux/systemd/cryptsetup-generator.nix { };
-
-  # In nixos, you can set systemd.package = pkgs.systemd_with_lvm2 to get
-  # LVM2 working in systemd.
-  systemd_with_lvm2 = pkgs.appendToName "with-lvm2" (pkgs.lib.overrideDerivation pkgs.systemd (p: {
-      postInstall = p.postInstall + ''
-        cp "${pkgs.lvm2}/lib/systemd/system-generators/"* $out/lib/systemd/system-generators
-      '';
-  }));
 
   systemd-wait = callPackage ../os-specific/linux/systemd-wait { };
 
@@ -19166,6 +19224,8 @@ in
 
   brave = callPackage ../applications/networking/browsers/brave { };
 
+  break-time = callPackage ../applications/misc/break-time { };
+
   breezy = with python3Packages; toPythonApplication breezy;
 
   notmuch-bower = callPackage ../applications/networking/mailreaders/notmuch-bower { };
@@ -19301,6 +19361,8 @@ in
   clipit = callPackage ../applications/misc/clipit { };
 
   cloud-print-connector = callPackage ../servers/cloud-print-connector { };
+
+  cloud-hypervisor = callPackage ../applications/virtualization/cloud-hypervisor { };
 
   clp = callPackage ../applications/science/math/clp { };
 
@@ -19769,6 +19831,10 @@ in
 
   FIL-plugins = callPackage ../applications/audio/FIL-plugins { };
 
+  finalfrontier = callPackage ../applications/science/machine-learning/finalfrontier {
+    inherit (darwin.apple_sdk.frameworks) Security;
+  };
+
   flacon = libsForQt5.callPackage ../applications/audio/flacon { };
 
   flexget = callPackage ../applications/networking/flexget { };
@@ -19802,6 +19868,8 @@ in
   fondo = callPackage ../applications/graphics/fondo { };
 
   font-manager = callPackage ../applications/misc/font-manager { };
+
+  fontpreview = callPackage ../applications/misc/fontpreview { };
 
   foo-yc20 = callPackage ../applications/audio/foo-yc20 { };
 
@@ -19971,6 +20039,7 @@ in
 
   firefoxPackages = recurseIntoAttrs (callPackage ../applications/networking/browsers/firefox/packages.nix {
     callPackage = pkgs.newScope {
+      inherit (rustPackages_1_44) cargo rustc;
       libpng = libpng_apng;
       python = python2;
       gnused = gnused_422;
@@ -20079,6 +20148,8 @@ in
   friture = libsForQt5.callPackage ../applications/audio/friture { };
 
   fte = callPackage ../applications/editors/fte { };
+
+  g933-utils = callPackage ../tools/misc/g933-utils { };
 
   game-music-emu = callPackage ../applications/audio/game-music-emu { };
 
@@ -20617,6 +20688,10 @@ in
     lcms = lcms2;
   };
 
+  inkscape_0 = callPackage ../applications/graphics/inkscape/0.x.nix {
+    lcms = lcms2;
+  };
+
   inspectrum = libsForQt5.callPackage ../applications/radio/inspectrum { };
 
   ion3 = callPackage ../applications/window-managers/ion-3 {
@@ -20640,6 +20715,8 @@ in
   irssi_fish = callPackage ../applications/networking/irc/irssi/fish { };
 
   ir.lv2 = callPackage ../applications/audio/ir.lv2 { };
+
+  istioctl = callPackage ../applications/networking/cluster/istioctl { };
 
   bip = callPackage ../applications/networking/irc/bip { };
 
@@ -20731,7 +20808,7 @@ in
       recurseIntoAttrs (makeOverridable mkApplications attrs);
 
   inherit (kdeApplications)
-    akonadi akregator ark bovo dolphin dragon elisa ffmpegthumbs filelight gwenview k3b
+    akonadi akregator ark bomber bovo dolphin dragon elisa ffmpegthumbs filelight granatier gwenview k3b
     kaddressbook kapptemplate kate kcachegrind kcalc kcharselect kcolorchooser kdenlive kdf kdialog
     keditbookmarks kfind kget kgpg khelpcenter kig kleopatra kmail kmix kmplot kolourpaint kompare konsole yakuake
     kpkpass kitinerary kontact korganizer krdc krfb ksystemlog ktouch kwalletmanager marble minuet okular picmi spectacle;
@@ -20813,6 +20890,8 @@ in
   konversation = libsForQt5.callPackage ../applications/networking/irc/konversation { };
 
   kotatogram-desktop = qt5.callPackage ../applications/networking/instant-messengers/telegram/kotatogram-desktop { };
+
+  kpt = callPackage ../applications/networking/cluster/kpt { };
 
   krita = libsForQt5.callPackage ../applications/graphics/krita {
     openjpeg = openjpeg_1;
@@ -20915,6 +20994,7 @@ in
     harfbuzz = harfbuzz.override {
       withIcu = true; withGraphite2 = true;
     };
+    nss = nss_3_44;
   };
 
   libreoffice-qt = lowPrio (callPackage ../applications/office/libreoffice/wrapper.nix {
@@ -21388,6 +21468,8 @@ in
 
   netease-cloud-music = callPackage ../applications/audio/netease-cloud-music {};
 
+  newsflash = callPackage ../applications/networking/feedreaders/newsflash { };
+
   nicotine-plus = callPackage ../applications/networking/soulseek/nicotine-plus {
     geoip = geoipWithDatabase;
   };
@@ -21417,7 +21499,9 @@ in
 
   partio = callPackage ../development/libraries/partio {};
 
-  pc-ble-driver = callPackage ../development/libraries/pc-ble-driver {};
+  pc-ble-driver = callPackage ../development/libraries/pc-ble-driver {
+    inherit (darwin.apple_sdk.frameworks) IOKit;
+  };
 
   pbis-open = callPackage ../tools/security/pbis { };
 
@@ -22518,10 +22602,7 @@ in
 
   stp = callPackage ../applications/science/logic/stp { };
 
-  stretchly = callPackage ../applications/misc/stretchly {
-    # Error on launch w/electron_8
-    electron = electron_7;
-  };
+  stretchly = callPackage ../applications/misc/stretchly { };
 
   stumpish = callPackage ../applications/window-managers/stumpish {};
 
@@ -22555,6 +22636,8 @@ in
     pythonBindings = true;
   });
 
+  sublime-music = callPackage ../applications/audio/sublime-music { };
+
   subunit = callPackage ../development/libraries/subunit { };
 
   surf = callPackage ../applications/networking/browsers/surf { gtk = gtk2; };
@@ -22574,7 +22657,8 @@ in
 
   symlinks = callPackage ../tools/system/symlinks { };
 
-  syncplay = python3.pkgs.callPackage ../applications/networking/syncplay { };
+  # this can be changed to python3 once pyside2 is updated to support the latest python version
+  syncplay = python37.pkgs.callPackage ../applications/networking/syncplay { };
 
   inherit (callPackages ../applications/networking/syncthing { })
     syncthing
@@ -22699,8 +22783,10 @@ in
   thonny = callPackage ../applications/editors/thonny { };
 
   thunderbird = callPackage ../applications/networking/mailreaders/thunderbird {
+    inherit (rustPackages_1_44) cargo rustc;
     libpng = libpng_apng;
     gtk3Support = true;
+    nss = nss_3_44; # 68.x won't build with newest nss anymore (like firefox-esr-68)
   };
 
   thunderbolt = callPackage ../os-specific/linux/thunderbolt {};
@@ -23878,13 +23964,11 @@ in
     inherit (darwin.apple_sdk.frameworks) Carbon CoreServices;
   };
 
-  cataclysm-dda = callPackage ../games/cataclysm-dda {
-    inherit (darwin.apple_sdk.frameworks) CoreFoundation Cocoa;
-  };
+  cataclysmDDA = callPackage ../games/cataclysm-dda { };
 
-  cataclysm-dda-git = callPackage ../games/cataclysm-dda/git.nix {
-    inherit (darwin.apple_sdk.frameworks) CoreFoundation Cocoa;
-  };
+  cataclysm-dda = cataclysmDDA.stable.tiles;
+
+  cataclysm-dda-git = cataclysmDDA.git.tiles;
 
   chessdb = callPackage ../games/chessdb { };
 
@@ -24054,7 +24138,10 @@ in
   frozen-bubble = callPackage ../games/frozen-bubble { };
 
   fsg = callPackage ../games/fsg {
-    wxGTK = wxGTK28.override { unicode = false; };
+    wxGTK = wxGTK28.override {
+      unicode = false;
+      gst-plugins-base = null;
+    };
   };
 
   galaxis = callPackage ../games/galaxis { };
@@ -26291,6 +26378,8 @@ in
 
   nix-top = callPackage ../tools/package-management/nix-top { };
 
+  nix-tree = haskell.lib.justStaticExecutables (haskellPackages.nix-tree);
+
   nix-universal-prefetch = callPackage ../tools/package-management/nix-universal-prefetch { };
 
   nix-repl = throw (
@@ -26595,6 +26684,8 @@ in
     callPackage ../applications/networking/cluster/terraform-providers {}
   );
 
+  terraform-compliance = python3Packages.callPackage ../applications/networking/cluster/terraform-compliance {};
+
   terraform-docs = callPackage ../applications/networking/cluster/terraform-docs {};
 
   terraform-inventory = callPackage ../applications/networking/cluster/terraform-inventory {};
@@ -26842,6 +26933,8 @@ in
   yaxg = callPackage ../tools/graphics/yaxg {};
 
   zap = callPackage ../tools/networking/zap { };
+
+  zigbee2mqtt = callPackage ../servers/zigbee2mqtt { };
 
   zopfli = callPackage ../tools/compression/zopfli { };
 
