@@ -2,6 +2,8 @@ NixOS profiles to optimize settings for different hardware.
 
 ## Setup
 
+### Using channels
+
 Add and update `nixos-hardware` channel:
 
 ```
@@ -20,7 +22,9 @@ imports = [
 ];
 ```
 
-## Adding via nix flakes support
+New updates to the expressions here will be fetched when you update the channel.
+
+## Using nix flakes support
 
 There is also experimental flake support. In your `/etc/nixos/flake.nix` add the following:
 
@@ -42,6 +46,20 @@ There is also experimental flake support. In your `/etc/nixos/flake.nix` add the
   };
 }
 ```
+
+
+### Using fetchgit
+
+You can fetch the git repository directly:
+
+```nix
+imports = [ 
+  "${builtins.fetchgit { url = "https://github.com/NixOS/nixos-hardware.git"; }}/lenovo/thinkpad/x220"
+];
+```
+
+Unlike the channel, this will update the git repository on a rebuild. However, 
+you can easily pin to a particular revision if you desire more stability.
 
 ## List of Profiles
 
@@ -69,6 +87,8 @@ See code for all available configurations.
 | [Dell XPS 15 9560][]              | `<nixos-hardware/dell/xps/15-9560>`                |
 | [Dell XPS 15 9560, intel only][]  | `<nixos-hardware/dell/xps/15-9560/intel>`          |
 | [Dell XPS 15 9560, nvidia only][] | `<nixos-hardware/dell/xps/15-9560/nvidia>`         |
+| [Dell XPS 15 9500][]              | `<nixos-hardware/dell/xps/15-9500>`                |
+| [Dell XPS 15 9500, nvidia][]      | `<nixos-hardware/dell/xps/15-9500/nvidia>`         |
 | [Google Pixelbook][]              | `<nixos-hardware/google/pixelbook>`                |
 | [Inverse Path USB armory][]       | `<nixos-hardware/inversepath/usbarmory>`           |
 | Lenovo IdeaPad Z510               | `<nixos-hardware/lenovo/ideapad/z510>`             |
