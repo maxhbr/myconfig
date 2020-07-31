@@ -9,4 +9,4 @@ cd "$( dirname "${BASH_SOURCE[0]}" )"
 common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
 . "$common"
 
-updateRefAndJson rycee/home-manager release-19.09
+updateRefAndJson rycee/home-manager release-20.03
