@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 {
-  imports = [
-    ./hardware-configuration.nix
+  imports =
+    [ ./hardware-configuration.nix
+      # ../../hardware/btrfs.nix
       { boot.initrd.supportedFilesystems = [ "btrfs" "luks" ];
 
         services.btrfs.autoScrub =
@@ -24,21 +25,21 @@
             options = ["auto,nofail,x-systemd.device-timeout=1,users,rw,discard,noatime"];
           };
       }
-    # ./4x500-hdds.raid.nix
-    ./2x4000-hdds.raid.nix
-    ../../roles/headless.nix
-    ../../hardware/hdd-spinndown.nix
-    ../../modules/service.monitoring.nix
-    ../../modules/virtualization.docker
-    ../../modules/service.syncthing.nix
-    ../../roles/imagework/exfat.nix
-    # hardware:
-    ../../hardware/efi.nix
-    # configuration
-    # ./docker.openhab.nix
-    ../../modules/service.deconz.nix
-    # ../../modules/kiosk/headless.kiosk.nix
-  ] ++
+      # ./4x500-hdds.raid.nix
+      ./2x4000-hdds.raid.nix
+      ../../roles/headless.nix
+      ../../hardware/hdd-spinndown.nix
+      ../../modules/service.monitoring.nix
+      ../../modules/virtualization.docker
+      ../../modules/service.syncthing.nix
+      ../../roles/imagework/exfat.nix
+      # hardware:
+      ../../hardware/efi.nix
+      # configuration
+      # ./docker.openhab.nix
+      ../../modules/service.deconz.nix
+      # ../../modules/kiosk/headless.kiosk.nix
+    ] ++
     (with (import ../lib.nix);
       [ (setupAsWireguardClient "10.199.199.6")
       ]

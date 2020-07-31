@@ -100,9 +100,19 @@ generateStats() {
 realize() {
     local targetHost="$1"; shift
     local FORCE_RECREATE=false
+    local IS_LOCAL_HOST=false
+    local DRY_RUN=false
     if [[ "$1" == "--force-recreate" ]]; then
         FORCE_RECREATE=true
         shift
+    fi
+    if [[ "$1" == "--is-local-host" ]]; then
+        IS_LOCAL_HOST=true
+        shift
+    fi
+    if [[ "$1" == "--dry-run" ]]; then
+        DRY_RUN=true
+        # don't do shift
     fi
 
     local nixopsDeployment="$(getDeploymentNameFromHostname "$targetHost")"
@@ -127,6 +137,12 @@ EOF
     ############################################################################
 
     logH1 "deploy" "targetHost=$targetHost args=$args jobCountArgs=$jobCountArgs"
+    if [[ $IS_LOCAL_HOST && ! $DRY_RUN ]]; then
+        local mimeapps_list="$HOME/.config/mimeapps.list"
+        if [[ -f "$mimeapps_list" && ! -L "$mimeapps_list" ]]; then
+            rm "$mimeapps_list"
+        fi
+    fi
     (set -x;
      nixops deploy \
             $NIX_PATH_ARGS \

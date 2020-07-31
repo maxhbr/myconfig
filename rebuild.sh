@@ -160,7 +160,8 @@ else
     if $DO_UPGRADE; then
         if [[ "$(hostname)" == "$my_main_host" ]]; then
             if isBranchMaster; then
-                runWithTrap realize $TARGET $($DRY_RUN && echo "--dry-run")
+                runWithTrap realize $TARGET \
+                            $($DRY_RUN && echo "--dry-run")
                 runWithTrap upgrade
             else
                 logINFO "git branch is not master, do not upgrade"
@@ -169,7 +170,10 @@ else
             logINFO "host is not main host, do not upgrade"
         fi
     fi
-    runWithTrap realize $TARGET $($FORCE_RECREATE && echo "--force-recreate") $($DRY_RUN && echo "--dry-run") $($FORCE_REBOOT && echo "--force-reboot")
+    runWithTrap realize $TARGET \
+                $($FORCE_RECREATE && echo "--force-recreate") \
+                $($DRY_RUN && echo "--dry-run") \
+                $($FORCE_REBOOT && echo "--force-reboot")
     if ! $DRY_RUN; then
         generateStats $TARGET
         if $DO_POST_STUFF; then
