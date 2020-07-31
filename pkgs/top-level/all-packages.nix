@@ -94,6 +94,8 @@ in
 
   genericUpdater = callPackage ../common-updater/generic-updater.nix { };
 
+  nix-update-script = callPackage ../common-updater/nix-update.nix { };
+
   ### Push NixOS tests inside the fixed point
 
   nixosTests = import ../../nixos/tests/all-tests.nix {
@@ -2010,6 +2012,8 @@ in
   hopper = qt5.callPackage ../development/tools/analysis/hopper {};
 
   hr = callPackage ../applications/misc/hr { };
+
+  humioctl = callPackage ../applications/logging/humioctl {};
 
   hyx = callPackage ../tools/text/hyx { };
 
@@ -5551,6 +5555,8 @@ in
 
   notable = callPackage ../applications/misc/notable { };
 
+  nvchecker = with python3Packages; toPythonApplication nvchecker;
+
   miller = callPackage ../tools/text/miller { };
 
   milu = callPackage ../applications/misc/milu { };
@@ -6393,6 +6399,8 @@ in
   recutils = callPackage ../tools/misc/recutils { };
 
   recoll = callPackage ../applications/search/recoll { };
+
+  redoc-cli = nodePackages.redoc-cli;
 
   reflex = callPackage ../development/tools/reflex { };
 
@@ -7340,7 +7348,7 @@ in
   uget = callPackage ../tools/networking/uget { };
 
   uget-integrator = callPackage ../tools/networking/uget-integrator { };
-  
+
   ugrep = callPackage ../tools/text/ugrep { };
 
   uif2iso = callPackage ../tools/cd-dvd/uif2iso { };
@@ -9293,7 +9301,6 @@ in
   rocm-opencl-icd = callPackage ../development/libraries/rocm-opencl-icd { };
 
   rocm-opencl-runtime = callPackage ../development/libraries/rocm-opencl-runtime {
-    stdenv = overrideCC stdenv llvmPackages_rocm.clang;
     inherit (llvmPackages_rocm) clang clang-unwrapped lld llvm;
   };
 
@@ -11420,6 +11427,8 @@ in
   allegro5 = callPackage ../development/libraries/allegro/5.nix {};
 
   amdvlk = callPackage ../development/libraries/amdvlk {};
+
+  aml = callPackage ../development/libraries/aml { };
 
   amrnb = callPackage ../development/libraries/amrnb { };
 
@@ -15529,7 +15538,6 @@ in
 
   zlog = callPackage ../development/libraries/zlog { };
 
-  zeromq3 = callPackage ../development/libraries/zeromq/3.x.nix {};
   zeromq4 = callPackage ../development/libraries/zeromq/4.x.nix {};
   zeromq = zeromq4;
 
@@ -15608,8 +15616,6 @@ in
   junit = callPackage ../development/libraries/java/junit { antBuild = releaseTools.antBuild; };
 
   junixsocket = callPackage ../development/libraries/java/junixsocket { };
-
-  jzmq = callPackage ../development/libraries/java/jzmq { };
 
   lombok = callPackage ../development/libraries/java/lombok { };
 
@@ -16875,6 +16881,8 @@ in
   checksec = callPackage ../os-specific/linux/checksec { };
 
   cifs-utils = callPackage ../os-specific/linux/cifs-utils { };
+
+  cm-rgb = python3Packages.callPackage ../tools/system/cm-rgb { };
 
   cpustat = callPackage ../os-specific/linux/cpustat { };
 
@@ -26399,6 +26407,8 @@ in
   nixfmt = haskell.lib.justStaticExecutables haskellPackages.nixfmt;
 
   nixpkgs-fmt = callPackage ../tools/nix/nixpkgs-fmt { };
+
+  rnix-hashes = callPackage ../tools/nix/rnix-hashes { };
 
   nixos-artwork = callPackage ../data/misc/nixos-artwork { };
   nixos-icons = callPackage ../data/misc/nixos-artwork/icons.nix { };
