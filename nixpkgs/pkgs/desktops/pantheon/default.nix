@@ -23,10 +23,6 @@ lib.makeScope pkgs.newScope (self: with self; {
     wingpanel-indicator-session wingpanel-indicator-sound
   ];
 
-  nixpkgs-github-update = callPackage ./nixpkgs_github_update { };
-
-  updateScript = callPackage ./update.nix { };
-
   maintainers = with pkgs.stdenv.lib.maintainers; [ worldofpeace ];
 
   mutter = pkgs.gnome3.mutter334;
@@ -198,11 +194,11 @@ lib.makeScope pkgs.newScope (self: with self; {
 
   elementary-wallpapers = callPackage ./artwork/elementary-wallpapers { };
 
-  vala = pkgs.vala_0_46; # multiple pantheon packages have issues with vala 0.48.7
-
 } // lib.optionalAttrs (config.allowAliases or true) {
 
   ### ALIASES
+
+  inherit (pkgs) vala; # added 2019-10-10
 
   cerbere = throw "Cerbere is now obsolete https://github.com/elementary/cerbere/releases/tag/2.5.1.";
 
