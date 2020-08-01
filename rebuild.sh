@@ -161,10 +161,15 @@ else
         if [[ "$(hostname)" == "$my_main_host" ]]; then
             if isBranchMaster; then
                 runWithTrap realize $TARGET \
+                            $($TARGET_WAS_CHANGED || echo "--is-local-host") \
                             $($DRY_RUN && echo "--dry-run")
                 runWithTrap upgrade
             else
                 logINFO "git branch is not master, do not upgrade"
+            fi
+            if ! $TARGET_WAS_CHANGED; then
+                logINFO "reindex git search"
+                nix search -u > /dev/null
             fi
         else
             logINFO "host is not main host, do not upgrade"
@@ -172,6 +177,7 @@ else
     fi
     runWithTrap realize $TARGET \
                 $($FORCE_RECREATE && echo "--force-recreate") \
+                $($TARGET_WAS_CHANGED || echo "--is-local-host") \
                 $($DRY_RUN && echo "--dry-run") \
                 $($FORCE_REBOOT && echo "--force-reboot")
     if ! $DRY_RUN; then
