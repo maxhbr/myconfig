@@ -168,7 +168,7 @@ else
                 logINFO "git branch is not master, do not upgrade"
             fi
             if ! $TARGET_WAS_CHANGED; then
-                logINFO "reindex git search"
+                logINFO "reindex nix search"
                 nix search -u > /dev/null
             fi
         else
