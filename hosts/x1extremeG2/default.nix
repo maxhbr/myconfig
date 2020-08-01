@@ -8,6 +8,7 @@
       # hardware:
       ../../hardware/x1extremeG2.nix
       ../../hardware/efi.nix
+      ../../hardware/footswitch.nix
       # { config =
       #     { fileSystems."/mnt/workstation-nfs" = {
       #         device = "workstation:/data";
