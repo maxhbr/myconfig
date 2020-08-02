@@ -833,6 +833,12 @@
     githubId = 135230;
     name = "Aycan iRiCAN";
   };
+  artturin = {
+    email = "artturin@artturin.com";
+    github = "artturin";
+    githubId = 56650223;
+    name = "Artturi N";
+  };
   b4dm4n = {
     email = "fabianm88@gmail.com";
     github = "B4dM4n";
@@ -4150,6 +4156,12 @@
     email = "karantan@gmail.com";
     github = "karantan";
     githubId = 7062631;
+  };
+  KarlJoad = {
+    email = "karl@hallsby.com";
+    github = "KarlJoad";
+    githubId = 34152449;
+    name = "Karl Hallsby";
   };
   karolchmist = {
     email = "info+nix@chmist.com";
@@ -7480,6 +7492,12 @@
     githubId = 2770647;
     name = "Simon Vandel Sillesen";
   };
+  siraben = {
+    email = "bensiraphob@gmail.com";
+    github = "siraben";
+    githubId = 8219659;
+    name = "Siraphob Phipathananunth";
+  };
   siriobalmelli = {
     email = "sirio@b-ad.ch";
     github = "siriobalmelli";
@@ -8021,6 +8039,12 @@
     github = "tesq0";
     githubId = 26417242;
     name = "Mikolaj Galkowski";
+  };
+  TethysSvensson = {
+    email = "freaken@freaken.dk";
+    github = "TethysSvensson";
+    githubId = 4294434;
+    name = "Tethys Svensson";
   };
   teto = {
     email = "mcoudron@hotmail.com";
