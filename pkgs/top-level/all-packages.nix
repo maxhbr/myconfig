@@ -1913,6 +1913,8 @@ in
 
   gdrive = callPackage ../applications/networking/gdrive { };
 
+  go-rice = callPackage ../tools/misc/go.rice {};
+
   go-2fa = callPackage ../tools/security/2fa {};
 
   go-dependency-manager = callPackage ../development/tools/gdm { };
@@ -2525,6 +2527,8 @@ in
 
   cemu = qt5.callPackage ../applications/science/math/cemu { };
 
+  isolyzer = callPackage ../tools/cd-dvd/isolyzer { };
+
   isomd5sum = callPackage ../tools/cd-dvd/isomd5sum { };
 
   mdf2iso = callPackage ../tools/cd-dvd/mdf2iso { };
@@ -3063,6 +3067,8 @@ in
   doomseeker = qt5.callPackage ../applications/misc/doomseeker { };
 
   doom-bcc = callPackage ../games/zdoom/bcc-git.nix { };
+
+  sl1-to-photon = python3Packages.callPackage ../applications/misc/sl1-to-photon { };
 
   slade = callPackage ../applications/misc/slade {
     wxGTK = wxGTK30;
@@ -6360,6 +6366,9 @@ in
 
   rdma-core = callPackage ../os-specific/linux/rdma-core { };
 
+
+  real_time_config_quick_scan = callPackage ../applications/audio/real_time_config_quick_scan { };
+
   react-native-debugger = callPackage ../development/tools/react-native-debugger { };
 
   read-edid = callPackage ../os-specific/linux/read-edid { };
@@ -7422,6 +7431,8 @@ in
   vcs_query = callPackage ../tools/misc/vcs_query { };
 
   vcstool = callPackage ../development/tools/vcstool { };
+
+  vend = callPackage ../development/tools/vend { };
 
   verilator = callPackage ../applications/science/electronics/verilator {};
 
@@ -9439,6 +9450,8 @@ in
   scala_2_13 = callPackage ../development/compilers/scala/2.13.nix { jre = jre8; };
   scala = scala_2_13;
 
+  scas = callPackage ../development/compilers/scas { };
+
   metal = callPackage ../development/libraries/metal { };
   metals = callPackage ../development/tools/metals { };
   scalafix = callPackage ../development/tools/scalafix { };
@@ -9630,6 +9643,8 @@ in
   dhall-bash = haskell.lib.justStaticExecutables haskellPackages.dhall-bash;
 
   dhall-json = haskell.lib.justStaticExecutables haskellPackages.dhall-json;
+
+  dhall-lsp-server = haskell.lib.justStaticExecutables haskellPackages.dhall-lsp-server;
 
   dhall-text = haskell.lib.justStaticExecutables haskellPackages.dhall-text;
 
@@ -16022,9 +16037,7 @@ in
 
   hiawatha = callPackage ../servers/http/hiawatha {};
 
-  home-assistant = callPackage ../servers/home-assistant {
-    python3 = python37;
-  };
+  home-assistant = callPackage ../servers/home-assistant { };
 
   home-assistant-cli = callPackage ../servers/home-assistant/cli.nix { };
 
@@ -18302,6 +18315,14 @@ in
 
   eb-garamond = callPackage ../data/fonts/eb-garamond { };
 
+  edukai = callPackage ../data/fonts/edukai { };
+
+  eduli = callPackage ../data/fonts/eduli { };
+
+  moeli = eduli;
+
+  edusong = callPackage ../data/fonts/edusong { };
+
   elliptic_curves = callPackage ../data/misc/elliptic_curves { };
 
   equilux-theme = callPackage ../data/themes/equilux-theme { };
@@ -19085,6 +19106,8 @@ in
   avocode = callPackage ../applications/graphics/avocode {};
 
   azpainter = callPackage ../applications/graphics/azpainter { };
+
+  bambootracker = libsForQt5.callPackage ../applications/audio/bambootracker { };
 
   cadence =  qt5.callPackage ../applications/audio/cadence { };
 
@@ -21493,6 +21516,8 @@ in
   nootka = qt5.callPackage ../applications/audio/nootka { };
   nootka-unstable = qt5.callPackage ../applications/audio/nootka/unstable.nix { };
 
+  nwg-launchers = callPackage ../applications/misc/nwg-launchers { };
+
   open-policy-agent = callPackage ../development/tools/open-policy-agent { };
 
   openshift = callPackage ../applications/networking/cluster/openshift { };
@@ -21663,9 +21688,7 @@ in
 
   mypaint-brushes = callPackage ../development/libraries/mypaint-brushes { };
 
-  mythtv = libsForQt5.callPackage ../applications/video/mythtv {
-    libXNVCtrl = linuxPackages.nvidia_x11.settings.libXNVCtrl;
-  };
+  mythtv = libsForQt5.callPackage ../applications/video/mythtv { };
 
   micro = callPackage ../applications/editors/micro { };
 
@@ -21993,6 +22016,8 @@ in
   };
 
   pistol = callPackage ../tools/misc/pistol { };
+
+  plexamp = callPackage ../applications/audio/plexamp { };
 
   plex-media-player = libsForQt512.callPackage ../applications/video/plex-media-player { };
 
@@ -25882,6 +25907,8 @@ in
   areca = callPackage ../applications/backup/areca { };
 
   attract-mode = callPackage ../misc/emulators/attract-mode { };
+
+  autotiling = python3Packages.callPackage ../misc/autotiling { };
 
   beep = callPackage ../misc/beep { };
 
