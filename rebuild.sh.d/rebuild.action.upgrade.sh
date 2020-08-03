@@ -18,6 +18,7 @@ upgradeSubtree() {
 
     git fetch "$remoteName" -- "$branch"
     logINFO "the channel $branch was last upgraded $(git log --format="%cr" remotes/$remoteName/$branch -1)"
+    local oldCommit="$(git rev-parse HEAD)"
     if [[ ! -d $prefix ]]; then
         (set -x;
          git subtree add --prefix $prefix "$remoteName" "$branch" --squash)
@@ -26,6 +27,11 @@ upgradeSubtree() {
          git subtree pull --prefix $prefix "$remoteName" "$branch" --squash)
     fi
 
+    if [[ "$oldCommit" == "$(git rev-parse HEAD)" ]]; then
+        return 0
+    else
+        return 1 # was updated
+    fi
 }
 
 upgradeNixpkgs() {
@@ -46,29 +52,33 @@ upgradeNixosHardware() {
 upgrade() {
     cd $myconfigDir
     if [[ "$(hostname)" == "$my_main_host" ]]; then
+        wasUpdated=0
+
         if git diff-index --quiet HEAD --; then
             logH1 "upgrade" "nixpkgs"
-            upgradeNixpkgs
+            upgradeNixpkgs || wasUpdated=1
             if git diff-index --quiet HEAD --; then
                 logH1 "upgrade" "NixosHardware"
-                upgradeNixosHardware
+                upgradeNixosHardware || wasUpdated=1
             fi
         else
             logINFO "skip updating subtrees, not clean"
         fi
 
         logH3 "update" "home-manager"
-        ./lib/home-manager/update.sh
+        ./lib/home-manager/update.sh || wasUpdated=1
         logH3 "update" "nix-nixPath"
-        ./lib/nix-nixPath/update.sh
+        ./lib/nix-nixPath/update.sh || wasUpdated=1
         logH3 "update" "extrahosts"
-        ./modules/nixos.networking/extrahosts/update.sh
+        ./modules/nixos.networking/extrahosts/update.sh || wasUpdated=1
         logH3 "update" "emacs"
-        ./modules/emacs/update.sh
+        ./modules/emacs/update.sh || wasUpdated=1
         logH3 "update" "my-wallpapers"
-        ./modules/desktop.common/my-wallpapers/update.sh
+        ./modules/desktop.common/my-wallpapers/update.sh || wasUpdated=1
         logH3 "update" "chisui/zsh-nix-shell"
-        ./modules/zsh/update.sh
+        ./modules/zsh/update.sh || wasUpdated=1
+
+        return $wasUpdated
     fi
 }
 

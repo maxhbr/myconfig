@@ -156,29 +156,27 @@ runWithTrap prepare
 if $DO_ONLY_UPGRADE; then
     runWithTrap upgrade
 else
-    if $DO_UPGRADE; then
-        if [[ "$(hostname)" == "$my_main_host" ]]; then
-            if isBranchMaster; then
-                runWithTrap realize $TARGET \
-                            $($TARGET_WAS_CHANGED || echo "--is-local-host") \
-                            $($DRY_RUN && echo "--dry-run")
-                runWithTrap upgrade
-            else
-                logINFO "git branch is not master, do not upgrade"
-            fi
-            if ! $TARGET_WAS_CHANGED; then
-                logINFO "reindex nix search"
-                nix search -u > /dev/null
-            fi
-        else
-            logINFO "host is not main host, do not upgrade"
-        fi
-    fi
     runWithTrap realize $TARGET \
                 $($FORCE_RECREATE && echo "--force-recreate") \
                 $($TARGET_WAS_CHANGED || echo "--is-local-host") \
                 $($DRY_RUN && echo "--dry-run") \
                 $($FORCE_REBOOT && echo "--force-reboot")
+
+    if $DO_UPGRADE && ! $DRY_RUN && isBranchMaster; then
+
+        if upgrade; then
+            logINFO "nothing was updated, so no new realize run"
+        else
+            runWithTrap realize $TARGET \
+                        $($TARGET_WAS_CHANGED || echo "--is-local-host") \
+                        $($DRY_RUN && echo "--dry-run")
+
+            if ! $TARGET_WAS_CHANGED; then
+                logINFO "reindex nix search"
+                nix search -u > /dev/null
+            fi
+        fi
+    fi
     if ! $DRY_RUN; then
         generateStats $TARGET
         if $DO_POST_STUFF; then

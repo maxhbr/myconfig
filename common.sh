@@ -107,6 +107,8 @@ if ! type logH1 &>/dev/null; then
                 local path=$(echo "$prefetchOutput" | tail -1)
                 echo '{"url":"'$tarball'","rev": "'$rev'","sha256":"'$hash'","path":"'$path'","ref": "'$branch'", "url": "'$url'", "owner": "'$repoUser'", "repo": "'$repoName'"}' > "./$outJson"
                 logINFO "... $(tput setaf 2)$(tput bold)updated$(tput sgr0) $outRev to rev=[$rev]"
+
+                return 1 # was updated
             else
                 logINFO "... $outRev file is already up to date, at rev=[$rev]"
             fi
