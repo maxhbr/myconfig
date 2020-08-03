@@ -68,6 +68,11 @@ if ! type logH1 &>/dev/null; then
         >&2 echo "$(tput setaf 1)$(tput bold)*** ERR: $text$(tput sgr0)"
     }
 
+    logDEBUG() {
+        local text=$1
+        >&2 echo "$(tput bold)*** DEBUG:$(tput sgr0) $text"
+    }
+
     if [ -n "$BASH_VERSION" ]; then
         export -f have
         export -f logH1

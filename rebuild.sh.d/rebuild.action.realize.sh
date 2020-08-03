@@ -137,7 +137,7 @@ EOF
     ############################################################################
 
     logH1 "deploy" "targetHost=$targetHost args=$args jobCountArgs=$jobCountArgs"
-    logINFO "FORCE_RECREATE=$FORCE_RECREATE IS_LOCAL_HOST=$IS_LOCAL_HOST DRY_RUN=$DRY_RUN"
+    logDEBUG "FORCE_RECREATE=$FORCE_RECREATE IS_LOCAL_HOST=$IS_LOCAL_HOST DRY_RUN=$DRY_RUN"
 
     if $IS_LOCAL_HOST; then
         # this should be removed, once home-manager bug is resolved
