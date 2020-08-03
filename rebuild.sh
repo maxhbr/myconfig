@@ -87,6 +87,7 @@ EOF
         --reboot) shift
             if $TARGET_WAS_CHANGED; then
               FORCE_REBOOT=true
+              DO_UPGRADE=false
             fi
             ;;
         --suspend) shift
@@ -162,22 +163,23 @@ else
                 $($DRY_RUN && echo "--dry-run") \
                 $($FORCE_REBOOT && echo "--force-reboot")
 
-    if $DO_UPGRADE && ! $DRY_RUN && isBranchMaster; then
+    if ! $DRY_RUN; then
+        if $DO_UPGRADE && isBranchMaster; then
 
-        if upgrade; then
-            logINFO "nothing was updated, so no new realize run"
-        else
-            runWithTrap realize $TARGET \
-                        $($TARGET_WAS_CHANGED || echo "--is-local-host") \
-                        $($DRY_RUN && echo "--dry-run")
+            if upgrade; then
+                logINFO "nothing was updated, so no new realize run"
+            else
+                runWithTrap realize $TARGET \
+                            $($TARGET_WAS_CHANGED || echo "--is-local-host") \
+                            $($DRY_RUN && echo "--dry-run")
 
-            if ! $TARGET_WAS_CHANGED; then
-                logINFO "reindex nix search"
-                nix search -u > /dev/null
+                if ! $TARGET_WAS_CHANGED; then
+                    logINFO "reindex nix search"
+                    nix search -u > /dev/null
+                fi
             fi
         fi
-    fi
-    if ! $DRY_RUN; then
+
         generateStats $TARGET
         if $DO_POST_STUFF; then
             runWithTrap cleanup
