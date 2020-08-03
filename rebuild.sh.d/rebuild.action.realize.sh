@@ -138,7 +138,9 @@ EOF
 
     logH1 "deploy" "targetHost=$targetHost args=$args jobCountArgs=$jobCountArgs"
     logINFO "FORCE_RECREATE=$FORCE_RECREATE IS_LOCAL_HOST=$IS_LOCAL_HOST DRY_RUN=$DRY_RUN"
+
     if $IS_LOCAL_HOST; then
+        # this should be removed, once home-manager bug is resolved
         if ! $DRY_RUN; then
             local mimeapps_list="$HOME/.config/mimeapps.list"
             if [[ -f "$mimeapps_list" && ! -L "$mimeapps_list" ]]; then
@@ -148,6 +150,7 @@ EOF
             fi
         fi
     fi
+
     (set -x;
      nixops deploy \
             $NIX_PATH_ARGS \

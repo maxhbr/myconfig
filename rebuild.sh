@@ -27,7 +27,6 @@ fi
 ###########################################################################
 export NIXOPS_STATE="$HOME/.myconfig-nixops.nixops"
 nixStableChannel=nixos-unstable
-nixUnstableChannel=nixpkgs-unstable
 DO_GIT=true
 DO_UPGRADE=true
 DO_ONLY_UPGRADE=false
