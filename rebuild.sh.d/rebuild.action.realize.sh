@@ -137,10 +137,15 @@ EOF
     ############################################################################
 
     logH1 "deploy" "targetHost=$targetHost args=$args jobCountArgs=$jobCountArgs"
-    if [[ $IS_LOCAL_HOST && ! $DRY_RUN ]]; then
-        local mimeapps_list="$HOME/.config/mimeapps.list"
-        if [[ -f "$mimeapps_list" && ! -L "$mimeapps_list" ]]; then
-            rm "$mimeapps_list"
+    logINFO "FORCE_RECREATE=$FORCE_RECREATE IS_LOCAL_HOST=$IS_LOCAL_HOST DRY_RUN=$DRY_RUN"
+    if $IS_LOCAL_HOST; then
+        if ! $DRY_RUN; then
+            local mimeapps_list="$HOME/.config/mimeapps.list"
+            if [[ -f "$mimeapps_list" && ! -L "$mimeapps_list" ]]; then
+                logINFO "remove $mimeapps_list"
+                (set -x;
+                 rm "$mimeapps_list")
+            fi
         fi
     fi
     (set -x;
