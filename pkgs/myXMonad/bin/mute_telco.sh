@@ -3,6 +3,9 @@
 # - https://askubuntu.com/a/180661
 # - https://askubuntu.com/a/541263
 
+# TODO:
+# - Bail out, if uncertain
+
 set -e
 
 toggle_telco_mute() {
