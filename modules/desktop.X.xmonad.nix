@@ -8,6 +8,10 @@ let
   my-xmonad = pkgs.haskellPackages.callPackage ../pkgs/myXMonad {
     inherit pkgs my-xmobar;
   };
+  myxev = pkgs.writeShellScriptBin "myxev" ''
+    ${pkgs.xorg.xev}/bin/xev -id $(${pkgs.xdotool}/bin/xdotool getactivewindow)
+  '';
+
 in {
   imports = [
     ./desktop.X.common
@@ -20,6 +24,7 @@ in {
         my-xmobar
 
         dzen2
+        myxev
       ];
       xsession.windowManager.command = "${my-xmonad}/bin/xmonad";
     };

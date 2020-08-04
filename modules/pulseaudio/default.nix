@@ -1,6 +1,6 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, ... }: let
+{ config, pkgs, lib, ... }: let
 
   mb660_switch_profile = pkgs.writeShellScriptBin "mb660_switch_profile" ''
     export PATH=$PATH:${pkgs.pulseaudio}/bin:${pkgs.bash}/bin
@@ -67,19 +67,34 @@
     fi
     connect
   '');
-in {
-  hardware.pulseaudio = {
-    enable = true;
-    package = pkgs.pulseaudioFull;
-    extraConfig = "load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1";
-  };
-  nixpkgs.overlays = [(self: super:
-    { helper = { inherit connectBtDevice; };
-    })];
+  mute_telco = pkgs.writeShellScriptBin "mute_telco" ''
+    export PATH=$PATH:${pkgs.pulseaudio}/bin:${pkgs.xorg.xmessage}/bin
+    ${pkgs.bash}/bin/bash ${./bin/mute_telco.sh} --popup
+  '';
 
-  environment.systemPackages = with pkgs; [
-    pavucontrol pamix
-    mb660_switch_profile
-  ];
-  nixpkgs.config.pulseaudio = true;
+in
+{ config =
+    { hardware.pulseaudio =
+        { enable = true;
+          package = pkgs.pulseaudioFull;
+          extraConfig = "load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1";
+        };
+      nixpkgs.overlays = [(self: super:
+        { helper = { inherit connectBtDevice; };
+        })];
+
+      environment.systemPackages = with pkgs;
+        [ pavucontrol pamix
+          mb660_switch_profile
+          mute_telco
+        ];
+      nixpkgs.config.pulseaudio = true;
+
+      services.actkbd =
+        { enable = lib.mkForce true;
+          bindings = [
+            { keys = [ 202 ]; events = [ "key" ]; command = "${mute_telco}/bin/mute_telco --popup"; }
+          ];
+        };
+    };
 }
