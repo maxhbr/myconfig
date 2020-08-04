@@ -167,7 +167,7 @@ else
         if $DO_UPGRADE && isBranchMaster; then
 
             if upgrade; then
-                logINFO "nothing was updated, so no new realize run"
+                logH1 "skip deploy" "nothing was updated, so no new realize run"
             else
                 runWithTrap realize $TARGET \
                             $($TARGET_WAS_CHANGED || echo "--is-local-host") \
