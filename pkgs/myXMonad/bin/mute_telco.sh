@@ -1,5 +1,4 @@
-#!/usr/bin/env nix-shell
-#! nix-shell -i bash -p pulseaudio xorg.xmessage
+#!/usr/bin/env bash
 # based on:
 # - https://askubuntu.com/a/180661
 # - https://askubuntu.com/a/541263
@@ -23,9 +22,9 @@ toggle_mute() {
         pacmd set-source-output-mute "$index" "$other_state"
         echo $other_state > "$state_file"
         if [[ "$other_state" == "0" ]]; then
-            echo "unmuted"
+            echo "unmute $(echo $name | awk '{print $1;}')"
         else
-            echo "muted"
+            echo "mute $(echo $name | awk '{print $1;}')"
         fi
     else
         return 1
@@ -59,10 +58,4 @@ get_other_state_from_file() {
     fi
 }
 
-popupcmd="echo"
-if [[ "$1" == "--popup" ]]; then
-    popupcmd="xmessage -timeout 1"
-    shift
-fi
-
-$popupcmd "$(toggle_telco_mute)"
+toggle_telco_mute

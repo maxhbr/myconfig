@@ -4,7 +4,7 @@
 module XMonad.MyConfig.Notify
        ( applyMyUrgencyHook
        , popupCurDesktop
-       , myDefaultPopup )
+       , myDefaultPopup, myNotify)
        where
 -- needs `notify-osd` and `libnotify`
 -- See: https://pbrisbin.com/posts/using_notify_osd_for_xmonad_notifications/

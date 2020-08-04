@@ -34,7 +34,7 @@ import qualified XMonad.StackSet as W
 -- MyConfig
 import XMonad.MyConfig.Common
 import XMonad.MyConfig.MyLayoutLayer ( myLayout )
-import XMonad.MyConfig.Notify ( popupCurDesktop, myDefaultPopup )
+import XMonad.MyConfig.Notify ( popupCurDesktop, myDefaultPopup, myNotify )
 
 normalcolor = "#333333" :: String
 maincolor = "#ee9a00" :: String
@@ -158,6 +158,9 @@ volumeControlKBs =
     [ (0x1008ff12, ["mute"])
     , (0x1008ff11, ["-10%"])
     , (0x1008ff13, ["+10%"])]
+  ++ [ ((m__, xK_a), runProcessWithInput (pathToXmonadBins ++ "mute_telco.sh") [] ""
+                     >>= myNotify 0.5)
+     ]
 #else
 -- alsa
   map (\(k,v) -> ((const 0, k)

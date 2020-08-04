@@ -67,11 +67,6 @@
     fi
     connect
   '');
-  mute_telco = pkgs.writeShellScriptBin "mute_telco" ''
-    export PATH=$PATH:${pkgs.pulseaudio}/bin:${pkgs.xorg.xmessage}/bin
-    ${pkgs.bash}/bin/bash ${./bin/mute_telco.sh} --popup
-  '';
-
 in
 { config =
     { hardware.pulseaudio =
@@ -86,15 +81,7 @@ in
       environment.systemPackages = with pkgs;
         [ pavucontrol pamix
           mb660_switch_profile
-          mute_telco
         ];
       nixpkgs.config.pulseaudio = true;
-
-      services.actkbd =
-        { enable = lib.mkForce true;
-          bindings = [
-            { keys = [ 202 ]; events = [ "key" ]; command = "${mute_telco}/bin/mute_telco --popup"; }
-          ];
-        };
     };
 }
