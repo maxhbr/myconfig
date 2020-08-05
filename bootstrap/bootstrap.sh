@@ -68,7 +68,7 @@ mkLegacyPartitions() {
     parted -a optimal ${SDX} -- mklabel msdos
     if true; then
         parted -a optimal $SDX -- mkpart primary 512MiB 100%
-        parted -a optimal $SDX -- mkpart fat32 1MiB 512MiB
+        parted -a optimal $SDX -- mkpart primary fat32 1MiB 512MiB
     else
         # swap as partition:
         parted -a optimal ${SDX} -- mkpart primary 512MiB -8GiB
