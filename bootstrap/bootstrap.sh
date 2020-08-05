@@ -34,7 +34,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 SDX="$1"
-PASSPHRASE=${2:-pass}
+PASSPHRASE="$2"
 VG_NAME=${3:-vg}
 MNT=${4:-/mnt}
 

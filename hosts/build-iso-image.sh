@@ -6,8 +6,23 @@ cd "$( dirname "${BASH_SOURCE[0]}" )"
 common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
 . "$common"
 
+getNamePrefixFromConfig() {
+    local config=${1%.*}
+    if [[ "$config" == "" ]]; then
+        return
+    fi
+
+    local configBN="$(basename "$config")"
+    if [[ "$configBN" != "default" ]]; then
+        echo "-$configBN"
+    else
+        getNamePrefixFromConfig "$(dirname "$config")"
+    fi
+}
+
 build() (
     local hostConfig="$1"
+    local secondaryHostConfig="$2"
 
     NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/hosts/minimal"
     NIX_PATH=""
@@ -23,17 +38,17 @@ build() (
          $jobCountArgs \
          --show-trace \
          --no-out-link \
-         --argstr hostConfig "$hostConfig"
+         --argstr hostConfig "$hostConfig" $([[ "$secondaryHostConfig" ]] && echo "--argstr secondaryHostConfig $secondaryHostConfig")
 )
 
 buildAndCopy() {
     local hostConfig="$1"
+    local secondaryHostConfig="$2"
 
-    drv=$(build "$hostConfig")
-    out=("$drv/iso/nixos"*".iso")
-    finalOut="nixos-myconfig-$(basename ${hostConfig%.*}).iso"
+    drv=$(build "$hostConfig" "$secondaryHostConfig")
+    out=("$drv/iso/nixos-myconfig"*".iso")
     du -h "$out"
-    local outDir="$myconfigDir/__out/iso"
+    local outDir="$myconfigDir/__out/iso$(getNamePrefixFromConfig "${hostConfig}")$(getNamePrefixFromConfig "${secondaryHostConfig}")"
     install -D -m 644 -v "$out" -t "$outDir"
     nix-store --delete "$drv"
 
@@ -53,4 +68,4 @@ EOF
     chmod +x "$outDir/run-qemu.sh"
 }
 
-buildAndCopy "${1:-roles/dev.nix}"
+buildAndCopy "${1:-roles/dev.nix}" "$2"

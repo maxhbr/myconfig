@@ -1,52 +1,80 @@
 # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
 { system ? "x86_64-linux"
-, hostConfig ? "roles/dev.nix" }:
+, hostConfig ? "roles/dev.nix"
+, secondaryHostConfig ? hostConfig
+}:
 let
   nixpkgs = ../nixpkgs;
   evalNixos = configuration:
     import "${nixpkgs}/nixos"
       { inherit system configuration;
       };
-  myisoconfig = { lib, ... }:
-    { imports =
-        [ "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
-          "${nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
-          (../. + "/${hostConfig}")
-          ../modules/service.openssh.nix
-        ];
+  myisoconfig = { lib, pkgs, ... }:
+    let
+      bootstrap = pkgs.writeShellScriptBin "bootstrap" ''
+        if [[ "$(hostname)" != "myconfig" ]]; then
+            echo "hostname missmatch"
+            exit 1
+        fi
+        sudo BOOTSTRAP=YES ${../bootstrap/bootstrap.sh} $@
+      '';
+    in
+      { imports =
+          [ "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+            "${nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
+            (../. + "/${hostConfig}")
+            ../modules/service.openssh.nix
+            ( lib.mkIf (hostConfig != secondaryHostConfig)
+                ( let
+                    preBuiltConfig = (evalNixos
+                      ( import (../. + "/${secondaryHostConfig}")
+                          { pkgs = nixpkgs;
+                          }
+                      )).system;
+                    bootstrap-install = pkgs.writeShellScriptBin "bootstrap-install" ''
+                      if [[ ! -d "/mnt/etc/nixos/" ]]; then
+                        echo "folder /mnt/etc/nixos/ is missing"
+                        exit 1
+                      fi
+                      sudo nixos-install --no-root-passwd --system ''${1:-${preBuiltConfig}}
+                    '';
+                  in
+                    { environment.systemPackages = [ bootstrap-install ];
+                      isoImage.storeContents = [ preBuiltConfig ];
+                    }
+                )
+            )
+          ];
 
-      config =
-        { networking.hostName = "myconfig";
-          networking.wireless.enable = false;
+        config =
+          { networking.hostName = "myconfig";
+            networking.wireless.enable = false;
 
-          services.xserver.displayManager.autoLogin =
-            { enable = true;
-              user = "mhuber";
-            };
+            environment.systemPackages = [ bootstrap ];
 
-          # OpenSSH is forced to have an empty `wantedBy` on the installer system[1], this won't allow it
-          # to be automatically started. Override it with the normal value.
-          # [1] https://github.com/NixOS/nixpkgs/blob/9e5aa25/nixos/modules/profiles/installation-device.nix#L76
-          systemd.services.sshd.wantedBy = lib.mkOverride 40 [ "multi-user.target" ];
+            services.xserver.displayManager.autoLogin =
+              { enable = true;
+                user = "mhuber";
+              };
 
-          # add myconfig to iso
-          isoImage =
-            { contents =
-                [ # { source = ./.; target = "myconfig/nixos"; }
-                  # { source = ../misc; target = "myconfig/misc"; }
-                  # { source = ../nixpkgs; target = "myconfig/nixpkgs"; }
-                  # { source = ../common.sh; target = "myconfig/common.sh"; }
-                  # { source = ../rebuild.sh; target = "myconfig/rebuild.sh"; }
-                  # { source = ../README.org; target = "myconfig/README.org"; }
-                  { source = ../LICENSE; target = "myconfig/LICENSE"; }
-                ];
-            };
-        };
-    };
+            # OpenSSH is forced to have an empty `wantedBy` on the installer system[1], this won't allow it
+            # to be automatically started. Override it with the normal value.
+            # [1] https://github.com/NixOS/nixpkgs/blob/9e5aa25/nixos/modules/profiles/installation-device.nix#L76
+            systemd.services.sshd.wantedBy = lib.mkOverride 40 [ "multi-user.target" ];
+
+            # add myconfig to iso
+            isoImage =
+              { contents =
+                  [ { source = ../LICENSE; target = "myconfig/LICENSE"; }
+                  ];
+                isoBaseName = "nixos-myconfig";
+              };
+          };
+      };
 
 in
-{ iso = (evalNixos myisoconfig).config.system.build.isoImage;
-}
+  { iso = (evalNixos myisoconfig).config.system.build.isoImage;
+  }
 
 
 
