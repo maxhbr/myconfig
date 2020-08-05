@@ -65,14 +65,15 @@ mkEfiPartitions() {
 }
 
 mkLegacyPartitions() {
-    parted -a optimal ${SDX} -- mklabel msdos
+    parted -a optimal $SDX -- mklabel msdos
     if true; then
         parted -a optimal $SDX -- mkpart primary 512MiB 100%
         parted -a optimal $SDX -- mkpart primary fat32 1MiB 512MiB
     else
         # swap as partition:
-        parted -a optimal ${SDX} -- mkpart primary 512MiB -8GiB
-        parted -a optimal ${SDX} -- mkpart primary linux-swap -8GiB 100%
+        parted -a optimal $SDX -- mkpart primary 512MiB -8GiB
+        parted -a optimal $SDX -- mkpart primary fat32 1MiB 512MiB
+        parted -a optimal $SDX -- mkpart primary linux-swap -8GiB 100%
     fi
     parted -a optimal $SDX -- set 2 boot on
 }
