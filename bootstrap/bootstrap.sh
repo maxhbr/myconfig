@@ -58,16 +58,21 @@ fi
 ################################################################################
 
 mkEfiPartitions() {
-    parted $SDX -- mklabel gpt
-    parted $SDX -- mkpart primary 512MiB 100%
-    parted $SDX -- mkpart ESP fat32 1MiB 512MiB
-    parted $SDX -- set 2 boot on
+    parted -a optimal $SDX -- mklabel gpt
+    parted -a optimal $SDX -- mkpart primary 512MiB 100%
+    parted -a optimal $SDX -- mkpart ESP fat32 1MiB 512MiB
+    parted -a optimal $SDX -- set 2 boot on
 }
 
 mkLegacyPartitions() {
-    parted ${SDX} -- mklabel msdos
-    parted ${SDX} -- mkpart primary 1MiB -8GiB
-    parted ${SDX} -- mkpart primary linux-swap -8GiB 100%
+    parted -a optimal ${SDX} -- mklabel msdos
+    if true; then
+        parted -a optimal ${SDX} -- mkpart primary 1MiB 100%
+    else
+        # swap as partition:
+        parted -a optimal ${SDX} -- mkpart primary 1MiB -8GiB
+        parted -a optimal ${SDX} -- mkpart primary linux-swap -8GiB 100%
+    fi
 }
 
 mkLuks() {
@@ -116,6 +121,7 @@ mkBTRFS() {
     btrfs subvolume create $MNT/@
     btrfs subvolume create $MNT/@home
     btrfs subvolume create $MNT/@snapshots
+
     btrfs subvolume create $MNT/@swapfile
     umount $MNT/
 
