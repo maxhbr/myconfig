@@ -18,8 +18,11 @@ BTRFS=true
 help() {
     cat <<EOF
 usage:
-  $ BOOTSTRAP=YES $0 /dev/SDX [pass] [vg_name] [mnt]
-  $ BOOTSTRAP=YES $0 /dev/SDX "" [vg_name] [mnt]
+  $ sudo BOOTSTRAP=YES $0 \
+      /dev/SDX \
+      [pass] \
+      [vg_name] \
+      [mnt]
 EOF
 }
 
@@ -107,7 +110,7 @@ mkBTRFS() {
     # see: https://gist.github.com/samdroid-apps/3723d30953af5e1d68d4ad5327e624c0
     local btrfsDev="$1"
 
-    mkfs.btrfs -L root "$btrfsDev"
+    mkfs.btrfs -f -L root "$btrfsDev"
 
     mount -t btrfs "$btrfsDev" $MNT/
     btrfs subvolume create $MNT/@
