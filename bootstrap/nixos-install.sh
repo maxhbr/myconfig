@@ -2,6 +2,7 @@
 cd "$( dirname "${BASH_SOURCE[0]}" )"
 common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
 . "$common"
+
 set -e
 ROOT="$(pwd)"
 cd "$nixpkgs/nixos"
@@ -12,16 +13,22 @@ if [[ ! -d "/mnt/etc/nixos/" ]]; then
 fi
 
 buildSystem() (
-    set -x
+    local config=${1:-"$ROOT/configuration.nix"}
     cd "$nixpkgs/nixos"
-    export NIX_PATH=nixpkgs="$nixpkgs":nixos-config="$ROOT/configuration.nix"
+    export NIX_PATH=nixpkgs="$nixpkgs":nixos-config="$config"
+    set -x
     nix-build \
         --show-trace \
         --no-out-link \
         -I nixpkgs="$nixpkgs" \
-        -I nixos-config="$ROOT/configuration.nix" \
+        -I nixos-config="$config" \
         -A system
 )
 
-set -x
-sudo nixos-install --no-root-passwd --system $(buildSystem)
+installBuiltSystem() {
+    local system=$(buildSystem "$1")
+    set -x
+    sudo nixos-install --no-root-passwd --system "$system"
+}
+
+installBuiltSystem "$@"
