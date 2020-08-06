@@ -8,10 +8,15 @@
 
 set -e
 
+lastStateFile="/tmp/myMute-lastState"
+
 toggle_telco_mute() {
     toggle_mute "ZOOM VoiceEngine" ||
         toggle_mute "Skype" ||
-        echo "nothing to mute was found"
+        {
+            echo "nothing to mute was found"
+            rm "/tmp/myMute-lastState" || true
+        }
 }
 
 toggle_mute() {
@@ -28,7 +33,7 @@ toggle_mute() {
             echo "unmute $(echo $name | awk '{print $1;}')"
             rm "/tmp/myMute-lastState" || true
         else
-            echo "mute $(echo $name | awk '{print $1;}')" | tee "/tmp/myMute-lastState"
+            echo "mute $(echo $name | awk '{print $1;}')" | tee "$lastStateFile"
         fi
     else
         return 1
@@ -62,4 +67,21 @@ get_other_state_from_file() {
     fi
 }
 
-toggle_telco_mute
+print_mute_status() {
+    local prefix="$1"
+    local postfix="$2"
+    local alternative="$3"
+    if [[ -f "$lastStateFile" ]]; then
+        printf "$prefix$(cat $lastStateFile)$postfix"
+    else
+        printf "$alternative"
+    fi
+}
+
+if [[ "$1" == "--print-status" ]]; then
+    shift
+    print_mute_status "$@"
+else
+    toggle_telco_mute
+fi
+

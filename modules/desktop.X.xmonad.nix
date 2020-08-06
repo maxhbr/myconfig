@@ -2,11 +2,14 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  my-xmobar = pkgs.callPackage ../pkgs/myXmobar {
+  my-mute-telco = pkgs.callPackage ../pkgs/myMuteTelco {
     inherit pkgs;
+  };
+  my-xmobar = pkgs.callPackage ../pkgs/myXmobar {
+    inherit pkgs my-mute-telco;
  };
   my-xmonad = pkgs.haskellPackages.callPackage ../pkgs/myXMonad {
-    inherit pkgs my-xmobar;
+    inherit pkgs my-xmobar my-mute-telco;
   };
   myxev = pkgs.writeShellScriptBin "myxev" ''
     ${pkgs.xorg.xev}/bin/xev -id $(${pkgs.xdotool}/bin/xdotool getactivewindow)
@@ -22,6 +25,7 @@ in {
       home.packages = with pkgs; [
         my-xmonad
         my-xmobar
+        my-mute-telco
 
         dzen2
         myxev

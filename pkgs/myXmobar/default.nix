@@ -4,6 +4,7 @@
 , stdenv ? pkgs.stdenv
 , xmobarrc ? ./xmobarrc
 , xmobarrcTop ? ./xmobarrc.top
+, my-mute-telco
 }:
 
 let
@@ -62,5 +63,6 @@ in pkgs.buildEnv {
     pkgs.xmobar
     xmobarXmonad
     xmobarDmesg
+    my-mute-telco
   ];
 }

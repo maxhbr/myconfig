@@ -158,8 +158,8 @@ volumeControlKBs =
     [ (0x1008ff12, ["mute"])
     , (0x1008ff11, ["-10%"])
     , (0x1008ff13, ["+10%"])]
-  ++ [ ((m__, xK_a), runProcessWithInput (pathToXmonadBins ++ "mute_telco.sh") [] ""
-                     >>= myNotify 0.5)
+  ++ [ ((m__, xK_a), runProcessWithInput muteTelcoCMD [] ""
+                     >>= myNotify 1.5)
      ]
 #else
 -- alsa

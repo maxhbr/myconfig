@@ -1,6 +1,18 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv, mkDerivation, base, containers, process, X11, xmonad, xmonad-contrib, callPackage, my-xmobar }:
+{ pkgs ? import <nixpkgs> {}
+, stdenv ? pkgs.stdenv
+, mkDerivation
+, base
+, containers
+, process
+, X11
+, xmonad
+, xmonad-contrib
+, callPackage
+, my-xmobar
+, my-mute-telco
+}:
 let
   version = "1.0";
   my-xmonad-scripts = ./bin;
@@ -63,6 +75,7 @@ in mkDerivation {
     addAbsoluteBinaryPath htop ${pkgs.htop}
     addAbsoluteBinaryPath pavucontrol ${pkgs.pavucontrol}
     addAbsoluteBinaryPath light ${pkgs.light}
+    addAbsoluteBinaryPath mute_telco ${my-mute-telco}
 
     replaceConfigValue xmobarCMD "${my-xmobar}/bin/xmobarXmonad"
     replaceConfigValue pathToXmonadBins "${my-xmonad-scripts}/"
