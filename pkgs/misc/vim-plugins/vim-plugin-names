@@ -172,7 +172,7 @@ jeetsukumaran/vim-indentwise
 jeffkreeftmeijer/neovim-sensible
 jeffkreeftmeijer/vim-numbertoggle
 jelera/vim-javascript-syntax
-jgdavey/tslime.vim
+jgdavey/tslime.vim@main
 jhradilek/vim-docbk
 jhradilek/vim-snippets as vim-docbk-snippets
 jiangmiao/auto-pairs
@@ -247,6 +247,7 @@ lilydjwg/colorizer
 liuchengxu/vim-which-key
 liuchengxu/vista.vim
 LnL7/vim-nix
+lotabout/skim.vim
 LucHermitte/lh-brackets
 LucHermitte/lh-vim-lib
 ludovicchabant/vim-gutentags
@@ -435,6 +436,7 @@ rhysd/vim-grammarous
 rhysd/vim-operator-surround
 rodjek/vim-puppet
 romainl/vim-cool
+roman/golden-ratio
 ron89/thesaurus_query.vim
 roxma/nvim-cm-racer
 roxma/nvim-completion-manager
@@ -526,6 +528,7 @@ tpope/vim-liquid
 tpope/vim-obsession
 tpope/vim-pathogen
 tpope/vim-projectionist
+tpope/vim-rails
 tpope/vim-repeat
 tpope/vim-rhubarb
 tpope/vim-rsi
