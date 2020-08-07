@@ -157,7 +157,8 @@ runWithTrap prepare
 if $DO_ONLY_UPGRADE; then
     runWithTrap upgrade
 else
-    runWithTrap realize $TARGET \
+    runWithTrap \
+        realize $TARGET \
                 $($FORCE_RECREATE && echo "--force-recreate") \
                 $($TARGET_WAS_CHANGED || echo "--is-local-host") \
                 $($DRY_RUN && echo "--dry-run") \
@@ -169,7 +170,8 @@ else
             if upgrade; then
                 logH1 "skip deploy" "nothing was updated, so no new realize run"
             else
-                runWithTrap realize $TARGET \
+                runWithTrap \
+                    realize $TARGET \
                             $($TARGET_WAS_CHANGED || echo "--is-local-host") \
                             $($DRY_RUN && echo "--dry-run")
 

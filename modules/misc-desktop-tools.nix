@@ -5,7 +5,7 @@
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
-        libreoffice
+        # libreoffice
         zoom-us bluejeans-gui
         nixos-2003-small.slack nixos-2003-small.tdesktop
         remmina
