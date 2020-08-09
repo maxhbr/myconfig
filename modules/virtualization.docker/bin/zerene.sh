@@ -7,7 +7,7 @@ set -x
 docker rm --force zerene >/dev/null 2>&1
 
 set -e
-version="T2018-07-19-1515"
+version="T2020-05-22-1330"
 
 docker build -t zerene --rm=true --force-rm=true - <<EOF
 FROM openjdk:8-jre
@@ -20,7 +20,12 @@ RUN set -x \
  && cd /app \
  && wget 'https://zerenesystems.com/stacker/downloads/ZS-Linux-Intel-64bit-${version}.zip' \
  && unzip 'ZS-Linux-Intel-64bit-${version}.zip' -d /app/ \
- && rm -rf 'ZS-Linux-Intel-64bit-${version}.zip'
+ && rm -rf 'ZS-Linux-Intel-64bit-${version}.zip' \
+ && chmod +x /app/ZereneStacker/*.zslinux \
+ && chmod +x /app/ZereneStacker/ZereneStacker.bsh \
+ && chmod +x /app/ZereneStacker/ZereneStacker \
+ && chmod +x /app/ZereneStacker/jre/bin/* \
+ && chmod +x /app/ZereneStacker/jre/lib/jspawnhelper
 
 RUN useradd -ms /bin/bash zerene
 USER zerene
