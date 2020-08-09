@@ -631,6 +631,8 @@ in {
 
   convertdate = callPackage ../development/python-modules/convertdate { };
 
+  cot = callPackage ../development/python-modules/cot { };
+
   crc32c = callPackage ../development/python-modules/crc32c { };
 
   curio = callPackage ../development/python-modules/curio { };
@@ -729,6 +731,8 @@ in {
   dogtail = callPackage ../development/python-modules/dogtail { };
 
   diff-match-patch = callPackage ../development/python-modules/diff-match-patch { };
+
+  eliot = callPackage ../development/python-modules/eliot {};
 
   entrance = callPackage ../development/python-modules/entrance { routerFeatures = false; };
 
@@ -897,6 +901,8 @@ in {
   itanium_demangler = callPackage ../development/python-modules/itanium_demangler { };
 
   itemadapter = callPackage ../development/python-modules/itemadapter { };
+
+  itemloaders = callPackage ../development/python-modules/itemloaders { };
 
   iterm2 = callPackage ../development/python-modules/iterm2 { };
 
@@ -2864,6 +2870,8 @@ in {
 
   dockerpty = callPackage ../development/python-modules/dockerpty {};
 
+  dockerspawner = callPackage ../development/python-modules/dockerspawner {};
+
   docker_pycreds = callPackage ../development/python-modules/docker-pycreds {};
 
   docloud = callPackage ../development/python-modules/docloud { };
@@ -4451,6 +4459,8 @@ in {
     pkgs-docker = pkgs.docker;
   };
 
+  jupyter-telemetry = callPackage ../development/python-modules/jupyter-telemetry { };
+
   jupyterhub = callPackage ../development/python-modules/jupyterhub { };
 
   jupyterhub-ldapauthenticator = callPackage ../development/python-modules/jupyterhub-ldapauthenticator { };
@@ -5430,6 +5440,8 @@ in {
   Babel = callPackage ../development/python-modules/Babel { };
 
   babelgladeextractor = callPackage ../development/python-modules/babelgladeextractor { };
+
+  batchspawner = callPackage ../development/python-modules/batchspawner { };
 
   pybfd = callPackage ../development/python-modules/pybfd { };
 

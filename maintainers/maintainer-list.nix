@@ -42,7 +42,7 @@
 */
 {
   "0x4A6F" = {
-    email = "0x4A6F@shackspace.de";
+    email = "mail-maintainer@0x4A6F.dev";
     name = "Joachim Ernst";
     github = "0x4A6F";
     githubId = 9675338;
@@ -1446,6 +1446,12 @@
       fingerprint = "099E 3F97 FA08 3D47 8C75  EBEC E0EB AD78 F019 0BD9";
     }];
   };
+  chiroptical = {
+    email = "chiroptical@gmail.com";
+    github = "chiroptical";
+    githubId = 3086255;
+    name = "Barry Moore II";
+  };
   chkno = {
     email = "chuck@intelligence.org";
     github = "chkno";
@@ -2179,6 +2185,16 @@
     github = "dpaetzel";
     githubId = 974130;
     name = "David Pätzel";
+  };
+  dpausp = {
+    email = "dpausp@posteo.de";
+    github = "dpausp";
+    githubId = 1965950;
+    name = "Tobias Stenzel";
+    keys = [{
+      longkeyid = "rsa2048/0x78C7DD40DF23FB16";
+      fingerprint = "4749 0887 CF3B 85A1 6355  C671 78C7 DD40 DF23 FB16";
+    }];
   };
   dpflug = {
     email = "david@pflug.email";
