@@ -719,6 +719,8 @@ in
 
   arduino = arduino-core.override { withGui = true; };
 
+  arduino-cli = callPackage ../development/arduino/arduino-cli { };
+
   arduino-core = callPackage ../development/arduino/arduino-core { };
 
   arduino-mk = callPackage ../development/arduino/arduino-mk {};
@@ -5133,6 +5135,8 @@ in
 
   logstalgia = callPackage ../tools/graphics/logstalgia {};
 
+  lokalise2-cli = callPackage ../tools/misc/lokalise2-cli { };
+
   loki = callPackage ../development/libraries/loki { };
 
   longview = callPackage ../servers/monitoring/longview { };
@@ -7820,6 +7824,8 @@ in
   wget = callPackage ../tools/networking/wget {
     libpsl = null;
   };
+
+  wg-bond = callPackage ../applications/networking/wg-bond { };
 
   which = callPackage ../tools/system/which { };
 
@@ -10625,6 +10631,8 @@ in
 
   eggdbus = callPackage ../development/tools/misc/eggdbus { };
 
+  effitask = callPackage ../applications/misc/effitask { };
+
   egypt = callPackage ../development/tools/analysis/egypt { };
 
   elfinfo = callPackage ../development/tools/misc/elfinfo { };
@@ -13316,6 +13324,8 @@ in
   libheif = callPackage ../development/libraries/libheif {};
 
   libhttpseverywhere = callPackage ../development/libraries/libhttpseverywhere { };
+
+  libhugetlbfs = callPackage ../development/libraries/libhugetlbfs { };
 
   libHX = callPackage ../development/libraries/libHX { };
 
@@ -20969,6 +20979,8 @@ in
 
   klayout = libsForQt5.callPackage ../applications/misc/klayout { };
 
+  kmetronome = libsForQt5.callPackage ../applications/audio/kmetronome { };
+
   kmplayer = libsForQt5.callPackage ../applications/video/kmplayer { };
 
   kmymoney = libsForQt5.callPackage ../applications/office/kmymoney {
@@ -22801,6 +22813,8 @@ in
   };
 
   tambura = callPackage ../applications/audio/tambura { };
+
+  tanka = callPackage ../applications/networking/cluster/tanka { };
 
   teams = callPackage ../applications/networking/instant-messengers/teams { };
 
@@ -25293,6 +25307,8 @@ in
 
   almonds = callPackage ../applications/science/math/almonds { };
 
+  amd-blis = callPackage ../development/libraries/science/math/amd-blis { };
+
   arpack = callPackage ../development/libraries/science/math/arpack { };
 
   blas = callPackage ../build-support/alternatives/blas { };
@@ -25745,6 +25761,7 @@ in
 
   caffe = callPackage ../applications/science/math/caffe ({
     opencv3 = opencv3WithoutCuda; # Used only for image loading.
+    blas = openblas;
     inherit (darwin.apple_sdk.frameworks) Accelerate CoreGraphics CoreVideo;
   } // (config.caffe or {}));
 
