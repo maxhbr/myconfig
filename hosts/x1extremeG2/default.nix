@@ -31,6 +31,7 @@
       ../../roles/imagework
       ../../modules/smarthome.nix
       ../../roles/gaming/default.minimal.nix
+      ../../modules/desktop.X.obs.nix
     ] ++
     (with (import ../lib.nix);
       [ (setupAsWireguardClient "10.199.199.2")

@@ -16,6 +16,7 @@
       # hardware:
       ../../hardware/grub.nix
       # configuration
+      ./nuccam.nix
     ];
   config = {
     networking.hostName = "nuc";

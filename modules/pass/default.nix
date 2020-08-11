@@ -3,6 +3,9 @@
 { config, pkgs, ... }:
 let
   wireguardKeypairToPassStore = with pkgs; writeScriptBin "wireguardKeypairToPassStore.sh" (lib.fileContents ./wireguardKeypairToPassStore.sh);
+  otpPass = pkgs.writeShellScriptBin "otpPass" ''
+${pkgs.oathToolkit}/bin/oathtool --totp -b "$(${pkgs.pass}/bin/pass -p "$1")"
+'';
 in {
   imports = [
     ./gopassbridge.nix
@@ -29,6 +32,7 @@ in {
         pass-git-helper
         gopass
         wireguardKeypairToPassStore
+        otpPass
       ];
       home.file = {
         ".config/pass-git-helper/git-pass-mapping.ini".source = ./config/pass-git-helper/git-pass-mapping.ini;

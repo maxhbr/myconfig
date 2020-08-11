@@ -53,6 +53,8 @@ import           XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall)
 import           XMonad.Layout.Spacing ( spacingRaw, Border(..), toggleWindowSpacingEnabled, toggleScreenSpacingEnabled)
 import           XMonad.Layout.TwoPane ( TwoPane( TwoPane ) )
 import           XMonad.Layout.IM -- (withIM)
+import           XMonad.Layout.Magnifier ( magnifier )
+import           XMonad.Layout.Grid ( Grid( Grid ) )
 
 import           XMonad.Layout.IfMax
 
@@ -78,14 +80,15 @@ applyMyLayoutModifications c = let
        , handleEventHook = fullscreenEventHook <+> handleEventHook c
        , mouseBindings   = myMouseBindings }
 
-myLayout = modWorkspaces [ "13" ] (smartBorders Full |||) $
-           smartBorders $
+myLayout = smartBorders $
+           modWorkspaces [ "13" ] (Full |||) $
            boringAuto $
-           modWorkspaces [ "vbox", "media" ] (smartBorders Full |||) $
+           modWorkspaces [ "vbox", "media" ] (Full |||) $
            avoidStrutsOn[U,D] $
            named "" $
-           withIM (1%7) (Title "Tabs Outliner") $
+           modWorkspaces [ "10" ] (magnifier Grid |||) $
            mkToggle (single FULL) $
+           modWorkspaces [ "8" ] (withIM (1%7) (Title "Tabs Outliner")) $
            mkToggle (single MIRROR) $
            IfMax 1 full  (IfMax 2 tiled (tiled ||| dtb) ||| full)
   where
