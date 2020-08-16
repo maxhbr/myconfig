@@ -35,8 +35,8 @@
     { networking.hostName = "workstation";
       networking.hostId = "864d73f4";
 
-      networking.firewall.allowedTCPPorts = [ 12345 ];
-      networking.firewall.allowedUDPPorts = [ 12345 ];
+      networking.firewall.allowedTCPPorts = [ 12345 6567 ];
+      networking.firewall.allowedUDPPorts = [ 12345 6567 ];
 
       services.logind.extraConfig = ''
           HandlePowerKey=suspend
