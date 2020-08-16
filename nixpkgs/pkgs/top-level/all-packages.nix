@@ -536,6 +536,10 @@ in
 
   _1password = callPackage ../applications/misc/1password { };
 
+  _1password-gui = callPackage ../tools/security/1password-gui {
+    electron = electron_9;
+  };
+
   _6tunnel = callPackage ../tools/networking/6tunnel { };
 
   _9pfs = callPackage ../tools/filesystems/9pfs { };
@@ -2927,6 +2931,8 @@ in
 
   dclxvi = callPackage ../development/libraries/dclxvi { };
 
+  dconf2nix = callPackage ../development/tools/haskell/dconf2nix { };
+
   dcraw = callPackage ../tools/graphics/dcraw { };
 
   dcfldd = callPackage ../tools/system/dcfldd { };
@@ -4382,6 +4388,8 @@ in
 
     packages = config.ihaskell.packages or (self: []);
   };
+
+  iruby = callPackage ../applications/editors/jupyter-kernels/iruby { };
 
   imapproxy = callPackage ../tools/networking/imapproxy {
     openssl = openssl_1_0_2;
@@ -16772,6 +16780,8 @@ in
     unifiStable;
   unifi = unifiStable;
 
+  urserver = callPackage ../servers/urserver { };
+
   victoriametrics = callPackage ../servers/nosql/victoriametrics { };
 
   virtlyst = libsForQt5.callPackage ../servers/web-apps/virtlyst { };
@@ -25308,6 +25318,8 @@ in
   almonds = callPackage ../applications/science/math/almonds { };
 
   amd-blis = callPackage ../development/libraries/science/math/amd-blis { };
+
+  amd-libflame = callPackage ../development/libraries/science/math/amd-libflame { };
 
   arpack = callPackage ../development/libraries/science/math/arpack { };
 
