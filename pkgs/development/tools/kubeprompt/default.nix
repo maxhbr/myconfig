@@ -15,10 +15,9 @@ buildGoModule rec {
     export buildFlagsArray+=(
       "-ldflags=
         -w -s
-        -X ${goPackagePath}/pkg/version.Version=${version}")
+        -X github.com/jlesquembre/kubeprompt/pkg/version.Version=${version}")
   '';
 
-  goPackagePath = "github.com/jlesquembre/kubeprompt";
   vendorSha256 = "089lfkvyf00f05kkmr935jbrddf2c0v7m2356whqnz7ad6a2whsi";
 
   doCheck = false;
@@ -28,6 +27,5 @@ buildGoModule rec {
     homepage = "https://github.com/jlesquembre/kubeprompt";
     license = licenses.epl20;
     maintainers = with maintainers; [ jlesquembre ];
-    platforms = platforms.all;
   };
 }
