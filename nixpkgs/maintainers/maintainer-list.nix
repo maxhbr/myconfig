@@ -26,6 +26,13 @@
 
     `handle == github` is strongly preferred whenever `github` is an acceptable attribute name and is short and convenient.
 
+    If `github` begins with a numeral, `handle` should be prefixed with an underscore.
+    ```nix
+    _1example = {
+      github = "1example";
+    };
+    ```
+
     Add PGP/GPG keys only if you actually use them to sign commits and/or mail.
 
     To get the required PGP/GPG values for a key run
@@ -41,7 +48,7 @@
     See `./scripts/check-maintainer-github-handles.sh` for an example on how to work with this data.
 */
 {
-  "0x4A6F" = {
+  _0x4A6F = {
     email = "mail-maintainer@0x4A6F.dev";
     name = "Joachim Ernst";
     github = "0x4A6F";
@@ -51,7 +58,7 @@
       fingerprint = "F466 A548 AD3F C1F1 8C88  4576 8702 7528 B006 D66D";
     }];
   };
-  "1000101" = {
+  _1000101 = {
     email = "b1000101@pm.me";
     github = "1000101";
     githubId = 791309;
@@ -1884,7 +1891,7 @@
     githubId = 4971975;
     name = "Janne Heß";
   };
-  "dasj19" = {
+  dasj19 = {
     email = "daniel@serbanescu.dk";
     github = "dasj19";
     githubId = 7589338;
@@ -2459,6 +2466,12 @@
     github = "ellis";
     githubId = 97852;
     name = "Ellis Whitehead";
+  };
+  elkowar = {
+    email = "thereal.elkowar@gmail.com";
+    github = "elkowar";
+    githubId = 5300871;
+    name = "Leon Kowarschick";
   };
   elohmeier = {
     email = "elo-nixos@nerdworks.de";
@@ -5944,6 +5957,12 @@
     githubId = 1224006;
     name = "Roberto Abdelkader Martínez Pérez";
   };
+  nilsirl = {
+    email = "nils@nilsand.re";
+    github = "NilsIrl";
+    githubId = 26231126;
+    name = "Nils ANDRÉ-CHANG";
+  };
   ninjatrappeur = {
     email = "felix@alternativebit.fr";
     github = "ninjatrappeur";
@@ -7948,6 +7967,12 @@
     githubId = 332289;
     name = "Rafał Łasocha";
   };
+  syberant = {
+    email = "sybrand@neuralcoding.com";
+    github = "syberant";
+    githubId = 20063502;
+    name = "Sybrand Aarnoutse";
+  };
   symphorien = {
     email = "symphorien_nixpkgs@xlumurb.eu";
     github = "symphorien";
@@ -8192,7 +8217,7 @@
     githubId = 8547242;
     name = "Stefan Rohrbacher";
   };
-  "thelegy" = {
+  thelegy = {
     email = "mail+nixos@0jb.de";
     github = "thelegy";
     githubId = 3105057;
@@ -8409,6 +8434,12 @@
     github = "treemo";
     githubId = 207457;
     name = "Matthieu Chevrier";
+  };
+  trepetti = {
+    email = "trepetti@cs.columbia.edu";
+    github = "trepetti";
+    githubId = 25440339;
+    name = "Tom Repetti";
   };
   trevorj = {
     email = "nix@trevor.joynson.io";
@@ -8737,6 +8768,14 @@
     githubId = 13259982;
     name = "Vanessa McHale";
   };
+
+  voidless = {
+    email = "julius.schmitt@yahoo.de";
+    github = "voidIess";
+    githubId = 45292658;
+    name = "Julius Schmitt";
+  };
+
   volhovm = {
     email = "volhovm.cs@gmail.com";
     github = "volhovm";
