@@ -184,6 +184,8 @@ in {
 
   aioamqp = callPackage ../development/python-modules/aioamqp { };
 
+  aiojobs = callPackage ../development/python-modules/aiojobs { };
+
   aioredis = callPackage ../development/python-modules/aioredis { };
 
   aiorun = callPackage ../development/python-modules/aiorun { };
@@ -763,6 +765,8 @@ in {
   filterpy = callPackage ../development/python-modules/filterpy { };
 
   filemagic = callPackage ../development/python-modules/filemagic { };
+
+  finalfusion = callPackage ../development/python-modules/finalfusion { };
 
   fints = callPackage ../development/python-modules/fints { };
 
@@ -2050,10 +2054,12 @@ in {
 
   binwalk = callPackage ../development/python-modules/binwalk {
     pyqtgraph = null;
+    matplotlib = null;
   };
 
   binwalk-full = appendToName "full" (self.binwalk.override {
     pyqtgraph = self.pyqtgraph;
+    matplotlib = self.matplotlib;
   });
 
   bitmath = callPackage ../development/python-modules/bitmath { };
@@ -4842,6 +4848,8 @@ in {
   else
     callPackage ../development/python-modules/mock { };
 
+  mocket = callPackage ../development/python-modules/mocket { };
+
   mock-open = callPackage ../development/python-modules/mock-open { };
 
   mockito = callPackage ../development/python-modules/mockito { };
@@ -6549,6 +6557,8 @@ in {
   sounddevice = callPackage ../development/python-modules/sounddevice { };
 
   stevedore = callPackage ../development/python-modules/stevedore {};
+
+  svglib = callPackage ../development/python-modules/svglib { };
 
   text-unidecode = callPackage ../development/python-modules/text-unidecode { };
 
