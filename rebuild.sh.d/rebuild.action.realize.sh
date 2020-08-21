@@ -2,11 +2,11 @@
 
 getDeploymentNameFromHostname() {
     local hostname="$1"
-    echo "myconfig-${hostname}"
+    echo "host-${hostname}"
 }
 getDeploymentFileFromHostname() {
     local hostname="$1"
-    echo "$myconfigDir/hosts/${hostname}/nixops.nix"
+    echo "$myconfigDir/host.${hostname}/nixops.nix"
 }
 
 setupNixopsDeployment() {
