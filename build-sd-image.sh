@@ -19,8 +19,8 @@ build() (
         arch="aarch64-linux"
         local aarchConfig="${nixpkgsDir}/nixos/modules/installer/cd-dvd/sd-image-aarch64.nix"
     else
-        local aarchConfig="${myconfigDir}/hosts/${hostname}/default.nix"
-        arch="$(grep "nixpkgs.system" "${myconfigDir}/hosts/${hostname}/hardware-configuration.nix" |
+        local aarchConfig="${myconfigDir}/host.${hostname}/default.nix"
+        arch="$(grep "nixpkgs.system" "${myconfigDir}/host.${hostname}/hardware-configuration.nix" |
             cut -d'"' -f 2)"
     fi
     time nix-build \

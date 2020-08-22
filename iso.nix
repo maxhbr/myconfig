@@ -4,7 +4,7 @@
 , secondaryHostConfig ? hostConfig
 }:
 let
-  nixpkgs = ../nixpkgs;
+  nixpkgs = ./nixpkgs;
   evalNixos = configuration:
     import "${nixpkgs}/nixos"
       { inherit system configuration;
@@ -16,18 +16,17 @@ let
             echo "hostname missmatch"
             exit 1
         fi
-        sudo BOOTSTRAP=YES ${../bootstrap/bootstrap.sh} $@
+        sudo BOOTSTRAP=YES ${./bootstrap/bootstrap.sh} $@
       '';
     in
       { imports =
           [ "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
             "${nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
-            (../. + "/${hostConfig}")
-            ../modules/service.openssh.nix
+            (./. + "/${hostConfig}")
             ( lib.mkIf (hostConfig != secondaryHostConfig)
                 ( let
                     preBuiltConfig = (evalNixos
-                      ( import (../. + "/${secondaryHostConfig}")
+                      ( import (./. + "/${secondaryHostConfig}")
                           { pkgs = nixpkgs;
                           }
                       )).system;
@@ -65,7 +64,7 @@ let
             # add myconfig to iso
             isoImage =
               { contents =
-                  [ { source = ../LICENSE; target = "myconfig/LICENSE"; }
+                  [ { source = ./LICENSE; target = "myconfig/LICENSE"; }
                   ];
                 isoBaseName = "nixos-myconfig";
               };

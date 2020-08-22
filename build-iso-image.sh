@@ -7,7 +7,7 @@ common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
 . "$common"
 
 getNamePrefixFromConfig() {
-    local config=${1%.*}
+    local config=${1%.nix}
     if [[ "$config" == "" ]]; then
         return
     fi
@@ -24,7 +24,7 @@ build() (
     local hostConfig="$1"
     local secondaryHostConfig="$2"
 
-    NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/hosts/minimal"
+    NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/misc/empty_nixos_config.nix"
     NIX_PATH=""
     if nix ping-store --store ssh://192.168.178.90; then
         jobCountArgs="-j0"
@@ -68,4 +68,4 @@ EOF
     chmod +x "$outDir/run-qemu.sh"
 }
 
-buildAndCopy "${1:-roles/dev.nix}" "$2"
+buildAndCopy "${1:-role.dev}" "$2"

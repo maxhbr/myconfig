@@ -12,7 +12,7 @@ EOF
 set -e
 ARGS=""
 DRYRUN=NO
-nixosConfig="$myconfigDir/hosts/$(hostname)"
+nixosConfig="$myconfigDir/host.$(hostname)"
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
@@ -31,10 +31,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --hostname)
             set -x
-            nixosConfig="$myconfigDir/hosts/${2}"
+            nixosConfig="$myconfigDir/host.${2}"
             if [[ ! -d "$nixosConfig" ]]; then
-                nixosRole="$myconfigDir/roles/${2}.nix"
-                if [[ -f "$nixosRole" ]]; then
+                nixosRole="$myconfigDir/role.${2}"
+                if [[ -d "$nixosRole" ]]; then
                     nixosConfig=$(mktemp -d)
                     trap 'ret=$?; rm "'"$nixosConfig"'/default.nix"; rmdir "'"$nixosConfig"'" 2>/dev/null; exit $ret' 0
                     cat <<EOF | tee "$nixosConfig/default.nix"
