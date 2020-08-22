@@ -7,7 +7,7 @@
       home.packages = with pkgs; [
         # libreoffice
         zoom-us bluejeans-gui
-        nixos-2003-small.slack
+        slack
         remmina
       ];
     };

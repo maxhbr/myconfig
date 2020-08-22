@@ -70,7 +70,7 @@ in {
         chromium inco pipechrome
         unstable.firefox pipefox
         qutebrowser
-        nixos-2003-small.tdesktop
+        tdesktop
         # spellchecking
         aspell aspellDicts.de aspellDicts.en
       ] ++ lib.optional config.networking.networkmanager.enable networkmanager_dmenu;
