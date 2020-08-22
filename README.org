@@ -23,6 +23,8 @@ $ ./rebuild.sh
 
 * How it is composed
 
+[[./README.png]]
+
 ** Entrypoint
 - Entrypoint for configuration for the ~${hostname}~ is ~./nixos/host-${hostname}/~.
 
