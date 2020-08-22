@@ -1,11 +1,10 @@
 { ... }:
 { imports =
     [ ./hardware-configuration.nix
-      ../../modules/service.openssh.nix
-      ../../roles/core.nix
-      ../../modules/service.monitoring.nix
-      ../../roles/headless.nix
-      ../../modules/service.syncthing.nix
+      ../role.core
+      ../role.headless
+      ../modules/service.syncthing.nix
+      ../secrets/common/wifi.QS3j.nix
     ] ++
     (with (import ../lib.nix);
       [ (setupAsWireguardClient "10.199.199.8")

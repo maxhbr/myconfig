@@ -22,7 +22,6 @@ rectangle headless <<role>>
 rectangle desktop <<role>>
 rectangle dev <<role>>
 rectangle gaming <<role>>
-rectangle gaming.minimal <<role>>
 rectangle imagework <<role>>
 rectangle work <<role>>
 rectangle "myconfig-master" <<role>> as master
@@ -30,35 +29,35 @@ rectangle "myconfig-master" <<role>> as master
 core <-- headless
 core <-- desktop
 desktop <-- dev
-desktop <-- gaming.minimal 
-gaming.minimal<-- gaming
+desktop <-- gaming
 desktop <-- imagework
 dev <-- work
 }
 
 ' Hosts
 '################################################
-
 together {
 rectangle x1extremeG2 <<host>>
 x1extremeG2 -[#green]--> work
-x1extremeG2 -[#green]--> gaming.minimal
+x1extremeG2 -[#green,dashed]--> gaming
 x1extremeG2 -[#green]--> imagework
 x1extremeG2 -[#green]--> master
 
 rectangle workstation <<host>>
 workstation -[#blue]--> gaming
-workstation -[#blue]--> dev
+workstation -[#blue,dashed]--> dev
 workstation -[#blue]--> headless
 }
 
 together {
 rectangle nas <<host>>
 nas -[#red]--> headless
+nas -[#red,dashed]--> dev
 
 rectangle vserver <<host>>
 vserver -[#red]--> headless
+vserver -[#red,dashed]--> dev
 
-rectangle pi4 <<host>>
-pi4 -[#orange]--> core
+rectangle "pi4\npi3a\n..." <<host>> as pis
+pis -[#orange]--> core
 }

@@ -26,10 +26,11 @@
       ./foto-hdd.nix
       # modules
       ../role.work
+      ./mail
       ## fun
       ../role.imagework
       ../modules/smarthome.nix
-      ../role.gaming.minimal
+      ../role.gaming/games.steam
       ../role.desktop/desktop.X.obs.nix
     ] ++
     (with (import ../lib.nix);

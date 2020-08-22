@@ -1,11 +1,13 @@
 {pkgs, ...}: {
   imports =
-    [ ../role.gaming.minimal
+    [ ../role.desktop
       ./games.wine
       ./games.doom3.nix
       ./games.lutris.nix
       ./games.ktane.nix
       ./games.openrct2.nix
+      ./games.powder.nix
+      ./games.steam
     ];
   config =
     { home-manager.users.mhuber =
@@ -13,6 +15,12 @@
             [ openra
               # xonotic
             ];
+          home.file =
+            { "bin" =
+                { source = ./bin;
+                  recursive = true;
+                };
+            };
         };
     };
 }

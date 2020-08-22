@@ -4,12 +4,12 @@
 {
   imports = [
     ./hardware-configuration.nix
-    ../../roles/headless.nix
+    ../role.headless.nix
     # hardware:
-    ../../hardware/grub.nix
+    ../hardware/grub.nix
     # configuration
     ./service.wireguard-server
-    ../../modules/virtualization.docker
+    ../role.dev/virtualization.docker
   ];
   config =
     { networking.hostName = "vserver";

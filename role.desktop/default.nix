@@ -8,7 +8,5 @@
     ./pulseaudio
     ./emacs
   ];
-  config = lib.mkIf (! config.virtualisation.virtualbox.host.enable) {
-    boot.kernelPackages = pkgs.linuxPackages_latest;
-  };
+  boot.kernelPackages = pkgs.linuxPackages_latest;
 }

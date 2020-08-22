@@ -17,8 +17,12 @@ if ! type logH1 &>/dev/null; then
 
     export nixpkgs="$myconfigDir/nixpkgs"
 
-    mkdir -p /tmp/myconfig
-    nixosConfig=$(mktemp /tmp/myconfig/myconfig.empty_nixos_config.XXXX.nix)
+
+    nixosConfig=/tmp/myconfig/empty_nixos_config.nix
+    if [[ ! -e "$nixosConfig" ]]; then
+        mkdir -p "$(dirname "$nixosConfig")"
+        ln -s /dev/null "$nixosConfig"
+    fi
 
     NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfig"
     NIX_PATH_ARGS="-I '$(echo "$NIX_PATH" | sed "s/:/' -I '/g")'"

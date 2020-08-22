@@ -27,18 +27,17 @@
       }
       # ./4x500-hdds.raid.nix
       ./2x4000-hdds.raid.nix
-      ../../roles/headless.nix
-      ../../hardware/hdd-spinndown.nix
-      ../../modules/service.monitoring.nix
-      ../../modules/virtualization.docker
-      ../../modules/service.syncthing.nix
-      ../../roles/imagework/exfat.nix
+      ../role.headless
+      ../hardware/hdd-spinndown.nix
+      ../role.dev/virtualization.docker
+      ../modules/service.syncthing.nix
+      ../role.imagework/exfat.nix
       # hardware:
-      ../../hardware/efi.nix
+      ../hardware/efi.nix
       # configuration
       # ./docker.openhab.nix
-      ../../modules/service.deconz.nix
-      # ../../modules/kiosk/headless.kiosk.nix
+      ./service.deconz.nix
+      # ../role.desktop/kiosk/headless.kiosk.nix
     ] ++
     (with (import ../lib.nix);
       [ (setupAsWireguardClient "10.199.199.6")
@@ -54,7 +53,7 @@
 
     local.services.deconz =
       let
-        deconz = pkgs.qt5.callPackage ../../pkgs/deconz {};
+        deconz = pkgs.qt5.callPackage ../pkgs/deconz {};
       in
       { enable = true;
         package = deconz;

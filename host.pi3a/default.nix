@@ -1,10 +1,9 @@
 { ... }:
 { imports =
     [ ./hardware-configuration.nix
-      ../../modules/service.openssh.nix
-      ../../roles/core.nix
-      ../../secrets/common/wifi.QS3j.nix
+      ../role.core
       ./raspicam.nix
+      ../secrets/common/wifi.QS3j.nix
     ] ++
     (with (import ../lib.nix);
       [ (setupAsWireguardClient "10.199.199.7")
