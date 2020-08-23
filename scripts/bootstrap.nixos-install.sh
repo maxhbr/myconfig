@@ -12,8 +12,28 @@ if [[ ! -d "/mnt/etc/nixos/" ]]; then
     exit 1
 fi
 
+genConfig() {
+    local cfg=$(mktemp /tmp/bootstrap.nixos-install.XXXXXXXX.nix)
+    cat <<EOF > "$cfg"
+{ pkgs, ... }:
+{ imports =
+    [ ${myconfigDir}/lib
+      ${myconfigDir}/role.core
+      /mnt/etc/nixos/configuration.nix
+    ];
+
+  config = {
+    networking.hostName = "bootstrapped";
+    networking.hostId = "12345678";
+  };
+}
+EOF
+
+    echo $cfg
+}
+
 buildSystem() (
-    local config=${1:-"$ROOT/configuration.nix"}
+    local config=${1:-"$(genConfig)"}
     cd "$nixpkgs/nixos"
     export NIX_PATH=nixpkgs="$nixpkgs":nixos-config="$config"
     set -x
