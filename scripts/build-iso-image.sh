@@ -33,12 +33,14 @@ build() (
     fi
 
     set -x
-    time nix-build iso.nix \
-         $NIX_PATH_ARGS \
-         $jobCountArgs \
-         --show-trace \
-         --no-out-link \
-         --argstr hostConfig "$hostConfig" $([[ "$secondaryHostConfig" ]] && echo "--argstr secondaryHostConfig $secondaryHostConfig")
+    (cd $myconfigDir/;
+     time nix-build iso.nix \
+          $NIX_PATH_ARGS \
+          $jobCountArgs \
+          --show-trace \
+          --no-out-link \
+          --argstr hostConfig "$hostConfig" $([[ "$secondaryHostConfig" ]] && echo "--argstr secondaryHostConfig $secondaryHostConfig")
+    )
 )
 
 buildAndCopy() {

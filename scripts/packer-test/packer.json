@@ -1,131 +1,126 @@
 {
-    "builders": [
-        {
-            "type": "virtualbox-iso",
-            "shutdown_command": "sudo shutdown -h now",
-            "ssh_username": "root",
-            "ssh_private_key_file": "keys/vagrant.key",
-            "ssh_wait_timeout": "20m",
-            "guest_os_type": "Linux_64",
-            "guest_additions_mode": "disable",
-            "virtualbox_version_file": ".vbox_version",
-            "vboxmanage": [
-                ["modifyvm", "{{.Name}}", "--memory", "8192"],
-                ["modifyvm", "{{.Name}}", "--cpus", "4"]
-            ],
-            "headless": false,
-
-            "iso_url": "https://releases.nixos.org/nixos/19.09/nixos-19.09.1861.eb65d1dae62/nixos-minimal-19.09.1861.eb65d1dae62-x86_64-linux.iso",
-            "iso_checksum": "4f91031a9aea9fa0508787392ce68c99fda8976fc8dbb2bfc97dbbc4822c32c6",
-            "iso_checksum_type": "sha256",
-
-            "http_directory": "./../../",
-
-            "boot_wait": "60s",
-            "boot_command": [
-                "sudo su<enter><wait>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/scripts/bootstrap.sh > $HOME/bootstrap.sh<enter><wait>",
-                "chmod +x $HOME/bootstrap.sh<enter>",
-
-                "BOOTSTRAP=YES $HOME/bootstrap.sh /dev/sda \"\" && \\<enter>",
-
-                "mkdir -p /mnt/etc/nixos/imports/ && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/configuration.nix |tee /mnt/etc/nixos/configuration.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/guest-virtualbox.nix |tee /mnt/etc/nixos/imports/guest.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/users-vagrant.nix |tee /mnt/etc/nixos/imports/users.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/vagrant.nix |tee /mnt/etc/nixos/vagrant.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/modules/core/user.mhuber.nix |tee /mnt/etc/nixos/mhuber.nix && \\<enter>",
-
-                "nixos-install --no-root-passwd && ",
-
-                "reboot<enter>"
-            ]
-        },
-        {
-            "type": "qemu",
-            "output_directory": "qemu_out",
-            "shutdown_command": "sudo -S shutdown -P now",
-            "disk_size": 40960,
-            "memory": 8192,
-            "format": "qcow2",
-            "accelerator": "kvm",
-            "ssh_username": "root",
-            "ssh_private_key_file": "keys/vagrant.key",
-            "ssh_timeout": "20m",
-            "vm_name": "myconfig_bootstrap_test",
-            "net_device": "virtio-net",
-            "disk_interface": "virtio",
-            "headless": false,
-
-            "iso_url": "https://releases.nixos.org/nixos/19.09/nixos-19.09.1861.eb65d1dae62/nixos-minimal-19.09.1861.eb65d1dae62-x86_64-linux.iso",
-            "iso_checksum": "4f91031a9aea9fa0508787392ce68c99fda8976fc8dbb2bfc97dbbc4822c32c6",
-            "iso_checksum_type": "sha256",
-
-            "http_directory": "./../../",
-
-            "boot_wait": "60s",
-            "boot_command": [
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/scripts/bootstrap.sh > /root/bootstrap.sh<enter><wait>",
-                "chmod +x /root/bootstrap.sh<enter>",
-
-                "BOOTSTRAP=YES /root/bootstrap.sh /dev/vda \"\" && \\<enter>",
-
-
-                "mkdir -p /mnt/etc/nixos/imports/ && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/configuration.nix |tee /mnt/etc/nixos/configuration.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/guest-qemu.nix |tee /mnt/etc/nixos/import/guest.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/users-vagrant.nix |tee /mnt/etc/nixos/imports/users.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/vagrant.nix |tee /mnt/etc/nixos/vagrant.nix && \\<enter>",
-                "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/modules/core/user.mhuber.nix |tee /mnt/etc/nixos/mhuber.nix && \\<enter>",
-
-                "nixos-install --no-root-passwd && ",
-
-                "reboot<enter>"
-            ]
-        }
-    ],
-    "provisioners": [
-        {
-            "type": "shell",
-            "inline": ["mkdir -p /home/mhuber/myconfig"]
-        },
-        {
-            "destination": "/home/mhuber/myconfig",
-            "source": "./../../",
-            "type": "file"
-        },
-        {
-            "type": "shell",
-            "inline": [
-                "set -x",
-                "cd /home/mhuber/myconfig/",
-                "git clean -dfX"
-            ]
-        },
-        {
-            "type": "shell",
-            "execute_command": "sudo sh '{{.Path}}' minimal",
-            "script": "scripts/postinstall.sh",
-            "expect_disconnect": true
-        },
-        {
-            "type": "shell",
-            "inline": [
-                "set -x",
-                "cd /tmp",
-                "sudo su mhuber -c \"/home/mhuber/myconfig/rebuild.sh --no-tmux\""
-            ]
-        }
-    ],
-    "post-processors": [
-        {
-            "type": "compress",
-            "format": "tar.gz"
-        },
-        {
-            "type": "vagrant",
-            "output": "myconfig-{{.Provider}}.box"
-        }
-    ]
+  "builders": [
+    {
+      "boot_command": [
+        "sudo su<enter><wait>",
+        "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/scripts/bootstrap.sh > $HOME/bootstrap.sh<enter><wait>",
+        "chmod +x $HOME/bootstrap.sh<enter>",
+        "BOOTSTRAP=YES $HOME/bootstrap.sh /dev/sda \"\" \u0026\u0026 \\<enter>",
+        "mkdir -p /mnt/etc/nixos/imports/ \u0026\u0026 \\<enter>",
+        "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/configuration.nix |tee /mnt/etc/nixos/configuration.nix \u0026\u0026 \\<enter>",
+        "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/guest-virtualbox.nix |tee /mnt/etc/nixos/imports/guest.nix \u0026\u0026 \\<enter>",
+        "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/users-vagrant.nix |tee /mnt/etc/nixos/imports/users.nix \u0026\u0026 \\<enter>",
+        "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/vagrant.nix |tee /mnt/etc/nixos/vagrant.nix \u0026\u0026 \\<enter>",
+        "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/modules/core/user.mhuber.nix |tee /mnt/etc/nixos/mhuber.nix \u0026\u0026 \\<enter>",
+        "nixos-install --no-root-passwd \u0026\u0026 ",
+        "reboot<enter>"
+      ],
+      "boot_wait": "60s",
+      "guest_additions_mode": "disable",
+      "guest_os_type": "Linux_64",
+      "headless": false,
+      "http_directory": "./../../",
+      "iso_checksum": "sha256:4f91031a9aea9fa0508787392ce68c99fda8976fc8dbb2bfc97dbbc4822c32c6",
+      "iso_url": "https://releases.nixos.org/nixos/19.09/nixos-19.09.1861.eb65d1dae62/nixos-minimal-19.09.1861.eb65d1dae62-x86_64-linux.iso",
+      "shutdown_command": "sudo shutdown -h now",
+      "ssh_private_key_file": "keys/vagrant.key",
+      "ssh_timeout": "20m",
+      "ssh_username": "root",
+      "type": "virtualbox-iso",
+      "vboxmanage": [
+        [
+          "modifyvm",
+          "{{.Name}}",
+          "--memory",
+          "8192"
+        ],
+        [
+          "modifyvm",
+          "{{.Name}}",
+          "--cpus",
+          "4"
+        ]
+      ],
+      "virtualbox_version_file": ".vbox_version"
+    },
+    {
+      "accelerator": "kvm",
+      "boot_command": [
+        "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/scripts/bootstrap.sh > /root/bootstrap.sh<enter><wait>",
+        "chmod +x /root/bootstrap.sh<enter>",
+        "BOOTSTRAP=YES /root/bootstrap.sh /dev/vda \"\" \u0026\u0026 \\<enter>",
+        "mkdir -p /mnt/etc/nixos/imports/ \u0026\u0026 \\<enter>",
+        "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/configuration.nix |tee /mnt/etc/nixos/configuration.nix \u0026\u0026 \\<enter>",
+        "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/guest-qemu.nix |tee /mnt/etc/nixos/import/guest.nix \u0026\u0026 \\<enter>",
+        "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/users-vagrant.nix |tee /mnt/etc/nixos/imports/users.nix \u0026\u0026 \\<enter>",
+        "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/misc/bootstrap/nixos/vagrant.nix |tee /mnt/etc/nixos/vagrant.nix \u0026\u0026 \\<enter>",
+        "curl http://{{ .HTTPIP }}:{{ .HTTPPort }}/modules/core/user.mhuber.nix |tee /mnt/etc/nixos/mhuber.nix \u0026\u0026 \\<enter>",
+        "nixos-install --no-root-passwd \u0026\u0026 ",
+        "reboot<enter>"
+      ],
+      "boot_wait": "60s",
+      "disk_interface": "virtio",
+      "disk_size": "40960M",
+      "format": "qcow2",
+      "headless": false,
+      "http_directory": "./../../",
+      "iso_checksum": "sha256:4f91031a9aea9fa0508787392ce68c99fda8976fc8dbb2bfc97dbbc4822c32c6",
+      "iso_url": "https://releases.nixos.org/nixos/19.09/nixos-19.09.1861.eb65d1dae62/nixos-minimal-19.09.1861.eb65d1dae62-x86_64-linux.iso",
+      "memory": 8192,
+      "net_device": "virtio-net",
+      "output_directory": "qemu_out",
+      "shutdown_command": "sudo -S shutdown -P now",
+      "ssh_private_key_file": "keys/vagrant.key",
+      "ssh_timeout": "20m",
+      "ssh_username": "root",
+      "type": "qemu",
+      "vm_name": "myconfig_bootstrap_test"
+    }
+  ],
+  "post-processors": [
+    {
+      "format": "tar.gz",
+      "type": "compress"
+    },
+    {
+      "output": "myconfig-{{.Provider}}.box",
+      "type": "vagrant"
+    }
+  ],
+  "provisioners": [
+    {
+      "inline": [
+        "mkdir -p /home/mhuber/myconfig"
+      ],
+      "type": "shell"
+    },
+    {
+      "destination": "/home/mhuber/myconfig",
+      "source": "./../../",
+      "type": "file"
+    },
+    {
+      "inline": [
+        "set -x",
+        "cd /home/mhuber/myconfig/",
+        "git clean -dfX"
+      ],
+      "type": "shell"
+    },
+    {
+      "execute_command": "sudo sh '{{.Path}}' minimal",
+      "expect_disconnect": true,
+      "script": "scripts/postinstall.sh",
+      "type": "shell"
+    },
+    {
+      "inline": [
+        "set -x",
+        "cd /tmp",
+        "sudo su mhuber -c \"/home/mhuber/myconfig/rebuild.sh --no-tmux\""
+      ],
+      "type": "shell"
+    }
+  ]
 }
 

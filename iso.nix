@@ -16,7 +16,7 @@ let
             echo "hostname missmatch"
             exit 1
         fi
-        sudo BOOTSTRAP=YES ${./bootstrap.sh} $@
+        sudo BOOTSTRAP=YES ${./scripts/bootstrap.sh} $@
       '';
     in
       { imports =
