@@ -38,7 +38,7 @@ rec
               let
                 ipFile = (secretsDir + "/${hostName}/ip");
               in lib.mkIf (builtins.pathExists ipFile)
-              { targetHost = builtins.readFile ipFile;
+              { targetHost = getSecretNoNewline  hostName "ip";
               };
           }
           { assertions =
@@ -212,14 +212,14 @@ rec
             };
         };
       nix.buildMachines = map (system:
-         { hostName = "builder.${host}";
-           maxJobs = 6;
-           supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
-           mandatoryFeatures = [ ];
-           sshUser = "nixBuild";
-           sshKey = "/etc/nix/${keyName}";
-           inherit speedFactor system;
-         }) systems;
+        { hostName = "builder.${host}";
+          maxJobs = 6;
+          supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
+          mandatoryFeatures = [ ];
+          sshUser = "nixBuild";
+          sshKey = "/etc/nix/${keyName}";
+          inherit speedFactor system;
+        }) systems;
       nix.distributedBuilds = true;
       # optional, useful when the builder has a faster internet connection than yours
       nix.extraOptions = ''
@@ -232,13 +232,70 @@ rec
         };
       programs.ssh.extraConfig = ''
         Host builder.${host}
-             HostName ${host}
-             User nixBuild
-             IdentitiesOnly yes
-             IdentityFile /etc/nix/${keyName}
-             StrictHostKeyChecking accept-new
-             ConnectTimeout 2
+            HostName ${host}
+            User nixBuild
+            IdentitiesOnly yes
+            IdentityFile /etc/nix/${keyName}
+            StrictHostKeyChecking accept-new
+            ConnectTimeout 2
       '';
+    };
+
+  mkSyncthingDevice =
+    hostName:
+    introducer:
+    let
+      baseDevice = import (secretsDir + "/${hostName}/syncthing/device.nix");
+      ipFile = (secretsDir + "/${hostName}/ip");
+      ipAddress =
+        if (builtins.pathExists ipFile)
+        then let
+            ip = getSecretNoNewline  hostName "ip";
+          in ["tcp://${ip}"]
+        else [];
+    in
+    { "${hostName}" =
+        { inherit (baseDevice) id;
+          addresses = ipAddress + baseDevice.addresses;
+          inherit introducer;
+        };
+    };
+
+  setupSyncthing =
+    hostName:
+    devices:
+    folders:
+    { deployment.keys =
+        { "cert.pem" =
+            { text = getSecret hostName "syncthing/cert.pem";
+              destDir = "/etc/syncthing";
+              user = "root";
+              group = "root";
+              permissions = "0400";
+            };
+          "key.pem" =
+            { text = getSecret hostName "syncthing/key.pem";
+              destDir = "/etc/syncthing";
+              user = "root";
+              group = "root";
+              permissions = "0400";
+            };
+        };
+      services.syncthing =
+        { enable = true;
+          declarative =
+            { cert = "/etc/syncthing/cert.pem";
+              key = "/etc/syncthing/key.pem";
+              devices = devices //
+                ( let
+                    path = (secretsDir + "/${hostName}/syncthing/devices.nix");
+                  in lib.mkIf (builtins.pathExists path) (import path));
+              folders = folders //
+                ( let
+                    path = (secretsDir + "/${hostName}/syncthing/folders.nix");
+                  in lib.mkIf (builtins.pathExists path) (import path));
+            };
+        };
     };
 
   # # generate with:

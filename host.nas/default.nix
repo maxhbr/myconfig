@@ -30,7 +30,6 @@
       ../role.headless
       ../hardware/hdd-spinndown.nix
       ../role.dev/virtualization.docker
-      ../modules/service.syncthing.nix
       ../role.imagework/exfat.nix
       # hardware:
       ../hardware/efi.nix

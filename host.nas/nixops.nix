@@ -51,6 +51,13 @@ mkHostNixops "nas"
                 };
             };
         }
+        (setupSyncthing "nas"
+           ( (mkSyncthingDevice "x1extremeG2" true) //
+             (mkSyncthingDevice "workstation" false) //
+             (mkSyncthingDevice "vserver" false) //
+             (import ../secrets/common/syncthing.SM-G960F.nix)
+           )
+           {})
       ];
   }
 )

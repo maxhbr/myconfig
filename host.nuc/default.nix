@@ -12,7 +12,6 @@
       ../../roles/headless.nix
       ../../modules/service.monitoring.nix
       ../../modules/virtualization.docker
-      ../../modules/service.syncthing.nix
       # hardware:
       ../../hardware/grub.nix
       # configuration

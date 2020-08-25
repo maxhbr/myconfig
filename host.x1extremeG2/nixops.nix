@@ -27,6 +27,13 @@ mkHostNixops "x1extremeG2"
            ["aarch64-linux"]
            (getSecret "x1extremeG2" "ssh/id_ed25519")
            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPYDCNFSDUaE1R0HUeikFcLK7Dp1w5CPKGWcXICq3iQd")
+        (setupSyncthing "x1extremeG2"
+           ( (mkSyncthingDevice "nas" false) //
+             (mkSyncthingDevice "workstation" false) //
+             (mkSyncthingDevice "vserver" false) //
+             (import ../secrets/common/syncthing.SM-G960F.nix)
+           )
+           {})
       ];
     }
 )

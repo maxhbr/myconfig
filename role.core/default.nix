@@ -19,6 +19,7 @@ in
       ./user.mhuber.nix
       ./dic.nix
       ./service.openssh.nix
+      ./service.syncthing.nix
     ];
 
   config =
