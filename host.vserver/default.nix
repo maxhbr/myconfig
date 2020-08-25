@@ -4,7 +4,7 @@
 {
   imports = [
     ./hardware-configuration.nix
-    ../role.headless.nix
+    ../role.headless
     # hardware:
     ../hardware/grub.nix
     # configuration

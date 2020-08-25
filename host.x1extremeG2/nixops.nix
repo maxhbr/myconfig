@@ -33,7 +33,12 @@ mkHostNixops "x1extremeG2"
              (mkSyncthingDevice "vserver" false) //
              (import ../secrets/common/syncthing.SM-G960F.nix)
            )
-           {})
+           { "/home/mhuber/Sync" =
+               { id = "sync";
+                 devices = [ "nas" "workstation" "vserver" ];
+                 type = "sendreceive";
+               };
+           })
       ];
     }
 )

@@ -24,6 +24,18 @@ mkHostNixops "workstation"
         #    "/mnt/4x500/backup"
         #    [ (getSecret "x1extremeG2" "ssh/id_ed25519.pub")
         #    ])
+        (setupSyncthing "workstation"
+           ( (mkSyncthingDevice "x1extremeG2" true) //
+             (mkSyncthingDevice "nas" false) //
+             (mkSyncthingDevice "vserver" false) //
+             (import ../secrets/common/syncthing.SM-G960F.nix)
+           )
+           { "/home/mhuber/Sync" =
+               { id = "sync";
+                 devices = [ "x1extremeG2" ];
+                 type = "sendreceive";
+               };
+           })
       ];
   }
 )

@@ -255,8 +255,9 @@ rec
         else [];
     in
     { "${hostName}" =
-        { inherit (baseDevice) id;
-          addresses = ipAddress + baseDevice.addresses;
+        { name = hostName;
+          inherit (baseDevice) id;
+          addresses = ipAddress ++ baseDevice.addresses;
           inherit introducer;
         };
     };
@@ -286,14 +287,7 @@ rec
           declarative =
             { cert = "/etc/syncthing/cert.pem";
               key = "/etc/syncthing/key.pem";
-              devices = devices //
-                ( let
-                    path = (secretsDir + "/${hostName}/syncthing/devices.nix");
-                  in lib.mkIf (builtins.pathExists path) (import path));
-              folders = folders //
-                ( let
-                    path = (secretsDir + "/${hostName}/syncthing/folders.nix");
-                  in lib.mkIf (builtins.pathExists path) (import path));
+              inherit devices folders;
             };
         };
     };

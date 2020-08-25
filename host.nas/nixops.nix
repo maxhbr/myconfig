@@ -57,7 +57,12 @@ mkHostNixops "nas"
              (mkSyncthingDevice "vserver" false) //
              (import ../secrets/common/syncthing.SM-G960F.nix)
            )
-           {})
+           { "/mnt/2x4t/Sync" =
+               { id = "sync";
+                 devices = [ "x1extremeG2" ];
+                 type = "sendreceive";
+               };
+           })
       ];
   }
 )

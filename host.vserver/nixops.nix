@@ -7,6 +7,18 @@ mkHostNixops "vserver"
     imports =
       [ (deployWireguardKeys "vserver")
         (deploySSHUserKeys "vserver" "rsa")
+        (setupSyncthing "vserver"
+           ( (mkSyncthingDevice "x1extremeG2" false) //
+             (mkSyncthingDevice "workstation" false) //
+             (mkSyncthingDevice "nas" false) //
+             (import ../secrets/common/syncthing.SM-G960F.nix)
+           )
+           { "/home/mhuber/Sync" =
+               { id = "sync";
+                 devices = [ "x1extremeG2" ];
+                 type = "sendreceive";
+               };
+           })
       ];
   }
 )
