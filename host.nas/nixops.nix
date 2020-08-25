@@ -27,6 +27,30 @@ mkHostNixops "nas"
            [ (getSecret "x1extremeG2" "ssh/id_ed25519.pub")
            ])
         (fixIp "nas" "enp3s0")
+        { deployment.keys =
+            { adminpass =
+                { text = getSecret "nas" "nextcloud/adminpass";
+                  destDir = "/etc/nextcloud";
+                  user = "nextcloud";
+                  group = "root";
+                  permissions = "0440";
+                };
+              "nextcloud.crt" =
+                { text = getSecret "nas" "nextcloud/nextcloud.crt";
+                  destDir = "/etc/nextcloud";
+                  user = "nginx";
+                  group = "root";
+                  permissions = "0440";
+                };
+              "nextcloud.key" =
+                { text = getSecret "nas" "nextcloud/nextcloud.key";
+                  destDir = "/etc/nextcloud";
+                  user = "nginx";
+                  group = "root";
+                  permissions = "0440";
+                };
+            };
+        }
       ];
   }
 )

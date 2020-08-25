@@ -37,6 +37,7 @@
       # configuration
       # ./docker.openhab.nix
       ./service.deconz.nix
+      ./service.nextcloud.nix
       # ../role.desktop/kiosk/headless.kiosk.nix
     ] ++
     (with (import ../lib.nix);
@@ -65,18 +66,18 @@
         allowSetSystemTime = false;
       };
 
-      services.snapper =
-        { snapshotInterval = "hourly";
-          cleanupInterval = "1d";
-          filters = null;
-          configs =
-            { home =
-                { subvolume = "/home";
-                  extraConfig = ''
-                    ALLOW_USERS="mhuber"
-                  '';
-                };
-            };
-        };
+    services.snapper =
+      { snapshotInterval = "hourly";
+        cleanupInterval = "1d";
+        filters = null;
+        configs =
+          { home =
+              { subvolume = "/home";
+                extraConfig = ''
+                  ALLOW_USERS="mhuber"
+                '';
+              };
+          };
+      };
   };
 }
