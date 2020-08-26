@@ -29,7 +29,8 @@
           sslCertificate = "/etc/nextcloud/nextcloud.crt";
           sslCertificateKey = "/etc/nextcloud/nextcloud.key";
           listen =
-            map (addr : {inherit addr; port = 443; ssl = true;}) (config.services.nextcloud.config.extraTrustedDomains);
+            map (addr : {inherit addr; port = 443; ssl = true;})
+                (config.services.nextcloud.config.extraTrustedDomains ++ [config.services.nextcloud.hostName]);
         };
       services.postgresql = {
         enable = true;
