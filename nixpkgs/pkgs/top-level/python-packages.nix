@@ -3371,6 +3371,10 @@ in {
 
   measurement = callPackage ../development/python-modules/measurement {};
 
+  mercurial = disabledIf (!isPy3k) (toPythonModule (pkgs.mercurial.override {
+    python3Packages = self;
+  }));
+
   midiutil = callPackage ../development/python-modules/midiutil {};
 
   mido = callPackage ../development/python-modules/mido { };
@@ -5952,6 +5956,8 @@ in {
 
   rdflib = callPackage ../development/python-modules/rdflib { };
 
+  rdflib-jsonld = callPackage ../development/python-modules/rdflib-jsonld { };
+
   isodate = callPackage ../development/python-modules/isodate { };
 
   owslib = callPackage ../development/python-modules/owslib { };
@@ -7162,6 +7168,8 @@ in {
   pluggy = callPackage ../development/python-modules/pluggy {};
 
   xcffib = callPackage ../development/python-modules/xcffib {};
+
+  xpybutil = callPackage ../development/python-modules/xpybutil {};
 
   pafy = callPackage ../development/python-modules/pafy { };
 
