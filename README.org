@@ -12,63 +12,9 @@ Currently I use
 
 *These notes are probably outdated*
 
-* How to bootstrap
-** on NixOS:
-first install NixOS, e.g. with the scripts in [[./misc/bootstrap]] or [[https://gist.github.com/martijnvermaat/76f2e24d0239470dd71050358b4d5134][this guide]]. Then
-#+BEGIN_SRC bash
-$ git clone https://github.com/maxhbr/myconfig ~/myconfig
-$ cd ~/myconfig
-$ ./rebuild.sh
-#+END_SRC
-
 * How it is composed
 
-** Entrypoint
-- Entrypoint for configuration for the ~${hostname}~ is ~./nixos/host-${hostname}/~.
-
-** ~./nixos/hardware/~
-This folder contains hardware related stuff. It uses the great repository [[https://github.com/NixOS/nixos-hardware][nixOS/nixos-hardware]] for additional configuration.
-
-** Profiles
-The profiles are stored in ~./nixos/~, e.g. ~./nixos/dev.nix~.
-
-** Modules
-The modules are stored in ~./nixos/modules/~ and interesting ones are:
-| Modules                     | Description                                                |
-|-----------------------------+------------------------------------------------------------|
-| *core*                      | This profile is loaded on every machine                    |
-| *core.shell.common*         | Shell stuff, like the  aliasrc                             |
-| *core.zsh*                  | Zsh dotfiles, other shell stuff                            |
-| *core.vim*                  | (currently unused) vim config                              |
-| *core.git*                  | Gitconfig and some related scripts                         |
-| *core.tmux*                 | Tmux configuration                                         |
-| *emacs*                     | Dotfiles for a spacemacs based emacs setup                 |
-| desktop                     | Contains all the stuff for the graphical UI, mainly xmonad |
-| *desktop.X.xmonad*          | My xmonad configuration                                    |
-| desktop.Wayland.sway        | (currently unused) configuration for sway                  |
-| desktop.X.vnc               | Adds an VNC server                                         |
-| desktop.X.terminal          | For setting up an terminal server                          |
-| *dev*                       | Some stuff necessary for programming and related tasks     |
-| *dev.virtualization.docker* | Docker stuff                                               |
-| *dev.virtualization.vbox*   | Virtualbox stuff                                           |
-| *mail*                      | Email client and configuration                             |
-| *work*                      | Some not-fun stuff                                         |
-| *gaming*                    | Some fun stuff                                             |
-| *imagework*                 | Applications used for editing of photographs               |
-| *server*                    | Configuration for an headless server                       |
-| *service.wireguard-server*  | The server configuration for wireguard                     |
-| *misc*                      | Some other stuff                                           |
-
-** Other Stuff
-*** ~./misc/bootstrap/~
-This contains documentation about how to bootstrap and setup my machines. It also contains a Packer based test for this setup.
-*** ~./misc/dotfiles_without_nix/~ (work in progress)
-This contains a bunch of scripts and symlinks, which should help to bootstrap my dotfiles on an non-Nix machine.
-*** ~./misc/guix/~ (work in progress)
-Some notes related to my experiments with GuixSD.
-*** ~./misc/ARM_Smart_Home_Server/~ (work in progress)
-Configuration for my non-Nixos Raspberry Pis and Odroids, which I use for smarthome stuff.
-The longterm goal is to migrate them to NixOS.
+[[./README.png]]
 
 * Notes
 ** To use https for pulling:

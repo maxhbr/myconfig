@@ -3,7 +3,7 @@
 home_git_commit() {
     local msg="$1"
     if [[ ! -z "$msg" ]]; then
-        "$myconfigDir/home_git.sh" commit -am "$msg"
+        "$myconfigDir/scripts/home_git.sh" commit -am "$msg"
     fi
 }
 

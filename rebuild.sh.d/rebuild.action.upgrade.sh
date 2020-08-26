@@ -66,17 +66,17 @@ upgrade() {
         fi
 
         logH3 "update" "home-manager"
-        ./lib/home-manager/update.sh || wasUpdated=1
+        ./role.core/lib/home-manager/update.sh || wasUpdated=1
         logH3 "update" "nix-nixPath"
-        ./lib/nix-nixPath/update.sh || wasUpdated=1
+        ./role.core/lib/nix-nixPath/update.sh || wasUpdated=1
         logH3 "update" "extrahosts"
-        ./modules/nixos.networking/extrahosts/update.sh || wasUpdated=1
+        ./role.core/nixos.networking/extrahosts/update.sh || wasUpdated=1
         logH3 "update" "emacs"
-        ./modules/emacs/update.sh || wasUpdated=1
+        ./role.desktop/emacs/update.sh || wasUpdated=1
         logH3 "update" "my-wallpapers"
-        ./modules/desktop.common/my-wallpapers/update.sh || wasUpdated=1
+        ./role.desktop/desktop.common/my-wallpapers/update.sh || wasUpdated=1
         logH3 "update" "chisui/zsh-nix-shell"
-        ./modules/zsh/update.sh || wasUpdated=1
+        ./role.core/zsh/update.sh || wasUpdated=1
 
         return $wasUpdated
     fi

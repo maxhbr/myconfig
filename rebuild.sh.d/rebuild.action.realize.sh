@@ -2,11 +2,11 @@
 
 getDeploymentNameFromHostname() {
     local hostname="$1"
-    echo "myconfig-${hostname}"
+    echo "host-${hostname}"
 }
 getDeploymentFileFromHostname() {
     local hostname="$1"
-    echo "$myconfigDir/hosts/${hostname}/nixops.nix"
+    echo "$myconfigDir/host.${hostname}/nixops.nix"
 }
 
 setupNixopsDeployment() {
@@ -119,22 +119,6 @@ realize() {
 
 
     setupNixopsDeployment "$targetHost" $($FORCE_RECREATE && echo "--force-recreate")
-
-    ############################################################################
-    # dirty fix due to driver incompatibilities:
-    if [[ "$targetHost" == "workstation" ]]; then
-
-        cat <<EOF
-TODO: workstation should use same nixpkgs as other hosts
-      Problem: mesa in unstable does not work in some games
-EOF
-
-        export nixpkgs="https://github.com/NixOS/nixpkgs/archive/20.03.tar.gz"
-        # export nixpkgs="https://github.com/NixOS/nixpkgs/archive/nixos-unstable-small.tar.gz"
-        export NIX_PATH="nixpkgs=$nixpkgs:nixos-config=$nixosConfig"
-        export NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$nixosConfig"
-    fi
-    ############################################################################
 
     logH1 "deploy" "targetHost=$targetHost args=$args jobCountArgs=$jobCountArgs"
     logDEBUG "FORCE_RECREATE=$FORCE_RECREATE IS_LOCAL_HOST=$IS_LOCAL_HOST DRY_RUN=$DRY_RUN"

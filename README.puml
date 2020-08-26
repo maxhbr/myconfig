@@ -1,0 +1,67 @@
+@startuml ./README
+
+skinparam Arrow {
+    Color #gray
+    FontSize 16
+    Thickness 3
+}
+
+skinparam rectangle<<role>> {
+    BackgroundColor white
+    FontSize 18
+}
+
+skinparam rectangle<<host>> {
+    BackgroundColor white
+    FontSize 20
+}
+
+' Roles
+'################################################
+together {
+rectangle core <<role>>
+rectangle headless <<role>>
+rectangle desktop <<role>>
+rectangle dev <<role>>
+rectangle gaming <<role>>
+rectangle imagework <<role>>
+rectangle work <<role>>
+
+core <-- headless
+core <-- desktop
+desktop <-- dev
+desktop <-- gaming
+desktop <-- imagework
+dev <-- work
+}
+
+' Hosts
+'################################################
+together {
+rectangle x1extremeG2 <<host>>
+x1extremeG2 -[#green]--> work
+x1extremeG2 -[#green,dashed]--> gaming
+x1extremeG2 -[#green]--> imagework
+rectangle "myconfig-master" <<role>> as master
+x1extremeG2 -[#green]-> master
+
+rectangle workstation <<host>>
+workstation -[#blue]--> gaming
+workstation -[#blue,dashed]--> dev
+workstation -[#blue]--> headless
+}
+
+together {
+rectangle nas <<host>>
+nas -[#red]--> headless
+nas -[#red,dashed]--> dev
+
+rectangle vserver <<host>>
+vserver -[#red]--> headless
+vserver -[#red,dashed]--> dev
+
+rectangle "pi4\npi3a\n..." <<host>> as pis
+pis -[#orange]--> core
+}
+
+@enduml
