@@ -47,7 +47,7 @@ mkHostNixops "x1extremeG2"
                { id = "Voo3Hidi";
                  devices = [ "SM-G960F" ];
                  type = "receiveonly";
-                 versioning = {type = "simple"; params.keep = "10";};.
+                 versioning = {type = "simple"; params.keep = "10";};
                };
            })
       ];

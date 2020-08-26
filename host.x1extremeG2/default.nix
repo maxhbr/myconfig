@@ -1,6 +1,6 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, secretsLib, ... }:
+{ pkgs, ... }:
 { imports =
     [ ./hardware-configuration.nix
       ../role.dev
@@ -9,19 +9,6 @@
       ../hardware/x1extremeG2.nix
       ../hardware/efi.nix
       ../hardware/footswitch.nix
-      # { config =
-      #     { fileSystems."/mnt/workstation-nfs" = {
-      #         device = "workstation:/data";
-      #         fsType = "nfs";
-      #         options = ["x-systemd.automount" "noauto"];
-      #       };
-      #       fileSystems."/mnt/nas-nfs" = {
-      #         device = "nas:/data";
-      #         fsType = "nfs";
-      #         options = ["x-systemd.automount" "noauto"];
-      #       };
-      #     };
-      # }
       ./backup-hdd.nix
       ./foto-hdd.nix
       # modules
