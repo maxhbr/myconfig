@@ -35,6 +35,13 @@ in {
                   };
                 recursive = true;
               };
+            ".local/share/Steam/compatibilitytools.d/Proton-5.9-GE-5-ST" =
+              { source = builtins.fetchTarball
+                  { url = "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/5.9-GE-5-ST/Proton-5.9-GE-5-ST.tar.gz";
+                    sha256 = "0zldsmanxjl6s9dii0ccfyp1i1lnk208jmixkvhd6y3yq1x7yy61";
+                  };
+                recursive = true;
+              };
           };
       };
 

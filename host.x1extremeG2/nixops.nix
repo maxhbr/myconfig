@@ -38,6 +38,17 @@ mkHostNixops "x1extremeG2"
                  devices = [ "nas" "workstation" "vserver" ];
                  type = "sendreceive";
                };
+             "/home/mhuber/Bilder/00-galerie" =
+               { id = "00-galerie";
+                 devices = [ "nas" ];
+                 type = "sendonly";
+               };
+             "/home/mhuber/syncthing/SM-G960F" =
+               { id = "Voo3Hidi";
+                 devices = [ "SM-G960F" ];
+                 type = "receiveonly";
+                 versioning = {type = "simple"; params.keep = "10";};.
+               };
            })
       ];
     }
