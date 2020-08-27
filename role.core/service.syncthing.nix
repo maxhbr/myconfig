@@ -1,6 +1,6 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
+{ pkgs, config, lib, ... }:
 let
   syncthingTunnel = with pkgs; pkgs.writeShellScriptBin "syncthingTunnel" ''
 set -x
@@ -12,13 +12,10 @@ exec \
   '';
 in
 {
-  config =
+  config = lib mkIf config.services.syncthing.enable;
     { services.syncthing =
-        { enable = true;
-          declarative =
-            { cert = "/etc/syncthing/cert.pem";
-              key = "/etc/syncthing/key.pem";
-              overrideDevices = true;
+        { declarative =
+            { overrideDevices = true;
               overrideFolders = true;
             };
           user = "mhuber";
