@@ -37,6 +37,7 @@ build() (
      time nix-build iso.nix \
           $NIX_PATH_ARGS \
           $jobCountArgs \
+          $3 \
           --show-trace \
           --no-out-link \
           --argstr hostConfig "$hostConfig" $([[ "$secondaryHostConfig" ]] && echo "--argstr secondaryHostConfig $secondaryHostConfig")
@@ -70,4 +71,10 @@ EOF
     chmod +x "$outDir/run-qemu.sh"
 }
 
-buildAndCopy "${1:-role.dev}" "$2"
+if [[ "$1" == "--dry-run" ]]; then
+    shift
+    build "${1:-role.dev}" "$2" "--dry-run"
+else
+    buildAndCopy "${1:-role.dev}" "$2"
+fi
+
