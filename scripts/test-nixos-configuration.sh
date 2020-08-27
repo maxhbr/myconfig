@@ -76,7 +76,7 @@ NIX_PATH=""
 set -x
 
 out=$(set -x;
-    nix-build './nixpkgs/nixos' \
+      nix-build "$nixpkgs/nixos" \
               $NIX_PATH_ARGS \
               $ARGS \
               -A system \
