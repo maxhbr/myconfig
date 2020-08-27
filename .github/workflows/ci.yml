@@ -13,11 +13,13 @@ jobs:
         config:
           - { hostname: core , mode: "--dry-run" }
           - { hostname: core , mode: "--push-to-cachix" }
+          - { hostname: headless , mode: "--dry-run" }
           - { hostname: dev , mode: "--dry-run" }
           - { hostname: desktop , mode: "--dry-run" }
           - { hostname: x1extremeG2 , mode: "--dry-run" }
-          - { hostname: headless , mode: "--dry-run" }
           - { hostname: vserver , mode: "--dry-run" }
+          - { hostname: workstaion , mode: "--dry-run" }
+          - { hostname: nas , mode: "--dry-run" }
       fail-fast: false
 
     steps:
