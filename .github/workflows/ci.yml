@@ -41,7 +41,7 @@ jobs:
         config:
           - { config: "" , secondaryConfig: "" , mode: "--dry-run" }
           - { config: "role.headless" , secondaryConfig: "" , mode: "--dry-run" }
-          - { config: "role.dev" , secondaryConfig: "role.headless" , mode: "--dry-run" }
+          - { config: "role.dev" , secondaryConfig: "host.vserver" , mode: "--dry-run" }
           - { config: "" , secondaryConfig: "" , mode: "--push-to-cachix" }
       fail-fast: false
 
