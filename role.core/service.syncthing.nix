@@ -12,7 +12,7 @@ exec \
   '';
 in
 {
-  config = lib mkIf config.services.syncthing.enable;
+  config = lib mkIf config.services.syncthing.enable
     { services.syncthing =
         { declarative =
             { overrideDevices = true;
