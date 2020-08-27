@@ -7,10 +7,13 @@ help() {
 EOF
 }
 
-. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../common.sh"
+cd "$( dirname "${BASH_SOURCE[0]}" )"
+common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
+. "$common"
 
 set -e
 ARGS=""
+CACHIX=NO
 DRYRUN=NO
 nixosConfig="$myconfigDir/host.$(hostname)"
 while [[ $# -gt 0 ]]; do
@@ -22,6 +25,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --check)
             ARGS="$ARGS --check"
+            shift
+            ;;
+        --push-to-cachix)
+            CACHIX=YES
             shift
             ;;
         --dry-run)
@@ -79,6 +86,9 @@ out=$(set -x;
 if [[ "$DRYRUN" != "YES" ]]; then
     if [[ -z "$out" ]]; then
         exit 1
+    fi
+    if [[ "$CACHIX" == "YES" ]]; then
+        echo "$out" | cachix push maxhbr
     fi
 
     nix path-info -hS $out
