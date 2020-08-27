@@ -11,7 +11,6 @@
               dbuser = "nextcloud";
               dbhost = "/run/postgresql";
               dbname = "nextcloud";
-              #dbpassFile = "/etc/nextcloud/adminpass";
               adminuser = "Admin";
               adminpassFile = "/etc/nextcloud/adminpass";
               extraTrustedDomains =
