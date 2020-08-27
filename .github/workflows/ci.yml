@@ -12,6 +12,7 @@ jobs:
       matrix:
         config:
           - { hostname: core , mode: "--dry-run" }
+          - { hostname: core , mode: "" }
           - { hostname: dev , mode: "--dry-run" }
           - { hostname: desktop , mode: "--dry-run" }
           - { hostname: x1extremeG2 , mode: "--dry-run" }
