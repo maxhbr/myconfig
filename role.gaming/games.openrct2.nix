@@ -1,5 +1,5 @@
-{ pkgs, ... }:
-{ config = {
+{ pkgs, lib, ... }:
+{ config = lib.mkIf (pkgs ? openrct2Files) {
     home-manager.users.mhuber =
       { home.packages = with pkgs; [ openrct2 ];
         home.file =
