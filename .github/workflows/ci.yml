@@ -52,7 +52,7 @@ jobs:
       with:
         name: maxhbr
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-    - run: ./scripts/build-iso-image.sh --dry-run
+    - run: ./scripts/build-iso-image.sh ${{ matrix.config.mode }} ${{ matrix.config.config }} ${{ matrix.config.secondaryConfig }}
 
 
   # build-iso:
