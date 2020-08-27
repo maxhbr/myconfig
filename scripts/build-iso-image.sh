@@ -74,6 +74,9 @@ EOF
 if [[ "$1" == "--dry-run" ]]; then
     shift
     build "${1:-role.dev}" "$2" "--dry-run"
+elif [[ "$1" == "--push-to-cachix" ]]; then
+    shift
+    build "${1:-role.dev}" "$2" | cachix push maxhbr
 else
     buildAndCopy "${1:-role.dev}" "$2"
 fi
