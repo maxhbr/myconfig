@@ -2,12 +2,12 @@
 { stdenv, fetchurl, unzip, makeWrapper }:
 
 stdenv.mkDerivation rec {
-  version = "1.8.2";
+  version = "1.8.6";
   name = "freeplane-${version}";
 
   src = fetchurl {
-    url = "https://sourceforge.net/projects/freeplane/files/freeplane%20stable/freeplane_bin-1.8.2.zip/download";
-    sha512 = "1a1a24fdffc932e2bc4af93ea0cbef1e9fcb9c7a5e92bac490c6ac4ed5485ae92d353aa41d259e40df0b256c9958c3978e967eea6f8991ae621deb44bc6c22b6";
+    url = "https://sourceforge.net/projects/freeplane/files/freeplane%20stable/freeplane_bin-${version}.zip/download";
+    sha512 = "185d69rhyw4i6k2chidsqgbif9qikk39li4fvw68aad3fl60p0blr48l5hgrkcfp39nkxkp188g76srnqi19kgrj1had1g57ad16jcl";
   };
 
   nativeBuildInputs = [
