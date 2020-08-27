@@ -7,7 +7,7 @@ help() {
 EOF
 }
 
-. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/common.sh"
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../common.sh"
 
 set -e
 ARGS=""
