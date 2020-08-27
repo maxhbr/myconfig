@@ -18,7 +18,7 @@ jobs:
           - { hostname: desktop , mode: "--dry-run" }
           - { hostname: x1extremeG2 , mode: "--dry-run" }
           - { hostname: vserver , mode: "--dry-run" }
-          - { hostname: workstaion , mode: "--dry-run" }
+          - { hostname: workstation , mode: "--dry-run" }
           - { hostname: nas , mode: "--dry-run" }
       fail-fast: false
 

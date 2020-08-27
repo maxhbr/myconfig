@@ -15,9 +15,10 @@
               adminpassFile = "/etc/nextcloud/adminpass";
               extraTrustedDomains =
                 (with (import ../lib.nix);
-                  [ (getSecretNoNewline "nas" "ip")
-                    "10.199.199.6"
-                  ]
+                  makeOptionalListBySecrets
+                    [ (getSecretNoNewline "nas" "ip")
+                      "10.199.199.6"
+                    ]
                 );
               overwriteProtocol = "https";
             };

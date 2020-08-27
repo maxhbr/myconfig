@@ -26,6 +26,12 @@ rec
     conf:
     lib.mkIf (builtins.pathExists (secretsDir + "/README.md")) conf;
 
+  makeOptionalListBySecrets =
+    list:
+    if (builtins.pathExists (secretsDir + "/README.md"))
+    then list
+    else [];
+
   mkHost =
     hostName:
     addConfig:
