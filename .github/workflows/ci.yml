@@ -54,18 +54,3 @@ jobs:
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - run: ./scripts/build-iso-image.sh ${{ matrix.config.mode }} ${{ matrix.config.config }} ${{ matrix.config.secondaryConfig }}
 
-
-  # build-iso:
-  #   runs-on: ubuntu-latest
-  #   strategy:
-  #     matrix:
-  #       config:
-  #         - { hostname: core }
-  #     fail-fast: false
-  #   steps:
-  #   - uses: actions/checkout@v1
-  #   - name: Install Nix
-  #     uses: cachix/install-nix-action@v6
-  #   - run: ./iso-rebuild.sh ${{ matrix.config.hostname }}
-
-
