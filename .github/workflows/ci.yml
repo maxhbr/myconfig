@@ -16,7 +16,7 @@ jobs:
           - { hostname: headless , mode: "--dry-run" }
           - { hostname: headless , mode: "--push-to-cachix" }
           - { hostname: dev , mode: "--dry-run" }
-          - { hostname: dev , mode: "--push-to-cachix" }
+          # - { hostname: dev , mode: "--push-to-cachix" } # runs out of disk space
           - { hostname: desktop , mode: "--dry-run" }
           - { hostname: x1extremeG2 , mode: "--dry-run" }
           - { hostname: vserver , mode: "--dry-run" }
@@ -42,7 +42,7 @@ jobs:
           - { config: "" , secondaryConfig: "" , mode: "--dry-run" }
           - { config: "role.headless" , secondaryConfig: "" , mode: "--dry-run" }
           - { config: "role.dev" , secondaryConfig: "host.vserver" , mode: "--dry-run" }
-          - { config: "" , secondaryConfig: "" , mode: "--push-to-cachix" }
+          # - { config: "" , secondaryConfig: "" , mode: "--push-to-cachix" } # runs out of disk space
       fail-fast: false
 
     steps:
