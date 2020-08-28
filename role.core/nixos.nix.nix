@@ -27,7 +27,7 @@
         };
       };
     };
-    nix = {
+    nix = rec {
       useSandbox = true;
       readOnlyStore = true;
 
@@ -37,8 +37,9 @@
       allowedUsers = [ "@wheel" "@builders" "mhuber" ];
       trustedUsers = [ "root" "@wheel" "@builders" "mhuber" ];
 
-      trustedBinaryCaches = [ "https://cache.nixos.org" ];
-      binaryCaches = [ "https://cache.nixos.org" ];
+      trustedBinaryCaches = [ "https://cache.nixos.org" "https://maxhbr.cachix.org" ];
+      binaryCaches = trustedBinaryCaches;
+      binaryCachePublicKeys = [ "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=" "maxhbr.cachix.org-1:wwfYm+B6HaXyFey300cmuSQnvwULS0VU1VtOGXDyxCo=" ];
 
       extraOptions = ''
         gc-keep-outputs = true
