@@ -310,4 +310,4 @@ main() {
     fi
 }
 
-main "$@"
+time main "$@"
