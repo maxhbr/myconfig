@@ -3,7 +3,6 @@
     [ ./hardware-configuration.nix
       ../role.core
       ../role.headless
-      ../modules/service.syncthing.nix
       ../secrets/common/wifi.QS3j.nix
     ] ++
     (with (import ../lib.nix);
