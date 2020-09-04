@@ -19,7 +19,7 @@
     ../hardware/lowres.nix
 
     ##############################################################################
-    ##  choos setup for graphics  ################################################
+    ##  choose setup for graphics  ###############################################
     ##############################################################################
     (import ../hardware/gtx1650.nix).rawNvidiaConf
     (lib.mkIf (config.services.xserver.libinput.enable) {
@@ -31,8 +31,9 @@
     boot.extraModprobeConfig = ''
       options snd slots=snd-hda-intel
     '';
-    services.tlp.extraConfig = ''
-      USB_BLACKLIST="0bda:8153"
-    ''; # see: https://askubuntu.com/a/1044128
+    services.tlp.settings =
+      { USB_BLACKLIST = "0bda:8153"; # see: https://askubuntu.com/a/1044128
+        USB_BLACKLIST_PHONE = 1;
+      };
   };
 }

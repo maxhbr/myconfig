@@ -9,7 +9,7 @@
     # ./dev.tex.nix
     ./programs.license-compliance-toolbox.nix
     ./virtualization.docker
-    ./virtualization.qemu.nix
+    ./virtualization.qemu
     ./virtualization.vbox
     # ./virtualization.lxc.nix
   ];
