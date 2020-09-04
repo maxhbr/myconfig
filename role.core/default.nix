@@ -28,14 +28,10 @@ in
         ];
       assertions =
         [ { assertion = config.networking.hostId != null;
-            message = ''
-              hostid should be set!
-              generate it with
-              $ cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
-            '';
+            message = "config.networking.hostId should be set!";
           }
           { assertion = config.networking.hostName != "nixos";
-            message = "hostname should be set!";
+            message = "config.networking.hostName should be set!";
           }
         ];
     };

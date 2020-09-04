@@ -61,9 +61,7 @@
         mosh
         sshfs
         nfs-utils libnfs
-
-        # my backup tool
-        borgbackup
+        unstable.nixfmt
       ];
     };
 
