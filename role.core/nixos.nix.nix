@@ -46,8 +46,7 @@
         gc-keep-derivations = true
         auto-optimise-store = true
         binary-caches-parallel-connections = 10
-        experimental-features = nix-command flakes
-      '';
+      ''; # experimental-features = nix-command flakes
     };
   };
 }
