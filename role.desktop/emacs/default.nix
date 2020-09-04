@@ -70,10 +70,11 @@ in {
           in "${chemacs}/.emacs";
           recursive = true;
         };
+        ".emacs.d/init.el".text = ''
+          (load "default.el")
+        '';
         ".emacs-profiles.el".text = ''
           (("spacemacs" . ((user-emacs-directory . "~/.spacemacs.d")))
-           ("doom" . ((user-emacs-directory . "~/.doom-emacs.d")
-                       (env . (("DOOMDIR" . "~/.doom.d")))))
            ("empty" . ((user-emacs-directory . "~/.emacs.d"))) 
            )
         '';

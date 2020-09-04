@@ -10,3 +10,5 @@ common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
 . "$common"
 
 updateRefAndJson syl20bnr/spacemacs
+updateRefAndJson hlissner/doom-emacs
+updateRefAndJson vlaci/nix-doom-emacs
