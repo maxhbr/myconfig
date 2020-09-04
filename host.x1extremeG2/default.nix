@@ -16,9 +16,9 @@
     ./mail
     ## fun
     ../role.imagework
-    ../modules/smarthome.nix
     ../role.gaming/games.steam
     ../role.desktop/desktop.X.obs.nix
+    ./smarthome.nix
   ] ++ (with (import ../lib.nix);
     [
       (setupAsWireguardClient "10.199.199.2")

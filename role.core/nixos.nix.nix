@@ -12,24 +12,14 @@
               allowUnfree = ${
                 lib.boolToString config.nixpkgs.config.allowUnfree
               };
-              permittedInsecurePackages = [
-                "dcraw-9.28.0"
-                # - CVE-2018-19655
-                # - CVE-2018-19565
-                # - CVE-2018-19566
-                # - CVE-2018-19567
-                # - CVE-2018-19568
-                "jasper-2.0.16"
-                # - Numerous CVE unsolved upstream
-                # - See: https://github.com/NixOS/nixpkgs/pull/57681#issuecomment-475857499
-                # - See: https://github.com/mdadams/jasper/issues/208
-              ];
             }
           '';
         };
       };
     };
     nix = rec {
+      package = pkgs.nixUnstable;
+
       useSandbox = true;
       readOnlyStore = true;
 
@@ -56,6 +46,7 @@
         gc-keep-derivations = true
         auto-optimise-store = true
         binary-caches-parallel-connections = 10
+        experimental-features = nix-command flakes
       '';
     };
   };

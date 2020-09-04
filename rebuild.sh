@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p nix ncurses git wget glibcLocales openssl nixops
+#! nix-shell -i bash -p nix ncurses git wget glibcLocales openssl nixops nixfmt
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 set -e
@@ -122,7 +122,9 @@ set -- "${POSITIONAL[@]}"
 if ! $DRY_RUN; then
     checkIfConnected
     if $DO_GIT; then
-        nixfmtall
+        if [[ ! $TARGET_WAS_CHANGED ]]; then
+            nixfmtall
+        fi
         handleGit
         home_git_commit "start of rebuild.sh" || true
     fi
