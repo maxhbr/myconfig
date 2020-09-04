@@ -18,7 +18,7 @@
       };
     };
     nix = rec {
-      package = pkgs.nixUnstable;
+      # package = pkgs.nixUnstable;
 
       useSandbox = true;
       readOnlyStore = true;
