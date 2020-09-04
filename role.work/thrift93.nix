@@ -5,7 +5,7 @@ let
   version = "0.9.3";
   name = "thrift-${version}";
 in {
-  thrift93 = super.thrift.overrideAttrs ( oldAttrs: {
+  thrift93 = super.thrift.overrideAttrs (oldAttrs: {
     inherit name version;
     src = self.fetchurl {
       url = "http://archive.apache.org/dist/thrift/${version}/${name}.tar.gz";

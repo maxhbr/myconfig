@@ -1,8 +1,5 @@
-{ pkgs, ... }:
-{ config =
-    { environment.systemPackages =
-        with pkgs.unstable;
-        [ nixos-shell
-        ];
-    };
+{ pkgs, ... }: {
+  config = {
+    environment.systemPackages = with pkgs.unstable; [ nixos-shell ];
+  };
 }

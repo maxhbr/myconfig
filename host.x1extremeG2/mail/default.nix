@@ -1,6 +1,1 @@
-{...}: {
-  imports = [
-    ./mail.mu4e
-    ./mail.mutt
-  ];
-}
+{ ... }: { imports = [ ./mail.mu4e ./mail.mutt ]; }

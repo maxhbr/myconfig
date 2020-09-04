@@ -1,5 +1,3 @@
-. ./common.sh
-
 getDeploymentNameFromHostname() {
     local hostname="$1"
     echo "host-${hostname}"

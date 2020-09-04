@@ -1,10 +1,4 @@
-{ stdenv
-, unzip
-, requireFile
-, autoPatchelfHook
-, gdk-pixbuf
-, gtk2-x11
-, steam-run
+{ stdenv, unzip, requireFile, autoPatchelfHook, gdk-pixbuf, gtk2-x11, steam-run
 }:
 
 stdenv.mkDerivation rec {
@@ -13,17 +7,9 @@ stdenv.mkDerivation rec {
 
   src = ./DungeonsofDredmor_Complete_linux_1389995827.tar.gz;
 
-  nativeBuildInputs = [
-    unzip
-    autoPatchelfHook
-  ];
+  nativeBuildInputs = [ unzip autoPatchelfHook ];
 
-  buildInputs = [
-    gtk2-x11
-    gdk-pixbuf
-    stdenv.cc.cc.lib
-    steam-run
-  ];
+  buildInputs = [ gtk2-x11 gdk-pixbuf stdenv.cc.cc.lib steam-run ];
 
   unpackPhase = ''
     mkdir -p dod
@@ -43,9 +29,9 @@ stdenv.mkDerivation rec {
   '';
 
   meta = with stdenv.lib; {
-    homggepage = http://www.bombmanual.com/;
+    homggepage = "http://www.bombmanual.com/";
     description = "Keep Talking and Nobody Explodes";
     platforms = platforms.linux;
-    maintainers = with maintainers; [];
+    maintainers = with maintainers; [ ];
   };
 }

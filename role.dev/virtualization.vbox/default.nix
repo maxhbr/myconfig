@@ -3,7 +3,5 @@
 { ... }:
 
 { # imports = [ ./vagrant.nix ];
-  config =
-    { virtualisation.virtualbox.host.enable = true;
-    };
+  config = { virtualisation.virtualbox.host.enable = true; };
 }

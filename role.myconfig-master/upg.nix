@@ -7,9 +7,7 @@ stdenv.mkDerivation rec {
 
   phases = [ "installPhase" ];
 
-  nativeBuildInputs = [
-    makeWrapper
-  ];
+  nativeBuildInputs = [ makeWrapper ];
 
   installPhase = ''
     makeWrapper /home/mhuber/myconfig/rebuild.sh $out/bin/upg

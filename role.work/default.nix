@@ -1,12 +1,7 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, ... }:
-{
-  imports = [
-    ../role.dev
-    ./jdk.nix
-    ./misc-desktop-tools.nix
-  ];
+{ config, pkgs, lib, ... }: {
+  imports = [ ../role.dev ./jdk.nix ./misc-desktop-tools.nix ];
   config = {
     nixpkgs.overlays = map (n: import n) [
       ./idea-ultimate
@@ -16,9 +11,12 @@
     ];
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
-        openvpn networkmanager_openvpn
-        openconnect networkmanager-openconnect
-        strongswan networkmanager_strongswan
+        openvpn
+        networkmanager_openvpn
+        openconnect
+        networkmanager-openconnect
+        strongswan
+        networkmanager_strongswan
         networkmanagerapplet
         thrift
         idea-ultimate # jetbrains.phpstorm

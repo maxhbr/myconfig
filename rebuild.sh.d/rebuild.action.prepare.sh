@@ -1,5 +1,3 @@
-. ./common.sh
-
 prepare_create_nix_store_key() {
     # https://github.com/NixOS/nix/issues/2330#issuecomment-410505837
     if [[ ! -f ~/.config/nix/pk ]]; then

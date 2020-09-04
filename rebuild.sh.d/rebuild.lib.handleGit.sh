@@ -1,5 +1,3 @@
-. ./common.sh
-
 isBranchMaster() {
     if [[ "$(cd "$myconfigDir"; git rev-parse --abbrev-ref HEAD)" == "master" ]]; then
         return 0

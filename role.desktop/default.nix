@@ -1,5 +1,5 @@
-{ pkgs, lib, config, ...}:
-{ imports = [
+{ pkgs, lib, config, ... }: {
+  imports = [
     ../role.core
     # modules
     # ./desktop.Wayland.sway

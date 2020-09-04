@@ -6,25 +6,21 @@
 # This can be removed, once the packages is listed
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
-{
+{ pkgs, ... }: {
   config = {
-    nixpkgs.overlays = [(self: super: {
-      dejavu_nerdfont = super.callPackage ./pkgs/dejavu-nerdfont.nix { };
-    })];
+    nixpkgs.overlays = [
+      (self: super: {
+        dejavu_nerdfont = super.callPackage ./pkgs/dejavu-nerdfont.nix { };
+      })
+    ];
 
     fonts = {
       enableFontDir = true;
       enableGhostscriptFonts = true;
 
-      fonts = with pkgs; [
-        dejavu_fonts dejavu_nerdfont
-        corefonts
-        inconsolata
-      ];
-      fontconfig.defaultFonts.monospace = [
-        "DejaVu Sans Mono Nerd Font Complete Mono"
-      ];
+      fonts = with pkgs; [ dejavu_fonts dejavu_nerdfont corefonts inconsolata ];
+      fontconfig.defaultFonts.monospace =
+        [ "DejaVu Sans Mono Nerd Font Complete Mono" ];
     };
   };
 }

@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  mailclient-sh = pkgs.writeScriptBin "mailclient.sh" (builtins.readFile ./bin/mailclient.sh);
-  mailrun-sh = pkgs.writeScriptBin "mailrun.sh" (builtins.readFile ./bin/mailrun.sh);
-  mutt-bgrun = pkgs.writeScriptBin "mutt_bgrun" (builtins.readFile ./bin/mutt_bgrun);
-in
-{
+  mailclient-sh =
+    pkgs.writeScriptBin "mailclient.sh" (builtins.readFile ./bin/mailclient.sh);
+  mailrun-sh =
+    pkgs.writeScriptBin "mailrun.sh" (builtins.readFile ./bin/mailrun.sh);
+  mutt-bgrun =
+    pkgs.writeScriptBin "mutt_bgrun" (builtins.readFile ./bin/mutt_bgrun);
+in {
   imports = [ ../mail.common ];
   config = {
     home-manager.users.mhuber = {
@@ -28,8 +30,6 @@ in
         ".mailcap".source = ./mailcap;
       };
     };
-    environment.shellAliases = {
-      mutt = "neomutt";
-    };
+    environment.shellAliases = { mutt = "neomutt"; };
   };
 }

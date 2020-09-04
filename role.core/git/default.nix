@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT
 { config, pkgs, ... }:
 
-
 # TODO: package scripts
 {
   config = {
@@ -17,11 +16,11 @@
     home-manager.users.mhuber = {
       home.packages = with pkgs.gitAndTools; [
         tig
-        pkgs.git-lfs git-fame git-gone
+        pkgs.git-lfs
+        git-fame
+        git-gone
       ];
-      home.file = {
-        ".gitconfig".source = ./gitconfig;
-      };
+      home.file = { ".gitconfig".source = ./gitconfig; };
       programs.git = {
         package = pkgs.gitAndTools.gitFull;
         enable = true;

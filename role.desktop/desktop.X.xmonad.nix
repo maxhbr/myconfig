@@ -2,12 +2,8 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  my-mute-telco = pkgs.callPackage ../pkgs/myMuteTelco {
-    inherit pkgs;
-  };
-  my-xmobar = pkgs.callPackage ../pkgs/myXmobar {
-    inherit pkgs my-mute-telco;
- };
+  my-mute-telco = pkgs.callPackage ../pkgs/myMuteTelco { inherit pkgs; };
+  my-xmobar = pkgs.callPackage ../pkgs/myXmobar { inherit pkgs my-mute-telco; };
   my-xmonad = pkgs.haskellPackages.callPackage ../pkgs/myXMonad {
     inherit pkgs my-xmobar my-mute-telco;
   };
@@ -16,9 +12,7 @@ let
   '';
 
 in {
-  imports = [
-    ./desktop.X.common
-  ];
+  imports = [ ./desktop.X.common ];
 
   config = {
     home-manager.users.mhuber = {

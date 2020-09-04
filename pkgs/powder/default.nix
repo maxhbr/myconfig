@@ -32,8 +32,9 @@ stdenv.mkDerivation {
   '';
 
   meta = with stdenv.lib; {
-    homepage = http://zincland.com/powder;
-    description = "A graphical roguelike, originally designed for the Game Boy Advance";
+    homepage = "http://zincland.com/powder";
+    description =
+      "A graphical roguelike, originally designed for the Game Boy Advance";
     license = licenses.unfree;
     platforms = platforms.linux;
     maintainers = [ "mail@maximilian-huber.de" ];

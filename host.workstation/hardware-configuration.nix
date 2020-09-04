@@ -4,55 +4,56 @@
 { config, lib, pkgs, modulesPath, ... }:
 
 {
-  imports =
-    [ (modulesPath + "/installer/scan/not-detected.nix")
-    ];
+  imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
 
-  boot.initrd.availableKernelModules = [ "nvme" "ahci" "xhci_pci" "usbhid" "usb_storage" "sd_mod" "sr_mod" ];
+  boot.initrd.availableKernelModules =
+    [ "nvme" "ahci" "xhci_pci" "usbhid" "usb_storage" "sd_mod" "sr_mod" ];
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-amd" ];
   boot.extraModulePackages = [ ];
 
-  fileSystems."/" =
-    { device = "/dev/disk/by-uuid/07300d85-1621-4ae7-afad-b04454560fdc";
-      fsType = "btrfs";
-      options = [ "subvol=@" ];
-    };
+  fileSystems."/" = {
+    device = "/dev/disk/by-uuid/07300d85-1621-4ae7-afad-b04454560fdc";
+    fsType = "btrfs";
+    options = [ "subvol=@" ];
+  };
 
-  boot.initrd.luks.devices."enc-pv" =
-    { device = "/dev/disk/by-uuid/2f8b0614-e22b-4ce6-80e1-04c136580106";
-      keyFile = "/dev/disk/by-id/usb-JetFlash_Transcend_16GB_753K3Z31LDXXOPIT-0:0";
-      keyFileSize = 4096;
-      preLVM = true;
-      allowDiscards = true;
-      fallbackToPassword = true;
-    };
+  boot.initrd.luks.devices."enc-pv" = {
+    device = "/dev/disk/by-uuid/2f8b0614-e22b-4ce6-80e1-04c136580106";
+    keyFile =
+      "/dev/disk/by-id/usb-JetFlash_Transcend_16GB_753K3Z31LDXXOPIT-0:0";
+    keyFileSize = 4096;
+    preLVM = true;
+    allowDiscards = true;
+    fallbackToPassword = true;
+  };
 
-  fileSystems."/home" =
-    { device = "/dev/disk/by-uuid/07300d85-1621-4ae7-afad-b04454560fdc";
-      fsType = "btrfs";
-      options = [ "subvol=@home" ];
-    };
+  fileSystems."/home" = {
+    device = "/dev/disk/by-uuid/07300d85-1621-4ae7-afad-b04454560fdc";
+    fsType = "btrfs";
+    options = [ "subvol=@home" ];
+  };
 
-  fileSystems."/.snapshots" =
-    { device = "/dev/disk/by-uuid/07300d85-1621-4ae7-afad-b04454560fdc";
-      fsType = "btrfs";
-      options = [ "subvol=@snapshots" ];
-    };
+  fileSystems."/.snapshots" = {
+    device = "/dev/disk/by-uuid/07300d85-1621-4ae7-afad-b04454560fdc";
+    fsType = "btrfs";
+    options = [ "subvol=@snapshots" ];
+  };
 
-  fileSystems."/.swapfile" =
-    { device = "/dev/disk/by-uuid/07300d85-1621-4ae7-afad-b04454560fdc";
-      fsType = "btrfs";
-      options = [ "compress=no" "subvol=@swapfile" ];
-    };
+  fileSystems."/.swapfile" = {
+    device = "/dev/disk/by-uuid/07300d85-1621-4ae7-afad-b04454560fdc";
+    fsType = "btrfs";
+    options = [ "compress=no" "subvol=@swapfile" ];
+  };
 
-  fileSystems."/boot" =
-    { device = "/dev/disk/by-uuid/DD0D-3AE8";
-      fsType = "vfat";
-    };
+  fileSystems."/boot" = {
+    device = "/dev/disk/by-uuid/DD0D-3AE8";
+    fsType = "vfat";
+  };
 
   swapDevices = [ ];
 
   # High-DPI console
-  console.font = lib.mkDefault "${pkgs.terminus_font}/share/consolefonts/ter-u28n.psf.gz";
+  console.font =
+    lib.mkDefault "${pkgs.terminus_font}/share/consolefonts/ter-u28n.psf.gz";
 }

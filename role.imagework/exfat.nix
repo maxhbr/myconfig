@@ -3,8 +3,9 @@
 { config, pkgs, ... }:
 
 {
-  environment.systemPackages = with pkgs; [
-    exfat
-    # linuxPackages.exfat-nofuse
-  ];
+  environment.systemPackages = with pkgs;
+    [
+      exfat
+      # linuxPackages.exfat-nofuse
+    ];
 }

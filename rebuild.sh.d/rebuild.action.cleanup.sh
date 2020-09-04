@@ -1,5 +1,3 @@
-. ./common.sh
-
 cleanup() {
     logH2 "cleanup" "nixos and nix-env"
     pcent=$(echo $(df -h /  --output=pcent | tail -1 | cut -d'%' -f1))

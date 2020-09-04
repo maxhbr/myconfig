@@ -1,7 +1,6 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
-{
+{ pkgs, ... }: {
   config = {
     home-manager.users.mhuber = {
       # home.packages = with pkgs; [ vim ];
@@ -15,11 +14,8 @@
       programs.vim = {
         enable = true;
         extraConfig = builtins.readFile ./vimrc;
-        settings = {
-          number = true;
-        };
-        plugins = [
-        ];
+        settings = { number = true; };
+        plugins = [ ];
       };
     };
   };

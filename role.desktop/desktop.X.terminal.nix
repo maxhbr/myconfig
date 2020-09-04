@@ -6,9 +6,6 @@
   imports = [
     ./desktop.X.common
     ./service.openssh.nix
+    ../nixpkgs/nixos/modules/services/x11/terminal-server.nix
   ];
-  config = {
-    import <nixpkgs/nixos/modules/services/x11/terminal-server.nix> {
-    inherit config lib pkgs;
-  });
 }

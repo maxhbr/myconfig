@@ -1,5 +1,4 @@
-{ pkgs, ... }:
-{
+{ pkgs, ... }: {
   config = {
     home-manager.users.mhuber = {
       programs.termite = {
@@ -19,7 +18,8 @@
         scrollbackLines = 10000;
         browser = "${pkgs.xdg_utils}/xdg-open";
         cursorBlink = "system";
-        cursorShape = "block"; # type = types.nullOr (types.enum [ "block" "underline" "ibeam" ]);
+        cursorShape =
+          "block"; # type = types.nullOr (types.enum [ "block" "underline" "ibeam" ]);
         scrollbar = "off";
 
         backgroundColor = "rgba(249, 249, 249, 1)";

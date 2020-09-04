@@ -6,13 +6,13 @@ stdenv.mkDerivation rec {
   name = "freeplane-${version}";
 
   src = fetchurl {
-    url = "https://sourceforge.net/projects/freeplane/files/freeplane%20stable/freeplane_bin-${version}.zip/download";
-    sha512 = "185d69rhyw4i6k2chidsqgbif9qikk39li4fvw68aad3fl60p0blr48l5hgrkcfp39nkxkp188g76srnqi19kgrj1had1g57ad16jcl";
+    url =
+      "https://sourceforge.net/projects/freeplane/files/freeplane%20stable/freeplane_bin-${version}.zip/download";
+    sha512 =
+      "185d69rhyw4i6k2chidsqgbif9qikk39li4fvw68aad3fl60p0blr48l5hgrkcfp39nkxkp188g76srnqi19kgrj1had1g57ad16jcl";
   };
 
-  nativeBuildInputs = [
-    unzip makeWrapper
-  ];
+  nativeBuildInputs = [ unzip makeWrapper ];
 
   unpackPhase = ''
     unzip $src
@@ -26,7 +26,7 @@ stdenv.mkDerivation rec {
 
   meta = with stdenv.lib; {
     description = "Mind-mapping software";
-    homepage = https://www.freeplane.org/wiki/index.php/Home;
+    homepage = "https://www.freeplane.org/wiki/index.php/Home";
     license = licenses.gpl2Plus;
     platforms = platforms.linux;
   };

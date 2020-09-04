@@ -2,49 +2,52 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  myStopScreensaver = with pkgs; writeScriptBin "myStopScreensaver" ''
-    #!${stdenv.shell}
-    printf "run: "
-    while true; do
-        printf "."
-        sleep $((60 * 4))
-        ${xdotool}/bin/xdotool key shift
-    done
-  '';
-  myInvert = with pkgs; writeScriptBin "myInvert" ''
-    #!${stdenv.shell}
-    ${systemd}/bin/systemctl --user stop redshift
-    ${xrandr-invert-colors}/bin/xrandr-invert-colors
-  '';
-  mySetBrightness = with pkgs; writeScriptBin "mySetBrightness" ''
-    #!${stdenv.shell}
-    ${systemd}/bin/systemctl --user stop redshift
-    ${xorg.xrandr}/bin/xrandr --output DP-2 --brightness $${1:-1}
-  '';
-  myXsecurelock = with pkgs; writeScriptBin "myXsecurelock" ''
-    #!${stdenv.shell}
-    export XSECURELOCK_SAVER=saver_blank
-    export XSECURELOCK_PASSWORD_PROMPT=time
-    ${xsecurelock}/bin/xsecurelock
-  '';
+  myStopScreensaver = with pkgs;
+    writeScriptBin "myStopScreensaver" ''
+      #!${stdenv.shell}
+      printf "run: "
+      while true; do
+          printf "."
+          sleep $((60 * 4))
+          ${xdotool}/bin/xdotool key shift
+      done
+    '';
+  myInvert = with pkgs;
+    writeScriptBin "myInvert" ''
+      #!${stdenv.shell}
+      ${systemd}/bin/systemctl --user stop redshift
+      ${xrandr-invert-colors}/bin/xrandr-invert-colors
+    '';
+  mySetBrightness = with pkgs;
+    writeScriptBin "mySetBrightness" ''
+      #!${stdenv.shell}
+      ${systemd}/bin/systemctl --user stop redshift
+      ${xorg.xrandr}/bin/xrandr --output DP-2 --brightness $${1:-1}
+    '';
+  myXsecurelock = with pkgs;
+    writeScriptBin "myXsecurelock" ''
+      #!${stdenv.shell}
+      export XSECURELOCK_SAVER=saver_blank
+      export XSECURELOCK_PASSWORD_PROMPT=time
+      ${xsecurelock}/bin/xsecurelock
+    '';
 
 in {
-  imports = [
-    ../desktop.common
-    ./big-cursor.nix
-    ./autorandr.nix
-  ];
+  imports = [ ../desktop.common ./big-cursor.nix ./autorandr.nix ];
 
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
         arandr
-        xlibs.xmodmap xlibs.xset xlibs.setxkbmap
+        xlibs.xmodmap
+        xlibs.xset
+        xlibs.setxkbmap
         xorg.xmessage
         xclip
         xdotool
         myStopScreensaver
-        xrandr-invert-colors myInvert
+        xrandr-invert-colors
+        myInvert
         mySetBrightness
       ];
       home.file = {
@@ -68,7 +71,8 @@ in {
       enable = true;
       # lockerCommand = "${pkgs.my-wallpapers}/bin/myScreenLock";
       lockerCommand = "${myXsecurelock}/bin/myXsecurelock";
-      extraOptions = ["-n" "${myXsecurelock}/libexec/xsecurelock/dimmer" "-l"];
+      extraOptions =
+        [ "-n" "${myXsecurelock}/libexec/xsecurelock/dimmer" "-l" ];
     };
     services = {
       xserver = {

@@ -1,5 +1,3 @@
-. ./common.sh
-
 handlePostExecutionHooks() {
     if [[ -d "$myconfigDir/misc/post_install_hooks" ]]; then
         find "$myconfigDir/misc/post_install_hooks" \

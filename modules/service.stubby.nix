@@ -1,7 +1,6 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ ... }:
-{
+{ ... }: {
   services.stubby = {
     enable = true;
     upstreamServers = ''

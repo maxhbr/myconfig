@@ -1,22 +1,21 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs ? import <nixpkgs> { } }:
 
-let
-  stdenv = pkgs.stdenv;
-in
+let stdenv = pkgs.stdenv;
 
-stdenv.mkDerivation rec {
+in stdenv.mkDerivation rec {
   name = "find-cursor-${version}";
   version = "0.0.0";
   src = pkgs.fetchFromGitHub {
-    owner  = "Carpetsmoker";
-    repo   = "find-cursor";
-    rev    = "24962c42000e08b052e7423a526c684f837fd42c";
+    owner = "Carpetsmoker";
+    repo = "find-cursor";
+    rev = "24962c42000e08b052e7423a526c684f837fd42c";
     sha256 = "1sw33758wyzn607smkx8rd5dm16ffy20w736agrdxdiigach5wb5";
   };
 
-  nativeBuildInputs = [ pkgs.makeWrapper ] ++ (with pkgs.xorg; [ libX11 libXext libXdamage libXrender ]);
+  nativeBuildInputs = [ pkgs.makeWrapper ]
+    ++ (with pkgs.xorg; [ libX11 libXext libXdamage libXrender ]);
 
   buildPhase = ''
     make all
@@ -29,7 +28,7 @@ stdenv.mkDerivation rec {
   '';
 
   meta = {
-    homepage = https://github.com/Carpetsmoker/find-cursor;
+    homepage = "https://github.com/Carpetsmoker/find-cursor";
     description = "Simple XLib program to highlight the cursor position.";
     license = stdenv.lib.licenses.mit;
     maintainers = with stdenv.lib.maintainers; [ ];

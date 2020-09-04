@@ -1,6 +1,6 @@
 # Copyright 2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv }:
+{ pkgs ? import <nixpkgs> { }, stdenv ? pkgs.stdenv }:
 
 stdenv.mkDerivation rec {
   version = "1.0";
@@ -11,7 +11,6 @@ stdenv.mkDerivation rec {
   patchPhase = ''
     sed -i -e 's%pacmd%${pkgs.pulseaudio}/bin/pacmd%g' mute_telco.sh
   '';
-
 
   installPhase = ''
     bin=$out/bin

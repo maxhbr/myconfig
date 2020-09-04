@@ -7,8 +7,5 @@
     ./imports/users.nix
     ./mhuber.nix
   ];
-  environment.systemPackages = with pkgs; [
-    git git-lfs
-    vim
-  ];
+  environment.systemPackages = with pkgs; [ git git-lfs vim ];
 }

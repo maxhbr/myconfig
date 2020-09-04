@@ -1,5 +1,4 @@
-{ config, pkgs, lib, ... }:
-{
+{ config, pkgs, lib, ... }: {
   config = {
     boot = {
       # kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
@@ -9,47 +8,46 @@
     };
 
     home-manager.users.mhuber = {
-      home.packages = with pkgs; [
-        taskwarrior
-      ];
-      home.file =
-        { ".ssh/config".text = ''
-            ControlMaster auto
-            ControlPath ~/.ssh/control:%h:%p:%r
-            Include ~/.ssh/imports/*.config
+      home.packages = with pkgs; [ taskwarrior ];
+      home.file = {
+        ".ssh/config".text = ''
+          ControlMaster auto
+          ControlPath ~/.ssh/control:%h:%p:%r
+          Include ~/.ssh/imports/*.config
 
-            Host localhost
-                StrictHostKeyChecking no
-                UserKnownHostsFile=/dev/null
+          Host localhost
+              StrictHostKeyChecking no
+              UserKnownHostsFile=/dev/null
 
-            Host 127.0.0.1
-                StrictHostKeyChecking no
-                UserKnownHostsFile=/dev/null
-            '';
-          ".ssh/imports/wireguard.config".text = ''
-            Host 10.199.199.*
-                User mhuber
-            '';
-        };
+          Host 127.0.0.1
+              StrictHostKeyChecking no
+              UserKnownHostsFile=/dev/null
+        '';
+        ".ssh/imports/wireguard.config".text = ''
+          Host 10.199.199.*
+              User mhuber
+        '';
+      };
     };
 
     environment = {
-      variables = {
-        TMP = "/tmp";
-      };
+      variables = { TMP = "/tmp"; };
       systemPackages = with pkgs; [
         kbd
 
         # core:
-        wget curl
-        git git-lfs
+        wget
+        curl
+        git
+        git-lfs
         unzip
         tree
         rlwrap
         vim
 
         # admin:
-        bind bridge-utils
+        bind
+        bridge-utils
         sysstat
         cryptsetup
         lsof
@@ -60,7 +58,8 @@
         rsnapshot
         mosh
         sshfs
-        nfs-utils libnfs
+        nfs-utils
+        libnfs
         unstable.nixfmt
       ];
     };
@@ -78,7 +77,7 @@
     };
 
     programs.bash.interactiveShellInit = ''
-       umask 027
+      umask 027
     '';
     programs.zsh.interactiveShellInit = ''
       umask 027

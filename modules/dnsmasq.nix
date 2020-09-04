@@ -6,7 +6,7 @@
   services.dnsmasq = {
     enable = true;
     extraConfig = ''
-conf-dir=/etc/dnsmasq.d
-'';
+      conf-dir=/etc/dnsmasq.d
+    '';
   };
 }

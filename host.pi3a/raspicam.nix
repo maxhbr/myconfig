@@ -1,18 +1,17 @@
 { pkgs, ... }:
 let
-  streamcam = with pkgs; writeShellScriptBin "streamcam" ''
-${pkgs.mjpg-streamer}/bin/mjpg_streamer \
-  -i "input_uvc.so \
-    -d /dev/video0 \
-    -rot 180 \
-    -f 15 \
-    -r 1280x720" \
-  -o "output_http.so -w /www -p 32145"
-'';
-in
-{ home-manager.users.mhuber =
-    { home.packages = [streamcam];
-    };
+  streamcam = with pkgs;
+    writeShellScriptBin "streamcam" ''
+      ${pkgs.mjpg-streamer}/bin/mjpg_streamer \
+        -i "input_uvc.so \
+          -d /dev/video0 \
+          -rot 180 \
+          -f 15 \
+          -r 1280x720" \
+        -o "output_http.so -w /www -p 32145"
+    '';
+in {
+  home-manager.users.mhuber = { home.packages = [ streamcam ]; };
 
   networking.firewall.allowedTCPPorts = [ 32145 ];
   networking.firewall.allowedUDPPorts = [ 32145 ];

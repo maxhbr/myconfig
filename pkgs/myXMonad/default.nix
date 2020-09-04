@@ -1,43 +1,30 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs ? import <nixpkgs> {}
-, stdenv ? pkgs.stdenv
-, mkDerivation
-, base
-, containers
-, process
-, X11
-, xmonad
-, xmonad-contrib
-, callPackage
-, my-xmobar
-, my-mute-telco
-}:
+{ pkgs ? import <nixpkgs> { }, stdenv ? pkgs.stdenv, mkDerivation, base
+, containers, process, X11, xmonad, xmonad-contrib, callPackage, my-xmobar
+, my-mute-telco }:
 let
   version = "1.0";
   my-xmonad-scripts = ./bin;
   my-xmonad-share = ./share;
-  find-cursor = callPackage ./find-cursor.nix {
-    inherit pkgs;
-  };
+  find-cursor = callPackage ./find-cursor.nix { inherit pkgs; };
 in mkDerivation {
   inherit version;
   pname = "my-xmonad";
-  src = builtins.filterSource
-    (path: type: let
-      basename = baseNameOf path;
-      in if type == "directory" then (basename != ".stack-work" &&
-                                      basename != "dist" &&
-                                      basename != "bin" &&
-                                      basename != "share")
-        else if type == "symlink" then builtins.match "^result(|-.*)$" basename == null
-          else (builtins.match "^((|\..*)\.(sw[a-z]|hi|o)|.*~)$" basename == null &&
-                builtins.match "\.sh$" basename == null))
-    ./.;
+  src = builtins.filterSource (path: type:
+    let basename = baseNameOf path;
+    in if type == "directory" then
+      (basename != ".stack-work" && basename != "dist" && basename != "bin"
+        && basename != "share")
+    else if type == "symlink" then
+      builtins.match "^result(|-.*)$" basename == null
+    else
+      (builtins.match "^((|..*).(sw[a-z]|hi|o)|.*~)$" basename == null
+        && builtins.match ".sh$" basename == null)) ./.;
   isLibrary = true;
   isExecutable = true;
-  libraryHaskellDepends    = [base containers process X11 xmonad xmonad-contrib];
-  executableHaskellDepends = [base containers         X11 xmonad xmonad-contrib];
+  libraryHaskellDepends = [ base containers process X11 xmonad xmonad-contrib ];
+  executableHaskellDepends = [ base containers X11 xmonad xmonad-contrib ];
 
   patchPhase = ''
     set -e

@@ -4,9 +4,9 @@
 { ... }:
 
 {
-  fileSystems."/mnt/backup" =
-    { device = "/dev/disk/by-uuid/3294d03a-f08b-433c-8f04-9cc2a3e9dc10";
-      fsType = "ext4";
-      options = ["noauto,nofail,x-systemd.device-timeout=1,sync,users,rw"];
-    };
+  fileSystems."/mnt/backup" = {
+    device = "/dev/disk/by-uuid/3294d03a-f08b-433c-8f04-9cc2a3e9dc10";
+    fsType = "ext4";
+    options = [ "noauto,nofail,x-systemd.device-timeout=1,sync,users,rw" ];
+  };
 }

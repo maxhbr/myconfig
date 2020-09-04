@@ -30,7 +30,8 @@
       "${config.system.build.installBootLoader} ${config.system.build.toplevel} -d ./firmware";
 
     # As the boot process is done entirely in the firmware partition.
-    populateRootCommands = "touch files/touched"; # See: https://github.com/NixOS/nixpkgs/pull/93175
+    populateRootCommands =
+      "touch files/touched"; # See: https://github.com/NixOS/nixpkgs/pull/93175
   };
 
   fileSystems."/boot/firmware" = {

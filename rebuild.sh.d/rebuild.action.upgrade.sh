@@ -1,5 +1,3 @@
-. ./common.sh
-
 upgradeSubtree() {
     if ! git diff-index --quiet HEAD --; then
         logERR "uncommitted changes, do not upgrade $channel"

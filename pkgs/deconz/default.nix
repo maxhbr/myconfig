@@ -1,9 +1,7 @@
 # see: https://raw.githubusercontent.com/bjornfor/nixos-config/master/pkgs/deconz/default.nix
 
-{ stdenv, fetchurl, mkDerivation, dpkg, autoPatchelfHook
-, qtserialport, qtwebsockets
-, libredirect, makeWrapper, gzip, gnutar
-}:
+{ stdenv, fetchurl, mkDerivation, dpkg, autoPatchelfHook, qtserialport
+, qtwebsockets, libredirect, makeWrapper, gzip, gnutar }:
 
 # The default user and password for the WebApp is delight/delight. Hm, it looks
 # like the "WebApp" is deprecated, and the new Phoscon App is its replacement
@@ -15,12 +13,14 @@ mkDerivation rec {
   version = "2.05.77";
 
   src = fetchurl {
-    url = "http://deconz.dresden-elektronik.de/ubuntu/beta/deconz-${version}-qt5.deb";
+    url =
+      "http://deconz.dresden-elektronik.de/ubuntu/beta/deconz-${version}-qt5.deb";
     sha256 = "16ssp6rxnqpgl9avdlcaabja05rr3l4xhghbv2l8afv0wcgbj29k";
   };
 
   devsrc = fetchurl {
-    url = "http://deconz.dresden-elektronik.de/ubuntu/beta/deconz-dev-${version}.deb";
+    url =
+      "http://deconz.dresden-elektronik.de/ubuntu/beta/deconz-dev-${version}.deb";
     sha256 = "0xav93kd9l8lpaw0fikghmrxfglan85krgh47rjpd7napr648ikg";
   };
 
@@ -65,10 +65,12 @@ mkDerivation rec {
   '';
 
   meta = with stdenv.lib; {
-    description = "Manage ZigBee network with ConBee, ConBee II or RaspBee hardware";
+    description =
+      "Manage ZigBee network with ConBee, ConBee II or RaspBee hardware";
     # 2019-08-19: The homepage links to old software that doesn't even work --
     # it fails to detect ConBee2.
-    homepage = "https://www.dresden-elektronik.de/funktechnik/products/software/pc-software/deconz/?L=1";
+    homepage =
+      "https://www.dresden-elektronik.de/funktechnik/products/software/pc-software/deconz/?L=1";
     license = licenses.unfree;
     platforms = with platforms; linux;
     maintainers = with maintainers; [ bjornfor ];

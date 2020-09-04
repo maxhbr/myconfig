@@ -3,16 +3,15 @@
 { pkgs, ... }:
 let
   winePkgs = with pkgs.unstable; [ wine winetricks playonlinux ];
-  wowWinePkgs =
-    let
-      wineCfg = {
-        wineBuild = "wineWow";
-        gstreamerSupport = false;
-      };
-      wowWine = pkgs.unstable.wine.override wineCfg;
-      wowWinetricks = (pkgs.unstable.winetricks.override {wine = wowWine;});
-      wowPlayonlinux = (pkgs.unstable.playonlinux.override {wine = wowWine;});
-    in [ wowWine wowWinetricks wowPlayonlinux ];
+  wowWinePkgs = let
+    wineCfg = {
+      wineBuild = "wineWow";
+      gstreamerSupport = false;
+    };
+    wowWine = pkgs.unstable.wine.override wineCfg;
+    wowWinetricks = (pkgs.unstable.winetricks.override { wine = wowWine; });
+    wowPlayonlinux = (pkgs.unstable.playonlinux.override { wine = wowWine; });
+  in [ wowWine wowWinetricks wowPlayonlinux ];
   # cosmoteer = ( helper.wrap
   #    { name   = "cosmoteer";
   #      paths  = [ wget wowWine wowWinetricks ];
@@ -26,9 +25,7 @@ in {
       "p7zip-16.02" # in winetricks
     ];
 
-    home-manager.users.mhuber = {
-      home.packages = wowWinePkgs;
-    };
+    home-manager.users.mhuber = { home.packages = wowWinePkgs; };
     hardware.opengl.driSupport32Bit = true;
   };
 }

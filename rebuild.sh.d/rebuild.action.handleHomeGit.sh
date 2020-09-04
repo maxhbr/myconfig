@@ -1,5 +1,3 @@
-. ./common.sh
-
 home_git_commit() {
     local msg="$1"
     if [[ ! -z "$msg" ]]; then

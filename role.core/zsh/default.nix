@@ -5,9 +5,7 @@ let
   jsonFile = ./. + "/chisui-zsh-nix-shell.json";
   json = builtins.fromJSON (builtins.readFile jsonFile);
 in {
-  imports = [
-    ../shell.common
-  ];
+  imports = [ ../shell.common ];
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [ oh-my-zsh ];
@@ -16,16 +14,12 @@ in {
         ".zprofile".source = ./zprofile;
         ".profile".source = ./zprofile;
         ".zshrc.pre-oh-my-zsh".source = ./zshrc.pre-oh-my-zsh;
-        ".zsh-nix-shell".source = pkgs.fetchFromGitHub {
-          inherit (json) owner repo rev sha256;
-        };
+        ".zsh-nix-shell".source =
+          pkgs.fetchFromGitHub { inherit (json) owner repo rev sha256; };
       };
     };
     environment = {
-      shells = [
-        "${pkgs.zsh}/bin/zsh"
-        "/run/current-system/sw/bin/zsh"
-      ];
+      shells = [ "${pkgs.zsh}/bin/zsh" "/run/current-system/sw/bin/zsh" ];
     };
 
     programs.zsh = {
@@ -34,7 +28,7 @@ in {
       syntaxHighlighting.enable = true;
       ohMyZsh = {
         enable = true;
-        plugins = ["git"];
+        plugins = [ "git" ];
       };
       promptInit = ""; # Clear this to avoid a conflict with oh-my-zsh
     };

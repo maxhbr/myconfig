@@ -3,9 +3,7 @@
 { config, pkgs, ... }:
 
 {
-  environment.systemPackages = with pkgs; [
-    pkgs.steamcontroller-udev-rules
-  ];
+  environment.systemPackages = with pkgs; [ pkgs.steamcontroller-udev-rules ];
 
   # steam controller
   nixpkgs.config.packageOverrides = pkgs: {

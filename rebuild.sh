@@ -105,6 +105,7 @@ set -- "${POSITIONAL[@]}"
 ##  imports  ##############################################################
 ###########################################################################
 . ./rebuild.sh.d/rebuild.lib.handleGit.sh
+. ./rebuild.sh.d/rebuild.action.nixfmtall.sh
 . ./rebuild.sh.d/rebuild.action.handleHomeGit.sh
 . ./rebuild.sh.d/rebuild.action.prepare.sh
 . ./rebuild.sh.d/rebuild.action.upgrade.sh
@@ -121,6 +122,7 @@ set -- "${POSITIONAL[@]}"
 if ! $DRY_RUN; then
     checkIfConnected
     if $DO_GIT; then
+        nixfmtall
         handleGit
         home_git_commit "start of rebuild.sh" || true
     fi

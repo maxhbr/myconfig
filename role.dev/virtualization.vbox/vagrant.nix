@@ -5,7 +5,7 @@
 {
   config = {
     home-manager.users.mhuber = {
-      home.packages = with pkgs; [vagrant];
+      home.packages = with pkgs; [ vagrant ];
       home.file = {
         ".vagrant.d/Vagrantfile".source = ./vagrant.d/Vagrantfile;
       };

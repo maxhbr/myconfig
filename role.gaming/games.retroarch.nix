@@ -1,10 +1,7 @@
-{ pkgs, ... }:
-{
+{ pkgs, ... }: {
   config = {
     home-manager.users.mhuber = {
-      home.packages = with pkgs; [
-        retroarchBare
-      ];
+      home.packages = with pkgs; [ retroarchBare ];
     };
   };
 }

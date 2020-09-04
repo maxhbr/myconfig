@@ -1,29 +1,16 @@
-{ stdenv
-, unzip
-, requireFile
-, autoPatchelfHook
-, gdk-pixbuf
-, gtk2-x11
-, steam-run
+{ stdenv, unzip, requireFile, autoPatchelfHook, gdk-pixbuf, gtk2-x11, steam-run
 }:
 
 stdenv.mkDerivation rec {
   name = "ktane-${version}";
   version = "1.8.3";
 
-  src = ./Keep_Talking_and_Nobody_Explodes_1.8.3_-_StandaloneLinuxUniversal_Default.zip;
+  src =
+    ./Keep_Talking_and_Nobody_Explodes_1.8.3_-_StandaloneLinuxUniversal_Default.zip;
 
-  nativeBuildInputs = [
-    unzip
-    autoPatchelfHook
-  ];
+  nativeBuildInputs = [ unzip autoPatchelfHook ];
 
-  buildInputs = [
-    gtk2-x11
-    gdk-pixbuf
-    stdenv.cc.cc.lib
-    steam-run
-  ];
+  buildInputs = [ gtk2-x11 gdk-pixbuf stdenv.cc.cc.lib steam-run ];
 
   unpackPhase = ''
     unzip $src
@@ -43,9 +30,9 @@ stdenv.mkDerivation rec {
   '';
 
   meta = with stdenv.lib; {
-    homggepage = http://www.bombmanual.com/;
+    homggepage = "http://www.bombmanual.com/";
     description = "Keep Talking and Nobody Explodes";
     platforms = platforms.linux;
-    maintainers = with maintainers; [];
+    maintainers = with maintainers; [ ];
   };
 }

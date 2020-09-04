@@ -1,10 +1,5 @@
-{ pkgs, ...}:
-let
-  footswitch = pkgs.callPackage ../pkgs/footswitch {};
+{ pkgs, ... }:
+let footswitch = pkgs.callPackage ../pkgs/footswitch { };
 in {
-  config = {
-    home-manager.users.mhuber = {
-      home.packages = [ footswitch ];
-    };
-  };
+  config = { home-manager.users.mhuber = { home.packages = [ footswitch ]; }; };
 }

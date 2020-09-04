@@ -2,26 +2,26 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  gmvn = with pkgs; writeScriptBin "gmvn" ''
-#!${stdenv.shell}
+  gmvn = with pkgs;
+    writeScriptBin "gmvn" ''
+      #!${stdenv.shell}
 
-# is a substitute for `mvn`, but creates a local repository for each git project
-# if there is no git repo, it falls back to repo in current folder
+      # is a substitute for `mvn`, but creates a local repository for each git project
+      # if there is no git repo, it falls back to repo in current folder
 
-repo="$(${pkgs.git}/bin/git rev-parse --show-toplevel)/.m2/repository"
-RESULT=$?
-set -e
-if [[ $RESULT -eq 0 ]]; then
-  repo="$(pwd)/.m2/repository"
-fi
+      repo="$(${pkgs.git}/bin/git rev-parse --show-toplevel)/.m2/repository"
+      RESULT=$?
+      set -e
+      if [[ $RESULT -eq 0 ]]; then
+        repo="$(pwd)/.m2/repository"
+      fi
 
-echo "repo is: $repo"
-exec ${pkgs.maven}/bin/mvn \
-  -Dmaven.repo.local="$repo" \
-  "$@"
-  '';
-in
-{
+      echo "repo is: $repo"
+      exec ${pkgs.maven}/bin/mvn \
+        -Dmaven.repo.local="$repo" \
+        "$@"
+        '';
+in {
   config = {
     # generates:
     # - /run/booted-system/pkgs/openjdk8
@@ -34,21 +34,13 @@ in
       ln -s ${pkgs.maven} $out/pkgs/maven
     '';
 
-    nixpkgs.overlays = [(self: super: {
-      maven = super.maven.override {
-        jdk = self.openjdk11;
-      };
-    })];
+    nixpkgs.overlays = [
+      (self: super: { maven = super.maven.override { jdk = self.openjdk11; }; })
+    ];
 
     environment = {
-      systemPackages = with pkgs; [
-        jdk11
-        maven gradle
-        gmvn
-      ];
-      shellAliases = {
-        mvnDebug = "${pkgs.maven}/maven/bin/mvnDebug";
-      };
+      systemPackages = with pkgs; [ jdk11 maven gradle gmvn ];
+      shellAliases = { mvnDebug = "${pkgs.maven}/maven/bin/mvnDebug"; };
       variables = {
         JAVA_8_HOME = "/run/current-system/pkgs/openjdk8/lib/openjdk";
         JAVA_11_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk";

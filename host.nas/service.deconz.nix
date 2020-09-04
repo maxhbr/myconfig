@@ -19,8 +19,7 @@ let
   cfg = config.local.services.deconz;
   name = "deconz";
   stateDir = "/var/lib/${name}";
-in
-{
+in {
   options.local.services.deconz = {
 
     enable = mkEnableOption "deCONZ, a ZigBee gateway";
@@ -63,10 +62,7 @@ in
 
     extraOpts = mkOption {
       type = types.listOf types.str;
-      default = [
-        "--auto-connect=1"
-        "--dbg-info=1"
-      ];
+      default = [ "--auto-connect=1" "--dbg-info=1" ];
       description = ''
         Extra command line options for deCONZ.
         These options seem undocumented, but some examples can be found here:
@@ -77,10 +73,8 @@ in
 
   config = mkIf cfg.enable {
 
-    networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [
-      cfg.httpPort
-      cfg.wsPort
-    ];
+    networking.firewall.allowedTCPPorts =
+      lib.mkIf cfg.openFirewall [ cfg.httpPort cfg.wsPort ];
 
     systemd.services.deconz = {
       description = "deCONZ ZigBee gateway";
@@ -92,23 +86,20 @@ in
         rm -f ${stateDir}/.local/share/dresden-elektronik/deCONZ/zcldb.txt
       '';
       serviceConfig = {
-        ExecStart =
-          "${cfg.package}/bin/deCONZ"
-          + " -platform minimal"
+        ExecStart = "${cfg.package}/bin/deCONZ" + " -platform minimal"
           + " --http-port=${toString cfg.httpPort}"
           + " --ws-port=${toString cfg.wsPort}"
-          + (if cfg.device != "" then " --dev=${cfg.device}" else "")
-          + " " + (lib.concatStringsSep " " cfg.extraOpts);
+          + (if cfg.device != "" then " --dev=${cfg.device}" else "") + " "
+          + (lib.concatStringsSep " " cfg.extraOpts);
         Restart = "on-failure";
-        AmbientCapabilities =
-          let
-            # ref. upstream deconz.service
-            caps = lib.optionals (cfg.httpPort < 1024 || cfg.wsPort < 1024) [ "CAP_NET_BIND_SERVICE" ]
-                ++ lib.optionals (cfg.allowRebootSystem) [ "CAP_SYS_BOOT" ]
-                ++ lib.optionals (cfg.allowRestartService) [ "CAP_KILL" ]
-                ++ lib.optionals (cfg.allowSetSystemTime) [ "CAP_SYS_TIME" ];
-          in
-            lib.concatStringsSep " " caps;
+        AmbientCapabilities = let
+          # ref. upstream deconz.service
+          caps = lib.optionals (cfg.httpPort < 1024 || cfg.wsPort < 1024)
+            [ "CAP_NET_BIND_SERVICE" ]
+            ++ lib.optionals (cfg.allowRebootSystem) [ "CAP_SYS_BOOT" ]
+            ++ lib.optionals (cfg.allowRestartService) [ "CAP_KILL" ]
+            ++ lib.optionals (cfg.allowSetSystemTime) [ "CAP_SYS_TIME" ];
+        in lib.concatStringsSep " " caps;
         UMask = "0027";
         User = name;
         StateDirectory = name;
@@ -124,9 +115,9 @@ in
       group = name;
       isSystemUser = true;
       home = stateDir;
-      extraGroups = [ "dialout" ];  # for access to /dev/ttyACM0 (ConBee)
+      extraGroups = [ "dialout" ]; # for access to /dev/ttyACM0 (ConBee)
     };
 
-    users.groups.deconz = {};
+    users.groups.deconz = { };
   };
 }

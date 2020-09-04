@@ -5,53 +5,46 @@
 
 { config, pkgs, lib, ... }:
 let
-  dic = with pkgs; writeScriptBin "dic" ''
-#!${stdenv.shell}
-# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
-# SPDX-License-Identifier: MIT
+  dic = with pkgs;
+    writeScriptBin "dic" ''
+      #!${stdenv.shell}
+      # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+      # SPDX-License-Identifier: MIT
 
-dicImpl(){
-    if [[ "$#" -eq 0 ]]; then
-        ${ncurses}/bin/tput bold
-        ${ncurses}/bin/tput setaf 6
-        while read line; do
-            if [[ "$line" == "" ]]; then
-                ${ncurses}/bin/tput sgr0
-                return 0
-            fi
-            tput sgr0
-            ${w3m}/bin/w3m -dump "http://pocket.dict.cc?s=\"$line\"" \
-                | ${gnused}/bin/sed -r -e '/^([ ]{5,}.*)$/d' -e '1,2d' -e '/^$/d' -e '/^\[/d' \
-                | ${coreutils}/bin/head -n $(( $(tput lines) - 3 ))
-            echo "=================================================================="
-            ${ncurses}/bin/tput bold
-            ${ncurses}/bin/tput setaf 6
-        done
-        ${ncurses}/bin/tput sgr0
-    else
-        ${w3m}/bin/w3m -dump "http://pocket.dict.cc?s=\"$*\"" \
-            | ${coreutils}/bin/sed -r -e '/^([ ]{5,}.*)$/d' -e '1,2d' -e '/^$/d' -e '/^\[/d' \
-            | ${coreutils}/bin/less
-    fi
-}
+      dicImpl(){
+          if [[ "$#" -eq 0 ]]; then
+              ${ncurses}/bin/tput bold
+              ${ncurses}/bin/tput setaf 6
+              while read line; do
+                  if [[ "$line" == "" ]]; then
+                      ${ncurses}/bin/tput sgr0
+                      return 0
+                  fi
+                  tput sgr0
+                  ${w3m}/bin/w3m -dump "http://pocket.dict.cc?s=\"$line\"" \
+                      | ${gnused}/bin/sed -r -e '/^([ ]{5,}.*)$/d' -e '1,2d' -e '/^$/d' -e '/^\[/d' \
+                      | ${coreutils}/bin/head -n $(( $(tput lines) - 3 ))
+                  echo "=================================================================="
+                  ${ncurses}/bin/tput bold
+                  ${ncurses}/bin/tput setaf 6
+              done
+              ${ncurses}/bin/tput sgr0
+          else
+              ${w3m}/bin/w3m -dump "http://pocket.dict.cc?s=\"$*\"" \
+                  | ${coreutils}/bin/sed -r -e '/^([ ]{5,}.*)$/d' -e '1,2d' -e '/^$/d' -e '/^\[/d' \
+                  | ${coreutils}/bin/less
+          fi
+      }
 
-################################################################################
-# run
-if [ $# -eq 0 ]; then
-    ${rlwrap}/bin/rlwrap $0 --rlwrap $@
-else
-    if [ "$1" == "--rlwrap" ]; then
-        shift
-    fi
-    dicImpl $@
-fi
-  '';
-in {
-  config = {
-    home-manager.users.mhuber = {
-      home.packages = [
-        dic
-      ];
-    };
-  };
-}
+      ################################################################################
+      # run
+      if [ $# -eq 0 ]; then
+          ${rlwrap}/bin/rlwrap $0 --rlwrap $@
+      else
+          if [ "$1" == "--rlwrap" ]; then
+              shift
+          fi
+          dicImpl $@
+      fi
+        '';
+in { config = { home-manager.users.mhuber = { home.packages = [ dic ]; }; }; }

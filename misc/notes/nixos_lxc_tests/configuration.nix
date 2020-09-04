@@ -3,10 +3,7 @@
 { config, pkgs, ... }:
 
 {
-  imports =
-    [ ../../nixos/core/default.nix
-    ];
-
+  imports = [ ../../nixos/core/default.nix ];
 
   security.sudo = {
     enable = true;

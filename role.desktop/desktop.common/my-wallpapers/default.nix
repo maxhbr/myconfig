@@ -4,18 +4,17 @@
 let
   jsonFile = ./. + "/maxhbr-wallpapers.json";
   json = builtins.fromJSON (builtins.readFile jsonFile);
-  my-wallpapers-source = pkgs.fetchFromGitHub {
-    inherit (json) owner repo rev sha256;
-  };
+  my-wallpapers-source =
+    pkgs.fetchFromGitHub { inherit (json) owner repo rev sha256; };
 in {
   config = {
-    nixpkgs.overlays = [(self: super: {
-      my-wallpapers = super.callPackage my-wallpapers-source {};
-    })];
+    nixpkgs.overlays = [
+      (self: super: {
+        my-wallpapers = super.callPackage my-wallpapers-source { };
+      })
+    ];
     home-manager.users.mhuber = {
-      home.packages = with pkgs; [
-        my-wallpapers my-wallpapers-source
-      ];
+      home.packages = with pkgs; [ my-wallpapers my-wallpapers-source ];
     };
   };
 }

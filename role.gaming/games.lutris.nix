@@ -1,7 +1,7 @@
-{ pkgs, ... }:
-{ config = {
-    home-manager.users.mhuber =
-      { home.packages = with pkgs.unstable; [ lutris ];
-      };
+{ pkgs, ... }: {
+  config = {
+    home-manager.users.mhuber = {
+      home.packages = with pkgs.unstable; [ lutris ];
+    };
   };
 }
