@@ -1,3 +1,0 @@
-(defconst myligatures-packages
-  '()
-  "")

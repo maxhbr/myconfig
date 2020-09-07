@@ -4,8 +4,8 @@
   (interactive)
   (switch-to-buffer (other-buffer (current-buffer) 1)))
                                         ; TODO: if (other-buffer (current-buffer) 1) = buffer-menu
-(evil-leader/set-key "," 'switch-to-previous-buffer
-                     "dt" 'delete-trailing-whitespace)
+;; (evil-leader/set-key "," 'switch-to-previous-buffer
+;;                      "dt" 'delete-trailing-whitespace)
 
 (defun my-window-killer ()
   "closes the window, and deletes the buffer if it's the last window open."
@@ -30,12 +30,6 @@
   (funcall cmd (mark) (point))
   (evil-visual-restore) ; re-select last visual-mode selection
   )
-
-; (use-package evil-numbers
-;   :ensure t
-;   :config
-;   (define-key evil-normal-state-map (kbd "+") 'evil-numbers/inc-at-pt)
-;   (define-key evil-normal-state-map (kbd "-") 'evil-numbers/dec-at-pt)))
 
 (defun fd-switch-dictionary()
   (interactive)

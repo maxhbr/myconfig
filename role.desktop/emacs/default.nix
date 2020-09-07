@@ -75,7 +75,7 @@ in {
         '';
         ".emacs-profiles.el".text = ''
           (("spacemacs" . ((user-emacs-directory . "~/.spacemacs.d")))
-           ("empty" . ((user-emacs-directory . "~/.emacs.d"))) 
+           ("empty" . ((user-emacs-directory . "~/.emacs.d")))
            )
         '';
         ".emacs-profile".text = "spacemacs";

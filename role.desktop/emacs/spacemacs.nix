@@ -20,6 +20,9 @@ in {
           source = ./spacemacs.d/private;
           recursive = true;
         };
+        ".spacemacs.d/private/mykeybindings/keybindings.el" = {
+          source = ./doom.d/keybindings.el;
+        };
       };
     };
   };
