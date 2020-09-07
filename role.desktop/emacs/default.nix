@@ -2,8 +2,27 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  my-emacs-wrapper = with pkgs;
-    writeShellScriptBin "ec" ''
+  jsonFile = ./. + "/nix-doom-emacs.json";
+  json = builtins.fromJSON (builtins.readFile jsonFile);
+  doom-emacs = pkgs.unstable.callPackage (builtins.fetchGit {
+    url = "https://github.com/vlaci/nix-doom-emacs.git";
+    inherit (json) rev ref;
+  }) {
+    doomPrivateDir =
+      ./doom.d; # Directory containing your config.el init.el and packages.el files
+    extraPackages = epkgs: [ pkgs.mu ];
+    extraConfig = ''
+      (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
+    '';
+  };
+  doom-emacs-bin = pkgs.writeShellScriptBin "doom-emacs" ''
+    exec "${doom-emacs}/bin/emacs" --with-profile empty "$@"
+  '';
+  # doom-emacsclient-bin = pkgs.writeShellScriptBin "doom-emacsclient" ''
+  #   exec "${doom-emacs}/bin/emacsclient" "$@"
+  # '';
+  my-emacs-wrapper = (emacs:
+    pkgs.writeShellScriptBin "ec" ''
       # Copyright 2018-2020 Maximilian Huber <oss@maximilian-huber.de>
       # SPDX-License-Identifier: MIT
       #
@@ -42,23 +61,20 @@ let
               exec ${emacs}/bin/emacsclient --no-wait --alternate-editor="" --create-frame "$@"
           fi
       fi
-        '';
-  emacsUpdate = with pkgs;
-    writeScriptBin "emacsUpdate" ''
-      ${emacs}/bin/emacs --batch -l ~/.emacs.d/init.el --eval="(configuration-layer/update-packages t)"
-    '';
+    '') doom-emacs;
 in {
-  imports = [ ./spacemacs.nix ./doom-emacs.nix ];
+  imports = [ ./spacemacs.nix ];
   config = {
+    environment = { systemPackages = with pkgs; [ doom-emacs ]; };
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
         my-emacs-wrapper
-        emacs
-        emacsUpdate
+        doom-emacs-bin
+
         aspell
         aspellDicts.de
         aspellDicts.en
-
+        shellcheck
         ripgrep
       ];
       home.file = {
@@ -73,12 +89,16 @@ in {
         ".emacs.d/init.el".text = ''
           (load "default.el")
         '';
+        ".doom.d/emacs.d/init.el".text = ''
+          (load "default.el")
+        '';
         ".emacs-profiles.el".text = ''
           (("spacemacs" . ((user-emacs-directory . "~/.spacemacs.d")))
+           ("doom" . ((user-emacs-directory . "~/.doom.d/emacs.d")))
            ("empty" . ((user-emacs-directory . "~/.emacs.d")))
            )
         '';
-        ".emacs-profile".text = "spacemacs";
+        ".emacs-profile".text = "doom";
       };
     };
     environment = {
@@ -111,5 +131,4 @@ in {
     # };
 
   };
-
 }

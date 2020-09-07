@@ -22,10 +22,14 @@ let
 in {
   config = {
     environment = {
-      systemPackages = with pkgs; [
-        doom-emacs-bin
-        shellcheck
-      ];
+      systemPackages = with pkgs; [ doom-emacs-bin shellcheck ];
+    };
+    home-manager.users.mhuber = {
+      home.file = {
+        ".doom.d/emacs.d/init.el".text = ''
+          (load "default.el")
+        '';
+      };
     };
   };
 }
