@@ -1,10 +1,10 @@
-# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
+{ pkgs, config, ... }:
 let
-  my-mute-telco = pkgs.callPackage ../pkgs/myMuteTelco { inherit pkgs; };
-  my-xmobar = pkgs.callPackage ../pkgs/myXmobar { inherit pkgs my-mute-telco; };
-  my-xmonad = pkgs.haskellPackages.callPackage ../pkgs/myXMonad {
+  my-mute-telco = pkgs.callPackage ./myMuteTelco { inherit pkgs; };
+  my-xmobar = pkgs.callPackage ./myXmobar { inherit pkgs my-mute-telco; };
+  my-xmonad = pkgs.haskellPackages.callPackage ./myXMonad {
     inherit pkgs my-xmobar my-mute-telco;
   };
   myxev = pkgs.writeShellScriptBin "myxev" ''
@@ -12,7 +12,7 @@ let
   '';
 
 in {
-  imports = [ ./desktop.X.common ];
+  imports = [ ../desktop.X.common ];
 
   config = {
     home-manager.users.mhuber = {
@@ -25,6 +25,19 @@ in {
         myxev
       ];
       xsession.windowManager.command = "${my-xmonad}/bin/xmonad";
+      home.file = {
+        ".myXmonadBinary" = {
+          text = ''
+            "${my-xmonad}/bin/xmonad"
+          '';
+          onChange = ''
+            if [[ -v DISPLAY ]] ; then
+              echo "Restarting xmonad"
+              $DRY_RUN_CMD ${config.home-manager.users.mhuber.xsession.windowManager.command} --restart
+            fi
+          '';
+        };
+      };
     };
 
     # system.activationScripts.cleanupXmonadState = "rm $HOME/.xmonad/xmonad.state || true";

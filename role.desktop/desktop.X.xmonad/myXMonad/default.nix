@@ -44,14 +44,9 @@ in mkDerivation {
 
     addAbsoluteBinaryPath urxvtc ${pkgs.rxvt_unicode-with-plugins}
     addAbsoluteBinaryPath urxvtd ${pkgs.rxvt_unicode-with-plugins}
-    addAbsoluteBinaryPath bash ${pkgs.bash}
-    addAbsoluteBinaryPath zsh ${pkgs.zsh}
-    addAbsoluteBinaryPath emacs ${pkgs.emacs}
     addAbsoluteBinaryPath dmenu_path ${pkgs.dmenu}
     addAbsoluteBinaryPath yeganesh ${pkgs.haskellPackages.yeganesh}
     addAbsoluteBinaryPath passmenu ${pkgs.pass}
-    addAbsoluteBinaryPath firefox ${pkgs.firefox}
-    addAbsoluteBinaryPath chromium-browser ${pkgs.chromium}
     addAbsoluteBinaryPath find-cursor ${find-cursor}
     addAbsoluteBinaryPath xdotool ${pkgs.xdotool}
     addAbsoluteBinaryPath synclient ${pkgs.xorg.xf86inputsynaptics}

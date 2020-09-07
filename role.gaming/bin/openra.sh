@@ -6,6 +6,6 @@ out="$HOME/Downloads/OpenRA-Red-Alert-x86_64.AppImage"
 wget \
     -O "$out" \
     -nc \
-    https://github.com/OpenRA/OpenRA/releases/download/release-20200503/OpenRA-Red-Alert-x86_64.AppImage
+    $url
 
 appimage-run "$out"

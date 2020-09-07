@@ -4,7 +4,7 @@
     # modules
     # ./desktop.Wayland.sway
     # ./desktop.X.xfce.nix
-    ./desktop.X.xmonad.nix
+    ./desktop.X.xmonad
     ./pulseaudio
     ./emacs
   ];
