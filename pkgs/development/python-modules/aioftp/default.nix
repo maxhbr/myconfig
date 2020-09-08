@@ -11,12 +11,12 @@
 
 buildPythonPackage rec {
   pname = "aioftp";
-  version = "0.16.1";
+  version = "0.17.2";
   disabled = isPy27;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0rqzg4w86zch0cjslkndv02gmpi0r27lsy1qi1irpa8hqfhh23ja";
+    sha256 = "8433ff21317e71ef1f4d8cb8f7fe58365c04b5174142d9643e22343cfb35da1b";
   };
 
   checkInputs = [

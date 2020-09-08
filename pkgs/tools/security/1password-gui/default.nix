@@ -8,11 +8,11 @@
 
 stdenv.mkDerivation rec {
   pname = "1password";
-  version = "0.8.0";
+  version = "0.8.4";
 
   src = fetchurl {
     url = "https://onepassword.s3.amazonaws.com/linux/appimage/${pname}-${version}.AppImage";
-    sha256 = "1r26vyx724h3k6p340bg3lmcxwyvgxj2kqvwczq784583hpq3lq9";
+    sha256 = "04rjlyi465pkg75pql3rfzmfj9zf8pfnxynz110x1wkqnvqmsxgw";
   };
 
   nativeBuildInputs = [ makeWrapper ];
@@ -50,6 +50,8 @@ stdenv.mkDerivation rec {
       --add-flags "$out/share/${pname}/resources/app.asar" \
       --prefix LD_LIBRARY_PATH : "${stdenv.lib.makeLibraryPath runtimeLibs}"
   '';
+
+  passthru.updateScript = ./update.sh;
 
   meta = with stdenv.lib; {
     description = "Multi-platform password manager";

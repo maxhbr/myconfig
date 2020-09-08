@@ -97,13 +97,21 @@ let
         url = "https://git.archlinux.org/svntogit/packages.git/plain/trunk/qtbug-77037-workaround.patch?h=packages/qt5-webengine&id=fc77d6b3d5ec74e421b58f199efceb2593cbf951";
         sha256 = "1gv733qfdn9746nbqqxzyjx4ijjqkkb7zb71nxax49nna5bri3am";
       })
-    ]
-      ++ optional stdenv.isDarwin ./qtwebengine-darwin-no-platform-check.patch;
-    qtwebkit = [ ./qtwebkit.patch ]
-      ++ optionals stdenv.isDarwin [
-        ./qtwebkit-darwin-no-readline.patch
-        ./qtwebkit-darwin-no-qos-classes.patch
-      ];
+    ] ++ optionals stdenv.isDarwin [
+      ./qtwebengine-darwin-no-platform-check.patch
+      ./qtwebengine-darwin-fix-failed-static-assertion.patch
+    ];
+    qtwebkit = [
+      (fetchpatch {
+        name = "qtwebkit-bison-3.7-build.patch";
+        url = "https://github.com/qtwebkit/qtwebkit/commit/d92b11fea65364fefa700249bd3340e0cd4c5b31.patch";
+        sha256 = "0h8ymfnwgkjkwaankr3iifiscsvngqpwb91yygndx344qdiw9y0n";
+      })
+      ./qtwebkit.patch
+    ] ++ optionals stdenv.isDarwin [
+      ./qtwebkit-darwin-no-readline.patch
+      ./qtwebkit-darwin-no-qos-classes.patch
+    ];
     qttools = [ ./qttools.patch ];
   };
 
