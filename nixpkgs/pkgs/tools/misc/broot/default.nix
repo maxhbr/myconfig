@@ -1,29 +1,37 @@
 { stdenv
 , rustPlatform
-, fetchFromGitHub
+, fetchCrate
 , installShellFiles
 , makeWrapper
 , coreutils
 , libiconv
+, xcbuild
+, zlib
 , Security
 }:
 
 rustPlatform.buildRustPackage rec {
   pname = "broot";
-  version = "0.20.0";
+  version = "1.0.0";
 
-  src = fetchFromGitHub {
-    owner = "Canop";
-    repo = pname;
-    rev = "v${version}";
-    sha256 = "0by4cln9ljaphqk5hz56mcavz9kc5s42zlxx33nf3idqrszfcarf";
+  src = fetchCrate {
+    inherit pname version;
+    sha256 = "1dc6lb6ihj4s0mcp1say16j9yr61jdbzhmayxxsm4ansngbzmw45";
   };
 
-  cargoSha256 = "1i5zq310k8gv9877rcrvash3aw1cyf3g0741qnky71d565s3n910";
+  cargoSha256 = "0nqmincayjv1snxz94i14fypc9dv69fxfqqdz3qbcvc2cs62zayg";
 
-  nativeBuildInputs = [ makeWrapper installShellFiles ];
+  nativeBuildInputs = [
+    makeWrapper
+    installShellFiles
+    xcbuild # The cc crate attempts to run xcbuild.
+  ];
 
-  buildInputs = stdenv.lib.optionals stdenv.isDarwin [ libiconv Security ];
+  buildInputs = stdenv.lib.optionals stdenv.isDarwin [
+    libiconv
+    Security
+    zlib
+  ];
 
   postPatch = ''
     substituteInPlace src/verb/builtin.rs --replace '"/bin/' '"${coreutils}/bin/'

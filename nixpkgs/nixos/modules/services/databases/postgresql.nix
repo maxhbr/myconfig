@@ -11,23 +11,23 @@ let
       then cfg.package
       else cfg.package.withPackages (_: cfg.extraPlugins);
 
+  toStr = value:
+    if true == value then "yes"
+    else if false == value then "no"
+    else if isString value then "'${lib.replaceStrings ["'"] ["''"] value}'"
+    else toString value;
+
   # The main PostgreSQL configuration file.
-  configFile = pkgs.writeText "postgresql.conf"
-    ''
-      hba_file = '${pkgs.writeText "pg_hba.conf" cfg.authentication}'
-      ident_file = '${pkgs.writeText "pg_ident.conf" cfg.identMap}'
-      log_destination = 'stderr'
-      log_line_prefix = '${cfg.logLinePrefix}'
-      listen_addresses = '${if cfg.enableTCPIP then "*" else "localhost"}'
-      port = ${toString cfg.port}
-      ${cfg.extraConfig}
-    '';
+  configFile = pkgs.writeText "postgresql.conf" (concatStringsSep "\n" (mapAttrsToList (n: v: "${n} = ${toStr v}") cfg.settings));
 
   groupAccessAvailable = versionAtLeast postgresql.version "11.0";
 
 in
 
 {
+  imports = [
+    (mkRemovedOptionModule [ "services" "postgresql" "extraConfig" ] "Use services.postgresql.settings instead.")
+  ];
 
   ###### interface
 
@@ -212,10 +212,28 @@ in
         '';
       };
 
-      extraConfig = mkOption {
-        type = types.lines;
-        default = "";
-        description = "Additional text to be appended to <filename>postgresql.conf</filename>.";
+      settings = mkOption {
+        type = with types; attrsOf (oneOf [ bool float int str ]);
+        default = {};
+        description = ''
+          PostgreSQL configuration. Refer to
+          <link xlink:href="https://www.postgresql.org/docs/11/config-setting.html#CONFIG-SETTING-CONFIGURATION-FILE"/>
+          for an overview of <literal>postgresql.conf</literal>.
+
+          <note><para>
+            String values will automatically be enclosed in single quotes. Single quotes will be
+            escaped with two single quotes as described by the upstream documentation linked above.
+          </para></note>
+        '';
+        example = literalExample ''
+          {
+            log_connections = true;
+            log_statement = "all";
+            logging_collector = true
+            log_disconnections = true
+            log_destination = lib.mkForce "syslog";
+          }
+        '';
       };
 
       recoveryConfig = mkOption {
@@ -225,14 +243,15 @@ in
           Contents of the <filename>recovery.conf</filename> file.
         '';
       };
+
       superUser = mkOption {
         type = types.str;
-        default= if versionAtLeast config.system.stateVersion "17.09" then "postgres" else "root";
+        default = "postgres";
         internal = true;
+        readOnly = true;
         description = ''
-          NixOS traditionally used 'root' as superuser, most other distros use 'postgres'.
-          From 17.09 we also try to follow this standard. Internal since changing this value
-          would lead to breakage while setting up databases.
+          PostgreSQL superuser account to use for various operations. Internal since changing
+          this value would lead to breakage while setting up databases.
         '';
         };
     };
@@ -243,6 +262,16 @@ in
   ###### implementation
 
   config = mkIf cfg.enable {
+
+    services.postgresql.settings =
+      {
+        hba_file = "${pkgs.writeText "pg_hba.conf" cfg.authentication}";
+        ident_file = "${pkgs.writeText "pg_ident.conf" cfg.identMap}";
+        log_destination = "stderr";
+        log_line_prefix = cfg.logLinePrefix;
+        listen_addresses = if cfg.enableTCPIP then "*" else "localhost";
+        port = cfg.port;
+      };
 
     services.postgresql.package =
       # Note: when changing the default, make it conditional on
@@ -310,6 +339,35 @@ in
             ''}
           '';
 
+        # Wait for PostgreSQL to be ready to accept connections.
+        postStart =
+          ''
+            PSQL="psql --port=${toString cfg.port}"
+
+            while ! $PSQL -d postgres -c "" 2> /dev/null; do
+                if ! kill -0 "$MAINPID"; then exit 1; fi
+                sleep 0.1
+            done
+
+            if test -e "${cfg.dataDir}/.first_startup"; then
+              ${optionalString (cfg.initialScript != null) ''
+                $PSQL -f "${cfg.initialScript}" -d postgres
+              ''}
+              rm -f "${cfg.dataDir}/.first_startup"
+            fi
+          '' + optionalString (cfg.ensureDatabases != []) ''
+            ${concatMapStrings (database: ''
+              $PSQL -tAc "SELECT 1 FROM pg_database WHERE datname = '${database}'" | grep -q 1 || $PSQL -tAc 'CREATE DATABASE "${database}"'
+            '') cfg.ensureDatabases}
+          '' + ''
+            ${concatMapStrings (user: ''
+              $PSQL -tAc "SELECT 1 FROM pg_roles WHERE rolname='${user.name}'" | grep -q 1 || $PSQL -tAc 'CREATE USER "${user.name}"'
+              ${concatStringsSep "\n" (mapAttrsToList (database: permission: ''
+                $PSQL -tAc 'GRANT ${permission} ON ${database} TO "${user.name}"'
+              '') user.ensurePermissions)}
+            '') cfg.ensureUsers}
+          '';
+
         serviceConfig = mkMerge [
           { ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
             User = "postgres";
@@ -329,40 +387,6 @@ in
             TimeoutSec = 120;
 
             ExecStart = "${postgresql}/bin/postgres";
-
-            # Wait for PostgreSQL to be ready to accept connections.
-            ExecStartPost =
-              let
-                setupScript = pkgs.writeScript "postgresql-setup" (''
-                  #!${pkgs.runtimeShell} -e
-
-                  PSQL="${pkgs.utillinux}/bin/runuser -u ${cfg.superUser} -- psql --port=${toString cfg.port}"
-
-                  while ! $PSQL -d postgres -c "" 2> /dev/null; do
-                      if ! kill -0 "$MAINPID"; then exit 1; fi
-                      sleep 0.1
-                  done
-
-                  if test -e "${cfg.dataDir}/.first_startup"; then
-                    ${optionalString (cfg.initialScript != null) ''
-                      $PSQL -f "${cfg.initialScript}" -d postgres
-                    ''}
-                    rm -f "${cfg.dataDir}/.first_startup"
-                  fi
-                '' + optionalString (cfg.ensureDatabases != []) ''
-                  ${concatMapStrings (database: ''
-                    $PSQL -tAc "SELECT 1 FROM pg_database WHERE datname = '${database}'" | grep -q 1 || $PSQL -tAc 'CREATE DATABASE "${database}"'
-                  '') cfg.ensureDatabases}
-                '' + ''
-                  ${concatMapStrings (user: ''
-                    $PSQL -tAc "SELECT 1 FROM pg_roles WHERE rolname='${user.name}'" | grep -q 1 || $PSQL -tAc 'CREATE USER "${user.name}"'
-                    ${concatStringsSep "\n" (mapAttrsToList (database: permission: ''
-                      $PSQL -tAc 'GRANT ${permission} ON ${database} TO "${user.name}"'
-                    '') user.ensurePermissions)}
-                  '') cfg.ensureUsers}
-                '');
-              in
-                "+${setupScript}";
           }
           (mkIf (cfg.dataDir == "/var/lib/postgresql/${cfg.package.psqlSchema}") {
             StateDirectory = "postgresql postgresql/${cfg.package.psqlSchema}";

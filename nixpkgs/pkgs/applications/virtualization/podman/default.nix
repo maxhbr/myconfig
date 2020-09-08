@@ -16,13 +16,13 @@
 
 buildGoModule rec {
   pname = "podman";
-  version = "2.0.4";
+  version = "2.0.6";
 
   src = fetchFromGitHub {
     owner = "containers";
     repo = "podman";
     rev = "v${version}";
-    sha256 = "0rnli16nh5m3a8jjkkm1k4f896yk1k1rg48rjiajqhfrr98qwr0f";
+    sha256 = "1kl8cfsqwfbjl14mbp58wrxfm90y2w58x6138zq0sn4jzwwpy1a4";
   };
 
   vendorSha256 = null;
@@ -60,7 +60,7 @@ buildGoModule rec {
     MANDIR=$man/share/man make install.man-nobuild
   '';
 
-  passthru.tests.podman = nixosTests.podman;
+  passthru.tests = { inherit (nixosTests) podman; };
 
   meta = with stdenv.lib; {
     homepage = "https://podman.io/";

@@ -3,6 +3,7 @@
 , python
 , buildPythonPackage
 , gfortran
+, hypothesis
 , pytest
 , blas
 , lapack
@@ -21,15 +22,18 @@ let
       ${blas.implementation} = {
         include_dirs = "${lib.getDev blas}/include:${lib.getDev lapack}/include";
         library_dirs = "${blas}/lib:${lapack}/lib";
+        runtime_library_dirs = "${blas}/lib:${lapack}/lib";
         libraries = "lapack,lapacke,blas,cblas";
       };
       lapack = {
         include_dirs = "${lib.getDev lapack}/include";
         library_dirs = "${lapack}/lib";
+        runtime_library_dirs = "${lapack}/lib";
       };
       blas = {
         include_dirs = "${lib.getDev blas}/include";
         library_dirs = "${blas}/lib";
+        runtime_library_dirs = "${blas}/lib";
       };
     });
   };
@@ -66,6 +70,8 @@ in buildPythonPackage rec {
   enableParallelBuilding = true;
 
   doCheck = !isPyPy; # numpy 1.16+ hits a bug in pypy's ctypes, using either numpy or pypy HEAD fixes this (https://github.com/numpy/numpy/issues/13807)
+
+  checkInputs = [ hypothesis ];
 
   checkPhase = ''
     runHook preCheck
