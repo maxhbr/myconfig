@@ -50,6 +50,7 @@ upgradeNixosHardware() {
 upgrade() {
     cd $myconfigDir
     if [[ "$(hostname)" == "$my_main_host" ]]; then
+        logH1 "upgrade" "start ..."
         wasUpdated=0
 
         if git diff-index --quiet HEAD --; then
