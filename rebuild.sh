@@ -13,7 +13,6 @@ fi
 
 REBUILD_SH="$(readlink -f "${BASH_SOURCE[0]}")"
 cd "$(dirname $REBUILD_SH)"
-MYCONFIG_ARGS="$@"
 
 . ./common.sh
 
@@ -29,6 +28,7 @@ export NIXOPS_STATE="$HOME/.myconfig-nixops.nixops"
 nixStableChannel=nixos-unstable
 DO_GIT=true
 DO_UPGRADE=true
+DO_DOUBLERUN=true
 DO_ONLY_UPGRADE=false
 DO_POST_STUFF=true
 DRY_RUN=false
@@ -61,6 +61,11 @@ EOF
             ;;
         --fast) shift
             DO_UPGRADE=false
+            DO_POST_STUFF=false
+            DO_GIT=false
+            ;;
+        --fast-upg) shift
+            DO_DOUBLERUN=false
             DO_POST_STUFF=false
             DO_GIT=false
             ;;
@@ -161,12 +166,14 @@ runWithTrap prepare
 if $DO_ONLY_UPGRADE; then
     runWithTrap upgrade
 else
-    runWithTrap \
-        realize $TARGET \
-                $($FORCE_RECREATE && echo "--force-recreate") \
-                $($TARGET_WAS_CHANGED || echo "--is-local-host") \
-                $($DRY_RUN && echo "--dry-run") \
-                $($FORCE_REBOOT && echo "--force-reboot")
+    if ! $DO_DOUBLERUN; then
+        runWithTrap \
+            realize $TARGET \
+            "$($FORCE_RECREATE && echo "--force-recreate")" \
+            "$($TARGET_WAS_CHANGED || echo "--is-local-host")" \
+            "$($DRY_RUN && echo "--dry-run")" \
+            "$($FORCE_REBOOT && echo "--force-reboot")"
+    fi
 
     if ! $DRY_RUN; then
         if $DO_UPGRADE && isBranchMaster; then
@@ -176,8 +183,8 @@ else
             else
                 runWithTrap \
                     realize $TARGET \
-                            $($TARGET_WAS_CHANGED || echo "--is-local-host") \
-                            $($DRY_RUN && echo "--dry-run")
+                            "$($TARGET_WAS_CHANGED || echo "--is-local-host")" \
+                            "$($DRY_RUN && echo "--dry-run")"
 
                 if ! $TARGET_WAS_CHANGED; then
                     logINFO "reindex nix search"
