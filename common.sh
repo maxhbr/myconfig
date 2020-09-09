@@ -35,7 +35,7 @@ if ! type logH1 &>/dev/null; then
         local prefix=$1
         local text=$2
         >&2 echo
-        >&2 echo "$(tput bold)****************************************************************************"
+        >&2 echo "$(tput bold)****************************************************************************$(tput sgr0)"
         >&2 echo "***$(tput sgr0) $prefix $(tput bold)$text$(tput sgr0)"
     }
 
@@ -44,7 +44,7 @@ if ! type logH1 &>/dev/null; then
         local text=$2
         >&2 echo
         >&2 echo "***$(tput sgr0) $prefix $(tput bold)$text$(tput sgr0)"
-        >&2 echo "$(tput bold)****************************************************************************"
+        >&2 echo "$(tput bold)****************************************************************************$(tput sgr0)"
     }
 
     logH2() {
