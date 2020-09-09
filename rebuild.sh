@@ -160,9 +160,9 @@ runWithTrap prepare
 if $DO_ONLY_UPGRADE; then
     if isBranchMaster; then
         if upgrade; then
-            logH1 "upgrade" "... nothing was done"
+            logH1end "upgrade" "... nothing was done"
         else
-            logH1 "upgrade" "... something was done"
+            logH1end "upgrade" "... something was done"
         fi
     fi
 else

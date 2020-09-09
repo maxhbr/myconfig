@@ -39,6 +39,14 @@ if ! type logH1 &>/dev/null; then
         >&2 echo "***$(tput sgr0) $prefix $(tput bold)$text$(tput sgr0)"
     }
 
+    logH1end() {
+        local prefix=$1
+        local text=$2
+        >&2 echo
+        >&2 echo "***$(tput sgr0) $prefix $(tput bold)$text$(tput sgr0)"
+        >&2 echo "$(tput bold)****************************************************************************"
+    }
+
     logH2() {
         local prefix=$1
         local text=$2
@@ -74,16 +82,20 @@ if ! type logH1 &>/dev/null; then
     if [ -n "$BASH_VERSION" ]; then
         export -f have
         export -f logH1
+        export -f logH1end
         export -f logH2
         export -f logH3
         export -f logINFO
+        export -f logWARN
         export -f logERR
     elif [ -n "$ZSH_VERSION" ]; then
         export have
         export logH1
+        export logH1end
         export logH2
         export logH3
         export logINFO
+        export logWARN
         export logERR
     fi
 
