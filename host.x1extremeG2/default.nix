@@ -15,7 +15,7 @@
     ../role.work
     ./mail
     ## fun
-    ../role.imagework
+    # ../role.imagework
     ../role.gaming/games.steam
     ../role.desktop/desktop.X.obs.nix
     ./smarthome.nix
