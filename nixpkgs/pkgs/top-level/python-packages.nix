@@ -2814,6 +2814,8 @@ in {
 
   imgaug = callPackage ../development/python-modules/imgaug { };
 
+  imgsize = callPackage ../development/python-modules/imgsize { };
+
   immutables = callPackage ../development/python-modules/immutables { };
 
   impacket = callPackage ../development/python-modules/impacket { };
@@ -3238,6 +3240,8 @@ in {
 
   libagent = callPackage ../development/python-modules/libagent { };
 
+  pa-ringbuffer = callPackage ../development/python-modules/pa-ringbuffer { };
+
   libais = callPackage ../development/python-modules/libais { };
 
   libarchive-c = callPackage ../development/python-modules/libarchive-c { inherit (pkgs) libarchive; };
@@ -3497,6 +3501,8 @@ in {
   mailman-hyperkitty = callPackage ../development/python-modules/mailman-hyperkitty { };
 
   mailman-web = callPackage ../servers/mail/mailman/web.nix { };
+
+  rtmixer = callPackage ../development/python-modules/rtmixer { };
 
   mail-parser = callPackage ../development/python-modules/mail-parser { };
 
@@ -5473,6 +5479,8 @@ in {
   pytest-freezegun = callPackage ../development/python-modules/pytest-freezegun { };
 
   pytest-helpers-namespace = callPackage ../development/python-modules/pytest-helpers-namespace { };
+
+  pyopengl-accelerate = callPackage ../development/python-modules/pyopengl-accelerate { };
 
   pytest-html = callPackage ../development/python-modules/pytest-html { };
 
