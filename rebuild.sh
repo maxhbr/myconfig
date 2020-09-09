@@ -28,7 +28,6 @@ export NIXOPS_STATE="$HOME/.myconfig-nixops.nixops"
 nixStableChannel=nixos-unstable
 DO_GIT=true
 DO_UPGRADE=true
-DO_DOUBLERUN=true
 DO_ONLY_UPGRADE=false
 DO_POST_STUFF=true
 DRY_RUN=false
@@ -61,11 +60,6 @@ EOF
             ;;
         --fast) shift
             DO_UPGRADE=false
-            DO_POST_STUFF=false
-            DO_GIT=false
-            ;;
-        --fast-upg) shift
-            DO_DOUBLERUN=false
             DO_POST_STUFF=false
             DO_GIT=false
             ;;
@@ -166,14 +160,12 @@ runWithTrap prepare
 if $DO_ONLY_UPGRADE; then
     runWithTrap upgrade
 else
-    if ! $DO_DOUBLERUN; then
-        runWithTrap \
-            realize $TARGET \
-            "$($FORCE_RECREATE && echo "--force-recreate")" \
-            "$($TARGET_WAS_CHANGED || echo "--is-local-host")" \
-            "$($DRY_RUN && echo "--dry-run")" \
-            "$($FORCE_REBOOT && echo "--force-reboot")"
-    fi
+    runWithTrap \
+        realize $TARGET \
+        "$($FORCE_RECREATE && echo "--force-recreate")" \
+        "$($TARGET_WAS_CHANGED || echo "--is-local-host")" \
+        "$($DRY_RUN && echo "--dry-run")" \
+        "$($FORCE_REBOOT && echo "--force-reboot")"
 
     if ! $DRY_RUN; then
         if $DO_UPGRADE && isBranchMaster; then
