@@ -16,7 +16,7 @@ let
     '';
   };
   doom-emacs-bin = pkgs.writeShellScriptBin "doom-emacs" ''
-    exec "${doom-emacs}/bin/emacs" --with-profile empty "$@"
+    exec "${doom-emacs}/bin/emacs" --with-profile empty "$@" &disown
   '';
   # doom-emacsclient-bin = pkgs.writeShellScriptBin "doom-emacsclient" ''
   #   exec "${doom-emacs}/bin/emacsclient" "$@"
