@@ -24,6 +24,13 @@
       (setupAsWireguardClient "10.199.199.2")
       # (setupNasNFS "bilder")
       # (setupNasNFS "data")
+      (announceHost "workstation")
+      (announceHost "nas")
+      (announceHost "vserver")
+      (announceHost "nuc")
+      # (announceHost "pi0")
+      (announceHost "pi3a")
+      (announceHost "pi4")
     ]);
 
   config = {

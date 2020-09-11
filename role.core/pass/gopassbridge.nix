@@ -6,8 +6,7 @@
 { config, pkgs, lib, ... }:
 let
   gopassWrapper = with pkgs;
-    writeScriptBin "gopass_wrapper.sh" ''
-      #!${stdenv.shell}
+    writeShellScriptBin "gopass_wrapper.sh" ''
       if [ -f ~/.gpg-agent-info ] && [ -n "$(${procps}/bin/pgrep gpg-agent)" ]; then
         source ~/.gpg-agent-info
         export GPG_AGENT_INFO
@@ -16,9 +15,7 @@ let
       fi
       export GPG_TTY="$(tty)"
 
-      ${gopass}/bin/gopass jsonapi listen
-
-      exit $?
+      exec ${gopass}/bin/gopass-jsonapi listen
     '';
 in {
   config = lib.mkIf config.services.xserver.enable {

@@ -49,6 +49,28 @@ in rec {
       networking.domain = "maxhbr.de";
     };
 
+  announceHost = hostName:
+    let
+      hostIp = getSecretNoNewline hostName "ip";
+    in
+    {...}: {
+      config = {
+        networking.extraHosts = ''
+            ${hostIp} ${hostName}
+            ${hostIp} ${hostName}.maxhbr.de
+          '';
+        home-manager.users.mhuber = {
+          home.file = {
+            ".ssh/imports/my-${hostName}.config".text = ''
+              Host ${hostName}
+                HostName ${hostIp}
+                User mhuber
+            '';
+          };
+        };
+      };
+    };
+
   mkHostNixops = hostName: addConfig: {
     network.description = "myconfig-" + hostName;
     "${hostName}" = mkHost hostName addConfig;

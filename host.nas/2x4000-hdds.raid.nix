@@ -6,7 +6,7 @@
 # - https://gist.github.com/MaxXor/ba1665f47d56c24018a943bb114640d7
 {
   config = {
-    systemd.packages = [ pkgs.systemd-cryptsetup-generator ];
+    systemd.packages = [ pkgs.systemd ];
     environment.etc.crypttab.text = ''
       2x4t-0 UUID=d33b8927-cffe-49db-a64a-868273c4120b /etc/cryptkey luks,noearly
       2x4t-1 UUID=1669a966-f851-4247-b473-1ebbccf53061 /etc/cryptkey luks,noearly
