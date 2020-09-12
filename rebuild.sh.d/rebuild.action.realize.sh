@@ -144,5 +144,5 @@ realize() {
 }
 
 export -f runOnHost
-export -f realize
 export -f generateStats
+export -f realize

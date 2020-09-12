@@ -2,13 +2,17 @@
   config = {
     boot = {
       # kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
-      cleanTmpDir = true;
-      # tmpOnTmpfs = true;
-      crashDump.enable = true;
+      # cleanTmpDir = ! config.boot.cleanTmpDir;
+      tmpOnTmpfs = true;
     };
 
     home-manager.users.mhuber = {
-      home.packages = with pkgs; [ taskwarrior ];
+      home.packages = with pkgs; [
+        taskwarrior
+        mosh
+        sshfs
+        unstable.nixfmt
+      ];
       home.file = {
         ".ssh/config".text = ''
           ControlMaster auto
@@ -55,12 +59,8 @@
         lm_sensors
 
         #others:
-        rsnapshot
-        mosh
-        sshfs
         nfs-utils
         libnfs
-        unstable.nixfmt
       ];
     };
 
