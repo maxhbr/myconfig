@@ -15,7 +15,7 @@
     ../role.dev/virtualization.docker
     ../role.dev/programs.license-compliance-toolbox.nix
     ../role.dev/dev.haskell
-    ../role.imagework
+    # ../role.imagework
     ../role.gaming
     # ../role.desktop/desktop.X.xfce.nix
     ../role.desktop/desktop.X.vnc.nix

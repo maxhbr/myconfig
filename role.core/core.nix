@@ -7,12 +7,7 @@
     };
 
     home-manager.users.mhuber = {
-      home.packages = with pkgs; [
-        taskwarrior
-        mosh
-        sshfs
-        unstable.nixfmt
-      ];
+      home.packages = with pkgs; [ taskwarrior mosh sshfs unstable.nixfmt ];
       home.file = {
         ".ssh/config".text = ''
           ControlMaster auto

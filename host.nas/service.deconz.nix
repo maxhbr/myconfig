@@ -1,123 +1,157 @@
-# NixOS module for running deCONZ ZigBee gateway as a service.
-#
-# FIXME: These two auth issues:
-# https://github.com/dresden-elektronik/deconz-rest-plugin/issues/1788 ("Auth problems on non-80 http port")
-# https://github.com/dresden-elektronik/deconz-rest-plugin/issues/1792 ("Trying to change password: "Service not available. Try again later.")
-
-# from:
-# - https://github.com/bjornfor/nixos-config/blob/master/options/deconz.nix
-# follow:
-# - https://github.com/bjornfor/nixos-config/blob/master/cfg/deconz.nix
-#  - https://github.com/dresden-elektronik/deconz-rest-plugin/issues/1788
-#  - https://github.com/dresden-elektronik/deconz-rest-plugin/issues/1792
-
 { config, lib, pkgs, ... }:
 
-with lib;
+{
+  imports = [
+    (
+      # NixOS module for running deCONZ ZigBee gateway as a service.
+      #
+      # FIXME: These two auth issues:
+      # https://github.com/dresden-elektronik/deconz-rest-plugin/issues/1788 ("Auth problems on non-80 http port")
+      # https://github.com/dresden-elektronik/deconz-rest-plugin/issues/1792 ("Trying to change password: "Service not available. Try again later.")
 
-let
-  cfg = config.local.services.deconz;
-  name = "deconz";
-  stateDir = "/var/lib/${name}";
-in {
-  options.local.services.deconz = {
+      # from:
+      # - https://github.com/bjornfor/nixos-config/blob/master/options/deconz.nix
+      # follow:
+      # - https://github.com/bjornfor/nixos-config/blob/master/cfg/deconz.nix
+      #  - https://github.com/dresden-elektronik/deconz-rest-plugin/issues/1788
+      #  - https://github.com/dresden-elektronik/deconz-rest-plugin/issues/1792
+      with lib;
 
-    enable = mkEnableOption "deCONZ, a ZigBee gateway";
+      let
+        cfg = config.myconfig.services.deconz;
+        name = "deconz";
+        stateDir = "/var/lib/${name}";
+      in {
+        options.myconfig.services.deconz = {
 
-    package = mkOption {
-      type = types.package;
-      default = pkgs.deconz;
-      defaultText = "pkgs.deconz";
-      description = "Which deCONZ package to use.";
-    };
+          enable = mkEnableOption "deCONZ, a ZigBee gateway";
 
-    device = mkOption {
-      type = types.str;
-      default = "";
-      description = ''
-        Force deCONZ to use a specific USB device (e.g. /dev/ttyACM0). By
-        default it does a search.
-      '';
-    };
+          package = mkOption {
+            type = types.package;
+            default = pkgs.deconz;
+            defaultText = "pkgs.deconz";
+            description = "Which deCONZ package to use.";
+          };
 
-    httpPort = mkOption {
-      type = types.port;
-      default = 80;
-      description = "TCP port for the web server.";
-    };
+          device = mkOption {
+            type = types.str;
+            default = "";
+            description = ''
+              Force deCONZ to use a specific USB device (e.g. /dev/ttyACM0). By
+              default it does a search.
+            '';
+          };
 
-    wsPort = mkOption {
-      type = types.port;
-      default = 443;
-      description = "TCP port for the WebSocket.";
-    };
+          httpPort = mkOption {
+            type = types.port;
+            default = 80;
+            description = "TCP port for the web server.";
+          };
 
-    openFirewall = mkEnableOption "open up the service ports in the firewall";
+          wsPort = mkOption {
+            type = types.port;
+            default = 443;
+            description = "TCP port for the WebSocket.";
+          };
 
-    allowRebootSystem = mkEnableOption "allow rebooting the system";
+          openFirewall =
+            mkEnableOption "open up the service ports in the firewall";
 
-    allowRestartService = mkEnableOption "allow killing/restarting processes";
+          allowRebootSystem = mkEnableOption "allow rebooting the system";
 
-    allowSetSystemTime = mkEnableOption "allow setting the system time";
+          allowRestartService =
+            mkEnableOption "allow killing/restarting processes";
 
-    extraOpts = mkOption {
-      type = types.listOf types.str;
-      default = [ "--auto-connect=1" "--dbg-info=1" ];
-      description = ''
-        Extra command line options for deCONZ.
-        These options seem undocumented, but some examples can be found here:
-        https://github.com/marthoc/docker-deconz/blob/master/amd64/root/start.sh
-      '';
-    };
-  };
+          allowSetSystemTime = mkEnableOption "allow setting the system time";
 
-  config = mkIf cfg.enable {
+          extraOpts = mkOption {
+            type = types.listOf types.str;
+            default = [ "--auto-connect=1" "--dbg-info=1" ];
+            description = ''
+              Extra command line options for deCONZ.
+              These options seem undocumented, but some examples can be found here:
+              https://github.com/marthoc/docker-deconz/blob/master/amd64/root/start.sh
+            '';
+          };
+        };
 
-    networking.firewall.allowedTCPPorts =
-      lib.mkIf cfg.openFirewall [ cfg.httpPort cfg.wsPort ];
+        config = mkIf cfg.enable {
 
-    systemd.services.deconz = {
-      description = "deCONZ ZigBee gateway";
-      wantedBy = [ "multi-user.target" ];
+          networking.firewall.allowedTCPPorts =
+            lib.mkIf cfg.openFirewall [ cfg.httpPort cfg.wsPort ];
 
-      preStart = ''
-        # The service puts a nix store path reference in here, and that path can
-        # be garbage collected. Ensure the file gets "refreshed" on every start.
-        rm -f ${stateDir}/.local/share/dresden-elektronik/deCONZ/zcldb.txt
-      '';
-      serviceConfig = {
-        ExecStart = "${cfg.package}/bin/deCONZ" + " -platform minimal"
-          + " --http-port=${toString cfg.httpPort}"
-          + " --ws-port=${toString cfg.wsPort}"
-          + (if cfg.device != "" then " --dev=${cfg.device}" else "") + " "
-          + (lib.concatStringsSep " " cfg.extraOpts);
-        Restart = "on-failure";
-        AmbientCapabilities = let
-          # ref. upstream deconz.service
-          caps = lib.optionals (cfg.httpPort < 1024 || cfg.wsPort < 1024)
-            [ "CAP_NET_BIND_SERVICE" ]
-            ++ lib.optionals (cfg.allowRebootSystem) [ "CAP_SYS_BOOT" ]
-            ++ lib.optionals (cfg.allowRestartService) [ "CAP_KILL" ]
-            ++ lib.optionals (cfg.allowSetSystemTime) [ "CAP_SYS_TIME" ];
-        in lib.concatStringsSep " " caps;
-        UMask = "0027";
-        User = name;
-        StateDirectory = name;
-        WorkingDirectory = stateDir;
+          systemd.services.deconz = {
+            description = "deCONZ ZigBee gateway";
+            wantedBy = [ "multi-user.target" ];
 
-        ProtectSystem = "strict";
-        ProtectHome = true;
-        ReadWritePaths = "/tmp";
+            preStart = ''
+              # The service puts a nix store path reference in here, and that path can
+              # be garbage collected. Ensure the file gets "refreshed" on every start.
+              rm -f ${stateDir}/.local/share/dresden-elektronik/deCONZ/zcldb.txt
+            '';
+            serviceConfig = {
+              ExecStart = "${cfg.package}/bin/deCONZ" + " -platform minimal"
+                + " --http-port=${toString cfg.httpPort}"
+                + " --ws-port=${toString cfg.wsPort}"
+                + (if cfg.device != "" then " --dev=${cfg.device}" else "")
+                + " " + (lib.concatStringsSep " " cfg.extraOpts);
+              Restart = "on-failure";
+              AmbientCapabilities = let
+                # ref. upstream deconz.service
+                caps = lib.optionals (cfg.httpPort < 1024 || cfg.wsPort < 1024)
+                  [ "CAP_NET_BIND_SERVICE" ]
+                  ++ lib.optionals (cfg.allowRebootSystem) [ "CAP_SYS_BOOT" ]
+                  ++ lib.optionals (cfg.allowRestartService) [ "CAP_KILL" ]
+                  ++ lib.optionals (cfg.allowSetSystemTime) [ "CAP_SYS_TIME" ];
+              in lib.concatStringsSep " " caps;
+              UMask = "0027";
+              User = name;
+              StateDirectory = name;
+              WorkingDirectory = stateDir;
+
+              ProtectSystem = "strict";
+              ProtectHome = true;
+              ReadWritePaths = "/tmp";
+            };
+          };
+
+          users.users.deconz = {
+            group = name;
+            isSystemUser = true;
+            home = stateDir;
+            extraGroups = [ "dialout" ]; # for access to /dev/ttyACM0 (ConBee)
+          };
+
+          users.groups.deconz = { };
+        };
+      })
+  ];
+  config = {
+    myconfig.services.deconz =
+      let deconz = pkgs.qt5.callPackage ../pkgs/deconz { };
+      in {
+        enable = true;
+        package = deconz;
+        device = "/dev/ttyACM0";
+        wsPort = 9443;
+        openFirewall = true;
+        allowRebootSystem = false;
+        allowRestartService = false;
+        allowSetSystemTime = false;
+      };
+
+    services.snapper = {
+      snapshotInterval = "hourly";
+      cleanupInterval = "1d";
+      filters = null;
+      configs = {
+        home = {
+          subvolume = "/home";
+          extraConfig = ''
+            ALLOW_USERS="mhuber"
+          '';
+        };
       };
     };
-
-    users.users.deconz = {
-      group = name;
-      isSystemUser = true;
-      home = stateDir;
-      extraGroups = [ "dialout" ]; # for access to /dev/ttyACM0 (ConBee)
-    };
-
-    users.groups.deconz = { };
   };
 }

@@ -94,7 +94,8 @@ in {
         autosetup =
           "${pkgs.autorandr}/bin/autorandr --skip-options gamma,panning --change";
         mobile = "${pkgs.autorandr}/bin/autorandr mobile";
-        mautosetup = "${pkgs.autorandr}/bin/autorandr mobile; ${pkgs.autorandr}/bin/autorandr --skip-options gamma,panning --change";
+        mautosetup =
+          "${pkgs.autorandr}/bin/autorandr mobile; ${pkgs.autorandr}/bin/autorandr --skip-options gamma,panning --change";
       };
     };
     services.autorandr.enable = true;

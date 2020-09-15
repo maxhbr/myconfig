@@ -15,23 +15,22 @@
     ../role.work
     ./mail
     ## fun
-    # ../role.imagework
+    ../role.imagework
     ../role.gaming/games.steam
     ../role.desktop/desktop.X.obs.nix
     ./smarthome.nix
-  ] ++ (with (import ../lib.nix);
-    [
-      (setupAsWireguardClient "10.199.199.2")
-      # (setupNasNFS "bilder")
-      # (setupNasNFS "data")
-      (announceHost "workstation")
-      (announceHost "nas")
-      (announceHost "vserver")
-      (announceHost "nuc")
-      # (announceHost "pi0")
-      (announceHost "pi3a")
-      (announceHost "pi4")
-    ]);
+  ] ++ (with (import ../lib.nix); [
+    (setupAsWireguardClient "10.199.199.2")
+    # (setupNasNFS "bilder")
+    # (setupNasNFS "data")
+    (announceHost "workstation")
+    (announceHost "nas")
+    (announceHost "vserver")
+    (announceHost "nuc")
+    # (announceHost "pi0")
+    (announceHost "pi3a")
+    (announceHost "pi4")
+  ]);
 
   config = {
     networking.hostName = "x1extremeG2";

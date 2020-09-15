@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }: {
   imports = [
+    # hardware:
     ./hardware-configuration.nix
-    # ../../hardware/btrfs.nix
+    ../hardware/efi.nix
+    ../hardware/hdd-spinndown.nix
     {
       boot.initrd.supportedFilesystems = [ "btrfs" "luks" ];
 
@@ -27,15 +29,11 @@
           [ "auto,nofail,x-systemd.device-timeout=1,users,rw,discard,noatime" ];
       };
     }
-    # ./4x500-hdds.raid.nix
     ./2x4000-hdds.raid.nix
+    # configuration
     ../role.headless
-    ../hardware/hdd-spinndown.nix
     ../role.dev/virtualization.docker
     ../role.imagework/exfat.nix
-    # hardware:
-    ../hardware/efi.nix
-    # configuration
     # ./docker.openhab.nix
     ./service.deconz.nix
     ./service.nextcloud.nix
@@ -48,32 +46,5 @@
     services.logind.extraConfig = ''
       HandlePowerKey=reboot
     '';
-
-    local.services.deconz =
-      let deconz = pkgs.qt5.callPackage ../pkgs/deconz { };
-      in {
-        enable = true;
-        package = deconz;
-        device = "/dev/ttyACM0";
-        wsPort = 9443;
-        openFirewall = true;
-        allowRebootSystem = false;
-        allowRestartService = false;
-        allowSetSystemTime = false;
-      };
-
-    services.snapper = {
-      snapshotInterval = "hourly";
-      cleanupInterval = "1d";
-      filters = null;
-      configs = {
-        home = {
-          subvolume = "/home";
-          extraConfig = ''
-            ALLOW_USERS="mhuber"
-          '';
-        };
-      };
-    };
   };
 }

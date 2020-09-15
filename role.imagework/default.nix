@@ -8,7 +8,7 @@
         gphoto2
         gphoto2fs
 
-        gimp-with-plugins
+        gimp # -with-plugins
         rawtherapee
         unstable.darktable
         unstable.geeqie

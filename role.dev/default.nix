@@ -10,7 +10,7 @@
     ./programs.license-compliance-toolbox.nix
     ./virtualization.docker
     ./virtualization.qemu
-    ./virtualization.vbox
+    # ./virtualization.vbox
     # ./virtualization.lxc.nix
   ];
 }

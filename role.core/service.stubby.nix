@@ -1,9 +1,7 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { config, lib, ... }: {
-  config = {
-    services.stubby.enable = true;
-  };
+  config = { services.stubby.enable = true; };
   imports = [
     (lib.mkIf config.services.stubby.enable {
       services.stubby = {

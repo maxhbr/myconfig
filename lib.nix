@@ -23,12 +23,43 @@ in rec {
   makeOptionalListBySecrets = list:
     if (builtins.pathExists (secretsDir + "/README.md")) then list else [ ];
 
+  mkFromBin = namePrefix: binDir: pkgs:
+    let
+      binDerivation = pkgs.stdenv.mkDerivation rec {
+        version = "1.0";
+        name = "${namePrefix}-bin-${version}";
+
+        src = binDir;
+
+        buildPhase = "";
+
+        installPhase = ''
+          bin=$out/bin
+          mkdir -p $bin
+          cp * $bin
+          chmod -R +x $bin
+        '';
+      };
+    in lib.mkIf (builtins.pathExists binDir) {
+      home-manager.users.mhuber = { home.packages = [ binDerivation ]; };
+    };
+
+  mkFromHostBin = hostName: pkgs:
+    let binDir = ./host + ".${hostName}/bin";
+    in mkFromBin hostName binDir pkgs;
+
+  mkFromSecretBin = hostName: pkgs:
+    let binDir = secretsDir + "/${hostName}/bin";
+    in mkFromBin "${hostName}-secrets" binDir pkgs;
+
   mkHost = hostName: addConfig:
-    { config, lib, ... }@args: {
+    { config, lib, pkgs, ... }@args: {
       imports = [
         (./host + ".${hostName}")
         (secretsDir + "/${hostName}")
         (addConfig args)
+        (mkFromHostBin hostName pkgs)
+        (mkFromSecretBin hostName pkgs)
         {
           deployment = let ipFile = (secretsDir + "/${hostName}/ip");
           in lib.mkIf (builtins.pathExists ipFile) {
@@ -50,15 +81,13 @@ in rec {
     };
 
   announceHost = hostName:
-    let
-      hostIp = getSecretNoNewline hostName "ip";
-    in
-    {...}: {
+    let hostIp = getSecretNoNewline hostName "ip";
+    in { ... }: {
       config = {
         networking.extraHosts = ''
-            ${hostIp} ${hostName}
-            ${hostIp} ${hostName}.maxhbr.de
-          '';
+          ${hostIp} ${hostName}
+          ${hostIp} ${hostName}.maxhbr.de
+        '';
         home-manager.users.mhuber = {
           home.file = {
             ".ssh/imports/my-${hostName}.config".text = ''
