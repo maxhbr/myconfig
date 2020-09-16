@@ -1,7 +1,12 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { config, pkgs, lib, ... }: {
-  imports = [ ../role.dev ./jdk.nix ./misc-desktop-tools.nix ];
+  imports = [
+    ../role.dev
+    ./jdk.nix
+    ./misc-desktop-tools.nix
+    ../secrets/common/wifi.TNG.nix
+  ];
   config = {
     nixpkgs.overlays = map (n: import n) [
       ./idea-ultimate
