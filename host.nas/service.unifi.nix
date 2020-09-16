@@ -1,12 +1,13 @@
 { config, lib, pkgs, ... }:
 
 {
-  services.unifi = {
-    enable = true;
-
-    networking.firewall = {
-      allowedTCPPorts = [ 8443 ];
-      allowedUDPPorts = [ 8443 ];
-    };
-  };
+  config.services.unifi.enable = true;
+  imports = [
+    (lib.mkIf config.services.unifi.enable {
+      networking.firewall = {
+        allowedTCPPorts = [ 8443 ];
+        allowedUDPPorts = [ 8443 ];
+      };
+    })
+  ];
 }

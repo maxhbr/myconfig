@@ -15,13 +15,11 @@
             unit_system = "metric";
             time_zone = "UTC";
           };
-          config = {};
+          config = { };
           lovelace = { mode = "yaml"; };
           logger = { default = "debug"; };
           http = { };
-          frontend = {
-            themes = "!include_dir_merge_named themes";
-          };
+          frontend = { themes = "!include_dir_merge_named themes"; };
           # feedreader.urls = [ "https://nixos.org/blogs.xml" ];
         };
         configWritable = true;
