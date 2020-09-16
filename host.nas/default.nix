@@ -35,6 +35,9 @@
     ../role.smarthome
     ../role.dev/virtualization.docker
     ../role.imagework/exfat.nix
+    ./service.nextcloud.nix
+    ./service.unifi.nix
+  
     # ../role.desktop/kiosk/headless.kiosk.nix
   ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.6") ]);
   config = {

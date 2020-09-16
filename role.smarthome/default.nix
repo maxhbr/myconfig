@@ -6,7 +6,6 @@
     ../role.dev/virtualization.docker
     # ./docker.openhab.nix
     ./service.deconz.nix
-    ./service.nextcloud.nix
     ./service.homeassistant.nix
   ];
 }
