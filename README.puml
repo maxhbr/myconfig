@@ -21,6 +21,7 @@ skinparam rectangle<<host>> {
 together {
 rectangle core <<role>>
 rectangle headless <<role>>
+rectangle smarthome <<role>>
 rectangle desktop <<role>>
 rectangle dev <<role>>
 rectangle gaming <<role>>
@@ -28,6 +29,7 @@ rectangle imagework <<role>>
 rectangle work <<role>>
 
 core <-- headless
+headless <-- smarthome
 core <-- desktop
 desktop <-- dev
 desktop <-- gaming
@@ -53,7 +55,7 @@ workstation -[#blue]--> headless
 
 together {
 rectangle nas <<host>>
-nas -[#red]--> headless
+nas -[#red]--> smarthome
 nas -[#red,dashed]--> dev
 
 rectangle vserver <<host>>

@@ -14,29 +14,27 @@
         # fileSystems = [ "/" "/mnt/v0" ];
       };
 
-      ########################################################################
-      # USB HDDS:
-      fileSystems."/mnt/tng-backup" = {
-        device = "/dev/disk/by-uuid/480aaf1f-aae0-469e-911e-13f961b46ec3";
-        fsType = "ext4";
-        options =
-          [ "auto,nofail,x-systemd.device-timeout=1,users,rw,discard,noatime" ];
-      };
-      fileSystems."/mnt/foto-backup" = {
-        device = "/dev/disk/by-uuid/a11523b0-e4f5-4af6-8551-2b43989c4781";
-        fsType = "ext4";
-        options =
-          [ "auto,nofail,x-systemd.device-timeout=1,users,rw,discard,noatime" ];
-      };
+      # ########################################################################
+      # # USB HDDS:
+      # fileSystems."/mnt/tng-backup" = {
+      #   device = "/dev/disk/by-uuid/480aaf1f-aae0-469e-911e-13f961b46ec3";
+      #   fsType = "ext4";
+      #   options =
+      #     [ "auto,nofail,x-systemd.device-timeout=1,users,rw,discard,noatime" ];
+      # };
+      # fileSystems."/mnt/foto-backup" = {
+      #   device = "/dev/disk/by-uuid/a11523b0-e4f5-4af6-8551-2b43989c4781";
+      #   fsType = "ext4";
+      #   options =
+      #     [ "auto,nofail,x-systemd.device-timeout=1,users,rw,discard,noatime" ];
+      # };
     }
     ./2x4000-hdds.raid.nix
     # configuration
     ../role.headless
+    ../role.smarthome
     ../role.dev/virtualization.docker
     ../role.imagework/exfat.nix
-    # ./docker.openhab.nix
-    ./service.deconz.nix
-    ./service.nextcloud.nix
     # ../role.desktop/kiosk/headless.kiosk.nix
   ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.6") ]);
   config = {
