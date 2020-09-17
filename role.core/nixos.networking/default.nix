@@ -3,6 +3,8 @@
 { pkgs, ... }: {
   imports = [ ./extrahosts ];
   config = {
+    boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
+    boot.kernel.sysctl."net.ipv6.conf.all.forwarding" = "1";
     environment.interactiveShellInit = ''
       myPorts() { /run/wrappers/bin/sudo ${pkgs.iproute}/bin/ss -tulpen; }
       killPort() { kill $(${pkgs.lsof}/bin/lsof -t -i:$1); }

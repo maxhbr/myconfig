@@ -44,7 +44,9 @@ buildImageIfMissing() {
         trap 'rm -rf $ORT' EXIT
         git clone https://github.com/oss-review-toolkit/ort $ORT
 
-        docker build -t $tag $ORT
+        docker build \
+            --network=host \
+            -t $tag $ORT
     else
         echo "docker image already build"
     fi

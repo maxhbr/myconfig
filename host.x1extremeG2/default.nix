@@ -1,6 +1,6 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }: {
+{ pkgs, config, lib, ... }: {
   imports = [
     ./hardware-configuration.nix
     ../role.dev
@@ -30,19 +30,23 @@
     # (announceHost "pi0")
     (announceHost "pi3a")
     (announceHost "pi4")
+    (lib.mkIf config.virtualisation.lxc.enable
+      { # nat for lxc
+        networking = {
+          nat = {
+            enable = true;
+            internalInterfaces = [ "ve-+" ];
+            externalInterface = "enp0s31f6";
+          };
+          networkmanager.unmanaged = [ "interface-name:ve-*" ];
+        };
+      }
+    )
   ]);
 
   config = {
     networking.hostName = "x1extremeG2";
     networking.hostId = "7634ddfe";
-    networking = {
-      nat = {
-        enable = true;
-        internalInterfaces = [ "ve-+" ];
-        externalInterface = "enp0s31f6";
-      };
-      networkmanager.unmanaged = [ "interface-name:ve-*" ];
-    };
 
     boot.initrd.supportedFilesystems = [ "luks" ];
     boot.initrd.luks.devices.crypted = {
