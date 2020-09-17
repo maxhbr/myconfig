@@ -5,7 +5,6 @@
     ../role.dev
     ./jdk.nix
     ./misc-desktop-tools.nix
-    ../secrets/common/wifi.TNG.nix
   ];
   config = {
     nixpkgs.overlays = map (n: import n) [
