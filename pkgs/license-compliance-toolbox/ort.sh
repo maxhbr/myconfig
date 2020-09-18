@@ -11,7 +11,8 @@
 
 set -e
 
-tag=ort:latest
+baseTag=ort:latest
+tag=myort:latest
 DEBUG_LEVEL="--info"
 case $1 in
     "--no-debug") shift; DEBUG_LEVEL="" ;;
@@ -23,6 +24,7 @@ helpMsg() {
     cat<<EOF
 usage:
   $0 --all <folder>
+  $0 --short <folder>
   $0 --analyze <folder>
   $0 --download <yaml>
   $0 --scan <yaml>
@@ -39,14 +41,25 @@ EOF
 # function to build ort docker image
 #################################################################################
 buildImageIfMissing() {
-    if [[ "$(docker images -q ort:latest 2> /dev/null)" == "" ]]; then
-        ORT=$(mktemp -d)
-        trap 'rm -rf $ORT' EXIT
-        git clone https://github.com/oss-review-toolkit/ort $ORT
+    if [[ "$(docker images -q $tag 2> /dev/null)" == "" ]]; then
+        if [[ "$(docker images -q $baseTag 2> /dev/null)" == "" ]]; then
+            ORT=$(mktemp -d)
+            trap 'rm -rf $ORT' EXIT
+            git clone https://github.com/oss-review-toolkit/ort $ORT
 
-        docker build \
-            --network=host \
-            -t $tag $ORT
+            docker build \
+                --network=host \
+                -t $baseTag $ORT
+        fi
+        gradle_properties="org.gradle.jvmargs=-Xms512M -Xmx4g -XX:MaxPermSize=1024m -XX:MaxMetaspaceSize=1g -Dkotlin.daemon.jvm.options=\"-Xmx1g\""
+        docker build -t $tag -<<EOF
+FROM $baseTag
+RUN set -x \
+ && mkdir -p /dot_gradle \
+ && echo "$gradle_properties" > /dot_gradle/gradle.properties \
+ && chmod -R 777 /dot_gradle
+ENV GRADLE_USER_HOME /dot_gradle
+EOF
     else
         echo "docker image already build"
     fi
@@ -144,7 +157,7 @@ reportScanResult() {
     local scanResultFile="$(basename $1)"
     local logfile="$(getOutFolder "$scanResultFolder")/reporter.logfile"
     runOrt "$scanResultFolder" \
-           report -f StaticHtml,WebApp,Excel,NoticeByPackage,NoticeSummary --ort-file "$scanResultFile" --output-dir /out |
+           report -f StaticHtml,WebApp,Excel,NoticeTemplate,SPDXDocument,GitLabLicensemodel,EVALUATEDMODELJSON,AMAZONOSSATTRIBUTIONBUILDER --ort-file "$scanResultFile" --output-dir /out |
         tee "$logfile"
 }
 
@@ -174,12 +187,33 @@ doAll() {
     fi
 }
 
+doShort() {
+    local folderToScan="$1"
+    [[ ! -d "$folderToScan" ]] && exit 1
+
+    local outFolder=$(getOutFolder "$folderToScan")
+
+    local reportResult="$outFolder/scan-report-web-app.html"
+    if [[ ! -f "$reportResult" ]]; then
+        local analyzeResult="$outFolder/analyzer-result.yml"
+        if [[ ! -f "$analyzeResult" ]]; then
+            analyzeFolder "$folderToScan"
+        else
+            echo "skip analyze ..."
+        fi
+        reportScanResult "$folderToScan"
+    else
+        echo "skip report ..."
+    fi
+}
+
 #################################################################################
 # main
 #################################################################################
 buildImageIfMissing
 case $1 in
     "--all") shift; doAll "$@" ;;
+    "--short") shift; doShort "$@" ;;
     "--analyze") shift; analyzeFolder "$@" ;;
     "--download") shift; downloadSource "$@" ;;
     "--scan") shift; scanAnalyzeResult "$@" ;;
