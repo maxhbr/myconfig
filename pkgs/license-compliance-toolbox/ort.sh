@@ -55,7 +55,7 @@ buildImageIfMissing() {
         fi
         docker build -t $tag -<<EOF
 FROM $baseTag
-env JAVA_OPTS "-Xms1024M -Xmx8g -XX:MaxPermSize=2048m -XX:MaxMetaspaceSize=2g"
+env JAVA_OPTS "-Xms2048M -Xmx16g -XX:MaxPermSize=4096m -XX:MaxMetaspaceSize=4g"
 EOF
     else
         echo "docker image already build"
@@ -182,7 +182,7 @@ doAll() {
         else
             echo "skip scan ..."
         fi
-        reportScanResult "$scanResult" short
+        reportScanResult "$scanResult"
     else
         echo "skip report ..."
     fi
@@ -202,7 +202,7 @@ doShort() {
         else
             echo "skip analyze ..."
         fi
-        reportScanResult "$folderToScan"
+        reportScanResult "$scanResult" short
     else
         echo "skip report ..."
     fi
