@@ -2916,6 +2916,22 @@ let
     };
   };
 
+  CLIHelpers = buildPerlPackage {
+    pname = "CLI-Helpers";
+    version = "1.8";
+    src = fetchurl {
+      url = "mirror://cpan/authors/id/B/BL/BLHOTSKY/CLI-Helpers-1.8.tar.gz";
+      sha256 = "1hgiynpy7q4gbx1d9pwnzdzil36k13vjxhscalj710ikcddvjz92";
+    };
+    buildInputs = [ PodCoverageTrustPod TestPerlCritic ];
+    propagatedBuildInputs = [ CaptureTiny RefUtil SubExporter TermReadKey YAML ];
+    meta = {
+      homepage = "https://github.com/reyjrar/CLI-Helpers";
+      description = "Subroutines for making simple command line scripts";
+      license = stdenv.lib.licenses.bsd3;
+    };
+  };
+
   Clipboard = buildPerlModule {
     pname = "Clipboard";
     version = "0.26";
@@ -17017,6 +17033,22 @@ let
     meta = {
       description = "An Asynchronous Remote Procedure Stack";
       license = with stdenv.lib.licenses; [ artistic1 gpl1Plus ];
+    };
+  };
+
+    RPM2 = buildPerlModule {
+    pname = "RPM2";
+    version = "1.4";
+    src = fetchurl {
+      url = "mirror://cpan/authors/id/L/LK/LKUNDRAK/RPM2-1.4.tar.gz";
+      sha256 = "5ecb42aa69324e6f4088abfae07313906e5aabf2f46f1204f3f1de59155bb636";
+    };
+    buildInputs = [ pkgs.pkg-config pkgs.rpm ];
+    doCheck = false; # Tries to open /var/lib/rpm
+    meta = {
+      description = "Perl bindings for the RPM Package Manager API";
+      license = with stdenv.lib.licenses; [ artistic1 gpl1Plus ];
+      platforms = stdenv.lib.platforms.linux;
     };
   };
 
