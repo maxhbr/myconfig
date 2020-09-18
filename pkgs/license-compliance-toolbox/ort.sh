@@ -163,6 +163,10 @@ doAll() {
     [[ ! -d "$folderToScan" ]] && exit 1
 
     local outFolder=$(getOutFolder "$folderToScan")
+    if [[ ! -z "$2" ]]; then
+        outFolder="$outFolder/$2"
+        mkdir -p "$outFolder"
+    fi
 
     local reportResult="$outFolder/scan-report-web-app.html"
     if [[ ! -f "$reportResult" ]]; then
@@ -178,7 +182,7 @@ doAll() {
         else
             echo "skip scan ..."
         fi
-        reportScanResult "$scanResult"
+        reportScanResult "$scanResult" short
     else
         echo "skip report ..."
     fi
