@@ -50,15 +50,12 @@ buildImageIfMissing() {
             docker build \
                 --network=host \
                 -t $baseTag $ORT
+        else
+        echo "docker base image already build"
         fi
-        gradle_properties="org.gradle.jvmargs=-Xms512M -Xmx4g -XX:MaxPermSize=1024m -XX:MaxMetaspaceSize=1g -Dkotlin.daemon.jvm.options=\"-Xmx1g\""
         docker build -t $tag -<<EOF
 FROM $baseTag
-RUN set -x \
- && mkdir -p /dot_gradle \
- && echo "$gradle_properties" > /dot_gradle/gradle.properties \
- && chmod -R 777 /dot_gradle
-ENV GRADLE_USER_HOME /dot_gradle
+env JAVA_OPTS "-Xms1024M -Xmx8g -XX:MaxPermSize=2048m -XX:MaxMetaspaceSize=2g"
 EOF
     else
         echo "docker image already build"
