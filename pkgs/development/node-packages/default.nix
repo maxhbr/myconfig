@@ -39,6 +39,14 @@ let
       meta.broken = since "12";
     };
 
+    # NOTE: this is a stub package to fetch npm dependencies for
+    # ../../applications/video/epgstation
+    epgstation = super."epgstation-../../applications/video/epgstation".override (drv: {
+      meta = drv.meta // {
+        broken = true; # not really broken, see the comment above
+      };
+    });
+
     bitwarden-cli = pkgs.lib.overrideDerivation super."@bitwarden/cli" (drv: {
       name = "bitwarden-cli-${drv.version}";
     });
@@ -103,7 +111,7 @@ let
     };
 
     node-red = super.node-red.override {
-      meta.broken = since "10";
+      buildInputs = [ self.node-pre-gyp ];
     };
 
     pnpm = super.pnpm.override {
