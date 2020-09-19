@@ -30,18 +30,16 @@
     # (announceHost "pi0")
     (announceHost "pi3a")
     (announceHost "pi4")
-    (lib.mkIf config.virtualisation.lxc.enable
-      { # nat for lxc
-        networking = {
-          nat = {
-            enable = true;
-            internalInterfaces = [ "ve-+" ];
-            externalInterface = "enp0s31f6";
-          };
-          networkmanager.unmanaged = [ "interface-name:ve-*" ];
+    (lib.mkIf config.virtualisation.lxc.enable { # nat for lxc
+      networking = {
+        nat = {
+          enable = true;
+          internalInterfaces = [ "ve-+" ];
+          externalInterface = "enp0s31f6";
         };
-      }
-    )
+        networkmanager.unmanaged = [ "interface-name:ve-*" ];
+      };
+    })
   ]);
 
   config = {
@@ -90,9 +88,9 @@
         ".config/autorandr/postswitch.d/mute_notebook_audio".source = let
           muteNotebookAudio = with pkgs;
             writeShellScriptBin "mute_notebook_audio" ''
-               exec ${pulseaudio}/bin/pactl set-sink-mute "alsa_output.pci-0000_00_1f.3.analog-stereo" "1"
-             '';
-          in "${muteNotebookAudio}/bin/mute_notebook_audio";
+              exec ${pulseaudio}/bin/pactl set-sink-mute "alsa_output.pci-0000_00_1f.3.analog-stereo" "1"
+            '';
+        in "${muteNotebookAudio}/bin/mute_notebook_audio";
       };
     };
   };

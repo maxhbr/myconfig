@@ -11,8 +11,9 @@ let
       [ ];
   lib = import <nixpkgs/lib>;
 in rec {
+  getSecretPath = hostName: fileName: (secretsDir + "/${hostName}/${fileName}");
   getSecret = hostName: fileName:
-    builtins.readFile (secretsDir + "/${hostName}/${fileName}");
+    builtins.readFile (getSecretPath hostName fileName);
 
   getSecretNoNewline = hostName: fileName:
     lib.removeSuffix "\n" (getSecret hostName fileName);
@@ -108,7 +109,11 @@ in rec {
   fixIp = hostName: deviceName: {
     networking = {
       interfaces."${deviceName}".ipv4.addresses = [{
-        address = getSecretNoNewline hostName "ip";
+        address = let newIpPath = getSecretPath hostName "newIp";
+        in if builtins.pathExists newIpPath then
+          getSecretNoNewline hostName "newIp"
+        else
+          getSecretNoNewline hostName "ip";
         prefixLength = 24;
       }];
       defaultGateway = "192.168.178.1";
