@@ -954,11 +954,15 @@ in
 
   cloud-custodian = python3Packages.callPackage ../tools/networking/cloud-custodian  { };
 
+  cod = callPackage ../tools/misc/cod { };
+
   codespell = with python3Packages; toPythonApplication codespell;
 
   coolreader = libsForQt5.callPackage ../applications/misc/coolreader {};
 
   cozy = callPackage ../applications/audio/cozy-audiobooks { };
+
+  cpuid = callPackage ../os-specific/linux/cpuid { };
 
   ctrtool = callPackage ../tools/archivers/ctrtool { };
 
@@ -967,6 +971,8 @@ in
   crumbs = callPackage ../applications/misc/crumbs { };
 
   crc32c = callPackage ../development/libraries/crc32c { };
+
+  crcpp = callPackage ../development/libraries/crcpp { };
 
   cudd = callPackage ../development/libraries/cudd { };
 
@@ -1943,6 +1949,8 @@ in
 
   filebench = callPackage ../tools/misc/filebench { };
 
+  filebot = callPackage ../applications/video/filebot { };
+
   fileshare = callPackage ../servers/fileshare {};
 
   fileshelter = callPackage ../servers/web-apps/fileshelter { };
@@ -2700,7 +2708,7 @@ in
 
   circus = callPackage ../tools/networking/circus { };
 
-  citrix_workspace = citrix_workspace_20_06_0;
+  citrix_workspace = citrix_workspace_20_09_0;
 
   inherit (callPackage ../applications/networking/remote/citrix-workspace { })
     citrix_workspace_19_6_0
@@ -2709,6 +2717,7 @@ in
     citrix_workspace_19_12_0
     citrix_workspace_20_04_0
     citrix_workspace_20_06_0
+    citrix_workspace_20_09_0
   ;
 
   citra = libsForQt5.callPackage ../misc/emulators/citra { };
@@ -3459,6 +3468,7 @@ in
     python = python3;
   };
 
+  embree = callPackage ../development/libraries/embree { };
   embree2 = callPackage ../development/libraries/embree/2.x.nix { };
 
   emem = callPackage ../applications/misc/emem { };
@@ -5367,6 +5377,8 @@ in
 
   mandoc = callPackage ../tools/misc/mandoc { };
 
+  manix = callPackage ../tools/nix/manix {};
+
   marktext = callPackage ../applications/misc/marktext { };
 
   mawk = callPackage ../tools/text/mawk { };
@@ -5444,6 +5456,8 @@ in
   mgba = libsForQt5.callPackage ../misc/emulators/mgba { };
 
   microcom = callPackage ../applications/misc/microcom { };
+
+  microserver = callPackage ../servers/microserver { };
 
   midisheetmusic = callPackage ../applications/audio/midisheetmusic { };
 
@@ -10151,7 +10165,13 @@ in
   python2Packages = python2.pkgs;
   python3Packages = python3.pkgs;
 
-  pythonInterpreters = callPackage ./../development/interpreters/python {};
+  pythonInterpreters = callPackage ./../development/interpreters/python {
+    # Overrides that apply to all Python interpreters
+    pkgs = pkgs // {
+      qt5 = pkgs.qt514;
+      libsForQt5 = pkgs.libsForQt514;
+    };
+  };
   inherit (pythonInterpreters) python27 python36 python37 python38 python39 python3Minimal pypy27 pypy36;
 
   # Python package sets.
@@ -14585,7 +14605,7 @@ in
   };
 
   opencv4 = callPackage ../development/libraries/opencv/4.x.nix {
-    inherit (darwin.apple_sdk.frameworks) AVFoundation Cocoa VideoDecodeAcceleration;
+    inherit (darwin.apple_sdk.frameworks) AVFoundation Cocoa VideoDecodeAcceleration CoreMedia MediaToolbox;
   };
 
   opencv = opencv4;
@@ -16467,6 +16487,8 @@ in
 
   mattermost-desktop = callPackage ../applications/networking/instant-messengers/mattermost-desktop { };
 
+  mbtileserver = callPackage ../servers/mbtileserver { };
+
   mediatomb = callPackage ../servers/mediatomb { };
 
   memcached = callPackage ../servers/memcached {};
@@ -17397,6 +17419,8 @@ in
 
   gmailctl = callPackage ../applications/networking/gmailctl {};
 
+  gomp = callPackage ../applications/version-management/gomp { };
+
   gpm = callPackage ../servers/gpm {
     ncurses = null;  # Keep curses disabled for lack of value
   };
@@ -17851,6 +17875,12 @@ in
     sysdig = callPackage ../os-specific/linux/sysdig {};
 
     systemtap = callPackage ../development/tools/profiling/systemtap { };
+
+    system76 = callPackage ../os-specific/linux/system76 { };
+
+    system76-acpi = callPackage ../os-specific/linux/system76-acpi { };
+
+    system76-io = callPackage ../os-specific/linux/system76-io { };
 
     tmon = callPackage ../os-specific/linux/tmon { };
 
@@ -22166,10 +22196,6 @@ in
     };
   };
 
-  sky = callPackage ../applications/networking/instant-messengers/sky {
-    qt5 = qt514;
-  };
-
   smplayer = libsForQt5.callPackage ../applications/video/smplayer { };
 
   smtube = libsForQt514.callPackage ../applications/video/smtube {};
@@ -22814,11 +22840,19 @@ in
 
   quodlibet-xine-full = quodlibet-full.override { xineBackend = true; tag = "-xine-full"; };
 
-  qutebrowser = libsForQt515.callPackage ../applications/networking/browsers/qutebrowser {
-    python3Packages = python3Packages.override {
-      qt5 = qt515;
-      libsForQt5 = libsForQt515;
+  qutebrowser = let
+    libsForQt5 = libsForQt515;
+    qt5 = qt515;
+    python = python3.override {
+      packageOverrides = self: super: {
+        pkgs = pkgs // {
+          inherit libsForQt5 qt5;
+        };
+      };
+      self = python3;
     };
+  in libsForQt5.callPackage ../applications/networking/browsers/qutebrowser {
+    python3 = python;
   };
 
   rabbitvcs = callPackage ../applications/version-management/rabbitvcs {};
@@ -22962,10 +22996,6 @@ in
   scribusUnstable = libsForQt514.callPackage ../applications/office/scribus/unstable.nix { };
 
   seafile-client = libsForQt514.callPackage ../applications/networking/seafile-client { };
-
-  seeks = callPackage ../tools/networking/p2p/seeks {
-    protobuf = protobuf3_1;
-  };
 
   sent = callPackage ../applications/misc/sent { };
 
@@ -23508,8 +23538,6 @@ in
   trustedqsl = tqsl; # Alias added 2019-02-10
 
   transcode = callPackage ../applications/audio/transcode { };
-
-  transcribe = callPackage ../applications/audio/transcribe { };
 
   transmission = callPackage ../applications/networking/p2p/transmission { };
   transmission-gtk = transmission.override { enableGTK3 = true; };
@@ -24430,6 +24458,8 @@ in
   };
   btc1d = btc1.override { withGui = false; };
 
+  btcpayserver = callPackage ../applications/blockchains/btcpayserver { };
+
   cryptop = python3.pkgs.callPackage ../applications/blockchains/cryptop { };
 
   dashpay = callPackage ../applications/blockchains/dashpay.nix { };
@@ -24482,7 +24512,9 @@ in
   namecoin  = callPackage ../applications/blockchains/namecoin.nix  { withGui = true; };
   namecoind = callPackage ../applications/blockchains/namecoin.nix { withGui = false; };
 
-  pivx = libsForQt514.callPackage ../applications/blockchains/pivx.nix { withGui = true; };
+  nbxplorer = callPackage ../applications/blockchains/nbxplorer { };
+
+  pivx = libsForQt5.callPackage ../applications/blockchains/pivx.nix { withGui = true; };
   pivxd = callPackage ../applications/blockchains/pivx.nix { withGui = false; };
 
   ethabi = callPackage ../applications/blockchains/ethabi.nix { };
@@ -26280,6 +26312,8 @@ in
 
   csxcad = callPackage ../applications/science/electronics/csxcad { };
 
+  flatcam = callPackage ../applications/science/electronics/flatcam { };
+
   fparser = callPackage ../applications/science/electronics/fparser { };
 
   geda = callPackage ../applications/science/electronics/geda {
@@ -27364,6 +27398,8 @@ in
 
   sqsh = callPackage ../development/tools/sqsh { };
 
+  go-swag = callPackage ../development/tools/go-swag { };
+
   go-swagger = callPackage ../development/tools/go-swagger { };
 
   jx = callPackage ../applications/networking/cluster/jx {};
@@ -27967,5 +28003,7 @@ in
   zettlr = callPackage ../applications/misc/zettlr { };
 
   unifi-poller = callPackage ../servers/monitoring/unifi-poller {};
+
+  fac-build = callPackage ../development/tools/build-managers/fac {};
 
 }
