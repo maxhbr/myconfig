@@ -83,7 +83,7 @@ in rec {
 
   announceHost = hostName:
     let hostIp = getSecretNoNewline hostName "ip";
-    in { ... }: {
+    in { ... }: makeOptionalBySecrets {
       config = {
         networking.extraHosts = ''
           ${hostIp} ${hostName}
