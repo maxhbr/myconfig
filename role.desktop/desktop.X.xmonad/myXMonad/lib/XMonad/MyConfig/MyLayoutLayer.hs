@@ -86,8 +86,8 @@ myLayout = smartBorders $
            modWorkspaces [ "vbox", "media" ] (Full |||) $
            avoidStrutsOn[U,D] $
            named "" $
-           modWorkspaces [ "10" ] (magnifier Grid |||) $
            mkToggle (single FULL) $
+           modWorkspaces [ "10" ] (magnifier Grid |||) $
            modWorkspaces [ "8" ] (withIM (1%7) (Title "Tabs Outliner")) $
            mkToggle (single MIRROR) $
            IfMax 1 full  (IfMax 2 tiled (tiled ||| dtb) ||| full)

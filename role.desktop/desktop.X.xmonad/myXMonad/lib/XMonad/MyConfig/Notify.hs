@@ -4,7 +4,7 @@
 module XMonad.MyConfig.Notify
        ( applyMyUrgencyHook
        , popupCurDesktop
-       , myDefaultPopup, myNotify)
+       , myDefaultPopup, myNotify, myNotifyColored)
        where
 -- needs `notify-osd` and `libnotify`
 -- See: https://pbrisbin.com/posts/using_notify_osd_for_xmonad_notifications/
@@ -37,11 +37,14 @@ instance UrgencyHook MyUrgencyHook where
 
 mkFont s = font $ "xft:inconsolata:pixelsize=" ++ show s ++ ":antialias=true:hinting=true"
 
-myNotify :: Rational -> String -> X ()
-myNotify t = dzenConfig pc
+myNotifyColored :: String -> Rational -> String -> X ()
+myNotifyColored color t = dzenConfig pc
   where
-    pc = onCurr (hCenter 1400) >=> timeout t >=> background "darkgreen" >=> mkFont 32
-    background color = addArgs ["-bg", color]
+    pc = onCurr (hCenter 1400) >=> timeout t >=> background >=> mkFont 32
+    background = addArgs ["-bg", color]
+
+myNotify :: Rational -> String -> X ()
+myNotify = myNotifyColored "darkgreen"
 
 myPopup :: Int -> Rational -> String -> X ()
 myPopup width t = dzenConfig pc

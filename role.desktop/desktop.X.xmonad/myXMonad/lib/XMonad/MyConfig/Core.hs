@@ -27,6 +27,7 @@ import           XMonad.Actions.WindowGo ( runOrRaiseNext )
 
 --------------------------------------------------------------------------------
 -- misc
+import           Data.List (isPrefixOf)
 import qualified Data.Map        as M
 import qualified XMonad.StackSet as W
 
@@ -34,7 +35,7 @@ import qualified XMonad.StackSet as W
 -- MyConfig
 import XMonad.MyConfig.Common
 import XMonad.MyConfig.MyLayoutLayer ( myLayout )
-import XMonad.MyConfig.Notify ( popupCurDesktop, myDefaultPopup, myNotify )
+import XMonad.MyConfig.Notify ( popupCurDesktop, myDefaultPopup, myNotify, myNotifyColored )
 
 normalcolor = "#333333" :: String
 maincolor = "#ee9a00" :: String
@@ -159,7 +160,9 @@ volumeControlKBs =
     , (0x1008ff11, ["-10%"])
     , (0x1008ff13, ["+10%"])]
   ++ [ ((m__, xK_a), runProcessWithInput muteTelcoCMD [] ""
-                     >>= myNotify 1.5)
+                     >>= (\message -> if "unmute" `isPrefixOf` message
+                             then myNotifyColored "darkred" 1.5 message
+                             else myNotify 1.5 message))
      ]
 #else
 -- alsa
