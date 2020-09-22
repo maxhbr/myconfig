@@ -2,20 +2,15 @@
 , buildPythonPackage
 , isPy27
 , fetchFromGitHub
-, pytestCheckHook
-, pytestcov
-, hyppo
-, matplotlib
-, networkx
+, pytestCheckHook , pytestcov , numba
 , numpy
 , scikitlearn
 , scipy
-, seaborn
 }:
 
 buildPythonPackage rec {
-  pname = "graspy";
-  version = "0.3";
+  pname = "hyppo";
+  version = "0.1.3";
 
   disabled = isPy27;
 
@@ -23,26 +18,22 @@ buildPythonPackage rec {
     owner = "neurodata";
     repo = pname;
     rev = "v${version}";
-    sha256 = "0lab76qiryxvwl6zrcikhnxil1xywl0wkkm2vzi4v9mdzpa7w29r";
+    sha256 = "0qdnb1l4hz4dgwhapz1fp9sb2vxxvr8h2ngsbvyf50h3kapcn19r";
   };
 
   propagatedBuildInputs = [
-    hyppo
-    matplotlib
-    networkx
+    numba
     numpy
     scikitlearn
     scipy
-    seaborn
   ];
 
   checkInputs = [ pytestCheckHook pytestcov ];
-  pytestFlagsArray = [ "tests" "--ignore=docs" ];
-  disabledTests = [ "gridplot_outputs" ];
+  pytestFlagsArray = [ "--ignore=docs" ];
 
   meta = with lib; {
-    homepage = "https://graspy.neurodata.io";
-    description = "A package for graph statistical algorithms";
+    homepage = "https://github.com/neurodata/hyppo";
+    description = "Indepedence testing in Python";
     license = licenses.asl20;
     maintainers = with maintainers; [ bcdarwin ];
   };
