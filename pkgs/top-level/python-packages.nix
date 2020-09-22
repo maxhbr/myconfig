@@ -2764,6 +2764,8 @@ in {
 
   hypothesis = if isPy3k then callPackage ../development/python-modules/hypothesis { } else self.hypothesis_4;
 
+  hyppo = callPackage ../development/python-modules/hyppo { };
+
   i3ipc = callPackage ../development/python-modules/i3ipc { };
 
   i3-py = callPackage ../development/python-modules/i3-py { };
@@ -4031,6 +4033,8 @@ in {
   nototools = callPackage ../data/fonts/noto-fonts/tools.nix { };
 
   nplusone = callPackage ../development/python-modules/nplusone { };
+
+  ntc-templates = callPackage ../development/python-modules/ntc-templates { };
 
   ntlm-auth = callPackage ../development/python-modules/ntlm-auth { };
 
@@ -6921,6 +6925,8 @@ in {
 
   testfixtures = callPackage ../development/python-modules/testfixtures { };
 
+  textfsm = callPackage ../development/python-modules/textfsm { };
+
   testpath = callPackage ../development/python-modules/testpath { };
 
   testrepository = callPackage ../development/python-modules/testrepository { };
@@ -7568,6 +7574,8 @@ in {
   yahooweather = callPackage ../development/python-modules/yahooweather { };
 
   yamllint = callPackage ../development/python-modules/yamllint { };
+
+  yamlordereddictloader = callPackage ../development/python-modules/yamlordereddictloader { };
 
   yanc = callPackage ../development/python-modules/yanc { };
 
