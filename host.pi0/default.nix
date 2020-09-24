@@ -3,7 +3,7 @@
     ./hardware-configuration.nix
     ../../modules/service.openssh.nix
     ../../roles/core.nix
-    # ../../secrets/common/wifi.QS3j.nix
+    # ../../secrets/common/wifi.home.nix
     ./raspicam.nix
   ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.9") ]);
 

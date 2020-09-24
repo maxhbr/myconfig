@@ -3,7 +3,7 @@
     ./hardware-configuration.nix
     ../../modules/service.openssh.nix
     ../../roles/core.nix
-    ../../secrets/common/wifi.QS3j.nix
+    ../../secrets/common/wifi.home.nix
   ];
 
   networking.hostName = "c2";

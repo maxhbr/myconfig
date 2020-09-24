@@ -9,7 +9,7 @@ mkHostNixops "workstation" ({ lib, ... }: {
   };
   imports = [
     (fixIp "workstation" "enp39s0")
-    ../secrets/common/wifi.QS3j.nix
+    ../secrets/common/wifi.home.nix
     (deployWireguardKeys "workstation")
     (deploySSHUserKeys "workstation" "rsa")
     (setupNixServe [

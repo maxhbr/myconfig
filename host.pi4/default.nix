@@ -3,7 +3,7 @@
     ./hardware-configuration.nix
     ../role.core
     ../role.headless
-    ../secrets/common/wifi.QS3j.nix
+    ../secrets/common/wifi.home.nix
   ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.8") ]);
 
   networking.hostName = "pi4";
