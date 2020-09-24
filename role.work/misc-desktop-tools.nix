@@ -5,7 +5,7 @@
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
         # libreoffice
-        unstable.zoom-us
+        nixos-unstable-small.zoom-us
         bluejeans-gui
         slack
         rambox
