@@ -1,6 +1,6 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }: {
+{ pkgs, lib, ... }: {
   imports = [
     ./hardware-configuration.nix
     ../role.headless
@@ -13,5 +13,7 @@
   config = {
     networking.hostName = "vserver";
     networking.hostId = "49496f29";
+
+    services.netdata.enable = lib.mkForce false;
   };
 }
