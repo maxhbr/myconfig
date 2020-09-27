@@ -1224,6 +1224,12 @@
     githubId = 3043718;
     name = "Brett Lyons";
   };
+  bryanasdev000 = {
+    email = "bryanasdev000@gmail.com";
+    github = "bryanasdev000";
+    githubId = 53131727;
+    name = "Bryan Albuquerque";
+  };
   btlvr = {
     email = "btlvr@protonmail.com";
     github = "btlvr";
@@ -1438,6 +1444,12 @@
     github = "chaoflow";
     githubId = 89596;
     name = "Florian Friesdorf";
+  };
+  charvp = {
+    email = "nixpkgs@cvpetegem.be";
+    github = "charvp";
+    githubId = 42220376;
+    name = "Charlotte Van Petegem";
   };
   chattered = {
     email = "me@philscotted.com";
@@ -4101,12 +4113,6 @@
     github = "JonathanReeve";
     githubId = 1843676;
     name = "Jonathan Reeve";
-  };
-  joncojonathan = {
-    email = "joncojonathan@gmail.com";
-    github = "joncojonathan";
-    githubId = 11414454;
-    name = "Jonathan Haddock";
   };
   jonringer = {
     email = "jonringer117@gmail.com";
