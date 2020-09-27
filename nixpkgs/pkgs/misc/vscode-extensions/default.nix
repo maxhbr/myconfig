@@ -1,4 +1,4 @@
-{ stdenv, callPackage, vscode-utils, llvmPackages_8 }:
+{ stdenv, callPackage, vscode-utils, llvmPackages_8, llvmPackages_latest }:
 
 let
   inherit (vscode-utils) buildVscodeMarketplaceExtension;
@@ -57,6 +57,18 @@ in
     };
     meta = {
       license = stdenv.lib.licenses.mit;
+    };
+  };
+
+  haskell.haskell = buildVscodeMarketplaceExtension {
+    mktplcRef = {
+      name = "haskell";
+      publisher = "haskell";
+      version = "1.1.0";
+      sha256 = "1wg06lyk0qn9jd6gi007sg7v0z9z8gwq7x2449d4ihs9n3w5l0gb";
+    };
+    meta = with stdenv.lib; {
+      license = licenses.mit;
     };
   };
 
@@ -176,6 +188,10 @@ in
     meta = with stdenv.lib; {
       license = licenses.mit;
     };
+  };
+
+  vadimcn.vscode-lldb = callPackage ./vscode-lldb {
+    lldb = llvmPackages_latest.lldb;
   };
 
   vscodevim.vim = buildVscodeMarketplaceExtension {

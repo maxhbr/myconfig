@@ -713,6 +713,8 @@ in {
 
   azure-synapse-spark = callPackage ../development/python-modules/azure-synapse-spark { };
 
+  b2sdk = callPackage ../development/python-modules/b2sdk { };
+
   Babel = callPackage ../development/python-modules/Babel { };
 
   babelfish = callPackage ../development/python-modules/babelfish { };
@@ -1186,6 +1188,8 @@ in {
 
   clize = callPackage ../development/python-modules/clize { };
 
+  clldutils = callPackage ../development/python-modules/clldutils { };
+
   closure-linter = callPackage ../development/python-modules/closure-linter { };
 
   cloudflare = callPackage ../development/python-modules/cloudflare { };
@@ -1311,6 +1315,8 @@ in {
 
   crashtest = callPackage ../development/python-modules/crashtest { };
 
+  crate = callPackage ../development/python-modules/crate { };
+
   crayons = callPackage ../development/python-modules/crayons { };
 
   crc16 = callPackage ../development/python-modules/crc16 { };
@@ -1350,6 +1356,8 @@ in {
   cssutils = callPackage ../development/python-modules/cssutils { };
 
   csvs-to-sqlite = callPackage ../development/python-modules/csvs-to-sqlite { };
+
+  csvw = callPackage ../development/python-modules/csvw { };
 
   cucumber-tag-expressions = callPackage ../development/python-modules/cucumber-tag-expressions { };
 
@@ -1457,6 +1465,8 @@ in {
   dbf = callPackage ../development/python-modules/dbf { };
 
   dbfread = callPackage ../development/python-modules/dbfread { };
+
+  dbus-next = callPackage ../development/python-modules/dbus-next { };
 
   dbus-python = callPackage ../development/python-modules/dbus { inherit (pkgs) dbus pkgconfig; };
 
@@ -2714,6 +2724,8 @@ in {
 
   httplib2 = callPackage ../development/python-modules/httplib2 { };
 
+  http-parser = callPackage ../development/python-modules/http-parser { };
+
   httpretty = if isPy3k then
     callPackage ../development/python-modules/httpretty { }
   else
@@ -3703,6 +3715,8 @@ in {
   moderngl-window = callPackage ../development/python-modules/moderngl_window { };
 
   modestmaps = callPackage ../development/python-modules/modestmaps { };
+
+  mohawk = callPackage ../development/python-modules/mohawk { };
 
   moinmoin = callPackage ../development/python-modules/moinmoin
     { }; # Needed here because moinmoin is loaded as a Python library.
@@ -5005,6 +5019,8 @@ in {
 
   pyjwt = callPackage ../development/python-modules/pyjwt { };
 
+  pykdl = callPackage ../development/python-modules/pykdl { };
+
   pykdtree = callPackage ../development/python-modules/pykdtree { inherit (pkgs.llvmPackages) openmp; };
 
   pykeepass = callPackage ../development/python-modules/pykeepass { };
@@ -5380,6 +5396,8 @@ in {
   pysparse = callPackage ../development/python-modules/pysparse { };
 
   pyspf = callPackage ../development/python-modules/pyspf { };
+
+  pyspice = callPackage ../development/python-modules/pyspice { };
 
   pyspinel = callPackage ../development/python-modules/pyspinel { };
 
@@ -5906,6 +5924,8 @@ in {
 
   pyxml = disabledIf isPy3k (callPackage ../development/python-modules/pyxml { });
 
+  pyxnat = callPackage ../development/python-modules/pyxnat { };
+
   pyyaml = callPackage ../development/python-modules/pyyaml { };
 
   pyzmq = callPackage ../development/python-modules/pyzmq { };
@@ -6106,6 +6126,8 @@ in {
   rig = callPackage ../development/python-modules/rig { };
 
   ripser = callPackage ../development/python-modules/ripser { };
+
+  rising = callPackage ../development/python-modules/rising { };
 
   rivet = disabledIf (!isPy3k) (toPythonModule (pkgs.rivet.override { python3 = python; }));
 
@@ -6339,6 +6361,8 @@ in {
 
   seekpath = callPackage ../development/python-modules/seekpath { };
 
+  segments = callPackage ../development/python-modules/segments { };
+
   selectors2 = callPackage ../development/python-modules/selectors2 { };
 
   selectors34 = callPackage ../development/python-modules/selectors34 { };
@@ -6463,7 +6487,9 @@ in {
 
   six = callPackage ../development/python-modules/six { };
 
-  skein = callPackage ../development/python-modules/skein { };
+  skein = callPackage ../development/python-modules/skein {
+    jre = pkgs.jre8; # TODO: remove override https://github.com/NixOS/nixpkgs/pull/89731
+  };
 
   sklearn-deap = callPackage ../development/python-modules/sklearn-deap { };
 
@@ -7609,6 +7635,8 @@ in {
   };
 
   yowsup = callPackage ../development/python-modules/yowsup { };
+
+  yq = callPackage ../development/python-modules/yq { };
 
   yt = callPackage ../development/python-modules/yt { };
 
