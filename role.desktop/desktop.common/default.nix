@@ -76,7 +76,9 @@ in {
           imagemagick
           mkscreenshot # scrot
           mplayer
-          chromium
+          (chromium.override {
+            commandLineArgs = "--load-media-router-component-extension=1";
+          })
           inco
           pipechrome
           unstable.firefox
@@ -117,6 +119,7 @@ in {
     };
 
     programs.light.enable = true;
+    services.avahi.enable = true;
     services.actkbd = {
       enable = true;
       bindings = [

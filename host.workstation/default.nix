@@ -38,7 +38,19 @@
 
     hardware.enableRedistributableFirmware = true;
     hardware.cpu.amd.updateMicrocode = true;
-    services.xserver.videoDrivers = [ "amdgpu" ];
+    services.xserver = {
+      xrandrHeads = [
+        { output = "HDMI-A-0";
+          primary = true;
+          monitorConfig = ''
+# 2560x1440 59.96 Hz (CVT 3.69M9) hsync: 89.52 kHz; pclk: 312.25 MHz
+Modeline "2560x1440_60.00"  312.25  2560 2752 3024 3488  1440 1443 1448 1493 -hsync +vsync
+Option "PreferredMode" "2560x1440"
+'';
+        }
+      ];
+      videoDrivers = [ "amdgpu" ];
+    };
 
     boot.initrd.supportedFilesystems = [ "luks" "btrfs" ];
     boot.binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];
@@ -47,6 +59,8 @@
       device = "/dev/disk/by-uuid/51d362d8-5b73-4b92-84c3-9ff260062da6";
       fsType = "ext4";
     };
+
+
 
     services.snapper = {
       snapshotInterval = "hourly";
