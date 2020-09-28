@@ -37,7 +37,8 @@ FORCE_RECREATE=false
 FORCE_REBOOT=false
 DO_SUSPEND=false
 
-ORIGINAL_ARGS="$@"
+ORIGINAL_ARGS="$*"
+NIXOPS_ARGS=""
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -51,6 +52,7 @@ $0
     [--target TARGET]  <-- deploy to other host
     [--force-recreate] <-- delete existing deployment
     [--reboot]         <-- force reboot
+    [-- $NIXOPS_ARGS]  <-- call nixops with args
 EOF
             exit 0
             ;;
@@ -92,6 +94,12 @@ EOF
         --suspend) shift
             DO_SUSPEND=true
             ;;
+        --) shift
+            NIXOPS_ARGS="$*"
+            while [[ $# -gt 0 ]]; do
+                shift
+            done
+            ;;
         *) shift
             POSITIONAL+=("$1")
             ;;
@@ -115,6 +123,12 @@ set -- "${POSITIONAL[@]}"
 ###########################################################################
 ##  run  ##################################################################
 ###########################################################################
+
+if [[ -n "$NIXOPS_ARGS" ]]; then
+    logH1end "run nixops for target, with args:" "$NIXOPS_ARGS"
+    runNixOps $TARGET $NIXOPS_ARGS
+    exit 0
+fi
 
 ###########################################################################
 # prepare misc stuff ######################################################

@@ -44,7 +44,7 @@ entrypoint(){
     echo "RUN echo \"#!/usr/bin/env bash\" > ~/entrypoint.sh \\"
     cat <<ENTRYPOINT | sed 's/^/ \&\& echo \"/g' | sed 's/$/\" >> ~\/entrypoint.sh \\/g'
 /opt/bin/mediaclient --start
-/opt/bin/mediaclient --mount=192.168.178.35
+/opt/bin/mediaclient --mount=192.168.1.35
 /opt/bin/mediaclient -e
 /opt/bin/mediaclient --setdtvmode=DVBC
 

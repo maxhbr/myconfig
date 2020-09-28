@@ -26,7 +26,7 @@ build() (
 
     NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/misc/empty_nixos_config.nix"
     NIX_PATH=""
-    if nix ping-store --store ssh://192.168.178.90; then
+    if nix ping-store --store ssh://"$(cat "$myconfigDir/secrets/workstation/ip")"; then
         jobCountArgs="-j0"
     else
         jobCountArgs=""

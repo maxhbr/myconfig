@@ -116,7 +116,7 @@ in rec {
           getSecretNoNewline hostName "ip";
         prefixLength = 24;
       }];
-      defaultGateway = "192.168.178.1";
+      defaultGateway = "192.168.1.1";
       nameservers = [ "8.8.8.8" "8.8.4.4" ];
     };
   };

@@ -95,6 +95,17 @@ generateStats() {
       generateDiffWithOld "$newFile"; } || true
 }
 
+runNixOps() {
+    local targetHost="$1"; shift
+    local verb="$1"; shift
+    local nixopsDeployment="$(getDeploymentNameFromHostname "$targetHost")"
+    (set -x;
+     nixops \
+         "$verb" \
+         --deployment "$nixopsDeployment" \
+         "$@")
+}
+
 realize() {
     local targetHost="$1"; shift
     local FORCE_RECREATE=false
