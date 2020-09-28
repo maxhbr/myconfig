@@ -52,6 +52,7 @@
         lsof
         psmisc # contains: killall, pstree
         lm_sensors
+        iperf
 
         #others:
         nfs-utils
