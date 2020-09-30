@@ -19,7 +19,6 @@ handleChannel() {
 run() {
     local wasUpdated=0
 
-    handleChannel master || wasUpdated=1
     handleChannel nixos-unstable || wasUpdated=1
     handleChannel nixos-unstable-small || wasUpdated=1
     handleChannel nixpkgs-unstable || wasUpdated=1
