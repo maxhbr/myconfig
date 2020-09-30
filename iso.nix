@@ -23,6 +23,7 @@ let
           preBuiltConfig = (evalNixos
             (import (./. + "/${secondaryHostConfig}") {
               pkgs = nixpkgs;
+              inherit lib;
             })).system;
           bootstrap-install = pkgs.writeShellScriptBin "bootstrap-install" ''
             if [[ ! -d "/mnt/etc/nixos/" ]]; then
