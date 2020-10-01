@@ -34,6 +34,8 @@ usage:
 
 Builds the ort image on demand.
 Remove the ort:latest image to enforce rebuild of the docker image.
+
+If the workdir ends on -enc it is treated as gocryptfs folder and the user is asked interactively for a password.
 EOF
 }
 
@@ -151,10 +153,8 @@ cleanAnalyzeGeneratedDirs() {
     if [[ -d "$analyzeResultFolder/native-scan-results" ]]; then
         rm -rf "$analyzeResultFolder/native-scan-results"
     fi
-    if [[ "$1" == "--also-downloads" ]]; then
-        if [[ -d "$analyzeResultFolder/downloads" ]]; then
-            rm -rf "$analyzeResultFolder/downloads"
-        fi
+    if [[ -d "$analyzeResultFolder/downloads" ]]; then
+        rm -rf "$analyzeResultFolder/downloads"
     fi
 }
 
@@ -174,7 +174,7 @@ scanAnalyzeResult() {
            scan  --ort-file "$analyzeResultFile" --output-dir /out --download-dir /out/downloads --output-formats JSON,YAML |
         tee -a "$logfile"
 
-    cleanAnalyzeGeneratedDirs "$analyzeResultFolder" --also-downloads
+    cleanAnalyzeGeneratedDirs "$analyzeResultFolder"
 }
 
 reportScanResult() {
