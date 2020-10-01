@@ -55,7 +55,9 @@ buildImageIfMissing() {
         fi
         docker build -t $tag -<<EOF
 FROM $baseTag
-env JAVA_OPTS "-Xms2048M -Xmx16g -XX:MaxPermSize=4096m -XX:MaxMetaspaceSize=4g"
+ENV JAVA_OPTS "-Xms2048M -Xmx16g -XX:MaxPermSize=4096m -XX:MaxMetaspaceSize=4g"
+RUN set -x \
+ && ssh-keygen -b 2048 -t rsa -f ~/.ssh/id_rsa -q -N ""
 EOF
     else
         echo "docker image already build"
@@ -115,7 +117,7 @@ analyzeFolder() {
     local logfile="$(getOutFolder "$folderToScan")/analyzer.logfile"
     runOrt "$folderToScan" \
            analyze -i /workdir --output-dir /out |
-        tee "$logfile"
+        tee -a "$logfile"
 }
 
 downloadSource() {
@@ -126,8 +128,8 @@ downloadSource() {
     local analyzeResultFile="$(basename $1)"
     local logfile="$(getOutFolder "$analyzeResultFolder")/downloader.logfile"
     runOrt "$analyzeResultFolder" \
-           download --ort-file "$analyzeResultFile" --output-dir /out |
-        tee "$logfile"
+           download --ort-file "$analyzeResultFile" --output-dir /out/downloads |
+        tee -a "$logfile"
 }
 
 scanAnalyzeResult() {
@@ -140,8 +142,8 @@ scanAnalyzeResult() {
     local analyzeResultFile="$(basename $1)"
     local logfile="$(getOutFolder "$analyzeResultFolder")/scanner.logfile"
     runOrt "$analyzeResultFolder" \
-           scan --ort-file "$analyzeResultFile" --output-dir /out |
-        tee "$logfile"
+           scan  --ort-file "$analyzeResultFile" --output-dir /out |
+        tee -a "$logfile"
 }
 
 reportScanResult() {
@@ -155,7 +157,7 @@ reportScanResult() {
     local logfile="$(getOutFolder "$scanResultFolder")/reporter.logfile"
     runOrt "$scanResultFolder" \
            report -f StaticHtml,WebApp,Excel,NoticeTemplate,SPDXDocument,GitLabLicensemodel,EVALUATEDMODELJSON,AMAZONOSSATTRIBUTIONBUILDER --ort-file "$scanResultFile" --output-dir /out |
-        tee "$logfile"
+        tee -a "$logfile"
 }
 
 doAll() {

@@ -22,7 +22,5 @@
         vdestroy = "vagrant destroy";
       };
     };
-
-    virtualisation.virtualbox.host.enable = true;
   };
 }
