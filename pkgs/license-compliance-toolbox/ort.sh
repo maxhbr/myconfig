@@ -57,7 +57,13 @@ buildImageIfMissing() {
 FROM $baseTag
 ENV JAVA_OPTS "-Xms2048M -Xmx16g -XX:MaxPermSize=4096m -XX:MaxMetaspaceSize=4g"
 RUN set -x \
- && ssh-keygen -b 2048 -t rsa -f ~/.ssh/id_rsa -q -N ""
+ && ssh-keygen -b 2048 -t rsa -f ~/.ssh/id_rsa -q -N "" \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends gocryptfs fuse \
+ && rm -rf /var/lib/apt/lists/* \
+ && (echo "if [[ -d /workdir-enc ]]; then\n  set -e\n  trap 'kill -TERM \\\$PID; wait \\\$PID; fusermount -u /workdir' TERM INT\n  mkdir /workdir\n  gocryptfs /workdir-enc /workdir\n  set +e\n  /opt/ort/bin/ort \"\\\$@\" &\n  PID=\\\$!\n  wait \\\$PID\n  wait \\\$PID\n  EXIT_STATUS=\\\$?\n  fusermount -u /workdir\n  exit \\\$EXIT_STATUS\nelse\n  exec /opt/ort/bin/ort \"\\\$@\" \nfi\n" > /opt/entrypoint.sh)
+
+ENTRYPOINT ["/bin/bash", "/opt/entrypoint.sh"]
 EOF
     else
         echo "docker image already build"
@@ -89,6 +95,12 @@ runOrt() {
     [[ ! -d "$workdir" ]] && exit 1
     shift
 
+    if [[ "$workdir" == *"-enc" ]]; then
+        workdirMountArgs="--device /dev/fuse --cap-add SYS_ADMIN -v $workdir:/workdir-enc"
+    else
+        workdirMountArgs="-v $workdir:/workdir"
+    fi
+
     prepareDotOrt
 
     (set -x;
@@ -96,7 +108,8 @@ runOrt() {
             --rm \
             -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u $(id -u $USER):$(id -g $USER) \
             -v "$HOME/.ort/dockerHome":"$HOME" \
-            -v "$workdir":/workdir -v "$(getOutFolder "$workdir")":/out \
+            $workdirMountArgs \
+            -v "$(getOutFolder "$workdir")":/out \
             -w /workdir \
             --net=host \
             $tag $DEBUG_LEVEL \
@@ -116,7 +129,7 @@ analyzeFolder() {
 
     local logfile="$(getOutFolder "$folderToScan")/analyzer.logfile"
     runOrt "$folderToScan" \
-           analyze -i /workdir --output-dir /out |
+           analyze -i /workdir --output-dir /out --output-formats JSON,YAML --allow-dynamic-versions |
         tee -a "$logfile"
 }
 
@@ -132,6 +145,19 @@ downloadSource() {
         tee -a "$logfile"
 }
 
+cleanAnalyzeGeneratedDirs() {
+    local analyzeResultFolder="$1"
+    shift
+    if [[ -d "$analyzeResultFolder/native-scan-results" ]]; then
+        rm -rf "$analyzeResultFolder/native-scan-results"
+    fi
+    if [[ "$1" == "--also-downloads" ]]; then
+        if [[ -d "$analyzeResultFolder/downloads" ]]; then
+            rm -rf "$analyzeResultFolder/downloads"
+        fi
+    fi
+}
+
 scanAnalyzeResult() {
     local analyzeResult="$(readlink -f "$1")"
     [[ ! -f "$analyzeResult" ]] && exit 1
@@ -141,9 +167,14 @@ scanAnalyzeResult() {
     local analyzeResultFolder="$(dirname $analyzeResult)"
     local analyzeResultFile="$(basename $1)"
     local logfile="$(getOutFolder "$analyzeResultFolder")/scanner.logfile"
+
+    cleanAnalyzeGeneratedDirs "$analyzeResultFolder"
+
     runOrt "$analyzeResultFolder" \
-           scan  --ort-file "$analyzeResultFile" --output-dir /out |
+           scan  --ort-file "$analyzeResultFile" --output-dir /out --download-dir /out/downloads --output-formats JSON,YAML |
         tee -a "$logfile"
+
+    cleanAnalyzeGeneratedDirs "$analyzeResultFolder" --also-downloads
 }
 
 reportScanResult() {
@@ -221,7 +252,6 @@ case $1 in
     "--download") shift; downloadSource "$@" ;;
     "--scan") shift; scanAnalyzeResult "$@" ;;
     "--report") shift; reportScanResult "$@" ;;
-    "--ortHelp") shift; ortHelp ;;
     "--help") helpMsg ;;
     *) runOrt "$(pwd)" "$@" ;;
 esac
