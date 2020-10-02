@@ -55,19 +55,11 @@ buildImageIfMissing() {
         else
         echo "docker base image already build"
         fi
-        docker build -t $tag -<<EOF
-FROM $baseTag
-ENV JAVA_OPTS "-Xms2048M -Xmx16g -XX:MaxPermSize=4096m -XX:MaxMetaspaceSize=4g"
-RUN set -x \
- && ssh-keygen -b 2048 -t rsa -f ~/.ssh/id_rsa -q -N "" \
- && npm install --global rollup \
- && apt-get update \
- && apt-get install -y --no-install-recommends gocryptfs fuse \
- && rm -rf /var/lib/apt/lists/* \
- && (echo "if [[ -d /workdir-enc ]]; then\n  set -e\n  trap 'kill -TERM \\\$PID; wait \\\$PID; fusermount -u /workdir' TERM INT\n  mkdir /workdir\n  gocryptfs /workdir-enc /workdir\n  set +e\n  /opt/ort/bin/ort \"\\\$@\" &\n  PID=\\\$!\n  wait \\\$PID\n  wait \\\$PID\n  EXIT_STATUS=\\\$?\n  fusermount -u /workdir\n  exit \\\$EXIT_STATUS\nelse\n  exec /opt/ort/bin/ort \"\\\$@\" \nfi\n" > /opt/entrypoint.sh)
-
-ENTRYPOINT ["/bin/bash", "/opt/entrypoint.sh"]
-EOF
+        (
+          cd $(dirname "${BASH_SOURCE[0]}")/myort
+          sed -E -i "s/^FROM( .*)?/FROM $baseTag/" Dockerfile
+          docker build -t $tag .
+        )
     else
         echo "docker image already build"
     fi
@@ -99,7 +91,13 @@ runOrt() {
     shift
 
     if [[ "$workdir" == *"-enc" ]]; then
-        workdirMountArgs="--device /dev/fuse --cap-add SYS_ADMIN -v $workdir:/workdir-enc"
+        if [[ -z $ORT_PASSWORD ]]; then
+          echo -n Password:
+          read -s ORT_PASSWORD
+          echo
+          export ORT_PASSWORD
+        fi
+        workdirMountArgs="-e ORT_PASSWORD --device /dev/fuse --cap-add SYS_ADMIN -v $workdir:/workdir-enc"
     else
         workdirMountArgs="-v $workdir:/workdir"
     fi
@@ -109,7 +107,7 @@ runOrt() {
     (set -x;
      docker run -i \
             --rm \
-            -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u $(id -u $USER):$(id -g $USER) \
+            -v /etc/group:/etc/group:ro -e USER=$(id -un) -u $(id -u $USER):$(id -g $USER) \
             -v "$HOME/.ort/dockerHome":"$HOME" \
             $workdirMountArgs \
             -v "$(getOutFolder "$workdir")":/out \
@@ -264,3 +262,4 @@ case $1 in
     *) runOrt "$(pwd)" "$@" ;;
 esac
 times
+f
