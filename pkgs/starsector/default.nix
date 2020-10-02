@@ -1,11 +1,17 @@
 # from: https://discourse.nixos.org/t/game-got-starsector-to-run-on-nixos/5419
-with import <nixpkgs> {};
+{ stdenv, lib, unzip, requireFile, makeWrapper, xorg, openjdk
+}:
 
 stdenv.mkDerivation rec {
   pname = "starsector";
   version = "0.9.1a-RC8";
 
-  src = ./starsector_linux- + "${version}.zip";
+  src = ./. + "starsector_linux-${version}.zip";
+  # requireFile {
+  #   name = "starsector_linux-${version}.zip";
+  #   sha256 = "0aaaa4b58a3e773429217e244b154ba3a997a2b52a1d06f81ed523e82ef40271";
+  #   url = "https://s3.amazonaws.com/fractalsoftworks/starsector/starsector_linux-0.9.1a-RC8.zip";
+  # };
 
   nativeBuildInputs = [ makeWrapper ];
   buildInputs = with xorg; [
