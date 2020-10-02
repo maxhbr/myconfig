@@ -5,6 +5,7 @@
     ./games.doom3.nix
     ./games.lutris.nix
     ./games.ktane.nix
+    ./games.starsector.nix
     ./games.openrct2.nix
     ./games.powder.nix
     ./games.steam

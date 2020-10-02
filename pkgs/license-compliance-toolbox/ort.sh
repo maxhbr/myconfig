@@ -53,7 +53,7 @@ buildImageIfMissing() {
                 --network=host \
                 -t $baseTag $ORT
         else
-        echo "docker base image already build"
+            echo "docker base image already build"
         fi
         docker build -t $tag -<<EOF
 FROM $baseTag
@@ -193,8 +193,13 @@ reportScanResult() {
         mkdir -p "$(getOutFolder "$scanResultFolder")/$innerDir"
         outputDir="/out/$innerDir"
     fi
+
     runOrt "$scanResultFolder" \
-           report -f StaticHtml,WebApp,Excel,NoticeTemplate,SPDXDocument,GitLabLicensemodel,EVALUATEDMODELJSON,AMAZONOSSATTRIBUTIONBUILDER --ort-file "$scanResultFile" --output-dir "$outputDir" 2>&1 |
+        report \
+        -f StaticHtml,WebApp,Excel,NoticeTemplate,SPDXDocument,GitLabLicensemodel,EVALUATEDMODELJSON,AMAZONOSSATTRIBUTIONBUILDER \
+        --ort-file "$scanResultFile" \
+        $([[ -f "$(getOutFolder "$scanResultFolder")/resolutions.yml" ]] && echo "--resolutions-file /out/resolutions.yml") \
+        --output-dir "$outputDir" 2>&1 |
         tee -a "$logfile"
 }
 
