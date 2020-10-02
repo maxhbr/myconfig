@@ -1,7 +1,10 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, ... }: {
-  imports = [ ./extrahosts ];
+  imports = [
+    ./extrahosts
+    # ./service.stubby.nix
+  ];
   config = {
     boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
     boot.kernel.sysctl."net.ipv6.conf.all.forwarding" = "1";

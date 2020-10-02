@@ -60,6 +60,7 @@ FROM $baseTag
 ENV JAVA_OPTS "-Xms2048M -Xmx16g -XX:MaxPermSize=4096m -XX:MaxMetaspaceSize=4g"
 RUN set -x \
  && ssh-keygen -b 2048 -t rsa -f ~/.ssh/id_rsa -q -N "" \
+ && npm install --global rollup \
  && apt-get update \
  && apt-get install -y --no-install-recommends gocryptfs fuse \
  && rm -rf /var/lib/apt/lists/* \
@@ -131,7 +132,7 @@ analyzeFolder() {
 
     local logfile="$(getOutFolder "$folderToScan")/analyzer.logfile"
     runOrt "$folderToScan" \
-           analyze -i /workdir --output-dir /out --output-formats JSON,YAML --allow-dynamic-versions |
+           analyze -i /workdir --output-dir /out --output-formats JSON,YAML --allow-dynamic-versions 2>&1 |
         tee -a "$logfile"
 }
 
@@ -143,7 +144,7 @@ downloadSource() {
     local analyzeResultFile="$(basename $1)"
     local logfile="$(getOutFolder "$analyzeResultFolder")/downloader.logfile"
     runOrt "$analyzeResultFolder" \
-           download --ort-file "$analyzeResultFile" --output-dir /out/downloads |
+           download --ort-file "$analyzeResultFile" --output-dir /out/downloads 2>&1 |
         tee -a "$logfile"
 }
 
@@ -171,23 +172,29 @@ scanAnalyzeResult() {
     cleanAnalyzeGeneratedDirs "$analyzeResultFolder"
 
     runOrt "$analyzeResultFolder" \
-           scan  --ort-file "$analyzeResultFile" --output-dir /out --download-dir /out/downloads --output-formats JSON,YAML |
+           scan  --ort-file "$analyzeResultFile" --output-dir /out --download-dir /out/downloads --output-formats JSON,YAML 2>&1 |
         tee -a "$logfile"
 
     cleanAnalyzeGeneratedDirs "$analyzeResultFolder"
 }
 
 reportScanResult() {
-    local scanResult="$(readlink -f "$1")"
+    local scanResult="$(readlink -f "$1")"; shift
     [[ ! -f "$scanResult" ]] && exit 1
+    local innerDir="$1"
 
     printf "\n\n\nreport: $scanResult\n\n"
 
     local scanResultFolder="$(dirname $scanResult)"
-    local scanResultFile="$(basename $1)"
+    local scanResultFile="$(basename $scanResult)"
     local logfile="$(getOutFolder "$scanResultFolder")/reporter.logfile"
+    local outputDir="/out"
+    if [[ ! -z "$innerDir" ]]; then
+        mkdir -p "$(getOutFolder "$scanResultFolder")/$innerDir"
+        outputDir="/out/$innerDir"
+    fi
     runOrt "$scanResultFolder" \
-           report -f StaticHtml,WebApp,Excel,NoticeTemplate,SPDXDocument,GitLabLicensemodel,EVALUATEDMODELJSON,AMAZONOSSATTRIBUTIONBUILDER --ort-file "$scanResultFile" --output-dir /out |
+           report -f StaticHtml,WebApp,Excel,NoticeTemplate,SPDXDocument,GitLabLicensemodel,EVALUATEDMODELJSON,AMAZONOSSATTRIBUTIONBUILDER --ort-file "$scanResultFile" --output-dir "$outputDir" 2>&1 |
         tee -a "$logfile"
 }
 
@@ -208,6 +215,7 @@ doAll() {
             local analyzeResult="$outFolder/analyzer-result.yml"
             if [[ ! -f "$analyzeResult" ]]; then
                 analyzeFolder "$folderToScan"
+                reportScanResult "$analyzeResult" reportFromAnalyzeResult
             else
                 echo "skip analyze ..."
             fi

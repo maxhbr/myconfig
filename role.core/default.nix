@@ -16,7 +16,6 @@ in {
     ./dic.nix
     ./service.openssh.nix
     ./service.syncthing.nix
-    ./service.stubby.nix
   ];
 
   config = {
