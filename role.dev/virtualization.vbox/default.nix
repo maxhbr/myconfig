@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: MIT
 { ... }:
 
-{ imports = [ ./vagrant.nix ];
+{
+  imports = [ ./vagrant.nix ];
   config = {
     virtualisation.virtualbox.host.enable = true;
     # virtualisation.virtualbox.host.enableExtensionPack = true;

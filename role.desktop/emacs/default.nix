@@ -65,6 +65,12 @@ let
 in {
   imports = [ ./spacemacs.nix ];
   config = {
+    nixpkgs.overlays = [
+      (self: super: {
+        emacs = super.emacs.overrideDerivation (drv: { nativeComp = true; });
+      })
+    ];
+
     environment = { systemPackages = with pkgs; [ doom-emacs ]; };
     home-manager.users.mhuber = {
       home.packages = with pkgs; [

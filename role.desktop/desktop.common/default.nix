@@ -119,7 +119,8 @@ in {
     };
 
     programs.light.enable = true;
-    services.avahi.enable = true; # https://github.com/NixOS/nixpkgs/issues/49630
+    services.avahi.enable =
+      true; # https://github.com/NixOS/nixpkgs/issues/49630
     services.actkbd = {
       enable = true;
       bindings = [
