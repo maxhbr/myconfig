@@ -86,9 +86,13 @@ prepareDotOrt() {
     done
 }
 
-getOutFolder() {
+computeOutFolder() {
     local workdir="$(readlink -f "$1")"
-    local out="${workdir%_ort}_ort"
+    echo "${workdir%_ort}_ort"
+}
+
+getOutFolder() {
+    local out="$(computeOutFolder "$@")"
     mkdir -p "$out"
     echo "$out"
 }
@@ -125,14 +129,14 @@ runOrt() {
 # actual calls to ort features
 #################################################################################
 analyzeFolder() {
-    local folderToScan="$(readlink -f "$1")"
+    local folderToScan="$(readlink -f "$1")"; shift
     [[ ! -d "$folderToScan" ]] && exit 1
 
     printf "\n\n\nanalyze: $folderToScan\n\n"
 
     local logfile="$(getOutFolder "$folderToScan")/analyzer.logfile"
     runOrt "$folderToScan" \
-           analyze -i /workdir --output-dir /out --output-formats JSON,YAML --allow-dynamic-versions 2>&1 |
+           analyze -i /workdir --output-dir /out --output-formats JSON,YAML --allow-dynamic-versions "$@" 2>&1 |
         tee -a "$logfile"
 }
 
@@ -258,6 +262,13 @@ doShort() {
 # main
 #################################################################################
 buildImageIfMissing
+
+if [[ ! -z "$2" && -d "$(computeOutFolder "$2")" ]]; then
+    cat <<EOF >> "$(computeOutFolder "$2")/_calls"
+[$(date)] $0 $*
+EOF
+fi
+
 case $1 in
     "--all") shift; doAll "$@" ;;
     "--short") shift; doShort "$@" ;;

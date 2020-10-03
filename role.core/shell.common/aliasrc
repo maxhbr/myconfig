@@ -253,8 +253,9 @@ exl() {
 }
 
 countFilesByTypes() {
-  find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -exec basename "{}" \; \
+  find "${1:-.}" -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -exec basename "{}" \; \
     | sed -e 's/.*\.//gi' \
+    | awk '{print tolower($0)}' \
     | sort \
     | uniq  -c \
     | sort  -rn
