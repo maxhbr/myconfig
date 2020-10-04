@@ -266,6 +266,8 @@ in
 
   dotnet-sdk_3 = dotnetCorePackages.sdk_3_1;
 
+  dotnet-sdk_5 = dotnetCorePackages.sdk_5_0;
+
   dotnet-netcore = dotnetCorePackages.netcore_2_1;
 
   dotnet-aspnetcore = dotnetCorePackages.aspnetcore_2_1;
@@ -1099,6 +1101,8 @@ in
 
   glyr = callPackage ../tools/audio/glyr { };
 
+  google-amber = callPackage ../tools/graphics/amber { };
+
   hpe-ltfs = callPackage ../tools/backup/hpe-ltfs { };
 
   http2tcp = callPackage ../tools/networking/http2tcp { };
@@ -1526,8 +1530,11 @@ in
     '';
   });
 
-  caddy = callPackage ../servers/caddy { buildGoModule = buildGo114Module; };  # https://github.com/lucas-clemente/quic-go/issues/2614
-  caddy1 = callPackage ../servers/caddy/v1.nix { buildGoModule = buildGo114Module; };
+  caddy = callPackage ../servers/caddy { };
+  caddy1 = callPackage ../servers/caddy/v1.nix {
+    # https://github.com/lucas-clemente/quic-go/issues/2614
+    buildGoModule = buildGo114Module;
+  };
 
   # Traefik 2.2 uses go1.14, pinning can be removed with 2.3
   # https://github.com/containous/traefik/issues/7234#issuecomment-684950612
@@ -1841,6 +1848,8 @@ in
   doppler = callPackage ../tools/security/doppler {};
 
   dosage = callPackage ../applications/graphics/dosage { };
+
+  dot-merlin-reader = callPackage ../development/tools/ocaml/merlin/dot-merlin-reader.nix { };
 
   dozenal = callPackage ../applications/misc/dozenal { };
 
@@ -2628,9 +2637,7 @@ in
 
   davix = callPackage ../tools/networking/davix { };
 
-  cantata = libsForQt5.callPackage ../applications/audio/cantata {
-    inherit vlc;
-  };
+  cantata = libsForQt5.callPackage ../applications/audio/cantata { };
 
   can-utils = callPackage ../os-specific/linux/can-utils { };
 
@@ -4605,9 +4612,7 @@ in
   iperf3 = callPackage ../tools/networking/iperf/3.nix { };
   iperf = iperf3;
 
-  ipfs = callPackage ../applications/networking/ipfs {
-    buildGoModule = buildGo114Module;
-  };
+  ipfs = callPackage ../applications/networking/ipfs { };
   ipfs-migrator = callPackage ../applications/networking/ipfs-migrator { };
   ipfs-cluster = callPackage ../applications/networking/ipfs-cluster {
     buildGoModule = buildGo114Module;
@@ -9378,6 +9383,12 @@ in
 
   lizardfs = callPackage ../tools/filesystems/lizardfs { };
 
+  lobster = callPackage ../development/compilers/lobster {
+    inherit (darwin) cf-private;
+    inherit (darwin.apple_sdk.frameworks)
+      Cocoa AudioToolbox OpenGL Foundation ForceFeedback;
+  };
+
   lld = llvmPackages.lld;
   lld_5 = llvmPackages_5.lld;
   lld_6 = llvmPackages_6.lld;
@@ -9728,6 +9739,7 @@ in
     inherit (darwin.apple_sdk.frameworks) Security;
   };
   cargo-sweep = callPackage ../development/tools/rust/cargo-sweep { };
+  cargo-sync-readme = callPackage ../development/tools/rust/cargo-sync-readme {};
   cargo-udeps = callPackage ../development/tools/rust/cargo-udeps {
     inherit (darwin.apple_sdk.frameworks) CoreServices Security;
   };
@@ -9986,7 +9998,7 @@ in
   inherit (beam.interpreters)
     erlang erlangR23 erlangR22 erlangR21 erlangR20 erlangR19 erlangR18
     erlang_odbc erlang_javac erlang_odbc_javac erlang_nox erlang_basho_R16B02
-    elixir elixir_1_10 elixir_1_9 elixir_1_8 elixir_1_7 elixir_1_6;
+    elixir elixir_1_10 elixir_1_9 elixir_1_8 elixir_1_7;
 
   inherit (beam.packages.erlang)
     rebar rebar3
@@ -10117,19 +10129,21 @@ in
 
   octave = callPackage ../development/interpreters/octave {
     python = python3;
+    mkDerivation = stdenv.mkDerivation;
     jdk = jdk8; # TODO: remove override https://github.com/NixOS/nixpkgs/pull/89731
   };
   octave-jit = callPackage ../development/interpreters/octave {
     python = python3;
     enableJIT = true;
+    mkDerivation = stdenv.mkDerivation;
     jdk = jdk8; # TODO: remove override https://github.com/NixOS/nixpkgs/pull/89731
   };
-  octaveFull = (lowPrio (libsForQt512.callPackage ../development/interpreters/octave {
+  octaveFull = libsForQt5.callPackage ../development/interpreters/octave {
     python = python3;
     enableQt = true;
     overridePlatforms = ["x86_64-linux" "x86_64-darwin"];
     jdk = jdk8; # TODO: remove override https://github.com/NixOS/nixpkgs/pull/89731
-  }));
+  };
 
   ocropus = callPackage ../applications/misc/ocropus { };
 
@@ -11918,6 +11932,8 @@ in
 
   aubio = callPackage ../development/libraries/aubio { };
 
+  audiality2 = callPackage ../development/libraries/audiality2 { };
+
   audiofile = callPackage ../development/libraries/audiofile {
     inherit (darwin.apple_sdk.frameworks) AudioUnit CoreServices;
   };
@@ -13281,6 +13297,8 @@ in
   libavc1394 = callPackage ../development/libraries/libavc1394 { };
 
   libb2 = callPackage ../development/libraries/libb2 { };
+
+  libbacktrace = callPackage ../development/libraries/libbacktrace { };
 
   libbap = callPackage ../development/libraries/libbap {
     inherit (ocaml-ng.ocamlPackages_4_06) bap ocaml findlib ctypes;
@@ -14651,6 +14669,7 @@ in
     inherit (darwin.apple_sdk.frameworks) OpenCL Cocoa;
   };
   opencascade-occt = callPackage ../development/libraries/opencascade-occt { };
+  opencascade-occt730 = callPackage ../development/libraries/opencascade-occt/7.3.nix { };
 
   opencl-headers = callPackage ../development/libraries/opencl-headers { };
 
@@ -15126,8 +15145,6 @@ in
     soqt = callPackage ../development/libraries/soqt { };
 
     telepathy = callPackage ../development/libraries/telepathy/qt { };
-
-    vlc = callPackage ../applications/video/vlc {};
 
     qtwebkit-plugins = callPackage ../development/libraries/qtwebkit-plugins { };
 
@@ -16510,7 +16527,7 @@ in
 
   hashi-ui = callPackage ../servers/hashi-ui {};
 
-  hasura-graphql-engine = haskellPackages.graphql-engine;
+  hasura-graphql-engine = haskell.lib.justStaticExecutables haskellPackages.graphql-engine;
 
   hasura-cli = callPackage ../servers/hasura/cli.nix { };
 
@@ -16949,6 +16966,7 @@ in
     postgresql_10
     postgresql_11
     postgresql_12
+    postgresql_13
   ;
   postgresql = postgresql_11.override { this = postgresql; };
   postgresqlPackages = recurseIntoAttrs postgresql.pkgs;
@@ -17468,6 +17486,8 @@ in
 
   fwupd = callPackage ../os-specific/linux/firmware/fwupd { };
 
+  firmware-manager = callPackage ../os-specific/linux/firmware/firmware-manager { };
+
   fwts = callPackage ../os-specific/linux/fwts { };
 
   gobi_loader = callPackage ../os-specific/linux/gobi_loader { };
@@ -17906,11 +17926,12 @@ in
 
     nvidiaPackages = dontRecurseIntoAttrs (callPackage ../os-specific/linux/nvidia-x11 { });
 
-    nvidia_x11_legacy304 = nvidiaPackages.legacy_304;
-    nvidia_x11_legacy340 = nvidiaPackages.legacy_340;
-    nvidia_x11_legacy390 = nvidiaPackages.legacy_390;
-    nvidia_x11_beta      = nvidiaPackages.beta;
-    nvidia_x11           = nvidiaPackages.stable;
+    nvidia_x11_legacy304   = nvidiaPackages.legacy_304;
+    nvidia_x11_legacy340   = nvidiaPackages.legacy_340;
+    nvidia_x11_legacy390   = nvidiaPackages.legacy_390;
+    nvidia_x11_beta        = nvidiaPackages.beta;
+    nvidia_x11_vulkan_beta = nvidiaPackages.vulkan_beta;
+    nvidia_x11             = nvidiaPackages.stable;
 
     openrazer = callPackage ../os-specific/linux/openrazer/driver.nix { };
 
@@ -18275,6 +18296,8 @@ in
   numad = callPackage ../os-specific/linux/numad { };
 
   nvme-cli = callPackage ../os-specific/linux/nvme-cli { };
+
+  system76-firmware = callPackage ../os-specific/linux/firmware/system76-firmware { };
 
   open-vm-tools = callPackage ../applications/virtualization/open-vm-tools { };
   open-vm-tools-headless = open-vm-tools.override { withX = false; };
@@ -20778,7 +20801,10 @@ in
 
   freecad = libsForQt514.callPackage ../applications/graphics/freecad {
     mpi = openmpi;
-    # pyside2 5.12 is broken under python 3.8
+  };
+  freecadStable = libsForQt514.callPackage ../applications/graphics/freecad/stable.nix {
+    mpi = openmpi;
+    opencascade-occt = opencascade-occt730;
     python3Packages = python37Packages;
   };
 
@@ -20947,8 +20973,6 @@ in
   gnumeric = callPackage ../applications/office/gnumeric { };
 
   gnunet = callPackage ../applications/networking/p2p/gnunet { };
-
-  gnunet_git = lowPrio (callPackage ../applications/networking/p2p/gnunet/git.nix { });
 
   gnunet-gtk = callPackage ../applications/networking/p2p/gnunet/gtk.nix { };
 
@@ -21757,6 +21781,10 @@ in
 
   linuxband = callPackage ../applications/audio/linuxband { };
 
+  littlegptracker = callPackage ../applications/audio/littlegptracker {
+    inherit (darwin.apple_sdk.frameworks) Foundation;
+  };
+
   ledger = callPackage ../applications/office/ledger { };
 
   ledger-autosync = callPackage  ../applications/office/ledger-autosync { };
@@ -22211,6 +22239,8 @@ in
 
   ninjas2 = callPackage ../applications/audio/ninjas2 {};
 
+  nncp = callPackage ../tools/misc/nncp { };
+
   notion = callPackage ../applications/window-managers/notion { };
 
   nootka = qt5.callPackage ../applications/audio/nootka { };
@@ -22361,7 +22391,7 @@ in
 
   imapfilter = callPackage ../applications/networking/mailreaders/imapfilter.nix {
     lua = lua5;
- };
+  };
 
   maxlib = callPackage ../applications/audio/pd-plugins/maxlib { };
 
@@ -23433,9 +23463,7 @@ in
   # this can be changed to python3 once pyside2 is updated to support the latest python version
   syncplay = python37.pkgs.callPackage ../applications/networking/syncplay { };
 
-  inherit (callPackages ../applications/networking/syncthing {
-    buildGoModule = buildGo114Module;
-  })
+  inherit (callPackages ../applications/networking/syncthing { })
     syncthing
     syncthing-cli
     syncthing-discovery
@@ -23756,6 +23784,8 @@ in
 
   vcprompt = callPackage ../applications/version-management/vcprompt { };
 
+  vcs = callPackage ../applications/video/vcs { };
+
   vcv-rack = callPackage ../applications/audio/vcv-rack { };
 
   vdirsyncer = with python3Packages; toPythonApplication vdirsyncer;
@@ -23902,9 +23932,18 @@ in
 
   vkeybd = callPackage ../applications/audio/vkeybd {};
 
-  vlc = libsForQt514.vlc;
+  vlc = libsForQt514.callPackage ../applications/video/vlc {};
 
   vlc_qt5 = vlc;
+
+  libvlc = vlc.override {
+    withQt5 = false;
+    qtbase = null;
+    qtsvg = null;
+    qtx11extras = null;
+    wrapQtAppsHook = null;
+    onlyLibVLC = true;
+  };
 
   vmpk = callPackage ../applications/audio/vmpk { };
 
@@ -25064,6 +25103,12 @@ in
 
   kobodeluxe = callPackage ../games/kobodeluxe { };
 
+  koboredux = callPackage ../games/koboredux { };
+
+  koboredux-free = callPackage ../games/koboredux {
+    useProprietaryAssets = false;
+  };
+
   leela-zero = libsForQt5.callPackage ../games/leela-zero { };
 
   legendary-gl = python38Packages.callPackage ../games/legendary-gl { };
@@ -25957,6 +26002,8 @@ in
 
   manta = callPackage ../applications/science/biology/manta { };
 
+  obitools3 = callPackage ../applications/science/biology/obitools/obitools3.nix { };
+
   octopus-caller = callPackage ../applications/science/biology/octopus { };
 
   paml = callPackage ../applications/science/biology/paml { };
@@ -26274,6 +26321,7 @@ in
 
   cvc3 = callPackage ../applications/science/logic/cvc3 {
     gmp = lib.overrideDerivation gmp (a: { dontDisableStatic = true; });
+    stdenv = gccStdenv;
   };
   cvc4 = callPackage ../applications/science/logic/cvc4 {
     jdk = jdk8; # TODO: remove override https://github.com/NixOS/nixpkgs/pull/89731
