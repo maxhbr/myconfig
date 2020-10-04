@@ -14,12 +14,9 @@
       };
     };
     home-manager.users.mhuber = {
-      home.packages = with pkgs.gitAndTools; [
-        tig
-        pkgs.git-lfs
-        git-fame
-        git-gone
-      ];
+      home.packages = with pkgs;
+        [ github-cli ]
+        ++ (with pkgs.gitAndTools; [ tig pkgs.git-lfs git-fame git-gone ]);
       home.file = { ".gitconfig".source = ./gitconfig; };
       programs.git = {
         package = pkgs.gitAndTools.gitFull;
