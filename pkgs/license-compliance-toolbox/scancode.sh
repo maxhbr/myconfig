@@ -50,8 +50,8 @@ getOutFolder() {
 
 getNumberOfThreads() {
     cores=$(nproc)
-    if [[ "$cores" -ge 2 ]]; then
-        echo $((cores / 2))
+    if [[ "$cores" -ge 3 ]]; then
+        echo $((cores - 2))
     else
         echo 1
     fi
