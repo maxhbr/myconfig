@@ -31,6 +31,9 @@ let
 in {
   imports = [ ./user.myconfig.nix ];
   config = {
+    home-manager.users.mhuber = {
+      home.packages = with pkgs; [ unstable.nixfmt ];
+    };
     environment = {
       systemPackages = with pkgs; [
         upg-pull

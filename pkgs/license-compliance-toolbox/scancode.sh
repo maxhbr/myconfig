@@ -61,12 +61,13 @@ runScancode() {
     local workdir="$(readlink -f "$1")"
     [[ ! -d "$workdir" ]] && exit 1
     bn="$(basename "$workdir")"
+    out="$(getOutFolder "$workdir")"
     shift
     (set -x;
      docker run -i \
             --rm \
             -u $(id -u $USER):$(id -g $USER) \
-            -v "$workdir":/workdir -v "$(getOutFolder "$workdir")":/out \
+            -v "$workdir":/workdir -v "$out":/out \
             --net=host \
             $tag \
             /scancode-toolkit/scancode \
@@ -79,7 +80,8 @@ runScancode() {
             --strip-root \
             $@;
      times
-    )
+    ) 2>&1 | tee -a "$out/${bn}.scancode.log"
+    sed -i "s%/out/%./%" "$out/${bn}.scancode.html"
 }
 
 runExtractcode() {
@@ -99,7 +101,6 @@ runExtractcode() {
             $@;
      times
     )
-    sed -i "s%/out/%./%" "$workdir/"*.scancode.html
 }
 
 #################################################################################
