@@ -130,6 +130,13 @@ cptemp() {
   cp -r $f ./
   pwd
 }
+mvtemp() {
+  f=$(readlink -f $1)
+  cd $(mktemp -d)
+  mv $f ./
+  pwd
+}
+
 
 alias grep='grep --color=auto'
 alias fgrep='fgrep --color=auto'

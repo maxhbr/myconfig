@@ -4,7 +4,7 @@
     networking.firewall.allowedUDPPorts = [ 8123 ];
 
     users.users.hass = {
-      home = "/var/lib/config";
+      home = "/home/hass";
       createHome = true;
       group = "hass";
       extraGroups = [ "dialout" ];
@@ -17,7 +17,7 @@
         # args = ;
         # entrypoint = ;
         volumes = [
-          "/var/lib/config:/config"
+          "/home/hass:/config"
           "/etc/localtime:/etc/localtime:ro"
           # "/etc/timezone:/etc/timezone:ro"
         ];

@@ -6,6 +6,8 @@
     (lib.mkIf config.services.home-assistant.enable {
       services.home-assistant = {
         openFirewall = true;
+        configDir = "/var/lib/hass";
+        port = 8123;
         config = {
           homeassistant = {
             name = "Home";
