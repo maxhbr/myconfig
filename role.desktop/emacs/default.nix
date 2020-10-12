@@ -18,6 +18,20 @@ let
   doom-emacs-bin = pkgs.writeShellScriptBin "doom-emacs" ''
     exec "${doom-emacs}/bin/emacs" --with-profile empty "$@" &disown
   '';
+  xclipedit = pkgs.writeShellScriptBin "xclipedit" ''
+#!/usr/bin/env bash
+set -euo pipefail
+tempfile="$(mktemp)"
+trap "rm $tempfile" EXIT
+if [ -t 0 ]; then
+    xclip -out > "$tempfile"
+else
+    cat > "$tempfile"
+fi
+${doom-emacs}/bin/emacs "$tempfile"
+${pkgs.xclip}/bin/xclip < "$tempfile"
+  '';
+               
   # doom-emacsclient-bin = pkgs.writeShellScriptBin "doom-emacsclient" ''
   #   exec "${doom-emacs}/bin/emacsclient" "$@"
   # '';
@@ -76,6 +90,7 @@ in {
       home.packages = with pkgs; [
         my-emacs-wrapper
         doom-emacs-bin
+        xclipedit
 
         aspell
         aspellDicts.de
