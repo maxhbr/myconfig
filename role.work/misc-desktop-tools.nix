@@ -4,7 +4,7 @@
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [
-        # libreoffice
+        libreoffice
         nixos-unstable-small.zoom-us
         bluejeans-gui
         slack
