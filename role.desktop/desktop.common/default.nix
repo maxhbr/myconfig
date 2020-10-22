@@ -143,5 +143,6 @@ in {
       # add hp-printer with:
       # $ nix run nixpkgs.hplipWithPlugin -c sudo hp-setup
     };
+    programs.system-config-printer.enable = config.services.printing.enable;
   };
 }
