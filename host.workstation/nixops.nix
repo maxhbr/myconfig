@@ -2,10 +2,6 @@ with (import ../lib.nix);
 mkHostNixops "workstation" ({ lib, ... }: {
   config = {
     deployment.targetHost = lib.mkDefault "10.199.199.5";
-    services.wakeonlan.interfaces = [{
-      interface = "enp39s0";
-      method = "magicpacket";
-    }];
   };
   imports = [
     (fixIp "workstation" "enp39s0")
