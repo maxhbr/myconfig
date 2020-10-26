@@ -57,6 +57,7 @@
         #others:
         nfs-utils
         libnfs
+        borgbackup
       ];
     };
 

@@ -22,8 +22,8 @@ run() {
     handleChannel nixos-unstable || wasUpdated=1
     handleChannel nixos-unstable-small || wasUpdated=1
     handleChannel nixpkgs-unstable || wasUpdated=1
-    handleChannel nixos-20.03 || wasUpdated=1
     handleChannel nixos-20.03-small || wasUpdated=1
+    handleChannel nixos-20.09-small || wasUpdated=1
 
     return $wasUpdated
 }

@@ -23,10 +23,12 @@ let
         fallbackUrl = "http://nixos.org/channels/" + channel
           + "/nixexprs.tar.xz";
       in builtins.fetchTarball fallbackUrl;
-  mkPkgs = channel: mkPkgsFromPath (mkPkgsPath channel);
   mkPkgsFromPath = pkgsPath:
     import pkgsPath { config = config.nixpkgs.config; };
+  mkPkgs = channel: mkPkgsFromPath (mkPkgsPath channel);
   ustablePath = mkPkgsPath "nixpkgs-unstable";
+  nixos2003Path = mkPkgsPath "nixos-20.03-small";
+  nixos2009Path = mkPkgsPath "nixos-20.09-small";
 in {
   config = {
     nixpkgs.overlays = [
@@ -35,13 +37,15 @@ in {
         nixos-unstable = super.nixos-unstable or { } // mkPkgs "nixos-unstable";
         nixos-unstable-small = super.nixos-unstable-small or { }
           // mkPkgs "nixos-unstable-small";
-        nixos-2003 = super.unstable or { } // mkPkgs "nixos-20.03";
-        nixos-2003-small = super.unstable or { } // mkPkgs "nixos-20.03-small";
+        nixos-2003-small = super.unstable or { } // mkPkgsFromPath nixos2003Path;
+        nixos-2009-small = super.unstable or { } // mkPkgsFromPath nixos2009Path;
       })
     ];
     nix.nixPath = [
       ("nixpkgs=" + ../../../nixpkgs)
       ("nixpkgs-unstable=" + ustablePath)
+      ("nixos-20.03-small=" + nixos2003Path)
+      ("nixos-20.09-small=" + nixos2009Path)
       "nixos-config=/dev/null"
     ];
   };
