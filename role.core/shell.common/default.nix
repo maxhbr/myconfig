@@ -113,6 +113,7 @@
       shellAliases = {
         cat = ''${pkgs.bat}/bin/bat --theme="Monokai Extended Light"'';
         ps = "${pkgs.procs}/bin/procs";
+        startServer = "${pkgs.python3}/bin/python -m http.server 8000";
       };
     };
     programs.thefuck.enable = true;

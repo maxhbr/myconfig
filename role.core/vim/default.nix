@@ -3,7 +3,6 @@
 { pkgs, ... }: {
   config = {
     home-manager.users.mhuber = {
-      # home.packages = with pkgs; [ vim ];
       home.file = {
         ".vim" = {
           source = ./vim;
@@ -11,11 +10,12 @@
         };
         # ".vimrc".source = ./vimrc;
       };
+      # home.packages = with pkgs; [ vim ];
       programs.vim = {
         enable = true;
         extraConfig = builtins.readFile ./vimrc;
         settings = { number = true; };
-        plugins = [ ];
+        plugins = with pkgs.vimPlugins; [ ];
       };
     };
   };
