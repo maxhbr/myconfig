@@ -80,11 +80,19 @@ in {
     nixpkgs.overlays =
       [ (self: super: { helper = { inherit connectBtDevice; }; }) ];
 
-    environment.systemPackages = with pkgs; [
-      pavucontrol
-      pamix
-      mb660_switch_profile
-    ];
+    environment = {
+      shellAliases = {
+        pactl-monitor-on = "${pkgs.pulseaudio}/bin/pactl load-module module-loopback latency_msec=1";
+        pactl-monitor-off = "${pkgs.pulseaudio}/bin/pactl unload-module module-loopback";
+      };
+
+      systemPackages = with pkgs; [
+        pavucontrol
+        pamix
+        mb660_switch_profile
+        pulseeffects
+      ];
+    };
     nixpkgs.config.pulseaudio = true;
   };
 }

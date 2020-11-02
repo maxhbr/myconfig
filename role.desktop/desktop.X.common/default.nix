@@ -42,6 +42,7 @@ in {
         xlibs.xmodmap
         xlibs.xset
         xlibs.setxkbmap
+        xorg.xkill
         xorg.xmessage
         xclip
         xdotool
