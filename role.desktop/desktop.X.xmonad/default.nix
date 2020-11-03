@@ -71,6 +71,12 @@ in {
         '';
       };
     };
+    environment.variables = {
+      XSECURELOCK_BLANK_TIMEOUT = "-1";
+      XSECURELOCK_COMPOSITE_OBSCURER = "0";
+      # XSECURELOCK_NO_COMPOSITE = "1";
+    };
+
 
     # system.activationScripts.cleanupXmonadState = "rm $HOME/.xmonad/xmonad.state || true";
 

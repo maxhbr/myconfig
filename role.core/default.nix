@@ -7,6 +7,7 @@ in {
     ./gnupg.nix
     ./vim
     ./zsh
+    ./fish
     ./tmux
     ./git
     ./pass

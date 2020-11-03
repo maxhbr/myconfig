@@ -58,8 +58,8 @@ let
         # add myconfig to iso
         isoImage = {
           contents = [{
-            source = ./LICENSE;
-            target = "myconfig/LICENSE";
+             source = pkgs.nix-gitignore.gitignoreRecursiveSource [] ./.;
+            target = "myconfig";
           }];
           isoBaseName = "nixos-myconfig";
         };
