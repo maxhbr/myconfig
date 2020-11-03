@@ -33,6 +33,9 @@ in {
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [ unstable.nixfmt ];
+      programs.zsh.shellAliases = {
+        upg-get-hostId = ''cksum /etc/machine-id | while read c rest; do printf "%x" $c; done'';
+      };
     };
     environment = {
       systemPackages = with pkgs; [
@@ -45,10 +48,6 @@ in {
         (mk-upg-script "upg-vserver" "--fast --target vserver")
         nixos-2003-small.nixops
       ];
-      shellAliases = {
-        upg-get-hostId = ''
-          cksum /etc/machine-id | while read c rest; do printf "%x" $c; done'';
-      };
     };
     boot.binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];
   };

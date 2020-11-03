@@ -57,6 +57,9 @@ in {
         shellcheck
         ripgrep
       ];
+      programs.zsh.shellAliases = {
+        magit = ''${doom-emacs-bin-path} -e "(magit-status \"$(pwd)\")"'';
+      };
       home.file = {
         ".emacs" = {
           source = let
@@ -87,7 +90,6 @@ in {
         ec = "${doom-emacs-bin-path}";
         vim = "${doom-emacs-bin-path} -t";
         emacs = "${doom-emacs-bin-path}";
-        magit = ''${doom-emacs-bin-path} -e "(magit-status \"$(pwd)\")"'';
       };
     };
 

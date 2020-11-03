@@ -6,12 +6,12 @@ let stdenv = pkgs.stdenv;
 
 in stdenv.mkDerivation rec {
   name = "find-cursor-${version}";
-  version = "0.0.0";
+  version = "2020-05-28";
   src = pkgs.fetchFromGitHub {
     owner = "Carpetsmoker";
     repo = "find-cursor";
-    rev = "24962c42000e08b052e7423a526c684f837fd42c";
-    sha256 = "1sw33758wyzn607smkx8rd5dm16ffy20w736agrdxdiigach5wb5";
+    rev = "9ed9ec581ca152d33cbb85b0929ef879e690568b";
+    sha256 = "1ybwbamxl3mysack02bjh13qrcq57wnsjxwindgp6c724cbfpw3a";
   };
 
   nativeBuildInputs = [ pkgs.makeWrapper ]

@@ -16,17 +16,14 @@
         shellInit = "";
         loginShellInit = "";
         interactiveShellInit = "";
-        promptInit = "";
+        promptInit = ''
+set -l nix_shell_info (
+  if test -n "$IN_NIX_SHELL"
+    echo -n "<nix-shell> "
+  end
+)
+'';
         plugins = [
-          {
-            name = "z";
-            src = pkgs.fetchFromGitHub {
-              owner = "jethrokuan";
-              repo = "z";
-              rev = "ddeb28a7b6a1f0ec6dae40c636e5ca4908ad160a";
-              sha256 = "0c5i7sdrsp0q3vbziqzdyqn4fmp235ax4mn4zslrswvn8g3fvdyh";
-            };
-          }
           {
             name = "fasd";
             src = pkgs.fetchFromGitHub {
@@ -45,33 +42,23 @@
               sha256 = "00xqlyl3lffc5l0viin1nyp819wf81fncqyz87jx8ljjdhilmgbs";
             };
           }
+          {
+            name = "z";
+            src = pkgs.fetchFromGitHub {
+              owner = "jethrokuan";
+              repo = "z";
+              rev = "78861a85fc4da704cd7d669c1133355c89a4c667";
+              sha256 = "1ffjihdjbj3359hjhg2qw2gfx5h7rljlz811ma0a318nkdcg1asx";
+            };
+          }
         ];
       };
     };
     programs.fish = {
       enable = true;
     };
-    # systemd = {
-    #   timers.fish-history-backup-timer = {
-    #     wantedBy = [ "timers.target" ];
-    #     partOf = [ "fish-history-backup-timer.service" ];
-    #     timerConfig.OnCalendar = "hourly";
-    #   };
-    #   services.fish-history-backup-timer = {
-    #     serviceConfig.Type = "oneshot";
-    #     script = ''
-    #       historyfile=/home/mhuber/.local/share/fish/fish_history
-    #       backupdir="$historyfile"_backups
-    #       backup=$backupdir/$(date '+%Y-%V').fish_history.gz
-    #       if [[ ! -f $backup ]]; then
-    #         mkdir -p $backupdir
-    #         echo "Time: $(date)." >> $backupdir/fish-history-backup-timer.log
-    #         ${pkgs.gzip}/bin/gzip -k $historyfile
-    #         mv $historyfile.gz $backup
-    #         chown mhuber:mhuber $backup
-    #       fi
-    #     '';
-    #   };
-    # };
+    environment = {
+      shells = [ "${pkgs.fish}/bin/fish" "/run/current-system/sw/bin/fish" ];
+    };
   };
 }
