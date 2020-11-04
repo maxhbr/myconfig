@@ -1,10 +1,7 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { config, pkgs, lib, ... }:
-let
-  nixpkgsConfig = {
-    allowUnfree = true;
-  };
+let nixpkgsConfig = { allowUnfree = true; };
 in {
   config = {
     nixpkgs.config = nixpkgsConfig;

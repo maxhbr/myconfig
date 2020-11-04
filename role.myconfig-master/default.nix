@@ -34,7 +34,8 @@ in {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [ unstable.nixfmt ];
       programs.zsh.shellAliases = {
-        upg-get-hostId = ''cksum /etc/machine-id | while read c rest; do printf "%x" $c; done'';
+        upg-get-hostId = ''
+          cksum /etc/machine-id | while read c rest; do printf "%x" $c; done'';
       };
     };
     environment = {

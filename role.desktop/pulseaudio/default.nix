@@ -82,8 +82,10 @@ in {
 
     environment = {
       shellAliases = {
-        pactl-monitor-on = "${pkgs.pulseaudio}/bin/pactl load-module module-loopback latency_msec=1";
-        pactl-monitor-off = "${pkgs.pulseaudio}/bin/pactl unload-module module-loopback";
+        pactl-monitor-on =
+          "${pkgs.pulseaudio}/bin/pactl load-module module-loopback latency_msec=1";
+        pactl-monitor-off =
+          "${pkgs.pulseaudio}/bin/pactl unload-module module-loopback";
       };
 
       systemPackages = with pkgs; [

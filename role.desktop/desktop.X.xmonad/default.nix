@@ -42,7 +42,8 @@ in {
         excludes = [
           "window_type *= 'menu'"
           "class_g = 'firefox' && argb"
-          "name ~= 'Zoom Meeting'" "class_g = 'zoom'"
+          "name ~= 'Zoom Meeting'"
+          "class_g = 'zoom'"
           # "name ~= 'Firefox$'"
           # "focused = 1"
           # # "menu        = { shadow = false; };"
@@ -50,7 +51,7 @@ in {
           # "popup_menu    = { shadow = false; };"
           # "utility       = { shadow = false; };"
         ];
-        in {
+      in {
         enable = true;
         blur = true;
         blurExclude = excludes;
@@ -76,7 +77,6 @@ in {
       XSECURELOCK_COMPOSITE_OBSCURER = "0";
       # XSECURELOCK_NO_COMPOSITE = "1";
     };
-
 
     # system.activationScripts.cleanupXmonadState = "rm $HOME/.xmonad/xmonad.state || true";
 

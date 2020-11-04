@@ -20,19 +20,19 @@ let
   '';
   doom-emacs-bin-path = "${doom-emacs-bin}/bin/doom-emacs";
   xclipedit = pkgs.writeShellScriptBin "xclipedit" ''
-#!/usr/bin/env bash
-set -euo pipefail
-tempfile="$(mktemp)"
-trap "rm $tempfile" EXIT
-if [ -t 0 ]; then
-    xclip -out > "$tempfile"
-else
-    cat > "$tempfile"
-fi
-${doom-emacs}/bin/emacs "$tempfile"
-${pkgs.xclip}/bin/xclip < "$tempfile"
-  '';
-               
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tempfile="$(mktemp)"
+    trap "rm $tempfile" EXIT
+    if [ -t 0 ]; then
+        xclip -out > "$tempfile"
+    else
+        cat > "$tempfile"
+    fi
+    ${doom-emacs}/bin/emacs "$tempfile"
+    ${pkgs.xclip}/bin/xclip < "$tempfile"
+      '';
+
   # doom-emacsclient-bin = pkgs.writeShellScriptBin "doom-emacsclient" ''
   #   exec "${doom-emacs}/bin/emacsclient" "$@"
   # '';

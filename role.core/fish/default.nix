@@ -1,30 +1,29 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
-{
+{ pkgs, ... }: {
   imports = [ ../shell.common ];
   config = {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [ fasd ];
       programs.fish = {
         enable = true;
-        shellAliases = {};
-        shellAbbrs = {};
+        shellAliases = { };
+        shellAbbrs = { };
         functions = {
           gitignore = "curl -sL https://www.gitignore.io/api/$argv";
         };
         shellInit = "";
         loginShellInit = "";
         interactiveShellInit = ''
-set -U fish_greeting
-'';
+          set -U fish_greeting
+        '';
         promptInit = ''
-set -l nix_shell_info (
-  if test -n "$IN_NIX_SHELL"
-    echo -n "<nix-shell> "
-  end
-)
-'';
+          set -l nix_shell_info (
+            if test -n "$IN_NIX_SHELL"
+              echo -n "<nix-shell> "
+            end
+          )
+        '';
         plugins = [
           { # sashimi prompt from https://github.com/isacikgoz/sashimi
             name = "sashimi";
@@ -45,7 +44,7 @@ set -l nix_shell_info (
             };
           }
           {
-            name="foreign-env";
+            name = "foreign-env";
             src = pkgs.fetchFromGitHub {
               owner = "oh-my-fish";
               repo = "plugin-foreign-env";
@@ -54,7 +53,7 @@ set -l nix_shell_info (
             };
           }
           {
-            name="tmux";
+            name = "tmux";
             src = pkgs.fetchFromGitHub {
               owner = "oh-my-fish";
               repo = "plugin-tmux";
@@ -74,9 +73,7 @@ set -l nix_shell_info (
         ];
       };
     };
-    programs.fish = {
-      enable = true;
-    };
+    programs.fish = { enable = true; };
     environment = {
       shells = [ "${pkgs.fish}/bin/fish" "/run/current-system/sw/bin/fish" ];
     };

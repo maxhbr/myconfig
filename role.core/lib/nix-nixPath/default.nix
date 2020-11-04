@@ -37,8 +37,10 @@ in {
         nixos-unstable = super.nixos-unstable or { } // mkPkgs "nixos-unstable";
         nixos-unstable-small = super.nixos-unstable-small or { }
           // mkPkgs "nixos-unstable-small";
-        nixos-2003-small = super.unstable or { } // mkPkgsFromPath nixos2003Path;
-        nixos-2009-small = super.unstable or { } // mkPkgsFromPath nixos2009Path;
+        nixos-2003-small = super.unstable or { }
+          // mkPkgsFromPath nixos2003Path;
+        nixos-2009-small = super.unstable or { }
+          // mkPkgsFromPath nixos2009Path;
       })
     ];
     nix.nixPath = [

@@ -5,9 +5,7 @@
 # https://github.com/NixOS/nixpkgs/pull/17926/files
 {
   home-manager.users.mhuber = {
-    home.packages = with pkgs; [
-      gnome3.evolution
-    ];
+    home.packages = with pkgs; [ gnome3.evolution ];
   };
   services.gnome3.evolution-data-server.enable = true;
   programs.dconf.enable = true;

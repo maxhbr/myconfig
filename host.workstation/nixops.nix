@@ -1,8 +1,6 @@
 with (import ../lib.nix);
 mkHostNixops "workstation" ({ lib, ... }: {
-  config = {
-    deployment.targetHost = lib.mkDefault "10.199.199.5";
-  };
+  config = { deployment.targetHost = lib.mkDefault "10.199.199.5"; };
   imports = [
     (fixIp "workstation" "enp39s0")
     ../secrets/common/wifi.home.nix
