@@ -23,7 +23,7 @@
             ++ pkgs.lib.optional config.programs.sway.enable "sway";
           home = "/home/mhuber";
           createHome = true;
-          shell = "/run/current-system/sw/bin/zsh";
+          shell = "/run/current-system/sw/bin/fish";
           # the hashed password is overwritten in the deployment
           # default value is: "dummy"
           # can be generated with: mkpasswd -m sha-512
