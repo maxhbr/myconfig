@@ -176,7 +176,7 @@ scanAnalyzeResult() {
     cleanAnalyzeGeneratedDirs "$analyzeResultFolder"
 
     runOrt "$analyzeResultFolder" \
-           scan  --ort-file "$analyzeResultFile" --output-dir /out --download-dir /out/downloads --output-formats JSON,YAML 2>&1 |
+           scan --skip-excluded --ort-file "$analyzeResultFile" --output-dir /out --download-dir /out/downloads --output-formats JSON,YAML 2>&1 |
         tee -a "$logfile"
 
     cleanAnalyzeGeneratedDirs "$analyzeResultFolder"
