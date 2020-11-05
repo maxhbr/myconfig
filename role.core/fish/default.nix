@@ -148,14 +148,14 @@ set -g fish_key_bindings hybrid_bindings
               sha256 = "1ydx0gv4mdnik8d4ymyckz9zkmiikq4xi0h4agca3sng87skwmw8";
             };
           }
-          { name = "bax";
-            src = builtins.fetchGit { url = "https://github.com/jorgebucaran/bax.fish"; };
-          }
           { name = "done";
             src = builtins.fetchGit { url = "https://github.com/franciscolourenco/done"; };
           }
           { name = "fish-async-prompt";
             src = builtins.fetchGit { url = "https://github.com/acomagu/fish-async-prompt"; };
+          }
+          { name = "fish-ssh-agent";
+            src = builtins.fetchGit { url = "https://github.com/danhper/fish-ssh-agent"; };
           }
         ];
       };
