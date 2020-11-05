@@ -51,8 +51,6 @@ grepf() {
     rm $FIFO
 }
 
-alias ta="task"
-
 alias uncolor='sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g"'
 adddate() { # see http://serverfault.com/questions/310098/how-to-add-a-timestamp-to-bash-script-log
     while IFS= read -r line; do
@@ -68,12 +66,6 @@ alias rm='rm -I'
 alias cp='cp -i'
 
 alias mv='mv -vi'
-# mkmv - creates a new directory and moves the file into it, in 1 step
-# Usage: mkmv <file> <directory>
-mkmv() {
-  mkdir "$2"
-  mv "$1" "$2"
-}
 
 alias ls='ls --color=auto'
 alias ll='ls -alF'
@@ -355,6 +347,10 @@ sxiv() {
   command sxiv "$@" &disown
 }
 
+meld() {
+  command meld "$@" &disown
+}
+
 #-------------------------------------------------------------------}}}
 #   package management
 #-------------------------------------------------------------------{{{
@@ -371,9 +367,6 @@ have nix-env && {
     fi
   }
   alias nixse="nix search"
-  alias nixlist="nix-env -qa \*"
-
-  alias nixrem="nix-env --uninstall"
 
   alias why-depends-nixos="nix why-depends /run/current-system"
   why-builds() {
@@ -447,10 +440,6 @@ mountExfat() {
       -o gid=$(id -g) \
       -t exfat \
       "$src" "$target"
-}
-
-meld() {
-  command meld "$@" &disown
 }
 
 #}}}
