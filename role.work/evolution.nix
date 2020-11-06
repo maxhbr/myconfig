@@ -9,4 +9,5 @@
   };
   services.gnome3.evolution-data-server.enable = true;
   programs.dconf.enable = true;
+  programs.seahorse.enable = true;
 }

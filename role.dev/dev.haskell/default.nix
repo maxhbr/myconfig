@@ -4,8 +4,8 @@
   imports = [ ../dev.core ];
   config = {
     home-manager.users.mhuber = {
-      home.packages = with pkgs;
-        [ stack cabal-install cabal2nix ] ++ (with pkgs.haskellPackages; [
+      home.packages = with pkgs.unstable;
+        [ stack cabal-install cabal2nix ] ++ (with haskellPackages; [
           # cabal-install
           ghc
           hlint

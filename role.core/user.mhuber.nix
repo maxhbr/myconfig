@@ -1,13 +1,15 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, ... }: {
+{ config, pkgs, lib, ... }: let
+  name = "mhuber";
+in {
   config = {
     users = {
       mutableUsers = false;
       extraUsers = {
-        mhuber = {
+        "${name}" = {
           isNormalUser = true;
-          group = "mhuber";
+          group = "${name}";
           uid = 1000;
           extraGroups =
             [ "myconfig" "wheel" "keys" "audio" "video" "dialout" "input" ]
@@ -21,7 +23,7 @@
             "networkmanager"
             ++ pkgs.lib.optional config.hardware.bumblebee.enable "bumblebee"
             ++ pkgs.lib.optional config.programs.sway.enable "sway";
-          home = "/home/mhuber";
+          home = "/home/${name}";
           createHome = true;
           shell = "/run/current-system/sw/bin/fish";
           # the hashed password is overwritten in the deployment
@@ -35,12 +37,16 @@
         };
         root = {
           openssh.authorizedKeys.keys =
-            config.users.extraUsers.mhuber.openssh.authorizedKeys.keys;
+            config.users.extraUsers."${name}".openssh.authorizedKeys.keys;
         };
       };
-      extraGroups.mhuber.gid = 1000;
+      extraGroups."${name}".gid = 1000;
     };
-    systemd.tmpfiles.rules = [ "d /home/mhuber/tmp 1777 mhuber mhuber 10d" ];
+    home-manager.users."${name}" = {
+      programs.alacritty.settings.shell.program = lib.mkForce config.users.extraUsers."${name}".shell;
+    };
+
+    systemd.tmpfiles.rules = [ "d /home/${name}/tmp 1777 ${name} ${name} 10d" ];
 
     time.timeZone = "Europe/Berlin";
 

@@ -12,6 +12,7 @@ let
                 (>&2 echo "[$counter] $file")
             else
                 (>&2 echo "$(${ncurses}/bin/tput bold)$(${ncurses}/bin/tput setaf 1)[$counter] $file$(${ncurses}/bin/tput sgr0)")
+                sleep $(( $counter / 3 ))
             fi
             local result=$(scanoss-scanner "$file")
 

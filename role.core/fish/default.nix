@@ -80,6 +80,10 @@ set linesInTerminal (${pkgs.ncurses}/bin/tput lines)
   mv $f ./
   pwd
 '';
+          ff = "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -iname '*'$argv'*' -ls 2>/dev/null";
+          ffd = "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type d -iname '*'$argv'*' -ls 2>/dev/null";
+          ffa = "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -iname '*'$argv'*' -ls 2>/dev/null";
+          ffg = "find . -type f -print0 | xargs -0 grep -lI $argv";
         };
         shellInit = "";
         loginShellInit = "";
@@ -168,6 +172,9 @@ set -g fish_key_bindings hybrid_bindings
             sha256 = "04968zdxby1ggsafv8gf1qnzz56p8y4xd25xd2rhbkpnbyghbh83";
           };
         in src + "/fish_prompt.fish";
+        ".config/fish/functions/bax.fish".source = let
+            src = builtins.fetchGit { url = "https://github.com/jorgebucaran/bax.fish"; };
+          in src + "/bax.fish";
       };
     };
   };
