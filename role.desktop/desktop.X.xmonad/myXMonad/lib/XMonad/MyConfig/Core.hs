@@ -86,7 +86,6 @@ myKeys conf =
 
     basicKBs =
       [ ((ms_            , xK_Return), spawn $ XMonad.terminal conf)
-      , ((msc, xK_Return), spawn (terminalServerCMD ++ " &"))
 #if 1
       , ((m4m, xK_Return), windows W.swapMaster)
 #else

@@ -66,7 +66,7 @@ set linesInTerminal (${pkgs.ncurses}/bin/tput lines)
 '';
             onVariable = "PWD";
           };
-          whichf = "readlink -f (which $@)";
+          whichf = "readlink -f (which $argv)";
           cdtemp = "cd (mktemp -d); pwd";
           cptemp = ''
   set f (readlink -f $1)

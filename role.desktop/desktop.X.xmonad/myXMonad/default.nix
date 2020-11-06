@@ -23,6 +23,7 @@ in mkDerivation {
         && builtins.match ".sh$" basename == null)) ./.;
   isLibrary = true;
   isExecutable = true;
+  buildDepends = [ pkgs.makeWrapper ];
   libraryHaskellDepends = [ base containers process X11 xmonad xmonad-contrib ];
   executableHaskellDepends = [ base containers X11 xmonad xmonad-contrib ];
 
@@ -42,26 +43,27 @@ in mkDerivation {
       sed -i -e '/'"$key"' *=/ s%= .*%= "'"$value"'";%' $variablesFile
     }
 
-    addAbsoluteBinaryPath urxvtc ${pkgs.rxvt_unicode-with-plugins}
-    addAbsoluteBinaryPath urxvtd ${pkgs.rxvt_unicode-with-plugins}
-    addAbsoluteBinaryPath dmenu_path ${pkgs.dmenu}
-    addAbsoluteBinaryPath yeganesh ${pkgs.haskellPackages.yeganesh}
-    addAbsoluteBinaryPath passmenu ${pkgs.pass}
-    addAbsoluteBinaryPath find-cursor ${find-cursor}
-    addAbsoluteBinaryPath xdotool ${pkgs.xdotool}
-    addAbsoluteBinaryPath synclient ${pkgs.xorg.xf86inputsynaptics}
-    addAbsoluteBinaryPath xrandr-invert-colors ${pkgs.xrandr-invert-colors}
-    addAbsoluteBinaryPath autorandr ${pkgs.autorandr}
-    addAbsoluteBinaryPath feh ${pkgs.feh}
-    addAbsoluteBinaryPath unclutter ${pkgs.unclutter}
-    addAbsoluteBinaryPath htop ${pkgs.htop}
-    addAbsoluteBinaryPath pavucontrol ${pkgs.pavucontrol}
-    addAbsoluteBinaryPath light ${pkgs.light}
-    addAbsoluteBinaryPath mute_telco ${my-mute-telco}
-
     replaceConfigValue xmobarCMD "${my-xmobar}/bin/xmobarXmonad"
     replaceConfigValue pathToXmonadBins "${my-xmonad-scripts}/"
     replaceConfigValue pathToXmonadShare "${my-xmonad-share}/"
+  '';
+
+  postInstall = ''
+    wrapProgram "$out/bin/xmonad" \
+      --prefix PATH ":" "${pkgs.dmenu}/bin" \
+      --prefix PATH ":" "${pkgs.haskellPackages.yeganesh}/bin" \
+      --prefix PATH ":" "${pkgs.pass}/bin" \
+      --prefix PATH ":" "${find-cursor}/bin" \
+      --prefix PATH ":" "${pkgs.xdotool}/bin" \
+      --prefix PATH ":" "${pkgs.xorg.xf86inputsynaptics}/bin" \
+      --prefix PATH ":" "${pkgs.xrandr-invert-colors}/bin" \
+      --prefix PATH ":" "${pkgs.autorandr}/bin" \
+      --prefix PATH ":" "${pkgs.feh}/bin" \
+      --prefix PATH ":" "${pkgs.unclutter}/bin" \
+      --prefix PATH ":" "${pkgs.htop}/bin" \
+      --prefix PATH ":" "${pkgs.pavucontrol}/bin" \
+      --prefix PATH ":" "${pkgs.light}/bin" \
+      --prefix PATH ":" "${my-mute-telco}/bin"
   '';
 
   description = "my xmonad configuration";

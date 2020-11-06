@@ -26,7 +26,7 @@ applyMyScratchpads c = let
     scratchpads =
       let
         mkTermCmd :: String -> String -> String
-        mkTermCmd name cmd = "SHLVL=0 " ++ terminal c ++ " -name " ++ name ++ " -e " ++ cmd
+        mkTermCmd name cmd = "SHLVL=0 " ++ terminal c ++ " -n " ++ name ++ " -e " ++ cmd
         mkEmacsCmd :: String -> String -> String
         mkEmacsCmd name "" = emacsCMD ++ " -name " ++ name
         mkEmacsCmd name cmd = emacsCMD ++ " -name " ++ name ++ " -e \"" ++ cmd ++ "\""
