@@ -42,10 +42,6 @@ in {
       };
       extraGroups."${name}".gid = 1000;
     };
-    home-manager.users."${name}" = {
-      programs.alacritty.settings.shell.program =
-        lib.mkForce config.users.extraUsers."${name}".shell;
-    };
 
     systemd.tmpfiles.rules = [ "d /home/${name}/tmp 1777 ${name} ${name} 10d" ];
 

@@ -9,8 +9,8 @@
     ../hardware/x1extremeG2.nix
     ../hardware/efi.nix
     ../hardware/footswitch.nix
-    ./backup-hdd.nix
-    ./foto-hdd.nix
+    # ./backup-hdd.nix
+    # ./foto-hdd.nix
     # modules
     ../role.work
     ./mail
