@@ -1,7 +1,7 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, ... }: let
-  name = "mhuber";
+{ config, pkgs, lib, ... }:
+let name = "mhuber";
 in {
   config = {
     users = {
@@ -43,7 +43,8 @@ in {
       extraGroups."${name}".gid = 1000;
     };
     home-manager.users."${name}" = {
-      programs.alacritty.settings.shell.program = lib.mkForce config.users.extraUsers."${name}".shell;
+      programs.alacritty.settings.shell.program =
+        lib.mkForce config.users.extraUsers."${name}".shell;
     };
 
     systemd.tmpfiles.rules = [ "d /home/${name}/tmp 1777 ${name} ${name} 10d" ];

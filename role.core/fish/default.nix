@@ -1,40 +1,40 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, ... }: {
-  imports = [ ../shell.common
-              { # nix related config
-                home-manager.users.mhuber = {
-                  programs.fish = {
-                    shellAbbrs = {
-                      nixse = "nix search";
-                      why-depends-nixos = "nix why-depends /run/current-system";
-                      nixTest = "NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' --run fish -p";
-                    };
-                    functions = {
-                      # nixRun = ''
-                      # if [ "$#" -eq "2" ]; then
-                      #   NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' -p "$1" --command "$2"
-                      # else
-                      #   NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' -p "$1" --command "$1"
-                      # fi
-                      # '';
-                    };
-                  };
-                };
-              }
-              { # for git
-                home-manager.users.mhuber = {
-                  programs.fish = {
-                    shellAbbrs = {
-                      g = "git";
-                    };
-                    functions = {
-                      gitignore = "curl -sL https://www.gitignore.io/api/$argv";
-                    };
-                  };
-                };
-              }
-            ];
+  imports = [
+    ../shell.common
+    { # nix related config
+      home-manager.users.mhuber = {
+        programs.fish = {
+          shellAbbrs = {
+            nixse = "nix search";
+            why-depends-nixos = "nix why-depends /run/current-system";
+            nixTest =
+              "NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' --run fish -p";
+          };
+          functions = {
+            # nixRun = ''
+            # if [ "$#" -eq "2" ]; then
+            #   NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' -p "$1" --command "$2"
+            # else
+            #   NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' -p "$1" --command "$1"
+            # fi
+            # '';
+          };
+        };
+      };
+    }
+    { # for git
+      home-manager.users.mhuber = {
+        programs.fish = {
+          shellAbbrs = { g = "git"; };
+          functions = {
+            gitignore = "curl -sL https://www.gitignore.io/api/$argv";
+          };
+        };
+      };
+    }
+  ];
   config = {
     programs.fish = { enable = true; };
     environment = {
@@ -57,48 +57,51 @@
           };
           __list_dir_handler = {
             body = ''
-# echo content after cd / z / or any pwd change
-set linesInLs (ls -1GF | ${pkgs.coreutils}/bin/wc -l)
-set linesInTerminal (${pkgs.ncurses}/bin/tput lines)
-  if [  -lt  ]; then
-    ls -GF
-  fi
-'';
+              # echo content after cd / z / or any pwd change
+              set linesInLs (ls -1GF | ${pkgs.coreutils}/bin/wc -l)
+              set linesInTerminal (${pkgs.ncurses}/bin/tput lines)
+                if [  -lt  ]; then
+                  ls -GF
+                fi
+            '';
             onVariable = "PWD";
           };
           whichf = "readlink -f (which $argv)";
           cdtemp = "cd (mktemp -d); pwd";
           cptemp = ''
-  set f (readlink -f $1)
-  cd (mktemp -d)
-  cp -r $f ./
-  pwd
-'';
+            set f (readlink -f $1)
+            cd (mktemp -d)
+            cp -r $f ./
+            pwd
+          '';
           mvtemp = ''
-  set f (readlink -f $1)
-  cd (mktemp -d)
-  mv $f ./
-  pwd
-'';
-          ff = "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -iname '*'$argv'*' -ls 2>/dev/null";
-          ffd = "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type d -iname '*'$argv'*' -ls 2>/dev/null";
-          ffa = "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -iname '*'$argv'*' -ls 2>/dev/null";
+            set f (readlink -f $1)
+            cd (mktemp -d)
+            mv $f ./
+            pwd
+          '';
+          ff =
+            "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -iname '*'$argv'*' -ls 2>/dev/null";
+          ffd =
+            "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type d -iname '*'$argv'*' -ls 2>/dev/null";
+          ffa =
+            "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -iname '*'$argv'*' -ls 2>/dev/null";
           ffg = "find . -type f -print0 | xargs -0 grep -lI $argv";
         };
         shellInit = "";
         loginShellInit = "";
         interactiveShellInit = ''
-set -U fish_greeting
+          set -U fish_greeting
 
-# see: https://fishshell.com/docs/current/#command-line-editor
-function hybrid_bindings --description "Vi-style bindings that inherit emacs-style bindings in all modes"
-    for mode in default insert visual
-        fish_default_key_bindings -M $mode
-    end
-    fish_vi_key_bindings --no-erase
-end
-set -g fish_key_bindings hybrid_bindings
-        '';
+          # see: https://fishshell.com/docs/current/#command-line-editor
+          function hybrid_bindings --description "Vi-style bindings that inherit emacs-style bindings in all modes"
+              for mode in default insert visual
+                  fish_default_key_bindings -M $mode
+              end
+              fish_vi_key_bindings --no-erase
+          end
+          set -g fish_key_bindings hybrid_bindings
+                  '';
         promptInit = ''
           set -l nix_shell_info (
             if test -n "$IN_NIX_SHELL"
@@ -152,14 +155,23 @@ set -g fish_key_bindings hybrid_bindings
               sha256 = "1ydx0gv4mdnik8d4ymyckz9zkmiikq4xi0h4agca3sng87skwmw8";
             };
           }
-          { name = "done";
-            src = builtins.fetchGit { url = "https://github.com/franciscolourenco/done"; };
+          {
+            name = "done";
+            src = builtins.fetchGit {
+              url = "https://github.com/franciscolourenco/done";
+            };
           }
-          { name = "fish-async-prompt";
-            src = builtins.fetchGit { url = "https://github.com/acomagu/fish-async-prompt"; };
+          {
+            name = "fish-async-prompt";
+            src = builtins.fetchGit {
+              url = "https://github.com/acomagu/fish-async-prompt";
+            };
           }
-          { name = "fish-ssh-agent";
-            src = builtins.fetchGit { url = "https://github.com/danhper/fish-ssh-agent"; };
+          {
+            name = "fish-ssh-agent";
+            src = builtins.fetchGit {
+              url = "https://github.com/danhper/fish-ssh-agent";
+            };
           }
         ];
       };
@@ -173,8 +185,10 @@ set -g fish_key_bindings hybrid_bindings
           };
         in src + "/fish_prompt.fish";
         ".config/fish/functions/bax.fish".source = let
-            src = builtins.fetchGit { url = "https://github.com/jorgebucaran/bax.fish"; };
-          in src + "/bax.fish";
+          src = builtins.fetchGit {
+            url = "https://github.com/jorgebucaran/bax.fish";
+          };
+        in src + "/bax.fish";
       };
     };
   };

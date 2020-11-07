@@ -85,10 +85,10 @@ in {
       };
     };
     environment = {
-      variables = { EDITOR = "${doom-emacs-bin-path} -t"; };
+      variables = { EDITOR = "${doom-emacs-bin-path} -nw"; };
       shellAliases = {
         ec = "${doom-emacs-bin-path}";
-        vim = "${doom-emacs-bin-path} -t";
+        vim = "${doom-emacs-bin-path} -nw";
         emacs = "${doom-emacs-bin-path}";
       };
     };
