@@ -96,8 +96,9 @@ unsigned int tabspaces = 8;
 /*
  * Solarized light
  * from: https://st.suckless.org/patches/solarized/st-solarized-light-20190306-ed68fe7.diff
-*/
+ */
 
+#if 0
 static const char *colorname[] = {
 	/* solarized light */
 	"#eee8d5",  /*  0: black    */
@@ -118,6 +119,48 @@ static const char *colorname[] = {
 	"#002b36",  /* 15: brwhite  */
 };
 
+unsigned int defaultfg = 12;
+unsigned int defaultbg = 8;
+static unsigned int defaultcs = 14;
+static unsigned int defaultrcs = 15;
+#else
+/*
+ * colors from urxvt
+ */
+
+static const char *colorname[] = {
+    "#000000", // "urxvt*color0"
+    "#E45649", // "urxvt*color1"
+    "#50A14F", // "urxvt*color2"
+    "#986801", // "urxvt*color3"
+    "#4078F2", // "urxvt*color4"
+    "#A626A4", // "urxvt*color5"
+    "#0184BC", // "urxvt*color6"
+    "#A0A1A7", // "urxvt*color7"
+    "#5c6370", // "urxvt*color8"
+    "#e06c75", // "urxvt*color9"
+    "#50A14F", // "urxvt*color10"
+    "#986801", // "urxvt*color11"
+    "#4078F2", // "urxvt*color12"
+    "#A626A4", // "urxvt*color13"
+    "#0184BC", // "urxvt*color14"
+    "#ffffff", // "urxvt*color15"
+
+	[255] = 0,
+ 	/* more colors can be added after 255 to use with DefaultXX */
+	"#f9f9f9", // "urxvt*background"
+	"#383a42", // "urxvt*foreground"
+	"#f9f9f9", // "urxvt*background"
+	"#383a42", // "urxvt*foreground"
+	"#d0d0d0", // "urxvt*cursorColor"
+};
+
+unsigned int defaultbg = 256;
+unsigned int defaultfg = 257;
+static unsigned int defaultrcs = 258;
+static unsigned int defaultcs = 259;
+#endif
+
 static const char *altcolorname[] = {
 	/* solarized dark */
 	"#073642",  /*  0: black    */
@@ -136,12 +179,14 @@ static const char *altcolorname[] = {
 	"#6c71c4",  /* 13: brmagenta*/
 	"#93a1a1",  /* 14: brcyan   */
 	"#fdf6e3",  /* 15: brwhite  */
-};
 
-unsigned int defaultfg = 12;
-unsigned int defaultbg = 8;
-static unsigned int defaultcs = 14;
-static unsigned int defaultrcs = 15;
+	[255] = 0,
+ 	/* more colors can be added after 255 to use with DefaultXX */
+	"#002b36",  /*  8: brblack  */
+	"#839496",  /* 12: brblue   */
+	"#fdf6e3",  /* 15: brwhite  */
+	"#93a1a1",  /* 14: brcyan   */
+};
 
 /*
  * Default shape of cursor
