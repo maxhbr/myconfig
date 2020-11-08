@@ -57,7 +57,7 @@ in {
   imports = [
     ./my-wallpapers
     ./fonts.nix
-    ../urxvt.nix
+    # ../urxvt.nix
     ../st
     # ../termite.nix
   ];

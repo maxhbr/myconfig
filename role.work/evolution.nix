@@ -8,6 +8,7 @@
     home.packages = with pkgs; [ gnome3.evolution ];
   };
   services.gnome3.evolution-data-server.enable = true;
+  services.gnome3.gnome-keyring.enable = true;
   programs.dconf.enable = true;
   programs.seahorse.enable = true;
 }

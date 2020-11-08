@@ -61,26 +61,25 @@
       }];
     };
 
-    environment.systemPackages = with pkgs.helper; [
-      (connectBtDevice {
-        name = "mb660";
-        id = "00:16:94:42:53:10";
-      })
-      (connectBtDevice {
-        name = "5200";
-        id = "E4:22:A5:3E:F4:3D";
-      })
-      (connectBtDevice {
-        name = "klim";
-        id = "1E:A8:2C:18:00:3D";
-      })
-      (connectBtDevice {
-        name = "wm25";
-        id = "03:A1:00:01:7B:13";
-      })
-    ];
-
     home-manager.users.mhuber = {
+      home.packages = with pkgs.helper; [
+        (connectBtDevice {
+          name = "mb660";
+          id = "00:16:94:42:53:10";
+        })
+        (connectBtDevice {
+          name = "5200";
+          id = "E4:22:A5:3E:F4:3D";
+        })
+        (connectBtDevice {
+          name = "klim";
+          id = "1E:A8:2C:18:00:3D";
+        })
+        (connectBtDevice {
+          name = "wm25";
+          id = "03:A1:00:01:7B:13";
+        })
+      ];
       home.file = {
         ".config/autorandr/" = {
           source = ./autorandr;

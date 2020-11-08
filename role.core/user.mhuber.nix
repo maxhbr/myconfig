@@ -42,6 +42,16 @@ in {
       };
       extraGroups."${name}".gid = 1000;
     };
+    home-manager.users."${name}" = {
+      programs.alacritty.settings.shell.program =
+        lib.mkForce config.users.extraUsers."${name}".shell;
+    };
+
+    environment.etc."current-home-manager-mhuber-packages".text = let
+      packages = builtins.map (p: "${p.name}") config.home-manager.users."${name}".home.packages;
+      sortedUnique = builtins.sort builtins.lessThan (lib.unique packages);
+      formatted = builtins.concatStringsSep "\n" sortedUnique;
+    in formatted;
 
     systemd.tmpfiles.rules = [ "d /home/${name}/tmp 1777 ${name} ${name} 10d" ];
 
