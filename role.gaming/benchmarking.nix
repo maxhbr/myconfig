@@ -1,5 +1,6 @@
-{ pkgs, ... }:
+{ pkgs, config, ... }:
 let
+  user = config.myconfig.user;
   mybench = with pkgs;
     writeShellScriptBin "mybench" ''
       benchDir="$HOME/Desktop/mybench/$(hostname)"
@@ -10,7 +11,7 @@ let
     '';
 in {
   config = {
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs; [ mybench glmark2 ];
     };
   };

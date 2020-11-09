@@ -1,12 +1,13 @@
-{ pkgs, lib, ... }:
-let nativeOnly = false;
+{ pkgs, config, lib, ... }:
+let user = config.myconfig.user;
+    nativeOnly = false;
 in {
   imports = [
     ./steamcontroller.nix
     (lib.mkIf nativeOnly { nixpkgs.config.allowBroken = true; })
   ];
   config = {
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = [
         (pkgs.unstable.steam.override {
           extraPkgs = innerPkgs:

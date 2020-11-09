@@ -1,7 +1,8 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
+{ pkgs, config, ... }:
 let
+  user = config.myconfig.user;
   winePkgs = with pkgs.unstable; [ wine winetricks playonlinux ];
   wowWinePkgs = let
     wineCfg = {
@@ -25,7 +26,7 @@ in {
       "p7zip-16.02" # in winetricks
     ];
 
-    home-manager.users.mhuber = { home.packages = wowWinePkgs; };
+    home-manager.users."${user}" = { home.packages = wowWinePkgs; };
     hardware.opengl.driSupport32Bit = true;
   };
 }
