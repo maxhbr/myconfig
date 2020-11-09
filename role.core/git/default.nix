@@ -1,9 +1,11 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, ... }:
-
+#
 # TODO: package scripts
-{
+#
+{ config, pkgs, ... }: let
+  user = config.myconfig.user;
+in {
   config = {
     environment = {
       shellAliases = {
@@ -13,7 +15,7 @@
         tu = "tig HEAD @{upstream}";
       };
     };
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs;
         [ github-cli ] ++ (with pkgs.gitAndTools; [
           tig

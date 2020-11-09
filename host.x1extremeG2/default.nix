@@ -12,7 +12,7 @@
     # ./backup-hdd.nix
     # ./foto-hdd.nix
     # modules
-    ../role.work
+    ./role.work
     ./mail
     ## fun
     ../role.imagework

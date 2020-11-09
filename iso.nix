@@ -5,8 +5,9 @@ let
   nixpkgs = ./nixpkgs;
   evalNixos = configuration:
     import "${nixpkgs}/nixos" { inherit system configuration; };
-  myisoconfig = { lib, pkgs, ... }:
+  myisoconfig = { lib, pkgs, config, ... }:
     let
+      user = config.myconfig.user;
       bootstrap = pkgs.writeShellScriptBin "bootstrap" ''
         if [[ "$(hostname)" != "myconfig" ]]; then
             echo "hostname missmatch"
@@ -46,7 +47,7 @@ let
 
         services.xserver.displayManager.autoLogin = {
           enable = true;
-          user = "mhuber";
+          user = "${user}";
         };
 
         # OpenSSH is forced to have an empty `wantedBy` on the installer system[1], this won't allow it

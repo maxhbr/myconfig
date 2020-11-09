@@ -1,9 +1,11 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }: {
+{ pkgs, config, ... }: let
+  user = config.myconfig.user;
+in {
   imports = [ ../role.desktop ./wacom.nix ./exfat.nix ];
   config = {
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs; [
         gphoto2
         gphoto2fs

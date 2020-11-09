@@ -1,6 +1,6 @@
-{ config, lib, pkgs, ... }:
-
-{
+{ config, lib, pkgs, ... }: let
+  user = config.myconfig.user;
+in {
   imports = [
     (
       # NixOS module for running deCONZ ZigBee gateway as a service.
@@ -148,7 +148,7 @@
         home = {
           subvolume = "/home";
           extraConfig = ''
-            ALLOW_USERS="mhuber"
+            ALLOW_USERS="${user}"
           '';
         };
       };

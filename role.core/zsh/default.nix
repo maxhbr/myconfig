@@ -1,13 +1,14 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
+{ pkgs, config, ... }:
 let
+  user = config.myconfig.user;
   jsonFile = ./. + "/chisui-zsh-nix-shell.json";
   json = builtins.fromJSON (builtins.readFile jsonFile);
 in {
   imports = [ ../shell.common ];
   config = {
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs; [ oh-my-zsh ];
       home.file = {
         ".zshrc".source = ./zshrc;
@@ -41,7 +42,7 @@ in {
       services.zsh-history-backup-timer = {
         serviceConfig.Type = "oneshot";
         script = ''
-          historyfile=/home/mhuber/.zsh_history
+          historyfile=/home/${user}/.zsh_history
           backupdir="$historyfile"_backups
           backup=$backupdir/$(date '+%Y-%V').zsh_history.gz
           if [[ ! -f $backup ]]; then
@@ -49,7 +50,7 @@ in {
             echo "Time: $(date)." >> $backupdir/zsh-history-backup-timer.log
             ${pkgs.gzip}/bin/gzip -k $historyfile
             mv $historyfile.gz $backup
-            chown mhuber:mhuber $backup
+            chown ${user}:${user} $backup
           fi
         '';
       };

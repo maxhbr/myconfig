@@ -1,8 +1,8 @@
 # Copyright 2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
-
+{ pkgs, config, ... }:
 let
+  user = config.myconfig.user;
   jsonFile = ./. + "/home-manager.json";
   json = builtins.fromJSON (builtins.readFile jsonFile);
   home-manager = builtins.fetchGit {
@@ -13,14 +13,14 @@ in {
   imports = [ "${home-manager}/nixos" ];
   config = {
     system.activationScripts.genProfileManagementDirs =
-      "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/mhuber";
+      "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${user}";
     systemd.services.mk-hm-dirs = {
       serviceConfig.Type = "oneshot";
       script = ''
-        mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/mhuber
-        chown mhuber /nix/var/nix/{profiles,gcroots}/per-user/mhuber
+        mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${user}
+        chown ${user} /nix/var/nix/{profiles,gcroots}/per-user/${user}
       '';
-      wantedBy = [ "home-manager-mhuber.service" ];
+      wantedBy = [ "home-manager-${user}.service" ];
     };
   };
 }

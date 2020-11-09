@@ -1,4 +1,6 @@
-{ config, pkgs, lib, ... }: {
+{ config, pkgs, lib, ... }:
+let user = config.myconfig.user;
+in {
   config = {
     boot = {
       # kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
@@ -7,12 +9,13 @@
     };
 
     environment.etc."current-system-packages".text = let
-      packages = builtins.map (p: "${p.name}") config.environment.systemPackages;
+      packages =
+        builtins.map (p: "${p.name}") config.environment.systemPackages;
       sortedUnique = builtins.sort builtins.lessThan (lib.unique packages);
       formatted = builtins.concatStringsSep "\n" sortedUnique;
     in formatted;
 
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs; [ taskwarrior mosh sshfs ];
       home.file = {
         ".ssh/config".text = ''
@@ -30,7 +33,7 @@
         '';
         ".ssh/imports/wireguard.config".text = ''
           Host 10.199.199.*
-              User mhuber
+              User ${user}
         '';
       };
     };

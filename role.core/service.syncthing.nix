@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
 let
+  user = config.myconfig.user;
   syncthingTunnel = with pkgs;
     pkgs.writeShellScriptBin "syncthingTunnel" ''
       set -x
@@ -18,12 +19,12 @@ in {
         overrideDevices = true;
         overrideFolders = true;
       };
-      user = "mhuber";
-      group = "mhuber";
-      dataDir = "/home/mhuber/syncthing";
-      configDir = "/home/mhuber/syncthing/.config/syncthing";
+      user = "${user}";
+      group = "${user}";
+      dataDir = "/home/${user}/syncthing";
+      configDir = "/home/${user}/syncthing/.config/syncthing";
       openDefaultPorts = true;
     };
-    home-manager.users.mhuber = { home.packages = [ syncthingTunnel ]; };
+    home-manager.users."${user}" = { home.packages = [ syncthingTunnel ]; };
   };
 }

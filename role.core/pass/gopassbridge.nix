@@ -5,6 +5,7 @@
 
 { config, pkgs, lib, ... }:
 let
+  user = config.myconfig.user;
   gopassWrapper = with pkgs;
     writeShellScriptBin "gopass_wrapper.sh" ''
       if [ -f ~/.gpg-agent-info ] && [ -n "$(${procps}/bin/pgrep gpg-agent)" ]; then
@@ -19,7 +20,7 @@ let
     '';
 in {
   config = lib.mkIf config.services.xserver.enable {
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.file = {
         ".mozilla/native-messaging-hosts/com.justwatch.gopass.json" = {
           text = ''

@@ -55,6 +55,7 @@ stdenv.mkDerivation rec {
     wrapProgram $out/starsector.sh \
       --prefix PATH : ${openjdk8}/bin \
       --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath buildInputs} \
+      --set XDG_DATA_HOME "/home/mhuber/.local/share" \
       --run "mkdir -p \$XDG_DATA_HOME/starsector; cd $out"
     ln -s $out/starsector.sh $out/bin/starsector
   '';

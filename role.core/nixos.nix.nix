@@ -1,11 +1,12 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { config, pkgs, lib, ... }:
-let nixpkgsConfig = { allowUnfree = true; };
+let user = config.myconfig.user;
+    nixpkgsConfig = { allowUnfree = true; };
 in {
   config = {
     nixpkgs.config = nixpkgsConfig;
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       nixpkgs.config = nixpkgsConfig;
       home.file = {
         ".config/nixpkgs/config.nix" = {
@@ -29,8 +30,8 @@ in {
       autoOptimiseStore = true;
       optimise.automatic = true;
 
-      allowedUsers = [ "@wheel" "@builders" "mhuber" ];
-      trustedUsers = [ "root" "@wheel" "@builders" "mhuber" ];
+      allowedUsers = [ "@wheel" "@builders" "${user}" ];
+      trustedUsers = [ "root" "@wheel" "@builders" "${user}" ];
 
       trustedBinaryCaches = [
         "https://cache.nixos.org"

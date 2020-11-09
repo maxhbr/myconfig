@@ -5,6 +5,7 @@
 
 { config, pkgs, lib, ... }:
 let
+  user = config.myconfig.user;
   dic = with pkgs;
     writeScriptBin "dic" ''
       #!${stdenv.shell}
@@ -47,4 +48,6 @@ let
           dicImpl $@
       fi
         '';
-in { config = { home-manager.users.mhuber = { home.packages = [ dic ]; }; }; }
+in {
+  config = { home-manager.users."${user}" = { home.packages = [ dic ]; }; };
+}

@@ -1,8 +1,20 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { config, pkgs, lib, ... }:
-let name = "mhuber";
+let
+  cfg = config.myconfig;
+  name = cfg.user;
 in {
+  options.myconfig = with lib; {
+    user = mkOption {
+      type = types.str;
+      default = "mhuber";
+      example = "mhuber";
+      description = ''
+        The username of the main user
+      '';
+    };
+  };
   config = {
     users = {
       mutableUsers = false;
@@ -45,10 +57,12 @@ in {
     home-manager.users."${name}" = {
       programs.alacritty.settings.shell.program =
         lib.mkForce config.users.extraUsers."${name}".shell;
+      xdg.enable = true;
     };
 
     environment.etc."current-home-manager-mhuber-packages".text = let
-      packages = builtins.map (p: "${p.name}") config.home-manager.users."${name}".home.packages;
+      packages = builtins.map (p: "${p.name}")
+        config.home-manager.users."${name}".home.packages;
       sortedUnique = builtins.sort builtins.lessThan (lib.unique packages);
       formatted = builtins.concatStringsSep "\n" sortedUnique;
     in formatted;

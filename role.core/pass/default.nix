@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 { config, pkgs, ... }:
 let
+  user = config.myconfig.user;
   wireguardKeypairToPassStore = with pkgs;
     writeScriptBin "wireguardKeypairToPassStore.sh"
     (lib.fileContents ./wireguardKeypairToPassStore.sh);
@@ -28,7 +29,7 @@ in {
             };
         })
     ];
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs; [
         pass
         pass-git-helper

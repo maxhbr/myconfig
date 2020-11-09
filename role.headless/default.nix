@@ -1,6 +1,8 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }: {
+{ pkgs, config, ... }: let
+  user = config.myconfig.user;
+in {
   imports = [
     ../role.core
     # configuration
@@ -9,7 +11,7 @@
   ];
 
   config = {
-    home-manager.users.mhuber = { home.packages = with pkgs; [ vnstat ]; };
+    home-manager.users."${user}" = { home.packages = with pkgs; [ vnstat ]; };
     system.autoUpgrade.allowReboot = true;
     services.vnstat.enable = true;
   };

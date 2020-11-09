@@ -1,10 +1,12 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }: {
+{ pkgs, config, ... }:
+let user = config.myconfig.user;
+in {
   imports = [
     ../shell.common
     { # nix related config
-      home-manager.users.mhuber = {
+      home-manager.users."${user}" = {
         programs.fish = {
           shellAbbrs = {
             nixse = "nix search";
@@ -25,7 +27,7 @@
       };
     }
     { # for git
-      home-manager.users.mhuber = {
+      home-manager.users."${user}" = {
         programs.fish = {
           shellAbbrs = { g = "git"; };
           functions = {
@@ -40,7 +42,7 @@
     environment = {
       shells = [ "${pkgs.fish}/bin/fish" "/run/current-system/sw/bin/fish" ];
     };
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs; [ fasd fzf ];
       programs.fish = {
         enable = true;

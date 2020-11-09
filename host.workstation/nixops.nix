@@ -1,5 +1,7 @@
 with (import ../lib.nix);
-mkHostNixops "workstation" ({ lib, ... }: {
+mkHostNixops "workstation" ({ lib, config, ... }: let
+  user = config.myconfig.user;
+in {
   config = { deployment.targetHost = lib.mkDefault "10.199.199.5"; };
   imports = [
     (fixIp "workstation" "enp39s0")
@@ -18,7 +20,7 @@ mkHostNixops "workstation" ({ lib, ... }: {
     (setupSyncthing "workstation" ((mkSyncthingDevice "x1extremeG2" true)
       // (mkSyncthingDevice "nas" false) // (mkSyncthingDevice "vserver" false)
       // (import ../secrets/common/syncthing.SM-G960F.nix)) {
-        "/home/mhuber/Sync" = {
+        "/home/${user}/Sync" = {
           id = "sync";
           devices = [ "x1extremeG2" ];
           type = "sendreceive";
