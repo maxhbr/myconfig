@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, ... }:
 let
+  user = config.myconfig.user;
   my-mute-telco = pkgs.callPackage ./myMuteTelco { inherit pkgs; };
   my-xmobar = pkgs.callPackage ./myXmobar { inherit pkgs my-mute-telco; };
   my-xmonad = pkgs.haskellPackages.callPackage ./myXMonad {
@@ -15,7 +16,7 @@ in {
   imports = [ ../desktop.X.common ];
 
   config = {
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs; [
         my-xmonad
         my-xmobar
@@ -33,7 +34,7 @@ in {
           onChange = ''
             if [[ -v DISPLAY ]] ; then
               echo "Restarting xmonad"
-              $DRY_RUN_CMD ${config.home-manager.users.mhuber.xsession.windowManager.command} --restart
+              $DRY_RUN_CMD ${config.home-manager.users."${user}".xsession.windowManager.command} --restart
             fi
           '';
         };

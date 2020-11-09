@@ -1,7 +1,8 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
+{ pkgs, config, ... }:
 let
+  user = config.myconfig.user;
   resetXrandr = with pkgs;
     writeShellScriptBin "resetXrandr" ''
       sleep 1
@@ -73,7 +74,7 @@ let
 
 in {
   config = {
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs; [
         xrandrUnpan
         autorandr

@@ -1,8 +1,10 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }: {
+{ pkgs, config, ... }: let
+  user = config.myconfig.user;
+in {
   config = {
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       xsession.pointerCursor = {
         package = pkgs.vanilla-dmz;
         size = 128;

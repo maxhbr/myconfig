@@ -1,6 +1,8 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }: {
+{ pkgs, config, lib, ... }: let
+  user = config.myconfig.user;
+in {
   imports = [
     ./hardware-configuration.nix
     ../role.dev
@@ -61,7 +63,7 @@
       }];
     };
 
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs.helper; [
         (connectBtDevice {
           name = "mb660";

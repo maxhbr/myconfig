@@ -1,10 +1,13 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }: {
+{ pkgs, config, ... }:
+let
+  user = config.myconfig.user;
+in {
   imports = [ ../desktop.common ];
 
   config = {
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.file = { ".config/sway/config".source = ./config/sway/config; };
       home.packages = with pkgs; [
         grim # for screenshots

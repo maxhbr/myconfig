@@ -1,7 +1,8 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
+{ pkgs, config, ... }:
 let
+  user = config.myconfig.user;
   mailclient-sh =
     pkgs.writeScriptBin "mailclient.sh" (builtins.readFile ./bin/mailclient.sh);
   mailrun-sh =
@@ -11,7 +12,7 @@ let
 in {
   imports = [ ../mail.common ];
   config = {
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs; [
         neomutt
         urlview

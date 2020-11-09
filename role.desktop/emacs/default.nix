@@ -1,7 +1,8 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
+{ pkgs, config, ... }:
 let
+  user = config.myconfig.user;
   jsonFile = ./. + "/nix-doom-emacs.json";
   json = builtins.fromJSON (builtins.readFile jsonFile);
   doom-emacs = pkgs.unstable.callPackage (builtins.fetchGit {
@@ -32,10 +33,6 @@ let
     ${doom-emacs}/bin/emacs "$tempfile"
     ${pkgs.xclip}/bin/xclip < "$tempfile"
       '';
-
-  # doom-emacsclient-bin = pkgs.writeShellScriptBin "doom-emacsclient" ''
-  #   exec "${doom-emacs}/bin/emacsclient" "$@"
-  # '';
 in {
   imports = [ ./spacemacs.nix ];
   config = {
@@ -46,7 +43,7 @@ in {
     ];
 
     environment = { systemPackages = with pkgs; [ doom-emacs ]; };
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs; [
         doom-emacs-bin
         xclipedit
@@ -97,7 +94,7 @@ in {
     #   description = "Emacs: the extensible, self-documenting text editor";
     #   serviceConfig = {
     #     Type      = "forking";
-    #     ExecStart = "${pkgs.emacs}/bin/emacs --daemon --user=mhuber";
+    #     ExecStart = "${pkgs.emacs}/bin/emacs --daemon --user=${user}";
     #     ExecStop  = "${pkgs.emacs}/bin/emacsclient --eval \"(kill-emacs)\"";
     #     Restart   = "always";
     #   };

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, lib, config, ... }:
 let
+  user = config.myconfig.user;
   inco = with pkgs;
     writeShellScriptBin "inco.sh" ''
       set -e
@@ -62,7 +63,7 @@ in {
     # ../termite.nix
   ];
   config = {
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs;
         [
           # misc

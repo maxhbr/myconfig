@@ -1,7 +1,8 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
+{ pkgs, config, ... }:
 let
+  user = config.myconfig.user;
   myStopScreensaver = with pkgs;
     writeScriptBin "myStopScreensaver" ''
       #!${stdenv.shell}
@@ -36,7 +37,7 @@ in {
   imports = [ ../desktop.common ./big-cursor.nix ./autorandr.nix ];
 
   config = {
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs; [
         arandr
         xlibs.xmodmap
@@ -101,7 +102,7 @@ in {
       cron = {
         enable = true;
         systemCronJobs = [
-          "*/10 * * * *  mhuber ${pkgs.my-wallpapers}/bin/myRandomBackground >> /tmp/cronout 2>&1"
+          "*/10 * * * *  ${user} ${pkgs.my-wallpapers}/bin/myRandomBackground >> /tmp/cronout 2>&1"
         ];
       };
 

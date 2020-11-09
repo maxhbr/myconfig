@@ -1,7 +1,8 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
+{ pkgs, config, ... }:
 let
+  user = config.myconfig.user;
   jsonFile = ./. + "/maxhbr-wallpapers.json";
   json = builtins.fromJSON (builtins.readFile jsonFile);
   my-wallpapers-source =
@@ -13,7 +14,7 @@ in {
         my-wallpapers = super.callPackage my-wallpapers-source { };
       })
     ];
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs; [ my-wallpapers my-wallpapers-source ];
     };
   };

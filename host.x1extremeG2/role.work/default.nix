@@ -1,6 +1,8 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, ... }: {
+{ config, pkgs, lib, ... }: let
+  user = config.myconfig.user;
+in {
   imports =
     [ ../../role.dev ./jdk.nix ./misc-desktop-tools.nix ./evolution.nix ];
   config = {
@@ -10,7 +12,7 @@
       ./thrift012.nix
       ./thrift93.nix
     ];
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs; [
         openvpn
         networkmanager_openvpn

@@ -1,10 +1,11 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
-let urxvt = pkgs.rxvt_unicode-with-plugins;
+{ pkgs, config, ... }:
+let user = config.myconfig.user;
+    urxvt = pkgs.rxvt_unicode-with-plugins;
 in {
   config = {
-    home-manager.users.mhuber = {
+    home-manager.users."${user}" = {
       home.packages = with pkgs; [ urxvt rxvt_unicode.terminfo ];
       xresources.properties = {
         "URxvt*saveLines" = "12000";
