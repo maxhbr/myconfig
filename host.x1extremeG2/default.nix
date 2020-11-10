@@ -19,7 +19,8 @@ in {
     ## fun
     ../role.imagework
     ../role.gaming/games.steam
-    ../role.gaming/games.starsector.nix
+    # ../role.gaming/games.powder.nix
+    # ../role.gaming/games.starsector.nix
     ../role.desktop/desktop.X.obs.nix
     ./smarthome.nix
   ] ++ (with (import ../lib.nix); [
