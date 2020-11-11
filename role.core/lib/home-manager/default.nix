@@ -12,6 +12,9 @@ let
 in {
   imports = [ "${home-manager}/nixos" ];
   config = {
+    home-manager.users."${user}" = {
+      nixpkgs.overlays = config.nixpkgs.overlays;
+    };
     system.activationScripts.genProfileManagementDirs =
       "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${user}";
     systemd.services.mk-hm-dirs = {

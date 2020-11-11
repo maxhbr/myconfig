@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, ... }:
 let
-  user = config.myconfig.user;
   mkPkgsPath = channel:
     let
       jsonFile = ./. + channel + ".json";
@@ -44,9 +43,6 @@ in {
           // mkPkgsFromPath nixos2009Path;
       })
     ];
-    home-manager.users."${user}" = {
-      nixpkgs.overlays = config.nixpkgs.overlays;
-    };
     nix.nixPath = [
       ("nixpkgs=" + ../../../nixpkgs)
       ("nixpkgs-unstable=" + ustablePath)
