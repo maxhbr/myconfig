@@ -5,7 +5,6 @@ in {
     ../role.desktop
     ./games.wine
     ./games.doom3.nix
-    ./games.lutris.nix
     ./games.ktane.nix
     ./games.starsector.nix
     ./games.openrct2.nix
@@ -14,6 +13,9 @@ in {
   ];
   config = {
     home-manager.users."${user}" = {
+      imports = [
+        ./games.lutris.nix
+      ];
       home.packages = with pkgs;
         [
           openra
