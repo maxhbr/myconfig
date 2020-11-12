@@ -34,7 +34,9 @@ in {
           onChange = ''
             if [[ -v DISPLAY ]] ; then
               echo "Restarting xmonad"
-              $DRY_RUN_CMD ${config.home-manager.users."${user}".xsession.windowManager.command} --restart
+              $DRY_RUN_CMD ${
+                config.home-manager.users."${user}".xsession.windowManager.command
+              } --restart
             fi
           '';
         };

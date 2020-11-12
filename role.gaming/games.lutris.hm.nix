@@ -1,2 +1,1 @@
-{ pkgs, ... }:
-{ home.packages = with pkgs.unstable; [ lutris ]; }
+{ pkgs, ... }: { home.packages = with pkgs.unstable; [ lutris ]; }

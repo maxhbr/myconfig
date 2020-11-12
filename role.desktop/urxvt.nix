@@ -1,8 +1,9 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, ... }:
-let user = config.myconfig.user;
-    urxvt = pkgs.rxvt_unicode-with-plugins;
+let
+  user = config.myconfig.user;
+  urxvt = pkgs.rxvt_unicode-with-plugins;
 in {
   config = {
     home-manager.users."${user}" = {

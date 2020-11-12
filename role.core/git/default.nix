@@ -3,8 +3,8 @@
 #
 # TODO: package scripts
 #
-{ config, pkgs, ... }: let
-  user = config.myconfig.user;
+{ config, pkgs, ... }:
+let user = config.myconfig.user;
 in {
   config = {
     environment = {

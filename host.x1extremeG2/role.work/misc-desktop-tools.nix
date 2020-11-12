@@ -1,7 +1,7 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, ... }: let
-  user = config.myconfig.user;
+{ config, pkgs, lib, ... }:
+let user = config.myconfig.user;
 in {
   config = {
     home-manager.users."${user}" = {

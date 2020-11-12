@@ -1,5 +1,5 @@
-{ config, lib, pkgs, ... }: let
-  user = config.myconfig.user;
+{ config, lib, pkgs, ... }:
+let user = config.myconfig.user;
 in {
   imports = [
     (

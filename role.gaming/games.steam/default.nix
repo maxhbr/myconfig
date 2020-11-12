@@ -1,6 +1,7 @@
 { pkgs, config, lib, ... }:
-let user = config.myconfig.user;
-    nativeOnly = false;
+let
+  user = config.myconfig.user;
+  nativeOnly = false;
 in {
   imports = [
     ./steamcontroller.nix
@@ -61,8 +62,7 @@ in {
     # for sharing / viewing via steam
     networking.firewall = {
       # https://support.steampowered.com/kb_article.php?ref=8571-GLVN-8711&l=german
-      allowedUDPPorts = [ 27031 27032 27033 27034 27035 27036
-                          3478 4379 4380];
+      allowedUDPPorts = [ 27031 27032 27033 27034 27035 27036 3478 4379 4380 ];
       allowedTCPPorts = [ 27036 27037 ];
     };
   };

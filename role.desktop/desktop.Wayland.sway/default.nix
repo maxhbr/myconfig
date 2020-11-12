@@ -1,8 +1,7 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, ... }:
-let
-  user = config.myconfig.user;
+let user = config.myconfig.user;
 in {
   imports = [ ../desktop.common ];
 

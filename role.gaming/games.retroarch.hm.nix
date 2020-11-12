@@ -1,2 +1,1 @@
-{ pkgs, ... }:
-{ home.packages = with pkgs; [ retroarchBare ]; }
+{ pkgs, ... }: { home.packages = with pkgs; [ retroarchBare ]; }

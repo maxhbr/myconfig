@@ -1,7 +1,7 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, ... }: let
-  user = config.myconfig.user;
+{ pkgs, config, ... }:
+let user = config.myconfig.user;
 in {
   imports = [ ../tmux ];
   config = {
