@@ -91,6 +91,40 @@ in {
           ffa =
             "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -iname '*'$argv'*' -ls 2>/dev/null";
           ffg = "find . -type f -print0 | xargs -0 grep -lI $argv";
+          ex = ''
+  for file in $args; do
+    if [ -f $file ] ; then
+      set opt ( tr '[:upper:]' '[:lower:]' <<<"$file" )
+      case $opt in
+        *.tar.bz2) tar xjf $file ;;
+        *.tar.gz) tar xzf $file ;;
+        *.tar.xz) tar xvfJ $file ;;
+        *.xz) xz -d $file ;;
+        *.tar.lzma) tar --lzma -xvf $file ;;
+        *.bz2) bunzip2 $file ;;
+        *.rar) unrar e $file ;;
+        *.gz) gunzip $file ;;
+        *.tar) tar xf $file ;;
+        *.tbz2) tar xjf $file ;;
+        *.tgz) tar xzf $file ;;
+        *.zip) unzip $file ;;
+        *.Z) uncompress $file ;;
+        *.7z) 7z x $file ;;
+        # *.jar) jar xf $file ;;
+        *.jar) unzip $file ;;
+        *.war) unzip $file ;;
+        *.ear) unzip $file ;;
+        *.deb) ar xv $file ;;
+        *)
+          echo "'$file' of type '$opt' cannot be extracted via ex(), more info:"
+          file $file
+          ;;
+      esac
+    else
+      echo "'$file' is not a valid file"
+    fi
+  done
+'';
         };
         shellInit = "";
         loginShellInit = "";

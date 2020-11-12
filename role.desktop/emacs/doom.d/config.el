@@ -68,13 +68,4 @@
   (after! ido
     (load! "./keybindings.el")))
 
-;; mu4e
-(after! mu4e
-  (let ((mu4e-config "~/Maildir/config/mu4e-config.el"))
-    (when (file-exists-p mu4e-config)
-      (load! mu4e-config)
-      (setq
-           ;mu4e-installation-path "/run/current-system/sw/share/emacs/site-lisp"
-           mu4e-use-maildirs-extension t
-           mu4e-enable-notifications t
-           mu4e-enable-mode-line t))))
+(mapc 'load (file-expand-wildcards "~/.doom.d/imports/*.el"))

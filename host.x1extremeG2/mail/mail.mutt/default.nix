@@ -10,7 +10,6 @@ let
   mutt-bgrun =
     pkgs.writeScriptBin "mutt_bgrun" (builtins.readFile ./bin/mutt_bgrun);
 in {
-  imports = [ ../mail.common ];
   config = {
     home-manager.users."${user}" = {
       home.packages = with pkgs; [

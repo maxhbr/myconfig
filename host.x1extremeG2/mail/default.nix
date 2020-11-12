@@ -1,1 +1,37 @@
-{ ... }: { imports = [ ./mail.mu4e ./mail.mutt ]; }
+{ pkgs, config, ... }: let
+  user = config.myconfig.user;
+in {
+  imports = [ ./mail.mu4e ./mail.mutt ];
+  config = {
+    home-manager.users."${user}" = {
+      home.packages = with pkgs; [
+        offlineimap isync
+        abook
+        urlview
+        notmuch
+        sxiv
+        unstable.astroid
+        (writeShellScriptBin "runMbsync" ''
+MAILDIR="$HOME/Maildir"
+if [[ -f "$MAILDIR/config/mbsyncrc" ]]; then
+  mkdir -p "$MAILDIR/mail" "$MAILDIR/tng"
+  ${isync}/bin/mbsync -c "$MAILDIR/config/mbsyncrc" -a
+fi
+'')
+      ];
+      # home.file = {
+      #   "Maildir/scripts/" = {
+      #     source = ./scripts;
+      #     recursive = true;
+      #   };
+      # };
+    };
+    environment = {
+      systemPackages = with pkgs; [ gnupg msmtp procmail ];
+    };
+    # services.offlineimap = {
+    #   enable = false;
+    #   path = with pkgs; [ notmuch ];
+    # };
+  };
+}

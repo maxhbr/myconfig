@@ -78,6 +78,10 @@ in {
            ("empty" . ((user-emacs-directory . "~/.emacs.d")))
            )
         '';
+        ".doom.d/imports" = {
+          source = ./imports;
+          recursive = true;
+        };
         ".emacs-profile".text = "doom";
       };
     };
