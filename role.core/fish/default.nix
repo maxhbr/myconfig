@@ -231,10 +231,6 @@ in {
         ];
       };
       home.file = {
-        ".config/fish/functions" = {
-          source = ./functions;
-          recursive = true;
-        };
         ".config/fish/functions/fish_prompt.fish".source = let
           src = pkgs.fetchFromGitHub {
             owner = "isacikgoz";
