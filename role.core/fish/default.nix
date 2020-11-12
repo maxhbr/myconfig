@@ -43,6 +43,7 @@ in {
       shells = [ "${pkgs.fish}/bin/fish" "/run/current-system/sw/bin/fish" ];
     };
     home-manager.users."${user}" = {
+      imports = [ ./ex.hm.nix ];
       home.packages = with pkgs; [ fasd fzf ];
       programs.fish = {
         enable = true;
@@ -92,38 +93,54 @@ in {
             "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -iname '*'$argv'*' -ls 2>/dev/null";
           ffg = "find . -type f -print0 | xargs -0 grep -lI $argv";
           ex = ''
-  for file in $args; do
-    if [ -f $file ] ; then
-      set opt ( tr '[:upper:]' '[:lower:]' <<<"$file" )
-      case $opt in
-        *.tar.bz2) tar xjf $file ;;
-        *.tar.gz) tar xzf $file ;;
-        *.tar.xz) tar xvfJ $file ;;
-        *.xz) xz -d $file ;;
-        *.tar.lzma) tar --lzma -xvf $file ;;
-        *.bz2) bunzip2 $file ;;
-        *.rar) unrar e $file ;;
-        *.gz) gunzip $file ;;
-        *.tar) tar xf $file ;;
-        *.tbz2) tar xjf $file ;;
-        *.tgz) tar xzf $file ;;
-        *.zip) unzip $file ;;
-        *.Z) uncompress $file ;;
-        *.7z) 7z x $file ;;
-        # *.jar) jar xf $file ;;
-        *.jar) unzip $file ;;
-        *.war) unzip $file ;;
-        *.ear) unzip $file ;;
-        *.deb) ar xv $file ;;
-        *)
-          echo "'$file' of type '$opt' cannot be extracted via ex(), more info:"
-          file $file
-          ;;
-      esac
-    else
-      echo "'$file' is not a valid file"
-    fi
-  done
+  for file in $argv
+        if test -f $file
+            set opt ( echo "$file" | tr '[:upper:]' '[:lower:]' )
+            switch $opt
+                case '*.tar.bz2'
+                    tar xjf $file
+                case '*.tar.gz'
+                    tar xzf $file
+                case '*.tar.xz'
+                    tar xvfJ $file
+                case '*.xz'
+                    ${pkgs.xz}/bin/xz -d $file
+                case '*.tar.lzma'
+                    tar --lzma -xvf $file
+                case '*.bz2'
+                    ${pkgs.bzip2}/bin/bunzip2 $file
+                case '*.rar'
+                    ${pkgs.unrar}/bin/unrar e $file
+                case '*.gz'
+                    ${pkgs.gzip}/bin/gunzip $file
+                case '*.tar'
+                    tar xf $file
+                case '*.tbz2'
+                    tar xjf $file
+                case '*.tgz'
+                    tar xzf $file
+                case '*.zip'
+                    ${pkgs.unzip}/bin/unzip $file
+                case '*.Z'
+                    uncompress $file
+                case '*.7z'
+                    ${pkgs.p7zip}/bin/7z x $file
+                case '*.jar'
+                    ${pkgs.unzip}/bin/unzip $file
+                case '*.war'
+                    ${pkgs.unzip}/bin/unzip $file
+                case '*.ear'
+                    ${pkgs.unzip}/bin/unzip $file
+                case '*.deb'
+                    ${pkgs.binutils}/bin/ar xv $file
+                case '*'
+                    echo "'$file' of type '$opt' cannot be extracted via ex(), more info:"
+                    file $file
+            end
+        else
+            echo "'$file' is not a valid file"
+        end
+    end
 '';
         };
         shellInit = "";
@@ -214,6 +231,10 @@ in {
         ];
       };
       home.file = {
+        ".config/fish/functions" = {
+          source = ./functions;
+          recursive = true;
+        };
         ".config/fish/functions/fish_prompt.fish".source = let
           src = pkgs.fetchFromGitHub {
             owner = "isacikgoz";

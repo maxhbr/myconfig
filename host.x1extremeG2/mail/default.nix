@@ -19,12 +19,6 @@ if [[ -f "$MAILDIR/config/mbsyncrc" ]]; then
 fi
 '')
       ];
-      # home.file = {
-      #   "Maildir/scripts/" = {
-      #     source = ./scripts;
-      #     recursive = true;
-      #   };
-      # };
     };
     environment = {
       systemPackages = with pkgs; [ gnupg msmtp procmail ];
