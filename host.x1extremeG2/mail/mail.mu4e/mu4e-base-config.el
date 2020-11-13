@@ -45,7 +45,7 @@
   (add-to-list 'mu4e-view-actions
                '("retag message" . mu4e-action-retag-message) t)
 
-      ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Marks
   ;; See: https://www.djcbsoftware.nl/code/mu/mu4e/Adding-a-new-kind-of-mark.html
   (add-to-list 'mu4e-marks
@@ -69,4 +69,17 @@
   (mu4e~headers-defun-mark-for archive)
   (define-key mu4e-headers-mode-map (kbd "g") 'mu4e-headers-mark-for-tag)
   (define-key mu4e-headers-mode-map (kbd "A") 'mu4e-headers-mark-for-archive)
+
+
+  ;; https://github.com/jeremy-compostella/org-msg
+  (after! org-msg
+    (setq mail-user-agent 'mu4e-user-agent)
+    (setq org-msg-options "html-postamble:nil H:5 num:nil ^:{} toc:nil author:nil email:nil \\n:t"
+          org-msg-startup "hidestars indent inlineimages"
+          org-msg-greeting-fmt "\nHi *%s*,\n\n"
+          org-msg-greeting-name-limit 3
+          org-msg-default-alternatives '(html text)
+          )
+    (org-msg-mode)
+    )
   )
