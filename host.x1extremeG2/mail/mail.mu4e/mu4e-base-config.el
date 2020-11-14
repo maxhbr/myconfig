@@ -81,5 +81,19 @@
           org-msg-default-alternatives '(html text)
           )
     (org-msg-mode)
+
+    ;; https://kitchingroup.cheme.cmu.edu/blog/2016/10/29/Sending-html-emails-from-org-mode-with-org-mime/
+    (defun mu4e-compose-org-mail ()
+      (interactive)
+      (mu4e-compose-new)
+      (org-mu4e-compose-org-mode))
+    (defun htmlize-and-send ()
+      "When in an org-mu4e-compose-org-mode message, htmlize and send it."
+      (interactive)
+      (when (member 'org~mu4e-mime-switch-headers-or-body post-command-hook)
+        (org-mime-htmlize)
+        (message-send-and-exit)))
+
+    (add-hook 'org-ctrl-c-ctrl-c-hook 'htmlize-and-send t)
     )
   )
