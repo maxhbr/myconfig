@@ -23,6 +23,3 @@ templates:
 nix:
   enable: true
   packages: [zlib.dev, zlib.out, libffi]
-
-ghc-options:
-  "*": -j
