@@ -16,10 +16,7 @@ let
       (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
     '';
   };
-  doom-emacs-bin = pkgs.writeShellScriptBin "doom-emacs" ''
-    exec "${doom-emacs}/bin/emacs" --with-profile empty "$@" &disown
-  '';
-  doom-emacs-bin-path = "${doom-emacs-bin}/bin/doom-emacs";
+  doom-emacs-bin-path = "${doom-emacs}/bin/emacs";
   xclipedit = pkgs.writeShellScriptBin "xclipedit" ''
     #!/usr/bin/env bash
     set -euo pipefail
@@ -30,7 +27,7 @@ let
     else
         cat > "$tempfile"
     fi
-    ${doom-emacs}/bin/emacs "$tempfile"
+    ${doom-emacs-bin-path} "$tempfile"
     ${pkgs.xclip}/bin/xclip < "$tempfile"
       '';
 in {
@@ -42,10 +39,9 @@ in {
       })
     ];
 
-    environment = { systemPackages = with pkgs; [ doom-emacs ]; };
+    environment.systemPackages = with pkgs; [ doom-emacs ];
     home-manager.users."${user}" = {
       home.packages = with pkgs; [
-        doom-emacs-bin
         xclipedit
 
         aspell
