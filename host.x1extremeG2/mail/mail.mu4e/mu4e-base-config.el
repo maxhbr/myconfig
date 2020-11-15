@@ -1,3 +1,9 @@
+;; To encrypt:
+;;     mml-secure-message-encrypt-pgp
+;;     mml-secure-message-sign-pgp
+;; To decrypt:
+;;    epa-mail-decrypt
+;;
 ;; mu4e
 (after! mu4e
   (defun mu4e-message-maildir-matches (msg rx)
@@ -32,6 +38,7 @@
 
         mml2015-use 'epg
         mml2015-encrypt-to-self t
+        mu4e-decryption-policy 'ask ;; t
 
         mml2015-sign-with-sender t ;; also encrypt for self (https://emacs.stackexchange.com/questions/2227/how-can-i-make-encrypted-messages-readable-in-my-sent-folder)
         mu4e-context-policy 'pick-first
@@ -69,7 +76,6 @@
   (mu4e~headers-defun-mark-for archive)
   (define-key mu4e-headers-mode-map (kbd "g") 'mu4e-headers-mark-for-tag)
   (define-key mu4e-headers-mode-map (kbd "A") 'mu4e-headers-mark-for-archive)
-
 
   ;; https://github.com/jeremy-compostella/org-msg
   (after! org-msg
