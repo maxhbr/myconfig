@@ -79,7 +79,7 @@ in {
            )
         '';
         ".doom.d/imports" = {
-          source = ./imports;
+          source = ./doom.d/imports;
           recursive = true;
         };
         ".emacs-profile".text = "doom";
