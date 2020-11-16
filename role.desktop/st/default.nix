@@ -13,8 +13,10 @@
                     "1nczrfgvl5ip95gm8qd9g3kam5xqbb5psqnpm563pbvrrw5d68hb";
                 })
                 (prev.fetchpatch {
-                  url = "https://st.suckless.org/patches/anysize/st-anysize-20201003-407a3d0.diff";
-                  sha256 = "1xkg9h6pj5wlxq0rg645dxf4vbl22nxr0jyll4figfg4qh7nhznh";
+                  url =
+                    "https://st.suckless.org/patches/anysize/st-anysize-20201003-407a3d0.diff";
+                  sha256 =
+                    "1xkg9h6pj5wlxq0rg645dxf4vbl22nxr0jyll4figfg4qh7nhznh";
                 })
                 # (prev.fetchpatch {
                 #   url = "https://st.suckless.org/patches/swapmouse/st-swapmouse-0.8.4.diff";
@@ -42,16 +44,18 @@
       ];
     };
     environment.systemPackages = with pkgs; [
-      tabbed st st-notmux
+      tabbed
+      st
+      st-notmux
       (writeShellScriptBin "st-reattach" ''
-${tmux}/bin/tmux ls |
-    ${gnugrep}/bin/grep -v '(attached)' |
-    cut -f 1 -d ":" |
-    while read SESSION; do
-        (set -x;
-         ${st-notabbed}/bin/st -e ${tmux}/bin/tmux attach -t "$SESSION" & disown)
-    done
-'')
+        ${tmux}/bin/tmux ls |
+            ${gnugrep}/bin/grep -v '(attached)' |
+            cut -f 1 -d ":" |
+            while read SESSION; do
+                (set -x;
+                 ${st-notabbed}/bin/st -e ${tmux}/bin/tmux attach -t "$SESSION" & disown)
+            done
+      '')
     ];
   };
 }

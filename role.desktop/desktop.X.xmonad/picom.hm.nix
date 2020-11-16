@@ -1,15 +1,18 @@
 { config, lib, pkgs, ... }:
 let
-  restartPicom = with pkgs; writeShellScriptBin "restartPicom" ''
-${systemd}/bin/systemctl --user restart picom.service
-'';
-  stopPicom = with pkgs; writeShellScriptBin "stopPicom" ''
-${systemd}/bin/systemctl --user stop picom.service
-'';
+  restartPicom = with pkgs;
+    writeShellScriptBin "restartPicom" ''
+      ${systemd}/bin/systemctl --user restart picom.service
+    '';
+  stopPicom = with pkgs;
+    writeShellScriptBin "stopPicom" ''
+      ${systemd}/bin/systemctl --user stop picom.service
+    '';
 in {
   home.packages = with pkgs; [ restartPicom stopPicom ];
   home.file = {
-    ".config/autorandr/postswitch.d/restartPicom".source = "${restartPicom}/bin/restartPicom";
+    ".config/autorandr/postswitch.d/restartPicom".source =
+      "${restartPicom}/bin/restartPicom";
   };
   services.picom = let
     excludes = [
