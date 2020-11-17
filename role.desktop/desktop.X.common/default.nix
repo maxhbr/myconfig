@@ -34,7 +34,7 @@ let
     '';
 
 in {
-  imports = [ ../desktop.common ./big-cursor.nix ./autorandr.nix ];
+  imports = [ ../desktop.common ./big-cursor.nix ./autorandr.nix ./xclip.nix ];
 
   config = {
     home-manager.users."${user}" = {
