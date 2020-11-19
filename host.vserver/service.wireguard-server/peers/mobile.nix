@@ -2,6 +2,6 @@
 # SPDX-License-Identifier: MIT
 
 { # mobile
-  publicKey = "Gy61ZXoyxpwk+pIq+TMHANhwPiMve2uRTKi+c8NKQFw=";
+  publicKey = "OtcbHe6O4I8KqpsOm08/pnQ/bFaKg0I0euxFfb6eZV4=";
   allowedIPs = [ "10.199.199.3/32" ];
 }

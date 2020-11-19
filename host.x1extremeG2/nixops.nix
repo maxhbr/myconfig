@@ -25,10 +25,11 @@ mkHostNixops "x1extremeG2" ({ lib, ... }: {
     (setupSyncthing "x1extremeG2" ((mkSyncthingDevice "nas" false)
       // (mkSyncthingDevice "workstation" false)
       // (mkSyncthingDevice "vserver" false)
-      // (import ../secrets/common/syncthing.SM-G960F.nix)) {
+      // (import ../secrets/common/syncthing.SM-G960F.nix)
+      // (import ../secrets/common/syncthing.Pixel5.nix)) {
         "/home/mhuber/Sync" = {
           id = "sync";
-          devices = [ "nas" "workstation" "vserver" ];
+          devices = [ "nas" "workstation" "vserver" "Pixel5" ];
           type = "sendreceive";
         };
         "/home/mhuber/Bilder/00-galerie" = {
@@ -37,9 +38,18 @@ mkHostNixops "x1extremeG2" ({ lib, ... }: {
           type = "sendonly";
         };
         "/home/mhuber/syncthing/SM-G960F" = {
-          id = "Voo3Hidi";
+          id = "Voo3Hidi"; # random
           devices = [ "SM-G960F" ];
           type = "receiveonly";
+          versioning = {
+            type = "simple";
+            params.keep = "10";
+          };
+        };
+        "/home/mhuber/syncthing/Pixel5" = {
+          id = "Voo4Hidi"; # close to random
+          devices = [ "Pixel5" ];
+          type = "sendreceive";
           versioning = {
             type = "simple";
             params.keep = "10";
