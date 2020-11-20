@@ -82,7 +82,7 @@
     (setq mail-user-agent 'mu4e-user-agent)
     (setq org-msg-options "html-postamble:nil H:5 num:nil ^:{} toc:nil author:nil email:nil \\n:t"
           org-msg-startup "hidestars indent inlineimages"
-          org-msg-greeting-fmt "\nHi *%s*,\n\n"
+          org-msg-greeting-fmt "\nHi %s,\n\n"
           org-msg-greeting-name-limit 3
           org-msg-default-alternatives '(text) ;; html
           )

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 { config, pkgs, lib, ... }:
 let
-
+  user = config.myconfig.user;
   mb660_switch_profile = pkgs.writeShellScriptBin "mb660_switch_profile" ''
     export PATH=$PATH:${pkgs.pulseaudio}/bin:${pkgs.bash}/bin
     ${./bin/switch_sennheiser_profile}
@@ -69,8 +69,32 @@ let
       fi
       connect
     '');
+
+  pactl-monitor = pkgs.writeShellScriptBin "pactl-monitor" ''
+    set -e
+    pactl_monitor_file=/tmp/.pactl_monitor_file
+    if [[ ! -f $pactl_monitor_file ]]; then
+      touch $pactl_monitor_file
+      ${pkgs.pulseaudio}/bin/pactl load-module module-loopback latency_msec=1
+      echo "enable loopback"
+    else
+      rm $pactl_monitor_file
+      ${pkgs.pulseaudio}/bin/pactl unload-module module-loopback || true
+      echo "disable disable"
+    fi
+  '';
 in {
   config = {
+    home-manager.users."${user}" = {
+      home.packages = with pkgs; [
+        pavucontrol
+        pamix
+        mb660_switch_profile
+        pulseeffects
+        pactl-monitor
+      ];
+    };
+
     hardware.pulseaudio = {
       enable = true;
       package = pkgs.pulseaudioFull;
@@ -79,22 +103,6 @@ in {
     };
     nixpkgs.overlays =
       [ (self: super: { helper = { inherit connectBtDevice; }; }) ];
-
-    environment = {
-      shellAliases = {
-        pactl-monitor-on =
-          "${pkgs.pulseaudio}/bin/pactl load-module module-loopback latency_msec=1";
-        pactl-monitor-off =
-          "${pkgs.pulseaudio}/bin/pactl unload-module module-loopback";
-      };
-
-      systemPackages = with pkgs; [
-        pavucontrol
-        pamix
-        mb660_switch_profile
-        pulseeffects
-      ];
-    };
     nixpkgs.config.pulseaudio = true;
   };
 }

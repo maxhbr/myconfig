@@ -1,32 +1,40 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, ... }:
-let
-  user = config.myconfig.user;
-  winePkgs = with pkgs.unstable; [ wine winetricks playonlinux ];
-  wowWinePkgs = let
-    wineCfg = {
-      wineBuild = "wineWow";
-      gstreamerSupport = false;
-    };
-    wowWine = pkgs.unstable.wine.override wineCfg;
-    wowWinetricks = (pkgs.unstable.winetricks.override { wine = wowWine; });
-    wowPlayonlinux = (pkgs.unstable.playonlinux.override { wine = wowWine; });
-  in [ wowWine wowWinetricks wowPlayonlinux ];
-  # cosmoteer = ( helper.wrap
-  #    { name   = "cosmoteer";
-  #      paths  = [ wget wowWine wowWinetricks ];
-  #      script = builtins.readFile ./bin/cosmoteer.sh;
-  #    }
-  # );
-
+let user = config.myconfig.user;
 in {
   config = {
+    nixpkgs.overlays = [
+      (self: super: let
+        wineSelf = with self.unstable; [ wine winetricks playonlinux ];
+        wineCfg = {
+          wineBuild = "wineWow";
+          gstreamerSupport = false;
+        };
+        wowWine = self.unstable.wine.override wineCfg;
+        wowWinetricks = (self.unstable.winetricks.override { wine = wowWine; });
+        wowPlayonlinux = (self.unstable.playonlinux.override { wine = wowWine; });
+        wowLutris = (self.unstable.lutris.override { wine = wowWine; });
+        in {
+          wine = wowWine;
+          winetricks = wowWinetricks;
+          playonlinux = wowPlayonlinux;
+          lustris = wowLutris;
+          # cosmoteer = ( helper.wrap
+          #   { name   = "cosmoteer";
+          #     paths  = [ wget wowWine wowWinetricks ];
+          #     script = builtins.readFile ./bin/cosmoteer.sh;
+          #   }
+          # );
+      })
+    ];
     nixpkgs.config.permittedInsecurePackages = [
       "p7zip-16.02" # in winetricks
     ];
 
-    home-manager.users."${user}" = { home.packages = wowWinePkgs; };
+    home-manager.users."${user}" = {
+      home.packages = with pkgs; [ wine winetricks playonlinux lutris ];
+    };
     hardware.opengl.driSupport32Bit = true;
   };
 }
