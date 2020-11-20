@@ -1,6 +1,6 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, ... }:
+{ pkgs, config, lib, ... }:
 let
   user = config.myconfig.user;
   my-mute-telco = pkgs.callPackage ./myMuteTelco { inherit pkgs; };
@@ -55,7 +55,7 @@ in {
       xserver = {
         displayManager.defaultSession = "none+myXmonad";
         windowManager = {
-          session = [{
+          session = lib.singleton {
             name = "myXmonad";
             start = ''
               exec &> >(tee -a /tmp/myXmonad.log)
@@ -63,7 +63,7 @@ in {
               ${my-xmonad}/bin/xmonad &
               waitPID=$!
             '';
-          }];
+          };
         };
 
         desktopManager.xterm.enable = false;

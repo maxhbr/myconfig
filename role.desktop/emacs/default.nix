@@ -1,6 +1,6 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, ... }:
+{ pkgs, config, lib, ... }:
 let
   user = config.myconfig.user;
   jsonFile = ./. + "/nix-doom-emacs.json";
@@ -18,7 +18,6 @@ let
   };
   doom-emacs-bin-path = "${doom-emacs}/bin/emacs";
   xclipedit = pkgs.writeShellScriptBin "xclipedit" ''
-    #!/usr/bin/env bash
     set -euo pipefail
     tempfile="$(mktemp)"
     trap "rm $tempfile" EXIT
@@ -31,7 +30,35 @@ let
     ${pkgs.xclip}/bin/xclip < "$tempfile"
       '';
 in {
-  imports = [ ./spacemacs.nix ];
+  imports = [
+    ./spacemacs.nix
+
+    (let
+        loadScript = pkgs.writeText "emacs-exwm-load" ''
+(require 'exwm)
+(require 'exwm-config)
+(exwm-config-default)
+(require 'exwm-systemtray)
+(exwm-systemtray-default)
+(require 'exwm-randr)
+(exwm-randr-default)
+        '';
+
+    in {
+      services.xserver = {
+         # displayManager.defaultSession = lib.mkForce "none+exwm";
+        windowManager.session = lib.singleton {
+          name = "exwm";
+          start = ''
+          ${doom-emacs-bin-path} -l ${loadScript}
+        '';
+        };
+      };
+      environment.systemPackages = with pkgs; [
+        (writeShellScriptBin "exwmstart" "${doom-emacs-bin-path} -l ${loadScript}")
+      ];
+    })
+  ];
   config = {
     nixpkgs.overlays = [
       (self: super: {
