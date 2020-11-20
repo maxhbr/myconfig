@@ -22,7 +22,7 @@ in {
           recursive = true;
         };
         ".spacemacs.d/private/mykeybindings/keybindings.el" = {
-          source = ./doom.d/keybindings.el;
+          source = ../doom.d/keybindings.el;
         };
       };
     };

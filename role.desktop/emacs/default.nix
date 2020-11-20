@@ -31,7 +31,7 @@ let
       '';
 in {
   imports = [
-    ./spacemacs.nix
+    ./spacemacs
 
     (let
         loadScript = pkgs.writeText "emacs-exwm-load" ''
@@ -44,19 +44,24 @@ in {
 (exwm-randr-default)
         '';
 
+      exwmstart = pkgs.writeShellScriptBin "exwmstart" "${doom-emacs-bin-path} -l ${loadScript}";
     in {
       services.xserver = {
          # displayManager.defaultSession = lib.mkForce "none+exwm";
         windowManager.session = lib.singleton {
           name = "exwm";
           start = ''
-          ${doom-emacs-bin-path} -l ${loadScript}
+          ${doom-emacs-bin-path} # -l ${loadScript}
         '';
         };
       };
-      environment.systemPackages = with pkgs; [
-        (writeShellScriptBin "exwmstart" "${doom-emacs-bin-path} -l ${loadScript}")
-      ];
+      environment = {
+        systemPackages = with pkgs; [ exwmstart ];
+        loginShellInit = ''
+          [[ -z $DISPLAY && $XDG_VTNR -eq 5 ]] && exec ${exwmstart}/bin/exwmstart
+        '';
+      };
+
     })
   ];
   config = {
