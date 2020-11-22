@@ -30,39 +30,7 @@ let
     ${pkgs.xclip}/bin/xclip < "$tempfile"
       '';
 in {
-  imports = [
-    ./spacemacs
-
-    (let
-        loadScript = pkgs.writeText "emacs-exwm-load" ''
-(require 'exwm)
-(require 'exwm-config)
-(exwm-config-default)
-(require 'exwm-systemtray)
-(exwm-systemtray-default)
-(require 'exwm-randr)
-(exwm-randr-default)
-        '';
-    in {
-      services.xserver = {
-        desktopManager = {
-          xterm.enable = false;
-          xfce = {
-            enable = true;
-            noDesktop = true;
-            enableXfwm = false;
-          };
-        };
-        displayManager.defaultSession = lib.mkForce "xfce+exwm";
-        windowManager.session = lib.singleton {
-          name = "exwm";
-          start = ''
-            ${doom-emacs-bin-path} # -l ${loadScript}
-          '';
-        };
-      };
-    })
-  ];
+  imports = [ ./spacemacs ];
   config = {
     nixpkgs.overlays = [
       (self: super: {
