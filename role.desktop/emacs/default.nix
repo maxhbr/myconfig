@@ -45,6 +45,25 @@ in {
         '';
 
       exwmstart = pkgs.writeShellScriptBin "exwmstart" "${doom-emacs-bin-path} -l ${loadScript}";
+      startXwithEXMW = with pkgs; (writeShellScriptBin "startXwithEXMW" ''
+set -ex
+${xorg.xhost}/bin/xhost +
+## you might need to append the TTY you are working on
+${xorg.xinit}/bin/xinit
+
+${wmname}/bin/wmname LG3D
+
+# Set fallback cursor
+${xorg.xsetroot}/bin/xsetroot -cursor_name left_ptr
+
+# If Emacs is started in server mode, `emacsclient` is a convenient way to edit
+# files in place (used by e.g. `git commit`)
+export VISUAL=${doom-emacs}/bin/emacsclient
+export EDITOR="$VISUAL"
+
+# Finally launch emacs and enable exwm
+exec ${dbus}/bin/dbus-launch --exit-with-session ${doom-emacs-bin-path} -l ${loadScript}
+'');
     in {
       services.xserver = {
          # displayManager.defaultSession = lib.mkForce "none+exwm";
@@ -56,9 +75,9 @@ in {
         };
       };
       environment = {
-        systemPackages = with pkgs; [ exwmstart ];
+        systemPackages = with pkgs; [ exwmstart startXwithEXMW ];
         loginShellInit = ''
-          [[ -z $DISPLAY && $XDG_VTNR -eq 5 ]] && exec ${exwmstart}/bin/exwmstart
+          [[ -z $DISPLAY && $XDG_VTNR -eq 5 ]] && exec ${startXwithEXMW}/bin/startXwithEXMW
         '';
       };
 
