@@ -107,12 +107,12 @@ in {
           (builtins.readFile ./bin/myspeedtest.sh))
         (writeScriptBin "startServer.py" ''
 #!${pkgs.python3}/bin/python
-import SimpleHTTPServer
+import http.server
 
-class MyHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_my_headers()
-        SimpleHTTPServer.SimpleHTTPRequestHandler.end_headers(self)
+        http.server.SimpleHTTPRequestHandler.end_headers(self)
 
     def send_my_headers(self):
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -120,7 +120,7 @@ class MyHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         self.send_header("Expires", "0")
 
 if __name__ == '__main__':
-    SimpleHTTPServer.test(HandlerClass=MyHTTPRequestHandler)
+    http.server.test(HandlerClass=MyHTTPRequestHandler)
 '')
       ];
       interactiveShellInit = ''
