@@ -1,8 +1,17 @@
-{ pkgs, config, ... }: {
+{ pkgs, config, lib, ... }: {
+  imports = [
+    (lib.mkIf config.services.prometheus.enable {
+      services.prometheus.exporters.nextcloud = {
+        url = "https://localhost:443";
+        username = "nextcloud-exporter";
+        passwordFile = "/etc/nextcloud/nextcloud-exporter-pass";
+      };
+    })
+  ];
   config = {
     services.nextcloud = {
       enable = true;
-      hostName = "nas";
+      hostName = config.networking.hostName;
       package = pkgs.nextcloud19;
       home = "/mnt/2x4t/nextcloud";
       https = true;
@@ -15,14 +24,14 @@
         adminpassFile = "/etc/nextcloud/adminpass";
         extraTrustedDomains = (with (import ../lib.nix);
           makeOptionalListBySecrets [
-            (getSecretNoNewline "nas" "ip")
+            (getSecretNoNewline "${config.networking.hostName}" "ip")
             "10.199.199.6"
           ]);
         overwriteProtocol = "https";
       };
       maxUploadSize = "20G";
     };
-    services.nginx.virtualHosts."nas" = {
+    services.nginx.virtualHosts."${config.services.nextcloud.hostName}" = {
       addSSL = true;
       sslCertificate = "/etc/nextcloud/nextcloud.crt";
       sslCertificateKey = "/etc/nextcloud/nextcloud.key";

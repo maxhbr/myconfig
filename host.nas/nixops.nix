@@ -41,12 +41,20 @@ mkHostNixops "nas" ({ lib, ... }: {
           group = "root";
           permissions = "0440";
         };
+        "nextcloud-exporter-pass" = {
+          text = getSecret "nas" "nextcloud/nextcloud-exporter-pass";
+          destDir = "/etc/nextcloud";
+          user = "prometheus";
+          group = "root";
+          permissions = "0440";
+        };
       };
     }
-    (setupSyncthing "nas" ((mkSyncthingDevice "x1extremeG2" true)
+    (setupSyncthing "nas" (
+      (mkSyncthingDevice "x1extremeG2" true)
       // (mkSyncthingDevice "workstation" false)
       // (mkSyncthingDevice "vserver" false)
-      // (import ../secrets/common/syncthing.SM-G960F.nix)) {
+      // (import ../secrets/common/syncthing.Pixel5.nix)) {
         "/mnt/2x4t/Sync" = {
           id = "sync";
           devices = [ "x1extremeG2" ];

@@ -9,6 +9,10 @@
         allowedTCPPorts = [ 8443 ];
         allowedUDPPorts = [ 8443 ];
       };
+      services.prometheus.exporters.unifi = {
+        unifiAddress = "localhost:8443";
+        unifiUsername = "ReadOnlyUser";
+      };
     })
   ];
 }

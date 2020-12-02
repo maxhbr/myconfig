@@ -54,6 +54,7 @@ in {
           mv = "mv -vi";
           ag = "rg";
           grep = "rg";
+          ducks = "du -chs *";
         };
         functions = {
           __fish_command_not_found_handler = {
