@@ -1,10 +1,14 @@
-{ config, pkgs, ... }:
-{
+{ config, pkgs, lib, ... }:
+let
+  useReverseProxy = false;
+in {
   config = {
     services = {
       prometheus = {
         enable = true;
-        listenAddress = "127.0.0.1";
+        listenAddress = if useReverseProxy
+                        then "127.0.0.1"
+                        else "0.0.0.0";
         webExternalUrl = "https://nas/prometheus/";
         port = 9001;
         exporters = {
@@ -42,7 +46,7 @@
           {
             job_name = config.networking.hostName;
             static_configs = [{
-              targets = [ "127.0.0.1:${toString config.services.prometheus.exporters.node.port}" ];
+              targets = [ "${config.services.prometheus.listenAddress}:${toString config.services.prometheus.exporters.node.port}" ];
             }];
           }
         ];
@@ -58,12 +62,17 @@
           }
         ];
       };
-      nginx.virtualHosts."${config.networking.hostName}" = {
-        locations."/prometheus" = {
-          proxyPass = "http://127.0.0.1:${toString config.services.prometheus.port}";
-          proxyWebsockets = true;
+      nginx.virtualHosts = lib.mkIf useReverseProxy {
+        "${config.networking.hostName}" = {
+          locations."/prometheus" = {
+            proxyPass = "http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}";
+            proxyWebsockets = true;
+          };
         };
       };
+    };
+    networking.firewall = lib.mkIf (! useReverseProxy) {
+      allowedTCPPorts = [ config.services.prometheus.port ];
     };
   };
 }
