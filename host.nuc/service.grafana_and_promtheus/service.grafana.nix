@@ -13,7 +13,7 @@
         dataDir = "/var/lib/grafana";
       };
 
-      nginx.virtualHosts."${config.services.grafana.domain}" = {
+      nginx.virtualHosts."${config.networking.hostName}" = {
         locations."/" = {
           proxyPass = "http://${config.services.grafana.addr}:${toString config.services.grafana.port}/";
           proxyWebsockets = true;

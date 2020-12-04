@@ -32,10 +32,10 @@ mkHostNixops "nuc" ({ lib, ... }: {
           permissions = "0440";
         };
       };
-      services.nginx.virtualHosts."nuc".listen = [
-        {addr = "10.199.199.9"; port = 443; ssl = true;}
-        {addr = (getSecretNoNewline "nuc" "ip"); port = 443; ssl = true;}
-      ];
+      # services.nginx.virtualHosts."nuc".listen = [
+      #   {addr = "10.199.199.9"; port = 443; ssl = true;}
+      #   {addr = (getSecretNoNewline "nuc" "ip"); port = 443; ssl = true;}
+      # ];
     }
   ];
 })
