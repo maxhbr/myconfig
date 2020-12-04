@@ -1,33 +1,24 @@
 # https://community.grafana.com/t/installing-on-nixos/6712/2
-{ config, pkgs, lib, ... }:
-let
-  useReverseProxy = false;
-in {
+{ config, pkgs, ... }:
+{
   config = {
     services = {
       grafana = {
         enable = true;
+        addr = "127.0.0.1";
+        protocol = "http";
         domain = config.networking.hostName;
         port = 2342;
-        addr = if useReverseProxy
-               then "127.0.0.1"
-               else "0.0.0.0";
-        rootUrl = "%(protocol)s://%(domain)s:%(http_port)s/";
-        protocol = "http";
+        rootUrl = "%(protocol)s://%(domain)s:%(http_port)s/grafana/";
         dataDir = "/var/lib/grafana";
       };
 
-      nginx.virtualHosts = lib.mkIf useReverseProxy {
-        "${config.services.grafana.domain}" = {
-          locations."/grafana/" = {
-            proxyPass = "http://${config.services.grafana.addr}:${toString config.services.grafana.port}/";
-            proxyWebsockets = true;
-          };
+      nginx.virtualHosts."${config.services.grafana.domain}" = {
+        locations."/grafana/" = {
+          proxyPass = "http://${config.services.grafana.addr}:${toString config.services.grafana.port}/";
+          proxyWebsockets = true;
         };
       };
-    };
-    networking.firewall = lib.mkIf (! useReverseProxy) {
-      allowedTCPPorts = [ config.services.grafana.port ];
     };
     systemd.services.grafana = {
       # wait until all network interfaces initialize before starting Grafana

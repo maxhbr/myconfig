@@ -31,7 +31,7 @@
       };
       maxUploadSize = "20G";
     };
-    services.nginx.virtualHosts."${config.services.nextcloud.hostName}" = {
+    services.nginx.virtualHosts."${config.networking.hostName}" = {
       addSSL = true;
       sslCertificate = "/etc/nextcloud/nextcloud.crt";
       sslCertificateKey = "/etc/nextcloud/nextcloud.key";

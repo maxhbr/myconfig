@@ -1,14 +1,10 @@
 { config, pkgs, lib, ... }:
-let
-  useReverseProxy = false;
-in {
+{
   config = {
     services = {
       prometheus = {
         enable = true;
-        listenAddress = if useReverseProxy
-                        then "127.0.0.1"
-                        else "0.0.0.0";
+        listenAddress = "127.0.0.1";
         webExternalUrl = "https://nas/prometheus/";
         port = 9001;
         exporters = {
@@ -62,7 +58,7 @@ in {
           }
         ];
       };
-      nginx.virtualHosts = lib.mkIf useReverseProxy {
+      nginx.virtualHosts = {
         "${config.networking.hostName}" = {
           locations."/prometheus" = {
             proxyPass = "http://${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port}";
@@ -70,9 +66,6 @@ in {
           };
         };
       };
-    };
-    networking.firewall = lib.mkIf (! useReverseProxy) {
-      allowedTCPPorts = [ config.services.prometheus.port ];
     };
   };
 }

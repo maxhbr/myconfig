@@ -139,19 +139,13 @@ in {
         allowRestartService = false;
         allowSetSystemTime = false;
       };
-
-    services.snapper = {
-      snapshotInterval = "hourly";
-      cleanupInterval = "1d";
-      filters = null;
-      configs = {
-        home = {
-          subvolume = "/home";
-          extraConfig = ''
-            ALLOW_USERS="${user}"
-          '';
+    services = {
+      nginx.virtualHosts."${config.services.grafana.domain}" = {
+        locations."/deconz/" = {
+          proxyPass = "http://127.0.0.1:${toString config.myconfig.services.deconz.httpPort}/";
         };
       };
     };
+
   };
 }

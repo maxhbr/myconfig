@@ -52,5 +52,19 @@
 
     networking.firewall.allowedTCPPorts = [ 12345 6567 ];
     networking.firewall.allowedUDPPorts = [ 12345 6567 ];
+
+    services.snapper = {
+      snapshotInterval = "hourly";
+      cleanupInterval = "1d";
+      filters = null;
+      configs = {
+        home = {
+          subvolume = "/home";
+          extraConfig = ''
+            ALLOW_USERS="${user}"
+          '';
+        };
+      };
+    };
   };
 }
