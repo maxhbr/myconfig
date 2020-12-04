@@ -9,7 +9,8 @@
         protocol = "http";
         domain = config.networking.hostName;
         port = 2342;
-        rootUrl = "%(protocol)s://%(domain)s:%(http_port)s/grafana/";
+        # rootUrl = "%(protocol)s://%(domain)s:%(http_port)s/grafana/";
+        rootUrl = "https://nas/grafana/";
         dataDir = "/var/lib/grafana";
       };
 

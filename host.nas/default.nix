@@ -1,6 +1,8 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }: {
+{ pkgs, config, ... }:
+let user = config.myconfig.user;
+in {
   imports = [
     # hardware:
     ./hardware-configuration.nix
@@ -53,16 +55,26 @@
     networking.firewall.allowedTCPPorts = [ 12345 6567 ];
     networking.firewall.allowedUDPPorts = [ 12345 6567 ];
 
-    services.snapper = {
-      snapshotInterval = "hourly";
-      cleanupInterval = "1d";
-      filters = null;
-      configs = {
-        home = {
-          subvolume = "/home";
-          extraConfig = ''
+
+    services = {
+      nginx = {
+        enable = true;
+        recommendedGzipSettings = true;
+        recommendedOptimisation = true;
+        recommendedProxySettings = true;
+        recommendedTlsSettings = true;
+      };
+      snapper = {
+        snapshotInterval = "hourly";
+        cleanupInterval = "1d";
+        filters = null;
+        configs = {
+          home = {
+            subvolume = "/home";
+            extraConfig = ''
             ALLOW_USERS="${user}"
           '';
+          };
         };
       };
     };
