@@ -55,7 +55,6 @@ in {
     networking.firewall.allowedTCPPorts = [ 12345 6567 ];
     networking.firewall.allowedUDPPorts = [ 12345 6567 ];
 
-
     services = {
       nginx = {
         enable = true;

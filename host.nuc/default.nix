@@ -3,17 +3,12 @@
 { pkgs, ... }: {
   imports = [
     ./hardware-configuration.nix
+    ../hardware/grub.nix
     {
       boot.initrd.supportedFilesystems = [ "btrfs" "luks" ];
       services.btrfs.autoScrub = { enable = true; };
     }
-    ../../roles/headless.nix
-    ../../modules/service.monitoring.nix
-    ../../modules/virtualization.docker
-    # hardware:
-    ../../hardware/grub.nix
-    # configuration
-    # ./nuccam.nix
+    ../role.headless
   ];
   config = {
     networking.hostName = "nuc";
