@@ -117,7 +117,7 @@ in rec {
         prefixLength = 24;
       }];
       defaultGateway = "192.168.1.1";
-      nameservers = [ "8.8.8.8" "8.8.4.4" ];
+      nameservers = [ "192.168.1.1" "8.8.8.8" "8.8.4.4" ];
     };
   };
 
