@@ -9,13 +9,12 @@
         protocol = "http";
         domain = config.networking.hostName;
         port = 2342;
-        # rootUrl = "%(protocol)s://%(domain)s:%(http_port)s/grafana/";
-        rootUrl = "https://nas/grafana/";
+        rootUrl = "%(protocol)s://%(domain)s:%(http_port)s/";
         dataDir = "/var/lib/grafana";
       };
 
       nginx.virtualHosts."${config.services.grafana.domain}" = {
-        locations."/grafana/" = {
+        locations."/" = {
           proxyPass = "http://${config.services.grafana.addr}:${toString config.services.grafana.port}/";
           proxyWebsockets = true;
         };
