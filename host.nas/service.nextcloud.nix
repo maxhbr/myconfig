@@ -32,19 +32,6 @@
         };
         maxUploadSize = "20G";
       };
-      nginx = {
-        virtualHosts."${config.networking.hostName}" = {
-          addSSL = true;
-          sslCertificate = "/etc/nextcloud/nextcloud.crt";
-          sslCertificateKey = "/etc/nextcloud/nextcloud.key";
-          listen = map (addr: {
-            inherit addr;
-            port = 443;
-            ssl = true;
-          }) (config.services.nextcloud.config.extraTrustedDomains
-              ++ [ config.services.nextcloud.hostName ]);
-        };
-      };
       postgresql = {
         enable = true;
         ensureDatabases = [ "nextcloud" ];
@@ -53,11 +40,22 @@
           ensurePermissions."DATABASE nextcloud" = "ALL PRIVILEGES";
         }];
       };
+
+      nginx.virtualHosts."${config.networking.hostName}" = {
+        locations."/" = {
+          proxyPass = "https://${config.services.nextcloud.hostName}/";
+          proxyWebsockets = true;
+        };
+      };
     };
     systemd.services."nextcloud-setup" = {
       requires = [ "postgresql.service" ];
       after = [ "postgresql.service" ];
     };
-    networking.firewall.allowedTCPPorts = [ 80 443 ];
+    systemd.services.nginx = {
+      # wait until all network interfaces initialize before starting Grafana
+      after = [ "nextcloud.target" ];
+      wants = [ "nextcloud.target" ];
+    };
   };
 }

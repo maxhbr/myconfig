@@ -1,6 +1,6 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, ... }:
+{ pkgs, config, lib, ... }:
 let user = config.myconfig.user;
 in {
   imports = [
@@ -37,8 +37,10 @@ in {
     ../role.smarthome
     ../role.dev/virtualization.docker
     ../role.imagework/exfat.nix
-    ./service.nextcloud.nix
+    # ./service.nextcloud.nix
     ./service.unifi.nix
+
+    ./service.grafana_and_promtheus
 
     # ../role.desktop/kiosk/headless.kiosk.nix
   ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.6") ]);
@@ -50,7 +52,7 @@ in {
       HandlePowerKey=reboot
     '';
 
-    networking.firewall.allowedTCPPorts = [ 12345 6567 ];
+    networking.firewall.allowedTCPPorts = [ 443 12345 6567 ];
     networking.firewall.allowedUDPPorts = [ 12345 6567 ];
 
     services = {
@@ -60,6 +62,17 @@ in {
         recommendedOptimisation = true;
         recommendedProxySettings = true;
         recommendedTlsSettings = true;
+        virtualHosts."${config.networking.hostName}" = {
+          addSSL = true;
+          sslCertificate = "/etc/tls/nginx.crt";
+          sslCertificateKey = "/etc/tls/nginx.key";
+          listen = map (addr: {
+            inherit addr;
+            port = 443;
+            ssl = true;
+          }) (lib.unique ([config.networking.hostName (with (import ../lib.nix); (getSecretNoNewline "nas" "ip"))]
+                          ++ config.services.nextcloud.config.extraTrustedDomains));
+        };
       };
       snapper = {
         snapshotInterval = "hourly";
@@ -69,11 +82,12 @@ in {
           home = {
             subvolume = "/home";
             extraConfig = ''
-            ALLOW_USERS="${user}"
-          '';
+              ALLOW_USERS="${user}"
+            '';
           };
         };
       };
     };
+    system.activationScripts.mkTlsDir = "mkdir -p /etc/tls && chmod 777 /etc/tls";
   };
 }

@@ -30,10 +30,11 @@
             inherit addr;
             port = 443;
             ssl = true;
-          }) [ config.networking.hostName
-               # "10.199.199.9"
-               (with (import ../lib.nix); (getSecretNoNewline "nuc" "ip"))
-             ];
+          }) [
+            config.networking.hostName
+            # "10.199.199.9"
+            (with (import ../lib.nix); (getSecretNoNewline "nuc" "ip"))
+          ];
         };
       };
     };
@@ -42,7 +43,8 @@
       after = [ "grafana.target" ];
       wants = [ "grafana.target" ];
     };
-    system.activationScripts.mkTlsDir = "mkdir -p /etc/tls && chmod 777 /etc/tls";
+    system.activationScripts.mkTlsDir =
+      "mkdir -p /etc/tls && chmod 777 /etc/tls";
     networking.firewall.allowedTCPPorts = [ 80 443 ];
   };
 }

@@ -10,6 +10,11 @@
         port = 2342;
         rootUrl = "%(protocol)s://%(domain)s:%(http_port)s/grafana/";
         dataDir = "/var/lib/grafana";
+        auth.anonymous = {
+          enable = true;
+          org_name = "Org";
+          org_role = "Editor";
+        };
         security = {
           adminUser = "admin";
           adminPasswordFile = "/etc/grafana-adminPasswordFile";
@@ -30,5 +35,6 @@
       after = [ "network-interfaces.target" ];
       wants = [ "network-interfaces.target" ];
     };
+
   };
 }

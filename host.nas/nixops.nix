@@ -1,5 +1,5 @@
 with (import ../lib.nix);
-mkHostNixops "nas" ({ lib, ... }: {
+mkHostNixops "nas" ({ config, lib, ... }: {
   config = { deployment.targetHost = lib.mkDefault "10.199.199.6"; };
   imports = [
     (deployWireguardKeys "nas")
@@ -18,7 +18,7 @@ mkHostNixops "nas" ({ lib, ... }: {
     (setupAsBackupTarget "/mnt/2x4t/backup"
       [ (getSecret "x1extremeG2" "ssh/id_ed25519.pub") ])
     (fixIp "nas" "enp3s0")
-    {
+    (lib.mkIf config.services.nextcloud.enable {
       deployment.keys = {
         adminpass = {
           text = getSecret "nas" "nextcloud/adminpass";
@@ -27,20 +27,28 @@ mkHostNixops "nas" ({ lib, ... }: {
           group = "root";
           permissions = "0440";
         };
-        "nextcloud.crt" = {
-          text = getSecret "nas" "nextcloud/nextcloud.crt";
-          destDir = "/etc/nextcloud";
+      };
+    })
+    (lib.mkIf config.services.nginx.enable {
+      deployment.keys = {
+        "nginx.crt" = {
+          text = getSecret "nuc" "tls/nginx.crt";
+          destDir = "/etc/tls";
           user = "nginx";
           group = "root";
           permissions = "0440";
         };
-        "nextcloud.key" = {
-          text = getSecret "nas" "nextcloud/nextcloud.key";
-          destDir = "/etc/nextcloud";
+        "nginx.key" = {
+          text = getSecret "nuc" "tls/nginx.key";
+          destDir = "/etc/tls";
           user = "nginx";
           group = "root";
           permissions = "0440";
         };
+      };
+    })
+    (lib.mkIf config.services.prometheus.enable {
+      deployment.keys = {
         "nextcloud-exporter-pass" = {
           text = getSecret "nas" "nextcloud/nextcloud-exporter-pass";
           destDir = "/etc/nextcloud";
@@ -49,9 +57,8 @@ mkHostNixops "nas" ({ lib, ... }: {
           permissions = "0440";
         };
       };
-    }
-    (setupSyncthing "nas" (
-      (mkSyncthingDevice "x1extremeG2" true)
+    })
+    (setupSyncthing "nas" ((mkSyncthingDevice "x1extremeG2" true)
       // (mkSyncthingDevice "workstation" false)
       // (mkSyncthingDevice "vserver" false)
       // (import ../secrets/common/syncthing.Pixel5.nix)) {
