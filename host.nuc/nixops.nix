@@ -1,5 +1,5 @@
 with (import ../lib.nix);
-mkHostNixops "nuc" ({ lib, ... }: {
+mkHostNixops "nuc" ({ lib, config, ... }: {
   config = { deployment.targetHost = lib.mkDefault "10.199.199.9"; };
   imports = [
     (fixIp "nuc" "enp2s0")
@@ -15,7 +15,7 @@ mkHostNixops "nuc" ({ lib, ... }: {
     #   // (mkSyncthingDevice "vserver" false)
     #   // (import ../secrets/common/syncthing.Pixel5.nix)) {
     #   })
-    {
+    (lib.mkIf config.services.nginx.enable {
       deployment.keys = {
         "nginx.crt" = {
           text = getSecret "nuc" "tls/nginx.crt";
@@ -32,10 +32,17 @@ mkHostNixops "nuc" ({ lib, ... }: {
           permissions = "0440";
         };
       };
-      # services.nginx.virtualHosts."nuc".listen = [
-      #   {addr = "10.199.199.9"; port = 443; ssl = true;}
-      #   {addr = (getSecretNoNewline "nuc" "ip"); port = 443; ssl = true;}
-      # ];
-    }
+    })
+    (lib.mkIf config.services.grafana.enable {
+      deployment.keys = {
+        "grafana-adminPasswordFile" = {
+          text = getSecret "nuc" "grafana/adminPasswordFile";
+          destDir = "/etc";
+          user = "grafana";
+          group = "root";
+          permissions = "0440";
+        };
+      };
+    })
   ];
 })

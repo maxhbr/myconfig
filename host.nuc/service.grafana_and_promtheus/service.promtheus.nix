@@ -5,7 +5,7 @@
       prometheus = {
         enable = true;
         listenAddress = "127.0.0.1";
-        webExternalUrl = "https://nas/prometheus/";
+        webExternalUrl = "https://${config.networking.hostName}/prometheus/";
         port = 9001;
         exporters = {
           node = {
@@ -53,7 +53,7 @@
           {
             name = "prometheus";
             type = "prometheus";
-            url = "http://localhost:9001";
+            url = "http://${config.services.prometheus.listenAddress}:9001/prometheus";
             isDefault = true;
           }
         ];

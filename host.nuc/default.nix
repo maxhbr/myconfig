@@ -9,7 +9,6 @@
       services.btrfs.autoScrub = { enable = true; };
     }
     ../role.headless
-    # experimental:
     ./service.grafana_and_promtheus
   ];
   config = {
@@ -31,10 +30,19 @@
             inherit addr;
             port = 443;
             ssl = true;
-          }) [ config.networking.hostName ];
+          }) [ config.networking.hostName
+               # "10.199.199.9"
+               (with (import ../lib.nix); (getSecretNoNewline "nuc" "ip"))
+             ];
         };
       };
     };
+    systemd.services.nginx = {
+      # wait until all network interfaces initialize before starting Grafana
+      after = [ "grafana.target" ];
+      wants = [ "grafana.target" ];
+    };
+    system.activationScripts.mkTlsDir = "mkdir -p /etc/tls && chmod 777 /etc/tls";
     networking.firewall.allowedTCPPorts = [ 80 443 ];
   };
 }

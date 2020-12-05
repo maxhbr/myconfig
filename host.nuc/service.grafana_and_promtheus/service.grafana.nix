@@ -11,6 +11,10 @@
         port = 2342;
         rootUrl = "%(protocol)s://%(domain)s:%(http_port)s/";
         dataDir = "/var/lib/grafana";
+        security = {
+          adminUser = "admin";
+          adminPasswordFile = "/etc/grafana-adminPasswordFile";
+        };
       };
 
       nginx.virtualHosts."${config.networking.hostName}" = {
