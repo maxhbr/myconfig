@@ -4,7 +4,7 @@
       prometheus = {
         enable = true;
         listenAddress = "127.0.0.1";
-        webExternalUrl = "https://${config.networking.hostName}/";
+        webExternalUrl = "https://${config.networking.hostName}/prometheus/";
         port = 9090;
         exporters = {
           node = {

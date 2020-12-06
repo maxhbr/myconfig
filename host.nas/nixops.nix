@@ -47,10 +47,21 @@ mkHostNixops "nas" ({ config, lib, ... }: {
         };
       };
     })
+    (lib.mkIf config.services.haproxy.enable {
+      deployment.keys = {
+        "nginx.pem" = {
+          text = getSecret "nas" "tls/nginx.pem";
+          destDir = "/etc/tls";
+          user = "haproxy";
+          group = "root";
+          permissions = "0440";
+        };
+      };
+    })
     (lib.mkIf config.services.grafana.enable {
       deployment.keys = {
         "grafana-adminPasswordFile" = {
-          text = getSecret "nas" "grafana/adminPasswordFile2";
+          text = getSecret "nas" "grafana/adminPasswordFile";
           destDir = "/etc";
           user = "grafana";
           group = "root";
