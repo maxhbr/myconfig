@@ -81,14 +81,14 @@ in rec {
       networking.domain = "maxhbr.de";
     };
 
-  announceHost = hostName:
+  announceHost = hostName: subDomains:
     let hostIp = getSecretNoNewline hostName "ip";
     in { ... }: {
       config = makeOptionalBySecrets {
-        networking.extraHosts = ''
+        networking.extraHosts = lib.concatStringsSep "\n" ([''
           ${hostIp} ${hostName}
           ${hostIp} ${hostName}.maxhbr.de
-        '';
+        ''] ++ map (subDomain: "${hostIp} ${subDomain}.${hostName}") subDomains);
         home-manager.users.mhuber = {
           home.file = {
             ".ssh/imports/my-${hostName}.config".text = ''

@@ -37,7 +37,7 @@ in {
     ../role.smarthome
     ../role.dev/virtualization.docker
     ../role.imagework/exfat.nix
-    # ./service.nextcloud.nix
+    ./service.nextcloud.nix
     ./service.unifi.nix
 
     ./service.grafana_and_promtheus

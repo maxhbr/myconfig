@@ -16,6 +16,8 @@
         package = pkgs.nextcloud19;
         home = "/mnt/2x4t/nextcloud";
         https = true;
+        autoUpdateApps.enable = true;
+        autoUpdateApps.startAt = "05:00:00";
         config = {
           dbtype = "pgsql";
           dbuser = "nextcloud";
@@ -39,13 +41,6 @@
           name = "nextcloud";
           ensurePermissions."DATABASE nextcloud" = "ALL PRIVILEGES";
         }];
-      };
-
-      nginx.virtualHosts."${config.networking.hostName}" = {
-        locations."/" = {
-          proxyPass = "https://${config.services.nextcloud.hostName}/";
-          proxyWebsockets = true;
-        };
       };
     };
     systemd.services."nextcloud-setup" = {

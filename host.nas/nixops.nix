@@ -32,16 +32,27 @@ mkHostNixops "nas" ({ config, lib, ... }: {
     (lib.mkIf config.services.nginx.enable {
       deployment.keys = {
         "nginx.crt" = {
-          text = getSecret "nuc" "tls/nginx.crt";
+          text = getSecret "nas" "tls/nginx.crt";
           destDir = "/etc/tls";
           user = "nginx";
           group = "root";
           permissions = "0440";
         };
         "nginx.key" = {
-          text = getSecret "nuc" "tls/nginx.key";
+          text = getSecret "nas" "tls/nginx.key";
           destDir = "/etc/tls";
           user = "nginx";
+          group = "root";
+          permissions = "0440";
+        };
+      };
+    })
+    (lib.mkIf config.services.grafana.enable {
+      deployment.keys = {
+        "grafana-adminPasswordFile" = {
+          text = getSecret "nas" "grafana/adminPasswordFile2";
+          destDir = "/etc";
+          user = "grafana";
           group = "root";
           permissions = "0440";
         };

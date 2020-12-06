@@ -4,11 +4,11 @@
     services = {
       grafana = {
         enable = true;
-        addr = "127.0.0.1";
+        addr = "";
         protocol = "http";
         domain = config.networking.hostName;
         port = 2342;
-        rootUrl = "%(protocol)s://%(domain)s:%(http_port)s/grafana/";
+        rootUrl = "%(protocol)s://%(domain)s:%(http_port)s/";
         dataDir = "/var/lib/grafana";
         auth.anonymous = {
           enable = true;
@@ -20,21 +20,12 @@
           adminPasswordFile = "/etc/grafana-adminPasswordFile";
         };
       };
-
-      nginx.virtualHosts."${config.networking.hostName}" = {
-        locations."/grafana/" = {
-          proxyPass = "http://${config.services.grafana.addr}:${
-              toString config.services.grafana.port
-            }/";
-          proxyWebsockets = true;
-        };
-      };
     };
     systemd.services.grafana = {
       # wait until all network interfaces initialize before starting Grafana
       after = [ "network-interfaces.target" ];
       wants = [ "network-interfaces.target" ];
     };
-
+    networking.firewall.allowedTCPPorts = [ 2342 ];
   };
 }

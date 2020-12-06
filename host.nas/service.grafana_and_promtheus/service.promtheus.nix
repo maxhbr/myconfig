@@ -4,8 +4,8 @@
       prometheus = {
         enable = true;
         listenAddress = "127.0.0.1";
-        webExternalUrl = "https://${config.networking.hostName}/prometheus/";
-        port = 9001;
+        webExternalUrl = "https://${config.networking.hostName}/";
+        port = 9090;
         exporters = {
           node = {
             enable = true;
@@ -34,7 +34,9 @@
               "interrupts"
               "ksmd"
             ];
-            port = 9002;
+            port = 9100;
+            openFirewall = true;
+            firewallFilter = "-i br0 -p tcp -m tcp --dport 9100";
           };
         };
         scrapeConfigs = [{
@@ -54,20 +56,11 @@
           name = "prometheus";
           type = "prometheus";
           url =
-            "http://${config.services.prometheus.listenAddress}:9001/prometheus";
+            "http://${config.services.prometheus.listenAddress}:9090/";
           isDefault = true;
         }];
       };
-      nginx.virtualHosts = {
-        "${config.networking.hostName}" = {
-          locations."/prometheus" = {
-            proxyPass = "http://${config.services.prometheus.listenAddress}:${
-                toString config.services.prometheus.port
-              }";
-            proxyWebsockets = true;
-          };
-        };
-      };
     };
+    networking.firewall.allowedTCPPorts = [ 9090 9100 ];
   };
 }
