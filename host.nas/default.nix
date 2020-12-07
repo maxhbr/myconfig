@@ -40,7 +40,7 @@ in {
     ./service.nextcloud.nix
     ./service.unifi.nix
 
-    ./service.grafana_and_promtheus
+    ./service.grafana
 
     { # nginx
       config = {
