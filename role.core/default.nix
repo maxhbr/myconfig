@@ -2,7 +2,7 @@
 let mybackup = pkgs.callPackage ../pkgs/mybackup { inherit pkgs; };
 in {
   imports = [
-    ./lib
+    ../modules
     ./core.nix
     ./gnupg.nix
     ./vim

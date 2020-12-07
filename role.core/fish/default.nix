@@ -14,15 +14,6 @@ in {
             nixTest =
               "NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' --run fish -p";
           };
-          functions = {
-            # nixRun = ''
-            # if [ "$#" -eq "2" ]; then
-            #   NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' -p "$1" --command "$2"
-            # else
-            #   NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' -p "$1" --command "$1"
-            # fi
-            # '';
-          };
         };
       };
     }
@@ -232,16 +223,9 @@ in {
         ];
       };
       home.file = {
-        # ".config/fish/functions/fish_prompt.fish".source = let
-        #   src = pkgs.fetchFromGitHub {
-        #     owner = "isacikgoz";
-        #     repo = "sashimi";
-        #     rev = "1f85f6f33be9079cff9a8798ac6f91a319ba3e40";
-        #     sha256 = "04968zdxby1ggsafv8gf1qnzz56p8y4xd25xd2rhbkpnbyghbh83";
-        #   };
-        # in src + "/fish_prompt.fish";
         ".config/fish/functions/fish_prompt.fish".source = let
           src = builtins.fetchGit {
+            # url = "https://github.com/isacikgoz/sashimi";
             url = "https://github.com/hauleth/agnoster";
           };
         in src + "/fish_prompt.fish";

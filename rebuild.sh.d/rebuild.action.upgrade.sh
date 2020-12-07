@@ -65,9 +65,9 @@ upgrade() {
         fi
 
         logH3 "update" "home-manager"
-        ./role.core/lib/home-manager/update.sh || wasUpdated=1
+        ./modules/lib/home-manager/update.sh || wasUpdated=1
         logH3 "update" "nix-nixPath"
-        ./role.core/lib/nix-nixPath/update.sh || wasUpdated=1
+        ./modules/lib/nix-nixPath/update.sh || wasUpdated=1
         logH3 "update" "extrahosts"
         ./role.core/nixos.networking/extrahosts/update.sh || wasUpdated=1
         logH3 "update" "emacs"
