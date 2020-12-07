@@ -75,7 +75,7 @@ upgrade() {
         logH3 "update" "my-wallpapers"
         ./role.desktop/desktop.common/my-wallpapers/update.sh || wasUpdated=1
         logH3 "update" "chisui/zsh-nix-shell"
-        ./role.core/zsh/update.sh || wasUpdated=1
+        ./modules/shell.zsh/update.sh || wasUpdated=1
 
         return $wasUpdated
     fi

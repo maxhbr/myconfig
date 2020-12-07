@@ -17,7 +17,7 @@ genConfig() {
     cat <<EOF > "$cfg"
 { pkgs, ... }:
 { imports =
-    [ ${myconfigDir}/role.core
+    [ ${myconfigDir}/modules
       /mnt/etc/nixos/configuration.nix
     ];
 

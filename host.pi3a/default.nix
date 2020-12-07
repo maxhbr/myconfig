@@ -1,7 +1,7 @@
 { ... }: {
   imports = [
     ./hardware-configuration.nix
-    ../role.core
+    ../modules
     ./raspicam.nix
     ../secrets/common/wifi.home.nix
   ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.7") ]);

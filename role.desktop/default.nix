@@ -1,6 +1,6 @@
 { pkgs, lib, config, ... }: {
   imports = [
-    ../role.core
+    ../modules
     # modules
     # ./desktop.Wayland.sway
     # ./desktop.X.xfce.nix

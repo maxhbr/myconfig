@@ -4,7 +4,7 @@
 let user = config.myconfig.user;
 in {
   imports = [
-    ../role.core
+    ../modules
     # configuration
     ./service.monitoring.nix
     ./service.vsftp.nix

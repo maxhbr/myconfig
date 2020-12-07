@@ -1,7 +1,7 @@
 { ... }: {
   imports = [
     ./hardware-configuration.nix
-    ../role.core
+    ../modules
     ../role.headless
     ../secrets/common/wifi.home.nix
   ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.8") ]);
