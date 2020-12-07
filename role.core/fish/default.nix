@@ -157,7 +157,7 @@ in {
               fish_vi_key_bindings --no-erase
           end
           set -g fish_key_bindings hybrid_bindings
-                  '';
+         '';
         promptInit = ''
           set -l nix_shell_info (
             if test -n "$IN_NIX_SHELL"
@@ -232,12 +232,17 @@ in {
         ];
       };
       home.file = {
+        # ".config/fish/functions/fish_prompt.fish".source = let
+        #   src = pkgs.fetchFromGitHub {
+        #     owner = "isacikgoz";
+        #     repo = "sashimi";
+        #     rev = "1f85f6f33be9079cff9a8798ac6f91a319ba3e40";
+        #     sha256 = "04968zdxby1ggsafv8gf1qnzz56p8y4xd25xd2rhbkpnbyghbh83";
+        #   };
+        # in src + "/fish_prompt.fish";
         ".config/fish/functions/fish_prompt.fish".source = let
-          src = pkgs.fetchFromGitHub {
-            owner = "isacikgoz";
-            repo = "sashimi";
-            rev = "1f85f6f33be9079cff9a8798ac6f91a319ba3e40";
-            sha256 = "04968zdxby1ggsafv8gf1qnzz56p8y4xd25xd2rhbkpnbyghbh83";
+          src = builtins.fetchGit {
+            url = "https://github.com/hauleth/agnoster";
           };
         in src + "/fish_prompt.fish";
         ".config/fish/functions/bax.fish".source = let

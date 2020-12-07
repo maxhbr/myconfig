@@ -10,7 +10,7 @@ let
     ${pkgs.oathToolkit}/bin/oathtool --totp -b "$(${pkgs.pass}/bin/pass -p "$1")"
   '';
 in {
-  imports = [ ./gopassbridge.nix ];
+  # imports = [ ./gopassbridge.nix ];
   config = {
     nixpkgs.overlays = [
       (self: super:

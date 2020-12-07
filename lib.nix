@@ -88,7 +88,8 @@ in rec {
         networking.extraHosts = lib.concatStringsSep "\n" ([''
           ${hostIp} ${hostName}
           ${hostIp} ${hostName}.maxhbr.de
-        ''] ++ map (subDomain: "${hostIp} ${subDomain}.${hostName}") subDomains);
+        '']
+          ++ map (subDomain: "${hostIp} ${subDomain}.${hostName}") subDomains);
         home-manager.users.mhuber = {
           home.file = {
             ".ssh/imports/my-${hostName}.config".text = ''

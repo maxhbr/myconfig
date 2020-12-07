@@ -18,9 +18,7 @@
 
       nginx.virtualHosts."${config.networking.hostName}" = {
         locations."/grafana/" = {
-          proxyPass = "http://${config.services.grafana.addr}:${
-              toString config.services.grafana.port
-            }/";
+          proxyPass = "http://${config.services.grafana.addr}:${toString config.services.grafana.port}/";
           proxyWebsockets = true;
         };
       };

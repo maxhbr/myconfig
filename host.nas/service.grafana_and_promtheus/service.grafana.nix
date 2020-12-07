@@ -4,7 +4,7 @@
     services = {
       grafana = {
         enable = true;
-        addr = "";
+        addr = "127.0.0.1";
         protocol = "http";
         domain = config.networking.hostName;
         port = 2342;
@@ -26,6 +26,5 @@
       after = [ "network-interfaces.target" ];
       wants = [ "network-interfaces.target" ];
     };
-    networking.firewall.allowedTCPPorts = [ 2342 ];
   };
 }

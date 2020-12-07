@@ -55,12 +55,10 @@
         datasources = [{
           name = "prometheus";
           type = "prometheus";
-          url =
-            "http://${config.services.prometheus.listenAddress}:9090/";
+          url = "http://${config.services.prometheus.listenAddress}:9090/prometheus/";
           isDefault = true;
         }];
       };
     };
-    networking.firewall.allowedTCPPorts = [ 9090 9100 ];
   };
 }

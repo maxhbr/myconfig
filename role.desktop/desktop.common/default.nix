@@ -16,10 +16,6 @@ let
     writeShellScriptBin "pipechrome" ''
       ${chromium}/bin/chromium "data:text/html;base64,$(base64 -w 0 <&0)" &> /dev/null
         '';
-  pipefox = with pkgs;
-    writeShellScriptBin "pipefox" ''
-      ${unstable.firefox}/bin/firefox "data:text/html;base64,$(base64 -w 0 <&0)" &> /dev/null
-        '';
   mkscreenshot = with pkgs;
     writeShellScriptBin "mkscreenshot.sh" ''
       set -e
@@ -64,6 +60,9 @@ in {
   ];
   config = {
     home-manager.users."${user}" = {
+      imports = [
+        ../programms.firefox.nix
+      ];
       home.packages = with pkgs;
         [
           # misc
@@ -83,8 +82,6 @@ in {
           })
           inco
           pipechrome
-          unstable.firefox
-          pipefox
           qutebrowser
           tdesktop
           # spellchecking
@@ -109,7 +106,6 @@ in {
     };
 
     environment = {
-      variables = { BROWSER = "${pkgs.firefox}/bin/firefox"; };
       shellAliases = {
         file-roller = "${pkgs.xarchiver}/bin/xarchiver";
         # see:

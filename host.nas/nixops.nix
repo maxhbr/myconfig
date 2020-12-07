@@ -18,6 +18,10 @@ mkHostNixops "nas" ({ config, lib, ... }: {
     (setupAsBackupTarget "/mnt/2x4t/backup"
       [ (getSecret "x1extremeG2" "ssh/id_ed25519.pub") ])
     (fixIp "nas" "enp3s0")
+    {
+      system.activationScripts.mkTlsDir =
+        "mkdir -p /etc/tls && chmod 777 /etc/tls";
+    }
     (lib.mkIf config.services.nextcloud.enable {
       deployment.keys = {
         adminpass = {
