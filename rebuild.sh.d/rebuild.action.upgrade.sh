@@ -69,7 +69,7 @@ upgrade() {
         logH3 "update" "nix-nixPath"
         ./modules/lib/nix-nixPath/update.sh || wasUpdated=1
         logH3 "update" "extrahosts"
-        ./role.core/nixos.networking/extrahosts/update.sh || wasUpdated=1
+        ./modules/nixos.networking/extrahosts/update.sh || wasUpdated=1
         logH3 "update" "emacs"
         ./role.desktop/emacs/spacemacs/update.sh || wasUpdated=1
         logH3 "update" "my-wallpapers"

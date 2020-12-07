@@ -11,9 +11,6 @@ in {
     ./tmux
     ./git
     ./pass
-    ./nixos.networking
-    ./nixos.nix.nix
-    ./user.mhuber.nix
     ./dic.nix
     ./service.openssh.nix
     ./service.syncthing.nix

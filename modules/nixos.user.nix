@@ -50,7 +50,7 @@ in {
       xdg.enable = true;
     };
 
-    environment.etc."current-home-manager-mhuber-packages".text = let
+    environment.etc."current-home-manager-${name}-packages".text = let
       packages = builtins.map (p: "${p.name}")
         config.home-manager.users."${name}".home.packages;
       sortedUnique = builtins.sort builtins.lessThan (lib.unique packages);
