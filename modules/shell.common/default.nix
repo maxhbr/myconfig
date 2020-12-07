@@ -3,7 +3,6 @@
 { pkgs, config, ... }:
 let user = config.myconfig.user;
 in {
-  imports = [ ../tmux ];
   config = {
     home-manager.users."${user}" = {
       programs.bat = {

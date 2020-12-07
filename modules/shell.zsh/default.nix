@@ -6,7 +6,6 @@ let
   jsonFile = ./. + "/chisui-zsh-nix-shell.json";
   json = builtins.fromJSON (builtins.readFile jsonFile);
 in {
-  imports = [ ../shell.common ];
   config = {
     home-manager.users."${user}" = {
       home.packages = with pkgs; [ oh-my-zsh ];

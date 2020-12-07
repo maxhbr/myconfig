@@ -1,25 +1,37 @@
 { config, lib, pkgs, ... }:
-
 let
   user = config.myconfig.user;
-in {
-  imports = [
-    # lib
-    ./lib
-    # modules
-    ./nixos.user.nix
-    ./nixos.networking
-    ./nixos.gc.nix
-    ./nixos.nix.nix
+  modules = [ # modules
+    ./core.nix
     ./make-linux-fast-again.nix
     ./myconfig.nix
+    ./mybackup.nix
+    ./nixos.gc.nix
+    ./nixos.networking
+    ./nixos.nix.nix
+    ./nixos.user.nix
+    ./gnupg.nix
+    ./pass
+    ./service.openssh.nix
     ./service.postgresql.nix
+    ./service.syncthing.nix
+    ./shell.common
+    ./shell.dic.nix
+    ./shell.fish
+    ./shell.git
+    ./shell.tmux
+    ./shell.vim
+    ./shell.zsh
+
   ];
+  hm-modules = [# home-manager modules
+
+  ];
+in {
+  imports = [./lib] ++ modules;
   config = {
     home-manager.users."${user}" = {
-      imports = [
-
-      ];
+      imports = hm-modules;
     };
     assertions = [
       {

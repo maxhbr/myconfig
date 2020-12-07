@@ -4,7 +4,6 @@
 let user = config.myconfig.user;
 in {
   imports = [
-    ../shell.common
     { # nix related config
       home-manager.users."${user}" = {
         programs.fish = {
