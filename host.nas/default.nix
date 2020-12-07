@@ -34,7 +34,7 @@ in {
     ./2x4000-hdds.raid.nix
     # configuration
     ../role.headless
-    ../role.smarthome
+    ./smarthome
     ../role.dev/virtualization.docker
     ../role.imagework/exfat.nix
     ./service.nextcloud.nix

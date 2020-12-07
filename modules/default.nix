@@ -5,6 +5,7 @@ let
     ./core.nix
     ./make-linux-fast-again.nix
     ./myconfig.nix
+    ./myconfig.service.deconz.nix
     ./mybackup.nix
     ./nixos.gc.nix
     ./nixos.networking
