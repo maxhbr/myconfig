@@ -71,7 +71,7 @@ upgrade() {
         logH3 "update" "extrahosts"
         ./modules/nixos.networking/extrahosts/update.sh || wasUpdated=1
         logH3 "update" "emacs"
-        ./role.desktop/emacs/spacemacs/update.sh || wasUpdated=1
+        ./role.desktop/emacs/update.sh || wasUpdated=1
         logH3 "update" "my-wallpapers"
         ./role.desktop/desktop.common/my-wallpapers/update.sh || wasUpdated=1
         logH3 "update" "chisui/zsh-nix-shell"

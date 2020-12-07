@@ -30,7 +30,6 @@ let
     ${pkgs.xclip}/bin/xclip < "$tempfile"
       '';
 in {
-  imports = [ ./spacemacs ];
   config = {
     nixpkgs.overlays = [
       (self: super: {
@@ -41,14 +40,12 @@ in {
     environment.systemPackages = with pkgs; [ doom-emacs ];
     home-manager.users."${user}" = {
       home.packages = with pkgs; [
-        xclipedit
-
         aspell
         aspellDicts.de
         aspellDicts.en
         shellcheck
         ripgrep
-      ];
+      ] ++ lib.optional config.services.xserver.enable xclipedit;
       programs.zsh.shellAliases = {
         magit = ''${doom-emacs-bin-path} -e "(magit-status \"$(pwd)\")"'';
       };
@@ -68,8 +65,7 @@ in {
           (load "default.el")
         '';
         ".emacs-profiles.el".text = ''
-          (("spacemacs" . ((user-emacs-directory . "~/.spacemacs.d")))
-           ("doom" . ((user-emacs-directory . "~/.doom.d/emacs.d")))
+          (("doom" . ((user-emacs-directory . "~/.doom.d/emacs.d")))
            ("empty" . ((user-emacs-directory . "~/.emacs.d")))
            )
         '';
@@ -88,25 +84,5 @@ in {
         emacs = "${doom-emacs-bin-path}";
       };
     };
-
-    # systemd.user.services.emacs = {
-    #   description = "Emacs: the extensible, self-documenting text editor";
-    #   serviceConfig = {
-    #     Type      = "forking";
-    #     ExecStart = "${pkgs.emacs}/bin/emacs --daemon --user=${user}";
-    #     ExecStop  = "${pkgs.emacs}/bin/emacsclient --eval \"(kill-emacs)\"";
-    #     Restart   = "always";
-    #   };
-    #   wantedBy = [ "default.target" ];
-    #   environment = {
-    #     SSH_AUTH_SOCK = "%t/keyring/ssh";
-    #     # Make sure aspell will find its dictionaries
-    #     ASPELL_CONF   = "dict-dir /run/current-system/sw/lib/aspell";
-    #     # Make sure locate will find its database
-    #     LOCATE_PATH   = "/var/cache/locatedb";
-    #   };
-    #   enable = true;
-    # };
-
   };
 }

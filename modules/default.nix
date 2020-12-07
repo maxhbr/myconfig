@@ -3,21 +3,22 @@ let
   user = config.myconfig.user;
   modules = [ # modules
     ./core.nix
-    ./make-linux-fast-again.nix
-    ./myconfig.nix
-    ./myconfig.service.deconz.nix
-    ./desktop.nix
     ./desktop.mkscreenshot.nix
+    ./desktop.nix
     ./desktop.printing.nix
     ./desktop.pulseaudio
     ./desktop.st
+    ./gnupg.nix
+    ./make-linux-fast-again.nix
     ./mybackup.nix
+    ./myconfig.nix
+    ./myconfig.service.deconz.nix
     ./nixos.gc.nix
     ./nixos.networking
     ./nixos.nix.nix
     ./nixos.user.nix
-    ./gnupg.nix
     ./pass
+    ./programs.emacs
     ./service.openssh.nix
     ./service.postgresql.nix
     ./service.syncthing.nix
