@@ -61,7 +61,7 @@ in {
   config = {
     home-manager.users."${user}" = {
       imports = [
-        ../programms.firefox.nix
+        ../programms.firefox.hm.nix
       ];
       home.packages = with pkgs;
         [
