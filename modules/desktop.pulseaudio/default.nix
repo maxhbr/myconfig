@@ -84,7 +84,7 @@ let
     fi
   '';
 in {
-  config = {
+  config = (lib.mkIf config.services.xserver.enable {
     home-manager.users."${user}" = {
       home.packages = with pkgs; [
         pavucontrol
@@ -104,5 +104,5 @@ in {
     nixpkgs.overlays =
       [ (self: super: { helper = { inherit connectBtDevice; }; }) ];
     nixpkgs.config.pulseaudio = true;
-  };
+  });
 }

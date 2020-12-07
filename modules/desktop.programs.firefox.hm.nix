@@ -52,31 +52,38 @@ in {
         };
       })
   ];
-  home.packages = with pkgs; [
-    pipefox
-  ];
-  programs.firefox = {
-    enable = true;
-    package = pkgs.unstable.firefox;
-    extensions = with pkgs.nur.repos.rycee.firefox-addons; [
-      # see: https://github.com/nix-community/nur-combined/blob/master/repos/rycee/pkgs/firefox-addons/generated-firefox-addons.nix
-      https-everywhere
-      privacy-badger
-      link-cleaner
-      gopass-bridge
+  config = (lib.mkIf config.programs.firefox.enable {
+    home.packages = with pkgs; [
+      pipefox
     ];
-    profiles."0" = {
-      id = 0;
-      isDefault = true;
-      name = "0";
-      settings = {
-        # "browser.startup.homepage" = "https://nixos.org";
-        "browser.search.region" = "DE";
-        # "browser.search.isUS" = false;
-        # "distribution.searchplugins.defaultLocale" = "en-GB";
-        # "general.useragent.locale" = "en-GB";
-        # "browser.bookmarks.showMobileBookmarks" = true;
+    programs.firefox = {
+      package = pkgs.unstable.firefox;
+      extensions = with pkgs.nur.repos.rycee.firefox-addons; [
+        # see: https://github.com/nix-community/nur-combined/blob/master/repos/rycee/pkgs/firefox-addons/generated-firefox-addons.nix
+        https-everywhere
+        privacy-badger
+        link-cleaner
+        gopass-bridge
+      ];
+      profiles."0" = {
+        id = 0;
+        isDefault = true;
+        name = "0";
+        settings = {
+          # "browser.startup.homepage" = "https://nixos.org";
+          "browser.search.region" = "DE";
+          # "browser.search.isUS" = false;
+          # "distribution.searchplugins.defaultLocale" = "en-GB";
+          # "general.useragent.locale" = "en-GB";
+          # "browser.bookmarks.showMobileBookmarks" = true;
+        };
       };
     };
-  };
+    xdg.mimeApps = {
+      defaultApplications."x-scheme-handler/http" =
+        [ "firefox.desktop" "chromium.desktop" "qutebrowser.desktop" ];
+      defaultApplications."x-scheme-handler/https" =
+        [ "firefox.desktop" "chromium.desktop" "qutebrowser.desktop" ];
+    };
+  });
 }

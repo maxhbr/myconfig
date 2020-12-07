@@ -1,5 +1,5 @@
 { pkgs, lib, config, ... }: {
-  config = {
+  config = (lib.mkIf config.services.xserver.enable {
     nixpkgs = {
       overlays = [
         (final: prev:
@@ -57,5 +57,5 @@
             done
       '')
     ];
-  };
+  });
 }

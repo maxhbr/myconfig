@@ -6,6 +6,11 @@ let
     ./make-linux-fast-again.nix
     ./myconfig.nix
     ./myconfig.service.deconz.nix
+    ./desktop.nix
+    ./desktop.mkscreenshot.nix
+    ./desktop.printing.nix
+    ./desktop.pulseaudio
+    ./desktop.st
     ./mybackup.nix
     ./nixos.gc.nix
     ./nixos.networking
@@ -26,7 +31,8 @@ let
 
   ];
   hm-modules = [# home-manager modules
-
+    ./desktop.programs.chromium.hm.nix
+    ./desktop.programs.firefox.hm.nix
   ];
 in {
   imports = [./lib] ++ modules;
