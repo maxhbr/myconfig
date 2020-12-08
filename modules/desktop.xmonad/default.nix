@@ -13,9 +13,7 @@ let
   '';
 
 in {
-  imports = [ ../desktop.X.common ];
-
-  config = {
+  config = (lib.mkIf config.services.xserver.enable {
     home-manager.users."${user}" = {
       imports = [ ./picom.hm.nix ];
       home.packages = with pkgs; [
@@ -69,5 +67,5 @@ in {
         desktopManager.xterm.enable = false;
       };
     };
-  };
+  });
 }

@@ -1,6 +1,5 @@
 { pkgs, ... }: {
   imports = [
-    ../role.desktop
     # modules
     ./dev.core
     ./dev.haskell

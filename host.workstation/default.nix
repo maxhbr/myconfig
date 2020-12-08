@@ -4,6 +4,7 @@
 let user = config.myconfig.user;
 in {
   imports = [
+    ../modules
     ./hardware-configuration.nix
     ../hardware/efi.nix
     ../hardware/btrfs.nix
@@ -13,17 +14,31 @@ in {
     ./4x500-hdds.raid.nix
     ../role.headless
     # other profiles
-    ../role.desktop
     ../role.dev/virtualization.docker
     ../role.dev/programs.license-compliance-toolbox.nix
     ../role.dev/dev.haskell
     # ../role.imagework
     ../role.gaming
     # ../role.desktop/desktop.X.xfce.nix
-    ../role.desktop/desktop.X.vnc.nix
     ../role.desktop/desktop.X.rdp.nix
     { # for quickfix (due to usage of 20.03)
       nixpkgs.config.allowBroken = true;
+    }
+    {
+      environment.systemPackages = with pkgs; [ x11vnc ];
+      ## Setup via ssh tunnel:
+      # $ ssh -t -L 5900:localhost:5900 $IP 'x11vnc -ncache 10 -unixpw -localhost -display :0'
+      ## in other terminal:
+      # $ vncviewer -encodings 'copyrect tight zrle hextile' localhost:0
+
+      ## or open ports
+      # networking.firewall.allowedUDPPorts = [ 5900 ];
+      # networking.firewall.allowedTCPPorts = [ 5900 ];
+    }
+    {
+      services.xrdp.enable = true;
+      services.xrdp.defaultWindowManager = "${pkgs.icewm}/bin/icewm";
+      networking.firewall.allowedTCPPorts = [ 3389 ];
     }
   ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.5") ]);
 

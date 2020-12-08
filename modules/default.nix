@@ -16,6 +16,7 @@ let
        ./desktop.pulseaudio
        ./desktop.st
        ./desktop.xclip.nix
+       ./desktop.xmonad
        ./gnupg.nix
        ./make-linux-fast-again.nix
        ./mybackup.nix

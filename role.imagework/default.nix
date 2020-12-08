@@ -3,7 +3,7 @@
 { pkgs, config, ... }:
 let user = config.myconfig.user;
 in {
-  imports = [ ../role.desktop ./wacom.nix ./exfat.nix ];
+  imports = [ ./wacom.nix ./exfat.nix ];
   config = {
     home-manager.users."${user}" = {
       home.packages = with pkgs; [
