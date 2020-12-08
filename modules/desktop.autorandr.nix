@@ -1,6 +1,6 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, ... }:
+{ pkgs, config, lib,... }:
 let
   user = config.myconfig.user;
   resetXrandr = with pkgs;
@@ -73,7 +73,7 @@ let
     '';
 
 in {
-  config = {
+  config = (lib.mkIf config.services.xserver.enable {
     home-manager.users."${user}" = {
       home.packages = with pkgs; [
         xrandrUnpan
@@ -100,5 +100,5 @@ in {
       };
     };
     services.autorandr.enable = true;
-  };
+  });
 }

@@ -50,6 +50,12 @@ in {
       xdg.enable = true;
     };
 
+    services.xserver = (lib.mkIf config.services.xserver.enable {
+      layout = "de";
+      xkbVariant = "neo";
+      xkbOptions = "altwin:swap_alt_win";
+    });
+
     environment.etc."current-home-manager-${name}-packages".text = let
       packages = builtins.map (p: "${p.name}")
         config.home-manager.users."${name}".home.packages;

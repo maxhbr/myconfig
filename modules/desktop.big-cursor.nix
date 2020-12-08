@@ -1,9 +1,9 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, ... }:
+{ pkgs, config, lib, ... }:
 let user = config.myconfig.user;
 in {
-  config = {
+  config = (lib.mkIf config.services.xserver.enable {
     home-manager.users."${user}" = {
       xsession.pointerCursor = {
         package = pkgs.vanilla-dmz;
@@ -12,7 +12,6 @@ in {
         defaultCursor = "left_ptr"; # or "left_ptr";
       };
     };
-    environment = { systemPackages = with pkgs; [ cursor ]; };
     nixpkgs.overlays = [
       (final: prev: {
         # set default cursor theme when installed
@@ -23,5 +22,6 @@ in {
         '';
       })
     ];
-  };
+    environment.systemPackages = with pkgs; [ cursor ];
+  });
 }

@@ -1,7 +1,7 @@
 { config, lib, pkgs, ... }:
 let user = config.myconfig.user;
 in {
-  config = {
+  config = (lib.mkIf config.services.xserver.enable {
     home-manager.users."${user}" = {
       home.packages = with pkgs; [ xclip ];
 
@@ -22,5 +22,5 @@ in {
         ${pkgs.xclip}/bin/xclip -selection c <(${pkgs.xclip}/bin/xclip -o)
       }
     '';
-  };
+  });
 }
