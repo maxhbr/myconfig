@@ -66,5 +66,3 @@
 (after! evil
   (after! ido
     (load! "./keybindings.el")))
-
-(mapc 'load (file-expand-wildcards "~/.doom.d/imports/*.el"))

@@ -7,6 +7,7 @@ let
     ./desktop.nix
     ./desktop.printing.nix
     ./desktop.pulseaudio
+    ./desktop.kernel.nix
     ./desktop.st
     ./gnupg.nix
     ./make-linux-fast-again.nix

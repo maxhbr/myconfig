@@ -40,41 +40,27 @@ in {
     environment.systemPackages = with pkgs; [ doom-emacs ];
     home-manager.users."${user}" = {
       home.packages = with pkgs; [
-        aspell
-        aspellDicts.de
-        aspellDicts.en
+        emacs-all-the-icons-fonts
+
+        aspell aspellDicts.de aspellDicts.en
+
         shellcheck
-        ripgrep
       ] ++ lib.optional config.services.xserver.enable xclipedit;
       programs.zsh.shellAliases = {
         magit = ''${doom-emacs-bin-path} -e "(magit-status \"$(pwd)\")"'';
       };
       home.file = {
-        ".emacs" = {
-          source = let
-            chemacs = (builtins.fetchTarball {
-              url = "https://github.com/plexus/chemacs/archive/master.tar.gz";
-            });
-          in "${chemacs}/.emacs";
-          recursive = true;
-        };
         ".emacs.d/init.el".text = ''
           (load "default.el")
-        '';
-        ".doom.d/emacs.d/init.el".text = ''
-          (load "default.el")
-        '';
-        ".emacs-profiles.el".text = ''
-          (("doom" . ((user-emacs-directory . "~/.doom.d/emacs.d")))
-           ("empty" . ((user-emacs-directory . "~/.emacs.d")))
-           )
+          (mapc 'load (file-expand-wildcards "~/.doom.d/imports/*.el"))
         '';
         ".doom.d/imports" = {
           source = ./doom.d/imports;
           recursive = true;
         };
-        ".emacs-profile".text = "doom";
       };
+      programs.emacs.package = doom-emacs;
+      programs.emacs.enable = true;
     };
     environment = {
       variables = { EDITOR = "${doom-emacs-bin-path} -nw"; };
