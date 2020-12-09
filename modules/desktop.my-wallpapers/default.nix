@@ -3,16 +3,17 @@
 { pkgs, config, lib, ... }:
 let
   user = config.myconfig.user;
-  jsonFile = ./. + "/maxhbr-wallpapers.json";
-  json = builtins.fromJSON (builtins.readFile jsonFile);
-  my-wallpapers-source =
-    pkgs.fetchFromGitHub { inherit (json) owner repo rev sha256; };
 in {
   imports = [
     {
       nixpkgs.overlays = [
         (self: super: {
-          my-wallpapers = super.callPackage my-wallpapers-source { };
+          my-wallpapers = let
+            jsonFile = ./. + "/maxhbr-wallpapers.json";
+            json = builtins.fromJSON (builtins.readFile jsonFile);
+            my-wallpapers-source =
+              pkgs.fetchFromGitHub { inherit (json) owner repo rev sha256; };
+            in super.callPackage my-wallpapers-source { };
         })
       ];
     }
