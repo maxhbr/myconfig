@@ -21,7 +21,6 @@ let
        ./gnupg.nix
        ./make-linux-fast-again.nix
        ./mybackup.nix
-       ./myconfig.nix
        ./myconfig.service.deconz.nix
        ./nixos.gc.nix
        ./nixos.networking
@@ -49,7 +48,7 @@ let
     ./desktop.programs.zathura.hm.nix
   ];
 in {
-  imports = [./lib] ++ modules;
+  imports = [./lib ./myconfig] ++ modules;
   config = {
     home-manager.users."${user}" = {
       imports = hm-modules;

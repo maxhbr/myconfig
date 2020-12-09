@@ -47,6 +47,11 @@ in {
   ]);
 
   config = {
+    myconfig = {
+      desktop.enable = true;
+      virtualisation.enable = true;
+    };
+
     networking.hostName = "x1extremeG2";
     networking.hostId = "7634ddfe";
 
@@ -56,10 +61,6 @@ in {
       preLVM = true;
       allowDiscards = true;
     };
-
-    services.xserver.enable = true;
-    virtualisation.docker.enable = true;
-    virtualisation.virtualbox.host.enable = true;
 
     services.openssh = {
       listenAddresses = [{
