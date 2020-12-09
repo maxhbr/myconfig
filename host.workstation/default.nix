@@ -15,7 +15,7 @@ in {
     # other profiles
     ../role.dev/programs.license-compliance-toolbox.nix
     ../role.dev/dev.haskell
-    ../role.gaming
+    ./gaming
     { # for quickfix (due to usage of 20.03)
       nixpkgs.config.allowBroken = true;
     }

@@ -19,9 +19,6 @@ in {
     ./mail
     ## fun
     ../role.imagework
-    ../role.gaming/games.steam
-    # ../role.gaming/games.powder.nix
-    # ../role.gaming/games.starsector.nix
     ./smarthome.nix
   ] ++ (with (import ../lib.nix); [
     (setupAsWireguardClient "10.199.199.2")
