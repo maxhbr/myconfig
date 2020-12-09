@@ -46,8 +46,8 @@ let
        ./virtualization.vbox.nix
   ];
   hm-modules = [# home-manager modules
-    ./desktop.programs.firefox.hm.nix
-    ./desktop.programs.zathura.hm.nix
+    ./services.xserver.programs.firefox.hm.nix
+    ./services.xserver.programs.zathura.hm.nix
   ];
 in {
   imports = [./lib ./myconfig] ++ modules;
