@@ -3,21 +3,6 @@ let
   user = config.myconfig.user;
   modules = [ # modules
        ./core.nix
-       ./desktop.autorandr.nix
-       ./desktop.big-cursor.nix
-       ./desktop.fonts
-       ./desktop.kernel.nix
-       ./desktop.mkscreenshot.nix
-       ./desktop.my-wallpapers
-       ./desktop.nix
-       ./desktop.printing.nix
-       ./desktop.programs.chromium.nix
-       ./desktop.programs.obs.nix
-       ./desktop.programs.xss-lock.nix
-       ./desktop.pulseaudio
-       ./desktop.st
-       ./desktop.xclip.nix
-       ./desktop.xmonad
        ./gnupg.nix
        ./make-linux-fast-again.nix
        ./mybackup.nix
@@ -26,13 +11,28 @@ let
        ./nixos.networking
        ./nixos.nix.nix
        ./nixos.user.nix
-       ./pass
        ./programs.emacs
+       ./programs.pass
        ./service.netdata.nix
        ./service.openssh.nix
        ./service.postgresql.nix
-       ./service.vsftp.nix
        ./service.syncthing.nix
+       ./service.vsftp.nix
+       ./services.xserver.autorandr.nix
+       ./services.xserver.big-cursor.nix
+       ./services.xserver.fonts
+       ./services.xserver.kernel.nix
+       ./services.xserver.mkscreenshot.nix
+       ./services.xserver.my-wallpapers
+       ./services.xserver.nix
+       ./services.xserver.printing.nix
+       ./services.xserver.programs.chromium.nix
+       ./services.xserver.programs.obs.nix
+       ./services.xserver.programs.xss-lock.nix
+       ./services.xserver.pulseaudio
+       ./services.xserver.st
+       ./services.xserver.xclip.nix
+       ./services.xserver.xmonad
        ./shell.common
        ./shell.dic.nix
        ./shell.fish
