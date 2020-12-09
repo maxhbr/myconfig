@@ -29,17 +29,6 @@ in {
       };
     };
 
-    services = {
-      xserver = {
-        displayManager = {
-          lightdm = {
-            background = "${pkgs.my-wallpapers}/share/romben3.png";
-          };
-          # sessionCommands = ''
-          #   ${pkgs.my-wallpapers}/bin/myRandomBackground &disown
-          # '';
-        };
-      };
-    };
+    services.xserver.displayManager.lightdm.background = "${pkgs.my-wallpapers}/share/romben3.png";
   });
 }
