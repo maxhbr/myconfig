@@ -58,6 +58,8 @@ in {
     };
 
     services.xserver.enable = true;
+    virtualisation.docker.enable = true;
+    virtualisation.virtualbox.host.enable = true;
 
     services.openssh = {
       listenAddresses = [{

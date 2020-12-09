@@ -12,6 +12,7 @@ let
        ./desktop.nix
        ./desktop.printing.nix
        ./desktop.programs.chromium.nix
+       ./desktop.programs.obs.nix
        ./desktop.programs.xss-lock.nix
        ./desktop.pulseaudio
        ./desktop.st
@@ -38,6 +39,10 @@ let
        ./shell.tmux
        ./shell.vim
        ./shell.zsh
+       ./virtualization.docker
+       ./virtualization.lxc.nix
+       ./virtualization.qemu.nix
+       ./virtualization.vbox.nix
   ];
   hm-modules = [# home-manager modules
     ./desktop.programs.firefox.hm.nix

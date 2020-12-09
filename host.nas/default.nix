@@ -35,7 +35,6 @@ in {
     # configuration
     ../role.headless
     ./smarthome
-    ../role.dev/virtualization.docker
     ../role.imagework/exfat.nix
     ./service.nextcloud.nix
     ./service.unifi.nix
@@ -126,6 +125,8 @@ in {
   config = {
     networking.hostName = "nas";
     networking.hostId = "29d93341";
+
+    virtualisation.docker.enable = true;
 
     services.logind.extraConfig = ''
       HandlePowerKey=reboot

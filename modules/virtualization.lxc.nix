@@ -1,6 +1,5 @@
-{ pkgs, ... }:
+{ pkgs, config, lib, ... }:
 let
-
   lxdMyInit = with pkgs;
     writeScriptBin "lxdMyInit" ''
       #!${stdenv.shell}
@@ -74,13 +73,13 @@ let
     '';
 
 in {
-  config = {
+  config = (lib.mkIf config.virtualisation.lxc.enable {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [ lxc lxcList lxd lxdMyInit lxdMyTeardown ];
     };
     virtualisation = {
-      lxc.enable = true;
+      # lxc.enable = true;
       lxd.enable = true;
     };
-  };
+  });
 }

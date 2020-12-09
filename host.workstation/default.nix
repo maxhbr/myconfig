@@ -14,13 +14,9 @@ in {
     ./4x500-hdds.raid.nix
     ../role.headless
     # other profiles
-    ../role.dev/virtualization.docker
     ../role.dev/programs.license-compliance-toolbox.nix
     ../role.dev/dev.haskell
-    # ../role.imagework
     ../role.gaming
-    # ../role.desktop/desktop.X.xfce.nix
-    ../role.desktop/desktop.X.rdp.nix
     { # for quickfix (due to usage of 20.03)
       nixpkgs.config.allowBroken = true;
     }
@@ -45,6 +41,10 @@ in {
   config = {
     networking.hostName = "workstation";
     networking.hostId = "864d73f4";
+
+    services.xserver.enable = true;
+    virtualisation.docker.enable = true;
+    virtualisation.virtualbox.host.enable = true;
 
     networking.firewall.allowedTCPPorts = [ 12345 6567 ];
     networking.firewall.allowedUDPPorts = [ 12345 6567 ];
