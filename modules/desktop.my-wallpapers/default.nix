@@ -20,10 +20,10 @@ in {
   ];
   config = (lib.mkIf config.services.xserver.enable {
     home-manager.users."${user}" = {
-      home.packages = with pkgs; [ my-wallpapers my-wallpapers-source ];
+      home.packages = with pkgs; [ my-wallpapers ];
       services.random-background = {
         enable = true;
-        imageDirectory = "${pkgs.my-wallpapers}/share/1440";
+        imageDirectory = "${pkgs.my-wallpapers}/share";
         display = "scale";
         interval = "10min";
       };
