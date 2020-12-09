@@ -6,13 +6,9 @@ in {
   imports = [
     ../modules
     # configuration
-    ./service.monitoring.nix
-    ./service.vsftp.nix
   ];
 
   config = {
-    home-manager.users."${user}" = { home.packages = with pkgs; [ vnstat ]; };
-    system.autoUpgrade.allowReboot = true;
-    services.vnstat.enable = true;
+    myconfig.headless.enable = true;
   };
 }

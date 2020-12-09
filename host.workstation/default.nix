@@ -12,7 +12,6 @@ in {
     ../hardware/nixos-hardware/common/pc/ssd
     ../hardware/hdd-spinndown.nix
     ./4x500-hdds.raid.nix
-    ../role.headless
     # other profiles
     ../role.dev/programs.license-compliance-toolbox.nix
     ../role.dev/dev.haskell
@@ -39,12 +38,14 @@ in {
   ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.5") ]);
 
   config = {
+    myconfig = {
+      desktop.enable = true;
+      headless.enable = true;
+      virtualisation.enable = true;
+    }
+
     networking.hostName = "workstation";
     networking.hostId = "864d73f4";
-
-    services.xserver.enable = true;
-    virtualisation.docker.enable = true;
-    virtualisation.virtualbox.host.enable = true;
 
     networking.firewall.allowedTCPPorts = [ 12345 6567 ];
     networking.firewall.allowedUDPPorts = [ 12345 6567 ];

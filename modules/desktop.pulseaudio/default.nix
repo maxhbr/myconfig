@@ -84,12 +84,6 @@ let
     fi
   '';
 in {
-  imports = [
-    {
-      nixpkgs.overlays =
-        [ (self: super: { helper = { inherit connectBtDevice; }; }) ];
-    }
-  ];
   config = (lib.mkIf config.services.xserver.enable {
     home-manager.users."${user}" = {
       home.packages = with pkgs; [
@@ -108,5 +102,7 @@ in {
         "load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1";
     };
     nixpkgs.config.pulseaudio = true;
+    nixpkgs.overlays =
+      [ (self: super: { helper = { inherit connectBtDevice; }; }) ];
   });
 }

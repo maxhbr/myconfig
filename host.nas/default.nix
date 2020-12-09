@@ -33,7 +33,6 @@ in {
     }
     ./2x4000-hdds.raid.nix
     # configuration
-    ../role.headless
     ./smarthome
     ../role.imagework/exfat.nix
     ./service.nextcloud.nix
@@ -123,6 +122,10 @@ in {
     }
   ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.6") ]);
   config = {
+    myconfig = {
+      headless.enable = true;
+    };
+
     networking.hostName = "nas";
     networking.hostId = "29d93341";
 

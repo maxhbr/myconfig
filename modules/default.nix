@@ -28,8 +28,10 @@ let
        ./nixos.user.nix
        ./pass
        ./programs.emacs
+       ./service.netdata.nix
        ./service.openssh.nix
        ./service.postgresql.nix
+       ./service.vsftp.nix
        ./service.syncthing.nix
        ./shell.common
        ./shell.dic.nix

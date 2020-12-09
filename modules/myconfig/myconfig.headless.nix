@@ -5,8 +5,16 @@ let
   user = cfg.user;
 in {
   options.myconfig = with lib; {
-    headless.enable = mkEnableOption "headless.desktop";
+    headless.enable = mkEnableOption "headless / server-like stuff";
   };
   config = (lib.mkIf cfg.headless.enable {
+    services.netdata.enable = true;
+    services.vnstat.enable = true;
+    services.vsftpd.enable = true;
+
+    systemd.enableCgroupAccounting = true;
+    system.autoUpgrade.allowReboot = true;
+
+    home-manager.users."${user}" = { home.packages = with pkgs; [ vnstat ]; };
   });
 }

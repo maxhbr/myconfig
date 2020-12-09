@@ -3,13 +3,16 @@
 { pkgs, lib, ... }: {
   imports = [
     ./hardware-configuration.nix
-    ../role.headless
     # hardware:
     ../hardware/grub.nix
     # configuration
     ./service.wireguard-server
   ];
   config = {
+    myconfig = {
+      headless.enable = true;
+    };
+
     networking.hostName = "vserver";
     networking.hostId = "49496f29";
 

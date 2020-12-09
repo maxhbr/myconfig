@@ -1,7 +1,6 @@
-{ pkgs, lib, ... }: {
-  config = {
+{ pkgs, config, lib, ... }: {
+  config = (lib.mkIf config.services.netdata.enable  {
     services.netdata = {
-      enable = true;
       config = {
         global = {
           "default port" = "19999";
@@ -13,8 +12,7 @@
         };
       };
     };
-    systemd.enableCgroupAccounting = true;
     networking.firewall.allowedTCPPorts = [ 19999 ];
     networking.firewall.allowedUDPPorts = [ 19999 ];
-  };
+  });
 }

@@ -8,10 +8,13 @@
       boot.initrd.supportedFilesystems = [ "btrfs" "luks" ];
       services.btrfs.autoScrub = { enable = true; };
     }
-    ../role.headless
     ./service.grafana_and_promtheus
   ];
   config = {
+    myconfig = {
+      headless.enable = true;
+    };
+
     networking.hostName = "nuc";
     networking.hostId = "29d93123";
 
