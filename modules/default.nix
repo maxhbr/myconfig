@@ -13,11 +13,11 @@ let
        ./nixos.user.nix
        ./programs.emacs
        ./programs.pass
-       ./service.netdata.nix
-       ./service.openssh.nix
-       ./service.postgresql.nix
-       ./service.syncthing.nix
-       ./service.vsftp.nix
+       ./services.netdata.nix
+       ./services.openssh.nix
+       ./services.postgresql.nix
+       ./services.syncthing.nix
+       ./services.vsftp.nix
        ./services.xserver.autorandr.nix
        ./services.xserver.big-cursor.nix
        ./services.xserver.fonts
