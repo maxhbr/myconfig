@@ -20,6 +20,12 @@ in {
   config = (lib.mkIf config.services.xserver.enable {
     home-manager.users."${user}" = {
       home.packages = with pkgs; [ my-wallpapers my-wallpapers-source ];
+      services.random-background = {
+        enable = true;
+        imageDirectory = "${pkgs.my-wallpapers}/share/1440";
+        display = "scale";
+        interval = "10min";
+      };
     };
 
     services = {
@@ -28,17 +34,10 @@ in {
           lightdm = {
             background = "${pkgs.my-wallpapers}/share/romben3.png";
           };
-          sessionCommands = ''
-            ${pkgs.my-wallpapers}/bin/myRandomBackground &disown
-          '';
+          # sessionCommands = ''
+          #   ${pkgs.my-wallpapers}/bin/myRandomBackground &disown
+          # '';
         };
-      };
-
-      cron = {
-        enable = true;
-        systemCronJobs = [
-          "*/10 * * * *  ${user} ${pkgs.my-wallpapers}/bin/myRandomBackground >> /tmp/cronout 2>&1"
-        ];
       };
     };
   });
