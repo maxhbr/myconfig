@@ -12,6 +12,10 @@ in {
         The username of the main interactive user
       '';
     };
+    # config = mkOption {
+    #   type = types.attrs;
+    #   default = {};
+    # };
   };
   imports = [
     ./myconfig.desktop.nix

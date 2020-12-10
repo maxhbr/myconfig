@@ -77,7 +77,7 @@ in {
     documentation.nixos.enable = true;
     services = {
       acpid.enable = true;
-      ntp.enable = true;
+      # ntp.enable = true;
       nscd.enable = true;
       earlyoom.enable = true;
     };

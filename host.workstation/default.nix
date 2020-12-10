@@ -38,14 +38,17 @@ in {
   ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.5") ]);
 
   config = {
+    networking.hostName = "workstation";
+    networking.hostId = "864d73f4";
     myconfig = {
       desktop.enable = true;
       headless.enable = true;
-      virtualisation.enable = true;
+      # virtualisation.enable = true;
     };
+    virtualisation.docker.enable = true;
 
-    networking.hostName = "workstation";
-    networking.hostId = "864d73f4";
+    boot.kernelPackages =
+      lib.mkForce pkgs.unstable.linuxPackages_testing;
 
     networking.firewall.allowedTCPPorts = [ 12345 6567 ];
     networking.firewall.allowedUDPPorts = [ 12345 6567 ];
@@ -90,9 +93,6 @@ in {
         };
       };
     };
-
-    boot.kernelPackages =
-      lib.mkForce pkgs.nixos-2003-small.linuxPackages_latest;
 
     # This value determines the NixOS release from which the default
     # settings for stateful data, like file locations and database versions
