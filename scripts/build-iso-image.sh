@@ -22,7 +22,6 @@ getNamePrefixFromConfig() {
 
 build() (
     local hostConfig="$1"
-    local secondaryHostConfig="$2"
 
     NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/misc/empty_nixos_config.nix"
     NIX_PATH=""
@@ -40,18 +39,17 @@ build() (
           $3 \
           --show-trace \
           --no-out-link \
-          --argstr hostConfig "$hostConfig" $([[ "$secondaryHostConfig" ]] && echo "--argstr secondaryHostConfig $secondaryHostConfig")
+          $([[ "$hostConfig" ]] && echo "--argstr hostConfig $hostConfig")
     )
 )
 
 buildAndCopy() {
     local hostConfig="$1"
-    local secondaryHostConfig="$2"
 
-    drv=$(build "$hostConfig" "$secondaryHostConfig")
+    drv=$(build "$hostConfig")
     out=("$drv/iso/nixos-myconfig"*".iso")
     du -h "$out"
-    local outDir="$myconfigDir/__out/iso$(getNamePrefixFromConfig "${hostConfig}")$(getNamePrefixFromConfig "${secondaryHostConfig}")"
+    local outDir="$myconfigDir/__out/iso$(getNamePrefixFromConfig "${hostConfig}")"
     install -D -m 644 -v "$out" -t "$outDir"
     nix-store --delete "$drv"
 
@@ -78,6 +76,6 @@ elif [[ "$1" == "--push-to-cachix" ]]; then
     shift
     build "${1:-role.dev}" "$2" | cachix push maxhbr
 else
-    buildAndCopy "${1:-role.dev}" "$2"
+    buildAndCopy "${1}"
 fi
 

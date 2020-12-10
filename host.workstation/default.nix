@@ -42,7 +42,7 @@ in {
       desktop.enable = true;
       headless.enable = true;
       virtualisation.enable = true;
-    }
+    };
 
     networking.hostName = "workstation";
     networking.hostId = "864d73f4";

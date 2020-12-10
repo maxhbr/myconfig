@@ -1,5 +1,6 @@
 hostname
 hostid
+*.iso
 *.log
 /_logs/
 /__out/
@@ -18,7 +19,6 @@ result
 result-*
 .vagrant
 myconfig.out-link
-*.iso
 **/imports/priv*
 **/imports/work*
 *.img
