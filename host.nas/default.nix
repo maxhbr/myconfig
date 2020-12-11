@@ -34,7 +34,6 @@ in {
     ./2x4000-hdds.raid.nix
     # configuration
     ./smarthome
-    ../role.imagework/exfat.nix
     ./service.nextcloud.nix
     ./service.unifi.nix
 

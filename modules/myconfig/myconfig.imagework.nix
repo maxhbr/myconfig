@@ -1,10 +1,14 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, ... }:
-let user = config.myconfig.user;
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.myconfig;
+  user = cfg.user;
 in {
-  imports = [ ./wacom.nix ./exfat.nix ];
-  config = {
+  options.myconfig = with lib; {
+    imagework.enable = mkEnableOption "imagework";
+  };
+  config = (lib.mkIf cfg.imagework.enable {
     home-manager.users."${user}" = {
       home.packages = with pkgs; [
         gphoto2
@@ -23,16 +27,5 @@ in {
         nixos-2003-small.freecad # 3D
       ];
     };
-    environment.interactiveShellInit = ''
-      gimp() {
-        command gimp "$@" &disown
-      }
-      darktable() {
-        command darktable "$@" &disown
-        }
-      gthumb() {
-        command gthumb "$@" &disown
-      }
-          '';
-  };
+  });
 }

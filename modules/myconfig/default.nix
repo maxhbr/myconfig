@@ -21,5 +21,6 @@ in {
     ./myconfig.desktop.nix
     ./myconfig.headless.nix
     ./myconfig.virtualisation.nix
+    ./myconfig.imagework.nix
   ];
 }

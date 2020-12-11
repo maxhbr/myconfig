@@ -3,6 +3,7 @@ let
   user = config.myconfig.user;
   modules = [ # modules
        ./core.nix
+       ./exfat.nix
        ./gnupg.nix
        ./make-linux-fast-again.nix
        ./mybackup.nix
@@ -31,6 +32,7 @@ let
        ./services.xserver.programs.xss-lock.nix
        ./services.xserver.pulseaudio
        ./services.xserver.st
+       ./services.xserver.wacom.nix
        ./services.xserver.xclip.nix
        ./services.xserver.xmonad
        ./shell.common

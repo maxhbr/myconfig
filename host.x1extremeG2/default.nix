@@ -18,7 +18,6 @@ in {
     ./role.work
     ./mail
     ## fun
-    ../role.imagework
     ./smarthome.nix
   ] ++ (with (import ../lib.nix); [
     (setupAsWireguardClient "10.199.199.2")
@@ -47,7 +46,9 @@ in {
     myconfig = {
       desktop.enable = true;
       virtualisation.enable = true;
+      imagework.enable = true;
     };
+    services.xserver.wacom.enable = true;
 
     networking.hostName = "x1extremeG2";
     networking.hostId = "7634ddfe";
