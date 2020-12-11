@@ -25,24 +25,26 @@ in rec {
     if (builtins.pathExists (secretsDir + "/README.md")) then list else [ ];
 
   mkFromBin = namePrefix: binDir: pkgs:
-    let
-      binDerivation = pkgs.stdenv.mkDerivation rec {
-        version = "1.0";
-        name = "${namePrefix}-bin-${version}";
+    lib.mkIf (builtins.pathExists binDir) {
+      home-manager.users.mhuber = {
+        home.packages = let
+          binDerivation = pkgs.stdenv.mkDerivation rec {
+            version = "1.0";
+            name = "${namePrefix}-bin-${version}";
 
-        src = binDir;
+            src = binDir;
 
-        buildPhase = "";
+            buildPhase = "";
 
-        installPhase = ''
-          bin=$out/bin
-          mkdir -p $bin
-          cp * $bin
-          chmod -R +x $bin
-        '';
+            installPhase = ''
+                bin=$out/bin
+                mkdir -p $bin
+                cp * $bin
+                chmod -R +x $bin
+              '';
+          };
+        in [ binDerivation ];
       };
-    in lib.mkIf (builtins.pathExists binDir) {
-      home-manager.users.mhuber = { home.packages = [ binDerivation ]; };
     };
 
   mkFromHostBin = hostName: pkgs:

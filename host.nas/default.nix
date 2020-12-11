@@ -36,7 +36,6 @@ in {
     ./smarthome
     ./service.nextcloud.nix
     ./service.unifi.nix
-
     ./service.grafana
 
     { # nginx
