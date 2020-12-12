@@ -3,6 +3,7 @@
 { pkgs, config, lib, ... }: {
   imports = [
     ./hardware-configuration.nix
+    ../modules
     ../hardware/grub.nix
     {
       boot.initrd.supportedFilesystems = [ "btrfs" "luks" ];

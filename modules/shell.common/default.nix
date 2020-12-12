@@ -5,13 +5,6 @@ let user = config.myconfig.user;
 in {
   config = {
     home-manager.users."${user}" = {
-      programs.bat = {
-        enable = true;
-        config = {
-          pager = "less -FR";
-          theme = "Monokai Extended Light";
-        };
-      };
       home.file = {
         ".aliasrc".source = ./aliasrc;
         ".bashrc" = {
@@ -127,7 +120,6 @@ in {
         hgrep() { history | egrep "$@"; }
       '';
       shellAliases = {
-        cat = ''${pkgs.bat}/bin/bat --theme="Monokai Extended Light"'';
         ps = "${pkgs.procs}/bin/procs";
         ag = "rg";
       };
