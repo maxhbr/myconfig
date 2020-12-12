@@ -7,7 +7,7 @@ in {
     ./hardware-configuration.nix
     ../modules
     ../role.dev
-    ../role.myconfig-master
+    ./myconfig-master
     # hardware:
     ../hardware/x1extremeG2.nix
     ../hardware/efi.nix
