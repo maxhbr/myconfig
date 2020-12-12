@@ -36,11 +36,11 @@ let
     ./services.xserver.xclip.nix
     ./services.xserver.xmonad
     ./shell.common
-    ./shell.dic.nix
+    ./shell.programs.dic.nix
     ./shell.fish
     ./shell.git
-    ./shell.tmux
-    ./shell.vim
+    ./shell.programs.tmux
+    ./shell.programs.vim
     ./shell.zsh
     ./virtualization.docker
     ./virtualization.lxc.nix
@@ -48,8 +48,8 @@ let
     ./virtualization.vbox.nix
   ];
   hm-modules = [# home-manager modules
-    ./shell.programms.bat.hm.nix
-    ./shell.programms.exa.hm.nix
+    ./shell.programs.bat.hm.nix
+    ./shell.programs.exa.hm.nix
     ./services.xserver.programs.firefox.hm.nix
     ./services.xserver.programs.zathura.hm.nix
   ];

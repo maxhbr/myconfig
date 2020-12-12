@@ -4,6 +4,7 @@
 let user = config.myconfig.user;
 in {
   imports = [
+    ./historybackup.nix
     { # nix related config
       home-manager.users."${user}" = {
         programs.fish = {
