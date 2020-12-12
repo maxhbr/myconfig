@@ -6,7 +6,6 @@ in {
   imports = [
     ./hardware-configuration.nix
     ../modules
-    ../role.dev
     ./myconfig-master
     # hardware:
     ../hardware/x1extremeG2.nix
@@ -47,6 +46,12 @@ in {
       desktop.enable = true;
       virtualisation.enable = true;
       imagework.enable = true;
+      dev = {
+        haskell.enable = true;
+        iot.enable = true;
+        network.enable = true;
+        compliance.enable = true;
+      };
     };
     services.xserver.wacom.enable = true;
 

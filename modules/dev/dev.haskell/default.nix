@@ -1,8 +1,10 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }: {
-  imports = [ ../dev.core ];
-  config = {
+{ pkgs, config, lib, ... }:
+let
+  cfg = config.myconfig.dev.haskell;
+in {
+  config = lib.mkIf cfg.enable {
     home-manager.users.mhuber = {
       home.packages = with pkgs.unstable;
         [ stack cabal-install ] ++ (with haskellPackages; [

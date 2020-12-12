@@ -4,7 +4,7 @@
 let user = config.myconfig.user;
 in {
   imports =
-    [ ../../role.dev ./jdk.nix ./misc-desktop-tools.nix ./evolution.nix ];
+    [ ./jdk.nix ./misc-desktop-tools.nix ./evolution.nix ];
   config = {
     nixpkgs.overlays = map (n: import n) [
       ./idea-ultimate

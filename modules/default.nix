@@ -3,6 +3,7 @@ let
   user = config.myconfig.user;
   modules = [ # modules
     ./core.nix
+    ./dev
     ./exfat.nix
     ./gnupg.nix
     ./make-linux-fast-again.nix
