@@ -13,8 +13,6 @@ in {
     ../hardware/hdd-spinndown.nix
     ./4x500-hdds.raid.nix
     # other profiles
-    ../role.dev/programs.license-compliance-toolbox.nix
-    ../role.dev/dev.haskell
     ./gaming
     { # for quickfix (due to usage of 20.03)
       nixpkgs.config.allowBroken = true;
@@ -44,11 +42,18 @@ in {
       desktop.enable = true;
       headless.enable = true;
       # virtualisation.enable = true;
+      dev = {
+        haskell.enable = true;
+        compliance.enable = true;
+      };
     };
     virtualisation.docker.enable = true;
 
     boot.kernelPackages =
-      lib.mkForce pkgs.unstable.linuxPackages_testing;
+      # lib.mkForce pkgs.unstable.linuxPackages_testing;
+      # lib.mkForce pkgs.linuxPackages_testing;
+      # lib.mkForce pkgs.unstable.linuxPackages_latest;
+      lib.mkForce pkgs.linuxPackages_latest;
 
     networking.firewall.allowedTCPPorts = [ 12345 6567 ];
     networking.firewall.allowedUDPPorts = [ 12345 6567 ];
