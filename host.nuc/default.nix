@@ -12,6 +12,7 @@
   ];
   config = {
     myconfig = {
+      desktop.enable = true;
       headless.enable = true;
     };
 

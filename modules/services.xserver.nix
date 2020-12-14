@@ -37,6 +37,7 @@ in {
           imagemagick
           mplayer
           qutebrowser
+          google-chrome # for netflix and stadia
           tdesktop
           # spellchecking
           aspell
