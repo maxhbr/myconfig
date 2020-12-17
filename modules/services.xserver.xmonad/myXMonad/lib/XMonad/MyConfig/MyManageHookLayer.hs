@@ -35,23 +35,25 @@ myManageHook = let
     fullscreenHook = isFullscreen -?> doFullFloat
     gtkFileChooserHook = stringProperty "WM_WINDOW_ROLE" =? "GtkFileChooserDialog" -?> doCenterFloat
     hooksByClassName = foldMap (\(a,cs) -> map (\c -> className =? c -?> a) cs)
-                               [ (doCenterFloat, ["Xmessage"
-                                                 ,"Zenity"
-                                                 ,"pinentry","Pinentry"
-                                                 ,"feh"])
+                               [ (doCenterFloat, [ "Xmessage"
+                                                 , "Zenity"
+                                                 , "pinentry", "Pinentry"
+                                                 , "feh"])
                                -- , (doRectFloat (RationalRect 0.65 0.2 0.32 0.7), ["zoom","zoom-us"])
-                               , (doRectFloat (RationalRect 0.1 0.05 0.3 0.9), ["pavucontrol","Pavucontrol"])
-                               , (doFloat, ["MPlayer"
-                                           ,"Onboard"])
-                               , (doShift "10", ["franz","Franz"
-                                                ,"Telegram"
-                                                ,"slack","Slack"])
-                               , (doShift "media", ["Steam"])
+                               , (doRectFloat (RationalRect 0.1 0.05 0.3 0.9), [ "pavucontrol", "Pavucontrol" ])
+                               , (doFloat, [ "MPlayer"
+                                           , "Onboard"])
+                               , (doShift "10", [ "franz", "Franz"
+                                                , "Telegram"
+                                                , "slack", "Slack"])
+                               , (doShift "media", [ "Steam"
+                                                   , "google-chrome", "Google-chrome"])
                                , (doShift "13", [ "Wfica", "Wfica_Seamless"
-                                                , "vncviewer", "Vncviewer", "org.remmina.Remmina"])
-                               , (doIgnore, ["desktop_window"
-                                            ,"kdesktop"
-                                            ,"xmessage","Xmessage"]) ]
+                                                , "vncviewer", "Vncviewer"
+                                                , "org.remmina.Remmina"])
+                               , (doIgnore, [ "desktop_window"
+                                            , "kdesktop"
+                                            , "xmessage", "Xmessage"]) ]
     -- see:
     -- - https://www.reddit.com/r/xmonad/comments/78uq0p/how_do_you_deal_with_intellij_idea_completion/?st=jgdc0si0&sh=7d79c956
     -- - https://youtrack.jetbrains.com/issue/IDEA-112015#comment=27-2498787

@@ -11,6 +11,7 @@ in {
     ../hardware/nixos-hardware/common/cpu/amd
     ../hardware/nixos-hardware/common/pc/ssd
     ../hardware/hdd-spinndown.nix
+    ../hardware/steamcontroller.nix
     ./4x500-hdds.raid.nix
     # other profiles
     ./gaming

@@ -25,7 +25,8 @@ in rec {
     if (builtins.pathExists (secretsDir + "/README.md")) then list else [ ];
 
   mkFromBin = namePrefix: binDir: pkgs:
-    lib.mkIf (builtins.pathExists binDir) {
+    if (builtins.pathExists binDir)
+    then {
       home-manager.users.mhuber = {
         home.packages = let
           binDerivation = pkgs.stdenv.mkDerivation rec {
@@ -45,7 +46,8 @@ in rec {
           };
         in [ binDerivation ];
       };
-    };
+    }
+    else {};
 
   mkFromHostBin = hostName: pkgs:
     let binDir = ./host + ".${hostName}/bin";

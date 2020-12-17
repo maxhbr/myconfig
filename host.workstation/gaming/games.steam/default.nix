@@ -4,7 +4,6 @@ let
   nativeOnly = false;
 in {
   imports = [
-    ./steamcontroller.nix
     (lib.mkIf nativeOnly { nixpkgs.config.allowBroken = true; })
   ];
   config = {

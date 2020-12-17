@@ -69,7 +69,7 @@ import XMonad.MyConfig.Notify (popupCurDesktop)
 
 myCoreWorkspaces, myWorkspaces :: [String]
 myCoreWorkspaces = "web" : map show [9..10]
-myWorkspaces = map show [1..7] ++ myCoreWorkspaces ++ ["vbox", "media"] ++ map show [13..20] ++ ["NSP"]
+myWorkspaces = map show [1..7] ++  ["media"] ++ myCoreWorkspaces ++ ["vbox"] ++ map show [13..20] ++ ["NSP"]
 applyMyLayoutModifications :: XConfig a -> XConfig a
 applyMyLayoutModifications c = let
   addLayoutkeys :: XConfig a -> XConfig a
@@ -160,7 +160,7 @@ layoutKBs conf =
       -- mod-[1..9], Switch to workspace N
       -- mod-shift-[1..9], Move client to workspace N
       [((m, k), f i)
-          | (i, k) <- zip (XMonad.workspaces conf) ([xK_1 .. xK_9] ++ [xK_0])
+          | (i, k) <- zip (filter (/= "media") (XMonad.workspaces conf)) ([xK_1 .. xK_9] ++ [xK_0])
           , (f, m) <- [ (\i -> windows (W.greedyView i) >> popupCurDesktop, m__)
                       , (windows . W.shift, ms_) ]]
       ++ [((msc, xK_m    ), (windows . W.shift) "NSP" )]
