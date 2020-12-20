@@ -4,6 +4,7 @@
 let user = config.myconfig.user;
 in {
   imports = [
+    ../modules
     # hardware:
     ./hardware-configuration.nix
     ../hardware/efi.nix

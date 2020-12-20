@@ -11,6 +11,7 @@ in {
     ../hardware/x1extremeG2.nix
     ../hardware/efi.nix
     ../hardware/footswitch.nix
+    ../hardware/steamcontroller.nix
     # ./backup-hdd.nix
     # ./foto-hdd.nix
     # modules
