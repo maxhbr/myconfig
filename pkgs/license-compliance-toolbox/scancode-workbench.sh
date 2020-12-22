@@ -2,12 +2,11 @@
 set -eo pipefail
 
 ################################################################################
-docker="$(docker info &> /dev/null || echo "sudo") docker"
 tag=scancodeworkbench
 
 buildImageIfMissing() {
     if [[ "$(docker images -q $tag 2> /dev/null)" == "" ]]; then
-        $docker build -t $tag --rm=true --force-rm=true - <<EOF
+        docker build -t $tag --rm=true --force-rm=true - <<EOF
 FROM ubuntu:latest
 ENV DEBIAN_FRONTEND noninteractive
 WORKDIR /scwb
@@ -33,8 +32,8 @@ run() {
         | sed -e 's/^..../ffff/' \
         | xauth -f $XAUTH nmerge -
 
-    if [ ! "$($docker ps -aq -f name=scancodeworkbench)" ]; then
-        $docker run \
+    if [ ! "$(docker ps -aq -f name=scancodeworkbench)" ]; then
+        docker run \
             --rm \
             `#-u $(id -u $USER):$(id -g $USER)` \
             -v $XSOCK:$XSOCK -e DISPLAY=$DISPLAY \
@@ -45,12 +44,12 @@ run() {
             --name=scancodeworkbench \
             $tag
     else
-        $docker start scancodeworkbench
+        docker start scancodeworkbench
     fi
 }
 
 forceRebuild() {
-    $docker rm \
+    docker rm \
             --force scancodeworkbench \
             >/dev/null 2>&1 || true
 }

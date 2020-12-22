@@ -20,7 +20,7 @@ buildImageIfMissing() {
         docker build -t $tag - <<EOF
 FROM python:3.6
 
-RUN apt-get update && apt-get install bzip2 xz-utils zlib1g libxml2-dev libxslt1-dev
+RUN apt-get update && apt-get install -y bzip2 xz-utils zlib1g libxml2-dev libxslt1-dev
 
 ADD https://github.com/nexB/scancode-toolkit/archive/master.tar.gz .
 
