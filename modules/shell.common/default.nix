@@ -95,6 +95,8 @@ in {
         pmount
         fuse
 
+        entr
+
         (writeScriptBin "myspeedtest.sh"
           (builtins.readFile ./bin/myspeedtest.sh))
         (writeScriptBin "startServer.py" ''
