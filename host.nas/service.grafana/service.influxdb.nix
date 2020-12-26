@@ -24,8 +24,8 @@ deconz:
 influxdb:
   addr: http://127.0.0.1:8086/
   useragent: Deflux
-  # username: change me
-  # password: change me
+  # username: Deflux
+  # password: Deflux
 influxdbdatabase: deconz
 '';
       };
@@ -71,8 +71,8 @@ influxdbdatabase: deconz
             database = "deconz";
             editable = false; # Force editing in this file.
             access = "proxy";
-            # user = "grafana"; # fill in Grafana InfluxDB user, if enabled
-            # password = "grafana";
+            # user = "Deflux";
+            # assword = "Deflux";
             url = "http://127.0.0.1:8086";
           }
         ];
