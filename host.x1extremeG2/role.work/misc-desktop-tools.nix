@@ -12,7 +12,22 @@ in {
         slack
         rambox
         remmina
+        teams # nixos-2003-small.teams
       ];
+      xdg.mimeApps = {
+        defaultApplications."x-scheme-handler/msteams" = [ "teams.desktop" ];
+      };
+      programs.zsh.shellAliases = {
+        unteams = ''while pkill teams; do echo "kill it with fire!"; done'';
+      };
+        programs.fish.functions = {
+          unteams = ''
+while pkill teams
+  echo "kill it with fire!"
+end
+echo "now wo are happy again"
+'';
+        };
     };
   };
 }
