@@ -25,19 +25,21 @@ export DOCKER_BUILDKIT=1
 helpMsg() {
     cat<<EOF
 usage:
-  $0 --all <folder>
-  $0 --short <folder>
-  $0 --analyze <folder>
-  $0 --download <yaml>
-  $0 --scan <yaml>
-  $0 --report <yaml>
+  $0 --rm
+  $0 [--no-debug|--info|--debug] [--all] <folder>
+  $0 [--no-debug|--info|--debug] --short <folder>
+  $0 [--no-debug|--info|--debug] --analyze <folder>
+  $0 [--no-debug|--info|--debug] --download <yaml>
+  $0 [--no-debug|--info|--debug] --scan <yaml>
+  $0 [--no-debug|--info|--debug] --report <yaml>
   $0 [args]
   $0 --help
 
-Builds the ort image on demand.
-Remove the ort:latest image to enforce rebuild of the docker image.
+env args:
+  MYORT_ARGS
 
-If the workdir ends on -enc it is treated as gocryptfs folder and the user is asked interactively for a password.
+Builds the ort image on demand.
+Remove the $baseTag and $tag image to enforce rebuild of the docker image.
 EOF
 }
 
@@ -102,6 +104,7 @@ runOrt() {
     (set -x;
      docker run -i \
             --rm \
+            $MYORT_ARGS \
             -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u $(id -u $USER):$(id -g $USER) \
             -v "$HOME/.ort/dockerHome":"$HOME" \
             -v "$workdir:/workdir" \
@@ -189,7 +192,7 @@ reportScanResult() {
 
     runOrt "$scanResultFolder" \
         report \
-        -f StaticHtml,WebApp,Excel,NoticeTemplate,SPDXDocument,GitLabLicensemodel,EVALUATEDMODELJSON,AMAZONOSSATTRIBUTIONBUILDER \
+        -f StaticHtml,WebApp,Excel,NoticeTemplate,SPDXDocument,GitLabLicensemodel,EVALUATEDMODELJSON \
         --ort-file "$scanResultFile" \
         $([[ -f "$(getOutFolder "$scanResultFolder")/resolutions.yml" ]] && echo "--resolutions-file /out/resolutions.yml") \
         --output-dir "$outputDir" 2>&1 |
@@ -259,6 +262,7 @@ EOF
 fi
 
 case $1 in
+    "--rm") shift; docker rmi "$tag"; docker rmi "$baseTag" ;;
     "--all") shift; doAll "$@" ;;
     "--short") shift; doShort "$@" ;;
     "--analyze") shift; analyzeFolder "$@" ;;
@@ -266,6 +270,12 @@ case $1 in
     "--scan") shift; scanAnalyzeResult "$@" ;;
     "--report") shift; reportScanResult "$@" ;;
     "--help") helpMsg ;;
-    *) runOrt "$(pwd)" "$@" ;;
+    *)
+        if [[ $# = 1 && -d "$1" ]]; then
+            doAll "$@"
+        else
+            runOrt "$(pwd)" "$@"
+        fi
+        ;;
 esac
 times
