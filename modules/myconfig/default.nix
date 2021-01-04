@@ -21,6 +21,7 @@ in {
     ./myconfig.desktop.nix
     ./myconfig.headless.nix
     ./myconfig.virtualisation.nix
+    ./myconfig.virtualization.gpu-passthrough-host.nix
     ./myconfig.imagework.nix
   ];
 }

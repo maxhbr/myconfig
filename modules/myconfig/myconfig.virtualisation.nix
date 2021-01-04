@@ -5,7 +5,7 @@ let
   user = cfg.user;
 in {
   options.myconfig = with lib; {
-    virtualisation.enable = mkEnableOption "myconfig.desktop";
+    virtualisation.enable = mkEnableOption "myconfig.virtualisation";
   };
   config = (lib.mkIf cfg.virtualisation.enable {
     virtualisation.docker.enable = true;

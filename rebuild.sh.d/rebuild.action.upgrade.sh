@@ -73,7 +73,7 @@ upgrade() {
         logH3 "update" "emacs"
         ./modules/programs.emacs/update.sh || wasUpdated=1
         logH3 "update" "my-wallpapers"
-        ./modules/desktop.my-wallpapers/update.sh || wasUpdated=1
+        ./modules/services.xserver.my-wallpapers/update.sh || wasUpdated=1
         logH3 "update" "chisui/zsh-nix-shell"
         ./modules/shell.zsh/update.sh || wasUpdated=1
 
