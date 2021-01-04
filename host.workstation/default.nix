@@ -42,13 +42,12 @@ in {
     myconfig = {
       desktop.enable = true;
       headless.enable = true;
-      # virtualisation.enable = true;
+      virtualisation.enable = true;
       dev = {
         haskell.enable = true;
         compliance.enable = true;
       };
     };
-    virtualisation.docker.enable = true;
 
     boot.kernelPackages =
       # lib.mkForce pkgs.unstable.linuxPackages_testing;
