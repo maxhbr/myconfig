@@ -81,7 +81,6 @@ let
           };
         }
         ./modules
-        ./role.dev
       ];
 
       config = {

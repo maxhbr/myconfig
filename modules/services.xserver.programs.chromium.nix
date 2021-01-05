@@ -8,9 +8,10 @@ let
       set -e
       postfix=$(date +%s | sha256sum | base64 | head -c 32 ; echo)
       mkdir -p "/tmp/incoChrome_$postfix"
-      ${chromium}/bin/chromium --incognito \
-          --user-data-dir="/tmp/incoChrome_$postfix" \
-          $@ &disown
+      ${pkgs.firejail}/bin/firejail --private --dns=8.8.8.8 \
+          ${chromium}/bin/chromium --incognito \
+              --user-data-dir="/tmp/incoChrome_$postfix" \
+              $@ &disown
         '';
   pipechrome = pkgs.writeShellScriptBin "pipechrome" ''
       ${chromium}/bin/chromium "data:text/html;base64,$(base64 -w 0 <&0)" &> /dev/null

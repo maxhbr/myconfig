@@ -15,6 +15,8 @@ in {
     ./4x500-hdds.raid.nix
     # other profiles
     ./gaming
+    # testing
+    ./chrootPopOS.nix
     { # for quickfix (due to usage of 20.03)
       nixpkgs.config.allowBroken = true;
     }
@@ -43,9 +45,11 @@ in {
       desktop.enable = true;
       headless.enable = true;
       virtualisation.enable = true;
+      virtualisation.gpuPassthroughHost.enable = true;
       dev = {
         haskell.enable = true;
         compliance.enable = true;
+        network.enable = true;
       };
     };
 

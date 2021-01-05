@@ -6,5 +6,6 @@ let
 in {
   config = lib.mkIf cfg.enable {
     programs.wireshark.enable = true;
+    programs.firejail.enable = true;
   };
 }

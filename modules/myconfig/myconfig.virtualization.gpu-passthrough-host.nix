@@ -1,4 +1,9 @@
 { config, lib, pkgs, ... }@args:
+# Experimental and untested
+# See:
+# - https://alexbakker.me/post/nixos-pci-passthrough-qemu-vfio.html
+# - https://forum.level1techs.com/t/nixos-vfio-pcie-passthrough/130916
+
 let
   cfg = config.myconfig;
   user = cfg.user;
