@@ -79,6 +79,11 @@ if ! type logH1 &>/dev/null; then
         >&2 echo "$(tput bold)*** DEBUG:$(tput sgr0) $text"
     }
 
+    logNormal() {
+        local text=$1
+        >&2 echo "$(tput sgr0)$text$(tput sgr0)"
+    }
+
     if [ -n "$BASH_VERSION" ]; then
         export -f have
         export -f logH1
@@ -88,6 +93,7 @@ if ! type logH1 &>/dev/null; then
         export -f logINFO
         export -f logWARN
         export -f logERR
+        export -f logNormal
     elif [ -n "$ZSH_VERSION" ]; then
         export have
         export logH1
@@ -97,6 +103,7 @@ if ! type logH1 &>/dev/null; then
         export logINFO
         export logWARN
         export logERR
+        export logNormal
     fi
 
     updateRefAndJson() {
@@ -124,7 +131,7 @@ if ! type logH1 &>/dev/null; then
 
                 return 1 # was updated
             else
-                logINFO "... $outRev file is already up to date, at rev=[$rev]"
+                logNormal "... $outRev file is already up to date, at rev=[$rev]"
             fi
         else
             logWARN "... failed to update $repo, potentially hit rate limiting of github"
