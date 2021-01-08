@@ -23,7 +23,7 @@ in {
       enable = true;
       wrappedBinaries = {
         steam = {
-          executable = "${steam}/bin/steam";
+          executable = steam + "/bin/steam";
           extraArgs = [
             "--net=enp39s0" "--dns=8.8.8.8" "--noprofile"
           ];
