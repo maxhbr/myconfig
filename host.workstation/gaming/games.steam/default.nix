@@ -19,17 +19,17 @@ in {
     (lib.mkIf nativeOnly { nixpkgs.config.allowBroken = true; })
   ];
   config = {
-    programs.firejail = {
-      enable = true;
-      wrappedBinaries = {
-        steam = {
-          executable = steam + "/bin/steam";
-          extraArgs = [
-            "--net=enp39s0" "--dns=8.8.8.8" "--noprofile"
-          ];
-        };
-      };
-    };
+    # programs.firejail = {
+    #   enable = true;
+    #   wrappedBinaries = {
+    #     steam = {
+    #       executable = "${lib.getBin steam}/bin/steam";
+    #       extraArgs = [
+    #         "--net=enp39s0" "--dns=8.8.8.8" "--noprofile"
+    #       ];
+    #     };
+    #   };
+    # };
     home-manager.users."${user}" = {
       home.packages = [
         (with pkgs.unstable; if nativeOnly then steam-run-native else steam-run)
