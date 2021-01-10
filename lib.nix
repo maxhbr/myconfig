@@ -87,7 +87,7 @@ in rec {
 
   announceHost = hostName: subDomains:
     let hostIp = getSecretNoNewline hostName "ip";
-    in { ... }: {
+    in { pkgs, ... }: {
       config = makeOptionalBySecrets {
         networking.extraHosts = lib.concatStringsSep "\n" ([''
           ${hostIp} ${hostName}
@@ -102,6 +102,15 @@ in rec {
                 User mhuber
             '';
           };
+          home.packages = let
+            macPath = getSecretPath hostName "mac";
+            mac = getSecretNoNewline hostName "mac";
+          in if (builtins.pathExists macPath)
+             then [
+               (pkgs.writeShellScriptBin "wake-${hostName}" "${pkgs.wol}/bin/wol ${mac}")
+               (pkgs.writeShellScriptBin "suspend-${hostName}" "ssh ${hostName} sudo systemctl suspend")
+             ]
+             else [];
         };
       };
     };
