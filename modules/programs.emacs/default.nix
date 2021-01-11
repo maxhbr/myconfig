@@ -39,13 +39,16 @@ in {
 
     environment.systemPackages = with pkgs; [ doom-emacs ];
     home-manager.users."${user}" = {
-      home.packages = with pkgs; [
-        emacs-all-the-icons-fonts
+      home.packages = with pkgs;
+        [
+          emacs-all-the-icons-fonts
 
-        aspell aspellDicts.de aspellDicts.en
+          aspell
+          aspellDicts.de
+          aspellDicts.en
 
-        shellcheck
-      ] ++ lib.optional config.services.xserver.enable xclipedit;
+          shellcheck
+        ] ++ lib.optional config.services.xserver.enable xclipedit;
       programs.zsh.shellAliases = {
         magit = ''${doom-emacs-bin-path} -e "(magit-status \"$(pwd)\")"'';
       };

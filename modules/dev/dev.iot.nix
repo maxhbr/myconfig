@@ -1,8 +1,7 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
-let
-  cfg = config.myconfig.dev.iot;
+let cfg = config.myconfig.dev.iot;
 in {
   config = lib.mkIf cfg.enable {
     home-manager.users.mhuber = { home.packages = with pkgs; [ platformio ]; };

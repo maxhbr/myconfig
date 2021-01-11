@@ -51,13 +51,11 @@ in {
       description = "TCP port for the WebSocket.";
     };
 
-    openFirewall =
-      mkEnableOption "open up the service ports in the firewall";
+    openFirewall = mkEnableOption "open up the service ports in the firewall";
 
     allowRebootSystem = mkEnableOption "allow rebooting the system";
 
-    allowRestartService =
-      mkEnableOption "allow killing/restarting processes";
+    allowRestartService = mkEnableOption "allow killing/restarting processes";
 
     allowSetSystemTime = mkEnableOption "allow setting the system time";
 
@@ -90,8 +88,8 @@ in {
         ExecStart = "${cfg.package}/bin/deCONZ" + " -platform minimal"
           + " --http-port=${toString cfg.httpPort}"
           + " --ws-port=${toString cfg.wsPort}"
-          + (if cfg.device != "" then " --dev=${cfg.device}" else "")
-          + " " + (lib.concatStringsSep " " cfg.extraOpts);
+          + (if cfg.device != "" then " --dev=${cfg.device}" else "") + " "
+          + (lib.concatStringsSep " " cfg.extraOpts);
         Restart = "on-failure";
         AmbientCapabilities = let
           # ref. upstream deconz.service

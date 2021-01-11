@@ -1,4 +1,4 @@
-{pkgs, config, lib, ...}:
+{ pkgs, config, lib, ... }:
 let
   user = config.myconfig.user;
   myXsecurelock = with pkgs;
@@ -18,12 +18,9 @@ let
           ${xdotool}/bin/xdotool key shift
       done
     '';
-in
-{
+in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.users."${user}" = {
-      home.packages = [myStopScreensaver];
-    };
+    home-manager.users."${user}" = { home.packages = [ myStopScreensaver ]; };
     programs.xss-lock = {
       enable = true;
       # lockerCommand = "${pkgs.my-wallpapers}/bin/myScreenLock";

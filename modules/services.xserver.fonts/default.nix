@@ -7,8 +7,7 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
-let
-  user = config.myconfig.user;
+let user = config.myconfig.user;
 in {
   config = (lib.mkIf config.services.xserver.enable {
     nixpkgs.overlays = [
@@ -28,31 +27,31 @@ in {
     home-manager.users."${user}" = {
       home.file = {
         ".fontconfig/fonts.conf".text = ''
-<?xml version="1.0"?>
-<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
-<fontconfig>
-    <match target="font" >
-        <edit mode="assign" name="rgba" >
-            <const>rgb</const>
-        </edit>
-    </match>
-    <match target="font" >
-        <edit mode="assign" name="hinting">
-            <bool>true</bool>
-        </edit>
-    </match>
-    <match target="font" >
-        <edit mode="assign" name="hintstyle">
-            <const>hintslight</const>
-        </edit>
-    </match>
-    <match target="font">
-        <edit mode="assign" name="lcdfilter">
-            <const>lcddefault</const>
-        </edit>
-    </match>
-</fontconfig>
-'';
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+          <fontconfig>
+              <match target="font" >
+                  <edit mode="assign" name="rgba" >
+                      <const>rgb</const>
+                  </edit>
+              </match>
+              <match target="font" >
+                  <edit mode="assign" name="hinting">
+                      <bool>true</bool>
+                  </edit>
+              </match>
+              <match target="font" >
+                  <edit mode="assign" name="hintstyle">
+                      <const>hintslight</const>
+                  </edit>
+              </match>
+              <match target="font">
+                  <edit mode="assign" name="lcdfilter">
+                      <const>lcddefault</const>
+                  </edit>
+              </match>
+          </fontconfig>
+        '';
       };
     };
   });

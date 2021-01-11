@@ -49,18 +49,16 @@ let
     ./virtualization.qemu.nix
     ./virtualization.vbox.nix
   ];
-  hm-modules = [# home-manager modules
+  hm-modules = [ # home-manager modules
     ./shell.programs.bat.hm.nix
     ./shell.programs.exa.hm.nix
     ./services.xserver.programs.firefox.hm.nix
     ./services.xserver.programs.zathura.hm.nix
   ];
 in {
-  imports = [./lib ./myconfig] ++ modules;
+  imports = [ ./lib ./myconfig ] ++ modules;
   config = {
-    home-manager.users."${user}" = {
-      imports = hm-modules;
-    };
+    home-manager.users."${user}" = { imports = hm-modules; };
     assertions = [
       {
         assertion = config.networking.hostId != null;

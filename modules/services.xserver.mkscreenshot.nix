@@ -37,8 +37,6 @@ let
         '';
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.users."${user}" = {
-      home.packages = [mkscreenshot];
-    };
+    home-manager.users."${user}" = { home.packages = [ mkscreenshot ]; };
   });
 }

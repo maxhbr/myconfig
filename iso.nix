@@ -26,41 +26,40 @@ let
       };
 
       bootstrapModule = (let
-          bootstrap = pkgs.writeShellScriptBin "bootstrap" ''
-            set -euxo pipefail
-            if [[ "$(hostname)" != "myconfig" ]]; then
-                echo "hostname missmatch"
-                exit 1
-            fi
-            sudo BOOTSTRAP=YES ${./scripts/bootstrap.sh} $@
-            echo "you should run bootstrap-install next"
-          '';
-        in {environment.systemPackages = [ bootstrap ];});
-
-      bootstrapInstallModule = (lib.mkIf (hostConfig != null) ( let
-          preBuildConfigRoot = ./. + "/${hostConfig}";
-          preBuiltConfig = (evalNixos
-            (import preBuildConfigRoot {
-              pkgs = nixpkgs;
-              inherit lib config;
-            })).system;
-          bootstrap-install = pkgs.writeShellScriptBin "bootstrap-install" ''
-            set -euxo pipefail
-            if [[ "$(hostname)" != "myconfig" ]]; then
-                echo "hostname missmatch"
-                exit 1
-            fi
-            if [[ ! -d "/mnt/etc/nixos/" ]]; then
-              echo "folder /mnt/etc/nixos/ is missing"
-              echo "you should run bootstrap first"
+        bootstrap = pkgs.writeShellScriptBin "bootstrap" ''
+          set -euxo pipefail
+          if [[ "$(hostname)" != "myconfig" ]]; then
+              echo "hostname missmatch"
               exit 1
-            fi
-            sudo nixos-install --no-root-passwd --system ''${1:-${preBuiltConfig}}
-          '';
-        in {
-          environment.systemPackages = [ bootstrap-install ];
-          isoImage.storeContents = [ preBuiltConfig ];
-        }));
+          fi
+          sudo BOOTSTRAP=YES ${./scripts/bootstrap.sh} $@
+          echo "you should run bootstrap-install next"
+        '';
+      in { environment.systemPackages = [ bootstrap ]; });
+
+      bootstrapInstallModule = (lib.mkIf (hostConfig != null) (let
+        preBuildConfigRoot = ./. + "/${hostConfig}";
+        preBuiltConfig = (evalNixos (import preBuildConfigRoot {
+          pkgs = nixpkgs;
+          inherit lib config;
+        })).system;
+        bootstrap-install = pkgs.writeShellScriptBin "bootstrap-install" ''
+          set -euxo pipefail
+          if [[ "$(hostname)" != "myconfig" ]]; then
+              echo "hostname missmatch"
+              exit 1
+          fi
+          if [[ ! -d "/mnt/etc/nixos/" ]]; then
+            echo "folder /mnt/etc/nixos/ is missing"
+            echo "you should run bootstrap first"
+            exit 1
+          fi
+          sudo nixos-install --no-root-passwd --system ''${1:-${preBuiltConfig}}
+        '';
+      in {
+        environment.systemPackages = [ bootstrap-install ];
+        isoImage.storeContents = [ preBuiltConfig ];
+      }));
 
     in {
       imports = [

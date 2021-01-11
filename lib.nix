@@ -25,8 +25,7 @@ in rec {
     if (builtins.pathExists (secretsDir + "/README.md")) then list else [ ];
 
   mkFromBin = namePrefix: binDir: pkgs:
-    if (builtins.pathExists binDir)
-    then {
+    if (builtins.pathExists binDir) then {
       home-manager.users.mhuber = {
         home.packages = let
           binDerivation = pkgs.stdenv.mkDerivation rec {
@@ -38,16 +37,16 @@ in rec {
             buildPhase = "";
 
             installPhase = ''
-                bin=$out/bin
-                mkdir -p $bin
-                cp * $bin
-                chmod -R +x $bin
-              '';
+              bin=$out/bin
+              mkdir -p $bin
+              cp * $bin
+              chmod -R +x $bin
+            '';
           };
         in [ binDerivation ];
       };
-    }
-    else {};
+    } else
+      { };
 
   mkFromHostBin = hostName: pkgs:
     let binDir = ./host + ".${hostName}/bin";
@@ -105,12 +104,13 @@ in rec {
           home.packages = let
             macPath = getSecretPath hostName "mac";
             mac = getSecretNoNewline hostName "mac";
-          in if (builtins.pathExists macPath)
-             then [
-               (pkgs.writeShellScriptBin "wake-${hostName}" "${pkgs.wol}/bin/wol ${mac}")
-               (pkgs.writeShellScriptBin "suspend-${hostName}" "ssh ${hostName} sudo systemctl suspend")
-             ]
-             else [];
+          in if (builtins.pathExists macPath) then [
+            (pkgs.writeShellScriptBin "wake-${hostName}"
+              "${pkgs.wol}/bin/wol ${mac}")
+            (pkgs.writeShellScriptBin "suspend-${hostName}"
+              "ssh ${hostName} sudo systemctl suspend")
+          ] else
+            [ ];
         };
       };
     };

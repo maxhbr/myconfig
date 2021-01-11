@@ -1,5 +1,5 @@
 { pkgs, config, lib, ... }: {
-  config = (lib.mkIf config.services.netdata.enable  {
+  config = (lib.mkIf config.services.netdata.enable {
     services.netdata = {
       config = {
         global = {

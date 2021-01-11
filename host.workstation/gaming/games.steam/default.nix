@@ -15,9 +15,7 @@ let
     inherit nativeOnly;
   };
 in {
-  imports = [
-    (lib.mkIf nativeOnly { nixpkgs.config.allowBroken = true; })
-  ];
+  imports = [ (lib.mkIf nativeOnly { nixpkgs.config.allowBroken = true; }) ];
   config = {
     # programs.firejail = {
     #   enable = true;

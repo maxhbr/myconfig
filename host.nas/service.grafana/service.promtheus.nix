@@ -55,7 +55,8 @@
         datasources = [{
           name = "prometheus";
           type = "prometheus";
-          url = "http://${config.services.prometheus.listenAddress}:9090/prometheus/";
+          url =
+            "http://${config.services.prometheus.listenAddress}:9090/prometheus/";
           isDefault = true;
         }];
       };

@@ -1,6 +1,5 @@
 { pkgs, config, lib, ... }:
-let
-  cfg = config.myconfig.dev.compliance;
+let cfg = config.myconfig.dev.compliance;
 in {
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [

@@ -37,42 +37,37 @@ in {
       networking.firewall.allowedTCPPorts = [ 3389 ];
     }
     ( # wol
-      let
-        interface = "enp39s0";
-      in
-        {
-          services.wakeonlan.interfaces = [
-            {
-              inherit interface;
-              method = "magicpacket";
-              # method = "password"; # or "magicpacket";
-              # password = "00:11:22:33:44:55";
-            }
-          ];
-          # [Unit]
-          # Description=Wake-on-LAN for %i
-          # Requires=network.target
-          # After=network.target
+      let interface = "enp39s0";
+      in {
+        services.wakeonlan.interfaces = [{
+          inherit interface;
+          method = "magicpacket";
+          # method = "password"; # or "magicpacket";
+          # password = "00:11:22:33:44:55";
+        }];
+        # [Unit]
+        # Description=Wake-on-LAN for %i
+        # Requires=network.target
+        # After=network.target
 
-          # [Service]
-          # ExecStart=/usr/bin/ethtool -s %i wol g
-          # Type=oneshot
+        # [Service]
+        # ExecStart=/usr/bin/ethtool -s %i wol g
+        # Type=oneshot
 
-          # [Install]
-          # WantedBy=multi-user.target
-          systemd.services.wolEnable = {
-            description = "Wake-on-LAN for ${interface}";
-            requires = ["network.target"];
-            after = ["network.target"];
-            wantedBy = ["multi-user.target"];
+        # [Install]
+        # WantedBy=multi-user.target
+        systemd.services.wolEnable = {
+          description = "Wake-on-LAN for ${interface}";
+          requires = [ "network.target" ];
+          after = [ "network.target" ];
+          wantedBy = [ "multi-user.target" ];
 
-            serviceConfig = {
-              ExecStart = "${pkgs.ethtool}/bin/ethtool -s ${interface} wol g";
-              Type = "oneshot";
-            };
+          serviceConfig = {
+            ExecStart = "${pkgs.ethtool}/bin/ethtool -s ${interface} wol g";
+            Type = "oneshot";
           };
-        }
-    )
+        };
+      })
   ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.5") ]);
 
   config = {

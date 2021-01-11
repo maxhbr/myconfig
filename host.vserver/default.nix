@@ -10,9 +10,7 @@
     ./service.wireguard-server
   ];
   config = {
-    myconfig = {
-      headless.enable = true;
-    };
+    myconfig = { headless.enable = true; };
 
     networking.hostName = "vserver";
     networking.hostId = "49496f29";

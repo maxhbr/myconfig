@@ -1,5 +1,4 @@
-{ config, lib, pkgs, ... }:
-{
+{ config, lib, pkgs, ... }: {
   config = {
     myconfig.services.deconz = {
       enable = true;

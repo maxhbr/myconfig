@@ -2,9 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, ... }:
 let
-  aliases = {
-    cat = "${pkgs.bat}/bin/bat --theme=\"Monokai Extended Light\"";
-  };
+  aliases = { cat = ''${pkgs.bat}/bin/bat --theme="Monokai Extended Light"''; };
 in {
   programs.bat = {
     enable = true;

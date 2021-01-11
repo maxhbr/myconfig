@@ -1,10 +1,8 @@
 { pkgs, lib, config, ... }:
-let
-  user = config.myconfig.user;
+let user = config.myconfig.user;
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.users."${user}" =
-      {config, ...}:
+    home-manager.users."${user}" = { config, ... }:
       (lib.mkIf config.programs.kitty.enable {
         programs.kitty = {
           settings = {

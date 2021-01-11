@@ -1,4 +1,4 @@
-{pkgs, config, lib, ...}:
+{ pkgs, config, lib, ... }:
 let
   user = config.myconfig.user;
   myInvert = with pkgs;
@@ -46,19 +46,19 @@ in {
         ] ++ lib.optional config.networking.networkmanager.enable
         networkmanager_dmenu;
       xresources.extraConfig = ''
-*utf8: 1
+        *utf8: 1
 
-!! Xft
-Xft.autohint: 0
-Xft.lcdfilter: lcddefault
-Xft.hintstyle: hintfull
-Xft.hinting: 1
-Xft.antialias: 1
-Xft.rgba: rgb
+        !! Xft
+        Xft.autohint: 0
+        Xft.lcdfilter: lcddefault
+        Xft.hintstyle: hintfull
+        Xft.hinting: 1
+        Xft.antialias: 1
+        Xft.rgba: rgb
 
-!! Xterm
-xterm*loginShell: true
-'';
+        !! Xterm
+        xterm*loginShell: true
+      '';
       xdg.mimeApps = {
         enable = true;
         defaultApplications."image/jpeg" = [ "sxiv.desktop" ];
@@ -69,9 +69,7 @@ xterm*loginShell: true
       };
     };
     environment = {
-      shellAliases = {
-        file-roller = "${pkgs.xarchiver}/bin/xarchiver";
-      };
+      shellAliases = { file-roller = "${pkgs.xarchiver}/bin/xarchiver"; };
 
       interactiveShellInit = ''
         xclipToX() {
@@ -107,9 +105,7 @@ xterm*loginShell: true
         ];
       };
 
-      redshift = {
-        enable = true;
-      };
+      redshift = { enable = true; };
     };
   });
 }

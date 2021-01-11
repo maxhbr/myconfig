@@ -1,6 +1,5 @@
 { config, lib, pkgs, ... }:
-let
-  user = config.myconfig.user;
+let user = config.myconfig.user;
 in {
   config = (lib.mkIf config.services.xserver.enable {
     services.printing = {

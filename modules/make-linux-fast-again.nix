@@ -13,5 +13,7 @@ in {
   options.myconfig.make-linux-fast-again = with lib; {
     enable = mkEnableOption "make-linux-fast-again";
   };
-  config = lib.mkIf config.myconfig.make-linux-fast-again.enable { boot.kernelParams = lib.splitString " " cmdline; };
+  config = lib.mkIf config.myconfig.make-linux-fast-again.enable {
+    boot.kernelParams = lib.splitString " " cmdline;
+  };
 }

@@ -99,13 +99,19 @@ in {
                http-request set-header X-Forwarded-Port %[dst_port]
                http-request add-header X-Forwarded-Proto https if { ssl_fc }
                option httpchk HEAD / HTTP/1.1\r\nHost:localhost
-               server grafana01 ${config.services.grafana.addr}:${toString config.services.grafana.port} check inter 2000
+               server grafana01 ${config.services.grafana.addr}:${
+                 toString config.services.grafana.port
+               } check inter 2000
 
             backend prometheus_backend
-               server prometheus01 ${config.services.prometheus.listenAddress}:${toString config.services.prometheus.port} check inter 2000
+               server prometheus01 ${config.services.prometheus.listenAddress}:${
+                 toString config.services.prometheus.port
+               } check inter 2000
 
             backend deconz_backend
-               server deconz01 127.0.0.1:${toString config.myconfig.services.deconz.httpPort} check inter 2000
+               server deconz01 127.0.0.1:${
+                 toString config.myconfig.services.deconz.httpPort
+               } check inter 2000
 
             listen stats
                 bind *:1936
@@ -121,9 +127,7 @@ in {
     }
   ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.6") ]);
   config = {
-    myconfig = {
-      headless.enable = true;
-    };
+    myconfig = { headless.enable = true; };
 
     networking.hostName = "nas";
     networking.hostId = "29d93341";

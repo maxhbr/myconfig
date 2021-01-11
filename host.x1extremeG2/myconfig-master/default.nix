@@ -39,16 +39,19 @@ in {
       };
     };
     environment = {
-      systemPackages = with pkgs; [
-        upg-pull
-        (mk-upg-script "upg" "")
-        (mk-upg-script "upg-fast" "--fast")
-        (mk-upg-script "upg-dry" "--dry-run")
-        (mk-upg-script "upg-workstation" "--fast --target workstation")
-        (mk-upg-script "upg-nas" "--fast --target nas")
-        (mk-upg-script "upg-vserver" "--fast --target vserver")
-        nixos-2003-small.nixops
-      ];
+      systemPackages = with pkgs;
+        [
+          upg-pull
+          (mk-upg-script "upg" "")
+          (mk-upg-script "upg-fast" "--fast")
+          (mk-upg-script "upg-dry" "--dry-run")
+          nixos-2003-small.nixops
+        ] ++ (map (hn: (mk-upg-script "upg-${hn}" "--fast --target ${hn}")) [
+          "workstation"
+          "nas"
+          "vserver"
+          "nuc"
+        ]);
     };
     boot.binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];
   };

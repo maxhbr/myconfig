@@ -1,4 +1,4 @@
-{pkgs, config, lib, ...}:
+{ pkgs, config, lib, ... }:
 let
   pipefox = with pkgs;
     writeShellScriptBin "pipefox" ''
@@ -7,55 +7,53 @@ let
 in {
   imports = [
     (let
-        gopassWrapper = with pkgs;
-          writeShellScriptBin "gopass_wrapper.sh" ''
-      if [ -f ~/.gpg-agent-info ] && [ -n "$(${procps}/bin/pgrep gpg-agent)" ]; then
-        source ~/.gpg-agent-info
-        export GPG_AGENT_INFO
-      else
-        eval $(${gnupg}/bin/gpg-agent --daemon)
-      fi
-      export GPG_TTY="$(tty)"
+      gopassWrapper = with pkgs;
+        writeShellScriptBin "gopass_wrapper.sh" ''
+          if [ -f ~/.gpg-agent-info ] && [ -n "$(${procps}/bin/pgrep gpg-agent)" ]; then
+            source ~/.gpg-agent-info
+            export GPG_AGENT_INFO
+          else
+            eval $(${gnupg}/bin/gpg-agent --daemon)
+          fi
+          export GPG_TTY="$(tty)"
 
-      exec ${gopass}/bin/gopass-jsonapi listen
-    '';
-      in {
-        config = {
-          home.file = {
-            ".mozilla/native-messaging-hosts/com.justwatch.gopass.json" = {
-              text = ''
-            {
-                "name": "com.justwatch.gopass",
-                "description": "Gopass wrapper to search and return passwords",
-                "path": "${gopassWrapper}/bin/gopass_wrapper.sh",
-                "type": "stdio",
-                "allowed_extensions": [
-                    "{eec37db0-22ad-4bf1-9068-5ae08df8c7e9}"
-                ]
-            }
-          '';
-            };
-            ".config/chromium/NativeMessagingHosts/com.justwatch.gopass.json" = {
-              text = ''
-            {
-                "name": "com.justwatch.gopass",
-                "description": "Gopass wrapper to search and return passwords",
-                "path": "${gopassWrapper}/bin/gopass_wrapper.sh",
-                "type": "stdio",
-                "allowed_origins": [
-                    "chrome-extension://kkhfnlkhiapbiehimabddjbimfaijdhk/"
-                ]
-            }
-          '';
-            };
+          exec ${gopass}/bin/gopass-jsonapi listen
+        '';
+    in {
+      config = {
+        home.file = {
+          ".mozilla/native-messaging-hosts/com.justwatch.gopass.json" = {
+            text = ''
+              {
+                  "name": "com.justwatch.gopass",
+                  "description": "Gopass wrapper to search and return passwords",
+                  "path": "${gopassWrapper}/bin/gopass_wrapper.sh",
+                  "type": "stdio",
+                  "allowed_extensions": [
+                      "{eec37db0-22ad-4bf1-9068-5ae08df8c7e9}"
+                  ]
+              }
+            '';
+          };
+          ".config/chromium/NativeMessagingHosts/com.justwatch.gopass.json" = {
+            text = ''
+              {
+                  "name": "com.justwatch.gopass",
+                  "description": "Gopass wrapper to search and return passwords",
+                  "path": "${gopassWrapper}/bin/gopass_wrapper.sh",
+                  "type": "stdio",
+                  "allowed_origins": [
+                      "chrome-extension://kkhfnlkhiapbiehimabddjbimfaijdhk/"
+                  ]
+              }
+            '';
           };
         };
-      })
+      };
+    })
   ];
   config = (lib.mkIf config.programs.firefox.enable {
-    home.packages = with pkgs; [
-      pipefox
-    ];
+    home.packages = with pkgs; [ pipefox ];
     programs.firefox = {
       package = pkgs.unstable.firefox;
       extensions = with pkgs.nur.repos.rycee.firefox-addons; [
