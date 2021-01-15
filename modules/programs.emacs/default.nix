@@ -9,9 +9,8 @@ let
     url = "https://github.com/vlaci/nix-doom-emacs.git";
     inherit (json) rev ref;
   }) {
-    doomPrivateDir =
-      ./doom.d; # Directory containing your config.el init.el and packages.el files
-    extraPackages = epkgs: [ pkgs.mu ];
+    doomPrivateDir = ./doom.d;
+    extraPackages = epkgs: [ pkgs.mu pkgs.inconsolata ];
     extraConfig = ''
       (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
     '';

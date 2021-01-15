@@ -23,7 +23,16 @@ in {
       };
     };
     nix = rec {
-      # package = pkgs.nixUnstable;
+      # see: https://nixos.wiki/wiki/Flakes
+      package = pkgs.nixFlakes;
+      extraOptions = ''
+        experimental-features = nix-command flakes
+
+        gc-keep-outputs = true
+        gc-keep-derivations = true
+        auto-optimise-store = true
+        binary-caches-parallel-connections = 10
+      '';
 
       useSandbox = true;
       readOnlyStore = true;
@@ -45,13 +54,6 @@ in {
         "maxhbr.cachix.org-1:wwfYm+B6HaXyFey300cmuSQnvwULS0VU1VtOGXDyxCo="
         "nixfmt.cachix.org-1:uyEQg16IhCFeDpFV07aL+Dbmh18XHVUqpkk/35WAgJI="
       ];
-
-      extraOptions = ''
-        gc-keep-outputs = true
-        gc-keep-derivations = true
-        auto-optimise-store = true
-        binary-caches-parallel-connections = 10
-      ''; # experimental-features = nix-command flakes
     };
   };
 }
