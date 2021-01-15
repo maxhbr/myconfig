@@ -27,7 +27,7 @@ let
     fi
     ${doom-emacs-bin-path} "$tempfile"
     ${pkgs.xclip}/bin/xclip < "$tempfile"
-      '';
+  '';
 in {
   config = {
     nixpkgs.overlays = [
