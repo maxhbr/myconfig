@@ -1,5 +1,21 @@
 {
-  description = "A very basic flake";
+  description = "myconfig";
+
+  inputs = {
+    home-manager = {
+      url = "github:rycee/home-manager";
+
+      inputs = {
+        nixpkgs = {
+          follows = "nixpkgs";
+        };
+      };
+    };
+
+    nixpkgs = {
+      url = "github:nixos/nixpkgs/nixos-unstable";
+    };
+  };
 
   outputs = { self, nixpkgs }: {
 
