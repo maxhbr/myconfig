@@ -3,12 +3,26 @@
 { config, pkgs, lib, ... }:
 let
   user = config.myconfig.user;
-  nixpkgsConfig = { allowUnfree = true; };
 in {
+  # imports = [
+  #   { # support for nix-flakes
+  #     # see:
+  #     # - https://nixos.wiki/wiki/Flakes
+  #     # - https://www.tweag.io/blog/2020-05-25-flakes/
+  #     config = {
+  #       nix = {
+  #         package = pkgs.nixFlakes;
+  #         extraOptions = ''
+  #           experimental-features = nix-command flakes
+  #         '';
+  #       };
+  #     };
+  #   }
+  # ];
   config = {
-    nixpkgs.config = nixpkgsConfig;
+    nixpkgs.config = { allowUnfree = true; };
     home-manager.users."${user}" = {
-      nixpkgs.config = nixpkgsConfig;
+      nixpkgs.config = config.nixpkgs.config;
       home.file = {
         ".config/nixpkgs/config.nix" = {
           text = ''
@@ -23,11 +37,7 @@ in {
       };
     };
     nix = rec {
-      # see: https://nixos.wiki/wiki/Flakes
-      package = pkgs.nixFlakes;
       extraOptions = ''
-        experimental-features = nix-command flakes
-
         gc-keep-outputs = true
         gc-keep-derivations = true
         auto-optimise-store = true
@@ -41,7 +51,7 @@ in {
       optimise.automatic = true;
 
       allowedUsers = [ "@wheel" "@builders" "${user}" ];
-      trustedUsers = [ "root" "@wheel" "@builders" "${user}" ];
+      trustedUsers = [ "root" ] ++ allowedUsers;
 
       trustedBinaryCaches = [
         "https://cache.nixos.org"
