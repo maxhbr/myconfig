@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, ... }:
 let
+  ls = "${pkgs.exa}/bin/exa";
   aliases = {
-    ls = "${pkgs.exa}/bin/exa";
-    ll = "ls -l";
-    la = "ls -a";
-    lt = "ls --tree";
-    lla = "ls -la";
+    inherit ls;
+    ll = "${ls} -l";
+    la = "${ls} -a";
+    lt = "${ls} --tree";
+    lla = "${ls} -la";
   };
 in {
   home.packages = [ pkgs.exa ];
