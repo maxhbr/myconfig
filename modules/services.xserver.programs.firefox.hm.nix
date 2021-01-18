@@ -62,6 +62,7 @@ in {
         privacy-badger
         link-cleaner
         gopass-bridge
+        vimium
       ];
       profiles."0" = {
         id = 0;
