@@ -18,5 +18,10 @@
     virtualisation.docker.enable = true;
 
     services.netdata.enable = lib.mkForce false;
+
+    # stk
+    networking.firewall.allowedUDPPorts = [ 2759 2757 ];
+    networking.firewall.allowedTCPPorts = [ 2759 2757 ];
+
   };
 }
