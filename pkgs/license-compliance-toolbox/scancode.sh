@@ -25,15 +25,16 @@ RUN apt-get update && apt-get install -y bzip2 xz-utils zlib1g libxml2-dev libxs
 ADD https://github.com/nexB/scancode-toolkit/archive/master.tar.gz .
 
 RUN set -x \
- && mkdir workdir \
- && mkdir /.cache && chmod 777 /.cache \
+ && mkdir /workdir \
  && mkdir scancode-toolkit \
  && tar xzvf master.tar.gz -C scancode-toolkit --strip-components=1 \
- && ./scancode-toolkit/scancode --help
+ && cd /scancode-toolkit \
+ && ./configure \
+ && mkdir -p tmp/ && chmod 777 tmp/ \
+ && mkdir -p .cache && chmod 777 .cache \
+ && /scancode-toolkit/scancode --help
 
 WORKDIR out
-
-RUN pwd
 CMD /scancode-toolkit/scancode --help
 EOF
     else

@@ -5,7 +5,7 @@
 
 set -e
 
-ternDir="$HOME/.tern-pip-env"
+pipEnvDir="$HOME/.license-compliance-toolbox-pip-env"
 # export format=json
 export format=yaml
 
@@ -20,14 +20,14 @@ EOF
 }
 
 activateTern() {
-    pushd "$ternDir"
+    pushd "$pipEnvDir"
     source bin/activate
     popd
 }
 
 installTernIfMissing() {
-    if [[ ! -d "$ternDir" ]]; then
-        python3 -m venv $ternDir
+    if [[ ! -d "$pipEnvDir" ]]; then
+        python3 -m venv $pipEnvDir
         activateTern
         pip install tern scancode-toolkit
     else
@@ -90,13 +90,15 @@ runTernRecursively() {
     shift
     local out="$(getOutFolder "$workdir")"
 
-    find "$workdir" -iname 'Dockerfile'  -print0 |
-        while IFS= read -r -d '' dockerfile; do
-            outFolder="$out/$(echo "$dockerfile" | sed 's#^./##' | sed 's#/#_#g')"
-            mkdir -p "$outFolder"
+    (cd "$workdir"
+     find . -iname 'Dockerfile'  -print0 |
+         while IFS= read -r -d '' dockerfile; do
+             outFolder="$out/$(echo "$dockerfile" | sed 's#^./##' | sed 's#/#_#g')"
+             mkdir -p "$outFolder"
 
-            runTernOnDockerfile "$dockerfile" "$outFolder"
-        done
+             runTernOnDockerfile "$dockerfile" "$outFolder"
+         done
+    )
 }
 
 #################################################################################
