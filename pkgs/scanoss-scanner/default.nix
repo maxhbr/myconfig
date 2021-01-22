@@ -14,7 +14,7 @@ run() {
             (>&2 echo "$(${ncurses}/bin/tput bold)$(${ncurses}/bin/tput setaf 1)[$counter] $file$(${ncurses}/bin/tput sgr0)")
             sleep $(( $counter / 3 ))
         fi
-        local result=$(scanoss-scanner "$file")
+        local result=$(scanoss-scanner "$file" | sed '/^[[:digit:]]*[[:space:]]*$/d' | awk 1 RS='\r\n' ORS=)
 
         if ${jq}/bin/jq -e . >/dev/null 2>&1 <<<"$result"; then
             echo "$result"
@@ -36,17 +36,18 @@ main() {
         exit 1
     fi
 
-    (cd "$workdir"
-    find . -type f \
-        -not -empty \
-        -not -path '*/\.git/*' \
-        -not -path '*/\.svn/*' |
-        while read file; do
-            run "$file"
-        done) |
-        sed '/^[[:space:]]*$/d' |
-        tee "''${workdir}_sca.raw.json" |
-        ${jq}/bin/jq -n '[inputs] | add' > "''${workdir}_sca.json"
+    (cd "$workdir";
+     find . -type f \
+         -not -empty \
+         -not -path '*/\.git/*' \
+         -not -path '*/\.svn/*' |
+         while read file; do
+             run "$file"
+         done  |
+         tee "''${workdir}_sca.raw.json" |
+         ${jq}/bin/jq -n '[inputs] | add' > "''${workdir}_sca.json"
+      rm "''${workdir}_sca.raw.json"
+    )
 }
 
 main "$@"

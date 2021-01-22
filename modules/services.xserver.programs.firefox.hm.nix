@@ -71,6 +71,8 @@ in {
         settings = {
           # "browser.startup.homepage" = "https://nixos.org";
           "browser.search.region" = "DE";
+          "browser.toolbars.bookmarks.2h2020" = true;
+          "browser.toolbars.bookmarks.visibility" = "never";
           # "browser.search.isUS" = false;
           # "distribution.searchplugins.defaultLocale" = "en-GB";
           # "general.useragent.locale" = "en-GB";

@@ -74,13 +74,41 @@ EOF
 # function to run dockerized ort commands
 #################################################################################
 prepareDotOrt() {
-    declare -a types=("analyzer" "downloader" "scanner" )
+    declare -a types=("analyzer" "downloader" "scanner" "config" )
     for type in ${types[@]}; do
         mkdir -p "$HOME/.ort/dockerHome/.ort/$type"
         if [[ ! -e "$HOME/.ort/$type" ]]; then
             ln -s "$HOME/.ort/dockerHome/.ort/$type" "$HOME/.ort/$type"
         fi
     done
+    cat <<EOF > "$HOME/.ort/dockerHome/.ort/config/ort.conf"
+ort {
+  scanner {
+    storages {
+      clearlyDefined {
+        serverUrl = "https://api.clearlydefined.io"
+      }
+      fileBasedStorage {
+        backend {
+          localFileStorage {
+            directory = "~/.ort/scanner/scan-results"
+            compression = false
+          }
+        }
+      }
+    }
+
+    storageReaders: [
+      "fileBasedStorage"
+      "clearlyDefined"
+    ]
+
+    storageWriters: [
+      "fileBasedStorage"
+    ]
+  }
+}
+EOF
 }
 
 computeOutFolder() {
