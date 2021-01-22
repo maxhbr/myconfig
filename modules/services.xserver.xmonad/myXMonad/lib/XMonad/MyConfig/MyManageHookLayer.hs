@@ -47,7 +47,8 @@ myManageHook = let
                                                 , "Telegram"
                                                 , "slack", "Slack"])
                                , (doShift "media", [ "Steam"
-                                                   , "google-chrome", "Google-chrome"])
+                                                   , "google-chrome", "Google-chrome"
+                                                   , "Xephyr"])
                                , (doShift "13", [ "Wfica", "Wfica_Seamless"
                                                 , "vncviewer", "Vncviewer"
                                                 , "org.remmina.Remmina"])
