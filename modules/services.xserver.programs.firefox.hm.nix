@@ -68,17 +68,17 @@ in {
         id = 0;
         isDefault = true;
         name = "0";
-        settings = {
-          # "browser.startup.homepage" = "https://nixos.org";
-          "browser.sessionstore.warnOnQuit"	= "true";
-          "browser.search.region" = "DE";
-          "browser.toolbars.bookmarks.2h2020" = "true";
-          "browser.toolbars.bookmarks.visibility" = "never";
-          # "browser.search.isUS" = false;
-          # "distribution.searchplugins.defaultLocale" = "en-GB";
-          # "general.useragent.locale" = "en-GB";
-          # "browser.bookmarks.showMobileBookmarks" = true;
-        };
+        # settings = {
+        #   # "browser.startup.homepage" = "https://nixos.org";
+        #   "browser.sessionstore.warnOnQuit"	= true;
+        #   "browser.search.region" = "DE";
+        #   "browser.toolbars.bookmarks.2h2020" = true;
+        #   "browser.toolbars.bookmarks.visibility" = "never";
+        #   # "browser.search.isUS" = false;
+        #   # "distribution.searchplugins.defaultLocale" = "en-GB";
+        #   # "general.useragent.locale" = "en-GB";
+        #   # "browser.bookmarks.showMobileBookmarks" = true;
+        # };
       };
     };
     xdg.mimeApps = {
