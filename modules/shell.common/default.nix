@@ -89,6 +89,10 @@ in {
         bmon
         nmon
         s-tui
+        (writeShellScriptBin "usbtop" ''
+          sudo modprobe usbmon
+          sudo ${usbtop}/bin/usbtop
+        '')
         pwgen # unstable.mkpasswd
         usbutils
         tcpdump
