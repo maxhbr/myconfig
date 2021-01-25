@@ -5,8 +5,7 @@
 
 let
   isvpn = with pkgs;
-    writeScriptBin "isvpn" ''
-      #!${stdenv.shell}
+    writeShellScriptBin "isvpn" ''
       delimiter=$1
       startcol=$2
       endcol=$3
@@ -17,10 +16,25 @@ let
       if ${nettools}/bin/ifconfig tun0 &> /dev/null; then
         echo -n "$pre"'VPN'"$post"
       fi
-        '';
+    '';
+  isBtBlocked = with pkgs;
+    writeShellScriptBin "isBtBlocked" ''
+      delimiter=$1
+      startcol=$2
+      endcol=$3
+
+      export LC_ALL=C
+
+      pre="$delimiter $startcol"
+      post="$endcol "
+      btState=$(${pkgs.utillinux}/bin/rfkill -J | ${pkgs.jq}/bin/jq -r '.""|.[] | select (."id"==0) | ."soft"')
+      if [[ "$btState" == "blocked" ]]; then
+        echo -n "''${pre}BT ''${btState}''${post}"
+      fi
+   '';
+
   hasXssLock = with pkgs;
-    writeScriptBin "hasXssLock" ''
-      #!${stdenv.shell}
+    writeShellScriptBin "hasXssLock" ''
       delimiter=$1
       startcol=$2
       endcol=$3
@@ -33,8 +47,7 @@ let
       fi
     '';
   xmobarXmonad = with pkgs;
-    writeScriptBin "xmobarXmonad" ''
-      #!${stdenv.shell}
+    writeShellScriptBin "xmobarXmonad" ''
       set -e
       export PATH=$PATH:${isvpn}/bin/:${hasXssLock}/bin/
       pidfile=/tmp/xmobarXmonad.pid
@@ -47,8 +60,7 @@ let
       echo $! > $pidfile
         '';
   xmobarDmesg = with pkgs;
-    writeScriptBin "xmobarDmesg" ''
-      #!${stdenv.shell}
+    writeShellScriptBin "xmobarDmesg" ''
       set -o pipefail
       set -ex
       fun () {
@@ -59,5 +71,5 @@ let
 in pkgs.buildEnv {
   name = "my-xmobar";
   extraOutputsToInstall = [ "bin" ];
-  paths = [ pkgs.xmobar xmobarXmonad xmobarDmesg my-mute-telco ];
+  paths = [ pkgs.xmobar xmobarXmonad xmobarDmesg my-mute-telco isBtBlocked ];
 }
