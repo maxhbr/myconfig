@@ -58,10 +58,12 @@ in {
       package = pkgs.unstable.firefox;
       extensions = with pkgs.nur.repos.rycee.firefox-addons; [
         # see: https://github.com/nix-community/nur-combined/blob/master/repos/rycee/pkgs/firefox-addons/generated-firefox-addons.nix
-        https-everywhere
-        privacy-badger
-        link-cleaner
+        dark-night-mode
         gopass-bridge
+        https-everywhere
+        link-cleaner
+        privacy-badger
+        tree-style-tab
         vimium
       ];
       profiles."0" = {
