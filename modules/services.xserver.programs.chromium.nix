@@ -8,12 +8,10 @@ let
     set -e
     postfix=$(date +%s | sha256sum | base64 | head -c 32 ; echo)
     mkdir -p "/tmp/incoChrome_$postfix"
-    ${pkgs.firejail}/bin/firejail --private --dns=8.8.8.8 \
-        -c \
-        ${chromium}/bin/chromium --incognito \
-            --user-data-dir="/tmp/incoChrome_$postfix" \
-            $@ &disown
-      '';
+    ${chromium}/bin/chromium --incognito \
+        --user-data-dir="/tmp/incoChrome_$postfix" \
+        $@ &disown
+  '';
   pipechrome = pkgs.writeShellScriptBin "pipechrome" ''
     ${chromium}/bin/chromium "data:text/html;base64,$(base64 -w 0 <&0)" &> /dev/null
       '';
@@ -28,6 +26,21 @@ in {
       true; # https://github.com/NixOS/nixpkgs/issues/49630
     home-manager.users."${user}" = {
       home.packages = [ inco pipechrome ];
+      home.file = {
+        ".config/chromium/NativeMessagingHosts/com.justwatch.gopass.json" = {
+          text = ''
+            {
+                "name": "com.justwatch.gopass",
+                "description": "Gopass wrapper to search and return passwords",
+                "path": "${pkgs.gopassWrapper}/bin/gopass_wrapper.sh",
+                "type": "stdio",
+                "allowed_origins": [
+                    "chrome-extension://kkhfnlkhiapbiehimabddjbimfaijdhk/"
+                ]
+            }
+          '';
+        };
+      };
       programs.chromium = {
         enable = true;
         package = chromium;

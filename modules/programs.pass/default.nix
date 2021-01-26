@@ -26,6 +26,18 @@ in {
               inherit (super.python3Packages) buildPythonApplication;
               inherit (self.python3Packages) pyxdg;
             };
+          gopassWrapper = with pkgs;
+            writeShellScriptBin "gopass_wrapper.sh" ''
+              if [ -f ~/.gpg-agent-info ] && [ -n "$(${procps}/bin/pgrep gpg-agent)" ]; then
+                source ~/.gpg-agent-info
+                export GPG_AGENT_INFO
+              else
+                eval $(${gnupg}/bin/gpg-agent --daemon)
+              fi
+              export GPG_TTY="$(tty)"
+
+              exec ${gopass}/bin/gopass-jsonapi listen
+            '';
         })
     ];
     home-manager.users."${user}" = {
