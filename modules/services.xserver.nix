@@ -43,7 +43,6 @@ in {
           aspellDicts.en
         ] ++ lib.optional config.networking.networkmanager.enable networkmanager_dmenu
         ++ (with pkgs.unstable; [
-          google-chrome # for netflix and stadia
           tdesktop
           signal-desktop signal-cli
         ]);
