@@ -38,6 +38,7 @@ in {
         link-cleaner
         privacy-badger
         tree-style-tab
+        ublock-origin
         vimium
       ];
       profiles."0" = {
