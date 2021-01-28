@@ -38,6 +38,12 @@ in {
       };
     };
 
+    nixpkgs.overlays = [
+      (self: super: {
+        sudo = super.unstable.sudo; # CVE-2021-3156, min version is 1.9.5p2
+      })
+    ];
+
     environment = {
       variables = { TMP = "/tmp"; };
       systemPackages = with pkgs; [
