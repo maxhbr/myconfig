@@ -1,0 +1,76 @@
+{ lib, stdenv
+, fetchFromGitHub
+, meson
+, ninja
+, pkg-config
+, desktop-file-utils
+, python3
+, vala
+, wrapGAppsHook
+, evolution-data-server
+, libical
+, libgee
+, json-glib
+, glib
+, sqlite
+, libsoup
+, gtk3
+, pantheon /* granite, icons, maintainers */
+, webkitgtk
+}:
+
+stdenv.mkDerivation rec {
+  pname = "elementary-planner";
+  version = "2.5.7";
+
+  src = fetchFromGitHub {
+    owner = "alainm23";
+    repo = "planner";
+    rev = version;
+    sha256 = "0s2f9q7i31c2splflfnaiqviwnxbsp2zvibr70xafhbhnkmzlrsk";
+  };
+
+  nativeBuildInputs = [
+    desktop-file-utils
+    meson
+    ninja
+    pkg-config
+    python3
+    vala
+    wrapGAppsHook
+  ];
+
+  buildInputs = [
+    evolution-data-server
+    glib
+    gtk3
+    json-glib
+    libgee
+    libical
+    libsoup
+    pantheon.elementary-icon-theme
+    pantheon.granite
+    sqlite
+    webkitgtk
+  ];
+
+  postPatch = ''
+    chmod +x build-aux/meson/post_install.py
+    patchShebangs build-aux/meson/post_install.py
+  '';
+
+  preFixup = ''
+    gappsWrapperArgs+=(
+      # the theme is hardcoded
+      --prefix XDG_DATA_DIRS : "${pantheon.elementary-gtk-theme}/share"
+    )
+  '';
+
+  meta = with lib; {
+    description = "Task manager with Todoist support designed for GNU/Linux 🚀️";
+    homepage = "https://planner-todo.web.app";
+    license = licenses.gpl3;
+    maintainers = with maintainers; [ dtzWill ] ++ pantheon.maintainers;
+  };
+}
+
