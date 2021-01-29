@@ -35,7 +35,7 @@ upgradeSubtree() {
 upgradeNixpkgs() {
     logH1 "upgrade nixpkgs" "nixStableChannel=$nixStableChannel"
     upgradeSubtree \
-        NixOS-nixpkgs-channels https://github.com/NixOS/nixpkgs-channels \
+        NixOS-nixpkgs https://github.com/NixOS/nixpkgs \
         "nixpkgs" \
         "$nixStableChannel"
 }
