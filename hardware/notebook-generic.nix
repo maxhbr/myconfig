@@ -24,10 +24,10 @@
   imports = [
     { # config for libinput
       config = lib.mkIf (config.services.xserver.libinput.enable) {
-        services.xserver.libinput = {
-          naturalScrolling = true;
+        services.xserver.libinput.touchpad = {
           disableWhileTyping = true;
           tappingDragLock = false;
+          naturalScrolling = true;
         };
       };
     }

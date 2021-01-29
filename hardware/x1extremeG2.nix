@@ -23,7 +23,7 @@
     ##############################################################################
     (import ../hardware/gtx1650.nix).rawNvidiaConf
     (lib.mkIf (config.services.xserver.libinput.enable) {
-      services.xserver.libinput.accelSpeed = "0.15";
+      services.xserver.libinput.touchpad.accelSpeed = "0.15";
     })
   ];
 
