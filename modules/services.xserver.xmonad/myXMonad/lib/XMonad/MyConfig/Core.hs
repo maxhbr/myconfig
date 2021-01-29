@@ -59,7 +59,6 @@ myStartupHook :: X ()
 myStartupHook = do
   setWMName "LG3D"
   spawn ("pkill unclutter; " ++ unclutterCMD)
-  spawn (xsetCMD ++ " s "++ (show (60 * 60)))
 
 ------------------------------------------------------------------------
 -- Key bindings:
