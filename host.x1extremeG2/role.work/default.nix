@@ -3,9 +3,11 @@
 { config, pkgs, lib, ... }:
 let user = config.myconfig.user;
 in {
-  imports = [ ./jdk.nix ./misc-desktop-tools.nix
-              # ./evolution.nix
-            ];
+  imports = [
+    ./jdk.nix
+    ./misc-desktop-tools.nix
+    # ./evolution.nix
+  ];
   config = {
     nixpkgs.overlays = map (n: import n) [
       ./idea-ultimate
@@ -22,7 +24,6 @@ in {
         strongswan
         networkmanager_strongswan
         networkmanagerapplet
-        thrift
         idea-ultimate # jetbrains.phpstorm
         dia
         insync
