@@ -9,4 +9,4 @@ cd "$( dirname "${BASH_SOURCE[0]}" )"
 common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
 . "$common"
 
-# updateRefAndJson nix-community/home-manager master #release-20.03
+updateRefAndJson nix-community/home-manager master
