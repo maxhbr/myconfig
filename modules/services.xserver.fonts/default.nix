@@ -17,7 +17,7 @@ in {
     ];
 
     fonts = {
-      FontDir.enable = true;
+      fontDir.enable = true;
       enableGhostscriptFonts = true;
 
       fonts = with pkgs; [ dejavu_fonts dejavu_nerdfont corefonts inconsolata ];

@@ -45,7 +45,7 @@ in {
   config = {
     myconfig = {
       desktop.enable = true;
-      virtualisation.enable = true;
+      # virtualisation.enable = true;
       imagework.enable = true;
       dev = {
         haskell.enable = true;
