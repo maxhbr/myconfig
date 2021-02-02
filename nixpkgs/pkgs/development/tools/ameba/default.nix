@@ -1,14 +1,14 @@
-{ stdenv, lib, fetchFromGitHub, crystal }:
+{ lib, fetchFromGitHub, crystal }:
 
 crystal.buildCrystalPackage rec {
   pname = "ameba";
-  version = "0.13.3";
+  version = "0.13.4";
 
   src = fetchFromGitHub {
     owner = "crystal-ameba";
     repo = "ameba";
     rev = "v${version}";
-    sha256 = "0yhb8vfrfzsm3a45h2jmcrn1n7jy3zn2hwims3dikgq8kaggws9y";
+    sha256 = "sha256-+ZsefwH1hag2syWaEXkdxgmxk6JsxP7MvV+ILlo+Hy8=";
   };
 
   meta = with lib; {

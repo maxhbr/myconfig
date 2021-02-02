@@ -13,7 +13,8 @@
 , csdp ? null
 , version, coq-version ? null,
 }@args:
-let lib = import ../../../../build-support/coq/extra-lib.nix {inherit (stdenv) lib;}; in
+let lib' = lib; in
+let lib = import ../../../../build-support/coq/extra-lib.nix {lib = lib';}; in
 with builtins; with lib;
 let
   release = {
@@ -44,7 +45,7 @@ let
   };
   releaseRev = v: "V${v}";
   fetched = import ../../../../build-support/coq/meta-fetch/default.nix
-    { inherit stdenv fetchzip; }
+    { inherit lib stdenv fetchzip; }
     { inherit release releaseRev; location = { owner = "coq"; repo = "coq";}; }
     args.version;
   version = fetched.version;

@@ -43,6 +43,7 @@ in {
       haskellPackages = mkOption {
         default = pkgs.haskellPackages;
         defaultText = "pkgs.haskellPackages";
+        type = types.package;
         example = literalExample "pkgs.haskell.packages.ghc784";
         description = ''
           haskellPackages used to build Xmonad and other packages.
@@ -53,6 +54,7 @@ in {
       };
 
       extraPackages = mkOption {
+        type = types.functionTo (types.listOf types.package);
         default = self: [];
         defaultText = "self: []";
         example = literalExample ''

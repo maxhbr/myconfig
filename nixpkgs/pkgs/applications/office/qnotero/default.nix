@@ -1,4 +1,4 @@
-{ lib, stdenv, fetchFromGitHub, python3Packages, wrapQtAppsHook }:
+{ lib, fetchFromGitHub, python3Packages, wrapQtAppsHook }:
 
 python3Packages.buildPythonPackage rec {
   pname = "qnotero";
@@ -25,6 +25,9 @@ python3Packages.buildPythonPackage rec {
   preFixup = ''
     wrapQtApp "$out"/bin/qnotero
   '';
+
+  # no tests executed
+  doCheck = false;
 
   meta = {
     description = "Quick access to Zotero references";

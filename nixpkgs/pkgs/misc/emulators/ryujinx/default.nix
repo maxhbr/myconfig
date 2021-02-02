@@ -1,7 +1,7 @@
 { lib, stdenv, fetchFromGitHub, fetchurl, makeWrapper, makeDesktopItem, linkFarmFromDrvs
-, dotnet-sdk_3, dotnetPackages, dotnetCorePackages
-, SDL2, libX11, openal
-, gtk3, gobject-introspection, wrapGAppsHook
+, dotnet-sdk_5, dotnetPackages, dotnetCorePackages
+, SDL2, libX11, ffmpeg, openal, libsoundio
+, gtk3, gobject-introspection, gdk-pixbuf, wrapGAppsHook
 }:
 
 let
@@ -9,20 +9,22 @@ let
     SDL2
     gtk3
     libX11
+    ffmpeg
     openal
+    libsoundio
   ];
 in stdenv.mkDerivation rec {
   pname = "ryujinx";
-  version = "1.0.5551"; # Versioning is based off of the official appveyor builds: https://ci.appveyor.com/project/gdkchan/ryujinx
+  version = "1.0.6448"; # Versioning is based off of the official appveyor builds: https://ci.appveyor.com/project/gdkchan/ryujinx
 
   src = fetchFromGitHub {
     owner = "Ryujinx";
     repo = "Ryujinx";
-    rev = "2dcc6333f8cbb959293832f52857bdaeab1918bf";
-    sha256 = "1hfa498fr9mdxas9s02y25ncb982wa1sqhl06jpnkhqsiicbkgcf";
+    rev = "9eb0ab05c6e820e113b3c61cbacd9b085b2819c4";
+    sha256 = "168nm7p6lqswmsya6gf3296ligyjabqmbrdzginkcviii643yslz";
   };
 
-  nativeBuildInputs = [ dotnet-sdk_3 dotnetPackages.Nuget makeWrapper wrapGAppsHook gobject-introspection ];
+  nativeBuildInputs = [ dotnet-sdk_5 dotnetPackages.Nuget makeWrapper wrapGAppsHook gobject-introspection gdk-pixbuf ];
 
   nugetDeps = linkFarmFromDrvs "${pname}-nuget-deps" (import ./deps.nix {
     fetchNuGet = { name, version, sha256 }: fetchurl {
@@ -32,7 +34,10 @@ in stdenv.mkDerivation rec {
     };
   });
 
-  patches = [ ./log.patch ]; # Without this, Ryujinx tries to write logs to the nix store. This patch makes it write to "~/.config/Ryujinx/Logs" on Linux.
+  patches = [
+    ./log.patch # Without this, Ryujinx attempts to write logs to the nix store. This patch makes it write to "~/.config/Ryujinx/Logs" on Linux.
+    ./disable-updater.patch # This disables the auto-updater, which does not work as it attempts to modify the nix store.
+  ];
 
   configurePhase = ''
     runHook preConfigure
@@ -73,12 +78,12 @@ in stdenv.mkDerivation rec {
     shopt -s extglob
 
     makeWrapper $out/lib/ryujinx/Ryujinx $out/bin/Ryujinx \
-      --set DOTNET_ROOT "${dotnetCorePackages.netcore_3_1}" \
+      --set DOTNET_ROOT "${dotnetCorePackages.net_5_0}" \
       --suffix LD_LIBRARY_PATH : "${lib.makeLibraryPath runtimeDeps}" \
       ''${gappsWrapperArgs[@]}
 
     for i in 16 32 48 64 96 128 256 512 1024; do
-      install -D ${src}/Ryujinx/Ui/assets/Icon.png $out/share/icons/hicolor/''${i}x$i/apps/ryujinx.png
+      install -D ${src}/Ryujinx/Ui/Resources/Logo_Ryujinx.png $out/share/icons/hicolor/''${i}x$i/apps/ryujinx.png
     done
     cp -r ${makeDesktopItem {
       desktopName = "Ryujinx";

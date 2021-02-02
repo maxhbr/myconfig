@@ -25,6 +25,7 @@ in {
     };
 
     packages = mkOption {
+      type = types.functionTo (types.listOf types.package);
       default = hp: [];
       defaultText = "hp: []";
       example = "hp: with hp; [ text lens ]";
@@ -40,6 +41,7 @@ in {
     haskellPackages = mkOption {
       description = "Which haskell package set to use.";
       default = pkgs.haskellPackages;
+      type = types.package;
       defaultText = "pkgs.haskellPackages";
     };
 

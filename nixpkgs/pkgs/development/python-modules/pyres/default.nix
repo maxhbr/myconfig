@@ -31,6 +31,9 @@ buildPythonPackage rec {
     sha256 = "1rkpv7gbjxl9h9g7kncmsrgmi77l7pgfq8d7dbnsr3ia2jmjqb8y";
   };
 
+  # started redis-server makes this hang on darwin
+  doCheck = !stdenv.isDarwin;
+
   checkPhase = ''
     redis-server &
     nosetests . --exclude test_worker_pids

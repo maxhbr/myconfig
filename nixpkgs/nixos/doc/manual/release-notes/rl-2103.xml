@@ -461,6 +461,11 @@ self: super:
       mouse section.
      </para>
    </listitem>
+   <listitem>
+    <para>
+     ALSA OSS emulation (<varname>sound.enableOSSEmulation</varname>) is now disabled by default.
+    </para>
+   </listitem>
   </itemizedlist>
  </section>
 
@@ -472,6 +477,14 @@ self: super:
   <title>Other Notable Changes</title>
 
   <itemizedlist>
+   <listitem>
+    <para>
+     <literal>stdenv.lib</literal> has been deprecated and will break
+     eval in 21.11.  Please use <literal>pkgs.lib</literal> instead.
+     See <link xlink:href="https://github.com/NixOS/nixpkgs/issues/108938">#108938</link>
+     for details.
+    </para>
+   </listitem>
    <listitem>
     <para>
      The Mailman NixOS module (<literal>services.mailman</literal>) has a new
@@ -607,6 +620,15 @@ self: super:
    </listitem>
    <listitem>
     <para>
+     In the ACME module, the data used to build the hash for the account
+     directory has changed to accomodate new features to reduce account
+     rate limit issues. This will trigger new account creation on the first
+     rebuild following this update. No issues are expected to arise from this,
+     thanks to the new account creation handling.
+    </para>
+   </listitem>
+   <listitem>
+    <para>
      <xref linkend="opt-users.users._name_.createHome" /> now always ensures home directory permissions to be <literal>0700</literal>.
      Permissions had previously been ignored for already existing home directories, possibly leaving them readable by others.
      The option's description was incorrect regarding ownership management and has been simplified greatly.
@@ -637,6 +659,11 @@ self: super:
     </para>
     <para>
      The <varname>platform</varname> grouping of these things never meant anything, and was just a historial/implementation artifact that was overdue removal.
+    </para>
+   </listitem>
+   <listitem>
+    <para>
+     <varname>services.restic</varname> now uses a dedicated cache directory for every backup defined in <varname>services.restic.backups</varname>. The old global cache directory, <literal>/root/.cache/restic</literal>, is now unused and can be removed to free up disk space.
     </para>
    </listitem>
   </itemizedlist>
