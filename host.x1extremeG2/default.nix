@@ -108,6 +108,7 @@ in {
         google-chrome # for netflix and stadia
       ];
 
+      programs.kitty.enable = true;
     };
   };
 }

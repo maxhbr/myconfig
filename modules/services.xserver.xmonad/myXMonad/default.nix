@@ -67,5 +67,5 @@ in mkDerivation {
   '';
 
   description = "my xmonad configuration";
-  license = stdenv.lib.licenses.mit;
+  license = pkgs.lib.licenses.mit;
 }

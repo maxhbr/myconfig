@@ -80,12 +80,12 @@ in stdenv.mkDerivation rec {
     sed -i -e 's%scanoss-scanner%'"$out"'/bin/scanoss-scanner%g' "$out/bin/scanoss-dir"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with pkgs.lib; {
     description =
       "This is a simple implementation of a console file scanner using the SCANOSS OSSKB, which allows you to perform identification of Open Source components, files or even snippets in your own code.";
     homepage = "https://github.com/scanoss/scanner.c";
     license = licenses.gpl2;
-    maintainers = with stdenv.lib.maintainers; [ ];
+    maintainers = with pkgs.lib.maintainers; [ ];
     platforms = [ "x86_64-linux" ];
   };
 }

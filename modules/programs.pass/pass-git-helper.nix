@@ -1,6 +1,6 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ stdenv, buildPythonApplication, fetchFromGitHub, pyxdg, pass }:
+{ lib, buildPythonApplication, fetchFromGitHub, pyxdg, pass }:
 
 buildPythonApplication rec {
   pname = "pass-git-helper";
@@ -23,7 +23,7 @@ buildPythonApplication rec {
 
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = "https://github.com/languitar/pass-git-helper";
     description =
       "A git credential helper interfacing with pass, the standard unix password manager.";

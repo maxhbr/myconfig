@@ -16,7 +16,7 @@ stdenv.mkDerivation {
     install -Dm644 19-footswitch.rules "$out/etc/udev/rules.d/19-footswitch.rules"
       '';
 
-  meta = with stdenv.lib; {
+  meta = with pkgs.lib; {
     homepage = "https://github.com/rgerganov/footswitch";
     description =
       "Command line utlities for programming PCsensor and Scythe foot switches.";

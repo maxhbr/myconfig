@@ -31,7 +31,7 @@ stdenv.mkDerivation {
     install -Dm755 powder "$out/bin/powder"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with pkgs.lib; {
     homepage = "http://zincland.com/powder";
     description =
       "A graphical roguelike, originally designed for the Game Boy Advance";

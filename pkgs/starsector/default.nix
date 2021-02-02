@@ -72,7 +72,7 @@ stdenv.mkDerivation rec {
       --replace "allowAnyJavaVersion\":false" "allowAnyJavaVersion\":true"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with pkgs.lib; {
     homggepage = "https://fractalsoftworks.com/";
     description =
       "Starsector (formerly “Starfarer”) is an in-development open-world single-player space-combat, roleplaying, exploration, and economic game.";

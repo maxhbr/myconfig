@@ -25,7 +25,7 @@
               '';
 
             fetchGitHashless = args:
-              stdenv.lib.overrideDerivation
+              pkgs.lib.overrideDerivation
               # Use a dummy hash, to appease fetchgit's assertions
               (fetchgit (args // { sha256 = hashString "sha256" args.url; }))
 

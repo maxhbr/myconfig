@@ -61,10 +61,10 @@ mkDerivation rec {
     wrapProgram "$out/bin/deCONZ" \
         --set LD_PRELOAD "${libredirect}/lib/libredirect.so" \
         --set NIX_REDIRECTS "/usr/share=$out/share" \
-        --prefix PATH : "${stdenv.lib.makeBinPath [ gzip gnutar ]}"
+        --prefix PATH : "${pkgs.lib.makeBinPath [ gzip gnutar ]}"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with pkgs.lib; {
     description =
       "Manage ZigBee network with ConBee, ConBee II or RaspBee hardware";
     # 2019-08-19: The homepage links to old software that doesn't even work --

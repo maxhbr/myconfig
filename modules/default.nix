@@ -22,7 +22,7 @@ let
     ./services.vsftp.nix
     ./services.xserver.autorandr.nix
     ./services.xserver.big-cursor.nix
-    ./services.xserver.fonts
+    ./services.xserver.fonts.nix
     ./services.xserver.kernel.nix
     ./services.xserver.mkscreenshot.nix
     ./services.xserver.my-wallpapers

@@ -28,7 +28,7 @@ stdenv.mkDerivation rec {
     chmod +x $out/bin/dod
   '';
 
-  meta = with stdenv.lib; {
+  meta = with pkgs.lib; {
     homggepage = "http://www.bombmanual.com/";
     description = "Keep Talking and Nobody Explodes";
     platforms = platforms.linux;

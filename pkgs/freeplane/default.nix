@@ -1,5 +1,5 @@
 # from: https://github.com/NixOS/nixpkgs/pull/34752
-{ stdenv, fetchurl, unzip, makeWrapper }:
+{ stdenv, lib, fetchurl, unzip, makeWrapper }:
 
 stdenv.mkDerivation rec {
   version = "1.8.6";
@@ -24,7 +24,7 @@ stdenv.mkDerivation rec {
     makeWrapper $out/share/freeplane.sh $out/bin/freeplane
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Mind-mapping software";
     homepage = "https://www.freeplane.org/wiki/index.php/Home";
     license = licenses.gpl2Plus;

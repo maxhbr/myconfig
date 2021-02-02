@@ -30,8 +30,8 @@ in stdenv.mkDerivation rec {
   meta = {
     homepage = "https://github.com/Carpetsmoker/find-cursor";
     description = "Simple XLib program to highlight the cursor position.";
-    license = stdenv.lib.licenses.mit;
-    maintainers = with stdenv.lib.maintainers; [ ];
+    license = pkgs.lib.licenses.mit;
+    maintainers = with pkgs.lib.maintainers; [ ];
     platforms = [ "x86_64-linux" ];
   };
 }
