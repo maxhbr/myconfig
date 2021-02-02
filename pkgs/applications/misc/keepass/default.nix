@@ -1,4 +1,4 @@
-{ stdenv, lib, fetchurl, buildDotnetPackage, substituteAll, makeWrapper, makeDesktopItem,
+{ lib, fetchurl, buildDotnetPackage, substituteAll, makeWrapper, makeDesktopItem,
   unzip, icoutils, gtk2, xorg, xdotool, xsel, coreutils, unixtools, glib, plugins ? [] }:
 
 with builtins; buildDotnetPackage rec {
@@ -111,7 +111,7 @@ with builtins; buildDotnetPackage rec {
   meta = {
     description = "GUI password manager with strong cryptography";
     homepage = "http://www.keepass.info/";
-    maintainers = with lib.maintainers; [ amorsillo obadz jraygauthier ];
+    maintainers = with lib.maintainers; [ amorsillo obadz ];
     platforms = with lib.platforms; all;
     license = lib.licenses.gpl2;
   };

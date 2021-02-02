@@ -1,4 +1,4 @@
-{ lib, stdenv, mkDerivation, fetchurl, cmake, pkg-config, xlibsWrapper
+{ lib, mkDerivation, fetchurl, cmake, pkg-config, xlibsWrapper
 , qtbase, qttools, qtmultimedia, qtx11extras
 # transports
 , curl, libmms
@@ -12,7 +12,7 @@
 }:
 
 # Additional plugins that can be added:
-#  wavpack (http://www.wavpack.com/)
+#  wavpack (https://www.wavpack.com/)
 #  gme (Game music support)
 #  Ogg Opus support
 #  BS2B effect plugin (http://bs2b.sourceforge.net/)
