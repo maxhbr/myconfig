@@ -35,7 +35,7 @@ instance UrgencyHook MyUrgencyHook where
       flash name index =
         pop (show name ++ " @ " ++ index)
 
-mkFont s = font $ "xft:inconsolata:pixelsize=" ++ show s ++ ":antialias=true:hinting=true"
+mkFont s = font $ "xft:Hack:pixelsize=" ++ show s ++ ":antialias=true:hinting=true"
 
 myNotifyColored :: String -> Rational -> String -> X ()
 myNotifyColored color t = dzenConfig pc

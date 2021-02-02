@@ -10,7 +10,10 @@ let
     inherit (json) rev ref;
   }) {
     doomPrivateDir = ./doom.d;
-    extraPackages = epkgs: [ pkgs.mu pkgs.inconsolata ];
+    extraPackages = epkgs: [
+      pkgs.mu
+      (pkgs.nerdfonts.override { fonts = [ "Inconsolata" ]; })
+    ];
     extraConfig = ''
       (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
     '';

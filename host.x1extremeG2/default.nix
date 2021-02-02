@@ -107,8 +107,6 @@ in {
       home.packages = with pkgs.unstable; [
         google-chrome # for netflix and stadia
       ];
-
-      programs.kitty.enable = true;
     };
   };
 }
