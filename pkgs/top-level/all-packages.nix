@@ -1033,6 +1033,8 @@ in
 
   boxes = callPackage ../tools/text/boxes { };
 
+  boundary = callPackage ../tools/networking/boundary { };
+
   chamber = callPackage ../tools/admin/chamber {  };
 
   charm = callPackage ../applications/misc/charm { };
@@ -3079,6 +3081,8 @@ in
   };
 
   cjdns = callPackage ../tools/networking/cjdns { };
+
+  cjson = callPackage ../development/libraries/cjson { };
 
   cksfv = callPackage ../tools/networking/cksfv { };
 
@@ -5205,6 +5209,8 @@ in
     packages = config.ihaskell.packages or (self: []);
   };
 
+  ijq = callPackage ../development/tools/ijq { };
+
   iruby = callPackage ../applications/editors/jupyter-kernels/iruby { };
 
   ike-scan = callPackage ../tools/security/ike-scan { };
@@ -6830,6 +6836,8 @@ in
   overmind = callPackage ../applications/misc/overmind { };
 
   ovh-ttyrec = callPackage ../tools/misc/ovh-ttyrec { };
+
+  ovito = libsForQt5.callPackage ../applications/graphics/ovito { };
 
   owncloud-client = libsForQt514.callPackage ../applications/networking/owncloud-client { };
 
@@ -8781,6 +8789,8 @@ in
   htmldoc = callPackage ../tools/typesetting/htmldoc {
     inherit (darwin.apple_sdk.frameworks) SystemConfiguration Foundation;
   };
+
+  htmltest = callPackage ../development/tools/htmltest { };
 
   rcm = callPackage ../tools/misc/rcm {};
 
@@ -14747,6 +14757,8 @@ in
 
   libgda = callPackage ../development/libraries/libgda { };
 
+  libgda6 = callPackage ../development/libraries/libgda/6.x.nix { };
+
   libgdamm = callPackage ../development/libraries/libgdamm { };
 
   libgdata = callPackage ../development/libraries/libgdata { };
@@ -16809,6 +16821,8 @@ in
     inherit (darwin.apple_sdk.frameworks) Carbon;
   };
 
+  tageditor = libsForQt5.callPackage ../applications/audio/tageditor { };
+
   taglib = callPackage ../development/libraries/taglib { };
 
   taglib_extras = callPackage ../development/libraries/taglib-extras { };
@@ -16816,6 +16830,8 @@ in
   taglib-sharp = callPackage ../development/libraries/taglib-sharp { };
 
   talloc = callPackage ../development/libraries/talloc { };
+
+  tagparser = callPackage ../development/libraries/tagparser { };
 
   tclap = callPackage ../development/libraries/tclap {};
 
@@ -19597,6 +19613,8 @@ in
   gotop = callPackage ../tools/system/gotop { };
 
   go-migrate = callPackage ../development/tools/go-migrate { };
+
+  gomacro = callPackage ../development/tools/gomacro { };
 
   gomodifytags = callPackage ../development/tools/gomodifytags { };
 
@@ -22413,7 +22431,7 @@ in
 
   gocr = callPackage ../applications/graphics/gocr { };
 
-  gobby5 = callPackage ../applications/editors/gobby { };
+  gobby = callPackage ../applications/editors/gobby { };
 
   gphoto2 = callPackage ../applications/misc/gphoto2 { };
 
@@ -22758,6 +22776,8 @@ in
   i3status-rust = callPackage ../applications/window-managers/i3/status-rust.nix { };
 
   i3-wk-switch = callPackage ../applications/window-managers/i3/wk-switch.nix { };
+
+  waybox = callPackage ../applications/window-managers/waybox { };
 
   windowchef = callPackage ../applications/window-managers/windowchef/default.nix { };
 
@@ -23740,8 +23760,6 @@ in
   piper = callPackage ../os-specific/linux/piper { };
 
   plank = callPackage ../applications/misc/plank { };
-
-  planner = callPackage ../applications/office/planner { };
 
   playonlinux = callPackage ../applications/misc/playonlinux {
      stdenv = stdenv_32bit;
@@ -25866,7 +25884,7 @@ in
 
   xdg-user-dirs = callPackage ../tools/X11/xdg-user-dirs { };
 
-  xdg_utils = callPackage ../tools/X11/xdg-utils {
+  xdg-utils = callPackage ../tools/X11/xdg-utils {
     w3m = w3m-batch;
   };
 
@@ -29493,8 +29511,13 @@ in
 
   yaxg = callPackage ../tools/graphics/yaxg {};
 
-  yuzu = libsForQt5.callPackage ../misc/emulators/yuzu {
-    stdenv = gcc10Stdenv;
+  yuzu-mainline = import ../misc/emulators/yuzu {
+    branch = "mainline";
+    inherit (pkgs) libsForQt5 fetchFromGitHub;
+  };
+  yuzu-ea = import ../misc/emulators/yuzu {
+    branch = "early-access";
+    inherit (pkgs) libsForQt5 fetchFromGitHub;
   };
 
   zap = callPackage ../tools/networking/zap { };
