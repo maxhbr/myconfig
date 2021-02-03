@@ -12,7 +12,7 @@ in {
         slack
         rambox
         remmina
-        teams # nixos-2003-small.teams
+        nixos-2009-small.teams
       ];
       xdg.mimeApps = {
         defaultApplications."x-scheme-handler/msteams" = [ "teams.desktop" ];
