@@ -4,7 +4,7 @@
 let user = config.myconfig.user;
 in {
   imports = [
-    ./extrahosts
+    # ./extrahosts
     # ./service.stubby.nix
   ];
   config = {

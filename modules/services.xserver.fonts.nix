@@ -31,7 +31,7 @@ in {
         noto-fonts-emoji
         proggyfonts
       ];
-      fontconfig.defaultFonts.monospace = [ "Inconsolata Nerd Font" "DejaVu Sans Mono" "Ubuntu" ];
+      # fontconfig.defaultFonts.monospace = [ "Inconsolata Nerd Font" "DejaVu Sans Mono" "Ubuntu" ];
     };
     home-manager.users."${user}" = {
       home.file = {
