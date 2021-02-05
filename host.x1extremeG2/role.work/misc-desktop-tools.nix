@@ -10,6 +10,7 @@ in {
         nixos-unstable-small.zoom-us
         bluejeans-gui
         slack
+        element-desktop
         rambox
         remmina
         nixos-2009-small.teams
