@@ -1349,6 +1349,8 @@ in {
 
   cmdtest = callPackage ../development/python-modules/cmdtest { };
 
+  cmsis-svd = callPackage ../development/python-modules/cmsis-svd { };
+
   cntk = callPackage ../development/python-modules/cntk { };
 
   cnvkit = callPackage ../development/python-modules/cnvkit { };
@@ -3476,6 +3478,8 @@ in {
     callPackage ../development/python-modules/keyring/2.nix { };
 
   keyrings-alt = callPackage ../development/python-modules/keyrings-alt { };
+
+  keystone-engine = callPackage ../development/python-modules/keystone-engine { };
 
   keyutils = callPackage ../development/python-modules/keyutils { inherit (pkgs) keyutils; };
 
