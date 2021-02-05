@@ -92,6 +92,7 @@ in {
         mb660_switch_profile
         pulseeffects
         pactl-monitor
+        noisetorch
       ];
     };
 

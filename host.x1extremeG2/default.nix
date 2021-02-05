@@ -55,6 +55,7 @@ in {
       };
     };
     services.xserver.wacom.enable = true;
+    virtualisation.docker.enable = true;
 
     networking.hostName = "x1extremeG2";
     networking.hostId = "7634ddfe";

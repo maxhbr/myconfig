@@ -156,7 +156,7 @@ analyzeFolder() {
 
     local logfile="$(getOutFolder "$folderToScan")/analyzer.logfile"
     runOrt "$folderToScan" \
-           analyze -i /workdir --output-dir /out --output-formats JSON,YAML --allow-dynamic-versions "$@" 2>&1 |
+           analyze -i /workdir --clearly-defined-curations --output-dir /out --output-formats JSON,YAML --allow-dynamic-versions "$@" 2>&1 |
         tee -a "$logfile"
 }
 

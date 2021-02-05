@@ -1,4 +1,4 @@
-{ stdenv, unzip, requireFile, autoPatchelfHook, gdk-pixbuf, gtk2-x11, steam-run
+{ lib, stdenv, unzip, requireFile, autoPatchelfHook, gdk-pixbuf, gtk2-x11, steam-run
 }:
 
 stdenv.mkDerivation rec {
@@ -29,7 +29,7 @@ stdenv.mkDerivation rec {
     chmod +x $out/bin/ktane
   '';
 
-  meta = with pkgs.lib; {
+  meta = with lib; {
     homggepage = "http://www.bombmanual.com/";
     description = "Keep Talking and Nobody Explodes";
     platforms = platforms.linux;
