@@ -58,7 +58,7 @@ in {
                 ssl = true;
               }) (lib.unique ([
                 config.networking.hostName
-                (with (import ../lib.nix); (getSecretNoNewline "nas" "ip"))
+                # (with (import ../lib.nix); (getSecretNoNewline "nas" "ip"))
               ] ++ config.services.nextcloud.config.extraTrustedDomains));
             };
           };
