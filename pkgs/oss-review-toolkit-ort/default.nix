@@ -33,10 +33,8 @@ let
     buildPhase = ''
       runHook preBuild
 
-      export JAVA_HOME="${jdk11}/lib/openjdk"
-      export HOME=$(mktemp -d)
-      export XDG_CONFIG_HOME=$HOME
       export GRADLE_USER_HOME=$(mktemp -d)
+      export XDG_CONFIG_HOME=$GRADLE_USER_HOME/.config
       mkdir -p "''${GRADLE_USER_HOME}/nodejs"
       ln -s "${nodejs-12_x}" "''${GRADLE_USER_HOME}/nodejs/node-v12.16.1-linux-x64"
 
@@ -53,7 +51,7 @@ let
     outputHashMode = "recursive";
     outputHash =
       # Downloaded AWT jars differ by platform.
-      if stdenv.system == "x86_64-linux" then "0pw97a24p73qnanc5mi0hqc6n8rdgzc9hgb1a9cqkp910kgz3qy8"
+      if stdenv.system == "x86_64-linux" then "03vicn0vsx8ggj8xr7jg4bqnq2hahmrb9gkw99q78y9g6pl3f0xy"
       else if stdenv.system == "i686-linux" then throw "Unsupported platform"
       else throw "Unsupported platform";
   };
@@ -76,8 +74,7 @@ in stdenv.mkDerivation {
       --prefix PATH ":" "${cvs}/bin" \
       --prefix PATH ":" "${licensee}/bin" \
       --prefix PATH ":" "${python3}/bin" \
-      --prefix PATH ":" "${python3Packages.virtualenv}/bin" \
-      --prefix PATH ":" "${ruby}/bin"
+      --prefix PATH ":" "${python3Packages.virtualenv}/bin"
     rm $out/bin/ort.bat
   '';
 
@@ -90,6 +87,6 @@ in stdenv.mkDerivation {
     license = "Apache-2.0";
     description = "The OSS Review Toolkit (ORT) aims to assist with the tasks that commonly need to be performed in the context of license compliance checks, especially for (but not limited to) Free and Open Source Software dependencies.";
     maintainers = with maintainers; [ ];
-    # platforms = ;
+    platforms = platforms.linux;
   };
 }
