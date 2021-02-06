@@ -1,6 +1,6 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 let
   user = config.myconfig.user;
 in {
@@ -22,7 +22,9 @@ in {
     };
     home-manager.users."${user}" = {
       home.file = {
+        # to simulate gradles kotlinYarnSetup nodejs bootstrapping:
         ".gradle/nodejs/node-v12.16.1-linux-x64" = {
+          source = pkgs.nodejs-12_x;
         };
       };
     };
