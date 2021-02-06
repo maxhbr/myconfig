@@ -1,14 +1,20 @@
-{ stdenv, fetchgit, jdk11, gradleGen, pkgconfig, perl, yarn, nodejs-12_x }:
-
-# based on https://github.com/abbradar/nixpkgs/blob/784cf70d384adaf1fea8028d1fd98d0d6ee5cfad/pkgs/development/compilers/openjdk/openjfx/11.nix
+{ stdenv, fetchgit, jdk11, gradleGen, nodejs-12_x, makeWrapper
+# runtime requirements for ort
+, git, mercurial, cvs
+, licensee, ruby
+, python3, python3Packages
+}:
 
 let
   gradle_ = (gradleGen.override {
     java = jdk11;
   }).gradle_6_8;
 
-  makePackage = args: stdenv.mkDerivation ({
-    version = "master_76986516f8d72ff5aa343cd8eaf565c3b97531b4";
+  version = "master_76986516f8d72ff5aa343cd8eaf565c3b97531b4";
+
+  deps = stdenv.mkDerivation {
+    pname = "oss-review-toolkit-deps";
+    inherit version;
 
     src = fetchgit {
       url = "https://github.com/oss-review-toolkit/ort";
@@ -19,8 +25,8 @@ let
       deepClone = true;
     };
 
-    buildInputs = [ yarn nodejs-12_x ];
-    nativeBuildInputs = [ gradle_ perl pkgconfig yarn nodejs-12_x ];
+    nativeBuildInputs = [ gradle_ ];
+
 
     dontUseCmakeConfigure = true;
 
@@ -38,63 +44,44 @@ let
 
       runHook postBuild
     '';
-  } // args);
 
-  # Fake build to pre-download deps into fixed-output derivation.
-  # We run nearly full build because I see no other way to download everything that's needed.
-  # Anyone who knows a better way?
-  deps = makePackage {
-    pname = "oss-review-toolkit-deps";
-
-    # perl code mavenizes pathes (com.squareup.okio/okio/1.13.0/a9283170b7305c8d92d25aff02a6ab7e45d06cbe/okio-1.13.0.jar -> com/squareup/okio/okio/1.13.0/okio-1.13.0.jar)
     installPhase = ''
-      echo "#!/bin/sh" > $out/installScript.sh
-      echo "set +e" >> $out/installScript.sh
-      find $GRADLE_USER_HOME -type f -regex '.*\.\(jar\|pom\)' \
-        | perl -pe 's#(.*/([^/]+)/([^/]+)/([^/]+)/[0-9a-f]{30,40}/([^/\s]+))$# ($x = $2) =~ tr|\.|/|; "install -Dm444 $1 \$out/$x/$3/$4/$5" #e' | tee -a $out/installScript.sh
-      chmod +x $out/installScript.sh
-      $out/installScript.sh || true
-      cp -r $GRADLE_USER_HOME $out/GRADLE_USER_HOME
-      rm -rf $out/tmp
+      cp -r ./cli/build/install/* $out
     '';
-
 
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
     outputHash =
       # Downloaded AWT jars differ by platform.
-      if stdenv.system == "x86_64-linux" then "165djgva1lkd2fgl4y82kl4hplz1k5dz4il92b5dbb8wipqdwdzq"
+      if stdenv.system == "x86_64-linux" then "0pw97a24p73qnanc5mi0hqc6n8rdgzc9hgb1a9cqkp910kgz3qy8"
       else if stdenv.system == "i686-linux" then throw "Unsupported platform"
       else throw "Unsupported platform";
   };
 
-
-in makePackage {
+in stdenv.mkDerivation {
   pname = "oss-review-toolkit";
+  inherit version;
 
-  preBuild = ''
-    substituteInPlace build.gradle.kts \
-      --replace 'mavenCentral()' 'mavenLocal(); maven { url uri("${deps}") }'
-  '';
+  src = deps;
+
+  buildInputs = [ makeWrapper ];
 
   installPhase = ''
-    cp -r ./cli/build/install/ort/* $out
+    mkdir -p $out
+    cp -r ./* $out
+    wrapProgram "$out/bin/ort" \
+      --set LANG en_US.UTF-8 \
+      --prefix PATH ":" "${git}/bin" \
+      --prefix PATH ":" "${mercurial}/bin" \
+      --prefix PATH ":" "${cvs}/bin" \
+      --prefix PATH ":" "${licensee}/bin" \
+      --prefix PATH ":" "${python3}/bin" \
+      --prefix PATH ":" "${python3Packages.virtualenv}/bin" \
+      --prefix PATH ":" "${ruby}/bin"
+    rm $out/bin/ort.bat
   '';
 
   stripDebugList = [ "." ];
-
-  postFixup = ''
-    # Remove references to bootstrap.
-    find "$out" -name \*.so | while read lib; do
-      new_refs="$(patchelf --print-rpath "$lib" | sed -E 's,:?${jdk11}[^:]*,,')"
-      patchelf --set-rpath "$new_refs" "$lib"
-    done
-    # Test to make sure that we don't depend on the bootstrap
-    if grep -q -r '${jdk11}' "$out"; then
-      echo "Extraneous references to ${jdk11} detected" >&2
-      exit 1
-    fi
-  '';
 
   passthru.deps = deps;
 
