@@ -4,6 +4,6 @@
     ./service.grafana.nix
     ./service.promtheus.nix
     ./service.influxdb.nix
-    ./service.loki.nix
+    # ./service.loki.nix
   ];
 }

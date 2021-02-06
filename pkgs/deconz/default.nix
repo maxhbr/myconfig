@@ -1,6 +1,6 @@
 # see: https://raw.githubusercontent.com/bjornfor/nixos-config/master/pkgs/deconz/default.nix
 
-{ stdenv, fetchurl, mkDerivation, dpkg, autoPatchelfHook, qtserialport
+{ lib, stdenv, fetchurl, mkDerivation, dpkg, autoPatchelfHook, qtserialport
 , qtwebsockets, libredirect, makeWrapper, gzip, gnutar }:
 
 # The default user and password for the WebApp is delight/delight. Hm, it looks
@@ -61,10 +61,10 @@ mkDerivation rec {
     wrapProgram "$out/bin/deCONZ" \
         --set LD_PRELOAD "${libredirect}/lib/libredirect.so" \
         --set NIX_REDIRECTS "/usr/share=$out/share" \
-        --prefix PATH : "${pkgs.lib.makeBinPath [ gzip gnutar ]}"
+        --prefix PATH : "${lib.makeBinPath [ gzip gnutar ]}"
   '';
 
-  meta = with pkgs.lib; {
+  meta = with lib; {
     description =
       "Manage ZigBee network with ConBee, ConBee II or RaspBee hardware";
     # 2019-08-19: The homepage links to old software that doesn't even work --
