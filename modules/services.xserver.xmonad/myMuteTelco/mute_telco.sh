@@ -38,7 +38,7 @@ toggle_mute() {
             blink1-tool --rgb '#007700' &>/dev/null || true &
         fi
     else
-        blink1-tool --rgb 0xff,0xff,0x00 --blink 3 &>/dev/null || true &
+        blink1-tool --rgb 0xff,0xff,0x00 --blink 1 &>/dev/null || true &
         return 1
     fi
 }

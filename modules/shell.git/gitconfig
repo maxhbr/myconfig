@@ -107,15 +107,15 @@
                    }; f"
     ghc         = "!f() { \
                         if [ \"$#\" -ne 2 ]; then echo \"needs two arguments\"; exit 1; fi;\
-                        git clone git@github.com:${1}/${2}.git ${1}-${2}; \
+                        git clone --recurse-submodules git@github.com:${1}/${2}.git ${1}-${2}; \
                     }; f"
     glc         = "!f() { \
                         if [ \"$#\" -ne 2 ]; then echo \"needs two arguments\"; exit 1; fi;\
-                        git clone git@gitlab.com:${1}/${2}.git ${1}-${2}; \
+                        git clone --recurse-submodules git@gitlab.com:${1}/${2}.git ${1}-${2}; \
                     }; f"
     gbc         = "!f() { \
                         if [ \"$#\" -ne 2 ]; then echo \"needs two arguments\"; exit 1; fi;\
-                        git clone https://bitbucket.org/${1}/${2} ${1}-${2}; \
+                        git clone --recurse-submodules https://bitbucket.org/${1}/${2} ${1}-${2}; \
                     }; f"
     remotes     = remote -v
 

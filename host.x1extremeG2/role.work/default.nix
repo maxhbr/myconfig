@@ -5,6 +5,7 @@ let user = config.myconfig.user;
 in {
   imports = [
     ./jdk.nix
+    ./node.nix
     ./misc-desktop-tools.nix
     # ./evolution.nix
   ];
