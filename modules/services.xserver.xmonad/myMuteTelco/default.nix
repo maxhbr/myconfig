@@ -10,6 +10,7 @@ stdenv.mkDerivation rec {
 
   patchPhase = ''
     sed -i -e 's%pacmd%${pkgs.pulseaudio}/bin/pacmd%g' mute_telco.sh
+    sed -i -e 's%blink1-tool%${pkgs.blink1-tool}/bin/blink1-tool%g' mute_telco.sh
   '';
 
   installPhase = ''

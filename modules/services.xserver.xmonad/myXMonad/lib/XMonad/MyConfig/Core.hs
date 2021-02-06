@@ -92,6 +92,7 @@ myKeys conf =
       , ((m__, xK_Return), windows W.swapMaster)
 #endif
       , ((ms_, xK_c     ), kill)
+      , ((msc, xK_c     ), spawn xkillCMD)
       , ((m__, xK_p     ), spawn myLauncherCMD)
       , ((m__, xK_q     ), restart "xmonad" True >> (setLayout $ layoutHook conf))
       , ((m_c, xK_q     ), spawn ("xmonad" ++ " --restart"))

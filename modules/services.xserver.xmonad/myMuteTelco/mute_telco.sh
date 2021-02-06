@@ -32,10 +32,13 @@ toggle_mute() {
         if [[ "$other_state" == "0" ]]; then
             echo "unmute $(echo $name | awk '{print $1;}')"
             rm "/tmp/myMute-lastState" || true
+            blink1-tool --rgb '#770000' &>/dev/null &
         else
             echo "mute $(echo $name | awk '{print $1;}')" | tee "$lastStateFile"
+            blink1-tool --rgb '#007700' &>/dev/null &
         fi
     else
+        blink1-tool --rgb 0xff,0xff,0x00 --blink 3 &>/dev/null &
         return 1
     fi
 }

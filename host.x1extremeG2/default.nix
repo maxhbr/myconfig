@@ -12,6 +12,7 @@ in {
     ../hardware/efi.nix
     ../hardware/footswitch.nix
     ../hardware/steamcontroller.nix
+    ../hardware/blink1.nix
     # ./backup-hdd.nix
     # ./foto-hdd.nix
     # modules

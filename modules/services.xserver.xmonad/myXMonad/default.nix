@@ -56,6 +56,7 @@ in mkDerivation {
       --prefix PATH ":" "${find-cursor}/bin" \
       --prefix PATH ":" "${pkgs.xdotool}/bin" \
       --prefix PATH ":" "${pkgs.xorg.xf86inputsynaptics}/bin" \
+      --prefix PATH ":" "${pkgs.xorg.xkill}/bin" \
       --prefix PATH ":" "${pkgs.xrandr-invert-colors}/bin" \
       --prefix PATH ":" "${pkgs.autorandr}/bin" \
       --prefix PATH ":" "${pkgs.feh}/bin" \
