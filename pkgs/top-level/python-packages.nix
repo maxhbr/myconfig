@@ -254,6 +254,8 @@ in {
 
   aioimaplib = callPackage ../development/python-modules/aioimaplib { };
 
+  aioinflux = callPackage ../development/python-modules/aioinflux { };
+
   aiojobs = callPackage ../development/python-modules/aiojobs { };
 
   aiokafka = callPackage ../development/python-modules/aiokafka { };
@@ -483,6 +485,8 @@ in {
   async_generator = callPackage ../development/python-modules/async_generator { };
 
   asyncio-dgram = callPackage ../development/python-modules/asyncio-dgram { };
+
+  asyncio-mqtt = callPackage ../development/python-modules/asyncio_mqtt { };
 
   asyncio-throttle = callPackage ../development/python-modules/asyncio-throttle { };
 
@@ -2926,6 +2930,8 @@ in {
 
   hieroglyph = callPackage ../development/python-modules/hieroglyph { };
 
+  hijri-converter = callPackage ../development/python-modules/hijri-converter { };
+
   hiredis = callPackage ../development/python-modules/hiredis { };
 
   hiro = callPackage ../development/python-modules/hiro { };
@@ -4896,6 +4902,8 @@ in {
 
   python-openems = callPackage ../development/python-modules/python-openems { };
 
+  python-openzwave-mqtt = callPackage ../development/python-modules/python-openzwave-mqtt { };
+
   python-tado = callPackage ../development/python-modules/python-tado { };
 
   pkutils = callPackage ../development/python-modules/pkutils { };
@@ -5594,6 +5602,8 @@ in {
 
   pylutron = callPackage ../development/python-modules/pylutron { };
 
+  pylxd = callPackage ../development/python-modules/pylxd { };
+
   pymacaroons = callPackage ../development/python-modules/pymacaroons { };
 
   pymaging = callPackage ../development/python-modules/pymaging { };
@@ -5989,6 +5999,8 @@ in {
 
   pysychonaut = callPackage ../development/python-modules/pysychonaut { };
 
+  pysyncobj = callPackage ../development/python-modules/pysyncobj { };
+
   pytabix = callPackage ../development/python-modules/pytabix { };
 
   pytado = callPackage ../development/python-modules/pytado { };
@@ -6090,6 +6102,8 @@ in {
   pytest-html = callPackage ../development/python-modules/pytest-html { };
 
   pytest-httpbin = callPackage ../development/python-modules/pytest-httpbin { };
+
+  pytest-httpserver = callPackage ../development/python-modules/pytest-httpserver { };
 
   pytest-instafail = callPackage ../development/python-modules/pytest-instafail { };
 
@@ -6644,6 +6658,8 @@ in {
   rdflib = callPackage ../development/python-modules/rdflib { };
 
   rdflib-jsonld = callPackage ../development/python-modules/rdflib-jsonld { };
+
+  rdkit = callPackage ../development/python-modules/rdkit { };
 
   re-assert = callPackage ../development/python-modules/re-assert { };
 
@@ -7257,6 +7273,8 @@ in {
   soco = callPackage ../development/python-modules/soco { };
 
   softlayer = callPackage ../development/python-modules/softlayer { };
+
+  solax = callPackage ../development/python-modules/solax { };
 
   solo-python = disabledIf (!pythonAtLeast "3.6") (callPackage ../development/python-modules/solo-python { });
 
@@ -8319,6 +8337,8 @@ in {
   xarray = callPackage ../development/python-modules/xarray { };
 
   xattr = callPackage ../development/python-modules/xattr { };
+
+  xboxapi = callPackage ../development/python-modules/xboxapi { };
 
   xcaplib = callPackage ../development/python-modules/xcaplib { };
 

@@ -3159,6 +3159,12 @@
     githubId = 92793;
     name = "Friedrich von Never";
   };
+  fortuneteller2k = {
+    email = "lythe1107@gmail.com";
+    github = "fortuneteller2k";
+    githubId = 20619776;
+    name = "fortuneteller2k";
+  };
   fpletz = {
     email = "fpletz@fnordicwalking.de";
     github = "fpletz";
@@ -5268,6 +5274,12 @@
     githubId = 307589;
     name = "Nathaniel Baxter";
   };
+  liamdiprose = {
+    email = "liam@liamdiprose.com";
+    github = "liamdiprose";
+    githubId = 1769386;
+    name = "Liam Diprose";
+  };
   liff = {
     email = "liff@iki.fi";
     github = "liff";
@@ -5549,6 +5561,12 @@
     github = "lolwat97";
     githubId = 2057309;
     name = "Sergey Sofeychuk";
+  };
+  lxea = {
+    email = "nix@amk.ie";
+    github = "lxea";
+    githubId = 7910815;
+    name = "Alex McGrath";
   };
   lynty = {
     email = "ltdong93+nix@gmail.com";
@@ -6716,6 +6734,12 @@
     github = "nomeata";
     githubId = 148037;
     name = "Joachim Breitner";
+  };
+  nomisiv = {
+    email = "simon@nomisiv.com";
+    github = "NomisIV";
+    githubId = 47303199;
+    name = "Simon Gutgesell";
   };
   noneucat = {
     email = "andy@lolc.at";

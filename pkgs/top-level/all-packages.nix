@@ -218,6 +218,8 @@ in
 
   containerpilot = callPackage ../applications/networking/cluster/containerpilot { };
 
+  coordgenlibs  = callPackage ../development/libraries/coordgenlibs { };
+
   cp437 = callPackage ../tools/misc/cp437 { };
 
   cpu-x = callPackage ../applications/misc/cpu-x { };
@@ -229,6 +231,8 @@ in
   };
 
   deadcode = callPackage ../development/tools/deadcode { };
+
+  each = callPackage ../tools/text/each { };
 
   eclipse-mat = callPackage ../development/tools/eclipse-mat { };
 
@@ -5327,7 +5331,9 @@ in
 
   ispike = callPackage ../development/libraries/science/robotics/ispike { };
 
-  isync = callPackage ../tools/networking/isync { };
+  isync = callPackage ../tools/networking/isync {
+    inherit (darwin.apple_sdk.frameworks) Security;
+  };
 
   itm-tools = callPackage ../development/tools/misc/itm-tools { };
 
@@ -6058,6 +6064,8 @@ in
   macchanger = callPackage ../os-specific/linux/macchanger { };
 
   madlang = haskell.lib.justStaticExecutables haskellPackages.madlang;
+
+  maeparser = callPackage ../development/libraries/maeparser { };
 
   mailcheck = callPackage ../applications/networking/mailreaders/mailcheck { };
 
@@ -7295,9 +7303,15 @@ in
 
   rocket = libsForQt5.callPackage ../tools/graphics/rocket { };
 
-  rtaudio = callPackage ../development/libraries/audio/rtaudio { };
+  rtaudio = callPackage ../development/libraries/audio/rtaudio {
+    jack = libjack2;
+    inherit (darwin.apple_sdk.frameworks) CoreAudio;
+  };
 
-  rtmidi = callPackage ../development/libraries/audio/rtmidi { };
+  rtmidi = callPackage ../development/libraries/audio/rtmidi {
+    jack = libjack2;
+    inherit (darwin.apple_sdk.frameworks) CoreMIDI CoreAudio CoreServices;
+  };
 
   openmpi = callPackage ../development/libraries/openmpi { };
 
@@ -8255,7 +8269,7 @@ in
 
   textadept11 = callPackage ../applications/editors/textadept/11 { };
 
-  texworks = libsForQt514.callPackage ../applications/editors/texworks { };
+  texworks = libsForQt5.callPackage ../applications/editors/texworks { };
 
   thc-hydra = callPackage ../tools/security/thc-hydra { };
 
@@ -11715,10 +11729,10 @@ in
   bazel_3 = callPackage ../development/tools/build-managers/bazel/bazel_3 {
     inherit (darwin) cctools;
     inherit (darwin.apple_sdk.frameworks) CoreFoundation CoreServices Foundation;
-    buildJdk = jdk8_headless;
-    buildJdkName = "jdk8";
+    buildJdk = jdk11_headless;
+    buildJdkName = "java11";
     runJdk = jdk11_headless;
-    stdenv = if stdenv.cc.isClang then llvmPackages_6.stdenv else stdenv;
+    stdenv = if stdenv.cc.isClang then llvmPackages.stdenv else stdenv;
     bazel_self = bazel_3;
   };
 
@@ -12958,6 +12972,8 @@ in
   xxdiff-tip = xxdiff;
 
   yaml2json = callPackage ../development/tools/yaml2json { };
+
+  yams = callPackage ../applications/audio/yams { };
 
   ycmd = callPackage ../development/tools/misc/ycmd {
     inherit (darwin.apple_sdk.frameworks) Cocoa;
@@ -15133,6 +15149,8 @@ in
   };
 
   libkate = callPackage ../development/libraries/libkate { };
+
+  libkeyfinder = callPackage ../development/libraries/libkeyfinder { };
 
   libkml = callPackage ../development/libraries/libkml { };
 
@@ -18418,6 +18436,8 @@ in
 
   storm = callPackage ../servers/computing/storm { };
 
+  switcheroo-control = callPackage ../os-specific/linux/switcheroo-control { };
+
   slurm = callPackage ../servers/computing/slurm { gtk2 = null; };
 
   slurm-spank-x11 = callPackage ../servers/computing/slurm-spank-x11 { };
@@ -19099,10 +19119,10 @@ in
      for a specific kernel.  This function can then be called for
      whatever kernel you're using. */
 
-  linuxPackagesFor = kernel: lib.makeExtensible (self: with self; {
+  linuxPackagesFor = kernel_: lib.makeExtensible (self: with self; {
     callPackage = newScope self;
 
-    inherit kernel;
+    kernel = kernel_;
     inherit (kernel) stdenv; # in particular, use the same compiler by default
 
     # to help determine module compatibility
@@ -19506,6 +19526,8 @@ in
     enableDmeventd = true;
     enableCmdlib = true;
   };
+
+  maddy = callPackage ../servers/maddy/default.nix { };
 
   mbelib = callPackage ../development/libraries/audio/mbelib { };
 
@@ -20324,6 +20346,12 @@ in
 
   greybird = callPackage ../data/themes/greybird { };
 
+  gruvbox-dark-gtk = callPackage ../data/themes/gruvbox-dark-gtk { };
+
+  gruvbox-dark-icons-gtk = callPackage ../data/icons/gruvbox-dark-icons-gtk {
+    inherit (plasma5Packages) breeze-icons;
+  };
+
   gubbi-font = callPackage ../data/fonts/gubbi { };
 
   gyre-fonts = callPackage ../data/fonts/gyre {};
@@ -20755,6 +20783,8 @@ in
 
   inter-ui = callPackage ../data/fonts/inter-ui { };
   inter = callPackage ../data/fonts/inter { };
+
+  scientifica = callPackage ../data/fonts/scientifica { };
 
   siji = callPackage ../data/fonts/siji
     { inherit (buildPackages.xorg) mkfontscale fonttosfnt; };
@@ -23055,7 +23085,7 @@ in
 
   keyfinder = libsForQt5.callPackage ../applications/audio/keyfinder { };
 
-  keyfinder-cli = libsForQt5.callPackage ../applications/audio/keyfinder-cli { };
+  keyfinder-cli = callPackage ../applications/audio/keyfinder-cli { };
 
   kgraphviewer = libsForQt5.callPackage ../applications/graphics/kgraphviewer { };
 
@@ -24070,10 +24100,7 @@ in
 
   osmium-tool = callPackage ../applications/misc/osmium-tool { };
 
-  osu-lazer = callPackage ../games/osu-lazer {
-    dotnet-sdk = dotnetCorePackages.sdk_3_1;
-    dotnet-netcore = dotnetCorePackages.netcore_3_1;
-  };
+  osu-lazer = callPackage ../games/osu-lazer { };
 
   owamp = callPackage ../applications/networking/owamp { };
 
@@ -24102,8 +24129,8 @@ in
   osmo = callPackage ../applications/office/osmo { };
 
   palemoon = callPackage ../applications/networking/browsers/palemoon {
-    # https://www.palemoon.org/sourcecode.shtml
-    stdenv = gcc7Stdenv;
+    # https://developer.palemoon.org/build/linux/
+    stdenv = gcc8Stdenv;
   };
 
   webbrowser = callPackage ../applications/networking/browsers/webbrowser {};
@@ -24560,7 +24587,7 @@ in
 
   rclone = callPackage ../applications/networking/sync/rclone { };
 
-  rclone-browser = libsForQt514.callPackage ../applications/networking/sync/rclone/browser.nix { };
+  rclone-browser = libsForQt5.callPackage ../applications/networking/sync/rclone/browser.nix { };
 
   rcs = callPackage ../applications/version-management/rcs { };
 
