@@ -12,9 +12,13 @@ jobs:
       matrix:
         config:
           - { hostname: x1extremeG2 , mode: "--dry-run" }
+          # - { hostname: x1extremeG2 , mode: "" }
           - { hostname: vserver , mode: "--dry-run" }
+          - { hostname: vserver , mode: "" }
           - { hostname: workstation , mode: "--dry-run" }
+          - { hostname: workstation , mode: "" }
           - { hostname: nas , mode: "--dry-run" }
+          - { hostname: nas , mode: "" }
       fail-fast: false
 
     steps:
