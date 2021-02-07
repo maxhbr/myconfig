@@ -89,7 +89,8 @@ let
         };
 
         networking.hostName = "myconfig";
-        networking.wireless.enable = false;
+        networking.wireless.enable = true;
+        services.vsftpd.enable = true;
       };
     };
 

@@ -1,4 +1,4 @@
-{ stdenv, fetchgit, jdk11, gradleGen, nodejs-12_x, makeWrapper
+{ lib, stdenv, fetchgit, jdk11, gradleGen, nodejs-12_x, makeWrapper
 # runtime requirements for ort
 , git, mercurial, cvs
 , licensee, ruby
@@ -64,10 +64,8 @@ in stdenv.mkDerivation {
 
   buildInputs = [ makeWrapper ];
 
-  installPhase = ''
-    mkdir -p $out
-    cp -r ./* $out
-    wrapProgram "$out/bin/ort" \
+  buildPhase = ''
+    wrapProgram "./bin/ort" \
       --set LANG en_US.UTF-8 \
       --prefix PATH ":" "${git}/bin" \
       --prefix PATH ":" "${mercurial}/bin" \
@@ -75,7 +73,15 @@ in stdenv.mkDerivation {
       --prefix PATH ":" "${licensee}/bin" \
       --prefix PATH ":" "${python3}/bin" \
       --prefix PATH ":" "${python3Packages.virtualenv}/bin"
-    rm $out/bin/ort.bat
+      # --prefix PATH : "''${lib.makeBinPath [ git mercurial cvs licensee ruby python3 python3Packages ]}"
+
+    cp ${./ort.sh} ./bin/ort.sh
+    sed -i -e 's%=ort%='"$out/bin/ort"'%' ./bin/ort.sh
+    rm ./bin/ort.bat
+  '';
+  installPhase = ''
+    mkdir -p $out
+    cp -r ./* $out
   '';
 
   stripDebugList = [ "." ];

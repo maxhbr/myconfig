@@ -38,7 +38,7 @@ main() {
 
     listBinaryFiles "$sourceDir" > "$out/binaryFiles.csv"
     "$DIR/scancode.sh" "$sourceDir" || true
-    "$DIR/ort.sh" --all "$sourceDir" || true
+    "ort.sh" all "$sourceDir" || true
 }
 
 main "$@"
