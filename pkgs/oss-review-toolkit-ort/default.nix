@@ -65,7 +65,14 @@ in stdenv.mkDerivation {
   buildInputs = [ makeWrapper ];
 
   buildPhase = ''
-    wrapProgram "./bin/ort" \
+    cp ${./ort.sh} ./bin/ort.sh
+    sed -i -e 's%=ort%='"$out/bin/ort"'%' ./bin/ort.sh
+    rm ./bin/ort.bat
+  '';
+  installPhase = ''
+    mkdir -p $out
+    cp -r ./* $out
+    wrapProgram "$out/bin/ort" \
       --set LANG en_US.UTF-8 \
       --prefix PATH ":" "${git}/bin" \
       --prefix PATH ":" "${mercurial}/bin" \
@@ -75,13 +82,6 @@ in stdenv.mkDerivation {
       --prefix PATH ":" "${python3Packages.virtualenv}/bin"
       # --prefix PATH : "''${lib.makeBinPath [ git mercurial cvs licensee ruby python3 python3Packages ]}"
 
-    cp ${./ort.sh} ./bin/ort.sh
-    sed -i -e 's%=ort%='"$out/bin/ort"'%' ./bin/ort.sh
-    rm ./bin/ort.bat
-  '';
-  installPhase = ''
-    mkdir -p $out
-    cp -r ./* $out
   '';
 
   stripDebugList = [ "." ];
