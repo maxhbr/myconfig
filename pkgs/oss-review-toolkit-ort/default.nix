@@ -6,27 +6,30 @@
 }:
 
 let
+  rev = "fa95a4eb8ec1d21c59ad4144575b0f219ad192be";
+  srcFixedOutputSha256 = "0pmICW0OeFzmQaSKruWJJF3XSLUibTWjhpXsKkNKD+E=";
+  installFixedOutputSha256 = "1wgzwvghh6nws7nvfivpqp6j9nfr0sig996690wmsiw1b0zvvpny";
+
   gradle_ = (gradleGen.override {
     java = jdk11;
   }).gradle_6_8;
 
-  version = "master_76986516f8d72ff5aa343cd8eaf565c3b97531b4";
+  version = "master_${rev}";
 
-  deps = stdenv.mkDerivation {
-    pname = "oss-review-toolkit-deps";
+  install = stdenv.mkDerivation {
+    pname = "oss-review-toolkit-install";
     inherit version;
 
     src = fetchgit {
       url = "https://github.com/oss-review-toolkit/ort";
-      rev = "76986516f8d72ff5aa343cd8eaf565c3b97531b4";
-      sha256 = "17f4g6xw5ipj36p9pnyk9mksiq12aqqrb2k6vzi33cahwyjrmr4i";
+      inherit rev;
+      sha256 = srcFixedOutputSha256;
       leaveDotGit = true;
       fetchSubmodules = true;
       deepClone = true;
     };
 
     nativeBuildInputs = [ gradle_ ];
-
 
     dontUseCmakeConfigure = true;
 
@@ -49,18 +52,16 @@ let
 
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
-    outputHash =
-      # Downloaded AWT jars differ by platform.
-      if stdenv.system == "x86_64-linux" then "03vicn0vsx8ggj8xr7jg4bqnq2hahmrb9gkw99q78y9g6pl3f0xy"
-      else if stdenv.system == "i686-linux" then throw "Unsupported platform"
-      else throw "Unsupported platform";
+    outputHash = if stdenv.system == "x86_64-linux"
+                 then installFixedOutputSha256
+                 else throw "Unsupported platform";
   };
 
 in stdenv.mkDerivation {
   pname = "oss-review-toolkit";
   inherit version;
 
-  src = deps;
+  src = install;
 
   buildInputs = [ makeWrapper ];
 
@@ -81,14 +82,13 @@ in stdenv.mkDerivation {
       --prefix PATH ":" "${python3}/bin" \
       --prefix PATH ":" "${python3Packages.virtualenv}/bin"
       # --prefix PATH : "''${lib.makeBinPath [ git mercurial cvs licensee ruby python3 python3Packages ]}"
-
   '';
 
   stripDebugList = [ "." ];
 
-  passthru.deps = deps;
+  passthru.deps = install;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = https://github.com/oss-review-toolkit/ort;
     license = "Apache-2.0";
     description = "The OSS Review Toolkit (ORT) aims to assist with the tasks that commonly need to be performed in the context of license compliance checks, especially for (but not limited to) Free and Open Source Software dependencies.";
