@@ -64,10 +64,23 @@ in {
         ("nixos-20.09-small=" + nixos2009Path)
         "nixos-config=/dev/null"
       ];
-      registry = {
+      registry = { # see: https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html#flake-references
         # self.flake = inputs.self;
+        nixpkgs = {
+          from = {
+            id = "nixpkgs";
+            type = "indirect";
+          };
+          to = {
+            type = "path";
+            path = "${../../../nixpkgs}";
+          };
+        };
         nixpkgs-unstable = mkRegistry "nixpkgs-unstable";
       };
+      extraOptions = ''
+        flake-registry = /etc/nix/registry.json
+      '';
     };
   };
 }
