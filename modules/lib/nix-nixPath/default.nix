@@ -2,47 +2,33 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, ... }:
 let
-  mkPkgsPath = channel:
+  getJson = channel:
     let
       jsonFile = ./. + ("/" + channel + ".json");
-      revFile = ./. + ("/" + channel + ".rev");
     in if builtins.pathExists jsonFile then
-      let json = builtins.fromJSON (builtins.readFile jsonFile);
-      in pkgs.fetchFromGitHub {
-        owner = "nixos";
-        repo = "nixpkgs";
-        inherit (json) rev sha256;
-      }
-    else if builtins.pathExists revFile then
-      let rev = builtins.readFile revFile;
-      in builtins.fetchTarball {
-        url = "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz";
-      }
+      builtins.fromJSON (builtins.readFile jsonFile)
     else
-      throw "missing pinning for ${channel}, looked for ${jsonFile} and ${revFile}";
-      # let
-      #   fallbackUrl = "http://nixos.org/channels/" + channel
-      #     + "/nixexprs.tar.xz";
-      # in builtins.fetchTarball fallbackUrl;
+      throw "missing json for ${channel}, looked at ${jsonFile}";
+  mkPkgsPath = channel:
+    let json = getJson channel;
+    in pkgs.fetchFromGitHub {
+      owner = "nixos";
+      repo = "nixpkgs";
+      inherit (json) rev sha256;
+    };
   mkPkgsFromPath = pkgsPath:
     import pkgsPath { config = config.nixpkgs.config; };
   mkPkgs = channel: mkPkgsFromPath (mkPkgsPath channel);
+
+  ustablePath = mkPkgsPath "nixpkgs-unstable";
+  nixos2003Path = mkPkgsPath "nixos-20.03-small";
+  nixos2009Path = mkPkgsPath "nixos-20.09-small";
 
   # see: https://discourse.nixos.org/t/my-painpoints-with-flakes/9750/14
   # maybe not necessary if configuration uses flakes
   mkRegistry = channel:
     let
-      rev =
-        let
-          jsonFile = ./. + ("/" + channel + ".json");
-          revFile = ./. + ("/" + channel + ".rev");
-        in if builtins.pathExists jsonFile then
-          let json = builtins.fromJSON (builtins.readFile jsonFile);
-          in json.rev
-        else if builtins.pathExists revFile then
-          builtins.readFile revFile
-        else
-          throw "missing rev for ${channel}";
+      json = getJson channel;
     in {
       from = {
         id = channel;
@@ -51,14 +37,11 @@ let
       to = {
         owner = "NixOS";
         repo = "nixpkgs";
-        rev = rev;
+        rev = json.rev;
         type = "github";
       };
     };
 
-  ustablePath = mkPkgsPath "nixpkgs-unstable";
-  nixos2003Path = mkPkgsPath "nixos-20.03-small";
-  nixos2009Path = mkPkgsPath "nixos-20.09-small";
 in {
   config = {
     nixpkgs.overlays = [
@@ -81,10 +64,10 @@ in {
         ("nixos-20.09-small=" + nixos2009Path)
         "nixos-config=/dev/null"
       ];
-      # registry = {
-      #   # self.flake = inputs.self;
-      #   nixpkgs-unstable = mkRegistry "nixpkgs-unstable";
-      # };
+      registry = {
+        # self.flake = inputs.self;
+        nixpkgs-unstable = mkRegistry "nixpkgs-unstable";
+      };
     };
   };
 }
