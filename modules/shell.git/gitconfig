@@ -245,6 +245,9 @@
 [url "git@github.com:"]
     insteadOf = github:
     pushInsteadOf = github:
+
+[init]
+    defaultBranch = main
  
 [github]
     user = maxhbr

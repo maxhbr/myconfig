@@ -16,7 +16,7 @@ in {
     ./dev.iot.nix
     ./dev.network.nix
     ./dev.tex.nix
-    ./programs.license-compliance-toolbox.nix
+    ./programs.license-compliance-toolbox
   ];
   config = {
     myconfig.dev.enable = cfg.haskell.enable || cfg.iot.enable
