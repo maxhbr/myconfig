@@ -1,4 +1,5 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nix-shell
+#! nix-shell -i bash -p nix cachix
 # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
 
 set -e
