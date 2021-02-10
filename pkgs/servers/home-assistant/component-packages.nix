@@ -2,7 +2,7 @@
 # Do not edit!
 
 {
-  version = "2021.2.0";
+  version = "2021.2.1";
   components = {
     "abode" = ps: with ps; [ abodepy ];
     "accuweather" = ps: with ps; [ accuweather ];
@@ -195,7 +195,7 @@
     "dwd_weather_warnings" = ps: with ps; [ ]; # missing inputs: dwdwfsapi
     "dweet" = ps: with ps; [ ]; # missing inputs: dweepy
     "dynalite" = ps: with ps; [ ]; # missing inputs: dynalite_devices
-    "dyson" = ps: with ps; [ aiohttp-cors zeroconf ]; # missing inputs: libpurecool
+    "dyson" = ps: with ps; [ aiohttp-cors libpurecool zeroconf ];
     "eafm" = ps: with ps; [ aioeafm ];
     "ebox" = ps: with ps; [ ]; # missing inputs: pyebox
     "ebusd" = ps: with ps; [ ]; # missing inputs: ebusdpy
@@ -561,7 +561,7 @@
     "nsw_rural_fire_service_feed" = ps: with ps; [ ]; # missing inputs: aio_geojson_nsw_rfs_incidents
     "nuheat" = ps: with ps; [ ]; # missing inputs: nuheat
     "nuimo_controller" = ps: with ps; [ ]; # missing inputs: --only-binary=all nuimo
-    "nuki" = ps: with ps; [ ]; # missing inputs: pynuki
+    "nuki" = ps: with ps; [ pynuki ];
     "numato" = ps: with ps; [ ]; # missing inputs: numato-gpio
     "number" = ps: with ps; [ ];
     "nut" = ps: with ps; [ ]; # missing inputs: pynut2
@@ -592,7 +592,7 @@
     "opensensemap" = ps: with ps; [ opensensemap-api ];
     "opensky" = ps: with ps; [ ];
     "opentherm_gw" = ps: with ps; [ ]; # missing inputs: pyotgw
-    "openuv" = ps: with ps; [ ]; # missing inputs: pyopenuv
+    "openuv" = ps: with ps; [ pyopenuv ];
     "openweathermap" = ps: with ps; [ pyowm ];
     "opnsense" = ps: with ps; [ pyopnsense ];
     "opple" = ps: with ps; [ ]; # missing inputs: pyoppleio
@@ -744,7 +744,7 @@
     "slack" = ps: with ps; [ ]; # missing inputs: slackclient
     "sleepiq" = ps: with ps; [ ]; # missing inputs: sleepyq
     "slide" = ps: with ps; [ ]; # missing inputs: goslide-api
-    "sma" = ps: with ps; [ ]; # missing inputs: pysma
+    "sma" = ps: with ps; [ pysma ];
     "smappee" = ps: with ps; [ aiohttp-cors ]; # missing inputs: pysmappee
     "smart_meter_texas" = ps: with ps; [ ]; # missing inputs: smart-meter-texas
     "smarthab" = ps: with ps; [ ]; # missing inputs: smarthab
