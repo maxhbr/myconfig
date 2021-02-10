@@ -2,7 +2,7 @@
 
 buildGoModule rec {
   pname = "kube3d";
-  version = "4.0.0";
+  version = "4.1.1";
 
   excludedPackages = "tools";
 
@@ -10,7 +10,7 @@ buildGoModule rec {
     owner = "rancher";
     repo = "k3d";
     rev = "v${version}";
-    sha256 = "sha256-sHtPW9EaTycHh9d/vp28BvzhmbLUQYsu6yMfJlJYH+k=";
+    sha256 = "sha256-ZdPBlGlrgSJQlp6sWUeXm34+O30WtXHy5hvye40qew0=";
   };
 
   vendorSha256 = null;
