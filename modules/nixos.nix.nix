@@ -12,9 +12,8 @@ in {
       config = {
         nix = {
           package = pkgs.nixFlakes;
-          extraOptions = ''
-            experimental-features = nix-command flakes
-          '';
+          extraOptions = lib.optionalString (config.nix.package == pkgs.nixFlakes)
+            "experimental-features = nix-command flakes";
         };
       };
     }
