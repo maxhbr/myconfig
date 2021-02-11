@@ -1,6 +1,6 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, ... }:
+{ pkgs, config, lib, ... }:
 let
   getJson = channel:
     let
@@ -43,6 +43,36 @@ let
     };
 
 in {
+  imports = [
+    {
+      nix = {
+        nixPath = [
+          ("nixpkgs=" + ../../../nixpkgs)
+          ("nixpkgs-unstable=" + ustablePath)
+          ("nixos-20.03-small=" + nixos2003Path)
+          ("nixos-20.09-small=" + nixos2009Path)
+          "nixos-config=/dev/null"
+        ];
+        registry = { # see: https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html#flake-references
+          # self.flake = inputs.self;
+          nixpkgs = {
+            from = {
+              id = "nixpkgs";
+              type = "indirect";
+            };
+            to = {
+              type = "path";
+              path = "${../../../nixpkgs}";
+            };
+          };
+          nixpkgs-unstable = mkRegistry "nixpkgs-unstable";
+        };
+        extraOptions = lib.optionalString (config.nix.package == pkgs.nixFlakes) ''
+          flake-registry = /etc/nix/registry.json
+        '';
+      };
+    }
+  ];
   config = {
     nixpkgs.overlays = [
       (self: super: {
@@ -56,31 +86,5 @@ in {
           // mkPkgsFromPath nixos2009Path;
       })
     ];
-    nix = {
-      nixPath = [
-        ("nixpkgs=" + ../../../nixpkgs)
-        ("nixpkgs-unstable=" + ustablePath)
-        ("nixos-20.03-small=" + nixos2003Path)
-        ("nixos-20.09-small=" + nixos2009Path)
-        "nixos-config=/dev/null"
-      ];
-      registry = { # see: https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html#flake-references
-        # self.flake = inputs.self;
-        nixpkgs = {
-          from = {
-            id = "nixpkgs";
-            type = "indirect";
-          };
-          to = {
-            type = "path";
-            path = "${../../../nixpkgs}";
-          };
-        };
-        nixpkgs-unstable = mkRegistry "nixpkgs-unstable";
-      };
-      extraOptions = ''
-        flake-registry = /etc/nix/registry.json
-      '';
-    };
   };
 }

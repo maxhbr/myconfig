@@ -5,18 +5,18 @@ let
   user = config.myconfig.user;
 in {
   imports = [
-    { # support for nix-flakes
-      # see:
-      # - https://nixos.wiki/wiki/Flakes
-      # - https://www.tweag.io/blog/2020-05-25-flakes/
-      config = {
-        nix = {
-          package = pkgs.nixFlakes;
-          extraOptions = lib.optionalString (config.nix.package == pkgs.nixFlakes)
-            "experimental-features = nix-command flakes";
-        };
-      };
-    }
+    # { # support for nix-flakes
+    #   # see:
+    #   # - https://nixos.wiki/wiki/Flakes
+    #   # - https://www.tweag.io/blog/2020-05-25-flakes/
+    #   config = {
+    #     nix = {
+    #       package = pkgs.nixFlakes;
+    #       extraOptions = lib.optionalString (config.nix.package == pkgs.nixFlakes)
+    #         "experimental-features = nix-command flakes";
+    #     };
+    #   };
+    # }
   ];
   config = {
     nixpkgs.config = { allowUnfree = true; };
