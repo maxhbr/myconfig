@@ -23,28 +23,39 @@ let
         '';
 in {
   config = {
+    nixpkgs.overlays = [
+      (self: super: let
+        defaultJdk = self.openjdk11;
+      in {
+        maven = super.maven.override { jdk = defaultJdk; };
+        gradle = (pkgs.gradleGen.override {
+          java = defaultJdk;
+        }).gradle_latest;
+        jdk = defaultJdk;
+      })
+    ];
+
     # generates:
     # - /run/booted-system/pkgs/openjdk8
     # - /run/current-system/pkgs/openjdk8
     # see: https://discourse.nixos.org/t/always-symlinking-the-latest-jdk-to-a-certain-path/3099/6
     system.extraSystemBuilderCmds = ''
       mkdir -p $out/pkgs/
-      ln -s ${pkgs.openjdk8_headless} $out/pkgs/openjdk8
-      ln -s ${pkgs.jdk11} $out/pkgs/openjdk11
+
       ln -s ${pkgs.maven} $out/pkgs/maven
+
+      ln -s ${pkgs.openjdk8_headless} $out/pkgs/openjdk8
+      ln -s ${pkgs.openjdk11} $out/pkgs/openjdk11
+      ln -s ${pkgs.jdk15_headless} $out/pkgs/openjdk15
     '';
 
-    nixpkgs.overlays = [
-      (self: super: { maven = super.maven.override { jdk = self.openjdk11; }; })
-    ];
-
     environment = {
-      systemPackages = with pkgs; [ jdk11 maven gradle gmvn ];
+      systemPackages = with pkgs; [ jdk maven gradle gmvn ];
       shellAliases = { mvnDebug = "${pkgs.maven}/maven/bin/mvnDebug"; };
       variables = {
         JAVA_8_HOME = "/run/current-system/pkgs/openjdk8/lib/openjdk";
-        JAVA_11_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk";
-        JAVA_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk";
+        JAVA_11_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk11";
+        JAVA_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk11";
       };
     };
   };
