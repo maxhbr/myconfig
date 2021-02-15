@@ -114,7 +114,7 @@ in {
     };
 
     boot.initrd.supportedFilesystems = [ "luks" "btrfs" ];
-    # boot.binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];
+    boot.binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];
 
     fileSystems."/mnt/2tb-1" = {
       device = "/dev/disk/by-uuid/51d362d8-5b73-4b92-84c3-9ff260062da6";

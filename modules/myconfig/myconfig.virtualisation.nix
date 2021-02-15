@@ -9,7 +9,7 @@ in {
   };
   config = (lib.mkIf cfg.virtualisation.enable {
     virtualisation.docker.enable = true;
-    virtualisation.libvirtd.enable = true;
+    # virtualisation.libvirtd.enable = true;
     virtualisation.virtualbox.host.enable = true;
   });
 }

@@ -53,6 +53,6 @@ in {
           "nuc"
         ]);
     };
-    # boot.binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ]; # todo: https://github.com/NixOS/nixpkgs/issues/110772
+    boot.binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];
   };
 }
