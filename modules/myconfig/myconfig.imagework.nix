@@ -24,7 +24,7 @@ in {
 
         blender
         librecad # 2D
-        nixos-2003-small.freecad # 3D
+        unstable.freecad # 3D
       ];
     };
   });
