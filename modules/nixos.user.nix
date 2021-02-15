@@ -19,6 +19,7 @@ in {
             "vboxusers"
             ++ pkgs.lib.optional config.virtualisation.docker.enable "docker"
             ++ pkgs.lib.optional config.virtualisation.libvirtd.enable "kvm"
+            ++ pkgs.lib.optional config.virtualisation.libvirtd.enable "libvirt"
             ++ pkgs.lib.optional config.virtualisation.lxc.enable "lxc"
             ++ pkgs.lib.optional config.virtualisation.lxd.enable "lxd"
             ++ pkgs.lib.optional config.networking.networkmanager.enable
