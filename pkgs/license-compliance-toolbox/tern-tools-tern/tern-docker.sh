@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2019-2021 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 
 set -e

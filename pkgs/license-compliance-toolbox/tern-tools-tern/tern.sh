@@ -1,6 +1,6 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i bash -p python3Packages.pip
-# Copyright 2020 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2020-2021 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 
 set -e
