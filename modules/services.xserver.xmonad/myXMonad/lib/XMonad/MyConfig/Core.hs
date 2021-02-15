@@ -59,6 +59,8 @@ myStartupHook :: X ()
 myStartupHook = do
   setWMName "LG3D"
   spawn ("pkill unclutter; " ++ unclutterCMD)
+  spawn terminalCleanupCMD
+  spawn terminalCMD
 
 ------------------------------------------------------------------------
 -- Key bindings:
