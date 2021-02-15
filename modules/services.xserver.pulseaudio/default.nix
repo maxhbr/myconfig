@@ -90,7 +90,7 @@ in {
         pavucontrol
         pamix
         mb660_switch_profile
-        pulseeffects
+        # pulseeffects
         pactl-monitor
         noisetorch
       ];
