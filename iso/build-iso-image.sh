@@ -57,16 +57,25 @@ build() {
 }
 
 buildAndCopy() {
+    local pushToCachix=false
+    if [[ "$1" == "--push-to-cachix" ]]; then
+        pushToCachix=true
+        shift
+    fi
+
     local drv
     drv=$(build "$@")
-    local nixfile
-    nixfile="$(readlink -f $1)"
+
+    if [[ "$pushToCachix" == "true" ]]; then
+        echo "$drv" | cachix push maxhbr
+    fi
+
     local outArr
     outArr=("$drv/iso/nixos-myconfig"*".iso")
     local out="${outArr[-1]}"
     du -h "$out"
     local outDir
-    outDir="$myconfigDir/__out/iso$(getNamePrefixFromConfig "${nixfile}")"
+    outDir="$myconfigDir/__out/iso$(getNamePrefixFromConfig "$(readlink -f $1)")"
     install -D -m 644 -v "$out" -t "$outDir"
     nix-store --delete "$drv" || {
         sleep 20
@@ -91,9 +100,6 @@ EOF
 
 if [[ "$1" == "--help" ]]; then
     help
-elif [[ "$1" == "--push-to-cachix" ]]; then
-    shift
-    build "$@" | cachix push maxhbr
 elif [[ "$2" == "--dry-run" ]]; then
     build "$@"
 else

@@ -37,8 +37,8 @@ jobs:
     strategy:
       matrix:
         config:
-          - { config: ./iso/minimal.nix, mode: "" }
-          - { config: ./iso/desktop.nix, mode: "--dry-run" }
+          - { name: "minimal", config: ./iso/minimal.nix, mode: "" }
+          - { name: "desktop", config: ./iso/desktop.nix, mode: "--dry-run" }
       fail-fast: false
 
 
@@ -59,6 +59,6 @@ jobs:
         b: ""
     - uses: actions/upload-artifact@v2
       with:
-        name: myconfig-iso-${{ matrix.config.config }}
-        path: __out/
+        name: myconfig-iso-${{ matrix.config.name }}
+        path: '__out/**/*.iso'
       if: steps.isNonDry.outputs.result
