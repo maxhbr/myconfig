@@ -6,7 +6,6 @@ in {
   imports = [
     ./jdk.nix
     ./node.nix
-    ./misc-desktop-tools.nix
     # ./evolution.nix
   ];
   config = {
@@ -29,7 +28,30 @@ in {
         dia
         insync
         exiftool
+        # misc-desktop-tools:
+        libreoffice
+        nixos-unstable-small.zoom-us
+        bluejeans-gui
+        slack
+        element-desktop
+        rambox
+        remmina
+        nixos-2009-small.teams
       ];
+      xdg.mimeApps = {
+        defaultApplications."x-scheme-handler/msteams" = [ "teams.desktop" ];
+      };
+      programs.zsh.shellAliases = {
+        unteams = ''while pkill teams; do echo "kill it with fire!"; done'';
+      };
+      programs.fish.functions = {
+        unteams = ''
+          while pkill teams
+            echo "kill it with fire!"
+          end
+          echo "now wo are happy again"
+        '';
+      };
     };
   };
 }
