@@ -69,8 +69,8 @@ buildAndCopy() {
     outDir="$myconfigDir/__out/iso$(getNamePrefixFromConfig "${nixfile}")"
     install -D -m 644 -v "$out" -t "$outDir"
     nix-store --delete "$drv" || {
-        sleep 10
-        nix-store --delete "$drv"
+        sleep 20
+        nix-store --delete "$drv" || echo "failed to\n\tnix-store --delete \"$drv\""
     }
 
     cat <<EOF | tee "$outDir/dd.sh"
