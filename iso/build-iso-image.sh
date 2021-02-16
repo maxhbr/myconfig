@@ -50,7 +50,7 @@ EOF
 
 build() {
     local nixfile
-    nixfile="$(readlink -f $1)"; shift
+    nixfile="$(readlink -f "$1")"; shift
 
     if [[ ! -f "$nixfile" ]]; then
         echo "'$nixfile' not found"

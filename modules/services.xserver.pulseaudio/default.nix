@@ -5,7 +5,7 @@ let
   user = config.myconfig.user;
   mb660_switch_profile = pkgs.writeShellScriptBin "mb660_switch_profile" ''
     export PATH=$PATH:${pkgs.pulseaudio}/bin:${pkgs.bash}/bin
-    ${./bin/switch_sennheiser_profile}
+    ${builtins.readFile ./bin/switch_sennheiser_profile}
   '';
   connectBtDevice = { name, id }:
     (pkgs.writeShellScriptBin (name + "_connect") ''
@@ -89,10 +89,9 @@ in {
       home.packages = with pkgs; [
         pavucontrol
         pamix
-        mb660_switch_profile
-        # pulseeffects
         pactl-monitor
         noisetorch
+        mb660_switch_profile
       ];
     };
 

@@ -21,7 +21,6 @@ in {
   config = {
     nixpkgs.config = { allowUnfree = true; };
     home-manager.users."${user}" = {
-      nixpkgs.config = config.nixpkgs.config;
       home.file = {
         ".config/nixpkgs/config.nix" = {
           text = ''
