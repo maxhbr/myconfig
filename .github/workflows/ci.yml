@@ -39,7 +39,9 @@ jobs:
       with:
         name: maxhbr
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-    - run: NIX_PATH="nixpkgs=$(pwd)/nixpkgs:nixos-config=$(pwd)/misc/empty_nixos_config.nix" ./scripts/build-iso-image.sh
+    - run: |
+        git config --global init.defaultBranch main
+        NIX_PATH="nixpkgs=$(pwd)/nixpkgs:nixos-config=$(pwd)/misc/empty_nixos_config.nix" ./scripts/build-iso-image.sh
     - uses: actions/upload-artifact@v2
       with:
         name: myconfig-iso
