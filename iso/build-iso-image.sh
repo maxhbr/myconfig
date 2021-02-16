@@ -7,6 +7,12 @@ cd "$( dirname "${BASH_SOURCE[0]}" )"
 common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
 . "$common"
 
+help() {
+    cat <<EOF
+$@ [--push-to-cachix] path/to/config.nix [--dry-run] [arguments [..]]
+EOF
+}
+
 getNamePrefixFromConfig() {
     local config=${1%.nix}
     if [[ "$config" == "" ]]; then
@@ -22,40 +28,45 @@ getNamePrefixFromConfig() {
     fi
 }
 
-build() (
-    local hostConfig="$1"
+build() {
+    local nixfile
+    nixfile="$(readlink -f $1)"; shift
 
-    NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/misc/empty_nixos_config.nix"
     jobCountArgs=""
     if [[ -f "$myconfigDir/secrets/workstation/ip" ]]; then
         if nix ping-store --store ssh://"$(cat "$myconfigDir/secrets/workstation/ip")"; then
+            # force build on remote host
             jobCountArgs="-j0"
         fi
     fi
 
-    (cd $myconfigDir/;
+    (cd $myconfigDir;
      export NIX_PATH=""
      set -x;
-     time nix-build iso.nix \
-          $NIX_PATH_ARGS \
+     time nix-build "$nixfile" \
+          -I nixpkgs="$nixpkgs" -I nixos-config="$myconfigDir/misc/empty_nixos_config.nix" \
           $jobCountArgs \
           --show-trace \
           --no-out-link \
-          $([[ "$hostConfig" ]] && echo "--argstr hostConfig $hostConfig")
-    )
-)
+          "$@")
+}
 
 buildAndCopy() {
-    local hostConfig="$1"
-
-    drv=$(build "$hostConfig")
+    local drv
+    drv=$(build "$@")
+    local nixfile
+    nixfile="$(readlink -f $1)"
+    local outArr
     outArr=("$drv/iso/nixos-myconfig"*".iso")
-    out="${outArr[-1]}"
+    local out="${outArr[-1]}"
     du -h "$out"
     local outDir
-    outDir="$myconfigDir/__out/iso$(getNamePrefixFromConfig "${hostConfig}")"
+    outDir="$myconfigDir/__out/iso$(getNamePrefixFromConfig "${nixfile}")"
     install -D -m 644 -v "$out" -t "$outDir"
-    nix-store --delete "$drv"
+    nix-store --delete "$drv" || {
+        sleep 10
+        nix-store --delete "$drv"
+    }
 
     cat <<EOF | tee "$outDir/dd.sh"
 #!/usr/bin/env bash
@@ -73,13 +84,14 @@ EOF
     chmod +x "$outDir/run-qemu.sh"
 }
 
-if [[ "$1" == "--dry-run" ]]; then
-    shift
-    build "${1}" "--dry-run"
+if [[ "$1" == "--help" ]]; then
+    help
 elif [[ "$1" == "--push-to-cachix" ]]; then
     shift
-    build "${1}" | cachix push maxhbr
+    build "$@" | cachix push maxhbr
+elif [[ "$2" == "--dry-run" ]]; then
+    build "$@"
 else
-    buildAndCopy "${1}"
+    buildAndCopy "$@"
 fi
 

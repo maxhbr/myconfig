@@ -12,13 +12,13 @@ jobs:
       matrix:
         config:
           - { hostname: x1extremeG2 , mode: "--dry-run" }
-          # - { hostname: x1extremeG2 , mode: "" } -- run out of memory
+          # - { hostname: x1extremeG2 , mode: "" } # run out of memory
           - { hostname: vserver , mode: "--dry-run" }
           - { hostname: vserver , mode: "" }
           - { hostname: workstation , mode: "--dry-run" }
-          # - { hostname: workstation , mode: "" } -- run out of memory
+          # - { hostname: workstation , mode: "" } # run out of memory
           - { hostname: nas , mode: "--dry-run" }
-          # - { hostname: nas , mode: "" } -- run out of memory
+          # - { hostname: nas , mode: "" } # run out of memory
       fail-fast: false
 
     steps:
@@ -33,6 +33,15 @@ jobs:
 
   build-iso:
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        config:
+          - { config: ./iso/minimal.nix, mode: "" }
+          - { config: ./iso/desktop.nix, mode: "--dry-run" }
+      fail-fast: false
+
+
     steps:
     - run: git config --global init.defaultBranch main
     - uses: actions/checkout@v2.3.4
@@ -41,8 +50,11 @@ jobs:
       with:
         name: maxhbr
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-    - run: NIX_PATH="nixpkgs=$(pwd)/nixpkgs:nixos-config=$(pwd)/misc/empty_nixos_config.nix" ./scripts/build-iso-image.sh
-    - uses: actions/upload-artifact@v2
+    - run: NIX_PATH="nixpkgs=$(pwd)/nixpkgs:nixos-config=$(pwd)/misc/empty_nixos_config.nix" ./iso/build-iso-image.sh ${{ matrix.config.config }} ${{ matrix.config.mode }}
+    ./iso/minimal.nix
+    - run: NIX_PATH="nixpkgs=$(pwd)/nixpkgs:nixos-config=$(pwd)/misc/empty_nixos_config.nix" ./iso/build-iso-image.sh ./iso/desktop.nix --dry-run
+    - if: ${{ matrix.config.mode == "" }}
+      uses: actions/upload-artifact@v2
       with:
-        name: myconfig-iso
+        name: myconfig-iso-${{ matrix.config.config }}
         path: __out/iso/

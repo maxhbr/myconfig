@@ -1,7 +1,10 @@
 # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
-{ system ? "x86_64-linux", hostConfig ? null }:
+{ system ? "x86_64-linux"
+, isoConfig ? {} # some custom configuration
+, bootstrappedConfig ? null # path to config to include for bootstrapping
+}:
 let
-  nixpkgs = ./nixpkgs;
+  nixpkgs = ../nixpkgs;
   evalNixos = configuration:
     import "${nixpkgs}/nixos" { inherit system configuration; };
 
@@ -32,13 +35,13 @@ let
               echo "hostname missmatch"
               exit 1
           fi
-          sudo BOOTSTRAP=YES ${./scripts/bootstrap.sh} $@
+          sudo BOOTSTRAP=YES ${../scripts/bootstrap.sh} $@
           echo "you should run bootstrap-install next"
         '';
       in { environment.systemPackages = [ bootstrap ]; });
 
-      bootstrapInstallModule = (lib.mkIf (hostConfig != null) (let
-        preBuildConfigRoot = ./. + "/${hostConfig}";
+      bootstrapInstallModule = (lib.mkIf (bootstrappedConfig != null) (let
+        preBuildConfigRoot = bootstrappedConfig;
         preBuiltConfig = (evalNixos (import preBuildConfigRoot {
           pkgs = nixpkgs;
           inherit lib config;
@@ -73,24 +76,18 @@ let
           # add myconfig to iso
           isoImage = {
             contents = [{
-              source = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
+              source = pkgs.nix-gitignore.gitignoreSource [ ] ../.;
               target = "myconfig";
             }];
             isoBaseName = "nixos-myconfig";
           };
         }
-        ./modules
+        ../modules
       ];
 
-      config = {
-        myconfig = {
-          desktop.enable = true;
-          virtualisation.enable = true;
-        };
-
+      config = isoConfig // {
         networking.hostName = "myconfig";
-        networking.wireless.enable = true;
-        services.vsftpd.enable = true;
+        networking.wireless.enable = false; # managed by network manager
       };
     };
 

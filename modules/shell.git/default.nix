@@ -10,6 +10,8 @@ in {
     environment = {
       shellAliases = {
         g = "git";
+        pushb = "git pushb";
+        pushfb = "git pushfb";
         gs = "git s";
         t = "tig";
         tu = "tig HEAD @{upstream}";
