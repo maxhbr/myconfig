@@ -50,7 +50,7 @@ jobs:
       with:
         name: maxhbr
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-    - run: NIX_PATH="nixpkgs=$(pwd)/nixpkgs:nixos-config=$(pwd)/misc/empty_nixos_config.nix" ./iso/build-iso-image.sh ${{ matrix.config.config }} ${{ matrix.config.mode }}
+    - run: NIX_PATH="nixpkgs=$(pwd)/nixpkgs:nixos-config=$(pwd)/misc/empty_nixos_config.nix" ./iso/build-iso-image.sh "$(readlink -f ${{ matrix.config.config }} )" ${{ matrix.config.mode }}
 
     - uses: Thog/action-equals@v1
       id: isNonDry

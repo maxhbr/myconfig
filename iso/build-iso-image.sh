@@ -32,6 +32,11 @@ build() {
     local nixfile
     nixfile="$(readlink -f $1)"; shift
 
+    if [[ ! -f "$nixfile" ]]; then
+        echo "'$nixfile' not found"
+        exit 1
+    fi
+
     jobCountArgs=""
     if [[ -f "$myconfigDir/secrets/workstation/ip" ]]; then
         if nix ping-store --store ssh://"$(cat "$myconfigDir/secrets/workstation/ip")"; then
