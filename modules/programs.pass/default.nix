@@ -19,8 +19,9 @@ in {
             patches = drv.patches ++ [ ./patches/pass_-_copy_by_default.diff ];
             doInstallCheck = false;
           });
+          gopass-jsonapi = pkgs.callPackage ../../pkgs/gopass-jsonapi {};
         in {
-          inherit pass;
+          inherit pass gopass-jsonapi;
           pass-git-helper =
             super.python3Packages.callPackage ./pass-git-helper.nix {
               inherit (super.python3Packages) buildPythonApplication;
@@ -36,13 +37,14 @@ in {
               fi
               export GPG_TTY="$(tty)"
 
-              exec ${gopass}/bin/gopass-jsonapi listen
+              exec ${gopass-jsonapi}/bin/gopass-jsonapi listen
             '';
         })
     ];
     home-manager.users."${user}" = {
       home.packages = with pkgs; [
         pass
+        gopass-jsonapi
         pass-git-helper
         gopass
         wireguardKeypairToPassStore

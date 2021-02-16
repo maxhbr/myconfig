@@ -13,7 +13,8 @@ getNamePrefixFromConfig() {
         return
     fi
 
-    local configBN="$(basename "$config")"
+    local configBN
+    configBN="$(basename "$config")"
     if [[ "$configBN" != "default" ]]; then
         echo "-$configBN"
     else
@@ -25,19 +26,19 @@ build() (
     local hostConfig="$1"
 
     NIX_PATH_ARGS="-I nixpkgs=$nixpkgs -I nixos-config=$myconfigDir/misc/empty_nixos_config.nix"
-    NIX_PATH=""
-    if nix ping-store --store ssh://"$(cat "$myconfigDir/secrets/workstation/ip")"; then
-        jobCountArgs="-j0"
-    else
-        jobCountArgs=""
+    jobCountArgs=""
+    if [[ -f "$myconfigDir/secrets/workstation/ip" ]]; then
+        if nix ping-store --store ssh://"$(cat "$myconfigDir/secrets/workstation/ip")"; then
+            jobCountArgs="-j0"
+        fi
     fi
 
-    set -x
     (cd $myconfigDir/;
+     export NIX_PATH=""
+     set -x;
      time nix-build iso.nix \
           $NIX_PATH_ARGS \
           $jobCountArgs \
-          $3 \
           --show-trace \
           --no-out-link \
           $([[ "$hostConfig" ]] && echo "--argstr hostConfig $hostConfig")
@@ -48,9 +49,11 @@ buildAndCopy() {
     local hostConfig="$1"
 
     drv=$(build "$hostConfig")
-    out=("$drv/iso/nixos-myconfig"*".iso")
+    outArr=("$drv/iso/nixos-myconfig"*".iso")
+    out="${outArr[-1]}"
     du -h "$out"
-    local outDir="$myconfigDir/__out/iso$(getNamePrefixFromConfig "${hostConfig}")"
+    local outDir
+    outDir="$myconfigDir/__out/iso$(getNamePrefixFromConfig "${hostConfig}")"
     install -D -m 644 -v "$out" -t "$outDir"
     nix-store --delete "$drv"
 
