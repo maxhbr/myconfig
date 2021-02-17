@@ -243,8 +243,10 @@
     enabled = true
 
 [url "git@github.com:"]
-    insteadOf = github:
-    pushInsteadOf = github:
+    insteadOf = https://github.com/
+    insteadOf = git://github.com/
+    pushInsteadOf = https://github.com/
+    pushInsteadOf = git://github.com/
 
 [init]
     defaultBranch = main

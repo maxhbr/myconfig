@@ -3,9 +3,9 @@
 # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
 
 set -e
-cd "$( dirname "${BASH_SOURCE[0]}" )"
-common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
-. "$common"
+SCRIPT_DIR="$( dirname "${BASH_SOURCE[0]}" )"
+common="./common.sh"; until [ -f "$SCRIPT_DIR/$common" ]; do common="./.${common}"; done
+. "$SCRIPT_DIR/$common"
 
 help() {
     cat <<EOF
