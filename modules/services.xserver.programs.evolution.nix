@@ -5,11 +5,8 @@
 { config, lib, pkgs, ... }:
 let user = config.myconfig.user;
 in {
-  home-manager.users."${user}" = {
-    home.packages = with pkgs; [ gnome3.evolution ];
+  config = lib.mkIf config.programs.evolution.enable {
+    programs.dconf.enable = true;
+    programs.seahorse.enable = true;
   };
-  services.gnome3.evolution-data-server.enable = true;
-  services.gnome3.gnome-keyring.enable = true;
-  programs.dconf.enable = true;
-  programs.seahorse.enable = true;
 }

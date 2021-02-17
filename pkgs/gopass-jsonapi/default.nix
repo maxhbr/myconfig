@@ -23,7 +23,11 @@ buildGoModule rec {
 
   nativeBuildInputs = [ installShellFiles makeWrapper ];
 
-  buildFlagsArray = [ "-ldflags=-s -w -X main.version=${version} -X main.commit=${src.rev}" ];
+  preBuild = ''
+    buildFlagsArray+=(
+      "-ldflags=-s -w -X main.version=${version} -X main.commit=${src.rev}"
+    )
+  '';
 
   postFixup = ''
     wrapProgram $out/bin/gopass-jsonapi --prefix PATH : "${lib.makeBinPath [ gopass ]}"

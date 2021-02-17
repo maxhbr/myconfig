@@ -29,6 +29,7 @@ let
     ./services.xserver.nix
     ./services.xserver.printing.nix
     ./services.xserver.programs.chromium.nix
+    ./services.xserver.programs.evolution.nix
     ./services.xserver.programs.kitty.nix
     ./services.xserver.programs.obs.nix
     ./services.xserver.programs.xss-lock.nix

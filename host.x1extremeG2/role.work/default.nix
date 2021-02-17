@@ -6,7 +6,6 @@ in {
   imports = [
     # ./jdk.nix
     # ./node.nix
-    # ./evolution.nix
   ];
   config = {
     nixpkgs.overlays = map (n: import n) [
@@ -15,6 +14,7 @@ in {
       ./thrift012.nix
       ./thrift93.nix
     ];
+    programs.evolution.enable = true;
     home-manager.users."${user}" = {
       imports = [
         {
