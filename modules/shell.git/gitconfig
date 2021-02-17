@@ -209,7 +209,7 @@
 [push]
     default = matching
 [credential]
-	helper = /home/mhuber/.nix-profile/bin/pass-git-helper
+	helper = /etc/profiles/per-user/mhuber/bin/pass-git-helper
 [filter "lfs"]
     clean = git-lfs clean -- %f
     smudge = git-lfs smudge -- %f
