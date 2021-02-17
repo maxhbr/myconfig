@@ -202,6 +202,8 @@ in {
 
   agent-py = callPackage ../development/python-modules/agent-py { };
 
+  aioambient = callPackage ../development/python-modules/aioambient { };
+
   aioamqp = callPackage ../development/python-modules/aioamqp { };
 
   ailment = callPackage ../development/python-modules/ailment { };
@@ -410,6 +412,8 @@ in {
 
   apsw = callPackage ../development/python-modules/apsw { };
 
+  aqualogic = callPackage ../development/python-modules/aqualogic { };
+
   arabic-reshaper = callPackage ../development/python-modules/arabic-reshaper { };
 
   archinfo = callPackage ../development/python-modules/archinfo { };
@@ -543,6 +547,8 @@ in {
   audiotools = callPackage ../development/python-modules/audiotools { };
 
   augeas = callPackage ../development/python-modules/augeas { inherit (pkgs) augeas; };
+
+  auroranoaa = callPackage ../development/python-modules/auroranoaa { };
 
   auth0-python = callPackage ../development/python-modules/auth0-python { };
 
@@ -2856,6 +2862,8 @@ in {
   else
     callPackage ../development/python-modules/gunicorn { };
 
+  guppy3 = callPackage ../development/python-modules/guppy3 { };
+
   gurobipy = if stdenv.hostPlatform.system == "x86_64-darwin" then
     callPackage ../development/python-modules/gurobipy/darwin.nix { inherit (pkgs.darwin) cctools insert_dylib; }
   else if stdenv.hostPlatform.system == "x86_64-linux" then
@@ -4034,6 +4042,8 @@ in {
 
   metaphone = callPackage ../development/python-modules/metaphone { };
 
+  metar = callPackage ../development/python-modules/metar { };
+
   mezzanine = callPackage ../development/python-modules/mezzanine { };
 
   micawber = callPackage ../development/python-modules/micawber { };
@@ -4627,8 +4637,6 @@ in {
 
   ovh = callPackage ../development/python-modules/ovh { };
 
-  ovito = toPythonModule (pkgs.libsForQt5.callPackage ../development/python-modules/ovito { inherit python; });
-
   owslib = callPackage ../development/python-modules/owslib { };
 
   oyaml = callPackage ../development/python-modules/oyaml { };
@@ -4916,6 +4924,8 @@ in {
 
   pynuki = callPackage ../development/python-modules/pynuki { };
 
+  pynws = callPackage ../development/python-modules/pynws { };
+
   pysbd = callPackage ../development/python-modules/pysbd { };
 
   pyshark = callPackage ../development/python-modules/pyshark { };
@@ -5119,6 +5129,8 @@ in {
 
   prox-tv = callPackage ../development/python-modules/prox-tv { };
 
+  proxmoxer = callPackage ../development/python-modules/proxmoxer { };
+
   psautohint = callPackage ../development/python-modules/psautohint { };
 
   psd-tools = callPackage ../development/python-modules/psd-tools { };
@@ -5317,6 +5329,8 @@ in {
 
   pycparser = callPackage ../development/python-modules/pycparser { };
 
+  py-cid = callPackage ../development/python-modules/py-cid { };
+
   py-cpuinfo = callPackage ../development/python-modules/py-cpuinfo { };
 
   pycrc = callPackage ../development/python-modules/pycrc { };
@@ -5343,6 +5357,8 @@ in {
   pycurl = callPackage ../development/python-modules/pycurl { };
 
   pycxx = callPackage ../development/python-modules/pycxx { };
+
+  pydaikin = callPackage ../development/python-modules/pydaikin { };
 
   pydantic = callPackage ../development/python-modules/pydantic { };
 
@@ -5672,6 +5688,10 @@ in {
 
   pymssql = throw "pymssql has been abandoned upstream."; # added 2020-05-04
 
+  pymsteams = callPackage ../development/python-modules/pymsteams { };
+
+  py-multiaddr = callPackage ../development/python-modules/py-multiaddr { };
+
   py-multibase = callPackage ../development/python-modules/py-multibase { };
 
   py-multicodec = callPackage ../development/python-modules/py-multicodec { };
@@ -5881,6 +5901,8 @@ in {
   pyreport = callPackage ../development/python-modules/pyreport { };
 
   pyres = callPackage ../development/python-modules/pyres { };
+
+  pyrisco = callPackage ../development/python-modules/pyrisco { };
 
   pyRFC3339 = callPackage ../development/python-modules/pyrfc3339 { };
 
@@ -6491,6 +6513,8 @@ in {
 
   pytorchWithoutCuda = self.pytorch.override { cudaSupport = false; };
 
+  pytrafikverket = callPackage ../development/python-modules/pytrafikverket { };
+
   pytrends = callPackage ../development/python-modules/pytrends { };
 
   pytricia = callPackage ../development/python-modules/pytricia { };
@@ -6674,6 +6698,8 @@ in {
   radicale_infcloud = callPackage ../development/python-modules/radicale_infcloud { };
 
   radio_beam = callPackage ../development/python-modules/radio_beam { };
+
+  radiotherm = callPackage ../development/python-modules/radiotherm { };
 
   radish-bdd = callPackage ../development/python-modules/radish-bdd { };
 
@@ -7234,6 +7260,8 @@ in {
 
   skorch = callPackage ../development/python-modules/skorch { };
 
+  slack-sdk = callPackage ../development/python-modules/slack-sdk { };
+
   slackclient = callPackage ../development/python-modules/slackclient { };
 
   sleekxmpp = callPackage ../development/python-modules/sleekxmpp { };
@@ -7574,6 +7602,8 @@ in {
   supervisor = callPackage ../development/python-modules/supervisor { };
 
   sure = callPackage ../development/python-modules/sure { };
+
+  surepy = callPackage ../development/python-modules/surepy { };
 
   survey = callPackage ../development/python-modules/survey { };
 
