@@ -24,15 +24,14 @@ let
 in {
   config = {
     nixpkgs.overlays = [
-      (self: super: let
-        defaultJdk = self.openjdk11;
-      in {
-        maven = super.maven.override { jdk = defaultJdk; };
-        gradle = (pkgs.gradleGen.override {
-          java = defaultJdk;
-        }).gradle_latest;
-        jdk = defaultJdk;
-      })
+      (self: super:
+        let defaultJdk = self.openjdk11;
+        in {
+          maven = super.maven.override { jdk = defaultJdk; };
+          gradle =
+            (pkgs.gradleGen.override { java = defaultJdk; }).gradle_latest;
+          jdk = defaultJdk;
+        })
     ];
 
     # generates:

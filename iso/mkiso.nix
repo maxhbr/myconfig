@@ -1,6 +1,6 @@
 # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
 { system ? "x86_64-linux"
-, customModule ? ({...}: {}) # some custom configuration
+, customModule ? ({ ... }: { }) # some custom configuration
 , bootstrappedConfig ? null # path to config to include for bootstrapping
 }:
 let

@@ -1,5 +1,3 @@
 import ./mkiso.nix {
-  customModule = {...}: {
-    services.getty.autologinUser = "mhuber";
-  };
+  customModule = { ... }: { services.getty.autologinUser = "mhuber"; };
 }

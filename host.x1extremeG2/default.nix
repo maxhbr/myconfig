@@ -110,9 +110,10 @@ in {
             '';
         in "${muteNotebookAudio}/bin/mute_notebook_audio";
       };
-      home.packages = with pkgs.unstable; [
-        google-chrome # for netflix and stadia
-      ];
+      home.packages = with pkgs.unstable;
+        [
+          google-chrome # for netflix and stadia
+        ];
     };
   };
 }

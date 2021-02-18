@@ -1,5 +1,5 @@
-{ lib, stdenv, unzip, requireFile, autoPatchelfHook, gdk-pixbuf, gtk2-x11, steam-run
-}:
+{ lib, stdenv, unzip, requireFile, autoPatchelfHook, gdk-pixbuf, gtk2-x11
+, steam-run }:
 
 stdenv.mkDerivation rec {
   name = "ktane-${version}";

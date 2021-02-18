@@ -1,5 +1,5 @@
 import ../iso/mkiso.nix {
-  customModule = {...}: {
+  customModule = { ... }: {
     imports = [ ./role.work ];
     myconfig = {
       desktop.enable = true;

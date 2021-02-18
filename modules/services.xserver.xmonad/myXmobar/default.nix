@@ -31,7 +31,7 @@ let
       if [[ "$btState" == "blocked" ]]; then
         echo -n "''${pre}BT ''${btState}''${post}"
       fi
-   '';
+    '';
 
   hasXssLock = with pkgs;
     writeShellScriptBin "hasXssLock" ''

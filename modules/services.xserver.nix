@@ -41,11 +41,9 @@ in {
           aspell
           aspellDicts.de
           aspellDicts.en
-        ] ++ lib.optional config.networking.networkmanager.enable networkmanager_dmenu
-        ++ (with pkgs.unstable; [
-          tdesktop
-          signal-desktop signal-cli
-        ]);
+        ] ++ lib.optional config.networking.networkmanager.enable
+        networkmanager_dmenu
+        ++ (with pkgs.unstable; [ tdesktop signal-desktop signal-cli ]);
       xresources.extraConfig = ''
         *utf8: 1
 

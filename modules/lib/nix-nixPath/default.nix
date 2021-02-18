@@ -3,8 +3,7 @@
 { pkgs, config, lib, ... }:
 let
   getJson = channel:
-    let
-      jsonFile = ./. + ("/" + channel + ".json");
+    let jsonFile = ./. + ("/" + channel + ".json");
     in if builtins.pathExists jsonFile then
       builtins.fromJSON (builtins.readFile jsonFile)
     else
@@ -27,8 +26,7 @@ let
   # see: https://discourse.nixos.org/t/my-painpoints-with-flakes/9750/14
   # maybe not necessary if configuration uses flakes
   mkRegistry = channel:
-    let
-      json = getJson channel;
+    let json = getJson channel;
     in {
       from = {
         id = channel;
@@ -43,17 +41,17 @@ let
     };
 
 in {
-  imports = [
-    {
-      nix = {
-        nixPath = [
-          ("nixpkgs=" + ../../../nixpkgs)
-          ("nixpkgs-unstable=" + ustablePath)
-          ("nixos-20.03-small=" + nixos2003Path)
-          ("nixos-20.09-small=" + nixos2009Path)
-          "nixos-config=/dev/null"
-        ];
-        registry = { # see: https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html#flake-references
+  imports = [{
+    nix = {
+      nixPath = [
+        ("nixpkgs=" + ../../../nixpkgs)
+        ("nixpkgs-unstable=" + ustablePath)
+        ("nixos-20.03-small=" + nixos2003Path)
+        ("nixos-20.09-small=" + nixos2009Path)
+        "nixos-config=/dev/null"
+      ];
+      registry =
+        { # see: https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html#flake-references
           # self.flake = inputs.self;
           nixpkgs = {
             from = {
@@ -67,12 +65,12 @@ in {
           };
           nixpkgs-unstable = mkRegistry "nixpkgs-unstable";
         };
-        extraOptions = lib.optionalString (config.nix.package == pkgs.nixFlakes) ''
+      extraOptions =
+        lib.optionalString (config.nix.package == pkgs.nixFlakes) ''
           flake-registry = /etc/nix/registry.json
         '';
-      };
-    }
-  ];
+    };
+  }];
   config = {
     nixpkgs.overlays = [
       (self: super: {

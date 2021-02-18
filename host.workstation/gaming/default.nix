@@ -1,7 +1,7 @@
 { pkgs, config, ... }:
 let user = config.myconfig.user;
 in {
-  imports = [./games.wine ./games.steam];
+  imports = [ ./games.wine ./games.steam ];
   config = {
     home-manager.users."${user}" = {
       imports = [

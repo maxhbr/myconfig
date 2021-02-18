@@ -1,5 +1,5 @@
 import ./mkiso.nix {
-  customModule = {...}: {
+  customModule = { ... }: {
     myconfig = {
       desktop.enable = true;
       virtualisation.enable = true;

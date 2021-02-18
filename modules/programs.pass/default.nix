@@ -19,7 +19,7 @@ in {
             patches = drv.patches ++ [ ./patches/pass_-_copy_by_default.diff ];
             doInstallCheck = false;
           });
-          gopass-jsonapi = pkgs.callPackage ../../pkgs/gopass-jsonapi {};
+          gopass-jsonapi = pkgs.callPackage ../../pkgs/gopass-jsonapi { };
         in {
           inherit pass gopass-jsonapi;
           pass-git-helper =

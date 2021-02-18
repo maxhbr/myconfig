@@ -1,10 +1,4 @@
-{ lib
-, makeWrapper
-, buildGoModule
-, fetchFromGitHub
-, installShellFiles
-, gopass
-}:
+{ lib, makeWrapper, buildGoModule, fetchFromGitHub, installShellFiles, gopass }:
 
 buildGoModule rec {
   pname = "gopass-jsonapi";
@@ -30,7 +24,9 @@ buildGoModule rec {
   '';
 
   postFixup = ''
-    wrapProgram $out/bin/gopass-jsonapi --prefix PATH : "${lib.makeBinPath [ gopass ]}"
+    wrapProgram $out/bin/gopass-jsonapi --prefix PATH : "${
+      lib.makeBinPath [ gopass ]
+    }"
   '';
 
   meta = with lib; {

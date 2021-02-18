@@ -16,7 +16,9 @@ in {
       enableGhostscriptFonts = true;
 
       fonts = with pkgs; [
-        (nerdfonts.override { fonts = [ "Inconsolata" "FiraCode" "DroidSansMono" ]; })
+        (nerdfonts.override {
+          fonts = [ "Inconsolata" "FiraCode" "DroidSansMono" ];
+        })
         corefonts
         dejavu_fonts
         dina-font

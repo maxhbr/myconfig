@@ -18,11 +18,10 @@ in {
     home-manager.users."${user}" = {
       imports = [
         {
-          home.packages = with pkgs; [
-            nixos-2009-small.teams
-          ];
+          home.packages = with pkgs; [ nixos-2009-small.teams ];
           xdg.mimeApps = {
-            defaultApplications."x-scheme-handler/msteams" = [ "teams.desktop" ];
+            defaultApplications."x-scheme-handler/msteams" =
+              [ "teams.desktop" ];
           };
           programs.zsh.shellAliases = {
             unteams = ''while pkill teams; do echo "kill it with fire!"; done'';

@@ -1,18 +1,14 @@
 { lib, stdenv, fetchgit, jdk11, gradleGen, nodejs-12_x, makeWrapper
 # runtime requirements for ort
-, git, mercurial, cvs
-, licensee, ruby
-, python3, python3Packages
-}:
+, git, mercurial, cvs, licensee, ruby, python3, python3Packages }:
 
 let
   rev = "fa95a4eb8ec1d21c59ad4144575b0f219ad192be";
   srcFixedOutputSha256 = "0pmICW0OeFzmQaSKruWJJF3XSLUibTWjhpXsKkNKD+E=";
-  installFixedOutputSha256 = "1wgzwvghh6nws7nvfivpqp6j9nfr0sig996690wmsiw1b0zvvpny";
+  installFixedOutputSha256 =
+    "1wgzwvghh6nws7nvfivpqp6j9nfr0sig996690wmsiw1b0zvvpny";
 
-  gradle_ = (gradleGen.override {
-    java = jdk11;
-  }).gradle_6_8;
+  gradle_ = (gradleGen.override { java = jdk11; }).gradle_6_8;
 
   version = "master_${rev}";
 
@@ -52,9 +48,10 @@ let
 
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
-    outputHash = if stdenv.system == "x86_64-linux"
-                 then installFixedOutputSha256
-                 else throw "Unsupported platform";
+    outputHash = if stdenv.system == "x86_64-linux" then
+      installFixedOutputSha256
+    else
+      throw "Unsupported platform";
   };
 
 in stdenv.mkDerivation {
@@ -89,9 +86,10 @@ in stdenv.mkDerivation {
   passthru.deps = install;
 
   meta = with lib; {
-    homepage = https://github.com/oss-review-toolkit/ort;
+    homepage = "https://github.com/oss-review-toolkit/ort";
     license = "Apache-2.0";
-    description = "The OSS Review Toolkit (ORT) aims to assist with the tasks that commonly need to be performed in the context of license compliance checks, especially for (but not limited to) Free and Open Source Software dependencies.";
+    description =
+      "The OSS Review Toolkit (ORT) aims to assist with the tasks that commonly need to be performed in the context of license compliance checks, especially for (but not limited to) Free and Open Source Software dependencies.";
     maintainers = with maintainers; [ ];
     platforms = platforms.linux;
   };
