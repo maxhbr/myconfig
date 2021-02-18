@@ -3548,6 +3548,8 @@ in {
 
   labelbox = callPackage ../development/python-modules/labelbox { };
 
+  labgrid = callPackage ../development/python-modules/labgrid { };
+
   lammps-cython = callPackage ../development/python-modules/lammps-cython { mpi = pkgs.mpi; };
 
   langcodes = callPackage ../development/python-modules/langcodes { };
@@ -6163,6 +6165,8 @@ in {
 
   pytest-httpserver = callPackage ../development/python-modules/pytest-httpserver { };
 
+  pytest-httpx = callPackage ../development/python-modules/pytest-httpx { };
+
   pytest-instafail = callPackage ../development/python-modules/pytest-instafail { };
 
   pytest-isort = callPackage ../development/python-modules/pytest-isort { };
@@ -6311,6 +6315,8 @@ in {
 
   python-engineio = callPackage ../development/python-modules/python-engineio { };
 
+  python-engineio_3 = callPackage ../development/python-modules/python-engineio/3.nix { };
+
   python-etcd = callPackage ../development/python-modules/python-etcd { };
 
   python_fedora = callPackage ../development/python-modules/python_fedora { };
@@ -6451,6 +6457,8 @@ in {
 
   python-socketio = callPackage ../development/python-modules/python-socketio { };
 
+  python-socketio_4 = callPackage ../development/python-modules/python-socketio/4.nix { };
+
   python-sql = callPackage ../development/python-modules/python-sql { };
 
   python_statsd = callPackage ../development/python-modules/python_statsd { };
@@ -6501,9 +6509,7 @@ in {
 
   pytorch = callPackage ../development/python-modules/pytorch { cudaSupport = pkgs.config.cudaSupport or false; };
 
-  pytorch-bin = callPackage ../development/python-modules/pytorch/bin.nix {
-    inherit (pkgs.linuxPackages) nvidia_x11;
-  };
+  pytorch-bin = callPackage ../development/python-modules/pytorch/bin.nix { };
 
   pytorch-lightning = callPackage ../development/python-modules/pytorch-lightning { };
 
@@ -7923,7 +7929,9 @@ in {
 
   translationstring = callPackage ../development/python-modules/translationstring { };
 
-  transmissionrpc = callPackage ../development/python-modules/transmissionrpc { };
+  transmission-rpc = callPackage ../development/python-modules/transmission-rpc { };
+
+  transmissionrpc = self.transmission-rpc; # alias for compatibility 2020-02-07
 
   treq = callPackage ../development/python-modules/treq { };
 

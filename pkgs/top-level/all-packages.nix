@@ -748,6 +748,12 @@ in
 
   metapixel = callPackage ../tools/graphics/metapixel { };
 
+  yabridge = callPackage ../tools/audio/yabridge {
+    wine = wineWowPackages.minimal;
+  };
+
+  yabridgectl = callPackage ../tools/audio/yabridgectl { };
+
   ### APPLICATIONS/TERMINAL-EMULATORS
 
   alacritty = callPackage ../applications/terminal-emulators/alacritty {
@@ -1671,7 +1677,6 @@ in
     else libtensorflow-bin;
 
   libtorch-bin = callPackage ../development/libraries/science/math/libtorch/bin.nix {
-    inherit (linuxPackages) nvidia_x11;
     cudaSupport = config.cudaSupport or false;
   };
 
@@ -1964,7 +1969,33 @@ in
 
   chntpw = callPackage ../tools/security/chntpw { };
 
-  clipman = callPackage ../tools/misc/clipman { };
+  clipman = callPackage ../tools/wayland/clipman { };
+
+  kanshi = callPackage ../tools/wayland/kanshi { };
+
+  oguri = callPackage  ../tools/wayland/oguri { };
+
+  slurp = callPackage ../tools/wayland/slurp { };
+
+  wayland-utils = callPackage ../tools/wayland/wayland-utils { };
+
+  wev = callPackage ../tools/wayland/wev { };
+
+  wl-clipboard = callPackage ../tools/wayland/wl-clipboard { };
+
+  wlogout = callPackage ../tools/wayland/wlogout { };
+
+  wlr-randr = callPackage ../tools/wayland/wlr-randr { };
+
+  wlsunset = callPackage ../tools/wayland/wlsunset { };
+
+  wob = callPackage ../tools/wayland/wob { };
+
+  wshowkeys = callPackage ../tools/wayland/wshowkeys { };
+
+  wtype = callPackage ../tools/wayland/wtype { };
+
+  ydotool = callPackage ../tools/wayland/ydotool { };
 
   clipster = callPackage ../tools/misc/clipster { };
 
@@ -3850,21 +3881,7 @@ in
 
   wallutils = callPackage ../tools/graphics/wallutils { };
 
-  wayland-utils = callPackage ../tools/wayland/wayland-utils { };
-
-  wev = callPackage ../tools/misc/wev { };
-
-  wl-clipboard = callPackage ../tools/misc/wl-clipboard { };
-
-  wlsunset = callPackage ../tools/wayland/wlsunset { };
-
-  wob = callPackage ../tools/misc/wob { };
-
-  wtype = callPackage ../tools/wayland/wtype { };
-
   wrangler = callPackage ../development/tools/wrangler { };
-
-  wshowkeys = callPackage ../tools/wayland/wshowkeys { };
 
   wsl-open = callPackage ../tools/misc/wsl-open { };
 
@@ -4215,8 +4232,6 @@ in
   libbladeRF = callPackage ../development/libraries/libbladeRF { };
 
   lp_solve = callPackage ../applications/science/math/lp_solve { };
-
-  lprof = callPackage ../tools/graphics/lprof { };
 
   fastlane = callPackage ../tools/admin/fastlane { };
 
@@ -5493,7 +5508,9 @@ in
     plugins = [ ];  # override with the list of desired plugins
   };
 
-  kak-lsp = callPackage ../tools/misc/kak-lsp { };
+  kak-lsp = callPackage ../tools/misc/kak-lsp {
+    inherit (darwin.apple_sdk.frameworks) Security;
+  };
 
   kbdd = callPackage ../applications/window-managers/kbdd { };
 
@@ -6997,7 +7014,9 @@ in
 
   pcimem = callPackage ../os-specific/linux/pcimem { };
 
-  pciutils = callPackage ../tools/system/pciutils { };
+  pciutils = callPackage ../tools/system/pciutils {
+    inherit (darwin.apple_sdk.frameworks) IOKit;
+  };
 
   pcsclite = callPackage ../tools/security/pcsclite {
     inherit (darwin.apple_sdk.frameworks) IOKit;
@@ -7219,6 +7238,8 @@ in
   pretty-simple = callPackage ../development/tools/pretty-simple { };
 
   prettyping = callPackage ../tools/networking/prettyping { };
+
+  pritunl-ssh = callPackage ../tools/networking/pritunl-ssh { };
 
   profile-cleaner = callPackage ../tools/misc/profile-cleaner { };
 
@@ -9049,6 +9070,18 @@ in
     libpsl = null;
   };
 
+  wget2 = callPackage ../tools/networking/wget2 {
+    # update breaks grub2
+    gnulib = pkgs.gnulib.overrideAttrs (oldAttrs: rec {
+      version = "20210208";
+      src = fetchgit {
+        url = "https://git.savannah.gnu.org/r/gnulib.git";
+        rev = "0b38e1d69f03d3977d7ae7926c1efeb461a8a971";
+        sha256 = "06bj9y8wcfh35h653yk8j044k7h5g82d2j3z3ib69rg0gy1xagzp";
+      };
+    });
+  };
+
   wg-bond = callPackage ../applications/networking/wg-bond { };
 
   which = callPackage ../tools/system/which { };
@@ -10163,6 +10196,13 @@ in
     buildPackages = buildPackages // { stdenv = gcc8Stdenv; };
   });
 
+  go_1_16 = callPackage ../development/compilers/go/1.16.nix ({
+    inherit (darwin.apple_sdk.frameworks) Security Foundation;
+  } // lib.optionalAttrs (stdenv.cc.isGNU && stdenv.isAarch64) {
+    stdenv = gcc8Stdenv;
+    buildPackages = buildPackages // { stdenv = gcc8Stdenv; };
+  });
+
   go_2-dev = callPackage ../development/compilers/go/2-dev.nix ({
     inherit (darwin.apple_sdk.frameworks) Security Foundation;
   } // lib.optionalAttrs (stdenv.cc.isGNU && stdenv.isAarch64) {
@@ -10398,27 +10438,19 @@ in
 
   jwasm =  callPackage ../development/compilers/jwasm { };
 
-  knightos-genkfs = callPackage ../development/tools/knightos/genkfs {
-    asciidoc = asciidoc-full;
-  };
+  knightos-genkfs = callPackage ../development/tools/knightos/genkfs { };
 
   knightos-kcc = callPackage ../development/tools/knightos/kcc { };
 
-  knightos-kimg = callPackage ../development/tools/knightos/kimg {
-    asciidoc = asciidoc-full;
-  };
+  knightos-kimg = callPackage ../development/tools/knightos/kimg { };
 
   knightos-kpack = callPackage ../development/tools/knightos/kpack { };
 
-  knightos-mkrom = callPackage ../development/tools/knightos/mkrom {
-    asciidoc = asciidoc-full;
-  };
+  knightos-mkrom = callPackage ../development/tools/knightos/mkrom { };
 
   knightos-patchrom = callPackage ../development/tools/knightos/patchrom { };
 
-  knightos-mktiupgrade = callPackage ../development/tools/knightos/mktiupgrade {
-    asciidoc = asciidoc-full;
-  };
+  knightos-mktiupgrade = callPackage ../development/tools/knightos/mktiupgrade { };
 
   knightos-scas = callPackage ../development/tools/knightos/scas { };
 
@@ -13848,6 +13880,8 @@ in
 
   libgit2-glib = callPackage ../development/libraries/libgit2-glib { };
 
+  libhsts = callPackage ../development/libraries/libhsts { };
+
   glbinding = callPackage ../development/libraries/glbinding { };
 
   gle = callPackage ../development/libraries/gle { };
@@ -16345,10 +16379,6 @@ in
 
   qolibri = libsForQt5.callPackage ../applications/misc/qolibri { };
 
-  qt3 = callPackage ../development/libraries/qt-3 {
-    libpng = libpng12;
-  };
-
   qt4 = qt48;
 
   qt48 = callPackage ../development/libraries/qt-4.x/4.8 {
@@ -16651,6 +16681,8 @@ in
   serf = callPackage ../development/libraries/serf {};
 
   sfsexp = callPackage ../development/libraries/sfsexp {};
+
+  shhgit = callPackage ../tools/security/shhgit { };
 
   shhmsg = callPackage ../development/libraries/shhmsg { };
 
@@ -17317,8 +17349,6 @@ in
 
   yder = callPackage ../development/libraries/yder { };
 
-  ydotool = callPackage ../tools/wayland/ydotool { };
-
   yojimbo = callPackage ../development/libraries/yojimbo { };
 
   yubioath-desktop = libsForQt5.callPackage ../applications/misc/yubioath-desktop { };
@@ -17478,6 +17508,9 @@ in
   buildGo115Package = callPackage ../development/go-packages/generic {
     go = buildPackages.go_1_15;
   };
+  buildGo116Package = callPackage ../development/go-packages/generic {
+    go = buildPackages.go_1_16;
+  };
 
   buildGoPackage = buildGo115Package;
 
@@ -17486,6 +17519,9 @@ in
   };
   buildGo115Module = callPackage ../development/go-modules/generic {
     go = buildPackages.go_1_15;
+  };
+  buildGo116Module = callPackage ../development/go-modules/generic {
+    go = buildPackages.go_1_16;
   };
 
   buildGoModule = buildGo115Module;
@@ -18842,6 +18878,8 @@ in
   fscrypt-experimental = callPackage ../os-specific/linux/fscrypt { };
   fscryptctl-experimental = callPackage ../os-specific/linux/fscryptctl/legacy.nix { };
 
+  fwanalyzer = callPackage ../tools/filesystems/fwanalyzer { };
+
   fwupd = callPackage ../os-specific/linux/firmware/fwupd { };
 
   firmware-manager = callPackage ../os-specific/linux/firmware/firmware-manager { };
@@ -19154,6 +19192,13 @@ in
     ];
   };
 
+  linux_5_11 = callPackage ../os-specific/linux/kernel/linux-5.11.nix {
+    kernelPatches = [
+      kernelPatches.bridge_stp_helper
+      kernelPatches.request_key_helper
+    ];
+  };
+
   linux-rt_5_10 = callPackage ../os-specific/linux/kernel/linux-rt-5.10.nix {
     kernelPatches = [
       kernelPatches.bridge_stp_helper
@@ -19412,7 +19457,7 @@ in
 
   # Update this when adding the newest kernel major version!
   # And update linux_latest_for_hardened below if the patches are already available
-  linuxPackages_latest = linuxPackages_5_10;
+  linuxPackages_latest = linuxPackages_5_11;
   linux_latest = linuxPackages_latest.kernel;
 
   # Realtime kernel packages.
@@ -19436,6 +19481,7 @@ in
   linuxPackages_4_19 = recurseIntoAttrs (linuxPackagesFor pkgs.linux_4_19);
   linuxPackages_5_4 = recurseIntoAttrs (linuxPackagesFor pkgs.linux_5_4);
   linuxPackages_5_10 = recurseIntoAttrs (linuxPackagesFor pkgs.linux_5_10);
+  linuxPackages_5_11 = recurseIntoAttrs (linuxPackagesFor pkgs.linux_5_11);
 
   # When adding to the list above:
   # - Update linuxPackages_latest to the latest version
@@ -22524,7 +22570,7 @@ in
   gitit = callPackage ../applications/misc/gitit {};
 
   gkrellm = callPackage ../applications/misc/gkrellm {
-    inherit (darwin) IOKit;
+    inherit (darwin.apple_sdk.frameworks) IOKit;
   };
 
   glow = callPackage ../applications/editors/glow { };
@@ -22817,8 +22863,6 @@ in
   };
 
   super-productivity = callPackage ../applications/networking/super-productivity { };
-
-  wlr-randr = callPackage ../tools/misc/wlr-randr { };
 
   wlroots = callPackage ../development/libraries/wlroots { };
 
@@ -23125,8 +23169,6 @@ in
   kail = callPackage ../tools/networking/kail {  };
 
   kanboard = callPackage ../applications/misc/kanboard { };
-
-  kanshi = callPackage ../tools/misc/kanshi { };
 
   kapitonov-plugins-pack = callPackage ../applications/audio/kapitonov-plugins-pack { };
 
@@ -23918,6 +23960,8 @@ in
 
   qbec = callPackage ../applications/networking/cluster/qbec { };
 
+  qemacs = callPackage ../applications/editors/qemacs { };
+
   rssguard = libsForQt5.callPackage ../applications/networking/feedreaders/rssguard { };
 
   scudcloud = callPackage ../applications/networking/instant-messengers/scudcloud { };
@@ -24010,6 +24054,8 @@ in
 
   mupdf = callPackage ../applications/misc/mupdf { };
   mupdf_1_17 = callPackage ../applications/misc/mupdf/1.17.nix { };
+
+  muso = callPackage ../applications/audio/muso { };
 
   mystem = callPackage ../applications/misc/mystem { };
 
@@ -24826,8 +24872,6 @@ in
   slop = callPackage ../tools/misc/slop {};
 
   slrn = callPackage ../applications/networking/newsreaders/slrn { };
-
-  slurp = callPackage ../tools/misc/slurp { };
 
   sniproxy = callPackage ../applications/networking/sniproxy { };
 
@@ -26502,6 +26546,8 @@ in
   blackshades = callPackage ../games/blackshades { };
 
   blobby = callPackage ../games/blobby { };
+
+  blobwars = callPackage ../games/blobwars { };
 
   boohu = callPackage ../games/boohu { };
 
@@ -29102,7 +29148,7 @@ in
 
   lkproof = callPackage ../tools/typesetting/tex/lkproof { };
 
-  lice = callPackage ../tools/misc/lice {};
+  lice = python3Packages.callPackage ../tools/misc/lice {};
 
   m33-linux = callPackage ../misc/drivers/m33-linux { };
 
