@@ -9,7 +9,16 @@ let
     url = "https://github.com/vlaci/nix-doom-emacs.git";
     inherit (json) rev ref;
   }) {
-    doomPrivateDir = ./doom.d;
+    doomPrivateDir = let
+      doomPrivateDeriv = pkgs.stdenv.mkDerivation rec {
+        name = "doomPrivateDeriv-1.0";
+        src = ./doom.d;
+        installPhase = ''
+          mkdir -p "$out"
+          cp -r * "$out"
+        '';
+      };
+    in "${doomPrivateDeriv}";
     extraPackages = epkgs: [
       pkgs.mu
       (pkgs.nerdfonts.override { fonts = [ "Inconsolata" ]; })
@@ -60,7 +69,7 @@ in {
           (mapc 'load (file-expand-wildcards "~/.doom.d/imports/*.el"))
         '';
         ".doom.d/imports" = {
-          source = ./doom.d/imports;
+          source = ./doom.d-imports;
           recursive = true;
         };
       };

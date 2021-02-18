@@ -21,7 +21,7 @@ getNamePrefixFromConfig() {
 
     local configBN
     configBN="$(basename "$config")"
-    if [[ "$configBN" != "default" ]]; then
+    if [[ "$configBN" != "default" && "$configBN" != "iso" ]]; then
         echo "-$configBN"
     else
         getNamePrefixFromConfig "$(dirname "$config")"
@@ -115,7 +115,7 @@ buildAndCopy() {
 
     nix-store --delete "$drv" || {
         sleep 20
-        nix-store --delete "$drv" || printf "failed to\n\tnix-store --delete \"$drv\""
+        nix-store --delete "$drv" || printf "failed to\n\tnix-store --delete \"$drv\"\n"
     }
 }
 
@@ -123,5 +123,5 @@ if [[ "$1" == "--help" ]]; then
     help
 else
     buildAndCopy "$@"
+    times
 fi
-

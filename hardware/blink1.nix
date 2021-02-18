@@ -1,4 +1,6 @@
-{ config, lib, pkgs, ... }: {
+{ config, lib, pkgs, ... }:
+let user = config.myconfig.user;
+in {
   config = {
     nixpkgs.config.packageOverrides = pkgs: {
       blink1-udev-rules = pkgs.writeTextFile {
@@ -26,5 +28,16 @@ ATTRS{idVendor}=="27b8", ATTRS{idProduct}=="01ed", MODE:="666", GROUP="plugdev"
       blink1-udev-rules
       blink1-tool
     ];
+
+    home-manager.users."${user}" = {
+      home.file = {
+        ".config/autorandr/postswitch.d/reset_blink1".source = let
+          muteNotebookAudio = with pkgs;
+          writeShellScriptBin "reset_blink1" ''
+              ${blink1-tool}/bin/blink1-tool --off &disown
+          '';
+        in "${muteNotebookAudio}/bin/reset_blink1";
+      };
+    };
   };
 }

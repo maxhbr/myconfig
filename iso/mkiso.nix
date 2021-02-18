@@ -1,6 +1,6 @@
 # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
 { system ? "x86_64-linux"
-, isoConfig ? {} # some custom configuration
+, customModule ? ({...}: {}) # some custom configuration
 , bootstrappedConfig ? null # path to config to include for bootstrapping
 }:
 let
@@ -23,7 +23,7 @@ let
       xautologinModule = {
         # autologin
         services.xserver.displayManager.autoLogin = {
-          enable = true;
+          enable = config.services.xserver.enable;
           inherit user;
         };
       };
@@ -83,9 +83,10 @@ let
           };
         }
         ../modules
+        (customModule args)
       ];
 
-      config = isoConfig // {
+      config = {
         networking.hostName = "myconfig";
         networking.wireless.enable = false; # managed by network manager
       };
