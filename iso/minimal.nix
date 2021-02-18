@@ -1,3 +1,5 @@
 import ./mkiso.nix {
-  customModule = { ... }: { services.getty.autologinUser = "mhuber"; };
+  customModule = { config, lib, ... }: let
+    user = config.myconfig.user;
+    in { services.getty.autologinUser = lib.mkForce user; };
 }
