@@ -85,11 +85,11 @@ in {
       };
     };
 
-    boot.kernelPackages =
-      # lib.mkForce pkgs.unstable.linuxPackages_testing;
-      # lib.mkForce pkgs.linuxPackages_testing;
-      # lib.mkForce pkgs.unstable.linuxPackages_latest;
-      lib.mkForce pkgs.linuxPackages_latest;
+    #boot.kernelPackages =
+    #  # lib.mkForce pkgs.unstable.linuxPackages_testing;
+    #  # lib.mkForce pkgs.linuxPackages_testing;
+    #  # lib.mkForce pkgs.unstable.linuxPackages_latest;
+    #  lib.mkForce pkgs.linuxPackages_latest;
 
     networking.firewall.allowedTCPPorts = [ 12345 6567 ];
     networking.firewall.allowedUDPPorts = [ 12345 6567 ];
