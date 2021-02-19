@@ -76,14 +76,15 @@ in {
     myconfig = {
       desktop.enable = true;
       headless.enable = true;
-      virtualisation.enable = true;
-      virtualisation.gpuPassthroughHost.enable = true;
+      # virtualisation.enable = true;
+      # virtualisation.gpuPassthroughHost.enable = true;
       dev = {
         haskell.enable = true;
         compliance.enable = true;
         network.enable = true;
       };
     };
+    virtualisation.docker.enable = true;
 
     #boot.kernelPackages =
     #  # lib.mkForce pkgs.unstable.linuxPackages_testing;

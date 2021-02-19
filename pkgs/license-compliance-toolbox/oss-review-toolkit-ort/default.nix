@@ -66,7 +66,7 @@ in stdenv.mkDerivation {
 
   buildPhase = ''
     cp ${./ort.sh} ./bin/ort.sh
-    sed -i -e 's%=ort%='"$out/bin/ort"'%' ./bin/ort.sh
+    sed -i -e 's%^ort=ort%ort='"$out/bin/ort"'%' ./bin/ort.sh
     rm ./bin/ort.bat
   '';
   installPhase = ''
@@ -74,6 +74,7 @@ in stdenv.mkDerivation {
     cp -r ./* $out
     wrapProgram "$out/bin/ort" \
       --set LANG en_US.UTF-8 \
+      --set JAVA_HOME "${jdk11}/lib/openjdk" \
       --prefix PATH ":" "${git}/bin" \
       --prefix PATH ":" "${mercurial}/bin" \
       --prefix PATH ":" "${cvs}/bin" \
