@@ -3,24 +3,6 @@
 { config, lib, pkgs, ... }:
 
 {
-  powerManagement.enable = true;
-
-  environment.systemPackages = with pkgs; [
-    acpi
-    acpid
-    xorg.xbacklight
-    powertop
-  ];
-
-  # networking.wireless.enable = true;
-  hardware.bluetooth.enable = true;
-
-  services = {
-    logind.lidSwitch = "suspend";
-    logind.lidSwitchDocked = "suspend";
-    logind.extraConfig = "HandlePowerKey=suspend";
-  };
-
   imports = [
     { # config for libinput
       config = lib.mkIf (config.services.xserver.libinput.enable) {
@@ -57,5 +39,32 @@
         ];
       };
     }
+    { # bluetooth
+      hardware.bluetooth.enable = true;
+      # see:
+      # - https://github.com/NixOS/nixpkgs/issues/113628
+      # - https://github.com/NixOS/nixpkgs/pull/113600
+      systemd.services.bluetooth.serviceConfig.ExecStart = [
+        ""
+        "${pkgs.bluez}/libexec/bluetooth/bluetoothd -f /etc/bluetooth/main.conf"
+      ];
+    }
   ];
+
+  config = {
+    powerManagement.enable = true;
+
+    environment.systemPackages = with pkgs; [
+      acpi
+      acpid
+      xorg.xbacklight
+      powertop
+    ];
+
+    services = {
+      logind.lidSwitch = "suspend";
+      logind.lidSwitchDocked = "suspend";
+      logind.extraConfig = "HandlePowerKey=suspend";
+    };
+  };
 }
