@@ -1,5 +1,4 @@
-# from: https://github.com/NixOS/nixpkgs/pull/34752
-{ stdenv, lib, fetchurl, unzip, makeWrapper, jdk11 }:
+{ stdenv, lib, fetchurl, unzip, makeWrapper, jre }:
 
 stdenv.mkDerivation rec {
   version = "1.8.11";
@@ -18,16 +17,21 @@ stdenv.mkDerivation rec {
   '';
 
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/{bin,share}
     cp -r freeplane-${version}/* $out/share
     makeWrapper $out/share/freeplane.sh $out/bin/freeplane \
-      --set JAVA_HOME "${jdk11}/lib/openjdk" \
+      --set JAVA_HOME "${jre}/lib/openjdk"
+
+    runHook postInstall
   '';
 
   meta = with lib; {
     description = "Mind-mapping software";
     homepage = "https://www.freeplane.org/wiki/index.php/Home";
     license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ maxhbr ];
     platforms = platforms.linux;
   };
 }
