@@ -120,6 +120,26 @@ in {
           if __name__ == '__main__':
               http.server.test(HandlerClass=MyHTTPRequestHandler)
         '')
+        (writeShellScriptBin "mountExfat" ''
+          src="$(readlink -f $1)"
+          if [[ ! -e "$src" ]]; then
+            echo "$src is not a file"
+            exit 1
+          fi
+          if [[ "$src" != "/dev/"* ]]; then
+            echo "$src is not in /dev/"
+            exit 2
+          fi
+          target="''${src/\/dev//media}"
+          echo $target
+          sudo mkdir -p "$target"
+          sudo mount \
+              -o nonempty \
+              -o uid=$(id -u) \
+              -o gid=$(id -g) \
+              -t exfat \
+              "$src" "$target"
+        '')
       ];
       interactiveShellInit = ''
         eval $(${pkgs.thefuck}/bin/thefuck --alias)
