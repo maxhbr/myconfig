@@ -1,26 +1,21 @@
-{ stdenv, lib, fetchurl, unzip, makeWrapper, jre }:
+{ stdenv, lib, fetchzip, makeWrapper, jre }:
 
 stdenv.mkDerivation rec {
-  version = "1.8.11";
   pname = "freeplane";
+  version = "1.8.11";
 
-  src = fetchurl {
-    url =
-      "https://sourceforge.net/projects/freeplane/files/freeplane%20stable/freeplane_bin-${version}.zip/download";
-    sha1 = "1038fc4e3b5fa86643e6d49d225fd811936c95fa";
+  src = fetchzip {
+    url = "https://sourceforge.net/projects/freeplane/files/freeplane%20stable/freeplane_bin-${version}.zip/download#freeplane_bin-${version}.zip";
+    sha256 = "tJyJ7LQoeEFakjOgOU6yUA8dlCuXSCvbUB+gRq4ElMw=";
   };
 
-  nativeBuildInputs = [ unzip makeWrapper ];
-
-  unpackPhase = ''
-    unzip $src
-  '';
+  nativeBuildInputs = [ makeWrapper ];
 
   installPhase = ''
     runHook preInstall
 
     mkdir -p $out/{bin,share}
-    cp -r freeplane-${version}/* $out/share
+    cp -r * $out/share
     makeWrapper $out/share/freeplane.sh $out/bin/freeplane \
       --set JAVA_HOME "${jre}/lib/openjdk"
 
