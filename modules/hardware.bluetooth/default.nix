@@ -1,10 +1,8 @@
-# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
-# SPDX-License-Identifier: MIT
-{ config, pkgs, lib, ... }:
+{ config, lib, pkgs, ... }:
 let
   user = config.myconfig.user;
   mb660_switch_profile = pkgs.writeShellScriptBin "mb660_switch_profile" ''
-    export PATH=$PATH:${pkgs.pulseaudio}/bin:${pkgs.bash}/bin
+    export PATH=$PATH:${config.hardware.pulseaudio.package}/bin:${pkgs.bash}/bin
     ${builtins.readFile ./bin/switch_sennheiser_profile}
   '';
   connectBtDevice = { name, id }:
@@ -69,39 +67,37 @@ let
       fi
       connect
     '');
-
-  pactl-monitor = pkgs.writeShellScriptBin "pactl-monitor" ''
-    set -e
-    pactl_monitor_file=/tmp/.pactl_monitor_file
-    if [[ ! -f $pactl_monitor_file ]]; then
-      touch $pactl_monitor_file
-      ${pkgs.pulseaudio}/bin/pactl load-module module-loopback latency_msec=1
-      echo "enable loopback"
-    else
-      rm $pactl_monitor_file
-      ${pkgs.pulseaudio}/bin/pactl unload-module module-loopback || true
-      echo "disable disable"
-    fi
-  '';
 in {
-  config = (lib.mkIf config.services.xserver.enable {
-    home-manager.users."${user}" = {
+  config = (lib.mkIf config.hardware.bluetooth.enable {
+    hardware.bluetooth = {
+      config = {
+        General = {
+          Enable = "Source,Sink,Media,Socket";
+        };
+      };
+    };
+    # see:
+    # - https://github.com/NixOS/nixpkgs/issues/113628
+    # - https://github.com/NixOS/nixpkgs/pull/113600
+    systemd.services.bluetooth.serviceConfig.ExecStart = [
+      ""
+      "${pkgs.bluez}/libexec/bluetooth/bluetoothd -f /etc/bluetooth/main.conf"
+    ];
+    home-manager.users."${user}" = lib.mkIf config.hardware.pulseaudio.enable {
       home.packages = with pkgs; [
-        pavucontrol
-        pamix
-        pactl-monitor
-        noisetorch
         mb660_switch_profile
       ];
-    };
 
-    hardware.pulseaudio = {
-      enable = true;
-      package = pkgs.pulseaudioFull;
-      extraConfig =
-        "load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1";
+      programs.fish = {
+        functions = {
+          # see: https://nixos.wiki/wiki/Bluetooth
+          pactl-bt-to-a2dp = "${config.hardware.pulseaudio.package}/bin/pacmd set-card-profile (${config.hardware.pulseaudio.package}/bin/pactl list cards short | ${pkgs.gnugrep}/bin/egrep -o bluez_card[[:alnum:]._]+) a2dp_sink";
+        };
+      };
     };
-    nixpkgs.config.pulseaudio = true;
+    hardware.pulseaudio = lib.mkIf config.hardware.pulseaudio.enable {
+      extraModules = [ pkgs.pulseaudio-modules-bt ];
+    };
     nixpkgs.overlays =
       [ (self: super: { helper = { inherit connectBtDevice; }; }) ];
   });

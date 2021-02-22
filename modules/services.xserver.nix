@@ -81,6 +81,8 @@ in {
       '';
     };
 
+    hardware.pulseaudio.enable = true;
+
     services = {
       xserver = {
         autorun = true;

@@ -6,6 +6,7 @@ let
     ./dev
     ./exfat.nix
     ./gnupg.nix
+    ./hardware.bluetooth
     ./make-linux-fast-again.nix
     ./mybackup.nix
     ./myconfig.service.deconz.nix
@@ -33,7 +34,7 @@ let
     ./services.xserver.programs.kitty.nix
     ./services.xserver.programs.obs.nix
     ./services.xserver.programs.xss-lock.nix
-    ./services.xserver.pulseaudio
+    ./services.xserver.pulseaudio.nix
     ./services.xserver.st
     ./services.xserver.wacom.nix
     ./services.xserver.xclip.nix

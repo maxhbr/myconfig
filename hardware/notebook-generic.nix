@@ -39,16 +39,6 @@
         ];
       };
     }
-    { # bluetooth
-      hardware.bluetooth.enable = true;
-      # see:
-      # - https://github.com/NixOS/nixpkgs/issues/113628
-      # - https://github.com/NixOS/nixpkgs/pull/113600
-      systemd.services.bluetooth.serviceConfig.ExecStart = [
-        ""
-        "${pkgs.bluez}/libexec/bluetooth/bluetoothd -f /etc/bluetooth/main.conf"
-      ];
-    }
   ];
 
   config = {
@@ -60,6 +50,8 @@
       xorg.xbacklight
       powertop
     ];
+
+    hardware.bluetooth.enable = true;
 
     services = {
       logind.lidSwitch = "suspend";
