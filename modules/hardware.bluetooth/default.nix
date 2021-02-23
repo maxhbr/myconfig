@@ -70,7 +70,7 @@ let
 in {
   config = (lib.mkIf config.hardware.bluetooth.enable {
     hardware.bluetooth = {
-      config = {
+      settings = {
         General = {
           Enable = "Source,Sink,Media,Socket";
         };
