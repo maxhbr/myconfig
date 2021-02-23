@@ -4,7 +4,7 @@
 let user = config.myconfig.user;
 in {
   imports = [
-    # ./jdk.nix
+    ./jdk.nix
     # ./node.nix
   ];
   config = {
