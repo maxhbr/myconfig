@@ -61,6 +61,7 @@ in {
     };
     services.xserver.wacom.enable = true;
     virtualisation.docker.enable = true;
+    virtualisation.libvirtd.enable = true;
     # virtualisation.virtualbox.host.enable = true;
 
     networking.hostName = "x1extremeG2";
