@@ -729,7 +729,7 @@ self: super: {
             libiconv
           ];
 
-          cargoSha256 = "0r3ldipdfzhdivgc43bv31c1g9hl458yznabmfzxr2phpyvq2dnn";
+          cargoSha256 = "042dbg80mx0khm8xahm4l490s7bfbav362r0mz5bfhq4fy2s9nsi";
         };
       in
       ''
@@ -788,6 +788,8 @@ self: super: {
 } // (
   let
     nodePackageNames = [
+      "coc-clangd"
+      "coc-cmake"
       "coc-css"
       "coc-diagnostic"
       "coc-emmet"
@@ -805,6 +807,7 @@ self: super: {
       "coc-metals"
       "coc-pairs"
       "coc-prettier"
+      "coc-pyright"
       "coc-python"
       "coc-r-lsp"
       "coc-rls"
@@ -814,6 +817,7 @@ self: super: {
       "coc-solargraph"
       "coc-stylelint"
       "coc-tabnine"
+      "coc-texlab"
       "coc-tslint"
       "coc-tslint-plugin"
       "coc-tsserver"
