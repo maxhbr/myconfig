@@ -6,11 +6,11 @@ assert enableCapabilities -> stdenv.isLinux;
 
 stdenv.mkDerivation rec {
   pname = "libgcrypt";
-  version = "1.8.7";
+  version = "1.9.1";
 
   src = fetchurl {
     url = "mirror://gnupg/libgcrypt/${pname}-${version}.tar.bz2";
-    sha256 = "0j27jxhjay78by940d64778nxwbysxynv5mq6iq1nmlrh810zdq3";
+    sha256 = "1nb50bgzp83q6r5cz4v40y1mcbhpqwqyxlay87xp1lrbkf5pm9n5";
   };
 
   outputs = [ "out" "dev" "info" ];
@@ -28,7 +28,7 @@ stdenv.mkDerivation rec {
     ++ lib.optional enableCapabilities libcap;
 
   configureFlags = [ "--with-libgpg-error-prefix=${libgpgerror.dev}" ]
-   ++ lib.optional stdenv.hostPlatform.isMusl "--disable-asm";
+      ++ lib.optional (stdenv.hostPlatform.isMusl || (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isAarch64)) "--disable-asm"; # for darwin see https://dev.gnupg.org/T5157
 
   # Necessary to generate correct assembly when compiling for aarch32 on
   # aarch64
