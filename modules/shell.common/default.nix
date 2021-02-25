@@ -80,6 +80,7 @@ in {
         w3m
         manpages
         file
+        renameutils # qmv
 
         # admin:
         htop

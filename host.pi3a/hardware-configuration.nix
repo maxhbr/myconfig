@@ -6,7 +6,7 @@
   imports = [
     <nixpkgs/nixos/modules/profiles/base.nix>
     # <nixpkgs/nixos/modules/profiles/installation-device.nix>
-    <nixpkgs/nixos/modules/installer/cd-dvd/sd-image.nix>
+    <nixpkgs/nixos/modules/installer/sd-card/sd-image.nix>
   ];
 
   nixpkgs.system = "aarch64-linux";
@@ -28,7 +28,12 @@
   # Also increase the amount of CMA to ensure the virtual console on the RPi3 works.
   boot.kernelParams = [ "cma=32M" "console=tty0" ];
 
-  boot.initrd.availableKernelModules = [
+  # see: https://github.com/colemickens/nixcfg/blob/192f891652a68c3db6ff434773f7ebc8e6c244aa/hosts/rpizero1/configuration.nix#L36
+  boot.initrd.availableKernelModules = lib.mkForce [
+    "mmc_block"
+    "usbhid"
+    "hid_generic"
+    "hid_microsoft"
     # Allows early (earlier) modesetting for the Raspberry Pi
     "vc4"
     "bcm2835_dma"
