@@ -2483,6 +2483,8 @@ in {
 
   futures = callPackage ../development/python-modules/futures { };
 
+  fuzzyfinder = callPackage ../development/python-modules/fuzzyfinder { };
+
   fuzzywuzzy = callPackage ../development/python-modules/fuzzywuzzy { };
 
   fx2 = callPackage ../development/python-modules/fx2 { };
@@ -3392,6 +3394,8 @@ in {
   jsonpath = callPackage ../development/python-modules/jsonpath { };
 
   jsonpath_rw = callPackage ../development/python-modules/jsonpath_rw { };
+
+  jsonpath-ng = callPackage ../development/python-modules/jsonpath-ng { };
 
   jsonpickle = callPackage ../development/python-modules/jsonpickle { };
 
@@ -6011,6 +6015,8 @@ in {
 
   pysma = callPackage ../development/python-modules/pysma { };
 
+  pysmappee = callPackage ../development/python-modules/pysmappee { };
+
   pysmb = callPackage ../development/python-modules/pysmb { };
 
   pysmbc = callPackage ../development/python-modules/pysmbc { inherit (pkgs) pkg-config; };
@@ -7880,8 +7886,6 @@ in {
 
   tinyobjloader-py = callPackage ../development/python-modules/tinyobjloader-py { };
 
-  tiros = callPackage ../development/python-modules/tiros { };
-
   tissue = callPackage ../development/python-modules/tissue { };
 
   titlecase = callPackage ../development/python-modules/titlecase { };
@@ -8015,6 +8019,8 @@ in {
 
   tweepy = callPackage ../development/python-modules/tweepy { };
 
+  twentemilieu = callPackage ../development/python-modules/twentemilieu { };
+
   twiggy = callPackage ../development/python-modules/twiggy { };
 
   twilio = callPackage ../development/python-modules/twilio { };
@@ -8040,6 +8046,8 @@ in {
   twitter-common-log = callPackage ../development/python-modules/twitter-common-log { };
 
   twitter-common-options = callPackage ../development/python-modules/twitter-common-options { };
+
+  twitterapi = callPackage ../development/python-modules/twitterapi { };
 
   twofish = callPackage ../development/python-modules/twofish { };
 
@@ -8219,6 +8227,8 @@ in {
   vega = callPackage ../development/python-modules/vega { };
 
   vega_datasets = callPackage ../development/python-modules/vega_datasets { };
+
+  venstarcolortouch = callPackage ../development/python-modules/venstarcolortouch { };
 
   venusian = callPackage ../development/python-modules/venusian { };
 
