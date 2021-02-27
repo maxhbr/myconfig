@@ -18,6 +18,7 @@ import           XMonad.Util.Types ( Direction2D(..) )
 
 --------------------------------------------------------------------------------
 -- Actions
+import           XMonad.Actions.CopyWindow ( kill1, copy )
 import           XMonad.Actions.CycleWS ( nextWS, prevWS
                                         , toggleWS'
                                         , shiftToNext, shiftToPrev
@@ -162,7 +163,8 @@ layoutKBs conf =
       [((m, k), f i)
           | (i, k) <- zip (filter (/= "media") (XMonad.workspaces conf)) ([xK_1 .. xK_9] ++ [xK_0])
           , (f, m) <- [ (\i -> windows (W.greedyView i) >> popupCurDesktop, m__)
-                      , (windows . W.shift, ms_) ]]
+                      , (windows . W.shift, ms_)
+                      , (windows . copy, msc) ]]
       ++ [((msc, xK_m    ), (windows . W.shift) "NSP" )]
     focusKBs =
       [ ((ms_, xK_Tab   ), focusDown)
