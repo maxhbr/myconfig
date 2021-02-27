@@ -36,6 +36,7 @@ library
                      , XMonad.MyConfig.Scratchpads
                      , XMonad.MyConfig.ToggleFollowFocus
                      , XMonad.MyConfig.MyManageHookLayer
+                     , XMonad.MyConfig.MyTreeSelectAction
 
 
 executable xmonad

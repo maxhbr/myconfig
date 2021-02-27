@@ -8,7 +8,6 @@ module XMonad.MyConfig.Core
 import           System.FilePath
 import           System.Exit ( exitSuccess )
 import           XMonad
-import           XMonad.Operations (restart)
 
 --------------------------------------------------------------------------------
 -- Actions
@@ -97,7 +96,7 @@ myKeys conf =
       , ((msc, xK_c     ), spawn xkillCMD)
       , ((m__, xK_p     ), spawn myLauncherCMD)
       , ((m__, xK_q     ), restart "xmonad" True >> (setLayout $ layoutHook conf))
-      , ((m_c, xK_q     ), spawn ("xmonad" ++ " --restart"))
+      , ((m_c, xK_q     ), spawn "xmonad --restart")
       , ((ms_, xK_q     ), spawn (pathToXmonadBins ++ "stopWM.sh"))
       , ((msc, xK_q     ), io exitSuccess)
       -- , ((m__, xK_x     ), shellPrompt defaultXPConfig)

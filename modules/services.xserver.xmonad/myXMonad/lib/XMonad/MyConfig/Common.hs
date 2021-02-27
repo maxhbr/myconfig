@@ -3,6 +3,7 @@
 module XMonad.MyConfig.Common
     ( m__, ms_, m_c, msc, m4m
     , applyMyKBs, applyMyKBs'
+    , mkTermCmd, mkTermBashCmd
     , mapToWithModM
     , module X
     ) where
@@ -16,6 +17,12 @@ applyMyKBs :: [((KeyMask -> KeyMask, KeySym), X ())] -> XConfig a -> XConfig a
 applyMyKBs myKBs conf = additionalKeys conf $ mapToWithModM conf myKBs
 applyMyKBs' :: (XConfig a -> [((KeyMask -> KeyMask, KeySym), X ())]) -> XConfig a -> XConfig a
 applyMyKBs' myKBs conf = additionalKeys conf $ mapToWithModM conf (myKBs conf)
+
+mkTermCmd :: XConfig a -> String -> String -> String
+mkTermCmd c "" cmd = "SHLVL=0 " ++ terminal c ++ " -e " ++ cmd
+mkTermCmd c name cmd = "SHLVL=0 " ++ terminal c ++ " -n " ++ name ++ " -e " ++ cmd
+mkTermBashCmd :: XConfig a -> String -> String -> String
+mkTermBashCmd c name cmd = mkTermCmd c name (bashCMD ++ " -c " ++ cmd)
 
  {-
 /---- meta

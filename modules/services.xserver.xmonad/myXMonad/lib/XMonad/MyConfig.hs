@@ -8,10 +8,8 @@ module XMonad.MyConfig
     , composeMyConfig
     ) where
 
-import           System.Environment ( getExecutablePath, getArgs, )
+import           System.Environment ( getExecutablePath )
 import           XMonad
-
-import           XMonad.Util.Replace ( replace )
 
 --------------------------------------------------------------------------------
 -- MyConfig
@@ -22,6 +20,7 @@ import XMonad.MyConfig.ToggleFollowFocus ( applyMyFollowFocus )
 import XMonad.MyConfig.Notify ( applyMyUrgencyHook )
 import XMonad.MyConfig.MyLayoutLayer ( applyMyLayoutModifications )
 import XMonad.MyConfig.MyLogHookLayer ( applyMyLogHook, runXmobar )
+import XMonad.MyConfig.MyTreeSelectAction ( applyTreeselectLayer )
 import XMonad.Hooks.EwmhDesktops (ewmh)
 
 runMyConfig :: IO ()
@@ -40,6 +39,7 @@ composeMyConfig = let
            , applyMyScratchpads
            , applyMyFollowFocus
            , applyMyLogHook
+           , applyTreeselectLayer
            , ewmh -- EWMH should prevent input grab without focus grab:
                   -- see: https://github.com/xmonad/xmonad/issues/45#issuecomment-442064582
                   --   Use EWMH handling, because some programs grab input focus without window focus. With EWMH enabled, this won't happenj

@@ -18,7 +18,7 @@ import           XMonad.Util.Types ( Direction2D(..) )
 
 --------------------------------------------------------------------------------
 -- Actions
-import           XMonad.Actions.CopyWindow ( kill1, copy )
+import           XMonad.Actions.CopyWindow ( copy )
 import           XMonad.Actions.CycleWS ( nextWS, prevWS
                                         , toggleWS'
                                         , shiftToNext, shiftToPrev

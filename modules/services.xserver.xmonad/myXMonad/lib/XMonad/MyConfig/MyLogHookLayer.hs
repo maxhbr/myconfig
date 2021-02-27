@@ -12,7 +12,9 @@ import           XMonad.Util.Run ( safeSpawnProg )
 import           XMonad.Hooks.DynamicLog ( dynamicLogString, xmonadPropLog
                                          , PP(..)
                                          , xmobarColor
-                                         , wrap )
+                                         , wrap
+                                         , pad )
+import           XMonad.Actions.CopyWindow ( wsContainingCopies )
 
 import XMonad.MyConfig.Common
 import XMonad.MyConfig.Scratchpads ( scratchpadPPSort )
@@ -30,7 +32,12 @@ applyMyLogHook c =
                      }
 
     myLogHook :: X ()
-    myLogHook = dynamicLogString myXmobarPP >>= xmonadPropLog
+    myLogHook = do 
+      -- see: https://hackage.haskell.org/package/xmonad-contrib-0.16/docs/XMonad-Actions-CopyWindow.html#g:2
+      copies <- wsContainingCopies
+      let check ws | ws `elem` copies = pad . xmobarColor "red" "" $ ws
+                   | otherwise = pad ws
+      dynamicLogString (myXmobarPP {ppHidden = check}) >>= xmonadPropLog
   in c { logHook = myLogHook }
 
 shortenStatus :: String -> String
