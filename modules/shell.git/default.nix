@@ -32,5 +32,11 @@ in {
         enable = true;
       };
     };
+    programs.fish = {
+      shellAbbrs = { g = "git"; };
+      functions = {
+        gitignore = "curl -sL https://www.gitignore.io/api/$argv";
+      };
+    };
   };
 }

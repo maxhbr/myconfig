@@ -5,28 +5,6 @@ let user = config.myconfig.user;
 in {
   imports = [
     ./historybackup.nix
-    { # nix related config
-      home-manager.users."${user}" = {
-        programs.fish = {
-          shellAbbrs = {
-            nixse = "nix search";
-            why-depends-nixos = "nix why-depends /run/current-system";
-            nixTest =
-              "NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' --fallback --run fish -p";
-          };
-        };
-      };
-    }
-    { # for git
-      home-manager.users."${user}" = {
-        programs.fish = {
-          shellAbbrs = { g = "git"; };
-          functions = {
-            gitignore = "curl -sL https://www.gitignore.io/api/$argv";
-          };
-        };
-      };
-    }
   ];
   config = {
     programs.fish = { enable = true; };

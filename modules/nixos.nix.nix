@@ -22,12 +22,11 @@ in {
         };
       };
     }
-    {
-      #       nix-closure-size() {
-      #   nix-store -q --size $(nix-store -qR $(readlink -e $1) ) | \
-      #   awk '{ a+=$1 } END { print a }' | \
-      #   /nix/store/cc64vcf0g3l5ck0c5pfwflcacb8x7i4d-coreutils-8.31/bin/numfmt --to=iec-i
-      # }
+    { # nix related config
+      home-manager.users."${user}" = {
+        programs.fish = {
+        };
+      };
     }
   ];
   config = {
@@ -35,6 +34,12 @@ in {
     home-manager.users."${user}" = {
       imports = [{
         programs.fish = {
+          shellAbbrs = {
+            nixse = "nix search";
+            why-depends-nixos = "nix why-depends /run/current-system";
+            nixTest =
+              "NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' --fallback --run fish -p";
+          };
           functions = {
             # see: https://github.com/NixOS/nixpkgs/issues/51368#issuecomment-704678563
             nix-closure-size =
