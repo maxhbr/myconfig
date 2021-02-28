@@ -12,7 +12,7 @@ in {
             nixse = "nix search";
             why-depends-nixos = "nix why-depends /run/current-system";
             nixTest =
-              "NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' --run fish -p";
+              "NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' --fallback --run fish -p";
           };
         };
       };

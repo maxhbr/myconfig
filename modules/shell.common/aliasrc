@@ -358,7 +358,6 @@ meld() {
 have nix-env && {
   #nix
   alias nixin-unfree="NIXPKGS_ALLOW_UNFREE=1 nix-env -iA"
-  alias nixTest="NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' --run zsh -p"
   nixRun() {
     if [ "$#" -eq "2" ]; then
       NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' -p "$1" --command "$2"

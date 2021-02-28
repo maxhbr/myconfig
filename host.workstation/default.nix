@@ -78,6 +78,7 @@ in {
       headless.enable = true;
       # virtualisation.enable = true;
       # virtualisation.gpuPassthroughHost.enable = true;
+      imagework.enable = true;
       dev = {
         haskell.enable = true;
         compliance.enable = true;
