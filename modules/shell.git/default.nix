@@ -31,11 +31,11 @@ in {
         package = pkgs.gitAndTools.gitFull;
         enable = true;
       };
-    };
-    programs.fish = {
-      shellAbbrs = { g = "git"; };
-      functions = {
-        gitignore = "curl -sL https://www.gitignore.io/api/$argv";
+      programs.fish = {
+        shellAbbrs = { g = "git"; };
+        functions = {
+          gitignore = "curl -sL https://www.gitignore.io/api/$argv";
+        };
       };
     };
   };
