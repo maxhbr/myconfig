@@ -63,7 +63,7 @@
     "automation" = ps: with ps; [ aiohttp-cors ];
     "avea" = ps: with ps; [ avea ];
     "avion" = ps: with ps; [ avion ];
-    "awair" = ps: with ps; [ ]; # missing inputs: python_awair
+    "awair" = ps: with ps; [ python-awair ];
     "aws" = ps: with ps; [ aiobotocore ];
     "axis" = ps: with ps; [ aiohttp-cors axis paho-mqtt ];
     "azure_devops" = ps: with ps; [ ]; # missing inputs: aioazuredevops
@@ -338,7 +338,7 @@
     "hassio" = ps: with ps; [ aiohttp-cors pillow ];
     "haveibeenpwned" = ps: with ps; [ ];
     "hddtemp" = ps: with ps; [ ];
-    "hdmi_cec" = ps: with ps; [ ]; # missing inputs: pyCEC
+    "hdmi_cec" = ps: with ps; [ pycec ];
     "heatmiser" = ps: with ps; [ ]; # missing inputs: heatmiserV3
     "heos" = ps: with ps; [ ]; # missing inputs: pyheos
     "here_travel_time" = ps: with ps; [ ]; # missing inputs: herepy
@@ -723,7 +723,7 @@
     "sesame" = ps: with ps; [ ]; # missing inputs: pysesame2
     "seven_segments" = ps: with ps; [ pillow ];
     "seventeentrack" = ps: with ps; [ ]; # missing inputs: py17track
-    "sharkiq" = ps: with ps; [ ]; # missing inputs: sharkiqpy
+    "sharkiq" = ps: with ps; [ sharkiqpy ];
     "shell_command" = ps: with ps; [ ];
     "shelly" = ps: with ps; [ aioshelly ];
     "shiftr" = ps: with ps; [ paho-mqtt ];
@@ -731,7 +731,7 @@
     "shopping_list" = ps: with ps; [ aiohttp-cors ];
     "sht31" = ps: with ps; [ ]; # missing inputs: Adafruit-GPIO Adafruit-SHT31
     "sigfox" = ps: with ps; [ ];
-    "sighthound" = ps: with ps; [ pillow ]; # missing inputs: simplehound
+    "sighthound" = ps: with ps; [ pillow simplehound ];
     "signal_messenger" = ps: with ps; [ ]; # missing inputs: pysignalclirestapi
     "simplepush" = ps: with ps; [ ]; # missing inputs: simplepush
     "simplisafe" = ps: with ps; [ ]; # missing inputs: simplisafe-python
@@ -751,7 +751,7 @@
     "smartthings" = ps: with ps; [ aiohttp-cors hass-nabucasa ]; # missing inputs: pysmartapp pysmartthings
     "smarty" = ps: with ps; [ ]; # missing inputs: pysmarty
     "smhi" = ps: with ps; [ ]; # missing inputs: smhi-pkg
-    "sms" = ps: with ps; [ ]; # missing inputs: python-gammu
+    "sms" = ps: with ps; [ python-gammu ];
     "smtp" = ps: with ps; [ ];
     "snapcast" = ps: with ps; [ snapcast ];
     "snips" = ps: with ps; [ aiohttp-cors paho-mqtt ];
@@ -801,7 +801,7 @@
     "swiss_public_transport" = ps: with ps; [ python-opendata-transport ];
     "swisscom" = ps: with ps; [ ];
     "switch" = ps: with ps; [ ];
-    "switchbot" = ps: with ps; [ ]; # missing inputs: PySwitchbot
+    "switchbot" = ps: with ps; [ pyswitchbot ];
     "switcher_kis" = ps: with ps; [ aioswitcher ];
     "switchmate" = ps: with ps; [ ]; # missing inputs: pySwitchmate
     "syncthru" = ps: with ps; [ url-normalize ]; # missing inputs: pysyncthru
@@ -817,7 +817,7 @@
     "tag" = ps: with ps; [ ];
     "tahoma" = ps: with ps; [ tahoma-api ];
     "tank_utility" = ps: with ps; [ ]; # missing inputs: tank_utility
-    "tankerkoenig" = ps: with ps; [ ]; # missing inputs: pytankerkoenig
+    "tankerkoenig" = ps: with ps; [ pytankerkoenig ];
     "tapsaff" = ps: with ps; [ ]; # missing inputs: tapsaff
     "tasmota" = ps: with ps; [ aiohttp-cors hatasmota paho-mqtt ];
     "tautulli" = ps: with ps; [ ]; # missing inputs: pytautulli
@@ -870,7 +870,7 @@
     "twilio" = ps: with ps; [ aiohttp-cors twilio ];
     "twilio_call" = ps: with ps; [ aiohttp-cors twilio ];
     "twilio_sms" = ps: with ps; [ aiohttp-cors twilio ];
-    "twinkly" = ps: with ps; [ ]; # missing inputs: twinkly-client
+    "twinkly" = ps: with ps; [ twinkly-client ];
     "twitch" = ps: with ps; [ python-twitch-client ];
     "twitter" = ps: with ps; [ twitterapi ];
     "ubus" = ps: with ps; [ ];
@@ -906,7 +906,7 @@
     "vicare" = ps: with ps; [ ]; # missing inputs: PyViCare
     "vilfo" = ps: with ps; [ ]; # missing inputs: vilfo-api-client
     "vivotek" = ps: with ps; [ ]; # missing inputs: libpyvivotek
-    "vizio" = ps: with ps; [ ]; # missing inputs: pyvizio
+    "vizio" = ps: with ps; [ pyvizio ];
     "vlc" = ps: with ps; [ python-vlc ];
     "vlc_telnet" = ps: with ps; [ ]; # missing inputs: python-telnet-vlc
     "voicerss" = ps: with ps; [ ];

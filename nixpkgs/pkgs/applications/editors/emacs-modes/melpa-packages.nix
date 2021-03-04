@@ -132,9 +132,24 @@ let
         flycheck-rtags = fix-rtags super.flycheck-rtags;
 
         pdf-tools = super.pdf-tools.overrideAttrs (old: {
-          nativeBuildInputs = [ pkgs.pkg-config ];
-          buildInputs = with pkgs; old.buildInputs ++ [ autoconf automake libpng zlib poppler ];
-          preBuild = "make server/epdfinfo";
+          nativeBuildInputs = [
+            pkgs.autoconf
+            pkgs.automake
+            pkgs.pkg-config
+            pkgs.removeReferencesTo
+          ];
+          buildInputs = old.buildInputs ++ [ pkgs.libpng pkgs.zlib pkgs.poppler ];
+          preBuild = ''
+            make server/epdfinfo
+            remove-references-to \
+              -t ${pkgs.stdenv.cc.libc.dev} \
+              -t ${pkgs.glib.dev} \
+              -t ${pkgs.libpng.dev} \
+              -t ${pkgs.poppler.dev} \
+              -t ${pkgs.zlib.dev} \
+              -t ${pkgs.cairo.dev} \
+              server/epdfinfo
+          '';
           recipe = pkgs.writeText "recipe" ''
             (pdf-tools
             :repo "politza/pdf-tools" :fetcher github
@@ -298,6 +313,24 @@ let
         telega = super.telega.overrideAttrs (old: {
           buildInputs = old.buildInputs ++ [ pkgs.tdlib ];
           nativeBuildInputs = [ pkgs.pkg-config ];
+
+          patches = [
+            (pkgs.fetchpatch {
+              name = "telega-server-bin-store-prefer.patch";
+              url = "https://github.com/zevlg/telega.el/commit/72550f984ca869309d197203ef7de99182d71729.patch";
+              sha256 = "18xvz53bygksak6h5f8cz79y83p2va15i8qz7n4s3g9gsklmkj2p";
+            })
+          ];
+
+          postPatch = ''
+            substituteInPlace telega-customize.el \
+              --replace 'defcustom telega-server-command "telega-server"' \
+                        "defcustom telega-server-command \"$out/bin/telega-server\""
+
+            substituteInPlace telega-sticker.el --replace '"dwebp"' '"${pkgs.libwebp}/bin/dwebp"'
+
+            substituteInPlace telega-vvnote.el --replace '"ffmpeg' '"${pkgs.ffmpeg}/bin/ffmpeg'
+          '';
 
           postBuild = ''
             cd source/server
