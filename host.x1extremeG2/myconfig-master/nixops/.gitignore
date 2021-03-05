@@ -1,0 +1,12 @@
+*~
+.coverage
+coverage.xml
+examples/*.json
+examples/*.lock
+html/
+*.pyc
+result
+*.sw[a-z]
+tags
+tests/test.nixops*
+.mypy_cache/
