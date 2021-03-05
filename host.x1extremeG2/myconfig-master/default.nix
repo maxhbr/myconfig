@@ -45,7 +45,7 @@ in {
           (mk-upg-script "upg" "")
           (mk-upg-script "upg-fast" "--fast")
           (mk-upg-script "upg-dry" "--dry-run")
-          nixos-2003-small.nixops
+          nixops
         ] ++ (map (hn: (mk-upg-script "upg-${hn}" "--fast --target ${hn}")) [
           "workstation"
           "nas"
