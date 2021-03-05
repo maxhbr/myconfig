@@ -33,18 +33,33 @@ upgradeSubtree() {
 }
 
 upgradeNixpkgs() {
-    logH1 "upgrade nixpkgs" "nixStableChannel=$nixStableChannel"
-    upgradeSubtree \
-        NixOS-nixpkgs https://github.com/NixOS/nixpkgs \
-        "nixpkgs" \
-        "$nixStableChannel"
+    if git diff-index --quiet HEAD --; then
+        logH1 "upgrade nixpkgs" "nixStableChannel=$nixStableChannel"
+        upgradeSubtree \
+            NixOS-nixpkgs https://github.com/NixOS/nixpkgs \
+            "nixpkgs" \
+            "$nixStableChannel"
+    fi
 }
 
 upgradeNixosHardware() {
-    upgradeSubtree \
-        NixOS-nixos-hardware https://github.com/NixOS/nixos-hardware \
-        "hardware/nixos-hardware/" \
-        "master"
+    if git diff-index --quiet HEAD --; then
+        logH1 "upgrade nixos-hardware" ""
+        upgradeSubtree \
+            NixOS-nixos-hardware https://github.com/NixOS/nixos-hardware \
+            "hardware/nixos-hardware/" \
+            "master"
+    fi
+}
+
+upgradeNixops() {
+    if git diff-index --quiet HEAD --; then
+        logH1 "upgrade nixops" ""
+        upgradeSubtree \
+            NixOS-nixops https://github.com/NixOS/nixops \
+            "host.x1extremeG2/myconfig-master/nixops/" \
+            "master"
+    fi
 }
 
 upgrade() {
@@ -53,16 +68,10 @@ upgrade() {
         logH1 "upgrade" "start ..."
         wasUpdated=0
 
-        if git diff-index --quiet HEAD --; then
-            logH1 "upgrade" "nixpkgs"
-            upgradeNixpkgs || wasUpdated=1
-            if git diff-index --quiet HEAD --; then
-                logH1 "upgrade" "NixosHardware"
-                upgradeNixosHardware || wasUpdated=1
-            fi
-        else
-            logINFO "skip updating subtrees, not clean"
-        fi
+        upgradeNixpkgs &&
+            upgradeNixosHardware &&
+            upgradeNixops ||
+                wasUpdated=1
 
         logH3 "update" "home-manager"
         ./modules/lib/home-manager/update.sh || wasUpdated=1
