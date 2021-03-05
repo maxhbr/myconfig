@@ -1,5 +1,1 @@
-{ config, lib, ... }: {
-  imports = [
-    ./helper.nix
-  ];
-}
+{ config, lib, ... }: { imports = [ ./helper.nix ]; }

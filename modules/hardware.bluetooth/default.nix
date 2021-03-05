@@ -70,11 +70,7 @@ let
 in {
   config = (lib.mkIf config.hardware.bluetooth.enable {
     hardware.bluetooth = {
-      settings = {
-        General = {
-          Enable = "Source,Sink,Media,Socket";
-        };
-      };
+      settings = { General = { Enable = "Source,Sink,Media,Socket"; }; };
     };
     # see:
     # - https://github.com/NixOS/nixpkgs/issues/113628
@@ -84,14 +80,13 @@ in {
       "${pkgs.bluez}/libexec/bluetooth/bluetoothd -f /etc/bluetooth/main.conf"
     ];
     home-manager.users."${user}" = lib.mkIf config.hardware.pulseaudio.enable {
-      home.packages = with pkgs; [
-        mb660_switch_profile
-      ];
+      home.packages = with pkgs; [ mb660_switch_profile ];
 
       programs.fish = {
         functions = {
           # see: https://nixos.wiki/wiki/Bluetooth
-          pactl-bt-to-a2dp = "${config.hardware.pulseaudio.package}/bin/pacmd set-card-profile (${config.hardware.pulseaudio.package}/bin/pactl list cards short | ${pkgs.gnugrep}/bin/egrep -o bluez_card[[:alnum:]._]+) a2dp_sink";
+          pactl-bt-to-a2dp =
+            "${config.hardware.pulseaudio.package}/bin/pacmd set-card-profile (${config.hardware.pulseaudio.package}/bin/pactl list cards short | ${pkgs.gnugrep}/bin/egrep -o bluez_card[[:alnum:]._]+) a2dp_sink";
         };
       };
     };

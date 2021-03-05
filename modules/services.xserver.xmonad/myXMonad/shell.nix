@@ -11,9 +11,10 @@ haskell.lib.buildStackProject {
   isExecutable = true;
   src = builtins.filterSource (path: type:
     let basename = baseNameOf path;
-    in if type == "symlink"
-       then builtins.match "^result(|-.*)$" basename == null
-       else builtins.match "^((|..*).(sw[a-z]|hi|o)|.*~)$" basename == null) ./.;
+    in if type == "symlink" then
+      builtins.match "^result(|-.*)$" basename == null
+    else
+      builtins.match "^((|..*).(sw[a-z]|hi|o)|.*~)$" basename == null) ./.;
   configureFlags = [ "-W -fwarn-unused-imports -fno-warn-missing-signatures" ];
   buildInputs = [
     gmp

@@ -3,9 +3,7 @@
 { pkgs, config, ... }:
 let user = config.myconfig.user;
 in {
-  imports = [
-    ./historybackup.nix
-  ];
+  imports = [ ./historybackup.nix ];
   config = {
     programs.fish = { enable = true; };
     environment = {

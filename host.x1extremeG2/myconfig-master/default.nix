@@ -38,12 +38,9 @@ in {
           cksum /etc/machine-id | while read c rest; do printf "%x" $c; done'';
       };
     };
-    nixpkgs.config.packageOverrides = pkgs: {
-      nixops = (import ./nixops).defaultPackage.x86_64-linux;
-    };
     environment = {
       systemPackages = with pkgs;
-        [ nixops
+        [
           upg-pull
           (mk-upg-script "upg" "")
           (mk-upg-script "upg-fast" "--fast")

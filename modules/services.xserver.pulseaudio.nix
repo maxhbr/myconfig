@@ -20,12 +20,7 @@ let
 in {
   config = (lib.mkIf config.hardware.pulseaudio.enable {
     home-manager.users."${user}" = {
-      home.packages = with pkgs; [
-        pavucontrol
-        pamix
-        pactl-monitor
-        noisetorch
-      ];
+      home.packages = with pkgs; [ pavucontrol pamix pactl-monitor noisetorch ];
     };
 
     hardware.pulseaudio = {

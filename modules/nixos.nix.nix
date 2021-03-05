@@ -11,22 +11,23 @@ in {
       config = {
         nix = {
           package = pkgs.nixFlakes;
-          extraOptions = lib.optionalString (config.nix.package == pkgs.nixFlakes)
-            "experimental-features = nix-command"; #  flakes
+          extraOptions =
+            lib.optionalString (config.nix.package == pkgs.nixFlakes)
+            "experimental-features = nix-command"; # flakes
         };
 
         home-manager.users."${user}" = {
           programs.fish = {
-            shellAbbrs = { nix-flake = "nix --experimental-features 'nix-command flakes' flake"; };
+            shellAbbrs = {
+              nix-flake =
+                "nix --experimental-features 'nix-command flakes' flake";
+            };
           };
         };
       };
     }
     { # nix related config
-      home-manager.users."${user}" = {
-        programs.fish = {
-        };
-      };
+      home-manager.users."${user}" = { programs.fish = { }; };
     }
   ];
   config = {
