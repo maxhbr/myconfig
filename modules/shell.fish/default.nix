@@ -210,6 +210,7 @@ in {
         ".config/fish/functions/bax.fish".source = let
           src = builtins.fetchGit {
             url = "https://github.com/jorgebucaran/bax.fish";
+            ref = "main";
           };
         in src + "/bax.fish";
       };

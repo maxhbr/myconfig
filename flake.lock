@@ -119,6 +119,53 @@
         "type": "github"
       }
     },
+    "nur": {
+      "locked": {
+        "lastModified": 1614977794,
+        "narHash": "sha256-VWlmph03m4XDvUBWIL1szhcjkTeG0B5yicUp7KdOCuc=",
+        "owner": "nix-community",
+        "repo": "NUR",
+        "rev": "6b332d9a23596b70f18aeef50e06d45b1074ef86",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "NUR",
+        "type": "github"
+      }
+    },
+    "rel2003": {
+      "locked": {
+        "lastModified": 1614389971,
+        "narHash": "sha256-AWmxiRwQ/ZI/mXIAW/yj7ziT2NoiD524n0a3LLtqiyg=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "462c6fe4b115804ea4d5bee7103c0f46ff9f9cfb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-20.03",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "rel2009": {
+      "locked": {
+        "lastModified": 1614852965,
+        "narHash": "sha256-BhfSQiyapI/zcodA09UnSpAe28rKVikN+PqmPRSmhYo=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "16fc9eb7364942f81d466cf29ab4e1623fc6d74f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-20.09",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "emacs": "emacs",
@@ -128,6 +175,9 @@
         "large": "large",
         "master": "master",
         "nix": "nix",
+        "nur": "nur",
+        "rel2003": "rel2003",
+        "rel2009": "rel2009",
         "small": "small",
         "staged": "staged",
         "utils": "utils"

@@ -24,28 +24,29 @@ in {
       # Fingerprint reader: login and unlock with fingerprint (if you add one with `fprintd-enroll`)
       services.fprintd.enable = true;
     }
-  ] ++ (with (import ../lib.nix); [
-    (setupAsWireguardClient "10.199.199.2")
-    # (setupNasNFS "bilder")
-    # (setupNasNFS "data")
-    # (announceHost "workstation" [ ])
-    # (announceHost "nas" [ "monitoring" "grafana" "prometheus" "deconz" ])
-    # (announceHost "vserver" [ ])
-    # (announceHost "nuc" [ ])
-    # # (announceHost "pi0" [])
-    # (announceHost "pi3a" [ ])
-    # (announceHost "pi4" [ ])
-    (lib.mkIf config.virtualisation.lxc.enable { # nat for lxc
-      networking = {
-        nat = {
-          enable = true;
-          internalInterfaces = [ "ve-+" ];
-          externalInterface = "enp0s31f6";
-        };
-        networkmanager.unmanaged = [ "interface-name:ve-*" ];
-      };
-    })
-  ]);
+  ];
+  # ++ (with (import ../lib.nix); [
+  #   (setupAsWireguardClient "10.199.199.2")
+  #   # (setupNasNFS "bilder")
+  #   # (setupNasNFS "data")
+  #   # (announceHost "workstation" [ ])
+  #   # (announceHost "nas" [ "monitoring" "grafana" "prometheus" "deconz" ])
+  #   # (announceHost "vserver" [ ])
+  #   # (announceHost "nuc" [ ])
+  #   # # (announceHost "pi0" [])
+  #   # (announceHost "pi3a" [ ])
+  #   # (announceHost "pi4" [ ])
+  #   (lib.mkIf config.virtualisation.lxc.enable { # nat for lxc
+  #     networking = {
+  #       nat = {
+  #         enable = true;
+  #         internalInterfaces = [ "ve-+" ];
+  #         externalInterface = "enp0s31f6";
+  #       };
+  #       networkmanager.unmanaged = [ "interface-name:ve-*" ];
+  #     };
+  #   })
+  # ]);
 
   config = {
     myconfig = {

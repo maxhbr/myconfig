@@ -8,13 +8,6 @@ in {
       tmpOnTmpfs = true;
     };
 
-    environment.etc."current-system-packages".text = let
-      packages =
-        builtins.map (p: "${p.name}") config.environment.systemPackages;
-      sortedUnique = builtins.sort builtins.lessThan (lib.unique packages);
-      formatted = builtins.concatStringsSep "\n" sortedUnique;
-    in formatted;
-
     home-manager.users."${user}" = {
       home.packages = with pkgs; [ taskwarrior mosh sshfs ];
       home.file = {
@@ -37,12 +30,6 @@ in {
         '';
       };
     };
-
-    nixpkgs.overlays = [
-      (self: super: {
-        sudo = super.unstable.sudo; # CVE-2021-3156, min version is 1.9.5p2
-      })
-    ];
 
     environment = {
       variables = { TMP = "/tmp"; };
