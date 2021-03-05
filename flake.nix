@@ -40,7 +40,7 @@
 
       # inherit (inputs.self.passthru) secrets;
 
-      user = mhuber; # TODO
+      user = "mhuber"; # TODO
     in {
 
       nixosConfigurations = let
