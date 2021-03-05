@@ -28,13 +28,13 @@ in {
     (setupAsWireguardClient "10.199.199.2")
     # (setupNasNFS "bilder")
     # (setupNasNFS "data")
-    (announceHost "workstation" [ ])
-    (announceHost "nas" [ "monitoring" "grafana" "prometheus" "deconz" ])
-    (announceHost "vserver" [ ])
-    (announceHost "nuc" [ ])
-    # (announceHost "pi0" [])
-    (announceHost "pi3a" [ ])
-    (announceHost "pi4" [ ])
+    # (announceHost "workstation" [ ])
+    # (announceHost "nas" [ "monitoring" "grafana" "prometheus" "deconz" ])
+    # (announceHost "vserver" [ ])
+    # (announceHost "nuc" [ ])
+    # # (announceHost "pi0" [])
+    # (announceHost "pi3a" [ ])
+    # (announceHost "pi4" [ ])
     (lib.mkIf config.virtualisation.lxc.enable { # nat for lxc
       networking = {
         nat = {

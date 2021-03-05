@@ -9,7 +9,7 @@ let
         (builtins.attrNames content))
     else
       [ ];
-  lib = import <nixpkgs/lib>;
+  lib = import ./nixpkgs/lib;
 in rec {
   getSecretPath = hostName: fileName: (secretsDir + "/${hostName}/${fileName}");
   getSecret = hostName: fileName:

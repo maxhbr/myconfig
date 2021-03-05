@@ -1,8 +1,11 @@
-{ config, ... }: {
+{ config, lib, ... }: {
   imports = [ ./helper.nix ./nix-nixPath ./home-manager ];
 
   config = {
     system.copySystemConfiguration = true;
+    boot.initrd.secrets = {
+      "/etc/nixos" = lib.cleanSource ./../..;
+    };
 
     nixpkgs = {
       config = pkgs: { allowUnfree = true; };
