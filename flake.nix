@@ -2,15 +2,15 @@
   description = "myconfig";
 
   inputs = {
-    master.url = "github:nixos/nixpkgs/master"; # |.
-    staged.url = "github:nixos/nixpkgs/staging"; # | |-- Nix
-    small.url = "github:nixos/nixpkgs/nixos-unstable-small"; # | |--   pkgs
-    large.url = "github:nixos/nixpkgs/nixos-unstable"; # |'
-    rel2009.url = "github:nixos/nixpkgs/nixos-20.09"; # | Stable
-    rel2003.url = "github:nixos/nixpkgs/nixos-20.03"; # | Old Stable
+    master.url = "github:nixos/nixpkgs/master";
+    staged.url = "github:nixos/nixpkgs/staging";
+    small.url = "github:nixos/nixpkgs/nixos-unstable-small";
+    large.url = "github:nixos/nixpkgs/nixos-unstable";
+    rel2009.url = "github:nixos/nixpkgs/nixos-20.09";
+    rel2003.url = "github:nixos/nixpkgs/nixos-20.03";
 
-    home.url = "github:nix-community/home-manager"; # |- Home-manager
-    home.inputs.nixpkgs.follows = "/master"; # |
+    home.url = "github:nix-community/home-manager";
+    home.inputs.nixpkgs.follows = "/master";
 
     nix.url = "github:nixos/nix/flakes";
     nix.inputs.nixpkgs.follows = "master";
@@ -30,21 +30,19 @@
       allSystems = [ "x86_64-linux" "i686-linux" "aarch64-linux" ];
       config = { allowUnfree = true; };
       channels = with inputs; {
-        pkgs = small; # For packages
-        modules = master; # For nixos modules
-        lib = master; # For flake-wide lib
+        pkgs = small;
+        modules = master;
+        lib = master;
       };
-      inherit (channels.lib) lib; # this ^
+      inherit (channels.lib) lib;
 
       eachDefaultSystem = inputs.flake-utils.lib.eachSystem [ "x86_64-linux" ];
-
-      # inherit (inputs.self.passthru) secrets;
 
       user = "mhuber"; # TODO
     in {
 
       nixosConfigurations = let
-        mkConfiguration = system: hostName:
+        mkConfiguration = system: hostName: customConfig:
           let
             myconfig = { };
 
@@ -59,7 +57,7 @@
                     unstable = super.unstable or { }
                       // import inputs.master { inherit system; };
                     nixos-unstable = super.nixos-unstable or { }
-                      // import channels.pkgs { inherit system; };
+                      // import channels.staging { inherit system; };
                     nixos-unstable-small = super.nixos-unstable-small or { }
                       // import inputs.small { inherit system; };
                     nixos-2003-small = super.unstable or { }
@@ -77,7 +75,7 @@
             modules = [
               nixpkgs
 
-              {
+              ({ config, ... }: {
                 boot.initrd.secrets = {
                   "/etc/myconfig" = lib.cleanSource ./.;
                 };
@@ -88,10 +86,10 @@
                     builtins.sort builtins.lessThan (lib.unique packages);
                   formatted = builtins.concatStringsSep "\n" sortedUnique;
                 in formatted;
-              }
+              })
 
               # home manager:
-              inputs.home-manager.nixosModules.home-manager
+              inputs.home.nixosModules.home-manager
               {
                 home-manager = {
                   useUserPackages = true;
@@ -113,8 +111,6 @@
             specialArgs = {
               inherit myconfig;
               flake = inputs.self;
-
-              # inherit (secrets) hosts domains;
 
               modules = modules ++ [
                 {
@@ -145,9 +141,12 @@
             };
           in lib.nixosSystem {
             inherit system specialArgs;
-            modules = modules ++ [ (./host + ".${hostName}") ];
+            modules = modules ++ [ (./host + ".${hostName}") customConfig ];
           };
-      in { x1extremeG2 = mkConfiguration "x86_64-linux" "x1extremeG2"; };
+      in {
+        x1extremeG2 = mkConfiguration "x86_64-linux" "x1extremeG2" {};
+        workstation = mkConfiguration "x86_64-linux" "workstation" {};
+      };
 
     } // (eachDefaultSystem (system: {
       devShell = let pkgs = import channels.pkgs { inherit system; };
@@ -182,6 +181,5 @@
       };
 
       legacyPackages = import channels.pkgs { inherit system; };
-      passthru = rec { inherit inputs channels; };
     }));
 }
