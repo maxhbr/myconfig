@@ -12,6 +12,35 @@
 
   myconfig = {
     user = "mhuber"; # TODO
+    lib = rec {
+      secretsDir = ./secrets;
+      getSecretPath = hostName: fileName: (secretsDir + "/${hostName}/${fileName}");
+      getSecret = hostName: fileName:
+        builtins.readFile (getSecretPath hostName fileName);
+
+      getSecretNoNewline = hostName: fileName:
+        lib.removeSuffix "\n" (getSecret hostName fileName);
+
+      makeOptionalBySecrets = conf:
+        lib.mkIf (builtins.pathExists (secretsDir + "/README.md")) conf;
+
+      makeOptionalListBySecrets = list:
+        if (builtins.pathExists (secretsDir + "/README.md")) then list else [ ];
+
+      fixIp = hostName: deviceName: {
+        networking = {
+          interfaces."${deviceName}".ipv4.addresses = [{
+            address = let newIpPath = getSecretPath hostName "newIp";
+                      in if builtins.pathExists newIpPath
+                         then getSecretNoNewline hostName "newIp"
+                         else getSecretNoNewline hostName "ip";
+            prefixLength = 24;
+          }];
+          defaultGateway = "192.168.1.1";
+          nameservers = [ "192.168.1.1" "1.1.1.1" "8.8.8.8" "8.8.4.4" ];
+        };
+      };
+    };
   };
 in {
   nixosConfigurations = let
@@ -94,6 +123,12 @@ in {
           flake = inputs.self;
 
           modules = modules ++ [
+            ({config, ...}: {
+              assertions = [{
+                assertion = config.networking.hostName == hostName;
+                message = "hostname should be set!";
+              }];
+            })
             {
               home-manager.users."${myconfig.user}" = { ... }: {
                 imports = hmModules;
@@ -139,8 +174,18 @@ in {
            else []);
       };
   in {
-    x1extremeG2 = mkConfiguration "x86_64-linux" "x1extremeG2" {};
-    workstation = mkConfiguration "x86_64-linux" "workstation" {};
+    x1extremeG2 = mkConfiguration "x86_64-linux" "x1extremeG2"
+      {
+        imports = [
+
+        ];
+      };
+    workstation = mkConfiguration "x86_64-linux" "workstation"
+      {
+        imports = [
+          (myconfig.lib.fixIp "workstation" "enp39s0")
+        ];
+      };
   };
 
 }
