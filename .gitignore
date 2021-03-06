@@ -19,6 +19,4 @@ result
 result-*
 .vagrant
 myconfig.out-link
-**/imports/priv*
-**/imports/work*
 *.img

@@ -36,6 +36,16 @@
       };
       inherit (channels.lib) lib;
 
+      importall = path:
+        if builtins.pathExists path then
+          let content = builtins.readDir path;
+          in map (n: import (path + ("/" + n))) (builtins.filter (n:
+            builtins.match ".*\\.nix" n != null
+            || builtins.pathExists (path + ("/" + n + "/default.nix")))
+            (builtins.attrNames content))
+        else
+          [ ];
+
       eachDefaultSystem = inputs.flake-utils.lib.eachSystem [ "x86_64-linux" ];
 
       user = "mhuber"; # TODO
@@ -141,7 +151,11 @@
             };
           in lib.nixosSystem {
             inherit system specialArgs;
-            modules = modules ++ [ (./host + ".${hostName}") customConfig ];
+            modules = modules ++ [
+              (./host + ".${hostName}")
+              (./secrets + "/${hostName}")
+              customConfig
+            ] ++ (importall (./secrets + "/${hostName}/imports"));
           };
       in {
         x1extremeG2 = mkConfiguration "x86_64-linux" "x1extremeG2" {};
