@@ -6,22 +6,23 @@
     staged.url = "github:nixos/nixpkgs/staging";
     small.url = "github:nixos/nixpkgs/nixos-unstable-small";
     large.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     rel2009.url = "github:nixos/nixpkgs/nixos-20.09";
     rel2003.url = "github:nixos/nixpkgs/nixos-20.03";
 
     home.url = "github:nix-community/home-manager";
-    home.inputs.nixpkgs.follows = "/master";
+    home.inputs.nixpkgs.follows = "nixpkgs";
 
     utils.url = "github:numtide/flake-utils";
 
-    nix.url = "github:nixos/nix/flakes";
-    nix.inputs.nixpkgs.follows = "master";
+    # nix.url = "github:nixos/nix/flakes";
+    # nix.inputs.nixpkgs.follows = "nixpkgs";
 
     nur.url = "github:nix-community/NUR";
 
     emacs.url = "github:nix-community/emacs-overlay";
     nix-doom-emacs.url = "github:vlaci/nix-doom-emacs";
-    nix-doom-emacs.inputs.nixpkgs.follows = "master";
+    nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
 
     myemacs.url = "path:flakes/myemacs/";
     myemacs.inputs.nix-doom-emacs.follows = "nix-doom-emacs";
@@ -33,18 +34,15 @@
 
   outputs = inputs:
     let
-      channels = with inputs; {
-        pkgs = small;
-        modules = master;
-        lib = master;
-      };
-      inherit (channels.lib) lib;
+      inherit (inputs.nixpkgs) lib;
 
       allSystems = [ "x86_64-linux" "i686-linux" "aarch64-linux" ];
       eachDefaultSystem = inputs.flake-utils.lib.eachSystem allSystems;
 
-    in (import ./flake.nixosConfigurations.nix {inherit inputs channels; }) // (eachDefaultSystem (system: {
-      devShell = let pkgs = import channels.pkgs { inherit system; };
+    in (import ./flake.nixosConfigurations.nix {inherit inputs; }) // (eachDefaultSystem (system: {
+      legacyPackages = import inputs.nixpkgs { inherit system; };
+
+      devShell = let pkgs = import inputs.nixpkgs { inherit system; };
       in pkgs.mkShell {
         nativeBuildInputs = with pkgs; [ git git-crypt git-secrets nixfmt ];
         shellHook = ''
@@ -74,7 +72,5 @@
             }
           ]);
       };
-
-      legacyPackages = import channels.pkgs { inherit system; };
     }));
 }

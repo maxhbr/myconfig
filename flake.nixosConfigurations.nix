@@ -1,5 +1,5 @@
-{inputs, channels, ...}: let
-  inherit (channels.lib) lib;
+{inputs, ...}: let
+  inherit (inputs.nixpkgs) lib;
   importall = path:
     if builtins.pathExists path then
       let content = builtins.readDir path;
@@ -17,25 +17,29 @@ in {
   nixosConfigurations = let
     mkConfiguration = system: hostName: customConfig:
       let
-        pkgs = channels.modules.legacyPackages.${system};
+        pkgs = inputs.nixpkgs.legacyPackages.${system};
 
         nixpkgs = { config, ... }: {
           config.nixpkgs = {
-            # inherit pkgs;
+            inherit pkgs;
             inherit system;
             overlays = [
               (self: super: {
                 unstable = super.unstable or { }
-                  // import inputs.master { inherit system; };
+                  // inputs.master.legacyPackages.${system};
                 nixos-unstable = super.nixos-unstable or { }
-                  // import channels.staging { inherit system; };
+                  // inputs.large.legacyPackages.${system};
                 nixos-unstable-small = super.nixos-unstable-small or { }
-                  // import inputs.small { inherit system; };
+                  // inputs.small.legacyPackages.${system};
                 nixos-2003-small = super.unstable or { }
-                  // import inputs.rel2003 { inherit system; };
+                  // inputs.rel2003.legacyPackages.${system};
                 nixos-2009-small = super.unstable or { }
-                  // import inputs.rel2009 { inherit system; };
+                  // inputs.rel2009.legacyPackages.${system};
               })
+
+              # # nix:
+              # inputs.nix.overlay
+
               # nur:
               inputs.nur.overlay
             ];
@@ -115,7 +119,7 @@ in {
                 };
               }) (inputs // { nixpkgs = inputs.master; });
               nix.nixPath = lib.mapAttrsToList (k: v: "${k}=${toString v}") {
-                nixpkgs = "${channels.pkgs}/";
+                nixpkgs = "${inputs.nixpkgs}/";
                 nixos = "${inputs.self}/";
                 home-manager = "${inputs.home}/";
               };

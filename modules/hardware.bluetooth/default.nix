@@ -69,9 +69,9 @@ let
     '');
 in {
   config = (lib.mkIf config.hardware.bluetooth.enable {
-    hardware.bluetooth = {
-      settings = { General = { Enable = "Source,Sink,Media,Socket"; }; };
-    };
+    # hardware.bluetooth = {
+    #   settings = { General = { Enable = "Source,Sink,Media,Socket"; }; };
+    # };
     # see:
     # - https://github.com/NixOS/nixpkgs/issues/113628
     # - https://github.com/NixOS/nixpkgs/pull/113600
