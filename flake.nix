@@ -12,13 +12,15 @@
     home.url = "github:nix-community/home-manager";
     home.inputs.nixpkgs.follows = "/master";
 
+    utils.url = "github:numtide/flake-utils";
+
     nix.url = "github:nixos/nix/flakes";
     nix.inputs.nixpkgs.follows = "master";
 
     nur.url = "github:nix-community/NUR";
 
     emacs.url = "github:nix-community/emacs-overlay";
-    utils.url = "github:numtide/flake-utils";
+    nix-doom-emacs.url = "github:vlaci/nix-doom-emacs";
 
     flake-utils.url = "github:numtide/flake-utils";
 
@@ -118,11 +120,21 @@
               }
             ];
 
+            hmModules = [
+              # doom emacs
+              inputs.nix-doom-emacs.hmModule
+            ];
+
             specialArgs = {
               inherit myconfig;
               flake = inputs.self;
 
               modules = modules ++ [
+                {
+                  home-manager.users."${user}" = { ... }: {
+                    imports = hmModules;
+                  };
+                }
                 {
                   environment.etc."machine-id".text =
                     builtins.hashString "md5" hostName;
