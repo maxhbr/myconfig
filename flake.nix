@@ -24,6 +24,7 @@
     nix-doom-emacs.inputs.nixpkgs.follows = "master";
 
     myemacs.url = "path:flakes/myemacs/";
+    myemacs.inputs.nix-doom-emacs.follows = "nix-doom-emacs";
 
     flake-utils.url = "github:numtide/flake-utils";
 

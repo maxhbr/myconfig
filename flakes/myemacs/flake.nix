@@ -23,8 +23,20 @@
           };
         };
       };
-    hmModule = { config, lib, pkgs, ... }:
-      {
+    hmModule = { config, lib, pkgs, ... }: let
+        xclipedit = pkgs.writeShellScriptBin "xclipedit" ''
+          set -euo pipefail
+          tempfile="$(mktemp)"
+          trap "rm $tempfile" EXIT
+          if [ -t 0 ]; then
+              xclip -out > "$tempfile"
+          else
+              cat > "$tempfile"
+          fi
+          ${config.programs.doom-emacs.package}/bin/emacs "$tempfile"
+          ${pkgs.xclip}/bin/xclip < "$tempfile"
+        '';
+      in {
         imports = [
           # doom emacs
           nix-doom-emacs.hmModule
@@ -51,6 +63,7 @@
         };
         home.packages = with pkgs;
           [
+            xclipedit
             emacs-all-the-icons-fonts
 
             aspell
