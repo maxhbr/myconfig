@@ -52,7 +52,7 @@ in {
   nixosConfigurations = let
     mkConfiguration = system: hostName: customConfig:
       let
-        pkgs = inputs.nixpkgs.legacyPackages.${system};
+        pkgs = inputs.self.legacyPackages.${system};
 
         nixpkgs = { config, ... }: {
           config.nixpkgs = {
@@ -62,15 +62,15 @@ in {
             overlays = [
               (self: super: {
                 unstable = super.unstable or { }
-                  // inputs.master.legacyPackages.${system};
+                           // import inputs.master {inherit (pkgs) config; inherit system;};
                 nixos-unstable = super.nixos-unstable or { }
-                  // inputs.large.legacyPackages.${system};
+                                 // import inputs.large {inherit (pkgs) config; inherit system;};
                 nixos-unstable-small = super.nixos-unstable-small or { }
-                  // inputs.small.legacyPackages.${system};
+                                       // import inputs.small {inherit (pkgs) config; inherit system;};
                 nixos-2003-small = super.unstable or { }
-                  // inputs.rel2003.legacyPackages.${system};
+                                   // import inputs.rel2003 {inherit (pkgs) config; inherit system;};
                 nixos-2009-small = super.unstable or { }
-                  // inputs.rel2009.legacyPackages.${system};
+                                   // import inputs.rel2009 {inherit (pkgs) config; inherit system;};
               })
 
               # # nix:
@@ -119,10 +119,12 @@ in {
           }
 
           inputs.myemacs.module
+          inputs.myfish.module
         ];
 
         hmModules = [
           inputs.myemacs.hmModule
+          inputs.myfish.hmModule
         ];
 
         specialArgs = {
@@ -171,10 +173,11 @@ in {
         };
       in lib.nixosSystem {
         inherit system specialArgs;
-        modules = modules ++ specialArgs.extraModules ++ [
-          (./host + ".${hostName}")
-          customConfig
-        ] ++ (getModulesFromSecrets hostName);
+        modules = modules
+                  ++ specialArgs.extraModules
+                  ++ [(./host + ".${hostName}")]
+                  ++ [customConfig]
+                  ++ (getModulesFromSecrets hostName);
       };
   in {
     x1extremeG2 = mkConfiguration "x86_64-linux" "x1extremeG2"

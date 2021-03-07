@@ -113,7 +113,7 @@ in {
             '';
         in "${muteNotebookAudio}/bin/mute_notebook_audio";
       };
-      home.packages = with pkgs.unstable;
+      home.packages = with pkgs;
         [
           google-chrome # for netflix and stadia
         ];

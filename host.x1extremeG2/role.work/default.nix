@@ -18,7 +18,7 @@ in {
     home-manager.users."${user}" = {
       imports = [
         {
-          home.packages = with pkgs; [ nixos-2009-small.teams ];
+          home.packages = with pkgs; [ teams ];
           xdg.mimeApps = {
             defaultApplications."x-scheme-handler/msteams" =
               [ "teams.desktop" ];

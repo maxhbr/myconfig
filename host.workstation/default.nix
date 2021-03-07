@@ -14,7 +14,7 @@ in {
     ../hardware/steamcontroller.nix
     ./4x500-hdds.raid.nix
     # other profiles
-    ./gaming
+    # ./gaming
     # testing
     ./chrootPopOS.nix
     { # for quickfix (due to usage of 20.03)

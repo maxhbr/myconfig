@@ -27,6 +27,8 @@
     myemacs.url = "path:flakes/myemacs/";
     myemacs.inputs.nix-doom-emacs.follows = "nix-doom-emacs";
 
+    myfish.url = "path:flakes/myfish/";
+
     # myxmonad.url = "path:flakes/myxmonad/";
     # myxmonad.inputs.nixpkgs.follows = "nixpkgs";
     # myxmonad.inputs.flake-utils.follows = "flake-utils";

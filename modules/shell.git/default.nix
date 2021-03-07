@@ -25,6 +25,8 @@ in {
           git-fame
           git-gone
           git-absorb
+          git-crypt
+          git-secrets
         ]);
       home.file = { ".gitconfig".source = ./gitconfig; };
       programs.git = {

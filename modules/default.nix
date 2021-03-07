@@ -40,7 +40,6 @@ let
     ./services.xserver.xmonad
     ./shell.common
     ./shell.programs.dic.nix
-    ./shell.fish
     ./shell.git
     ./shell.programs.tmux
     ./shell.programs.vim
