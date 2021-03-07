@@ -14,7 +14,6 @@ let
     ./nixos.networking
     ./nixos.nix.nix
     ./nixos.user.nix
-    ./programs.emacs
     ./programs.pass
     ./services.netdata.nix
     ./services.openssh.nix
