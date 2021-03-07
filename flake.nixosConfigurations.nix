@@ -78,6 +78,8 @@ in {
 
         # Final modules set
         modules = [
+          ./modules
+
           nixpkgs
 
           ({ config, ... }: {

@@ -5,7 +5,6 @@ let user = config.myconfig.user;
 in {
   imports = [
     ./hardware-configuration.nix
-    ../modules
     ./myconfig-master
     ../secrets/common/wifi.home.nix
     # hardware:
