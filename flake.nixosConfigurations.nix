@@ -42,12 +42,6 @@
       };
     };
   };
-
-  getModulesFromSecrets = hostName: (let
-      hostsSecretsDir = (./secrets + "/${hostName}");
-  in (if builtins.pathExists "${hostsSecretsDir}/default.nix"
-       then [hostsSecretsDir]
-      else []) ++ (importall ("${hostsSecretsDir}/imports")));
 in {
   nixosConfigurations = let
     mkConfiguration = system: hostName: customConfig:
@@ -177,7 +171,8 @@ in {
                   ++ specialArgs.extraModules
                   ++ [(./host + ".${hostName}")]
                   ++ [customConfig]
-                  ++ (getModulesFromSecrets hostName);
+		  ++ [(./secrets + "/${hostName}")]
+		  ++ (importall (./secrets + "/${hostName}/imports"));
       };
   in {
     x1extremeG2 = mkConfiguration "x86_64-linux" "x1extremeG2"
