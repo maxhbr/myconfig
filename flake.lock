@@ -257,25 +257,6 @@
         "type": "path"
       }
     },
-    "myxmonad": {
-      "inputs": {
-        "flake-utils": [
-          "flake-utils"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "narHash": "sha256-8j4BG435bqRWUss0h66Ogd7SPW05CHo7JjWqF+wt/XE=",
-        "path": "flakes/myxmonad/",
-        "type": "path"
-      },
-      "original": {
-        "path": "flakes/myxmonad/",
-        "type": "path"
-      }
-    },
     "nix-doom-emacs": {
       "inputs": {
         "doom-emacs": "doom-emacs",
@@ -498,7 +479,6 @@
         "large": "large",
         "master": "master",
         "myemacs": "myemacs",
-        "myxmonad": "myxmonad",
         "nix-doom-emacs": "nix-doom-emacs",
         "nixpkgs": "nixpkgs",
         "nur": "nur",

@@ -57,6 +57,7 @@ in {
         nixpkgs = { config, ... }: {
           config.nixpkgs = {
             inherit pkgs;
+            inherit (pkgs) config;
             inherit system;
             overlays = [
               (self: super: {
@@ -170,7 +171,7 @@ in {
         };
       in lib.nixosSystem {
         inherit system specialArgs;
-        modules = modules ++ [
+        modules = modules ++ specialArgs.extraModules ++ [
           (./host + ".${hostName}")
           customConfig
         ] ++ (getModulesFromSecrets hostName);

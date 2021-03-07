@@ -27,9 +27,9 @@
     myemacs.url = "path:flakes/myemacs/";
     myemacs.inputs.nix-doom-emacs.follows = "nix-doom-emacs";
 
-    myxmonad.url = "path:flakes/myxmonad/";
-    myxmonad.inputs.nixpkgs.follows = "nixpkgs";
-    myxmonad.inputs.flake-utils.follows = "flake-utils";
+    # myxmonad.url = "path:flakes/myxmonad/";
+    # myxmonad.inputs.nixpkgs.follows = "nixpkgs";
+    # myxmonad.inputs.flake-utils.follows = "flake-utils";
 
     hardware.url = "github:nixos/nixos-hardware";
   };
@@ -41,10 +41,18 @@
       allSystems = [ "x86_64-linux" "i686-linux" "aarch64-linux" ];
       eachDefaultSystem = inputs.flake-utils.lib.eachSystem allSystems;
 
-    in (import ./flake.nixosConfigurations.nix {inherit inputs; }) // (eachDefaultSystem (system: {
-      legacyPackages = import inputs.nixpkgs { inherit system; };
+      nixpkgsConfig = { allowUnfree = true; };
 
-      devShell = let pkgs = import inputs.nixpkgs { inherit system; };
+    in (import ./flake.nixosConfigurations.nix {inherit inputs; }) // (eachDefaultSystem (system: {
+      legacyPackages = import inputs.nixpkgs {
+        inherit system;
+        config = nixpkgsConfig;
+      };
+
+      devShell = let pkgs = import inputs.nixpkgs {
+        inherit system;
+        config = nixpkgsConfig;
+      };
       in pkgs.mkShell {
         nativeBuildInputs = with pkgs; [ git git-crypt git-secrets nixfmt ];
         shellHook = ''

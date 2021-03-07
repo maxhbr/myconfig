@@ -32,7 +32,7 @@ in {
           # gui applications
           mupdf
           llpp
-          xarchiver
+          # xarchiver
           feh
           imagemagick
           mplayer
@@ -68,7 +68,7 @@ in {
       };
     };
     environment = {
-      shellAliases = { file-roller = "${pkgs.xarchiver}/bin/xarchiver"; };
+      # shellAliases = { file-roller = "${pkgs.xarchiver}/bin/xarchiver"; };
 
       interactiveShellInit = ''
         xclipToX() {
