@@ -13,7 +13,7 @@
     home.url = "github:nix-community/home-manager";
     home.inputs.nixpkgs.follows = "nixpkgs";
 
-    utils.url = "github:numtide/flake-utils";
+    flake-utils.url = "github:numtide/flake-utils";
 
     # nix.url = "github:nixos/nix/flakes";
     # nix.inputs.nixpkgs.follows = "nixpkgs";
@@ -27,7 +27,9 @@
     myemacs.url = "path:flakes/myemacs/";
     myemacs.inputs.nix-doom-emacs.follows = "nix-doom-emacs";
 
-    flake-utils.url = "github:numtide/flake-utils";
+    myxmonad.url = "path:flakes/myxmonad/";
+    myxmonad.inputs.nixpkgs.follows = "nixpkgs";
+    myxmonad.inputs.flake-utils.follows = "flake-utils";
 
     hardware.url = "github:nixos/nixos-hardware";
   };
