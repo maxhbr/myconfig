@@ -127,21 +127,18 @@ in {
 
           modules = modules ++ [
             ({config, ...}: {
+              environment.etc."machine-id".text =
+                builtins.hashString "md5" hostName;
+              networking = { inherit hostName; };
+
               assertions = [{
                 assertion = config.networking.hostName == hostName;
                 message = "hostname should be set!";
               }];
-            })
-            {
               home-manager.users."${myconfig.user}" = { ... }: {
                 imports = hmModules;
               };
-            }
-            {
-              environment.etc."machine-id".text =
-                builtins.hashString "md5" hostName;
-              networking = { inherit hostName; };
-            }
+            })
             { _module.args = specialArgs; }
           ];
 

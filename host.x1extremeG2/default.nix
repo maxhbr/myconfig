@@ -7,7 +7,7 @@ in {
     ./hardware-configuration.nix
     ../modules
     ./myconfig-master
-    ../secrets/common/home.wifi.nix
+    ../secrets/common/wifi.home.nix
     # hardware:
     ../hardware/x1extremeG2.nix
     ../hardware/efi.nix
