@@ -43,159 +43,155 @@
     };
   };
 in {
-  nixosConfigurations = let
-    mkConfiguration = system: hostName: customConfig:
-      let
-        pkgs = inputs.self.legacyPackages.${system};
+  lib.mkConfiguration = system: hostName: customConfig:
+    let
+      pkgs = inputs.self.legacyPackages.${system};
 
-        nixpkgs = { config, ... }: {
-          config.nixpkgs = {
-            inherit pkgs;
-            inherit (pkgs) config;
-            inherit system;
-            overlays = [
-              (self: super: {
-                unstable = super.unstable or { }
-                           // import inputs.master {inherit (pkgs) config; inherit system;};
-                nixos-unstable = super.nixos-unstable or { }
-                                 // import inputs.large {inherit (pkgs) config; inherit system;};
-                nixos-unstable-small = super.nixos-unstable-small or { }
-                                       // import inputs.small {inherit (pkgs) config; inherit system;};
-                nixos-2003-small = super.unstable or { }
-                                   // import inputs.rel2003 {inherit (pkgs) config; inherit system;};
-                nixos-2009-small = super.unstable or { }
-                                   // import inputs.rel2009 {inherit (pkgs) config; inherit system;};
-              })
+      nixpkgs = { config, ... }: {
+        config.nixpkgs = {
+          inherit pkgs;
+          inherit (pkgs) config;
+          inherit system;
+          overlays = [
+            (self: super: {
+              unstable = super.unstable or { }
+                         // import inputs.master {inherit (pkgs) config; inherit system;};
+              nixos-unstable = super.nixos-unstable or { }
+                               // import inputs.large {inherit (pkgs) config; inherit system;};
+              nixos-unstable-small = super.nixos-unstable-small or { }
+                                     // import inputs.small {inherit (pkgs) config; inherit system;};
+              nixos-2003-small = super.unstable or { }
+                                 // import inputs.rel2003 {inherit (pkgs) config; inherit system;};
+              nixos-2009-small = super.unstable or { }
+                                 // import inputs.rel2009 {inherit (pkgs) config; inherit system;};
+            })
 
-              # # nix:
-              # inputs.nix.overlay
+            # # nix:
+            # inputs.nix.overlay
 
-              # nur:
-              inputs.nur.overlay
-            ];
-          };
+            # nur:
+            inputs.nur.overlay
+          ];
         };
+      };
 
-        hmModules = [
-          inputs.self.hmModules.myemacs
-          inputs.self.hmModules.myfish
-        ] ++ inputs.private.lib.getHmModulesFor hostName;
+      hmModules = [
+        inputs.self.hmModules.myemacs
+        inputs.self.hmModules.myfish
+      ] ++ inputs.private.lib.getHmModulesFor hostName;
 
-        # Final modules set
-        modules = [
-          ./modules
+      # Final modules set
+      modules = [
+        ./modules
 
-          nixpkgs
+        nixpkgs
 
-          ({ config, ... }: {
-            boot.initrd.secrets = {
-              "/etc/myconfig" = lib.cleanSource ./.;
+        ({ config, ... }: {
+          boot.initrd.secrets = {
+            "/etc/myconfig" = lib.cleanSource ./.;
+          };
+          environment.etc."myconfig.current-system-packages".text = let
+            packages = builtins.map (p: "${p.name}")
+              config.environment.systemPackages;
+            sortedUnique =
+              builtins.sort builtins.lessThan (lib.unique packages);
+            formatted = builtins.concatStringsSep "\n" sortedUnique;
+          in formatted;
+        })
+
+        # home manager:
+        inputs.home.nixosModules.home-manager
+        ({ config, ... }: {
+          options.home-manager.users = lib.mkOption {
+            type = with lib.types;
+              attrsOf (submoduleWith {
+                specialArgs = specialArgs // { super = config; };
+                modules = hmModules;
+              });
+          };
+          config = {
+            home-manager = {
+              useUserPackages = true;
+              useGlobalPkgs = true;
             };
-            environment.etc."myconfig.current-system-packages".text = let
-              packages = builtins.map (p: "${p.name}")
-                config.environment.systemPackages;
-              sortedUnique =
-                builtins.sort builtins.lessThan (lib.unique packages);
-              formatted = builtins.concatStringsSep "\n" sortedUnique;
-            in formatted;
-          })
-
-          # home manager:
-          inputs.home.nixosModules.home-manager
-          ({ config, ... }: {
-            options.home-manager.users = lib.mkOption {
-              type = with lib.types;
-                attrsOf (submoduleWith {
-                  specialArgs = specialArgs // { super = config; };
-                  modules = hmModules;
-                });
-            };
-            config = {
-              home-manager = {
-                useUserPackages = true;
-                useGlobalPkgs = true;
-              };
-              system.activationScripts.genProfileManagementDirs =
-                "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}";
-              systemd.services.mk-hm-dirs = {
-                serviceConfig.Type = "oneshot";
-                script = ''
+            system.activationScripts.genProfileManagementDirs =
+              "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}";
+            systemd.services.mk-hm-dirs = {
+              serviceConfig.Type = "oneshot";
+              script = ''
                   mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
                   chown ${myconfig.user} /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
                 '';
-                wantedBy = [ "home-manager-${myconfig.user}.service" ];
-              };
+              wantedBy = [ "home-manager-${myconfig.user}.service" ];
             };
+          };
+        })
+
+        inputs.self.nixosModules.myemacs
+        inputs.self.nixosModules.myfish
+      ];
+
+      specialArgs = {
+        inherit myconfig;
+        flake = inputs.self;
+
+        modules = modules ++ [
+          ({config, ...}: {
+            environment.etc."machine-id".text =
+              builtins.hashString "md5" hostName;
+            networking = { inherit hostName; };
+
+            assertions = [{
+              assertion = config.networking.hostName == hostName;
+              message = "hostname should be set!";
+            }];
           })
-
-          inputs.self.nixosModules.myemacs
-          inputs.self.nixosModules.myfish
+          { _module.args = specialArgs; }
         ];
 
-        specialArgs = {
-          inherit myconfig;
-          flake = inputs.self;
+        # Modules to propagate to containers
+        extraModules = [
+          {
+            nix.package = lib.mkDefault pkgs.nixFlakes;
+            nix.extraOptions = "experimental-features = nix-command flakes";
 
-          modules = modules ++ [
-            ({config, ...}: {
-              environment.etc."machine-id".text =
-                builtins.hashString "md5" hostName;
-              networking = { inherit hostName; };
-
-              assertions = [{
-                assertion = config.networking.hostName == hostName;
-                message = "hostname should be set!";
-              }];
-            })
-            { _module.args = specialArgs; }
-          ];
-
-          # Modules to propagate to containers
-          extraModules = [
-            {
-              nix.package = lib.mkDefault pkgs.nixFlakes;
-              nix.extraOptions = "experimental-features = nix-command flakes";
-
-              nix.registry = lib.mapAttrs (id: flake: {
-                inherit flake;
-                from = {
-                  inherit id;
-                  type = "indirect";
-                };
-              }) (inputs // { nixpkgs = inputs.master; });
-              nix.nixPath = lib.mapAttrsToList (k: v: "${k}=${toString v}") {
-                nixpkgs = "${inputs.nixpkgs}/";
-                nixos = "${inputs.self}/";
-                home-manager = "${inputs.home}/";
+            nix.registry = lib.mapAttrs (id: flake: {
+              inherit flake;
+              from = {
+                inherit id;
+                type = "indirect";
               };
-              system.configurationRevision = inputs.self.rev or "dirty";
-            }
-          ];
-        };
-      in lib.nixosSystem {
-        inherit system specialArgs;
-        modules = modules
-                  ++ specialArgs.extraModules
-                  ++ [(./host + ".${hostName}")]
-                  ++ [customConfig]
-                  ++ [(./secrets + "/${hostName}")]
-                  ++ (importall (./secrets + "/${hostName}/imports"))
-                  ++ inputs.private.lib.getNixosModulesFor hostName;
-      };
-  in {
-    container = mkConfiguration "x86_64-linux" "x1extremeG2"
-      {
-         config = {
-           boot.isContainer = true;
-         };
-      };
-    x1extremeG2 = mkConfiguration "x86_64-linux" "x1extremeG2"
-      {
-        imports = [
-
+            }) (inputs // { nixpkgs = inputs.master; });
+            nix.nixPath = lib.mapAttrsToList (k: v: "${k}=${toString v}") {
+              nixpkgs = "${inputs.nixpkgs}/";
+              nixos = "${inputs.self}/";
+              home-manager = "${inputs.home}/";
+            };
+            system.configurationRevision = inputs.self.rev or "dirty";
+          }
         ];
       };
-    workstation = mkConfiguration "x86_64-linux" "workstation"
+    in lib.nixosSystem {
+      inherit system specialArgs;
+      modules = modules
+                ++ specialArgs.extraModules
+                ++ [(./host + ".${hostName}")]
+                ++ [customConfig]
+                ++ [(./secrets + "/${hostName}")]
+                ++ (importall (./secrets + "/${hostName}/imports"))
+                ++ inputs.private.lib.getNixosModulesFor hostName;
+    };
+  nixosConfigurations = {
+    container = inputs.self.lib.mkConfiguration "x86_64-linux" "x1extremeG2"
+      {
+        config = {
+          boot.isContainer = true;
+        };
+      };
+    x1extremeG2 = inputs.self.lib.mkConfiguration "x86_64-linux" "x1extremeG2"
+      {
+      };
+    workstation = inputs.self.lib.mkConfiguration "x86_64-linux" "workstation"
       {
         imports = [
           (myconfig.lib.fixIp "workstation" "enp39s0")
