@@ -2,6 +2,8 @@
   description = "myconfig";
 
   inputs = {
+    myconfig-base.url = "path:../base";
+
     private.url = "path:../myconfig-private";
 
     master.url = "github:nixos/nixpkgs/master";
@@ -41,8 +43,10 @@
     hardware.url = "github:nixos/nixos-hardware";
   };
 
-  outputs = inputs:
+  outputs = inputs_:
     let
+      inputs = inputs_.myconfig-base.aggregatedInputs // inputs_;
+
       inherit (inputs.nixpkgs) lib;
 
       allSystems = [ "x86_64-linux" "i686-linux" "aarch64-linux" ];

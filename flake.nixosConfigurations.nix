@@ -185,7 +185,7 @@ in {
     in lib.nixosSystem {
       inherit system specialArgs;
       modules = modules ++ specialArgs.extraModules
-        ++ [ (./host/host + ".${hostName}") ] ++ [ customConfig ]
+        ++ [ (./hosts/host + ".${hostName}") ] ++ [ customConfig ]
         ++ [ (./secrets + "/${hostName}") ]
         ++ (importall (./secrets + "/${hostName}/imports"))
         ++ inputs.private.lib.getNixosModulesFor hostName;

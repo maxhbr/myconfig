@@ -6,13 +6,13 @@ in {
   imports = [
     ./hardware-configuration.nix
     ./myconfig-master
-    ../secrets/common/wifi.home.nix
+    ../../secrets/common/wifi.home.nix
     # hardware:
-    ../hardware/x1extremeG2.nix
-    ../hardware/efi.nix
-    ../hardware/footswitch.nix
-    ../hardware/steamcontroller.nix
-    ../hardware/blink1.nix
+    ../../hardware/x1extremeG2.nix
+    ../../hardware/efi.nix
+    ../../hardware/footswitch.nix
+    ../../hardware/steamcontroller.nix
+    ../../hardware/blink1.nix
     # ./backup-hdd.nix
     # ./foto-hdd.nix
     # modules
