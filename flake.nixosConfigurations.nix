@@ -83,8 +83,8 @@ in {
                 };
             })
 
-            # nix:
-            inputs.nix.overlay
+            # # nix:
+            # inputs.nix.overlay
 
             # nur:
             inputs.nur.overlay
