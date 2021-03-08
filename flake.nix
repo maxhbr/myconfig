@@ -50,7 +50,20 @@
 
       nixpkgsConfig = { allowUnfree = true; };
 
-    in (import ./flake.nixosConfigurations.nix { inherit inputs; }) // {
+    in {
+      lib.mkConfiguration = import ./flake.nixosConfigurations.nix inputs;
+      lib.importall = path:
+        if builtins.pathExists path then
+          let content = builtins.readDir path;
+          in map (n: import (path + ("/" + n))) (builtins.filter (n:
+            builtins.match ".*\\.nix" n != null
+            || builtins.pathExists (path + ("/" + n + "/default.nix")))
+            (builtins.attrNames content))
+        else
+          [ ];
+
+      nixosModules.core = import ./core/output.nixosModule.nix inputs;
+      hmModules.core = import ./core/output.hmModule.nix inputs;
 
       nixosModules.base = import ./base/output.nixosModule.nix inputs;
       hmModules.base = import ./base/output.hmModule.nix inputs;
@@ -60,6 +73,18 @@
 
       nixosModules.myfish = inputs.myfish.nixosModule;
       hmModules.myfish = inputs.myfish.hmModule;
+
+
+      nixosConfigurations = {
+        container = inputs.self.lib.mkConfiguration "x86_64-linux" "x1extremeG2" {
+          config = { boot.isContainer = true; };
+        };
+        x1extremeG2 = inputs.self.lib.mkConfiguration "x86_64-linux" "x1extremeG2" { };
+        workstation = inputs.self.lib.mkConfiguration "x86_64-linux" "workstation" {
+          # imports = [ (myconfig.lib.fixIp "workstation" "enp39s0") ];
+        };
+      };
+
 
     } // (eachDefaultSystem (system: {
       legacyPackages = import inputs.nixpkgs {

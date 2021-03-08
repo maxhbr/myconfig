@@ -1,0 +1,182 @@
+inputs:
+let
+  inherit (inputs.nixpkgs) lib;
+
+  myconfig = {
+    user = "mhuber"; # TODO
+    lib = rec {
+      secretsDir = ./secrets;
+      getSecretPath = hostName: fileName:
+        (secretsDir + "/${hostName}/${fileName}");
+      getSecret = hostName: fileName:
+        builtins.readFile (getSecretPath hostName fileName);
+
+      getSecretNoNewline = hostName: fileName:
+        lib.removeSuffix "\n" (getSecret hostName fileName);
+
+      makeOptionalBySecrets = conf:
+        lib.mkIf (builtins.pathExists (secretsDir + "/README.md")) conf;
+
+      makeOptionalListBySecrets = list:
+        if (builtins.pathExists (secretsDir + "/README.md")) then list else [ ];
+
+      fixIp = hostName: deviceName: {
+        networking = {
+          interfaces."${deviceName}".ipv4.addresses = [{
+            address = let newIpPath = getSecretPath hostName "newIp";
+                      in if builtins.pathExists newIpPath then
+                        getSecretNoNewline hostName "newIp"
+                         else
+                           getSecretNoNewline hostName "ip";
+            prefixLength = 24;
+          }];
+          defaultGateway = "192.168.1.1";
+          nameservers = [ "192.168.1.1" "1.1.1.1" "8.8.8.8" "8.8.4.4" ];
+        };
+      };
+    };
+  };
+in system: hostName: customConfig:
+  let
+    pkgs = inputs.self.legacyPackages.${system};
+
+    nixpkgs = { config, ... }: {
+      config.nixpkgs = {
+        inherit pkgs;
+        inherit (pkgs) config;
+        inherit system;
+        overlays = [
+          (self: super: {
+            unstable = super.unstable or { } // import inputs.master {
+              inherit (pkgs) config;
+              inherit system;
+            };
+            nixos-unstable = super.nixos-unstable or { }
+                             // import inputs.large {
+                               inherit (pkgs) config;
+                               inherit system;
+                             };
+            nixos-unstable-small = super.nixos-unstable-small or { }
+                                   // import inputs.small {
+                                     inherit (pkgs) config;
+                                     inherit system;
+                                   };
+            nixos-2003-small = super.unstable or { }
+                               // import inputs.rel2003 {
+                                 inherit (pkgs) config;
+                                 inherit system;
+                               };
+            nixos-2009-small = super.unstable or { }
+                               // import inputs.rel2009 {
+                                 inherit (pkgs) config;
+                                 inherit system;
+                               };
+          })
+
+          # # nix:
+          # inputs.nix.overlay
+
+          # nur:
+          inputs.nur.overlay
+        ];
+      };
+    };
+
+    hmModules = [ inputs.self.hmModules.myemacs inputs.self.hmModules.myfish ]
+                ++ inputs.private.lib.getHmModulesFor hostName;
+
+    # Final modules set
+    modules = [
+      ./modules
+
+      nixpkgs
+
+      ({ config, ... }: {
+        boot.initrd.secrets = { "/etc/myconfig" = lib.cleanSource ./.; };
+        environment.etc."myconfig.current-system-packages".text = let
+          packages =
+            builtins.map (p: "${p.name}") config.environment.systemPackages;
+          sortedUnique =
+            builtins.sort builtins.lessThan (lib.unique packages);
+          formatted = builtins.concatStringsSep "\n" sortedUnique;
+        in formatted;
+      })
+
+      # home manager:
+      inputs.home.nixosModules.home-manager
+      ({ config, ... }: {
+        options.home-manager.users = lib.mkOption {
+          type = with lib.types;
+            attrsOf (submoduleWith {
+              specialArgs = specialArgs // { super = config; };
+              modules = hmModules;
+            });
+        };
+        config = {
+          home-manager = {
+            useUserPackages = true;
+            useGlobalPkgs = true;
+          };
+          system.activationScripts.genProfileManagementDirs =
+            "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}";
+          systemd.services.mk-hm-dirs = {
+            serviceConfig.Type = "oneshot";
+            script = ''
+                mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
+                chown ${myconfig.user} /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
+              '';
+            wantedBy = [ "home-manager-${myconfig.user}.service" ];
+          };
+        };
+      })
+
+      inputs.self.nixosModules.myemacs
+      inputs.self.nixosModules.myfish
+    ];
+
+    specialArgs = {
+      inherit myconfig;
+      flake = inputs.self;
+
+      modules = modules ++ [
+        ({ config, ... }: {
+          environment.etc."machine-id".text =
+            builtins.hashString "md5" hostName;
+          networking = { inherit hostName; };
+
+          assertions = [{
+            assertion = config.networking.hostName == hostName;
+            message = "hostname should be set!";
+          }];
+        })
+        { _module.args = specialArgs; }
+      ];
+
+      # Modules to propagate to containers
+      extraModules = [{
+        nix.package = lib.mkDefault pkgs.nixFlakes;
+        nix.extraOptions = "experimental-features = nix-command flakes";
+
+        nix.registry = lib.mapAttrs (id: flake: {
+          inherit flake;
+          from = {
+            inherit id;
+            type = "indirect";
+          };
+        }) (inputs // { nixpkgs = inputs.master; });
+        nix.nixPath = lib.mapAttrsToList (k: v: "${k}=${toString v}") {
+          nixpkgs = "${inputs.nixpkgs}/";
+          nixos = "${inputs.self}/";
+          home-manager = "${inputs.home}/";
+        };
+        system.configurationRevision = inputs.self.rev or "dirty";
+      }];
+    };
+  in lib.nixosSystem {
+    inherit system specialArgs;
+    modules = modules ++ specialArgs.extraModules
+              ++ [ (./hosts/host + ".${hostName}") ] ++ [ customConfig ]
+              ++ [ (./secrets + "/${hostName}") ]
+              ++ (inputs.self.lib.importall (./secrets + "/${hostName}/imports"))
+              ++ inputs.private.lib.getNixosModulesFor hostName;
+  }
