@@ -117,8 +117,8 @@
       };
       hmModules.core = {...}: {
         imports = [
-          self.hmModules.myemacs
           self.hmModules.myfish
+          self.hmModules.myemacs
         ];
       };
 
@@ -126,7 +126,7 @@
       ## configurations ########################################################
       ##########################################################################
       lib.mkConfiguration = import ./lib.mkConfiguration.nix inputs;
-      lib.mkConfiguration' = system: hostName: args:
+      lib.evalConfiguration = system: hostName: args:
         (let
           cfg = self.lib.mkConfiguration system hostName args;
         in lib.nixosSystem
@@ -139,10 +139,10 @@
         );
 
       nixosConfigurations = {
-        container = self.lib.mkConfiguration' "x86_64-linux" "x1extremeG2" {
+        container = self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" {
           config = { boot.isContainer = true; };
         };
-        x1extremeG2 = self.lib.mkConfiguration' "x86_64-linux" "x1extremeG2"
+        x1extremeG2 = self.lib.evalConfiguration "x86_64-linux" "x1extremeG2"
           {
             nixosModules = [
               {
@@ -156,7 +156,7 @@
               self.hmModules.core
             ];
           };
-        workstation = self.lib.mkConfiguration' "x86_64-linux" "workstation" {
+        workstation = self.lib.evalConfiguration "x86_64-linux" "workstation" {
           # imports = [ (myconfig.lib.fixIp "workstation" "enp39s0") ];
         };
       };
