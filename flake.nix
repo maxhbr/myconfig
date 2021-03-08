@@ -45,7 +45,15 @@
 
       nixpkgsConfig = { allowUnfree = true; };
 
-    in (import ./flake.nixosConfigurations.nix {inherit inputs; }) // (eachDefaultSystem (system: {
+    in (import ./flake.nixosConfigurations.nix {inherit inputs; }) // {
+
+      nixosModules.myemacs = inputs.myemacs.nixosModule;
+      hmModules.myemacs = inputs.myemacs.hmModule;
+
+      nixosModules.myfish = inputs.myfish.nixosModule;
+      hmModules.myfish = inputs.myfish.hmModule;
+
+    } // (eachDefaultSystem (system: {
       legacyPackages = import inputs.nixpkgs {
         inherit system;
         config = nixpkgsConfig;

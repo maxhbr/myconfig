@@ -7,7 +7,7 @@
   };
 
   outputs = { nix-doom-emacs, ... }: {
-    module = { config, lib, pkgs, ... }:
+    nixosModule = { config, lib, pkgs, ... }:
       {
         nixpkgs.overlays = [
           (self: super: {

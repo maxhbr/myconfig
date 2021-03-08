@@ -27,7 +27,7 @@
   };
 
   outputs = { self, ... }@inputs: {
-    module = {pkgs, ...}: {
+    nixosModule = {pkgs, ...}: {
       imports = [ ./historybackup.nix ];
       config = {
         programs.fish = { enable = true; };

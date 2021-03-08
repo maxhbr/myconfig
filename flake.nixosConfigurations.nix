@@ -114,8 +114,8 @@ in {
             };
           }
 
-          inputs.myemacs.module
-          inputs.myfish.module
+          inputs.myemacs.nixosModule
+          inputs.myfish.nixosModule
         ];
 
         hmModules = [
