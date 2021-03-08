@@ -56,7 +56,7 @@ let
     ./services.xserver.programs.zathura.hm.nix
   ];
 in {
-  imports = [ ./lib ./myconfig ] ++ modules;
+  imports = [ ./myconfig ] ++ modules;
   config = {
     home-manager.users."${user}" = { imports = hm-modules; };
     assertions = [
