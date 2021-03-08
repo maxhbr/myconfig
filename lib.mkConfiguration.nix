@@ -1,4 +1,4 @@
-inputs:
+{self,...}@inputs:
 let
   inherit (inputs.nixpkgs) lib;
 
@@ -36,60 +36,14 @@ let
       };
     };
   };
-in system: hostName: customConfig:
+in system: hostName: { nixosModules ? [], hmModules ? []}:
   let
-    pkgs = inputs.self.legacyPackages.${system};
-
-    nixpkgs = { config, ... }: {
-      config.nixpkgs = {
-        inherit pkgs;
-        inherit (pkgs) config;
-        inherit system;
-        overlays = [
-          (self: super: {
-            unstable = super.unstable or { } // import inputs.master {
-              inherit (pkgs) config;
-              inherit system;
-            };
-            nixos-unstable = super.nixos-unstable or { }
-                             // import inputs.large {
-                               inherit (pkgs) config;
-                               inherit system;
-                             };
-            nixos-unstable-small = super.nixos-unstable-small or { }
-                                   // import inputs.small {
-                                     inherit (pkgs) config;
-                                     inherit system;
-                                   };
-            nixos-2003-small = super.unstable or { }
-                               // import inputs.rel2003 {
-                                 inherit (pkgs) config;
-                                 inherit system;
-                               };
-            nixos-2009-small = super.unstable or { }
-                               // import inputs.rel2009 {
-                                 inherit (pkgs) config;
-                                 inherit system;
-                               };
-          })
-
-          # # nix:
-          # inputs.nix.overlay
-
-          # nur:
-          inputs.nur.overlay
-        ];
-      };
-    };
-
-    hmModules = [ inputs.self.hmModules.myemacs inputs.self.hmModules.myfish ]
-                ++ inputs.private.lib.getHmModulesFor hostName;
+    pkgs = self.legacyPackages.${system};
 
     # Final modules set
-    modules = [
+    modules = nixosModules ++ [
       ./modules
-
-      nixpkgs
+      (self.lib.mkNixpkgsModule pkgs)
 
       ({ config, ... }: {
         boot.initrd.secrets = { "/etc/myconfig" = lib.cleanSource ./.; };
@@ -104,19 +58,8 @@ in system: hostName: customConfig:
 
       # home manager:
       inputs.home.nixosModules.home-manager
-      ({ config, ... }: {
-        options.home-manager.users = lib.mkOption {
-          type = with lib.types;
-            attrsOf (submoduleWith {
-              specialArgs = specialArgs // { super = config; };
-              modules = hmModules;
-            });
-        };
+      ({ ... }: {
         config = {
-          home-manager = {
-            useUserPackages = true;
-            useGlobalPkgs = true;
-          };
           system.activationScripts.genProfileManagementDirs =
             "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}";
           systemd.services.mk-hm-dirs = {
@@ -129,14 +72,11 @@ in system: hostName: customConfig:
           };
         };
       })
-
-      inputs.self.nixosModules.myemacs
-      inputs.self.nixosModules.myfish
     ];
 
     specialArgs = {
       inherit myconfig;
-      flake = inputs.self;
+      flake = self;
 
       modules = modules ++ [
         ({ config, ... }: {
@@ -166,17 +106,17 @@ in system: hostName: customConfig:
         }) (inputs // { nixpkgs = inputs.master; });
         nix.nixPath = lib.mapAttrsToList (k: v: "${k}=${toString v}") {
           nixpkgs = "${inputs.nixpkgs}/";
-          nixos = "${inputs.self}/";
+          nixos = "${self}/";
           home-manager = "${inputs.home}/";
         };
-        system.configurationRevision = inputs.self.rev or "dirty";
+        system.configurationRevision = self.rev or "dirty";
       }];
     };
   in lib.nixosSystem {
     inherit system specialArgs;
-    modules = modules ++ specialArgs.extraModules
-              ++ [ (./hosts/host + ".${hostName}") ] ++ [ customConfig ]
+    modules = nixosModules ++ modules ++ specialArgs.extraModules
+              ++ [ (./hosts/host + ".${hostName}") ]
               ++ [ (./secrets + "/${hostName}") ]
-              ++ (inputs.self.lib.importall (./secrets + "/${hostName}/imports"))
+              ++ (self.lib.importall (./secrets + "/${hostName}/imports"))
               ++ inputs.private.lib.getNixosModulesFor hostName;
   }

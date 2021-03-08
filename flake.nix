@@ -41,17 +41,10 @@
     hardware.url = "github:nixos/nixos-hardware";
   };
 
-  outputs = inputs:
+  outputs = {self,...}@inputs:
     let
       inherit (inputs.nixpkgs) lib;
-
-      allSystems = [ "x86_64-linux" "i686-linux" "aarch64-linux" ];
-      eachDefaultSystem = inputs.flake-utils.lib.eachSystem allSystems;
-
-      nixpkgsConfig = { allowUnfree = true; };
-
     in {
-      lib.mkConfiguration = import ./flake.nixosConfigurations.nix inputs;
       lib.importall = path:
         if builtins.pathExists path then
           let content = builtins.readDir path;
@@ -62,31 +55,97 @@
         else
           [ ];
 
-      nixosModules.core = import ./core/output.nixosModule.nix inputs;
-      hmModules.core = import ./core/output.hmModule.nix inputs;
+      lib.mkNixpkgsModule = pkgs:
+        ({ config, ... }: {
+          config.nixpkgs = {
+            inherit pkgs;
+            inherit (pkgs) config system;
+            overlays = [
+              (self: super: {
+                unstable = super.unstable or { }
+                           // import inputs.master {
+                             inherit (pkgs) config system;
+                           };
+                nixos-unstable = super.nixos-unstable or { }
+                                 // import inputs.large {
+                                   inherit (pkgs) config system;
+                                 };
+                nixos-unstable-small = super.nixos-unstable-small or { }
+                                       // import inputs.small {
+                                         inherit (pkgs) config system;
+                                       };
+                nixos-2003-small = super.unstable or { }
+                                   // import inputs.rel2003 {
+                                     inherit (pkgs) config system;
+                                   };
+                nixos-2009-small = super.unstable or { }
+                                   // import inputs.rel2009 {
+                                     inherit (pkgs) config system;
+                                   };
+              })
+            ];
+          };
+        });
 
-      nixosModules.base = import ./base/output.nixosModule.nix inputs;
-      hmModules.base = import ./base/output.hmModule.nix inputs;
-
+      ##########################################################################
+      ## profiles and modules ##################################################
+      ##########################################################################
       nixosModules.myemacs = inputs.myemacs.nixosModule;
       hmModules.myemacs = inputs.myemacs.hmModule;
 
       nixosModules.myfish = inputs.myfish.nixosModule;
       hmModules.myfish = inputs.myfish.hmModule;
 
+      nixosModules.core = {...}: {
+        imports = [
+          (import ./core/output.nixosModule.nix inputs)
+        ];
+        config.nixpkgs.overlays = [
+          inputs.nur.overlay
+        ];
+      };
+      hmModules.core = import ./core/output.hmModule.nix inputs;
+
+      nixosModules.base = import ./base/output.nixosModule.nix inputs;
+      hmModules.base = import ./base/output.hmModule.nix inputs;
+
+      ##########################################################################
+      ## configurations ########################################################
+      ##########################################################################
+      lib.mkConfiguration = import ./lib.mkConfiguration.nix inputs;
 
       nixosConfigurations = {
-        container = inputs.self.lib.mkConfiguration "x86_64-linux" "x1extremeG2" {
+        container = self.lib.mkConfiguration "x86_64-linux" "x1extremeG2" {
           config = { boot.isContainer = true; };
         };
-        x1extremeG2 = inputs.self.lib.mkConfiguration "x86_64-linux" "x1extremeG2" { };
-        workstation = inputs.self.lib.mkConfiguration "x86_64-linux" "workstation" {
+        x1extremeG2 = self.lib.mkConfiguration "x86_64-linux" "x1extremeG2"
+          {
+            nixosModules = [
+              self.nixosModules.base
+              self.nixosModules.myemacs
+              self.nixosModules.myfish
+            ];
+            hmModules = [
+              self.hmModules.base
+              self.hmModules.myemacs
+              self.hmModules.myfish
+            ];
+          };
+        workstation = self.lib.mkConfiguration "x86_64-linux" "workstation" {
           # imports = [ (myconfig.lib.fixIp "workstation" "enp39s0") ];
         };
       };
 
+      ##########################################################################
+      ##########################################################################
+      ##########################################################################
+    } // (let
+      allSystems = [ "x86_64-linux" "aarch64-linux" ];
+      eachDefaultSystem = inputs.flake-utils.lib.eachSystem allSystems;
 
-    } // (eachDefaultSystem (system: {
+      nixpkgsConfig = { allowUnfree = true; };
+
+    in eachDefaultSystem (system: {
       legacyPackages = import inputs.nixpkgs {
         inherit system;
         config = nixpkgsConfig;
@@ -107,7 +166,7 @@
           let
             nixConf = ''
               ${lib.optionalString (builtins.pathExists /etc/nix/nix.conf)
-              (builtins.readFile /etc/nix/nix.conf)}
+                (builtins.readFile /etc/nix/nix.conf)}
               experimental-features = nix-command flakes ca-references
               print-build-logs = true
             ''; # access-tokens = "github.com=${secrets.git.github.oauth-token}"
