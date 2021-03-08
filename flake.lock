@@ -433,7 +433,7 @@
         "z": "z"
       },
       "locked": {
-        "narHash": "sha256-BHruWAsfk/Ik8r418y1hA2+UP+YwTPe0JlJhAHCW4cw=",
+        "narHash": "sha256-H8GUOP7z9bqXjvldA0eNKudX7Gvh4NvHbKWnLrcEeCA=",
         "path": "flakes/myfish/",
         "type": "path"
       },
