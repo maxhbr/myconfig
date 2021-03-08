@@ -79,7 +79,7 @@ in {
         hmModules = [
           inputs.self.hmModules.myemacs
           inputs.self.hmModules.myfish
-        ];
+        ] ++ inputs.private.lib.getHmModulesFor hostName;
 
         # Final modules set
         modules = [
@@ -178,8 +178,9 @@ in {
                   ++ specialArgs.extraModules
                   ++ [(./host + ".${hostName}")]
                   ++ [customConfig]
-		  ++ [(./secrets + "/${hostName}")]
-		  ++ (importall (./secrets + "/${hostName}/imports"));
+                  ++ [(./secrets + "/${hostName}")]
+                  ++ (importall (./secrets + "/${hostName}/imports"))
+                  ++ inputs.private.lib.getNixosModulesFor hostName;
       };
   in {
     container = mkConfiguration "x86_64-linux" "x1extremeG2"

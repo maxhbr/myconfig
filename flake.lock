@@ -240,6 +240,22 @@
         "type": "github"
       }
     },
+    "flake-compat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1606424373,
+        "narHash": "sha256-oq8d4//CJOrVj+EcOaSXvMebvuTkmBJuT5tzlfewUnQ=",
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "rev": "99f1c2157fba4bfe6211a321fd0ee43199025dbf",
+        "type": "github"
+      },
+      "original": {
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "locked": {
         "lastModified": 1614513358,
@@ -353,6 +369,24 @@
         "type": "github"
       }
     },
+    "license-compliance-toolbox": {
+      "inputs": {
+        "flake-compat": "flake-compat",
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "ort": "ort"
+      },
+      "locked": {
+        "narHash": "sha256-UJ4r8jhpQpB1RQVA/sGdR9M55nabAbfxn174YR+yibk=",
+        "path": "flakes/license-compliance-toolbox/",
+        "type": "path"
+      },
+      "original": {
+        "path": "flakes/license-compliance-toolbox/",
+        "type": "path"
+      }
+    },
     "master": {
       "locked": {
         "lastModified": 1615047539,
@@ -405,6 +439,25 @@
       },
       "original": {
         "path": "flakes/myfish/",
+        "type": "path"
+      }
+    },
+    "myxmonad": {
+      "inputs": {
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "narHash": "sha256-B5UFia8ZFRIDMw/q1Jo6ZlX83UzrlbRoP9QOd44w3dM=",
+        "path": "flakes/myxmonad/",
+        "type": "path"
+      },
+      "original": {
+        "path": "flakes/myxmonad/",
         "type": "path"
       }
     },
@@ -476,6 +529,19 @@
         "ref": "nixos-unstable",
         "repo": "nixpkgs",
         "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1615047539,
+        "narHash": "sha256-uc9vCvT6EiChcoYmsWb7VjLSL3ftNnvQk/CrFTG5EPg=",
+        "path": "/nix/store/5cppqk9bqv404plfzrgncmhcaqjl8qar-source",
+        "rev": "9fa29c0df25cef249645a11c3b9de4dc996bb5e9",
+        "type": "path"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "type": "indirect"
       }
     },
     "nose": {
@@ -557,6 +623,22 @@
         "type": "github"
       }
     },
+    "ort": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1613750629,
+        "narHash": "sha256-+0oeNQLao+RRbt4kz1miaXtwsDJ5zqwYhlVD5EhfHA8=",
+        "owner": "oss-review-toolkit",
+        "repo": "ort",
+        "rev": "640bcea691c367c1807a0166f1e188026a08ccde",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oss-review-toolkit",
+        "repo": "ort",
+        "type": "github"
+      }
+    },
     "php-extras": {
       "flake": false,
       "locked": {
@@ -571,6 +653,20 @@
         "owner": "arnested",
         "repo": "php-extras",
         "type": "github"
+      }
+    },
+    "private": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "narHash": "sha256-x8iJdgpM3g1K0W3R77I9m8EJTTLmL15vqbNSIlM+xFY=",
+        "path": "../myconfig-private",
+        "type": "path"
+      },
+      "original": {
+        "path": "../myconfig-private",
+        "type": "path"
       }
     },
     "rel2003": {
@@ -628,12 +724,15 @@
         "hardware": "hardware",
         "home": "home",
         "large": "large",
+        "license-compliance-toolbox": "license-compliance-toolbox",
         "master": "master",
         "myemacs": "myemacs",
         "myfish": "myfish",
+        "myxmonad": "myxmonad",
         "nix-doom-emacs": "nix-doom-emacs",
         "nixpkgs": "nixpkgs",
         "nur": "nur",
+        "private": "private",
         "rel2003": "rel2003",
         "rel2009": "rel2009",
         "small": "small",

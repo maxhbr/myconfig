@@ -2,6 +2,8 @@
   description = "myconfig";
 
   inputs = {
+    private.url = "path:../myconfig-private";
+
     master.url = "github:nixos/nixpkgs/master";
     staged.url = "github:nixos/nixpkgs/staging";
     small.url = "github:nixos/nixpkgs/nixos-unstable-small";
@@ -29,9 +31,12 @@
 
     myfish.url = "path:flakes/myfish/";
 
-    # myxmonad.url = "path:flakes/myxmonad/";
-    # myxmonad.inputs.nixpkgs.follows = "nixpkgs";
-    # myxmonad.inputs.flake-utils.follows = "flake-utils";
+    myxmonad.url = "path:flakes/myxmonad/";
+    myxmonad.inputs.nixpkgs.follows = "nixpkgs";
+    myxmonad.inputs.flake-utils.follows = "flake-utils";
+
+    license-compliance-toolbox.url = "path:flakes/license-compliance-toolbox/";
+    license-compliance-toolbox.inputs.nixpkgs.follows = "nixpkgs";
 
     hardware.url = "github:nixos/nixos-hardware";
   };

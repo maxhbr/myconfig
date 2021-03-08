@@ -9,7 +9,7 @@
   outputs = inputs:
     let
       inherit (inputs.nixpkgs) lib;
-      allSystems = [ "x86_64-linux" "i686-linux" "aarch64-linux" ];
+      allSystems = [ "x86_64-linux" "aarch64-linux" ];
       eachDefaultSystem = inputs.flake-utils.lib.eachSystem allSystems;
     in eachDefaultSystem (system: let
       pkgs = import inputs.nixpkgs { inherit system; };
@@ -21,7 +21,11 @@
       myxev = pkgs.writeShellScriptBin "myxev" ''
     ${pkgs.xorg.xev}/bin/xev -id $(${pkgs.xdotool}/bin/xdotool getactivewindow)
   '';
-      in {
+    in {
+      packages = {
+        inherit my-mute-telco my-xmobar my-xmonad;
+      };
+
       nixosModule = { config, lib, pkgs, ... }:
         {
           config = (lib.mkIf config.services.xserver.enable {
