@@ -378,7 +378,7 @@
         "ort": "ort"
       },
       "locked": {
-        "narHash": "sha256-UJ4r8jhpQpB1RQVA/sGdR9M55nabAbfxn174YR+yibk=",
+        "narHash": "sha256-cRfYsJdn59IyViMo4A0c62CAJ71Vr8ApSHoTSobAaII=",
         "path": "flakes/license-compliance-toolbox/",
         "type": "path"
       },
@@ -410,7 +410,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-a1D3UXxolCQzwHRhRkhgmBV4vwydtOj8dCjmuUvJ2Ks=",
+        "narHash": "sha256-orcluGTZYdTwwCvTSXVLPKSm8raMkCDuyKlbFkOrcjQ=",
         "path": "flakes/myemacs/",
         "type": "path"
       },
@@ -452,7 +452,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-B5UFia8ZFRIDMw/q1Jo6ZlX83UzrlbRoP9QOd44w3dM=",
+        "narHash": "sha256-l4PSvEopOu9og6lwHae2otvuYSk0zcfITUmHMQPB0pM=",
         "path": "flakes/myxmonad/",
         "type": "path"
       },
