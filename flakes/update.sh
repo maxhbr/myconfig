@@ -8,5 +8,6 @@ find "$(cd "$(dirname "$0")" && pwd)" -maxdepth 1 -mindepth 1 -type d -print0 |
         ( cd "$flake";
           nix --experimental-features 'nix-command flakes' flake update)
         ( cd "$flake/../..";
-          nix --experimental-features 'nix-command flakes' flake update --update-input "$(basename "$flake")")
+          nix --experimental-features 'nix-command flakes' flake update --update-input "$(basename "$flake")"
+          nix --experimental-features 'nix-command flakes' flake show "$(basename "$flake")")
     done
