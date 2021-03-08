@@ -98,16 +98,29 @@
 
       nixosModules.core = {...}: {
         imports = [
-          (import ./core/output.nixosModule.nix inputs)
+          inputs.home.nixosModules.home-manager
+          ({ config, lib, ... }: {
+            config = {
+              home-manager = {
+                useUserPackages = true;
+                useGlobalPkgs = true;
+              };
+            };
+          })
+          ./modules
+          self.nixosModules.myfish
+          self.nixosModules.myemacs
         ];
         config.nixpkgs.overlays = [
           inputs.nur.overlay
         ];
       };
-      hmModules.core = import ./core/output.hmModule.nix inputs;
-
-      nixosModules.base = import ./base/output.nixosModule.nix inputs;
-      hmModules.base = import ./base/output.hmModule.nix inputs;
+      hmModules.core = {...}: {
+        imports = [
+          self.hmModules.myemacs
+          self.hmModules.myfish
+        ];
+      };
 
       ##########################################################################
       ## configurations ########################################################
@@ -132,14 +145,15 @@
         x1extremeG2 = self.lib.mkConfiguration' "x86_64-linux" "x1extremeG2"
           {
             nixosModules = [
-              self.nixosModules.base
-              self.nixosModules.myemacs
-              self.nixosModules.myfish
+              {
+                config = {
+                  hardware.enableRedistributableFirmware = true;
+                };
+              }
+              self.nixosModules.core
             ];
             hmModules = [
-              self.hmModules.base
-              self.hmModules.myemacs
-              self.hmModules.myfish
+              self.hmModules.core
             ];
           };
         workstation = self.lib.mkConfiguration' "x86_64-linux" "workstation" {
@@ -179,7 +193,6 @@
               ${lib.optionalString (builtins.pathExists /etc/nix/nix.conf)
                 (builtins.readFile /etc/nix/nix.conf)}
               experimental-features = nix-command flakes ca-references
-              print-build-logs = true
             ''; # access-tokens = "github.com=${secrets.git.github.oauth-token}"
           in linkFarm "nix-conf-dir" ([
             {

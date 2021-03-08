@@ -42,7 +42,6 @@ in system: hostName: { nixosModules ? [], hmModules ? []}:
 
     # Final modules set
     finalModules = nixosModules ++ [
-      ./modules
       (self.lib.mkNixpkgsModule pkgs)
 
       ({ config, ... }: {
@@ -103,7 +102,6 @@ in system: hostName: { nixosModules ? [], hmModules ? []}:
         nix.package = lib.mkDefault pkgs.nixFlakes;
         nix.extraOptions = ''
           experimental-features = nix-command flakes
-          print-build-logs = true
 '';
 
         nix.registry = lib.mapAttrs (id: flake: {
