@@ -76,6 +76,11 @@ in {
           };
         };
 
+        hmModules = [
+          inputs.self.hmModules.myemacs
+          inputs.self.hmModules.myfish
+        ];
+
         # Final modules set
         modules = [
           ./modules
@@ -97,30 +102,34 @@ in {
 
           # home manager:
           inputs.home.nixosModules.home-manager
-          {
-            home-manager = {
-              useUserPackages = true;
-              useGlobalPkgs = true;
+          ({ config, ... }: {
+            options.home-manager.users = lib.mkOption {
+              type = with lib.types;
+                attrsOf (submoduleWith {
+                  specialArgs = specialArgs // { super = config; };
+                  modules = hmModules;
+                });
             };
-            system.activationScripts.genProfileManagementDirs =
-              "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}";
-            systemd.services.mk-hm-dirs = {
-              serviceConfig.Type = "oneshot";
-              script = ''
-                mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
-                chown ${myconfig.user} /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
-              '';
-              wantedBy = [ "home-manager-${myconfig.user}.service" ];
+            config = {
+              home-manager = {
+                useUserPackages = true;
+                useGlobalPkgs = true;
+              };
+              system.activationScripts.genProfileManagementDirs =
+                "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}";
+              systemd.services.mk-hm-dirs = {
+                serviceConfig.Type = "oneshot";
+                script = ''
+                  mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
+                  chown ${myconfig.user} /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
+                '';
+                wantedBy = [ "home-manager-${myconfig.user}.service" ];
+              };
             };
-          }
+          })
 
           inputs.self.nixosModules.myemacs
           inputs.self.nixosModules.myfish
-        ];
-
-        hmModules = [
-          inputs.self.hmModules.myemacs
-          inputs.self.hmModules.myfish
         ];
 
         specialArgs = {
@@ -137,9 +146,6 @@ in {
                 assertion = config.networking.hostName == hostName;
                 message = "hostname should be set!";
               }];
-              home-manager.users."${myconfig.user}" = { ... }: {
-                imports = hmModules;
-              };
             })
             { _module.args = specialArgs; }
           ];

@@ -71,7 +71,7 @@
             aspellDicts.en
 
             shellcheck
-          ] ++ lib.optional config.services.xserver.enable xclipedit;
+          ];
         # programs.zsh.shellAliases = {
         #   magit = ''${doom-emacs-bin-path} -e "(magit-status \"$(pwd)\")"'';
         # };

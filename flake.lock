@@ -376,7 +376,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-0HGW46q57hF4j2fAMWAjF5NIeSz6JW93uQmbFuCzySE=",
+        "narHash": "sha256-VOXqqucfldj2CDi15LqhJTV0/RN0NZte3iAmiag+xxM=",
         "path": "flakes/myemacs/",
         "type": "path"
       },
@@ -399,7 +399,7 @@
         "z": "z"
       },
       "locked": {
-        "narHash": "sha256-PbwRhwxaUtF2o0icer+wm4fmFTacxeyR3SaIxyFGNX0=",
+        "narHash": "sha256-z+mnn+eQFz30aLxGJ/Ys4zgL/JyPtDnn2YIHA4tWxw4=",
         "path": "flakes/myfish/",
         "type": "path"
       },
