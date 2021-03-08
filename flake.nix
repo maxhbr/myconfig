@@ -2,8 +2,6 @@
   description = "myconfig";
 
   inputs = {
-    myconfig-base.url = "path:../base";
-
     private.url = "path:../myconfig-private";
 
     master.url = "github:nixos/nixpkgs/master";
@@ -43,10 +41,8 @@
     hardware.url = "github:nixos/nixos-hardware";
   };
 
-  outputs = inputs_:
+  outputs = inputs:
     let
-      inputs = inputs_.myconfig-base.aggregatedInputs // inputs_;
-
       inherit (inputs.nixpkgs) lib;
 
       allSystems = [ "x86_64-linux" "i686-linux" "aarch64-linux" ];
@@ -55,6 +51,9 @@
       nixpkgsConfig = { allowUnfree = true; };
 
     in (import ./flake.nixosConfigurations.nix { inherit inputs; }) // {
+
+      nixosModules.base = import ./base/output.nixosModule.nix inputs;
+      hmModules.base = import ./base/output.hmModule.nix inputs;
 
       nixosModules.myemacs = inputs.myemacs.nixosModule;
       hmModules.myemacs = inputs.myemacs.hmModule;
