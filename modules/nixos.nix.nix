@@ -9,13 +9,6 @@ in {
       # - https://nixos.wiki/wiki/Flakes
       # - https://www.tweag.io/blog/2020-05-25-flakes/
       config = {
-        nix = {
-          package = pkgs.nixFlakes;
-          extraOptions =
-            lib.optionalString (config.nix.package == pkgs.nixFlakes)
-            "experimental-features = nix-command"; # flakes
-        };
-
         home-manager.users."${user}" = {
           programs.fish = {
             shellAbbrs = {

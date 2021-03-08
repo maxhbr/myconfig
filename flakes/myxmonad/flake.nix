@@ -22,7 +22,7 @@
     ${pkgs.xorg.xev}/bin/xev -id $(${pkgs.xdotool}/bin/xdotool getactivewindow)
   '';
       in {
-      module = { config, lib, pkgs, ... }:
+      nixosModule = { config, lib, pkgs, ... }:
         {
           config = (lib.mkIf config.services.xserver.enable {
             environment.variables = {

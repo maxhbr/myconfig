@@ -114,13 +114,13 @@ in {
             };
           }
 
-          inputs.myemacs.nixosModule
-          inputs.myfish.nixosModule
+          inputs.self.nixosModules.myemacs
+          inputs.self.nixosModules.myfish
         ];
 
         hmModules = [
-          inputs.myemacs.hmModule
-          inputs.myfish.hmModule
+          inputs.self.hmModules.myemacs
+          inputs.self.hmModules.myfish
         ];
 
         specialArgs = {
@@ -148,6 +148,8 @@ in {
           extraModules = [
             {
               nix.package = lib.mkDefault pkgs.nixFlakes;
+              nix.extraOptions = "experimental-features = nix-command flakes";
+
               nix.registry = lib.mapAttrs (id: flake: {
                 inherit flake;
                 from = {
@@ -174,6 +176,12 @@ in {
 		  ++ (importall (./secrets + "/${hostName}/imports"));
       };
   in {
+    container = mkConfiguration "x86_64-linux" "x1extremeG2"
+      {
+         config = {
+           boot.isContainer = true;
+         };
+      };
     x1extremeG2 = mkConfiguration "x86_64-linux" "x1extremeG2"
       {
         imports = [

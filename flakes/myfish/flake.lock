@@ -1,0 +1,180 @@
+{
+  "nodes": {
+    "agnoster": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1586985273,
+        "narHash": "sha256-jGClZu74ENxJqrONNSkqhpAoenpnt97sPc/oArh0zi0=",
+        "owner": "hauleth",
+        "repo": "agnoster",
+        "rev": "1ae9625e27ef47d2e6abc60156cd154cd1c37f46",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hauleth",
+        "repo": "agnoster",
+        "type": "github"
+      }
+    },
+    "bax": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1614578677,
+        "narHash": "sha256-Q/9YVdiRSJw1SdcfQv2h7Lj6EyFustRk+kmh1eRRQ6k=",
+        "owner": "jorgebucaran",
+        "repo": "bax.fish",
+        "rev": "07f2bcea94391946cab747199dd5597366532dda",
+        "type": "github"
+      },
+      "original": {
+        "owner": "jorgebucaran",
+        "repo": "bax.fish",
+        "type": "github"
+      }
+    },
+    "done": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1611520292,
+        "narHash": "sha256-exW2dF45AuO8jUw3uSu9XG9j4sKhGc7rWYHMKGcq88Q=",
+        "owner": "franciscolourenco",
+        "repo": "done",
+        "rev": "f7886fdc26cd849ddf21fb05d516548914dd060a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "franciscolourenco",
+        "repo": "done",
+        "type": "github"
+      }
+    },
+    "fasd": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1613331538,
+        "narHash": "sha256-8JASaNylXAGnWd2IV88juk73b8eJJlVrpyiRZUwHGFQ=",
+        "owner": "oh-my-fish",
+        "repo": "plugin-fasd",
+        "rev": "98c4c729780d8bd0a86031db7d51a97d55025cf5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oh-my-fish",
+        "repo": "plugin-fasd",
+        "type": "github"
+      }
+    },
+    "fish-async-prompt": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1610734454,
+        "narHash": "sha256-sSM8jB81TO+n0JVl8ekfVbw99K5NzEdxi1VqWkhIJaY=",
+        "owner": "acomagu",
+        "repo": "fish-async-prompt",
+        "rev": "40f30a4048b81f03fa871942dcb1671ea0fe7a53",
+        "type": "github"
+      },
+      "original": {
+        "owner": "acomagu",
+        "repo": "fish-async-prompt",
+        "type": "github"
+      }
+    },
+    "fish-ssh-agent": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1605087262,
+        "narHash": "sha256-e94Sd1GSUAxwLVVo5yR6msq0jZLOn2m+JZJ6mvwQdLs=",
+        "owner": "danhper",
+        "repo": "fish-ssh-agent",
+        "rev": "fd70a2afdd03caf9bf609746bf6b993b9e83be57",
+        "type": "github"
+      },
+      "original": {
+        "owner": "danhper",
+        "repo": "fish-ssh-agent",
+        "type": "github"
+      }
+    },
+    "foreign-env": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1547655379,
+        "narHash": "sha256-er1KI2xSUtTlQd9jZl1AjqeArrfBxrgBLcw5OqinuAM=",
+        "owner": "oh-my-fish",
+        "repo": "plugin-foreign-env",
+        "rev": "dddd9213272a0ab848d474d0cbde12ad034e65bc",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oh-my-fish",
+        "repo": "plugin-foreign-env",
+        "type": "github"
+      }
+    },
+    "fzf": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1614962741,
+        "narHash": "sha256-s0TTMckRI1nwF39vkrjwjS4dWEGLCfX5mDPbnp3NWcI=",
+        "owner": "jethrokuan",
+        "repo": "fzf",
+        "rev": "8a805cd2d3482f4a9ce344cf559a6403dd166e96",
+        "type": "github"
+      },
+      "original": {
+        "owner": "jethrokuan",
+        "repo": "fzf",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "agnoster": "agnoster",
+        "bax": "bax",
+        "done": "done",
+        "fasd": "fasd",
+        "fish-async-prompt": "fish-async-prompt",
+        "fish-ssh-agent": "fish-ssh-agent",
+        "foreign-env": "foreign-env",
+        "fzf": "fzf",
+        "tmux": "tmux",
+        "z": "z"
+      }
+    },
+    "tmux": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1465517968,
+        "narHash": "sha256-EpE8IeZX3KDN4SUB4d9vGIjXpYMmRzw47jqT9lamRQ0=",
+        "owner": "oh-my-fish",
+        "repo": "plugin-tmux",
+        "rev": "7d43f4e0959649fb2367c1525da8a0bd9075b723",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oh-my-fish",
+        "repo": "plugin-tmux",
+        "type": "github"
+      }
+    },
+    "z": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1610945496,
+        "narHash": "sha256-TEaIR1NbadNk1ParPDR72rfHRvtWk/CpklfyJU2OdjU=",
+        "owner": "jethrokuan",
+        "repo": "z",
+        "rev": "e0e1b9dfdba362f8ab1ae8c1afc7ccf62b89f7eb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "jethrokuan",
+        "repo": "z",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
