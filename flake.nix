@@ -113,12 +113,23 @@
       ## configurations ########################################################
       ##########################################################################
       lib.mkConfiguration = import ./lib.mkConfiguration.nix inputs;
+      lib.mkConfiguration' = system: hostName: args:
+        (let
+          cfg = self.lib.mkConfiguration system hostName args;
+        in lib.nixosSystem
+          (cfg // {
+            modules = cfg.modules ++ [ (./hosts/host + ".${hostName}") ]
+              ++ [ (./secrets + "/${hostName}") ]
+              ++ (self.lib.importall (./secrets + "/${hostName}/imports"))
+              ++ inputs.private.lib.getNixosModulesFor hostName;
+          })
+        );
 
       nixosConfigurations = {
-        container = self.lib.mkConfiguration "x86_64-linux" "x1extremeG2" {
+        container = self.lib.mkConfiguration' "x86_64-linux" "x1extremeG2" {
           config = { boot.isContainer = true; };
         };
-        x1extremeG2 = self.lib.mkConfiguration "x86_64-linux" "x1extremeG2"
+        x1extremeG2 = self.lib.mkConfiguration' "x86_64-linux" "x1extremeG2"
           {
             nixosModules = [
               self.nixosModules.base
@@ -131,7 +142,7 @@
               self.hmModules.myfish
             ];
           };
-        workstation = self.lib.mkConfiguration "x86_64-linux" "workstation" {
+        workstation = self.lib.mkConfiguration' "x86_64-linux" "workstation" {
           # imports = [ (myconfig.lib.fixIp "workstation" "enp39s0") ];
         };
       };

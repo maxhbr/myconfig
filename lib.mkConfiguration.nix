@@ -41,7 +41,7 @@ in system: hostName: { nixosModules ? [], hmModules ? []}:
     pkgs = self.legacyPackages.${system};
 
     # Final modules set
-    modules = nixosModules ++ [
+    finalModules = nixosModules ++ [
       ./modules
       (self.lib.mkNixpkgsModule pkgs)
 
@@ -57,8 +57,14 @@ in system: hostName: { nixosModules ? [], hmModules ? []}:
       })
 
       # home manager:
-      inputs.home.nixosModules.home-manager
-      ({ ... }: {
+      ({ config, lib, ... }: {
+        options.home-manager.users = lib.mkOption {
+          type = with lib.types;
+            attrsOf (submoduleWith {
+              specialArgs = specialArgs // { super = config; };
+              modules = hmModules;
+            });
+        };
         config = {
           system.activationScripts.genProfileManagementDirs =
             "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}";
@@ -78,7 +84,7 @@ in system: hostName: { nixosModules ? [], hmModules ? []}:
       inherit myconfig;
       flake = self;
 
-      modules = modules ++ [
+      modules = finalModules ++ [
         ({ config, ... }: {
           environment.etc."machine-id".text =
             builtins.hashString "md5" hostName;
@@ -95,7 +101,10 @@ in system: hostName: { nixosModules ? [], hmModules ? []}:
       # Modules to propagate to containers
       extraModules = [{
         nix.package = lib.mkDefault pkgs.nixFlakes;
-        nix.extraOptions = "experimental-features = nix-command flakes";
+        nix.extraOptions = ''
+          experimental-features = nix-command flakes
+          print-build-logs = true
+'';
 
         nix.registry = lib.mapAttrs (id: flake: {
           inherit flake;
@@ -112,11 +121,7 @@ in system: hostName: { nixosModules ? [], hmModules ? []}:
         system.configurationRevision = self.rev or "dirty";
       }];
     };
-  in lib.nixosSystem {
+  in {
     inherit system specialArgs;
-    modules = nixosModules ++ modules ++ specialArgs.extraModules
-              ++ [ (./hosts/host + ".${hostName}") ]
-              ++ [ (./secrets + "/${hostName}") ]
-              ++ (self.lib.importall (./secrets + "/${hostName}/imports"))
-              ++ inputs.private.lib.getNixosModulesFor hostName;
+    modules = finalModules ++ specialArgs.extraModules;
   }
