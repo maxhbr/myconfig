@@ -117,11 +117,11 @@
             }
             {
               name = "foreign-env";
-              src = inputs.plugin-foreign-env;
+              src = inputs.foreign-env;
             }
             {
               name = "tmux";
-              src = inputs.plugin-tmux;
+              src = inputs.tmux;
             }
             {
               name = "z";

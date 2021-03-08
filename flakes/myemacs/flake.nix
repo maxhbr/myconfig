@@ -53,7 +53,7 @@
             '';
             };
           in "${doomPrivateDeriv}";
-          extraPackages = epkgs: [
+          extraPackages = [
             pkgs.mu
             (pkgs.nerdfonts.override { fonts = [ "Inconsolata" ]; })
           ];
