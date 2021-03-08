@@ -1,4 +1,5 @@
-{ config, lib, pkgs, ... }: let
+{ config, lib, pkgs, ... }:
+let
   steamcontroller-udev-rules = pkgs.writeTextFile {
     name = "steamcontroller-udev-rules";
     text = ''
@@ -34,9 +35,7 @@
 in {
   config = {
     services.udev.packages = [ steamcontroller-udev-rules ];
-    environment.systemPackages = [
-      steamcontroller-udev-rules
-      pkgs.steamcontroller
-    ];
+    environment.systemPackages =
+      [ steamcontroller-udev-rules pkgs.steamcontroller ];
   };
 }

@@ -50,7 +50,7 @@
 
       nixpkgsConfig = { allowUnfree = true; };
 
-    in (import ./flake.nixosConfigurations.nix {inherit inputs; }) // {
+    in (import ./flake.nixosConfigurations.nix { inherit inputs; }) // {
 
       nixosModules.myemacs = inputs.myemacs.nixosModule;
       hmModules.myemacs = inputs.myemacs.hmModule;
@@ -64,10 +64,11 @@
         config = nixpkgsConfig;
       };
 
-      devShell = let pkgs = import inputs.nixpkgs {
-        inherit system;
-        config = nixpkgsConfig;
-      };
+      devShell = let
+        pkgs = import inputs.nixpkgs {
+          inherit system;
+          config = nixpkgsConfig;
+        };
       in pkgs.mkShell {
         nativeBuildInputs = with pkgs; [ git git-crypt git-secrets nixfmt ];
         shellHook = ''

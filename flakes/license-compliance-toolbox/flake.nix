@@ -34,36 +34,36 @@
               (builtins.readFile ./dependencytrac.sh))
 
             (pkgs.writeShellScriptBin "tdd.sh" ''
-            getOutFolder() {
-                local input="$1"
-                local workdir="$(readlink -f "$input")"
-                local out="''${workdir%_tdd}_tdd"
-                mkdir -p "$out"
-                echo "$out"
-            }
+              getOutFolder() {
+                  local input="$1"
+                  local workdir="$(readlink -f "$input")"
+                  local out="''${workdir%_tdd}_tdd"
+                  mkdir -p "$out"
+                  echo "$out"
+              }
 
-            getSourceDir() {
-                local input="$1"
-                local out="$(getOutFolder "$input")"
-                local source="$out/$(basename "$input")"
-                if [[ -d "$input" ]]; then
-                    cp -r "$input" "$source"
-                    (>&2 ${scancode}/bin/scancode.sh -ex "$source")
-                fi
-                echo "$source"
-            }
+              getSourceDir() {
+                  local input="$1"
+                  local out="$(getOutFolder "$input")"
+                  local source="$out/$(basename "$input")"
+                  if [[ -d "$input" ]]; then
+                      cp -r "$input" "$source"
+                      (>&2 ${scancode}/bin/scancode.sh -ex "$source")
+                  fi
+                  echo "$source"
+              }
 
-            main() {
-                local input="$1"
-                local out="$(getOutFolder "$input")"
-                local sourceDir="$(getSourceDir "$input")"
+              main() {
+                  local input="$1"
+                  local out="$(getOutFolder "$input")"
+                  local sourceDir="$(getSourceDir "$input")"
 
-                ${scancode}/bin//scancode.sh "$sourceDir" || true
-                ${ort}/bin/ort.sh all "$sourceDir" || true
-            }
+                  ${scancode}/bin//scancode.sh "$sourceDir" || true
+                  ${ort}/bin/ort.sh all "$sourceDir" || true
+              }
 
-            main "$@"
-          '')
+              main "$@"
+            '')
           ];
         };
       };

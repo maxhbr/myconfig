@@ -27,16 +27,17 @@
   };
 
   outputs = { self, ... }@inputs: {
-    nixosModule = {pkgs, ...}: {
+    nixosModule = { pkgs, ... }: {
       imports = [ ./historybackup.nix ];
       config = {
         programs.fish = { enable = true; };
         environment = {
-          shells = [ "${pkgs.fish}/bin/fish" "/run/current-system/sw/bin/fish" ];
+          shells =
+            [ "${pkgs.fish}/bin/fish" "/run/current-system/sw/bin/fish" ];
         };
       };
     };
-    hmModule = {pkgs, ...}: {
+    hmModule = { pkgs, ... }: {
       imports = [ ./ex.hm.nix ];
       config = {
         home.packages = with pkgs; [ fasd fzf ];
@@ -93,7 +94,7 @@
           loginShellInit = "";
           interactiveShellInit = ''
             set -U fish_greeting
-  
+
             # see: https://fishshell.com/docs/current/#command-line-editor
             function hybrid_bindings --description "Vi-style bindings that inherit emacs-style bindings in all modes"
                 for mode in default insert visual
@@ -146,7 +147,8 @@
           ];
         };
         home.file = {
-          ".config/fish/functions/fish_prompt.fish".source = inputs.agnoster + "/fish_prompt.fish";
+          ".config/fish/functions/fish_prompt.fish".source = inputs.agnoster
+            + "/fish_prompt.fish";
           ".config/fish/functions/bax.fish".source = inputs.bax + "/bax.fish";
         };
       };

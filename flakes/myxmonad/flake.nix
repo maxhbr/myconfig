@@ -11,23 +11,21 @@
       inherit (inputs.nixpkgs) lib;
       allSystems = [ "x86_64-linux" "aarch64-linux" ];
       eachDefaultSystem = inputs.flake-utils.lib.eachSystem allSystems;
-    in eachDefaultSystem (system: let
-      pkgs = import inputs.nixpkgs { inherit system; };
-      my-mute-telco = pkgs.callPackage ./myMuteTelco { inherit pkgs; };
-      my-xmobar = pkgs.callPackage ./myXmobar { inherit pkgs my-mute-telco; };
-      my-xmonad = pkgs.haskellPackages.callPackage ./myXMonad {
-        inherit pkgs my-xmobar my-mute-telco;
-      };
-      myxev = pkgs.writeShellScriptBin "myxev" ''
-    ${pkgs.xorg.xev}/bin/xev -id $(${pkgs.xdotool}/bin/xdotool getactivewindow)
-  '';
-    in {
-      packages = {
-        inherit my-mute-telco my-xmobar my-xmonad;
-      };
+    in eachDefaultSystem (system:
+      let
+        pkgs = import inputs.nixpkgs { inherit system; };
+        my-mute-telco = pkgs.callPackage ./myMuteTelco { inherit pkgs; };
+        my-xmobar = pkgs.callPackage ./myXmobar { inherit pkgs my-mute-telco; };
+        my-xmonad = pkgs.haskellPackages.callPackage ./myXMonad {
+          inherit pkgs my-xmobar my-mute-telco;
+        };
+        myxev = pkgs.writeShellScriptBin "myxev" ''
+          ${pkgs.xorg.xev}/bin/xev -id $(${pkgs.xdotool}/bin/xdotool getactivewindow)
+        '';
+      in {
+        packages = { inherit my-mute-telco my-xmobar my-xmonad; };
 
-      nixosModule = { config, lib, pkgs, ... }:
-        {
+        nixosModule = { config, lib, pkgs, ... }: {
           config = (lib.mkIf config.services.xserver.enable {
             environment.variables = {
               XSECURELOCK_BLANK_TIMEOUT = "-1";
@@ -57,8 +55,7 @@
             };
           });
         };
-      hmModule = { config, lib, pkgs, ... }:
-        {
+        hmModule = { config, lib, pkgs, ... }: {
           imports = [ ./picom.hm.nix ];
           home.packages = with pkgs; [
             my-xmonad
@@ -72,18 +69,16 @@
           home.file = {
             ".myXmonadBinary" = {
               text = ''
-            "${my-xmonad}/bin/xmonad"
-          '';
+                "${my-xmonad}/bin/xmonad"
+              '';
               onChange = ''
-            if [[ -v DISPLAY ]] ; then
-              echo "Restarting xmonad"
-              $DRY_RUN_CMD ${
-                config.xsession.windowManager.command
-              } --restart
-            fi
-          '';
+                if [[ -v DISPLAY ]] ; then
+                  echo "Restarting xmonad"
+                  $DRY_RUN_CMD ${config.xsession.windowManager.command} --restart
+                fi
+              '';
             };
           };
         };
-    });
+      });
 }

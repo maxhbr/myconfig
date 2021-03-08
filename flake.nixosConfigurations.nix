@@ -1,4 +1,5 @@
-{inputs, ...}: let
+{ inputs, ... }:
+let
   inherit (inputs.nixpkgs) lib;
   importall = path:
     if builtins.pathExists path then
@@ -14,7 +15,8 @@
     user = "mhuber"; # TODO
     lib = rec {
       secretsDir = ./secrets;
-      getSecretPath = hostName: fileName: (secretsDir + "/${hostName}/${fileName}");
+      getSecretPath = hostName: fileName:
+        (secretsDir + "/${hostName}/${fileName}");
       getSecret = hostName: fileName:
         builtins.readFile (getSecretPath hostName fileName);
 
@@ -31,9 +33,10 @@
         networking = {
           interfaces."${deviceName}".ipv4.addresses = [{
             address = let newIpPath = getSecretPath hostName "newIp";
-                      in if builtins.pathExists newIpPath
-                         then getSecretNoNewline hostName "newIp"
-                         else getSecretNoNewline hostName "ip";
+            in if builtins.pathExists newIpPath then
+              getSecretNoNewline hostName "newIp"
+            else
+              getSecretNoNewline hostName "ip";
             prefixLength = 24;
           }];
           defaultGateway = "192.168.1.1";
@@ -54,16 +57,30 @@ in {
           inherit system;
           overlays = [
             (self: super: {
-              unstable = super.unstable or { }
-                         // import inputs.master {inherit (pkgs) config; inherit system;};
+              unstable = super.unstable or { } // import inputs.master {
+                inherit (pkgs) config;
+                inherit system;
+              };
               nixos-unstable = super.nixos-unstable or { }
-                               // import inputs.large {inherit (pkgs) config; inherit system;};
+                // import inputs.large {
+                  inherit (pkgs) config;
+                  inherit system;
+                };
               nixos-unstable-small = super.nixos-unstable-small or { }
-                                     // import inputs.small {inherit (pkgs) config; inherit system;};
+                // import inputs.small {
+                  inherit (pkgs) config;
+                  inherit system;
+                };
               nixos-2003-small = super.unstable or { }
-                                 // import inputs.rel2003 {inherit (pkgs) config; inherit system;};
+                // import inputs.rel2003 {
+                  inherit (pkgs) config;
+                  inherit system;
+                };
               nixos-2009-small = super.unstable or { }
-                                 // import inputs.rel2009 {inherit (pkgs) config; inherit system;};
+                // import inputs.rel2009 {
+                  inherit (pkgs) config;
+                  inherit system;
+                };
             })
 
             # # nix:
@@ -75,10 +92,8 @@ in {
         };
       };
 
-      hmModules = [
-        inputs.self.hmModules.myemacs
-        inputs.self.hmModules.myfish
-      ] ++ inputs.private.lib.getHmModulesFor hostName;
+      hmModules = [ inputs.self.hmModules.myemacs inputs.self.hmModules.myfish ]
+        ++ inputs.private.lib.getHmModulesFor hostName;
 
       # Final modules set
       modules = [
@@ -87,12 +102,10 @@ in {
         nixpkgs
 
         ({ config, ... }: {
-          boot.initrd.secrets = {
-            "/etc/myconfig" = lib.cleanSource ./.;
-          };
+          boot.initrd.secrets = { "/etc/myconfig" = lib.cleanSource ./.; };
           environment.etc."myconfig.current-system-packages".text = let
-            packages = builtins.map (p: "${p.name}")
-              config.environment.systemPackages;
+            packages =
+              builtins.map (p: "${p.name}") config.environment.systemPackages;
             sortedUnique =
               builtins.sort builtins.lessThan (lib.unique packages);
             formatted = builtins.concatStringsSep "\n" sortedUnique;
@@ -119,9 +132,9 @@ in {
             systemd.services.mk-hm-dirs = {
               serviceConfig.Type = "oneshot";
               script = ''
-                  mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
-                  chown ${myconfig.user} /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
-                '';
+                mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
+                chown ${myconfig.user} /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
+              '';
               wantedBy = [ "home-manager-${myconfig.user}.service" ];
             };
           };
@@ -136,7 +149,7 @@ in {
         flake = inputs.self;
 
         modules = modules ++ [
-          ({config, ...}: {
+          ({ config, ... }: {
             environment.etc."machine-id".text =
               builtins.hashString "md5" hostName;
             networking = { inherit hostName; };
@@ -150,53 +163,42 @@ in {
         ];
 
         # Modules to propagate to containers
-        extraModules = [
-          {
-            nix.package = lib.mkDefault pkgs.nixFlakes;
-            nix.extraOptions = "experimental-features = nix-command flakes";
+        extraModules = [{
+          nix.package = lib.mkDefault pkgs.nixFlakes;
+          nix.extraOptions = "experimental-features = nix-command flakes";
 
-            nix.registry = lib.mapAttrs (id: flake: {
-              inherit flake;
-              from = {
-                inherit id;
-                type = "indirect";
-              };
-            }) (inputs // { nixpkgs = inputs.master; });
-            nix.nixPath = lib.mapAttrsToList (k: v: "${k}=${toString v}") {
-              nixpkgs = "${inputs.nixpkgs}/";
-              nixos = "${inputs.self}/";
-              home-manager = "${inputs.home}/";
+          nix.registry = lib.mapAttrs (id: flake: {
+            inherit flake;
+            from = {
+              inherit id;
+              type = "indirect";
             };
-            system.configurationRevision = inputs.self.rev or "dirty";
-          }
-        ];
+          }) (inputs // { nixpkgs = inputs.master; });
+          nix.nixPath = lib.mapAttrsToList (k: v: "${k}=${toString v}") {
+            nixpkgs = "${inputs.nixpkgs}/";
+            nixos = "${inputs.self}/";
+            home-manager = "${inputs.home}/";
+          };
+          system.configurationRevision = inputs.self.rev or "dirty";
+        }];
       };
     in lib.nixosSystem {
       inherit system specialArgs;
-      modules = modules
-                ++ specialArgs.extraModules
-                ++ [(./host + ".${hostName}")]
-                ++ [customConfig]
-                ++ [(./secrets + "/${hostName}")]
-                ++ (importall (./secrets + "/${hostName}/imports"))
-                ++ inputs.private.lib.getNixosModulesFor hostName;
+      modules = modules ++ specialArgs.extraModules
+        ++ [ (./host + ".${hostName}") ] ++ [ customConfig ]
+        ++ [ (./secrets + "/${hostName}") ]
+        ++ (importall (./secrets + "/${hostName}/imports"))
+        ++ inputs.private.lib.getNixosModulesFor hostName;
     };
   nixosConfigurations = {
-    container = inputs.self.lib.mkConfiguration "x86_64-linux" "x1extremeG2"
-      {
-        config = {
-          boot.isContainer = true;
-        };
-      };
-    x1extremeG2 = inputs.self.lib.mkConfiguration "x86_64-linux" "x1extremeG2"
-      {
-      };
-    workstation = inputs.self.lib.mkConfiguration "x86_64-linux" "workstation"
-      {
-        imports = [
-          (myconfig.lib.fixIp "workstation" "enp39s0")
-        ];
-      };
+    container = inputs.self.lib.mkConfiguration "x86_64-linux" "x1extremeG2" {
+      config = { boot.isContainer = true; };
+    };
+    x1extremeG2 =
+      inputs.self.lib.mkConfiguration "x86_64-linux" "x1extremeG2" { };
+    workstation = inputs.self.lib.mkConfiguration "x86_64-linux" "workstation" {
+      imports = [ (myconfig.lib.fixIp "workstation" "enp39s0") ];
+    };
   };
 
 }

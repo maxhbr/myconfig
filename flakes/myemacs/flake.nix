@@ -7,23 +7,23 @@
   };
 
   outputs = { nix-doom-emacs, ... }: {
-    nixosModule = { config, lib, pkgs, ... }:
-      {
-        nixpkgs.overlays = [
-          (self: super: {
-            emacs = super.emacs.overrideDerivation (drv: { nativeComp = true; });
-          })
-        ];
-        environment = {
-          variables = { EDITOR = "emacs -nw"; };
-          shellAliases = {
-            ec = "emacs";
-            vim = "emacs -nw";
-            emacs = "emacs";
-          };
+    nixosModule = { config, lib, pkgs, ... }: {
+      nixpkgs.overlays = [
+        (self: super: {
+          emacs = super.emacs.overrideDerivation (drv: { nativeComp = true; });
+        })
+      ];
+      environment = {
+        variables = { EDITOR = "emacs -nw"; };
+        shellAliases = {
+          ec = "emacs";
+          vim = "emacs -nw";
+          emacs = "emacs";
         };
       };
-    hmModule = { config, lib, pkgs, ... }: let
+    };
+    hmModule = { config, lib, pkgs, ... }:
+      let
         xclipedit = pkgs.writeShellScriptBin "xclipedit" ''
           set -euo pipefail
           tempfile="$(mktemp)"
@@ -48,9 +48,9 @@
               name = "doomPrivateDeriv-1.0";
               src = ./doom.d;
               installPhase = ''
-              mkdir -p "$out"
-              cp -r * "$out"
-            '';
+                mkdir -p "$out"
+                cp -r * "$out"
+              '';
             };
           in "${doomPrivateDeriv}";
           extraPackages = [
@@ -58,28 +58,27 @@
             (pkgs.nerdfonts.override { fonts = [ "Inconsolata" ]; })
           ];
           extraConfig = ''
-          (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
-        '';
+            (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
+          '';
         };
-        home.packages = with pkgs;
-          [
-            xclipedit
-            emacs-all-the-icons-fonts
+        home.packages = with pkgs; [
+          xclipedit
+          emacs-all-the-icons-fonts
 
-            aspell
-            aspellDicts.de
-            aspellDicts.en
+          aspell
+          aspellDicts.de
+          aspellDicts.en
 
-            shellcheck
-          ];
+          shellcheck
+        ];
         # programs.zsh.shellAliases = {
         #   magit = ''${doom-emacs-bin-path} -e "(magit-status \"$(pwd)\")"'';
         # };
         home.file = {
           ".emacs.d/init.el".text = ''
-          (load "default.el")
-          (mapc 'load (file-expand-wildcards "~/.doom.d/imports/*.el"))
-        '';
+            (load "default.el")
+            (mapc 'load (file-expand-wildcards "~/.doom.d/imports/*.el"))
+          '';
           ".doom.d/imports" = {
             source = ./doom.d-imports;
             recursive = true;
