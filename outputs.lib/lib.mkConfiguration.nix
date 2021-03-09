@@ -5,7 +5,7 @@ let
   myconfig = {
     user = "mhuber"; # TODO
     lib = rec {
-      secretsDir = ./secrets;
+      secretsDir = ../secrets;
       getSecretPath = hostName: fileName:
         (secretsDir + "/${hostName}/${fileName}");
       getSecret = hostName: fileName:

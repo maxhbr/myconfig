@@ -7,7 +7,7 @@
 with lib;
 
 let
-  cfg = config.within.secrets;
+  cfg = config.myconfig.secrets;
 
   secret = types.submodule {
     options = {
@@ -73,7 +73,7 @@ let
       '';
     };
 in {
-  options.within.secrets = mkOption {
+  options.myconfig.secrets = mkOption {
     type = types.attrsOf secret;
     description = "secret configuration";
     default = { };
