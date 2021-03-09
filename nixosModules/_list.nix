@@ -2,6 +2,7 @@
   ./myconfig
   # modules
   ./core.nix
+  ./crypt.nix
   ./dev
   ./exfat.nix
   ./gnupg.nix
