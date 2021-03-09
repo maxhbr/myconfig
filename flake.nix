@@ -41,7 +41,7 @@
     hardware.url = "github:nixos/nixos-hardware";
   };
 
-  outputs = {self,...}@inputs:
+  outputs = { self, ... }@inputs:
     {
       lib = import ./outputs.lib inputs;
 
@@ -54,7 +54,7 @@
       nixosModules.myfish = inputs.myfish.nixosModule;
       hmModules.myfish = inputs.myfish.hmModule;
 
-      nixosModules.core = {...}: {
+      nixosModules.core = { ... }: {
         imports = [
           inputs.home.nixosModules.home-manager
           ({ config, lib, ... }: {
@@ -69,15 +69,11 @@
           self.nixosModules.myfish
           self.nixosModules.myemacs
         ] ++ (import ./nixosModules/_list.nix);
-        config.nixpkgs.overlays = [
-          inputs.nur.overlay
-        ];
+        config.nixpkgs.overlays = [ inputs.nur.overlay ];
       };
-      hmModules.core = {...}: {
-        imports = [
-          self.hmModules.myfish
-          self.hmModules.myemacs
-        ] ++ (import ./hmModules/_list.nix);
+      hmModules.core = { ... }: {
+        imports = [ self.hmModules.myfish self.hmModules.myemacs ]
+          ++ (import ./hmModules/_list.nix);
       };
 
       ##########################################################################
@@ -88,20 +84,13 @@
         container = self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" {
           config = { boot.isContainer = true; };
         };
-        x1extremeG2 = self.lib.evalConfiguration "x86_64-linux" "x1extremeG2"
-          {
-            nixosModules = [
-              {
-                config = {
-                  hardware.enableRedistributableFirmware = true;
-                };
-              }
-              self.nixosModules.core
-            ];
-            hmModules = [
-              self.hmModules.core
-            ];
-          };
+        x1extremeG2 = self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" {
+          nixosModules = [
+            { config = { hardware.enableRedistributableFirmware = true; }; }
+            self.nixosModules.core
+          ];
+          hmModules = [ self.hmModules.core ];
+        };
         workstation = self.lib.evalConfiguration "x86_64-linux" "workstation" {
           # imports = [ (myconfig.lib.fixIp "workstation" "enp39s0") ];
         };
@@ -137,7 +126,7 @@
           let
             nixConf = ''
               ${pkgs.lib.optionalString (builtins.pathExists /etc/nix/nix.conf)
-                (builtins.readFile /etc/nix/nix.conf)}
+              (builtins.readFile /etc/nix/nix.conf)}
               experimental-features = nix-command flakes ca-references
             ''; # access-tokens = "github.com=${secrets.git.github.oauth-token}"
           in linkFarm "nix-conf-dir" ([
