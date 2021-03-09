@@ -110,7 +110,7 @@
 
           self.nixosModules.myfish
           self.nixosModules.myemacs
-        ] ++ (import ./nixosMoudles/_list.nix);
+        ] ++ (import ./nixosModules/_list.nix);
         config.nixpkgs.overlays = [
           inputs.nur.overlay
         ];
@@ -119,7 +119,7 @@
         imports = [
           self.hmModules.myfish
           self.hmModules.myemacs
-        ] ++ (import ./hmMoudles/_list.nix);
+        ] ++ (import ./hmModules/_list.nix);
       };
 
       ##########################################################################
