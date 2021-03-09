@@ -33,7 +33,7 @@ in {
       };
     });
 
-  mkConfiguration = import ./lib.mkConfiguration.nix inputs;
+  mkConfiguration = import ./mkConfiguration.nix inputs;
   evalConfiguration = system: hostName: args:
     (let cfg = self.lib.mkConfiguration system hostName args;
     in lib.nixosSystem (cfg // {
