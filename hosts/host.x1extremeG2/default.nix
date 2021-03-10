@@ -1,8 +1,7 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
-let user = config.myconfig.user;
-in {
+{
   imports = [
     ./hardware-configuration.nix
     ./myconfig-master
@@ -82,7 +81,7 @@ in {
       }];
     };
 
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       # home.packages = with pkgs.helper; [
       #   (connectBtDevice {
       #     name = "mb660";
@@ -117,6 +116,6 @@ in {
         [
           google-chrome # for netflix and stadia
         ];
-    };
+    }];
   };
 }

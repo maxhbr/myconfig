@@ -1,6 +1,5 @@
-{ config, lib, pkgs, ... }:
-let user = config.myconfig.user;
-in {
+{ config, lib, pkgs, myconfig, ... }:
+{
   config = {
     systemd = {
       timers.fish-history-backup-timer = {
@@ -11,7 +10,7 @@ in {
       services.fish-history-backup-timer = {
         serviceConfig.Type = "oneshot";
         script = ''
-          historyfile=/home/${user}/.local/share/fish/fish_history
+          historyfile=/home/${myconfig.user}/.local/share/fish/fish_history
           backupdir="$historyfile"_backups
           backup=$backupdir/$(date '+%Y-%V').fish_history.gz
           if [[ ! -f $backup ]]; then
@@ -19,7 +18,7 @@ in {
             echo "Time: $(date)." >> $backupdir/fish-history-backup-timer.log
             ${pkgs.gzip}/bin/gzip -k $historyfile
             mv $historyfile.gz $backup
-            chown ${user}:${user} $backup
+            chown ${myconfig.user}:${myconfig.user} $backup
           fi
         '';
       };

@@ -433,7 +433,7 @@
         "z": "z"
       },
       "locked": {
-        "narHash": "sha256-H8GUOP7z9bqXjvldA0eNKudX7Gvh4NvHbKWnLrcEeCA=",
+        "narHash": "sha256-lThXpWgPmLXAwI9h7yd6tIAoJEvguLbVGFs9l625B+M=",
         "path": "flakes/myfish/",
         "type": "path"
       },
@@ -660,7 +660,7 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "narHash": "sha256-DD3OE1UjhmZlXCCwUUnScVruAM6Bc/Zl+BywHzUsKUk=",
+        "narHash": "sha256-MFlRKby/R93HCYTE9BHGm7A/ZdGMSKbq39Svy82FgZQ=",
         "path": "../myconfig-private",
         "type": "path"
       },

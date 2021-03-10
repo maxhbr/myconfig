@@ -2,8 +2,7 @@
 let user = config.myconfig.user;
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.imports = [({ config, ... }:
-      (lib.mkIf config.programs.kitty.enable {
+    home-manager.imports = [{
         programs.kitty = {
           settings = {
             scrollback_lines = 10000;
@@ -13,6 +12,6 @@ in {
             background = "#f9f9f9";
           };
         };
-      }))];
+      }];
   });
 }
