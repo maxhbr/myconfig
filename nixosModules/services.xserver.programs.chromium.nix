@@ -23,7 +23,7 @@ in {
   config = (lib.mkIf config.services.xserver.enable {
     services.avahi.enable =
       true; # https://github.com/NixOS/nixpkgs/issues/49630
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.packages = [ inco pipechrome ];
       home.file = {
         ".config/chromium/NativeMessagingHosts/com.justwatch.gopass.json" = {

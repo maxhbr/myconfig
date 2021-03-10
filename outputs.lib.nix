@@ -53,7 +53,7 @@ in {
             config = {
               home-manager = {
                 extraSpecialArgs = specialArgs // { super = config; };
-                sharedModules = config.home-manager.imports ++ hmModules;
+                sharedModules = hmModules;
                 useUserPackages = true;
                 useGlobalPkgs = true;
               };

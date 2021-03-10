@@ -16,7 +16,7 @@
         tu = "tig HEAD @{upstream}";
       };
     };
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.packages = with pkgs;
         [ github-cli ] ++ (with pkgs.gitAndTools; [
           tig

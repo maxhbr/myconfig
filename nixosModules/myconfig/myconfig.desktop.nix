@@ -14,7 +14,7 @@ in {
   };
   config = (lib.mkIf cfg.desktop.enable {
     services.xserver.enable = true;
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       programs.firefox.enable = lib.mkDefault true;
       programs.zathura.enable = lib.mkDefault true;
     }];

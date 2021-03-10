@@ -14,7 +14,7 @@
       killPort() { kill $(${pkgs.lsof}/bin/lsof -t -i:$1); }
     '';
 
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       programs.fish = {
         functions = {
           myPorts = "/run/wrappers/bin/sudo ${pkgs.iproute}/bin/ss -tulpen";

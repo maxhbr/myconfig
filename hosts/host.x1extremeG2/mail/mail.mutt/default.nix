@@ -10,7 +10,7 @@ let
     pkgs.writeScriptBin "mutt_bgrun" (builtins.readFile ./bin/mutt_bgrun);
 in {
   config = {
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.packages = with pkgs; [
         neomutt
         urlview

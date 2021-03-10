@@ -15,7 +15,7 @@
     ];
   }];
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.packages = with pkgs; [ my-wallpapers ];
       services.random-background = {
         enable = true;

@@ -18,7 +18,7 @@
         NODEJS_15_HOME = "/run/current-system/pkgs/nodejs-15_x";
       };
     };
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.file = {
         # to simulate gradles kotlinYarnSetup nodejs bootstrapping:
         ".gradle/nodejs/node-v12.16.1-linux-x64" = {

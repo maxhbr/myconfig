@@ -17,7 +17,7 @@ let
   '';
 in {
   config = (lib.mkIf config.hardware.pulseaudio.enable {
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.packages = with pkgs; [ pavucontrol pamix pactl-monitor noisetorch ];
     }];
 

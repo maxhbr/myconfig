@@ -4,7 +4,7 @@
 { pkgs, config, lib, ... }:
 {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       programs.obs-studio = {
         enable = true;
         plugins = with pkgs;

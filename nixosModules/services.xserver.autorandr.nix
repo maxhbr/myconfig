@@ -73,7 +73,7 @@ let
 
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.packages = with pkgs; [
         xrandrUnpan
         autorandr

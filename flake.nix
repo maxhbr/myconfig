@@ -64,7 +64,7 @@
       #       type = with lib.types;
       #         attrsOf (submoduleWith {
       #           specialArgs = specialArgs // { super = config; };
-      #           modules = config.home-manager.imports;
+      #           modules = config.home-manager.sharedModules;
       #         });
       #     };
       #   };
@@ -104,8 +104,7 @@
         };
       };
 
-      hmModules.core = [inputs.myemacs.hmModule inputs.myfish.hmModule ]
-                       ++ (import ./hmModules/_list.nix);
+      hmModules.core = (import ./hmModules/_list.nix);
 
       ##########################################################################
       ## configurations ########################################################
@@ -119,8 +118,8 @@
           nixosModules = [
             { config = { hardware.enableRedistributableFirmware = true; }; }
             self.nixosModules.core
+            { config.home-manager.sharedModules = self.hmModules.core; }
           ];
-          hmModules = self.hmModules.core;
         };
         workstation = self.lib.evalConfiguration "x86_64-linux" "workstation" {
           # imports = [ (myconfig.lib.fixIp "workstation" "enp39s0") ];

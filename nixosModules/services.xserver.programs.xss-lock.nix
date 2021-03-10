@@ -19,7 +19,7 @@ let
     '';
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.imports = [{ home.packages = [ myStopScreensaver ]; }];
+    home-manager.sharedModules = [{ home.packages = [ myStopScreensaver ]; }];
     programs.xss-lock = {
       enable = true;
       # lockerCommand = "${pkgs.my-wallpapers}/bin/myScreenLock";

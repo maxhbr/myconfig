@@ -14,7 +14,7 @@
       ./thrift93.nix
     ];
     programs.evolution.enable = true;
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       imports = [
         {
           home.packages = with pkgs; [ teams ];

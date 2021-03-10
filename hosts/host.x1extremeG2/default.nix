@@ -81,7 +81,7 @@
       }];
     };
 
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       # home.packages = with pkgs.helper; [
       #   (connectBtDevice {
       #     name = "mb660";

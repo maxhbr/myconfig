@@ -8,7 +8,7 @@ in {
     imagework.enable = mkEnableOption "imagework";
   };
   config = (lib.mkIf cfg.imagework.enable {
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.packages = with pkgs; [
         gphoto2
         gphoto2fs

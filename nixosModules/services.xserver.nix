@@ -8,7 +8,7 @@ let
     '';
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       programs.firefox.enable = lib.mkDefault true;
       programs.zathura.enable = lib.mkDefault true;
 

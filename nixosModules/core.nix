@@ -7,7 +7,7 @@
       tmpOnTmpfs = true;
     };
 
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.packages = with pkgs; [ taskwarrior mosh sshfs ];
       home.file = {
         ".ssh/config".text = ''

@@ -34,7 +34,7 @@
       ];
       # fontconfig.defaultFonts.monospace = [ "Inconsolata Nerd Font" "DejaVu Sans Mono" "Ubuntu" ];
     };
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.file = {
         ".fontconfig/fonts.conf".text = ''
           <?xml version="1.0"?>

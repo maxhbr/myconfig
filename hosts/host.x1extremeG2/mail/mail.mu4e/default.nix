@@ -3,7 +3,7 @@
 { pkgs, config, ... }:
 {
   config = {
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.packages = with pkgs; [
         mu
         gnome3.gnome-keyring # necessary for mu4e?

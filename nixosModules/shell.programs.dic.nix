@@ -48,5 +48,5 @@ let
       fi
         '';
 in {
-  config = { home-manager.imports = [{ home.packages = [ dic ]; }]; };
+  config = { home-manager.sharedModules = [{ home.packages = [ dic ]; }]; };
 }

@@ -40,7 +40,7 @@ in {
             '';
         })
     ];
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.packages = with pkgs; [
         pass
         gopass-jsonapi

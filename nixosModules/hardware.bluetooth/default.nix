@@ -78,7 +78,7 @@ in {
       ""
       "${pkgs.bluez}/libexec/bluetooth/bluetoothd -f /etc/bluetooth/main.conf"
     ];
-    home-manager.imports = [(lib.mkIf config.hardware.pulseaudio.enable {
+    home-manager.sharedModules = [(lib.mkIf config.hardware.pulseaudio.enable {
       home.packages = with pkgs; [ mb660_switch_profile ];
 
       programs.fish = {

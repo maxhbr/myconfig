@@ -13,7 +13,7 @@ let
 
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       imports = [ ./picom.hm.nix ];
       home.packages = with pkgs; [
         my-xmonad

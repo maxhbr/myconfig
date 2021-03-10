@@ -4,7 +4,7 @@
 let user = config.myconfig.user;
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       xsession.pointerCursor = {
         package = pkgs.vanilla-dmz;
         size = 128;

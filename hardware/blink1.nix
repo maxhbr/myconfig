@@ -24,7 +24,7 @@ in {
     services.udev.packages = [ blink1-udev-rules ];
     environment.systemPackages = [ blink1-udev-rules pkgs.blink1-tool ];
 
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.file = {
         ".config/autorandr/postswitch.d/reset_blink1".source = let
           muteNotebookAudio = with pkgs;

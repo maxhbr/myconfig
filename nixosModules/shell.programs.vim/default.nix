@@ -3,7 +3,7 @@
 { pkgs, config, ... }:
 {
   config = {
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.file = {
         ".vim" = {
           source = ./vim;

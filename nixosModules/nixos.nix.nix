@@ -8,7 +8,7 @@
       # - https://nixos.wiki/wiki/Flakes
       # - https://www.tweag.io/blog/2020-05-25-flakes/
       config = {
-        home-manager.imports = [
+        home-manager.sharedModules = [
           {
             programs.fish = {
               shellAbbrs = {
@@ -23,7 +23,7 @@
   ];
   config = {
     nixpkgs.config = { allowUnfree = true; };
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       imports = [{
         programs.fish = {
           shellAbbrs = {

@@ -2,7 +2,7 @@
 let user = config.myconfig.user;
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
         programs.kitty = {
           settings = {
             scrollback_lines = 10000;

@@ -2,7 +2,7 @@
 {
   imports = [ ./mail.mu4e ./mail.mutt ];
   config = {
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.packages = with pkgs; [
         offlineimap
         isync

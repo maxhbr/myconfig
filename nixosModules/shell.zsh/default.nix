@@ -6,7 +6,7 @@ let
   json = builtins.fromJSON (builtins.readFile jsonFile);
 in {
   config = {
-    home-manager.imports = [{
+    home-manager.sharedModules = [{
       home.packages = with pkgs; [ oh-my-zsh ];
       home.file = {
         ".zshrc".source = ./zshrc;
