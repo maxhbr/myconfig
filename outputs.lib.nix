@@ -15,7 +15,7 @@ in {
       [ ];
 
   mkConfiguration = system: hostName:
-    { nixosModules ? [ ] }:
+    { nixosModules ? [ ] , hmModules ? [] }:
     let
       pkgs = self.legacyPackages.${system};
 
@@ -49,16 +49,11 @@ in {
                   listOf attrs;
                 default = [];
               };
-              users = lib.mkOption {
-                type = with lib.types;
-                  attrsOf (submoduleWith {
-                    specialArgs = specialArgs // { super = config; };
-                    modules = config.home-manager.imports;
-                  });
-              };
             };
             config = {
               home-manager = {
+                extraSpecialArgs = specialArgs // { super = config; };
+                sharedModules = config.home-manager.imports ++ hmModules;
                 useUserPackages = true;
                 useGlobalPkgs = true;
               };
@@ -72,9 +67,9 @@ in {
               systemd.services.mk-hm-dirs = {
                 serviceConfig.Type = "oneshot";
                 script = ''
-            mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
-            chown ${myconfig.user} /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
-          '';
+                    mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
+                    chown ${myconfig.user} /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
+                  '';
                 wantedBy = [ "home-manager-${myconfig.user}.service" ];
               };
             };

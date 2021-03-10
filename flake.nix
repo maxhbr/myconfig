@@ -101,10 +101,11 @@
         ] ++ (import ./nixosModules/_list.nix);
         config = {
           nixpkgs.overlays = [ inputs.nur.overlay ];
-          home-manager.imports = [inputs.myemacs.hmModule inputs.myfish.hmModule ]
-                                 ++ (import ./hmModules/_list.nix);
         };
       };
+
+      hmModules.core = [inputs.myemacs.hmModule inputs.myfish.hmModule ]
+                       ++ (import ./hmModules/_list.nix);
 
       ##########################################################################
       ## configurations ########################################################
@@ -119,6 +120,7 @@
             { config = { hardware.enableRedistributableFirmware = true; }; }
             self.nixosModules.core
           ];
+          hmModules = self.hmModules.core;
         };
         workstation = self.lib.evalConfiguration "x86_64-linux" "workstation" {
           # imports = [ (myconfig.lib.fixIp "workstation" "enp39s0") ];
