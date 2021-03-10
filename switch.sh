@@ -21,7 +21,7 @@ nix develop \
 nix develop \
     --command sudo nixos-rebuild \
     --target-host "$targetIP" \
-    switch -p test \
+    switch `#-p test` \
     --flake '.#'"$target"
 
 set +x

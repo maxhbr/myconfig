@@ -41,49 +41,57 @@ in system: hostName:
 let
   pkgs = self.legacyPackages.${system};
 
-  # Final modules set
-  finalModules = nixosModules ++ [
-    (self.lib.mkNixpkgsModule pkgs)
-
-    ({ config, ... }: {
-      boot.initrd.secrets = { "/etc/myconfig" = lib.cleanSource ./.; };
-      environment.etc."myconfig.current-system-packages".text = let
-        packages =
-          builtins.map (p: "${p.name}") config.environment.systemPackages;
-        sortedUnique = builtins.sort builtins.lessThan (lib.unique packages);
-        formatted = builtins.concatStringsSep "\n" sortedUnique;
-      in formatted;
-    })
-
-    # home manager:
-    ({ config, lib, ... }: {
-      options.home-manager.users = lib.mkOption {
-        type = with lib.types;
-          attrsOf (submoduleWith {
-            specialArgs = specialArgs // { super = config; };
-            modules = hmModules;
-          });
-      };
-      config = {
-        system.activationScripts.genProfileManagementDirs =
-          "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}";
-        systemd.services.mk-hm-dirs = {
-          serviceConfig.Type = "oneshot";
-          script = ''
-            mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
-            chown ${myconfig.user} /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
-          '';
-          wantedBy = [ "home-manager-${myconfig.user}.service" ];
-        };
-      };
-    })
-  ];
-
   specialArgs = {
     inherit myconfig;
     flake = self;
 
-    modules = finalModules ++ [
+    modules = nixosModules ++ [
+      ({ config, ... }: {
+        config = {
+          nixpkgs = {
+            inherit pkgs;
+            inherit (pkgs) config system;
+          };
+          boot.initrd.secrets = { "/etc/myconfig" = lib.cleanSource ./..; };
+          environment.etc."myconfig.current-system-packages".text = let
+            packages =
+              builtins.map (p: "${p.name}") config.environment.systemPackages;
+            sortedUnique = builtins.sort builtins.lessThan (lib.unique packages);
+            formatted = builtins.concatStringsSep "\n" sortedUnique;
+          in formatted;
+        };
+      })
+
+      # home manager:
+      ({ config, lib, ... }: {
+        options = {
+          hmModules = lib.mkOption {
+            type = with lib.types;
+              listOf attrs;
+            default = [];
+          };
+          home-manager.users = lib.mkOption {
+            type = with lib.types;
+              attrsOf (submoduleWith {
+                specialArgs = specialArgs // { super = config; };
+                modules = hmModules ++ config.hmModules;
+              });
+          };
+        };
+        config = {
+          system.activationScripts.genProfileManagementDirs =
+            "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}";
+          systemd.services.mk-hm-dirs = {
+            serviceConfig.Type = "oneshot";
+            script = ''
+            mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
+            chown ${myconfig.user} /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
+          '';
+            wantedBy = [ "home-manager-${myconfig.user}.service" ];
+          };
+        };
+      })
+
       ({ config, ... }: {
         environment.etc."machine-id".text = builtins.hashString "md5" hostName;
         networking = { inherit hostName; };
@@ -93,10 +101,10 @@ let
           message = "hostname should be set!";
         }];
       })
+
       { _module.args = specialArgs; }
     ];
 
-    # Modules to propagate to containers
     extraModules = [{
       nix.package = lib.mkDefault pkgs.nixFlakes;
       nix.extraOptions = ''
@@ -120,5 +128,5 @@ let
   };
 in {
   inherit system specialArgs;
-  modules = finalModules ++ specialArgs.extraModules;
+  modules = specialArgs.modules ++ specialArgs.extraModules;
 }

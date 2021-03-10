@@ -2,7 +2,7 @@
 let user = config.myconfig.user;
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.users."${user}" = {
+    hmModules = [{
       home.packages = with pkgs; [ xclip ];
 
       programs.fish.functions = {
@@ -11,7 +11,7 @@ in {
         xclipToCtrl =
           "${pkgs.xclip}/bin/xclip -selection c (${pkgs.xclip}/bin/xclip -o | psub)";
       };
-    };
+    }];
 
     environment.interactiveShellInit = ''
       xclipToX() {

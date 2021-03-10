@@ -42,22 +42,35 @@
   };
 
   outputs = { self, ... }@inputs:
-    {
+    let inherit (inputs.nixpkgs) lib;
+    in lib.recursiveUpdate {
       lib = import ./outputs.lib inputs;
 
       ##########################################################################
       ## profiles and modules ##################################################
       ##########################################################################
-      nixosModules.myemacs = inputs.myemacs.nixosModule;
-      hmModules.myemacs = inputs.myemacs.hmModule;
-
-      nixosModules.myfish = inputs.myfish.nixosModule;
-      hmModules.myfish = inputs.myfish.hmModule;
 
       nixosModules.core = { ... }: {
         imports = [
+          ({ pkgs, ... }: {
+            config.nixpkgs = {
+              overlays = let
+                mkSubPkgsOverlay = targetName: input:
+                  (self: super: {
+                    "${targetName}" = super."${targetName}" or { }
+                                      // import input { inherit (pkgs) config system; };
+                  });
+              in [
+                (mkSubPkgsOverlay "unstable" inputs.master)
+                (mkSubPkgsOverlay "nixos-unstable" inputs.large)
+                (mkSubPkgsOverlay "nixos-unstable-small" inputs.small)
+                (mkSubPkgsOverlay "nixos-2003-small" inputs.rel2003)
+                (mkSubPkgsOverlay "nixos-2009-small" inputs.rel2009)
+              ];
+            };
+          })
           inputs.home.nixosModules.home-manager
-          ({ config, lib, ... }: {
+          ({ ... }: {
             config = {
               home-manager = {
                 useUserPackages = true;
@@ -66,13 +79,13 @@
             };
           })
 
-          self.nixosModules.myfish
-          self.nixosModules.myemacs
+          inputs.myfish.nixosModule
+          inputs.myemacs.nixosModule
         ] ++ (import ./nixosModules/_list.nix);
         config.nixpkgs.overlays = [ inputs.nur.overlay ];
       };
       hmModules.core = { ... }: {
-        imports = [ self.hmModules.myfish self.hmModules.myemacs ]
+        imports = [inputs.myemacs.hmModule inputs.myfish.hmModule ]
           ++ (import ./hmModules/_list.nix);
       };
 
@@ -96,13 +109,9 @@
         };
       };
 
-      ##########################################################################
-      ##########################################################################
-      ##########################################################################
-    } // (let
-      allSystems = [ "x86_64-linux" "aarch64-linux" ];
-      eachDefaultSystem = inputs.flake-utils.lib.eachSystem allSystems;
+    } (let
 
+      eachDefaultSystem = inputs.flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ];
       nixpkgsConfig = { allowUnfree = true; };
 
     in eachDefaultSystem (system: {
@@ -117,10 +126,7 @@
           config = nixpkgsConfig;
         };
       in pkgs.mkShell {
-        nativeBuildInputs = with pkgs; [ git git-crypt git-secrets nixfmt ];
-        shellHook = ''
-          mkdir -p secrets
-        '';
+        nativeBuildInputs = with pkgs; [ git git-crypt git-secrets nixfmt age ];
 
         NIX_CONF_DIR = with pkgs;
           let
