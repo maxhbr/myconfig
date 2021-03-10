@@ -1,9 +1,7 @@
-# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2017 Maximilian nuber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { config, pkgs, lib, ... }:
 let
-  user = config.myconfig.user;
-
   pactl-monitor = pkgs.writeShellScriptBin "pactl-monitor" ''
     set -e
     pactl_monitor_file=/tmp/.pactl_monitor_file
@@ -19,9 +17,9 @@ let
   '';
 in {
   config = (lib.mkIf config.hardware.pulseaudio.enable {
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       home.packages = with pkgs; [ pavucontrol pamix pactl-monitor noisetorch ];
-    };
+    }];
 
     hardware.pulseaudio = {
       package = pkgs.pulseaudioFull;

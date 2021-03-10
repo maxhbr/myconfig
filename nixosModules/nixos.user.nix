@@ -1,17 +1,14 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, ... }:
-let
-  cfg = config.myconfig;
-  name = cfg.user;
-in {
+{ config, pkgs, lib, myconfig, ... }:
+{
   config = {
     users = {
       mutableUsers = false;
       extraUsers = {
-        "${name}" = {
+        "${myconfig.user}" = {
           isNormalUser = true;
-          group = "${name}";
+          group = "${myconfig.user}";
           uid = 1000;
           extraGroups =
             [ "myconfig" "wheel" "keys" "audio" "video" "dialout" "input" ]
@@ -26,7 +23,7 @@ in {
             "networkmanager"
             ++ pkgs.lib.optional config.hardware.bumblebee.enable "bumblebee"
             ++ pkgs.lib.optional config.programs.sway.enable "sway";
-          home = "/home/${name}";
+          home = "/home/${myconfig.user}";
           createHome = true;
           shell = "/run/current-system/sw/bin/fish";
           # the hashed password is overwritten in the deployment
@@ -40,14 +37,14 @@ in {
         };
         root = {
           openssh.authorizedKeys.keys =
-            config.users.extraUsers."${name}".openssh.authorizedKeys.keys;
+            config.users.extraUsers."${myconfig.user}".openssh.authorizedKeys.keys;
         };
       };
-      extraGroups."${name}".gid = 1000;
+      extraGroups."${myconfig.user}".gid = 1000;
     };
-    home-manager.users."${name}" = {
+    home-manager.users."${myconfig.user}" = {
       programs.alacritty.settings.shell.program =
-        lib.mkForce config.users.extraUsers."${name}".shell;
+        lib.mkForce config.users.extraUsers."${myconfig.user}".shell;
       xdg.enable = true;
     };
 
@@ -57,14 +54,14 @@ in {
       xkbOptions = "altwin:swap_alt_win";
     });
 
-    environment.etc."current-home-manager-${name}-packages".text = let
+    environment.etc."current-home-manager-${myconfig.user}-packages".text = let
       packages = builtins.map (p: "${p.name}")
-        config.home-manager.users."${name}".home.packages;
+        config.home-manager.users."${myconfig.user}".home.packages;
       sortedUnique = builtins.sort builtins.lessThan (lib.unique packages);
       formatted = builtins.concatStringsSep "\n" sortedUnique;
     in formatted;
 
-    systemd.tmpfiles.rules = [ "d /home/${name}/tmp 1777 ${name} ${name} 10d" ];
+    systemd.tmpfiles.rules = [ "d /home/${myconfig.user}/tmp 1777 ${myconfig.user} ${myconfig.user} 10d" ];
 
     time.timeZone = "Europe/Berlin";
 

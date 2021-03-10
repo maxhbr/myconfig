@@ -1,6 +1,5 @@
-{ pkgs, config, lib, ... }:
+{ pkgs, config, lib, myconfig, ... }:
 let
-  user = config.myconfig.user;
   myInvert = with pkgs;
     writeScriptBin "myInvert" ''
       #!${stdenv.shell}
@@ -9,7 +8,7 @@ let
     '';
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       programs.firefox.enable = lib.mkDefault true;
       programs.zathura.enable = lib.mkDefault true;
 
@@ -66,7 +65,7 @@ in {
         defaultApplications."x-scheme-handler/zoommtg" =
           [ "us.zoom.Zoom.desktop" ];
       };
-    };
+    }];
     environment = {
       # shellAliases = { file-roller = "${pkgs.xarchiver}/bin/xarchiver"; };
 
@@ -102,7 +101,7 @@ in {
       cron = {
         enable = true;
         systemCronJobs = [
-          "*/10 * * * *  ${user} ${pkgs.my-wallpapers}/bin/myRandomBackground >> /tmp/cronout 2>&1"
+          "*/10 * * * *  ${myconfig.user} ${pkgs.my-wallpapers}/bin/myRandomBackground >> /tmp/cronout 2>&1"
         ];
       };
 

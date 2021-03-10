@@ -1,8 +1,7 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { config, pkgs, lib, ... }:
-let user = config.myconfig.user;
-in {
+{
   imports = [
     ./jdk.nix
     # ./node.nix
@@ -15,7 +14,7 @@ in {
       ./thrift93.nix
     ];
     programs.evolution.enable = true;
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       imports = [
         {
           home.packages = with pkgs; [ teams ];
@@ -61,6 +60,6 @@ in {
         rambox
         remmina
       ];
-    };
+    }];
   };
 }

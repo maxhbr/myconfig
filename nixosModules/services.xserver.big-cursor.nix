@@ -4,14 +4,14 @@
 let user = config.myconfig.user;
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       xsession.pointerCursor = {
         package = pkgs.vanilla-dmz;
         size = 128;
         name = "Vanilla-DMZ";
         defaultCursor = "left_ptr"; # or "left_ptr";
       };
-    };
+    }];
     nixpkgs.overlays = [
       (final: prev: {
         # set default cursor theme when installed

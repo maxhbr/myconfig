@@ -7,8 +7,7 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
-let user = config.myconfig.user;
-in {
+{
   config = (lib.mkIf config.services.xserver.enable {
     fonts = {
       enableDefaultFonts = true;
@@ -35,7 +34,7 @@ in {
       ];
       # fontconfig.defaultFonts.monospace = [ "Inconsolata Nerd Font" "DejaVu Sans Mono" "Ubuntu" ];
     };
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       home.file = {
         ".fontconfig/fonts.conf".text = ''
           <?xml version="1.0"?>
@@ -64,6 +63,6 @@ in {
           </fontconfig>
         '';
       };
-    };
+    }];
   });
 }

@@ -1,13 +1,12 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, ... }:
+{ pkgs, config, myconfig, ... }:
 let
-  user = config.myconfig.user;
   jsonFile = ./. + "/chisui-zsh-nix-shell.json";
   json = builtins.fromJSON (builtins.readFile jsonFile);
 in {
   config = {
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       home.packages = with pkgs; [ oh-my-zsh ];
       home.file = {
         ".zshrc".source = ./zshrc;
@@ -17,7 +16,7 @@ in {
         ".zsh-nix-shell".source =
           pkgs.fetchFromGitHub { inherit (json) owner repo rev sha256; };
       };
-    };
+    }];
     environment = {
       shells = [ "${pkgs.zsh}/bin/zsh" "/run/current-system/sw/bin/zsh" ];
     };
@@ -41,7 +40,7 @@ in {
       services.zsh-history-backup-timer = {
         serviceConfig.Type = "oneshot";
         script = ''
-          historyfile=/home/${user}/.zsh_history
+          historyfile=/home/${myconfig.user}/.zsh_history
           backupdir="$historyfile"_backups
           backup=$backupdir/$(date '+%Y-%V').zsh_history.gz
           if [[ ! -f $backup ]]; then
@@ -49,7 +48,7 @@ in {
             echo "Time: $(date)." >> $backupdir/zsh-history-backup-timer.log
             ${pkgs.gzip}/bin/gzip -k $historyfile
             mv $historyfile.gz $backup
-            chown ${user}:${user} $backup
+            chown ${myconfig.user}:${myconfig.user} $backup
           fi
         '';
       };

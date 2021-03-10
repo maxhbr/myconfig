@@ -660,7 +660,7 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "narHash": "sha256-zIV+e+QIUKHFB/VZk67ZlIAvbRm2IfUJ5eI/JAYm4Xg=",
+        "narHash": "sha256-DD3OE1UjhmZlXCCwUUnScVruAM6Bc/Zl+BywHzUsKUk=",
         "path": "../myconfig-private",
         "type": "path"
       },

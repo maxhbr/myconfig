@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, ... }:
 let
-  user = config.myconfig.user;
   mailclient-sh =
     pkgs.writeScriptBin "mailclient.sh" (builtins.readFile ./bin/mailclient.sh);
   mailrun-sh =
@@ -11,7 +10,7 @@ let
     pkgs.writeScriptBin "mutt_bgrun" (builtins.readFile ./bin/mutt_bgrun);
 in {
   config = {
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       home.packages = with pkgs; [
         neomutt
         urlview
@@ -29,7 +28,7 @@ in {
         ".gnupg/toMutt.pl".source = gnupg/toMutt.pl;
         ".mailcap".source = ./mailcap;
       };
-    };
+    }];
     environment.shellAliases = { mutt = "neomutt"; };
   };
 }

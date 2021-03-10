@@ -64,17 +64,17 @@ let
 
       # home manager:
       ({ config, lib, ... }: {
-        options = {
-          hmModules = lib.mkOption {
+        options.home-manager = {
+          imports = lib.mkOption {
             type = with lib.types;
               listOf attrs;
             default = [];
           };
-          home-manager.users = lib.mkOption {
+          users = lib.mkOption {
             type = with lib.types;
               attrsOf (submoduleWith {
                 specialArgs = specialArgs // { super = config; };
-                modules = hmModules ++ config.hmModules;
+                modules = hmModules ++ config.home-manager.imports;
               });
           };
         };

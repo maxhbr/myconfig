@@ -1,31 +1,29 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, ... }:
-let user = config.myconfig.user;
-in {
+{ config, pkgs, lib, myconfig, ... }:
+{
   imports = [
     { # support for nix-flakes
       # see:
       # - https://nixos.wiki/wiki/Flakes
       # - https://www.tweag.io/blog/2020-05-25-flakes/
       config = {
-        home-manager.users."${user}" = {
-          programs.fish = {
-            shellAbbrs = {
-              nix-flake =
-                "nix --experimental-features 'nix-command flakes' flake";
+        home-manager.imports = [
+          {
+            programs.fish = {
+              shellAbbrs = {
+                nix-flake =
+                  "nix --experimental-features 'nix-command flakes' flake";
+              };
             };
-          };
-        };
+          }
+        ];
       };
-    }
-    { # nix related config
-      home-manager.users."${user}" = { programs.fish = { }; };
     }
   ];
   config = {
     nixpkgs.config = { allowUnfree = true; };
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       imports = [{
         programs.fish = {
           shellAbbrs = {
@@ -60,7 +58,7 @@ in {
           '';
         };
       };
-    };
+    }];
     nix = rec {
       extraOptions = ''
         gc-keep-outputs = true
@@ -75,7 +73,7 @@ in {
       autoOptimiseStore = true;
       optimise.automatic = true;
 
-      allowedUsers = [ "@wheel" "@builders" "${user}" ];
+      allowedUsers = [ "@wheel" "@builders" "${myconfig.user}" ];
       trustedUsers = [ "root" ] ++ allowedUsers;
 
       trustedBinaryCaches = [

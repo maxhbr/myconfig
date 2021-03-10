@@ -1,6 +1,5 @@
-{ config, pkgs, lib, ... }:
-let user = config.myconfig.user;
-in {
+{ config, pkgs, lib, myconfig, ... }:
+{
   config = {
     boot = {
       # kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
@@ -8,7 +7,7 @@ in {
       tmpOnTmpfs = true;
     };
 
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       home.packages = with pkgs; [ taskwarrior mosh sshfs ];
       home.file = {
         ".ssh/config".text = ''
@@ -26,10 +25,10 @@ in {
         '';
         ".ssh/imports/wireguard.config".text = ''
           Host 10.199.199.*
-              User ${user}
+              User ${myconfig.user}
         '';
       };
-    };
+    }];
 
     environment = {
       variables = { TMP = "/tmp"; };
@@ -70,7 +69,6 @@ in {
     documentation.nixos.enable = true;
     services = {
       acpid.enable = true;
-      # ntp.enable = true;
       nscd.enable = true;
       earlyoom.enable = true;
     };

@@ -2,7 +2,6 @@
 
 let
   cfg = config.myconfig;
-  user = cfg.user;
 in {
   options.myconfig = with lib; {
     desktop.enable = mkEnableOption "myconfig.desktop";
@@ -15,9 +14,9 @@ in {
   };
   config = (lib.mkIf cfg.desktop.enable {
     services.xserver.enable = true;
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       programs.firefox.enable = lib.mkDefault true;
       programs.zathura.enable = lib.mkDefault true;
-    };
+    }];
   });
 }

@@ -4,8 +4,7 @@
 # TODO: package scripts
 #
 { config, pkgs, ... }:
-let user = config.myconfig.user;
-in {
+{
   config = {
     environment = {
       shellAliases = {
@@ -17,7 +16,7 @@ in {
         tu = "tig HEAD @{upstream}";
       };
     };
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       home.packages = with pkgs;
         [ github-cli ] ++ (with pkgs.gitAndTools; [
           tig
@@ -39,6 +38,6 @@ in {
           gitignore = "curl -sL https://www.gitignore.io/api/$argv";
         };
       };
-    };
+    }];
   };
 }

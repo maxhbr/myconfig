@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
 let
-  user = config.myconfig.user;
   resetXrandr = with pkgs;
     writeShellScriptBin "resetXrandr" ''
       sleep 1
@@ -74,7 +73,7 @@ let
 
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       home.packages = with pkgs; [
         xrandrUnpan
         autorandr
@@ -89,7 +88,7 @@ in {
         ".config/autorandr/postswitch.d/setupHuion".source =
           "${setupWacom}/bin/setupHuion";
       };
-    };
+    }];
     environment = {
       shellAliases = {
         autosetup =

@@ -1,6 +1,5 @@
 { pkgs, config, lib, ... }:
 let
-  user = config.myconfig.user;
   myXsecurelock = with pkgs;
     writeScriptBin "myXsecurelock" ''
       #!${stdenv.shell}
@@ -20,7 +19,7 @@ let
     '';
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.users."${user}" = { home.packages = [ myStopScreensaver ]; };
+    home-manager.imports = [{ home.packages = [ myStopScreensaver ]; }];
     programs.xss-lock = {
       enable = true;
       # lockerCommand = "${pkgs.my-wallpapers}/bin/myScreenLock";

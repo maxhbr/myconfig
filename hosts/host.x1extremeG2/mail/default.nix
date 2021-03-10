@@ -1,9 +1,8 @@
 { pkgs, config, ... }:
-let user = config.myconfig.user;
-in {
+{
   imports = [ ./mail.mu4e ./mail.mutt ];
   config = {
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       home.packages = with pkgs; [
         offlineimap
         isync
@@ -20,7 +19,7 @@ in {
           fi
         '')
       ];
-    };
+    }];
     environment = { systemPackages = with pkgs; [ gnupg msmtp procmail ]; };
     # services.offlineimap = {
     #   enable = false;

@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
 let
-  user = config.myconfig.user;
   my-mute-telco = pkgs.callPackage ./myMuteTelco { inherit pkgs; };
   my-xmobar = pkgs.callPackage ./myXmobar { inherit pkgs my-mute-telco; };
   my-xmonad = pkgs.haskellPackages.callPackage ./myXMonad {
@@ -14,7 +13,7 @@ let
 
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       imports = [ ./picom.hm.nix ];
       home.packages = with pkgs; [
         my-xmonad
@@ -33,14 +32,12 @@ in {
           onChange = ''
             if [[ -v DISPLAY ]] ; then
               echo "Restarting xmonad"
-              $DRY_RUN_CMD ${
-                config.home-manager.users."${user}".xsession.windowManager.command
-              } --restart
+              $DRY_RUN_CMD "${my-xmonad}/bin/xmonad" --restart
             fi
           '';
         };
       };
-    };
+    }];
     environment.variables = {
       XSECURELOCK_BLANK_TIMEOUT = "-1";
       XSECURELOCK_COMPOSITE_OBSCURER = "0";

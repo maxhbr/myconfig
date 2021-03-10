@@ -3,13 +3,12 @@
 { config, lib, pkgs, ... }:
 let
   cfg = config.myconfig;
-  user = cfg.user;
 in {
   options.myconfig = with lib; {
     imagework.enable = mkEnableOption "imagework";
   };
   config = (lib.mkIf cfg.imagework.enable {
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       home.packages = with pkgs; [
         gphoto2
         gphoto2fs
@@ -26,6 +25,6 @@ in {
         librecad # 2D
         unstable.freecad # 3D
       ];
-    };
+    }];
   });
 }

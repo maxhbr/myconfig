@@ -1,6 +1,5 @@
 { config, lib, pkgs, ... }:
 let
-  user = config.myconfig.user;
   mkscreenshot = with pkgs;
     writeShellScriptBin "mkscreenshot.sh" ''
       set -e
@@ -37,6 +36,6 @@ let
         '';
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.users."${user}" = { home.packages = [ mkscreenshot ]; };
+    home-manager.imports = [{ home.packages = [ mkscreenshot ]; }];
   });
 }

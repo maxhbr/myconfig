@@ -1,6 +1,5 @@
 { config, lib, pkgs, ... }:
 let
-  user = config.myconfig.user;
   chromium = pkgs.chromium.override {
     commandLineArgs = "--load-media-router-component-extension=1";
   };
@@ -24,7 +23,7 @@ in {
   config = (lib.mkIf config.services.xserver.enable {
     services.avahi.enable =
       true; # https://github.com/NixOS/nixpkgs/issues/49630
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       home.packages = [ inco pipechrome ];
       home.file = {
         ".config/chromium/NativeMessagingHosts/com.justwatch.gopass.json" = {
@@ -48,6 +47,6 @@ in {
 
         ];
       };
-    };
+    }];
   });
 }

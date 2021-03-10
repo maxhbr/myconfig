@@ -2,7 +2,7 @@
 let user = config.myconfig.user;
 in {
   config = (lib.mkIf config.services.xserver.enable {
-    hmModules = [{
+    home-manager.imports = [{
       home.packages = with pkgs; [ xclip ];
 
       programs.fish.functions = {

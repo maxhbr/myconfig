@@ -1,10 +1,9 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, ... }:
-let user = config.myconfig.user;
-in {
+{
   config = {
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       home.packages = with pkgs; [
         mu
         gnome3.gnome-keyring # necessary for mu4e?
@@ -21,7 +20,7 @@ in {
       home.file = {
         ".doom.d/imports/mu4e-base-config.el".source = ./mu4e-base-config.el;
       };
-    };
+    }];
     environment = {
       shellAliases = {
         mu4e = "${pkgs.emacs}/bin/emacs -name ScratchMu4e &disown";

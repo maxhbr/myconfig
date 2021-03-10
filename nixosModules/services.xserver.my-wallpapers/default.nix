@@ -1,8 +1,7 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
-let user = config.myconfig.user;
-in {
+{
   imports = [{
     nixpkgs.overlays = [
       (self: super: {
@@ -16,7 +15,7 @@ in {
     ];
   }];
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.users."${user}" = {
+    home-manager.imports = [{
       home.packages = with pkgs; [ my-wallpapers ];
       services.random-background = {
         enable = true;
@@ -24,7 +23,7 @@ in {
         display = "scale";
         interval = "10min";
       };
-    };
+    }];
 
     services.xserver.displayManager.lightdm.background =
       "${pkgs.my-wallpapers}/share/romben3.png";

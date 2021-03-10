@@ -1,6 +1,5 @@
 { config, lib, pkgs, ... }:
 let
-  user = config.myconfig.user;
   mb660_switch_profile = pkgs.writeShellScriptBin "mb660_switch_profile" ''
     export PATH=$PATH:${config.hardware.pulseaudio.package}/bin:${pkgs.bash}/bin
     ${builtins.readFile ./bin/switch_sennheiser_profile}
@@ -79,7 +78,7 @@ in {
       ""
       "${pkgs.bluez}/libexec/bluetooth/bluetoothd -f /etc/bluetooth/main.conf"
     ];
-    home-manager.users."${user}" = lib.mkIf config.hardware.pulseaudio.enable {
+    home-manager.imports = [(lib.mkIf config.hardware.pulseaudio.enable {
       home.packages = with pkgs; [ mb660_switch_profile ];
 
       programs.fish = {
@@ -89,7 +88,7 @@ in {
             "${config.hardware.pulseaudio.package}/bin/pacmd set-card-profile (${config.hardware.pulseaudio.package}/bin/pactl list cards short | ${pkgs.gnugrep}/bin/egrep -o bluez_card[[:alnum:]._]+) a2dp_sink";
         };
       };
-    };
+    })];
     hardware.pulseaudio = lib.mkIf config.hardware.pulseaudio.enable {
       extraModules = [ pkgs.pulseaudio-modules-bt ];
     };
