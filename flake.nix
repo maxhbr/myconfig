@@ -44,11 +44,37 @@
   outputs = { self, ... }@inputs:
     let inherit (inputs.nixpkgs) lib;
     in lib.recursiveUpdate {
-      lib = import ./outputs.lib inputs;
+      lib = import ./outputs.lib.nix inputs;
 
       ##########################################################################
       ## profiles and modules ##################################################
       ##########################################################################
+
+      # nixosModules.myhome-manager = { config, lib, ... }: {
+      #   imports = [
+      #     inputs.home.nixosModules.home-manager
+      #   ];
+      #   options.home-manager = {
+      #     imports = lib.mkOption {
+      #       type = with lib.types;
+      #         listOf attrs;
+      #       default = [];
+      #     };
+      #     users = lib.mkOption {
+      #       type = with lib.types;
+      #         attrsOf (submoduleWith {
+      #           specialArgs = specialArgs // { super = config; };
+      #           modules = config.home-manager.imports;
+      #         });
+      #     };
+      #   };
+      #   config = {
+      #     home-manager = {
+      #       useUserPackages = true;
+      #       useGlobalPkgs = true;
+      #     };
+      #   };
+      # };
 
       nixosModules.core = { ... }: {
         imports = [
@@ -69,24 +95,15 @@
               ];
             };
           })
-          inputs.home.nixosModules.home-manager
-          ({ ... }: {
-            config = {
-              home-manager = {
-                useUserPackages = true;
-                useGlobalPkgs = true;
-              };
-            };
-          })
 
           inputs.myfish.nixosModule
           inputs.myemacs.nixosModule
         ] ++ (import ./nixosModules/_list.nix);
-        config.nixpkgs.overlays = [ inputs.nur.overlay ];
-      };
-      hmModules.core = { ... }: {
-        imports = [inputs.myemacs.hmModule inputs.myfish.hmModule ]
-          ++ (import ./hmModules/_list.nix);
+        config = {
+          nixpkgs.overlays = [ inputs.nur.overlay ];
+          home-manager.imports = [inputs.myemacs.hmModule inputs.myfish.hmModule ]
+                                 ++ (import ./hmModules/_list.nix);
+        };
       };
 
       ##########################################################################
@@ -102,7 +119,6 @@
             { config = { hardware.enableRedistributableFirmware = true; }; }
             self.nixosModules.core
           ];
-          hmModules = [ self.hmModules.core ];
         };
         workstation = self.lib.evalConfiguration "x86_64-linux" "workstation" {
           # imports = [ (myconfig.lib.fixIp "workstation" "enp39s0") ];

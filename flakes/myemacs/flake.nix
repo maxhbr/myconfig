@@ -76,7 +76,6 @@
         # };
         home.file = {
           ".emacs.d/init.el".text = ''
-            (load "default.el")
             (mapc 'load (file-expand-wildcards "~/.doom.d/imports/*.el"))
           '';
           ".doom.d/imports" = {
