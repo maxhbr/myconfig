@@ -76,9 +76,6 @@
             #   magit = ''${doom-emacs-bin-path} -e "(magit-status \"$(pwd)\")"'';
             # };
             home.file = {
-              ".emacs.d/init.el".text = ''
-            (mapc 'load (file-expand-wildcards "~/.doom.d/imports/*.el"))
-          '';
               ".doom.d/imports" = {
                 source = ./doom.d-imports;
                 recursive = true;
