@@ -9,7 +9,6 @@ find "$(cd "$(dirname "$0")" && pwd)" -maxdepth 1 -mindepth 1 -type d -print0 |
           set -x
           nix --experimental-features 'nix-command flakes' flake update)
         ( cd "$flake/../.."
-          set -x
           nix --experimental-features 'nix-command flakes' flake update --update-input "$(basename "$flake")"
           # nix --experimental-features 'nix-command flakes' flake show "$(basename "$flake")"
         )

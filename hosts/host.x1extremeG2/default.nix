@@ -5,7 +5,6 @@
   imports = [
     ./hardware-configuration.nix
     ./myconfig-master
-    ../../secrets/common/wifi.home.nix
     # hardware:
     ../../hardware/x1extremeG2.nix
     ../../hardware/efi.nix
