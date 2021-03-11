@@ -4,14 +4,13 @@
 let user = config.myconfig.user;
 in {
   imports = [
-    ../modules
     ./hardware-configuration.nix
-    ../hardware/efi.nix
-    ../hardware/btrfs.nix
-    ../hardware/nixos-hardware/common/cpu/amd
-    ../hardware/nixos-hardware/common/pc/ssd
-    ../hardware/hdd-spinndown.nix
-    ../hardware/steamcontroller.nix
+    ../../hardware/efi.nix
+    ../../hardware/btrfs.nix
+    ../../hardware/nixos-hardware/common/cpu/amd
+    ../../hardware/nixos-hardware/common/pc/ssd
+    ../../hardware/hdd-spinndown.nix
+    ../../hardware/steamcontroller.nix
     ./4x500-hdds.raid.nix
     # other profiles
     # ./gaming
