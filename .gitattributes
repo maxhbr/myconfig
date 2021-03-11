@@ -1,2 +1,0 @@
-.gitattributes !filter !diff
-secrets/** filter=git-crypt diff=git-crypt
