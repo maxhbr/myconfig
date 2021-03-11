@@ -15,9 +15,6 @@ fi
 ./flakes/update.sh
 
 set -x
-
-nix develop \
-    --command nix flake update --update-input "private"
 nix develop \
     --command sudo nixos-rebuild \
     --target-host "$targetIP" \

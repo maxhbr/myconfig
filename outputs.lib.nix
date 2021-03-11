@@ -43,17 +43,9 @@ in {
           # home manager:
           inputs.home.nixosModules.home-manager
           ({ config, lib, ... }: {
-            options.home-manager = {
-              imports = lib.mkOption {
-                type = with lib.types;
-                  listOf attrs;
-                default = [];
-              };
-            };
             config = {
               home-manager = {
                 extraSpecialArgs = specialArgs // { super = config; };
-                sharedModules = hmModules;
                 useUserPackages = true;
                 useGlobalPkgs = true;
               };

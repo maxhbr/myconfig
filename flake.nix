@@ -44,37 +44,12 @@
   outputs = { self, ... }@inputs:
     let inherit (inputs.nixpkgs) lib;
     in lib.recursiveUpdate {
+      aggregatedInputs = inputs;
       lib = import ./outputs.lib.nix inputs;
 
       ##########################################################################
       ## profiles and modules ##################################################
       ##########################################################################
-
-      # nixosModules.myhome-manager = { config, lib, ... }: {
-      #   imports = [
-      #     inputs.home.nixosModules.home-manager
-      #   ];
-      #   options.home-manager = {
-      #     imports = lib.mkOption {
-      #       type = with lib.types;
-      #         listOf attrs;
-      #       default = [];
-      #     };
-      #     users = lib.mkOption {
-      #       type = with lib.types;
-      #         attrsOf (submoduleWith {
-      #           specialArgs = specialArgs // { super = config; };
-      #           modules = config.home-manager.sharedModules;
-      #         });
-      #     };
-      #   };
-      #   config = {
-      #     home-manager = {
-      #       useUserPackages = true;
-      #       useGlobalPkgs = true;
-      #     };
-      #   };
-      # };
 
       nixosModules.core = { ... }: {
         imports = [
@@ -111,7 +86,7 @@
           { config = { hardware.enableRedistributableFirmware = true; }; }
           self.nixosModules.core
           { config.home-manager.sharedModules = self.hmModules.core; }
-        ] ++ moreModules);)
+        ] ++ moreModules));
 
       ##########################################################################
       ## configurations ########################################################
