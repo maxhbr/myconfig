@@ -76,31 +76,31 @@
           inputs.myemacs.nixosModule
         ] ++ (import ./nixosModules/_list.nix);
         config = {
+          hardware.enableRedistributableFirmware = true;
           nixpkgs.overlays = [ inputs.nur.overlay ];
+          home-manager.sharedModules = (import ./hmModules/_list.nix);
         };
       };
 
-      hmModules.core = (import ./hmModules/_list.nix);
-
-      nixosConfigurationsGen.host-x1extremeG2 = moreModules:
-        (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
-          { config = { hardware.enableRedistributableFirmware = true; }; }
-          self.nixosModules.core
-          { config.home-manager.sharedModules = self.hmModules.core; }
-        ] ++ moreModules));
+      nixosConfigurationsGen = {
+        host-x1extremeG2 = moreModules:
+          (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
+            { config = { hardware.enableRedistributableFirmware = true; }; }
+            self.nixosModules.core
+          ] ++ moreModules));
+        host-workstation = moreModules:
+          (self.lib.evalConfiguration "x86_64-linux" "workstation" ([
+            self.nixosModules.core
+          ] ++ moreModules));
+      };
 
       ##########################################################################
       ## configurations ########################################################
       ##########################################################################
 
       nixosConfigurations = {
-        # container = self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" {
-        #   config = { boot.isContainer = true; };
-        # };
-          x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [];
-        # workstation = self.lib.evalConfiguration "x86_64-linux" "workstation" {
-        #   # imports = [ (myconfig.lib.fixIp "workstation" "enp39s0") ];
-        # };
+        x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [];
+        workstation = self.nixosConfigurationsGen.host-workstation [];
       };
 
     } (let
