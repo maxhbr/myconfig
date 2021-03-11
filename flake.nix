@@ -24,12 +24,13 @@
 
     # mine
 
-    # emacs.url = "github:nix-community/emacs-overlay";
-    # nix-doom-emacs.url = "github:vlaci/nix-doom-emacs";
-    # nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
+    emacs.url = "github:nix-community/emacs-overlay";
+    nix-doom-emacs.url = "github:vlaci/nix-doom-emacs";
+    nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
 
-    # myemacs.url = "path:flakes/myemacs/";
-    # myemacs.inputs.nix-doom-emacs.follows = "nix-doom-emacs";
+    myemacs.url = "path:flakes/myemacs/";
+    myemacs.inputs.nixpkgs.follows = "nixpkgs";
+    myemacs.inputs.nix-doom-emacs.follows = "nix-doom-emacs";
 
     myfish.url = "path:flakes/myfish/";
 
@@ -72,7 +73,7 @@
           })
 
           inputs.myfish.nixosModule
-          # inputs.myemacs.nixosModule
+          inputs.myemacs.nixosModule
         ] ++ (import ./nixosModules/_list.nix);
         config = {
           nixpkgs.overlays = [ inputs.nur.overlay ];

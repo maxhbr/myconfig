@@ -3,6 +3,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+if [[ -f ../switch.sh ]]; then
+  exit 1
+fi
+
 target="${1:-$(hostname)}"
 
 if [ $# -gt 0 ]; then

@@ -2,8 +2,10 @@
   description = "my doom-emacs configuration";
 
   inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     # emacs.url = "github:nix-community/emacs-overlay";
     nix-doom-emacs.url = "github:vlaci/nix-doom-emacs";
+    nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { nix-doom-emacs, ... }: {
@@ -11,6 +13,7 @@
       config = {
         nixpkgs.overlays = [
           (self: super: {
+            dune = super.dune_1; # see: https://github.com/vlaci/nix-doom-emacs/issues/166
             emacs = super.emacs.overrideDerivation (drv: { nativeComp = true; });
           })
         ];
