@@ -531,19 +531,6 @@
         "type": "github"
       }
     },
-    "nixpkgs_2": {
-      "locked": {
-        "lastModified": 1615047539,
-        "narHash": "sha256-uc9vCvT6EiChcoYmsWb7VjLSL3ftNnvQk/CrFTG5EPg=",
-        "path": "/nix/store/5cppqk9bqv404plfzrgncmhcaqjl8qar-source",
-        "rev": "9fa29c0df25cef249645a11c3b9de4dc996bb5e9",
-        "type": "path"
-      },
-      "original": {
-        "id": "nixpkgs",
-        "type": "indirect"
-      }
-    },
     "nose": {
       "flake": false,
       "locked": {
@@ -655,20 +642,6 @@
         "type": "github"
       }
     },
-    "private": {
-      "inputs": {
-        "nixpkgs": "nixpkgs_2"
-      },
-      "locked": {
-        "narHash": "sha256-MFlRKby/R93HCYTE9BHGm7A/ZdGMSKbq39Svy82FgZQ=",
-        "path": "../myconfig-private",
-        "type": "path"
-      },
-      "original": {
-        "path": "../myconfig-private",
-        "type": "path"
-      }
-    },
     "rel2003": {
       "locked": {
         "lastModified": 1614389971,
@@ -732,7 +705,6 @@
         "nix-doom-emacs": "nix-doom-emacs",
         "nixpkgs": "nixpkgs",
         "nur": "nur",
-        "private": "private",
         "rel2003": "rel2003",
         "rel2009": "rel2009",
         "small": "small",

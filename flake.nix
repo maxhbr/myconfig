@@ -1,7 +1,29 @@
 {
   description = "myconfig";
 
-  inputs = import ./inputs.nix // {
+  inputs = {
+    master.url = "github:nixos/nixpkgs/master";
+    staged.url = "github:nixos/nixpkgs/staging";
+    small.url = "github:nixos/nixpkgs/nixos-unstable-small";
+    large.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    rel2009.url = "github:nixos/nixpkgs/nixos-20.09";
+    rel2003.url = "github:nixos/nixpkgs/nixos-20.03";
+
+    home.url = "github:nix-community/home-manager";
+    home.inputs.nixpkgs.follows = "nixpkgs";
+
+    flake-utils.url = "github:numtide/flake-utils";
+
+    # nix.url = "github:nixos/nix/flakes";
+    # nix.inputs.nixpkgs.follows = "nixpkgs";
+
+    nur.url = "github:nix-community/NUR";
+
+    hardware.url = "github:nixos/nixos-hardware";
+
+    # mine
+
     emacs.url = "github:nix-community/emacs-overlay";
     nix-doom-emacs.url = "github:vlaci/nix-doom-emacs";
     nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
@@ -14,6 +36,9 @@
     myxmonad.url = "path:flakes/myxmonad/";
     myxmonad.inputs.nixpkgs.follows = "nixpkgs";
     myxmonad.inputs.flake-utils.follows = "flake-utils";
+
+    license-compliance-toolbox.url = "path:flakes/license-compliance-toolbox/";
+    license-compliance-toolbox.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { self, ... }@inputs:

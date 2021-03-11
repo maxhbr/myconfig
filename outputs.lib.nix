@@ -109,7 +109,6 @@ in {
   evalConfiguration = system: hostName: nixosModules:
     (let cfg = self.lib.mkConfiguration system hostName (nixosModules);
      in lib.nixosSystem (lib.recursiveUpdate cfg {
-       modules = cfg.modules ++ [ (./hosts/host + ".${hostName}") ]
-                 ++ inputs.private.lib.getNixosModulesFor hostName;
+       modules = cfg.modules ++ [ (./hosts/host + ".${hostName}") ];
      }));
 }
