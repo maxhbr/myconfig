@@ -20,4 +20,3 @@ result-*
 .vagrant
 myconfig.out-link
 *.img
-/secrets
