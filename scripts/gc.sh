@@ -11,7 +11,7 @@ age=${1:-30d}
 logUsage() {
     o=$(mktemp)
     df -h --output=file,used,pcent /nix/store /boot > "$o"
-    echo $o
+    echo "$o"
 }
 
 before=$(logUsage)

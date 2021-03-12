@@ -1,8 +1,5 @@
 { self, ... }@inputs:
 let inherit (inputs.nixpkgs) lib;
-    myconfig = {
-      user = "mhuber";
-    };
 in {
   importall = path:
     if builtins.pathExists path then
@@ -16,11 +13,15 @@ in {
 
   mkConfiguration = system: hostName:
     nixosModules:
+    metadataOverride:
     let
       pkgs = self.legacyPackages.${system};
 
       specialArgs = {
-        inherit myconfig;
+        myconfig = {
+          user = "mhuber";
+          metadatalib = import ./hosts/metadata.lib.nix { inherit lib metadataOverride; };
+        };
         flake = self;
 
         modules = nixosModules ++ [

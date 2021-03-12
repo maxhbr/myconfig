@@ -1,0 +1,41 @@
+{
+  "hosts": {
+    "x1extremeG2": {
+      "network": "home",
+      "pubkeys": {
+        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK/hdWBc+T0fMGKpAQRMLTHhyC/+3P8H//ox7AC+toNA root@x1extremeG2"
+      }
+    },
+    "nas": {
+      "network": "home",
+      "ip4": "192.168.1.9",
+      "pubkeys": {
+        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINV9PFlcY7bYzZFbxok9vl992kwN3WHbZ8rIP4AI6v7ex root@nas"
+      }
+    },
+    "workstation": {
+      "network": "home",
+      "ip4": "192.168.1.40",
+      "pubkeys": {
+        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDtqOcfT93S4gCROVvhTxB3Imp4bnbrtzQRnF9oRLTDs root@workstation"
+      }
+    },
+    "vserver": {
+
+    },
+    "nuc": {
+      "network": "home",
+      "ip4": "192.168.1.205",
+      "mac": "94:de:80:8f:a3:7a"
+    },
+    "pi4": {
+      "network": "home",
+      "ip4" : "192.168.1.100"
+    }
+  },
+  "networks": {
+    "home": {
+      "defaultGateway": "192.168.1.1"
+    }
+  }
+}
