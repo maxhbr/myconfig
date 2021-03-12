@@ -21,7 +21,7 @@ in
       wgNetwork = metadata.networks."${wgInterface}";
       wgPeerMetadata = metadata.hosts."${wgNetwork.peer}";
     in { config, lib, pkgs, ... }@args:
-      {
+      (lib.mkIf (lib.attrsets.hasAttrByPath ["ip4"] wgPeerMetadata) {
         environment.systemPackages = [ pkgs.wireguard ];
         networking.wireguard.interfaces = {
           "${wgInterface}" = {
@@ -40,5 +40,5 @@ in
             }];
           };
         };
-      });
+      }));
 }
