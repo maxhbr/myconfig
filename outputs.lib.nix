@@ -45,6 +45,7 @@ let inherit (inputs.nixpkgs) lib;
                   };
                 };
               }));
+          get = metadata;
         };
 in {
   importall = path:

@@ -1,4 +1,4 @@
-{ pkgs, config, lib, ... }:
+{ pkgs, config, lib, myconfig, ... }:
 # copied from https://github.com/Xe/nixos-configs/blob/master/common/crypto/default.nix : MIT
 # see also: https://christine.website/blog/nixos-encrypted-secrets-2021-01-20
 # License: MIT
@@ -41,8 +41,6 @@ let
     };
   };
 
-  metadata = lib.importTOML ../../ops/metadata/hosts.toml;
-
   mkSecretOnDisk = name:
     { source, ... }:
     pkgs.stdenv.mkDerivation {
@@ -50,7 +48,7 @@ let
       phases = "installPhase";
       buildInputs = [ pkgs.age ];
       installPhase =
-        let key = metadata.hosts."${config.networking.hostName}".ssh_pubkey;
+        let key = myconfig.metadatalib.get.hosts."${config.networking.hostName}".pubkeys."/etc/ssh/ssh_host_ed25519_key.pub";
         in ''
           age -a -r '${key}' -o "$out" '${source}'
         '';
