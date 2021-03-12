@@ -3,7 +3,8 @@
     "x1extremeG2": {
       "network": "home",
       "pubkeys": {
-        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK/hdWBc+T0fMGKpAQRMLTHhyC/+3P8H//ox7AC+toNA root@x1extremeG2"
+        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK/hdWBc+T0fMGKpAQRMLTHhyC/+3P8H//ox7AC+toNA root@x1extremeG2",
+        "cache-pub-key.pem": "binarycache.example.com:AZVRKwnneOvcjQf6Kbe5HsWN12me3G6rIIApP9Iwv+Q="
       },
       "wireguard": {
         "wg0": {
@@ -29,7 +30,8 @@
       "network": "home",
       "ip4": "192.168.1.40",
       "pubkeys": {
-        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDtqOcfT93S4gCROVvhTxB3Imp4bnbrtzQRnF9oRLTDs root@workstation"
+        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDtqOcfT93S4gCROVvhTxB3Imp4bnbrtzQRnF9oRLTDs root@workstation",
+        "cache-pub-key.pem": "binarycache.example.com:cDMH+7Ashj12YRTEt4kqcTOyiXEjDtov/q5Kx1nKRCo="
       },
       "wireguard": {
         "wg0": {

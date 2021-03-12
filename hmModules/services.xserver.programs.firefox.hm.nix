@@ -59,6 +59,12 @@ in {
         [ "firefox.desktop" "chromium.desktop" "qutebrowser.desktop" ];
       defaultApplications."x-scheme-handler/https" =
         [ "firefox.desktop" "chromium.desktop" "qutebrowser.desktop" ];
+      defaultApplications."text/html" =
+        [ "firefox.desktop" ];
+      defaultApplications."x-scheme-handler/about" =
+        [ "firefox.desktop" ];
+      defaultApplications."x-scheme-handler/unknown" =
+        [ "firefox.desktop" ];
     };
   });
 }
