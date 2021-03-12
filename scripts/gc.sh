@@ -4,26 +4,22 @@
 # SPDX-License-Identifier: MIT
 
 cd "$( dirname "${BASH_SOURCE[0]}" )"
-common="./common.sh"; until [ -f "$common" ]; do common="./.${common}"; done
-. "$common"
 set -e
 
 age=${1:-30d}
 
 logUsage() {
     o=$(mktemp)
-    df -h --output=file,used,pcent /nix/store > "$o"
+    df -h --output=file,used,pcent /nix/store /boot > "$o"
     echo $o
 }
 
 before=$(logUsage)
 
 echo "* nix-env --delete-generations $age ..."
-nix-env $NIX_PATH_ARGS \
-        --delete-generations $age
+nix-env --delete-generations $age
 echo "* sudo nix-env --delete-generations $age ..."
-sudo nix-env $NIX_PATH_ARGS \
-             --delete-generations $age || echo "failed, probably when waiting for sudo PW"
+sudo nix-env --delete-generations $age || echo "failed, probably when waiting for sudo PW"
 echo "* sudo nix-collect-garbage --delete-older-than $age ..."
 sudo nix-collect-garbage \
      --delete-older-than $age || echo "failed, probably when waiting for sudo PW"
