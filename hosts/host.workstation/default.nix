@@ -1,8 +1,7 @@
 # Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, ... }:
-let user = config.myconfig.user;
-in {
+{ config, pkgs, lib, myconfig, ... }:
+{
   imports = [
     ./hardware-configuration.nix
     ../../hardware/efi.nix
@@ -12,6 +11,8 @@ in {
     ../../hardware/hdd-spinndown.nix
     ../../hardware/steamcontroller.nix
     ./4x500-hdds.raid.nix
+    (myconfig.metadatalib.fixIp "enp39s0")
+    (myconfig.metadatalib.setupAsWireguardClient "wg0")
     # other profiles
     # ./gaming
     # testing
@@ -67,7 +68,7 @@ in {
           };
         };
       })
-  ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.5") ]);
+  ]; # ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.5") ]);
 
   config = {
     networking.hostName = "workstation";
@@ -130,7 +131,7 @@ in {
         home = {
           subvolume = "/home";
           extraConfig = ''
-            ALLOW_USERS="${user}"
+            ALLOW_USERS="${myconfig.user}"
           '';
         };
       };

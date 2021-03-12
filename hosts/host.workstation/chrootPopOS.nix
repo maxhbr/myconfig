@@ -1,6 +1,5 @@
 { pkgs, config, ... }:
 let
-  user = config.myconfig.user;
   chrootPopOS = with pkgs;
     writeShellScriptBin "chrootPopOS" ''
       set -euo pipefail
@@ -34,8 +33,8 @@ let
           '';
 in {
   config = {
-    home-manager.users."${user}" = {
+    home-manager.sharedModules = [{
       home.packages = with pkgs; [ chrootPopOS ];
-    };
+    }];
   };
 }

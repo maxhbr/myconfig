@@ -15,6 +15,6 @@ in {
     systemd.enableCgroupAccounting = true;
     system.autoUpgrade.allowReboot = true;
 
-    home-manager.users."${user}" = { home.packages = with pkgs; [ vnstat ]; };
+    home-manager.sharedModules = [{ home.packages = with pkgs; [ vnstat ]; }];
   });
 }

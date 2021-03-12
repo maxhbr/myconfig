@@ -53,7 +53,7 @@ in {
             };
           })
 
-          ({ config, lib, ... }: {
+          ({ config, lib, myconfig, ... }: {
             config = {
               system.activationScripts.genProfileManagementDirs =
                 "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}";
@@ -107,8 +107,10 @@ in {
       modules = specialArgs.modules ++ specialArgs.extraModules;
     };
 
-  evalConfiguration = system: hostName: nixosModules:
-    (let cfg = self.lib.mkConfiguration system hostName (nixosModules);
+  evalConfiguration = system: hostName:
+    nixosModules:
+    metadataOverride:
+    (let cfg = self.lib.mkConfiguration system hostName (nixosModules) metadataOverride;
      in lib.nixosSystem (lib.recursiveUpdate cfg {
        modules = cfg.modules ++ [ (./hosts/host + ".${hostName}") ];
      }));
