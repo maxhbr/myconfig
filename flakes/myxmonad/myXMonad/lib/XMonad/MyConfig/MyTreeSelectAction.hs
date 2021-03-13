@@ -36,6 +36,7 @@ applyTreeselectLayer c = let
                 , "nmon"
                 , "s-tui"
                 , "usbtop" 
+                , "mtr 1.1.1.1"
                 ])
         ]
 

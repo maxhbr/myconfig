@@ -19,8 +19,8 @@ applyMyKBs' :: (XConfig a -> [((KeyMask -> KeyMask, KeySym), X ())]) -> XConfig 
 applyMyKBs' myKBs conf = additionalKeys conf $ mapToWithModM conf (myKBs conf)
 
 mkTermCmd :: XConfig a -> String -> String -> String
-mkTermCmd c "" cmd = "SHLVL=0 " ++ terminal c ++ " -e " ++ cmd
-mkTermCmd c name cmd = "SHLVL=0 " ++ terminal c ++ " -n " ++ name ++ " -e " ++ cmd
+mkTermCmd c "" cmd = "SHLVL=0 " ++ terminalNoTmuxCMD ++ " -e " ++ cmd
+mkTermCmd c name cmd = "SHLVL=0 " ++ terminalNoTmuxCMD ++ " -n " ++ name ++ " -e " ++ cmd
 mkTermBashCmd :: XConfig a -> String -> String -> String
 mkTermBashCmd c name cmd = mkTermCmd c name (bashCMD ++ " -c " ++ cmd)
 

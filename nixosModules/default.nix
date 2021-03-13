@@ -37,7 +37,6 @@ let
     ./services.xserver.st
     ./services.xserver.wacom.nix
     ./services.xserver.xclip.nix
-    ./services.xserver.xmonad
     ./shell.common
     ./shell.programs.dic.nix
     ./shell.git

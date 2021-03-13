@@ -72,6 +72,7 @@
             };
           })
 
+          inputs.myxmonad.nixosModule
           inputs.myfish.nixosModule
           inputs.myemacs.nixosModule
         ] ++ (import ./nixosModules/_list.nix);

@@ -8,6 +8,7 @@ pathToXmonadShare  = "~/.xmonad/share/"
 
 xmobarCMD          = "xmobar"
 terminalCMD        = "st"
+terminalNoTmuxCMD  = "st-notmux"
 terminalCleanupCMD = "st-reattach"
 bashCMD            = "bash"
 zshCMD             = "zsh"

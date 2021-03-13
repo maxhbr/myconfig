@@ -447,15 +447,12 @@
     },
     "myxmonad": {
       "inputs": {
-        "flake-utils": [
-          "flake-utils"
-        ],
         "nixpkgs": [
           "nixpkgs"
         ]
       },
       "locked": {
-        "narHash": "sha256-l4PSvEopOu9og6lwHae2otvuYSk0zcfITUmHMQPB0pM=",
+        "narHash": "sha256-DGrdrrOvVPsQkFGGfq4wsIqv4rEJlqNMKZzx7f+Pjvg=",
         "path": "flakes/myxmonad/",
         "type": "path"
       },
