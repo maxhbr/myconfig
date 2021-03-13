@@ -20,12 +20,20 @@ let inherit (inputs.nixpkgs) lib;
             };
           });
 
-          setupAsWireguardClient = wgInterface:
+          setupAsWireguardClient = wgInterface: privateKey:
             ( let
               wgNetwork = metadata.networks."${wgInterface}";
               wgPeerMetadata = metadata.hosts."${wgNetwork.peer}";
             in { config, lib, pkgs, ... }@args:
               (lib.mkIf (lib.attrsets.hasAttrByPath ["ip4"] wgPeerMetadata) {
+
+                myconfig.secrets = {
+                  "wireguard.private" = {
+                    source = privateKey;
+                    dest = "/etc/wireguard/wg-private";
+                  };
+                };
+
                 environment.systemPackages = [ pkgs.wireguard ];
                 networking.wireguard.interfaces = {
                   "${wgInterface}" = {
@@ -45,6 +53,7 @@ let inherit (inputs.nixpkgs) lib;
                   };
                 };
               }));
+
           get = metadata;
         };
 in {

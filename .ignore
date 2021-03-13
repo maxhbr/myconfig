@@ -3,3 +3,4 @@ nixpkgs
 hardware/nixos-hardware
 default.nix.d/extrahosts/extrahosts
 _logs
+secrets
