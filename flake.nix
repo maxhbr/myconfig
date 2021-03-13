@@ -75,11 +75,10 @@
           inputs.myxmonad.nixosModule
           inputs.myfish.nixosModule
           inputs.myemacs.nixosModule
-        ] ++ (import ./nixosModules/_list.nix);
+        ] ++ (import ./modules/_list.nix);
         config = {
           hardware.enableRedistributableFirmware = true;
           nixpkgs.overlays = [ inputs.nur.overlay ];
-          home-manager.sharedModules = (import ./hmModules/_list.nix);
         };
       };
 

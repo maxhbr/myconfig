@@ -30,17 +30,20 @@
   ./services.xserver.printing.nix
   ./services.xserver.programs.chromium.nix
   ./services.xserver.programs.evolution.nix
+  ./services.xserver.programs.firefox.nix
   ./services.xserver.programs.kitty.nix
   ./services.xserver.programs.obs.nix
   ./services.xserver.programs.xss-lock.nix
+  ./services.xserver.programs.zathura.nix
   ./services.xserver.pulseaudio.nix
   ./services.xserver.st
   ./services.xserver.wacom.nix
   ./services.xserver.xclip.nix
-  ./services.xserver.xmonad
   ./shell.common
   ./shell.programs.dic.nix
   ./shell.git
+  ./shell.programs.bat.nix
+  ./shell.programs.exa.nix
   ./shell.programs.tmux
   ./shell.programs.vim
   ./shell.zsh

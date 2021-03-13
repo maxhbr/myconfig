@@ -1,9 +1,12 @@
-{ config, lib, pkgs, ... }: {
-  config = (lib.mkIf config.programs.zathura.enable {
-    home.packages = with pkgs; [ zathura ];
-    programs.zathura = {
-      options = { };
-      extraConfig = ''
+{config, lib, pkgs, ...}: {
+  config = (lib.mkIf config.services.xserver.enable {
+    home-manager.sharedModules = [
+      {
+        config = {
+          programs.zathura = {
+            enable = true;
+            options = { };
+            extraConfig = ''
         set recolor false # invert colors
         set recolor-keephue false
 
@@ -21,10 +24,13 @@
         map [normal] v set recolor false
         map [fullscreen] v set recolor false
       '';
-    };
-    xdg.mimeApps = {
-      defaultApplications."application/pdf" =
-        [ "zathura.desktop" "mupdf.desktop" ];
-    };
+          };
+          xdg.mimeApps = {
+            defaultApplications."application/pdf" =
+              [ "zathura.desktop" "mupdf.desktop" ];
+          };
+        };
+      }
+    ];
   });
 }
