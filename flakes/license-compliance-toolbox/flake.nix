@@ -15,6 +15,11 @@
   outputs = { self, nixpkgs, ... }:
     let pkgs = import nixpkgs { system = "x86_64-linux"; };
     in {
+      nixosModule = {
+        config.environment.systemPackages = [
+          self.defaultPackage.x86_64-linux
+        ];
+      };
 
       packages.x86_64-linux = {
         ort = pkgs.callPackage ./oss-review-toolkit-ort { };

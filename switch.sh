@@ -16,7 +16,7 @@ else
     targetIP="localhost"
 fi
 
-./flakes/update.sh
+./update.sh
 
 set -x
 nix develop \

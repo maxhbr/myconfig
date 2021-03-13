@@ -87,6 +87,7 @@
           (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
             { config = { hardware.enableRedistributableFirmware = true; }; }
             self.nixosModules.core
+            inputs.license-compliance-toolbox.nixosModule
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "workstation" ([
