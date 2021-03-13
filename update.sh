@@ -4,4 +4,4 @@ set -euo pipefail
 cd "$(dirname "$0")"
 ./flakes/update.sh
 
-nix flake update  --recreate-lock-file
+nix flake update

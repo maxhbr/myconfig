@@ -7,6 +7,4 @@ find "$(cd "$(dirname "$0")" && pwd)" -maxdepth 1 -mindepth 1 -type d -print0 |
         echo "$flake:"
         cd "$flake"
         nix flake update
-        cd "$flake/../.."
-        nix flake update --update-input "$(basename "$flake")"
     done

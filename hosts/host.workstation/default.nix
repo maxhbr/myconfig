@@ -12,7 +12,6 @@
     ../../hardware/steamcontroller.nix
     ./4x500-hdds.raid.nix
     (myconfig.metadatalib.fixIp "enp39s0")
-    (myconfig.metadatalib.setupAsWireguardClient "wg0")
     # other profiles
     # ./gaming
     # testing

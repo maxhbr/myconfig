@@ -378,7 +378,7 @@
         "ort": "ort"
       },
       "locked": {
-        "narHash": "sha256-drNPGGRsPz9JNMrD/x57Ofq7eS/7RyoS5r+ZUpuqjQ8=",
+        "narHash": "sha256-dJzRUsALvdUkXd4+FL5eTRdnKZymnL0wx5XjqSeayhA=",
         "path": "flakes/license-compliance-toolbox/",
         "type": "path"
       },
@@ -389,11 +389,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1615662078,
-        "narHash": "sha256-8eP4nupRBxX4uAHY7Z7+euTxkJfRJ3iJTWB9yCPg9YA=",
+        "lastModified": 1615666330,
+        "narHash": "sha256-HGB/XKLYj9sXxHsHglVAkbc0/c0YV4sjcfq/y01+xWQ=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "bccfa9e33e2cb8bdb736b63cafdfb270eea73059",
+        "rev": "312390ca50c87ef93c3d7661791ea546e79d2b76",
         "type": "github"
       },
       "original": {
@@ -413,7 +413,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-fgajhAkokrN25Hlbvbn6A/nLThz17Bt7aoiETtwYxuQ=",
+        "narHash": "sha256-tdD9wMnARu2+w8/7WxHEAa7yrMl/RZm0LxgI08uUFAg=",
         "path": "flakes/myemacs/",
         "type": "path"
       },
@@ -436,7 +436,7 @@
         "z": "z"
       },
       "locked": {
-        "narHash": "sha256-Y6bCkzGliYO9GjpGSSjiy5g+aPLPd4TISxNz+Ga2qQU=",
+        "narHash": "sha256-D6LDWJCAdEWnMkENQ6vl2EkFb437Mt1YKyynpuw+rQQ=",
         "path": "flakes/myfish/",
         "type": "path"
       },
@@ -549,11 +549,11 @@
     },
     "nur": {
       "locked": {
-        "lastModified": 1615663899,
-        "narHash": "sha256-IGlKW3kT7aE64JlY8+SD4O62urYQqerlyH8/oWYKARQ=",
+        "lastModified": 1615668212,
+        "narHash": "sha256-KN1zzT+GThrBs7S9Gs6mQrZyG1cO8rR1UMMn9Vp45oo=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "f9a23dbbd9a01223219ec35b3bf923fde37f0070",
+        "rev": "387048d922437b00c6549726c5eab8cbdfd0303e",
         "type": "github"
       },
       "original": {
@@ -613,11 +613,11 @@
     "ort": {
       "flake": false,
       "locked": {
-        "lastModified": 1613750629,
-        "narHash": "sha256-+0oeNQLao+RRbt4kz1miaXtwsDJ5zqwYhlVD5EhfHA8=",
+        "lastModified": 1615568113,
+        "narHash": "sha256-Wsa1o7bVaerIypStUpYQ8asXffelBRy23gWN/MX1pco=",
         "owner": "oss-review-toolkit",
         "repo": "ort",
-        "rev": "640bcea691c367c1807a0166f1e188026a08ccde",
+        "rev": "7fd852a42e5f5602a47b5eea58ef8f85bbd97970",
         "type": "github"
       },
       "original": {
@@ -778,11 +778,11 @@
     "z": {
       "flake": false,
       "locked": {
-        "lastModified": 1610945496,
-        "narHash": "sha256-TEaIR1NbadNk1ParPDR72rfHRvtWk/CpklfyJU2OdjU=",
+        "lastModified": 1615621779,
+        "narHash": "sha256-VIeRzaA/Dg0mpCjMB9rNXmIhNGzzYCxgkFUXNUOyJ50=",
         "owner": "jethrokuan",
         "repo": "z",
-        "rev": "e0e1b9dfdba362f8ab1ae8c1afc7ccf62b89f7eb",
+        "rev": "97ca1fd1b281f5f240e7adb90d0a28f9eb4567db",
         "type": "github"
       },
       "original": {
