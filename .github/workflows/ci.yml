@@ -4,23 +4,8 @@ on: [push]
 
 
 jobs:
-  build-os:
-
+  try-develop:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        config:
-          - { hostname: x1extremeG2 , mode: "--dry-run" }
-          # - { hostname: x1extremeG2 , mode: "" } # run out of memory
-          - { hostname: vserver , mode: "--dry-run" }
-          - { hostname: vserver , mode: "" }
-          - { hostname: workstation , mode: "--dry-run" }
-          # - { hostname: workstation , mode: "" } # run out of memory
-          - { hostname: nas , mode: "--dry-run" }
-          # - { hostname: nas , mode: "" } # run out of memory
-      fail-fast: false
-
     steps:
     - run: git config --global init.defaultBranch main
     - uses: actions/checkout@v2.3.4
@@ -29,36 +14,60 @@ jobs:
       with:
         name: maxhbr
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-    - run: ./scripts/test-nixos-configuration.sh ${{ matrix.config.mode }} --hostname ${{ matrix.config.hostname }}
+    - run: nix develop --command env
+  # build-os:
 
-  build-iso:
-    runs-on: ubuntu-latest
+  #   runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        config:
-          - { name: "minimal", config: ./iso/minimal.nix, mode: "" }
-          - { name: "desktop", config: ./iso/desktop.nix, mode: "--dry-run" }
-      fail-fast: false
+  #   strategy:
+  #     matrix:
+  #       config:
+  #         - { hostname: x1extremeG2 , action: "build-dry" }
+  #         - { hostname: x1extremeG2 , action: "build" }
+  #         - { hostname: workstation , action: "build-dry" }
+  #         - { hostname: workstation , action: "build" }
+  #         - { hostname: nas , action: "build-dry" }
+  #         - { hostname: nas , action: "build" }
+  #     fail-fast: false
+
+  #   steps:
+  #   - run: git config --global init.defaultBranch main
+  #   - uses: actions/checkout@v2.3.4
+  #   - uses: cachix/install-nix-action@v12
+  #   - uses: cachix/cachix-action@v8
+  #     with:
+  #       name: maxhbr
+  #       signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
+  #   - run:
+
+  # build-iso:
+  #   runs-on: ubuntu-latest
+
+  #   strategy:
+  #     matrix:
+  #       config:
+  #         - { name: "minimal", config: ./iso/minimal.nix, mode: "" }
+  #         - { name: "desktop", config: ./iso/desktop.nix, mode: "--dry-run" }
+  #     fail-fast: false
 
 
-    steps:
-    - run: git config --global init.defaultBranch main
-    - uses: actions/checkout@v2.3.4
-    - uses: cachix/install-nix-action@v12
-    - uses: cachix/cachix-action@v8
-      with:
-        name: maxhbr
-        signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-    - run: NIX_PATH="nixpkgs=$(pwd)/nixpkgs:nixos-config=$(pwd)/misc/empty_nixos_config.nix" ./iso/build-iso-image.sh "$(readlink -f ${{ matrix.config.config }} )" ${{ matrix.config.mode }}
+  #   steps:
+  #   - run: git config --global init.defaultBranch main
+  #   - uses: actions/checkout@v2.3.4
+  #   - uses: cachix/install-nix-action@v12
+  #   - uses: cachix/cachix-action@v8
+  #     with:
+  #       name: maxhbr
+  #       signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
+  #   - run: NIX_PATH="nixpkgs=$(pwd)/nixpkgs:nixos-config=$(pwd)/misc/empty_nixos_config.nix" ./iso/build-iso-image.sh "$(readlink -f ${{ matrix.config.config }} )" ${{ matrix.config.mode }}
 
-    - uses: Thog/action-equals@v1
-      id: isNonDry
-      with:
-        a: ${{ matrix.config.mode }}
-        b: ""
-    - uses: actions/upload-artifact@v2
-      with:
-        name: myconfig-iso-${{ matrix.config.name }}
-        path: '__out/**/*.iso'
-      if: steps.isNonDry.outputs.result
+  #   - uses: Thog/action-equals@v1
+  #     id: isNonDry
+  #     with:
+  #       a: ${{ matrix.config.mode }}
+  #       b: ""
+  #   - uses: actions/upload-artifact@v2
+  #     with:
+  #       name: myconfig-iso-${{ matrix.config.name }}
+  #       path: '__out/**/*.iso'
+  #     if: steps.isNonDry.outputs.result
