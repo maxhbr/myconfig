@@ -2,9 +2,8 @@
 
 set -euo pipefail
 
-find "$(cd "$(dirname "$0")" && pwd)" -maxdepth 1 -mindepth 1 -type d -print0 | 
-    while IFS= read -r -d '' flake; do 
-        echo "$flake:"
-        cd "$flake"
-        nix flake update
-    done
+flakes="$(cd "$(dirname "$0")" && pwd)"
+
+( cd "$flakes/myemacs"; nix flake update )
+( cd "$flakes/myfish"; nix flake update )
+( cd "$flakes/myxmonad"; nix flake update )
