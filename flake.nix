@@ -133,7 +133,12 @@
           config = nixpkgsConfig;
         };
       in pkgs.mkShell {
-        nativeBuildInputs = with pkgs; [ git git-crypt git-secrets nixfmt age ];
+        nativeBuildInputs = with pkgs; [
+          nixos-rebuild
+          git git-crypt git-secrets
+          nixfmt
+          age
+        ];
 
         NIX_CONF_DIR = with pkgs;
           let
