@@ -46,7 +46,7 @@ jobs:
       with:
         name: maxhbr
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-    - run: nix develop --command nixos-rebuild ${{ config.action }} --flake ${{ config.flake }}
+    - run: nix develop --command nixos-rebuild ${{ matrix.config.action }} --flake ${{ matrix.config.flake }}
 
   # build-iso:
   #   runs-on: ubuntu-latest
