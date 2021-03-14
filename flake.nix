@@ -87,11 +87,23 @@
           (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
             { config = { hardware.enableRedistributableFirmware = true; }; }
             self.nixosModules.core
-            inputs.license-compliance-toolbox.nixosModule
+            # inputs.license-compliance-toolbox.nixosModule
+            ({myconfig, ...}: {
+              imports = [
+                (myconfig.metadatalib.announceHost "workstation")
+                (myconfig.metadatalib.announceHost "nas")
+                (myconfig.metadatalib.announceHost "vserver")
+                (myconfig.metadatalib.announceHost "nuc")
+                (myconfig.metadatalib.announceHost "pi4")
+                (myconfig.metadatalib.announceHost "pi3a")
+                (myconfig.metadatalib.announceHost "pi0")
+              ];
+            })
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "workstation" ([
             self.nixosModules.core
+            # inputs.license-compliance-toolbox.nixosModule
           ] ++ moreModules) metadataOverride);
       };
 
