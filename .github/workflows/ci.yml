@@ -26,12 +26,12 @@ jobs:
     strategy:
       matrix:
         config:
-          - { hostname: x1extremeG2 , action: "build-dry" }
-          - { hostname: x1extremeG2 , action: "build" }
-          - { hostname: workstation , action: "build-dry" }
-          - { hostname: workstation , action: "build" }
-          - { hostname: nas , action: "build-dry" }
-          - { hostname: nas , action: "build" }
+          - { flake: .#x1extremeG2 , action: "build-dry" }
+          - { flake: .#x1extremeG2 , action: "build" }
+          - { flake: .#workstation , action: "build-dry" }
+          - { flake: .#workstation , action: "build" }
+          - { flake: .#nas , action: "build-dry" }
+          - { flake: .#nas , action: "build" }
       fail-fast: false
 
     steps:
@@ -46,7 +46,7 @@ jobs:
       with:
         name: maxhbr
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-    - run: nix develop --command nixos-rebuild "${{config.action}}" --flake ".#${{config.hostname}}"
+    - run: nix develop --command nixos-rebuild ${{ config.action }} --flake ${{ config.flake }}
 
   # build-iso:
   #   runs-on: ubuntu-latest
