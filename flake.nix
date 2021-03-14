@@ -145,8 +145,9 @@
             nixConf = ''
               ${pkgs.lib.optionalString (builtins.pathExists /etc/nix/nix.conf)
               (builtins.readFile /etc/nix/nix.conf)}
-              experimental-features = nix-command flakes ca-references
-            ''; # access-tokens = "github.com=${secrets.git.github.oauth-token}"
+            '';
+            # experimental-features = nix-command flakes ca-references
+            # access-tokens = "github.com=${secrets.git.github.oauth-token}"
           in linkFarm "nix-conf-dir" ([
             {
               name = "nix.conf";
