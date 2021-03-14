@@ -26,11 +26,11 @@ jobs:
     strategy:
       matrix:
         config:
-          - { flake: .#x1extremeG2 , action: "build-dry" }
+          - { flake: .#x1extremeG2 , action: "dry-build" }
           - { flake: .#x1extremeG2 , action: "build" }
-          - { flake: .#workstation , action: "build-dry" }
+          - { flake: .#workstation , action: "dry-build" }
           - { flake: .#workstation , action: "build" }
-          - { flake: .#nas , action: "build-dry" }
+          - { flake: .#nas , action: "dry-build" }
           - { flake: .#nas , action: "build" }
       fail-fast: false
 
@@ -42,10 +42,10 @@ jobs:
         install_url: https://github.com/numtide/nix-flakes-installer/releases/download/nix-2.4pre20201221_9fab14a/install
         extra_nix_config: |
           experimental-features = nix-command flakes
-    - uses: cachix/cachix-action@v8
-      with:
-        name: maxhbr
-        signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
+    # - uses: cachix/cachix-action@v8
+    #   with:
+    #     name: maxhbr
+    #     signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - run: nix develop --command nixos-rebuild ${{ matrix.config.action }} --flake ${{ matrix.config.flake }}
 
   # build-iso:
