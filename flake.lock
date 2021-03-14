@@ -378,7 +378,7 @@
         "ort": "ort"
       },
       "locked": {
-        "narHash": "sha256-+GsZpQwphpKjVQnQpjX9a8vb6JvsZ6ddXlwOpJZ2eao=",
+        "narHash": "sha256-pYHzVl1G29Iqcu4GqirhVA/emWm6pKHBoMHVvlXma10=",
         "path": "flakes/license-compliance-toolbox/",
         "type": "path"
       },
@@ -389,11 +389,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1615712930,
-        "narHash": "sha256-gwzCrGOSfCQGwn16UJTU5Q1NnoqqsdXz7gus165OX+A=",
+        "lastModified": 1615723931,
+        "narHash": "sha256-I1ua0koN17Pg2EGoH4D44TsYhirMv87q5rjJhcZTel4=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "727471ee5155982e0099925bc27ef8380b32d091",
+        "rev": "f7574a5c8fefd86b50def1827eadb9b8cb266ffd",
         "type": "github"
       },
       "original": {
@@ -549,11 +549,11 @@
     },
     "nur": {
       "locked": {
-        "lastModified": 1615689807,
-        "narHash": "sha256-KmMlV2OheUTOUMS9B1tQBB6+YOzCK3k7VdT+AC+mkfE=",
+        "lastModified": 1615719117,
+        "narHash": "sha256-hbDkZxYNfagBjTB7uKGf3bUFTQbigOW3BTIGiJSjEUo=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "dcc97d9a70a0a56512fde7d72550a4e10dca8bff",
+        "rev": "9a2be1893dc3325a8da525d57a08b3995aa7e040",
         "type": "github"
       },
       "original": {
@@ -745,11 +745,11 @@
     },
     "staged": {
       "locked": {
-        "lastModified": 1615702655,
-        "narHash": "sha256-jHPZPEJ2Fw+2M38ZL3fXtUwehCCbHcUK/kY2517WHiI=",
+        "lastModified": 1615724474,
+        "narHash": "sha256-97oE8wJRSA2HGh6FDwRWeVgxYJw+1kVYQ9jsvcn6qR8=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "2c7bf48e77f3aca0cb8d1698b08a810ce07f468f",
+        "rev": "977005c64f5f972f8c7ef52b483f2227d3623fc9",
         "type": "github"
       },
       "original": {
