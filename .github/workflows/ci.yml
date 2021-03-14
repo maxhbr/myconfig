@@ -19,30 +19,34 @@ jobs:
         name: maxhbr
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - run: nix develop --command env
-  # build-os:
 
-  #   runs-on: ubuntu-latest
+  build-os:
+    runs-on: ubuntu-latest
 
-  #   strategy:
-  #     matrix:
-  #       config:
-  #         - { hostname: x1extremeG2 , action: "build-dry" }
-  #         - { hostname: x1extremeG2 , action: "build" }
-  #         - { hostname: workstation , action: "build-dry" }
-  #         - { hostname: workstation , action: "build" }
-  #         - { hostname: nas , action: "build-dry" }
-  #         - { hostname: nas , action: "build" }
-  #     fail-fast: false
+    strategy:
+      matrix:
+        config:
+          - { hostname: x1extremeG2 , action: "build-dry" }
+          - { hostname: x1extremeG2 , action: "build" }
+          - { hostname: workstation , action: "build-dry" }
+          - { hostname: workstation , action: "build" }
+          - { hostname: nas , action: "build-dry" }
+          - { hostname: nas , action: "build" }
+      fail-fast: false
 
-  #   steps:
-  #   - run: git config --global init.defaultBranch main
-  #   - uses: actions/checkout@v2.3.4
-  #   - uses: cachix/install-nix-action@v12
-  #   - uses: cachix/cachix-action@v8
-  #     with:
-  #       name: maxhbr
-  #       signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-  #   - run:
+    steps:
+    - run: git config --global init.defaultBranch main
+    - uses: actions/checkout@v2.3.4
+    - uses: cachix/install-nix-action@v12
+      with:
+        install_url: https://github.com/numtide/nix-flakes-installer/releases/download/nix-2.4pre20201221_9fab14a/install
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+    - uses: cachix/cachix-action@v8
+      with:
+        name: maxhbr
+        signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
+    - run: nix develop --command nixos-rebuild "${{config.action}}" --flake ".#${{config.hostname}}"
 
   # build-iso:
   #   runs-on: ubuntu-latest
