@@ -20,35 +20,34 @@ let inherit (inputs.nixpkgs) lib;
             };
           });
 
-          announceHost = otherHostName:
-            (let otherHostMetadata = metadata.hosts."${otherHostName}";
-             in { pkgs, lib, ... }: {
-               config = (lib.mkIf (lib.attrsets.hasAttrByPath ["ip4"] otherHostMetadata) (let
-                 otherHostIp = otherHostMetadata.ip4;
-               in {
-                  networking.extraHosts = ''
+          announceHost = otherHostName: let
+            otherHostMetadata = metadata.hosts."${otherHostName}";
+          in { pkgs, lib, ... }: {
+            config = (lib.mkIf (lib.attrsets.hasAttrByPath ["ip4"] otherHostMetadata) (let
+              otherHostIp = otherHostMetadata.ip4;
+            in {
+              networking.extraHosts = ''
                       ${otherHostIp} ${otherHostName}
                       ${otherHostIp} ${otherHostName}.maxhbr.de
                     '';
-                  home-manager.users.mhuber = {
-                    home.file = {
-                      ".ssh/imports/my-${otherHostName}.config".text = ''
+              home-manager.users.mhuber = {
+                home.file = {
+                  ".ssh/imports/my-${otherHostName}.config".text = ''
                           Host ${otherHostName}
                             HostName ${otherHostIp}
                             User mhuber
                         '';
-                    };
-                    home.packages = [
-                      (pkgs.writeShellScriptBin "suspend-${otherHostName}"
-                        "ssh ${otherHostName} sudo systemctl suspend")
-                    ] ++ (if (lib.attrsets.hasAttrByPath ["mac"] otherHostMetadata)
-                          then [(pkgs.writeShellScriptBin "wake-${otherHostName}"
-                            "${pkgs.wol}/bin/wol ${otherHostMetadata.mac}")]
-                          else [ ]);
-                  };
-               }));
-             };
-            );
+                };
+                home.packages = [
+                  (pkgs.writeShellScriptBin "suspend-${otherHostName}"
+                    "ssh ${otherHostName} sudo systemctl suspend")
+                ] ++ (if (lib.attrsets.hasAttrByPath ["mac"] otherHostMetadata)
+                      then [(pkgs.writeShellScriptBin "wake-${otherHostName}"
+                        "${pkgs.wol}/bin/wol ${otherHostMetadata.mac}")]
+                      else [ ]);
+              };
+            }));
+          };
 
           setupAsWireguardClient = wgInterface: privateKey:
             ( let
