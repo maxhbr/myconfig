@@ -14,6 +14,7 @@ jobs:
       with:
         name: maxhbr
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
+    - run: nix-env -i nixFlakes
     - run: nix --experimental-features 'nix-command flakes' develop --command env
   # build-os:
 
