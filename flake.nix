@@ -134,7 +134,7 @@
         };
       in pkgs.mkShell {
         nativeBuildInputs = with pkgs; [
-          nixos-rebuild
+          # nixos-rebuild
           git git-crypt git-secrets
           nixfmt
           age
