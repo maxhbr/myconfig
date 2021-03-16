@@ -180,9 +180,13 @@ let
               '';
     destination = "/etc/udev/rules.d/99-platformio.rules";
   };
+
 in {
   config = lib.mkIf cfg.enable {
-    home-manager.users.mhuber = { home.packages = with pkgs; [ platformio ]; };
-    services.udev.packages = [ platformio-udev-rules ];
+     home-manager.users.mhuber = { home.packages = with pkgs; [
+       platformio openocd
+     ];
+    };
+    services.udev.packages = [ platformio-udev-rules pkgs.openocd ];
   };
 }

@@ -27,10 +27,10 @@
       imports = [{
         programs.fish = {
           shellAbbrs = {
-            nixse = "nix search";
+            nixse = "nix search nixpkgs";
             why-depends-nixos = "nix why-depends /run/current-system";
             nixTest =
-              "NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs-unstable>' --fallback --run fish -p";
+              "NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs>' --fallback --run fish -p";
           };
           functions = {
             # see: https://github.com/NixOS/nixpkgs/issues/51368#issuecomment-704678563
