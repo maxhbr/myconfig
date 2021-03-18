@@ -30,6 +30,7 @@ in {
     home-manager.sharedModules = [{
       home.packages = [
         (with pkgs.unstable; if nativeOnly then steam-run-native else steam-run)
+        steam
       ];
       # home.file = {
       #   ".local/share/Steam/compatibilitytools.d/Proton-5.9-GE-2-MF" = {
