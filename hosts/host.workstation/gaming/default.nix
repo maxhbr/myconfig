@@ -1,9 +1,8 @@
 { pkgs, config, ... }:
-let user = config.myconfig.user;
-in {
+{
   imports = [ ./games.wine ./games.steam ];
   config = {
-    home-manager.users."${user}" = {
+    home-manager.sharedModules = [{
       imports = [
         # ./games.dod.hm.nix
         ./games.doom3.hm.nix
@@ -24,6 +23,6 @@ in {
           recursive = true;
         };
       };
-    };
+    }];
   };
 }

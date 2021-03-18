@@ -1,8 +1,7 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, ... }:
-let user = config.myconfig.user;
-in {
+{
   config = {
     nixpkgs.overlays = [
       (self: super:
@@ -35,9 +34,9 @@ in {
       "p7zip-16.02" # in winetricks
     ];
 
-    home-manager.users."${user}" = {
+    home-manager.sharedModules = [{
       home.packages = with pkgs; [ wine winetricks playonlinux lutris ];
-    };
+    }];
     hardware.opengl.driSupport32Bit = true;
   };
 }

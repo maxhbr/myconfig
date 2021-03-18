@@ -13,7 +13,7 @@
     ./4x500-hdds.raid.nix
     (myconfig.metadatalib.fixIp "enp39s0")
     # other profiles
-    # ./gaming
+    ./gaming
     # testing
     ./chrootPopOS.nix
     { # for quickfix (due to usage of 20.03)

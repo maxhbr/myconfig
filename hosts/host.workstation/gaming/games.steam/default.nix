@@ -1,6 +1,5 @@
 { pkgs, config, lib, ... }:
 let
-  user = config.myconfig.user;
   nativeOnly = false;
   steam = pkgs.unstable.steam.override {
     extraPkgs = innerPkgs:
@@ -28,7 +27,7 @@ in {
     #     };
     #   };
     # };
-    home-manager.users."${user}" = {
+    home-manager.sharedModules = [{
       home.packages = [
         (with pkgs.unstable; if nativeOnly then steam-run-native else steam-run)
       ];
@@ -50,7 +49,7 @@ in {
       #     recursive = true;
       #   };
       # };
-    };
+    }];
 
     hardware = {
       opengl = {
