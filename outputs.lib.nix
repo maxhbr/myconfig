@@ -167,7 +167,10 @@ in {
         extraModules = [{
           nix.package = lib.mkDefault pkgs.nixFlakes;
           nix.extraOptions = ''
-            experimental-features = nix-command flakes
+            experimental-features = nix-command flakes ca-references recursive-nix
+            show-trace = true
+            builders-use-substitutes = true
+            preallocate-contents = true
           '';
 
           nix.registry = lib.mapAttrs (id: flake: {
