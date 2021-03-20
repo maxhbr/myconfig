@@ -40,9 +40,13 @@
 
     license-compliance-toolbox.url = "path:flakes/license-compliance-toolbox/";
     license-compliance-toolbox.inputs.nixpkgs.follows = "nixpkgs";
+
+    zephyrproject.url = "path:flakes/zephyrproject/";
+    # zephyrproject.inputs.nixpkgs.follows = "nixpkgs";
+    zephyrproject.inputs.flake-utils.follows = "flake-utils";
   };
 
-  outputs = { self, ... }@inputs:
+  outputs = { self, nixpkgs, ... }@inputs:
     let inherit (inputs.nixpkgs) lib;
     in lib.recursiveUpdate {
       aggregatedInputs = inputs;
@@ -52,33 +56,48 @@
       ## profiles and modules ##################################################
       ##########################################################################
 
-      nixosModules.core = { ... }: {
-        imports = [
-          ({ pkgs, ... }: {
-            config.nixpkgs = {
-              overlays = let
-                mkSubPkgsOverlay = targetName: input:
-                  (self: super: {
-                    "${targetName}" = super."${targetName}" or { }
-                                      // import input { inherit (pkgs) config system; };
-                  });
-              in [
-                (mkSubPkgsOverlay "unstable" inputs.master)
-                (mkSubPkgsOverlay "nixos-unstable" inputs.large)
-                (mkSubPkgsOverlay "nixos-unstable-small" inputs.small)
-                (mkSubPkgsOverlay "nixos-2003-small" inputs.rel2003)
-                (mkSubPkgsOverlay "nixos-2009-small" inputs.rel2009)
-              ];
-            };
-          })
+      nixosModules = {
+        activateHomeManager = { config, lib, ... }: {
+          imports = [
+            # home manager:
+            inputs.home.nixosModules.home-manager
+          ];
 
-          inputs.myxmonad.nixosModule
-          inputs.myfish.nixosModule
-          inputs.myemacs.nixosModule
-        ] ++ (import ./modules/_list.nix);
-        config = {
-          hardware.enableRedistributableFirmware = true;
-          nixpkgs.overlays = [ inputs.nur.overlay ];
+          config = {
+            home-manager = {
+              useUserPackages = true;
+              useGlobalPkgs = true;
+            };
+          };
+        };
+        core = { ... }: {
+          imports = [
+            ({ pkgs, ... }: {
+              config.nixpkgs = {
+                overlays = let
+                  mkSubPkgsOverlay = targetName: input:
+                    (self: super: {
+                      "${targetName}" = super."${targetName}" or { }
+                                        // import input { inherit (pkgs) config system; };
+                    });
+                in [
+                  (mkSubPkgsOverlay "unstable" inputs.master)
+                  (mkSubPkgsOverlay "nixos-unstable" inputs.large)
+                  (mkSubPkgsOverlay "nixos-unstable-small" inputs.small)
+                  (mkSubPkgsOverlay "nixos-2003-small" inputs.rel2003)
+                  (mkSubPkgsOverlay "nixos-2009-small" inputs.rel2009)
+                ];
+              };
+            })
+
+            inputs.myxmonad.nixosModule
+            inputs.myfish.nixosModule
+            inputs.myemacs.nixosModule
+          ] ++ (import ./modules/_list.nix);
+          config = {
+            hardware.enableRedistributableFirmware = true;
+            nixpkgs.overlays = [ inputs.nur.overlay ];
+          };
         };
       };
 
@@ -99,6 +118,7 @@
                 (myconfig.metadatalib.announceHost "pi0")
               ];
             })
+            inputs.zephyrproject.nixosModule
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "workstation" ([
@@ -114,6 +134,31 @@
       nixosConfigurations = {
         x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [] {};
         workstation = self.nixosConfigurationsGen.host-workstation [] {};
+
+        container = nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = [
+            self.nixosModules.activateHomeManager
+            # self.nixosModules.core
+            ({ pkgs, ... }: {
+              boot.isContainer = true;
+
+              # Let 'nixos-version --json' know about the Git revision
+              # of this flake.
+              system.configurationRevision = nixpkgs.lib.mkIf (self ? rev) self.rev;
+
+              # Network configuration.
+              networking.useDHCP = false;
+              networking.firewall.allowedTCPPorts = [ 80 ];
+
+              # Enable a web server.
+              services.httpd = {
+                enable = true;
+                adminAddr = "morty@example.org";
+              };
+            })
+          ];
+        };
       };
 
     } (let

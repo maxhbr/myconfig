@@ -53,7 +53,6 @@
       imagework.enable = true;
       dev = {
         haskell.enable = true;
-        iot.enable = true;
         network.enable = true;
         compliance.enable = true;
       };

@@ -21,7 +21,7 @@ in {
         krita
         # inkscape
 
-        blender
+        # blender
         librecad # 2D
         unstable.freecad # 3D
       ];

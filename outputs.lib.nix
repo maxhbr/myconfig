@@ -127,13 +127,11 @@ in {
           })
 
           # home manager:
-          inputs.home.nixosModules.home-manager
+          self.nixosModules.activateHomeManager
           ({ config, lib, ... }: {
             config = {
               home-manager = {
                 extraSpecialArgs = specialArgs // { super = config; };
-                useUserPackages = true;
-                useGlobalPkgs = true;
               };
             };
           })
