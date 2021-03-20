@@ -827,7 +827,7 @@
         "platformio-core": "platformio-core"
       },
       "locked": {
-        "narHash": "sha256-+aRzQLOwc0URUgSTfeYGAhIW5imFgooFyVa0DOICK1Q=",
+        "narHash": "sha256-YMt7CvLj/B/ka26/QgEVsI7pouvuvGEvKon9HGfG00o=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
