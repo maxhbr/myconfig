@@ -28,10 +28,27 @@
         "type": "indirect"
       }
     },
+    "platformio-core": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1616229134,
+        "narHash": "sha256-cKSeQcoFeGNmG+tjGm77UC4fLDFfBt4B7wzvBJVY7Ug=",
+        "owner": "platformio",
+        "repo": "platformio-core",
+        "rev": "1542b1cebb849ef22af6de8b446da6f0d2ff2d0e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "platformio",
+        "repo": "platformio-core",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "platformio-core": "platformio-core"
       }
     }
   },
