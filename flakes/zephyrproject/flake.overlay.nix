@@ -55,26 +55,40 @@
     }));
 in {
   my-west = my-west-fun {};
-  my-west-gnuarmemb =
+  my-west-update = writeShellScriptBin "west-update" ''
+          cd $HOME/zephyrproject
+          ${my-west}/bin/west update
+         '';
+  my-west-init = writeShellScriptBin "west-init" ''
+          ${my-west}/bin/west init $HOME/zephyrproject
+          cd $HOME/zephyrproject
+          ${git}/bin/git init
+          ${git}/bin/git add .
+          ${git}/bin/git commit -am "init"
+          ${my-west-update}/bin/west-update
+          ${git}/bin/git add .
+          ${git}/bin/git commit -am "update"
+         '';
+
+  my-west-arm =
     let
       gcc = pkgs.gcc-arm-embedded;
       binutils = pkgs.pkgsCross.arm-embedded.buildPackages.binutils;
-      toolchain = pkgs.buildEnv {
+      arm-toolchain = pkgs.buildEnv {
         name = "arm-toolchain";
         paths = [ gcc binutils ] ++ baseInputs;
       };
     in my-west-fun {
-      pnameext = "-gnuarmemb";
+      pnameext = "-arm";
       moreBuildInputs =
         [
           gcc
           binutils
           stdenv.cc.cc.lib
-          toolchain
         ];
       wrapperArgs = ''
               --set ZEPHYR_TOOLCHAIN_VARIANT "gnuarmemb" \
-              --set GNUARMEMB_TOOLCHAIN_PATH "${toolchain}"
+              --set GNUARMEMB_TOOLCHAIN_PATH "${arm-toolchain}"
         '';
     };
   my-west-esp32 = let
@@ -90,23 +104,9 @@ in {
     wrapperArgs = ''
               --set NIX_CFLAGS_LINK -lncurses \
               --set ZEPHYR_TOOLCHAIN_VARIANT "espressif" \
-              --set IDF_PATH "${inputs.esp-idf}" \
-              --set IDF_TOOLS_PATH "${inputs.esp-idf}/tools" \
               --set ESPRESSIF_TOOLCHAIN_PATH "${esp32-toolchain}"
         '';
+              # --set IDF_PATH "${inputs.esp-idf}" \
+              # --set IDF_TOOLS_PATH "${inputs.esp-idf}/tools" \
   };
-  my-west-update = writeShellScriptBin "mywest-update" ''
-          cd $HOME/zephyrproject
-          ${my-west}/bin/west update
-         '';
-  my-west-init = writeShellScriptBin "mywest-init" ''
-          ${my-west}/bin/west init $HOME/zephyrproject
-          cd $HOME/zephyrproject
-          ${git}/bin/git init
-          ${git}/bin/git add .
-          ${git}/bin/git commit -am "init"
-          ${my-west-update}/bin/west-update
-          ${git}/bin/git add .
-          ${git}/bin/git commit -am "update"
-         '';
 })
