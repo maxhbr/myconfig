@@ -4,6 +4,9 @@
   inputs = {
     platformio-core.url = "github:platformio/platformio-core";
     platformio-core.flake = false;
+
+    esp-idf.url = "github:espressif/esp-idf";
+    esp-idf.flake = false;
   };
 
   outputs = { self, nixpkgs,  ... }@inputs:
@@ -22,81 +25,19 @@
         nixpkgs.overlays = [ self.overlay ];
         home-manager.sharedModules = [{
           home.packages = (with pkgs; [
-            my-west
+            my-west my-west-init my-west-update
             platformio openocd
           ]);
         }];
         services.udev.packages = [ platformio-udev-rules pkgs.openocd ];
       };
-      overlay = final: prev: {
-        my-west = with final; stdenv.mkDerivation (
-        let
-          python3west = pkgs.python3.withPackages (pp: with pp; [
-            west
-            docutils
-            wheel
-            breathe
-            sphinx
-            sphinx_rtd_theme
-            pyyaml
-            ply
-            pyelftools
-            pyserial
-            pykwalify
-            colorama
-            pillow
-            intelhex
-            pytest
-            gcovr
-          ]);
-          inputs = [
-            ninja
-            which
-            git
-            cmake
-            dtc
-            gperf
-            openocd
-            dfu-util
-            bossa
-            python3west
-          ];
-          gcc = pkgs.gcc-arm-embedded;
-          binutils = pkgs.pkgsCross.arm-embedded.buildPackages.binutils;
-          toolchain = pkgs.buildEnv {
-            name = "arm-toolchain";
-            paths = [ gcc binutils ] ++ inputs;
-          };
-        in rec {
-          pname = "my-west";
-          version = "1.0";
 
-          buildInputs =
-            [
-              gcc
-              binutils
-              stdenv.cc.cc.lib
-            ] ++ inputs;
-
-          nativeBuildInputs = [ pkgs.makeWrapper ];
-
-          phases = [ "installPhase" ];
-
-          installPhase = ''
-            mkdir -p $out/bin
-            makeWrapper ${toolchain}/bin/west $out/bin/mywest \
-              --prefix PATH : "${lib.makeBinPath buildInputs}" \
-              --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath buildInputs}" \
-              --set PYTHONPATH "${python3west}/${python3west.sitePackages}" \
-              --set ZEPHYR_TOOLCHAIN_VARIANT "gnuarmemb" \
-              --set GNUARMEMB_TOOLCHAIN_PATH "${toolchain}" \
-              --set ESPRESSIF_TOOLCHAIN_PATH "~/.espressif/tools/xtensa-esp32-elf/esp-2020r3-8.4.0/xtensa-esp32-elf"
-          '';
-        });
-      };
+      overlay = import ./flake.overlay.nix inputs;
 
       packages = forAllSystems (system: {
         my-west = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west;
+        my-west-init = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-init;
+        my-west-update = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-update;
       });
 
       defaultPackage = forAllSystems (system: self.packages.${system}.my-west);
@@ -105,5 +46,17 @@
         type = "app";
         program = "${self.defaultPackage."${system}"}/bin/mywest";
       });
+
+      devShell = forAllSystems (system:
+        let
+          pkgs = import nixpkgs { inherit system; overlays = [ self.overlay ]; };
+        in pkgs.mkShell {
+          nativeBuildInputs = with pkgs; [
+            my-west
+            my-west-update
+            my-west-init
+          ];
+        }
+      );
     };
 }
