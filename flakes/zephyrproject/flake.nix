@@ -21,21 +21,17 @@
       in {
         nixpkgs.overlays = [ self.overlay ];
         home-manager.sharedModules = [{
-          home.packages = with pkgs; [
+          home.packages = (with pkgs; [
+            my-west
             platformio openocd
-
-            # devtools
-            ninja
-            which
-            git
-            cmake
-            dtc
-            gperf
-            openocd
-            dfu-util
-            bossa
-            python3
-          ] ++ (with python3Packages; [
+          ]);
+        }];
+        services.udev.packages = [ platformio-udev-rules pkgs.openocd ];
+      };
+      overlay = final: prev: {
+        my-west = with final; stdenv.mkDerivation (
+        let
+          python3west = pkgs.python3.withPackages (pp: with pp; [
             west
             docutils
             wheel
@@ -53,13 +49,18 @@
             pytest
             gcovr
           ]);
-        }];
-        services.udev.packages = [ platformio-udev-rules pkgs.openocd ];
-      };
-      overlay = final: prev: {
-        my-west = with final; stdenv.mkDerivation (
-        let
-          inputs = );
+          inputs = [
+            ninja
+            which
+            git
+            cmake
+            dtc
+            gperf
+            openocd
+            dfu-util
+            bossa
+            python3west
+          ];
           gcc = pkgs.gcc-arm-embedded;
           binutils = pkgs.pkgsCross.arm-embedded.buildPackages.binutils;
           toolchain = pkgs.buildEnv {
@@ -71,8 +72,11 @@
           version = "1.0";
 
           buildInputs =
-            [ stdenv.cc.cc.lib
-            ];
+            [
+              gcc
+              binutils
+              stdenv.cc.cc.lib
+            ] ++ inputs;
 
           nativeBuildInputs = [ pkgs.makeWrapper ];
 
@@ -83,6 +87,7 @@
             makeWrapper ${toolchain}/bin/west $out/bin/mywest \
               --prefix PATH : "${lib.makeBinPath buildInputs}" \
               --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath buildInputs}" \
+              --set PYTHONPATH "${python3west}/${python3west.sitePackages}" \
               --set ZEPHYR_TOOLCHAIN_VARIANT "gnuarmemb" \
               --set GNUARMEMB_TOOLCHAIN_PATH "${toolchain}" \
               --set ESPRESSIF_TOOLCHAIN_PATH "~/.espressif/tools/xtensa-esp32-elf/esp-2020r3-8.4.0/xtensa-esp32-elf"
