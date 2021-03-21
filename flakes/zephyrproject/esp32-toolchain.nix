@@ -10,11 +10,11 @@ in
 
 stdenv.mkDerivation rec {
   name = "esp32-toolchain";
-  version = "1.22.0";
+  version = "2020r3";
 
   src = fetchurl {
-    url = "https://dl.espressif.com/dl/xtensa-esp32-elf-linux64-1.22.0-80-g6c4433a-5.2.0.tar.gz";
-    sha256 = "0mji8jq1dg198z8bl50i0hs3drdqa446kvf6xpjx9ha63lanrs9z";
+    url = "https://dl.espressif.com/dl/xtensa-esp32-elf-gcc8_4_0-esp-2020r3-linux-amd64.tar.gz";
+    sha256 = "Z0CAoS+cXr5aOlzlHG3q7/5t+wbWQWIz34byW1dOknk=";
   };
 
   buildInputs = [ makeWrapper ];

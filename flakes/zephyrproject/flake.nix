@@ -25,7 +25,10 @@
         nixpkgs.overlays = [ self.overlay ];
         home-manager.sharedModules = [{
           home.packages = (with pkgs; [
-            my-west my-west-init my-west-update
+            my-west
+            my-west-gnuarmemb
+            my-west-esp32
+            my-west-init my-west-update
             platformio openocd
           ]);
         }];
@@ -36,11 +39,13 @@
 
       packages = forAllSystems (system: {
         my-west = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west;
+        my-west-gnuarmemb = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-gnuarmemb;
+        my-west-esp32 = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-esp32;
         my-west-init = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-init;
         my-west-update = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-update;
       });
 
-      defaultPackage = forAllSystems (system: self.packages.${system}.my-west);
+      defaultPackage = forAllSystems (system: self.packages.${system}.my-west-gnuarmemb);
 
       defaultApp = forAllSystems (system: {
         type = "app";
@@ -53,6 +58,8 @@
         in pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
             my-west
+            my-west-gnuarmemb
+            my-west-esp32
             my-west-update
             my-west-init
           ];

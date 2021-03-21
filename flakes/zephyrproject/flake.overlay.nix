@@ -18,6 +18,9 @@
     intelhex
     pytest
     gcovr
+    # esp
+    future cryptography setuptools pyparsing click
+    kconfiglib
   ]);
   baseInputs = [
     ninja
@@ -31,25 +34,12 @@
     bossa
     python3west
   ];
-  in {
-  my-west = stdenv.mkDerivation (
-    let
-      gcc = pkgs.gcc-arm-embedded;
-      binutils = pkgs.pkgsCross.arm-embedded.buildPackages.binutils;
-      toolchain = pkgs.buildEnv {
-        name = "arm-toolchain";
-        paths = [ gcc binutils ] ++ baseInputs;
-      };
-    in rec {
-      pname = "my-west-gnuarmemb";
+  my-west-fun = {pnameext ? "", moreBuildInputs ? [], wrapperArgs ? ""}: (
+    stdenv.mkDerivation (rec {
+      pname = "my-west" + pnameext;
       version = "1.0";
 
-      buildInputs =
-        [
-          gcc
-          binutils
-          stdenv.cc.cc.lib
-        ] ++ baseInputs;
+      buildInputs = moreBuildInputs ++ baseInputs;
 
       nativeBuildInputs = [ pkgs.makeWrapper ];
 
@@ -57,30 +47,54 @@
 
       installPhase = ''
             mkdir -p $out/bin
-            makeWrapper ${toolchain}/bin/west $out/bin/west \
+            makeWrapper ${python3west}/bin/west $out/bin/west${pnameext} \
               --prefix PATH : "${lib.makeBinPath buildInputs}" \
               --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath buildInputs}" \
-              --set PYTHONPATH "${python3west}/${python3west.sitePackages}" \
+              --set PYTHONPATH "${python3west}/${python3west.sitePackages}" ${wrapperArgs}
+          '';
+    }));
+in {
+  my-west = my-west-fun {};
+  my-west-gnuarmemb =
+    let
+      gcc = pkgs.gcc-arm-embedded;
+      binutils = pkgs.pkgsCross.arm-embedded.buildPackages.binutils;
+      toolchain = pkgs.buildEnv {
+        name = "arm-toolchain";
+        paths = [ gcc binutils ] ++ baseInputs;
+      };
+    in my-west-fun {
+      pnameext = "-gnuarmemb";
+      moreBuildInputs =
+        [
+          gcc
+          binutils
+          stdenv.cc.cc.lib
+          toolchain
+        ];
+      wrapperArgs = ''
               --set ZEPHYR_TOOLCHAIN_VARIANT "gnuarmemb" \
               --set GNUARMEMB_TOOLCHAIN_PATH "${toolchain}"
-          '';
-    });
-      # moreBuildInputs = [
-      #   #esp:
-      #   esptool
-      #   (pkgs.callPackage ./esp32-toolchain.nix {})
-      #   # gawk gperf gettext automake bison flex texinfo help2man libtool autoconf ncurses5 cmake glibcLocales
-      #   # (python2.withPackages (ppkgs: with ppkgs; [ pyserial future cryptography setuptools pyelftools pyparsing click ]))
-      # ];
-            # makeWrapper ${toolchain}/bin/west $out/bin/west-esp \
-            #   --set NIX_CFLAGS_LINK -lncurses \
-            #   --set IDF_PATH "${inputs.esp-idf}" \
-            #   --set IDF_TOOLS_PATH "${inputs.esp-idf}/tools" \
-            #   --prefix PATH : "${inputs.esp-idf}/tools" \
-            #   --prefix PATH : "${lib.makeBinPath buildInputs}" \
-            #   --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath buildInputs}" \
-            #   --set PYTHONPATH "${python3west}/${python3west.sitePackages}" \
-            #   --set ZEPHYR_TOOLCHAIN_VARIANT "espressif"
+        '';
+    };
+  my-west-esp32 = let
+    esp32-toolchain = (pkgs.callPackage ./esp32-toolchain.nix {});
+  in my-west-fun {
+    pnameext = "-esp32";
+    moreBuildInputs =
+      [
+        esptool
+        esp32-toolchain
+        gawk gettext automake bison flex texinfo help2man libtool autoconf ncurses5 glibcLocales
+      ];
+    wrapperArgs = ''
+              --set NIX_CFLAGS_LINK -lncurses \
+              --set ZEPHYR_TOOLCHAIN_VARIANT "espressif" \
+              --set IDF_PATH "${inputs.esp-idf}" \
+              --set IDF_TOOLS_PATH "${inputs.esp-idf}/tools" \
+              --set ESPRESSIF_TOOLCHAIN_PATH "${esp32-toolchain}"
+        '';
+  };
   my-west-update = writeShellScriptBin "mywest-update" ''
           cd $HOME/zephyrproject
           ${my-west}/bin/west update
