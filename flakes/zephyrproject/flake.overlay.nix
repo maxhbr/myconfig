@@ -18,6 +18,8 @@
     intelhex
     pytest
     gcovr
+    # gui
+    tkinter
     # esp
     future cryptography setuptools pyparsing click
     kconfiglib
@@ -58,6 +60,7 @@ in {
   my-west-update = writeShellScriptBin "west-update" ''
           cd $HOME/zephyrproject
           ${my-west}/bin/west update
+          ${git}/bin/git add bootloader modules tools zephyr
          '';
   my-west-init = writeShellScriptBin "west-init" ''
           ${my-west}/bin/west init $HOME/zephyrproject
