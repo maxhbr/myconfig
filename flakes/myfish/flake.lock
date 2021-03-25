@@ -161,11 +161,11 @@
     "z": {
       "flake": false,
       "locked": {
-        "lastModified": 1615621779,
-        "narHash": "sha256-VIeRzaA/Dg0mpCjMB9rNXmIhNGzzYCxgkFUXNUOyJ50=",
+        "lastModified": 1616619907,
+        "narHash": "sha256-I2feYLp+oqVGjtaG5uftG0Lok5ye7G8oefZAMdzAeoo=",
         "owner": "jethrokuan",
         "repo": "z",
-        "rev": "97ca1fd1b281f5f240e7adb90d0a28f9eb4567db",
+        "rev": "d5500284077ebb12c306ea429e74c8d046aef5a0",
         "type": "github"
       },
       "original": {
