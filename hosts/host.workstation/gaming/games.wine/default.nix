@@ -34,9 +34,10 @@
       "p7zip-16.02" # in winetricks
     ];
 
-    home-manager.sharedModules = [{
-      home.packages = with pkgs; [ wine winetricks playonlinux lutris ];
-    }];
+    home-manager.sharedModules = [
+      {home.packages = with pkgs; [ wine winetricks playonlinux ];}
+      # {home.packages = with pkgs; [ lutris ];}
+    ];
     hardware.opengl.driSupport32Bit = true;
   };
 }
