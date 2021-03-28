@@ -1,6 +1,9 @@
 { pkgs, config, ... }:
 {
-  imports = [ ./games.wine ./games.steam ];
+  imports = [
+    # ./games.wine
+    ./games.steam
+  ];
   config = {
     home-manager.sharedModules = [{
       imports = [

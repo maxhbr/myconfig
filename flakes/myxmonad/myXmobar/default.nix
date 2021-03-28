@@ -29,7 +29,7 @@ let
       post="$endcol "
       btState=$(${pkgs.utillinux}/bin/rfkill -J | ${pkgs.jq}/bin/jq -r '.""|.[] | select (."id"==0) | ."soft"')
       if [[ "$btState" == "blocked" ]]; then
-        echo -n "''${pre}BT ''${btState}''${post}"
+        echo -n "''${pre}¬BT''${post}"
       fi
     '';
 
@@ -43,7 +43,7 @@ let
       post="$endcol "
 
       if ! ${procps}/bin/pgrep xss-lock &> /dev/null; then
-        echo -n "$pre"'!XSS-LOCK'"$post"
+        echo -n "$pre"'¬XSS-LOCK'"$post"
       fi
     '';
   xmobarXmonad = with pkgs;

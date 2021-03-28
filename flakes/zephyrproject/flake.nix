@@ -30,6 +30,7 @@
             my-west-esp32
             my-west-init my-west-update
             platformio openocd
+            minicom
           ]);
         }];
         services.udev.packages = [ platformio-udev-rules pkgs.openocd ];

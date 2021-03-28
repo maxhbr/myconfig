@@ -5,6 +5,7 @@
 set -euo pipefail
 
 DEBUG_LEVEL="--info"
+DOCKERIZE_BY_DEFAULT=false
 baseTag=ort:latest
 tag=myort:latest
 ort=ort
@@ -14,11 +15,11 @@ help() {
     $0 inputFileOrDir [other [ort [args]]]
 
 e.g.
-    $0 short /path/to/folder
-    $0 all /path/to/folder -m gradle
-    $0 analzye /path/to/folder
-    $0 analzye /path/to/folder -m gradle
-    $0 scan /path/to/folder/analyzer-result.json
+    $0 [--dockerize] short /path/to/folder
+    $0 [--dockerize] all /path/to/folder -m gradle
+    $0 [--dockerize] analzye /path/to/folder
+    $0 [--dockerize] analzye /path/to/folder -m gradle
+    $0 [--dockerize] scan /path/to/folder/analyzer-result.json
     $0 ...
     $0 rm-docker-images
 EOF
@@ -133,7 +134,7 @@ runDockerizedOrt() {
 ################################################################################
 
 runOrt() {
-    local dockerize=false
+    local dockerize="$DOCKERIZE_BY_DEFAULT"
     local task="$1"; shift
 
     local input="$(readlink -f "$1")"; shift
@@ -272,6 +273,11 @@ doShort() {
 # fi
 #
 prepareDotOrt
+
+if [[ "$1" == "--dockerize" ]]; then
+    DOCKERIZE_BY_DEFAULT=true
+    shift
+fi
 
 if [[ $# = 0 ]]; then
     help
