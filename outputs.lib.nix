@@ -154,7 +154,7 @@ in {
                 inherit pkgs;
                 inherit (pkgs) config system;
               };
-              boot.initrd.secrets = { "/etc/myconfig" = lib.cleanSource ./.; };
+              environment.etc."myconfig".source = lib.cleanSource ./.;
               environment.etc."myconfig.current-system-packages".text = let
                 packages =
                   builtins.map (p: "${p.name}") config.environment.systemPackages;
