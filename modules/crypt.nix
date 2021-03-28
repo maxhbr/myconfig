@@ -47,10 +47,10 @@ let
       name = "${name}-secret";
       phases = "installPhase";
       buildInputs = [ pkgs.age ];
-      installPhase = ''
-          age -a -r '${
-            myconfig.metadatalib.get.hosts."${config.networking.hostName}".pubkeys."/etc/ssh/ssh_host_ed25519_key.pub";
-          }' -o "$out" '${source}'
+      installPhase =
+        let key = myconfig.metadatalib.get.hosts."${config.networking.hostName}".pubkeys."/etc/ssh/ssh_host_rsa_key.pub";
+        in ''
+          age -a -r '${key}' -o "$out" '${source}'
         '';
     };
 
@@ -62,12 +62,10 @@ let
       serviceConfig.Type = "oneshot";
 
       script = with pkgs; ''
-        tmpfile="$(mktemp)"
-        "${age}"/bin/age -d -i /etc/ssh/ssh_host_ed25519_key -o "$tmpfile" '${
+        rm -rf ${dest}
+        "${age}"/bin/age -d -i /etc/ssh/ssh_host_rsa_key -o '${dest}' '${
           mkSecretOnDisk name { inherit source; }
         }'
-        rm -f ${dest}
-        mv "$tmpfile" '${dest}'
         chown '${owner}':'${group}' '${dest}'
         chmod '${permissions}' '${dest}'
       '';

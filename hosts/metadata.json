@@ -4,6 +4,7 @@
       "network": "home",
       "pubkeys": {
         "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK/hdWBc+T0fMGKpAQRMLTHhyC/+3P8H//ox7AC+toNA root@x1extremeG2",
+        "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC+qK51m1ipvJyCsU2sqh994c20ukP6+mtf6aIjI2TvS1mTvV7bFCMYWEtQ4PZ4Bb1MMfg7cua843KHZXeGIDksKLuaCY2OZbeZ9YX2n3DOWe2SH6TSe9QaKLuef2UfC8XKwjDtHU7d1PLzr9RT9Ctas/GfvjFT9ITdZ/9OVkq/RXU6rEWRXUVn9Jb3dRrfXgGKVsPAqPlHPXxgCjcIFpVWx6IFQp5dykeAr4MgDsPZKDbUKYe9yx6z4J+y1cqdw0YRqsItog4DXYnVrLYnWeiS4ualuLoNTlH3zJTdTaQQQjSwvQmNj71QaydqOLNc07rt/uFz1W1CdCvA8/+LhonwJ/x2kdFx9QsTU9DKOMCcq4ZWRms8bk/gRkrlgPHNdsYdEl0OQJCpw/0AUrmUYXj4x/EBd8Wi/0dqI0dl/3umWKuK8e12fCnwav0X1itYIuZdcSLvtzbV6jStvDdcTPAVQK5Wu8lF4FyepW2+5BllF23HIFs4NqW/2BozyuZb3dhvOpODv34NHMd9cagNto9YK7P4ules9UtDtWGKZEYTq+GFowAXlJUfVoD3UpB5vOqxfvTGBtjyAv5vvhVtbQ1JzWailyWInx6Hnri550VN7yZNHmq5q9pAfOg8hm/d6nbJxRWkXdsrVfMwct991odvAsDXvaBAJhrNV5azwzSiwQ== root@x1extremeG2",
         "cache-pub-key.pem": "binarycache.example.com:AZVRKwnneOvcjQf6Kbe5HsWN12me3G6rIIApP9Iwv+Q="
       },
       "wireguard": {
@@ -17,7 +18,8 @@
       "network": "home",
       "ip4": "192.168.1.9",
       "pubkeys": {
-        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINV9PFlcY7bYzZFbxok9vl992kwN3WHbZ8rIP4AI6v7ex root@nas"
+        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINV9PFlcY7bYzZFbxok9vl992kwN3WHbZ8rIP4AI6v7ex root@nas",
+        "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDFV/gFFLW6d8NIy7tE3xaHS3hGj3KuGBrvm5RFYik8lVngOmT2TMwtRC8LKFVaQArf/6xGUS4GNle3tJHrltakr8AceP97ldSCulpncjnYPJFJOaPlFugh2c7dclTNlHqrolaqr8F6CXvatka3jZ80h109lunarloWXrQXm4V9cSsvGPlOtdg7JXpwqhRw7oy6+xjJpsG5Z/QcX19Jt5pRNSKQQ+gNGdg4J/SXJxC5adeCylNzvV01/U3k0tz4NkbWlihnVFuKqIAWd0ikQgS3r43uoblT67snUydJmJzd/EFnE3wScb8MNMvGzVxwtFTCsaxOCUuIsDTk0HO96BQFw8DEm0QJi1PmmOCKJvfG3qs0kksTsFUzBiHh11xaiYPKelhFPiuTV0Ej8LSUYlE7PSbDNqAQYQhRk/S1SDu56ObivaRJXk6MnEPG1yp9VckiArzVH4jE6LOnAWBbK4wgAUhmuqZPfz0s6f/F3bM2lWQm0klrSOgDVMQ9WaSuSg6Gh13M33JePkOZ0ttLNnHhJJJhMAhw6lS1KIaS1nbBmIVFEZPZk+GOJopJ/IEWUReGX0R73uRS85d7sH/eBAEJwX/tDUR1lLwg8ZgNsEr+7ZhXZcYXpaZ/tRyPfN/9NeL8l3b55YTDw7xp+GJcrTwcXJPbrQ1GclgAtT6ZYowe9w== root@nas"
       },
       "wireguard": {
         "wg0": {
@@ -31,6 +33,7 @@
       "ip4": "192.168.1.40",
       "pubkeys": {
         "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDtqOcfT93S4gCROVvhTxB3Imp4bnbrtzQRnF9oRLTDs root@workstation",
+        "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDcPHI3qViYHiiEeE4ZSiBHMrU3NPceR3M/b/2gtQ5rhJB/eOs4z5/6HyZu6FNKRXQnAujBM8AhvicjGqnnRqlR+YNoQu5QAT21GyusklxhSkxOBErhtZULJrO3brSKDTp4tL+99BJxsUqmvLX6LQ+7VS2mN4Pi0BZ7klz8E/qQs6uDcNfvbtw//KMZtRyX9KbRthbT0vq5s7OrvyghFNM6xffF6shtk9uQBGnNURiGPzKAJQDvl800GOY/znkoKcLugG7hNhtXLsbiCv4n50KMxf+PIfNywPrFj9G7loCnhD9lTZVj74zSNIs0XCAHLPnsgOwSiWkEu8B0geBGga/dCwFGCV2e4M+ywi4yDkoTEboa9whU7souLq0eS1+n7WfxDx20wFelC27yf/7bibrzYEf7Z3W5CefpSfWN+aNkob+DMkqeI+hSkSNAtPeLBB5woysOL2GkqTcO9Hn2XQ8B4YtMuzBCFjY1jTevX4dEO0Sea71ec4AOltUY2DaobOjZBnHIXdvCw9SRQDH3qS1JlLEOl7gLZU2vH7ta3Mu/Z9Z2YAdm/Wz1HpNFxNn2hyXSCXjpiHU/ielcDa8W3/2LbZfkHqKO9sDshBWAstpqitvxfBn3KmZa9hI+X1vcvL/UDjsAGZT6wTytR/jkz+eHJd7PVrR4UXDXrLrxzJPn3w== root@bootstrapped",
         "cache-pub-key.pem": "binarycache.example.com:cDMH+7Ashj12YRTEt4kqcTOyiXEjDtov/q5Kx1nKRCo="
       },
       "wireguard": {
