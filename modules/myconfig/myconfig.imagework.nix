@@ -23,7 +23,7 @@ in {
 
         # blender
         librecad # 2D
-        unstable.freecad # 3D
+        freecad # 3D
       ];
     }];
   });

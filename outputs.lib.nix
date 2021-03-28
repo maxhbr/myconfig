@@ -83,6 +83,44 @@ let inherit (inputs.nixpkgs) lib;
                 };
               }));
 
+          setupBuildSlave = host: speedFactor: systems: privateKey:
+            let keyName = "nixBuildPrivKey.${host}";
+            in {
+              myconfig.secrets = {
+                "${keyName}" = {
+                  source = privateKey;
+                  dest = "/etc/nix/${keyName}";
+                };
+              };
+              nix.buildMachines = map (system: {
+                hostName = "builder.${host}";
+                maxJobs = 6;
+                supportedFeatures = [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
+                mandatoryFeatures = [ ];
+                sshUser = "nixBuild";
+                sshKey = "/etc/nix/${keyName}";
+                inherit speedFactor system;
+              }) systems;
+              nix.distributedBuilds = true;
+              # optional, useful when the builder has a faster internet connection than yours
+              nix.extraOptions = ''
+                 builders-use-substitutes = true
+               '';
+              services.openssh.knownHosts = {
+                "builder.${host}".publicKey = metadata.hosts."${host}".pubkeys."/etc/ssh/ssh_host_ed25519_key.pub";
+              };
+              programs.ssh.extraConfig = ''
+                 Host builder.${host}
+                     HostName ${host}
+                     User nixBuild
+                     IdentitiesOnly yes
+                     IdentityFile /etc/nix/${keyName}
+                     StrictHostKeyChecking accept-new
+                     ConnectTimeout 2
+               '';
+            };
+
+
           get = metadata;
         };
 in {
