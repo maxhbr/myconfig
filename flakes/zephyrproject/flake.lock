@@ -1,27 +1,11 @@
 {
   "nodes": {
-    "esp-idf": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1615798486,
-        "narHash": "sha256-QY8yVoNM3eRiAEwDsUq7+6pf3tMJmTzO/fxmJvFv9oU=",
-        "owner": "espressif",
-        "repo": "esp-idf",
-        "rev": "1067b28707e527f177752741e3aa08b5dc64a4d7",
-        "type": "github"
-      },
-      "original": {
-        "owner": "espressif",
-        "repo": "esp-idf",
-        "type": "github"
-      }
-    },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1616959319,
-        "narHash": "sha256-4K8UJHygnuGq079g8Cnsj9LJx6FLyaYGGToDufnetIg=",
-        "path": "/nix/store/86qh02svk6imagkdm10x7kw7s28kiqsa-source",
-        "rev": "733f0586c5564ae3596bd7610dadb561530d09d3",
+        "lastModified": 1617041408,
+        "narHash": "sha256-FBeDYOyG//bTUbYL6urYG6YkMGdrascojQ5bKzlVbiw=",
+        "path": "/nix/store/wnib9hg5zjbqsbyzfa2jxavjnn090y06-source",
+        "rev": "4344033bacde594f05c076e139dd4b968cd04154",
         "type": "path"
       },
       "original": {
@@ -47,7 +31,6 @@
     },
     "root": {
       "inputs": {
-        "esp-idf": "esp-idf",
         "nixpkgs": "nixpkgs",
         "platformio-core": "platformio-core"
       }
