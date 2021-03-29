@@ -3,6 +3,8 @@
     "x1extremeG2": {
       "network": "home",
       "pubkeys": {
+        "id_ed25519.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFTH8ykA8PsXR87/jLa6/FzLwAjNf9qX/JhKAHXSpQLi mhuber@x1extremeG2",
+        "id_rsa.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDYUWsgqFqIHd3ftOC1W4j24wa1C4gjVt8yzdlqKn0KovLH5e4TdnMMkcoyVWAmrR/fxLCX0XbbUUAlwpA5mwxnyd5vBO7P+6tm9Z4I7rGW4EDxgRVA45/4qbe1DOW4qkYGf0MLidzq7xMXS7UIGcMZk1K0EIhj8tL1fPrPa8cV94/x5PAOGwXSALG3RFLH+8xxCOtean0/1Ev9+l+W19cp8+SwksjMCCbj1yrIgLPMaclMerZ6oUAKB6yXYkAoSSfVvSQLp9iRWwKkOAjDPvWCkKr4ICTKEY0z3lbhd587NwWmEUDAp9Z9rTNT5MVfKOGtlLVBMCB2rf0wmjuL/hlp",
         "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK/hdWBc+T0fMGKpAQRMLTHhyC/+3P8H//ox7AC+toNA root@x1extremeG2",
         "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC+qK51m1ipvJyCsU2sqh994c20ukP6+mtf6aIjI2TvS1mTvV7bFCMYWEtQ4PZ4Bb1MMfg7cua843KHZXeGIDksKLuaCY2OZbeZ9YX2n3DOWe2SH6TSe9QaKLuef2UfC8XKwjDtHU7d1PLzr9RT9Ctas/GfvjFT9ITdZ/9OVkq/RXU6rEWRXUVn9Jb3dRrfXgGKVsPAqPlHPXxgCjcIFpVWx6IFQp5dykeAr4MgDsPZKDbUKYe9yx6z4J+y1cqdw0YRqsItog4DXYnVrLYnWeiS4ualuLoNTlH3zJTdTaQQQjSwvQmNj71QaydqOLNc07rt/uFz1W1CdCvA8/+LhonwJ/x2kdFx9QsTU9DKOMCcq4ZWRms8bk/gRkrlgPHNdsYdEl0OQJCpw/0AUrmUYXj4x/EBd8Wi/0dqI0dl/3umWKuK8e12fCnwav0X1itYIuZdcSLvtzbV6jStvDdcTPAVQK5Wu8lF4FyepW2+5BllF23HIFs4NqW/2BozyuZb3dhvOpODv34NHMd9cagNto9YK7P4ules9UtDtWGKZEYTq+GFowAXlJUfVoD3UpB5vOqxfvTGBtjyAv5vvhVtbQ1JzWailyWInx6Hnri550VN7yZNHmq5q9pAfOg8hm/d6nbJxRWkXdsrVfMwct991odvAsDXvaBAJhrNV5azwzSiwQ== root@x1extremeG2",
         "cache-pub-key.pem": "binarycache.example.com:AZVRKwnneOvcjQf6Kbe5HsWN12me3G6rIIApP9Iwv+Q="

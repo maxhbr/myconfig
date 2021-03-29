@@ -109,7 +109,5 @@ in {
               --set ZEPHYR_TOOLCHAIN_VARIANT "espressif" \
               --set ESPRESSIF_TOOLCHAIN_PATH "${esp32-toolchain}"
         '';
-              # --set IDF_PATH "${inputs.esp-idf}" \
-              # --set IDF_TOOLS_PATH "${inputs.esp-idf}/tools" \
   };
 })

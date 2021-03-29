@@ -4,9 +4,6 @@
   inputs = {
     platformio-core.url = "github:platformio/platformio-core";
     platformio-core.flake = false;
-
-    esp-idf.url = "github:espressif/esp-idf";
-    esp-idf.flake = false;
   };
 
   outputs = { self, nixpkgs,  ... }@inputs:
@@ -32,6 +29,10 @@
             platformio openocd
             minicom
           ]);
+          home.sessionVariables = {
+            IDF_PATH = "/home/mhuber/zephyrproject/modules/hal/espressif";
+            IDF_TOOLS_PATH = "/home/mhuber/zephyrproject/modules/hal/espressif/tools";
+          };
         }];
         services.udev.packages = [ platformio-udev-rules pkgs.openocd ];
       };

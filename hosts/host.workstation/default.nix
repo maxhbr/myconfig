@@ -12,6 +12,10 @@
     ../../hardware/steamcontroller.nix
     ./4x500-hdds.raid.nix
     (myconfig.metadatalib.fixIp "enp39s0")
+    (myconfig.metadatalib.setupAsBuildMachine [
+      myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_ed25519.pub"
+      myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
+    ])
     # other profiles
     ./gaming
     # testing

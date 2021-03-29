@@ -83,6 +83,18 @@ let inherit (inputs.nixpkgs) lib;
                 };
               }));
 
+          setupAsBuildMachine = authorizedKeys: {
+            users.extraUsers.nixBuild = {
+              name = "nixBuild";
+              useDefaultShell = true;
+              openssh.authorizedKeys.keys = authorizedKeys;
+            };
+            nix = {
+              allowedUsers = [ "nixBuild" ];
+              trustedUsers = [ "nixBuild" ];
+            };
+          };
+
           setupBuildSlave = host: speedFactor: systems: privateKey:
             let keyName = "nixBuildPrivKey.${host}";
             in {
