@@ -132,6 +132,35 @@ let inherit (inputs.nixpkgs) lib;
                '';
             };
 
+          setupNixServe = hosts :
+            let keys = map (host: metadata.hosts."${host}".pubkeys."id_rsa.pub") hosts;
+            in {
+              nix.sshServe = {
+                enable = true;
+                inherit keys;
+              };
+              users.extraUsers.nix-ssh = { openssh.authorizedKeys = { inherit keys; }; };
+            };
+
+
+          setupAsBackupTarget = home : hosts :
+            let keys = map (host: metadata.hosts."${host}".pubkeys."id_ed25519.pub") hosts;
+            in {
+            config = {
+              users = {
+                extraUsers.backup = {
+                  isNormalUser = true;
+                  group = "backup";
+                  uid = 1100;
+                  inherit home;
+                  createHome = false;
+                  openssh.authorizedKeys = { inherit keys; };
+                };
+                extraGroups.backup.gid = 1100;
+              };
+            };
+          };
+
 
           get = metadata;
         };

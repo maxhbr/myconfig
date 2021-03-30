@@ -1,11 +1,10 @@
 { config, lib, pkgs, ... }:
-let user = config.myconfig.user;
-in {
+{
   imports = [
-    (let deflux = pkgs.callPackage ../../pkgs/deflux { };
+    (let deflux = pkgs.callPackage ./deflux { };
     in {
       config = {
-        home-manager.users."${user}" = { home.packages = [ deflux ]; };
+        home-manager.sharedModules = [{ home.packages = [ deflux ]; }];
         users.users.deflux = {
           group = "deflux";
           isSystemUser = true;
@@ -40,7 +39,7 @@ in {
     })
   ];
   config = {
-    home-manager.users."${user}" = { home.packages = with pkgs; [ influxdb ]; };
+    home-manager.sharedModules = [{ home.packages = with pkgs; [ influxdb ]; }];
     services = {
       influxdb = { enable = true; };
       grafana.provision = {

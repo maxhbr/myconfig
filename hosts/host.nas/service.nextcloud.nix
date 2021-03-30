@@ -1,4 +1,4 @@
-{ pkgs, config, lib, ... }: {
+{ pkgs, config, lib, myconfig, ... }: {
   imports = [
     (lib.mkIf config.services.prometheus.enable {
       services.prometheus.exporters.nextcloud = {
@@ -25,11 +25,10 @@
           dbname = "nextcloud";
           adminuser = "Admin";
           adminpassFile = "/etc/nextcloud/adminpass";
-          extraTrustedDomains = (with (import ../lib.nix);
-            makeOptionalListBySecrets [
-              (getSecretNoNewline "${config.networking.hostName}" "ip")
-              "10.199.199.6"
-            ]);
+          extraTrustedDomains = [
+            myconfig.metadatalib.get.hosts."${config.networking.hostName}".ip4
+            myconfig.metadatalib.get.hosts."${config.networking.hostName}".wireguard.wg0.ip4
+          ];
           overwriteProtocol = "https";
         };
         maxUploadSize = "20G";

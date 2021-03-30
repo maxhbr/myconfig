@@ -1,14 +1,12 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }:
-let user = config.myconfig.user;
-in {
+{ pkgs, config, lib, myconfig, ... }:
+{
   imports = [
-    ../modules
     # hardware:
     ./hardware-configuration.nix
-    ../hardware/efi.nix
-    ../hardware/hdd-spinndown.nix
+    ../../hardware/efi.nix
+    ../../hardware/hdd-spinndown.nix
     {
       boot.initrd.supportedFilesystems = [ "btrfs" "luks" ];
 
@@ -125,7 +123,18 @@ in {
       };
 
     }
-  ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.6") ]);
+    (myconfig.metadatalib.setupNixServe [ "workstation" "vserver" ])
+    {
+      nix.trustedBinaryCaches =
+        [ ("ssh://nix-ssh@" + myconfig.metadatalib.get.hosts.workstation.ip4) ];
+    }
+    (myconfig.metadatalib.setupAsBackupTarget "/mnt/2x4t/backup" [ "x1extremeG2" ])
+    (myconfig.metadatalib.fixIp "enp3s0")
+    {
+      system.activationScripts.mkTlsDir =
+        "mkdir -p /etc/tls && chmod 777 /etc/tls";
+    }
+  ];
   config = {
     myconfig = { headless.enable = true; };
 
@@ -150,7 +159,7 @@ in {
           home = {
             subvolume = "/home";
             extraConfig = ''
-              ALLOW_USERS="${user}"
+              ALLOW_USERS="${myconfig.user}"
             '';
           };
         };
