@@ -125,6 +125,10 @@
             self.nixosModules.core
             inputs.license-compliance-toolbox.nixosModule
           ] ++ moreModules) metadataOverride);
+        host-nas = moreModules: metadataOverride:
+          (self.lib.evalConfiguration "x86_64-linux" "nas" ([
+            self.nixosModules.core
+          ] ++ moreModules) metadataOverride);
       };
 
       ##########################################################################
@@ -134,6 +138,7 @@
       nixosConfigurations = {
         x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [] {};
         workstation = self.nixosConfigurationsGen.host-workstation [] {};
+        nas = self.nixosConfigurationsGen.host-nas [] {};
 
         container = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";

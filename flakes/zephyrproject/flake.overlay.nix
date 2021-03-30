@@ -110,4 +110,7 @@ in {
               --set ESPRESSIF_TOOLCHAIN_PATH "${esp32-toolchain}"
         '';
   };
+  my-minicom-esp32 = with pkgs; writeShellScriptBin "minicom-esp32" ''
+    minicom -con -b 115200 -D ''${1:-/dev/ttyUSB0}
+  '';
 })

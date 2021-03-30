@@ -25,6 +25,7 @@
             my-west
             my-west-arm
             my-west-esp32
+            my-minicom-esp32
             my-west-init my-west-update
             platformio openocd
             minicom
@@ -43,6 +44,7 @@
         my-west = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west;
         my-west-arm = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-arm;
         my-west-esp32 = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-esp32;
+        my-minicom-esp32 = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-minicom-esp32;
         my-west-init = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-init;
         my-west-update = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-update;
       });
@@ -64,6 +66,7 @@
             my-west-esp32
             my-west-update
             my-west-init
+            my-minicom-esp32
           ];
         }
       );
