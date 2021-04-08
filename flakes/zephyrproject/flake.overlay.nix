@@ -33,6 +33,7 @@
     gperf
     openocd
     dfu-util
+    nrfutil
     bossa
     python3west
   ];
@@ -73,6 +74,25 @@ in {
           ${git}/bin/git commit -am "update"
          '';
 
+  my-platformio-zephyr = stdenv.mkDerivation (rec {
+      pname = "my-platformio-zephyr";
+      version = "1.0";
+
+      buildInputs = baseInputs;
+
+      nativeBuildInputs = [ pkgs.makeWrapper ] ++ (with pkgs; [ libudev ]);
+
+      phases = [ "installPhase" ];
+
+      installPhase = ''
+            mkdir -p $out/bin
+            makeWrapper ${pkgs.platformio}/bin/platformio $out/bin/platformio-zephyr \
+              --prefix PATH : "${lib.makeBinPath buildInputs}" \
+              --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath buildInputs}" \
+              --set PYTHONPATH "${python3west}/${python3west.sitePackages}"
+          '';
+    });
+
   my-west-arm =
     let
       gcc = pkgs.gcc-arm-embedded;
@@ -94,6 +114,17 @@ in {
               --set GNUARMEMB_TOOLCHAIN_PATH "${arm-toolchain}"
         '';
     };
+  my-west-riscv = my-west-fun {
+    pnameext = "-riscv";
+    moreBuildInputs =
+      [ openocd
+        # git cmake ninja-build gperf\ccache dfu-util device-tree-compiler wget python3-pip python3-setuptools\python3-wheel xz-utils file make gcc gcc-multilib
+      ];
+    wrapperArgs = ''
+              --set ZEPHYR_TOOLCHAIN_VARIANT zephyr \
+              --set OPENOCD ${pkgs.openocd}/bin/openocd
+        '';
+  };
   my-west-esp32 = let
     esp32-toolchain = (pkgs.callPackage ./esp32-toolchain.nix {});
   in my-west-fun {

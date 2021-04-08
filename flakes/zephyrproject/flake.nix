@@ -18,6 +18,12 @@
           text = builtins.readFile "${inputs.platformio-core}/scripts/99-platformio-udev.rules";
           destination = "/etc/udev/rules.d/99-platformio.rules";
         };
+        segger-modemmanager-blacklist-udev-rules = pkgs.writeTextFile {
+          name = "segger-modemmanager-blacklist-udev-rules";
+          # https://docs.zephyrproject.org/2.5.0/guides/tools/nordic_segger.html#gnu-linux
+          text = "ATTRS{idVendor}==\"1366\", ENV{ID_MM_DEVICE_IGNORE}=\"1\"";
+          destination = "/etc/udev/rules.d/99-segger-modemmanager-blacklist.rules";
+        };
       in {
         nixpkgs.overlays = [ self.overlay ];
         home-manager.sharedModules = [{
@@ -28,21 +34,24 @@
             my-minicom-esp32
             my-west-init my-west-update
             platformio openocd
-            minicom
+            minicom picocom
           ]);
           home.sessionVariables = {
+            ZEPHYR_BASE = "/home/mhuber/zephyrproject/zephyr";
             IDF_PATH = "/home/mhuber/zephyrproject/modules/hal/espressif";
             IDF_TOOLS_PATH = "/home/mhuber/zephyrproject/modules/hal/espressif/tools";
           };
         }];
-        services.udev.packages = [ platformio-udev-rules pkgs.openocd ];
+        services.udev.packages = [ platformio-udev-rules segger-modemmanager-blacklist-udev-rules pkgs.openocd ];
       };
 
       overlay = import ./flake.overlay.nix inputs;
 
       packages = forAllSystems (system: {
         my-west = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west;
+        my-platformio-zephyr = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-platformio-zephyr;
         my-west-arm = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-arm;
+        my-west-riscv = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-riscv;
         my-west-esp32 = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-esp32;
         my-minicom-esp32 = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-minicom-esp32;
         my-west-init = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-init;
@@ -62,7 +71,9 @@
         in pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
             my-west
+            my-platformio-zephyr
             my-west-arm
+            my-west-riscv
             my-west-esp32
             my-west-update
             my-west-init

@@ -18,12 +18,12 @@ in {
         unstable.darktable
         unstable.geeqie
         unstable.gthumb
-        krita
+        # krita
         # inkscape
 
         # blender
-        librecad # 2D
-        freecad # 3D
+        # librecad # 2D
+        # freecad # 3D
       ];
     }];
   });
