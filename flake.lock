@@ -389,11 +389,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1618153411,
-        "narHash": "sha256-xevpO/rTac+Fcf/8KmGGAxdoMN9WoosZTo9tAM8rHKY=",
+        "lastModified": 1618157171,
+        "narHash": "sha256-z3x81BJ6cv+XOouIDwSDKMGZV+CkLEpgkR9ZXY1fbNw=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "20443c348225791ca7ecb2787f403f4be56ab223",
+        "rev": "f17647c89212b990275ca8a910077f38d8c0a46c",
         "type": "github"
       },
       "original": {
@@ -827,7 +827,7 @@
         "platformio-core": "platformio-core"
       },
       "locked": {
-        "narHash": "sha256-WuUhG6LySXjKPxEWpm+auL5e2VXaHA1dEPdaTaxXPv8=",
+        "narHash": "sha256-qyXEwBP6chZk0dIl5lrgUbu8sSyIeoHuci5z5foWYIk=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
