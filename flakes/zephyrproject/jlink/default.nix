@@ -25,7 +25,7 @@ stdenv.mkDerivation rec {
   buildInputs = [ rpmextract ];
   phases = [ "unpackPhase" "installPhase" "fixupPhase" "distPhase" ];
 
-  RPATH="${stdenv.cc.cc.lib}/lib:${libudev.lib}/lib";
+  RPATH="${stdenv.cc.cc.lib}/lib:${lib.getLib libudev}/lib";
   unpackPhase = "rpmextract $src";
   installPhase = readFile ./install.sh;
 
