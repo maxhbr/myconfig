@@ -11,7 +11,7 @@ stdenv.mkDerivation rec {
       requireFile {
         name = "JLink_Linux_V${version}_x86_64.rpm";
         url = "https://www.segger.com/downloads/jlink/JLink_Linux_V${version}_x86_64.rpm";
-        sha256 = "badc316b8dbbd1800e0d7a0b7fce4d369ffa352ff35e148675af439531991761";
+        sha256 = "06g1x25afhpczaz3xlzyrfa00456mfjn9f0n8nf166faczwkcaj9";
       }
     # else if stdenv.system == "i686-linux" then
     #   requireFile {

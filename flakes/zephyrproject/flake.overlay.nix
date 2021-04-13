@@ -37,6 +37,8 @@
     openocd
     dfu-util
     bossa
+    nrfutil
+    jlink
     python3west
   ];
   my-west-fun = {pnameext ? "", moreBuildInputs ? [], wrapperArgs ? ""}: (
@@ -110,8 +112,6 @@ in {
           gcc
           binutils
           stdenv.cc.cc.lib
-          nrfutil
-          jlink
         ];
       wrapperArgs = ''
               --set ZEPHYR_TOOLCHAIN_VARIANT "gnuarmemb" \
@@ -120,10 +120,6 @@ in {
     };
   my-west-riscv = my-west-fun {
     pnameext = "-riscv";
-    moreBuildInputs =
-      [ openocd
-        # git cmake ninja-build gperf\ccache dfu-util device-tree-compiler wget python3-pip python3-setuptools\python3-wheel xz-utils file make gcc gcc-multilib
-      ];
     wrapperArgs = ''
               --set ZEPHYR_TOOLCHAIN_VARIANT zephyr \
               --set OPENOCD ${pkgs.openocd}/bin/openocd
