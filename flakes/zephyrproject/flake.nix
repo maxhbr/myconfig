@@ -34,7 +34,22 @@
             my-minicom-esp32
             my-west-init my-west-update
             platformio openocd
-            minicom picocom
+            picocom
+            my-jlink
+            (writeShellScriptBin "flash-nrf52840dongle" ''
+set -euo pipefail
+in=build/zephyr/zephyr.hex
+out=build/zephyr.zip
+if [[ -f "$in" ]]; then
+  set -x
+  ${pkgs.nrfutil}/bin/nrfutil pkg generate --hw-version 52 --sd-req=0x00 \
+          --application "$in" \
+          --application-version 1 "$out"
+  ${pkgs.nrfutil}/bin/nrfutil dfu usb-serial -pkg "$out" -p "''${1:-/dev/ttyACM0}"
+else
+  echo "\$in=$in not found"
+fi
+'')
           ]);
           home.sessionVariables = {
             ZEPHYR_BASE = "/home/mhuber/zephyrproject/zephyr";
@@ -56,6 +71,7 @@
         my-minicom-esp32 = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-minicom-esp32;
         my-west-init = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-init;
         my-west-update = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-update;
+        my-jlink = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-jlink;
       });
 
       defaultPackage = forAllSystems (system: self.packages.${system}.my-west-arm);
@@ -67,7 +83,11 @@
 
       devShell = forAllSystems (system:
         let
-          pkgs = import nixpkgs { inherit system; overlays = [ self.overlay ]; };
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [ self.overlay ];
+            config.allowUnfree = true;
+          };
         in pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
             my-west
@@ -78,6 +98,7 @@
             my-west-update
             my-west-init
             my-minicom-esp32
+            my-jlink
           ];
         }
       );

@@ -34,6 +34,7 @@ applyTreeselectLayer c = let
                 , "sudo iotop"
                 , "bmon"
                 , "nmon"
+                , "atop"
                 , "s-tui"
                 , "usbtop" 
                 , "mtr 1.1.1.1"

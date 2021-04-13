@@ -23,7 +23,10 @@
     # esp
     future cryptography setuptools pyparsing click
     kconfiglib
+    # SEGGER
+    pylink-square
   ]);
+  jlink = final.callPackage ./jlink { };
   baseInputs = [
     ninja
     which
@@ -33,7 +36,6 @@
     gperf
     openocd
     dfu-util
-    nrfutil
     bossa
     python3west
   ];
@@ -108,6 +110,8 @@ in {
           gcc
           binutils
           stdenv.cc.cc.lib
+          nrfutil
+          jlink
         ];
       wrapperArgs = ''
               --set ZEPHYR_TOOLCHAIN_VARIANT "gnuarmemb" \
@@ -144,4 +148,5 @@ in {
   my-minicom-esp32 = with pkgs; writeShellScriptBin "minicom-esp32" ''
     minicom -con -b 115200 -D ''${1:-/dev/ttyUSB0}
   '';
+  my-jlink = jlink;
 })
