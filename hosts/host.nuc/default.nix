@@ -9,6 +9,7 @@
       boot.initrd.supportedFilesystems = [ "btrfs" "luks" ];
       services.btrfs.autoScrub = { enable = true; };
     }
+    (myconfig.metadatalib.fixIp "enp2s0")
   ];
   config = {
     myconfig = {
