@@ -129,6 +129,11 @@
           (self.lib.evalConfiguration "x86_64-linux" "nas" ([
             self.nixosModules.core
           ] ++ moreModules) metadataOverride);
+        host-nuc = moreModules: metadataOverride:
+          (self.lib.evalConfiguration "x86_64-linux" "nuc" ([
+            self.nixosModules.core
+            inputs.zephyrproject.nixosModule
+          ] ++ moreModules) metadataOverride);
       };
 
       ##########################################################################
@@ -139,6 +144,7 @@
         x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [] {};
         workstation = self.nixosConfigurationsGen.host-workstation [] {};
         nas = self.nixosConfigurationsGen.host-nas [] {};
+        nuc = self.nixosConfigurationsGen.host-nuc [] {};
 
         container = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";

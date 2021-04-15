@@ -1,4 +1,4 @@
-{ stdenv, lib, rpmextract, requireFile, libudev }:
+{ stdenv, lib, rpmextract, requireFile, libudev, lxqt }:
 
 with lib;
 
@@ -19,7 +19,7 @@ stdenv.mkDerivation rec {
   buildInputs = [ rpmextract ];
   phases = [ "unpackPhase" "installPhase" "fixupPhase" "distPhase" ];
 
-  RPATH="${stdenv.cc.cc.lib}/lib:${lib.getLib libudev}/lib";
+  RPATH="${stdenv.cc.cc.lib}/lib:${lib.getLib libudev}/lib:${lib.getLib lxqt.libqtxdg}/lib";
   unpackPhase = "rpmextract $src";
   installPhase = readFile ./install.sh;
 

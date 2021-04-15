@@ -1,10 +1,10 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }: {
+{ config, pkgs, lib, myconfig, ... }:
+{
   imports = [
     ./hardware-configuration.nix
-    ../modules
-    ../hardware/grub.nix
+    ../../hardware/grub.nix
     {
       boot.initrd.supportedFilesystems = [ "btrfs" "luks" ];
       services.btrfs.autoScrub = { enable = true; };

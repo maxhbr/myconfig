@@ -10,6 +10,16 @@
     let
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
       systems = [ "x86_64-linux" ];
+
+      allpackages = pkgs: with pkgs; zephyrenv.baseInputs ++ [
+        my-west
+        my-platformio-zephyr
+        my-west-arm
+        my-west-riscv
+        my-west-esp32
+        my-west-update
+        my-west-init
+      ];
     in
     {
       nixosModule = { config, lib, pkgs, ... }: let
@@ -27,15 +37,9 @@
       in {
         nixpkgs.overlays = [ self.overlay ];
         home-manager.sharedModules = [{
-          home.packages = (with pkgs; [
-            my-west
-            my-west-arm
-            my-west-esp32
-            my-minicom-esp32
-            my-west-init my-west-update
-            platformio openocd
+          home.packages = (allpackages pkgs) ++ (with pkgs; [
+            openocd
             picocom
-            my-jlink
             (writeShellScriptBin "flash-nrf52840dongle" ''
 set -euo pipefail
 in=build/zephyr/zephyr.hex
@@ -68,10 +72,8 @@ fi
         my-west-arm = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-arm;
         my-west-riscv = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-riscv;
         my-west-esp32 = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-esp32;
-        my-minicom-esp32 = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-minicom-esp32;
         my-west-init = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-init;
         my-west-update = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-update;
-        my-jlink = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-jlink;
       });
 
       defaultPackage = forAllSystems (system: self.packages.${system}.my-west-arm);
@@ -89,17 +91,7 @@ fi
             config.allowUnfree = true;
           };
         in pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [
-            my-west
-            my-platformio-zephyr
-            my-west-arm
-            my-west-riscv
-            my-west-esp32
-            my-west-update
-            my-west-init
-            my-minicom-esp32
-            my-jlink
-          ];
+          nativeBuildInputs = allpackages pkgs;
         }
       );
     };

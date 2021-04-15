@@ -30,7 +30,6 @@
   baseInputs = [
     ninja
     which
-    git
     cmake
     dtc
     gperf
@@ -39,14 +38,13 @@
     bossa
     nrfutil
     jlink
-    python3west
   ];
   my-west-fun = {pnameext ? "", moreBuildInputs ? [], wrapperArgs ? ""}: (
     stdenv.mkDerivation (rec {
       pname = "my-west" + pnameext;
       version = "1.0";
 
-      buildInputs = moreBuildInputs ++ baseInputs;
+      buildInputs = moreBuildInputs ++ baseInputs ++ (with pkgs; [git python3west]);
 
       nativeBuildInputs = [ pkgs.makeWrapper ];
 
@@ -61,6 +59,9 @@
           '';
     }));
 in {
+  zephyrenv = {
+    inherit baseInputs;
+  };
   my-west = my-west-fun {};
   my-west-update = writeShellScriptBin "west-update" ''
           cd $HOME/zephyrproject
@@ -82,7 +83,7 @@ in {
       pname = "my-platformio-zephyr";
       version = "1.0";
 
-      buildInputs = baseInputs;
+      buildInputs = baseInputs ++ (with pkgs; [git]);
 
       nativeBuildInputs = [ pkgs.makeWrapper ] ++ (with pkgs; [ libudev ]);
 
@@ -141,8 +142,4 @@ in {
               --set ESPRESSIF_TOOLCHAIN_PATH "${esp32-toolchain}"
         '';
   };
-  my-minicom-esp32 = with pkgs; writeShellScriptBin "minicom-esp32" ''
-    minicom -con -b 115200 -D ''${1:-/dev/ttyUSB0}
-  '';
-  my-jlink = jlink;
 })
