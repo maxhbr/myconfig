@@ -28,6 +28,7 @@
   ./services.xserver.my-wallpapers
   ./services.xserver.nix
   ./services.xserver.printing.nix
+  ./services.xserver.programs.appimage-run.nix
   ./services.xserver.programs.chromium.nix
   ./services.xserver.programs.evolution.nix
   ./services.xserver.programs.firefox.nix
