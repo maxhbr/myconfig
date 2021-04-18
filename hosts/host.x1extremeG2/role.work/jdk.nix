@@ -45,7 +45,6 @@ in {
 
       ln -s ${pkgs.openjdk8_headless} $out/pkgs/openjdk8
       ln -s ${pkgs.openjdk11} $out/pkgs/openjdk11
-      ln -s ${pkgs.jdk15_headless} $out/pkgs/openjdk15
     '';
 
     environment = {

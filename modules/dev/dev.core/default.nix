@@ -5,7 +5,6 @@ let
   cfg = config.myconfig.dev;
   cropLog = with pkgs;
     writeScriptBin "cropLog.hs" (lib.fileContents ./cropLog.hs);
-  freeplane = pkgs.callPackage ../../../pkgs/freeplane { };
 in {
   config = lib.mkIf cfg.enable {
     home-manager.users.mhuber = {
@@ -20,12 +19,16 @@ in {
           jq
           cropLog
           mercurialFull
-          freeplane
-          xournalpp
           plantuml
           graphviz
-        ] ++ lib.optional config.services.xserver.enable
-          vscode-with-extensions);
+        ]
+        ++ lib.optional config.services.xserver.enable
+          vscode-with-extensions
+        ++ lib.optional config.services.xserver.enable
+          unstable.freeplane
+        ++ lib.optional config.services.xserver.enable
+          xournalpp
+        );
     };
   };
 }
