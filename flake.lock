@@ -389,11 +389,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1619021298,
-        "narHash": "sha256-K2p4Od1GCaD5e5PAWweo/8efvSHT4/kE/Ytzdg0H+sM=",
+        "lastModified": 1619030513,
+        "narHash": "sha256-D3RiGpIq5x3Ftu/43YreCnkkIekwxOJp2t+x6f8IgNo=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "b14062b75c4e8ef4dd4110282f7105be87f681d7",
+        "rev": "bb2bcb63ce30a34039bc5205d99121f8c91f3c21",
         "type": "github"
       },
       "original": {
@@ -533,10 +533,10 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1618734763,
-        "narHash": "sha256-jxyDdEBt59vqp5t5Ald+i9zgmjf3r+mPYgT4gmEXJR4=",
-        "path": "/nix/store/r855hmpfmdy4n0iadczxgs6wmxwwvwpq-source",
-        "rev": "c6df94ce561456492babc7628042fdc1c5fa0d5a",
+        "lastModified": 1619021298,
+        "narHash": "sha256-K2p4Od1GCaD5e5PAWweo/8efvSHT4/kE/Ytzdg0H+sM=",
+        "path": "/nix/store/rn5fx4fvx1319ay5y97lzm0c94x5h8q6-source",
+        "rev": "b14062b75c4e8ef4dd4110282f7105be87f681d7",
         "type": "path"
       },
       "original": {
@@ -658,11 +658,11 @@
     "platformio-core": {
       "flake": false,
       "locked": {
-        "lastModified": 1618939729,
-        "narHash": "sha256-+UZ8WGGh/VfmwHkYL7LHJ1ZzWwiVc6MbTajVHfJStho=",
+        "lastModified": 1619027547,
+        "narHash": "sha256-WsGed7MmJwY3MdLwHU3VrQciQ4YkwCqCT3KI7hykOEI=",
         "owner": "platformio",
         "repo": "platformio-core",
-        "rev": "dfdccac67df5d5d686fc4c8cce61305da0b88ba4",
+        "rev": "286f4ef9614da5d0d692b66c0422f1aec6aaf157",
         "type": "github"
       },
       "original": {
@@ -775,11 +775,11 @@
     },
     "staged": {
       "locked": {
-        "lastModified": 1619006786,
-        "narHash": "sha256-h9mZ/7sUTNUWosCS36VbfOsmAkRJFEICJvRRAu57VtE=",
+        "lastModified": 1619028811,
+        "narHash": "sha256-IxoLtrp+aJxJMBoa9t+dq4yxJ2Pxm1N97UXEBjLYSD8=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "a260b67879906489233e21d0c50aa5a123f1084d",
+        "rev": "af82393e360a68bead64e0cfab26b9e6c82d1749",
         "type": "github"
       },
       "original": {
@@ -827,7 +827,7 @@
         "platformio-core": "platformio-core"
       },
       "locked": {
-        "narHash": "sha256-oRWiZ7zD20nN2fKRRwNtu42CCxeKM0n7FxPRZbkiYgo=",
+        "narHash": "sha256-JU9bS9RxMcJfwRO69wxvhPQJpBTNLdh173vy4zqZ4R4=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
