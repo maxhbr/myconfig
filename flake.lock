@@ -378,7 +378,7 @@
         "ort": "ort"
       },
       "locked": {
-        "narHash": "sha256-AEgmhj+2XWzovZ/y4K/jHZPQMdJDigJGzGdt8yknkyc=",
+        "narHash": "sha256-H6keGcfrpna28vcHbmQE0kOwV2Q3s42Ie8xCIqqTdRo=",
         "path": "flakes/license-compliance-toolbox/",
         "type": "path"
       },
@@ -389,11 +389,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1619590001,
-        "narHash": "sha256-FvJgjxoCB68qCNUzDeEbIrknKF09X05Kic3NHXtB0Ro=",
+        "lastModified": 1619593545,
+        "narHash": "sha256-+QhHNlHuItSV4EKQiZ5ONANgQOMXrWc8qYojIJORgxM=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "19916afe1d3f68fe9d35637c84b9363ef2493f1b",
+        "rev": "f3820d580ee15cd6a1aee4f7abece467075f13e7",
         "type": "github"
       },
       "original": {
@@ -626,11 +626,11 @@
     "ort": {
       "flake": false,
       "locked": {
-        "lastModified": 1613750629,
-        "narHash": "sha256-+0oeNQLao+RRbt4kz1miaXtwsDJ5zqwYhlVD5EhfHA8=",
+        "lastModified": 1619591172,
+        "narHash": "sha256-5NkmXbF18ub7InHSbPZXwVVJIQf+49BWBzLq2Ai7oVE=",
         "owner": "oss-review-toolkit",
         "repo": "ort",
-        "rev": "640bcea691c367c1807a0166f1e188026a08ccde",
+        "rev": "635c560233db8f39ca56134c82b2f64449ea8be4",
         "type": "github"
       },
       "original": {
