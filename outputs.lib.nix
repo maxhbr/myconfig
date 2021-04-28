@@ -86,6 +86,7 @@ let inherit (inputs.nixpkgs) lib;
           setupAsBuildMachine = authorizedKeys: {
             users.extraUsers.nixBuild = {
               name = "nixBuild";
+              isSystemUser = true;
               useDefaultShell = true;
               openssh.authorizedKeys.keys = authorizedKeys;
             };

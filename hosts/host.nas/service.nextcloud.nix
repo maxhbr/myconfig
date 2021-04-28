@@ -13,7 +13,7 @@
       nextcloud = {
         enable = true;
         hostName = config.networking.hostName;
-        package = pkgs.nextcloud20;
+        package = pkgs.nextcloud21;
         home = "/mnt/2x4t/nextcloud";
         https = true;
         autoUpdateApps.enable = true;

@@ -54,6 +54,9 @@ else
   echo "\$in=$in not found"
 fi
 '')
+            (writeShellScriptBin "clang-format" ''
+exec ${llvmPackages.clang-unwrapped}/bin/clang-format "$@"
+'')
           ]);
           home.sessionVariables = {
             ZEPHYR_BASE = "/home/mhuber/zephyrproject/zephyr";
