@@ -274,9 +274,14 @@ doShort() {
 #
 prepareDotOrt
 
-if [[ "$1" == "--dockerize" ]]; then
+if ! command -v $ort &> /dev/null; then
+    echo "$ort not in \$PATH, dockerize by default"
     DOCKERIZE_BY_DEFAULT=true
-    shift
+else
+    if [[ "$1" == "--dockerize" ]]; then
+        DOCKERIZE_BY_DEFAULT=true
+        shift
+    fi
 fi
 
 if [[ $# = 0 ]]; then
