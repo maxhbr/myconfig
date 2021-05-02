@@ -42,14 +42,15 @@
             picocom
             (writeShellScriptBin "flash-nrf52840dongle" ''
 set -euo pipefail
+# TODO: call nrfutil directly instead of relying on PATH
 in=build/zephyr/zephyr.hex
 out=build/zephyr.zip
 if [[ -f "$in" ]]; then
   set -x
-  ${pkgs.nrfutil}/bin/nrfutil pkg generate --hw-version 52 --sd-req=0x00 \
+  nrfutil pkg generate --hw-version 52 --sd-req=0x00 \
           --application "$in" \
           --application-version 1 "$out"
-  ${pkgs.nrfutil}/bin/nrfutil dfu usb-serial -pkg "$out" -p "''${1:-/dev/ttyACM0}"
+  nrfutil dfu usb-serial -pkg "$out" -p "''${1:-/dev/ttyACM0}"
 else
   echo "\$in=$in not found"
 fi

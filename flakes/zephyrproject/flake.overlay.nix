@@ -36,7 +36,7 @@
     openocd
     dfu-util
     bossa
-    nrfutil
+    # nrfutil
     jlink
   ];
   my-west-fun = {pnameext ? "", moreBuildInputs ? [], wrapperArgs ? ""}: (
