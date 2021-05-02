@@ -134,7 +134,7 @@ runDockerizedOrt() {
 ################################################################################
 
 runOrt() {
-    local dockerize="$DOCKERIZE_BY_DEFAULT"
+    local dockerize=false
     local task="$1"; shift
 
     local input="$(readlink -f "$1")"; shift
