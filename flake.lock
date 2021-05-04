@@ -378,7 +378,7 @@
         "ort": "ort"
       },
       "locked": {
-        "narHash": "sha256-k2EeAgc+fv83laeZeuiZraITaEJZ9BeESlk6wt2tzzU=",
+        "narHash": "sha256-zkJ+/uzbk4XhPfKEB7m9MiJxVEkMMa5ByRTCWopBWiU=",
         "path": "flakes/license-compliance-toolbox/",
         "type": "path"
       },
@@ -562,11 +562,11 @@
     },
     "nur": {
       "locked": {
-        "lastModified": 1620147430,
-        "narHash": "sha256-Wy5pcSMOuL45TitR7i7dWA6QwwavpECXLhqn6yfaGDc=",
+        "lastModified": 1620151446,
+        "narHash": "sha256-J3/+VG6tjbb7Hu8RB9byJOB1AXRhgOwgSsYEi031YSc=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "5cfc906def44f81f037c385b7c3e66514d26d505",
+        "rev": "e4bed0a300da796057f8db18492f359d3b441306",
         "type": "github"
       },
       "original": {
