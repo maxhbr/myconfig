@@ -378,7 +378,7 @@
         "ort": "ort"
       },
       "locked": {
-        "narHash": "sha256-JQscykSBiq4gZIB0i09ZdOnIL37UIvnUreBEVOgDfmg=",
+        "narHash": "sha256-k2EeAgc+fv83laeZeuiZraITaEJZ9BeESlk6wt2tzzU=",
         "path": "flakes/license-compliance-toolbox/",
         "type": "path"
       },
@@ -389,11 +389,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1620150510,
-        "narHash": "sha256-eMAqilItpCx/s4VY5TeBmJpzceZxyg2AHw7drcxyT+0=",
+        "lastModified": 1620151126,
+        "narHash": "sha256-vSIbffMCTzwV/+2qw+wBOgYb9RvGYeutzAAsGMvFP5k=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "2b4b20a4b58fc2ecd0d26d84b6d4ef9c60c7cd65",
+        "rev": "d5b9c1748529e3c965a27b3f51d055e8ab8a9f17",
         "type": "github"
       },
       "original": {
