@@ -562,11 +562,11 @@
     },
     "nur": {
       "locked": {
-        "lastModified": 1620824210,
-        "narHash": "sha256-G4EHOz7J1Wk1fukVK99EQq+qNKqkiHFIE265umWhsh0=",
+        "lastModified": 1620825816,
+        "narHash": "sha256-9K5hP7uKuF7583EhBrsVAzXgAmOvRtLzOFV6Xo6h8/o=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "803b0e1e9c7c5607f313c5a32db38333183a14b2",
+        "rev": "3ab62643a6e3c8148393799ccfe31c671fed4ab3",
         "type": "github"
       },
       "original": {
@@ -827,7 +827,7 @@
         "platformio-core": "platformio-core"
       },
       "locked": {
-        "narHash": "sha256-txwbymNFgtvT+Ep5Wrz2W15sWiHoD+lRWMG1H3QAGQ4=",
+        "narHash": "sha256-zPmPQbMOBAW/Qh7M0PTaYqjh5w1HHVp/baW5oyObtqE=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
