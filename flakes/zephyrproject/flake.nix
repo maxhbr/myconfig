@@ -64,6 +64,20 @@ exec ${llvmPackages.clang-unwrapped}/bin/clang-format "$@"
             IDF_PATH = "/home/mhuber/zephyrproject/modules/hal/espressif";
             IDF_TOOLS_PATH = "/home/mhuber/zephyrproject/modules/hal/espressif/tools";
           };
+          programs.fish = {
+            shellAbbrs = lib.mapAttrs' (name: value: lib.nameValuePair ("west-" + name) value) (lib.genAttrs [
+              "nucleo_l432kc"
+              "nucleo_f767zi"
+              "nucleo_h745zi_q_m4"
+              "nucleo_h745zi_q_m7"
+              "nucleo_wb55rg"
+              "adafruit_feather_stm32f405"
+              "adafruit_feather_nrf52840"
+              "nrf52840dongle_nrf52840"
+              "frdm_k64f"
+              "lpcxpresso55s69_cpu0"
+            ] (board: "west-arm build -p always -b ${board} ."));
+          };
         }];
         services.udev.packages = [ platformio-udev-rules segger-modemmanager-blacklist-udev-rules pkgs.openocd ];
       };

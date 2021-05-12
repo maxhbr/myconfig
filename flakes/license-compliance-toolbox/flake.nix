@@ -29,7 +29,7 @@
         license-compliance-toolbox = pkgs.buildEnv {
           name = "license-compliance-toolbox";
           paths = with self.packages.x86_64-linux; [
-            ort
+            # ort
             scancode
             tern
             scanoss
@@ -64,7 +64,7 @@
                   local sourceDir="$(getSourceDir "$input")"
 
                   ${scancode}/bin//scancode.sh "$sourceDir" || true
-                  ${ort}/bin/ort.sh all "$sourceDir" || true
+                  ''${ort}/bin/ort.sh all "$sourceDir" || true
               }
 
               main "$@"

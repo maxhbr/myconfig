@@ -1,7 +1,11 @@
 { self, nixpkgs,  ... }@inputs:
 
 (final: prev: with final; let
-  python3west = pkgs.python3.withPackages (pp: with pp; [
+  # cmsis-pack-manager = final.python3Packages.callPackage ./pyocd/cmsis-pack-manager.nix { };
+  # pyocd = final.python3Packages.callPackage ./pyocd { inherit cmsis-pack-manager; };
+  # pyocd_pemicro = final.python3Packages.callPackage ./pyocd/pyocd_pemicro.nix { inherit pyocd;};
+  jlink = final.callPackage ./jlink { };
+  python3west = final.python3.withPackages (pp: with pp; [
     west
     docutils
     wheel
@@ -18,6 +22,7 @@
     intelhex
     pytest
     gcovr
+    # pyocd
     # gui
     tkinter
     # esp
@@ -26,7 +31,6 @@
     # SEGGER
     pylink-square
   ]);
-  jlink = final.callPackage ./jlink { };
   baseInputs = [
     ninja
     which
@@ -38,6 +42,7 @@
     bossa
     # nrfutil
     jlink
+    srecord # for srec_cat
   ];
   my-west-fun = {pnameext ? "", moreBuildInputs ? [], wrapperArgs ? ""}: (
     stdenv.mkDerivation (rec {

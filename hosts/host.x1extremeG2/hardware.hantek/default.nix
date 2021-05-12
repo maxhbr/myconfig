@@ -6,7 +6,10 @@ in {
   config = {
     services.udev.packages = [ openhantek6022 ];
     home-manager.sharedModules = [{
-      home.packages = [ openhantek6022 pkgs.pulseview ];
+      home.packages = [
+        openhantek6022
+        # pkgs.pulseview
+        ];
     }];
   };
 }
