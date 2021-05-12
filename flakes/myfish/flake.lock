@@ -115,11 +115,11 @@
     "fzf": {
       "flake": false,
       "locked": {
-        "lastModified": 1617960845,
-        "narHash": "sha256-l+qDptQLfKt++OjHkL1l1LsesaNYqDfHr4eeU97NlQk=",
+        "lastModified": 1620776412,
+        "narHash": "sha256-28QW/WTLckR4lEfHv6dSotwkAKpNJFCShxmKFGQQ1Ew=",
         "owner": "jethrokuan",
         "repo": "fzf",
-        "rev": "9405fd2fc449fc28196a216bdb873e4c9aab9913",
+        "rev": "479fa67d7439b23095e01b64987ae79a91a4e283",
         "type": "github"
       },
       "original": {
