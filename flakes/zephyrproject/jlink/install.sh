@@ -1,28 +1,38 @@
 ################################################################################
-interpreter=`cat $NIX_CC/nix-support/dynamic-linker`
-srcdir=opt/SEGGER/JLink_V${version}
+interpreter="$(cat $NIX_CC/nix-support/dynamic-linker)"
+srcdir="opt/SEGGER/JLink_V${version}"
 
 ################################################################################
-mkdir -p $out/bin $out/lib
+mkdir -p "$out/bin" "$out/lib"
+RPATH="$RPATH:$out/lib"
 
-################################################################################
-for f in `find $srcdir -type f -name 'J*' -executable`; do
-  echo "patching $out/bin/"`basename $f`
-  install -m 0755 $f $out/bin
-  patchelf --interpreter $interpreter $out/bin/`basename $f`
-  patchelf --set-rpath $RPATH:$out/lib $out/bin/`basename $f`
-done
+# echo 'installing lib*'
+find "$srcdir" -type f -name 'J*' -executable -maxdepth 1 \
+  -print \
+  -exec install -m 0755 {} "$out/bin" \;
+find "$srcdir" -type l -name 'J*' -maxdepth 1 -exec cp -P {} "$out/bin" \;
+find "$srcdir" -type f -name 'lib*' -maxdepth 1 \
+  -print \
+  -exec install -m 0755 {} "$out/lib" \;
+find "$srcdir" -type l -name 'lib*' -maxdepth 1 -exec cp -P {} "$out/lib" \;
+cp -r opt "$out"
 
-################################################################################
-# Create symlinks for the libraries.
-for f in `find $srcdir -type f -name 'lib*' -executable`; do
-  basename=`basename $f`
-  link=`echo $basename | sed 's/\..*$//g'`
+find "$out/lib" -type f -name 'lib*' -print0 |
+  while IFS= read -r -d '' f; do
+  echo "patching $f"
+  basename="$(basename "$f")"
+  patchelf --set-rpath "$RPATH" "$f"
+  done
 
-  echo "patching $out/lib/"`basename $f`
-  install -m 0755 $f $out/lib
-  patchelf --set-rpath $RPATH:$out/lib $out/lib/$basename
+find "$out/lib" -name 'lib*' -print0 |
+  while IFS= read -r -d '' f; do
+    cd $out/bin
+    ln -s "$f"
+  done
 
-  # This is upsetting.
-  (cd $out/bin && ln -s ../lib/$basename $link.so)
+find "$out/bin" -type f -name 'J*' -executable -print0 |
+    while IFS= read -r -d '' f; do
+  echo "patching $f"
+  patchelf --interpreter "$interpreter" "$f"
+  patchelf --set-rpath "$RPATH" "$f"
 done

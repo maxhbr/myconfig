@@ -1,25 +1,33 @@
-{ stdenv, lib, rpmextract, requireFile, libudev, lxqt }:
+{ stdenv, lib, rpmextract, requireFile, libudev, lxqt, xorg, fontconfig.lib }:
 
 with lib;
 
 stdenv.mkDerivation rec {
   name = "jlink-${version}";
-  version = "700";
+  version = "721a";
 
   src =
     if stdenv.system == "x86_64-linux" then
       requireFile {
         name = "JLink_Linux_V${version}_x86_64.rpm";
         url = "https://www.segger.com/downloads/jlink/JLink_Linux_V${version}_x86_64.rpm";
-        sha256 = "06g1x25afhpczaz3xlzyrfa00456mfjn9f0n8nf166faczwkcaj9";
+        sha256 = "63328d0aa9fddb05c04238206d11d80b5918552aa240c6d1d887cf77c1566185";
       }
     else
       abort "${name} requires x86_64 Linux";
 
-  buildInputs = [ rpmextract ];
+  nativeBuildInputs = [rpmextract];
+  buildInputs = [
+                  # stdenv.cc.cc.lib
+                  libudev
+                  lxqt.libqtxdg
+                  xorg.libXrender
+                  fontconfig.lib
+                ];
   phases = [ "unpackPhase" "installPhase" "fixupPhase" "distPhase" ];
 
-  RPATH="${stdenv.cc.cc.lib}/lib:${lib.getLib libudev}/lib:${lib.getLib lxqt.libqtxdg}/lib";
+  RPATH=  lib.makeLibraryPath buildInputs;
+    # "${stdenv.cc.cc.lib}/lib:${lib.getLib libudev}/lib:${lib.getLib lxqt.libqtxdg}/lib";
   unpackPhase = "rpmextract $src";
   installPhase = readFile ./install.sh;
 
@@ -28,6 +36,6 @@ stdenv.mkDerivation rec {
     homepage = https://www.segger.com/downloads/jlink;
     license = licenses.unfree;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ pjones ];
+    maintainers = with maintainers; [ pjones maxhbr ];
   };
 }
