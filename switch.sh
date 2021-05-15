@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-if [[ -f ../switch.sh ]]; then
+if [[ -f ../priv/switch.sh ]]; then
   exit 1
 fi
 

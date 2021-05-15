@@ -40,7 +40,7 @@
     openocd
     dfu-util
     bossa
-    # nrfutil
+    nrfutil
     jlink
     srecord # for srec_cat
   ];
@@ -64,6 +64,21 @@
           '';
     }));
 in {
+  pc-ble-driver = let
+    version = "4.1.2";
+    in prev.pc-ble-driver.overrideAttrs (old: {
+      inherit version;
+    src = fetchFromGitHub {
+       owner = "NordicSemiconductor";
+       repo = "pc-ble-driver";
+       rev = "v${version}";
+       sha256 = "s6SnOLAJ8fwxLQR7PuOLvlaiX61Hhz/MrzQ8h5ApBEQ=";
+     };
+    cmakeFlags = [
+    "-DNRF_BLE_DRIVER_VERSION=${version}"
+  ];
+    buildInputs = old.buildInputs ++ [final.spdlog];
+  });
   zephyrenv = {
     inherit baseInputs;
   };
