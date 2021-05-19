@@ -35,11 +35,11 @@
     "done": {
       "flake": false,
       "locked": {
-        "lastModified": 1618251766,
-        "narHash": "sha256-NFysKzRZgDXXZW/sUlZNu7ZpMCKwbjAhIfspSK3UqCY=",
+        "lastModified": 1621416587,
+        "narHash": "sha256-cScH1NzsuQnDZq0XGiay6o073WSRIAsshkySRa/gJc0=",
         "owner": "franciscolourenco",
         "repo": "done",
-        "rev": "8fd2bc5c95a93b65452281459a167f1bbfb58990",
+        "rev": "37117c3d8ed6b820f6dc647418a274ebd1281832",
         "type": "github"
       },
       "original": {
