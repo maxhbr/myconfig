@@ -59,6 +59,7 @@
               in "${doomPrivateDeriv}";
               extraPackages = [
                 pkgs.mu
+                pkgs.gnuplot
                 (pkgs.nerdfonts.override { fonts = [ "Inconsolata" ]; })
               ];
               extraConfig = ''

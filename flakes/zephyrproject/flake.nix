@@ -13,7 +13,6 @@
 
       allpackages = pkgs: with pkgs; zephyrenv.baseInputs ++ [
         my-west
-        my-platformio-zephyr
         my-west-arm
         my-west-riscv
         my-west-esp32
@@ -85,7 +84,6 @@ exec ${llvmPackages.clang-unwrapped}/bin/clang-format "$@"
 
       packages = forAllSystems (system: {
         my-west = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west;
-        my-platformio-zephyr = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-platformio-zephyr;
         my-west-arm = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-arm;
         my-west-riscv = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-riscv;
         my-west-esp32 = (import nixpkgs { inherit system; overlays = [ self.overlay ]; }).my-west-esp32;

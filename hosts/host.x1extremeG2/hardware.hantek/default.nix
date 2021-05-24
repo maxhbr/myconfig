@@ -4,12 +4,13 @@
   openhantek6022 = pkgs.libsForQt5.callPackage ./openhantek6022.nix {};
 in {
   config = {
-    services.udev.packages = [ openhantek6022 ];
+    services.udev.packages = [ openhantek6022 pkgs.saleae-logic ];
     home-manager.sharedModules = [{
       home.packages = [
         openhantek6022
-        # pkgs.pulseview
-        ];
+        pkgs.unstable.pulseview
+        pkgs.saleae-logic
+      ];
     }];
   };
 }

@@ -7,10 +7,19 @@ let
     writeScriptBin "cropLog.hs" (lib.fileContents ./cropLog.hs);
 in {
   config = lib.mkIf cfg.enable {
-    home-manager.users.mhuber = {
+    nixpkgs.overlays = [
+      (self: super: {
+        diffoscope = super.diffoscope.overrideAttrs(oldAttrs: rec{
+          disabledTests = oldAttrs.disabledTests ++ ["test_ffprobe"];
+        });
+        }
+      )
+    ];
+    home-manager.sharedModules = [{
       home.packages = with pkgs;
         ([
           meld
+          diffoscope
           gnumake
           cmake
           automake
@@ -19,6 +28,7 @@ in {
           jq
           cropLog
           mercurialFull
+          gnuplot
           plantuml
           graphviz
         ]
@@ -29,6 +39,6 @@ in {
         ++ lib.optional config.services.xserver.enable
           xournalpp
         );
-    };
+    }];
   };
 }
