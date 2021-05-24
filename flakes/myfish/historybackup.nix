@@ -1,5 +1,4 @@
-{ config, lib, pkgs, myconfig, ... }:
-{
+{ config, lib, pkgs, myconfig, ... }: {
   config = {
     systemd = {
       timers.fish-history-backup-timer = {

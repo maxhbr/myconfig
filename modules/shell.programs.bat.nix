@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }: {
   config = {
-    home-manager.sharedModules = [(
-      let
-        aliases = { cat = ''${pkgs.bat}/bin/bat --theme="Monokai Extended Light"''; };
+    home-manager.sharedModules = [
+      (let
+        aliases = {
+          cat = ''${pkgs.bat}/bin/bat --theme="Monokai Extended Light"'';
+        };
       in {
         programs.bat = {
           enable = true;
@@ -16,7 +18,7 @@
         programs.bash.shellAliases = aliases;
         programs.zsh.shellAliases = aliases;
         programs.fish.shellAliases = aliases;
-      }
-    )];
+      })
+    ];
   };
 }

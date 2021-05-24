@@ -47,11 +47,12 @@ let
       name = "${name}-secret";
       phases = "installPhase";
       buildInputs = [ pkgs.age ];
-      installPhase =
-        let key = myconfig.metadatalib.get.hosts."${config.networking.hostName}".pubkeys."/etc/ssh/ssh_host_rsa_key.pub";
-        in ''
-          age -a -r '${key}' -o "$out" '${source}'
-        '';
+      installPhase = let
+        key =
+          myconfig.metadatalib.get.hosts."${config.networking.hostName}".pubkeys."/etc/ssh/ssh_host_rsa_key.pub";
+      in ''
+        age -a -r '${key}' -o "$out" '${source}'
+      '';
     };
 
   mkService = name:

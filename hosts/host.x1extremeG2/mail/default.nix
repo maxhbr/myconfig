@@ -1,5 +1,4 @@
-{ pkgs, config, ... }:
-{
+{ pkgs, config, ... }: {
   imports = [ ./mail.mu4e ./mail.mutt ];
   config = {
     home-manager.sharedModules = [{

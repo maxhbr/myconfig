@@ -78,7 +78,7 @@
                   mkSubPkgsOverlay = targetName: input:
                     (self: super: {
                       "${targetName}" = super."${targetName}" or { }
-                                        // import input { inherit (pkgs) config system; };
+                        // import input { inherit (pkgs) config system; };
                     });
                 in [
                   (mkSubPkgsOverlay "unstable" inputs.master)
@@ -107,7 +107,7 @@
             { config = { hardware.enableRedistributableFirmware = true; }; }
             self.nixosModules.core
             inputs.license-compliance-toolbox.nixosModule
-            ({myconfig, ...}: {
+            ({ myconfig, ... }: {
               imports = [
                 (myconfig.metadatalib.announceHost "workstation")
                 (myconfig.metadatalib.announceHost "nas")
@@ -126,14 +126,12 @@
             inputs.license-compliance-toolbox.nixosModule
           ] ++ moreModules) metadataOverride);
         host-nas = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "nas" ([
-            self.nixosModules.core
-          ] ++ moreModules) metadataOverride);
+          (self.lib.evalConfiguration "x86_64-linux" "nas"
+            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
         host-nuc = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "nuc" ([
-            self.nixosModules.core
-            inputs.zephyrproject.nixosModule
-          ] ++ moreModules) metadataOverride);
+          (self.lib.evalConfiguration "x86_64-linux" "nuc"
+            ([ self.nixosModules.core inputs.zephyrproject.nixosModule ]
+              ++ moreModules) metadataOverride);
       };
 
       ##########################################################################
@@ -141,10 +139,10 @@
       ##########################################################################
 
       nixosConfigurations = {
-        x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [] {};
-        workstation = self.nixosConfigurationsGen.host-workstation [] {};
-        nas = self.nixosConfigurationsGen.host-nas [] {};
-        nuc = self.nixosConfigurationsGen.host-nuc [] {};
+        x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [ ] { };
+        workstation = self.nixosConfigurationsGen.host-workstation [ ] { };
+        nas = self.nixosConfigurationsGen.host-nas [ ] { };
+        nuc = self.nixosConfigurationsGen.host-nuc [ ] { };
 
         container = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
@@ -156,7 +154,8 @@
 
               # Let 'nixos-version --json' know about the Git revision
               # of this flake.
-              system.configurationRevision = nixpkgs.lib.mkIf (self ? rev) self.rev;
+              system.configurationRevision =
+                nixpkgs.lib.mkIf (self ? rev) self.rev;
 
               # Network configuration.
               networking.useDHCP = false;
@@ -174,7 +173,8 @@
 
     } (let
 
-      eachDefaultSystem = inputs.flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ];
+      eachDefaultSystem =
+        inputs.flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ];
       nixpkgsConfig = { allowUnfree = true; };
 
     in eachDefaultSystem (system: {
@@ -191,7 +191,9 @@
       in pkgs.mkShell {
         nativeBuildInputs = with pkgs; [
           # nixos-rebuild
-          git git-crypt git-secrets
+          git
+          git-crypt
+          git-secrets
           nixfmt
           age
         ];

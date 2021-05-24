@@ -1,37 +1,26 @@
-{ stdenv
-, lib
-, requireFile
-, autoPatchelfHook
-, makeDesktopItem
-, copyDesktopItems
-, fontconfig
-, freetype
-, libusb
-, libICE
-, libSM
-, udev
-, libX11
-, libXext
-, libXcursor
-, libXfixes
-, libXrender
-, libXrandr }:
+{ stdenv, lib, requireFile, autoPatchelfHook, makeDesktopItem, copyDesktopItems
+, fontconfig, freetype, libusb, libICE, libSM, udev, libX11, libXext, libXcursor
+, libXfixes, libXrender, libXrandr }:
 
 let
   architectures = {
-    i686-linux    = "i386";
-    x86_64-linux  = "x86_64";
-    armv7l-linux  = "arm";
+    i686-linux = "i386";
+    x86_64-linux = "x86_64";
+    armv7l-linux = "arm";
     aarch64-linux = "arm64";
   };
 
   architecture = architectures.${stdenv.hostPlatform.system};
 
   hashes = {
-    x86_64-linux  = "9560f026f66b5470f5536877043e6e6268c96eb9d3ee9d7f87542e8e06332e76";
-    i686-linux    = "e2f2a92fc9e31527ba019ee80de8a8808e9c967a73566a46350eb409444a8645";
-    armv7l-linux  = "633b054645605f1d4d964f34b9e9fa9f2f265f7f48e94332cb9bbb65ce76bd45";
-    aarch64-linux = "9f0728c84a7c134c52c020b56decf41abaef081e33eca49daf367f58e6e050a2";
+    x86_64-linux =
+      "9560f026f66b5470f5536877043e6e6268c96eb9d3ee9d7f87542e8e06332e76";
+    i686-linux =
+      "e2f2a92fc9e31527ba019ee80de8a8808e9c967a73566a46350eb409444a8645";
+    armv7l-linux =
+      "633b054645605f1d4d964f34b9e9fa9f2f265f7f48e94332cb9bbb65ce76bd45";
+    aarch64-linux =
+      "9f0728c84a7c134c52c020b56decf41abaef081e33eca49daf367f58e6e050a2";
   };
 
   hash = hashes.${stdenv.hostPlatform.system};
@@ -42,35 +31,40 @@ let
       desktopName = "SEGGER - J-Flash";
       categories = "Development;Qt;";
       exec = "JFlashExe";
-      comment = "An application to program data images to the flash of a target device.";
+      comment =
+        "An application to program data images to the flash of a target device.";
     })
     (makeDesktopItem {
       name = "j-flash-lite";
       desktopName = "SEGGER - J-Flash Lite";
       categories = "Development;Qt;";
       exec = "JFlashLiteExe";
-      comment = "Flash programming application to program data images to the flash of a target device (lite version for J-Link BASE and EDU).";
+      comment =
+        "Flash programming application to program data images to the flash of a target device (lite version for J-Link BASE and EDU).";
     })
     (makeDesktopItem {
       name = "j-flash-spi";
       desktopName = "SEGGER - J-Flash SPI";
       categories = "Development;Qt;";
       exec = "JFlashSPIExe";
-      comment = "Flash programming application, which allows direct programming of SPI flashes, without any additional hardware.";
+      comment =
+        "Flash programming application, which allows direct programming of SPI flashes, without any additional hardware.";
     })
     (makeDesktopItem {
       name = "j-link-config";
       desktopName = "SEGGER - J-Link Configurator";
       categories = "Development;Qt;HardwareSettings;";
       exec = "JLinkConfigExe";
-      comment = "Allows configuration of USB identification as well as TCP/IP identification of J-Link.";
+      comment =
+        "Allows configuration of USB identification as well as TCP/IP identification of J-Link.";
     })
     (makeDesktopItem {
       name = "j-link-gdb-server";
       desktopName = "SEGGER - J-Link GDB Server";
       categories = "Development;Debugger;Qt;";
       exec = "JLinkGDBServer";
-      comment = "A remote server for GDB making it possible for GDB to connect to and communicate with the target device via J-Link.";
+      comment =
+        "A remote server for GDB making it possible for GDB to connect to and communicate with the target device via J-Link.";
     })
     (makeDesktopItem {
       name = "j-link-license-manager";
@@ -95,7 +89,8 @@ let
       desktopName = "SEGGER - J-Link Remote Server";
       categories = "Development;Qt;";
       exec = "JLinkRemoteServer";
-      comment = "Utility which provides the possibility to use J-Link / J-Trace remotely via TCP/IP.";
+      comment =
+        "Utility which provides the possibility to use J-Link / J-Trace remotely via TCP/IP.";
     })
     (makeDesktopItem {
       name = "j-link-swo-viewer";
@@ -109,18 +104,19 @@ let
       desktopName = "SEGGER - J-Mem";
       categories = "Development;Debugger;Monitor;Qt;";
       exec = "JMemExe";
-      comment = "Application to display and modify the RAM and SFRs (Special Function Registers) of target systems while the target is running.";
+      comment =
+        "Application to display and modify the RAM and SFRs (Special Function Registers) of target systems while the target is running.";
     })
   ];
-in
 
-stdenv.mkDerivation rec {
+in stdenv.mkDerivation rec {
   pname = "j-link";
   version = "V720a";
 
   src = requireFile {
     name = "JLink_Linux_${version}_${architecture}.tgz";
-    url = "https://www.segger.com/downloads/jlink#J-LinkSoftwareAndDocumentationPack";
+    url =
+      "https://www.segger.com/downloads/jlink#J-LinkSoftwareAndDocumentationPack";
     sha256 = hash;
   };
 
@@ -132,9 +128,18 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [ copyDesktopItems autoPatchelfHook ];
 
   buildInputs = [
-    udev stdenv.cc.cc.lib
-    fontconfig freetype libICE libSM
-    libX11 libXext libXcursor libXfixes libXrender libXrandr
+    udev
+    stdenv.cc.cc.lib
+    fontconfig
+    freetype
+    libICE
+    libSM
+    libX11
+    libXext
+    libXcursor
+    libXfixes
+    libXrender
+    libXrandr
   ];
 
   runtimeDependencies = [ udev ];

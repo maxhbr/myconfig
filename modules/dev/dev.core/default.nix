@@ -9,11 +9,10 @@ in {
   config = lib.mkIf cfg.enable {
     nixpkgs.overlays = [
       (self: super: {
-        diffoscope = super.diffoscope.overrideAttrs(oldAttrs: rec{
-          disabledTests = oldAttrs.disabledTests ++ ["test_ffprobe"];
+        diffoscope = super.diffoscope.overrideAttrs (oldAttrs: rec {
+          disabledTests = oldAttrs.disabledTests ++ [ "test_ffprobe" ];
         });
-        }
-      )
+      })
     ];
     home-manager.sharedModules = [{
       home.packages = with pkgs;
@@ -31,14 +30,9 @@ in {
           gnuplot
           plantuml
           graphviz
-        ]
-        ++ lib.optional config.services.xserver.enable
-          vscode-with-extensions
-        ++ lib.optional config.services.xserver.enable
-          unstable.freeplane
-        ++ lib.optional config.services.xserver.enable
-          xournalpp
-        );
+        ] ++ lib.optional config.services.xserver.enable vscode-with-extensions
+          ++ lib.optional config.services.xserver.enable unstable.freeplane
+          ++ lib.optional config.services.xserver.enable xournalpp);
     }];
   };
 }

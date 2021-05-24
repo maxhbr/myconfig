@@ -1,26 +1,21 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, ... }:
-{
-  imports = [
-    { # support for nix-flakes
-      # see:
-      # - https://nixos.wiki/wiki/Flakes
-      # - https://www.tweag.io/blog/2020-05-25-flakes/
-      config = {
-        home-manager.sharedModules = [
-          {
-            programs.fish = {
-              shellAbbrs = {
-                nix-flake =
-                  "nix --experimental-features 'nix-command flakes' flake";
-              };
-            };
-          }
-        ];
-      };
-    }
-  ];
+{ config, pkgs, lib, myconfig, ... }: {
+  imports = [{ # support for nix-flakes
+    # see:
+    # - https://nixos.wiki/wiki/Flakes
+    # - https://www.tweag.io/blog/2020-05-25-flakes/
+    config = {
+      home-manager.sharedModules = [{
+        programs.fish = {
+          shellAbbrs = {
+            nix-flake =
+              "nix --experimental-features 'nix-command flakes' flake";
+          };
+        };
+      }];
+    };
+  }];
   config = {
     nixpkgs.config = { allowUnfree = true; };
     home-manager.sharedModules = [{

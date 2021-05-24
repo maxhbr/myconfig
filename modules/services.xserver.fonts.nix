@@ -6,8 +6,7 @@
 # This can be removed, once the packages is listed
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }:
-{
+{ pkgs, config, lib, ... }: {
   config = (lib.mkIf config.services.xserver.enable {
     fonts = {
       enableDefaultFonts = true;

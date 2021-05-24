@@ -1,7 +1,6 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, ... }:
-{
+{ config, pkgs, ... }: {
   config = {
     system.extraSystemBuilderCmds = ''
       mkdir -p $out/pkgs/

@@ -1,7 +1,6 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }:
-{
+{ pkgs, config, lib, ... }: {
   imports = [{
     nixpkgs.overlays = [
       (self: super: {

@@ -57,29 +57,29 @@
                 };
                 __list_dir_handler = {
                   body = ''
-                # echo content after cd / z / or any pwd change
-                set linesInLs (ls -1GF | ${pkgs.coreutils}/bin/wc -l)
-                set linesInTerminal (${pkgs.ncurses}/bin/tput lines)
-                  if [  -lt  ]; then
-                    ls -GF
-                  fi
-              '';
+                    # echo content after cd / z / or any pwd change
+                    set linesInLs (ls -1GF | ${pkgs.coreutils}/bin/wc -l)
+                    set linesInTerminal (${pkgs.ncurses}/bin/tput lines)
+                      if [  -lt  ]; then
+                        ls -GF
+                      fi
+                  '';
                   onVariable = "PWD";
                 };
                 whichf = "readlink -f (which $argv)";
                 cdtemp = "cd (mktemp -d); pwd";
                 cptemp = ''
-              set f (readlink -f $1)
-              cd (mktemp -d)
-              cp -r $f ./
-              pwd
-            '';
+                  set f (readlink -f $1)
+                  cd (mktemp -d)
+                  cp -r $f ./
+                  pwd
+                '';
                 mvtemp = ''
-              set f (readlink -f $1)
-              cd (mktemp -d)
-              mv $f ./
-              pwd
-            '';
+                  set f (readlink -f $1)
+                  cd (mktemp -d)
+                  mv $f ./
+                  pwd
+                '';
                 ff =
                   "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -iname '*'$argv'*' -ls 2>/dev/null";
                 ffd =
@@ -91,24 +91,24 @@
               shellInit = "";
               loginShellInit = "";
               interactiveShellInit = ''
-            set -U fish_greeting
+                set -U fish_greeting
 
-            # see: https://fishshell.com/docs/current/#command-line-editor
-            function hybrid_bindings --description "Vi-style bindings that inherit emacs-style bindings in all modes"
-                for mode in default insert visual
-                    fish_default_key_bindings -M $mode
+                # see: https://fishshell.com/docs/current/#command-line-editor
+                function hybrid_bindings --description "Vi-style bindings that inherit emacs-style bindings in all modes"
+                    for mode in default insert visual
+                        fish_default_key_bindings -M $mode
+                    end
+                    fish_vi_key_bindings --no-erase
                 end
-                fish_vi_key_bindings --no-erase
-            end
-            set -g fish_key_bindings hybrid_bindings
-          '';
+                set -g fish_key_bindings hybrid_bindings
+              '';
               promptInit = ''
-            set -l nix_shell_info (
-              if test -n "$IN_NIX_SHELL"
-                echo -n "<nix-shell> "
-              end
-            )
-          '';
+                set -l nix_shell_info (
+                  if test -n "$IN_NIX_SHELL"
+                    echo -n "<nix-shell> "
+                  end
+                )
+              '';
               plugins = [
                 {
                   name = "fasd";
@@ -146,8 +146,9 @@
             };
             home.file = {
               ".config/fish/functions/fish_prompt.fish".source = inputs.agnoster
-                                                                 + "/fish_prompt.fish";
-              ".config/fish/functions/bax.fish".source = inputs.bax + "/bax.fish";
+                + "/fish_prompt.fish";
+              ".config/fish/functions/bax.fish".source = inputs.bax
+                + "/bax.fish";
             };
           };
         })];

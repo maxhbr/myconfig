@@ -17,7 +17,7 @@ in {
     ./programs.license-compliance-toolbox.nix
   ];
   config = {
-    myconfig.dev.enable = cfg.haskell.enable
-      || cfg.network.enable || cfg.tex.enable || cfg.compliance.enable;
+    myconfig.dev.enable = cfg.haskell.enable || cfg.network.enable
+      || cfg.tex.enable || cfg.compliance.enable;
   };
 }

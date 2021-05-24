@@ -1,5 +1,4 @@
-{ config, pkgs, lib, myconfig, ... }:
-{
+{ config, pkgs, lib, myconfig, ... }: {
   config = {
     boot = {
       # kernelModules = [ "fuse" "kvm-intel" "coretemp" ];

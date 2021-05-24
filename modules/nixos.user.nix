@@ -1,7 +1,6 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, ... }:
-{
+{ config, pkgs, lib, myconfig, ... }: {
   config = {
     users = {
       mutableUsers = false;
@@ -61,7 +60,9 @@
       formatted = builtins.concatStringsSep "\n" sortedUnique;
     in formatted;
 
-    systemd.tmpfiles.rules = [ "d /home/${myconfig.user}/tmp 1777 ${myconfig.user} ${myconfig.user} 10d" ];
+    systemd.tmpfiles.rules = [
+      "d /home/${myconfig.user}/tmp 1777 ${myconfig.user} ${myconfig.user} 10d"
+    ];
 
     time.timeZone = "Europe/Berlin";
 

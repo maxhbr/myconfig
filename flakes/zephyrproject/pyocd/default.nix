@@ -1,18 +1,7 @@
 { lib, buildPythonPackage, fetchPypi, setuptools_scm, setuptools-scm-git-archive
 
-        , capstone
-        , cmsis-pack-manager
-        , colorama
-        , intelhex
-        , intervaltree
-        , naturalsort
-        , prettytable
-        , pyelftools
-        , pylink-square
-        , pyusb
-        , pyyaml
-        , six
-}:
+, capstone, cmsis-pack-manager, colorama, intelhex, intervaltree, naturalsort
+, prettytable, pyelftools, pylink-square, pyusb, pyyaml, six }:
 
 buildPythonPackage rec {
   pname = "pyocd";
@@ -24,27 +13,30 @@ buildPythonPackage rec {
   };
 
   patchPhase = ''
-# break cyclic dependency
-  sed '/pyocd-pemicro/d' ./setup.py
-'';
+    # break cyclic dependency
+      sed '/pyocd-pemicro/d' ./setup.py
+  '';
 
-  propagatedBuildInputs = [setuptools_scm setuptools-scm-git-archive
-                           capstone
-                           cmsis-pack-manager
-                           colorama
-                           intelhex
-                           intervaltree
-                           naturalsort
-                           prettytable
-                           pyelftools
-                           pylink-square
-                           pyusb
-                           pyyaml
-                           six
-                          ];
+  propagatedBuildInputs = [
+    setuptools_scm
+    setuptools-scm-git-archive
+    capstone
+    cmsis-pack-manager
+    colorama
+    intelhex
+    intervaltree
+    naturalsort
+    prettytable
+    pyelftools
+    pylink-square
+    pyusb
+    pyyaml
+    six
+  ];
 
   meta = with lib; {
-    description = "pyOCD is an open source Python package for programming and debugging Arm Cortex-M microcontrollers using multiple supported types of USB debug probes.";
+    description =
+      "pyOCD is an open source Python package for programming and debugging Arm Cortex-M microcontrollers using multiple supported types of USB debug probes.";
     homepage = "https://github.com/pyocd/pyOCD";
     license = "Apache-2.0";
   };

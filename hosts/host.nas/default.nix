@@ -1,7 +1,6 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, myconfig, ... }:
-{
+{ pkgs, config, lib, myconfig, ... }: {
   imports = [
     # hardware:
     ./hardware-configuration.nix
@@ -128,7 +127,8 @@
       nix.trustedBinaryCaches =
         [ ("ssh://nix-ssh@" + myconfig.metadatalib.get.hosts.workstation.ip4) ];
     }
-    (myconfig.metadatalib.setupAsBackupTarget "/mnt/2x4t/backup" [ "x1extremeG2" ])
+    (myconfig.metadatalib.setupAsBackupTarget "/mnt/2x4t/backup"
+      [ "x1extremeG2" ])
     (myconfig.metadatalib.fixIp "enp3s0")
     {
       system.activationScripts.mkTlsDir =

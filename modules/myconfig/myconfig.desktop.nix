@@ -1,7 +1,6 @@
 { config, lib, pkgs, ... }:
 
-let
-  cfg = config.myconfig;
+let cfg = config.myconfig;
 in {
   options.myconfig = with lib; {
     desktop.enable = mkEnableOption "myconfig.desktop";

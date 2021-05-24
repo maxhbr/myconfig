@@ -3,8 +3,7 @@
 #
 # TODO: package scripts
 #
-{ config, pkgs, ... }:
-{
+{ config, pkgs, ... }: {
   config = {
     environment = {
       shellAliases = {

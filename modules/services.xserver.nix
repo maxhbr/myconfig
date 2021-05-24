@@ -68,9 +68,7 @@ in {
     }];
     environment = {
       # shellAliases = { file-roller = "${pkgs.xarchiver}/bin/xarchiver"; };
-      variables = {
-        QT_AUTO_SCREEN_SCALE_FACTOR = "0";
-      };
+      variables = { QT_AUTO_SCREEN_SCALE_FACTOR = "0"; };
 
       interactiveShellInit = ''
         xclipToX() {

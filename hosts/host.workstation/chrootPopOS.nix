@@ -33,8 +33,7 @@ let
           '';
 in {
   config = {
-    home-manager.sharedModules = [{
-      home.packages = with pkgs; [ chrootPopOS ];
-    }];
+    home-manager.sharedModules =
+      [{ home.packages = with pkgs; [ chrootPopOS ]; }];
   };
 }
