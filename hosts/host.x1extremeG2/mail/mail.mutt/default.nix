@@ -12,7 +12,7 @@ in {
   config = {
     home-manager.sharedModules = [{
       home.packages = with pkgs; [
-        neomutt
+        # neomutt
         urlview
         sxiv
         mutt-bgrun
