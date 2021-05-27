@@ -389,11 +389,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1622086780,
-        "narHash": "sha256-KDjg4qkM8cdjNVmIzLq4ewTAKBqS9Q3pTbofqYImV+M=",
+        "lastModified": 1622103435,
+        "narHash": "sha256-5i5mGg402AANnSRQmWVo7lqiyw3taoMwX26oslOD9c4=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "46fab2bfeef67e948a30861222bdba29e126ed25",
+        "rev": "5658fadedb748cb0bdbcb569a53bd6065a5704a9",
         "type": "github"
       },
       "original": {
@@ -436,7 +436,7 @@
         "z": "z"
       },
       "locked": {
-        "narHash": "sha256-JgBebR8Ly/SUmFwdmtmFE3KCncJJl7qMSjTjnwXfiI0=",
+        "narHash": "sha256-vfCFhu0l6LNySPiT71jcCA81kRJSc+ojG0AukTKSrOc=",
         "path": "flakes/myfish/",
         "type": "path"
       },
@@ -562,11 +562,11 @@
     },
     "nur": {
       "locked": {
-        "lastModified": 1622088781,
-        "narHash": "sha256-CGI9e37HEOTx8XGL8H3DRtG9YHjMzoeLMBsKkQh8zLM=",
+        "lastModified": 1622105843,
+        "narHash": "sha256-N0YvIn66288zb6PRVj8vn+i01223yOlJvYTpqvd9AsY=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "61559589a9bb4f2e2301d9e4a59f3f1fac4cec59",
+        "rev": "789873d368988ba99f92ddf67c6d66ea40df8ad1",
         "type": "github"
       },
       "original": {
@@ -759,11 +759,11 @@
     },
     "small": {
       "locked": {
-        "lastModified": 1622050916,
-        "narHash": "sha256-9fwhKSnWh2zDULooWHiCQCWBtjsY+N7NaI+hJEGCMbM=",
+        "lastModified": 1622099353,
+        "narHash": "sha256-lDLpmiMDt8Su3fjxeaSyh7aWmiQg1rtcPOC+sAIvhro=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "d4b7485fb66b727f822a1b94129c2af57166eab0",
+        "rev": "a48d4bf159076106895df685e879aff235bcbff3",
         "type": "github"
       },
       "original": {
@@ -775,11 +775,11 @@
     },
     "staged": {
       "locked": {
-        "lastModified": 1622078279,
-        "narHash": "sha256-k5V0xdP2EOBUXHyW8IfVpinrnLQvySvS0x1yaqXysEE=",
+        "lastModified": 1622097961,
+        "narHash": "sha256-bwl9/ms5L0ipli5UFB7nyoDNmthavz2xczA/TxsXPQ8=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "89d917d0a9ef57efa0c7594fe5ee46a2d36612a2",
+        "rev": "09db09c559e594d592b4ba57bb1ebbfc3ed74ecd",
         "type": "github"
       },
       "original": {
