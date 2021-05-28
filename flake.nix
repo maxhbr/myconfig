@@ -39,12 +39,12 @@
     myxmonad.inputs.nixpkgs.follows = "nixpkgs";
     myxmonad.inputs.flake-utils.follows = "flake-utils";
 
-    # license-compliance-toolbox.url = "path:flakes/license-compliance-toolbox/";
-    # license-compliance-toolbox.inputs.nixpkgs.follows = "nixpkgs";
+    license-compliance-toolbox.url = "path:flakes/license-compliance-toolbox/";
+    license-compliance-toolbox.inputs.nixpkgs.follows = "nixpkgs";
 
-    # zephyrproject.url = "path:flakes/zephyrproject/";
-    # # zephyrproject.inputs.nixpkgs.follows = "nixpkgs";
-    # zephyrproject.inputs.flake-utils.follows = "flake-utils";
+    zephyrproject.url = "path:flakes/zephyrproject/";
+    # zephyrproject.inputs.nixpkgs.follows = "nixpkgs";
+    zephyrproject.inputs.flake-utils.follows = "flake-utils";
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -108,7 +108,7 @@
           (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
             { config = { hardware.enableRedistributableFirmware = true; }; }
             self.nixosModules.core
-            # inputs.license-compliance-toolbox.nixosModule
+            inputs.license-compliance-toolbox.nixosModule
             ({ myconfig, ... }: {
               imports = [
                 (myconfig.metadatalib.announceHost "workstation")
@@ -120,12 +120,12 @@
                 (myconfig.metadatalib.announceHost "pi0")
               ];
             })
-            # inputs.zephyrproject.nixosModule
+            inputs.zephyrproject.nixosModule
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "workstation" ([
             self.nixosModules.core
-            # inputs.license-compliance-toolbox.nixosModule
+            inputs.license-compliance-toolbox.nixosModule
           ] ++ moreModules) metadataOverride);
         host-nas = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "nas"
@@ -133,7 +133,7 @@
         host-nuc = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "nuc"
             ([ self.nixosModules.core
-               # inputs.zephyrproject.nixosModule
+               inputs.zephyrproject.nixosModule
              ]
               ++ moreModules) metadataOverride);
       };
