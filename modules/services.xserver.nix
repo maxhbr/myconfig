@@ -42,7 +42,7 @@ in {
           aspellDicts.en
         ] ++ lib.optional config.networking.networkmanager.enable
         networkmanager_dmenu
-        ++ (with pkgs.unstable; [ tdesktop signal-desktop signal-cli ]);
+        ++ (with pkgs.nixos-unstable; [ tdesktop signal-desktop signal-cli ]);
       xresources.extraConfig = ''
         *utf8: 1
 

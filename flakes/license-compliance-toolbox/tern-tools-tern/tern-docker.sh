@@ -8,8 +8,8 @@ tag=mytern:latest
 
 export DOCKER_BUILDKIT=1
 
-# export format=json
-export format=yaml
+export format=json
+# export format=yaml
 
 helpMsg() {
     cat<<EOF

@@ -5,17 +5,17 @@
     nixpkgs.overlays = [
       (self: super:
         let
-          wineSelf = with self.unstable; [ wine winetricks playonlinux ];
+          wineSelf = with self.nixos-unstable; [ wine winetricks playonlinux ];
           wineCfg = {
             wineBuild = "wineWow";
             gstreamerSupport = false;
           };
-          wowWine = self.unstable.wine.override wineCfg;
+          wowWine = self.nixos-unstable.wine.override wineCfg;
           wowWinetricks =
-            (self.unstable.winetricks.override { wine = wowWine; });
+            (self.nixos-unstable.winetricks.override { wine = wowWine; });
           wowPlayonlinux =
-            (self.unstable.playonlinux.override { wine = wowWine; });
-          wowLutris = (self.unstable.lutris.override { wine = wowWine; });
+            (self.nixos-unstable.playonlinux.override { wine = wowWine; });
+          wowLutris = (self.nixos-unstable.lutris.override { wine = wowWine; });
         in {
           wine = wowWine;
           winetricks = wowWinetricks;

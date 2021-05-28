@@ -5,7 +5,7 @@ let cfg = config.myconfig.dev.haskell;
 in {
   config = lib.mkIf cfg.enable {
     home-manager.users.mhuber = {
-      home.packages = with pkgs.unstable;
+      home.packages = with pkgs.nixos-unstable;
         [ stack cabal-install ] ++ (with haskellPackages; [
           # cabal-install
           ghc

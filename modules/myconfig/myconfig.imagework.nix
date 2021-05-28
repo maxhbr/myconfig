@@ -14,15 +14,15 @@ in {
 
         gimp # -with-plugins
         rawtherapee
-        unstable.darktable
-        unstable.geeqie
-        unstable.gthumb
+        nixos-unstable.darktable
+        nixos-unstable.geeqie
+        nixos-unstable.gthumb
         # krita
         # inkscape
 
         # blender
         # librecad # 2D
-        unstable.freecad # 3D
+        nixos-unstable.freecad # 3D
       ];
     }];
   });

@@ -31,7 +31,7 @@ in {
           plantuml
           graphviz
         ] ++ lib.optional config.services.xserver.enable vscode-with-extensions
-          ++ lib.optional config.services.xserver.enable unstable.freeplane
+          ++ lib.optional config.services.xserver.enable nixos-unstable.freeplane
           ++ lib.optional config.services.xserver.enable xournalpp);
     }];
   };

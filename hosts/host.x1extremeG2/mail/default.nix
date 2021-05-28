@@ -9,7 +9,7 @@
         urlview
         notmuch
         sxiv
-        unstable.astroid
+        nixos-unstable.astroid
         (writeShellScriptBin "runMbsync" ''
           MAILDIR="$HOME/Maildir"
           if [[ -f "$MAILDIR/config/mbsyncrc" ]]; then

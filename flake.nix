@@ -3,12 +3,13 @@
 
   inputs = {
     master.url = "github:nixos/nixpkgs/master";
-    staged.url = "github:nixos/nixpkgs/staging";
-    small.url = "github:nixos/nixpkgs/nixos-unstable-small";
-    large.url = "github:nixos/nixpkgs/nixos-unstable";
+    # staged.url = "github:nixos/nixpkgs/staging";
+    nixos-unstable-small.url = "github:nixos/nixpkgs/nixos-unstable-small";
+    nixos-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     rel2009.url = "github:nixos/nixpkgs/nixos-20.09";
     rel2003.url = "github:nixos/nixpkgs/nixos-20.03";
+    rel2105.url = "github:nixos/nixpkgs/release-21.05";
 
     home.url = "github:nix-community/home-manager";
     home.inputs.nixpkgs.follows = "nixpkgs";
@@ -81,11 +82,12 @@
                         // import input { inherit (pkgs) config system; };
                     });
                 in [
-                  (mkSubPkgsOverlay "unstable" inputs.master)
-                  (mkSubPkgsOverlay "nixos-unstable" inputs.large)
-                  (mkSubPkgsOverlay "nixos-unstable-small" inputs.small)
-                  (mkSubPkgsOverlay "nixos-2003-small" inputs.rel2003)
-                  (mkSubPkgsOverlay "nixos-2009-small" inputs.rel2009)
+                  (mkSubPkgsOverlay "master" inputs.master)
+                  (mkSubPkgsOverlay "nixos-unstable" inputs.nixos-unstable)
+                  (mkSubPkgsOverlay "nixos-unstable-small" inputs.nixos-unstable-small)
+                  (mkSubPkgsOverlay "nixos-2003" inputs.rel2003)
+                  (mkSubPkgsOverlay "nixos-2009" inputs.rel2009)
+                  (mkSubPkgsOverlay "nixos-2105" inputs.rel2105)
                 ];
               };
             })

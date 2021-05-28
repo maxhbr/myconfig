@@ -1,7 +1,7 @@
 { pkgs, config, lib, ... }:
 let
   nativeOnly = false;
-  steam = pkgs.unstable.steam.override {
+  steam = pkgs.nixos-unstable.steam.override {
     extraPkgs = innerPkgs:
       with innerPkgs; [
         mono
