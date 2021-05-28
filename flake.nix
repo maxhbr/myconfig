@@ -120,12 +120,12 @@
                 (myconfig.metadatalib.announceHost "pi0")
               ];
             })
-            inputs.zephyrproject.nixosModule
+            # inputs.zephyrproject.nixosModule
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "workstation" ([
             self.nixosModules.core
-            # inputs.license-compliance-toolbox.nixosModule
+            inputs.license-compliance-toolbox.nixosModule
           ] ++ moreModules) metadataOverride);
         host-nas = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "nas"
