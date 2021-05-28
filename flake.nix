@@ -39,12 +39,12 @@
     myxmonad.inputs.nixpkgs.follows = "nixpkgs";
     myxmonad.inputs.flake-utils.follows = "flake-utils";
 
-    license-compliance-toolbox.url = "path:flakes/license-compliance-toolbox/";
-    license-compliance-toolbox.inputs.nixpkgs.follows = "nixpkgs";
+    # license-compliance-toolbox.url = "path:flakes/license-compliance-toolbox/";
+    # license-compliance-toolbox.inputs.nixpkgs.follows = "nixpkgs";
 
-    zephyrproject.url = "path:flakes/zephyrproject/";
-    # zephyrproject.inputs.nixpkgs.follows = "nixpkgs";
-    zephyrproject.inputs.flake-utils.follows = "flake-utils";
+    # zephyrproject.url = "path:flakes/zephyrproject/";
+    # # zephyrproject.inputs.nixpkgs.follows = "nixpkgs";
+    # zephyrproject.inputs.flake-utils.follows = "flake-utils";
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -125,14 +125,16 @@
         host-workstation = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "workstation" ([
             self.nixosModules.core
-            inputs.license-compliance-toolbox.nixosModule
+            # inputs.license-compliance-toolbox.nixosModule
           ] ++ moreModules) metadataOverride);
         host-nas = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "nas"
             ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
         host-nuc = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "nuc"
-            ([ self.nixosModules.core inputs.zephyrproject.nixosModule ]
+            ([ self.nixosModules.core
+               # inputs.zephyrproject.nixosModule
+             ]
               ++ moreModules) metadataOverride);
       };
 

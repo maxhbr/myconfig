@@ -26,11 +26,11 @@ jobs:
     strategy:
       matrix:
         config:
-          - { host: x1extremeG2 , action: "dry-build" }
+          - { host: x1extremeG2 , action: "build --dry-run" }
           - { host: x1extremeG2 , action: "build" }
-          - { host: workstation , action: "dry-build" }
+          - { host: workstation , action: "build --dry-run" }
           - { host: workstation , action: "build" }
-          - { host: nas , action: "dry-build" }
+          - { host: nas , action: "build --dry-run" }
           - { host: nas , action: "build" }
       fail-fast: false
 
