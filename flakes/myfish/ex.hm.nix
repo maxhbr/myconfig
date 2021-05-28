@@ -19,7 +19,7 @@
                       case '*.bz2'
                           ${pkgs.bzip2}/bin/bunzip2 $file
                       case '*.rar'
-                          ${pkgs.unrar}/bin/unrar e $file
+                          unrar e $file
                       case '*.gz'
                           ${pkgs.gzip}/bin/gunzip $file
                       case '*.tar'

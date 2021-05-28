@@ -46,7 +46,8 @@ jobs:
     #   with:
     #     name: maxhbr
     #     signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-    - run: nix --experimental-features 'nix-command flakes' develop --command nixos-rebuild ${{ matrix.config.action }} --flake ${{ matrix.config.flake }}
+    - run: nix --experimental-features 'nix-command flakes' develop --command nix ${{ matrix.config.action }} -L '.#nixosConfigurations.'${{ matrix.config.host }}'.config.system.build.toplevel'
+    # - run: nix --experimental-features 'nix-command flakes' develop --command nixos-rebuild ${{ matrix.config.action }} --flake '.#'${{ matrix.config.host }}
 
   # build-iso:
   #   runs-on: ubuntu-latest

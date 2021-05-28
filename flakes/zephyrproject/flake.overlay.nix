@@ -47,7 +47,7 @@
       openocd
       dfu-util
       bossa
-      nrfutil
+      # nrfutil
       jlink
       srecord # for srec_cat
     ];
