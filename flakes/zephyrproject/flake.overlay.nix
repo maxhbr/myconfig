@@ -8,6 +8,7 @@
     # pyocd_pemicro = final.python3Packages.callPackage ./pyocd/pyocd_pemicro.nix { inherit pyocd;};
     jlink = final.callPackage ./jlink { };
     segger-jlink = final.callPackage ./segger-jlink { acceptLicense = true; };
+    nRF-Command-Line-Tools = final.callPackage ./nRF-Command-Line-Tools { };
 
     python3west = final.python3.withPackages (pp:
       with pp; [
@@ -49,7 +50,7 @@
       openocd
       dfu-util
       bossa
-      nrfutil
+      nrfutil nRF-Command-Line-Tools
       # jlink
       segger-jlink
       srecord # for srec_cat
@@ -75,7 +76,7 @@
         '';
       }));
   in {
-    inherit jlink segger-jlink;
+    inherit jlink segger-jlink nRF-Command-Line-Tools;
     pc-ble-driver = let version = "4.1.2";
     in prev.pc-ble-driver.overrideAttrs (old: {
       inherit version;

@@ -120,6 +120,7 @@ in stdenv.mkDerivation {
     # Move udev rule
     mkdir -p $out/lib/udev/rules.d
     mv $out/JLink/99-jlink.rules $out/lib/udev/rules.d/
+    ln -s $out/JLink/*.so* $out/lib
   '';
 
   preFixup = ''

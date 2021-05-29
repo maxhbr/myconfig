@@ -14,6 +14,8 @@
       allpackages = pkgs:
         with pkgs;
         zephyrenv.baseInputs ++ [
+          nrfutil nRF-Command-Line-Tools
+          segger-jlink
           my-west
           my-west-arm
           my-west-riscv
@@ -43,7 +45,6 @@
             home.packages = (allpackages pkgs) ++ (with pkgs; [
               openocd
               picocom
-              nrfutil
               (writeShellScriptBin "flash-nrf52840dongle" ''
                 set -euo pipefail
                 in=build/zephyr/zephyr.hex
@@ -89,6 +90,7 @@
             platformio-udev-rules
             segger-modemmanager-blacklist-udev-rules
             pkgs.openocd
+            pkgs.segger-jlink
           ];
         };
 
