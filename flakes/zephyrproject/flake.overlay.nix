@@ -7,6 +7,8 @@
     # pyocd = final.python3Packages.callPackage ./pyocd { inherit cmsis-pack-manager; };
     # pyocd_pemicro = final.python3Packages.callPackage ./pyocd/pyocd_pemicro.nix { inherit pyocd;};
     jlink = final.callPackage ./jlink { };
+    segger-jlink = final.callPackage ./segger-jlink { acceptLicense = true; };
+
     python3west = final.python3.withPackages (pp:
       with pp; [
         west
@@ -47,8 +49,9 @@
       openocd
       dfu-util
       bossa
-      # nrfutil
-      jlink
+      nrfutil
+      # jlink
+      segger-jlink
       srecord # for srec_cat
     ];
     my-west-fun = { pnameext ? "", moreBuildInputs ? [ ], wrapperArgs ? "" }:
@@ -72,6 +75,7 @@
         '';
       }));
   in {
+    inherit jlink segger-jlink;
     pc-ble-driver = let version = "4.1.2";
     in prev.pc-ble-driver.overrideAttrs (old: {
       inherit version;

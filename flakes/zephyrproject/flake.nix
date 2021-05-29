@@ -43,23 +43,24 @@
             home.packages = (allpackages pkgs) ++ (with pkgs; [
               openocd
               picocom
-            #   (writeShellScriptBin "flash-nrf52840dongle" ''
-            #     set -euo pipefail
-            #     in=build/zephyr/zephyr.hex
-            #     out=build/zephyr.zip
-            #     if [[ -f "$in" ]]; then
-            #       set -x
-            #       ${pkgs.nrfutil}/bin/nrfutil pkg generate --hw-version 52 --sd-req=0x00 \
-            #               --application "$in" \
-            #               --application-version 1 "$out"
-            #       ${pkgs.nrfutil}/bin/nrfutil dfu usb-serial -pkg "$out" -p "''${1:-/dev/ttyACM0}"
-            #     else
-            #       echo "\$in=$in not found"
-            #     fi
-            #   '')
-            #   (writeShellScriptBin "clang-format" ''
-            #     exec ${llvmPackages.clang-unwrapped}/bin/clang-format "$@"
-            #   '')
+              nrfutil
+              (writeShellScriptBin "flash-nrf52840dongle" ''
+                set -euo pipefail
+                in=build/zephyr/zephyr.hex
+                out=build/zephyr.zip
+                if [[ -f "$in" ]]; then
+                  set -x
+                  ${pkgs.nrfutil}/bin/nrfutil pkg generate --hw-version 52 --sd-req=0x00 \
+                          --application "$in" \
+                          --application-version 1 "$out"
+                  ${pkgs.nrfutil}/bin/nrfutil dfu usb-serial -pkg "$out" -p "''${1:-/dev/ttyACM0}"
+                else
+                  echo "\$in=$in not found"
+                fi
+              '')
+              (writeShellScriptBin "clang-format" ''
+                exec ${llvmPackages.clang-unwrapped}/bin/clang-format "$@"
+              '')
             ]);
             home.sessionVariables = {
               ZEPHYR_BASE = "/home/mhuber/zephyrproject/zephyr";
