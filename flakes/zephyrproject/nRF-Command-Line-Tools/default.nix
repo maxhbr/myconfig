@@ -1,6 +1,7 @@
 # https://www.nordicsemi.com/-/media/Software-and-other-downloads/Desktop-software/nRF-command-line-tools/sw/Versions-10-x-x/10-12-2/nRF-Command-Line-Tools_10_12_2_Linux-amd64.zip
 { stdenv, lib, fetchzip, autoPatchelfHook, makeWrapper, makeDesktopItem, copyDesktopItems
-  , segger-jlink
+, segger-jlink
+  # TODO: cleanup unnecessary deps:
 , fontconfig, freetype, libusb, libICE, libSM, udev, libX11, libXext, libXcursor
 , libXfixes, libXrender, libXrandr }:
 
