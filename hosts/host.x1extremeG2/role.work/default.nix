@@ -56,7 +56,7 @@
         bluejeans-gui
         slack
         element-desktop
-        rambox
+        # rambox
         remmina
       ];
     }];

@@ -39,6 +39,9 @@ prepareDotOrt() {
     done
     cat <<EOF > "$HOME/.ort/dockerHome/.ort/config/ort.conf"
 ort {
+  analyzer {
+    allowDynamicVersions = true
+  }
   scanner {
     storages {
       clearlyDefined {
@@ -134,7 +137,7 @@ runDockerizedOrt() {
 ################################################################################
 
 runOrt() {
-    local dockerize=false
+    local dockerize=$DOCKERIZE_BY_DEFAULT
     local task="$1"; shift
 
     local input="$(readlink -f "$1")"; shift
@@ -153,7 +156,7 @@ runOrt() {
     local args=("--force-overwrite" "$DEBUG_LEVEL")
     case $task in
         analyze)
-            args+=("analyze" "--clearly-defined-curations" "--output-formats" "JSON,YAML")
+            args+=("-P" "ort.analyzer.allowDynamicVersions=true" "analyze" "--clearly-defined-curations" "--output-formats" "JSON,YAML")
             ;;
 
         download)
@@ -161,12 +164,12 @@ runOrt() {
             ;;
 
         scan)
-            args+=("scan" "--download-dir" "$output/downloads")
+            args+=("scan")
             dockerize=true
             ;;
 
         report)
-            args+=("report" "-f" "StaticHtml,WebApp,Excel,NoticeTemplate,SPDXDocument,GitLabLicensemodel,EVALUATEDMODELJSON")
+            args+=("report" "-f" "StaticHtml,WebApp,Excel,NoticeTemplate,SPDXDocument,GitLabLicensemodel,AsciiDocTemplate,CycloneDx,EvaluatedModel")
             if [[ -f "$output/resolutions.yml" ]]; then
                 args+=("--resolutions-file" "$output/resolutions.yml")
             fi
@@ -277,6 +280,9 @@ prepareDotOrt
 if ! command -v $ort &> /dev/null; then
     echo "$ort not in \$PATH, dockerize by default"
     DOCKERIZE_BY_DEFAULT=true
+    if [[ "$1" == "--dockerize" ]]; then
+        shift
+    fi
 else
     if [[ "$1" == "--dockerize" ]]; then
         DOCKERIZE_BY_DEFAULT=true

@@ -4,7 +4,7 @@ in {
   config = (lib.mkIf config.services.xserver.enable {
     services.printing = {
       enable = true;
-      drivers = with pkgs; [ gutenprint hplip ];
+      drivers = with pkgs; [ gutenprint hplipWithPlugin ];
       # add hp-printer with:
       # $ nix run nixpkgs.hplipWithPlugin -c sudo hp-setup
     };

@@ -3,16 +3,16 @@
 # - https://github.com/colemickens/nixcfg
 { pkgs, config, lib, ... }: {
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.sharedModules = [{
-      programs.obs-studio = {
-        enable = true;
-        plugins = with pkgs;
-          [
-            #obs-wlrobs
-          ];
-      };
-    }];
+    # home-manager.sharedModules = [{
+    #   programs.obs-studio = {
+    #     enable = true;
+    #     plugins = with pkgs;
+    #       [
+    #         #obs-wlrobs
+    #       ];
+    #   };
+    # }];
     boot.extraModulePackages = [ config.boot.kernelPackages.v4l2loopback ];
-    environment.systemPackages = with pkgs; [ v4l-utils ];
+    environment.systemPackages = with pkgs; [ obs-studio v4l-utils ];
   });
 }
