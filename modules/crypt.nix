@@ -38,6 +38,12 @@ let
         type = types.str;
         description = "Permissions expressed as octal.";
       };
+
+      wantedBy = mkOption {
+        default = [];
+        type = types.listOf types.str;
+        description = "Other targets that depend on this secret.";
+      };
     };
   };
 
@@ -56,9 +62,9 @@ let
     };
 
   mkService = name:
-    { source, dest, owner, group, permissions, ... }: {
+    { source, dest, owner, group, permissions, wantedBy, ... }: {
       description = "decrypt secret for ${name}";
-      wantedBy = [ "multi-user.target" ];
+      wantedBy = [ "multi-user.target" ] ++ wantedBy;
 
       serviceConfig.Type = "oneshot";
 
