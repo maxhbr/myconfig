@@ -303,9 +303,17 @@ in rec {
     , bootstrappedConfig ? null # path to config to include for bootstrapping
     }:
     let
-      myisoconfig = { lib, pkgs, config, ... }@args:
+      myisoconfigModules =
         let
-          user = config.myconfig.user;
+          # user = config.myconfig.user;
+
+          # xautologinModule = {
+          #   # autologin
+          #   services.xserver.displayManager.autoLogin = {
+          #     enable = config.services.xserver.enable;
+          #     inherit user;
+          #   };
+          # };
 
           forceSSHModule = {
             # OpenSSH is forced to have an empty `wantedBy` on the installer system[1], this won't allow it
@@ -315,15 +323,7 @@ in rec {
               lib.mkOverride 40 [ "multi-user.target" ];
           };
 
-          xautologinModule = {
-            # autologin
-            services.xserver.displayManager.autoLogin = {
-              enable = config.services.xserver.enable;
-              inherit user;
-            };
-          };
-
-          bootstrapModule = (let
+          bootstrapModule = { pkgs, config, ... }@args: (let
             bootstrap = pkgs.writeShellScriptBin "bootstrap" ''
               set -euxo pipefail
               if [[ "$(hostname)" != "myconfig" ]]; then
@@ -335,7 +335,7 @@ in rec {
             '';
           in { environment.systemPackages = [ bootstrap ]; });
 
-          bootstrapInstallModule = (lib.mkIf (bootstrappedConfig != null) (let
+          bootstrapInstallModule = { lib, pkgs, config, ... }@args: (lib.mkIf (bootstrappedConfig != null) (let
             evalNixos = configuration:
               import "${inputs.nixpkgs}/nixos" { inherit system configuration; };
             preBuildConfigRoot = bootstrappedConfig;
@@ -361,30 +361,27 @@ in rec {
             isoImage.storeContents = [ preBuiltConfig ];
           }));
 
-        in {
-          imports = [
-            "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-base.nix"
-            "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
-            forceSSHModule
-            xautologinModule
-            bootstrapModule
-            bootstrapInstallModule
-            {
-              networking.wireless.enable = false; # managed by network manager
-            }
-          ];
-
-          config = {
+        in [
+          "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-base.nix"
+          "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
+          {
             # add myconfig to iso
             isoImage = {
               # contents = [{
               #   source = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
               #   target = "myconfig";
               # }];
-              isoBaseName = "nixos-myconfig";
+              isoBaseName = "nixos-myconfig-${hostName}";
             };
-          };
-        };
+          }
+          forceSSHModule
+          # xautologinModule
+          # bootstrapModule
+          # bootstrapInstallModule
+          {
+            networking.wireless.enable = false; # managed by network manager
+          }
+        ];
 
-    in (evalConfiguration system hostName ([myisoconfig] ++ nixosModules) metadataOverride).config.system.build.isoImage;
+    in (evalConfiguration system hostName (myisoconfigModules ++ nixosModules) metadataOverride).config.system.build.isoImage;
 }

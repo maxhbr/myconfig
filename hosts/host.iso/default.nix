@@ -4,20 +4,20 @@
   imports = [
   ];
   config = {
-    myconfig = {
-      desktop.enable = true;
-      virtualisation.enable = true;
-      dev = {
-        haskell.enable = true;
-        network.enable = true;
-        compliance.enable = true;
-      };
-    };
-    virtualisation.docker.enable = true;
-    virtualisation.libvirtd.enable = true;
-    virtualisation.virtualbox.host.enable = true;
+    # myconfig = {
+    #   desktop.enable = true;
+    #   virtualisation.enable = true;
+    #   dev = {
+    #     haskell.enable = true;
+    #     network.enable = true;
+    #     compliance.enable = true;
+    #   };
+    # };
+    # virtualisation.docker.enable = true;
+    # virtualisation.libvirtd.enable = true;
+    # virtualisation.virtualbox.host.enable = true;
 
-    networking.hostName = "myconfig";
+    # networking.hostName = "myconfig";
     networking.hostId = "12345678";
 
     boot.initrd.supportedFilesystems = [ "luks" ];
