@@ -288,8 +288,7 @@ in rec {
 
   evalConfiguration = system: hostName: nixosModules: metadataOverride:
     (let
-      cfg = self.lib.mkConfiguration system hostName (nixosModules)
-        metadataOverride;
+      cfg = self.lib.mkConfiguration system hostName nixosModules metadataOverride;
     in lib.nixosSystem (lib.recursiveUpdate cfg {
       modules = cfg.modules ++ [ (./hosts/host + ".${hostName}") ];
     }));
@@ -376,12 +375,13 @@ in rec {
           }
           forceSSHModule
           # xautologinModule
-          # bootstrapModule
-          # bootstrapInstallModule
+          bootstrapModule
+          bootstrapInstallModule
           {
             networking.wireless.enable = false; # managed by network manager
           }
         ];
 
     in (evalConfiguration system hostName (myisoconfigModules ++ nixosModules) metadataOverride).config.system.build.isoImage;
+
 }

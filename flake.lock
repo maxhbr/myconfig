@@ -83,11 +83,11 @@
     },
     "emacs": {
       "locked": {
-        "lastModified": 1625276265,
-        "narHash": "sha256-7IjZ+7jwYwe4XiW31QnbSmvc4pX0FhhH8381jh/zt9k=",
+        "lastModified": 1625332911,
+        "narHash": "sha256-s1jp4bth4ZDiR4kQfjUxH5/hNwHS61mtWjLQmvwr+fo=",
         "owner": "nix-community",
         "repo": "emacs-overlay",
-        "rev": "a8eda53100ed5f69237e6f3ddc9a87e3afe34601",
+        "rev": "7c0a914426733ab5e4bf387fc49d0fc362fe774e",
         "type": "github"
       },
       "original": {
@@ -320,11 +320,11 @@
     },
     "hardware": {
       "locked": {
-        "lastModified": 1625127528,
-        "narHash": "sha256-NDD8BuY8UjAs7VfeiRck7JkpsUyUWJYg1/RqdEJ0PgE=",
+        "lastModified": 1625333638,
+        "narHash": "sha256-M6J9RN60XJyv6nUfDFCwnz5aVjhe8+GJnV8Q9VpdQQQ=",
         "owner": "nixos",
         "repo": "nixos-hardware",
-        "rev": "eb889532fef2cb73071436842ae2ca0ed2d011aa",
+        "rev": "41775780a0b6b32b3d32dcc32bb9bc6df809062d",
         "type": "github"
       },
       "original": {
@@ -362,7 +362,7 @@
         "ort": "ort"
       },
       "locked": {
-        "narHash": "sha256-K6f8IfhMpeUKiv65v2voqYnAh8G5jBpVmW1FaRO3sTY=",
+        "narHash": "sha256-FtwC+835OKwpotZpEn1wbj44CBft9wQ+7yMRZEdv8VQ=",
         "path": "flakes/license-compliance-toolbox/",
         "type": "path"
       },
@@ -373,11 +373,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1625300922,
-        "narHash": "sha256-ZKD5xyXaPADaiFXTD3edU8KDVuJs2vwnV5o9nfrdaSk=",
+        "lastModified": 1625338067,
+        "narHash": "sha256-XvQ6Zjg94B5NNGnJeVkanHCd9cAMnymGvQmiO0Ib1e4=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "c5cb576222c2ce3b363c6477e591f8d2a2d6db54",
+        "rev": "e77ce56f9e02f5bde86ce41626ff78554dd301d1",
         "type": "github"
       },
       "original": {
@@ -517,11 +517,11 @@
     },
     "nixos-unstable-small": {
       "locked": {
-        "lastModified": 1625239064,
-        "narHash": "sha256-8ZwThC78EANYdPeVpzZ6y6LH2FS0p2dHX0Acaw+Jkho=",
+        "lastModified": 1625282911,
+        "narHash": "sha256-pnXRM13owNl1r8gf21BWlL7hQLnP037J46KKDn4wa0A=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "28acaac96f0cc203c63a3d50634541feff7fc31c",
+        "rev": "69063eaf6253160ea6e0d8142147b358c6e28ea2",
         "type": "github"
       },
       "original": {
@@ -549,10 +549,10 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1625252050,
-        "narHash": "sha256-Ys8FkqKoFqF4xDU6iXQo6v9fx/AUj18fWIhhpG0bTNU=",
-        "path": "/nix/store/lgc6svz7khdlbipxfk7zrc855d758yxk-source",
-        "rev": "a143a6dd34cd72fe24962988c7eccb97b1173fac",
+        "lastModified": 1621532715,
+        "narHash": "sha256-T1d9pBuU9f+Q9UGStcug4dkpxCr6cNVyjPrngzdI5o8=",
+        "path": "/nix/store/6k0sm0m0zffpawrshybwpgqqiq9pmgym-source",
+        "rev": "d2faff3f67f7d08db616afd91c48f94a9493f4f1",
         "type": "path"
       },
       "original": {
@@ -578,11 +578,11 @@
     },
     "nur": {
       "locked": {
-        "lastModified": 1625301534,
-        "narHash": "sha256-aEVppGd5x11gGwsGb6yON4Yj0tqqakOXL/eqBqC0g8o=",
+        "lastModified": 1625318836,
+        "narHash": "sha256-HHmkJx3VO67FhTALJKsMduC8QN6noUKQptAqdNCXYqQ=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "4df6288963ebb08b9fbdd79c48e834dea05f0650",
+        "rev": "9bd6b9385dc24e2b0695a0cebf7bc346c09ae81d",
         "type": "github"
       },
       "original": {
@@ -721,11 +721,11 @@
     },
     "rel2105": {
       "locked": {
-        "lastModified": 1625294824,
-        "narHash": "sha256-CQIplw9rB+nBLLjwXHX2sxVs4RVKyZEyNes7urjiCrY=",
+        "lastModified": 1625335119,
+        "narHash": "sha256-5IypEqyMZBzHTOQSwxT1ruU0Z80Wrt8ZTKJpbRCyLAw=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "9cc09d4302fa26964b29edba0e3de11d5cad93a7",
+        "rev": "9143023abbe4008a9a67092eee80cb08121066a0",
         "type": "github"
       },
       "original": {
@@ -827,7 +827,7 @@
         "platformio-core": "platformio-core"
       },
       "locked": {
-        "narHash": "sha256-JldJVAGMWSCZ0kCyTL8ReXAwTOR0FojVAqoqbqR3WXQ=",
+        "narHash": "sha256-d2Jna0wd6ZLqeYxKsFWNxHB4q0cJNcVcf1BkdXJlBwo=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
