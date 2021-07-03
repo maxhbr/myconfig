@@ -187,6 +187,14 @@
         config = nixpkgsConfig;
       };
 
+      packages.myconfig-iso = self.lib.mkISO
+        { system = "x86_64-linux";
+          hostName = "iso";
+          nixosModules = [];
+          metadataOverride = {};
+          bootstrappedConfig = null;
+        };
+
       devShell = let
         pkgs = import inputs.nixpkgs {
           inherit system;

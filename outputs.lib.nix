@@ -178,7 +178,7 @@ let
 
       get = metadata;
     };
-in {
+in rec {
   importall = path:
     if builtins.pathExists path then
       let content = builtins.readDir path;
@@ -293,4 +293,98 @@ in {
     in lib.nixosSystem (lib.recursiveUpdate cfg {
       modules = cfg.modules ++ [ (./hosts/host + ".${hostName}") ];
     }));
+
+  # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
+  mkISO =
+    { system ? "x86_64-linux"
+    , hostName ? "myconfig"
+    , nixosModules ? [] # some custom configuration
+    , metadataOverride ? {}
+    , bootstrappedConfig ? null # path to config to include for bootstrapping
+    }:
+    let
+      myisoconfig = { lib, pkgs, config, ... }@args:
+        let
+          user = config.myconfig.user;
+
+          forceSSHModule = {
+            # OpenSSH is forced to have an empty `wantedBy` on the installer system[1], this won't allow it
+            # to be automatically started. Override it with the normal value.
+            # [1] https://github.com/NixOS/nixpkgs/blob/9e5aa25/nixos/modules/profiles/installation-device.nix#L76
+            systemd.services.sshd.wantedBy =
+              lib.mkOverride 40 [ "multi-user.target" ];
+          };
+
+          xautologinModule = {
+            # autologin
+            services.xserver.displayManager.autoLogin = {
+              enable = config.services.xserver.enable;
+              inherit user;
+            };
+          };
+
+          bootstrapModule = (let
+            bootstrap = pkgs.writeShellScriptBin "bootstrap" ''
+              set -euxo pipefail
+              if [[ "$(hostname)" != "myconfig" ]]; then
+                  echo "hostname missmatch"
+                  exit 1
+              fi
+              sudo BOOTSTRAP=YES ${./scripts/bootstrap.sh} $@
+              echo "you should run bootstrap-install next"
+            '';
+          in { environment.systemPackages = [ bootstrap ]; });
+
+          bootstrapInstallModule = (lib.mkIf (bootstrappedConfig != null) (let
+            evalNixos = configuration:
+              import "${inputs.nixpkgs}/nixos" { inherit system configuration; };
+            preBuildConfigRoot = bootstrappedConfig;
+            preBuiltConfig = (evalNixos (import preBuildConfigRoot {
+              pkgs = inputs.nixpkgs;
+              inherit lib config;
+            })).system;
+            bootstrap-install = pkgs.writeShellScriptBin "bootstrap-install" ''
+              set -euxo pipefail
+              if [[ "$(hostname)" != "myconfig" ]]; then
+                  echo "hostname missmatch"
+                  exit 1
+              fi
+              if [[ ! -d "/mnt/etc/nixos/" ]]; then
+                echo "folder /mnt/etc/nixos/ is missing"
+                echo "you should run bootstrap first"
+                exit 1
+              fi
+              sudo nixos-install --no-root-passwd --system ''${1:-${preBuiltConfig}}
+            '';
+          in {
+            environment.systemPackages = [ bootstrap-install ];
+            isoImage.storeContents = [ preBuiltConfig ];
+          }));
+
+        in {
+          imports = [
+            "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-base.nix"
+            "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
+            forceSSHModule
+            xautologinModule
+            bootstrapModule
+            bootstrapInstallModule
+            {
+              networking.wireless.enable = false; # managed by network manager
+            }
+          ];
+
+          config = {
+            # add myconfig to iso
+            isoImage = {
+              # contents = [{
+              #   source = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
+              #   target = "myconfig";
+              # }];
+              isoBaseName = "nixos-myconfig";
+            };
+          };
+        };
+
+    in (evalConfiguration system hostName ([myisoconfig] ++ nixosModules) metadataOverride).config.system.build.isoImage;
 }
