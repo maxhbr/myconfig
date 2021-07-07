@@ -387,6 +387,26 @@
         "type": "github"
       }
     },
+    "my-wallpapers": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1625668697,
+        "narHash": "sha256-edxWENTtXgtS7rXRuXoWtzjmS81908/87GH45MMdHS8=",
+        "owner": "maxhbr",
+        "repo": "wallpapers",
+        "rev": "bdd6065b63baf4d1dfcd3a9d383ef8856c8faed1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "maxhbr",
+        "repo": "wallpapers",
+        "type": "github"
+      }
+    },
     "myemacs": {
       "inputs": {
         "nix-doom-emacs": [
@@ -759,6 +779,7 @@
         "home": "home",
         "license-compliance-toolbox": "license-compliance-toolbox",
         "master": "master",
+        "my-wallpapers": "my-wallpapers",
         "myemacs": "myemacs",
         "myfish": "myfish",
         "myxmonad": "myxmonad",
