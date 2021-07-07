@@ -694,11 +694,11 @@
     "platformio-core": {
       "flake": false,
       "locked": {
-        "lastModified": 1625490362,
-        "narHash": "sha256-qGYkcNNO4iS8V221+xMnch/JzrHZfMFgDUu1qXFhTwk=",
+        "lastModified": 1625671555,
+        "narHash": "sha256-XKm/B19xHMpILuWEZn3wdKtV3D5rXVLhtB7s4S8GVew=",
         "owner": "platformio",
         "repo": "platformio-core",
-        "rev": "71ae579bc07b2e11fec16acda482dea04bc3a359",
+        "rev": "7dc8463da989c7c611e99d18be3b45e631801cf6",
         "type": "github"
       },
       "original": {
@@ -741,11 +741,11 @@
     },
     "rel2105": {
       "locked": {
-        "lastModified": 1625619626,
-        "narHash": "sha256-dBwTwNPp/0FjOLObQvd0qgFssPUOzzcCB4iqOQjytYY=",
+        "lastModified": 1625671737,
+        "narHash": "sha256-mxlg91dK87X/EcWAf4BWCqEN3iJMtQQcykpRr4T+j5s=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "133a81c2ecf78f660b83dce2849ac28b0d72dc94",
+        "rev": "bd095512480187bac60bf7c1f6c25c8c56ba3f3b",
         "type": "github"
       },
       "original": {
@@ -848,7 +848,7 @@
         "platformio-core": "platformio-core"
       },
       "locked": {
-        "narHash": "sha256-MCKn9KreG0MxmZ03M3RBA8dnUzvjQWGXdW3W0qT8O8U=",
+        "narHash": "sha256-l9fIBbpn/hizAsObSJoc6TFOTy2bfO4Ib3dtedrXybc=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
