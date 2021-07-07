@@ -10,6 +10,7 @@
     rel2009.url = "github:nixos/nixpkgs/nixos-20.09";
     rel2003.url = "github:nixos/nixpkgs/nixos-20.03";
     rel2105.url = "github:nixos/nixpkgs/release-21.05";
+    # rel2111.url = "github:nixos/nixpkgs/release-21.11";
 
     home.url = "github:nix-community/home-manager";
     home.inputs.nixpkgs.follows = "nixpkgs";
@@ -38,6 +39,9 @@
     myxmonad.url = "path:flakes/myxmonad/";
     myxmonad.inputs.nixpkgs.follows = "nixpkgs";
     myxmonad.inputs.flake-utils.follows = "flake-utils";
+
+    my-wallpapers.url = "github:maxhbr/wallpapers";
+    my-wallpapers.inputs.nixpkgs.follows = "nixpkgs";
 
     license-compliance-toolbox.url = "path:flakes/license-compliance-toolbox/";
     license-compliance-toolbox.inputs.nixpkgs.follows = "nixpkgs";
@@ -93,6 +97,7 @@
             })
 
             inputs.myxmonad.nixosModule
+            inputs.my-wallpapers.nixosModule
             inputs.myfish.nixosModule
             inputs.myemacs.nixosModule
           ] ++ (import ./modules/_list.nix);

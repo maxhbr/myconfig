@@ -25,7 +25,6 @@
   ./services.xserver.fonts.nix
   ./services.xserver.kernel.nix
   ./services.xserver.mkscreenshot.nix
-  ./services.xserver.my-wallpapers
   ./services.xserver.nix
   ./services.xserver.printing.nix
   ./services.xserver.programs.appimage-run.nix

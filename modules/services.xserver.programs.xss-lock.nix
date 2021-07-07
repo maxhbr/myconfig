@@ -22,7 +22,6 @@ in {
     home-manager.sharedModules = [{ home.packages = [ myStopScreensaver ]; }];
     programs.xss-lock = {
       enable = true;
-      # lockerCommand = "${pkgs.my-wallpapers}/bin/myScreenLock";
       lockerCommand = "${myXsecurelock}/bin/myXsecurelock";
       extraOptions =
         [ "-n" "${myXsecurelock}/libexec/xsecurelock/dimmer" "-l" ];

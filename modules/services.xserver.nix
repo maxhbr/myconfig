@@ -87,16 +87,7 @@ in {
       xserver = {
         autorun = true;
         enableCtrlAltBackspace = true;
-
-        displayManager = {
-          lightdm = {
-            enable = true;
-            background = "${pkgs.my-wallpapers}/share/romben3.png";
-          };
-          sessionCommands = ''
-            ${pkgs.my-wallpapers}/bin/myRandomBackground &disown
-          '';
-        };
+        displayManager.lightdm.enable = true;
       };
 
       cron = {
