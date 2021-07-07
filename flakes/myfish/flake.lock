@@ -3,11 +3,11 @@
     "agnoster": {
       "flake": false,
       "locked": {
-        "lastModified": 1586985273,
-        "narHash": "sha256-jGClZu74ENxJqrONNSkqhpAoenpnt97sPc/oArh0zi0=",
+        "lastModified": 1625431668,
+        "narHash": "sha256-IbijoxERlQ9MTroevl0+dyZumRbvbW0OiOmH1liG9nM=",
         "owner": "hauleth",
         "repo": "agnoster",
-        "rev": "1ae9625e27ef47d2e6abc60156cd154cd1c37f46",
+        "rev": "5144893ecd2c7ec25a9de34d14cb75f3cff83e8b",
         "type": "github"
       },
       "original": {
@@ -35,11 +35,11 @@
     "done": {
       "flake": false,
       "locked": {
-        "lastModified": 1621416587,
-        "narHash": "sha256-cScH1NzsuQnDZq0XGiay6o073WSRIAsshkySRa/gJc0=",
+        "lastModified": 1625438418,
+        "narHash": "sha256-Xld66z9vVp3kxikndZ9k/zlNvP0YSoSCNTBkJ8rT3uo=",
         "owner": "franciscolourenco",
         "repo": "done",
-        "rev": "37117c3d8ed6b820f6dc647418a274ebd1281832",
+        "rev": "7fda8f2c3e79835d5c1e6721fa48fe5ed4ba0858",
         "type": "github"
       },
       "original": {
