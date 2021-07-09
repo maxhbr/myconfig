@@ -3,11 +3,11 @@
     "agnoster": {
       "flake": false,
       "locked": {
-        "lastModified": 1625431668,
-        "narHash": "sha256-IbijoxERlQ9MTroevl0+dyZumRbvbW0OiOmH1liG9nM=",
+        "lastModified": 1625824140,
+        "narHash": "sha256-0/FgJlQULIXKhQIt3z3ugAGubgMlwFZa/cjGjiq7BcA=",
         "owner": "hauleth",
         "repo": "agnoster",
-        "rev": "5144893ecd2c7ec25a9de34d14cb75f3cff83e8b",
+        "rev": "7312ebb59769d5ff503fd06b174103f0f7ba368a",
         "type": "github"
       },
       "original": {
