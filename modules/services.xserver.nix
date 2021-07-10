@@ -89,15 +89,7 @@ in {
         enableCtrlAltBackspace = true;
         displayManager.lightdm.enable = true;
       };
-
-      cron = {
-        enable = true;
-        systemCronJobs = [
-          "*/10 * * * *  ${myconfig.user} ${pkgs.my-wallpapers}/bin/myRandomBackground >> /tmp/cronout 2>&1"
-        ];
-      };
-
-      redshift = { enable = true; };
+      redshift.enable = true;
     };
   });
 }

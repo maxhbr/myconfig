@@ -6,13 +6,13 @@
     # staged.url = "github:nixos/nixpkgs/staging";
     nixos-unstable-small.url = "github:nixos/nixpkgs/nixos-unstable-small";
     nixos-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/release-21.05";
     rel2009.url = "github:nixos/nixpkgs/nixos-20.09";
     rel2003.url = "github:nixos/nixpkgs/nixos-20.03";
     rel2105.url = "github:nixos/nixpkgs/release-21.05";
     # rel2111.url = "github:nixos/nixpkgs/release-21.11";
 
-    home.url = "github:nix-community/home-manager";
+    home.url = "github:nix-community/home-manager/release-21.05";
     home.inputs.nixpkgs.follows = "nixpkgs";
 
     flake-utils.url = "github:numtide/flake-utils";

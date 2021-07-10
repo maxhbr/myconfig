@@ -7,7 +7,7 @@
   ];
   config = {
     nixpkgs.overlays = map (n: import n) [
-      ./idea-ultimate
+      # ./idea-ultimate
       ./thrift011.nix
       ./thrift012.nix
       ./thrift93.nix
@@ -46,7 +46,7 @@
         }
       ];
       home.packages = with pkgs; [
-        idea-ultimate # jetbrains.phpstorm
+        # idea-ultimate # jetbrains.phpstorm
         dia
         insync
         exiftool
