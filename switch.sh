@@ -7,23 +7,48 @@ if [[ -f ../priv/switch.sh ]]; then
   exit 1
 fi
 
-target="${1:-$(hostname)}"
+################################################################################
+# setup logging
+logsDir="../_logs"
+mkdir -p "$logsDir"
+logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
+echo -e "\n\n\n\n\n\n\n" >> "$logfile"
+exec &> >(tee -a "$logfile")
 
-if [ $# -gt 0 ]; then
-    targetIP="$(cat "./secrets/$target/ip")"
-    echo "No arguments supplied"
+if [[ $# -gt 0 && "$1" == "--fast" ]]; then
+    shift
+    nix flake update
 else
-    targetIP="localhost"
+    ./update.sh
 fi
 
-./update.sh
+target="${1:-$(hostname)}"
 
+cmd="nixos-rebuild"
+if [ $# -gt 0 ]; then
+    targetIP="root@$(cat ./hosts/metadata.json | jq -r ".hosts.${target}.ip4")"
+    cmd="$cmd --target-host $targetIP"
+else
+    cmd="sudo $cmd"
+fi
+
+################################################################################
+# run
 set -x
-nix develop \
-    --command sudo nixos-rebuild \
-    --target-host "$targetIP" \
-    switch `#-p test` \
-    --flake '.#'"$target"
+
+nix build \
+    -L \
+    --fallback \
+    --log-format bar-with-logs \
+    --out-link '../result.'"$target" \
+    '.#nixosConfigurations.'"$target"'.config.system.build.toplevel'
+
+until $cmd \
+        --build-host localhost \
+        switch `#-p test` \
+        --flake '.#'"$target"; do
+    echo "... retry"
+done
 
 set +x
 
