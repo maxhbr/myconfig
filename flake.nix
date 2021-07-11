@@ -195,7 +195,9 @@
       packages.myconfig-iso = self.lib.mkISO
         { system = "x86_64-linux";
           hostName = "iso";
-          nixosModules = [];
+          nixosModules = [
+            self.nixosModules.core
+          ];
           metadataOverride = {};
           bootstrappedConfig = null;
         };

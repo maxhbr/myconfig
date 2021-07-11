@@ -304,15 +304,16 @@ in rec {
     let
       myisoconfigModules =
         let
-          # user = config.myconfig.user;
 
-          # xautologinModule = {
-          #   # autologin
-          #   services.xserver.displayManager.autoLogin = {
-          #     enable = config.services.xserver.enable;
-          #     inherit user;
-          #   };
-          # };
+          xautologinModule = { pkgs, config, ... }@args: (let
+            user = "mhuber"; #config.myconfig.user;
+          in {
+            # autologin
+            services.xserver.displayManager.autoLogin = {
+              enable = config.services.xserver.enable;
+              inherit user;
+            };
+          });
 
           forceSSHModule = {
             # OpenSSH is forced to have an empty `wantedBy` on the installer system[1], this won't allow it
@@ -374,7 +375,7 @@ in rec {
             };
           }
           forceSSHModule
-          # xautologinModule
+          xautologinModule
           bootstrapModule
           bootstrapInstallModule
           {
