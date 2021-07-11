@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
 
-set -e
+set -ex
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 writeScripts() {
-    local outFile="$1"
-    local outDir
-    outDir="$(dirname "$outFile")"
+    local outDir="$1"
+    local outFile="$2"
     cat <<EOF | tee "$outDir/dd.sh"
 #!/usr/bin/env bash
 set -ex
@@ -24,39 +23,24 @@ EOF
     chmod +x "$outDir/run-qemu.sh"
 }
 
-build() {
-    time nix build --no-link --show-trace $@ .#myconfig-iso
-}
-
-getIsoFromDrv() {
-    local drv="$1"
+getIsoFromOutLink() {
+    local outLink="$1"
     local outArr
-    outArr=("$drv/iso/nixos-myconfig"*".iso")
-    echo "${outArr[-1]}"
+    outArr=("$outLink/iso/"*".iso")
+    echo "$(readlink -f "${outArr[-1]}")"
 }
 
-buildAndCopy() {
-    local drv
-    drv=$(build "$@")
-    if [[ "$*" == *"--dry-run"* ]]; then
-        return 0
-    fi
+build() {
+    local outDir="__out/iso"
+    local outLink="$outDir/result"
+    time nix build --out-link "$outLink" --show-trace .#myconfig-iso
 
     local out
-    out="$(getIsoFromDrv "$drv")"
+    out="$(getIsoFromOutLink "$outLink")"
     du -h "$out"
 
-
-    local outDir="__out/iso"
-    install -D -m 644 -v "$out" -t "$outDir"
-    writeScripts "$outDir/$(basename "$out")"
-
-
-    nix-store --delete "$drv" || {
-        sleep 20
-        nix-store --delete "$drv" || printf "failed to\n\tnix-store --delete \"$drv\"\n"
-    }
+    writeScripts "$outDir" "$out"
 }
 
-buildAndCopy "$@"
+build
 times
