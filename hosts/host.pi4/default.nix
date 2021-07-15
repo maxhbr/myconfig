@@ -1,7 +1,5 @@
 { lib, ... }: {
-  imports =
-    [ ./hardware-configuration.nix ../modules ../secrets/common/wifi.home.nix ]
-    ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.8") ]);
+  imports =  [ ./hardware-configuration.nix ];
 
   config = {
     myconfig = { headless.enable = true; };

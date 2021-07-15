@@ -1,13 +1,12 @@
 # based on:
 # <nixpkgs/nixos/modules/installer/cd-dvd/sd-image-raspberrypi4.nix>
 # this mainly removes the `installation-device` part
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, modulesPath, ... }:
 
 {
   imports = [
-    <nixpkgs/nixos/modules/profiles/base.nix>
-    # <nixpkgs/nixos/modules/profiles/installation-device.nix>
-    <nixpkgs/nixos/modules/installer/cd-dvd/sd-image.nix>
+    (modulesPath + "/profiles/base.nix")
+    (modulesPath + "/installer/sd-card/sd-image.nix")
   ];
 
   nixpkgs.system = "aarch64-linux";

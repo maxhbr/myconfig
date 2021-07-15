@@ -141,6 +141,9 @@
                inputs.zephyrproject.nixosModule
              ]
               ++ moreModules) metadataOverride);
+        host-pi4 = moreModules: metadataOverride:
+          (self.lib.evalConfiguration "aarch64-linux" "pi4"
+            ([ self.nixosModules.core] ++ moreModules) metadataOverride);
       };
 
       ##########################################################################
@@ -152,6 +155,7 @@
         workstation = self.nixosConfigurationsGen.host-workstation [ ] { };
         nas = self.nixosConfigurationsGen.host-nas [ ] { };
         nuc = self.nixosConfigurationsGen.host-nuc [ ] { };
+        pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
 
         container = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
