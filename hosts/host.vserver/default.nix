@@ -2,10 +2,9 @@
 # SPDX-License-Identifier: MIT
 { pkgs, lib, ... }: {
   imports = [
-    ../modules
     ./hardware-configuration.nix
     # hardware:
-    ../hardware/grub.nix
+    ../../hardware/grub.nix
     # configuration
     ./service.wireguard-server
   ];

@@ -132,6 +132,10 @@
             self.nixosModules.core
             inputs.license-compliance-toolbox.nixosModule
           ] ++ moreModules) metadataOverride);
+        host-vserver = moreModules: metadataOverride:
+          (self.lib.evalConfiguration "x86_64-linux" "vserver" ([
+            self.nixosModules.core
+          ] ++ moreModules) metadataOverride);
         host-nas = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "nas"
             ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
@@ -153,6 +157,7 @@
       nixosConfigurations = {
         x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [ ] { };
         workstation = self.nixosConfigurationsGen.host-workstation [ ] { };
+        vserver = self.nixosConfigurationsGen.host-vserver [ ] { };
         nas = self.nixosConfigurationsGen.host-nas [ ] { };
         nuc = self.nixosConfigurationsGen.host-nuc [ ] { };
         pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
