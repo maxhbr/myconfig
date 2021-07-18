@@ -83,11 +83,11 @@
     },
     "emacs": {
       "locked": {
-        "lastModified": 1626542694,
-        "narHash": "sha256-SZy1GWgZSfb0Qq1r6aVo6+dsCJVjfF1V5GArkroYjmo=",
+        "lastModified": 1626630029,
+        "narHash": "sha256-FfY7bUXoiurnC4/nPrkkVneCyFe2PJj8Ertgax7I22U=",
         "owner": "nix-community",
         "repo": "emacs-overlay",
-        "rev": "458d30ef17167e390d0280d0f954ca8ee61ef701",
+        "rev": "4470595d93d25163609226c21e1a1dcf366de2ea",
         "type": "github"
       },
       "original": {
@@ -570,10 +570,10 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1626616805,
-        "narHash": "sha256-J/XxM05E6nwrz3/+PaRezPcI/i5s1Fidem/vPJqTX78=",
-        "path": "/nix/store/b26v16303h79ljrja73p9z9fpr9qa4q0-source",
-        "rev": "20117e607d3dd91bef0136220e0056c0827e2854",
+        "lastModified": 1626631212,
+        "narHash": "sha256-mE47P1TC0PYo1jTjSc3omLpxmLqUokF9ZHt2pPJHJ4w=",
+        "path": "/nix/store/alqsidknf1i0k710lvr5m3v1yvxa6r0h-source",
+        "rev": "eb0aa6ea31ea14724a5c8b6c10f3d9b282d77461",
         "type": "path"
       },
       "original": {
@@ -849,7 +849,7 @@
         "platformio-core": "platformio-core"
       },
       "locked": {
-        "narHash": "sha256-N0SFFoojAo/QsQp9UmIqtKA8TlzvtGos6YWjB7xrJ8Q=",
+        "narHash": "sha256-4aEewh9mRnG3z5HQVxksdWQz5RwqEgX8qn/DgTq+EVI=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
