@@ -83,6 +83,7 @@
                   "adafruit_feather_nrf52840"
                   "nrf52840dongle_nrf52840"
                   "nrf5340dk_nrf5340_cpuapp"
+                  "mimxrt1060_evk"
                   "frdm_k64f"
                   "lpcxpresso55s69_cpu0"
                 ] (board: "west-arm build -p always -b ${board} ."));
