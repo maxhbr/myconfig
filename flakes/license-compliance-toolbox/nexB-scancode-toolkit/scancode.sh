@@ -65,11 +65,11 @@ runScancode() {
     (set -x;
      docker run -i \
             --rm \
-            -u $(id -u $USER):$(id -g $USER) \
+            -u "$(id -u $USER):$(id -g $USER)" \
             -v "$workdir":/workdir -v "$out":/out \
             --net=host \
             $tag \
-            -n $(getNumberOfThreads) \
+            -n "$(getNumberOfThreads)" \
             --license --copyright --package --info \
             /workdir \
             --license-text --license-text-diagnostics \
@@ -93,8 +93,9 @@ runExtractcode() {
             -u $(id -u $USER):$(id -g $USER) \
             -v "$workdir":/workdir \
             --net=host \
+            --entrypoint /scancode-toolkit/extractcode \
             $tag \
-            /scancode-toolkit/extractcode --verbose \
+            --verbose \
             /workdir \
             $@;
      times

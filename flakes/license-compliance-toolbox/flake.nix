@@ -21,14 +21,17 @@
       };
 
       packages.x86_64-linux = {
-        ort = pkgs.callPackage ./oss-review-toolkit-ort { };
+        ort = #pkgs.callPackage ./oss-review-toolkit-ort { };
+            pkgs.writeScriptBin "ort.sh"
+              (builtins.readFile ./oss-review-toolkit-ort/ort.sh);
+
         scancode = pkgs.callPackage ./nexB-scancode-toolkit { };
         tern = pkgs.callPackage ./tern-tools-tern { };
         scanoss = pkgs.callPackage ./scanoss-scanner { };
         license-compliance-toolbox = pkgs.buildEnv {
           name = "license-compliance-toolbox";
           paths = with self.packages.x86_64-linux; [
-            # ort
+            ort
             scancode
             tern
             scanoss
@@ -62,11 +65,14 @@
                   local out="$(getOutFolder "$input")"
                   local sourceDir="$(getSourceDir "$input")"
 
-                  ${scancode}/bin//scancode.sh "$sourceDir" || true
-                  ''${ort}/bin/ort.sh all "$sourceDir" || true
+                  ${scancode}/bin/scancode.sh "$sourceDir" || true
+                  ${ort}/bin/ort.sh all "$sourceDir" || true
+                  ${ort}/bin/ort.sh list-packages "${sourceDir}_ort/analyze-result.yml" > "${sourceDir}_ort/packages || true
               }
 
-              main "$@"
+              for dir in "$@"; do
+                main "$dir"
+              done
             '')
           ];
         };

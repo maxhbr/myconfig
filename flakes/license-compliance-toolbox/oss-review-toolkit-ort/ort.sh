@@ -9,6 +9,7 @@ DOCKERIZE_BY_DEFAULT=false
 baseTag=ort:latest
 tag=myort:latest
 ort=ort
+orth=orth
 
 help() {
     cat <<EOF
@@ -85,7 +86,7 @@ buildImageIfMissing() {
                 --network=host \
                 -t $baseTag $ORT
         else
-            echo "docker base image already build, at $(docker inspect -f '{{ .Created }}' $baseTag)"
+            >&2 echo "docker base image already build, at $(docker inspect -f '{{ .Created }}' $baseTag)"
         fi
         docker build -t $tag -<<EOF
 FROM $baseTag
@@ -115,20 +116,21 @@ runDockerizedOrt() {
         inputDir="$input"
     fi
 
+    local dockerArgs=("-i" "--rm")
+    dockerArgs+=("-v" "/etc/group:/etc/group:ro" "-v" "/etc/passwd:/etc/passwd:ro" "-u" "$(id -u $USER):$(id -g $USER)")
+    dockerArgs+=("-v" "$HOME/.ort/dockerHome:$HOME")
+    dockerArgs+=("-v" "$inputDir:/workdir")
+    dockerArgs+=("-v" "$output:/out")
+    dockerArgs+=("-w" "/workdir")
+    dockerArgs+=("--net=host")
     local args=($(echo "${@}" | sed "s%$output%/out%g" | sed "s%$inputDir%/workdir%g"))
 
     (set -x;
-     docker run -i \
-            --rm \
-            -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -u $(id -u $USER):$(id -g $USER) \
-            -v "$HOME/.ort/dockerHome:$HOME" \
-            -v "$inputDir:/workdir" \
-            -v "$output:/out" \
-            -w /workdir \
-            --net=host \
-            "$tag" \
-            "${args[@]}" -i "/workdir/$inputFile" -o /out;
-     times
+     docker run \
+         "${dockerArgs[@]}" \
+         "$tag" \
+         "${args[@]}" -i "/workdir/$inputFile" -o /out;
+     >&2 times
      )
 }
 
@@ -182,7 +184,7 @@ runOrt() {
     args+=("${@}")
 
     cat <<EOF >> "$output/_calls"
-[$(date)] $0
+[$(date)] ort
     -i "${input}"
     -o "${output}"
     ${args[@]}
@@ -193,10 +195,11 @@ EOF
     else
         args+=("-i" "${input}" "-o" "$output")
         (set -x;
-         $ort "${args[@]}";
-         times)
+            $ort "${args[@]}";
+            >&2 times)
     fi
 }
+
 
 ################################################################################
 ##  wrapper to run a more complete pipeline  ###################################
@@ -264,6 +267,36 @@ doShort() {
     fi
 }
 
+doListPackages() {
+    local input="$(readlink -f "$1")"; shift
+
+    buildImageIfMissing
+
+    local inputFile
+    local inputDir
+    if [[ -f "$input" ]]; then
+        inputFile="$(basename "$input")"
+        inputDir="$(dirname "$input")"
+    else
+        inputFile=""
+        inputDir="$input"
+    fi
+
+    local dockerArgs=("-i" "--rm")
+    dockerArgs+=("-v" "$inputDir:/workdir")
+    dockerArgs+=("-w" "/workdir")
+    dockerArgs+=("--net=host")
+    dockerArgs+=("--entrypoint" "/opt/ort/bin/orth")
+    local args=($(echo "${@}" | sed "s%$inputDir%/workdir%g"))
+    (set -x;
+     docker run \
+         "${dockerArgs[@]}" \
+         "$tag" \
+         list-packages "${args[@]}" --ort-file "/workdir/$inputFile";
+     >&2 times
+     )
+}
+
 ################################################################################
 ##  handle arguments and run  ##################################################
 ################################################################################
@@ -278,7 +311,7 @@ doShort() {
 prepareDotOrt
 
 if ! command -v $ort &> /dev/null; then
-    echo "$ort not in \$PATH, dockerize by default"
+    (>&2 echo "$ort not in \$PATH, dockerize by default")
     DOCKERIZE_BY_DEFAULT=true
     if [[ "$1" == "--dockerize" ]]; then
         shift
@@ -301,7 +334,10 @@ elif [[ "$1" == "all" ]]; then
 elif [[ "$1" == "short" ]]; then
     shift
     doShort "$@"
+elif [[ "$1" == "list-packages" ]]; then
+    shift
+    doListPackages "$@"
 else
     runOrt "$@" || help
 fi
-times
+>&2 times

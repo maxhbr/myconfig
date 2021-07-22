@@ -76,6 +76,7 @@ myKeys conf =
     browserX     = runOrRaiseNext browserCMD (className =? "Firefox" <||> className =? "Firefox-bin" <||> className =?  "chromium-browser" <||> className =? "Chromium-browser")
     editorX      = runOrRaiseNext editorCMD (className =? "Emacs")
     pavucontrolX = runOrRaiseNext pavucontrolCMD (className =? "pavucontrol" <||> className =? "Pavucontrol")
+    mailclientX  = runOrRaiseNext "evolution" (className =? "evolution" <||> className =? ".evolution-wrapped_")
 
     myLauncherCMD = let
       additionalPath = if isAbsolute dmenuPathCMD
@@ -111,6 +112,7 @@ myKeys conf =
         , ((msc, xK_F12), "poweroff")]
     raiseKBs = map (\(a,b) -> (a,b >> popupCurDesktop))
        [ ((m__, xK_i), browserX)
+       , ((ms_, xK_i), mailclientX)
        , ((m__, 0xfc), editorX)
        , ((m__, 0xf6), raiseNext (className =? "jetbrains-phpstorm" <||> className =? "jetbrains-idea"))
        , ((const 0, 0x1008ffb2), pavucontrolX)]
