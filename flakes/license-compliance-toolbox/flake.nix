@@ -67,7 +67,7 @@
 
                   ${scancode}/bin/scancode.sh "$sourceDir" || true
                   ${ort}/bin/ort.sh all "$sourceDir" || true
-                  ${ort}/bin/ort.sh list-packages "${sourceDir}_ort/analyze-result.yml" > "${sourceDir}_ort/packages || true
+                  ${ort}/bin/ort.sh list-packages "''${sourceDir}_ort/analyze-result.yml" > "''${sourceDir}_ort/packages" || true
               }
 
               for dir in "$@"; do

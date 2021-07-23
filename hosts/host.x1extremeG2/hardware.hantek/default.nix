@@ -7,7 +7,10 @@ in {
     services.udev.packages = [ openhantek6022 pkgs.saleae-logic ];
     home-manager.sharedModules = [{
       home.packages =
-        [ openhantek6022 pkgs.nixos-unstable.pulseview pkgs.saleae-logic ];
+        [ openhantek6022
+          # pkgs.pulseview
+          pkgs.saleae-logic
+        ];
     }];
   };
 }
