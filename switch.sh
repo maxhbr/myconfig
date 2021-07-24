@@ -39,6 +39,7 @@ set -x
 nix build \
     -L \
     --fallback \
+    --keep-going \
     --log-format bar-with-logs \
     --out-link '../result.'"$target" \
     '.#nixosConfigurations.'"$target"'.config.system.build.toplevel'

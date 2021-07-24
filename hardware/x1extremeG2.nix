@@ -21,7 +21,7 @@
     ##############################################################################
     ##  choose setup for graphics  ###############################################
     ##############################################################################
-    (import ../hardware/gtx1650.nix).rawNvidiaConf
+    (import ../hardware/gtx1650.nix).rawNouveauConf
     (lib.mkIf (config.services.xserver.libinput.enable) {
       services.xserver.libinput.touchpad.accelSpeed = "0.15";
     })

@@ -57,7 +57,7 @@
         slack
         element-desktop
         # rambox
-        remmina
+        # remmina
       ];
     }];
   };

@@ -278,8 +278,7 @@ doListPackages() {
         inputFile="$(basename "$input")"
         inputDir="$(dirname "$input")"
     else
-        inputFile=""
-        inputDir="$input"
+        exit 1
     fi
 
     local dockerArgs=("-i" "--rm")
