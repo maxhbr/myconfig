@@ -2,10 +2,10 @@
   "nodes": {
     "nixpkgs": {
       "locked": {
-        "lastModified": 1627231651,
-        "narHash": "sha256-wGN3bPaRyiLHX98+12UgaMUUieV04/y4Bi/TYHQX218=",
-        "path": "/nix/store/hyvnzqmvy3czf9ppnl5593gdziqhiqma-source",
-        "rev": "f027f8e38d926ffc925f4b9a7b1aa09cf2451ebc",
+        "lastModified": 1627237346,
+        "narHash": "sha256-L9BwmVAxISBoYr5wadRp4AYqhERcNjKHVqmk52wI1gw=",
+        "path": "/nix/store/lr57rrx2kwylvcwl9djkw77mdpm1kvg9-source",
+        "rev": "2f9cf506dd12c86a322ace5ae74b4eafee172cc2",
         "type": "path"
       },
       "original": {
@@ -29,10 +29,27 @@
         "type": "github"
       }
     },
+    "rel2105": {
+      "locked": {
+        "lastModified": 1627234996,
+        "narHash": "sha256-1lUN2ByKraIMEieEW5vkR3rgrehRJ6in6Xiyzx4dtL8=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "ecd1adcea03e4c5cb6083c87f04bcc952e116315",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "release-21.05",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "nixpkgs": "nixpkgs",
-        "platformio-core": "platformio-core"
+        "platformio-core": "platformio-core",
+        "rel2105": "rel2105"
       }
     }
   },
