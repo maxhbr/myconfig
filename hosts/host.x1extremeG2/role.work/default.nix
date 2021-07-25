@@ -12,7 +12,7 @@
       ./thrift012.nix
       ./thrift93.nix
     ];
-    programs.evolution.enable = true;
+    # programs.evolution.enable = true;
     home-manager.sharedModules = [{
       imports = [
         {

@@ -6,7 +6,7 @@
     # staged.url = "github:nixos/nixpkgs/staging";
     nixos-unstable-small.url = "github:nixos/nixpkgs/nixos-unstable-small";
     nixos-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
-    nixpkgs.url = "github:nixos/nixpkgs/release-21.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     rel2009.url = "github:nixos/nixpkgs/nixos-20.09";
     rel2003.url = "github:nixos/nixpkgs/nixos-20.03";
     rel2105.url = "github:nixos/nixpkgs/release-21.05";
