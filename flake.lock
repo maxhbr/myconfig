@@ -318,21 +318,6 @@
         "type": "github"
       }
     },
-    "hardware": {
-      "locked": {
-        "lastModified": 1627212500,
-        "narHash": "sha256-KMUQCT3JSqznp+dR6BTvbwLqPFErjNlotVpkp/P/ZmM=",
-        "owner": "nixos",
-        "repo": "nixos-hardware",
-        "rev": "03e7686c72345f237405c0b46b153dccd3ec9913",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "repo": "nixos-hardware",
-        "type": "github"
-      }
-    },
     "home": {
       "inputs": {
         "nixpkgs": [
@@ -374,11 +359,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1627216210,
-        "narHash": "sha256-cio7Y0HNA3itIOQCUZRXoQCLbI6Lf6qMRC077xJZEJ4=",
+        "lastModified": 1627217084,
+        "narHash": "sha256-n/eblKg6Lq2M20YEcW2/je9p0xXbfG1YG9msN5HisFk=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "3080eb2418cdc4558c6d327a54b85a4295062625",
+        "rev": "4d62c8942fb1598dd0593e55f9c4c1a6119aae76",
         "type": "github"
       },
       "original": {
@@ -517,6 +502,22 @@
         "owner": "vlaci",
         "ref": "v2.2.0",
         "repo": "nix-straight.el",
+        "type": "github"
+      }
+    },
+    "nixos-hardware": {
+      "locked": {
+        "lastModified": 1627212500,
+        "narHash": "sha256-KMUQCT3JSqznp+dR6BTvbwLqPFErjNlotVpkp/P/ZmM=",
+        "owner": "NixOS",
+        "repo": "nixos-hardware",
+        "rev": "03e7686c72345f237405c0b46b153dccd3ec9913",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "master",
+        "repo": "nixos-hardware",
         "type": "github"
       }
     },
@@ -776,7 +777,6 @@
       "inputs": {
         "emacs": "emacs",
         "flake-utils": "flake-utils",
-        "hardware": "hardware",
         "home": "home",
         "license-compliance-toolbox": "license-compliance-toolbox",
         "master": "master",
@@ -785,6 +785,7 @@
         "myfish": "myfish",
         "myxmonad": "myxmonad",
         "nix-doom-emacs": "nix-doom-emacs",
+        "nixos-hardware": "nixos-hardware",
         "nixos-unstable": "nixos-unstable",
         "nixos-unstable-small": "nixos-unstable-small",
         "nixpkgs": "nixpkgs",
