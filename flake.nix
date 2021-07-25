@@ -22,7 +22,7 @@
 
     nur.url = "github:nix-community/NUR";
 
-    hardware.url = "github:nixos/nixos-hardware";
+    nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
     # mine
 
@@ -114,6 +114,7 @@
             { config = { hardware.enableRedistributableFirmware = true; }; }
             self.nixosModules.core
             inputs.license-compliance-toolbox.nixosModule
+            inputs.nixos-hardware.nixosModules.lenovo-thinkpad-x1-extreme-gen2
             ({ myconfig, ... }: {
               imports = [
                 (myconfig.metadatalib.announceHost "workstation")

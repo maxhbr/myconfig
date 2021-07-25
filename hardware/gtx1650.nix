@@ -85,8 +85,8 @@ let
     blacklistNouveau // {
       services.xserver.videoDrivers = [ "intel" "nvidia" ];
       hardware.nvidia = {
-        optimus_prime = {
-          enable = true;
+        prime = {
+          sync.enable = true;
           # sync.enable = true;
           # offload.enable = true; # see: https://github.com/NixOS/nixpkgs/pull/66601
 
@@ -99,15 +99,33 @@ let
       };
     };
   ##############################################################################
-  primeRenderOffload = { ... }: {
+  primeRenderOffload = { pkgs, config,... }: let
+      nvidia-offload = pkgs.writeShellScriptBin "nvidia-offload" ''
+        export __NV_PRIME_RENDER_OFFLOAD=1
+        export __NV_PRIME_RENDER_OFFLOAD_PROVIDER=NVIDIA-G0
+        export __GLX_VENDOR_LIBRARY_NAME=nvidia
+        export __VK_LAYER_NV_optimus=NVIDIA_only
+        exec -a "$0" "$@"
+      '';
+    in {
     # waits for: https://github.com/NixOS/nixpkgs/pull/66601
     config = {
+      nixpkgs.overlays = [
+        (self: super: {
+          nvidia_x11 = super.nvidiaPackages.beta;
+          # linuxPackages.nvidia_x11 = super.nvidiaPackages.beta;
+        })
+      ];
+      hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.beta;
+      environment.systemPackages = [ nvidia-offload ];
       services.xserver.videoDrivers = [ "nvidia" ];
       hardware.nvidia.prime = {
-        offload.enable = true;
+        # offload.enable = true;
         sync.enable = true;
-        nvidiaBusId = "PCI:1:0:0";
+        # Bus ID of the Intel GPU. You can find it using lspci, either under 3D or VGA
         intelBusId = "PCI:0:2:0";
+        # Bus ID of the NVIDIA GPU. You can find it using lspci, either under 3D or VGA
+        nvidiaBusId = "PCI:1:0:0";
       };
     };
   };

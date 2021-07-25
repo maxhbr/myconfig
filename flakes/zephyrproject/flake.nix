@@ -3,6 +3,7 @@
 
   inputs = {
     platformio-core.url = "github:platformio/platformio-core";
+    rel2105.url = "github:nixos/nixpkgs/release-21.05";
     platformio-core.flake = false;
   };
 
@@ -14,7 +15,8 @@
       allpackages = pkgs:
         with pkgs;
         zephyrenv.baseInputs ++ [
-          nrfutil nRF-Command-Line-Tools
+          nrfutil
+          nRF-Command-Line-Tools
           segger-jlink
           my-west
           my-west-arm

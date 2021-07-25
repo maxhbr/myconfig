@@ -15,13 +15,12 @@
 {
   imports = [
     ../hardware/notebook-generic.nix
-    ../hardware/nixos-hardware/lenovo/thinkpad/x1-extreme/gen2/default.nix
     ../hardware/lowres.nix
 
     ##############################################################################
     ##  choose setup for graphics  ###############################################
     ##############################################################################
-    (import ../hardware/gtx1650.nix).optimusPrimeConf
+    (import ../hardware/gtx1650.nix).primeRenderOffload
     (lib.mkIf (config.services.xserver.libinput.enable) {
       services.xserver.libinput.touchpad.accelSpeed = "0.15";
     })
