@@ -867,7 +867,7 @@
         "rel2105": "rel2105_2"
       },
       "locked": {
-        "narHash": "sha256-SLL012KQhl0fPmD+KPeqZokMrJQhOLgzys1OWZcGdIg=",
+        "narHash": "sha256-+ULFcagom8T/wUFEJHOZJDl79ITPIiUmQbkkJWtAFfw=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
