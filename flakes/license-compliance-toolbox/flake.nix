@@ -60,11 +60,41 @@
                   echo "$source"
               }
 
+              collectMetadataForFiles() (
+                  local input="$1"; shift
+                  local output="$1/cmff"; shift
+                  if [[ ! -d "$input" ]]; then
+                      return
+                  fi
+                  if [[ -d "$output" ]]; then
+                      return
+                  fi
+
+                  cd "$input"
+
+                  find . -type f -print0 |
+                      while IFS= read -r -d "" file; do
+                          fileDir="$output/$file"
+                          (set +e
+                           mkdir -p "$fileDir"
+                           md5sum "$file" > "$fileDir/md5sum"
+                           sha1sum "$file" > "$fileDir/sha1sum"
+                           sha256sum "$file" > "$fileDir/sha256sum"
+                           sha512sum "$file" > "$fileDir/sha512sum"
+                           file "$file" > "$fileDir/file"
+                           wc "$file" > "$fileDir/wc"
+                           du -h "$file" > "$fileDir/du"
+                           ${pkgs.exiftool}/bin/exiftool "$file" > "$fileDir/exiftool"
+                          )
+                      done
+              )
+
               main() {
                   local input="$1"
                   local out="$(getOutFolder "$input")"
                   local sourceDir="$(getSourceDir "$input")"
 
+                  collectMetadataForFiles "$sourceDir" "$out"
                   ${scancode}/bin/scancode.sh "$sourceDir" || true
                   ${ort}/bin/ort.sh all "$sourceDir" || true
                   if [[ -f "''${sourceDir}_ort/analyzer-result.yml" ]]; then
@@ -73,7 +103,7 @@
               }
 
               for dir in "$@"; do
-                main "$dir"
+                  main "$dir"
               done
             '')
           ];

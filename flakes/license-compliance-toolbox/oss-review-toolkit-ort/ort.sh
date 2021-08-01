@@ -76,6 +76,8 @@ EOF
 ################################################################################
 
 buildImageIfMissing() {
+    export DOCKER_BUILDKIT=1
+
     if [[ "$(docker images -q $tag 2> /dev/null)" == "" ]]; then
         if [[ "$(docker images -q $baseTag 2> /dev/null)" == "" ]]; then
             ORT=$(mktemp -d)
@@ -221,18 +223,18 @@ doAll() {
     local reportResult="$output/scan-report-web-app.html"
     if [[ ! -f "$reportResult" ]]; then
         local scanResult="$output/scan-result.yml"
+        local analyzeResult="$output/analyzer-result.yml"
         if [[ ! -f "$scanResult" ]]; then
-            local analyzeResult="$output/analyzer-result.yml"
             if [[ ! -f "$analyzeResult" ]]; then
-                runOrt analyze "$input" "$@"
+                runOrt analyze "$input" "$@" || [[ -f "$analyzeResult" ]]
             else
                 echo "skip analyze ..."
             fi
-            runOrt scan "$analyzeResult"
+            runOrt scan "$analyzeResult" || [[ -f "$scanResult" ]]
         else
             echo "skip scan ..."
         fi
-        runOrt report "$scanResult"
+        runOrt report "$scanResult" || runOrt report "$analyzeResult"
     else
         echo "skip report ..."
     fi
@@ -257,7 +259,7 @@ doShort() {
     if [[ ! -f "$reportResult" ]]; then
         local analyzeResult="$output/analyzer-result.yml"
         if [[ ! -f "$analyzeResult" ]]; then
-            runOrt analyze "$input" "$@"
+            runOrt analyze "$input" "$@" || [[ -f "$analyzeResult" ]]
         else
             echo "skip analyze ..."
         fi
@@ -301,12 +303,6 @@ doListPackages() {
 ################################################################################
 
 
-# if [[ ! -z "$2" && -d "$(computeOutFolder "$2")" ]]; then
-#     cat <<EOF >> "$(computeOutFolder "$2")/_calls"
-# [$(date)] $0 $*
-# EOF
-# fi
-#
 prepareDotOrt
 
 if ! command -v $ort &> /dev/null; then
