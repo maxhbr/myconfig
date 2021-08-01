@@ -348,7 +348,7 @@
         "ort": "ort"
       },
       "locked": {
-        "narHash": "sha256-iiyAxkxeMOdg0rYtzJ4Wua3BxXJ1NPXrIZUrH9HipsU=",
+        "narHash": "sha256-2YeAP83/NKvT6w9TsqJHoXn18V9upDhtJmVJlILBvio=",
         "path": "flakes/license-compliance-toolbox/",
         "type": "path"
       },
