@@ -129,8 +129,10 @@ runTernRecursively() {
         while IFS= read -r -d '' dockerfile; do
             outFolder="$out/$(echo "$dockerfile" | sed 's#^./##' | sed 's#/#_#g')"
             mkdir -p "$outFolder"
-            runTernOnDockerfile $dockerfile "$outFolder"
-            sudo chown -R $(id -u $USER):$(id -g $USER) "$outFolder"
+            runTernOnDockerfile "$dockerfile" "$outFolder" || true
+            if [[ -d "$outFolder" ]]; then
+                sudo chown -R "$(id -u $USER):$(id -g $USER)" "$outFolder"
+            fi
         done
 }
 

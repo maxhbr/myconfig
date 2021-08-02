@@ -87,6 +87,15 @@
                            ${pkgs.exiftool}/bin/exiftool "$file" > "$fileDir/exiftool"
                           )
                       done
+                  find . -type d -print0 |
+                      while IFS= read -r -d "" dir; do
+                          dirDir="$output/$dir"
+                          (set +e
+                           mkdir -p "$fileDir"
+                           ls -alF $dir > "$dirDir/ls"
+                           # TODO: cloc every dir?
+                          )
+                      done
               )
 
               main() {
@@ -94,12 +103,17 @@
                   local out="$(getOutFolder "$input")"
                   local sourceDir="$(getSourceDir "$input")"
 
-                  collectMetadataForFiles "$sourceDir" "$out"
-                  ${scancode}/bin/scancode.sh "$sourceDir" || true
-                  ${ort}/bin/ort.sh all "$sourceDir" || true
-                  if [[ -f "''${sourceDir}_ort/analyzer-result.yml" ]]; then
-                      ${ort}/bin/ort.sh list-packages "''${sourceDir}_ort/analyzer-result.yml" > "''${sourceDir}_ort/packages" || true
-                  fi
+                  {
+                      ${pkgs.cloc}/bin/cloc "$input" > "$out/original.cloc"
+                      ${pkgs.cloc}/bin/cloc "$sourceDir" > "$out/extracted.cloc"
+                      collectMetadataForFiles "$sourceDir" "$out"
+                      ${scancode}/bin/scancode.sh "$sourceDir" || true
+                      ${ort}/bin/ort.sh all "$sourceDir" || true
+                      if [[ -f "''${sourceDir}_ort/analyzer-result.yml" ]]; then
+                          ${ort}/bin/ort.sh list-packages "''${sourceDir}_ort/analyzer-result.yml" > "''${sourceDir}_ort/packages" || true
+                      fi
+                      ${tern}/bin/tern-docker.sh "$sourceDir" || true
+                  } | tee -a "$out/log"
               }
 
               for dir in "$@"; do

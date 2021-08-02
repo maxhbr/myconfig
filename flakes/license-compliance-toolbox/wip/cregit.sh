@@ -22,16 +22,15 @@ RUN set -x \
 WORKDIR /cregit
 RUN set -x \
  && git clone https://github.com/cregit/cregit /cregit \
- && git clone https://github.com/rtyley/bfg-repo-cleaner \
  && git clone https://github.com/dmgerman/bfg-repo-cleaner.git --branch blobexec
+ # && git clone https://github.com/rtyley/bfg-repo-cleaner
 
 RUN set -x \
- && cd /cregit/bfg-repo-cleaner && sbt \
- && cd /cregit/bfg-repo-cleaner/bfg && sbt \
+ && cd /cregit/bfg-repo-cleaner && sbt bfg/assembly \
+ # && cd /cregit/bfg-repo-cleaner/bfg && sbt \
  && cd /cregit/slickGitLog && sbt one-jar \
  && cd /cregit/persons && sbt one-jar \
  && cd /cregit/remapCommits && sbt one-jar
-
 
 FROM ubuntu:latest
 ARG DEBIAN_FRONTEND=noninteractive
