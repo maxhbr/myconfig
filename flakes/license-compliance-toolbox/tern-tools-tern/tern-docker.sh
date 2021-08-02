@@ -131,7 +131,7 @@ runTernRecursively() {
             mkdir -p "$outFolder"
             runTernOnDockerfile "$dockerfile" "$outFolder" || true
             if [[ -d "$outFolder" ]]; then
-                sudo chown -R "$(id -u $USER):$(id -g $USER)" "$outFolder"
+                sudo chown -R "$(id -u "$USER"):$(id -g "$USER")" "$outFolder"
             fi
         done
 }

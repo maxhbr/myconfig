@@ -51,7 +51,7 @@ ort {
       fileBasedStorage {
         backend {
           localFileStorage {
-            directory = "~/.ort/scanner/scan-results"
+            directory = "${HOME}/.ort/scanner/scan-results"
             compression = false
           }
         }
@@ -187,8 +187,8 @@ runOrt() {
 
     cat <<EOF >> "$output/_calls"
 [$(date)] ort
-    -i "${input}"
-    -o "${output}"
+    -i "$(realpath --relative-to="$(pwd)" "$input")"
+    -o "$(realpath --relative-to="$(pwd)" "$output")"
     ${args[@]}
 EOF
 
@@ -301,7 +301,6 @@ doListPackages() {
 ################################################################################
 ##  handle arguments and run  ##################################################
 ################################################################################
-
 
 prepareDotOrt
 
