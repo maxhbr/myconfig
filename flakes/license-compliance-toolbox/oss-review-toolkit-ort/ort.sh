@@ -60,7 +60,6 @@ ort {
 
     storageReaders: [
       "fileBasedStorage"
-      "clearlyDefined"
     ]
 
     storageWriters: [

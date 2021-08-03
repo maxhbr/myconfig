@@ -74,10 +74,10 @@
 
                   find . -type f -print0 |
                       while IFS= read -r -d "" file; do
-                          echo "$file" >> "$output/_files"
                           fileDir="$output/$file"
                           (set +e
                            mkdir -p "$fileDir"
+                           echo "$file" >> "$output/_files"
                            md5sum "$file" > "$fileDir/md5sum"
                            sha1sum "$file" > "$fileDir/sha1sum"
                            sha256sum "$file" > "$fileDir/sha256sum"
