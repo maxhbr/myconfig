@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     # emacs.url = "github:nix-community/emacs-overlay";
-    nix-doom-emacs.url = "github:vlaci/nix-doom-emacs";
+    nix-doom-emacs.url = "github:vlaci/nix-doom-emacs/develop";
     nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
   };
 
@@ -39,7 +39,7 @@
                 else
                     cat > "$tempfile"
                 fi
-                ${config.programs.doom-emacs.package}/bin/emacs "$tempfile"
+                $EDITOR "$tempfile"
                 ${pkgs.xclip}/bin/xclip < "$tempfile"
               '';
             in {

@@ -53,12 +53,12 @@
       xkbOptions = "altwin:swap_alt_win";
     });
 
-    environment.etc."current-home-manager-${myconfig.user}-packages".text = let
-      packages = builtins.map (p: "${p.name}")
-        config.home-manager.users."${myconfig.user}".home.packages;
-      sortedUnique = builtins.sort builtins.lessThan (lib.unique packages);
-      formatted = builtins.concatStringsSep "\n" sortedUnique;
-    in formatted;
+    # environment.etc."current-home-manager-${myconfig.user}-packages".text = let
+    #   packages = builtins.map (p: "${p.name}")
+    #     config.home-manager.users."${myconfig.user}".home.packages;
+    #   sortedUnique = builtins.sort builtins.lessThan (lib.unique packages);
+    #   formatted = builtins.concatStringsSep "\n" sortedUnique;
+    # in formatted;
 
     systemd.tmpfiles.rules = [
       "d /home/${myconfig.user}/tmp 1777 ${myconfig.user} ${myconfig.user} 10d"

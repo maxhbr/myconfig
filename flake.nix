@@ -27,7 +27,7 @@
     # mine
 
     emacs.url = "github:nix-community/emacs-overlay";
-    nix-doom-emacs.url = "github:vlaci/nix-doom-emacs";
+    nix-doom-emacs.url = "github:vlaci/nix-doom-emacs/develop";
     nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
 
     myemacs.url = "path:flakes/myemacs/";
