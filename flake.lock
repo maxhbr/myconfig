@@ -359,11 +359,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1628354175,
-        "narHash": "sha256-z2GI07DzHyc42FpJXaMhZVasLiFubOJ2r0VJ2bvSlZg=",
+        "lastModified": 1628356036,
+        "narHash": "sha256-iCpgTZHzrcXx0zrUOcygvGenFPbBtrlGQo37zJJfkH4=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "c0976faff9e2a8f10bb19c09c2eaace6d83abce4",
+        "rev": "155c75e3d2337d1d4d93cb6592e7909bcb380973",
         "type": "github"
       },
       "original": {
@@ -403,7 +403,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-eEgYmhlxdBvdyDyJMbZxhO1jOQBRSW2/zNNImjLyXKw=",
+        "narHash": "sha256-r7zfHJh5DCLOoJpJzQYB6yXpUqWtJLnDqLNFavxGELY=",
         "path": "flakes/myemacs/",
         "type": "path"
       },
