@@ -31,11 +31,11 @@
     },
     "rel2105": {
       "locked": {
-        "lastModified": 1628417343,
-        "narHash": "sha256-s+mUtN+CyF0p2/CJlPTnhqcfzzlfkHNFEANetHtDjCI=",
+        "lastModified": 1628427351,
+        "narHash": "sha256-WuZUIQ07AvRw+T9wvQ3qFf8MXmKZ+ktZz9drNgWXDbs=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "7174a6136756bab7be6df3c97b0c03e3a6563d7a",
+        "rev": "348bc5de8bca09c624f5c4975f538684da4713d2",
         "type": "github"
       },
       "original": {
