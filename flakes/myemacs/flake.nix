@@ -8,7 +8,42 @@
     nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { nix-doom-emacs, ... }: {
+  outputs = { self, nix-doom-emacs, nixpkgs, ... }: let
+    doomPrivateDir = let
+      pkgs = import nixpkgs { system = "x86_64-linux"; };
+      doomPrivateDeriv = pkgs.stdenv.mkDerivation rec {
+        name = "doomPrivateDeriv-1.0";
+        src = ./doom.d;
+        installPhase = ''
+           mkdir -p "$out"
+           cp -r * "$out"
+         '';
+      };
+    in "${doomPrivateDeriv}";
+    doom-emacs-conf = pkgs: {
+      inherit doomPrivateDir;
+      extraPackages = [
+        pkgs.mu
+        pkgs.gnuplot
+        (pkgs.nerdfonts.override { fonts = [ "Inconsolata" ]; })
+      ];
+      extraConfig = ''
+        (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
+      '';
+      # dependencyOverrides = nix-doom-emacs.inputs;
+    };
+    in {
+    packages.x86_64-linux =
+      let pkgs = import nixpkgs { system = "x86_64-linux"; };
+      in {
+        doom-emacs = pkgs.callPackage nix-doom-emacs (doom-emacs-conf pkgs);
+    };
+    defaultPackage.x86_64-linux =
+      self.packages.x86_64-linux.doom-emacs;
+    defaultApp = {
+      type = "app";
+      program = "${self.defaultPackage.x86_64-linux}/bin/emacs";
+    };
     nixosModule = { config, lib, pkgs, ... }: {
       config = {
         nixpkgs.overlays = [
@@ -24,11 +59,10 @@
           shellAliases = {
             ec = "emacs";
             vim = "emacs -nw";
-            emacs = "emacs";
           };
         };
         home-manager.sharedModules = [
-          ({ config, ... }:
+          ({ config, pkgs, ... }:
             let
               xclipedit = pkgs.writeShellScriptBin "xclipedit" ''
                 set -euo pipefail
@@ -47,28 +81,13 @@
                 # doom emacs
                 nix-doom-emacs.hmModule
               ];
-              programs.doom-emacs = {
-                enable = true;
-                doomPrivateDir = let
-                  doomPrivateDeriv = pkgs.stdenv.mkDerivation rec {
-                    name = "doomPrivateDeriv-1.0";
-                    src = ./doom.d;
-                    installPhase = ''
-                      mkdir -p "$out"
-                      cp -r * "$out"
-                    '';
-                  };
-                in "${doomPrivateDeriv}";
-                extraPackages = [
-                  pkgs.mu
-                  pkgs.gnuplot
-                  (pkgs.nerdfonts.override { fonts = [ "Inconsolata" ]; })
-                ];
-                extraConfig = ''
-                  (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
-                '';
-              };
+              programs.doom-emacs = (doom-emacs-conf pkgs) // {
+                # enable = true;
+                # dependencyOverrides = nix-doom-emacs.inputs;
+              } ;
               home.packages = with pkgs; [
+                # self.defaultPackage.x86_64-linux
+
                 xclipedit
                 emacs-all-the-icons-fonts
 
@@ -87,7 +106,6 @@
                   recursive = true;
                 };
               };
-
             })
         ];
       };

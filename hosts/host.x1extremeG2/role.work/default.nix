@@ -46,7 +46,7 @@
         }
       ];
       home.packages = with pkgs; [
-        # idea-ultimate # jetbrains.phpstorm
+        idea.idea-ultimate # jetbrains.phpstorm
         dia
         insync
         exiftool

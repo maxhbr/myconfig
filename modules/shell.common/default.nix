@@ -149,6 +149,7 @@ in {
       '';
       shellAliases = {
         ps = "${pkgs.procs}/bin/procs";
+        r = "ranger";
         ag = "rg";
       };
     };

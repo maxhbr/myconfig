@@ -50,6 +50,7 @@ let
           outputs=$(${xorg.xrandr}/bin/xrandr --listmonitors |
                       `# resolution is 1920x1080` grep 'x1080/' |
                       `# DP-2 is the notebook screen` grep -v 'DP-2 ' |
+                      `# eDP-1-1 is the notebook screen` grep -v 'eDP-1-1 ' |
                       awk '{print $NF}')
           nOutputs="$(echo "$outputs" | wc -l)"
       else

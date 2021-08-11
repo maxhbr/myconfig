@@ -17,6 +17,9 @@
     };
     environment = {
       systemPackages = with pkgs; [ docker docker-machine ];
+      variables = {
+        DOCKER_BUILDKIT = "1";
+      };
       shellAliases = {
         d = "docker";
         dc = "docker-compose";
@@ -39,7 +42,13 @@
             [[ "$1" == "-a" ]] && remAll || remUntagged
         }
 
+        dcacheclean() {
+            DOCKER_BUILDKIT=1 docker builder prune --filter type=exec.cachemount
+        }
+
         dclean(){
+            dcacheclean
+
             # remove all dangling volumes
             docker volume ls -qf dangling=true |xargs -r docker volume rm
 

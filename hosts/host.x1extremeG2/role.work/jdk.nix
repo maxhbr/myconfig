@@ -52,8 +52,8 @@ in {
       shellAliases = { mvnDebug = "${pkgs.maven}/maven/bin/mvnDebug"; };
       variables = {
         JAVA_8_HOME = "/run/current-system/pkgs/openjdk8/lib/openjdk";
-        JAVA_11_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk11";
-        JAVA_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk11";
+        JAVA_11_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk";
+        JAVA_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk";
       };
     };
   };
