@@ -403,7 +403,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-jquXn3tCOjC1q6i0fKMCy2RfB7TrSDYVL8PygZLsUJg=",
+        "narHash": "sha256-CBpzveAwvJOjjU431PmdFB3Iex45L3aiD4o5H5CIfxk=",
         "path": "flakes/myemacs/",
         "type": "path"
       },
