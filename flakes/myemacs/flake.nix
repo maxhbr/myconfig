@@ -50,16 +50,16 @@
           (self: super: {
             dune =
               super.dune_1; # see: https://github.com/vlaci/nix-doom-emacs/issues/166
-            emacs =
-              super.emacs.overrideDerivation (drv: { nativeComp = true; });
+            #emacs =
+            #  super.emacs.overrideDerivation (drv: { nativeComp = true; });
           })
         ];
         environment = {
           variables = { EDITOR = "emacs -nw"; };
-          shellAliases = {
-            ec = "emacs";
-            vim = "emacs -nw";
-          };
+          #shellAliases = {
+          #  ec = "emacs";
+          #  vim = "emacs -nw";
+          #};
         };
         home-manager.sharedModules = [
           ({ config, pkgs, ... }:
@@ -81,10 +81,14 @@
                 # doom emacs
                 nix-doom-emacs.hmModule
               ];
+              #programs.emacs = {
+              #  enable = true;
+              #  extraPackages = epkgs: [ epkgs.emms epkgs.magit ];
+              #};
               programs.doom-emacs = (doom-emacs-conf pkgs) // {
-                # enable = true;
-                # dependencyOverrides = nix-doom-emacs.inputs;
-              } ;
+                enable = true;
+                #dependencyOverrides = nix-doom-emacs.inputs;
+              };
               home.packages = with pkgs; [
                 # self.defaultPackage.x86_64-linux
 

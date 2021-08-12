@@ -31,7 +31,7 @@ getIsoFromOutLink() {
 }
 
 build() {
-    local outDir="__out/iso"
+    local outDir="../iso"
     local outLink="$outDir/result"
     time nix build --out-link "$outLink" --show-trace .#myconfig-iso
 
