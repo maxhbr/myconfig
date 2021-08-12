@@ -1,1 +1,0 @@
-nexB-scancode-toolkit/scancode.sh

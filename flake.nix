@@ -43,7 +43,7 @@
     my-wallpapers.url = "github:maxhbr/wallpapers";
     my-wallpapers.inputs.nixpkgs.follows = "nixpkgs";
 
-    license-compliance-toolbox.url = "path:flakes/license-compliance-toolbox/";
+    license-compliance-toolbox.url = "github:maxhbr/license-compliance-toolbox";
     license-compliance-toolbox.inputs.nixpkgs.follows = "nixpkgs";
 
     zephyrproject.url = "path:flakes/zephyrproject/";
