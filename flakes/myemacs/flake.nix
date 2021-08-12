@@ -3,7 +3,6 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    # emacs.url = "github:nix-community/emacs-overlay";
     nix-doom-emacs.url = "github:vlaci/nix-doom-emacs/develop";
     nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -56,10 +55,9 @@
         ];
         environment = {
           variables = { EDITOR = "emacs -nw"; };
-          #shellAliases = {
-          #  ec = "emacs";
-          #  vim = "emacs -nw";
-          #};
+          shellAliases = {
+           vim = "emacs -nw";
+          };
         };
         home-manager.sharedModules = [
           ({ config, pkgs, ... }:
@@ -81,13 +79,8 @@
                 # doom emacs
                 nix-doom-emacs.hmModule
               ];
-              #programs.emacs = {
-              #  enable = true;
-              #  extraPackages = epkgs: [ epkgs.emms epkgs.magit ];
-              #};
               programs.doom-emacs = (doom-emacs-conf pkgs) // {
                 enable = true;
-                #dependencyOverrides = nix-doom-emacs.inputs;
               };
               home.packages = with pkgs; [
                 # self.defaultPackage.x86_64-linux
@@ -101,9 +94,9 @@
 
                 shellcheck
               ];
-              # programs.zsh.shellAliases = {
-              #   magit = ''${doom-emacs-bin-path} -e "(magit-status \"$(pwd)\")"'';
-              # };
+              programs.zsh.shellAliases = {
+                magit = ''emacs -e "(magit-status \"$(pwd)\")"'';
+              };
               home.file = {
                 ".doom.d/imports" = {
                   source = ./doom.d-imports;
