@@ -170,11 +170,11 @@
         "straight": "straight"
       },
       "locked": {
-        "lastModified": 1628328518,
-        "narHash": "sha256-U56ydG0+GQvXc9ivjPwJzIE4U4ovXDOzTLdHqJx6oxo=",
+        "lastModified": 1628865677,
+        "narHash": "sha256-cIRgrMuLOynvNLMAhMMG3Wm/zkggYx2gSsnANevv+bk=",
         "owner": "vlaci",
         "repo": "nix-doom-emacs",
-        "rev": "656a3aea172d6fb99a1d6e5c45667121855e5996",
+        "rev": "1020f27f1fab123f0ce3ed5f6e9c0637d888c884",
         "type": "github"
       },
       "original": {
@@ -187,11 +187,11 @@
     "nix-straight": {
       "flake": false,
       "locked": {
-        "lastModified": 1628328207,
-        "narHash": "sha256-ZWdev0HyxmKIdzLetPKiNK7Hh5gBuCnGwqgq95aNf5k=",
+        "lastModified": 1628630968,
+        "narHash": "sha256-eh5QpnX3F8/0iKv1BvyU3KyZ/ksLlRegcd5c41pm/L8=",
         "owner": "vlaci",
         "repo": "nix-straight.el",
-        "rev": "4bb7a6267d0bbb76d7bf4168ada1fb4eec1b735f",
+        "rev": "e3f8aaff9ba889c6f2ee6c6d349736d21f21c685",
         "type": "github"
       },
       "original": {
@@ -202,11 +202,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1628693817,
-        "narHash": "sha256-WtlM8ptjcUUWRvbpkToKJHzLlGCEXZKGh+SfwUYHobA=",
+        "lastModified": 1628869426,
+        "narHash": "sha256-7OetQdzAnml3+0b3pmr+reBKs9jn54IvVxbsncWzBn0=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "9df2cb074d72ea80ac9fd225b29060c8cf13dd39",
+        "rev": "6fc5211eddddc02c50ca7f98d6cc377726417fa9",
         "type": "github"
       },
       "original": {
