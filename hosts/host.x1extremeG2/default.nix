@@ -63,6 +63,8 @@
     virtualisation.libvirtd.enable = true;
     virtualisation.virtualbox.host.enable = true;
 
+    services.hardware.bolt.enable = true;
+
     networking.hostName = "x1extremeG2";
     networking.hostId = "7634ddfe";
 
