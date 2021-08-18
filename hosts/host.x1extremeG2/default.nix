@@ -54,6 +54,8 @@
       imagework.enable = true;
       dev = {
         haskell.enable = true;
+        go.enable = true;
+        ruby.enable = true;
         network.enable = true;
         compliance.enable = true;
       };
