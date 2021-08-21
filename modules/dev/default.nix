@@ -9,6 +9,7 @@ in {
     network.enable = mkEnableOption "myconfig.dev.network";
     tex.enable = mkEnableOption "myconfig.dev.tex";
     compliance.enable = mkEnableOption "myconfig.dev.compliance";
+    nodejs.enable = mkEnableOption "myconfig.dev.nodejs";
   };
 
   imports = [
@@ -18,11 +19,12 @@ in {
     ./dev.tex.nix
     ./dev.go.nix
     ./dev.ruby.nix
+    ./dev.nodejs.nix
     ./programs.license-compliance-toolbox.nix
   ];
   config = {
     myconfig.dev.enable = cfg.haskell.enable || cfg.network.enable
       || cfg.tex.enable || cfg.compliance.enable
-      || cfg.go.enable || cfg.ruby.enable;
+      || cfg.go.enable || cfg.ruby.enable || cfg.nodejs.enable;
   };
 }
