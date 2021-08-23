@@ -6,11 +6,18 @@ in {
   config = lib.mkIf cfg.enable {
     home-manager.users.mhuber = {
       home.packages = with pkgs.nixos-unstable;
-        [ stack cabal-install ] ++ (with haskellPackages; [
-          # cabal-install
-          ghc
+        [ stack sourceHighlight ] ++ (with haskellPackages; [
+          (ghcWithPackages (hpkgs: with hpkgs; [
+            cabal-install
+            hoogle
+            hlint
+            hindent
+            ghcid
+            # packunused
+          ])) # ghc
           hlint
           pandoc
+          # unused
           # hdevtools
         ]);
       home.file = {
