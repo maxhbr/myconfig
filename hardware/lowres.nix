@@ -3,6 +3,5 @@
 { config, pkgs, ... }:
 
 {
-  fonts.fontconfig.dpi = 90;
   services.xserver.dpi = 90;
 }
