@@ -36,6 +36,7 @@ in {
           imagemagick
           mplayer
           qutebrowser
+          freetube
           # spellchecking
           aspell
           aspellDicts.de
