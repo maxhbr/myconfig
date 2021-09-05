@@ -13,7 +13,7 @@
       nextcloud = {
         enable = true;
         hostName = config.networking.hostName;
-        package = pkgs.nextcloud21;
+        package = pkgs.nextcloud22;
         home = "/mnt/2x4t/nextcloud";
         https = true;
         autoUpdateApps.enable = true;
@@ -24,7 +24,6 @@
           dbhost = "/run/postgresql";
           dbname = "nextcloud";
           adminuser = "Admin";
-          adminpassFile = "/etc/nextcloud/adminpass";
           extraTrustedDomains = [
             myconfig.metadatalib.get.hosts."${config.networking.hostName}".ip4
             myconfig.metadatalib.get.hosts."${config.networking.hostName}".wireguard.wg0.ip4
