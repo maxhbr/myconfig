@@ -90,6 +90,46 @@ let
           };
         }));
 
+      setupAsSyncthingClient = cert: key: devices: folders: {
+        myconfig.secrets = {
+          "syncthing.cert.pem" = {
+            source = cert;
+            dest = "/etc/syncthing/cert.pem";
+          };
+          "syncthing.key.pem" = {
+            source = key;
+            dest = "/etc/syncthing/key.pem";
+          };
+        };
+        services.syncthing = {
+          enable = true;
+          declarative = {
+            cert = "/etc/syncthing/cert.pem";
+            key = "/etc/syncthing/key.pem";
+            inherit devices folders;
+          };
+        };
+      };
+
+      mkSyncthingDevice = hostName: introducer:
+        let
+          hostMetadata = metadata.hosts."${hostName}";
+          addressesFromIp = if (lib.attrsets.hasAttrByPath [ "ip4" ] hostMetadata)
+                            then [ "tcp://${hostMetadata.ip4}" ]
+                            else [];
+          otherAddresses = if (lib.attrsets.hasAttrByPath [ "syncthing" "addresses" ] hostMetadata)
+                           then hostMetadata.syncthing.addresses
+                           else [];
+        in ( # lib.mkIf (lib.attrsets.hasAttrByPath [ "syncthing" "id" ] hostMetadata)
+          {
+          "${hostName}" = {
+            name = hostName;
+            id = hostMetadata.syncthing.id;
+            addresses = addressesFromIp ++ otherAddresses;
+            inherit introducer;
+          };
+        });
+
       setupAsBuildMachine = authorizedKeys: {
         users.extraUsers.nixBuild = {
           name = "nixBuild";

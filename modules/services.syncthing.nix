@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
 let
-  user = config.myconfig.user;
+  user = "mhuber";
   syncthingTunnel = with pkgs;
     pkgs.writeShellScriptBin "syncthingTunnel" ''
       set -x
