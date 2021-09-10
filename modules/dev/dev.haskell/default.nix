@@ -14,6 +14,7 @@ in {
             hindent
             ghcid
             # packunused
+            brittany
           ])) # ghc
           hlint
           pandoc

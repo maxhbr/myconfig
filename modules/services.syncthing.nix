@@ -15,10 +15,8 @@ let
 in {
   config = lib.mkIf config.services.syncthing.enable {
     services.syncthing = {
-      declarative = {
-        overrideDevices = true;
-        overrideFolders = true;
-      };
+      overrideDevices = true;
+      overrideFolders = true;
       user = "${user}";
       group = "${user}";
       dataDir = "/home/${user}/syncthing";

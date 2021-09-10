@@ -44,7 +44,7 @@
           };
 
           home-manager.sharedModules = [{
-            imports = [ ./picom.hm.nix ];
+            # imports = [ ./picom.hm.nix ];
             home.packages = with pkgs; [
               my-xmonad
               my-xmobar

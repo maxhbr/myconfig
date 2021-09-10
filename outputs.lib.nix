@@ -103,11 +103,9 @@ let
         };
         services.syncthing = {
           enable = true;
-          declarative = {
-            cert = "/etc/syncthing/cert.pem";
-            key = "/etc/syncthing/key.pem";
-            inherit devices folders;
-          };
+          cert = "/etc/syncthing/cert.pem";
+          key = "/etc/syncthing/key.pem";
+          inherit devices folders;
         };
       };
 
