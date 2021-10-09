@@ -267,7 +267,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-sAhNpExYBse06JdM5bmjj8q7/qmgC/F8iRdduegZ2XE=",
+        "narHash": "sha256-c/3Vu3k3qtHsJm/rJUstmaNLACgZxhBHLBX00tiVwzw=",
         "path": "flakes/myvim/",
         "type": "path"
       },
@@ -450,11 +450,11 @@
     },
     "rel2105": {
       "locked": {
-        "lastModified": 1633779225,
-        "narHash": "sha256-RypZY0aF/6nCaLIMl6g9kfVjnZxvUiYeuJn2azGK27Q=",
+        "lastModified": 1633795001,
+        "narHash": "sha256-8kC6F1soQH89jIDVbF3zays95EcRHII36F7RdV9Bu/8=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "0c106b8ef3a8c7e9f2ec5b45c17ffaa8c7343bdd",
+        "rev": "7cdc04db5a2c0089a7eef9fba57f3df44349e8bd",
         "type": "github"
       },
       "original": {
@@ -466,11 +466,11 @@
     },
     "rel2105_2": {
       "locked": {
-        "lastModified": 1633779225,
-        "narHash": "sha256-RypZY0aF/6nCaLIMl6g9kfVjnZxvUiYeuJn2azGK27Q=",
+        "lastModified": 1633795001,
+        "narHash": "sha256-8kC6F1soQH89jIDVbF3zays95EcRHII36F7RdV9Bu/8=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "0c106b8ef3a8c7e9f2ec5b45c17ffaa8c7343bdd",
+        "rev": "7cdc04db5a2c0089a7eef9fba57f3df44349e8bd",
         "type": "github"
       },
       "original": {
@@ -540,7 +540,7 @@
         "rel2105": "rel2105_2"
       },
       "locked": {
-        "narHash": "sha256-qypQNFDN0mjEdc2TMLvaMEa6rtzZF9IFmk8Fia2847M=",
+        "narHash": "sha256-P5wjHIqPjpVI07br37+a4gUV7pT+Qv+PYVThwBBiRh4=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
