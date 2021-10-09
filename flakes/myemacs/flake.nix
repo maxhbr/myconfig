@@ -60,7 +60,7 @@
           };
         };
         home-manager.sharedModules = [
-          ({ config, pkgs, ... }:
+          ({ config, ... }:
             let
               xclipedit = pkgs.writeShellScriptBin "xclipedit" ''
                 set -euo pipefail

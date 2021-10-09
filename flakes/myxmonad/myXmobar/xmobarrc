@@ -68,7 +68,7 @@ Config { font = "xft:Inconsolata Nerd Font:pixelsize=12:antialias=true:hinting=t
          ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %XMonadLog% }{ <action=`urxvtc -name ScratchNMTUI -e bash -c nmtui`>%dynnetwork% %wlp82s0wi%</action> | <action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu%%multicoretemp% %memory%</action> %isvpn%%hasXssLock%%isBtBlocked%%mute_telco%| <action=`xbacklight =10`>%battery%</action> | <fc=#7285c3>%mail%</fc> | %date% "
+       , template = " %XMonadLog% }{ <action=`urxvtc -name ScratchNMTUI -e bash -c nmtui`>%dynnetwork% %wlp82s0wi%</action> | <action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu%%multicoretemp% %memory%</action> %isvpn%%hasXssLock%%isBtBlocked%%mute_telco%| <action=`xbacklight =10`>%battery%</action> | %date% "
        }
 
 -- vim: set ft=haskell :

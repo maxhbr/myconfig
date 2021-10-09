@@ -3,6 +3,17 @@
 { pkgs, config, myconfig, ... }:
 let user = myconfig.user;
 in {
+  imports = [
+    {
+      # security.wrappers = {
+      #   pmount.source = "${pkgs.pmount}/bin/pmount";
+      #   pumount.source = "${pkgs.pmount}/bin/pumount";
+      # };
+      environment.systemPackages = with pkgs; [
+        pmount
+      ];
+    }
+  ];
   config = {
     home-manager.users."${user}" = {
       home.file = {
@@ -98,7 +109,6 @@ in {
         pwgen # unstable.mkpasswd
         usbutils
         tcpdump
-        pmount
         fuse
 
         entr
@@ -155,16 +165,10 @@ in {
     };
     programs.thefuck.enable = true;
 
-    security = {
-      sudo.extraConfig = ''
-        ALL  ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/systemctl suspend
-        ALL  ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/systemctl reboot
-        ALL  ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/systemctl poweroff
-      '';
-      wrappers = {
-        pmount.source = "${pkgs.pmount}/bin/pmount";
-        pumount.source = "${pkgs.pmount}/bin/pumount";
-      };
-    };
+    security.sudo.extraConfig = ''
+      ALL  ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/systemctl suspend
+      ALL  ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/systemctl reboot
+      ALL  ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/systemctl poweroff
+    '';
   };
 }

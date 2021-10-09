@@ -1,19 +1,4 @@
 " ~/.vimrc
-"
-" The other files of my vim config can be found at github:
-"     https://github.com/maximilianhuber/myconfig
-"
-" Try it out:
-"     simply call the script `_tasteMyVimrc.sh` in my config repo. It will
-"     generate a folder `/tmp/vimtest/` and install my vimrc and the other
-"     files completely in this folder
-"
-" Written by Maximilian-Huber.de
-"
-" Worth reading:
-"   Steve Losh: Learn Vimscript the Hard Way
-"
-" Last Modified: Mon Jun 15, 2015  09:25
 
 " ===================================================================
 " ====  initialize settings  ========================================

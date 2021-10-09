@@ -33,6 +33,7 @@
   ./services.xserver.programs.firefox.nix
   ./services.xserver.programs.kitty.nix
   ./services.xserver.programs.obs.nix
+  ./services.xserver.programs.vscode.nix
   ./services.xserver.programs.xss-lock.nix
   ./services.xserver.programs.zathura.nix
   ./services.xserver.pulseaudio.nix
@@ -45,7 +46,6 @@
   ./shell.programs.bat.nix
   ./shell.programs.exa.nix
   ./shell.programs.tmux
-  ./shell.programs.vim
   ./shell.zsh
   ./virtualization.docker
   ./virtualization.lxc.nix

@@ -39,7 +39,7 @@
         curl
         git
         git-lfs
-        unzip
+        unzip p7zip
         tree
         rlwrap
         vim

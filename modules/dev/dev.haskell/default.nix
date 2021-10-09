@@ -15,6 +15,7 @@ in {
             ghcid
             # packunused
             brittany
+            # ghc-mod
           ])) # ghc
           hlint
           pandoc

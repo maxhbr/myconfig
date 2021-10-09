@@ -12,7 +12,7 @@
     rel2105.url = "github:nixos/nixpkgs/release-21.05";
     # rel2111.url = "github:nixos/nixpkgs/release-21.11";
 
-    home.url = "github:nix-community/home-manager/release-21.05";
+    home.url = "github:nix-community/home-manager";
     home.inputs.nixpkgs.follows = "nixpkgs";
 
     flake-utils.url = "github:numtide/flake-utils";
@@ -26,13 +26,16 @@
 
     # mine
 
-    emacs.url = "github:nix-community/emacs-overlay";
-    nix-doom-emacs.url = "github:vlaci/nix-doom-emacs/develop";
-    nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
+    myvim.url = "path:flakes/myvim/";
+    myvim.inputs.nixpkgs.follows = "nixpkgs";
 
-    myemacs.url = "path:flakes/myemacs/";
-    myemacs.inputs.nixpkgs.follows = "nixpkgs";
-    myemacs.inputs.nix-doom-emacs.follows = "nix-doom-emacs";
+    # emacs.url = "github:nix-community/emacs-overlay";
+    # nix-doom-emacs.url = "github:vlaci/nix-doom-emacs/develop";
+    # nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
+
+    # myemacs.url = "path:flakes/myemacs/";
+    # myemacs.inputs.nixpkgs.follows = "nixpkgs";
+    # myemacs.inputs.nix-doom-emacs.follows = "nix-doom-emacs";
 
     myfish.url = "path:flakes/myfish/";
 
@@ -99,7 +102,8 @@
             inputs.myxmonad.nixosModule
             inputs.my-wallpapers.nixosModule
             inputs.myfish.nixosModule
-            inputs.myemacs.nixosModule
+            # inputs.myemacs.nixosModule
+            inputs.myvim.nixosModule
           ] ++ (import ./modules/_list.nix);
           config = {
             hardware.enableRedistributableFirmware = true;
