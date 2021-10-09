@@ -203,11 +203,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1633796375,
-        "narHash": "sha256-ud7swRUPEAqViSBbxcEm1yiKEFJrP1cO1bX69W0OF0g=",
+        "lastModified": 1633798051,
+        "narHash": "sha256-FV+rxiIJGIpAzLucUt7IokAEBlkNVM2kXTRgyRNireY=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "df315b7b80a1067bb1789a6e78eff98413d84c52",
+        "rev": "71bcb1806235b66cb414a42e92e6cb9af8ae2a2c",
         "type": "github"
       },
       "original": {
@@ -267,7 +267,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-JlmG6i0jiYHEaKkp3DVqFJ66MKEUSfNmSDewWr/zuMQ=",
+        "narHash": "sha256-sNj6lFiPXyqUwqlGPcsg4XvkZAVuBaNMpcXOdDO0A/E=",
         "path": "flakes/myvim/",
         "type": "path"
       },
