@@ -267,7 +267,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-c/3Vu3k3qtHsJm/rJUstmaNLACgZxhBHLBX00tiVwzw=",
+        "narHash": "sha256-sMETMcMZRSV4BsgChOCCij3MdEae6jTFT6lZd/2Q46Q=",
         "path": "flakes/myvim/",
         "type": "path"
       },
