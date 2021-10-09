@@ -1,5 +1,6 @@
 [
   ./myconfig
+  ./myvim
   # modules
   ./core.nix
   ./crypt.nix

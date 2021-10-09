@@ -25,10 +25,6 @@
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
     # mine
-
-    myvim.url = "path:flakes/myvim/";
-    myvim.inputs.nixpkgs.follows = "nixpkgs";
-
     # emacs.url = "github:nix-community/emacs-overlay";
     # nix-doom-emacs.url = "github:vlaci/nix-doom-emacs/develop";
     # nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
@@ -36,6 +32,7 @@
     # myemacs.url = "path:flakes/myemacs/";
     # myemacs.inputs.nixpkgs.follows = "nixpkgs";
     # myemacs.inputs.nix-doom-emacs.follows = "nix-doom-emacs";
+
 
     myfish.url = "path:flakes/myfish/";
 
@@ -91,7 +88,8 @@
                 in [
                   (mkSubPkgsOverlay "master" inputs.master)
                   (mkSubPkgsOverlay "nixos-unstable" inputs.nixos-unstable)
-                  (mkSubPkgsOverlay "nixos-unstable-small" inputs.nixos-unstable-small)
+                  (mkSubPkgsOverlay "nixos-unstable-small"
+                    inputs.nixos-unstable-small)
                   (mkSubPkgsOverlay "nixos-2003" inputs.rel2003)
                   (mkSubPkgsOverlay "nixos-2009" inputs.rel2009)
                   (mkSubPkgsOverlay "nixos-2105" inputs.rel2105)
@@ -102,8 +100,6 @@
             inputs.myxmonad.nixosModule
             inputs.my-wallpapers.nixosModule
             inputs.myfish.nixosModule
-            # inputs.myemacs.nixosModule
-            inputs.myvim.nixosModule
           ] ++ (import ./modules/_list.nix);
           config = {
             hardware.enableRedistributableFirmware = true;
@@ -138,21 +134,18 @@
             inputs.license-compliance-toolbox.nixosModule
           ] ++ moreModules) metadataOverride);
         host-vserver = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "vserver" ([
-            self.nixosModules.core
-          ] ++ moreModules) metadataOverride);
+          (self.lib.evalConfiguration "x86_64-linux" "vserver"
+            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
         host-nas = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "nas"
             ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
         host-nuc = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "nuc"
-            ([ self.nixosModules.core
-               inputs.zephyrproject.nixosModule
-             ]
+            ([ self.nixosModules.core inputs.zephyrproject.nixosModule ]
               ++ moreModules) metadataOverride);
         host-pi4 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "aarch64-linux" "pi4"
-            ([ self.nixosModules.core] ++ moreModules) metadataOverride);
+            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
       };
 
       ##########################################################################
@@ -206,15 +199,13 @@
         config = nixpkgsConfig;
       };
 
-      packages.myconfig-iso = self.lib.mkISO
-        { system = "x86_64-linux";
-          hostName = "iso";
-          nixosModules = [
-            self.nixosModules.core
-          ];
-          metadataOverride = {};
-          bootstrappedConfig = null;
-        };
+      packages.myconfig-iso = self.lib.mkISO {
+        system = "x86_64-linux";
+        hostName = "iso";
+        nixosModules = [ self.nixosModules.core ];
+        metadataOverride = { };
+        bootstrappedConfig = null;
+      };
 
       devShell = let
         pkgs = import inputs.nixpkgs {
