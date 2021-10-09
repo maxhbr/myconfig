@@ -267,7 +267,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-040ovPAa0rWhxH3asdWIqI0wFOzzGLHybcDzr8jm0Bc=",
+        "narHash": "sha256-wyUYg0tvjNs6fu2iMvEz0eiAsn2wTimoYhz4sGC1rks=",
         "path": "flakes/myvim/",
         "type": "path"
       },
@@ -358,10 +358,10 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1633791597,
-        "narHash": "sha256-HzpxqTEnqsjkKWfW87kSI3WVizYjUMQeUjSIm3b5I0Y=",
-        "path": "/nix/store/fjdfm9jz85sr5a8fnmp4d10i1cf95ncp-source",
-        "rev": "9bf75dd50b7b6d3ce6aaf6563db95f41438b9bdb",
+        "lastModified": 1633796375,
+        "narHash": "sha256-ud7swRUPEAqViSBbxcEm1yiKEFJrP1cO1bX69W0OF0g=",
+        "path": "/nix/store/r9hhmcw4r2v1qx6v6xjk4i37cv5l99n5-source",
+        "rev": "df315b7b80a1067bb1789a6e78eff98413d84c52",
         "type": "path"
       },
       "original": {
@@ -540,7 +540,7 @@
         "rel2105": "rel2105_2"
       },
       "locked": {
-        "narHash": "sha256-StkOvfvVtwXfcZSAwHjxb7IJ4Su8UaRgv5e4ukgSK9I=",
+        "narHash": "sha256-Cl1Q1PCnTnweMc1b3gEM2I1MgG3P+pM2GefmoZnXCvM=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
