@@ -188,11 +188,11 @@
         "ort": "ort"
       },
       "locked": {
-        "lastModified": 1634020311,
-        "narHash": "sha256-UN13rLRTQxpve9VvwPYOADna2LLYz+WnPbKbo6Pm0Cw=",
+        "lastModified": 1634037969,
+        "narHash": "sha256-coprKPnpDy1TXI59x1IfmkugpzPoVlmRLoQXwTbRZtk=",
         "owner": "maxhbr",
         "repo": "license-compliance-toolbox",
-        "rev": "c492959a03c0e5380a10dcd82ce2f29048d2861c",
+        "rev": "05bceac3572daec8d0359083d52a34efa8669288",
         "type": "github"
       },
       "original": {
@@ -371,11 +371,11 @@
     "ort": {
       "flake": false,
       "locked": {
-        "lastModified": 1634014823,
-        "narHash": "sha256-iyA7L97D+/n5xTMGMGE1zLENE9XW6/REVmHieaVaNZ8=",
+        "lastModified": 1634034728,
+        "narHash": "sha256-mK2JQa3XKJzcmuP5oA/69oA1+0da5Aic4mpnmxfaGmc=",
         "owner": "oss-review-toolkit",
         "repo": "ort",
-        "rev": "4ab3679b1b654ab00953224e2c52b3f34a32b377",
+        "rev": "6b3740e4b2d0a3488b9dadab3a22c35dc32513ec",
         "type": "github"
       },
       "original": {
