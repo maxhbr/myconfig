@@ -1,570 +1,34 @@
 " ~/.vimrc
 
-" ===================================================================
-" ====  initialize settings  ========================================
-" ===================================================================
-let s:settings = {}
-let b:settings = {}
-" Best Colorschemes: landscape, mustang, jellybeans, hybrid
-" Light Colorscheme: lucius, hemisu
-" Also Good: seoul256(-light), badwolf, kolor, molokai, wombat256...
-" let b:settings.Colorscheme="jellybeans"
-" let b:settings.Colorscheme="hemisu"
-let s:settings.LightColorscheme="lucius"
-let s:settings.DarkColorscheme="landscape"
-let s:settings.ColorschemeVariant="dark"      " dark or light
-let s:settings.InstallPluginManagerAutomatically=1
-let s:settings.ChooseStatusline=2              " 2: lightline
-                                               " 1: Airline
-                                               " 0: Powerline
-let s:settings.useNERDTree=0                   " 1: NERDTree     0: none
-let s:settings.UndotreeOrGundo=1               " 1: Undotree     0: Gundo
-let s:settings.ChooseCommenter=2               " 2: vim-commentry
-                                               " 1: tComment
-                                               " 0: NerdCommenter
-let s:settings.YcmOrNeocomplete=1              " 1: YCM          0: Neocomplete
-  let s:settings.YcmAlternativeKeybindings=1   " only if YCM is chosen
-" Plugin Groups:
-" hasekll, scheme, clojure, lisp, html, csv, arduino, ruby, perl
-let s:settings.supportLanguages=['haskell', 'arduino', 'html', 'csv', 'lisp', 'perl', 'arduino']
-let s:settings.TestPlugins=1
-
-function! s:applyColorscheme() "{{{
-  if s:settings.ColorschemeVariant == "light" "{{{
-    let l:col = s:settings.LightColorscheme
-    set background=light
-  else
-    let l:col = s:settings.DarkColorscheme
-    set background=dark
-  endif "}}}
-
-  "configure the colorscheme
-  if l:col == "badwolf"
-    let g:badwolf_darkgutter = 0
-    let g:badwolf_tabline = 3
-    let g:badwolf_css_props_highlight = 1
-  endif
-
-  "apply the colorscheme
-  exec 'colorscheme '.l:col
-
-  "tweak the colorscheme
-  if l:col == "mustang"
-    highlight ColorColumn ctermbg=233 guibg=#592929
-  elseif l:col == "badwolf"
-    highlight LineNr ctermbg=235
-  elseif l:col == "jellybeans"
-    highlight LineNr ctermbg=234
-  elseif l:col == "hybrid"
-    highlight LineNr ctermfg=243 ctermbg=232
-  endif
-  hi CursorLine cterm=none
-
-  " if s:settings.ChooseStatusline == 2
-  "   if exists("s:lightline#colorscheme#default#palette")
-  "     call lightline#enable()
-  "   endif
-  " endif
-endfunction "}}}
-" augroup AutoApplyColorscheme "{{{
-"   autocmd!
-"   autocmd BufEnter * call s:applyColorscheme()
-" augroup END "}}}
-
 let mapleader=","
-" let maplocalleader = "\\"
-
-" auto reload vimrc when saved ======================================{{{
-if has("autocmd")
-  augroup autoSourceVimrc
-    autocmd!
-    autocmd bufwritepost .vimrc source %
-          \ | set ts=2 sw=2 sts=2 et fenc=utf-8 ff=unix foldmethod=marker foldmarker={{{,}}}
-  augroup END
-endif "==============================================================}}}
 
 " ===================================================================
 " ====  plugins  ====================================================
 " ==================================================================={{{
-if s:settings.InstallPluginManagerAutomatically " ========================={{{
-  " install vundle automatically, if not present
-  " if !isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
-  "   let src = 'http://github.com/gmarik/vundle.git'
-  "   exec '!git clone '.src.' ~/.vim/bundle/Vundle.vim'
-  "   au VimEnter * BundleInstall
-  " endif
-  if !filereadable(expand('~').'/.vim/autoload/plug.vim')
-    exec '!mkdir -p '.expand('~').'/.vim/autoload/'
-    exec '!curl -fLo '.expand('~').'/.vim/autoload/plug.vim '.
-      \ 'https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim'
-    au VimEnter * PlugInstall
-  endif
-endif " ============================================================}}}
-" if isdirectory(expand('~').'/.vim/bundle/Vundle.vim')
-  " filetype off                      " required
-  " set rtp+=~/.vim/bundle/Vundle.vim " required
-  " call vundle#begin()               " required
-if filereadable(expand('~').'/.vim/autoload/plug.vim')
-  filetype off
-  call plug#begin('~/.vim/plug')
+# 'scrooloose/syntastic' "{{{
+  let g:syntastic_error_symbol = '✗'
+  let g:syntastic_style_error_symbol = '✠'
+  let g:syntastic_warning_symbol = '∆'
+  let g:syntastic_style_warning_symbol = '≈'
+  noremap <Leader>S :SyntasticToggleMode<CR>
+  let g:syntastic_scala_checkers = []
 
-  " " download the rest of my config with vundle, if no ~/ftplugin folder is
-  " " present
-  " " TODO: find better test
-  " if !isdirectory(expand('~').'/.vim/ftplugin')
-  "   Plugin 'maximilianhuber/myconfig', {'rtp': 'vim/'}
-  " endif
-
-  " Used Plugins:
-  " ===================================================================
-  "   General:
-  if s:settings.UndotreeOrGundo
-    Plug 'mbbill/undotree',  { 'on': 'UndotreeToggle' }
-    nnoremap <F6> :UndotreeToggle<CR>
-  else
-    Plug 'sjl/gundo.vim',  { 'on': 'GundoToggle' }
-    nnoremap <F6> :GundoToggle<CR>
-  endif
-
-  Plug 'vim-scripts/matchit.zip'
-
-  Plug 'Raimondi/delimitMate'
-  " or:
-  "Plug 'jiangmiao/auto-pairs'
-
-  Plug 'scrooloose/syntastic' "{{{
-    let g:syntastic_error_symbol = '✗'
-    let g:syntastic_style_error_symbol = '✠'
-    let g:syntastic_warning_symbol = '∆'
-    let g:syntastic_style_warning_symbol = '≈'
-    noremap <Leader>S :SyntasticToggleMode<CR>
-    let g:syntastic_scala_checkers = []
-    
-    let g:syntastic_always_populate_loc_list = 0
-    let g:syntastic_auto_loc_list = 0
-    let g:syntastic_check_on_open = 1
-    let g:syntastic_check_on_wq = 0
-    " let g:syntastic_haskell_checkers = ["hlint","scan"]
-    let g:syntastic_haskell_checkers = ["hlint","scan","hdevtools"]
-    " let g:syntastic_haskell_checkers = ["hlint","scan","hdevtools","ghc-mod"]
-  "}}}
-
-  if  s:settings.ChooseCommenter==2
-    Plug 'tpope/vim-commentary'
-  elseif  s:settings.ChooseCommenter==1
-    Plug 'tomtom/tcomment_vim'
-  else
-    Plug 'scrooloose/nerdcommenter'
-  end
-
-  " ===================================================================
-  "   Design:
-  if s:settings.ChooseStatusline==2
-    Plug 'itchyny/lightline.vim'
-  elseif s:settings.ChooseStatusline==1
-    Plug 'bling/vim-airline' "{{{
-      "let g:airline_powerline_fonts = 1
-      if 0 " tabline
-        let g:airline#extensions#tabline#enabled = 1
-        let g:airline#extensions#tabline#left_sep=' '
-        let g:airline#extensions#tabline#left_alt_sep='¦'
-      endif
-    "}}}
-  else
-    Plug 'Lokaltog/vim-powerline' " DEPRECATED in favor of Lokaltog/powerline.
-  endif
-
-  " ===================================================================
-  "  Colorschemes:  ==================================================={{{
-  " Often used colorschemes
-  Plug 'nanotech/jellybeans.vim'
-  Plug 'itchyny/landscape.vim'
-  Plug 'jonathanfilip/vim-lucius'
-  Plug 'noahfrederick/vim-hemisu'
-  Plug 'sjl/badwolf'
-  " other good colorschemes
-  " Plug 'croaker/mustang-vim'
-  " Plug 'junegunn/seoul256.vim'
-  " Plug 'w0ng/vim-hybrid'
-  " Plug 'zeis/vim-kolor'
-  " Plug 'tomasr/molokai'
-  " Plug 'vim-scripts/wombat256.vim'
-  "                                                                    }}}
-  " ===================================================================
-  "   Manage Files:
-  Plug 'kien/ctrlp.vim' "{{{
-    let g:ctrlp_map = '<c-p>'
-    let g:ctrlp_cmd = 'CtrlP'
-    let g:ctrlp_working_path_mode = 'ra'
-    nnoremap <Leader>b :CtrlPBuffer<CR>
-    nnoremap <Leader>p :CtrlPMRU<CR>
-  "}}}
-
-  Plug 'Shougo/unite.vim' "{{{
-    if !has("gui_running") && !has("win32")
-      nnoremap <silent> <Nul> :Unite -start-insert buffer file<CR>
-    else
-      nnoremap <silent> <C-space> :Unite -start-insert buffer file<CR>
-    end
-  "}}}
-  Plug 'Shougo/vimfiler.vim', { 'on': ['VimFiler', 'VimFilerExplorer'] } "{{{
-    let g:vimfiler_as_default_explorer = 1
-    noremap <C-e> :VimFilerExplorer<CR>
-  "}}}
-
-  if s:settings.useNERDTree
-    Plug 'scrooloose/nerdtree', { 'on': 'NERDTreeToggle' } "{{{
-      "noremap <C-n> :NERDTreeToggle<CR>
-      augroup autoNERDTree
-        autocmd!
-        autocmd bufenter * if (winnr("$") == 1 && exists("b:NERDTreeType") && b:NERDTreeType == "primary") | q | endif
-      augroup END
-    "}}}
-  " else
-    " noremap <C-e> :Explore<CR>
-    "noremap <C-e> :Ve<CR>
-  endif
-
-  Plug 'mileszs/ack.vim', { 'on': 'Ack' } "{{{
-    nnoremap _a :silent execute "Ack " . expand("<cWORD>") <cr>
-    " use ggreer/the_silver_searcher
-    let g:ackprg = 'ag --nogroup --nocolor --column'
-  "}}}
-
-  " ===================================================================
-  "   Completion:  ===================================================={{{
-  Plug 'honza/vim-snippets'
-
-  if s:settings.YcmOrNeocomplete
-    Plug 'SirVer/ultisnips' "{{{
-      " Trigger configuration. Do not use <tab> if you use YCM.
-      let g:UltiSnipsExpandTrigger="<c-b>"
-      let g:UltiSnipsJumpForwardTrigger="<c-b>"
-      "let g:UltiSnipsJumpBackwardTrigger="<c-z>"
-      " If you want :UltiSnipsEdit to split your window.
-      let g:UltiSnipsEditSplit="vertical"
-    "}}}
-
-    Plug 'Valloric/YouCompleteMe', { 'do': './install.sh' } "{{{
-      "       needs:
-      "       $ ./install.sh --clang-completer
-      let g:ycm_use_ultisnips_completer = 1
-      let g:ycm_min_num_of_chars_for_completion = 2
-      let g:ycm_filetype_blacklist = {
-            \ 'tagbar' : 1,
-            \ 'qf' : 1,
-            \ 'notes' : 1,
-            \ 'unite' : 1,
-            \ 'pandoc' : 1,
-            \ 'infolog' : 1,
-            \}
-      let g:ycm_key_detailed_diagnostics = "<leader>Dt"
-      let g:ycm_complete_in_comments_and_strings=1
-
-      if s:settings.YcmAlternativeKeybindings
-        let g:ycm_key_list_select_completion=['<C-n>', '<c-b>', '<Down>']
-        let g:ycm_key_list_previous_completion=['<C-p>', '<Up>']
-        let g:UltiSnipsExpandTrigger="<tab>"
-        let g:UltiSnipsJumpForwardTrigger="<tab>"
-      endif
-    "}}}
-  else
-    " neocomplete / neocomplcache and neosnippet {{{
-    if has('lua')
-      Plug 'Shougo/neocomplete.vim' " {{{
-        " Use neocomplcache
-        let g:neocomplete#enable_at_startup = 1
-        " Use smartcase.
-        let g:neocomplete#enable_smart_case = 1
-        " Set minimum syntax keyword length.
-        let g:neocomplete#sources#syntax#min_keyword_length = 2
-        let g:neocomplete#lock_buffer_name_pattern = '\*ku\*'
-
-        " For cursor moving in insert mode(Not recommended)
-        inoremap <expr><Left>  neocomplete#close_popup() . "\<Left>"
-        inoremap <expr><Right> neocomplete#close_popup() . "\<Right>"
-        inoremap <expr><Up>    neocomplete#close_popup() . "\<Up>"
-        inoremap <expr><Down>  neocomplete#close_popup() . "\<Down>"
-
-        function! s:my_cr_function()
-          return neocomplete#close_popup() . "\<CR>"
-          " For no inserting <CR> key.
-          "return pumvisible() ? neocomplete#close_popup() : "\<CR>"
-        endfunction
-      " }}}
-    else
-      Plug 'Shougo/neocomplcache.vim' " {{{
-        " Use neocomplcache.
-        let g:neocomplcache_enable_at_startup = 1
-        " Use smartcase.
-        let g:neocomplcache_enable_smart_case = 1
-        " Set minimum syntax keyword length.
-        let g:neocomplcache_min_syntax_length = 2
-        let g:neocomplcache_lock_buffer_name_pattern = '\*ku\*'
-
-        " For cursor moving in insert mode(Not recommended)
-        inoremap <expr><Left>  neocomplcache#close_popup() . "\<Left>"
-        inoremap <expr><Right> neocomplcache#close_popup() . "\<Right>"
-        inoremap <expr><Up>    neocomplcache#close_popup() . "\<Up>"
-        inoremap <expr><Down>  neocomplcache#close_popup() . "\<Down>"
-
-        function! s:my_cr_function()
-          return neocomplcache#smart_close_popup() . "\<CR>"
-          " For no inserting <CR> key.
-          "return pumvisible() ? neocomplete#close_popup() : "\<CR>"
-        endfunction
-      " }}}
-      " }}}
-    endif
-    let g:acp_enableAtStartup = 0
-    " <CR>: close popup and save indent.
-    inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
-    " <TAB>: completion.
-    inoremap <expr><TAB>  pumvisible() ? "\<C-n>" : "\<TAB>"
-
-    " Enable omni completion.
-    augroup neoOmicActivations
-      autocmd!
-      autocmd FileType css           setlocal omnifunc=csscomplete#CompleteCSS
-      autocmd FileType html,markdown setlocal omnifunc=htmlcomplete#CompleteTags
-      autocmd FileType javascript    setlocal omnifunc=javascriptcomplete#CompleteJS
-      autocmd FileType python        setlocal omnifunc=pythoncomplete#Complete
-      autocmd FileType xml           setlocal omnifunc=xmlcomplete#CompleteTags
-    augroup END
-
-    Plug 'Shougo/neosnippet-snippets'
-    Plug 'Shougo/neosnippet.vim' "{{{
-      let g:neosnippet#snippets_directory='~/.vim/bundle/vim-snippets/snippets'
-      let g:neosnippet#enable_snipmate_compatibility=1
-
-      imap <expr><TAB> neosnippet#expandable_or_jumpable() ?
-            \ "\<Plug>(neosnippet_expand_or_jump)" :
-            \ (pumvisible() ? "\<C-n>" : "\<TAB>")
-      smap <expr><TAB> neosnippet#expandable_or_jumpable() ?
-            \ "\<Plug>(neosnippet_expand_or_jump)" : "\<TAB>"
-      imap <expr><S-TAB> pumvisible() ? "\<C-p>" : ""
-      smap <expr><S-TAB> pumvisible() ? "\<C-p>" : ""
-    "}}}
-  endif
-    Plug 'ervandew/supertab' "{{{
-      let g:SuperTabDefaultCompletionType = "<c-n>"
-    "}}}
-  "}}}
-
-  " ===================================================================
-  "   Vimwiki:
-  Plug 'vimwiki/vimwiki'
-
-  " ===================================================================
-  "   Haskell:
-  if (index(s:settings.supportLanguages, 'haskell') >= 0)
-    " http://www.stephendiehl.com/posts/vim_haskell.html
-    " https://wiki.haskell.org/Vim
-    " http://blog.mno2.org/posts/2011-11-17-vim-plugins-for-haskell-programmers.html
-
-    "needs $ cabal install ghc-mod
-    Plug 'eagletmt/ghcmod-vim', { 'for': ['haskell','lhaskell'] } "{{{
-      Plug 'Shougo/vimproc.vim', { 'do': 'make', 'for': ['haskell','lhaskell'] }
-      hi ghcmodType ctermbg=yellow
-      let g:ghcmod_type_highlight = 'ghcmodType'
-    "}}}
-
-    "needs $ cabal install hoogle
-    Plug 'Twinside/vim-hoogle', { 'for': ['haskell','lhaskell'] }
-
-    " In addition to Syntastic, it is recommended that you also use
-    " vim-hdevtools for additional functionality.
-    "needs $ cabal install hdevtools
-    Plug 'bitc/vim-hdevtools', { 'for': ['haskell','lhaskell'] } "{{{
-      let g:syntastic_haskell_hdevtools_args = '-g-Wall'
-      " let g:syntastic_haskell_hdevtools_args = '-g-isrc -g-Wall'
-    "}}}
-
-    Plug 'eagletmt/neco-ghc', { 'for': ['haskell','lhaskell'] }
-    
-    if 0
-      " Plug 'lukerandall/haskellmode-vim', { 'for': ['haskell','lhaskell'] } "{{{
-      "   let g:haddock_browser = 'chromium'
-      " "}}}
-    else
-      Plug 'dag/vim2hs', { 'for': ['haskell','lhaskell'] } "{{{
-        let g:haskell_conceal_wide = 0
-      "}}}
-    endif
-
-    " better highlighting
-    " Plug 'vim-scripts/haskell.vim', { 'for': 'haskell' }
-
-    " Plug 'Twinside/vim-haskellConceal', { 'for': ['haskell','lhaskell'] }
-
-    " Plug 'Twinside/vim-haskellFold', { 'for': ['haskell','lhaskell'] }
-  end
-
-  " ===================================================================
-  "   Clojure, Scheme(Racket) and Lisp:
-  if (index(s:settings.supportLanguages, 'clojure') >= 0)
-    Plug 'tpope/vim-fireplace', { 'for': 'clojure' }
-    "Plug 'vim-scripts/VimClojure'
-  endif
-
-  if (index(s:settings.supportLanguages, 'scheme') >= 0)
-    Plug 'wlangstroth/vim-racket', { 'for': 'scheme' }
-  endif
-
-  " if (index(s:settings.supportLanguages, 'lisp') >= 0)
-  "   Plug 'kovisoft/slimv'
-  " endif
-
-  "Rainbow parantheses:
-  if (index(s:settings.supportLanguages, 'clojure') >= 0)
-        \ || (index(s:settings.supportLanguages, 'scheme') >= 0)
-        \ || (index(s:settings.supportLanguages, 'lisp') >= 0)
-    " original but dead repo: 'amdt/vim-niji'
-    Plug 'raymond-w-ko/vim-niji'
-    "{{{
-      let g:niji_matching_filetypes = ['lisp', 'scheme', 'clojure']
-    "}}}
-  endif
-
-  " ===================================================================
-  "   CSV:
-  if (index(s:settings.supportLanguages, 'csv') >= 0)
-    Plug 'chrisbra/csv.vim' , { 'for': 'csv' }
-  endif
-
-  " ===================================================================
-  "   HTML:
-  if (index(s:settings.supportLanguages, 'html') >= 0)
-    Plug 'rstacruz/sparkup', {'rtp': 'vim/'}
-  endif
-
-  " ===================================================================
-  "   Arduino:
-  if (index(s:settings.supportLanguages, 'arduino') >= 0)
-    Plug 'sudar/vim-arduino-syntax' , { 'for': 'arduino' }
-    Plug 'tclem/vim-arduino' , { 'for': 'arduino' }
-  endif
-
-  " ===================================================================
-  "   Ruby:
-  if (index(s:settings.supportLanguages, 'ruby') >= 0)
-    Plug 'tpope/vim-rails' , { 'for': 'ruby' }
-  endif
-
-  " ===================================================================
-  "   Perl:
-  if (index(s:settings.supportLanguages, 'perl') >= 0)
-    Plug 'c9s/perlomni.vim' , { 'for': 'perl' } " {{{
-      if s:settings.YcmOrNeocomplete == 0
-        if has('lua')
-          if !exists('g:neocomplete#sources#omni#input_patterns')
-            let g:neocomplete#sources#omni#input_patterns = {}
-          endif
-          let g:neocomplete#sources#omni#input_patterns.perl = '\h\w*->\h\w*\|\h\w*::'
-        else
-          if !exists('g:neocomplcache_force_omni_patterns')
-            let g:neocomplcache_force_omni_patterns = {}
-          endif
-          let g:neocomplcache_force_omni_patterns.perl = '\h\w*->\h\w*\|\h\w*::'
-        endif
-      endif
-    " }}}
-  endif
-
-  " ===================================================================
-  "   Tagbar:
-  " needs Ctags in $PATH
-  Plug 'majutsushi/tagbar', { 'on': 'TagbarToggle' } "{{{
-    nmap <leader>tt :TagbarToggle<CR>
-  "}}}
-
-  " ===================================================================
-  "   Others:
-  Plug 'sjl/clam.vim', { 'on': ['Clam', 'ClamVisual'] } "{{{
-    nnoremap ! :Clam<space>
-    vnoremap ! :ClamVisual<space>
-  "}}}
-
-  Plug 'tpope/vim-eunuch'
-
-  Plug 'chrisbra/NrrwRgn'
-  " :NR - Open the selected region in a new narrowed window
-
-  Plug 'tpope/vim-surround'
-  " cs'"
-
-  Plug 'terryma/vim-multiple-cursors'
-  " Ctrl-n
-
-  Plug 'Yggdroot/indentLine', { 'for': ['tex', 'vim', 'ocaml', 'haskell'] }
-
-  Plug 'junegunn/limelight.vim' "{{{
-  " Color name (:help cterm-colors) or ANSI code
-    let g:limelight_conceal_ctermfg = 'gray'
-    let g:limelight_conceal_ctermfg = 240
-
-    " Color name (:help gui-colors) or RGB color
-    let g:limelight_conceal_guifg = 'DarkGray'
-    let g:limelight_conceal_guifg = '#777777'
-
-    " Default: 0.5
-    let g:limelight_default_coefficient = 0.7
-  "}}}
-  Plug 'junegunn/goyo.vim' "{{{
-    " :Goyo
-    " autocmd User GoyoEnter Limelight
-    " autocmd User GoyoLeave Limelight!
-
-    let g:goyo_margin_top = 1
-    let g:goyo_margin_bottom = 1
-    let g:goyo_width = 80
-  "}}}
-
-  " ===================================================================
-  "   Notes:
-  if isdirectory(expand('~').'/.notes')
-    Plug 'xolox/vim-misc'
-    Plug 'xolox/vim-notes'
-    let g:notes_directories = ['~/.notes']
-  endif
-
-  " ===================================================================
-  "   Testing:
-  if s:settings.TestPlugins
-    Plug 'tpope/vim-dispatch', { 'on': ['Start', 'Dispatch'] } "{{{
-      augroup vim_dispatch_autocmds
-        autocmd!
-        autocmd FileType java let b:dispatch = 'javac %'
-        autocmd FileType lisp let b:dispatch = '/usr/bin/env clisp %'
-        autocmd FileType perl let b:dispatch = '/usr/bin/env perl %'
-        autocmd FileType haskell let b:dispatch = 'ghci %'
-      augroup END
-      noremap <leader>ö :Dispatch<cr>
-    "}}}
-
-    Plug 'tpope/vim-fugitive'
-
-    Plug 'airblade/vim-gitgutter'
-  endif
-
-  " ===================================================================
-  " Not used plugins {{{
-  "Plug 'justinmk/vim-sneak'
-
-  "Plug 'goldfeld/ctrlr.vim'
-
-  " Plug 'AndrewRadev/splitjoin.vim'
-  " " gS gJ
-
-  " Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': 'yes \| ./install' }
-  " }}}
-
-  call plug#end()
-  filetype plugin indent on
-endif
-  " call vundle#end()                 " required
-  " filetype plugin indent on         " required
-" endif
+  let g:syntastic_always_populate_loc_list = 0
+  let g:syntastic_auto_loc_list = 0
+  let g:syntastic_check_on_open = 1
+  let g:syntastic_check_on_wq = 0
+  " let g:syntastic_haskell_checkers = ["hlint","scan"]
+  let g:syntastic_haskell_checkers = ["hlint","scan","hdevtools"]
+  " let g:syntastic_haskell_checkers = ["hlint","scan","hdevtools","ghc-mod"]
+"}}}
+" 'kien/ctrlp.vim' "{{{
+  let g:ctrlp_map = '<c-p>'
+  let g:ctrlp_cmd = 'CtrlP'
+  let g:ctrlp_working_path_mode = 'ra'
+  nnoremap <Leader>b :CtrlPBuffer<CR>
+  nnoremap <Leader>p :CtrlPMRU<CR>
+"}}}
+"
 " ===================================================================}}}
 " ====  general  ====================================================
 " ==================================================================={{{
@@ -693,16 +157,7 @@ hi NonText cterm=NONE ctermfg=NONE
 " set synmaxcol=128
 "                                                                    }}}
 " ====  line numberig  =============================================={{{
-" TODO: has problems?
-"augroup autoChangeNumbering
-"  autocmd!
-"  autocmd InsertEnter * set nu
-"  autocmd InsertLeave * set rnu
-""  "au FocusLost * set nu
-""  "au FocusGained * set rnu
-"augroup END
 set nu
-"                                                                    }}}
 " ====  backup / undo  =============================================={{{
 
 set history=3000
@@ -721,12 +176,7 @@ set dir=/tmp " tmpfs
 
 " no backup!
 set nobackup
-" backup to ~/.tmp
-"set backupdir=~/.vim-tmp,~/.tmp,~/tmp,/var/tmp,/tmp
-"set backupskip=/tmp/*,/private/tmp/*
-"set directory=~/.vim-tmp,~/.tmp,~/tmp,/var/tmp,/tmp
-"set writebackup
-"                                                                    }}}
+
 " ====  spelling  ==================================================={{{
 setlocal nospell
 set spelllang=de_de,en_us
@@ -779,8 +229,6 @@ else
     match OverLength /\%81v.\+/
 endif
 
-" ====  apply colorscheme  ==========================================
-call s:applyColorscheme()
 
 if has('spell') " Set spell hilighting =============================={{{
   highlight clear SpellBad
@@ -870,9 +318,6 @@ nnoremap <c-c> <nop>
 vnoremap <leader>Q gq
 nnoremap <leader>Q gqap
 
-"for cleaning
-nnoremap <leader>T :set expandtab<cr>:retab!<cr>
-
 " Search and replace
 nnoremap <Leader>s :%s/\<<C-r><C-w>\>//g<Left><Left>
 " Search and change
@@ -926,12 +371,6 @@ noremap <c-Left> :tabp<CR>
 noremap <c-Right> :tabn<CR>
 
 "                                                                    }}}
-" ====  for external scripts  ======================================={{{
-
-"Markdown to HTML
-nnoremap <leader>md :%!~/bin/Markdown.pl --html4tags <cr>
-
-"                                                                    }}}
 " ====  testing  ===================================================={{{
 function! FoldColumnToggle()
   if &foldcolumn
@@ -961,6 +400,9 @@ function! Preserve(command) "{{{
 endfunction "}}}
 
 " ====  for cleanup  ================================================{{{
+"for cleaning
+nnoremap <leader>T :set expandtab<cr>:retab!<cr>
+
 " delete all trails
 " use :call DeleteTrailing
 " or <Leader>dt
@@ -986,18 +428,6 @@ endfunction
 nnoremap <Leader>dT :call Cleanup()
 
 "                                                                    }}}
-" ====  simpel Html escapeing  ======================================{{{
-function! MyHtmlEscape()
-  silent s/ö/\&ouml;/eg
-  silent s/ä/\&auml;/eg
-  silent s/ü/\&uuml;/eg
-  silent s/Ö/\&Ouml;/eg
-  silent s/Ä/\&Auml;/eg
-  silent s/Ü/\&Uuml;/eg
-  silent s/ß/\&szlig;/eg
-endfunction
-
-"                                                                    }}}
 " ====  open files via ranger  ======================================{{{
 function! RangerChooser()
   exec "silent !ranger --choosefile=/tmp/chosenfile " . expand("%:p:h")
@@ -1016,7 +446,7 @@ endfunction
 " ===================================================================}}}
 " ====  abbreviations  ==============================================
 " ==================================================================={{{
-" overwrite those annoying commands
+
 cnoreabbrev <expr> W ((getcmdtype() is# ':' && getcmdline() is# 'W')?('w'):('W'))
 cnoreabbrev <expr> Q ((getcmdtype() is# ':' && getcmdline() is# 'Q')?('q'):('Q'))
 
@@ -1031,7 +461,6 @@ iabbrev mglw möglicherweise
 
 " correct some typos
 iabbrev adn and
-iabbrev Kapittel Kapitel
 
 " ===================================================================}}}
 " ====  filetype specific  ==========================================

@@ -5,8 +5,7 @@ let
       name = "vim";
       wrapGui = true;
       vimrcConfig = {
-        # customRC = builtins.readFile ./vimrc;
-        customRC = "";
+        customRC = builtins.readFile ./vimrc;
         vam.knownPlugins = pkgs.vimPlugins;
         vam.pluginDictionaries = [{
           names = [

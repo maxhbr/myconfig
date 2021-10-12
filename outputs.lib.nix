@@ -135,6 +135,8 @@ let
           useDefaultShell = true;
           openssh.authorizedKeys.keys = authorizedKeys;
         };
+       users.users.nixBuild.group = "nixBuild";
+       users.groups.nixBuild = {};
         nix = {
           allowedUsers = [ "nixBuild" ];
           trustedUsers = [ "nixBuild" ];

@@ -41,12 +41,11 @@
     ( # wol
       let interface = "enp39s0";
       in {
-        services.wakeonlan.interfaces = [{
-          inherit interface;
-          method = "magicpacket";
-          # method = "password"; # or "magicpacket";
-          # password = "00:11:22:33:44:55";
-        }];
+        # services.wakeonlan.interfaces = [{
+        #   inherit interface;
+        #   method = "magicpacket";
+        # }];
+
         # [Unit]
         # Description=Wake-on-LAN for %i
         # Requires=network.target
