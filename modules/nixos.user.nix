@@ -46,6 +46,7 @@
         lib.mkForce config.users.extraUsers."${myconfig.user}".shell;
       xdg.enable = true;
     };
+    home-manager.sharedModules = [{ home.sessionPath = [ "~/bin" ]; }];
 
     services.xserver = (lib.mkIf config.services.xserver.enable {
       layout = "de";

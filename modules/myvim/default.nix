@@ -77,6 +77,9 @@ let
         aspellDicts.en
 
         shellcheck
+        nixfmt
+        shfmt
+        stylish-haskell
       ];
     });
 in {
@@ -84,6 +87,7 @@ in {
     environment = { variables = { EDITOR = "vim"; }; };
     home-manager.sharedModules = [
       ({ config, ... }: {
+        home.sessionVariables = { EDITOR = "vim"; };
         home.packages = with pkgs; [ myvimEnv ];
         home.file = { ".gvimrc".source = ./gvimrc; };
       })
