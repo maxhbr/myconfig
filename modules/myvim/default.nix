@@ -19,9 +19,6 @@ let
             "fugitive"
             "ghcid"
             "gitgutter"
-            "haskell-vim"
-            # "haskellconceal"
-            "hoogle"
             "idris-vim"
             "neco-ghc"
             "nerdcommenter"
@@ -29,7 +26,6 @@ let
             "quickfixstatus"
             "quickrun"
             "rainbow_parentheses"
-            "rust-vim"
             "shabadou-vim"
             "signature"
             "surround"
@@ -55,6 +51,12 @@ let
             "vimwiki"
             "watchdogs"
             "webapi-vim"
+          ] ++ [
+            "haskell-vim"
+            # "haskellconceal"
+            "hoogle"
+          ] ++ [
+            "rust-vim"
           ];
         }];
 
