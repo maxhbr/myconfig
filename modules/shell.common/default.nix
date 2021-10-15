@@ -5,13 +5,16 @@ let user = myconfig.user;
 in {
   imports = [
     {
-      # security.wrappers = {
-      #   pmount.source = "${pkgs.pmount}/bin/pmount";
-      #   pumount.source = "${pkgs.pmount}/bin/pumount";
-      # };
+      services.udisks2.enable = true;
       environment.systemPackages = with pkgs; [
-        pmount
+        udisks2 udiskie bashmount
       ];
+      environment = {
+        shellAliases = {
+          mountall = "udiskie -a";
+          pmount = "udisksctl mount -b";
+        };
+      };
     }
   ];
   config = {

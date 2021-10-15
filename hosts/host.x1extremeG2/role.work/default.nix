@@ -51,7 +51,7 @@
         insync
         exiftool
         # misc-desktop-tools:
-        libreoffice
+        # libreoffice
         nixos-unstable-small.zoom-us
         bluejeans-gui
         slack
