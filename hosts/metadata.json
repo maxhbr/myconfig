@@ -50,7 +50,15 @@
       "network": "home",
       "ip4": "192.168.1.87",
       "pubkeys": {
-        "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDWhY5F437cOBwjDk/CyRqxNXGC+fmIyEKkPmjf1R5ABXrLGzyz9Blrlbperuf1j1uWDzFaSfdr08/gpxRfILVRN32kWjgGm3aijZj0yK0yJ6TpjCFJNfZQa2pYdpT6K5OB4X3DC31wPMkfaFTqpIrMEdzvc44CleAf4dyWmPiF+32A6ViuB6UDx/wl5KBc5w5vFJSZJcJdZiTVD/3A3+Na30OGQ17AaimEyGZJvR3kdooeSwwuj2oivl4rmbGCjGVNbMsNNFdMjL/G9MDIJBcPT4CcOPDEFWKzrB5gMHxgHsnlgROHuWDlOdXgrUJVxrg6edNKas5d1pYVSOkyN7S6zW2uWvUoAC907gNnCJduTFr3Pc0NIZnlQC1po86Un2rYg6ZgkmnK12wxeRzPBCrWj4qA29HMdQsGkV/YGMZ4VHmrynNRPwZ3rM8agi0E14oYGJR/mUpCuxC0laBKuHlvKatTwTX4tgcHpUwICqr1DoxxXX96VrGUJeK16OXz/wM7Q6O8hFhVIjcwn1S5beq9nMJPbf0YX4NzFrPaGyhGBPUMkMsxJfFSamreouDXptR+lyrHbPRbo//4mM9A2dryVg7CQshVzOwSOUmcH/S6rF60Izwr/AtzQsnOjqQ/58XYvP4Tws35dtnf1kpROc/ZFKTQalBU0piesIpQXElULQ== root@iso"
+        "id_rsa.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC6BlyBCYrsNoPWy/E/9C/KW3CU4i1ElsQowKkr2XO6AW4zeU/d8qplKwPo0m8zqz/8HeFsg6FPPrZP7FaTzTuxJpOASw3uLJSMVmT80wm0zOjfLtEdqwR0BLb8yBunABTO+0nTR9xCMgbLyoiJQSjeTKFl6thUKvzVYuVZzbRhhY6WbwvzDFLksFBY7dyGjUbQjuvWOkPoV3hUCZLvDRo5S0Ht2tp/vkEebSQjqpl1UviriAUeeJJgz/MutxfcBCIRgksoQtnwB+bozkgVM/6uPjQ/eq8gZsnZu6fc9qkUtiBRurIr7QZC56ux+P+O77gi+WG/tMifpotl0UjOuJjH mhuber@x1extremeG2",
+        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC69c0GZzGaU9WDqrwBfprnkhj9nPHj+qu3w3OQEZdzZ root@spare",
+        "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCl9cfQcCvegvE9bH2KcYj4cy5SgHSLUd5lNmlK7tRzxBiwQpYWiAItiXSCRpeQNGuMp7hFV+o6HF69ODBxzWeEe2Z3ZZeujfgheOc+XzPnPDRr7Mex6yGdZcim25qp//vamLOmIfHe2vuDp7uw15CJ3mWncdZaJ/1jUiJTMv+0lOhQ/dNMxaJsFy9JJefdtPKQDoXEbUFTyoT3E7SG7tQdUlu9OlGTFC8GlzgZNBuhoFNZc8OiES0p7143gj+uoQ5+kZjo5tkQE6BN4YPcQ+9D8sgaQ8lULfXpoWZ2I4EHli7qfTMIBL1FVe7/i5jfnirBg6FIbqqPatSIg61usCVVBlUlyp8vb15Us83WBGL0+YaN4zb/grxy+4TCZBEJDhrsQARSakvALBmhdc24m3Tx5+Ev9ioJSCiFktmtrIBnLgJ6U1YM0xnh/7xEcLWH4QF8dz3opN+j66/vOwC2XmPsOC/sOnrOSL8qTsZDQUWzdxrZ3/ChAcTsifXDgotY/MMY+sM0henDPJ433NoIBybTzM5xWLejntYnK2Z16Gjp5CAnJF5g/7wtRwnU/teaQvQzNSYutMkKGhzp//8Dvz83k45BjdczkOwFClapRfLQ9RZLF4k8vlUOhgOmlKm07HjZcFSE1lXXk80NUNWJCLW28ZIMVKivmIRwMEuK9JZ6xQ== root@spare"
+      },
+      "wireguard": {
+        "wg0": {
+          "ip4": "10.199.199.87",
+          "pubkey": "6rTOMXv5e/RWOM4fHTiWVlH0TEcfnsWx1dRKppTj+Ww="
+        }
       }
     },
     "vserver": {

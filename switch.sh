@@ -44,6 +44,7 @@ nix build \
     --out-link '../result.'"$target" \
     '.#nixosConfigurations.'"$target"'.config.system.build.toplevel'
 
+
 until $cmd \
         --build-host localhost \
         switch `#-p test` \

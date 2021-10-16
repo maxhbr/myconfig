@@ -49,6 +49,7 @@
   ./shell.programs.tmux
   ./shell.zsh
   ./virtualization.docker
+  ./virtualization.libvirt.nix
   ./virtualization.lxc.nix
   ./virtualization.qemu.nix
   ./virtualization.vbox.nix

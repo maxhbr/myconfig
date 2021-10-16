@@ -5,31 +5,46 @@
     ./hardware-configuration.nix
     ../../hardware/efi.nix
     ../../hardware/nixos-hardware/common/pc/ssd
-    # (myconfig.metadatalib.fixIp "enp39s0")
-    # (myconfig.metadatalib.setupAsBuildMachine [
-    #   myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_ed25519.pub"
-    #   myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
-    # ])
-    ({
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
+    (myconfig.metadatalib.fixIp "enp0s31f6")
+    (myconfig.metadatalib.setupAsBuildMachine [
+      myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_ed25519.pub"
+      myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
+    ])
+    {
+      boot.loader.systemd-boot.enable = true;
+      boot.loader.efi.canTouchEfiVariables = true;
 
+      networking.useDHCP = false;
+      networking.interfaces.enp0s31f6.useDHCP = true;
+      networking.interfaces.wlp3s0.useDHCP = true;
+      networking.interfaces.wwp0s20f0u5c2.useDHCP = true;
 
-  networking.useDHCP = false;
-  networking.interfaces.enp0s31f6.useDHCP = true;
-  networking.interfaces.wlp3s0.useDHCP = true;
-  networking.interfaces.wwp0s20f0u5c2.useDHCP = true;
-
-     })
+    }
+    {
+      virtualisation.libvirtd.enable = lib.mkForce false;
+      home-manager.sharedModules = [{
+        programs.go.enable = true;
+        home.sessionVariables = { VAGRANT_DEFAULT_PROVIDER = "virtualbox"; };
+        home.packages = with pkgs;
+          [ python38 ] ++ (with python38Packages; [
+            pip
+            ansible
+            # fabric3 # try pip
+            jsonpickle
+            requests
+            pyyaml
+          ]);
+      }];
+    }
   ];
 
   config = {
     networking.hostName = "spare";
     networking.hostId = "13942153";
     myconfig = {
-      # desktop.enable = true;
+      desktop.enable = true;
       headless.enable = true;
-      # virtualisation.enable = true;
+      virtualisation.enable = true;
     };
     # virtualisation.docker.enable = true;
 
@@ -39,28 +54,12 @@
 
     boot.initrd.supportedFilesystems = [ "luks" ];
     boot.initrd.luks.devices.crypted = {
-      device = "/dev/disk/by-uuid/2118a468-c2c3-4304-b7d3-32f8e19da49f";
+      device = "/dev/disk/by-uuid/0689caf9-dc68-414c-97fe-ba15b84945bf";
       preLVM = true;
       allowDiscards = true;
     };
 
     hardware.enableRedistributableFirmware = true;
-
-    boot.initrd.supportedFilesystems = [ "luks" "btrfs" ];
-
-    # services.snapper = {
-    #   snapshotInterval = "hourly";
-    #   cleanupInterval = "1d";
-    #   filters = null;
-    #   configs = {
-    #     home = {
-    #       subvolume = "/home";
-    #       extraConfig = ''
-    #         ALLOW_USERS="${myconfig.user}"
-    #       '';
-    #     };
-    #   };
-    # };
 
     # This value determines the NixOS release from which the default
     # settings for stateful data, like file locations and database versions
