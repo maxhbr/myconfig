@@ -10,6 +10,17 @@
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_ed25519.pub"
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
     ])
+    ({
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.efi.canTouchEfiVariables = true;
+
+
+  networking.useDHCP = false;
+  networking.interfaces.enp0s31f6.useDHCP = true;
+  networking.interfaces.wlp3s0.useDHCP = true;
+  networking.interfaces.wwp0s20f0u5c2.useDHCP = true;
+
+     })
   ];
 
   config = {
@@ -50,6 +61,6 @@
     # this value at the release version of the first install of this system.
     # Before changing this value read the documentation for this option
     # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
-    system.stateVersion = lib.mkForce "20.09"; # Did you read the comment?
+    system.stateVersion = lib.mkForce "21.05"; # Did you read the comment?
   };
 }
