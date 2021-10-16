@@ -32,7 +32,7 @@
       # dependencyOverrides = nix-doom-emacs.inputs;
     };
     in {
-    packages.x86_64-linux =
+'/nix/store/chvdir2y3sbdv6l3n4x5bp06w53knva1-nixos-system-spare-21.11.20211014.2cf9db0'    packages.x86_64-linux =
       let pkgs = import nixpkgs { system = "x86_64-linux"; };
       in {
         doom-emacs = pkgs.callPackage nix-doom-emacs (doom-emacs-conf pkgs);

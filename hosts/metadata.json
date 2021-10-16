@@ -46,9 +46,12 @@
         }
       }
     },
-    "flake": {
+    "spare": {
       "network": "home",
-      "ip4": "192.168.1.87"
+      "ip4": "192.168.1.87",
+      "pubkeys": {
+        "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDWhY5F437cOBwjDk/CyRqxNXGC+fmIyEKkPmjf1R5ABXrLGzyz9Blrlbperuf1j1uWDzFaSfdr08/gpxRfILVRN32kWjgGm3aijZj0yK0yJ6TpjCFJNfZQa2pYdpT6K5OB4X3DC31wPMkfaFTqpIrMEdzvc44CleAf4dyWmPiF+32A6ViuB6UDx/wl5KBc5w5vFJSZJcJdZiTVD/3A3+Na30OGQ17AaimEyGZJvR3kdooeSwwuj2oivl4rmbGCjGVNbMsNNFdMjL/G9MDIJBcPT4CcOPDEFWKzrB5gMHxgHsnlgROHuWDlOdXgrUJVxrg6edNKas5d1pYVSOkyN7S6zW2uWvUoAC907gNnCJduTFr3Pc0NIZnlQC1po86Un2rYg6ZgkmnK12wxeRzPBCrWj4qA29HMdQsGkV/YGMZ4VHmrynNRPwZ3rM8agi0E14oYGJR/mUpCuxC0laBKuHlvKatTwTX4tgcHpUwICqr1DoxxXX96VrGUJeK16OXz/wM7Q6O8hFhVIjcwn1S5beq9nMJPbf0YX4NzFrPaGyhGBPUMkMsxJfFSamreouDXptR+lyrHbPRbo//4mM9A2dryVg7CQshVzOwSOUmcH/S6rF60Izwr/AtzQsnOjqQ/58XYvP4Tws35dtnf1kpROc/ZFKTQalBU0piesIpQXElULQ== root@iso"
+      }
     },
     "vserver": {
       "pubkeys": {

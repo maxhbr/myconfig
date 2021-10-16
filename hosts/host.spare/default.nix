@@ -6,10 +6,10 @@
     ../../hardware/efi.nix
     ../../hardware/nixos-hardware/common/pc/ssd
     # (myconfig.metadatalib.fixIp "enp39s0")
-    (myconfig.metadatalib.setupAsBuildMachine [
-      myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_ed25519.pub"
-      myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
-    ])
+    # (myconfig.metadatalib.setupAsBuildMachine [
+    #   myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_ed25519.pub"
+    #   myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
+    # ])
     ({
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
@@ -24,18 +24,25 @@
   ];
 
   config = {
-    networking.hostName = "flake";
+    networking.hostName = "spare";
     networking.hostId = "13942153";
     myconfig = {
-      desktop.enable = true;
+      # desktop.enable = true;
       headless.enable = true;
-      virtualisation.enable = true;
+      # virtualisation.enable = true;
     };
-    virtualisation.docker.enable = true;
+    # virtualisation.docker.enable = true;
 
     services.logind.extraConfig = ''
       HandlePowerKey=suspend
     '';
+
+    boot.initrd.supportedFilesystems = [ "luks" ];
+    boot.initrd.luks.devices.crypted = {
+      device = "/dev/disk/by-uuid/2118a468-c2c3-4304-b7d3-32f8e19da49f";
+      preLVM = true;
+      allowDiscards = true;
+    };
 
     hardware.enableRedistributableFirmware = true;
 
