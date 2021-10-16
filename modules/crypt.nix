@@ -40,7 +40,7 @@ let
       };
 
       wantedBy = mkOption {
-        default = [];
+        default = [ ];
         type = types.listOf types.str;
         description = "Other targets that depend on this secret.";
       };

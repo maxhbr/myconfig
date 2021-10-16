@@ -3,20 +3,16 @@
 { pkgs, config, myconfig, ... }:
 let user = myconfig.user;
 in {
-  imports = [
-    {
-      services.udisks2.enable = true;
-      environment.systemPackages = with pkgs; [
-        udisks2 udiskie bashmount
-      ];
-      environment = {
-        shellAliases = {
-          mountall = "udiskie -a";
-          pmount = "udisksctl mount -b";
-        };
+  imports = [{
+    services.udisks2.enable = true;
+    environment.systemPackages = with pkgs; [ udisks2 udiskie bashmount ];
+    environment = {
+      shellAliases = {
+        mountall = "udiskie -a";
+        pmount = "udisksctl mount -b";
       };
-    }
-  ];
+    };
+  }];
   config = {
     home-manager.users."${user}" = {
       home.file = {

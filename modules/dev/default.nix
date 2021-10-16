@@ -24,7 +24,7 @@ in {
   ];
   config = {
     myconfig.dev.enable = cfg.haskell.enable || cfg.network.enable
-      || cfg.tex.enable || cfg.compliance.enable
-      || cfg.go.enable || cfg.ruby.enable || cfg.nodejs.enable;
+      || cfg.tex.enable || cfg.compliance.enable || cfg.go.enable
+      || cfg.ruby.enable || cfg.nodejs.enable;
   };
 }

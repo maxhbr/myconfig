@@ -1,5 +1,5 @@
 { lib, ... }: {
-  imports =  [ ./hardware-configuration.nix ];
+  imports = [ ./hardware-configuration.nix ];
 
   config = {
     myconfig = { headless.enable = true; };

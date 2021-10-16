@@ -1,7 +1,7 @@
 # https://www.nordicsemi.com/-/media/Software-and-other-downloads/Desktop-software/nRF-command-line-tools/sw/Versions-10-x-x/10-12-2/nRF-Command-Line-Tools_10_12_2_Linux-amd64.zip
-{ stdenv, lib, fetchzip, autoPatchelfHook, makeWrapper, makeDesktopItem, copyDesktopItems
-, segger-jlink
-  # TODO: cleanup unnecessary deps:
+{ stdenv, lib, fetchzip, autoPatchelfHook, makeWrapper, makeDesktopItem
+, copyDesktopItems, segger-jlink
+# TODO: cleanup unnecessary deps:
 , fontconfig, freetype, libusb, libICE, libSM, udev, libX11, libXext, libXcursor
 , libXfixes, libXrender, libXrandr }:
 
@@ -10,7 +10,8 @@ let
   pname = "nRF-command-line-tools";
   version = "10-12-2";
   version_us = "10_12_2";
-  url = "https://www.nordicsemi.com/-/media/Software-and-other-downloads/Desktop-software/${pname}/sw/Versions-10-x-x/${version}/${pname}_${version_us}_Linux-amd64.zip";
+  url =
+    "https://www.nordicsemi.com/-/media/Software-and-other-downloads/Desktop-software/${pname}/sw/Versions-10-x-x/${version}/${pname}_${version_us}_Linux-amd64.zip";
 
 in stdenv.mkDerivation rec {
   inherit pname version;
@@ -67,7 +68,8 @@ in stdenv.mkDerivation rec {
   # '';
 
   meta = with lib; {
-    homepage = "https://www.nordicsemi.com/Software-and-tools/Development-Tools/nRF-Command-Line-Tools/Download#infotabs";
+    homepage =
+      "https://www.nordicsemi.com/Software-and-tools/Development-Tools/nRF-Command-Line-Tools/Download#infotabs";
     description = "nRF-command-line-tools";
     license = licenses.unfree;
     platforms = platforms.linux;

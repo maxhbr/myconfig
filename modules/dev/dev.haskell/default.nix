@@ -7,16 +7,17 @@ in {
     home-manager.users.mhuber = {
       home.packages = with pkgs.nixos-unstable;
         [ stack sourceHighlight ] ++ (with haskellPackages; [
-          (ghcWithPackages (hpkgs: with hpkgs; [
-            cabal-install
-            hoogle
-            hlint
-            hindent
-            ghcid
-            # packunused
-            brittany
-            # ghc-mod
-          ])) # ghc
+          (ghcWithPackages (hpkgs:
+            with hpkgs; [
+              cabal-install
+              hoogle
+              hlint
+              hindent
+              ghcid
+              # packunused
+              brittany
+              # ghc-mod
+            ])) # ghc
           hlint
           pandoc
           # unused

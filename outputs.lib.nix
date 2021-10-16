@@ -112,21 +112,26 @@ let
       mkSyncthingDevice = hostName: introducer:
         let
           hostMetadata = metadata.hosts."${hostName}";
-          addressesFromIp = if (lib.attrsets.hasAttrByPath [ "ip4" ] hostMetadata)
-                            then [ "tcp://${hostMetadata.ip4}" ]
-                            else [];
-          otherAddresses = if (lib.attrsets.hasAttrByPath [ "syncthing" "addresses" ] hostMetadata)
-                           then hostMetadata.syncthing.addresses
-                           else [];
+          addressesFromIp =
+            if (lib.attrsets.hasAttrByPath [ "ip4" ] hostMetadata) then
+              [ "tcp://${hostMetadata.ip4}" ]
+            else
+              [ ];
+          otherAddresses =
+            if (lib.attrsets.hasAttrByPath [ "syncthing" "addresses" ]
+              hostMetadata) then
+              hostMetadata.syncthing.addresses
+            else
+              [ ];
         in ( # lib.mkIf (lib.attrsets.hasAttrByPath [ "syncthing" "id" ] hostMetadata)
           {
-          "${hostName}" = {
-            name = hostName;
-            id = hostMetadata.syncthing.id;
-            addresses = addressesFromIp ++ otherAddresses;
-            inherit introducer;
-          };
-        });
+            "${hostName}" = {
+              name = hostName;
+              id = hostMetadata.syncthing.id;
+              addresses = addressesFromIp ++ otherAddresses;
+              inherit introducer;
+            };
+          });
 
       setupAsBuildMachine = authorizedKeys: {
         users.extraUsers.nixBuild = {
@@ -135,8 +140,8 @@ let
           useDefaultShell = true;
           openssh.authorizedKeys.keys = authorizedKeys;
         };
-       users.users.nixBuild.group = "nixBuild";
-       users.groups.nixBuild = {};
+        users.users.nixBuild.group = "nixBuild";
+        users.groups.nixBuild = { };
         nix = {
           allowedUsers = [ "nixBuild" ];
           trustedUsers = [ "nixBuild" ];
@@ -328,25 +333,23 @@ in rec {
 
   evalConfiguration = system: hostName: nixosModules: metadataOverride:
     (let
-      cfg = self.lib.mkConfiguration system hostName nixosModules metadataOverride;
+      cfg =
+        self.lib.mkConfiguration system hostName nixosModules metadataOverride;
     in lib.nixosSystem (lib.recursiveUpdate cfg {
       modules = cfg.modules ++ [ (./hosts/host + ".${hostName}") ];
     }));
 
   # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
-  mkISO =
-    { system ? "x86_64-linux"
-    , hostName ? "myconfig"
-    , nixosModules ? [] # some custom configuration
-    , metadataOverride ? {}
+  mkISO = { system ? "x86_64-linux", hostName ? "myconfig"
+    , nixosModules ? [ ] # some custom configuration
+    , metadataOverride ? { }
     , bootstrappedConfig ? null # path to config to include for bootstrapping
     }:
     let
-      myisoconfigModules =
-        let
+      myisoconfigModules = let
 
-          xautologinModule = { pkgs, config, ... }@args: (let
-            user = "mhuber"; #config.myconfig.user;
+        xautologinModule = { pkgs, config, ... }@args:
+          (let user = "mhuber"; # config.myconfig.user;
           in {
             # autologin
             services.xserver.displayManager.autoLogin = {
@@ -355,15 +358,16 @@ in rec {
             };
           });
 
-          forceSSHModule = {
-            # OpenSSH is forced to have an empty `wantedBy` on the installer system[1], this won't allow it
-            # to be automatically started. Override it with the normal value.
-            # [1] https://github.com/NixOS/nixpkgs/blob/9e5aa25/nixos/modules/profiles/installation-device.nix#L76
-            systemd.services.sshd.wantedBy =
-              lib.mkOverride 40 [ "multi-user.target" ];
-          };
+        forceSSHModule = {
+          # OpenSSH is forced to have an empty `wantedBy` on the installer system[1], this won't allow it
+          # to be automatically started. Override it with the normal value.
+          # [1] https://github.com/NixOS/nixpkgs/blob/9e5aa25/nixos/modules/profiles/installation-device.nix#L76
+          systemd.services.sshd.wantedBy =
+            lib.mkOverride 40 [ "multi-user.target" ];
+        };
 
-          bootstrapModule = { pkgs, config, ... }@args: (let
+        bootstrapModule = { pkgs, config, ... }@args:
+          (let
             bootstrap = pkgs.writeShellScriptBin "bootstrap" ''
               set -euxo pipefail
               if [[ "$(hostname)" != "myconfig" ]]; then
@@ -375,9 +379,12 @@ in rec {
             '';
           in { environment.systemPackages = [ bootstrap ]; });
 
-          bootstrapInstallModule = { lib, pkgs, config, ... }@args: (lib.mkIf (bootstrappedConfig != null) (let
+        bootstrapInstallModule = { lib, pkgs, config, ... }@args:
+          (lib.mkIf (bootstrappedConfig != null) (let
             evalNixos = configuration:
-              import "${inputs.nixpkgs}/nixos" { inherit system configuration; };
+              import "${inputs.nixpkgs}/nixos" {
+                inherit system configuration;
+              };
             preBuildConfigRoot = bootstrappedConfig;
             preBuiltConfig = (evalNixos (import preBuildConfigRoot {
               pkgs = inputs.nixpkgs;
@@ -401,28 +408,29 @@ in rec {
             isoImage.storeContents = [ preBuiltConfig ];
           }));
 
-        in [
-          "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-base.nix"
-          "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
-          {
-            # add myconfig to iso
-            isoImage = {
-              # contents = [{
-              #   source = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
-              #   target = "myconfig";
-              # }];
-              isoBaseName = "nixos-myconfig-${hostName}";
-            };
-          }
-          forceSSHModule
-          xautologinModule
-          bootstrapModule
-          bootstrapInstallModule
-          {
-            networking.wireless.enable = false; # managed by network manager
-          }
-        ];
+      in [
+        "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-base.nix"
+        "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
+        {
+          # add myconfig to iso
+          isoImage = {
+            # contents = [{
+            #   source = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
+            #   target = "myconfig";
+            # }];
+            isoBaseName = "nixos-myconfig-${hostName}";
+          };
+        }
+        forceSSHModule
+        xautologinModule
+        bootstrapModule
+        bootstrapInstallModule
+        {
+          networking.wireless.enable = false; # managed by network manager
+        }
+      ];
 
-    in (evalConfiguration system hostName (myisoconfigModules ++ nixosModules) metadataOverride).config.system.build.isoImage;
+    in (evalConfiguration system hostName (myisoconfigModules ++ nixosModules)
+      metadataOverride).config.system.build.isoImage;
 
 }

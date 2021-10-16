@@ -11,25 +11,24 @@
     nRF-Command-Line-Tools = final.callPackage ./nRF-Command-Line-Tools { };
 
     nrfutil = let
-      pc-ble-overlay = (final: prev:
-        {
-          pc-ble-driver = let version = "4.1.2";
-                          in prev.pc-ble-driver.overrideAttrs (old: {
-                            inherit version;
-                            src = fetchFromGitHub {
-                              owner = "NordicSemiconductor";
-                              repo = "pc-ble-driver";
-                              rev = "v${version}";
-                              sha256 = "s6SnOLAJ8fwxLQR7PuOLvlaiX61Hhz/MrzQ8h5ApBEQ=";
-                            };
-                            cmakeFlags = [ "-DNRF_BLE_DRIVER_VERSION=${version}" ];
-                            buildInputs = old.buildInputs ++ [ final.spdlog ];
-                          });
+      pc-ble-overlay = (final: prev: {
+        pc-ble-driver = let version = "4.1.2";
+        in prev.pc-ble-driver.overrideAttrs (old: {
+          inherit version;
+          src = fetchFromGitHub {
+            owner = "NordicSemiconductor";
+            repo = "pc-ble-driver";
+            rev = "v${version}";
+            sha256 = "s6SnOLAJ8fwxLQR7PuOLvlaiX61Hhz/MrzQ8h5ApBEQ=";
+          };
+          cmakeFlags = [ "-DNRF_BLE_DRIVER_VERSION=${version}" ];
+          buildInputs = old.buildInputs ++ [ final.spdlog ];
         });
+      });
       pkgs2105 = import inputs.rel2105 {
         inherit pkgs system;
-        config = (config // {allowUnfree = true;});
-        overlays = [pc-ble-overlay];
+        config = (config // { allowUnfree = true; });
+        overlays = [ pc-ble-overlay ];
       };
     in pkgs2105.nrfutil;
 
@@ -73,7 +72,8 @@
       openocd
       dfu-util
       bossa
-      nrfutil nRF-Command-Line-Tools
+      nrfutil
+      nRF-Command-Line-Tools
       # jlink
       segger-jlink
       srecord # for srec_cat

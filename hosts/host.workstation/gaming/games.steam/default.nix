@@ -29,7 +29,8 @@ in {
     # };
     home-manager.sharedModules = [{
       home.packages = [
-        (with pkgs.nixos-unstable; if nativeOnly then steam-run-native else steam-run)
+        (with pkgs.nixos-unstable;
+          if nativeOnly then steam-run-native else steam-run)
         steam
       ];
       # home.file = {

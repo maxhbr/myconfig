@@ -2,18 +2,8 @@
 #  https://github.com/NixOS/nixpkgs/pull/121601
 #  see: https://github.com/NixOS/nixpkgs/pull/121601/files#diff-1e1071c682940fc6a95a879445b64519dae98cb30e354e9ea191f119259780cc
 
-
-{ lib
-, stdenv
-, fetchurl
-, autoPatchelfHook
-, makeWrapper
-, qt4
-, udev
-, system
-, config
-, acceptLicense ? config.segger-jlink.acceptLicense or false
-}:
+{ lib, stdenv, fetchurl, autoPatchelfHook, makeWrapper, qt4, udev, system
+, config, acceptLicense ? config.segger-jlink.acceptLicense or false }:
 
 let
   supported = {
@@ -39,7 +29,8 @@ let
 
   version = "720";
 
-  url = "https://www.segger.com/downloads/jlink/JLink_Linux_V${version}_${platform.name}.tgz";
+  url =
+    "https://www.segger.com/downloads/jlink/JLink_Linux_V${version}_${platform.name}.tgz";
 
   throwLicense = throw ''
     Use of the "SEGGER JLink Software and Documentation pack" requires the
@@ -68,11 +59,12 @@ in stdenv.mkDerivation {
   pname = "segger-jlink";
   inherit version;
 
-  src = assert !acceptLicense -> throwLicense; fetchurl {
-    inherit url;
-    inherit (platform) sha256;
-    curlOpts = "--data accept_license_agreement=accepted";
-  };
+  src = assert !acceptLicense -> throwLicense;
+    fetchurl {
+      inherit url;
+      inherit (platform) sha256;
+      curlOpts = "--data accept_license_agreement=accepted";
+    };
 
   # Currently blocked by patchelf bug
   # https://github.com/NixOS/patchelf/pull/275
@@ -130,11 +122,13 @@ in stdenv.mkDerivation {
 
   meta = with lib; {
     description = "J-Link Software and Documentation pack";
-    homepage = "https://www.segger.com/downloads/jlink/#J-LinkSoftwareAndDocumentationPack";
+    homepage =
+      "https://www.segger.com/downloads/jlink/#J-LinkSoftwareAndDocumentationPack";
     license = licenses.unfree;
     platforms = attrNames supported;
-    maintainers = with maintainers; [
-      # FlorianFranzen reardencode
-    ];
+    maintainers = with maintainers;
+      [
+        # FlorianFranzen reardencode
+      ];
   };
 }

@@ -4,4 +4,5 @@ time find "$(dirname "$0")" \
         -iname '*.nix' \
         -not -iname 'empty_nixos_config.nix' \
         -not -path '*/nixos-hardware/*' \
+        -print \
         -exec nixfmt {} \;

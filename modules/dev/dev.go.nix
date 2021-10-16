@@ -4,8 +4,6 @@
 let cfg = config.myconfig.dev.go;
 in {
   config = lib.mkIf cfg.enable {
-    home-manager.sharedModules = [{
-      programs.go.enable = true;
-    }];
+    home-manager.sharedModules = [{ programs.go.enable = true; }];
   };
 }

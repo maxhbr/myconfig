@@ -4,10 +4,7 @@
 let cfg = config.myconfig.dev.nodejs;
 in {
   config = lib.mkIf cfg.enable {
-    home-manager.sharedModules = [{
-      home.packages = with pkgs; [
-        nodejs_latest
-      ];
-    }];
+    home-manager.sharedModules =
+      [{ home.packages = with pkgs; [ nodejs_latest ]; }];
   };
 }

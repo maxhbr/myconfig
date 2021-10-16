@@ -1,9 +1,7 @@
-{pkgs, lib, config, ...}:
-{
+{ pkgs, lib, config, ... }: {
   config = (lib.mkIf config.services.xserver.enable {
     home-manager.sharedModules = [
-      ({ config, ... }:
-      {
+      ({ config, ... }: {
         programs.vscode = {
           enable = true;
           # package = pkgs.vscode-with-extensions;

@@ -17,9 +17,7 @@
     };
     environment = {
       systemPackages = with pkgs; [ docker docker-machine ];
-      variables = {
-        DOCKER_BUILDKIT = "1";
-      };
+      variables = { DOCKER_BUILDKIT = "1"; };
       shellAliases = {
         d = "docker";
         dc = "docker-compose";
