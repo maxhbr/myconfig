@@ -84,7 +84,12 @@ let
     });
 in {
   config = {
-    environment = { variables = { EDITOR = "vim"; }; };
+    environment = {
+      variables = { EDITOR = "vim"; };
+      shellAliases = {
+        emacs = "gvim";
+      };
+    };
     home-manager.sharedModules = [
       ({ config, ... }: {
         home.sessionVariables = { EDITOR = "vim"; };

@@ -46,6 +46,10 @@
         }
       }
     },
+    "flake": {
+      "network": "home",
+      "ip4": "192.168.1.87"
+    },
     "vserver": {
       "pubkeys": {
         "id_rsa.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC6dumJloLmi+otqmB9rhaVkjjrGO3Qk+eTUA3U3oJPTw9fP1gEuOIRtU1dRY3C3gj8QXlXK1E+7C537Lw40dDLtkvXg5/0mtG/G16nFm1xtNRdLVsQkYPh2r4oZfkprLV/d9kwARZP46FuBD5nG8vHOSTEoEdqZyndJN40iv7VSSxJ9qv2QE8XusrId4Cicpr6uw9v0eh5ftO5HaNz+AcDK98q33QAOdCKMgG0B0hLkRET5jyTy0KB/do6ojTcA5ZfrAzYuB5h2xjLCUQ+wyJtAGTwG3wEjzj7laBs1d1v4UyRD0LRPjmxy41ivS+WUJ0Hcv7ZJD2jmXAoEn7GoOTunOvwjhHPS7HFiuEF8ruQ6YeAJqlxQsb/pgQF5dHkoBclCGsdN/+tmgybNCmtKEs3D2AAukgTbiHmnC4dDf8QCe4GbrFB5S2aWURAdetehz2d7eTEz2IFEzyZ8YlIMqROfzaQQsypPEcG3lTmuECQHs7XhtZ8igRe2AhAjn9ON8qGrE6hT1faFNCQ/f5UKJoMyHFSgRIJ1Wovo06bwuJgcxK0NJljtzBlccWPUupg0pSYPx2XDUR+er8zpXvprAeflLOQjznp6047hSz3iP1ZMwe7znOTazPX0XCBL6RjsS7xd7sU925iCe5mmxc0p9qEjNSu/LtJ7ZoYxt3Vj6Qyqw== mhuber@x1extremeG2",

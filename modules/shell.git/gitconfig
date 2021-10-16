@@ -39,6 +39,7 @@
     cp          = cherry-pick
 
 	  pushb       = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git push \"${1:-origin}\" \"$branchname\"; fi; }; f"
+	  psuhb       = pushb
 	  pushfb      = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git push --force-with-lease \"${1:-origin}\" \"$branchname\"; fi; }; f"
 	  pullb       = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git pull \"${1:-origin}\" \"$branchname\"; fi; }; f"
 
