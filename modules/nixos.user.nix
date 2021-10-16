@@ -44,7 +44,12 @@
     home-manager.users."${myconfig.user}" = {
       programs.alacritty.settings.shell.program =
         lib.mkForce config.users.extraUsers."${myconfig.user}".shell;
-      xdg.enable = true;
+      xdg = {
+        enable = true;
+        mime.enable = true;
+        configFile."mimeapps.list".force = true;
+        mimeApps.enable = true;
+      };
     };
     home-manager.sharedModules = [{ home.sessionPath = [ "~/bin" ]; }];
 
