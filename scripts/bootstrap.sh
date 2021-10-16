@@ -9,7 +9,7 @@
 
 set -e
 
-BTRFS=true
+BTRFS=${BTRFS:-false}
 
 ################################################################################
 ##  prepare  ###################################################################
@@ -18,7 +18,7 @@ BTRFS=true
 help() {
     cat <<EOF
 usage:
-  $ sudo BOOTSTRAP=YES $0 \
+  $ sudo BOOTSTRAP=YES BTRFS=true $0 \
       /dev/SDX \
       [pass] \
       [vg_name] \
@@ -96,9 +96,10 @@ mkBoot() {
     local bootDev="$1"
 
     mkfs.fat -F 32 -n boot "$bootDev"
-    sleep 5
 
     mkdir -p "$MNT/boot"
+
+    sync; sleep 5
     mount /dev/disk/by-label/boot "$MNT/boot"
 }
 
@@ -111,7 +112,7 @@ mkLVM() {
     lvcreate -L 8G -n swap "$VG_NAME"
     lvcreate -l '100%FREE' -n root "$VG_NAME"
 
-    sleep 5
+    sync; sleep 5
 
     mkSwap "/dev/$VG_NAME/swap"
     mkExt4 "/dev/$VG_NAME/root"
@@ -154,6 +155,7 @@ mkExt4() {
 
     mkfs.ext4 -L root "$rootDev"
 
+    sync; sleep 5
     mount /dev/disk/by-label/root "$MNT"
 }
 
@@ -175,6 +177,13 @@ set -x
 
 if vgdisplay -c  | cut -f 1 -d ":" | tr -d '[:space:]' | grep -q '^'"$VG_NAME"'$'; then
     echo "$VG_NAME already present on system"
+    echo
+    echo "to remove, do:"
+    echo '$ sudo swapoff /dev/'$VG_NAME'/swap'
+    echo '$ sudo lvchange -an /dev/'$VG_NAME'/*'
+    echo '$ sudo lvremove /dev/'$VG_NAME'/*'
+    echo '$ sudo vgremove '$VG_NAME
+    echo '$ sudo cryptsetup close /dev/mapper/enc-pv'
 else
     if [[ -d /sys/firmware/efi/efivars ]]; then
         mkEfiPartitions
