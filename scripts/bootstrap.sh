@@ -96,6 +96,7 @@ mkBoot() {
     local bootDev="$1"
 
     mkfs.fat -F 32 -n boot "$bootDev"
+    sleep 5
 
     mkdir -p "$MNT/boot"
     mount /dev/disk/by-label/boot "$MNT/boot"
@@ -110,8 +111,10 @@ mkLVM() {
     lvcreate -L 8G -n swap "$VG_NAME"
     lvcreate -l '100%FREE' -n root "$VG_NAME"
 
+    sleep 5
+
     mkSwap "/dev/$VG_NAME/swap"
-    mkRoot "/dev/$VG_NAME/root"
+    mkExt4 "/dev/$VG_NAME/root"
 }
 
 mkBTRFS() {
@@ -161,8 +164,6 @@ mkRoot() {
         mkBTRFS "$dev"
     else
         mkLVM "$dev"
-        sleep 10
-        mkExt4 "/dev/disk/by-label/root"
     fi
 }
 
