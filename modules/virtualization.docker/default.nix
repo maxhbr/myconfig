@@ -99,6 +99,7 @@
       '';
     };
 
+    systemd.services.docker.restartIfChanged = lib.mkForce false;
     virtualisation.docker = {
       extraOptions = "--data-root /home/docker";
       storageDriver = "overlay2";

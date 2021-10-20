@@ -65,11 +65,18 @@ let
     { source, dest, owner, group, permissions, wantedBy, ... }: {
       description = "decrypt secret for ${name}";
       wantedBy = [ "multi-user.target" ] ++ wantedBy;
+      before = wantedBy;
 
       serviceConfig.Type = "oneshot";
 
       script = with pkgs; ''
-        rm -rf ${dest}
+        dir="$(dirname '${dest}')"
+        if [[ ! -d "$dir" ]]; then
+          mkdir -p "$dir"
+          chown '${owner}':'${group}' "$dir"
+        fi
+
+        rm -rf '${dest}'
         "${age}"/bin/age -d -i /etc/ssh/ssh_host_rsa_key -o '${dest}' '${
           mkSecretOnDisk name { inherit source; }
         }'

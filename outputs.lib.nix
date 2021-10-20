@@ -59,13 +59,15 @@ let
         (let
           wgNetwork = metadata.networks."${wgInterface}";
           wgPeerMetadata = metadata.hosts."${wgNetwork.peer}";
+          privateKeyFile = "/etc/wireguard/${wgInterface}-private";
         in { config, lib, pkgs, ... }@args:
         (lib.mkIf (lib.attrsets.hasAttrByPath [ "ip4" ] wgPeerMetadata) {
 
           myconfig.secrets = {
             "wireguard.private" = {
               source = privateKey;
-              dest = "/etc/wireguard/wg-private";
+              dest = privateKeyFile;
+              wantedBy = ["wireguard-${wgInterface}.service"];
             };
           };
 
@@ -76,7 +78,7 @@ let
                 (metadata.hosts."${config.networking.hostName}".wireguard."${wgInterface}".ip4
                   + "/24")
               ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
-              privateKeyFile = "/etc/wireguard/wg-private";
+              inherit privateKeyFile;
               peers = [{
                 publicKey = wgPeerMetadata.wireguard."${wgInterface}".pubkey;
                 # allowedIPs = [ "0.0.0.0/0" ];
