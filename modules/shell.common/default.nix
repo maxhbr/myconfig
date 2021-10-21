@@ -91,6 +91,7 @@ in {
         manpages
         file
         renameutils # qmv
+        pv
 
         # admin:
         htop
