@@ -46,6 +46,7 @@
   ./shell.git
   ./shell.programs.bat.nix
   ./shell.programs.exa.nix
+  ./shell.programs.htop.nix
   ./shell.programs.tmux
   ./shell.zsh
   ./virtualization.docker

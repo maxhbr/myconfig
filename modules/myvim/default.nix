@@ -10,7 +10,7 @@ let
         vam.pluginDictionaries = [{
           names = [
             "Vundle-vim"
-            "YUNOcommit-vim"
+            "ale"
             "airline"
             "colors-solarized"
             "ctrlp"

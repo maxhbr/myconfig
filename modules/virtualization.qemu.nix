@@ -7,8 +7,10 @@
       "options kvm_intel nested=1"; # enable nested virtualization
 
     virtualisation.libvirtd = {
-      qemuOvmf = true;
-      qemuRunAsRoot = false;
+      qemu = {
+        ovmf.enable = true;
+        runAsRoot = false;
+      };
       onBoot = "ignore";
       onShutdown = "shutdown";
     };

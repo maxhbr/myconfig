@@ -32,7 +32,7 @@
     ./2x4000-hdds.raid.nix
     # configuration
     ./smarthome
-    ./service.nextcloud.nix
+    # ./service.nextcloud.nix
     ./service.unifi.nix
     # ./service.grafana
 

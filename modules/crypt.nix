@@ -52,12 +52,11 @@ let
     pkgs.stdenv.mkDerivation {
       name = "${name}-secret";
       phases = "installPhase";
-      buildInputs = [ pkgs.age ];
       installPhase = let
         key =
           myconfig.metadatalib.get.hosts."${config.networking.hostName}".pubkeys."/etc/ssh/ssh_host_rsa_key.pub";
       in ''
-        age -a -r '${key}' -o "$out" '${source}'
+        "${pkgs.age}"/bin/age -a -r '${key}' -o "$out" '${source}'
       '';
     };
 
@@ -77,11 +76,15 @@ let
         fi
 
         rm -rf '${dest}'
-        "${age}"/bin/age -d -i /etc/ssh/ssh_host_rsa_key -o '${dest}' '${
-          mkSecretOnDisk name { inherit source; }
-        }'
+        "${age}"/bin/age -d \
+            -i /etc/ssh/ssh_host_rsa_key -o '${dest}' \
+            '${mkSecretOnDisk name { inherit source; }}'
+
         chown '${owner}':'${group}' '${dest}'
         chmod '${permissions}' '${dest}'
+
+        # # test for readability, fails if a parent folder is not readable
+        # sudo -H -u '${owner}' -g '${group}' bash -c "test -r '${dest}'"
       '';
     };
 in {

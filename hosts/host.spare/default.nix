@@ -48,6 +48,9 @@
     };
     # virtualisation.docker.enable = true;
 
+    networking.firewall.allowedUDPPorts = [ 60001];
+    programs.mosh.enable = true;
+
     services.logind.extraConfig = ''
       HandlePowerKey=suspend
     '';

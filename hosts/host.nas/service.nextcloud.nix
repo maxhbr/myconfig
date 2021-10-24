@@ -13,6 +13,7 @@
       nextcloud = {
         enable = true;
         hostName = config.networking.hostName;
+        adminpassFile = "/etc/nextcloud/adminpass";
         package = pkgs.nextcloud22;
         home = "/mnt/2x4t/nextcloud";
         https = true;
