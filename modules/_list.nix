@@ -37,7 +37,7 @@
   ./services.xserver.programs.vscode.nix
   ./services.xserver.programs.xss-lock.nix
   ./services.xserver.programs.zathura.nix
-  ./services.xserver.pulseaudio.nix
+  ./services.xserver.audio.nix
   ./services.xserver.st
   ./services.xserver.wacom.nix
   ./services.xserver.xclip.nix

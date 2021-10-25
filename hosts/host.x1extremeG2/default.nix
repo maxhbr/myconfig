@@ -63,41 +63,47 @@
       }];
     };
 
-    home-manager.sharedModules = [{
-      # home.packages = with pkgs.helper; [
-      #   (connectBtDevice {
-      #     name = "mb660";
-      #     id = "00:16:94:42:53:10";
-      #   })
-      #   (connectBtDevice {
-      #     name = "5200";
-      #     id = "E4:22:A5:3E:F4:3D";
-      #   })
-      #   (connectBtDevice {
-      #     name = "klim";
-      #     id = "1E:A8:2C:18:00:3D";
-      #   })
-      #   (connectBtDevice {
-      #     name = "wm25";
-      #     id = "03:A1:00:01:7B:13";
-      #   })
-      # ];
-      home.file = {
-        ".config/autorandr/" = {
-          source = ./autorandr;
-          recursive = true;
+    home-manager.sharedModules = [
+      {
+        home.file = {
+          ".config/autorandr/" = {
+            source = ./autorandr;
+            recursive = true;
+          };
         };
-        ".config/autorandr/postswitch.d/mute_notebook_audio".source = let
-          muteNotebookAudio = with pkgs;
-            writeShellScriptBin "mute_notebook_audio" ''
-              exec ${pulseaudio}/bin/pactl set-sink-mute "alsa_output.pci-0000_00_1f.3.analog-stereo" "1"
-            '';
-        in "${muteNotebookAudio}/bin/mute_notebook_audio";
-      };
-      home.packages = with pkgs;
-        [
-          google-chrome # for netflix and stadia
-        ];
-    }];
+        home.packages = with pkgs;
+          [
+            google-chrome # for netflix and stadia
+          ];
+      }
+      (lib.mkIf config.hardware.pulseaudio.enable {
+        # home.packages = with pkgs.helper; [
+        #   (connectBtDevice {
+        #     name = "mb660";
+        #     id = "00:16:94:42:53:10";
+        #   })
+        #   (connectBtDevice {
+        #     name = "5200";
+        #     id = "E4:22:A5:3E:F4:3D";
+        #   })
+        #   (connectBtDevice {
+        #     name = "klim";
+        #     id = "1E:A8:2C:18:00:3D";
+        #   })
+        #   (connectBtDevice {
+        #     name = "wm25";
+        #     id = "03:A1:00:01:7B:13";
+        #   })
+        # ];
+        home.file = {
+          ".config/autorandr/postswitch.d/mute_notebook_audio".source = let
+            muteNotebookAudio = with pkgs;
+              writeShellScriptBin "mute_notebook_audio" ''
+                exec ${pulseaudio}/bin/pactl set-sink-mute "alsa_output.pci-0000_00_1f.3.analog-stereo" "1"
+              '';
+          in "${muteNotebookAudio}/bin/mute_notebook_audio";
+        };
+      })
+    ];
   };
 }
