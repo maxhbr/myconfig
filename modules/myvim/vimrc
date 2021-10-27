@@ -28,7 +28,11 @@ let mapleader=","
   nnoremap <Leader>b :CtrlPBuffer<CR>
   nnoremap <Leader>p :CtrlPMRU<CR>
 "}}}
-"
+let g:formatters_haskell = ['stylish_haskell']
+let g:autoformat_verbosemode=1
+autocmd BufWrite *.hs :Autoformat
+" Don't automatically indent on save, since vim's autoindent for haskell is buggy
+autocmd FileType haskell let b:autoformat_autoindent=0
 " ===================================================================}}}
 " ====  general  ====================================================
 " ==================================================================={{{

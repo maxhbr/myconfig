@@ -52,6 +52,7 @@ let
             "watchdogs"
             "webapi-vim"
           ] ++ [
+            "stylish-haskell"
             "haskell-vim"
             # "haskellconceal"
             "hoogle"
