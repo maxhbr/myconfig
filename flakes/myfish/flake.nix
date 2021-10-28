@@ -101,8 +101,6 @@
                     fish_vi_key_bindings --no-erase
                 end
                 set -g fish_key_bindings hybrid_bindings
-              '';
-              promptInit = ''
                 set -l nix_shell_info (
                   if test -n "$IN_NIX_SHELL"
                     echo -n "<nix-shell> "

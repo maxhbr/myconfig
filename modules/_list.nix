@@ -54,4 +54,5 @@
   ./virtualization.lxc.nix
   ./virtualization.qemu.nix
   ./virtualization.vbox.nix
+  ./zramSwap.nix
 ]

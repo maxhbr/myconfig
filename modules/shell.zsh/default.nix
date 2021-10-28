@@ -29,7 +29,6 @@ in {
         enable = true;
         plugins = [ "git" ];
       };
-      promptInit = ""; # Clear this to avoid a conflict with oh-my-zsh
     };
     systemd = {
       timers.zsh-history-backup-timer = {
