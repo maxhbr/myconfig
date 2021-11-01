@@ -20,7 +20,6 @@ in {
     ./dev.go.nix
     ./dev.ruby.nix
     ./dev.nodejs.nix
-    ./programs.license-compliance-toolbox.nix
   ];
   config = {
     myconfig.dev.enable = cfg.haskell.enable || cfg.network.enable
