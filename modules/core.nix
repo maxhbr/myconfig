@@ -41,7 +41,7 @@
         git-lfs
         unzip
         p7zip
-        tree
+        tree # build fails?
         rlwrap
         vim
 

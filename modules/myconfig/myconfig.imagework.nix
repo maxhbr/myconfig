@@ -23,6 +23,8 @@ in {
         # blender
         # librecad # 2D
         nixos-unstable.freecad # 3D
+        povray
+        luxcorerender
       ];
     }];
   });

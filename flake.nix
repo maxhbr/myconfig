@@ -92,6 +92,13 @@
                 ];
               };
             })
+            ({ pkgs, ... }: {
+              nixpkgs.overlays = [
+                (self: super: {
+                  # https://github.com/NixOS/nixpkgs/pull/145738
+                  tree = (import inputs.master { inherit (pkgs) config system; }).tree;
+                })];
+            })
 
             inputs.myxmonad.nixosModule
             inputs.my-wallpapers.nixosModule
