@@ -8,5 +8,6 @@ in {
     ./myconfig.headless.nix
     ./myconfig.virtualisation.nix
     ./myconfig.imagework.nix
+    ./myconfig.cad.nix
   ];
 }

@@ -242,6 +242,8 @@
     # tool = ediff
 [rerere]
     enabled = true
+[help]
+    autoCorrect = prompt
 
 [url "git@github.com:"]
     # insteadOf = https://github.com/

@@ -30,6 +30,7 @@
       desktop.enable = true;
       virtualisation.enable = true;
       imagework.enable = true;
+      cad.enable = true;
       dev = {
         haskell.enable = true;
         go.enable = true;
