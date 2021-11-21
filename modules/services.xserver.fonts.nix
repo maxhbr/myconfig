@@ -30,6 +30,7 @@
         noto-fonts-cjk
         noto-fonts-emoji
         proggyfonts
+        roboto
       ];
       # fontconfig.defaultFonts.monospace = [ "Inconsolata Nerd Font" "DejaVu Sans Mono" "Ubuntu" ];
     };
