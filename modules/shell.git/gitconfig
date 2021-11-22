@@ -28,6 +28,7 @@
     ca          = commit -s --amend
     caa         = commit -s --amend -a
     cac         = commit -s --patch --amend
+    reuse       = commit -c @ --reset-author
     co          = checkout
     cot         = checkout --track
     cob         = checkout -b

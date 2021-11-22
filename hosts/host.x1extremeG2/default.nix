@@ -32,12 +32,13 @@
       imagework.enable = true;
       cad.enable = true;
       dev = {
-        haskell.enable = true;
+        compliance.enable = true;
         go.enable = true;
-        ruby.enable = true;
+        haskell.enable = true;
         network.enable = true;
         nodejs.enable = true;
-        compliance.enable = true;
+        ruby.enable = true;
+        rust.enable = true;
       };
     };
     services.xserver.wacom.enable = true;
@@ -46,6 +47,8 @@
     virtualisation.virtualbox.host.enable = true;
 
     services.hardware.bolt.enable = true;
+
+    # zramSwap.enable = true;
 
     networking.hostName = "x1extremeG2";
     networking.hostId = "7634ddfe";
