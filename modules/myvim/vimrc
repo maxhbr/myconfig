@@ -198,11 +198,12 @@ set nocursorcolumn " hat probleme mit acp (Popup)
 set textwidth=80    " Don't wrap lines by default
 let &foldcolumn=(&columns - &textwidth - 2) / 2
 let &synmaxcol=max([128, &columns])
-augroup mySidepaddingAugroup
-  autocmd!
-  autocmd VimResized * let &foldcolumn=(&columns - &textwidth - 2) / 2
-  autocmd VimResized * let &synmaxcol=max([128, &columns])
-augroup END
+
+" augroup mySidepaddingAugroup
+"   autocmd!
+"   autocmd VimResized * let &foldcolumn=(&columns - &textwidth - 2) / 2
+"   autocmd VimResized * let &synmaxcol=max([128, &columns])
+" augroup END
 
 set nowrap
 set ruler
