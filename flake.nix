@@ -10,7 +10,7 @@
     rel2009.url = "github:nixos/nixpkgs/nixos-20.09";
     rel2003.url = "github:nixos/nixpkgs/nixos-20.03";
     rel2105.url = "github:nixos/nixpkgs/release-21.05";
-    # rel2111.url = "github:nixos/nixpkgs/release-21.11";
+    rel2111.url = "github:nixos/nixpkgs/release-21.11";
 
     home.url = "github:nix-community/home-manager";
     home.inputs.nixpkgs.follows = "nixpkgs";
@@ -42,9 +42,15 @@
     my-wallpapers.url = "github:maxhbr/wallpapers";
     my-wallpapers.inputs.nixpkgs.follows = "nixpkgs";
 
+    license-compliance-toolbox.url = "github:maxhbr/license-compliance-toolbox";
+    license-compliance-toolbox.inputs.nixpkgs.follows = "nixpkgs";
+
     zephyrproject.url = "path:flakes/zephyrproject/";
     # zephyrproject.inputs.nixpkgs.follows = "nixpkgs";
     zephyrproject.inputs.flake-utils.follows = "flake-utils";
+
+    mykeylight.url = "path:flakes/mykeylight";
+    mykeylight.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -89,6 +95,7 @@
                   (mkSubPkgsOverlay "nixos-2003" inputs.rel2003)
                   (mkSubPkgsOverlay "nixos-2009" inputs.rel2009)
                   (mkSubPkgsOverlay "nixos-2105" inputs.rel2105)
+                  (mkSubPkgsOverlay "nixos-2111" inputs.rel2111)
                 ];
               };
             })
@@ -99,6 +106,7 @@
                   tree = (import inputs.master { inherit (pkgs) config system; }).tree;
                 })];
             })
+            inputs.mykeylight.nixosModule
 
             inputs.myxmonad.nixosModule
             inputs.my-wallpapers.nixosModule
@@ -116,6 +124,7 @@
           (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
             { config = { hardware.enableRedistributableFirmware = true; }; }
             self.nixosModules.core
+            inputs.license-compliance-toolbox.nixosModule
             inputs.nixos-hardware.nixosModules.lenovo-thinkpad-x1-extreme-gen2
             ({ myconfig, ... }: {
               imports = [
@@ -133,10 +142,12 @@
         host-workstation = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "workstation" ([
             self.nixosModules.core
+            inputs.license-compliance-toolbox.nixosModule
           ] ++ moreModules) metadataOverride);
         host-spare = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "spare" ([
             self.nixosModules.core
+            inputs.license-compliance-toolbox.nixosModule
           ] ++ moreModules) metadataOverride);
         host-vserver = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "vserver"
