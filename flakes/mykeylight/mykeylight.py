@@ -8,16 +8,22 @@ from elgato import Elgato, State, Info
 
 async def main():
     """Show example on controlling your Elgato Light device."""
-    async with Elgato("192.168.1.202") as elgato:
-        info: Info = await elgato.info()
-        print(info)
+    async with Elgato("192.168.1.202") as elgato1:
+        # info1: Info = await elgato1.info()
+        # print(info1)
 
-        state: State = await elgato.state()
-        print(state)
+        state1: State = await elgato1.state()
+        print(state1)
 
-        # Toggle the Light
-        await elgato.light(on=(not state.on))
+        async with Elgato("192.168.1.231") as elgato2:
+            # info2: Info = await elgato2.info()
+            # print(info2)
 
+            state2: State = await elgato2.state()
+            print(state2)
+
+            await elgato2.light(on=(not state1.on))
+        await elgato1.light(on=(not state1.on))
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
