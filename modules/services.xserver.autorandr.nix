@@ -87,7 +87,7 @@ in {
         ".config/autorandr/postswitch.d/setupWacom".source =
           "${setupWacom}/bin/setupWacom";
         ".config/autorandr/postswitch.d/setupHuion".source =
-          "${setupWacom}/bin/setupHuion";
+          "${setupHuion}/bin/setupHuion";
       };
     }];
     environment = {
