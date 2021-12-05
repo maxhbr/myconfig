@@ -2,28 +2,35 @@
 # -*- coding: iso-8859-15 -*-
 
 import asyncio
+import argparse
 
 from elgato import Elgato, State, Info
 
 
+parser = argparse.ArgumentParser(description='mykeylight.')
+parser.add_argument('--on', action=argparse.BooleanOptionalAction)
+parser.add_argument('--off', action=argparse.BooleanOptionalAction)
+
+ips = ["192.168.1.202", "192.168.1.231"]
+
+async def toggle():
+    async with Elgato(ips[0]) as elgato:
+        state: State = await elgato.state()
+        await set(not state.on)
+
+async def set(on: bool):
+    for ip in ips:
+        async with Elgato(ip) as elgato:
+            await elgato.light(on=on)
+
 async def main():
-    """Show example on controlling your Elgato Light device."""
-    async with Elgato("192.168.1.202") as elgato1:
-        # info1: Info = await elgato1.info()
-        # print(info1)
-
-        state1: State = await elgato1.state()
-        print(state1)
-
-        async with Elgato("192.168.1.231") as elgato2:
-            # info2: Info = await elgato2.info()
-            # print(info2)
-
-            state2: State = await elgato2.state()
-            print(state2)
-
-            await elgato2.light(on=(not state1.on))
-        await elgato1.light(on=(not state1.on))
+    args = parser.parse_args()
+    if args.on:
+        await set(True)
+    elif args.off:
+        await set(False)
+    else:
+        await toggle()
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()

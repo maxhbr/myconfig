@@ -106,6 +106,8 @@
                 exec ${pulseaudio}/bin/pactl set-sink-mute "alsa_output.pci-0000_00_1f.3.analog-stereo" "1"
               '';
           in "${muteNotebookAudio}/bin/mute_notebook_audio";
+          ".config/autorandr/mobile/postswitch.d/mykeylight-off".source = with pkgs;
+            "${mykeylight-off}/bin/mykeylight-off &disown";
         };
       })
     ];
