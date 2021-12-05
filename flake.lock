@@ -249,7 +249,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-hOLcUNO6crvE7seVbBwyfwxkazygRzN9NYdmslJHsIk=",
+        "narHash": "sha256-MNq/PvQCGC1fleGMwtIhZt2EYH308MSXo6e59LGEEhc=",
         "path": "flakes/mykeylight",
         "type": "path"
       },
