@@ -72,8 +72,10 @@ myManageHook =
     -- see: https://www.peterstuart.org/posts/2021-09-06-xmonad-zoom/
       manageZoomHooks =
         composeAll $
-        [ (className =? zoomClassName) <&&> shouldFloat <$> title --> doFloat
-        , (className =? zoomClassName) <&&> shouldSink <$> title --> doSink
+        [ (className =? zoomClassName) <&&> shouldFloat <$>
+          title --> doFloat <+> doF W.focusDown
+        , (className =? zoomClassName) <&&> shouldSink <$>
+          title --> (ask >>= doF . W.sink) <+> doF W.swapDown
         ]
         where
           zoomClassName = "zoom"
@@ -85,7 +87,6 @@ myManageHook =
             ]
           shouldSink title = any (\f -> f title) tilePreds
           shouldFloat = not . shouldSink
-          doSink = (ask >>= doF . W.sink) <+> doF W.swapDown
    in composeOne
         (ideaPopupHook :
          (transience :
