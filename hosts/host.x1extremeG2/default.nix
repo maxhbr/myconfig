@@ -101,13 +101,15 @@
         # ];
         home.file = {
           ".config/autorandr/postswitch.d/mute_notebook_audio".source = let
-            muteNotebookAudio = with pkgs;
-              writeShellScriptBin "mute_notebook_audio" ''
+            script = with pkgs;
+              writeShellScriptBin "script" ''
                 exec ${pulseaudio}/bin/pactl set-sink-mute "alsa_output.pci-0000_00_1f.3.analog-stereo" "1"
               '';
-          in "${muteNotebookAudio}/bin/mute_notebook_audio";
-          ".config/autorandr/mobile/postswitch.d/mykeylight-off".text = with pkgs;
-            "${mykeylight-off}/bin/mykeylight-off &disown";
+          in "${script}/bin/script";
+          ".config/autorandr/mobile/postswitch.d/mykeylight-off".source = let
+            script = with pkgs;
+              writeShellScriptBin "script" "${pkgs.mykeylight-off}/bin/mykeylight-off &disown";
+          in "${script}/bin/script";
         };
       })
     ];
