@@ -19,6 +19,7 @@ haskell.lib.buildStackProject {
   buildInputs = [
     gmp
     x11
+    libffi
     xorg.libXinerama
     xorg.libXext
     xorg.libX11

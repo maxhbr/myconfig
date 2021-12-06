@@ -59,6 +59,9 @@
         # rambox
         # remmina
       ];
+      programs.fish.functions = {
+        libreoffice = "nix-shell '<nixpkgs>' --fallback --run libreoffice -p libreoffice";
+      };
     }];
   };
 }
