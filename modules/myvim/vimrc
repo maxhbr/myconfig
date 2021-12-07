@@ -196,14 +196,8 @@ set cursorline
 set nocursorcolumn " hat probleme mit acp (Popup)
 
 set textwidth=80    " Don't wrap lines by default
-let &foldcolumn=(&columns - &textwidth - 2) / 2
+let &foldcolumn=4
 let &synmaxcol=max([128, &columns])
-
-" augroup mySidepaddingAugroup
-"   autocmd!
-"   autocmd VimResized * let &foldcolumn=(&columns - &textwidth - 2) / 2
-"   autocmd VimResized * let &synmaxcol=max([128, &columns])
-" augroup END
 
 set nowrap
 set ruler
@@ -445,9 +439,6 @@ endfunction
 noremap ,R :call RangerChooser()<CR>
 
 "                                                                    }}}
-function! MyBigLeftPadding()
-  let &foldcolumn = (&columns - &textwidth) / 2
-endfunction
 " ===================================================================}}}
 " ====  abbreviations  ==============================================
 " ==================================================================={{{

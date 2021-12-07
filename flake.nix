@@ -208,7 +208,7 @@
 
       eachDefaultSystem =
         inputs.flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ];
-      nixpkgsConfig = { allowUnfree = true; };
+        nixpkgsConfig = { allowUnfree = true; allowBroken = true; };
 
     in eachDefaultSystem (system: {
       legacyPackages = import inputs.nixpkgs {
