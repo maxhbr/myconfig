@@ -35,6 +35,7 @@
     # ./service.nextcloud.nix
     ./service.unifi.nix
     # ./service.grafana
+    ./service.pi-hole.nix
 
     { # nginx
       config = {

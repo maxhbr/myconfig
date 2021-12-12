@@ -25,7 +25,7 @@
             why-depends-nixos = "nix why-depends /run/current-system";
           };
           functions = {
-            nixse = "nix search nixpkgs";
+            nixse = "nix search nixpkgs $argv";
             nixTest =
               "NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs>' --fallback --run fish -p";
             # see: https://github.com/NixOS/nixpkgs/issues/51368#issuecomment-704678563
