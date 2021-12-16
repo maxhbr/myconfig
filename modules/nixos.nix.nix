@@ -23,11 +23,11 @@
         programs.fish = {
           shellAbbrs = {
             why-depends-nixos = "nix why-depends /run/current-system";
+            nixse = "nix search nixpkgs";
           };
           functions = {
-            nixse = "nix search nixpkgs $argv";
             nixTest =
-              "NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs>' --fallback --run fish -p";
+              "NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs>' --fallback --run fish -p $argv";
             # see: https://github.com/NixOS/nixpkgs/issues/51368#issuecomment-704678563
             nix-closure-size =
               "${pkgs.nix}/bin/nix-store -q --size (nix-store -qR (readlink -e $argv) ) | awk '{ a+=$1 } END { print a }' | ${pkgs.coreutils}/bin/numfmt --to=iec-i";

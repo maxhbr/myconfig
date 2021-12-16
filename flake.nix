@@ -24,6 +24,8 @@
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
+    vulnerablecode.url = "github:nexB/vulnerablecode?dir=etc/nix";
+
     # mine
     # emacs.url = "github:nix-community/emacs-overlay";
     # nix-doom-emacs.url = "github:vlaci/nix-doom-emacs/develop";
@@ -138,6 +140,14 @@
               ];
             })
             inputs.zephyrproject.nixosModule
+            ({ pkgs, ... }: {
+              nixpkgs.overlays = [ inputs.vulnerablecode.overlay];
+              home-manager.sharedModules = [{
+                home.packages = with pkgs; [
+                  vulnerablecode
+                ];
+              }];
+            })
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "workstation" ([

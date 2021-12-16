@@ -94,9 +94,6 @@
     #  # lib.mkForce pkgs.unstable.linuxPackages_latest;
     #  lib.mkForce pkgs.linuxPackages_latest;
 
-    networking.firewall.allowedTCPPorts = [ 12345 6567 ];
-    networking.firewall.allowedUDPPorts = [ 12345 6567 ];
-
     services.logind.extraConfig = ''
       HandlePowerKey=suspend
     '';
