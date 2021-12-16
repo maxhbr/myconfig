@@ -1,4 +1,5 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nix-shell
+#! nix-shell --pure -i bash -p bash wget adoptopenjdk-jre-hotspot-bin-16
 set -euo pipefail
 
 release=v135
