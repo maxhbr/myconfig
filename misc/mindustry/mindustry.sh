@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#! nix-shell --pure -i bash -p bash wget adoptopenjdk-jre-hotspot-bin-16
+#! nix-shell -i bash -p wget jre_minimal SDL2 glew alsa-lib glew
 set -euo pipefail
 
 release=v135
