@@ -49,7 +49,7 @@
   ./shell.programs.htop.nix
   ./shell.programs.tmux
   ./shell.zsh
-  ./virtualization.docker
+  ./virtualization.oci-containers
   ./virtualization.libvirt.nix
   ./virtualization.lxc.nix
   ./virtualization.qemu.nix

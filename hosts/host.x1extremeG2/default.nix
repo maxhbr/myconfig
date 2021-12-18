@@ -43,6 +43,7 @@
     };
     services.xserver.wacom.enable = true;
     virtualisation.docker.enable = true;
+    virtualisation.podman.enable = true;
     virtualisation.libvirtd.enable = true;
     virtualisation.virtualbox.host.enable = true;
 
