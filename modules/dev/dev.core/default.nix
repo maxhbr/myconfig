@@ -7,18 +7,18 @@ let
     writeScriptBin "cropLog.hs" (lib.fileContents ./cropLog.hs);
 in {
   config = lib.mkIf cfg.enable {
-    nixpkgs.overlays = [
-      (self: super: {
-        diffoscope = super.diffoscope.overrideAttrs (oldAttrs: rec {
-          disabledTests = oldAttrs.disabledTests ++ [ "test_ffprobe" ];
-        });
-      })
-    ];
+    # nixpkgs.overlays = [
+    #   (self: super: {
+    #     diffoscope = super.diffoscope.overrideAttrs (oldAttrs: rec {
+    #       disabledTests = oldAttrs.disabledTests ++ [ "test_ffprobe" ];
+    #     });
+    #   })
+    # ];
     home-manager.sharedModules = [{
       home.packages = with pkgs;
         ([
           meld
-          diffoscope
+          master.diffoscope
           gnumake
           cmake
           automake

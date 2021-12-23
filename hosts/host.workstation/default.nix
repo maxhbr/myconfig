@@ -86,7 +86,8 @@
         network.enable = true;
       };
     };
-    virtualisation.docker.enable = true;
+    virtualisation.podman.enable = true;
+    virtualisation.docker.enable = false;
 
     #boot.kernelPackages =
     #  # lib.mkForce pkgs.unstable.linuxPackages_testing;

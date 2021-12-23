@@ -4,6 +4,6 @@
   imports = [
     # ./docker.openhab.nix
     ./service.deconz.nix
-    ./service.homeassistant.nix
+    # ./service.homeassistant.nix
   ];
 }

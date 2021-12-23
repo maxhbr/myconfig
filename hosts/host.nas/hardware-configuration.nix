@@ -23,7 +23,7 @@
     fsType = "vfat";
   };
 
-  swapDevices = [ ];
+  swapDevices = [ { device = "/swapfile"; size = 8192; } ];
 
   powerManagement.cpuFreqGovernor = lib.mkDefault "powersave";
   # High-DPI console
