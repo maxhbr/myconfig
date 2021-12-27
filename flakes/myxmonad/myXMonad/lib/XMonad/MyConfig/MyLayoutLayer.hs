@@ -6,71 +6,104 @@ module XMonad.MyConfig.MyLayoutLayer
     , myLayout
     ) where
 
-import           Data.Ratio ((%))
-import           Data.Maybe ( isJust )
+import           Data.List                           ((\\))
+import           Data.Maybe                          (isJust)
+import           Data.Ratio                          ((%))
 
 import           XMonad
-import           XMonad.StackSet ( stack, tag )
+import           XMonad.StackSet                     (stack, tag)
 
 --------------------------------------------------------------------------------
 -- Util
-import           XMonad.Util.Types ( Direction2D(..) )
+import           XMonad.Util.Types                   (Direction2D (..))
 
 --------------------------------------------------------------------------------
 -- Actions
-import           XMonad.Actions.CopyWindow ( copy )
-import           XMonad.Actions.CycleWS ( nextWS, prevWS
-                                        , toggleWS'
-                                        , shiftToNext, shiftToPrev
-                                        , nextScreen, prevScreen
-                                        , shiftNextScreen, shiftPrevScreen
-                                        , moveTo
-                                        , Direction1D(..)
-                                        , WSType( WSIs ) )
-import           XMonad.Actions.Minimize ( minimizeWindow, withLastMinimized, maximizeWindowAndFocus )
+import           XMonad.Actions.CopyWindow           (copy)
+import           XMonad.Actions.CycleWS              (Direction1D (..),
+                                                      WSType (WSIs, (:&:)),
+                                                      emptyWS, ignoringWSs,
+                                                      moveTo, nextScreen,
+                                                      nextWS, prevScreen,
+                                                      prevWS, shiftNextScreen,
+                                                      shiftPrevScreen,
+                                                      shiftToNext, shiftToPrev,
+                                                      toggleWS')
+import           XMonad.Actions.Minimize             (maximizeWindowAndFocus,
+                                                      minimizeWindow,
+                                                      withLastMinimized)
 
 --------------------------------------------------------------------------------
 -- Hooks
-import           XMonad.Hooks.EwmhDesktops ( fullscreenEventHook )
-import           XMonad.Hooks.ManageDocks ( docks
-                                          , avoidStrutsOn
-                                          , ToggleStruts(..) )
+import           XMonad.Hooks.EwmhDesktops           (fullscreenEventHook)
+import           XMonad.Hooks.ManageDocks            (ToggleStruts (..),
+                                                      avoidStrutsOn, docks)
 
 --------------------------------------------------------------------------------
 -- Layouts
-import           XMonad.Layout.BoringWindows( boringAuto
-                                            , focusDown )
-import           XMonad.Layout.Gaps (gaps, GapMessage(ToggleGaps))
-import           XMonad.Layout.Named ( named )
-import           XMonad.Layout.NoBorders ( smartBorders )
-import           XMonad.Layout.Minimize ( minimize )
+import           XMonad.Layout.BoringWindows         (boringAuto, focusDown)
+import           XMonad.Layout.Gaps                  (GapMessage (ToggleGaps),
+                                                      gaps)
+import           XMonad.Layout.Grid                  (Grid (Grid))
+import           XMonad.Layout.IM
+import           XMonad.Layout.Magnifier             (magnifier)
+import           XMonad.Layout.Minimize              (minimize)
 import           XMonad.Layout.MultiToggle
 import           XMonad.Layout.MultiToggle.Instances
-import           XMonad.Layout.PerScreen (ifWider)
-import           XMonad.Layout.PerWorkspace ( modWorkspaces )
-import           XMonad.Layout.ResizableTile ( ResizableTall(ResizableTall)
-                                             , MirrorResize ( MirrorShrink
-                                                            , MirrorExpand ) )
-import           XMonad.Layout.Spacing ( spacingRaw, Border(..), toggleWindowSpacingEnabled, toggleScreenSpacingEnabled)
-import           XMonad.Layout.TwoPane ( TwoPane( TwoPane ) )
-import           XMonad.Layout.IM -- (withIM)
-import           XMonad.Layout.Magnifier ( magnifier )
-import           XMonad.Layout.Grid ( Grid( Grid ) )
+import           XMonad.Layout.Named                 (named)
+import           XMonad.Layout.NoBorders             (smartBorders)
+import           XMonad.Layout.PerScreen             (ifWider)
+import           XMonad.Layout.PerWorkspace          (modWorkspaces)
+import           XMonad.Layout.ResizableTile         (MirrorResize (MirrorExpand, MirrorShrink),
+                                                      ResizableTall (ResizableTall))
+import           XMonad.Layout.Spacing               (Border (..), spacingRaw,
+                                                      toggleScreenSpacingEnabled,
+                                                      toggleWindowSpacingEnabled)
+import           XMonad.Layout.TwoPane               (TwoPane (TwoPane))
 
 import           XMonad.Layout.IfMax
 
 --------------------------------------------------------------------------------
 -- misc
-import qualified Data.Map                    as M
-import qualified XMonad.StackSet             as W
+import qualified Data.Map                            as M
+import qualified XMonad.StackSet                     as W
 
-import XMonad.MyConfig.Common
-import XMonad.MyConfig.Notify (popupCurDesktop)
+import           XMonad.MyConfig.Common
+import           XMonad.MyConfig.Notify              (popupCurDesktop)
 
 
-myCoreWorkspaces, myWorkspaces :: [String]
-myCoreWorkspaces = "web" : map show [9..10]
+myComWorkspaces, myCoreWorkspaces, myWorkspaces :: [String]
+myComWorkspaces = ["10mail", "10slack", "10"]
+myCoreWorkspaces = ["web", "9"] ++ myComWorkspaces
 myWorkspaces = map show [1..7] ++  ["media"] ++ myCoreWorkspaces ++ ["vbox"] ++ map show [13..20] ++ ["NSP"]
+
+myWorkspaceKeys :: [(KeySym,[String])]
+myWorkspaceKeys = [ (xK_1, [myWorkspaces !! 0])
+                  , (xK_2, [myWorkspaces !! 1])
+                  , (xK_3, [myWorkspaces !! 2])
+                  , (xK_4, [myWorkspaces !! 3])
+                  , (xK_5, [myWorkspaces !! 4])
+                  , (xK_6, [myWorkspaces !! 5])
+                  , (xK_7, [myWorkspaces !! 6])
+                  , (xK_8, [myWorkspaces !! 7])
+                  , (xK_9, [myWorkspaces !! 8])
+                  , (xK_0, myComWorkspaces)
+                  ]
+workspaceKeysToKBs :: (KeySym,[String]) -> [((KeyMask -> KeyMask, KeySym), X ())]
+workspaceKeysToKBs (k,ws) = let firstW = head ws
+                                goToFun = case ws of
+                                            [w] -> windows (W.greedyView w) >> popupCurDesktop
+                                            _   -> moveTo Next $ (ignoringWSs (myWorkspaces \\ ws)) --:&: (Not emptyWS)
+                             in [ ((m__, k), goToFun)
+                                , ((ms_, k), (windows . W.shift) firstW)
+                                , ((msc, k), (windows . copy) firstW)
+                                ]
+
+switchWorkspaceKBs :: [((KeyMask -> KeyMask, KeySym), X ())]
+switchWorkspaceKBs =
+  (concatMap workspaceKeysToKBs myWorkspaceKeys)
+  ++ [((msc, xK_m    ), (windows . W.shift) "NSP" )]
+
 applyMyLayoutModifications :: XConfig a -> XConfig a
 applyMyLayoutModifications c = let
   addLayoutkeys :: XConfig a -> XConfig a
@@ -157,15 +190,6 @@ layoutKBs conf =
   -- ++ combineTwoKBs
   -- ++ subLayoutKBs
   where
-    switchWorkspaceKBs =
-      -- mod-[1..9], Switch to workspace N
-      -- mod-shift-[1..9], Move client to workspace N
-      [((m, k), f i)
-          | (i, k) <- zip (filter (/= "media") (XMonad.workspaces conf)) ([xK_1 .. xK_9] ++ [xK_0])
-          , (f, m) <- [ (\i -> windows (W.greedyView i) >> popupCurDesktop, m__)
-                      , (windows . W.shift, ms_)
-                      , (windows . copy, msc) ]]
-      ++ [((msc, xK_m    ), (windows . W.shift) "NSP" )]
     focusKBs =
       [ ((ms_, xK_Tab   ), focusDown)
 #if 0

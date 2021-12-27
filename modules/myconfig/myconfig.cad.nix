@@ -17,6 +17,7 @@ in {
         povray
         luxcorerender
         meshlab
+        gmsh
       ];
     }];
   });

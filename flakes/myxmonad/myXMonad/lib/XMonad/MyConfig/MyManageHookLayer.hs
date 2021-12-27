@@ -51,7 +51,9 @@ myManageHook =
           , ( doRectFloat (RationalRect 0.1 0.05 0.3 0.9)
             , ["pavucontrol", "Pavucontrol"])
           , (doFloat, ["MPlayer", "Onboard"])
-          , (doShift "10", ["franz", "Franz", "Telegram", "slack", "Slack"])
+          , (doShift "10", ["franz", "Franz", "Telegram"])
+          , (doShift "10mail" [".evolution-wrapped_", "evolution"])
+          , (doShift "10slack", ["slack", "Slack"])
           , ( doShift "media"
             , ["Steam", "google-chrome", "Google-chrome", "Xephyr"])
           , ( doShift "13"
