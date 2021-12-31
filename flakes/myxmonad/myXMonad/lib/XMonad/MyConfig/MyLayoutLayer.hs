@@ -85,15 +85,15 @@ myWorkspaceKeys = [ (xK_1, [myWorkspaces !! 0])
                   , (xK_5, [myWorkspaces !! 4])
                   , (xK_6, [myWorkspaces !! 5])
                   , (xK_7, [myWorkspaces !! 6])
-                  , (xK_8, [myWorkspaces !! 7])
-                  , (xK_9, [myWorkspaces !! 8])
+                  , (xK_8, ["web"])
+                  , (xK_9, ["9"])
                   , (xK_0, myComWorkspaces)
                   ]
 workspaceKeysToKBs :: (KeySym,[String]) -> [((KeyMask -> KeyMask, KeySym), X ())]
 workspaceKeysToKBs (k,ws) = let firstW = head ws
                                 goToFun = case ws of
                                             [w] -> windows (W.greedyView w) >> popupCurDesktop
-                                            _   -> moveTo Next $ (ignoringWSs (myWorkspaces \\ ws)) --:&: (Not emptyWS)
+                                            _   -> moveTo Next $ (ignoringWSs (myWorkspaces \\ ws)) -- :&: (Not emptyWS)
                              in [ ((m__, k), goToFun)
                                 , ((ms_, k), (windows . W.shift) firstW)
                                 , ((msc, k), (windows . copy) firstW)

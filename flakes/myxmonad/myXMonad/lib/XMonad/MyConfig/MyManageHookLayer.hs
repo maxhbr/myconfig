@@ -52,7 +52,7 @@ myManageHook =
             , ["pavucontrol", "Pavucontrol"])
           , (doFloat, ["MPlayer", "Onboard"])
           , (doShift "10", ["franz", "Franz", "Telegram"])
-          , (doShift "10mail" [".evolution-wrapped_", "evolution"])
+          , (doShift "10mail", [".evolution-wrapped_", "evolution"])
           , (doShift "10slack", ["slack", "Slack"])
           , ( doShift "media"
             , ["Steam", "google-chrome", "Google-chrome", "Xephyr"])
