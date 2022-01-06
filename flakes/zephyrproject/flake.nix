@@ -64,6 +64,8 @@
               (writeShellScriptBin "clang-format" ''
                 exec ${llvmPackages.clang-unwrapped}/bin/clang-format "$@"
               '')
+              # teensy
+              teensy-loader-cli tytools
             ]);
             home.sessionVariables = {
               ZEPHYR_BASE = "/home/mhuber/zephyrproject/zephyr";
@@ -88,6 +90,8 @@
                   "mimxrt1060_evk"
                   "frdm_k64f"
                   "lpcxpresso55s69_cpu0"
+                  "teensy40"
+                  "teensy41"
                 ] (board: "west-arm build -p always -b ${board} ."));
             };
           }];

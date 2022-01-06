@@ -73,9 +73,11 @@ import           XMonad.MyConfig.Notify              (popupCurDesktop)
 
 
 myComWorkspaces, myCoreWorkspaces, myWorkspaces :: [String]
-myComWorkspaces = ["10mail", "10slack", "10"]
-myCoreWorkspaces = ["web", "9"] ++ myComWorkspaces
-myWorkspaces = map show [1..7] ++  ["media"] ++ myCoreWorkspaces ++ ["vbox"] ++ map show [13..20] ++ ["NSP"]
+myWebWorkspaces = ["web", "web2"]
+myComWorkspaces = ["9mail", "9"]
+myCoreWorkspaces = myWebWorkspaces ++ myComWorkspaces
+myOtherWorkspaces = map show [10..20] ++ ["vbox"]
+myWorkspaces = map show [1..7] ++  ["media"] ++ myCoreWorkspaces ++ myOtherWorkspaces ++ ["NSP"]
 
 myWorkspaceKeys :: [(KeySym,[String])]
 myWorkspaceKeys = [ (xK_1, [myWorkspaces !! 0])
@@ -85,9 +87,9 @@ myWorkspaceKeys = [ (xK_1, [myWorkspaces !! 0])
                   , (xK_5, [myWorkspaces !! 4])
                   , (xK_6, [myWorkspaces !! 5])
                   , (xK_7, [myWorkspaces !! 6])
-                  , (xK_8, ["web"])
-                  , (xK_9, ["9"])
-                  , (xK_0, myComWorkspaces)
+                  , (xK_8, myWebWorkspaces)
+                  , (xK_9, myComWorkspaces)
+                  , (xK_0, myOtherWorkspaces)
                   ]
 workspaceKeysToKBs :: (KeySym,[String]) -> [((KeyMask -> KeyMask, KeySym), X ())]
 workspaceKeysToKBs (k,ws) = let firstW = head ws
@@ -121,7 +123,7 @@ myLayout = smartBorders $
            avoidStrutsOn[U,D] $
            named "" $
            mkToggle (single FULL) $
-           modWorkspaces [ "10" ] (magnifier Grid |||) $
+           modWorkspaces [ "9" ] (magnifier Grid |||) $
            modWorkspaces [ "8" ] (withIM (1%7) (Title "Tabs Outliner")) $
            mkToggle (single MIRROR) $
            IfMax 1 full  (IfMax 2 tiled (tiled ||| dtb) ||| full)
