@@ -26,14 +26,13 @@
 
     vulnerablecode.url = "github:nexB/vulnerablecode?dir=etc/nix";
 
-    # mine
-    # emacs.url = "github:nix-community/emacs-overlay";
-    # nix-doom-emacs.url = "github:vlaci/nix-doom-emacs/develop";
-    # nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
+    emacs.url = "github:nix-community/emacs-overlay";
+    nix-doom-emacs.url = "github:nix-community/nix-doom-emacs";
+    nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
 
-    # myemacs.url = "path:flakes/myemacs/";
-    # myemacs.inputs.nixpkgs.follows = "nixpkgs";
-    # myemacs.inputs.nix-doom-emacs.follows = "nix-doom-emacs";
+    myemacs.url = "path:flakes/myemacs/";
+    myemacs.inputs.nixpkgs.follows = "nixpkgs";
+    myemacs.inputs.nix-doom-emacs.follows = "nix-doom-emacs";
 
     myfish.url = "path:flakes/myfish/";
 
@@ -113,6 +112,7 @@
             inputs.myxmonad.nixosModule
             inputs.my-wallpapers.nixosModule
             inputs.myfish.nixosModule
+            inputs.myemacs.nixosModule
           ] ++ (import ./modules/_list.nix);
           config = {
             hardware.enableRedistributableFirmware = true;

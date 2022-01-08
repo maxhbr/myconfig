@@ -84,8 +84,8 @@ let
 in {
   config = {
     environment = {
-      variables = { EDITOR = "vim"; };
-      shellAliases = { emacs = "gvim"; };
+      variables = { EDITOR = lib.mkForce "vim"; };
+      # shellAliases = { emacs = "gvim"; };
     };
     home-manager.sharedModules = [
       ({ config, ... }: {

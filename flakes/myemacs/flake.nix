@@ -2,8 +2,9 @@
   description = "my doom-emacs configuration";
 
   inputs = {
+    home-manager.url = "github:rycee/home-manager";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    nix-doom-emacs.url = "github:vlaci/nix-doom-emacs/develop";
+    nix-doom-emacs.url = "github:nix-community/nix-doom-emacs";
     nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
   };
 
@@ -55,7 +56,7 @@
           ];
           environment = {
             variables = { EDITOR = "emacs -nw"; };
-            shellAliases = { vim = "emacs -nw"; };
+            # shellAliases = { vim = "emacs -nw"; };
           };
           home-manager.sharedModules = [
             ({ config, ... }:

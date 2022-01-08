@@ -144,6 +144,23 @@
         "type": "github"
       }
     },
+    "format-all": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1581716637,
+        "narHash": "sha256-ul7LCe60W8TIvUmUtZtZRo8489TK9iTPDsLHmzxY57M=",
+        "owner": "lassik",
+        "repo": "emacs-format-all-the-code",
+        "rev": "47d862d40a088ca089c92cd393c6dca4628f87d3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "lassik",
+        "repo": "emacs-format-all-the-code",
+        "rev": "47d862d40a088ca089c92cd393c6dca4628f87d3",
+        "type": "github"
+      }
+    },
     "nix-doom-emacs": {
       "inputs": {
         "doom-emacs": "doom-emacs",
@@ -155,6 +172,7 @@
         "evil-quick-diff": "evil-quick-diff",
         "explain-pause-mode": "explain-pause-mode",
         "flake-utils": "flake-utils",
+        "format-all": "format-all",
         "nix-straight": "nix-straight",
         "nixpkgs": [
           "nixpkgs"
@@ -166,20 +184,18 @@
         "org-yt": "org-yt",
         "php-extras": "php-extras",
         "revealjs": "revealjs",
-        "rotate-text": "rotate-text",
-        "straight": "straight"
+        "rotate-text": "rotate-text"
       },
       "locked": {
-        "lastModified": 1631192516,
-        "narHash": "sha256-HaS2f8N7uGBz8bGAiC7y9xkWzsrtThpudcoaTsh5OkE=",
-        "owner": "vlaci",
+        "lastModified": 1641517873,
+        "narHash": "sha256-JWiJXjrZO7WlMORT8E27QjGQYsrtS3ln5LG087bMYZg=",
+        "owner": "nix-community",
         "repo": "nix-doom-emacs",
-        "rev": "33064319607745856f488a998ca3db8ffcede865",
+        "rev": "6f3ac60c5719171f805740558e1705d0b46f91ba",
         "type": "github"
       },
       "original": {
-        "owner": "vlaci",
-        "ref": "develop",
+        "owner": "nix-community",
         "repo": "nix-doom-emacs",
         "type": "github"
       }
@@ -187,15 +203,15 @@
     "nix-straight": {
       "flake": false,
       "locked": {
-        "lastModified": 1628630968,
-        "narHash": "sha256-eh5QpnX3F8/0iKv1BvyU3KyZ/ksLlRegcd5c41pm/L8=",
-        "owner": "vlaci",
+        "lastModified": 1639180741,
+        "narHash": "sha256-3AaUE9Z/Sc5QxK8WtkPzU+9UqcOUaF9klaz8sV8DUu4=",
+        "owner": "nix-community",
         "repo": "nix-straight.el",
-        "rev": "e3f8aaff9ba889c6f2ee6c6d349736d21f21c685",
+        "rev": "866ef703fa96c970624d6d4ad33110a0708fcfef",
         "type": "github"
       },
       "original": {
-        "owner": "vlaci",
+        "owner": "nix-community",
         "repo": "nix-straight.el",
         "type": "github"
       }
@@ -347,22 +363,6 @@
       "original": {
         "owner": "debug-ito",
         "repo": "rotate-text.el",
-        "type": "github"
-      }
-    },
-    "straight": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1623633709,
-        "narHash": "sha256-taLIYnjs9sD8N8PuGO2F7l+O69u0dNPunwzFVTlXjUM=",
-        "owner": "raxod502",
-        "repo": "straight.el",
-        "rev": "1e27b0590df77a5d478970ca58fd6606971692f5",
-        "type": "github"
-      },
-      "original": {
-        "owner": "raxod502",
-        "repo": "straight.el",
         "type": "github"
       }
     }

@@ -74,7 +74,7 @@ import           XMonad.MyConfig.Notify              (popupCurDesktop)
 
 myComWorkspaces, myCoreWorkspaces, myWorkspaces :: [String]
 myWebWorkspaces = ["web", "web2"]
-myComWorkspaces = ["9mail", "9"]
+myComWorkspaces = ["9", "9mail"]
 myCoreWorkspaces = myWebWorkspaces ++ myComWorkspaces
 myOtherWorkspaces = map show [10..20] ++ ["vbox"]
 myWorkspaces = map show [1..7] ++  ["media"] ++ myCoreWorkspaces ++ myOtherWorkspaces ++ ["NSP"]
