@@ -2,10 +2,10 @@
   "nodes": {
     "nixpkgs": {
       "locked": {
-        "lastModified": 1641640104,
-        "narHash": "sha256-iZf+WJvU4Ppv52n//ACYPOSei1mVO9KRXT/GyTOoRZI=",
-        "path": "/nix/store/m54xfdxy4z4h0p7z38iqhnjy75fsvb86-source",
-        "rev": "a801c31fa47618d4fd27ee4c15d4c58b5ae60cae",
+        "lastModified": 1641648511,
+        "narHash": "sha256-e/TYVZVerkZaiwAksqrJ2TJuXh4bV/EsSUQNpbJlt+U=",
+        "path": "/nix/store/7zdciglhms2ifax4yh2dgilk8mg6d9yb-source",
+        "rev": "7d885432343b04661e0e2828eee657b172a184f1",
         "type": "path"
       },
       "original": {
