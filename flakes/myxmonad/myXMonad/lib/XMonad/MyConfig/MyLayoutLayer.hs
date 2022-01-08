@@ -93,9 +93,11 @@ myWorkspaceKeys = [ (xK_1, [myWorkspaces !! 0])
                   ]
 workspaceKeysToKBs :: (KeySym,[String]) -> [((KeyMask -> KeyMask, KeySym), X ())]
 workspaceKeysToKBs (k,ws) = let firstW = head ws
-                                goToFun = case ws of
-                                            [w] -> windows (W.greedyView w) >> popupCurDesktop
-                                            _   -> moveTo Next $ (ignoringWSs (myWorkspaces \\ ws)) -- :&: (Not emptyWS)
+                                goToFun = do
+                                    case ws of
+                                            [w] -> windows (W.greedyView w)
+                                            _   -> moveTo Next (ignoringWSs (myWorkspaces \\ ws)) -- :&: (Not emptyWS)
+                                    popupCurDesktop
                              in [ ((m__, k), goToFun)
                                 , ((ms_, k), (windows . W.shift) firstW)
                                 , ((msc, k), (windows . copy) firstW)

@@ -26,7 +26,7 @@ in {
           pass-git-helper
           jq
           cropLog
-          mercurialFull
+          mercurial
           gnuplot
           plantuml
           graphviz
