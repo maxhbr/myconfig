@@ -104,8 +104,11 @@
               nixpkgs.overlays = [
                 (self: super: {
                   # https://github.com/NixOS/nixpkgs/pull/145738
-                  tree = (import inputs.master { inherit (pkgs) config system; }).tree;
-                })];
+                  tree = (import inputs.master {
+                    inherit (pkgs) config system;
+                  }).tree;
+                })
+              ];
             })
             inputs.mykeylight.nixosModule
 
@@ -141,12 +144,9 @@
             })
             inputs.zephyrproject.nixosModule
             ({ pkgs, ... }: {
-              nixpkgs.overlays = [ inputs.vulnerablecode.overlay];
-              home-manager.sharedModules = [{
-                home.packages = with pkgs; [
-                  vulnerablecode
-                ];
-              }];
+              nixpkgs.overlays = [ inputs.vulnerablecode.overlay ];
+              home-manager.sharedModules =
+                [{ home.packages = with pkgs; [ vulnerablecode ]; }];
             })
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
@@ -218,7 +218,10 @@
 
       eachDefaultSystem =
         inputs.flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ];
-        nixpkgsConfig = { allowUnfree = true; allowBroken = true; };
+      nixpkgsConfig = {
+        allowUnfree = true;
+        allowBroken = true;
+      };
 
     in eachDefaultSystem (system: {
       legacyPackages = import inputs.nixpkgs {

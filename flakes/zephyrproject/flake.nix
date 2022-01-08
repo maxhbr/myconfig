@@ -65,7 +65,8 @@
                 exec ${llvmPackages.clang-unwrapped}/bin/clang-format "$@"
               '')
               # teensy
-              teensy-loader-cli tytools
+              teensy-loader-cli
+              tytools
             ]);
             home.sessionVariables = {
               ZEPHYR_BASE = "/home/mhuber/zephyrproject/zephyr";

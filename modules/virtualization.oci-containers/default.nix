@@ -5,7 +5,7 @@
     (lib.mkIf config.virtualisation.podman.enable {
       virtualisation.podman = {
         # Create a `docker` alias for podman, to use it as a drop-in replacement
-        dockerCompat = ! config.virtualisation.docker.enable;
+        dockerCompat = !config.virtualisation.docker.enable;
       };
     })
     (lib.mkIf config.virtualisation.docker.enable {

@@ -9,14 +9,14 @@
     })
   ];
   config = {
-      myconfig.secrets = {
-        "nextcloud-pass" = {
-          dest = "/etc/nextcloud/adminpass";
-          owner = "nextcloud";
-          group = "nextcloud";
-          permissions = "0440";
-        };
+    myconfig.secrets = {
+      "nextcloud-pass" = {
+        dest = "/etc/nextcloud/adminpass";
+        owner = "nextcloud";
+        group = "nextcloud";
+        permissions = "0440";
       };
+    };
     services = {
       nextcloud = {
         enable = true;

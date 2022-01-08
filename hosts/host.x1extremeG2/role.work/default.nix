@@ -61,7 +61,8 @@
         subversion
       ];
       programs.fish.functions = {
-        libreoffice = "nix-shell '<nixpkgs>' --fallback --run libreoffice -p libreoffice";
+        libreoffice =
+          "nix-shell '<nixpkgs>' --fallback --run libreoffice -p libreoffice";
       };
     }];
   };

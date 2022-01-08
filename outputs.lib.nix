@@ -67,7 +67,7 @@ let
             "wireguard.private" = {
               source = privateKey;
               dest = privateKeyFile;
-              wantedBy = ["wireguard-${wgInterface}.service"];
+              wantedBy = [ "wireguard-${wgInterface}.service" ];
             };
           };
 

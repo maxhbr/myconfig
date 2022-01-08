@@ -11,10 +11,8 @@
 
       nixosModule = { config, lib, pkgs, ... }: {
         nixpkgs.overlays = [
-         (final: prev: {
-            mykeylight = self.defaultPackage.x86_64-linux;
-          })
-         (final: prev: {
+          (final: prev: { mykeylight = self.defaultPackage.x86_64-linux; })
+          (final: prev: {
             mykeylight-on = (final.writeShellScriptBin "mykeylight-on"
               "${final.mykeylight}/bin/mykeylight.py --on");
             mykeylight-off = (final.writeShellScriptBin "mykeylight-off"
