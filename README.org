@@ -12,10 +12,6 @@ Currently I use
 
 *These notes are probably outdated*
 
-* How it is composed
-
-[[./README.png]]
-
 * Notes
 ** To use https for pulling:
 #+BEGIN_SRC bash
