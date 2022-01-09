@@ -67,6 +67,8 @@
               # teensy
               teensy-loader-cli
               tytools
+              # # mbed
+              # mbed-cli
             ]);
             home.sessionVariables = {
               ZEPHYR_BASE = "/home/mhuber/zephyrproject/zephyr";
