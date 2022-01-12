@@ -109,16 +109,7 @@ let
         exec -a "$0" "$@"
       '';
     in {
-      # waits for: https://github.com/NixOS/nixpkgs/pull/66601
       config = {
-        # nixpkgs.overlays = [
-        #   (self: super: {
-        #     nvidia_x11 = super.nvidiaPackages.beta;
-        #     # linuxPackages.nvidia_x11 = super.nvidiaPackages.beta;
-        #   })
-        # ];
-        # hardbetaware.nvidia.package =
-        #   config.boot.kernelPackages.nvidiaPackages.stable;
         environment.systemPackages = [ nvidia-offload ];
         services.xserver.videoDrivers = [ "nvidia" ];
         hardware.nvidia.prime = {
