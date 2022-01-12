@@ -7,9 +7,9 @@
         isync
         abook
         urlview
-        notmuch
+        # notmuch
         sxiv
-        nixos-unstable.astroid
+        # nixos-unstable.astroid
         (writeShellScriptBin "runMbsync" ''
           MAILDIR="$HOME/Maildir"
           if [[ -f "$MAILDIR/config/mbsyncrc" ]]; then

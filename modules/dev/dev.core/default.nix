@@ -18,7 +18,7 @@ in {
       home.packages = with pkgs;
         ([
           meld
-          master.diffoscope
+          # master.diffoscope
           gnumake
           cmake
           automake
