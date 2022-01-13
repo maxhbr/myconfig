@@ -15,12 +15,12 @@ logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
 echo -e "\n\n\n\n\n\n\n" >> "$logfile"
 exec &> >(tee -a "$logfile")
 
-# if [[ $# -gt 0 && "$1" == "--fast" ]]; then
-#     shift
-#     nix flake update
-# else
-#     ./update.sh
-# fi
+if [[ $# -gt 0 && "$1" == "--fast" ]]; then
+    shift
+    nix flake update
+else
+    ./update.sh
+fi
 
 target="${1:-$(hostname)}"
 

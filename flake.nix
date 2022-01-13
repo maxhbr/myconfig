@@ -26,7 +26,7 @@
 
     vulnerablecode.url = "github:nexB/vulnerablecode?dir=etc/nix";
 
-    emacs.url = "github:nix-community/emacs-overlay";
+    # emacs.url = "github:nix-community/emacs-overlay";
     nix-doom-emacs.url = "github:nix-community/nix-doom-emacs";
     nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
 
