@@ -354,24 +354,6 @@
         "type": "github"
       }
     },
-    "home-manager": {
-      "inputs": {
-        "nixpkgs": "nixpkgs"
-      },
-      "locked": {
-        "lastModified": 1641937533,
-        "narHash": "sha256-IJbR1nNV6v/ruWv9iUFi9/qa8tFLmMhbVjzvhSWCWJY=",
-        "owner": "rycee",
-        "repo": "home-manager",
-        "rev": "d07df8d9a80a4a34ea881bee7860ae437c5d44a5",
-        "type": "github"
-      },
-      "original": {
-        "owner": "rycee",
-        "repo": "home-manager",
-        "type": "github"
-      }
-    },
     "license-compliance-toolbox": {
       "inputs": {
         "nixpkgs": [
@@ -395,7 +377,7 @@
     "machnix": {
       "inputs": {
         "flake-utils": "flake-utils_3",
-        "nixpkgs": "nixpkgs_3",
+        "nixpkgs": "nixpkgs_2",
         "pypi-deps-db": "pypi-deps-db"
       },
       "locked": {
@@ -447,26 +429,6 @@
         "owner": "maxhbr",
         "repo": "wallpapers",
         "type": "github"
-      }
-    },
-    "myemacs": {
-      "inputs": {
-        "home-manager": "home-manager",
-        "nix-doom-emacs": [
-          "nix-doom-emacs"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "narHash": "sha256-8P3YyfLsv4k4XUXX+Qrgxbr1pxY0FW2rzGn0OPHSGRI=",
-        "path": "flakes/myemacs/",
-        "type": "path"
-      },
-      "original": {
-        "path": "flakes/myemacs/",
-        "type": "path"
       }
     },
     "myfish": {
@@ -629,19 +591,6 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1642104889,
-        "narHash": "sha256-ZGS7DKXeH4rn+t8KcUFptV5Y2Np7JpFgL73Zj615yq0=",
-        "path": "/nix/store/f2i8909wyjnp53rf4xvj5fjmwiayj95z-source",
-        "rev": "47619623ea15c6464b0e378092d5a46742dd3f9e",
-        "type": "path"
-      },
-      "original": {
-        "id": "nixpkgs",
-        "type": "indirect"
-      }
-    },
-    "nixpkgs_2": {
-      "locked": {
         "lastModified": 1641887635,
         "narHash": "sha256-kDGpufwzVaiGe5e1sBUBPo9f1YN+nYHJlYqCaVpZTQQ=",
         "owner": "nixos",
@@ -656,7 +605,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_3": {
+    "nixpkgs_2": {
       "locked": {
         "lastModified": 1605988311,
         "narHash": "sha256-PA+kgq46NApOAJlmBNJHs5DwsIrY+jodM0e4g7VtXyY=",
@@ -672,7 +621,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_4": {
+    "nixpkgs_3": {
       "locked": {
         "lastModified": 1603791972,
         "narHash": "sha256-nj2SvACFH+NERpye1kudcuygCcvnsZYv26M2+wgM5vE=",
@@ -688,7 +637,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_5": {
+    "nixpkgs_4": {
       "locked": {
         "lastModified": 1642104889,
         "narHash": "sha256-ZGS7DKXeH4rn+t8KcUFptV5Y2Np7JpFgL73Zj615yq0=",
@@ -910,11 +859,11 @@
     },
     "rel2111": {
       "locked": {
-        "lastModified": 1642103259,
-        "narHash": "sha256-1mlueXZtI9ZGODBF+t1nJXibPflJBD9NWiw6XTVMLqs=",
+        "lastModified": 1642105947,
+        "narHash": "sha256-rFdJMN0yvQoq1ieTJdqgC0vr50TLsCN95LkWZH08EFs=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "414dcbafa4a64cc8495af1313aac41eacef316fa",
+        "rev": "ac6af9a0be3375d67ad71f00c4319edc4a6af044",
         "type": "github"
       },
       "original": {
@@ -948,7 +897,6 @@
         "license-compliance-toolbox": "license-compliance-toolbox",
         "master": "master",
         "my-wallpapers": "my-wallpapers",
-        "myemacs": "myemacs",
         "myfish": "myfish",
         "mykeylight": "mykeylight",
         "myxmonad": "myxmonad",
@@ -956,7 +904,7 @@
         "nixos-hardware": "nixos-hardware",
         "nixos-unstable": "nixos-unstable",
         "nixos-unstable-small": "nixos-unstable-small",
-        "nixpkgs": "nixpkgs_2",
+        "nixpkgs": "nixpkgs",
         "nur": "nur",
         "rel2003": "rel2003",
         "rel2009": "rel2009",
@@ -1001,7 +949,7 @@
     "vulnerablecode": {
       "inputs": {
         "machnix": "machnix",
-        "nixpkgs": "nixpkgs_4"
+        "nixpkgs": "nixpkgs_3"
       },
       "locked": {
         "dir": "etc/nix",
@@ -1037,7 +985,7 @@
     },
     "zephyrproject": {
       "inputs": {
-        "nixpkgs": "nixpkgs_5",
+        "nixpkgs": "nixpkgs_4",
         "platformio-core": "platformio-core",
         "rel2105": "rel2105_2"
       },
