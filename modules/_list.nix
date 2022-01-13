@@ -1,5 +1,6 @@
 [
   ./myconfig
+  ./myemacs
   ./myvim
   # modules
   ./core.nix

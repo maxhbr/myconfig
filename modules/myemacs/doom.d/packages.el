@@ -2,7 +2,7 @@
 ;;; $DOOMDIR/packages.el
 
 (package! dmenu)
-;; (package! exwm)
+(package! exwm)
 
 
 

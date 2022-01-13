@@ -26,13 +26,9 @@
 
     vulnerablecode.url = "github:nexB/vulnerablecode?dir=etc/nix";
 
-    # emacs.url = "github:nix-community/emacs-overlay";
+    emacs.url = "github:nix-community/emacs-overlay";
     nix-doom-emacs.url = "github:nix-community/nix-doom-emacs";
     nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
-
-    myemacs.url = "path:flakes/myemacs/";
-    myemacs.inputs.nixpkgs.follows = "nixpkgs";
-    myemacs.inputs.nix-doom-emacs.follows = "nix-doom-emacs";
 
     myfish.url = "path:flakes/myfish/";
 
@@ -102,6 +98,11 @@
             })
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
+                  inputs.emacs.overlay
+              ];
+            })
+            ({ pkgs, ... }: {
+              nixpkgs.overlays = [
                 (self: super: {
                   # https://github.com/NixOS/nixpkgs/pull/145738
                   tree = (import inputs.master {
@@ -147,6 +148,9 @@
               nixpkgs.overlays = [ inputs.vulnerablecode.overlay ];
               home-manager.sharedModules =
                 [{ home.packages = with pkgs; [ vulnerablecode ]; }];
+            })
+            ({ pkgs, ... }: {
+              home-manager.sharedModules = [inputs.nix-doom-emacs.hmModule];
             })
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
