@@ -37,10 +37,6 @@ in {
           mplayer
           qutebrowser
           freetube
-          # spellchecking
-          aspell
-          aspellDicts.de
-          aspellDicts.en
         ] ++ lib.optional config.networking.networkmanager.enable
         networkmanager_dmenu
         ++ (with pkgs.nixos-unstable; [ tdesktop signal-desktop signal-cli ]);

@@ -49,6 +49,7 @@
   ./shell.programs.htop.nix
   ./shell.programs.tmux
   ./shell.zsh
+  ./spellchecking.nix
   ./virtualization.oci-containers
   ./virtualization.libvirt.nix
   ./virtualization.lxc.nix
