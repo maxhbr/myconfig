@@ -1,7 +1,6 @@
 { config, lib, pkgs, ... }:
 let
   doomPrivateDir = let
-    pkgs = import nixpkgs { system = "x86_64-linux"; };
     doomPrivateDeriv = pkgs.stdenv.mkDerivation rec {
       name = "doomPrivateDeriv-1.0";
       src = ./doom.d;
@@ -13,12 +12,12 @@ let
   in "${doomPrivateDeriv}";
   doom-emacs-conf = pkgs: {
     inherit doomPrivateDir;
-    extraPackages = [
-      pkgs.mu
-      pkgs.gnuplot
-      (pkgs.nerdfonts.override { fonts = [ "Inconsolata" ]; })
-            emacs-all-the-icons-fonts
-            shellcheck
+    extraPackages = with pkgs; [
+      mu
+      gnuplot
+      (nerdfonts.override { fonts = [ "Inconsolata" ]; })
+      emacs-all-the-icons-fonts
+      shellcheck
     ];
     extraConfig = ''
       (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
@@ -60,5 +59,18 @@ in {
           };
         })
     ];
+    services.xserver.windowManager.session = let
+      loadScript = pkgs.writeText "emacs-exwm-load" ''
+        (require 'exwm)
+        (exwm-enable)
+        (require 'exwm-config)
+        (exwm-config-default)
+      '';
+    in lib.singleton {
+      name = "exwm";
+      start = ''
+        emacs -l ${loadScript}
+      '';
+    };
   };
 }

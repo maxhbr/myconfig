@@ -96,11 +96,7 @@
                 ];
               };
             })
-            ({ pkgs, ... }: {
-              nixpkgs.overlays = [
-                  inputs.emacs.overlay
-              ];
-            })
+            ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.emacs.overlay ]; })
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
                 (self: super: {
@@ -116,7 +112,6 @@
             inputs.myxmonad.nixosModule
             inputs.my-wallpapers.nixosModule
             inputs.myfish.nixosModule
-            inputs.myemacs.nixosModule
           ] ++ (import ./modules/_list.nix);
           config = {
             hardware.enableRedistributableFirmware = true;
@@ -150,7 +145,7 @@
                 [{ home.packages = with pkgs; [ vulnerablecode ]; }];
             })
             ({ pkgs, ... }: {
-              home-manager.sharedModules = [inputs.nix-doom-emacs.hmModule];
+              home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
             })
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:

@@ -26,8 +26,7 @@ in {
               id = 0;
               isDefault = true;
               name = "0";
-              settings = {
-                "network.http.http3.enabled" = false;
+              # settings = {
               #   # "browser.startup.homepage" = "https://nixos.org";
               #   "browser.sessionstore.warnOnQuit" = true;
               #   "browser.search.region" = "DE";
@@ -37,7 +36,7 @@ in {
               #   # "distribution.searchplugins.defaultLocale" = "en-GB";
               #   # "general.useragent.locale" = "en-GB";
               #   # "browser.bookmarks.showMobileBookmarks" = true;
-              };
+              # };
             };
           };
           xdg.mimeApps = {

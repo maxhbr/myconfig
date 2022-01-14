@@ -49,6 +49,13 @@
                 ag = "rg";
                 grep = "rg";
                 ducks = "du -chs *";
+                ff =
+                  "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -iname ";
+                ffd =
+                  "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type d -iname ";
+                ffa =
+                  "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -iname ";
+                ffg = "find . -type f -print0 | xargs -0 grep -lI";
               };
               functions = {
                 __fish_command_not_found_handler = {
@@ -80,13 +87,6 @@
                   mv $f ./
                   pwd
                 '';
-                ff =
-                  "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -iname '*'$argv'*' -ls 2>/dev/null";
-                ffd =
-                  "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type d -iname '*'$argv'*' -ls 2>/dev/null";
-                ffa =
-                  "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -iname '*'$argv'*' -ls 2>/dev/null";
-                ffg = "find . -type f -print0 | xargs -0 grep -lI $argv";
               };
               shellInit = "";
               loginShellInit = "";
