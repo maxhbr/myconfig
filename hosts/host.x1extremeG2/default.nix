@@ -21,7 +21,7 @@
     ../host.workstation/gaming/games.steam
     {
       # Fingerprint reader: login and unlock with fingerprint (if you add one with `fprintd-enroll`)
-      services.fprintd.enable = true;
+      # services.fprintd.enable = true;
     }
   ];
 
