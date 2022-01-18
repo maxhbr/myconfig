@@ -112,6 +112,10 @@
             inputs.myxmonad.nixosModule
             inputs.my-wallpapers.nixosModule
             inputs.myfish.nixosModule
+
+            ({ pkgs, ... }: {
+              home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
+            })
           ] ++ (import ./modules/_list.nix);
           config = {
             hardware.enableRedistributableFirmware = true;
@@ -143,9 +147,6 @@
               nixpkgs.overlays = [ inputs.vulnerablecode.overlay ];
               home-manager.sharedModules =
                 [{ home.packages = with pkgs; [ vulnerablecode ]; }];
-            })
-            ({ pkgs, ... }: {
-              home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
             })
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
