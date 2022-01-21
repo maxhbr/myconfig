@@ -121,8 +121,8 @@ static const char *colorname[] = {
 
 unsigned int defaultfg = 12;
 unsigned int defaultbg = 8;
-static unsigned int defaultcs = 14;
-static unsigned int defaultrcs = 15;
+unsigned int defaultcs = 14;
+unsigned int defaultrcs = 15;
 #else
 /*
  * colors from urxvt
@@ -157,8 +157,8 @@ static const char *colorname[] = {
 
 unsigned int defaultbg = 256;
 unsigned int defaultfg = 257;
-static unsigned int defaultrcs = 258;
-static unsigned int defaultcs = 259;
+unsigned int defaultrcs = 258;
+unsigned int defaultcs = 259;
 #endif
 
 static const char *altcolorname[] = {
@@ -255,7 +255,7 @@ static Shortcut shortcuts[] = {
 	{ TERMMOD,              XK_Y,           selpaste,       {.i =  0} },
 	{ ShiftMask,            XK_Insert,      selpaste,       {.i =  0} },
 	{ TERMMOD,              XK_Num_Lock,    numlock,        {.i =  0} },
-    { XK_ANY_MOD,           XK_F6,          swapcolors,     {.i =  0} },
+    /* { XK_ANY_MOD,           XK_F6,          swapcolors,     {.i =  0} }, */
 };
 
 /*

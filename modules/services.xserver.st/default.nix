@@ -6,21 +6,17 @@
           let
             stpre = (prev.st.overrideAttrs (oldAttrs: rec {
               patches = oldAttrs.patches ++ [
-                (prev.fetchpatch {
-                  url =
-                    "https://st.suckless.org/patches/solarized/st-solarized-both-0.8.4.diff";
-                  sha256 =
-                    "1nczrfgvl5ip95gm8qd9g3kam5xqbb5psqnpm563pbvrrw5d68hb";
-                })
-                (prev.fetchpatch {
-                  url =
-                    "https://st.suckless.org/patches/anysize/st-anysize-20201003-407a3d0.diff";
-                  sha256 =
-                    "1xkg9h6pj5wlxq0rg645dxf4vbl22nxr0jyll4figfg4qh7nhznh";
-                })
                 # (prev.fetchpatch {
-                #   url = "https://st.suckless.org/patches/swapmouse/st-swapmouse-0.8.4.diff";
-                #   sha256 = "1610fh4kqx2jcdbbb1pj09qpmckhagq4lqk1kq019pzg5p5isfxf";
+                #   url =
+                #     "https://st.suckless.org/patches/solarized/st-solarized-both-0.8.4.diff";
+                #   sha256 =
+                #     "1nczrfgvl5ip95gm8qd9g3kam5xqbb5psqnpm563pbvrrw5d68hb";
+                # })
+                # (prev.fetchpatch {
+                #   url =
+                #     "https://st.suckless.org/patches/anysize/st-anysize-0.8.4.diff";
+                #   sha256 =
+                #     "2uxCn9HtSM44poIVOPm4YwGXynN50OIE/HcsnW2cHyo=";
                 # })
               ];
             })).override { conf = builtins.readFile ./st-config.h; };

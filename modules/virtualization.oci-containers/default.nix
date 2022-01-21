@@ -2,6 +2,11 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }: {
   imports = [
+    (lib.mkIf (config.virtualisation.podman.enable || config.virtualisation.docker.enable) {
+      home-manager.sharedModules = [{
+        home.packages = with pkgs; [ buildkit ];
+      }];
+    })
     (lib.mkIf config.virtualisation.podman.enable {
       virtualisation.podman = {
         # Create a `docker` alias for podman, to use it as a drop-in replacement
@@ -9,7 +14,7 @@
       };
     })
     (lib.mkIf config.virtualisation.docker.enable {
-      home-manager.users.mhuber = {
+      home-manager.sharedModules = [{
         home.packages = with pkgs; [ docker_compose ];
         home.file = {
           "bin/docker" = {
@@ -21,7 +26,7 @@
             recursive = true;
           };
         };
-      };
+      }];
       environment = {
         systemPackages = with pkgs; [ docker docker-machine ];
         variables = { DOCKER_BUILDKIT = "1"; };
