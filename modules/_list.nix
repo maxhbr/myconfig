@@ -15,6 +15,7 @@
   ./nixos.gc.nix
   ./nixos.networking
   ./nixos.nix.nix
+  ./nixos.nix-index.nix
   ./nixos.user.nix
   ./programs.pass
   ./services.netdata.nix
