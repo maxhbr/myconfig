@@ -306,8 +306,9 @@ in rec {
 
         extraModules = [{
           nix.package = lib.mkDefault pkgs.nixFlakes;
+          # ca-references
           nix.extraOptions = ''
-            experimental-features = nix-command flakes ca-references recursive-nix
+            experimental-features = nix-command flakes recursive-nix
             show-trace = true
             builders-use-substitutes = true
             preallocate-contents = true
