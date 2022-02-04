@@ -79,6 +79,7 @@
         home.packages = with pkgs;
           [
             google-chrome # for netflix and stadia
+            comma
           ];
       }
       (lib.mkIf config.hardware.pulseaudio.enable {

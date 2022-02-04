@@ -17,6 +17,16 @@ let
       };
     };
   };
+
+  physlockmodule = {
+    services.physlock = {
+      enable = true;
+    };
+    programs.xss-lock = {
+      lockerCommand = "${config.security.wrapperDir}/physlock";
+    };
+  };
+
   myStopScreensaver = with pkgs;
     writeScriptBin "myStopScreensaver" ''
       #!${stdenv.shell}
@@ -28,9 +38,11 @@ let
       done
     '';
 in {
-  imports = [ xsecurelockmodule ];
+  imports = [physlockmodule];
   config = (lib.mkIf config.services.xserver.enable {
-    home-manager.sharedModules = [{ home.packages = [ myStopScreensaver ]; }];
+    home-manager.sharedModules = [{
+      home.packages = [ myStopScreensaver ];
+    }];
     programs.xss-lock = { enable = true; };
   });
 }
