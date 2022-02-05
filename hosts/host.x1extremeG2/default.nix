@@ -76,11 +76,10 @@
             recursive = true;
           };
         };
-        home.packages = with pkgs;
-          [
-            google-chrome # for netflix and stadia
-            comma
-          ];
+        home.packages = with pkgs; [
+          google-chrome # for netflix and stadia
+          comma
+        ];
       }
       (lib.mkIf config.hardware.pulseaudio.enable {
         # home.packages = with pkgs.helper; [

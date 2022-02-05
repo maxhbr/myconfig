@@ -16,6 +16,8 @@ in {
         luxcorerender
         meshlab
         gmsh
+        # pcb design
+        librepcb
       ];
     }];
   });

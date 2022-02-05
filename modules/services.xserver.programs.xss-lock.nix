@@ -15,15 +15,30 @@ let
         extraOptions =
           [ "-n" "${myXsecurelock}/libexec/xsecurelock/dimmer" "-l" ];
       };
+      home-manager.sharedModules = [{
+        services = {
+          screen-locker.lockCmd = "${myXsecurelock}/bin/myXsecurelock";
+          xss-lock.extraOptions =
+            [ "-n" "${myXsecurelock}/libexec/xsecurelock/dimmer" "-l" ];
+        };
+      }];
     };
   };
 
   physlockmodule = {
-    services.physlock = {
-      enable = true;
-    };
-    programs.xss-lock = {
-      lockerCommand = "${config.security.wrapperDir}/physlock";
+    config = {
+      services.physlock = {
+        enable = true;
+        allowAnyUser = true;
+      };
+      programs.xss-lock = {
+        lockerCommand = "${config.security.wrapperDir}/physlock";
+      };
+      home-manager.sharedModules = [{
+        services = {
+          screen-locker.lockCmd = "${config.security.wrapperDir}/physlock";
+        };
+      }];
     };
   };
 
@@ -37,12 +52,14 @@ let
           ${xdotool}/bin/xdotool key shift
       done
     '';
+
 in {
-  imports = [physlockmodule];
+  imports = [ physlockmodule ];
   config = (lib.mkIf config.services.xserver.enable {
     home-manager.sharedModules = [{
       home.packages = [ myStopScreensaver ];
+      services.screen-locker.enable = true;
     }];
-    programs.xss-lock = { enable = true; };
+    # programs.xss-lock = { enable = true; };
   });
 }

@@ -19,7 +19,7 @@
   config = {
     nixpkgs.config = { allowUnfree = true; };
     home-manager.sharedModules = [{
-      home.packages = with pkgs; [nix-tree];
+      home.packages = with pkgs; [ nix-tree ];
       imports = [{
         programs.fish = {
           shellAbbrs = {

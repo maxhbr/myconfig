@@ -3,7 +3,7 @@
 { config, pkgs, lib, myconfig, ... }: {
   config = {
     home-manager.sharedModules = [{
-      home.packages = with pkgs; [nix-index];
+      home.packages = with pkgs; [ nix-index ];
       programs.nix-index.enable = true;
     }];
   };

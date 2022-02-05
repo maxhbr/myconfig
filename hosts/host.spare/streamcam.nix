@@ -13,16 +13,16 @@ in {
     home.packages = [ streamcam pkgs.mjpg-streamer pkgs.motion ];
     home.file = {
       ".motion/motion.conf".text = ''
-stream_port 3215
-stream_localhost off
+        stream_port 3215
+        stream_localhost off
 
-webcontrol_port 3216
-webcontrol_localhost off
-'';
+        webcontrol_port 3216
+        webcontrol_localhost off
+      '';
       ".motion/camera0.conf".text = ''
-video_device /dev/video0
-stream_port 3217
-'';
+        video_device /dev/video0
+        stream_port 3217
+      '';
     };
   }];
 

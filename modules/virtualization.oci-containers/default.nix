@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }: {
   imports = [
-    (lib.mkIf (config.virtualisation.podman.enable || config.virtualisation.docker.enable) {
-      home-manager.sharedModules = [{
-        home.packages = with pkgs; [ buildkit ];
-      }];
-    })
+    (lib.mkIf (config.virtualisation.podman.enable
+      || config.virtualisation.docker.enable) {
+        home-manager.sharedModules =
+          [{ home.packages = with pkgs; [ buildkit ]; }];
+      })
     (lib.mkIf config.virtualisation.podman.enable {
       virtualisation.podman = {
         # Create a `docker` alias for podman, to use it as a drop-in replacement
