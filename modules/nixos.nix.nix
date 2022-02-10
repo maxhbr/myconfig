@@ -55,7 +55,7 @@
         };
       };
     }];
-    nix = rec {
+    nix = {
       extraOptions = ''
         gc-keep-outputs = true
         gc-keep-derivations = true
@@ -63,26 +63,29 @@
         binary-caches-parallel-connections = 10
       '';
 
-      useSandbox = true;
       readOnlyStore = true;
-
       autoOptimiseStore = true;
+      settings = rec {
+        sandbox = true;
+
+
+        allowed-users = [ "@wheel" "@builders" "${myconfig.user}" ];
+        trusted-users = [ "root" ] ++ allowed-users;
+
+        trusted-substituters = [
+          "https://cache.nixos.org"
+          # "https://maxhbr.cachix.org"
+          "https://nixfmt.cachix.org"
+        ];
+        substituters = trusted-substituters;
+        trusted-public-keys = [
+          "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+          # "maxhbr.cachix.org-1:wwfYm+B6HaXyFey300cmuSQnvwULS0VU1VtOGXDyxCo="
+          "nixfmt.cachix.org-1:uyEQg16IhCFeDpFV07aL+Dbmh18XHVUqpkk/35WAgJI="
+        ];
+
+      };
       optimise.automatic = true;
-
-      allowedUsers = [ "@wheel" "@builders" "${myconfig.user}" ];
-      trustedUsers = [ "root" ] ++ allowedUsers;
-
-      trustedBinaryCaches = [
-        "https://cache.nixos.org"
-        # "https://maxhbr.cachix.org"
-        "https://nixfmt.cachix.org"
-      ];
-      binaryCaches = trustedBinaryCaches;
-      binaryCachePublicKeys = [
-        "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-        # "maxhbr.cachix.org-1:wwfYm+B6HaXyFey300cmuSQnvwULS0VU1VtOGXDyxCo="
-        "nixfmt.cachix.org-1:uyEQg16IhCFeDpFV07aL+Dbmh18XHVUqpkk/35WAgJI="
-      ];
     };
   };
 }
