@@ -694,11 +694,11 @@
     "platformio-core": {
       "flake": false,
       "locked": {
-        "lastModified": 1645038493,
-        "narHash": "sha256-z+iWBi9mE8ks9wPHqvA3pcBlPmAmD7qXXWX//qZXR78=",
+        "lastModified": 1645041198,
+        "narHash": "sha256-Zrh5f/wkYXpL8FjxKMzMMgZwzeT+GAl32xdNTPT9Kfc=",
         "owner": "platformio",
         "repo": "platformio-core",
-        "rev": "a4d2dc856c5e8a39efca5817946dff1b722f038d",
+        "rev": "1b44ba4ce08ec7f64a3b736d412fd14d36e70a77",
         "type": "github"
       },
       "original": {
@@ -882,7 +882,7 @@
         "rel2105": "rel2105_2"
       },
       "locked": {
-        "narHash": "sha256-e4msZy+7/QEpd6tOYOSWpf0N0vte+wleCs0GcYcNYYQ=",
+        "narHash": "sha256-0FjhLaySLTogVYmi1ksfeG+V8/vZhX9c8/X74KNvHf4=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
