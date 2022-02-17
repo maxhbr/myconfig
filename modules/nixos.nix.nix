@@ -64,10 +64,9 @@
       '';
 
       readOnlyStore = true;
-      autoOptimiseStore = true;
       settings = rec {
         sandbox = true;
-
+        auto-optimise-store = true;
 
         allowed-users = [ "@wheel" "@builders" "${myconfig.user}" ];
         trusted-users = [ "root" ] ++ allowed-users;

@@ -104,6 +104,10 @@
                   tree = (import inputs.master {
                     inherit (pkgs) config system;
                   }).tree;
+                  # https://github.com/NixOS/nixpkgs/pull/159074
+                  remarshal = (import inputs.master {
+                    inherit (pkgs) config system;
+                  }).remarshal;
                 })
               ];
             })

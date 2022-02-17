@@ -38,7 +38,8 @@ let
   '';
 in {
   home-manager.sharedModules =
-    [{ home.packages = with pkgs; [ pavucontrol pamix noisetorch ]; }];
+    [{ home.packages = with pkgs; [ pavucontrol pamix ]; }];
+  programs.noisetorch.enable = true;
   imports = [
     {
       config = (lib.mkIf config.hardware.pulseaudio.enable {

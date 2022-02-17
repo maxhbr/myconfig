@@ -10,7 +10,7 @@ in {
         # blender
         # librecad # 2D
         openscad
-        nixos-unstable.freecad # 3D
+        # freecad # 3D
         prusa-slicer
         povray
         luxcorerender

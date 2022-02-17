@@ -167,6 +167,8 @@
        web               ; the tubes
        yaml              ; JSON, but readable
 
+       dts ; dts-mode — A Device Tree major mode for emacs
+
        :email
        mu4e ;;(mu4e +gmail)
        ;;notmuch

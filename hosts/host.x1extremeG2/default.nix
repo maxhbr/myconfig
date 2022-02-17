@@ -28,7 +28,7 @@
   config = {
     myconfig = {
       desktop.enable = true;
-      virtualisation.enable = true;
+      # virtualisation.enable = true;
       imagework.enable = true;
       cad.enable = true;
       dev = {
@@ -44,8 +44,8 @@
     services.xserver.wacom.enable = true;
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;
-    virtualisation.libvirtd.enable = true;
-    virtualisation.virtualbox.host.enable = true;
+    # virtualisation.libvirtd.enable = true;
+    # virtualisation.virtualbox.host.enable = true;
 
     services.hardware.bolt.enable = true;
 
