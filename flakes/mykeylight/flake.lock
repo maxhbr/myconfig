@@ -2,8 +2,8 @@
   "nodes": {
     "nixpkgs": {
       "locked": {
-        "narHash": "sha256-j+l8bt++dsYTJSGABuqeBEom5aNpD4n0BsOTdewFYuU=",
-        "path": "/nix/store/06xnj0jinr4r7w9wc7xx4yfa4zahd8a1-source",
+        "narHash": "sha256-I+HkWU1IpRb93VzjayAybj3L2CcJxNlZDhSeSpL3eSw=",
+        "path": "/nix/store/s0x7r4rn5wzn4cdmphd24lz41h3y0acq-source",
         "type": "path"
       },
       "original": {
