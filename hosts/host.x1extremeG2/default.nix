@@ -10,6 +10,7 @@
     ../../hardware/footswitch.nix
     ../../hardware/steamcontroller.nix
     ../../hardware/blink1.nix
+    ../../hardware/unifying.nix
     ./hardware.hantek
     # ./backup-hdd.nix
     # ./foto-hdd.nix

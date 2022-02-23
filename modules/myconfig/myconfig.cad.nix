@@ -10,7 +10,7 @@ in {
         # blender
         # librecad # 2D
         openscad
-        # freecad # 3D
+        nixos-2105.freecad # 3D
         prusa-slicer
         povray
         luxcorerender
