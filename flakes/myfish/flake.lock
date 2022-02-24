@@ -19,11 +19,11 @@
     "bax": {
       "flake": false,
       "locked": {
-        "lastModified": 1614578677,
-        "narHash": "sha256-Q/9YVdiRSJw1SdcfQv2h7Lj6EyFustRk+kmh1eRRQ6k=",
+        "lastModified": 1645710882,
+        "narHash": "sha256-ovxpzHC9coRtm/v3rQlPlX1NEe22+WLA7HpnfqtUJU8=",
         "owner": "jorgebucaran",
         "repo": "bax.fish",
-        "rev": "07f2bcea94391946cab747199dd5597366532dda",
+        "rev": "a2eef7319adb1c5cd00a4454bb29a9e072d51a53",
         "type": "github"
       },
       "original": {
