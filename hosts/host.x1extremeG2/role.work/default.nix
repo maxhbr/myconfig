@@ -36,7 +36,7 @@
         {
           home.packages = with pkgs; [
             openvpn
-            networkmanager_openvpn
+            networkmanager-openvpn
             openconnect
             networkmanager-openconnect
             strongswan

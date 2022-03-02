@@ -1,10 +1,11 @@
 -- Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 -- SPDX-License-Identifier: MIT
 {-# LANGUAGE CPP #-}
+
 module XMonad.MyConfig.MyLayoutLayer
-    ( applyMyLayoutModifications
-    , myLayout
-    ) where
+  ( applyMyLayoutModifications
+  , myLayout
+  ) where
 
 import           Data.List                           ((\\))
 import           Data.Maybe                          (isJust)
@@ -16,16 +17,20 @@ import           XMonad.StackSet                     (stack, tag)
 --------------------------------------------------------------------------------
 -- Util
 import           XMonad.Util.Types                   (Direction2D (..))
+import           XMonad.Util.WorkspaceCompare (getSortByIndex)
 
 --------------------------------------------------------------------------------
 -- Actions
 import           XMonad.Actions.CopyWindow           (copy)
 import           XMonad.Actions.CycleWS              (Direction1D (..),
                                                       WSType (WSIs, (:&:)),
-                                                      emptyWS, ignoringWSs,
-                                                      moveTo, nextScreen,
-                                                      nextWS, prevScreen,
-                                                      prevWS, shiftNextScreen,
+                                                      findWorkspace,
+                                                      toggleOrView,
+                                                      emptyWS, hiddenWS,
+                                                      ignoringWSs, moveTo,
+                                                      nextScreen, nextWS,
+                                                      prevScreen, prevWS,
+                                                      shiftNextScreen,
                                                       shiftPrevScreen,
                                                       shiftToNext, shiftToPrev,
                                                       toggleWS')
@@ -71,166 +76,178 @@ import qualified XMonad.StackSet                     as W
 import           XMonad.MyConfig.Common
 import           XMonad.MyConfig.Notify              (popupCurDesktop)
 
-
 myComWorkspaces, myCoreWorkspaces, myWorkspaces :: [String]
 myWebWorkspaces = ["web", "web2"]
-myComWorkspaces = ["9", "9mail"]
-myCoreWorkspaces = myWebWorkspaces ++ myComWorkspaces
-myOtherWorkspaces = map show [10..20] ++ ["vbox"]
-myWorkspaces = map show [1..7] ++  ["media"] ++ myCoreWorkspaces ++ myOtherWorkspaces ++ ["NSP"]
 
-myWorkspaceKeys :: [(KeySym,[String])]
-myWorkspaceKeys = [ (xK_1, [myWorkspaces !! 0])
-                  , (xK_2, [myWorkspaces !! 1])
-                  , (xK_3, [myWorkspaces !! 2])
-                  , (xK_4, [myWorkspaces !! 3])
-                  , (xK_5, [myWorkspaces !! 4])
-                  , (xK_6, [myWorkspaces !! 5])
-                  , (xK_7, [myWorkspaces !! 6])
-                  , (xK_8, myWebWorkspaces)
-                  , (xK_9, myComWorkspaces)
-                  , (xK_0, myOtherWorkspaces)
-                  ]
-workspaceKeysToKBs :: (KeySym,[String]) -> [((KeyMask -> KeyMask, KeySym), X ())]
-workspaceKeysToKBs (k,ws) = let firstW = head ws
-                                goToFun = do
-                                    case ws of
-                                            [w] -> windows (W.greedyView w)
-                                            _   -> moveTo Next (ignoringWSs (myWorkspaces \\ ws)) -- :&: (Not emptyWS)
-                                    popupCurDesktop
-                             in [ ((m__, k), goToFun)
-                                , ((ms_, k), (windows . W.shift) firstW)
-                                , ((msc, k), (windows . copy) firstW)
-                                ]
+myComWorkspaces = ["9", "9mail"]
+
+myCoreWorkspaces = myWebWorkspaces ++ myComWorkspaces
+
+myOtherWorkspaces = map show [10 .. 20] ++ ["vbox"]
+
+myWorkspaces =
+  map show [1 .. 7] ++
+  ["media"] ++ myCoreWorkspaces ++ myOtherWorkspaces ++ ["NSP"]
+
+myWorkspaceKeys :: [(KeySym, [String])]
+myWorkspaceKeys =
+  [ (xK_1, [myWorkspaces !! 0])
+  , (xK_2, [myWorkspaces !! 1])
+  , (xK_3, [myWorkspaces !! 2])
+  , (xK_4, [myWorkspaces !! 3])
+  , (xK_5, [myWorkspaces !! 4])
+  , (xK_6, [myWorkspaces !! 5])
+  , (xK_7, [myWorkspaces !! 6])
+  , (xK_8, myWebWorkspaces)
+  , (xK_9, myComWorkspaces)
+  , (xK_0, myOtherWorkspaces)
+  ]
+
+viewNextNonVisibleExcludingWSsWithFallback :: [String] -> X()
+viewNextNonVisibleExcludingWSsWithFallback ws =
+  do
+    let wsFilter = ignoringWSs (myWorkspaces \\ ws)
+    W.Workspace cur _ _ <- gets (W.workspace . W.current . windowset)
+    n1 <- findWorkspace getSortByIndex Next (hiddenWS :&: wsFilter) 1
+    n2 <- findWorkspace getSortByIndex Next wsFilter 1
+    windows . W.greedyView $ if n1 /= cur
+                             then n1
+                             else n2
+
+workspaceKeysToKBs ::
+     (KeySym, [String]) -> [((KeyMask -> KeyMask, KeySym), X ())]
+workspaceKeysToKBs (k, ws) =
+  let firstW = head ws
+      goToFun = do
+        case ws of
+          [w] -> toggleOrView w
+          _ -> viewNextNonVisibleExcludingWSsWithFallback ws
+        popupCurDesktop
+   in [ ((m__, k), goToFun)
+      , ((ms_, k), (windows . W.shift) firstW)
+      , ((msc, k), (windows . copy) firstW)
+      ]
 
 switchWorkspaceKBs :: [((KeyMask -> KeyMask, KeySym), X ())]
 switchWorkspaceKBs =
-  (concatMap workspaceKeysToKBs myWorkspaceKeys)
-  ++ [((msc, xK_m    ), (windows . W.shift) "NSP" )]
+  (concatMap workspaceKeysToKBs myWorkspaceKeys) ++
+  [((msc, xK_m), (windows . W.shift) "NSP")]
 
 applyMyLayoutModifications :: XConfig a -> XConfig a
-applyMyLayoutModifications c = let
-  addLayoutkeys :: XConfig a -> XConfig a
-  addLayoutkeys = applyMyKBs' layoutKBs
-  in docks $
-     addLayoutkeys $
-     c { workspaces      = myWorkspaces
-       , handleEventHook = fullscreenEventHook <+> handleEventHook c
-       , mouseBindings   = myMouseBindings }
+applyMyLayoutModifications c =
+  let addLayoutkeys :: XConfig a -> XConfig a
+      addLayoutkeys = applyMyKBs' layoutKBs
+   in docks $
+      addLayoutkeys $
+      c
+        { workspaces = myWorkspaces
+        , handleEventHook = fullscreenEventHook <+> handleEventHook c
+        , mouseBindings = myMouseBindings
+        }
 
-myLayout = smartBorders $
-           modWorkspaces [ "13" ] (Full |||) $
-           boringAuto $
-           modWorkspaces [ "vbox", "media" ] (Full |||) $
-           avoidStrutsOn[U,D] $
-           named "" $
-           mkToggle (single FULL) $
-           modWorkspaces [ "9" ] (magnifier Grid |||) $
-           modWorkspaces [ "8" ] (withIM (1%7) (Title "Tabs Outliner")) $
-           mkToggle (single MIRROR) $
-           IfMax 1 full  (IfMax 2 tiled (tiled ||| dtb) ||| full)
+myLayout =
+  smartBorders $
+  modWorkspaces ["13"] (Full |||) $
+  boringAuto $
+  modWorkspaces ["vbox", "media"] (Full |||) $
+  avoidStrutsOn [U, D] $
+  mkToggle (single FULL) $
+  modWorkspaces ["9"] (magnifier Grid |||) $
+  modWorkspaces ["8"] (withIM (1 % 7) (Title "Tabs Outliner")) $
+  mkToggle (single MIRROR) $
+  named "" $ IfMax 1 full (IfMax 2 tiled (tiled ||| dtb) ||| full)
   where
     baseSpacing = 10
     wqhdSpacing = 20
     hdGapping = 150
     wqhdGapping = (2560 - 1920) `div` 2 - wqhdSpacing + baseSpacing
-    myUprightGapping l = ifWider 1440 l $
-                         ifWider 1439 (gaps [(U,wqhdGapping), (D,wqhdGapping)] l) l
-    myUprightMirroring l = ifWider 1440 l $
-                           ifWider 1439 (Mirror l) l
-
-    mySpacing l = let
-        spacing w = spacingRaw False (Border 0 wIntegral 0 wIntegral) True (Border wIntegral 0 wIntegral 0) True
-          where
-            wIntegral =  fromIntegral w
-      in ifWider 1920 (spacing wqhdSpacing l) $
-         ifWider 1919 (spacing baseSpacing l) $
-         ifWider 1439 (spacing wqhdSpacing l)
-         l
-    full      = named "=" $
-                mySpacing $
-                ifWider 1920 (gaps [(L,wqhdGapping), (R,wqhdGapping)] Full) $
-                ifWider 1919 (gaps [(L,hdGapping), (R,hdGapping)] Full) $
-                myUprightGapping Full
-    tiled     = named " " $
-                mySpacing $
-                minimize $
-                myUprightGapping $
-                myUprightMirroring $
-                ResizableTall 1 (3/100) (1/2) []
-    dtb       = named "%" $
-                mySpacing $
-                minimize $
-                myUprightGapping $
-                myUprightMirroring $
-                TwoPane (3/100) (1/2)
+    myUprightGapping l =
+      ifWider 1440 l $
+      ifWider 1439 (gaps [(U, wqhdGapping), (D, wqhdGapping)] l) l
+    myUprightMirroring l = ifWider 1440 l $ ifWider 1439 (Mirror l) l
+    mySpacing l =
+      let spacing w =
+            spacingRaw
+              False
+              (Border 0 wIntegral 0 wIntegral)
+              True
+              (Border wIntegral 0 wIntegral 0)
+              True
+            where
+              wIntegral = fromIntegral w
+       in ifWider 1920 (spacing wqhdSpacing l) $
+          ifWider 1919 (spacing baseSpacing l) $
+          ifWider 1439 (spacing wqhdSpacing l) l
+    full =
+      named "=" $
+      mySpacing $
+      ifWider 1920 (gaps [(L, wqhdGapping), (R, wqhdGapping)] Full) $
+      ifWider 1919 (gaps [(L, hdGapping), (R, hdGapping)] Full) $
+      myUprightGapping Full
+    tiled =
+      named " " $
+      mySpacing $
+      minimize $
+      myUprightGapping $
+      myUprightMirroring $ ResizableTall 1 (3 / 100) (1 / 2) []
+    dtb =
+      named "%" $
+      mySpacing $
+      minimize $
+      myUprightGapping $ myUprightMirroring $ TwoPane (3 / 100) (1 / 2)
 
 layoutKBs conf =
-  [ ((m__, xK_space ), sendMessage NextLayout)
-  , ((ms_, xK_x     ), sendMessage $ Toggle MIRROR)
-  , ((m__, xK_f     ), sendMessage $ Toggle FULL)
-  , ((ms_, xK_f     ), do
-        sendMessage ToggleGaps
-        toggleScreenSpacingEnabled
-        toggleWindowSpacingEnabled)
-  , ((m__, xK_m     ), withFocused minimizeWindow)
-  , ((ms_, xK_m     ), withLastMinimized maximizeWindowAndFocus)
-
-  , ((m__, xK_t     ), withFocused $ windows . W.sink) -- Push window back into tiling
-  , ((m__, xK_comma ), sendMessage (IncMasterN 1))
+  [ ((m__, xK_space), sendMessage NextLayout)
+  , ((ms_, xK_x), sendMessage $ Toggle MIRROR)
+  , ((m__, xK_f), sendMessage $ Toggle FULL)
+  , ( (ms_, xK_f)
+    , do sendMessage ToggleGaps
+         toggleScreenSpacingEnabled
+         toggleWindowSpacingEnabled)
+  , ((m__, xK_m), withFocused minimizeWindow)
+  , ((ms_, xK_m), withLastMinimized maximizeWindowAndFocus)
+  , ((m__, xK_t), withFocused $ windows . W.sink) -- Push window back into tiling
+  , ((m__, xK_comma), sendMessage (IncMasterN 1))
   , ((m__, xK_period), sendMessage (IncMasterN (-1)))
-
   -- Shrink and Expand
-  , ((m__, xK_h     ), sendMessage Shrink)
-  , ((m__, xK_l     ), sendMessage Expand)
-  , ((ms_, xK_h     ), sendMessage MirrorShrink)
-  , ((ms_, xK_l     ), sendMessage MirrorExpand)
-
-  , ((m__, xK_b     ), sendMessage ToggleStruts) ]
-  ++ cycleWSKBs
-  ++ switchWorkspaceKBs
-  ++ focusKBs
+  , ((m__, xK_h), sendMessage Shrink)
+  , ((m__, xK_l), sendMessage Expand)
+  , ((ms_, xK_h), sendMessage MirrorShrink)
+  , ((ms_, xK_l), sendMessage MirrorExpand)
+  , ((m__, xK_b), sendMessage ToggleStruts)
+  ] ++
+  cycleWSKBs ++ switchWorkspaceKBs ++ focusKBs
   -- ++ switchPhysicalKBs
   -- ++ combineTwoKBs
   -- ++ subLayoutKBs
   where
     focusKBs =
-      [ ((ms_, xK_Tab   ), focusDown)
-#if 0
-      , ((m__, xK_Tab   ), windows W.focusDown)
-      , ((m_c, xK_Tab   ), windows W.focusUp >> windows W.shiftMaster)
-#else
-      , ((m__, xK_Tab   ), windows W.focusUp >> windows W.shiftMaster)
-      , ((m_c, xK_Tab   ), windows W.focusDown)
-#endif
-
-      , ((m__, xK_j     ), windows W.focusDown)
-      , ((m__, xK_k     ), windows W.focusUp)
-      , ((ms_, xK_j     ), windows W.swapDown)
-      , ((ms_, xK_k     ), windows W.swapUp)
+      [ ((ms_, xK_Tab), focusDown)
+      , ((m__, xK_Tab), windows W.focusUp >> windows W.shiftMaster)
+      , ((m_c, xK_Tab), windows W.focusDown)
+      , ((m__, xK_j), windows W.focusDown)
+      , ((m__, xK_k), windows W.focusUp)
+      , ((ms_, xK_j), windows W.swapDown)
+      , ((ms_, xK_k), windows W.swapUp)
       ]
-    cycleWSKBs = let
-        nonEmptyNonMinorWS = WSIs $ do
-           let ne = isJust . stack -- equals NonEmptyWS in XMonad.Actions.CycleWS
-           let mw = not . (`elem` myCoreWorkspaces) . tag
-           return (\w -> ne w && mw w)
-      in map (\(a,b) -> (a,b >> popupCurDesktop))
-        [ ((m__, xK_Down ), moveTo Next nonEmptyNonMinorWS) -- HiddenNonEmptyWS
-        , ((m__, xK_Up   ), moveTo Prev nonEmptyNonMinorWS) -- HiddenNonEmptyWS
-        , ((ms_, xK_Down ), shiftToNext >> nextWS)
-        , ((ms_, xK_Up   ), shiftToPrev >> prevWS)
-#if 1
-        , ((m__, xK_Left ), nextScreen)
-        , ((m__, xK_Right), prevScreen)
-        , ((ms_, xK_Left ), shiftNextScreen)
-        , ((ms_, xK_Right), shiftPrevScreen)
-#else
-        , ((m__, xK_Right), nextScreen)
-        , ((m__, xK_Left ), prevScreen)
-        , ((ms_, xK_Right), shiftNextScreen)
-        , ((ms_, xK_Left ), shiftPrevScreen)
-#endif
-        , ((m__, xK_y    ), toggleWS' ["NSP"])]
+    cycleWSKBs =
+      let nonEmptyNonMinorWS =
+            WSIs $ do
+              let ne = isJust . stack -- equals NonEmptyWS in XMonad.Actions.CycleWS
+              let mw = not . (`elem` myCoreWorkspaces) . tag
+              return (\w -> ne w && mw w)
+       in map
+            (\(a, b) -> (a, b >> popupCurDesktop))
+            [ ((m__, xK_Down), moveTo Next nonEmptyNonMinorWS) -- HiddenNonEmptyWS
+            , ((m__, xK_Up), moveTo Prev nonEmptyNonMinorWS) -- HiddenNonEmptyWS
+            , ((ms_, xK_Down), shiftToNext >> nextWS)
+            , ((ms_, xK_Up), shiftToPrev >> prevWS)
+            , ((m__, xK_Left), nextScreen)
+            , ((m__, xK_Right), prevScreen)
+            , ((ms_, xK_Left), shiftNextScreen)
+            , ((ms_, xK_Right), shiftPrevScreen)
+            , ((m__, xK_y), toggleWS' ["NSP"])
+            ]
       -- switchPhysicalKBs =
       --   -- mod-{w,e,r}, Switch to physical/Xinerama screens 1, 2, or 3
       --   -- mod-shift-{w,e,r}, Move client to screen 1, 2, or 3
@@ -247,12 +264,11 @@ layoutKBs conf =
 
 ------------------------------------------------------------------------
 -- Mouse bindings:
-myMouseBindings XConfig {XMonad.modMask = modm} = M.fromList
-  [ ((modm, button1), \w -> focus w
-                            >> mouseMoveWindow w
-                            >> windows W.shiftMaster)
-  , ((modm, button2), \w -> focus w
-                            >> windows W.shiftMaster)
-  , ((modm, button3), \w -> focus w
-                            >> mouseResizeWindow w
-                            >> windows W.shiftMaster) ]
+myMouseBindings XConfig {XMonad.modMask = modm} =
+  M.fromList
+    [ ( (modm, button1)
+      , \w -> focus w >> mouseMoveWindow w >> windows W.shiftMaster)
+    , ((modm, button2), \w -> focus w >> windows W.shiftMaster)
+    , ( (modm, button3)
+      , \w -> focus w >> mouseResizeWindow w >> windows W.shiftMaster)
+    ]

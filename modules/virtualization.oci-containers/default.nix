@@ -15,7 +15,7 @@
     })
     (lib.mkIf config.virtualisation.docker.enable {
       home-manager.sharedModules = [{
-        home.packages = with pkgs; [ docker_compose ];
+        home.packages = with pkgs; [ docker-compose ];
         home.file = {
           "bin/docker" = {
             source = ./bin;

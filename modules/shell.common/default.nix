@@ -60,7 +60,7 @@ in {
         tmux
         elinks
         w3m
-        manpages
+        man-pages
         file
         renameutils # qmv
         pv

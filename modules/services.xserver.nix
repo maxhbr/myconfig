@@ -15,9 +15,9 @@ in {
       home.packages = with pkgs;
         [
           arandr
-          xlibs.xmodmap
-          xlibs.xset
-          xlibs.setxkbmap
+          xorg.xmodmap
+          xorg.xset
+          xorg.setxkbmap
           xorg.xkill
           xorg.xmessage
           xclip

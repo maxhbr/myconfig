@@ -71,7 +71,7 @@ let
             };
           };
 
-          environment.systemPackages = [ pkgs.wireguard ];
+          environment.systemPackages = [ pkgs.wireguard-tools ];
           networking.wireguard.interfaces = {
             "${wgInterface}" = {
               ips = [
