@@ -83,11 +83,11 @@
     },
     "emacs": {
       "locked": {
-        "lastModified": 1646618851,
-        "narHash": "sha256-LvXKcS1ItRoOLhY/trvG3DqC1O8HipwdLVcu6OUhRFk=",
+        "lastModified": 1646731473,
+        "narHash": "sha256-FHZTySgUkI4lseaiJfeht/sX4FHQHeysxTrhyQlmmf0=",
         "owner": "nix-community",
         "repo": "emacs-overlay",
-        "rev": "1df96ae1607647923a32084df71c6ad42c81135b",
+        "rev": "3dde0cf09244b994609c9eae5e43eb287cfa4616",
         "type": "github"
       },
       "original": {
@@ -361,11 +361,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1646643513,
-        "narHash": "sha256-OrIfQ20wmuFfeNiPzOY7JOKYic4zJnvDFfjlGwznTZs=",
+        "lastModified": 1646736846,
+        "narHash": "sha256-w2d+um8XduAgV/nbFC3vgM8BPmJL6mRETiE0TIZ4nVw=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "5f77153502d63d29a5487862be6b14b746927e82",
+        "rev": "c7b3a73f99eaa2213974bb4ada3b69d610fc951b",
         "type": "github"
       },
       "original": {
@@ -425,7 +425,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-0Rq7vf5tslJyRH8NdDhlfLcM+2ZHorp2S4sdfeanYbw=",
+        "narHash": "sha256-APGsZo9FgOtgIf3GoPJef3OnJlsgUYNCsdeGqCNaLS0=",
         "path": "flakes/mykeylight",
         "type": "path"
       },
@@ -507,11 +507,11 @@
     },
     "nixos-hardware": {
       "locked": {
-        "lastModified": 1646635685,
-        "narHash": "sha256-CffozYq2cfU2EzjB2UVrAso8HlQvEd3TmJQ7gcvvxJA=",
+        "lastModified": 1646647249,
+        "narHash": "sha256-G1qFpuv8FOO7Sjx3kPwVi63emtCFZvTBSta8jODOb/U=",
         "owner": "NixOS",
         "repo": "nixos-hardware",
-        "rev": "a91de8c9140ea41e678b593ab9a5a8c9d844a9dc",
+        "rev": "86fa91c21f911d7cb0427baed3b177744b82e068",
         "type": "github"
       },
       "original": {
@@ -539,11 +539,11 @@
     },
     "nixos-unstable-small": {
       "locked": {
-        "lastModified": 1646456064,
-        "narHash": "sha256-bt4c5frg/NzIA+rDiYwpDoVB9zxSqE0FqjE4xetI99w=",
+        "lastModified": 1646633962,
+        "narHash": "sha256-SvDOQ7zEAK+K1xDPyKYAVnEcFSEar+nF8gT+VcbauUE=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "3c745c05fb1d0979af3c6db7dc8c12d35c7e41e0",
+        "rev": "35db2e60df598e3d5c88adab65f70b91f6645b45",
         "type": "github"
       },
       "original": {
@@ -571,8 +571,8 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "narHash": "sha256-S/IZX9+D+aDt1gP7WzsluMDc0v2rm4gXdSKtALUfvY4=",
-        "path": "/nix/store/0wc0zl6cmv2rmwbf9rh8l6slkc7r4lcq-source",
+        "narHash": "sha256-OrIfQ20wmuFfeNiPzOY7JOKYic4zJnvDFfjlGwznTZs=",
+        "path": "/nix/store/h5ws1b8v9i2nhiz9xycd5l8g5lxgl9g4-source",
         "type": "path"
       },
       "original": {
@@ -598,11 +598,11 @@
     },
     "nur": {
       "locked": {
-        "lastModified": 1646637036,
-        "narHash": "sha256-rZvNBSLwSu/4qI8TEv1k70wmCOMzdM0NbPZPLHg45ZY=",
+        "lastModified": 1646736674,
+        "narHash": "sha256-cEXgBlhAx6A7cTnkRT8Gjv8B18PPK1ONNnmLcKJp9Xs=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "feb68d68dd4f9f9ac3c89354c0dc835800881836",
+        "rev": "39c203e5db32217ced0c54b771cc012710379739",
         "type": "github"
       },
       "original": {
@@ -773,11 +773,11 @@
     },
     "rel2111": {
       "locked": {
-        "lastModified": 1646642570,
-        "narHash": "sha256-1LeNYWiAIdiJzGrASWVc9xDPqbpABQFr8HFgDhnO5n8=",
+        "lastModified": 1646675913,
+        "narHash": "sha256-ZvGf51XpXM7JojKLZ5yI0XLUq8UOFX6AwZ3bhtdcpIo=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "3e53230d49310e1c5451834309c472187c9be119",
+        "rev": "9b1c7ba323732ddc85a51850a7f10ecc5269b8e9",
         "type": "github"
       },
       "original": {
@@ -882,7 +882,7 @@
         "rel2105": "rel2105_2"
       },
       "locked": {
-        "narHash": "sha256-F29JxTg20OVctvmBn9F60R7T8Cv+J/7ASiiOPiXdJaA=",
+        "narHash": "sha256-oh7lueErJco5vgKc3EEeIk9w/WaWVJjAmnjqh7RL21I=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
