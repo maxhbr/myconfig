@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p wireguard pass
+#! nix-shell -i bash -p wireguard-tools pass
 # Copyright 2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 

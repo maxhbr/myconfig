@@ -1,6 +1,5 @@
 { pkgs, config, lib, ... }:
 let
-  nativeOnly = false;
   steam = pkgs.nixos-unstable.steam.override {
     extraPkgs = innerPkgs:
       with innerPkgs; [
@@ -11,10 +10,19 @@ let
         zlib
         libffi
       ];
-    inherit nativeOnly;
   };
 in {
-  imports = [ (lib.mkIf nativeOnly { nixpkgs.config.allowBroken = true; }) ];
+  imports = [
+    (lib.mkIf false
+      {# for sharing / viewing via steam
+        networking.firewall = {
+          # https://support.steampowered.com/kb_article.php?ref=8571-GLVN-8711&l=german
+          allowedUDPPorts = [ 27031 27032 27033 27034 27035 27036 3478 4379 4380 ];
+          allowedTCPPorts = [ 27036 27037 ];
+        };
+      }
+    )
+  ];
   config = {
     # programs.firejail = {
     #   enable = true;
@@ -29,8 +37,6 @@ in {
     # };
     home-manager.sharedModules = [{
       home.packages = [
-        (with pkgs.nixos-unstable;
-          if nativeOnly then steam-run-native else steam-run)
         steam
       ];
       # home.file = {
@@ -59,12 +65,6 @@ in {
         driSupport32Bit = true;
       };
       pulseaudio.support32Bit = true;
-    };
-    # for sharing / viewing via steam
-    networking.firewall = {
-      # https://support.steampowered.com/kb_article.php?ref=8571-GLVN-8711&l=german
-      allowedUDPPorts = [ 27031 27032 27033 27034 27035 27036 3478 4379 4380 ];
-      allowedTCPPorts = [ 27036 27037 ];
     };
   };
 }

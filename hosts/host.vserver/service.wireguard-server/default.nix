@@ -11,7 +11,7 @@
 
 { pkgs, ... }: {
   config = {
-    environment.systemPackages = with pkgs; [ wireguard ];
+    environment.systemPackages = with pkgs; [ wireguard-tools ];
     # enable NAT
     networking.nat.enable = true;
     networking.nat.externalInterface = "ens3";
