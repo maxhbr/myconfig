@@ -17,13 +17,15 @@
     ../hardware/notebook-generic.nix
     ../hardware/lowres.nix
 
+    (lib.mkIf (config.services.xserver.libinput.enable) {
+      services.xserver.libinput.touchpad.accelSpeed = "0.15";
+    })
+
     ##############################################################################
     ##  choose setup for graphics  ###############################################
     ##############################################################################
     (import ../hardware/gtx1650.nix).primeRenderOffload
-    (lib.mkIf (config.services.xserver.libinput.enable) {
-      services.xserver.libinput.touchpad.accelSpeed = "0.15";
-    })
+    # (import ../hardware/gtx1650.nix).bumblebeeConf
   ];
 
   config = {

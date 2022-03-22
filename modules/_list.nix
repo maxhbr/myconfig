@@ -57,4 +57,5 @@
   ./virtualization.lxc.nix
   ./virtualization.qemu.nix
   ./virtualization.vbox.nix
+  ./desktop.Wayland.sway
 ]

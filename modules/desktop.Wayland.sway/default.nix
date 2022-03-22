@@ -1,18 +1,15 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, ... }:
-let user = config.myconfig.user;
-in {
-  imports = [ ../desktop.common ];
-
-  config = {
-    home-manager.users."${user}" = {
+{ pkgs, config, lib, ... }:
+{
+  config = (lib.mkIf config.services.xserver.enable {
+    home-manager.sharedModules = [{
       home.file = { ".config/sway/config".source = ./config/sway/config; };
       home.packages = with pkgs; [
         grim # for screenshots
         qt5.qtwayland
       ];
-    };
+    }];
     programs.sway = {
       enable = true;
       extraPackages = with pkgs; [ swaylock swayidle xwayland st dmenu ];
@@ -32,5 +29,5 @@ in {
         [[ -z $DISPLAY && $XDG_VTNR -eq 6 ]] && exec sway --my-next-gpu-wont-be-nvidia
       '';
     };
-  };
+  });
 }

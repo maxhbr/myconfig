@@ -8,7 +8,7 @@
     ../../hardware/x1extremeG2.nix
     ../../hardware/efi.nix
     ../../hardware/footswitch.nix
-    ../../hardware/steamcontroller.nix
+    # ../../hardware/steamcontroller.nix
     ../../hardware/blink1.nix
     ../../hardware/unifying.nix
     ./hardware.hantek
@@ -19,7 +19,7 @@
     ./mail
     ## fun
     ./smarthome.nix
-    ../host.workstation/gaming/games.steam
+    # ../host.workstation/gaming/games.steam
     {
       # Fingerprint reader: login and unlock with fingerprint (if you add one with `fprintd-enroll`)
       # services.fprintd.enable = true;

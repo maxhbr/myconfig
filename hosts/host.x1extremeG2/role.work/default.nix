@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 { config, pkgs, lib, ... }: {
   imports = [
-    ./jdk.nix
+    # ./jdk.nix
     # ./node.nix
   ];
   config = {

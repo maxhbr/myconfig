@@ -26,6 +26,9 @@
 
           services = {
             xserver = {
+              serverFlagsSection = ''
+                Option "MaxClients" "2048"
+              '';
               displayManager.defaultSession = "none+myXmonad";
               windowManager = {
                 session = lib.singleton {

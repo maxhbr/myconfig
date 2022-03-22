@@ -99,7 +99,7 @@ let
       };
     };
   ##############################################################################
-  primeRenderOffload = { pkgs, config, ... }:
+  primeRenderOffload = { pkgs, config, lib, ... }:
     let
       nvidia-offload = pkgs.writeShellScriptBin "nvidia-offload" ''
         export __NV_PRIME_RENDER_OFFLOAD=1
@@ -119,6 +119,14 @@ let
           intelBusId = "PCI:0:2:0";
           # Bus ID of the NVIDIA GPU. You can find it using lspci, either under 3D or VGA
           nvidiaBusId = "PCI:1:0:0";
+        };
+        # hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.stable;
+        hardware.opengl = {
+          enable = true; # // vaapi collides in opengl build...
+          # extraPackages = with pkgs; [
+          #   vaapiIntel
+          #   intel-media-driver
+          # ];
         };
       };
     };
