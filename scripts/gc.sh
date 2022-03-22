@@ -1,5 +1,6 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i bash -p nix ncurses git wget tmux glibcLocales
+
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 
@@ -23,6 +24,10 @@ sudo nix-env --delete-generations $age || echo "failed, probably when waiting fo
 echo "* sudo nix-collect-garbage --delete-older-than $age ..."
 sudo nix-collect-garbage \
      --delete-older-than $age || echo "failed, probably when waiting for sudo PW"
+
+##  haskellPackages.stack-clean-old
+# echo "* cleanup stack"
+# stack-clean-old keep-minor -S -o x86_64-linux-nix -d
 
 after=$(logUsage)
 

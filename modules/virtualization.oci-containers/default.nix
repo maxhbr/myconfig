@@ -12,6 +12,9 @@
         # Create a `docker` alias for podman, to use it as a drop-in replacement
         dockerCompat = !config.virtualisation.docker.enable;
       };
+      home-manager.sharedModules = [{
+        home.packages = with pkgs; [ podman-compose ];
+      }];
     })
     (lib.mkIf config.virtualisation.docker.enable {
       home-manager.sharedModules = [{
