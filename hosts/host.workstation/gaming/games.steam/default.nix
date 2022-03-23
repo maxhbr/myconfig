@@ -59,6 +59,8 @@ in {
       # };
     }];
 
+    programs.steam.enable = true;
+
     hardware = {
       opengl = {
         driSupport = true;

@@ -36,6 +36,7 @@
   ./services.xserver.programs.firefox.nix
   ./services.xserver.programs.kitty.nix
   ./services.xserver.programs.obs.nix
+  ./services.xserver.programs.qutebrowser.nix
   ./services.xserver.programs.vscode.nix
   ./services.xserver.programs.xss-lock.nix
   ./services.xserver.programs.zathura.nix

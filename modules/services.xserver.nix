@@ -25,6 +25,8 @@ in {
           xrandr-invert-colors
           myInvert
 
+          xrestop
+
           # misc
           libnotify # xfce.xfce4notifyd # notify-osd
 
@@ -35,7 +37,6 @@ in {
           feh
           imagemagick
           mplayer
-          qutebrowser
           freetube
         ] ++ lib.optional config.networking.networkmanager.enable
         networkmanager_dmenu
@@ -86,6 +87,11 @@ in {
         autorun = true;
         enableCtrlAltBackspace = true;
         displayManager.lightdm.enable = true;
+
+        desktopManager = {
+          xterm.enable = false;
+          xfce.enable = true;
+        };
       };
       redshift.enable = true;
     };

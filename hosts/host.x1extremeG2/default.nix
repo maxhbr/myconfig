@@ -19,7 +19,7 @@
     ./mail
     ## fun
     ./smarthome.nix
-    # ../host.workstation/gaming/games.steam
+    ../host.workstation/gaming/games.steam
     {
       # Fingerprint reader: login and unlock with fingerprint (if you add one with `fprintd-enroll`)
       # services.fprintd.enable = true;

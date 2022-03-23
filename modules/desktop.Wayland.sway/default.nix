@@ -26,7 +26,7 @@
     };
     environment = {
       loginShellInit = ''
-        [[ -z $DISPLAY && $XDG_VTNR -eq 6 ]] && exec sway --my-next-gpu-wont-be-nvidia
+        [[ -z $DISPLAY && $XDG_VTNR -eq 6 ]] && exec sway --unsupported-gpu
       '';
     };
   });

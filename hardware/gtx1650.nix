@@ -122,11 +122,13 @@ let
         };
         # hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.stable;
         hardware.opengl = {
-          enable = true; # // vaapi collides in opengl build...
-          # extraPackages = with pkgs; [
-          #   vaapiIntel
-          #   intel-media-driver
-          # ];
+          enable = true;
+          driSupport = true;
+          driSupport32Bit = true;
+          extraPackages = with pkgs; [
+            vaapiIntel
+            intel-media-driver
+          ];
         };
       };
     };
