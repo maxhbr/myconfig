@@ -425,7 +425,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-G8FoMOU2V3Nk2a1FNcghLfsALk14F7nNIrAtXBXQCz0=",
+        "narHash": "sha256-ML6WTQX68iK3tYucyFCBV8/vN9vqczIDXW94QyjAHpU=",
         "path": "flakes/mykeylight",
         "type": "path"
       },
@@ -571,8 +571,8 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "narHash": "sha256-EixKLLkKAggQLAhQmC8cAMgIRtJJHGI39HCl1zJ9Qqc=",
-        "path": "/nix/store/virmxq9lvpaz0jvjzjsvr3phf2sad131-source",
+        "narHash": "sha256-D5gmfn1lS77k+NehqzOYLKzZF4SI6q0PzBV8S3ZyqzM=",
+        "path": "/nix/store/0a6a6kdzx9dm8kmn3919a0f9zwlblzvp-source",
         "type": "path"
       },
       "original": {
@@ -882,7 +882,7 @@
         "rel2105": "rel2105_2"
       },
       "locked": {
-        "narHash": "sha256-0cQfVZPZZctRp9aVuTXCpYT8vEmICFOu38Bgb0syKT4=",
+        "narHash": "sha256-g5tzud8lGkHDMWlZIaU0fe+K3/SX4x8UmJSOLEnHsdY=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
