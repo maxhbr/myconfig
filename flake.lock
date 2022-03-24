@@ -361,11 +361,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1648105992,
-        "narHash": "sha256-D5gmfn1lS77k+NehqzOYLKzZF4SI6q0PzBV8S3ZyqzM=",
+        "lastModified": 1648108070,
+        "narHash": "sha256-RSkkA/86qIZc/Qh0mRisGc4RvsNUwkP9WdYMUURFdCk=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "e9aa17c9f09ef2049bb33067f0e0a456b12a2b66",
+        "rev": "dceccf4139f5e31c7a4fdb043c91f37b1a608447",
         "type": "github"
       },
       "original": {
@@ -441,7 +441,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-Y2o6omYZJng+b0yhyDu4hQg+PBfE3nuLuyuhP3aWNQY=",
+        "narHash": "sha256-lFAAfyrRmn/suKvvdqRpJlW9srGzBg3J+oIQkhgrQhk=",
         "path": "flakes/myxmonad/",
         "type": "path"
       },
