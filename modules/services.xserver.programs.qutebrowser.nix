@@ -2,6 +2,7 @@
 {
   config = (lib.mkIf config.services.xserver.enable {
     home-manager.sharedModules = [{
+      home.packages = [ pkgs.python3Packages.adblock ];
       programs.qutebrowser = {
         enable = true;
         searchEngines = {

@@ -31,7 +31,7 @@ in {
           plantuml
           graphviz
         ] ++ lib.optional config.services.xserver.enable
-          nixos-unstable.freeplane
+          freeplane
           ++ lib.optional config.services.xserver.enable xournalpp);
     }];
   };

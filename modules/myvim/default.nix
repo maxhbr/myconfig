@@ -1,9 +1,8 @@
 { pkgs, lib, config, ... }:
 let
   myvim =
-    (pkgs.vim_configurable.override { python = pkgs.python3; }).customize {
+    pkgs.vim_configurable.customize {
       name = "vim";
-      wrapGui = true;
       vimrcConfig = {
         customRC = builtins.readFile ./vimrc;
         vam.knownPlugins = pkgs.vimPlugins;

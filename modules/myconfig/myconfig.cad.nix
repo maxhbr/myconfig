@@ -18,6 +18,7 @@ in {
         gmsh
         # pcb design
         librepcb
+        gerbv
       ];
     }];
   });

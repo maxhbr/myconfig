@@ -87,11 +87,6 @@ in {
         autorun = true;
         enableCtrlAltBackspace = true;
         displayManager.lightdm.enable = true;
-
-        desktopManager = {
-          xterm.enable = false;
-          xfce.enable = true;
-        };
       };
       redshift.enable = true;
     };

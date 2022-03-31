@@ -42,6 +42,7 @@
         rust.enable = true;
       };
     };
+    services.xserver.desktopManager.xfce.enable = true;
     services.xserver.wacom.enable = true;
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;

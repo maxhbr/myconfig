@@ -78,7 +78,8 @@
     console.font = "lat9w-16";
     console.keyMap = "neo";
     i18n = {
-      defaultLocale = "de_DE.UTF-8";
+      # defaultLocale = "de_DE.UTF-8";
+      defaultLocale = "en_us.UTF-8";
       supportedLocales = [ "de_DE.UTF-8/UTF-8" "en_US.UTF-8/UTF-8" ];
     };
   };

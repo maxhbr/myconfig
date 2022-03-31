@@ -25,7 +25,7 @@
         hack-font
         inconsolata
         liberation_ttf
-        mplus-outline-fonts
+        mplus-outline-fonts.githubRelease
         noto-fonts
         noto-fonts-cjk
         noto-fonts-emoji
