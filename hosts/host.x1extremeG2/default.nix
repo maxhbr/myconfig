@@ -12,6 +12,7 @@
     ../../hardware/blink1.nix
     ../../hardware/unifying.nix
     ./hardware.hantek
+    ./mykeylight
     # ./backup-hdd.nix
     # ./foto-hdd.nix
     # modules

@@ -45,9 +45,6 @@
     zephyrproject.url = "path:flakes/zephyrproject/";
     # zephyrproject.inputs.nixpkgs.follows = "nixpkgs";
     zephyrproject.inputs.flake-utils.follows = "flake-utils";
-
-    mykeylight.url = "path:flakes/mykeylight";
-    mykeylight.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -111,7 +108,6 @@
                 })
               ];
             })
-            inputs.mykeylight.nixosModule
 
             inputs.myxmonad.nixosModule
             inputs.my-wallpapers.nixosModule
