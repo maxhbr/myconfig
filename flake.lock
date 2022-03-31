@@ -418,22 +418,6 @@
         "type": "path"
       }
     },
-    "mykeylight": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "narHash": "sha256-cb60/zIqMntUwMlIR1mANygKa7sjMN4O8IITFV9TVww=",
-        "path": "flakes/mykeylight",
-        "type": "path"
-      },
-      "original": {
-        "path": "flakes/mykeylight",
-        "type": "path"
-      }
-    },
     "myxmonad": {
       "inputs": {
         "nixpkgs": [
@@ -571,8 +555,8 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "narHash": "sha256-s9yPrzPaDPfQz9QymYx2r5uhDP00Djq0nQMIlup9l/g=",
-        "path": "/nix/store/v9aiavw6jsb4f86q9ccvib4ys9z639j1-source",
+        "narHash": "sha256-BSTdph+uxiZldzRhL6RXGls2t9IpspP5940S4dkSqJ0=",
+        "path": "/nix/store/k7rnlwis6zlzniqhxkw4gmlifcfq7ji9-source",
         "type": "path"
       },
       "original": {
@@ -812,7 +796,6 @@
         "master": "master",
         "my-wallpapers": "my-wallpapers",
         "myfish": "myfish",
-        "mykeylight": "mykeylight",
         "myxmonad": "myxmonad",
         "nix-doom-emacs": "nix-doom-emacs",
         "nixos-hardware": "nixos-hardware",
@@ -882,7 +865,7 @@
         "rel2105": "rel2105_2"
       },
       "locked": {
-        "narHash": "sha256-qaXxsiBJZ448QY5XWvnrwRfvQqMCXFt+8/NvosywkJQ=",
+        "narHash": "sha256-MPQxYv2LTJrAcyJZUEN7KcyjQH1kWVfRJAxt4kNdEhs=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
