@@ -425,7 +425,7 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-a1CuAIpqt6b89Xyi6/JxQ7aB9Rgkz0qb88GsS+o8xig=",
+        "narHash": "sha256-uHwAUeL3Qq8NbdeCeA5DNBSW2B/dkQ63oedMu9dV/pk=",
         "path": "flakes/myxmonad/",
         "type": "path"
       },
