@@ -409,7 +409,7 @@
         "z": "z"
       },
       "locked": {
-        "narHash": "sha256-/S7qOv9dXyUvZIGkIp2KJ98uIpei8WyM2E+dPramFMM=",
+        "narHash": "sha256-Esndo/wlkzfGheE4NYS8ERWoLq+n69arQdGTXKuDkG8=",
         "path": "flakes/myfish/",
         "type": "path"
       },
@@ -582,11 +582,11 @@
     },
     "nur": {
       "locked": {
-        "lastModified": 1649420545,
-        "narHash": "sha256-4ToJtr0m22cTaYmF5uSPm2IKieXCCbcv3vB/njrY8/g=",
+        "lastModified": 1649440138,
+        "narHash": "sha256-eomG5RmI7ctLrKIhNhBUSw6+bW1wJnyMR6Q7tgIbaFE=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "2a531b3ae63276d9054f861f71b7f66c95c2b0ec",
+        "rev": "0acccecebcb8c718f497de19529b7ee688471d75",
         "type": "github"
       },
       "original": {
@@ -845,11 +845,11 @@
     "z": {
       "flake": false,
       "locked": {
-        "lastModified": 1626157139,
-        "narHash": "sha256-pWkEhjbcxXduyKz1mAFo90IuQdX7R8bLCQgb0R+hXs4=",
+        "lastModified": 1649439817,
+        "narHash": "sha256-+FUBM7CodtZrYKqU542fQD+ZDGrd2438trKM0tIESs0=",
         "owner": "jethrokuan",
         "repo": "z",
-        "rev": "45a9ff6d0932b0e9835cbeb60b9794ba706eef10",
+        "rev": "85f863f20f24faf675827fb00f3a4e15c7838d76",
         "type": "github"
       },
       "original": {
