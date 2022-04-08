@@ -12,8 +12,9 @@ in {
         openscad
         nixos-2105.freecad # 3D
         prusa-slicer
-        povray
-        luxcorerender
+        # povray
+        # luxcorerender
+        fstl
         meshlab
         gmsh
         # pcb design

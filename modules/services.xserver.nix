@@ -10,7 +10,6 @@ in {
   config = (lib.mkIf config.services.xserver.enable {
     home-manager.sharedModules = [{
       programs.firefox.enable = lib.mkDefault true;
-      programs.zathura.enable = lib.mkDefault true;
 
       home.packages = with pkgs;
         [
@@ -32,7 +31,7 @@ in {
 
           # gui applications
           mupdf
-          llpp
+          # llpp
           xarchiver
           feh
           imagemagick

@@ -15,7 +15,6 @@ in {
     services.xserver.enable = true;
     home-manager.sharedModules = [{
       programs.firefox.enable = lib.mkDefault true;
-      programs.zathura.enable = lib.mkDefault true;
     }];
   });
 }

@@ -105,6 +105,9 @@
           in "${script}/bin/script";
         };
       })
+      {
+        programs.zathura.enable = lib.mkForce false;
+      }
     ];
   };
 }

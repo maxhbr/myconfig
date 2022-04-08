@@ -3,7 +3,7 @@
     home-manager.sharedModules = [{
       config = {
         programs.zathura = {
-          enable = true;
+          enable = lib.mkDefault true;
           options = { };
           extraConfig = ''
             set recolor false # invert colors
