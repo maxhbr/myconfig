@@ -99,11 +99,11 @@
     "foreign-env": {
       "flake": false,
       "locked": {
-        "lastModified": 1547655379,
-        "narHash": "sha256-er1KI2xSUtTlQd9jZl1AjqeArrfBxrgBLcw5OqinuAM=",
+        "lastModified": 1649621402,
+        "narHash": "sha256-3h03WQrBZmTXZLkQh1oVyhv6zlyYsSDS7HTHr+7WjY8=",
         "owner": "oh-my-fish",
         "repo": "plugin-foreign-env",
-        "rev": "dddd9213272a0ab848d474d0cbde12ad034e65bc",
+        "rev": "b3dd471bcc885b597c3922e4de836e06415e52dd",
         "type": "github"
       },
       "original": {
