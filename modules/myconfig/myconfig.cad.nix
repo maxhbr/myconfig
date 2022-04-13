@@ -6,21 +6,26 @@ in {
   options.myconfig = with lib; { cad.enable = mkEnableOption "cad"; };
   config = (lib.mkIf cfg.cad.enable {
     home-manager.sharedModules = [{
-      home.packages = with pkgs; [
-        # blender
-        # librecad # 2D
-        openscad
-        nixos-2105.freecad # 3D
-        prusa-slicer
-        # povray
-        # luxcorerender
-        fstl
-        meshlab
-        gmsh
-        # pcb design
-        librepcb
-        gerbv
-      ];
+      home.packages = with pkgs; (
+        [ # 2D
+          # librecad # 2D
+        ] ++
+        [ # 3D
+          # blender
+          openscad
+          nixos-2105.freecad # 3D
+          prusa-slicer
+          # povray
+          # luxcorerender
+          fstl
+          meshlab
+          gmsh
+        ] ++
+        [ # pcb design
+          librepcb
+          gerbv
+          kicad-small
+        ]);
     }];
   });
 }

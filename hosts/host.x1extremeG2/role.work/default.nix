@@ -8,9 +8,6 @@
   config = {
     nixpkgs.overlays = map (n: import n) [
       # ./idea-ultimate
-      ./thrift011.nix
-      ./thrift012.nix
-      ./thrift93.nix
     ];
     programs.evolution.enable = true;
     home-manager.sharedModules = [{
@@ -39,8 +36,8 @@
             networkmanager-openvpn
             openconnect
             networkmanager-openconnect
-            strongswan
-            networkmanager_strongswan
+            # strongswan
+            # networkmanager_strongswan
             networkmanagerapplet
           ];
         }
@@ -52,18 +49,12 @@
         exiftool
         # misc-desktop-tools:
         # libreoffice
-        nixos-unstable-small.zoom-us
-        bluejeans-gui
+        nixos-unstable-small.zoom-us # pr166085.zoom-us
         slack
-        element-desktop
+        # element-desktop
         # rambox
-        # remmina
         subversion
       ];
-      programs.fish.functions = {
-        libreoffice =
-          "nix-shell '<nixpkgs>' --fallback --run libreoffice -p libreoffice";
-      };
     }];
   };
 }

@@ -162,6 +162,7 @@
           };
         };
       };
+      # monit.enable = true;
     };
   };
 }

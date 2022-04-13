@@ -11,6 +11,8 @@
     rel2003.url = "github:nixos/nixpkgs/nixos-20.03";
     rel2105.url = "github:nixos/nixpkgs/release-21.05";
     rel2111.url = "github:nixos/nixpkgs/release-21.11";
+    # https://github.com/NixOS/nixpkgs/pull/166085
+    pr166085.url = "github:LutzCle/nixpkgs/zoom";
 
     home.url = "github:nix-community/home-manager";
     home.inputs.nixpkgs.follows = "nixpkgs";
@@ -90,6 +92,7 @@
                   (mkSubPkgsOverlay "nixos-2009" inputs.rel2009)
                   (mkSubPkgsOverlay "nixos-2105" inputs.rel2105)
                   (mkSubPkgsOverlay "nixos-2111" inputs.rel2111)
+                  (mkSubPkgsOverlay "pr166085" inputs.pr166085)
                 ];
               };
             })
