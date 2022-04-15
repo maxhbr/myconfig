@@ -60,7 +60,6 @@ in mkDerivation {
       --prefix PATH ":" "${pkgs.xorg.xf86inputsynaptics}/bin" \
       --prefix PATH ":" "${pkgs.xorg.xkill}/bin" \
       --prefix PATH ":" "${pkgs.xrandr-invert-colors}/bin" \
-      --prefix PATH ":" "${pkgs.autorandr}/bin" \
       --prefix PATH ":" "${pkgs.feh}/bin" \
       --prefix PATH ":" "${pkgs.unclutter}/bin" \
       --prefix PATH ":" "${pkgs.htop}/bin" \

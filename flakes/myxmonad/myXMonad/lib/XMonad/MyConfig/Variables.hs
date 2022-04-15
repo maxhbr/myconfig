@@ -45,10 +45,6 @@ xkillCMD = "xkill"
 -- or: "xcalib -i -a"
 invertColorsCMD = "xrandr-invert-colors"
 
-xAutoSetupCMD = "mautosetup"
-
-autorandrCMD = "autorandr"
-
 fehCMD = "feh"
 
 unclutterCMD = "unclutter"

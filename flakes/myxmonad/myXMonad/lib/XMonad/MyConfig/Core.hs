@@ -129,9 +129,9 @@ myKeys conf =
       -- keyboard layouts
       , ((m__, xK_F2     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_3_4.png"))
       , ((m__, xK_F3     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_5_6.png"))
-      , ((m__, xK_z      ), spawn (xAutoSetupCMD))
-      , ((ms_, xK_z      ), spawn (autorandrCMD ++ " common"))
-      , ((m_c, xK_z      ), spawn (autorandrCMD ++ " --force default"))
+      , ((m__, xK_z      ), spawn "mautosetup")
+      , ((ms_, xK_z      ), spawn "autosetup common")
+      , ((m_c, xK_z      ), spawn "mobile")
       ]
 
 backlightControlKBs, volumeControlKBs :: [((KeyMask -> KeyMask, KeySym), X ())]
