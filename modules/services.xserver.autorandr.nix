@@ -72,12 +72,35 @@ let
       ${xorg.xinput}/bin/xinput map-to-output $id $outputs
     '';
 
+  myautorandr = let
+    autosetup = pkgs.writeShellScriptBin "autosetup" ''
+    exec ${pkgs.autorandr}/bin/autorandr --skip-options gamma,panning --change
+  '';
+    mobile = pkgs.writeShellScriptBin "mobile" ''
+    exec ${pkgs.autorandr}/bin/autorandr mobile
+  '';
+    mautosetup = pkgs.writeShellScriptBin "mautosetup" ''
+    ${mobile}/bin/mobile
+    exec ${autosetup}/bin/autosetup
+  '';
+  in
+
+    pkgs.symlinkJoin {
+      name = "myautorandr";
+      paths = [
+        autosetup
+        mobile
+        mautosetup
+        pkgs.autorandr
+      ];
+    };
+
 in {
   config = (lib.mkIf config.services.xserver.enable {
     home-manager.sharedModules = [{
       home.packages = with pkgs; [
         xrandrUnpan
-        autorandr
+        myautorandr
         setupWacom
         setupHuion
       ];
@@ -90,15 +113,6 @@ in {
           "${setupHuion}/bin/setupHuion";
       };
     }];
-    environment = {
-      shellAliases = {
-        autosetup =
-          "${pkgs.autorandr}/bin/autorandr --skip-options gamma,panning --change";
-        mobile = "${pkgs.autorandr}/bin/autorandr mobile";
-        mautosetup =
-          "${pkgs.autorandr}/bin/autorandr mobile; ${pkgs.autorandr}/bin/autorandr --skip-options gamma,panning --change";
-      };
-    };
     services.autorandr.enable = true;
   });
 }

@@ -1,35 +1,62 @@
 -- Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 -- SPDX-License-Identifier: MIT
-module XMonad.MyConfig.Variables
-    where
+module XMonad.MyConfig.Variables where
 
-pathToXmonadBins   = "~/.xmonad/bin/"
-pathToXmonadShare  = "~/.xmonad/share/"
+pathToXmonadBins = "~/.xmonad/bin/"
 
-xmobarCMD          = "xmobar"
-terminalCMD        = "st"
-terminalNoTmuxCMD  = "st-notmux"
+pathToXmonadShare = "~/.xmonad/share/"
+
+xmobarCMD = "xmobar"
+
+terminalCMD = "st"
+
+terminalNoTmuxCMD = "st-notmux"
+
 terminalCleanupCMD = "st-reattach"
-bashCMD            = "bash"
-zshCMD             = "zsh"
-editorCMD          = "ec"
-emacsCMD           = "emacs"
-dmenuPathCMD       = "dmenu_path"
-yeganeshCMD        = "yeganesh"
-passmenuCMD        = "passmenu"
-firefoxCMD         = "firefox"
-browserCMD         = "chromium-browser"
-findCursorCMD      = "find-cursor"
-xdotoolCMD         = "xdotool"
-synclientCMD       = "synclient"
-xsetCMD            = "xset"
-xkillCMD            = "xkill"
-invertColorsCMD    = "xrandr-invert-colors"
+
+bashCMD = "bash"
+
+zshCMD = "zsh"
+
+editorCMD = "ec"
+
+emacsCMD = "emacs"
+
+dmenuPathCMD = "dmenu_path"
+
+yeganeshCMD = "yeganesh"
+
+passmenuCMD = "passmenu"
+
+firefoxCMD = "firefox"
+
+browserCMD = "chromium-browser"
+
+findCursorCMD = "find-cursor"
+
+xdotoolCMD = "xdotool"
+
+synclientCMD = "synclient"
+
+xsetCMD = "xset"
+
+xkillCMD = "xkill"
+
 -- or: "xcalib -i -a"
-xAutoSetupCMD      = "autorandr"
-fehCMD             = "feh"
-unclutterCMD       = "unclutter"
-htopCMD            = "htop"
-pavucontrolCMD     = "pavucontrol"
-lightCMD           = "light"
-muteTelcoCMD       = "mute_telco"
+invertColorsCMD = "xrandr-invert-colors"
+
+xAutoSetupCMD = "mautosetup"
+
+autorandrCMD = "autorandr"
+
+fehCMD = "feh"
+
+unclutterCMD = "unclutter"
+
+htopCMD = "htop"
+
+pavucontrolCMD = "pavucontrol"
+
+lightCMD = "light"
+
+muteTelcoCMD = "mute_telco"

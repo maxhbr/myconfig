@@ -5,36 +5,38 @@ module XMonad.MyConfig.Core
     ( coreConfig
     ) where
 
+import           System.Exit                   (exitSuccess)
 import           System.FilePath
-import           System.Exit ( exitSuccess )
 import           XMonad
 
 --------------------------------------------------------------------------------
 -- Actions
 import           XMonad.Actions.GridSelect
-import           XMonad.Actions.WindowGo ( raiseNext )
+import           XMonad.Actions.WindowGo       (raiseNext)
 
 --------------------------------------------------------------------------------
 -- Hooks
-import           XMonad.Hooks.SetWMName ( setWMName )
+import           XMonad.Hooks.SetWMName        (setWMName)
 
 
 --------------------------------------------------------------------------------
 -- Utils
-import           XMonad.Util.Run ( runProcessWithInput )
-import           XMonad.Actions.WindowGo ( runOrRaiseNext )
+import           XMonad.Actions.WindowGo       (runOrRaiseNext)
+import           XMonad.Util.Run               (runProcessWithInput)
 
 --------------------------------------------------------------------------------
 -- misc
-import           Data.List (isPrefixOf)
-import qualified Data.Map        as M
-import qualified XMonad.StackSet as W
+import           Data.List                     (isPrefixOf)
+import qualified Data.Map                      as M
+import qualified XMonad.StackSet               as W
 
 --------------------------------------------------------------------------------
 -- MyConfig
-import XMonad.MyConfig.Common
-import XMonad.MyConfig.MyLayoutLayer ( myLayout )
-import XMonad.MyConfig.Notify ( popupCurDesktop, myDefaultPopup, myNotify, myNotifyColored )
+import           XMonad.MyConfig.Common
+import           XMonad.MyConfig.MyLayoutLayer (myLayout)
+import           XMonad.MyConfig.Notify        (myDefaultPopup, myNotify,
+                                                myNotifyColored,
+                                                popupCurDesktop)
 
 normalcolor = "#333333" :: String
 maincolor = "#ee9a00" :: String
@@ -127,9 +129,9 @@ myKeys conf =
       -- keyboard layouts
       , ((m__, xK_F2     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_3_4.png"))
       , ((m__, xK_F3     ), spawn (fehCMD ++ " " ++ pathToXmonadShare ++ "neo_Ebenen_1_2_5_6.png"))
-      , ((m__, xK_z      ), spawn (xAutoSetupCMD ++ " --change"))
-      , ((ms_, xK_z      ), spawn (xAutoSetupCMD ++ " common"))
-      , ((m_c, xK_z      ), spawn (xAutoSetupCMD ++ " --force default"))
+      , ((m__, xK_z      ), spawn (xAutoSetupCMD))
+      , ((ms_, xK_z      ), spawn (autorandrCMD ++ " common"))
+      , ((m_c, xK_z      ), spawn (autorandrCMD ++ " --force default"))
       ]
 
 backlightControlKBs, volumeControlKBs :: [((KeyMask -> KeyMask, KeySym), X ())]
@@ -177,4 +179,3 @@ volumeControlKBs =
     , (0x1008ff11, ["6dB-"])
     , (0x1008ff13, ["unmute","3dB+"])]
 #endif
-
