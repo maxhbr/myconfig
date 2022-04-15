@@ -555,8 +555,8 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "narHash": "sha256-1QD+SlSbX05lATo/36M6hsdqInG9KDaQPZzipThc4VE=",
-        "path": "/nix/store/zsgcnqn05wr6ibmxyd36qkcqf86facv2-source",
+        "narHash": "sha256-0DhWgQN5v9TIKu+iVt5FH6V+gZvvp+UCX5cnQ2uiQ2g=",
+        "path": "/nix/store/7kvgp6v52v202a5ag0mz7av55ygla6xk-source",
         "type": "path"
       },
       "original": {
@@ -882,7 +882,7 @@
         "rel2105": "rel2105_2"
       },
       "locked": {
-        "narHash": "sha256-yIKrzoX+LVWllp25XOEu+zjJLjyqWBrZRSAeqLmJcNs=",
+        "narHash": "sha256-weGHU29kaTebiDvyLNCbHSmkaI2Akfv8npvkVzIvi2Y=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
