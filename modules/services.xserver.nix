@@ -31,7 +31,7 @@ in {
 
           # gui applications
           mupdf
-          # llpp
+          llpp
           xarchiver
           feh
           imagemagick

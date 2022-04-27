@@ -24,7 +24,8 @@ in {
         [ # pcb design
           librepcb
           gerbv
-          kicad-small
+          # kicad-small
+          kicad-with-packages3d
         ]);
     }];
   });

@@ -17,23 +17,21 @@ import           XMonad.StackSet                     (stack, tag)
 --------------------------------------------------------------------------------
 -- Util
 import           XMonad.Util.Types                   (Direction2D (..))
-import           XMonad.Util.WorkspaceCompare (getSortByIndex)
+import           XMonad.Util.WorkspaceCompare        (getSortByIndex)
 
 --------------------------------------------------------------------------------
 -- Actions
 import           XMonad.Actions.CopyWindow           (copy)
 import           XMonad.Actions.CycleWS              (Direction1D (..),
                                                       WSType (WSIs, (:&:)),
-                                                      findWorkspace,
-                                                      toggleOrView,
-                                                      emptyWS, hiddenWS,
-                                                      ignoringWSs, moveTo,
-                                                      nextScreen, nextWS,
-                                                      prevScreen, prevWS,
-                                                      shiftNextScreen,
+                                                      emptyWS, findWorkspace,
+                                                      hiddenWS, ignoringWSs,
+                                                      moveTo, nextScreen,
+                                                      nextWS, prevScreen,
+                                                      prevWS, shiftNextScreen,
                                                       shiftPrevScreen,
                                                       shiftToNext, shiftToPrev,
-                                                      toggleWS')
+                                                      toggleOrView, toggleWS')
 import           XMonad.Actions.Minimize             (maximizeWindowAndFocus,
                                                       minimizeWindow,
                                                       withLastMinimized)
@@ -103,16 +101,16 @@ myWorkspaceKeys =
   , (xK_0, myOtherWorkspaces)
   ]
 
-viewNextNonVisibleExcludingWSsWithFallback :: [String] -> X()
-viewNextNonVisibleExcludingWSsWithFallback ws =
-  do
-    let wsFilter = ignoringWSs (myWorkspaces \\ ws)
-    W.Workspace cur _ _ <- gets (W.workspace . W.current . windowset)
-    n1 <- findWorkspace getSortByIndex Next (hiddenWS :&: wsFilter) 1
-    n2 <- findWorkspace getSortByIndex Next wsFilter 1
-    windows . W.greedyView $ if n1 /= cur
-                             then n1
-                             else n2
+viewNextNonVisibleExcludingWSsWithFallback :: [String] -> X ()
+viewNextNonVisibleExcludingWSsWithFallback ws = do
+  let wsFilter = ignoringWSs (myWorkspaces \\ ws)
+  W.Workspace cur _ _ <- gets (W.workspace . W.current . windowset)
+  n1 <- findWorkspace getSortByIndex Next (hiddenWS :&: wsFilter) 1
+  n2 <- findWorkspace getSortByIndex Next wsFilter 1
+  windows . W.greedyView $
+    if n1 /= cur
+      then n1
+      else n2
 
 workspaceKeysToKBs ::
      (KeySym, [String]) -> [((KeyMask -> KeyMask, KeySym), X ())]
@@ -121,7 +119,7 @@ workspaceKeysToKBs (k, ws) =
       goToFun = do
         case ws of
           [w] -> toggleOrView w
-          _ -> viewNextNonVisibleExcludingWSsWithFallback ws
+          _   -> viewNextNonVisibleExcludingWSsWithFallback ws
         popupCurDesktop
    in [ ((m__, k), goToFun)
       , ((ms_, k), (windows . W.shift) firstW)

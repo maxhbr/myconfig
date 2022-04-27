@@ -47,7 +47,6 @@ in {
           [{ home.packages = with pkgs; [ pactl-monitor ]; }];
         hardware.pulseaudio = {
           package = pkgs.pulseaudioFull;
-          extraModules = [ pkgs.pulseaudio-modules-bt ];
           extraConfig =
             "load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1";
         };

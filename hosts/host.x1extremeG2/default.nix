@@ -39,7 +39,7 @@
         haskell.enable = true;
         network.enable = true;
         nodejs.enable = true;
-        ruby.enable = true;
+        # ruby.enable = true;
         rust.enable = true;
       };
     };
@@ -105,9 +105,6 @@
           in "${script}/bin/script";
         };
       })
-      {
-        programs.zathura.enable = lib.mkForce false;
-      }
     ];
   };
 }

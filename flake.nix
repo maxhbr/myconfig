@@ -145,7 +145,7 @@
                 (myconfig.metadatalib.announceHost "pi0")
               ];
             })
-            inputs.zephyrproject.nixosModule
+            # inputs.zephyrproject.nixosModule
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "workstation" ([

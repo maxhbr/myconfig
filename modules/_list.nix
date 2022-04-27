@@ -29,7 +29,7 @@
   ./services.xserver.kernel.nix
   ./services.xserver.mkscreenshot.nix
   ./services.xserver.nix
-  # ./services.xserver.printing.nix
+  ./services.xserver.printing.nix
   ./services.xserver.programs.appimage-run.nix
   ./services.xserver.programs.chromium.nix
   ./services.xserver.programs.evolution.nix

@@ -91,9 +91,6 @@ in {
         };
       })
     ];
-    hardware.pulseaudio = lib.mkIf config.hardware.pulseaudio.enable {
-      extraModules = [ pkgs.pulseaudio-modules-bt ];
-    };
     nixpkgs.overlays =
       [ (self: super: { helper = { inherit connectBtDevice; }; }) ];
   });
