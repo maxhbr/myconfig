@@ -558,8 +558,8 @@
     "nixpkgs_2": {
       "locked": {
         "lastModified": 0,
-        "narHash": "sha256-hjVuXNutHWr2/o0qSD49L9xZQ6a3iuy0UprcObINWnM=",
-        "path": "/nix/store/rz87gzrp9kcl8mqpd82s61fk84jvpg1y-source",
+        "narHash": "sha256-mVI2uRY3Rf6WS7iowNH3zdyhqSemRsksSMgAwZC8Y6w=",
+        "path": "/nix/store/wkzwk6mmm5gsdw6kmgvap1pyb4bhmcam-source",
         "type": "path"
       },
       "original": {
@@ -886,7 +886,7 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-G6UW/ZusaN13u3Yk/SjpDCeaPrWdt0tyU3tjCzUzo4s=",
+        "narHash": "sha256-8hh3wAModrE5Uz/G7WIJzRhZy5YmZ1qz6ymtbS6+2RE=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
