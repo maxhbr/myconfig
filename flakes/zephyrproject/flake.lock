@@ -15,11 +15,11 @@
     "platformio-core": {
       "flake": false,
       "locked": {
-        "lastModified": 1651159543,
-        "narHash": "sha256-2tGu1i5+3L9s+TUz/EpPtNM/QWoiPuLlw+hFuidKDTY=",
+        "lastModified": 1651258295,
+        "narHash": "sha256-p9oFJHIzH5weC4rz49RqsquHt7hYD4mljsILK1RrPVM=",
         "owner": "platformio",
         "repo": "platformio-core",
-        "rev": "62b8a63b80b1f83608eeb860312b751b01794cfd",
+        "rev": "327d5990d674f83bfda86361bcfd4d1bb80bbfad",
         "type": "github"
       },
       "original": {
