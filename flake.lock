@@ -83,11 +83,11 @@
     },
     "emacs": {
       "locked": {
-        "lastModified": 1651898579,
-        "narHash": "sha256-n77/YojHD+t+6Fq1sEA6OQtzm8rUBX+g6NfCxZVKmxo=",
+        "lastModified": 1651921687,
+        "narHash": "sha256-NAsOvhxbgC/h1WoLI5W85I/pvzbCo0Cmng987Z2BsrU=",
         "owner": "nix-community",
         "repo": "emacs-overlay",
-        "rev": "e007354fcc0f492878d85b85334ab3baa08a273b",
+        "rev": "ebb4f13297cc67f59ed72faa1402fcd449fa8dce",
         "type": "github"
       },
       "original": {
@@ -681,11 +681,11 @@
     "platformio-core": {
       "flake": false,
       "locked": {
-        "lastModified": 1651919479,
-        "narHash": "sha256-H7qaL+pV0UsslkAywnDtdlzpw4sNOGtQlxacmI1AhC0=",
+        "lastModified": 1651921751,
+        "narHash": "sha256-9ouVCBkWznbgp4RnuKhXhtxyZ3i9BdaB+Fpo3e6LD1c=",
         "owner": "platformio",
         "repo": "platformio-core",
-        "rev": "daa34818622f09b2c9fa7743289f3d54bc46edf0",
+        "rev": "50eda82e27c5e8b80447b3ba3b5baa496aa6a392",
         "type": "github"
       },
       "original": {
@@ -886,7 +886,7 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-H55cvK2DN3/JRK4A09BoqttsxjWf/PWnUFh/O7OnUwM=",
+        "narHash": "sha256-pvxZ5vrS/htAlmKQGdf5QdPj4IJt/hGctuSyI8ty2xw=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
