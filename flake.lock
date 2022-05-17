@@ -365,11 +365,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1652812138,
-        "narHash": "sha256-vxRs3dbAS0u8D2dsjxfmxKNMmpZWS2U9EVVsuaOvrlg=",
+        "lastModified": 1652812372,
+        "narHash": "sha256-OOFOGI8uRB/aHYmpTnB9hB//AfViTEqarcStegAIs3o=",
         "owner": "maxhbr",
         "repo": "license-compliance-toolbox",
-        "rev": "586dbe303f0fa70a65d7ef1cd273081bc1e8bd5d",
+        "rev": "e019cf1a13ced9b5f6d6ce46cb0d85f85df27a5d",
         "type": "github"
       },
       "original": {
