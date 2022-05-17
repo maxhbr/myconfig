@@ -365,11 +365,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1652806334,
-        "narHash": "sha256-3TRSludYGpFbV3hcRuW1MhEbw9W/CD5jyJQh3wXPl84=",
+        "lastModified": 1652812138,
+        "narHash": "sha256-vxRs3dbAS0u8D2dsjxfmxKNMmpZWS2U9EVVsuaOvrlg=",
         "owner": "maxhbr",
         "repo": "license-compliance-toolbox",
-        "rev": "895304c39619f6ac25c1d80e255681e36675ca02",
+        "rev": "586dbe303f0fa70a65d7ef1cd273081bc1e8bd5d",
         "type": "github"
       },
       "original": {
@@ -380,11 +380,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1652809549,
-        "narHash": "sha256-aWvzuFsPdd9C+4HaBLjrNZY35aFJu510uyYcpY8jNoo=",
+        "lastModified": 1652811815,
+        "narHash": "sha256-Ojb8sgmz7eyBV16K3oGdu/nh/wMVo//PjzI/gy8sGp0=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "c0723eef37468a1783d3e2fde84e25b3e502f45c",
+        "rev": "1550635eaaf53ebcf26dd58ed217ce8bedfb6302",
         "type": "github"
       },
       "original": {
