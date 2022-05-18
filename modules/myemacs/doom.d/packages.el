@@ -1,8 +1,8 @@
 ;; -*- no-byte-compile: t; -*-
 ;;; $DOOMDIR/packages.el
 
-(package! dmenu)
-(package! exwm)
+;; (package! dmenu)
+;; (package! exwm)
 
 
 

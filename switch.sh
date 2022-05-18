@@ -40,6 +40,7 @@ nix build \
     -L \
     --fallback \
     --keep-going \
+    --keep-failed \
     --log-format bar-with-logs \
     --out-link '../result.'"$target" \
     '.#nixosConfigurations.'"$target"'.config.system.build.toplevel'

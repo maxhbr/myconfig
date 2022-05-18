@@ -5,11 +5,15 @@ let user = config.myconfig.user;
 in {
   config = (lib.mkIf config.services.xserver.enable {
     home-manager.sharedModules = [{
-      xsession.pointerCursor = {
+      home.pointerCursor = {
         package = pkgs.vanilla-dmz;
         size = 128;
         name = "Vanilla-DMZ";
-        defaultCursor = "left_ptr"; # or "left_ptr";
+        x11 = {
+          enable = true;
+          defaultCursor = "left_ptr";
+        };
+        gtk.enable = true;
       };
     }];
     nixpkgs.overlays = [

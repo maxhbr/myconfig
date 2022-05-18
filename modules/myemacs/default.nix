@@ -46,7 +46,21 @@ in {
             ${pkgs.xclip}/bin/xclip < "$tempfile"
           '';
         in {
-          programs.doom-emacs = (doom-emacs-conf pkgs) // { enable = true; };
+          programs.doom-emacs = {
+            enable = true;
+            inherit doomPrivateDir;
+            extraPackages = with pkgs; [
+              mu
+              gnuplot
+              (nerdfonts.override { fonts = [ "Inconsolata" ]; })
+              emacs-all-the-icons-fonts
+              shellcheck
+            ];
+            extraConfig = ''
+                (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
+              '';
+            # dependencyOverrides = nix-doom-emacs.inputs;
+          };
           home.packages = with pkgs; [ xclipedit ];
           programs.zsh.shellAliases = {
             magit = ''emacs -e "(magit-status \"$(pwd)\")"'';

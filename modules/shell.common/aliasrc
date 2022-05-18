@@ -151,23 +151,6 @@ alias ducksALL='du -ch --max-depth=1 ./ |sort -rh'
 alias hducks='du -csh .??* |sort -rh |head -11'
 alias hducksall='du -csh .??* |sort -rh'
 
-ranger-cd() {
-  tempfile='/tmp/chosendir'
-  ranger --choosedir="$tempfile" "${@:-$(pwd)}"
-  test -f "$tempfile" &&
-  if [ "$(cat -- "$tempfile")" != "$(echo -n `pwd`)" ]; then
-    cd -- "$(cat "$tempfile")"
-  fi
-  rm -f -- "$tempfile"
-}
-if [ -n "$BASH_VERSION" ]; then
-  if [[ $- == *i* ]]; then
-    bind '"\C-o":" ranger-cd\C-m"'
-  fi
-elif [ -n "$ZSH_VERSION" ]; then
-  bindkey -s '^o' '^qranger-cd\n'
-fi
-
 # Find a file/dir/file&dir with a pattern in name:
 ff() { find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -iname '*'$*'*' -ls 2>/dev/null ; }
 ffd() { find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type d -iname '*'$*'*' -ls 2>/dev/null ; }

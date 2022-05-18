@@ -24,7 +24,7 @@
             st-notabbed = stpre;
             st-notmux = prev.writeShellScriptBin "st-notmux" ''
               if [ $# -eq 0 ]; then
-                exec ${final.tabbed}/bin/tabbed -d -c -r 2 ${stpre}/bin/st
+                exec ${stpre}/bin/st
               else
                 exec ${stpre}/bin/st "$@"
               fi
@@ -51,6 +51,12 @@
                 (set -x;
                  ${st-notabbed}/bin/st -e ${tmux}/bin/tmux attach -t "$SESSION" & disown)
             done
+      '')
+      (writeShellScriptBin "st-ssh" ''
+        ${st-notmux}/bin/st-notmux -e ssh "$@" & disown
+      '')
+      (writeShellScriptBin "st-mosh" ''
+        ${st-notmux}/bin/st-notmux -e mosh "$@" & disown
       '')
     ];
   });

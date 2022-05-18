@@ -47,16 +47,11 @@ in {
             /.git/
           '';
         };
-        ".config/ranger" = {
-          source = ./ranger;
-          recursive = true;
-        };
       };
     };
     environment = {
       systemPackages = with pkgs; [
         ripgrep # ag
-        ranger
         tmux
         elinks
         w3m
@@ -130,7 +125,8 @@ in {
       '';
       shellAliases = {
         ps = "${pkgs.procs}/bin/procs";
-        r = "ranger";
+        ranger = "lf";
+        r = "lf";
         ag = "rg";
       };
     };

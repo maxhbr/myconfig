@@ -69,6 +69,10 @@
           };
         };
       })
+    {
+      networking.firewall.allowedUDPPorts = [ 60001 ];
+      programs.mosh.enable = true;
+    }
   ]; # ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.5") ]);
 
   config = {
@@ -87,7 +91,7 @@
       };
     };
     virtualisation.podman.enable = true;
-    virtualisation.docker.enable = false;
+    virtualisation.docker.enable = true;
 
     #boot.kernelPackages =
     #  # lib.mkForce pkgs.unstable.linuxPackages_testing;

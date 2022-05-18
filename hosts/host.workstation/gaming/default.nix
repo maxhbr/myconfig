@@ -10,7 +10,7 @@
         ./games.doom3.hm.nix
         # ./games.ktane.hm.nix
         ./games.openrct2.hm.nix
-        ./games.powder.hm.nix
+        # ./games.powder.hm.nix
         # ./games.retroarch.hm.nix
         # ./games.starsector.hm.nix
       ];

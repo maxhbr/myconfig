@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
 {
-  config = (lib.mkIf config.services.xserver.enable {
+  config = (lib.mkIf config.programs.sway.enable {
     home-manager.sharedModules = [{
       home.file = { ".config/sway/config".source = ./config/sway/config; };
       home.packages = with pkgs; [
@@ -11,7 +11,6 @@
       ];
     }];
     programs.sway = {
-      enable = true;
       extraPackages = with pkgs; [ swaylock swayidle xwayland st dmenu ];
 
       extraSessionCommands = ''
