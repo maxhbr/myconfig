@@ -68,6 +68,8 @@ let
       paths = [
         myvim
 
+        xkb-switch
+
         ctags
 
         aspell

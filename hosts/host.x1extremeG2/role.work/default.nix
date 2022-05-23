@@ -49,7 +49,7 @@
         exiftool
         # misc-desktop-tools:
         # libreoffice
-        nixos-unstable-small.zoom-us # pr166085.zoom-us
+        nixos-unstable-small.zoom-us
         slack
         # element-desktop
         # rambox

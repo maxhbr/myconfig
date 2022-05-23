@@ -4,6 +4,7 @@
 ;; (package! dmenu)
 ;; (package! exwm)
 
+(package! graphviz-dot-mode)
 
 
 
