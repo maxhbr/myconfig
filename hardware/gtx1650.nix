@@ -125,10 +125,7 @@ let
           enable = true;
           driSupport = true;
           driSupport32Bit = true;
-          extraPackages = with pkgs; [
-            vaapiIntel
-            intel-media-driver
-          ];
+          extraPackages = with pkgs; [ vaapiIntel intel-media-driver ];
         };
       };
     };

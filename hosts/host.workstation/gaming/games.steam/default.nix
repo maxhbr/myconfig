@@ -13,15 +13,14 @@ let
   };
 in {
   imports = [
-    (lib.mkIf false
-      {# for sharing / viewing via steam
-        networking.firewall = {
-          # https://support.steampowered.com/kb_article.php?ref=8571-GLVN-8711&l=german
-          allowedUDPPorts = [ 27031 27032 27033 27034 27035 27036 3478 4379 4380 ];
-          allowedTCPPorts = [ 27036 27037 ];
-        };
-      }
-    )
+    (lib.mkIf false { # for sharing / viewing via steam
+      networking.firewall = {
+        # https://support.steampowered.com/kb_article.php?ref=8571-GLVN-8711&l=german
+        allowedUDPPorts =
+          [ 27031 27032 27033 27034 27035 27036 3478 4379 4380 ];
+        allowedTCPPorts = [ 27036 27037 ];
+      };
+    })
   ];
   config = {
     # programs.firejail = {
@@ -36,9 +35,7 @@ in {
     #   };
     # };
     home-manager.sharedModules = [{
-      home.packages = [
-        steam
-      ];
+      home.packages = [ steam ];
       # home.file = {
       #   ".local/share/Steam/compatibilitytools.d/Proton-5.9-GE-2-MF" = {
       #     source = builtins.fetchTarball {

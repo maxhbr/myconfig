@@ -13,7 +13,7 @@ let
   '';
   pipechrome = pkgs.writeShellScriptBin "pipechrome" ''
     ${chromium}/bin/chromium "data:text/html;base64,$(base64 -w 0 <&0)" &> /dev/null
-      '';
+  '';
   # # see:
   # # - https://github.com/NixOS/nixpkgs/issues/3107
   # # - https://productforums.google.com/forum/#!msg/chromecast/G3E2ENn-YZI/s7Xoz6ICCwAJ

@@ -10,11 +10,7 @@
   ];
   home-manager.sharedModules = [({
     config = {
-      home.packages = with pkgs; [
-        mykeylight
-        mykeylight-on
-        mykeylight-off
-      ];
+      home.packages = with pkgs; [ mykeylight mykeylight-on mykeylight-off ];
     };
   })];
 }

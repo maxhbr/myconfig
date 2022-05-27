@@ -15,17 +15,18 @@
           ${pkgs.xorg.xev}/bin/xev -id $(${pkgs.xdotool}/bin/xdotool getactivewindow)
         '';
       in {
-        imports = [(lib.mkIf config.services.xserver.desktopManager.xfce.enable {
-          services.xserver.desktopManager = {
-            xterm.enable = false;
-            xfce = {
-              noDesktop = true;
-              enableXfwm = false;
-              enableScreensaver = false;
+        imports = [
+          (lib.mkIf config.services.xserver.desktopManager.xfce.enable {
+            services.xserver.desktopManager = {
+              xterm.enable = false;
+              xfce = {
+                noDesktop = true;
+                enableXfwm = false;
+                enableScreensaver = false;
+              };
             };
-          };
-        }
-        )];
+          })
+        ];
         config = (lib.mkIf config.services.xserver.enable {
           environment.variables = {
             XSECURELOCK_BLANK_TIMEOUT = "-1";
@@ -40,9 +41,11 @@
               serverFlagsSection = ''
                 Option "MaxClients" "2048"
               '';
-              displayManager.defaultSession = if config.services.xserver.desktopManager.xfce.enable
-                                              then "xfce+myXmonad"
-                                              else "none+myXmonad";
+              displayManager.defaultSession =
+                if config.services.xserver.desktopManager.xfce.enable then
+                  "xfce+myXmonad"
+                else
+                  "none+myXmonad";
               windowManager = {
                 session = lib.singleton {
                   name = "myXmonad";

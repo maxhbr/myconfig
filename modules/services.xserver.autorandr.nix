@@ -74,26 +74,20 @@ let
 
   myautorandr = let
     autosetup = pkgs.writeShellScriptBin "autosetup" ''
-    exec ${pkgs.autorandr}/bin/autorandr --skip-options gamma,panning --change
-  '';
+      exec ${pkgs.autorandr}/bin/autorandr --skip-options gamma,panning --change
+    '';
     mobile = pkgs.writeShellScriptBin "mobile" ''
-    exec ${pkgs.autorandr}/bin/autorandr mobile
-  '';
+      exec ${pkgs.autorandr}/bin/autorandr mobile
+    '';
     mautosetup = pkgs.writeShellScriptBin "mautosetup" ''
-    ${mobile}/bin/mobile
-    exec ${autosetup}/bin/autosetup
-  '';
-  in
+      ${mobile}/bin/mobile
+      exec ${autosetup}/bin/autosetup
+    '';
 
-    pkgs.symlinkJoin {
-      name = "myautorandr";
-      paths = [
-        autosetup
-        mobile
-        mautosetup
-        pkgs.autorandr
-      ];
-    };
+  in pkgs.symlinkJoin {
+    name = "myautorandr";
+    paths = [ autosetup mobile mautosetup pkgs.autorandr ];
+  };
 
 in {
   config = (lib.mkIf config.services.xserver.enable {

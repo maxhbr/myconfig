@@ -13,8 +13,7 @@ in {
   };
   config = (lib.mkIf cfg.desktop.enable {
     services.xserver.enable = true;
-    home-manager.sharedModules = [{
-      programs.firefox.enable = lib.mkDefault true;
-    }];
+    home-manager.sharedModules =
+      [{ programs.firefox.enable = lib.mkDefault true; }];
   });
 }

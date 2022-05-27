@@ -11,7 +11,7 @@ let
               -R ''${2:-9384}:localhost:8384 \
               -L ''${2:-9384}:localhost:8384 \
               "''${1}"
-        '';
+    '';
 in {
   config = lib.mkIf config.services.syncthing.enable {
     services.syncthing = {

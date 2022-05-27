@@ -17,7 +17,7 @@ buildPythonApplication rec {
     old=pass
     new=${pass}/bin/pass
     sed -i -e "s%'$old', 'show'%'$new', 'show', '-p'%g" passgithelper.py
-      '';
+  '';
 
   propagatedBuildInputs = [ pyxdg ];
 

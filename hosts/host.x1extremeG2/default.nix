@@ -97,12 +97,6 @@
                 exec ${pulseaudio}/bin/pactl set-sink-mute "alsa_output.pci-0000_00_1f.3.analog-stereo" "1"
               '';
           in "${script}/bin/script";
-          ".config/autorandr/postswitch.d/unload_noisetorch".source = let
-            script = with pkgs;
-              writeShellScriptBin "script" ''
-                exec ${noisetorch}/bin/noisetorch -u
-              '';
-          in "${script}/bin/script";
         };
       })
     ];

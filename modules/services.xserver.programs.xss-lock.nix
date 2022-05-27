@@ -54,9 +54,7 @@ let
     '';
 
 in {
-  imports = [
-    physlockmodule
-  ];
+  imports = [ physlockmodule ];
   config = (lib.mkIf config.services.xserver.enable {
     home-manager.sharedModules = [{
       home.packages = [ myStopScreensaver ];

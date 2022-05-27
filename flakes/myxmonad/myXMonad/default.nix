@@ -1,8 +1,8 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs ? import <nixpkgs> { }, stdenv ? pkgs.stdenv, mkDerivation, base
-, containers, process, X11, xmonad, xmonad-contrib, callPackage
-, my-xmobar, my-mute-telco }:
+, containers, process, X11, xmonad, xmonad-contrib, callPackage, my-xmobar
+, my-mute-telco }:
 let
   version = "1.0";
   my-xmonad-scripts = ./bin;
@@ -24,10 +24,8 @@ in mkDerivation {
   isLibrary = true;
   isExecutable = true;
   buildDepends = [ pkgs.makeWrapper ];
-  libraryHaskellDepends =
-    [ base containers process X11 xmonad xmonad-contrib ];
-  executableHaskellDepends =
-    [ base containers X11 xmonad xmonad-contrib ];
+  libraryHaskellDepends = [ base containers process X11 xmonad xmonad-contrib ];
+  executableHaskellDepends = [ base containers X11 xmonad xmonad-contrib ];
 
   patchPhase = ''
     set -e

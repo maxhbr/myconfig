@@ -57,8 +57,8 @@ in {
               shellcheck
             ];
             extraConfig = ''
-                (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
-              '';
+              (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
+            '';
             # dependencyOverrides = nix-doom-emacs.inputs;
           };
           home.packages = with pkgs; [ xclipedit ];

@@ -1,5 +1,4 @@
-{ config, lib, pkgs, ... }:
-{
+{ config, lib, pkgs, ... }: {
   config = (lib.mkIf config.services.xserver.enable {
     home-manager.sharedModules = [{
       home.packages = [ pkgs.python3Packages.adblock ];

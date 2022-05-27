@@ -9,12 +9,12 @@ stdenv.mkDerivation {
   buildInputs = [ pkg-config hidapi ];
   buildPhase = ''
     make
-      '';
+  '';
   installPhase = ''
     install -Dm755 footswitch "$out/bin/footswitch"
     install -Dm755 scythe "$out/bin/scythe"
     install -Dm644 19-footswitch.rules "$out/etc/udev/rules.d/19-footswitch.rules"
-      '';
+  '';
 
   meta = with pkgs.lib; {
     homepage = "https://github.com/rgerganov/footswitch";

@@ -1,7 +1,6 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }:
-{
+{ pkgs, config, lib, ... }: {
   config = (lib.mkIf config.programs.sway.enable {
     home-manager.sharedModules = [{
       home.file = { ".config/sway/config".source = ./config/sway/config; };

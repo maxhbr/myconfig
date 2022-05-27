@@ -12,6 +12,13 @@ in {
     services.vnstat.enable = true;
     services.vsftpd.enable = true;
 
+    services.eternal-terminal = {
+      enable = true;
+      port = 22022;
+    };
+    networking.firewall.allowedTCPPorts = [ 22022 ];
+    networking.firewall.allowedUDPPorts = [ 22022 ];
+
     systemd.enableCgroupAccounting = true;
     system.autoUpgrade.allowReboot = true;
 

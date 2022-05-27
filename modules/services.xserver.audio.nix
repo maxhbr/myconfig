@@ -37,9 +37,20 @@ let
     done
   '';
 in {
-  home-manager.sharedModules =
-    [{ home.packages = with pkgs; [ pavucontrol pamix ]; }];
-  programs.noisetorch.enable = true;
+  home-manager.sharedModules = [
+    { home.packages = with pkgs; [ pavucontrol pamix ]; }
+    (lib.mkIf config.programs.noisetorch.enable {
+      home.file = {
+        ".config/autorandr/postswitch.d/unload_noisetorch".source = let
+          script = with pkgs;
+            writeShellScriptBin "script" ''
+              exec ${noisetorch}/bin/noisetorch -u
+            '';
+        in "${script}/bin/script";
+      };
+    })
+  ];
+  # programs.noisetorch.enable = true;
   imports = [
     {
       config = (lib.mkIf config.hardware.pulseaudio.enable {

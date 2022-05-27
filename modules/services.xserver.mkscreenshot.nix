@@ -39,7 +39,7 @@ let
       $0 [f[ull]|w[indow]]
       EOF
       fi
-        '';
+    '';
 in {
   config = (lib.mkIf config.services.xserver.enable {
     home-manager.sharedModules = [{ home.packages = [ mkscreenshot ]; }];

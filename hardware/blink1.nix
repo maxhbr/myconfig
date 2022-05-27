@@ -16,7 +16,7 @@ let
       #SUBSYSTEM=="input", GROUP="input", MODE="0666"
       ATTRS{idVendor}=="27b8", ATTRS{idProduct}=="01ed", MODE:="666", GROUP="plugdev"
       #KERNEL=="hidraw*", ATTRS{idVendor}=="27b8", ATTRS{idProduct}=="01ed", MODE="0666", GROUP="plugdev"
-              '';
+    '';
     destination = "/etc/udev/rules.d/51-blink1.rules";
   };
 in {

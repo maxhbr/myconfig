@@ -6,11 +6,10 @@ in {
   options.myconfig = with lib; { cad.enable = mkEnableOption "cad"; };
   config = (lib.mkIf cfg.cad.enable {
     home-manager.sharedModules = [{
-      home.packages = with pkgs; (
-        [ # 2D
+      home.packages = with pkgs;
+        ([ # 2D
           # librecad # 2D
-        ] ++
-        [ # 3D
+        ] ++ [ # 3D
           # blender
           openscad
           nixos-2105.freecad # 3D
@@ -20,8 +19,7 @@ in {
           fstl
           meshlab
           gmsh
-        ] ++
-        [ # pcb design
+        ] ++ [ # pcb design
           librepcb
           gerbv
           # kicad-small

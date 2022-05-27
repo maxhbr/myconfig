@@ -30,7 +30,7 @@ let
                DISPLAY=:0 \
                PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin" \
                /bin/bash --login
-          '';
+    '';
 in {
   config = {
     home-manager.sharedModules =

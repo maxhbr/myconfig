@@ -46,7 +46,7 @@ let
           fi
           dicImpl $@
       fi
-        '';
+    '';
 in {
   config = { home-manager.sharedModules = [{ home.packages = [ dic ]; }]; };
 }

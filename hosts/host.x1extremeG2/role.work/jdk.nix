@@ -20,7 +20,7 @@ let
       exec ${pkgs.maven}/bin/mvn \
         -Dmaven.repo.local="$repo" \
         "$@"
-        '';
+    '';
 in {
   config = {
     nixpkgs.overlays = [

@@ -58,7 +58,7 @@ let
       set -x
       ${xmobar}/bin/xmobar ${xmobarrc} &
       echo $! > $pidfile
-        '';
+    '';
   xmobarDmesg = with pkgs;
     writeShellScriptBin "xmobarDmesg" ''
       set -o pipefail
@@ -67,7 +67,7 @@ let
         ${utillinux}/bin/dmesg -w -T | ${xmobar}/bin/xmobar ${xmobarrcTop}
       }
       fun &disown
-        '';
+    '';
 in pkgs.buildEnv {
   name = "my-xmobar";
   extraOutputsToInstall = [ "bin" ];
