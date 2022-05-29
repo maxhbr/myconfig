@@ -32,10 +32,6 @@
 
     myfish.url = "path:flakes/myfish/";
 
-    myxmonad.url = "path:flakes/myxmonad/";
-    myxmonad.inputs.nixpkgs.follows = "nixpkgs";
-    myxmonad.inputs.flake-utils.follows = "flake-utils";
-
     my-wallpapers.url = "github:maxhbr/wallpapers";
     my-wallpapers.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -109,7 +105,6 @@
               ];
             })
 
-            inputs.myxmonad.nixosModule
             inputs.my-wallpapers.nixosModule
             inputs.myfish.nixosModule
 

@@ -2,6 +2,7 @@
   ./myconfig
   ./myemacs
   ./myvim
+  ./myxmonad
   # modules
   ./core.nix
   ./crypt.nix
