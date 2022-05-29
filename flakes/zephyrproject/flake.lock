@@ -3,8 +3,8 @@
     "nixpkgs": {
       "locked": {
         "lastModified": 0,
-        "narHash": "sha256-SFtTzaDSwpPkBFf8MRgFLmU5NI6Q6d6RHetLaTFusYs=",
-        "path": "/nix/store/3g99rhxqj907cnnmisyr9xrlxwj58sms-source",
+        "narHash": "sha256-3lXax7fCS4giF9RpWvz2LlX0yTtXRTQp7DEGHUpf/Gc=",
+        "path": "/nix/store/kf0yh3i5f4as3md1bbvs18lizh6clgkj-source",
         "type": "path"
       },
       "original": {
