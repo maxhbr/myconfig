@@ -67,11 +67,11 @@
     "fish-async-prompt": {
       "flake": false,
       "locked": {
-        "lastModified": 1651826081,
-        "narHash": "sha256-/zRjC0rkG7guHC0EfZm35lJtauQfULqaIZMUPIuYG+I=",
+        "lastModified": 1653809859,
+        "narHash": "sha256-RpZgnB9g+kCkt576Qe4LG5erlUjQl70ibf0Jn2+1F5A=",
         "owner": "acomagu",
         "repo": "fish-async-prompt",
-        "rev": "f1d6b37593486252bbcd69e7f95ddcac1144e100",
+        "rev": "b866f232a4a5ded7e16cda648648c43925c01ba0",
         "type": "github"
       },
       "original": {
