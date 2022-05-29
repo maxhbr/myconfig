@@ -438,23 +438,6 @@
         "type": "path"
       }
     },
-    "myxmonad": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1,
-        "narHash": "sha256-uzgbHulAAvo4Eid+POORj4nY/VLgynlY+bEbavzjsbU=",
-        "path": "flakes/myxmonad/",
-        "type": "path"
-      },
-      "original": {
-        "path": "flakes/myxmonad/",
-        "type": "path"
-      }
-    },
     "nix-doom-emacs": {
       "inputs": {
         "doom-emacs": "doom-emacs",
@@ -830,7 +813,6 @@
         "master": "master",
         "my-wallpapers": "my-wallpapers",
         "myfish": "myfish",
-        "myxmonad": "myxmonad",
         "nix-doom-emacs": "nix-doom-emacs",
         "nixos-hardware": "nixos-hardware",
         "nixos-unstable": "nixos-unstable",
