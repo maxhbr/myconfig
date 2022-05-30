@@ -3,17 +3,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-if [[ -f ../priv/switch.sh ]]; then
-  exit 1
-fi
+# if [[ -f ../priv/switch.sh ]]; then
+#   exit 1
+# fi
 
 ################################################################################
 # setup logging
-logsDir="../_logs"
-mkdir -p "$logsDir"
-logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
-echo -e "\n\n\n\n\n\n\n" >> "$logfile"
-exec &> >(tee -a "$logfile")
 
 if [[ $# -gt 0 && "$1" == "--fast" ]]; then
     shift
@@ -24,9 +19,16 @@ fi
 
 target="${1:-$(hostname)}"
 
+logsDir="../_logs"
+mkdir -p "$logsDir"
+logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
+echo -e "\n\n\n\n\n\n\n" >> "$logfile"
+exec &> >(tee -a "$logfile")
+
 cmd="nixos-rebuild"
-if [ $# -gt 0 ]; then
+if [[ $# -gt 0 || ! -z "$TARGET_IP" ]]; then
     targetIP="root@$(cat ./hosts/metadata.json | jq -r ".hosts.${target}.ip4")"
+    targetIP="${TARGET_IP:-"$targetIP"}"
     cmd="$cmd --target-host $targetIP"
 else
     cmd="sudo $cmd"

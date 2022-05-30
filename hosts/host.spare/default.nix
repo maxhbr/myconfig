@@ -44,9 +44,11 @@
     myconfig = {
       desktop.enable = true;
       headless.enable = true;
-      virtualisation.enable = true;
+      virtualisation.enable = false;
     };
-    # virtualisation.docker.enable = true;
+    virtualisation.docker.enable = true;
+    virtualisation.podman.enable = true;
+    # virtualisation.libvirtd.enable = true;
 
     networking.firewall.allowedUDPPorts = [ 60001 ];
     programs.mosh.enable = true;

@@ -17,6 +17,7 @@
     # ./foto-hdd.nix
     # modules
     ./role.work
+    ./service.docker-registry.nix
     ./mail
     ## fun
     ./smarthome.nix
@@ -51,7 +52,7 @@
         rust.enable = true;
       };
     };
-    services.xserver.desktopManager.xfce.enable = true;
+    # services.xserver.desktopManager.xfce.enable = true;
     services.xserver.wacom.enable = true;
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;

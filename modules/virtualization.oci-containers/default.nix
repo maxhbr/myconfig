@@ -15,7 +15,8 @@
       home-manager.sharedModules =
         [{ home.packages = with pkgs; [ podman-compose ]; }];
     })
-    (lib.mkIf config.virtualisation.docker.enable {
+  ];
+  config = lib.mkIf config.virtualisation.docker.enable {
       home-manager.sharedModules = [{
         home.packages = with pkgs; [ docker-compose ];
         home.file = {
@@ -121,6 +122,5 @@
         autoPrune.enable = true;
         package = pkgs.docker-edge;
       };
-    })
-  ];
+    };
 }

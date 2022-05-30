@@ -54,6 +54,7 @@
         # element-desktop
         # rambox
         subversion
+        google-cloud-sdk
       ];
     }];
   };
