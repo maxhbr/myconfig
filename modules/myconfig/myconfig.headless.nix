@@ -12,6 +12,7 @@ in {
     services.vnstat.enable = true;
     services.vsftpd.enable = true;
 
+    programs.mosh.enable = lib.mkDefault true;
     services.eternal-terminal = {
       enable = true;
       port = 22022;

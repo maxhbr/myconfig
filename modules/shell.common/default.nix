@@ -59,7 +59,7 @@ in {
         file
         renameutils # qmv
         pv
-        lf # ranger replacement
+        lf nnn # ranger replacement
 
         # admin:
         iftop
