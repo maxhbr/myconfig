@@ -24,9 +24,8 @@
     ##############################################################################
     ##  choose setup for graphics  ###############################################
     ##############################################################################
-    # (import ../hardware/gtx1650.nix).primeRenderOffload
+    (import ../hardware/gtx1650.nix).primeRenderOffload
     # (import ../hardware/gtx1650.nix).bumblebeeConf
-    (import ../hardware/gtx1650.nix).rawIntelConf
   ];
 
   config = {
