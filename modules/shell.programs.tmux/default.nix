@@ -19,7 +19,9 @@ let
     yank
     vim-tmux-navigator
   ];
+
 in {
+  nixpkgs.overlays = [ (final: prev: { tmux = final.master.tmux; }) ];
   environment = {
     shellAliases = {
       tx = "tmux new-session -A -s $USER";

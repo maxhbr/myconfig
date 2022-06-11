@@ -52,14 +52,14 @@ in {
     environment = {
       systemPackages = with pkgs; [
         ripgrep # ag
-        tmux
         elinks
         w3m
         man-pages
         file
         renameutils # qmv
         pv
-        lf nnn # ranger replacement
+        lf
+        nnn # ranger replacement
 
         # admin:
         iftop

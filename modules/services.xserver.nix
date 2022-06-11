@@ -30,6 +30,8 @@ in {
           libnotify # xfce.xfce4notifyd # notify-osd
 
           # gui applications
+          kitty
+          alacritty
           mupdf
           llpp
           xarchiver
