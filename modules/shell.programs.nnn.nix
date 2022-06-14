@@ -4,9 +4,7 @@
 {
   config = {
     home-manager.sharedModules = [{
-      programs.nnn = {
-        enable = true;
-      };
+      programs.nnn.enable = true;
     }];
   };
 }

@@ -12,8 +12,7 @@
     rel2105.url = "github:nixos/nixpkgs/release-21.05";
     rel2111.url = "github:nixos/nixpkgs/release-21.11";
 
-    # TODO: fixme
-    home.url = "github:nix-community/home-manager/70824bb5c790b820b189f62f643f795b1d2ade2e";
+    home.url = "github:nix-community/home-manager";
     home.inputs.nixpkgs.follows = "nixpkgs";
 
     flake-utils.url = "github:numtide/flake-utils";
