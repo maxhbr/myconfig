@@ -51,6 +51,8 @@
   ./shell.programs.bat.nix
   ./shell.programs.exa.nix
   ./shell.programs.htop.nix
+  ./shell.programs.lf.nix
+  ./shell.programs.nnn.nix
   ./shell.programs.tmux
   ./shell.zsh
   ./spellchecking.nix

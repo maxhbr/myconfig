@@ -17,7 +17,8 @@
     # ./foto-hdd.nix
     # modules
     ./role.work
-    ./service.docker-registry.nix
+    # ./service.docker-registry.nix
+    # ./service.podman.buildkit.nix
     ./mail
     ## fun
     ./smarthome.nix

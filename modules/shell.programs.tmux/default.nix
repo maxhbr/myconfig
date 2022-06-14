@@ -48,6 +48,7 @@ in {
   programs.tmux = {
     enable = true;
     aggressiveResize = true;
+    newSession = true;
     escapeTime = 10;
     historyLimit = 5000;
     keyMode = "vi";
