@@ -9,9 +9,9 @@
         settings = {};
         keybindings = {
           gh = "cd ~";
-          D = "trash";
+          # D = "trash";
           i = "$less $f";
-          U = "!du -sh";
+          U = "!du -chs *|sort -h|less";
           # gg = null;
         };
         cmdKeybindings = {
@@ -25,7 +25,7 @@ case "''${1,,}" in
     *.zip) ${pkgs.p7zip}/bin/7z l "$1";;
     *.rar) ${pkgs.p7zip}/bin/7z l "$1";;
     *.7z) ${pkgs.p7zip}/bin/7z l "$1";;
-    *.dll|*.exe|*.ttf) ${pkgs.exiftool}/bin/exiftool "$1" -;;
+    *.dll|*.exe|*.ttf|*.woff|*.otf|*eot) ${pkgs.exiftool}/bin/exiftool "$1";;
     *) ${pkgs.pistol}/bin/pistol "$1";;
 esac
 '';

@@ -48,7 +48,7 @@
         insync
         exiftool
         # misc-desktop-tools:
-        # libreoffice
+        libreoffice
         nixos-unstable-small.zoom-us
         slack
         # element-desktop
