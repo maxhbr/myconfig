@@ -64,6 +64,9 @@
             home-manager = {
               useUserPackages = true;
               useGlobalPkgs = true;
+              sharedModules = [ {
+                home.stateVersion = lib.mkDefault "22.11";
+              }];
             };
           };
         };
