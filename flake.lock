@@ -502,11 +502,11 @@
         "ws-butler": "ws-butler"
       },
       "locked": {
-        "lastModified": 1657319179,
-        "narHash": "sha256-o7lYM6uY3iyR6NaHMZN+5ajcjNU4D+PEapvoWHMRQXA=",
+        "lastModified": 1657364333,
+        "narHash": "sha256-PiNZ6Kk/JedMTRDxAmvLkf/O34QRPep7I3ItMEYVllw=",
         "owner": "nix-community",
         "repo": "nix-doom-emacs",
-        "rev": "b27d21334836521901736d138063d351262f9564",
+        "rev": "a59295c11efb6377b0c5eb4c8259bb49d94ec1d5",
         "type": "github"
       },
       "original": {
