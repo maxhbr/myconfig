@@ -87,11 +87,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1657339794,
-        "narHash": "sha256-9AcgGeHLBK+PoRFXfYdNfvCu9cmAdYLQLSG3KLQgJhM=",
+        "lastModified": 1657362523,
+        "narHash": "sha256-hoYYqpCKsuHqYwMnK9lcUYHnuf5OaDFPqCt/RavKsRw=",
         "owner": "nix-community",
         "repo": "emacs-overlay",
-        "rev": "30a0861e0d4b9944ee01595436de5e2d58303105",
+        "rev": "e1c34ef6f6eb7d966af5011eeeec6342017cd535",
         "type": "github"
       },
       "original": {
@@ -413,11 +413,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1657350950,
-        "narHash": "sha256-csFtHwaclw9T8mg67d+SYbIKG7p7TTyP09XrZFYHAYc=",
+        "lastModified": 1657361158,
+        "narHash": "sha256-w4xWC6i8gAM89ODfAI/LX4Gj1we7/SEHBinDYMtBiz8=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "a6d59d9ee48461e645ed5988424a229f6feec0d4",
+        "rev": "37d847197431b24bd2183627850916c5cb842005",
         "type": "github"
       },
       "original": {
@@ -582,8 +582,8 @@
     "nixpkgs": {
       "locked": {
         "lastModified": 0,
-        "narHash": "sha256-ldfVSTveWceDCmW6gf3B4kR6vwmz/XS80y5wsLLHFJU=",
-        "path": "/nix/store/a06advq8gsd980j7nrk4gnnb72hx040r-source",
+        "narHash": "sha256-csFtHwaclw9T8mg67d+SYbIKG7p7TTyP09XrZFYHAYc=",
+        "path": "/nix/store/1q0ikjmrgwlf12035j1sf9mcaka76r4f-source",
         "type": "path"
       },
       "original": {
@@ -610,8 +610,8 @@
     "nixpkgs_3": {
       "locked": {
         "lastModified": 0,
-        "narHash": "sha256-ldfVSTveWceDCmW6gf3B4kR6vwmz/XS80y5wsLLHFJU=",
-        "path": "/nix/store/a06advq8gsd980j7nrk4gnnb72hx040r-source",
+        "narHash": "sha256-csFtHwaclw9T8mg67d+SYbIKG7p7TTyP09XrZFYHAYc=",
+        "path": "/nix/store/1q0ikjmrgwlf12035j1sf9mcaka76r4f-source",
         "type": "path"
       },
       "original": {
@@ -983,7 +983,7 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-8d8AHHPr2OPIUITR3Q5jhJa3HLpG1xqDyc3XtjpN7/s=",
+        "narHash": "sha256-9xVidnh/4YfaZmpUcXIDajCP5aO7f8cT9966SchymNc=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
