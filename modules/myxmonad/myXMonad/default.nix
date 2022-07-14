@@ -7,7 +7,6 @@ let
   version = "1.0";
   my-xmonad-scripts = ./bin;
   my-xmonad-share = ./share;
-  find-cursor = callPackage ./find-cursor.nix { inherit pkgs; };
 in mkDerivation {
   inherit version;
   pname = "my-xmonad";
@@ -53,7 +52,6 @@ in mkDerivation {
       --prefix PATH ":" "${pkgs.dmenu}/bin" \
       --prefix PATH ":" "${pkgs.haskellPackages.yeganesh}/bin" \
       --prefix PATH ":" "${pkgs.pass}/bin" \
-      --prefix PATH ":" "${find-cursor}/bin" \
       --prefix PATH ":" "${pkgs.xdotool}/bin" \
       --prefix PATH ":" "${pkgs.xorg.xf86inputsynaptics}/bin" \
       --prefix PATH ":" "${pkgs.xorg.xkill}/bin" \

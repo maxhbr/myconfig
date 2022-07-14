@@ -127,6 +127,7 @@ in {
         ranger = "lf";
         r = "lf";
         ag = "rg";
+        webserver = "python -m http.server 8000";
       };
     };
     programs.thefuck.enable = true;

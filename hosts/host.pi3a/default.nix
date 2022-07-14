@@ -1,10 +1,9 @@
 { lib, ... }: {
   imports = [
     ./hardware-configuration.nix
-    ../modules
     ./raspicam.nix
-    ../secrets/common/wifi.home.nix
-  ] ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.7") ]);
+    # ./gstreamer.nix
+  ];
 
   networking.hostName = "pi3a";
   networking.hostId = "78acddde";

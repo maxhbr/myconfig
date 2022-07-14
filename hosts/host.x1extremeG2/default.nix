@@ -20,6 +20,7 @@
     # ./service.docker-registry.nix
     # ./service.podman.buildkit.nix
     ./mail
+    ./deskreen.nix
     ## fun
     ./smarthome.nix
     ../host.workstation/gaming/games.steam

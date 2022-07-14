@@ -352,7 +352,7 @@ in rec {
       myisoconfigModules = let
 
         xautologinModule = { pkgs, config, ... }@args:
-          (let user = "mhuber"; # config.myconfig.user;
+          (let user = "mhuber";
           in {
             # autologin
             services.xserver.displayManager.autoLogin = {

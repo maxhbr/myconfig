@@ -37,8 +37,7 @@ in {
           xarchiver
           feh
           imagemagick
-          mplayer
-          freetube
+          # mplayer # unsuported on aarch
         ] ++ lib.optional config.networking.networkmanager.enable
         networkmanager_dmenu
         ++ (with pkgs.nixos-unstable; [ tdesktop signal-desktop signal-cli ]);

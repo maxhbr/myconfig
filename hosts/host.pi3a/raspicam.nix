@@ -1,6 +1,5 @@
 { pkgs, config, ... }:
 let
-  user = config.myconfig.user;
   streamcam = with pkgs;
     writeShellScriptBin "streamcam" ''
       ${pkgs.mjpg-streamer}/bin/mjpg_streamer \
@@ -12,7 +11,7 @@ let
         -o "output_http.so -w /www -p 32145"
     '';
 in {
-  home-manager.users."${user}" = { home.packages = [ streamcam ]; };
+  home-manager.sharedModules = [{ home.packages = [ streamcam ]; }];
 
   networking.firewall.allowedTCPPorts = [ 32145 ];
   networking.firewall.allowedUDPPorts = [ 32145 ];
@@ -21,7 +20,7 @@ in {
     description = "CamStreamServer";
     enable = true;
     serviceConfig = {
-      User = user;
+      User = "mhuber";
       Type = "simple";
       ExecStart = "${streamcam}/bin/streamcam";
       ExecStop = "${pkgs.procps}/bin/pkill mjpg_streamer";

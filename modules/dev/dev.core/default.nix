@@ -24,7 +24,8 @@ in {
           automake
           cloc
           pass-git-helper
-          jq yq
+          jq
+          yq
           cropLog
           mercurial
           gnuplot

@@ -1,12 +1,12 @@
 # based on:
 # <nixpkgs/nixos/modules/installer/cd-dvd/sd-image-raspberrypi.nix>
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, modulesPath, ... }:
 
 {
   imports = [
-    <nixpkgs/nixos/modules/profiles/base.nix>
+    (modulesPath + "/profiles/base.nix")
+    (modulesPath + "/installer/sd-card/sd-image.nix")
     # <nixpkgs/nixos/modules/profiles/installation-device.nix>
-    <nixpkgs/nixos/modules/installer/sd-card/sd-image.nix>
   ];
 
   nixpkgs.system = "aarch64-linux";

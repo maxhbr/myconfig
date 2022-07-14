@@ -64,9 +64,7 @@
             home-manager = {
               useUserPackages = true;
               useGlobalPkgs = true;
-              sharedModules = [ {
-                home.stateVersion = lib.mkDefault "22.11";
-              }];
+              sharedModules = [{ home.stateVersion = lib.mkDefault "22.11"; }];
             };
           };
         };
@@ -140,7 +138,7 @@
                 (myconfig.metadatalib.announceHost "pi0")
               ];
             })
-            # inputs.zephyrproject.nixosModule
+            inputs.zephyrproject.nixosModule
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "workstation" ([
@@ -165,6 +163,9 @@
         host-pi4 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "aarch64-linux" "pi4"
             ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
+        host-pi3a = moreModules: metadataOverride:
+          (self.lib.evalConfiguration "aarch64-linux" "pi3a"
+            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
       };
 
       ##########################################################################
@@ -179,6 +180,7 @@
         nas = self.nixosConfigurationsGen.host-nas [ ] { };
         nuc = self.nixosConfigurationsGen.host-nuc [ ] { };
         pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
+        pi3a = self.nixosConfigurationsGen.host-pi3a [ ] { };
 
         container = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
@@ -229,6 +231,11 @@
         metadataOverride = { };
         bootstrappedConfig = null;
       };
+
+      packages.pi4-sd-image =
+        inputs.self.nixosConfigurations.pi4.config.system.build.sdImage;
+      packages.pi3a-sd-image =
+        inputs.self.nixosConfigurations.pi3a.config.system.build.sdImage;
 
       devShell = let
         pkgs = import inputs.nixpkgs {

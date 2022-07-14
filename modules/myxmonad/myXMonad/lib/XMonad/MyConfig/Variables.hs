@@ -32,8 +32,6 @@ firefoxCMD = "firefox"
 
 browserCMD = "chromium-browser"
 
-findCursorCMD = "find-cursor"
-
 xdotoolCMD = "xdotool"
 
 synclientCMD = "synclient"

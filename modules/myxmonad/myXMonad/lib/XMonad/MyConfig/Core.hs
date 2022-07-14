@@ -120,7 +120,6 @@ myKeys conf =
        , ((const 0, 0x1008ffb2), pavucontrolX)]
     miscKBs =
       [ ((const 0,   0x1008ffa9), spawn (synclientCMD ++ " TouchpadOff=$(" ++ synclientCMD ++ " -l | grep -c 'TouchpadOff.*=.*0')"))
-      , ((m__, xK_s      ), spawn findCursorCMD)
       , ((msc, xK_s      ), spawn (xdotoolCMD ++ " mousemove 0 0; " ++ synclientCMD ++ " TouchpadOff=$(" ++ synclientCMD ++ " -l | grep -c 'TouchpadOff.*=.*0')"))
       , ((ms_, xK_y      ), spawn (xsetCMD ++ " s activate")) -- screenlocker
       , ((m__, xK_Home   ), spawn invertColorsCMD)

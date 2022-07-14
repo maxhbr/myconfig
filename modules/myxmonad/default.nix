@@ -4,6 +4,7 @@ let
   my-xmobar = pkgs.callPackage ./myXmobar { inherit pkgs my-mute-telco; };
   my-xmonad = pkgs.haskellPackages.callPackage ./myXMonad {
     inherit pkgs my-xmobar my-mute-telco;
+    # find-cursor = callPackage ./find-cursor.nix { inherit pkgs; };
   };
   myxev = pkgs.writeShellScriptBin "myxev" ''
     ${pkgs.xorg.xev}/bin/xev -id $(${pkgs.xdotool}/bin/xdotool getactivewindow)

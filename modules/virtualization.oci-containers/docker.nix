@@ -1,9 +1,7 @@
 { config, lib, pkgs, ... }:
 
-let
-  enable = config.virtualisation.docker.enable;
-in
-{
+let enable = config.virtualisation.docker.enable;
+in {
   config = {
     home-manager.sharedModules = [{
       home.packages = with pkgs; [ docker docker-machine docker-compose ];
