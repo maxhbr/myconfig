@@ -8,4 +8,5 @@ build() {
     hostname="$1"
     time nix build --out-link ../sd-image."${hostname}" --show-trace .#"${hostname}"-sd-image
 }
+./update.sh
 build "${1:-pi4}"
