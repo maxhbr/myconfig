@@ -5,7 +5,7 @@
 { config, lib, pkgs, ... }:
 let user = config.myconfig.user;
 in {
-  config = lib.mkIf config.programs.evolution.enable {
+  config = lib.mkIf (config.programs.evolution.enable && config.myconfig.desktop.full) {
     programs.dconf.enable = true;
     programs.seahorse.enable = true;
   };

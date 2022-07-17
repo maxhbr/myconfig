@@ -5,7 +5,7 @@ let
       ${nixos-unstable.firefox}/bin/firefox "data:text/html;base64,$(base64 -w 0 <&0)" &> /dev/null
     '';
 in {
-  config = (lib.mkIf config.services.xserver.enable {
+  config = (lib.mkIf (config.services.xserver.enable && config.myconfig.desktop.full) {
     home-manager.sharedModules = [
       {
         config = {

@@ -1,5 +1,16 @@
-{ lib, ... }: {
-  imports = [ ./hardware-configuration.nix ./gstreamer.nix ];
+{ lib, pkgs, ... }: {
+  imports = [ ./hardware-configuration.nix ./gstreamer.nix 
+    {
+      environment.systemPackages = with pkgs; [ x11vnc ];
+      ## Setup via ssh tunnel:
+      # $ ssh -t -L 5900:localhost:5900 $IP 'x11vnc -ncache 10 -unixpw -localhost -display :0'
+      ## in other terminal:
+      # $ vncviewer -encodings 'copyrect tight zrle hextile' localhost:0
+      ## or open ports
+      # networking.firewall.allowedUDPPorts = [ 5900 ];
+      # networking.firewall.allowedTCPPorts = [ 5900 ];
+    }
+  ];
 
   config = {
     # This value determines the NixOS release from which the default
@@ -11,7 +22,8 @@
     system.stateVersion = lib.mkForce "22.11"; # Did you read the comment?
 
     myconfig = {
-      # desktop.enable = true;
+      desktop.enable = true;
+      desktop.full = false;
       headless.enable = true;
     };
     virtualisation.docker.enable = true;

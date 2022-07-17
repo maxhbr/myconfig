@@ -1,5 +1,5 @@
 { config, lib, pkgs, ... }: {
-  config = (lib.mkIf config.services.xserver.enable {
+  config = (lib.mkIf (config.services.xserver.enable && config.myconfig.desktop.full) {
     home-manager.sharedModules = [{
       home.packages = [ pkgs.python3Packages.adblock ];
       programs.qutebrowser = {

@@ -28,7 +28,9 @@ in {
 
           # misc
           libnotify # xfce.xfce4notifyd # notify-osd
-
+        ] ++ lib.optional config.networking.networkmanager.enable
+        networkmanager_dmenu
+        ++ lib.optionals config.myconfig.desktop.full ([
           # gui applications
           kitty
           alacritty
@@ -37,10 +39,9 @@ in {
           xarchiver
           feh
           imagemagick
-          # mplayer # unsuported on aarch
-        ] ++ lib.optional config.networking.networkmanager.enable
-        networkmanager_dmenu
-        ++ (with pkgs.nixos-unstable; [ tdesktop signal-desktop signal-cli ]);
+          mplayer # unsuported on aarch
+        ]
+        ++ (with pkgs.nixos-unstable; [ tdesktop signal-desktop signal-cli ]));
       xresources.extraConfig = ''
         *utf8: 1
 
@@ -88,7 +89,7 @@ in {
         enableCtrlAltBackspace = true;
         displayManager.lightdm.enable = true;
       };
-      redshift.enable = true;
+      redshift.enable = config.myconfig.desktop.full;
     };
   });
 }
