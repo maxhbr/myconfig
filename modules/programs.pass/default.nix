@@ -18,9 +18,20 @@ in {
             patches = drv.patches ++ [ ./patches/pass_-_copy_by_default.diff ];
             doInstallCheck = false;
           });
-          gopass-jsonapi = pkgs.callPackage ../../pkgs/gopass-jsonapi { };
         in {
-          inherit pass gopass-jsonapi;
+          inherit pass;
+
+          # https://github.com/NixOS/nixpkgs/pull/181281#issuecomment-1182841233
+          #   packages failed to build:
+          #     datree
+          #     git-credential-gopass
+          #     gopass
+          #     gopass-hibp
+          #     gopass-jsonapi
+          #     gopass-summon-provider
+          gopass = self.nixos-2111.gopass;
+          gopass-jsonapi = self.nixos-2111.gopass-jsonapi;
+
           pass-git-helper =
             super.python3Packages.callPackage ./pass-git-helper.nix {
               inherit (super.python3Packages) buildPythonApplication;

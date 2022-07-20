@@ -18,7 +18,7 @@ haskell.lib.buildStackProject {
   configureFlags = [ "-W -fwarn-unused-imports -fno-warn-missing-signatures" ];
   buildInputs = [
     gmp
-    x11
+    xlibsWrapper
     libffi
     xorg.libXinerama
     xorg.libXext

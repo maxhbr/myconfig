@@ -13,7 +13,8 @@ import           XMonad.Hooks.DynamicProperty (dynamicTitle)
 import           XMonad.Hooks.ManageHelpers   (composeOne, doCenterFloat,
                                                doFullFloat, doRectFloat,
                                                isDialog, isFullscreen,
-                                               transience, (-?>))
+                                               transience, (-?>),
+                                               isInProperty)
 import           XMonad.StackSet              (RationalRect (..))
 
 applyMyManageHook c =
@@ -72,14 +73,7 @@ myManageHook =
         appName =? "sun-awt-X11-XWindowPeer" <&&> className =? "jetbrains-idea" -?>
         doIgnore
     -- see: https://www.peterstuart.org/posts/2021-09-06-xmonad-zoom/
-      manageZoomHooks =
-        composeAll $
-        [ (className =? zoomClassName) <&&> shouldFloat <$>
-          title --> doFloat <+> doF W.focusDown
-        , (className =? zoomClassName) <&&> shouldSink <$>
-          title --> (ask >>= doF . W.sink) <+> doF W.swapDown
-        ]
-        where
+      manageZoomHooks = let
           zoomClassName = "zoom"
           tilePreds =
             [ (==) "Zoom - Free Account" -- main window
@@ -87,8 +81,14 @@ myManageHook =
             , (==) "Zoom" -- meeting window on creation / second window
             , ("Zoom Meeting" `isSuffixOf`) -- meeting window shortly after creation
             ]
-          shouldSink title = any (\f -> f title) tilePreds
-          shouldFloat = not . shouldSink
+          wantsToStayOnTop = isInProperty "_NET_WM_STATE" "_NET_WM_STATE_ABOVE" <||> isInProperty "_NET_WM_STATE" "_NET_WM_STATE_STAYS_ON_TOP" <||> isInProperty "_NET_WM_STATE" "_NET_WM_STATE_ABOVE, _NET_WM_STATE_STAYS_ON_TOP"
+          shouldFloat = ((\t -> not $ any (\f -> f t) tilePreds) <$> title) <||> wantsToStayOnTop
+          shouldSink = not <$> shouldSink
+        in
+          composeAll $
+          [ (className =? zoomClassName) <&&> shouldFloat --> doFloat <+> doF W.focusDown
+          , (className =? zoomClassName) <&&> shouldSink --> (ask >>= doF . W.sink) <+> doF W.swapDown
+          ]
    in composeOne
         (ideaPopupHook :
          (transience :
