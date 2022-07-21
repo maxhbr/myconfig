@@ -92,6 +92,7 @@
     };
     virtualisation.podman.enable = true;
     virtualisation.docker.enable = true;
+    virtualisation.virtualbox.host.enable = true;
 
     #boot.kernelPackages =
     #  # lib.mkForce pkgs.unstable.linuxPackages_testing;
