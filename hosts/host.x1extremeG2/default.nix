@@ -22,6 +22,7 @@
     ./mail
     ./deskreen.nix
     ## fun
+    ./a7iiiAsWebcam.nix
     ./smarthome.nix
     ../host.workstation/gaming/games.steam
     {

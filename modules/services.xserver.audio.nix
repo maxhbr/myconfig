@@ -56,7 +56,7 @@ in {
     {
       config = (lib.mkIf config.services.pipewire.enable {
         home-manager.sharedModules =
-          [{ home.packages = with pkgs; [ qjackctl helvum pw-simultaneous ]; }];
+          [{ home.packages = with pkgs; [ qjackctl helvum pw-simultaneous easyeffects ]; }];
         hardware.pulseaudio.enable = false;
         security.rtkit.enable = true;
         services.pipewire = {

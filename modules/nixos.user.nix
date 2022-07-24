@@ -21,7 +21,8 @@
             ++ pkgs.lib.optional config.networking.networkmanager.enable
             "networkmanager"
             ++ pkgs.lib.optional config.hardware.bumblebee.enable "bumblebee"
-            ++ pkgs.lib.optional config.programs.sway.enable "sway";
+            ++ pkgs.lib.optional config.programs.sway.enable "sway"
+            ++ pkgs.lib.optional config.services.pipewire.enable "realtime";
           home = "/home/${myconfig.user}";
           createHome = true;
           shell = "/run/current-system/sw/bin/fish";
