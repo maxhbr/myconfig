@@ -22,6 +22,11 @@
     fsType = "vfat";
   };
 
+  fileSystems."/home/mhuber/TNG2" = {
+    device = "/dev/disk/by-uuid/5b43fba0-0f18-4dbc-88cf-aa0f226b7b3f";
+    fsType = "ext4";
+  };
+
   swapDevices =
     [{ device = "/dev/disk/by-uuid/1975c0a8-c22e-4428-8336-d17baf300409"; }];
 

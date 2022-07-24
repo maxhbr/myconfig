@@ -75,6 +75,14 @@
       preLVM = true;
       allowDiscards = true;
     };
+    boot.initrd.luks.devices.crypted2 = {
+      device = "/dev/disk/by-uuid/56c9fe80-4b6d-42dc-a025-0a2138ae012e";
+      allowDiscards = true;
+      preLVM = false;
+      # keyFileSize = 4096;
+      # # pinning to /dev/disk/by-id/usbkey works
+      # keyFile = "/dev/sdb";
+    };
 
     services.openssh = {
       listenAddresses = [{
