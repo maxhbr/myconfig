@@ -87,11 +87,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1658659239,
-        "narHash": "sha256-XzA1/K8SdL/dQ6C6XTpxjeBm9mYjLZ8vQFy2Wpqs1ts=",
+        "lastModified": 1658689457,
+        "narHash": "sha256-d8nUJIx3NIsRx60Un1gAxOEKziBt9waGB6gC6Lw6yFE=",
         "owner": "nix-community",
         "repo": "emacs-overlay",
-        "rev": "9e75e2c6c772f4c8ac411f4982ed656dec3be29f",
+        "rev": "8105f0f88edf635dbe97dc3b40984b90b2e76029",
         "type": "github"
       },
       "original": {
@@ -413,11 +413,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1658686720,
-        "narHash": "sha256-Dy6eBH3a3XtPzU78DU17aCU5xIA/jEWSp3IPd1vq/P4=",
+        "lastModified": 1658691231,
+        "narHash": "sha256-rfVmzbSbt3jtdSc7iNSDMM3A7gzQI8qRxjTPKTbzz24=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "92dd57f4afe6476b847b9e3b5b2b15a496d8da64",
+        "rev": "9245adc13578625ecaf412b72bbd083e22f13594",
         "type": "github"
       },
       "original": {
@@ -582,8 +582,8 @@
     "nixpkgs": {
       "locked": {
         "lastModified": 0,
-        "narHash": "sha256-jzEt+TMhsIlFgavg56zq6Tq0btIMuxKcD5FngxI5pV8=",
-        "path": "/nix/store/ia60hs9w1kknpymbcxixrfzfn8hnqy6a-source",
+        "narHash": "sha256-Dy6eBH3a3XtPzU78DU17aCU5xIA/jEWSp3IPd1vq/P4=",
+        "path": "/nix/store/r19yywrgv6yaw5lwpvj6p05cwhh2jiic-source",
         "type": "path"
       },
       "original": {
@@ -610,8 +610,8 @@
     "nixpkgs_3": {
       "locked": {
         "lastModified": 0,
-        "narHash": "sha256-jzEt+TMhsIlFgavg56zq6Tq0btIMuxKcD5FngxI5pV8=",
-        "path": "/nix/store/ia60hs9w1kknpymbcxixrfzfn8hnqy6a-source",
+        "narHash": "sha256-Dy6eBH3a3XtPzU78DU17aCU5xIA/jEWSp3IPd1vq/P4=",
+        "path": "/nix/store/r19yywrgv6yaw5lwpvj6p05cwhh2jiic-source",
         "type": "path"
       },
       "original": {
@@ -983,7 +983,7 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-nkfIeRbtmKd6wAnXgz5cIQxRAOmJFebDKUtMxekucoQ=",
+        "narHash": "sha256-HEFhNOe3rLtHmFC7TXpwWavJTLyRf5AIE61QEA4sImM=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
