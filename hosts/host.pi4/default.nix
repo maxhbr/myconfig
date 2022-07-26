@@ -1,5 +1,6 @@
 { lib, pkgs, ... }: {
-  imports = [ ./hardware-configuration.nix ./gstreamer.nix 
+  imports = [
+    ./hardware-configuration.nix
     {
       environment.systemPackages = with pkgs; [ x11vnc ];
       ## Setup via ssh tunnel:

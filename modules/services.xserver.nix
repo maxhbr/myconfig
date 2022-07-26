@@ -29,8 +29,7 @@ in {
           # misc
           libnotify # xfce.xfce4notifyd # notify-osd
         ] ++ lib.optional config.networking.networkmanager.enable
-        networkmanager_dmenu
-        ++ lib.optionals config.myconfig.desktop.full ([
+        networkmanager_dmenu ++ lib.optionals config.myconfig.desktop.full ([
           # gui applications
           kitty
           alacritty
@@ -40,8 +39,11 @@ in {
           feh
           imagemagick
           mplayer # unsuported on aarch
-        ]
-        ++ (with pkgs.nixos-unstable; [ tdesktop signal-desktop signal-cli ]));
+        ] ++ (with pkgs.nixos-unstable; [
+          tdesktop
+          signal-desktop
+          signal-cli
+        ]));
       xresources.extraConfig = ''
         *utf8: 1
 

@@ -37,9 +37,8 @@ let
     done
   '';
 in {
-  home-manager.sharedModules = [
-    { home.packages = with pkgs; [ pavucontrol pamix ]; }
-  ];
+  home-manager.sharedModules =
+    [{ home.packages = with pkgs; [ pavucontrol pamix ]; }];
   imports = [
     {
       config = (lib.mkIf config.hardware.pulseaudio.enable {
@@ -55,8 +54,14 @@ in {
     }
     {
       config = (lib.mkIf config.services.pipewire.enable {
-        home-manager.sharedModules =
-          [{ home.packages = with pkgs; [ qjackctl helvum pw-simultaneous easyeffects ]; }];
+        home-manager.sharedModules = [{
+          home.packages = with pkgs;
+            [ qjackctl pw-simultaneous ]
+            ++ lib.optionals config.myconfig.desktop.full [
+              helvum
+              easyeffects
+            ];
+        }];
         hardware.pulseaudio.enable = false;
         security.rtkit.enable = true;
         services.pipewire = {

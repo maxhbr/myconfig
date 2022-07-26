@@ -22,7 +22,7 @@
     fsType = "vfat";
   };
 
-  fileSystems."/home/mhuber/TNG2" = {
+  fileSystems."/home/mhuber/MINE" = {
     device = "/dev/disk/by-uuid/5b43fba0-0f18-4dbc-88cf-aa0f226b7b3f";
     fsType = "ext4";
   };

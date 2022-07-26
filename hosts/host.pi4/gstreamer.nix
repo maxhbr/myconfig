@@ -1,4 +1,5 @@
-{ pkgs, config, ... }: let
+{ pkgs, config, ... }:
+let
   streamcam = with pkgs;
     writeShellScriptBin "streamcam" ''
       ${pkgs.mjpg-streamer}/bin/mjpg_streamer \

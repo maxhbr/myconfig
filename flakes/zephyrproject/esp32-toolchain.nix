@@ -12,7 +12,8 @@ in stdenv.mkDerivation rec {
   version = "2021r2-patch3";
 
   src = fetchurl {
-    url = "https://github.com/espressif/crosstool-NG/releases/download/esp-${version}/xtensa-esp32-elf-gcc8_4_0-esp-${version}-linux-amd64.tar.gz";
+    url =
+      "https://github.com/espressif/crosstool-NG/releases/download/esp-${version}/xtensa-esp32-elf-gcc8_4_0-esp-${version}-linux-amd64.tar.gz";
     hash = "sha256-nt0ed2J2iPQ1Vhki0UKZ9qACG6H2/2fkcuEQhpWmnlM=";
   };
 
@@ -33,7 +34,8 @@ in stdenv.mkDerivation rec {
 
   meta = with lib; {
     description = "ESP32 toolchain";
-    homepage = https://docs.espressif.com/projects/esp-idf/en/stable/get-started/linux-setup.html;
+    homepage =
+      "https://docs.espressif.com/projects/esp-idf/en/stable/get-started/linux-setup.html";
     license = licenses.gpl3;
   };
 }
