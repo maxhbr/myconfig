@@ -7,7 +7,7 @@
     };
 
     home-manager.sharedModules = [{
-      home.packages = with pkgs; [ taskwarrior mosh eternal-terminal sshfs ];
+      home.packages = with pkgs; [ mosh eternal-terminal sshfs ];
       home.file = {
         ".ssh/config".text = ''
           ControlMaster auto

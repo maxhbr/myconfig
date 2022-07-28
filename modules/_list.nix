@@ -19,6 +19,7 @@
   ./nixos.nix-index.nix
   ./nixos.user.nix
   ./programs.pass
+  ./programs.taskwarrior.nix
   ./services.netdata.nix
   ./services.openssh.nix
   ./services.postgresql.nix
