@@ -25,6 +25,7 @@
     ./a7iiiAsWebcam.nix
     ./smarthome.nix
     ../host.workstation/gaming/games.steam
+    ./services.xserver.programs.platformio.nix
     {
       # Fingerprint reader: login and unlock with fingerprint (if you add one with `fprintd-enroll`)
       # services.fprintd.enable = true;
