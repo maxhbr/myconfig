@@ -158,7 +158,7 @@
             ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
         host-nuc = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "nuc"
-            ([ self.nixosModules.core inputs.zephyrproject.nixosModule ]
+            ([ self.nixosModules.core ]
               ++ moreModules) metadataOverride);
         host-pi4 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "aarch64-linux" "pi4"
@@ -226,6 +226,7 @@
         config = nixpkgsConfig;
       };
 
+      # might be overwritten in priv
       packages.myconfig-iso = self.lib.mkISO {
         system = "x86_64-linux";
         hostName = "iso";

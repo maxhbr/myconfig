@@ -43,5 +43,6 @@ build() {
     writeScripts "$outDir" "$out"
 }
 
+[[ -d "~/myconfig/priv" ]] && cd "~/myconfig/priv"
 build
 times
