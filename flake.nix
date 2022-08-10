@@ -162,7 +162,9 @@
               ++ moreModules) metadataOverride);
         host-pi4 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "aarch64-linux" "pi4"
-            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
+            ([ self.nixosModules.core 
+              inputs.nixos-hardware.nixosModules.raspberry-pi-4
+            ] ++ moreModules) metadataOverride);
         host-pi3a = moreModules: metadataOverride:
           (self.lib.evalConfiguration "aarch64-linux" "pi3a"
             ([ self.nixosModules.core ] ++ moreModules) metadataOverride);

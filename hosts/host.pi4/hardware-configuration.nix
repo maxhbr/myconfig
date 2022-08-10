@@ -11,11 +11,12 @@
 
   nixpkgs.system = "aarch64-linux";
 
+  # defined in https://github.com/NixOS/nixos-hardware/tree/master/raspberry-pi/4
   boot.consoleLogLevel = lib.mkDefault 7;
-  boot.loader.grub.enable = false;
-  boot.loader.raspberryPi.enable = true;
-  boot.loader.raspberryPi.version = 4;
-  boot.kernelPackages = lib.mkForce pkgs.linuxPackages_rpi4;
+  # boot.loader.grub.enable = false;
+  # boot.loader.raspberryPi.enable = true;
+  # boot.loader.raspberryPi.version = 4;
+  # boot.kernelPackages = lib.mkForce pkgs.linuxPackages_rpi4;
 
   hardware.enableRedistributableFirmware = true;
 

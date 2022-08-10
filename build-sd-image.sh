@@ -5,8 +5,17 @@
 set -e
 
 build() {
-    hostname="$1"
-    time nix build --out-link ../sd-image."${hostname}" --show-trace .#"${hostname}"-sd-image
+    local hostname="$1"
+    local out=../sd-image."${hostname}"
+    local oldOut=""
+    if [[ -d "$oldOut" ]]; then
+        oldOut="$(readlink -f "$out")"
+    fi
+    (set -x; time nix build --out-link "$out" --show-trace .#"${hostname}"-sd-image)
+    local newOut="$(readlink -f "$out")"
+    if [[ -n $oldOut && -d "$oldOut" && "$oldOut" != "$newOut" ]]; then
+        (set -x; nix store delete "$oldOut")
+    fi
 }
 
 [[ -d "~/myconfig/priv" ]] && cd "~/myconfig/priv"

@@ -46,7 +46,7 @@ Config { font = "xft:Inconsolata Nerd Font:pixelsize=12:antialias=true:hinting=t
                       , "--normal"   , "darkorange"
                       , "--high"     , "darkred"
                       ] 10
-         , Run DiskU [("/", "<fc=#999999>H:</fc> <freep>%")] ["-L", "10", "-H", "30", "-l", "red", "-n", "yellow", "-m", "1", "-p", "3"] 180
+         , Run DiskU [("/", "<fc=#999999>H:</fc><freep>%")] ["-L", "10", "-H", "30", "-l", "darkred", "-n", "darkorange", "-m", "1", "-p", "3"] 180
          , Run Com "isvpn" ["|", "<fc=#7285c3>", "</fc>"] "" 60
          , Run Com "hasXssLock" ["|", "<fc=darkred>", "</fc>"] "" 60
          , Run Com "isBtBlocked" ["|", "<fc=darkred>", "</fc>"] "" 60
