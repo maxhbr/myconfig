@@ -121,6 +121,10 @@
       };
 
       nixosConfigurationsGen = {
+        host-p14 = moreModules: metadataOverride:
+          (self.lib.evalConfiguration "x86_64-linux" "p14"
+            ([ self.nixosModules.core ]
+              ++ moreModules) metadataOverride);
         host-x1extremeG2 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
             { config = { hardware.enableRedistributableFirmware = true; }; }
@@ -175,6 +179,7 @@
       ##########################################################################
 
       nixosConfigurations = {
+        p14 = self.nixosConfigurationsGen.host-p14 [ ] { };
         x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [ ] { };
         workstation = self.nixosConfigurationsGen.host-workstation [ ] { };
         spare = self.nixosConfigurationsGen.host-spare [ ] { };

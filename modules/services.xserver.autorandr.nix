@@ -44,7 +44,7 @@ let
     writeShellScriptBin "setupHuion" ''
       set -e
       sleep 1
-      id=$(${xorg.xinput}/bin/xinput --list --id-only "Tablet Monitor Pen Pen (0)" || true)
+      id=$(${xorg.xinput}/bin/xinput --list --id-only "Tablet Monitor Pen (0)" || true)
 
       if [[ "$1" == "" ]]; then
           outputs=$(${xorg.xrandr}/bin/xrandr --listmonitors |
