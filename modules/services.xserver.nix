@@ -34,7 +34,7 @@ in {
           kitty
           alacritty
           mupdf
-          llpp
+          # llpp
           xarchiver
           feh
           imagemagick
