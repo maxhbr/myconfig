@@ -13,7 +13,6 @@
       networking.interfaces.enp0s31f6.useDHCP = true;
       networking.interfaces.wlp3s0.useDHCP = true;
       networking.interfaces.wwp0s20f0u5c2.useDHCP = true;
-
     }
   ];
 
@@ -21,23 +20,18 @@
     networking.hostName = "p14";
     networking.hostId = "98234324";
     myconfig = {
-      desktop.enable = true;
+      desktop.enable = false;
       virtualisation.enable = false;
     };
-    virtualisation.docker.enable = true;
-    virtualisation.podman.enable = true;
+    virtualisation.docker.enable = false;
+    virtualisation.podman.enable = false;
     # virtualisation.libvirtd.enable = true;
 
     services.logind.extraConfig = ''
       HandlePowerKey=suspend
     '';
 
-    boot.initrd.supportedFilesystems = [ "luks" ];
-    boot.initrd.luks.devices.crypted = {
-      device = "/dev/disk/by-uuid/0689caf9-dc68-414c-97fe-ba15b84945bf";
-      preLVM = true;
-      allowDiscards = true;
-    };
+    boot.kernelPackages = lib.mkForce pkgs.linuxPackages_testing;
 
     hardware.enableRedistributableFirmware = true;
 

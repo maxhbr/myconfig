@@ -39,8 +39,6 @@
     license-compliance-toolbox.inputs.nixpkgs.follows = "nixpkgs";
 
     zephyrproject.url = "path:flakes/zephyrproject/";
-    # zephyrproject.inputs.nixpkgs.follows = "nixpkgs";
-    zephyrproject.inputs.flake-utils.follows = "flake-utils";
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -233,7 +231,7 @@
 
       # might be overwritten in priv
       packages.myconfig-iso = self.lib.mkISO {
-        system = "x86_64-linux";
+        inherit system;
         hostName = "iso";
         nixosModules = [ self.nixosModules.core ];
         metadataOverride = { };

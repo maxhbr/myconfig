@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
 
-set -ex
-cd "$(dirname "${BASH_SOURCE[0]}")"
+set -exuo pipefail
 
 writeScripts() {
     local outDir="$1"
@@ -24,25 +23,30 @@ EOF
 }
 
 getIsoFromOutLink() {
-    local outLink="$1"
+    local iso="$1"
+    local outLink="$2"
     local outArr
-    outArr=("$outLink/iso/"*".iso")
+    outArr=("$outLink/$iso/"*".iso")
     echo "$(readlink -f "${outArr[-1]}")"
 }
 
 build() {
-    local outDir="../iso"
+    local iso="$1"
+    local outDir="../$iso"
     local outLink="$outDir/result"
 
-    time nix build --out-link "$outLink" --show-trace .#myconfig-iso
+    time nix build --out-link "$outLink" --show-trace .#myconfig-"$iso"
 
     local out
-    out="$(getIsoFromOutLink "$outLink")"
+    out="$(getIsoFromOutLink "$iso" "$outLink")"
     du -h "$out"
 
     writeScripts "$outDir" "$out"
 }
 
-[[ -d "~/myconfig/priv" ]] && cd "~/myconfig/priv"
-build
+iso="${1:-iso}"
+
+cd "$(dirname "${BASH_SOURCE[0]}")"
+[[ -d "$HOME/myconfig/priv" ]] && cd "$HOME/myconfig/priv"
+build "$iso"
 times

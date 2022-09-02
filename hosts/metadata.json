@@ -18,7 +18,7 @@
     },
     "p14": {
       "network": "home",
-      "ip4": "192.168.1.19",
+      "ip4": "192.168.1.149",
       "pubkeys": {
         "id_ed25519.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIID3sMl+Ocl3tlNEZuRQJCSxQ1MvhzMl/b0m3wdOirwT",
         "id_rsa.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDFOat0jpflLKVyUbBuuphN1Hm4gVqes4Fcy9KLNSkD6fC0mSetr2NB87oH6Tc1JNSW0yBAJnhG/16JacBC0Xwx14WolIxsnusAqYL9DKG9jcbo5WVjytnT/zZj07ir+BwCrgN53YhX2fVX58/6fjaTSLqUzA+np+hq27kdEXQjrjyc9VxSmFmyNGToBfy0es+fiweRVHpZkSgYVkFAKYoMQ8azWVi/Uk8U+yi0cOebg/xxMkxl+2ot2GlLioGjbPuRA7Q1LTELTSM0MV4GxdSI9ZSgqQREZg6VvU7qnTWGaHfab0E5HMEnE7wKXXPJ1S5Naj3ZjVYyM1UkSbaPcPcQEMPxmmmuo7FHTzGN7CpiGLd/maV99L/dshYNKmHzdFyzenYoXibyEqT4n73tsIEam+7R8/57FxGv136UD7y7Y001PTgY1ATqZHHY0YEiNzJWk79oVaWS3r0yCEDTTcnggswGa1X143pVy1nLbLqhFGhPo1e0gN6f2LxEHA9wly0=",
