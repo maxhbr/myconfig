@@ -20,7 +20,7 @@
     };
 
   boot.initrd.supportedFilesystems = [ "luks" ];
-  boot.initrd.luks.devices.crypted = {
+  boot.initrd.luks.devices.enc-pv = {
     device = "/dev/disk/by-uuid/4d5b9788-f38b-4ce4-a1c9-eb13b7bf8884";
     preLVM = true;
     allowDiscards = true;

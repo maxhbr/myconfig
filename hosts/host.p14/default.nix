@@ -20,7 +20,7 @@
     networking.hostName = "p14";
     networking.hostId = "98234324";
     myconfig = {
-      desktop.enable = false;
+      desktop.enable = true;
       virtualisation.enable = false;
     };
     virtualisation.docker.enable = false;
