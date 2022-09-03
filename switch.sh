@@ -38,7 +38,7 @@ fi
 # run
 set -x
 
-nix build \
+time nix build \
     -L \
     --fallback \
     --keep-going \
@@ -56,5 +56,6 @@ until $cmd \
 done
 
 set +x
+times
 
 # ./scripts/gc.sh

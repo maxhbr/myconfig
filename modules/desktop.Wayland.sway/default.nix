@@ -24,7 +24,7 @@
     };
     environment = {
       loginShellInit = ''
-        [[ -z $DISPLAY && $XDG_VTNR -eq 6 ]] && exec sway --unsupported-gpu
+        [[ -z $DISPLAY && $XDG_VTNR -eq 6 ]] && exec sway
       '';
     };
   });

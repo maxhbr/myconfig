@@ -19,9 +19,8 @@
       options = [ "subvol=@" ];
     };
 
-  boot.initrd.supportedFilesystems = [ "luks" ];
-  boot.initrd.luks.devices.enc-pv = {
-    device = "/dev/disk/by-uuid/4d5b9788-f38b-4ce4-a1c9-eb13b7bf8884";
+  boot.initrd.luks.devices."enc-pv" = {
+    device = "/dev/disk/by-uuid/50d4205b-70d1-4836-99e3-6cb568e832bb";
     preLVM = true;
     allowDiscards = true;
   };
@@ -46,7 +45,7 @@
     };
 
   fileSystems."/boot" =
-    { device = "/dev/disk/by-uuid/7671-6491";
+    { device = "/dev/disk/by-uuid/113B-166C";
       fsType = "vfat";
     };
 
