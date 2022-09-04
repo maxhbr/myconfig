@@ -23,6 +23,9 @@
       nixpkgs.config.allowBroken = true;
     }
     {
+      services.xrdp.enable = true;
+    }
+    {
       environment.systemPackages = with pkgs; [ x11vnc ];
       ## Setup via ssh tunnel:
       # $ ssh -t -L 5900:localhost:5900 $IP 'x11vnc -ncache 10 -unixpw -localhost -display :0'
@@ -32,11 +35,6 @@
       ## or open ports
       # networking.firewall.allowedUDPPorts = [ 5900 ];
       # networking.firewall.allowedTCPPorts = [ 5900 ];
-    }
-    {
-      services.xrdp.enable = true;
-      services.xrdp.defaultWindowManager = "${pkgs.icewm}/bin/icewm";
-      networking.firewall.allowedTCPPorts = [ 3389 ];
     }
     ( # wol
       let interface = "enp39s0";
