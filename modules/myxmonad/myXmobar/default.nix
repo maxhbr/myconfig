@@ -34,12 +34,11 @@ let
     '';
   getCpuPerfState = with pkgs;
     writeShellScriptBin "getCpuPerfState" ''
-      delimiter=$1
-      startcol=$2
-      endcol=$3
+      startcol=$1
+      endcol=$2
 
-      pre="$delimiter $startcol"
-      post="$endcol "
+      pre=" $startcol"
+      post="$endcol"
       if [[ -f /sys/firmware/acpi/platform_profile ]]; then
         cpuPerfState="$(cat /sys/firmware/acpi/platform_profile)"
         if [[ "$cpuPerfState" != "performance" ]]; then
