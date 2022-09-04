@@ -14,6 +14,13 @@
       networking.interfaces.wlp3s0.useDHCP = true;
       networking.interfaces.wwp0s20f0u5c2.useDHCP = true;
     }
+    ../../hardware/footswitch.nix
+    ../../hardware/blink1.nix
+    ../../hardware/unifying.nix
+    ../host.x1extremeG2/hardware.hantek
+    ../host.x1extremeG2/mykeylight
+    ../host.x1extremeG2/role.work
+    ../host.x1extremeG2/deskreen.nix
   ];
 
   config = {
@@ -22,10 +29,23 @@
     myconfig = {
       desktop.enable = true;
       virtualisation.enable = true;
+      imagework.enable = true;
+      cad.enable = true;
+      dev = {
+        compliance.enable = true;
+        go.enable = true;
+        haskell.enable = true;
+        network.enable = true;
+        nodejs.enable = true;
+        # ruby.enable = true;
+        rust.enable = true;
+      };
     };
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;
     # virtualisation.libvirtd.enable = true;
+
+    services.xserver.wacom.enable = true;
 
     programs.sway.enable = true;
 
