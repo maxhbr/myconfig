@@ -63,5 +63,6 @@
   ./virtualization.lxc.nix
   ./virtualization.qemu.nix
   ./virtualization.vbox.nix
+  ./desktop.Wayland.river
   ./desktop.Wayland.sway
 ]
