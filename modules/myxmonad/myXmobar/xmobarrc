@@ -49,6 +49,7 @@ Config { font = "xft:Inconsolata Nerd Font:pixelsize=12:antialias=true:hinting=t
          , Run DiskU [("/", "<fc=#999999>H:</fc><freep>%")] ["-L", "10", "-H", "30", "-l", "darkred", "-n", "darkorange", "-m", "1", "-p", "3"] 180
          , Run Com "isvpn" ["|", "<fc=#7285c3>", "</fc>"] "" 60
          , Run Com "hasXssLock" ["|", "<fc=darkred>", "</fc>"] "" 60
+         , Run Com "getCpuPerfState" ["|", "<fc=darkred>", "</fc>"] "" 60
          , Run Com "isBtBlocked" ["|", "<fc=darkred>", "</fc>"] "" 60
          , Run Com "mute_telco" ["--print-status", "| <fc=darkred>", "</fc> "] "" 2
          , Run Battery [ "-t", "<fc=#999999>B:</fc><left><fc=#999999>%</fc> <watts><fc=#999999>W</fc> <timeleft>"
@@ -69,7 +70,7 @@ Config { font = "xft:Inconsolata Nerd Font:pixelsize=12:antialias=true:hinting=t
          ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = " %XMonadLog% }{ <action=`urxvtc -name ScratchNMTUI -e bash -c nmtui`>%dynnetwork% %wlp82s0wi%</action> | <action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu%%multicoretemp% %memory% %disku%</action> %isvpn%%hasXssLock%%isBtBlocked%%mute_telco%| <action=`xbacklight =10`>%battery%</action> | %date% "
+       , template = " %XMonadLog% }{ <action=`urxvtc -name ScratchNMTUI -e bash -c nmtui`>%dynnetwork% %wlp82s0wi%</action> | <action=`urxvtc -name ScratchHtop -e bash -c htop`>%cpu%%multicoretemp%%getCpuPerfState% %memory% %disku%</action> %isvpn%%hasXssLock%%isBtBlocked%%mute_telco%| <action=`xbacklight =10`>%battery%</action> | %date% "
        }
 
 -- vim: set ft=haskell :

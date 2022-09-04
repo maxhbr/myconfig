@@ -32,7 +32,21 @@ let
         echo -n "''${pre}¬BT''${post}"
       fi
     '';
+  getCpuPerfState = with pkgs;
+    writeShellScriptBin "getCpuPerfState" ''
+      delimiter=$1
+      startcol=$2
+      endcol=$3
 
+      pre="$delimiter $startcol"
+      post="$endcol "
+      if [[ -f /sys/firmware/acpi/platform_profile ]]; then
+        cpuPerfState="$(cat /sys/firmware/acpi/platform_profile)"
+        if [[ "$cpuPerfState" != "performance" ]]; then
+          echo -n "$pre$cpuPerfState$post"
+        fi
+      fi
+    '';
   hasXssLock = with pkgs;
     writeShellScriptBin "hasXssLock" ''
       delimiter=$1
@@ -49,7 +63,7 @@ let
   xmobarXmonad = with pkgs;
     writeShellScriptBin "xmobarXmonad" ''
       set -e
-      export PATH=$PATH:${isvpn}/bin/:${hasXssLock}/bin/
+      export PATH=$PATH:${isvpn}/bin/:${hasXssLock}/bin/:${getCpuPerfState}/bin/
       pidfile=/tmp/xmobarXmonad.pid
       if [[ -f $pidfile ]]; then
         kill $(cat $pidfile) || true
