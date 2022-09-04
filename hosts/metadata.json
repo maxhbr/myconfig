@@ -95,6 +95,7 @@
       "mac": "94:de:80:8f:a3:7a",
       "wireguard": {
         "wg0": {
+          "ip4": "10.199.199.9",
           "pubkey": "MHISqlHM8Yb6ks9h66AXCCY6/x8z2f7BYmSII8e6MzI="
         }
       }
