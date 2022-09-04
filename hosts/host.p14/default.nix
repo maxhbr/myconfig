@@ -20,6 +20,9 @@
     ../host.x1extremeG2/hardware.hantek
     ../host.x1extremeG2/mykeylight
     ../host.x1extremeG2/role.work
+    {
+      services.xserver.windowManager.qtile.enable = true;
+    }
   ];
 
   config = {
