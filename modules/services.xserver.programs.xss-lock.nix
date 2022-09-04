@@ -58,7 +58,11 @@ in {
   config = (lib.mkIf config.services.xserver.enable {
     home-manager.sharedModules = [{
       home.packages = [ myStopScreensaver ];
-      services.screen-locker.enable = true;
+      services.screen-locker = {
+        enable = true;
+        inactiveInterval = 60;
+        xss-lock.screensaverCycle = 3600;
+      };
     }];
     # programs.xss-lock = { enable = true; };
   });
