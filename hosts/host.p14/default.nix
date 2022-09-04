@@ -80,6 +80,10 @@ index 51dde5bfd..5dcd32cf9 100644
       }
     ];
 
+     home-manager.sharedModules = [{
+       home.packages = with pkgs; [rdesktop];
+     }];
+
     hardware.enableRedistributableFirmware = true;
 
     # This value determines the NixOS release from which the default
