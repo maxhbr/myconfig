@@ -65,4 +65,5 @@
   ./virtualization.vbox.nix
   ./desktop.Wayland.river
   ./desktop.Wayland.sway
+  ./desktop.Wayland.qtile
 ]

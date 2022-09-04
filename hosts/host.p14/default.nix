@@ -21,8 +21,8 @@
     ../host.x1extremeG2/mykeylight
     ../host.x1extremeG2/role.work
     {
-      services.xserver.windowManager.qtile.enable = true;
       myconfig.river.enable = true;
+      myconfig.qtile.enable = true;
     }
     # {
     #   services.openssh = {
