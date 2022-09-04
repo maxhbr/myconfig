@@ -20,7 +20,6 @@
     ../host.x1extremeG2/hardware.hantek
     ../host.x1extremeG2/mykeylight
     ../host.x1extremeG2/role.work
-    ../host.x1extremeG2/deskreen.nix
   ];
 
   config = {
@@ -31,6 +30,7 @@
       virtualisation.enable = true;
       imagework.enable = true;
       cad.enable = true;
+      deskreen.enable = true;
       dev = {
         compliance.enable = true;
         go.enable = true;

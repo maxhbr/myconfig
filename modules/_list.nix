@@ -34,6 +34,7 @@
   ./services.xserver.printing.nix
   ./services.xserver.programs.appimage-run.nix
   ./services.xserver.programs.chromium.nix
+  ./services.xserver.programs.deskreen.nix
   ./services.xserver.programs.evolution.nix
   ./services.xserver.programs.firefox.nix
   ./services.xserver.programs.kitty.nix

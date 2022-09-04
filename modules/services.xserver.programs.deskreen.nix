@@ -1,5 +1,9 @@
-{ config, pkgs, ... }: {
-  config = {
+{ config, pkgs, ... }:
+let cfg = config.myconfig;
+in {
+  options.myconfig = with lib; { deskreen.enable = mkEnableOption "deskreen"; };
+  config = 
+    (lib.mkIf (config.services.xserver.enable && cfg.deskreen.enable) {
     home-manager.sharedModules = [{
       home.packages = with pkgs;
         [
@@ -17,5 +21,5 @@
     }];
     networking.firewall.allowedTCPPorts = [ 3131 ];
     networking.firewall.allowedUDPPorts = [ 3131 ];
-  };
+  });
 }

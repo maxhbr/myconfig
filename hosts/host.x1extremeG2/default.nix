@@ -20,7 +20,6 @@
     # ./service.docker-registry.nix
     # ./service.podman.buildkit.nix
     ./mail
-    ./deskreen.nix
     ## fun
     ./a7iiiAsWebcam.nix
     ./smarthome.nix
@@ -46,6 +45,7 @@
       # virtualisation.enable = true;
       imagework.enable = true;
       cad.enable = true;
+      deskreen.enable = true;
       dev = {
         compliance.enable = true;
         go.enable = true;
