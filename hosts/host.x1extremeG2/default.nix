@@ -20,6 +20,11 @@
     # ./service.docker-registry.nix
     # ./service.podman.buildkit.nix
     ./mail
+    {
+      myconfig.river.enable = true;
+      myconfig.qtile.enable = true;
+      programs.sway.enable = true;
+    }
     ## fun
     ./a7iiiAsWebcam.nix
     ./smarthome.nix

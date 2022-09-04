@@ -11,7 +11,7 @@ in {
         [[ -z $DISPLAY && $XDG_VTNR -eq 4 ]] && {
           export XKB_DEFAULT_LAYOUT=de
           export XKB_DEFAULT_VARIANT=neo
-          exec qtile -b wayland
+          exec qtile start -b wayland
         }
       '';
     };

@@ -23,6 +23,7 @@
     {
       myconfig.river.enable = true;
       myconfig.qtile.enable = true;
+      programs.sway.enable = true;
     }
     # {
     #   services.openssh = {
@@ -58,8 +59,6 @@
     # virtualisation.libvirtd.enable = true;
 
     services.xserver.wacom.enable = true;
-
-    programs.sway.enable = true;
 
     services.logind.extraConfig = ''
       HandlePowerKey=suspend
