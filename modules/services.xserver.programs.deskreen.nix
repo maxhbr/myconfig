@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 let cfg = config.myconfig;
 in {
   options.myconfig = with lib; { deskreen.enable = mkEnableOption "deskreen"; };
