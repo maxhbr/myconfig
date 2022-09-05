@@ -128,6 +128,18 @@
               inputs.nixos-hardware.nixosModules.common-pc-laptop-acpi_call
               inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
               inputs.nixos-hardware.nixosModules.lenovo-thinkpad
+              ({ myconfig, ... }: {
+                imports = [
+                  (myconfig.metadatalib.announceHost "x1extremeG2")
+                  (myconfig.metadatalib.announceHost "workstation")
+                  (myconfig.metadatalib.announceHost "nas")
+                  (myconfig.metadatalib.announceHost "vserver")
+                  (myconfig.metadatalib.announceHost "nuc")
+                  (myconfig.metadatalib.announceHost "pi4")
+                  (myconfig.metadatalib.announceHost "pi3a")
+                  (myconfig.metadatalib.announceHost "pi0")
+                ];
+              })
              ]
               ++ moreModules) metadataOverride);
         host-x1extremeG2 = moreModules: metadataOverride:
@@ -136,17 +148,6 @@
             self.nixosModules.core
             inputs.license-compliance-toolbox.nixosModule
             inputs.nixos-hardware.nixosModules.lenovo-thinkpad-x1-extreme-gen2
-            ({ myconfig, ... }: {
-              imports = [
-                (myconfig.metadatalib.announceHost "workstation")
-                (myconfig.metadatalib.announceHost "nas")
-                (myconfig.metadatalib.announceHost "vserver")
-                (myconfig.metadatalib.announceHost "nuc")
-                (myconfig.metadatalib.announceHost "pi4")
-                (myconfig.metadatalib.announceHost "pi3a")
-                (myconfig.metadatalib.announceHost "pi0")
-              ];
-            })
             inputs.zephyrproject.nixosModule
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:

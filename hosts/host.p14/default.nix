@@ -4,15 +4,13 @@
   imports = [
     ./hardware-configuration.nix
     ../../hardware/efi.nix
-    ../../hardware/nixos-hardware/common/pc/ssd
     {
       boot.loader.systemd-boot.enable = true;
       boot.loader.efi.canTouchEfiVariables = true;
 
       networking.useDHCP = false;
-      networking.interfaces.enp0s31f6.useDHCP = true;
-      networking.interfaces.wlp3s0.useDHCP = true;
-      networking.interfaces.wwp0s20f0u5c2.useDHCP = true;
+      networking.interfaces.wlp0s20f3.useDHCP = true;
+      # networking.interfaces.enp82s0u2u1u2.useDHCP = true;
     }
     ../../hardware/footswitch.nix
     ../../hardware/blink1.nix
@@ -37,7 +35,7 @@
 
   config = {
     networking.hostName = "p14";
-    networking.hostId = "98234324";
+    networking.hostId = "1ea9689e";
     myconfig = {
       desktop.enable = true;
       virtualisation.enable = true;
@@ -57,6 +55,7 @@
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;
     # virtualisation.libvirtd.enable = true;
+    # virtualisation.virtualbox.host.enable = true;
 
     services.xserver.wacom.enable = true;
 
@@ -65,32 +64,51 @@
     '';
 
     boot.kernelPackages = lib.mkForce pkgs.linuxPackages_testing;
-    boot.kernelPatches = [
-      { name = "i915-P14sG3-intel-fix";
-        patch = pkgs.writeTextFile {
-          name = "i915-P14sG3-intel-fix.patch";
-          text = ''
-diff --git a/drivers/gpu/drm/i915/display/intel_bios.c b/drivers/gpu/drm/i915/display/intel_bios.c
-index 51dde5bfd..5dcd32cf9 100644
---- a/drivers/gpu/drm/i915/display/intel_bios.c
-+++ b/drivers/gpu/drm/i915/display/intel_bios.c
-@@ -2665,7 +2665,7 @@ static void parse_ddi_port(struct intel_bios_encoder_data *devdata)
- 		drm_dbg_kms(&i915->drm,
- 			    "More than one child device for port %c in VBT, using the first.\n",
- 			    port_name(port));
--		return;
-+		// return; // see https://gitlab.freedesktop.org/drm/intel/-/issues/5531#note_1477044
- 	}
+    boot.kernelPatches = [{
+      name = "i915-P14sG3-intel-fix";
+      patch = pkgs.writeTextFile {
+        name = "i915-P14sG3-intel-fix.patch";
+        text = ''
+          diff --git a/drivers/gpu/drm/i915/display/intel_bios.c b/drivers/gpu/drm/i915/display/intel_bios.c
+          index 51dde5bfd..5dcd32cf9 100644
+          --- a/drivers/gpu/drm/i915/display/intel_bios.c
+          +++ b/drivers/gpu/drm/i915/display/intel_bios.c
+          @@ -2665,7 +2665,7 @@ static void parse_ddi_port(struct intel_bios_encoder_data *devdata)
+           		drm_dbg_kms(&i915->drm,
+           			    "More than one child device for port %c in VBT, using the first.\n",
+           			    port_name(port));
+          -		return;
+          +		// return; // see https://gitlab.freedesktop.org/drm/intel/-/issues/5531#note_1477044
+           	}
 
- 	sanitize_device_type(devdata, port);
-          '';
+           	sanitize_device_type(devdata, port);
+        '';
+      };
+    }];
+
+    home-manager.sharedModules = [{
+      home.file = {
+        ".config/autorandr/" = {
+          source = ./autorandr;
+          recursive = true;
         };
-      }
-    ];
-
-     home-manager.sharedModules = [{
-       home.packages = with pkgs; [ rdesktop ];
-     }];
+        ".config/autorandr/mobile/postswitch.d/mykeylight-off".source = let
+          script = with pkgs;
+            writeShellScriptBin "script"
+            "${mykeylight-off}/bin/mykeylight-off &disown";
+        in "${script}/bin/script";
+      };
+      home.packages = with pkgs; [
+        rdesktop
+        google-chrome # for netflix and stadia
+        comma
+      ];
+      programs.zsh.shellAliases = {
+        upg-get-hostId = ''
+          cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
+        '';
+      };
+    }];
 
     hardware.enableRedistributableFirmware = true;
 
