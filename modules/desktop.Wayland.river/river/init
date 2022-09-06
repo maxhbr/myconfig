@@ -141,6 +141,25 @@ do
     riverctl map $mode None XF86MonBrightnessDown spawn 'light -U 5'
 done
 
+###############################################################################
+
+# The scratchpad will live on an unused tag. Which tags are used depends on your
+# config, but rivers default uses the first 9 tags.
+scratch_tag=$((1 << 20 ))
+
+# Toggle the scratchpad with Super+P
+riverctl map normal Super S toggle-focused-tags ${scratch_tag}
+
+# Send windows to the scratchpad with Super+Shift+P
+riverctl map normal Super+Shift S set-view-tags ${scratch_tag}
+
+# Set spawn tagmask to ensure new windows don't have the scratchpad tag unless
+# explicitly set.
+all_but_scratch_tag=$(( ((1 << 32) - 1) ^ $scratch_tag ))
+riverctl spawn-tagmask ${all_but_scratch_tag}
+
+###############################################################################
+
 # Set background and border color
 riverctl background-color 0x002b36
 riverctl border-color-focused 0x93a1a1
@@ -159,9 +178,10 @@ riverctl csd-filter-add app-id "gedit"
 # Set the default layout generator to be rivertile and start it.
 # River will send the process group of the init executable SIGTERM on exit.
 riverctl default-layout rivertile
-rivertile -view-padding 6 -outer-padding 6
+###############################################################################
+
+waybar &disown
+foot &disown
 
 ###############################################################################
-###############################################################################
-###############################################################################
-foot
+rivertile -view-padding 6 -outer-padding 6

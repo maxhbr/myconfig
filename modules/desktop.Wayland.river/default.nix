@@ -10,6 +10,8 @@ let cfg = config.myconfig;
         # https://github.com/riverwm/river/wiki/Recommended-Software
         ## Output configuration
         wlopm wlr-randr kanshi way-displays
+        ## statusbar
+        waybar
         ## Program Launchers
         bemenu fuzzel
         ## Other
@@ -27,7 +29,10 @@ in {
   options.myconfig = with lib; { river.enable = mkEnableOption "river"; };
   config = (lib.mkIf cfg.river.enable {
     home-manager.sharedModules = [{
-      home.file = { ".config/river/init".source = ./river/init; };
+      home.file = {
+        ".config/river/init".source = ./river/init;
+        ".config/waybar/config".source = ./waybar/config;
+      };
       home.packages = with pkgs; [
         riverPackage
       ];
