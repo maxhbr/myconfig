@@ -89,7 +89,11 @@ in {
       xserver = {
         autorun = true;
         enableCtrlAltBackspace = true;
-        displayManager.lightdm.enable = true;
+        displayManager.lightdm.enable = false;
+        displayManager.gdm = {
+          enable = true;
+          wayland = true;
+        };
       };
       redshift.enable = config.myconfig.desktop.full;
     };
