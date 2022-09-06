@@ -4,6 +4,7 @@
   imports = [
     ./hardware-configuration.nix
     ../../hardware/efi.nix
+    ../../hardware/notebook-generic.nix
     {
       boot.loader.systemd-boot.enable = true;
       boot.loader.efi.canTouchEfiVariables = true;
@@ -22,6 +23,10 @@
       myconfig.river.enable = true;
       myconfig.qtile.enable = true;
       programs.sway.enable = true;
+      home-manager.sharedModules = [{
+        services.screen-locker.enable = lib.mkForce false;
+      }];
+      services.physlock.enable = lib.mkForce false;
     }
     # {
     #   services.openssh = {

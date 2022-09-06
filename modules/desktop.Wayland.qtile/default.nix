@@ -8,6 +8,11 @@ in {
     services.xserver.windowManager.qtile.enable = true;
     environment = {
       loginShellInit = ''
+        [[ -z $DISPLAY && $XDG_VTNR -eq 3 ]] && {
+          export XKB_DEFAULT_LAYOUT=de
+          export XKB_DEFAULT_VARIANT=neo
+          exec qtile start
+        }
         [[ -z $DISPLAY && $XDG_VTNR -eq 4 ]] && {
           export XKB_DEFAULT_LAYOUT=de
           export XKB_DEFAULT_VARIANT=neo

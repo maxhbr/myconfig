@@ -12,6 +12,7 @@
 
 # Super+Shift+Return to start an instance of foot (https://codeberg.org/dnkl/foot)
 riverctl map normal Super+Shift Return spawn foot
+riverctl map normal Super P spawn fuzzel
 
 # Super+Q to close the focused view
 riverctl map normal Super Q close
