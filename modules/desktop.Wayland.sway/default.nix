@@ -40,15 +40,20 @@ let
         '';
   };
 
-
 in {
   config = (lib.mkIf config.programs.sway.enable {
-    environment.systemPackages = with pkgs; [
-      dbus-sway-environment
-      configure-gtk
-      dracula-theme # gtk theme
-      gnome3.adwaita-icon-theme  # default gnome cursors
-    ];
+    environment = {
+      loginShellInit = ''
+        [[ -z $DISPLAY && $XDG_VTNR -eq 6 ]] && exec sway
+      '';
+      systemPackages = with pkgs; [
+        dbus-sway-environment
+        configure-gtk
+        dracula-theme # gtk theme
+        gnome3.adwaita-icon-theme  # default gnome cursors
+      ];
+      etc."sway/config".source = ./config/sway/config;
+    };
     home-manager.sharedModules = [{
       home.file = { ".config/sway/config".source = ./config/sway/config; };
       home.packages = with pkgs; [
@@ -56,6 +61,7 @@ in {
         qt5.qtwayland
       ];
     }];
+
     # xdg-desktop-portal works by exposing a series of D-Bus interfaces
     # known as portals under a well-known name
     # (org.freedesktop.portal.Desktop) and object path
@@ -74,9 +80,8 @@ in {
     programs.sway = {
       extraPackages = with pkgs; [
         swaylock swayidle xwayland st dmenu
+        foot
         glib # gsettings
-        swaylock
-        swayidle
         grim # screenshot functionality
         slurp # screenshot functionality
         wl-clipboard # wl-copy and wl-paste for copy/paste from stdin / stdout
@@ -93,11 +98,6 @@ in {
         # Fix for some Java AWT applications (e.g. Android Studio),
         # use this if they aren't displayed properly:
         export _JAVA_AWT_WM_NONREPARENTING=1
-      '';
-    };
-    environment = {
-      loginShellInit = ''
-        [[ -z $DISPLAY && $XDG_VTNR -eq 6 ]] && exec sway
       '';
     };
   });

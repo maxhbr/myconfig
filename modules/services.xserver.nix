@@ -90,9 +90,9 @@ in {
         autorun = true;
         enableCtrlAltBackspace = true;
         displayManager.lightdm.enable = false;
-        displayManager.gdm = {
+        displayManager.sddm = {
           enable = true;
-          wayland = true;
+          # wayland = true;
         };
       };
       redshift.enable = config.myconfig.desktop.full;
