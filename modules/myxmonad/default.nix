@@ -81,7 +81,6 @@ in {
           '';
         };
       };
-      services.dunst.enable = true;
     }];
   });
 }

@@ -43,9 +43,6 @@ let
 in {
   config = (lib.mkIf config.programs.sway.enable {
     environment = {
-      loginShellInit = ''
-        [[ -z $DISPLAY && $XDG_VTNR -eq 6 ]] && exec sway
-      '';
       systemPackages = with pkgs; [
         dbus-sway-environment
         configure-gtk

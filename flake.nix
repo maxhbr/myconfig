@@ -39,6 +39,12 @@
     license-compliance-toolbox.inputs.nixpkgs.follows = "nixpkgs";
 
     zephyrproject.url = "path:flakes/zephyrproject/";
+
+    hyprland = {
+      url = "github:hyprwm/Hyprland";
+        # build with your own instance of nixpkgs
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -140,6 +146,8 @@
                   (myconfig.metadatalib.announceHost "pi0")
                 ];
               })
+              # inputs.hyprland.nixosModules.default
+              # { programs.hyprland.enable = true; }
              ]
               ++ moreModules) metadataOverride);
         host-x1extremeG2 = moreModules: metadataOverride:

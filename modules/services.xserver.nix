@@ -11,6 +11,7 @@ in {
     home-manager.sharedModules = [{
       programs.firefox.enable = lib.mkDefault true;
 
+      services.dunst.enable = true;
       home.packages = with pkgs;
         [
           arandr
@@ -91,11 +92,33 @@ in {
         enableCtrlAltBackspace = true;
         displayManager.lightdm.enable = false;
         displayManager.sddm = {
-          enable = true;
+          enable = false;
           # wayland = true;
         };
       };
+  #     greetd = {
+  #       enable = true;
+  #       settings.default_session = let
+  #         swayConfig = pkgs.writeText "greetd-sway-config" ''
+  #   # `-l` activates layer-shell mode. Notice that `swaymsg exit` will run after gtkgreet.
+  #   exec "${pkgs.greetd.gtkgreet}/bin/gtkgreet -l -c river; swaymsg exit"
+  #   bindsym Mod4+shift+e exec swaynag \
+  #     -t warning \
+  #     -m 'What do you want to do?' \
+  #     -b 'Poweroff' 'systemctl poweroff' \
+  #     -b 'Reboot' 'systemctl reboot'
+  # '';
+  #       in {
+  #         command = "${pkgs.sway}/bin/sway --config ${swayConfig}";
+  #       };
+      # };
       redshift.enable = config.myconfig.desktop.full;
     };
+
+  # environment.etc."greetd/environments".text = ''
+  #   river
+  #   fish
+  #   bash
+  # '';
   });
 }

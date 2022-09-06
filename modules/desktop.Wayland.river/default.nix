@@ -20,7 +20,7 @@ let cfg = config.myconfig;
         export XKB_DEFAULT_LAYOUT=de
         export XKB_DEFAULT_VARIANT=neo
       '';
-      withGtkWrapper = false;
+      withGtkWrapper = true;
       extraOptions = [];
     };
 in {
@@ -32,15 +32,23 @@ in {
         riverPackage
       ];
     }];
+    services= {
+      xserver.displayManager.sddm = {
+        settings = {
+          General.DefaultSession = "river.desktop";
+        };
+      };
+    };
     services.xserver.displayManager.sessionPackages = [ riverPackage ];
-    environment = {
-      loginShellInit = ''
-        [[ -z $DISPLAY && $XDG_VTNR -eq 5 ]] && {
-          while true; do
-            ${riverPackage}/bin/river
-          done
-        }
-      '';
+    services.greetd = {
+      enable = true;
+      settings = rec {
+        initial_session = {
+          command = "${riverPackage}/bin/river";
+          user = "mhuber";
+        };
+        default_session = initial_session;
+      };
     };
   });
 }

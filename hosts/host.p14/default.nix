@@ -20,11 +20,13 @@
     ../host.x1extremeG2/mykeylight
     ../host.x1extremeG2/role.work
     {
+      # myconfig.dwl.enable = true;
       myconfig.river.enable = true;
       myconfig.qtile.enable = true;
-      programs.sway.enable = true;
+      # programs.sway.enable = true;
       home-manager.sharedModules = [{
         services.screen-locker.enable = lib.mkForce false;
+        services.dunst.enable = lib.mkForce false; # is that causing slack freeze
       }];
       services.physlock.enable = lib.mkForce false;
     }
@@ -102,6 +104,10 @@
             writeShellScriptBin "script"
             "${mykeylight-off}/bin/mykeylight-off &disown";
         in "${script}/bin/script";
+        ".config/electron-flags.conf".text = ''
+          --enable-features=WaylandWindowDecorations
+          --ozone-platform-hint=auto
+        '';
       };
       home.packages = with pkgs; [
         rdesktop
