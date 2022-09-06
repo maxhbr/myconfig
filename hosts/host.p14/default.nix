@@ -26,7 +26,7 @@
       home-manager.sharedModules = [{
         services.screen-locker.enable = lib.mkForce false;
       }];
-      services.physlock.enable = lib.mkForce fals
+      services.physlock.enable = lib.mkForce false;
     }
     # {
     #   services.openssh = {

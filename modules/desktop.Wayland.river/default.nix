@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }: 
 let cfg = config.myconfig;
-    otherWlPackages = with pkgs; [
+    riverPackage = pkgs.callPackage ./wrapper.nix {
+      river-unwrapped = pkgs.river;
+      withBaseWrapper = true;
+      extraPaths= with pkgs; [
         foot
         # https://github.com/riverwm/river/wiki/Recommended-Software
         ## Output configuration
@@ -13,23 +16,28 @@ let cfg = config.myconfig;
         ristate
         wayshot
       ];
+      extraSessionCommands = ''
+        export XKB_DEFAULT_LAYOUT=de
+        export XKB_DEFAULT_VARIANT=neo
+      '';
+      withGtkWrapper = false;
+      extraOptions = [];
+    };
 in {
   options.myconfig = with lib; { river.enable = mkEnableOption "river"; };
   config = (lib.mkIf cfg.river.enable {
     home-manager.sharedModules = [{
       home.file = { ".config/river/init".source = ./river/init; };
       home.packages = with pkgs; [
-        river
+        riverPackage
       ];
     }];
+    services.xserver.displayManager.sessionPackages = [ riverPackage ];
     environment = {
       loginShellInit = ''
         [[ -z $DISPLAY && $XDG_VTNR -eq 5 ]] && {
-          export XKB_DEFAULT_LAYOUT=de
-          export XKB_DEFAULT_VARIANT=neo
-          export PATH=$PATH:${lib.makeBinPath otherWlPackages}
           while true; do
-            river
+            ${riverPackage}/bin/river
           done
         }
       '';
