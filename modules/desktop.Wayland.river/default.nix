@@ -6,6 +6,8 @@ let cfg = config.myconfig;
       river-unwrapped = pkgs.river;
       withBaseWrapper = true;
       extraPaths= with pkgs; [
+        rivercarro
+        ## Terminal
         foot
         # https://github.com/riverwm/river/wiki/Recommended-Software
         ## Output configuration
@@ -14,6 +16,15 @@ let cfg = config.myconfig;
         waybar
         ## Program Launchers
         bemenu fuzzel
+        ## Screen Lockers
+        swaylock
+        ## Idle Management
+        swayidle
+        (writeShellScriptBin "myswayidle" ''
+${swayidle}/bin/swayidle -w \
+  timeout 300 '${swaylock}/bin/swaylock -f -c 000000' \
+  before-sleep '${swaylock}/bin/swaylock -f -c 000000'
+'')
         ## Other
         ristate
         wayshot

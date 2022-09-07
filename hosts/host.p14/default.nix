@@ -28,16 +28,16 @@
         services.screen-locker.enable = lib.mkForce false;
         services.dunst.enable = lib.mkForce false; # is that causing slack freeze
       }];
-      services.physlock.enable = lib.mkForce false;
+      # services.physlock.enable = lib.mkForce false;
     }
-    # {
-    #   services.openssh = {
-    #     listenAddresses = [{
-    #       addr = "127.0.0.1";
-    #       port = 22;
-    #     }];
-    #   };
-    # }
+    {
+      services.openssh = {
+        listenAddresses = [{
+          addr = "127.0.0.1";
+          port = 22;
+        }];
+      };
+    }
   ];
 
   config = {
