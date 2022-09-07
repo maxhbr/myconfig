@@ -6,12 +6,13 @@ let cfg = config.myconfig;
       river-unwrapped = pkgs.river;
       withBaseWrapper = true;
       extraPaths= with pkgs; [
-        (writeShellScriptBin "reriver" ''
-sudo systemctl restart greetd.service
-'')
+        (writeShellScriptBin "reriver" "sudo systemctl restart greetd.service")
         rivercarro
         ## Terminal
         foot
+        (writeShellScriptBin "tfoot" ''
+exec ${foot}/bin/foot ${tmux}/bin/tmux
+'')
         # https://github.com/riverwm/river/wiki/Recommended-Software
         ## Output configuration
         wlopm way-displays # wlr-randr kanshi
@@ -30,6 +31,7 @@ ${swayidle}/bin/swayidle -w \
   before-sleep '${swaylock}/bin/swaylock -f -c 000000'
 '')
         ## Other
+        swaybg
         ristate
         wayshot
       ];

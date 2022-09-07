@@ -18,7 +18,8 @@ exec &> >(tee /tmp/river.${XDG_VTNR}.${USER}.log)
 mod=Super
 
 # $mod+Shift+Return to start an instance of foot (https://codeberg.org/dnkl/foot)
-riverctl map normal $mod+Shift Return spawn foot
+riverctl map normal $mod+Shift Return spawn tfoot
+riverctl map normal $mod+Control Return spawn foot
 riverctl map normal $mod P spawn bemenu-run
 riverctl map normal $mod R spawn fuzzel
 
@@ -179,7 +180,7 @@ riverctl csd-filter-add app-id "gedit"
 waybar > /tmp/river.${XDG_VTNR}.${USER}.waybar.log 2>&1 &disown
 way-displays > /tmp/river.${XDG_VTNR}.${USER}.way-displays.log 2>&1 &
 
-foot &disown
+tfoot &disown
 
 ###############################################################################
 
