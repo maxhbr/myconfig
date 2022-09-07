@@ -1,0 +1,6 @@
+ARRANGE: ROW
+# Align ROWs at the TOP (default), MIDDLE or BOTTOM
+# Align COLUMNs at the LEFT (default), MIDDLE or RIGHT
+ALIGN: MIDDLE
+AUTO_SCALE: false
+LAPTOP_DISPLAY_PREFIX: 'eDP'

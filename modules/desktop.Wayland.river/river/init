@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # This is the example configuration file for river.
 #
@@ -9,6 +9,11 @@
 # documentation.
 
 # Note: the "Super" modifier is also known as Logo, GUI, Windows, Mod4, etc.
+
+if [[ -f /tmp/river.log ]]; then
+    mv /tmp/river.${XDG_VTNR}.${USER}.log /tmp/river.${XDG_VTNR}.${USER}.log.1
+fi
+exec &> >(tee /tmp/river.${XDG_VTNR}.${USER}.log)
 
 mod=Super
 
@@ -129,6 +134,7 @@ do
     riverctl map $mode None XF86AudioRaiseVolume  spawn 'pamixer -i 5'
     riverctl map $mode None XF86AudioLowerVolume  spawn 'pamixer -d 5'
     riverctl map $mode None XF86AudioMute         spawn 'pamixer --toggle-mute'
+
     # Control screen backlight brightness with light (https://github.com/haikarainen/light)
     riverctl map $mode None XF86MonBrightnessUp   spawn 'light -A 5'
     riverctl map $mode None XF86MonBrightnessDown spawn 'light -U 5'
@@ -155,7 +161,7 @@ riverctl spawn-tagmask ${all_but_scratch_tag}
 
 # Set background and border color
 riverctl background-color 0x002b36
-riverctl border-color-focused 0x93a1a1
+riverctl border-color-focused 0xee9a00
 riverctl border-color-unfocused 0x586e75
 
 # Set keyboard repeat rate
@@ -170,46 +176,14 @@ riverctl csd-filter-add app-id "gedit"
 
 ###############################################################################
 
-waybar &disown
+waybar > /tmp/river.${XDG_VTNR}.${USER}.waybar.log 2>&1 &disown
+way-displays > /tmp/river.${XDG_VTNR}.${USER}.way-displays.log 2>&1 &
+
 foot &disown
 
 ###############################################################################
-###############################################################################
-###############################################################################
 
-if true; do
-    # Set the default layout generator to be rivertile and start it.
-    # River will send the process group of the init executable SIGTERM on exit.
-    riverctl default-layout rivertile
-    exec rivertile -view-padding 6 -outer-padding 6
-else
-    # Mod+H and Mod+L to decrease/increase the main ratio of rivercarro
-    riverctl map normal $mod H send-layout-cmd rivercarro "main-ratio -0.05"
-    riverctl map normal $mod L send-layout-cmd rivercarro "main-ratio +0.05"
-
-    # Mod+Shift+H and Mod+Shift+L to increment/decrement the main count of rivercarro
-    riverctl map normal $mod+Shift H send-layout-cmd rivercarro "main-count +1"
-    riverctl map normal $mod+Shift L send-layout-cmd rivercarro "main-count -1"
-
-    # Mod+{Up,Right,Down,Left} to change layout orientation
-    riverctl map normal $mod Up    send-layout-cmd rivercarro "main-location top"
-    riverctl map normal $mod Right send-layout-cmd rivercarro "main-location right"
-    riverctl map normal $mod Down  send-layout-cmd rivercarro "main-location bottom"
-    riverctl map normal $mod Left  send-layout-cmd rivercarro "main-location left"
-    # And for monocle
-    riverctl map normal $mod M     send-layout-cmd rivercarro "main-location monocle"
-
-    # Add others rivercarrro's commands the same way with the keybinds you'd like.
-    # e.g.
-    # riverctl map normal $mod <keys> send-layout-cmd rivercarro "inner-gaps -1"
-    # riverctl map normal $mod <keys> send-layout-cmd rivercarro "inner-gaps +1"
-    # riverctl map normal $mod <keys> send-layout-cmd rivercarro "outer-gaps -1"
-    # riverctl map normal $mod <keys> send-layout-cmd rivercarro "outer-gaps +1"
-    # riverctl map normal $mod <keys> send-layout-cmd rivercarro "width-ratio -0.1"
-    # riverctl map normal $mod <keys> send-layout-cmd rivercarro "width-ratio +0.1"
-
-    # Set and exec into the default layout generator, rivercarro.
-    # River will send the process group of the init executable SIGTERM on exit.
-    riverctl default-layout rivercarro
-    exec rivercarro
-done
+# Set the default layout generator to be rivertile and start it.
+# River will send the process group of the init executable SIGTERM on exit.
+riverctl default-layout rivertile
+exec rivertile -view-padding 6 -outer-padding 6

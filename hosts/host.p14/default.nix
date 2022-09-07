@@ -66,6 +66,8 @@
 
     services.xserver.wacom.enable = true;
 
+    services.hardware.bolt.enable = true;
+
     services.logind.extraConfig = ''
       HandlePowerKey=suspend
     '';
