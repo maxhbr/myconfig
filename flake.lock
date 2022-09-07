@@ -399,11 +399,11 @@
         "wlroots": "wlroots"
       },
       "locked": {
-        "lastModified": 1662540488,
-        "narHash": "sha256-XgFE65R6Zm0P3rkQYF53X5f9X5FQIUmkYGAKzEPzFw0=",
+        "lastModified": 1662542744,
+        "narHash": "sha256-D9Y8LzoxoWh7NyPBAK32S8AGncRdgTVlIHWGvMLOPP4=",
         "owner": "hyprwm",
         "repo": "Hyprland",
-        "rev": "cf5426f2d8ddce5de9dc1859857d56700560b976",
+        "rev": "44a2d755c68f8e6990ea885a45ea370be8b3a392",
         "type": "github"
       },
       "original": {
@@ -602,10 +602,10 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1662540211,
-        "narHash": "sha256-C5eeUPaOjIMOUqBI4mHfQuB0ZpKO+nJV6SC2w7vqUxw=",
-        "path": "/nix/store/a4p3c898g53zzkbcmac8p6xlqgplircm-source",
-        "rev": "11715d422cf0dc6b5dcc4da136ed1af96779a70a",
+        "lastModified": 1662540884,
+        "narHash": "sha256-n7L12VvdU6F+9GcBOvqfC9vBYuoXdr2c9yg0QyLewqI=",
+        "path": "/nix/store/qbgdxfxkwjxbp1czc2lzi0j9rajxzl6g-source",
+        "rev": "9b5ce942876b29ebff667aff5764fd130c528e92",
         "type": "path"
       },
       "original": {
@@ -631,10 +631,10 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1662540211,
-        "narHash": "sha256-C5eeUPaOjIMOUqBI4mHfQuB0ZpKO+nJV6SC2w7vqUxw=",
-        "path": "/nix/store/a4p3c898g53zzkbcmac8p6xlqgplircm-source",
-        "rev": "11715d422cf0dc6b5dcc4da136ed1af96779a70a",
+        "lastModified": 1662540884,
+        "narHash": "sha256-n7L12VvdU6F+9GcBOvqfC9vBYuoXdr2c9yg0QyLewqI=",
+        "path": "/nix/store/qbgdxfxkwjxbp1czc2lzi0j9rajxzl6g-source",
+        "rev": "9b5ce942876b29ebff667aff5764fd130c528e92",
         "type": "path"
       },
       "original": {
@@ -1025,7 +1025,7 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-fk9AAGHsp+RkkMYn2u9J7jAm4MDE30OwNPgRBvbkZpE=",
+        "narHash": "sha256-QYbp/2IG84+8Psl5PG1c8zfDYmdZo0CXjXvhWfa15uU=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
