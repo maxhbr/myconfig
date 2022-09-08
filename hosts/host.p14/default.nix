@@ -48,7 +48,6 @@
       virtualisation.enable = true;
       imagework.enable = true;
       cad.enable = true;
-      deskreen.enable = true;
       dev = {
         compliance.enable = true;
         go.enable = true;
