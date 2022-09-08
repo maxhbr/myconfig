@@ -13,6 +13,15 @@ let cfg = config.myconfig;
         (writeShellScriptBin "tfoot" ''
 exec ${foot}/bin/foot ${tmux}/bin/tmux
 '')
+        (writeShellScriptBin "tfoot-reattach" ''
+          ${tmux}/bin/tmux ls |
+              ${gnugrep}/bin/grep -v '(attached)' |
+              cut -f 1 -d ":" |
+              while read SESSION; do
+                  (set -x;
+                   ${foot}/bin/foot ${tmux}/bin/tmux attach -t "$SESSION" & disown)
+              done
+        '')
         # https://github.com/riverwm/river/wiki/Recommended-Software
         ## Output configuration
         wlopm way-displays # wlr-randr kanshi
@@ -27,8 +36,8 @@ exec ${foot}/bin/foot ${tmux}/bin/tmux
         (writeShellScriptBin "myswayidle" ''
 set -euo pipefail
 ${swayidle}/bin/swayidle -w \
-  timeout 300 '${swaylock}/bin/swaylock -f -c 000000' \
-  before-sleep '${swaylock}/bin/swaylock -f -c 000000'
+  timeout 300 'physlock' \
+  before-sleep 'physlock'
 '')
         ## Other
         swaybg
@@ -55,6 +64,9 @@ in {
         riverPackage
       ];
       services.random-background.enable = lib.mkForce false;
+      programs.mako = {
+        enable = true;
+      };
       programs.waybar = {
         enable = true;
         systemd.enable = false;
@@ -239,5 +251,11 @@ tooltip label {
         default_session = initial_session;
       };
     };
+    services.physlock = {
+      enable = true;
+      allowAnyUser = true;
+    };
+    # programs.xss-lock = {
+    #   lockerCommand = "${config.security.wrapperDir}/physlock";
   });
 }

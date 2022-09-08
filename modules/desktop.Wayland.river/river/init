@@ -30,6 +30,9 @@ riverctl map normal $mod+Shift C close
 # $mod+Shift+E to exit river
 riverctl map normal $mod+Shift E exit
 
+# lock screen
+riverctl map normal $mod+Shift Y physlock
+
 # $mod+J and $mod+K to focus the next/previous view in the layout stack
 riverctl map normal $mod J focus-view next
 riverctl map normal $mod K focus-view previous
@@ -107,6 +110,7 @@ riverctl map normal $mod+Shift 0 set-view-tags $all_tags
 
 # $mod+Space to toggle float
 riverctl map normal $mod Space toggle-float
+riverctl map normal $mod T toggle-float
 
 # $mod+F to toggle fullscreen
 riverctl map normal $mod F toggle-fullscreen
@@ -149,9 +153,11 @@ scratch_tag=$((1 << 20 ))
 
 # Toggle the scratchpad with $mod+P
 riverctl map normal $mod S toggle-focused-tags ${scratch_tag}
+riverctl map normal $mod Minus toggle-focused-tags ${scratch_tag}
 
 # Send windows to the scratchpad with $mod+Shift+P
 riverctl map normal $mod+Shift S set-view-tags ${scratch_tag}
+riverctl map normal $mod+Shift Minus set-view-tags ${scratch_tag}
 
 # Set spawn tagmask to ensure new windows don't have the scratchpad tag unless
 # explicitly set.

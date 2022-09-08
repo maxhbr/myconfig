@@ -22,13 +22,12 @@
     {
       # myconfig.dwl.enable = true;
       myconfig.river.enable = true;
-      myconfig.qtile.enable = true;
+      # myconfig.qtile.enable = true;
       # programs.sway.enable = true;
       home-manager.sharedModules = [{
         services.screen-locker.enable = lib.mkForce false;
         services.dunst.enable = lib.mkForce false; # is that causing slack freeze
       }];
-      # services.physlock.enable = lib.mkForce false;
     }
     {
       services.openssh = {
