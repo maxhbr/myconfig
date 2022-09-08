@@ -20,6 +20,7 @@ mod=Super
 # $mod+Shift+Return to start an instance of foot (https://codeberg.org/dnkl/foot)
 riverctl map normal $mod+Shift Return spawn tfoot
 riverctl map normal $mod+Control Return spawn foot
+riverctl map normal $mod+Shift+Control Return spawn tfoot-reattach
 riverctl map normal $mod P spawn bemenu-run
 riverctl map normal $mod R spawn fuzzel
 
@@ -178,10 +179,10 @@ riverctl set-repeat 50 300
 
 # Make certain views start floating
 riverctl float-filter-add app-id float
-riverctl float-filter-add title "popup title with spaces"
+# riverctl float-filter-add title "popup title with spaces"
 
-# Set app-ids and titles of views which should use client side decorations
-riverctl csd-filter-add app-id "gedit"
+# # Set app-ids and titles of views which should use client side decorations
+# riverctl csd-filter-add app-id "gedit"
 
 ###############################################################################
 

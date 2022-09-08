@@ -48,6 +48,9 @@ let
       swaybg
       ristate
       wayshot
+      wf-recorder
+      slurp
+      grim
     ];
     extraSessionCommands = ''
       export XKB_DEFAULT_LAYOUT=de
