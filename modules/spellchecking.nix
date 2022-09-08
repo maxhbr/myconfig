@@ -9,7 +9,10 @@
     ];
     environment = {
       pathsToLink = [ "/share/hunspell" "/share/myspell" "/share/hyphen" ];
-      variables = { DICPATH = "/run/current-system/sw/share/hunspell:/run/current-system/sw/share/hyphen"; };
+      variables = {
+        DICPATH =
+          "/run/current-system/sw/share/hunspell:/run/current-system/sw/share/hyphen";
+      };
     };
   };
 }

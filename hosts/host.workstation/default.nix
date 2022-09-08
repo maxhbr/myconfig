@@ -22,9 +22,7 @@
     { # for quickfix (due to usage of 20.03)
       nixpkgs.config.allowBroken = true;
     }
-    {
-      services.xrdp.enable = true;
-    }
+    { services.xrdp.enable = true; }
     {
       environment.systemPackages = with pkgs; [ x11vnc ];
       ## Setup via ssh tunnel:

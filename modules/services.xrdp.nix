@@ -1,5 +1,4 @@
-{ config, lib, pkgs, ... }:
-{
+{ config, lib, pkgs, ... }: {
   config = (lib.mkIf config.services.xrdp.enable {
     services.xserver.desktopManager.xfce.enable = lib.mkDefault true;
     services.xrdp = {

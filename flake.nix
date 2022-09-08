@@ -42,7 +42,7 @@
 
     hyprland = {
       url = "github:hyprwm/Hyprland";
-        # build with your own instance of nixpkgs
+      # build with your own instance of nixpkgs
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -126,30 +126,29 @@
 
       nixosConfigurationsGen = {
         host-p14 = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "p14"
-            ([ self.nixosModules.core
-              inputs.nixos-hardware.nixosModules.common-cpu-intel
-              inputs.nixos-hardware.nixosModules.common-gpu-intel
-              inputs.nixos-hardware.nixosModules.common-pc-laptop
-              inputs.nixos-hardware.nixosModules.common-pc-laptop-acpi_call
-              inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
-              inputs.nixos-hardware.nixosModules.lenovo-thinkpad
-              ({ myconfig, ... }: {
-                imports = [
-                  (myconfig.metadatalib.announceHost "x1extremeG2")
-                  (myconfig.metadatalib.announceHost "workstation")
-                  (myconfig.metadatalib.announceHost "nas")
-                  (myconfig.metadatalib.announceHost "vserver")
-                  (myconfig.metadatalib.announceHost "nuc")
-                  (myconfig.metadatalib.announceHost "pi4")
-                  (myconfig.metadatalib.announceHost "pi3a")
-                  (myconfig.metadatalib.announceHost "pi0")
-                ];
-              })
-              # inputs.hyprland.nixosModules.default
-              # { programs.hyprland.enable = true; }
-             ]
-              ++ moreModules) metadataOverride);
+          (self.lib.evalConfiguration "x86_64-linux" "p14" ([
+            self.nixosModules.core
+            inputs.nixos-hardware.nixosModules.common-cpu-intel
+            inputs.nixos-hardware.nixosModules.common-gpu-intel
+            inputs.nixos-hardware.nixosModules.common-pc-laptop
+            inputs.nixos-hardware.nixosModules.common-pc-laptop-acpi_call
+            inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
+            inputs.nixos-hardware.nixosModules.lenovo-thinkpad
+            ({ myconfig, ... }: {
+              imports = [
+                (myconfig.metadatalib.announceHost "x1extremeG2")
+                (myconfig.metadatalib.announceHost "workstation")
+                (myconfig.metadatalib.announceHost "nas")
+                (myconfig.metadatalib.announceHost "vserver")
+                (myconfig.metadatalib.announceHost "nuc")
+                (myconfig.metadatalib.announceHost "pi4")
+                (myconfig.metadatalib.announceHost "pi3a")
+                (myconfig.metadatalib.announceHost "pi0")
+              ];
+            })
+            # inputs.hyprland.nixosModules.default
+            # { programs.hyprland.enable = true; }
+          ] ++ moreModules) metadataOverride);
         host-x1extremeG2 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
             { config = { hardware.enableRedistributableFirmware = true; }; }
@@ -176,13 +175,12 @@
             ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
         host-nuc = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "nuc"
-            ([ self.nixosModules.core ]
-              ++ moreModules) metadataOverride);
+            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
         host-pi4 = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "aarch64-linux" "pi4"
-            ([ self.nixosModules.core 
-              inputs.nixos-hardware.nixosModules.raspberry-pi-4
-            ] ++ moreModules) metadataOverride);
+          (self.lib.evalConfiguration "aarch64-linux" "pi4" ([
+            self.nixosModules.core
+            inputs.nixos-hardware.nixosModules.raspberry-pi-4
+          ] ++ moreModules) metadataOverride);
         host-pi3a = moreModules: metadataOverride:
           (self.lib.evalConfiguration "aarch64-linux" "pi3a"
             ([ self.nixosModules.core ] ++ moreModules) metadataOverride);

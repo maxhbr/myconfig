@@ -31,15 +31,17 @@ riverctl map normal $mod+Shift C close
 riverctl map normal $mod+Shift E exit
 
 # lock screen
-riverctl map normal $mod+Shift Y physlock
+riverctl map normal $mod+Shift Y myphyslock
 
 # $mod+J and $mod+K to focus the next/previous view in the layout stack
 riverctl map normal $mod J focus-view next
+riverctl map normal $mod Tab focus-view next
 riverctl map normal $mod K focus-view previous
 
 # $mod+Shift+J and $mod+Shift+K to swap the focused view with the next/previous
 # view in the layout stack
 riverctl map normal $mod+Shift J swap next
+riverctl map normal $mod+Shift Tab swap next
 riverctl map normal $mod+Shift K swap previous
 
 # $mod+Period and $mod+Comma to focus the next/previous output

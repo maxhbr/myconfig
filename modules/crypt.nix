@@ -65,16 +65,20 @@ let
       name = "${name}-secret";
       phases = "installPhase";
       installPhase = let
-        pubkeyArgs = if unsafePubkeyOverwrite == null
-               then "-r '${myconfig.metadatalib.get.hosts."${config.networking.hostName}".pubkeys."/etc/ssh/ssh_host_rsa_key.pub"}'"
-               else "-R '${unsafePubkeyOverwrite}'";
+        pubkeyArgs = if unsafePubkeyOverwrite == null then
+          "-r '${
+            myconfig.metadatalib.get.hosts."${config.networking.hostName}".pubkeys."/etc/ssh/ssh_host_rsa_key.pub"
+          }'"
+        else
+          "-R '${unsafePubkeyOverwrite}'";
       in ''
         "${pkgs.age}"/bin/age -a ${pubkeyArgs} -o "$out" '${source}'
       '';
     };
 
   mkService = name:
-    { source, dest, owner, group, permissions, wantedBy, unsafePubkeyOverwrite, unsafePrivkeyOverwrite, ... }: {
+    { source, dest, owner, group, permissions, wantedBy, unsafePubkeyOverwrite
+    , unsafePrivkeyOverwrite, ... }: {
       description = "decrypt secret for ${name}";
       wantedBy = [ "multi-user.target" ] ++ wantedBy;
       before = wantedBy;
@@ -82,10 +86,11 @@ let
       serviceConfig.Type = "oneshot";
 
       script = let
-          privkey = if unsafePrivkeyOverwrite == null
-                       then "/etc/ssh/ssh_host_rsa_key"
-                       else unsafePrivkeyOverwrite;
-        in with pkgs; ''
+        privkey = if unsafePrivkeyOverwrite == null then
+          "/etc/ssh/ssh_host_rsa_key"
+        else
+          unsafePrivkeyOverwrite;
+      in with pkgs; ''
         dir="$(dirname '${dest}')"
         if [[ ! -d "$dir" ]]; then
           mkdir -p "$dir"

@@ -2,8 +2,7 @@
 let cfg = config.myconfig;
 in {
   options.myconfig = with lib; { deskreen.enable = mkEnableOption "deskreen"; };
-  config = 
-    (lib.mkIf (config.services.xserver.enable && cfg.deskreen.enable) {
+  config = (lib.mkIf (config.services.xserver.enable && cfg.deskreen.enable) {
     home-manager.sharedModules = [{
       home.packages = with pkgs;
         [

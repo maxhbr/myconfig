@@ -1,20 +1,19 @@
 { config, lib, pkgs, modulesPath, ... }:
 
 {
-  imports =
-    [ (modulesPath + "/installer/scan/not-detected.nix")
-    ];
+  imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
 
-  boot.initrd.availableKernelModules = [ "xhci_pci" "thunderbolt" "nvme" "usb_storage" "sd_mod" ];
+  boot.initrd.availableKernelModules =
+    [ "xhci_pci" "thunderbolt" "nvme" "usb_storage" "sd_mod" ];
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-intel" ];
   boot.extraModulePackages = [ ];
 
-  fileSystems."/" =
-    { device = "/dev/mapper/enc-pv";
-      fsType = "btrfs";
-      options = [ "subvol=@" ];
-    };
+  fileSystems."/" = {
+    device = "/dev/mapper/enc-pv";
+    fsType = "btrfs";
+    options = [ "subvol=@" ];
+  };
 
   boot.initrd.luks.devices."enc-pv" = {
     device = "/dev/disk/by-uuid/50d4205b-70d1-4836-99e3-6cb568e832bb";
@@ -22,29 +21,28 @@
     allowDiscards = true;
   };
 
+  fileSystems."/home" = {
+    device = "/dev/mapper/enc-pv";
+    fsType = "btrfs";
+    options = [ "subvol=@home" ];
+  };
 
-  fileSystems."/home" =
-    { device = "/dev/mapper/enc-pv";
-      fsType = "btrfs";
-      options = [ "subvol=@home" ];
-    };
+  fileSystems."/.snapshots" = {
+    device = "/dev/mapper/enc-pv";
+    fsType = "btrfs";
+    options = [ "subvol=@snapshots" ];
+  };
 
-  fileSystems."/.snapshots" =
-    { device = "/dev/mapper/enc-pv";
-      fsType = "btrfs";
-      options = [ "subvol=@snapshots" ];
-    };
+  fileSystems."/.swapfile" = {
+    device = "/dev/mapper/enc-pv";
+    fsType = "btrfs";
+    options = [ "subvol=@swapfile" ];
+  };
 
-  fileSystems."/.swapfile" =
-    { device = "/dev/mapper/enc-pv";
-      fsType = "btrfs";
-      options = [ "subvol=@swapfile" ];
-    };
-
-  fileSystems."/boot" =
-    { device = "/dev/disk/by-uuid/113B-166C";
-      fsType = "vfat";
-    };
+  fileSystems."/boot" = {
+    device = "/dev/disk/by-uuid/113B-166C";
+    fsType = "vfat";
+  };
 
   swapDevices = [{
     device = "/.swapfile/swapfile";
@@ -61,5 +59,6 @@
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
   powerManagement.cpuFreqGovernor = lib.mkDefault "powersave";
-  hardware.cpu.intel.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
+  hardware.cpu.intel.updateMicrocode =
+    lib.mkDefault config.hardware.enableRedistributableFirmware;
 }

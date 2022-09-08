@@ -26,7 +26,8 @@
       # programs.sway.enable = true;
       home-manager.sharedModules = [{
         services.screen-locker.enable = lib.mkForce false;
-        services.dunst.enable = lib.mkForce false; # is that causing slack freeze
+        services.dunst.enable =
+          lib.mkForce false; # is that causing slack freeze
       }];
     }
     {

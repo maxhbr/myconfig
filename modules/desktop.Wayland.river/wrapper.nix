@@ -1,13 +1,8 @@
-{ lib
-, river-unwrapped
-, makeWrapper, symlinkJoin, writeShellScriptBin
+{ lib, river-unwrapped, makeWrapper, symlinkJoin, writeShellScriptBin
 , withBaseWrapper ? true, extraSessionCommands ? "", dbus
 , withGtkWrapper ? false, wrapGAppsHook, gdk-pixbuf, glib, gtk3
-, extraPaths ? []
-, extraOptions ? [] # E.g.: [ "--verbose" ]
-, xwaylandSupport ? true
-, dbusSupport ? true
-}:
+, extraPaths ? [ ], extraOptions ? [ ] # E.g.: [ "--verbose" ]
+, xwaylandSupport ? true, dbusSupport ? true }:
 
 assert extraSessionCommands != "" -> withBaseWrapper;
 
@@ -16,24 +11,25 @@ with lib;
 let
   river = river-unwrapped.override { inherit xwaylandSupport; };
   baseWrapper = writeShellScriptBin "river" ''
-     set -o errexit
-     if [ ! "$_nIVER_WRAPPER_ALREADY_EXECUTED" ]; then
-       export XDG_CURRENT_DESKTOP=river
-       ${extraSessionCommands}
-       export _RIVER_WRAPPER_ALREADY_EXECUTED=1
-     fi
-     if [ "$DBUS_SESSION_BUS_ADDRESS" ]; then
-       export DBUS_SESSION_BUS_ADDRESS
-       exec ${river}/bin/river "$@"
-     else
-       exec ${if !dbusSupport then "" else "${dbus}/bin/dbus-run-session"} ${river}/bin/river "$@"
-     fi
-   '';
+    set -o errexit
+    if [ ! "$_nIVER_WRAPPER_ALREADY_EXECUTED" ]; then
+      export XDG_CURRENT_DESKTOP=river
+      ${extraSessionCommands}
+      export _RIVER_WRAPPER_ALREADY_EXECUTED=1
+    fi
+    if [ "$DBUS_SESSION_BUS_ADDRESS" ]; then
+      export DBUS_SESSION_BUS_ADDRESS
+      exec ${river}/bin/river "$@"
+    else
+      exec ${
+        if !dbusSupport then "" else "${dbus}/bin/dbus-run-session"
+      } ${river}/bin/river "$@"
+    fi
+  '';
 in symlinkJoin {
   name = "river-${river.version}";
 
-  paths = (optional withBaseWrapper baseWrapper)
-    ++ [ river ] ++ extraPaths;
+  paths = (optional withBaseWrapper baseWrapper) ++ [ river ] ++ extraPaths;
 
   strictDeps = false;
   nativeBuildInputs = [ makeWrapper ]
@@ -58,7 +54,10 @@ in symlinkJoin {
 
     wrapProgram $out/bin/river \
       ${optionalString withGtkWrapper ''"''${gappsWrapperArgs[@]}"''} \
-      ${optionalString (extraOptions != []) "${concatMapStrings (x: " --add-flags " + x) extraOptions}"}
+      ${
+        optionalString (extraOptions != [ ])
+        "${concatMapStrings (x: " --add-flags " + x) extraOptions}"
+      }
   '';
 
   passthru = {
