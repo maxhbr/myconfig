@@ -20,6 +20,7 @@
     ./hardware.hantek
     ./mykeylight
     ./role.work
+    ./programs.khal.nix
     ./a7iiiAsWebcam.nix
     {
       # myconfig.dwl.enable = true;

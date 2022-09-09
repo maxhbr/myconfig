@@ -45,8 +45,8 @@
           };
           battery = {
             states = {
-              warning = 80;
-              critical = 30;
+              warning = 40;
+              critical = 20;
             };
             format = "{capacity}% {icon}";
             format-charging = "{capacity}% ";
@@ -145,6 +145,9 @@
         }
 
         #battery.warning:not(.charging) {
+            background: #ee9a00;
+        }
+        #battery.critical:not(.charging) {
             background: #f53c3c;
             color: white;
             animation-name: blink;
