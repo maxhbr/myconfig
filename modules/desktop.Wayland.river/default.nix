@@ -51,6 +51,7 @@ let
       wf-recorder
       slurp
       grim
+      (writeShellScriptBin "grim-region" "${grim}/bin/grim -g \"$(${slurp}/bin/slurp)\"")
     ];
     extraSessionCommands = ''
       export XKB_DEFAULT_LAYOUT=de

@@ -13,12 +13,14 @@
       networking.interfaces.wlp0s20f3.useDHCP = true;
       # networking.interfaces.enp82s0u2u1u2.useDHCP = true;
     }
+    ./mail
     ../../hardware/footswitch.nix
     ../../hardware/blink1.nix
     ../../hardware/unifying.nix
-    ../host.x1extremeG2/hardware.hantek
-    ../host.x1extremeG2/mykeylight
-    ../host.x1extremeG2/role.work
+    ./hardware.hantek
+    ./mykeylight
+    ./role.work
+    ./a7iiiAsWebcam.nix
     {
       # myconfig.dwl.enable = true;
       myconfig.river.enable = true;

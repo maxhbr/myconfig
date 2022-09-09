@@ -11,22 +11,21 @@
     # ../../hardware/steamcontroller.nix
     ../../hardware/blink1.nix
     ../../hardware/unifying.nix
-    ./hardware.hantek
-    ./mykeylight
+    ../host.p14/hardware.hantek
+    ../host.p14/mykeylight
     # ./backup-hdd.nix
     # ./foto-hdd.nix
     # modules
-    ./role.work
+    ../host.p14/role.work
     # ./service.docker-registry.nix
     # ./service.podman.buildkit.nix
-    ./mail
+    ../host.p14/mail
     {
       myconfig.river.enable = true;
       myconfig.qtile.enable = true;
       programs.sway.enable = true;
     }
     ## fun
-    ./a7iiiAsWebcam.nix
     ./smarthome.nix
     ../host.workstation/gaming/games.steam
     ./services.xserver.programs.platformio.nix

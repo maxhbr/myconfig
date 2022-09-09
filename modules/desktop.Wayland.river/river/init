@@ -190,6 +190,7 @@ waybar > /tmp/river.${XDG_VTNR}.${USER}.waybar.log 2>&1 &disown
 way-displays > /tmp/river.${XDG_VTNR}.${USER}.way-displays.log 2>&1 &
 
 tfoot &disown
+myphyslock &disown
 
 ###############################################################################
 
