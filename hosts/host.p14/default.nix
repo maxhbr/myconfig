@@ -21,7 +21,7 @@
     ./mykeylight
     ./role.work
     ./programs.khal.nix
-    ./a7iiiAsWebcam.nix
+    # ./a7iiiAsWebcam.nix
     {
       # myconfig.dwl.enable = true;
       myconfig.river.enable = true;

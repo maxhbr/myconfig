@@ -1,4 +1,4 @@
-# Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2022 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
 let
@@ -54,6 +54,7 @@ let
       (writeShellScriptBin "grim-region" "${grim}/bin/grim -g \"$(${slurp}/bin/slurp)\"")
       wl-clipboard
       xdg-desktop-portal-wlr
+      nomacs
     ];
     extraSessionCommands = ''
       export XKB_DEFAULT_LAYOUT=${config.environment.sessionVariables."XKB_DEFAULT_LAYOUT"}

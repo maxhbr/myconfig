@@ -9,24 +9,16 @@
           modules-left = [ "river/tags" "river/window" ];
           modules-center = [ ];
           modules-right = [
-            "idle_inhibitor"
             "pulseaudio"
             "network"
             "cpu"
+            "custom/platform_profile"
             "memory"
             "backlight"
-            "sway/language"
             "battery"
             "clock"
             "tray"
           ];
-          idle_inhibitor = {
-            format = "{icon}";
-            format-icons = {
-              activated = "";
-              deactivated = "";
-            };
-          };
           tray = { spacing = 10; };
           clock = {
             tooltip-format = ''
@@ -37,6 +29,18 @@
           cpu = {
             format = "cpu: {usage}%";
             tooltip = false;
+          };
+          "custom/platform_profile" = {
+            format = "{}";
+            exec = (pkgs.writeShellScriptBin "getPlatformProfile" ''
+profile="$(cat /sys/firmware/acpi/platform_profile)"
+cat <<EOF
+{"text":"$profile","class":"$profile"}
+EOF
+'') + "/bin/getPlatformProfile";
+            exec-if = "! grep -q performance /sys/firmware/acpi/platform_profile";
+            return-type = "json";
+            interval = 5;
           };
           memory = { format = "ram: {}%"; };
           backlight = {
@@ -119,10 +123,9 @@
         #backlight,
         #network,
         #pulseaudio,
-        #custom-media,
+        #custom-platform_profile,
         #tray,
-        #mode,
-        #idle_inhibitor {
+        #mode {
             padding: 0 10px;
             background-color: #64727D;
         }
@@ -142,6 +145,14 @@
                 background-color: #ffffff;
                 color: black;
             }
+        }
+
+        #custom-platform_profile.balanced {
+            background: #ee9a00;
+        }
+
+        #custom-platform_profile.low-power {
+            background: #f53c3c;
         }
 
         #battery.warning:not(.charging) {

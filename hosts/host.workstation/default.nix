@@ -14,6 +14,8 @@
     (myconfig.metadatalib.setupAsBuildMachine [
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_ed25519.pub"
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
+      myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519.pub"
+      myconfig.metadatalib.get.hosts.p14.pubkeys."id_rsa.pub"
     ])
     # other profiles
     ./gaming

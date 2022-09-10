@@ -40,14 +40,16 @@ in {
         serviceConfig.Type = "oneshot";
         script = ''
           historyfile=/home/${myconfig.user}/.zsh_history
-          backupdir="$historyfile"_backups
-          backup=$backupdir/$(date '+%Y-%V').zsh_history.gz
-          if [[ ! -f $backup ]]; then
-            mkdir -p $backupdir
-            echo "Time: $(date)." >> $backupdir/zsh-history-backup-timer.log
-            ${pkgs.gzip}/bin/gzip -k $historyfile
-            mv $historyfile.gz $backup
-            chown ${myconfig.user}:${myconfig.user} $backup
+          if [[ -f $historyfile ]]; then
+            backupdir="$historyfile"_backups
+            backup=$backupdir/$(date '+%Y-%V').zsh_history.gz
+            if [[ ! -f $backup ]]; then
+              mkdir -p $backupdir
+              echo "Time: $(date)." >> $backupdir/zsh-history-backup-timer.log
+              ${pkgs.gzip}/bin/gzip -k $historyfile
+              mv $historyfile.gz $backup
+              chown ${myconfig.user}:${myconfig.user} $backup
+            fi
           fi
         '';
       };
