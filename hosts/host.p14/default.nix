@@ -73,6 +73,7 @@
     services.logind.extraConfig = ''
       HandlePowerKey=suspend
     '';
+    services.gnome.gnome-keyring.enable = true;
 
     boot.kernelPackages = lib.mkForce pkgs.linuxPackages_testing;
     boot.kernelPatches = [{

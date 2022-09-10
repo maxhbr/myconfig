@@ -12,7 +12,7 @@ let
   river = river-unwrapped.override { inherit xwaylandSupport; };
   baseWrapper = writeShellScriptBin "river" ''
     set -o errexit
-    if [ ! "$_nIVER_WRAPPER_ALREADY_EXECUTED" ]; then
+    if [ ! "$_RIVER_WRAPPER_ALREADY_EXECUTED" ]; then
       export XDG_CURRENT_DESKTOP=river
       ${extraSessionCommands}
       export _RIVER_WRAPPER_ALREADY_EXECUTED=1

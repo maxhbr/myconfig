@@ -20,6 +20,7 @@
   ./nixos.user.nix
   ./programs.pass
   ./programs.taskwarrior.nix
+  ./services.gnome.gnome-keyring.nix
   ./services.netdata.nix
   ./services.openssh.nix
   ./services.postgresql.nix

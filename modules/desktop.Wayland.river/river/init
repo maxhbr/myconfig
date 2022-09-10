@@ -188,6 +188,9 @@ riverctl float-filter-add app-id float
 
 ###############################################################################
 
+riverctl spawn "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=river"
+riverctl spawn "systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=river"
+
 waybar > /tmp/river.${XDG_VTNR}.${USER}.waybar.log 2>&1 &disown
 way-displays > /tmp/river.${XDG_VTNR}.${USER}.way-displays.log 2>&1 &
 
