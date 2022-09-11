@@ -61,19 +61,18 @@
             tree_view = 0;
             detailed_cpu_time = 1;
 
-            left_meters = [ "AllCPUs2" "CPU" "LoadAverage" "Tasks" ];
+            left_meters = [ "AllCPUs2"];
             left_meter_modes = with config.lib.htop.modes; [
               Bar
-              Bar
-              Text
-              Text
             ];
             right_meters = [
               "Uptime"
               "Battery"
               "Hostname"
+              "CPU"
               "Memory"
               "Swap"
+              "LoadAverage" "Tasks"
               "Systemd"
               "Zram"
             ];
@@ -83,6 +82,9 @@
               Text
               Bar
               Bar
+              Bar
+              Text
+              Text
               Text
               Text
             ];

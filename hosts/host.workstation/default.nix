@@ -12,10 +12,9 @@
     ./4x500-hdds.raid.nix
     (myconfig.metadatalib.fixIp "enp39s0")
     (myconfig.metadatalib.setupAsBuildMachine [
+      myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_ed25519.pub"
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
-      myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519.pub"
-      myconfig.metadatalib.get.hosts.p14.pubkeys."id_rsa.pub"
     ])
     # other profiles
     ./gaming

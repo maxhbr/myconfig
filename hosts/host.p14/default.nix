@@ -23,8 +23,9 @@
     ./programs.khal.nix
     # ./a7iiiAsWebcam.nix
     {
+      myconfig.wayland.enable = true;
       # myconfig.dwl.enable = true;
-      myconfig.river.enable = true;
+      # myconfig.river.enable = true;
       # myconfig.qtile.enable = true;
       # programs.sway.enable = true;
       home-manager.sharedModules = [{

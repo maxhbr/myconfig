@@ -21,7 +21,7 @@ mod=Super
 riverctl map normal $mod+Shift Return spawn tfoot
 riverctl map normal $mod+Control Return spawn foot
 riverctl map normal $mod+Shift+Control Return spawn tfoot-reattach
-riverctl map normal $mod P spawn bemenu-run
+riverctl map normal $mod P spawn "wofi --show run"
 riverctl map normal $mod R spawn fuzzel
 
 # $mod+Q to close the focused view
@@ -55,14 +55,6 @@ riverctl map normal $mod+Shift Comma send-to-output previous
 
 # $mod+Return to bump the focused view to the top of the layout stack
 riverctl map normal $mod Return zoom
-
-# $mod+H and $mod+L to decrease/increase the main ratio of rivertile(1)
-riverctl map normal $mod H send-layout-cmd rivertile "main-ratio -0.05"
-riverctl map normal $mod L send-layout-cmd rivertile "main-ratio +0.05"
-
-# $mod+Shift+H and $mod+Shift+L to increment/decrement the main count of rivertile(1)
-riverctl map normal $mod+Shift H send-layout-cmd rivertile "main-count +1"
-riverctl map normal $mod+Shift L send-layout-cmd rivertile "main-count -1"
 
 # $mod+Alt+{H,J,K,L} to move views
 riverctl map normal $mod+Alt H move left 100
@@ -116,15 +108,6 @@ riverctl map normal $mod+Shift Y set-view-tags $all_tags
 # $mod+Space to toggle float
 riverctl map normal $mod Space toggle-float
 riverctl map normal $mod T toggle-float
-
-# $mod+F to toggle fullscreen
-riverctl map normal $mod F toggle-fullscreen
-
-# $mod+{Up,Right,Down,Left} to change layout orientation
-riverctl map normal $mod Up    send-layout-cmd rivertile "main-location top"
-riverctl map normal $mod Right send-layout-cmd rivertile "main-location right"
-riverctl map normal $mod Down  send-layout-cmd rivertile "main-location bottom"
-riverctl map normal $mod Left  send-layout-cmd rivertile "main-location left"
 
 # Declare a passthrough mode. This mode has only a single mapping to return to
 # normal mode. This makes it useful for testing a nested wayland compositor
@@ -199,7 +182,60 @@ myphyslock &disown
 
 ###############################################################################
 
-# Set the default layout generator to be rivertile and start it.
-# River will send the process group of the init executable SIGTERM on exit.
-riverctl default-layout rivertile
-exec rivertile -view-padding 6 -outer-padding 6
+if false; then
+    # $mod+H and $mod+L to decrease/increase the main ratio of rivertile(1)
+    riverctl map normal $mod H send-layout-cmd rivertile "main-ratio -0.05"
+    riverctl map normal $mod L send-layout-cmd rivertile "main-ratio +0.05"
+
+    # $mod+Shift+H and $mod+Shift+L to increment/decrement the main count of rivertile(1)
+    riverctl map normal $mod+Shift H send-layout-cmd rivertile "main-count +1"
+    riverctl map normal $mod+Shift L send-layout-cmd rivertile "main-count -1"
+
+    # $mod+{Up,Right,Down,Left} to change layout orientation
+    riverctl map normal $mod Up    send-layout-cmd rivertile "main-location top"
+    riverctl map normal $mod Right send-layout-cmd rivertile "main-location right"
+    riverctl map normal $mod Down  send-layout-cmd rivertile "main-location bottom"
+    riverctl map normal $mod Left  send-layout-cmd rivertile "main-location left"
+
+    # $mod+F to toggle fullscreen
+    riverctl map normal $mod F toggle-fullscreen
+
+    # Set the default layout generator to be rivertile and start it.
+    # River will send the process group of the init executable SIGTERM on exit.
+    riverctl default-layout rivertile
+    exec rivertile -view-padding 6 -outer-padding 6
+else
+    # Mod+H and Mod+L to decrease/increase the main ratio of rivercarro
+    riverctl map normal $mod H send-layout-cmd rivercarro "main-ratio -0.05"
+    riverctl map normal $mod L send-layout-cmd rivercarro "main-ratio +0.05"
+
+    # Mod+Shift+H and Mod+Shift+L to increment/decrement the main count of rivercarro
+    riverctl map normal $mod+Shift H send-layout-cmd rivercarro "main-count +1"
+    riverctl map normal $mod+Shift L send-layout-cmd rivercarro "main-count -1"
+
+    # Mod+{Up,Right,Down,Left} to change layout orientation
+    riverctl map normal $mod Up    send-layout-cmd rivercarro "main-location top"
+    riverctl map normal $mod Right send-layout-cmd rivercarro "main-location right"
+    riverctl map normal $mod Down  send-layout-cmd rivercarro "main-location bottom"
+    riverctl map normal $mod Left  send-layout-cmd rivercarro "main-location left"
+    riverctl map normal $mod+Shift Space send-layout-cmd rivercarro "main-location left"
+    # And for monocle
+    riverctl map normal $mod M     send-layout-cmd rivercarro "main-location monocle"
+    riverctl map normal $mod F     send-layout-cmd rivercarro "main-location monocle"
+    # $mod+F to toggle fullscreen
+    riverctl map normal $mod+Shift F toggle-fullscreen
+
+    # Add others rivercarrro's commands the same way with the keybinds you'd like.
+    # e.g.
+    # riverctl map normal $mod <keys> send-layout-cmd rivercarro "inner-gaps -1"
+    # riverctl map normal $mod <keys> send-layout-cmd rivercarro "inner-gaps +1"
+    # riverctl map normal $mod <keys> send-layout-cmd rivercarro "outer-gaps -1"
+    # riverctl map normal $mod <keys> send-layout-cmd rivercarro "outer-gaps +1"
+    # riverctl map normal $mod <keys> send-layout-cmd rivercarro "width-ratio -0.1"
+    # riverctl map normal $mod <keys> send-layout-cmd rivercarro "width-ratio +0.1"
+
+    # Set and exec into the default layout generator, rivercarro.
+    # River will send the process group of the init executable SIGTERM on exit.
+    riverctl default-layout rivercarro
+    exec rivercarro -inner-gaps 6 -outer-gaps 6
+fi
