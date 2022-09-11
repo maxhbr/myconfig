@@ -24,6 +24,7 @@
     # ./a7iiiAsWebcam.nix
     {
       myconfig.wayland.enable = true;
+      myconfig.wayland.desktop = "river";
       # myconfig.dwl.enable = true;
       # myconfig.river.enable = true;
       # myconfig.qtile.enable = true;

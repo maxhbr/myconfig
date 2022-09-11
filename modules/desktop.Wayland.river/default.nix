@@ -44,22 +44,33 @@ in {
         programs.waybar.enable = true;
       }
     ];
-    # services = {
-    #   xserver.displayManager.sddm = {
-    #     settings = { General.DefaultSession = "river.desktop"; };
-    #   };
-    # };
+    services = {
+      xserver.displayManager.sddm = {
+        settings = { General.DefaultSession = "river.desktop"; };
+      };
+    };
     services.xserver.displayManager.sessionPackages = [ riverPackage ];
     services.greetd = {
-      settings = rec {
+      enable = lib.mkDefault true;
+      settings = {
+        default_session = {
+          command = "${lib.makeBinPath [pkgs.greetd.tuigreet] }/tuigreet --time --cmd ${riverPackage}/bin/river";
+          user = "greeter";
+        };
         initial_session = {
           command = "${riverPackage}/bin/river";
           user = "mhuber";
         };
-        settings = {
-          default_session = initial_session;
-        };
       };
+      # settings = rec {
+      #   initial_session = {
+      #     command = "${riverPackage}/bin/river";
+      #     user = "mhuber";
+      #   };
+      #   settings = {
+      #     default_session = initial_session;
+      #   };
+      # };
     };
   });
 }

@@ -87,7 +87,7 @@ in {
     home-manager.sharedModules = [
       {
         services.random-background.enable = lib.mkForce false;
-        programs.mako.enable = true; 
+        programs.mako.enable = true;
       }
     ];
     services.greetd = {
