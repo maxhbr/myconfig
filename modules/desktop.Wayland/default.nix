@@ -3,6 +3,7 @@
 { pkgs, config, lib, ... }:
 let
   cfg = config.myconfig;
+  settingsFormat = pkgs.formats.toml {};
 in {
   options.myconfig = with lib; {
     wayland = {
@@ -70,11 +71,24 @@ in {
           The desktop environment to use
         '';
       };
+      greetdSettings = mkOption {
+        type = settingsFormat.type;
+        example = literalExpression ''
+          {
+            sway = {
+              command = "''${pkgs.greetd.greetd}/bin/agreety --cmd sway";
+            };
+          }
+        '';
+        description = lib.mdDoc ''
+          greetd configuration ([documentation](https://man.sr.ht/~kennylevinsen/greetd/))
+          as a Nix attribute set.
+        '';
+      };
     };
   };
   config = (lib.mkIf cfg.wayland.enable {
     environment.sessionVariables = {
-      "XDG_CURRENT_DESKTOP" = cfg.wayland.desktop;
       "XDG_SESSION_TYPE" = "wayland";
       "SDL_VIDEODRIVER" = "wayland";
       # needs qt5.qtwayland in systemPackages
@@ -86,12 +100,24 @@ in {
     };
     home-manager.sharedModules = [
       {
+        home.packages = [
+          (pkgs.writeShellScriptBin "regreet" "sudo systemctl restart greetd.service")
+        ];
         services.random-background.enable = lib.mkForce false;
         programs.mako.enable = true;
       }
     ];
     services.greetd = {
       enable = true;
+      settings = let
+        initial_session = cfg.wayland.greetdSettings."${cfg.wayland.desktop}_session";
+      in cfg.wayland.greetdSettings // {
+        default_session = {
+          command = "${lib.makeBinPath [pkgs.greetd.tuigreet] }/tuigreet --width 120 --time --cmd '${initial_session.command}'";
+          user = "greeter";
+        };
+        inherit initial_session;
+      };
     };
     services.physlock = {
       enable = true;

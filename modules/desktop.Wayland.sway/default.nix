@@ -40,8 +40,9 @@ let
     '';
   };
 
+  cfg = config.myconfig;
 in {
-  config = (lib.mkIf config.programs.sway.enable {
+  config = (lib.mkIf (cfg.wayland.enable && config.programs.sway.enable) {
     environment = {
       systemPackages = with pkgs; [
         dbus-sway-environment
@@ -54,7 +55,6 @@ in {
     home-manager.sharedModules = [{
       home.file = { ".config/sway/config".source = ./config/sway/config; };
       home.packages = with pkgs; [
-        grim # for screenshots
         qt5.qtwayland
       ];
     }];
@@ -81,25 +81,26 @@ in {
         xwayland
         st
         dmenu
-        foot
-        glib # gsettings
-        grim # screenshot functionality
-        slurp # screenshot functionality
-        wl-clipboard # wl-copy and wl-paste for copy/paste from stdin / stdout
-        bemenu # wayland clone of dmenu
-        mako # notification system developed by swaywm maintainer
-      ];
+      ] ++ cfg.wayland.commonPackages;
       wrapperFeatures.gtk = true;
 
       extraSessionCommands = ''
-        export SDL_VIDEODRIVER=wayland
-        # needs qt5.qtwayland in systemPackages
-        export QT_QPA_PLATFORM=wayland
-        export QT_WAYLAND_DISABLE_WINDOWDECORATION="1"
-        # Fix for some Java AWT applications (e.g. Android Studio),
-        # use this if they aren't displayed properly:
-        export _JAVA_AWT_WM_NONREPARENTING=1
+        export XDG_CURRENT_DESKTOP=sway
+        export XKB_DEFAULT_LAYOUT=${config.environment.sessionVariables."XKB_DEFAULT_LAYOUT"}
+        export XKB_DEFAULT_VARIANT=${config.environment.sessionVariables."XKB_DEFAULT_VARIANT"}
+        export XDG_SESSION_TYPE=${config.environment.sessionVariables."XDG_SESSION_TYPE"}
+        export SDL_VIDEODRIVER=${config.environment.sessionVariables."SDL_VIDEODRIVER"}
+        export QT_QPA_PLATFORM=${config.environment.sessionVariables."QT_QPA_PLATFORM"}
+        export QT_WAYLAND_DISABLE_WINDOWDECORATION=${config.environment.sessionVariables."QT_WAYLAND_DISABLE_WINDOWDECORATION"}
+        export _JAVA_AWT_WM_NONREPARENTING=${config.environment.sessionVariables."_JAVA_AWT_WM_NONREPARENTING"}
       '';
+    };
+
+    myconfig.wayland.greetdSettings = {
+      sway_session = {
+        command = "sway";
+        user = "mhuber";
+      };
     };
   });
 }

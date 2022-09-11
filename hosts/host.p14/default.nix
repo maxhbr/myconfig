@@ -25,10 +25,7 @@
     {
       myconfig.wayland.enable = true;
       myconfig.wayland.desktop = "river";
-      # myconfig.dwl.enable = true;
-      # myconfig.river.enable = true;
-      # myconfig.qtile.enable = true;
-      # programs.sway.enable = true;
+      programs.sway.enable = true;
       home-manager.sharedModules = [{
         services.screen-locker.enable = lib.mkForce false;
         services.dunst.enable =

@@ -7,7 +7,6 @@ let
     river-unwrapped = pkgs.river;
     withBaseWrapper = true;
     extraPaths = cfg.wayland.commonPackages ++ (with pkgs; [
-      (writeShellScriptBin "reriver" "sudo systemctl restart greetd.service")
       rivercarro
       ristate
       (writeShellScriptBin "myswayidle" ''
@@ -20,6 +19,7 @@ let
         "exec '${config.security.wrapperDir}/physlock'")
     ]);
     extraSessionCommands = ''
+      export XDG_CURRENT_DESKTOP=river
       export XKB_DEFAULT_LAYOUT=${config.environment.sessionVariables."XKB_DEFAULT_LAYOUT"}
       export XKB_DEFAULT_VARIANT=${config.environment.sessionVariables."XKB_DEFAULT_VARIANT"}
       export XDG_SESSION_TYPE=${config.environment.sessionVariables."XDG_SESSION_TYPE"}
@@ -32,7 +32,7 @@ let
     extraOptions = [ ];
   };
 in {
-  config = (lib.mkIf (cfg.wayland.enable && cfg.wayland.desktop == "river") {
+  config = (lib.mkIf (cfg.wayland.enable) {
     home-manager.sharedModules = [
       ./home-manager.waybar.nix
       {
@@ -44,33 +44,11 @@ in {
         programs.waybar.enable = true;
       }
     ];
-    services = {
-      xserver.displayManager.sddm = {
-        settings = { General.DefaultSession = "river.desktop"; };
+    myconfig.wayland.greetdSettings = {
+      river_session = {
+        command = "${riverPackage}/bin/river";
+        user = "mhuber";
       };
-    };
-    services.xserver.displayManager.sessionPackages = [ riverPackage ];
-    services.greetd = {
-      enable = lib.mkDefault true;
-      settings = {
-        default_session = {
-          command = "${lib.makeBinPath [pkgs.greetd.tuigreet] }/tuigreet --time --cmd ${riverPackage}/bin/river";
-          user = "greeter";
-        };
-        initial_session = {
-          command = "${riverPackage}/bin/river";
-          user = "mhuber";
-        };
-      };
-      # settings = rec {
-      #   initial_session = {
-      #     command = "${riverPackage}/bin/river";
-      #     user = "mhuber";
-      #   };
-      #   settings = {
-      #     default_session = initial_session;
-      #   };
-      # };
     };
   });
 }
