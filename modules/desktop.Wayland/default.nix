@@ -45,7 +45,26 @@ in {
           wf-recorder
           slurp
           grim
-          (writeShellScriptBin "grim-region" "${grim}/bin/grim -g \"$(${slurp}/bin/slurp)\"")
+          (writeShellScriptBin "grim-region" ''
+output_dir="$HOME/_screenshots"
+old_dir="$output_dir/_old"
+mkdir -p "$output_dir"
+mkdir -p "$old_dir"
+
+if [[ "$1" == "win" ]]; then
+    shift
+    output="$output_dir/$(date +%Y-%m-%d_%H-%M-%S).png"
+else
+    output="$output_dir/$(date +%Y-%m-%d_%H:%M:%S).png"
+fi
+
+echo "## clean up old screenshots ..."
+find "$output_dir" -maxdepth 1 -mtime +10 -type f -print -exec mv {} "$old_dir" \;
+
+${grim}/bin/grim \
+  -o "$output" \
+  -g "$(${slurp}/bin/slurp)"
+'')
           wl-clipboard
           xdg-desktop-portal-wlr
           nomacs
@@ -104,7 +123,11 @@ in {
           (pkgs.writeShellScriptBin "regreet" "sudo systemctl restart greetd.service")
         ];
         services.random-background.enable = lib.mkForce false;
-        programs.mako.enable = true;
+        programs.mako = {
+          enable = true;
+          backgroundColor = "#285577BB";
+          defaultTimeout = 5000;
+        };
       }
     ];
     services.greetd = {
