@@ -20,9 +20,10 @@ let
     extraOptions = [ ];
   };
 in {
-  config = (lib.mkIf (cfg.wayland.enable) {
+  config = (lib.mkIf cfg.wayland.enable {
     home-manager.sharedModules = [{
       home.file = { ".config/qtile/config.py".source = ./qtile/config.py; };
+      home.packages = with pkgs; [ qtilePackage ];
     }];
 
     #services.xserver.windowManager.qtile = {

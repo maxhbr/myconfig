@@ -139,7 +139,7 @@ ${grim}/bin/grim \
           command = "${lib.makeBinPath [pkgs.greetd.tuigreet] }/tuigreet --width 120 --time --cmd '${initial_session.command}'";
           user = "greeter";
         };
-        inherit initial_session;
+        # inherit initial_session;
       };
     };
     services.physlock = {
