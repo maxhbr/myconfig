@@ -57,5 +57,6 @@ done
 
 set +x
 times
+date
 
 # ./scripts/gc.sh

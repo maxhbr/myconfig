@@ -39,6 +39,14 @@ in {
           swaylock
           ## Idle Management
           swayidle
+          (writeShellScriptBin "myswayidle" ''
+            set -euo pipefail
+            ${swayidle}/bin/swayidle -w \
+              timeout $1 '${config.security.wrapperDir}/physlock' \
+              before-sleep '${config.security.wrapperDir}/physlock'
+          '')
+          (writeShellScriptBin "myphyslock"
+            "exec '${config.security.wrapperDir}/physlock'")
           ## Other
           swaybg
           wayshot
@@ -118,6 +126,7 @@ ${grim}/bin/grim \
       "_JAVA_AWT_WM_NONREPARENTING" = "1";
     };
     home-manager.sharedModules = [
+      ./home-manager.waybar.nix
       {
         home.packages = [
           (pkgs.writeShellScriptBin "regreet" "sudo systemctl restart greetd.service")

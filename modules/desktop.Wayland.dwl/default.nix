@@ -5,6 +5,7 @@ let
   cfg = config.myconfig;
   dwlPackage = pkgs.callPackage ./wrapper.nix {
     dwl-unwrapped = pkgs.dwl;
+    conf = ./config.h;
     withBaseWrapper = true;
     extraPaths = cfg.wayland.commonPackages;
     extraSessionCommands = ''

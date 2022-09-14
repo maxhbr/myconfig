@@ -6,7 +6,9 @@
         mainBar = {
           height = 25;
           spacing = 4;
-          modules-left = [ "river/tags" "river/window" ];
+          modules-left = [ "river/tags" "river/window"
+                           "sway/workspaces" "sway/mode" "sway/window"
+                         ];
           modules-center = [ ];
           modules-right = [
             "pulseaudio"

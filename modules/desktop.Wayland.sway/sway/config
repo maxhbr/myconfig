@@ -12,15 +12,17 @@ input * xkb_variant "neo"
 # Logo key. Use Mod1 for Alt.
 set $mod Mod4
 # Home row direction keys, like vim
-set $left h
-set $down j
-set $up k
-set $right l
+set $left n
+set $down r
+set $up t
+set $right d
 # Your preferred terminal emulator
-set $term st
+# set $term st
+set $term tfoot
 # Your preferred application launcher
 # Note: it's recommended that you pass the final command to sway
 set $menu dmenu_path | dmenu | xargs swaymsg exec --
+# set $drun dmenu_path | dmenu | xargs swaymsg exec --
 
 ### Output configuration
 #
@@ -42,6 +44,7 @@ set $menu dmenu_path | dmenu | xargs swaymsg exec --
 #          timeout 600 'swaymsg "output * dpms off"' \
 #               resume 'swaymsg "output * dpms on"' \
 #          before-sleep 'swaylock -f -c 000000'
+exec myswayidle 1200
 #
 # This will lock your screen after 300 seconds of inactivity, then turn off
 # your displays after another 300 seconds, and turn your screens back on when
@@ -73,6 +76,7 @@ set $menu dmenu_path | dmenu | xargs swaymsg exec --
 
     # Start your launcher
     bindsym $mod+p exec $menu
+    # bindsym $mod+r exec $drun
 
     # Drag floating windows by holding down $mod and left mouse button.
     # Resize them with right mouse button + $mod.
@@ -110,6 +114,14 @@ set $menu dmenu_path | dmenu | xargs swaymsg exec --
     bindsym $mod+Shift+Down move down
     bindsym $mod+Shift+Up move up
     bindsym $mod+Shift+Right move right
+
+    bindsym $mod+Control+Shift+Right move workspace to output right
+    # bindsym $mod+Shift+Dot move workspace to output right
+    bindsym $mod+Control+Shift+Left move workspace to output left
+    # bindsym $mod+Shift+Comma move workspace to output left
+    bindsym $mod+Control+Shift+Down move workspace to output down
+    bindsym $mod+Control+Shift+Up move workspace to output up
+
 #
 # Workspaces:
 #
@@ -147,12 +159,13 @@ set $menu dmenu_path | dmenu | xargs swaymsg exec --
     bindsym $mod+v splitv
 
     # Switch the current container between different layout styles
-    bindsym $mod+s layout stacking
+    # bindsym $mod+s layout stacking
     bindsym $mod+w layout tabbed
     bindsym $mod+e layout toggle split
 
     # Make the current focus fullscreen
-    bindsym $mod+f fullscreen
+    bindsym $mod+f layout toggle tabbed split
+    bindsym $mod+shift+f fullscreen
 
     # Toggle the current focus between tiling and floating mode
     bindsym $mod+Shift+space floating toggle
@@ -197,25 +210,33 @@ mode "resize" {
     bindsym Return mode "default"
     bindsym Escape mode "default"
 }
-bindsym $mod+r mode "resize"
+# bindsym $mod+r mode "resize"
 
 #
 # Status Bar:
 #
 # Read `man 5 sway-bar` for more information about this section.
 bar {
-    position top
-
-    # When the status_command prints a new line to stdout, swaybar updates.
-    # The default just shows the current date and time.
-    status_command while date +'%Y-%m-%d %k:%M:%S %p'; do sleep 1; done
-
-    colors {
-        statusline #ffffff
-        background #323232
-        inactive_workspace #32323200 #32323200 #5c5c5c
-    }
+     swaybar_command waybar
 }
+# bar {
+#     position top
+
+#     # When the status_command prints a new line to stdout, swaybar updates.
+#     # The default just shows the current date and time.
+#     status_command while date +'%Y-%m-%d %k:%M:%S %p'; do sleep 1; done
+
+#     colors {
+#         statusline #ffffff
+#         background #323232
+#         inactive_workspace #32323200 #32323200 #5c5c5c
+#     }
+# }
+
+assign [class="firefox"] 8
+assign [class="slack"] 9
+assign [class="signal"] 9
+assign [class="evolution"] 9
 
 input "2:10:TPPS/2 Elan TrackPoint" {
     tap enabled

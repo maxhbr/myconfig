@@ -9,14 +9,6 @@ let
     extraPaths = cfg.wayland.commonPackages ++ (with pkgs; [
       rivercarro
       ristate
-      (writeShellScriptBin "myswayidle" ''
-        set -euo pipefail
-        ${swayidle}/bin/swayidle -w \
-          timeout 300 '${config.security.wrapperDir}/physlock' \
-          before-sleep '${config.security.wrapperDir}/physlock'
-      '')
-      (writeShellScriptBin "myphyslock"
-        "exec '${config.security.wrapperDir}/physlock'")
     ]);
     extraSessionCommands = ''
       export XDG_CURRENT_DESKTOP=river
@@ -34,7 +26,6 @@ let
 in {
   config = (lib.mkIf (cfg.wayland.enable) {
     home-manager.sharedModules = [
-      ./home-manager.waybar.nix
       {
         xdg.configFile = {
           "river/init".source = ./river/init;

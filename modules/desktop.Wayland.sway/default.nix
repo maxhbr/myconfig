@@ -50,13 +50,14 @@ in {
         dracula-theme # gtk theme
         gnome3.adwaita-icon-theme # default gnome cursors
       ];
-      etc."sway/config".source = ./config/sway/config;
+      etc."sway/config".source = ./sway/config;
     };
     home-manager.sharedModules = [{
-      home.file = { ".config/sway/config".source = ./config/sway/config; };
+      home.file = { ".config/sway/config".source = ./sway/config; };
       home.packages = with pkgs; [
         qt5.qtwayland
       ];
+        programs.waybar.enable = true;
     }];
 
     # xdg-desktop-portal works by exposing a series of D-Bus interfaces

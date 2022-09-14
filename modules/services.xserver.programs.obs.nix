@@ -4,16 +4,16 @@
 { pkgs, config, lib, ... }: {
   config =
     (lib.mkIf (config.services.xserver.enable && config.myconfig.desktop.full) {
-      # home-manager.sharedModules = [{
-      #   programs.obs-studio = {
-      #     enable = true;
-      #     plugins = with pkgs;
-      #       [
-      #         #obs-wlrobs
-      #       ];
-      #   };
-      # }];
+      home-manager.sharedModules = [{
+        programs.obs-studio = {
+          enable = true;
+          plugins = with pkgs.obs-studio-plugins;
+            [
+              wlrobs
+            ];
+        };
+      }];
       boot.extraModulePackages = [ config.boot.kernelPackages.v4l2loopback ];
-      environment.systemPackages = with pkgs; [ obs-studio v4l-utils ];
+      environment.systemPackages = with pkgs; [ v4l-utils ];
     });
 }
