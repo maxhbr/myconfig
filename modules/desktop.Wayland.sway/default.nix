@@ -45,7 +45,7 @@ in {
   config = (lib.mkIf (cfg.wayland.enable && config.programs.sway.enable) {
     environment = {
       systemPackages = with pkgs; [
-        dbus-sway-environment
+        # dbus-sway-environment
         configure-gtk
         dracula-theme # gtk theme
         gnome3.adwaita-icon-theme # default gnome cursors
@@ -70,9 +70,9 @@ in {
     xdg.portal = {
       enable = true;
       wlr.enable = true;
-      # gtk portal needed to make gtk apps happy
-      extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
-      gtkUsePortal = true;
+      # # gtk portal needed to make gtk apps happy
+      # extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+      # gtkUsePortal = true; # warning: The option `xdg.portal.gtkUsePortal'has been deprecated. Setting the variable globally with `environment.sessionVariables' NixOS option can have unforseen side-effects.
     };
 
     programs.sway = {

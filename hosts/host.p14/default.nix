@@ -24,7 +24,7 @@
     # ./a7iiiAsWebcam.nix
     {
       myconfig.wayland.enable = true;
-      myconfig.wayland.desktop = "river";
+      myconfig.wayland.desktop = "sway";
       programs.sway.enable = true;
       home-manager.sharedModules = [{
         services.screen-locker.enable = lib.mkForce false;
@@ -39,6 +39,30 @@
           port = 22;
         }];
       };
+    }
+    {
+      boot.kernelPackages = lib.mkForce pkgs.linuxPackages_testing;
+      boot.kernelPatches = [{
+        name = "i915-P14sG3-intel-fix";
+        patch = pkgs.writeTextFile {
+          name = "i915-P14sG3-intel-fix.patch";
+          text = ''
+            diff --git a/drivers/gpu/drm/i915/display/intel_bios.c b/drivers/gpu/drm/i915/display/intel_bios.c
+            index 51dde5bfd..5dcd32cf9 100644
+            --- a/drivers/gpu/drm/i915/display/intel_bios.c
+            +++ b/drivers/gpu/drm/i915/display/intel_bios.c
+            @@ -2665,7 +2665,7 @@ static void parse_ddi_port(struct intel_bios_encoder_data *devdata)
+                  drm_dbg_kms(&i915->drm,
+                          "More than one child device for port %c in VBT, using the first.\n",
+                          port_name(port));
+            -		return;
+            +		// return; // see https://gitlab.freedesktop.org/drm/intel/-/issues/5531#note_1477044
+              }
+
+              sanitize_device_type(devdata, port);
+          '';
+        };
+      }];
     }
   ];
 
@@ -73,29 +97,6 @@
       HandlePowerKey=suspend
     '';
     services.gnome.gnome-keyring.enable = true;
-
-    boot.kernelPackages = lib.mkForce pkgs.linuxPackages_testing;
-    boot.kernelPatches = [{
-      name = "i915-P14sG3-intel-fix";
-      patch = pkgs.writeTextFile {
-        name = "i915-P14sG3-intel-fix.patch";
-        text = ''
-          diff --git a/drivers/gpu/drm/i915/display/intel_bios.c b/drivers/gpu/drm/i915/display/intel_bios.c
-          index 51dde5bfd..5dcd32cf9 100644
-          --- a/drivers/gpu/drm/i915/display/intel_bios.c
-          +++ b/drivers/gpu/drm/i915/display/intel_bios.c
-          @@ -2665,7 +2665,7 @@ static void parse_ddi_port(struct intel_bios_encoder_data *devdata)
-           		drm_dbg_kms(&i915->drm,
-           			    "More than one child device for port %c in VBT, using the first.\n",
-           			    port_name(port));
-          -		return;
-          +		// return; // see https://gitlab.freedesktop.org/drm/intel/-/issues/5531#note_1477044
-           	}
-
-           	sanitize_device_type(devdata, port);
-        '';
-      };
-    }];
 
     home-manager.sharedModules = [{
       home.file = {

@@ -74,7 +74,7 @@ ${grim}/bin/grim \
   -g "$(${slurp}/bin/slurp)"
 '')
           wl-clipboard
-          xdg-desktop-portal-wlr
+          # xdg-desktop-portal-wlr
           nomacs
         ];
         # defaultText = literalExpression ''

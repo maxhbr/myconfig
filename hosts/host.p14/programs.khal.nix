@@ -17,21 +17,21 @@
       Install.WantedBy = [ "timers.target" ];
     };
 
-    systemd.user.services.vdirsyncer = {
-      Unit = {
-        Description = "Synchronize your calendars";
-        After = [ "network-online.target" ];
-        Wants = [ "network-online.target" ];
-      };
+    # systemd.user.services.vdirsyncer = {
+    #   Unit = {
+    #     Description = "Synchronize your calendars";
+    #     After = [ "network-online.target" ];
+    #     Wants = [ "network-online.target" ];
+    #   };
 
-      Install.WantedBy = [ "default.target" ];
+    #   Install.WantedBy = [ "default.target" ];
 
-      Service = {
-        ExecStart = "${pkgs.vdirsyncer}/bin/vdirsyncer sync";
-        Restart = "on-failure";
-        Type = "oneshot";
-        RestartSec = 30;
-      };
-    };
+    #   Service = {
+    #     ExecStart = "${pkgs.vdirsyncer}/bin/vdirsyncer sync";
+    #     Restart = "on-failure";
+    #     Type = "oneshot";
+    #     RestartSec = 30;
+    #   };
+    # };
   }];
 }
