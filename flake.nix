@@ -45,6 +45,10 @@
       # build with your own instance of nixpkgs
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    swaymonad = {
+      url = "github:nicolasavru/swaymonad";
+      inputs.nixpkgs.follows = "nixpkgs"; # not mandatory but recommended
+    };
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -115,6 +119,11 @@
 
             ({ pkgs, ... }: {
               home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
+            })
+            ({config, pkgs, lib, ...}: lib.mkIf config.programs.sway.enable {
+              environment.systemPackages = with pkgs; [
+                inputs.swaymonad.defaultPackage.x86_64-linux
+              ];
             })
           ] ++ (import ./modules/_list.nix);
           config = {

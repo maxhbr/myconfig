@@ -7,6 +7,9 @@
 input * xkb_layout "de"
 input * xkb_variant "neo"
 
+# exec swaymonad
+exec autotiling
+
 ### Variables
 #
 # Logo key. Use Mod1 for Alt.
@@ -164,8 +167,8 @@ exec myswayidle 1200
     bindsym $mod+e layout toggle split
 
     # Make the current focus fullscreen
-    bindsym $mod+f layout toggle tabbed split
-    bindsym $mod+shift+f fullscreen
+    bindsym $mod+f fullscreen
+    bindsym $mod+Shift+f layout tabbed
 
     # Toggle the current focus between tiling and floating mode
     bindsym $mod+Shift+space floating toggle

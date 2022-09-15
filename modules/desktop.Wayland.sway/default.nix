@@ -77,6 +77,7 @@ in {
 
     programs.sway = {
       extraPackages = with pkgs; [
+        autotiling
         swaylock
         swayidle
         xwayland

@@ -45,7 +45,7 @@
       home.packages = with pkgs; [
         # idea.idea-ultimate # jetbrains.phpstorm
         dia
-        insync
+        # insync
         exiftool
         # misc-desktop-tools:
         libreoffice

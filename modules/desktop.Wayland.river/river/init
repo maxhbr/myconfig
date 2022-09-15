@@ -57,22 +57,22 @@ riverctl map normal $mod+Shift Comma send-to-output previous
 riverctl map normal $mod Return zoom
 
 # $mod+Alt+{H,J,K,L} to move views
-riverctl map normal $mod+Alt H move left 100
-riverctl map normal $mod+Alt J move down 100
-riverctl map normal $mod+Alt K move up 100
-riverctl map normal $mod+Alt L move right 100
+riverctl map normal $mod+Alt N move left 100
+riverctl map normal $mod+Alt R move down 100
+riverctl map normal $mod+Alt T move up 100
+riverctl map normal $mod+Alt D move right 100
 
 # $mod+Alt+Control+{H,J,K,L} to snap views to screen edges
-riverctl map normal $mod+Alt+Control H snap left
-riverctl map normal $mod+Alt+Control J snap down
-riverctl map normal $mod+Alt+Control K snap up
-riverctl map normal $mod+Alt+Control L snap right
+riverctl map normal $mod+Alt+Control N snap left
+riverctl map normal $mod+Alt+Control R snap down
+riverctl map normal $mod+Alt+Control T snap up
+riverctl map normal $mod+Alt+Control D snap right
 
 # $mod+Alt+Shift+{H,J,K,L} to resize views
-riverctl map normal $mod+Alt+Shift H resize horizontal -100
-riverctl map normal $mod+Alt+Shift J resize vertical 100
-riverctl map normal $mod+Alt+Shift K resize vertical -100
-riverctl map normal $mod+Alt+Shift L resize horizontal 100
+riverctl map normal $mod+Alt+Shift N resize horizontal -100
+riverctl map normal $mod+Alt+Shift R resize vertical 100
+riverctl map normal $mod+Alt+Shift T resize vertical -100
+riverctl map normal $mod+Alt+Shift D resize horizontal 100
 
 # $mod + Left Mouse Button to move views
 riverctl map-pointer normal $mod BTN_LEFT move-view
@@ -182,7 +182,7 @@ tfoot &disown
 
 ###############################################################################
 
-if false; then
+if true; then
     # $mod+H and $mod+L to decrease/increase the main ratio of rivertile(1)
     riverctl map normal $mod H send-layout-cmd rivertile "main-ratio -0.05"
     riverctl map normal $mod L send-layout-cmd rivertile "main-ratio +0.05"
