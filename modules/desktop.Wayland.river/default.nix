@@ -45,10 +45,7 @@ in {
     home-manager.sharedModules = [{
       xdg.configFile = {
         "river/init".source = ./river/init;
-        "way-displays/cfg.yaml".source = ./way-displays/cfg.yaml;
       };
-      home.packages = with pkgs; [ riverPackage ];
-      programs.waybar.enable = true;
     }];
     myconfig.wayland.greetdSettings = {
       river_session = {

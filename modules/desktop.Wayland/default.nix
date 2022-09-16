@@ -134,6 +134,11 @@ in {
             "sudo systemctl restart greetd.service")
           qt5.qtwayland
         ];
+      xdg.configFile = {
+        "way-displays/cfg.yaml".source = ./way-displays/cfg.yaml;
+      };
+      home.packages = with pkgs; [ riverPackage ];
+      programs.waybar.enable = true;
         services.random-background.enable = lib.mkForce false;
         programs.mako = {
           enable = true;
