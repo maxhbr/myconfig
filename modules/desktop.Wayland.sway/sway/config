@@ -9,6 +9,8 @@ input * xkb_variant "neo"
 
 # exec swaymonad
 exec autotiling
+exec dbus-sway-environment
+exec configure-gtk
 
 ### Variables
 #
@@ -237,8 +239,8 @@ bar {
 # }
 
 assign [class="firefox"] 8
-assign [class="slack"] 9
-assign [class="signal"] 9
+assign [app_id="Slack"] 9
+assign [app_id="Signal"] 9
 assign [class="evolution"] 9
 
 input "2:10:TPPS/2 Elan TrackPoint" {

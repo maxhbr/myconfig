@@ -6,9 +6,13 @@
         mainBar = {
           height = 25;
           spacing = 4;
-          modules-left = [ "river/tags" "river/window"
-                           "sway/workspaces" "sway/mode" "sway/window"
-                         ];
+          modules-left = [
+            "river/tags"
+            "river/window"
+            "sway/workspaces"
+            "sway/mode"
+            "sway/window"
+          ];
           modules-center = [ ];
           modules-right = [
             "pulseaudio"
@@ -35,12 +39,13 @@
           "custom/platform_profile" = {
             format = "{}";
             exec = (pkgs.writeShellScriptBin "getPlatformProfile" ''
-profile="$(cat /sys/firmware/acpi/platform_profile)"
-cat <<EOF
-{"text":"$profile","class":"$profile"}
-EOF
-'') + "/bin/getPlatformProfile";
-            exec-if = "! grep -q performance /sys/firmware/acpi/platform_profile";
+              profile="$(cat /sys/firmware/acpi/platform_profile)"
+              cat <<EOF
+              {"text":"$profile","class":"$profile"}
+              EOF
+            '') + "/bin/getPlatformProfile";
+            exec-if =
+              "! grep -q performance /sys/firmware/acpi/platform_profile";
             return-type = "json";
             interval = 5;
           };

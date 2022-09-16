@@ -120,11 +120,11 @@
             ({ pkgs, ... }: {
               home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
             })
-            ({config, pkgs, lib, ...}: lib.mkIf config.programs.sway.enable {
-              environment.systemPackages = with pkgs; [
-                inputs.swaymonad.defaultPackage.x86_64-linux
-              ];
-            })
+            ({ config, pkgs, lib, ... }:
+              lib.mkIf config.programs.sway.enable {
+                environment.systemPackages = with pkgs;
+                  [ inputs.swaymonad.defaultPackage.x86_64-linux ];
+              })
           ] ++ (import ./modules/_list.nix);
           config = {
             hardware.enableRedistributableFirmware = true;

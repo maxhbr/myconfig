@@ -5,7 +5,7 @@
       gnome-online-accounts.enable = lib.mkDefault true;
       gnome-settings-daemon.enable = lib.mkDefault true;
     };
-    environment.systemPackages = with pkgs; [gcr];
+    environment.systemPackages = with pkgs; [ gcr ];
 
     programs.dconf.enable = lib.mkDefault true;
     programs.seahorse.enable = lib.mkDefault true;

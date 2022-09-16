@@ -64,9 +64,7 @@
     environment.sessionVariables = {
       "XKB_DEFAULT_LAYOUT" = "de";
       "XKB_DEFAULT_VARIANT" = "neo";
-      PATH = [
-        "\${HOME}/bin"
-      ];
+      PATH = [ "\${HOME}/bin" ];
     };
 
     # environment.etc."current-home-manager-${myconfig.user}-packages".text = let

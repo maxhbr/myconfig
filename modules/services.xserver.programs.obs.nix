@@ -7,10 +7,7 @@
       home-manager.sharedModules = [{
         programs.obs-studio = {
           enable = true;
-          plugins = with pkgs.obs-studio-plugins;
-            [
-              wlrobs
-            ];
+          plugins = with pkgs.obs-studio-plugins; [ wlrobs ];
         };
       }];
       boot.extraModulePackages = [ config.boot.kernelPackages.v4l2loopback ];

@@ -3,7 +3,7 @@
 { pkgs, config, lib, ... }:
 let
   cfg = config.myconfig;
-  settingsFormat = pkgs.formats.toml {};
+  settingsFormat = pkgs.formats.toml { };
 in {
   options.myconfig = with lib; {
     wayland = {
@@ -54,25 +54,25 @@ in {
           slurp
           grim
           (writeShellScriptBin "grim-region" ''
-output_dir="$HOME/_screenshots"
-old_dir="$output_dir/_old"
-mkdir -p "$output_dir"
-mkdir -p "$old_dir"
+            output_dir="$HOME/_screenshots"
+            old_dir="$output_dir/_old"
+            mkdir -p "$output_dir"
+            mkdir -p "$old_dir"
 
-if [[ "$1" == "win" ]]; then
-    shift
-    output="$output_dir/$(date +%Y-%m-%d_%H-%M-%S).png"
-else
-    output="$output_dir/$(date +%Y-%m-%d_%H:%M:%S).png"
-fi
+            if [[ "$1" == "win" ]]; then
+                shift
+                output="$output_dir/$(date +%Y-%m-%d_%H-%M-%S).png"
+            else
+                output="$output_dir/$(date +%Y-%m-%d_%H:%M:%S).png"
+            fi
 
-echo "## clean up old screenshots ..."
-find "$output_dir" -maxdepth 1 -mtime +10 -type f -print -exec mv {} "$old_dir" \;
+            echo "## clean up old screenshots ..."
+            find "$output_dir" -maxdepth 1 -mtime +10 -type f -print -exec mv {} "$old_dir" \;
 
-${grim}/bin/grim \
-  -o "$output" \
-  -g "$(${slurp}/bin/slurp)"
-'')
+            ${grim}/bin/grim \
+              -o "$output" \
+              -g "$(${slurp}/bin/slurp)"
+          '')
           wl-clipboard
           # xdg-desktop-portal-wlr
           nomacs
@@ -89,8 +89,7 @@ ${grim}/bin/grim \
       };
       desktop = mkOption {
         type = types.str;
-        default = optionalString cfg.wayland.enable
-          "river";
+        default = optionalString cfg.wayland.enable "river";
         defaultText = literalExpression ''
           optionalString config.myconfig.wayland.enable "river"
         '';
@@ -114,6 +113,8 @@ ${grim}/bin/grim \
       };
     };
   };
+
+  includes = [./xdg.portal.nix];
   config = (lib.mkIf cfg.wayland.enable {
     environment.sessionVariables = {
       "XDG_SESSION_TYPE" = "wayland";
@@ -128,8 +129,10 @@ ${grim}/bin/grim \
     home-manager.sharedModules = [
       ./home-manager.waybar.nix
       {
-        home.packages = [
-          (pkgs.writeShellScriptBin "regreet" "sudo systemctl restart greetd.service")
+        home.packages = with pkgs; [
+          (writeShellScriptBin "regreet"
+            "sudo systemctl restart greetd.service")
+          qt5.qtwayland
         ];
         services.random-background.enable = lib.mkForce false;
         programs.mako = {
@@ -142,15 +145,19 @@ ${grim}/bin/grim \
     services.greetd = {
       enable = true;
       settings = let
-        initial_session = cfg.wayland.greetdSettings."${cfg.wayland.desktop}_session";
+        initial_session =
+          cfg.wayland.greetdSettings."${cfg.wayland.desktop}_session";
       in cfg.wayland.greetdSettings // {
         default_session = {
-          command = "${lib.makeBinPath [pkgs.greetd.tuigreet] }/tuigreet --width 120 --time --cmd '${initial_session.command}'";
+          command = "${
+              lib.makeBinPath [ pkgs.greetd.tuigreet ]
+            }/tuigreet --width 120 --time --cmd '${initial_session.command}'";
           user = "greeter";
         };
         # inherit initial_session;
       };
     };
+
     services.physlock = {
       enable = true;
       allowAnyUser = true;
