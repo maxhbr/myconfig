@@ -114,7 +114,7 @@ in {
     };
   };
 
-  includes = [./xdg.portal.nix];
+  imports = [./services.dbus.nix];
   config = (lib.mkIf cfg.wayland.enable {
     environment.sessionVariables = {
       "XDG_SESSION_TYPE" = "wayland";

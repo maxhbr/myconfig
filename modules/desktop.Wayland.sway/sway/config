@@ -7,11 +7,6 @@
 input * xkb_layout "de"
 input * xkb_variant "neo"
 
-# exec swaymonad
-exec autotiling
-exec dbus-sway-environment
-exec configure-gtk
-
 ### Variables
 #
 # Logo key. Use Mod1 for Alt.
@@ -249,4 +244,13 @@ input "2:10:TPPS/2 Elan TrackPoint" {
 }
 seat seat0 xcursor_theme default 128
 
+
+################################################################################
+################################################################################
+################################################################################
+exec dbus-wm-environment sway
+exec configure-gtk
 exec xrdb ~/.Xresources
+
+# exec swaymonad
+exec autotiling

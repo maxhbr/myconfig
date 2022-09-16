@@ -36,7 +36,12 @@ let
     extraOptions = [ ];
   };
 in {
-  config = (lib.mkIf (cfg.wayland.enable) {
+  options.myconfig = with lib; {
+    wayland.dwl = {
+      enable = mkEnableOption "dwl";
+    };
+  };
+  config = (lib.mkIf (cfg.wayland.enable && cfg.wayland.dwl.enable) {
     home-manager.sharedModules =
       [{ home.packages = with pkgs; [ dwlPackage ]; }];
     myconfig.wayland.greetdSettings = {
