@@ -46,6 +46,7 @@ in {
       xdg.configFile = {
         "river/init".source = ./river/init;
       };
+      home.packages = with pkgs; [ riverPackage ];
     }];
     myconfig.wayland.greetdSettings = {
       river_session = {

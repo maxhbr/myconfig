@@ -7,6 +7,12 @@ let user = config.myconfig.user;
 in {
   config = lib.mkIf
     (config.programs.evolution.enable && config.myconfig.desktop.full) {
+      services.gnome = {
+        evolution-data-server.enable = lib.mkDefault true;
+        gnome-keyring.enable = lib.mkDefault true;
+        # # optional to use google/nextcloud calendar
+        # gnome-online-accounts.enable = lib.mkDefault true;
+      };
       programs.dconf.enable = true;
       programs.seahorse.enable = true;
     };

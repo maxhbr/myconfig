@@ -76,6 +76,7 @@ in {
           wl-clipboard
           # xdg-desktop-portal-wlr
           nomacs
+          dex # for autostarting
         ];
         # defaultText = literalExpression ''
         #   with pkgs; [ ];
@@ -137,7 +138,6 @@ in {
       xdg.configFile = {
         "way-displays/cfg.yaml".source = ./way-displays/cfg.yaml;
       };
-      home.packages = with pkgs; [ riverPackage ];
       programs.waybar.enable = true;
         services.random-background.enable = lib.mkForce false;
         programs.mako = {
