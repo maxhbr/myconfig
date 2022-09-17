@@ -99,6 +99,7 @@
 
     services.logind.extraConfig = ''
       HandlePowerKey=suspend
+      RuntimeDirectorySize=6G
     '';
 
     hardware.enableRedistributableFirmware = true;
