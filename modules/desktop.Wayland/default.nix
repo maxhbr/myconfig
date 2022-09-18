@@ -73,6 +73,7 @@ in {
               -o "$output" \
               -g "$(${slurp}/bin/slurp)"
           '')
+          wob
           wl-clipboard
           # xdg-desktop-portal-wlr
           nomacs

@@ -41,7 +41,9 @@ in {
   };
   config = (lib.mkIf (cfg.wayland.enable && cfg.wayland.qtile.enable) {
     home-manager.sharedModules = [{
-      home.file = { ".config/qtile/config.py".source = ./qtile/config.py; };
+      xdg.configFile = {
+        "qtile/config.py".source = ./qtile/config.py;
+      };
       home.packages = with pkgs; [ qtilePackage ];
     }];
 

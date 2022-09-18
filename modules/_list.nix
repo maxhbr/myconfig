@@ -70,4 +70,5 @@
   ./desktop.Wayland.river
   ./desktop.Wayland.sway
   ./desktop.Wayland.qtile
+  ./desktop.Wayland.newm
 ]
