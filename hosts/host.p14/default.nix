@@ -62,6 +62,8 @@
 #         };
 #       }];
     }
+    # fun
+    ../host.workstation/gaming/games.steam
   ];
 
   config = {

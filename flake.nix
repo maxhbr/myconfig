@@ -40,15 +40,26 @@
 
     zephyrproject.url = "path:flakes/zephyrproject/";
 
-    hyprland = {
-      url = "github:hyprwm/Hyprland";
-      # build with your own instance of nixpkgs
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     swaymonad = {
       url = "github:nicolasavru/swaymonad";
-      inputs.nixpkgs.follows = "nixpkgs"; # not mandatory but recommended
+      inputs.nixpkgs.follows = "nixpkgs";
     };
+    # hyprland = {
+    #   url = "github:hyprwm/Hyprland";
+    #   # build with your own instance of nixpkgs
+    #   inputs.nixpkgs.follows = "nixpkgs";
+    #         # ({ pkgs, ... }: {
+    #         #   home-manager.sharedModules = [
+    #         #     inputs.hyprland.homeManagerModules.default
+    #         #     { wayland.windowManager.hyprland.enable = true; }
+    #         #   ];
+    #         # })
+    # };
+    # newm = {
+    #   url = "github:jbuchermn/newm";
+    #   inputs.nixpkgs.follows = "nixpkgs";
+    #   inputs.flake-utils.follows = "flake-utils";
+    # };
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -123,8 +134,9 @@
             ({ config, pkgs, lib, ... }:
               lib.mkIf config.programs.sway.enable {
                 environment.systemPackages = with pkgs;
-                  [ inputs.swaymonad.defaultPackage.x86_64-linux ];
+                [ inputs.swaymonad.defaultPackage.x86_64-linux ];
               })
+
           ] ++ (import ./modules/_list.nix);
           config = {
             hardware.enableRedistributableFirmware = true;
@@ -155,8 +167,6 @@
                 (myconfig.metadatalib.announceHost "pi0")
               ];
             })
-            # inputs.hyprland.nixosModules.default
-            # { programs.hyprland.enable = true; }
           ] ++ moreModules) metadataOverride);
         host-x1extremeG2 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
