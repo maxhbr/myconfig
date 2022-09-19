@@ -19,10 +19,7 @@ set $right d
 # Your preferred terminal emulator
 # set $term st
 set $term tfoot
-# Your preferred application launcher
-# Note: it's recommended that you pass the final command to sway
-set $menu dmenu_path | dmenu | xargs swaymsg exec --
-# set $drun dmenu_path | dmenu | xargs swaymsg exec --
+
 
 ### Output configuration
 #
@@ -75,8 +72,15 @@ set $menu dmenu_path | dmenu | xargs swaymsg exec --
     bindsym $mod+Shift+c kill
 
     # Start your launcher
-    bindsym $mod+p exec $menu
-    # bindsym $mod+r exec $drun
+    bindsym $mod+p exec "wofi --show run"
+
+    set $menu dmenu_path | dmenu | xargs swaymsg exec --
+    bindsym $mod+Shift+p exec $menu
+
+    # bindsym $mod+z exec "fuzzel"
+    for_window [app_id="^launcher$"] floating enable, sticky enable, resize set 30 ppt 60 ppt, border pixel 10
+    set $menul exec foot-sway-launcher-desktop
+    bindsym $mod+z exec $menul
 
     # Drag floating windows by holding down $mod and left mouse button.
     # Resize them with right mouse button + $mod.

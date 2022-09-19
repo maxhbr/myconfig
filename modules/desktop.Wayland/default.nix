@@ -11,6 +11,7 @@ in {
       commonPackages = mkOption {
         type = with types; listOf package;
         default = with pkgs; [
+          xwayland
           ## Terminal
           foot
           (writeShellScriptBin "tfoot" ''

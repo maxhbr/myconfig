@@ -9,13 +9,16 @@ in {
       etc."sway/config".source = ./sway/config;
     };
     home-manager.sharedModules = [{
-      # home.file = { ".config/sway/config".source = ./sway/config; };
       programs.waybar.enable = true;
     }];
 
     programs.sway = {
       extraPackages = with pkgs;
-        [ autotiling swaylock swayidle xwayland st dmenu ]
+        [ autotiling swaylock swayidle dmenu sway-launcher-desktop
+          (writeShellScriptBin "foot-sway-launcher-desktop" ''
+${foot}/bin/foot --title=launcher --app-id=launcher -e sway-launcher-desktop
+'')
+        ]
         ++ cfg.wayland.commonPackages;
       wrapperFeatures.gtk = true;
 
