@@ -44,22 +44,21 @@
       url = "github:nicolasavru/swaymonad";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # hyprland = {
-    #   url = "github:hyprwm/Hyprland";
-    #   # build with your own instance of nixpkgs
-    #   inputs.nixpkgs.follows = "nixpkgs";
-    #         # ({ pkgs, ... }: {
-    #         #   home-manager.sharedModules = [
-    #         #     inputs.hyprland.homeManagerModules.default
-    #         #     { wayland.windowManager.hyprland.enable = true; }
-    #         #   ];
-    #         # })
-    # };
-    # newm = {
-    #   url = "github:jbuchermn/newm";
-    #   inputs.nixpkgs.follows = "nixpkgs";
-    #   inputs.flake-utils.follows = "flake-utils";
-    # };
+    hyprland = {
+      url = "github:hyprwm/Hyprland";
+      # build with your own instance of nixpkgs
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    newmpkg = {
+      url = "github:jbuchermn/newm";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+    pywm-fullscreenpkg = {
+      url = "github:jbuchermn/pywm-fullscreen";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -124,6 +123,14 @@
                 })
               ];
             })
+            ({ pkgs, ... }: {
+              nixpkgs.overlays = [
+                (self: super: {
+                  newm = inputs.newmpkg.packages.${pkgs.system}.newm;
+                  pywm-fullscreen = inputs.pywm-fullscreenpkg.packages.${pkgs.system}.pywm-fullscreen;
+                })
+              ];
+            })
 
             inputs.my-wallpapers.nixosModule
             inputs.myfish.nixosModule
@@ -140,7 +147,7 @@
           ] ++ (import ./modules/_list.nix);
           config = {
             hardware.enableRedistributableFirmware = true;
-            nixpkgs.overlays = [ inputs.nur.overlay ];
+            nixpkgs.overlays = [inputs.nur.overlay];
           };
         };
       };
@@ -165,6 +172,11 @@
                 (myconfig.metadatalib.announceHost "pi4")
                 (myconfig.metadatalib.announceHost "pi3a")
                 (myconfig.metadatalib.announceHost "pi0")
+              ];
+            })
+            ({ pkgs, ... }: {
+              home-manager.sharedModules = [
+                inputs.hyprland.homeManagerModules.default
               ];
             })
           ] ++ moreModules) metadataOverride);

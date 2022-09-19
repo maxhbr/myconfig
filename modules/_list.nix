@@ -67,8 +67,9 @@
   ./virtualization.vbox.nix
   ./desktop.Wayland
   ./desktop.Wayland.dwl
+  ./desktop.Wayland.hyprland
+  ./desktop.Wayland.newm
+  ./desktop.Wayland.qtile
   ./desktop.Wayland.river
   ./desktop.Wayland.sway
-  ./desktop.Wayland.qtile
-  ./desktop.Wayland.newm
 ]

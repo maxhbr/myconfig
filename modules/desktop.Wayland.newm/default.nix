@@ -14,6 +14,10 @@ in {
       xdg.configFile = {
         "newm/config.py".source = ./newm/config.py;
       };
+      home.packages = with pkgs; [
+        newm
+        pywm-fullscreen
+      ];
     }];
     myconfig.wayland.greetdSettings = {
       newm_session = {

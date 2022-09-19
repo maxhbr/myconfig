@@ -6,15 +6,24 @@ import pwd
 import time
 import logging
 
+logger = logging.getLogger(__name__)
 from newm.layout import Layout
 from newm.helper import BacklightManager, WobRunner, PaCtl
 
 from pywm import (
     PYWM_MOD_LOGO,
-    PYWM_MOD_ALT
+    PYWM_MOD_ALT,
+    PYWM_TRANSFORM_90,
+    PYWM_TRANSFORM_180,
+    PYWM_TRANSFORM_270,
+    PYWM_TRANSFORM_FLIPPED,
+    PYWM_TRANSFORM_FLIPPED_90,
+    PYWM_TRANSFORM_FLIPPED_180,
+    PYWM_TRANSFORM_FLIPPED_270,
 )
 
-logger = logging.getLogger(__name__)
+def on_startup():
+    os.system("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=wlroots")
 
 background = {
     'path': os.path.dirname(os.path.realpath(__file__)) + '/resources/wallpaper.jpg',
@@ -24,6 +33,35 @@ background = {
 outputs = [
     { 'name': 'eDP-1' }
 ]
+
+
+def rules(view):
+    if view.app_id == "catapult":
+        return { 'float': True, 'float_pos': (0.5, 0.25) }
+    if view.app_id == "pavucontrol":
+        return { 'float': True, 'float_size': (340, 600), 'float_pos': (0.15, 0.4) }
+    if view.title is not None and view.title.strip() == "Firefox — Sharing Indicator":
+        return { 'float': True, 'float_size': (100, 40), 'float_pos': (0.5, 0.1) }
+    if view.app_id == "Alacritty":
+        return { 'blur': { 'radius': 5, 'passes': 3}}
+    if view.app_id == "waybar":
+        return { 'blur': { 'radius': 5, 'passes': 3}}
+    return None
+
+
+view = {
+    'padding': 8,
+    'fullscreen_padding': 0,
+    'send_fullscreen': False,
+    'accept_fullscreen': False,
+
+    'rules': rules,
+    'floating_min_size': False,
+
+    'debug_scaling': True,
+    'border_ws_switch': 100,
+}
+
 
 wob_runner = WobRunner("wob -a bottom -M 100")
 backlight_manager = BacklightManager(anim_time=1., bar_display=wob_runner)
@@ -56,6 +94,7 @@ def key_bindings(layout: Layout) -> list[tuple[str, Callable[[], Any]]]:
 
         ("L-Return", lambda: os.system("tfoot &")),
         ("L-p", lambda: os.system("wofi --show run &")),
+        ("L-r", lambda: os.system("rofi -show run &")),
         ("L-C", lambda: layout.close_focused_view()),
 
         ("L-Y", lambda: layout.ensure_locked(dim=True)),
@@ -76,23 +115,26 @@ def key_bindings(layout: Layout) -> list[tuple[str, Callable[[], Any]]]:
     ]
 
 panels = {
-    'lock': {
-        'cmd': 'myphyslock',
-    },
+    # 'lock': {
+    #     'cmd': 'myphyslock',
+    # },
     'launcher': {
         'cmd': 'alacritty -e newm-panel-basic launcher'
     },
-    'top_bar': {
-        'native': {
-            'enabled': True,
-            'texts': lambda: [
-                pwd.getpwuid(os.getuid())[0],
-                time.strftime("%c"),
-            ],
-        }
+    'bar': {
+        'cmd': 'waybar'
     },
 }
 
-energy = {
-    'idle_callback': backlight_manager.callback
+grid = {
+    'throw_ps': [2, 10]
+}
+
+# energy = {
+#     'idle_callback': backlight_manager.callback
+# }
+
+focus = {
+    'color': '#92f0f5d1',
+    'enabled': True
 }

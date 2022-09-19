@@ -27,7 +27,6 @@
         enable = true;
         desktop = "sway";
         river.enable = true;
-        newm.enable = true;
       };
       programs.sway.enable = true;
     }
