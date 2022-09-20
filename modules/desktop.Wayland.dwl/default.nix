@@ -37,9 +37,7 @@ let
   };
 in {
   options.myconfig = with lib; {
-    wayland.dwl = {
-      enable = mkEnableOption "dwl";
-    };
+    wayland.dwl = { enable = mkEnableOption "dwl"; };
   };
   config = (lib.mkIf (cfg.wayland.enable && cfg.wayland.dwl.enable) {
     home-manager.sharedModules =

@@ -41,13 +41,13 @@ in {
           ## Idle Management
           swayidle
           (writeShellScriptBin "myswayidle" ''
-            set -euo pipefail
-            ${swayidle}/bin/swayidle -w \
-              timeout $1 '${config.security.wrapperDir}/physlock' \
-              before-sleep '${config.security.wrapperDir}/physlock'
+set -x
+exec ${swayidle}/bin/swayidle -w \
+	timeout 300 '${swaylock}/bin/swaylock -f -c 000000' \
+	before-sleep '${swaylock}/bin/swaylock -f -c 000000'
           '')
-          (writeShellScriptBin "myphyslock"
-            "exec '${config.security.wrapperDir}/physlock'")
+          # (writeShellScriptBin "myphyslock"
+          #   "exec '${config.security.wrapperDir}/physlock'")
           ## Other
           swaybg
           wayshot
@@ -117,7 +117,7 @@ in {
     };
   };
 
-  imports = [./services.dbus.nix];
+  imports = [ ./services.dbus.nix ];
   config = (lib.mkIf cfg.wayland.enable {
     environment.sessionVariables = {
       "XDG_SESSION_TYPE" = "wayland";
@@ -128,6 +128,21 @@ in {
       # Fix for some Java AWT applications (e.g. Android Studio),
       # use this if they aren't displayed properly:
       "_JAVA_AWT_WM_NONREPARENTING" = "1";
+    };
+    services.greetd = {
+      enable = true;
+      settings = let
+        initial_session =
+          cfg.wayland.greetdSettings."${cfg.wayland.desktop}_session";
+      in cfg.wayland.greetdSettings // {
+        default_session = {
+          command = "${
+              lib.makeBinPath [ pkgs.greetd.tuigreet ]
+            }/tuigreet --width 120 --time --cmd '${initial_session.command}'";
+          user = "greeter";
+        };
+        inherit initial_session;
+      };
     };
     home-manager.sharedModules = [
       ./home-manager.waybar.nix
@@ -151,27 +166,14 @@ in {
           defaultTimeout = 5000;
         };
         services.dunst.enable =
-            lib.mkForce false; # is that causing slack freeze
+          lib.mkForce false; # is that causing slack freeze
+      }
+      {
+      services.screen-locker.enable = lib.mkForce false;
       }
     ];
-    services.greetd = {
-      enable = true;
-      settings = let
-        initial_session =
-          cfg.wayland.greetdSettings."${cfg.wayland.desktop}_session";
-      in cfg.wayland.greetdSettings // {
-        default_session = {
-          command = "${
-              lib.makeBinPath [ pkgs.greetd.tuigreet ]
-            }/tuigreet --width 120 --time --cmd '${initial_session.command}'";
-          user = "greeter";
-        };
-        inherit initial_session;
-      };
-    };
-
     services.physlock = {
-      enable = true;
+      enable = lib.mkForce false;
       allowAnyUser = true;
     };
   });

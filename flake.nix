@@ -127,7 +127,15 @@
               nixpkgs.overlays = [
                 (self: super: {
                   newm = inputs.newmpkg.packages.${pkgs.system}.newm;
-                  pywm-fullscreen = inputs.pywm-fullscreenpkg.packages.${pkgs.system}.pywm-fullscreen;
+                  pywm-fullscreen =
+                    inputs.pywm-fullscreenpkg.packages.${pkgs.system}.pywm-fullscreen;
+                })
+              ];
+            })
+            ({ pkgs, ... }: {
+              nixpkgs.overlays = [
+                (self: super: {
+                  swaymonad = inputs.swaymonad.defaultPackage.${pkgs.system};
                 })
               ];
             })
@@ -138,16 +146,10 @@
             ({ pkgs, ... }: {
               home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
             })
-            ({ config, pkgs, lib, ... }:
-              lib.mkIf config.programs.sway.enable {
-                environment.systemPackages = with pkgs;
-                [ inputs.swaymonad.defaultPackage.x86_64-linux ];
-              })
-
           ] ++ (import ./modules/_list.nix);
           config = {
             hardware.enableRedistributableFirmware = true;
-            nixpkgs.overlays = [inputs.nur.overlay];
+            nixpkgs.overlays = [ inputs.nur.overlay ];
           };
         };
       };
@@ -175,9 +177,8 @@
               ];
             })
             ({ pkgs, ... }: {
-              home-manager.sharedModules = [
-                inputs.hyprland.homeManagerModules.default
-              ];
+              home-manager.sharedModules =
+                [ inputs.hyprland.homeManagerModules.default ];
             })
           ] ++ moreModules) metadataOverride);
         host-x1extremeG2 = moreModules: metadataOverride:

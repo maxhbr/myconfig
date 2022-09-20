@@ -37,15 +37,11 @@ let
   };
 in {
   options.myconfig = with lib; {
-    wayland.river = {
-      enable = mkEnableOption "river";
-    };
+    wayland.river = { enable = mkEnableOption "river"; };
   };
   config = (lib.mkIf (cfg.wayland.enable && cfg.wayland.river.enable) {
     home-manager.sharedModules = [{
-      xdg.configFile = {
-        "river/init".source = ./river/init;
-      };
+      xdg.configFile = { "river/init".source = ./river/init; };
       home.packages = with pkgs; [ riverPackage ];
     }];
     myconfig.wayland.greetdSettings = {

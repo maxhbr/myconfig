@@ -59,17 +59,16 @@ in {
       # warning: The option `xdg.portal.gtkUsePortal'has been deprecated. Setting the variable globally with `environment.sessionVariables' NixOS option can have unforseen side-effects.
       gtkUsePortal = true;
     };
-  } // (lib.mkIf (! enable) {
+  } // (lib.mkIf (!enable) {
     home-manager.sharedModules = [{
-      home.packages = with pkgs;
-        [
-          (writeShellScriptBin "configure-gtk" ''
-            echo "nothing to do, as config.service.dbus.enable=false"
-          '')
-          (writeShellScriptBin "dbus-wm-environment" ''
-            echo "nothing to do, as config.service.dbus.enable=false"
-          '')
-        ];
+      home.packages = with pkgs; [
+        (writeShellScriptBin "configure-gtk" ''
+          echo "nothing to do, as config.service.dbus.enable=false"
+        '')
+        (writeShellScriptBin "dbus-wm-environment" ''
+          echo "nothing to do, as config.service.dbus.enable=false"
+        '')
+      ];
     }];
   });
 }

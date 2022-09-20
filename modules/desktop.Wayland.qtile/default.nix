@@ -35,15 +35,11 @@ let
   };
 in {
   options.myconfig = with lib; {
-    wayland.qtile = {
-      enable = mkEnableOption "qtile";
-    };
+    wayland.qtile = { enable = mkEnableOption "qtile"; };
   };
   config = (lib.mkIf (cfg.wayland.enable && cfg.wayland.qtile.enable) {
     home-manager.sharedModules = [{
-      xdg.configFile = {
-        "qtile/config.py".source = ./qtile/config.py;
-      };
+      xdg.configFile = { "qtile/config.py".source = ./qtile/config.py; };
       home.packages = with pkgs; [ qtilePackage ];
     }];
 

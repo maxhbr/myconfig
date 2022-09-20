@@ -1,25 +1,26 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
-let
-  cfg = config.myconfig;
+let cfg = config.myconfig;
 in {
   config = (lib.mkIf (cfg.wayland.enable && config.programs.sway.enable) {
-    environment = {
-      etc."sway/config".source = ./sway/config;
-    };
-    home-manager.sharedModules = [{
-      programs.waybar.enable = true;
-    }];
+    environment = { etc."sway/config".source = ./sway/config; };
+    home-manager.sharedModules = [{ programs.waybar.enable = true; }];
 
     programs.sway = {
       extraPackages = with pkgs;
-        [ autotiling swaylock swayidle dmenu sway-launcher-desktop
+        [
+          autotiling
+          swaylock
+          swayidle
+          dmenu
+          sway-launcher-desktop
           (writeShellScriptBin "foot-sway-launcher-desktop" ''
-${foot}/bin/foot --title=launcher --app-id=launcher -e sway-launcher-desktop
-'')
-        ]
-        ++ cfg.wayland.commonPackages;
+            ${foot}/bin/foot --title=launcher --app-id=launcher -e sway-launcher-desktop
+          '')
+          # swaymonad
+          i3-wk-switch # https://github.com/tmfink/i3-wk-switch
+        ] ++ cfg.wayland.commonPackages;
       wrapperFeatures.gtk = true;
 
       extraSessionCommands = ''
