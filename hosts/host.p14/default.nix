@@ -30,6 +30,20 @@
         # qtile.enable = true;
       };
       programs.sway.enable = true;
+      home-manager.sharedModules = [{
+        services.kanshi.profiles = {
+          # get list via "swaymsg -t get_outputs"
+          undocked = {
+            outputs = [{
+              criteria = "eDP-1";
+              mode = "1920x1200@60Hz";
+              position = "0,0";
+              scale = 1.0;
+            }];
+            exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
+          };
+        };
+      }];
     }
     {
       services.openssh = {
@@ -101,21 +115,21 @@
     services.gnome.gnome-keyring.enable = true;
 
     home-manager.sharedModules = [{
-      home.file = {
-        ".config/autorandr/" = {
-          source = ./autorandr;
-          recursive = true;
-        };
-        ".config/autorandr/mobile/postswitch.d/mykeylight-off".source = let
-          script = with pkgs;
-            writeShellScriptBin "script"
-            "${mykeylight-off}/bin/mykeylight-off &disown";
-        in "${script}/bin/script";
-        ".config/electron-flags.conf".text = ''
-          --enable-features=WaylandWindowDecorations
-          --ozone-platform-hint=auto
-        '';
-      };
+      # home.file = {
+      #   ".config/autorandr/" = {
+      #     source = ./autorandr;
+      #     recursive = true;
+      #   };
+      #   ".config/autorandr/mobile/postswitch.d/mykeylight-off".source = let
+      #     script = with pkgs;
+      #       writeShellScriptBin "script"
+      #       "${mykeylight}/bin/mykeylight-off &disown";
+      #   in "${script}/bin/script";
+      #   ".config/electron-flags.conf".text = ''
+      #     --enable-features=WaylandWindowDecorations
+      #     --ozone-platform-hint=auto
+      #   '';
+      # };
       home.packages = with pkgs; [
         rdesktop
         google-chrome # for netflix and stadia

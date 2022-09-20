@@ -117,7 +117,7 @@
           ".config/autorandr/mobile/postswitch.d/mykeylight-off".source = let
             script = with pkgs;
               writeShellScriptBin "script"
-              "${mykeylight-off}/bin/mykeylight-off &disown";
+              "${mykeylight}/bin/mykeylight-off &disown";
           in "${script}/bin/script";
         };
         home.packages = with pkgs; [

@@ -41,10 +41,10 @@ in {
           ## Idle Management
           swayidle
           (writeShellScriptBin "myswayidle" ''
-set -x
-exec ${swayidle}/bin/swayidle -w \
-	timeout 300 '${swaylock}/bin/swaylock -f -c 000000' \
-	before-sleep '${swaylock}/bin/swaylock -f -c 000000'
+            set -x
+            exec ${swayidle}/bin/swayidle -w \
+            	timeout 300 '${swaylock}/bin/swaylock -f -c 000000' \
+            	before-sleep '${swaylock}/bin/swaylock -f -c 000000'
           '')
           # (writeShellScriptBin "myphyslock"
           #   "exec '${config.security.wrapperDir}/physlock'")
@@ -145,6 +145,8 @@ exec ${swayidle}/bin/swayidle -w \
       };
     };
     home-manager.sharedModules = [
+      ./home-manager.kanshi.nix
+      ./home-manager.mako.nix
       ./home-manager.waybar.nix
       {
         home.packages = with pkgs; [
@@ -156,20 +158,10 @@ exec ${swayidle}/bin/swayidle -w \
           "way-displays/cfg.yaml".source = ./way-displays/cfg.yaml;
         };
         programs.waybar.enable = true;
+        services.kanshi.enable = true;
+        programs.mako.enable = true;
         services.random-background.enable = lib.mkForce false;
         services.screen-locker.enable = lib.mkForce false;
-      }
-      {
-        programs.mako = {
-          enable = true;
-          backgroundColor = "#285577BB";
-          defaultTimeout = 5000;
-        };
-        services.dunst.enable =
-          lib.mkForce false; # is that causing slack freeze
-      }
-      {
-      services.screen-locker.enable = lib.mkForce false;
       }
     ];
     services.physlock = {
