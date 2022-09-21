@@ -984,6 +984,22 @@
         "type": "github"
       }
     },
+    "rel2205": {
+      "locked": {
+        "lastModified": 1663707118,
+        "narHash": "sha256-eyzwPTQqB9l/viI769epK8NwGOY8v/c2TNrRmcX5u+8=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "cafad185b7486732d6b6e0b8447588e22216c020",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "release-22.05",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "revealjs": {
       "flake": false,
       "locked": {
@@ -1022,6 +1038,7 @@
         "rel2009": "rel2009",
         "rel2105": "rel2105",
         "rel2111": "rel2111",
+        "rel2205": "rel2205",
         "swaymonad": "swaymonad",
         "zephyrproject": "zephyrproject"
       }
