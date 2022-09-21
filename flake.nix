@@ -11,6 +11,7 @@
     rel2003.url = "github:nixos/nixpkgs/nixos-20.03";
     rel2105.url = "github:nixos/nixpkgs/release-21.05";
     rel2111.url = "github:nixos/nixpkgs/release-21.11";
+    rel2205.url = "github:nixos/nixpkgs/release-22.05";
 
     home.url = "github:nix-community/home-manager";
     home.inputs.nixpkgs.follows = "nixpkgs";
@@ -105,6 +106,7 @@
                   (mkSubPkgsOverlay "nixos-2009" inputs.rel2009)
                   (mkSubPkgsOverlay "nixos-2105" inputs.rel2105)
                   (mkSubPkgsOverlay "nixos-2111" inputs.rel2111)
+                  (mkSubPkgsOverlay "nixos-2205" inputs.rel2205)
                 ];
               };
             })

@@ -23,7 +23,7 @@ in {
           librepcb
           gerbv
           # kicad-small
-          # kicad-with-packages3d
+          nixos-2205.kicad-with-packages3d
         ]);
     }];
   });

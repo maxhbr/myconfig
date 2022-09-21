@@ -132,16 +132,16 @@ in {
     services.greetd = {
       enable = true;
       settings = let
-        initial_session =
+        chosen_session =
           cfg.wayland.greetdSettings."${cfg.wayland.desktop}_session";
       in cfg.wayland.greetdSettings // {
         default_session = {
           command = "${
               lib.makeBinPath [ pkgs.greetd.tuigreet ]
-            }/tuigreet --width 120 --time --cmd '${initial_session.command}'";
+            }/tuigreet --width 120 --time --cmd '${chosen_session.command}'";
           user = "greeter";
         };
-        inherit initial_session;
+        # initial_session = chosen_session;
       };
     };
     home-manager.sharedModules = [
