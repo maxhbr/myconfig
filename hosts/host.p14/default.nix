@@ -30,8 +30,10 @@
         # qtile.enable = true;
       };
       programs.sway.enable = true;
-      home-manager.sharedModules = [{
-        services.kanshi.profiles = {
+      home-manager.sharedModules = [
+        ./home-manager.email
+        {
+          services.kanshi.profiles = {
           # get list via "swaymsg -t get_outputs"
           undocked = {
             outputs = [{
@@ -43,7 +45,8 @@
             exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
           };
         };
-      }];
+      }
+    ];
     }
     {
       services.openssh = {
