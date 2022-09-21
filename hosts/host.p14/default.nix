@@ -13,7 +13,7 @@
       networking.interfaces.wlp0s20f3.useDHCP = true;
       # networking.interfaces.enp82s0u2u1u2.useDHCP = true;
     }
-    ./mail
+    # ./mail
     ../../hardware/footswitch.nix
     ../../hardware/blink1.nix
     ../../hardware/unifying.nix
