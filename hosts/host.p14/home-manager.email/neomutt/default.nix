@@ -21,10 +21,15 @@
     #   fi
     # '')
   ];
-  msmtp = {
+  programs.mbsync.enable = true;
+  programs.msmtp.enable = true;
+  programs.notmuch = {
     enable = true;
+    hooks = {
+      preNew = "mbsync --all";
+    };
   };
-  neomutt = {
+  programs.neomutt = {
     enable = true;
     sidebar = {
       enable = true;

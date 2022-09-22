@@ -144,6 +144,7 @@ in {
         # initial_session = chosen_session;
       };
     };
+    services.dbus.enable = true;
     home-manager.sharedModules = [
       ./home-manager.kanshi.nix
       ./home-manager.mako.nix
@@ -158,7 +159,7 @@ in {
           "way-displays/cfg.yaml".source = ./way-displays/cfg.yaml;
         };
         programs.waybar.enable = true;
-        services.kanshi.enable = true;
+        services.kanshi.enable = false;
         programs.mako.enable = true;
         services.random-background.enable = lib.mkForce false;
         services.screen-locker.enable = lib.mkForce false;

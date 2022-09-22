@@ -29,7 +29,7 @@ let
   # note: this is pretty much the same as  /etc/sway/config.d/nixos.conf but also restarts
   # some user services to make sure they have the correct environment variables
   dbus-wm-environment = pkgs.writeShellScriptBin "dbus-wm-environment" ''
-    dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=''${XDG_CURRENT_DESKTOP:-sway}
+    dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP=''${XDG_CURRENT_DESKTOP:-sway}
     systemctl --user stop pipewire pipewire-media-session xdg-desktop-portal xdg-desktop-portal-wlr
     systemctl --user start pipewire pipewire-media-session xdg-desktop-portal xdg-desktop-portal-wlr
   '';
@@ -44,6 +44,14 @@ in {
         gnome3.adwaita-icon-theme # default gnome cursors
       ];
     }];
+
+    environment.etc = lib.mkIf config.programs.sway.enable {
+      # overwrite the nixos.conf from https://github.com/NixOS/nixpkgs/blob/4ae405c83424f18b360dc9794f6300ab243f61e2/nixos/modules/programs/sway.nix#L129-L133
+      "sway/config.d/nixos.conf".source = lib.mkForce ( pkgs.writeText "nixos.conf" ''
+exec ${dbus-wm-environment}/bin/dbus-wm-environment sway
+exec ${configure-gtk}/bin/configure-gtk
+        '');
+    };
 
     # xdg-desktop-portal works by exposing a series of D-Bus interfaces
     # known as portals under a well-known name

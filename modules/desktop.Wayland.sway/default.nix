@@ -4,7 +4,14 @@
 let cfg = config.myconfig;
 in {
   config = (lib.mkIf (cfg.wayland.enable && config.programs.sway.enable) {
-    environment = { etc."sway/config".source = ./sway/config; };
+    environment = {
+      etc = {
+        "sway/config".source = ./sway/config;
+        "sway/config.d/dex.conf".source = pkgs.writeText "dex.conf" ''
+exec ${pkgs.dex}/bin/dex --autostart
+        '';
+      };
+    };
     home-manager.sharedModules = [{ programs.waybar.enable = true; }];
 
     programs.sway = {

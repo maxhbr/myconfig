@@ -142,16 +142,6 @@ set $term tfoot
     # bindsym $mod+8 workspace 8
     # bindsym $mod+9 workspace 9
     # bindsym $mod+0 workspace 10
-    # bindsym $mod+F1 workspace F1
-    # bindsym $mod+F2 workspace F2
-    # bindsym $mod+F3 workspace F3
-    # bindsym $mod+F4 workspace F4
-    # bindsym $mod+F5 workspace F5
-    # bindsym $mod+F6 workspace F6
-    # bindsym $mod+F7 workspace F7
-    # bindsym $mod+F8 workspace F8
-    # bindsym $mod+F9 workspace F9
-    # bindsym $mod+F10 workspace F10
     bindsym $mod+1 exec --no-startup-id i3-wk-switch 1
     bindsym $mod+2 exec --no-startup-id i3-wk-switch 2
     bindsym $mod+3 exec --no-startup-id i3-wk-switch 3
@@ -162,16 +152,26 @@ set $term tfoot
     bindsym $mod+8 exec --no-startup-id i3-wk-switch 8
     bindsym $mod+9 exec --no-startup-id i3-wk-switch 9
     bindsym $mod+0 exec --no-startup-id i3-wk-switch 10
-    bindsym $mod+F1 exec --no-startup-id i3-wk-switch F1
-    bindsym $mod+F2 exec --no-startup-id i3-wk-switch F2
-    bindsym $mod+F3 exec --no-startup-id i3-wk-switch F3
-    bindsym $mod+F4 exec --no-startup-id i3-wk-switch F4
-    bindsym $mod+F5 exec --no-startup-id i3-wk-switch F5
-    bindsym $mod+F6 exec --no-startup-id i3-wk-switch F6
-    bindsym $mod+F7 exec --no-startup-id i3-wk-switch F7
-    bindsym $mod+F8 exec --no-startup-id i3-wk-switch F8
-    bindsym $mod+F9 exec --no-startup-id i3-wk-switch F9
-    bindsym $mod+F10 exec --no-startup-id i3-wk-switch F10
+    bindsym $mod+F1 workspace F1
+    bindsym $mod+F2 workspace F2
+    bindsym $mod+F3 workspace F3
+    bindsym $mod+F4 workspace F4
+    bindsym $mod+F5 workspace F5
+    bindsym $mod+F6 workspace F6
+    bindsym $mod+F7 workspace F7
+    bindsym $mod+F8 workspace F8
+    bindsym $mod+F9 workspace F9
+    bindsym $mod+F10 workspace F10
+    # bindsym $mod+F1 exec --no-startup-id i3-wk-switch F1
+    # bindsym $mod+F2 exec --no-startup-id i3-wk-switch F2
+    # bindsym $mod+F3 exec --no-startup-id i3-wk-switch F3
+    # bindsym $mod+F4 exec --no-startup-id i3-wk-switch F4
+    # bindsym $mod+F5 exec --no-startup-id i3-wk-switch F5
+    # bindsym $mod+F6 exec --no-startup-id i3-wk-switch F6
+    # bindsym $mod+F7 exec --no-startup-id i3-wk-switch F7
+    # bindsym $mod+F8 exec --no-startup-id i3-wk-switch F8
+    # bindsym $mod+F9 exec --no-startup-id i3-wk-switch F9
+    # bindsym $mod+F10 exec --no-startup-id i3-wk-switch F10
 
     # Move focused container to workspace
     bindsym $mod+Shift+1 move container to workspace 1
@@ -309,9 +309,6 @@ seat seat0 xcursor_theme default 128
 ################################################################################
 ################################################################################
 ################################################################################
-exec dbus-wm-environment sway
-exec configure-gtk
 exec xrdb ~/.Xresources
-exec dex --autostart
 
 exec autotiling
