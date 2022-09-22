@@ -117,7 +117,43 @@ in {
     };
   };
 
-  imports = [ ./services.dbus.nix ];
+  imports = [
+    (lib.mkIf (cfg.wayland.enable && config.services.greetd.enable){
+      services.greetd = {
+        settings = let
+          chosen_session =
+            cfg.wayland.greetdSettings."${cfg.wayland.desktop}_session";
+        in cfg.wayland.greetdSettings // {
+          default_session = {
+            command = "${
+                lib.makeBinPath [ pkgs.greetd.tuigreet ]
+              }/tuigreet --width 120 --time --cmd '${chosen_session.command}'";
+            user = "greeter";
+          };
+          # initial_session = chosen_session;
+        };
+      };
+      home-manager.sharedModules = [
+        {
+          home.packages = with pkgs; [
+            (writeShellScriptBin "regreet"
+              "sudo systemctl restart greetd.service")
+          ];
+        }
+      ];
+    })
+    (lib.mkIf (cfg.wayland.enable && ! config.services.greetd.enable){
+      environment.interactiveShellInit = let
+        chosen_session =
+          cfg.wayland.greetdSettings."${cfg.wayland.desktop}_session";
+      in ''
+    if test `tty` = /dev/tty1; then
+       exec ${chosen_session.command}
+    fi
+  '';
+    })
+  ];
+
   config = (lib.mkIf cfg.wayland.enable {
     environment.sessionVariables = {
       "XDG_SESSION_TYPE" = "wayland";
@@ -130,33 +166,12 @@ in {
       "_JAVA_AWT_WM_NONREPARENTING" = "1";
     };
 
-    # services.greetd = {
-    #   enable = true;
-    #   settings = let
-    #     chosen_session =
-    #       cfg.wayland.greetdSettings."${cfg.wayland.desktop}_session";
-    #   in cfg.wayland.greetdSettings // {
-    #     default_session = {
-    #       command = "${
-    #           lib.makeBinPath [ pkgs.greetd.tuigreet ]
-    #         }/tuigreet --width 120 --time --cmd '${chosen_session.command}'";
-    #       user = "greeter";
-    #     };
-    #     # initial_session = chosen_session;
-    #   };
-    # };
-
-    services.dbus.enable = true;
     home-manager.sharedModules = [
       ./home-manager.kanshi.nix
       ./home-manager.mako.nix
       ./home-manager.waybar.nix
       {
-        home.packages = with pkgs; [
-          (writeShellScriptBin "regreet"
-            "sudo systemctl restart greetd.service")
-          qt5.qtwayland
-        ];
+        home.packages = with pkgs; [qt5.qtwayland];
         xdg.configFile = {
           "way-displays/cfg.yaml".source = ./way-displays/cfg.yaml;
         };
@@ -168,7 +183,7 @@ in {
       }
     ];
     services.physlock = {
-      enable = lib.mkForce false;
+      enable = true;
       allowAnyUser = true;
     };
   });

@@ -4,9 +4,6 @@
 # https://www.reddit.com/r/NixOS/comments/s9ytrg/comment/htr06n8/
 
 let
-  cfg = config.myconfig;
-  enable = cfg.wayland.enable && config.services.dbus.enable;
-
   # currently, there is some friction between sway and gtk:
   # https://github.com/swaywm/sway/wiki/GTK-3-settings-on-Wayland
   # the suggested way to set gtk settings is with gsettings
@@ -30,12 +27,15 @@ let
   # some user services to make sure they have the correct environment variables
   dbus-wm-environment = pkgs.writeShellScriptBin "dbus-wm-environment" ''
     dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP=''${XDG_CURRENT_DESKTOP:-sway}
+
+    ${configure-gtk}/bin/configure-gtk &disown
+
     systemctl --user stop pipewire pipewire-media-session xdg-desktop-portal xdg-desktop-portal-wlr
     systemctl --user start pipewire pipewire-media-session xdg-desktop-portal xdg-desktop-portal-wlr
   '';
 
 in {
-  config = lib.mkIf enable {
+  config = lib.mkIf config.services.dbus.enable {
     home-manager.sharedModules = [{
       home.packages = with pkgs; [
         configure-gtk
@@ -50,7 +50,6 @@ in {
       "sway/config.d/nixos.conf" = lib.mkForce {
         source = pkgs.writeText "nixos.conf" ''
           exec ${dbus-wm-environment}/bin/dbus-wm-environment sway
-          exec ${configure-gtk}/bin/configure-gtk
         '';
       };
     };
@@ -65,9 +64,11 @@ in {
       enable = true;
       wlr.enable = true;
       # gtk portal needed to make gtk apps happy
-      extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
-      # warning: The option `xdg.portal.gtkUsePortal'has been deprecated. Setting the variable globally with `environment.sessionVariables' NixOS option can have unforseen side-effects.
-      gtkUsePortal = true;
+      extraPortals = let
+        gnome = config.services.xserver.desktopManager.gnome.enable;
+      in [ pkgs.xdg-desktop-portal-wlr ] ++ lib.optional (!gnome) pkgs.xdg-desktop-portal-gtk;
+      # # warning: The option `xdg.portal.gtkUsePortal'has been deprecated. Setting the variable globally with `environment.sessionVariables' NixOS option can have unforseen side-effects.
+      # gtkUsePortal = true;
     };
   };
 }

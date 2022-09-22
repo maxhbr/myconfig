@@ -1,7 +1,7 @@
 { config, lib, pkgs, ... }:
 
 {
-  imports = [./neomutt];
+  imports = [./neomutt ./astroid.nix];
   # config = {
   # };
 }

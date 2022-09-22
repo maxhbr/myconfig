@@ -21,6 +21,7 @@
   ./programs.pass
   ./programs.taskwarrior.nix
   ./programs.weylus.nix
+  ./services.dbus.nix
   ./services.gnome.gnome-keyring.nix
   ./services.netdata.nix
   ./services.openssh.nix
