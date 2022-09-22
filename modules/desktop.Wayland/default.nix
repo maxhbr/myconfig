@@ -129,21 +129,23 @@ in {
       # use this if they aren't displayed properly:
       "_JAVA_AWT_WM_NONREPARENTING" = "1";
     };
-    services.greetd = {
-      enable = true;
-      settings = let
-        chosen_session =
-          cfg.wayland.greetdSettings."${cfg.wayland.desktop}_session";
-      in cfg.wayland.greetdSettings // {
-        default_session = {
-          command = "${
-              lib.makeBinPath [ pkgs.greetd.tuigreet ]
-            }/tuigreet --width 120 --time --cmd '${chosen_session.command}'";
-          user = "greeter";
-        };
-        # initial_session = chosen_session;
-      };
-    };
+
+    # services.greetd = {
+    #   enable = true;
+    #   settings = let
+    #     chosen_session =
+    #       cfg.wayland.greetdSettings."${cfg.wayland.desktop}_session";
+    #   in cfg.wayland.greetdSettings // {
+    #     default_session = {
+    #       command = "${
+    #           lib.makeBinPath [ pkgs.greetd.tuigreet ]
+    #         }/tuigreet --width 120 --time --cmd '${chosen_session.command}'";
+    #       user = "greeter";
+    #     };
+    #     # initial_session = chosen_session;
+    #   };
+    # };
+
     services.dbus.enable = true;
     home-manager.sharedModules = [
       ./home-manager.kanshi.nix

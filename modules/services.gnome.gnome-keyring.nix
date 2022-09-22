@@ -4,6 +4,6 @@
     environment.systemPackages = with pkgs; [ gcr ];
 
     programs.dconf.enable = lib.mkDefault true;
-    programs.seahorse.enable = lib.mkDefault true;
+    # programs.seahorse.enable = lib.mkDefault true;
   });
 }

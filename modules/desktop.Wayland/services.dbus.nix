@@ -47,10 +47,12 @@ in {
 
     environment.etc = lib.mkIf config.programs.sway.enable {
       # overwrite the nixos.conf from https://github.com/NixOS/nixpkgs/blob/4ae405c83424f18b360dc9794f6300ab243f61e2/nixos/modules/programs/sway.nix#L129-L133
-      "sway/config.d/nixos.conf".source = lib.mkForce ( pkgs.writeText "nixos.conf" ''
-exec ${dbus-wm-environment}/bin/dbus-wm-environment sway
-exec ${configure-gtk}/bin/configure-gtk
-        '');
+      "sway/config.d/nixos.conf" = lib.mkForce {
+        source = pkgs.writeText "nixos.conf" ''
+          exec ${dbus-wm-environment}/bin/dbus-wm-environment sway
+          exec ${configure-gtk}/bin/configure-gtk
+        '';
+      };
     };
 
     # xdg-desktop-portal works by exposing a series of D-Bus interfaces
@@ -67,16 +69,5 @@ exec ${configure-gtk}/bin/configure-gtk
       # warning: The option `xdg.portal.gtkUsePortal'has been deprecated. Setting the variable globally with `environment.sessionVariables' NixOS option can have unforseen side-effects.
       gtkUsePortal = true;
     };
-  } // (lib.mkIf (!enable) {
-    home-manager.sharedModules = [{
-      home.packages = with pkgs; [
-        (writeShellScriptBin "configure-gtk" ''
-          echo "nothing to do, as config.service.dbus.enable=false"
-        '')
-        (writeShellScriptBin "dbus-wm-environment" ''
-          echo "nothing to do, as config.service.dbus.enable=false"
-        '')
-      ];
-    }];
-  });
+  };
 }

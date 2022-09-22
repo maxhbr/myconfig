@@ -14,6 +14,6 @@ in {
         # gnome-online-accounts.enable = lib.mkDefault true;
       };
       programs.dconf.enable = true;
-      programs.seahorse.enable = true;
+      # programs.seahorse.enable = true;
     };
 }
