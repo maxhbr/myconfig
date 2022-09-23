@@ -13,7 +13,6 @@
       networking.interfaces.wlp0s20f3.useDHCP = true;
       # networking.interfaces.enp82s0u2u1u2.useDHCP = true;
     }
-    # ./mail
     ../../hardware/footswitch.nix
     ../../hardware/blink1.nix
     ../../hardware/unifying.nix
@@ -31,22 +30,21 @@
       };
       programs.sway.enable = true;
       home-manager.sharedModules = [
-        ./home-manager.email
         {
           services.kanshi.profiles = {
-          # get list via "swaymsg -t get_outputs"
-          undocked = {
-            outputs = [{
-              criteria = "eDP-1";
-              mode = "1920x1200@60Hz";
-              position = "0,0";
-              scale = 1.0;
-            }];
-            exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
+            # get list via "swaymsg -t get_outputs"
+            undocked = {
+              outputs = [{
+                criteria = "eDP-1";
+                mode = "1920x1200@60Hz";
+                position = "0,0";
+                scale = 1.0;
+              }];
+              exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
+            };
           };
-        };
-      }
-    ];
+        }
+      ];
     }
     {
       services.openssh = {
@@ -89,6 +87,7 @@
     networking.hostId = "1ea9689e";
     myconfig = {
       desktop.enable = true;
+      email.enable = true;
       virtualisation.enable = true;
       imagework.enable = true;
       cad.enable = true;

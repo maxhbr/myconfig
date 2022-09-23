@@ -1,8 +1,5 @@
 { config, lib, pkgs, ... }:
-let
-  cfg = config.myconfig;
-  user = cfg.user;
-in {
+{
   imports = [
     ./myconfig.desktop.nix
     ./myconfig.headless.nix

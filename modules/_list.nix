@@ -1,5 +1,6 @@
 [
   ./myconfig
+  ./myconfig.email
   ./myemacs
   ./myvim
   ./myxmonad

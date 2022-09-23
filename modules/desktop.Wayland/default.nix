@@ -60,18 +60,11 @@ in {
             mkdir -p "$output_dir"
             mkdir -p "$old_dir"
 
-            if [[ "$1" == "win" ]]; then
-                shift
-                output="$output_dir/$(date +%Y-%m-%d_%H-%M-%S).png"
-            else
-                output="$output_dir/$(date +%Y-%m-%d_%H:%M:%S).png"
-            fi
-
             echo "## clean up old screenshots ..."
             find "$output_dir" -maxdepth 1 -mtime +10 -type f -print -exec mv {} "$old_dir" \;
 
-            ${grim}/bin/grim \
-              -o "$output" \
+            echo "## take screenshot ..."
+            GRIM_DEFAULT_DIR="$output_dir" ${grim}/bin/grim \
               -g "$(${slurp}/bin/slurp)"
           '')
           wob
