@@ -30,8 +30,12 @@ let
 
     ${configure-gtk}/bin/configure-gtk &disown
 
-    systemctl --user stop pipewire pipewire-media-session xdg-desktop-portal xdg-desktop-portal-wlr
-    systemctl --user start pipewire pipewire-media-session xdg-desktop-portal xdg-desktop-portal-wlr
+    systemctl --user stop pipewire ${if config.services.pipewire.wireplumber.enable
+                                     then "wireplumber"
+                                     else "pipewire-media-session"} xdg-desktop-portal xdg-desktop-portal-wlr
+    systemctl --user start pipewire ${if config.services.pipewire.wireplumber.enable
+                                     then "wireplumber"
+                                     else "pipewire-media-session"} xdg-desktop-portal xdg-desktop-portal-wlr
   '';
 
 in {

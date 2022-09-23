@@ -91,6 +91,8 @@
     virtualisation.docker.enable = true;
     virtualisation.virtualbox.host.enable = true;
 
+    services.physlock.enable = true;
+
     #boot.kernelPackages =
     #  # lib.mkForce pkgs.unstable.linuxPackages_testing;
     #  # lib.mkForce pkgs.linuxPackages_testing;

@@ -182,9 +182,6 @@ in {
         services.screen-locker.enable = lib.mkForce false;
       }
     ];
-    services.physlock = {
-      enable = true;
-      allowAnyUser = true;
-    };
+    services.physlock.enable = lib.mkForce false;
   });
 }

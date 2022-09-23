@@ -8,6 +8,7 @@
           searchEngines = {
             "DEFAULT" =  "https://google.com/search?hl=en&q={}";
             "!g" = "https://www.google.com/search?hl=en&q={}";
+            "!gm" = "https://www.google.com/maps?q={}";
             "!d"="https://duckduckgo.com/?ia=web&q={}";
             "!nw" = "https://nixos.wiki/index.php?search={}";
             "!np" = "https://github.com/NixOS/nixpkgs/search?q={}";

@@ -73,6 +73,7 @@
     };
     # services.xserver.desktopManager.xfce.enable = true;
     services.xserver.wacom.enable = true;
+    services.physlock.enable = true;
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;
     # virtualisation.libvirtd.enable = true;
