@@ -8,7 +8,7 @@ in {
       etc = {
         "sway/config".source = ./sway/config;
         "sway/config.d/dex.conf".source = pkgs.writeText "dex.conf" ''
-exec ${pkgs.dex}/bin/dex --autostart
+          exec ${pkgs.dex}/bin/dex --autostart
         '';
       };
     };
@@ -25,7 +25,8 @@ exec ${pkgs.dex}/bin/dex --autostart
           (writeShellScriptBin "foot-sway-launcher-desktop" ''
             ${foot}/bin/foot --title=launcher --app-id=launcher -e sway-launcher-desktop
           '')
-          (pkgs.writeScriptBin "sway-run-or-raise" (builtins.readFile ./sway-run-or-raise))
+          (pkgs.writeScriptBin "sway-run-or-raise"
+            (builtins.readFile ./sway-run-or-raise))
           # swaymonad
           i3-wk-switch # https://github.com/tmfink/i3-wk-switch
         ] ++ cfg.wayland.commonPackages;

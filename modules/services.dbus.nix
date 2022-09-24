@@ -30,12 +30,18 @@ let
 
     ${configure-gtk}/bin/configure-gtk &disown
 
-    systemctl --user stop pipewire ${if config.services.pipewire.wireplumber.enable
-                                     then "wireplumber"
-                                     else "pipewire-media-session"} xdg-desktop-portal xdg-desktop-portal-wlr
-    systemctl --user start pipewire ${if config.services.pipewire.wireplumber.enable
-                                     then "wireplumber"
-                                     else "pipewire-media-session"} xdg-desktop-portal xdg-desktop-portal-wlr
+    systemctl --user stop pipewire ${
+      if config.services.pipewire.wireplumber.enable then
+        "wireplumber"
+      else
+        "pipewire-media-session"
+    } xdg-desktop-portal xdg-desktop-portal-wlr
+    systemctl --user start pipewire ${
+      if config.services.pipewire.wireplumber.enable then
+        "wireplumber"
+      else
+        "pipewire-media-session"
+    } xdg-desktop-portal xdg-desktop-portal-wlr
   '';
 
 in {
@@ -68,9 +74,10 @@ in {
       enable = true;
       wlr.enable = true;
       # gtk portal needed to make gtk apps happy
-      extraPortals = let
-        gnome = config.services.xserver.desktopManager.gnome.enable;
-      in [ pkgs.xdg-desktop-portal-wlr ] ++ lib.optional (!gnome) pkgs.xdg-desktop-portal-gtk;
+      extraPortals =
+        let gnome = config.services.xserver.desktopManager.gnome.enable;
+        in [ pkgs.xdg-desktop-portal-wlr ]
+        ++ lib.optional (!gnome) pkgs.xdg-desktop-portal-gtk;
       # # warning: The option `xdg.portal.gtkUsePortal'has been deprecated. Setting the variable globally with `environment.sessionVariables' NixOS option can have unforseen side-effects.
       # gtkUsePortal = true;
     };

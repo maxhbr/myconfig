@@ -25,11 +25,9 @@ let
     };
   };
 
-  physlockmodule = {config,...}: {
+  physlockmodule = { config, ... }: {
     config = lib.mkIf config.services.physlock.enable {
-      services.physlock = {
-        allowAnyUser = true;
-      };
+      services.physlock = { allowAnyUser = true; };
       programs.xss-lock = {
         lockerCommand = "${config.security.wrapperDir}/physlock";
       };

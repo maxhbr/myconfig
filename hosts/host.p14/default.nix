@@ -29,22 +29,20 @@
         # qtile.enable = true;
       };
       programs.sway.enable = true;
-      home-manager.sharedModules = [
-        {
-          services.kanshi.profiles = {
-            # get list via "swaymsg -t get_outputs"
-            undocked = {
-              outputs = [{
-                criteria = "eDP-1";
-                mode = "1920x1200@60Hz";
-                position = "0,0";
-                scale = 1.0;
-              }];
-              exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
-            };
+      home-manager.sharedModules = [{
+        services.kanshi.profiles = {
+          # get list via "swaymsg -t get_outputs"
+          undocked = {
+            outputs = [{
+              criteria = "eDP-1";
+              mode = "1920x1200@60Hz";
+              position = "0,0";
+              scale = 1.0;
+            }];
+            exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
           };
-        }
-      ];
+        };
+      }];
     }
     {
       services.openssh = {

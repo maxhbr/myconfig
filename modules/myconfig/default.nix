@@ -1,5 +1,4 @@
-{ config, lib, pkgs, ... }:
-{
+{ config, lib, pkgs, ... }: {
   imports = [
     ./myconfig.desktop.nix
     ./myconfig.headless.nix

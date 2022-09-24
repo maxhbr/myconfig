@@ -45,6 +45,11 @@
       url = "github:nicolasavru/swaymonad";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    persway = {
+      url = "github:johnae/persway";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     hyprland = {
       url = "github:hyprwm/Hyprland";
       # build with your own instance of nixpkgs
@@ -139,6 +144,7 @@
                 (self: super: {
                   swaymonad = inputs.swaymonad.defaultPackage.${pkgs.system};
                 })
+                inputs.persway.overlays.default
               ];
             })
 

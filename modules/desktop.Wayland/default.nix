@@ -12,6 +12,7 @@ in {
         type = with types; listOf package;
         default = with pkgs; [
           xwayland
+          persway
           ## Terminal
           foot
           (writeShellScriptBin "tfoot" ''
@@ -29,7 +30,9 @@ in {
           # https://github.com/riverwm/river/wiki/Recommended-Software
           ## Output configuration
           wlopm
-          way-displays # wlr-randr kanshi
+          way-displays
+          wdisplays
+          wlr-randr
           ## statusbar
           waybar
           ## Program Launchers
@@ -111,7 +114,7 @@ in {
   };
 
   imports = [
-    (lib.mkIf (cfg.wayland.enable && config.services.greetd.enable){
+    (lib.mkIf (cfg.wayland.enable && config.services.greetd.enable) {
       services.greetd = {
         settings = let
           chosen_session =
@@ -126,24 +129,23 @@ in {
           # initial_session = chosen_session;
         };
       };
-      home-manager.sharedModules = [
-        {
-          home.packages = with pkgs; [
+      home-manager.sharedModules = [{
+        home.packages = with pkgs;
+          [
             (writeShellScriptBin "regreet"
               "sudo systemctl restart greetd.service")
           ];
-        }
-      ];
+      }];
     })
-    (lib.mkIf (cfg.wayland.enable && ! config.services.greetd.enable){
+    (lib.mkIf (cfg.wayland.enable && !config.services.greetd.enable) {
       environment.interactiveShellInit = let
         chosen_session =
           cfg.wayland.greetdSettings."${cfg.wayland.desktop}_session";
       in ''
-    if test `tty` = /dev/tty1; then
-       exec ${chosen_session.command}
-    fi
-  '';
+        if test `tty` = /dev/tty1; then
+           exec ${chosen_session.command}
+        fi
+      '';
     })
   ];
 
@@ -164,7 +166,7 @@ in {
       ./home-manager.mako.nix
       ./home-manager.waybar.nix
       {
-        home.packages = with pkgs; [qt5.qtwayland];
+        home.packages = with pkgs; [ qt5.qtwayland ];
         xdg.configFile = {
           "way-displays/cfg.yaml".source = ./way-displays/cfg.yaml;
         };
