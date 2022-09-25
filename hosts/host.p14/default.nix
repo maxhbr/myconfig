@@ -22,29 +22,6 @@
     ./programs.khal.nix
     # ./a7iiiAsWebcam.nix
     {
-      myconfig.wayland = {
-        enable = true;
-        desktop = "sway";
-        # river.enable = true;
-        # qtile.enable = true;
-      };
-      programs.sway.enable = true;
-      home-manager.sharedModules = [{
-        services.kanshi.profiles = {
-          # get list via "swaymsg -t get_outputs"
-          undocked = {
-            outputs = [{
-              criteria = "eDP-1";
-              mode = "1920x1200@60Hz";
-              position = "0,0";
-              scale = 1.0;
-            }];
-            exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
-          };
-        };
-      }];
-    }
-    {
       services.openssh = {
         listenAddresses = [{
           addr = "127.0.0.1";
@@ -84,11 +61,19 @@
     networking.hostName = "p14";
     networking.hostId = "1ea9689e";
     myconfig = {
-      desktop.enable = true;
+      desktop = {
+        enable = true;
+        wayland = {
+          enable = true;
+          desktop = "sway";
+          # river.enable = true;
+          # qtile.enable = true;
+        };
+        imagework.enable = true;
+        cad.enable = true;
+      };
       email.enable = true;
       virtualisation.enable = true;
-      imagework.enable = true;
-      cad.enable = true;
       dev = {
         compliance.enable = true;
         go.enable = true;
@@ -103,6 +88,8 @@
     virtualisation.podman.enable = true;
     # virtualisation.libvirtd.enable = true;
     # virtualisation.virtualbox.host.enable = true;
+    #
+    programs.sway.enable = true;
 
     services.xserver.wacom.enable = true;
 
@@ -114,33 +101,49 @@
     '';
     services.gnome.gnome-keyring.enable = true;
 
-    home-manager.sharedModules = [{
-      # home.file = {
-      #   ".config/autorandr/" = {
-      #     source = ./autorandr;
-      #     recursive = true;
-      #   };
-      #   ".config/autorandr/mobile/postswitch.d/mykeylight-off".source = let
-      #     script = with pkgs;
-      #       writeShellScriptBin "script"
-      #       "${mykeylight}/bin/mykeylight-off &disown";
-      #   in "${script}/bin/script";
-      #   ".config/electron-flags.conf".text = ''
-      #     --enable-features=WaylandWindowDecorations
-      #     --ozone-platform-hint=auto
-      #   '';
-      # };
-      home.packages = with pkgs; [
-        rdesktop
-        google-chrome # for netflix and stadia
-        comma
-      ];
-      programs.zsh.shellAliases = {
-        upg-get-hostId = ''
+    home-manager.sharedModules = [
+      {
+        # home.file = {
+        #   ".config/autorandr/" = {
+        #     source = ./autorandr;
+        #     recursive = true;
+        #   };
+        #   ".config/autorandr/mobile/postswitch.d/mykeylight-off".source = let
+        #     script = with pkgs;
+        #       writeShellScriptBin "script"
+        #       "${mykeylight}/bin/mykeylight-off &disown";
+        #   in "${script}/bin/script";
+        #   ".config/electron-flags.conf".text = ''
+        #     --enable-features=WaylandWindowDecorations
+        #     --ozone-platform-hint=auto
+        #   '';
+        # };
+        home.packages = with pkgs; [
+          rdesktop
+          google-chrome # for netflix and stadia
+          comma
+        ];
+        programs.zsh.shellAliases = {
+          upg-get-hostId = ''
           cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
         '';
-      };
-    }];
+        };
+      }
+      {
+        services.kanshi.profiles = {
+          # get list via "swaymsg -t get_outputs"
+          undocked = {
+            outputs = [{
+              criteria = "eDP-1";
+              mode = "1920x1200@60Hz";
+              position = "0,0";
+              scale = 1.0;
+            }];
+            exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
+          };
+        };
+      }
+    ];
 
     hardware.enableRedistributableFirmware = true;
 

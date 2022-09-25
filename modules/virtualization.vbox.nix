@@ -18,17 +18,5 @@
     networking.firewall.extraCommands = ''
       ip46tables -I INPUT 1 -i vboxnet+ -p tcp -m tcp --dport 2049 -j ACCEPT
     '';
-    environment = {
-      shellAliases = {
-        vup = "vagrant up";
-        vstart = "vagrant up";
-        vreload = "vagrant reload";
-        vhalt = "vagrant halt";
-        vstop = "vagrant halt";
-        vdown = "vagrant halt";
-        vssh = "vagrant ssh";
-        vdestroy = "vagrant destroy";
-      };
-    };
   });
 }

@@ -45,10 +45,6 @@
       url = "github:nicolasavru/swaymonad";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    persway = {
-      url = "github:johnae/persway";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
 
     hyprland = {
       url = "github:hyprwm/Hyprland";
@@ -133,6 +129,14 @@
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
                 (self: super: {
+                  mybackup =
+                    pkgs.callPackage ../pkgs/mybackup { inherit pkgs; };
+                })
+              ];
+            })
+            ({ pkgs, ... }: {
+              nixpkgs.overlays = [
+                (self: super: {
                   newm = inputs.newmpkg.packages.${pkgs.system}.newm;
                   pywm-fullscreen =
                     inputs.pywm-fullscreenpkg.packages.${pkgs.system}.pywm-fullscreen;
@@ -144,7 +148,6 @@
                 (self: super: {
                   swaymonad = inputs.swaymonad.defaultPackage.${pkgs.system};
                 })
-                inputs.persway.overlays.default
               ];
             })
 
@@ -154,7 +157,8 @@
             ({ pkgs, ... }: {
               home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
             })
-          ] ++ (import ./modules/_list.nix);
+          ] ++ (map (n: "${./modules}/${n}")
+            (builtins.attrNames (builtins.readDir ./modules)));
           config = {
             hardware.enableRedistributableFirmware = true;
             nixpkgs.overlays = [ inputs.nur.overlay ];
