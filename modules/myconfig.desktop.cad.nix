@@ -3,8 +3,8 @@
 { config, lib, pkgs, ... }:
 let cfg = config.myconfig;
 in {
-  options.myconfig = with lib; { cad.enable = mkEnableOption "cad"; };
-  config = (lib.mkIf cfg.cad.enable {
+  options.myconfig = with lib; { desktop.cad.enable = mkEnableOption "cad"; };
+  config = (lib.mkIf cfg.desktop.cad.enable {
     home-manager.sharedModules = [{
       home.packages = with pkgs;
         ([ # 2D

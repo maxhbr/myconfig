@@ -129,7 +129,8 @@
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
                 (self: super: {
-                  mybackup = pkgs.callPackage ../pkgs/mybackup { inherit pkgs; };
+                  mybackup =
+                    pkgs.callPackage ../pkgs/mybackup { inherit pkgs; };
                 })
               ];
             })
@@ -156,7 +157,8 @@
             ({ pkgs, ... }: {
               home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
             })
-          ] ++ (map (n: "${./modules}/${n}") (builtins.attrNames (builtins.readDir ./modules)));
+          ] ++ (map (n: "${./modules}/${n}")
+            (builtins.attrNames (builtins.readDir ./modules)));
           config = {
             hardware.enableRedistributableFirmware = true;
             nixpkgs.overlays = [ inputs.nur.overlay ];

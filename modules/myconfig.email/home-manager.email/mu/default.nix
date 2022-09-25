@@ -14,8 +14,12 @@
           fi
         '')
       ];
-    home.file = {
-      ".doom.d/imports/mu4e-base-config.el".source = ./mu4e-base-config.el;
+    programs.doom-emacs = {
+      extraPackages = with pkgs; [ mu ];
+      extraConfig = ''
+        (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
+        (load "${./mu4e-base-config.el}")
+      '';
     };
   };
 }

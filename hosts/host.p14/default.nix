@@ -84,11 +84,13 @@
     networking.hostName = "p14";
     networking.hostId = "1ea9689e";
     myconfig = {
-      desktop.enable = true;
+      desktop = {
+        enable = true;
+        imagework.enable = true;
+        cad.enable = true;
+      };
       email.enable = true;
       virtualisation.enable = true;
-      imagework.enable = true;
-      cad.enable = true;
       dev = {
         compliance.enable = true;
         go.enable = true;

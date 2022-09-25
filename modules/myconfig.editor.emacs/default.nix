@@ -10,26 +10,15 @@ let
       '';
     };
   in "${doomPrivateDeriv}";
-  doom-emacs-conf = pkgs: {
-    inherit doomPrivateDir;
-    extraPackages = with pkgs; [
-      mu
-      gnuplot
-      (nerdfonts.override { fonts = [ "Inconsolata" ]; })
-      emacs-all-the-icons-fonts
-      shellcheck
-    ];
-    extraConfig = ''
-      (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
-    '';
-    # dependencyOverrides = nix-doom-emacs.inputs;
-  };
 in {
-  config = {
-    environment = {
-      variables = { EDITOR = "emacs -nw"; };
-      # shellAliases = { vim = "emacs -nw"; };
+  options.myconfig = with lib; {
+    editor.emacs.enable = mkEnableOption "emacs" // {
+      default = true;
+      example = false;
     };
+  };
+  config = lib.mkIf config.myconfig.editor.emacs.enable {
+    environment = { variables = { EDITOR = "emacs -nw"; }; };
     home-manager.sharedModules = [
       ({ config, ... }:
         let
@@ -50,16 +39,11 @@ in {
             enable = true;
             inherit doomPrivateDir;
             extraPackages = with pkgs; [
-              mu
               gnuplot
               (nerdfonts.override { fonts = [ "Inconsolata" ]; })
               emacs-all-the-icons-fonts
               shellcheck
             ];
-            extraConfig = ''
-              (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
-            '';
-            # dependencyOverrides = nix-doom-emacs.inputs;
           };
           home.packages = with pkgs; [ xclipedit ];
           programs.zsh.shellAliases = {
@@ -73,18 +57,5 @@ in {
           };
         })
     ];
-    services.xserver.windowManager.session = let
-      loadScript = pkgs.writeText "emacs-exwm-load" ''
-        (require 'exwm)
-        (exwm-enable)
-        (require 'exwm-config)
-        (exwm-config-default)
-      '';
-    in lib.singleton {
-      name = "exwm";
-      start = ''
-        emacs -l ${loadScript}
-      '';
-    };
   };
 }

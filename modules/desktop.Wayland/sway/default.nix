@@ -28,8 +28,8 @@ in {
           (pkgs.writeScriptBin "sway-run-or-raise"
             (builtins.readFile ./sway-run-or-raise))
           (writeShellScriptBin "sway-foot-neomutt" ''
-exec sway-run-or-raise foot-neomutt
-'')
+            exec sway-run-or-raise foot-neomutt
+          '')
           # swaymonad
           i3-wk-switch # https://github.com/tmfink/i3-wk-switch
         ] ++ cfg.wayland.commonPackages;

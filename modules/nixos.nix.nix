@@ -89,12 +89,8 @@
 
     # see: https://github.com/NixOS/nixpkgs/issues/54707#issuecomment-1132907191
     systemd = {
-      services.nix-daemon = {
-        environment.TMPDIR = "/nix/tmp";
-      };
-      tmpfiles.rules = [
-        "d /nix/tmp 0755 root root 1d"
-      ];
+      services.nix-daemon = { environment.TMPDIR = "/nix/tmp"; };
+      tmpfiles.rules = [ "d /nix/tmp 0755 root root 1d" ];
     };
   };
 }

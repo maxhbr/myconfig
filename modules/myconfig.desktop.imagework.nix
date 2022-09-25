@@ -4,9 +4,9 @@
 let cfg = config.myconfig;
 in {
   options.myconfig = with lib; {
-    imagework.enable = mkEnableOption "imagework";
+    desktop.imagework.enable = mkEnableOption "imagework";
   };
-  config = (lib.mkIf cfg.imagework.enable {
+  config = (lib.mkIf cfg.desktop.imagework.enable {
     home-manager.sharedModules = [{
       home.packages = with pkgs; [
         gphoto2

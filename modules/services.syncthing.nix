@@ -1,8 +1,8 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }:
+{ pkgs, config, lib, myconfig, ... }:
 let
-  user = "mhuber";
+  user = myconfig.user;
   syncthingTunnel = with pkgs;
     pkgs.writeShellScriptBin "syncthingTunnel" ''
       set -x

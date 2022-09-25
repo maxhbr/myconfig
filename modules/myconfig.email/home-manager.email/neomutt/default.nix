@@ -64,14 +64,14 @@ in {
         # macro pager S "<save-message>=Spam.Verified<enter>" "file as Spam"
         {
           # "file as Spam"
-          map = ["index"];
+          map = [ "index" ];
           key = "S";
           action =
             "<tag-prefix><enter-command>unset resolve<enter><tag-prefix><clear-flag>N<tag-prefix><enter-command>set resolve<enter><tag-prefix><save-message>=Spam.Verified<enter>";
         }
         {
           # "file as Spam"
-          map = ["pager"];
+          map = [ "pager" ];
           key = "S";
           action = "<save-message>=Spam.Verified<enter>";
         }
@@ -83,13 +83,13 @@ in {
         }
         # macro index t "c=<tab><tab><tab>" #drücke t, um in den Ordnern des Postfaches zu navigieren
         {
-          map = ["index"];
+          map = [ "index" ];
           key = "t";
           action = "c=<tab><tab><tab>";
         }
         # macro compose Y pfy "Send without GPG"
         {
-          map = ["compose"];
+          map = [ "compose" ];
           key = "Y";
           action = "pfy";
         }
@@ -108,16 +108,14 @@ in {
       '';
     };
     home.packages = with pkgs; [
-      (writeScriptBin "gnupg-to-mutt.pl"
-        (builtins.readFile ./gnupg-to-mutt.pl))
-      (writeScriptBin "tmux-neomutt.sh"
-        (builtins.readFile ./tmux-neomutt.sh))
+      (writeScriptBin "gnupg-to-mutt.pl" (builtins.readFile ./gnupg-to-mutt.pl))
+      (writeScriptBin "tmux-neomutt.sh" (builtins.readFile ./tmux-neomutt.sh))
       (writeShellScriptBin "foot-neomutt" ''
-exec ${foot}/bin/foot \
-  -T foot-neomutt \
-  -a foot-neomutt \
-  tmux-neomutt.sh
-'')
+        exec ${foot}/bin/foot \
+          -T foot-neomutt \
+          -a foot-neomutt \
+          tmux-neomutt.sh
+      '')
     ];
   };
 }
