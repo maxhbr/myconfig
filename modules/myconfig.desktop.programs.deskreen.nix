@@ -1,8 +1,8 @@
 { config, pkgs, lib, ... }:
 let cfg = config.myconfig;
 in {
-  options.myconfig = with lib; { deskreen.enable = mkEnableOption "deskreen"; };
-  config = (lib.mkIf (config.services.xserver.enable && cfg.deskreen.enable) {
+  options.myconfig = with lib; { desktop.deskreen.enable = mkEnableOption "deskreen"; };
+  config = (lib.mkIf (config.myconfig.desktop.enable && cfg.desktop.deskreen.enable) {
     home-manager.sharedModules = [{
       home.packages = with pkgs;
         [

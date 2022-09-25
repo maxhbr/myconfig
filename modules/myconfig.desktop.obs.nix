@@ -4,8 +4,8 @@
 { pkgs, config, lib, ... }:
 let cfg = config.myconfig;
 in {
-  options.myconfig = with lib; { obs.enable = mkEnableOption "obs"; };
-  config = (lib.mkIf (config.services.xserver.enable && cfg.obs.enable) {
+  options.myconfig = with lib; { desktop.obs.enable = mkEnableOption "obs"; };
+  config = (lib.mkIf (cfg.desktop.enable && cfg.desktop.obs.enable) {
     home-manager.sharedModules = [{
       programs.obs-studio = {
         enable = true;

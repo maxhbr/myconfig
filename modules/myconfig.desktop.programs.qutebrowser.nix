@@ -1,10 +1,9 @@
 { config, lib, pkgs, ... }: {
-  config =
-    (lib.mkIf (config.services.xserver.enable && config.myconfig.desktop.full) {
+  config = lib.mkIf config.myconfig.desktop.enable {
       home-manager.sharedModules = [{
         home.packages = [ pkgs.python3Packages.adblock ];
         programs.qutebrowser = {
-          enable = true;
+          enable = lib.mkDefault true;
           searchEngines = {
             "DEFAULT" = "https://google.com/search?hl=en&q={}";
             "!g" = "https://www.google.com/search?hl=en&q={}";
@@ -20,5 +19,5 @@
           };
         };
       }];
-    });
+    };
 }

@@ -1,5 +1,5 @@
 { config, lib, pkgs, ... }: {
-  config = (lib.mkIf config.services.xserver.enable {
+  config = lib.mkIf config.myconfig.desktop.enable {
     home-manager.sharedModules = [{
       config = {
         programs.zathura = {
@@ -30,5 +30,5 @@
         };
       };
     }];
-  });
+  };
 }

@@ -21,7 +21,7 @@ let
       ${appimage-run}/bin/appimage-run $@
     '';
 in {
-  config = lib.mkIf config.services.xserver.enable {
+  config = lib.mkIf config.myconfig.desktop.enable {
     environment.systemPackages = [ appimage-run-xdg pkgs.appimage-run ];
   };
 }

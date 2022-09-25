@@ -20,8 +20,7 @@ let
   # allowChromecast =
   #   "sudo ${pkgs.iptables}/bin/iptables -I INPUT -p udp -m udp -s 192.168.0.0/16 --match multiport --dports 1900,5353 -j ACCEPT";
 in {
-  config =
-    (lib.mkIf (config.services.xserver.enable && config.myconfig.desktop.full) {
+  config = lib.mkIf config.myconfig.desktop.enable  {
       services.avahi.enable =
         true; # https://github.com/NixOS/nixpkgs/issues/49630
       home-manager.sharedModules = [{
@@ -42,12 +41,12 @@ in {
           };
         };
         programs.chromium = {
-          enable = true;
+          enable = lib.mkDefault true;
           package = chromium;
           extensions = [
 
           ];
         };
       }];
-    });
+    };
 }

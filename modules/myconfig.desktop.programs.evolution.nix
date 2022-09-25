@@ -6,7 +6,7 @@
 let user = config.myconfig.user;
 in {
   config = lib.mkIf
-    (config.programs.evolution.enable && config.myconfig.desktop.full) {
+    (config.programs.evolution.enable && config.myconfig.desktop.enable) {
       services.gnome = {
         evolution-data-server.enable = lib.mkDefault true;
         gnome-keyring.enable = lib.mkDefault true;

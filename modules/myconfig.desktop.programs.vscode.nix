@@ -1,9 +1,9 @@
 { pkgs, lib, config, ... }: {
-  config = (lib.mkIf config.services.xserver.enable {
+  config = lib.mkIf config.myconfig.desktop.enable {
     home-manager.sharedModules = [
       ({ config, ... }: {
         programs.vscode = {
-          enable = true;
+          enable = lib.mkDefault true;
           # package = pkgs.vscode-with-extensions;
           extensions = with pkgs.vscode-extensions; [
             dracula-theme.theme-dracula
@@ -13,5 +13,5 @@
         };
       })
     ];
-  });
+  };
 }
