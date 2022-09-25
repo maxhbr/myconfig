@@ -12,7 +12,6 @@ in {
         type = with types; listOf package;
         default = with pkgs; [
           xwayland
-          persway
           ## Terminal
           foot
           (writeShellScriptBin "tfoot" ''
