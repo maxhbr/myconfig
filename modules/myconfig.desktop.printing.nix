@@ -2,11 +2,10 @@
 # SPDX-License-Identifier: MIT
 { config, lib, pkgs, ... }:
 
-let
-  cfg = config.myconfig;
+let cfg = config.myconfig;
 in {
   options.myconfig = with lib; {
-    desktop.printing.enable = mkEnableOption "myconfig.desktop.printing"// {
+    desktop.printing.enable = mkEnableOption "myconfig.desktop.printing" // {
       default = true;
       example = false;
     };

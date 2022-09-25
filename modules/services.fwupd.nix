@@ -1,7 +1,5 @@
 { config, lib, pkgs, ... }:
 
 {
-  config = {
-    services.fwupd.enable = true;
-  };
+  config = { services.fwupd.enable = true; };
 }

@@ -125,8 +125,8 @@
         ];
         programs.zsh.shellAliases = {
           upg-get-hostId = ''
-          cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
-        '';
+            cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
+          '';
         };
       }
       {

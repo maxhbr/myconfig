@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: MIT
 { config, lib, pkgs, ... }:
 
-let
-  cfg = config.myconfig;
+let cfg = config.myconfig;
 in {
   imports = [
     ./modules/services.pipewire.nix
@@ -12,7 +11,7 @@ in {
     ./modules/services.pipewire.wireplumber.nix
   ];
   options.myconfig = with lib; {
-    desktop.audio.enable = mkEnableOption "myconfig.desktop.audio"// {
+    desktop.audio.enable = mkEnableOption "myconfig.desktop.audio" // {
       default = true;
       example = false;
     };

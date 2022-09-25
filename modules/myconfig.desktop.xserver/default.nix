@@ -31,24 +31,23 @@ in {
 
     home-manager.sharedModules = [{
       services.dunst.enable = true;
-      home.packages = with pkgs;
-        [
-          arandr
-          xorg.xmodmap
-          xorg.xset
-          xorg.setxkbmap
-          xorg.xkill
-          xorg.xmessage
-          xclip
-          xdotool
-          xrandr-invert-colors
-          myInvert
+      home.packages = with pkgs; [
+        arandr
+        xorg.xmodmap
+        xorg.xset
+        xorg.setxkbmap
+        xorg.xkill
+        xorg.xmessage
+        xclip
+        xdotool
+        xrandr-invert-colors
+        myInvert
 
-          xrestop
+        xrestop
 
-          # misc
-          libnotify # xfce.xfce4notifyd # notify-osd
-        ];
+        # misc
+        libnotify # xfce.xfce4notifyd # notify-osd
+      ];
       xresources.extraConfig = ''
         *utf8: 1
 

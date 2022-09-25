@@ -6,10 +6,11 @@ in {
   options.myconfig = with lib; {
     desktop.wayland.hyprland = { enable = mkEnableOption "hyprland"; };
   };
-  config = (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.hyprland.enable) {
-    home-manager.sharedModules = [{
-      xdg.configFile."hypr/hyprland.conf".source = ./hypr/hyprland.conf;
-      desktop.wayland.windowManager.hyprland.enable = true;
-    }];
-  });
+  config = (lib.mkIf
+    (cfg.desktop.wayland.enable && cfg.desktop.wayland.hyprland.enable) {
+      home-manager.sharedModules = [{
+        xdg.configFile."hypr/hyprland.conf".source = ./hypr/hyprland.conf;
+        desktop.wayland.windowManager.hyprland.enable = true;
+      }];
+    });
 }

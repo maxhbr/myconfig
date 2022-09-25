@@ -39,14 +39,15 @@ in {
   options.myconfig = with lib; {
     desktop.wayland.dwl = { enable = mkEnableOption "dwl"; };
   };
-  config = (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.dwl.enable) {
-    home-manager.sharedModules =
-      [{ home.packages = with pkgs; [ dwlPackage ]; }];
-    myconfig.desktop.wayland.greetdSettings = {
-      dwl_session = {
-        command = "${dwlPackage}/bin/dwl";
-        user = "mhuber";
+  config =
+    (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.dwl.enable) {
+      home-manager.sharedModules =
+        [{ home.packages = with pkgs; [ dwlPackage ]; }];
+      myconfig.desktop.wayland.greetdSettings = {
+        dwl_session = {
+          command = "${dwlPackage}/bin/dwl";
+          user = "mhuber";
+        };
       };
-    };
-  });
+    });
 }

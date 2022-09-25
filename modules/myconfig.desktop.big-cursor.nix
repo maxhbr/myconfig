@@ -1,7 +1,6 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }:
-{
+{ pkgs, config, lib, ... }: {
   config = lib.mkIf config.myconfig.desktop.enable {
     home-manager.sharedModules = [{
       home.pointerCursor = {

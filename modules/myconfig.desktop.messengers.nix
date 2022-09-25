@@ -6,7 +6,11 @@ in {
   };
   config = lib.mkIf cfg.desktop.messengers.enable {
     home-manager.sharedModules = [{
-      home.packages = with pkgs.nixos-unstable; [ tdesktop signal-desktop signal-cli ];
+      home.packages = with pkgs.nixos-unstable; [
+        tdesktop
+        signal-desktop
+        signal-cli
+      ];
     }];
   };
 }
