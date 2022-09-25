@@ -3,13 +3,11 @@
 { pkgs, config, lib, ... }:
 let
   cfg = config.myconfig;
-  dwlPackage = pkgs.callPackage ./wrapper.nix {
-    dwl-unwrapped = pkgs.dwl;
-    conf = ./config.h;
+  qtilePackage = pkgs.callPackage ./wrapper.nix {
     withBaseWrapper = true;
-    extraPaths = cfg.wayland.commonPackages;
+    extraPaths = cfg.desktop.wayland.commonPackages;
     extraSessionCommands = ''
-      export XDG_CURRENT_DESKTOP=dwl
+      export XDG_CURRENT_DESKTOP=qtile
       export XKB_DEFAULT_LAYOUT=${
         config.environment.sessionVariables."XKB_DEFAULT_LAYOUT"
       }
@@ -37,14 +35,24 @@ let
   };
 in {
   options.myconfig = with lib; {
-    wayland.dwl = { enable = mkEnableOption "dwl"; };
+    desktop.wayland.qtile = { enable = mkEnableOption "qtile"; };
   };
-  config = (lib.mkIf (cfg.wayland.enable && cfg.wayland.dwl.enable) {
-    home-manager.sharedModules =
-      [{ home.packages = with pkgs; [ dwlPackage ]; }];
-    myconfig.wayland.greetdSettings = {
-      dwl_session = {
-        command = "${dwlPackage}/bin/dwl";
+  config = (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.qtile.enable) {
+    home-manager.sharedModules = [{
+      xdg.configFile = { "qtile/config.py".source = ./qtile/config.py; };
+      home.packages = with pkgs; [ qtilePackage ];
+    }];
+
+    #services.xserver.windowManager.qtile = {
+    #  enable = true;
+    #  # package = qtilePackage;
+    #};
+    #services.xserver.displayManager.sessionPackages = [
+    #  qtilePackage
+    #];
+    myconfig.desktop.wayland.greetdSettings = {
+      qtile_session = {
+        command = "${qtilePackage}/bin/qtile start -b wayland";
         user = "mhuber";
       };
     };

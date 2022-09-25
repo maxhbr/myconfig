@@ -6,8 +6,7 @@ let
   settingsFormat = pkgs.formats.toml { };
 in {
   options.myconfig = with lib; {
-    wayland = {
-      enable = mkEnableOption "wayland";
+    desktop.wayland = {
       commonPackages = mkOption {
         type = with types; listOf package;
         default = with pkgs; [
@@ -87,7 +86,7 @@ in {
       };
       desktop = mkOption {
         type = types.str;
-        default = optionalString cfg.wayland.enable "river";
+        default = optionalString cfg.desktop.wayland.enable "river";
         defaultText = literalExpression ''
           optionalString config.myconfig.wayland.enable "river"
         '';
@@ -113,18 +112,12 @@ in {
   };
 
   imports = [
-    ./dwl
-    ./hyprland
-    ./newm
-    ./qtile
-    ./river
-    ./sway
-    (lib.mkIf (cfg.wayland.enable && config.services.greetd.enable) {
+    (lib.mkIf (cfg.desktop.wayland.enable && config.services.greetd.enable) {
       services.greetd = {
         settings = let
           chosen_session =
-            cfg.wayland.greetdSettings."${cfg.wayland.desktop}_session";
-        in cfg.wayland.greetdSettings // {
+            cfg.desktop.wayland.greetdSettings."${cfg.desktop.wayland.desktop}_session";
+        in cfg.desktop.wayland.greetdSettings // {
           default_session = {
             command = "${
                 lib.makeBinPath [ pkgs.greetd.tuigreet ]
@@ -142,10 +135,10 @@ in {
           ];
       }];
     })
-    (lib.mkIf (cfg.wayland.enable && !config.services.greetd.enable) {
+    (lib.mkIf (cfg.desktop.wayland.enable && !config.services.greetd.enable) {
       environment.interactiveShellInit = let
         chosen_session =
-          cfg.wayland.greetdSettings."${cfg.wayland.desktop}_session";
+          cfg.desktop.wayland.greetdSettings."${cfg.desktop.wayland.desktop}_session";
       in ''
         if test `tty` = /dev/tty1; then
            exec ${chosen_session.command}
@@ -154,7 +147,7 @@ in {
     })
   ];
 
-  config = (lib.mkIf cfg.wayland.enable {
+  config = (lib.mkIf cfg.desktop.wayland.enable {
     environment.sessionVariables = {
       "XDG_SESSION_TYPE" = "wayland";
       "SDL_VIDEODRIVER" = "wayland";

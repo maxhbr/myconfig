@@ -3,7 +3,7 @@
 { pkgs, config, lib, ... }:
 let cfg = config.myconfig;
 in {
-  config = (lib.mkIf (cfg.wayland.enable && config.programs.sway.enable) {
+  config = (lib.mkIf (cfg.desktop.wayland.enable && config.programs.sway.enable) {
     environment = {
       etc = {
         "sway/config".source = ./sway/config;
@@ -32,7 +32,7 @@ in {
           '')
           # swaymonad
           i3-wk-switch # https://github.com/tmfink/i3-wk-switch
-        ] ++ cfg.wayland.commonPackages;
+        ] ++ cfg.desktop.wayland.commonPackages;
       wrapperFeatures.gtk = true;
 
       extraSessionCommands = ''
@@ -61,7 +61,7 @@ in {
       '';
     };
 
-    myconfig.wayland.greetdSettings = {
+    myconfig.desktop.wayland.greetdSettings = {
       sway_session = {
         command = "sway";
         user = "mhuber";

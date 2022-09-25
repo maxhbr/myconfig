@@ -6,14 +6,14 @@ let
   user = myconfig.user;
 in {
   options.myconfig = with lib; {
-    wayland.newm = { enable = mkEnableOption "newm"; };
+    desktop.wayland.newm = { enable = mkEnableOption "newm"; };
   };
-  config = (lib.mkIf (cfg.wayland.enable && cfg.wayland.newm.enable) {
+  config = (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.newm.enable) {
     home-manager.sharedModules = [{
       xdg.configFile = { "newm/config.py".source = ./newm/config.py; };
       home.packages = with pkgs; [ newm pywm-fullscreen ];
     }];
-    myconfig.wayland.greetdSettings = {
+    myconfig.desktop.wayland.greetdSettings = {
       newm_session = {
         command = "start-newm";
         inherit user;

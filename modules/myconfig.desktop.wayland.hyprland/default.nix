@@ -4,12 +4,12 @@
 let cfg = config.myconfig;
 in {
   options.myconfig = with lib; {
-    wayland.hyprland = { enable = mkEnableOption "hyprland"; };
+    desktop.wayland.hyprland = { enable = mkEnableOption "hyprland"; };
   };
-  config = (lib.mkIf (cfg.wayland.enable && cfg.wayland.hyprland.enable) {
+  config = (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.hyprland.enable) {
     home-manager.sharedModules = [{
       xdg.configFile."hypr/hyprland.conf".source = ./hypr/hyprland.conf;
-      wayland.windowManager.hyprland.enable = true;
+      desktop.wayland.windowManager.hyprland.enable = true;
     }];
   });
 }

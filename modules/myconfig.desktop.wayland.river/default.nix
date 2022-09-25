@@ -37,14 +37,14 @@ let
   };
 in {
   options.myconfig = with lib; {
-    wayland.river = { enable = mkEnableOption "river"; };
+    desktop.wayland.river = { enable = mkEnableOption "river"; };
   };
-  config = (lib.mkIf (cfg.wayland.enable && cfg.wayland.river.enable) {
+  config = (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.river.enable) {
     home-manager.sharedModules = [{
       xdg.configFile = { "river/init".source = ./river/init; };
       home.packages = with pkgs; [ riverPackage ];
     }];
-    myconfig.wayland.greetdSettings = {
+    myconfig.desktop.wayland.greetdSettings = {
       river_session = {
         command = "${riverPackage}/bin/river";
         user = "mhuber";

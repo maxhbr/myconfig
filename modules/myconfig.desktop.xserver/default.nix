@@ -1,4 +1,4 @@
-{ pkgs, config, lib, myconfig, ... }:
+{ config, lib, pkgs, ... }:
 let
   myInvert = with pkgs;
     writeScriptBin "myInvert" ''
@@ -7,10 +7,29 @@ let
       ${xrandr-invert-colors}/bin/xrandr-invert-colors
     '';
 in {
-  config = (lib.mkIf config.services.xserver.enable {
-    home-manager.sharedModules = [{
-      programs.firefox.enable = lib.mkDefault true;
+  imports = [
+    ./modules/services.xserver.autorandr.nix
+    ./modules/services.xserver.mkscreenshot.nix
+    ./modules/services.xserver.programs.xss-lock.nix
+    ./modules/services.xserver.xclip.nix
+    ./modules/services.xserver.kernel.nix
+  ];
+  config = lib.mkIf config.myconfig.desktop.xserver.enable {
+    services = {
+      xserver = {
+        enable = true;
+        autorun = true;
+        enableCtrlAltBackspace = true;
+        displayManager.lightdm.enable = false;
+        displayManager.sddm = {
+          enable = false;
+          # wayland = true;
+        };
+      };
+      redshift.enable = config.myconfig.desktop.full;
+    };
 
+    home-manager.sharedModules = [{
       services.dunst.enable = true;
       home.packages = with pkgs;
         [
@@ -29,22 +48,7 @@ in {
 
           # misc
           libnotify # xfce.xfce4notifyd # notify-osd
-        ] ++ lib.optional config.networking.networkmanager.enable
-        networkmanager_dmenu ++ lib.optionals config.myconfig.desktop.full ([
-          # gui applications
-          kitty
-          alacritty
-          mupdf
-          # llpp
-          xarchiver
-          feh
-          imagemagick
-          mplayer # unsuported on aarch
-        ] ++ (with pkgs.nixos-unstable; [
-          tdesktop
-          signal-desktop
-          signal-cli
-        ]));
+        ];
       xresources.extraConfig = ''
         *utf8: 1
 
@@ -69,7 +73,6 @@ in {
       };
     }];
     environment = {
-      shellAliases = { file-roller = "${pkgs.xarchiver}/bin/xarchiver"; };
       variables = { QT_AUTO_SCREEN_SCALE_FACTOR = "0"; };
 
       interactiveShellInit = ''
@@ -82,18 +85,5 @@ in {
         }
       '';
     };
-
-    services = {
-      xserver = {
-        autorun = true;
-        enableCtrlAltBackspace = true;
-        displayManager.lightdm.enable = false;
-        displayManager.sddm = {
-          enable = false;
-          # wayland = true;
-        };
-      };
-      redshift.enable = config.myconfig.desktop.full;
-    };
-  });
+  };
 }

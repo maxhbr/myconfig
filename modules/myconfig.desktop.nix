@@ -3,28 +3,28 @@
 let cfg = config.myconfig;
 in {
   options.myconfig = with lib; {
-    desktop.enable = mkEnableOption "myconfig.desktop";
-    desktop.flavor = mkOption {
-      type = types.enum [ "xserver" "wayland" ];
-      default = "wayland";
-      description = "type of tesktop to use.";
-    };
+    desktop= {
+      enable = mkEnableOption "myconfig.desktop";
+      wayland.enable = mkEnableOption "myconfig.desktop.wayland";
+      xserver.enable = mkEnableOption "myconfig.desktop.xserver == !myconfig.desktop.wayland";
 
-    # TODO: get rid of desktop.full
-    desktop.full = mkEnableOption "myconfig.desktop.full" // {
-      default = true;
-      example = false;
+      # TODO: get rid of desktop.full
+      full = mkEnableOption "myconfig.desktop.full" // {
+        default = true;
+        example = false;
+      };
     };
   };
   config = lib.mkIf cfg.desktop.enable {
-    services.xserver.enable = cfg.desktop.flavor == "xserver";
-    myconfig.wayland.enable = cfg.desktop.flavor == "wayland";
+    myconfig.desktop.xserver.enable = ! cfg.desktop.wayland.enable;
+    services.xserver.enable = ! cfg.desktop.wayland.enable;
 
     home-manager.sharedModules = [
       {
         programs.firefox.enable = lib.mkDefault true;
         home.packages = with pkgs;
           [
+            libnotify
             xarchiver
             sxiv
             kitty
@@ -34,7 +34,7 @@ in {
             feh
             imagemagick
             mplayer # unsuported on aarch
-          ] ++ (with pkgs.nixos-unstable; [ tdesktop signal-desktop signal-cli ]);
+          ];
         xdg.mimeApps = {
           enable = true;
           defaultApplications."image/jpeg" = [ "sxiv.desktop" ];

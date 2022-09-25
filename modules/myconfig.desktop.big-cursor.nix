@@ -1,9 +1,8 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
-let user = config.myconfig.user;
-in {
-  config = (lib.mkIf config.services.xserver.enable {
+{
+  config = lib.mkIf config.myconfig.desktop.enable {
     home-manager.sharedModules = [{
       home.pointerCursor = {
         package = pkgs.vanilla-dmz;
@@ -27,5 +26,5 @@ in {
       })
     ];
     environment.systemPackages = with pkgs; [ cursor ];
-  });
+  };
 }
