@@ -114,6 +114,12 @@ in {
   };
 
   imports = [
+    ./dwl
+    ./hyprland
+    ./newm
+    ./qtile
+    ./river
+    ./sway
     (lib.mkIf (cfg.wayland.enable && config.services.greetd.enable) {
       services.greetd = {
         settings = let

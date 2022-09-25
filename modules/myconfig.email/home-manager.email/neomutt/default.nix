@@ -3,8 +3,8 @@
 # see:
 # - https://github.com/nix-community/home-manager/blob/master/modules/programs/neomutt.nix
 # - https://github.com/nix-community/home-manager/blob/master/modules/programs/neomutt-accounts.nix
-let
 
+let
   mailcap_file = pkgs.writeText "mailcap" (let
     htmlViaLynx = ''
       text/html; ${pkgs.lynx}/bin/lynx %s
@@ -53,25 +53,25 @@ in {
           key = "G";
           action = "last-entry";
         }
-        # bind compose p pgp-menu
-        {
-          key = "p";
-          action = "pgp-menu";
-        }
+        # # bind compose p pgp-menu
+        # {
+        #   key = "p";
+        #   action = "pgp-menu";
+        # }
       ];
       macros = [
         # macro index S "<tag-prefix><enter-command>unset resolve<enter><tag-prefix><clear-flag>N<tag-prefix><enter-command>set resolve<enter><tag-prefix><save-message>=Spam.Verified<enter>" "file as Spam"
         # macro pager S "<save-message>=Spam.Verified<enter>" "file as Spam"
         {
           # "file as Spam"
-          map = "index";
+          map = ["index"];
           key = "S";
           action =
             "<tag-prefix><enter-command>unset resolve<enter><tag-prefix><clear-flag>N<tag-prefix><enter-command>set resolve<enter><tag-prefix><save-message>=Spam.Verified<enter>";
         }
         {
           # "file as Spam"
-          map = "pager";
+          map = ["pager"];
           key = "S";
           action = "<save-message>=Spam.Verified<enter>";
         }
@@ -83,13 +83,13 @@ in {
         }
         # macro index t "c=<tab><tab><tab>" #drücke t, um in den Ordnern des Postfaches zu navigieren
         {
-          map = "index";
+          map = ["index"];
           key = "t";
           action = "c=<tab><tab><tab>";
         }
         # macro compose Y pfy "Send without GPG"
         {
-          map = "compose";
+          map = ["compose"];
           key = "Y";
           action = "pfy";
         }
@@ -97,6 +97,7 @@ in {
 
       # editor = "emacs";
       extraConfig = ''
+        source ${config.programs.neomutt.package}/share/doc/neomutt/colorschemes/solarized-dark-256.neomuttrc
         source `FILE=$HOME/.gnupg/gpg_groups.mutt; if [ ! -s "$FILE" ]; then FILE=/dev/null;fi;echo "$FILE"`
 
         ##############################################################################
@@ -106,9 +107,17 @@ in {
         ##############################################################################
       '';
     };
-    home.packages = [
-      (pkgs.writeScriptBin "gnupg-to-mutt.pl"
+    home.packages = with pkgs; [
+      (writeScriptBin "gnupg-to-mutt.pl"
         (builtins.readFile ./gnupg-to-mutt.pl))
+      (writeScriptBin "tmux-neomutt.sh"
+        (builtins.readFile ./tmux-neomutt.sh))
+      (writeShellScriptBin "foot-neomutt" ''
+exec ${foot}/bin/foot \
+  -T foot-neomutt \
+  -a foot-neomutt \
+  tmux-neomutt.sh
+'')
     ];
   };
 }

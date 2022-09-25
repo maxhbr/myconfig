@@ -44,13 +44,13 @@
 (define-key evil-ex-map "e " 'ido-find-file)
 (define-key evil-ex-map "b " 'ido-switch-buffer)
 
-;; =============================================================================
-;; notmuch
-(define-key notmuch-show-mode-map "r" 'notmuch-show-reply)
-(define-key notmuch-show-mode-map "R" 'notmuch-show-reply-sender)
+;; ;; =============================================================================
+;; ;; notmuch
+;; (define-key notmuch-show-mode-map "r" 'notmuch-show-reply)
+;; (define-key notmuch-show-mode-map "R" 'notmuch-show-reply-sender)
 
-(define-key notmuch-search-mode-map "r" 'notmuch-search-reply-to-thread)
-(define-key notmuch-search-mode-map "R" 'notmuch-search-reply-to-thread-sender)
+;; (define-key notmuch-search-mode-map "r" 'notmuch-search-reply-to-thread)
+;; (define-key notmuch-search-mode-map "R" 'notmuch-search-reply-to-thread-sender)
 
-(define-key notmuch-tree-mode-map "r" (notmuch-tree-close-message-pane-and #'notmuch-show-reply))
-(define-key notmuch-tree-mode-map "R" (notmuch-tree-close-message-pane-and #'notmuch-show-reply-sender))
+;; (define-key notmuch-tree-mode-map "r" (notmuch-tree-close-message-pane-and #'notmuch-show-reply))
+;; (define-key notmuch-tree-mode-map "R" (notmuch-tree-close-message-pane-and #'notmuch-show-reply-sender))
