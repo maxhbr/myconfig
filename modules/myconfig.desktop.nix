@@ -9,6 +9,8 @@ in {
       default = "wayland";
       description = "type of tesktop to use.";
     };
+
+    # TODO: get rid of desktop.full
     desktop.full = mkEnableOption "myconfig.desktop.full" // {
       default = true;
       example = false;

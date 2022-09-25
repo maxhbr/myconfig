@@ -83,9 +83,6 @@ in {
       '';
     };
 
-    # hardware.pulseaudio.enable = true;
-    services.pipewire.enable = true;
-
     services = {
       xserver = {
         autorun = true;
