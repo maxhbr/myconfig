@@ -92,7 +92,7 @@ set $term tfoot
     # Reload the configuration file
     bindsym $mod+q reload
 
-    bindsym $mod+Shift+Y exec myphyslock
+    bindsym $mod+Shift+Y exec swaylock -c 000000
 
     # Exit sway (logs you out of your Wayland session)
     bindsym $mod+Shift+q exec swaynag -t warning -m 'You pressed the exit shortcut. Do you really want to exit sway? This will end your Wayland session.' -b 'Yes, exit sway' 'swaymsg exit'
@@ -195,17 +195,23 @@ set $term tfoot
     bindsym $mod+Shift+F9 move container to workspace F9
     bindsym $mod+Shift+F10 move container to workspace F10
 
-    bindsym $mod+Next workspace next
-    bindsym $mod+Prior workspace prev
+    # Toggle workspaces
+    bindsym $mod+y workspace back_and_forth
 
-    workspace 1 output DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8 eDP-1
-    workspace 2 output DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8 eDP-1
-    workspace 3 output DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8 eDP-1
-    workspace 4 output DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8 eDP-1
-    workspace 5 output DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8 eDP-1
-    workspace 6 output DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8 eDP-1
-    workspace 7 output DP-8 DP-7 DP-6 DP-5 DP-4 DP-3 DP-2 DP-1 eDP-1
-    workspace 8 output DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8 eDP-1
+    bindsym $mod+Next workspace next_on_output
+    bindsym $mod+Prior workspace prev_on_output
+    bindsym $mod+Shift+Next workspace next
+    bindsym $mod+Shift+Prior workspace prev
+
+
+    # workspace 1 output DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8 eDP-1
+    # workspace 2 output DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8 eDP-1
+    # workspace 3 output DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8 eDP-1
+    # workspace 4 output DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8 eDP-1
+    # workspace 5 output DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8 eDP-1
+    # workspace 6 output DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8 eDP-1
+    # workspace 7 output DP-8 DP-7 DP-6 DP-5 DP-4 DP-3 DP-2 DP-1 eDP-1
+    # workspace 8 output DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8 eDP-1
     workspace 9 output eDP-1 DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8
     workspace 10 output eDP-1 DP-1 DP-2 DP-3 DP-4 DP-5 DP-6 DP-7 DP-8
 
@@ -251,7 +257,8 @@ set $term tfoot
 #
 # Resizing containers:
 #
-    bindsym $mod+i exec sway-foot-neomutt
+    bindsym $mod+Shift+i exec sway-foot-neomutt
+    bindsym $mod+i exec sway-run-or-raise slack Slack slack
 #
 # Resizing containers:
 #

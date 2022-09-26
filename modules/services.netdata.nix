@@ -12,7 +12,8 @@
         };
       };
     };
-    networking.firewall.allowedTCPPorts = [ 19999 ];
-    networking.firewall.allowedUDPPorts = [ 19999 ];
+    # use ssh port forwarding instead ;) 
+    # networking.firewall.allowedTCPPorts = [ 19999 ];
+    # networking.firewall.allowedUDPPorts = [ 19999 ];
   });
 }

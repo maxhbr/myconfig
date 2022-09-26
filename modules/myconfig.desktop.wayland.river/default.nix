@@ -6,7 +6,7 @@ let
   riverPackage = pkgs.callPackage ./wrapper.nix {
     river-unwrapped = pkgs.river;
     withBaseWrapper = true;
-    extraPaths = cfg.wayland.commonPackages
+    extraPaths = cfg.desktop.wayland.commonPackages
       ++ (with pkgs; [ rivercarro ristate ]);
     extraSessionCommands = ''
       export XDG_CURRENT_DESKTOP=river
