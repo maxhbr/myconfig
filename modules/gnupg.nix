@@ -4,8 +4,12 @@
       enable = true;
       enableSSHSupport = !config.programs.ssh.startAgent;
       pinentryFlavor =
-        if config.services.xserver.enable then "gtk2" else "curses";
+        if config.myconfig.desktop.enable
+        then (if config.myconfig.desktop.wayland.enable
+              then "qt"
+              else "gtk2")
+        else "curses";
     };
-    environment = { systemPackages = with pkgs; [ gnupg ]; };
+    environment = { systemPackages = with pkgs; [ gnupg ] ; };
   };
 }

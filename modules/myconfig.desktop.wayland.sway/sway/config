@@ -4,21 +4,21 @@
 #
 # Read `man 5 sway` for a complete reference.
 
-input * xkb_layout "de"
-input * xkb_variant "neo"
-
 ### Variables
 #
 # Logo key. Use Mod1 for Alt.
 set $mod Mod4
+
+# Your preferred terminal emulator
+set $term tfoot
+
+input * xkb_layout "de"
+input * xkb_variant "neo"
 # Home row direction keys, like vim
 set $left n
 set $down r
 set $up t
 set $right d
-# Your preferred terminal emulator
-# set $term st
-set $term tfoot
 
 
 ### Output configuration
@@ -41,11 +41,12 @@ set $term tfoot
 #          timeout 600 'swaymsg "output * dpms off"' \
 #               resume 'swaymsg "output * dpms on"' \
 #          before-sleep 'swaylock -f -c 000000'
-# exec myswayidle 1200
-#
+
 # This will lock your screen after 300 seconds of inactivity, then turn off
 # your displays after another 300 seconds, and turn your screens back on when
 # resumed. It will also lock your screen before your computer goes to sleep.
+
+exec myswayidle 1200
 
 ### Input configuration
 #
@@ -288,32 +289,20 @@ bindsym $mod+m mode "resize"
 #
 # Status Bar:
 #
-# Read `man 5 sway-bar` for more information about this section.
 bar {
      swaybar_command waybar
 }
-# bar {
-#     position top
-
-#     # When the status_command prints a new line to stdout, swaybar updates.
-#     # The default just shows the current date and time.
-#     status_command while date +'%Y-%m-%d %k:%M:%S %p'; do sleep 1; done
-
-#     colors {
-#         statusline #ffffff
-#         background #323232
-#         inactive_workspace #32323200 #32323200 #5c5c5c
-#     }
-# }
 
 assign [class="firefox"] 8
+assign [class="Slack"] 9
 assign [app_id="Slack"] 9
+assign [class="Signal"] 9
 assign [app_id="Signal"] 9
 assign [class="evolution"] 9
 
 input "2:10:TPPS/2 Elan TrackPoint" {
     tap enabled
-    natural_scroll enabled
+    natural_scroll disabled
 }
 seat seat0 xcursor_theme default 128
 

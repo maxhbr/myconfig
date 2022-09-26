@@ -69,6 +69,7 @@
           river.enable = true;
           # qtile.enable = true;
         };
+        messengers.enable = true;
         imagework.enable = true;
         cad.enable = true;
       };

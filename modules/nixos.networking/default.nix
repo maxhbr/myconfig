@@ -9,14 +9,14 @@
     boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
     boot.kernel.sysctl."net.ipv6.conf.all.forwarding" = "1";
     environment.interactiveShellInit = ''
-      myPorts() { /run/wrappers/bin/sudo ${pkgs.iproute}/bin/ss -tulpen; }
+      myPorts() { /run/wrappers/bin/sudo ${pkgs.iproute2}/bin/ss -tulpen; }
       killPort() { kill $(${pkgs.lsof}/bin/lsof -t -i:$1); }
     '';
 
     home-manager.sharedModules = [{
       programs.fish = {
         functions = {
-          myPorts = "/run/wrappers/bin/sudo ${pkgs.iproute}/bin/ss -tulpen";
+          myPorts = "/run/wrappers/bin/sudo ${pkgs.iproute2}/bin/ss -tulpen";
           killPort = "kill $(${pkgs.lsof}/bin/lsof -t -i:$1)";
         };
       };
