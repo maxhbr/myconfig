@@ -11,6 +11,9 @@ in {
           "sway/config.d/dex.conf".source = pkgs.writeText "dex.conf" ''
             exec ${pkgs.dex}/bin/dex --autostart
           '';
+          "sway/config.d/background.conf".source = pkgs.writeText "background.conf" ''
+            output "*" bg ${pkgs.my-wallpapers}/share/background.png fill
+          '';
         };
       };
       home-manager.sharedModules = [{ programs.waybar.enable = true; }];
@@ -21,6 +24,7 @@ in {
             autotiling
             swaylock
             swayidle
+            swaybg
             dmenu
             sway-launcher-desktop
             (writeShellScriptBin "foot-sway-launcher-desktop" ''

@@ -12,12 +12,12 @@
           package = config.programs.mbsync.package;
           preExec = let
             mbsync-preExec = pkgs.writeShellScriptBin "mbsync-preExec" ''
-              date > "$HOME/Maildir/mbsync-start-pre-exec"
+              ${pkgs.coreutils}/bin/date > "$HOME/Maildir/mbsync-start-pre-exec"
             '';
           in "${mbsync-preExec}/bin/mbsync-preExec";
           postExec = let
             mbsync-postExec = pkgs.writeShellScriptBin "mbsync-postExec" ''
-              date > "$HOME/Maildir/mbsync-start-post-exec"
+              ${pkgs.coreutils}/bin/date > "$HOME/Maildir/mbsync-start-post-exec"
               ${if config.programs.notmuch.enable then
                 "${pkgs.notmuch}/bin/notmuch new --no-hooks --verbose"
               else

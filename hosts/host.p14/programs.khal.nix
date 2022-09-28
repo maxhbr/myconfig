@@ -1,16 +1,17 @@
 { config, lib, pkgs, ... }: {
   home-manager.sharedModules = [{
     home.packages = with pkgs; [ khal vdirsyncer ];
-    systemd.user.timers.vdirsyncer = {
-      Unit = { Description = "Timer to synchronize calendars"; };
 
-      Timer = {
-        OnBootSec = "15min";
-        OnUnitActiveSec = "30min";
-      };
+    # systemd.user.timers.vdirsyncer = {
+    #   Unit = { Description = "Timer to synchronize calendars"; };
 
-      Install.WantedBy = [ "timers.target" ];
-    };
+    #   Timer = {
+    #     OnBootSec = "15min";
+    #     OnUnitActiveSec = "30min";
+    #   };
+
+    #   Install.WantedBy = [ "timers.target" ];
+    # };
 
     # systemd.user.services.vdirsyncer = {
     #   Unit = {

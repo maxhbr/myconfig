@@ -43,9 +43,10 @@ in {
           swayidle
           (writeShellScriptBin "myswayidle" ''
             set -x
+            color=777777
             exec ${swayidle}/bin/swayidle -w \
-            	timeout 300 '${swaylock}/bin/swaylock -f -c 000000' \
-            	before-sleep '${swaylock}/bin/swaylock -f -c 000000'
+            	timeout 300 '${swaylock}/bin/swaylock -f -c '"$color" \
+            	before-sleep '${swaylock}/bin/swaylock -f -c '"$color"
           '')
           # (writeShellScriptBin "myphyslock"
           #   "exec '${config.security.wrapperDir}/physlock'")
@@ -140,8 +141,9 @@ in {
         chosen_session =
           cfg.desktop.wayland.greetdSettings."${cfg.desktop.wayland.desktop}_session";
       in ''
-        if test `tty` = /dev/tty1; then
-           exec ${chosen_session.command}
+        if [ -z $DISPLAY ] && [ "$(tty)" = "/dev/tty1" ]; then
+          exec &> >(tee /tmp/tty1-wayland.''${XDG_VTNR}.''${USER}.log)
+          exec ${chosen_session.command} > /tmp/tty1-wayland.''${XDG_VTNR}.''${USER}.log
         fi
       '';
     })

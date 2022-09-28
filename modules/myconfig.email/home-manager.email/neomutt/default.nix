@@ -53,6 +53,11 @@ in {
           key = "G";
           action = "last-entry";
         }
+        {
+          map = ["index" "pager"];
+          key = "R";
+          action = "group-reply";
+        }
         # # bind compose p pgp-menu
         # {
         #   key = "p";
