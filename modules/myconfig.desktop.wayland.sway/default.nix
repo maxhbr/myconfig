@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
 let cfg = config.myconfig;
+    wallpaperCmdString = ''
+output "*" bg ${pkgs.my-wallpapers}/share/background.png fill
+'';
 in {
   config =
     (lib.mkIf (cfg.desktop.wayland.enable && config.programs.sway.enable) {
@@ -11,9 +14,7 @@ in {
           "sway/config.d/dex.conf".source = pkgs.writeText "dex.conf" ''
             exec ${pkgs.dex}/bin/dex --autostart
           '';
-          "sway/config.d/background.conf".source = pkgs.writeText "background.conf" ''
-            output "*" bg ${pkgs.my-wallpapers}/share/background.png fill
-          '';
+          "sway/config.d/background.conf".source = pkgs.writeText "background.conf" wallpaperCmdString;
         };
       };
       home-manager.sharedModules = [{ programs.waybar.enable = true; }];
@@ -29,6 +30,9 @@ in {
             sway-launcher-desktop
             (writeShellScriptBin "foot-sway-launcher-desktop" ''
               ${foot}/bin/foot --title=launcher --app-id=launcher -e sway-launcher-desktop
+            '')
+            (writeShellScriptBin "my-set-background" ''
+              ${sway}/bin/swaymsg ${wallpaperCmdString}
             '')
             (pkgs.writeScriptBin "sway-run-or-raise"
               (builtins.readFile ./sway-run-or-raise))

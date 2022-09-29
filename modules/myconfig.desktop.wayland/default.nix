@@ -51,7 +51,6 @@ in {
           # (writeShellScriptBin "myphyslock"
           #   "exec '${config.security.wrapperDir}/physlock'")
           ## Other
-          swaybg
           wayshot
           wf-recorder
           slurp

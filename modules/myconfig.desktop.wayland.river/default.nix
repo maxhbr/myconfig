@@ -7,7 +7,7 @@ let
     river-unwrapped = pkgs.river;
     withBaseWrapper = true;
     extraPaths = cfg.desktop.wayland.commonPackages
-      ++ (with pkgs; [ rivercarro ristate ]);
+      ++ (with pkgs; [ rivercarro ristate swaybg ]);
     extraSessionCommands = ''
       export XDG_CURRENT_DESKTOP=river
       export XKB_DEFAULT_LAYOUT=${
