@@ -19,7 +19,7 @@
     ./hardware.hantek
     ./mykeylight
     ./role.work
-    ./programs.khal.nix
+    # ./programs.khal.nix
     # ./a7iiiAsWebcam.nix
     {
       services.openssh = {
@@ -67,7 +67,7 @@
           enable = true;
           desktop = "sway";
           river.enable = true;
-          # qtile.enable = true;
+          qtile.enable = true;
         };
         messengers.enable = true;
         imagework.enable = true;

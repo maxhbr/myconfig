@@ -39,8 +39,6 @@ in {
         defaultApplications."image/jpeg" = [ "sxiv.desktop" ];
         defaultApplications."image/png" = [ "sxiv.desktop" ];
         defaultApplications."x-scheme-handler/slack" = [ "slack.desktop" ];
-        defaultApplications."x-scheme-handler/zoommtg" =
-          [ "us.zoom.Zoom.desktop" ];
       };
     }];
     environment = {

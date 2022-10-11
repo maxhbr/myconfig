@@ -15,6 +15,7 @@
           ];
           modules-center = [ ];
           modules-right = [
+            "idle_inhibitor"
             "pulseaudio"
             "network"
             "cpu"
@@ -91,6 +92,13 @@
             };
             on-click = "pavucontrol";
           };
+          idle_inhibitor = {
+            format = "{icon}";
+            format-icons = {
+              activated = "";
+              deactivated = "";
+            };
+          };
         };
       };
       style = ''
@@ -131,6 +139,7 @@
         #network,
         #pulseaudio,
         #custom-platform_profile,
+        #idle_inhibitor,
         #tray,
         #mode {
             padding: 0 10px;
@@ -191,6 +200,10 @@
         }
         #tags button.urgent {
           border-bottom: 3px solid #ee9a00;
+        }
+
+        #idle_inhibitor.deactivated {
+            background-color: #1F2C36;
         }
       '';
     };

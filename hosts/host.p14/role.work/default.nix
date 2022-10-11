@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 { config, pkgs, lib, ... }: {
   imports = [
+    ./zoom.nix
     # ./jdk.nix
     # ./node.nix
   ];
@@ -49,7 +50,6 @@
         exiftool
         # misc-desktop-tools:
         libreoffice
-        nixos-unstable-small.zoom-us
         slack
         # element-desktop
         # rambox

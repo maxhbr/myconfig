@@ -9,6 +9,7 @@
             dracula-theme.theme-dracula
             vscodevim.vim
             yzhang.markdown-all-in-one
+            haskell.haskell
           ];
         };
       })
