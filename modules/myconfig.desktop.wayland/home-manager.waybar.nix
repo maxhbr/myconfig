@@ -28,10 +28,11 @@
           ];
           tray = { spacing = 10; };
           clock = {
+            format = "{:%H:%M}";
             tooltip-format = ''
               <big>{:%Y %B}</big>
               <tt><small>{calendar}</small></tt>'';
-            format-alt = "{:%Y-%m-%d}";
+            format-alt = "{:%H:%M (%Y-%m-%d)}";
           };
           cpu = {
             format = "cpu: {usage}%";

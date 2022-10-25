@@ -11,9 +11,8 @@ in {
       environment = {
         etc = {
           "sway/config".source = ./sway/config;
-          "sway/config.d/dex.conf".source = pkgs.writeText "dex.conf" ''
-            exec ${pkgs.dex}/bin/dex --autostart
-          '';
+          "sway/config.d/zoom.us.conf".source = ./sway/config.d/zoom.us.conf;
+          "sway/config.d/dex.conf".source = pkgs.writeText "dex.conf" "exec ${pkgs.dex}/bin/dex --autostart";
           "sway/config.d/background.conf".source = pkgs.writeText "background.conf" wallpaperCmdString;
         };
       };
@@ -26,6 +25,7 @@ in {
             swaylock
             swayidle
             swaybg
+            swayws
             dmenu
             sway-launcher-desktop
             (writeShellScriptBin "foot-sway-launcher-desktop" ''

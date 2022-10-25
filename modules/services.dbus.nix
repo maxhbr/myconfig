@@ -16,8 +16,8 @@ let
   in pkgs.writeShellScriptBin "configure-gtk" ''
     export XDG_DATA_DIRS=${datadir}:$XDG_DATA_DIRS
     gnome_schema=org.gnome.desktop.interface
-    ${pkgs.glib}/bin/gsettings set $gnome_schema gtk-theme 'Dracula'
-  '';
+    ${pkgs.glib}/bin/gsettings set $gnome_schema gtk-theme ''${1:-Breeze}
+'';
 
   # bash script to let dbus know about important env variables and
   # propogate them to relevent services run at the end of sway config
@@ -28,7 +28,7 @@ let
   dbus-wm-environment = pkgs.writeShellScriptBin "dbus-wm-environment" ''
     dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP=''${XDG_CURRENT_DESKTOP:-sway}
 
-    ${configure-gtk}/bin/configure-gtk &disown
+    ${configure-gtk}/bin/configure-gtk $2 &disown
 
     systemctl --user stop pipewire ${
       if config.services.pipewire.wireplumber.enable then
