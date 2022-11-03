@@ -97,6 +97,8 @@ exec myswayidle 3600
 
     # Exit sway (logs you out of your Wayland session)
     bindsym $mod+Shift+q exec swaynag -t warning -m 'You pressed the exit shortcut. Do you really want to exit sway? This will end your Wayland session.' -b 'Yes, exit sway' 'swaymsg exit'
+
+    bindsym $mod+a exec "mute_mic"
 #
 # Moving around:
 #
@@ -241,7 +243,7 @@ exec myswayidle 3600
     bindsym $mod+space focus mode_toggle
 
     # Move focus to the parent container
-    bindsym $mod+a focus parent
+    bindsym $mod+l focus parent
 #
 # Scratchpad:
 #

@@ -3,6 +3,7 @@ let cfg = config.myconfig.dev;
 in {
   options.myconfig.dev = with lib; {
     enable = mkEnableOption "myconfig.dev";
+    elixir.enable = mkEnableOption "myconfig.dev.elixir";
     compliance.enable = mkEnableOption "myconfig.dev.compliance";
     go.enable = mkEnableOption "myconfig.dev.go";
     haskell.enable = mkEnableOption "myconfig.dev.haskell";
@@ -15,6 +16,7 @@ in {
 
   imports = [
     ./dev.core
+    ./dev.elixir.nix
     ./dev.go.nix
     ./dev.haskell
     ./dev.network.nix
@@ -24,8 +26,6 @@ in {
     ./dev.tex.nix
   ];
   config = {
-    myconfig.dev.enable = cfg.haskell.enable || cfg.network.enable
-      || cfg.tex.enable || cfg.compliance.enable || cfg.go.enable
-      || cfg.ruby.enable || cfg.rust.enable || cfg.nodejs.enable;
+    myconfig.dev.enable = cfg.elixir.enable ||  cfg.haskell.enable || cfg.network.enable || cfg.tex.enable || cfg.compliance.enable || cfg.go.enable || cfg.ruby.enable || cfg.rust.enable || cfg.nodejs.enable;
   };
 }

@@ -23,7 +23,7 @@
   ;; PGP-Sign all e-mails
   ;; (add-hook 'message-send-hook 'mml-secure-message-sign-pgpmime)
   (setq mu4e-maildir "~/Maildir/"
-        mu4e-get-mail-command "runMbsync"
+        mu4e-get-mail-command "mbsync -a"
         mu4e-attachment-dir  "~/Downloads"
         ;; This enabled the thread like viewing of email similar to gmail's UI.
         mu4e-headers-include-related t

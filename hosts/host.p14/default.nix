@@ -67,7 +67,6 @@
           enable = true;
           desktop = "sway";
           river.enable = true;
-          qtile.enable = true;
         };
         messengers.enable = true;
         imagework.enable = true;
@@ -83,6 +82,7 @@
         nodejs.enable = true;
         # ruby.enable = true;
         rust.enable = true;
+        elixir.enable = true;
       };
     };
     virtualisation.docker.enable = true;
