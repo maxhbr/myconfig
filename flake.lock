@@ -87,11 +87,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1667823539,
-        "narHash": "sha256-AwDCZgUT004T+skxK62ZWAlP+60yomMaHb0/+hHH448=",
+        "lastModified": 1667901730,
+        "narHash": "sha256-uqeF9nZzGX6Zj+7OtApQ2xmHSHNi6BS7SFlkqlnSBDs=",
         "owner": "nix-community",
         "repo": "emacs-overlay",
-        "rev": "a864e84bd842d00d686e040f552e2fa7030351a0",
+        "rev": "88749da29c07c2ae565c9906565dbc895d736282",
         "type": "github"
       },
       "original": {
@@ -408,11 +408,11 @@
         "utils": "utils"
       },
       "locked": {
-        "lastModified": 1667830176,
-        "narHash": "sha256-TNm8W88Jf9qELqKI8rGMr0sZWlTV9WKIlqN4dzvuKUA=",
+        "lastModified": 1667898954,
+        "narHash": "sha256-VqHVeoxcOl9M6yQ+LV3yTWMb0h5Rl5yixn9PCY/MJJo=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "886675991b643b701a33f533443db165c70692d1",
+        "rev": "d20e3d070c78271356a2d5d73c01f1de94586087",
         "type": "github"
       },
       "original": {
@@ -429,11 +429,11 @@
         "wlroots": "wlroots"
       },
       "locked": {
-        "lastModified": 1667823390,
-        "narHash": "sha256-u8mu1GQ7/oSchWhyUg5iyDd210hx5yWjVJHQS7aeCwc=",
+        "lastModified": 1667861486,
+        "narHash": "sha256-+UKjPI025RgjILaz3ihoIaYskGF9sT6Hf++L+IYn6G8=",
         "owner": "hyprwm",
         "repo": "Hyprland",
-        "rev": "1a55fb417093fb945942dba63d0edb9467d782ef",
+        "rev": "1d2e4243dc8bc983369ef49eada08d2322658bc6",
         "type": "github"
       },
       "original": {
@@ -464,11 +464,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1667847265,
-        "narHash": "sha256-2ikdx6a4NFcMmP3bAFllU8ULfT4UPw5Un5pvZ+LA584=",
+        "lastModified": 1667904788,
+        "narHash": "sha256-nFBMofl53Iyd3eoz6BEVyAHQulZnQMH+e3jAQ+8sspE=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "2aa5c8d3abd627a871619260bc5cd83defa6c042",
+        "rev": "ab631455aefc6afa3dc123d61e00f315f86dfa13",
         "type": "github"
       },
       "original": {
@@ -624,11 +624,11 @@
     },
     "nixos-unstable": {
       "locked": {
-        "lastModified": 1667629849,
-        "narHash": "sha256-P+v+nDOFWicM4wziFK9S/ajF2lc0N2Rg9p6Y35uMoZI=",
+        "lastModified": 1667811565,
+        "narHash": "sha256-HYml7RdQPQ7X13VNe2CoDMqmifsXbt4ACTKxHRKQE3Q=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "3bacde6273b09a21a8ccfba15586fb165078fb62",
+        "rev": "667e5581d16745bcda791300ae7e2d73f49fff25",
         "type": "github"
       },
       "original": {
@@ -640,11 +640,11 @@
     },
     "nixos-unstable-small": {
       "locked": {
-        "lastModified": 1667816927,
-        "narHash": "sha256-BjRdmoHVakdmnaY6BBGge+rpBEMhIjgXjXP4d2UvuO4=",
+        "lastModified": 1667879206,
+        "narHash": "sha256-fHiB8mIUotFpbvugTJ9ImYJ6q0ry2QVFHYox6YRHHaE=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "ad83bff0088bcefd621fcf16b0db5d34f0cebf1c",
+        "rev": "295778ad21806918c16176164497f2793e2133f4",
         "type": "github"
       },
       "original": {
@@ -656,10 +656,10 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1667811923,
-        "narHash": "sha256-Yraqu25epaeI0k6ZPciZ1JrURr2C8BdOCq/KS9/l6bc=",
-        "path": "/nix/store/f0z6sla0hslx86wclvsqn5xq0q389fr0-source",
-        "rev": "83ecc90d1012eeb3dc379c737edc42974ddb41b1",
+        "lastModified": 1667847265,
+        "narHash": "sha256-2ikdx6a4NFcMmP3bAFllU8ULfT4UPw5Un5pvZ+LA584=",
+        "path": "/nix/store/i2zny71bbpj1mkhr6prayzh2hg4ks7ag-source",
+        "rev": "2aa5c8d3abd627a871619260bc5cd83defa6c042",
         "type": "path"
       },
       "original": {
@@ -669,11 +669,11 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1667629849,
-        "narHash": "sha256-P+v+nDOFWicM4wziFK9S/ajF2lc0N2Rg9p6Y35uMoZI=",
+        "lastModified": 1667811565,
+        "narHash": "sha256-HYml7RdQPQ7X13VNe2CoDMqmifsXbt4ACTKxHRKQE3Q=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "3bacde6273b09a21a8ccfba15586fb165078fb62",
+        "rev": "667e5581d16745bcda791300ae7e2d73f49fff25",
         "type": "github"
       },
       "original": {
@@ -685,10 +685,10 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1667811923,
-        "narHash": "sha256-Yraqu25epaeI0k6ZPciZ1JrURr2C8BdOCq/KS9/l6bc=",
-        "path": "/nix/store/f0z6sla0hslx86wclvsqn5xq0q389fr0-source",
-        "rev": "83ecc90d1012eeb3dc379c737edc42974ddb41b1",
+        "lastModified": 1667847265,
+        "narHash": "sha256-2ikdx6a4NFcMmP3bAFllU8ULfT4UPw5Un5pvZ+LA584=",
+        "path": "/nix/store/i2zny71bbpj1mkhr6prayzh2hg4ks7ag-source",
+        "rev": "2aa5c8d3abd627a871619260bc5cd83defa6c042",
         "type": "path"
       },
       "original": {
@@ -714,11 +714,11 @@
     },
     "nur": {
       "locked": {
-        "lastModified": 1667845588,
-        "narHash": "sha256-5ifIx7bgTtM2Dh5UEsyb1Y51PvTkR1eJaHkcNrFDj/c=",
+        "lastModified": 1667904789,
+        "narHash": "sha256-rGhf0TYfNNLta7XtoE2LGulQGqaE7dbT2z1by8eHIr4=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "9395202bd590a1957dfb432693d06037390538a3",
+        "rev": "0b26c235ce3d24f2c501c70e1ec771b563c8d791",
         "type": "github"
       },
       "original": {
@@ -974,11 +974,11 @@
     },
     "rel2205": {
       "locked": {
-        "lastModified": 1667844727,
-        "narHash": "sha256-IWdjn7yQ7O83lId7j3qUk/BAePqqTKFvjeVbGyJ2oIY=",
+        "lastModified": 1667896688,
+        "narHash": "sha256-gB30K2usfzeWZ9VsP92NmAGr/mEZ1IJ0Hkpq587ZzCY=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "8d467eecf4f34117bbfa52db86c79d926081d5f4",
+        "rev": "67bcb74195474ebdd667c7844fcfe649e8a1ff32",
         "type": "github"
       },
       "original": {
@@ -1204,7 +1204,7 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-SuazY8MqzLZdzgHbuAF3dNYAgdsuYx1ckTFnbsK3xcY=",
+        "narHash": "sha256-6LXuIWzTYGrvLD2Z7PHbeHA9VJVcCRfPR+tXCfzeXxU=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
