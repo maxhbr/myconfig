@@ -76,19 +76,27 @@
     networking.hostName = "workstation";
     networking.hostId = "864d73f4";
     myconfig = {
-      desktop.enable = true;
+      desktop = {
+        enable = true;
+        wayland = {
+          enable = true;
+          desktop = "sway";
+        };
+        imagework.enable = true;
+        obs.enable = true;
+      };
       headless.enable = true;
       # virtualisation.enable = true;
       # virtualisation.gpuPassthroughHost.enable = true;
-      imagework.enable = true;
+      virtualisation.enable = true;
       dev = {
-        haskell.enable = true;
         compliance.enable = true;
+        haskell.enable = true;
         network.enable = true;
       };
     };
-    virtualisation.podman.enable = true;
     virtualisation.docker.enable = true;
+    virtualisation.podman.enable = true;
     virtualisation.virtualbox.host.enable = true;
 
     services.physlock.enable = true;

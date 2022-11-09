@@ -66,6 +66,7 @@
         wayland = {
           enable = true;
           desktop = "sway";
+          sway.enable = true;
           river.enable = true;
         };
         messengers.enable = true;
@@ -91,7 +92,6 @@
     # virtualisation.libvirtd.enable = true;
     # virtualisation.virtualbox.host.enable = true;
     #
-    programs.sway.enable = true;
 
     services.xserver.wacom.enable = true;
 

@@ -6,8 +6,11 @@ let cfg = config.myconfig;
 output "*" bg ${pkgs.my-wallpapers}/share/background.png fill
 '';
 in {
+  options.myconfig = with lib; {
+    desktop.wayland.sway = { enable = mkEnableOption "sway"; };
+  };
   config =
-    (lib.mkIf (cfg.desktop.wayland.enable && config.programs.sway.enable) {
+    (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.sway.enable) {
       environment = {
         etc = {
           "sway/config".source = ./sway/config;
@@ -19,6 +22,7 @@ in {
       home-manager.sharedModules = [{ programs.waybar.enable = true; }];
 
       programs.sway = {
+        enable = true;
         extraPackages = with pkgs;
           [
             autotiling
