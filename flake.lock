@@ -87,11 +87,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1668861223,
-        "narHash": "sha256-Y7Jc7n79h7vl7WGDohiSTpc4xdUx/B2n19+zMNjj0js=",
+        "lastModified": 1668887399,
+        "narHash": "sha256-NWPVZx6Px2gkRDN51bZTb2oTh9PXDTTwpjLSX+zJrCA=",
         "owner": "nix-community",
         "repo": "emacs-overlay",
-        "rev": "909b090c1181644ef3def6a37a18e9e3d08d1b07",
+        "rev": "1ddaf3eea07315ee3923c161e6a358b53d9fceea",
         "type": "github"
       },
       "original": {
@@ -464,11 +464,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1668885215,
-        "narHash": "sha256-By1N5Ic4NQB/ExHwSwrkDIcg/gsc4qRtWKTeiFcpxfs=",
+        "lastModified": 1668889030,
+        "narHash": "sha256-FWAdUyjstyiyeJrEkTxanDzqtY1VdIHykS+zpyRiNuY=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "b394f86dcb1a9d971e58642b19238024e6f0fba0",
+        "rev": "0fd0bd0f35e4c50d85b80af20584ad12a4b3a930",
         "type": "github"
       },
       "original": {
@@ -1204,7 +1204,7 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-yPrBZKnL9KGAmjP9uSKrQJ1EYK/A4h0dAotO/s0/q3M=",
+        "narHash": "sha256-/Aa7/iTNnEs3WaUoDYLATJZFpBHBeHwNeZshKXK/+8k=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
