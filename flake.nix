@@ -189,6 +189,7 @@
                 (myconfig.metadatalib.announceHost "pi0")
               ];
             })
+            inputs.zephyrproject.nixosModule
             ({ pkgs, ... }: {
               home-manager.sharedModules =
                 [ inputs.hyprland.homeManagerModules.default ];
