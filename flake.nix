@@ -131,7 +131,8 @@
                 (self: super: {
                   mybackup =
                     pkgs.callPackage ../pkgs/mybackup { inherit pkgs; };
-                  my-wallpapers =  inputs.my-wallpapers.defaultPackage.x86_64-linux;
+                  my-wallpapers =
+                    inputs.my-wallpapers.defaultPackage.x86_64-linux;
                 })
               ];
             })

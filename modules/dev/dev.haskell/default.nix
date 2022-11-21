@@ -6,9 +6,8 @@ in {
   config = lib.mkIf cfg.enable {
     home-manager.users.mhuber = {
       home.packages = with pkgs.nixos-unstable;
-        [ stack sourceHighlight
-          haskell-language-server
-        ] ++ (with haskellPackages; [
+        [ stack sourceHighlight haskell-language-server ]
+        ++ (with haskellPackages; [
           (ghcWithPackages (hpkgs:
             with hpkgs; [
               cabal-install

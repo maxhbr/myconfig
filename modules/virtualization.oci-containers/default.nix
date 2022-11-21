@@ -6,8 +6,7 @@ let
   enableDocker = config.virtualisation.docker.enable;
 in {
   imports = [ ./podman.nix ./docker.nix ];
-  config = (lib.mkIf (config.virtualisation.podman.enable
-    || config.virtualisation.docker.enable) {
+  config = (lib.mkIf (enablePodman || enableDocker) {
       # virtualisation.podman.dockerCompat = !config.virtualisation.docker.enable;
       home-manager.sharedModules =
         [{ home.packages = with pkgs; [ buildkit ]; }];

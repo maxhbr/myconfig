@@ -17,7 +17,7 @@ let
   cfg = config.myconfig.services.deconz;
   name = "deconz";
   stateDir = "/var/lib/${name}";
-  deconz = pkgs.qt5.callPackage ../pkgs/deconz { };
+  deconz = pkgs.qt5.callPackage ./deconz.nix { };
 in {
   options.myconfig.services.deconz = {
 

@@ -1,10 +1,11 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
-let cfg = config.myconfig;
-    wallpaperCmdString = ''
-output "*" bg ${pkgs.my-wallpapers}/share/background.png fill
-'';
+let
+  cfg = config.myconfig;
+  wallpaperCmdString = ''
+    output "*" bg ${pkgs.my-wallpapers}/share/background.png fill
+  '';
 in {
   options.myconfig = with lib; {
     desktop.wayland.sway = { enable = mkEnableOption "sway"; };
@@ -15,8 +16,10 @@ in {
         etc = {
           "sway/config".source = ./sway/config;
           "sway/config.d/zoom.us.conf".source = ./sway/config.d/zoom.us.conf;
-          "sway/config.d/dex.conf".source = pkgs.writeText "dex.conf" "exec ${pkgs.dex}/bin/dex --autostart";
-          "sway/config.d/background.conf".source = pkgs.writeText "background.conf" wallpaperCmdString;
+          "sway/config.d/dex.conf".source =
+            pkgs.writeText "dex.conf" "exec ${pkgs.dex}/bin/dex --autostart";
+          "sway/config.d/background.conf".source =
+            pkgs.writeText "background.conf" wallpaperCmdString;
         };
       };
       home-manager.sharedModules = [{ programs.waybar.enable = true; }];

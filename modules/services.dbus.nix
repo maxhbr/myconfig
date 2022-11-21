@@ -17,7 +17,7 @@ let
     export XDG_DATA_DIRS=${datadir}:$XDG_DATA_DIRS
     gnome_schema=org.gnome.desktop.interface
     ${pkgs.glib}/bin/gsettings set $gnome_schema gtk-theme ''${1:-Breeze}
-'';
+  '';
 
   # bash script to let dbus know about important env variables and
   # propogate them to relevent services run at the end of sway config

@@ -4,7 +4,7 @@
     services = {
       grafana = {
         enable = true;
-        addr = "127.0.0.1";
+        addr = "127.0.0.1"; 
         protocol = "http";
         domain = config.networking.hostName;
         port = 2342;

@@ -54,7 +54,7 @@ in {
           action = "last-entry";
         }
         {
-          map = ["index" "pager"];
+          map = [ "index" "pager" ];
           key = "R";
           action = "group-reply";
         }

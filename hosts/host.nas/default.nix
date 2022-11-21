@@ -30,7 +30,6 @@
       # };
     }
     ./2x4000-hdds.raid.nix
-    # configuration
     ./smarthome
     # ./service.nextcloud.nix
     ./service.unifi.nix
@@ -65,71 +64,71 @@
         networking.firewall.allowedTCPPorts = [ 443 ];
       };
     }
-    { # haproxy
-      config = {
-        services.haproxy = {
-          enable = true;
-          config = ''
-            defaults
-               mode    http
-               option  httpchk
+    # { # haproxy
+    #   config = {
+    #     services.haproxy = {
+    #       enable = true;
+    #       config = ''
+    #         defaults
+    #            mode    http
+    #            option  httpchk
 
-            frontend frontend
-               bind *:1443 ssl crt /etc/tls/nginx.pem
-               redirect scheme https if !{ ssl_fc }
+    #         frontend frontend
+    #            bind *:1443 ssl crt /etc/tls/nginx.pem
+    #            redirect scheme https if !{ ssl_fc }
 
-               acl url_prometheus path_beg /prometheus
-               # acl url_prometheus hdr(host) -m beg prometheus.
-               use_backend prometheus_backend if url_prometheus
+    #            acl url_prometheus path_beg /prometheus
+    #            # acl url_prometheus hdr(host) -m beg prometheus.
+    #            use_backend prometheus_backend if url_prometheus
 
-               acl url_deconz path_beg /deconz
-               # acl url_deconz hdr(host) -m beg deconz.
-               use_backend deconz_backend if url_deconz
+    #            acl url_deconz path_beg /deconz
+    #            # acl url_deconz hdr(host) -m beg deconz.
+    #            use_backend deconz_backend if url_deconz
 
-               # acl url_stats path_beg /stats
-               # # acl url_stats hdr(host) -m beg stats.
-               # use_backend stats_backend if url_stats
+    #            # acl url_stats path_beg /stats
+    #            # # acl url_stats hdr(host) -m beg stats.
+    #            # use_backend stats_backend if url_stats
 
-               default_backend grafana_backend
+    #            default_backend grafana_backend
 
-            backend grafana_backend
-               option forwardfor
-               http-request set-header X-Forwarded-Port %[dst_port]
-               http-request add-header X-Forwarded-Proto https if { ssl_fc }
-               option httpchk HEAD / HTTP/1.1\r\nHost:localhost
-               server grafana01 ${config.services.grafana.addr}:${
-                 toString config.services.grafana.port
-               } check inter 2000
+    #         backend grafana_backend
+    #            option forwardfor
+    #            http-request set-header X-Forwarded-Port %[dst_port]
+    #            http-request add-header X-Forwarded-Proto https if { ssl_fc }
+    #            option httpchk HEAD / HTTP/1.1\r\nHost:localhost
+    #            server grafana01 ${config.services.grafana.settings.server.http_addr}:${
+    #              toString config.services.grafana.settings.server.http_port
+    #            } check inter 2000
 
-            backend prometheus_backend
-               server prometheus01 ${config.services.prometheus.listenAddress}:${
-                 toString config.services.prometheus.port
-               } check inter 2000
+    #         backend prometheus_backend
+    #            server prometheus01 ${config.services.prometheus.listenAddress}:${
+    #              toString config.services.prometheus.port
+    #            } check inter 2000
 
-            backend deconz_backend
-               server deconz01 127.0.0.1:${
-                 toString config.myconfig.services.deconz.httpPort
-               } check inter 2000
+    #         backend deconz_backend
+    #            server deconz01 127.0.0.1:${
+    #              toString config.myconfig.services.deconz.httpPort
+    #            } check inter 2000
 
-            listen stats
-                bind *:1936
-                stats enable
-                stats uri /
-                stats hide-version
-                stats auth someuser:password
-          '';
-        };
-        networking.firewall.allowedTCPPorts = [ 1443 1936 ];
-      };
+    #         listen stats
+    #             bind *:1936
+    #             stats enable
+    #             stats uri /
+    #             stats hide-version
+    #             stats auth someuser:password
+    #       '';
+    #     };
+    #     networking.firewall.allowedTCPPorts = [ 1443 1936 ];
+    #   };
 
-    }
+    # }
     (myconfig.metadatalib.setupNixServe [ "workstation" "vserver" ])
     {
-      nix.trustedBinaryCaches =
+      nix.settings.trusted-substituters =
         [ ("ssh://nix-ssh@" + myconfig.metadatalib.get.hosts.workstation.ip4) ];
     }
     (myconfig.metadatalib.setupAsBackupTarget "/mnt/2x4t/backup"
-      [ "x1extremeG2" ])
+      [ "x1extremeG2" "p14" ])
     (myconfig.metadatalib.fixIp "enp3s0")
     {
       system.activationScripts.mkTlsDir =
@@ -137,12 +136,16 @@
     }
   ];
   config = {
-    myconfig = { headless.enable = true; };
+    myconfig = { 
+      headless.enable = true;
+      virtualisation.enable = true;
+    };
 
     networking.hostName = "nas";
     networking.hostId = "29d93341";
 
     virtualisation.docker.enable = true;
+    virtualisation.podman.enable = true;
 
     services.logind.extraConfig = ''
       HandlePowerKey=reboot
@@ -164,5 +167,6 @@
       };
       # monit.enable = true;
     };
+    system.stateVersion = lib.mkForce "22.11";
   };
 }

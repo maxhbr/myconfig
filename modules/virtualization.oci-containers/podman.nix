@@ -5,6 +5,6 @@ in {
   config = {
     home-manager.sharedModules =
       lib.optional enable { home.packages = with pkgs; [ podman-compose ]; };
-    virtualisation.oci-containers = lib.mkIf enable { backend = "podman"; };
+    # virtualisation.oci-containers = lib.mkIf enable { backend = "podman"; };
   };
 }

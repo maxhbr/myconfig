@@ -5,16 +5,16 @@ in {
   config = {
     home-manager.sharedModules = [{
       home.packages = with pkgs; [ docker docker-machine docker-compose ];
-      home.file = {
-        "bin/docker" = {
-          source = ./bin;
-          recursive = true;
-        };
-        "dockerfiles" = {
-          source = ./bin;
-          recursive = true;
-        };
-      };
+      # home.file = {
+      #   "bin/docker" = {
+      #     source = ./bin;
+      #     recursive = true;
+      #   };
+      #   "dockerfiles" = {
+      #     source = ./bin;
+      #     recursive = true;
+      #   };
+      # };
     }];
     environment = {
       variables = { DOCKER_BUILDKIT = "1"; };

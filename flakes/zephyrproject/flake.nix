@@ -31,7 +31,7 @@
           platformio-udev-rules = pkgs.writeTextFile {
             name = "platformio-udev-rules";
             text = builtins.readFile
-              "${inputs.platformio-core}/scripts/99-platformio-udev.rules";
+              "${inputs.platformio-core}/platformio/assets/system/99-platformio-udev.rules";
             destination = "/etc/udev/rules.d/99-platformio.rules";
           };
           segger-modemmanager-blacklist-udev-rules = pkgs.writeTextFile {
@@ -84,9 +84,9 @@
                   "adafruit_feather_stm32f405"
                   "b_l4s5i_iot01a"
                   "bbc_microbit_v2"
-                  "frdm_k64f"
+                  # "frdm_k64f"
                   "lpcxpresso55s69_cpu0"
-                  "mimxrt1060_evk"
+                  # "mimxrt1060_evk"
                   "nrf52840dongle_nrf52840"
                   "nrf5340dk_nrf5340_cpuapp"
                   "nucleo_f767zi"
@@ -102,6 +102,7 @@
           }];
           services.udev.packages = [
             platformio-udev-rules
+            pkgs.platformio
             segger-modemmanager-blacklist-udev-rules
             pkgs.openocd
             pkgs.segger-jlink

@@ -292,7 +292,7 @@ main() {
 
     if $doBackup; then
         doBackup "$home" "${POSITIONAL[@]}"
-        echo "date" >> "$home/dates"
+        date >> "$home/dates"
     fi
 
     if $doPrune; then
