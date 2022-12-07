@@ -55,6 +55,15 @@
     }
     # fun
     ../host.workstation/gaming/games.steam
+    { 
+      home-manager.sharedModules = [
+        {
+          home.packages = with pkgs; [
+            mindustry-wayland
+          ];
+        }
+      ];
+    }
   ];
 
   config = {
@@ -105,21 +114,6 @@
 
     home-manager.sharedModules = [
       {
-        # home.file = {
-        #   ".config/autorandr/" = {
-        #     source = ./autorandr;
-        #     recursive = true;
-        #   };
-        #   ".config/autorandr/mobile/postswitch.d/mykeylight-off".source = let
-        #     script = with pkgs;
-        #       writeShellScriptBin "script"
-        #       "${mykeylight}/bin/mykeylight-off &disown";
-        #   in "${script}/bin/script";
-        #   ".config/electron-flags.conf".text = ''
-        #     --enable-features=WaylandWindowDecorations
-        #     --ozone-platform-hint=auto
-        #   '';
-        # };
         home.packages = with pkgs; [
           rdesktop
           google-chrome # for netflix and stadia
@@ -141,6 +135,29 @@
               position = "0,0";
               scale = 1.0;
             }];
+            exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
+          };
+          docked = {
+            outputs = [
+              {
+                criteria = "eDP-1";
+                mode = "1920x1200@60Hz";
+                position = "0,0";
+                scale = 1.0;
+              }
+              {
+                criteria = "DP-5";
+                mode = "2560x1440@59.951Hz";
+                position = "1920,0";
+                scale = 1.0;
+              }
+              {
+                criteria = "DP-7";
+                mode = "1920x1080@60Hz";
+                position = "2240,1440";
+                scale = 1.0;
+              }
+            ];
             exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
           };
         };

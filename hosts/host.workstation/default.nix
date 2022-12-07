@@ -78,8 +78,9 @@
     myconfig = {
       desktop = {
         enable = true;
+        xserver.enable = true;
         wayland = {
-          enable = true;
+          enable = false;
           desktop = "sway";
         };
         imagework.enable = true;
@@ -95,6 +96,12 @@
         network.enable = true;
       };
     };
+    services.xserver = {
+      desktopManager.plasma5.enable = true;
+      desktopManager.xterm.enable = false;
+      displayManager.sddm.enable = true;
+    };
+
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;
     virtualisation.virtualbox.host.enable = true;

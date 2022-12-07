@@ -6,7 +6,7 @@ let
       json = builtins.fromJSON (builtins.readFile (./hosts + "/metadata.json"));
       metadata = lib.recursiveUpdate json metadataOverride;
 
-      mkBackupJob = name: configOverwrites:
+      mkBackupJob = configOverwrites:
         {
           encryption = {
             mode = "repokey-blake2";
@@ -220,63 +220,74 @@ let
         };
 
       setupAsBorgbackupClient = backupkey: passphrase: {
-          myconfig.secrets = {
-            "borgbackup.ssh" = {
-              source = backupkey;
-              dest = "/etc/borgbackup/ssh_key";
-            };
-            "borgbackup.passphrase" = {
-              source = passphrase;
-              dest = "/etc/borgbackup/passphrase";
-            };
+        myconfig.secrets = {
+          "borgbackup.ssh" = {
+            source = backupkey;
+            dest = "/etc/borgbackup/ssh_key";
           };
+          "borgbackup.passphrase" = {
+            source = passphrase;
+            dest = "/etc/borgbackup/passphrase";
+          };
+        };
       };
 
       mkHddBackupJob = name: hddid: configOverwrites:
-        (let
-          newName = "${name}@hdd";
-          device = "/dev/disk/by-uuid/${hddid}";
-          repomnt = "/mnt/backup/${hddid}";
-          repodir = "${repomnt}/borgbackup/${newName}";
-        in { pkgs, lib, config, ... }: {
-          fileSystems."${repomnt}" = {
-            device = device;
-            fsType = "ext4";
-            options = [ "noauto,nofail,x-systemd.device-timeout=1,sync,users,rw" ];
-          };
-          services.borgbackup.jobs."${newName}" = mkBackupJob newName ({
-            removableDevice = true;
-            repo = repodir;
-          } // configOverwrites);
+        ({ pkgs, lib, config, ... }:
+          let
+            device = "/dev/disk/by-uuid/${hddid}";
+            repomnt = "/mnt/backup/${hddid}";
+            serviceName = "${name}@${hddid}";
+            repodir = "${repomnt}/borgbackup/${config.networking.hostName}-${name}";
+          in {
+            fileSystems."${repomnt}" = {
+              device = device;
+              fsType = "ext4";
+              options =
+                [ "noauto,nofail,x-systemd.device-timeout=1,sync,users,rw" ];
+            };
+            services.borgbackup.jobs."${serviceName}" = mkBackupJob ({
+              removableDevice = true;
+              repo = repodir;
+            } // configOverwrites);
 
-          environment.systemPackages = [(pkgs.writeShellScriptBin "mkBackup-${newName}" ''
-            set -euo pipefail
-            sudo mount ${device} || true
-            if [[ ! -d "${repomnt}" ]]; then
-              exit 1
-            fi
-            sudo mkdir -p "${repodir}"
-            sudo systemctl restart borgbackup-job-${newName}.service
-            if [[ ! -f "${repodir}.key" ]]; then
-              sudo borg key export "${repodir}" "${repodir}.key"
-            fi
-            journalctl -u borgbackup-job-${newName}.service --since "2 minutes ago" -f
-          '')];
-        });
+            environment.systemPackages = [
+              (pkgs.writeShellScriptBin "mkBackup-${serviceName}" ''
+                set -euo pipefail
+                sudo mkdir -p "${repomnt}"
+                sudo mount ${device} || true
+                if ! ( mount | grep -q "${repomnt}" ); then
+                  exit 1
+                fi
+                sudo mkdir -p "${repodir}"
+                (set -x; sudo systemctl restart borgbackup-job-${serviceName}.service)
+                if [[ ! -f "${repodir}.key" ]]; then
+                  sleep 20
+                  sudo borg key export "${repodir}" "${repodir}.key"
+                fi
+                set -x
+                journalctl -u borgbackup-job-${serviceName}.service --since "2 minutes ago" -f
+              '')
+            ];
+          });
       mkRemoteBackupJob = name: host: configOverwrites:
-        (let newName = "${name}@${host}";
-        in { pkgs, lib, config, ... }: {
-          services.borgbackup.jobs."${newName}" = mkBackupJob newName ({
-            repo =
-              "borg@${host}:./${config.networking.hostName}-${newName}.borg";
-            environment.BORG_RSH = "ssh -i /etc/borgbackup/ssh_key"; #-o StrictHostKeyChecking=no
-          } // configOverwrites);
-          environment.systemPackages = [(pkgs.writeShellScriptBin "mkBackup-${newName}" ''
-            set -euo pipefail
-            sudo systemctl restart borgbackup-job-${newName}.service
-            journalctl -u borgbackup-job-${newName}.service --since "2 minutes ago" -f
-          '')];
-        });
+        ({ pkgs, lib, config, ... }:
+          let newName = "${name}@${host}";
+          in {
+            services.borgbackup.jobs."${newName}" = mkBackupJob ({
+              repo =
+                "borg@${host}:./${config.networking.hostName}-${newName}.borg";
+              environment.BORG_RSH =
+                "ssh -i /etc/borgbackup/ssh_key"; # -o StrictHostKeyChecking=no
+            } // configOverwrites);
+            environment.systemPackages = [
+              (pkgs.writeShellScriptBin "mkBackup-${newName}" ''
+                set -euo pipefail
+                sudo systemctl restart borgbackup-job-${newName}.service
+                journalctl -u borgbackup-job-${newName}.service --since "2 minutes ago" -f
+              '')
+            ];
+          });
 
       setupAsBackupTarget = home: hosts:
         let

@@ -127,8 +127,10 @@
       nix.settings.trusted-substituters =
         [ ("ssh://nix-ssh@" + myconfig.metadatalib.get.hosts.workstation.ip4) ];
     }
-    (myconfig.metadatalib.setupAsBackupTarget "/mnt/2x4t/backup"
-      [ "x1extremeG2" "p14" ])
+    (myconfig.metadatalib.setupAsBackupTarget "/mnt/2x4t/backup" [
+      "x1extremeG2"
+      "p14"
+    ])
     (myconfig.metadatalib.fixIp "enp3s0")
     {
       system.activationScripts.mkTlsDir =
@@ -136,7 +138,7 @@
     }
   ];
   config = {
-    myconfig = { 
+    myconfig = {
       headless.enable = true;
       virtualisation.enable = true;
     };

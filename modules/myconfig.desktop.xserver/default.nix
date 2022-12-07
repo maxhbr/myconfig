@@ -22,7 +22,7 @@ in {
         enableCtrlAltBackspace = true;
         displayManager.lightdm.enable = false;
         displayManager.sddm = {
-          enable = false;
+          enable = lib.mkDefault false;
           # wayland = true;
         };
       };

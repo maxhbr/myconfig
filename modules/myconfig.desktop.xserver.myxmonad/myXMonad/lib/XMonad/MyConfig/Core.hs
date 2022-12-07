@@ -41,7 +41,7 @@ import           XMonad.MyConfig.Notify        (myDefaultPopup, myNotify,
 normalcolor = "#333333" :: String
 maincolor = "#ee9a00" :: String
 
-myModMask = mod1Mask -- or: mod4Mask
+myModMask = mod4Mask -- or: mod4Mask
 
 coreConfig =
   def { terminal           = terminalCMD

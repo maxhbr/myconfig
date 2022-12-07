@@ -30,6 +30,7 @@ let
 
     ${configure-gtk}/bin/configure-gtk $2 &disown
 
+    set -x
     systemctl --user stop pipewire ${
       if config.services.pipewire.wireplumber.enable then
         "wireplumber"

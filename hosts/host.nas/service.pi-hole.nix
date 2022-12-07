@@ -9,8 +9,7 @@ in {
     volumes =
       [ "/var/lib/pihole/:/etc/pihole/" "/var/lib/dnsmasq.d:/etc/dnsmasq.d/" ];
     environment = { ServerIP = serverIP; };
-    extraOptions =
-      [ "--cap-add=NET_ADMIN" "--dns=127.0.0.1" "--dns=1.1.1.1" ];
+    extraOptions = [ "--cap-add=NET_ADMIN" "--dns=127.0.0.1" "--dns=1.1.1.1" ];
     workdir = "/var/lib/pihole/";
   };
 }
