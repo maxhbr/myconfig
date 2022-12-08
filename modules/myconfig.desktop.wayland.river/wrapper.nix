@@ -27,7 +27,7 @@ let
     fi
   '';
 in symlinkJoin {
-  name = "river-${river.version}";
+  name = "my-river-${river.version}";
 
   paths = (optional withBaseWrapper baseWrapper) ++ [ river ] ++ extraPaths;
 
@@ -42,15 +42,6 @@ in symlinkJoin {
 
   postBuild = ''
     ${optionalString withGtkWrapper "gappsWrapperArgsHook"}
-
-    mkdir -p "$out/share/wayland-sessions"
-    cat <<EOF >"$out/share/wayland-sessions/river.desktop"
-    [Desktop Entry]
-    Name=River
-    Comment=River
-    Exec=river
-    Type=Application
-    EOF
 
     wrapProgram $out/bin/river \
       ${optionalString withGtkWrapper ''"''${gappsWrapperArgs[@]}"''} \

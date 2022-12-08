@@ -10,7 +10,10 @@ in {
     (cfg.desktop.wayland.enable && cfg.desktop.wayland.hyprland.enable) {
       home-manager.sharedModules = [{
         xdg.configFile."hypr/hyprland.conf".source = ./hypr/hyprland.conf;
-        desktop.wayland.windowManager.hyprland.enable = true;
+        wayland.windowManager.hyprland = {
+          enable = true;
+          extraConfig = builtins.readFile ./hypr/hyprland.conf;
+        };
       }];
     });
 }

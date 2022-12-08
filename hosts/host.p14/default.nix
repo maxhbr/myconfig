@@ -77,6 +77,7 @@
           desktop = "sway";
           sway.enable = true;
           river.enable = true;
+          hyprland.enable = true;
         };
         messengers.enable = true;
         imagework.enable = true;
