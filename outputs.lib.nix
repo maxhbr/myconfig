@@ -238,7 +238,8 @@ let
             device = "/dev/disk/by-uuid/${hddid}";
             repomnt = "/mnt/backup/${hddid}";
             serviceName = "${name}@${hddid}";
-            repodir = "${repomnt}/borgbackup/${config.networking.hostName}-${name}";
+            repodir =
+              "${repomnt}/borgbackup/${config.networking.hostName}-${name}";
           in {
             fileSystems."${repomnt}" = {
               device = device;

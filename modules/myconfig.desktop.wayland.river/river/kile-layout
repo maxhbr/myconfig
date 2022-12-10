@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+ROW="((h: h d) 2 0.65)"
+
+# Nested layouts (examples)
+
+# Horizontal split layout with stacking on the last area
+HORIZONTAL="horizontal
+((h:
+    v
+    ((v: f d) 1 0.5)) 1 0.62)"
+
+
+# Simple vertical version of stack
+VSTACK="vstack
+(( h:
+    v
+    (( v: f d ) 1 0.5 0)
+  ) 1 0.65 0)"
+
+# The classic centered master layout
+# https://media.discordapp.net/attachments/769673106842845194/780095998239834142/unknown.png
+# Bran - BlingCorp
+CENTERED="centered
+((v:
+    $ROW
+  ((h: f d) 1 0.63)
+    $ROW
+) 1 0.47 1)"
+
+# Mosaic, a neat proof of concept layout for my smaller monitor
+MOSAIC="mosaic
+((3 > ( v:
+	$HORIZONTAL
+    ((h: f d) 1 0.62)
+  ) ? ((v: h h) 1)) 3 0.6)"
+
+
+# A layout meant for grouping a shit ton of windows
+GROUP="group
+(( v:
+    ( h: d d )
+    $HORIZONTAL
+    ( h: d d )
+  ) 1 0.45 1)"
+
+# Inspired by Stacktile - https://git.sr.ht/~leon_plickat/stacktile
+STACKTILE="stacktile
+((v:
+  ((h: f d) 1 0.62)
+  ((h: f d) 1 0.62)) 1 0.6 1)"

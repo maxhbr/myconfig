@@ -97,6 +97,7 @@ riverctl map normal $mod 0 set-focused-tags $all_tags
 riverctl map normal $mod Y set-focused-tags $all_tags
 riverctl map normal $mod+Shift 0 set-view-tags $all_tags
 riverctl map normal $mod+Shift Y set-view-tags $all_tags
+riverctl map normal $mod Z zoom
 
 # $mod+Space to toggle float
 riverctl map normal $mod Space toggle-float
@@ -157,6 +158,7 @@ riverctl set-repeat 50 300
 
 # Make certain views start floating
 riverctl float-filter-add app-id float
+riverctl float-filter-add "popup"
 # riverctl float-filter-add title "popup title with spaces"
 
 # # Set app-ids and titles of views which should use client side decorations
@@ -176,6 +178,7 @@ riverctl focus-follows-cursor normal
 
 pkill rivertile
 pkill rivercarro
+pkill kile
 case "${1:-rivercarro}" in
   rivertile)
     # $mod+H and $mod+L to decrease/increase the main ratio of rivertile(1)
@@ -259,6 +262,22 @@ case "${1:-rivercarro}" in
 
       # Tell river to use kile as its layout generator
       riverctl default-layout kile
+
+      source ~/.config/river/kile-layout
+
+      for output in "eDP-1"; do
+          case $output in
+              eDP-1)
+                  riverctl send-layout-cmd kile "1 $VSTACK"
+                  riverctl send-layout-cmd kile "2 FULL"
+                  riverctl send-layout-cmd kile "3 FULL"
+                  riverctl send-layout-cmd kile "view_padding 10"
+                  riverctl send-layout-cmd kile "smart_padding false"
+                  ;;
+          esac
+          riverctl send-layout-cmd kile "outer_padding 10"
+          riverctl focus-output next
+      done
 
       # Note: nothing after this line will be run
       exec kile --namespace kile --layout "((v: h h) 1 0.65 1)"

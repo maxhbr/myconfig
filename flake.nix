@@ -41,17 +41,27 @@
 
     zephyrproject.url = "path:flakes/zephyrproject/";
 
+    #wayland:sway
     swaymonad = {
       url = "github:nicolasavru/swaymonad";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    #wayland:river
+    river-grid = {
+      url = "github:luc65r/grid";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+
+    #wayland:hyprland
     hyprland = {
       url = "github:hyprwm/Hyprland";
       # build with your own instance of nixpkgs
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    #wayland:newm
     newmpkg = {
       url = "github:jbuchermn/newm";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -114,7 +124,7 @@
             ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.emacs.overlay ]; })
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
-                (self: super: {
+                (_: _: {
                   # https://github.com/NixOS/nixpkgs/pull/145738
                   tree = (import inputs.master {
                     inherit (pkgs) config system;
@@ -128,7 +138,7 @@
             })
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
-                (self: super: {
+                (_: _: {
                   mybackup =
                     pkgs.callPackage ../pkgs/mybackup { inherit pkgs; };
                   my-wallpapers =
@@ -138,7 +148,7 @@
             })
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
-                (self: super: {
+                (_: _: {
                   newm = inputs.newmpkg.packages.${pkgs.system}.newm;
                   pywm-fullscreen =
                     inputs.pywm-fullscreenpkg.packages.${pkgs.system}.pywm-fullscreen;
@@ -147,8 +157,16 @@
             })
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
-                (self: super: {
-                  swaymonad = inputs.swaymonad.defaultPackage.${pkgs.system};
+                (_: _: {
+                  swaymonad = inputs.swaymonad.defaultpackage.${pkgs.system};
+                })
+              ];
+            })
+
+            ({ pkgs, ... }: {
+              nixpkgs.overlays = [
+                (_: _: {
+                  river-grid = inputs.river-grid.defaultPackage.${pkgs.system};
                 })
               ];
             })

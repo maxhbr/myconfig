@@ -66,13 +66,15 @@ in {
 
             echo "## take screenshot ..."
             GRIM_DEFAULT_DIR="$output_dir" ${grim}/bin/grim \
-              -g "$(${slurp}/bin/slurp)"
+              -g "$(${slurp}/bin/slurp)" \
+              "$output_dir/$(date).png"
           '')
           wob
           wl-clipboard
           # xdg-desktop-portal-wlr
           nomacs
           dex # for autostarting
+          gammastep
         ];
         # defaultText = literalExpression ''
         #   with pkgs; [ ];

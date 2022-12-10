@@ -55,14 +55,9 @@
     }
     # fun
     ../host.workstation/gaming/games.steam
-    { 
-      home-manager.sharedModules = [
-        {
-          home.packages = with pkgs; [
-            mindustry-wayland
-          ];
-        }
-      ];
+    {
+      home-manager.sharedModules =
+        [{ home.packages = with pkgs; [ mindustry-wayland ]; }];
     }
   ];
 
@@ -76,8 +71,11 @@
           enable = true;
           desktop = "sway";
           sway.enable = true;
+          #experimental:
           river.enable = true;
           hyprland.enable = true;
+          hikari.enable = true;
+          # labwc.enable = true;
         };
         messengers.enable = true;
         imagework.enable = true;
@@ -88,13 +86,13 @@
       virtualisation.enable = true;
       dev = {
         compliance.enable = true;
-        go.enable = true;
+        go.enable = false;
         haskell.enable = true;
         network.enable = true;
-        nodejs.enable = true;
+        nodejs.enable = false;
         # ruby.enable = true;
-        rust.enable = true;
-        elixir.enable = true;
+        rust.enable = false;
+        elixir.enable = false;
       };
     };
     virtualisation.docker.enable = true;
@@ -127,39 +125,59 @@
         };
       }
       {
-        services.kanshi.profiles = {
-          # get list via "swaymsg -t get_outputs"
-          undocked = {
-            outputs = [{
-              criteria = "eDP-1";
-              mode = "1920x1200@60Hz";
-              position = "0,0";
-              scale = 1.0;
-            }];
-            exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
-          };
-          docked = {
-            outputs = [
-              {
+        services.kanshi = {
+          # enable = lib.mkForce true;
+          profiles = {
+            # get list via "swaymsg -t get_outputs"
+            undocked = {
+              outputs = [{
                 criteria = "eDP-1";
                 mode = "1920x1200@60Hz";
                 position = "0,0";
                 scale = 1.0;
-              }
-              {
-                criteria = "DP-5";
-                mode = "2560x1440@59.951Hz";
-                position = "1920,0";
-                scale = 1.0;
-              }
-              {
-                criteria = "DP-7";
-                mode = "1920x1080@60Hz";
-                position = "2240,1440";
-                scale = 1.0;
-              }
-            ];
-            exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
+              }];
+              exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
+            };
+            dp4 = {
+              outputs = [
+                {
+                  criteria = "eDP-1";
+                  mode = "1920x1200@60Hz";
+                  position = "0,0";
+                  scale = 1.0;
+                }
+                {
+                  criteria = "DP-4";
+                  mode = "2560x1440@59.951Hz";
+                  position = "1920,0";
+                  scale = 1.0;
+                }
+              ];
+              exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
+            };
+            docked = {
+              outputs = [
+                {
+                  criteria = "eDP-1";
+                  mode = "1920x1200@60Hz";
+                  position = "0,0";
+                  scale = 1.0;
+                }
+                {
+                  criteria = "DP-5";
+                  mode = "2560x1440@59.951Hz";
+                  position = "1920,0";
+                  scale = 1.0;
+                }
+                {
+                  criteria = "DP-7";
+                  mode = "1920x1080@60Hz";
+                  position = "2240,1440";
+                  scale = 1.0;
+                }
+              ];
+              exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
+            };
           };
         };
       }
