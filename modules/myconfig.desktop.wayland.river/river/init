@@ -94,9 +94,9 @@ done
 # $mod+Shift+0 to tag focused view with all tags
 all_tags=$(((1 << 32) - 1))
 riverctl map normal $mod 0 set-focused-tags $all_tags
-riverctl map normal $mod Y set-focused-tags $all_tags
+# riverctl map normal $mod Y set-focused-tags $all_tags
 riverctl map normal $mod+Shift 0 set-view-tags $all_tags
-riverctl map normal $mod+Shift Y set-view-tags $all_tags
+# riverctl map normal $mod+Shift Y set-view-tags $all_tags
 riverctl map normal $mod Z zoom
 
 # $mod+Space to toggle float

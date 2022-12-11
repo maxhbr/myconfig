@@ -7,7 +7,7 @@ let
     river-unwrapped = pkgs.river;
     withBaseWrapper = true;
     extraPaths = cfg.desktop.wayland.commonPackages
-      ++ (with pkgs; [ rivercarro ristate swaybg kile-wl river-grid ]);
+      ++ (with pkgs; [ rivercarro ristate swaybg kile-wl ]);
     extraSessionCommands = ''
       export XDG_CURRENT_DESKTOP=river
       export XKB_DEFAULT_LAYOUT=${
@@ -45,7 +45,7 @@ in {
         xdg.configFile = {
           "river/init".source = ./river/init;
           "river/init".executable = true;
-          "river/init".onChange = "${pkgs.procps}/bin/pkill -u $USER river || true";
+          # "river/init".onChange = "${pkgs.procps}/bin/pkill -u $USER river || true";
           "river/kile-layout".source = ./river/kile-layout;
           "river/kile-layout".executable = true;
         };
