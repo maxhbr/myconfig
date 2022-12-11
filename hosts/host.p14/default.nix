@@ -75,6 +75,7 @@
           river.enable = true;
           hyprland.enable = true;
           hikari.enable = true;
+          newm.enable = true;
           # labwc.enable = true;
         };
         messengers.enable = true;
@@ -99,7 +100,6 @@
     virtualisation.podman.enable = true;
     # virtualisation.libvirtd.enable = true;
     # virtualisation.virtualbox.host.enable = true;
-    #
 
     services.xserver.wacom.enable = true;
 

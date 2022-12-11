@@ -57,8 +57,8 @@
     }];
     nix = {
       extraOptions = ''
-        gc-keep-outputs = true
-        gc-keep-derivations = true
+        keep-outputs = true
+        keep-derivations = true
         auto-optimise-store = true
         binary-caches-parallel-connections = 10
       '';

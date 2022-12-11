@@ -74,11 +74,12 @@ in {
     xdg.portal = {
       enable = true;
       wlr.enable = true;
-      wlr.settings.screencast = lib.mkIf config.myconfig.desktop.wayland.enable {
-        output_name = "eDP-1";
-        chooser_type = "simple";
-        chooser_cmd = "${pkgs.slurp}/bin/slurp -f %o -or";
-      };
+      wlr.settings.screencast =
+        lib.mkIf config.myconfig.desktop.wayland.enable {
+          output_name = "eDP-1";
+          chooser_type = "simple";
+          chooser_cmd = "${pkgs.slurp}/bin/slurp -f %o -or";
+        };
       # gtk portal needed to make gtk apps happy
       extraPortals =
         let gnome = config.services.xserver.desktopManager.gnome.enable;

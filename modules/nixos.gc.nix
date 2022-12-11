@@ -12,6 +12,8 @@
       options = "--delete-older-than 30d";
     };
     nix.extraOptions = ''
+      gc-keep-outputs = true
+      gc-keep-derivations = true
       min-free = ${toString (1 * 1024 * 1024 * 1024)}
       max-free = ${toString (2 * 1024 * 1024 * 1024)}
     '';

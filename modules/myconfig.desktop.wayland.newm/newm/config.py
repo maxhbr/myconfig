@@ -48,7 +48,6 @@ def rules(view):
         return { 'blur': { 'radius': 5, 'passes': 3}}
     return None
 
-
 view = {
     'padding': 8,
     'fullscreen_padding': 0,
@@ -118,6 +117,12 @@ panels = {
     # 'lock': {
     #     'cmd': 'myphyslock',
     # },
+    'lock': {
+        'cmd': 'alacritty -e newm-panel-basic lock',
+        'w': 0.7,
+        'h': 0.6,
+        'corner_radius': 50,
+    },
     'launcher': {
         'cmd': 'alacritty -e newm-panel-basic launcher'
     },
@@ -130,9 +135,10 @@ grid = {
     'throw_ps': [2, 10]
 }
 
-# energy = {
-#     'idle_callback': backlight_manager.callback
-# }
+energy = {
+    'idle_times': [60, 180],
+    'idle_callback': backlight_manager.callback
+}
 
 focus = {
     'color': '#92f0f5d1',

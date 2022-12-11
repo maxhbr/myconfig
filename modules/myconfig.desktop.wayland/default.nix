@@ -25,6 +25,25 @@ in {
                     ${foot}/bin/foot ${tmux}/bin/tmux attach -t "$SESSION" & disown)
                 done
           '')
+          (writeShellScriptBin "open-wl" ''
+            set -euo pipefail
+            flags='--ozone-platform-hint=auto \
+            --enable-features=WebRTCPipeWireCapturer \
+            --enable-gpu \
+            --ignore-gpu-blocklist \
+            --enable-gpu-rasterization \
+            --enable-zero-copy \
+            --disable-gpu-driver-bug-workarounds \
+            --enable-features=VaapiVideoDecoder \
+            --disable-software-rasterizer \
+            --start-maximized \
+            --js-flags="--max-old-space-size=5120"'
+
+            app="$1"
+            shift
+            set -x
+            exec $app $flags $@
+          '')
           # https://github.com/riverwm/river/wiki/Recommended-Software
           ## Output configuration
           wlopm
@@ -67,7 +86,7 @@ in {
             echo "## take screenshot ..."
             GRIM_DEFAULT_DIR="$output_dir" ${grim}/bin/grim \
               -g "$(${slurp}/bin/slurp)" \
-              "$output_dir/$(date).png"
+              "$output_dir/$(date +%Y-%m-%d_%H-%M-%S).png"
           '')
           wob
           wl-clipboard
