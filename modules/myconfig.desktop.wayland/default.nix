@@ -181,6 +181,8 @@ in {
       "_JAVA_AWT_WM_NONREPARENTING" = "1";
     };
 
+    # displayManager.sddm.wayland = true;
+
     home-manager.sharedModules = [
       ./home-manager.kanshi.nix
       ./home-manager.mako.nix

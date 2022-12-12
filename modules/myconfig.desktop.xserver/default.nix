@@ -20,7 +20,7 @@ in {
         enable = true;
         autorun = true;
         enableCtrlAltBackspace = true;
-        displayManager.lightdm.enable = false;
+        displayManager.lightdm.enable = true;
         displayManager.sddm = {
           enable = lib.mkDefault false;
           # wayland = true;
