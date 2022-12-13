@@ -62,8 +62,9 @@
     {
       # testing plasma5
 
-    services.xserver.enable = lib.mkForce true;
+    # services.xserver.enable = lib.mkForce true;
     services.xserver.displayManager.sddm.enable = false;
+    services.xserver.displayManager.gdm.enable = true;
     services.xserver.desktopManager.plasma5.enable = true;
 
     }

@@ -25,25 +25,6 @@ in {
                     ${foot}/bin/foot ${tmux}/bin/tmux attach -t "$SESSION" & disown)
                 done
           '')
-          (writeShellScriptBin "open-wl" ''
-            set -euo pipefail
-            flags='--ozone-platform-hint=auto \
-            --enable-features=WebRTCPipeWireCapturer \
-            --enable-gpu \
-            --ignore-gpu-blocklist \
-            --enable-gpu-rasterization \
-            --enable-zero-copy \
-            --disable-gpu-driver-bug-workarounds \
-            --enable-features=VaapiVideoDecoder \
-            --disable-software-rasterizer \
-            --start-maximized \
-            --js-flags="--max-old-space-size=5120"'
-
-            app="$1"
-            shift
-            set -x
-            exec $app $flags $@
-          '')
           # https://github.com/riverwm/river/wiki/Recommended-Software
           ## Output configuration
           wlopm
@@ -181,7 +162,9 @@ in {
       "_JAVA_AWT_WM_NONREPARENTING" = "1";
     };
 
-    # displayManager.sddm.wayland = true;
+    services.greetd.enable = true;
+    # services.xserver.displayManager.sddm.wayland = true;
+    services.xserver.displayManager.gdm.wayland = true;
 
     home-manager.sharedModules = [
       ./home-manager.kanshi.nix

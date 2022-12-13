@@ -21,10 +21,7 @@ in {
         autorun = true;
         enableCtrlAltBackspace = true;
         displayManager.lightdm.enable = true;
-        displayManager.sddm = {
-          enable = lib.mkDefault false;
-          # wayland = true;
-        };
+        displayManager.sddm.enable = lib.mkDefault false;
       };
       redshift.enable = config.myconfig.desktop.full;
     };

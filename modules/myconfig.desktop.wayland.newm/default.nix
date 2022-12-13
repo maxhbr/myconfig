@@ -4,6 +4,7 @@
 let
   cfg = config.myconfig;
   user = myconfig.user;
+  pkg = pkgs.newm;
 in {
   options.myconfig = with lib; {
     desktop.wayland.newm = { enable = mkEnableOption "newm"; };
@@ -12,13 +13,17 @@ in {
     (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.newm.enable) {
       home-manager.sharedModules = [{
         xdg.configFile = { "newm/config.py".source = ./newm/config.py; };
-        home.packages = with pkgs; [ newm pywm-fullscreen ];
+        home.packages = [ pkg pkgs.pywm-fullscreen ];
       }];
       myconfig.desktop.wayland.greetdSettings = {
         newm_session = {
-          command = "start-newm";
+          command = "${pkg}/bin/start-newm";
           inherit user;
         };
+      };
+      services.xserver.windowManager.session = lib.singleton {
+        name = "newm";
+        start = "${pkg}/bin/start-newm";
       };
     });
 }
