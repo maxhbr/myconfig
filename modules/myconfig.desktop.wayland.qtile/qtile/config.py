@@ -10,6 +10,8 @@ from libqtile import layout, bar, widget, hook
 from libqtile.lazy import lazy
 from typing import List  # noqa: F401
 
+qtile.core.set_keymap(layout="de", options="", variant="neo")
+
 mod = "mod4"              # Sets mod key to SUPER/WINDOWS
 myTerm = "tfoot"      # My terminal of choice
 myBrowser = "qutebrowser" # My browser of choice
