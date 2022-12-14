@@ -85,6 +85,7 @@
           hyprland.enable = true;
           hikari.enable = true;
           newm.enable = true;
+          qtile.enable = true;
           # labwc.enable = true;
         };
         messengers.enable = true;
