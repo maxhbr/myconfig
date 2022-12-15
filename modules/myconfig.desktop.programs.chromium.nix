@@ -17,14 +17,14 @@ let
   # # see:
   # # - https://github.com/NixOS/nixpkgs/issues/3107
   # # - https://productforums.google.com/forum/#!msg/chromecast/G3E2ENn-YZI/s7Xoz6ICCwAJ
-  # allowChromecast =
-  #   "sudo ${pkgs.iptables}/bin/iptables -I INPUT -p udp -m udp -s 192.168.0.0/16 --match multiport --dports 1900,5353 -j ACCEPT";
+  allowChromecast = pkgs.writeShellScriptBin "allowChromecast" 
+    "sudo ${pkgs.iptables}/bin/iptables -I INPUT -p udp -m udp -s 192.168.0.0/16 --match multiport --dports 1900,5353 -j ACCEPT";
 in {
   config = lib.mkIf config.myconfig.desktop.enable {
     services.avahi.enable =
       true; # https://github.com/NixOS/nixpkgs/issues/49630
     home-manager.sharedModules = [{
-      home.packages = [ inco pipechrome ];
+      home.packages = [ inco pipechrome allowChromecast ];
       home.file = {
         ".config/chromium/NativeMessagingHosts/com.justwatch.gopass.json" = {
           text = ''

@@ -3,14 +3,11 @@ import os
 import re
 import socket
 import subprocess
-from libqtile import qtile
+from libqtile import qtile, layout, bar, widget, hook
 from libqtile.config import Click, Drag, Group, KeyChord, Key, Match, Screen
 from libqtile.command import lazy
-from libqtile import layout, bar, widget, hook
 from libqtile.lazy import lazy
 from typing import List  # noqa: F401
-
-qtile.core.set_keymap(layout="de", options="", variant="neo")
 
 mod = "mod4"              # Sets mod key to SUPER/WINDOWS
 myTerm = "tfoot"      # My terminal of choice
@@ -285,26 +282,26 @@ layouts = [
     layout.Max(**layout_theme),
     layout.Stack(num_stacks=2),
     layout.RatioTile(**layout_theme),
-    layout.TreeTab(
-         font = "Ubuntu",
-         fontsize = 10,
-         sections = ["FIRST", "SECOND", "THIRD", "FOURTH"],
-         section_fontsize = 10,
-         border_width = 2,
-         bg_color = "1c1f24",
-         active_bg = "c678dd",
-         active_fg = "000000",
-         inactive_bg = "a9a1e1",
-         inactive_fg = "1c1f24",
-         padding_left = 0,
-         padding_x = 0,
-         padding_y = 5,
-         section_top = 10,
-         section_bottom = 20,
-         level_shift = 8,
-         vspace = 3,
-         panel_width = 200
-         ),
+    # layout.TreeTab(
+    #      font = "Ubuntu",
+    #      fontsize = 10,
+    #      sections = ["FIRST", "SECOND", "THIRD", "FOURTH"],
+    #      section_fontsize = 10,
+    #      border_width = 2,
+    #      bg_color = "1c1f24",
+    #      active_bg = "c678dd",
+    #      active_fg = "000000",
+    #      inactive_bg = "a9a1e1",
+    #      inactive_fg = "1c1f24",
+    #      padding_left = 0,
+    #      padding_x = 0,
+    #      padding_y = 5,
+    #      section_top = 10,
+    #      section_bottom = 20,
+    #      level_shift = 8,
+    #      vspace = 3,
+    #      panel_width = 200
+    #      ),
     layout.Floating(**layout_theme)
 ]
 
@@ -445,17 +442,6 @@ def init_widgets_list():
                        padding = 0,
                        fontsize = 37
                        ),
-              widget.CheckUpdates(
-                       update_interval = 1800,
-                       distro = "Arch_checkupdates",
-                       display_format = "Updates: {updates} ",
-                       foreground = colors[1],
-                       colour_have_updates = colors[1],
-                       colour_no_updates = colors[1],
-                       mouse_callbacks = {'Button1': lambda: qtile.cmd_spawn(myTerm + ' -e sudo pacman -Syu')},
-                       padding = 5,
-                       background = colors[5]
-                       ),
               widget.TextBox(
                        text = '',
                        font = "Ubuntu Mono",
@@ -534,6 +520,7 @@ if __name__ in ["config", "__main__"]:
     widgets_list = init_widgets_list()
     widgets_screen1 = init_widgets_screen1()
     widgets_screen2 = init_widgets_screen2()
+    # qtile.core.set_keymap(layout=os.environ["XKB_DEFAULT_LAYOUT"], options="", variant=os.environ["XKB_DEFAULT_VARIANT"])
 
 def window_to_prev_group(qtile):
     if qtile.currentWindow is not None:
@@ -570,7 +557,8 @@ mouse = [
     Click([mod], "Button2", lazy.window.bring_to_front())
 ]
 
-dgroups_app_rules = []  # type: List
+dgroups_key_binder = None
+dgroups_app_rules = []  # type: list
 follow_mouse_focus = True
 bring_front_click = False
 cursor_warp = False
@@ -584,6 +572,12 @@ floating_layout = layout.Floating(float_rules=[
     Match(title='Qalculate!'),        # qalculate-gtk
     Match(wm_class='kdenlive'),       # kdenlive
     Match(wm_class='pinentry-gtk-2'), # GPG key password entry
+    Match(wm_class="confirmreset"),  # gitk
+    Match(wm_class="makebranch"),  # gitk
+    Match(wm_class="maketag"),  # gitk
+    Match(wm_class="ssh-askpass"),  # ssh-askpass
+    Match(title="branchdialog"),  # gitk
+    Match(title="pinentry"),  # GPG key password entry
 ])
 auto_fullscreen = True
 focus_on_window_activation = "smart"
@@ -597,6 +591,9 @@ auto_minimize = True
 # def start_once():
 #     home = os.path.expanduser('~')
 #     subprocess.call([home + '/.config/qtile/autostart.sh'])
+
+# When using the Wayland backend, this can be used to configure input devices.
+wl_input_rules = None
 
 # XXX: Gasp! We're lying here. In fact, nobody really uses or cares about this
 # string besides java UI toolkits; you can see several discussions on the
