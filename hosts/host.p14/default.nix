@@ -59,15 +59,6 @@
       home-manager.sharedModules =
         [{ home.packages = with pkgs; [ mindustry-wayland ]; }];
     }
-    {
-      # testing plasma5
-
-    # services.xserver.enable = lib.mkForce true;
-    services.xserver.displayManager.sddm.enable = false;
-    services.xserver.displayManager.gdm.enable = true;
-    services.xserver.desktopManager.plasma5.enable = true;
-
-    }
   ];
 
   config = {
@@ -87,6 +78,7 @@
           newm.enable = true;
           qtile.enable = true;
           # labwc.enable = true;
+          kde.enable = true;
         };
         messengers.enable = true;
         imagework.enable = true;

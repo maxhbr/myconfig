@@ -94,6 +94,7 @@
             home-manager = {
               useUserPackages = true;
               useGlobalPkgs = true;
+              backupFileExtension = "hmBackup";
               sharedModules = [{ home.stateVersion = lib.mkDefault "22.11"; }];
             };
           };
