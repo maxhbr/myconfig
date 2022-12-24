@@ -1,7 +1,9 @@
 # Copyright 2022 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }:
-let cfg = config.myconfig;
+{ pkgs, config, lib, myconfig, ... }:
+let
+  cfg = config.myconfig;
+  user = myconfig.user;
 in {
   options.myconfig = with lib; {
     desktop.wayland.hikari = {
@@ -270,5 +272,11 @@ in {
         };
         home.packages = [ pkgs.hikari ];
       }];
+      myconfig.desktop.wayland.greetdSettings = {
+        hikari_session = {
+          command = "${pkgs.hikari}/bin/hikari";
+          inherit user;
+        };
+      };
     });
 }

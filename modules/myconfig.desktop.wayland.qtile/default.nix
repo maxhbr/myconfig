@@ -1,8 +1,9 @@
 # Copyright 2022 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }:
+{ pkgs, config, lib, myconfig, ... }:
 let
   cfg = config.myconfig;
+  user = myconfig.user;
   qtilePackage = pkgs.callPackage ./wrapper.nix {
     withBaseWrapper = true;
     extraPaths = cfg.desktop.wayland.commonPackages;
@@ -33,6 +34,11 @@ let
     withGtkWrapper = true;
     extraOptions = [ ];
   };
+  startQtile = pkgs.writeShellScriptBin "start-qtile" ''
+    ${qtilePackage}/bin/qtile start \
+      -b wayland \
+      -l DEBUG
+  '';
 in {
   options.myconfig = with lib; {
     desktop.wayland.qtile = { enable = mkEnableOption "qtile"; };
@@ -41,7 +47,7 @@ in {
     (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.qtile.enable) {
       home-manager.sharedModules = [{
         xdg.configFile = { "qtile/config.py".source = ./qtile/config.py; };
-        home.packages = with pkgs; [ qtilePackage ];
+        home.packages = with pkgs; [ qtilePackage startQtile ];
       }];
 
       #services.xserver.windowManager.qtile = {
@@ -53,8 +59,8 @@ in {
       #];
       myconfig.desktop.wayland.greetdSettings = {
         qtile_session = {
-          command = "${qtilePackage}/bin/qtile start -b wayland";
-          user = "mhuber";
+          command = "${startQtile}/bin/start-qtile";
+          inherit user;
         };
       };
     });

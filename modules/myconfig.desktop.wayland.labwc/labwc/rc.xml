@@ -11,7 +11,7 @@
     <decoration>server</decoration>
     <gap>20</gap>
     <adaptiveSync>no</adaptiveSync>
-    <cycleViewPreview>no</cycleViewPreview>
+    <cycleViewPreview>yes</cycleViewPreview>
     <cycleViewOutlines>yes</cycleViewOutlines>
   </core>
 
@@ -46,7 +46,7 @@
 
   <focus>
     <followMouse>yes</followMouse>
-    <raiseOnFocus>yes</raiseOnFocus>
+    <raiseOnFocus>no</raiseOnFocus>
   </focus>
 
   <!-- Set range to 0 to disable window snapping completely -->
@@ -71,21 +71,23 @@
     </desktops>
   -->
   <desktops>
+    <number>9</number>
+    <firstdesk>0</firstdesk>
     <!--
       popupTime defaults to 1000 so could be left out.
       Set to 0 to completely disable the workspace OSD.
     -->
     <popupTime>1000</popupTime>
     <names>
-      <name>Workspace 1</name>
-      <name>Workspace 2</name>
-      <name>Workspace 3</name>
-      <name>Workspace 4</name>
-      <name>Workspace 5</name>
-      <name>Workspace 6</name>
-      <name>Workspace 7</name>
-      <name>Workspace 8</name>
-      <name>Workspace 9</name>
+      <name>1</name>
+      <name>2</name>
+      <name>3</name>
+      <name>4</name>
+      <name>5</name>
+      <name>6</name>
+      <name>7</name>
+      <name>8</name>
+      <name>9</name>
     </names>
   </desktops>
 
@@ -106,16 +108,28 @@
   <keyboard>
     <repeatRate>25</repeatRate>
     <repeatDelay>600</repeatDelay>
+    <keybind key="W-q">
+      <action name="Reconfigure" />
+    </keybind>
+    <keybind key="S-W-q">
+      <action name="Exit">
+    </keybind>
     <keybind key="A-Tab">
       <action name="NextWindow" />
     </keybind>
     <keybind key="W-Return">
-      <action name="Execute"><command>alacritty</command></action>
+      <action name="Execute"><command>tfoot</command></action>
     </keybind>
-    <keybind key="A-F3">
-      <action name="Execute"><command>bemenu-run</command></action>
+    <keybind key="s-W-Return">
+      <action name="Execute"><command>tfoot</command></action>
+    </keybind>
+    <keybind key="W-p">
+      <action name="Execute"><command> wofi --show run </command></action>
     </keybind>
     <keybind key="A-F4">
+      <action name="Close" />
+    </keybind>
+    <keybind key="S-W-c">
       <action name="Close" />
     </keybind>
     <keybind key="W-f">
@@ -163,6 +177,35 @@
     <keybind key="XF86_MonBrightnessDown">
       <action name="Execute"><command>brightnessctl set 10%-</command></action>
     </keybind>
+    <!-- Change Workspace/Desktop -->
+    <keybind key="W-1"> <action name="GoToDesktop"> <to>1</to> </action> </keybind>
+    <keybind key="W-2"> <action name="GoToDesktop"> <to>2</to> </action> </keybind>
+    <keybind key="W-3"> <action name="GoToDesktop"> <to>3</to> </action> </keybind>
+    <keybind key="W-4"> <action name="GoToDesktop"> <to>4</to> </action> </keybind>
+    <keybind key="W-5"> <action name="GoToDesktop"> <to>5</to> </action> </keybind>
+    <keybind key="W-6"> <action name="GoToDesktop"> <to>6</to> </action> </keybind>
+    <keybind key="W-7"> <action name="GoToDesktop"> <to>7</to> </action> </keybind>
+    <keybind key="W-8"> <action name="GoToDesktop"> <to>8</to> </action> </keybind>
+    <keybind key="W-9"> <action name="GoToDesktop"> <to>9</to> </action> </keybind>
+    <!-- Move application to specific desktop -->
+    <keybind key="S-W-1"> <action name="SendToDesktop"> <to>1</to> </action> </keybind>
+    <keybind key="S-W-2"> <action name="SendToDesktop"> <to>2</to> </action> </keybind>
+    <keybind key="S-W-3"> <action name="SendToDesktop"> <to>3</to> </action> </keybind>
+    <keybind key="S-W-4"> <action name="SendToDesktop"> <to>4</to> </action> </keybind>
+    <keybind key="S-W-5"> <action name="SendToDesktop"> <to>5</to> </action> </keybind>
+    <keybind key="S-W-6"> <action name="SendToDesktop"> <to>6</to> </action> </keybind>
+    <keybind key="S-W-7"> <action name="SendToDesktop"> <to>7</to> </action> </keybind>
+    <keybind key="S-W-8"> <action name="SendToDesktop"> <to>8</to> </action> </keybind>
+    <keybind key="S-W-9"> <action name="SendToDesktop"> <to>9</to> </action> </keybind>
+    <keybind key="C-W-1"> <action name="SendToDesktop"> <to>1</to> </action> </keybind>
+    <keybind key="C-W-2"> <action name="SendToDesktop"> <to>2</to> </action> </keybind>
+    <keybind key="C-W-3"> <action name="SendToDesktop"> <to>3</to> </action> </keybind>
+    <keybind key="C-W-4"> <action name="SendToDesktop"> <to>4</to> </action> </keybind>
+    <keybind key="C-W-5"> <action name="SendToDesktop"> <to>5</to> </action> </keybind>
+    <keybind key="C-W-6"> <action name="SendToDesktop"> <to>6</to> </action> </keybind>
+    <keybind key="C-W-7"> <action name="SendToDesktop"> <to>7</to> </action> </keybind>
+    <keybind key="C-W-8"> <action name="SendToDesktop"> <to>8</to> </action> </keybind>
+    <keybind key="C-W-9"> <action name="SendToDesktop"> <to>9</to> </action> </keybind>
   </keyboard>
 
   <!--

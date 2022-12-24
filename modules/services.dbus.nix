@@ -81,12 +81,10 @@ in {
           chooser_cmd = "${pkgs.slurp}/bin/slurp -f %o -or";
         };
       # gtk portal needed to make gtk apps happy
-      extraPortals =
+      extraPortals = 
         let gnome = config.services.xserver.desktopManager.gnome.enable;
         in [ pkgs.xdg-desktop-portal-wlr ]
         ++ lib.optional (!gnome) pkgs.xdg-desktop-portal-gtk;
-      # # warning: The option `xdg.portal.gtkUsePortal'has been deprecated. Setting the variable globally with `environment.sessionVariables' NixOS option can have unforseen side-effects.
-      # gtkUsePortal = true;
     };
   };
 }

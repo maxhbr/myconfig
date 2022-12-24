@@ -1,7 +1,9 @@
 # Copyright 2022 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }:
-let cfg = config.myconfig;
+{ pkgs, config, lib, myconfig, ... }:
+let
+  cfg = config.myconfig;
+  user = myconfig.user;
 in {
   options.myconfig = with lib; {
     desktop.wayland.kde = { enable = mkEnableOption "kde"; };
@@ -21,5 +23,11 @@ in {
         kdeconnect
         kdeplasma-addons
       ];
+      myconfig.desktop.wayland.greetdSettings = {
+        kde_session = {
+          command = "${pkgs.plasma-workspace}/bin/startplasma-wayland";
+          inherit user;
+        };
+      };
     });
 }

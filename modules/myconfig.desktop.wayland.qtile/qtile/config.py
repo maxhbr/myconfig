@@ -7,13 +7,29 @@ from libqtile import qtile, layout, bar, widget, hook
 from libqtile.config import Click, Drag, Group, KeyChord, Key, Match, Screen
 from libqtile.command import lazy
 from libqtile.lazy import lazy
+from libqtile.dgroups import simple_key_binder
 from typing import List  # noqa: F401
 
 mod = "mod4"              # Sets mod key to SUPER/WINDOWS
-myTerm = "tfoot"      # My terminal of choice
+if qtile.core.name == "x11":
+    myTerm = "urxvt"
+elif qtile.core.name == "wayland":
+    myTerm = "foot"
 myBrowser = "qutebrowser" # My browser of choice
 
-keys = [
+
+def set_keymap_from_layout(qtile):
+    try:
+        qtile.core.cmd_set_keymap(layout=os.environ["XKB_DEFAULT_LAYOUT"], options="", variant=os.environ["XKB_DEFAULT_VARIANT"])
+    except:
+        print("failed to set layout: with qtile.core.cmd_set_keymap") 
+    try:
+        qtile.cmd_set_keymap(layout=os.environ["XKB_DEFAULT_LAYOUT"], options="", variant=os.environ["XKB_DEFAULT_VARIANT"])
+    except:
+        print("failed to set layout: with qtile.cmd_set_keymap") 
+
+def setupKeys():
+    return [
          ### The essentials
          Key([mod], "Return",
              lazy.spawn(myTerm),
@@ -256,10 +272,10 @@ groups = [Group("DEV", layout='monadtall'),
           Group("VID", layout='monadtall'),
           Group("GFX", layout='floating')]
 
+
 # Allow MODKEY+[0 through 9] to bind to groups, see https://docs.qtile.org/en/stable/manual/config/groups.html
 # MOD4 + index Number : Switch to Group[index]
 # MOD4 + shift + index Number : Send active window to another Group
-from libqtile.dgroups import simple_key_binder
 dgroups_key_binder = simple_key_binder("mod4")
 
 layout_theme = {"border_width": 2,
@@ -520,7 +536,8 @@ if __name__ in ["config", "__main__"]:
     widgets_list = init_widgets_list()
     widgets_screen1 = init_widgets_screen1()
     widgets_screen2 = init_widgets_screen2()
-    # qtile.core.set_keymap(layout=os.environ["XKB_DEFAULT_LAYOUT"], options="", variant=os.environ["XKB_DEFAULT_VARIANT"])
+
+    set_keymap_from_layout(qtile)
 
 def window_to_prev_group(qtile):
     if qtile.currentWindow is not None:
@@ -556,6 +573,8 @@ mouse = [
          start=lazy.window.get_size()),
     Click([mod], "Button2", lazy.window.bring_to_front())
 ]
+
+keys = setupKeys()
 
 dgroups_key_binder = None
 dgroups_app_rules = []  # type: list

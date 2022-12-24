@@ -162,7 +162,7 @@ in {
       "_JAVA_AWT_WM_NONREPARENTING" = "1";
     };
 
-    services.greetd.enable = true;
+    # services.greetd.enable = true;
     # services.xserver.displayManager.sddm.wayland = true;
     services.xserver.displayManager.gdm.wayland = true;
 

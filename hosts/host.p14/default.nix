@@ -31,27 +31,6 @@
     }
     {
       boot.kernelPackages = lib.mkForce pkgs.linuxPackages_testing;
-      # boot.kernelPatches = [{
-      #   name = "i915-P14sG3-intel-fix";
-      #   patch = pkgs.writeTextFile {
-      #     name = "i915-P14sG3-intel-fix.patch";
-      #     text = ''
-      # diff --git a/drivers/gpu/drm/i915/display/intel_bios.c b/drivers/gpu/drm/i915/display/intel_bios.c
-      # index 7d6eb9a..679cf36 100644
-      # --- a/drivers/gpu/drm/i915/display/intel_bios.c
-      # +++ b/drivers/gpu/drm/i915/display/intel_bios.c
-      # @@ -2674,7 +2674,7 @@ static void parse_ddi_port(struct intel_bios_encoder_data *devdata)
-      # drm_dbg_kms(&i915->drm,
-      # "More than one child device for port %c in VBT, using the first.\n",
-      # port_name(port));
-      # -		return;
-      # +		// return; // see https://gitlab.freedesktop.org/drm/intel/-/issues/5531#note_1477044
-      # }
-
-      # sanitize_device_type(devdata, port);
-      # '';
-      #   };
-      # }];
     }
     # fun
     ../host.workstation/gaming/games.steam
@@ -69,16 +48,20 @@
         enable = true;
         wayland = {
           enable = true;
-          desktop = "sway";
+          desktop = "river";
           sway.enable = true;
+
           #experimental:
           river.enable = true;
           hyprland.enable = true;
-          hikari.enable = true;
           newm.enable = true;
           qtile.enable = true;
-          # labwc.enable = true;
+          labwc.enable = true;
           kde.enable = true;
+          # gnome.enable = true; # konflicts with sway
+
+          # dead or buggy:
+          # hikari.enable = true;
         };
         messengers.enable = true;
         imagework.enable = true;
@@ -180,6 +163,52 @@
               ];
               exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
             };
+            # docked2 = {
+            #   outputs = [
+            #     {
+            #       criteria = "eDP-1";
+            #       mode = "1920x1200@60Hz";
+            #       position = "0,0";
+            #       scale = 1.0;
+            #     }
+            #     {
+            #       criteria = "DP-5";
+            #       mode = "2560x1440@59.951Hz";
+            #       position = "1920,0";
+            #       scale = 1.0;
+            #     }
+            #     {
+            #       criteria = "DP-4";
+            #       mode = "1920x1080@60Hz";
+            #       position = "2240,1440";
+            #       scale = 1.0;
+            #     }
+            #   ];
+            #   exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
+            # };
+            # docked3 = {
+            #   outputs = [
+            #     {
+            #       criteria = "eDP-1";
+            #       mode = "1920x1200@60Hz";
+            #       position = "0,0";
+            #       scale = 1.0;
+            #     }
+            #     {
+            #       criteria = "DP-6";
+            #       mode = "2560x1440@59.951Hz";
+            #       position = "1920,0";
+            #       scale = 1.0;
+            #     }
+            #     {
+            #       criteria = "DP-4";
+            #       mode = "1920x1080@60Hz";
+            #       position = "2240,1440";
+            #       scale = 1.0;
+            #     }
+            #   ];
+            #   exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
+            # };
           };
         };
       }
