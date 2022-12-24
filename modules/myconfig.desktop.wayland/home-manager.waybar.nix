@@ -12,10 +12,12 @@
             "sway/workspaces"
             "sway/mode"
             "sway/window"
+            "wlr/taskbar"
           ];
           modules-center = [ ];
           modules-right = [
             "idle_inhibitor"
+            "wireplumber"
             "pulseaudio"
             "network"
             "cpu"
@@ -37,6 +39,20 @@
           cpu = {
             format = "cpu: {usage}%";
             tooltip = false;
+          };
+          "wlr/taskbar" = {
+            format = "{icon}";
+            icon-size = 14;
+            icon-theme = "Numix-Circle";
+            tooltip-format = "{title}";
+            on-click = "activate";
+            on-click-middle = "close";
+            ignore-list = [
+              "Alacritty"
+            ];
+            app_ids-mapping = {
+              "firefoxdeveloperedition" = "firefox-developer-edition";
+            };
           };
           "custom/platform_profile" = {
             format = "{}";
@@ -74,6 +90,12 @@
             format-linked = "{ifname} (No IP) ";
             format-disconnected = "Disconnected ⚠";
             format-alt = "{ifname}: {ipaddr}/{cidr}";
+          };
+          wireplumber = {
+            format = "{volume}% {icon}";
+            format-muted = "";
+            on-click = "helvum";
+            format-icons = ["" "" ""];
           };
           pulseaudio = {
             format = "{volume}% {icon} {format_source}";

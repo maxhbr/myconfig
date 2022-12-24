@@ -11,7 +11,10 @@ in {
     (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.labwc.enable) {
       home-manager.sharedModules = [{
         xdg.configFile = {
-          "labwc/rc.xml".source = ./labwc/rc.xml;
+          "labwc/rc.xml" = {
+            source = ./labwc/rc.xml;
+            onChange = "${pkgs.psmisc}/bin/killall -s SIGHUP labwc || true";
+          };
           "labwc/autostart".text = ''
             set -x
             ${pkgs.swaybg}/bin/swaybg \
@@ -32,7 +35,22 @@ in {
               config.environment.sessionVariables."XKB_DEFAULT_VARIANT"
             }
           '';
-          "labwc/menu.xml".source = ./labwc/menu.xml;
+          "labwc/menu.xml".text = ''
+<?xml version="1.0" ?>
+
+<openbox_menu>
+<menu id="root-menu" label="">
+  <item label="Web browser"><action name="Execute" command="firefox" /></item>
+  <item label="Terminal"><action name="Execute" command="tfoot" /></item>
+  <item label="Screenshot"><action name="Execute" command="grim-region" /></item>
+  <item label="Displays"><action name="Execute" command="${pkgs.wdisplays}/bin/wdisplays" /></item>
+  <menu id="labwc-menu" label="labwc">
+    <item label="Reconfigure"><action name="Reconfigure" /></item>
+    <item label="Exit"><action name="Exit" /></item>
+  </menu>
+</menu>
+</openbox_menu>
+          '';
         };
         home.packages = [ pkg ];
       }];

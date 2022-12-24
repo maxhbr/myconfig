@@ -41,7 +41,7 @@
 
   <!-- edge strength is in pixels -->
   <resistance>
-    <screenEdgeStrength>20</screenEdgeStrength>
+    <screenEdgeStrength>10</screenEdgeStrength>
   </resistance>
 
   <focus>
@@ -111,16 +111,20 @@
     <keybind key="W-q">
       <action name="Reconfigure" />
     </keybind>
-    <keybind key="S-W-q">
-      <action name="Exit">
-    </keybind>
+    <keybind key="S-W-q"> <action name="Exit" /> </keybind>
     <keybind key="A-Tab">
       <action name="NextWindow" />
+    </keybind>
+    <keybind key="W-Tab">
+      <action name="NextWindow" />
+    </keybind>
+    <keybind key="W-m">
+      <action name="ShowMenu"><menu>root-menu</menu></action>
     </keybind>
     <keybind key="W-Return">
       <action name="Execute"><command>tfoot</command></action>
     </keybind>
-    <keybind key="s-W-Return">
+    <keybind key="S-W-Return">
       <action name="Execute"><command>tfoot</command></action>
     </keybind>
     <keybind key="W-p">
@@ -188,15 +192,15 @@
     <keybind key="W-8"> <action name="GoToDesktop"> <to>8</to> </action> </keybind>
     <keybind key="W-9"> <action name="GoToDesktop"> <to>9</to> </action> </keybind>
     <!-- Move application to specific desktop -->
-    <keybind key="S-W-1"> <action name="SendToDesktop"> <to>1</to> </action> </keybind>
-    <keybind key="S-W-2"> <action name="SendToDesktop"> <to>2</to> </action> </keybind>
-    <keybind key="S-W-3"> <action name="SendToDesktop"> <to>3</to> </action> </keybind>
-    <keybind key="S-W-4"> <action name="SendToDesktop"> <to>4</to> </action> </keybind>
-    <keybind key="S-W-5"> <action name="SendToDesktop"> <to>5</to> </action> </keybind>
-    <keybind key="S-W-6"> <action name="SendToDesktop"> <to>6</to> </action> </keybind>
-    <keybind key="S-W-7"> <action name="SendToDesktop"> <to>7</to> </action> </keybind>
-    <keybind key="S-W-8"> <action name="SendToDesktop"> <to>8</to> </action> </keybind>
-    <keybind key="S-W-9"> <action name="SendToDesktop"> <to>9</to> </action> </keybind>
+    <keybind key="W-°"> <action name="SendToDesktop"> <to>1</to> </action> </keybind>
+    <keybind key="W-§"> <action name="SendToDesktop"> <to>2</to> </action> </keybind>
+    <keybind key="W-ℓ"> <action name="SendToDesktop"> <to>3</to> </action> </keybind>
+    <keybind key="W-»"> <action name="SendToDesktop"> <to>4</to> </action> </keybind>
+    <keybind key="W-«"> <action name="SendToDesktop"> <to>5</to> </action> </keybind>
+    <keybind key="W-$"> <action name="SendToDesktop"> <to>6</to> </action> </keybind>
+    <keybind key="W-€"> <action name="SendToDesktop"> <to>7</to> </action> </keybind>
+    <keybind key="W-„"> <action name="SendToDesktop"> <to>8</to> </action> </keybind>
+    <keybind key="W-“"> <action name="SendToDesktop"> <to>9</to> </action> </keybind>
     <keybind key="C-W-1"> <action name="SendToDesktop"> <to>1</to> </action> </keybind>
     <keybind key="C-W-2"> <action name="SendToDesktop"> <to>2</to> </action> </keybind>
     <keybind key="C-W-3"> <action name="SendToDesktop"> <to>3</to> </action> </keybind>
