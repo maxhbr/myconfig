@@ -17,7 +17,6 @@
           modules-center = [ ];
           modules-right = [
             "idle_inhibitor"
-            "wireplumber"
             "pulseaudio"
             "network"
             "cpu"
@@ -44,11 +43,12 @@
             format = "{icon}";
             icon-size = 14;
             icon-theme = "Numix-Circle";
-            tooltip-format = "{title}";
+            tooltip-format = "{title}\n{name}\n{short_state}";
             on-click = "activate";
             on-click-middle = "close";
             ignore-list = [
               "Alacritty"
+              "Foot" "foot" "tfoot"
             ];
             app_ids-mapping = {
               "firefoxdeveloperedition" = "firefox-developer-edition";
@@ -90,12 +90,6 @@
             format-linked = "{ifname} (No IP) ";
             format-disconnected = "Disconnected ⚠";
             format-alt = "{ifname}: {ipaddr}/{cidr}";
-          };
-          wireplumber = {
-            format = "{volume}% {icon}";
-            format-muted = "";
-            on-click = "helvum";
-            format-icons = ["" "" ""];
           };
           pulseaudio = {
             format = "{volume}% {icon} {format_source}";
@@ -164,6 +158,7 @@
         #custom-platform_profile,
         #idle_inhibitor,
         #tray,
+        #taskbar button,
         #mode {
             padding: 0 10px;
             background-color: #64727D;
@@ -207,7 +202,11 @@
             animation-direction: alternate;
         }
 
+        /* #taskbar button.minimized */
+        /* #taskbar button.maximized */
+        /* #taskbar button.fullscreen */
 
+        #taskbar button,
         #tags button, #workspaces button {
             padding: 0 5px;
             background: transparent;
@@ -215,12 +214,15 @@
             border-bottom: 3px solid transparent;
         }
 
+        #taskbar button.active,
         #tags button.focused, #workspaces button.focused {
             background: #64727D;
         }
+        /* #taskbar button.maximized, */
         #tags button.occupied {
           border-bottom: 3px solid white;
         }
+        #taskbar button.fullscreen,
         #tags button.urgent {
           border-bottom: 3px solid #ee9a00;
         }

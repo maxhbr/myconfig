@@ -18,22 +18,22 @@
   <!-- <font><theme> can be defined without an attribute to set all places -->
   <theme>
     <name></name>
-    <cornerRadius>8</cornerRadius>
+    <cornerRadius>0</cornerRadius>
     <font place="ActiveWindow">
       <name>sans</name>
-      <size>10</size>
+      <size>8</size>
       <slant>normal</slant>
       <weight>normal</weight>
     </font>
     <font place="MenuItem">
       <name>sans</name>
-      <size>10</size>
+      <size>8</size>
       <slant>normal</slant>
       <weight>normal</weight>
     </font>
     <font place="OnScreenDisplay">
       <name>sans</name>
-      <size>10</size>
+      <size>8</size>
       <slant>normal</slant>
       <weight>normal</weight>
     </font>
@@ -79,15 +79,16 @@
     -->
     <popupTime>1000</popupTime>
     <names>
-      <name>1</name>
-      <name>2</name>
-      <name>3</name>
-      <name>4</name>
-      <name>5</name>
-      <name>6</name>
-      <name>7</name>
-      <name>8</name>
-      <name>9</name>
+      <name>Desktop 1</name>
+      <name>Desktop 2</name>
+      <name>Desktop 3</name>
+      <name>Desktop 4</name>
+      <name>Desktop 5</name>
+      <name>Desktop 6</name>
+      <name>Desktop 7</name>
+      <name>Desktop 8</name>
+      <name>Desktop 9</name>
+      <name>Desktop 0</name>
     </names>
   </desktops>
 
@@ -112,75 +113,35 @@
       <action name="Reconfigure" />
     </keybind>
     <keybind key="S-W-q"> <action name="Exit" /> </keybind>
-    <keybind key="A-Tab">
-      <action name="NextWindow" />
-    </keybind>
-    <keybind key="W-Tab">
-      <action name="NextWindow" />
-    </keybind>
-    <keybind key="W-m">
-      <action name="ShowMenu"><menu>root-menu</menu></action>
-    </keybind>
-    <keybind key="W-Return">
-      <action name="Execute"><command>tfoot</command></action>
-    </keybind>
-    <keybind key="S-W-Return">
-      <action name="Execute"><command>tfoot</command></action>
-    </keybind>
-    <keybind key="W-p">
-      <action name="Execute"><command> wofi --show run </command></action>
-    </keybind>
-    <keybind key="A-F4">
-      <action name="Close" />
-    </keybind>
-    <keybind key="S-W-c">
-      <action name="Close" />
-    </keybind>
-    <keybind key="W-f">
-      <action name="ToggleMaximize" />
-    </keybind>
-    <keybind key="A-Left">
-      <action name="MoveToEdge"><direction>left</direction></action>
-    </keybind>
-    <keybind key="A-Right">
-      <action name="MoveToEdge"><direction>right</direction></action>
-    </keybind>
-    <keybind key="A-Up">
-      <action name="MoveToEdge"><direction>up</direction></action>
-    </keybind>
-    <keybind key="A-Down">
-      <action name="MoveToEdge"><direction>down</direction></action>
-    </keybind>
-    <keybind key="W-Left">
-      <action name="SnapToEdge"><direction>left</direction></action>
-    </keybind>
-    <keybind key="W-Right">
-      <action name="SnapToEdge"><direction>right</direction></action>
-    </keybind>
-    <keybind key="W-Up">
-      <action name="SnapToEdge"><direction>up</direction></action>
-    </keybind>
-    <keybind key="W-Down">
-      <action name="SnapToEdge"><direction>down</direction></action>
-    </keybind>
-    <keybind key="A-Space">
-      <action name="ShowMenu"><menu>client-menu</menu></action>
-    </keybind>
-    <keybind key="XF86_AudioLowerVolume">
-      <action name="Execute"><command>amixer sset Master 5%-</command></action>
-    </keybind>
-    <keybind key="XF86_AudioRaiseVolume">
-      <action name="Execute"><command>amixer sset Master 5%+</command></action>
-    </keybind>
-    <keybind key="XF86_AudioMute">
-      <action name="Execute"><command>amixer sset Master toggle</command></action>
-    </keybind>
-    <keybind key="XF86_MonBrightnessUp">
-      <action name="Execute"><command>brightnessctl set +10%</command></action>
-    </keybind>
-    <keybind key="XF86_MonBrightnessDown">
-      <action name="Execute"><command>brightnessctl set 10%-</command></action>
-    </keybind>
+    <keybind key="A-Tab"> <action name="NextWindow" /> </keybind>
+    <keybind key="W-Tab"> <action name="NextWindow" /> </keybind>
+    <keybind key="W-m"> <action name="ShowMenu"><menu>root-menu</menu></action> </keybind>
+    <keybind key="A-m"> <action name="ShowMenu"><menu>client-menu</menu></action> </keybind>
+    <keybind key="W-Return"> <action name="Execute"><command>tfoot</command></action> </keybind>
+    <keybind key="S-W-Return"> <action name="Execute"><command>tfoot</command></action> </keybind>
+    <keybind key="W-p"> <action name="Execute"><command> wofi --show run </command></action> </keybind>
+    <keybind key="A-F4"> <action name="Close" /> </keybind>
+    <keybind key="S-W-c"> <action name="Close" /> </keybind>
+    <keybind key="W-f"> <action name="ToggleMaximize" /> </keybind>
+    <keybind key="S-W-f"> <action name="ToggleFullscreen" /> </keybind>
+    <keybind key="W-Minus"> <action name="ToggleAlwaysOnTop" /> </keybind>
+    <keybind key="A-Left"> <action name="MoveToEdge"><direction>left</direction></action> </keybind>
+    <keybind key="A-Right"> <action name="MoveToEdge"><direction>right</direction></action> </keybind>
+    <keybind key="A-Up"> <action name="MoveToEdge"><direction>up</direction></action> </keybind>
+    <keybind key="A-Down"> <action name="MoveToEdge"><direction>down</direction></action> </keybind>
+    <keybind key="W-Left"> <action name="SnapToEdge"><direction>left</direction></action> </keybind>
+    <keybind key="W-Right"> <action name="SnapToEdge"><direction>right</direction></action> </keybind>
+    <keybind key="W-Up"> <action name="SnapToEdge"><direction>up</direction></action> </keybind>
+    <keybind key="W-Down"> <action name="SnapToEdge"><direction>down</direction></action> </keybind>
+    <keybind key="W-n"> <action name="SnapToEdge"><direction>left</direction></action> </keybind>
+    <keybind key="W-d"> <action name="SnapToEdge"><direction>right</direction></action> </keybind>
+    <keybind key="W-r"> <action name="SnapToEdge"><direction>up</direction></action> </keybind>
+    <keybind key="W-t"> <action name="SnapToEdge"><direction>down</direction></action> </keybind>
+    <!-- <keybind key="XF86_AudioLowerVolume"> <action name="Execute"><command>amixer sset Master 5%-</command></action> </keybind> -->
+    <!-- <keybind key="XF86_AudioRaiseVolume"> <action name="Execute"><command>amixer sset Master 5%+</command></action> </keybind> -->
+    <!-- <keybind key="XF86_AudioMute"> <action name="Execute"><command>amixer sset Master toggle</command></action> </keybind> -->
+    <keybind key="XF86_MonBrightnessUp"> <action name="Execute"><command>brightnessctl set +10%</command></action> </keybind>
+    <keybind key="XF86_MonBrightnessDown"> <action name="Execute"><command>brightnessctl set 10%-</command></action> </keybind>
     <!-- Change Workspace/Desktop -->
     <keybind key="W-1"> <action name="GoToDesktop"> <to>1</to> </action> </keybind>
     <keybind key="W-2"> <action name="GoToDesktop"> <to>2</to> </action> </keybind>
@@ -191,16 +152,18 @@
     <keybind key="W-7"> <action name="GoToDesktop"> <to>7</to> </action> </keybind>
     <keybind key="W-8"> <action name="GoToDesktop"> <to>8</to> </action> </keybind>
     <keybind key="W-9"> <action name="GoToDesktop"> <to>9</to> </action> </keybind>
+    <keybind key="W-0"> <action name="GoToDesktop"> <to>0</to> </action> </keybind>
     <!-- Move application to specific desktop -->
-    <keybind key="W-°"> <action name="SendToDesktop"> <to>1</to> </action> </keybind>
-    <keybind key="W-§"> <action name="SendToDesktop"> <to>2</to> </action> </keybind>
-    <keybind key="W-ℓ"> <action name="SendToDesktop"> <to>3</to> </action> </keybind>
-    <keybind key="W-»"> <action name="SendToDesktop"> <to>4</to> </action> </keybind>
-    <keybind key="W-«"> <action name="SendToDesktop"> <to>5</to> </action> </keybind>
-    <keybind key="W-$"> <action name="SendToDesktop"> <to>6</to> </action> </keybind>
-    <keybind key="W-€"> <action name="SendToDesktop"> <to>7</to> </action> </keybind>
-    <keybind key="W-„"> <action name="SendToDesktop"> <to>8</to> </action> </keybind>
-    <keybind key="W-“"> <action name="SendToDesktop"> <to>9</to> </action> </keybind>
+    <keybind key="S-W-1"> <action name="SendToDesktop"> <to>1</to> </action> </keybind>
+    <keybind key="S-W-2"> <action name="SendToDesktop"> <to>2</to> </action> </keybind>
+    <keybind key="S-W-3"> <action name="SendToDesktop"> <to>3</to> </action> </keybind>
+    <keybind key="S-W-4"> <action name="SendToDesktop"> <to>4</to> </action> </keybind>
+    <keybind key="S-W-5"> <action name="SendToDesktop"> <to>5</to> </action> </keybind>
+    <keybind key="S-W-6"> <action name="SendToDesktop"> <to>6</to> </action> </keybind>
+    <keybind key="S-W-7"> <action name="SendToDesktop"> <to>7</to> </action> </keybind>
+    <keybind key="S-W-8"> <action name="SendToDesktop"> <to>8</to> </action> </keybind>
+    <keybind key="S-W-9"> <action name="SendToDesktop"> <to>9</to> </action> </keybind>
+    <keybind key="S-W-0"> <action name="SendToDesktop"> <to>0</to> </action> </keybind>
     <keybind key="C-W-1"> <action name="SendToDesktop"> <to>1</to> </action> </keybind>
     <keybind key="C-W-2"> <action name="SendToDesktop"> <to>2</to> </action> </keybind>
     <keybind key="C-W-3"> <action name="SendToDesktop"> <to>3</to> </action> </keybind>
@@ -210,6 +173,7 @@
     <keybind key="C-W-7"> <action name="SendToDesktop"> <to>7</to> </action> </keybind>
     <keybind key="C-W-8"> <action name="SendToDesktop"> <to>8</to> </action> </keybind>
     <keybind key="C-W-9"> <action name="SendToDesktop"> <to>9</to> </action> </keybind>
+    <keybind key="C-W-0"> <action name="SendToDesktop"> <to>0</to> </action> </keybind>
   </keyboard>
 
   <!--
@@ -223,18 +187,18 @@
     <doubleClickTime>500</doubleClickTime>
 
     <context name="Frame">
-      <mousebind button="A-Left" action="Press">
+      <mousebind button="W-Left" action="Press">
         <action name="Focus"/>
         <action name="Raise"/>
       </mousebind>
-      <mousebind button="A-Left" action="Drag">
+      <mousebind button="W-Left" action="Drag">
         <action name="Move"/>
       </mousebind>
-      <mousebind button="A-Right" action="Press">
+      <mousebind button="W-Right" action="Press">
         <action name="Focus"/>
         <action name="Raise"/>
       </mousebind>
-      <mousebind button="A-Right" action="Drag">
+      <mousebind button="W-Right" action="Drag">
         <action name="Resize"/>
       </mousebind>
     </context>
