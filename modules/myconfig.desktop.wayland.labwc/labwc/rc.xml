@@ -124,6 +124,7 @@
     <keybind key="S-W-c"> <action name="Close" /> </keybind>
     <keybind key="W-f"> <action name="ToggleMaximize" /> </keybind>
     <keybind key="S-W-f"> <action name="ToggleFullscreen" /> </keybind>
+    <keybind key="S-W-y"> <action name="Execute"><command> swaylock -f -c 000000 </command></action> </keybind>
     <keybind key="W-Minus"> <action name="ToggleAlwaysOnTop" /> </keybind>
     <keybind key="A-Left"> <action name="MoveToEdge"><direction>left</direction></action> </keybind>
     <keybind key="A-Right"> <action name="MoveToEdge"><direction>right</direction></action> </keybind>

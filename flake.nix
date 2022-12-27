@@ -13,6 +13,11 @@
     rel2111.url = "github:nixos/nixpkgs/release-21.11";
     rel2205.url = "github:nixos/nixpkgs/release-22.05";
 
+    nixpkgs-wayland  = { url = "github:nix-community/nixpkgs-wayland"; };
+    # only needed if you use as a package set:
+    nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
+    nixpkgs-wayland.inputs.master.follows = "master";
+
     home.url = "github:nix-community/home-manager";
     home.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -71,6 +76,9 @@
       url = "github:jbuchermn/pywm-fullscreen";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    #wayland:vivarium
+    vivarium.url = "github:maxhbr/vivarium";
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -163,7 +171,6 @@
                 })
               ];
             })
-
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
                 (_: _: {
@@ -171,12 +178,40 @@
                 })
               ];
             })
-
+            ({ pkgs, ... }: {
+              nixpkgs.overlays = [
+                inputs.vivarium.overlay
+              ];
+            })
             inputs.my-wallpapers.nixosModule
             inputs.myfish.nixosModule
 
             ({ pkgs, ... }: {
               home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
+            })
+
+            ({pkgs, config, ... }: {
+              config = {
+                nix = {
+                  # add binary caches
+                  binaryCachePublicKeys = [
+                    "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+                    "nixpkgs-wayland.cachix.org-1:3lwxaILxMRkVhehr5StQprHdEo4IrE8sRho9R9HOLYA="
+                  ];
+                  binaryCaches = [
+                    "https://cache.nixos.org"
+                    "https://nixpkgs-wayland.cachix.org"
+                  ];
+                };
+
+                # use it as an overlay
+                nixpkgs.overlays = [ inputs.nixpkgs-wayland.overlay ];
+
+                # or, pull specific packages (built against inputs.nixpkgs, usually `nixos-unstable`)
+                environment.systemPackages = with pkgs; [
+                  inputs.nixpkgs-wayland.packages.${system}.waybar
+                ];
+              };
             })
           ] ++ (map (n: "${./modules}/${n}")
             (builtins.attrNames (builtins.readDir ./modules)));

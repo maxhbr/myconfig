@@ -11,6 +11,7 @@ in {
         type = with types; listOf package;
         default = with pkgs; [
           xwayland
+          xorg.xwininfo # to find out if somenthing runs under xwayland
           ## Terminal
           foot
           (writeShellScriptBin "tfoot" ''
@@ -75,6 +76,8 @@ in {
           nomacs
           dex # for autostarting
           gammastep
+          wev # Wayland event viewer
+          wayvnc
         ];
         # defaultText = literalExpression ''
         #   with pkgs; [ ];

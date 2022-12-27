@@ -1,5 +1,8 @@
 # Copyright 2022 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
+
+# todo:
+#  - https://github.com/jordanisaacs/dwl-flake and https://github.com/jordanisaacs/dotfiles
 { pkgs, config, lib, ... }:
 let
   cfg = config.myconfig;
@@ -43,11 +46,9 @@ in {
     (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.dwl.enable) {
       home-manager.sharedModules =
         [{ home.packages = with pkgs; [ dwlPackage ]; }];
-      myconfig.desktop.wayland.greetdSettings = {
-        dwl_session = {
-          command = "${dwlPackage}/bin/dwl";
-          user = "mhuber";
-        };
+      services.xserver.windowManager.session = lib.singleton {
+        name = "dwl";
+        start = "${dwlPackage}/bin/dwl";
       };
     });
 }

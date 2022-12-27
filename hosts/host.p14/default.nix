@@ -59,6 +59,8 @@
           labwc.enable = true;
           kde.enable = true;
           # gnome.enable = true; # konflicts with sway
+          # dwl.enable = true;
+          vivarium.enable = true;
 
           # dead or buggy:
           # hikari.enable = true;
