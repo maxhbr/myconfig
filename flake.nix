@@ -13,7 +13,7 @@
     rel2111.url = "github:nixos/nixpkgs/release-21.11";
     rel2205.url = "github:nixos/nixpkgs/release-22.05";
 
-    nixpkgs-wayland  = { url = "github:nix-community/nixpkgs-wayland"; };
+    nixpkgs-wayland = { url = "github:nix-community/nixpkgs-wayland"; };
     # only needed if you use as a package set:
     nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
     nixpkgs-wayland.inputs.master.follows = "master";
@@ -178,11 +178,7 @@
                 })
               ];
             })
-            ({ pkgs, ... }: {
-              nixpkgs.overlays = [
-                inputs.vivarium.overlay
-              ];
-            })
+            ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.vivarium.overlay ]; })
             inputs.my-wallpapers.nixosModule
             inputs.myfish.nixosModule
 

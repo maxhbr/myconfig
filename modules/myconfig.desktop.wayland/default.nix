@@ -1,82 +1,93 @@
 # Copyright 2022 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
-let
-  cfg = config.myconfig;
+let cfg = config.myconfig;
 in {
   options.myconfig = with lib; {
     desktop.wayland = {
       commonPackages = mkOption {
         type = with types; listOf package;
-        default = with pkgs; [
-          xwayland
-          xorg.xwininfo # to find out if somenthing runs under xwayland
-          ## Terminal
-          foot
-          (writeShellScriptBin "tfoot" ''
-            exec ${foot}/bin/foot ${tmux}/bin/tmux
-          '')
-          (writeShellScriptBin "tfoot-reattach" ''
-            ${tmux}/bin/tmux ls |
-                ${gnugrep}/bin/grep -v '(attached)' |
-                cut -f 1 -d ":" |
-                while read SESSION; do
-                    (set -x;
-                    ${foot}/bin/foot ${tmux}/bin/tmux attach -t "$SESSION" & disown)
-                done
-          '')
-          # https://github.com/riverwm/river/wiki/Recommended-Software
-          ## Output configuration
-          wlopm
-          way-displays
-          wdisplays
-          wlr-randr
-          ## statusbar
-          waybar
-          ## Program Launchers
-          wofi
-          bemenu
-          fuzzel
-          ## Screen Lockers
-          swaylock
-          ## Idle Management
-          swayidle
-          (writeShellScriptBin "myswayidle" ''
-            set -x
-            color=777777
-            exec ${swayidle}/bin/swayidle -w \
-            	timeout 300 '${swaylock}/bin/swaylock -f -c '"$color" \
-            	before-sleep '${swaylock}/bin/swaylock -f -c '"$color"
-          '')
-          ## Other
-          wayshot
-          wf-recorder
-          slurp
-          grim
-          (writeShellScriptBin "grim-region" ''
-            output_dir="$HOME/_screenshots"
-            old_dir="$output_dir/_old"
-            mkdir -p "$output_dir"
-            mkdir -p "$old_dir"
+        default = with pkgs;
+          [
+            xwayland
+            xorg.xwininfo # to find out if somenthing runs under xwayland
+            ## Terminal
+            foot
+            (writeShellScriptBin "tfoot" ''
+              exec ${foot}/bin/foot ${tmux}/bin/tmux
+            '')
+            (let
+              tmux-scratch = writeShellScriptBin "tmux-scratch" ''
+                NAME="tmux-scratch"
+                tmux has-session -t $NAME 2>/dev/null
+                [[ "$?" -eq 1 ]] && tmux new-session -d -s $NAME
+                tmux attach-session -t $NAME
+              '';
+            in writeShellScriptBin "foot-scratch" ''
+              exec ${foot}/bin/foot \
+                -T tmux-scratch \
+                -a tmux-scratch \
+                ${tmux-scratch}/bin/tmux-scratch
+            '')
+            (writeShellScriptBin "tfoot-reattach" ''
+              ${tmux}/bin/tmux ls |
+                  ${gnugrep}/bin/grep -v '(attached)' |
+                  cut -f 1 -d ":" |
+                  while read SESSION; do
+                      (set -x;
+                      ${foot}/bin/foot ${tmux}/bin/tmux attach -t "$SESSION" & disown)
+                  done
+            '')
+            # https://github.com/riverwm/river/wiki/Recommended-Software
+            ## Output configuration
+            wlopm
+            way-displays
+            wdisplays
+            wlr-randr
+            ## statusbar
+            waybar
+            ## Program Launchers
+            wofi
+            bemenu
+            fuzzel
+            ## Screen Lockers
+            swaylock
+            ## Idle Management
+            swayidle
+            (writeShellScriptBin "myswayidle" ''
+              set -x
+              color=777777
+              exec ${swayidle}/bin/swayidle -w \
+              	timeout 300 '${swaylock}/bin/swaylock -f -c '"$color" \
+              	before-sleep '${swaylock}/bin/swaylock -f -c '"$color"
+            '')
+            ## Other
+            wayshot
+            wf-recorder
+            slurp
+            grim
+            (writeShellScriptBin "grim-region" ''
+              output_dir="$HOME/_screenshots"
+              old_dir="$output_dir/_old"
+              mkdir -p "$output_dir"
+              mkdir -p "$old_dir"
 
-            echo "## clean up old screenshots ..."
-            find "$output_dir" -maxdepth 1 -mtime +10 -type f -print -exec mv {} "$old_dir" \;
+              echo "## clean up old screenshots ..."
+              find "$output_dir" -maxdepth 1 -mtime +10 -type f -print -exec mv {} "$old_dir" \;
 
-            echo "## take screenshot ..."
-            GRIM_DEFAULT_DIR="$output_dir" ${grim}/bin/grim \
-              -g "$(${slurp}/bin/slurp)" \
-              "$output_dir/$(date +%Y-%m-%d_%H-%M-%S).png"
-          '')
-          wob # A lightweight overlay bar for Wayland
-          wl-clipboard
-          # xdg-desktop-portal-wlr
-          nomacs
-          dex # for autostarting
-          gammastep
-          wev # Wayland event viewer
-        ] ++ [
-          wayvnc
-        ];
+              echo "## take screenshot ..."
+              GRIM_DEFAULT_DIR="$output_dir" ${grim}/bin/grim \
+                -g "$(${slurp}/bin/slurp)" \
+                "$output_dir/$(date +%Y-%m-%d_%H-%M-%S).png"
+            '')
+            wob # A lightweight overlay bar for Wayland
+            wl-clipboard
+            # xdg-desktop-portal-wlr
+            nomacs
+            dex # for autostarting
+            gammastep
+            wev # Wayland event viewer
+          ] ++ [ wayvnc ];
         # defaultText = literalExpression ''
         #   with pkgs; [ ];
         # '';
@@ -97,22 +108,21 @@ in {
           The desktop environment to use
         '';
       };
-      greetdSettings = let
-          settingsFormat = pkgs.formats.toml { };
-        in mkOption {
-          type = settingsFormat.type;
-          example = literalExpression ''
-            {
-              sway = {
-                command = "''${pkgs.greetd.greetd}/bin/agreety --cmd sway";
-              };
-            }
-          '';
-          description = lib.mdDoc ''
-            greetd configuration ([documentation](https://man.sr.ht/~kennylevinsen/greetd/))
-            as a Nix attribute set.
-          '';
-        };
+      greetdSettings = let settingsFormat = pkgs.formats.toml { };
+      in mkOption {
+        type = settingsFormat.type;
+        example = literalExpression ''
+          {
+            sway = {
+              command = "''${pkgs.greetd.greetd}/bin/agreety --cmd sway";
+            };
+          }
+        '';
+        description = lib.mdDoc ''
+          greetd configuration ([documentation](https://man.sr.ht/~kennylevinsen/greetd/))
+          as a Nix attribute set.
+        '';
+      };
     };
   };
 

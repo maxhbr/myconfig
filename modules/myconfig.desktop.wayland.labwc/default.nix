@@ -1,8 +1,9 @@
 # Copyright 2022 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }:
-let cfg = config.myconfig;
-    pkg = pkgs.master.labwc;
+let
+  cfg = config.myconfig;
+  pkg = pkgs.master.labwc;
 in {
   options.myconfig = with lib; {
     desktop.wayland.labwc = { enable = mkEnableOption "labwc"; };
@@ -37,21 +38,21 @@ in {
             }
           '';
           "labwc/menu.xml".text = ''
-<?xml version="1.0" ?>
+            <?xml version="1.0" ?>
 
-<openbox_menu>
-<menu id="root-menu" label="">
-  <item label="Web browser"><action name="Execute" command="firefox" /></item>
-  <item label="Terminal"><action name="Execute" command="tfoot" /></item>
-  <item label="re-Terminal"><action name="Execute" command="tfoot-reattach" /></item>
-  <item label="Screenshot"><action name="Execute" command="grim-region" /></item>
-  <item label="Displays"><action name="Execute" command="${pkgs.wdisplays}/bin/wdisplays" /></item>
-  <menu id="labwc-menu" label="labwc">
-    <item label="Reconfigure"><action name="Reconfigure" /></item>
-    <item label="Exit"><action name="Exit" /></item>
-  </menu>
-</menu>
-</openbox_menu>
+            <openbox_menu>
+            <menu id="root-menu" label="">
+              <item label="Web browser"><action name="Execute" command="firefox" /></item>
+              <item label="Terminal"><action name="Execute" command="tfoot" /></item>
+              <item label="re-Terminal"><action name="Execute" command="tfoot-reattach" /></item>
+              <item label="Screenshot"><action name="Execute" command="grim-region" /></item>
+              <item label="Displays"><action name="Execute" command="${pkgs.wdisplays}/bin/wdisplays" /></item>
+              <menu id="labwc-menu" label="labwc">
+                <item label="Reconfigure"><action name="Reconfigure" /></item>
+                <item label="Exit"><action name="Exit" /></item>
+              </menu>
+            </menu>
+            </openbox_menu>
           '';
         };
         home.packages = [ pkg ];

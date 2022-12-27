@@ -43,13 +43,13 @@
             format = "{icon}";
             icon-size = 14;
             icon-theme = "Numix-Circle";
-            tooltip-format = "{title}\n{name}\n{short_state}";
+            tooltip-format = ''
+              {title}
+              {name}
+              {short_state}'';
             on-click = "activate";
             on-click-middle = "close";
-            ignore-list = [
-              "Alacritty"
-              "Foot" "foot" "tfoot"
-            ];
+            ignore-list = [ "Alacritty" "Foot" "foot" "tfoot" ];
             app_ids-mapping = {
               "firefoxdeveloperedition" = "firefox-developer-edition";
             };

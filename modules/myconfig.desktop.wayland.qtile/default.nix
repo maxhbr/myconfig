@@ -39,6 +39,9 @@ let
       -b wayland \
       -l DEBUG
   '';
+  reloadQtile = pkgs.writeShellScriptBin "qtile-reload" ''
+    ${qtilePackage}/bin/qtile shell -c 'reload_config()'
+  '';
 in {
   options.myconfig = with lib; {
     desktop.wayland.qtile = { enable = mkEnableOption "qtile"; };
@@ -47,16 +50,11 @@ in {
     (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.qtile.enable) {
       home-manager.sharedModules = [{
         xdg.configFile = { "qtile/config.py".source = ./qtile/config.py; };
-        home.packages = with pkgs; [ qtilePackage startQtile ];
+        home.packages = with pkgs; [ qtilePackage startQtile reloadQtile ];
       }];
 
-      #services.xserver.windowManager.qtile = {
-      #  enable = true;
-      #  # package = qtilePackage;
-      #};
-      #services.xserver.displayManager.sessionPackages = [
-      #  qtilePackage
-      #];
+      services.xserver.windowManager.qtile.package = qtilePackage;
+      services.xserver.displayManager.sessionPackages = [ qtilePackage ];
       myconfig.desktop.wayland.greetdSettings = {
         qtile_session = {
           command = "${startQtile}/bin/start-qtile";

@@ -35,6 +35,9 @@ let
     withGtkWrapper = true;
     extraOptions = [ ];
   };
+  riverinit = pkgs.writeShellScriptBin "river-init" ''
+    $HOME/.config/river/init &disown
+  '';
 in {
   options.myconfig = with lib; {
     desktop.wayland.river = { enable = mkEnableOption "river"; };
@@ -49,7 +52,7 @@ in {
           "river/kile-layout".source = ./river/kile-layout;
           "river/kile-layout".executable = true;
         };
-        home.packages = with pkgs; [ riverPackage ];
+        home.packages = with pkgs; [ riverPackage riverinit ];
       }];
       myconfig.desktop.wayland.greetdSettings = {
         river_session = {

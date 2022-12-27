@@ -48,14 +48,14 @@
         enable = true;
         wayland = {
           enable = true;
-          desktop = "river";
+          desktop = "qtile";
           sway.enable = true;
+          river.enable = true;
+          qtile.enable = true;
 
           #experimental:
-          river.enable = true;
           hyprland.enable = true;
           newm.enable = true;
-          qtile.enable = true;
           labwc.enable = true;
           kde.enable = true;
           # gnome.enable = true; # konflicts with sway

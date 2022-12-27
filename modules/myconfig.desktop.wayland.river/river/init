@@ -10,10 +10,10 @@
 
 # Note: the "Super" modifier is also known as Logo, GUI, Windows, Mod4, etc.
 
-if [[ -f /tmp/river.log ]]; then
-    mv /tmp/river.${XDG_VTNR}.${USER}.log /tmp/river.${XDG_VTNR}.${USER}.log.1
-fi
-exec &> >(tee /tmp/river.${XDG_VTNR}.${USER}.log)
+logfile=/tmp/river.${XDG_VTNR}.${USER}.$(date +%F).log
+exec &> >(tee -a "$logfile")
+date
+set -x
 
 mod=Super
 
@@ -23,16 +23,17 @@ riverctl map normal $mod+Control Return spawn foot
 riverctl map normal $mod+Shift+Control Return spawn tfoot-reattach
 riverctl map normal $mod P spawn "wofi --show run"
 riverctl map normal $mod R spawn fuzzel
+riverctl map normal None XF86Display grim-region
 
 # $mod+Q to close the focused view
 riverctl map normal $mod Q close
 riverctl map normal $mod+Shift C close
 
 # $mod+Shift+E to exit river
-riverctl map normal $mod+Shift E exit
+riverctl map normal $mod+Shift Q exit
 
 # lock screen
-riverctl map normal $mod+Shift Y myphyslock
+riverctl map normal $mod+Shift Y "swaylock -f -c 000000"
 
 # $mod+J and $mod+K to focus the next/previous view in the layout stack
 riverctl map normal $mod J focus-view next
@@ -115,8 +116,7 @@ riverctl map passthrough $mod F11 enter-mode normal
 
 # Various media key mapping examples for both normal and locked mode which do
 # not have a modifier
-for mode in normal locked
-do
+for mode in normal locked; do
     # # Control pulse audio volume with pamixer (https://github.com/cdemoulins/pamixer)
     # riverctl map $mode None XF86AudioRaiseVolume  spawn 'pamixer -i 5'
     # riverctl map $mode None XF86AudioLowerVolume  spawn 'pamixer -d 5'
@@ -125,6 +125,17 @@ do
     # Control screen backlight brightness with light (https://github.com/haikarainen/light)
     riverctl map $mode None XF86MonBrightnessUp   spawn 'light -A 5'
     riverctl map $mode None XF86MonBrightnessDown spawn 'light -U 5'
+
+    # Control MPRIS aware media players with playerctl (https://github.com/altdesktop/playerctl)
+    riverctl map $mode None XF86AudioMedia spawn 'playerctl play-pause'
+    riverctl map $mode None XF86AudioPlay spawn 'playerctl play-pause'
+    riverctl map $mode None XF86AudioPrev spawn 'playerctl previous'
+    riverctl map $mode None XF86AudioNext spawn 'playerctl next'
+
+    riverctl map $mode None XF86Go spawn 'playerctl play'
+    riverctl map $mode None Cancel spawn 'playerctl pause'
+    # riverctl map $mode None XF86Messenger spawn 'playerctl previous'
+    # riverctl map $mode None XF86Favorites spawn 'playerctl next'
 done
 
 ###############################################################################
@@ -158,16 +169,18 @@ riverctl set-repeat 50 300
 
 # Make certain views start floating
 riverctl float-filter-add app-id float
-riverctl float-filter-add "popup"
-# riverctl float-filter-add title "popup title with spaces"
+riverctl float-filter-add app-id "popup"
+riverctl float-filter-add title "(?:Open|Save) (?:File|Folder|As)"
+riverctl float-filter-add app-id "pavucontrol"
 
-# # Set app-ids and titles of views which should use client side decorations
-# riverctl csd-filter-add app-id "gedit"
+# Set app-ids and titles of views which should use client side decorations
+riverctl csd-filter-add app-id "gedit"
 
 ###############################################################################
 
 riverctl spawn "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=river"
 riverctl spawn "systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=river"
+riverctl spawn 'playerctld daemon'
 
 pkill waybar ; waybar > /tmp/river.${XDG_VTNR}.${USER}.waybar.log 2>&1 &disown
 
@@ -263,7 +276,7 @@ case "${1:-rivercarro}" in
       # Tell river to use kile as its layout generator
       riverctl default-layout kile
 
-      source ~/.config/river/kile-layout
+      source "$HOME/.config/river/kile-layout"
 
       for output in "eDP-1"; do
           case $output in

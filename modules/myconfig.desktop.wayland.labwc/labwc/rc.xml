@@ -153,7 +153,7 @@
     <keybind key="W-7"> <action name="GoToDesktop"> <to>7</to> </action> </keybind>
     <keybind key="W-8"> <action name="GoToDesktop"> <to>8</to> </action> </keybind>
     <keybind key="W-9"> <action name="GoToDesktop"> <to>9</to> </action> </keybind>
-    <keybind key="W-0"> <action name="GoToDesktop"> <to>0</to> </action> </keybind>
+    <keybind key="W-0"> <action name="GoToDesktop"> <to>10</to> </action> </keybind>
     <!-- Move application to specific desktop -->
     <keybind key="S-W-1"> <action name="SendToDesktop"> <to>1</to> </action> </keybind>
     <keybind key="S-W-2"> <action name="SendToDesktop"> <to>2</to> </action> </keybind>
@@ -164,7 +164,7 @@
     <keybind key="S-W-7"> <action name="SendToDesktop"> <to>7</to> </action> </keybind>
     <keybind key="S-W-8"> <action name="SendToDesktop"> <to>8</to> </action> </keybind>
     <keybind key="S-W-9"> <action name="SendToDesktop"> <to>9</to> </action> </keybind>
-    <keybind key="S-W-0"> <action name="SendToDesktop"> <to>0</to> </action> </keybind>
+    <keybind key="S-W-0"> <action name="SendToDesktop"> <to>10</to> </action> </keybind>
     <keybind key="C-W-1"> <action name="SendToDesktop"> <to>1</to> </action> </keybind>
     <keybind key="C-W-2"> <action name="SendToDesktop"> <to>2</to> </action> </keybind>
     <keybind key="C-W-3"> <action name="SendToDesktop"> <to>3</to> </action> </keybind>
@@ -174,7 +174,7 @@
     <keybind key="C-W-7"> <action name="SendToDesktop"> <to>7</to> </action> </keybind>
     <keybind key="C-W-8"> <action name="SendToDesktop"> <to>8</to> </action> </keybind>
     <keybind key="C-W-9"> <action name="SendToDesktop"> <to>9</to> </action> </keybind>
-    <keybind key="C-W-0"> <action name="SendToDesktop"> <to>0</to> </action> </keybind>
+    <keybind key="C-W-0"> <action name="SendToDesktop"> <to>10</to> </action> </keybind>
   </keyboard>
 
   <!--

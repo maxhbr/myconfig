@@ -81,7 +81,7 @@ in {
           chooser_cmd = "${pkgs.slurp}/bin/slurp -f %o -or";
         };
       # gtk portal needed to make gtk apps happy
-      extraPortals = 
+      extraPortals =
         let gnome = config.services.xserver.desktopManager.gnome.enable;
         in [ pkgs.xdg-desktop-portal-wlr ]
         ++ lib.optional (!gnome) pkgs.xdg-desktop-portal-gtk;

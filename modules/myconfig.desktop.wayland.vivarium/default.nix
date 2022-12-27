@@ -9,8 +9,8 @@ in {
   options.myconfig = with lib; {
     desktop.wayland.vivarium = { enable = mkEnableOption "vivarium"; };
   };
-  config =
-    (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.vivarium.enable) {
+  config = (lib.mkIf
+    (cfg.desktop.wayland.enable && cfg.desktop.wayland.vivarium.enable) {
       home-manager.sharedModules = [{
         xdg.configFile = { "vivarium/config.toml".source = ./config.toml; };
         home.packages = with pkgs; [ pkg ];

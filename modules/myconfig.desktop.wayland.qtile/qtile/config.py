@@ -4,11 +4,11 @@ import re
 import socket
 import subprocess
 from libqtile import qtile, layout, bar, widget, hook
-from libqtile.config import Click, Drag, Group, KeyChord, Key, Match, Screen
+from libqtile.config import Click, Drag, Group, KeyChord, ScratchPad, DropDown, Key, Match, Screen
 from libqtile.command import lazy
 from libqtile.lazy import lazy
-from libqtile.dgroups import simple_key_binder
 from typing import List  # noqa: F401
+
 
 mod = "mod4"              # Sets mod key to SUPER/WINDOWS
 if qtile.core.name == "x11":
@@ -16,6 +16,7 @@ if qtile.core.name == "x11":
 elif qtile.core.name == "wayland":
     myTerm = "foot"
 myBrowser = "qutebrowser" # My browser of choice
+myLauncher = "wofi --show run"
 
 
 def set_keymap_from_layout(qtile):
@@ -28,255 +29,270 @@ def set_keymap_from_layout(qtile):
     except:
         print("failed to set layout: with qtile.cmd_set_keymap") 
 
-def setupKeys():
-    return [
-         ### The essentials
-         Key([mod], "Return",
-             lazy.spawn(myTerm),
-             desc='Launches My Terminal'
-             ),
-         Key([mod, "shift"], "Return",
-             lazy.spawn("dm-run"),
-             desc='Run Launcher'
-             ),
-         Key([mod], "b",
-             lazy.spawn(myBrowser),
-             desc='Qutebrowser'
-             ),
-         # Key([mod], "/",
-         #     lazy.spawn("dtos-help"),
-         #     desc='DTOS Help'
-         #     ),
-         Key([mod], "Tab",
-             lazy.next_layout(),
-             desc='Toggle through layouts'
-             ),
-         Key([mod, "shift"], "c",
-             lazy.window.kill(),
-             desc='Kill active window'
-             ),
-         Key([mod, "shift"], "r",
-             lazy.restart(),
-             desc='Restart Qtile'
-             ),
-         Key([mod, "shift"], "q",
-             lazy.shutdown(),
-             desc='Shutdown Qtile'
-             ),
-         Key(["control", "shift"], "e",
-             lazy.spawn("emacsclient -c -a emacs"),
-             desc='Doom Emacs'
-             ),
-         ### Switch focus to specific monitor (out of three)
-         Key([mod], "w",
-             lazy.to_screen(0),
-             desc='Keyboard focus to monitor 1'
-             ),
-         Key([mod], "e",
-             lazy.to_screen(1),
-             desc='Keyboard focus to monitor 2'
-             ),
-         Key([mod], "r",
-             lazy.to_screen(2),
-             desc='Keyboard focus to monitor 3'
-             ),
-         ### Switch focus of monitors
-         Key([mod], "period",
-             lazy.next_screen(),
-             desc='Move focus to next monitor'
-             ),
-         Key([mod], "comma",
-             lazy.prev_screen(),
-             desc='Move focus to prev monitor'
-             ),
-         ### Treetab controls
-          Key([mod, "shift"], "h",
-             lazy.layout.move_left(),
-             desc='Move up a section in treetab'
-             ),
-         Key([mod, "shift"], "l",
-             lazy.layout.move_right(),
-             desc='Move down a section in treetab'
-             ),
-         ### Window controls
-         Key([mod], "j",
-             lazy.layout.down(),
-             desc='Move focus down in current stack pane'
-             ),
-         Key([mod], "k",
-             lazy.layout.up(),
-             desc='Move focus up in current stack pane'
-             ),
-         Key([mod, "shift"], "j",
-             lazy.layout.shuffle_down(),
-             lazy.layout.section_down(),
-             desc='Move windows down in current stack'
-             ),
-         Key([mod, "shift"], "k",
-             lazy.layout.shuffle_up(),
-             lazy.layout.section_up(),
-             desc='Move windows up in current stack'
-             ),
-         Key([mod], "h",
-             lazy.layout.shrink(),
-             lazy.layout.decrease_nmaster(),
-             desc='Shrink window (MonadTall), decrease number in master pane (Tile)'
-             ),
-         Key([mod], "l",
-             lazy.layout.grow(),
-             lazy.layout.increase_nmaster(),
-             desc='Expand window (MonadTall), increase number in master pane (Tile)'
-             ),
-         Key([mod], "n",
-             lazy.layout.normalize(),
-             desc='normalize window size ratios'
-             ),
-         Key([mod], "m",
-             lazy.layout.maximize(),
-             desc='toggle window between minimum and maximum sizes'
-             ),
-         Key([mod, "shift"], "f",
-             lazy.window.toggle_floating(),
-             desc='toggle floating'
-             ),
-         Key([mod], "f",
-             lazy.window.toggle_fullscreen(),
-             desc='toggle fullscreen'
-             ),
-         ### Stack controls
-         Key([mod, "shift"], "Tab",
-             lazy.layout.rotate(),
-             lazy.layout.flip(),
-             desc='Switch which side main pane occupies (XmonadTall)'
-             ),
-          Key([mod], "space",
-             lazy.layout.next(),
-             desc='Switch window focus to other pane(s) of stack'
-             ),
-         Key([mod, "shift"], "space",
-             lazy.layout.toggle_split(),
-             desc='Toggle between split and unsplit sides of stack'
-             ),
-         # # Emacs programs launched using the key chord CTRL+e followed by 'key'
-         # KeyChord([mod],"e", [
-         #     Key([], "e",
-         #         lazy.spawn("emacsclient -c -a 'emacs'"),
-         #         desc='Emacsclient Dashboard'
-         #         ),
-         #     Key([], "a",
-         #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(emms)' --eval '(emms-play-directory-tree \"~/Music/\")'"),
-         #         desc='Emacsclient EMMS (music)'
-         #         ),
-         #     Key([], "b",
-         #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(ibuffer)'"),
-         #         desc='Emacsclient Ibuffer'
-         #         ),
-         #     Key([], "d",
-         #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(dired nil)'"),
-         #         desc='Emacsclient Dired'
-         #         ),
-         #     Key([], "i",
-         #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(erc)'"),
-         #         desc='Emacsclient ERC (IRC)'
-         #         ),
-         #     Key([], "n",
-         #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(elfeed)'"),
-         #         desc='Emacsclient Elfeed (RSS)'
-         #         ),
-         #     Key([], "s",
-         #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(eshell)'"),
-         #         desc='Emacsclient Eshell'
-         #         ),
-         #     Key([], "v",
-         #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(+vterm/here nil)'"),
-         #         desc='Emacsclient Vterm'
-         #         ),
-         #     Key([], "w",
-         #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(doom/window-maximize-buffer(eww \"distro.tube\"))'"),
-         #         desc='Emacsclient EWW Browser'
-         #         )
-         # ]),
-         # # Dmenu scripts launched using the key chord SUPER+p followed by 'key'
-         # KeyChord([mod], "p", [
-         #     Key([], "h",
-         #         lazy.spawn("dm-hub"),
-         #         desc='List all dmscripts'
-         #         ),
-         #     Key([], "a",
-         #         lazy.spawn("dm-sounds"),
-         #         desc='Choose ambient sound'
-         #         ),
-         #     Key([], "b",
-         #         lazy.spawn("dm-setbg"),
-         #         desc='Set background'
-         #         ),
-         #     Key([], "c",
-         #         lazy.spawn("dtos-colorscheme"),
-         #         desc='Choose color scheme'
-         #         ),
-         #     Key([], "e",
-         #         lazy.spawn("dm-confedit"),
-         #         desc='Choose a config file to edit'
-         #         ),
-         #     Key([], "i",
-         #         lazy.spawn("dm-maim"),
-         #         desc='Take a screenshot'
-         #         ),
-         #     Key([], "k",
-         #         lazy.spawn("dm-kill"),
-         #         desc='Kill processes '
-         #         ),
-         #     Key([], "m",
-         #         lazy.spawn("dm-man"),
-         #         desc='View manpages'
-         #         ),
-         #     Key([], "n",
-         #         lazy.spawn("dm-note"),
-         #         desc='Store and copy notes'
-         #         ),
-         #     Key([], "o",
-         #         lazy.spawn("dm-bookman"),
-         #         desc='Browser bookmarks'
-         #         ),
-         #     Key([], "p",
-         #         lazy.spawn("passmenu -p \"Pass: \""),
-         #         desc='Logout menu'
-         #         ),
-         #     Key([], "q",
-         #         lazy.spawn("dm-logout"),
-         #         desc='Logout menu'
-         #         ),
-         #     Key([], "r",
-         #         lazy.spawn("dm-radio"),
-         #         desc='Listen to online radio'
-         #         ),
-         #     Key([], "s",
-         #         lazy.spawn("dm-websearch"),
-         #         desc='Search various engines'
-         #         ),
-         #     Key([], "t",
-         #         lazy.spawn("dm-translate"),
-         #         desc='Translate text'
-         #         )
-         # ])
+keys = [
+     ### The essentials
+     Key([mod], "Return",
+         lazy.spawn(myTerm),
+         desc='Launches My Terminal'
+         ),
+     Key([mod, "shift"], "Return",
+         lazy.spawn(myTerm),
+         desc='Launches My Terminal'
+         ),
+     Key([mod], "p",
+         lazy.spawn(myLauncher),
+         desc='launcher'
+         ),
+     Key([mod], "space",
+         lazy.next_layout(),
+         desc='Toggle through layouts'
+         ),
+     Key([mod, "shift"], "c",
+         lazy.window.kill(),
+         desc='Kill active window'
+         ),
+     Key([mod, "shift"], "r",
+         lazy.restart(),
+         desc='Restart Qtile'
+         ),
+     Key([mod, "shift"], "q",
+         lazy.shutdown(),
+         desc='Shutdown Qtile'
+         ),
+     Key(["control", "shift"], "e",
+         lazy.spawn("emacsclient -c -a emacs"),
+         desc='Doom Emacs'
+         ),
+     ### Switch focus to specific monitor (out of three)
+     Key([mod], "w",
+         lazy.to_screen(0),
+         desc='Keyboard focus to monitor 1'
+         ),
+     Key([mod], "e",
+         lazy.to_screen(1),
+         desc='Keyboard focus to monitor 2'
+         ),
+     Key([mod], "r",
+         lazy.to_screen(2),
+         desc='Keyboard focus to monitor 3'
+         ),
+     ### Switch focus of monitors
+     Key([mod], "period",
+         lazy.next_screen(),
+         desc='Move focus to next monitor'
+         ),
+     Key([mod], "comma",
+         lazy.prev_screen(),
+         desc='Move focus to prev monitor'
+         ),
+     ### Treetab controls
+      Key([mod, "shift"], "h",
+         lazy.layout.move_left(),
+         desc='Move up a section in treetab'
+         ),
+     Key([mod, "shift"], "l",
+         lazy.layout.move_right(),
+         desc='Move down a section in treetab'
+         ),
+     ### Window controls
+     Key([mod], "j",
+         lazy.layout.down(),
+         desc='Move focus down in current stack pane'
+         ),
+     Key([mod], "k",
+         lazy.layout.up(),
+         desc='Move focus up in current stack pane'
+         ),
+     Key([mod, "shift"], "j",
+         lazy.layout.shuffle_down(),
+         lazy.layout.section_down(),
+         desc='Move windows down in current stack'
+         ),
+     Key([mod, "shift"], "k",
+         lazy.layout.shuffle_up(),
+         lazy.layout.section_up(),
+         desc='Move windows up in current stack'
+         ),
+     Key([mod], "h",
+         lazy.layout.shrink(),
+         lazy.layout.decrease_nmaster(),
+         desc='Shrink window (MonadTall), decrease number in master pane (Tile)'
+         ),
+     Key([mod], "l",
+         lazy.layout.grow(),
+         lazy.layout.increase_nmaster(),
+         desc='Expand window (MonadTall), increase number in master pane (Tile)'
+         ),
+     Key([mod], "n",
+         lazy.layout.normalize(),
+         desc='normalize window size ratios'
+         ),
+     Key([mod], "m",
+         lazy.layout.maximize(),
+         desc='toggle window between minimum and maximum sizes'
+         ),
+     Key([mod, "shift"], "f",
+         lazy.window.toggle_floating(),
+         desc='toggle floating'
+         ),
+     Key([mod], "f",
+         lazy.window.toggle_fullscreen(),
+         desc='toggle fullscreen'
+         ),
+     ### Stack controls
+     Key([mod, "shift"], "space",
+         lazy.layout.rotate(),
+         lazy.layout.flip(),
+         desc='Switch which side main pane occupies (XmonadTall)'
+         ),
+      Key([mod], "Tab",
+         lazy.layout.next(),
+         desc='Switch window focus to other pane(s) of stack'
+         ),
+     Key([mod, "shift"], "Tab",
+         lazy.layout.toggle_split(),
+         desc='Toggle between split and unsplit sides of stack'
+         ),
+     # # Emacs programs launched using the key chord CTRL+e followed by 'key'
+     # KeyChord([mod],"e", [
+     #     Key([], "e",
+     #         lazy.spawn("emacsclient -c -a 'emacs'"),
+     #         desc='Emacsclient Dashboard'
+     #         ),
+     #     Key([], "a",
+     #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(emms)' --eval '(emms-play-directory-tree \"~/Music/\")'"),
+     #         desc='Emacsclient EMMS (music)'
+     #         ),
+     #     Key([], "b",
+     #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(ibuffer)'"),
+     #         desc='Emacsclient Ibuffer'
+     #         ),
+     #     Key([], "d",
+     #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(dired nil)'"),
+     #         desc='Emacsclient Dired'
+     #         ),
+     #     Key([], "i",
+     #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(erc)'"),
+     #         desc='Emacsclient ERC (IRC)'
+     #         ),
+     #     Key([], "n",
+     #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(elfeed)'"),
+     #         desc='Emacsclient Elfeed (RSS)'
+     #         ),
+     #     Key([], "s",
+     #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(eshell)'"),
+     #         desc='Emacsclient Eshell'
+     #         ),
+     #     Key([], "v",
+     #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(+vterm/here nil)'"),
+     #         desc='Emacsclient Vterm'
+     #         ),
+     #     Key([], "w",
+     #         lazy.spawn("emacsclient -c -a 'emacs' --eval '(doom/window-maximize-buffer(eww \"distro.tube\"))'"),
+     #         desc='Emacsclient EWW Browser'
+     #         )
+     # ]),
+     # # Dmenu scripts launched using the key chord SUPER+p followed by 'key'
+     # KeyChord([mod], "p", [
+     #     Key([], "h",
+     #         lazy.spawn("dm-hub"),
+     #         desc='List all dmscripts'
+     #         ),
+     #     Key([], "a",
+     #         lazy.spawn("dm-sounds"),
+     #         desc='Choose ambient sound'
+     #         ),
+     #     Key([], "b",
+     #         lazy.spawn("dm-setbg"),
+     #         desc='Set background'
+     #         ),
+     #     Key([], "c",
+     #         lazy.spawn("dtos-colorscheme"),
+     #         desc='Choose color scheme'
+     #         ),
+     #     Key([], "e",
+     #         lazy.spawn("dm-confedit"),
+     #         desc='Choose a config file to edit'
+     #         ),
+     #     Key([], "i",
+     #         lazy.spawn("dm-maim"),
+     #         desc='Take a screenshot'
+     #         ),
+     #     Key([], "k",
+     #         lazy.spawn("dm-kill"),
+     #         desc='Kill processes '
+     #         ),
+     #     Key([], "m",
+     #         lazy.spawn("dm-man"),
+     #         desc='View manpages'
+     #         ),
+     #     Key([], "n",
+     #         lazy.spawn("dm-note"),
+     #         desc='Store and copy notes'
+     #         ),
+     #     Key([], "o",
+     #         lazy.spawn("dm-bookman"),
+     #         desc='Browser bookmarks'
+     #         ),
+     #     Key([], "p",
+     #         lazy.spawn("passmenu -p \"Pass: \""),
+     #         desc='Logout menu'
+     #         ),
+     #     Key([], "q",
+     #         lazy.spawn("dm-logout"),
+     #         desc='Logout menu'
+     #         ),
+     #     Key([], "r",
+     #         lazy.spawn("dm-radio"),
+     #         desc='Listen to online radio'
+     #         ),
+     #     Key([], "s",
+     #         lazy.spawn("dm-websearch"),
+     #         desc='Search various engines'
+     #         ),
+     #     Key([], "t",
+     #         lazy.spawn("dm-translate"),
+     #         desc='Translate text'
+     #         )
+     # ])
 ]
 
-groups = [Group("DEV", layout='monadtall'),
-          Group("WWW", layout='monadtall'),
-          Group("SYS", layout='monadtall'),
-          Group("SYS", layout='monadtall'),
-          Group("DOC", layout='monadtall'),
-          Group("VBOX", layout='monadtall'),
-          Group("CHAT", layout='monadtall'),
-          Group("MUS", layout='monadtall'),
-          Group("VID", layout='monadtall'),
-          Group("GFX", layout='floating')]
+group_names = [("%d" % (n+1)) for n in range(9)]
+groups = [Group(group_names[0], layout='monadtall'),
+          Group(group_names[1], layout='monadtall'),
+          Group(group_names[2], layout='monadtall'),
+          Group(group_names[3], layout='monadtall'),
+          Group(group_names[4], layout='monadtall'),
+          Group(group_names[5], layout='monadtall'),
+          Group(group_names[6], layout='monadtall'),
+          Group(group_names[7], layout='monadtall', matches=[Match(wm_class=["Firefox"])]),
+          Group(group_names[8], layout='monadtall'),
+          ScratchPad("scratchpad", [
+            # define a drop down terminal.
+            # it is placed in the upper third of screen by default.
+            DropDown("term", "tfoot", opacity=0.8),
+
+            # define another terminal exclusively for ``qtile shell` at different position
+            DropDown("scratch", "foot-scratch",
+                    x=0.05, y=0.4, width=0.9, height=0.6, opacity=0.9,
+                    on_focus_lost_hide=True),
+
+                    ])
+          ]
+
+keys.append( Key([mod], 'F11', lazy.group['scratchpad'].dropdown_toggle('term')) )
+keys.append( Key([mod], 'minus', lazy.group['scratchpad'].dropdown_toggle('scratch')) )
+
+# see https://docs.qtile.org/en/stable/manual/config/groups.html
+# allow mod3+1 through mod3+0 to bind to groups; if you bind your groups
+# by hand in your config, you don't need to do this.
+from libqtile.dgroups import simple_key_binder
+dgroups_key_binder = simple_key_binder(mod)
 
 
-# Allow MODKEY+[0 through 9] to bind to groups, see https://docs.qtile.org/en/stable/manual/config/groups.html
-# MOD4 + index Number : Switch to Group[index]
-# MOD4 + shift + index Number : Send active window to another Group
-dgroups_key_binder = simple_key_binder("mod4")
+# for i, (name, kwargs) in enumerate(group_names, 1):
+#     keys.append(Key([mod], str(i), lazy.group[name].toscreen()))
+#     keys.append(Key([mod, "shift"], str(i), lazy.window.togroup(name)))
 
 layout_theme = {"border_width": 2,
                 "margin": 8,
@@ -293,7 +309,7 @@ layouts = [
     #layout.Tile(shift_windows=True, **layout_theme),
     #layout.VerticalTile(**layout_theme),
     #layout.Matrix(**layout_theme),
-    #layout.Zoomy(**layout_theme),
+    # layout.Zoomy(**layout_theme),
     layout.MonadTall(**layout_theme),
     layout.Max(**layout_theme),
     layout.Stack(num_stacks=2),
@@ -428,13 +444,13 @@ def init_widgets_list():
                        padding = 0,
                        fontsize = 37
                        ),
-             widget.Net(
-                       interface = "enp5s0",
-                       format = 'Net: {down} ↓↑ {up}',
-                       foreground = colors[1],
-                       background = colors[3],
-                       padding = 5
-                       ),
+             # widget.Net(
+             #           interface = "wlp0s20f3",
+             #           format = 'Net: {down} ↓↑ {up}',
+             #           foreground = colors[1],
+             #           background = colors[3],
+             #           padding = 5
+             #           ),
               widget.TextBox(
                        text = '',
                        font = "Ubuntu Mono",
@@ -443,13 +459,13 @@ def init_widgets_list():
                        padding = 0,
                        fontsize = 37
                        ),
-              widget.ThermalSensor(
-                       foreground = colors[1],
-                       background = colors[4],
-                       threshold = 90,
-                       fmt = 'Temp: {}',
-                       padding = 5
-                       ),
+             #  widget.ThermalSensor(
+             #           foreground = colors[1],
+             #           background = colors[4],
+             #           threshold = 90,
+             #           fmt = 'Temp: {}',
+             #           padding = 5
+             #           ),
               widget.TextBox(
                        text='',
                        font = "Ubuntu Mono",
@@ -466,13 +482,13 @@ def init_widgets_list():
                        padding = 0,
                        fontsize = 37
                        ),
-              widget.Memory(
-                       foreground = colors[1],
-                       background = colors[6],
-                       mouse_callbacks = {'Button1': lambda: qtile.cmd_spawn(myTerm + ' -e htop')},
-                       fmt = 'Mem: {}',
-                       padding = 5
-                       ),
+            #   widget.Memory(
+            #            foreground = colors[1],
+            #            background = colors[6],
+            #            mouse_callbacks = {'Button1': lambda: qtile.cmd_spawn(myTerm + ' -e htop')},
+            #            fmt = 'Mem: {}',
+            #            padding = 5
+            #            ),
               widget.TextBox(
                        text = '',
                        font = "Ubuntu Mono",
@@ -481,12 +497,6 @@ def init_widgets_list():
                        padding = 0,
                        fontsize = 37
                        ),
-              widget.Volume(
-                       foreground = colors[1],
-                       background = colors[7],
-                       fmt = 'Vol: {}',
-                       padding = 5
-                       ),
               widget.TextBox(
                        text = '',
                        font = "Ubuntu Mono",
@@ -494,12 +504,6 @@ def init_widgets_list():
                        foreground = colors[8],
                        padding = 0,
                        fontsize = 37
-                       ),
-              widget.KeyboardLayout(
-                       foreground = colors[1],
-                       background = colors[8],
-                       fmt = 'Keyboard: {}',
-                       padding = 5
                        ),
               widget.TextBox(
                        text = '',
@@ -574,9 +578,7 @@ mouse = [
     Click([mod], "Button2", lazy.window.bring_to_front())
 ]
 
-keys = setupKeys()
-
-dgroups_key_binder = None
+# dgroups_key_binder = None
 dgroups_app_rules = []  # type: list
 follow_mouse_focus = True
 bring_front_click = False

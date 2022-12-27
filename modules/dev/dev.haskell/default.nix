@@ -16,7 +16,7 @@ in {
               hindent
               ghcid
               # packunused
-              brittany
+              # brittany
               # ghc-mod
             ])) # ghc
           hlint

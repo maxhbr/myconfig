@@ -14,6 +14,8 @@
           "!hp" = "https://github.com/nix-community/home-manager/search?q={}";
           "!a" = "https://www.amazon.com/s?k={}";
           "!gh" = "https://github.com/search?o=desc&q={}&s=stars";
+          "!s" =
+            "https://sourcegraph.com/search?patternType=standard&sm=1&q=context:global+{}";
           "!gist" = "https://gist.github.com/search?q={}";
           "!aw" = "https://wiki.archlinux.org/?search={}";
         };
