@@ -3,7 +3,6 @@
 { pkgs, config, lib, ... }:
 let
   cfg = config.myconfig;
-  settingsFormat = pkgs.formats.toml { };
 in {
   options.myconfig = with lib; {
     desktop.wayland = {
@@ -49,8 +48,6 @@ in {
             	timeout 300 '${swaylock}/bin/swaylock -f -c '"$color" \
             	before-sleep '${swaylock}/bin/swaylock -f -c '"$color"
           '')
-          # (writeShellScriptBin "myphyslock"
-          #   "exec '${config.security.wrapperDir}/physlock'")
           ## Other
           wayshot
           wf-recorder
@@ -70,13 +67,14 @@ in {
               -g "$(${slurp}/bin/slurp)" \
               "$output_dir/$(date +%Y-%m-%d_%H-%M-%S).png"
           '')
-          wob
+          wob # A lightweight overlay bar for Wayland
           wl-clipboard
           # xdg-desktop-portal-wlr
           nomacs
           dex # for autostarting
           gammastep
           wev # Wayland event viewer
+        ] ++ [
           wayvnc
         ];
         # defaultText = literalExpression ''
@@ -99,20 +97,22 @@ in {
           The desktop environment to use
         '';
       };
-      greetdSettings = mkOption {
-        type = settingsFormat.type;
-        example = literalExpression ''
-          {
-            sway = {
-              command = "''${pkgs.greetd.greetd}/bin/agreety --cmd sway";
-            };
-          }
-        '';
-        description = lib.mdDoc ''
-          greetd configuration ([documentation](https://man.sr.ht/~kennylevinsen/greetd/))
-          as a Nix attribute set.
-        '';
-      };
+      greetdSettings = let
+          settingsFormat = pkgs.formats.toml { };
+        in mkOption {
+          type = settingsFormat.type;
+          example = literalExpression ''
+            {
+              sway = {
+                command = "''${pkgs.greetd.greetd}/bin/agreety --cmd sway";
+              };
+            }
+          '';
+          description = lib.mdDoc ''
+            greetd configuration ([documentation](https://man.sr.ht/~kennylevinsen/greetd/))
+            as a Nix attribute set.
+          '';
+        };
     };
   };
 

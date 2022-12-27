@@ -26,6 +26,7 @@ in {
             {
               tfoot || ${pkgs.foot}/bin/foot
             } >/dev/null 2>&1 &
+            myswayidle &
           '';
           "labwc/environment".text = ''
             XKB_DEFAULT_LAYOUT=${
