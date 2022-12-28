@@ -4,15 +4,13 @@ import re
 import socket
 import subprocess
 
-from libqtile import qtile, layout, bar, widget, hook
-from libqtile.config import Click, Drag, Group, KeyChord, ScratchPad, DropDown, Key, Match, Screen
-from libqtile.command import lazy
-from libqtile.lazy import lazy
+from libqtile import qtile, hook
 from typing import List  # noqa: F401
 
+from setting.groups import init_groups
 from setting.keys import initial_keys
-from setting.screen import init_screens
 from setting.layout import init_layouts
+from setting.screen import init_screens
 
 mod = "mod4"
 if qtile.core.name == "x11":

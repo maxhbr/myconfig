@@ -1,5 +1,4 @@
-from libqtile.config import Match
-from libqtile import layout
+import os
 
 from libqtile.config import Screen
 from libqtile import widget
@@ -75,11 +74,6 @@ def init_widgets_list():
                        padding = 0,
                        scale = 0.7
                        ),
-              widget.CurrentLayout(
-                       foreground = colors[2],
-                       background = colors[0],
-                       padding = 5
-                       ),
              widget.TextBox(
                        text = '|',
                        font = "Ubuntu Mono",
@@ -93,97 +87,20 @@ def init_widgets_list():
                        background = colors[0],
                        padding = 0
                        ),
-              widget.Systray(
-                       background = colors[0],
-                       padding = 5
-                       ),
               widget.Sep(
                        linewidth = 0,
                        padding = 6,
                        foreground = colors[0],
                        background = colors[0]
                        ),
-              widget.TextBox(
-                       text = '',
-                       font = "Ubuntu Mono",
-                       background = colors[0],
-                       foreground = colors[3],
-                       padding = 0,
-                       fontsize = 37
-                       ),
-             # widget.Net(
-             #           interface = "wlp0s20f3",
-             #           format = 'Net: {down} ↓↑ {up}',
-             #           foreground = colors[1],
-             #           background = colors[3],
-             #           padding = 5
-             #           ),
-              widget.TextBox(
-                       text = '',
-                       font = "Ubuntu Mono",
-                       background = colors[3],
-                       foreground = colors[4],
-                       padding = 0,
-                       fontsize = 37
-                       ),
-             #  widget.ThermalSensor(
-             #           foreground = colors[1],
-             #           background = colors[4],
-             #           threshold = 90,
-             #           fmt = 'Temp: {}',
-             #           padding = 5
-             #           ),
-              widget.TextBox(
-                       text='',
-                       font = "Ubuntu Mono",
-                       background = colors[4],
-                       foreground = colors[5],
-                       padding = 0,
-                       fontsize = 37
-                       ),
-              widget.TextBox(
-                       text = '',
-                       font = "Ubuntu Mono",
-                       background = colors[5],
-                       foreground = colors[6],
-                       padding = 0,
-                       fontsize = 37
-                       ),
-            #   widget.Memory(
-            #            foreground = colors[1],
-            #            background = colors[6],
-            #            mouse_callbacks = {'Button1': lambda: qtile.cmd_spawn(myTerm + ' -e htop')},
-            #            fmt = 'Mem: {}',
-            #            padding = 5
-            #            ),
-              widget.TextBox(
-                       text = '',
-                       font = "Ubuntu Mono",
-                       background = colors[6],
-                       foreground = colors[7],
-                       padding = 0,
-                       fontsize = 37
-                       ),
-              widget.TextBox(
-                       text = '',
-                       font = "Ubuntu Mono",
-                       background = colors[7],
-                       foreground = colors[8],
-                       padding = 0,
-                       fontsize = 37
-                       ),
-              widget.TextBox(
-                       text = '',
-                       font = "Ubuntu Mono",
-                       background = colors[8],
-                       foreground = colors[9],
-                       padding = 0,
-                       fontsize = 37
-                       ),
               widget.Clock(
-                       foreground = colors[1],
-                       background = colors[9],
+                       foreground = colors[6],
+                       background = colors[0],
                        format = "%A, %B %d - %H:%M "
+                       ),
+              widget.Systray(
+                       background = colors[0],
+                       padding = 5
                        ),
               ]
     return widgets_list

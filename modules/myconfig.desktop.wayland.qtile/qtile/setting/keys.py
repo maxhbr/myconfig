@@ -1,6 +1,5 @@
-from libqtile.utils import guess_terminal
 from libqtile.command import lazy
-from libqtile.config import Key
+from libqtile.config import Click, Key, Drag
 from libqtile.lazy import lazy
 
 def window_to_prev_group(qtile):
