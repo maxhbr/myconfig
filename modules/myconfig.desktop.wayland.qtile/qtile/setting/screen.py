@@ -25,96 +25,83 @@ widget_defaults = dict(
 )
 extension_defaults = widget_defaults.copy()
 
-def init_widgets_list():
+def init_widgets_list(withSystray):
+    sep = widget.Sep(
+        linewidth = 0,
+        padding = 6,
+        foreground = colors[2],
+        background = colors[0]
+    )
+    bar = widget.TextBox(
+        text = '|',
+        font = "Ubuntu Mono",
+        background = colors[0],
+        foreground = '474747',
+        padding = 2,
+        fontsize = 14
+    )
     widgets_list = [
-              widget.Sep(
-                       linewidth = 0,
-                       padding = 6,
-                       foreground = colors[2],
-                       background = colors[0]
-                       ),
-              widget.Sep(
-                       linewidth = 0,
-                       padding = 6,
-                       foreground = colors[2],
-                       background = colors[0]
-                       ),
-              widget.GroupBox(
-                       font = "Ubuntu Bold",
-                       fontsize = 9,
-                       margin_y = 3,
-                       margin_x = 0,
-                       padding_y = 5,
-                       padding_x = 3,
-                       borderwidth = 3,
-                       active = colors[2],
-                       inactive = colors[7],
-                       rounded = False,
-                       highlight_color = colors[1],
-                       highlight_method = "line",
-                       this_current_screen_border = colors[6],
-                       this_screen_border = colors [4],
-                       other_current_screen_border = colors[6],
-                       other_screen_border = colors[4],
-                       foreground = colors[2],
-                       background = colors[0]
-                       ),
-             widget.TextBox(
-                       text = '|',
-                       font = "Ubuntu Mono",
-                       background = colors[0],
-                       foreground = '474747',
-                       padding = 2,
-                       fontsize = 14
-                       ),
-              widget.CurrentLayoutIcon(
-                       custom_icon_paths = [os.path.expanduser("~/.config/qtile/icons")],
-                       foreground = colors[2],
-                       background = colors[0],
-                       padding = 0,
-                       scale = 0.7
-                       ),
-             widget.TextBox(
-                       text = '|',
-                       font = "Ubuntu Mono",
-                       background = colors[0],
-                       foreground = '474747',
-                       padding = 2,
-                       fontsize = 14
-                       ),
-              widget.WindowName(
-                       foreground = colors[6],
-                       background = colors[0],
-                       padding = 0
-                       ),
-              widget.Sep(
-                       linewidth = 0,
-                       padding = 6,
-                       foreground = colors[0],
-                       background = colors[0]
-                       ),
-              widget.Clock(
-                       foreground = colors[6],
-                       background = colors[0],
-                       format = "%A, %B %d - %H:%M "
-                       ),
-              widget.Systray(
-                       background = colors[0],
-                       padding = 5
-                       ),
-              ]
+        sep,
+        sep,
+        widget.GroupBox(
+            font = "Ubuntu Bold",
+            fontsize = 9,
+            margin_y = 3,
+            margin_x = 0,
+            padding_y = 5,
+            padding_x = 3,
+            borderwidth = 3,
+            active = colors[2],
+            inactive = colors[7],
+            rounded = False,
+            highlight_color = colors[1],
+            highlight_method = "line",
+            this_current_screen_border = colors[6],
+            this_screen_border = colors [4],
+            other_current_screen_border = colors[6],
+            other_screen_border = colors[4],
+            foreground = colors[2],
+            background = colors[0]
+        ),
+        bar,
+        widget.CurrentLayoutIcon(
+            custom_icon_paths = [os.path.expanduser("~/.config/qtile/icons")],
+            foreground = colors[2],
+            background = colors[0],
+            padding = 0,
+            scale = 0.7
+        ),
+        widget.CurrentScreen(
+            background = colors[0],
+        ),
+        bar,
+        widget.WindowName(
+            foreground = colors[6],
+            background = colors[0],
+            padding = 0
+        ),
+        sep,
+        widget.Battery(
+            foreground = colors[6],
+            background = colors[0],
+        ),
+        bar, 
+        widget.Clock(
+            foreground = colors[6],
+            background = colors[0],
+            format = "%A, %B %d - %H:%M "
+        ),
+        ]
+    if withSystray:
+        widgets_list.append(
+            widget.Systray(
+                    background = colors[0],
+                    padding = 5
+                    )
+        )
     return widgets_list
 
-def init_widgets_screen1():
-    widgets_screen1 = init_widgets_list()
-    del widgets_screen1[9:10]               # Slicing removes unwanted widgets (systray) on Monitors 1,3
-    return widgets_screen1
-
-def init_widgets_screen2():
-    widgets_screen2 = init_widgets_list()
-    return widgets_screen2                 # Monitor 2 will display all widgets in widgets_list
-
 def init_screens():
-    return [Screen(top=bar.Bar(widgets=init_widgets_screen1(), opacity=1.0, size=20)),
-            Screen(top=bar.Bar(widgets=init_widgets_screen2(), opacity=1.0, size=20)),
-            Screen(top=bar.Bar(widgets=init_widgets_screen1(), opacity=1.0, size=20))]
+    return [Screen(top=bar.Bar(widgets=init_widgets_list(True), opacity=1.0, size=20)),
+            Screen(top=bar.Bar(widgets=init_widgets_list(False), opacity=1.0, size=20)),
+            Screen(top=bar.Bar(widgets=init_widgets_list(False), opacity=1.0, size=20))]
