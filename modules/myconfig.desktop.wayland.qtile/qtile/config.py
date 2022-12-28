@@ -80,7 +80,8 @@ def restart_on_randr(_):
 @hook.subscribe.startup_once
 def start_once():
     home = os.path.expanduser('~')
-    subprocess.call([home + '/.config/qtile/autostart.sh'])
+    p = subprocess.Popen(f"{home}/.config/qtile/autostart.sh")
+    hook.subscribe.shutdown(p.terminate)
 
 
 # When using the Wayland backend, this can be used to configure input devices.

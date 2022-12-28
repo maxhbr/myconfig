@@ -107,9 +107,13 @@ in {
               -c '#556677' \
               -i '${pkgs.my-wallpapers}/share/romben3.png' \
               >/dev/null 2>&1 &
+
+          ${foot}/bin/foot --server &
           {
             tfoot || ${pkgs.foot}/bin/foot
           } >/dev/null 2>&1 &
+
+          ${wlsunset}/bin/wlsunset &
         '';
         # ${pkgs.dex}/bin/dex --autostart
       };

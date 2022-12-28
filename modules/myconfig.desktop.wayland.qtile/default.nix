@@ -61,6 +61,15 @@ in {
               set -x
               ${cfg.desktop.wayland.autostartCommands}
               dbus-wm-environment qtile &
+
+              # Clean up
+              clean() {
+                  pkill -P $$
+                  test -e $FIFO && rm $FIFO
+              }
+              trap clean SIGINT SIGTERM
+              sleep infinity &
+              wait $!
             '') + "/bin/autostart.sh";
             executable = true;
           };

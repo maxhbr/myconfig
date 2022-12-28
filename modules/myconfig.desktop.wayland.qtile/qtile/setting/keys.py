@@ -160,6 +160,13 @@ def initial_keys(mod, myTerm, myLauncher):
             lazy.layout.toggle_split(),
             desc='Toggle between split and unsplit sides of stack'
             ),
+        Key(["control", "mod1"], "F1", lazy.core.change_vt(1), desc="Change to VT 1"),
+        Key(["control", "mod1"], "F2", lazy.core.change_vt(2), desc="Change to VT 2"),
+        Key(["control", "mod1"], "F3", lazy.core.change_vt(3), desc="Change to VT 3"),
+        Key(["control", "mod1"], "F4", lazy.core.change_vt(4), desc="Change to VT 4"),
+        Key(["control", "mod1"], "F5", lazy.core.change_vt(4), desc="Change to VT 5"),
+        Key(["control", "mod1"], "F6", lazy.core.change_vt(4), desc="Change to VT 6"),
+        Key(["control", "mod1"], "F7", lazy.core.change_vt(4), desc="Change to VT 7"),
     ]
     mouse = [
         Drag([mod], "Button1", lazy.window.set_position_floating(),
