@@ -98,6 +98,22 @@ in {
           Extra packages to be installed in the desktop environment wide.
         '';
       };
+      autostartCommands = mkOption {
+        type = types.lines;
+        default = with pkgs; ''
+          myswayidle 3600 &
+          ${playerctl}/bin/playerctld daemon &
+          ${pkgs.swaybg}/bin/swaybg \
+              -c '#556677' \
+              -i '${pkgs.my-wallpapers}/share/romben3.png' \
+              >/dev/null 2>&1 &
+          {
+            tfoot || ${pkgs.foot}/bin/foot
+          } >/dev/null 2>&1 &
+        '';
+          # ${pkgs.dex}/bin/dex --autostart
+      };
+
       desktop = mkOption {
         type = types.str;
         default = optionalString cfg.desktop.wayland.enable "river";

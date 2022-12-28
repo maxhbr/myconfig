@@ -49,18 +49,18 @@
         wayland = {
           enable = true;
           desktop = "qtile";
+          qtile.enable = true;
           sway.enable = true;
           river.enable = true;
-          qtile.enable = true;
+          labwc.enable = true;
 
           #experimental:
-          hyprland.enable = true;
-          newm.enable = true;
-          labwc.enable = true;
-          kde.enable = true;
+          # hyprland.enable = true;
+          # newm.enable = true;
+          # kde.enable = true;
           # gnome.enable = true; # konflicts with sway
           # dwl.enable = true;
-          vivarium.enable = true;
+          # vivarium.enable = true;
 
           # dead or buggy:
           # hikari.enable = true;

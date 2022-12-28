@@ -16,19 +16,15 @@ in {
             source = ./labwc/rc.xml;
             onChange = "${pkgs.psmisc}/bin/killall -s SIGHUP labwc || true";
           };
-          "labwc/autostart".text = ''
-            set -x
-            ${pkgs.swaybg}/bin/swaybg \
-                -c '#556677' \
-                -i '"${pkgs.my-wallpapers}/share/romben3.png"' \
-                >/dev/null 2>&1 &
-            ${pkgs.waybar}/bin/waybar \
-                >/dev/null 2>&1 &
-            {
-              tfoot || ${pkgs.foot}/bin/foot
-            } >/dev/null 2>&1 &
-            myswayidle &
-          '';
+          "labwc/autostart" = {
+            source = (pkgs.writeShellScriptBin "autostart.sh" ''
+              set -x
+              ${cfg.desktop.wayland.autostartCommands}
+              pkill waybar ; waybar > /tmp/labwc.''${XDG_VTNR}.''${USER}.waybar.log 2>&1 &disown
+              dbus-wm-environment labwc
+            '') + "/bin/autostart.sh";
+            executable = true;
+          };
           "labwc/environment".text = ''
             XKB_DEFAULT_LAYOUT=${
               config.environment.sessionVariables."XKB_DEFAULT_LAYOUT"

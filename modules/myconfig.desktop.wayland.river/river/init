@@ -178,13 +178,7 @@ riverctl csd-filter-add app-id "gedit"
 
 ###############################################################################
 
-riverctl spawn "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=river"
-riverctl spawn "systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=river"
-riverctl spawn 'playerctld daemon'
-
-pkill waybar ; waybar > /tmp/river.${XDG_VTNR}.${USER}.waybar.log 2>&1 &disown
-
-tfoot &disown
+riverctl spawn "$HOME/.config/river/autostart"
 
 ###############################################################################
 riverctl focus-follows-cursor normal

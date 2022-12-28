@@ -24,8 +24,10 @@ in {
     (cfg.desktop.wayland.enable && cfg.desktop.wayland.hikari.enable) {
       myconfig.desktop.wayland.hikari = {
         autostart = ''
-          waybar &
-          ${pkgs.foot}/bin/foot &
+          set -x
+          ${cfg.desktop.wayland.autostartCommands}
+          pkill waybar ; waybar > /tmp/hikari.''${XDG_VTNR}.''${USER}.waybar.log 2>&1 &disown
+          dbus-wm-environment hikari
         '';
         settings = {
           ui = {

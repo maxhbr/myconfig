@@ -49,6 +49,15 @@ in {
           "river/init".source = ./river/init;
           "river/init".executable = true;
           # "river/init".onChange = "${pkgs.procps}/bin/pkill -u $USER river || true";
+          "river/autostart" = {
+            source = (pkgs.writeShellScriptBin "autostart.sh" ''
+              set -x
+              ${cfg.desktop.wayland.autostartCommands}
+              pkill waybar ; waybar > /tmp/river.''${XDG_VTNR}.''${USER}.waybar.log 2>&1 &disown
+              dbus-wm-environment river
+            '') + "/bin/autostart.sh";
+            executable = true;
+          };
           "river/kile-layout".source = ./river/kile-layout;
           "river/kile-layout".executable = true;
         };

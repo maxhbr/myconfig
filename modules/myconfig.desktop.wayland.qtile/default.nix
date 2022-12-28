@@ -49,7 +49,22 @@ in {
   config =
     (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.qtile.enable) {
       home-manager.sharedModules = [{
-        xdg.configFile = { "qtile/config.py".source = ./qtile/config.py; };
+        xdg.configFile = {
+          "qtile" = {
+            source = ./qtile;
+            recursive = true;
+          };
+          "qtile/autostart.sh" = {
+            source = (pkgs.writeShellScriptBin "autostart.sh" ''
+              logfile=/tmp/qtile.autostart.''${XDG_VTNR}.''${USER}.$(date +%F).log
+              exec &> >(tee -a "$logfile")
+              set -x
+              ${cfg.desktop.wayland.autostartCommands}
+              dbus-wm-environment qtile &
+            '') + "/bin/autostart.sh";
+            executable = true;
+          };
+        };
         home.packages = with pkgs; [ qtilePackage startQtile reloadQtile ];
       }];
 
