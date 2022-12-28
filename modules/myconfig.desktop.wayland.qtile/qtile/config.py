@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from libqtile.dgroups import simple_key_binder
 import os
 import re
 import socket
@@ -16,22 +17,27 @@ mod = "mod4"
 if qtile.core.name == "x11":
     myTerm = "urxvt"
 elif qtile.core.name == "wayland":
-    myTerm = "foot"
+    myTerm = "tfoot"
 myLauncher = "wofi --show run"
 
 ###############################################################################
 ###############################################################################
 ###############################################################################
 
+
 def set_keymap_from_layout(qtile):
     try:
-        qtile.core.cmd_set_keymap(layout=os.environ["XKB_DEFAULT_LAYOUT"], options="", variant=os.environ["XKB_DEFAULT_VARIANT"])
+        qtile.core.cmd_set_keymap(
+            layout=os.environ["XKB_DEFAULT_LAYOUT"], options="", variant=os.environ["XKB_DEFAULT_VARIANT"])
     except:
-        print("failed to set layout: with qtile.core.cmd_set_keymap") 
+        print("failed to set layout: with qtile.core.cmd_set_keymap")
     try:
-        qtile.cmd_set_keymap(layout=os.environ["XKB_DEFAULT_LAYOUT"], options="", variant=os.environ["XKB_DEFAULT_VARIANT"])
+        qtile.cmd_set_keymap(
+            layout=os.environ["XKB_DEFAULT_LAYOUT"], options="", variant=os.environ["XKB_DEFAULT_VARIANT"])
     except:
-        print("failed to set layout: with qtile.cmd_set_keymap") 
+        print("failed to set layout: with qtile.cmd_set_keymap")
+
+
 if __name__ in ["config", "__main__"]:
     set_keymap_from_layout(qtile)
 
@@ -45,12 +51,9 @@ groups = init_groups(mod, keys)
 # see https://docs.qtile.org/en/stable/manual/config/groups.html
 # allow mod3+1 through mod3+0 to bind to groups; if you bind your groups
 # by hand in your config, you don't need to do this.
-from libqtile.dgroups import simple_key_binder
 dgroups_key_binder = simple_key_binder(mod)
 
 layouts, floating_layout = init_layouts()
-
-prompt = "{0}@{1}: ".format(os.environ["USER"], socket.gethostname())
 
 screens = init_screens()
 
@@ -68,10 +71,17 @@ reconfigure_screens = True
 # focus, should we respect this or not?
 auto_minimize = True
 
+
+@hook.subscribe.screen_change
+def restart_on_randr(_):
+    qtile.cmd_reload_config()
+
+
 @hook.subscribe.startup_once
 def start_once():
     home = os.path.expanduser('~')
-    # subprocess.call([home + '/.config/qtile/autostart.sh'])
+    subprocess.call([home + '/.config/qtile/autostart.sh'])
+
 
 # When using the Wayland backend, this can be used to configure input devices.
 wl_input_rules = None

@@ -111,7 +111,7 @@ in {
             tfoot || ${pkgs.foot}/bin/foot
           } >/dev/null 2>&1 &
         '';
-          # ${pkgs.dex}/bin/dex --autostart
+        # ${pkgs.dex}/bin/dex --autostart
       };
 
       desktop = mkOption {
