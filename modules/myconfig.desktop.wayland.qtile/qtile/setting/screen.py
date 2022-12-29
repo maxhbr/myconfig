@@ -1,8 +1,7 @@
 import os
 
 from libqtile.config import Screen
-from libqtile import widget
-from libqtile import bar
+from libqtile import widget, bar, qtile
 
 # prompt = "{0}@{1}: ".format(os.environ["USER"], socket.gethostname())
 
@@ -105,7 +104,10 @@ def init_widgets_list(withSystray):
 
 
 def init_screens():
-    return [Screen(top=bar.Bar(widgets=init_widgets_list(True), opacity=1.0, size=20)),
-            # Screen(top=bar.Bar(widgets=init_widgets_list(False), opacity=1.0, size=20)),
-            # Screen(top=bar.Bar(widgets=init_widgets_list(False), opacity=1.0, size=20))
-            ]
+    screens = []
+    for output in qtile.core.outputs:
+        wlr_output = output.wlr_output
+        screens.append(
+            Screen(top=bar.Bar(widgets=init_widgets_list(screens == []), opacity=1.0, size=20))
+        )
+    return screens

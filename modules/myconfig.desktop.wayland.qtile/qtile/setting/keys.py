@@ -35,6 +35,50 @@ def switch_screens(qtile):
     qtile.current_screen.set_group(group)
 
 
+floating_window_index = 0
+
+def float_cycle(qtile, forward: bool):
+    global floating_window_index
+    floating_windows = []
+    for window in qtile.current_group.windows:
+        if window.floating:
+            floating_windows.append(window)
+    if not floating_windows:
+        return
+    floating_window_index = min(floating_window_index, len(floating_windows) -1)
+    if forward:
+        floating_window_index += 1
+    else:
+        floating_window_index += 1
+    if floating_window_index >= len(floating_windows):
+        floating_window_index = 0
+    if floating_window_index < 0:
+        floating_window_index = len(floating_windows) - 1
+    win = floating_windows[floating_window_index]
+    win.cmd_bring_to_front()
+    win.cmd_focus()
+
+@lazy.function
+def float_cycle_backward(qtile):
+    float_cycle(qtile, False)
+
+@lazy.function
+def float_cycle_forward(qtile):
+    float_cycle(qtile, True)
+
+@lazy.function
+def float_to_front(qtile):
+    """
+    Bring all floating windows of the group to front
+    """
+    for window in qtile.currentGroup.windows:
+        if window.floating:
+            window.cmd_bring_to_front()
+
+@lazy.function
+def latest_group(qtile):
+    qtile.current_screen.set_group(qtile.current_screen.previous_group)
+
 def initial_keys(mod, myTerm, myLauncher):
     keys = [
         # The essentials
@@ -58,7 +102,7 @@ def initial_keys(mod, myTerm, myLauncher):
             lazy.window.kill(),
             desc='Kill active window'
             ),
-        Key([mod, "shift"], "r",
+        Key([mod], "q",
             lazy.restart(),
             desc='Restart Qtile'
             ),
@@ -66,23 +110,30 @@ def initial_keys(mod, myTerm, myLauncher):
             lazy.shutdown(),
             desc='Shutdown Qtile'
             ),
-        Key(["control", "shift"], "e",
-            lazy.spawn("emacsclient -c -a emacs"),
-            desc='Doom Emacs'
+        Key([mod, "control"], "q",
+            lazy.spawn("qtile shell -c 'reload_config()'"),
+            desc='Shutdown Qtile'
             ),
-        # Switch focus to specific monitor (out of three)
-        Key([mod], "w",
-            lazy.to_screen(0),
-            desc='Keyboard focus to monitor 1'
-            ),
-        Key([mod], "e",
-            lazy.to_screen(1),
-            desc='Keyboard focus to monitor 2'
-            ),
-        Key([mod], "r",
-            lazy.to_screen(2),
-            desc='Keyboard focus to monitor 3'
-            ),
+        Key(["mod4"], "y",
+            latest_group
+           ),
+        # Key(["control", "shift"], "e",
+        #     lazy.spawn("emacsclient -c -a emacs"),
+        #     desc='Doom Emacs'
+        #     ),
+        # # Switch focus to specific monitor (out of three)
+        # Key([mod], "w",
+        #     lazy.to_screen(0),
+        #     desc='Keyboard focus to monitor 1'
+        #     ),
+        # Key([mod], "e",
+        #     lazy.to_screen(1),
+        #     desc='Keyboard focus to monitor 2'
+        #     ),
+        # Key([mod], "r",
+        #     lazy.to_screen(2),
+        #     desc='Keyboard focus to monitor 3'
+        #     ),
         # Switch focus of monitors
         Key([mod], "period",
             lazy.next_screen(),
@@ -140,8 +191,10 @@ def initial_keys(mod, myTerm, myLauncher):
             ),
         Key([mod, "shift"], "f",
             lazy.window.toggle_floating(),
+            float_to_front,
             desc='toggle floating'
             ),
+        Key([mod, "control"], "Tab", float_cycle_forward),
         Key([mod], "f",
             lazy.window.toggle_fullscreen(),
             desc='toggle fullscreen'
@@ -169,10 +222,10 @@ def initial_keys(mod, myTerm, myLauncher):
         Key(["control", "mod1"], "F7", lazy.core.change_vt(4), desc="Change to VT 7"),
     ]
     mouse = [
-        Drag([mod], "Button1", lazy.window.set_position_floating(),
+        Drag([mod], "Button1", lazy.window.set_position_floating(), float_to_front,
              start=lazy.window.get_position()),
-        Drag([mod], "Button3", lazy.window.set_size_floating(),
+        Drag([mod], "Button3", lazy.window.set_size_floating(), float_to_front,
              start=lazy.window.get_size()),
-        Click([mod], "Button2", lazy.window.bring_to_front())
+        Click([mod], "Button2", lazy.window.bring_to_front(), float_to_front)
     ]
     return keys, mouse
