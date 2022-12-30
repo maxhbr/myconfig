@@ -194,11 +194,13 @@ def initial_keys(mod, myTerm, myLauncher):
             float_to_front,
             desc='toggle floating'
             ),
+        Key([mod, "shift"], "s", lazy.window.static(), desc="Make window static"),
         Key([mod, "control"], "Tab", float_cycle_forward),
         Key([mod], "f",
             lazy.window.toggle_fullscreen(),
             desc='toggle fullscreen'
             ),
+        Key([mod], "b", lazy.hide_show_bar("bottom"), desc="Hide bar"),
         # Stack controls
         Key([mod, "shift"], "space",
             lazy.layout.rotate(),

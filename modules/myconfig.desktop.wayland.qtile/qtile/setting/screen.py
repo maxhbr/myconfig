@@ -3,6 +3,8 @@ import os
 from libqtile.config import Screen
 from libqtile import widget, bar, qtile
 
+IS_WAYLAND: bool = qtile.core.name == "wayland"
+
 # prompt = "{0}@{1}: ".format(os.environ["USER"], socket.gethostname())
 
 colors = [["#282c34", "#282c34"],
@@ -25,7 +27,6 @@ widget_defaults = dict(
 )
 extension_defaults = widget_defaults.copy()
 
-
 def init_widgets_list(withSystray):
     sep = widget.Sep(
         linewidth=0,
@@ -41,6 +42,14 @@ def init_widgets_list(withSystray):
         padding=2,
         fontsize=14
     )
+    if IS_WAYLAND:
+        systray = widget.StatusNotifier(
+            background=colors[0],
+            padding=20)
+    else:
+        systray = widget.Systray(
+            background=colors[0],
+            padding=20, icon_size=24)
     widgets_list = [
         sep,
         sep,
@@ -95,10 +104,7 @@ def init_widgets_list(withSystray):
     ]
     if withSystray:
         widgets_list.append(
-            widget.Systray(
-                background=colors[0],
-                padding=5
-            )
+            systray
         )
     return widgets_list
 
