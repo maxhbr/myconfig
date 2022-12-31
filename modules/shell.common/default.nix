@@ -58,8 +58,10 @@ in {
         file
         renameutils # qmv
         pv
+        entr
 
         # admin:
+        btop
         iftop
         iptraf-ng
         iotop
@@ -71,12 +73,10 @@ in {
           sudo modprobe usbmon
           sudo ${usbtop}/bin/usbtop
         '')
-        pwgen # unstable.mkpasswd
+        pwgen
         usbutils
         tcpdump
         fuse
-
-        entr
 
         (writeScriptBin "myspeedtest.sh"
           (builtins.readFile ./bin/myspeedtest.sh))

@@ -57,7 +57,7 @@
           #experimental:
           # hyprland.enable = true;
           # newm.enable = true;
-          # kde.enable = true;
+          kde.enable = true;
           # gnome.enable = true; # konflicts with sway
           # dwl.enable = true;
           # vivarium.enable = true;
