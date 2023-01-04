@@ -55,6 +55,7 @@
         };
       };
     }];
+    boot.readOnlyNixStore = true;
     nix = {
       extraOptions = ''
         keep-outputs = true
@@ -63,7 +64,6 @@
         binary-caches-parallel-connections = 10
       '';
 
-      readOnlyStore = true;
       settings = rec {
         sandbox = true;
         auto-optimise-store = true;

@@ -46,7 +46,7 @@
           home-manager.sharedModules = [{
             home.packages = (allpackages pkgs) ++ (with pkgs; [
               openocd
-              picocom
+              picocom minicom
               (writeShellScriptBin "flash-nrf52840dongle" ''
                 set -euo pipefail
                 in=build/zephyr/zephyr.hex
@@ -70,12 +70,11 @@
               # # mbed
               # mbed-cli
             ]);
-            home.sessionVariables = {
-              ZEPHYR_BASE = "/home/mhuber/zephyrproject/zephyr";
-              IDF_PATH = "/home/mhuber/zephyrproject/modules/hal/espressif";
-              IDF_TOOLS_PATH =
-                "/home/mhuber/zephyrproject/modules/hal/espressif/tools";
-            };
+            # home.sessionVariables = {
+            #   ZEPHYR_BASE = "/home/mhuber/zephyrproject/zephyr";
+            #   IDF_PATH = "/home/mhuber/zephyrproject/modules/hal/espressif";
+            #   IDF_TOOLS_PATH = "/home/mhuber/zephyrproject/modules/hal/espressif/tools";
+            # };
             programs.fish = {
               shellAbbrs = lib.mapAttrs'
                 (name: value: lib.nameValuePair ("west-" + name) value)

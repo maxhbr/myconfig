@@ -11,13 +11,13 @@ in {
           # librecad # 2D
         ] ++ [ # 3D
           # blender
-          # openscad
+          openscad
           # freecad # 3D
           nixos-2105.prusa-slicer
           # povray
           # luxcorerender
           fstl
-          # meshlab
+          meshlab
           gmsh
         ] ++ [ # pcb design
           librepcb

@@ -96,15 +96,15 @@
         network.enable = true;
       };
     };
-    services.xserver = {
-      desktopManager.plasma5.enable = true;
-      desktopManager.xterm.enable = false;
-      displayManager.sddm.enable = true;
-    };
+    #services.xserver = {
+    #  desktopManager.plasma5.enable = true;
+    #  desktopManager.xterm.enable = false;
+    #  # displayManager.sddm.enable = true;
+    #};
 
-    virtualisation.docker.enable = true;
-    virtualisation.podman.enable = true;
-    virtualisation.virtualbox.host.enable = true;
+    #virtualisation.docker.enable = true;
+    #virtualisation.podman.enable = true;
+    #virtualisation.virtualbox.host.enable = true;
 
     services.physlock.enable = true;
 

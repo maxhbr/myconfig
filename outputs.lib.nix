@@ -160,9 +160,9 @@ let
         };
         users.users.nixBuild.group = "nixBuild";
         users.groups.nixBuild = { };
-        nix = {
-          allowedUsers = [ "nixBuild" ];
-          trustedUsers = [ "nixBuild" ];
+        nix.settings = {
+          trusted-users = [ "nixBuild" ];
+          allowed-users = [ "nixBuild" ];
         };
       };
 

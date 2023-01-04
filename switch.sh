@@ -26,7 +26,7 @@ echo -e "\n\n\n\n\n\n\n" >> "$logfile"
 exec &> >(tee -a "$logfile")
 
 cmd="nixos-rebuild"
-if [[ $# -gt 0 || ! -z "$TARGET_IP" ]]; then
+if [[ $# -gt 0 || -n "$TARGET_IP" ]]; then
     targetIP="root@$(cat ./hosts/metadata.json | jq -r ".hosts.${target}.ip4")"
     targetIP="${TARGET_IP:-"$targetIP"}"
     cmd="$cmd --target-host $targetIP"
@@ -49,7 +49,7 @@ time nix build \
 
 
 until $cmd \
-        --build-host localhost \
+        `#--build-host localhost` \
         switch `#-p test` \
         --flake '.#'"$target"; do
     echo "... retry"
