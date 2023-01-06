@@ -23,18 +23,17 @@
     { # for quickfix (due to usage of 20.03)
       nixpkgs.config.allowBroken = true;
     }
-    { services.xrdp.enable = true; }
-    {
-      environment.systemPackages = with pkgs; [ x11vnc ];
-      ## Setup via ssh tunnel:
-      # $ ssh -t -L 5900:localhost:5900 $IP 'x11vnc -ncache 10 -unixpw -localhost -display :0'
-      ## in other terminal:
-      # $ vncviewer -encodings 'copyrect tight zrle hextile' localhost:0
+    # {
+    #   environment.systemPackages = with pkgs; [ x11vnc ];
+    #   ## Setup via ssh tunnel:
+    #   # $ ssh -t -L 5900:localhost:5900 $IP 'x11vnc -ncache 10 -unixpw -localhost -display :0'
+    #   ## in other terminal:
+    #   # $ vncviewer -encodings 'copyrect tight zrle hextile' localhost:0
 
-      ## or open ports
-      # networking.firewall.allowedUDPPorts = [ 5900 ];
-      # networking.firewall.allowedTCPPorts = [ 5900 ];
-    }
+    #   ## or open ports
+    #   # networking.firewall.allowedUDPPorts = [ 5900 ];
+    #   # networking.firewall.allowedTCPPorts = [ 5900 ];
+    # }
     ( # wol
       let interface = "enp39s0";
       in {
