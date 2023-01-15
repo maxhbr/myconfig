@@ -30,7 +30,7 @@
       };
     }
     {
-      boot.kernelPackages = lib.mkForce pkgs.linuxPackages_testing;
+      boot.kernelPackages = lib.mkForce pkgs.linuxPackages_latest;
     }
     # fun
     ../host.workstation/gaming/games.steam
