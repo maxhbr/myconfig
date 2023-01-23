@@ -13,10 +13,10 @@ in {
         gphoto2fs
 
         gimp # -with-plugins
-        rawtherapee
-        nixos-unstable.darktable
-        nixos-unstable.geeqie
-        nixos-unstable.gthumb
+        # rawtherapee
+        # darktable
+        geeqie
+        gthumb
         # krita
         # inkscape
       ];

@@ -3,6 +3,8 @@
 { config, pkgs, lib, myconfig, ... }: {
   config = {
     home-manager.sharedModules =
-      [{ home.packages = with pkgs; [ platformio ]; }];
+      [{ home.packages = with pkgs; [
+        # platformio 
+      ]; }];
   };
 }

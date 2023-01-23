@@ -48,13 +48,13 @@
         enable = true;
         wayland = {
           enable = true;
-          desktop = "qtile";
-          qtile.enable = true;
+          desktop = "sway";
           sway.enable = true;
           river.enable = true;
           labwc.enable = true;
 
           #experimental:
+          # qtile.enable = true;
           # hyprland.enable = true;
           # newm.enable = true;
           kde.enable = true;
@@ -89,6 +89,7 @@
     # virtualisation.virtualbox.host.enable = true;
 
     services.xserver.wacom.enable = true;
+    services.xserver.digimend.enable = true;
 
     services.hardware.bolt.enable = true;
 

@@ -101,7 +101,7 @@
           }];
           services.udev.packages = [
             platformio-udev-rules
-            pkgs.platformio
+            # pkgs.platformio
             segger-modemmanager-blacklist-udev-rules
             pkgs.openocd
             pkgs.segger-jlink

@@ -29,7 +29,7 @@ in {
     home-manager.sharedModules = [{
       home.packages = with pkgs;
         [ qjackctl pw-simultaneous ]
-        ++ lib.optionals config.myconfig.desktop.full [ helvum easyeffects ];
+        ++ lib.optionals config.myconfig.desktop.full [ /* helvum easyeffects */ ];
     }];
     hardware.pulseaudio.enable = false;
     security.rtkit.enable = true;

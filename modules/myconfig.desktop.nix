@@ -26,7 +26,7 @@ in {
         libnotify
         xarchiver
         sxiv
-        kitty
+        # kitty
         alacritty
         mupdf
         xarchiver

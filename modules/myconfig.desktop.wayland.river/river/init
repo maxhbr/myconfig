@@ -47,12 +47,12 @@ riverctl map normal $mod+Shift Tab swap next
 riverctl map normal $mod+Shift K swap previous
 
 # $mod+Period and $mod+Comma to focus the next/previous output
-riverctl map normal $mod Period focus-output next
-riverctl map normal $mod Comma focus-output previous
+riverctl map normal $mod Period focus-output previous
+riverctl map normal $mod Comma focus-output next
 
 # $mod+Shift+{Period,Comma} to send the focused view to the next/previous output
-riverctl map normal $mod+Shift Period send-to-output next
-riverctl map normal $mod+Shift Comma send-to-output previous
+riverctl map normal $mod+Shift Period send-to-output previous
+riverctl map normal $mod+Shift Comma send-to-output next
 
 # $mod+Return to bump the focused view to the top of the layout stack
 riverctl map normal $mod Return zoom
@@ -220,20 +220,20 @@ case "${1:-rivercarro}" in
     riverctl map normal $mod+Shift H send-layout-cmd rivercarro "main-count +1"
     riverctl map normal $mod+Shift L send-layout-cmd rivercarro "main-count -1"
 
-    # Mod+{Up,Right,Down,Left} to change layout orientation
-    riverctl map normal $mod Up    send-layout-cmd rivercarro "main-location top"
-    riverctl map normal $mod Right send-layout-cmd rivercarro "main-location right"
-    riverctl map normal $mod Down  send-layout-cmd rivercarro "main-location bottom"
+    riverctl map normal $mod F send-layout-cmd rivercarro "main-location monocle"
+
     riverctl map normal $mod Left  send-layout-cmd rivercarro "main-location left"
     riverctl map normal $mod+Shift Space send-layout-cmd rivercarro "main-location left"
-    # And for monocle
-    riverctl map normal $mod F send-layout-cmd rivercarro "main-location monocle"
     riverctl map normal $mod G send-layout-cmd rivercarro "main-location left"
-    # $mod+F to toggle fullscreen
+
+    riverctl map normal $mod Up    send-layout-cmd rivercarro "main-location top"
+
+    riverctl map normal $mod Right send-layout-cmd rivercarro "main-location right"
+
+    riverctl map normal $mod Down  send-layout-cmd rivercarro "main-location bottom"
+    
     riverctl map normal $mod+Shift F toggle-fullscreen
 
-    # Add others rivercarrro's commands the same way with the keybinds you'd like.
-    # e.g.
     # riverctl map normal $mod <keys> send-layout-cmd rivercarro "inner-gaps -1"
     # riverctl map normal $mod <keys> send-layout-cmd rivercarro "inner-gaps +1"
     # riverctl map normal $mod <keys> send-layout-cmd rivercarro "outer-gaps -1"
