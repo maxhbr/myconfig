@@ -48,8 +48,8 @@
         enable = true;
         wayland = {
           enable = true;
-          desktop = "sway";
-          sway.enable = true;
+          desktop = "river";
+          # sway.enable = true;
           river.enable = true;
           labwc.enable = true;
 
@@ -58,7 +58,7 @@
           # hyprland.enable = true;
           # newm.enable = true;
           kde.enable = true;
-          # gnome.enable = true; # konflicts with sway
+          gnome.enable = true; # konflicts with sway
           # dwl.enable = true;
           # vivarium.enable = true;
 

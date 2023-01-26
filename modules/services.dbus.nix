@@ -26,23 +26,44 @@ let
   # note: this is pretty much the same as  /etc/sway/config.d/nixos.conf but also restarts
   # some user services to make sure they have the correct environment variables
   dbus-wm-environment = pkgs.writeShellScriptBin "dbus-wm-environment" ''
-    dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP=''${XDG_CURRENT_DESKTOP:-sway}
+    dbus-update() (
+      set -x
+      export XDG_CURRENT_DESKTOP="''${1:-wlroots}"
+      dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP=$XDG_CURRENT_DESKTOP
+      ${configure-gtk}/bin/configure-gtk $2 &disown
+    )
+    systemctl-update() (
+      set -x
+      systemctl --user stop pipewire ${
+        if config.services.pipewire.wireplumber.enable then
+          "wireplumber"
+        else
+          "pipewire-media-session"
+      } xdg-desktop-portal xdg-desktop-portal-wlr
+      systemctl --user start pipewire ${
+        if config.services.pipewire.wireplumber.enable then
+          "wireplumber"
+        else
+          "pipewire-media-session"
+      } xdg-desktop-portal xdg-desktop-portal-wlr
+    )
 
-    ${configure-gtk}/bin/configure-gtk $2 &disown
-
-    set -x
-    systemctl --user stop pipewire ${
-      if config.services.pipewire.wireplumber.enable then
-        "wireplumber"
-      else
-        "pipewire-media-session"
-    } xdg-desktop-portal xdg-desktop-portal-wlr
-    systemctl --user start pipewire ${
-      if config.services.pipewire.wireplumber.enable then
-        "wireplumber"
-      else
-        "pipewire-media-session"
-    } xdg-desktop-portal xdg-desktop-portal-wlr
+    if [[ $# -eq 0 ]] ; then
+      cat <<EOF
+    usage:
+      $@ wlroots
+    EOF
+    elif [[ "$1" == "systemctl-update" ]]; then
+      shift
+      echo "systemctl-update..."
+      systemctl-update "$@"
+    else
+      echo "dbus-update..."
+      dbus-update "$@"
+      until "$0" systemctl-update $@; do 
+        echo "retry..."
+      done
+    fi
   '';
 
 in {
