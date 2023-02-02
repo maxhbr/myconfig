@@ -537,33 +537,13 @@
         "type": "github"
       }
     },
-    "license-compliance-toolbox": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1675088211,
-        "narHash": "sha256-aBrM9l2roNrr4ojTvC9bo3/XsJtcT3d6JoaD2qX94ew=",
-        "owner": "maxhbr",
-        "repo": "license-compliance-toolbox",
-        "rev": "019c10d07d5cd07e4289bab9d0bd6beb6ec63dd4",
-        "type": "github"
-      },
-      "original": {
-        "owner": "maxhbr",
-        "repo": "license-compliance-toolbox",
-        "type": "github"
-      }
-    },
     "master": {
       "locked": {
-        "lastModified": 1675319838,
-        "narHash": "sha256-sLD1MdHQr4WP9lOTUs8eFlY2erseJSkV9YTKxwVoRlY=",
+        "lastModified": 1675321455,
+        "narHash": "sha256-uJlAvVGSvuosIesEKr+MtwgwbycFUQESb+ircU1m1nU=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "0d18971a0e8ed4b3429fe0af7d097d8e774664a8",
+        "rev": "9f79b25907cc9eb1ed75accc73b435ac1e5bafbd",
         "type": "github"
       },
       "original": {
@@ -1204,7 +1184,6 @@
         "flake-utils": "flake-utils_2",
         "home": "home",
         "hyprland": "hyprland",
-        "license-compliance-toolbox": "license-compliance-toolbox",
         "master": "master",
         "my-wallpapers": "my-wallpapers",
         "myfish": "myfish",
