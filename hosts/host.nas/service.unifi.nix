@@ -8,12 +8,12 @@
         unifiPackage = pkgs.unifi7;
         openFirewall = true;
       };
-      networking.firewall.allowedTCPPorts = [8443];
+      networking.firewall.allowedTCPPorts = [ 8443 ];
       users.users.unifi = {
         group = "unifi";
         isSystemUser = true;
       };
-      users.groups.unifi = {};
+      users.groups.unifi = { };
       # networking.firewall = {
       #   allowedTCPPorts = [ 8443 ];
       #   allowedUDPPorts = [ 8443 ];

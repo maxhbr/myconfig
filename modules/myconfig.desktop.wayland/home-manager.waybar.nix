@@ -12,9 +12,8 @@
             "sway/workspaces"
             "sway/mode"
             "sway/window"
-            "wlr/taskbar"
           ];
-          modules-center = [ ];
+          modules-center = [ "wlr/taskbar" ];
           modules-right = [
             "idle_inhibitor"
             "pulseaudio"

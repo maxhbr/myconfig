@@ -45,6 +45,8 @@
         rlwrap
         vim
 
+        comma
+
         # admin:
         bind
         bridge-utils

@@ -1,5 +1,6 @@
 { config, lib, pkgs, ... }:
-let cfg = config.myconfig;
+let
+  cfg = config.myconfig;
   startGnome = pkgs.writeShellScriptBin "start-gnome" ''
     dbus-run-session -- gnome-shell --display-server --wayland
   '';
@@ -16,7 +17,7 @@ in {
           true-color-invert
           miniview
           material-shell
-          forge 
+          forge
         ];
       }];
     };

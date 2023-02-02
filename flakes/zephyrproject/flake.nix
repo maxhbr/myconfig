@@ -46,7 +46,8 @@
           home-manager.sharedModules = [{
             home.packages = (allpackages pkgs) ++ (with pkgs; [
               openocd
-              picocom minicom
+              picocom
+              minicom
               (writeShellScriptBin "flash-nrf52840dongle" ''
                 set -euo pipefail
                 in=build/zephyr/zephyr.hex

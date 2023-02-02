@@ -38,6 +38,10 @@
       home-manager.sharedModules =
         [{ home.packages = with pkgs; [ mindustry-wayland ]; }];
     }
+    {
+      home-manager.sharedModules =
+        [{ home.packages = with pkgs.nixos-2205; [ libreoffice ]; }];
+    }
   ];
 
   config = {
@@ -104,7 +108,6 @@
         home.packages = with pkgs; [
           rdesktop
           google-chrome # for netflix and stadia
-          comma
         ];
         programs.zsh.shellAliases = {
           upg-get-hostId = ''
@@ -114,7 +117,7 @@
       }
       {
         services.kanshi = {
-          enable = lib.mkForce true;
+          # enable = lib.mkForce true;
           profiles = {
             # get list via "swaymsg -t get_outputs"
             undocked = {
