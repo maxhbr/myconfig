@@ -41,8 +41,8 @@
     my-wallpapers.url = "github:maxhbr/wallpapers";
     my-wallpapers.inputs.nixpkgs.follows = "nixpkgs";
 
-    license-compliance-toolbox.url = "github:maxhbr/license-compliance-toolbox";
-    license-compliance-toolbox.inputs.nixpkgs.follows = "nixpkgs";
+    # octrc.url = "github:maxhbr/octrc";
+    # octrc.inputs.nixpkgs.follows = "nixpkgs";
 
     zephyrproject.url = "path:flakes/zephyrproject/";
 
@@ -250,19 +250,19 @@
           (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
             { config = { hardware.enableRedistributableFirmware = true; }; }
             self.nixosModules.core
-            inputs.license-compliance-toolbox.nixosModule
+            # inputs.octrc.nixosModule
             inputs.nixos-hardware.nixosModules.lenovo-thinkpad-x1-extreme-gen2
             inputs.zephyrproject.nixosModule
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "workstation" ([
             self.nixosModules.core
-            inputs.license-compliance-toolbox.nixosModule
+            # inputs.octrc.nixosModule
           ] ++ moreModules) metadataOverride);
         host-spare = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "spare" ([
             self.nixosModules.core
-            inputs.license-compliance-toolbox.nixosModule
+            # inputs.octrc.nixosModule
           ] ++ moreModules) metadataOverride);
         host-vserver = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "vserver"
