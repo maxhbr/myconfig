@@ -123,10 +123,6 @@ for mode in normal locked; do
     # riverctl map $mode None XF86AudioLowerVolume  spawn 'pamixer -d 5'
     # riverctl map $mode None XF86AudioMute         spawn 'pamixer --toggle-mute'
 
-    # Control screen backlight brightness with light (https://github.com/haikarainen/light)
-    riverctl map $mode None XF86MonBrightnessUp   spawn 'light -A 5'
-    riverctl map $mode None XF86MonBrightnessDown spawn 'light -U 5'
-
     # Control MPRIS aware media players with playerctl (https://github.com/altdesktop/playerctl)
     riverctl map $mode None XF86AudioMedia spawn 'playerctl play-pause'
     riverctl map $mode None XF86AudioPlay spawn 'playerctl play-pause'

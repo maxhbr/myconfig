@@ -6,6 +6,6 @@
       backgroundColor = "#285577BB";
       defaultTimeout = 5000;
     };
-    services.dunst.enable = lib.mkForce false; # is that causing slack freeze
+    services.dunst.enable = lib.mkForce false;
   };
 }

@@ -5,7 +5,7 @@
     ./hardware-configuration.nix
     ./myconfig-master
     # hardware:
-    ../../hardware/x1extremeG2.nix
+    ./x1extremeG2.nix
     ../../hardware/efi.nix
     ../../hardware/footswitch.nix
     # ../../hardware/steamcontroller.nix

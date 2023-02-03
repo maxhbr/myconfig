@@ -5,6 +5,7 @@ ALIGN: MIDDLE
 AUTO_SCALE: false
 LAPTOP_DISPLAY_PREFIX: 'eDP'
 ORDER:
+  - 'eDP-1'
   - 'eDP1-1'
   - 'DP-5'
   - 'DP-7'
