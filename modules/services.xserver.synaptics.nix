@@ -3,7 +3,7 @@
 {lib, pkgs, config, ...}:
 { # config for synaptics (unused?)
   config = lib.mkIf config.services.xserver.synaptics.enable {
-    services.xserver.libinput.enable = lib.mkForce true;
+    # services.xserver.libinput.enable = lib.mkForce true;
     services.xserver.synaptics = {
       twoFingerScroll = true;
       vertEdgeScroll = false;

@@ -49,10 +49,7 @@ let
     )
 
     if [[ $# -eq 0 ]] ; then
-      cat <<EOF
-    usage:
-      $@ wlroots
-    EOF
+      exec "$0" "''${XDG_CURRENT_DESKTOP:-wlroots}"
     elif [[ "$1" == "systemctl-update" ]]; then
       shift
       echo "systemctl-update..."

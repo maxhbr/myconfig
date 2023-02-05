@@ -3,7 +3,7 @@
 {lib, pkgs, config, ...}:
 { # config for libinput
   config = lib.mkIf config.services.xserver.libinput.enable {
-    services.xserver.synaptics.enable = lib.mkForce false;
+    # services.xserver.synaptics.enable = lib.mkForce false;
     services.xserver.libinput.touchpad = {
       disableWhileTyping = true;
       tappingDragLock = false;
