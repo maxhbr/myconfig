@@ -6,12 +6,14 @@ in {
   config = lib.mkIf cfg.enable {
     home-manager.sharedModules = [{
       home.packages = with pkgs; [
+        # rustc
+        # cargo
+        # cargo-generate
         rustup
         llvmPackages_latest.llvm
         llvmPackages_latest.bintools
         llvmPackages_latest.lld
       ];
-      # home.packages = with pkgs; [ rustc cargo cargo-generate ];
     }];
   };
 }

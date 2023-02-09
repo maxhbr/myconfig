@@ -83,7 +83,7 @@
         network.enable = true;
         nodejs.enable = false;
         # ruby.enable = true;
-        rust.enable = false;
+        rust.enable = true;
         elixir.enable = false;
       };
     };

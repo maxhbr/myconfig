@@ -11,16 +11,6 @@ in {
         config = {
           programs.firefox = {
             enable = lib.mkDefault true;
-            extensions = with pkgs.nur.repos.rycee.firefox-addons; [
-              # see: https://github.com/nix-community/nur-combined/blob/master/repos/rycee/pkgs/firefox-addons/generated-firefox-addons.nix
-              gopass-bridge
-              # https-everywhere
-              link-cleaner
-              privacy-badger
-              tree-style-tab
-              ublock-origin
-              vimium
-            ];
             profiles."0" = {
               id = 0;
               isDefault = true;
@@ -36,6 +26,16 @@ in {
               #   # "general.useragent.locale" = "en-GB";
               #   # "browser.bookmarks.showMobileBookmarks" = true;
               # };
+              extensions = with pkgs.nur.repos.rycee.firefox-addons; [
+                # see: https://github.com/nix-community/nur-combined/blob/master/repos/rycee/pkgs/firefox-addons/generated-firefox-addons.nix
+                gopass-bridge
+                # https-everywhere
+                link-cleaner
+                privacy-badger
+                tree-style-tab
+                ublock-origin
+                vimium
+              ];
             };
           };
           xdg.mimeApps = {
