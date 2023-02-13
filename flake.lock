@@ -87,11 +87,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1676196577,
-        "narHash": "sha256-nzXTh2VQZDyzIc6ed2+qoRT/FUKkQQAaLEFPy2MKB+A=",
+        "lastModified": 1676283171,
+        "narHash": "sha256-w+Ee7JiL88YJTH60NiVCY/BoeE0oFe9rbfpD8llmEtc=",
         "owner": "nix-community",
         "repo": "emacs-overlay",
-        "rev": "25bc792c9fe3ab354e7b51539b4da72ac821dde9",
+        "rev": "dc9d1a2f5ccd547ea32f46313081827f05ec1dae",
         "type": "github"
       },
       "original": {
@@ -331,11 +331,11 @@
     },
     "flake-utils_2": {
       "locked": {
-        "lastModified": 1667395993,
-        "narHash": "sha256-nuEHfE/LcWyuSWnS8t12N1wc105Qtau+/OdUAjtQ0rA=",
+        "lastModified": 1676283394,
+        "narHash": "sha256-XX2f9c3iySLCw54rJ/CZs+ZK6IQy7GXNY4nSOyu2QG4=",
         "owner": "numtide",
         "repo": "flake-utils",
-        "rev": "5aed5285a952e0b949eb3ba02c12fa4fcfef535f",
+        "rev": "3db36a8b464d0c4532ba1c7dda728f4576d6d073",
         "type": "github"
       },
       "original": {
@@ -484,11 +484,11 @@
         "xdph": "xdph"
       },
       "locked": {
-        "lastModified": 1676198317,
-        "narHash": "sha256-i5Er/KA5E9CNxs4XFdwJEOsiCyXS3X3KKuu04gRSJD4=",
+        "lastModified": 1676240687,
+        "narHash": "sha256-Qzgd87UF64k4Es8SFY/IOKDGKD1DlFT60+TAke8qV7Q=",
         "owner": "hyprwm",
         "repo": "Hyprland",
-        "rev": "7d914cd427b36d5ec8acb06e415cdf2b846f1648",
+        "rev": "6b7e409f05536e45baa3dabeab0df77d05c9a96f",
         "type": "github"
       },
       "original": {
@@ -539,11 +539,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1676193721,
-        "narHash": "sha256-ISq1QK+pdFeRT4Mz0E177j/w3GRRMH9Awot5jy9rGu4=",
+        "lastModified": 1676286385,
+        "narHash": "sha256-SrQVBc1ymnRiwqKbQCLbs5E/LOjajESjKFFENBBCic8=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "d1cd9f140292aa8cdd77433a793e173731101473",
+        "rev": "3ea51a72e4f381706175c9f8ac7d07d7d57b6a27",
         "type": "github"
       },
       "original": {
@@ -734,11 +734,11 @@
     },
     "nixos-unstable-small": {
       "locked": {
-        "lastModified": 1676037601,
-        "narHash": "sha256-I+sNMIVnmarjnPnjp7xupQXzbUroNc3EWQkGPFv4w4M=",
+        "lastModified": 1676272577,
+        "narHash": "sha256-km3Ty03BpaSbr5zek8a68YN2yduygtKm5//OSKJP/l0=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "f8e875671f248c21a49a7f914117c28135d4c588",
+        "rev": "e8b67bd87cbbefebda0cee68728c67da0fe91b6c",
         "type": "github"
       },
       "original": {
@@ -836,10 +836,10 @@
     },
     "nixpkgs_4": {
       "locked": {
-        "lastModified": 1676075376,
-        "narHash": "sha256-O1SmDq7XXxykoJS8I19dc124VuI5n4eo89QFnHG2VUk=",
-        "path": "/nix/store/pwg9p4lchw6i6c37hyw0cj3y2yfifjj0-source",
-        "rev": "0cba5e8bf9eec2d112467839f0b7afdafeac9e60",
+        "lastModified": 1676193721,
+        "narHash": "sha256-ISq1QK+pdFeRT4Mz0E177j/w3GRRMH9Awot5jy9rGu4=",
+        "path": "/nix/store/maaglhk6j8h3i1ggjya65hbvx3455cm4-source",
+        "rev": "d1cd9f140292aa8cdd77433a793e173731101473",
         "type": "path"
       },
       "original": {
@@ -865,11 +865,11 @@
     },
     "nur": {
       "locked": {
-        "lastModified": 1676197247,
-        "narHash": "sha256-sPmIQooEOiWkjYPmjNqde+ml2NcDTockTQF2WdTSHK0=",
+        "lastModified": 1676281484,
+        "narHash": "sha256-dWZXiud69G6LwzpFCaKFD4wpKarTRYY3605rLN9fw50=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "661a9358da62de5d4bdd9b6d510a8c17084e04ac",
+        "rev": "d44ab24d70b4e0080630730c42793fdff8ea0ace",
         "type": "github"
       },
       "original": {
@@ -1420,7 +1420,7 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-gU/Tv2aUgWjqmKaI631oqAvNUbV1ayxtMQJ3JyiQi40=",
+        "narHash": "sha256-jIHbNCPyjMzNVhb9aaTJushJtnLcxRGvEoOOoCULqtA=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
