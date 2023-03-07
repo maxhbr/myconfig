@@ -58,7 +58,7 @@ in {
     home-manager.sharedModules = [{
       home.packages = [ myStopScreensaver ];
       services.screen-locker = {
-        enable = true;
+        # enable = true;
         inactiveInterval = 60;
         xss-lock.screensaverCycle = 3600;
       };

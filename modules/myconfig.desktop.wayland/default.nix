@@ -210,7 +210,7 @@ in {
         };
         programs.waybar.enable = true;
         services.kanshi.enable = false;
-        programs.mako.enable = true;
+        services.mako.enable = true;
         services.random-background.enable = lib.mkForce false;
         services.screen-locker.enable = lib.mkForce false;
       }

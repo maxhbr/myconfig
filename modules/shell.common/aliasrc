@@ -330,9 +330,9 @@ sxiv() {
   command sxiv "$@" &disown
 }
 
-meld() {
-  command meld "$@" &disown
-}
+# meld() {
+#   command meld "$@" &disown
+# }
 
 #-------------------------------------------------------------------}}}
 #   package management

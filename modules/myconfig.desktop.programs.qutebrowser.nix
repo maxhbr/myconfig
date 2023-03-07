@@ -1,9 +1,7 @@
 { config, lib, pkgs, ... }: {
   config = lib.mkIf config.myconfig.desktop.enable {
-    home-manager.sharedModules = [{
-      home.packages = [ pkgs.python3Packages.adblock ];
+    home-manager.sharedModules = [({config, ...}: lib.mkIf config.programs.qutebrowser.enable{
       programs.qutebrowser = {
-        enable = lib.mkDefault true;
         searchEngines = {
           "DEFAULT" = "https://google.com/search?hl=en&q={}";
           "!g" = "https://www.google.com/search?hl=en&q={}";
@@ -20,6 +18,6 @@
           "!aw" = "https://wiki.archlinux.org/?search={}";
         };
       };
-    }];
+    })];
   };
 }

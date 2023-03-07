@@ -7,6 +7,15 @@ let
     writeScriptBin "cropLog.hs" (lib.fileContents ./cropLog.hs);
 in {
   config = lib.mkIf cfg.enable {
+    nixpkgs.overlays = [
+      (self: super: {
+        my-meld = pkgs.meld.overrideAttrs (old: {
+          postFixup = old.postFixup + ''
+            wrapProgram $out/bin/meld --unset WAYLAND_DISPLAY
+          '';
+        });
+      })
+    ];
     # nixpkgs.overlays = [
     #   (self: super: {
     #     diffoscope = super.diffoscope.overrideAttrs (oldAttrs: rec {
@@ -17,8 +26,8 @@ in {
     home-manager.sharedModules = [{
       home.packages = with pkgs;
         ([
-          meld
-          # master.diffoscope
+          my-meld
+          diffoscope
           gnumake
           cmake
           automake

@@ -1,8 +1,8 @@
 { config, lib, pkgs, ... }:
 
 {
-  config = lib.mkIf config.programs.mako.enable {
-    programs.mako = {
+  config = lib.mkIf config.services.mako.enable {
+    services.mako = {
       backgroundColor = "#285577BB";
       defaultTimeout = 5000;
     };

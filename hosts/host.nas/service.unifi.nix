@@ -5,7 +5,7 @@
   imports = [
     (lib.mkIf config.services.unifi.enable {
       services.unifi = {
-        unifiPackage = pkgs.unifi7;
+        unifiPackage = pkgs.unifi5;
         openFirewall = true;
       };
       networking.firewall.allowedTCPPorts = [ 8443 ];
@@ -14,10 +14,6 @@
         isSystemUser = true;
       };
       users.groups.unifi = { };
-      # networking.firewall = {
-      #   allowedTCPPorts = [ 8443 ];
-      #   allowedUDPPorts = [ 8443 ];
-      # };
       # services.prometheus.exporters.unifi = {
       #   unifiAddress = "localhost:8443";
       #   unifiUsername = "ReadOnlyUser";

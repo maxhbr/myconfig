@@ -116,7 +116,7 @@
         };
       }
       {
-        programs.mako = {
+        services.mako = {
           output = "eDP-1";
           defaultTimeout = lib.mkForce 20000;
         };

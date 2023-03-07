@@ -16,7 +16,7 @@ in {
         # rawtherapee
         # darktable
         geeqie
-        gthumb
+        # gthumb
         # krita
         # inkscape
       ];
