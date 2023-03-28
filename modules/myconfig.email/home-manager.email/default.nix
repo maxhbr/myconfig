@@ -41,7 +41,7 @@
       hooks = { preNew = "mbsync --all"; };
     };
     programs.mu.enable = true;
-    programs.astroid.enable = true;
+    programs.astroid.enable = false;
     programs.neomutt.enable = true;
   };
 }
