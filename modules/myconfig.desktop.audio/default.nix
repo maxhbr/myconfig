@@ -7,7 +7,6 @@ in {
   imports = [
     ./modules/services.pipewire.nix
     ./modules/hardware.pulseaudio.nix
-    ./modules/services.pipewire.media-session.nix
     ./modules/services.pipewire.wireplumber.nix
   ];
   options.myconfig = with lib; {

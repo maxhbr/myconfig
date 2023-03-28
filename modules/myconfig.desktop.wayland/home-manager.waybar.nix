@@ -16,8 +16,8 @@
           modules-center = [ "wlr/taskbar" ];
           modules-right = [
             "idle_inhibitor"
-            "bluetooth"
             "pulseaudio"
+            "bluetooth"
             "network"
             "custom/platform_profile"
             "cpu"
@@ -100,6 +100,7 @@
             tooltip-format-connected = "{controller_alias}\t{controller_address}\n\n{num_connections} connected\n\n{device_enumerate}";
             tooltip-format-enumerate-connected = "{device_alias}\t{device_address}";
             tooltip-format-enumerate-connected-battery = "{device_alias}\t{device_address}\t{device_battery_percentage}%";
+            on-click = "tfoot-bluetuith";
           };
           pulseaudio = {
             format = "{volume}% {icon} {format_source}";
@@ -165,6 +166,7 @@
         #backlight,
         #network,
         #pulseaudio,
+        #bluetooth,
         #custom-platform_profile,
         #idle_inhibitor,
         #tray,

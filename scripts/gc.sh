@@ -17,10 +17,21 @@ logUsage() {
 
 before=$(logUsage)
 
+# for link in /nix/var/nix/gcroots/auto/* ;do
+#     rl="$(readlink "$link")"
+#     echo "* rm $rl"
+#     sudo rm "$rl" || true
+# done
+
+echo "* nix-store --gc ..."
+sudo nix-store --gc
+
 echo "* nix-env --delete-generations $age ..."
 nix-env --delete-generations $age
+
 echo "* sudo nix-env --delete-generations $age ..."
 sudo nix-env --delete-generations $age || echo "failed, probably when waiting for sudo PW"
+
 echo "* sudo nix-collect-garbage --delete-older-than $age ..."
 sudo nix-collect-garbage \
      --delete-older-than $age || echo "failed, probably when waiting for sudo PW"

@@ -38,6 +38,12 @@ in {
                       ${foot}/bin/foot ${tmux}/bin/tmux attach -t "$SESSION" & disown)
                   done
             '')
+            (writeShellScriptBin "tfoot-bluetuith" ''
+              exec ${foot}/bin/foot \
+                -T tmux-bluetuith \
+                -a tmux-bluetuith \
+                ${bluetuith}/bin/bluetuith
+            '')
             # https://github.com/riverwm/river/wiki/Recommended-Software
             ## Output configuration
             wlopm

@@ -169,6 +169,8 @@ riverctl float-filter-add app-id float
 riverctl float-filter-add app-id "popup"
 riverctl float-filter-add title "(?:Open|Save) (?:File|Folder|As)"
 riverctl float-filter-add app-id "pavucontrol"
+riverctl float-filter-add app-id "tfoot-bluetuith"
+riverctl float-filter-add title "tfoot-bluetuith"
 
 # Set app-ids and titles of views which should use client side decorations
 riverctl csd-filter-add app-id "gedit"
