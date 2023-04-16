@@ -35,6 +35,7 @@ in {
                 tree-style-tab
                 ublock-origin
                 vimium
+                sidebery
               ];
             };
           };

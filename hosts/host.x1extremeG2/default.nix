@@ -11,15 +11,12 @@
     # ../../hardware/steamcontroller.nix
     ../../hardware/blink1.nix
     ../../hardware/unifying.nix
-    ../host.p14/hardware.hantek
-    ../host.p14/mykeylight
     # ./backup-hdd.nix
     # ./foto-hdd.nix
     # modules
     ../host.p14/role.work
     # ./service.docker-registry.nix
     # ./service.podman.buildkit.nix
-    ../host.p14/mail
     {
       myconfig.river.enable = true;
       myconfig.qtile.enable = true;

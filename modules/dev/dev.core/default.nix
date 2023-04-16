@@ -16,18 +16,11 @@ in {
         });
       })
     ];
-    # nixpkgs.overlays = [
-    #   (self: super: {
-    #     diffoscope = super.diffoscope.overrideAttrs (oldAttrs: rec {
-    #       disabledTests = oldAttrs.disabledTests ++ [ "test_ffprobe" ];
-    #     });
-    #   })
-    # ];
     home-manager.sharedModules = [{
       home.packages = with pkgs;
         ([
           my-meld
-          diffoscope
+          # diffoscope
           gnumake
           cmake
           automake

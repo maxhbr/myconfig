@@ -6,7 +6,7 @@ let cfg = config.myconfig;
 in {
   options.myconfig = with lib; {
     desktop.printing.enable = mkEnableOption "myconfig.desktop.printing" // {
-      default = true;
+      default = false;
       example = false;
     };
   };
