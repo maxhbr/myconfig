@@ -186,29 +186,21 @@
               home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
             })
 
-            # ({pkgs, config, ... }: {
-            #   config = {
-            #     nix = {
-            #       # add binary caches
-            #       binaryCachePublicKeys = [
-            #         "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-            #         "nixpkgs-wayland.cachix.org-1:3lwxaILxMRkVhehr5StQprHdEo4IrE8sRho9R9HOLYA="
-            #       ];
-            #       binaryCaches = [
-            #         "https://cache.nixos.org"
-            #         "https://nixpkgs-wayland.cachix.org"
-            #       ];
-            #     };
-
-            #     # use it as an overlay
-            #     nixpkgs.overlays = [ inputs.nixpkgs-wayland.overlay ];
-
-            #     # or, pull specific packages (built against inputs.nixpkgs, usually `nixos-unstable`)
-            #     environment.systemPackages = with pkgs; [
-            #       inputs.nixpkgs-wayland.packages.${system}.waybar
-            #     ];
-            #   };
-            # })
+            ({pkgs, config, ... }: {
+              config = {
+                nix = {
+                  binaryCachePublicKeys = [
+                    "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+                    "nixpkgs-wayland.cachix.org-1:3lwxaILxMRkVhehr5StQprHdEo4IrE8sRho9R9HOLYA="
+                  ];
+                  binaryCaches = [
+                    "https://cache.nixos.org"
+                    "https://nixpkgs-wayland.cachix.org"
+                  ];
+                };
+                nixpkgs.overlays = [ inputs.nixpkgs-wayland.overlay ];
+              };
+            })
           ] ++ (map (n: "${./modules}/${n}")
             (builtins.attrNames (builtins.readDir ./modules)));
           config = {

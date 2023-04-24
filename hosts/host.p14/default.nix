@@ -56,6 +56,7 @@
           # sway.enable = true;
           river.enable = true;
           labwc.enable = true;
+          wayfire.enable = true;
 
           #experimental:
           # qtile.enable = true;
