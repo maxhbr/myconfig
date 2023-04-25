@@ -220,6 +220,17 @@ in {
         services.random-background.enable = lib.mkForce false;
         services.screen-locker.enable = lib.mkForce false;
       }
+      {
+        programs.wofi = {
+          enable = true;
+          settings = {
+            mode = "run";
+            location = "bottom-right";
+            allow_markup = true;
+            width = 250;
+          };
+        };
+      }
     ];
     services.physlock.enable = lib.mkForce false;
 
