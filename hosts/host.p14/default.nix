@@ -91,10 +91,10 @@
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;
     # virtualisation.libvirtd.enable = true;
-    # virtualisation.virtualbox.host.enable = true;
+    virtualisation.virtualbox.host.enable = false;
 
     services.xserver.wacom.enable = true;
-    services.xserver.digimend.enable = true;
+    # services.xserver.digimend.enable = true;
 
     services.hardware.bolt.enable = true;
 
