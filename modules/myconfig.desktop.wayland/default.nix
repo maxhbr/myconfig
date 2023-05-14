@@ -9,7 +9,7 @@ in {
         type = with types; listOf package;
         default = with pkgs;
           [
-            xwayland
+            # xwayland
             xorg.xwininfo # to find out if somenthing runs under xwayland
             ## Terminal
             foot
@@ -93,6 +93,7 @@ in {
             dex # for autostarting
             gammastep
             wev # Wayland event viewer
+            qt5.qtwayland
           ] ++ [ wayvnc ];
         # defaultText = literalExpression ''
         #   with pkgs; [ ];
@@ -210,7 +211,7 @@ in {
       ./home-manager.mako.nix
       ./home-manager.waybar.nix
       {
-        home.packages = with pkgs; [ qt5.qtwayland ];
+        home.packages = cfg.desktop.wayland.commonPackages;
         xdg.configFile = {
           "way-displays/cfg.yaml".source = ./way-displays/cfg.yaml;
         };

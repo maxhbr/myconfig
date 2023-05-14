@@ -6,8 +6,7 @@ let
   wayfirePackage = pkgs.callPackage ./wrapper.nix {
     wayfire = pkgs.wayfire-unstable;
     withBaseWrapper = true;
-    extraPaths = cfg.desktop.wayland.commonPackages
-      ++ (with pkgs; [ wayfire-unstable ]);
+    extraPaths = with pkgs; [ wayfire-unstable ];
     extraSessionCommands = ''
       export XDG_CURRENT_DESKTOP=wayfire
       export XKB_DEFAULT_LAYOUT=${

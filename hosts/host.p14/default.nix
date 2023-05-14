@@ -40,7 +40,7 @@
     }
     {
       home-manager.sharedModules =
-        [{ home.packages = with pkgs.nixos-2205; [ libreoffice ]; }];
+        [{ home.packages = with pkgs; [ libreoffice ]; }];
     }
   ];
 
@@ -53,7 +53,7 @@
         wayland = {
           enable = true;
           desktop = "river";
-          # sway.enable = true;
+          sway.enable = true;
           river.enable = true;
           labwc.enable = true;
 
@@ -62,11 +62,11 @@
           # qtile.enable = true;
           # hyprland.enable = true;
           # newm.enable = true;
-          kde.enable = true;
-          # gnome.enable = true; # konflicts with sway
           # dwl.enable = true;
           # vivarium.enable = true;
-
+          #bloated:
+          # kde.enable = true;
+          # gnome.enable = true; # konflicts with sway
           # dead or buggy:
           # hikari.enable = true;
         };

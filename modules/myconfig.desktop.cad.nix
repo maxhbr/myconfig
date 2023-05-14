@@ -12,8 +12,8 @@ in {
         ] ++ [ # 3D
           # blender
           openscad
-          # freecad # 3D
-          nixos-2105.prusa-slicer
+          freecad # 3D
+          prusa-slicer
           # povray
           # luxcorerender
           fstl

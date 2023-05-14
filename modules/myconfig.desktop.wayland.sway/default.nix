@@ -48,7 +48,7 @@ in {
             '')
             # swaymonad
             i3-wk-switch # https://github.com/tmfink/i3-wk-switch
-          ] ++ cfg.desktop.wayland.commonPackages;
+          ];
         wrapperFeatures.gtk = true;
 
         extraSessionCommands = ''

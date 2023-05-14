@@ -1,9 +1,10 @@
 # Copyright 2022 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }:
+{ pkgs, config, lib, myconfig, ... }:
 let
   cfg = config.myconfig;
   pkg = pkgs.master.labwc;
+  user = myconfig.user;
 in {
   options.myconfig = with lib; {
     desktop.wayland.labwc = { enable = mkEnableOption "labwc"; };
@@ -56,6 +57,12 @@ in {
       services.xserver.windowManager.session = lib.singleton {
         name = "labwc";
         start = "${pkg}/bin/labwc";
+      };
+      myconfig.desktop.wayland.greetdSettings = {
+        labwc_session = {
+          command = "${pkg}/bin/labwc";
+          inherit user;
+        };
       };
     });
 }

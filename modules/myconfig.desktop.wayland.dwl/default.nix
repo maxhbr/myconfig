@@ -10,7 +10,7 @@ let
     dwl-unwrapped = pkgs.dwl;
     conf = ./config.h;
     withBaseWrapper = true;
-    extraPaths = cfg.wayland.commonPackages;
+    extraPaths = []; #cfg.wayland.commonPackages;
     extraSessionCommands = ''
       export XDG_CURRENT_DESKTOP=dwl
       export XKB_DEFAULT_LAYOUT=${
