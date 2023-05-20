@@ -24,6 +24,7 @@ in {
           gerbv
           # kicad-small
           kicad-with-packages3d
+          jre # for freerouting
         ]);
     }];
   });
