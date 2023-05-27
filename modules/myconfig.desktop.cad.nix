@@ -13,8 +13,8 @@ in {
           # blender
           openscad
           freecad # 3D
+          povray # raytracing for freecad
           prusa-slicer
-          # povray
           # luxcorerender
           fstl
           meshlab
