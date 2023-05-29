@@ -18,11 +18,11 @@ set -x
 mod=Super
 
 # $mod+Shift+Return to start an instance of foot (https://codeberg.org/dnkl/foot)
+riverctl map normal $mod Return spawn tfoot
 riverctl map normal $mod+Shift Return spawn tfoot
 riverctl map normal $mod+Control Return spawn foot
 riverctl map normal $mod+Shift+Control Return spawn tfoot-reattach
 riverctl map normal $mod P spawn "wofi --show run"
-riverctl map normal $mod R spawn fuzzel
 riverctl map normal None XF86Display grim-region
 
 # $mod+Q to close the focused view
@@ -55,25 +55,25 @@ riverctl map normal $mod+Shift Comma send-to-output previous
 riverctl map normal $mod+Shift Period send-to-output next
 
 # $mod+Return to bump the focused view to the top of the layout stack
-riverctl map normal $mod Return zoom
+riverctl map normal $mod Z zoom
 
-# $mod+Alt+{H,J,K,L} to move views
-riverctl map normal $mod+Alt N move left 100
-riverctl map normal $mod+Alt R move down 100
-riverctl map normal $mod+Alt T move up 100
-riverctl map normal $mod+Alt D move right 100
+# # $mod+Alt+{H,J,K,L} to move views
+# riverctl map normal $mod+Alt N move left 100
+# riverctl map normal $mod+Alt R move down 100
+# riverctl map normal $mod+Alt T move up 100
+# riverctl map normal $mod+Alt D move right 100
 
-# $mod+Alt+Control+{H,J,K,L} to snap views to screen edges
-riverctl map normal $mod+Alt+Control N snap left
-riverctl map normal $mod+Alt+Control R snap down
-riverctl map normal $mod+Alt+Control T snap up
-riverctl map normal $mod+Alt+Control D snap right
+# # $mod+Alt+Control+{H,J,K,L} to snap views to screen edges
+# riverctl map normal $mod+Alt+Control N snap left
+# riverctl map normal $mod+Alt+Control R snap down
+# riverctl map normal $mod+Alt+Control T snap up
+# riverctl map normal $mod+Alt+Control D snap right
 
-# $mod+Alt+Shift+{H,J,K,L} to resize views
-riverctl map normal $mod+Alt+Shift N resize horizontal -100
-riverctl map normal $mod+Alt+Shift R resize vertical 100
-riverctl map normal $mod+Alt+Shift T resize vertical -100
-riverctl map normal $mod+Alt+Shift D resize horizontal 100
+# # $mod+Alt+Shift+{H,J,K,L} to resize views
+# riverctl map normal $mod+Alt+Shift N resize horizontal -100
+# riverctl map normal $mod+Alt+Shift R resize vertical 100
+# riverctl map normal $mod+Alt+Shift T resize vertical -100
+# riverctl map normal $mod+Alt+Shift D resize horizontal 100
 
 # $mod + Left Mouse Button to move views
 riverctl map-pointer normal $mod BTN_LEFT move-view
@@ -81,8 +81,8 @@ riverctl map-pointer normal $mod BTN_LEFT move-view
 # $mod + Right Mouse Button to resize views
 riverctl map-pointer normal $mod BTN_RIGHT resize-view
 
-for i in $(seq 1 9)
-do
+homerow=("U" "I" "A" "E" "O" "S" "N" "R" "T" "D")
+for i in $(seq 1 9); do
     tags=$((1 << ($i - 1)))
 
     riverctl map normal $mod $i set-focused-tags $tags
@@ -90,6 +90,12 @@ do
     riverctl map normal $mod+Control $i toggle-focused-tags $tags
     riverctl map normal $mod+Shift+Control $i toggle-view-tags $tags
     riverctl map normal $mod "F${i}" toggle-view-tags $tags
+
+    c="${array["$(( $i - 1 ))"]}"
+    riverctl map normal $mod $c set-focused-tags $tags
+    riverctl map normal $mod+Shift $c set-view-tags $tags
+    riverctl map normal $mod+Control $c toggle-focused-tags $tags
+    riverctl map normal $mod+Shift+Control $c toggle-view-tags $tags
 done
 
 # $mod+0 to focus all tags
@@ -99,7 +105,6 @@ riverctl map normal $mod 0 set-focused-tags $all_tags
 # riverctl map normal $mod Y set-focused-tags $all_tags
 riverctl map normal $mod+Shift 0 set-view-tags $all_tags
 # riverctl map normal $mod+Shift Y set-view-tags $all_tags
-riverctl map normal $mod Z zoom
 
 # $mod+Space to toggle float
 riverctl map normal $mod Space toggle-float
@@ -142,11 +147,9 @@ done
 scratch_tag=$((1 << 20 ))
 
 # Toggle the scratchpad with $mod+P
-riverctl map normal $mod S toggle-focused-tags ${scratch_tag}
 riverctl map normal $mod Minus toggle-focused-tags ${scratch_tag}
 
 # Send windows to the scratchpad with $mod+Shift+P
-riverctl map normal $mod+Shift S set-view-tags ${scratch_tag}
 riverctl map normal $mod+Shift Minus set-view-tags ${scratch_tag}
 
 # Set spawn tagmask to ensure new windows don't have the scratchpad tag unless
@@ -222,6 +225,7 @@ case "${1:-rivercarro}" in
     riverctl map normal $mod F send-layout-cmd rivercarro "main-location monocle"
 
     riverctl map normal $mod Left  send-layout-cmd rivercarro "main-location left"
+    riverctl map normal $mod M  send-layout-cmd rivercarro "main-location left"
     riverctl map normal $mod+Shift Space send-layout-cmd rivercarro "main-location left"
     riverctl map normal $mod G send-layout-cmd rivercarro "main-location left"
 
