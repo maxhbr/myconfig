@@ -3,7 +3,7 @@
     boot = {
       # kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
       # cleanTmpDir = ! config.boot.cleanTmpDir;
-      tmpOnTmpfs = true;
+      tmp.useTmpfs = true;
     };
 
     home-manager.sharedModules = [{
