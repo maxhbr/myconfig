@@ -7,6 +7,7 @@
           height = 25;
           spacing = 4;
           modules-left = [
+            # "river/mode"
             "river/tags"
             "river/window"
             "sway/workspaces"
@@ -38,6 +39,9 @@
           cpu = {
             format = "cpu: {usage}%";
             tooltip = false;
+          };
+          "river/tags" = {
+            tag-labels = ["U" "I" "A" "E" "O" "S" "N" "R" "T" "D"];
           };
           "wlr/taskbar" = {
             format = "{icon}";

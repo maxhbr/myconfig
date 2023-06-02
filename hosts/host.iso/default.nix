@@ -16,6 +16,7 @@
     # virtualisation.virtualbox.host.enable = true;
 
     networking.hostId = "12345678";
+    boot.kernelPackages = lib.mkForce pkgs.linuxPackages;
 
     boot.initrd.supportedFilesystems = [ "luks" ];
   };

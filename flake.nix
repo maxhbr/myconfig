@@ -16,7 +16,7 @@
     nixpkgs-wayland = { url = "github:nix-community/nixpkgs-wayland"; };
     # only needed if you use as a package set:
     nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
-    nixpkgs-wayland.inputs.master.follows = "master";
+    # nixpkgs-wayland.inputs.master.follows = "master";
 
     home.url = "github:nix-community/home-manager";
     home.inputs.nixpkgs.follows = "nixpkgs";
