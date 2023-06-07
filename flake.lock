@@ -1476,7 +1476,7 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-OpdpMWCjClLSf4NQb2h79liwOrtN3aUiVQmWlsbAjUg=",
+        "narHash": "sha256-ex0Pz+kAvQ7AZfZusGRKzW7tvrnWEHHHtOWNXBiEnoY=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
