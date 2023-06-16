@@ -17,7 +17,10 @@
     };
   }];
   config = {
-    nixpkgs.config = { allowUnfree = true; };
+    nixpkgs.config = { 
+      allowUnfree = true;
+      segger-jlink.acceptLicense = true;
+    };
     home-manager.sharedModules = [{
       home.packages = with pkgs; [ nix-tree ];
       imports = [{

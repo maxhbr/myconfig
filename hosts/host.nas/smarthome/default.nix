@@ -3,7 +3,7 @@
 { pkgs, ... }: {
   imports = [
     # ./docker.openhab.nix
-    ./service.deconz.nix
+    # ./service.deconz.nix
     # ./service.homeassistant.nix
   ];
 }

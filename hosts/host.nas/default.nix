@@ -160,10 +160,10 @@
         filters = null;
         configs = {
           home = {
-            subvolume = "/home";
-            extraConfig = ''
-              ALLOW_USERS="${myconfig.user}"
-            '';
+            SUBVOLUME = "/home";
+            # extraConfig = ''
+            #   ALLOW_USERS="${myconfig.user}"
+            # '';
           };
         };
       };

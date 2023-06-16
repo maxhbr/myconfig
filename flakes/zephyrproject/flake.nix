@@ -3,7 +3,7 @@
 
   inputs = {
     platformio-core.url = "github:platformio/platformio-core";
-    rel2105.url = "github:nixos/nixpkgs/release-21.05";
+    # rel2105.url = "github:nixos/nixpkgs/release-21.05";
     platformio-core.flake = false;
   };
 
@@ -16,7 +16,7 @@
         with pkgs;
         zephyrenv.baseInputs ++ [
           nrfutil
-          nRF-Command-Line-Tools
+          # nRF-Command-Line-Tools
           segger-jlink
           my-west
           my-west-arm
@@ -43,6 +43,8 @@
           };
         in {
           nixpkgs.overlays = [ self.overlay ];
+          nixpkgs.config.allowUnfree = true;
+          nixpkgs.config.segger-jlink.acceptLicense = true;
           home-manager.sharedModules = [{
             home.packages = (allpackages pkgs) ++ (with pkgs; [
               openocd
@@ -105,7 +107,7 @@
             # pkgs.platformio
             segger-modemmanager-blacklist-udev-rules
             pkgs.openocd
-            pkgs.segger-jlink
+            # pkgs.segger-jlink
             pkgs.stlink
             pkgs.teensy-udev-rules
           ];

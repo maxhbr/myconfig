@@ -115,7 +115,10 @@
                   mkSubPkgsOverlay = targetName: input:
                     (self: super: {
                       "${targetName}" = super."${targetName}" or { }
-                        // import input { inherit (pkgs) config system; };
+                        // import input { 
+                          inherit (pkgs) system;
+                          config = pkgs.config // {allowUnfree = true; segger-jlink.acceptLicense = true;};
+                        };
                     });
                 in [
                   (mkSubPkgsOverlay "master" inputs.master)
@@ -233,6 +236,10 @@
               ];
             })
             inputs.zephyrproject.nixosModule
+            # ({ pkgs, ... }: {
+            #   environment.systemPackages = with pkgs.nixos-unstable; [ segger-jlink ];
+            #   services.udev.packages = [ pkgs.nixos-unstable.segger-jlink ];
+            # })
             ({ pkgs, ... }: {
               home-manager.sharedModules =
                 [ inputs.hyprland.homeManagerModules.default ];

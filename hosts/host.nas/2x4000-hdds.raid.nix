@@ -30,7 +30,7 @@
     };
 
     services.snapper = {
-      configs = { "2x4t" = { subvolume = "/mnt/2x4t"; }; };
+      configs = { "2x4t" = { SUBVOLUME = "/mnt/2x4t"; }; };
     };
 
     services.nfs.server = {
