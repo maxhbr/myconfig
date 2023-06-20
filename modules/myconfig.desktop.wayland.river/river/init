@@ -26,11 +26,10 @@ riverctl map normal $mod P spawn "wofi --show run"
 riverctl map normal None XF86Display grim-region
 
 # $mod+Q to close the focused view
-# riverctl map normal $mod Q close
 riverctl map normal $mod+Shift C close
 
 # $mod+Shift+E to exit river
-riverctl map normal $mod+Shift Q exit
+riverctl map normal $mod+Shift+Control Q exit
 
 # lock screen
 riverctl map normal $mod+Shift Y "swaylock -f -c 000000"
