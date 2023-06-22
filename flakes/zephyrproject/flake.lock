@@ -2,10 +2,10 @@
   "nodes": {
     "nixpkgs": {
       "locked": {
-        "lastModified": 1687284774,
-        "narHash": "sha256-ZS1oFpjjLMIUOp2iUZ4RCZDTs4XqcntX7+7EfPY8Ov8=",
-        "path": "/nix/store/rdl9x2h9xqfnm90az922nxpfim2ib8y0-source",
-        "rev": "725e8ab49c6a0014d963c9dffb769b65e5a527d4",
+        "lastModified": 1687326282,
+        "narHash": "sha256-+aY1Lhx/Nl5LnHeAV0EXIV1ZyZUM0idzV+uY6JdQlxw=",
+        "path": "/nix/store/rf3mnmgy450jjr2klwnbjn4pskx6aw2c-source",
+        "rev": "ce4eb9091e246b833d525f2eacea57e3d79f6258",
         "type": "path"
       },
       "original": {
@@ -16,11 +16,11 @@
     "platformio-core": {
       "flake": false,
       "locked": {
-        "lastModified": 1687284237,
-        "narHash": "sha256-vUtAxf3xcoNDb1okJqSpnNPNUI30ywRnme+3svwKB3c=",
+        "lastModified": 1687431344,
+        "narHash": "sha256-dywSlwVkZ8sBgUMix4daLAeDvBNiDccQxEiIjSrkYwA=",
         "owner": "platformio",
         "repo": "platformio-core",
-        "rev": "8b604c1a03ce6731e453bad762e40aee57df7334",
+        "rev": "a754a28cd8be1c94372243ae4c5083cef97c2b8e",
         "type": "github"
       },
       "original": {
