@@ -43,7 +43,7 @@ in {
   };
   config =
     (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.river.enable) {
-      home-manager.sharedModules = [{
+      home-manager.sharedModules = [({config, ...}: {
         xdg.configFile = {
           "river/init".source = ./river/init;
           "river/init".executable = true;
@@ -52,7 +52,7 @@ in {
             source = (pkgs.writeShellScriptBin "autostart.sh" ''
               set -x
               ${cfg.desktop.wayland.autostartCommands}
-              pkill waybar ; ${riverPackage}/bin/waybar > /tmp/river.''${XDG_VTNR}.''${USER}.waybar.log 2>&1 &disown
+              pkill waybar ; ${config.programs.waybar.package}/bin/waybar > /tmp/river.''${XDG_VTNR}.''${USER}.waybar.log 2>&1 &disown
 
               # TODO: why is/was river called in rivers autostart script, which is called by river??
               # # or: dbus-run-session -- river
@@ -66,7 +66,7 @@ in {
           "river/kile-layout".executable = true;
         };
         home.packages = with pkgs; [ riverPackage riverinit ];
-      }];
+      })];
       myconfig.desktop.wayland.greetdSettings = {
         river_session = {
           command = "${riverPackage}/bin/river";
