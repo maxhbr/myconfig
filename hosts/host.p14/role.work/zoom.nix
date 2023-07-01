@@ -6,7 +6,7 @@
   config = {
     nixpkgs.overlays = [
       (self: super: {
-        my-zoom-us = pkgs.nixos-unstable-small.zoom-us.overrideAttrs (old: {
+        my-zoom-us = pkgs.master.zoom-us.overrideAttrs (old: {
           postFixup = let
             os-release = super.writeText "os-release" ''
               PRETTY_NAME="Debian GNU/Linux 10 (buster)"
