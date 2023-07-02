@@ -16,6 +16,7 @@ date
 set -x
 
 mod=Super
+hypr=Super+Alt+Shift+Control
 
 # $mod+Shift+Return to start an instance of foot (https://codeberg.org/dnkl/foot)
 riverctl map normal $mod Return spawn tfoot
@@ -95,6 +96,7 @@ for i in $(seq 1 9); do
     riverctl map normal $mod+Shift $c set-view-tags $tags
     riverctl map normal $mod+Control $c toggle-focused-tags $tags
     riverctl map normal $mod+Shift+Control $c toggle-view-tags $tags
+    riverctl map normal $hypr $c toggle-view-tags $tags
 done
 
 # $mod+0 to focus all tags

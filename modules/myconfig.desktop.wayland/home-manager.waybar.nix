@@ -21,6 +21,7 @@
             "bluetooth"
             "network"
             "custom/platform_profile"
+            "custom/test_for_missing_tb_changing"
             "cpu"
             "memory"
             "backlight"
@@ -70,6 +71,24 @@
               "! grep -q performance /sys/firmware/acpi/platform_profile";
             return-type = "json";
             interval = 5;
+          };
+          "custom/test_for_missing_tb_changing" = {
+            format = "{}";
+            exec = (pkgs.writeShellScriptBin "test_for_missing_tb_changing" ''
+              if ${pkgs.bolt}/bin/boltctl list | ${pkgs.gnugrep}/bin/grep "status" | ${pkgs.gnugrep}/bin/grep -q -v "disconnected"; then
+                  if ${pkgs.acpi}/bin/acpi -a | ${pkgs.gnugrep}/bin/grep -q "off-line"; then
+                      cat <<EOF
+              {"text":"not-charging","class":"error"}
+              EOF
+                     exit 0
+                  fi
+              fi
+              # cat <<EOF
+              # {"text":"ok","class":"ok"}
+              # EOF
+            '') + "/bin/test_for_missing_tb_changing";
+            return-type = "json";
+            interval = 60;
           };
           memory = { format = "ram: {}%"; };
           backlight = {
@@ -208,7 +227,7 @@
         #battery.warning:not(.charging) {
             background: #ee9a00;
         }
-        #battery.critical:not(.charging) {
+        #battery.critical:not(.charging), #custom-test_for_missing_tb_changing.error {
             background: #f53c3c;
             color: white;
             animation-name: blink;
