@@ -40,8 +40,8 @@ in {
             '')
             (writeShellScriptBin "tfoot-bluetuith" ''
               exec ${foot}/bin/foot \
-                -T tmux-bluetuith \
-                -a tmux-bluetuith \
+                -T foot-bluetuith \
+                -a foot-bluetuith \
                 ${bluetuith}/bin/bluetuith
             '')
             # https://github.com/riverwm/river/wiki/Recommended-Software
@@ -88,6 +88,7 @@ in {
             '')
             wob # A lightweight overlay bar for Wayland
             wl-clipboard
+            lswt # list Wayland toplevels
             # xdg-desktop-portal-wlr
             nomacs
             dex # for autostarting

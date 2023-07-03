@@ -25,6 +25,7 @@ riverctl map normal $mod+Control Return spawn foot
 riverctl map normal $mod+Shift+Control Return spawn tfoot-reattach
 riverctl map normal $mod P spawn "wofi --show run"
 riverctl map normal None XF86Display grim-region
+riverctl map normal $mod W grim-region
 
 # $mod+Q to close the focused view
 riverctl map normal $mod+Shift C close
@@ -167,13 +168,16 @@ riverctl border-color-unfocused 0x586e75
 # Set keyboard repeat rate
 riverctl set-repeat 50 300
 
-# Make certain views start floating
+# Make certain views start floating, use `lswt` to find names and IDs
 riverctl float-filter-add app-id float
 riverctl float-filter-add app-id "popup"
 riverctl float-filter-add title "(?:Open|Save) (?:File|Folder|As)"
 riverctl float-filter-add app-id "pavucontrol"
-riverctl float-filter-add app-id "tfoot-bluetuith"
-riverctl float-filter-add title "tfoot-bluetuith"
+riverctl float-filter-add app-id "foot-bluetuith"
+riverctl float-filter-add title "zoom" # popups?
+# riverctl float-filter-add title "Zoom" # video widow
+# riverctl float-filter-add title "Zoom Meeting" # video widow
+# riverctl float-filter-add title "Zoom - Licensed Account" # dialog
 
 # Set app-ids and titles of views which should use client side decorations
 riverctl csd-filter-add app-id "gedit"
