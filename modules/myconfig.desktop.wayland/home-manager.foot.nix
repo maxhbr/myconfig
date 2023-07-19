@@ -2,42 +2,33 @@
 # from https://codeberg.org/dnkl/foot/src/branch/master/themes
   theme = pkgs.writeText "foot-theme" ''
 # -*- conf -*-
-# Material Amber
-# Based on material.io guidelines with Amber 50 background
+# PaperColor Light
+# Palette based on https://github.com/NLKNguyen/papercolor-theme
 
 [cursor]
-color=fff8e1 21201d
+color=eeeeee 444444
 
 [colors]
-foreground = 21201d
-background = fff8e1
-
-regular0 = 21201d # black
-regular1 = cd4340 # red
-regular2 = 498d49 # green
-regular3 = fab32d # yellow
-regular4 = 3378c4 # blue
-regular5 = b83269 # magenta
-regular6 = 21929a # cyan
-regular7 = ffd7d7 # white
-
-bright0 = 66635a # bright black
-bright1 = dd7b72 # bright red
-bright2 = 82ae78 # bright green
-bright3 = fbc870 # bright yellow
-bright4 = 73a0cd # bright blue
-bright5 = ce6f8e # bright magenta
-bright6 = 548c94 # bright cyan
-bright7 = ffe1da # bright white
-
-dim0 = 9e9a8c # dim black
-dim1 = e9a99b # dim red
-dim2 = b0c99f # dim green
-dim3 = fdda9a # dim yellow
-dim4 = a6c0d4 # dim blue
-dim5 = e0a1ad # dim magenta
-dim6 = 3c6064 # dim cyan
-dim7 = ffe9dd # dim white
+background=eeeeee
+foreground=444444
+regular0=eeeeee  # black
+regular1=af0000  # red
+regular2=008700  # green
+regular3=5f8700  # yellow
+regular4=0087af  # blue
+regular5=878787  # magenta
+regular6=005f87  # cyan
+regular7=764e37  # white
+bright0=bcbcbc   # bright black
+bright1=d70000   # bright red
+bright2=d70087   # bright green
+bright3=8700af   # bright yellow
+bright4=d75f00   # bright blue
+bright5=d75f00   # bright magenta
+bright6=4c7a5d   # bright cyan
+bright7=005faf   # bright white
+# selection-foreground=eeeeee
+# selection-background=0087af
 '';
 in {
   config = (lib.mkIf config.programs.foot.enable {
