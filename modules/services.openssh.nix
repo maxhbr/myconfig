@@ -6,11 +6,11 @@
   config = {
     services.openssh = {
       enable = true;
-      # settings = {
-        passwordAuthentication = false;
-        kbdInteractiveAuthentication = false;
-        forwardX11 = config.services.xserver.enable;
-      # };
+      settings = {
+        PasswordAuthentication = false;
+        KbdInteractiveAuthentication = false;
+        X11Forwarding = config.services.xserver.enable;
+      };
     };
     systemd.services.sshd.wantedBy = lib.mkOverride 40 [ "multi-user.target" ];
   };
