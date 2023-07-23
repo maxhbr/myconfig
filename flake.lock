@@ -496,11 +496,11 @@
         "xdph": "xdph"
       },
       "locked": {
-        "lastModified": 1690047096,
-        "narHash": "sha256-VvZqoWLscSlRonCGq+OdIgA9GkZJJ/Z4yyoXn7m8kjY=",
+        "lastModified": 1690120955,
+        "narHash": "sha256-D7eJ1N6fd/wYZIZ/eqr26lDWTjM265S3UT+YuyLnEio=",
         "owner": "hyprwm",
         "repo": "Hyprland",
-        "rev": "b21644b61143de0835fef9c3fa69fbdd2553cdfa",
+        "rev": "90f69782ee64d35c4b0f38985c00c40595224088",
         "type": "github"
       },
       "original": {
@@ -865,10 +865,10 @@
     },
     "nixpkgs_4": {
       "locked": {
-        "lastModified": 1690053638,
-        "narHash": "sha256-tsGuXTV/wHEi4sEVi6JmJn9Q7e5FT87Mpc+q5IJ5C2M=",
-        "path": "/nix/store/051s4xrbhi3gzanz7hzjxqjmq12m1dnf-source",
-        "rev": "61677c946cf82c2f48492ab81fb4d887f8fedccf",
+        "lastModified": 1690118796,
+        "narHash": "sha256-O3EIZIKJocPEPxhTpgD9cbj0QHamBwVrD3cKUzobK+A=",
+        "path": "/nix/store/p6h6lnkllbirldbklgcw691aj3r72ma1-source",
+        "rev": "88fc4998ff5e106193a1742c8058bd0bf7adc06b",
         "type": "path"
       },
       "original": {
@@ -1500,7 +1500,7 @@
       },
       "locked": {
         "lastModified": 1,
-        "narHash": "sha256-gXf5paIYPJuCAOODEX40/NqyG1nxqHelnmyGZAdzN/8=",
+        "narHash": "sha256-wYczg4HKtYx8l0vlNSgggVDmZc88Cw/sJIUCcED8dDE=",
         "path": "flakes/zephyrproject/",
         "type": "path"
       },
