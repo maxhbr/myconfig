@@ -20,6 +20,7 @@
             "pulseaudio"
             "bluetooth"
             "network"
+            "custom/isvpn"
             "custom/platform_profile"
             "custom/test_for_missing_tb_changing"
             "cpu"
@@ -71,6 +72,18 @@
               "! grep -q performance /sys/firmware/acpi/platform_profile";
             return-type = "json";
             interval = 5;
+          };
+          "custom/isvpn" = {
+            format = "{}";
+            exec = (pkgs.writeShellScriptBin "isvpn" ''
+              if ${pkgs.nettools}/bin/ifconfig tun0 &> /dev/null; then
+                cat <<EOF
+              {"text":"VPN","class":"warning"}
+              EOF
+              fi
+            '') + "/bin/isvpn";
+            return-type = "json";
+            interval = 30;
           };
           "custom/test_for_missing_tb_changing" = {
             format = "{}";
