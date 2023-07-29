@@ -34,7 +34,8 @@ riverctl map normal $mod+Shift C close
 riverctl map normal $mod+Shift+Control Q exit
 
 # lock screen
-riverctl map normal $mod+Shift Y "swaylock -f -c 000000"
+riverctl map normal $mod+Shift Y spawn "swaylock -f -c 000000"
+riverctl map normal $mod X spawn "swaylock -f -c 000000"
 
 # $mod+J and $mod+K to focus the next/previous view in the layout stack
 riverctl map normal $mod J focus-view next
@@ -164,6 +165,7 @@ riverctl spawn-tagmask ${all_but_scratch_tag}
 riverctl background-color 0x002b36
 riverctl border-color-focused 0xee9a00
 riverctl border-color-unfocused 0x586e75
+riverctl border-width 4
 
 # Set keyboard repeat rate
 riverctl set-repeat 50 300
@@ -173,11 +175,14 @@ riverctl float-filter-add app-id float
 riverctl float-filter-add app-id "popup"
 riverctl float-filter-add title "(?:Open|Save) (?:File|Folder|As)"
 riverctl float-filter-add app-id "pavucontrol"
+riverctl float-filter-add app-id "wdisplays"
 riverctl float-filter-add app-id "foot-bluetuith"
 riverctl float-filter-add title "zoom" # popups?
 # riverctl float-filter-add title "Zoom" # video widow
 # riverctl float-filter-add title "Zoom Meeting" # video widow
 # riverctl float-filter-add title "Zoom - Licensed Account" # dialog
+# gimp:
+riverctl float-filter-add title "New Layer"
 
 # Set app-ids and titles of views which should use client side decorations
 riverctl csd-filter-add app-id "gedit"
@@ -187,7 +192,10 @@ riverctl csd-filter-add app-id "gedit"
 riverctl spawn "$HOME/.config/river/autostart"
 
 ###############################################################################
+riverctl attach-mode bottom
 riverctl focus-follows-cursor normal
+riverctl hide-cursor timeout 5000
+riverctl set-cursor-warp on-focus-change
 
 pkill rivertile
 pkill rivercarro

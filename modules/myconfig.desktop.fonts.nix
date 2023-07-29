@@ -9,11 +9,11 @@
 { pkgs, config, lib, ... }: {
   config = lib.mkIf config.myconfig.desktop.enable {
     fonts = {
-      enableDefaultFonts = true;
+      enableDefaultPackages = true;
       fontDir.enable = true;
       enableGhostscriptFonts = true;
 
-      fonts = with pkgs; [
+      packages = with pkgs; [
         (nerdfonts.override {
           fonts = [ "Inconsolata" "FiraCode" "DroidSansMono" ];
         })

@@ -41,6 +41,7 @@
           cpu = {
             format = "cpu: {usage}%";
             tooltip = false;
+            on-click = "foot-htop";
           };
           "river/tags" = {
             tag-labels = ["U" "I" "A" "E" "O" "S" "N" "R" "T" "D"];
@@ -136,7 +137,7 @@
             tooltip-format-connected = "{controller_alias}\t{controller_address}\n\n{num_connections} connected\n\n{device_enumerate}";
             tooltip-format-enumerate-connected = "{device_alias}\t{device_address}";
             tooltip-format-enumerate-connected-battery = "{device_alias}\t{device_address}\t{device_battery_percentage}%";
-            on-click = "tfoot-bluetuith";
+            on-click = "foot-bluetuith";
           };
           pulseaudio = {
             format = "{volume}% {icon} {format_source}";
@@ -209,7 +210,7 @@
         #taskbar button,
         #mode {
             padding: 0 10px;
-            background-color: #64727D;
+            /* background-color: #64727D; */
         }
 
         #battery {
@@ -256,18 +257,23 @@
 
         #taskbar button,
         #tags button, #workspaces button {
-            padding: 0 5px;
+            padding: 0;
+            margin: 0;
             background: transparent;
             color: white;
             border-bottom: 3px solid transparent;
         }
+        #tags button * {
+            margin: 0;
+            padding: 0;
+        }
 
         #taskbar button.active,
-        #tags button.focused, #workspaces button.focused {
+        #tags button.focused, #workspaces button.focused{
             background: #64727D;
         }
         /* #taskbar button.maximized, */
-        #tags button.occupied {
+        #tags button.occupied , #window.focused {
           border-bottom: 3px solid white;
         }
         #taskbar button.fullscreen,

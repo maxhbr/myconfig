@@ -71,11 +71,17 @@ in {
                 ${foot}/bin/foot ${tmux}/bin/tmux attach -t "$SESSION" & disown)
             done
       '')
-      (writeShellScriptBin "tfoot-bluetuith" ''
+      (writeShellScriptBin "foot-bluetuith" ''
         exec ${foot}/bin/foot \
           -T foot-bluetuith \
           -a foot-bluetuith \
           ${bluetuith}/bin/bluetuith
+      '')
+      (writeShellScriptBin "foot-htop" ''
+        exec ${foot}/bin/foot \
+          -T foot-bluetuith \
+          -a foot-bluetuith \
+          ${htop}/bin/htop
       '')
     ];
   });
