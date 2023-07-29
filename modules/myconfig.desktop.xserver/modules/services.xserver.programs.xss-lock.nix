@@ -28,17 +28,17 @@ let
   physlockmodule = { config, ... }: {
     # physlock is deprecated: https://github.com/xyb3rt/physlock
     services.physlock.enable = lib.mkForce false;
-  #   config = lib.mkIf config.services.physlock.enable {
-  #     services.physlock = { allowAnyUser = true; };
-  #     programs.xss-lock = {
-  #       lockerCommand = "${config.security.wrapperDir}/physlock";
-  #     };
-  #     home-manager.sharedModules = [{
-  #       services = {
-  #         screen-locker.lockCmd = "${config.security.wrapperDir}/physlock";
-  #       };
-  #     }];
-  #   };
+    #   config = lib.mkIf config.services.physlock.enable {
+    #     services.physlock = { allowAnyUser = true; };
+    #     programs.xss-lock = {
+    #       lockerCommand = "${config.security.wrapperDir}/physlock";
+    #     };
+    #     home-manager.sharedModules = [{
+    #       services = {
+    #         screen-locker.lockCmd = "${config.security.wrapperDir}/physlock";
+    #       };
+    #     }];
+    #   };
   };
 
   myStopScreensaver = with pkgs;

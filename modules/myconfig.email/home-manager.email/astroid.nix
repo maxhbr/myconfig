@@ -2,7 +2,5 @@
 
 {
   programs.astroid =
-    lib.mkIf config.programs.astroid.enable {
-      externalEditor = "emacs %1";
-    };
+    lib.mkIf config.programs.astroid.enable { externalEditor = "emacs %1"; };
 }

@@ -115,9 +115,12 @@
                   mkSubPkgsOverlay = targetName: input:
                     (self: super: {
                       "${targetName}" = super."${targetName}" or { }
-                        // import input { 
+                        // import input {
                           inherit (pkgs) system;
-                          config = pkgs.config // {allowUnfree = true; segger-jlink.acceptLicense = true;};
+                          config = pkgs.config // {
+                            allowUnfree = true;
+                            segger-jlink.acceptLicense = true;
+                          };
                         };
                     });
                 in [
@@ -189,7 +192,7 @@
               home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
             })
 
-            ({pkgs, config, ... }: {
+            ({ pkgs, config, ... }: {
               config = {
                 nix.settings = {
                   trusted-public-keys = [

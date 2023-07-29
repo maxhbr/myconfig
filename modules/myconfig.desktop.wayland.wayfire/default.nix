@@ -38,12 +38,10 @@ in {
   options.myconfig = with lib; {
     desktop.wayland.wayfire = { enable = mkEnableOption "wayfire"; };
   };
-  config =
-    (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.wayfire.enable) {
+  config = (lib.mkIf
+    (cfg.desktop.wayland.enable && cfg.desktop.wayland.wayfire.enable) {
       home-manager.sharedModules = [{
-        xdg.configFile = {
-          "wayfire.ini".source = ./wayfire.ini;
-        };
+        xdg.configFile = { "wayfire.ini".source = ./wayfire.ini; };
         home.packages = with pkgs; [ wayfirePackage ];
       }];
       myconfig.desktop.wayland.greetdSettings = {

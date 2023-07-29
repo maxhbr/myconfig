@@ -26,29 +26,28 @@ in {
 
       programs.sway = {
         enable = true;
-        extraPackages = with pkgs;
-          [
-            autotiling
-            swaylock
-            swayidle
-            swaybg
-            swayws
-            dmenu
-            sway-launcher-desktop
-            (writeShellScriptBin "foot-sway-launcher-desktop" ''
-              ${foot}/bin/foot --title=launcher --app-id=launcher -e sway-launcher-desktop
-            '')
-            (writeShellScriptBin "my-set-background" ''
-              ${sway}/bin/swaymsg ${wallpaperCmdString}
-            '')
-            (pkgs.writeScriptBin "sway-run-or-raise"
-              (builtins.readFile ./sway-run-or-raise))
-            (writeShellScriptBin "sway-foot-neomutt" ''
-              exec sway-run-or-raise foot-neomutt
-            '')
-            # swaymonad
-            i3-wk-switch # https://github.com/tmfink/i3-wk-switch
-          ];
+        extraPackages = with pkgs; [
+          autotiling
+          swaylock
+          swayidle
+          swaybg
+          swayws
+          dmenu
+          sway-launcher-desktop
+          (writeShellScriptBin "foot-sway-launcher-desktop" ''
+            ${foot}/bin/foot --title=launcher --app-id=launcher -e sway-launcher-desktop
+          '')
+          (writeShellScriptBin "my-set-background" ''
+            ${sway}/bin/swaymsg ${wallpaperCmdString}
+          '')
+          (pkgs.writeScriptBin "sway-run-or-raise"
+            (builtins.readFile ./sway-run-or-raise))
+          (writeShellScriptBin "sway-foot-neomutt" ''
+            exec sway-run-or-raise foot-neomutt
+          '')
+          # swaymonad
+          i3-wk-switch # https://github.com/tmfink/i3-wk-switch
+        ];
         wrapperFeatures.gtk = true;
 
         extraSessionCommands = ''

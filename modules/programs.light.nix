@@ -1,7 +1,6 @@
 # Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{lib, pkgs, config, ...}:
-{ 
+{ lib, pkgs, config, ... }: {
   config = lib.mkIf config.programs.light.enable {
     services.actkbd = {
       enable = lib.mkDefault true;

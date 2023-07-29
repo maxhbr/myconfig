@@ -17,7 +17,7 @@
     };
   }];
   config = {
-    nixpkgs.config = { 
+    nixpkgs.config = {
       allowUnfree = true;
       segger-jlink.acceptLicense = true;
     };

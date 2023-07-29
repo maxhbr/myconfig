@@ -43,63 +43,65 @@ in {
   };
   config =
     (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.river.enable) {
-      home-manager.sharedModules = [({config, ...}: {
-        xdg.configFile = {
-          "river/init".source = ./river/init;
-          "river/init".executable = true;
-          # "river/init".onChange = "${pkgs.procps}/bin/pkill -u $USER river || true";
-          "river/autostart" = {
-            source = (pkgs.writeShellScriptBin "autostart.sh" ''
-              set -x
-              ${cfg.desktop.wayland.autostartCommands}
-              pkill waybar ; ${config.programs.waybar.package}/bin/waybar > /tmp/river.''${XDG_VTNR}.''${USER}.waybar.log 2>&1 &disown
+      home-manager.sharedModules = [
+        ({ config, ... }: {
+          xdg.configFile = {
+            "river/init".source = ./river/init;
+            "river/init".executable = true;
+            # "river/init".onChange = "${pkgs.procps}/bin/pkill -u $USER river || true";
+            "river/autostart" = {
+              source = (pkgs.writeShellScriptBin "autostart.sh" ''
+                set -x
+                ${cfg.desktop.wayland.autostartCommands}
+                pkill waybar ; ${config.programs.waybar.package}/bin/waybar > /tmp/river.''${XDG_VTNR}.''${USER}.waybar.log 2>&1 &disown
 
-              # TODO: why is/was river called in rivers autostart script, which is called by river??
-              # # or: dbus-run-session -- river
-              # dbus-wm-environment ${riverPackage}/bin/river
+                # TODO: why is/was river called in rivers autostart script, which is called by river??
+                # # or: dbus-run-session -- river
+                # dbus-wm-environment ${riverPackage}/bin/river
 
-              ${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all
-            '') + "/bin/autostart.sh";
-            executable = true;
-          };
-          "river/kile-layout".source = ./river/kile-layout;
-          "river/kile-layout".executable = true;
-        };
-        home.packages = with pkgs; [ riverPackage riverinit ];
-        
-      })
-      ({config, pkgs, ...}: 
-        # from https://github.com/riverwm/river/wiki
-        let extraCss = ''
-/* No (default) titlebar on wayland */
-headerbar.titlebar.default-decoration {
-  background: transparent;
-  padding: 0;
-  margin: 0 0 -17px 0;
-  border: 0;
-  min-height: 0;
-  font-size: 0;
-  box-shadow: none;
-}
-
-/* rm -rf window shadows */
-window.csd,             /* gtk4? */
-window.csd decoration { /* gtk3 */
-  box-shadow: none;
-}
-        '';
-        in {
-          gtk = {
-            enable = true;
-            theme = {
-              package = pkgs.gruvbox-gtk-theme;
-              name = "Gruvbox-Dark-B";
+                ${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all
+              '') + "/bin/autostart.sh";
+              executable = true;
             };
-            gtk3 = { inherit extraCss; };
-            gtk4 = { inherit extraCss; };
+            "river/kile-layout".source = ./river/kile-layout;
+            "river/kile-layout".executable = true;
           };
-      })
-      
+          home.packages = with pkgs; [ riverPackage riverinit ];
+
+        })
+        ({ config, pkgs, ... }:
+          # from https://github.com/riverwm/river/wiki
+          let
+            extraCss = ''
+              /* No (default) titlebar on wayland */
+              headerbar.titlebar.default-decoration {
+                background: transparent;
+                padding: 0;
+                margin: 0 0 -17px 0;
+                border: 0;
+                min-height: 0;
+                font-size: 0;
+                box-shadow: none;
+              }
+
+              /* rm -rf window shadows */
+              window.csd,             /* gtk4? */
+              window.csd decoration { /* gtk3 */
+                box-shadow: none;
+              }
+            '';
+          in {
+            gtk = {
+              enable = true;
+              theme = {
+                package = pkgs.gruvbox-gtk-theme;
+                name = "Gruvbox-Dark-B";
+              };
+              gtk3 = { inherit extraCss; };
+              gtk4 = { inherit extraCss; };
+            };
+          })
+
       ];
 
       myconfig.desktop.wayland.greetdSettings = {

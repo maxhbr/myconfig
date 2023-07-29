@@ -123,9 +123,7 @@ let
           enable = true;
           cert = "/etc/syncthing/cert.pem";
           key = "/etc/syncthing/key.pem";
-          settings = {
-            inherit devices folders;
-          };
+          settings = { inherit devices folders; };
         };
       };
 
