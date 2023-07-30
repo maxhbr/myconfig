@@ -4,21 +4,6 @@
 # https://www.reddit.com/r/NixOS/comments/s9ytrg/comment/htr06n8/
 
 let
-  # currently, there is some friction between sway and gtk:
-  # https://github.com/swaywm/sway/wiki/GTK-3-settings-on-Wayland
-  # the suggested way to set gtk settings is with gsettings
-  # for gsettings to work, we need to tell it where the schemas are
-  # using the XDG_DATA_DIR environment variable
-  # run at the end of sway config
-  configure-gtk = let
-    schema = pkgs.gsettings-desktop-schemas;
-    datadir = "${schema}/share/gsettings-schemas/${schema.name}";
-  in pkgs.writeShellScriptBin "configure-gtk" ''
-    export XDG_DATA_DIRS=${datadir}:$XDG_DATA_DIRS
-    gnome_schema=org.gnome.desktop.interface
-    ${pkgs.glib}/bin/gsettings set $gnome_schema gtk-theme ''${1:-Breeze}
-  '';
-
   # bash script to let dbus know about important env variables and
   # propogate them to relevent services run at the end of sway config
   # see
@@ -30,7 +15,9 @@ let
       set -x
       export XDG_CURRENT_DESKTOP="''${1:-wlroots}"
       dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP=$XDG_CURRENT_DESKTOP
-      ${configure-gtk}/bin/configure-gtk $2 &disown
+      if command -v configure-gtk &> /dev/null; then
+          configure-gtk &disown
+      fi
     )
     systemctl-update() (
       set -x
@@ -58,6 +45,8 @@ let
       echo "dbus-update..."
       dbus-update "$@"
       until "$0" systemctl-update $@; do 
+        echo "wait for detached..."
+        wait $(jobs -p) || true
         echo "retry..."
       done
     fi
@@ -67,10 +56,7 @@ in {
   config = lib.mkIf config.services.dbus.enable {
     home-manager.sharedModules = [{
       home.packages = with pkgs; [
-        configure-gtk
         dbus-wm-environment
-        dracula-theme # gtk theme
-        gnome.adwaita-icon-theme # default gnome cursors
       ];
     }];
 

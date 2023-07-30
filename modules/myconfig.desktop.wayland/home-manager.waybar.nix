@@ -9,12 +9,14 @@
           modules-left = [
             # "river/mode"
             "river/tags"
-            "river/window"
             "sway/workspaces"
             "sway/mode"
-            "sway/window"
           ];
-          modules-center = [ "wlr/taskbar" ];
+          modules-center = [
+            "river/window"
+            "sway/window"
+            "wlr/taskbar"
+          ];
           modules-right = [
             "idle_inhibitor"
             "pulseaudio"
@@ -218,10 +220,13 @@
         #custom-platform_profile,
         #idle_inhibitor,
         #tray,
+        #mode,
         #taskbar button,
-        #mode {
+        #window,
+        #tags button {
             padding: 0 10px;
             /* background-color: #64727D; */
+            border-radius: 0px 0px 7px 7px;
         }
 
         #battery {
@@ -282,6 +287,8 @@
         #taskbar button.active,
         #tags button.focused, #workspaces button.focused{
             background: #64727D;
+            border-right: 3px solid white;
+            border-left: 3px solid white;
         }
         /* #taskbar button.maximized, */
         #tags button.occupied , #window.focused {

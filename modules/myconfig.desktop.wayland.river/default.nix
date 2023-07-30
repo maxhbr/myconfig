@@ -67,41 +67,7 @@ in {
             "river/kile-layout".executable = true;
           };
           home.packages = with pkgs; [ riverPackage riverinit ];
-
         })
-        ({ config, pkgs, ... }:
-          # from https://github.com/riverwm/river/wiki
-          let
-            extraCss = ''
-              /* No (default) titlebar on wayland */
-              headerbar.titlebar.default-decoration {
-                background: transparent;
-                padding: 0;
-                margin: 0 0 -17px 0;
-                border: 0;
-                min-height: 0;
-                font-size: 0;
-                box-shadow: none;
-              }
-
-              /* rm -rf window shadows */
-              window.csd,             /* gtk4? */
-              window.csd decoration { /* gtk3 */
-                box-shadow: none;
-              }
-            '';
-          in {
-            gtk = {
-              enable = true;
-              theme = {
-                package = pkgs.gruvbox-gtk-theme;
-                name = "Gruvbox-Dark-B";
-              };
-              gtk3 = { inherit extraCss; };
-              gtk4 = { inherit extraCss; };
-            };
-          })
-
       ];
 
       myconfig.desktop.wayland.greetdSettings = {
