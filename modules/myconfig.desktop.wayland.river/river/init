@@ -24,8 +24,8 @@ riverctl map normal $mod+Shift Return spawn tfoot
 riverctl map normal $mod+Control Return spawn foot
 riverctl map normal $mod+Shift+Control Return spawn tfoot-reattach
 riverctl map normal $mod P spawn "wofi --show run"
-riverctl map normal None XF86Display grim-region
-riverctl map normal $mod W grim-region
+riverctl map normal None XF86Display spawn grim-region
+riverctl map normal $mod W           spawn grim-region
 
 # $mod+Q to close the focused view
 riverctl map normal $mod+Shift C close

@@ -15,7 +15,6 @@
           modules-center = [
             "river/window"
             "sway/window"
-            "wlr/taskbar"
           ];
           modules-right = [
             "idle_inhibitor"
@@ -25,12 +24,13 @@
             "custom/isvpn"
             "custom/platform_profile"
             "custom/test_for_missing_tb_changing"
-            "cpu"
-            "memory"
+            # "cpu"
+            # "memory"
             "backlight"
             "battery"
-            "clock"
+            "wlr/taskbar"
             "tray"
+            "clock"
           ];
           tray = { spacing = 10; };
           clock = {
@@ -46,7 +46,7 @@
             on-click = "foot-htop";
           };
           "river/tags" = {
-            tag-labels = [ "U" "I" "A" "E" "O" "S" "N" "R" "T" "D" ];
+            tag-labels = [ "U" "I" "A" "E" "O" "S" "N" "R" "T" ];
           };
           "wlr/taskbar" = {
             format = "{icon}";
@@ -99,9 +99,6 @@
                      exit 0
                   fi
               fi
-              # cat <<EOF
-              # {"text":"ok","class":"ok"}
-              # EOF
             '') + "/bin/test_for_missing_tb_changing";
             return-type = "json";
             interval = 60;
@@ -179,7 +176,9 @@
           };
         };
       };
-      style = ''
+      style = let 
+        white = "#e0cbc7";
+      in ''
         * {
             border: none;
             border-radius: 0;
@@ -190,8 +189,8 @@
 
         window#waybar {
             background: rgba(43, 48, 59, 0.5);
-            border-bottom: 3px solid rgba(100, 114, 125, 0.5);
-            color: white;
+            border-bottom: 3px solid rgba(195, 210, 222, 0.5); /* c3d2df */
+            color: ${white};
         }
 
         tooltip {
@@ -199,16 +198,15 @@
           border: 1px solid rgba(100, 114, 125, 0.5);
         }
         tooltip label {
-          color: white;
+          color: ${white};
         }
 
         #mode {
             padding: 0 10px;
-            background: #64727D;
-            border-bottom: 3px solid white;
+            background: #64727d;
+            border-bottom: 3px solid ${white};
         }
 
-        #clock,
         #battery,
         #cpu,
         #memory,
@@ -225,8 +223,28 @@
         #window,
         #tags button {
             padding: 0 10px;
-            /* background-color: #64727D; */
             border-radius: 0px 0px 7px 7px;
+        }
+
+        #clock {
+            border-bottom: 3px solid ${white};
+        }
+
+        #taskbar button,
+        #tags button,
+        #workspaces button {
+            padding: 0;
+            margin: 0;
+            background: transparent;
+            color: ${white};
+            border-bottom: 3px solid transparent;
+        }
+        #tags button * {
+            margin: 0;
+            padding: 0;
+        }
+        #taskbar button.active {
+            background-color: #ffffff;
         }
 
         #battery {
@@ -235,8 +253,8 @@
         }
 
         #battery.charging {
-            color: white;
-            background-color: #26A65B;
+            background-color: #26a65b;
+            color: white; /* actual white */
         }
 
         @keyframes blink {
@@ -271,34 +289,28 @@
         /* #taskbar button.maximized */
         /* #taskbar button.fullscreen */
 
-        #taskbar button,
-        #tags button, #workspaces button {
-            padding: 0;
-            margin: 0;
-            background: transparent;
-            color: white;
-            border-bottom: 3px solid transparent;
-        }
-        #tags button * {
-            margin: 0;
-            padding: 0;
-        }
-
-        #taskbar button.active,
         #tags button.focused, #workspaces button.focused{
-            background: #64727D;
-            border-right: 3px solid white;
-            border-left: 3px solid white;
+            background: #64727d;
+            border-right: 3px solid ${white};
+            border-left: 3px solid ${white};
+        }
+        #tray {
+            border-left: 3px solid ${white};
+            border-bottom: 3px solid ${white};
+            border-radius: 0px 0px 0px 7px;
         }
         /* #taskbar button.maximized, */
         #tags button.occupied , #window.focused {
-          border-bottom: 3px solid white;
+          border-bottom: 3px solid ${white};
         }
         #taskbar button.fullscreen,
         #tags button.urgent {
           border-bottom: 3px solid #ee9a00;
         }
 
+        #idle_inhibitor {
+          min-width: 15px;
+        }
         #idle_inhibitor.deactivated {
             background-color: #1F2C36;
         }

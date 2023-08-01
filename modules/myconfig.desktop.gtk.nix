@@ -4,6 +4,10 @@
 let
   cfg = config.myconfig;
 
+  iconTheme = {
+    package = pkgs.numix-icon-theme-circle;
+    name = "Numix-Circle";
+  };
   theme = let 
     light = false;
     gruvbox = {
@@ -62,11 +66,12 @@ in {
             home.packages = with pkgs; [
               configure-gtk
               theme.package
+              iconTheme.package
               gnome.adwaita-icon-theme # default gnome cursors
             ];
             gtk = {
               enable = true;
-              inherit theme;
+              inherit theme iconTheme;
               gtk3 = { inherit extraCss; };
               gtk4 = { inherit extraCss; };
             };

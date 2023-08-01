@@ -70,18 +70,17 @@ in {
                 ${foot}/bin/foot ${tmux}/bin/tmux attach -t "$SESSION" & disown)
             done
       '')
-      (writeShellScriptBin "foot-bluetuith" ''
+    ] ++ (let
+      mkFootTuiCmd = cmd: package: (writeShellScriptBin "foot-${cmd}" ''
         exec ${foot}/bin/foot \
-          -T foot-bluetuith \
-          -a foot-bluetuith \
-          ${bluetuith}/bin/bluetuith
-      '')
-      (writeShellScriptBin "foot-htop" ''
-        exec ${foot}/bin/foot \
-          -T foot-bluetuith \
-          -a foot-bluetuith \
-          ${htop}/bin/htop
-      '')
-    ];
+          -T foot-${cmd} \
+          -a foot-${cmd} \
+          ${package}/bin/${cmd}
+      '');
+    in [
+      (mkFootTuiCmd "bluetuith" bluetuith)
+      (mkFootTuiCmd "htop" htop)
+      (mkFootTuiCmd "nmtui" networkmanager)
+    ]);
   });
 }
