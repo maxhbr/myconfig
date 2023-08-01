@@ -819,19 +819,6 @@
         "type": "github"
       }
     },
-    "nixpkgs_4": {
-      "locked": {
-        "lastModified": 1690830529,
-        "narHash": "sha256-SaKBLYzrtcxbdFONm0CpsM21khHSVbjJ1Hn+t4THEGw=",
-        "path": "/nix/store/rcs6l2g62z4m18k7c479fg4k7mpw6sj6-source",
-        "rev": "1e186dd0c3baa34d59ef74156fc0a554e21e4320",
-        "type": "path"
-      },
-      "original": {
-        "id": "nixpkgs",
-        "type": "indirect"
-      }
-    },
     "nose": {
       "flake": false,
       "locked": {
@@ -940,22 +927,6 @@
       "original": {
         "owner": "arnested",
         "repo": "php-extras",
-        "type": "github"
-      }
-    },
-    "platformio-core": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1690635860,
-        "narHash": "sha256-zSgxZz+EwJkAUDcn5QbfHaEh1c3jIe85ZuyMo/p98yI=",
-        "owner": "platformio",
-        "repo": "platformio-core",
-        "rev": "f8b5266c1eafcc7c3528d8f845c531066dfe9758",
-        "type": "github"
-      },
-      "original": {
-        "owner": "platformio",
-        "repo": "platformio-core",
         "type": "github"
       }
     },
@@ -1171,8 +1142,7 @@
         "rel2205": "rel2205",
         "river-grid": "river-grid",
         "swaymonad": "swaymonad",
-        "vivarium": "vivarium",
-        "zephyrproject": "zephyrproject"
+        "vivarium": "vivarium"
       }
     },
     "rotate-text": {
@@ -1402,22 +1372,6 @@
         "owner": "jethrokuan",
         "repo": "z",
         "type": "github"
-      }
-    },
-    "zephyrproject": {
-      "inputs": {
-        "nixpkgs": "nixpkgs_4",
-        "platformio-core": "platformio-core"
-      },
-      "locked": {
-        "lastModified": 1,
-        "narHash": "sha256-yQaBusTqz1ejot0o9ZkwHBV5jlVudnUn84V/F+h1+BQ=",
-        "path": "flakes/zephyrproject/",
-        "type": "path"
-      },
-      "original": {
-        "path": "flakes/zephyrproject/",
-        "type": "path"
       }
     }
   },
