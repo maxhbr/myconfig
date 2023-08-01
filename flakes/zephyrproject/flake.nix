@@ -20,7 +20,7 @@
           segger-jlink
           my-west
           my-west-arm
-          my-west-riscv
+          # my-west-riscv
           my-west-esp32
           my-west-update
           my-west-init
@@ -47,7 +47,7 @@
           nixpkgs.config.segger-jlink.acceptLicense = true;
           home-manager.sharedModules = [{
             home.packages = (allpackages pkgs) ++ (with pkgs; [
-              openocd
+              # openocd
               picocom
               minicom
               (writeShellScriptBin "flash-nrf52840dongle" ''
@@ -106,7 +106,7 @@
             platformio-udev-rules
             # pkgs.platformio
             segger-modemmanager-blacklist-udev-rules
-            pkgs.openocd
+            # pkgs.openocd
             # pkgs.segger-jlink
             pkgs.stlink
             pkgs.teensy-udev-rules
@@ -124,10 +124,10 @@
           inherit system;
           overlays = [ self.overlay ];
         }).my-west-arm;
-        my-west-riscv = (import nixpkgs {
-          inherit system;
-          overlays = [ self.overlay ];
-        }).my-west-riscv;
+        # my-west-riscv = (import nixpkgs {
+        #   inherit system;
+        #   overlays = [ self.overlay ];
+        # }).my-west-riscv;
         my-west-esp32 = (import nixpkgs {
           inherit system;
           overlays = [ self.overlay ];

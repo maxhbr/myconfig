@@ -69,7 +69,7 @@
       cmake
       dtc
       gperf
-      openocd
+      # openocd
       dfu-util
       bossa
       pkgs.nrfutil
@@ -152,13 +152,13 @@
         --set GNUARMEMB_TOOLCHAIN_PATH "${arm-toolchain}"
       '';
     };
-    my-west-riscv = my-west-fun {
-      pnameext = "-riscv";
-      wrapperArgs = ''
-        --set ZEPHYR_TOOLCHAIN_VARIANT zephyr \
-        --set OPENOCD ${pkgs.openocd}/bin/openocd
-      '';
-    };
+    # my-west-riscv = my-west-fun {
+    #   pnameext = "-riscv";
+    #   wrapperArgs = ''
+    #     --set ZEPHYR_TOOLCHAIN_VARIANT zephyr \
+    #     --set OPENOCD ${pkgs.openocd}/bin/openocd
+    #   '';
+    # };
     my-west-esp32 =
       let esp32-toolchain = (pkgs.callPackage ./esp32-toolchain.nix { });
       in my-west-fun {

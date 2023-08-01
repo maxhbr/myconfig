@@ -44,7 +44,7 @@
     # octrc.url = "github:maxhbr/octrc";
     # octrc.inputs.nixpkgs.follows = "nixpkgs";
 
-    zephyrproject.url = "path:flakes/zephyrproject/";
+    # zephyrproject.url = "path:flakes/zephyrproject/";
 
     #wayland:sway
     swaymonad = {
@@ -59,12 +59,12 @@
       inputs.flake-utils.follows = "flake-utils";
     };
 
-    #wayland:hyprland
-    hyprland = {
-      url = "github:hyprwm/Hyprland";
-      # build with your own instance of nixpkgs
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    # #wayland:hyprland
+    # hyprland = {
+    #   url = "github:hyprwm/Hyprland";
+    #   # build with your own instance of nixpkgs
+    #   inputs.nixpkgs.follows = "nixpkgs";
+    # };
 
     #wayland:newm
     newmpkg = {
@@ -238,15 +238,15 @@
                 (myconfig.metadatalib.announceHost "pi0")
               ];
             })
-            inputs.zephyrproject.nixosModule
+            # inputs.zephyrproject.nixosModule
             # ({ pkgs, ... }: {
             #   environment.systemPackages = with pkgs.nixos-unstable; [ segger-jlink ];
             #   services.udev.packages = [ pkgs.nixos-unstable.segger-jlink ];
             # })
-            ({ pkgs, ... }: {
-              home-manager.sharedModules =
-                [ inputs.hyprland.homeManagerModules.default ];
-            })
+            # ({ pkgs, ... }: {
+            #   home-manager.sharedModules =
+            #     [ inputs.hyprland.homeManagerModules.default ];
+            # })
           ] ++ moreModules) metadataOverride);
         host-x1extremeG2 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
@@ -254,7 +254,7 @@
             self.nixosModules.core
             # inputs.octrc.nixosModule
             inputs.nixos-hardware.nixosModules.lenovo-thinkpad-x1-extreme-gen2
-            inputs.zephyrproject.nixosModule
+            # inputs.zephyrproject.nixosModule
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "workstation" ([

@@ -17,7 +17,6 @@
             "sway/window"
           ];
           modules-right = [
-            "idle_inhibitor"
             "pulseaudio"
             "bluetooth"
             "network"
@@ -30,6 +29,7 @@
             "battery"
             "wlr/taskbar"
             "tray"
+            "idle_inhibitor"
             "clock"
           ];
           tray = { spacing = 10; };
@@ -216,7 +216,6 @@
         #pulseaudio,
         #bluetooth,
         #custom-platform_profile,
-        #idle_inhibitor,
         #tray,
         #mode,
         #taskbar button,
@@ -226,7 +225,8 @@
             border-radius: 0px 0px 7px 7px;
         }
 
-        #clock {
+        #clock,
+        #idle_inhibitor {
             border-bottom: 3px solid ${white};
         }
 
@@ -238,13 +238,12 @@
             background: transparent;
             color: ${white};
             border-bottom: 3px solid transparent;
+            padding-left: 2px;
+            padding-right: 2px;
         }
         #tags button * {
             margin: 0;
             padding: 0;
-        }
-        #taskbar button.active {
-            background-color: #ffffff;
         }
 
         #battery {
@@ -290,9 +289,11 @@
         /* #taskbar button.fullscreen */
 
         #tags button.focused, #workspaces button.focused{
-            background: #64727d;
-            border-right: 3px solid ${white};
-            border-left: 3px solid ${white};
+            /* background: #64727d; */
+            border-right: 2px solid ${white};
+            border-left: 2px solid ${white};
+            padding-left: 0px;
+            padding-right: 0px;
         }
         #tray {
             border-left: 3px solid ${white};
@@ -300,7 +301,9 @@
             border-radius: 0px 0px 0px 7px;
         }
         /* #taskbar button.maximized, */
-        #tags button.occupied , #window.focused {
+        #taskbar button.active,
+        #tags button.occupied,
+        #window.focused {
           border-bottom: 3px solid ${white};
         }
         #taskbar button.fullscreen,
@@ -309,7 +312,7 @@
         }
 
         #idle_inhibitor {
-          min-width: 15px;
+          min-width: 25px;
         }
         #idle_inhibitor.deactivated {
             background-color: #1F2C36;

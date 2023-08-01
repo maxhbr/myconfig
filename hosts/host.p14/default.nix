@@ -53,10 +53,11 @@
         wayland = {
           enable = true;
           desktop = "river";
-          sway.enable = true;
           river.enable = true;
           labwc.enable = true;
 
+          #disabled:
+          # sway.enable = true;
           #experimental:
           # wayfire.enable = true;
           # qtile.enable = true;
