@@ -83,10 +83,10 @@
         go.enable = false;
         haskell.enable = true;
         network.enable = true;
-        nodejs.enable = false;
+        # nodejs.enable = false;
         # ruby.enable = true;
         # rust.enable = true;
-        elixir.enable = false;
+        # elixir.enable = false;
       };
     };
     virtualisation.docker.enable = true;
@@ -108,7 +108,7 @@
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [
-          rdesktop
+          # rdesktop
           google-chrome # for netflix and stadia
         ];
         programs.zsh.shellAliases = {
