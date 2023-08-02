@@ -123,7 +123,7 @@
           defaultTimeout = lib.mkForce 20000;
         };
         services.kanshi = {
-          # enable = lib.mkForce true;
+          enable = lib.mkForce true;
           profiles = {
             # get list via "swaymsg -t get_outputs"
             undocked = {
