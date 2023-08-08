@@ -14,7 +14,7 @@ in {
 
         gimp # -with-plugins
         # rawtherapee
-        # darktable
+        darktable
         geeqie
         # gthumb
         # krita

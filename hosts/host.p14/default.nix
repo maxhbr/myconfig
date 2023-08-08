@@ -87,6 +87,7 @@
         # ruby.enable = true;
         # rust.enable = true;
         # elixir.enable = false;
+        embedded.enable = true;
       };
     };
     virtualisation.docker.enable = true;

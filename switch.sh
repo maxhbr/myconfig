@@ -14,7 +14,7 @@ if [[ $# -gt 0 && "$1" == "--fast" ]]; then
     shift
     nix flake update
 else
-    ./update.sh
+    nix flake update --commit-lock-file
 fi
 
 target="${1:-$(hostname)}"

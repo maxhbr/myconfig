@@ -181,6 +181,7 @@ riverctl float-filter-add title "zoom" # popups?
 # riverctl float-filter-add title "Zoom" # video widow
 # riverctl float-filter-add title "Zoom Meeting" # video widow
 # riverctl float-filter-add title "Zoom - Licensed Account" # dialog
+riverctl float-filter-add title "Google Pay — Mozilla Firefox"
 # gimp:
 riverctl float-filter-add title "New Layer"
 

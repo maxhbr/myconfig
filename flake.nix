@@ -36,8 +36,6 @@
     nix-doom-emacs.url = "github:nix-community/nix-doom-emacs";
     nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
 
-    myfish.url = "path:flakes/myfish/";
-
     my-wallpapers.url = "github:maxhbr/wallpapers";
     my-wallpapers.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -79,6 +77,33 @@
 
     #wayland:vivarium
     vivarium.url = "github:maxhbr/vivarium";
+
+    ###########################################################################
+    # begin fish
+    fasd.url = "github:oh-my-fish/plugin-fasd";
+    fasd.flake = false;
+    foreign-env.url = "github:oh-my-fish/plugin-foreign-env";
+    foreign-env.flake = false;
+    tmux.url = "github:oh-my-fish/plugin-tmux";
+    tmux.flake = false;
+    z.url = "github:jethrokuan/z";
+    z.flake = false;
+    fzf.url = "github:jethrokuan/fzf";
+    fzf.flake = false;
+    done.url = "github:franciscolourenco/done";
+    done.flake = false;
+    fish-async-prompt.url = "github:acomagu/fish-async-prompt";
+    fish-async-prompt.flake = false;
+    fish-ssh-agent.url = "github:danhper/fish-ssh-agent";
+    fish-ssh-agent.flake = false;
+    # sashimi.url = "github:isacikgoz/sashimi";
+    # sashimi.flake = false;
+    agnoster.url = "github:hauleth/agnoster";
+    agnoster.flake = false;
+    bax.url = "github:jorgebucaran/bax.fish";
+    bax.flake = false;
+    # end fish
+    ###########################################################################
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -91,7 +116,7 @@
       ## profiles and modules ##################################################
       ##########################################################################
 
-      nixosModules = {
+      nixosModules = rec {
         activateHomeManager = { config, lib, ... }: {
           imports = [
             # home manager:
@@ -105,6 +130,57 @@
               backupFileExtension = "hmBackup";
               sharedModules = [{ home.stateVersion = lib.mkDefault "22.11"; }];
             };
+          };
+        };
+        fishPluginsModule = { pkgs, ... }: {
+          config = {
+            home-manager.sharedModules = [({config, lib, ...} : {
+              config = lib.mkIf config.programs.fish.enable {
+                home.packages = with pkgs; [ fasd fzf ];
+                programs.fish = {
+                  plugins = [
+                    {
+                      name = "fasd";
+                      src = inputs.fasd;
+                    }
+                    {
+                      name = "foreign-env";
+                      src = inputs.foreign-env;
+                    }
+                    {
+                      name = "tmux";
+                      src = inputs.tmux;
+                    }
+                    {
+                      name = "z";
+                      src = inputs.z;
+                    }
+                    {
+                      name = "fzf";
+                      src = inputs.fzf;
+                    }
+                    {
+                      name = "done";
+                      src = inputs.done;
+                    }
+                    {
+                      name = "fish-async-prompt";
+                      src = inputs.fish-async-prompt;
+                    }
+                    {
+                      name = "fish-ssh-agent";
+                      src = inputs.fish-ssh-agent;
+                    }
+                  ];
+                };
+                home.file = {
+                  ".config/fish/functions/fish_prompt.fish".source = inputs.agnoster
+                    + "/fish_prompt.fish";
+                  ".config/fish/functions/bax.fish".source = inputs.bax
+                    + "/bax.fish";
+                };
+              };
+            })];
           };
         };
         core = { ... }: {
@@ -186,7 +262,7 @@
             })
             ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.vivarium.overlay ]; })
             inputs.my-wallpapers.nixosModule
-            inputs.myfish.nixosModule
+            fishPluginsModule
 
             ({ pkgs, ... }: {
               home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
