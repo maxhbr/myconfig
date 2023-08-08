@@ -55,5 +55,5 @@ in symlinkJoin {
     providedSessions = [ "wayfire" ];
   };
 
-  inherit (wayfire) meta;
+  inherit (wayfire) meta man;
 }

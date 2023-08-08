@@ -54,9 +54,10 @@
           enable = true;
           desktop = "river";
           river.enable = true;
-          labwc.enable = true;
+          # labwc.enable = true;
 
           #disabled:
+          # desktop = "sway";
           # sway.enable = true;
           #experimental:
           # wayfire.enable = true;

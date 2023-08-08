@@ -65,5 +65,5 @@ in symlinkJoin {
     providedSessions = [ "dwl" ];
   };
 
-  inherit (dwl) meta;
+  inherit (dwl) meta man;
 }

@@ -66,5 +66,5 @@ in symlinkJoin {
     providedSessions = [ "qtile" ];
   };
 
-  inherit (qtile) meta;
+  inherit (qtile) meta man;
 }

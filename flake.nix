@@ -132,6 +132,10 @@
             };
           };
         };
+        readOnlyPkgs = {
+          imports = [ nixpkgs.nixosModules.readOnlyPkgs ];
+          nixpkgs.pkgs = nixpkgs.legacyPackages.x86_64-linux;
+        };
         fishPluginsModule = { pkgs, ... }: {
           config = {
             home-manager.sharedModules = [({config, lib, ...} : {
@@ -314,15 +318,6 @@
                 (myconfig.metadatalib.announceHost "pi0")
               ];
             })
-            # inputs.zephyrproject.nixosModule
-            # ({ pkgs, ... }: {
-            #   environment.systemPackages = with pkgs.nixos-unstable; [ segger-jlink ];
-            #   services.udev.packages = [ pkgs.nixos-unstable.segger-jlink ];
-            # })
-            # ({ pkgs, ... }: {
-            #   home-manager.sharedModules =
-            #     [ inputs.hyprland.homeManagerModules.default ];
-            # })
           ] ++ moreModules) metadataOverride);
         host-x1extremeG2 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
@@ -380,6 +375,7 @@
           system = "x86_64-linux";
           modules = [
             self.nixosModules.activateHomeManager
+            self.nixosModules.readOnlyPkgs
             # self.nixosModules.core
             ({ pkgs, ... }: {
               boot.isContainer = true;

@@ -56,5 +56,5 @@ in symlinkJoin {
     providedSessions = [ "river" ];
   };
 
-  inherit (river) meta;
+  inherit (river) meta man;
 }
