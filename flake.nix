@@ -108,6 +108,11 @@
 
   outputs = { self, nixpkgs, ... }@inputs:
     let inherit (inputs.nixpkgs) lib;
+      nixpkgsConfig = {
+        allowUnfree = true;
+        segger-jlink.acceptLicense = true;
+        allowBroken = true;
+      };
     in lib.recursiveUpdate {
       aggregatedInputs = inputs;
       lib = import ./outputs.lib.nix inputs;
@@ -197,17 +202,14 @@
                       "${targetName}" = super."${targetName}" or { }
                         // import input {
                           inherit (pkgs) system;
-                          config = pkgs.config // {
-                            allowUnfree = true;
-                            segger-jlink.acceptLicense = true;
-                          };
+                          config = pkgs.config // nixpkgsConfig;
                         };
                     });
                 in [
                   (mkSubPkgsOverlay "master" inputs.master)
                   (mkSubPkgsOverlay "nixos-unstable" inputs.nixos-unstable)
                   (mkSubPkgsOverlay "nixos-unstable-small"
-                    inputs.nixos-unstable-small)
+                    inputs.ninos-unstable-small)
                   (mkSubPkgsOverlay "nixos-2003" inputs.rel2003)
                   (mkSubPkgsOverlay "nixos-2009" inputs.rel2009)
                   (mkSubPkgsOverlay "nixos-2105" inputs.rel2105)
@@ -400,14 +402,7 @@
       };
 
     } (let
-
-      eachDefaultSystem =
-        inputs.flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ];
-      nixpkgsConfig = {
-        allowUnfree = true;
-        allowBroken = true;
-      };
-
+      eachDefaultSystem = inputs.flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ];
     in eachDefaultSystem (system: {
       legacyPackages = import inputs.nixpkgs {
         inherit system;
