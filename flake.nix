@@ -110,6 +110,7 @@
     let inherit (inputs.nixpkgs) lib;
       nixpkgsConfig = {
         allowUnfree = true;
+        allowUnfreePredicate = (pkg: true);
         segger-jlink.acceptLicense = true;
         allowBroken = true;
       };
