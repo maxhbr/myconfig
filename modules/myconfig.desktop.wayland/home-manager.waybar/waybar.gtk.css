@@ -7,28 +7,21 @@
 }
 
 window#waybar {
-    background: linear-gradient(rgba(43, 48, 59, 0.5), rgba(43, 48, 59, 0)); /*rgba(195, 210, 222, 0)*/
+    background: linear-gradient(rgba(43, 48, 59, 0.5), rgba(43, 48, 59, 0));
     color: #e0cbc7;
 }
 
 tooltip {
-  background: rgba(43, 48, 59, 0.5);
-  border: 1px solid rgba(100, 114, 125, 0.5);
-}
-tooltip label {
-  color: #e0cbc7;
+    background: rgba(43, 48, 59, 0.5);
+    border: 1px solid rgba(100, 114, 125, 0.5);
+    border-radius: 7px;
 }
 
-#mode {
-    padding: 0 10px;
-    background: #64727d;
-    border-bottom: 3px solid #e0cbc7;
+tooltip label {
+    color: #e0cbc7;
 }
 
 #battery,
-#cpu,
-#memory,
-#disk,
 #backlight,
 #network,
 #pulseaudio,
@@ -39,14 +32,12 @@ tooltip label {
 #taskbar button,
 #window,
 #tags button {
-    padding: 0 10px;
+    padding: 0 9px;
     border-radius: 0px 0px 7px 7px;
 }
 
-#clock,
-#idle_inhibitor {
-    background: rgba(43, 48, 59, 0.5);
-    border-bottom: 3px solid #e0cbc7;
+#battery {
+    padding-right: 11px;
 }
 
 #taskbar button,
@@ -60,11 +51,15 @@ tooltip label {
     padding-left: 2px;
     padding-right: 2px;
 }
+
 #tags button * {
     margin: 0;
     padding: 0;
 }
 
+#pulseaudio:hover,
+#bluetooth:hover,
+#network:hover,
 #battery {
     background-color: #ffffff;
     color: black;
@@ -72,7 +67,7 @@ tooltip label {
 
 #battery.charging {
     background-color: #26a65b;
-    color: white; /* actual white */
+    color: white;
 }
 
 @keyframes blink {
@@ -93,7 +88,9 @@ tooltip label {
 #battery.warning:not(.charging) {
     background: #ee9a00;
 }
-#battery.critical:not(.charging), #custom-test_for_missing_tb_changing.error {
+
+#battery.critical:not(.charging),
+#custom-test_for_missing_tb_changing.error {
     background: #f53c3c;
     color: white;
     animation-name: blink;
@@ -103,41 +100,57 @@ tooltip label {
     animation-direction: alternate;
 }
 
-/* #taskbar button.minimized */
-/* #taskbar button.maximized */
-/* #taskbar button.fullscreen */
-
-#tags button.focused, #workspaces button.focused{
+#tags button.focused,
+#workspaces button.focused {
     background: rgba(43, 48, 59, 0.5);
     border-right: 2px solid #e0cbc7;
     border-left: 2px solid #e0cbc7;
     padding-left: 0px;
     padding-right: 0px;
 }
+
 #tray {
     background: rgba(43, 48, 59, 0.5);
     border-left: 3px solid #e0cbc7;
     border-bottom: 3px solid #e0cbc7;
     border-radius: 0px 0px 0px 7px;
 }
-/* #taskbar button.maximized, */
+
 #taskbar button.active,
 #tags button.occupied,
 #window.focused {
-  border-bottom: 3px solid #e0cbc7;
+    border-bottom: 3px solid #e0cbc7;
 }
-/* window#waybar:has(> #window.focused) {
-    border-bottom: 3px solid rgba(195, 210, 222, 0.9); 
-} */
-#taskbar button.fullscreen,
+
+#window:not(.focused) {
+    border-bottom: 3px solid transparent;
+}
+
+@keyframes blink-border {
+    to {
+        border-bottom: 3px solid #ee9a00;
+    }
+}
 #tags button.urgent {
-  border-bottom: 3px solid #ee9a00;
+    animation-name: blink-border;
+    animation-duration: 0.5s;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+}
+
+#clock,
+#idle_inhibitor {
+    background: rgba(43, 48, 59, 0.5);
+    border-bottom: 3px solid #e0cbc7;
 }
 
 #idle_inhibitor {
-  min-width: 25px;
+    min-width: 25px;
+    padding-right: 3px;
 }
+
 #idle_inhibitor.deactivated {
     /* background-color: #1F2C36; */
-    background: rgba(43, 48, 59, 0.9);
+    color: rgb(43, 48, 59);
 }
