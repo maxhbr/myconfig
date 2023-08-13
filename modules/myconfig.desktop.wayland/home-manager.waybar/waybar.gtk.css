@@ -79,6 +79,7 @@ tooltip label {
 
 #custom-platform_profile.balanced {
     background: #ee9a00;
+    color: black;
 }
 
 #custom-platform_profile.low-power {
@@ -109,13 +110,6 @@ tooltip label {
     padding-right: 0px;
 }
 
-#tray {
-    background: rgba(43, 48, 59, 0.5);
-    border-left: 3px solid #e0cbc7;
-    border-bottom: 3px solid #e0cbc7;
-    border-radius: 0px 0px 0px 7px;
-}
-
 #taskbar button.active,
 #tags button.occupied,
 #window.focused {
@@ -139,10 +133,18 @@ tooltip label {
     animation-direction: alternate;
 }
 
-#clock,
+
 #idle_inhibitor {
     background: rgba(43, 48, 59, 0.5);
+    border-left: 2px solid #e0cbc7;
     border-bottom: 3px solid #e0cbc7;
+    border-radius: 0px 0px 0px 14px;
+}
+#clock,
+#tray {
+    background: rgba(43, 48, 59, 0.5);
+    border-bottom: 3px solid #e0cbc7;
+    border-radius: 0px 0px 0px 0px;
 }
 
 #idle_inhibitor {

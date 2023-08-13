@@ -28,8 +28,8 @@
             "backlight"
             "battery"
             "wlr/taskbar"
-            "tray"
             "idle_inhibitor"
+            "tray"
             "clock"
           ];
           tray = { spacing = 10; };
