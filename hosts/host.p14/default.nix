@@ -38,10 +38,10 @@
       home-manager.sharedModules =
         [{ home.packages = with pkgs; [ mindustry-wayland ]; }];
     }
-    {
-      home-manager.sharedModules =
-        [{ home.packages = with pkgs; [ libreoffice ]; }];
-    }
+    # {
+    #   home-manager.sharedModules =
+    #     [{ home.packages = with pkgs; [ libreoffice ]; }];
+    # }
   ];
 
   config = {

@@ -24,7 +24,7 @@
         fira-code-symbols
         hack-font
         inconsolata
-        liberation_ttf
+        # liberation_ttf
         mplus-outline-fonts.githubRelease
         noto-fonts
         noto-fonts-cjk
