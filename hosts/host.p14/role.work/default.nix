@@ -1,6 +1,18 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, ... }: {
+{ config, pkgs, lib, ... }: let
+  waylandSlack = pkgs.slack.overrideAttrs (old: {
+    installPhase = old.installPhase + ''
+      rm $out/bin/slack
+
+      makeWrapper $out/lib/slack/slack $out/bin/slack \
+        --prefix XDG_DATA_DIRS : $GSETTINGS_SCHEMAS_PATH \
+        --prefix PATH : ${lib.makeBinPath [pkgs.xdg-utils]} \
+        --set NIXOS_OZONE_WL 1 \
+        --add-flags "--ozone-platform=wayland --enable-features=UseOzonePlatform,WebRTCPipeWireCapturer"
+    '';
+  });
+in {
   imports = [
     ./zoom.nix
     # ./jdk.nix
@@ -50,7 +62,7 @@
         exiftool
         # misc-desktop-tools:
         # libreoffice
-        slack
+        waylandSlack
         # element-desktop
         # rambox
         subversion
