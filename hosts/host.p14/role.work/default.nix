@@ -6,11 +6,11 @@
       rm $out/bin/slack
 
       makeWrapper $out/lib/slack/slack $out/bin/slack \
-        --prefix XDG_DATA_DIRS : $GSETTINGS_SCHEMAS_PATH \
-        --prefix PATH : ${lib.makeBinPath [pkgs.xdg-utils]} \
-        --set NIXOS_OZONE_WL 1 \
         --add-flags "--ozone-platform=wayland --enable-features=UseOzonePlatform,WebRTCPipeWireCapturer"
     '';
+        # --prefix xdg_data_dirs : $gsettings_schemas_path \
+        # --prefix path : ${lib.makebinpath [pkgs.xdg-utils]} \
+        # --set NIXOS_OZONE_WL 1 \
   });
 in {
   imports = [
@@ -62,7 +62,7 @@ in {
         exiftool
         # misc-desktop-tools:
         # libreoffice
-        waylandSlack
+        slack
         # element-desktop
         # rambox
         subversion

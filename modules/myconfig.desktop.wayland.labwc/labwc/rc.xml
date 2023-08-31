@@ -79,16 +79,16 @@
     -->
     <popupTime>1000</popupTime>
     <names>
-      <name>Desktop 1</name>
-      <name>Desktop 2</name>
-      <name>Desktop 3</name>
-      <name>Desktop 4</name>
-      <name>Desktop 5</name>
-      <name>Desktop 6</name>
-      <name>Desktop 7</name>
-      <name>Desktop 8</name>
-      <name>Desktop 9</name>
-      <name>Desktop 0</name>
+      <name>U</name>
+      <name>I</name>
+      <name>A</name>
+      <name>E</name>
+      <name>O</name>
+      <name>S</name>
+      <name>N</name>
+      <name>R</name>
+      <name>T</name>
+      <name>D</name>
     </names>
   </desktops>
 
@@ -134,47 +134,47 @@
     <keybind key="W-Right"> <action name="SnapToEdge"><direction>right</direction></action> </keybind>
     <keybind key="W-Up"> <action name="SnapToEdge"><direction>up</direction></action> </keybind>
     <keybind key="W-Down"> <action name="SnapToEdge"><direction>down</direction></action> </keybind>
-    <keybind key="W-n"> <action name="SnapToEdge"><direction>left</direction></action> </keybind>
+    <!-- <keybind key="W-n"> <action name="SnapToEdge"><direction>left</direction></action> </keybind>
     <keybind key="W-d"> <action name="SnapToEdge"><direction>right</direction></action> </keybind>
     <keybind key="W-r"> <action name="SnapToEdge"><direction>up</direction></action> </keybind>
-    <keybind key="W-t"> <action name="SnapToEdge"><direction>down</direction></action> </keybind>
+    <keybind key="W-t"> <action name="SnapToEdge"><direction>down</direction></action> </keybind> -->
     <!-- <keybind key="XF86_AudioLowerVolume"> <action name="Execute"><command>amixer sset Master 5%-</command></action> </keybind> -->
     <!-- <keybind key="XF86_AudioRaiseVolume"> <action name="Execute"><command>amixer sset Master 5%+</command></action> </keybind> -->
     <!-- <keybind key="XF86_AudioMute"> <action name="Execute"><command>amixer sset Master toggle</command></action> </keybind> -->
     <keybind key="XF86_MonBrightnessUp"> <action name="Execute"><command>brightnessctl set +10%</command></action> </keybind>
     <keybind key="XF86_MonBrightnessDown"> <action name="Execute"><command>brightnessctl set 10%-</command></action> </keybind>
     <!-- Change Workspace/Desktop -->
-    <keybind key="W-1"> <action name="GoToDesktop"> <to>1</to> </action> </keybind>
-    <keybind key="W-2"> <action name="GoToDesktop"> <to>2</to> </action> </keybind>
-    <keybind key="W-3"> <action name="GoToDesktop"> <to>3</to> </action> </keybind>
-    <keybind key="W-4"> <action name="GoToDesktop"> <to>4</to> </action> </keybind>
-    <keybind key="W-5"> <action name="GoToDesktop"> <to>5</to> </action> </keybind>
-    <keybind key="W-6"> <action name="GoToDesktop"> <to>6</to> </action> </keybind>
-    <keybind key="W-7"> <action name="GoToDesktop"> <to>7</to> </action> </keybind>
-    <keybind key="W-8"> <action name="GoToDesktop"> <to>8</to> </action> </keybind>
-    <keybind key="W-9"> <action name="GoToDesktop"> <to>9</to> </action> </keybind>
-    <keybind key="W-0"> <action name="GoToDesktop"> <to>10</to> </action> </keybind>
+    <keybind key="W-u"> <action name="GoToDesktop"> <to>1</to> </action> </keybind>
+    <keybind key="W-i"> <action name="GoToDesktop"> <to>2</to> </action> </keybind>
+    <keybind key="W-a"> <action name="GoToDesktop"> <to>3</to> </action> </keybind>
+    <keybind key="W-e"> <action name="GoToDesktop"> <to>4</to> </action> </keybind>
+    <keybind key="W-o"> <action name="GoToDesktop"> <to>5</to> </action> </keybind>
+    <keybind key="W-s"> <action name="GoToDesktop"> <to>6</to> </action> </keybind>
+    <keybind key="W-n"> <action name="GoToDesktop"> <to>7</to> </action> </keybind>
+    <keybind key="W-r"> <action name="GoToDesktop"> <to>8</to> </action> </keybind>
+    <keybind key="W-t"> <action name="GoToDesktop"> <to>9</to> </action> </keybind>
+    <keybind key="W-d"> <action name="GoToDesktop"> <to>10</to> </action> </keybind>
     <!-- Move application to specific desktop -->
-    <keybind key="S-W-1"> <action name="SendToDesktop"> <to>1</to> </action> </keybind>
-    <keybind key="S-W-2"> <action name="SendToDesktop"> <to>2</to> </action> </keybind>
-    <keybind key="S-W-3"> <action name="SendToDesktop"> <to>3</to> </action> </keybind>
-    <keybind key="S-W-4"> <action name="SendToDesktop"> <to>4</to> </action> </keybind>
-    <keybind key="S-W-5"> <action name="SendToDesktop"> <to>5</to> </action> </keybind>
-    <keybind key="S-W-6"> <action name="SendToDesktop"> <to>6</to> </action> </keybind>
-    <keybind key="S-W-7"> <action name="SendToDesktop"> <to>7</to> </action> </keybind>
-    <keybind key="S-W-8"> <action name="SendToDesktop"> <to>8</to> </action> </keybind>
-    <keybind key="S-W-9"> <action name="SendToDesktop"> <to>9</to> </action> </keybind>
-    <keybind key="S-W-0"> <action name="SendToDesktop"> <to>10</to> </action> </keybind>
-    <keybind key="C-W-1"> <action name="SendToDesktop"> <to>1</to> </action> </keybind>
-    <keybind key="C-W-2"> <action name="SendToDesktop"> <to>2</to> </action> </keybind>
-    <keybind key="C-W-3"> <action name="SendToDesktop"> <to>3</to> </action> </keybind>
-    <keybind key="C-W-4"> <action name="SendToDesktop"> <to>4</to> </action> </keybind>
-    <keybind key="C-W-5"> <action name="SendToDesktop"> <to>5</to> </action> </keybind>
-    <keybind key="C-W-6"> <action name="SendToDesktop"> <to>6</to> </action> </keybind>
-    <keybind key="C-W-7"> <action name="SendToDesktop"> <to>7</to> </action> </keybind>
-    <keybind key="C-W-8"> <action name="SendToDesktop"> <to>8</to> </action> </keybind>
-    <keybind key="C-W-9"> <action name="SendToDesktop"> <to>9</to> </action> </keybind>
-    <keybind key="C-W-0"> <action name="SendToDesktop"> <to>10</to> </action> </keybind>
+    <keybind key="S-W-u"> <action name="SendToDesktop"> <to>1</to> </action> </keybind>
+    <keybind key="S-W-i"> <action name="SendToDesktop"> <to>2</to> </action> </keybind>
+    <keybind key="S-W-a"> <action name="SendToDesktop"> <to>3</to> </action> </keybind>
+    <keybind key="S-W-e"> <action name="SendToDesktop"> <to>4</to> </action> </keybind>
+    <keybind key="S-W-o"> <action name="SendToDesktop"> <to>5</to> </action> </keybind>
+    <keybind key="S-W-s"> <action name="SendToDesktop"> <to>6</to> </action> </keybind>
+    <keybind key="S-W-n"> <action name="SendToDesktop"> <to>7</to> </action> </keybind>
+    <keybind key="S-W-r"> <action name="SendToDesktop"> <to>8</to> </action> </keybind>
+    <keybind key="S-W-t"> <action name="SendToDesktop"> <to>9</to> </action> </keybind>
+    <keybind key="S-W-d"> <action name="SendToDesktop"> <to>10</to> </action> </keybind>
+    <keybind key="C-W-u"> <action name="SendToDesktop"> <to>1</to> </action> </keybind>
+    <keybind key="C-W-i"> <action name="SendToDesktop"> <to>2</to> </action> </keybind>
+    <keybind key="C-W-a"> <action name="SendToDesktop"> <to>3</to> </action> </keybind>
+    <keybind key="C-W-e"> <action name="SendToDesktop"> <to>4</to> </action> </keybind>
+    <keybind key="C-W-o"> <action name="SendToDesktop"> <to>5</to> </action> </keybind>
+    <keybind key="C-W-s"> <action name="SendToDesktop"> <to>6</to> </action> </keybind>
+    <keybind key="C-W-n"> <action name="SendToDesktop"> <to>7</to> </action> </keybind>
+    <keybind key="C-W-r"> <action name="SendToDesktop"> <to>8</to> </action> </keybind>
+    <keybind key="C-W-t"> <action name="SendToDesktop"> <to>9</to> </action> </keybind>
+    <keybind key="C-W-d"> <action name="SendToDesktop"> <to>10</to> </action> </keybind>
   </keyboard>
 
   <!--
