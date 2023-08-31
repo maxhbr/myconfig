@@ -161,6 +161,7 @@ in {
 
   config = (lib.mkIf cfg.desktop.wayland.enable {
     environment.sessionVariables = {
+      "NIXOS_OZONE_WL" = "1";
       "XDG_SESSION_TYPE" = "wayland";
       "SDL_VIDEODRIVER" = "wayland";
       # needs qt5.qtwayland in systemPackages

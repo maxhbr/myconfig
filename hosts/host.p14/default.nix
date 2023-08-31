@@ -54,7 +54,7 @@
           enable = true;
           desktop = "river";
           river.enable = true;
-          # labwc.enable = true;
+          labwc.enable = true;
 
           #disabled:
           # desktop = "sway";
@@ -84,7 +84,7 @@
         go.enable = false;
         haskell.enable = true;
         network.enable = true;
-        # nodejs.enable = false;
+        nodejs.enable = true;
         # ruby.enable = true;
         # rust.enable = true;
         # elixir.enable = false;

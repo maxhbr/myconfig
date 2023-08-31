@@ -15,13 +15,17 @@ logUsage() {
     echo "$o"
 }
 
-before=$(logUsage)
+read -p "also clean /nix/var/nix/gcroots/auto/? " -n 1 -r
+echo    # (optional) move to a new line
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    for link in /nix/var/nix/gcroots/auto/* ;do
+        rl="$(readlink "$link")"
+        echo "* rm $rl"
+        sudo rm "$rl" || true
+    done
+fi
 
-# for link in /nix/var/nix/gcroots/auto/* ;do
-#     rl="$(readlink "$link")"
-#     echo "* rm $rl"
-#     sudo rm "$rl" || true
-# done
+before=$(logUsage)
 
 echo "* nix-store --gc ..."
 sudo nix-store --gc
@@ -35,10 +39,6 @@ sudo nix-env --delete-generations $age || echo "failed, probably when waiting fo
 echo "* sudo nix-collect-garbage --delete-older-than $age ..."
 sudo nix-collect-garbage \
      --delete-older-than $age || echo "failed, probably when waiting for sudo PW"
-
-##  haskellPackages.stack-clean-old
-# echo "* cleanup stack"
-# stack-clean-old keep-minor -S -o x86_64-linux-nix -d
 
 after=$(logUsage)
 

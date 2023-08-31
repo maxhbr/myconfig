@@ -35,6 +35,7 @@ in {
         imagemagick
         mplayer # unsuported on aarch
         playerctl # mpris media player command-line controller
+        xdg-utils
       ];
       xdg.mimeApps = {
         enable = true;
