@@ -57,20 +57,19 @@
           labwc.enable = true;
 
           #disabled:
-          # desktop = "sway";
           # sway.enable = true;
           #experimental:
           # wayfire.enable = true;
           # qtile.enable = true;
           # hyprland.enable = true;
-          # newm.enable = true;
           # dwl.enable = true;
           # vivarium.enable = true;
           #bloated:
           # kde.enable = true;
           # gnome.enable = true; # konflicts with sway
-          # dead or buggy:
+          #dead or buggy:
           # hikari.enable = true;
+          # newm.enable = true;
         };
         messengers.enable = true;
         imagework.enable = true;

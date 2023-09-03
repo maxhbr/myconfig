@@ -109,9 +109,7 @@
   <keyboard>
     <repeatRate>25</repeatRate>
     <repeatDelay>600</repeatDelay>
-    <keybind key="W-q">
-      <action name="Reconfigure" />
-    </keybind>
+    <keybind key="W-q"> <action name="Reconfigure" /> </keybind>
     <keybind key="S-W-q"> <action name="Exit" /> </keybind>
     <keybind key="A-Tab"> <action name="NextWindow" /> </keybind>
     <keybind key="W-Tab"> <action name="NextWindow" /> </keybind>
