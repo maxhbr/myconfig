@@ -12,13 +12,16 @@ in {
     lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.gnome.enable) {
       services.xserver.desktopManager.gnome.enable = true;
       home-manager.sharedModules = [{
-        home.packages = with pkgs.gnomeExtensions; [
+        home.packages = (with pkgs.gnome3; [
+          evince # pdf reader
+          gnome-tweak-tool
+        ]) + (with pkgs.gnomeExtensions; [
           startGnome
           true-color-invert
           miniview
-          material-shell
+          # material-shell
           forge
-        ];
+        ]);
       }];
     };
 }
