@@ -19,7 +19,7 @@
     ./hardware.hantek
     ./mykeylight
     ./role.work
-    # ./programs.khal.nix
+    ./programs.khal.nix
     # ./a7iiiAsWebcam.nix
     {
       services.openssh = {

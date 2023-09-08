@@ -56,7 +56,7 @@ in {
       # pkgs.platformio
       segger-modemmanager-blacklist-udev-rules
       # openocd
-      segger-jlink
+      # segger-jlink
       stlink
       teensy-udev-rules
       picoprobe-udev-rules
