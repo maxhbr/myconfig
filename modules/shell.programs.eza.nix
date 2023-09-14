@@ -4,7 +4,7 @@
   config = {
     home-manager.sharedModules = [
       (let
-        ls = "${pkgs.exa}/bin/exa";
+        ls = "${pkgs.eza}/bin/eza";
         aliases = {
           inherit ls;
           ll = "${ls} -l";
@@ -13,7 +13,7 @@
           lla = "${ls} -la";
         };
       in {
-        home.packages = [ pkgs.exa ];
+        home.packages = [ pkgs.eza ];
         programs.bash.shellAliases = aliases;
         programs.zsh.shellAliases = aliases;
         programs.fish.shellAliases = aliases;
