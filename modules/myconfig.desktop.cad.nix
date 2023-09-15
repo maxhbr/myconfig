@@ -23,7 +23,7 @@ in {
           librepcb
           gerbv
           # kicad-small
-          kicad-with-packages3d
+          kicad
           jre # for freerouting
         ]);
     }];
