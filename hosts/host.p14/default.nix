@@ -75,6 +75,7 @@
         imagework.enable = true;
         obs.enable = true;
         cad.enable = true;
+        deskreen.enable = true;
       };
       email.enable = false; # msmtp fails to build
       virtualisation.enable = true;

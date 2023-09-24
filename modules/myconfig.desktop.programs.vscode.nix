@@ -7,9 +7,14 @@
           # package = pkgs.vscode-with-extensions;
           userSettings = {
             "files.autoSave" = "on";
+            "files.trimTrailingWhitespace" = true;
+            "files.insertFinalNewline" = true;
             "window.titleBarStyle" = "custom"; # https://github.com/microsoft/vscode/issues/184124
+            "[plaintext]"."files.insertFinalNewline" = false;
             "[nix]"."editor.tabSize" = 2;
             "[haskell]"."editor.tabSize" = 4;
+            "editor.experimental.asyncTokenization" = true;
+            "editor.experimental.asyncTokenizationVerification" = true;
           };
           extensions = with pkgs.vscode-extensions; [
             dracula-theme.theme-dracula
