@@ -6,8 +6,10 @@
           enable = lib.mkDefault true;
           # package = pkgs.vscode-with-extensions;
           userSettings = {
+            "files.autoSave" = "on";
             "window.titleBarStyle" = "custom"; # https://github.com/microsoft/vscode/issues/184124
             "[nix]"."editor.tabSize" = 2;
+            "[haskell]"."editor.tabSize" = 4;
           };
           extensions = with pkgs.vscode-extensions; [
             dracula-theme.theme-dracula
