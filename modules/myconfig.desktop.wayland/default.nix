@@ -32,8 +32,8 @@ in {
               set -x
               color=777777
               exec ${swayidle}/bin/swayidle -w \
-              	timeout 300 '${swaylock}/bin/swaylock -f -c '"$color" \
-              	before-sleep '${swaylock}/bin/swaylock -f -c '"$color"
+                  timeout 300 '${swaylock}/bin/swaylock -f -c '"$color" \
+                  before-sleep '${swaylock}/bin/swaylock -f -c '"$color"
             '')
             ## Other
             wayshot

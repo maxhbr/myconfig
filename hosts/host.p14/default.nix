@@ -55,6 +55,7 @@
           desktop = "river";
           river.enable = true;
           labwc.enable = true;
+          # dwl.enable = true;
 
           #disabled:
           # sway.enable = true;
@@ -62,7 +63,6 @@
           # wayfire.enable = true;
           # qtile.enable = true;
           # hyprland.enable = true;
-          # dwl.enable = true;
           # vivarium.enable = true;
           #bloated:
           # kde.enable = true;
@@ -76,7 +76,7 @@
         obs.enable = true;
         cad.enable = true;
       };
-      email.enable = true;
+      email.enable = false; # msmtp fails to build
       virtualisation.enable = true;
       dev = {
         compliance.enable = true;
