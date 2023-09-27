@@ -36,10 +36,16 @@ let
             # })
           ];
       })).override { conf = ./config.h; };
+  mydwl-autostart = pkgs.writeShellScriptBin "mydwl-autostart" ''
+set -x
+${cfg.desktop.wayland.autostartCommands}
+
+${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all
+'';
   overlay = (_: super: {
         inherit mydwl;
         mydwl-start = pkgs.writeShellScriptBin "mydwl-start" ''
-#!/usr/bin/env bash
+PATH="$PATH:${mydwl-autostart}/bin"
 exec ${mydwl}/bin/dwl -s ${super.somebar}/bin/somebar
 '';
     });

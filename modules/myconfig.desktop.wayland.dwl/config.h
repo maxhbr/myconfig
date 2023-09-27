@@ -3,20 +3,20 @@ static const int sloppyfocus               = 1;  /* focus follows mouse */
 static const int bypass_surface_visibility = 0;  /* 1 means idle inhibitors will disable idle tracking even if it's surface isn't visible  */
 static const int smartgaps                 = 0;  /* 1 means no outer gap when there is only one window */
 static const int monoclegaps               = 0;  /* 1 means outer gaps in monocle layout */
-static const unsigned int borderpx         = 1;  /* border pixel of windows */
+static const unsigned int borderpx         = 4;  /* border pixel of windows */
 static const unsigned int gappih           = 10; /* horiz inner gap between windows */
 static const unsigned int gappiv           = 10; /* vert inner gap between windows */
 static const unsigned int gappoh           = 10; /* horiz outer gap between windows and screen edge */
 static const unsigned int gappov           = 10; /* vert outer gap between windows and screen edge */
 static const float bordercolor[]           = {0.5, 0.5, 0.5, 1.0};
-static const float focuscolor[]            = {1.0, 0.0, 0.0, 1.0};
+static const float focuscolor[]            = {0.933, 0.604, 0.0, 1.0};
 /* To conform the xdg-protocol, set the alpha to zero to restore the old behavior */
 static const float fullscreen_bg[]         = {0.1, 0.1, 0.1, 1.0};
 static const float unfocussedalpha  = 0.75;
 static const float focussedalpha    = 1;
 
 static const char *const autostart[] = {
-	"foot", "--server", NULL,
+	"mydwl-autostart", NULL,
 	NULL
 };
 
@@ -43,9 +43,7 @@ static const Layout layouts[] = {
 /* monitors */
 static const MonitorRule monrules[] = {
 	/* name       mfact nmaster scale layout       rotate/reflect                x    y */
-	/* example of a HiDPI laptop monitor:
 	{ "eDP-1",    0.5,  1,      2,    &layouts[0], WL_OUTPUT_TRANSFORM_NORMAL,   -1,  -1 },
-	*/
 	/* defaults */
 	{ NULL,       0.55, 1,      1,    &layouts[0], WL_OUTPUT_TRANSFORM_NORMAL,   -1,  -1 },
 };
@@ -132,13 +130,13 @@ static const Key keys[] = {
 	{ MODKEY,                    XKB_KEY_k,          focusstack,     {.i = -1} },
 	// { MODKEY,                    XKB_KEY_i,          incnmaster,     {.i = +1} },
 	// { MODKEY,                    XKB_KEY_d,          incnmaster,     {.i = -1} },
-    { MODKEY,                    XKB_KEY_Tab,      	 rotatetags,     {.i = -1} },
-    // { MODKEY,                    XKB_KEY_d,      	 rotatetags,     {.i =  1} },
-    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_Tab,      	 clientshift,    {.i = -1} },
-    // { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_d,      	 clientshift,    {.i =  1} },
+    { MODKEY,                    XKB_KEY_Left,      	 rotatetags,     {.i = -1} },
+    { MODKEY,                    XKB_KEY_Right,      	 rotatetags,     {.i =  1} },
+    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_Left,      	 clientshift,    {.i = -1} },
+    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_Right,      	 clientshift,    {.i =  1} },
 	{ MODKEY,                    XKB_KEY_h,          setmfact,       {.f = -0.05} },
 	{ MODKEY,                    XKB_KEY_l,          setmfact,       {.f = +0.05} },
-	// { MODKEY,                    XKB_KEY_Tab,        zoom,           {0} },
+	{ MODKEY,                    XKB_KEY_Tab,        zoom,           {0} },
 	{ MODKEY,                    XKB_KEY_y,          view,           {0} },
 	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_C,          killclient,     {0} },
 	{ MODKEY,                    XKB_KEY_g,          setlayout,      {.v = &layouts[0]} },
@@ -153,8 +151,8 @@ static const Key keys[] = {
 	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_D,          tag,            {.ui = ~0} },
 	{ MODKEY,                    XKB_KEY_comma,      focusmon,       {.i = WLR_DIRECTION_LEFT} },
 	{ MODKEY,                    XKB_KEY_period,     focusmon,       {.i = WLR_DIRECTION_RIGHT} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_less,       tagmon,         {.i = WLR_DIRECTION_LEFT} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_greater,    tagmon,         {.i = WLR_DIRECTION_RIGHT} },
+	{ MODKEY|WLR_MODIFIER_CTRL,  XKB_KEY_less,       tagmon,         {.i = WLR_DIRECTION_LEFT} },
+	{ MODKEY|WLR_MODIFIER_CTRL,  XKB_KEY_greater,    tagmon,         {.i = WLR_DIRECTION_RIGHT} },
 	TAGKEYS(          XKB_KEY_u, XKB_KEY_U,                          0),
 	TAGKEYS(          XKB_KEY_i, XKB_KEY_I,                          1),
 	TAGKEYS(          XKB_KEY_a, XKB_KEY_A,                          2),

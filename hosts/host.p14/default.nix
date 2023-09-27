@@ -5,7 +5,7 @@
     ./hardware-configuration.nix
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
-    ./hardware.TP-Link_Archer_TX20U.nix
+    # ./hardware.TP-Link_Archer_TX20U.nix
     {
       boot.loader.systemd-boot.enable = true;
       boot.loader.efi.canTouchEfiVariables = true;
