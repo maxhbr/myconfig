@@ -78,9 +78,6 @@
     #wayland:vivarium
     vivarium.url = "github:maxhbr/vivarium";
 
-    # mydwl.url = "github:mahbr/mydwl";
-    # mydwl.inputs.nixpkgs.follows = "nixpkgs";
-
     ###########################################################################
     # begin fish
     fasd.url = "github:oh-my-fish/plugin-fasd";
@@ -226,7 +223,6 @@
               };
             })
             ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.emacs.overlay ]; })
-            # ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.mydwl.overlay ]; })
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
                 (_: _: {

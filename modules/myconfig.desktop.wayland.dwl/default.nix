@@ -1,63 +1,59 @@
-# Copyright 2022 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2023 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-
-# todo:
-#  - https://github.com/jordanisaacs/dwl-flake and https://github.com/jordanisaacs/dotfiles
 { pkgs, config, lib, ... }:
 let
   cfg = config.myconfig;
-  # dwlPackage = pkgs.callPackage ./wrapper.nix {
-  #   dwl-unwrapped = pkgs.dwl;
-  #   conf = ./config.h;
-  #   withBaseWrapper = true;
-  #   extraPaths = [ ]; # cfg.wayland.commonPackages;
-  #   extraSessionCommands = ''
-  #     export XDG_CURRENT_DESKTOP=dwl
-  #     export XKB_DEFAULT_LAYOUT=${
-  #       config.environment.sessionVariables."XKB_DEFAULT_LAYOUT"
-  #     }
-  #     export XKB_DEFAULT_VARIANT=${
-  #       config.environment.sessionVariables."XKB_DEFAULT_VARIANT"
-  #     }
-  #     export XDG_SESSION_TYPE=${
-  #       config.environment.sessionVariables."XDG_SESSION_TYPE"
-  #     }
-  #     export SDL_VIDEODRIVER=${
-  #       config.environment.sessionVariables."SDL_VIDEODRIVER"
-  #     }
-  #     export QT_QPA_PLATFORM=${
-  #       config.environment.sessionVariables."QT_QPA_PLATFORM"
-  #     }
-  #     export QT_WAYLAND_DISABLE_WINDOWDECORATION=${
-  #       config.environment.sessionVariables."QT_WAYLAND_DISABLE_WINDOWDECORATION"
-  #     }
-  #     export _JAVA_AWT_WM_NONREPARENTING=${
-  #       config.environment.sessionVariables."_JAVA_AWT_WM_NONREPARENTING"
-  #     }
-  #   '';
-  #   withGtkWrapper = true;
-  #   extraOptions = [ ];
-  # };
-  dwlPackage = pkgs.nixos-unstable.dwl.override { conf = ./config.h; };
+  mydwl = (pkgs.dwl.overrideAttrs (prev: {
+          version = "git";
+          src = pkgs.fetchFromGitHub {
+            owner = "djpohly";
+            repo = "dwl";
+            rev = "342850487acf4fc7383429786b9cb05a6a4cdf4f";
+            hash = "sha256-qvW09Ge1Qt0Yg3K6TOD1msOxuk+pGucepNiCGhfrQwI=";
+          };
+          enableXWayland = true;
+          # conf = ./config.h;
+          patches = [
+            (pkgs.fetchpatch {
+              url = "https://github.com/djpohly/dwl/compare/main...sevz17:vanitygaps.patch";
+              hash = "sha256-vLbdlLtBRUvvbccSpANEzgoPpwb5kxwGV0sZp9aZfvg=";
+            })
+            (pkgs.fetchpatch {
+              url = "https://github.com/djpohly/dwl/compare/main...sevz17:autostart.patch";
+              hash = "sha256-/vbVW9BJWmbrqajWpY/mUdYRze7yHOeh4CrBuBGpB0I=";
+            })
+            (pkgs.fetchpatch {
+              url = "https://github.com/djpohly/dwl/compare/main...korei999:rotatetags.patch";
+              hash = "sha256-SbtOIWodRrL+pnzaJfa3JMolLZpW5pXy2FXoxjMZC7U=";
+            })
+            (pkgs.fetchpatch {
+              url = "https://github.com/djpohly/dwl/compare/main...NikitaIvanovV:centeredmaster.patch";
+              hash = "sha256-k3pHs5E+MyagqvDGXi+HZYiKTG/WJlgqJqes7PN3uNs=";
+            })
+            # (pkgs.fetchpatch {
+            #   url = "https://github.com/djpohly/dwl/compare/main...juliag2:alphafocus.patch";
+            #   hash = "sha256-RXkA5jdDaHPKVlWgkiedFBpVXZBkuH66qMAlC6Eb+ug=";
+            # })
+          ];
+      })).override { conf = ./config.h; };
+  overlay = (_: super: {
+        inherit mydwl;
+        mydwl-start = pkgs.writeShellScriptBin "mydwl-start" ''
+#!/usr/bin/env bash
+exec ${mydwl}/bin/dwl -s ${super.somebar}/bin/somebar
+'';
+    });
 in {
   options.myconfig = with lib; {
     desktop.wayland.dwl = { enable = mkEnableOption "dwl"; };
   };
   config =
     (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.dwl.enable) {
-      # nixpkgs.overlays = [
-      #   (
-      #     final: prev:
-      #     {
-      #       dwl = prev.dwl.override { conf = ./config.h; };
-      #     }
-      #   )
-      # ];
-
-      home-manager.sharedModules = [{ home.packages = [ dwlPackage ]; }];
+      nixpkgs.overlays = [ overlay ];
+      home-manager.sharedModules = [{ home.packages = with pkgs; [ mydwl somebar mydwl-start ]; }];
       services.xserver.windowManager.session = lib.singleton {
         name = "dwl";
-        start = "${dwlPackage}/bin/dwl";
+        start = "${pkgs.mydwl-start}/bin/mydwl-start";
       };
     });
 }

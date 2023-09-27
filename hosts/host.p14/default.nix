@@ -57,7 +57,7 @@
           river.enable = true;
           labwc.enable = true;
           # gnome.enable = true; # konflicts with sway
-          # dwl.enable = true;
+          dwl.enable = true;
 
           #disabled:
           # sway.enable = true;
