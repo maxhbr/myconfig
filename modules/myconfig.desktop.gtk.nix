@@ -8,7 +8,7 @@ let
     package = pkgs.numix-icon-theme-circle;
     name = "Numix-Circle";
   };
-  theme = let 
+  theme = let
     light = false;
     gruvbox = {
       package = pkgs.gruvbox-gtk-theme;
@@ -59,24 +59,23 @@ let
     }
   '';
 in {
-  config =
-    (lib.mkIf (cfg.desktop.wayland.enable || cfg.desktop.enable) {
-      home-manager.sharedModules = [
-        ({ config, pkgs, ... }: {
-            home.packages = with pkgs; [
-              configure-gtk
-              theme.package
-              iconTheme.package
-              gnome.adwaita-icon-theme # default gnome cursors
-            ];
-            gtk = {
-              enable = true;
-              inherit theme iconTheme;
-              gtk3 = { inherit extraCss; };
-              gtk4 = { inherit extraCss; };
-            };
-          })
-      ];
-    });
+  config = (lib.mkIf (cfg.desktop.wayland.enable || cfg.desktop.enable) {
+    home-manager.sharedModules = [
+      ({ config, pkgs, ... }: {
+        home.packages = with pkgs; [
+          configure-gtk
+          theme.package
+          iconTheme.package
+          gnome.adwaita-icon-theme # default gnome cursors
+        ];
+        gtk = {
+          enable = true;
+          inherit theme iconTheme;
+          gtk3 = { inherit extraCss; };
+          gtk4 = { inherit extraCss; };
+        };
+      })
+    ];
+  });
 }
 

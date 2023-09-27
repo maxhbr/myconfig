@@ -54,8 +54,7 @@ in {
       #   )
       # ];
 
-      home-manager.sharedModules =
-        [{ home.packages = [ dwlPackage ]; }];
+      home-manager.sharedModules = [{ home.packages = [ dwlPackage ]; }];
       services.xserver.windowManager.session = lib.singleton {
         name = "dwl";
         start = "${dwlPackage}/bin/dwl";

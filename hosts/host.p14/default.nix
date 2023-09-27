@@ -5,6 +5,7 @@
     ./hardware-configuration.nix
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
+    ./hardware.TP-Link_Archer_TX20U.nix
     {
       boot.loader.systemd-boot.enable = true;
       boot.loader.efi.canTouchEfiVariables = true;
@@ -55,6 +56,7 @@
           desktop = "river";
           river.enable = true;
           labwc.enable = true;
+          # gnome.enable = true; # konflicts with sway
           # dwl.enable = true;
 
           #disabled:
@@ -66,7 +68,6 @@
           # vivarium.enable = true;
           #bloated:
           # kde.enable = true;
-          # gnome.enable = true; # konflicts with sway
           #dead or buggy:
           # hikari.enable = true;
           # newm.enable = true;
@@ -109,10 +110,11 @@
 
     home-manager.sharedModules = [
       {
-        home.packages = with pkgs; [
-          # rdesktop
-          google-chrome # for netflix and stadia
-        ];
+        home.packages = with pkgs;
+          [
+            # rdesktop
+            google-chrome # for netflix and stadia
+          ];
         programs.zsh.shellAliases = {
           upg-get-hostId = ''
             cksum /etc/machine-id | while read c rest; do printf "%x" $c; done

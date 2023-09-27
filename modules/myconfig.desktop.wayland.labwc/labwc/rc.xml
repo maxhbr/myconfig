@@ -132,6 +132,8 @@
     <keybind key="W-Right"> <action name="SnapToEdge"><direction>right</direction></action> </keybind>
     <keybind key="W-Up"> <action name="SnapToEdge"><direction>up</direction></action> </keybind>
     <keybind key="W-Down"> <action name="SnapToEdge"><direction>down</direction></action> </keybind>
+    <keybind key="W-Comma"> <action name="SnapToEdge"><direction>left</direction></action> </keybind>
+    <keybind key="W-Period"> <action name="SnapToEdge"><direction>right</direction></action> </keybind>
     <!-- <keybind key="W-n"> <action name="SnapToEdge"><direction>left</direction></action> </keybind>
     <keybind key="W-d"> <action name="SnapToEdge"><direction>right</direction></action> </keybind>
     <keybind key="W-r"> <action name="SnapToEdge"><direction>up</direction></action> </keybind>

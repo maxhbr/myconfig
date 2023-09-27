@@ -1,6 +1,5 @@
 { config, lib, pkgs, ... }:
-let
-  cfg = config.myconfig;
+let cfg = config.myconfig;
 in {
   options.myconfig = with lib; {
     dev.embedded.enable = mkEnableOption "embedded";
@@ -49,7 +48,8 @@ in {
         name = "segger-modemmanager-blacklist-udev-rules";
         # https://docs.zephyrproject.org/2.5.0/guides/tools/nordic_segger.html#gnu-linux
         text = ''ATTRS{idVendor}=="1366", ENV{ID_MM_DEVICE_IGNORE}="1"'';
-        destination = "/etc/udev/rules.d/99-segger-modemmanager-blacklist.rules";
+        destination =
+          "/etc/udev/rules.d/99-segger-modemmanager-blacklist.rules";
       };
     in with pkgs; [
       # platformio-udev-rules

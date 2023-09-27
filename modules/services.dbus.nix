@@ -54,11 +54,8 @@ let
 
 in {
   config = lib.mkIf config.services.dbus.enable {
-    home-manager.sharedModules = [{
-      home.packages = with pkgs; [
-        dbus-wm-environment
-      ];
-    }];
+    home-manager.sharedModules =
+      [{ home.packages = with pkgs; [ dbus-wm-environment ]; }];
 
     environment.etc = lib.mkIf config.programs.sway.enable {
       # overwrite the nixos.conf from https://github.com/NixOS/nixpkgs/blob/4ae405c83424f18b360dc9794f6300ab243f61e2/nixos/modules/programs/sway.nix#L129-L133

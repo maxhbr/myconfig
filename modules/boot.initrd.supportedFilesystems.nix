@@ -1,9 +1,5 @@
-{...}: {
+{ ... }: {
   config = {
-    boot.initrd.supportedFilesystems = [
-      "btrfs"
-      "bcachefs"
-      "luks"
-    ];
+    boot.initrd.supportedFilesystems = [ "btrfs" "bcachefs" "luks" ];
   };
 }

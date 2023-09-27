@@ -12,10 +12,7 @@
             "sway/workspaces"
             "sway/mode"
           ];
-          modules-center = [
-            "river/window"
-            "sway/window"
-          ];
+          modules-center = [ "river/window" "sway/window" ];
           modules-right = [
             "pulseaudio"
             "bluetooth"

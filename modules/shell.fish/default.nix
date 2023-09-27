@@ -3,8 +3,7 @@
   config = {
     programs.fish = { enable = true; };
     environment = {
-      shells =
-        [ "${pkgs.fish}/bin/fish" "/run/current-system/sw/bin/fish" ];
+      shells = [ "${pkgs.fish}/bin/fish" "/run/current-system/sw/bin/fish" ];
     };
     home-manager.sharedModules = [({
       imports = [ ./ex.hm.nix ];

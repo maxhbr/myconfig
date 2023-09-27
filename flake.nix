@@ -78,6 +78,9 @@
     #wayland:vivarium
     vivarium.url = "github:maxhbr/vivarium";
 
+    # mydwl.url = "github:mahbr/mydwl";
+    # mydwl.inputs.nixpkgs.follows = "nixpkgs";
+
     ###########################################################################
     # begin fish
     fasd.url = "github:oh-my-fish/plugin-fasd";
@@ -107,7 +110,8 @@
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
-    let inherit (inputs.nixpkgs) lib;
+    let
+      inherit (inputs.nixpkgs) lib;
       nixpkgsConfig = {
         allowUnfree = true;
         allowUnfreePredicate = (pkg: true);
@@ -144,53 +148,55 @@
         };
         fishPluginsModule = { pkgs, ... }: {
           config = {
-            home-manager.sharedModules = [({config, lib, ...} : {
-              config = lib.mkIf config.programs.fish.enable {
-                home.packages = with pkgs; [ fasd fzf ];
-                programs.fish = {
-                  plugins = [
-                    {
-                      name = "fasd";
-                      src = inputs.fasd;
-                    }
-                    {
-                      name = "foreign-env";
-                      src = inputs.foreign-env;
-                    }
-                    {
-                      name = "tmux";
-                      src = inputs.tmux;
-                    }
-                    {
-                      name = "z";
-                      src = inputs.z;
-                    }
-                    {
-                      name = "fzf";
-                      src = inputs.fzf;
-                    }
-                    {
-                      name = "done";
-                      src = inputs.done;
-                    }
-                    {
-                      name = "fish-async-prompt";
-                      src = inputs.fish-async-prompt;
-                    }
-                    {
-                      name = "fish-ssh-agent";
-                      src = inputs.fish-ssh-agent;
-                    }
-                  ];
+            home-manager.sharedModules = [
+              ({ config, lib, ... }: {
+                config = lib.mkIf config.programs.fish.enable {
+                  home.packages = with pkgs; [ fasd fzf ];
+                  programs.fish = {
+                    plugins = [
+                      {
+                        name = "fasd";
+                        src = inputs.fasd;
+                      }
+                      {
+                        name = "foreign-env";
+                        src = inputs.foreign-env;
+                      }
+                      {
+                        name = "tmux";
+                        src = inputs.tmux;
+                      }
+                      {
+                        name = "z";
+                        src = inputs.z;
+                      }
+                      {
+                        name = "fzf";
+                        src = inputs.fzf;
+                      }
+                      {
+                        name = "done";
+                        src = inputs.done;
+                      }
+                      {
+                        name = "fish-async-prompt";
+                        src = inputs.fish-async-prompt;
+                      }
+                      {
+                        name = "fish-ssh-agent";
+                        src = inputs.fish-ssh-agent;
+                      }
+                    ];
+                  };
+                  home.file = {
+                    ".config/fish/functions/fish_prompt.fish".source =
+                      inputs.agnoster + "/fish_prompt.fish";
+                    ".config/fish/functions/bax.fish".source = inputs.bax
+                      + "/bax.fish";
+                  };
                 };
-                home.file = {
-                  ".config/fish/functions/fish_prompt.fish".source = inputs.agnoster
-                    + "/fish_prompt.fish";
-                  ".config/fish/functions/bax.fish".source = inputs.bax
-                    + "/bax.fish";
-                };
-              };
-            })];
+              })
+            ];
           };
         };
         core = { ... }: {
@@ -220,6 +226,7 @@
               };
             })
             ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.emacs.overlay ]; })
+            # ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.mydwl.overlay ]; })
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
                 (_: _: {
@@ -403,7 +410,8 @@
       };
 
     } (let
-      eachDefaultSystem = inputs.flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ];
+      eachDefaultSystem =
+        inputs.flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ];
     in eachDefaultSystem (system: {
       legacyPackages = import inputs.nixpkgs {
         inherit system;

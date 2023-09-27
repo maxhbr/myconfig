@@ -65,5 +65,5 @@ in symlinkJoin {
     providedSessions = [ "dwl" ];
   };
 
-  inherit (dwl) meta mane for our second episode playing Ken's very own ;
+  inherit (dwl) meta mane for our second episode playing Ken's very own;
 }

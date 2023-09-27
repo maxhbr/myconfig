@@ -44,43 +44,45 @@ in {
         colors = { alpha = "0.85"; };
       };
     };
-    home.packages = with pkgs; [
-      (writeShellScriptBin "tfoot" ''
-        exec ${foot}/bin/foot ${tmux}/bin/tmux
-      '')
-      (let
-        tmux-scratch = writeShellScriptBin "tmux-scratch" ''
-          NAME="tmux-scratch"
-          tmux has-session -t $NAME 2>/dev/null
-          [[ "$?" -eq 1 ]] && tmux new-session -d -s $NAME
-          tmux attach-session -t $NAME
-        '';
-      in writeShellScriptBin "foot-scratch" ''
-        exec ${foot}/bin/foot \
-          -T tmux-scratch \
-          -a tmux-scratch \
-          ${tmux-scratch}/bin/tmux-scratch
-      '')
-      (writeShellScriptBin "tfoot-reattach" ''
-        ${tmux}/bin/tmux ls |
-            ${gnugrep}/bin/grep -v '(attached)' |
-            cut -f 1 -d ":" |
-            while read SESSION; do
-                (set -x;
-                ${foot}/bin/foot ${tmux}/bin/tmux attach -t "$SESSION" & disown)
-            done
-      '')
-    ] ++ (let
-      mkFootTuiCmd = cmd: package: (writeShellScriptBin "foot-${cmd}" ''
-        exec ${foot}/bin/foot \
-          -T foot-${cmd} \
-          -a foot-${cmd} \
-          ${package}/bin/${cmd}
-      '');
-    in [
-      (mkFootTuiCmd "bluetuith" bluetuith)
-      (mkFootTuiCmd "htop" htop)
-      (mkFootTuiCmd "nmtui" networkmanager)
-    ]);
+    home.packages = with pkgs;
+      [
+        (writeShellScriptBin "tfoot" ''
+          exec ${foot}/bin/foot ${tmux}/bin/tmux
+        '')
+        (let
+          tmux-scratch = writeShellScriptBin "tmux-scratch" ''
+            NAME="tmux-scratch"
+            tmux has-session -t $NAME 2>/dev/null
+            [[ "$?" -eq 1 ]] && tmux new-session -d -s $NAME
+            tmux attach-session -t $NAME
+          '';
+        in writeShellScriptBin "foot-scratch" ''
+          exec ${foot}/bin/foot \
+            -T tmux-scratch \
+            -a tmux-scratch \
+            ${tmux-scratch}/bin/tmux-scratch
+        '')
+        (writeShellScriptBin "tfoot-reattach" ''
+          ${tmux}/bin/tmux ls |
+              ${gnugrep}/bin/grep -v '(attached)' |
+              cut -f 1 -d ":" |
+              while read SESSION; do
+                  (set -x;
+                  ${foot}/bin/foot ${tmux}/bin/tmux attach -t "$SESSION" & disown)
+              done
+        '')
+      ] ++ (let
+        mkFootTuiCmd = cmd: package:
+          (writeShellScriptBin "foot-${cmd}" ''
+            exec ${foot}/bin/foot \
+              -T foot-${cmd} \
+              -a foot-${cmd} \
+              ${package}/bin/${cmd}
+          '');
+      in [
+        (mkFootTuiCmd "bluetuith" bluetuith)
+        (mkFootTuiCmd "htop" htop)
+        (mkFootTuiCmd "nmtui" networkmanager)
+      ]);
   });
 }
