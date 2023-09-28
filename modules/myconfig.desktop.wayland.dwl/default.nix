@@ -3,6 +3,21 @@
 { pkgs, config, lib, ... }:
 let
   cfg = config.myconfig;
+  mysomebar = (pkgs.somebar.overrideAttrs (prev: {
+      version = "git";
+      src = pkgs.fetchFromSourcehut {
+        owner = "~raphi";
+        repo = "somebar";
+        rev = "8c52d4704c0ac52c946e41a1a68c8292eb83d0d2";
+        hash = "sha256-9KYuX2bwRKiHiRHsFthdZ+TVkJE8Cjm+f78f9qhbB90=";
+      };
+      # patches = [
+      #   (pkgs.fetchpatch {
+      #         url = "https://git.sr.ht/~raphi/somebar/blob/master/contrib/clickable-tags-using-wtype.patch";
+      #         hash = "sha256-4M59rZukfyJAXG7ZwMjgzeu8wQKx6F0OBVbaNw0xZ7k=";
+      #       })
+      # ];
+  }));
   mydwl = (pkgs.dwl.overrideAttrs (prev: {
           version = "git";
           src = pkgs.fetchFromGitHub {
@@ -34,6 +49,10 @@ let
             #   url = "https://github.com/djpohly/dwl/compare/main...juliag2:alphafocus.patch";
             #   hash = "sha256-RXkA5jdDaHPKVlWgkiedFBpVXZBkuH66qMAlC6Eb+ug=";
             # })
+           # (pkgs.fetchpatch {
+           #    url = "https://github.com/djpohly/dwl/compare/main...dm1tz:04-cyclelayouts.patch";
+           #    hash = "sha256-Xxi5ywqhVJgg+otjzKeGVMdgygKZdQS3r9Qd/XGc2OE=";
+           #  })
           ];
       })).override { conf = ./config.h; };
   mydwl-autostart = pkgs.writeShellScriptBin "mydwl-autostart" ''
@@ -44,9 +63,10 @@ ${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all
 '';
   overlay = (_: super: {
         inherit mydwl;
+        inherit mysomebar;
         mydwl-start = pkgs.writeShellScriptBin "mydwl-start" ''
 PATH="$PATH:${mydwl-autostart}/bin"
-exec ${mydwl}/bin/dwl -s ${super.somebar}/bin/somebar
+exec ${mydwl}/bin/dwl -s ${mysomebar}/bin/somebar
 '';
     });
 in {
@@ -56,7 +76,7 @@ in {
   config =
     (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.dwl.enable) {
       nixpkgs.overlays = [ overlay ];
-      home-manager.sharedModules = [{ home.packages = with pkgs; [ mydwl somebar mydwl-start ]; }];
+      home-manager.sharedModules = [{ home.packages = with pkgs; [ mydwl mysomebar mydwl-start ]; }];
       services.xserver.windowManager.session = lib.singleton {
         name = "dwl";
         start = "${pkgs.mydwl-start}/bin/mydwl-start";
