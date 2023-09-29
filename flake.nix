@@ -78,7 +78,7 @@
     #wayland:vivarium
     vivarium.url = "github:maxhbr/vivarium";
 
-    mydwl.url = "path:./flakes/mydwl";
+    mydwl.url = "github:maxhbr/mydwl";
     mydwl.inputs.nixpkgs.follows = "nixpkgs";
 
     ###########################################################################
