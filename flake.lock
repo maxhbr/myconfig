@@ -88,11 +88,11 @@
         "nixpkgs-stable": "nixpkgs-stable"
       },
       "locked": {
-        "lastModified": 1695956969,
-        "narHash": "sha256-mSwhyEAq7c/4MgxCTKNg86YrrWkKAuJejVK2XEY5Sl4=",
+        "lastModified": 1696012364,
+        "narHash": "sha256-UvVsjzwYvsDmiXijFA6VPzhyI92KC7ALXtgOBuNuUSc=",
         "owner": "nix-community",
         "repo": "emacs-overlay",
-        "rev": "f32c6288cc50298c04a86364e5947c28981c2f7d",
+        "rev": "a3807ae37389f6effb13e30cc12933cfdd325d80",
         "type": "github"
       },
       "original": {
@@ -473,11 +473,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1695940289,
-        "narHash": "sha256-z9DItQvCasu7sexaz1GZ+uOymDRpuEehFwRKToCooJ8=",
+        "lastModified": 1695984718,
+        "narHash": "sha256-LQwKgaaaFOkIcxarf0xQXeDJFwZ5BZWcgmPeo3xp2CM=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "9d4cdf8cc4da54beb5d2e927af7a259bb4a00645",
+        "rev": "4f02e35f9d150573e1a710afa338846c2f6d850c",
         "type": "github"
       },
       "original": {
@@ -507,11 +507,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1695967887,
-        "narHash": "sha256-/NxKXVKSAAAJcqxAPqTecE6HxK9qMUypnJ4L/qNqxas=",
+        "lastModified": 1696015448,
+        "narHash": "sha256-mJIaYwNk5qZH0hPMO5wK1HxUZmhudpdo1+mmTV/7FZk=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "a1f529bf88a2175605708f614ba22a98751d059f",
+        "rev": "ffb0f6b9778f111d2af62db25a48cb7f6f7a1859",
         "type": "github"
       },
       "original": {
@@ -538,6 +538,26 @@
       "original": {
         "owner": "maxhbr",
         "repo": "wallpapers",
+        "type": "github"
+      }
+    },
+    "mydwl": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1696010530,
+        "narHash": "sha256-MNuwsBZ5erZ042fvvmJl5mtVMn5X3LzIOu6rUusRJ6c=",
+        "owner": "maxhbr",
+        "repo": "mydwl",
+        "rev": "66ec073f5987d2c0d77027a9e388278ff78a1e0c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "maxhbr",
+        "repo": "mydwl",
         "type": "github"
       }
     },
@@ -679,11 +699,11 @@
     },
     "nixos-unstable-small": {
       "locked": {
-        "lastModified": 1695859332,
-        "narHash": "sha256-w2a7NW3VtI5FgFPUKslYRGAj5Qb7y4i0I2QO0S/lBMQ=",
+        "lastModified": 1695962284,
+        "narHash": "sha256-vygWW+zz/5NHWpH7nIfNFlKiJChp6kVRXkzAcPK08hY=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "248a83fffc10b627da67fa6b25d2c13fc7542628",
+        "rev": "cdd726e1deb44c031ee8975528d6b283ed8cf021",
         "type": "github"
       },
       "original": {
@@ -750,11 +770,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1695933574,
-        "narHash": "sha256-tnssDhNt4+wBz1s7XWQ4kOWNs8I616E/IOGZLkkD2zQ=",
+        "lastModified": 1696015417,
+        "narHash": "sha256-qU9TipHjLdsE+tGQfv2R3Hec18weI05yjny50c6y4yY=",
         "owner": "nix-community",
         "repo": "nixpkgs-wayland",
-        "rev": "d93a29c75d878bce117859e4f7710e1a6bafda4d",
+        "rev": "76dced3ae0f7dd3127880aeba64ab7eeb72ea9f6",
         "type": "github"
       },
       "original": {
@@ -813,11 +833,11 @@
     },
     "nur": {
       "locked": {
-        "lastModified": 1695966078,
-        "narHash": "sha256-iwIusFTJqe2msimFGkh/pXN/FTSWB95hTsNmvc+Sbgw=",
+        "lastModified": 1696013191,
+        "narHash": "sha256-apZaVgALAKLiQHczYbMMcXqJ5id2WzltFyzx0op7vrU=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "bcf04b18bdf790d3c817ba907ea2c7c5481602e6",
+        "rev": "1a1c4d396060605ffedb0a9061aa1b6502c7818a",
         "type": "github"
       },
       "original": {
@@ -1109,6 +1129,7 @@
         "home": "home",
         "master": "master",
         "my-wallpapers": "my-wallpapers",
+        "mydwl": "mydwl",
         "newmpkg": "newmpkg",
         "nix-doom-emacs": "nix-doom-emacs",
         "nixos-hardware": "nixos-hardware",
