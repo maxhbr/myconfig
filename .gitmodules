@@ -1,0 +1,3 @@
+[submodule "flakes/mydwl"]
+	path = flakes/mydwl
+	url = https://github.com/maxhbr/mydwl

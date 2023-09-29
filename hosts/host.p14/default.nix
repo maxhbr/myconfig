@@ -53,7 +53,8 @@
         enable = true;
         wayland = {
           enable = true;
-          desktop = "river";
+          # desktop = "river";
+          desktop = "dwl";
           river.enable = true;
           labwc.enable = true;
           # gnome.enable = true; # konflicts with sway

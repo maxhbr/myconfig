@@ -78,6 +78,9 @@
     #wayland:vivarium
     vivarium.url = "github:maxhbr/vivarium";
 
+    mydwl.url = "path:./flakes/mydwl";
+    mydwl.inputs.nixpkgs.follows = "nixpkgs";
+
     ###########################################################################
     # begin fish
     fasd.url = "github:oh-my-fish/plugin-fasd";
@@ -300,12 +303,35 @@
             nixpkgs.overlays = [ inputs.nur.overlay ];
           };
         };
+        mydwl = { pkgs, config, lib, ... }:
+          let
+            cfg = config.myconfig;
+          in {
+            options.myconfig = with lib; {
+              desktop.wayland.dwl = { enable = mkEnableOption "dwl"; };
+            };
+            imports = [ inputs.mydwl.nixosModules.mydwl ];
+            config =
+              (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.dwl.enable) {
+                mydwl = {
+                  enable = true;
+                  autostartCommands = cfg.desktop.wayland.autostartCommands;
+                };
+                myconfig.desktop.wayland.greetdSettings = {
+                  dwl_session = {
+                    command = config.mydwl.startCommand;
+                    user = "mhuber";
+                  };
+                };
+              });
+        };
       };
 
       nixosConfigurationsGen = {
         host-p14 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "p14" ([
             self.nixosModules.core
+            self.nixosModules.mydwl
             inputs.nixos-hardware.nixosModules.common-cpu-intel
             inputs.nixos-hardware.nixosModules.common-gpu-intel
             inputs.nixos-hardware.nixosModules.common-pc-laptop
