@@ -18,8 +18,6 @@ in {
             way-displays
             wdisplays
             wlr-randr
-            ## statusbar
-            waybar
             ## Program Launchers
             wofi
             bemenu
@@ -205,7 +203,7 @@ in {
         };
       }
       # {
-      #   programs.foot = let 
+      #   programs.foot = let
       #     foottheme = "";
 
       #     # imaterial-amber = {

@@ -84,7 +84,6 @@ main() {
 
         ( cd "../myconfig"; pwd; nix flake update --commit-lock-file )
         ( cd "../opossum.nix"; pwd; nix flake update --commit-lock-file )
-        ( cd "flakes/mydwl"; pwd; nix flake update --commit-lock-file )
 
         pwd
         nix flake update --commit-lock-file

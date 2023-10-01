@@ -5,29 +5,29 @@
         programs.vscode = {
           enable = lib.mkDefault true;
           # package = pkgs.vscode-with-extensions;
-          userSettings = {
-            "files.autoSave" = "on";
-            "files.trimTrailingWhitespace" = true;
-            "files.insertFinalNewline" = true;
-            "window.titleBarStyle" =
-              "custom"; # https://github.com/microsoft/vscode/issues/184124
-            "accessibility.dimUnfocused.enabled" = true;
-            "[plaintext]"."files.insertFinalNewline" = false;
-            "[nix]"."editor.tabSize" = 2;
-            "[haskell]"."editor.tabSize" = 2;
-            "editor.experimental.asyncTokenization" = true;
-            "editor.experimental.asyncTokenizationVerification" = true;
-            "editor.inlineSuggest.enabled" = true;
-            "github.copilot.enable" = {
-              "*" = true;
-              "plaintext" = false;
-              # "yaml" = false;
-              # "markdown" = true;
-              # "javascript" = true;
-              # "python" = true;
-            };
-            "github.copilot.advanced" = { "enabled" = true; };
-          };
+          # userSettings = {
+          #   "files.autoSave" = "on";
+          #   "files.trimTrailingWhitespace" = true;
+          #   "files.insertFinalNewline" = true;
+          #   "window.titleBarStyle" =
+          #     "custom"; # https://github.com/microsoft/vscode/issues/184124
+          #   "accessibility.dimUnfocused.enabled" = true;
+          #   "[plaintext]"."files.insertFinalNewline" = false;
+          #   "[nix]"."editor.tabSize" = 2;
+          #   "[haskell]"."editor.tabSize" = 2;
+          #   "editor.experimental.asyncTokenization" = true;
+          #   "editor.experimental.asyncTokenizationVerification" = true;
+          #   "editor.inlineSuggest.enabled" = true;
+          #   "github.copilot.enable" = {
+          #     "*" = true;
+          #     "plaintext" = false;
+          #     # "yaml" = false;
+          #     # "markdown" = true;
+          #     # "javascript" = true;
+          #     # "python" = true;
+          #   };
+          #   "github.copilot.advanced" = { "enabled" = true; };
+          # };
           extensions = with pkgs.vscode-extensions; [
             dracula-theme.theme-dracula
             vscodevim.vim

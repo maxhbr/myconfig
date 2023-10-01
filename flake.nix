@@ -44,11 +44,11 @@
 
     # zephyrproject.url = "path:flakes/zephyrproject/";
 
-    #wayland:sway
-    swaymonad = {
-      url = "github:nicolasavru/swaymonad";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    # #wayland:sway
+    # swaymonad = {
+    #   url = "github:nicolasavru/swaymonad";
+    #   inputs.nixpkgs.follows = "nixpkgs";
+    # };
 
     #wayland:river
     river-grid = {
@@ -64,19 +64,19 @@
     #   inputs.nixpkgs.follows = "nixpkgs";
     # };
 
-    #wayland:newm
-    newmpkg = {
-      url = "github:jbuchermn/newm";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-utils.follows = "flake-utils";
-    };
-    pywm-fullscreenpkg = {
-      url = "github:jbuchermn/pywm-fullscreen";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    # #wayland:newm
+    # newmpkg = {
+    #   url = "github:jbuchermn/newm";
+    #   inputs.nixpkgs.follows = "nixpkgs";
+    #   inputs.flake-utils.follows = "flake-utils";
+    # };
+    # pywm-fullscreenpkg = {
+    #   url = "github:jbuchermn/pywm-fullscreen";
+    #   inputs.nixpkgs.follows = "nixpkgs";
+    # };
 
-    #wayland:vivarium
-    vivarium.url = "github:maxhbr/vivarium";
+    # #wayland:vivarium
+    # vivarium.url = "github:maxhbr/vivarium";
 
     mydwl.url = "github:maxhbr/mydwl";
     mydwl.inputs.nixpkgs.follows = "nixpkgs";
@@ -120,7 +120,7 @@
       };
     in lib.recursiveUpdate {
       aggregatedInputs = inputs;
-      lib = import ./outputs.lib.nix inputs;
+      lib = import ./flake.lib.nix inputs;
 
       ##########################################################################
       ## profiles and modules ##################################################
@@ -250,22 +250,22 @@
                 })
               ];
             })
-            ({ pkgs, ... }: {
-              nixpkgs.overlays = [
-                (_: _: {
-                  newm = inputs.newmpkg.packages.${pkgs.system}.newm;
-                  pywm-fullscreen =
-                    inputs.pywm-fullscreenpkg.packages.${pkgs.system}.pywm-fullscreen;
-                })
-              ];
-            })
-            ({ pkgs, ... }: {
-              nixpkgs.overlays = [
-                (_: _: {
-                  swaymonad = inputs.swaymonad.defaultpackage.${pkgs.system};
-                })
-              ];
-            })
+            # ({ pkgs, ... }: {
+            #   nixpkgs.overlays = [
+            #     (_: _: {
+            #       newm = inputs.newmpkg.packages.${pkgs.system}.newm;
+            #       pywm-fullscreen =
+            #         inputs.pywm-fullscreenpkg.packages.${pkgs.system}.pywm-fullscreen;
+            #     })
+            #   ];
+            # })
+            # ({ pkgs, ... }: {
+            #   nixpkgs.overlays = [
+            #     (_: _: {
+            #       swaymonad = inputs.swaymonad.defaultpackage.${pkgs.system};
+            #     })
+            #   ];
+            # })
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
                 (_: _: {
@@ -273,7 +273,7 @@
                 })
               ];
             })
-            ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.vivarium.overlay ]; })
+            # ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.vivarium.overlay ]; })
             inputs.my-wallpapers.nixosModule
             fishPluginsModule
 
@@ -303,28 +303,7 @@
             nixpkgs.overlays = [ inputs.nur.overlay ];
           };
         };
-        mydwl = { pkgs, config, lib, ... }:
-          let
-            cfg = config.myconfig;
-          in {
-            options.myconfig = with lib; {
-              desktop.wayland.dwl = { enable = mkEnableOption "dwl"; };
-            };
-            imports = [ inputs.mydwl.nixosModules.mydwl ];
-            config =
-              (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.dwl.enable) {
-                mydwl = {
-                  enable = true;
-                  autostartCommands = cfg.desktop.wayland.autostartCommands;
-                };
-                myconfig.desktop.wayland.greetdSettings = {
-                  dwl_session = {
-                    command = config.mydwl.startCommand;
-                    user = "mhuber";
-                  };
-                };
-              });
-        };
+        mydwl = import ./flake.nixosModules.mydwl.nix inputs;
       };
 
       nixosConfigurationsGen = {

@@ -9,7 +9,7 @@
           modules-left = [
             # "river/mode"
             "river/tags"
-            "dwl/tags"
+            # "dwl/tags"
             "sway/workspaces"
             "sway/mode"
           ];

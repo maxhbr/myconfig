@@ -55,10 +55,10 @@
           enable = true;
           # desktop = "river";
           desktop = "dwl";
-          river.enable = true;
+          dwl.enable = true;
+          # river.enable = true;
           labwc.enable = true;
           # gnome.enable = true; # konflicts with sway
-          dwl.enable = true;
 
           #disabled:
           # sway.enable = true;
