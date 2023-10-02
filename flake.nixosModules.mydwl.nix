@@ -10,7 +10,7 @@ in {
     (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.dwl.enable) {
       mydwl = {
         enable = true;
-        # barCommand = null;
+        # barCommand = "${pkgs.waybar}/bin/waybar";
         autostartCommands = cfg.desktop.wayland.autostartCommands;
       };
       myconfig.desktop.wayland.greetdSettings = {

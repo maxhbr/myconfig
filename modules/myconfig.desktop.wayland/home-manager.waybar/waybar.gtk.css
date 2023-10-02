@@ -31,6 +31,7 @@ tooltip label {
 #mode,
 #taskbar button,
 #window,
+#custom-dwl_tag,
 #tags button {
     padding: 0 9px;
     border-radius: 0px 0px 7px 7px;
@@ -42,6 +43,7 @@ tooltip label {
 
 #taskbar button,
 #tags button,
+#custom-dwl_tag,
 #workspaces button {
     padding: 0;
     margin: 0;
@@ -102,6 +104,7 @@ tooltip label {
 }
 
 #tags button.focused,
+#custom-dwl_tag.focused,
 #workspaces button.focused {
     background: rgba(43, 48, 59, 0.5);
     border-right: 2px solid #e0cbc7;
@@ -112,6 +115,7 @@ tooltip label {
 
 #taskbar button.active,
 #tags button.occupied,
+#custom-dwl_tag.occupied,
 #window.focused {
     border-bottom: 3px solid #e0cbc7;
 }
@@ -125,6 +129,7 @@ tooltip label {
         border-bottom: 3px solid #ee9a00;
     }
 }
+#custom-dwl_tag.urgent,
 #tags button.urgent {
     animation-name: blink-border;
     animation-duration: 0.5s;
@@ -156,3 +161,27 @@ tooltip label {
     /* background-color: #1F2C36; */
     color: rgb(43, 48, 59);
 }
+
+/* #custom-dwl_layout {
+    color: #EC5800
+}
+
+#custom-dwl_title {
+    color: #017AFF
+}
+
+#custom-dwl_tag {
+    color: #875F00
+}
+
+#custom-dwl_tag.occupied {
+    color: #017AFF
+}
+
+#custom-dwl_tag.focused {
+    border-top: 1px solid #EC5800
+}
+
+#custom-dwl_tag.urgent {
+    background-color: #FF0000
+} */
