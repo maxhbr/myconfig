@@ -10,8 +10,12 @@ in {
     (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.dwl.enable) {
       mydwl = {
         enable = true;
-        # barCommand = "${pkgs.waybar}/bin/waybar";
-        autostartCommands = cfg.desktop.wayland.autostartCommands;
+        barCommand = null;
+        autostartCommands = ''
+          ${cfg.desktop.wayland.autostartCommands}
+          pkill waybar ; ${config.programs.waybar.package}/bin/waybar > /tmp/dwl.''${XDG_VTNR}.''${USER}.waybar.log 2>&1 &disown
+          ${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all
+          '';
       };
       myconfig.desktop.wayland.greetdSettings = {
         dwl_session = {

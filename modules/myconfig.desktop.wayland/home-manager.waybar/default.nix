@@ -9,7 +9,6 @@
           modules-left = [
             # "river/mode"
             "river/tags"
-            # "dwl/tags"
             "sway/workspaces"
             "sway/mode"
           ];
@@ -44,10 +43,6 @@
             on-click = "foot-htop";
           };
           "river/tags" = {
-            tag-labels = [ "U" "I" "A" "E" "O" "S" "N" "R" "T" ];
-          };
-          "dwl/tags" = {
-            num-tags = 9;
             tag-labels = [ "U" "I" "A" "E" "O" "S" "N" "R" "T" ];
           };
           "wlr/taskbar" = {
