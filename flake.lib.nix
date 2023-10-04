@@ -345,7 +345,7 @@ in rec {
           ({ config, ... }: {
             config = {
               nixpkgs = {
-                inherit pkgs;
+                # inherit pkgs;
                 inherit (pkgs) config system;
               };
               environment.etc."myconfig".source = lib.cleanSource ./.;

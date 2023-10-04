@@ -50,12 +50,12 @@
     #   inputs.nixpkgs.follows = "nixpkgs";
     # };
 
-    #wayland:river
-    river-grid = {
-      url = "github:luc65r/grid";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-utils.follows = "flake-utils";
-    };
+    # #wayland:river
+    # river-grid = {
+    #   url = "github:luc65r/grid";
+    #   inputs.nixpkgs.follows = "nixpkgs";
+    #   inputs.flake-utils.follows = "flake-utils";
+    # };
 
     # #wayland:hyprland
     # hyprland = {
@@ -266,13 +266,13 @@
             #     })
             #   ];
             # })
-            ({ pkgs, ... }: {
-              nixpkgs.overlays = [
-                (_: _: {
-                  river-grid = inputs.river-grid.defaultPackage.${pkgs.system};
-                })
-              ];
-            })
+            # ({ pkgs, ... }: {
+            #   nixpkgs.overlays = [
+            #     (_: _: {
+            #       river-grid = inputs.river-grid.defaultPackage.${pkgs.system};
+            #     })
+            #   ];
+            # })
             # ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.vivarium.overlay ]; })
             inputs.my-wallpapers.nixosModule
             fishPluginsModule
