@@ -969,29 +969,6 @@
         "type": "github"
       }
     },
-    "river-grid": {
-      "inputs": {
-        "flake-utils": [
-          "flake-utils"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1648928092,
-        "narHash": "sha256-/p65KjvbqxGFymtNhtcWFGcWwPTPtorndI0UXhVb3is=",
-        "owner": "luc65r",
-        "repo": "grid",
-        "rev": "25f426a40a0faddb4dda658bc45a1bfcb0e63ebe",
-        "type": "github"
-      },
-      "original": {
-        "owner": "luc65r",
-        "repo": "grid",
-        "type": "github"
-      }
-    },
     "root": {
       "inputs": {
         "agnoster": "agnoster",
@@ -1020,7 +997,6 @@
         "rel2105": "rel2105",
         "rel2111": "rel2111",
         "rel2205": "rel2205",
-        "river-grid": "river-grid",
         "tmux": "tmux",
         "z": "z"
       }
