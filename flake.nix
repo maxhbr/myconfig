@@ -12,6 +12,8 @@
     rel2105.url = "github:nixos/nixpkgs/release-21.05";
     rel2111.url = "github:nixos/nixpkgs/release-21.11";
     rel2205.url = "github:nixos/nixpkgs/release-22.05";
+    rel2211.url = "github:nixos/nixpkgs/release-22.11";
+    rel2305.url = "github:nixos/nixpkgs/release-23.05";
 
     nixpkgs-wayland = { url = "github:nix-community/nixpkgs-wayland"; };
     # only needed if you use as a package set:
@@ -222,6 +224,8 @@
                   (mkSubPkgsOverlay "nixos-2105" inputs.rel2105)
                   (mkSubPkgsOverlay "nixos-2111" inputs.rel2111)
                   (mkSubPkgsOverlay "nixos-2205" inputs.rel2205)
+                  (mkSubPkgsOverlay "nixos-2211" inputs.rel2111)
+                  (mkSubPkgsOverlay "nixos-2305" inputs.rel2205)
                 ];
               };
             })

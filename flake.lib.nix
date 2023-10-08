@@ -403,6 +403,8 @@ in rec {
           # ca-references
           nix.extraOptions = ''
             experimental-features = nix-command flakes recursive-nix
+            keep-outputs = true
+            keep-derivations = true
             show-trace = true
             builders-use-substitutes = true
             preallocate-contents = true

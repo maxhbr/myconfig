@@ -155,11 +155,12 @@ in {
         fi
       '';
     })
+    ./sharescreen.nix
   ];
 
   config = (lib.mkIf cfg.desktop.wayland.enable {
     environment.sessionVariables = {
-      "NIXOS_OZONE_WL" = "1";
+      # "NIXOS_OZONE_WL" = "1"; # VSCode fails to start if that is set in dwl / wayland
       "XDG_SESSION_TYPE" = "wayland";
       "SDL_VIDEODRIVER" = "wayland";
       # needs qt5.qtwayland in systemPackages
@@ -202,63 +203,6 @@ in {
           };
         };
       }
-      # {
-      #   programs.foot = let
-      #     foottheme = "";
-
-      #     # imaterial-amber = {
-      #     #   cursor = {
-      #     #     color = "fff8e1 21201d";
-      #     #   };
-      #     #   colors = {
-      #     #     foreground = "21201d";
-      #     #     background = "fff8e1";
-
-      #     #     regular0 = "21201d"; # black
-      #     #     regular1 = "cd4340"; # red
-      #     #     regular2 = "498d49"; # green
-      #     #     regular3 = "fab32d"; # yellow
-      #     #     regular4 = "3378c4"; # blue
-      #     #     regular5 = "b83269"; # magenta
-      #     #     regular6 = "21929a"; # cyan
-      #     #     regular7 = "ffd7d7"; # white
-
-      #     #     bright0 = "66635a"; # bright black
-      #     #     bright1 = "dd7b72"; # bright red
-      #     #     bright2 = "82ae78"; # bright green
-      #     #     bright3 = "fbc870"; # bright yellow
-      #     #     bright4 = "73a0cd"; # bright blue
-      #     #     bright5 = "ce6f8e"; # bright magenta
-      #     #     bright6 = "548c94"; # bright cyan
-      #     #     bright7 = "ffe1da"; # bright white
-
-      #     #     dim0 = "9e9a8c"; # dim black
-      #     #     dim1 = "e9a99b"; # dim red
-      #     #     dim2 = "b0c99f"; # dim green
-      #     #     dim3 = "fdda9a"; # dim yellow
-      #     #     dim4 = "a6c0d4"; # dim blue
-      #     #     dim5 = "e0a1ad"; # dim magenta
-      #     #     dim6 = "3c6064"; # dim cyan
-      #     #     dim7 = "ffe9dd"; # dim white
-      #     #   };
-      #     # };
-      #   in {
-      #     enable = true;
-      #     server.enable = true;
-      #     settings =  {
-      #       main = {
-      #         term = "xterm-256color";
-
-      #         font = "font=monospace:size=8";
-      #         dpi-aware = "yes";
-      #         include = "${foottheme}";
-      #       };
-      #       colors = {
-      #         alpha = "0.8";
-      #       };
-      #     } // imaterial-amber;
-      #   };
-      # }
     ];
     services.physlock.enable = lib.mkForce false;
 
