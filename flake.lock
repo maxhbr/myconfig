@@ -477,11 +477,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1696830680,
-        "narHash": "sha256-x8hr3Aknda7aFHjdWEYHQTFe9nloUXRExpC2+1Zo/pU=",
+        "lastModified": 1696834766,
+        "narHash": "sha256-iVQR1oh2ElelyCjPuOgJovKV5L95NpgMBeujOty50vc=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "85f158659acf63d1a44ff30e5a680ddffd3400ff",
+        "rev": "8c9e646fb4f7b174cb1c388ba273a55a16e89c23",
         "type": "github"
       },
       "original": {
@@ -516,14 +516,15 @@
         "nixpkgs": [
           "nixpkgs"
         ],
-        "somebar": "somebar"
+        "somebar": "somebar",
+        "sway-audio-idle-inhibit": "sway-audio-idle-inhibit"
       },
       "locked": {
-        "lastModified": 1696786905,
-        "narHash": "sha256-9/4ZP/sLsOGPNLkXHI46dGPsKWNN2xi65vCwLcoKsS8=",
+        "lastModified": 1696836393,
+        "narHash": "sha256-AnUWGTSheRBmutvFHjZYuEauAzsjdYSne7BxSbt1c/g=",
         "owner": "maxhbr",
         "repo": "mydwl",
-        "rev": "47990e6c8270c0749d871f4d30a4c0693355a8be",
+        "rev": "266daef7918e943f98df8dc7dafb9b18f1d8cd01",
         "type": "github"
       },
       "original": {
@@ -1081,6 +1082,22 @@
         "owner": "~raphi",
         "repo": "somebar",
         "type": "sourcehut"
+      }
+    },
+    "sway-audio-idle-inhibit": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1691602798,
+        "narHash": "sha256-MKzyF5xY0uJ/UWewr8VFrK0y7ekvcWpMv/u9CHG14gs=",
+        "owner": "ErikReider",
+        "repo": "SwayAudioIdleInhibit",
+        "rev": "c850bc4812216d03e05083c69aa05326a7fab9c7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ErikReider",
+        "repo": "SwayAudioIdleInhibit",
+        "type": "github"
       }
     },
     "systems": {
