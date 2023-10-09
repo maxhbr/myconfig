@@ -25,10 +25,16 @@
             "backlight"
             "battery"
             "wlr/taskbar"
+            # "group/hardware"
             "idle_inhibitor"
+            "custom/audio_idle_inhibitor"
             "tray"
             "clock"
           ];
+          "group/hardware" = {
+            "orientation" = "vertical";
+            "modules" = [ "cpu" "memory" ];
+          };
           tray = { spacing = 10; };
           clock = {
             format = "{:%H:%M (%Y-%m-%d)}";
@@ -119,10 +125,11 @@
           network = {
             format-wifi = "{essid} ({signalStrength}%) ";
             format-ethernet = "{ipaddr}/{cidr} ";
-            tooltip-format = "{ifname} via {gwaddr} ";
+            tooltip-format = "{ifname} via {gwaddr} \n{ipaddr}/{cidr}";
             format-linked = "{ifname} (No IP) ";
             format-disconnected = "Disconnected ⚠";
-            format-alt = "{ifname}: {ipaddr}/{cidr}";
+            # format-alt = "{ifname}: {ipaddr}/{cidr}";
+            on-click = "foot-nmtui";
           };
           bluetooth = {
             format = " {status}";

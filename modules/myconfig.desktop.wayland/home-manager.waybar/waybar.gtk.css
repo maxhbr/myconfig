@@ -28,6 +28,7 @@ tooltip label {
 #bluetooth,
 #custom-platform_profile,
 #tray,
+#custom-audio_idle_inhibitor,
 #mode,
 #taskbar button,
 #window,
@@ -146,6 +147,7 @@ tooltip label {
     border-radius: 0px 0px 0px 14px;
 }
 #clock,
+#custom-audio_idle_inhibitor,
 #tray {
     background: rgba(43, 48, 59, 0.5);
     border-bottom: 3px solid #e0cbc7;
@@ -160,6 +162,10 @@ tooltip label {
 #idle_inhibitor.deactivated {
     /* background-color: #1F2C36; */
     color: rgb(43, 48, 59);
+}
+
+#hardware, .vertical {
+    font-size: 0.4em;
 }
 
 /* #custom-dwl_layout {
