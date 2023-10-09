@@ -31,10 +31,10 @@
             "tray"
             "clock"
           ];
-          "group/hardware" = {
-            "orientation" = "vertical";
-            "modules" = [ "cpu" "memory" ];
-          };
+          # "group/hardware" = {
+          #   "orientation" = "vertical";
+          #   "modules" = [ "cpu" "memory" ];
+          # };
           tray = { spacing = 10; };
           clock = {
             format = "{:%H:%M (%Y-%m-%d)}";
