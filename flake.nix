@@ -148,59 +148,8 @@
           imports = [ nixpkgs.nixosModules.readOnlyPkgs ];
           nixpkgs.pkgs = nixpkgs.legacyPackages.x86_64-linux;
         };
-        fishPluginsModule = { pkgs, ... }: {
-          config = {
-            home-manager.sharedModules = [
-              ({ config, lib, ... }: {
-                config = lib.mkIf config.programs.fish.enable {
-                  home.packages = with pkgs; [ fasd fzf ];
-                  programs.fish = {
-                    plugins = [
-                      {
-                        name = "fasd";
-                        src = inputs.fasd;
-                      }
-                      {
-                        name = "foreign-env";
-                        src = inputs.foreign-env;
-                      }
-                      {
-                        name = "tmux";
-                        src = inputs.tmux;
-                      }
-                      {
-                        name = "z";
-                        src = inputs.z;
-                      }
-                      {
-                        name = "fzf";
-                        src = inputs.fzf;
-                      }
-                      {
-                        name = "done";
-                        src = inputs.done;
-                      }
-                      {
-                        name = "fish-async-prompt";
-                        src = inputs.fish-async-prompt;
-                      }
-                      {
-                        name = "fish-ssh-agent";
-                        src = inputs.fish-ssh-agent;
-                      }
-                    ];
-                  };
-                  home.file = {
-                    ".config/fish/functions/fish_prompt.fish".source =
-                      inputs.agnoster + "/fish_prompt.fish";
-                    ".config/fish/functions/bax.fish".source = inputs.bax
-                      + "/bax.fish";
-                  };
-                };
-              })
-            ];
-          };
-        };
+        mydwl = import ./flake.nixosModules.mydwl.nix inputs;
+        myfish = import ./flake.nixosModules.myfish.nix inputs;
         core = { ... }: {
           imports = [
             ({ pkgs, ... }: {
@@ -279,7 +228,8 @@
             # })
             # ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.vivarium.overlay ]; })
             inputs.my-wallpapers.nixosModule
-            fishPluginsModule
+            myfish
+            mydwl
 
             ({ pkgs, ... }: {
               home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
@@ -307,14 +257,12 @@
             nixpkgs.overlays = [ inputs.nur.overlay ];
           };
         };
-        mydwl = import ./flake.nixosModules.mydwl.nix inputs;
       };
 
       nixosConfigurationsGen = {
         host-p14 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "p14" ([
             self.nixosModules.core
-            self.nixosModules.mydwl
             inputs.nixos-hardware.nixosModules.common-cpu-intel
             inputs.nixos-hardware.nixosModules.common-gpu-intel
             inputs.nixos-hardware.nixosModules.common-pc-laptop
