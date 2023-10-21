@@ -42,7 +42,6 @@ in {
                 # fzf
               ];
               programs.fish = {
-                # enable = true;
                 shellAliases = { };
                 shellAbbrs = {
                   rm = "rm -I";
