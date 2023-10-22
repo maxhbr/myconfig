@@ -477,11 +477,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1697995704,
-        "narHash": "sha256-CV3xsaVQbaANhzMzgHzGpG4DAvJwVYGdZwhh8gbHs6w=",
+        "lastModified": 1697996611,
+        "narHash": "sha256-HhioRXHLcUh/irCLwy4S7rHTs19ZvHdl+j7MC5EzQGs=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "8c5947252d0c0fbb00d240371b3def7437733549",
+        "rev": "3720ec25904c60938ec37a5d7b405e10faaedc26",
         "type": "github"
       },
       "original": {
@@ -520,11 +520,11 @@
         "sway-audio-idle-inhibit": "sway-audio-idle-inhibit"
       },
       "locked": {
-        "lastModified": 1697609053,
-        "narHash": "sha256-r4AfldxiLm5mr1j340vdoAwfRoaSXnZ7HDDbVD2WRiQ=",
+        "lastModified": 1697877358,
+        "narHash": "sha256-pTUeyHdzw5GtqBAlamt/d276c9cwFt5DBhdcR9DndUU=",
         "owner": "maxhbr",
         "repo": "mydwl",
-        "rev": "0fa76a39a6d58e92c0b5cde857b70b909bfa3e65",
+        "rev": "941af4aa2fdb0cffa8d87f469564e28c7c77fa2c",
         "type": "github"
       },
       "original": {
