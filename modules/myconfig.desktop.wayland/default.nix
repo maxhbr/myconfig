@@ -88,15 +88,17 @@ in {
           } >/dev/null 2>&1 &
 
           ${wlsunset}/bin/wlsunset &
+
+          ${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all
         '';
         # ${pkgs.dex}/bin/dex --autostart
       };
 
       desktop = mkOption {
         type = types.str;
-        default = optionalString cfg.desktop.wayland.enable "river";
+        default = optionalString cfg.desktop.wayland.enable "dwl";
         defaultText = literalExpression ''
-          optionalString config.myconfig.wayland.enable "river"
+          optionalString config.myconfig.wayland.enable "dwl"
         '';
         description = lib.mdDoc ''
           The desktop environment to use

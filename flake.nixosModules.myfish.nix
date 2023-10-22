@@ -3,7 +3,7 @@ inputs:
 let cfg = config.myconfig;
 in {
   imports = [
-    ( { config, lib, pkgs, myconfig, ... }: {
+    ({ config, lib, pkgs, myconfig, ... }: {
       config = lib.mkIf config.programs.fish.enable {
         systemd = {
           timers.fish-history-backup-timer = {
@@ -29,18 +29,20 @@ in {
         };
       };
     })
-    ( { config, lib, pkgs, myconfig, ... }: {
+    ({ config, lib, pkgs, myconfig, ... }: {
       config = lib.mkIf config.programs.fish.enable {
         environment = {
-          shells = [ "${pkgs.fish}/bin/fish" "/run/current-system/sw/bin/fish" ];
+          shells =
+            [ "${pkgs.fish}/bin/fish" "/run/current-system/sw/bin/fish" ];
         };
         home-manager.sharedModules = [
           ({ config, lib, ... }: {
             config = lib.mkIf config.programs.fish.enable {
-              home.packages = with pkgs; [
-                fasd
-                # fzf
-              ];
+              home.packages = with pkgs;
+                [
+                  fasd
+                  # fzf
+                ];
               programs.fish = {
                 shellAliases = { };
                 shellAbbrs = {
@@ -143,7 +145,7 @@ in {
                 loginShellInit = "";
                 interactiveShellInit = ''
                   set -U fish_greeting
-        
+
                   # see: https://fishshell.com/docs/current/#command-line-editor
                   function hybrid_bindings --description "Vi-style bindings that inherit emacs-style bindings in all modes"
                       for mode in default insert visual
@@ -207,12 +209,7 @@ in {
   ];
   config = {
     programs.fish = { enable = true; };
-    home-manager.sharedModules = [
-      ({ ... }: {
-        programs.fish = {
-          enable = true;
-        };
-      })
-    ];
+    home-manager.sharedModules =
+      [ ({ ... }: { programs.fish = { enable = true; }; }) ];
   };
 }

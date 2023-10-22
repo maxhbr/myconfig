@@ -15,6 +15,9 @@
     rel2211.url = "github:nixos/nixpkgs/release-22.11";
     rel2305.url = "github:nixos/nixpkgs/release-23.05";
 
+    pr244937.url =
+      "github:charles-dyfis-net/nixpkgs/freeplane-1_11_4"; # https://github.com/NixOS/nixpkgs/pull/244937
+
     nixpkgs-wayland = { url = "github:nix-community/nixpkgs-wayland"; };
     # only needed if you use as a package set:
     nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
@@ -173,25 +176,24 @@
                   (mkSubPkgsOverlay "nixos-2105" inputs.rel2105)
                   (mkSubPkgsOverlay "nixos-2111" inputs.rel2111)
                   (mkSubPkgsOverlay "nixos-2205" inputs.rel2205)
-                  (mkSubPkgsOverlay "nixos-2211" inputs.rel2111)
-                  (mkSubPkgsOverlay "nixos-2305" inputs.rel2205)
+                  (mkSubPkgsOverlay "nixos-2111" inputs.rel2111)
+                  (mkSubPkgsOverlay "nixos-2205" inputs.rel2205)
+                  (mkSubPkgsOverlay "nixos-2211" inputs.rel2211)
+                  (mkSubPkgsOverlay "nixos-2305" inputs.rel2305)
                 ];
               };
             })
             ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.emacs.overlay ]; })
             ({ pkgs, ... }: {
-              nixpkgs.overlays = [
+              nixpkgs.overlays = map ({ input, pkg }:
                 (_: _: {
-                  # https://github.com/NixOS/nixpkgs/pull/145738
-                  tree = (import inputs.master {
+                  "${pkg}" = (import inputs."${input}" {
                     inherit (pkgs) config system;
-                  }).tree;
-                  # https://github.com/NixOS/nixpkgs/pull/159074
-                  remarshal = (import inputs.master {
-                    inherit (pkgs) config system;
-                  }).remarshal;
-                })
-              ];
+                  })."${pkg}";
+                })) [{
+                  input = "pr244937";
+                  pkg = "freeplane";
+                }];
             })
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
@@ -203,30 +205,6 @@
                 })
               ];
             })
-            # ({ pkgs, ... }: {
-            #   nixpkgs.overlays = [
-            #     (_: _: {
-            #       newm = inputs.newmpkg.packages.${pkgs.system}.newm;
-            #       pywm-fullscreen =
-            #         inputs.pywm-fullscreenpkg.packages.${pkgs.system}.pywm-fullscreen;
-            #     })
-            #   ];
-            # })
-            # ({ pkgs, ... }: {
-            #   nixpkgs.overlays = [
-            #     (_: _: {
-            #       swaymonad = inputs.swaymonad.defaultpackage.${pkgs.system};
-            #     })
-            #   ];
-            # })
-            # ({ pkgs, ... }: {
-            #   nixpkgs.overlays = [
-            #     (_: _: {
-            #       river-grid = inputs.river-grid.defaultPackage.${pkgs.system};
-            #     })
-            #   ];
-            # })
-            # ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.vivarium.overlay ]; })
             inputs.my-wallpapers.nixosModule
             myfish
             mydwl

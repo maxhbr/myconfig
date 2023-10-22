@@ -63,8 +63,6 @@ in {
                 # TODO: why is/was river called in rivers autostart script, which is called by river??
                 # # or: dbus-run-session -- river
                 # dbus-wm-environment ${riverPackage}/bin/river
-
-                ${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all
               '') + "/bin/autostart.sh";
               executable = true;
             };

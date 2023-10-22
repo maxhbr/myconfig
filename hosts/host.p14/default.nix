@@ -53,7 +53,6 @@
         enable = true;
         wayland = {
           enable = true;
-          # desktop = "river";
           desktop = "dwl";
           dwl.enable = true;
           # river.enable = true;

@@ -125,7 +125,9 @@
           network = {
             format-wifi = "{essid} ({signalStrength}%) ";
             format-ethernet = "{ipaddr}/{cidr} ";
-            tooltip-format = "{ifname} via {gwaddr} \n{ipaddr}/{cidr}";
+            tooltip-format = ''
+              {ifname} via {gwaddr} 
+              {ipaddr}/{cidr}'';
             format-linked = "{ifname} (No IP) ";
             format-disconnected = "Disconnected ⚠";
             # format-alt = "{ifname}: {ipaddr}/{cidr}";
