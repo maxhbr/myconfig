@@ -91,6 +91,8 @@ main() {
         type gnupg-to-mutt.pl &> /dev/null && gnupg-to-mutt.pl
     else
         nix flake lock --update-input myconfig
+        nix flake lock --update-input mydwl
+        nix flake lock --update-input opossum
     fi
 
     build "$target" || build "$target" --keep-failed --no-eval-cache
