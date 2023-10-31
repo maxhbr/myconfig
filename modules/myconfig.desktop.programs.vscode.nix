@@ -34,7 +34,7 @@
             yzhang.markdown-all-in-one
             haskell.haskell
             bbenoist.nix
-            ms-python.python
+            # ms-python.python
             ms-azuretools.vscode-docker
             ms-vscode-remote.remote-ssh
           ];

@@ -5,10 +5,14 @@ let user = myconfig.user;
 in {
   imports = [{
     services.udisks2.enable = true;
-    environment.systemPackages = with pkgs; [ udisks2 udiskie bashmount ];
+    environment.systemPackages = with pkgs; [ 
+      udisks2
+      # udiskie
+      bashmount
+    ];
     environment = {
       shellAliases = {
-        mountall = "udiskie -a";
+        # mountall = "udiskie -a";
         pmount = "udisksctl mount -b";
       };
     };

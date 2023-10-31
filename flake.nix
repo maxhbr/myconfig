@@ -143,7 +143,7 @@
               useUserPackages = true;
               useGlobalPkgs = true;
               backupFileExtension = "hmBackup";
-              sharedModules = [{ home.stateVersion = lib.mkDefault "22.11"; }];
+              sharedModules = [{ home.stateVersion = lib.mkDefault "23.05"; }];
             };
           };
         };

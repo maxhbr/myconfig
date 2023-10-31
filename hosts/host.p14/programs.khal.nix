@@ -1,6 +1,6 @@
 { config, lib, pkgs, ... }: {
   home-manager.sharedModules = [{
-    home.packages = with pkgs; [ khal vdirsyncer ]; # calcurse
+    home.packages = with pkgs; [ nixos-2305.khal vdirsyncer ]; # calcurse
 
     # systemd.user.timers.vdirsyncer = {
     #   Unit = { Description = "Timer to synchronize calendars"; };
