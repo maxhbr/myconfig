@@ -78,7 +78,7 @@
         cad.enable = true;
         deskreen.enable = true;
       };
-      email.enable = false; # msmtp fails to build
+      email.enable = true;
       virtualisation.enable = true;
       dev = {
         compliance.enable = true;
