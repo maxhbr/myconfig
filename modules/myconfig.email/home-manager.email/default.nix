@@ -36,7 +36,34 @@
     home.packages = with pkgs; [ abook urlview ];
     programs.mbsync.enable = true;
     programs.msmtp.enable = true;
-    programs.aerc.enable = true;
+    programs.aerc= {
+      enable = true;
+      # see for example https://man.archlinux.org/man/aerc-config.5.en
+      extraConfig = let
+          pager = "${pkgs.bat}/bin/bat";
+        in {
+          general = {
+            unsafe-accounts-conf = true;
+          };
+          ui = {
+            mouse-enabled = true;
+          };
+          compose = {
+            # editor = "${pkgs.vim}/bin/vim";
+            empty-subject-warning = true;
+          };
+          viewer = {
+            inherit pager;
+            # show-headers = true;
+            always-show-mime = true;
+          };
+          filters = {
+            "text/plain" = pager;
+            "text/*"="${pager} -fP --file-name=\"$AERC_FILENAME\" --style=plain";
+            "image/*"="${pkgs.catimg}/bin/catimg -w$(${pkgs.ncurses}/bin/tput cols) -";
+          };
+        };
+    };
     programs.notmuch = {
       enable = true;
       hooks = { preNew = "mbsync --all"; };

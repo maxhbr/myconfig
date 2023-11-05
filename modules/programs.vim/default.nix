@@ -82,7 +82,7 @@ let
       ];
     });
 in {
-  config = {
+  config = lib.mkIf (! config.programs.neovim.enable) {
     environment = {
       variables = { EDITOR = lib.mkForce "vim"; };
       # shellAliases = { emacs = "gvim"; };
