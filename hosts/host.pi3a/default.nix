@@ -31,6 +31,7 @@
       };
     };
 
+    services.greetd.enable = lib.mkForce false;
 
     swapDevices = [{
       device = "/swapfile";

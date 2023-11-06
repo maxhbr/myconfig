@@ -153,6 +153,7 @@
         };
         mydwl = import ./flake.nixosModules.mydwl.nix inputs;
         myfish = import ./flake.nixosModules.myfish.nix inputs;
+        myemacs = import ./flake.nixosModules.myemacs inputs;
         core = { ... }: {
           imports = [
             ({ pkgs, ... }: {
@@ -183,7 +184,6 @@
                 ];
               };
             })
-            ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.emacs.overlay ]; })
             ({ pkgs, ... }: {
               nixpkgs.overlays = map ({ input, pkg }:
                 (_: _: {
@@ -208,10 +208,7 @@
             inputs.my-wallpapers.nixosModule
             myfish
             mydwl
-
-            ({ pkgs, ... }: {
-              home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
-            })
+            # myemacs
 
             ({ pkgs, config, ... }: {
               config = {

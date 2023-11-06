@@ -1,5 +1,7 @@
-{ config, lib, pkgs, ... }:
+inputs:
+{ pkgs, config, lib, ... }:
 let
+  cfg = config.myconfig;
   doomPrivateDir = let
     doomPrivateDeriv = pkgs.stdenv.mkDerivation rec {
       name = "doomPrivateDeriv-1.0";
@@ -11,6 +13,14 @@ let
     };
   in "${doomPrivateDeriv}";
 in {
+  imports = [
+    ({...}: {
+      nixpkgs.overlays = [ inputs.emacs.overlay ];
+      home-manager.sharedModules = [
+        inputs.nix-doom-emacs.hmModule
+      ];
+    })
+  ];
   options.myconfig = with lib; {
     editor.emacs.enable = mkEnableOption "emacs";
   };
