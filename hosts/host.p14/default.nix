@@ -230,6 +230,8 @@
       }
     ];
 
+    boot.binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];
+
     hardware.enableRedistributableFirmware = true;
 
     # This value determines the NixOS release from which the default

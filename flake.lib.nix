@@ -179,7 +179,7 @@ let
             hostName = "builder.${host}";
             maxJobs = 6;
             supportedFeatures =
-              [ "nixos-test" "benchmark" "big-parallel" "kvm" ];
+              [ "nixos-test" "benchmark" "big-parallel" "kvm" "aarch64-linux" "armv6l-linux" ];
             mandatoryFeatures = [ ];
             sshUser = "nixBuild";
             sshKey = "/etc/nix/${keyName}";

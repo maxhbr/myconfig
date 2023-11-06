@@ -12,10 +12,7 @@ let
   in "${doomPrivateDeriv}";
 in {
   options.myconfig = with lib; {
-    editor.emacs.enable = mkEnableOption "emacs" // {
-      default = true;
-      example = false;
-    };
+    editor.emacs.enable = mkEnableOption "emacs";
   };
   config = lib.mkIf config.myconfig.editor.emacs.enable {
     environment = { variables = { EDITOR = "emacs -nw"; }; };

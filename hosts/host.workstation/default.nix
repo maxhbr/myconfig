@@ -86,9 +86,7 @@
         obs.enable = true;
       };
       headless.enable = true;
-      # virtualisation.enable = true;
       # virtualisation.gpuPassthroughHost.enable = true;
-      virtualisation.enable = true;
       dev = {
         compliance.enable = true;
         haskell.enable = true;
@@ -106,6 +104,8 @@
     #virtualisation.virtualbox.host.enable = true;
 
     services.physlock.enable = true;
+
+    programs.dconf.enable = true;
 
     #boot.kernelPackages =
     #  # lib.mkForce pkgs.unstable.linuxPackages_testing;
