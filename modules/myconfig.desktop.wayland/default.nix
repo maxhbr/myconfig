@@ -146,17 +146,17 @@ in {
           ];
       }];
     })
-    (lib.mkIf (cfg.desktop.wayland.enable && !config.services.greetd.enable) {
-      environment.interactiveShellInit = let
-        chosen_session =
-          cfg.desktop.wayland.greetdSettings."${cfg.desktop.wayland.desktop}_session";
-      in ''
-        if [ -z $DISPLAY ] && [ "$(tty)" = "/dev/tty1" ]; then
-          exec &> >(tee /tmp/tty1-wayland.''${XDG_VTNR}.''${USER}.log)
-          exec ${chosen_session.command} > /tmp/tty1-wayland.''${XDG_VTNR}.''${USER}.log
-        fi
-      '';
-    })
+    # (lib.mkIf (cfg.desktop.wayland.enable && !config.services.greetd.enable) {
+    #   environment.interactiveShellInit = let
+    #     chosen_session =
+    #       cfg.desktop.wayland.greetdSettings."${cfg.desktop.wayland.desktop}_session";
+    #   in ''
+    #     if [ -z $DISPLAY ] && [ "$(tty)" = "/dev/tty1" ]; then
+    #       exec &> >(tee /tmp/tty1-wayland.''${XDG_VTNR}.''${USER}.log)
+    #       exec ${chosen_session.command} > /tmp/tty1-wayland.''${XDG_VTNR}.''${USER}.log
+    #     fi
+    #   '';
+    # })
     ./sharescreen.nix
   ];
 
