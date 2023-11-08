@@ -17,11 +17,11 @@
     ../host.p14/role.work
     # ./service.docker-registry.nix
     # ./service.podman.buildkit.nix
-    {
-      myconfig.river.enable = true;
-      myconfig.qtile.enable = true;
-      programs.sway.enable = true;
-    }
+    # {
+    #   myconfig.river.enable = true;
+    #   myconfig.qtile.enable = true;
+    #   programs.sway.enable = true;
+    # }
     ## fun
     ./smarthome.nix
     ../host.workstation/gaming/games.steam
@@ -55,9 +55,9 @@
     myconfig = {
       desktop.enable = true;
       # virtualisation.enable = true;
-      imagework.enable = true;
-      cad.enable = true;
-      deskreen.enable = true;
+      #imagework.enable = true;
+      # cad.enable = true;
+      # deskreen.enable = true;
       dev = {
         compliance.enable = true;
         go.enable = true;

@@ -1,10 +1,13 @@
 { self, ... }@inputs:
 let
   inherit (inputs.nixpkgs) lib;
-  mkMetadatalib = metadataOverride:
-    let
+  mkMetadata = metadataOverride: rec {
       json = builtins.fromJSON (builtins.readFile (./hosts + "/metadata.json"));
       metadata = lib.recursiveUpdate json metadataOverride;
+  };
+  mkMetadatalib = metadataOverride:
+    let
+      metadata = (mkMetadata metadataOverride).metadata;
 
       mkBackupJob = configOverwrites:
         {
@@ -437,6 +440,22 @@ in rec {
     in lib.nixosSystem (lib.recursiveUpdate cfg {
       modules = cfg.modules ++ [ (./hosts/host + ".${hostName}") ];
     }));
+
+  mkDeploy = hostName: nixosConfigurations: metadataOverride: let
+      metadata = (mkMetadata metadataOverride).metadata;
+    in {
+      # sshOpts = [ "-p" "2221" ];
+      hostname = metadata.hosts."${hostName}".ip4;
+      fastConnection = true;
+
+      profiles = {
+        system = {
+          # sshUser = "admin";
+          path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos (nixosConfigurations."${hostName}");
+          user = "root";
+        };
+      };
+    };
 
   # see also: https://nixos.mayflower.consulting/blog/2018/09/11/custom-images/
   mkISO = { system ? "x86_64-linux", hostName ? "myconfig"

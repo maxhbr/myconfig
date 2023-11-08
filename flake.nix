@@ -35,6 +35,8 @@
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
+    deploy-rs.url = "github:serokell/deploy-rs";
+
     # vulnerablecode.url = "github:nexB/vulnerablecode?dir=etc/nix";
 
     emacs.url = "github:nix-community/emacs-overlay";
@@ -309,32 +311,36 @@
         pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
         pi3a = self.nixosConfigurationsGen.host-pi3a [ ] { };
 
-        container = nixpkgs.lib.nixosSystem {
-          system = "x86_64-linux";
-          modules = [
-            self.nixosModules.activateHomeManager
-            self.nixosModules.readOnlyPkgs
-            # self.nixosModules.core
-            ({ pkgs, ... }: {
-              boot.isContainer = true;
+        # container = nixpkgs.lib.nixosSystem {
+        #   system = "x86_64-linux";
+        #   modules = [
+        #     self.nixosModules.activateHomeManager
+        #     self.nixosModules.readOnlyPkgs
+        #     # self.nixosModules.core
+        #     ({ pkgs, ... }: {
+        #       boot.isContainer = true;
 
-              # Let 'nixos-version --json' know about the Git revision
-              # of this flake.
-              system.configurationRevision =
-                nixpkgs.lib.mkIf (self ? rev) self.rev;
+        #       # Let 'nixos-version --json' know about the Git revision
+        #       # of this flake.
+        #       system.configurationRevision =
+        #         nixpkgs.lib.mkIf (self ? rev) self.rev;
 
-              # Network configuration.
-              networking.useDHCP = false;
-              networking.firewall.allowedTCPPorts = [ 80 ];
+        #       # Network configuration.
+        #       networking.useDHCP = false;
+        #       networking.firewall.allowedTCPPorts = [ 80 ];
 
-              # Enable a web server.
-              services.httpd = {
-                enable = true;
-                adminAddr = "morty@example.org";
-              };
-            })
-          ];
-        };
+        #       # Enable a web server.
+        #       services.httpd = {
+        #         enable = true;
+        #         adminAddr = "morty@example.org";
+        #       };
+        #     })
+        #   ];
+        # };
+      };
+
+      deploy.nodes = {
+        pi3a = self.lib.mkDeploy "pi3a" self.nixosConfigurations {};
       };
 
     } (let
@@ -398,5 +404,7 @@
             }
           ]);
       };
+
+      checks = builtins.mapAttrs (system: deployLib: deployLib.deployChecks self.deploy) inputs.deploy-rs.lib;
     }));
 }
