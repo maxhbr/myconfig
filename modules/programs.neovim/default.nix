@@ -27,9 +27,9 @@
             # Full list here,
             # https://github.com/NixOS/nixpkgs/blob/master/pkgs/applications/editors/vim/plugins/generated.nix
             plugins = with pkgs.vimPlugins; [
-              pkgs.vimPlugins.nvim-tree-lua
+              nvim-tree-lua
               {
-                plugin = pkgs.vimPlugins.vim-startify;
+                plugin = vim-startify;
                 config = "let g:startify_change_to_vcs_root = 0";
               }
 
@@ -110,6 +110,21 @@
               }
 
               vim-markdown
+
+              {
+                 # :Copilot setup
+                plugin = copilot-vim;
+                type = "lua";
+                config = ''
+                  let g:copilot_filetypes = {
+                        \ '*': v:false,
+                        \ 'python': v:true,
+                        \ 'haskell': v:true,
+                        \ }
+                  let g:copilot_node_command = "${pkgs.nodejs_latest}/bin/node"
+                  let g:copilot_proxy_strict_ssl = v:true
+                '';
+              }
             ];
           };
         })
