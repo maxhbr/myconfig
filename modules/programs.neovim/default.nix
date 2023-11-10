@@ -114,11 +114,11 @@
               {
                  # :Copilot setup
                 plugin = copilot-vim;
-                type = "lua";
                 config = ''
                   let g:copilot_filetypes = {
                         \ '*': v:false,
                         \ 'python': v:true,
+                        \ 'markdown': v:true,
                         \ 'haskell': v:true,
                         \ }
                   let g:copilot_node_command = "${pkgs.nodejs_latest}/bin/node"

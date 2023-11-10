@@ -3,7 +3,13 @@
 { pkgs, config, lib, ... }: {
   config = {
     myconfig = {
-      desktop.enable = true;
+      desktop = {
+        enable = true;
+        wayland = {
+          enable = true;
+          desktop = "dwl";
+        };
+     };
       #   virtualisation.enable = true;
       #   dev = {
       #     haskell.enable = true;
