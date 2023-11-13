@@ -8,6 +8,7 @@
         wayland = {
           enable = true;
           desktop = "dwl";
+          dwl.enable = true;
         };
      };
       #   virtualisation.enable = true;
@@ -20,6 +21,8 @@
     # virtualisation.docker.enable = true;
     # virtualisation.libvirtd.enable = true;
     # virtualisation.virtualbox.host.enable = true;
+
+    services.hardware.bolt.enable = true;
 
     networking.hostId = "12345678";
     boot.kernelPackages = lib.mkForce pkgs.linuxPackages;

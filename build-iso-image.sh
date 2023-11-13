@@ -48,5 +48,6 @@ iso="${1:-iso}"
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 [[ -d "$HOME/myconfig/priv" ]] && cd "$HOME/myconfig/priv"
+nix flake update
 build "$iso"
 times

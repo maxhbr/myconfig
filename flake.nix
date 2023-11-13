@@ -210,7 +210,7 @@
             inputs.my-wallpapers.nixosModule
             myfish
             mydwl
-            # myemacs
+            myemacs
 
             ({ pkgs, config, ... }: {
               config = {
