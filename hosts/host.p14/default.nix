@@ -80,7 +80,7 @@
       };
       email.enable = true;
       virtualisation.enable = true;
-      editor.emacs.enable = true;
+      # editor.emacs.enable = true;
       dev = {
         compliance.enable = true;
         go.enable = false;
