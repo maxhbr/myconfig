@@ -37,8 +37,8 @@ in {
       server.enable = true;
       settings = {
         main = {
-          font = "monospace:size=7";
-          dpi-aware = "yes";
+          font = "monospace:size=10";
+          dpi-aware = "no"; # "yes";
           include = "${theme}";
         };
         colors = { alpha = "0.85"; };
