@@ -129,6 +129,14 @@
           "pubkey": "8l//P4RvIKYqqNmBsN4SKmWzo/Ldvr//lVvuWnZd4jk="
         }
       }
+    },
+    "r6c": {
+      "network": "home",
+      "ip4" : "192.168.1.175",
+      "pubkeys": {
+        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICGqOI1O0dgdLO/Mc4VmnLhmNg1/b4Nn0DFCCkNH4L2d root@r6c",
+        "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDChuDf7UnioFGI+aqZI/5zDSTboFk1eWnGGx/Agq+7OLqyeL1MY4IE0Qbp3zyUU8BVtVNCTzYu+ynnN5YW7LbfJZXW86w+9AEdVI74OGhi8T8GevnvLotaEVVqVVbltRmwBd438oRYCdAFTkcVwyRqmc3rT/36Mdz+bPFkYwm9Rq93K+mocL1uDXDAJEKPK3cmcf+6d4Ocl1VgusLqDDCzFdtjLBeBMpmaD8S6VmDO7CWfo4yxx9xakRb7nTq9npNtAiMUw3rsxmDVtznv/9z7ZIWSXOTOoKu0pJwUSN+R4fJIoosZUJ8hNIvzo7mAR/ILp0ldb3DzS16ptNWoa9X8YaL7ppHPcA86WVA15WyB7eZnFE/KCfc24/w5v6kc2NUmtx6aTg0SwKxByA0TgWwWBYUzyARfvMTf6Bm6lbbmxu0SlausfkDxfVWYBs1GpTIHTmHw7SpkxEI5EL6m3iKm/2Mi/fwiB4W+DaD7FIcr8vwTgLYWmb1Vwa6o5H7Ph2IOfKAyhchUDM6T+r8yXqUNjRZlfR8HEf5Xnm9YeDvfCi/KtDb9+f/lMNyxXw9hZAlAqd+Ch/0d6OxeeL9RHEhsEWpFtXhCs+YwF5ACs9LKD8ApMVuEbWPUmMxY/SC1cjAVuH/p20evur1nnZSXuTofW46aBlUOUvqyq0s6CeQbyw== root@r6c"
+      }
     }
   },
   "networks": {

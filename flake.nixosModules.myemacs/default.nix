@@ -14,11 +14,9 @@ let
   in "${doomPrivateDeriv}";
 in {
   imports = [
-    ({...}: {
+    ({ ... }: {
       nixpkgs.overlays = [ inputs.emacs.overlay ];
-      home-manager.sharedModules = [
-        inputs.nix-doom-emacs.hmModule
-      ];
+      home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
     })
   ];
   options.myconfig = with lib; {

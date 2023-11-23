@@ -35,8 +35,6 @@
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
-    deploy-rs.url = "github:serokell/deploy-rs";
-
     # vulnerablecode.url = "github:nexB/vulnerablecode?dir=etc/nix";
 
     emacs.url = "github:nix-community/emacs-overlay";
@@ -145,7 +143,15 @@
               useUserPackages = true;
               useGlobalPkgs = true;
               backupFileExtension = "hmBackup";
-              sharedModules = [{ home.stateVersion = lib.mkDefault "23.05"; }];
+              sharedModules = [
+                ({ pkgs, ... }: {
+                  home.stateVersion =
+                    lib.mkDefault (config.system.stateVersion);
+                  home.packages = [
+                    pkgs.dconf
+                  ]; # see: https://github.com/nix-community/home-manager/issues/3113
+                })
+              ];
             };
           };
         };
@@ -272,11 +278,6 @@
             self.nixosModules.core
             # inputs.octrc.nixosModule
           ] ++ moreModules) metadataOverride);
-        host-spare = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "spare" ([
-            self.nixosModules.core
-            # inputs.octrc.nixosModule
-          ] ++ moreModules) metadataOverride);
         host-vserver = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "vserver"
             ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
@@ -294,6 +295,9 @@
         host-pi3a = moreModules: metadataOverride:
           (self.lib.evalConfiguration "aarch64-linux" "pi3a"
             ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
+        host-r6c = moreModules: metadataOverride:
+          (self.lib.evalConfiguration "aarch64-linux" "r6c"
+            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
       };
 
       ##########################################################################
@@ -302,14 +306,13 @@
 
       nixosConfigurations = {
         p14 = self.nixosConfigurationsGen.host-p14 [ ] { };
-        x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [ ] { };
+        # x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [ ] { };
         workstation = self.nixosConfigurationsGen.host-workstation [ ] { };
-        spare = self.nixosConfigurationsGen.host-spare [ ] { };
         vserver = self.nixosConfigurationsGen.host-vserver [ ] { };
         nas = self.nixosConfigurationsGen.host-nas [ ] { };
         nuc = self.nixosConfigurationsGen.host-nuc [ ] { };
-        pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
-        pi3a = self.nixosConfigurationsGen.host-pi3a [ ] { };
+        # pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
+        # pi3a = self.nixosConfigurationsGen.host-pi3a [ ] { };
 
         # container = nixpkgs.lib.nixosSystem {
         #   system = "x86_64-linux";
@@ -337,10 +340,6 @@
         #     })
         #   ];
         # };
-      };
-
-      deploy.nodes = {
-        pi3a = self.lib.mkDeploy "pi3a" self.nixosConfigurations {};
       };
 
     } (let
@@ -404,7 +403,5 @@
             }
           ]);
       };
-
-      checks = builtins.mapAttrs (system: deployLib: deployLib.deployChecks self.deploy) inputs.deploy-rs.lib;
     }));
 }

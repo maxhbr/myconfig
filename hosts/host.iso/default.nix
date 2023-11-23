@@ -10,7 +10,7 @@
           desktop = "dwl";
           dwl.enable = true;
         };
-     };
+      };
       #   virtualisation.enable = true;
       #   dev = {
       #     haskell.enable = true;

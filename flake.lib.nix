@@ -2,8 +2,8 @@
 let
   inherit (inputs.nixpkgs) lib;
   mkMetadata = metadataOverride: rec {
-      json = builtins.fromJSON (builtins.readFile (./hosts + "/metadata.json"));
-      metadata = lib.recursiveUpdate json metadataOverride;
+    json = builtins.fromJSON (builtins.readFile (./hosts + "/metadata.json"));
+    metadata = lib.recursiveUpdate json metadataOverride;
   };
   mkMetadatalib = metadataOverride:
     let
@@ -181,8 +181,14 @@ let
           nix.buildMachines = map (system: {
             hostName = "builder.${host}";
             maxJobs = 6;
-            supportedFeatures =
-              [ "nixos-test" "benchmark" "big-parallel" "kvm" "aarch64-linux" "armv6l-linux" ];
+            supportedFeatures = [
+              "nixos-test"
+              "benchmark"
+              "big-parallel"
+              "kvm"
+              "aarch64-linux"
+              "armv6l-linux"
+            ];
             mandatoryFeatures = [ ];
             sshUser = "nixBuild";
             sshKey = "/etc/nix/${keyName}";
@@ -441,8 +447,8 @@ in rec {
       modules = cfg.modules ++ [ (./hosts/host + ".${hostName}") ];
     }));
 
-  mkDeploy = hostName: nixosConfigurations: metadataOverride: let
-      metadata = (mkMetadata metadataOverride).metadata;
+  mkDeploy = hostName: nixosConfigurations: metadataOverride:
+    let metadata = (mkMetadata metadataOverride).metadata;
     in {
       # sshOpts = [ "-p" "2221" ];
       hostname = metadata.hosts."${hostName}".ip4;
@@ -451,7 +457,8 @@ in rec {
       profiles = {
         system = {
           # sshUser = "admin";
-          path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos (nixosConfigurations."${hostName}");
+          path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos
+            (nixosConfigurations."${hostName}");
           user = "root";
         };
       };

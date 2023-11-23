@@ -5,7 +5,7 @@ let user = myconfig.user;
 in {
   imports = [{
     services.udisks2.enable = true;
-    environment.systemPackages = with pkgs; [ 
+    environment.systemPackages = with pkgs; [
       udisks2
       # udiskie
       bashmount
