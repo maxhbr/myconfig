@@ -18,7 +18,14 @@
     };
 
     myconfig = {
-      desktop.enable = true;
+      desktop = {
+        enable = true;
+        wayland = {
+          enable = true;
+          desktop = "dwl";
+          dwl.enable = true;
+        };
+      };
       desktop.full = false;
       headless.enable = true;
     };

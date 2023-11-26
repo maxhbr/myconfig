@@ -62,12 +62,12 @@
     #   inputs.flake-utils.follows = "flake-utils";
     # };
 
-    # #wayland:hyprland
-    # hyprland = {
-    #   url = "github:hyprwm/Hyprland";
-    #   # build with your own instance of nixpkgs
-    #   inputs.nixpkgs.follows = "nixpkgs";
-    # };
+    #wayland:hyprland
+    hyprland = {
+      url = "github:hyprwm/Hyprland";
+      # build with your own instance of nixpkgs
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     # #wayland:newm
     # newmpkg = {

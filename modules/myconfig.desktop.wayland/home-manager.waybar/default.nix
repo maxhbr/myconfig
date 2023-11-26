@@ -11,8 +11,9 @@
             "river/tags"
             "sway/workspaces"
             "sway/mode"
+            "hyprland/workspaces"
           ];
-          modules-center = [ "river/window" "sway/window" ];
+          modules-center = [ "river/window" "sway/window" "hyprland/window" ];
           modules-right = [
             "pulseaudio"
             "bluetooth"
@@ -65,6 +66,15 @@
             app_ids-mapping = {
               "firefoxdeveloperedition" = "firefox-developer-edition";
             };
+          };
+          "hyprland/workspaces" = {
+              "format" = "{icon}";
+              "on-scroll-up" = "hyprctl dispatch workspace e+1";
+              "on-scroll-down" = "hyprctl dispatch workspace e-1";
+          };
+          "hyprland/window" = {
+              "max-length" = 200;
+              "separate-outputs" = true;
           };
           "custom/platform_profile" = {
             format = "{}";

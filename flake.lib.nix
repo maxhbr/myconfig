@@ -344,6 +344,7 @@ in rec {
       pkgs = self.legacyPackages.${system};
 
       specialArgs = {
+        inherit inputs;
         myconfig = {
           user = "mhuber";
           metadatalib = mkMetadatalib metadataOverride;

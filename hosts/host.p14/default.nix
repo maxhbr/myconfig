@@ -53,10 +53,11 @@
         enable = true;
         wayland = {
           enable = true;
-          desktop = "dwl";
-          dwl.enable = true;
-          # river.enable = true;
+          desktop = "hyprland";
+          # dwl.enable = true;
+          hyprland.enable = true;
           labwc.enable = true;
+          # river.enable = true;
           # gnome.enable = true; # konflicts with sway
 
           #disabled:
@@ -64,7 +65,6 @@
           #experimental:
           # wayfire.enable = true;
           # qtile.enable = true;
-          # hyprland.enable = true;
           # vivarium.enable = true;
           #bloated:
           # kde.enable = true;
