@@ -54,7 +54,7 @@
         wayland = {
           enable = true;
           desktop = "hyprland";
-          # dwl.enable = true;
+          dwl.enable = true;
           hyprland.enable = true;
           labwc.enable = true;
           # river.enable = true;

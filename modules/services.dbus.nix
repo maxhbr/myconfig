@@ -85,11 +85,7 @@ in {
       # portal implementation found in lexicographical order, use the following:
       #
       # xdg.portal.config.common.default = "*";
-      config = {
-        common = {
-          default = "wlr";
-        };
-      };
+      config = { common = { default = "wlr"; }; };
       wlr.enable = true;
       wlr.settings.screencast =
         lib.mkIf config.myconfig.desktop.wayland.enable {

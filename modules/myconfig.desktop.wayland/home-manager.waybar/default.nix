@@ -4,16 +4,12 @@
       systemd.enable = false;
       settings = {
         mainBar = {
+          layer = "top";
+          position = "top";
           height = 25;
           spacing = 4;
-          modules-left = [
-            # "river/mode"
-            "river/tags"
-            "sway/workspaces"
-            "sway/mode"
-            "hyprland/workspaces"
-          ];
-          modules-center = [ "river/window" "sway/window" "hyprland/window" ];
+          modules-left = [ ];
+          modules-center = [ ];
           modules-right = [
             "pulseaudio"
             "bluetooth"
@@ -49,9 +45,6 @@
             tooltip = false;
             on-click = "foot-htop";
           };
-          "river/tags" = {
-            tag-labels = [ "U" "I" "A" "E" "O" "S" "N" "R" "T" ];
-          };
           "wlr/taskbar" = {
             format = "{icon}";
             icon-size = 14;
@@ -66,15 +59,6 @@
             app_ids-mapping = {
               "firefoxdeveloperedition" = "firefox-developer-edition";
             };
-          };
-          "hyprland/workspaces" = {
-              "format" = "{icon}";
-              "on-scroll-up" = "hyprctl dispatch workspace e+1";
-              "on-scroll-down" = "hyprctl dispatch workspace e-1";
-          };
-          "hyprland/window" = {
-              "max-length" = 200;
-              "separate-outputs" = true;
           };
           "custom/platform_profile" = {
             format = "{}";

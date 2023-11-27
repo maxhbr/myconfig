@@ -22,7 +22,21 @@ in {
             pkgs.writeText "background.conf" wallpaperCmdString;
         };
       };
-      home-manager.sharedModules = [{ programs.waybar.enable = true; }];
+      home-manager.sharedModules = [
+        { 
+          programs.waybar = {
+            enable = true;
+            settings.mainBar = {
+              modules-left = 
+                [
+                  "sway/workspaces"
+                  "sway/mode"
+                ];
+              modules-center = [ "sway/window" ];
+            };
+          };
+        }
+      ];
 
       programs.sway = {
         enable = true;

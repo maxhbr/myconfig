@@ -72,6 +72,17 @@ in {
           home.packages = with pkgs;
             [ riverPackage riverinit ]
             ++ (if wrapPackage then [ ] else extraPaths);
+          programs.waybar.settings.mainBar = {
+            modules-left = 
+              [
+                # "river/mode"
+                "river/tags"
+              ];
+            modules-center = [ "river/window" ];
+            "river/tags" = {
+              tag-labels = [ "U" "I" "A" "E" "O" "S" "N" "R" "T" ];
+            };
+          };
         })
       ];
 
