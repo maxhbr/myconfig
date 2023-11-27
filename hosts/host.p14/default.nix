@@ -99,7 +99,7 @@
     virtualisation.virtualbox.host.enable = false;
 
     services.xserver.wacom.enable = true;
-    # services.xserver.digimend.enable = true;
+    services.xserver.digimend.enable = true;
 
     services.hardware.bolt.enable = true;
 
