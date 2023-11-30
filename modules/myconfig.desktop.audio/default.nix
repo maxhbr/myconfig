@@ -17,7 +17,12 @@ in {
   };
   config = lib.mkIf (cfg.desktop.enable && cfg.desktop.audio.enable) {
     home-manager.sharedModules =
-      [{ home.packages = with pkgs; [ pavucontrol pamix ]; }];
+      [({config, ...}: {
+        home.packages = with pkgs; [ pavucontrol pamix ];
+        programs.cava = {
+          enable = true;
+        };
+      })];
 
     # hardware.pulseaudio.enable = true;
     services.pipewire.enable = true;

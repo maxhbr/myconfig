@@ -5,13 +5,22 @@ let
   cfg = config.myconfig;
   user = myconfig.user;
 
-  hyprctl-workspace = pkgs.writeShellScriptBin "hyprctl-workspace" ''
+
+in {
+  options.myconfig = with lib; {
+    desktop.wayland.hyprland = { enable = mkEnableOption "hyprland"; };
+  };
+  config = (lib.mkIf
+    (cfg.desktop.wayland.enable && cfg.desktop.wayland.hyprland.enable) {
+      home-manager.sharedModules = [({config, ...}: let
+        hyprctl = "${config.wayland.windowManager.hyprland.package}/bin/hyprctl";
+        hyprctl-workspace = pkgs.writeShellScriptBin "hyprctl-workspace" ''
 # SPDX-License-Identifier: CC0-1.0
 
 set -euo pipefail
 
 jq="${pkgs.jq}/bin/jq"
-hyprctl="${pkgs.hyprland}/bin/hyprctl"
+hyprctl="${hyprctl}"
 
 get_number_of_monitors() {
     $jq -r '.|length'
@@ -65,14 +74,22 @@ main() {
 
 main "$@"
 '';
-in {
-  options.myconfig = with lib; {
-    desktop.wayland.hyprland = { enable = mkEnableOption "hyprland"; };
-  };
-  config = (lib.mkIf
-    (cfg.desktop.wayland.enable && cfg.desktop.wayland.hyprland.enable) {
-      home-manager.sharedModules = [{
-        home.packages = with pkgs; [ hyprpaper hyprnome hyprdim hyprctl-workspace ];
+        hyprctl-scripts = with pkgs; [
+          hyprctl-workspace 
+          (writeShellScriptBin "hyprctl-animations-off" "${hyprctl} keyword animations:enabled no")
+          (writeShellScriptBin "hyprctl-animations-on"  "${hyprctl} keyword animations:enabled yes")
+          (writeShellScriptBin "hyprctl-create-headless" ''
+            ${hyprctl} output create headless
+            echo "remove with:"
+            echo "  hyprctl output remove HEADLESS-2"
+          '')
+        ];
+      in {
+        home.packages = with pkgs; [ 
+          hyprpaper
+          hyprnome
+          hyprdim
+        ] ++ hyprctl-scripts;
         # xdg.configFile."hypr/hyprpaper.conf".text = ''
         #   preload = 
         #   wallpaper = ${pkgs.hyprland}/share/backgrounds/hyprland.png
@@ -96,21 +113,21 @@ in {
         programs.waybar = {
           enable = lib.mkDefault true;
           settings.mainBar = {
-            modules-left =  [ "hyprland/workspaces" ];
+            modules-left =  [ "hyprland/workspaces" "hyprland/submap" ];
             modules-center = [ "hyprland/window" ];
             "hyprland/workspaces" = {
               "format" = "{icon}";
               "format-icons" = {
-                "1" = "1:u";
-                "2" = "2:i";
-                "3" = "3:a";
-                "4" = "4:e";
-                "5" = "5:o";
-                "6" = "6:s";
-                "7" = "7:n";
-                "8" = "8:r";
-                "9" = "9:t";
-                "10" = "0:d";
+                "1"  = "<sub>1:</sub>u";
+                "2"  = "<sub>2:</sub>i";
+                "3"  = "<sub>3:</sub>a";
+                "4"  = "<sub>4:</sub>e";
+                "5"  = "<sub>5:</sub>o";
+                "6"  = "<sub>6:</sub>s";
+                "7"  = "<sub>7:</sub>n";
+                "8"  = "<sub>8:</sub>r";
+                "9"  = "<sub>9:</sub>t";
+                "10" = "<sub>0:</sub>d";
               };
               # "persistent-workspaces" = {
               #   "*" = [ 1 2 3 4 5 6 7 8 9 10 ];
@@ -122,9 +139,14 @@ in {
               "max-length" = 200;
               "separate-outputs" = true;
             };
+            "hyprland/submap" = {
+                "format" = "submap: {}";
+                "max-length" = 8;
+                "tooltip" = false;
+            };
           };
         };
-      }];
+      })];
       myconfig.desktop.wayland.greetdSettings = {
         hyprland_session = {
           command = "${pkgs.hyprland}/bin/Hyprland";

@@ -30,11 +30,12 @@ tooltip label {
 #tray,
 #custom-audio_idle_inhibitor,
 #mode,
-#taskbar button,
 #window,
-#custom-dwl_tag,
-#tags button {
-    padding: 0 9px;
+button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button 
+{
+    padding: 0 2px;
+    background: transparent;
+    color: #e0cbc7;
     border-radius: 0px 0px 7px 7px;
 }
 
@@ -46,19 +47,18 @@ tooltip label {
 #tags button,
 #custom-dwl_tag,
 #workspaces button {
-    padding: 0;
-    margin: 0;
-    background: transparent;
-    color: #e0cbc7;
     border-bottom: 3px solid transparent;
-    padding-left: 2px;
-    padding-right: 2px;
+}
+#tags button,
+#custom-dwl_tag,
+#workspaces button {
+    min-width: 25px;
 }
 
-#tags button * {
+/* #tags button * {
     margin: 0;
     padding: 0;
-}
+} */
 
 #pulseaudio:hover,
 #bluetooth:hover,
@@ -106,7 +106,6 @@ tooltip label {
 
 #tags button.focused,
 #custom-dwl_tag.focused,
-#workspaces button.active,
 #workspaces button.focused {
     background: rgba(43, 48, 59, 0.5);
     border-right: 2px solid #e0cbc7;

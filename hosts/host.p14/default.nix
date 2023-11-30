@@ -43,6 +43,28 @@
     #   home-manager.sharedModules =
     #     [{ home.packages = with pkgs; [ libreoffice ]; }];
     # }
+    ({config, pkgs, ...}: {
+      config = lib.mkIf config.myconfig.desktop.wayland.hyprland.enable {
+        home-manager.sharedModules = [({config, ...}: let
+          hyprctl = "${config.wayland.windowManager.hyprland.package}/bin/hyprctl";
+          eDP-1 = "eDP-1,1920x1200,0x0,1";
+          DP-5 = "DP-5,2560x1440,1920x0,1"; # Dell Inc. DELL U2719D 7RVLSS2 (DP-5)
+          DP-3 = "DP-3,1920x1080,2240x1440,1"; #  HAT Kamvas Pro 13  (DP-3 via HDMI)
+        in {
+          home.packages = with pkgs; [ 
+            (writeShellScriptBin "hyprctl-monitors-home"  "${hyprctl} hyprctl --batch 'keyword monitor ${eDP-1}; keyword monitor ${DP-5}; keyword monitor ${DP-3}'")
+          ];
+          wayland.windowManager.hyprland = {
+            extraConfig = ''
+              monitor=${eDP-1}
+              monitor=${DP-5}
+              monitor=${DP-3}
+            '';
+          };
+        })];
+      };
+    }
+    )
   ];
 
   config = {
