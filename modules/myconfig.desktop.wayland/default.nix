@@ -146,17 +146,18 @@ in {
           ];
       }];
     })
-    # (lib.mkIf (cfg.desktop.wayland.enable && !config.services.greetd.enable) {
-    #   environment.interactiveShellInit = let
-    #     chosen_session =
-    #       cfg.desktop.wayland.greetdSettings."${cfg.desktop.wayland.desktop}_session";
-    #   in ''
-    #     if [ -z $DISPLAY ] && [ "$(tty)" = "/dev/tty1" ]; then
-    #       exec &> >(tee /tmp/tty1-wayland.''${XDG_VTNR}.''${USER}.log)
-    #       exec ${chosen_session.command} > /tmp/tty1-wayland.''${XDG_VTNR}.''${USER}.log
-    #     fi
-    #   '';
-    # })
+    (lib.mkIf cfg.desktop.wayland.enable {
+      nixpkgs = {
+        overlays = [
+        # Disable some things that don’t cross compile
+        # from https://github.com/matthewbauer/nixiosk/blob/7e6d1e1875ec5ae810e99fe5a1c814abdf56fecb/configuration.nix#L104
+        (self: super: lib.optionalAttrs (super.stdenv.hostPlatform != super.stdenv.buildPlatform) {
+          gtk3 = super.gtk3.override { cupsSupport = false; };
+          mesa = super.mesa.override { eglPlatforms = ["wayland"]; };
+        })
+        ];
+      };
+    })
     ./sharescreen.nix
   ];
 
@@ -173,7 +174,7 @@ in {
       "_JAVA_AWT_WM_NONREPARENTING" = "1";
     };
 
-    services.greetd.enable = true;
+    services.greetd.enable = lib.mkDefault true;
     # services.xserver.displayManager.sddm.wayland = true;
     # services.xserver.displayManager.gdm.wayland = true;
     services.xserver.libinput.enable = true;

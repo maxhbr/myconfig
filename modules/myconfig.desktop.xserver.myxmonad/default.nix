@@ -1,5 +1,6 @@
 { config, lib, pkgs, ... }:
 let
+  cfg = config.myconfig;
   my-mute-telco = pkgs.callPackage ./myMuteTelco { inherit pkgs; };
   my-xmobar = pkgs.callPackage ./myXmobar { inherit pkgs my-mute-telco; };
   my-xmonad = pkgs.haskellPackages.callPackage ./myXMonad {
@@ -10,8 +11,11 @@ let
     ${pkgs.xorg.xev}/bin/xev -id $(${pkgs.xdotool}/bin/xdotool getactivewindow)
   '';
 in {
+  options.myconfig = with lib; {
+    desktop.xserver.xmonad = { enable = mkEnableOption "xmonad"; };
+  };
   imports = [
-    (lib.mkIf config.services.xserver.desktopManager.xfce.enable {
+    (lib.mkIf (config.services.xserver.enable && cfg.desktop.xserver.xmonad.enable && config.services.xserver.desktopManager.xfce.enable) {
       services.xserver.desktopManager = {
         xterm.enable = false;
         xfce = {
@@ -22,7 +26,7 @@ in {
       };
     })
   ];
-  config = (lib.mkIf config.services.xserver.enable {
+  config = (lib.mkIf (config.services.xserver.enable && cfg.desktop.xserver.xmonad.enable) {
     environment.variables = {
       XSECURELOCK_BLANK_TIMEOUT = "-1";
       XSECURELOCK_COMPOSITE_OBSCURER = "0";

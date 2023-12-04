@@ -77,7 +77,10 @@
     myconfig = {
       desktop = {
         enable = true;
-        xserver.enable = true;
+        xserver = {
+          enable = true;
+          xmonad.enable = true;
+        };
         wayland = {
           enable = false;
           desktop = "sway";
