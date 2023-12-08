@@ -137,6 +137,12 @@ main "$@"
             };
             "hyprland/window" = {
               "max-length" = 200;
+              "rewrite" = {
+                "(.*) — Mozilla Firefox" = "🌎 $1";
+                "(.*) — Chromium" = "🌎 $1";
+                "(.*) - Visual Studio Code" = "󰨞 $1";
+                "(.*) - fish" = "> [$1]";
+              };
               "separate-outputs" = true;
             };
             "hyprland/submap" = {

@@ -11,7 +11,7 @@
       wlrLibinputNoDevices = "1"; 
     in {
       # environment.systemPackages = with pkgs; [ cage firefox ];
-      services.cage = {
+      services.cage = lib.mkIf config.myconfig.desktop.wayland.enable {
         enable = true;
         user = "mhuber";
         program = "${pkgs.firefox}/bin/firefox -kiosk -private-window https://github.com";
@@ -23,7 +23,7 @@
       };
       # wait for network and DNS
       systemd.services."cage-tty1" = {
-        # environment.WLR_LIBINPUT_NO_DEVICES = wlrLibinputNoDevices;
+        environment.WLR_LIBINPUT_NO_DEVICES = wlrLibinputNoDevices;
         after = [
           "network-online.target"
           "systemd-resolved.service"
