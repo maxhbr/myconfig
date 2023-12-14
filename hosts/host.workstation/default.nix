@@ -9,7 +9,6 @@
     ../../hardware/nixos-hardware/common/pc/ssd
     ../../hardware/hdd-spinndown.nix
     ../../hardware/steamcontroller.nix
-    ./4x500-hdds.raid.nix
     (myconfig.metadatalib.fixIp "enp39s0")
     (myconfig.metadatalib.setupAsBuildMachine [
       myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"

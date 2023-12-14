@@ -62,10 +62,9 @@ in {
         # insync
         exiftool
         # misc-desktop-tools:
-        # libreoffice
+        libreoffice
         slack
         # element-desktop
-        # rambox
         subversion
         google-cloud-sdk
       ];

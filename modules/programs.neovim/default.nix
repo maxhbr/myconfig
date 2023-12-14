@@ -25,6 +25,8 @@
               # Full list here,
               # https://github.com/NixOS/nixpkgs/blob/master/pkgs/applications/editors/vim/plugins/generated.nix
               plugins = with pkgs.vimPlugins; [
+                vim-commentary
+
                 nvim-tree-lua
                 {
                   plugin = vim-startify;
@@ -125,6 +127,7 @@
                 }
               ];
             };
+            home.packages = with pkgs; [ neovide ];
           })
         ];
       })

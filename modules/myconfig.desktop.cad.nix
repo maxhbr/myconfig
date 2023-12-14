@@ -12,7 +12,7 @@ in {
         ] ++ [ # 3D
           # blender
           openscad
-          nixos-2305.freecad # 3D
+          freecad # 3D
           povray # raytracing for freecad
           prusa-slicer
           # luxcorerender

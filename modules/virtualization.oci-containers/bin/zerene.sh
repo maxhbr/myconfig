@@ -7,7 +7,8 @@ set -x
 docker rm --force zerene >/dev/null 2>&1
 
 set -e
-version="T2020-05-22-1330"
+version="T2023-06-11-1120"
+url="https://zerenesystems.com/stacker/downloads/ZS-Linux-Intel-64bit-${version}.zip"
 
 docker build -t zerene --rm=true --force-rm=true - <<EOF
 FROM openjdk:8-jre
@@ -18,7 +19,7 @@ RUN apt-get update && \
 RUN set -x \
  && mkdir /app \
  && cd /app \
- && wget 'https://zerenesystems.com/stacker/downloads/ZS-Linux-Intel-64bit-${version}.zip' \
+ && wget '${url}' \
  && unzip 'ZS-Linux-Intel-64bit-${version}.zip' -d /app/ \
  && rm -rf 'ZS-Linux-Intel-64bit-${version}.zip' \
  && chmod +x /app/ZereneStacker/*.zslinux \
@@ -39,15 +40,20 @@ CMD set -x \
          com.zerenesystems.stacker.gui.MainFrame
 EOF
 
-XSOCK=/tmp/.X11-unix
-XAUTH=/tmp/.docker.xauth
-xauth nlist :0 | sed -e 's/^..../ffff/' | xauth -f $XAUTH nmerge -
+if ! xset q &>/dev/null; then
+  echo "No X server at \$DISPLAY [$DISPLAY]" >&2
+  exit 1
+else
+  XSOCK=/tmp/.X11-unix
+  XAUTH=/tmp/.docker.xauth
+  xauth nlist :0 | sed -e 's/^..../ffff/' | xauth -f $XAUTH nmerge -
 
-docker run -ti \
-       -v $XSOCK:$XSOCK -e DISPLAY=$DISPLAY \
-       -v $XAUTH:$XAUTH -e XAUTHORITY=$XAUTH \
-       --volume /dev/snd:/dev/snd \
-       --volume /tmp/.X11-unix:/tmp/.X11-unix \
-       --volume "$(pwd):/workdir" \
-       --name=zerene \
-       zerene $1
+  docker run -ti \
+         -v $XSOCK:$XSOCK -e DISPLAY=$DISPLAY \
+         -v $XAUTH:$XAUTH -e XAUTHORITY=$XAUTH \
+         --volume /dev/snd:/dev/snd \
+         --volume /tmp/.X11-unix:/tmp/.X11-unix \
+         --volume "$(pwd):/workdir" \
+         --name=zerene \
+         zerene $1
+fi
