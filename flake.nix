@@ -17,25 +17,24 @@
 
     pr244937.url =
       "github:charles-dyfis-net/nixpkgs/freeplane-1_11_4"; # https://github.com/NixOS/nixpkgs/pull/244937
+    pr275479.url =
+      "github:maxhbr/nixpkgs/freeplane-1_11_8"; # https://github.com/NixOS/nixpkgs/pull/275479
 
-    nixpkgs-wayland = { url = "github:nix-community/nixpkgs-wayland"; };
-    # only needed if you use as a package set:
-    nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
-    # nixpkgs-wayland.inputs.master.follows = "master";
+    nixpkgs-wayland = { 
+      url = "github:nix-community/nixpkgs-wayland";
+      # only needed if you use as a package set:
+      inputs.nixpkgs.follows = "nixpkgs";
+      # nixpkgs-wayland.inputs.master.follows = "master";
+    };
 
     home.url = "github:nix-community/home-manager";
     home.inputs.nixpkgs.follows = "nixpkgs";
 
     flake-utils.url = "github:numtide/flake-utils";
 
-    # nix.url = "github:nixos/nix/flakes";
-    # nix.inputs.nixpkgs.follows = "nixpkgs";
-
     nur.url = "github:nix-community/NUR";
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
-
-    # vulnerablecode.url = "github:nexB/vulnerablecode?dir=etc/nix";
 
     emacs.url = "github:nix-community/emacs-overlay";
     nix-doom-emacs.url = "github:nix-community/nix-doom-emacs";
@@ -49,39 +48,16 @@
 
     # zephyrproject.url = "path:flakes/zephyrproject/";
 
-    # #wayland:sway
-    # swaymonad = {
-    #   url = "github:nicolasavru/swaymonad";
-    #   inputs.nixpkgs.follows = "nixpkgs";
-    # };
-
-    # #wayland:river
-    # river-grid = {
-    #   url = "github:luc65r/grid";
-    #   inputs.nixpkgs.follows = "nixpkgs";
-    #   inputs.flake-utils.follows = "flake-utils";
-    # };
-
     #wayland:hyprland
     hyprland = {
       url = "github:hyprwm/Hyprland";
-      # build with your own instance of nixpkgs
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
-    # #wayland:newm
-    # newmpkg = {
-    #   url = "github:jbuchermn/newm";
-    #   inputs.nixpkgs.follows = "nixpkgs";
-    #   inputs.flake-utils.follows = "flake-utils";
-    # };
-    # pywm-fullscreenpkg = {
-    #   url = "github:jbuchermn/pywm-fullscreen";
-    #   inputs.nixpkgs.follows = "nixpkgs";
-    # };
-
-    # #wayland:vivarium
-    # vivarium.url = "github:maxhbr/vivarium";
+    hyprland-plugins = {
+      url = "github:hyprwm/hyprland-plugins";
+      inputs.hyprland.follows = "hyprland";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     mydwl.url = "github:maxhbr/mydwl";
     mydwl.inputs.nixpkgs.follows = "nixpkgs";
@@ -199,7 +175,7 @@
                     inherit (pkgs) config system;
                   })."${pkg}";
                 })) [{
-                  input = "pr244937";
+                  input = "pr275479";
                   pkg = "freeplane";
                 }];
             })

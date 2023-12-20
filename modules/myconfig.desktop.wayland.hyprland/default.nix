@@ -4,12 +4,17 @@
 let
   cfg = config.myconfig;
   user = myconfig.user;
-
-
+  hyprland = inputs.hyprland.packages.${pkgs.system}.hyprland;
+  plugins = inputs.hyprland-plugins.packages.${pkgs.system};
 in {
   options.myconfig = with lib; {
     desktop.wayland.hyprland = { enable = mkEnableOption "hyprland"; };
   };
+  imports = [
+    {
+      programs.hyprland = {enable = false;};
+    }
+  ];
   config = (lib.mkIf
     (cfg.desktop.wayland.enable && cfg.desktop.wayland.hyprland.enable) {
       home-manager.sharedModules = [({config, ...}: let
@@ -96,7 +101,7 @@ main "$@"
         # '';
         wayland.windowManager.hyprland = {
           enable = true;
-          package = inputs.hyprland.packages.${pkgs.system}.hyprland;
+          package = hyprland;
           extraConfig = ''
             source = ${./hypr/hyprland.conf}
             exec-once = ${
@@ -107,8 +112,10 @@ main "$@"
               ''
             }/bin/autostart.sh
             # exec-once = ${pkgs.hyprdim}/bin/hyprdim
-            exec = tfoot &
           '';
+          plugins = with plugins; [
+            # hyprwinwrap
+          ];
         };
         programs.waybar = {
           enable = lib.mkDefault true;
@@ -118,16 +125,16 @@ main "$@"
             "hyprland/workspaces" = {
               "format" = "{icon}";
               "format-icons" = {
-                "1"  = "<sub>1:</sub>u";
-                "2"  = "<sub>2:</sub>i";
-                "3"  = "<sub>3:</sub>a";
-                "4"  = "<sub>4:</sub>e";
-                "5"  = "<sub>5:</sub>o";
-                "6"  = "<sub>6:</sub>s";
-                "7"  = "<sub>7:</sub>n";
-                "8"  = "<sub>8:</sub>r";
-                "9"  = "<sub>9:</sub>t";
-                "10" = "<sub>0:</sub>d";
+                "1"  = "u:<sub>1</sub>";
+                "2"  = "i:<sub>2</sub>";
+                "3"  = "a:<sub>3</sub>";
+                "4"  = "e:<sub>4</sub>";
+                "5"  = "o:<sub>5</sub>";
+                "6"  = "s:<sub>6</sub>";
+                "7"  = "n:<sub>7</sub>";
+                "8"  = "r:<sub>8</sub>";
+                "9"  = "t:<sub>9</sub>";
+                "10" = "d:<sub>0</sub>";
               };
               # "persistent-workspaces" = {
               #   "*" = [ 1 2 3 4 5 6 7 8 9 10 ];
@@ -138,9 +145,8 @@ main "$@"
             "hyprland/window" = {
               "max-length" = 200;
               "rewrite" = {
-                "(.*) — Mozilla Firefox" = "🌎 $1";
-                "(.*) — Chromium" = "🌎 $1";
-                "(.*) - Visual Studio Code" = "󰨞 $1";
+                "(.*) — Mozilla Firefox" = "FF: $1";
+                "(.*) - Visual Studio Code" = "code: $1";
                 "(.*) - fish" = "> [$1]";
               };
               "separate-outputs" = true;
