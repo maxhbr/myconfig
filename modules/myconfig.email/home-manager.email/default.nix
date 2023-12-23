@@ -33,7 +33,7 @@
     })
   ];
   config = {
-    home.packages = with pkgs; [ abook urlview ];
+    home.packages = with pkgs; [ abook extract_url urlscan ];
     programs.mbsync.enable = true;
     programs.msmtp.enable = true;
     programs.aerc = {

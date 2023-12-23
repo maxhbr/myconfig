@@ -125,16 +125,16 @@ main "$@"
             "hyprland/workspaces" = {
               "format" = "{icon}";
               "format-icons" = {
-                "1"  = "u:<sub>1</sub>";
-                "2"  = "i:<sub>2</sub>";
-                "3"  = "a:<sub>3</sub>";
-                "4"  = "e:<sub>4</sub>";
-                "5"  = "o:<sub>5</sub>";
-                "6"  = "s:<sub>6</sub>";
-                "7"  = "n:<sub>7</sub>";
-                "8"  = "r:<sub>8</sub>";
-                "9"  = "t:<sub>9</sub>";
-                "10" = "d:<sub>0</sub>";
+                "1"  = "u<sub> 1 </sub>";
+                "2"  = "i<sub> 2 </sub>";
+                "3"  = "a<sub> 3 </sub>";
+                "4"  = "e<sub> 4 </sub>";
+                "5"  = "o<sub> 5 </sub>";
+                "6"  = "s<sub> 6 </sub>";
+                "7"  = "n<sub> 7 </sub>";
+                "8"  = "r<sub> 8 </sub>";
+                "9"  = "t<sub> 9 </sub>";
+                "10" = "d<sub> 0 </sub>";
               };
               # "persistent-workspaces" = {
               #   "*" = [ 1 2 3 4 5 6 7 8 9 10 ];
