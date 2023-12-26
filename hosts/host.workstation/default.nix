@@ -15,6 +15,11 @@
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_ed25519.pub"
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
     ])
+    {
+      services.vsftpd = {
+        enable = true;
+      };
+    }
     # other profiles
     ./gaming
     # testing

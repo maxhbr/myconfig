@@ -4,7 +4,7 @@
       enable = true;
       enableSSHSupport = !config.programs.ssh.startAgent;
       pinentryFlavor = if config.myconfig.desktop.enable then
-        (if config.myconfig.desktop.wayland.enable then "qt" else "gtk2")
+        (if config.myconfig.desktop.wayland.enable then "qt" else "qt")
       else
         "curses";
     };

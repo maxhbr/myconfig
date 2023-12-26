@@ -1,18 +1,45 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
+# based on https://github.com/jakubgs/nixos-config/blob/master/roles/vsftpd.nix
 { config, lib, pkgs, myconfig, ... }:
-let port = 9136;
+let
+  listenPort = 9226;
+  pasvPorts = {
+    min = 51000;
+    max = 51001;
+  };
 in {
   config = (lib.mkIf config.services.vsftpd.enable {
-    networking.firewall.allowedTCPPorts = [ port ];
-    networking.firewall.allowedUDPPorts = [ port ];
+    # User
+    users.extraUsers.ftpuser = {
+      createHome = true;
+      isNormalUser = true;
+      hashedPassword = "$6$yfi/TifAgZVWZN8n$pwEKwnLFSQ.P7xfhgwJ1hz7SxMCLvip/lQv0jEz74UqcwF16omIVvwpWXX6QErhm8Lr5lB1ACEUisLkI/mTyZ/";
+      extraGroups = [ "ftp" ];
+      home = "/mnt/ftp";
+       homeMode = "777";
+    };
+
+    # Service - WARNING: Open to public!
     services.vsftpd = {
-      userlist = [ myconfig.user ];
-      userlistEnable = true;
+      writeEnable = true;
       localUsers = true;
+      chrootlocalUser = true;
+      allowWriteableChroot = true;
+      userlistEnable = true;
+      userlist = [ "ftpuser" ];
       extraConfig = ''
-        listen_port=${toString port}
+        listen_port=${builtins.toString listenPort}
+        pasv_enable=YES
+        pasv_min_port=${builtins.toString pasvPorts.min}
+        pasv_max_port=${builtins.toString pasvPorts.max}
       '';
     };
+
+    # Firewall
+    networking.firewall.allowedTCPPorts = [ listenPort ];
+    networking.firewall.allowedTCPPortRanges = [
+      { from = pasvPorts.min; to = pasvPorts.max; }
+    ];
   });
 }
