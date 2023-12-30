@@ -62,6 +62,9 @@
     mydwl.url = "github:maxhbr/mydwl";
     mydwl.inputs.nixpkgs.follows = "nixpkgs";
 
+    myphoto.url = "github:maxhbr/myphoto";
+    myphoto.inputs.nixpkgs.follows = "nixpkgs";
+
     ###########################################################################
     # begin fish
     fasd.url = "github:oh-my-fish/plugin-fasd";
@@ -135,9 +138,19 @@
           imports = [ nixpkgs.nixosModules.readOnlyPkgs ];
           nixpkgs.pkgs = nixpkgs.legacyPackages.x86_64-linux;
         };
-        mydwl = import ./flake.nixosModules.mydwl.nix inputs;
-        myfish = import ./flake.nixosModules.myfish.nix inputs;
-        myemacs = import ./flake.nixosModules.myemacs inputs;
+        mydwl = import ./flake.nixosModules.mydwl.nix;
+        myphoto = ( { config, lib, ... }:
+                      let cfg = config.myconfig;
+                      in {
+                        options.myconfig = with lib; {
+                          desktop.myphoto.enable = mkEnableOption "myphoto";
+                        };
+                        config = (lib.mkIf cfg.desktop.myphoto.enable {
+                          home-manager.sharedModules = [ inputs.myphoto.homeManagerModules.myphoto ];
+                        });
+                      });
+        myfish = import ./flake.nixosModules.myfish.nix;
+        myemacs = import ./flake.nixosModules.myemacs;
         core = { ... }: {
           imports = [
             ({ pkgs, ... }: {
@@ -192,6 +205,7 @@
             inputs.my-wallpapers.nixosModule
             myfish
             mydwl
+            myphoto
             myemacs
 
             ({ pkgs, config, ... }: {

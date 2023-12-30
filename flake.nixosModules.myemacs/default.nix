@@ -1,5 +1,4 @@
-inputs:
-{ pkgs, config, lib, ... }:
+{ inputs, pkgs, config, lib, ... }:
 let
   cfg = config.myconfig;
   doomPrivateDir = let

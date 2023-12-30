@@ -76,7 +76,7 @@
         wayland = {
           enable = true;
           desktop = "hyprland";
-          dwl.enable = true;
+          # dwl.enable = true;
           hyprland.enable = true;
           labwc.enable = true;
           # river.enable = true;
@@ -95,7 +95,7 @@
           # newm.enable = true;
         };
         messengers.enable = true;
-        imagework.enable = true;
+        myphoto.enable = true;
         obs.enable = true;
         cad.enable = true;
         deskreen.enable = true;
@@ -118,7 +118,7 @@
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;
     # virtualisation.libvirtd.enable = true;
-    virtualisation.virtualbox.host.enable = true;
+    virtualisation.virtualbox.host.enable = false;
 
     services.xserver.wacom.enable = true;
     services.xserver.digimend.enable = true;
@@ -135,6 +135,7 @@
       {
         home.packages = with pkgs;
           [
+            nvtop-intel
             # rdesktop
             google-chrome # for netflix and stadia
           ];
@@ -254,6 +255,7 @@
     ];
 
     boot.binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];
+    boot.supportedFilesystems = [ "ntfs" ];
 
     hardware.enableRedistributableFirmware = true;
 

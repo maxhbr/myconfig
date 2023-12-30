@@ -73,6 +73,20 @@
       networking.firewall.allowedUDPPorts = [ 60001 ];
       programs.mosh.enable = true;
     }
+    # {
+    #   services.nfs.server = {
+    #     enable = true;
+    #     exports = ''
+    #       /nfs       192.168.1.0/24(rw,fsid=0,insecure,no_subtree_check,crossmnt,fsid=0)
+    #       /nfs/data  192.168.1.0/24(rw,nohide,insecure,no_subtree_check)
+    #       /nfs/guest 192.168.1.0/24(rw,nohide,insecure,no_subtree_check)
+    #     '';
+    #     statdPort = 4000;
+    #     lockdPort = 4001;
+    #   };
+    #   networking.firewall.allowedTCPPorts = [ 2049 111 4000 4001 ];
+    #   networking.firewall.allowedUDPPorts = [ 2049 111 4000 4001 ];
+    # }
   ]; # ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.5") ]);
 
   config = {

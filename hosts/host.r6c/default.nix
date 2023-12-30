@@ -30,6 +30,11 @@
         ];
       };
     })
+    {
+      services.vsftpd = {
+        enable = true;
+      };
+    }
   ];
 
   config = {
@@ -42,9 +47,9 @@
 
     myconfig = {
       desktop = {
-        enable = true;
+        enable = false;
         wayland = {
-          enable = true;
+          enable = false;
           # desktop = "labwc";
           # labwc.enable = true;
         };
