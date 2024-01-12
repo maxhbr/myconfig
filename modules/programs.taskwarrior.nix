@@ -17,7 +17,7 @@
             labels =
               [ "ID" "Started" "Age" "Priority" "Project" "Due" "Description" ];
           };
-          tasksh.autoclear = 1;
+          # tasksh.autoclear = 1;
 
           uda.priority.label = "Priority";
           uda.priority.type = "string";

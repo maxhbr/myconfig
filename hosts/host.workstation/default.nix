@@ -103,7 +103,7 @@
           enable = false;
           desktop = "sway";
         };
-        imagework.enable = true;
+        myphoto.enable = true;
         obs.enable = true;
       };
       headless.enable = true;
