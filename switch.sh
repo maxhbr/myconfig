@@ -84,6 +84,7 @@ main() {
 
         ( cd "../myconfig"; pwd; nix flake update --commit-lock-file )
         ( cd "../opossum.nix"; pwd; nix flake update --commit-lock-file )
+        ( cd "../myphoto"; pwd; nix flake update --commit-lock-file )
 
         pwd
         nix flake update --commit-lock-file
@@ -91,6 +92,7 @@ main() {
         type gnupg-to-mutt.pl &> /dev/null && gnupg-to-mutt.pl
     else
         nix flake lock --update-input myconfig
+        nix flake lock --update-input mymyphoto
         nix flake lock --update-input mydwl
         nix flake lock --update-input opossum
     fi
