@@ -1489,11 +1489,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1705402335,
-        "narHash": "sha256-P0N5xxFWXJGj3WlcBiZR057xw8r2D0KPz9NdylsFKX8=",
+        "lastModified": 1705402889,
+        "narHash": "sha256-tKJEL6/2ZJzk5Z5tS/9hTJzHsnZhxtYdKf2Pkoa5SOk=",
         "owner": "maxhbr",
         "repo": "zephyr-flake",
-        "rev": "ae28599f007ff3d3d7d4b09aece20cff64154ad6",
+        "rev": "51e631236a60323a6d017b48db59fd9736a62254",
         "type": "github"
       },
       "original": {
