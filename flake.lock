@@ -1502,11 +1502,11 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1705584533,
-        "narHash": "sha256-WI0xNGaTEXxHInuxM7ySVbu1LVW9mmLD32EZP1y/zN4=",
+        "lastModified": 1705584866,
+        "narHash": "sha256-26K1Iyt0KPCPnyLMSPY4JYvCmtFICuhTW/heJhg3ETE=",
         "owner": "maxhbr",
         "repo": "zephyr-flake",
-        "rev": "0ef7ab36276b46b08aa00712561f00b87923b9f3",
+        "rev": "51fb7800165d5121daf011d0959bf1a13a54a5f9",
         "type": "github"
       },
       "original": {
