@@ -20,7 +20,7 @@
     ./hardware.hantek
     ./mykeylight
     ./role.work
-    # ./programs.khal.nix
+    ./programs.khal.nix
     # ./a7iiiAsWebcam.nix
     {
       services.openssh = {
@@ -112,7 +112,7 @@
         # ruby.enable = true;
         # rust.enable = true;
         # elixir.enable = false;
-        embedded.enable = true;
+        zephyr.enable = true;
       };
     };
     virtualisation.docker.enable = true;

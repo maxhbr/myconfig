@@ -95,6 +95,7 @@ main() {
         nix flake lock --update-input mymyphoto
         nix flake lock --update-input mydwl
         nix flake lock --update-input opossum
+        nix flake lock --update-input zephyr-flake
     fi
 
     build "$target" || build "$target" --keep-failed --no-eval-cache

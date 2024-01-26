@@ -43,6 +43,9 @@
     my-wallpapers.url = "github:maxhbr/wallpapers";
     my-wallpapers.inputs.nixpkgs.follows = "nixpkgs";
 
+    zephyr-flake.url = "github:maxhbr/zephyr-flake";
+    # zephyr-flake.inputs.nixpkgs.follows = "nixpkgs";
+
     # octrc.url = "github:maxhbr/octrc";
     # octrc.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -139,6 +142,7 @@
           nixpkgs.pkgs = nixpkgs.legacyPackages.x86_64-linux;
         };
         mydwl = import ./flake.nixosModules.mydwl.nix;
+        myzephyr = import ./flake.nixosModules.zephyr.nix;
         myphoto = ( { config, lib, ... }:
                       let cfg = config.myconfig;
                       in {
@@ -187,10 +191,9 @@
                   "${pkg}" = (import inputs."${input}" {
                     inherit (pkgs) config system;
                   })."${pkg}";
-                })) [{
-                  input = "pr275479";
-                  pkg = "freeplane";
-                }];
+                })) [
+                  # { input = "pr275479"; pkg = "freeplane"; }
+                ];
             })
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
@@ -205,6 +208,7 @@
             inputs.my-wallpapers.nixosModule
             myfish
             mydwl
+            myzephyr
             myphoto
             myemacs
 
