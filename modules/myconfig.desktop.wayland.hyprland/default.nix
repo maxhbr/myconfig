@@ -93,7 +93,6 @@ main "$@"
         home.packages = with pkgs; [ 
           hyprpaper
           hyprnome
-          hyprdim
         ] ++ hyprctl-scripts;
         # xdg.configFile."hypr/hyprpaper.conf".text = ''
         #   preload = 
@@ -103,15 +102,19 @@ main "$@"
           enable = true;
           package = hyprland;
           extraConfig = ''
+            $notifycmd = ${pkgs.libnotify}/bin/notify-send -h string:x-canonical-private-synchronous:hypr-cfg -u low
             source = ${./hypr/hyprland.conf}
+            source = ${./hypr/hyprland.windowrule.conf}
+            source = ${./hypr/hyprland.binds.conf}
+
             exec-once = ${
               pkgs.writeShellScriptBin "autostart.sh" ''
                 set -x
+                exec &> >(tee -a /tmp/hyprland.''${XDG_VTNR}.''${USER}.autostart.log)
                 ${cfg.desktop.wayland.autostartCommands}
                 pkill waybar ; ${config.programs.waybar.package}/bin/waybar > /tmp/hyprland.''${XDG_VTNR}.''${USER}.waybar.log 2>&1 &disown
               ''
             }/bin/autostart.sh
-            # exec-once = ${pkgs.hyprdim}/bin/hyprdim
           '';
           plugins = with plugins; [
             # hyprwinwrap
