@@ -140,6 +140,7 @@ main "$@"
               # };
               "on-scroll-up" = "${pkgs.hyprnome}/bin/hyprnome";
               "on-scroll-down" = "${pkgs.hyprnome}/bin/hyprnome --previous";
+              "show-special" = true;
             };
             "hyprland/window" = {
               "max-length" = 200;
