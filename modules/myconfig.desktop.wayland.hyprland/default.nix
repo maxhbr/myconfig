@@ -4,8 +4,7 @@
 let
   cfg = config.myconfig;
   user = myconfig.user;
-  hyprland = inputs.hyprland.packages.${pkgs.system}.hyprland;
-  plugins = inputs.hyprland-plugins.packages.${pkgs.system};
+  hyprlandPkg = inputs.hyprland.packages.${pkgs.system}.hyprland;
 in {
   options.myconfig = with lib; {
     desktop.wayland.hyprland = { enable = mkEnableOption "hyprland"; };
@@ -100,7 +99,7 @@ main "$@"
         # '';
         wayland.windowManager.hyprland = {
           enable = true;
-          package = hyprland;
+          package = hyprlandPkg;
           extraConfig = ''
             $notifycmd = ${pkgs.libnotify}/bin/notify-send -h string:x-canonical-private-synchronous:hypr-cfg -u low
             source = ${./hypr/hyprland.conf}
@@ -116,9 +115,6 @@ main "$@"
               ''
             }/bin/autostart.sh
           '';
-          plugins = with plugins; [
-            # hyprwinwrap
-          ];
         };
         programs.waybar = {
           enable = lib.mkDefault true;
@@ -164,7 +160,7 @@ main "$@"
       })];
       myconfig.desktop.wayland.greetdSettings = {
         hyprland_session = {
-          command = "${pkgs.hyprland}/bin/Hyprland";
+          command = "${hyprlandPkg}/bin/Hyprland";
           inherit user;
         };
       };
