@@ -92,6 +92,7 @@ main "$@"
         home.packages = with pkgs; [ 
           hyprpaper
           hyprnome
+          hyprpicker
         ] ++ hyprctl-scripts;
         # xdg.configFile."hypr/hyprpaper.conf".text = ''
         #   preload = 
