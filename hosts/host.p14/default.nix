@@ -54,13 +54,13 @@
           home.packages = with pkgs; [ 
             (writeShellScriptBin "hyprctl-monitors-home"  "${hyprctl} hyprctl --batch 'keyword monitor ${eDP-1}; keyword monitor ${DP-5}; keyword monitor ${DP-3}'")
           ];
-          # wayland.windowManager.hyprland = {
-          #   extraConfig = ''
-          #     monitor=${eDP-1}
-          #     monitor=${DP-5}
-          #     monitor=${DP-3}
-          #   '';
-          # };
+          wayland.windowManager.hyprland = {
+            extraConfig = ''
+              device:opentabletdriver-virtual-artist-tablet {
+                  output=DP-5
+              }
+            '';
+          };
         })];
       };
     }
