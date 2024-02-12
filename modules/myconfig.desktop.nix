@@ -22,7 +22,7 @@ in {
 
     home-manager.sharedModules = [{
       programs.firefox.enable = lib.mkDefault true;
-      programs.qutebrowser.enable = lib.mkDefault true;
+      programs.qutebrowser.enable = lib.mkDefault false; # BROKEN
       home.packages = with pkgs; [
         libnotify
         xarchiver

@@ -3,6 +3,7 @@
 { config, pkgs, lib, myconfig, ... }: {
   imports = [
     ./hardware-configuration.nix
+    ./imgwork.nfs.nix
     ../../hardware/efi.nix
     ../../hardware/btrfs.nix
     ../../hardware/nixos-hardware/common/cpu/amd
@@ -23,10 +24,6 @@
     # other profiles
     ./gaming
     # testing
-    ./chrootPopOS.nix
-    { # for quickfix (due to usage of 20.03)
-      nixpkgs.config.allowBroken = true;
-    }
     # {
     #   environment.systemPackages = with pkgs; [ x11vnc ];
     #   ## Setup via ssh tunnel:
