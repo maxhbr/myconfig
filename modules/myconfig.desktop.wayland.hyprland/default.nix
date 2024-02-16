@@ -19,8 +19,14 @@ in {
       home-manager.sharedModules = [({config, ...}: let
         hyprctl = "${config.wayland.windowManager.hyprland.package}/bin/hyprctl";
         hyprctl-scripts = with pkgs; [
-          (writeShellScriptBin "hyprctl-animations-off" "${hyprctl} keyword animations:enabled no")
-          (writeShellScriptBin "hyprctl-animations-on"  "${hyprctl} keyword animations:enabled yes")
+          (writeShellScriptBin "hyprctl-animations-off" ''
+            ${hyprctl} keyword animations:enabled false
+            ${hyprctl} keyword decoration:blur:enabled false
+            ${hyprctl} keyword decoration:inactive_opacity 1
+            ${hyprctl} keyword decoration:dim_inactive false
+            ${hyprctl} keyword decoration:dim_special 1
+            '')
+          (writeShellScriptBin "hyprctl-animations-on"  "${hyprctl} keyword animations:enabled true")
           (writeShellScriptBin "hyprctl-create-headless" ''
             ${hyprctl} output create headless
             echo "remove with:"

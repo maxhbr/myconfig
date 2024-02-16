@@ -7,20 +7,11 @@
         enable = true;
         wayland = {
           enable = true;
-          desktop = "dwl";
-          dwl.enable = true;
+          desktop = "hyprland";
+          hyprland.enable = true;
         };
       };
-      #   virtualisation.enable = true;
-      #   dev = {
-      #     haskell.enable = true;
-      #     network.enable = true;
-      #     compliance.enable = true;
-      #   };
     };
-    # virtualisation.docker.enable = true;
-    # virtualisation.libvirtd.enable = true;
-    # virtualisation.virtualbox.host.enable = true;
 
     services.hardware.bolt.enable = true;
 
