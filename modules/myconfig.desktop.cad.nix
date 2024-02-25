@@ -20,7 +20,7 @@ in {
           meshlab
           gmsh
         ] ++ [ # pcb design
-          librepcb
+          # librepcb
           gerbv
           # kicad-small
           kicad
