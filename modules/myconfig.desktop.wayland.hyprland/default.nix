@@ -48,9 +48,7 @@ in {
           package = hyprlandPkg;
           extraConfig = ''
             $notifycmd = ${pkgs.libnotify}/bin/notify-send -h string:x-canonical-private-synchronous:hypr-cfg -u low
-            source = ${./hypr/hyprland.conf}
-            source = ${./hypr/hyprland.windowrule.conf}
-            source = ${./hypr/hyprland.binds.conf}
+            source = ${./hypr}/hyprland.conf
 
             exec-once = ${
               pkgs.writeShellScriptBin "autostart.sh" ''
