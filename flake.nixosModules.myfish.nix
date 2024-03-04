@@ -39,8 +39,6 @@ in {
             config = lib.mkIf config.programs.fish.enable {
               home.packages = with pkgs;
                 [
-                  fasd
-                  # fzf
                 ];
               programs.fish = {
                 shellAliases = { };

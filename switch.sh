@@ -77,6 +77,12 @@ main() {
     echo -e "\n\n\n\n\n\n\n" >> "$logfile"
     exec &> >(tee -a "$logfile")
     ################################################################################
+  
+    local token="$(pass github-bot-token2 -p || true)"
+    if [[ ! -z "$token" ]]; then
+     NIX_CONFIG="access-tokens = github.com=$token"
+     export NIX_CONFIG
+    fi
 
     set -x
     if [[ "$MODE" == "" ]]; then

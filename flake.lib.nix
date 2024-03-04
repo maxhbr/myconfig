@@ -420,13 +420,13 @@ in rec {
             preallocate-contents = true
           '';
 
-          nix.registry = lib.mapAttrs (id: flake: {
-            inherit flake;
-            from = {
-              inherit id;
-              type = "indirect";
-            };
-          }) (inputs // { nixpkgs = inputs.master; });
+          # nix.registry = lib.mapAttrs (id: flake: {
+          #   inherit flake;
+          #   from = {
+          #     inherit id;
+          #     type = "indirect";
+          #   };
+          # }) (inputs // { nixpkgs = inputs.master; });
           nix.nixPath = lib.mapAttrsToList (k: v: "${k}=${toString v}") {
             nixpkgs = "${inputs.nixpkgs}/";
             nixos = "${self}/";
