@@ -37,9 +37,7 @@ in {
         home-manager.sharedModules = [
           ({ config, lib, ... }: {
             config = lib.mkIf config.programs.fish.enable {
-              home.packages = with pkgs;
-                [
-                ];
+              home.packages = with pkgs; [ grc ];
               programs.fish = {
                 shellAliases = { };
                 shellAbbrs = {
@@ -87,56 +85,6 @@ in {
                     mv $f ./
                     pwd
                   '';
-                  ex = ''
-                    for file in $argv
-                          if test -f $file
-                              set opt ( echo "$file" | tr '[:upper:]' '[:lower:]' )
-                              switch $opt
-                                  case '*.tar.bz2'
-                                      tar xjf $file
-                                  case '*.tar.gz'
-                                      tar xzf $file
-                                  case '*.tar.xz'
-                                      tar xvfJ $file
-                                  case '*.xz'
-                                      ${pkgs.xz}/bin/xz -d $file
-                                  case '*.tar.lzma'
-                                      tar --lzma -xvf $file
-                                  case '*.bz2'
-                                      ${pkgs.bzip2}/bin/bunzip2 $file
-                                  case '*.rar'
-                                      unrar e $file
-                                  case '*.gz'
-                                      ${pkgs.gzip}/bin/gunzip $file
-                                  case '*.tar'
-                                      tar xf $file
-                                  case '*.tbz2'
-                                      tar xjf $file
-                                  case '*.tgz'
-                                      tar xzf $file
-                                  case '*.zip'
-                                      ${pkgs.unzip}/bin/unzip $file
-                                  case '*.Z'
-                                      uncompress $file
-                                  case '*.7z'
-                                      ${pkgs.p7zip}/bin/7z x $file
-                                  case '*.jar'
-                                      ${pkgs.unzip}/bin/unzip $file
-                                  case '*.war'
-                                      ${pkgs.unzip}/bin/unzip $file
-                                  case '*.ear'
-                                      ${pkgs.unzip}/bin/unzip $file
-                                  case '*.deb'
-                                      ${pkgs.binutils}/bin/ar xv $file
-                                  case '*'
-                                      echo "'$file' of type '$opt' cannot be extracted via ex(), more info:"
-                                      file $file
-                              end
-                          else
-                              echo "'$file' is not a valid file"
-                          end
-                      end
-                  '';
                 };
                 shellInit = "";
                 loginShellInit = "";
@@ -157,46 +105,34 @@ in {
                     end
                   )
                 '';
-                plugins = [
-                  {
-                    name = "fasd";
-                    src = inputs.fasd;
-                  }
-                  {
-                    name = "foreign-env";
-                    src = inputs.foreign-env;
-                  }
-                  {
-                    name = "tmux";
-                    src = inputs.tmux;
-                  }
-                  {
-                    name = "z";
-                    src = inputs.z;
-                  }
-                  # {
-                  #   name = "fzf";
-                  #   src = inputs.fzf;
-                  # }
-                  {
-                    name = "done";
-                    src = inputs.done;
-                  }
-                  {
-                    name = "fish-async-prompt";
-                    src = inputs.fish-async-prompt;
-                  }
-                  {
-                    name = "fish-ssh-agent";
-                    src = inputs.fish-ssh-agent;
-                  }
-                ];
+                plugins = (map (name: { inherit name; src = pkgs.fishPlugins."${name}".src; }) [
+                  "colored-man-pages" # Fish shell plugin to colorize man pages
+                  "done"
+                  "grc" #  grc Colourizer for some commands on Fish shell
+                #   "sponge" # keeps your fish shell history clean from typos, incorrectly used commands and everything you don't want to store due to privacy reasons
+                #   "hydro" # Ultra-pure, lag-free prompt with async Git status
+                #   "z" # Pure-fish z directory jumping
+                ]);
               };
-              home.file = {
-                ".config/fish/functions/fish_prompt.fish".source =
-                  inputs.agnoster + "/fish_prompt.fish";
-                ".config/fish/functions/bax.fish".source = inputs.bax
-                  + "/bax.fish";
+              xdg.configFile = {
+                "fish/functions" = {
+                  source = lib.cleanSourceWith {
+                    src = lib.cleanSource ./functions/.;
+                  };
+                  recursive = true;
+                };
+                "fish/functions/fish_mode_prompt.fish" = {
+                  source = "${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_mode_prompt.fish";
+                };
+                "fish/functions/fish_prompt.fish" = {
+                  source = "${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_prompt.fish";
+                };
+                "fish/functions/fish_title.fish" = {
+                  source = "${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_title.fish";
+                };
+                "fish/conf.d/hydro.fish" = {
+                  source = "${pkgs.fishPlugins.hydro}/share/fish/vendor_conf.d/hydro.fish";
+                };
               };
             };
           })

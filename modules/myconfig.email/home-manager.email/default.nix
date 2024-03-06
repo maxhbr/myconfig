@@ -3,7 +3,8 @@
 {
   imports = [
     ./neomutt
-    ./astroid.nix
+    ./aerc.nix
+    ./alot.nix
     ./mu
     ({ config, ... }: {
       config = lib.mkIf config.programs.mbsync.enable {
@@ -36,36 +37,20 @@
     home.packages = with pkgs; [ abook extract_url urlscan ];
     programs.mbsync.enable = true;
     programs.msmtp.enable = true;
-    programs.aerc = {
-      enable = true;
-      # see for example https://man.archlinux.org/man/aerc-config.5.en
-      extraConfig = let pager = "${pkgs.bat}/bin/bat";
-      in {
-        general = { unsafe-accounts-conf = true; };
-        ui = { mouse-enabled = true; };
-        compose = {
-          # editor = "${pkgs.vim}/bin/vim";
-          empty-subject-warning = true;
-        };
-        viewer = {
-          inherit pager;
-          # show-headers = true;
-          always-show-mime = true;
-        };
-        filters = {
-          "text/plain" = pager;
-          "text/*" =
-            ''${pager} -fP --file-name="$AERC_FILENAME" --style=plain'';
-          "image/*" =
-            "${pkgs.catimg}/bin/catimg -w$(${pkgs.ncurses}/bin/tput cols) -";
-        };
-      };
-    };
+    programs.lieer.enable = true; # gmail sync
+    programs.aerc.enable = true;
     programs.notmuch = {
       enable = true;
-      hooks = { preNew = "mbsync --all"; };
+      hooks = { 
+        preNew = "${config.programs.mbsync.package}/bin/mbsync --all";
+        # postNew = if config.programs.afew.enable
+        #           then "afew --tag --new"
+        #           else "";
+      };
     };
-    programs.mu.enable = true;
+    programs.afew.enable = true;
+    programs.alot.enable = true;
+    programs.mu.enable = false;
     programs.astroid.enable = false;
     programs.neomutt.enable = true;
   };

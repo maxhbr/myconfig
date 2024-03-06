@@ -15,6 +15,7 @@ in {
         gimp # -with-plugins
         # rawtherapee
         darktable
+        ansel # A darktable fork minus the bloat plus some design vision
         geeqie
         # gthumb
         # krita

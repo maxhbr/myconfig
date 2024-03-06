@@ -68,32 +68,32 @@
     myphoto.url = "github:maxhbr/myphoto";
     myphoto.inputs.nixpkgs.follows = "nixpkgs";
 
-    ###########################################################################
-    # begin fish
-    fasd.url = "github:oh-my-fish/plugin-fasd";
-    fasd.flake = false;
-    foreign-env.url = "github:oh-my-fish/plugin-foreign-env";
-    foreign-env.flake = false;
-    tmux.url = "github:oh-my-fish/plugin-tmux";
-    tmux.flake = false;
-    z.url = "github:jethrokuan/z";
-    z.flake = false;
-    fzf.url = "github:jethrokuan/fzf";
-    fzf.flake = false;
-    done.url = "github:franciscolourenco/done";
-    done.flake = false;
-    fish-async-prompt.url = "github:acomagu/fish-async-prompt";
-    fish-async-prompt.flake = false;
-    fish-ssh-agent.url = "github:danhper/fish-ssh-agent";
-    fish-ssh-agent.flake = false;
-    # sashimi.url = "github:isacikgoz/sashimi";
-    # sashimi.flake = false;
-    agnoster.url = "github:hauleth/agnoster";
-    agnoster.flake = false;
-    bax.url = "github:jorgebucaran/bax.fish";
-    bax.flake = false;
-    # end fish
-    ###########################################################################
+    ############################################################################
+    ## begin fish
+    #fasd.url = "github:oh-my-fish/plugin-fasd";
+    #fasd.flake = false;
+    #foreign-env.url = "github:oh-my-fish/plugin-foreign-env";
+    #foreign-env.flake = false;
+    #tmux.url = "github:oh-my-fish/plugin-tmux";
+    #tmux.flake = false;
+    #z.url = "github:jethrokuan/z";
+    #z.flake = false;
+    #fzf.url = "github:jethrokuan/fzf";
+    #fzf.flake = false;
+    #done.url = "github:franciscolourenco/done";
+    #done.flake = false;
+    #fish-async-prompt.url = "github:acomagu/fish-async-prompt";
+    #fish-async-prompt.flake = false;
+    #fish-ssh-agent.url = "github:danhper/fish-ssh-agent";
+    #fish-ssh-agent.flake = false;
+    ## sashimi.url = "github:isacikgoz/sashimi";
+    ## sashimi.flake = false;
+    #agnoster.url = "github:hauleth/agnoster";
+    #agnoster.flake = false;
+    #bax.url = "github:jorgebucaran/bax.fish";
+    #bax.flake = false;
+    ## end fish
+    ############################################################################
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -153,7 +153,7 @@
                           home-manager.sharedModules = [ inputs.myphoto.homeManagerModules.myphoto ];
                         });
                       });
-        myfish = import ./flake.nixosModules.myfish.nix;
+        myfish = import ./flake.nixosModules.myfish;
         myemacs = import ./flake.nixosModules.myemacs;
         core = { ... }: {
           imports = [

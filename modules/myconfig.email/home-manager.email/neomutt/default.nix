@@ -1,9 +1,5 @@
 { config, lib, pkgs, ... }:
 
-# see:
-# - https://github.com/nix-community/home-manager/blob/master/modules/programs/neomutt.nix
-# - https://github.com/nix-community/home-manager/blob/master/modules/programs/neomutt-accounts.nix
-
 let
   mailcap_file = pkgs.writeText "mailcap" (let
     htmlViaLynx = ''
@@ -26,7 +22,10 @@ let
 in {
   config = lib.mkIf config.programs.neomutt.enable {
     programs.neomutt = {
-      sidebar = { enable = true; };
+      sidebar = { 
+        enable = true;
+
+      };
       sort = "threads";
       vimKeys = false;
       settings = {
@@ -38,9 +37,6 @@ in {
       };
 
       binds = [
-        # bind index g noop
-        # bind index gg first-entry
-        # bind index G last-entry
         {
           key = "g";
           action = "noop";
@@ -65,8 +61,6 @@ in {
         # }
       ];
       macros = [
-        # macro index S "<tag-prefix><enter-command>unset resolve<enter><tag-prefix><clear-flag>N<tag-prefix><enter-command>set resolve<enter><tag-prefix><save-message>=Spam.Verified<enter>" "file as Spam"
-        # macro pager S "<save-message>=Spam.Verified<enter>" "file as Spam"
         {
           # "file as Spam"
           map = [ "index" ];
@@ -80,29 +74,44 @@ in {
           key = "S";
           action = "<save-message>=Spam.Verified<enter>";
         }
-        # macro index,pager M "<pipe-message>abook --add-email-quiet<return>" "add sender to abook"
         {
+          # macro index,pager M "<pipe-message>abook --add-email-quiet<return>" "add sender to abook"
           map = [ "index" "pager" ];
           key = "M";
           action = "<pipe-message>abook --add-email-quiet<return>";
         }
-        # macro index t "c=<tab><tab><tab>" #drücke t, um in den Ordnern des Postfaches zu navigieren
         {
+          # macro index t "c=<tab><tab><tab>" #drücke t, um in den Ordnern des Postfaches zu navigieren
           map = [ "index" ];
           key = "t";
           action = "c=<tab><tab><tab>";
         }
-        # macro compose Y pfy "Send without GPG"
         {
+          # macro compose Y pfy "Send without GPG"
           map = [ "compose" ];
           key = "Y";
           action = "pfy";
         }
+        {
+          map = [ "index" ];
+          key = "<f5>";
+          action =
+            "<sync-mailbox><refresh><enter-command>source ~/.config/neomutt/neomuttrc<enter><change-folder>!<enter>";
+        }
+        {
+          map = ["index" "pager"];
+          key = "\\cb";
+          action = "<pipe-message> ${pkgs.urlscan}/bin/urlscan<Enter>";
+        }
+        {
+          map = ["attach" "compose"];
+          key = "\\cb";
+          action = "<pipe-entry> ${pkgs.urlscan}/bin/urlscan<Enter>";
+        }
       ];
 
-      # editor = "emacs";
       extraConfig = ''
-        source ${config.programs.neomutt.package}/share/doc/neomutt/colorschemes/solarized-dark-256.neomuttrc
+        source ${config.programs.neomutt.package}/share/doc/neomutt/colorschemes/neonwolf-256.neomuttrc
         source `FILE=$HOME/.gnupg/gpg_groups.mutt; if [ ! -s "$FILE" ]; then FILE=/dev/null;fi;echo "$FILE"`
 
         ##############################################################################
