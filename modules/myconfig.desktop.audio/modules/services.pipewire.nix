@@ -24,11 +24,16 @@ let
         fi
     done
   '';
+  pw-record-all = pkgs.writeShellScriptBin "pw-record-all" ''
+    set -euo pipefail
+    ${pkgs.pipewire}/bin/pw-record -P '{ stream.capture.sink=true }' "$HOME/recording-$(date "+%F_%H-%M-%S").flac"
+  '';
+
 in {
   config = (lib.mkIf config.services.pipewire.enable {
     home-manager.sharedModules = [{
       home.packages = with pkgs;
-        [ qjackctl pw-simultaneous ]
+        [ qjackctl pw-simultaneous pw-record-all ]
         ++ lib.optionals config.myconfig.desktop.full [ # helvum easyeffects
         ];
     }];
