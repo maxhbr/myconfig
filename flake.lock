@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "doomemacs": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1709619669,
+        "narHash": "sha256-XbohD+bCpB9xNIqmmPvauqEA7gPBs/7mDhJ7kKdUFsM=",
+        "owner": "hlissner",
+        "repo": "doom-emacs",
+        "rev": "bea81278fd2ecb65db6a63dbcd6db2f52921ee41",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hlissner",
+        "repo": "doom-emacs",
+        "type": "github"
+      }
+    },
     "emacs": {
       "inputs": {
         "flake-utils": "flake-utils",
@@ -247,11 +263,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1709805250,
-        "narHash": "sha256-i79jt6OoiD+ZcJTgj7Xl4BhOJG3cu1mAaL68qL7fCuw=",
+        "lastModified": 1709806265,
+        "narHash": "sha256-Mrce9D+DUnFhq+/yBycVq9hlHcY6HcQeqAJLs7KiWDg=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "dad71551ab30dad8368691259c7873790fc6c0ad",
+        "rev": "59188fdab66e19afd6b99c932549a0661e368cb3",
         "type": "github"
       },
       "original": {
@@ -692,6 +708,7 @@
     },
     "root": {
       "inputs": {
+        "doomemacs": "doomemacs",
         "emacs": "emacs",
         "flake-utils": "flake-utils_2",
         "home": "home",
