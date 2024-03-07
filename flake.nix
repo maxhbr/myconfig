@@ -37,8 +37,10 @@
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
     emacs.url = "github:nix-community/emacs-overlay";
-    nix-doom-emacs.url = "github:nix-community/nix-doom-emacs";
-    nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
+    doomemacs.url = "github:hlissner/doom-emacs";
+    doomemacs.flake = false;
+    # nix-doom-emacs.url = "github:nix-community/nix-doom-emacs";
+    # nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
 
     my-wallpapers.url = "github:maxhbr/wallpapers";
     my-wallpapers.inputs.nixpkgs.follows = "nixpkgs";
@@ -143,18 +145,6 @@
         };
         mydwl = import ./flake.nixosModules.mydwl.nix;
         myzephyr = import ./flake.nixosModules.zephyr.nix;
-        myphoto = ( { config, lib, ... }:
-                      let cfg = config.myconfig;
-                      in {
-                        options.myconfig = with lib; {
-                          desktop.myphoto.enable = mkEnableOption "myphoto";
-                        };
-                        config = (lib.mkIf cfg.desktop.myphoto.enable {
-                          home-manager.sharedModules = [ inputs.myphoto.homeManagerModules.myphoto ];
-                        });
-                      });
-        myfish = import ./flake.nixosModules.myfish;
-        myemacs = import ./flake.nixosModules.myemacs;
         core = { ... }: {
           imports = [
             ({ pkgs, ... }: {
@@ -206,11 +196,8 @@
               ];
             })
             inputs.my-wallpapers.nixosModule
-            myfish
             mydwl
             myzephyr
-            myphoto
-            myemacs
 
             ({ pkgs, config, ... }: {
               config = {

@@ -5,7 +5,9 @@
 ;;    epa-mail-decrypt
 ;;
 ;; mu4e
-(after! mu4e
+(use-package mu4e
+  :ensure t
+  :config
   (defun mu4e-message-maildir-matches (msg rx)
     (when rx
       (if (listp rx)
@@ -77,29 +79,29 @@
   (define-key mu4e-headers-mode-map (kbd "g") 'mu4e-headers-mark-for-tag)
   (define-key mu4e-headers-mode-map (kbd "A") 'mu4e-headers-mark-for-archive)
 
-  ;; https://github.com/jeremy-compostella/org-msg
-  (after! org-msg
-    (setq mail-user-agent 'mu4e-user-agent)
-    (setq org-msg-options "html-postamble:nil H:5 num:nil ^:{} toc:nil author:nil email:nil \\n:t"
-          org-msg-startup "hidestars indent inlineimages"
-          org-msg-greeting-fmt "\nHi %s,\n\n"
-          org-msg-greeting-name-limit 3
-          org-msg-default-alternatives '(text) ;; html
-          )
-    (org-msg-mode)
+  ; ;; https://github.com/jeremy-compostella/org-msg
+  ; (after! org-msg
+  ;   (setq mail-user-agent 'mu4e-user-agent)
+  ;   (setq org-msg-options "html-postamble:nil H:5 num:nil ^:{} toc:nil author:nil email:nil \\n:t"
+  ;         org-msg-startup "hidestars indent inlineimages"
+  ;         org-msg-greeting-fmt "\nHi %s,\n\n"
+  ;         org-msg-greeting-name-limit 3
+  ;         org-msg-default-alternatives '(text) ;; html
+  ;         )
+  ;   (org-msg-mode)
 
-    ;; https://kitchingroup.cheme.cmu.edu/blog/2016/10/29/Sending-html-emails-from-org-mode-with-org-mime/
-    (defun mu4e-compose-org-mail ()
-      (interactive)
-      (mu4e-compose-new)
-      (org-mu4e-compose-org-mode))
-    (defun htmlize-and-send ()
-      "When in an org-mu4e-compose-org-mode message, htmlize and send it."
-      (interactive)
-      (when (member 'org~mu4e-mime-switch-headers-or-body post-command-hook)
-        (org-mime-htmlize)
-        (message-send-and-exit)))
+  ;   ;; https://kitchingroup.cheme.cmu.edu/blog/2016/10/29/Sending-html-emails-from-org-mode-with-org-mime/
+  ;   (defun mu4e-compose-org-mail ()
+  ;     (interactive)
+  ;     (mu4e-compose-new)
+  ;     (org-mu4e-compose-org-mode))
+  ;   (defun htmlize-and-send ()
+  ;     "When in an org-mu4e-compose-org-mode message, htmlize and send it."
+  ;     (interactive)
+  ;     (when (member 'org~mu4e-mime-switch-headers-or-body post-command-hook)
+  ;       (org-mime-htmlize)
+  ;       (message-send-and-exit)))
 
-    (add-hook 'org-ctrl-c-ctrl-c-hook 'htmlize-and-send t)
-    )
+  ;   (add-hook 'org-ctrl-c-ctrl-c-hook 'htmlize-and-send t)
+  ;   )
   )

@@ -5,7 +5,6 @@
     ./neomutt
     ./aerc.nix
     ./alot.nix
-    ./mu
     ({ config, ... }: {
       config = lib.mkIf config.programs.mbsync.enable {
         services.mbsync = {
@@ -50,7 +49,7 @@
     };
     programs.afew.enable = true;
     programs.alot.enable = true;
-    programs.mu.enable = false;
+    programs.mu.enable = true;
     programs.astroid.enable = false;
     programs.neomutt.enable = true;
   };

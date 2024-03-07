@@ -28,12 +28,14 @@ in {
       };
       sort = "threads";
       vimKeys = false;
+      checkStatsInterval = 60;
       settings = {
         sort_browser = "reverse-date";
         sort_aux = "last-date-received";
         mailcap_path = "${mailcap_file}";
         envelope_from = "yes";
         edit_headers = "yes";
+        query_command = "\"${pkgs.notmuch-addrlookup}/bin/notmuch-addrlookup --format=mutt '%s'\"";
       };
 
       binds = [
@@ -112,7 +114,7 @@ in {
 
       extraConfig = ''
         source ${config.programs.neomutt.package}/share/doc/neomutt/colorschemes/neonwolf-256.neomuttrc
-        source `FILE=$HOME/.gnupg/gpg_groups.mutt; if [ ! -s "$FILE" ]; then FILE=/dev/null;fi;echo "$FILE"`
+        source `FILE=$HOME/.gnupg/gpg_groups.mutt; if [[ ! -s "$FILE" ]]; then FILE=/dev/null;fi;echo "$FILE"`
 
         ##############################################################################
         # http://www.gnuterrypratchett.com/
