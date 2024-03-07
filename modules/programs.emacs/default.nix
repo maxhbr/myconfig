@@ -23,15 +23,18 @@
             onChange = "${pkgs.writeShellScript "remove-emacs-config-el" ''
             [[ -f ~/.emacs.d/config.el ]] && rm ~/.emacs.d/config.el
             ''}";
-            ".emacs.d/imports" = {
-              source = ./imports;
-              recursive = true;
-            };
+          };
+          ".emacs.d/imports" = {
+            source = ./imports;
+            recursive = true;
           };
         };
         programs.emacs = {
           enable = true;
           extraConfig = ''
+          ; prevent emacs from saving customizations to this file
+          (setq custom-file (concat user-emacs-directory ".emacs-customize.el"))
+
           (package-initialize)
           (org-babel-load-file "~/.emacs.d/config.org")
           (mapc 'load (file-expand-wildcards "~/.emacs.d/imports/*.el"))
@@ -58,15 +61,15 @@
 
             epkgs.nix-mode
 
-            # epkgs.dired-single
-            # epkgs.nerd-icons
-            # epkgs.all-the-icons
-            # epkgs.all-the-icons-dired
-            # epkgs.all-the-icons-ivy-rich
-            # epkgs.emojify
-            # epkgs.eshell-prompt-extras
-            # epkgs.vterm
-            # epkgs.multi-vterm
+            epkgs.dired-single
+            epkgs.nerd-icons
+            epkgs.all-the-icons
+            epkgs.all-the-icons-dired
+            epkgs.all-the-icons-ivy-rich
+            epkgs.emojify
+            epkgs.eshell-prompt-extras
+            epkgs.vterm
+            epkgs.multi-vterm
 
             # User interface packages.
             epkgs.neotree

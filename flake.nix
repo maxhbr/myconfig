@@ -144,7 +144,6 @@
           nixpkgs.pkgs = nixpkgs.legacyPackages.x86_64-linux;
         };
         mydwl = import ./flake.nixosModules.mydwl.nix;
-        myzephyr = import ./flake.nixosModules.zephyr.nix;
         core = { ... }: {
           imports = [
             ({ pkgs, ... }: {
@@ -197,7 +196,6 @@
             })
             inputs.my-wallpapers.nixosModule
             mydwl
-            myzephyr
 
             ({ pkgs, config, ... }: {
               config = {
