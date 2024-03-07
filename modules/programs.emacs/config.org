@@ -77,8 +77,27 @@ Switch the Menubar off by default (I like to keep everything clean)
   :config
   (setq evil-want-integration t)
   (evil-collection-init))
+
+;;; SPC as leader
+(use-package evil-leader
+  :after evil
+  :config
+  (global-evil-leader-mode)
+  (evil-leader/set-leader "<SPC>")
+  (evil-leader/set-key
+    "e" 'find-file
+    "b" 'switch-to-buffer
+    "k" 'kill-buffer))
 #+END_SRC
 
+* Space Menu?!?
+#+BEGIN_SRC emacs-lisp
+  (use-package which-key
+    :ensure t
+    :config
+    (which-key-mode)
+    )
+#+END_SRC
 * Theme
 #+BEGIN_SRC emacs-lisp
 (use-package doom-themes

@@ -45,6 +45,7 @@
             epkgs.auto-compile
             # epkgs.exwm
             epkgs.evil
+            epkgs.evil-leader
             epkgs.evil-collection
             epkgs.evil-surround
             epkgs.evil-nerd-commenter
