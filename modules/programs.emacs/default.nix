@@ -39,49 +39,51 @@
           (org-babel-load-file "~/.emacs.d/config.org")
           (mapc 'load (file-expand-wildcards "~/.emacs.d/imports/*.el"))
           '';
-          extraPackages = epkgs: [
-            epkgs.use-package
-            epkgs.better-defaults
-            epkgs.auto-compile
-            # epkgs.exwm
-            epkgs.evil
-            epkgs.evil-leader
-            epkgs.evil-collection
-            epkgs.evil-surround
-            epkgs.evil-nerd-commenter
-            epkgs.general
-            epkgs.which-key
+          extraPackages = epkgs: with epkgs; [
+            use-package
+            better-defaults
+            auto-compile
+            # exwm
+            evil
+            evil-leader
+            evil-collection
+            evil-surround
+            evil-nerd-commenter
+            general
+            which-key
 
-            epkgs.org
+            org
             
-            epkgs.magit
+            magit
 
-            epkgs.company
+            company
 
-            epkgs.projectile
+            projectile
 
-            epkgs.nix-mode
+            nix-mode
 
-            epkgs.dired-single
-            epkgs.nerd-icons
-            epkgs.all-the-icons
-            epkgs.all-the-icons-dired
-            epkgs.all-the-icons-ivy-rich
-            epkgs.emojify
-            epkgs.eshell-prompt-extras
-            epkgs.vterm
-            epkgs.multi-vterm
+            copilot
+
+            dired-single
+            nerd-icons
+            all-the-icons
+            all-the-icons-dired
+            all-the-icons-ivy-rich
+            emojify
+            eshell-prompt-extras
+            vterm
+            multi-vterm
 
             # User interface packages.
-            epkgs.neotree
-            epkgs.ivy
-            epkgs.counsel
-            epkgs.ivy-rich
-            epkgs.ivy-posframe
-            epkgs.ivy-prescient
-            epkgs.desktop-environment
-            epkgs.doom-themes
-            epkgs.doom-modeline
+            neotree
+            ivy
+            counsel
+            ivy-rich
+            ivy-posframe
+            ivy-prescient
+            desktop-environment
+            doom-themes
+            doom-modeline
           ];
         };
         programs.fish.functions = {

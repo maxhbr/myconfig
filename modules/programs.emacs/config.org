@@ -6,12 +6,12 @@
 
 ** Setup =use-package= if isn't already
 #+BEGIN_SRC emacs-lisp
-(unless (package-installed-p 'use-package)
-  (package-refresh-contents)
-  (package-install 'use-package))
+  (unless (package-installed-p 'use-package)
+    (package-refresh-contents)
+    (package-install 'use-package))
 
-(eval-when-compile
-  (require 'use-package))
+  (eval-when-compile
+    (require 'use-package))
 #+END_SRC
 
 ** Auto-compile
@@ -90,6 +90,15 @@ Switch the Menubar off by default (I like to keep everything clean)
     "k" 'kill-buffer))
 #+END_SRC
 
+* Copilot
+#+BEGIN_SRC emacs-lisp
+  (require 'copilot)
+;  (use-package copilot
+;    :straight (:host github :repo "copilot-emacs/copilot.el" :files ("dist" "*.el"))
+;    :ensure t
+;    :config
+;    (add-hook 'prog-mode-hook 'copilot-mode))
+#+END_SRC
 * Space Menu?!?
 #+BEGIN_SRC emacs-lisp
   (use-package which-key

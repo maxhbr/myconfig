@@ -110,6 +110,7 @@
         network.enable = true;
         nodejs.enable = true;
         # ruby.enable = true;
+        python.enable = true;
         # rust.enable = true;
         # elixir.enable = false;
         zephyr.enable = true;
