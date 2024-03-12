@@ -92,12 +92,15 @@ Switch the Menubar off by default (I like to keep everything clean)
 
 * Copilot
 #+BEGIN_SRC emacs-lisp
-  (require 'copilot)
-;  (use-package copilot
-;    :straight (:host github :repo "copilot-emacs/copilot.el" :files ("dist" "*.el"))
-;    :ensure t
-;    :config
-;    (add-hook 'prog-mode-hook 'copilot-mode))
+    (require 'copilot)
+    (add-hook 'prog-mode-hook 'copilot-mode)
+    (define-key copilot-completion-map (kbd "<tab>") 'copilot-accept-completion)
+    (define-key copilot-completion-map (kbd "TAB") 'copilot-accept-completion)
+  ;  (use-package copilot
+  ;    :straight (:host github :repo "copilot-emacs/copilot.el" :files ("dist" "*.el"))
+  ;    :ensure t
+  ;    :config
+  ;    (add-hook 'prog-mode-hook 'copilot-mode))
 #+END_SRC
 * Space Menu?!?
 #+BEGIN_SRC emacs-lisp

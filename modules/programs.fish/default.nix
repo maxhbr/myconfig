@@ -34,6 +34,16 @@ in {
           shells =
             [ "${pkgs.fish}/bin/fish" "/run/current-system/sw/bin/fish" ];
         };
+        programs.bash = {
+          # launches fish unless the parent process is already fish: 
+          interactiveShellInit = ''
+            if [[ $(${pkgs.procps}/bin/ps --no-header --pid=$PPID --format=comm) != "fish" && -z ''${BASH_EXECUTION_STRING} ]]
+            then
+              shopt -q login_shell && LOGIN_OPTION='--login' || LOGIN_OPTION=""
+              exec ${pkgs.fish}/bin/fish $LOGIN_OPTION
+            fi
+          '';
+        };
         home-manager.sharedModules = [
           ({ config, lib, ... }: {
             config = lib.mkIf config.programs.fish.enable {
@@ -109,9 +119,8 @@ in {
                   "colored-man-pages" # Fish shell plugin to colorize man pages
                   "done"
                   "grc" #  grc Colourizer for some commands on Fish shell
-                #   "sponge" # keeps your fish shell history clean from typos, incorrectly used commands and everything you don't want to store due to privacy reasons
-                #   "hydro" # Ultra-pure, lag-free prompt with async Git status
-                #   "z" # Pure-fish z directory jumping
+                  "sponge" # keeps your fish shell history clean from typos, incorrectly used commands and everything you don't want to store due to privacy reasons
+                  "z" # Pure-fish z directory jumping
                 ]);
               };
               xdg.configFile = {
