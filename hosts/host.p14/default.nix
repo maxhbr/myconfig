@@ -5,7 +5,6 @@
     ./hardware-configuration.nix
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
-    # ./hardware.TP-Link_Archer_TX20U.nix
     {
       boot.loader.systemd-boot.enable = true;
       boot.loader.efi.canTouchEfiVariables = true;
@@ -21,7 +20,6 @@
     ./mykeylight
     ./role.work
     ./programs.khal.nix
-    # ./a7iiiAsWebcam.nix
     {
       services.openssh = {
         listenAddresses = [{
@@ -33,16 +31,7 @@
     {
       boot.kernelPackages = lib.mkForce pkgs.linuxPackages_latest;
     }
-    # fun
     ../host.workstation/gaming/games.steam
-    {
-      home-manager.sharedModules =
-        [{ home.packages = with pkgs; [ mindustry-wayland ]; }];
-    }
-    # {
-    #   home-manager.sharedModules =
-    #     [{ home.packages = with pkgs; [ libreoffice ]; }];
-    # }
     ({config, pkgs, ...}: {
       config = lib.mkIf config.myconfig.desktop.wayland.hyprland.enable {
         home-manager.sharedModules = [({config, ...}: let
@@ -113,7 +102,7 @@
         python.enable = true;
         # rust.enable = true;
         # elixir.enable = false;
-        zephyr.enable = true;
+        # zephyr.enable = true;
       };
     };
     virtualisation.docker.enable = true;

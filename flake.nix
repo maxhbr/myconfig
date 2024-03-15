@@ -248,14 +248,11 @@
           (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
             { config = { hardware.enableRedistributableFirmware = true; }; }
             self.nixosModules.core
-            # inputs.octrc.nixosModule
             inputs.nixos-hardware.nixosModules.lenovo-thinkpad-x1-extreme-gen2
-            # inputs.zephyrproject.nixosModule
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "workstation" ([
             self.nixosModules.core
-            # inputs.octrc.nixosModule
           ] ++ moreModules) metadataOverride);
         host-vserver = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "vserver"

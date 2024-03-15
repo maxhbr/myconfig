@@ -3,10 +3,10 @@
     programs.gnupg.agent = {
       enable = true;
       enableSSHSupport = !config.programs.ssh.startAgent;
-      pinentryFlavor = if config.myconfig.desktop.enable then
-        (if config.myconfig.desktop.wayland.enable then "qt" else "qt")
+      pinentryPackage = if config.myconfig.desktop.enable then
+        (if config.myconfig.desktop.wayland.enable then pkgs.pinentry-qt else pkgs.pinentry-qt)
       else
-        "curses";
+        pkgs.pinentry-curses;
     };
     environment = { systemPackages = with pkgs; [ gnupg ]; };
   };
