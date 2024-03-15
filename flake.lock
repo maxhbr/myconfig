@@ -134,11 +134,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1710527391,
-        "narHash": "sha256-3uM8+g/nb7ROgzSmJwOrKefctZpjR5uBJtUz4lpwWJI=",
+        "lastModified": 1710532761,
+        "narHash": "sha256-SUXGZNrXX05YA9G6EmgupxhOr3swI1gcxLUeDMUhrEY=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "c781b28add41b74423ab2e64496d4fc91192e13a",
+        "rev": "206f457fffdb9a73596a4cb2211a471bd305243d",
         "type": "github"
       },
       "original": {
@@ -318,11 +318,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1710534455,
-        "narHash": "sha256-huQT4Xs0y4EeFKn2BTBVYgEwJSv8SDlm82uWgMnCMmI=",
+        "lastModified": 1710537727,
+        "narHash": "sha256-vufL9fTlkXKcwKLfkp67Rtic7ql3jGfuzpyinue/h9I=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "9af9c1c87ed3e3ed271934cb896e0cdd33dae212",
+        "rev": "d361239141d3fdc3d58876245a34b6eaac6949a2",
         "type": "github"
       },
       "original": {
@@ -361,11 +361,11 @@
         "sway-audio-idle-inhibit": "sway-audio-idle-inhibit"
       },
       "locked": {
-        "lastModified": 1709641722,
-        "narHash": "sha256-IP4wRKWaiysuuphNKUz9w0taTC5sV062CSqTH0hBO00=",
+        "lastModified": 1710537445,
+        "narHash": "sha256-Enoee81g8S6LQdVnRiU/gkcEmtbOEtlynGMQJp+o71E=",
         "owner": "maxhbr",
         "repo": "mydwl",
-        "rev": "3e5bf674ccf289936941c30b4dc9827da59619cc",
+        "rev": "84a5231ca9c8eb3224b52c59943e092d67f97ba0",
         "type": "github"
       },
       "original": {
@@ -794,11 +794,11 @@
     "somebar": {
       "flake": false,
       "locked": {
-        "lastModified": 1691000288,
-        "narHash": "sha256-9KYuX2bwRKiHiRHsFthdZ+TVkJE8Cjm+f78f9qhbB90=",
+        "lastModified": 1708085853,
+        "narHash": "sha256-4s9tj5+lOkYjF5cuFRrR1R1S5nzqvZFq9SUAFuA8QXc=",
         "owner": "~raphi",
         "repo": "somebar",
-        "rev": "8c52d4704c0ac52c946e41a1a68c8292eb83d0d2",
+        "rev": "6572b98d697fef50473366bf4b598e66c0be3e54",
         "type": "sourcehut"
       },
       "original": {
@@ -810,11 +810,11 @@
     "sway-audio-idle-inhibit": {
       "flake": false,
       "locked": {
-        "lastModified": 1691602798,
-        "narHash": "sha256-MKzyF5xY0uJ/UWewr8VFrK0y7ekvcWpMv/u9CHG14gs=",
+        "lastModified": 1707589229,
+        "narHash": "sha256-Y5eOyxB63YgMoIQSic4zGLVuXVErAnjajRdboNBmKyQ=",
         "owner": "ErikReider",
         "repo": "SwayAudioIdleInhibit",
-        "rev": "c850bc4812216d03e05083c69aa05326a7fab9c7",
+        "rev": "8ac8608d31e18e5a064002c2a1ef73a683ea9537",
         "type": "github"
       },
       "original": {
