@@ -16,6 +16,30 @@
         "type": "github"
       }
     },
+    "dwl": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-H2QiKhihYRQ49tPeUXe/MJv3RjBkObNU6SCroKxqdRI=",
+        "type": "file",
+        "url": "https://codeberg.org/dwl/dwl"
+      },
+      "original": {
+        "type": "file",
+        "url": "https://codeberg.org/dwl/dwl"
+      }
+    },
+    "dwl-patches": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-eU8K7jUAKmuJ1qat+WmhfhKB9IVOt8aFLLuU6riwycQ=",
+        "type": "file",
+        "url": "https://codeberg.org/dwl/dwl-patches"
+      },
+      "original": {
+        "type": "file",
+        "url": "https://codeberg.org/dwl/dwl-patches"
+      }
+    },
     "emacs": {
       "inputs": {
         "flake-utils": "flake-utils",
@@ -186,11 +210,11 @@
         "xdph": "xdph"
       },
       "locked": {
-        "lastModified": 1710608265,
-        "narHash": "sha256-t79NV2m7R2zr7OkQa/QZSEGzPhuJEuh6hVPlIeqgfNQ=",
+        "lastModified": 1710611769,
+        "narHash": "sha256-gM4cDw45J8mBmM0aR5Ko/zMAA8UWnQhc4uZ5Ydvc4uo=",
         "owner": "hyprwm",
         "repo": "Hyprland",
-        "rev": "e566be7847b1d32c11291edb99b169f6b64fcebb",
+        "rev": "0e87a08e15c023325b64920d9e1159f38a090695",
         "type": "github"
       },
       "original": {
@@ -318,11 +342,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1710608262,
-        "narHash": "sha256-Tf2zqUWgU1iofcECQ+xj7HJVtoCz6yWG/oEIDmXxwXg=",
+        "lastModified": 1710611172,
+        "narHash": "sha256-Yy8yzTvqxNAYaRqIVOq6EvI/D/yLuv0hIEHLKdHiL60=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "d211b80d2944a41899a6ab24009d9729cca05e49",
+        "rev": "5ebdb3eda7e96ab9750a45091925434e0b18dfb2",
         "type": "github"
       },
       "original": {
@@ -354,6 +378,8 @@
     },
     "mydwl": {
       "inputs": {
+        "dwl": "dwl",
+        "dwl-patches": "dwl-patches",
         "nixpkgs": [
           "nixpkgs"
         ],
@@ -361,11 +387,11 @@
         "sway-audio-idle-inhibit": "sway-audio-idle-inhibit"
       },
       "locked": {
-        "lastModified": 1710537445,
-        "narHash": "sha256-Enoee81g8S6LQdVnRiU/gkcEmtbOEtlynGMQJp+o71E=",
+        "lastModified": 1710611749,
+        "narHash": "sha256-JJVE5/bYBkl+yqO4UGDZLRz6Wj68OyDY1QbTRE4d4X4=",
         "owner": "maxhbr",
         "repo": "mydwl",
-        "rev": "84a5231ca9c8eb3224b52c59943e092d67f97ba0",
+        "rev": "e149ed76a56f632b6cc8473235077b97fe30c284",
         "type": "github"
       },
       "original": {
@@ -542,11 +568,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1710602011,
-        "narHash": "sha256-E0+Mvl0JFA9x3Fpx5kGICddm3yk9FGLrYSvcJTqyxIw=",
+        "lastModified": 1710609234,
+        "narHash": "sha256-DVCc6Wn3mudjhRGO+S0buGD+RjofogYnkexajygr598=",
         "owner": "nix-community",
         "repo": "nixpkgs-wayland",
-        "rev": "e820eb2dcc92be48930f15292a42c7c5045422ab",
+        "rev": "2e43e0f23b868d18392fb1355b311589926b04c7",
         "type": "github"
       },
       "original": {
