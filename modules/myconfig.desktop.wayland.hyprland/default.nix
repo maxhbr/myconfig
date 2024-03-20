@@ -4,7 +4,10 @@
 let
   cfg = config.myconfig;
   user = myconfig.user;
-  hyprlandPkg = inputs.hyprland.packages.${pkgs.system}.hyprland;
+  debug = false;
+  hyprlandPkg = if debug
+    then inputs.hyprland.packages.${pkgs.system}.hyprland.override { inherit debug; }
+    else inputs.hyprland.packages.${pkgs.system}.hyprland;
 in {
   options.myconfig = with lib; {
     desktop.wayland.hyprland = { enable = mkEnableOption "hyprland"; };
@@ -34,6 +37,9 @@ in {
           '')
         ];
       in {
+        home.sessionVariables = lib.mkIf debug {
+          ASAN_OPTIONS = "log_path=/tmp/asan.log";
+        };
         home.packages = with pkgs; [ 
           hyprpaper
           hyprnome

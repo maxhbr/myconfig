@@ -65,10 +65,10 @@
         wayland = {
           enable = true;
           desktop = "hyprland";
-          # dwl.enable = true;
+          dwl.enable = true;
           hyprland.enable = true;
           labwc.enable = true;
-          # river.enable = true;
+          river.enable = true;
           # gnome.enable = true; # konflicts with sway
 
           #disabled:
@@ -107,7 +107,7 @@
     };
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;
-    # virtualisation.libvirtd.enable = true;
+    virtualisation.libvirtd.enable = true;
     virtualisation.virtualbox.host.enable = false;
 
     services.xserver.wacom.enable = true;
