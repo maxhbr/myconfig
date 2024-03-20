@@ -407,11 +407,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1708844909,
-        "narHash": "sha256-7OYlVAnIrt3xh/3bLjGgmWL06N2Tvdjv/yMJqXjQ3zQ=",
+        "lastModified": 1710961308,
+        "narHash": "sha256-BeEKiZjNTzy3H55Mt2FgrX80AhCV3yN8ZOC36Vohdao=",
         "owner": "maxhbr",
         "repo": "myphoto",
-        "rev": "8d7d64eb6666de775e3425040004f90bace5cfb0",
+        "rev": "b222f5b5541725dc3a1d297648416387c3836f5a",
         "type": "github"
       },
       "original": {
