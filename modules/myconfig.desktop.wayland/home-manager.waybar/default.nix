@@ -1,6 +1,7 @@
 { config, lib, pkgs, ... }: {
   config = (lib.mkIf config.programs.waybar.enable {
     programs.waybar = {
+      package = pkgs.nixos-2311.waybar;
       systemd.enable = false;
       settings = {
         mainBar = {

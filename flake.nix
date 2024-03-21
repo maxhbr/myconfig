@@ -14,6 +14,7 @@
     rel2205.url = "github:nixos/nixpkgs/release-22.05";
     rel2211.url = "github:nixos/nixpkgs/release-22.11";
     rel2305.url = "github:nixos/nixpkgs/release-23.05";
+    rel2311.url = "github:nixos/nixpkgs/release-23.11";
 
     pr244937.url =
       "github:charles-dyfis-net/nixpkgs/freeplane-1_11_4"; # https://github.com/NixOS/nixpkgs/pull/244937
@@ -171,6 +172,7 @@
                   (mkSubPkgsOverlay "nixos-2205" inputs.rel2205)
                   (mkSubPkgsOverlay "nixos-2211" inputs.rel2211)
                   (mkSubPkgsOverlay "nixos-2305" inputs.rel2305)
+                  (mkSubPkgsOverlay "nixos-2311" inputs.rel2311)
                 ];
               };
             })
