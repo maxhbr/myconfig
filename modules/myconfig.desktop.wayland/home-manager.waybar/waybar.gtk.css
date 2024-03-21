@@ -7,7 +7,7 @@
 }
 
 window#waybar {
-    background: linear-gradient(rgba(43, 48, 59, 0.5), rgba(43, 48, 59, 0));
+    background: linear-gradient(90deg, rgba(43, 48, 59, 0.5), rgba(43, 48, 59, 0));
     color: #e0cbc7;
 }
 
@@ -33,14 +33,14 @@ tooltip label {
 #window,
 button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button 
 {
-    padding: 0 2px;
+    padding: 2px 0;
     background: transparent;
     color: #e0cbc7;
-    border-radius: 0px 0px 7px 7px;
+    border-radius: 0px 7px 7px 0px;
 }
 
 #battery {
-    padding-right: 11px;
+    padding-top: 11px;
 }
 
 #taskbar button,
@@ -55,19 +55,15 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
     min-width: 25px;
 }
 
-/* #tags button * {
-    margin: 0;
-    padding: 0;
-} */
-
 #pulseaudio:hover,
-#bluetooth:hover,
 #network:hover,
+#bluetooth.on,
 #battery {
     background-color: #ffffff;
     color: black;
 }
 
+#bluetooth.connected,
 #battery.charging {
     background-color: #26a65b;
     color: white;
@@ -147,21 +143,21 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 
 #idle_inhibitor {
     background: rgba(43, 48, 59, 0.5);
-    border-left: 2px solid #e0cbc7;
-    border-bottom: 3px solid #e0cbc7;
-    border-radius: 0px 0px 0px 14px;
+    border-top: 2px solid #e0cbc7;
+    border-right: 3px solid #e0cbc7;
+    border-radius: 0px 14px 0px 0px;
 }
 #clock,
 #custom-audio_idle_inhibitor,
 #tray {
     background: rgba(43, 48, 59, 0.5);
-    border-bottom: 3px solid #e0cbc7;
+    border-right: 3px solid #e0cbc7;
     border-radius: 0px 0px 0px 0px;
 }
 
 #idle_inhibitor {
-    min-width: 25px;
-    padding-right: 3px;
+    min-height: 25px;
+    padding-top: 3px;
 }
 
 #idle_inhibitor.deactivated {
@@ -172,27 +168,3 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 #hardware, .vertical {
     font-size: 0.4em;
 }
-
-/* #custom-dwl_layout {
-    color: #EC5800
-}
-
-#custom-dwl_title {
-    color: #017AFF
-}
-
-#custom-dwl_tag {
-    color: #875F00
-}
-
-#custom-dwl_tag.occupied {
-    color: #017AFF
-}
-
-#custom-dwl_tag.focused {
-    border-top: 1px solid #EC5800
-}
-
-#custom-dwl_tag.urgent {
-    background-color: #FF0000
-} */

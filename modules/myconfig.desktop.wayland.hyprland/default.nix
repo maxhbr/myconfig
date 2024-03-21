@@ -69,8 +69,10 @@ in {
         programs.waybar = {
           enable = lib.mkDefault true;
           settings.mainBar = {
+            position = lib.mkForce "left";
+            height = lib.mkForce null;
             modules-left =  [ "hyprland/workspaces" "hyprland/submap" ];
-            modules-center = [ "hyprland/window" ];
+            modules-center = lib.mkForce []; # modules-center = [ "hyprland/window" ];
             "hyprland/workspaces" = {
               "format" = "{icon}";
               "format-icons" = {
@@ -105,7 +107,24 @@ in {
                 "format" = "submap: {}";
                 "max-length" = 8;
                 "tooltip" = false;
+                "rotate" = 90;
             };
+            "pulseaudio"."rotate" = 90;
+            "bluetooth"."rotate" = 90;
+            "network"."rotate" = 90;
+            "custom/isvpn"."rotate" = 90;
+            "custom/platform_profile"."rotate" = 90;
+            "custom/test_for_missing_tb_changing"."rotate" = 90;
+            # "cpu"."rotate" = 90;
+            # "memory"."rotate" = 90;
+            "backlight"."rotate" = 90;
+            "battery"."rotate" = 90;
+            "wlr/taskbar"."rotate" = 90;
+            # "group/hardware"."rotate" = 90;
+            "idle_inhibitor"."rotate" = 90;
+            "custom/audio_idle_inhibitor"."rotate" = 90;
+            "tray"."rotate" = 90;
+            "clock"."rotate" = 90;
           };
         };
       })];
