@@ -54,6 +54,18 @@
   (add-to-list 'mu4e-view-actions
                '("retag message" . mu4e-action-retag-message) t)
 
+   mu4e-context-policy 'pick-first ;; mu4e-context-policy 'ask
+   mu4e-compose-context-policy 'ask-if-none
+   mu4e-bookmarks '(("\\\\Inbox" "Inbox" ?i)
+                    ("flag:unread or flag:flagged" "Unread messages" ?u)
+                    ("flag:unread" "Only unread messages" ?U)
+                    ("flag:flagged" "Starred messages" ?s)
+                    ("date:today..now or flag:flagged" "Today's messages" ?t)
+                    ("date:7d..now or flag:flagged" "Last 7 days" ?w)
+                    ("date:2d..1d" "Yesterday" ?y)
+                    ("mime:image/*" "Messages with images" ?p)
+                    ("mime:application/pdf" "Messages with PDFs" ?P)))
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Marks
   ;; See: https://www.djcbsoftware.nl/code/mu/mu4e/Adding-a-new-kind-of-mark.html
