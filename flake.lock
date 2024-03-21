@@ -787,6 +787,22 @@
         "type": "github"
       }
     },
+    "rel2311": {
+      "locked": {
+        "lastModified": 1710951922,
+        "narHash": "sha256-FOOBJ3DQenLpTNdxMHR2CpGZmYuctb92gF0lpiirZ30=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "f091af045dff8347d66d186a62d42aceff159456",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "release-23.11",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "doomemacs": "doomemacs",
@@ -814,6 +830,7 @@
         "rel2205": "rel2205",
         "rel2211": "rel2211",
         "rel2305": "rel2305",
+        "rel2311": "rel2311",
         "zephyr-flake": "zephyr-flake"
       }
     },
