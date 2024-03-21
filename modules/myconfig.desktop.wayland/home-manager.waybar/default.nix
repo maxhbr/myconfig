@@ -1,7 +1,7 @@
 { config, lib, pkgs, ... }: {
   config = (lib.mkIf config.programs.waybar.enable {
     programs.waybar = {
-      package = pkgs.nixos-2311.waybar;
+      package = pkgs.nixos-2311.waybar; # TODO: go back ot latest, ones it compiles again
       systemd.enable = false;
       settings = {
         mainBar = {

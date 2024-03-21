@@ -1,5 +1,5 @@
-#! /usr/bin/env nix-shell
-#! nix-shell -p "haskellPackages.ghcWithPackages (pkgs: with pkgs; [])" -i runhaskell
+#!/usr/bin/env nix-shell
+#!nix-shell -p "haskellPackages.ghcWithPackages (pkgs: with pkgs; [])" -i runhaskell
 
 import           System.Environment
 import           System.Exit
