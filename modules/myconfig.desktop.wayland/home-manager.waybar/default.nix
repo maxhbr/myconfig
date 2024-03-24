@@ -35,11 +35,12 @@
           # };
           tray = { spacing = 10; };
           clock = {
-            format = "{:%H:%M (%Y-%m-%d)}";
+            format = "{:%H:%M <sub>%Y-%m-%d</sub>}";
             tooltip-format = ''
               <big>{:%Y %B}</big>
               <tt><small>{calendar}</small></tt>'';
-            format-alt = "{:%H:%M}";
+            format-alt = "{:%H:%M<sub>:%S</sub>}";
+            interval = 1;
           };
           cpu = {
             format = "cpu: {usage}%";

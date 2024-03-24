@@ -62,7 +62,6 @@
     hyprland-plugins = {
       url = "github:hyprwm/hyprland-plugins";
       inputs.hyprland.follows = "hyprland";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     mydwl.url = "github:maxhbr/mydwl";

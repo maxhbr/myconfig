@@ -154,6 +154,9 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
     border-right: 3px solid #e0cbc7;
     border-radius: 0px 0px 0px 0px;
 }
+#clock{
+  padding: 15px 0;
+}
 
 #idle_inhibitor {
     min-height: 25px;

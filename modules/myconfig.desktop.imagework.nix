@@ -20,6 +20,7 @@ in {
         # gthumb
         # krita
         # inkscape
+        sigal # static website generator
       ];
     }];
   });
