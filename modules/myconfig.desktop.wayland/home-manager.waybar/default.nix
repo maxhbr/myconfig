@@ -4,14 +4,14 @@
       package = pkgs.nixos-2311.waybar; # TODO: go back ot latest, ones it compiles again
       systemd.enable = false;
       settings = {
-        mainBar = {
+        mainBar = lib.recursiveUpdate {
           layer = "top";
           position = "top";
           height = 25;
           spacing = 4;
-          modules-left = [ ];
-          modules-center = [ ];
-          modules-right = [
+          modules-left = [
+          ];
+          modules-center = [
             "pulseaudio"
             "bluetooth"
             "network"
@@ -29,13 +29,15 @@
             "tray"
             "clock"
           ];
+          modules-right = [
+          ];
           # "group/hardware" = {
           #   "orientation" = "vertical";
           #   "modules" = [ "cpu" "memory" ];
           # };
           tray = { spacing = 10; };
           clock = {
-            format = "{:%H:%M <sub>%Y-%m-%d</sub>}";
+            format = "{:%H:<big>%M</big> <sub>%Y-%m-</sub>%d}";
             tooltip-format = ''
               <big>{:%Y %B}</big>
               <tt><small>{calendar}</small></tt>'';
@@ -106,6 +108,8 @@
           backlight = {
             format = "{percent}% {icon}";
             format-icons = [ "" "" "" "" "" "" "" "" "" ];
+            on-scroll-up = "${pkgs.light}/bin/light -A 5";
+            on-scroll-down = "${pkgs.light}/bin/light -U 5";
           };
           battery = {
             states = {
@@ -176,6 +180,24 @@
               deactivated = "";
             };
           };
+        } {
+          position = lib.mkForce "left";
+          height = lib.mkForce null;
+          pulseaudio.rotate = 90;
+          bluetooth.rotate = 90;
+          network.rotate = 90;
+          "custom/isvpn.rotate" = 90;
+          "custom/platform_profile".rotate = 90;
+          "custom/test_for_missing_tb_changing".rotate = 90;
+          cpu.rotate = 90;
+          memory.rotate = 90;
+          backlight.rotate = 90;
+          battery.rotate = 90;
+          "wlr/taskbar".rotate = 90;
+          "group/hardware".rotate = 90;
+          "custom/audio_idle_inhibitor".rotate = 90;
+          tray.rotate = 90;
+          clock.rotate = 90;
         };
       };
       style = builtins.readFile ./waybar.gtk.css;

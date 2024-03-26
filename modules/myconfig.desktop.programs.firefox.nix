@@ -33,6 +33,7 @@ in {
                 link-cleaner
                 privacy-badger
                 tree-style-tab
+                multi-account-containers
                 ublock-origin
                 vimium
                 sidebery
