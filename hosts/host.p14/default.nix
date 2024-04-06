@@ -34,11 +34,11 @@
         supportedFilesystems = [ "nfs" ];
         kernelModules = [ "nfs" ];
       };
-      # fileSystems."/home/mhuber/MINE/Bilder/imgwork" =
-      #   { device = "192.168.1.40:/export/imgwork";
-      #     fsType = "nfs";
-      #     options = ["nofail"];
-      #   };
+      fileSystems."/home/mhuber/MINE/Bilder/imgwork" =
+        { device = "192.168.1.40:/imgwork";
+          fsType = "nfs";
+          options = ["nofail"];
+        };
     }
     {
       boot.kernelPackages = lib.mkForce pkgs.linuxPackages_latest;
