@@ -12,24 +12,24 @@
           modules-left = [
           ];
           modules-center = [
-            "pulseaudio"
-            "bluetooth"
-            "network"
-            "custom/isvpn"
-            "custom/platform_profile"
-            "custom/test_for_missing_tb_changing"
-            # "cpu"
-            # "memory"
-            "backlight"
-            "battery"
-            "wlr/taskbar"
+            # "wlr/taskbar"
             # "group/hardware"
             "idle_inhibitor"
-            "custom/audio_idle_inhibitor"
+            "battery"
+            "custom/platform_profile"
+            "custom/test_for_missing_tb_changing"
+            # "custom/audio_idle_inhibitor"
             "tray"
             "clock"
           ];
           modules-right = [
+            "pulseaudio"
+            "bluetooth"
+            "backlight"
+            "custom/isvpn"
+            "network"
+            "cpu"
+            # "memory"
           ];
           # "group/hardware" = {
           #   "orientation" = "vertical";
@@ -37,7 +37,7 @@
           # };
           tray = { spacing = 10; };
           clock = {
-            format = "{:%H:<big>%M</big> <sub>%Y-%m-</sub>%d}";
+            format = "{:<b>%H:<big>%M</big></b> <sub>%Y</sub>-%m-%d}";
             tooltip-format = ''
               <big>{:%Y %B}</big>
               <tt><small>{calendar}</small></tt>'';
@@ -124,7 +124,7 @@
           };
           network = {
             format-wifi = "{essid} ({signalStrength}%) ";
-            format-ethernet = "{ipaddr}/{cidr} ";
+            format-ethernet = "{ifname} ";
             tooltip-format = ''
               {ifname} via {gwaddr} 
               {ipaddr}/{cidr}'';

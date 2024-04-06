@@ -10,7 +10,7 @@
     ../../hardware/nixos-hardware/common/pc/ssd
     ../../hardware/hdd-spinndown.nix
     ../../hardware/steamcontroller.nix
-    (myconfig.metadatalib.fixIp "enp39s0")
+    (myconfig.metadatalib.fixIp "enp4s0")
     (myconfig.metadatalib.setupAsBuildMachine [
       myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_ed25519.pub"
@@ -36,7 +36,7 @@
     #   # networking.firewall.allowedTCPPorts = [ 5900 ];
     # }
     ( # wol
-      let interface = "enp39s0";
+      let interface = "enp4s0";
       in {
         # services.wakeonlan.interfaces = [{
         #   inherit interface;
@@ -157,6 +157,7 @@
     fileSystems."/mnt/2tb-1" = {
       device = "/dev/disk/by-uuid/51d362d8-5b73-4b92-84c3-9ff260062da6";
       fsType = "ext4";
+      options = ["nofail"];
     };
 
     # This value determines the NixOS release from which the default

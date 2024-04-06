@@ -21,7 +21,6 @@ tooltip label {
     color: #e0cbc7;
 }
 
-#battery,
 #backlight,
 #network,
 #pulseaudio,
@@ -39,7 +38,9 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
     border-radius: 0px 7px 7px 0px;
 }
 
+#network,
 #battery {
+    padding: 2px 0;
     padding-top: 11px;
 }
 
@@ -59,21 +60,13 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 #network:hover,
 #bluetooth.on,
 #battery {
-    background-color: #ffffff;
-    color: black;
+    background: linear-gradient(90deg, rgba(43, 48, 59, 0.5), rgba(80,80,80, 1));
 }
 
 #bluetooth.connected,
 #battery.charging {
-    background-color: #26a65b;
+    background: linear-gradient(90deg, rgba(14, 65, 35, 0.5), rgba(43, 48, 59, 0));
     color: white;
-}
-
-@keyframes blink {
-    to {
-        background-color: #ffffff;
-        color: black;
-    }
 }
 
 #custom-platform_profile.balanced {
@@ -89,6 +82,12 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
     background: #ee9a00;
 }
 
+@keyframes blink {
+    to {
+        background-color: #ffffff;
+        color: black;
+    }
+}
 #battery.critical:not(.charging),
 #custom-test_for_missing_tb_changing.error {
     background: #f53c3c;
@@ -149,10 +148,15 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 }
 #clock,
 #custom-audio_idle_inhibitor,
+#battery,
 #tray {
-    background: rgba(43, 48, 59, 0.5);
     border-right: 3px solid #e0cbc7;
     border-radius: 0px 0px 0px 0px;
+}
+#clock,
+#custom-audio_idle_inhibitor,
+#tray {
+    background: rgba(43, 48, 59, 0.5);
 }
 #clock{
   padding: 15px 0;
