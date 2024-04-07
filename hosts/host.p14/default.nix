@@ -37,7 +37,7 @@
       fileSystems."/home/mhuber/MINE/Bilder/imgwork" =
         { device = "192.168.1.40:/imgwork";
           fsType = "nfs";
-          options = ["nofail"];
+          options = ["nofail" "soft"];
         };
     }
     {
