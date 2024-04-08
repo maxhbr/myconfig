@@ -84,6 +84,7 @@
     #   networking.firewall.allowedTCPPorts = [ 2049 111 4000 4001 ];
     #   networking.firewall.allowedUDPPorts = [ 2049 111 4000 4001 ];
     # }
+
   ]; # ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.5") ]);
 
   config = {
@@ -92,13 +93,30 @@
     myconfig = {
       desktop = {
         enable = true;
-        xserver = {
-          enable = true;
-          xmonad.enable = true;
-        };
+        # xserver = {
+        #   enable = true;
+        #   xmonad.enable = true;
+        # };
         wayland = {
-          enable = false;
-          desktop = "sway";
+          enable = true;
+          desktop = "hyprland";
+          # dwl.enable = true;
+          hyprland.enable = true;
+          labwc.enable = true;
+          river.enable = true;
+          # gnome.enable = true; # konflicts with sway
+
+          #disabled:
+          # sway.enable = true;
+          #experimental:
+          # wayfire.enable = true;
+          # qtile.enable = true;
+          # vivarium.enable = true;
+          #bloated:
+          # kde.enable = true;
+          #dead or buggy:
+          # hikari.enable = true;
+          # newm.enable = true;
         };
         myphoto.enable = true;
         obs.enable = true;
