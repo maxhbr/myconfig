@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "awatcher-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1709780495,
+        "narHash": "sha256-HjPA+sZ4lYerWS6lrqAwO7T+4xhJvRzFj6NOFqOrwf0=",
+        "owner": "2e3s",
+        "repo": "awatcher",
+        "rev": "a21b917b265dbb70f33cfbd3b8bee8f10e884a3d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "2e3s",
+        "repo": "awatcher",
+        "type": "github"
+      }
+    },
     "doomemacs": {
       "flake": false,
       "locked": {
@@ -330,11 +346,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1712820978,
-        "narHash": "sha256-y5v0pQ4hZ8Jd8EF/yf5T3rlPEwKgmoXF4VPI6TKbcTc=",
+        "lastModified": 1712822247,
+        "narHash": "sha256-OOxfEohEyMGD+eIvyqAaDYae1CLN5SxyTvNnRCUI5Rs=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "646f0dcd0133210c20805729e53168a15c7db211",
+        "rev": "60193de3208e061f5cdca2fb57855aa404bb084b",
         "type": "github"
       },
       "original": {
@@ -793,6 +809,7 @@
     },
     "root": {
       "inputs": {
+        "awatcher-src": "awatcher-src",
         "doomemacs": "doomemacs",
         "emacs": "emacs",
         "flake-utils": "flake-utils_2",
