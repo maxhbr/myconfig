@@ -66,6 +66,19 @@
     #   };
     # }
     # )
+    ({pkgs, ...}: let
+      fix-my-notebook = pkgs.writeShellScriptBin "fix-my-notebook" ''
+        set -euo pipefail
+        set -x
+        systemctl restart bluetooth.service
+        # pkill waybar && waybar & disown
+        dbus-wm-environment wlroots
+      '';
+    in {
+      config = {
+        home-manager.sharedModules = [{ home.packages = with pkgs; [ fix-my-notebook ]; }];
+      };
+    })
   ];
 
   config = {
