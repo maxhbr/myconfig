@@ -5,14 +5,6 @@
     ./hardware-configuration.nix
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
-    {
-      boot.loader.systemd-boot.enable = true;
-      boot.loader.efi.canTouchEfiVariables = true;
-
-      networking.useDHCP = false;
-      networking.interfaces.wlp0s20f3.useDHCP = true;
-      # networking.interfaces.enp82s0u2u1u2.useDHCP = true;
-    }
     ../../hardware/footswitch.nix
     ../../hardware/blink1.nix
     ../../hardware/unifying.nix
@@ -29,19 +21,11 @@
       };
     }
     {
-      environment.systemPackages = with pkgs; [ nfs-utils ];
-      boot.initrd = {
-        supportedFilesystems = [ "nfs" ];
-        kernelModules = [ "nfs" ];
-      };
       fileSystems."/home/mhuber/MINE/Bilder/imgwork" =
         { device = "192.168.1.40:/imgwork";
           fsType = "nfs";
           options = ["nofail" "soft"];
         };
-    }
-    {
-      boot.kernelPackages = lib.mkForce pkgs.linuxPackages_latest;
     }
     ../host.workstation/gaming/games.steam
     # ({config, pkgs, ...}: {
@@ -84,6 +68,9 @@
   config = {
     networking.hostName = "p14";
     networking.hostId = "1ea9689e";
+    networking.useDHCP = false;
+    networking.interfaces.wlp0s20f3.useDHCP = true;
+    # networking.interfaces.enp82s0u2u1u2.useDHCP = true;
     myconfig = {
       desktop = {
         enable = true;
@@ -151,8 +138,7 @@
         home.packages = with pkgs;
           [
             nvtop-intel
-            # rdesktop
-            google-chrome # for netflix and stadia
+            google-chrome # for netflix
           ];
         programs.zsh.shellAliases = {
           upg-get-hostId = ''
@@ -178,99 +164,24 @@
               }];
               exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
             };
-            dp4 = {
-              outputs = [
-                {
-                  criteria = "eDP-1";
-                  mode = "1920x1200@60Hz";
-                  position = "0,0";
-                  scale = 1.0;
-                }
-                {
-                  criteria = "DP-4";
-                  mode = "2560x1440@59.951Hz";
-                  position = "1920,0";
-                  scale = 1.0;
-                }
-              ];
-              exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
-            };
-            docked = {
-              outputs = [
-                {
-                  criteria = "eDP-1";
-                  mode = "1920x1200@60Hz";
-                  position = "0,0";
-                  scale = 1.0;
-                }
-                {
-                  criteria = "DP-5";
-                  mode = "2560x1440@59.951Hz";
-                  position = "1920,0";
-                  scale = 1.0;
-                }
-                {
-                  criteria = "DP-7";
-                  mode = "1920x1080@60Hz";
-                  position = "2240,1440";
-                  scale = 1.0;
-                }
-              ];
-              exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
-            };
-            # docked2 = {
-            #   outputs = [
-            #     {
-            #       criteria = "eDP-1";
-            #       mode = "1920x1200@60Hz";
-            #       position = "0,0";
-            #       scale = 1.0;
-            #     }
-            #     {
-            #       criteria = "DP-5";
-            #       mode = "2560x1440@59.951Hz";
-            #       position = "1920,0";
-            #       scale = 1.0;
-            #     }
-            #     {
-            #       criteria = "DP-4";
-            #       mode = "1920x1080@60Hz";
-            #       position = "2240,1440";
-            #       scale = 1.0;
-            #     }
-            #   ];
-            #   exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
-            # };
-            # docked3 = {
-            #   outputs = [
-            #     {
-            #       criteria = "eDP-1";
-            #       mode = "1920x1200@60Hz";
-            #       position = "0,0";
-            #       scale = 1.0;
-            #     }
-            #     {
-            #       criteria = "DP-6";
-            #       mode = "2560x1440@59.951Hz";
-            #       position = "1920,0";
-            #       scale = 1.0;
-            #     }
-            #     {
-            #       criteria = "DP-4";
-            #       mode = "1920x1080@60Hz";
-            #       position = "2240,1440";
-            #       scale = 1.0;
-            #     }
-            #   ];
-            #   exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
-            # };
           };
         };
       }
     ];
 
-    boot.binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];
-    boot.supportedFilesystems = [ "ntfs" ];
+    boot = {
+      loader = {
+        systemd-boot.enable = true;
+        efi.canTouchEfiVariables = true;
+      };
+
+      binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];
+      kernelPackages = lib.mkForce pkgs.linuxPackages_latest;
+      initrd = {
+        supportedFilesystems = [ "nfs" ];
+        kernelModules = [ "nfs" ];
+      };
+    };
 
     hardware.enableRedistributableFirmware = true;
 
