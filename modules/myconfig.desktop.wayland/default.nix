@@ -159,6 +159,7 @@ in {
       };
     })
     ./sharescreen.nix
+    ./programs.waybar
   ];
 
   config = (lib.mkIf cfg.desktop.wayland.enable {
@@ -182,7 +183,6 @@ in {
     home-manager.sharedModules = [
       ./home-manager.kanshi.nix
       ./home-manager.mako.nix
-      ./home-manager.waybar
       ./home-manager.foot.nix
       {
         home.packages = cfg.desktop.wayland.commonPackages;
