@@ -64,38 +64,20 @@
       inputs.hyprland.follows = "hyprland";
     };
 
+    awatcher-src.url = "github:2e3s/awatcher";
+    awatcher-src.flake = false;
+
+    river-src.url = "git+https://github.com/riverwm/river?submodules=1";
+    river-src.flake = false;
+    rivercarro-src.url = "git+https://git.sr.ht/~novakane/rivercarro?submodules=1";
+    rivercarro-src.flake = false;
+    
+
     mydwl.url = "github:maxhbr/mydwl";
     mydwl.inputs.nixpkgs.follows = "nixpkgs";
 
     myphoto.url = "github:maxhbr/myphoto";
     myphoto.inputs.nixpkgs.follows = "nixpkgs";
-
-    ############################################################################
-    ## begin fish
-    #fasd.url = "github:oh-my-fish/plugin-fasd";
-    #fasd.flake = false;
-    #foreign-env.url = "github:oh-my-fish/plugin-foreign-env";
-    #foreign-env.flake = false;
-    #tmux.url = "github:oh-my-fish/plugin-tmux";
-    #tmux.flake = false;
-    #z.url = "github:jethrokuan/z";
-    #z.flake = false;
-    #fzf.url = "github:jethrokuan/fzf";
-    #fzf.flake = false;
-    #done.url = "github:franciscolourenco/done";
-    #done.flake = false;
-    #fish-async-prompt.url = "github:acomagu/fish-async-prompt";
-    #fish-async-prompt.flake = false;
-    #fish-ssh-agent.url = "github:danhper/fish-ssh-agent";
-    #fish-ssh-agent.flake = false;
-    ## sashimi.url = "github:isacikgoz/sashimi";
-    ## sashimi.flake = false;
-    #agnoster.url = "github:hauleth/agnoster";
-    #agnoster.flake = false;
-    #bax.url = "github:jorgebucaran/bax.fish";
-    #bax.flake = false;
-    ## end fish
-    ############################################################################
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
