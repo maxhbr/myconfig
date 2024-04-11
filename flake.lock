@@ -346,11 +346,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1712822419,
-        "narHash": "sha256-aFLFG8XlhYKd8niAFazeEO12dklQlmR4244URs1/NDA=",
+        "lastModified": 1712823088,
+        "narHash": "sha256-+a0gkGn1tanKzRSAyPPx6GpR0lModZ9Kpg62JLEMDD8=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "2ceccc9b709087f03b8098b4c054c02f5c78e23f",
+        "rev": "873bbd66c28f6a8de76d78c574fcbbe376961592",
         "type": "github"
       },
       "original": {
@@ -807,6 +807,42 @@
         "type": "github"
       }
     },
+    "river-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1712665127,
+        "narHash": "sha256-uACc9Cb1tSw3I0fMlEMX74NfU+Tg3It74tb+nc51AZ4=",
+        "ref": "refs/heads/master",
+        "rev": "14e941bae16b1ca478c32198c131c4297157f888",
+        "revCount": 1238,
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/riverwm/river"
+      },
+      "original": {
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/riverwm/river"
+      }
+    },
+    "rivercarro-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1712481244,
+        "narHash": "sha256-8e1VNWDeXejpgafK5oLWo+SwcTMgl0JerW91jAHmoac=",
+        "ref": "refs/heads/main",
+        "rev": "0aa0fccf8b77832ad3456de45737779647132711",
+        "revCount": 81,
+        "submodules": true,
+        "type": "git",
+        "url": "https://git.sr.ht/~novakane/rivercarro"
+      },
+      "original": {
+        "submodules": true,
+        "type": "git",
+        "url": "https://git.sr.ht/~novakane/rivercarro"
+      }
+    },
     "root": {
       "inputs": {
         "awatcher-src": "awatcher-src",
@@ -836,6 +872,8 @@
         "rel2211": "rel2211",
         "rel2305": "rel2305",
         "rel2311": "rel2311",
+        "river-src": "river-src",
+        "rivercarro-src": "rivercarro-src",
         "zephyr-flake": "zephyr-flake"
       }
     },
