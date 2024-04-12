@@ -31,6 +31,9 @@ let
     # selection-foreground=eeeeee
     # selection-background=0087af
   '';
+  footclient = if config.programs.foot.server.enable
+               then "${config.programs.foot.package}/bin/footclient"
+               else "${config.programs.foot.package}/bin/foot";
 in {
   config = (lib.mkIf config.programs.foot.enable {
     programs.foot = {
@@ -47,7 +50,7 @@ in {
     home.packages = with pkgs;
       [
         (writeShellScriptBin "tfoot" ''
-          exec ${foot}/bin/foot ${tmux}/bin/tmux
+          exec ${footclient} ${tmux}/bin/tmux
         '')
         (let
           tmux-scratch = writeShellScriptBin "tmux-scratch" ''
@@ -57,7 +60,7 @@ in {
             tmux attach-session -t $NAME
           '';
         in writeShellScriptBin "foot-scratch" ''
-          exec ${foot}/bin/foot \
+          exec ${footclient} \
             -T tmux-scratch \
             -a tmux-scratch \
             ${tmux-scratch}/bin/tmux-scratch
@@ -68,13 +71,13 @@ in {
               cut -f 1 -d ":" |
               while read SESSION; do
                   (set -x;
-                  ${foot}/bin/foot ${tmux}/bin/tmux attach -t "$SESSION" & disown)
+                  ${footclient} ${tmux}/bin/tmux attach -t "$SESSION" & disown)
               done
         '')
       ] ++ (let
         mkFootTuiCmd = cmd: package:
           (writeShellScriptBin "foot-${cmd}" ''
-            exec ${foot}/bin/foot \
+            exec ${footclient} \
               -T foot-${cmd} \
               -a foot-${cmd} \
               ${package}/bin/${cmd}

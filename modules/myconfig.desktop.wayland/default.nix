@@ -62,9 +62,6 @@ in {
             wev # Wayland event viewer
             qt5.qtwayland
           ] ++ [ wayvnc ];
-        # defaultText = literalExpression ''
-        #   with pkgs; [ ];
-        # '';
         example = literalExpression ''
           with pkgs; [ ]
         '';

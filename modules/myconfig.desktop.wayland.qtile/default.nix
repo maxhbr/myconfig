@@ -78,7 +78,6 @@ in {
       }];
 
       services.xserver.windowManager.qtile.package = qtilePackage;
-      services.xserver.displayManager.sessionPackages = [ qtilePackage ];
       myconfig.desktop.wayland.greetdSettings = {
         qtile_session = {
           command = "${startQtile}/bin/start-qtile";
