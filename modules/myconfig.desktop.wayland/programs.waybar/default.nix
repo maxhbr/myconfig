@@ -34,9 +34,9 @@
           position = "top";
           height = 25;
           spacing = 4;
-          modules-left = [
-          ];
-          modules-center = [
+      modules-left = [
+      ];
+      modules-center = [
         # "wlr/taskbar"
         # "group/hardware"
         "idle_inhibitor"
@@ -44,8 +44,9 @@
         "custom/platform_profile"
         "custom/test_for_missing_tb_changing"
         # "custom/audio_idle_inhibitor"
+        "clock#time"
+        "clock#date"
         "tray"
-        "clock"
       ];
       modules-right = [
         "pulseaudio"
@@ -61,100 +62,104 @@
       #   "modules" = [ "cpu" "memory" ];
       # };
       tray = { spacing = 10; };
-      clock = {
-        format = "{:<b>%H:<big>%M</big></b> <sub>%Y</sub>-%m-%d}";
+      "clock#time" = {
+        format = "<big>{:%H:%M<sub>:%S</sub>}</big>";
+        interval = 1;
+        tooltip = false;
+      };
+      "clock#date" = {
+        # format = "<sub>{:%Y-%m-%d}</sub>";
+        format = "{:%e\n<sub>%b</sub>}";
+        interval = 60;
+        tooltip = false;
+      };
+      cpu = {
+        format = "cpu: {usage}%";
+        tooltip = false;
+        on-click = "foot-htop";
+      };
+      "wlr/taskbar" = {
+        format = "{icon}";
+        icon-size = 14;
+        icon-theme = "Numix-Circle";
         tooltip-format = ''
-          <big>{:%Y %B}</big>
-          <tt><small>{calendar}</small></tt>'';
-          format-alt = "{:%H:%M<sub>:%S</sub>}";
-          interval = 1;
+          {title}
+          {name}
+          {short_state}'';
+        on-click = "activate";
+        on-click-middle = "close";
+        ignore-list = [ "Alacritty" "Foot" "foot" "tfoot" ];
+        app_ids-mapping = {
+          "firefoxdeveloperedition" = "firefox-developer-edition";
         };
-        cpu = {
-          format = "cpu: {usage}%";
-          tooltip = false;
-          on-click = "foot-htop";
+      };
+      "custom/platform_profile" = {
+        format = "{}";
+        exec = (pkgs.writeShellScriptBin "getPlatformProfile" ''
+          profile="$(cat /sys/firmware/acpi/platform_profile)"
+          cat <<EOF
+          {"text":"$profile","class":"$profile"}
+          EOF
+        '') + "/bin/getPlatformProfile";
+        exec-if =
+          "! grep -q performance /sys/firmware/acpi/platform_profile";
+        return-type = "json";
+        interval = 5;
+      };
+      "custom/isvpn" = {
+        format = "{}";
+        exec = (pkgs.writeShellScriptBin "isvpn" ''
+          if ${pkgs.nettools}/bin/ifconfig tun0 &> /dev/null; then
+          cat <<EOF
+          {"text":"VPN","class":"warning"}
+          EOF
+          fi
+        '') + "/bin/isvpn";
+        return-type = "json";
+        interval = 30;
+      };
+      "custom/test_for_missing_tb_changing" = {
+        format = "{}";
+        exec = (pkgs.writeShellScriptBin "test_for_missing_tb_changing" ''
+          if ${pkgs.bolt}/bin/boltctl list | ${pkgs.gnugrep}/bin/grep "status" | ${pkgs.gnugrep}/bin/grep -q -v "disconnected"; then
+          if ${pkgs.acpi}/bin/acpi -a | ${pkgs.gnugrep}/bin/grep -q "off-line"; then
+            cat <<EOF
+          {"text":"not-charging","class":"error"}
+          EOF
+           exit 0
+          fi
+          fi
+        '') + "/bin/test_for_missing_tb_changing";
+        return-type = "json";
+        interval = 60;
+      };
+      memory = { format = "ram: {}%"; };
+      backlight = {
+        format = "{percent}% {icon}";
+        format-icons = [ "" "" "" "" "" "" "" "" "" ];
+        on-scroll-up = "${pkgs.light}/bin/light -A 5";
+        on-scroll-down = "${pkgs.light}/bin/light -U 5";
+      };
+      battery = {
+        states = {
+          warning = 40;
+          critical = 20;
         };
-        "wlr/taskbar" = {
-          format = "{icon}";
-          icon-size = 14;
-          icon-theme = "Numix-Circle";
-          tooltip-format = ''
-            {title}
-            {name}
-            {short_state}'';
-            on-click = "activate";
-            on-click-middle = "close";
-            ignore-list = [ "Alacritty" "Foot" "foot" "tfoot" ];
-            app_ids-mapping = {
-              "firefoxdeveloperedition" = "firefox-developer-edition";
-            };
-          };
-          "custom/platform_profile" = {
-            format = "{}";
-            exec = (pkgs.writeShellScriptBin "getPlatformProfile" ''
-              profile="$(cat /sys/firmware/acpi/platform_profile)"
-              cat <<EOF
-              {"text":"$profile","class":"$profile"}
-              EOF
-            '') + "/bin/getPlatformProfile";
-            exec-if =
-              "! grep -q performance /sys/firmware/acpi/platform_profile";
-              return-type = "json";
-              interval = 5;
-            };
-            "custom/isvpn" = {
-              format = "{}";
-              exec = (pkgs.writeShellScriptBin "isvpn" ''
-                if ${pkgs.nettools}/bin/ifconfig tun0 &> /dev/null; then
-                cat <<EOF
-                {"text":"VPN","class":"warning"}
-                EOF
-                fi
-              '') + "/bin/isvpn";
-              return-type = "json";
-              interval = 30;
-            };
-            "custom/test_for_missing_tb_changing" = {
-              format = "{}";
-              exec = (pkgs.writeShellScriptBin "test_for_missing_tb_changing" ''
-                if ${pkgs.bolt}/bin/boltctl list | ${pkgs.gnugrep}/bin/grep "status" | ${pkgs.gnugrep}/bin/grep -q -v "disconnected"; then
-                if ${pkgs.acpi}/bin/acpi -a | ${pkgs.gnugrep}/bin/grep -q "off-line"; then
-                  cat <<EOF
-                {"text":"not-charging","class":"error"}
-                EOF
-                 exit 0
-                fi
-                fi
-              '') + "/bin/test_for_missing_tb_changing";
-              return-type = "json";
-              interval = 60;
-            };
-            memory = { format = "ram: {}%"; };
-            backlight = {
-              format = "{percent}% {icon}";
-              format-icons = [ "" "" "" "" "" "" "" "" "" ];
-              on-scroll-up = "${pkgs.light}/bin/light -A 5";
-              on-scroll-down = "${pkgs.light}/bin/light -U 5";
-            };
-            battery = {
-              states = {
-                warning = 40;
-                critical = 20;
-              };
-              format = "{capacity}% {icon}";
-              format-charging = "{capacity}% ";
-              format-plugged = "{capacity}% ";
-              format-alt = "{time} {icon}";
-              format-icons = [ "" "" "" "" "" ];
-            };
-            network = {
-              format-wifi = "{essid} ({signalStrength}%) ";
-              format-ethernet = "{ifname} ";
-              tooltip-format = ''
-                {ifname} via {gwaddr} 
-                {ipaddr}/{cidr}'';
-                format-linked = "{ifname} (No IP) ";
-                format-disconnected = "Disconnected ⚠";
+        format = "{capacity}% {icon}";
+        format-charging = "{capacity}% ";
+        format-plugged = "{capacity}% ";
+        format-alt = "{time} {icon}";
+        format-icons = [ "" "" "" "" "" ];
+        # format-icons = ["\uf244" "\uf243" "\uf242" "\uf241" "\uf240"];
+      };
+      network = {
+        format-wifi = "{essid} ({signalStrength}%) ";
+        format-ethernet = "{ifname} ";
+        tooltip-format = ''
+          {ifname} via {gwaddr} 
+          {ipaddr}/{cidr}'';
+        format-linked = "{ifname} (No IP) ";
+        format-disconnected = "Disconnected ⚠";
         # format-alt = "{ifname}: {ipaddr}/{cidr}";
         on-click = "foot-nmtui";
       };
@@ -223,6 +228,8 @@
             "custom/audio_idle_inhibitor".rotate = 90;
             tray.rotate = 90;
             clock.rotate = 90;
+            "clock#time".rotate = 90;
+            # "clock#date".rotate = 90;
           };
         };
         style = builtins.readFile ./waybar.gtk.css;

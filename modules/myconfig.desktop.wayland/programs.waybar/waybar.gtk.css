@@ -158,7 +158,7 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 #tray {
     background: rgba(43, 48, 59, 0.5);
 }
-#clock{
+#tray{
   padding: 15px 0;
 
   border-bottom: 2px solid #e0cbc7;
