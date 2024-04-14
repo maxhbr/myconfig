@@ -5,9 +5,11 @@ let
   cfg = config.myconfig;
   user = myconfig.user;
   debug = false;
+  # legacyRenderer is true if hostname is "workstation"
+  legacyRenderer = config.networking.hostName == "workstation";
   hyprlandPkg = if debug
-    then inputs.hyprland.packages.${pkgs.system}.hyprland.override { inherit debug; }
-    else inputs.hyprland.packages.${pkgs.system}.hyprland;
+    then inputs.hyprland.packages.${pkgs.system}.hyprland.override { inherit legacyRenderer debug; }
+    else inputs.hyprland.packages.${pkgs.system}.hyprland.override { inherit legacyRenderer; };
 in {
   options.myconfig = with lib; {
     desktop.wayland.hyprland = { enable = mkEnableOption "hyprland"; };
@@ -44,11 +46,8 @@ in {
           hyprpaper
           hyprnome
           hyprpicker
-        ] ++ hyprctl-scripts;
-        # xdg.configFile."hypr/hyprpaper.conf".text = ''
-        #   preload = 
-        #   wallpaper = ${pkgs.hyprland}/share/backgrounds/hyprland.png
-        # '';
+        ] ++ hyprctl-scripts
+          ++ (if debug then [kitty] else []);
         wayland.windowManager.hyprland = {
           enable = true;
           package = hyprlandPkg;
