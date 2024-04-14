@@ -61,7 +61,7 @@ in {
             gammastep
             wev # Wayland event viewer
             qt5.qtwayland
-          ] ++ [ wayvnc ];
+          ] ++ [ wayvnc waypipe ];
         example = literalExpression ''
           with pkgs; [ ]
         '';
