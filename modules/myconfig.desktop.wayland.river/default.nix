@@ -102,7 +102,7 @@ in {
                 # "river/mode"
                 "river/tags"
               ];
-            modules-center = [ "river/window" ];
+            # modules-center = [ "river/window" ];
             "river/tags" = {
               tag-labels = [ "U" "I" "A" "E" "O" "S" "N" "R" "T" ];
             };

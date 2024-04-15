@@ -46,16 +46,15 @@
         # "custom/audio_idle_inhibitor"
         "clock#time"
         "clock#date"
-        "tray"
       ];
       modules-right = [
         "pulseaudio"
-        "bluetooth"
         "backlight"
         "custom/isvpn"
         "network"
         "cpu"
         # "memory"
+        "tray"
       ];
       # "group/hardware" = {
       #   "orientation" = "vertical";

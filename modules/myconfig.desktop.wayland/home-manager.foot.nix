@@ -37,7 +37,7 @@ let
 in {
   config = (lib.mkIf config.programs.foot.enable {
     programs.foot = {
-      server.enable = true;
+      server.enable = false; # footclient fails to find comands like grep
       settings = {
         main = {
           font = "monospace:size=10";
