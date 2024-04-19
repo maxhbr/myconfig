@@ -35,7 +35,7 @@
 
   (add-hook 'mu4e-compose-mode-hook 'flyspell-mode)
   ;; PGP-Sign all e-mails
-  ;; (add-hook 'message-send-hook 'mml-secure-message-sign-pgpmime)
+  (add-hook 'message-send-hook 'mml-secure-message-sign-pgpmime)
   (setq mu4e-maildir "~/Maildir/"
         mu4e-get-mail-command "mbsync -a"
         mu4e-attachment-dir  "~/Downloads"
