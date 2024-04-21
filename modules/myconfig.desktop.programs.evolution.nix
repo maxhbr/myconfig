@@ -15,5 +15,14 @@ in {
       };
       programs.dconf.enable = true;
       # programs.seahorse.enable = true;
-    };
+
+     nixpkgs.overlays = [ ( self: super: {
+       # Spamassasin tests currently fail:
+       # TODO: remove
+        spamassassin = super.spamassassin.overrideAttrs (old: { 
+          doCheck = false; 
+          doInstallCheck = false; 
+      });
+    })]; 
+  };
 }

@@ -23,7 +23,6 @@ in {
     nixpkgs.overlays = map (n: import n) [
       # ./idea-ultimate
     ];
-    programs.evolution.enable = true;
     home-manager.sharedModules = [{
       imports = [
         # {

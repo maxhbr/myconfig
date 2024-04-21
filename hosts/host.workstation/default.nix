@@ -8,33 +8,8 @@
     ../../hardware/btrfs.nix
     ../../hardware/nixos-hardware/common/cpu/amd
     ../../hardware/nixos-hardware/common/pc/ssd
-    ../../hardware/hdd-spinndown.nix
     ../../hardware/steamcontroller.nix
     (myconfig.metadatalib.fixIp "enp4s0")
-    (myconfig.metadatalib.setupAsBuildMachine [
-      myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
-      myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_ed25519.pub"
-      myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
-    ])
-    {
-      services.vsftpd = {
-        enable = true;
-      };
-    }
-    # other profiles
-    ./gaming
-    # testing
-    # {
-    #   environment.systemPackages = with pkgs; [ x11vnc ];
-    #   ## Setup via ssh tunnel:
-    #   # $ ssh -t -L 5900:localhost:5900 $IP 'x11vnc -ncache 10 -unixpw -localhost -display :0'
-    #   ## in other terminal:
-    #   # $ vncviewer -encodings 'copyrect tight zrle hextile' localhost:0
-
-    #   ## or open ports
-    #   # networking.firewall.allowedUDPPorts = [ 5900 ];
-    #   # networking.firewall.allowedTCPPorts = [ 5900 ];
-    # }
     ( # wol
       let interface = "enp4s0";
       in {
@@ -66,10 +41,22 @@
           };
         };
       })
+    (myconfig.metadatalib.setupAsBuildMachine [
+      myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
+      myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_ed25519.pub"
+      myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
+    ])
     {
-      networking.firewall.allowedUDPPorts = [ 60001 ];
-      programs.mosh.enable = true;
+      services.vsftpd = {
+        enable = true;
+      };
     }
+    # other profiles
+    ./gaming
+    # {
+    #   networking.firewall.allowedUDPPorts = [ 60001 ];
+    #   programs.mosh.enable = true;
+    # }
     # {
     #   services.nfs.server = {
     #     enable = true;
@@ -100,23 +87,9 @@
         wayland = {
           enable = true;
           desktop = "hyprland";
-          # dwl.enable = true;
           hyprland.enable = true;
           labwc.enable = true;
           river.enable = true;
-          # gnome.enable = true; # konflicts with sway
-
-          #disabled:
-          # sway.enable = true;
-          #experimental:
-          # wayfire.enable = true;
-          # qtile.enable = true;
-          # vivarium.enable = true;
-          #bloated:
-          # kde.enable = true;
-          #dead or buggy:
-          # hikari.enable = true;
-          # newm.enable = true;
         };
         myphoto.enable = true;
         obs.enable = true;
@@ -129,11 +102,6 @@
         network.enable = true;
       };
     };
-    #services.xserver = {
-    #  desktopManager.plasma5.enable = true;
-    #  desktopManager.xterm.enable = false;
-    #  # displayManager.sddm.enable = true;
-    #};
 
     #virtualisation.docker.enable = true;
     #virtualisation.podman.enable = true;
@@ -142,12 +110,6 @@
     services.physlock.enable = true;
 
     programs.dconf.enable = true;
-
-    #boot.kernelPackages =
-    #  # lib.mkForce pkgs.unstable.linuxPackages_testing;
-    #  # lib.mkForce pkgs.linuxPackages_testing;
-    #  # lib.mkForce pkgs.unstable.linuxPackages_latest;
-    #  lib.mkForce pkgs.linuxPackages_latest;
 
     services.logind.extraConfig = ''
       HandlePowerKey=suspend
@@ -171,12 +133,6 @@
 
     boot.initrd.supportedFilesystems = [ "luks" "btrfs" ];
     boot.binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];
-
-    fileSystems."/mnt/2tb-1" = {
-      device = "/dev/disk/by-uuid/51d362d8-5b73-4b92-84c3-9ff260062da6";
-      fsType = "ext4";
-      options = ["nofail"];
-    };
 
     # This value determines the NixOS release from which the default
     # settings for stateful data, like file locations and database versions

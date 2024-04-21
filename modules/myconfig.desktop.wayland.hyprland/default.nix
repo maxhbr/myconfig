@@ -5,14 +5,19 @@ let
   cfg = config.myconfig;
   user = myconfig.user;
   debug = false;
-  # legacyRenderer is true if hostname is "workstation"
-  legacyRenderer = config.networking.hostName == "workstation";
-  hyprlandPkg = if debug
-    then inputs.hyprland.packages.${pkgs.system}.hyprland.override { inherit legacyRenderer debug; }
-    else inputs.hyprland.packages.${pkgs.system}.hyprland.override { inherit legacyRenderer; };
+  hyprlandPkg = inputs.hyprland.packages.${pkgs.system}.hyprland.override { 
+    inherit debug;
+    legacyRenderer = cfg.desktop.wayland.hyprland.legacyRenderer;
+  };
 in {
   options.myconfig = with lib; {
-    desktop.wayland.hyprland = { enable = mkEnableOption "hyprland"; };
+    desktop.wayland.hyprland = { 
+      enable = mkEnableOption "hyprland";
+      legacyRenderer = mkOption {
+        type = types.bool;
+        default = false;
+      };
+    };
   };
   imports = [
     {
