@@ -1,8 +1,9 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }: {
+{ pkgs, config, lib, inputs, ... }: {
   imports = [
     ./hardware-configuration.nix
+    inputs.nixos-hardware.nixosModules.lenovo-thinkpad-x1-extreme-gen2
     ./myconfig-master
     # hardware:
     ./x1extremeG2.nix

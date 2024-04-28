@@ -1,6 +1,7 @@
-{ lib, pkgs, ... }: {
+{ lib, pkgs, inputs, ... }: {
   imports = [
     ./hardware-configuration.nix
+    inputs.nixos-hardware.nixosModules.raspberry-pi-4
     {
       environment.systemPackages = with pkgs; [ x11vnc ];
       ## Setup via ssh tunnel:

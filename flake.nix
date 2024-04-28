@@ -225,7 +225,6 @@
           (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
             { config = { hardware.enableRedistributableFirmware = true; }; }
             self.nixosModules.core
-            inputs.nixos-hardware.nixosModules.lenovo-thinkpad-x1-extreme-gen2
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "workstation" ([
@@ -243,7 +242,6 @@
         host-pi4 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "aarch64-linux" "pi4" ([
             self.nixosModules.core
-            inputs.nixos-hardware.nixosModules.raspberry-pi-4
           ] ++ moreModules) metadataOverride);
         host-pi3a = moreModules: metadataOverride:
           (self.lib.evalConfiguration "aarch64-linux" "pi3a"
