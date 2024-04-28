@@ -1,8 +1,14 @@
 # Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, ... }: {
+{ config, pkgs, lib, myconfig, inputs, ... }: {
   imports = [
     ./hardware-configuration.nix
+    inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
+    # inputs.nixos-hardware.nixosModules.common-gpu-intel # this also imports common-gpu-intel
+    inputs.nixos-hardware.nixosModules.common-pc-laptop
+    inputs.nixos-hardware.nixosModules.common-pc-laptop-acpi_call
+    inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
+    inputs.nixos-hardware.nixosModules.lenovo-thinkpad
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
     ../../hardware/footswitch.nix

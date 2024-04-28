@@ -208,12 +208,6 @@
         host-p14 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "p14" ([
             self.nixosModules.core
-            inputs.nixos-hardware.nixosModules.common-cpu-intel
-            inputs.nixos-hardware.nixosModules.common-gpu-intel
-            inputs.nixos-hardware.nixosModules.common-pc-laptop
-            inputs.nixos-hardware.nixosModules.common-pc-laptop-acpi_call
-            inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
-            inputs.nixos-hardware.nixosModules.lenovo-thinkpad
             ({ myconfig, ... }: {
               imports = [
                 (myconfig.metadatalib.announceHost "x1extremeG2")
