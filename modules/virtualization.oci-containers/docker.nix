@@ -53,8 +53,14 @@ in {
     systemd.services.docker.restartIfChanged = lib.mkForce false;
     virtualisation.docker = {
       extraOptions = "--data-root /home/docker";
-      storageDriver = "overlay2";
+      storageDriver = if config.fileSystems."/".fsType == "btrfs"
+                      then "btrfs"
+                      else "overlay2"; # 'overlay2' for systemd; 'btrfs' for btrfs ; etc.
       # socketActivation = false;
+      rootless = {
+        enable = true;
+        setSocketVariable = true; # Set DOCKER\_HOST for rootless Docker
+      };
       autoPrune.enable = true;
     };
   };

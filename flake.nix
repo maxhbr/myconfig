@@ -87,7 +87,7 @@
         allowUnfree = true;
         allowUnfreePredicate = (pkg: true);
         segger-jlink.acceptLicense = true;
-        allowBroken = true;
+        allowBroken = false;
       };
     in lib.recursiveUpdate {
       aggregatedInputs = inputs;
@@ -297,24 +297,26 @@
       eachDefaultSystem =
         inputs.flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ];
     in eachDefaultSystem (system: {
-      legacyPackages = import inputs.nixpkgs {
-        inherit system;
-        config = nixpkgsConfig;
-      };
+      # legacyPackages = import inputs.nixpkgs {
+      #   inherit system;
+      #   config = nixpkgsConfig;
+      # };
 
       # might be overwritten in priv
-      packages.myconfig-iso = self.lib.mkISO {
-        inherit system;
-        hostName = "iso";
-        nixosModules = [ self.nixosModules.core ];
-        metadataOverride = { };
-        bootstrappedConfig = null;
-      };
+      packages = {
+        myconfig-iso = self.lib.mkISO {
+          inherit system;
+          hostName = "iso";
+          nixosModules = [ self.nixosModules.core ];
+          metadataOverride = { };
+          bootstrappedConfig = null;
+        };
 
-      packages.pi4-sd-image =
-        inputs.self.nixosConfigurations.pi4.config.system.build.sdImage;
-      packages.pi3a-sd-image =
-        inputs.self.nixosConfigurations.pi3a.config.system.build.sdImage;
+        pi4-sd-image =
+          inputs.self.nixosConfigurations.pi4.config.system.build.sdImage;
+        pi3a-sd-image =
+          inputs.self.nixosConfigurations.pi3a.config.system.build.sdImage;
+      };
 
       devShell = let
         pkgs = import inputs.nixpkgs {

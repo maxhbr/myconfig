@@ -94,6 +94,7 @@
         myphoto.enable = true;
         obs.enable = true;
       };
+      ai.enable = true;
       headless.enable = true;
       # virtualisation.gpuPassthroughHost.enable = true;
       dev = {

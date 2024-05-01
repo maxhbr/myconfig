@@ -341,7 +341,7 @@ in rec {
 
   mkConfiguration = system: hostName: nixosModules: metadataOverride:
     let
-      pkgs = self.legacyPackages.${system};
+      # pkgs = self.legacyPackages.${system};
 
       specialArgs = {
         inherit inputs;
@@ -352,12 +352,13 @@ in rec {
         flake = self;
 
         modules = nixosModules ++ [
-          ({ config, ... }: {
+          { _module.args = inputs;}
+          ({ config, pkgs, ... }: {
             config = {
-              nixpkgs = {
-                # inherit pkgs;
-                inherit (pkgs) config system;
-              };
+              # nixpkgs = {
+              #   # inherit pkgs;
+              #   inherit (pkgs) config system;
+              # };
               environment.etc."myconfig".source = lib.cleanSource ./.;
               environment.etc."myconfig.current-system-packages".text = let
                 packages = builtins.map (p: "${p.name}")
@@ -408,7 +409,7 @@ in rec {
           { _module.args = specialArgs; }
         ];
 
-        extraModules = [{
+        extraModules = [({pkgs, ...}: {
           nix.package = lib.mkDefault pkgs.nixVersions.stable;
           # ca-references
           nix.extraOptions = ''
@@ -433,7 +434,7 @@ in rec {
             home-manager = "${inputs.home}/";
           };
           system.configurationRevision = self.rev or "dirty";
-        }];
+        })];
       };
     in {
       inherit system specialArgs;
