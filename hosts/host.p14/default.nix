@@ -144,7 +144,7 @@
       {
         home.packages = with pkgs;
           [
-            nvtop-intel
+            nvtopPackages.intel
             google-chrome # for netflix
           ];
         programs.zsh.shellAliases = {
