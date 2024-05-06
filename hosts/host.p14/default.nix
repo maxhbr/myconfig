@@ -107,7 +107,6 @@
         cad.enable = true;
         deskreen.enable = true;
       };
-      ai.enable = true;
       email.enable = true;
       virtualisation.enable = true;
       editor.emacs.enable = true;

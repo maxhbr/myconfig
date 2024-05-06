@@ -9,6 +9,19 @@
     ../../hardware/nixos-hardware/common/cpu/amd
     ../../hardware/nixos-hardware/common/pc/ssd
     ../../hardware/steamcontroller.nix
+    ({...}: {
+      config = {
+        services.ollama = {
+          enable = true;
+          # listenAddress = "0.0.0.0:11434";
+          acceleration = "rocm";
+          # environmentVariables = {
+          #   OLLAMA_LLM_LIBRARY = "cpu";
+          #   HIP_VISIBLE_DEVICES = "0,1";
+          # };
+        };
+      };
+    })
     (myconfig.metadatalib.fixIp "enp4s0")
     ( # wol
       let interface = "enp4s0";
@@ -53,25 +66,6 @@
     }
     # other profiles
     ./gaming
-    # {
-    #   networking.firewall.allowedUDPPorts = [ 60001 ];
-    #   programs.mosh.enable = true;
-    # }
-    # {
-    #   services.nfs.server = {
-    #     enable = true;
-    #     exports = ''
-    #       /nfs       192.168.1.0/24(rw,fsid=0,insecure,no_subtree_check,crossmnt,fsid=0)
-    #       /nfs/data  192.168.1.0/24(rw,nohide,insecure,no_subtree_check)
-    #       /nfs/guest 192.168.1.0/24(rw,nohide,insecure,no_subtree_check)
-    #     '';
-    #     statdPort = 4000;
-    #     lockdPort = 4001;
-    #   };
-    #   networking.firewall.allowedTCPPorts = [ 2049 111 4000 4001 ];
-    #   networking.firewall.allowedUDPPorts = [ 2049 111 4000 4001 ];
-    # }
-
   ]; # ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.5") ]);
 
   config = {
@@ -80,10 +74,6 @@
     myconfig = {
       desktop = {
         enable = true;
-        # xserver = {
-        #   enable = true;
-        #   xmonad.enable = true;
-        # };
         wayland = {
           enable = true;
           desktop = "hyprland";
@@ -94,7 +84,6 @@
         myphoto.enable = true;
         obs.enable = true;
       };
-      ai.enable = true;
       headless.enable = true;
       # virtualisation.gpuPassthroughHost.enable = true;
       dev = {
@@ -104,9 +93,14 @@
       };
     };
 
-    virtualisation.docker.enable = true;
-    virtualisation.podman.enable = true;
-    #virtualisation.virtualbox.host.enable = true;
+    virtualisation = {
+      docker.enable = true;
+      podman.enable = true;
+      oci-containers = {
+        backend = "podman";
+      };
+      #virtualbox.host.enable = true;
+    };
 
     services.physlock.enable = true;
 
