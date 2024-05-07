@@ -5,6 +5,11 @@ let
   };
   inco = pkgs.writeShellScriptBin "inco.sh" ''
     set -e
+    if ${pkgs.networkmanager}/bin/nmcli connection show --active | grep " tun"; then
+      echo "found vpn, exit"
+      ${pkgs.libnotify}/bin/notify-send --expire-time=1000 --urgency="critical" --transient "!inco.sh" "found vpn"
+      exit 3
+    fi
     postfix=$(date +%s | sha256sum | base64 | head -c 32 ; echo)
     mkdir -p "/tmp/incoChrome_$postfix"
     ${chromium}/bin/chromium --incognito \
