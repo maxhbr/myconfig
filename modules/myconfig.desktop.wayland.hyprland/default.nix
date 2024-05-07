@@ -9,6 +9,20 @@ let
     inherit debug;
     legacyRenderer = cfg.desktop.wayland.hyprland.legacyRenderer;
   };
+  hyprnomePkg = pkgs.hyprnome.override (old: {
+    rustPlatform = old.rustPlatform // {
+      buildRustPackage = args: old.rustPlatform.buildRustPackage (args // {
+        version = "2024-05-07"; # currentl 0.2.0 is the latest released version
+        src = pkgs.fetchFromGitHub {
+          owner = "donovanglover";
+          repo = "hyprnome";
+          rev = "f185e6dbd7cfcb3ecc11471fab7d2be374bd5b28";
+          hash = "sha256-tmko/bnGdYOMTIGljJ6T8d76NPLkHAfae6P6G2Aa2Qo=";
+        };
+        cargoHash = "sha256-PKmOsep0YS5LHnrH4wlgeey7X/9szgGsp1uSbRI5sj4=";
+      });
+    };
+  });
 in {
   options.myconfig = with lib; {
     desktop.wayland.hyprland = { 
@@ -49,7 +63,7 @@ in {
         };
         home.packages = with pkgs; [ 
           hyprpaper
-          hyprnome
+          hyprnomePkg
           hyprpicker
         ] ++ hyprctl-scripts
           ++ (if debug then [kitty] else []);
@@ -91,8 +105,8 @@ in {
               # "persistent-workspaces" = {
               #   "*" = [ 1 2 3 4 5 6 7 8 9 10 ];
               # };
-              "on-scroll-up" = "${pkgs.hyprnome}/bin/hyprnome";
-              "on-scroll-down" = "${pkgs.hyprnome}/bin/hyprnome --previous";
+              "on-scroll-up" = "${hyprnomePkg}/bin/hyprnome";
+              "on-scroll-down" = "${hyprnomePkg}/bin/hyprnome --previous";
               "show-special" = true;
             };
             "hyprland/window" = {
