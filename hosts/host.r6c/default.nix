@@ -47,11 +47,11 @@
 
     myconfig = {
       desktop = {
-        enable = false;
+        enable = true;
         wayland = {
-          enable = false;
-          # desktop = "labwc";
-          # labwc.enable = true;
+          enable = true;
+          desktop = "hyprland";
+          hyprland.enable = true;
         };
       };
       desktop.full = false;
