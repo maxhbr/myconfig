@@ -218,6 +218,7 @@
                 (myconfig.metadatalib.announceHost "pi4")
                 (myconfig.metadatalib.announceHost "pi3a")
                 (myconfig.metadatalib.announceHost "pi0")
+                (myconfig.metadatalib.announceHost "r6c")
               ];
             })
           ] ++ moreModules) metadataOverride);

@@ -18,6 +18,17 @@
     ./mykeylight
     ./role.work
     ./programs.khal.nix
+    ({...}: {
+      config = {
+        services.ollama = {
+          enable = true;
+          # environmentVariables = {
+          #   OLLAMA_LLM_LIBRARY = "cpu";
+          #   HIP_VISIBLE_DEVICES = "0,1";
+          # };
+        };
+      };
+    })
     {
       services.openssh = {
         listenAddresses = [{
@@ -123,10 +134,14 @@
         # zephyr.enable = true;
       };
     };
-    virtualisation.docker.enable = true;
-    virtualisation.podman.enable = true;
-    virtualisation.libvirtd.enable = true;
-    virtualisation.virtualbox.host.enable = false;
+    virtualisation = {
+      docker.enable = true;
+      podman.enable = true;
+      oci-containers = {
+        backend = "podman";
+      };
+      virtualbox.host.enable = false;
+    };
 
     services.xserver.wacom.enable = true;
     services.xserver.digimend.enable = true;
@@ -143,7 +158,6 @@
       {
         home.packages = with pkgs;
           [
-            nvtopPackages.intel
             google-chrome # for netflix
           ];
         programs.zsh.shellAliases = {

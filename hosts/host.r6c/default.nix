@@ -7,34 +7,6 @@
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_ed25519.pub"
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
     ])
-    ({...}:  let
-      wlrLibinputNoDevices = "1"; 
-    in {
-      # environment.systemPackages = with pkgs; [ cage firefox ];
-      services.cage = lib.mkIf config.myconfig.desktop.wayland.enable {
-        enable = true;
-        user = "mhuber";
-        program = "${pkgs.firefox}/bin/firefox -kiosk -private-window https://github.com";
-        environment = {
-          WLR_LIBINPUT_NO_DEVICES = wlrLibinputNoDevices;
-        } // lib.optionalAttrs (config.environment.variables ? GDK_PIXBUF_MODULE_FILE) {
-          GDK_PIXBUF_MODULE_FILE = config.environment.variables.GDK_PIXBUF_MODULE_FILE;
-        };
-      };
-      # wait for network and DNS
-      systemd.services."cage-tty1" = {
-        environment.WLR_LIBINPUT_NO_DEVICES = wlrLibinputNoDevices;
-        after = [
-          "network-online.target"
-          "systemd-resolved.service"
-        ];
-      };
-    })
-    {
-      services.vsftpd = {
-        enable = true;
-      };
-    }
   ];
 
   config = {
@@ -52,12 +24,12 @@
           enable = true;
           desktop = "hyprland";
           hyprland.enable = true;
+          # cage.enable = true;
         };
       };
       desktop.full = false;
       headless.enable = true;
     };
-    services.greetd.enable = false;
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;
 
@@ -65,7 +37,7 @@
     networking.hostId = "ac8aad7a";
 
     networking.networkmanager.enable =
-      true; # Easiest to use and most distros use this by default.
+      true;
 
     services.vsftpd.enable = lib.mkForce false; # fails to build on arm
 
