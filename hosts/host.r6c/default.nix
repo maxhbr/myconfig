@@ -22,9 +22,10 @@
         enable = true;
         wayland = {
           enable = true;
-          desktop = "hyprland";
-          hyprland.enable = true;
-          # cage.enable = true;
+          sessions = ["niri" "river" "hyprland" "labwc"];
+          # desktop = "labwc";
+          # labwc.enable = true;
+          # # cage.enable = true;
         };
       };
       desktop.full = false;

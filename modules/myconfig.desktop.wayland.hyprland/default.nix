@@ -26,7 +26,6 @@ let
 in {
   options.myconfig = with lib; {
     desktop.wayland.hyprland = { 
-      enable = mkEnableOption "hyprland";
       legacyRenderer = mkOption {
         type = types.bool;
         default = false;
@@ -39,7 +38,7 @@ in {
     }
   ];
   config = (lib.mkIf
-    (cfg.desktop.wayland.enable && cfg.desktop.wayland.hyprland.enable) {
+    (cfg.desktop.wayland.enable && builtins.elem "hyprland" cfg.desktop.wayland.sessions) {
       home-manager.sharedModules = [({config, ...}: let
         hyprctl = "${config.wayland.windowManager.hyprland.package}/bin/hyprctl";
         hyprctl-scripts = with pkgs; [

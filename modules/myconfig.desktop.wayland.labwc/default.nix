@@ -10,7 +10,7 @@ in {
     desktop.wayland.labwc = { enable = mkEnableOption "labwc"; };
   };
   config =
-    (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.labwc.enable) {
+    (lib.mkIf (cfg.desktop.wayland.enable && builtins.elem "labwc" cfg.desktop.wayland.sessions) {
       home-manager.sharedModules = [{
         xdg.configFile = {
           "labwc/rc.xml" = {

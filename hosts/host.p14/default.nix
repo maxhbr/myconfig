@@ -93,24 +93,25 @@
         enable = true;
         wayland = {
           enable = true;
-          desktop = "hyprland";
-          # dwl.enable = true;
-          hyprland.enable = true;
-          labwc.enable = true;
-          river.enable = true;
-          # gnome.enable = true; # konflicts with sway
+          sessions = ["hyprland" "niri" "river" "labwc"];
+          #desktop = "hyprland";
+          ## dwl.enable = true;
+          #hyprland.enable = true;
+          #labwc.enable = true;
+          #river.enable = true;
+          ## gnome.enable = true; # konflicts with sway
 
-          #disabled:
-          # sway.enable = true;
-          #experimental:
-          # wayfire.enable = true;
-          # qtile.enable = true;
-          # vivarium.enable = true;
-          #bloated:
-          # kde.enable = true;
-          #dead or buggy:
-          # hikari.enable = true;
-          # newm.enable = true;
+          ##disabled:
+          ## sway.enable = true;
+          ##experimental:
+          ## wayfire.enable = true;
+          ## qtile.enable = true;
+          ## vivarium.enable = true;
+          ##bloated:
+          ## kde.enable = true;
+          ##dead or buggy:
+          ## hikari.enable = true;
+          ## newm.enable = true;
         };
         messengers.enable = true;
         myphoto.enable = true;
