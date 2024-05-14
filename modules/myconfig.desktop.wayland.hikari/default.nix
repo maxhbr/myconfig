@@ -7,7 +7,6 @@ let
 in {
   options.myconfig = with lib; {
     desktop.wayland.hikari = {
-      enable = mkEnableOption "hikari";
       settings = mkOption {
         type = types.attrs;
         default = { };
@@ -21,7 +20,7 @@ in {
     };
   };
   config = (lib.mkIf
-    (cfg.desktop.wayland.enable && cfg.desktop.wayland.hikari.enable) {
+    (cfg.desktop.wayland.enable && builtins.elem "hikari" cfg.desktop.wayland.sessions) {
       myconfig.desktop.wayland.hikari = {
         autostart = ''
           set -x

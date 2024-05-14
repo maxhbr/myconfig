@@ -71,7 +71,7 @@ in {
     desktop.wayland.river = { enable = mkEnableOption "river"; };
   };
   config =
-    (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.river.enable) {
+    (lib.mkIf (cfg.desktop.wayland.enable && builtins.elem "river" cfg.desktop.wayland.sessions) {
       home-manager.sharedModules = [
         ({ config, ... }: {
           xdg.configFile = {
