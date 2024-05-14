@@ -4,7 +4,26 @@
   imports = [
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
-    # inputs.nixos-hardware.nixosModules.common-gpu-intel
+    inputs.nixos-hardware.nixosModules.common-gpu-intel
+    {
+      # https://nixos.wiki/wiki/Intel_Graphics
+      #  getting the device ID with: $ nix-shell -p pciutils --run "lspci -nn | grep VGA"
+      boot.kernelParams = [ "i915.force_probe=46a6" ];
+
+      # https://nixos.wiki/wiki/Accelerated_Video_Playback
+        nixpkgs.config.packageOverrides = pkgs: {
+        intel-vaapi-driver = pkgs.intel-vaapi-driver.override { enableHybridCodec = true; };
+      };
+      hardware.opengl = {
+        enable = true;
+        extraPackages = with pkgs; [
+          intel-media-driver # LIBVA_DRIVER_NAME=iHD
+          intel-vaapi-driver # LIBVA_DRIVER_NAME=i965 (older but works better for Firefox/Chromium)
+          libvdpau-va-gl
+        ];
+      };
+      environment.sessionVariables = { LIBVA_DRIVER_NAME = "iHD"; }; # Force intel-media-driver
+    }
     inputs.nixos-hardware.nixosModules.common-pc-laptop
     inputs.nixos-hardware.nixosModules.common-pc-laptop-acpi_call
     inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
