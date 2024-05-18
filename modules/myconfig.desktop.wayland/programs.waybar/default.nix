@@ -136,8 +136,8 @@
       backlight = {
         format = "{percent}% {icon}";
         format-icons = [ "" "" "" "" "" "" "" "" "" ];
-        on-scroll-up = "${pkgs.light}/bin/light -A 5";
-        on-scroll-down = "${pkgs.light}/bin/light -U 5";
+        on-scroll-up = "${pkgs.light}/bin/light -A 1";
+        on-scroll-down = "${pkgs.light}/bin/light -U 1";
       };
       battery = {
         states = {
