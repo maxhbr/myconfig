@@ -19,8 +19,8 @@ in {
       };
     };
   };
-  config = (lib.mkIf
-    (cfg.desktop.wayland.enable && builtins.elem "hikari" cfg.desktop.wayland.sessions) {
+  config = (lib.mkIf (cfg.desktop.wayland.enable
+    && builtins.elem "hikari" cfg.desktop.wayland.sessions) {
       myconfig.desktop.wayland.hikari = {
         autostart = ''
           set -x

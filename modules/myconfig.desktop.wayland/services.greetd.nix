@@ -1,12 +1,13 @@
 { pkgs, config, lib, myconfig, ... }:
-let cfg = config.myconfig;
-    user = myconfig.user;
+let
+  cfg = config.myconfig;
+  user = myconfig.user;
 in {
   options.myconfig = with lib; {
     desktop.wayland = {
       sessions = mkOption {
         type = types.listOf types.str;
-        default = [];
+        default = [ ];
         description = lib.mdDoc ''
           List of greet desktop environments, fist will be default
         '';
@@ -61,30 +62,33 @@ in {
   ];
   config = let
     sessions = cfg.desktop.wayland.sessions;
-    cmd_for_session = session: cfg.desktop.wayland.greetdSettings."${session}_session".command;
-  in (lib.mkIf (cfg.desktop.wayland.enable && sessions != []) {
-      services.greetd = {
-        enable = true;
-        settings = {
-          default_session.command = "${pkgs.cage}/bin/cage -s  -- ${pkgs.greetd.gtkgreet}/bin/gtkgreet -l";
-          initial_session = {
-            command = cmd_for_session (lib.elemAt sessions 0);
-            user = "greeter";
-            # inherit user;
-          };
+    cmd_for_session = session:
+      cfg.desktop.wayland.greetdSettings."${session}_session".command;
+  in (lib.mkIf (cfg.desktop.wayland.enable && sessions != [ ]) {
+    services.greetd = {
+      enable = true;
+      settings = {
+        default_session.command =
+          "${pkgs.cage}/bin/cage -s  -- ${pkgs.greetd.gtkgreet}/bin/gtkgreet -l";
+        initial_session = {
+          command = cmd_for_session (lib.elemAt sessions 0);
+          user = "greeter";
+          # inherit user;
         };
       };
-      
-      environment.etc."greetd/environments".text =
-        lib.foldr (session: str: (cmd_for_session session) + "\n" + str) "fish" sessions;
+    };
 
-      home-manager.sharedModules = [{
-        home.packages = with pkgs;
-          [
-            (writeShellScriptBin "regreet"
-              "sudo systemctl restart greetd.service")
-          ];
-      }];
+    environment.etc."greetd/environments".text =
+      lib.foldr (session: str: (cmd_for_session session) + "\n" + str) "fish"
+      sessions;
+
+    home-manager.sharedModules = [{
+      home.packages = with pkgs;
+        [
+          (writeShellScriptBin "regreet"
+            "sudo systemctl restart greetd.service")
+        ];
+    }];
   });
 }
 

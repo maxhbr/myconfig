@@ -1,13 +1,10 @@
 # partially based on:
 # https://gist.github.com/dltacube/280c82b3426690558341a3ac3a71428d
-{ inputs, pkgs, config, lib, ... }:
-{
+{ inputs, pkgs, config, lib, ... }: {
   imports = [
     ({ ... }: {
       nixpkgs.overlays = [ inputs.emacs.overlay ];
-      home-manager.sharedModules = [ 
-        ./mu
-      ];
+      home-manager.sharedModules = [ ./mu ];
     })
   ];
   options.myconfig = with lib; {
@@ -21,7 +18,7 @@
             source = ./config.org;
             recursive = true;
             onChange = "${pkgs.writeShellScript "remove-emacs-config-el" ''
-            [[ -f ~/.emacs.d/config.el ]] && rm ~/.emacs.d/config.el
+              [[ -f ~/.emacs.d/config.el ]] && rm ~/.emacs.d/config.el
             ''}";
           };
           ".emacs.d/imports" = {
@@ -32,59 +29,60 @@
         programs.emacs = {
           enable = true;
           extraConfig = ''
-          ; prevent emacs from saving customizations to this file
-          (setq custom-file (concat user-emacs-directory ".emacs-customize.el"))
+            ; prevent emacs from saving customizations to this file
+            (setq custom-file (concat user-emacs-directory ".emacs-customize.el"))
 
-          (package-initialize)
-          (org-babel-load-file "~/.emacs.d/config.org")
-          (mapc 'load (file-expand-wildcards "~/.emacs.d/imports/*.el"))
+            (package-initialize)
+            (org-babel-load-file "~/.emacs.d/config.org")
+            (mapc 'load (file-expand-wildcards "~/.emacs.d/imports/*.el"))
           '';
-          extraPackages = epkgs: with epkgs; [
-            use-package
-            better-defaults
-            auto-compile
-            # exwm
-            evil
-            evil-leader
-            evil-collection
-            evil-surround
-            evil-nerd-commenter
-            general
-            which-key
+          extraPackages = epkgs:
+            with epkgs; [
+              use-package
+              better-defaults
+              auto-compile
+              # exwm
+              evil
+              evil-leader
+              evil-collection
+              evil-surround
+              evil-nerd-commenter
+              general
+              which-key
 
-            org
-            
-            magit
+              org
 
-            company
+              magit
 
-            projectile
+              company
 
-            nix-mode
+              projectile
 
-            copilot
+              nix-mode
 
-            dired-single
-            nerd-icons
-            all-the-icons
-            all-the-icons-dired
-            all-the-icons-ivy-rich
-            emojify
-            eshell-prompt-extras
-            vterm
-            multi-vterm
+              copilot
 
-            # User interface packages.
-            neotree
-            ivy
-            counsel
-            ivy-rich
-            ivy-posframe
-            ivy-prescient
-            desktop-environment
-            doom-themes
-            doom-modeline
-          ];
+              dired-single
+              nerd-icons
+              all-the-icons
+              all-the-icons-dired
+              all-the-icons-ivy-rich
+              emojify
+              eshell-prompt-extras
+              vterm
+              multi-vterm
+
+              # User interface packages.
+              neotree
+              ivy
+              counsel
+              ivy-rich
+              ivy-posframe
+              ivy-prescient
+              desktop-environment
+              doom-themes
+              doom-modeline
+            ];
         };
         programs.fish.functions = {
           emacs = "command emacs $argv > /dev/null 2>&1 & disown";

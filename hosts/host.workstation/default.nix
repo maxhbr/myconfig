@@ -9,7 +9,7 @@
     ../../hardware/nixos-hardware/common/cpu/amd
     ../../hardware/nixos-hardware/common/pc/ssd
     ../../hardware/steamcontroller.nix
-    ({...}: {
+    ({ ... }: {
       config = {
         services.ollama = {
           enable = true;
@@ -60,9 +60,7 @@
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
     ])
     {
-      services.vsftpd = {
-        enable = true;
-      };
+      services.vsftpd = { enable = true; };
     }
     # other profiles
     ./gaming
@@ -76,7 +74,7 @@
         enable = true;
         wayland = {
           enable = true;
-          sessions = ["hyprland" "niri" "river" "labwc"];
+          sessions = [ "hyprland" "niri" "river" "labwc" ];
         };
         myphoto.enable = true;
         obs.enable = true;
@@ -93,9 +91,7 @@
     virtualisation = {
       docker.enable = true;
       podman.enable = true;
-      oci-containers = {
-        backend = "podman";
-      };
+      oci-containers = { backend = "podman"; };
       #virtualbox.host.enable = true;
     };
 

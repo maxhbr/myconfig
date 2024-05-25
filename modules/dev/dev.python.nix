@@ -4,8 +4,6 @@
 let cfg = config.myconfig.dev.python;
 in {
   config = lib.mkIf cfg.enable {
-    home-manager.sharedModules = [{
-      home.packages = with pkgs; [ pdm ];
-    }];
+    home-manager.sharedModules = [{ home.packages = with pkgs; [ pdm ]; }];
   };
 }

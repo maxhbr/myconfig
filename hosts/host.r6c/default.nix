@@ -22,7 +22,7 @@
         enable = true;
         wayland = {
           enable = true;
-          sessions = ["niri" "river" "hyprland" "labwc"];
+          sessions = [ "niri" "river" "hyprland" "labwc" ];
           # desktop = "labwc";
           # labwc.enable = true;
           # # cage.enable = true;
@@ -37,8 +37,7 @@
     networking.hostName = "r6c";
     networking.hostId = "ac8aad7a";
 
-    networking.networkmanager.enable =
-      true;
+    networking.networkmanager.enable = true;
 
     services.vsftpd.enable = lib.mkForce false; # fails to build on arm
 

@@ -8,13 +8,11 @@ in {
 
   imports = [
     # v4l2loopback currently fails to compile:
-    ( { pkgs, config, lib, ... }:
+    ({ pkgs, config, lib, ... }:
       (lib.mkIf cfg.v4l2.enable {
         boot = {
           extraModulePackages = [ config.boot.kernelPackages.v4l2loopback ];
-          kernelModules = [
-            "v4l2loopback"
-          ];
+          kernelModules = [ "v4l2loopback" ];
           # Set initial kernel module settings
           extraModprobeConfig = ''
             # exclusive_caps: Skype, Zoom, Teams etc. will only show device when actually streaming

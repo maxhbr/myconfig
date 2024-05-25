@@ -40,7 +40,7 @@
     programs.aerc.enable = true;
     programs.notmuch = {
       enable = true;
-      hooks = { 
+      hooks = {
         preNew = "${config.programs.mbsync.package}/bin/mbsync --all";
         # postNew = if config.programs.afew.enable
         #           then "afew --tag --new"

@@ -1,8 +1,7 @@
 # partially based on:
 # https://gist.github.com/dltacube/280c82b3426690558341a3ac3a71428d
 { inputs, pkgs, config, lib, ... }:
-let
-  cfg = config.myconfig;
+let cfg = config.myconfig;
 in {
   options.myconfig = with lib; {
     editor.emacs.doom.enable = mkEnableOption "emacs";
@@ -11,7 +10,12 @@ in {
     home-manager.sharedModules = [
       ({ config, ... }: {
         home = {
-          sessionPath = [ "${config.xdg.configHome}/emacs/bin" "${config.home.homeDirectory}/.emacs.d/bin" "${pkgs.emacs}/bin" "${pkgs.git}" ];
+          sessionPath = [
+            "${config.xdg.configHome}/emacs/bin"
+            "${config.home.homeDirectory}/.emacs.d/bin"
+            "${pkgs.emacs}/bin"
+            "${pkgs.git}"
+          ];
           sessionVariables = {
             DOOMDIR = "${config.xdg.configHome}/doom-config";
             DOOMLOCALDIR = "${config.xdg.configHome}/doom-local";

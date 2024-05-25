@@ -22,7 +22,7 @@ let
 in {
   config = lib.mkIf config.programs.neomutt.enable {
     programs.neomutt = {
-      sidebar = { 
+      sidebar = {
         enable = true;
 
       };
@@ -35,7 +35,8 @@ in {
         mailcap_path = "${mailcap_file}";
         envelope_from = "yes";
         edit_headers = "yes";
-        query_command = "\"${pkgs.notmuch-addrlookup}/bin/notmuch-addrlookup --format=mutt '%s'\"";
+        query_command = ''
+          "${pkgs.notmuch-addrlookup}/bin/notmuch-addrlookup --format=mutt '%s'"'';
       };
 
       binds = [
@@ -101,12 +102,12 @@ in {
             "<sync-mailbox><refresh><enter-command>source ~/.config/neomutt/neomuttrc<enter><change-folder>!<enter>";
         }
         {
-          map = ["index" "pager"];
+          map = [ "index" "pager" ];
           key = "\\cb";
           action = "<pipe-message> ${pkgs.urlscan}/bin/urlscan<Enter>";
         }
         {
-          map = ["attach" "compose"];
+          map = [ "attach" "compose" ];
           key = "\\cb";
           action = "<pipe-entry> ${pkgs.urlscan}/bin/urlscan<Enter>";
         }

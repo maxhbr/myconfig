@@ -2,45 +2,44 @@
 # SPDX-License-Identifier: MIT
 { config, lib, pkgs, ... }:
 let
-  zoom-auto = (pkgs.writeShellScriptBin "zoom-auto"
-''
-set -euo pipefail
+  zoom-auto = (pkgs.writeShellScriptBin "zoom-auto" ''
+    set -euo pipefail
 
-function convert_zoom_link_to_zoommtg() {
-    local zoom_link="$1"
-    local confno=$(echo "$zoom_link" | sed -n 's/.*\/j\/\([0-9]*\).*/\1/p')
-    if [[ "$zoom_link" =~ .*pwd=.* ]]; then
-        local pwd=$(echo "$zoom_link" | sed -n 's/.*pwd=\(.*\)/\1/p')
-        echo "zoommtg://zoom.us/join?action=join&confno=$confno&pwd=$pwd"
-    else
-        echo "zoommtg://zoom.us/join?action=join&confno=$confno"
-    fi
-}
+    function convert_zoom_link_to_zoommtg() {
+        local zoom_link="$1"
+        local confno=$(echo "$zoom_link" | sed -n 's/.*\/j\/\([0-9]*\).*/\1/p')
+        if [[ "$zoom_link" =~ .*pwd=.* ]]; then
+            local pwd=$(echo "$zoom_link" | sed -n 's/.*pwd=\(.*\)/\1/p')
+            echo "zoommtg://zoom.us/join?action=join&confno=$confno&pwd=$pwd"
+        else
+            echo "zoommtg://zoom.us/join?action=join&confno=$confno"
+        fi
+    }
 
-function open_zoom_link_in_zoom() {
-    local zoom_link="$1"
-    local zoommtg_link=$(convert_zoom_link_to_zoommtg "$zoom_link")
-    echo "... opening zoom link in zoom ..."
-    exec zoom-us "$zoommtg_link"
-    exit 0
-}
+    function open_zoom_link_in_zoom() {
+        local zoom_link="$1"
+        local zoommtg_link=$(convert_zoom_link_to_zoommtg "$zoom_link")
+        echo "... opening zoom link in zoom ..."
+        exec zoom-us "$zoommtg_link"
+        exit 0
+    }
 
-function test_for_zoom_link() {
-    local args="$@"
-    # bash check that args has no whitespace
-    if [[ "$args" =~ ^https://.*zoom.us.*$ && ! "$args" =~ .*[[:space:]].* ]]; then
-        echo "... starting zoom ..."
-        open_zoom_link_in_zoom "$args"
-    else
-        echo "... no zoom link found"
-    fi
-}
+    function test_for_zoom_link() {
+        local args="$@"
+        # bash check that args has no whitespace
+        if [[ "$args" =~ ^https://.*zoom.us.*$ && ! "$args" =~ .*[[:space:]].* ]]; then
+            echo "... starting zoom ..."
+            open_zoom_link_in_zoom "$args"
+        else
+            echo "... no zoom link found"
+        fi
+    }
 
-echo "testing for secondary clipboard ..."
-test_for_zoom_link "$(${pkgs.wl-clipboard}/bin/wl-paste || true)"
-echo "testing for primary clipboard ..."
-test_for_zoom_link "$(${pkgs.wl-clipboard}/bin/wl-paste -p || true)"
-'');
+    echo "testing for secondary clipboard ..."
+    test_for_zoom_link "$(${pkgs.wl-clipboard}/bin/wl-paste || true)"
+    echo "testing for primary clipboard ..."
+    test_for_zoom_link "$(${pkgs.wl-clipboard}/bin/wl-paste -p || true)"
+  '');
 in {
   config = {
     # nixpkgs.overlays = [

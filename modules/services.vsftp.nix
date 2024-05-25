@@ -15,16 +15,15 @@ in {
       extraUsers.ftpuser = {
         createHome = true;
         isSystemUser = true;
-        hashedPassword = "$6$yfi/TifAgZVWZN8n$pwEKwnLFSQ.P7xfhgwJ1hz7SxMCLvip/lQv0jEz74UqcwF16omIVvwpWXX6QErhm8Lr5lB1ACEUisLkI/mTyZ/";
+        hashedPassword =
+          "$6$yfi/TifAgZVWZN8n$pwEKwnLFSQ.P7xfhgwJ1hz7SxMCLvip/lQv0jEz74UqcwF16omIVvwpWXX6QErhm8Lr5lB1ACEUisLkI/mTyZ/";
         group = "ftpuser";
         extraGroups = [ "ftp" ];
         home = "/var/ftp";
         homeMode = "777";
       };
-      extraUsers."${myconfig.user}" = {
-        extraGroups = [ "ftp" "ftpuser" ];
-      };
-      groups.ftpuser = {};
+      extraUsers."${myconfig.user}" = { extraGroups = [ "ftp" "ftpuser" ]; };
+      groups.ftpuser = { };
     };
 
     # Service - WARNING: Open to public!
@@ -46,8 +45,9 @@ in {
 
     # Firewall
     networking.firewall.allowedTCPPorts = [ listenPort ];
-    networking.firewall.allowedTCPPortRanges = [
-      { from = pasvPorts.min; to = pasvPorts.max; }
-    ];
+    networking.firewall.allowedTCPPortRanges = [{
+      from = pasvPorts.min;
+      to = pasvPorts.max;
+    }];
   });
 }

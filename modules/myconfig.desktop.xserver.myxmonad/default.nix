@@ -15,76 +15,79 @@ in {
     desktop.xserver.xmonad = { enable = mkEnableOption "xmonad"; };
   };
   imports = [
-    (lib.mkIf (config.services.xserver.enable && cfg.desktop.xserver.xmonad.enable && config.services.xserver.desktopManager.xfce.enable) {
-      services.xserver.desktopManager = {
-        xterm.enable = false;
-        xfce = {
-          noDesktop = true;
-          enableXfwm = false;
-          enableScreensaver = false;
+    (lib.mkIf (config.services.xserver.enable
+      && cfg.desktop.xserver.xmonad.enable
+      && config.services.xserver.desktopManager.xfce.enable) {
+        services.xserver.desktopManager = {
+          xterm.enable = false;
+          xfce = {
+            noDesktop = true;
+            enableXfwm = false;
+            enableScreensaver = false;
+          };
+        };
+      })
+  ];
+  config = (lib.mkIf
+    (config.services.xserver.enable && cfg.desktop.xserver.xmonad.enable) {
+      environment.variables = {
+        XSECURELOCK_BLANK_TIMEOUT = "-1";
+        XSECURELOCK_COMPOSITE_OBSCURER = "0";
+        # XSECURELOCK_NO_COMPOSITE = "1";
+      };
+
+      # system.activationScripts.cleanupXmonadState = "rm $HOME/.xmonad/xmonad.state || true";
+
+      services = {
+        xserver = {
+          serverFlagsSection = ''
+            Option "MaxClients" "2048"
+          '';
+          displayManager.defaultSession =
+            if config.services.xserver.desktopManager.xfce.enable then
+              "xfce+myXmonad"
+            else
+              "none+myXmonad";
+          windowManager = {
+            session = lib.singleton {
+              name = "myXmonad";
+              start = ''
+                exec &> >(tee -a /tmp/myXmonad.log)
+                echo -e "\n\n$(date)\n\n"
+                ${my-xmonad}/bin/xmonad &
+                waitPID=$!
+              '';
+            };
+          };
+
+          desktopManager.xterm.enable = false;
         };
       };
-    })
-  ];
-  config = (lib.mkIf (config.services.xserver.enable && cfg.desktop.xserver.xmonad.enable) {
-    environment.variables = {
-      XSECURELOCK_BLANK_TIMEOUT = "-1";
-      XSECURELOCK_COMPOSITE_OBSCURER = "0";
-      # XSECURELOCK_NO_COMPOSITE = "1";
-    };
 
-    # system.activationScripts.cleanupXmonadState = "rm $HOME/.xmonad/xmonad.state || true";
+      home-manager.sharedModules = [{
+        # imports = [ ./picom.hm.nix ];
+        home.packages = with pkgs; [
+          my-xmonad
+          my-xmobar
+          my-mute-telco
 
-    services = {
-      xserver = {
-        serverFlagsSection = ''
-          Option "MaxClients" "2048"
-        '';
-        displayManager.defaultSession =
-          if config.services.xserver.desktopManager.xfce.enable then
-            "xfce+myXmonad"
-          else
-            "none+myXmonad";
-        windowManager = {
-          session = lib.singleton {
-            name = "myXmonad";
-            start = ''
-              exec &> >(tee -a /tmp/myXmonad.log)
-              echo -e "\n\n$(date)\n\n"
-              ${my-xmonad}/bin/xmonad &
-              waitPID=$!
+          dzen2
+          myxev
+        ];
+        xsession.windowManager.command = "${my-xmonad}/bin/xmonad";
+        home.file = {
+          ".myXmonadBinary" = {
+            text = ''
+              "${my-xmonad}/bin/xmonad"
+            '';
+            onChange = ''
+              if [[ -v DISPLAY ]] ; then
+                echo "Restarting xmonad"
+                ${my-xmonad}/bin/xmonad &
+              fi
             '';
           };
         };
-
-        desktopManager.xterm.enable = false;
-      };
-    };
-
-    home-manager.sharedModules = [{
-      # imports = [ ./picom.hm.nix ];
-      home.packages = with pkgs; [
-        my-xmonad
-        my-xmobar
-        my-mute-telco
-
-        dzen2
-        myxev
-      ];
-      xsession.windowManager.command = "${my-xmonad}/bin/xmonad";
-      home.file = {
-        ".myXmonadBinary" = {
-          text = ''
-            "${my-xmonad}/bin/xmonad"
-          '';
-          onChange = ''
-            if [[ -v DISPLAY ]] ; then
-              echo "Restarting xmonad"
-              ${my-xmonad}/bin/xmonad &
-            fi
-          '';
-        };
-      };
-    }];
-  });
+      }];
+    });
 }

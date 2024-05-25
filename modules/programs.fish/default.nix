@@ -115,10 +115,13 @@ in {
                     end
                   )
                 '';
-                plugins = (map (name: { inherit name; src = pkgs.fishPlugins."${name}".src; }) [
+                plugins = (map (name: {
+                  inherit name;
+                  src = pkgs.fishPlugins."${name}".src;
+                }) [
                   "colored-man-pages" # Fish shell plugin to colorize man pages
                   "done"
-                  "grc" #  grc Colourizer for some commands on Fish shell
+                  "grc" # grc Colourizer for some commands on Fish shell
                   "sponge" # keeps your fish shell history clean from typos, incorrectly used commands and everything you don't want to store due to privacy reasons
                   "z" # Pure-fish z directory jumping
                 ]);
@@ -131,16 +134,20 @@ in {
                   recursive = true;
                 };
                 "fish/functions/fish_mode_prompt.fish" = {
-                  source = "${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_mode_prompt.fish";
+                  source =
+                    "${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_mode_prompt.fish";
                 };
                 "fish/functions/fish_prompt.fish" = {
-                  source = "${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_prompt.fish";
+                  source =
+                    "${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_prompt.fish";
                 };
                 "fish/functions/fish_title.fish" = {
-                  source = "${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_title.fish";
+                  source =
+                    "${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_title.fish";
                 };
                 "fish/conf.d/hydro.fish" = {
-                  source = "${pkgs.fishPlugins.hydro}/share/fish/vendor_conf.d/hydro.fish";
+                  source =
+                    "${pkgs.fishPlugins.hydro}/share/fish/vendor_conf.d/hydro.fish";
                 };
               };
             };

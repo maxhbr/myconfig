@@ -16,10 +16,7 @@
       mu
     ];
     programs.emacs = {
-      extraPackages = epkgs: [
-        epkgs.mu4e
-        epkgs.mu4e-alert
-      ];
+      extraPackages = epkgs: [ epkgs.mu4e epkgs.mu4e-alert ];
       extraConfig = ''
         (setq mu4e-mu-binary "${pkgs.mu}/bin/mu")
         (load "${./mu4e-base-config.el}")

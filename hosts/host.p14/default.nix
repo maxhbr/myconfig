@@ -37,7 +37,7 @@
     ./mykeylight
     ./role.work
     ./programs.khal.nix
-    ({...}: {
+    ({ ... }: {
       config = {
         services.ollama = {
           enable = true;
@@ -57,11 +57,11 @@
       };
     }
     {
-      fileSystems."/home/mhuber/MINE/Bilder/imgwork" =
-        { device = "192.168.1.40:/imgwork";
-          fsType = "nfs";
-          options = ["nofail" "soft"];
-        };
+      fileSystems."/home/mhuber/MINE/Bilder/imgwork" = {
+        device = "192.168.1.40:/imgwork";
+        fsType = "nfs";
+        options = [ "nofail" "soft" ];
+      };
     }
     ../host.workstation/gaming/games.steam
     # ({config, pkgs, ...}: {
@@ -86,19 +86,21 @@
     #   };
     # }
     # )
-    ({pkgs, ...}: let
-      fix-my-notebook = pkgs.writeShellScriptBin "fix-my-notebook" ''
-        set -euo pipefail
-        set -x
-        systemctl restart bluetooth.service
-        # pkill waybar && waybar & disown
-        dbus-wm-environment wlroots
-      '';
-    in {
-      config = {
-        home-manager.sharedModules = [{ home.packages = with pkgs; [ fix-my-notebook ]; }];
-      };
-    })
+    ({ pkgs, ... }:
+      let
+        fix-my-notebook = pkgs.writeShellScriptBin "fix-my-notebook" ''
+          set -euo pipefail
+          set -x
+          systemctl restart bluetooth.service
+          # pkill waybar && waybar & disown
+          dbus-wm-environment wlroots
+        '';
+      in {
+        config = {
+          home-manager.sharedModules =
+            [{ home.packages = with pkgs; [ fix-my-notebook ]; }];
+        };
+      })
   ];
 
   config = {
@@ -112,7 +114,7 @@
         enable = true;
         wayland = {
           enable = true;
-          sessions = ["hyprland" "niri" "labwc"]; #"river"
+          sessions = [ "hyprland" "niri" "labwc" ]; # "river"
           #desktop = "hyprland";
           ## dwl.enable = true;
           #hyprland.enable = true;
@@ -157,9 +159,7 @@
     virtualisation = {
       docker.enable = true;
       podman.enable = true;
-      oci-containers = {
-        backend = "podman";
-      };
+      oci-containers = { backend = "podman"; };
       virtualbox.host.enable = false;
     };
 

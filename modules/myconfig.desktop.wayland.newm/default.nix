@@ -6,8 +6,8 @@ let
   user = myconfig.user;
   pkg = pkgs.newm;
 in {
-  config =
-    (lib.mkIf (cfg.desktop.wayland.enable && builtins.elem "newm" cfg.desktop.wayland.sessions) {
+  config = (lib.mkIf (cfg.desktop.wayland.enable
+    && builtins.elem "newm" cfg.desktop.wayland.sessions) {
       home-manager.sharedModules = [{
         xdg.configFile = { "newm/config.py".source = ./newm/config.py; };
         home.packages = [ pkg pkgs.pywm-fullscreen ];

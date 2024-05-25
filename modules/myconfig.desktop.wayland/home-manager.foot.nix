@@ -31,9 +31,10 @@ let
     # selection-foreground=eeeeee
     # selection-background=0087af
   '';
-  footclient = if config.programs.foot.server.enable
-               then "${config.programs.foot.package}/bin/footclient"
-               else "${config.programs.foot.package}/bin/foot";
+  footclient = if config.programs.foot.server.enable then
+    "${config.programs.foot.package}/bin/footclient"
+  else
+    "${config.programs.foot.package}/bin/foot";
 in {
   config = (lib.mkIf config.programs.foot.enable {
     programs.foot = {

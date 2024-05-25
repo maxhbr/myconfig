@@ -4,31 +4,33 @@
 let
   cfg = config.myconfig;
   useMaster = true;
-  river-master = pkgs.river.overrideAttrs
-    (oa: {
-      version = "master";
+  river-master = pkgs.river.overrideAttrs (oa: {
+    version = "master";
 
-      src = inputs.river-src;
+    src = inputs.river-src;
 
-      buildInputs = with pkgs; [
-        scdoc
-        udev
-        libevdev
-        libinput
-        pixman
-        wlroots_0_17
-        wayland-protocols
-        libxkbcommon
-      ];
-    });
-  rivercarro-master = pkgs.rivercarro.overrideAttrs (oa:
-    {
-      version = "master";
-      src = inputs.rivercarro-src;
-    }
-  );
+    buildInputs = with pkgs; [
+      scdoc
+      udev
+      libevdev
+      libinput
+      pixman
+      wlroots_0_17
+      wayland-protocols
+      libxkbcommon
+    ];
+  });
+  rivercarro-master = pkgs.rivercarro.overrideAttrs (oa: {
+    version = "master";
+    src = inputs.rivercarro-src;
+  });
   wrapPackage = true;
-  extraPaths = with pkgs; [ (if useMaster then rivercarro-master else rivercarro) ristate swaybg kile-wl ];
+  extraPaths = with pkgs; [
+    (if useMaster then rivercarro-master else rivercarro)
+    ristate
+    swaybg
+    kile-wl
+  ];
   riverPackage = if wrapPackage then
     pkgs.callPackage ./wrapper.nix {
       river-unwrapped = if useMaster then river-master else pkgs.river;
@@ -70,8 +72,8 @@ in {
   options.myconfig = with lib; {
     desktop.wayland.river = { enable = mkEnableOption "river"; };
   };
-  config =
-    (lib.mkIf (cfg.desktop.wayland.enable && builtins.elem "river" cfg.desktop.wayland.sessions) {
+  config = (lib.mkIf (cfg.desktop.wayland.enable
+    && builtins.elem "river" cfg.desktop.wayland.sessions) {
       home-manager.sharedModules = [
         ({ config, ... }: {
           xdg.configFile = {
@@ -97,11 +99,10 @@ in {
             [ riverPackage riverinit ]
             ++ (if wrapPackage then [ ] else extraPaths);
           programs.waybar.settings.mainBar = {
-            modules-left = 
-              [
-                # "river/mode"
-                "river/tags"
-              ];
+            modules-left = [
+              # "river/mode"
+              "river/tags"
+            ];
             # modules-center = [ "river/window" ];
             "river/tags" = {
               tag-labels = [ "U" "I" "A" "E" "O" "S" "N" "R" "T" ];

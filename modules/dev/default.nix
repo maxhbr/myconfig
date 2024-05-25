@@ -30,7 +30,7 @@ in {
   config = {
     myconfig.dev.enable = cfg.elixir.enable || cfg.haskell.enable
       || cfg.network.enable || cfg.tex.enable || cfg.compliance.enable
-      || cfg.go.enable || cfg.ruby.enable || cfg.python.enable || cfg.rust.enable
-      || cfg.nodejs.enable;
+      || cfg.go.enable || cfg.ruby.enable || cfg.python.enable
+      || cfg.rust.enable || cfg.nodejs.enable;
   };
 }

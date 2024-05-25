@@ -352,7 +352,7 @@ in rec {
         flake = self;
 
         modules = nixosModules ++ [
-          { _module.args = inputs;}
+          { _module.args = inputs; }
           ({ config, pkgs, ... }: {
             config = {
               # nixpkgs = {
@@ -409,32 +409,34 @@ in rec {
           { _module.args = specialArgs; }
         ];
 
-        extraModules = [({pkgs, ...}: {
-          nix.package = lib.mkDefault pkgs.nixVersions.stable;
-          # ca-references
-          nix.extraOptions = ''
-            experimental-features = nix-command flakes recursive-nix
-            keep-outputs = true
-            keep-derivations = true
-            show-trace = true
-            builders-use-substitutes = true
-            preallocate-contents = true
-          '';
+        extraModules = [
+          ({ pkgs, ... }: {
+            nix.package = lib.mkDefault pkgs.nixVersions.stable;
+            # ca-references
+            nix.extraOptions = ''
+              experimental-features = nix-command flakes recursive-nix
+              keep-outputs = true
+              keep-derivations = true
+              show-trace = true
+              builders-use-substitutes = true
+              preallocate-contents = true
+            '';
 
-          # nix.registry = lib.mapAttrs (id: flake: {
-          #   inherit flake;
-          #   from = {
-          #     inherit id;
-          #     type = "indirect";
-          #   };
-          # }) (inputs // { nixpkgs = inputs.master; });
-          nix.nixPath = lib.mapAttrsToList (k: v: "${k}=${toString v}") {
-            nixpkgs = "${inputs.nixpkgs}/";
-            nixos = "${self}/";
-            home-manager = "${inputs.home}/";
-          };
-          system.configurationRevision = self.rev or "dirty";
-        })];
+            # nix.registry = lib.mapAttrs (id: flake: {
+            #   inherit flake;
+            #   from = {
+            #     inherit id;
+            #     type = "indirect";
+            #   };
+            # }) (inputs // { nixpkgs = inputs.master; });
+            nix.nixPath = lib.mapAttrsToList (k: v: "${k}=${toString v}") {
+              nixpkgs = "${inputs.nixpkgs}/";
+              nixos = "${self}/";
+              home-manager = "${inputs.home}/";
+            };
+            system.configurationRevision = self.rev or "dirty";
+          })
+        ];
       };
     in {
       inherit system specialArgs;

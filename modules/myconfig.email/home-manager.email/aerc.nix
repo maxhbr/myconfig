@@ -18,8 +18,7 @@
       };
       filters = {
         "text/plain" = pager;
-        "text/*" =
-          ''${pager} -fP --file-name="$AERC_FILENAME" --style=plain'';
+        "text/*" = ''${pager} -fP --file-name="$AERC_FILENAME" --style=plain'';
         "image/*" =
           "${pkgs.catimg}/bin/catimg -w$(${pkgs.ncurses}/bin/tput cols) -";
       };

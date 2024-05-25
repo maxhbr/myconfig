@@ -120,14 +120,10 @@ in {
     };
   };
 
-  imports = [
-    ./services.greetd.nix
-    ./sharescreen.nix
-    ./programs.waybar
-  ];
+  imports = [ ./services.greetd.nix ./sharescreen.nix ./programs.waybar ];
 
   config = (lib.mkIf cfg.desktop.wayland.enable {
-      services.greetd.enable = true;
+    services.greetd.enable = true;
     environment.sessionVariables = {
       # "NIXOS_OZONE_WL" = "1"; # VSCode fails to start if that is set in dwl / wayland
       "XDG_SESSION_TYPE" = "wayland";
@@ -146,12 +142,14 @@ in {
 
     nixpkgs = {
       overlays = [
-      # Disable some things that don’t cross compile
-      # from https://github.com/matthewbauer/nixiosk/blob/7e6d1e1875ec5ae810e99fe5a1c814abdf56fecb/configuration.nix#L104
-      (self: super: lib.optionalAttrs (super.stdenv.hostPlatform != super.stdenv.buildPlatform) {
-        gtk3 = super.gtk3.override { cupsSupport = false; };
-        mesa = super.mesa.override { eglPlatforms = ["wayland"]; };
-      })
+        # Disable some things that don’t cross compile
+        # from https://github.com/matthewbauer/nixiosk/blob/7e6d1e1875ec5ae810e99fe5a1c814abdf56fecb/configuration.nix#L104
+        (self: super:
+          lib.optionalAttrs
+          (super.stdenv.hostPlatform != super.stdenv.buildPlatform) {
+            gtk3 = super.gtk3.override { cupsSupport = false; };
+            mesa = super.mesa.override { eglPlatforms = [ "wayland" ]; };
+          })
       ];
     };
 

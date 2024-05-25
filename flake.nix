@@ -21,7 +21,7 @@
     pr275479.url =
       "github:maxhbr/nixpkgs/freeplane-1_11_8"; # https://github.com/NixOS/nixpkgs/pull/275479
 
-    nixpkgs-wayland = { 
+    nixpkgs-wayland = {
       url = "github:nix-community/nixpkgs-wayland";
       # only needed if you use as a package set:
       inputs.nixpkgs.follows = "nixpkgs";
@@ -69,9 +69,9 @@
 
     river-src.url = "git+https://github.com/riverwm/river?submodules=1";
     river-src.flake = false;
-    rivercarro-src.url = "git+https://git.sr.ht/~novakane/rivercarro?submodules=1";
+    rivercarro-src.url =
+      "git+https://git.sr.ht/~novakane/rivercarro?submodules=1";
     rivercarro-src.flake = false;
-    
 
     mydwl.url = "github:maxhbr/mydwl";
     mydwl.inputs.nixpkgs.follows = "nixpkgs";
@@ -228,9 +228,8 @@
             self.nixosModules.core
           ] ++ moreModules) metadataOverride);
         host-workstation = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "workstation" ([
-            self.nixosModules.core
-          ] ++ moreModules) metadataOverride);
+          (self.lib.evalConfiguration "x86_64-linux" "workstation"
+            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
         host-vserver = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "vserver"
             ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
@@ -241,9 +240,8 @@
           (self.lib.evalConfiguration "x86_64-linux" "nuc"
             ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
         host-pi4 = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "aarch64-linux" "pi4" ([
-            self.nixosModules.core
-          ] ++ moreModules) metadataOverride);
+          (self.lib.evalConfiguration "aarch64-linux" "pi4"
+            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
         host-pi3a = moreModules: metadataOverride:
           (self.lib.evalConfiguration "aarch64-linux" "pi3a"
             ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
