@@ -76,10 +76,7 @@
         enable = true;
         wayland = {
           enable = true;
-          desktop = "hyprland";
-          hyprland.enable = true;
-          labwc.enable = true;
-          river.enable = true;
+          sessions = ["hyprland" "niri" "river" "labwc"];
         };
         myphoto.enable = true;
         obs.enable = true;

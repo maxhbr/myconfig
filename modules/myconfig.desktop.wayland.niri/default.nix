@@ -14,7 +14,7 @@ in {
     ];
     myconfig.desktop.wayland.greetdSettings = {
       niri_session = {
-        command = "${pkgs.niri}/bin/niri-session";
+        command = "${pkgs.niri}/bin/niri --session";
         inherit user;
       };
     };

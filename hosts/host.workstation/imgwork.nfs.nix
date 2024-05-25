@@ -17,10 +17,11 @@
     };
   }];
   config = {
-    fileSystems."/export/imgwork" = {
-      device = "/dev/disk/by-uuid/0bdd6e1e-036d-4f98-b4bd-0c82c2b90aa2";
-      fsType = "ext4";
-    };
+    # fileSystems."/export/imgwork" = {
+    #   device = "/dev/disk/by-uuid/d1d992c4-637b-4070-a4e5-472b15cb986e";
+    #   # device = "/dev/disk/by-uuid/0bdd6e1e-036d-4f98-b4bd-0c82c2b90aa2";
+    #   fsType = "ext4";
+    # };
     services.nfs.server = {
       enable = true;
       exports = ''

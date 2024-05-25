@@ -25,6 +25,12 @@ let
       "--add-host=host.containers.internal:host-gateway"
     ];
   };
+  nlm-ingestor = {
+    image = "ghcr.io/nlmatics/nlm-ingestor:latest";
+    ports = [
+      "127.0.0.1:5010:5001" # Ensures we listen only on localhost
+    ];
+  };
 in {
       config = lib.mkIf config.services.ollama.enable {
         home-manager.sharedModules = [{
@@ -47,7 +53,7 @@ in {
         };
 
         virtualisation.oci-containers.containers = {
-          inherit open-webui;
+          inherit open-webui nlm-ingestor;
         };
       };
     }

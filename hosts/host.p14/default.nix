@@ -112,7 +112,7 @@
         enable = true;
         wayland = {
           enable = true;
-          sessions = ["hyprland" "niri" "river" "labwc"];
+          sessions = ["hyprland" "niri" "labwc"]; #"river"
           #desktop = "hyprland";
           ## dwl.enable = true;
           #hyprland.enable = true;

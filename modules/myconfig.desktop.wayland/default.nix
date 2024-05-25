@@ -18,6 +18,7 @@ in {
             way-displays
             wdisplays
             wlr-randr
+            cage # allows to run x windows
             ## Program Launchers
             wofi
             bemenu
