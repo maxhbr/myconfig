@@ -1,10 +1,10 @@
-{ config, ... }:
+{ config, lib, pkgs, ... }:
 let
   # waybar-master = inputs.nixpkgs-wayland.packages.${pkgs.system}.waybar;
   cfg = config.myconfig;
-  hmModule = ({ config, lib, pkgs, ... }:
+  hmModule = ({ config, ... }:
     let
-      waybarPackage = if true then
+      waybarPackage = if false then
         pkgs.waybar.override {
           cavaSupport = config.programs.cava.enable;
           #   evdevSupport = true;
