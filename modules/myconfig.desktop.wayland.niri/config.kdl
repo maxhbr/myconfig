@@ -40,7 +40,7 @@ input {
     warp-mouse-to-focus
 
     // Focus windows and outputs automatically when moving the mouse into them.
-    focus-follows-mouse
+    // focus-follows-mouse
 }
 
 // You can configure outputs by their name, which you can find
@@ -59,10 +59,10 @@ input {
     // for the resolution.
     // If the mode is omitted altogether or is invalid, niri will pick one automatically.
     // Run `niri msg outputs` while inside a niri instance to list all outputs and their modes.
-    mode "1920x1080@120.030"
+    mode "1920x1200@120.030"
 
     // Scale is a floating-point number, but at the moment only integer values work.
-    scale 2.0
+    scale 1.0
 
     // Transform allows to rotate the output counter-clockwise, valid values are:
     // normal, 90, 180, 270, flipped, flipped-90, flipped-180 and flipped-270.
@@ -93,7 +93,7 @@ layout {
     // - "always", the focused column will always be centered.
     // - "on-overflow", focusing a column will center it if it doesn't fit
     //   together with the previously focused column.
-    center-focused-column "always"
+    center-focused-column "on-overflow"
 
     // You can customize the widths that "switch-preset-column-width" (Mod+R) toggles between.
     preset-column-widths {
@@ -141,7 +141,7 @@ layout {
         // active-color "#ee9a00"
 
         // Color of the ring on inactive monitors.
-        inactive-color "#505050"
+        //inactive-color "#505050"
 
         // You can also use gradients. They take precedence over solid colors.
         // Gradients are rendered the same as CSS linear-gradient(angle, from, to).
@@ -155,7 +155,7 @@ layout {
         // of the workspace, rather than relative to just the window itself.
         // To do that, set relative-to="workspace-view".
         //
-        // inactive-gradient from="#505050" to="#808080" angle=45 relative-to="workspace-view"
+        inactive-gradient from="#505050" to="#808080" angle=45 relative-to="workspace-view"
     }
 
     // You can also add a border. It's similar to the focus ring, but always visible.
@@ -178,6 +178,8 @@ layout {
     // Top and bottom struts will simply add outer gaps in addition to the area occupied by
     // layer-shell panels and regular gaps.
     struts {
+        left 10
+        right 10
         // left 64
         // right 64
         // top 64
@@ -189,18 +191,17 @@ layout {
 // Note that running niri as a session supports xdg-desktop-autostart,
 // which may be more convenient to use.
 // spawn-at-startup "alacritty" "-e" "fish"
-spawn-at-startup "tfoot"
 spawn-at-startup "waybar"
 
 // Uncomment this line to ask the clients to omit their client-side decorations if possible.
 // If the client will specifically ask for CSD, the request will be honored.
 // Additionally, clients will be informed that they are tiled, removing some rounded corners.
-// prefer-no-csd
+prefer-no-csd
 
 // You can change the path where screenshots are saved.
 // A ~ at the front will be expanded to the home directory.
 // The path is formatted with strftime(3) to give you the screenshot date and time.
-screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
+screenshot-path "~/_screenshots/%Y-%m-%d %H-%M-%S.png"
 
 // You can also set this to null to disable saving screenshots to disk.
 // screenshot-path null
@@ -214,6 +215,36 @@ animations {
 
     // Slow down all animations by this factor. Values below 1 speed them up instead.
     // slowdown 3.0
+
+    workspace-switch {
+        spring damping-ratio=1.0 stiffness=1000 epsilon=0.0001
+    }
+
+    window-open {
+        duration-ms 150
+        curve "ease-out-expo"
+    }
+
+    window-close {
+        duration-ms 150
+        curve "ease-out-quad"
+    }
+
+    horizontal-view-movement {
+        spring damping-ratio=1.0 stiffness=800 epsilon=0.0001
+    }
+
+    window-movement {
+        spring damping-ratio=1.0 stiffness=800 epsilon=0.0001
+    }
+
+    window-resize {
+        spring damping-ratio=1.0 stiffness=800 epsilon=0.0001
+    }
+
+    config-notification-open-close {
+        spring damping-ratio=0.6 stiffness=1000 epsilon=0.001
+    }
 }
 
 // Window rules let you adjust behavior for individual windows.
@@ -259,9 +290,9 @@ binds {
 
     // Suggested binds for running programs: terminal, app launcher, screen locker.
     Mod+Return { spawn "tfoot"; }
-    Mod+P { spawn "wofi --show run"; }
+    Mod+P { spawn "wofi" "--show" "run"; }
     Mod+Shift+P { spawn "fuzzel"; }
-    Mod+Y { spawn "swaylock -f -c 000000"; }
+    Mod+Shift+X { spawn "swaylock -f -c 000000"; }
 
     // You can also use a shell:
     // Mod+T { spawn "bash" "-c" "notify-send hello && exec alacritty"; }
@@ -333,12 +364,12 @@ binds {
 
     Mod+Page_Down      { focus-workspace-down; }
     Mod+Page_Up        { focus-workspace-up; }
-    // Mod+U              { focus-workspace-down; }
-    // Mod+I              { focus-workspace-up; }
+    Mod+J              { focus-workspace-down; }
+    Mod+M              { focus-workspace-up; }
     Mod+Ctrl+Page_Down { move-column-to-workspace-down; }
     Mod+Ctrl+Page_Up   { move-column-to-workspace-up; }
-    // Mod+Ctrl+U         { move-column-to-workspace-down; }
-    // Mod+Ctrl+I         { move-column-to-workspace-up; }
+    Mod+Ctrl+J         { move-column-to-workspace-down; }
+    Mod+Ctrl+M         { move-column-to-workspace-up; }
 
     // Alternatively, there are commands to move just a single window:
     // Mod+Ctrl+Page_Down { move-window-to-workspace-down; }
@@ -346,8 +377,8 @@ binds {
 
     Mod+Shift+Page_Down { move-workspace-down; }
     Mod+Shift+Page_Up   { move-workspace-up; }
-    // Mod+Shift+U         { move-workspace-down; }
-    // Mod+Shift+I         { move-workspace-up; }
+    Mod+Shift+J         { move-workspace-down; }
+    Mod+Shift+M         { move-workspace-up; }
 
     // You can bind mouse wheel scroll ticks using the following syntax.
     // These binds will change direction based on the natural-scroll setting.
@@ -386,9 +417,6 @@ binds {
     // "best effort". Trying to refer to a workspace index bigger than
     // the current workspace count will instead refer to the bottommost
     // (empty) workspace.
-    //
-    // For example, with 2 workspaces + 1 empty, indices 3, 4, 5 and so on
-    // will all refer to the 3rd workspace.
     Mod+U { focus-workspace 1; }
     Mod+I { focus-workspace 2; }
     Mod+A { focus-workspace 3; }
@@ -397,7 +425,6 @@ binds {
     Mod+S { focus-workspace 6; }
     Mod+N { focus-workspace 7; }
     Mod+R { focus-workspace 8; }
-    Mod+T { focus-workspace 9; }
     Mod+Ctrl+U { move-column-to-workspace 1; }
     Mod+Ctrl+I { move-column-to-workspace 2; }
     Mod+Ctrl+A { move-column-to-workspace 3; }
@@ -407,12 +434,18 @@ binds {
     Mod+Ctrl+N { move-column-to-workspace 7; }
     Mod+Ctrl+R { move-column-to-workspace 8; }
     Mod+Ctrl+T { move-column-to-workspace 9; }
-
-    // Alternatively, there are commands to move just a single window:
-    // Mod+Ctrl+1 { move-window-to-workspace 1; }
+    Mod+Shift+U { move-window-to-workspace 1; }
+    Mod+Shift+I { move-window-to-workspace 2; }
+    Mod+Shift+A { move-window-to-workspace 3; }
+    Mod+Shift+E { move-window-to-workspace 4; }
+    Mod+Shift+O { move-window-to-workspace 5; }
+    Mod+Shift+S { move-window-to-workspace 6; }
+    Mod+Shift+N { move-window-to-workspace 7; }
+    Mod+Shift+R { move-window-to-workspace 8; }
+    Mod+Shift+T { move-window-to-workspace 9; }
 
     // Switches focus between the current and the previous workspace.
-    // Mod+Tab { focus-workspace-previous; }
+    Mod+Y { focus-workspace-previous; }
 
     Mod+Comma  { consume-window-into-column; }
     Mod+Period { expel-window-from-column; }
@@ -455,7 +488,7 @@ binds {
     Alt+Print { screenshot-window; }
 
     // The quit action will show a confirmation dialog to avoid accidental exits.
-    Mod+Shift+E { quit; }
+    Mod+Shift+Q { quit; }
 
     // Powers off the monitors. To turn them back on, do any input like
     // moving the mouse or pressing any other key.

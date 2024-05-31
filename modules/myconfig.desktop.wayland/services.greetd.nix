@@ -29,18 +29,6 @@ in {
       };
     };
   };
-  #     desktop = mkOption {
-  #       type = types.str;
-  #       default = optionalString cfg.desktop.wayland.enable "hyprland";
-  #       defaultText = literalExpression ''
-  #         optionalString config.myconfig.wayland.enable "hyprland"
-  #       '';
-  #       description = lib.mdDoc ''
-  #         The desktop environment to use
-  #       '';
-  #     };
-  #   };
-  # };
   imports = [
     # (lib.mkIf config.services.greetd.enable {
     #   services.greetd = {
@@ -64,16 +52,17 @@ in {
     sessions = cfg.desktop.wayland.sessions;
     cmd_for_session = session:
       cfg.desktop.wayland.greetdSettings."${session}_session".command;
+    cmd0 = cmd_for_session (lib.elemAt sessions 0);
   in (lib.mkIf (cfg.desktop.wayland.enable && sessions != [ ]) {
     services.greetd = {
       enable = true;
       settings = {
+        # default_session.command = "${pkgs.greetd.greetd}/bin/agreety --cmd ${cmd0}";
         default_session.command =
           "${pkgs.cage}/bin/cage -s  -- ${pkgs.greetd.gtkgreet}/bin/gtkgreet -l";
         initial_session = {
-          command = cmd_for_session (lib.elemAt sessions 0);
+          command = cmd0;
           user = "greeter";
-          # inherit user;
         };
       };
     };
