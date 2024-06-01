@@ -13,6 +13,7 @@ let
     # --prefix path : ${lib.makebinpath [pkgs.xdg-utils]} \
     # --set NIXOS_OZONE_WL 1 \
   });
+  slack-pkg = pkgs.slack;
 in {
   imports = [
     ./zoom.nix
@@ -55,7 +56,7 @@ in {
           ];
         }
       ];
-      home.packages = with pkgs; [
+      home.packages = [slack-pkg] ++ (with pkgs; [
         # idea.idea-ultimate # jetbrains.phpstorm
         dia
         # insync
@@ -66,6 +67,12 @@ in {
         # element-desktop
         subversion
         google-cloud-sdk
+      ]);
+      myconfig.desktop.wayland.wrappedElectronPackages = [
+        {
+          pkg = slack-pkg;
+          executable = "slack";
+        }
       ];
     }];
   };

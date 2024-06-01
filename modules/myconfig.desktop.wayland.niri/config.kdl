@@ -190,7 +190,6 @@ layout {
 // Add lines like this to spawn processes at startup.
 // Note that running niri as a session supports xdg-desktop-autostart,
 // which may be more convenient to use.
-// spawn-at-startup "alacritty" "-e" "fish"
 spawn-at-startup "waybar"
 
 // Uncomment this line to ask the clients to omit their client-side decorations if possible.
@@ -292,6 +291,7 @@ binds {
     Mod+Return { spawn "tfoot"; }
     Mod+P { spawn "wofi" "--show" "run"; }
     Mod+Shift+P { spawn "fuzzel"; }
+    Mod+X { spawn "swaylock -f -c 000000"; }
     Mod+Shift+X { spawn "swaylock -f -c 000000"; }
 
     // You can also use a shell:
@@ -492,5 +492,5 @@ binds {
 
     // Powers off the monitors. To turn them back on, do any input like
     // moving the mouse or pressing any other key.
-    Mod+Shift+Y { power-off-monitors; }
+    // Mod+Shift+Y { power-off-monitors; }
 }

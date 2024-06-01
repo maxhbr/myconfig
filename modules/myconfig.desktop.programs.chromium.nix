@@ -28,7 +28,7 @@ in {
   config = lib.mkIf config.myconfig.desktop.enable {
     services.avahi.enable =
       true; # https://github.com/NixOS/nixpkgs/issues/49630
-    home-manager.sharedModules = [{
+    home-manager.sharedModules = [({config, ...}: {
       home.packages = [ inco pipechrome allowChromecast ];
       home.file = {
         ".config/chromium/NativeMessagingHosts/com.justwatch.gopass.json" = {
@@ -52,6 +52,13 @@ in {
 
         ];
       };
-    }];
+      myconfig.desktop.wayland.wrappedElectronPackages = [
+        {
+          pkg = config.programs.chromium.package;
+          executable = "chromium";
+          enabled = config.programs.chromium.enabled;
+        }
+      ];
+    })];
   };
 }

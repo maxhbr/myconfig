@@ -154,6 +154,7 @@ in {
     };
 
     home-manager.sharedModules = [
+      ./home-manager.wrap-electron-apps.nix
       ./home-manager.kanshi.nix
       ./home-manager.mako.nix
       ./home-manager.foot.nix
