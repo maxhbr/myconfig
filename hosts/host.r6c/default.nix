@@ -7,6 +7,7 @@
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_ed25519.pub"
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
     ])
+    { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
   ];
 
   config = {
@@ -22,10 +23,14 @@
         enable = true;
         wayland = {
           enable = true;
-          sessions = [ "niri" "river" "hyprland" "labwc" ];
-          # desktop = "labwc";
-          # labwc.enable = true;
-          # # cage.enable = true;
+          directLoginFirstSession = true;
+          sessions = [ 
+            # "river" 
+            "niri-plain" 
+            "niri" 
+            "hyprland" 
+            # "labwc" 
+          ];
         };
       };
       desktop.full = false;
@@ -33,6 +38,8 @@
     };
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;
+
+    # environment.sessionVariables = { WLR_RENDERER_ALLOW_SOFTWARE = "1"; };
 
     networking.hostName = "r6c";
     networking.hostId = "ac8aad7a";

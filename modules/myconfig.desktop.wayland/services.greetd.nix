@@ -12,6 +12,10 @@ in {
           List of greet desktop environments, fist will be default
         '';
       };
+      directLoginFirstSession = mkOption {
+        type = types.bool;
+        default = false;
+      };
       greetdSettings = let settingsFormat = pkgs.formats.toml { };
       in mkOption {
         type = settingsFormat.type;
@@ -53,18 +57,26 @@ in {
     cmd_for_session = session:
       cfg.desktop.wayland.greetdSettings."${session}_session".command;
     cmd0 = cmd_for_session (lib.elemAt sessions 0);
+    cageSettings = {
+      default_session.command = "${pkgs.cage}/bin/cage -s  -- ${pkgs.greetd.gtkgreet}/bin/gtkgreet -l";
+      initial_session = {
+        command = cmd0;
+        user = "greeter";
+      };
+    };
+    directLaunchSettings = rec {
+      initial_session = {
+        command = cmd0;
+        user = user;
+      };
+      default_session = initial_session;
+    };
   in (lib.mkIf (cfg.desktop.wayland.enable && sessions != [ ]) {
     services.greetd = {
       enable = true;
-      settings = {
-        # default_session.command = "${pkgs.greetd.greetd}/bin/agreety --cmd ${cmd0}";
-        default_session.command =
-          "${pkgs.cage}/bin/cage -s  -- ${pkgs.greetd.gtkgreet}/bin/gtkgreet -l";
-        initial_session = {
-          command = cmd0;
-          user = "greeter";
-        };
-      };
+      settings = if cfg.desktop.wayland.directLoginFirstSession
+                  then directLaunchSettings
+                  else cageSettings;
     };
 
     environment.etc."greetd/environments".text =

@@ -3,7 +3,7 @@
 { pkgs, config, lib, inputs, ... }:
 let
   cfg = config.myconfig;
-  useMaster = true;
+  useMaster = false; # does currently not compile
   river-master = pkgs.river.overrideAttrs (oa: {
     version = "master";
 
@@ -69,9 +69,6 @@ let
     $HOME/.config/river/init &disown
   '';
 in {
-  options.myconfig = with lib; {
-    desktop.wayland.river = { enable = mkEnableOption "river"; };
-  };
   config = (lib.mkIf (cfg.desktop.wayland.enable
     && builtins.elem "river" cfg.desktop.wayland.sessions) {
       home-manager.sharedModules = [

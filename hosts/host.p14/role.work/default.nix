@@ -14,6 +14,7 @@ let
     # --set NIXOS_OZONE_WL 1 \
   });
   slack-pkg = pkgs.slack;
+  teams-for-linux-pkg = pkgs.teams-for-linux;
 in {
   imports = [
     ./zoom.nix
@@ -56,24 +57,25 @@ in {
           ];
         }
       ];
-      home.packages = [slack-pkg] ++ (with pkgs; [
+      home.packages = [ slack-pkg teams-for-linux-pkg ] ++ (with pkgs; [
         # idea.idea-ultimate # jetbrains.phpstorm
         dia
         # insync
         exiftool
         # misc-desktop-tools:
         libreoffice
-        slack
         # element-desktop
         subversion
         google-cloud-sdk
       ]);
-      myconfig.desktop.wayland.wrappedElectronPackages = [
-        {
-          pkg = slack-pkg;
-          executable = "slack";
-        }
-      ];
+      myconfig.desktop.wayland.wrappedElectronPackages = [{
+        pkg = slack-pkg;
+        executable = "slack";
+      }
+      {
+        pkg = teams-for-linux-pkg;
+        executable = "teams-for-linux";
+      }];
     }];
   };
 }

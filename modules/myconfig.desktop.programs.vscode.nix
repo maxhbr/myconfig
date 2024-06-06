@@ -39,13 +39,11 @@
             ms-vscode-remote.remote-ssh
           ];
         };
-        myconfig.desktop.wayland.wrappedElectronPackages = [
-          {
-            pkg = config.programs.vscode.package;
-            executable = "code";
-            enabled = config.programs.vscode.enable;
-          }
-        ];
+        myconfig.desktop.wayland.wrappedElectronPackages = [{
+          pkg = config.programs.vscode.package;
+          executable = "code";
+          enabled = config.programs.vscode.enable;
+        }];
         xdg.configFile = {
           # --enable-ozone
           # --enable-features=UseOzonePlatform
