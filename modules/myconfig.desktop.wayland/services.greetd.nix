@@ -31,7 +31,7 @@ in {
       default_session = {
         command = "${
             lib.makeBinPath [ pkgs.greetd.tuigreet ]
-          }/tuigreet --width 120 --time --cmd '${cmd0}'";
+          }/tuigreet --width 120 --remember --remember-session --sessions /etc/greetd/wayland-sessions/ --time --cmd '${cmd0}'";
         user = "greeter";
       };
     };
@@ -62,9 +62,23 @@ in {
                      abort "selectedGreeter is invalid";
     };
 
-    environment.etc."greetd/environments".text =
-      lib.foldr (session: str: (cmd_for_session session) + "\n" + str) "fish"
-      selectedSessions;
+    environment.etc = {
+      "greetd/environments".text =
+        lib.foldr (session: str: (cmd_for_session session) + "\n" + str) "fish"
+        selectedSessions;
+    } // (let
+      fun = session: {
+        name = "greetd/wayland-sessions/${session}.desktop";
+        value = { text = ''
+[Desktop Entry]
+Name=${session}
+Comment=${session}
+Exec=${cmd_for_session session}
+Type=Application
+         '';
+       };
+     };
+      in builtins.listToAttrs (builtins.map fun selectedSessions));
 
     home-manager.sharedModules = [{
       home.packages = with pkgs;

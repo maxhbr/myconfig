@@ -37,17 +37,6 @@
     ./mykeylight
     ./role.work
     ./programs.khal.nix
-    ({ ... }: {
-      config = {
-        services.ollama = {
-          enable = true;
-          # environmentVariables = {
-          #   OLLAMA_LLM_LIBRARY = "cpu";
-          #   HIP_VISIBLE_DEVICES = "0,1";
-          # };
-        };
-      };
-    })
     {
       services.openssh = {
         listenAddresses = [{
@@ -116,6 +105,7 @@
         wayland = {
           enable = true;
           selectedSessions = [ "hyprland" "niri" "labwc" ]; # "river"
+          selectedGreeter = "tuigreet";
           niri.additionalConfigKdl = ''
 // You can configure outputs by their name, which you can find
 // by running `niri msg outputs` while inside a niri instance.
