@@ -92,35 +92,47 @@ in {
         # ${pkgs.dex}/bin/dex --autostart
       };
 
-      # desktop = mkOption {
-      #   type = types.str;
-      #   default = optionalString cfg.desktop.wayland.enable "hyprland";
-      #   defaultText = literalExpression ''
-      #     optionalString config.myconfig.wayland.enable "hyprland"
-      #   '';
-      #   description = lib.mdDoc ''
-      #     The desktop environment to use
-      #   '';
-      # };
-      # greetdSettings = let settingsFormat = pkgs.formats.toml { };
-      # in mkOption {
-      #   type = settingsFormat.type;
-      #   example = literalExpression ''
-      #     {
-      #       sway = {
-      #         command = "''${pkgs.greetd.greetd}/bin/agreety --cmd sway";
-      #       };
-      #     }
-      #   '';
-      #   description = lib.mdDoc ''
-      #     greetd configuration ([documentation](https://man.sr.ht/~kennylevinsen/greetd/))
-      #     as a Nix attribute set.
-      #   '';
-      # };
+      selectedSessions = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = lib.mdDoc ''
+          List of greet desktop environments, fist will be default
+        '';
+      };
+      selectedGreeter = mkOption {
+        type = types.enum [ "gtkgreet" "tuigreet" ];
+        default = "gtkgreet";
+        description = lib.mdDoc ''
+          Choose the greeter to use
+        '';
+      };
+      directLoginFirstSession = mkOption {
+        type = types.bool;
+        default = false;
+      };
+      sessions = let settingsFormat = pkgs.formats.toml { };
+      in mkOption {
+        type = settingsFormat.type;
+        example = literalExpression ''
+          {
+            sway = {
+              command = "''${pkgs.greetd.greetd}/bin/agreety --cmd sway";
+            };
+          }
+        '';
+        description = lib.mdDoc ''
+          greetd configuration ([documentation](https://man.sr.ht/~kennylevinsen/greetd/))
+          as a Nix attribute set.
+        '';
+      };
     };
   };
 
-  imports = [ ./services.greetd.nix ./sharescreen.nix ./programs.waybar ];
+  imports = [ 
+    ./services.greetd.nix
+    ./sharescreen.nix
+    ./programs.waybar
+  ];
 
   config = (lib.mkIf cfg.desktop.wayland.enable {
     services.greetd.enable = true;

@@ -115,25 +115,7 @@
         enable = true;
         wayland = {
           enable = true;
-          sessions = [ "hyprland" "niri" "labwc" ]; # "river"
-          #desktop = "hyprland";
-          ## dwl.enable = true;
-          #hyprland.enable = true;
-          #labwc.enable = true;
-          #river.enable = true;
-          ## gnome.enable = true; # konflicts with sway
-
-          ##disabled:
-          ## sway.enable = true;
-          ##experimental:
-          ## wayfire.enable = true;
-          ## qtile.enable = true;
-          ## vivarium.enable = true;
-          ##bloated:
-          ## kde.enable = true;
-          ##dead or buggy:
-          ## hikari.enable = true;
-          ## newm.enable = true;
+          selectedSessions = [ "hyprland" "niri" "labwc" ]; # "river"
           niri.additionalConfigKdl = ''
 // You can configure outputs by their name, which you can find
 // by running `niri msg outputs` while inside a niri instance.

@@ -20,7 +20,7 @@ in {
     };
   };
   config = (lib.mkIf (cfg.desktop.wayland.enable
-    && builtins.elem "hikari" cfg.desktop.wayland.sessions) {
+    && builtins.elem "hikari" cfg.desktop.wayland.selectedSessions) {
       myconfig.desktop.wayland.hikari = {
         autostart = ''
           set -x
@@ -273,10 +273,9 @@ in {
         };
         home.packages = [ pkgs.hikari ];
       }];
-      myconfig.desktop.wayland.greetdSettings = {
-        hikari_session = {
+      myconfig.desktop.wayland.sessions = {
+        hikari = {
           command = "${pkgs.hikari}/bin/hikari";
-          inherit user;
         };
       };
     });

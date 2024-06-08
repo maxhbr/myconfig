@@ -3,36 +3,6 @@ let
   cfg = config.myconfig;
   user = myconfig.user;
 in {
-  options.myconfig = with lib; {
-    desktop.wayland = {
-      sessions = mkOption {
-        type = types.listOf types.str;
-        default = [ ];
-        description = lib.mdDoc ''
-          List of greet desktop environments, fist will be default
-        '';
-      };
-      directLoginFirstSession = mkOption {
-        type = types.bool;
-        default = false;
-      };
-      greetdSettings = let settingsFormat = pkgs.formats.toml { };
-      in mkOption {
-        type = settingsFormat.type;
-        example = literalExpression ''
-          {
-            sway = {
-              command = "''${pkgs.greetd.greetd}/bin/agreety --cmd sway";
-            };
-          }
-        '';
-        description = lib.mdDoc ''
-          greetd configuration ([documentation](https://man.sr.ht/~kennylevinsen/greetd/))
-          as a Nix attribute set.
-        '';
-      };
-    };
-  };
   imports = [
     # (lib.mkIf config.services.greetd.enable {
     #   services.greetd = {
@@ -53,11 +23,19 @@ in {
     # })
   ];
   config = let
-    sessions = cfg.desktop.wayland.sessions;
+    selectedSessions = cfg.desktop.wayland.selectedSessions;
     cmd_for_session = session:
-      cfg.desktop.wayland.greetdSettings."${session}_session".command;
-    cmd0 = cmd_for_session (lib.elemAt sessions 0);
-    cageSettings = {
+      cfg.desktop.wayland.sessions."${session}".command;
+    cmd0 = cmd_for_session (lib.elemAt selectedSessions 0);
+    tuigreetSettings = {
+      default_session = {
+        command = "${
+            lib.makeBinPath [ pkgs.greetd.tuigreet ]
+          }/tuigreet --width 120 --time --cmd '${cmd0}'";
+        user = "greeter";
+      };
+    };
+    cageGtkgreetSettings = {
       default_session.command = "${pkgs.cage}/bin/cage -s  -- ${pkgs.greetd.gtkgreet}/bin/gtkgreet -l";
       initial_session = {
         command = cmd0;
@@ -71,17 +49,22 @@ in {
       };
       default_session = initial_session;
     };
-  in (lib.mkIf (cfg.desktop.wayland.enable && sessions != [ ]) {
+  in (lib.mkIf (cfg.desktop.wayland.enable && selectedSessions != [ ]) {
     services.greetd = {
       enable = true;
-      settings = if cfg.desktop.wayland.directLoginFirstSession
-                  then directLaunchSettings
-                  else cageSettings;
+      settings = if cfg.desktop.wayland.directLoginFirstSession then
+                     directLaunchSettings
+                else if cfg.desktop.wayland.selectedGreeter == "gtkgreet" then
+                     cageGtkgreetSettings
+                else if cfg.desktop.wayland.selectedGreeter == "tuigreet" then
+                     tuigreetSettings
+                else
+                     abort "selectedGreeter is invalid";
     };
 
     environment.etc."greetd/environments".text =
       lib.foldr (session: str: (cmd_for_session session) + "\n" + str) "fish"
-      sessions;
+      selectedSessions;
 
     home-manager.sharedModules = [{
       home.packages = with pkgs;

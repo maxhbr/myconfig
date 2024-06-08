@@ -1,12 +1,9 @@
 { inputs, pkgs, config, lib, ... }:
 let cfg = config.myconfig;
 in {
-  options.myconfig = with lib; {
-    desktop.wayland.dwl = { enable = mkEnableOption "dwl"; };
-  };
   imports = [ inputs.mydwl.nixosModules.mydwl ];
-  config =
-    (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.dwl.enable) {
+  config = (lib.mkIf (cfg.desktop.wayland.enable
+    && builtins.elem "dwl" cfg.desktop.wayland.selectedSessions) {
       mydwl = {
         enable = true;
         barCommand = null;
@@ -16,10 +13,9 @@ in {
           ${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all
         '';
       };
-      myconfig.desktop.wayland.greetdSettings = {
-        dwl_session = {
+      myconfig.desktop.wayland.sessions = {
+        dwl = {
           command = config.mydwl.startCommand;
-          user = "mhuber";
         };
       };
     });

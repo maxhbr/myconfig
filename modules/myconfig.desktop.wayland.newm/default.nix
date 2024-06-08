@@ -7,15 +7,14 @@ let
   pkg = pkgs.newm;
 in {
   config = (lib.mkIf (cfg.desktop.wayland.enable
-    && builtins.elem "newm" cfg.desktop.wayland.sessions) {
+    && builtins.elem "newm" cfg.desktop.wayland.selectedSessions) {
       home-manager.sharedModules = [{
         xdg.configFile = { "newm/config.py".source = ./newm/config.py; };
         home.packages = [ pkg pkgs.pywm-fullscreen ];
       }];
-      myconfig.desktop.wayland.greetdSettings = {
-        newm_session = {
+      myconfig.desktop.wayland.sessions = {
+        newm = {
           command = "${pkg}/bin/start-newm";
-          inherit user;
         };
       };
       services.xserver.windowManager.session = lib.singleton {

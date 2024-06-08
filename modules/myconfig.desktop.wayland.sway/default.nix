@@ -7,11 +7,8 @@ let
     output "*" bg ${pkgs.my-wallpapers}/share/background.png fill
   '';
 in {
-  options.myconfig = with lib; {
-    desktop.wayland.sway = { enable = mkEnableOption "sway"; };
-  };
-  config =
-    (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.sway.enable) {
+  config = (lib.mkIf (cfg.desktop.wayland.enable
+    && builtins.elem "sway" cfg.desktop.wayland.selectedSessions) {
       environment = {
         etc = {
           "sway/config".source = ./sway/config;
@@ -84,10 +81,9 @@ in {
         '';
       };
 
-      myconfig.desktop.wayland.greetdSettings = {
-        sway_session = {
+      myconfig.desktop.wayland.sessions = {
+        sway = {
           command = "sway";
-          user = "mhuber";
         };
       };
     });

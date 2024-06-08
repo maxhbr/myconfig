@@ -36,7 +36,7 @@ in {
   };
   imports = [{ programs.hyprland = { enable = false; }; }];
   config = (lib.mkIf (cfg.desktop.wayland.enable
-    && builtins.elem "hyprland" cfg.desktop.wayland.sessions) {
+    && builtins.elem "hyprland" cfg.desktop.wayland.selectedSessions) {
       home-manager.sharedModules = [
         ({ config, ... }:
           let
@@ -125,10 +125,9 @@ in {
             };
           })
       ];
-      myconfig.desktop.wayland.greetdSettings = {
-        hyprland_session = {
+      myconfig.desktop.wayland.sessions = {
+        hyprland = {
           command = "${hyprlandPkg}/bin/Hyprland";
-          inherit user;
         };
       };
     });

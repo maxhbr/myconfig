@@ -23,10 +23,9 @@ in {
         kdeconnect
         kdeplasma-addons
       ];
-      myconfig.desktop.wayland.greetdSettings = {
-        kde_session = {
+      myconfig.desktop.wayland.sessions = {
+        kde = {
           command = "${pkgs.plasma-workspace}/bin/startplasma-wayland";
-          inherit user;
         };
       };
     });

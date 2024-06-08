@@ -14,7 +14,8 @@ in {
     };
   };
   config = (lib.mkIf (cfg.desktop.wayland.enable
-    && builtins.elem "niri" cfg.desktop.wayland.sessions) {
+    && ( builtins.elem "niri" cfg.desktop.wayland.selectedSessions
+      || builtins.elem "niri-plain" cfg.desktop.wayland.selectedSessions)) {
       home-manager.sharedModules = [
         ({ config, ... }: {
           home.packages = [ niri ];
@@ -71,14 +72,12 @@ in {
         })
       ];
 
-      myconfig.desktop.wayland.greetdSettings = {
-        niri_session = {
+      myconfig.desktop.wayland.sessions = {
+        niri = {
           command = "${niri}/bin/niri-session";
-          inherit user;
         };
-        niri-plain_session = {
+        niri-plain = {
           command = "${niri}/bin/niri";
-          inherit user;
         };
       };
     });

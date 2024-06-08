@@ -12,13 +12,13 @@ in {
     services.vnstat.enable = true;
     services.vsftpd.enable = true;
 
-    programs.mosh.enable = lib.mkDefault true;
-    services.eternal-terminal = {
-      enable = true;
-      port = 22022;
-    };
-    networking.firewall.allowedTCPPorts = [ 22022 ];
-    networking.firewall.allowedUDPPorts = [ 22022 ];
+    # programs.mosh.enable = lib.mkDefault true;
+    # services.eternal-terminal = {
+    #   enable = true;
+    #   port = 22022;
+    # };
+    # networking.firewall.allowedTCPPorts = [ 22022 ];
+    # networking.firewall.allowedUDPPorts = [ 22022 ];
 
     systemd.enableCgroupAccounting = true;
     system.autoUpgrade.allowReboot = true;

@@ -78,10 +78,9 @@ in {
       }];
 
       services.xserver.windowManager.qtile.package = qtilePackage;
-      myconfig.desktop.wayland.greetdSettings = {
-        qtile_session = {
+      myconfig.desktop.wayland.sessions = {
+        qtile = {
           command = "${startQtile}/bin/start-qtile";
-          inherit user;
         };
       };
     });

@@ -70,7 +70,7 @@ let
   '';
 in {
   config = (lib.mkIf (cfg.desktop.wayland.enable
-    && builtins.elem "river" cfg.desktop.wayland.sessions) {
+    && builtins.elem "river" cfg.desktop.wayland.selectedSessions) {
       home-manager.sharedModules = [
         ({ config, ... }: {
           xdg.configFile = {
@@ -108,10 +108,9 @@ in {
         })
       ];
 
-      myconfig.desktop.wayland.greetdSettings = {
-        river_session = {
+      myconfig.desktop.wayland.sessions = {
+        river = {
           command = "${riverPackage}/bin/river";
-          user = "mhuber";
         };
       };
     });

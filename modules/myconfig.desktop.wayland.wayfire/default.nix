@@ -44,10 +44,9 @@ in {
         xdg.configFile = { "wayfire.ini".source = ./wayfire.ini; };
         home.packages = with pkgs; [ wayfirePackage ];
       }];
-      myconfig.desktop.wayland.greetdSettings = {
-        wayfire_session = {
+      myconfig.desktop.wayland.sessions = {
+        wayfire = {
           command = "${wayfirePackage}/bin/wayfire";
-          user = "mhuber";
         };
       };
     });

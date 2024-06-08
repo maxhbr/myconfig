@@ -16,10 +16,9 @@ in {
         home.packages = with pkgs; [ pkg ];
       }];
 
-      myconfig.desktop.wayland.greetdSettings = {
-        vivarium_session = {
+      myconfig.desktop.wayland.sessions = {
+        vivarium = {
           command = "${pkg}/bin/vivarium";
-          inherit user;
         };
       };
     });

@@ -6,11 +6,8 @@ let
   pkg = pkgs.master.labwc;
   user = myconfig.user;
 in {
-  options.myconfig = with lib; {
-    desktop.wayland.labwc = { enable = mkEnableOption "labwc"; };
-  };
   config = (lib.mkIf (cfg.desktop.wayland.enable
-    && builtins.elem "labwc" cfg.desktop.wayland.sessions) {
+    && builtins.elem "labwc" cfg.desktop.wayland.selectedSessions) {
       home-manager.sharedModules = [{
         xdg.configFile = {
           "labwc/rc.xml" = {
@@ -58,10 +55,9 @@ in {
         name = "labwc";
         start = "${pkg}/bin/labwc";
       };
-      myconfig.desktop.wayland.greetdSettings = {
-        labwc_session = {
+      myconfig.desktop.wayland.sessions = {
+        labwc = {
           command = "${pkg}/bin/labwc";
-          inherit user;
         };
       };
     });
