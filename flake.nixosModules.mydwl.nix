@@ -14,9 +14,7 @@ in {
         '';
       };
       myconfig.desktop.wayland.sessions = {
-        dwl = {
-          command = config.mydwl.startCommand;
-        };
+        dwl = { command = config.mydwl.startCommand; };
       };
     });
 }

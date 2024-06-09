@@ -100,8 +100,8 @@ in {
         '';
       };
       selectedGreeter = mkOption {
-        type = types.enum [ "gtkgreet" "tuigreet" ];
-        default = "gtkgreet";
+        type = types.enum [ "tuigreet" "gtkgreet" ];
+        default = "tuigreet";
         description = lib.mdDoc ''
           Choose the greeter to use
         '';
@@ -128,11 +128,7 @@ in {
     };
   };
 
-  imports = [ 
-    ./services.greetd.nix
-    ./sharescreen.nix
-    ./programs.waybar
-  ];
+  imports = [ ./services.greetd.nix ./sharescreen.nix ./programs.waybar ];
 
   config = (lib.mkIf cfg.desktop.wayland.enable {
     services.greetd.enable = true;

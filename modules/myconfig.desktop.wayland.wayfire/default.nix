@@ -45,9 +45,7 @@ in {
         home.packages = with pkgs; [ wayfirePackage ];
       }];
       myconfig.desktop.wayland.sessions = {
-        wayfire = {
-          command = "${wayfirePackage}/bin/wayfire";
-        };
+        wayfire = { command = "${wayfirePackage}/bin/wayfire"; };
       };
     });
 }

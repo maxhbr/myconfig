@@ -81,10 +81,6 @@ in {
         '';
       };
 
-      myconfig.desktop.wayland.sessions = {
-        sway = {
-          command = "sway";
-        };
-      };
+      myconfig.desktop.wayland.sessions = { sway = { command = "sway"; }; };
     });
 }

@@ -68,14 +68,16 @@ in {
         subversion
         google-cloud-sdk
       ]);
-      myconfig.desktop.wayland.wrappedElectronPackages = [{
-        pkg = slack-pkg;
-        executable = "slack";
-      }
-      {
-        pkg = teams-for-linux-pkg;
-        executable = "teams-for-linux";
-      }];
+      myconfig.desktop.wayland.wrappedElectronPackages = [
+        {
+          pkg = slack-pkg;
+          executable = "slack";
+        }
+        {
+          pkg = teams-for-linux-pkg;
+          executable = "teams-for-linux";
+        }
+      ];
     }];
   };
 }

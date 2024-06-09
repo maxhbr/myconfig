@@ -126,9 +126,7 @@ in {
           })
       ];
       myconfig.desktop.wayland.sessions = {
-        hyprland = {
-          command = "${hyprlandPkg}/bin/Hyprland";
-        };
+        hyprland = { command = "${hyprlandPkg}/bin/Hyprland"; };
       };
     });
 }

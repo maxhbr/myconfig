@@ -274,9 +274,7 @@ in {
         home.packages = [ pkgs.hikari ];
       }];
       myconfig.desktop.wayland.sessions = {
-        hikari = {
-          command = "${pkgs.hikari}/bin/hikari";
-        };
+        hikari = { command = "${pkgs.hikari}/bin/hikari"; };
       };
     });
 }

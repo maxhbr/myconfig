@@ -208,7 +208,7 @@
         host-p14 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "p14" ([
             self.nixosModules.core
-            ({ myconfig, ... }: {
+            ({ pkgs, myconfig, ... }: {
               imports = [
                 (myconfig.metadatalib.announceHost "x1extremeG2")
                 (myconfig.metadatalib.announceHost "workstation")
@@ -220,6 +220,16 @@
                 (myconfig.metadatalib.announceHost "pi0")
                 (myconfig.metadatalib.announceHost "r6c")
               ];
+              config = {
+                home-manager.sharedModules = [{
+                  home.packages = [
+                    (pkgs.writeShellScriptBin "myconfig" ''
+                      set -x
+                      ${pkgs.neovide}/bin/neovide ~/myconfig/myconfig
+                    '')
+                  ];
+                }];
+              };
             })
           ] ++ moreModules) metadataOverride);
         host-x1extremeG2 = moreModules: metadataOverride:

@@ -24,9 +24,7 @@ in {
         kdeplasma-addons
       ];
       myconfig.desktop.wayland.sessions = {
-        kde = {
-          command = "${pkgs.plasma-workspace}/bin/startplasma-wayland";
-        };
+        kde = { command = "${pkgs.plasma-workspace}/bin/startplasma-wayland"; };
       };
     });
 }

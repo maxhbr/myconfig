@@ -17,9 +17,7 @@ in {
       }];
 
       myconfig.desktop.wayland.sessions = {
-        vivarium = {
-          command = "${pkg}/bin/vivarium";
-        };
+        vivarium = { command = "${pkg}/bin/vivarium"; };
       };
     });
 }

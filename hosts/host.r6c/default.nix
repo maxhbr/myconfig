@@ -24,11 +24,11 @@
         wayland = {
           enable = true;
           directLoginFirstSession = true;
-          sessions = [ 
+          sessions = [
             # "river" 
-            "niri-plain" 
-            "niri" 
-            "hyprland" 
+            "niri-plain"
+            "niri"
+            "hyprland"
             # "labwc" 
           ];
         };

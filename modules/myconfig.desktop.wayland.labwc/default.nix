@@ -56,9 +56,7 @@ in {
         start = "${pkg}/bin/labwc";
       };
       myconfig.desktop.wayland.sessions = {
-        labwc = {
-          command = "${pkg}/bin/labwc";
-        };
+        labwc = { command = "${pkg}/bin/labwc"; };
       };
     });
 }

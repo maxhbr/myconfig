@@ -109,9 +109,7 @@ in {
       ];
 
       myconfig.desktop.wayland.sessions = {
-        river = {
-          command = "${riverPackage}/bin/river";
-        };
+        river = { command = "${riverPackage}/bin/river"; };
       };
     });
 }

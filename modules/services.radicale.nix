@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: MIT
 # https://nixos.wiki/wiki/Radicale
 { pkgs, config, lib, myconfig, ... }:
-let
-  user = myconfig.user;
+let user = myconfig.user;
 in {
   config = lib.mkIf config.services.radicale.enable {
     services.radicale = {
@@ -14,9 +13,7 @@ in {
           # htpasswd_filename = "/etc/radicale_users.htpasswd";
           # htpasswd_encryption = "bcrypt";
         };
-        storage = {
-          filesystem_folder = "/var/lib/radicale/collections";
-        };
+        storage = { filesystem_folder = "/var/lib/radicale/collections"; };
       };
       rights = {
         root = {

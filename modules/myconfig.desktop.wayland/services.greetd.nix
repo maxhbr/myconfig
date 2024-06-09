@@ -36,7 +36,8 @@ in {
       };
     };
     cageGtkgreetSettings = {
-      default_session.command = "${pkgs.cage}/bin/cage -s  -- ${pkgs.greetd.gtkgreet}/bin/gtkgreet -l";
+      default_session.command =
+        "${pkgs.cage}/bin/cage -s  -- ${pkgs.greetd.gtkgreet}/bin/gtkgreet -l";
       initial_session = {
         command = cmd0;
         user = "greeter";
@@ -53,13 +54,13 @@ in {
     services.greetd = {
       enable = true;
       settings = if cfg.desktop.wayland.directLoginFirstSession then
-                     directLaunchSettings
-                else if cfg.desktop.wayland.selectedGreeter == "gtkgreet" then
-                     cageGtkgreetSettings
-                else if cfg.desktop.wayland.selectedGreeter == "tuigreet" then
-                     tuigreetSettings
-                else
-                     abort "selectedGreeter is invalid";
+        directLaunchSettings
+      else if cfg.desktop.wayland.selectedGreeter == "gtkgreet" then
+        cageGtkgreetSettings
+      else if cfg.desktop.wayland.selectedGreeter == "tuigreet" then
+        tuigreetSettings
+      else
+        abort "selectedGreeter is invalid";
     };
 
     environment.etc = {
@@ -69,16 +70,17 @@ in {
     } // (let
       fun = session: {
         name = "greetd/wayland-sessions/${session}.desktop";
-        value = { text = ''
-[Desktop Entry]
-Name=${session}
-Comment=${session}
-Exec=${cmd_for_session session}
-Type=Application
-         '';
-       };
-     };
-      in builtins.listToAttrs (builtins.map fun selectedSessions));
+        value = {
+          text = ''
+            [Desktop Entry]
+            Name=${session}
+            Comment=${session}
+            Exec=${cmd_for_session session}
+            Type=Application
+          '';
+        };
+      };
+    in builtins.listToAttrs (builtins.map fun selectedSessions));
 
     home-manager.sharedModules = [{
       home.packages = with pkgs;

@@ -13,9 +13,7 @@ in {
         home.packages = [ pkg pkgs.pywm-fullscreen ];
       }];
       myconfig.desktop.wayland.sessions = {
-        newm = {
-          command = "${pkg}/bin/start-newm";
-        };
+        newm = { command = "${pkg}/bin/start-newm"; };
       };
       services.xserver.windowManager.session = lib.singleton {
         name = "newm";
