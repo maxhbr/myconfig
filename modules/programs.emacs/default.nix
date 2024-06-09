@@ -1,6 +1,8 @@
 # partially based on:
 # https://gist.github.com/dltacube/280c82b3426690558341a3ac3a71428d
-{ inputs, pkgs, config, lib, ... }: {
+{ inputs, pkgs, config, lib, ... }: let
+  cfg = config.myconfig;
+in {
   imports = [
     ({ ... }: {
       nixpkgs.overlays = [ inputs.emacs.overlay ];
@@ -28,6 +30,9 @@
         };
         programs.emacs = {
           enable = true;
+          package = if cfg.desktop.wayland.enable
+                    then pkgs.emacs-pgtk
+                    else pkgs.emacs-unstable;
           extraConfig = ''
             ; prevent emacs from saving customizations to this file
             (setq custom-file (concat user-emacs-directory ".emacs-customize.el"))
