@@ -28,8 +28,25 @@ let
         }
       else
         pkgs.waybar;
+      waybarOnce = pkgs.writeShellScriptBin "waybarOnce" ''
+        set -euo pipefail
+        session="$1"; shift
+        pidfile=/tmp/''${session}.''${XDG_VTNR}.''${USER}.waybar.pid
+
+        if [ -f $pidfile ]; then
+          pid=$(cat $pidfile)
+          if kill -0 $pid &> /dev/null; then
+            kill $pid
+          fi
+        fi
+
+        ${waybarPackage}/bin/waybar "$@" waybar > /tmp/''${session}.''${XDG_VTNR}.''${USER}.waybar.log 2>&1 &
+        echo $! > $pidfile
+        wait
+      '';
     in {
       config = (lib.mkIf config.programs.waybar.enable {
+        home.packages = [waybarOnce];
         programs.waybar = {
           package = waybarPackage;
           systemd.enable = false;
@@ -235,7 +252,6 @@ let
               tray.rotate = 90;
               clock.rotate = 90;
               "clock#time".rotate = 90;
-              # "clock#date".rotate = 90;
             };
           };
           style = builtins.readFile ./waybar.gtk.css;

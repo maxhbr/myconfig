@@ -81,7 +81,6 @@
           set -euo pipefail
           set -x
           systemctl restart bluetooth.service
-          # pkill waybar && waybar & disown
           dbus-wm-environment wlroots
         '';
       in {

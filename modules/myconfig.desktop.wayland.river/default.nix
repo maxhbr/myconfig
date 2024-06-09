@@ -81,7 +81,8 @@ in {
               source = (pkgs.writeShellScriptBin "autostart.sh" ''
                 set -x
                 ${cfg.desktop.wayland.autostartCommands}
-                pkill waybar ; waybar > /tmp/river.''${XDG_VTNR}.''${USER}.waybar.log 2>&1 &disown
+
+                waybarOnce river &disown
 
                 # TODO: why is/was river called in rivers autostart script, which is called by river??
                 # # or: dbus-run-session -- river

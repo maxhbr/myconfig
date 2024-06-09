@@ -25,7 +25,7 @@ in {
         autostart = ''
           set -x
           ${cfg.desktop.wayland.autostartCommands}
-          pkill waybar ; waybar > /tmp/hikari.''${XDG_VTNR}.''${USER}.waybar.log 2>&1 &disown
+          waybarOnce hikari &disown
           dbus-wm-environment hikari
         '';
         settings = {

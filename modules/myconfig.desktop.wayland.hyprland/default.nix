@@ -76,7 +76,7 @@ in {
                     set -x
                     exec &> >(tee -a /tmp/hyprland.''${XDG_VTNR}.''${USER}.autostart.log)
                     ${cfg.desktop.wayland.autostartCommands}
-                    pkill waybar ; waybar > /tmp/hyprland.''${XDG_VTNR}.''${USER}.waybar.log 2>&1 &disown
+                    waybarOnce hyprland &disown
                   ''
                 }/bin/autostart.sh
               '';
