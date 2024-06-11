@@ -493,4 +493,11 @@ binds {
     // Powers off the monitors. To turn them back on, do any input like
     // moving the mouse or pressing any other key.
     // Mod+Shift+Y { power-off-monitors; }
+
+    XF86AudioMedia { spawn "playerctl" "play-pause"; }
+    XF86AudioPlay { spawn "playerctl" "play-pause"; }
+    XF86AudioPrev { spawn "playerctl" "previous"; }
+    XF86AudioNext { spawn "playerctl" "next"; }
+    XF86Go { spawn "playerctl" "play"; }
+    Cancel { spawn "playerctl" "pause"; }
 }

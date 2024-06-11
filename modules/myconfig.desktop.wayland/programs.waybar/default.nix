@@ -31,7 +31,9 @@ let
       waybarOnce = pkgs.writeShellScriptBin "waybarOnce" ''
         set -euo pipefail
         session="$1"; shift
-        pidfile=/tmp/''${session}.''${XDG_VTNR}.''${USER}.waybar.pid
+        bn=/tmp/''${session}.''${XDG_VTNR:-x}.''${USER}.waybar
+        pidfile=$bn.pid
+        logfile=$bn.log
 
         if [ -f $pidfile ]; then
           pid=$(cat $pidfile)
@@ -40,7 +42,8 @@ let
           fi
         fi
 
-        ${waybarPackage}/bin/waybar "$@" waybar > /tmp/''${session}.''${XDG_VTNR}.''${USER}.waybar.log 2>&1 &
+        echo "... waybar log is written to $logfile"
+        ${waybarPackage}/bin/waybar "$@" > $logfile 2>&1 &
         echo $! > $pidfile
         wait
       '';
