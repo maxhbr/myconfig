@@ -5,11 +5,8 @@ let
   cfg = config.myconfig;
   user = myconfig.user;
 in {
-  options.myconfig = with lib; {
-    desktop.wayland.kde = { enable = mkEnableOption "kde"; };
-  };
-  config =
-    (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.kde.enable) {
+  config = (lib.mkIf (cfg.desktop.wayland.enable
+    && builtins.elem "kde" cfg.desktop.wayland.selectedSessions) {
       # services.xserver.enable = true;
       # services.xserver.displayManager.sddm.enable = true;
 

@@ -103,7 +103,14 @@
         enable = true;
         wayland = {
           enable = true;
-          selectedSessions = [ "hyprland" "niri" "labwc" ]; # "river"
+          selectedSessions = [
+            "hyprland"
+            "niri"
+            "labwc"
+            "river"
+            "kde"
+             # "qtile"
+          ];
           niri.additionalConfigKdl = ''
             // You can configure outputs by their name, which you can find
             // by running `niri msg outputs` while inside a niri instance.

@@ -43,11 +43,8 @@ let
     ${qtilePackage}/bin/qtile shell -c 'reload_config()'
   '';
 in {
-  options.myconfig = with lib; {
-    desktop.wayland.qtile = { enable = mkEnableOption "qtile"; };
-  };
-  config =
-    (lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.qtile.enable) {
+  config = (lib.mkIf (cfg.desktop.wayland.enable
+    && builtins.elem "qtile" cfg.desktop.wayland.selectedSessions) {
       home-manager.sharedModules = [{
         xdg.configFile = {
           "qtile" = {
