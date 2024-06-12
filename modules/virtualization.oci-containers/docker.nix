@@ -52,6 +52,7 @@ in {
 
     systemd.services.docker.restartIfChanged = lib.mkForce false;
     virtualisation.docker = {
+      daemon.settings = { ip = "127.0.0.1"; };
       extraOptions = "--data-root /home/docker";
       storageDriver = if config.fileSystems."/".fsType == "btrfs" then
         "btrfs"
