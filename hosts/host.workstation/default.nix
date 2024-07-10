@@ -74,7 +74,14 @@
         enable = true;
         wayland = {
           enable = true;
-          sessions = [ "hyprland" "niri" "labwc" ]; # "river"
+          selectedSessions = [
+            "hyprland"
+            "niri"
+            "labwc"
+            "river"
+            "kde"
+             # "qtile"
+          ];
         };
         myphoto.enable = true;
         obs.enable = true;
