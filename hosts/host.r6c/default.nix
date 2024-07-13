@@ -8,6 +8,12 @@
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
     ])
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
+
+    {
+      environment.systemPackages = with pkgs; [
+        plasma5Packages.plasma-bigscreen
+      ];
+    }
   ];
 
   config = {
@@ -24,11 +30,12 @@
         wayland = {
           enable = true;
           directLoginFirstSession = true;
-          sessions = [
+          selectedSessions = [
+            "kde"
             # "river" 
             "niri-plain"
             "niri"
-            "hyprland"
+            # "hyprland"
             # "labwc" 
           ];
         };
