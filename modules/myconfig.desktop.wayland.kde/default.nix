@@ -23,5 +23,13 @@ in {
       myconfig.desktop.wayland.sessions = {
         kde = { command = "${pkgs.plasma-workspace}/bin/startplasma-wayland"; };
       };
+      networking.firewall = {
+        allowedTCPPortRanges = [ 
+          { from = 1714; to = 1764; } # KDE Connect
+        ];  
+        allowedUDPPortRanges = [ 
+          { from = 1714; to = 1764; } # KDE Connect
+        ];
+      };
     });
 }

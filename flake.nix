@@ -108,7 +108,7 @@
             home-manager = {
               useUserPackages = true;
               useGlobalPkgs = true;
-              backupFileExtension = "hmBackup";
+              backupFileExtension = "homeManagerBackup";
               sharedModules = [
                 ({ pkgs, ... }: {
                   home.stateVersion =

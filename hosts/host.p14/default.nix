@@ -52,7 +52,7 @@
         options = [ "nofail" "soft" ];
       };
     }
-    ../host.workstation/gaming/games.steam
+    # ../host.workstation/gaming/games.steam
     # ({config, pkgs, ...}: {
     #   config = lib.mkIf config.myconfig.desktop.wayland.hyprland.enable {
     #     home-manager.sharedModules = [({config, ...}: let
@@ -104,7 +104,7 @@
         wayland = {
           enable = true;
           selectedSessions = [
-            "hyprland"
+            # "hyprland"
             "niri"
             "labwc"
             "river"
@@ -153,7 +153,7 @@
         messengers.enable = true;
         myphoto.enable = true;
         obs.enable = true;
-        cad.enable = true;
+        # cad.enable = true;
         deskreen.enable = true;
       };
       email.enable = true;

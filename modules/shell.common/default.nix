@@ -123,7 +123,6 @@ in {
         '')
       ];
       interactiveShellInit = ''
-        eval $(${pkgs.thefuck}/bin/thefuck --alias)
         hgrep() { history | egrep "$@"; }
       '';
       shellAliases = {
@@ -134,7 +133,6 @@ in {
         webserver = "python -m http.server 8000";
       };
     };
-    programs.thefuck.enable = true;
 
     security.sudo.extraConfig = ''
       ALL  ALL=(ALL) NOPASSWD: /run/current-system/sw/bin/systemctl suspend
