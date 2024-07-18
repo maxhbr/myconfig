@@ -8,12 +8,6 @@
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
     ])
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
-
-    {
-      environment.systemPackages = with pkgs; [
-        plasma5Packages.plasma-bigscreen
-      ];
-    }
   ];
 
   config = {
@@ -31,7 +25,8 @@
           enable = true;
           directLoginFirstSession = true;
           selectedSessions = [
-            "kde"
+            "plasma5-bigsrceen"
+            "plasma5"
             # "river" 
             "niri-plain"
             "niri"

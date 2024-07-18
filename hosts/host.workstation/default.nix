@@ -75,11 +75,11 @@
         wayland = {
           enable = true;
           selectedSessions = [
-            "hyprland"
+            # "hyprland"
             "niri"
             "labwc"
             "river"
-            "kde"
+            "plasma6"
              # "qtile"
           ];
         };

@@ -90,6 +90,9 @@
         };
       })
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
+    {
+      programs.kdeconnect.enable = true;
+    }
   ];
 
   config = {
@@ -108,7 +111,7 @@
             "niri"
             "labwc"
             "river"
-            "kde"
+            "plasma6"
              # "qtile"
           ];
           niri.additionalConfigKdl = ''

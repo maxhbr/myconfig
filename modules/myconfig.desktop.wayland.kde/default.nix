@@ -5,7 +5,42 @@ let
   cfg = config.myconfig;
   user = myconfig.user;
 in {
-  imports = [
+  config = (lib.mkIf (cfg.desktop.wayland.enable
+  && (builtins.elem "plasma5" cfg.desktop.wayland.selectedSessions ||
+      builtins.elem "plasma6" cfg.desktop.wayland.selectedSessions)) (lib.mkMerge [
+    (lib.mkIf (builtins.elem "plasma5" cfg.desktop.wayland.selectedSessions) {
+      services.xserver.desktopManager.plasma5.enable = true;
+      environment.systemPackages = with pkgs; [
+        plasma5Packages.bismuth
+      ];
+      environment.plasma5.excludePackages = with pkgs.libsForQt5; [
+        plasma-browser-integration
+        konsole
+        oxygen
+      ];
+      myconfig.desktop.wayland.sessions = {
+        plasma5 = { command = "${pkgs.plasma-workspace}/bin/startplasma-wayland"; };
+      };
+    })
+    (lib.mkIf (builtins.elem "plasma6" cfg.desktop.wayland.selectedSessions) {
+      services.desktopManager.plasma6.enable = true;
+      environment.plasma6.excludePackages = with pkgs.kdePackages; [
+        plasma-browser-integration
+        konsole
+        oxygen
+      ];
+      myconfig.desktop.wayland.sessions = {
+        plasma6 = { command = "${pkgs.plasma-workspace}/bin/startplasma-wayland"; };
+      };
+    })
+    (lib.mkIf (builtins.elem "plasma5-bigsrceen" cfg.desktop.wayland.selectedSessions) {
+      environment.systemPackages = with pkgs; [
+        plasma5Packages.plasma-bigscreen
+      ];
+      myconfig.desktop.wayland.sessions = {
+        plasma5-bigsrceen = { command = "${pkgs.plasma5Packages.plasma-bigscreen}/bin/plasma-bigscreen-wayland"; };
+      };
+    })
     (lib.mkIf config.programs.kdeconnect.enable {
       networking.firewall = {
         allowedTCPPortRanges = [ 
@@ -16,36 +51,11 @@ in {
         ];
       };
     })
-  ];
-  config = (lib.mkIf (cfg.desktop.wayland.enable
-    && builtins.elem "kde" cfg.desktop.wayland.selectedSessions) {
-      # services.xserver.enable = true;
-      # services.xserver.displayManager.sddm.enable = true;
-
-      # # services.xserver.enable = lib.mkForce true;
-      # services.xserver.displayManager.sddm.enable = false;
-      # services.xserver.displayManager.gdm.enable = true;
-
-      # services.xserver.desktopManager.plasma5.enable = true;
-      services.desktopManager.plasma6.enable = true;
+    {
       environment.systemPackages = with pkgs; [
-        plasma5Packages.bismuth
-        kdeconnect
         kdeplasma-addons
       ];
-      environment.plasma5.excludePackages = with pkgs.libsForQt5; [
-        plasma-browser-integration
-        konsole
-        oxygen
-      ];
-      environment.plasma6.excludePackages = with pkgs.kdePackages; [
-        plasma-browser-integration
-        konsole
-        oxygen
-      ];
-      myconfig.desktop.wayland.sessions = {
-        kde = { command = "${pkgs.plasma-workspace}/bin/startplasma-wayland"; };
-      };
-      programs.kdeconnect.enable = false;
-    });
+      programs.kdeconnect.enable = lib.mkDefault false;
+    }
+  ]));
 }
