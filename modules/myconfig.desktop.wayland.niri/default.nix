@@ -56,7 +56,7 @@ in {
                 Slice = "session.slice";
                 Type = "notify";
                 ExecStart =
-                  "/nix/store/nghd2753y9wddr65k5pz4iwgzlfsgvd0-niri-0.1.6/bin/niri --session";
+                  "${niri}/bin/niri --session";
               };
             };
             systemd.user.targets.niri-shutdown = {

@@ -66,7 +66,7 @@ in {
           configure-gtk
           theme.package
           iconTheme.package
-          gnome.adwaita-icon-theme # default gnome cursors
+          adwaita-icon-theme # default gnome cursors
         ];
         gtk = {
           enable = true;

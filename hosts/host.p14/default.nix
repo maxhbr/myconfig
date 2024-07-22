@@ -45,13 +45,13 @@
         }];
       };
     }
-    {
-      fileSystems."/home/mhuber/MINE/Bilder/imgwork" = {
-        device = "192.168.1.40:/imgwork";
-        fsType = "nfs";
-        options = [ "nofail" "soft" ];
-      };
-    }
+    # {
+    #   fileSystems."/home/mhuber/MINE/Bilder/imgwork" = {
+    #     device = "192.168.1.40:/imgwork";
+    #     fsType = "nfs";
+    #     options = [ "nofail" "soft" ];
+    #   };
+    # }
     # ../host.workstation/gaming/games.steam
     # ({config, pkgs, ...}: {
     #   config = lib.mkIf config.myconfig.desktop.wayland.hyprland.enable {
@@ -109,6 +109,7 @@
           selectedSessions = [
             # "hyprland"
             "niri"
+            "niri-plain"
             "labwc"
             "river"
             "plasma6"
@@ -210,21 +211,21 @@
           output = "eDP-1";
           defaultTimeout = lib.mkForce 20000;
         };
-        services.kanshi = {
-          enable = lib.mkForce true;
-          profiles = {
-            # get list via "swaymsg -t get_outputs"
-            undocked = {
-              outputs = [{
-                criteria = "eDP-1";
-                mode = "1920x1200@60Hz";
-                position = "0,0";
-                scale = 1.0;
-              }];
-              exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
-            };
-          };
-        };
+        # services.kanshi = {
+        #   enable = lib.mkForce true;
+        #   settings = {
+        #     # get list via "swaymsg -t get_outputs"
+        #     undocked = {
+        #       outputs = [{
+        #         criteria = "eDP-1";
+        #         mode = "1920x1200@60Hz";
+        #         position = "0,0";
+        #         scale = 1.0;
+        #       }];
+        #       exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
+        #     };
+        #   };
+        # };
       }
     ];
 

@@ -146,7 +146,7 @@ in {
 
     # services.xserver.displayManager.sddm.wayland = true;
     # services.xserver.displayManager.gdm.wayland = true;
-    services.xserver.libinput.enable = true;
+    services.libinput.enable = true;
 
     nixpkgs = {
       overlays = [

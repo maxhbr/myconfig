@@ -56,7 +56,7 @@
 
     #wayland:hyprland
     hyprland = {
-      url = "github:hyprwm/Hyprland/v0.40.0";
+      url = "github:hyprwm/Hyprland/v0.41.2";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     hyprland-plugins = {
