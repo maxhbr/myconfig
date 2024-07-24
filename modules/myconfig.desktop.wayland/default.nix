@@ -164,6 +164,7 @@ in {
     home-manager.sharedModules = [
       ./home-manager.wrap-electron-apps.nix
       ./home-manager.kanshi.nix
+      ./home-manager.swaync.nix
       ./home-manager.mako.nix
       ./home-manager.foot.nix
       {
@@ -173,7 +174,9 @@ in {
         };
         programs.waybar.enable = true;
         services.kanshi.enable = false;
-        services.mako.enable = true;
+        services.swaync.enable = true;
+        services.mako.enable = false;
+        services.dunst.enable = false;
         services.random-background.enable = lib.mkForce false;
         services.screen-locker.enable = lib.mkForce false;
         programs.foot.enable = true;
