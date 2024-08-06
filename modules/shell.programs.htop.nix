@@ -5,6 +5,7 @@
     environment.systemPackages = with pkgs; [ htop ];
     home-manager.sharedModules = [
       ({ config, ... }: {
+        xdg.configFile."htop/htoprc".force = true;
         programs.htop = {
           enable = true;
           settings = {

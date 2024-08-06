@@ -54,7 +54,7 @@ in {
     {
       environment.systemPackages = with pkgs; [
         kdeplasma-addons
-      ];
+      ] ++ (with pkgs.kdePackages; [ arianna ]) ;
       programs.kdeconnect.enable = lib.mkDefault false;
     }
   ]));
