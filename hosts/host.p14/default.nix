@@ -180,7 +180,9 @@
       docker.enable = true;
       podman.enable = true;
       oci-containers = { backend = "podman"; };
-      virtualbox.host.enable = false;
+      # virtualbox.host.enable = true;
+      # lxc.enable = true;
+      libvirtd.enable = true;
     };
 
     services.xserver.wacom.enable = true;
