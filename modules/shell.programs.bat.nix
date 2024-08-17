@@ -3,13 +3,15 @@
 { pkgs, ... }: {
   config = {
     home-manager.sharedModules = [
-      (let
+      {
+        programs.bat.enable = false;
+      }
+      ({config, ...}: let
         aliases = {
           cat = ''${pkgs.bat}/bin/bat --theme="Monokai Extended Light"'';
         };
-      in {
+      in lib.mkIf (config.programs.bat.enable {
         programs.bat = {
-          enable = true;
           extraPackages = with pkgs.bat-extras; [
             batdiff
             batman
@@ -24,7 +26,7 @@
         programs.bash.shellAliases = aliases;
         programs.zsh.shellAliases = aliases;
         programs.fish.shellAliases = aliases;
-      })
+      }))
     ];
   };
 }

@@ -72,8 +72,12 @@
     myconfig = {
       desktop = {
         enable = true;
-        wayland = {
+        xserver = {
           enable = true;
+          xmonad.enable = true;
+        };
+        wayland = {
+          enable = false;
           selectedSessions = [
             # "hyprland"
             "niri"

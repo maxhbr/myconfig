@@ -264,6 +264,7 @@ let
             environment.systemPackages = [
               (pkgs.writeShellScriptBin "mkBackup-${serviceName}" ''
                 set -euo pipefail
+                set -x
                 sudo mkdir -p "${repomnt}"
                 sudo mount ${device} || true
                 if ! ( mount | grep -q "${repomnt}" ); then
@@ -293,6 +294,7 @@ let
             environment.systemPackages = [
               (pkgs.writeShellScriptBin "mkBackup-${newName}" ''
                 set -euo pipefail
+                set -x
                 sudo systemctl restart borgbackup-job-${newName}.service
                 journalctl -u borgbackup-job-${newName}.service --since "2 minutes ago" -f
               '')

@@ -201,6 +201,7 @@
         home.packages = with pkgs;
           [
             google-chrome # for netflix
+            joplin-desktop
           ];
         programs.zsh.shellAliases = {
           upg-get-hostId = ''
