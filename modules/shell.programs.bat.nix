@@ -1,19 +1,18 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, ... }: {
+{ pkgs, config, myconfig, ... }: {
   config = {
     home-manager.sharedModules = [
-      {
-        programs.bat.enable = false;
-      }
-      ({config, ...}: let
+      ({pkgs, lib, config, ...}:{
+        config = lib.mkIf config.programs.bat.enable (let
         aliases = {
-          cat = ''${pkgs.bat}/bin/bat --theme="Monokai Extended Light"'';
+          cat = ''${pkgs.bat}/bin/bat''; # --theme="Monokai Extended Light"'';
         };
-      in lib.mkIf (config.programs.bat.enable {
+      in 
+        {
         programs.bat = {
           extraPackages = with pkgs.bat-extras; [
-            batdiff
+            # batdiff
             batman
             batgrep
             batwatch
@@ -26,7 +25,11 @@
         programs.bash.shellAliases = aliases;
         programs.zsh.shellAliases = aliases;
         programs.fish.shellAliases = aliases;
-      }))
+      });
+    })
+    {
+      programs.bat.enable = true;
+    }
     ];
   };
 }
