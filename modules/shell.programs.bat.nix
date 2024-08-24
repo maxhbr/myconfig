@@ -5,21 +5,22 @@
     home-manager.sharedModules = [
       ({pkgs, lib, config, ...}:{
         config = lib.mkIf config.programs.bat.enable (let
+        theme = "Monokai Extended Light";
         aliases = {
-          cat = ''${pkgs.bat}/bin/bat''; # --theme="Monokai Extended Light"'';
+          cat = ''${pkgs.bat}/bin/bat --theme="${theme}"'';
         };
       in 
         {
         programs.bat = {
           extraPackages = with pkgs.bat-extras; [
-            # batdiff
+            # batdiff # fails to compile
             batman
             batgrep
             batwatch
           ];
           config = {
             pager = "less -FR";
-            theme = "Monokai Extended Light";
+            inherit theme;
           };
         };
         programs.bash.shellAliases = aliases;
