@@ -30,6 +30,7 @@ in {
         # kitty
         alacritty
         mupdf
+        evince
         xarchiver
         feh
         imagemagick
