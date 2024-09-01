@@ -128,7 +128,23 @@ in {
     };
   };
 
-  imports = [ ./services.greetd.nix ./sharescreen.nix ./programs.waybar ];
+  imports = [ 
+    ./services.greetd.nix
+    ./sharescreen.nix
+    ./programs.waybar
+    {
+      home-manager.sharedModules = [
+        {
+          options.myconfig = with lib; {
+            desktop.wayland = {
+              enable = mkEnableOption "wayland";
+            };
+          };
+        }
+        ./home-manager.wrap-electron-apps.nix
+      ];
+    }
+  ];
 
   config = (lib.mkIf cfg.desktop.wayland.enable {
     services.greetd.enable = true;
@@ -162,7 +178,9 @@ in {
     };
 
     home-manager.sharedModules = [
-      ./home-manager.wrap-electron-apps.nix
+      {
+        myconfig.desktop.wayland.enable = true;
+      }
       ./home-manager.kanshi.nix
       ./home-manager.swaync.nix
       ./home-manager.mako.nix

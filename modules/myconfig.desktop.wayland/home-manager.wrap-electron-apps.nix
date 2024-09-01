@@ -39,7 +39,7 @@ in {
       };
     };
   };
-  config = {
+  config = lib.mkIf cfg.desktop.wayland.enable {
     home.packages = let
       wrapExecutable = ptw:
         pkgs.runCommand "${ptw.executable}-wl" {

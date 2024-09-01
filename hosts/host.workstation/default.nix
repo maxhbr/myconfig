@@ -74,7 +74,8 @@
         enable = true;
         xserver = {
           enable = true;
-          xmonad.enable = true;
+          xmonad.enable = false;
+          kde.enable = true;
         };
         wayland = {
           enable = false;
