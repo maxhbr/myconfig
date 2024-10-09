@@ -90,14 +90,17 @@ in {
       wlr.settings.screencast =
         lib.mkIf config.myconfig.desktop.wayland.enable {
           output_name = "eDP-1";
+          max_fps = 30;
           chooser_type = "simple";
           chooser_cmd = "${pkgs.slurp}/bin/slurp -f %o -or";
         };
-      # # gtk portal needed to make gtk apps happy
-      # extraPortals =
-      #   let gnome = config.services.xserver.desktopManager.gnome.enable;
-      #   in [ pkgs.xdg-desktop-portal-wlr ]
-      #   ++ lib.optional (!gnome) pkgs.xdg-desktop-portal-gtk;
+      extraPortals =
+        let 
+          gnome = config.services.xserver.desktopManager.gnome.enable;
+          kde = config.services.desktopManager.plasma6.enable || config.services.xserver.desktopManager.plasma5.enable;
+        in [ pkgs.xdg-desktop-portal-wlr ]
+        ++ lib.optional (!kde) pkgs.xdg-desktop-portal-kde
+        ++ lib.optional (!gnome) pkgs.xdg-desktop-portal-gtk;
     };
   };
 }

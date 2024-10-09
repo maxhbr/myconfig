@@ -56,6 +56,30 @@ in {
             networkmanagerapplet
           ];
         }
+        (let
+          my-azure-cli = with pkgs; azure-cli.override {
+            withExtensions = with azure-cli-extensions; [
+              bastion
+              ssh
+            ];
+          };
+        in {
+          home.packages = with pkgs; [
+            my-azure-cli
+          ];
+          home.file = {
+            ".azure/config" = {
+              text = ''
+[cloud]
+name = AzureCloud
+
+[extension]
+use_dynamic_install = yes_without_prompt
+dynamic_install_allow_preview = false
+              '';
+            };
+          };
+        })
       ];
       home.packages = [ slack-pkg teams-for-linux-pkg ] ++ (with pkgs; [
         # idea.idea-ultimate # jetbrains.phpstorm

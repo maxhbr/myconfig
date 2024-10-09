@@ -10,9 +10,9 @@ in {
       example = false;
     };
   };
-  config = (lib.mkIf config.myconfig.desktop.enable {
+  config = (lib.mkIf ( config.myconfig.desktop.enable &&  config.myconfig.desktop.printing.enable ) {
     services.printing = {
-      enable = config.myconfig.desktop.printing.enable;
+      enable = true;
       drivers = with pkgs; [ gutenprint hplipWithPlugin ];
       # add hp-printer with:
       # $ nix run nixpkgs.hplipWithPlugin -c sudo hp-setup

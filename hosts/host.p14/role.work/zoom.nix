@@ -2,6 +2,14 @@
 # SPDX-License-Identifier: MIT
 { config, lib, pkgs, ... }:
 let
+  zoom-us-overlay = (self: super: {
+    zoom-us = super.zoom-us.overrideAttrs (old: {
+      postFixup = old.postFixup + ''
+        wrapProgram $out/bin/zoom-us \
+          --set XDG_CURRENT_DESKTOP gnome
+      '';
+    });
+  });
   zoom-us = pkgs.zoom-us;
   mk-zoom-auto = name: zoom-cmd: (pkgs.writeShellScriptBin name ''
     set -euo pipefail
@@ -50,12 +58,37 @@ let
   # zoom-auto-wl = mk-zoom-auto "zoom-auto-wl" "${pkgs.cage}/bin/cage -- ${zoom-us}/bin/zoom-us"; # does not work
 in {
   config = {
+    nixpkgs.overlays = [zoom-us-overlay];
     home-manager.sharedModules = [{
       home.packages = [ zoom-us zoom-auto ];
       xdg.mimeApps = {
         defaultApplications."x-scheme-handler/zoommtg" =
           [ "us.zoom.Zoom.desktop" ];
       };
+      programs.fish = {
+        functions = {
+          zoom-join = ''
+            set confno "$1"
+            set pwd "$2"
+            set url 'zoommtg://zoom.us/join?action=join&confno='"$confno"
+            if [ ! -z "$pwd" ]
+              set url="$url"'&pwd='"$pwd"
+            end
+            zoom "$url"
+          '';
+        };
+      };
     }];
+    programs.zsh.interactiveShellInit = ''
+      zoom-join() {
+        local confno="$1"
+        local pwd="$2"
+        local url='zoommtg://zoom.us/join?action=join&confno='"$confno"
+        if [[ ! -z "$pwd" ]]; then
+          local url="$url"'&pwd='"$pwd"
+        fi
+        zoom "$url"
+      }
+    '';
   };
 }
