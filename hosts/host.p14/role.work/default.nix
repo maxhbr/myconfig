@@ -20,6 +20,7 @@ in {
     ./zoom.nix
     # ./jdk.nix
     # ./node.nix
+    # ./azure-cli.nix
   ];
   config = {
     nixpkgs.overlays = map (n: import n) [
@@ -28,11 +29,6 @@ in {
     home-manager.sharedModules = [{
       imports = [
         {
-        #   home.packages = with pkgs; [ teams ];
-        #   xdg.mimeApps = {
-        #     defaultApplications."x-scheme-handler/msteams" =
-        #       [ "teams.desktop" ];
-        #   };
           programs.zsh.shellAliases = {
             unteams = ''while pkill teams; do echo "kill it with fire!"; done'';
           };
@@ -51,35 +47,9 @@ in {
             networkmanager-openvpn
             openconnect
             networkmanager-openconnect
-            # strongswan
-            # networkmanager_strongswan
             networkmanagerapplet
           ];
         }
-        (let
-          my-azure-cli = with pkgs; azure-cli.override {
-            withExtensions = with azure-cli-extensions; [
-              bastion
-              ssh
-            ];
-          };
-        in {
-          home.packages = with pkgs; [
-            my-azure-cli
-          ];
-          home.file = {
-            ".azure/config" = {
-              text = ''
-[cloud]
-name = AzureCloud
-
-[extension]
-use_dynamic_install = yes_without_prompt
-dynamic_install_allow_preview = false
-              '';
-            };
-          };
-        })
       ];
       home.packages = [ slack-pkg teams-for-linux-pkg ] ++ (with pkgs; [
         # idea.idea-ultimate # jetbrains.phpstorm

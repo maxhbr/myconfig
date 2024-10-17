@@ -7,8 +7,15 @@
         enable = true;
         wayland = {
           enable = true;
-          desktop = "hyprland";
-          hyprland.enable = true;
+          selectedSessions = [
+            # "hyprland"
+            "niri"
+            "niri-plain"
+            "labwc"
+            "river"
+            "plasma6"
+             # "qtile"
+          ];
         };
       };
     };
