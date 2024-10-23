@@ -10,7 +10,7 @@ fi
 
 installBuiltSystem() {
     local target="$1"
-    local outLink="/tmp/systemOutLink"
+    local outLink='../result.'"$target"
 
     set -x
 
@@ -18,7 +18,7 @@ installBuiltSystem() {
         -L \
         --fallback \
         --log-format bar-with-logs \
-        --out-link '../result.'"$target" \
+        --out-link "$outLink" \
         '.#nixosConfigurations.'"$target"'.config.system.build.toplevel'
 
     sudo nixos-install --no-root-passwd --system "$outLink"

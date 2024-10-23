@@ -213,6 +213,7 @@
             ({ pkgs, myconfig, ... }: {
               imports = [
                 (myconfig.metadatalib.announceHost "x1extremeG2")
+                (myconfig.metadatalib.announceHost "spare")
                 (myconfig.metadatalib.announceHost "workstation")
                 (myconfig.metadatalib.announceHost "nas")
                 (myconfig.metadatalib.announceHost "vserver")
@@ -233,6 +234,10 @@
                 }];
               };
             })
+          ] ++ moreModules) metadataOverride);
+        host-spare = moreModules: metadataOverride:
+          (self.lib.evalConfiguration "x86_64-linux" "spare" ([
+            self.nixosModules.core
           ] ++ moreModules) metadataOverride);
         host-x1extremeG2 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
@@ -268,6 +273,7 @@
 
       nixosConfigurations = {
         p14 = self.nixosConfigurationsGen.host-p14 [ ] { };
+        spare = self.nixosConfigurationsGen.host-spare [ ] { };
         # x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [ ] { };
         workstation = self.nixosConfigurationsGen.host-workstation [ ] { };
         vserver = self.nixosConfigurationsGen.host-vserver [ ] { };
