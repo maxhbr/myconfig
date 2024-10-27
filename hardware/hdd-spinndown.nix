@@ -3,7 +3,7 @@ let
   spindownAllHdds = with pkgs;
     writeScriptBin "spindownAllHdds" ''
       rotHdds() {
-        ${utillinux}/bin/lsblk -dnp -o name,rota |
+        ${util-linux}/bin/lsblk -dnp -o name,rota |
             ${gnugrep}/bin/grep \'.*\\s1\' |
             ${coreutils}/bin/cut -d \' \' -f 1
       }

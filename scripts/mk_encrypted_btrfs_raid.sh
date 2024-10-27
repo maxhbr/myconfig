@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p parted cryptsetup btrfsProgs utillinux
+#! nix-shell -i bash -p parted cryptsetup btrfsProgs util-linux
 
 # see: https://gist.github.com/MaxXor/ba1665f47d56c24018a943bb114640d7
 

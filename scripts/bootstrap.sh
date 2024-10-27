@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p parted btrfs-progs lvm2 cryptsetup utillinux
+#! nix-shell -i bash -p parted btrfs-progs lvm2 cryptsetup util-linux
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 

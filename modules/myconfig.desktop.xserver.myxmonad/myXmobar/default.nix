@@ -27,7 +27,7 @@ let
 
       pre="$delimiter $startcol"
       post="$endcol "
-      btState=$(${pkgs.utillinux}/bin/rfkill -J | ${pkgs.jq}/bin/jq -r '.""|.[] | select (."id"==0) | ."soft"')
+      btState=$(${pkgs.util-linux}/bin/rfkill -J | ${pkgs.jq}/bin/jq -r '.""|.[] | select (."id"==0) | ."soft"')
       if [[ "$btState" == "blocked" ]]; then
         echo -n "''${pre}¬BT''${post}"
       fi
@@ -77,7 +77,7 @@ let
       set -o pipefail
       set -ex
       fun () {
-        ${utillinux}/bin/dmesg -w -T | ${xmobar}/bin/xmobar ${xmobarrcTop}
+        ${util-linux}/bin/dmesg -w -T | ${xmobar}/bin/xmobar ${xmobarrcTop}
       }
       fun &disown
     '';
