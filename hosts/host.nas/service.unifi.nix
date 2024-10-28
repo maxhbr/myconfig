@@ -1,11 +1,12 @@
 { config, lib, pkgs, ... }:
 
 {
-  config.services.unifi.enable = false;
+  config.services.unifi.enable = true;
   imports = [
     (lib.mkIf config.services.unifi.enable {
       services.unifi = {
-        unifiPackage = pkgs.unifi5;
+        unifiPackage = pkgs.unifi;
+        mongodbPackage = pkgs.mongodb;
         openFirewall = true;
       };
       networking.firewall.allowedTCPPorts = [ 8443 ];

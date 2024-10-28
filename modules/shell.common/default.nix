@@ -55,7 +55,6 @@ in {
     };
     environment = {
       systemPackages = with pkgs; [
-        ripgrep # ag
         elinks
         w3m
         man-pages
@@ -129,7 +128,6 @@ in {
         ps = "${pkgs.procs}/bin/procs";
         ranger = "lf";
         r = "lf";
-        ag = "rg";
         webserver = "python -m http.server 8000";
       };
     };

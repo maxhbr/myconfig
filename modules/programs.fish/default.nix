@@ -54,8 +54,6 @@ in {
                   rm = "rm -I";
                   cp = "cp -i";
                   mv = "mv -vi";
-                  ag = "rg";
-                  grep = "rg";
                   ducks = "du -chs *";
                   ff =
                     "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -iname ";
