@@ -48,7 +48,7 @@
       };
     };
     programs.afew.enable = true;
-    programs.alot.enable = true;
+    programs.alot.enable = false;
     programs.mu.enable = true;
     programs.astroid.enable = false;
     programs.neomutt.enable = true;

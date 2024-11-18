@@ -67,7 +67,7 @@ in {
 
               copilot
 
-              dired-single
+              # dired-single
               nerd-icons
               all-the-icons
               all-the-icons-dired

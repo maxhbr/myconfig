@@ -19,7 +19,7 @@ in {
     home-manager.sharedModules = [
       ({ config, ... }: {
         home.packages = with pkgs; [ pavucontrol pamix ];
-        programs.cava = { enable = true; };
+        programs.cava = { enable = false; };
       })
     ];
 

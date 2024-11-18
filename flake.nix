@@ -228,7 +228,7 @@
                   home.packages = [
                     (pkgs.writeShellScriptBin "myconfig" ''
                       set -x
-                      ${pkgs.neovide}/bin/neovide ~/myconfig/myconfig
+                      $EDITOR ~/myconfig/myconfig
                     '')
                   ];
                 }];
