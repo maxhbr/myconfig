@@ -35,6 +35,7 @@
     # ../../hardware/unifying.nix
     ./hardware.hantek
     ./mykeylight
+    ./smarthome.nix
     ./role.work
     ./programs.khal.nix
     {

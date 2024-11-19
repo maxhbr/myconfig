@@ -12,7 +12,8 @@ parser.add_argument('--on', action=argparse.BooleanOptionalAction)
 parser.add_argument('--off', action=argparse.BooleanOptionalAction)
 
 config = open(os.path.expanduser('~/.mykeylight'), 'r')
-ips = config.readlines()
+with open(os.path.expanduser('~/.mykeylight'), 'r') as config:
+    ips = config.read().splitlines()
 
 async def toggle():
     async with Elgato(ips[0]) as elgato:
