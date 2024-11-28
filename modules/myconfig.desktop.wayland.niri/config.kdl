@@ -40,7 +40,7 @@ input {
     // warp-mouse-to-focus
 
     // Focus windows and outputs automatically when moving the mouse into them.
-    focus-follows-mouse
+    // focus-follows-mouse
 }
 
 // You can configure outputs by their name, which you can find

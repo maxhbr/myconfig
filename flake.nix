@@ -146,7 +146,8 @@
                   (mkSubPkgsOverlay "nixos-unstable-small"
                     inputs.ninos-unstable-small)
                   (mkSubPkgsOverlay "nixos-2003" inputs.rel2003)
-                  (mkSubPkgsOverlay "nixos-2009" inputs.rel2009)
+                  (mkSubPkgsOverlay "nixos-2009" inputs.rel2009
+                  )
                   (mkSubPkgsOverlay "nixos-2105" inputs.rel2105)
                   (mkSubPkgsOverlay "nixos-2111" inputs.rel2111)
                   (mkSubPkgsOverlay "nixos-2205" inputs.rel2205)

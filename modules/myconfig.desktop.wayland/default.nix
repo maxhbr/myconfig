@@ -48,10 +48,11 @@ in {
               echo "## clean up old screenshots ..."
               find "$output_dir" -maxdepth 1 -mtime +10 -type f -print -exec mv {} "$old_dir" \;
 
-              echo "## take screenshot ..."
+              out="$output_dir/$(date +%Y-%m-%d_%H-%M-%S).png"
+              echo "## take screenshot: $out ..."
               GRIM_DEFAULT_DIR="$output_dir" ${grim}/bin/grim \
                 -g "$(${slurp}/bin/slurp)" \
-                "$output_dir/$(date +%Y-%m-%d_%H-%M-%S).png"
+                "$out"
             '')
             wob # A lightweight overlay bar for Wayland
             wl-clipboard

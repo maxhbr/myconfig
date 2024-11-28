@@ -186,8 +186,8 @@
       libvirtd.enable = true;
     };
 
-    services.xserver.wacom.enable = true;
-    services.xserver.digimend.enable = true;
+    services.xserver.wacom.enable = false;
+    services.xserver.digimend.enable = false;
 
     services.hardware.bolt.enable = true;
 
