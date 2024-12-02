@@ -25,6 +25,7 @@ in {
                   set -x
                   exec &> >(tee -a /tmp/niri.''${XDG_VTNR}.''${USER}.autostart.log)
                   ${cfg.desktop.wayland.autostartCommands}
+                  ${pkgs.xwayland-satellite}/bin/xwayland-satellite
                 '';
                 drv = pkgs.runCommand "niri-config" {
                   nativeBuildInputs = [ niri ];

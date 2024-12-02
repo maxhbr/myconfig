@@ -14,16 +14,16 @@
       enableGhostscriptFonts = true;
 
       packages = with pkgs; [
-        (nerdfonts.override {
-          fonts = [ "Inconsolata" "FiraCode" "DroidSansMono" ];
-        })
+        nerd-fonts.inconsolata
+        nerd-fonts.fira-code
+        nerd-fonts.droid-sans-mono
         corefonts
         dejavu_fonts
         dina-font
-        fira-code
+        # fira-code
         fira-code-symbols
         hack-font
-        inconsolata
+        # inconsolata
         # liberation_ttf
         mplus-outline-fonts.githubRelease
         noto-fonts

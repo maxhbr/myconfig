@@ -25,7 +25,7 @@
       # environment.sessionVariables = { LIBVA_DRIVER_NAME = "iHD"; }; # Force intel-media-driver
     }
     inputs.nixos-hardware.nixosModules.common-pc-laptop
-    inputs.nixos-hardware.nixosModules.common-pc-laptop-acpi_call
+    # inputs.nixos-hardware.nixosModules.common-pc-laptop-acpi_call
     inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
     inputs.nixos-hardware.nixosModules.lenovo-thinkpad
     ../../hardware/efi.nix
