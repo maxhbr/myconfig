@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, myconfig, ... }:
 let
+  nixosConfig = config;
   cfg = config.myconfig;
   user = myconfig.user;
   niri = pkgs.niri;
@@ -18,6 +19,9 @@ in {
       || builtins.elem "niri-plain" cfg.desktop.wayland.selectedSessions)) {
         home-manager.sharedModules = [
           ({ config, ... }: {
+            home.sessionVariables = {
+              DISPLAY = ":12";
+            };
             home.packages = [ niri ];
             xdg.configFile = {
               "niri/config.kdl".source = let
@@ -25,7 +29,7 @@ in {
                   set -x
                   exec &> >(tee -a /tmp/niri.''${XDG_VTNR}.''${USER}.autostart.log)
                   ${cfg.desktop.wayland.autostartCommands}
-                  ${pkgs.xwayland-satellite}/bin/xwayland-satellite
+                  ${pkgs.xwayland-satellite}/bin/xwayland-satellite ${config.home.sessionVariables.DISPLAY}
                 '';
                 drv = pkgs.runCommand "niri-config" {
                   nativeBuildInputs = [ niri ];
