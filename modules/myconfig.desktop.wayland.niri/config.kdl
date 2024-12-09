@@ -208,7 +208,7 @@ prefer-no-csd
 // You can change the path where screenshots are saved.
 // A ~ at the front will be expanded to the home directory.
 // The path is formatted with strftime(3) to give you the screenshot date and time.
-screenshot-path "~/_screenshots/%Y-%m-%d %H-%M-%S.png"
+screenshot-path "~/_screenshots/%Y-%m-%d_%H-%M-%S.png"
 
 // You can also set this to null to disable saving screenshots to disk.
 // screenshot-path null
@@ -258,14 +258,9 @@ animations {
 // Find more information on the wiki:
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Window-Rules
 
-// Work around WezTerm's initial configure bug
-// by setting an empty default-column-width.
 window-rule {
-    // This regular expression is intentionally made as specific as possible,
-    // since this is the default config, and we want no false positives.
-    // You can get away with just app-id="wezterm" if you want.
-    match app-id=r#"^org\.wezfurlong\.wezterm$"#
-    default-column-width {}
+    geometry-corner-radius 8
+    clip-to-geometry true
 }
 
 window-rule {
@@ -275,28 +270,38 @@ window-rule {
     block-out-from "screen-capture"
 }
 
-// comes with 1.11.0 
-// layer-rule {
-//     match namespace="waybar"
-//     match at-startup=true
-// 
-//     // Properties that apply continuously.
-//     opacity 0.5
-//     block-out-from "screen-capture"
-// }
-// 
-// layer-rule {
-//     match namespace="^notifications$"
-// 
-//     block-out-from "screen-capture"
-// }
-// 
-// // Make fuzzel semitransparent.
-// layer-rule {
-//     match namespace="^launcher$"
-// 
-//     opacity 0.95
-// }
+window-rule {
+    match app-id=r#"^com\.obsproject\.Studio$"#
+
+    min-width 876
+}
+
+window-rule {
+    match app-id="^zoom$"
+    default-column-width { }
+}
+
+layer-rule {
+    match namespace="waybar"
+    match at-startup=true
+
+    // Properties that apply continuously.
+    opacity 0.9
+    block-out-from "screen-capture"
+}
+
+layer-rule {
+    match namespace="^notifications$"
+
+    block-out-from "screen-capture"
+}
+
+// Make fuzzel semitransparent.
+layer-rule {
+    match namespace="^launcher$"
+
+    opacity 0.95
+}
 
 binds {
     // Keys consist of modifiers separated by + signs, followed by an XKB key name
