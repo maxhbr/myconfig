@@ -57,5 +57,19 @@ in {
       ] ++ (with pkgs.kdePackages; [ arianna ]) ;
       programs.kdeconnect.enable = lib.mkDefault false;
     }
+    {
+      home-manager.sharedModules = [
+        ({ config, ... }: {
+          xdg.configFile = {
+            "kwalletrc".text = ''
+[Wallet]
+# permanently disable kwallet
+Enabled=false
+First Use=false
+            '';
+          };
+        })
+      ];
+    }
   ]));
 }

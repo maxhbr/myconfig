@@ -59,7 +59,8 @@ let
               position = "top";
               height = 25;
               spacing = 4;
-              modules-left = [ ];
+              modules-left = [
+              ];
               modules-center = [
                 # "wlr/taskbar"
                 # "group/hardware"
@@ -110,6 +111,7 @@ let
                 tooltip-format = ''
                   {title}
                   {name}
+                  app_id: {app_id}
                   {short_state}'';
                 on-click = "activate";
                 on-click-middle = "close";

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, myconfig, ... }:
+{ pkgs, config, lib, myconfig, inputs, ... }:
 let
   nixosConfig = config;
   cfg = config.myconfig;
@@ -17,6 +17,7 @@ in {
   config = (lib.mkIf (cfg.desktop.wayland.enable
     && (builtins.elem "niri" cfg.desktop.wayland.selectedSessions
       || builtins.elem "niri-plain" cfg.desktop.wayland.selectedSessions)) {
+        nixpkgs.overlays = [ inputs.niri.overlays.default ];
         home-manager.sharedModules = [
           ({ config, ... }: {
             home.sessionVariables = {
@@ -39,6 +40,10 @@ in {
                   cat <<EOF >$out/config.kdl
                   $(cat $src)
 
+                  environment {
+                      DISPLAY "${config.home.sessionVariables.DISPLAY}"
+                  }
+
                   ${cfg.desktop.wayland.niri.additionalConfigKdl}
 
                   spawn-at-startup "${autostart}/bin/autostart.sh"
@@ -46,6 +51,11 @@ in {
                   niri validate --config $out/config.kdl > $out/config.kdl.validate
                 '';
               in "${drv}/config.kdl";
+            };
+            programs.waybar.settings.mainBar = {
+              modules-left = [
+                "wlr/taskbar"
+              ];
             };
             systemd.user.services.niri = {
               Unit = {
