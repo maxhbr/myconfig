@@ -53,8 +53,35 @@ in {
               in "${drv}/config.kdl";
             };
             programs.waybar.settings.mainBar = {
+              "niri/window" = {
+                "format" =  "{}";
+                "rewrite" = {
+                  "(.*) - Mozilla Firefox" = "🌎 $1";
+                  "(.*) - zsh" = "> [$1]";
+                };
+                rotate = 90;
+              };
+              "niri/workspaces" = {
+                "format" = "{icon}";
+                "format-icons" = {
+                  # Named workspaces
+                  # (you need to configure them in niri)
+                  "browser" = "";
+                  "discord" = "";
+                  "chat" = "<b></b>";
+
+                  # Icons by state
+                  "active" = "";
+                  "default" = "";
+                };
+                rotate = 90;
+              };
               modules-left = [
+                # "niri/workspaces"
                 "wlr/taskbar"
+              ];
+              modules-center = [
+                # "niri/window"
               ];
             };
             systemd.user.services.niri = {

@@ -40,7 +40,7 @@ input {
     // warp-mouse-to-focus
 
     // Allow focus-follows-mouse only when it will not scroll the view.
-    focus-follows-mouse max-scroll-amount="0%"
+    focus-follows-mouse max-scroll-amount="5%"
     workspace-auto-back-and-forth
 }
 
@@ -264,6 +264,11 @@ window-rule {
 }
 
 window-rule {
+    match is-active=false
+    opacity 0.8
+}
+
+window-rule {
     match app-id=r#"^org\.keepassxc\.KeePassXC$"#
     match app-id=r#"^org\.gnome\.World\.Secrets$"#
 
@@ -481,12 +486,12 @@ binds {
     // * adjust width as a percentage of screen width: "-10%" or "+10%"
     // Pixel sizes use logical, or scaled, pixels. I.e. on an output with scale 2.0,
     // set-column-width "100" will make the column occupy 200 physical screen pixels.
-    Mod+Minus { set-column-width "-10%"; }
-    Mod+Equal { set-column-width "+10%"; }
+    Mod+Minus { set-column-width "-2%"; }
+    Mod+Equal { set-column-width "+2%"; }
 
     // Finer height adjustments when in column with other windows.
-    Mod+Shift+Minus { set-window-height "-10%"; }
-    Mod+Shift+Equal { set-window-height "+10%"; }
+    Mod+Shift+Minus { set-window-height "-2%"; }
+    Mod+Shift+Equal { set-window-height "+2%"; }
 
     // Actions to switch layouts.
     // Note: if you uncomment these, make sure you do NOT have
