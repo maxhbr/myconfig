@@ -19,19 +19,33 @@ in {
       || builtins.elem "niri-plain" cfg.desktop.wayland.selectedSessions)) {
         nixpkgs.overlays = [ inputs.niri.overlays.default ];
         home-manager.sharedModules = [
-          ({ config, ... }: {
+          ({ config, ... }: let
+            niri-autostart = pkgs.writeShellScript "niri-autostart" ''
+              set -x
+              exec &> >(tee -a /tmp/niri.''${XDG_VTNR}.''${USER}.autostart.log)
+              ${cfg.desktop.wayland.autostartCommands}
+            '';
+            niri-xwayland-satellite = pkgs.writeShellScriptBin "niri-xwayland-satellite" ''
+              CHOSEN_DISPLAY="''${1:-"''${DISPLAY}"}"
+              pidfile=/tmp/niri.''${XDG_VTNR}.''${USER}.xwayland-satellite.''${CHOSEN_DISPLAY}.pid
+              exec &> >(tee -a /tmp/niri.''${XDG_VTNR}.''${USER}.xwayland-satellite.''${CHOSEN_DISPLAY}.log)
+            
+              if [ -f $pidfile ]; then
+                kill $(cat $pidfile) || true
+              fi
+            
+              set -euo pipefail
+              set -x
+              ${pkgs.xwayland-satellite}/bin/xwayland-satellite ''${CHOSEN_DISPLAY}
+              echo $$ > $pidfile
+            '';
+          in {
             home.sessionVariables = {
               DISPLAY = ":12";
             };
-            home.packages = [ niri ];
+            home.packages = [ niri niri-xwayland-satellite ];
             xdg.configFile = {
               "niri/config.kdl".source = let
-                autostart = pkgs.writeShellScriptBin "autostart.sh" ''
-                  set -x
-                  exec &> >(tee -a /tmp/niri.''${XDG_VTNR}.''${USER}.autostart.log)
-                  ${cfg.desktop.wayland.autostartCommands}
-                  ${pkgs.xwayland-satellite}/bin/xwayland-satellite ${config.home.sessionVariables.DISPLAY}
-                '';
                 drv = pkgs.runCommand "niri-config" {
                   nativeBuildInputs = [ niri ];
                   src = ./config.kdl;
@@ -46,7 +60,8 @@ in {
 
                   ${cfg.desktop.wayland.niri.additionalConfigKdl}
 
-                  spawn-at-startup "${autostart}/bin/autostart.sh"
+                  spawn-at-startup "${niri-autostart}"
+                  spawn-at-startup "${niri-xwayland-satellite}/bin/niri-xwayland-satellite"
                   EOF
                   niri validate --config $out/config.kdl > $out/config.kdl.validate
                 '';
