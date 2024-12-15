@@ -127,7 +127,29 @@
                 }
               ];
             };
-            home.packages = with pkgs; [ neovide ];
+            programs.neovide = {
+              enable = true;
+
+              settings = {
+                fork = true;
+                frame = "full";
+                idle = true;
+                maximized = false;
+              #   neovim-bin = "${config.programs.neovim.package}/bin/nvim";
+              #   no-multigrid = false;
+              #   # srgb = false;
+                tabs = true;
+              #   theme = "auto";
+              #   title-hidden = true;
+              #   vsync = true;
+              #   wsl = false;
+              #
+              #   font = {
+              #     normal = [];
+              #     size = 14.0;
+              #   };
+              };
+            };
           })
         ];
       })

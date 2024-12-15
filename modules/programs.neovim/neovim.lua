@@ -24,7 +24,7 @@ set termguicolors " 24-bit colors
 " let g:tokyonight_italic_functions = 1
 " colorscheme tokyonight
 " colorscheme sonokai
-colorscheme PaperColor
+"colorscheme PaperColor
 ]])
 
 vim.opt.tabstop = 2

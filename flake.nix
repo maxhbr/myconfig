@@ -16,6 +16,7 @@
     rel2305.url = "github:nixos/nixpkgs/release-23.05";
     rel2311.url = "github:nixos/nixpkgs/release-23.11";
     rel2405.url = "github:nixos/nixpkgs/release-24.05";
+    rel2411.url = "github:nixos/nixpkgs/release-24.11";
 
     pr244937.url =
       "github:charles-dyfis-net/nixpkgs/freeplane-1_11_4"; # https://github.com/NixOS/nixpkgs/pull/244937
@@ -41,8 +42,6 @@
     emacs.url = "github:nix-community/emacs-overlay";
     doomemacs.url = "github:hlissner/doom-emacs";
     doomemacs.flake = false;
-    # nix-doom-emacs.url = "github:nix-community/nix-doom-emacs";
-    # nix-doom-emacs.inputs.nixpkgs.follows = "nixpkgs";
 
     my-wallpapers.url = "github:maxhbr/wallpapers";
     my-wallpapers.inputs.nixpkgs.follows = "nixpkgs";
@@ -64,9 +63,6 @@
       url = "github:hyprwm/hyprland-plugins";
       inputs.hyprland.follows = "hyprland";
     };
-
-    awatcher-src.url = "github:2e3s/awatcher";
-    awatcher-src.flake = false;
 
     river-src.url = "git+https://github.com/riverwm/river?submodules=1";
     river-src.flake = false;
@@ -112,7 +108,9 @@
             home-manager = {
               useUserPackages = true;
               useGlobalPkgs = true;
-              backupFileExtension = "homeManagerBackup";
+              backupFileExtension = let
+                  rev = toString (self.shortRev or self.dirtyShortRev or self.lastModified or "unknown");
+                in "${rev}.homeManagerBackup";
               sharedModules = [
                 ({ pkgs, ... }: {
                   home.stateVersion =
@@ -160,6 +158,7 @@
                   (mkSubPkgsOverlay "nixos-2305" inputs.rel2305)
                   (mkSubPkgsOverlay "nixos-2311" inputs.rel2311)
                   (mkSubPkgsOverlay "nixos-2405" inputs.rel2405)
+                  (mkSubPkgsOverlay "nixos-2411" inputs.rel2411)
                 ];
               };
             })
@@ -225,14 +224,14 @@
                 (myconfig.metadatalib.announceHost "r6c")
               ];
               config = {
-                home-manager.sharedModules = [{
+                home-manager.sharedModules = [({config, ...}: {
                   home.packages = [
-                    (pkgs.writeShellScriptBin "myconfig" ''
-                      set -x
-                      $EDITOR ~/myconfig/myconfig
-                    '')
+                    (pkgs.writeShellScriptBin "myconfig" 
+			(if config.programs.neovide.enable
+				 then "${config.programs.neovide.package}/bin/neovide ~/myconfig/myconfig &disown"
+				 else "$EDITOR  ~/myconfig/myconfig"))
                   ];
-                }];
+                })];
               };
             })
           ] ++ moreModules) metadataOverride);
