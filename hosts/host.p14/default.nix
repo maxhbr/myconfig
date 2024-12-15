@@ -108,13 +108,14 @@
         wayland = {
           enable = true;
           selectedSessions = [
-            # "hyprland"
             "niri"
             "niri-plain"
             "labwc"
             "river"
             "plasma6"
-             # "qtile"
+            # "dwl"
+            # "qtile"
+            # "hyprland"
           ];
           niri.additionalConfigKdl = ''
             // You can configure outputs by their name, which you can find
@@ -133,7 +134,7 @@
                 // for the resolution.
                 // If the mode is omitted altogether or is invalid, niri will pick one automatically.
                 // Run `niri msg outputs` while inside a niri instance to list all outputs and their modes.
-                mode "1920x1080@60.000"
+                mode "1920x1200@60.000"
 
                 // Scale is a floating-point number, but at the moment only integer values work.
                 scale 1.0

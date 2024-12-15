@@ -38,6 +38,7 @@ in {
             <menu id="root-menu" label="">
               <item label="Web browser"><action name="Execute" command="firefox" /></item>
               <item label="Terminal"><action name="Execute" command="tfoot" /></item>
+              <item label="plain-Terminal"><action name="Execute" command="foot" /></item>
               <item label="re-Terminal"><action name="Execute" command="tfoot-reattach" /></item>
               <item label="Screenshot"><action name="Execute" command="grim-region" /></item>
               <item label="Displays"><action name="Execute" command="${pkgs.wdisplays}/bin/wdisplays" /></item>
