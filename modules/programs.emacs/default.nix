@@ -6,7 +6,6 @@ in {
   imports = [
     ({ ... }: {
       nixpkgs.overlays = [ inputs.emacs.overlay ];
-      home-manager.sharedModules = [ ./mu ];
     })
   ];
   options.myconfig = with lib; {
@@ -14,6 +13,7 @@ in {
   };
   config = lib.mkIf config.myconfig.editor.emacs.enable {
     home-manager.sharedModules = [
+      ./mu
       ({ config, ... }: {
         home.file = {
           ".emacs.d/config.org" = {

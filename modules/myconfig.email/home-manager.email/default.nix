@@ -37,7 +37,7 @@
     programs.mbsync.enable = true;
     programs.msmtp.enable = true;
     programs.lieer.enable = true; # gmail sync
-    programs.aerc.enable = false;
+    programs.aerc.enable = true;
     programs.notmuch = {
       enable = true;
       hooks = {

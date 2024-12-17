@@ -261,16 +261,22 @@ animations {
 window-rule {
     geometry-corner-radius 8
     clip-to-geometry true
+    open-fullscreen false
 }
 
 window-rule {
     match is-active=false
+    exclude app-id="^firefox$"
+    exclude app-id="^Chromium-browser$"
+    exclude app-id="^zoom$"
+    exclude app-id="^teams-for-linux$"
     opacity 0.8
 }
 
 window-rule {
     match app-id=r#"^org\.keepassxc\.KeePassXC$"#
     match app-id=r#"^org\.gnome\.World\.Secrets$"#
+    match app-id="^Signal$"
 
     block-out-from "screen-capture"
 }
@@ -343,13 +349,13 @@ binds {
     Mod+Shift+C { close-window; }
 
     Mod+Left  { focus-column-left; }
-    Mod+Down  { focus-window-down; }
-    Mod+Up    { focus-window-up; }
+    Mod+Page_Down  { focus-window-down; }
+    Mod+Page_Up    { focus-window-up; }
     Mod+Right { focus-column-right; }
 
     Mod+Ctrl+Left  { move-column-left; }
-    Mod+Ctrl+Down  { move-window-down; }
-    Mod+Ctrl+Up    { move-window-up; }
+    Mod+Ctrl+Page_Down  { move-window-down; }
+    Mod+Ctrl+Page_Up    { move-window-up; }
     Mod+Ctrl+Right { move-column-right; }
 
     // Alternative commands that move across workspaces when reaching
@@ -380,12 +386,12 @@ binds {
     Mod+Shift+Ctrl+Up    { move-workspace-to-monitor-up; }
     Mod+Shift+Ctrl+Right { move-workspace-to-monitor-right; }
 
-    Mod+Page_Down      { focus-workspace-down; }
-    Mod+Page_Up        { focus-workspace-up; }
+    Mod+Down      { focus-workspace-down; }
+    Mod+Up        { focus-workspace-up; }
     Mod+J              { focus-workspace-down; }
     Mod+M              { focus-workspace-up; }
-    Mod+Ctrl+Page_Down { move-column-to-workspace-down; }
-    Mod+Ctrl+Page_Up   { move-column-to-workspace-up; }
+    Mod+Ctrl+Down { move-column-to-workspace-down; }
+    Mod+Ctrl+Up   { move-column-to-workspace-up; }
     Mod+Ctrl+J         { move-column-to-workspace-down; }
     Mod+Ctrl+M         { move-column-to-workspace-up; }
 
