@@ -270,6 +270,7 @@ window-rule {
     exclude app-id="^Chromium-browser$"
     exclude app-id="^zoom$"
     exclude app-id="^teams-for-linux$"
+    exclude app-id="^org-knopflerfish-framework-BundleThread$"
     opacity 0.8
 }
 
