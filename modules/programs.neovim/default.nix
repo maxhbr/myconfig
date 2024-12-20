@@ -91,6 +91,8 @@
                 # Language support
                 vim-nix
 
+                kdl-vim
+
                 # nushell
                 null-ls-nvim
                 {

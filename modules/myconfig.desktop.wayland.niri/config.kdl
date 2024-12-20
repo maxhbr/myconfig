@@ -145,12 +145,6 @@ layout {
         // - RGB hex: "#rgb", "#rgba", "#rrggbb", "#rrggbbaa"
         // - CSS-like notation: "rgb(255, 127, 0)", rgba(), hsl() and a few others.
 
-        // Color of the ring on the active monitor.
-        // active-color "#ee9a00"
-
-        // Color of the ring on inactive monitors.
-        //inactive-color "#505050"
-
         // You can also use gradients. They take precedence over solid colors.
         // Gradients are rendered the same as CSS linear-gradient(angle, from, to).
         // The angle is the same as in linear-gradient, and is optional,
@@ -158,12 +152,7 @@ layout {
         // You can use any CSS linear-gradient tool on the web to set these up.
         //
         active-gradient from="#ee9a00" to="#eadd53" angle=45
-
-        // You can also color the gradient relative to the entire view
-        // of the workspace, rather than relative to just the window itself.
-        // To do that, set relative-to="workspace-view".
-        //
-        inactive-gradient from="#505050" to="#808080" angle=45 relative-to="workspace-view"
+        inactive-gradient from="#505050" to="#808080" angle=45
     }
 
     // You can also add a border. It's similar to the focus ring, but always visible.
@@ -173,11 +162,8 @@ layout {
         off
 
         width 4
-        active-color "#ffc87f"
-        inactive-color "#505050"
-
-        // active-gradient from="#ffbb66" to="#ffc880" angle=45 relative-to="workspace-view"
-        // inactive-gradient from="#505050" to="#808080" angle=45 relative-to="workspace-view"
+        active-gradient from="#ee9a00" to="#eadd53" angle=45
+        inactive-gradient from="#505050" to="#808080" angle=45
     }
 
     // Struts shrink the area occupied by windows, similarly to layer-shell panels.
@@ -188,8 +174,6 @@ layout {
     struts {
         left 10
         right 10
-        // left 64
-        // right 64
         // top 64
         // bottom 64
     }
@@ -265,12 +249,30 @@ window-rule {
 }
 
 window-rule {
+    exclude app-id="^firefox$"
+    exclude app-id="^Chromium-browser$"
+    exclude app-id="^chromium-browser$"
+    exclude app-id="^teams-for-linux$"
+    exclude app-id="^Slack$"
+
+    default-column-width { proportion 0.66667; }
+}
+
+window-rule {
+    match app-id="^zoom$"
+
+    default-column-width { }
+}
+
+window-rule {
     match is-active=false
     exclude app-id="^firefox$"
     exclude app-id="^Chromium-browser$"
+    exclude app-id="^chromium-browser$"
     exclude app-id="^zoom$"
     exclude app-id="^teams-for-linux$"
     exclude app-id="^org-knopflerfish-framework-BundleThread$"
+
     opacity 0.8
 }
 
@@ -286,11 +288,6 @@ window-rule {
     match app-id=r#"^com\.obsproject\.Studio$"#
 
     min-width 876
-}
-
-window-rule {
-    match app-id="^zoom$"
-    default-column-width { }
 }
 
 layer-rule {

@@ -82,6 +82,7 @@
           selectedSessions = [
             # "hyprland"
             "niri"
+            "niri-plain"
             "labwc"
             "river"
             "plasma6"
@@ -107,7 +108,7 @@
       #virtualbox.host.enable = true;
     };
 
-    services.physlock.enable = true;
+    #services.physlock.enable = true;
 
     programs.dconf.enable = true;
 
@@ -119,15 +120,6 @@
     hardware.enableRedistributableFirmware = true;
     hardware.cpu.amd.updateMicrocode = true;
     services.xserver = {
-      xrandrHeads = [{
-        output = "HDMI-A-0";
-        primary = true;
-        monitorConfig = ''
-          # 2560x1440 59.96 Hz (CVT 3.69M9) hsync: 89.52 kHz; pclk: 312.25 MHz
-          Modeline "2560x1440_60.00"  312.25  2560 2752 3024 3488  1440 1443 1448 1493 -hsync +vsync
-          Option "PreferredMode" "2560x1440"
-        '';
-      }];
       videoDrivers = [ "amdgpu" ];
     };
 
