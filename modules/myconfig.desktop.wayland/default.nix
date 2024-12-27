@@ -54,6 +54,26 @@ in {
                 -g "$(${slurp}/bin/slurp)" \
                 "$out"
             '')
+            (writeShellScriptBin "sync_x11_to_wayland" ''
+              x11_clip=$(${xclip}/bin/xclip -selection clipboard -o 2>/dev/null)
+              if [ $? -eq 0 ] && [ -n "$x11_clip" ]; then
+                  echo -n "$x11_clip" | ${wl-clipboard}/bin/wl-copy
+              fi
+              x11_clip=$(${xclip}/bin/xclip -selection primary -o 2>/dev/null)
+              if [ $? -eq 0 ] && [ -n "$x11_clip" ]; then
+                  echo -n "$x11_clip" | ${wl-clipboard}/bin/wl-copy --primary
+              fi
+            '')
+            (writeShellScriptBin "sync_wayland_to_x11" ''
+              wayland_clip=$(${wl-clipboard}/bin/wl-paste 2>/dev/null)
+              if [ $? -eq 0 ] && [ -n "$wayland_clip" ]; then
+                  echo -n "$wayland_clip" | ${xclip}/bin/xclip -selection clipboard
+              fi
+              wayland_clip=$(${wl-clipboard}/bin/wl-paste --primary 2>/dev/null)
+              if [ $? -eq 0 ] && [ -n "$wayland_clip" ]; then
+                  echo -n "$wayland_clip" | ${xclip}/bin/xclip -selection primary
+              fi
+            '')
             wob # A lightweight overlay bar for Wayland
             wl-clipboard
             lswt # list Wayland toplevels

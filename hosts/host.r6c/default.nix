@@ -28,8 +28,8 @@
             "plasma5-bigsrceen"
             "plasma5"
             # "river" 
-            "niri-plain"
-            "niri"
+            #"niri"
+            #"niri-plain"
             # "hyprland"
             # "labwc" 
           ];

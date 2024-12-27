@@ -182,7 +182,7 @@ layout {
 // Add lines like this to spawn processes at startup.
 // Note that running niri as a session supports xdg-desktop-autostart,
 // which may be more convenient to use.
-spawn-at-startup "waybar"
+spawn-at-startup "waybarOnce" "niri"
 
 // Uncomment this line to ask the clients to omit their client-side decorations if possible.
 // If the client will specifically ask for CSD, the request will be honored.
@@ -480,6 +480,7 @@ binds {
     Mod+Shift+Space { reset-window-height; }
     Mod+F { maximize-column; }
     Mod+Shift+F { fullscreen-window; }
+    Mod+Ctrl+F { center-column; }
     Mod+C { center-column; }
 
     // Finer width adjustments.

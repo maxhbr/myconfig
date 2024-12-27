@@ -31,6 +31,7 @@ in {
         alacritty
         mupdf
         evince
+        foliate
         xarchiver
         feh
         imagemagick
