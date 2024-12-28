@@ -54,25 +54,38 @@ in {
                 -g "$(${slurp}/bin/slurp)" \
                 "$out"
             '')
-            (writeShellScriptBin "sync_x11_to_wayland" ''
-              x11_clip=$(${xclip}/bin/xclip -selection clipboard -o 2>/dev/null)
-              if [ $? -eq 0 ] && [ -n "$x11_clip" ]; then
-                  echo -n "$x11_clip" | ${wl-clipboard}/bin/wl-copy
-              fi
-              x11_clip=$(${xclip}/bin/xclip -selection primary -o 2>/dev/null)
-              if [ $? -eq 0 ] && [ -n "$x11_clip" ]; then
-                  echo -n "$x11_clip" | ${wl-clipboard}/bin/wl-copy --primary
-              fi
+            (writeShellScriptBin "x_to_w" ''
+              set -euo pipefail
+              x_to_w_inner() {
+                local x_arg="''${1:-}"
+                local wl_arg="''${2:-}"
+                x11_clip=$(${xclip}/bin/xclip -selection "$x_arg" -o 2>/dev/null)
+                if [ $? -eq 0 ] && [ -n "$x11_clip" ]; then
+                    # TODO: Handle types
+                    echo -n "$x11_clip" | ${wl-clipboard}/bin/wl-copy "$wl_arg" 
+                fi
+              }
+              x_to_w_inner "clipboard" ""
+              x_to_w_inner "primary" "--primary"
             '')
-            (writeShellScriptBin "sync_wayland_to_x11" ''
-              wayland_clip=$(${wl-clipboard}/bin/wl-paste 2>/dev/null)
-              if [ $? -eq 0 ] && [ -n "$wayland_clip" ]; then
-                  echo -n "$wayland_clip" | ${xclip}/bin/xclip -selection clipboard
-              fi
-              wayland_clip=$(${wl-clipboard}/bin/wl-paste --primary 2>/dev/null)
-              if [ $? -eq 0 ] && [ -n "$wayland_clip" ]; then
-                  echo -n "$wayland_clip" | ${xclip}/bin/xclip -selection primary
-              fi
+            (writeShellScriptBin "w_to_x" ''
+              set -euo pipefail
+              w_to_x_inner() {
+                local wl_arg="''${1:-}"
+                local x_arg="''${2:-}"
+                wayland_clip="$(${wl-clipboard}/bin/wl-paste $wl_arg 2>/dev/null)"
+                if [ $? -eq 0 ] && [ -n "$wayland_clip" ]; then
+                    wayland_type="$(wl-paste -l | head -1 | tr -d '\n')"
+                    if [ -n "$wayland_type" ]; then
+                        echo -n "$wayland_clip" | ${xclip}/bin/xclip -i -t "$wayland_type" -selection $x_arg
+                    else
+                        echo -n "$wayland_clip" | ${xclip}/bin/xclip -i -selection $x_arg
+                    fi
+                fi
+                
+              }
+              w_to_x_inner "" "clipboard"
+              w_to_x_inner "--primary" "primary"
             '')
             wob # A lightweight overlay bar for Wayland
             wl-clipboard

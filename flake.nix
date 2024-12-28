@@ -159,6 +159,7 @@
                   (mkSubPkgsOverlay "nixos-2311" inputs.rel2311)
                   (mkSubPkgsOverlay "nixos-2405" inputs.rel2405)
                   (mkSubPkgsOverlay "nixos-2411" inputs.rel2411)
+                  (mkSubPkgsOverlay "stable" inputs.rel2411)
                 ];
               };
             })

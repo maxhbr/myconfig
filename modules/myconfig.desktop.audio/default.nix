@@ -18,7 +18,7 @@ in {
   config = lib.mkIf (cfg.desktop.enable && cfg.desktop.audio.enable) {
     home-manager.sharedModules = [
       ({ config, ... }: {
-        home.packages = with pkgs; [ pavucontrol pamix ];
+        home.packages = with pkgs; [ pavucontrol pamix pulsemixer ];
         programs.cava = { enable = false; };
       })
     ];

@@ -232,6 +232,13 @@
         #   };
         # };
       }
+      {
+        home.packages = with pkgs.helper; [
+          (connectBtDevice { name = "WF-1000XM5"; id = "AC:80:0A:2A:10:6F";})
+          (connectBtDevice { name = "Px7"; id = "EC:66:D1:B4:C8:3B";})
+          (connectBtDevice { name = "Streambot"; id = "E9:08:EF:60:57:21";})
+        ];
+      }
     ];
 
     boot = {

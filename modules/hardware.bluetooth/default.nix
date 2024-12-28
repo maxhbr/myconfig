@@ -1,9 +1,5 @@
 { config, lib, pkgs, ... }:
 let
-  mb660_switch_profile = pkgs.writeShellScriptBin "mb660_switch_profile" ''
-    export PATH=$PATH:${config.hardware.pulseaudio.package}/bin:${pkgs.bash}/bin
-    ${builtins.readFile ./bin/switch_sennheiser_profile}
-  '';
   connectBtDevice = { name, id }:
     (pkgs.writeShellScriptBin (name + "_connect") ''
       # docu:
@@ -80,7 +76,9 @@ in {
     ];
     home-manager.sharedModules = [
       (lib.mkIf config.hardware.pulseaudio.enable {
-        home.packages = with pkgs; [ mb660_switch_profile ];
+        home.packages = with pkgs; [ 
+          bluetuith
+        ];
 
         programs.fish = {
           functions = {
