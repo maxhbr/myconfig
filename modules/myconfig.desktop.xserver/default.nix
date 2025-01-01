@@ -23,7 +23,7 @@ in {
         displayManager.lightdm.enable = true;
         displayManager.sddm.enable = lib.mkDefault false;
       };
-      redshift.enable = config.myconfig.desktop.full;
+      redshift.enable = config.myconfig.desktop.enable;
     };
 
     home-manager.sharedModules = [{

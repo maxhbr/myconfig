@@ -25,7 +25,6 @@
 
     myconfig = {
       desktop.enable = true;
-      desktop.full = false;
       headless.enable = true;
     };
     virtualisation.docker.enable = true;

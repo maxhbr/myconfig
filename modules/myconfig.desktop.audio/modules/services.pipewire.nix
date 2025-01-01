@@ -33,9 +33,7 @@ in {
   config = (lib.mkIf config.services.pipewire.enable {
     home-manager.sharedModules = [{
       home.packages = with pkgs;
-        [ qjackctl pw-simultaneous pw-record-all ]
-        ++ lib.optionals config.myconfig.desktop.full [ # helvum easyeffects
-        ];
+        [ qjackctl pw-simultaneous pw-record-all ];
     }];
     hardware.pulseaudio.enable = false;
     security.rtkit.enable = true;

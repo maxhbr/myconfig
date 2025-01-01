@@ -35,7 +35,6 @@
           ];
         };
       };
-      desktop.full = false;
       headless.enable = true;
     };
     virtualisation.docker.enable = true;

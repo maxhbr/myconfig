@@ -8,12 +8,6 @@ in {
       wayland.enable = mkEnableOption "myconfig.desktop.wayland";
       xserver.enable =
         mkEnableOption "myconfig.desktop.xserver == !myconfig.desktop.wayland";
-
-      # TODO: get rid of desktop.full
-      full = mkEnableOption "myconfig.desktop.full" // {
-        default = true;
-        example = false;
-      };
     };
   };
   config = lib.mkIf cfg.desktop.enable {
@@ -22,7 +16,7 @@ in {
 
     home-manager.sharedModules = [{
       programs.firefox.enable = lib.mkDefault true;
-      programs.qutebrowser.enable = lib.mkDefault false; # BROKEN
+      programs.qutebrowser.enable = lib.mkDefault true;
       home.packages = with pkgs; [
         libnotify
         xarchiver
