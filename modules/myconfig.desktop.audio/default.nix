@@ -6,7 +6,7 @@ let cfg = config.myconfig;
 in {
   imports = [
     ./modules/services.pipewire.nix
-    ./modules/hardware.pulseaudio.nix
+    # ./modules/hardware.pulseaudio.nix
     ./modules/services.pipewire.wireplumber.nix
   ];
   options.myconfig = with lib; {
@@ -23,7 +23,6 @@ in {
       })
     ];
 
-    # hardware.pulseaudio.enable = true;
     services.pipewire.enable = true;
   };
 }

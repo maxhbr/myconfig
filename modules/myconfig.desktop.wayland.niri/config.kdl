@@ -483,6 +483,10 @@ binds {
     Mod+Ctrl+F { center-column; }
     Mod+C { center-column; }
 
+    // Move the focused window between the floating and the tiling layout.
+    Mod+V       { toggle-window-floating; }
+    Mod+Shift+V { switch-focus-between-floating-and-tiling; }
+
     // Finer width adjustments.
     // This command can also:
     // * set width in pixels: "1000"

@@ -3,10 +3,11 @@
 { config, lib, pkgs, ... }:
 let
   zoom-us-overlay = (self: super: {
-    zoom-us = super.zoom-us.overrideAttrs (old: {
+    zoom-us = self.nixos-2411.zoom-us.overrideAttrs (old: {
       postFixup = old.postFixup + ''
         wrapProgram $out/bin/zoom-us \
-          --set XDG_CURRENT_DESKTOP gnome
+          --set QT_DEBUG_PLUGINS 1
+          # --set XDG_CURRENT_DESKTOP gnome
       '';
     });
   });
@@ -44,7 +45,21 @@ let
         fi
     }
 
-    if [[ $# -gt 0 ]]; then
+
+    function join_from_confno_and_pwd() {
+        local confno="$1"
+        local pwd="''${2:-}"
+        local url='zoommtg://zoom.us/join?action=join&confno='"$confno"
+        if [[ ! -z "$pwd" ]]; then
+          local url="$url"'&pwd='"$pwd"
+        fi
+        open_zoom_link_in_zoom "$url"
+    }
+
+
+    if [[ $# -ge 2 ]]; then
+        join_from_confno_and_pwd "$@"
+    elif [[ $# -gt 0 ]]; then
         test_for_zoom_link "$@"
         exit 0
     fi
@@ -60,35 +75,14 @@ in {
   config = {
     nixpkgs.overlays = [zoom-us-overlay];
     home-manager.sharedModules = [{
-      home.packages = [ zoom-us zoom-auto ];
+      home.packages = [ 
+        zoom-us
+        zoom-auto
+      ];
       xdg.mimeApps = {
         defaultApplications."x-scheme-handler/zoommtg" =
           [ "us.zoom.Zoom.desktop" ];
       };
-      programs.fish = {
-        functions = {
-          zoom-join = ''
-            set confno "$1"
-            set pwd "$2"
-            set url 'zoommtg://zoom.us/join?action=join&confno='"$confno"
-            if [ ! -z "$pwd" ]
-              set url="$url"'&pwd='"$pwd"
-            end
-            zoom "$url"
-          '';
-        };
-      };
     }];
-    programs.zsh.interactiveShellInit = ''
-      zoom-join() {
-        local confno="$1"
-        local pwd="$2"
-        local url='zoommtg://zoom.us/join?action=join&confno='"$confno"
-        if [[ ! -z "$pwd" ]]; then
-          local url="$url"'&pwd='"$pwd"
-        fi
-        zoom "$url"
-      }
-    '';
   };
 }

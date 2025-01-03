@@ -74,21 +74,9 @@ in {
       ""
       "${pkgs.bluez}/libexec/bluetooth/bluetoothd -f /etc/bluetooth/main.conf"
     ];
-    home-manager.sharedModules = [
-      (lib.mkIf config.hardware.pulseaudio.enable {
-        home.packages = with pkgs; [ 
-          bluetuith
-        ];
-
-        programs.fish = {
-          functions = {
-            # see: https://nixos.wiki/wiki/Bluetooth
-            pactl-bt-to-a2dp =
-              "${config.hardware.pulseaudio.package}/bin/pacmd set-card-profile (${config.hardware.pulseaudio.package}/bin/pactl list cards short | ${pkgs.gnugrep}/bin/egrep -o bluez_card[[:alnum:]._]+) a2dp_sink";
-          };
-        };
-      })
-    ];
+    home-manager.sharedModules = [{
+      home.packages = with pkgs; [ bluetuith ];
+    }];
     nixpkgs.overlays =
       [ (self: super: { helper = { inherit connectBtDevice; }; }) ];
   });
