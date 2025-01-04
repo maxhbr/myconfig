@@ -6,8 +6,8 @@ let
     zoom-us = self.nixos-2411.zoom-us.overrideAttrs (old: {
       postFixup = old.postFixup + ''
         wrapProgram $out/bin/zoom-us \
-          --set QT_DEBUG_PLUGINS 1
-          # --set XDG_CURRENT_DESKTOP gnome
+          --set QT_DEBUG_PLUGINS 1 \
+          --set XDG_CURRENT_DESKTOP gnome
       '';
     });
   });
@@ -62,14 +62,19 @@ let
     elif [[ $# -gt 0 ]]; then
         test_for_zoom_link "$@"
         exit 0
-    fi
+    else
+      echo "testing for secondary clipboard ..."
+      test_for_zoom_link "$(${pkgs.wl-clipboard}/bin/wl-paste || true)"
 
-    echo "testing for secondary clipboard ..."
-    test_for_zoom_link "$(${pkgs.wl-clipboard}/bin/wl-paste || true)"
-    echo "testing for primary clipboard ..."
-    test_for_zoom_link "$(${pkgs.wl-clipboard}/bin/wl-paste -p || true)"
+      echo "testing for primary clipboard ..."
+      test_for_zoom_link "$(${pkgs.wl-clipboard}/bin/wl-paste -p || true)"
+
+      echo "zoom-auto did not match anything, just running zoom:"
+      exec ${zoom-cmd}
+    fi
   '');
   zoom-auto = mk-zoom-auto "zoom-auto" "${zoom-us}/bin/zoom-us";
+  zoom-auto-master = mk-zoom-auto "zoom-auto-master" "${pkgs.master.zoom-us}/bin/zoom-us";
   # zoom-auto-wl = mk-zoom-auto "zoom-auto-wl" "${pkgs.cage}/bin/cage -- ${zoom-us}/bin/zoom-us"; # does not work
 in {
   config = {
@@ -78,6 +83,7 @@ in {
       home.packages = [ 
         zoom-us
         zoom-auto
+        zoom-auto-master
       ];
       xdg.mimeApps = {
         defaultApplications."x-scheme-handler/zoommtg" =

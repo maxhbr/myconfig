@@ -22,7 +22,6 @@ in {
         programs.cava = { enable = false; };
       })
     ];
-
     services.pipewire.enable = true;
   };
 }
