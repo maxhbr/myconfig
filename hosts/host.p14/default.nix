@@ -91,9 +91,9 @@
         };
       })
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
-    {
-      programs.kdeconnect.enable = true;
-    }
+    # {
+    #   programs.kdeconnect.enable = true;
+    # }
   ];
 
   config = {

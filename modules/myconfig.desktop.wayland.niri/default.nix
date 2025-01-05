@@ -108,6 +108,7 @@ in {
                 Wants =
                   "graphical-session-pre.target xdg-desktop-autostart.target";
                 After = "graphical-session-pre.target";
+                X-RestartIfChanged = false;
               };
               Service = {
                 Slice = "session.slice";
