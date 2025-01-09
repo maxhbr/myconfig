@@ -54,6 +54,8 @@
 
     # zephyrproject.url = "path:flakes/zephyrproject/";
 
+    nixgl.url = "github:nix-community/nixGL";
+
     #wayland:hyprland
     hyprland = {
       url = "github:hyprwm/Hyprland/v0.41.2";
@@ -181,6 +183,11 @@
                   my-wallpapers =
                     inputs.my-wallpapers.defaultPackage.x86_64-linux;
                 })
+              ];
+            })
+            ({ pkgs, ... }: {
+              nixpkgs.overlays = [
+                nixgl.overlay # https://github.com/nix-community/nixGL
               ];
             })
             inputs.my-wallpapers.nixosModule
