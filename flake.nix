@@ -187,7 +187,7 @@
             })
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
-                nixgl.overlay # https://github.com/nix-community/nixGL
+                inputs.nixgl.overlay # https://github.com/nix-community/nixGL
               ];
             })
             inputs.my-wallpapers.nixosModule
