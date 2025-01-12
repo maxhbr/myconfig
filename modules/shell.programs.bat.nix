@@ -14,9 +14,9 @@
         programs.bat = {
           extraPackages = with pkgs.bat-extras; [
             # batdiff # fails to compile
-            batman
-            batgrep
-            batwatch
+            # batman # broken
+            # batgrep # broken
+            # batwatch
           ];
           config = {
             pager = "less -FR";

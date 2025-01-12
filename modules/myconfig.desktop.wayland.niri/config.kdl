@@ -173,7 +173,7 @@ layout {
     // layer-shell panels and regular gaps.
     struts {
         left 10
-        right 10
+        right 35 // 10 + 25 for symmetry with waybar
         // top 64
         // bottom 64
     }
