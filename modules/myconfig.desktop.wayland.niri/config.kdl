@@ -262,6 +262,7 @@ window-rule {
     match app-id="^zoom$"
 
     default-column-width { }
+    open-floating true
 }
 
 window-rule {
@@ -282,6 +283,11 @@ window-rule {
     match app-id="^Signal$"
 
     block-out-from "screen-capture"
+}
+
+window-rule {
+    match app-id="^Signal$"
+    match app-id="^Slack$"
 }
 
 window-rule {

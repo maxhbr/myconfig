@@ -17,7 +17,7 @@ let
   teams-for-linux-pkg = pkgs.nixos-2405.teams-for-linux;
 in {
   imports = [
-    ./zoom.nix
+    ./zoom-us
     # ./jdk.nix
     # ./node.nix
     # ./azure-cli.nix
