@@ -30,9 +30,10 @@ in {
         };
         programs.emacs = {
           enable = true;
-          package = if cfg.desktop.wayland.enable
-                    then pkgs.emacs-pgtk
-                    else pkgs.emacs-unstable;
+          package = pkgs.emacs-unstable;
+          # package = if cfg.desktop.wayland.enable
+          #           then pkgs.emacs-pgtk
+          #           else pkgs.emacs-unstable;
           extraConfig = ''
             ; prevent emacs from saving customizations to this file
             (setq custom-file (concat user-emacs-directory ".emacs-customize.el"))
@@ -46,7 +47,6 @@ in {
               use-package
               better-defaults
               auto-compile
-              # exwm
               evil
               evil-leader
               evil-collection
@@ -87,6 +87,10 @@ in {
               desktop-environment
               doom-themes
               doom-modeline
+
+              # exwm:
+              exwm
+              # exwm-systemtray
             ];
         };
         programs.fish.functions = {
@@ -94,6 +98,7 @@ in {
         };
         home.shellAliases = {
           magit = ''emacs -e "(magit-status \"$(pwd)\")"'';
+          emacs-cage-exwm = ''exec cage emacs -Q --eval "(require 'exwm)" --eval "(exwm-enable)"''; # --eval "(require 'exwm-systemtray)" --eval "(exwm-systemtray-enable)"'';
         };
       })
     ];
