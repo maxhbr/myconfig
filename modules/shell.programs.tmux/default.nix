@@ -15,7 +15,7 @@ let
   plugins = with pkgs.tmuxPlugins; [
     copycat
     open
-    resurrect
+    # resurrect
     yank
     vim-tmux-navigator
   ];
