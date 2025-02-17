@@ -21,13 +21,13 @@
       nextcloud = {
         enable = true;
         hostName = config.networking.hostName;
-        adminpassFile = "/etc/nextcloud/adminpass";
         package = pkgs.nextcloud22;
         home = "/mnt/2x4t/nextcloud";
         https = true;
         autoUpdateApps.enable = true;
         autoUpdateApps.startAt = "05:00:00";
         config = {
+          adminpassFile = "/etc/nextcloud/adminpass";
           dbtype = "pgsql";
           dbuser = "nextcloud";
           dbhost = "/run/postgresql";

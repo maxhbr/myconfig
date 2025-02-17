@@ -1,7 +1,6 @@
-{ config, pkgs, ... }: {
-  config = {
+{ config, pkgs, lib, ... }: {
+  config = lib.mkIf config.programs.gnupg.agent.enable {
     programs.gnupg.agent = {
-      enable = true;
       enableSSHSupport = !config.programs.ssh.startAgent;
       pinentryPackage = if config.myconfig.desktop.enable then
         (if config.myconfig.desktop.wayland.enable then
