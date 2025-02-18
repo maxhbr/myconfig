@@ -35,7 +35,7 @@ in {
       home.packages = with pkgs;
         [ qjackctl pw-simultaneous pw-record-all ];
     }];
-    hardware.pulseaudio.enable = false;
+    services.pulseaudio.enable = false;
     security.rtkit.enable = true;
     services.pipewire = {
       alsa = {

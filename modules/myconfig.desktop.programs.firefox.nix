@@ -26,7 +26,7 @@ in {
               #   # "general.useragent.locale" = "en-GB";
               #   # "browser.bookmarks.showMobileBookmarks" = true;
               # };
-              extensions = with pkgs.nur.repos.rycee.firefox-addons; [
+              extensions.packages = with pkgs.nur.repos.rycee.firefox-addons; [
                 # see: https://github.com/nix-community/nur-combined/blob/master/repos/rycee/pkgs/firefox-addons/generated-firefox-addons.nix
                 gopass-bridge
                 # https-everywhere

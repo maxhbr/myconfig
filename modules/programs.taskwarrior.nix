@@ -3,6 +3,7 @@
     home-manager.sharedModules = [{
       programs.taskwarrior = {
         enable = true;
+        package = pkgs.taskwarrior3;
         config = {
           report.active = {
             columns = [
