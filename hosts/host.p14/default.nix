@@ -94,11 +94,6 @@
     # {
     #   programs.kdeconnect.enable = true;
     # }
-    {
-      # currently suspend breaks the OS, ignore lidSwitch for now...
-      services.logind.lidSwitch = lib.mkForce "ignore";
-      services.logind.lidSwitchDocked = lib.mkForce "ignore";
-    }
   ];
 
   config = {
@@ -243,6 +238,7 @@
         home.packages = with pkgs.helper; [
           (connectBtDevice { name = "WF-1000XM5"; id = "AC:80:0A:2A:10:6F";})
           (connectBtDevice { name = "Px7"; id = "EC:66:D1:B4:C8:3B";})
+          (connectBtDevice { name = "Px7s2e"; id = "EC:66:D1:BD:E4:98";})
           (connectBtDevice { name = "Px8"; id = "EC:66:D1:C6:94:14";})
           (connectBtDevice { name = "Streambot"; id = "E9:08:EF:60:57:21";})
         ];
