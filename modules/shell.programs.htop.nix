@@ -5,7 +5,7 @@
     environment.systemPackages = with pkgs; [ htop ];
     home-manager.sharedModules = [
       ({ config, ... }: {
-        xdg.configFile."htop/htoprc".force = true;
+        # xdg.configFile."htop/htoprc".force = true; # todo: no longer builds / still needed?
         programs.htop = {
           enable = true;
           settings = {
