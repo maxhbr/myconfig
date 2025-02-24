@@ -1,4 +1,4 @@
-{ stdenv, requireFile, pkgs, autoPatchelfHook, alsa-lib, freetype, curl }:
+{ stdenv, requireFile, pkgs, autoPatchelfHook, alsa-lib, freetype, curl, glibc }:
 let
   version = "3.1";
   #  Run `nix store add-file <path/to/Wing-Edit_LINUX_${version}.tar.gz>`, get the output path. Use that output in
@@ -28,8 +28,7 @@ stdenv.mkDerivation {
 
   meta = with pkgs.lib; {
     homepage = "https://www.behringer.com/";
-    description =
-      "WING-Edit.";
+    description = "WING-Edit";
     # license = licenses.tbd;
     platforms = platforms.linux;
     maintainers = [ ];
