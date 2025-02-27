@@ -30,7 +30,7 @@ let
         pkgs.waybar;
       waybarOnce = pkgs.writeShellScriptBin "waybarOnce" ''
         set -euo pipefail
-        session="$1"; shift
+        session="''${1:-"$DESKTOP_SESSION"}"; shift
         bn=/tmp/''${session}.''${XDG_VTNR:-x}.''${USER}.waybar
         pidfile=$bn.pid
         logfile=$bn.log

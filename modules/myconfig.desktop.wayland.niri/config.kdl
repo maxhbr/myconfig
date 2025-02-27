@@ -172,8 +172,8 @@ layout {
     // Top and bottom struts will simply add outer gaps in addition to the area occupied by
     // layer-shell panels and regular gaps.
     struts {
-        left 10
-        right 35 // 10 + 25 for symmetry with waybar
+        left 100
+        right 125 // 10 + 25 for symmetry with waybar
         // top 64
         // bottom 64
     }

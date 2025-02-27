@@ -18,6 +18,8 @@
     rel2405.url = "github:nixos/nixpkgs/release-24.05";
     rel2411.url = "github:nixos/nixpkgs/release-24.11";
 
+    zoom-old-screenshare.url = "github:NixOS/nixpkgs/06031e8a5d9d5293c725a50acf01242193635022";
+
     pr244937.url =
       "github:charles-dyfis-net/nixpkgs/freeplane-1_11_4"; # https://github.com/NixOS/nixpkgs/pull/244937
     pr275479.url =

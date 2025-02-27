@@ -1,7 +1,11 @@
 # Copyright 2022 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, inputs, ... }:
 let
+  zoom-old-screenshare-pkgs = import inputs.zoom-old-screenshare {
+    inherit (pkgs) system;
+    config = pkgs.config;
+  };
   zoom-us-overlay = (self: super: {
     zoom-us = super.zoom-us.overrideAttrs (old: {
       postFixup = old.postFixup + ''
@@ -10,6 +14,7 @@ let
           --set XDG_CURRENT_DESKTOP gnome
       '';
     });
+    zoom-old-screenshare = zoom-old-screenshare-pkgs.zoom-us;
   });
   zoom-us = pkgs.zoom-us;
   mk-zoom-auto = name: zoom-pkg: let
@@ -21,7 +26,8 @@ let
         patchShebangs $out/bin/${name}
         wrapProgram "$out/bin/${name}" --prefix PATH : ${pkgs.lib.makeBinPath my-script-deps}
       '';
-  zoom-auto = mk-zoom-auto "zoom-auto" "${zoom-us}/bin/zoom-us";
+  zoom-auto = mk-zoom-auto "zoom-auto" zoom-us;
+  zoom-auto-old-screenshare = mk-zoom-auto "zoom-auto-old-screenshare" pkgs.zoom-old-screenshare;
   # zoom-auto-wl = mk-zoom-auto "zoom-auto-wl" "${pkgs.cage}/bin/cage -- ${zoom-us}/bin/zoom-us"; # does not work
 in {
   config = {
@@ -30,6 +36,7 @@ in {
       home.packages = [ 
         zoom-us
         zoom-auto
+        zoom-auto-old-screenshare
       ];
       xdg.mimeApps = {
         defaultApplications."x-scheme-handler/zoommtg" =

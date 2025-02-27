@@ -19,7 +19,7 @@ in {
         oxygen
       ];
       myconfig.desktop.wayland.sessions = {
-        plasma5 = { command = "${pkgs.plasma-workspace}/bin/startplasma-wayland"; };
+        plasma5 = { command = "${pkgs.kdePackages.plasma-workspace}/bin/startplasma-wayland"; };
       };
     })
     (lib.mkIf (builtins.elem "plasma6" cfg.desktop.wayland.selectedSessions) {
@@ -30,7 +30,7 @@ in {
         oxygen
       ];
       myconfig.desktop.wayland.sessions = {
-        plasma6 = { command = "${pkgs.plasma-workspace}/bin/startplasma-wayland"; };
+        plasma6 = { command = "${pkgs.kdePackages.plasma-workspace}/bin/startplasma-wayland"; };
       };
     })
     (lib.mkIf (builtins.elem "plasma5-bigsrceen" cfg.desktop.wayland.selectedSessions) {
@@ -52,9 +52,7 @@ in {
       };
     })
     {
-      environment.systemPackages = with pkgs; [
-        kdeplasma-addons
-      ] ++ (with pkgs.kdePackages; [ arianna ]) ;
+      environment.systemPackages = with pkgs.kdePackages; [ kdeplasma-addons arianna ] ;
       programs.kdeconnect.enable = lib.mkDefault false;
     }
     {
