@@ -11,7 +11,7 @@ in {
           # librecad # 2D
         ] ++ [ # 3D
           # blender
-          openscad
+          openscad-unstable
           freecad # 3D
           povray # raytracing for freecad
           prusa-slicer
@@ -21,9 +21,9 @@ in {
           gmsh
         ] ++ [ # pcb design
           # librepcb
-          gerbv
+          # gerbv
           # kicad-small
-          kicad
+          # kicad
           jre # for freerouting
         ]);
     }];

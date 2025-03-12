@@ -159,7 +159,7 @@
         messengers.enable = true;
         myphoto.enable = true;
         obs.enable = true;
-        # cad.enable = true;
+        cad.enable = true;
         # deskreen.enable = true;
       };
       email.enable = true;

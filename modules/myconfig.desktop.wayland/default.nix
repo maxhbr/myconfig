@@ -166,6 +166,10 @@ in {
     ./services.greetd.nix
     ./sharescreen.nix
     ./programs.waybar
+    ./services.clipboard-sync.nix
+    {
+      services.clipboard-sync.enable = true;
+    }
     {
       home-manager.sharedModules = [
         {

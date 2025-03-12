@@ -77,6 +77,8 @@
     niri.url = "github:YaLTeR/niri";
     niri.inputs.nixpkgs.follows = "nixpkgs";
 
+    clipboard-sync.url = "github:dnut/clipboard-sync";
+
     mydwl.url = "github:maxhbr/mydwl";
     mydwl.inputs.nixpkgs.follows = "nixpkgs";
 
