@@ -39,6 +39,7 @@
 
     nur.url = "github:nix-community/NUR";
 
+
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
     emacs.url = "github:nix-community/emacs-overlay";
@@ -74,7 +75,7 @@
       "git+https://git.sr.ht/~novakane/rivercarro?submodules=1";
     rivercarro-src.flake = false;
 
-    niri.url = "github:YaLTeR/niri";
+    niri.url = "github:YaLTeR/niri/v25.02"; # pin, as latest does not start electron things?
     niri.inputs.nixpkgs.follows = "nixpkgs";
 
     clipboard-sync.url = "github:dnut/clipboard-sync";

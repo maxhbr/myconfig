@@ -168,9 +168,6 @@ in {
     ./programs.waybar
     ./services.clipboard-sync.nix
     {
-      services.clipboard-sync.enable = true;
-    }
-    {
       home-manager.sharedModules = [
         {
           options.myconfig = with lib; {
@@ -186,6 +183,7 @@ in {
 
   config = (lib.mkIf cfg.desktop.wayland.enable {
     services.greetd.enable = true;
+    services.clipboard-sync.enable = true;
     environment.sessionVariables = {
       # "NIXOS_OZONE_WL" = "1"; # VSCode fails to start if that is set in dwl / wayland
       "XDG_SESSION_TYPE" = "wayland";

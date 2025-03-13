@@ -98,7 +98,7 @@ in {
         };
         home.shellAliases = {
           magit = ''emacs -e "(magit-status \"$(pwd)\")"'';
-          emacs-cage-exwm = ''exec cage emacs -Q --eval "(require 'exwm)" --eval "(exwm-enable)"''; # --eval "(require 'exwm-systemtray)" --eval "(exwm-systemtray-enable)"'';
+          emacs-cage-exwm = ''exec cage -- emacs -Q --eval "(require 'exwm)" --eval "(exwm-enable)"''; # --eval "(require 'exwm-systemtray)" --eval "(exwm-systemtray-enable)"'';
         };
       })
     ];
