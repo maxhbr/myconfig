@@ -75,7 +75,7 @@
       "git+https://git.sr.ht/~novakane/rivercarro?submodules=1";
     rivercarro-src.flake = false;
 
-    niri.url = "github:YaLTeR/niri/v25.02"; # pin, as latest does not start electron things?
+    niri.url = "github:YaLTeR/niri";
     niri.inputs.nixpkgs.follows = "nixpkgs";
 
     clipboard-sync.url = "github:dnut/clipboard-sync";

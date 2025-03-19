@@ -38,6 +38,7 @@
     ./smarthome.nix
     ./role.work
     ./programs.khal.nix
+    ./ai-tooling.nix
     {
       services.openssh = {
         listenAddresses = [{
