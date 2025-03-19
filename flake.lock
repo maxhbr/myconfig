@@ -405,11 +405,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1742374443,
-        "narHash": "sha256-4pKN5iUtxgyW0bOHN4tXj/sCqWDux8EXvPgmfdxaPMY=",
+        "lastModified": 1742379890,
+        "narHash": "sha256-cG2l5l4h5s4Vuj5haQ9nxZXdwTyZfQAZdr/hj/FeYR8=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "2ac9a6c6c62d6ef54e6d6ce4ea11995b6629ad7d",
+        "rev": "f8e54f76f839e121088ba32c1161f6e94f3939b5",
         "type": "github"
       },
       "original": {
@@ -541,11 +541,11 @@
     },
     "nixos-hardware": {
       "locked": {
-        "lastModified": 1742217307,
-        "narHash": "sha256-3fwpN7KN226ghLlpO9TR0/WpgQOmOj1e8bieUxpIYSk=",
+        "lastModified": 1742376361,
+        "narHash": "sha256-VFMgJkp/COvkt5dnkZB4D2szVdmF6DGm5ZdVvTUy61c=",
         "owner": "NixOS",
         "repo": "nixos-hardware",
-        "rev": "4f4d97d7b7be387286cc9c988760a7ebaa5be1f1",
+        "rev": "daaae13dff0ecc692509a1332ff9003d9952d7a9",
         "type": "github"
       },
       "original": {
@@ -741,11 +741,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1742374376,
-        "narHash": "sha256-6mv+q/hXDTzGhJJ5O+lAiplcOazYrtqttkS1gE2U7A4=",
+        "lastModified": 1742375758,
+        "narHash": "sha256-2DyqzYbSiU5/sLiBSxhFXzmhWw7xH5d9gZXp93VhFLE=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "f9d4d88c9077ea28373084aa2cbae262993255b2",
+        "rev": "1ad28216d9a988e1e786d2d818db7cab20ca59ae",
         "type": "github"
       },
       "original": {
@@ -967,11 +967,11 @@
     "rivercarro-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1717919197,
-        "narHash": "sha256-q1o6+yNzbkFmEImtbRUFNr3ly3GD67PehiOPQ/vtHDY=",
+        "lastModified": 1742376443,
+        "narHash": "sha256-im26hiRi24tLCSvLnIdcnIWml5kTs7YSCAC8o9mcR+M=",
         "ref": "refs/heads/main",
-        "rev": "2c83990c80fab29e942b783d7194b5cab13f745a",
-        "revCount": 88,
+        "rev": "199800235645a1771e2551a64d5b4f5e2601888c",
+        "revCount": 91,
         "submodules": true,
         "type": "git",
         "url": "https://git.sr.ht/~novakane/rivercarro"
