@@ -17,12 +17,12 @@ in {
   config = (lib.mkIf (cfg.desktop.wayland.enable
     && (builtins.elem "niri" cfg.desktop.wayland.selectedSessions
       || builtins.elem "niri-plain" cfg.desktop.wayland.selectedSessions)) {
-        nixpkgs.overlays = [ 
-          # do not use provided overlay to reduce risk
-          (_: _: {
-            niri = inputs.niri.packages.${pkgs.system}.default;
-          })
-        ];
+        # nixpkgs.overlays = [ 
+        #   # do not use provided overlay to reduce risk
+        #   (_: _: {
+        #     niri = inputs.niri.packages.${pkgs.system}.default;
+        #   })
+        # ];
         home-manager.sharedModules = [
           ({ config, ... }: let
             niri-autostart = pkgs.writeShellScript "niri-autostart" ''
