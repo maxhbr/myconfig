@@ -1,13 +1,15 @@
 # Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, ... }: {
+{ config, pkgs, lib, myconfig, inputs, ... }: {
   imports = [
     ./hardware-configuration.nix
     ./imgwork.nfs.nix
+    ../../hardware/RTX5090.nix
+    ../../hardware/RX5500XT.nix
     ../../hardware/efi.nix
     ../../hardware/btrfs.nix
-    ../../hardware/nixos-hardware/common/cpu/amd
-    ../../hardware/nixos-hardware/common/pc/ssd
+    inputs.nixos-hardware.nixosModules.common-cpu-amd
+    inputs.nixos-hardware.nixosModules.common-pc-ssd
     ../../hardware/steamcontroller.nix
     ({ ... }: {
       config = {
@@ -119,9 +121,6 @@
 
     hardware.enableRedistributableFirmware = true;
     hardware.cpu.amd.updateMicrocode = true;
-    services.xserver = {
-      videoDrivers = [ "amdgpu" ];
-    };
 
     boot.initrd.supportedFilesystems = [ "luks" "btrfs" ];
     boot.binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];

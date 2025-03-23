@@ -95,6 +95,9 @@
     {
       programs.kdeconnect.enable = true;
     }
+
+    # Testing: Thunderbolt GPUs
+    ../../hardware/eGPU.nix
   ];
 
   config = {
