@@ -34,7 +34,6 @@ in {
           plantuml
           graphviz
           darcs
-          python310Packages.autopep8
         ] ++ lib.optional config.myconfig.desktop.enable freeplane
           ++ lib.optional config.services.xserver.wacom.enable xournalpp);
     }];
