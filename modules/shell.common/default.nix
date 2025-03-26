@@ -71,7 +71,6 @@ in {
         bmon
         nmon
         s-tui
-        atop
         (writeShellScriptBin "usbtop" ''
           sudo modprobe usbmon
           sudo ${usbtop}/bin/usbtop
