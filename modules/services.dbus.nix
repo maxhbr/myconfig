@@ -99,8 +99,8 @@ in {
           gnome = config.services.xserver.desktopManager.gnome.enable;
           kde = config.services.desktopManager.plasma6.enable || config.services.xserver.desktopManager.plasma5.enable;
         in [ pkgs.xdg-desktop-portal-wlr ]
-        ++ lib.optional (!kde) pkgs.xdg-desktop-portal-kde
-        ++ lib.optional (!gnome) pkgs.xdg-desktop-portal-gtk;
+        ++ lib.optional kde pkgs.kdePackages.xdg-desktop-portal-kde 
+        ++ lib.optional gnome pkgs.xdg-desktop-portal-gtk;
     };
   };
 }

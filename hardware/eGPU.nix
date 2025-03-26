@@ -1,7 +1,7 @@
 { pkgs, config, inputs, ... }: {
   imports = [
     ./RTX5090.nix
-    ./RX5500XT.nix
+    # ./RX5500XT.nix
   ];
   config = {
     # boot.kernelParams = [ "pcie_aspm=off" ];

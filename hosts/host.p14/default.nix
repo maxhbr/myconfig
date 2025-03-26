@@ -97,7 +97,7 @@
     }
 
     # Testing: Thunderbolt GPUs
-    ../../hardware/eGPU.nix
+    ./eGPU.p14.nix
   ];
 
   config = {

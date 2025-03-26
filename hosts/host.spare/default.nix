@@ -3,18 +3,14 @@
 { config, pkgs, lib, myconfig, inputs, ... }: {
   imports = [
     ./hardware-configuration.nix
-    # inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
-    # {
-    #   # https://nixos.wiki/wiki/Intel_Graphics
-    #   #  getting the device ID with: $ nix-shell -p pciutils --run "lspci -nn | grep VGA"
-    #   boot.kernelParams = [ "i915.force_probe=46a6" ];
-    # }
     inputs.nixos-hardware.nixosModules.common-pc-laptop
     inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
     inputs.nixos-hardware.nixosModules.dell-precision-5560
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
     ../host.p14/role.work
+    ./eGPU.spare.nix
+    ../host.workstation/gaming/games.steam
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
   ];
 
@@ -76,7 +72,7 @@
           '';
         };
       };
-      # virtualisation.enable = true;
+      virtualisation.enable = true;
       editor.emacs.enable = true;
       # dev = {
       #   compliance.enable = true;
