@@ -65,7 +65,7 @@
     },
     "spare": {
       "network": "home",
-      "ip4": "192.168.1.87",
+      "ip4": "192.168.1.127",
       "pubkeys": {
         "id_rsa.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC6BlyBCYrsNoPWy/E/9C/KW3CU4i1ElsQowKkr2XO6AW4zeU/d8qplKwPo0m8zqz/8HeFsg6FPPrZP7FaTzTuxJpOASw3uLJSMVmT80wm0zOjfLtEdqwR0BLb8yBunABTO+0nTR9xCMgbLyoiJQSjeTKFl6thUKvzVYuVZzbRhhY6WbwvzDFLksFBY7dyGjUbQjuvWOkPoV3hUCZLvDRo5S0Ht2tp/vkEebSQjqpl1UviriAUeeJJgz/MutxfcBCIRgksoQtnwB+bozkgVM/6uPjQ/eq8gZsnZu6fc9qkUtiBRurIr7QZC56ux+P+O77gi+WG/tMifpotl0UjOuJjH mhuber@x1extremeG2",
         "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC69c0GZzGaU9WDqrwBfprnkhj9nPHj+qu3w3OQEZdzZ root@spare",
