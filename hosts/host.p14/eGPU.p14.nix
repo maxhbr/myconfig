@@ -7,7 +7,7 @@
 
   config = {
     services.ollama = {
-      enable = true;
+      enable = false;
       # listenAddress = "0.0.0.0:11434";
       acceleration = "cuda";
       # environmentVariables = {

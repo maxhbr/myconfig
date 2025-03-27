@@ -29,6 +29,7 @@
           #   "github.copilot.advanced" = { "enabled" = true; };
           # };
           extensions = with pkgs.vscode-extensions; [
+            continue.continue
             dracula-theme.theme-dracula
             vscodevim.vim
             yzhang.markdown-all-in-one
