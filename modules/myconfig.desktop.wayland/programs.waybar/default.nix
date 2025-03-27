@@ -49,7 +49,7 @@ let
       '';
     in {
       config = (lib.mkIf config.programs.waybar.enable {
-        home.packages = [waybarOnce];
+        home.packages = [ waybarOnce ];
         programs.waybar = {
           package = waybarPackage;
           systemd.enable = false;
@@ -59,8 +59,7 @@ let
               position = "top";
               height = 25;
               spacing = 4;
-              modules-left = [
-              ];
+              modules-left = [ ];
               modules-center = [
                 # "wlr/taskbar"
                 # "group/hardware"

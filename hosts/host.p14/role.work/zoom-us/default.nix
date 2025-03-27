@@ -17,27 +17,26 @@ let
     zoom-old-screenshare = zoom-old-screenshare-pkgs.zoom-us;
   });
   zoom-us = pkgs.zoom-us;
-  mk-zoom-auto = name: zoom-pkg: let
-    my-script-deps = [ zoom-pkg pkgs.wl-clipboard ];
-  in pkgs.runCommandLocal name
-      { nativeBuildInputs = [ pkgs.makeWrapper ]; }
-      ''
-        install -m755 ${./zoom-auto.sh} -D $out/bin/${name}
-        patchShebangs $out/bin/${name}
-        wrapProgram "$out/bin/${name}" --prefix PATH : ${pkgs.lib.makeBinPath my-script-deps}
-      '';
+  mk-zoom-auto = name: zoom-pkg:
+    let my-script-deps = [ zoom-pkg pkgs.wl-clipboard ];
+    in pkgs.runCommandLocal name {
+      nativeBuildInputs = [ pkgs.makeWrapper ];
+    } ''
+      install -m755 ${./zoom-auto.sh} -D $out/bin/${name}
+      patchShebangs $out/bin/${name}
+      wrapProgram "$out/bin/${name}" --prefix PATH : ${
+        pkgs.lib.makeBinPath my-script-deps
+      }
+    '';
   zoom-auto = mk-zoom-auto "zoom-auto" zoom-us;
-  zoom-auto-old-screenshare = mk-zoom-auto "zoom-auto-old-screenshare" pkgs.zoom-old-screenshare;
+  zoom-auto-old-screenshare =
+    mk-zoom-auto "zoom-auto-old-screenshare" pkgs.zoom-old-screenshare;
   # zoom-auto-wl = mk-zoom-auto "zoom-auto-wl" "${pkgs.cage}/bin/cage -- ${zoom-us}/bin/zoom-us"; # does not work
 in {
   config = {
-    nixpkgs.overlays = [zoom-us-overlay];
+    nixpkgs.overlays = [ zoom-us-overlay ];
     home-manager.sharedModules = [{
-      home.packages = [ 
-        zoom-us
-        zoom-auto
-        zoom-auto-old-screenshare
-      ];
+      home.packages = [ zoom-us zoom-auto zoom-auto-old-screenshare ];
       xdg.mimeApps = {
         defaultApplications."x-scheme-handler/zoommtg" =
           [ "us.zoom.Zoom.desktop" ];

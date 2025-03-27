@@ -42,7 +42,10 @@ in {
     home-manager.sharedModules = [{
       home.packages = with pkgs;
         [ pass pass-git-helper wireguardKeypairToPassStore otpPass ]
-        ++ lib.optionals config.myconfig.desktop.enable [ gopass gopass-jsonapi ];
+        ++ lib.optionals config.myconfig.desktop.enable [
+          gopass
+          gopass-jsonapi
+        ];
       home.file = {
         ".config/pass-git-helper/git-pass-mapping.ini".source =
           ./config/pass-git-helper/git-pass-mapping.ini;

@@ -88,7 +88,7 @@
             "labwc"
             "river"
             "plasma6"
-             # "qtile"
+            # "qtile"
           ];
         };
         myphoto.enable = true;

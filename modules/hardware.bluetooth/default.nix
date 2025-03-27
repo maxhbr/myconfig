@@ -74,9 +74,8 @@ in {
       ""
       "${pkgs.bluez}/libexec/bluetooth/bluetoothd -f /etc/bluetooth/main.conf"
     ];
-    home-manager.sharedModules = [{
-      home.packages = with pkgs; [ bluetuith ];
-    }];
+    home-manager.sharedModules =
+      [{ home.packages = with pkgs; [ bluetuith ]; }];
     nixpkgs.overlays =
       [ (self: super: { helper = { inherit connectBtDevice; }; }) ];
   });

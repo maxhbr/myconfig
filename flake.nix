@@ -18,7 +18,8 @@
     rel2405.url = "github:nixos/nixpkgs/release-24.05";
     rel2411.url = "github:nixos/nixpkgs/release-24.11";
 
-    zoom-old-screenshare.url = "github:NixOS/nixpkgs/06031e8a5d9d5293c725a50acf01242193635022";
+    zoom-old-screenshare.url =
+      "github:NixOS/nixpkgs/06031e8a5d9d5293c725a50acf01242193635022";
 
     pr244937.url =
       "github:charles-dyfis-net/nixpkgs/freeplane-1_11_4"; # https://github.com/NixOS/nixpkgs/pull/244937
@@ -38,7 +39,6 @@
     flake-utils.url = "github:numtide/flake-utils";
 
     nur.url = "github:nix-community/NUR";
-
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
@@ -116,8 +116,9 @@
               useUserPackages = true;
               useGlobalPkgs = true;
               backupFileExtension = let
-                  rev = toString (self.shortRev or self.dirtyShortRev or self.lastModified or "unknown");
-                in "${rev}.homeManagerBackup";
+                rev = toString
+                  (self.shortRev or self.dirtyShortRev or self.lastModified or "unknown");
+              in "${rev}.homeManagerBackup";
               sharedModules = [
                 ({ pkgs, ... }: {
                   home.stateVersion =
@@ -154,8 +155,7 @@
                   (mkSubPkgsOverlay "nixos-unstable-small"
                     inputs.ninos-unstable-small)
                   (mkSubPkgsOverlay "nixos-2003" inputs.rel2003)
-                  (mkSubPkgsOverlay "nixos-2009" inputs.rel2009
-                  )
+                  (mkSubPkgsOverlay "nixos-2009" inputs.rel2009)
                   (mkSubPkgsOverlay "nixos-2105" inputs.rel2105)
                   (mkSubPkgsOverlay "nixos-2111" inputs.rel2111)
                   (mkSubPkgsOverlay "nixos-2205" inputs.rel2205)
@@ -204,9 +204,7 @@
                   trusted-public-keys = [
                     "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
                   ];
-                  substituters = [
-                    "https://cache.nixos.org"
-                  ];
+                  substituters = [ "https://cache.nixos.org" ];
                 };
               };
             })
@@ -237,21 +235,23 @@
                 (myconfig.metadatalib.announceHost "r6c")
               ];
               config = {
-                home-manager.sharedModules = [({config, ...}: {
-                  home.packages = [
-                    (pkgs.writeShellScriptBin "myconfig" 
-			(if config.programs.neovide.enable
-				 then "${config.programs.neovide.package}/bin/neovide ~/myconfig/myconfig &disown"
-				 else "$EDITOR  ~/myconfig/myconfig"))
-                  ];
-                })];
+                home-manager.sharedModules = [
+                  ({ config, ... }: {
+                    home.packages = [
+                      (pkgs.writeShellScriptBin "myconfig"
+                        (if config.programs.neovide.enable then
+                          "${config.programs.neovide.package}/bin/neovide ~/myconfig/myconfig &disown"
+                        else
+                          "$EDITOR  ~/myconfig/myconfig"))
+                    ];
+                  })
+                ];
               };
             })
           ] ++ moreModules) metadataOverride);
         host-spare = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "spare" ([
-            self.nixosModules.core
-          ] ++ moreModules) metadataOverride);
+          (self.lib.evalConfiguration "x86_64-linux" "spare"
+            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
         host-x1extremeG2 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
             { config = { hardware.enableRedistributableFirmware = true; }; }

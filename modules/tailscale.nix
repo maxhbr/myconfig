@@ -1,5 +1,4 @@
-{ config, pkgs, lib, ... }:
-{
+{ config, pkgs, lib, ... }: {
   config = lib.mkIf config.services.tailscale.enable {
     environment.systemPackages = [ pkgs.tailscale ];
 

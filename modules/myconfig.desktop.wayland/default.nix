@@ -162,7 +162,7 @@ in {
     };
   };
 
-  imports = [ 
+  imports = [
     ./services.greetd.nix
     ./sharescreen.nix
     ./programs.waybar
@@ -171,9 +171,7 @@ in {
       home-manager.sharedModules = [
         {
           options.myconfig = with lib; {
-            desktop.wayland = {
-              enable = mkEnableOption "wayland";
-            };
+            desktop.wayland = { enable = mkEnableOption "wayland"; };
           };
         }
         ./home-manager.wrap-electron-apps.nix
@@ -214,9 +212,7 @@ in {
     };
 
     home-manager.sharedModules = [
-      {
-        myconfig.desktop.wayland.enable = true;
-      }
+      { myconfig.desktop.wayland.enable = true; }
       ./home-manager.kanshi.nix
       ./home-manager.swaync.nix
       ./home-manager.mako.nix

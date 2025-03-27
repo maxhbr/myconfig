@@ -10,13 +10,14 @@ in {
       example = false;
     };
   };
-  config = (lib.mkIf ( config.myconfig.desktop.enable &&  config.myconfig.desktop.printing.enable ) {
-    services.printing = {
-      enable = true;
-      drivers = with pkgs; [ gutenprint hplipWithPlugin ];
-      # add hp-printer with:
-      # $ nix run nixpkgs.hplipWithPlugin -c sudo hp-setup
-    };
-    programs.system-config-printer.enable = config.services.printing.enable;
-  });
+  config = (lib.mkIf (config.myconfig.desktop.enable
+    && config.myconfig.desktop.printing.enable) {
+      services.printing = {
+        enable = true;
+        drivers = with pkgs; [ gutenprint hplipWithPlugin ];
+        # add hp-printer with:
+        # $ nix run nixpkgs.hplipWithPlugin -c sudo hp-setup
+      };
+      programs.system-config-printer.enable = config.services.printing.enable;
+    });
 }

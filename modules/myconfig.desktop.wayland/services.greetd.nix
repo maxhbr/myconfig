@@ -3,13 +3,14 @@ let
   cfg = config.myconfig;
   user = myconfig.user;
   selectedSessions = cfg.desktop.wayland.selectedSessions;
-  cmd_for_session = session:
-    cfg.desktop.wayland.sessions."${session}".command;
+  cmd_for_session = session: cfg.desktop.wayland.sessions."${session}".command;
   cmd0 = cmd_for_session (lib.elemAt selectedSessions 0);
   sessionStarters = pkgs.symlinkJoin {
     name = "sessionStartes";
     paths = let
-      fun = session: pkgs.writeShellScriptBin "start-${session}-session" (cmd_for_session session);
+      fun = session:
+        pkgs.writeShellScriptBin "start-${session}-session"
+        (cmd_for_session session);
     in builtins.map fun selectedSessions;
   };
 in {
@@ -18,14 +19,15 @@ in {
       home-manager.sharedModules = [{
         home.packages = with pkgs;
           [
-          (writeShellScriptBin "regreet"
-            "sudo systemctl restart greetd.service")
+            (writeShellScriptBin "regreet"
+              "sudo systemctl restart greetd.service")
           ];
       }];
-      services.greetd = let 
+      services.greetd = let
         tuigreetSettings = {
           default_session = {
-            command = "${pkgs.greetd.tuigreet}/bin/tuigreet --width 120 --remember --remember-session --sessions /etc/greetd/wayland-sessions/ --time --cmd '${cmd0}'";
+            command =
+              "${pkgs.greetd.tuigreet}/bin/tuigreet --width 120 --remember --remember-session --sessions /etc/greetd/wayland-sessions/ --time --cmd '${cmd0}'";
             user = "greeter";
           };
         };
@@ -57,21 +59,16 @@ in {
     })
   ];
   config = (lib.mkIf (cfg.desktop.wayland.enable && selectedSessions != [ ]) {
-    home-manager.sharedModules = [{
-      home.packages = with pkgs;
-        [
-          sessionStarters
-        ];
-    }];
+    home-manager.sharedModules =
+      [{ home.packages = with pkgs; [ sessionStarters ]; }];
 
-    services.greetd = {
-      enable = true;
-    };
+    services.greetd = { enable = true; };
 
     environment.etc = {
-      "greetd/environments".text =
-        lib.foldr (session: str: "start-${session}-session\n" + str) "fish"
-        selectedSessions;
+      "greetd/environments".text = lib.foldr (session: str:
+        ''
+          start-${session}-session
+        '' + str) "fish" selectedSessions;
     } // (let
       fun = session: {
         name = "greetd/wayland-sessions/${session}.desktop";

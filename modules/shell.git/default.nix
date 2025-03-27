@@ -33,7 +33,8 @@
         signing = {
           key = null;
           signByDefault = true;
-          format = if config.programs.gnupg.agent.enable then "openpgp" else "ssh";
+          format =
+            if config.programs.gnupg.agent.enable then "openpgp" else "ssh";
         };
       };
       programs.fish = {

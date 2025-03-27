@@ -1,13 +1,9 @@
 # partially based on:
 # https://gist.github.com/dltacube/280c82b3426690558341a3ac3a71428d
-{ inputs, pkgs, config, lib, ... }: let
-  cfg = config.myconfig;
+{ inputs, pkgs, config, lib, ... }:
+let cfg = config.myconfig;
 in {
-  imports = [
-    ({ ... }: {
-      nixpkgs.overlays = [ inputs.emacs.overlay ];
-    })
-  ];
+  imports = [ ({ ... }: { nixpkgs.overlays = [ inputs.emacs.overlay ]; }) ];
   options.myconfig = with lib; {
     editor.emacs.enable = mkEnableOption "emacs";
   };
@@ -98,7 +94,8 @@ in {
         };
         home.shellAliases = {
           magit = ''emacs -e "(magit-status \"$(pwd)\")"'';
-          emacs-cage-exwm = ''exec cage -- emacs -Q --eval "(require 'exwm)" --eval "(exwm-enable)"''; # --eval "(require 'exwm-systemtray)" --eval "(exwm-systemtray-enable)"'';
+          emacs-cage-exwm = ''
+            exec cage -- emacs -Q --eval "(require 'exwm)" --eval "(exwm-enable)"''; # --eval "(require 'exwm-systemtray)" --eval "(exwm-systemtray-enable)"'';
         };
       })
     ];

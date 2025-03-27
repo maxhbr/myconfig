@@ -3,27 +3,24 @@
 { pkgs, config, myconfig, ... }: {
   config = {
     home-manager.sharedModules = [
-      ({pkgs, lib, config, ...}:{
+      ({ pkgs, lib, config, ... }: {
         config = lib.mkIf config.programs.ripgrep.enable (let
-        theme = "Monokai Extended Light";
-        aliases = {
-          rgi = "rg --no-ignore-vcs";
-          ag = "rg";
-          grep = "rg";
-        };
-      in 
-        {
-        programs.ripgrep = {
-          arguments = [ "--max-columns-preview" "--colors=line:style:bold" ];
-        };
-        programs.fish.shellAbbrs = aliases;
-        programs.bash.shellAliases = aliases;
-        programs.zsh.shellAliases = aliases;
-      });
-    })
-    {
-      programs.ripgrep.enable = true;
-    }
+          theme = "Monokai Extended Light";
+          aliases = {
+            rgi = "rg --no-ignore-vcs";
+            ag = "rg";
+            grep = "rg";
+          };
+        in {
+          programs.ripgrep = {
+            arguments = [ "--max-columns-preview" "--colors=line:style:bold" ];
+          };
+          programs.fish.shellAbbrs = aliases;
+          programs.bash.shellAliases = aliases;
+          programs.zsh.shellAliases = aliases;
+        });
+      })
+      { programs.ripgrep.enable = true; }
     ];
   };
 }

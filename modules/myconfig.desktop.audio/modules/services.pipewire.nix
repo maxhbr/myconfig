@@ -32,8 +32,7 @@ let
 in {
   config = (lib.mkIf config.services.pipewire.enable {
     home-manager.sharedModules = [{
-      home.packages = with pkgs;
-        [ qjackctl pw-simultaneous pw-record-all ];
+      home.packages = with pkgs; [ qjackctl pw-simultaneous pw-record-all ];
     }];
     services.pulseaudio.enable = false;
     security.rtkit.enable = true;

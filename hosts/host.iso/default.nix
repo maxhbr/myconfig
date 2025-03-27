@@ -14,7 +14,7 @@
             "labwc"
             "river"
             "plasma6"
-             # "qtile"
+            # "qtile"
           ];
         };
       };

@@ -13,9 +13,7 @@ in {
         enable = true;
         plugins = with pkgs.obs-studio-plugins; [ wlrobs obs-ndi ];
       };
-      home.packages = with pkgs; [
-       ndi
-     ];
+      home.packages = with pkgs; [ ndi ];
     }];
   });
 }

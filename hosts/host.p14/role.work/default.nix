@@ -21,13 +21,13 @@ in {
     # ./jdk.nix
     # ./node.nix
     # ./azure-cli.nix
-    (
-      { pkgs, ... }:
+    ({ pkgs, ... }:
       let wing-edit = pkgs.callPackage ../../../pkgs/wing-edit { };
       in {
-        config = { home-manager.users.mhuber = { home.packages = [ wing-edit ]; }; };
-      }
-    )
+        config = {
+          home-manager.users.mhuber = { home.packages = [ wing-edit ]; };
+        };
+      })
   ];
   config = {
     nixpkgs.overlays = map (n: import n) [

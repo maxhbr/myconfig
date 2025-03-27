@@ -206,11 +206,10 @@
 
     home-manager.sharedModules = [
       {
-        home.packages = with pkgs;
-          [
-            google-chrome # for netflix
-            joplin-desktop
-          ];
+        home.packages = with pkgs; [
+          google-chrome # for netflix
+          joplin-desktop
+        ];
         programs.zsh.shellAliases = {
           upg-get-hostId = ''
             cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
@@ -240,11 +239,26 @@
       }
       {
         home.packages = with pkgs.helper; [
-          (connectBtDevice { name = "WF-1000XM5"; id = "AC:80:0A:2A:10:6F";})
-          (connectBtDevice { name = "Px7"; id = "EC:66:D1:B4:C8:3B";})
-          (connectBtDevice { name = "Px7s2e"; id = "EC:66:D1:BD:E4:98";})
-          (connectBtDevice { name = "Px8"; id = "EC:66:D1:C6:94:14";})
-          (connectBtDevice { name = "Streambot"; id = "E9:08:EF:60:57:21";})
+          (connectBtDevice {
+            name = "WF-1000XM5";
+            id = "AC:80:0A:2A:10:6F";
+          })
+          (connectBtDevice {
+            name = "Px7";
+            id = "EC:66:D1:B4:C8:3B";
+          })
+          (connectBtDevice {
+            name = "Px7s2e";
+            id = "EC:66:D1:BD:E4:98";
+          })
+          (connectBtDevice {
+            name = "Px8";
+            id = "EC:66:D1:C6:94:14";
+          })
+          (connectBtDevice {
+            name = "Streambot";
+            id = "E9:08:EF:60:57:21";
+          })
         ];
       }
     ];

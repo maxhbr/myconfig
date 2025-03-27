@@ -1,12 +1,14 @@
 { config, lib, pkgs, ... }: {
   config = lib.mkIf config.myconfig.desktop.enable {
-    nixpkgs.overlays = [ (self: super: {
-      zathura = super.zathura.overrideAttrs (oldAttrs: {
-        postInstall = ''
-          mv $out/bin/zathura-sandbox $out/bin/.zathura-sandbox
-        '';
-      });
-    }) ];
+    nixpkgs.overlays = [
+      (self: super: {
+        zathura = super.zathura.overrideAttrs (oldAttrs: {
+          postInstall = ''
+            mv $out/bin/zathura-sandbox $out/bin/.zathura-sandbox
+          '';
+        });
+      })
+    ];
 
     home-manager.sharedModules = [{
       config = {
