@@ -250,12 +250,17 @@ window-rule {
 
 window-rule {
     exclude app-id="^firefox$"
-    exclude app-id="^Chromium-browser$"
-    exclude app-id="^chromium-browser$"
     exclude app-id="^teams-for-linux$"
     exclude app-id="^Slack$"
 
     default-column-width { proportion 0.66667; }
+}
+
+window-rule {
+    match app-id="^Chromium-browser$"
+    match app-id="^chromium-browser$"
+
+    default-column-width { proportion 1.0; }
 }
 
 window-rule {

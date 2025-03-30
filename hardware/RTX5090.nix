@@ -1,8 +1,10 @@
-{ pkgs, config, inputs, ... }: {
+{ config, pkgs, lib, myconfig, inputs, ... }: {
   imports = [
     # inputs.nixos-hardware.nixosModules.common-gpu-nvidia
   ];
   config = {
+    users.extraUsers."${myconfig.user}".extraGroups = ["nvidia"];
+    virtualisation.podman.enableNvidia = true;
     hardware.graphics = { enable = true; };
     services.xserver.videoDrivers = [ "nvidia" ];
     hardware.nvidia = {
