@@ -4,6 +4,13 @@
     # ./RX5500XT.nix
   ];
   config = {
+    home-manager.sharedModules = [{
+      home.packages = with pkgs;
+        [
+          nvtopPackages.full
+          # oterm
+        ];
+    }];
     # boot.kernelParams = [ "pcie_aspm=off" ];
 
     # services.tlp.settings = {

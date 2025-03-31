@@ -4,9 +4,11 @@
   ];
   config = {
     users.extraUsers."${myconfig.user}".extraGroups = ["nvidia"];
-    virtualisation.podman.enableNvidia = true;
+    hardware.nvidia-container-toolkit.enable = true;
     hardware.graphics = { enable = true; };
     services.xserver.videoDrivers = [ "nvidia" ];
+    nixpkgs.config.cudaSupport.enabled = true;
+
     hardware.nvidia = {
       modesetting.enable = true;
 

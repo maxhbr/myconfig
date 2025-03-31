@@ -2,6 +2,11 @@
 # SPDX-License-Identifier: MIT
 { config, lib, pkgs, ... }:
 {
+  imports = [
+    ./services.ollama.nix
+    ./container.open-webui.nix
+    ./container.nlm-ingestor.nix
+  ];
   options.myconfig = with lib; {
     ai.enable = mkEnableOption "myconfig.ai";
   };

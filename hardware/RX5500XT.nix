@@ -3,5 +3,6 @@
   config = {
     hardware.graphics = { enable = true; };
     services.xserver.videoDrivers = [ "amdgpu" ];
+    nixpkgs.config.rocmSupport.enabled = true;
   };
 }
