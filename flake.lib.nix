@@ -98,6 +98,7 @@ let
                   + "/24")
               ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
               inherit privateKeyFile;
+              mtu = 1380;
               peers = [{
                 publicKey = wgPeerMetadata.wireguard."${wgInterface}".pubkey;
                 # allowedIPs = [ "0.0.0.0/0" ];

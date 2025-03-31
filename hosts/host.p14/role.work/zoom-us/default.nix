@@ -11,7 +11,8 @@ let
       postFixup = old.postFixup + ''
         wrapProgram $out/bin/zoom-us \
           --set QT_DEBUG_PLUGINS 1 \
-          --set XDG_CURRENT_DESKTOP gnome
+          --set XDG_CURRENT_DESKTOP gnome \
+          --set XDG_SESSION_TYPE ""
       '';
     });
     zoom-old-screenshare = zoom-old-screenshare-pkgs.zoom-us;

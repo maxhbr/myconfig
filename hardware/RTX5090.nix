@@ -7,7 +7,7 @@
     hardware.nvidia-container-toolkit.enable = true;
     hardware.graphics = { enable = true; };
     services.xserver.videoDrivers = [ "nvidia" ];
-    nixpkgs.config.cudaSupport.enabled = true;
+    nixpkgs.config.cudaSupport = true;
 
     hardware.nvidia = {
       modesetting.enable = true;
