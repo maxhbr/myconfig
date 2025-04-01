@@ -3,6 +3,7 @@
 { config, lib, pkgs, ... }:
 {
   imports = [
+    ./ai-coding.nix
     ./services.ollama.nix
     ./container.open-webui.nix
     ./container.nlm-ingestor.nix

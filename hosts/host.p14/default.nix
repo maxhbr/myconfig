@@ -38,7 +38,12 @@
     ./smarthome.nix
     ./role.work
     ./programs.khal.nix
-    ./ai-tooling.nix
+    {
+      myconfig.ai = {
+        enable = true;
+        coding.enable = true;
+      };
+    }
     {
       services.openssh = {
         listenAddresses = [{

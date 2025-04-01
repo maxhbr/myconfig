@@ -8,10 +8,22 @@
     inputs.nixos-hardware.nixosModules.dell-precision-5560
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
+    ./ai.spare.nix
     ../host.p14/role.work
-    ./eGPU.spare.nix
     ../host.workstation/gaming/games.steam
+    (myconfig.metadatalib.setupAsBuildMachine [
+      myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
+    ])
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
+    {
+      # programs.mosh.enable = lib.mkDefault true;
+      services.eternal-terminal = {
+        enable = true;
+        port = 22022;
+      };
+      networking.firewall.allowedTCPPorts = [ 22022 ];
+      networking.firewall.allowedUDPPorts = [ 22022 ];
+    }
   ];
 
   config = {

@@ -18,8 +18,14 @@
     options = [ "subvol=@" ];
   };
 
-  boot.initrd.luks.devices."enc-pv".device =
-    "/dev/disk/by-uuid/bb6616ae-c6b2-42d9-ac32-9955be35d3b5";
+  boot.initrd.luks.devices."enc-pv" = {
+    device = "/dev/disk/by-uuid/bb6616ae-c6b2-42d9-ac32-9955be35d3b5";
+    keyFile = "/dev/disk/by-id/mmc-SDC_0x14022ef6";
+    keyFileSize = 4096;
+    preLVM = true;
+    allowDiscards = true;
+    fallbackToPassword = true;
+  };
 
   fileSystems."/home" = {
     device = "/dev/disk/by-uuid/9f17fd7f-85bd-4c6b-8fdb-deb0c93b9a72";
