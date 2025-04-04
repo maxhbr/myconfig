@@ -225,6 +225,7 @@
               imports = [
                 (myconfig.metadatalib.announceHost "x1extremeG2")
                 (myconfig.metadatalib.announceHost "spare")
+                (myconfig.metadatalib.addEternalTerminalCmd "spare")
                 (myconfig.metadatalib.announceHost "workstation")
                 (myconfig.metadatalib.announceHost "nas")
                 (myconfig.metadatalib.announceHost "vserver")

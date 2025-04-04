@@ -42,7 +42,7 @@ let
 
       announceHost = otherHostName:
         let otherHostMetadata = metadata.hosts."${otherHostName}";
-        in { pkgs, lib, ... }: {
+        in { pkgs, lib, myconfig,... }: {
           config =
             (lib.mkIf (lib.attrsets.hasAttrByPath [ "ip4" ] otherHostMetadata)
               (let otherHostIp = otherHostMetadata.ip4;
@@ -51,12 +51,12 @@ let
                   ${otherHostIp} ${otherHostName}
                   ${otherHostIp} ${otherHostName}.maxhbr.de
                 '';
-                home-manager.users.mhuber = {
+                home-manager.users."${myconfig.user}" = {
                   home.file = {
                     ".ssh/imports/my-${otherHostName}.config".text = ''
                       Host ${otherHostName}
                         HostName ${otherHostIp}
-                        User mhuber
+                        User ${myconfig.user}
                     '';
                   };
                   home.packages = [
@@ -72,6 +72,21 @@ let
                     [ ]);
                 };
               }));
+        };
+
+      addEternalTerminalCmd = host:
+        { pkgs, lib, myconfig, ... }: {
+          config = {
+            home-manager.users."${myconfig.user}" = {
+              home.packages = [
+                (with pkgs; writeShellScriptBin "et-${host}" ''
+                  set -euo pipefail
+                  set -x
+                  exec ${eternal-terminal}/bin/et "$@" ${myconfig.user}@${metadata.hosts."${host}".wireguard.wg0.ip4}:22022 
+                '')
+              ];
+            };
+          };
         };
 
       setupAsWireguardClient = wgInterface: privateKey:
