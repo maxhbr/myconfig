@@ -28,23 +28,35 @@ du_of_out_link() {
 }
 get_ip_of_target() {
     local target="$1"; shift
-    ip="$(cat ./hosts/metadata.json | jq -r ".hosts.${target}.ip4")"
+    local use_wg="${1:-false}"; shift
+    if [[ "$use_wg" == "true" ]]; then
+        ip="$(cat ./hosts/metadata.json | jq -r ".hosts.${target}.wireguard.wg0.ip4")"
+    else
+        ip="$(cat ./hosts/metadata.json | jq -r ".hosts.${target}.ip4")"
+    fi
     if [[ "$ip" == "null" ]]; then
-        ip="$(cat ../myconfig/hosts/metadata.json | jq -r ".hosts.${target}.ip4")"
+        if [[ "$use_wg" == "true" ]]; then
+            ip="$(cat ../myconfig/hosts/metadata.json | jq -r ".hosts.${target}.wireguard.wg0.ip4")"
+        else
+            ip="$(cat ../myconfig/hosts/metadata.json | jq -r ".hosts.${target}.ip4")"
+        fi
     fi
 
     echo "$ip"
 }
 deploy() {
     local target="$1"; shift
+    local use_wg="${1:-false}"; shift
     cmd="nixos-rebuild"
     if [[ "$target" != "$(hostname)" ]]; then
-        targetIP="root@$(get_ip_of_target "$target")"
+        targetIP="root@$(get_ip_of_target "$target" "$use_wg")"
         targetIP="${TARGET_IP:-"$targetIP"}"
         cmd="$cmd --target-host $targetIP"
 
         local out_link="$(get_out_link_of_target "$target")"
-        nix-copy-closure --to "$targetIP" "$out_link"
+        until nix-copy-closure --to "$targetIP" "$out_link"; do
+            echo "... retry nix-copy-closure"
+        done
     else
         cmd="sudo $cmd"
     fi
@@ -54,7 +66,7 @@ deploy() {
             `# --build-host localhost` \
             switch `#-p test` \
             --flake '.#'"$target"; do
-        echo "... retry"
+        echo "... retry nixos-rebuild"
     done
 }
 main() {
@@ -63,6 +75,9 @@ main() {
         MODE="$1"
         shift
     elif [[ $# -gt 0 && "$1" == "--test" ]]; then
+        MODE="$1"
+        shift
+    elif [[ $# -gt 0 && "$1" == "--use-wg" ]]; then
         MODE="$1"
         shift
     fi
@@ -106,7 +121,9 @@ main() {
 
     build "$target" || build "$target" --keep-failed --no-eval-cache
     du_of_out_link "$target"
-    if [[ "$MODE" != "--test" ]]; then
+    if [[ "$MODE" == "--use-wg" ]]; then
+        deploy "$target" true
+    elif [[ "$MODE" != "--test" ]]; then
         deploy "$target"
     fi
     set +x

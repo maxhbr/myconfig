@@ -26,6 +26,18 @@
       #   OLLAMA_LLM_LIBRARY = "cpu";
       #   HIP_VISIBLE_DEVICES = "0,1";
       # };
+      loadModels = [
+        "deepseek-r1:32b"
+        "gemma3:27b"
+        "llama3.2:3b"
+        "llava:34b"
+        "mistral-small:24b"
+        "mistral:7b"
+        "openthinker:32b"
+        "phi4"
+        "qwq:32b"
+        "smollm2:1.7b"
+      ];
     };
   };
 }
