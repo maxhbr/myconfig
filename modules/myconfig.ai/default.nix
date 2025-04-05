@@ -5,6 +5,7 @@
   imports = [
     ./ai-coding.nix
     ./services.ollama.nix
+    ./services.tabby.nix
     ./container.open-webui.nix
     ./container.nlm-ingestor.nix
   ];

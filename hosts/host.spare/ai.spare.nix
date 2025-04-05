@@ -39,5 +39,10 @@
         "smollm2:1.7b"
       ];
     };
+    services.tabby = {
+      enable = false;
+      acceleration = "cuda";
+      model = "TabbyML/Qwen2.5-Coder-14B";
+    };
   };
 }
