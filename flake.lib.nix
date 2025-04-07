@@ -25,6 +25,7 @@ let
           };
         } // configOverwrites;
     in {
+      inherit metadata;
       fixIp = deviceName:
         ({ config, ... }:
           let hostName = config.networking.hostName;

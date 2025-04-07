@@ -11,7 +11,7 @@
       enable = true;
       container = {
         nlm-ingestor = {
-          enable = true;
+          enable = false;
         };
         open-webui = {
           enable = true;
@@ -20,6 +20,8 @@
     };  
     services.ollama = {
       enable = true;
+      
+      # host = myconfig.metadatalib.metadata.hosts."${config.networking.hostName}".ip4;
       # listenAddress = "0.0.0.0:11434";
       acceleration = "cuda";
       # environmentVariables = {

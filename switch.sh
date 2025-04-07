@@ -7,7 +7,10 @@ get_out_link_of_target() {
 }
 build() {
     local target="$1"; shift
-    local out_link="$(get_out_link_of_target "$target")"
+    local out_link="$1"; shift
+    echo "################################################################################"
+    echo "building for $target to $out_link"
+    echo "################################################################################"
     local system='.#nixosConfigurations.'"$target"'.config.system.build.toplevel'
 
     nix build \
@@ -26,48 +29,70 @@ du_of_out_link() {
         tee "$out_link"'.du' |
         tail -1
 }
+get_ip_of_target_from_metadata() {
+    local metadata_file="$1"; shift
+    local target="$1"; shift
+    local use_wg="${1:-false}";
+    cat "$metadata_file" | 
+        if [[ "$use_wg" == "true" ]]; then
+            jq -r ".hosts.${target}.wireguard.wg0.ip4" || true
+        else
+            jq -r ".hosts.${target}.ip4" || true
+        fi
+}
 get_ip_of_target() {
     local target="$1"; shift
-    local use_wg="${1:-false}"; shift
-    if [[ "$use_wg" == "true" ]]; then
-        ip="$(cat ./hosts/metadata.json | jq -r ".hosts.${target}.wireguard.wg0.ip4")"
-    else
-        ip="$(cat ./hosts/metadata.json | jq -r ".hosts.${target}.ip4")"
+    local use_wg="${1:-false}";
+    ip="$(get_ip_of_target_from_metadata ./hosts/metadata.json "$target" "$use_wg")"
+    if [[ "$ip" == "null" ]]; then
+        ip="$(get_ip_of_target_from_metadata ../myconfig/hosts/metadata.json "$target" "$use_wg")"
     fi
     if [[ "$ip" == "null" ]]; then
-        if [[ "$use_wg" == "true" ]]; then
-            ip="$(cat ../myconfig/hosts/metadata.json | jq -r ".hosts.${target}.wireguard.wg0.ip4")"
-        else
-            ip="$(cat ../myconfig/hosts/metadata.json | jq -r ".hosts.${target}.ip4")"
-        fi
+        echo "ip for $target not found in metadata"
+        exit 1
     fi
-
     echo "$ip"
+}
+copy_closure_to_target() {
+    local targetIP="$1"; shift
+    local out_link="$1"; shift
+    echo "################################################################################"
+    echo "copying closure to $targetIP"
+    echo "################################################################################"
+    set -x
+    until nix-copy-closure --to "$targetIP" "$out_link"; do
+        echo "... retry nix-copy-closure"
+    done
+    set +x
 }
 deploy() {
     local target="$1"; shift
-    local use_wg="${1:-false}"; shift
+    local out_link="$1"; shift
+    echo "################################################################################"
+    echo "deploying $out_link to $target"
+    echo "################################################################################"
+    local use_wg="${1:-false}";
     cmd="nixos-rebuild"
     if [[ "$target" != "$(hostname)" ]]; then
         targetIP="root@$(get_ip_of_target "$target" "$use_wg")"
         targetIP="${TARGET_IP:-"$targetIP"}"
-        cmd="$cmd --target-host $targetIP"
 
-        local out_link="$(get_out_link_of_target "$target")"
-        until nix-copy-closure --to "$targetIP" "$out_link"; do
-            echo "... retry nix-copy-closure"
-        done
+        copy_closure_to_target "$targetIP" "$out_link"
+
+        cmd="$cmd --target-host $targetIP"
     else
         cmd="sudo $cmd"
     fi
 
     export NIX_SSHOPTS='-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'
+    set -x
     until $cmd \
             `# --build-host localhost` \
             switch `#-p test` \
             --flake '.#'"$target"; do
         echo "... retry nixos-rebuild"
     done
+    set +x
 }
 main() {
     local MODE=""
@@ -99,7 +124,6 @@ main() {
      export NIX_CONFIG
     fi
 
-    set -x
     if [[ "$MODE" == "" ]]; then
         cd "$(dirname "$0")"
 
@@ -119,14 +143,14 @@ main() {
         nix flake lock --update-input zephyr-flake
     fi
 
-    build "$target" || build "$target" --keep-failed --no-eval-cache
+    local out_link="$(get_out_link_of_target "$target")"
+    build "$target" "$out_link" || build "$target" "$out_link" --keep-failed --no-eval-cache
     du_of_out_link "$target"
     if [[ "$MODE" == "--use-wg" ]]; then
-        deploy "$target" true
+        deploy "$target" "$out_link" true
     elif [[ "$MODE" != "--test" ]]; then
-        deploy "$target"
+        deploy "$target" "$out_link"
     fi
-    set +x
 }
 
 ################################################################################
