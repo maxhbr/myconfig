@@ -7,14 +7,23 @@
   ];
 
   config = {
-    myconfig.ai = {
-      enable = true;
-      container = {
-        nlm-ingestor = {
-          enable = false;
-        };
-        open-webui = {
-          enable = true;
+    myconfig = {
+      services.pciDeviceMonitor = {
+        enable = true;
+        searchSubstring = "NVIDIA Corporation GB202";  # or your specific device
+        retries = 3;
+        checkInterval = 60;
+        initialDelay = 60;
+      };
+      ai = {
+        enable = true;
+        container = {
+          nlm-ingestor = {
+            enable = false;
+          };
+          open-webui = {
+            enable = true;
+          };
         };
       };
     };  

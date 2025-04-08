@@ -4,11 +4,11 @@ let
   mkMetadata = metadataOverride: rec {
     json = builtins.fromJSON (builtins.readFile (./hosts + "/metadata.json"));
     metadata = lib.recursiveUpdate json metadataOverride;
+    getIp = hostName: metadata.hosts."${hostName}".ip4;
+    getWgIp = hostName: metadata.hosts."${hostName}".wireguard.wg0.ip4;
   };
   mkMetadatalib = metadataOverride:
     let
-      metadata = (mkMetadata metadataOverride).metadata;
-
       mkBackupJob = configOverwrites:
         {
           encryption = {
@@ -24,15 +24,15 @@ let
             monthly = -1; # Keep at least one archive for each month
           };
         } // configOverwrites;
-    in {
-      inherit metadata;
+    in rec {
+      inherit (mkMetadata metadataOverride) metadata getIp getWgIp;
       fixIp = deviceName:
         ({ config, ... }:
           let hostName = config.networking.hostName;
           in {
             networking = rec {
               interfaces."${deviceName}".ipv4.addresses = [{
-                address = metadata.hosts."${hostName}".ip4;
+                address = getIp hostName;
                 prefixLength = 24;
               }];
               defaultGateway =
@@ -83,7 +83,7 @@ let
                 (with pkgs; writeShellScriptBin "et-${host}" ''
                   set -euo pipefail
                   set -x
-                  exec ${eternal-terminal}/bin/et "$@" ${myconfig.user}@${metadata.hosts."${host}".wireguard.wg0.ip4}:22022 
+                  exec ${eternal-terminal}/bin/et "$@" ${myconfig.user}@${getWgIp host}:22022 
                 '')
               ];
             };
@@ -109,9 +109,8 @@ let
           environment.systemPackages = [ pkgs.wireguard-tools ];
           networking.wireguard.interfaces = {
             "${wgInterface}" = {
-              ips = [
-                (metadata.hosts."${config.networking.hostName}".wireguard."${wgInterface}".ip4
-                  + "/24")
+              ips = [ # (getWgIp config.networking.hostName) + "/24")
+               (metadata.hosts."${config.networking.hostName}".wireguard."${wgInterface}".ip4 + "/24")
               ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
               inherit privateKeyFile;
               mtu = 1380;
@@ -301,21 +300,31 @@ let
       mkRemoteBackupJob = name: host: configOverwrites:
         ({ pkgs, lib, config, ... }:
           let newName = "${name}@${host}";
-          in {
-            services.borgbackup.jobs."${newName}" = mkBackupJob ({
-              repo =
-                "borg@${host}:./${config.networking.hostName}-${newName}.borg";
-              environment.BORG_RSH =
-                "ssh -i /etc/borgbackup/ssh_key"; # -o StrictHostKeyChecking=no
-            } // configOverwrites);
-            environment.systemPackages = [
-              (pkgs.writeShellScriptBin "mkBackup-${newName}" ''
+              hostHasWg = lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "ip4" ] metadata.hosts."${host}";
+              hostWgIp = getWgIp host;
+              newWgName = "${name}@${host}-wg";
+              mkScript = name: pkgs.writeShellScriptBin "mkBackup-${name}" ''
                 set -euo pipefail
                 set -x
-                sudo systemctl restart borgbackup-job-${newName}.service
-                journalctl -u borgbackup-job-${newName}.service --since "2 minutes ago" -f
-              '')
-            ];
+                sudo systemctl restart borgbackup-job-${name}.service
+                journalctl -u borgbackup-job-${name}.service --since "2 minutes ago" -f
+              '';
+          in {
+            services.borgbackup.jobs = {
+              "${newName}" = mkBackupJob ({
+                repo =
+                  "borg@${host}:./${config.networking.hostName}-${newName}.borg";
+                environment.BORG_RSH =
+                  "ssh -i /etc/borgbackup/ssh_key"; # -o StrictHostKeyChecking=no
+              } // configOverwrites);
+              "${newWgName}" = lib.mkIf hostHasWg (mkBackupJob ({
+              repo =
+                  "borg@${hostWgIp}:./${config.networking.hostName}-${newWgName}.borg";
+                environment.BORG_RSH =
+                  "ssh -i /etc/borgbackup/ssh_key"; # -o StrictHostKeyChecking=no
+              } // configOverwrites));
+            };
+            environment.systemPackages = [(mkScript newName)] ++ (if hostHasWg then [(mkScript newWgName)] else []);
           });
 
       setupAsBackupTarget = home: hosts:
@@ -471,10 +480,10 @@ in rec {
     }));
 
   mkDeploy = hostName: nixosConfigurations: metadataOverride:
-    let metadata = (mkMetadata metadataOverride).metadata;
+    let getIp = (mkMetadata metadataOverride).getIp;
     in {
       # sshOpts = [ "-p" "2221" ];
-      hostname = metadata.hosts."${hostName}".ip4;
+      hostname = getIp hostName;
       fastConnection = true;
 
       profiles = {

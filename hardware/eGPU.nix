@@ -9,6 +9,7 @@
         [
           nvtopPackages.full
           # oterm
+          pciutils
         ];
     }];
     # boot.kernelParams = [ "pcie_aspm=off" ];
