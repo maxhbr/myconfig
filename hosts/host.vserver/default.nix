@@ -7,6 +7,8 @@
     ../../hardware/grub.nix
     # configuration
     ./service.wireguard-server
+    ./service.youtrack.nix
+    ./service.kanboard.nix
   ];
   config = {
     myconfig = { headless.enable = true; };

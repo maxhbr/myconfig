@@ -124,10 +124,10 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 #custom-dwl_tag.focused,
 #workspaces button.focused {
     background: rgba(43, 48, 59, 0.5);
-    border-right: 2px solid #e0cbc7;
-    border-left: 2px solid #e0cbc7;
-    padding-left: 0px;
-    padding-right: 0px;
+    /* border-right: 2px solid #e0cbc7;
+    border-left: 2px solid #e0cbc7; */
+    /* padding-left: 0px;
+    padding-right: 0px; */
 }
 
 #workspaces button.empty {

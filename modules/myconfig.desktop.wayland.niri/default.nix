@@ -82,22 +82,22 @@ in {
                   rotate = 90;
                 };
                 "niri/workspaces" = {
-                  "format" = "{icon}";
-                  "format-icons" = {
-                    # Named workspaces
-                    # (you need to configure them in niri)
-                    "browser" = "";
-                    "discord" = "";
-                    "chat" = "<b></b>";
+                  "format" = "{index}";
+                  # "format-icons" = {
+                  #   # Named workspaces
+                  #   # (you need to configure them in niri)
+                  #   "browser" = "";
+                  #   "discord" = "";
+                  #   "chat" = "<b></b>";
 
-                    # Icons by state
-                    "active" = "";
-                    "default" = "";
-                  };
+                  #   # Icons by state
+                  #   "active" = "";
+                  #   "default" = "";
+                  # };
                   rotate = 90;
                 };
                 modules-left = [
-                  # "niri/workspaces"
+                  "niri/workspaces"
                   "wlr/taskbar"
                 ];
                 modules-center = [

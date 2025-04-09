@@ -38,6 +38,7 @@
       #   HIP_VISIBLE_DEVICES = "0,1";
       # };
       loadModels = [
+        "cogito:32b"
         "deepseek-r1:32b"
         "gemma3:27b"
         "llama3.2:3b"
