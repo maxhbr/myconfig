@@ -22,7 +22,7 @@
     })
   ];
   config = {
-    services.kanboard.enable = true;
+    services.kanboard.enable = false;
   };
 }
 

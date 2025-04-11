@@ -136,11 +136,11 @@ main() {
 
         type gnupg-to-mutt.pl &> /dev/null && gnupg-to-mutt.pl
     else
-        nix flake lock --update-input myconfig
-        nix flake lock --update-input mymyphoto
-        nix flake lock --update-input mydwl
-        nix flake lock --update-input opossum
-        nix flake lock --update-input zephyr-flake
+        nix flake update myconfig
+        nix flake update mymyphoto
+        nix flake update mydwl
+        nix flake update opossum
+        nix flake update zephyr-flake
     fi
 
     local out_link="$(get_out_link_of_target "$target")"

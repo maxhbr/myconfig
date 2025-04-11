@@ -1,6 +1,22 @@
 # Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, inputs, ... }: {
+{ config, pkgs, lib, myconfig, inputs, ... }: let
+  ai-tmux-session = "ai";
+  ai-tmux-session-script = pkgs.writeShellScriptBin "ai-tmux-session" ''
+    # if session is not yet created, create it
+    if ! tmux has-session -t ${ai-tmux-session}; then
+      tmux new-session -d -s ${ai-tmux-session}
+      tmux split-window -h -t ${ai-tmux-session}
+      tmux split-window -v -t ${ai-tmux-session}
+      tmux select-pane -t ${ai-tmux-session}:0
+      # start btop
+      tmux send-keys -t ${ai-tmux-session}:0 "btop" C-m
+      # start nvtop -i
+      tmux send-keys -t ${ai-tmux-session}:1 "nvtop -i" C-m
+    fi
+    exec tmux attach-session -t ${ai-tmux-session}
+  '';
+in {
   imports = [ 
     ../../hardware/eGPU.nix
     ./run-comfyui.nix
@@ -8,12 +24,12 @@
 
   config = {
     myconfig = {
-      services.pciDeviceMonitor = {
+      services.dmesgMonitor = {
         enable = true;
-        searchSubstring = "NVIDIA Corporation GB202";  # or your specific device
-        retries = 3;
-        checkInterval = 60;
-        initialDelay = 60;
+        errorSubstrings = [
+          "Check failed: GPU lost from the bus"
+          "Assertion failed: status == NV_OK"
+        ];
       };
       ai = {
         enable = true;
@@ -56,5 +72,12 @@
       acceleration = "cuda";
       model = "TabbyML/Qwen2.5-Coder-14B";
     };
+    home-manager.sharedModules = [
+      {
+        home.packages = [
+          ai-tmux-session-script
+        ];
+      }
+    ];
   };
 }
