@@ -9,10 +9,6 @@ in {
     
     errorSubstrings = mkOption {
       type = types.listOf types.str;
-      default = [
-        "Check failed: GPU lost from the bus"
-        "Assertion failed: status == NV_OK"
-      ];
       description = ''
         List of error substrings to look for in dmesg/journalctl output. The system will reboot
         if any of these substrings are found.

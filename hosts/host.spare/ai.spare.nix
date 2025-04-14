@@ -1,4 +1,4 @@
-# Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { config, pkgs, lib, myconfig, inputs, ... }: let
   ai-tmux-session = "ai";
@@ -6,13 +6,11 @@
     # if session is not yet created, create it
     if ! tmux has-session -t ${ai-tmux-session}; then
       tmux new-session -d -s ${ai-tmux-session}
+      tmux send-keys -t ${ai-tmux-session}:1 "btop" C-m
       tmux split-window -h -t ${ai-tmux-session}
-      tmux split-window -v -t ${ai-tmux-session}
-      tmux select-pane -t ${ai-tmux-session}:0
-      # start btop
-      tmux send-keys -t ${ai-tmux-session}:0 "btop" C-m
-      # start nvtop -i
       tmux send-keys -t ${ai-tmux-session}:1 "nvtop -i" C-m
+      tmux split-window -v -t ${ai-tmux-session}
+      tmux send-keys -t ${ai-tmux-session}:1 "journalctl -f" C-m
     fi
     exec tmux attach-session -t ${ai-tmux-session}
   '';
@@ -23,6 +21,9 @@ in {
   ];
 
   config = {
+    # boot.kernelParams = [
+    #   "pcie_aspm=off"
+    # ];
     myconfig = {
       services.dmesgMonitor = {
         enable = true;
