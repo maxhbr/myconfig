@@ -1,6 +1,10 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, ... }: {
+  imports = [
+    ../../hardware/eGPU.nix
+    ../../hardware/RX5500XT.nix
+  ];
   config = {
     myconfig = {
       desktop = {

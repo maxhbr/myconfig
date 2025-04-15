@@ -570,12 +570,12 @@ in rec {
         "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
         {
           # add myconfig to iso
-          isoImage = {
+          image = {
             # contents = [{
             #   source = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
             #   target = "myconfig";
             # }];
-            isoBaseName = "nixos-myconfig-${hostName}";
+            baseName = lib.mkForce "nixos-myconfig-${hostName}";
           };
         }
         forceSSHModule

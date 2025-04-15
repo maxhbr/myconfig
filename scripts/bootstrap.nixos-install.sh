@@ -23,7 +23,7 @@ sendBuiltSystem() {
 
     cat <<EOF
 run:
-    sudo nixos-install --no-root-passwd --system "$outLink"
+    sudo nixos-install --no-root-passwd --system "$(readlink -f "$outLink")"
 EOF
 }
 
@@ -51,6 +51,10 @@ else
       echo "folder /mnt/etc/nixos/ is missing"
       exit 1
   fi
+    if [[ "$BOOTSTRAP" != "YES" ]]; then
+        help
+        exit 1
+    fi
 
   installBuiltSystem "$@"
 fi

@@ -224,6 +224,8 @@
             ({ pkgs, myconfig, ... }: {
               imports = [
                 (myconfig.metadatalib.announceHost "x1extremeG2")
+                (myconfig.metadatalib.announceHost "brain")
+                (myconfig.metadatalib.addEternalTerminalCmd "brain")
                 (myconfig.metadatalib.announceHost "spare")
                 (myconfig.metadatalib.addEternalTerminalCmd "spare")
                 (myconfig.metadatalib.announceHost "workstation")
@@ -250,6 +252,9 @@
               };
             })
           ] ++ moreModules) metadataOverride);
+        host-brain = moreModules: metadataOverride:
+          (self.lib.evalConfiguration "x86_64-linux" "brain"
+            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
         host-spare = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "spare"
             ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
@@ -288,6 +293,7 @@
       nixosConfigurations = {
         p14 = self.nixosConfigurationsGen.host-p14 [ ] { };
         spare = self.nixosConfigurationsGen.host-spare [ ] { };
+        brain = self.nixosConfigurationsGen.host-brain [ ] { };
         # x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [ ] { };
         workstation = self.nixosConfigurationsGen.host-workstation [ ] { };
         vserver = self.nixosConfigurationsGen.host-vserver [ ] { };
