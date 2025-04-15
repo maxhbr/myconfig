@@ -257,8 +257,8 @@ window-rule {
 }
 
 window-rule {
-    match app-id="^Chromium-browser$"
     match app-id="^chromium-browser$"
+    match app-id="^Alacritty$"
 
     default-column-width { proportion 1.0; }
 }
@@ -268,12 +268,12 @@ window-rule {
 
     default-column-width { }
     open-floating true
+    block-out-from "screen-capture"
 }
 
 window-rule {
     match is-active=false
     exclude app-id="^firefox$"
-    exclude app-id="^Chromium-browser$"
     exclude app-id="^chromium-browser$"
     exclude app-id="^zoom$"
     exclude app-id="^teams-for-linux$"

@@ -11,6 +11,7 @@
       tmux send-keys -t ${ai-tmux-session}:1 "nvtop -i" C-m
       tmux split-window -v -t ${ai-tmux-session}
       tmux send-keys -t ${ai-tmux-session}:1 "journalctl -f" C-m
+      tmux split-window -v -t ${ai-tmux-session}
     fi
     exec tmux attach-session -t ${ai-tmux-session}
   '';
