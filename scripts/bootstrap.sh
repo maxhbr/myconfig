@@ -10,6 +10,7 @@
 set -e
 
 BTRFS=${BTRFS:-false}
+EFI=${EFI:-false}
 
 ################################################################################
 ##  prepare  ###################################################################
@@ -18,7 +19,7 @@ BTRFS=${BTRFS:-false}
 help() {
     cat <<EOF
 usage:
-  $ sudo BOOTSTRAP=YES BTRFS=true $0 \
+  $ sudo BOOTSTRAP=YES [BTRFS=true] [EFI=true] $0 \
       /dev/SDX \
       [pass] \
       [vg_name] \
@@ -185,7 +186,7 @@ if vgdisplay -c  | cut -f 1 -d ":" | tr -d '[:space:]' | grep -q '^'"$VG_NAME"'$
     echo '$ sudo vgremove '$VG_NAME
     echo '$ sudo cryptsetup close /dev/mapper/enc-pv'
 else
-    if [[ -d /sys/firmware/efi/efivars ]]; then
+    if [[ -d /sys/firmware/efi/efivars || "$EFI" == "true" ]]; then
         mkEfiPartitions
     else
         mkLegacyPartitions
