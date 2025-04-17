@@ -527,11 +527,15 @@ in rec {
           (let
             bootstrap = pkgs.writeShellScriptBin "bootstrap" ''
               set -euxo pipefail
-              if [[ "$(hostname)" != "myconfig" ]]; then
+              if [[ "$(hostname)" != "myconfig" &&  "$(hostname)" != "iso" ]]; then
                   echo "hostname missmatch"
                   exit 1
               fi
-              sudo BOOTSTRAP=YES ${./scripts/bootstrap.sh} $@
+              sudo \
+                BOOTSTRAP=YES \
+                BTRFS=${BTRFS:-true} \
+                EFI=${EFI:-true} \
+                ${./scripts/bootstrap.sh} $@
               echo "you should run bootstrap-install next"
             '';
           in { environment.systemPackages = [ bootstrap ]; });
@@ -549,7 +553,7 @@ in rec {
             })).system;
             bootstrap-install = pkgs.writeShellScriptBin "bootstrap-install" ''
               set -euxo pipefail
-              if [[ "$(hostname)" != "myconfig" ]]; then
+              if [[ "$(hostname)" != "myconfig" &&  "$(hostname)" != "iso" ]]; then
                   echo "hostname missmatch"
                   exit 1
               fi
