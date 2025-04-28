@@ -4,27 +4,36 @@
   imports = [
     ./hardware-configuration.nix
     ./imgwork.nfs.nix
-    ../../hardware/RTX5090.nix
     ../../hardware/RX5500XT.nix
+    ./ai.workstation.nix
     ../../hardware/efi.nix
     ../../hardware/btrfs.nix
     inputs.nixos-hardware.nixosModules.common-cpu-amd
     inputs.nixos-hardware.nixosModules.common-pc-ssd
     ../../hardware/steamcontroller.nix
-    ({ ... }: {
-      config = {
-        services.ollama = {
-          enable = true;
-          # listenAddress = "0.0.0.0:11434";
-          acceleration = "rocm";
-          # environmentVariables = {
-          #   OLLAMA_LLM_LIBRARY = "cpu";
-          #   HIP_VISIBLE_DEVICES = "0,1";
-          # };
-        };
-      };
-    })
+    # ({ ... }: {
+    #   config = {
+    #     services.ollama = {
+    #       enable = true;
+    #       # listenAddress = "0.0.0.0:11434";
+    #       acceleration = "rocm";
+    #       # environmentVariables = {
+    #       #   OLLAMA_LLM_LIBRARY = "cpu";
+    #       #   HIP_VISIBLE_DEVICES = "0,1";
+    #       # };
+    #     };
+    #   };
+    # })
     (myconfig.metadatalib.fixIp "enp4s0")
+    {
+      # programs.mosh.enable = lib.mkDefault true;
+      services.eternal-terminal = {
+        enable = true;
+        port = 22022;
+      };
+      networking.firewall.allowedTCPPorts = [ 22022 ];
+      networking.firewall.allowedUDPPorts = [ 22022 ];
+    }
     ( # wol
       let interface = "enp4s0";
       in {

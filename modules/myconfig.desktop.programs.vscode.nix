@@ -28,17 +28,19 @@
           #   };
           #   "github.copilot.advanced" = { "enabled" = true; };
           # };
-          extensions = with pkgs.vscode-extensions; [
-            continue.continue
-            dracula-theme.theme-dracula
-            vscodevim.vim
-            yzhang.markdown-all-in-one
-            haskell.haskell
-            bbenoist.nix
-            # ms-python.python
-            ms-azuretools.vscode-docker
-            ms-vscode-remote.remote-ssh
-          ];
+          profiles.default {
+            extensions = with pkgs.vscode-extensions; [
+              continue.continue
+              dracula-theme.theme-dracula
+              vscodevim.vim
+              yzhang.markdown-all-in-one
+              haskell.haskell
+              bbenoist.nix
+              # ms-python.python
+              ms-azuretools.vscode-docker
+              ms-vscode-remote.remote-ssh
+            ];
+          };
         };
         myconfig.desktop.wayland.wrappedElectronPackages = [{
           pkg = config.programs.vscode.package;

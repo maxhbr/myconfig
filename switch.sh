@@ -137,7 +137,7 @@ main() {
         type gnupg-to-mutt.pl &> /dev/null && gnupg-to-mutt.pl
     else
         nix flake update myconfig
-        nix flake update mymyphoto
+        nix flake update myphoto
         nix flake update mydwl
         nix flake update opossum
         nix flake update zephyr-flake

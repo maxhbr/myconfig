@@ -265,6 +265,7 @@ window-rule {
 
 window-rule {
     match app-id="^zoom$"
+    match app-id="it.mijorus.smile"
 
     default-column-width { }
     open-floating true

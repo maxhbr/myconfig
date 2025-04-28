@@ -9,7 +9,7 @@ in {
   };
   config = lib.mkIf cfg.desktop.messengers.enable {
     home-manager.sharedModules = [{
-      home.packages = [ signal-desktop signal-cli ];
+      home.packages = [ signal-desktop signal-cli pkgs.smile ];
       myconfig.desktop.wayland.wrappedElectronPackages = [{
         pkg = signal-desktop;
         executable = "signal-desktop";

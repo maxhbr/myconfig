@@ -4,6 +4,7 @@ let
   mkMetadata = metadataOverride: rec {
     json = builtins.fromJSON (builtins.readFile (./hosts + "/metadata.json"));
     metadata = lib.recursiveUpdate json metadataOverride;
+    hasWg = hostName: lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "ip4" ] metadata.hosts."${hostName}";
     getIp = hostName: metadata.hosts."${hostName}".ip4;
     getWgIp = hostName: metadata.hosts."${hostName}".wireguard.wg0.ip4;
   };
@@ -25,7 +26,7 @@ let
           };
         } // configOverwrites;
     in rec {
-      inherit (mkMetadata metadataOverride) metadata getIp getWgIp;
+      inherit (mkMetadata metadataOverride) metadata getIp getWgIp hasWg;
       fixIp = deviceName:
         ({ config, ... }:
           let hostName = config.networking.hostName;
@@ -187,6 +188,7 @@ let
 
       setupBuildSlave = host: speedFactor: systems: privateKey:
         let keyName = "nixBuildPrivKey.${host}";
+            hostIp = if hasWg host then getWgIp host else getIp host;
         in {
           myconfig.secrets = {
             "${keyName}" = {
@@ -221,7 +223,7 @@ let
           };
           programs.ssh.extraConfig = ''
             Host builder.${host}
-                HostName ${host}
+                HostName ${hostIp}
                 User nixBuild
                 IdentitiesOnly yes
                 IdentityFile /etc/nix/${keyName}
@@ -300,7 +302,7 @@ let
       mkRemoteBackupJob = name: host: configOverwrites:
         ({ pkgs, lib, config, ... }:
           let newName = "${name}@${host}";
-              hostHasWg = lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "ip4" ] metadata.hosts."${host}";
+              hostHasWg = hasWg host;
               hostWgIp = getWgIp host;
               newWgName = "${name}@${host}-wg";
               mkScript = name: pkgs.writeShellScriptBin "mkBackup-${name}" ''
