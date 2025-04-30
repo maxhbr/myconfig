@@ -8,6 +8,7 @@
     ./services.tabby.nix
     ./container.open-webui.nix
     ./container.nlm-ingestor.nix
+    ./container.SillyTavern.nix
   ];
   options.myconfig = with lib; {
     ai.enable = mkEnableOption "myconfig.ai";

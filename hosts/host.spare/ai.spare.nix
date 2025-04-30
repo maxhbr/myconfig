@@ -42,6 +42,10 @@ in {
           open-webui = {
             enable = true;
           };
+          sillytavern = {
+            enable = true;
+            publicPort = 8888;
+          };
         };
       };
     };  

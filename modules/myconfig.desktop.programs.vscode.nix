@@ -1,4 +1,17 @@
-{ pkgs, lib, config, ... }: {
+{ pkgs, lib, config, ... }: let
+  baseProfile = {
+    extensions = with pkgs.vscode-extensions; [
+      dracula-theme.theme-dracula
+      vscodevim.vim
+      yzhang.markdown-all-in-one
+      haskell.haskell
+      bbenoist.nix
+      # ms-python.python
+      ms-azuretools.vscode-docker
+      ms-vscode-remote.remote-ssh
+    ];
+  };
+in {
   config = lib.mkIf config.myconfig.desktop.enable {
     home-manager.sharedModules = [
       ({ config, ... }: {
@@ -28,17 +41,10 @@
           #   };
           #   "github.copilot.advanced" = { "enabled" = true; };
           # };
-          profiles.default {
+          profiles.default = baseProfile; 
+          profiles.continue = lib.recursiveUpdate baseProfile {
             extensions = with pkgs.vscode-extensions; [
               continue.continue
-              dracula-theme.theme-dracula
-              vscodevim.vim
-              yzhang.markdown-all-in-one
-              haskell.haskell
-              bbenoist.nix
-              # ms-python.python
-              ms-azuretools.vscode-docker
-              ms-vscode-remote.remote-ssh
             ];
           };
         };
