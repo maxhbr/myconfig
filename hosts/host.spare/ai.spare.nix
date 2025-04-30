@@ -35,6 +35,12 @@ in {
       };
       ai = {
         enable = true;
+        koboldcpp = {
+          enable = true;
+        };
+        lmstudio = {
+          enable = true;
+        };
         container = {
           nlm-ingestor = {
             enable = false;
@@ -43,7 +49,7 @@ in {
             enable = true;
           };
           sillytavern = {
-            enable = true;
+            enable = false;
             publicPort = 8888;
           };
         };

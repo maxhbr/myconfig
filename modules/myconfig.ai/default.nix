@@ -9,6 +9,8 @@
     ./container.open-webui.nix
     ./container.nlm-ingestor.nix
     ./container.SillyTavern.nix
+    ./koboldcpp.nix
+    ./lmstudio.nix
   ];
   options.myconfig = with lib; {
     ai.enable = mkEnableOption "myconfig.ai";

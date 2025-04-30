@@ -7,7 +7,6 @@ let
   EXTENSIONS_PATH="${SILLYTAVERN_DIR}/extensions";
   sillytavern = {
     image = "ghcr.io/sillytavern/sillytavern:${config.myconfig.ai.container.sillytavern.version}";
-    user = "1100:1100";
 
     environment = rec {
       "TZ" = "Europe/Amsterdam";
@@ -53,27 +52,18 @@ in {
     };
   };
   config = lib.mkIf (config.myconfig.ai.enable && config.myconfig.ai.container.sillytavern.enable && config.services.ollama.enable) {
-    users.users.sillytavern = {
-      isSystemUser = true;
-      group = "sillytavern";
-      home = SILLYTAVERN_DIR;
-      createHome = true;
-      uid = 1100;
-    };
-    users.groups.sillytavern = {
-      gid = 1100;
-    };
 
     virtualisation.oci-containers.containers = {
       inherit sillytavern;
     };
     system.activationScripts = {
       script.text = ''
-        install -d -m 755 ${CONFIG_PATH} -o sillytavern -g sillytavern
-        install -d -m 755 ${DATA_PATH} -o sillytavern -g sillytavern
-        install -d -m 755 ${EXTENSIONS_PATH} -o sillytavern -g sillytavern
-        install -d -m 755 ${PLUGINS_PATH} -o sillytavern -g sillytavern
-        install -m 644 ${inputs.sillytavern.outPath}/default/config.yaml ${CONFIG_PATH}/config.yaml -o sillytavern -g sillytavern
+        install -d -m 755 ${CONFIG_PATH} -o root -g root
+        install -d -m 755 ${DATA_PATH} -o root -g root
+        install -d -m 755 ${EXTENSIONS_PATH} -o root -g root
+        install -d -m 755 ${PLUGINS_PATH} -o root -g root
+        # install config
+        install -m 644 ${inputs.sillytavern.outPath}/default/config.yaml ${CONFIG_PATH}/config.yaml -o root -g root
       '';
     };
   };
