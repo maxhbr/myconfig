@@ -71,6 +71,8 @@ in {
         "phi4"
         "qwq:32b"
         "smollm2:1.7b"
+        "qwen3:32b"
+        "qwen3:30b"
       ];
     };
     services.tabby = {

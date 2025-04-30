@@ -32,6 +32,12 @@ in {
       default = 300;
       description = "Number of seconds to look back in the logs";
     };
+
+    publicPort = mkOption {
+      type = types.nullOr types.int;
+      default = null;
+      description = "Optional public port to expose for monitoring";
+    };
   };
 
   config = mkIf cfg.enable {
@@ -99,5 +105,7 @@ in {
         Unit = "dmesg-monitor.service";
       };
     };
+
+    networking.firewall.allowedTCPPorts = lib.optional (cfg.publicPort != null) cfg.publicPort;
   };
 }
