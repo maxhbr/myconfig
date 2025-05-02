@@ -8,7 +8,8 @@ let
   };
   zoom-us-overlay = (self: super: {
     zoom-us = super.zoom-us.overrideAttrs (old: {
-      postFixup = old.postFixup + ''
+      # postFixup = old.postFixup + ''
+      postFixup = ''
         wrapProgram $out/bin/zoom-us \
           --set QT_DEBUG_PLUGINS 1 \
           --set XDG_CURRENT_DESKTOP gnome \

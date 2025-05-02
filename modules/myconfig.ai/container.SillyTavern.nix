@@ -62,8 +62,6 @@ in {
         install -d -m 755 ${DATA_PATH} -o root -g root
         install -d -m 755 ${EXTENSIONS_PATH} -o root -g root
         install -d -m 755 ${PLUGINS_PATH} -o root -g root
-        # install config
-        install -m 644 ${inputs.sillytavern.outPath}/default/config.yaml ${CONFIG_PATH}/config.yaml -o root -g root
       '';
     };
   };

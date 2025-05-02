@@ -85,11 +85,6 @@
 
     myphoto.url = "github:maxhbr/myphoto";
     myphoto.inputs.nixpkgs.follows = "nixpkgs";
-
-
-    # AI
-    sillytavern.url = "github:SillyTavern/SillyTavern";
-    sillytavern.flake = false;
   };
 
   outputs = { self, nixpkgs, ... }@inputs:

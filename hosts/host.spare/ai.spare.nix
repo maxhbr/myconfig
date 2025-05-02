@@ -35,7 +35,7 @@ in {
       };
       ai = {
         enable = true;
-        koboldcpp = {
+        inference-cpp = {
           enable = true;
         };
         lmstudio = {
@@ -79,6 +79,11 @@ in {
         "smollm2:1.7b"
         "qwen3:32b"
         "qwen3:30b"
+      ] ++ [
+        # for continue:
+        "llama3.1:8b"
+        "qwen2.5-coder:1.5b-base"
+        "nomic-embed-text:latest"
       ];
     };
     services.tabby = {

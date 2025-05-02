@@ -9,7 +9,7 @@
     ./container.open-webui.nix
     ./container.nlm-ingestor.nix
     ./container.SillyTavern.nix
-    ./koboldcpp.nix
+    ./inference.cpp.nix
     ./lmstudio.nix
   ];
   options.myconfig = with lib; {
@@ -19,6 +19,7 @@
     home-manager.sharedModules = [{
       home.packages = with pkgs; [
         aichat
+        alpaca
       ];
     }];
   };

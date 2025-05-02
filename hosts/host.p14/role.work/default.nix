@@ -21,6 +21,7 @@ in {
     # ./jdk.nix
     # ./node.nix
     # ./azure-cli.nix
+    ./dotnet.nix
     ({ pkgs, ... }:
       let wing-edit = pkgs.callPackage ../../../pkgs/wing-edit { };
       in {
