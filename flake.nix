@@ -7,24 +7,19 @@
     nixos-unstable-small.url = "github:nixos/nixpkgs/nixos-unstable-small";
     nixos-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    rel2009.url = "github:nixos/nixpkgs/nixos-20.09";
-    rel2003.url = "github:nixos/nixpkgs/nixos-20.03";
-    rel2105.url = "github:nixos/nixpkgs/release-21.05";
-    rel2111.url = "github:nixos/nixpkgs/release-21.11";
-    rel2205.url = "github:nixos/nixpkgs/release-22.05";
-    rel2211.url = "github:nixos/nixpkgs/release-22.11";
-    rel2305.url = "github:nixos/nixpkgs/release-23.05";
-    rel2311.url = "github:nixos/nixpkgs/release-23.11";
+    # rel2009.url = "github:nixos/nixpkgs/nixos-20.09";
+    # rel2003.url = "github:nixos/nixpkgs/nixos-20.03";
+    # rel2105.url = "github:nixos/nixpkgs/release-21.05";
+    # rel2111.url = "github:nixos/nixpkgs/release-21.11";
+    # rel2205.url = "github:nixos/nixpkgs/release-22.05";
+    # rel2211.url = "github:nixos/nixpkgs/release-22.11";
+    # rel2305.url = "github:nixos/nixpkgs/release-23.05";
+    # rel2311.url = "github:nixos/nixpkgs/release-23.11";
     rel2405.url = "github:nixos/nixpkgs/release-24.05";
     rel2411.url = "github:nixos/nixpkgs/release-24.11";
 
     zoom-old-screenshare.url =
       "github:NixOS/nixpkgs/06031e8a5d9d5293c725a50acf01242193635022";
-
-    pr244937.url =
-      "github:charles-dyfis-net/nixpkgs/freeplane-1_11_4"; # https://github.com/NixOS/nixpkgs/pull/244937
-    pr275479.url =
-      "github:maxhbr/nixpkgs/freeplane-1_11_8"; # https://github.com/NixOS/nixpkgs/pull/275479
 
     nixpkgs-wayland = {
       url = "github:nix-community/nixpkgs-wayland";
@@ -59,29 +54,10 @@
 
     nixgl.url = "github:nix-community/nixGL";
 
-    #wayland:hyprland
-    hyprland = {
-      url = "github:hyprwm/Hyprland/v0.41.2";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    hyprland-plugins = {
-      url = "github:hyprwm/hyprland-plugins";
-      inputs.hyprland.follows = "hyprland";
-    };
-
-    river-src.url = "git+https://github.com/riverwm/river?submodules=1";
-    river-src.flake = false;
-    rivercarro-src.url =
-      "git+https://git.sr.ht/~novakane/rivercarro?submodules=1";
-    rivercarro-src.flake = false;
-
     niri.url = "github:YaLTeR/niri";
     niri.inputs.nixpkgs.follows = "nixpkgs";
 
     clipboard-sync.url = "github:dnut/clipboard-sync";
-
-    mydwl.url = "github:maxhbr/mydwl";
-    mydwl.inputs.nixpkgs.follows = "nixpkgs";
 
     myphoto.url = "github:maxhbr/myphoto";
     myphoto.inputs.nixpkgs.follows = "nixpkgs";
@@ -135,7 +111,6 @@
           imports = [ nixpkgs.nixosModules.readOnlyPkgs ];
           nixpkgs.pkgs = nixpkgs.legacyPackages.x86_64-linux;
         };
-        mydwl = import ./flake.nixosModules.mydwl.nix;
         core = { ... }: {
           imports = [
             ({ pkgs, ... }: {
@@ -154,16 +129,16 @@
                   (mkSubPkgsOverlay "nixos-unstable" inputs.nixos-unstable)
                   (mkSubPkgsOverlay "nixos-unstable-small"
                     inputs.ninos-unstable-small)
-                  (mkSubPkgsOverlay "nixos-2003" inputs.rel2003)
-                  (mkSubPkgsOverlay "nixos-2009" inputs.rel2009)
-                  (mkSubPkgsOverlay "nixos-2105" inputs.rel2105)
-                  (mkSubPkgsOverlay "nixos-2111" inputs.rel2111)
-                  (mkSubPkgsOverlay "nixos-2205" inputs.rel2205)
-                  (mkSubPkgsOverlay "nixos-2111" inputs.rel2111)
-                  (mkSubPkgsOverlay "nixos-2205" inputs.rel2205)
-                  (mkSubPkgsOverlay "nixos-2211" inputs.rel2211)
-                  (mkSubPkgsOverlay "nixos-2305" inputs.rel2305)
-                  (mkSubPkgsOverlay "nixos-2311" inputs.rel2311)
+                  # (mkSubPkgsOverlay "nixos-2003" inputs.rel2003)
+                  # (mkSubPkgsOverlay "nixos-2009" inputs.rel2009)
+                  # (mkSubPkgsOverlay "nixos-2105" inputs.rel2105)
+                  # (mkSubPkgsOverlay "nixos-2111" inputs.rel2111)
+                  # (mkSubPkgsOverlay "nixos-2205" inputs.rel2205)
+                  # (mkSubPkgsOverlay "nixos-2111" inputs.rel2111)
+                  # (mkSubPkgsOverlay "nixos-2205" inputs.rel2205)
+                  # (mkSubPkgsOverlay "nixos-2211" inputs.rel2211)
+                  # (mkSubPkgsOverlay "nixos-2305" inputs.rel2305)
+                  # (mkSubPkgsOverlay "nixos-2311" inputs.rel2311)
                   (mkSubPkgsOverlay "nixos-2405" inputs.rel2405)
                   (mkSubPkgsOverlay "nixos-2411" inputs.rel2411)
                   (mkSubPkgsOverlay "stable" inputs.rel2411)
@@ -171,13 +146,18 @@
               };
             })
             ({ pkgs, ... }: {
+              # To use a version from a PR, use the following:    
+              ## 1. create an input with the following:
+              # pr275479.url =
+              #  "github:maxhbr/nixpkgs/freeplane-1_11_8"; # https://github.com/NixOS/nixpkgs/pull/275479
+              ## 2. add the input to the inputs list
+              # { input = "pr275479"; pkg = "freeplane"; }
               nixpkgs.overlays = map ({ input, pkg }:
                 (_: _: {
                   "${pkg}" = (import inputs."${input}" {
                     inherit (pkgs) config system;
                   })."${pkg}";
                 })) [
-                  # { input = "pr275479"; pkg = "freeplane"; }
                 ];
             })
             ({ pkgs, ... }: {
@@ -196,7 +176,6 @@
               ];
             })
             inputs.my-wallpapers.nixosModule
-            mydwl
 
             ({ pkgs, config, ... }: {
               config = {
@@ -334,11 +313,6 @@
       eachDefaultSystem =
         inputs.flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ];
     in eachDefaultSystem (system: {
-      # legacyPackages = import inputs.nixpkgs {
-      #   inherit system;
-      #   config = nixpkgsConfig;
-      # };
-
       # might be overwritten in priv
       packages = {
         myconfig-iso = self.lib.mkISO {
@@ -362,7 +336,6 @@
         };
       in pkgs.mkShell {
         nativeBuildInputs = with pkgs; [
-          # nixos-rebuild
           git
           git-crypt
           git-secrets

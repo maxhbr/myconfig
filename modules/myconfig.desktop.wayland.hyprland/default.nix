@@ -1,11 +1,11 @@
 # Copyright 2022 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, myconfig, inputs, ... }:
+{ pkgs, config, lib, myconfig, ... }:
 let
   cfg = config.myconfig;
   user = myconfig.user;
   debug = false;
-  hyprlandPkg = inputs.hyprland.packages.${pkgs.system}.hyprland.override {
+  hyprlandPkg = pkgs.hyprland.override {
     inherit debug;
     legacyRenderer = cfg.desktop.wayland.hyprland.legacyRenderer;
   };

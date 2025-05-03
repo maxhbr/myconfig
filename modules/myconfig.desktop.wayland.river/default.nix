@@ -1,39 +1,18 @@
 # Copyright 2022 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, inputs, ... }:
+{ pkgs, config, lib, ... }:
 let
   cfg = config.myconfig;
-  useMaster = false; # does currently not compile
-  river-master = pkgs.river.overrideAttrs (oa: {
-    version = "master";
-
-    src = inputs.river-src;
-
-    buildInputs = with pkgs; [
-      scdoc
-      udev
-      libevdev
-      libinput
-      pixman
-      wlroots_0_17
-      wayland-protocols
-      libxkbcommon
-    ];
-  });
-  rivercarro-master = pkgs.rivercarro.overrideAttrs (oa: {
-    version = "master";
-    src = inputs.rivercarro-src;
-  });
   wrapPackage = true;
   extraPaths = with pkgs; [
-    (if useMaster then rivercarro-master else rivercarro)
+    rivercarro
     ristate
     swaybg
     kile-wl
   ];
   riverPackage = if wrapPackage then
     pkgs.callPackage ./wrapper.nix {
-      river-unwrapped = if useMaster then river-master else pkgs.river;
+      river-unwrapped = pkgs.river;
       withBaseWrapper = true;
       inherit extraPaths;
       extraSessionCommands = ''
