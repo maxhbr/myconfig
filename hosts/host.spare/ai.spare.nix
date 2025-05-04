@@ -52,6 +52,21 @@ in {
             enable = false;
             publicPort = 8888;
           };
+          litellm = {
+            enable = false;
+            config = {
+              "environment_variables" = { };
+              "model_list" = [
+                {
+                  "model_name" = "ollama/qwen3:32b";
+                  "litellm_params" = {
+                    model = "ollama/qwen3:32b";
+                    api_base = "http://host.containers.internal:11434";
+                  };
+                }
+              ];
+            };
+          };
         };
       };
     };  

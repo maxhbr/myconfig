@@ -107,7 +107,38 @@ in {
               rooveterinaryinc.roo-cline
             ] ++ baseExtensions;
           };
+          profiles.cline = {
+            extensions = with pkgs.vscode-extensions; [
+              saoudrizwan.claude-dev
+            ] ++ baseExtensions;
+            userSettings = {
+              "files.autoSave" = "on";
+              "files.trimTrailingWhitespace" = true;
+              "files.insertFinalNewline" = true;
+              "window.titleBarStyle" =
+                "custom"; # https://github.com/microsoft/vscode/issues/184124
+              "accessibility.dimUnfocused.enabled" = true;
+              "[plaintext]"."files.insertFinalNewline" = false;
+              "[nix]"."editor.tabSize" = 2;
+              "[haskell]"."editor.tabSize" = 2;
+              "editor.experimental.asyncTokenization" = true;
+              "editor.experimental.asyncTokenizationVerification" = true;
+              "editor.inlineSuggest.enabled" = true;
+              "github.copilot.enable" = {
+                "*" = false;
+              };
+              "github.copilot.advanced" = { "enabled" = false; };
+              "cline.chromeExecutablePath" = "${config.programs.chromium.package}/bin/chromium";
+              "cline.disableBrowserTool" = false;
+              "cline.enableCheckpoints" = true;
+              "cline.mcpMarketplace.enabled" = true;
+              "cline.modelSettings.o3Mini.reasoningEffort" = "medium";
+              "cline.preferredLanguage" = "English";
+              # "cline.vsCodeLmModelSelector" = {};
+            };
+          };
         };
+
         myconfig.desktop.wayland.wrappedElectronPackages = [{
           pkg = config.programs.vscode.package;
           executable = "code";

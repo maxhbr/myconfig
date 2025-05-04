@@ -9,6 +9,7 @@
     ./container.open-webui.nix
     ./container.nlm-ingestor.nix
     ./container.SillyTavern.nix
+    ./container.litellm.nix
     ./inference.cpp.nix
     ./lmstudio.nix
   ];
@@ -20,6 +21,7 @@
       home.packages = with pkgs; [
         aichat
         alpaca
+        python313Packages.huggingface-hub
       ];
     }];
   };
