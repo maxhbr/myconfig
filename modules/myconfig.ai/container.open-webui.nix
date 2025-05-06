@@ -1,5 +1,28 @@
 { pkgs, lib, config, ... }:
+
 let
+  openedai-speech = {
+    image = "ghcr.io/matatonic/openedai-speech:latest";
+    environment = rec {
+      "TZ" = "Europe/Amsterdam";
+      "TTS_HOME" = "/app/voices";
+      "HF_HOME" = "/app/voices";
+      "PRELOAD_MODEL" = "xtts";
+      "EXTRA_ARGS" = "--log-level DEBUG --unload-t";
+    };
+    ports = [
+      "127.0.0.1:8000:8000"
+    ];
+    volumes = [
+      "/home/open-webui/openedai/voices:/app/voices"
+      "/home/open-webui/openedai/config:/app/config"
+    ];
+    extraOptions = [
+      "--pull=always"
+      "--name=openedai-speech"
+      "--hostname=openedai-speech"
+    ];
+  };
   open-webui = {
     image = "ghcr.io/open-webui/open-webui:main";
 
@@ -36,6 +59,8 @@ in {
     system.activationScripts = {
       script.text = ''
         install -d -m 755 /home/open-webui/data -o root -g root
+        install -d -m 755 /home/open-webui/openedai/voices -o root -g root
+        install -d -m 755 /home/open-webui/openedai/config -o root -g root
       '';
     };
   };

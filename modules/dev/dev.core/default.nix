@@ -34,7 +34,7 @@ in {
           plantuml
           graphviz
           darcs
-        ] ++ lib.optional config.myconfig.desktop.enable freeplane
+        ] # ++ lib.optional config.myconfig.desktop.enable freeplane
           ++ lib.optional config.services.xserver.wacom.enable xournalpp);
     }];
   };
