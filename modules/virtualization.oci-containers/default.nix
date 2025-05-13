@@ -16,6 +16,9 @@ in {
         ];
         "transports" = {
           "docker" = {
+            "docker.io" = [
+              { "type" = "insecureAcceptAnything"; }
+            ];
             "docker.io/library" = [
               { "type" = "insecureAcceptAnything"; }
             ];

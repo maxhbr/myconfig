@@ -186,18 +186,23 @@ let
         };
       };
 
-      setupBuildSlave = host: speedFactor: systems: privateKey:
-        let keyName = "nixBuildPrivKey.${host}";
-            hostIp = if hasWg host then getWgIp host else getIp host;
+      setupBuildSlave = { host,
+                          speedFactor ? 2,
+                          systems ? [ "x86_64-linux" ],
+                          privateKey,
+                          useWg ? false
+                        }:
+        let name = if (useWg && (hasWg host)) then "builder.${host}.wg" else "builder.${host}";
+            hostIp = if (useWg && (hasWg host)) then getWgIp host else getIp host;
         in {
           myconfig.secrets = {
-            "${keyName}" = {
+            "${name}" = {
               source = privateKey;
-              dest = "/etc/nix/${keyName}";
+              dest = "/etc/nix/${name}";
             };
           };
           nix.buildMachines = map (system: {
-            hostName = "builder.${host}";
+            hostName = name;
             maxJobs = 6;
             supportedFeatures = [
               "nixos-test"
@@ -209,7 +214,7 @@ let
             ];
             mandatoryFeatures = [ ];
             sshUser = "nixBuild";
-            sshKey = "/etc/nix/${keyName}";
+            sshKey = "/etc/nix/${name}";
             inherit speedFactor system;
           }) systems;
           nix.distributedBuilds = true;
@@ -218,15 +223,15 @@ let
             builders-use-substitutes = true
           '';
           services.openssh.knownHosts = {
-            "builder.${host}".publicKey =
+            "${name}".publicKey =
               metadata.hosts."${host}".pubkeys."/etc/ssh/ssh_host_ed25519_key.pub";
           };
           programs.ssh.extraConfig = ''
-            Host builder.${host}
+            Host ${name}
                 HostName ${hostIp}
                 User nixBuild
                 IdentitiesOnly yes
-                IdentityFile /etc/nix/${keyName}
+                IdentityFile /etc/nix/${name}
                 StrictHostKeyChecking accept-new
                 ConnectTimeout 2
           '';

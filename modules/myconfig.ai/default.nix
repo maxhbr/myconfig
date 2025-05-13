@@ -10,6 +10,8 @@
     ./container.nlm-ingestor.nix
     ./container.SillyTavern.nix
     ./container.litellm.nix
+    ./container.lobe-chat.nix
+    ./container.Kokoro-FastAPI.nix
     ./inference.cpp.nix
     ./lmstudio.nix
   ];

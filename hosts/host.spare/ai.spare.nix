@@ -52,6 +52,12 @@ in {
             enable = false;
             publicPort = 8888;
           };
+          kokoro-fastapi = {
+            enable = false;
+          };
+          lobe-chat = {
+            enable = true;
+          };
           litellm = {
             enable = false;
             config = {
