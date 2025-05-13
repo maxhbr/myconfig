@@ -18,9 +18,6 @@
     rel2405.url = "github:nixos/nixpkgs/release-24.05";
     rel2411.url = "github:nixos/nixpkgs/release-24.11";
 
-    zoom-old-screenshare.url =
-      "github:NixOS/nixpkgs/06031e8a5d9d5293c725a50acf01242193635022";
-
     nixpkgs-wayland = {
       url = "github:nix-community/nixpkgs-wayland";
       # only needed if you use as a package set:
