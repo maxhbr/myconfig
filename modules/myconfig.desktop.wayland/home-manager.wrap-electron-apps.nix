@@ -8,6 +8,11 @@ let
 
         executable = mkOption { type = types.str; };
 
+        replaceOriginal = mkOption {
+          type = types.bool;
+          default = false;
+        };
+
         args = mkOption {
           type = types.str;
           default =
@@ -48,10 +53,18 @@ in {
           mkdir -p $out/bin
           makeWrapper ${ptw.pkg}/bin/${ptw.executable} $out/bin/$(basename ${ptw.executable})-wl --add-flags "${ptw.args}"
         '';
-      wrapAndAddExecutable = ptw: [ (wrapExecutable ptw) ptw.pkg ];
+      wrapPackage = ptw:
+        pkgs.symlinkJoin {
+          name = ptw.executable;
+          paths = [ ptw.pkg ];
+          buildInputs = [ pkgs.makeWrapper ];
+          postBuild = ''
+            wrapProgram $out/bin/${ptw.executable} --add-flags "${ptw.args}"
+          '';
+        };
+      wrapAndAddExecutable = ptw: if ptw.replaceOriginal then [ (wrapPackage ptw) ] else [ (wrapExecutable ptw) ptw.pkg ];
       maybeWrapAndAddExecutable = ptw:
         if ptw.enabled then (wrapAndAddExecutable ptw) else [ ];
-    in lib.concatMap wrapAndAddExecutable
-    cfg.desktop.wayland.wrappedElectronPackages;
+    in lib.concatMap maybeWrapAndAddExecutable cfg.desktop.wayland.wrappedElectronPackages;
   };
 }

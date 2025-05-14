@@ -139,11 +139,11 @@ in {
           };
         };
 
-        myconfig.desktop.wayland.wrappedElectronPackages = [{
-          pkg = config.programs.vscode.package;
-          executable = "code";
-          enabled = config.programs.vscode.enable;
-        }];
+        # myconfig.desktop.wayland.wrappedElectronPackages = [{
+        #   pkg = config.programs.vscode.package;
+        #   executable = "code";
+        #   enabled = config.programs.vscode.enable;
+        # }];
         xdg.configFile = lib.mkIf config.myconfig.desktop.wayland.enable {
           # --enable-ozone
           # --enable-features=UseOzonePlatform

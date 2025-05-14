@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cd "$(dirname "$0")"
+verbose=""
+
+flake_update() (
+    local path="$1"; shift
+    echo "################################################################################"
+    echo "update flake $path and commit lock file"
+    echo "################################################################################"
+    cd "$path";
+    pwd
+    set -x
+    nix flake update ${verbose:+"--verbose"} --commit-lock-file
+)
 get_out_link_of_target() {
     local target="$1"; shift
     echo '../result.'"$target"
 }
-build() {
+build() (
     local target="$1"; shift
     local out_link="$1"; shift
     echo "################################################################################"
@@ -13,7 +26,9 @@ build() {
     echo "################################################################################"
     local system='.#nixosConfigurations.'"$target"'.config.system.build.toplevel'
 
+    set -x
     nix build \
+        ${verbose:+"--verbose"} \
         -L \
         --fallback \
         --log-format bar-with-logs \
@@ -21,7 +36,7 @@ build() {
         --keep-going \
         $@ \
         "$system"
-}
+)
 du_of_out_link() {
     local target="$1"; shift
     local out_link="$(get_out_link_of_target "$target")"
@@ -53,7 +68,7 @@ get_ip_of_target() {
     fi
     echo "$ip"
 }
-copy_closure_to_target() {
+copy_closure_to_target() (
     local targetIP="$1"; shift
     local out_link="$1"; shift
     echo "################################################################################"
@@ -63,9 +78,8 @@ copy_closure_to_target() {
     until nix-copy-closure --to "$targetIP" "$out_link"; do
         echo "... retry nix-copy-closure"
     done
-    set +x
-}
-deploy() {
+)
+deploy() (
     local target="$1"; shift
     local out_link="$1"; shift
     echo "################################################################################"
@@ -89,13 +103,20 @@ deploy() {
     until $cmd \
             `# --build-host localhost` \
             switch `#-p test` \
+            ${verbose:+"--verbose"} \
             --flake '.#'"$target"; do
         echo "... retry nixos-rebuild"
     done
-    set +x
-}
+)
 main() {
     local MODE=""
+    if [[ $# -gt 0 && ("$1" == "--verbose" || "$1" == "-v") ]]; then
+        verbose="--verbose"
+        shift
+    elif [[ $# -gt 0 && ("$1" == "--quiet" || "$1" == "-q") ]]; then
+        verbose=""
+        shift
+    fi
     if [[ $# -gt 0 && "$1" == "--fast" ]]; then
         MODE="$1"
         shift
@@ -111,6 +132,8 @@ main() {
 
     ################################################################################
     # setup logging
+    start_time="$(date +%s)"
+    exec &> >(while read line; do current_time="$(date +%s)"; time_diff="$((current_time - start_time))"; printf "%5ds: %s\n" "$time_diff" "$line"; done)
     logsDir="../_logs"
     mkdir -p "$logsDir"
     logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
@@ -125,25 +148,17 @@ main() {
     fi
 
     if [[ "$MODE" == "" ]]; then
-        cd "$(dirname "$0")"
-
-        ( cd "../myconfig"; pwd; nix flake update --commit-lock-file )
-        ( cd "../opossum.nix"; pwd; nix flake update --commit-lock-file )
-        ( cd "../myphoto"; pwd; nix flake update --commit-lock-file )
-
-        pwd
-        nix flake update --commit-lock-file
-
+        grep '\.url = "path:' flake.nix | sed s/.*path:// | sed 's/".*//g' |
+            while read flake_path; do
+                flake_update "$flake_path"
+            done
+        flake_update "."
         type gnupg-to-mutt.pl &> /dev/null && gnupg-to-mutt.pl
     else
-        (
-            set +x
-            nix flake update myconfig
-            nix flake update myphoto
-            nix flake update mydwl
-            nix flake update opossum
-            nix flake update zephyr-flake
-        )
+        grep '\.url = "path:' flake.nix | sed s/\.url.*// | sed 's/ //g' |
+            while read flake; do
+                (set -x; nix flake update ${verbose:+"--verbose"} "$flake")
+            done
     fi
 
     local out_link="$(get_out_link_of_target "$target")"
@@ -158,7 +173,6 @@ main() {
 
 ################################################################################
 
-cd "$(dirname "$0")"
 main "$@"
 times
 date

@@ -183,7 +183,7 @@ in {
     services.greetd.enable = true;
     services.clipboard-sync.enable = true;
     environment.sessionVariables = {
-      # "NIXOS_OZONE_WL" = "1"; # VSCode fails to start if that is set in dwl / wayland
+      "NIXOS_OZONE_WL" = "1";
       "XDG_SESSION_TYPE" = "wayland";
       "SDL_VIDEODRIVER" = "wayland";
       # needs qt5.qtwayland in systemPackages
@@ -221,6 +221,12 @@ in {
         home.packages = cfg.desktop.wayland.commonPackages;
         xdg.configFile = {
           "way-displays/cfg.yaml".source = ./way-displays/cfg.yaml;
+          "electron-flags.conf".text = ''
+            --enable-features=UseOzonePlatform
+            --ozone-platform=wayland
+            --ozone-platform-hint=auto
+            --enable-features=WaylandWindowDecorations
+          '';
         };
         programs.waybar.enable = true;
         services.kanshi.enable = false;

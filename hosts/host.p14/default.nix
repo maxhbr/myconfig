@@ -224,8 +224,10 @@
       }
       {
         services.mako = {
-          output = "eDP-1";
-          defaultTimeout = lib.mkForce 20000;
+          settings = {
+            output = "eDP-1";
+            default-timeout = 20000;
+          };
         };
         # services.kanshi = {
         #   enable = lib.mkForce true;

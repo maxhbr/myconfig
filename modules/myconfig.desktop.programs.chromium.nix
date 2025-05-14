@@ -56,7 +56,7 @@ in {
         myconfig.desktop.wayland.wrappedElectronPackages = [{
           pkg = config.programs.chromium.package;
           executable = "chromium";
-          enabled = config.programs.chromium.enabled;
+          enabled = config.programs.chromium.enable;
         }];
       })
     ];
