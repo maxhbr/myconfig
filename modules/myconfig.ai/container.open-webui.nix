@@ -28,28 +28,36 @@ let
 
     environment = rec {
       "TZ" = "Europe/Amsterdam";
-      "OLLAMA_BASE_URL" = "http://localhost:${toString config.services.ollama.port}";
+      "OLLAMA_BASE_URL" = "http://host.containers.internal:${toString config.services.ollama.port}";
       "OLLAMA_API_BASE_URL" = "${OLLAMA_BASE_URL}/api";
     };
 
     volumes = [ "/home/open-webui/data:/app/backend/data" ];
 
-    # ports = [
-    #   "${config.myconfig.ai.container.open-webui.host}:${toString config.myconfig.ai.container.open-webui.port}:8080" # Ensures we listen only on localhost
-    # ];
+    ports = [
+      "${config.myconfig.ai.container.open-webui.host}:${toString config.myconfig.ai.container.open-webui.port}:8080" # Ensures we listen only on localhost
+    ];
 
     extraOptions = [
       "--pull=always" # Pull if the image on the registry is always
       "--name=open-webui"
       "--hostname=open-webui"
-      "--network=host"
-      # "--add-host=host.containers.internal:host-gateway"
+      # "--network=host"
+      "--add-host=host.containers.internal:host-gateway"
     ];
   };
 in {
   options.myconfig = with lib; {  
     ai.container.open-webui = {
       enable = mkEnableOption "myconfig.ai.container.open-webui";
+      host = mkOption {
+        type = types.str;
+        default = "127.0.0.1";
+      };
+      port = mkOption {
+        type = types.int;
+        default = 8080;
+      };
     };
   };
   config = lib.mkIf (config.myconfig.ai.enable && config.myconfig.ai.container.open-webui.enable && config.services.ollama.enable) {

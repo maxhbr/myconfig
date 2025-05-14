@@ -47,6 +47,7 @@ in {
           };
           open-webui = {
             enable = true;
+            host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
           };
           sillytavern = {
             enable = false;
@@ -78,14 +79,15 @@ in {
     };  
     services.ollama = {
       enable = true;
-      
+
+      openFirewall = true;
       # host = myconfig.metadatalib.metadata.hosts."${config.networking.hostName}".ip4;
-      # listenAddress = "0.0.0.0:11434";
       acceleration = "cuda";
-      # environmentVariables = {
-      #   OLLAMA_LLM_LIBRARY = "cpu";
-      #   HIP_VISIBLE_DEVICES = "0,1";
-      # };
+      host = "0.0.0.0";
+      environmentVariables = {
+        OLLAMA_ORIGIN = "*";
+        OLLAMA_KEEP_ALIVE = "5m";
+      };
       loadModels = [
         "cogito:32b"
         "deepseek-r1:32b"

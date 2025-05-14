@@ -2,6 +2,9 @@
 let
   lobe-chat = {
     image = "docker.io/lobehub/lobe-chat:latest";
+    environment = {
+      "OLLAMA_PROXY_URL" = "http://host.containers.internal:11434";
+    };
     ports = [
       "127.0.0.1:3210:3210" # Ensures we listen only on localhost
     ];
@@ -10,7 +13,7 @@ let
       "--name=lobe-chat"
       "--hostname=lobe-chat"
       # "--network=host"
-      # "--add-host=host.containers.internal:host-gateway"
+      "--add-host=host.containers.internal:host-gateway"
     ];
   };
 in {

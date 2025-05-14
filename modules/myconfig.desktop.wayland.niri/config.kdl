@@ -539,4 +539,7 @@ binds {
     XF86AudioNext allow-when-locked=true { spawn "playerctl" "next"; }
     XF86Go allow-when-locked=true { spawn "playerctl" "play"; }
     Cancel allow-when-locked=true { spawn "playerctl" "pause"; }
+
+    // Ctrl+Shift+C { spawn "sh" "-c" "env DISPLAY=:0 xsel -ob | wl-copy"; }
+    // Ctrl+Shift+V { spawn "sh" "-c" "wl-paste -n | env DISPLAY=:0 xsel -ib"; }
 }

@@ -2,10 +2,9 @@
 {
   config = lib.mkIf config.services.ollama.enable {
     services.ollama = {
-      # environmentVariables = {
-      #   OLLAMA_LLM_LIBRARY = "cpu";
-      #   HIP_VISIBLE_DEVICES = "0,1";
-      # };
+      environmentVariables = {
+        OLLAMA_KEEP_ALIVE = "5m";
+      };
     };
     services.nextjs-ollama-llm-ui.enable = true;
   };
