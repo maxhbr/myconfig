@@ -12,8 +12,8 @@ let
       "TZ" = "Europe/Amsterdam";
       "NODE_ENV" = "production";
       "FORCE_COLOR" = "1";
-      # "OLLAMA_BASE_URL" = "http://localhost:${toString config.services.ollama.port}";
-      # "OLLAMA_API_BASE_URL" = "${OLLAMA_BASE_URL}/api";
+      "OLLAMA_BASE_URL" = "http://host.containers.internal:${toString config.services.ollama.port}";
+      "OLLAMA_API_BASE_URL" = "${OLLAMA_BASE_URL}/api";
     };
 
     volumes = [
@@ -23,26 +23,27 @@ let
       "${PLUGINS_PATH}:/app/backend/plugins"
     ];
 
-    ports = lib.mkIf (config.myconfig.ai.container.sillytavern.publicPort != null) [
-      "${toString config.myconfig.ai.container.sillytavern.publicPort}:8000/tcp"
+    ports = [
+      "${config.myconfig.ai.container.sillytavern.host}:${toString config.myconfig.ai.container.sillytavern.port}:8000/tcp"
     ];
 
     extraOptions = [
       "--pull=always" # Pull if the image on the registry is always
       "--name=sillytavern"
       "--hostname=sillytavern"
-    ] ++ (if config.myconfig.ai.container.sillytavern.publicPort != null then [
       "--add-host=host.containers.internal:host-gateway"
-    ] else [
-      "--network=host"
-    ]);
+    ];
   };
 in {
   options.myconfig = with lib; {  
     ai.container.sillytavern = {
       enable = mkEnableOption "myconfig.ai.container.sillytavern";
-      publicPort = mkOption {
-        type = types.nullOr types.int;
+      host = mkOption {
+        type = types.str;
+        default = "127.0.0.1";
+      };
+      port = mkOption {
+        type = types.int;
         default = 8000;
       };
       version = mkOption {

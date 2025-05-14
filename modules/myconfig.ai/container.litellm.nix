@@ -8,7 +8,11 @@
         default = {};
         description = "Arbitrary YAML configuration for myapp";
       };
-      publicPort = mkOption {
+      host = mkOption {
+        type = types.str;
+        default = "127.0.0.1";
+      };
+      port = mkOption {
         type = types.int;
         default = 4000;
       };
@@ -33,7 +37,7 @@
           "${yamlFile}:/app/config.yaml"
         ];
         ports = [
-          "${toString config.myconfig.ai.container.litellm.publicPort}:4000/tcp"
+          "${config.myconfig.ai.container.litellm.host}:${toString config.myconfig.ai.container.litellm.port}:4000/tcp"
         ];
         cmd = [
           "--config" "/app/config.yaml"

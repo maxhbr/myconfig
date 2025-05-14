@@ -51,13 +51,15 @@ in {
           };
           sillytavern = {
             enable = false;
-            publicPort = 8888;
+            host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
+            port = 8888;
           };
           kokoro-fastapi = {
             enable = false;
           };
           lobe-chat = {
             enable = true;
+            host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
           };
           litellm = {
             enable = false;
