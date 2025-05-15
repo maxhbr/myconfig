@@ -199,19 +199,20 @@
             self.nixosModules.core
             ({ pkgs, myconfig, ... }: {
               imports = [
-                (myconfig.metadatalib.announceHost "x1extremeG2")
-                (myconfig.metadatalib.announceHost "brain")
-                (myconfig.metadatalib.addEternalTerminalCmd "brain")
-                (myconfig.metadatalib.announceHost "spare")
-                (myconfig.metadatalib.addEternalTerminalCmd "spare")
-                (myconfig.metadatalib.announceHost "workstation")
-                (myconfig.metadatalib.announceHost "nas")
-                (myconfig.metadatalib.announceHost "vserver")
-                (myconfig.metadatalib.announceHost "nuc")
-                (myconfig.metadatalib.announceHost "pi4")
-                (myconfig.metadatalib.announceHost "pi3a")
-                (myconfig.metadatalib.announceHost "pi0")
-                (myconfig.metadatalib.announceHost "r6c")
+                (myconfig.metadatalib.announceOtherHosts "p14")
+              #   (myconfig.metadatalib.announceHost "x1extremeG2")
+              #   (myconfig.metadatalib.announceHost "brain")
+              #   (myconfig.metadatalib.addEternalTerminalCmd "brain")
+              #   (myconfig.metadatalib.announceHost "spare")
+              #   (myconfig.metadatalib.addEternalTerminalCmd "spare")
+              #   (myconfig.metadatalib.announceHost "workstation")
+              #   (myconfig.metadatalib.announceHost "nas")
+              #   (myconfig.metadatalib.announceHost "vserver")
+              #   (myconfig.metadatalib.announceHost "nuc")
+              #   (myconfig.metadatalib.announceHost "pi4")
+              #   (myconfig.metadatalib.announceHost "pi3a")
+              #   (myconfig.metadatalib.announceHost "pi0")
+              #   (myconfig.metadatalib.announceHost "r6c")
               ];
               config = {
                 home-manager.sharedModules = [

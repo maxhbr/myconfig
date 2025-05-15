@@ -9,7 +9,15 @@
 # $ wg genkey > ~/wireguard-keys/private
 # $ wg pubkey < ~/wireguard-keys/private > ~/wireguard-keys/public
 
-{ pkgs, ... }: {
+{ pkgs, config, lib, myconfig, ... }: let
+  wgHosts = myconfig.metadatalib.get.getOtherWgHosts config.networking.hostName;
+  peers = lib.map (wgHost: {
+    publicKey = wgHost.publicKey;
+    allowedIPs = [ "${wgHost.ip4}/32" ];
+  }) wgHosts;
+  otherAddresses = lib.map (wgHost: "/${wgHost.name}.wg0.maxhbr.local/${wgHost.ip4}") wgHosts;
+
+in {
   config = {
     environment.systemPackages = with pkgs; [ wireguard-tools ];
     # enable NAT
@@ -26,6 +34,18 @@
       '';
     };
 
+    # Enable dnsmasq service
+    services.dnsmasq.enable = true;
+    services.dnsmasq.settings = {
+      domain = "maxhbr.local";
+      listen-address = [ "127.0.0.1" "10.199.199.1" ];
+      dhcp-range = [ "10.199.199.2,10.199.199.254,12h" ];
+      dhcp-leasefile = "/var/lib/dnsmasq/dnsmasq.leases";
+      address = [ "/wg0.maxhbr.local/10.199.199.1" ] ++ otherAddresses;
+    };
+    networking.firewall.interfaces."wg0".allowedTCPPorts = [ 53 ];
+    networking.firewall.interfaces."wg0".allowedUDPPorts = [ 53 ];
+
     networking.wireguard.interfaces = {
       wg0 = {
         ips = [
@@ -33,12 +53,13 @@
         ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
         listenPort = 51820;
         privateKeyFile = "/etc/wireguard/wg-private";
-        peers = let
-          path = ./peers;
-          content = builtins.readDir path;
-        in map (n: import (path + ("/" + n)))
-        (builtins.filter (n: builtins.match ".*\\.nix" n != null)
-          (builtins.attrNames content));
+        peers = peers;
+        # let
+        #   path = ./peers;
+        #   content = builtins.readDir path;
+        # in map (n: import (path + ("/" + n)))
+        # (builtins.filter (n: builtins.match ".*\\.nix" n != null)
+        #   (builtins.attrNames content));
       };
     };
   };

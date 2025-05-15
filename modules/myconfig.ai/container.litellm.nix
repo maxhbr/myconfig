@@ -6,7 +6,7 @@
       config = mkOption {
         type = types.attrsOf types.anything;
         default = {};
-        description = "Arbitrary YAML configuration for myapp";
+        description = "Arbitrary YAML configuration";
       };
       host = mkOption {
         type = types.str;

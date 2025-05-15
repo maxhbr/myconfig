@@ -25,12 +25,6 @@
         "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK/hdWBc+T0fMGKpAQRMLTHhyC/+3P8H//ox7AC+toNA root@x1extremeG2",
         "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC+qK51m1ipvJyCsU2sqh994c20ukP6+mtf6aIjI2TvS1mTvV7bFCMYWEtQ4PZ4Bb1MMfg7cua843KHZXeGIDksKLuaCY2OZbeZ9YX2n3DOWe2SH6TSe9QaKLuef2UfC8XKwjDtHU7d1PLzr9RT9Ctas/GfvjFT9ITdZ/9OVkq/RXU6rEWRXUVn9Jb3dRrfXgGKVsPAqPlHPXxgCjcIFpVWx6IFQp5dykeAr4MgDsPZKDbUKYe9yx6z4J+y1cqdw0YRqsItog4DXYnVrLYnWeiS4ualuLoNTlH3zJTdTaQQQjSwvQmNj71QaydqOLNc07rt/uFz1W1CdCvA8/+LhonwJ/x2kdFx9QsTU9DKOMCcq4ZWRms8bk/gRkrlgPHNdsYdEl0OQJCpw/0AUrmUYXj4x/EBd8Wi/0dqI0dl/3umWKuK8e12fCnwav0X1itYIuZdcSLvtzbV6jStvDdcTPAVQK5Wu8lF4FyepW2+5BllF23HIFs4NqW/2BozyuZb3dhvOpODv34NHMd9cagNto9YK7P4ules9UtDtWGKZEYTq+GFowAXlJUfVoD3UpB5vOqxfvTGBtjyAv5vvhVtbQ1JzWailyWInx6Hnri550VN7yZNHmq5q9pAfOg8hm/d6nbJxRWkXdsrVfMwct991odvAsDXvaBAJhrNV5azwzSiwQ== root@x1extremeG2",
         "cache-pub-key.pem": "binarycache.example.com:AZVRKwnneOvcjQf6Kbe5HsWN12me3G6rIIApP9Iwv+Q="
-      },
-      "wireguard": {
-        "wg0": {
-          "ip4": "10.199.199.2",
-          "pubkey": "qrlimRa0itwJ8i1HdRGSrCeCJAIzRIaIP3YTe4szpXg="
-        }
       }
     },
     "nas": {
@@ -113,6 +107,15 @@
         "wg0": {
           "ip4": "10.199.199.9",
           "pubkey": "MHISqlHM8Yb6ks9h66AXCCY6/x8z2f7BYmSII8e6MzI="
+        }
+      }
+    },
+    "Pixel9": {
+      "network": "home",
+      "wireguard": {
+        "wg0": {
+          "ip4": "10.199.199.3",
+          "pubkey": "qSLdPv2i+J/sz6z/ymSkRLBUyLNeNsvtBXVEHtHkbU0="
         }
       }
     },

@@ -45,13 +45,13 @@ let
       announceHost = otherHostName:
         let otherHostMetadata = metadata.hosts."${otherHostName}";
         in { pkgs, lib, myconfig,... }: {
-          config =
+          imports = [
             (lib.mkIf (lib.attrsets.hasAttrByPath [ "ip4" ] otherHostMetadata)
               (let otherHostIp = otherHostMetadata.ip4;
               in {
                 networking.extraHosts = ''
                   ${otherHostIp} ${otherHostName}
-                  ${otherHostIp} ${otherHostName}.maxhbr.de
+                  ${otherHostIp} ${otherHostName}.maxhbr.local
                 '';
                 home-manager.users."${myconfig.user}" = {
                   home.file = {
@@ -73,8 +73,20 @@ let
                   else
                     [ ]);
                 };
-              }));
+              }))
+            (lib.mkIf (lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "ip4" ] otherHostMetadata)
+              (let otherHostWgIp = otherHostMetadata.wireguard.wg0.ip4;
+              in {
+                networking.extraHosts = ''
+                  ${otherHostWgIp} ${otherHostName}.wg0
+                  ${otherHostWgIp} ${otherHostName}.wg0.maxhbr.local
+                '';
+              }))
+          ];
         };
+      announceOtherHosts = thisHost: {
+        imports = lib.map (host: announceHost host) (lib.filter (name: name != thisHost) (lib.attrNames metadata.hosts));
+      };
 
       addEternalTerminalCmd = host:
         { pkgs, lib, myconfig, ... }: {
@@ -127,6 +139,16 @@ let
             };
           };
         }));
+      
+      getOtherWgHosts = thisHost: lib.filter (peer: peer != null) (lib.mapAttrsToList (name: host: 
+          if (lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "pubkey" ] host) && (lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "ip4" ] host) && (name != thisHost)
+          then {
+            name = name;
+            publicKey = host.wireguard.wg0.pubkey;
+            ip4 = host.wireguard.wg0.ip4;
+          }
+          else null
+        ) metadata.hosts);
 
       setupAsSyncthingClient = cert: key: devices: folders: {
         myconfig.secrets = {

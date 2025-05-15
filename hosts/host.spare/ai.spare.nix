@@ -39,7 +39,7 @@ in {
           enable = true;
         };
         lmstudio = {
-          enable = true;
+          enable = false;
         };
         container = {
           nlm-ingestor = {
@@ -47,7 +47,6 @@ in {
           };
           open-webui = {
             enable = true;
-            host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
           };
           sillytavern = {
             enable = false;
@@ -116,6 +115,21 @@ in {
       acceleration = "cuda";
       model = "TabbyML/Qwen2.5-Coder-14B";
     };
+    services.caddy = {
+      enable = true;
+      virtualHosts."${myconfig.metadatalib.getWgIp "${config.networking.hostName}"}" = {
+        listenAddresses = [
+          (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
+        ];
+        extraConfig = ''
+          reverse_proxy http://localhost:${toString config.myconfig.ai.container.open-webui.port}
+        '';
+      };
+    };
+    # TODO Open 443 on the wireguard interface
+
+    networking.firewall.interfaces."wg0".allowedTCPPorts = [ 443 ];
+
     home-manager.sharedModules = [
       {
         home.packages = [
