@@ -117,8 +117,13 @@ in {
     };
     services.caddy = {
       enable = true;
-      virtualHosts."${myconfig.metadatalib.getWgIp "${config.networking.hostName}"}" = {
+      virtualHosts."${config.networking.hostName}.wg0.maxhbr.local" = {
         listenAddresses = [
+          (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
+        ];
+        hostName = "${config.networking.hostName}.wg0.maxhbr.local";
+        serverAliases = [
+          "${config.networking.hostName}.wg0"
           (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
         ];
         extraConfig = ''
