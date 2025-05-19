@@ -177,6 +177,10 @@ layout {
         // top 64
         // bottom 64
     }
+
+    shadow {
+        on
+    }
 }
 
 // Add lines like this to spawn processes at startup.
@@ -309,6 +313,28 @@ layer-rule {
     // Properties that apply continuously.
     opacity 0.9
     block-out-from "screen-capture"
+}
+
+window-rule {
+    match is-window-cast-target=true
+
+    focus-ring {
+        active-color "#f38ba8"
+        inactive-color "#7d0d2d"
+    }
+
+    border {
+        inactive-color "#7d0d2d"
+    }
+
+    shadow {
+        color "#7d0d2d70"
+    }
+
+    tab-indicator {
+        active-color "#f38ba8"
+        inactive-color "#7d0d2d"
+    }
 }
 
 layer-rule {
@@ -490,10 +516,14 @@ binds {
 
     Mod+Space { switch-preset-column-width; }
     Mod+Shift+Space { reset-window-height; }
+    Mod+Ctrl+Space { expand-column-to-available-width; }
     Mod+F { maximize-column; }
     Mod+Shift+F { fullscreen-window; }
+    Mod+Ctrl+Shift+F { toggle-windowed-fullscreen; }
     Mod+Ctrl+F { center-column; }
     Mod+C { center-column; }
+
+    Mod+Z repeat=false { toggle-overview; }
 
     // Move the focused window between the floating and the tiling layout.
     Mod+V       { toggle-window-floating; }
@@ -519,7 +549,7 @@ binds {
     // a matching layout switch hotkey configured in xkb options above.
     // Having both at once on the same hotkey will break the switching,
     // since it will switch twice upon pressing the hotkey (once by xkb, once by niri).
-    Mod+Ctrl+Space       { switch-layout "next"; }
+    // Mod+Ctrl+Space       { switch-layout "next"; }
     // Mod+Shift+Space { switch-layout "prev"; }
 
     Print { screenshot; }
@@ -542,4 +572,7 @@ binds {
 
     // Ctrl+Shift+C { spawn "sh" "-c" "env DISPLAY=:0 xsel -ob | wl-copy"; }
     // Ctrl+Shift+V { spawn "sh" "-c" "wl-paste -n | env DISPLAY=:0 xsel -ib"; }
+
+    Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
+    Mod+Shift+Escape { power-off-monitors; }
 }

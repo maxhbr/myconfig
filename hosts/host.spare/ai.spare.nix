@@ -131,7 +131,6 @@ in {
         '';
       };
     };
-    # TODO Open 443 on the wireguard interface
 
     networking.firewall.interfaces."wg0".allowedTCPPorts = [ 443 ];
 

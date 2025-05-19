@@ -4,7 +4,8 @@ let
   nixosConfig = config;
   cfg = config.myconfig;
   user = myconfig.user;
-  niri = pkgs.niri;
+  # if niri in pkgs is of version older then 25.05, use the master version
+  niri = if pkgs.niri.version < "25.05" then inputs.niri.packages.${pkgs.system}.default else pkgs.niri;
 in {
   # add option for additional config added to config.kdl
   options.myconfig = with lib; {
