@@ -102,7 +102,7 @@
     }
 
     # Testing: Thunderbolt GPUs
-    ./eGPU.p14.nix
+    # ./eGPU.p14.nix
   ];
 
   config = {
@@ -168,13 +168,13 @@
         messengers.enable = true;
         myphoto.enable = true;
         obs.enable = true;
-        cad.enable = true;
+        # cad.enable = true;
         # deskreen.enable = true;
       };
       ai.enable = true;
       email.enable = true;
       virtualisation.enable = true;
-      editor.emacs.enable = true;
+      editor.emacs.enable = false;
       dev = {
         compliance.enable = true;
         go.enable = false;

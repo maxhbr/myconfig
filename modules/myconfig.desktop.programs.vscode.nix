@@ -95,7 +95,10 @@ in {
           #   "github.copilot.advanced" = { "enabled" = true; };
           # };
           profiles.default = {
-            extensions = baseExtensions;
+            extensions = with pkgs.vscode-extensions; [
+              github.copilot
+              github.copilot-chat
+            ] ++ baseExtensions;
           }; 
           profiles.continue = {
             extensions = with pkgs.vscode-extensions; [

@@ -1,4 +1,5 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nix-shell
+#! nix-shell -i bash -p nvd
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -78,6 +79,18 @@ copy_closure_to_target() (
     until nix-copy-closure --to "$targetIP" "$out_link"; do
         echo "... retry nix-copy-closure"
     done
+)
+diff_build_results() (
+    local old_result="$1"; shift
+    local out_link="$1"; shift
+    if command -v nvd &> /dev/null; then
+        echo "################################################################################"
+        echo "diffing $old_result and $out_link"
+        echo "################################################################################"
+        set -x
+        nvd list -r "$out_link" > "$out_link"'.list'
+        nvd diff "$old_result" "$out_link" | tee "$out_link"'.diff'
+    fi
 )
 deploy() (
     local target="$1"; shift
@@ -162,7 +175,11 @@ main() {
     fi
 
     local out_link="$(get_out_link_of_target "$target")"
+    local old_result="$(readlink -f "$out_link" || true)"
     build "$target" "$out_link" || build "$target" "$out_link" --keep-failed --no-eval-cache
+    if [[ -e "$old_result" ]]; then
+        diff_build_results "$old_result" "$out_link"
+    fi
     du_of_out_link "$target"
     if [[ "$MODE" == "--use-wg" ]]; then
         deploy "$target" "$out_link" true
@@ -173,6 +190,4 @@ main() {
 
 ################################################################################
 
-main "$@"
-times
-date
+main "$@"; times; date
