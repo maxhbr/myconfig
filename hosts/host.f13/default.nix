@@ -3,6 +3,7 @@
 { config, pkgs, lib, myconfig, inputs, ... }: {
   imports = [
     ./hardware-configuration.nix
+    ./impermanence.nix
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
     inputs.nixos-hardware.nixosModules.common-pc-laptop
     inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
@@ -33,7 +34,7 @@
 
   config = {
     networking.hostName = "f13";
-    networking.hostId = "Phaeng1i";
+    networking.hostId = "00000f13";
     networking.useDHCP = false;
     networking.interfaces.wlp192s0.useDHCP = true;
     myconfig = {

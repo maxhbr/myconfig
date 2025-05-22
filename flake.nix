@@ -19,6 +19,8 @@
     home.url = "github:nix-community/home-manager";
     home.inputs.nixpkgs.follows = "nixpkgs";
 
+    impermanence.url = "github:nix-community/impermanence";
+
     flake-utils.url = "github:numtide/flake-utils";
 
     nur.url = "github:nix-community/NUR";
@@ -173,7 +175,12 @@
         host-f13 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "f13" ([
             self.nixosModules.core
-            (myconfig.metadatalib.announceOtherHosts "p14")
+            self.nixosModules.impermanence
+            ({ pkgs, myconfig, ... }: {
+              imports = [
+                (myconfig.metadatalib.announceOtherHosts "p14")
+              ];
+            })
           ] ++ moreModules) metadataOverride);
         host-p14 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "p14" ([

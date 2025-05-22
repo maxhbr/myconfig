@@ -1,5 +1,22 @@
 {
   "hosts": {
+    "f13": {
+      "network": "home",
+      "ip4": "192.168.1.159",
+      "pubkeys": {
+        "id_ed25519.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF4/Erg9yplOhyzAWSbzBcHTduXnMgQ5ToRniCKlUDYK",
+        "id_rsa.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDYUWsgqFqIHd3ftOC1W4j24wa1C4gjVt8yzdlqKn0KovLH5e4TdnMMkcoyVWAmrR/fxLCX0XbbUUAlwpA5mwxnyd5vBO7P+6tm9Z4I7rGW4EDxgRVA45/4qbe1DOW4qkYGf0MLidzq7xMXS7UIGcMZk1K0EIhj8tL1fPrPa8cV94/x5PAOGwXSALG3RFLH+8xxCOtean0/1Ev9+l+W19cp8+SwksjMCCbj1yrIgLPMaclMerZ6oUAKB6yXYkAoSSfVvSQLp9iRWwKkOAjDPvWCkKr4ICTKEY0z3lbhd587NwWmEUDAp9Z9rTNT5MVfKOGtlLVBMCB2rf0wmjuL/hlp",
+        "id_ed25519_no_pw.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFQuHsjj1LnybBlvTiVqhP7DaiBh+omIeGy9MiI86J0v",
+        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILoBGMVQHv1Me9Ar5MK2hMv7yRqptiev9Dv+x2oM8wjX root@p14",
+        "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDsYPFaL7y16ZfMvKTaSHIcQHF01awQTdWcUnpi087UKdScRZVRBogRJZZLDcszhwHxa8w4WR5VUGdiRPCN4TNW1F8LiDYyv5kGL80G6WPM4W6KPJBRdUtytwFS0DCxpxBrA5ir3kO38aCcF9f/2k5otbPofh46loqXRqvGx1WK/BDwvaejoXzbHuuUNZhG+aaX3gl1B5CJM4QP3/2ny8YX1UucPTK2wM/xyw+qOmmXtsCz1z6VVFGPAqucNnooVnk7lQkbFbnprW83s3oHyHg5XR6uWfEEIAFZDE8xn3hfn1TeYMovlZWpYp+H3rqBwAw2N6VRjzSFEh5yNgTB3yDOSsN6562vo46SamiycQSNClDB8ssNHjEW47p4V+qAPmwrGUIrgHyMCB5BIJC01VUzJ+aZRRXZTlcdlnTshKLr53SRXLHoTqC32/Zo1g5P2CTclrY/A23K4wFUbneXfISEdreedmdMwRSReODl+rfmQF7Gt+JvREci/A8KRVH/NYbIjaTyv/Q+9IOPO5NC0YXFsM6jOVDEQM/jUStCGctvdeXK9qZaBJR+Tj77/+uDiwB0MsFCFeTU3g9mbye+jVNvbH1LISpUxK3LdRrSqWwEWNqXT74feILj+byHH8Bu6tlmq9EW7mGG41UCN3LyOKQrLoefTiPoX+OUXXwYtVGIcQ== root@p14"
+      },
+      "wireguard": {
+        "wg0": {
+          "ip4": "10.199.199.12",
+          "pubkey": "WBSIYDYWvnhKyCdBsBpc8F7lKCI4CRUeEgCwrIkx2lg="
+        }
+      }
+    },
     "p14": {
       "network": "home",
       "ip4": "192.168.1.149",

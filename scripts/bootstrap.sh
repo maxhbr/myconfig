@@ -9,8 +9,9 @@
 
 set -e
 
-BTRFS=${BTRFS:-false}
+BTRFS=${BTRFS:-true}
 EFI=${EFI:-false}
+EPHEMERAL_ROOT=${EPHEMERAL_ROOT:-false}
 
 ################################################################################
 ##  prepare  ###################################################################
@@ -121,34 +122,49 @@ mkLVM() {
 
 mkBTRFS() {
     # see: https://gist.github.com/samdroid-apps/3723d30953af5e1d68d4ad5327e624c0
+    # see also for ephemeral root: https://gist.github.com/giuseppe998e/629774863b149521e2efa855f7042418
     local btrfsDev="$1"
 
     mkfs.btrfs -f -L root "$btrfsDev"
 
+    # Create subvolumes
     mount -t btrfs "$btrfsDev" $MNT/
-    btrfs subvolume create $MNT/@
+    if [ "$EPHEMERAL_ROOT" = "true" ]; then
+        btrfs subvolume create $MNT/@persistent 
+    else 
+        btrfs subvolume create $MNT/@
+    fi
+    btrfs subvolume create $MNT/@nix
     btrfs subvolume create $MNT/@home
-    btrfs subvolume create $MNT/@snapshots
-
+    btrfs subvolume create $MNT/@log
     btrfs subvolume create $MNT/@swapfile
     umount $MNT/
 
-    mount -t btrfs -o compress=zstd,subvol=@ "$btrfsDev" $MNT/
-    mkdir -p $MNT/home
-    mount -t btrfs -o compress=zstd,subvol=@home "$btrfsDev" $MNT/home
-    mkdir -p $MNT/.snapshots
+    # Mount subvolumes
+    if [ "$EPHEMERAL_ROOT" = "true" ]; then
+        mount -t tmpfs -o noatime,mode=755 none $MNT
+        mkdir -p $MNT/persistent
+        mount -t btrfs -o compress=zstd,subvol=@persistent "$btrfsDev" $MNT/persistent
+    else
+        mount -t btrfs -o compress=zstd,subvol=@ "$btrfsDev" $MNT/
+        mkdir -p $MNT/home
+        mount -t btrfs -o compress=zstd,subvol=@home "$btrfsDev" $MNT/home
+
+        # to exclude from snapshots:
+        btrfs subvolume create $MNT/home/docker
+    fi
+    mkdir -p $MNT/{nix,var/log,.snapshots}
+    mount -t btrfs -o compress=zstd,subvol=@nix "$btrfsDev" $MNT/nix
+    mount -t btrfs -o compress=zstd,subvol=@log "$btrfsDev" $MNT/var/log
     mount -t btrfs -o compress=zstd,subvol=@snapshots "$btrfsDev" $MNT/.snapshots
+
     mkdir -p $MNT/.swapfile
     mount -t btrfs -o compress=no,subvol=@swapfile "$btrfsDev" $MNT/.swapfile
-
     sudo touch $MNT/.swapfile/swapfile
     sudo chattr +C $MNT/.swapfile/swapfile
     sudo chmod 600 $MNT/.swapfile/swapfile
     sudo fallocate -l20g $MNT/.swapfile/swapfile
     sudo mkswap $MNT/.swapfile/swapfile
-
-    # to exclude from snapshots:
-    btrfs subvolume create $MNT/home/docker
 }
 
 mkExt4() {
