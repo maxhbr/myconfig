@@ -3,18 +3,9 @@
 
   inputs = {
     master.url = "github:nixos/nixpkgs/master";
-    # staged.url = "github:nixos/nixpkgs/staging";
     nixos-unstable-small.url = "github:nixos/nixpkgs/nixos-unstable-small";
     nixos-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    # rel2009.url = "github:nixos/nixpkgs/nixos-20.09";
-    # rel2003.url = "github:nixos/nixpkgs/nixos-20.03";
-    # rel2105.url = "github:nixos/nixpkgs/release-21.05";
-    # rel2111.url = "github:nixos/nixpkgs/release-21.11";
-    # rel2205.url = "github:nixos/nixpkgs/release-22.05";
-    # rel2211.url = "github:nixos/nixpkgs/release-22.11";
-    # rel2305.url = "github:nixos/nixpkgs/release-23.05";
-    # rel2311.url = "github:nixos/nixpkgs/release-23.11";
     rel2405.url = "github:nixos/nixpkgs/release-24.05";
     rel2411.url = "github:nixos/nixpkgs/release-24.11";
 
@@ -47,12 +38,7 @@
     # octrc.url = "github:maxhbr/octrc";
     # octrc.inputs.nixpkgs.follows = "nixpkgs";
 
-    # zephyrproject.url = "path:flakes/zephyrproject/";
-
     nixgl.url = "github:nix-community/nixGL";
-
-    niri.url = "github:YaLTeR/niri";
-    niri.inputs.nixpkgs.follows = "nixpkgs";
 
     clipboard-sync.url = "github:dnut/clipboard-sync";
 
@@ -126,16 +112,6 @@
                   (mkSubPkgsOverlay "nixos-unstable" inputs.nixos-unstable)
                   (mkSubPkgsOverlay "nixos-unstable-small"
                     inputs.ninos-unstable-small)
-                  # (mkSubPkgsOverlay "nixos-2003" inputs.rel2003)
-                  # (mkSubPkgsOverlay "nixos-2009" inputs.rel2009)
-                  # (mkSubPkgsOverlay "nixos-2105" inputs.rel2105)
-                  # (mkSubPkgsOverlay "nixos-2111" inputs.rel2111)
-                  # (mkSubPkgsOverlay "nixos-2205" inputs.rel2205)
-                  # (mkSubPkgsOverlay "nixos-2111" inputs.rel2111)
-                  # (mkSubPkgsOverlay "nixos-2205" inputs.rel2205)
-                  # (mkSubPkgsOverlay "nixos-2211" inputs.rel2211)
-                  # (mkSubPkgsOverlay "nixos-2305" inputs.rel2305)
-                  # (mkSubPkgsOverlay "nixos-2311" inputs.rel2311)
                   (mkSubPkgsOverlay "nixos-2405" inputs.rel2405)
                   (mkSubPkgsOverlay "nixos-2411" inputs.rel2411)
                   (mkSubPkgsOverlay "stable" inputs.rel2411)
@@ -194,25 +170,17 @@
       };
 
       nixosConfigurationsGen = {
+        host-f13 = moreModules: metadataOverride:
+          (self.lib.evalConfiguration "x86_64-linux" "f13" ([
+            self.nixosModules.core
+            (myconfig.metadatalib.announceOtherHosts "p14")
+          ] ++ moreModules) metadataOverride);
         host-p14 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "p14" ([
             self.nixosModules.core
             ({ pkgs, myconfig, ... }: {
               imports = [
                 (myconfig.metadatalib.announceOtherHosts "p14")
-              #   (myconfig.metadatalib.announceHost "x1extremeG2")
-              #   (myconfig.metadatalib.announceHost "brain")
-              #   (myconfig.metadatalib.addEternalTerminalCmd "brain")
-              #   (myconfig.metadatalib.announceHost "spare")
-              #   (myconfig.metadatalib.addEternalTerminalCmd "spare")
-              #   (myconfig.metadatalib.announceHost "workstation")
-              #   (myconfig.metadatalib.announceHost "nas")
-              #   (myconfig.metadatalib.announceHost "vserver")
-              #   (myconfig.metadatalib.announceHost "nuc")
-              #   (myconfig.metadatalib.announceHost "pi4")
-              #   (myconfig.metadatalib.announceHost "pi3a")
-              #   (myconfig.metadatalib.announceHost "pi0")
-              #   (myconfig.metadatalib.announceHost "r6c")
               ];
               config = {
                 home-manager.sharedModules = [
@@ -268,6 +236,7 @@
       ##########################################################################
 
       nixosConfigurations = {
+        f13 = self.nixosConfigurationsGen.host-f13 [ ] { };
         p14 = self.nixosConfigurationsGen.host-p14 [ ] { };
         spare = self.nixosConfigurationsGen.host-spare [ ] { };
         brain = self.nixosConfigurationsGen.host-brain [ ] { };

@@ -10,7 +10,7 @@
 # $ wg pubkey < ~/wireguard-keys/private > ~/wireguard-keys/public
 
 { pkgs, config, lib, myconfig, ... }: let
-  wgHosts = myconfig.metadatalib.get.getOtherWgHosts config.networking.hostName;
+  wgHosts = myconfig.metadatalib.getOtherWgHosts config.networking.hostName;
   peers = lib.map (wgHost: {
     publicKey = wgHost.publicKey;
     allowedIPs = [ "${wgHost.ip4}/32" ];

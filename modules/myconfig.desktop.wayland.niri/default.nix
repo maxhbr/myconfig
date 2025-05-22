@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, myconfig, inputs, ... }:
+{ pkgs, config, lib, myconfig, ... }:
 let
   nixosConfig = config;
   cfg = config.myconfig;
   user = myconfig.user;
-  # if niri in pkgs is of version older then 25.05, use the master version
-  niri = if pkgs.niri.version < "25.05" then inputs.niri.packages.${pkgs.system}.default else pkgs.niri;
+  niri = if pkgs.niri.version < "25.05" then pkgs.master.niri else pkgs.niri;
 in {
   # add option for additional config added to config.kdl
   options.myconfig = with lib; {
@@ -18,12 +17,6 @@ in {
   config = (lib.mkIf (cfg.desktop.wayland.enable
     && (builtins.elem "niri" cfg.desktop.wayland.selectedSessions
       || builtins.elem "niri-plain" cfg.desktop.wayland.selectedSessions)) {
-        # nixpkgs.overlays = [ 
-        #   # do not use provided overlay to reduce risk
-        #   (_: _: {
-        #     niri = inputs.niri.packages.${pkgs.system}.default;
-        #   })
-        # ];
         home-manager.sharedModules = [
           ({ config, ... }:
             let

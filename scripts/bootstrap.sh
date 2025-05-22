@@ -204,3 +204,8 @@ else
 fi
 
 nixos-generate-config --root "$MNT"
+
+cat <<EOF
+create networking.hostId with:
+$ cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
+EOF
