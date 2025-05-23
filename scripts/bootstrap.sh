@@ -130,7 +130,9 @@ mkBTRFS() {
     # Create subvolumes
     mount -t btrfs "$btrfsDev" $MNT/
     if [[ "$EPHEMERAL_ROOT" == "true" ]]; then
-        btrfs subvolume create $MNT/@persistent
+        btrfs subvolume create $MNT/@persistent@priv
+        btrfs subvolume create $MNT/@persistent@work
+        btrfs subvolume create $MNT/@persistent@cache
     else
         btrfs subvolume create $MNT/@
         btrfs subvolume create $MNT/@snapshots
@@ -158,8 +160,10 @@ mkBTRFS() {
     # to exclude from snapshots:
     btrfs subvolume create $MNT/home/docker
     if [[ "$EPHEMERAL_ROOT" == "true" ]]; then
-        mkdir -p $MNT/persistent
-        mount -t btrfs -o compress=zstd,subvol=@persistent "$btrfsDev" $MNT/persistent
+        mkdir -p $MNT/{persistent/priv,persistent/work,persistent/cache}
+        mount -t btrfs -o compress=zstd,subvol=@persistent@priv "$btrfsDev" $MNT/persistent/priv
+        mount -t btrfs -o compress=zstd,subvol=@persistent@work "$btrfsDev" $MNT/persistent/work
+        mount -t btrfs -o compress=zstd,subvol=@persistent@cache "$btrfsDev" $MNT/persistent/cache
     fi
 
     mkdir -p $MNT/.swapfile
