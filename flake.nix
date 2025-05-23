@@ -175,7 +175,6 @@
         host-f13 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "f13" ([
             self.nixosModules.core
-            self.nixosModules.impermanence
             ({ pkgs, myconfig, ... }: {
               imports = [
                 (myconfig.metadatalib.announceOtherHosts "p14")

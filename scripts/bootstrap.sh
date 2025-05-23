@@ -129,10 +129,11 @@ mkBTRFS() {
 
     # Create subvolumes
     mount -t btrfs "$btrfsDev" $MNT/
-    if [ "$EPHEMERAL_ROOT" = "true" ]; then
-        btrfs subvolume create $MNT/@persistent 
-    else 
+    if [[ "$EPHEMERAL_ROOT" == "true" ]]; then
+        btrfs subvolume create $MNT/@persistent
+    else
         btrfs subvolume create $MNT/@
+        btrfs subvolume create $MNT/@snapshots
     fi
     btrfs subvolume create $MNT/@nix
     btrfs subvolume create $MNT/@home
@@ -141,22 +142,25 @@ mkBTRFS() {
     umount $MNT/
 
     # Mount subvolumes
-    if [ "$EPHEMERAL_ROOT" = "true" ]; then
+    if [[ "$EPHEMERAL_ROOT" == "true" ]]; then
         mount -t tmpfs -o noatime,mode=755 none $MNT
-        mkdir -p $MNT/persistent
-        mount -t btrfs -o compress=zstd,subvol=@persistent "$btrfsDev" $MNT/persistent
     else
         mount -t btrfs -o compress=zstd,subvol=@ "$btrfsDev" $MNT/
-        mkdir -p $MNT/home
-        mount -t btrfs -o compress=zstd,subvol=@home "$btrfsDev" $MNT/home
-
-        # to exclude from snapshots:
-        btrfs subvolume create $MNT/home/docker
+        mount -t btrfs -o compress=zstd,subvol=@snapshots "$btrfsDev" $MNT/.snapshots
     fi
     mkdir -p $MNT/{nix,var/log,.snapshots}
     mount -t btrfs -o compress=zstd,subvol=@nix "$btrfsDev" $MNT/nix
     mount -t btrfs -o compress=zstd,subvol=@log "$btrfsDev" $MNT/var/log
-    mount -t btrfs -o compress=zstd,subvol=@snapshots "$btrfsDev" $MNT/.snapshots
+
+    mkdir -p $MNT/home
+    mount -t btrfs -o compress=zstd,subvol=@home "$btrfsDev" $MNT/home
+
+    # to exclude from snapshots:
+    btrfs subvolume create $MNT/home/docker
+    if [[ "$EPHEMERAL_ROOT" == "true" ]]; then
+        mkdir -p $MNT/persistent
+        mount -t btrfs -o compress=zstd,subvol=@persistent "$btrfsDev" $MNT/persistent
+    fi
 
     mkdir -p $MNT/.swapfile
     mount -t btrfs -o compress=no,subvol=@swapfile "$btrfsDev" $MNT/.swapfile

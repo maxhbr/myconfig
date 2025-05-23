@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+target="f13"
+
+cd "$(dirname "$0")"
+upg -v --test $target
+result="$HOME/myconfig/result.$target/"
+nix-store --export $(nix-store --query --requisites "$result") | pv -b > $target.nar
+set -x
+
+cat <<EOF | tee load_nar.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "\$(dirname "\$0")"
+cat $target.nar | nix-store --import
+set -x
+sudo nix-env --profile /nix/var/nix/profiles/system \
+             --set "$(readlink -f "$result")"
+sudo "$(readlink -f "$result")/bin/switch-to-configuration" switch
+EOF
+chmod +x load_nar.sh
+
