@@ -11,6 +11,7 @@
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
     ./mykeylight
+    ./role.work
     {
       myconfig.ai = {
         enable = true;
@@ -93,7 +94,7 @@
         messengers.enable = true;
         myphoto.enable = true;
         obs.enable = true;
-        cad.enable = true;
+        # cad.enable = true;
         deskreen.enable = true;
       };
       ai.enable = true;

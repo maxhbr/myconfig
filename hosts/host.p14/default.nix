@@ -36,7 +36,7 @@
     ./hardware.hantek
     ./mykeylight
     ./smarthome.nix
-    ./role.work
+    ../host.f13/role.work
     ./programs.khal.nix
     {
       myconfig.ai = {
