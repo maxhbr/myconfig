@@ -20,34 +20,48 @@
     };
 
   fileSystems."/nix" =
-    { device = "/dev/disk/by-uuid/be770722-a525-4f6f-a873-ac20cd59fa44";
+    { device = "/dev/disk/by-uuid/e3ecf820-abdb-4af4-b879-c5bed8a47360";
       fsType = "btrfs";
       options = [ "subvol=@nix" ];
     };
 
-  boot.initrd.luks.devices."enc-pv".device = "/dev/disk/by-uuid/4837f94e-1fce-40e2-a173-5f8bb972eab4";
+  boot.initrd.luks.devices."enc-pv".device = "/dev/disk/by-uuid/e137fe0d-d6fe-4b5e-9940-425862823148";
 
   fileSystems."/var/log" =
-    { device = "/dev/disk/by-uuid/be770722-a525-4f6f-a873-ac20cd59fa44";
+    { device = "/dev/disk/by-uuid/e3ecf820-abdb-4af4-b879-c5bed8a47360";
       fsType = "btrfs";
       options = [ "subvol=@log" ];
     };
 
   fileSystems."/home" =
-    { device = "/dev/disk/by-uuid/be770722-a525-4f6f-a873-ac20cd59fa44";
+    { device = "/dev/disk/by-uuid/e3ecf820-abdb-4af4-b879-c5bed8a47360";
       fsType = "btrfs";
       options = [ "subvol=@home" ];
     };
 
-  fileSystems."/persistent" =
-    { device = "/dev/disk/by-uuid/be770722-a525-4f6f-a873-ac20cd59fa44";
+  fileSystems."/persistent/priv" =
+    { device = "/dev/disk/by-uuid/e3ecf820-abdb-4af4-b879-c5bed8a47360";
       fsType = "btrfs";
-      options = [ "subvol=@persistent" ];
+      options = [ "subvol=@persistent@priv" ];
+      neededForBoot = true;
+    };
+
+  fileSystems."/persistent/work" =
+    { device = "/dev/disk/by-uuid/e3ecf820-abdb-4af4-b879-c5bed8a47360";
+      fsType = "btrfs";
+      options = [ "subvol=@persistent@work" ];
+      neededForBoot = true;
+    };
+
+  fileSystems."/persistent/cache" =
+    { device = "/dev/disk/by-uuid/e3ecf820-abdb-4af4-b879-c5bed8a47360";
+      fsType = "btrfs";
+      options = [ "subvol=@persistent@cache" ];
       neededForBoot = true;
     };
 
   fileSystems."/.swapfile" =
-    { device = "/dev/disk/by-uuid/be770722-a525-4f6f-a873-ac20cd59fa44";
+    { device = "/dev/disk/by-uuid/e3ecf820-abdb-4af4-b879-c5bed8a47360";
       fsType = "btrfs";
       options = [ "subvol=@swapfile" ];
     };
@@ -65,6 +79,7 @@
   # still possible to use this option, but it's recommended to use it in conjunction
   # with explicit per-interface declarations with `networking.interfaces.<interface>.useDHCP`.
   networking.useDHCP = lib.mkDefault true;
+  # networking.interfaces.eth0.useDHCP = lib.mkDefault true;
   # networking.interfaces.wlp192s0.useDHCP = lib.mkDefault true;
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
