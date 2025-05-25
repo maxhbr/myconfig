@@ -2,13 +2,14 @@
   "hosts": {
     "f13": {
       "network": "home",
-      "ip4": "192.168.1.159",
+      "ip4": "192.168.1.155",
       "pubkeys": {
         "id_ed25519.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF4/Erg9yplOhyzAWSbzBcHTduXnMgQ5ToRniCKlUDYK",
         "id_rsa.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDYUWsgqFqIHd3ftOC1W4j24wa1C4gjVt8yzdlqKn0KovLH5e4TdnMMkcoyVWAmrR/fxLCX0XbbUUAlwpA5mwxnyd5vBO7P+6tm9Z4I7rGW4EDxgRVA45/4qbe1DOW4qkYGf0MLidzq7xMXS7UIGcMZk1K0EIhj8tL1fPrPa8cV94/x5PAOGwXSALG3RFLH+8xxCOtean0/1Ev9+l+W19cp8+SwksjMCCbj1yrIgLPMaclMerZ6oUAKB6yXYkAoSSfVvSQLp9iRWwKkOAjDPvWCkKr4ICTKEY0z3lbhd587NwWmEUDAp9Z9rTNT5MVfKOGtlLVBMCB2rf0wmjuL/hlp",
         "id_ed25519_no_pw.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFQuHsjj1LnybBlvTiVqhP7DaiBh+omIeGy9MiI86J0v",
-        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIOzR83L8yHB3hPnedwIt3sgK7GNWJrdUgDnIEizTVdw root@f13",
-        "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCFUvSWeZYE+R0v+uragS4I+yzmkV8Tvl75fpmWIBnt6wWuODZwgmct1uLRZlQLDcWcS8hgHM/658DSGY4WmUt3TpV0mf2twGhixFpbPJsVhnPazKtvmfQgiItCEbWswC+I2JDXoMYZOGtUkw0i8RajaouSFh+3Ye8PsH5V7KiEovokH1HjjtiHrY0rewfjWEjRVL60u45yf04oFvRAWCFQFXgYoU3NxbnlhIJzROAdnzRe2FHM5ncQpBePxoBuA38IyByEuizBmpGV+ZfGQJtIRdLofESmWPNlOutLPB8NkcvLAYF9MlgW4AiWIQnwWa4LDH62oj9K401M6g6fQKu+2nS0YchJ/C4aw/XmdSg9TZptQp1z0ldcG0DQvSWGSfvePS76kuTT/OSfgQMhuAtIY26DV8L3t+ycyfIR01QRoqKSFw93aZwAmJscyCVnZLNfeIkQTESHgfZbz5bGGNuRHmlDW6/j2Uf3Ey8Y+kVA6yMRTleHb7AMva/kJWrK4EeZBFhjPqGwY8FYlPM+ZJALHgPsfwthiE7kVt089dZvqF1ojr0zKs0b4GFxmsNwanM6iGdb9687xRadrVV3qUgSBKZDTiB/hzl+YiiBVttQfzwu0guwAjtNu6CpdEbIS0rLXrSVBURqu4y02sNi09TuFgKfttAFMCptpnkr5M/xmw== root@f13"
+        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPVoYpfHQDT3A8NYRKC5wP4w95qq9UYuO5L1HAnxEW2y root@f13",
+        "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDz9zHubxWtF6MCaaIStTHImpyNqjKRdYHodOC7PXk3G3tLE8P0B/NI9tKEbCXDK+BIRegMLOQNTsRq9FLTgukRRGeElJhjD4TnOpGnRFp9dhYw4vJg0XB2Bk4aRd91pjIBOcHnQPnpgXGIIj+G8/sQIviBGb+Ket+gHAQWqtp72prQYuCgLaqk38XWTVjHkQ7ImZeoJVVNRQ1yXzc+IxAhI1rusLtMzPaZGpkNHqfEk9M44yn0/UYCwWzXhhjVLgQ6Pj15nYxyRSGzv4mBIA3QBdh4BNR6zfqesmnnUbk2LazeJ5jJ56IqfjwoTZhMN0Y36mypiGQjGxR+blEkVq/DE+BZw+s2i3C2ykNVC91BkdvjCWQspRACSMRPrOMc6eQi9OSTXJFvmGLbFUdXGM/K4O+sE7V/STSvp1wG+EyEU9OrWrl4aZFkm12AM2c9GqK9AT15D5WdaEeUaQgxr8+htzHDxzPOhvx0TdCoLeNGI++VEDdP5zS1yRjcj1cl7SbDMXMSJYcGl3KLhispxO4ts4B6j8WECL2zBmH17CDMFGbJ0fcf8k1VozZ/NfYsP5pHf99c7r8Hu88zYxT/IhW8FqWeWL3y62mtQzhrHZ+ytztjui0L2dH6lUpqmXbDbH/jfLad87U8lhL0H4MJkhfu7CulduMm7i3XQtGfZiKDKQ== root@f13"
+
       },
       "wireguard": {
         "wg0": {

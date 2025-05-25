@@ -25,7 +25,7 @@
       enable = true;
       hideMounts = true;
       directories = [
-        "/var/lib/ollama"
+        # "/var/lib/ollama"
         "/var/lib/systemd/coredump"
       ];
     };

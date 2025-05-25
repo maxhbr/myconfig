@@ -33,19 +33,20 @@ in {
       };
     };  
     services.ollama = {
-      enable = true;
+      enable = false;
+      # home = "/home/ollama";
 
-      openFirewall = true;
+      openFirewall = false;
       acceleration = "rocm";
       host = "127.0.0.1";
       # environmentVariables = {
       #   OLLAMA_ORIGIN = "*";
       #   OLLAMA_KEEP_ALIVE = "5m";
       # };
-      loadModels = [
-        "llama3.1:8b"
-        "phi4"
-      ];
+      # loadModels = [
+      #   "llama3.1:8b"
+      #   "phi4"
+      # ];
     };
 
     home-manager.sharedModules = [

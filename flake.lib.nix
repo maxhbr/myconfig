@@ -410,22 +410,22 @@ in rec {
 
         modules = nixosModules ++ [
           { _module.args = inputs; }
-          ({ config, pkgs, ... }: {
-            config = {
-              # nixpkgs = {
-              #   # inherit pkgs;
-              #   inherit (pkgs) config system;
-              # };
-              environment.etc."myconfig".source = lib.cleanSource ./.;
-              environment.etc."myconfig.current-system-packages".text = let
-                packages = builtins.map (p: "${p.name}")
-                  config.environment.systemPackages;
-                sortedUnique =
-                  builtins.sort builtins.lessThan (lib.unique packages);
-                formatted = builtins.concatStringsSep "\n" sortedUnique;
-              in formatted;
-            };
-          })
+          # ({ config, pkgs, ... }: {
+          #   config = {
+          #     # nixpkgs = {
+          #     #   # inherit pkgs;
+          #     #   inherit (pkgs) config system;
+          #     # };
+          #     environment.etc."myconfig".source = lib.cleanSource ./.;
+          #     environment.etc."myconfig.current-system-packages".text = let
+          #       packages = builtins.map (p: "${p.name}")
+          #         config.environment.systemPackages;
+          #       sortedUnique =
+          #         builtins.sort builtins.lessThan (lib.unique packages);
+          #       formatted = builtins.concatStringsSep "\n" sortedUnique;
+          #     in formatted;
+          #   };
+          # })
 
           # home manager:
           self.nixosModules.activateHomeManager

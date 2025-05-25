@@ -20,48 +20,48 @@
     };
 
   fileSystems."/nix" =
-    { device = "/dev/disk/by-uuid/e3ecf820-abdb-4af4-b879-c5bed8a47360";
+    { device = "/dev/disk/by-uuid/982c7f86-ac34-4e73-8172-6b34a55d0050";
       fsType = "btrfs";
       options = [ "subvol=@nix" ];
     };
 
-  boot.initrd.luks.devices."enc-pv".device = "/dev/disk/by-uuid/e137fe0d-d6fe-4b5e-9940-425862823148";
+  boot.initrd.luks.devices."enc-pv".device = "/dev/disk/by-uuid/a1b5e42e-a57e-4d0b-b2f2-a76e0429f452";
 
   fileSystems."/var/log" =
-    { device = "/dev/disk/by-uuid/e3ecf820-abdb-4af4-b879-c5bed8a47360";
+    { device = "/dev/disk/by-uuid/982c7f86-ac34-4e73-8172-6b34a55d0050";
       fsType = "btrfs";
       options = [ "subvol=@log" ];
     };
 
   fileSystems."/home" =
-    { device = "/dev/disk/by-uuid/e3ecf820-abdb-4af4-b879-c5bed8a47360";
+    { device = "/dev/disk/by-uuid/982c7f86-ac34-4e73-8172-6b34a55d0050";
       fsType = "btrfs";
       options = [ "subvol=@home" ];
     };
 
   fileSystems."/persistent/priv" =
-    { device = "/dev/disk/by-uuid/e3ecf820-abdb-4af4-b879-c5bed8a47360";
+    { device = "/dev/disk/by-uuid/982c7f86-ac34-4e73-8172-6b34a55d0050";
       fsType = "btrfs";
-      options = [ "subvol=@persistent@priv" ];
+      options = [ "subvol=@persistent_priv" ];
       neededForBoot = true;
     };
 
   fileSystems."/persistent/work" =
-    { device = "/dev/disk/by-uuid/e3ecf820-abdb-4af4-b879-c5bed8a47360";
+    { device = "/dev/disk/by-uuid/982c7f86-ac34-4e73-8172-6b34a55d0050";
       fsType = "btrfs";
-      options = [ "subvol=@persistent@work" ];
+      options = [ "subvol=@persistent_work" ];
       neededForBoot = true;
     };
 
   fileSystems."/persistent/cache" =
-    { device = "/dev/disk/by-uuid/e3ecf820-abdb-4af4-b879-c5bed8a47360";
+    { device = "/dev/disk/by-uuid/982c7f86-ac34-4e73-8172-6b34a55d0050";
       fsType = "btrfs";
-      options = [ "subvol=@persistent@cache" ];
+      options = [ "subvol=@persistent_cache" ];
       neededForBoot = true;
     };
 
   fileSystems."/.swapfile" =
-    { device = "/dev/disk/by-uuid/e3ecf820-abdb-4af4-b879-c5bed8a47360";
+    { device = "/dev/disk/by-uuid/982c7f86-ac34-4e73-8172-6b34a55d0050";
       fsType = "btrfs";
       options = [ "subvol=@swapfile" ];
     };
