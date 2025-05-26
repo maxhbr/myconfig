@@ -16,6 +16,18 @@
     exec tmux attach-session -t ${ai-tmux-session}
   '';
 in {
+  imports = [
+    {
+      home-manager.sharedModules = [{
+        home.packages = with pkgs;
+          [
+            nvtopPackages.amd
+          ];
+      }];
+      # users.extraUsers."${myconfig.user}".extraGroups = ["nvidia"];
+      nixpkgs.config.rocmSupport = true;
+    }
+  ];
   config = {
     # boot.kernelParams = [
     #   "pcie_aspm=off"

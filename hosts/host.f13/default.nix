@@ -13,14 +13,26 @@
     ./mykeylight
     ./role.work
     ./ai.f13.nix
-    # {
-    #   services.openssh = {
-    #     listenAddresses = [{
-    #       addr = "127.0.0.1";
-    #       port = 22;
-    #     }];
-    #   };
-    # }
+    {
+      services.openssh = {
+        listenAddresses = [{
+          addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
+          port = 22;
+        }
+        {
+          addr = "127.0.0.1";
+          port = 22;
+        }];
+      };
+    }
+    {
+      services.eternal-terminal = {
+        enable = true;
+        port = 22022;
+      };
+      networking.firewall.interfaces."wg0".allowedTCPPorts = [ 22022 ];
+      networking.firewall.interfaces."wg0".allowedUDPPorts = [ 22022 ];
+    }
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
     {
       programs.kdeconnect.enable = true;
