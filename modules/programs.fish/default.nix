@@ -112,6 +112,7 @@ in {
                       echo -n "<nix-shell> "
                     end
                   )
+                  set -U sponge_successful_exit_codes (seq 0 255)
                 '';
                 plugins = (map (name: {
                   inherit name;

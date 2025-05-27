@@ -22,7 +22,14 @@ in {
         home.packages = with pkgs;
           [
             nvtopPackages.amd
-          ];
+            rocmPackages.rocminfo
+            rocmPackages.rocm-smi
+            onnxruntime
+          ] ++ (with pkgs.python3Packages; [
+            onnx
+            onnxruntime-tools
+            huggingface-hub
+          ]);
       }];
       # users.extraUsers."${myconfig.user}".extraGroups = ["nvidia"];
       nixpkgs.config.rocmSupport = true;

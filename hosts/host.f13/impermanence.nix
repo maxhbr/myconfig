@@ -11,7 +11,9 @@
         "/var/lib/nixos"
         "/etc/NetworkManager/system-connections"
         "/etc/ssh/authorized_keys"
-      ];
+      ] ++ (if config.services.ollama.enable then [
+        { file = "/var/lib/private/ollama"; parentDirectory = { mode = "u=rwx,g=,o="; }; }
+      ] else []);
       files = [
         # "/etc/machine-id"
         { file = "/var/keys/secret_file"; parentDirectory = { mode = "u=rwx,g=,o="; }; }

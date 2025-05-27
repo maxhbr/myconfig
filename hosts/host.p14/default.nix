@@ -59,7 +59,7 @@
     {
       config = let
           tmux-session = "btops";
-          tmux-session-script = pkgs.writeShellScriptBin "tmux-btops" ''
+          tmux-btops = pkgs.writeShellScriptBin "tmux-btops" ''
             # if session is not yet created, create it
             if ! tmux has-session -t ${tmux-session}; then
               tmux new-session -d -s ${tmux-session}

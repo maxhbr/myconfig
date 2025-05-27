@@ -23,8 +23,9 @@
       home.packages = with pkgs; [
         aichat
         alpaca
-        python313Packages.huggingface-hub
-      ];
+      ] ++ (with pkgs.python3Packages; [
+        huggingface-hub
+      ]);
     }];
   };
 }
