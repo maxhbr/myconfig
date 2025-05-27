@@ -39,6 +39,18 @@
     }
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
     { programs.kdeconnect.enable = true; }
+    {
+      home-manager.sharedModules = [{
+        services.wayvnc = {
+          enable = true;
+          autoStart = true;
+          settings = {
+            address = (myconfig.metadatalib.getIp "${config.networking.hostName}");
+            port = 5901;
+          };
+        };
+      }];
+    }
   ];
 
   config = {
