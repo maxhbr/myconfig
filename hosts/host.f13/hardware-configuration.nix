@@ -20,48 +20,55 @@
     };
 
   fileSystems."/nix" =
-    { device = "/dev/disk/by-uuid/982c7f86-ac34-4e73-8172-6b34a55d0050";
+    { device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
       fsType = "btrfs";
       options = [ "subvol=@nix" ];
     };
 
-  boot.initrd.luks.devices."enc-pv".device = "/dev/disk/by-uuid/a1b5e42e-a57e-4d0b-b2f2-a76e0429f452";
+  boot.initrd.luks.devices."enc-pv" = {
+    device = "/dev/disk/by-uuid/2d31a80b-c6ac-4475-8b08-75faa64825b4";
+    allowDiscards = true;
+    keyFileSize = 4096;
+    keyFile = "/dev/disk/by-id/usb-hp_v222w_070D472F8F013A50-0:0";
+    # preLVM = true;
+    fallbackToPassword = true;
+  };
 
   fileSystems."/var/log" =
-    { device = "/dev/disk/by-uuid/982c7f86-ac34-4e73-8172-6b34a55d0050";
+    { device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
       fsType = "btrfs";
       options = [ "subvol=@log" ];
     };
 
   fileSystems."/home" =
-    { device = "/dev/disk/by-uuid/982c7f86-ac34-4e73-8172-6b34a55d0050";
+    { device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
       fsType = "btrfs";
       options = [ "subvol=@home" ];
     };
 
   fileSystems."/persistent/priv" =
-    { device = "/dev/disk/by-uuid/982c7f86-ac34-4e73-8172-6b34a55d0050";
+    { device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
       fsType = "btrfs";
       options = [ "subvol=@persistent_priv" ];
       neededForBoot = true;
     };
 
   fileSystems."/persistent/work" =
-    { device = "/dev/disk/by-uuid/982c7f86-ac34-4e73-8172-6b34a55d0050";
+    { device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
       fsType = "btrfs";
       options = [ "subvol=@persistent_work" ];
       neededForBoot = true;
     };
 
   fileSystems."/persistent/cache" =
-    { device = "/dev/disk/by-uuid/982c7f86-ac34-4e73-8172-6b34a55d0050";
+    { device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
       fsType = "btrfs";
       options = [ "subvol=@persistent_cache" ];
       neededForBoot = true;
     };
 
   fileSystems."/.swapfile" =
-    { device = "/dev/disk/by-uuid/982c7f86-ac34-4e73-8172-6b34a55d0050";
+    { device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
       fsType = "btrfs";
       options = [ "subvol=@swapfile" ];
     };

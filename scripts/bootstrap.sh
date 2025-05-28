@@ -61,8 +61,8 @@ fi
 
 mkEfiPartitions() {
     parted -a optimal $SDX -- mklabel gpt
-    parted -a optimal $SDX -- mkpart primary 512MiB 100%
-    parted -a optimal $SDX -- mkpart ESP fat32 1MiB 512MiB
+    parted -a optimal $SDX -- mkpart primary 81920MiB 100%
+    parted -a optimal $SDX -- mkpart ESP fat32 1MiB 8192MiB
     parted -a optimal $SDX -- set 2 boot on
 }
 

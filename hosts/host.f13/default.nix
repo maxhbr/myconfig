@@ -13,22 +13,22 @@
     ./mykeylight
     ./role.work
     ./ai.f13.nix
-    {
-      services.openssh = {
-        listenAddresses = [{
-          addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
-          port = 22;
-        }
-        {
-          addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
-          port = 22;
-        }
-        {
-          addr = "127.0.0.1";
-          port = 22;
-        }];
-      };
-    }
+    # {
+    #   services.openssh = {
+    #     listenAddresses = [{
+    #       addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
+    #       port = 22;
+    #     }
+    #     {
+    #       addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
+    #       port = 22;
+    #     }
+    #     {
+    #       addr = "127.0.0.1";
+    #       port = 22;
+    #     }];
+    #   };
+    # }
     {
       services.eternal-terminal = {
         enable = true;
@@ -39,18 +39,6 @@
     }
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
     { programs.kdeconnect.enable = true; }
-    {
-      home-manager.sharedModules = [{
-        services.wayvnc = {
-          enable = true;
-          autoStart = true;
-          settings = {
-            address = (myconfig.metadatalib.getIp "${config.networking.hostName}");
-            port = 5901;
-          };
-        };
-      }];
-    }
   ];
 
   config = {
@@ -82,39 +70,39 @@
             }
           '';
         };
-        messengers.enable = true;
-        myphoto.enable = true;
-        obs.enable = true;
-        # cad.enable = true;
-        deskreen.enable = true;
+        # messengers.enable = true;
+        # myphoto.enable = true;
+        # obs.enable = true;
+        # # cad.enable = true;
+        # deskreen.enable = true;
       };
-      email.enable = true;
-      virtualisation.enable = true;
-      editor.emacs.enable = false;
-      dev = {
-        compliance.enable = true;
-        go.enable = false;
-        haskell.enable = true;
-        network.enable = true;
-        nodejs.enable = true;
-        # ruby.enable = true;
-        python.enable = true;
-        # rust.enable = true;
-        # elixir.enable = false;
-        # zephyr.enable = true;
-      };
+      # email.enable = true;
+      # virtualisation.enable = true;
+      # editor.emacs.enable = false;
+      # dev = {
+      #   compliance.enable = true;
+      #   go.enable = false;
+      #   haskell.enable = true;
+      #   network.enable = true;
+      #   nodejs.enable = true;
+      #   # ruby.enable = true;
+      #   python.enable = true;
+      #   # rust.enable = true;
+      #   # elixir.enable = false;
+      #   # zephyr.enable = true;
+      # };
     };
-    virtualisation = {
-      docker.enable = true;
-      podman.enable = true;
-      oci-containers = { backend = "podman"; };
-      # virtualbox.host.enable = true;
-      # lxc.enable = true;
-      libvirtd.enable = true;
-    };
+    # virtualisation = {
+    #   docker.enable = true;
+    #   podman.enable = true;
+    #   oci-containers = { backend = "podman"; };
+    #   # virtualbox.host.enable = true;
+    #   # lxc.enable = true;
+    #   libvirtd.enable = true;
+    # };
 
-    services.xserver.wacom.enable = false;
-    services.xserver.digimend.enable = false;
+    # services.xserver.wacom.enable = false;
+    # services.xserver.digimend.enable = false;
 
     programs.gnupg.agent.enable = true;
 
@@ -128,7 +116,7 @@
 
     home-manager.sharedModules = [
       {
-        home.packages = with pkgs; [
+        home.packages = with pkgs.master; [
           joplin-desktop
         ];
       }
