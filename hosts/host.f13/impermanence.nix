@@ -52,6 +52,13 @@
 
             umount /btrfs_tmp
 
+            # Create a new home in subvolume
+            # TODO: why is this needed?
+            mount -o "subvol=@home" ${btrfs_device} /btrfs_tmp/
+            mkdir -m 700 /btrfs_tmp/mhuber
+            chown 1000:1000 /btrfs_tmp/mhuber
+            umount /btrfs_tmp
+
             set +x
           '';
       };
