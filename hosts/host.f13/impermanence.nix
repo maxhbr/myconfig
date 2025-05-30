@@ -63,6 +63,20 @@
           '';
       };
     }
+    ({config, lib, ...}: {
+      config = lib.mkIf config.programs.steam.enable {
+        environment.persistence."/persistent/cache" = {
+          users.mhuber = {
+            directories = [
+              {
+                directory = ".local/share/Steam";
+                method = "symlink";
+              }
+            ];
+          };
+        };
+      };
+    })
   ];
   config = {
     environment.persistence."/persistent/priv" = {
@@ -84,6 +98,15 @@
         "/etc/ssh/ssh_host_rsa_key"
         "/etc/ssh/ssh_host_rsa_key.pub"
       ];
+      users.mhuber = {
+        directories = [
+          # TODO: module in home-manager can't use `mode`?
+          { directory = ".gnupg"; mode = "0700"; }
+          { directory = ".ssh"; mode = "0700"; }
+          { directory = ".local/share/keyrings"; mode = "0700"; }
+          { directory = ".password-store"; mode = "0700"; }
+        ];
+      };
     };
     environment.persistence."/persistent/cache" = {
       enable = true;
@@ -101,41 +124,64 @@
       '';
     };
     programs.fuse.userAllowOther = true;
-    home-manager.users.mhuber = {...}: {
-      imports = [
+    home-manager.sharedModules = [
         inputs.impermanence.homeManagerModules.impermanence
-      ];
-      home.persistence."/persistent/priv/home/mhuber" = {
-        directories = [
-          "myconfig"
-          "Downloads"
-          "Documents"
-          "MINE"
-          "_screenshots"
-          ".gnupg"
-        #   ".ssh"
-        #   ".nixops"
-        #   ".local/share/keyrings"
-        #   ".local/share/direnv"
-        #   {
-        #     directory = ".local/share/Steam";
-        #     method = "symlink";
-        #   }
-          "Maildir/alfa"
-          "Maildir/gmail"
-          "Maildir/mail"
-        ];
-        # files = [
-        #   ".screenrc"
-        # ];
-        allowOther = true;
-      };
-      home.persistence."/persistent/work/home/mhuber" = {
-        directories = [
-          "TNG"
-          "Maildir/tng"
-        ];
-      };
-    };
+        # ({lib, options, ...}: let
+        #   option = with lib; mkOption {
+        #         type = types.listOf (
+        #           types.coercedTo types.str (directory: { inherit directory; }) (submodule {
+        #             options = {
+        #               directory = mkOption {
+        #                 type = str;
+        #                 description = "The directory path to be linked.";
+        #               };
+        #               method = mkOption {
+        #                 type = types.enum [ "bindfs" "symlink" ];
+        #                 default = "bindfs";
+        #                 description = ''
+        #                   The linking method to be used for this specific
+        #                   directory entry. See
+        #                   <literal>defaultDirectoryMethod</literal> for more
+        #                   information on the tradeoffs.
+        #                 '';
+        #               };
+        #             };
+        #           })
+        #         );
+        #     };
+        #   in {
+        #   options = {
+        #     myconfig.persistence.directories = option;
+        #     myconfig.persistence.work-directories = option;
+        #   };
+        # })
+        ({config, ...}: {
+        home.persistence."/persistent/priv/home/${config.home.username}" = {
+          # directories = config.myconfig.persistence.directories ++ [
+          directories = [
+            "myconfig"
+            "Downloads"
+            "Documents"
+            "MINE"
+            "_screenshots"
+            "Maildir/alfa"
+            "Maildir/gmail"
+            "Maildir/mail"
+            ".config/Signal"
+          ];
+          # files = [
+          #   ".screenrc"
+          # ];
+          allowOther = true;
+        };
+        home.persistence."/persistent/work/home/${config.home.username}" = {
+          # directories = config.myconfig.persistence.work-directories ++ [
+          directories = [
+            "TNG"
+            "Maildir/tng"
+          ];
+        };
+      })
+    ];
   };
 }

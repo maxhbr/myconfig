@@ -13,22 +13,22 @@
     ./mykeylight
     ./role.work
     ./ai.f13.nix
-    {
-      services.openssh = {
-        listenAddresses = [{
-          addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
-          port = 22;
-        }
-        {
-          addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
-          port = 22;
-        }
-        {
-          addr = "127.0.0.1";
-          port = 22;
-        }];
-      };
-    }
+    # {
+    #   services.openssh = {
+    #     listenAddresses = [{
+    #       addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
+    #       port = 22;
+    #     }
+    #     {
+    #       addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
+    #       port = 22;
+    #     }
+    #     {
+    #       addr = "127.0.0.1";
+    #       port = 22;
+    #     }];
+    #   };
+    # }
     {
       services.eternal-terminal = {
         enable = true;
