@@ -42,6 +42,8 @@ build() {
     du -h "$out"
 
     writeScripts "$outDir" "$out"
+    date > "$outDir/date"
+    git log -1 > "$outDir/lastCommit"
 }
 
 iso="${1:-iso}"

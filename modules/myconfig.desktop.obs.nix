@@ -7,7 +7,7 @@ in {
   options.myconfig = with lib; { desktop.obs.enable = mkEnableOption "obs"; };
 
   config = (lib.mkIf (cfg.desktop.enable && cfg.desktop.obs.enable) {
-    myconfig.v4l2.enable = true;
+    # myconfig.v4l2.enable = true;
     home-manager.sharedModules = [{
       programs.obs-studio = {
         enable = true;

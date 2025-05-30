@@ -1,15 +1,13 @@
 { stdenv, requireFile, pkgs, autoPatchelfHook, alsa-lib, freetype, curl, glibc
 }:
 let
-  version = "3.1";
-  #  Run `nix store add-file <path/to/Wing-Edit_LINUX_${version}.tar.gz>`, get the output path. Use that output in
-  # `nix hash path <output path of nix store add-file>`
-  # Paste that into the hash line below.
+  version = "3.2.1";
+  # Run 
+  # $ nix-prefetch-url --type sha256 file:///<path/to/Wing-Edit_LINUX_${version}.tar.gz>
   src = requireFile {
     name = "Wing-Edit_LINUX_${version}.tar.gz";
     url = "https://www.behringer.com/downloads.html";
-    sha256 = "1dyvm7k16j564vjgcfrygxy7qs485s11i1ljkgn792lylazwl4fy";
-    # hash = "sha256-tP8vOduKwCfNkXoiaDH0arVywDc96cED/iFhPh06hos=";
+    sha256 = "0w6xixppldxhh2nmqzjqr01xjg4dbpkank2kzkcckbr6gb6dvfb6";
   };
 in stdenv.mkDerivation {
   pname = "wing-edit";

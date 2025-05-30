@@ -13,22 +13,22 @@
     ./mykeylight
     ./role.work
     ./ai.f13.nix
-    # {
-    #   services.openssh = {
-    #     listenAddresses = [{
-    #       addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
-    #       port = 22;
-    #     }
-    #     {
-    #       addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
-    #       port = 22;
-    #     }
-    #     {
-    #       addr = "127.0.0.1";
-    #       port = 22;
-    #     }];
-    #   };
-    # }
+    {
+      services.openssh = {
+        listenAddresses = [{
+          addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
+          port = 22;
+        }
+        {
+          addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
+          port = 22;
+        }
+        {
+          addr = "127.0.0.1";
+          port = 22;
+        }];
+      };
+    }
     {
       services.eternal-terminal = {
         enable = true;
@@ -77,7 +77,7 @@
         # deskreen.enable = true;
       };
       # email.enable = true;
-      # virtualisation.enable = true;
+      virtualisation.enable = true;
       # editor.emacs.enable = false;
       # dev = {
       #   compliance.enable = true;
@@ -92,17 +92,17 @@
       #   # zephyr.enable = true;
       # };
     };
-    # virtualisation = {
-    #   docker.enable = true;
-    #   podman.enable = true;
-    #   oci-containers = { backend = "podman"; };
-    #   # virtualbox.host.enable = true;
-    #   # lxc.enable = true;
-    #   libvirtd.enable = true;
-    # };
+    virtualisation = {
+      docker.enable = true;
+      podman.enable = true;
+      oci-containers = { backend = "podman"; };
+      # virtualbox.host.enable = true;
+      # lxc.enable = true;
+      libvirtd.enable = true;
+    };
 
-    # services.xserver.wacom.enable = false;
-    # services.xserver.digimend.enable = false;
+    services.xserver.wacom.enable = false;
+    services.xserver.digimend.enable = false;
 
     programs.gnupg.agent.enable = true;
 
