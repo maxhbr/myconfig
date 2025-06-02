@@ -22,10 +22,10 @@
       "flake": false,
       "locked": {
         "lastModified": 1748866766,
-        "narHash": "sha256-9rJK4lkXMnDVB+sU8//KbrvDTn5xs2V87o7NLusV42I=",
+        "narHash": "sha256-3WupxlFrfp1QKXPJA9qOCzMnlG8KXZGeSoDxRh9IbbU=",
         "owner": "hlissner",
         "repo": "doom-emacs",
-        "rev": "aa6f3903d57e033bc869f34e7ceb43740826dfda",
+        "rev": "6ce4ba3d1877f837211dbe6959c927ae6ada3830",
         "type": "github"
       },
       "original": {
