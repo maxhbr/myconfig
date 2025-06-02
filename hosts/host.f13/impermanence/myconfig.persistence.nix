@@ -26,6 +26,11 @@
         };
       })
       ({ config, lib, ... }: {
+        config = {
+          myconfig.persistence.directories = [ "Maildir/alfa" "Maildir/gmail" "Maildir/mail" ];
+        };
+      })
+      ({ config, lib, ... }: {
         config = lib.mkIf config.programs.chromium.enable {
           myconfig.persistence.directories = [ ".config/chromium" ];
         };

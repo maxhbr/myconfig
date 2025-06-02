@@ -41,7 +41,6 @@ in {
       }] else
         [ ]);
       files = [
-        # "/etc/machine-id"
         {
           file = "/var/keys/secret_file";
           parentDirectory = { mode = "u=rwx,g=,o="; };
@@ -160,9 +159,6 @@ in {
               "MINE"
               "bin"
               "_screenshots"
-              "Maildir/alfa"
-              "Maildir/gmail"
-              "Maildir/mail"
               ".local/share/fish"
             ];
             files = config.myconfig.persistence.files;
