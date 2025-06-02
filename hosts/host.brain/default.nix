@@ -1,16 +1,15 @@
 # Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, inputs, ... }: let
-  is_full_build = false;
+{ config, pkgs, lib, myconfig, inputs, ... }:
+let is_full_build = false;
 in {
   imports = [
     ./hardware-configuration.nix
     ../../hardware/efi.nix
     ./ai.brain.nix
     ../host.workstation/gaming/games.steam
-    (myconfig.metadatalib.setupAsBuildMachine [
-      myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
-    ])
+    (myconfig.metadatalib.setupAsBuildMachine
+      [ myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub" ])
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
     {
       # programs.mosh.enable = lib.mkDefault true;

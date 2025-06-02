@@ -6,7 +6,9 @@ let
       "OLLAMA_PROXY_URL" = "http://host.containers.internal:11434";
     };
     ports = [
-      "${config.myconfig.ai.container.lobe-chat.host}:${toString config.myconfig.ai.container.lobe-chat.port}:3210"
+      "${config.myconfig.ai.container.lobe-chat.host}:${
+        toString config.myconfig.ai.container.lobe-chat.port
+      }:3210"
     ];
     extraOptions = [
       "--pull=always" # Pull if the image on the registry is always
@@ -29,9 +31,8 @@ in {
       };
     };
   };
-  config = lib.mkIf (config.myconfig.ai.enable && config.myconfig.ai.container.lobe-chat.enable) {
-    virtualisation.oci-containers.containers = {
-      inherit lobe-chat;
+  config = lib.mkIf (config.myconfig.ai.enable
+    && config.myconfig.ai.container.lobe-chat.enable) {
+      virtualisation.oci-containers.containers = { inherit lobe-chat; };
     };
-  };
 }

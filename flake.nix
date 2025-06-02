@@ -132,8 +132,7 @@
                   "${pkg}" = (import inputs."${input}" {
                     inherit (pkgs) config system;
                   })."${pkg}";
-                })) [
-                ];
+                })) [ ];
             })
             ({ pkgs, ... }: {
               nixpkgs.overlays = [
@@ -176,18 +175,14 @@
           (self.lib.evalConfiguration "x86_64-linux" "f13" ([
             self.nixosModules.core
             ({ pkgs, myconfig, ... }: {
-              imports = [
-                (myconfig.metadatalib.announceOtherHosts "f13")
-              ];
+              imports = [ (myconfig.metadatalib.announceOtherHosts "f13") ];
             })
           ] ++ moreModules) metadataOverride);
         host-p14 = moreModules: metadataOverride:
           (self.lib.evalConfiguration "x86_64-linux" "p14" ([
             self.nixosModules.core
             ({ pkgs, myconfig, ... }: {
-              imports = [
-                (myconfig.metadatalib.announceOtherHosts "p14")
-              ];
+              imports = [ (myconfig.metadatalib.announceOtherHosts "p14") ];
               config = {
                 home-manager.sharedModules = [
                   ({ config, ... }: {
@@ -308,13 +303,7 @@
           config = nixpkgsConfig;
         };
       in pkgs.mkShell {
-        nativeBuildInputs = with pkgs; [
-          git
-          git-crypt
-          git-secrets
-          nixfmt
-          age
-        ];
+        nativeBuildInputs = with pkgs; [ git git-crypt git-secrets nixfmt age ];
 
         NIX_CONF_DIR = with pkgs;
           let

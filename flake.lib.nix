@@ -4,7 +4,9 @@ let
   mkMetadata = metadataOverride: rec {
     json = builtins.fromJSON (builtins.readFile (./hosts + "/metadata.json"));
     metadata = lib.recursiveUpdate json metadataOverride;
-    hasWg = hostName: lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "ip4" ] metadata.hosts."${hostName}";
+    hasWg = hostName:
+      lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "ip4" ]
+      metadata.hosts."${hostName}";
     getIp = hostName: metadata.hosts."${hostName}".ip4;
     getWgIp = hostName: metadata.hosts."${hostName}".wireguard.wg0.ip4;
   };
@@ -44,7 +46,7 @@ let
 
       announceHost = otherHostName:
         let otherHostMetadata = metadata.hosts."${otherHostName}";
-        in { pkgs, lib, myconfig,... }: {
+        in { pkgs, lib, myconfig, ... }: {
           imports = [
             (lib.mkIf (lib.attrsets.hasAttrByPath [ "ip4" ] otherHostMetadata)
               (let otherHostIp = otherHostMetadata.ip4;
@@ -74,7 +76,8 @@ let
                     [ ]);
                 };
               }))
-            (lib.mkIf (lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "ip4" ] otherHostMetadata)
+            (lib.mkIf (lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "ip4" ]
+              otherHostMetadata)
               (let otherHostWgIp = otherHostMetadata.wireguard.wg0.ip4;
               in {
                 networking.extraHosts = ''
@@ -85,7 +88,8 @@ let
           ];
         };
       announceOtherHosts = thisHost: {
-        imports = lib.map (host: announceHost host) (lib.filter (name: name != thisHost) (lib.attrNames metadata.hosts));
+        imports = lib.map (host: announceHost host)
+          (lib.filter (name: name != thisHost) (lib.attrNames metadata.hosts));
       };
 
       addEternalTerminalCmd = host:
@@ -93,11 +97,14 @@ let
           config = {
             home-manager.users."${myconfig.user}" = {
               home.packages = [
-                (with pkgs; writeShellScriptBin "et-${host}" ''
-                  set -euo pipefail
-                  set -x
-                  exec ${eternal-terminal}/bin/et "$@" ${myconfig.user}@${getWgIp host}:22022 
-                '')
+                (with pkgs;
+                  writeShellScriptBin "et-${host}" ''
+                    set -euo pipefail
+                    set -x
+                    exec ${eternal-terminal}/bin/et "$@" ${myconfig.user}@${
+                      getWgIp host
+                    }:22022 
+                  '')
               ];
             };
           };
@@ -123,7 +130,8 @@ let
           networking.wireguard.interfaces = {
             "${wgInterface}" = {
               ips = [ # (getWgIp config.networking.hostName) + "/24")
-               (metadata.hosts."${config.networking.hostName}".wireguard."${wgInterface}".ip4 + "/24")
+                (metadata.hosts."${config.networking.hostName}".wireguard."${wgInterface}".ip4
+                  + "/24")
               ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
               inherit privateKeyFile;
               mtu = 1380;
@@ -139,16 +147,17 @@ let
             };
           };
         }));
-      
-      getOtherWgHosts = thisHost: lib.filter (peer: peer != null) (lib.mapAttrsToList (name: host: 
-          if (lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "pubkey" ] host) && (lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "ip4" ] host) && (name != thisHost)
-          then {
+
+      getOtherWgHosts = thisHost:
+        lib.filter (peer: peer != null) (lib.mapAttrsToList (name: host:
+          if (lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "pubkey" ] host)
+          && (lib.attrsets.hasAttrByPath [ "wireguard" "wg0" "ip4" ] host)
+          && (name != thisHost) then {
             name = name;
             publicKey = host.wireguard.wg0.pubkey;
             ip4 = host.wireguard.wg0.ip4;
-          }
-          else null
-        ) metadata.hosts);
+          } else
+            null) metadata.hosts);
 
       setupAsSyncthingClient = cert: key: devices: folders: {
         myconfig.secrets = {
@@ -208,14 +217,14 @@ let
         };
       };
 
-      setupBuildSlave = { host,
-                          speedFactor ? 2,
-                          systems ? [ "x86_64-linux" ],
-                          privateKey,
-                          useWg ? false
-                        }:
-        let name = if (useWg && (hasWg host)) then "builder.${host}.wg" else "builder.${host}";
-            hostIp = if (useWg && (hasWg host)) then getWgIp host else getIp host;
+      setupBuildSlave = { host, speedFactor ? 2, systems ? [ "x86_64-linux" ]
+        , privateKey, useWg ? false }:
+        let
+          name = if (useWg && (hasWg host)) then
+            "builder.${host}.wg"
+          else
+            "builder.${host}";
+          hostIp = if (useWg && (hasWg host)) then getWgIp host else getIp host;
         in {
           myconfig.secrets = {
             "${name}" = {
@@ -328,11 +337,13 @@ let
           });
       mkRemoteBackupJob = name: host: configOverwrites:
         ({ pkgs, lib, config, ... }:
-          let newName = "${name}@${host}";
-              hostHasWg = hasWg host;
-              hostWgIp = getWgIp host;
-              newWgName = "${name}@${host}-wg";
-              mkScript = name: pkgs.writeShellScriptBin "mkBackup-${name}" ''
+          let
+            newName = "${name}@${host}";
+            hostHasWg = hasWg host;
+            hostWgIp = getWgIp host;
+            newWgName = "${name}@${host}-wg";
+            mkScript = name:
+              pkgs.writeShellScriptBin "mkBackup-${name}" ''
                 set -euo pipefail
                 set -x
                 sudo systemctl restart borgbackup-job-${name}.service
@@ -347,13 +358,14 @@ let
                   "ssh -i /etc/borgbackup/ssh_key"; # -o StrictHostKeyChecking=no
               } // configOverwrites);
               "${newWgName}" = lib.mkIf hostHasWg (mkBackupJob ({
-              repo =
+                repo =
                   "borg@${hostWgIp}:./${config.networking.hostName}-${newWgName}.borg";
                 environment.BORG_RSH =
                   "ssh -i /etc/borgbackup/ssh_key"; # -o StrictHostKeyChecking=no
               } // configOverwrites));
             };
-            environment.systemPackages = [(mkScript newName)] ++ (if hostHasWg then [(mkScript newWgName)] else []);
+            environment.systemPackages = [ (mkScript newName) ]
+              ++ (if hostHasWg then [ (mkScript newWgName) ] else [ ]);
           });
 
       setupAsBackupTarget = home: hosts:
@@ -409,7 +421,9 @@ in rec {
         flake = self;
 
         modules = nixosModules ++ [
-          { _module.args = inputs; }
+          {
+            _module.args = inputs;
+          }
           # ({ config, pkgs, ... }: {
           #   config = {
           #     # nixpkgs = {
@@ -562,8 +576,8 @@ in rec {
               fi
               sudo \
                 BOOTSTRAP=YES \
-                BTRFS=${BTRFS:-true} \
-                EFI=${EFI:-true} \
+                BTRFS=${"BTRFS:-true"} \
+                EFI=${"EFI:-true"} \
                 ${./scripts/bootstrap.sh} $@
               echo "you should run bootstrap-install next"
             '';

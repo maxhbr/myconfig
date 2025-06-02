@@ -4,46 +4,46 @@
 { config, lib, pkgs, modulesPath, ... }:
 
 {
-  imports =
-    [ (modulesPath + "/installer/scan/not-detected.nix")
-    ];
+  imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
 
-  boot.initrd.availableKernelModules = [ "nvme" "xhci_pci" "ahci" "usbhid" "usb_storage" "sd_mod" ];
+  boot.initrd.availableKernelModules =
+    [ "nvme" "xhci_pci" "ahci" "usbhid" "usb_storage" "sd_mod" ];
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ ];
   boot.extraModulePackages = [ ];
 
-  fileSystems."/" =
-    { device = "/dev/disk/by-uuid/88bcdc5b-6e78-456d-9134-0600818eec37";
-      fsType = "btrfs";
-      options = [ "subvol=@" ];
-    };
+  fileSystems."/" = {
+    device = "/dev/disk/by-uuid/88bcdc5b-6e78-456d-9134-0600818eec37";
+    fsType = "btrfs";
+    options = [ "subvol=@" ];
+  };
 
-  boot.initrd.luks.devices."enc-pv".device = "/dev/disk/by-uuid/ee250ee2-bb43-4680-a9ef-5c563a4344de";
+  boot.initrd.luks.devices."enc-pv".device =
+    "/dev/disk/by-uuid/ee250ee2-bb43-4680-a9ef-5c563a4344de";
 
-  fileSystems."/home" =
-    { device = "/dev/disk/by-uuid/88bcdc5b-6e78-456d-9134-0600818eec37";
-      fsType = "btrfs";
-      options = [ "subvol=@home" ];
-    };
+  fileSystems."/home" = {
+    device = "/dev/disk/by-uuid/88bcdc5b-6e78-456d-9134-0600818eec37";
+    fsType = "btrfs";
+    options = [ "subvol=@home" ];
+  };
 
-  fileSystems."/.snapshots" =
-    { device = "/dev/disk/by-uuid/88bcdc5b-6e78-456d-9134-0600818eec37";
-      fsType = "btrfs";
-      options = [ "subvol=@snapshots" ];
-    };
+  fileSystems."/.snapshots" = {
+    device = "/dev/disk/by-uuid/88bcdc5b-6e78-456d-9134-0600818eec37";
+    fsType = "btrfs";
+    options = [ "subvol=@snapshots" ];
+  };
 
-  fileSystems."/.swapfile" =
-    { device = "/dev/disk/by-uuid/88bcdc5b-6e78-456d-9134-0600818eec37";
-      fsType = "btrfs";
-      options = [ "subvol=@swapfile" ];
-    };
+  fileSystems."/.swapfile" = {
+    device = "/dev/disk/by-uuid/88bcdc5b-6e78-456d-9134-0600818eec37";
+    fsType = "btrfs";
+    options = [ "subvol=@swapfile" ];
+  };
 
-  fileSystems."/boot" =
-    { device = "/dev/disk/by-uuid/12CE-A600";
-      fsType = "vfat";
-      options = [ "fmask=0022" "dmask=0022" ];
-    };
+  fileSystems."/boot" = {
+    device = "/dev/disk/by-uuid/12CE-A600";
+    fsType = "vfat";
+    options = [ "fmask=0022" "dmask=0022" ];
+  };
 
   swapDevices = [ ];
 
@@ -55,5 +55,6 @@
   # networking.interfaces.enp5s0.useDHCP = lib.mkDefault true;
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
-  hardware.cpu.amd.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
+  hardware.cpu.amd.updateMicrocode =
+    lib.mkDefault config.hardware.enableRedistributableFirmware;
 }

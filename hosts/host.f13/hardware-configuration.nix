@@ -4,26 +4,25 @@
 { config, lib, pkgs, modulesPath, ... }:
 
 {
-  imports =
-    [ (modulesPath + "/installer/scan/not-detected.nix")
-    ];
+  imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
 
-  boot.initrd.availableKernelModules = [ "nvme" "xhci_pci" "thunderbolt" "uas" "usb_storage" "sd_mod" ];
+  boot.initrd.availableKernelModules =
+    [ "nvme" "xhci_pci" "thunderbolt" "uas" "usb_storage" "sd_mod" ];
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-amd" ];
   boot.extraModulePackages = [ ];
 
-  fileSystems."/" =
-    { device = "none";
-      fsType = "tmpfs";
-      options = [ "defaults" "size=25%" "mode=755" ];
-    };
+  fileSystems."/" = {
+    device = "none";
+    fsType = "tmpfs";
+    options = [ "defaults" "size=25%" "mode=755" ];
+  };
 
-  fileSystems."/nix" =
-    { device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
-      fsType = "btrfs";
-      options = [ "subvol=@nix" ];
-    };
+  fileSystems."/nix" = {
+    device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
+    fsType = "btrfs";
+    options = [ "subvol=@nix" ];
+  };
 
   boot.initrd.luks.devices."enc-pv" = {
     device = "/dev/disk/by-uuid/2d31a80b-c6ac-4475-8b08-75faa64825b4";
@@ -34,50 +33,50 @@
     fallbackToPassword = true;
   };
 
-  fileSystems."/var/log" =
-    { device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
-      fsType = "btrfs";
-      options = [ "subvol=@log" ];
-    };
+  fileSystems."/var/log" = {
+    device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
+    fsType = "btrfs";
+    options = [ "subvol=@log" ];
+  };
 
-  fileSystems."/home" =
-    { device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
-      fsType = "btrfs";
-      options = [ "subvol=@home" ];
-    };
+  fileSystems."/home" = {
+    device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
+    fsType = "btrfs";
+    options = [ "subvol=@home" ];
+  };
 
-  fileSystems."/persistent/priv" =
-    { device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
-      fsType = "btrfs";
-      options = [ "subvol=@persistent_priv" ];
-      neededForBoot = true;
-    };
+  fileSystems."/persistent/priv" = {
+    device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
+    fsType = "btrfs";
+    options = [ "subvol=@persistent_priv" ];
+    neededForBoot = true;
+  };
 
-  fileSystems."/persistent/work" =
-    { device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
-      fsType = "btrfs";
-      options = [ "subvol=@persistent_work" ];
-      neededForBoot = true;
-    };
+  fileSystems."/persistent/work" = {
+    device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
+    fsType = "btrfs";
+    options = [ "subvol=@persistent_work" ];
+    neededForBoot = true;
+  };
 
-  fileSystems."/persistent/cache" =
-    { device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
-      fsType = "btrfs";
-      options = [ "subvol=@persistent_cache" ];
-      neededForBoot = true;
-    };
+  fileSystems."/persistent/cache" = {
+    device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
+    fsType = "btrfs";
+    options = [ "subvol=@persistent_cache" ];
+    neededForBoot = true;
+  };
 
-  fileSystems."/.swapfile" =
-    { device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
-      fsType = "btrfs";
-      options = [ "subvol=@swapfile" ];
-    };
+  fileSystems."/.swapfile" = {
+    device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
+    fsType = "btrfs";
+    options = [ "subvol=@swapfile" ];
+  };
 
-  fileSystems."/boot" =
-    { device = "/dev/disk/by-uuid/12CE-A600";
-      fsType = "vfat";
-      options = [ "fmask=0022" "dmask=0022" ];
-    };
+  fileSystems."/boot" = {
+    device = "/dev/disk/by-uuid/12CE-A600";
+    fsType = "vfat";
+    options = [ "fmask=0022" "dmask=0022" ];
+  };
 
   swapDevices = [ ];
 
@@ -90,5 +89,6 @@
   # networking.interfaces.wlp192s0.useDHCP = lib.mkDefault true;
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
-  hardware.cpu.amd.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
+  hardware.cpu.amd.updateMicrocode =
+    lib.mkDefault config.hardware.enableRedistributableFirmware;
 }

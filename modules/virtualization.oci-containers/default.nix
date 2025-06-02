@@ -11,38 +11,22 @@ in {
     home-manager.sharedModules = [{ home.packages = with pkgs; [ buildkit ]; }];
     virtualisation.containers = {
       policy = {
-        "default" = [
-          { "type" = "reject"; }
-        ];
+        "default" = [{ "type" = "reject"; }];
         "transports" = {
           "docker" = {
-            "docker.io" = [
-              { "type" = "insecureAcceptAnything"; }
-            ];
-            "docker.io/library" = [
-              { "type" = "insecureAcceptAnything"; }
-            ];
-            "ghcr.io" = [
-              { "type" = "insecureAcceptAnything"; }
-            ];
-            "quay.io" = [
-              { "type" = "insecureAcceptAnything"; }
-            ];
+            "docker.io" = [{ "type" = "insecureAcceptAnything"; }];
+            "docker.io/library" = [{ "type" = "insecureAcceptAnything"; }];
+            "ghcr.io" = [{ "type" = "insecureAcceptAnything"; }];
+            "quay.io" = [{ "type" = "insecureAcceptAnything"; }];
           };
 
           # local images written while building
           "containers-storage" = {
-            "" = [
-              { "type" = "insecureAcceptAnything"; }
-            ];
+            "" = [{ "type" = "insecureAcceptAnything"; }];
           };
 
           # `docker-daemon =` pulls (e.g. `docker save | podman load`)
-          "docker-daemon" = {
-            "" = [
-              { "type" = "insecureAcceptAnything"; }
-            ];
-          };
+          "docker-daemon" = { "" = [{ "type" = "insecureAcceptAnything"; }]; };
         };
       };
     };

@@ -1,6 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, inputs, ... }: let
+{ config, pkgs, lib, myconfig, inputs, ... }:
+let
   ai-tmux-session = "ai";
   ai-tmux-session-script = pkgs.writeShellScriptBin "ai-tmux-session" ''
     # if session is not yet created, create it
@@ -16,10 +17,7 @@
     exec tmux attach-session -t ${ai-tmux-session}
   '';
 in {
-  imports = [ 
-    ../../hardware/RTX5090.nix
-    ./run-comfyui.nix
-  ];
+  imports = [ ../../hardware/RTX5090.nix ./run-comfyui.nix ];
 
   config = {
     # boot.kernelParams = [
@@ -36,18 +34,14 @@ in {
       ai = {
         enable = true;
         container = {
-          nlm-ingestor = {
-            enable = false;
-          };
-          open-webui = {
-            enable = true;
-          };
+          nlm-ingestor = { enable = false; };
+          open-webui = { enable = true; };
         };
       };
-    };  
+    };
     services.ollama = {
       enable = true;
-      
+
       # host = myconfig.metadatalib.metadata.hosts."${config.networking.hostName}".ip4;
       # listenAddress = "0.0.0.0:11434";
       acceleration = "cuda";
@@ -74,12 +68,7 @@ in {
       acceleration = "cuda";
       model = "TabbyML/Qwen2.5-Coder-14B";
     };
-    home-manager.sharedModules = [
-      {
-        home.packages = [
-          ai-tmux-session-script
-        ];
-      }
-    ];
+    home-manager.sharedModules =
+      [{ home.packages = [ ai-tmux-session-script ]; }];
   };
 }

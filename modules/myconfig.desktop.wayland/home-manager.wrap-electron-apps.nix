@@ -45,27 +45,35 @@ in {
       };
     };
   };
-  config = lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.wrapElectronPackages) {
-    home.packages = let
-      wrapExecutable = ptw:
-        pkgs.runCommand "${ptw.executable}-wl" {
-          buildInputs = [ pkgs.makeWrapper ];
-        } ''
-          mkdir -p $out/bin
-          makeWrapper ${ptw.pkg}/bin/${ptw.executable} $out/bin/$(basename ${ptw.executable})-wl --add-flags "${ptw.args}"
-        '';
-      wrapPackage = ptw:
-        pkgs.symlinkJoin {
-          name = ptw.executable;
-          paths = [ ptw.pkg ];
-          buildInputs = [ pkgs.makeWrapper ];
-          postBuild = ''
-            wrapProgram $out/bin/${ptw.executable} --add-flags "${ptw.args}"
+  config = lib.mkIf
+    (cfg.desktop.wayland.enable && cfg.desktop.wayland.wrapElectronPackages) {
+      home.packages = let
+        wrapExecutable = ptw:
+          pkgs.runCommand "${ptw.executable}-wl" {
+            buildInputs = [ pkgs.makeWrapper ];
+          } ''
+            mkdir -p $out/bin
+            makeWrapper ${ptw.pkg}/bin/${ptw.executable} $out/bin/$(basename ${ptw.executable})-wl --add-flags "${ptw.args}"
           '';
-        };
-      wrapAndAddExecutable = ptw: if ptw.replaceOriginal then [ (wrapPackage ptw) ] else [ (wrapExecutable ptw) ptw.pkg ];
-      maybeWrapAndAddExecutable = ptw:
-        if ptw.enabled then (wrapAndAddExecutable ptw) else [ ];
-    in lib.concatMap maybeWrapAndAddExecutable cfg.desktop.wayland.wrappedElectronPackages;
-  };
+        wrapPackage = ptw:
+          pkgs.symlinkJoin {
+            name = ptw.executable;
+            paths = [ ptw.pkg ];
+            buildInputs = [ pkgs.makeWrapper ];
+            postBuild = ''
+              wrapProgram $out/bin/${ptw.executable} --add-flags "${ptw.args}"
+            '';
+          };
+        wrapAndAddExecutable = ptw:
+          if ptw.replaceOriginal then
+            [ (wrapPackage ptw) ]
+          else [
+            (wrapExecutable ptw)
+            ptw.pkg
+          ];
+        maybeWrapAndAddExecutable = ptw:
+          if ptw.enabled then (wrapAndAddExecutable ptw) else [ ];
+      in lib.concatMap maybeWrapAndAddExecutable
+      cfg.desktop.wayland.wrappedElectronPackages;
+    };
 }

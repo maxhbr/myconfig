@@ -1,6 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, inputs, ... }: let
+{ config, pkgs, lib, myconfig, inputs, ... }:
+let
   ai-tmux-session = "ai";
   ai-tmux-session-script = pkgs.writeShellScriptBin "ai-tmux-session" ''
     # if session is not yet created, create it
@@ -16,10 +17,7 @@
     exec tmux attach-session -t ${ai-tmux-session}
   '';
 in {
-  imports = [ 
-    ../../hardware/eGPU.nix
-    ./run-comfyui.nix
-  ];
+  imports = [ ../../hardware/eGPU.nix ./run-comfyui.nix ];
 
   config = {
     # boot.kernelParams = [
@@ -35,27 +33,17 @@ in {
       };
       ai = {
         enable = true;
-        inference-cpp = {
-          enable = true;
-        };
-        lmstudio = {
-          enable = false;
-        };
+        inference-cpp = { enable = true; };
+        lmstudio = { enable = false; };
         container = {
-          nlm-ingestor = {
-            enable = false;
-          };
-          open-webui = {
-            enable = true;
-          };
+          nlm-ingestor = { enable = false; };
+          open-webui = { enable = true; };
           sillytavern = {
             enable = false;
             host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
             port = 8888;
           };
-          kokoro-fastapi = {
-            enable = false;
-          };
+          kokoro-fastapi = { enable = false; };
           lobe-chat = {
             enable = true;
             host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
@@ -64,20 +52,18 @@ in {
             enable = false;
             config = {
               "environment_variables" = { };
-              "model_list" = [
-                {
-                  "model_name" = "ollama/qwen3:32b";
-                  "litellm_params" = {
-                    model = "ollama/qwen3:32b";
-                    api_base = "http://host.containers.internal:11434";
-                  };
-                }
-              ];
+              "model_list" = [{
+                "model_name" = "ollama/qwen3:32b";
+                "litellm_params" = {
+                  model = "ollama/qwen3:32b";
+                  api_base = "http://host.containers.internal:11434";
+                };
+              }];
             };
           };
         };
       };
-    };  
+    };
     services.ollama = {
       enable = true;
 
@@ -118,28 +104,24 @@ in {
     services.caddy = {
       enable = true;
       virtualHosts."${config.networking.hostName}.wg0.maxhbr.local" = {
-        listenAddresses = [
-          (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
-        ];
+        listenAddresses =
+          [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
         hostName = "${config.networking.hostName}.wg0.maxhbr.local";
         serverAliases = [
           "${config.networking.hostName}.wg0"
           (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
         ];
         extraConfig = ''
-          reverse_proxy http://localhost:${toString config.myconfig.ai.container.open-webui.port}
+          reverse_proxy http://localhost:${
+            toString config.myconfig.ai.container.open-webui.port
+          }
         '';
       };
     };
 
     networking.firewall.interfaces."wg0".allowedTCPPorts = [ 443 ];
 
-    home-manager.sharedModules = [
-      {
-        home.packages = [
-          ai-tmux-session-script
-        ];
-      }
-    ];
+    home-manager.sharedModules =
+      [{ home.packages = [ ai-tmux-session-script ]; }];
   };
 }

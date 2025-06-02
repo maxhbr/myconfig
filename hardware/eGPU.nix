@@ -5,12 +5,11 @@
   ];
   config = {
     home-manager.sharedModules = [{
-      home.packages = with pkgs;
-        [
-          nvtopPackages.full
-          # oterm
-          pciutils
-        ];
+      home.packages = with pkgs; [
+        nvtopPackages.full
+        # oterm
+        pciutils
+      ];
     }];
     # boot.kernelParams = [ "pcie_aspm=off" ];
 

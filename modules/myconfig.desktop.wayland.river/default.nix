@@ -4,12 +4,7 @@
 let
   cfg = config.myconfig;
   wrapPackage = true;
-  extraPaths = with pkgs; [
-    rivercarro
-    ristate
-    swaybg
-    kile-wl
-  ];
+  extraPaths = with pkgs; [ rivercarro ristate swaybg kile-wl ];
   riverPackage = if wrapPackage then
     pkgs.callPackage ./wrapper.nix {
       river-unwrapped = pkgs.river;

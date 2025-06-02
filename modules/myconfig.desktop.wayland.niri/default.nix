@@ -90,10 +90,7 @@ in {
                   # };
                   rotate = 90;
                 };
-                modules-left = [
-                  "niri/workspaces"
-                  "wlr/taskbar"
-                ];
+                modules-left = [ "niri/workspaces" "wlr/taskbar" ];
                 modules-center = [
                   # "niri/window"
                 ];

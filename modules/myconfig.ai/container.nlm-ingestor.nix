@@ -15,11 +15,11 @@ let
   };
 in {
   options.myconfig = with lib; {
-    ai.container.nlm-ingestor.enable = mkEnableOption "myconfig.ai.container.nlm-ingestor ";
+    ai.container.nlm-ingestor.enable =
+      mkEnableOption "myconfig.ai.container.nlm-ingestor ";
   };
-  config = lib.mkIf (config.myconfig.ai.enable && config.myconfig.ai.container.nlm-ingestor.enable) {
-    virtualisation.oci-containers.containers = {
-      inherit nlm-ingestor;
+  config = lib.mkIf (config.myconfig.ai.enable
+    && config.myconfig.ai.container.nlm-ingestor.enable) {
+      virtualisation.oci-containers.containers = { inherit nlm-ingestor; };
     };
-  };
 }

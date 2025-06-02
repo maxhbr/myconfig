@@ -11,9 +11,8 @@
     ./ai.spare.nix
     ../host.p14/role.work
     ../host.workstation/gaming/games.steam
-    (myconfig.metadatalib.setupAsBuildMachine [
-      myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
-    ])
+    (myconfig.metadatalib.setupAsBuildMachine
+      [ myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub" ])
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
     {
       # programs.mosh.enable = lib.mkDefault true;

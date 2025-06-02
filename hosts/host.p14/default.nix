@@ -46,43 +46,43 @@
     }
     {
       services.openssh = {
-        listenAddresses = [{
-          addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
-          port = 22;
-        }
-        {
-          addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
-          port = 22;
-        }
-        {
-          addr = "127.0.0.1";
-          port = 22;
-        }];
+        listenAddresses = [
+          {
+            addr =
+              (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
+            port = 22;
+          }
+          {
+            addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
+            port = 22;
+          }
+          {
+            addr = "127.0.0.1";
+            port = 22;
+          }
+        ];
       };
     }
     {
       config = let
-          tmux-session = "btops";
-          tmux-btops = pkgs.writeShellScriptBin "tmux-btops" ''
-            # if session is not yet created, create it
-            if ! tmux has-session -t ${tmux-session}; then
-              tmux new-session -d -s ${tmux-session}
-              tmux send-keys -t ${tmux-session}:1 "btop" C-m
-              tmux split-window -h -t ${tmux-session}
-              tmux send-keys -t ${tmux-session}:1 "et -x  mhuber@spare.wg0:22022 --command btop" C-m
-              tmux split-window -v -t ${tmux-session}
-              tmux send-keys -t ${tmux-session}:1 "et -x  mhuber@workstation.wg0:22022 --command btop" C-m
-              tmux split-window -v -t ${tmux-session}
-            fi
-            exec tmux attach-session -t ${tmux-session}
-          '';
-        in {
-          home-manager.sharedModules = [
-            {
-              home.packages = with pkgs; [ tmux-btops ];
-            }
-          ];
-        };
+        tmux-session = "btops";
+        tmux-btops = pkgs.writeShellScriptBin "tmux-btops" ''
+          # if session is not yet created, create it
+          if ! tmux has-session -t ${tmux-session}; then
+            tmux new-session -d -s ${tmux-session}
+            tmux send-keys -t ${tmux-session}:1 "btop" C-m
+            tmux split-window -h -t ${tmux-session}
+            tmux send-keys -t ${tmux-session}:1 "et -x  mhuber@spare.wg0:22022 --command btop" C-m
+            tmux split-window -v -t ${tmux-session}
+            tmux send-keys -t ${tmux-session}:1 "et -x  mhuber@workstation.wg0:22022 --command btop" C-m
+            tmux split-window -v -t ${tmux-session}
+          fi
+          exec tmux attach-session -t ${tmux-session}
+        '';
+      in {
+        home-manager.sharedModules =
+          [{ home.packages = with pkgs; [ tmux-btops ]; }];
+      };
     }
     # {
     #   fileSystems."/home/mhuber/MINE/Bilder/imgwork" = {

@@ -1,18 +1,21 @@
 { pkgs, lib, config, inputs, ... }:
 let
-  SILLYTAVERN_DIR="/home/sillytavern";
-  CONFIG_PATH="${SILLYTAVERN_DIR}/config";
-  DATA_PATH="${SILLYTAVERN_DIR}/data";
-  PLUGINS_PATH="${SILLYTAVERN_DIR}/plugins";
-  EXTENSIONS_PATH="${SILLYTAVERN_DIR}/extensions";
+  SILLYTAVERN_DIR = "/home/sillytavern";
+  CONFIG_PATH = "${SILLYTAVERN_DIR}/config";
+  DATA_PATH = "${SILLYTAVERN_DIR}/data";
+  PLUGINS_PATH = "${SILLYTAVERN_DIR}/plugins";
+  EXTENSIONS_PATH = "${SILLYTAVERN_DIR}/extensions";
   sillytavern = {
-    image = "ghcr.io/sillytavern/sillytavern:${config.myconfig.ai.container.sillytavern.version}";
+    image =
+      "ghcr.io/sillytavern/sillytavern:${config.myconfig.ai.container.sillytavern.version}";
 
     environment = rec {
       "TZ" = "Europe/Amsterdam";
       "NODE_ENV" = "production";
       "FORCE_COLOR" = "1";
-      "OLLAMA_BASE_URL" = "http://host.containers.internal:${toString config.services.ollama.port}";
+      "OLLAMA_BASE_URL" = "http://host.containers.internal:${
+          toString config.services.ollama.port
+        }";
       "OLLAMA_API_BASE_URL" = "${OLLAMA_BASE_URL}/api";
     };
 
@@ -24,7 +27,9 @@ let
     ];
 
     ports = [
-      "${config.myconfig.ai.container.sillytavern.host}:${toString config.myconfig.ai.container.sillytavern.port}:8000/tcp"
+      "${config.myconfig.ai.container.sillytavern.host}:${
+        toString config.myconfig.ai.container.sillytavern.port
+      }:8000/tcp"
     ];
 
     extraOptions = [
@@ -35,7 +40,7 @@ let
     ];
   };
 in {
-  options.myconfig = with lib; {  
+  options.myconfig = with lib; {
     ai.container.sillytavern = {
       enable = mkEnableOption "myconfig.ai.container.sillytavern";
       host = mkOption {
@@ -52,18 +57,18 @@ in {
       };
     };
   };
-  config = lib.mkIf (config.myconfig.ai.enable && config.myconfig.ai.container.sillytavern.enable && config.services.ollama.enable) {
+  config = lib.mkIf (config.myconfig.ai.enable
+    && config.myconfig.ai.container.sillytavern.enable
+    && config.services.ollama.enable) {
 
-    virtualisation.oci-containers.containers = {
-      inherit sillytavern;
+      virtualisation.oci-containers.containers = { inherit sillytavern; };
+      system.activationScripts = {
+        script.text = ''
+          install -d -m 755 ${CONFIG_PATH} -o root -g root
+          install -d -m 755 ${DATA_PATH} -o root -g root
+          install -d -m 755 ${EXTENSIONS_PATH} -o root -g root
+          install -d -m 755 ${PLUGINS_PATH} -o root -g root
+        '';
+      };
     };
-    system.activationScripts = {
-      script.text = ''
-        install -d -m 755 ${CONFIG_PATH} -o root -g root
-        install -d -m 755 ${DATA_PATH} -o root -g root
-        install -d -m 755 ${EXTENSIONS_PATH} -o root -g root
-        install -d -m 755 ${PLUGINS_PATH} -o root -g root
-      '';
-    };
-  };
 }

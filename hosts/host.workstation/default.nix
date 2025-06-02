@@ -65,9 +65,8 @@
           };
         };
       })
-    (myconfig.metadatalib.setupAsBuildMachine [
-      myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
-    ])
+    (myconfig.metadatalib.setupAsBuildMachine
+      [ myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub" ])
     {
       services.vsftpd = { enable = true; };
     }

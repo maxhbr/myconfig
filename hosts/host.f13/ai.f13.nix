@@ -1,6 +1,7 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, inputs, ... }: let
+{ config, pkgs, lib, myconfig, inputs, ... }:
+let
   ai-tmux-session = "ai";
   ai-tmux-session-script = pkgs.writeShellScriptBin "ai-tmux-session" ''
     # if session is not yet created, create it
@@ -16,25 +17,23 @@
     exec tmux attach-session -t ${ai-tmux-session}
   '';
 in {
-  imports = [
-    {
-      home-manager.sharedModules = [{
-        home.packages = with pkgs;
-          [
-            nvtopPackages.amd
-            rocmPackages.rocminfo
-            rocmPackages.rocm-smi
-            onnxruntime
-          ] ++ (with pkgs.python3Packages; [
-            onnx
-            onnxruntime-tools
-            huggingface-hub
-          ]);
-      }];
-      # users.extraUsers."${myconfig.user}".extraGroups = ["nvidia"];
-      nixpkgs.config.rocmSupport = true;
-    }
-  ];
+  imports = [{
+    home-manager.sharedModules = [{
+      home.packages = with pkgs;
+        [
+          nvtopPackages.amd
+          rocmPackages.rocminfo
+          rocmPackages.rocm-smi
+          onnxruntime
+        ] ++ (with pkgs.python3Packages; [
+          onnx
+          onnxruntime-tools
+          huggingface-hub
+        ]);
+    }];
+    # users.extraUsers."${myconfig.user}".extraGroups = ["nvidia"];
+    nixpkgs.config.rocmSupport = true;
+  }];
   config = {
     # boot.kernelParams = [
     #   "pcie_aspm=off"
@@ -43,14 +42,10 @@ in {
       ai = {
         enable = true;
         coding.enable = true;
-        inference-cpp = {
-          enable = true;
-        };
-        lmstudio = {
-          enable = false;
-        };
+        inference-cpp = { enable = true; };
+        lmstudio = { enable = false; };
       };
-    };  
+    };
     services.ollama = {
       enable = false;
       # home = "/home/ollama";
@@ -68,12 +63,7 @@ in {
       # ];
     };
 
-    home-manager.sharedModules = [
-      {
-        home.packages = [
-          ai-tmux-session-script
-        ];
-      }
-    ];
+    home-manager.sharedModules =
+      [{ home.packages = [ ai-tmux-session-script ]; }];
   };
 }

@@ -3,7 +3,7 @@
 { config, pkgs, lib, myconfig, inputs, ... }: {
   imports = [
     ./hardware-configuration.nix
-    ./impermanence.nix
+    ./impermanence
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
     inputs.nixos-hardware.nixosModules.common-pc-laptop
     inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
@@ -15,18 +15,21 @@
     ./ai.f13.nix
     {
       services.openssh = {
-        listenAddresses = [{
-          addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
-          port = 22;
-        }
-        {
-          addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
-          port = 22;
-        }
-        {
-          addr = "127.0.0.1";
-          port = 22;
-        }];
+        listenAddresses = [
+          {
+            addr =
+              (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
+            port = 22;
+          }
+          {
+            addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
+            port = 22;
+          }
+          {
+            addr = "127.0.0.1";
+            port = 22;
+          }
+        ];
       };
     }
     {
@@ -115,11 +118,7 @@
     services.gnome.gnome-keyring.enable = true;
 
     home-manager.sharedModules = [
-      {
-        home.packages = with pkgs.master; [
-          joplin-desktop
-        ];
-      }
+      { home.packages = with pkgs.master; [ joplin-desktop ]; }
       {
         services.mako = {
           settings = {
