@@ -1,4 +1,4 @@
-{ pkgs, config, lib, myconfig, inputs, ... }: let {
+{ config, lib, ... }: {
   imports = [
     (lib.mkIf config.programs.steam.enable {
       myconfig.persistence.cache-directories = [ ".local/share/Steam" ];
@@ -11,20 +11,27 @@
   ];
   config = {
     home-manager.sharedModules = [
-      ({ config, lib, ... }:
-        lib.mkIf config.programs.firefox.enable {
-          myconfig.persistence.directories = [ ".mozilla" ];
-        })
       ({ config, lib, ... }: {
-        myconfig.persistence.directories =
-          [ ".config/Signal" ".config/Joplin" ".config/joplin-desktop" ];
+        config = lib.mkIf config.programs.firefox.enable {
+          myconfig.persistence.directories = [ ".mozilla" ];
+        };
       })
-      ({ config, lib, ... }:
-        lib.mkIf config.programs.chromium.enable {
+      ({ config, lib, ... }: {
+        config = { myconfig.persistence.directories = [ ".config/Signal" ]; };
+      })
+      ({ config, lib, ... }: {
+        config = {
+          myconfig.persistence.directories =
+            [ ".config/Joplin" ".config/joplin-desktop" ];
+        };
+      })
+      ({ config, lib, ... }: {
+        config = lib.mkIf config.programs.chromium.enable {
           myconfig.persistence.directories = [ ".config/chromium" ];
-        })
-      ({ config, lib, ... }:
-        lib.mkIf config.programs.teams.enable {
+        };
+      })
+      ({ config, lib, ... }: {
+        config = {
           myconfig.persistence.work-directories = [
             "TNG"
             "Maildir/tng"
@@ -34,9 +41,10 @@
           ];
           myconfig.persistence.work-files =
             [ ".config/zoom.conf" ".config/zoomus.conf" ];
-          config.myconfig.persistence.cache-directories =
+          myconfig.persistence.cache-directories =
             [ ".config/Cursor" ".cursor" ];
-        })
+        };
+      })
     ];
   };
 }
