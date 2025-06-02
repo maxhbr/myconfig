@@ -23,6 +23,7 @@ in {
       configDir = "/home/${user}/syncthing/.config/syncthing";
       openDefaultPorts = true;
     };
+    systemd.services.syncthing.environment.STNODEFAULTFOLDER = "true"; # Don't create default ~/Sync folder
     home-manager.users."${user}" = { home.packages = [ syncthingTunnel ]; };
   };
 }

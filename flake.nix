@@ -177,7 +177,7 @@
             self.nixosModules.core
             ({ pkgs, myconfig, ... }: {
               imports = [
-                (myconfig.metadatalib.announceOtherHosts "p14")
+                (myconfig.metadatalib.announceOtherHosts "f13")
               ];
             })
           ] ++ moreModules) metadataOverride);

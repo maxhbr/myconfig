@@ -51,6 +51,10 @@
           port = 22;
         }
         {
+          addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
+          port = 22;
+        }
+        {
           addr = "127.0.0.1";
           port = 22;
         }];

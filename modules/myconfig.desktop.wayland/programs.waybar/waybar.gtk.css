@@ -101,6 +101,7 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 
 #battery.warning:not(.charging) {
     background: #ee9a00;
+    color: black;
 }
 
 @keyframes blink {

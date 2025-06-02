@@ -22,7 +22,7 @@
     home-manager.sharedModules = [{
       home.packages = with pkgs; [
         aichat
-        alpaca
+        # alpaca
       ] ++ (with pkgs.python3Packages; [
         huggingface-hub
       ]);

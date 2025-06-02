@@ -59,6 +59,20 @@ get_ip_of_target_from_metadata() {
 get_ip_of_target() {
     local target="$1"; shift
     local use_wg="${1:-false}";
+
+    if [[ "$use_wg" == "true" ]]; then
+      local hosts_alias="$target.wg0"
+      if grep -q " $hosts_alias"'$' /etc/hosts; then
+        echo "$hosts_alias"
+        return
+      fi
+    else
+      if grep -q " $target\$" /etc/hosts; then
+        echo "$target"
+        return
+      fi
+    fi
+
     ip="$(get_ip_of_target_from_metadata ./hosts/metadata.json "$target" "$use_wg")"
     if [[ "$ip" == "null" ]]; then
         ip="$(get_ip_of_target_from_metadata ../myconfig/hosts/metadata.json "$target" "$use_wg")"
@@ -66,6 +80,10 @@ get_ip_of_target() {
     if [[ "$ip" == "null" ]]; then
         echo "ip for $target not found in metadata"
         exit 1
+    fi
+    if [[ "$ip" == "" ]]; then
+      echo "ip can not be empty"
+      exit 1
     fi
     echo "$ip"
 }
@@ -92,6 +110,16 @@ diff_build_results() (
         nvd diff "$old_result" "$out_link" | tee "$out_link"'.diff'
     fi
 )
+direct_deploy_locally() {
+    local out_link="$1"; shift
+    echo "################################################################################"
+    echo "direct deploying $out_link to $(hostname)"
+    echo "################################################################################"
+    local store_path="$(nix-store -q "$out_link")"
+    set -x
+    sudo nix-env --profile /nix/var/nix/profiles/system --set "$store_path"
+    sudo "$store_path/bin/switch-to-configuration" switch
+}
 deploy() (
     local target="$1"; shift
     local out_link="$1"; shift
@@ -184,7 +212,11 @@ main() {
     if [[ "$MODE" == "--use-wg" ]]; then
         deploy "$target" "$out_link" true
     elif [[ "$MODE" != "--test" ]]; then
-        deploy "$target" "$out_link"
+        # if [[ "$target" == "$(hostname)" ]]; then
+        #     direct_deploy_locally "$out_link"
+        # else
+            deploy "$target" "$out_link"
+        # fi
     fi
 }
 

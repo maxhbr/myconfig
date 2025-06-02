@@ -65,16 +65,13 @@
     }
     ({config, lib, ...}: {
       config = lib.mkIf config.programs.steam.enable {
-        environment.persistence."/persistent/cache" = {
-          users.mhuber = {
-            directories = [
-              {
-                directory = ".local/share/Steam";
-                method = "symlink";
-              }
+        home-manager.sharedModules = [
+          ({config, ...}: {
+            myconfig.persistence.cache-directories = [
+              ".local/share/Steam"
             ];
-          };
-        };
+          })
+        ];
       };
     })
   ];
@@ -101,18 +98,22 @@
       users.mhuber = {
         directories = [
           # TODO: module in home-manager can't use `mode`?
-          { directory = ".gnupg"; mode = "0700"; }
-          { directory = ".ssh"; mode = "0700"; }
-          { directory = ".local/share/keyrings"; mode = "0700"; }
-          { directory = ".password-store"; mode = "0700"; }
-        ];
+          { directory = ".gnupg"; mode = "0700"; user = "mhuber"; group = "mhuber"; }
+          { directory = ".ssh"; mode = "0700"; user = "mhuber"; group = "mhuber"; }
+          { directory = ".local/share/keyrings"; mode = "0700"; user = "mhuber"; group = "mhuber"; }
+          { directory = ".password-store"; mode = "0700"; user = "mhuber"; group = "mhuber"; }
+        ] ++ (if config.services.syncthing.enable then 
+          ((lib.mapAttrsToList (name: folder: let 
+              path = if lib.hasPrefix "/home/mhuber/" name then lib.removePrefix "/home/mhuber/" name else folder.path;
+            in { directory = path; mode = "0700"; user = "mhuber"; group = "mhuber"; }) config.services.syncthing.folders) ++ [ { directory = "syncthing"; mode = "0700"; user = "mhuber"; group = "mhuber"; } ])
+         else []);
       };
     };
     environment.persistence."/persistent/cache" = {
       enable = true;
       hideMounts = true;
       directories = [
-        # "/var/lib/ollama"
+        { directory = "/var/lib/private"; mode = "0700"; }
         "/var/lib/systemd/coredump"
       ];
     };
@@ -126,59 +127,60 @@
     programs.fuse.userAllowOther = true;
     home-manager.sharedModules = [
         inputs.impermanence.homeManagerModules.impermanence
-        # ({lib, options, ...}: let
-        #   option = with lib; mkOption {
-        #         type = types.listOf (
-        #           types.coercedTo types.str (directory: { inherit directory; }) (submodule {
-        #             options = {
-        #               directory = mkOption {
-        #                 type = str;
-        #                 description = "The directory path to be linked.";
-        #               };
-        #               method = mkOption {
-        #                 type = types.enum [ "bindfs" "symlink" ];
-        #                 default = "bindfs";
-        #                 description = ''
-        #                   The linking method to be used for this specific
-        #                   directory entry. See
-        #                   <literal>defaultDirectoryMethod</literal> for more
-        #                   information on the tradeoffs.
-        #                 '';
-        #               };
-        #             };
-        #           })
-        #         );
-        #     };
-        #   in {
-        #   options = {
-        #     myconfig.persistence.directories = option;
-        #     myconfig.persistence.work-directories = option;
-        #   };
-        # })
+        ({lib, options, ...}: let
+          optionDirectories = with lib; mkOption {
+            type = types.listOf (types.str);
+            description = "Directories to persist";
+            default = [];
+          };
+          in {
+          options = {
+            myconfig.persistence.directories = optionDirectories;
+            myconfig.persistence.work-directories = optionDirectories;
+            myconfig.persistence.cache-directories = optionDirectories;
+          };
+        })
         ({config, ...}: {
         home.persistence."/persistent/priv/home/${config.home.username}" = {
-          # directories = config.myconfig.persistence.directories ++ [
-          directories = [
+          directories = config.myconfig.persistence.directories ++ [
             "myconfig"
             "Downloads"
             "Documents"
             "MINE"
+            "bin"
             "_screenshots"
             "Maildir/alfa"
             "Maildir/gmail"
             "Maildir/mail"
             ".config/Signal"
+            ".mozilla"
+            ".config/chromium"
+            # ".local/share/fish"
+            ".config/Joplin"
+            ".config/joplin-desktop"
           ];
-          # files = [
-          #   ".screenrc"
-          # ];
+          files = [
+            ".local/share/fish/fish_history"
+          ];
           allowOther = true;
         };
         home.persistence."/persistent/work/home/${config.home.username}" = {
-          # directories = config.myconfig.persistence.work-directories ++ [
-          directories = [
+          directories = config.myconfig.persistence.work-directories ++ [
             "TNG"
             "Maildir/tng"
+            ".config/teams-for-linux"
+            ".zoom/data"
+            ".config/Slack"
+          ];
+          files = [
+            ".config/zoom.conf"
+            ".config/zoomus.conf"
+          ];
+        };
+        home.persistence."/persistent/cache/home/${config.home.username}" = {
+          directories = config.myconfig.persistence.cache-directories ++ [
+            ".config/Cursor"
+            ".cursor"
           ];
         };
       })

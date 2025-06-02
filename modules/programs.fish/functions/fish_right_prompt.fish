@@ -1,7 +1,7 @@
 # partially copied from: https://github.com/glasserc/etc/blob/master/dot/config/fish/functions/fish_right_prompt.fish
 
 function fish_right_prompt
-    set default_host "p14"
+    set default_host "f13"
     set current_host (hostname)
 
     if test "$current_host" != "$default_host"

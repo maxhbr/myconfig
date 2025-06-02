@@ -35,6 +35,7 @@ let
 in {
   options.myconfig = with lib; {
     desktop.wayland = {
+      wrapElectronPackages = mkEnableOption "Wrap electron packages";
       wrappedElectronPackages = mkOption {
         type = packagesToWrap;
         default = [ ];
@@ -44,7 +45,7 @@ in {
       };
     };
   };
-  config = lib.mkIf cfg.desktop.wayland.enable {
+  config = lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.wrapElectronPackages) {
     home.packages = let
       wrapExecutable = ptw:
         pkgs.runCommand "${ptw.executable}-wl" {
