@@ -36,6 +36,7 @@ in {
     # };
     home-manager.sharedModules = [{
       home.packages = [ steam ];
+      myconfig.persistence.cache-directories = [ ".local/share/Steam" ];
       # home.file = {
       #   ".local/share/Steam/compatibilitytools.d/Proton-5.9-GE-2-MF" = {
       #     source = builtins.fetchTarball {

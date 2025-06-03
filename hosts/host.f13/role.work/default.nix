@@ -59,6 +59,10 @@ in {
           ];
         }
       ];
+      myconfig.persistence.work-directories = [
+        ".config/teams-for-linux"
+        ".config/Slack"
+      ];
       home.packages = [ slack-pkg teams-for-linux-pkg ] ++ (with pkgs; [
         # idea.idea-ultimate # jetbrains.phpstorm
         dia

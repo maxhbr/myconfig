@@ -14,6 +14,7 @@ in {
         pkg = signal-desktop;
         executable = "signal-desktop";
       }];
+      myconfig.persistence.directories = [ ".config/Signal" ];
     }];
   };
 }

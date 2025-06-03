@@ -42,6 +42,21 @@
     }
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
     { programs.kdeconnect.enable = true; }
+    {
+      boot.kernelParams = [ "amd_pstate=active" ];
+      services.power-profiles-daemon.enable = false;
+
+      systemd.services.set-epp = {
+        description = "Set AMD EPP to performance";
+        wantedBy = [ "multi-user.target" ];
+        serviceConfig.Type = "oneshot";
+        serviceConfig.ExecStart = ''
+          for cpu in /sys/devices/system/cpu/cpu[0-9]*/cpufreq; do
+            echo performance > "$cpu/energy_performance_preference"
+          done
+        '';
+      };
+    }
   ];
 
   config = {
@@ -161,7 +176,6 @@
         supportedFilesystems = [ "nfs" ];
         kernelModules = [ "nfs" ];
       };
-      kernelParams = [ "amd_pstate=performance" ];
     };
 
     hardware.enableRedistributableFirmware = true;

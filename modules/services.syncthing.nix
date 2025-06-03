@@ -26,5 +26,12 @@ in {
     systemd.services.syncthing.environment.STNODEFAULTFOLDER =
       "true"; # Don't create default ~/Sync folder
     home-manager.users."${user}" = { home.packages = [ syncthingTunnel ]; };
+    myconfig.persistence.directories = let
+      folders = lib.mapAttrsToList (name: folder:
+        if lib.hasPrefix "/home/${user}/" name then
+          lib.removePrefix "/home/${user}/" name
+        else
+          folder.path) config.services.syncthing.settings.folders;
+    in folders ++ [ "syncthing" ];
   };
 }

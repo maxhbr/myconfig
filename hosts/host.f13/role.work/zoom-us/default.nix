@@ -36,6 +36,8 @@ in {
         defaultApplications."x-scheme-handler/zoommtg" =
           [ "us.zoom.Zoom.desktop" ];
       };
+      myconfig.persistence.work-directories = [ ".zoom/data" ];
+      myconfig.persistence.work-files = [ ".config/zoom.conf" ".config/zoomus.conf" ];
     }];
   };
 }

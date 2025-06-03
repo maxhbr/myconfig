@@ -4,14 +4,15 @@ let
     mkOption {
       type = types.listOf (types.str);
       description = "Directories to persist";
-      default = [ ];
+      default = [];
     };
   optionFiles = with lib;
     mkOption {
       type = types.listOf (types.str);
       description = "Files to persist";
-      default = [ ];
+      default = [];
     };
+  nixosConfig = config;
 in {
   imports = [
     ./impermanence.nix
@@ -26,20 +27,6 @@ in {
   };
   config = {
     home-manager.sharedModules = [
-      {
-        # take from nixos config
-        myconfig.persistence.directories =
-          config.myconfig.persistence.directories;
-        myconfig.persistence.files = config.myconfig.persistence.files;
-        myconfig.persistence.work-directories =
-          config.myconfig.persistence.work-directories;
-        myconfig.persistence.work-files =
-          config.myconfig.persistence.work-files;
-        myconfig.persistence.cache-directories =
-          config.myconfig.persistence.cache-directories;
-        myconfig.persistence.cache-files =
-          config.myconfig.persistence.cache-files;
-      }
       ({ config, ... }: {
         options = {
           myconfig.persistence.directories = optionDirectories;
@@ -48,6 +35,20 @@ in {
           myconfig.persistence.work-files = optionFiles;
           myconfig.persistence.cache-directories = optionDirectories;
           myconfig.persistence.cache-files = optionFiles;
+        };
+        config = {
+          # take from nixos config
+          myconfig.persistence.directories =
+            nixosConfig.myconfig.persistence.directories;
+          myconfig.persistence.files = nixosConfig.myconfig.persistence.files;
+          myconfig.persistence.work-directories =
+            nixosConfig.myconfig.persistence.work-directories;
+          myconfig.persistence.work-files =
+            nixosConfig.myconfig.persistence.work-files;
+          myconfig.persistence.cache-directories =
+            nixosConfig.myconfig.persistence.cache-directories;
+          myconfig.persistence.cache-files =
+            nixosConfig.myconfig.persistence.cache-files;
         };
       })
     ];

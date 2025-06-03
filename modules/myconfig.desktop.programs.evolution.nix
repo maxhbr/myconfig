@@ -26,5 +26,8 @@ in {
       #     });
       #   })
       # ];
+      myconfig.persistence.directories =
+        [ ".local/share/evolution" ".config/evolution" ];
+      myconfig.persistence.cache-directories = [ ".cache/evolution" ];
     };
 }

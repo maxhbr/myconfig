@@ -5,7 +5,11 @@
   config =
     lib.mkIf (config.myconfig.ai.enable && config.myconfig.ai.coding.enable) {
       home-manager.sharedModules =
-        [{ home.packages = with pkgs; [ aider-chat code-cursor zed ]; }];
+        [{ 
+          home.packages = with pkgs; [ aider-chat code-cursor zed ]; 
+          myconfig.persistence.cache-directories =
+            [ ".config/Cursor" ".cursor" ];
+          }];
     };
 }
 

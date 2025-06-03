@@ -6,6 +6,7 @@ let
     '';
 in {
   config = lib.mkIf config.myconfig.desktop.enable {
+    myconfig.persistence.directories = [ ".mozilla" ];
     home-manager.sharedModules = [
       {
         config = {
