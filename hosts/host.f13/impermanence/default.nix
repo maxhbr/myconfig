@@ -78,26 +78,7 @@ in {
             user = "mhuber";
             group = "mhuber";
           }
-        ] ++ (if config.services.syncthing.enable then
-          ((lib.mapAttrsToList (name: folder:
-            let
-              path = if lib.hasPrefix "/home/mhuber/" name then
-                lib.removePrefix "/home/mhuber/" name
-              else
-                folder.path;
-            in {
-              directory = path;
-              mode = "0700";
-              user = "mhuber";
-              group = "mhuber";
-            }) config.services.syncthing.settings.folders) ++ [{
-              directory = "syncthing";
-              mode = "0700";
-              user = "mhuber";
-              group = "mhuber";
-            }])
-        else
-          [ ]);
+        ];
       };
     };
     environment.persistence."/persistent/cache" = {

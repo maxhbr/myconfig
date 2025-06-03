@@ -8,6 +8,15 @@
         [ ".local/share/evolution" ".config/evolution" ];
       myconfig.persistence.cache-directories = [ ".cache/evolution" ];
     })
+    (lib.mkIf config.services.syncthing.enable {
+      myconfig.persistence.directories = let
+        folders = lib.mapAttrsToList (name: folder:
+            if lib.hasPrefix "/home/mhuber/" name then
+              lib.removePrefix "/home/mhuber/" name
+            else
+              folder.path) config.services.syncthing.settings.folders;
+        in folders ++ ["syncthing"];
+    })
   ];
   config = {
     home-manager.sharedModules = [
@@ -50,6 +59,7 @@
             [ ".config/Cursor" ".cursor" ];
         };
       })
+
     ];
   };
 }

@@ -5,6 +5,20 @@ set -euo pipefail
 cd "$(dirname "$0")"
 verbose=""
 
+guard_pid() {
+    local target="$1"; shift
+    local this_pid=$$
+    local pidfile="/tmp/$(echo "$0" | sed 's/\//-/g').${target}.pid"
+    if [[ -e "$pidfile" ]]; then
+        old_pid="$(cat "$pidfile")"
+        if [[ -e "/proc/$old_pid" ]]; then
+            echo "process $old_pid is running for $target"
+            exit 1
+        fi
+    fi
+    echo "$this_pid" > "$pidfile"
+}   
+
 flake_update() (
     local path="$1"; shift
     echo "################################################################################"
@@ -170,6 +184,8 @@ main() {
     fi
 
     local target="${1:-$(hostname)}"
+
+    guard_pid "$target"
 
     ################################################################################
     # setup logging
