@@ -161,9 +161,7 @@
         supportedFilesystems = [ "nfs" ];
         kernelModules = [ "nfs" ];
       };
-      kernelParams = [
-        "amd_pstate=performance"
-      ];
+      kernelParams = [ "amd_pstate=performance" ];
     };
 
     hardware.enableRedistributableFirmware = true;
