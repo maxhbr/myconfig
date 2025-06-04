@@ -4,19 +4,17 @@ let
     mkOption {
       type = types.listOf (types.str);
       description = "Directories to persist";
-      default = [];
+      default = [ ];
     };
   optionFiles = with lib;
     mkOption {
       type = types.listOf (types.str);
       description = "Files to persist";
-      default = [];
+      default = [ ];
     };
   nixosConfig = config;
 in {
-  imports = [
-    ./impermanence.nix
-  ];
+  imports = [ ./impermanence.nix ];
   options = {
     myconfig.persistence.directories = optionDirectories;
     myconfig.persistence.files = optionFiles;

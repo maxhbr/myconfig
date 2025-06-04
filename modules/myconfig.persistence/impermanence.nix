@@ -77,38 +77,49 @@ in {
     };
     home-manager.sharedModules = [
       inputs.impermanence.homeManagerModules.impermanence
-      ({ config, ... }: let 
-          mkRelativeToHome = path: if lib.hasPrefix "${config.home.homeDirectory}/" path then lib.removePrefix "${config.home.homeDirectory}/" path else path;
+      ({ config, ... }:
+        let
+          mkRelativeToHome = path:
+            if lib.hasPrefix "${config.home.homeDirectory}/" path then
+              lib.removePrefix "${config.home.homeDirectory}/" path
+            else
+              path;
         in {
-        config = {
-          home.persistence."${persistentPrivDir}/home/${config.home.username}" =
-            {
-              directories = lib.map mkRelativeToHome config.myconfig.persistence.directories ++ [
-                "myconfig"
-                "Downloads"
-                "Documents"
-                "MINE"
-                "bin"
-                "_screenshots"
-                ".local/share/fish"
-              ];
-              files = lib.map mkRelativeToHome config.myconfig.persistence.files;
-              allowOther = true;
-            };
-          home.persistence."${persistentWorkDir}/home/${config.home.username}" =
-            {
-              directories = lib.map mkRelativeToHome config.myconfig.persistence.work-directories;
-              files = lib.map mkRelativeToHome config.myconfig.persistence.work-files;
-              allowOther = true;
-            };
-          home.persistence."${persistentCacheDir}/home/${config.home.username}" =
-            {
-              directories = lib.map mkRelativeToHome config.myconfig.persistence.cache-directories;
-              files = lib.map mkRelativeToHome config.myconfig.persistence.cache-files;
-              allowOther = true;
-            };
-        };
-      })
+          config = {
+            home.persistence."${persistentPrivDir}/home/${config.home.username}" =
+              {
+                directories = lib.map mkRelativeToHome
+                  config.myconfig.persistence.directories ++ [
+                    "myconfig"
+                    "Downloads"
+                    "Documents"
+                    "MINE"
+                    "bin"
+                    "_screenshots"
+                    ".local/share/fish"
+                  ];
+                files =
+                  lib.map mkRelativeToHome config.myconfig.persistence.files;
+                allowOther = true;
+              };
+            home.persistence."${persistentWorkDir}/home/${config.home.username}" =
+              {
+                directories = lib.map mkRelativeToHome
+                  config.myconfig.persistence.work-directories;
+                files = lib.map mkRelativeToHome
+                  config.myconfig.persistence.work-files;
+                allowOther = true;
+              };
+            home.persistence."${persistentCacheDir}/home/${config.home.username}" =
+              {
+                directories = lib.map mkRelativeToHome
+                  config.myconfig.persistence.cache-directories;
+                files = lib.map mkRelativeToHome
+                  config.myconfig.persistence.cache-files;
+                allowOther = true;
+              };
+          };
+        })
     ];
     system.activationScripts = {
       script.text = ''

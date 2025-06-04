@@ -43,25 +43,28 @@
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
     { programs.kdeconnect.enable = true; }
     {
+      # set CPU to performance mode
       boot.kernelParams = [ "amd_pstate=active" ];
-      services.power-profiles-daemon.enable = false;
-
+      # services.power-profiles-daemon.enable = false;
       systemd.services.set-epp = {
         description = "Set AMD EPP to performance";
         wantedBy = [ "multi-user.target" ];
         serviceConfig.Type = "oneshot";
-        serviceConfig.ExecStart = ''
-          for cpu in /sys/devices/system/cpu/cpu[0-9]*/cpufreq; do
-            echo performance > "$cpu/energy_performance_preference"
-          done
-        '';
+        serviceConfig.ExecStart = let
+          set-performance =
+            pkgs.writeShellScriptBin "amd-epp-set-performance" ''
+              for cpu in /sys/devices/system/cpu/cpu[0-9]*/cpufreq; do
+                echo performance > "$cpu/energy_performance_preference"
+              done
+            '';
+        in "${set-performance}/bin/amd-epp-set-performance";
       };
     }
   ];
 
   config = {
     networking.hostName = "f13";
-    networking.hostId = "00000f13";
+    networking.hostId = "00000${config.networking.hostName}";
     networking.useDHCP = false;
     networking.interfaces.wlp192s0.useDHCP = true;
     myconfig = {
@@ -133,7 +136,11 @@
     services.gnome.gnome-keyring.enable = true;
 
     home-manager.sharedModules = [
-      { home.packages = with pkgs.master; [ joplin-desktop ]; }
+      { 
+        home.packages = with pkgs.master; [ joplin-desktop ];
+        myconfig.persistence.directories =
+          [ ".config/Joplin" ".config/joplin-desktop" ];
+      }
       {
         services.mako = {
           settings = {

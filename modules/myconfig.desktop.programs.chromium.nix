@@ -53,6 +53,7 @@ in {
 
           ];
         };
+        myconfig.persistence.directories = [ ".config/chromium" ];
         myconfig.desktop.wayland.wrappedElectronPackages = [{
           pkg = config.programs.chromium.package;
           executable = "chromium";

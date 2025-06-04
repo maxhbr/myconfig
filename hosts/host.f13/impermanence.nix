@@ -3,6 +3,7 @@
   # + patches
   config = let btrfs_device = config.fileSystems."/home".device;
   in {
+    myconfig.persistence.impermanence.enable = true;
     boot.initrd.postResumeCommands = lib.mkAfter ''
       set -x
 

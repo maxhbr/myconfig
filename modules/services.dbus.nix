@@ -95,7 +95,7 @@ in {
           chooser_cmd = "${pkgs.slurp}/bin/slurp -f %o -or";
         };
       extraPortals = let
-        gnome = config.services.xserver.desktopManager.gnome.enable;
+        gnome = config.services.desktopManager.gnome.enable;
         kde = config.services.desktopManager.plasma6.enable
           || config.services.xserver.desktopManager.plasma5.enable;
       in [ pkgs.xdg-desktop-portal-wlr ]

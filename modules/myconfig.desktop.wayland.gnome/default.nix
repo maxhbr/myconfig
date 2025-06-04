@@ -10,7 +10,7 @@ in {
   };
   config =
     lib.mkIf (cfg.desktop.wayland.enable && cfg.desktop.wayland.gnome.enable) {
-      services.xserver.desktopManager.gnome.enable = true;
+      services.desktopManager.gnome.enable = true;
       environment.gnome.excludePackages =
         (with pkgs; [ gnome-photos gnome-tour ]) ++ (with pkgs.gnome; [
           cheese # webcam tool
