@@ -1,6 +1,7 @@
 { config, lib, pkgs, ... }:
 let
   # waybar-master = inputs.nixpkgs-wayland.packages.${pkgs.system}.waybar;
+  power-profiles-daemon-config = config.services.power-profiles-daemon;
   cfg = config.myconfig;
   hmModule = ({ config, ... }:
     let
@@ -65,7 +66,9 @@ let
                 # "group/hardware"
                 "idle_inhibitor"
                 "battery"
+              ] ++ lib.optionals power-profiles-daemon-config.enable [
                 "custom/platform_profile"
+              ] ++ [
                 "custom/test_for_missing_tb_changing"
                 # "custom/audio_idle_inhibitor"
                 "clock#time"
@@ -119,16 +122,17 @@ let
                   "firefoxdeveloperedition" = "firefox-developer-edition";
                 };
               };
-              "custom/platform_profile" = {
+              "custom/platform_profile" = lib.mkIf power-profiles-daemon-config.enable {
                 format = "{}";
                 exec = (pkgs.writeShellScriptBin "getPlatformProfile" ''
-                  profile="$(cat /sys/firmware/acpi/platform_profile)"
+                  profile="$(${power-profiles-daemon-config.package}/bin/powerprofilesctl get)"
                   cat <<EOF
                   {"text":"$profile","class":"$profile"}
                   EOF
                 '') + "/bin/getPlatformProfile";
                 exec-if =
                   "! grep -q performance /sys/firmware/acpi/platform_profile";
+                on-click = "${power-profiles-daemon-config.package}/bin/powerprofilesctl set performance";
                 return-type = "json";
                 interval = 5;
               };

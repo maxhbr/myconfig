@@ -3,7 +3,7 @@
 { config, pkgs, lib, myconfig, inputs, ... }: {
   imports = [
     ./hardware-configuration.nix
-    ./impermanence
+    ./impermanence.nix
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
     inputs.nixos-hardware.nixosModules.common-pc-laptop
     inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
@@ -45,19 +45,12 @@
     {
       # set CPU to performance mode
       boot.kernelParams = [ "amd_pstate=active" ];
-      # services.power-profiles-daemon.enable = false;
-      systemd.services.set-epp = {
-        description = "Set AMD EPP to performance";
+      services.power-profiles-daemon.enable = true;
+      systemd.services.set-performance = {
+        description = "Set performance profile";
         wantedBy = [ "multi-user.target" ];
         serviceConfig.Type = "oneshot";
-        serviceConfig.ExecStart = let
-          set-performance =
-            pkgs.writeShellScriptBin "amd-epp-set-performance" ''
-              for cpu in /sys/devices/system/cpu/cpu[0-9]*/cpufreq; do
-                echo performance > "$cpu/energy_performance_preference"
-              done
-            '';
-        in "${set-performance}/bin/amd-epp-set-performance";
+        serviceConfig.ExecStart = "${config.services.power-profiles-daemon.package}/bin/powerprofilesctl set performance";
       };
     }
   ];
