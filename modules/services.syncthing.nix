@@ -32,6 +32,6 @@ in {
           lib.removePrefix "/home/${user}/" name
         else
           folder.path) config.services.syncthing.settings.folders;
-    in folders ++ [ "syncthing" ];
+    in folders ++ [ config.services.syncthing.configDir ];
   };
 }

@@ -1,4 +1,5 @@
-{ config, myconfig, lib, pkgs, ... }:  let
+{ config, myconfig, lib, pkgs, ... }:
+let
   user = myconfig.user;
   btrfs_device = config.fileSystems."/home".device;
 in {

@@ -21,6 +21,7 @@ in {
         home-manager.sharedModules = [
           ({ config, lib, ... }: {
             config = lib.mkIf config.programs.fish.enable {
+              myconfig.persistence.directories = [ ".local/share/fish" ];
               home.packages = with pkgs; [ grc ];
               programs.fish = {
                 shellAliases = { };

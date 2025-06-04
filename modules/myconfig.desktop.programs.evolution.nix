@@ -10,24 +10,13 @@ in {
       services.gnome = {
         evolution-data-server.enable = lib.mkDefault true;
         gnome-keyring.enable = lib.mkDefault true;
-        # # optional to use google/nextcloud calendar
-        # gnome-online-accounts.enable = lib.mkDefault true;
       };
       programs.dconf.enable = true;
-      # programs.seahorse.enable = true;
-
-      # nixpkgs.overlays = [
-      #   (self: super: {
-      #     # Spamassasin tests currently fail:
-      #     # TODO: remove
-      #     spamassassin = super.spamassassin.overrideAttrs (old: {
-      #       doCheck = false;
-      #       doInstallCheck = false;
-      #     });
-      #   })
-      # ];
-      myconfig.persistence.directories =
-        [ ".local/share/evolution" ".config/evolution" ];
+      myconfig.persistence.directories = [
+        ".local/share/evolution"
+        ".config/evolution"
+        ".local/share/org.gnome.Evolution"
+      ];
       myconfig.persistence.cache-directories = [ ".cache/evolution" ];
     };
 }

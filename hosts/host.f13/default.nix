@@ -50,7 +50,8 @@
         description = "Set performance profile";
         wantedBy = [ "multi-user.target" ];
         serviceConfig.Type = "oneshot";
-        serviceConfig.ExecStart = "${config.services.power-profiles-daemon.package}/bin/powerprofilesctl set performance";
+        serviceConfig.ExecStart =
+          "${config.services.power-profiles-daemon.package}/bin/powerprofilesctl set performance";
       };
     }
   ];
@@ -84,13 +85,13 @@
             }
           '';
         };
-        # messengers.enable = true;
+        messengers.enable = true;
         myphoto.enable = true;
         obs.enable = true;
         # cad.enable = true;
         deskreen.enable = true;
       };
-      # email.enable = true;
+      email.enable = true;
       virtualisation.enable = true;
       # editor.emacs.enable = false;
       dev = {
@@ -129,7 +130,7 @@
     services.gnome.gnome-keyring.enable = true;
 
     home-manager.sharedModules = [
-      { 
+      {
         home.packages = with pkgs.master; [ joplin-desktop ];
         myconfig.persistence.directories =
           [ ".config/Joplin" ".config/joplin-desktop" ];

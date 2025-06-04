@@ -1,15 +1,43 @@
 { pkgs, config, lib, myconfig, inputs, ... }:
 let
+  user = myconfig.user;
   persistentDir = "/persistent";
   persistentPrivDir = "${persistentDir}/priv";
   persistentWorkDir = "${persistentDir}/work";
   persistentCacheDir = "${persistentDir}/cache";
+
+  validatePaths = paths:
+    let
+      sortedPaths = lib.sort (a: b: lib.hasPrefix a b) paths;
+
+      # Check if path a is a prefix of path b
+      isPrefix = a: b: a != b && lib.hasPrefix a b;
+
+      # Check each path against all following paths in the sorted list
+      checkPrefixes = path: rest:
+        if rest == [ ] then
+          true
+        else if isPrefix path (lib.head rest) then
+          throw "Invalid paths: '${path}' is a prefix of '${lib.head rest}'"
+        else
+          checkPrefixes path (lib.tail rest);
+
+      # Validate all paths
+      validate = paths:
+        if paths == [ ] then
+          true
+        else
+          checkPrefixes (lib.head paths) (lib.tail paths)
+          && validate (lib.tail paths);
+    in if validate sortedPaths then paths else throw "Path validation failed";
+
 in {
   imports = [ inputs.impermanence.nixosModule ];
   options = {
     myconfig.persistence.impermanence.enable =
       lib.mkEnableOption "impermanence";
   };
+
   config = lib.mkIf config.myconfig.persistence.impermanence.enable {
     programs.fuse.userAllowOther = true;
     environment.persistence = {
@@ -86,36 +114,36 @@ in {
               path;
         in {
           config = {
+            myconfig.persistence.directories = [
+              "myconfig"
+              "Downloads"
+              "Documents"
+              "MINE"
+              "bin"
+              "_screenshots"
+            ];
             home.persistence."${persistentPrivDir}/home/${config.home.username}" =
               {
-                directories = lib.map mkRelativeToHome
-                  config.myconfig.persistence.directories ++ [
-                    "myconfig"
-                    "Downloads"
-                    "Documents"
-                    "MINE"
-                    "bin"
-                    "_screenshots"
-                    ".local/share/fish"
-                  ];
-                files =
-                  lib.map mkRelativeToHome config.myconfig.persistence.files;
+                directories = validatePaths (lib.map mkRelativeToHome
+                  config.myconfig.persistence.directories);
+                files = validatePaths
+                  (lib.map mkRelativeToHome config.myconfig.persistence.files);
                 allowOther = true;
               };
             home.persistence."${persistentWorkDir}/home/${config.home.username}" =
               {
-                directories = lib.map mkRelativeToHome
-                  config.myconfig.persistence.work-directories;
-                files = lib.map mkRelativeToHome
-                  config.myconfig.persistence.work-files;
+                directories = validatePaths (lib.map mkRelativeToHome
+                  config.myconfig.persistence.work-directories);
+                files = validatePaths (lib.map mkRelativeToHome
+                  config.myconfig.persistence.work-files);
                 allowOther = true;
               };
             home.persistence."${persistentCacheDir}/home/${config.home.username}" =
               {
-                directories = lib.map mkRelativeToHome
-                  config.myconfig.persistence.cache-directories;
-                files = lib.map mkRelativeToHome
-                  config.myconfig.persistence.cache-files;
+                directories = validatePaths (lib.map mkRelativeToHome
+                  config.myconfig.persistence.cache-directories);
+                files = validatePaths (lib.map mkRelativeToHome
+                  config.myconfig.persistence.cache-files);
                 allowOther = true;
               };
           };
@@ -123,15 +151,15 @@ in {
     ];
     system.activationScripts = {
       script.text = ''
-        install -d -m 700 "/persistent/priv/home/mhuber" -o ${
-          toString config.users.extraUsers.mhuber.uid
-        } -g ${toString config.users.extraGroups.mhuber.gid}
-        install -d -m 700 "/persistent/work/home/mhuber" -o ${
-          toString config.users.extraUsers.mhuber.uid
-        } -g ${toString config.users.extraGroups.mhuber.gid}
-        install -d -m 700 "/persistent/cache/home/mhuber" -o ${
-          toString config.users.extraUsers.mhuber.uid
-        } -g ${toString config.users.extraGroups.mhuber.gid}
+        install -d -m 700 "/${persistentPrivDir}/home/${user}" -o ${
+          toString config.users.extraUsers.${user}.uid
+        } -g ${toString config.users.extraGroups.${user}.gid}
+        install -d -m 700 "/${persistentWorkDir}/home/${user}" -o ${
+          toString config.users.extraUsers.${user}.uid
+        } -g ${toString config.users.extraGroups.${user}.gid}
+        install -d -m 700 "/${persistentCacheDir}/home/${user}" -o ${
+          toString config.users.extraUsers.${user}.uid
+        } -g ${toString config.users.extraGroups.${user}.gid}
       '';
     };
   };
