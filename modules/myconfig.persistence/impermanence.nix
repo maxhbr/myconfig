@@ -5,6 +5,18 @@ let
   persistentPrivDir = "${persistentDir}/priv";
   persistentWorkDir = "${persistentDir}/work";
   persistentCacheDir = "${persistentDir}/cache";
+  volumeLog = "@log";
+  volumeNix = "@nix";
+  volumeHome = "@home";
+  volumePriv = "@persistent_priv";
+  volumeWork = "@persistent_work";
+  volumeCache = "@persistent_cache";
+
+  validateDevice = device:
+    if lib.isString device && lib.hasPrefix "/dev/" device then
+      device
+    else
+      throw "Invalid device: '${device}' (must be a string and start with '/dev/')";
 
   validatePaths = paths:
     let
@@ -33,12 +45,143 @@ let
 
 in {
   imports = [ inputs.impermanence.nixosModule ];
-  options = {
+  options = with lib; {
     myconfig.persistence.impermanence.enable =
       lib.mkEnableOption "impermanence";
+    myconfig.persistence.impermanence.btrfs_device = mkOption {
+      default = null;
+      example = "/dev/sda";
+      type = types.nullOr types.str;
+      description = "Location of the device.";
+    }; 
   };
 
   config = lib.mkIf config.myconfig.persistence.impermanence.enable {
+    # see https://github.com/nix-community/impermanence?tab=readme-ov-file
+    # + patches
+    boot.initrd.postResumeCommands = lib.mkAfter ''
+      clean_home() {
+        if [[ -e /btrfs_tmp/${volumeHome} ]]; then
+            mkdir -p /btrfs_tmp/old_homes
+            timestamp=$(date --date="@$(stat -c %Y /btrfs_tmp/${volumeHome})" "+%Y-%m-%d_%H:%M:%S")
+            if [[ ! -e /btrfs_tmp/old_homes/$timestamp ]]; then
+              mv /btrfs_tmp/${volumeHome} "/btrfs_tmp/old_homes/$timestamp"
+            else
+              btrfs subvolume delete /btrfs_tmp/${volumeHome}
+            fi
+        fi
+      }
+
+      delete_subvolume_recursively() {
+          IFS=$'\n'
+
+          # If we accidentally end up with a file or directory under old_homes,
+          # the code will enumerate all subvolumes under the main volume.
+          # We don't want to remove everything under true main volume. Only
+          # proceed if this path is a btrfs subvolume (inode=256).
+          if [ $(stat -c %i "$1") -ne 256 ]; then return; fi
+
+          for i in $(btrfs subvolume list -o "$1" | cut -f 9- -d ' '); do
+              delete_subvolume_recursively "/btrfs_tmp/$i"
+          done
+          btrfs subvolume delete "$1"
+      }
+
+      delete_old_snapshots() {
+        latest_snapshot=$(find /btrfs_tmp/old_homes/ -mindepth 1 -maxdepth 1 -type d | sort -r | head -n 1)
+        # Only delete old snapshots if there's at least one that will remain after deletion
+        if [ -n "$latest_snapshot" ]; then
+            for i in $(find /btrfs_tmp/old_homes/ -mindepth 1 -maxdepth 1 -mtime +30 | grep -v -e "$latest_snapshot"); do
+                delete_subvolume_recursively "$i"
+            done
+        fi
+      }
+
+      create_subvolume_if_not_exists() {
+        if ! btrfs subvolume list /btrfs_tmp | grep -q "$1"; then
+          btrfs subvolume create /btrfs_tmp/$1
+        fi
+      }
+
+      init_home() {
+        create_subvolume_if_not_exists "${volumeHome}"
+        install -d -m 700 "/btrfs_tmp/${volumeHome}/${user}" -o ${
+          toString config.users.extraUsers.${user}.uid
+        } -g ${toString config.users.extraGroups.${user}.gid}
+        for folder in .local .local/share .config; do
+          install -d -m 755 "/btrfs_tmp/${volumeHome}/${user}/$folder" -o ${
+            toString config.users.extraUsers.${user}.uid
+          } -g ${toString config.users.extraGroups.${user}.gid}
+        done
+      }
+
+      set -x
+
+      mkdir -p /btrfs_tmp
+      mount ${config.myconfig.persistence.impermanence.btrfs_device} /btrfs_tmp
+      exec 1>>/btrfs_tmp/boot.initrd.postResumeCommands.log 2>&1
+
+      clean_home
+      delete_old_snapshots
+      init_home
+      create_subvolume_if_not_exists "${volumeLog}"
+      create_subvolume_if_not_exists "${volumeNix}"
+      create_subvolume_if_not_exists "${volumePriv}"
+      create_subvolume_if_not_exists "${volumeWork}"
+      create_subvolume_if_not_exists "${volumeCache}"
+
+      exec 1>&- 2>&-
+
+      umount /btrfs_tmp
+
+      set +x
+    '';
+
+    fileSystems."/" = {
+      device = "none";
+      fsType = "tmpfs";
+      options = [ "defaults" "size=20%" "mode=755" ];
+    };
+
+    fileSystems."/var/log" = {
+      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      fsType = "btrfs";
+      options = [ "subvol=${volumeLog}" ];
+    };
+
+    fileSystems."/nix" = {
+      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      fsType = "btrfs";
+      options = [ "subvol=${volumeNix}" ];
+    };
+
+    fileSystems."/home" = {
+      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      fsType = "btrfs";
+      options = [ "subvol=${volumeHome}" ];
+    };
+
+    fileSystems."${persistentPrivDir}" = {
+      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      fsType = "btrfs";
+      options = [ "subvol=${volumePriv}" ];
+      neededForBoot = true;
+    };
+
+    fileSystems."${persistentWorkDir}" = {
+      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      fsType = "btrfs";
+      options = [ "subvol=${volumeWork}" ];
+      neededForBoot = true;
+    };
+
+    fileSystems."${persistentCacheDir}" = {
+      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      fsType = "btrfs";
+      options = [ "subvol=${volumeCache}" ];
+      neededForBoot = true;
+    };
+
     programs.fuse.userAllowOther = true;
     environment.persistence = {
       "${persistentPrivDir}" = {
@@ -60,33 +203,33 @@ in {
           "/etc/ssh/ssh_host_rsa_key"
           "/etc/ssh/ssh_host_rsa_key.pub"
         ];
-        users.mhuber = {
+        users.${user} = {
           directories = [
             # TODO: module in home-manager can't use `mode`?
             # TODO: parent directories are owned by root
             {
               directory = ".gnupg";
               mode = "0700";
-              user = "mhuber";
-              group = "mhuber";
+              user = user;
+              group = user;
             }
             {
               directory = ".ssh";
               mode = "0700";
-              user = "mhuber";
-              group = "mhuber";
+              user = user;
+              group = user;
             }
             {
               directory = ".local/share/keyrings";
               mode = "0700";
-              user = "mhuber";
-              group = "mhuber";
+              user = user;
+              group = user;
             }
             {
               directory = ".password-store";
               mode = "0700";
-              user = "mhuber";
-              group = "mhuber";
+              user = user;
+              group = user;
             }
           ];
         };
