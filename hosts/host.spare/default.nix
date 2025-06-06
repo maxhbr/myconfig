@@ -9,7 +9,7 @@
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
     ./ai.spare.nix
-    ../host.p14/role.work
+    ../host.f13/role.work
     ../host.workstation/gaming/games.steam
     (myconfig.metadatalib.setupAsBuildMachine
       [ myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub" ])

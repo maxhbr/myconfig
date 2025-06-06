@@ -16,7 +16,8 @@ let
     if lib.isString device && lib.hasPrefix "/dev/" device then
       device
     else
-      throw "Invalid device: '${device}' (must be a string and start with '/dev/')";
+      throw
+      "Invalid device: '${device}' (must be a string and start with '/dev/')";
 
   validatePaths = paths:
     let
@@ -53,7 +54,7 @@ in {
       example = "/dev/sda";
       type = types.nullOr types.str;
       description = "Location of the device.";
-    }; 
+    };
   };
 
   config = lib.mkIf config.myconfig.persistence.impermanence.enable {
@@ -144,39 +145,45 @@ in {
     };
 
     fileSystems."/var/log" = {
-      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      device =
+        validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvol=${volumeLog}" ];
     };
 
     fileSystems."/nix" = {
-      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      device =
+        validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvol=${volumeNix}" ];
     };
 
     fileSystems."/home" = {
-      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      device =
+        validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvol=${volumeHome}" ];
     };
 
     fileSystems."${persistentPrivDir}" = {
-      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      device =
+        validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvol=${volumePriv}" ];
       neededForBoot = true;
     };
 
     fileSystems."${persistentWorkDir}" = {
-      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      device =
+        validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvol=${volumeWork}" ];
       neededForBoot = true;
     };
 
     fileSystems."${persistentCacheDir}" = {
-      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      device =
+        validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvol=${volumeCache}" ];
       neededForBoot = true;

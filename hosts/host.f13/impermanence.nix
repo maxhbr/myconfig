@@ -1,5 +1,5 @@
-{ config, myconfig, lib, pkgs, ... }:  let
-  user = myconfig.user;
+{ config, myconfig, lib, pkgs, ... }:
+let user = myconfig.user;
 in {
   config = {
     myconfig.persistence.impermanence = {

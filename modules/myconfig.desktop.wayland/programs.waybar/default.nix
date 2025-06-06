@@ -48,6 +48,15 @@ let
         echo $! > $pidfile
         wait
       '';
+      toggleLight = pkgs.writeShellScriptBin "toggleLight" ''
+        set -x
+        current=$(${pkgs.light}/bin/light -G)
+        if [[ $current == "100.00"* ]]; then
+          ${pkgs.light}/bin/light -S 20
+        else
+          ${pkgs.light}/bin/light -S 100
+        fi
+      '';
     in {
       config = (lib.mkIf config.programs.waybar.enable {
         home.packages = [ waybarOnce ];
@@ -103,7 +112,7 @@ let
               cpu = {
                 format = "cpu: {usage}%";
                 tooltip = false;
-                on-click = "foot-htop";
+                on-click = "foot-btop";
               };
               "wlr/taskbar" = {
                 format = "{icon}";
@@ -171,6 +180,7 @@ let
                 format-icons = [ "" "" "" "" "" "" "" "" "" ];
                 on-scroll-up = "${pkgs.light}/bin/light -A 1";
                 on-scroll-down = "${pkgs.light}/bin/light -U 1";
+                on-click = "${toggleLight}/bin/toggleLight";
               };
               battery = {
                 states = {

@@ -43,8 +43,9 @@ in {
         main = {
           font = "monospace:size=10";
           dpi-aware = "no"; # "yes";
-          include = "${theme}";
+          # include = "${theme}";
         };
+        mouse = { hide-when-typing = "yes"; };
         colors = { alpha = "0.85"; };
       };
     };
@@ -86,6 +87,7 @@ in {
       in [
         (mkFootTuiCmd "bluetuith" bluetuith)
         (mkFootTuiCmd "htop" htop)
+        (mkFootTuiCmd "btop" btop)
         (mkFootTuiCmd "nmtui" networkmanager)
       ]);
   });
