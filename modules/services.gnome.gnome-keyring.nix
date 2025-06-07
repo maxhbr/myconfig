@@ -7,8 +7,6 @@
 
     # programs.seahorse.enable = lib.mkDefault true;
 
-    myconfig.persistence.directories = [
-      "~/.local/share/keyrings"
-    ];
+    # impermanence already stores ".local/share/keyrings" via other config^
   });
 }

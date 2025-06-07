@@ -3,7 +3,6 @@
 { config, pkgs, lib, myconfig, inputs, ... }: {
   imports = [
     ./hardware-configuration.nix
-    ./impermanence.nix
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
     inputs.nixos-hardware.nixosModules.common-pc-laptop
     inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
