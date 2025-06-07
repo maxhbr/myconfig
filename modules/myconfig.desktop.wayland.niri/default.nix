@@ -60,10 +60,10 @@ in {
                     ${cfg.desktop.wayland.niri.additionalConfigKdl}
 
                     spawn-at-startup "${niri-autostart}"
-                    spawn-at-startup "${niri-xwayland-satellite}/bin/niri-xwayland-satellite"
                     EOF
                     niri validate --config $out/config.kdl > $out/config.kdl.validate
                   '';
+                    # spawn-at-startup "${niri-xwayland-satellite}/bin/niri-xwayland-satellite"
                 in "${drv}/config.kdl";
               };
               programs.waybar.settings.mainBar = {
