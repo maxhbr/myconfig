@@ -20,6 +20,9 @@ in {
       ({ config, ... }: {
         home.packages = with pkgs; [ pavucontrol pamix pulsemixer ];
         programs.cava = { enable = false; };
+        myconfig.desktop.wayland.launcherCommands = [
+          "pavucontrol"
+        ];
       })
     ];
     services.pipewire.enable = true;

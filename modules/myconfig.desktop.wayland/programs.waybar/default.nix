@@ -74,20 +74,21 @@ let
                 # "wlr/taskbar"
                 # "group/hardware"
                 "idle_inhibitor"
+                "custom/test_for_missing_tb_changing"
+                # "custom/audio_idle_inhibitor"
+                "clock#time"
+                "clock#date"
+              # ];
+              # modules-right = [
+                ] ++ lib.optionals power-profiles-daemon-config.enable [
+                  "power-profiles-daemon"
+                ] ++ [
                 "battery"
-              ] ++ lib.optionals power-profiles-daemon-config.enable
-                [ "custom/platform_profile" ] ++ [
-                  "custom/test_for_missing_tb_changing"
-                  # "custom/audio_idle_inhibitor"
-                  "clock#time"
-                  "clock#date"
-                ];
-              modules-right = [
-                "pulseaudio"
                 "backlight"
+                "pulseaudio"
                 "custom/isvpn"
-                "network"
-                "cpu"
+                # "network"
+                # "cpu"
                 # "memory"
                 "tray"
               ];
@@ -130,22 +131,18 @@ let
                   "firefoxdeveloperedition" = "firefox-developer-edition";
                 };
               };
-              "custom/platform_profile" =
-                lib.mkIf power-profiles-daemon-config.enable {
-                  format = "{}";
-                  exec = (pkgs.writeShellScriptBin "getPlatformProfile" ''
-                    profile="$(${power-profiles-daemon-config.package}/bin/powerprofilesctl get)"
-                    cat <<EOF
-                    {"text":"$profile","class":"$profile"}
-                    EOF
-                  '') + "/bin/getPlatformProfile";
-                  exec-if =
-                    "! grep -q performance /sys/firmware/acpi/platform_profile";
-                  on-click =
-                    "${power-profiles-daemon-config.package}/bin/powerprofilesctl set performance";
-                  return-type = "json";
-                  interval = 5;
+              "power-profiles-daemon" = lib.mkIf power-profiles-daemon-config.enable {
+                "format" = "{icon}";
+                "tooltip-format" = "Power profile: {profile}\nDriver: {driver}";
+                "tooltip" = true;
+                "format-icons" = {
+                  "default" = "";
+                  "performance" = "";
+                  "balanced" = "";
+                  "power-saver" = "";
                 };
+              };
+
               "custom/isvpn" = {
                 format = "{}";
                 exec = (pkgs.writeShellScriptBin "isvpn" ''
@@ -259,7 +256,7 @@ let
               bluetooth.rotate = 90;
               network.rotate = 90;
               "custom/isvpn.rotate" = 90;
-              "custom/platform_profile".rotate = 90;
+              "power-profiles-daemon".rotate = 90;
               "custom/test_for_missing_tb_changing".rotate = 90;
               cpu.rotate = 90;
               memory.rotate = 90;

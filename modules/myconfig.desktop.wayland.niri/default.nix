@@ -90,10 +90,11 @@ in {
                   # };
                   rotate = 90;
                 };
-                modules-left = [ "niri/workspaces" "wlr/taskbar" ];
+                modules-left = [ "niri/workspaces" ];
                 modules-center = [
                   # "niri/window"
                 ];
+                modules-right = [ "wlr/taskbar" ];
               };
               systemd.user.services.niri = {
                 Unit = {

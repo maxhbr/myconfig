@@ -16,5 +16,6 @@ in {
       }];
       myconfig.persistence.directories = [ ".config/Signal" ];
     }];
+    myconfig.desktop.wayland.launcherCommands = [ "signal-desktop" ];
   };
 }

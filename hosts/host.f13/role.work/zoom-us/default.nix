@@ -40,5 +40,6 @@ in {
       myconfig.persistence.work-files =
         [ ".config/zoom.conf" ".config/zoomus.conf" ];
     }];
+    myconfig.desktop.wayland.launcherCommands = [ "zoom-us" "zoom-auto" ];
   };
 }

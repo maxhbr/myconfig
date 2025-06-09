@@ -61,5 +61,6 @@ in {
         }];
       })
     ];
+    myconfig.desktop.wayland.launcherCommands = [ "chromium" ];
   };
 }

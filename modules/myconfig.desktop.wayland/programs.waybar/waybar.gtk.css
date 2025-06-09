@@ -19,6 +19,8 @@ window#waybar {
     border-radius: 0px 14px 12px 0px;
     padding-top: 5px;
     padding-bottom: 5px;
+    margin-top: 10px;
+    margin-bottom: 10px;
 }
 .modules-left {
   padding-top: 10px;
@@ -85,17 +87,20 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
     color: white;
 }
 
-#custom-platform_profile {
+#custom-platform_profile, #power-profiles-daemon {
   padding-top: 5px;
   padding-bottom: 5px;
 }
 
-#custom-platform_profile.balanced {
+#power-profiles-daemon.performance {
+}
+
+#custom-platform_profile.balanced, #power-profiles-daemon.balanced {
     background: #ee9a00;
     color: black;
 }
 
-#custom-platform_profile.low-power {
+#custom-platform_profile.low-power, #power-profiles-daemon.power-saver {
     background: #f53c3c;
 }
 
@@ -159,6 +164,11 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
     animation-timing-function: linear;
     animation-iteration-count: infinite;
     animation-direction: alternate;
+}
+
+#custom-isvpn {
+    background: #ee9a00;
+    color: black;
 }
 
 

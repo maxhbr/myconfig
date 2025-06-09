@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 { pkgs, config, lib, myconfig, ... }:
 let cfg = config.myconfig;
+    nixosConfig = config;
 in {
   options.myconfig = with lib; {
     desktop.wayland = {
@@ -22,7 +23,7 @@ in {
             ## Program Launchers
             wofi
             bemenu
-            fuzzel
+            # fuzzel
             ## Screen Lockers
             swaylock
             ## Idle Management
@@ -104,6 +105,19 @@ in {
           Extra packages to be installed in the desktop environment wide.
         '';
       };
+      launcherCommands = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = literalExpression ''
+          [
+            "firefox"
+            "foot"
+          ]
+        '';
+        description = lib.mdDoc ''
+          List of commands to be shown in the launcher.
+        '';
+      };
       autostartCommands = mkOption {
         type = types.lines;
         default = with pkgs; ''
@@ -175,6 +189,43 @@ in {
           };
         }
         ./home-manager.wrap-electron-apps.nix
+        ({ config, lib, ... }: let
+            launcherCommands = config.myconfig.desktop.wayland.launcherCommands;
+            myWofi = pkgs.writeShellScriptBin "my-wofi" ''
+choice="$(printf '%s\n' "${lib.escapeShellArgs launcherCommands}" |
+          tr ' ' '\n' |
+          sort |
+          ${pkgs.wofi}/bin/wofi --dmenu \
+               --lines=10 \
+               --prompt="Run:" \
+               --cache-file /dev/null)"
+
+[ -z "$choice" ] && exit 0
+${pkgs.util-linux}/bin/setsid $choice >/dev/null 2>&1 &
+            '';
+          in {
+            options.myconfig = with lib; {
+              desktop.wayland = {
+                launcherCommands = mkOption {
+                  type = types.listOf types.str;
+                  default = [ ];
+                  example = literalExpression ''
+                    [
+                      "firefox"
+                      "foot"
+                    ]
+                  '';
+                  description = lib.mdDoc ''
+                    List of commands to be shown in the launcher.
+                  '';
+                };
+              };
+            };
+            config = {
+              myconfig.desktop.wayland.launcherCommands = nixosConfig.myconfig.desktop.wayland.launcherCommands;
+              home.packages = [ myWofi ];
+            };
+        })
       ];
     }
   ];
@@ -269,5 +320,8 @@ in {
       session required pam_unix.so
     '';
 
+    myconfig.desktop.wayland.launcherCommands = [
+      "wdisplays"
+    ];
   });
 }

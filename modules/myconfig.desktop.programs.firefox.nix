@@ -7,6 +7,7 @@ let
 in {
   config = lib.mkIf config.myconfig.desktop.enable {
     myconfig.persistence.directories = [ ".mozilla" ];
+    myconfig.desktop.wayland.launcherCommands = [ "firefox" ];
     home-manager.sharedModules = [
       {
         config = {

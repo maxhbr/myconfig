@@ -323,7 +323,7 @@ ADDED_FILE="$CURRENT_FILE.added"
 mkdir -p "$OUTPUT_DIR"
 
 # Generate current file list
-${pkgs.fd}/bin/fd 
+${pkgs.fd}/bin/fd \
   --one-file-system \
   --base-directory "$BASE_DIR" \
   --type f \

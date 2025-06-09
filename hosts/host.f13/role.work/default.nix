@@ -83,5 +83,9 @@ in {
         }
       ];
     }];
+    myconfig.desktop.wayland.launcherCommands = [
+      "slack"
+      "teams-for-linux"
+    ];
   };
 }

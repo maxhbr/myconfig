@@ -22,7 +22,7 @@ help() {
 usage:
   $ sudo BOOTSTRAP=YES [BTRFS=true] [EFI=true] $0 \
       /dev/SDX \
-      [pass] \
+      pass \
       [vg_name] \
       [mnt]
 EOF

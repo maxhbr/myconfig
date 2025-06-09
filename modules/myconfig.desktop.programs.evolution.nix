@@ -18,5 +18,6 @@ in {
         ".local/share/org.gnome.Evolution"
       ];
       myconfig.persistence.cache-directories = [ ".cache/evolution" ];
+      myconfig.desktop.wayland.launcherCommands = [ "evolution" ];
     };
 }

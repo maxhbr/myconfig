@@ -386,8 +386,8 @@ binds {
 
     // Suggested binds for running programs: terminal, app launcher, screen locker.
     Mod+Return { spawn "tfoot"; }
-    Mod+P { spawn "wofi" "--show" "run"; }
-    Mod+Shift+P { spawn "fuzzel"; }
+    Mod+P { spawn "my-wofi"; }
+    Mod+Shift+P { spawn "wofi" "--show" "run"; }
     Mod+X { spawn "swaylock" "-f" "-c" "000000"; }
     Mod+Shift+X { spawn "swaylock" "-f" "-c" "000000"; }
 

@@ -16,5 +16,12 @@
         to = 1764;
       }];
     };
+    home-manager.sharedModules = [
+      {
+        myconfig.persistence.cache-directories = [
+          ".config/kdeconnect/"
+        ];
+      }
+    ];
   };
 }

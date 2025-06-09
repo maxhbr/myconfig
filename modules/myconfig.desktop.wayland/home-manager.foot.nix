@@ -43,7 +43,7 @@ in {
         main = {
           font = "monospace:size=10";
           dpi-aware = "no"; # "yes";
-          # include = "${theme}";
+          include = "${theme}";
         };
         mouse = { hide-when-typing = "yes"; };
         colors = { alpha = "0.85"; };
@@ -90,5 +90,15 @@ in {
         (mkFootTuiCmd "btop" btop)
         (mkFootTuiCmd "nmtui" networkmanager)
       ]);
+    myconfig.desktop.wayland.launcherCommands = [
+      "foot"
+      "tfoot"
+      "tfoot-reattach"
+      "foot-scratch"
+      "foot-bluetuith"
+      "foot-htop"
+      "foot-btop"
+      "foot-nmtui"
+    ];
   });
 }
