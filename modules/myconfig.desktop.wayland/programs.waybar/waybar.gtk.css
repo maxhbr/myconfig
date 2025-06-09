@@ -104,7 +104,8 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
     background: #f53c3c;
 }
 
-#battery.warning:not(.charging) {
+#battery.warning:not(.charging),
+#systemd-failed-units.degraded {
     background: #ee9a00;
     color: black;
 }

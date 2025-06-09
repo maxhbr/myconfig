@@ -86,6 +86,8 @@ let
                 "battery"
                 "backlight"
                 "pulseaudio"
+                "systemd-failed-units#user"
+                "systemd-failed-units#system"
                 "custom/isvpn"
                 # "network"
                 # "cpu"
@@ -142,7 +144,20 @@ let
                   "power-saver" = "";
                 };
               };
-
+              "systemd-failed-units#user" = {
+                "hide-on-ok" = true;
+                "format" = "✗ U:{nr_failed}";
+                "format-ok" = "✓";
+                "system" = false;
+                "user" = true; 
+              };
+              "systemd-failed-units#system" = {
+                "hide-on-ok" = true;
+                "format" = "✗ S:{nr_failed}";
+                "format-ok" = "✓";
+                "system" = true;
+                "user" = false; 
+              };
               "custom/isvpn" = {
                 format = "{}";
                 exec = (pkgs.writeShellScriptBin "isvpn" ''
@@ -210,7 +225,7 @@ let
                 # format-device-preference = [ "device1"; "device2" ], # preference list deciding the displayed device
                 tooltip-format = ''
                   {controller_alias}	{controller_address}
-
+  
                   {num_connections} connected'';
                 tooltip-format-connected = ''
                   {controller_alias}	{controller_address}
@@ -257,6 +272,9 @@ let
               network.rotate = 90;
               "custom/isvpn.rotate" = 90;
               "power-profiles-daemon".rotate = 90;
+              "systemd-failed-units".rotate = 90;
+              "systemd-failed-units#user".rotate = 90;
+              "systemd-failed-units#system".rotate = 90;
               "custom/test_for_missing_tb_changing".rotate = 90;
               cpu.rotate = 90;
               memory.rotate = 90;

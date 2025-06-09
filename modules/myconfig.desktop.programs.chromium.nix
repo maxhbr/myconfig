@@ -61,6 +61,6 @@ in {
         }];
       })
     ];
-    myconfig.desktop.wayland.launcherCommands = [ "chromium" ];
+    myconfig.desktop.wayland.launcherCommands = [ "chromium" "inco.sh" ];
   };
 }
