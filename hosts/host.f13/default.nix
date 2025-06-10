@@ -45,13 +45,13 @@
       # set CPU to performance mode
       boot.kernelParams = [ "amd_pstate=active" ];
       services.power-profiles-daemon.enable = true;
-      systemd.services.set-performance = {
-        description = "Set performance profile";
-        wantedBy = [ "multi-user.target" ];
-        serviceConfig.Type = "oneshot";
-        serviceConfig.ExecStart =
-          "${config.services.power-profiles-daemon.package}/bin/powerprofilesctl set performance";
-      };
+      # systemd.services.set-performance = {
+      #   description = "Set performance profile";
+      #   wantedBy = [ "multi-user.target" ];
+      #   serviceConfig.Type = "oneshot";
+      #   serviceConfig.ExecStart =
+      #     "${config.services.power-profiles-daemon.package}/bin/powerprofilesctl set performance";
+      # };
     }
   ];
 
@@ -89,8 +89,8 @@
           '';
         };
         messengers.enable = true;
-        myphoto.enable = true;
         obs.enable = true;
+        imagework.enable = true;
         # cad.enable = true;
         deskreen.enable = true;
       };

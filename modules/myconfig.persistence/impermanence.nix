@@ -260,6 +260,11 @@ in {
           }
           "/var/lib/systemd/coredump"
         ];
+        users.${user} = {
+          directories = [
+            ".cache/nix-index"
+          ];
+        };
       };
     };
     home-manager.sharedModules = [
