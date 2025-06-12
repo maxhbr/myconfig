@@ -18,6 +18,15 @@
       };
     })
   ];
-  home-manager.sharedModules =
-    [({ config = { home.packages = with pkgs; [ mykeylight ]; }; })];
+  home-manager.sharedModules = [({
+    config = {
+      home.packages = with pkgs; [ mykeylight ];
+      home.file.".mykeylight" = {
+        text = ''
+          192.168.1.202
+          192.168.1.231
+        '';
+      };
+    };
+  })];
 }

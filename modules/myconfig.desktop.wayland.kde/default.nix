@@ -66,10 +66,8 @@ in {
                 First Use=false
               '';
             };
-            myconfig.persistence.directories = [
-              "~/.local/share/kwalletd"
-              "~/.local/share/kwalletmanager5"
-            ];
+            myconfig.persistence.directories =
+              [ "~/.local/share/kwalletd" "~/.local/share/kwalletmanager5" ];
           })
         ];
       }

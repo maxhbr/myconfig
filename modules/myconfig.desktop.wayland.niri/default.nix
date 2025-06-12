@@ -40,9 +40,30 @@ in {
                   ${pkgs.xwayland-satellite}/bin/xwayland-satellite ''${CHOSEN_DISPLAY}
                   echo $$ > $pidfile
                 '';
+              niri-toggle-dpi-scale =
+                pkgs.writeShellScriptBin "niri-toggle-dpi-scale" ''
+                  set -euo pipefail
+
+                  OUTPUT="''${1:-eDP-1}"
+                  HI="2"
+                  LO="1.3"
+
+                  current_scale=$(${pkgs.niri}/bin/niri msg --json outputs \
+                                  | ${pkgs.jq}/bin/jq -r --arg o "$OUTPUT" '.[$o].logical.scale')
+
+                  if [[ "$current_scale" == "$HI"* ]]; then
+                      target="$LO"
+                  else
+                      target="$HI"
+                  fi
+
+                  set -x
+                  ${pkgs.niri}/bin/niri msg output "$OUTPUT" scale "$target"
+                '';
             in {
               home.sessionVariables = { DISPLAY = ":12"; };
-              home.packages = [ niri niri-xwayland-satellite ];
+              home.packages =
+                [ niri niri-xwayland-satellite niri-toggle-dpi-scale ];
               xdg.configFile = {
                 "niri/config.kdl".source = let
                   drv = pkgs.runCommand "niri-config" {
@@ -63,7 +84,7 @@ in {
                     EOF
                     niri validate --config $out/config.kdl > $out/config.kdl.validate
                   '';
-                    # spawn-at-startup "${niri-xwayland-satellite}/bin/niri-xwayland-satellite"
+                  # spawn-at-startup "${niri-xwayland-satellite}/bin/niri-xwayland-satellite"
                 in "${drv}/config.kdl";
               };
               programs.waybar.settings.mainBar = {

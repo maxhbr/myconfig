@@ -10,31 +10,26 @@ in {
     };
   };
   config = (lib.mkIf cfg.desktop.imagework.enable {
-    home-manager.sharedModules = [
-      {
-        home.packages = with pkgs; [
-          gphoto2
-          gphoto2fs
-          gimp # -with-plugins
-          darktable
-          # ansel # A darktable fork minus the bloat plus some design vision
-          geeqie
-          gphoto2
-          gphoto2fs
+    home-manager.sharedModules = [{
+      home.packages = with pkgs; [
+        gphoto2
+        gphoto2fs
+        gimp # -with-plugins
+        darktable
+        # ansel # A darktable fork minus the bloat plus some design vision
+        geeqie
+        gphoto2
+        gphoto2fs
 
-          # rawtherapee
-          # gthumb
-          # krita
-          # inkscape
-          sigal # static website generator
-        ];
-        myconfig.persistence.files = [
-          ".config/darktable/darktablerc"
-          ".config/darktable/shortcutsrc"
-        ];
-      }
-    ] ++ lib.optionals cfg.desktop.imagework.myphoto.enable [
-      inputs.myphoto.homeManagerModules.myphoto
-    ];
+        # rawtherapee
+        # gthumb
+        # krita
+        # inkscape
+        sigal # static website generator
+      ];
+      myconfig.persistence.files =
+        [ ".config/darktable/darktablerc" ".config/darktable/shortcutsrc" ];
+    }] ++ lib.optionals cfg.desktop.imagework.myphoto.enable
+      [ inputs.myphoto.homeManagerModules.myphoto ];
   });
 }

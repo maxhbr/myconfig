@@ -197,14 +197,14 @@
             }
           '';
         };
-        messengers.enable = true;
-        myphoto.enable = true;
+        messengers.enable = false;
+        imagework.enable = true;
         obs.enable = true;
         # cad.enable = true;
         # deskreen.enable = true;
       };
       ai.enable = true;
-      email.enable = true;
+      email.enable = false;
       virtualisation.enable = true;
       editor.emacs.enable = false;
       dev = {

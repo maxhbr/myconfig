@@ -48,10 +48,8 @@ let
           true
         else
           checkPrefixes (lib.head paths) (lib.tail paths)
-          && isRelativePath (lib.head paths)
-          && validate (lib.tail paths);
+          && isRelativePath (lib.head paths) && validate (lib.tail paths);
     in if validate sortedPaths then paths else throw "Path validation failed";
-
 
 in {
   imports = [ inputs.impermanence.nixosModule ];
@@ -260,11 +258,6 @@ in {
           }
           "/var/lib/systemd/coredump"
         ];
-        users.${user} = {
-          directories = [
-            ".cache/nix-index"
-          ];
-        };
       };
     };
     home-manager.sharedModules = [
@@ -286,6 +279,7 @@ in {
               "bin"
               "_screenshots"
             ];
+            myconfig.persistence.cache-directories = [ ".cache/nix-index" ];
             home.persistence."${persistentPrivDir}/home/${config.home.username}" =
               {
                 directories = validatePaths (lib.map mkRelativeToHome
@@ -312,53 +306,53 @@ in {
               };
           };
         })
-      ({ config, ... }: let
-        mk_diff_command = dir: name: pkgs.writeShellScriptBin "diff_${name}" ''
-set -euo pipefail
+      ({ config, ... }:
+        let
+          mk_diff_command = dir: name:
+            pkgs.writeShellScriptBin "diff_${name}" ''
+              set -euo pipefail
 
-# Variables
-BASE_DIR="${dir}"
-OUTPUT_DIR="$HOME/tmp_diff_${name}"
-TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
-CURRENT_FILE="$OUTPUT_DIR/$TIMESTAMP"
-CLEANED_FILE="$CURRENT_FILE.cleaned"
-ADDED_FILE="$CURRENT_FILE.added"
+              # Variables
+              BASE_DIR="${dir}"
+              OUTPUT_DIR="$HOME/tmp_diff_${name}"
+              TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
+              CURRENT_FILE="$OUTPUT_DIR/$TIMESTAMP"
+              CLEANED_FILE="$CURRENT_FILE.cleaned"
+              ADDED_FILE="$CURRENT_FILE.added"
 
-# Ensure output directory exists
-mkdir -p "$OUTPUT_DIR"
+              # Ensure output directory exists
+              mkdir -p "$OUTPUT_DIR"
 
-# Generate current file list
-${pkgs.fd}/bin/fd \
-  --one-file-system \
-  --base-directory "$BASE_DIR" \
-  --type f \
-  --hidden \
-  --exclude "{$(basename "$OUTPUT_DIR"),.cache}" \
-  | while read -r line; do
-    if [[ "$(readlink -f "$line")" == /nix/store/* ]]; then
-        continue
-    fi
-    echo "$line"
-  done | sort > "$CLEANED_FILE"
-echo "Current file list saved to: $CLEANED_FILE"
+              # Generate current file list
+              ${pkgs.fd}/bin/fd \
+                --one-file-system \
+                --base-directory "$BASE_DIR" \
+                --type f \
+                --hidden \
+                --exclude "{$(basename "$OUTPUT_DIR"),.cache}" \
+                | while read -r line; do
+                  if [[ "$(readlink -f "$line")" == /nix/store/* ]]; then
+                      continue
+                  fi
+                  echo "$line"
+                done | sort > "$CLEANED_FILE"
+              echo "Current file list saved to: $CLEANED_FILE"
 
-# Find the previous snapshot file (sorted by timestamp)
-PREVIOUS_FILE="$(ls -t "$OUTPUT_DIR" | grep '\.cleaned$' | head -n 2 | tail -n 1 || true)"
+              # Find the previous snapshot file (sorted by timestamp)
+              PREVIOUS_FILE="$(ls -t "$OUTPUT_DIR" | grep '\.cleaned$' | head -n 2 | tail -n 1 || true)"
 
-# If previous exists, compute added files
-if [[ -n "$PREVIOUS_FILE" && -f "$OUTPUT_DIR/$PREVIOUS_FILE" ]]; then
-    comm -13 <(sort "$OUTPUT_DIR/$PREVIOUS_FILE") <(sort "$CLEANED_FILE") > "$ADDED_FILE"
-    echo "Diff saved to: $ADDED_FILE"
-else
-    echo "No previous file to diff against."
-fi
-  '';
+              # If previous exists, compute added files
+              if [[ -n "$PREVIOUS_FILE" && -f "$OUTPUT_DIR/$PREVIOUS_FILE" ]]; then
+                  comm -13 <(sort "$OUTPUT_DIR/$PREVIOUS_FILE") <(sort "$CLEANED_FILE") > "$ADDED_FILE"
+                  echo "Diff saved to: $ADDED_FILE"
+              else
+                  echo "No previous file to diff against."
+              fi
+            '';
 
-        diff_home = mk_diff_command "/home/${user}" "home";
-        diff_root = mk_diff_command "/" "root";
-        in {
-        home.packages = [ diff_home diff_root ];
-      })
+          diff_home = mk_diff_command "/home/${user}" "home";
+          diff_root = mk_diff_command "/" "root";
+        in { home.packages = [ diff_home diff_root ]; })
     ];
     system.activationScripts = {
       script.text = ''

@@ -170,6 +170,9 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 #custom-isvpn {
     background: #ee9a00;
     color: black;
+    font-size: 0.5em;
+    padding-top: 0.2em;
+    padding-bottom: 0.2em;
 }
 
 
