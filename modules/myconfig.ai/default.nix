@@ -21,7 +21,17 @@
         [
           aichat
           # alpaca
-        ] ++ (with pkgs.python3Packages; [ huggingface-hub ]);
+        ] ++ (with pkgs.python3Packages; [ huggingface-hub ])
+          ++ (lib.optionals config.nixpkgs.config.rocmSupport [
+            nvtopPackages.amd
+            rocmPackages.rocminfo
+            rocmPackages.rocm-smi
+          ])
+          ++ (lib.optionals config.nixpkgs.config.cudaSupport [
+            nvtopPackages.nvidia
+            nvidia-smi
+            nvidia-cuda-toolkit
+          ]);
     }];
   };
 }

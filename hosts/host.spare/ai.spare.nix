@@ -34,7 +34,7 @@ in {
       ai = {
         enable = true;
         inference-cpp = { enable = true; };
-        lmstudio = { enable = false; };
+        lmstudio = { enable = true; };
         container = {
           nlm-ingestor = { enable = false; };
           open-webui = { enable = true; };
