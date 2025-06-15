@@ -33,8 +33,10 @@ in {
       };
       ai = {
         enable = true;
+        acceleration.vulkan.enable = true;
         inference-cpp = { enable = true; };
         lmstudio = { enable = true; };
+        alpaca = { enable = true; };
         container = {
           nlm-ingestor = { enable = false; };
           open-webui = { enable = true; };

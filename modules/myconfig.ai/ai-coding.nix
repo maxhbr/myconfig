@@ -7,6 +7,7 @@
       home-manager.sharedModules = [{
         home.packages = with pkgs; [ aider-chat code-cursor zed ];
         myconfig.persistence.cache-directories = [ ".config/Cursor" ".cursor" ];
+        myconfig.desktop.wayland.launcherCommands = [ "cursor" ];
       }];
     };
 }
