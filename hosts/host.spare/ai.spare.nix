@@ -20,9 +20,7 @@ in {
   imports = [ ../../hardware/eGPU.nix ./run-comfyui.nix ];
 
   config = {
-    # boot.kernelParams = [
-    #   "pcie_aspm=off"
-    # ];
+    nixpkgs.config.rocmSupport = false;
     myconfig = {
       services.dmesgMonitor = {
         enable = true;

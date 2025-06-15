@@ -3,12 +3,12 @@
 { config, pkgs, lib, myconfig, inputs, ... }: {
   imports = [
     ./hardware-configuration.nix
-    inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
     inputs.nixos-hardware.nixosModules.common-pc-laptop
     inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
     inputs.nixos-hardware.nixosModules.framework-amd-ai-300-series
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
+    ../../hardware/Radeon890M.nix
     ./mykeylight
     ./role.work
     ./ai.f13.nix

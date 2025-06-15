@@ -4,5 +4,12 @@
     hardware.graphics = { enable = true; };
     services.xserver.videoDrivers = [ "amdgpu" ];
     nixpkgs.config.rocmSupport = true;
+    home-manager.sharedModules = [{
+      home.packages = with pkgs; [
+        nvtopPackages.amd
+        rocmPackages.rocminfo
+        rocmPackages.rocm-smi
+      ];
+    }];
   };
 }

@@ -1,12 +1,9 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, lib, pkgs, ... }: let
-  nixpkgsConfig = config.nixpkgs.config;
-  in {
+{ config, lib, pkgs, ... }:
+let nixpkgsConfig = config.nixpkgs.config;
+in {
   imports = [
-    ./acceleration.cuda.nix
-    ./acceleration.rcom.nix
-    ./acceleration.vulkan.nix
     ./ai-coding.nix
     ./services.ollama.nix
     ./services.tabby.nix
@@ -22,10 +19,7 @@
   ];
   options.myconfig = with lib; { ai.enable = mkEnableOption "myconfig.ai"; };
   config = lib.mkIf config.myconfig.ai.enable {
-    home-manager.sharedModules = [{
-      home.packages = with pkgs; [ aichat ];
-    }
-    ];
+    home-manager.sharedModules = [{ home.packages = with pkgs; [ aichat ]; }];
   };
 }
 

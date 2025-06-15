@@ -3,14 +3,19 @@
     # inputs.nixos-hardware.nixosModules.common-gpu-nvidia
   ];
   config = {
-    home-manager.sharedModules =
-      [{ home.packages = with pkgs; [ nvtopPackages.full ]; }];
+    home-manager.sharedModules = [{
+      home.packages = with pkgs; [
+        nvtopPackages.nvidia
+        nvidia-smi
+        nvidia-cuda-toolkit
+      ];
+    }];
     users.extraUsers."${myconfig.user}".extraGroups = [ "nvidia" ];
     hardware.graphics = { enable = true; };
     services.xserver.videoDrivers = [ "nvidia" ];
 
     nixpkgs.config.cudaSupport = true;
-    nixpkgs.config.rocmSupport = lib.mkDefault false;
+    nixpkgs.config.rocmSupport = false;
     hardware.nvidia-container-toolkit.enable = true;
     hardware.nvidia = {
       package =
