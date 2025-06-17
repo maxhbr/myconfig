@@ -1,31 +1,24 @@
 #!/usr/bin/env bash
-#
-# gallery.sh – Build a static HTML photo gallery with Sigal in an isolated venv
-#
-# Usage:
-#   ./gallery.sh [-o OUTPUT_DIR] [-t THEME] SOURCE_DIR
-#
-# Example:
-#   ./gallery.sh -o ~/public_html/trip_gallery ~/Pictures/Spain2025
-#
-# The script creates or re-uses a virtual-env at “${OUT_DIR}.venv”.
-# ------------------------------------------------------------------------------
 
 set -euo pipefail
 
-##############################################################################
-# Helper
-##############################################################################
 usage() {
   cat <<EOF
-Usage: ${0##*/} [-o OUTPUT_DIR] [-t THEME] SOURCE_DIR
+Usage: 
+  ${0##*/} [-f] [-o OUTPUT_DIR] [-t TITLE] [-T THEME] [-s SIZE] [-p PASSWORD] SOURCE_DIR
+  ${0##*/} -c CONFIG_FILE
 
 Generate a static HTML gallery from SOURCE_DIR using sigal inside a
 dedicated virtual-environment located at \${OUTPUT_DIR}.venv.
 
 Options:
   -o OUTPUT_DIR   Destination directory for the gallery (default: ./gallery)
-  -t THEME        Sigal theme to use            (default: colorbox)
+  -t TITLE        Title of the gallery (default: "Gallery")
+  -T THEME        Sigal theme to use            (default: galleria)
+  -s SIZE         Size of resized image (default: 3840)
+  -p PASSWORD     Password for the gallery
+  -c CONFIG_File  Rebuild the gallery from config file
+  -f              Force overwrite the config file
   -h              Show this help and exit
 EOF
   exit 1
@@ -35,92 +28,113 @@ EOF
 # Parse options
 ##############################################################################
 OUT_DIR=""
-THEME="colorbox"
+TITLE="Gallery"
+THEME="galleria"
+SIZE=3840
+PASSWORD=""
+REBUILD=false
+FORCE=false
 
-while getopts ":o:t:h" opt; do
+while getopts ":o:t:T:s:p:fch" opt; do
   case "$opt" in
     o) OUT_DIR=$(readlink -f "$OPTARG") ;;
-    t) THEME=$OPTARG ;;
+    t) TITLE=$OPTARG ;;
+    T) THEME=$OPTARG ;;
+    s) SIZE=$OPTARG ;;
+    p) PASSWORD=$OPTARG ;;
+    c) REBUILD=true ;;
+    f) FORCE=true ;;
     h) usage ;;
     *) usage ;;
   esac
 done
 shift $((OPTIND-1))
-
 [[ $# -eq 1 ]] || usage
-SRC_DIR=$(readlink -f "$1")
-[[ -d "$SRC_DIR" ]] || { echo "❌ Source directory '$SRC_DIR' not found."; exit 1; }
-
-
-# if OUT_DIR is not set, replace it with $SRC_DIR.gallery
-if [[ -z "$OUT_DIR" ]]; then
-  OUT_DIR="${SRC_DIR}.gallery"
-fi
-
-# Create output directory
-mkdir -p "$OUT_DIR"
+POSITONAL_ARG="$1"
 
 ##############################################################################
-# Prepare virtual environment
+# Functions
 ##############################################################################
-VENV_DIR="${HOME}/.$(basename "$0").venv"
+create_config() {
+  local CONFIG="$1"
 
-if [[ ! -d "$VENV_DIR" ]]; then
-  echo "🛠  Creating virtual-env at '$VENV_DIR' ..."
-  python3 -m venv "$VENV_DIR"
-fi
+  if [[ "$FORCE" != true && -f "$CONFIG" ]]; then
+    echo "Config file '$CONFIG' already exists. Use --force to overwrite or '--rebuild $CONFIG' to rebuild."
+    exit 1
+  fi
 
-# shellcheck disable=SC1090
-source "$VENV_DIR/bin/activate"
-
-# Install (or upgrade) sigal & Pillow only if missing
-if ! python -m pip show sigal > /dev/null 2>&1; then
-  echo "📦 Installing sigal ..."
-  python -m pip install --upgrade --quiet sigal pillow
-fi
-
-##############################################################################
-# Build a temporary Sigal config
-##############################################################################
-CONFIG="${OUT_DIR}.sigal.conf.py"
-
-cat > "$CONFIG" <<'EOF'
+  cat > "$CONFIG" <<'EOF'
 # --- Auto-generated Sigal configuration ---
-source = "$SOURCE"
-destination = "$DEST"
-theme = "$THEME"
-
+source = "@@SOURCE@@"
+destination = "@@DEST@@"
 # - colorbox (default), galleria, photoswipe, or the path to a custom theme
 # directory
-theme = "galleria"
+theme = "@@THEME@@"
 
-# Size of resized image (default: (640, 480))
-img_size = (3840, 3840)
+img_size = (@@SIZE@@, @@SIZE@@)
 
-# File extensions that should be treated as images
 img_extensions = ['.JPG', '.jpg', '.jpeg', '.png', '.gif']
 
 # Uncomment and tweak as desired:
-# title      = "My Photo Gallery"
+title      = "@@TITLE@@"
 # thumb_size = (300, 200)
 # use_orig   = False
 # plugins    = ["optimize_images"]
 EOF
 
-# Inject variables safely
-sed -i \
-  -e "s^\$SOURCE^$SRC_DIR^" \
-  -e "s^\$DEST^$OUT_DIR^" \
-  -e "s^\$THEME^$THEME^" \
-  "$CONFIG"
+  # Inject variables safely
+  sed -i \
+    -e 's^@@SOURCE@@^'"$SRC_DIR"'^' \
+    -e 's^@@DEST@@^'"$OUT_DIR"'^' \
+    -e 's^@@THEME@@^'"$THEME"'^' \
+    -e 's^@@SIZE@@^'"$SIZE"'^g' \
+    -e 's^@@TITLE@@^'"$TITLE"'^' \
+    "$CONFIG"
+
+  if [[ -n "$PASSWORD" ]]; then
+    echo "Password: $PASSWORD"
+    cat >> "$CONFIG" <<EOF
+plugins = ['sigal.plugins.encrypt']
+encrypt_options = {
+    'password': '@@PASSWORD@@',
+    'ask_password': True,
+    # 'gcm_tag': 'randomly_generated',
+    # 'kdf_salt': 'randomly_generated',
+    # 'kdf_iters': 10000,
+}
+EOF
+    sed -i \
+      -e 's^@@PASSWORD@@^'"$PASSWORD"'^' \
+      "$CONFIG"
+  fi
+}
+
+build() {
+  [[ $# -eq 1 ]] || usage
+  local CONFIG="$1"
+  if [[ ! -f "$CONFIG" ]]; then
+    echo "Config file '$CONFIG' not found."
+    exit 1
+  fi
+  sigal build -c "$CONFIG"
+}
 
 ##############################################################################
-# Run Sigal
+# Main
 ##############################################################################
-echo "🚀 Building gallery with Sigal (theme: $THEME)…"
-python -m sigal build -c "$CONFIG" --quiet
-echo "✅ Gallery ready: '$OUT_DIR/index.html'"
+if [[ "$REBUILD" == true ]]; then
+  rebuild "$POSITONAL_ARG"
+else
+  SRC_DIR=$(readlink -f "$POSITONAL_ARG")
+  [[ -d "$SRC_DIR" ]] || { echo "Source directory '$SRC_DIR' not found."; exit 1; }
 
-##############################################################################
-# End
-##############################################################################
+  if [[ -z "$OUT_DIR" ]]; then
+    OUT_DIR="${SRC_DIR}.gallery"
+  fi
+
+  mkdir -p "$OUT_DIR"
+
+  CONFIG="${OUT_DIR}.sigal.conf.py"
+  create_config "$CONFIG"
+  build "$CONFIG"
+fi

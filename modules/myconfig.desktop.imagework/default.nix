@@ -4,7 +4,7 @@
 let cfg = config.myconfig;
     mk_sigal_gallery = pkgs.writeShellApplication {
       name = "mk_sigal_gallery";
-      runtimeInputs = with pkgs; [ sigal python ];
+      runtimeInputs = with pkgs; [ sigal ];
       text = builtins.readFile ./mk_sigal_gallery.sh;
     };
 in {
