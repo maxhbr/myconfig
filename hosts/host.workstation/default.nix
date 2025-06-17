@@ -97,7 +97,7 @@
             # "qtile"
           ];
         };
-        myphoto.enable = true;
+        imagework.enable = true;
         obs.enable = true;
       };
       headless.enable = true;

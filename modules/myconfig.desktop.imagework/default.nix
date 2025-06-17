@@ -2,6 +2,11 @@
 # SPDX-License-Identifier: MIT
 { config, lib, pkgs, inputs, ... }:
 let cfg = config.myconfig;
+    mk_sigal_gallery = pkgs.writeShellApplication {
+      name = "mk_sigal_gallery";
+      runtimeInputs = with pkgs; [ sigal python ];
+      text = builtins.readFile ./mk_sigal_gallery.sh;
+    };
 in {
   options.myconfig = with lib; {
     desktop.imagework.enable = mkEnableOption "imagework";
@@ -26,6 +31,7 @@ in {
         # krita
         # inkscape
         sigal # static website generator
+        mk_sigal_gallery
       ];
       myconfig.persistence.files =
         [ ".config/darktable/darktablerc" ".config/darktable/shortcutsrc" ];
