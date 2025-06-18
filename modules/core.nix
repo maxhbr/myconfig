@@ -6,29 +6,6 @@
       tmp.useTmpfs = true;
     };
 
-    home-manager.sharedModules = [{
-      home.packages = with pkgs; [ mosh eternal-terminal sshfs ];
-      home.file = {
-        ".ssh/config".text = ''
-          ControlMaster auto
-          ControlPath ~/.ssh/control:%h:%p:%r
-          Include ~/.ssh/imports/*.config
-
-          Host localhost
-              StrictHostKeyChecking no
-              UserKnownHostsFile=/dev/null
-
-          Host 127.0.0.1
-              StrictHostKeyChecking no
-              UserKnownHostsFile=/dev/null
-        '';
-        ".ssh/imports/wireguard.config".text = ''
-          Host 10.199.199.*
-              User ${myconfig.user}
-        '';
-      };
-    }];
-
     environment = {
       variables = { TMP = "/tmp"; };
       systemPackages = with pkgs; [
@@ -81,7 +58,6 @@
     programs.zsh.interactiveShellInit = ''
       umask 027
     '';
-    programs.ssh.startAgent = true;
     programs.firejail.enable = true;
     programs.mtr.enable = true;
   };
