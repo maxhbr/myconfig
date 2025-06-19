@@ -90,6 +90,7 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 #custom-platform_profile, #power-profiles-daemon {
   padding-top: 5px;
   padding-bottom: 5px;
+  font-size: 0.8em;
 }
 
 #power-profiles-daemon.performance {

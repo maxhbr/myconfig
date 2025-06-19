@@ -51,10 +51,10 @@ let
       toggleLight = pkgs.writeShellScriptBin "toggleLight" ''
         set -x
         current=$(${pkgs.light}/bin/light -G)
-        if [[ $current == "100.00"* ]]; then
+        if [[ $current == "80.00"* ]]; then
           ${pkgs.light}/bin/light -S 20
         else
-          ${pkgs.light}/bin/light -S 100
+          ${pkgs.light}/bin/light -S 80
         fi
       '';
     in {

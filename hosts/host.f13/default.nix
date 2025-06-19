@@ -143,7 +143,6 @@
         services.mako = {
           settings = {
             output = "eDP-1";
-            default-timeout = 20000;
           };
         };
       }

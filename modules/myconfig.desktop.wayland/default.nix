@@ -174,6 +174,13 @@ in {
           as a Nix attribute set.
         '';
       };
+      notificationCenter = mkOption {
+        type = types.enum [ "swaync" "mako" "dunst" ];
+        default = "mako";
+        description = lib.mdDoc ''
+          Notification center to use.
+        '';
+      };
     };
   };
 
@@ -286,9 +293,9 @@ in {
         };
         programs.waybar.enable = true;
         services.kanshi.enable = false;
-        services.swaync.enable = true;
-        services.mako.enable = false;
-        services.dunst.enable = false;
+        services.swaync.enable = cfg.desktop.wayland.notificationCenter == "swaync";
+        services.mako.enable = cfg.desktop.wayland.notificationCenter == "mako";
+        services.dunst.enable = cfg.desktop.wayland.notificationCenter == "dunst";
         services.random-background.enable = lib.mkForce false;
         services.screen-locker.enable = lib.mkForce false;
         programs.foot.enable = true;
