@@ -71,7 +71,18 @@ in {
         gtk = {
           enable = true;
           inherit theme iconTheme;
-          gtk3 = { inherit extraCss; };
+          gtk3 = { 
+            inherit extraCss;
+            bookmarks = [
+              "file:///tmp"
+              "file://${config.home.homeDirectory}"
+              "file://${config.home.homeDirectory}/tmp"
+              "file://${config.home.homeDirectory}/Downloads"
+              "file://${config.home.homeDirectory}/Documents"
+              "file://${config.home.homeDirectory}/MINE"
+              "file://${config.home.homeDirectory}/tng"
+            ];
+          };
           gtk4 = { inherit extraCss; };
         };
       })

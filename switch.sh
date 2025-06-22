@@ -37,7 +37,7 @@ build() (
     local target="$1"; shift
     local out_link="$1"; shift
     echo "################################################################################"
-    echo "building for $target to $out_link"
+    echo "building for $target to $out_link (at $(date))"
     echo "################################################################################"
     local system='.#nixosConfigurations.'"$target"'.config.system.build.toplevel'
 
@@ -105,7 +105,7 @@ copy_closure_to_target() (
     local targetIP="$1"; shift
     local out_link="$1"; shift
     echo "################################################################################"
-    echo "copying closure to $targetIP"
+    echo "copying closure to $targetIP (at $(date))"
     echo "################################################################################"
     set -x
     until nix-copy-closure --to "$targetIP" "$out_link"; do
@@ -127,7 +127,7 @@ diff_build_results() (
 direct_deploy_locally() {
     local out_link="$1"; shift
     echo "################################################################################"
-    echo "direct deploying $out_link to $(hostname)"
+    echo "direct deploying $out_link to $(hostname) (at $(date))"
     echo "################################################################################"
     local store_path="$(nix-store -q "$out_link")"
     set -x
@@ -138,7 +138,7 @@ deploy() (
     local target="$1"; shift
     local out_link="$1"; shift
     echo "################################################################################"
-    echo "deploying $out_link to $target"
+    echo "deploying $out_link to $target (at $(date))"
     echo "################################################################################"
     local use_wg="${1:-false}";
     cmd="nixos-rebuild"

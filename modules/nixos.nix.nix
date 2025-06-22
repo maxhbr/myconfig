@@ -58,7 +58,6 @@
         };
       };
     }];
-    boot.readOnlyNixStore = true;
     nix = {
       extraOptions = ''
         keep-outputs = true

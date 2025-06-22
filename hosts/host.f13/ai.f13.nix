@@ -6,7 +6,7 @@
       ai = {
         enable = true;
         coding.enable = true;
-        inference-cpp = { enable = true; };
+        inference-cpp = { enable = false; };
         lmstudio = { enable = false; };
         alpaca = { enable = true; };
       };

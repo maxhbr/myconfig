@@ -22,13 +22,13 @@ in {
     # ./node.nix
     # ./azure-cli.nix
     ./dotnet.nix
-    ({ pkgs, ... }:
-      let wing-edit = pkgs.callPackage ../../../pkgs/wing-edit { };
-      in {
-        config = {
-          home-manager.users.mhuber = { home.packages = [ wing-edit ]; };
-        };
-      })
+    # ({ pkgs, ... }:
+    #   let wing-edit = pkgs.callPackage ../../../pkgs/wing-edit { };
+    #   in {
+    #     config = {
+    #       home-manager.users.mhuber = { home.packages = [ wing-edit ]; };
+    #     };
+    #   })
   ];
   config = {
     nixpkgs.overlays = map (n: import n) [

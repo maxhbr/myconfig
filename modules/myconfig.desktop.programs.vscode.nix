@@ -34,7 +34,7 @@ let
     mathiasfrohlich.kotlin
     mechatroner.rainbow-csv
     ms-ceintl.vscode-language-pack-de
-    ms-dotnettools.csdevkit
+    # ms-dotnettools.csdevkit
     ms-dotnettools.csharp
     ms-dotnettools.vscode-dotnet-runtime
     ms-vscode-remote.remote-containers

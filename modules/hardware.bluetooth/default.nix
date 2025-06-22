@@ -59,6 +59,10 @@ let
           shift
           pair
           sleep 5
+      elif ! ( ${pkgs.bluez}/bin/bluetoothctl info $id | grep -q "Paired: yes" ); then
+          echo "Device is not paired, pairing..."
+          pair
+          sleep 5
       fi
       connect
     '');
