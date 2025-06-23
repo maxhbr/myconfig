@@ -2,8 +2,10 @@
 #! nix-shell -i bash -p nvd
 set -euo pipefail
 
+
 cd "$(dirname "$0")"
 verbose=""
+ulimit -c unlimited
 
 guard_pid() {
     local target="$1"; shift
@@ -165,8 +167,11 @@ deploy() (
 )
 main() {
     local MODE=""
-    if [[ $# -gt 0 && ("$1" == "--verbose" || "$1" == "-v") ]]; then
+    if [[ $# -gt 0 && ("$1" == "--verbose" || "$1" == "-v" || "$1" == "-vv") ]]; then
         verbose="--verbose"
+        if [[ "$1" == "-vv" ]]; then
+            set -x
+        fi
         shift
     elif [[ $# -gt 0 && ("$1" == "--quiet" || "$1" == "-q") ]]; then
         verbose=""

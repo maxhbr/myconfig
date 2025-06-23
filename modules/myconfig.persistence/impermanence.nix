@@ -319,9 +319,13 @@ in {
               CURRENT_FILE="$OUTPUT_DIR/$TIMESTAMP"
               CLEANED_FILE="$CURRENT_FILE.cleaned"
               ADDED_FILE="$CURRENT_FILE.added"
+              LIST_FILE="$OUTPUT_DIR/list"
 
               # Ensure output directory exists
               mkdir -p "$OUTPUT_DIR"
+
+              # Find the previous snapshot file (sorted by timestamp)
+              PREVIOUS_FILE="$(ls -t "$OUTPUT_DIR" | grep '\.cleaned$' | head -n 2 | tail -n 1 || true)"
 
               # Generate current file list
               ${pkgs.fd}/bin/fd \
@@ -337,14 +341,13 @@ in {
                   echo "$line"
                 done | sort > "$CLEANED_FILE"
               echo "Current file list saved to: $CLEANED_FILE"
-
-              # Find the previous snapshot file (sorted by timestamp)
-              PREVIOUS_FILE="$(ls -t "$OUTPUT_DIR" | grep '\.cleaned$' | head -n 2 | tail -n 1 || true)"
+              wc -l "$CLEANED_FILE" | tee -a "$LIST_FILE"
 
               # If previous exists, compute added files
               if [[ -n "$PREVIOUS_FILE" && -f "$OUTPUT_DIR/$PREVIOUS_FILE" ]]; then
                   comm -13 <(sort "$OUTPUT_DIR/$PREVIOUS_FILE") <(sort "$CLEANED_FILE") > "$ADDED_FILE"
                   echo "Diff saved to: $ADDED_FILE"
+                  wc -l "$ADDED_FILE" | tee -a "$LIST_FILE"
               else
                   echo "No previous file to diff against."
               fi
