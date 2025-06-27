@@ -81,14 +81,13 @@ in {
         "gemma3:27b"
         "llama3.2:3b"
         "llava:34b"
-        "mistral-small:24b"
-        "mistral:7b"
         "openthinker:32b"
         "phi4"
         "qwq:32b"
         "smollm2:1.7b"
         "qwen3:32b"
         "qwen3:30b"
+        "magistral:24b"
       ] ++ [
         # for continue:
         "llama3.1:8b"
