@@ -92,6 +92,7 @@
         messengers.enable = true;
         obs.enable = true;
         imagework.enable = true;
+        imagework.myphoto.enable = false;
         # cad.enable = true;
         deskreen.enable = true;
       };

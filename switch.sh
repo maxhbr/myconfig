@@ -1,11 +1,17 @@
-#!/usr/bin/env nix-shell
-#! nix-shell -i bash -p nvd
+#!/usr/bin/env bash
 set -euo pipefail
-
 
 cd "$(dirname "$0")"
 verbose=""
 ulimit -c unlimited
+
+have() {
+    local cmd="$1"; shift
+    if command -v "$cmd" &> /dev/null; then
+        return 0
+    fi
+    return 1
+}
 
 log_step() {
     {
@@ -279,5 +285,10 @@ main() {
 }
 
 ################################################################################
+
+if ! have nix || ! have nvd; then
+    log_error "nvd not found"
+    exec nix-shell -p nvd --command "$0" "$@"
+fi
 
 main "$@"; times; date

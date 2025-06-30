@@ -12,7 +12,7 @@ in {
         programs.fish = {
           shellAbbrs = {
             nix-flake =
-              "nix --experimental-features 'nix-command flakes' flake";
+              "${nix}/bin/nix --experimental-features 'nix-command flakes' flake";
           };
         };
       }];
@@ -24,26 +24,26 @@ in {
       segger-jlink.acceptLicense = true;
     };
     home-manager.sharedModules = [{
-      home.packages = with pkgs; [ nix-tree ];
+      home.packages = with pkgs; [ nix-tree nvd ];
       imports = [{
         programs.fish = {
           shellAbbrs = {
-            why-depends-nixos = "nix why-depends /run/current-system";
-            nixse = "nix search nixpkgs";
+            why-depends-nixos = "${nix}/bin/nix why-depends /run/current-system";
+            nixse = "${nix}/bin/nix search nixpkgs";
           };
           functions = {
             nixTest =
-              "NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs>' --fallback --run fish -p $argv";
+              "NIXPKGS_ALLOW_UNFREE=1 ${nix}/bin/nix-shell '<nixpkgs>' --fallback --run fish -p $argv";
             # see: https://github.com/NixOS/nixpkgs/issues/51368#issuecomment-704678563
             nix-closure-size =
-              "${nix}/bin/nix-store -q --size (nix-store -qR (readlink -e $argv) ) | awk '{ a+=$1 } END { print a }' | ${pkgs.coreutils}/bin/numfmt --to=iec-i";
+              "${nix}/bin/nix-store -q --size (${nix}/bin/nix-store -qR (readlink -e $argv) ) | awk '{ a+=$1 } END { print a }' | ${pkgs.coreutils}/bin/numfmt --to=iec-i";
             # see: https://nixos.wiki/wiki/Nix_command/path-info
             nix-closure-sizes =
-              "nix path-info -rS (readlink -e $argv) | sort -nk2";
+              "${nix}/bin/nix path-info -rS (readlink -e $argv) | sort -nk2";
             nix-most-recently-added =
               "${nix}/bin/nix path-info --json --all | ${pkgs.jq}/bin/jq -r 'sort_by(.registrationTime)[-11:-1][].path'";
             nix-list-big-closures =
-              "${nix}/bin/nix path-info --json --all -S | ${pkgs.jq}/bin/jq 'map(select(.closureSize > 1e9)) | sort_by(.closureSize) | map([.path, .closureSize])'";
+              "${nix}/bin/nix path-info --json --all -S | ${pkgs.jq}/bin/jq -r 'map(select(.closureSize > 1e9)) | sort_by(.closureSize) | map([.path, .closureSize]) | @csv'";
           };
         };
       }];
