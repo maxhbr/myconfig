@@ -7,6 +7,20 @@ cd "$(dirname "$0")"
 verbose=""
 ulimit -c unlimited
 
+log_step() {
+    {
+        echo "$(tput setaf 2)################################################################################$(tput sgr0)"
+        echo "$1 (at $(date))"
+        echo "$(tput setaf 2)################################################################################$(tput sgr0)"
+    } >&2
+}
+log_warning() {
+    echo "$(tput setaf 3)warning: $1$(tput sgr0)" >&2
+}
+log_error() {
+    echo "$(tput setaf 1)error: $1$(tput sgr0)" >&2
+}
+
 guard_pid() {
     local target="$1"; shift
     local this_pid=$$
@@ -14,22 +28,67 @@ guard_pid() {
     if [[ -e "$pidfile" ]]; then
         old_pid="$(cat "$pidfile")"
         if [[ -e "/proc/$old_pid" ]]; then
-            echo "process $old_pid is running for $target"
+            log_error "process $old_pid is running for $target"
             exit 1
         fi
     fi
     echo "$this_pid" > "$pidfile"
 }   
 
-flake_update() (
+flake_update() {
+    local update_mode="$1"; shift
+    log_step "updating flake in $update_mode mode"
+
+    if [[ "$update_mode" == "full" ]]; then
+        flake_update_recursively "."
+        type gnupg-to-mutt.pl &> /dev/null && gnupg-to-mutt.pl
+    elif [[ "$update_mode" == "fast" ]]; then
+        grep '\.url = "path:' flake.nix | sed s/\.url.*// | sed 's/ //g' |
+            while read flake; do
+                (set -x; nix flake update ${verbose:+"--verbose"} "$flake")
+            done
+    else
+        log_error "unknown update mode: $update_mode"
+        exit 1
+    fi
+
+}
+
+flake_update_recursively() (
     local path="$1"; shift
-    echo "################################################################################"
-    echo "update flake $path and commit lock file"
-    echo "################################################################################"
+    local flake="$path/flake.nix"
+    echo ">> recursively walk flake $path"
+    if [[ ! -e "$flake" ]]; then
+        log_error "flake.nix not found in $path"
+        return
+    fi
+    if grep -q '\.url = "path:' "$flake"; then
+        grep '\.url = "path:' "$flake" | sed s/.*path:// | sed 's/".*//g' |
+            while read flake_path; do
+                flake_update_recursively "$flake_path"
+            done
+    fi
+    flake_update_one "$path"
+)
+
+flake_update_one() (
+    local path="$1"; shift
+    local num_of_tries="${1:-1}";
+    echo ">>> update flake $path and commit lock file"
+    if [[ "$num_of_tries" -gt 1 ]]; then
+        log_warning "retry $num_of_tries times"
+    fi
     cd "$path";
-    pwd
     set -x
-    nix flake update ${verbose:+"--verbose"} --commit-lock-file
+    nix flake update ${verbose:+"--verbose"} --commit-lock-file || {
+        set +x
+        if [[ "$num_of_tries" -lt 3 ]]; then
+            flake_update_one "$path" $((num_of_tries + 1))
+        else
+            log_error "failed to update flake $path"
+            exit 1
+        fi
+    } 
 )
 get_out_link_of_target() {
     local target="$1"; shift
@@ -38,9 +97,7 @@ get_out_link_of_target() {
 build() (
     local target="$1"; shift
     local out_link="$1"; shift
-    echo "################################################################################"
-    echo "building for $target to $out_link (at $(date))"
-    echo "################################################################################"
+    log_step "building for $target to $out_link"
     local system='.#nixosConfigurations.'"$target"'.config.system.build.toplevel'
 
     set -x
@@ -94,11 +151,11 @@ get_ip_of_target() {
         ip="$(get_ip_of_target_from_metadata ../myconfig/hosts/metadata.json "$target" "$use_wg")"
     fi
     if [[ "$ip" == "null" ]]; then
-        echo "ip for $target not found in metadata"
+        log_error "ip for $target not found in metadata"
         exit 1
     fi
     if [[ "$ip" == "" ]]; then
-      echo "ip can not be empty"
+      log_error "ip can not be empty"
       exit 1
     fi
     echo "$ip"
@@ -106,21 +163,17 @@ get_ip_of_target() {
 copy_closure_to_target() (
     local targetIP="$1"; shift
     local out_link="$1"; shift
-    echo "################################################################################"
-    echo "copying closure to $targetIP (at $(date))"
-    echo "################################################################################"
+    log_step "copying closure to $targetIP"
     set -x
     until nix-copy-closure --to "$targetIP" "$out_link"; do
-        echo "... retry nix-copy-closure"
+        log_warning "retry nix-copy-closure"
     done
 )
 diff_build_results() (
     local old_result="$1"; shift
     local out_link="$1"; shift
     if command -v nvd &> /dev/null; then
-        echo "################################################################################"
-        echo "diffing $old_result and $out_link"
-        echo "################################################################################"
+        log_step "diffing $old_result and $out_link"
         set -x
         nvd list -r "$out_link" > "$out_link"'.list'
         nvd diff "$old_result" "$out_link" | tee "$out_link"'.diff'
@@ -128,9 +181,7 @@ diff_build_results() (
 )
 direct_deploy_locally() {
     local out_link="$1"; shift
-    echo "################################################################################"
-    echo "direct deploying $out_link to $(hostname) (at $(date))"
-    echo "################################################################################"
+    log_step "direct deploying $out_link to $(hostname)"
     local store_path="$(nix-store -q "$out_link")"
     set -x
     sudo nix-env --profile /nix/var/nix/profiles/system --set "$store_path"
@@ -139,9 +190,7 @@ direct_deploy_locally() {
 deploy() (
     local target="$1"; shift
     local out_link="$1"; shift
-    echo "################################################################################"
-    echo "deploying $out_link to $target (at $(date))"
-    echo "################################################################################"
+    log_step "deploying $out_link to $target"
     local use_wg="${1:-false}";
     cmd="nixos-rebuild"
     if [[ "$target" != "$(hostname)" ]]; then
@@ -209,19 +258,7 @@ main() {
      export NIX_CONFIG
     fi
 
-    if [[ "$MODE" == "" ]]; then
-        grep '\.url = "path:' flake.nix | sed s/.*path:// | sed 's/".*//g' |
-            while read flake_path; do
-                flake_update "$flake_path"
-            done
-        flake_update "."
-        type gnupg-to-mutt.pl &> /dev/null && gnupg-to-mutt.pl
-    else
-        grep '\.url = "path:' flake.nix | sed s/\.url.*// | sed 's/ //g' |
-            while read flake; do
-                (set -x; nix flake update ${verbose:+"--verbose"} "$flake")
-            done
-    fi
+    flake_update "$( [[ "$MODE" == "" ]] && echo "full" || echo "fast")"
 
     local out_link="$(get_out_link_of_target "$target")"
     local old_result="$(readlink -f "$out_link" || true)"

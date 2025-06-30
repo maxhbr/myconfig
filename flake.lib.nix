@@ -482,7 +482,6 @@ in rec {
 
         extraModules = [
           ({ pkgs, ... }: {
-            nix.package = lib.mkDefault pkgs.nixVersions.stable;
             # ca-references
             nix.extraOptions = ''
               experimental-features = nix-command flakes recursive-nix

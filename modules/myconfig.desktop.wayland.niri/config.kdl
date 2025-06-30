@@ -577,6 +577,8 @@ binds {
 
     // The quit action will show a confirmation dialog to avoid accidental exits.
     Mod+Shift+Q { quit; }
+    Mod+Shift+F11 { spawn "systemctl" "suspend"; }
+
 
     // Powers off the monitors. To turn them back on, do any input like
     // moving the mouse or pressing any other key.

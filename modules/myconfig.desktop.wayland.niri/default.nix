@@ -27,12 +27,26 @@ in {
               '';
               niri-xwayland-satellite =
                 pkgs.writeShellScriptBin "niri-xwayland-satellite" ''
+                  kill_running_xwayland_satellite=false
+                  if [[ "$#" -gt 0 && "$1" == "kill" ]]; then
+                    kill_running_xwayland_satellite=true
+                  fi
+
                   CHOSEN_DISPLAY="''${1:-"''${DISPLAY}"}"
                   pidfile=/tmp/niri.''${XDG_VTNR}.''${USER}.xwayland-satellite.''${CHOSEN_DISPLAY}.pid
                   exec &> >(tee -a /tmp/niri.''${XDG_VTNR}.''${USER}.xwayland-satellite.''${CHOSEN_DISPLAY}.log)
 
-                  if [ -f $pidfile ]; then
-                    kill $(cat $pidfile) || true
+                  if [[ -f $pidfile ]]; then
+                    pid=$(cat $pidfile)
+                    echo "old pid: $pid"
+                    if [[ "$kill_running_xwayland_satellite" == "true" ]]; then
+                      kill $pid || true
+                    else
+                      if ps -p $pid > /dev/null; then
+                        echo "xwayland-satellite already running"
+                        exit 0
+                      fi
+                    fi
                   fi
 
                   set -euo pipefail

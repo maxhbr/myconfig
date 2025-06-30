@@ -1,6 +1,8 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, ... }: {
+{ config, pkgs, lib, myconfig, ... }: let
+  nix = config.nix.package;
+in {
   imports = [{ # support for nix-flakes
     # see:
     # - https://nixos.wiki/wiki/Flakes
@@ -34,14 +36,14 @@
               "NIXPKGS_ALLOW_UNFREE=1 nix-shell '<nixpkgs>' --fallback --run fish -p $argv";
             # see: https://github.com/NixOS/nixpkgs/issues/51368#issuecomment-704678563
             nix-closure-size =
-              "${pkgs.nix}/bin/nix-store -q --size (nix-store -qR (readlink -e $argv) ) | awk '{ a+=$1 } END { print a }' | ${pkgs.coreutils}/bin/numfmt --to=iec-i";
+              "${nix}/bin/nix-store -q --size (nix-store -qR (readlink -e $argv) ) | awk '{ a+=$1 } END { print a }' | ${pkgs.coreutils}/bin/numfmt --to=iec-i";
             # see: https://nixos.wiki/wiki/Nix_command/path-info
             nix-closure-sizes =
               "nix path-info -rS (readlink -e $argv) | sort -nk2";
             nix-most-recently-added =
-              "${pkgs.nix}/bin/nix path-info --json --all | ${pkgs.jq}/bin/jq -r 'sort_by(.registrationTime)[-11:-1][].path'";
+              "${nix}/bin/nix path-info --json --all | ${pkgs.jq}/bin/jq -r 'sort_by(.registrationTime)[-11:-1][].path'";
             nix-list-big-closures =
-              "${pkgs.nix}/bin/nix path-info --json --all -S | ${pkgs.jq}/bin/jq 'map(select(.closureSize > 1e9)) | sort_by(.closureSize) | map([.path, .closureSize])'";
+              "${nix}/bin/nix path-info --json --all -S | ${pkgs.jq}/bin/jq 'map(select(.closureSize > 1e9)) | sort_by(.closureSize) | map([.path, .closureSize])'";
           };
         };
       }];
@@ -59,6 +61,11 @@
       };
     }];
     nix = {
+      # package = pkgs.nix;
+      # if nix is more recent than 2.19.0, use the system nix
+      package = if lib.versionAtLeast pkgs.nix.version "2.29.0" then pkgs.nix else pkgs.nixVersions.nix_2_29;
+      # package = pkgs.nixVersions.git;
+
       extraOptions = ''
         keep-outputs = true
         keep-derivations = true
