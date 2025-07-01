@@ -49,10 +49,11 @@ flake_update() {
         flake_update_recursively "."
         type gnupg-to-mutt.pl &> /dev/null && gnupg-to-mutt.pl
     elif [[ "$update_mode" == "fast" ]]; then
-        grep '\.url = "path:' flake.nix | sed s/\.url.*// | sed 's/ //g' |
-            while read flake; do
-                (set -x; nix flake update ${verbose:+"--verbose"} "$flake")
-            done
+        flake_update_one "."
+        # grep '\.url = "path:' flake.nix | sed s/\.url.*// | sed 's/ //g' |
+        #     while read flake; do
+        #         (set -x; nix flake update ${verbose:+"--verbose"} "$flake")
+        #     done
     else
         log_error "unknown update mode: $update_mode"
         exit 1
@@ -123,6 +124,23 @@ du_of_out_link() {
     nix path-info -rhsS "$out_link" |
         tee "$out_link"'.du' |
         tail -1
+    cat "$out_link"'.du' |
+        gawk '
+        BEGIN {FS="\t"; OFS=","} {
+            if ($3 ~ / *[0-9\.]+ KiB/)
+                { a=gensub(/ *([0-9\.]+)( KiB)/,"\\1","g",$3); \
+                printf "%s KiB,%s,%s,%s\n", a,$3,$2,$1} \
+            else if ($3 ~ / *[0-9\.]+ MiB/)
+                { a=gensub(/ *([0-9\.]+)( MiB)/,"\\1","g",$3); \
+                printf "%s KiB,%s,%s,%s\n", a*1024,$3,$2,$1} \
+            else if ($3 ~ / *[0-9\.]+ GiB/)
+                { a=gensub(/ *([0-9\.]+)( GiB)/,"\\1","g",$3); \
+                printf "%s KiB,%s,%s,%s\n", a*1024*1024,$3,$2,$1} \
+            else {print "?",$3,$2,$1}
+            }
+        ' |
+        sort -n |
+        awk 'BEGIN {FS=","; OFS=","} {print $2,$3,$4}' > "$out_link"'.du.csv'
 }
 get_ip_of_target_from_metadata() {
     local metadata_file="$1"; shift

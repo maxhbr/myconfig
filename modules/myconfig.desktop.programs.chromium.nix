@@ -54,11 +54,6 @@ in {
           ];
         };
         myconfig.persistence.directories = [ ".config/chromium" ];
-        myconfig.desktop.wayland.wrappedElectronPackages = [{
-          pkg = config.programs.chromium.package;
-          executable = "chromium";
-          enabled = config.programs.chromium.enable;
-        }];
       })
     ];
     myconfig.desktop.wayland.launcherCommands = [ "chromium" "inco.sh" ];

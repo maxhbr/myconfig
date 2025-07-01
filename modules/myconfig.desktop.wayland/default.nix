@@ -196,7 +196,6 @@ in {
             desktop.wayland = { enable = mkEnableOption "wayland"; };
           };
         }
-        ./home-manager.wrap-electron-apps.nix
         ({ config, lib, ... }:
           let
             launcherCommands = config.myconfig.desktop.wayland.launcherCommands;

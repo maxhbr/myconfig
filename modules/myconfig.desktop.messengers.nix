@@ -10,10 +10,6 @@ in {
   config = lib.mkIf cfg.desktop.messengers.enable {
     home-manager.sharedModules = [{
       home.packages = [ signal-desktop signal-cli pkgs.smile ];
-      myconfig.desktop.wayland.wrappedElectronPackages = [{
-        pkg = signal-desktop;
-        executable = "signal-desktop";
-      }];
       myconfig.persistence.directories = [ ".config/Signal" ];
     }];
     myconfig.desktop.wayland.launcherCommands = [ "signal-desktop" ];

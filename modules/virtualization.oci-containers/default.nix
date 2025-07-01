@@ -9,24 +9,27 @@ in {
   config = (lib.mkIf (enablePodman || enableDocker) {
     # virtualisation.podman.dockerCompat = !config.virtualisation.docker.enable;
     home-manager.sharedModules = [{ home.packages = with pkgs; [ buildkit ]; }];
-    virtualisation.containers = {
-      policy = {
-        "default" = [{ "type" = "reject"; }];
-        "transports" = {
-          "docker" = {
-            "docker.io" = [{ "type" = "insecureAcceptAnything"; }];
-            "docker.io/library" = [{ "type" = "insecureAcceptAnything"; }];
-            "ghcr.io" = [{ "type" = "insecureAcceptAnything"; }];
-            "quay.io" = [{ "type" = "insecureAcceptAnything"; }];
-          };
+    virtualisation = {
+      oci-containers = { backend = if enablePodman then "podman" else "docker"; };
+      containers = {
+        policy = {
+          "default" = [{ "type" = "reject"; }];
+          "transports" = {
+            "docker" = {
+              "docker.io" = [{ "type" = "insecureAcceptAnything"; }];
+              "docker.io/library" = [{ "type" = "insecureAcceptAnything"; }];
+              "ghcr.io" = [{ "type" = "insecureAcceptAnything"; }];
+              "quay.io" = [{ "type" = "insecureAcceptAnything"; }];
+            };
 
-          # local images written while building
-          "containers-storage" = {
-            "" = [{ "type" = "insecureAcceptAnything"; }];
-          };
+            # local images written while building
+            "containers-storage" = {
+              "" = [{ "type" = "insecureAcceptAnything"; }];
+            };
 
-          # `docker-daemon =` pulls (e.g. `docker save | podman load`)
-          "docker-daemon" = { "" = [{ "type" = "insecureAcceptAnything"; }]; };
+            # `docker-daemon =` pulls (e.g. `docker save | podman load`)
+            "docker-daemon" = { "" = [{ "type" = "insecureAcceptAnything"; }]; };
+          };
         };
       };
     };

@@ -94,7 +94,6 @@
         imagework.enable = true;
         imagework.myphoto.enable = false;
         # cad.enable = true;
-        deskreen.enable = true;
       };
       email.enable = true;
       virtualisation.enable = true;
@@ -102,7 +101,7 @@
       dev = {
         # compliance.enable = true;
         # go.enable = false;
-        haskell.enable = true;
+        # haskell.enable = true;
         network.enable = true;
         # nodejs.enable = true;
         # ruby.enable = true;
@@ -115,7 +114,6 @@
     virtualisation = {
       # docker.enable = true;
       podman.enable = true;
-      oci-containers = { backend = "podman"; };
       # virtualbox.host.enable = true;
       # lxc.enable = true;
       # libvirtd.enable = true;

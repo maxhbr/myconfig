@@ -28,8 +28,8 @@ in {
       imports = [{
         programs.fish = {
           shellAbbrs = {
-            why-depends-nixos = "${nix}/bin/nix why-depends /run/current-system";
-            nixse = "${nix}/bin/nix search nixpkgs";
+            nixos-why-depends = "nix why-depends /run/current-system";
+            nixse = "nix search nixpkgs";
           };
           functions = {
             nixTest =
