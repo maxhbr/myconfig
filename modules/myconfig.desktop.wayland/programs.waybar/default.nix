@@ -31,22 +31,77 @@ let
         pkgs.waybar;
       waybarOnce = pkgs.writeShellScriptBin "waybarOnce" ''
         set -euo pipefail
-        session="''${1:-"$DESKTOP_SESSION"}"; shift
+
+        # Argument Parsing
+        #  $0 [--auto-restart] [--no-auto-kill] session
+        auto_restart=false
+        auto_kill=true
+        session=""
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --auto-restart)
+              auto_restart=true
+              shift
+              ;;
+            --no-auto-kill)
+              auto_kill=false
+              shift
+              ;;
+            *)
+              session="$1"
+              shift
+              break
+              ;;
+          esac
+        done
+
         bn=/tmp/''${session}.''${XDG_VTNR:-x}.''${USER}.waybar
         pidfile=$bn.pid
         logfile=$bn.log
 
-        if [ -f $pidfile ]; then
-          pid=$(cat $pidfile)
-          if kill -0 $pid &> /dev/null; then
-            kill $pid
+        auto_restart_waybar() {
+          if [ -f $pidfile ]; then
+            pid=$(cat $pidfile)
+            if kill -0 $pid &> /dev/null; then
+              echo "waybar is running, skipping auto-restart"
+              exit 1
+            fi
           fi
-        fi
+          set +e
+          while true; do
+            $0 --no-auto-kill "$session" "$@"
+            echo "waybar crashed, restarting..."
+            sleep 1
+          done
+          exit 0
+        }
 
-        echo "... waybar log is written to $logfile"
-        ${waybarPackage}/bin/waybar "$@" > $logfile 2>&1 &
-        echo $! > $pidfile
-        wait
+        start_waybar() {
+          if [ -f $pidfile ]; then
+            pid=$(cat $pidfile)
+            if kill -0 $pid &> /dev/null; then
+              if $auto_kill; then
+                kill $pid
+              else
+                echo "waybar is running"
+                exit 1
+              fi
+            else
+              rm $pidfile
+            fi
+          fi
+
+          echo "... waybar log is written to $logfile"
+          ${waybarPackage}/bin/waybar "$@" > $logfile 2>&1 &
+          echo $! > $pidfile
+          wait
+        }
+
+        if $auto_restart; then
+          auto_restart_waybar "$@"
+        else
+          start_waybar "$@"
+        fi
       '';
       toggleLight = pkgs.writeShellScriptBin "toggleLight" ''
         set -x
