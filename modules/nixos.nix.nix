@@ -1,7 +1,7 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, ... }: let
-  nix = config.nix.package;
+{ config, pkgs, lib, myconfig, ... }:
+let nix = config.nix.package;
 in {
   imports = [{ # support for nix-flakes
     # see:
@@ -63,7 +63,10 @@ in {
     nix = {
       # package = pkgs.nix;
       # if nix is more recent than 2.19.0, use the system nix
-      package = if lib.versionAtLeast pkgs.nix.version "2.29.0" then pkgs.nix else pkgs.nixVersions.nix_2_29;
+      package = if lib.versionAtLeast pkgs.nix.version "2.29.0" then
+        pkgs.nix
+      else
+        pkgs.nixVersions.nix_2_29;
       # package = pkgs.nixVersions.git;
 
       extraOptions = ''

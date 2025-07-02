@@ -4,7 +4,7 @@ let
   nixosConfig = config;
   cfg = config.myconfig;
   user = myconfig.user;
-  niri = if pkgs.niri.version < "25.05" then pkgs.master.niri else pkgs.niri;
+  niri = pkgs.niri;
 in {
   # add option for additional config added to config.kdl
   options.myconfig = with lib; {
@@ -80,6 +80,14 @@ in {
                 [ niri niri-xwayland-satellite niri-toggle-dpi-scale ];
               xdg.configFile = {
                 "niri/config.kdl".source = let
+                  xwayland-config =
+                    if pkgs.lib.versionAtLeast pkgs.niri.version "25.06" then ''
+                      xwayland-satellite {
+                          path "${pkgs.xwayland-satellite}/bin/xwayland-satellite"
+                      }
+                    '' else ''
+                      spawn-at-startup "${niri-xwayland-satellite}/bin/niri-xwayland-satellite"
+                    '';
                   drv = pkgs.runCommand "niri-config" {
                     nativeBuildInputs = [ niri ];
                     src = ./config.kdl;
@@ -95,10 +103,10 @@ in {
                     ${cfg.desktop.wayland.niri.additionalConfigKdl}
 
                     spawn-at-startup "${niri-autostart}"
+                    ${xwayland-config}
                     EOF
                     niri validate --config $out/config.kdl > $out/config.kdl.validate
                   '';
-                  # spawn-at-startup "${niri-xwayland-satellite}/bin/niri-xwayland-satellite"
                 in "${drv}/config.kdl";
               };
               programs.waybar.settings.mainBar = {

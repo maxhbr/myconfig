@@ -292,9 +292,11 @@ in {
         };
         programs.waybar.enable = true;
         services.kanshi.enable = false;
-        services.swaync.enable = cfg.desktop.wayland.notificationCenter == "swaync";
+        services.swaync.enable = cfg.desktop.wayland.notificationCenter
+          == "swaync";
         services.mako.enable = cfg.desktop.wayland.notificationCenter == "mako";
-        services.dunst.enable = cfg.desktop.wayland.notificationCenter == "dunst";
+        services.dunst.enable = cfg.desktop.wayland.notificationCenter
+          == "dunst";
         services.random-background.enable = lib.mkForce false;
         services.screen-locker.enable = lib.mkForce false;
         programs.foot.enable = true;

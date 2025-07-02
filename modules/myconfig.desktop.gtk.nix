@@ -71,7 +71,7 @@ in {
         gtk = {
           enable = true;
           inherit theme iconTheme;
-          gtk3 = { 
+          gtk3 = {
             inherit extraCss;
             bookmarks = [
               "file:///tmp"

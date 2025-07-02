@@ -1,12 +1,13 @@
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 { config, lib, pkgs, inputs, ... }:
-let cfg = config.myconfig;
-    mk_sigal_gallery = pkgs.writeShellApplication {
-      name = "mk_sigal_gallery";
-      runtimeInputs = with pkgs; [ sigal ];
-      text = builtins.readFile ./mk_sigal_gallery.sh;
-    };
+let
+  cfg = config.myconfig;
+  mk_sigal_gallery = pkgs.writeShellApplication {
+    name = "mk_sigal_gallery";
+    runtimeInputs = with pkgs; [ sigal ];
+    text = builtins.readFile ./mk_sigal_gallery.sh;
+  };
 in {
   options.myconfig = with lib; {
     desktop.imagework.enable = mkEnableOption "imagework";

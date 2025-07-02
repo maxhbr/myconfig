@@ -62,7 +62,8 @@ in {
       type = types.nullOr types.str;
       description = "Location of the device.";
     };
-    myconfig.persistence.impermanence.enable_smartd = mkEnableOption "smartd for the btrfs impermanence device";
+    myconfig.persistence.impermanence.enable_smartd =
+      mkEnableOption "smartd for the btrfs impermanence device";
   };
 
   config = lib.mkIf config.myconfig.persistence.impermanence.enable {
@@ -262,12 +263,10 @@ in {
       };
     };
     services.smartd = {
-      enable = lib.mkDefault config.myconfig.persistence.impermanence.enable_smartd;
-      devices = [
-        {
-          device = config.myconfig.persistence.impermanence.btrfs_device;
-        }
-      ];
+      enable =
+        lib.mkDefault config.myconfig.persistence.impermanence.enable_smartd;
+      devices =
+        [{ device = config.myconfig.persistence.impermanence.btrfs_device; }];
     };
     home-manager.sharedModules = [
       inputs.impermanence.homeManagerModules.impermanence

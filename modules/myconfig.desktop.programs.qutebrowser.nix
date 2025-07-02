@@ -1,9 +1,7 @@
 { config, lib, pkgs, ... }: {
   config = lib.mkIf config.myconfig.desktop.enable {
     home-manager.sharedModules = [
-      ({ config, ... }: {
-        programs.qutebrowser.enable = lib.mkDefault false;
-      })
+      ({ config, ... }: { programs.qutebrowser.enable = lib.mkDefault false; })
       ({ config, ... }:
         lib.mkIf config.programs.qutebrowser.enable {
           programs.qutebrowser = {

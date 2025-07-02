@@ -10,7 +10,9 @@ in {
     # virtualisation.podman.dockerCompat = !config.virtualisation.docker.enable;
     home-manager.sharedModules = [{ home.packages = with pkgs; [ buildkit ]; }];
     virtualisation = {
-      oci-containers = { backend = if enablePodman then "podman" else "docker"; };
+      oci-containers = {
+        backend = if enablePodman then "podman" else "docker";
+      };
       containers = {
         policy = {
           "default" = [{ "type" = "reject"; }];
@@ -28,7 +30,9 @@ in {
             };
 
             # `docker-daemon =` pulls (e.g. `docker save | podman load`)
-            "docker-daemon" = { "" = [{ "type" = "insecureAcceptAnything"; }]; };
+            "docker-daemon" = {
+              "" = [{ "type" = "insecureAcceptAnything"; }];
+            };
           };
         };
       };

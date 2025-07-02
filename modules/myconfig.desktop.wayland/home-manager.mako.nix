@@ -3,9 +3,9 @@
 {
   config = lib.mkIf config.services.mako.enable {
     services.mako = {
-      settings = { 
+      settings = {
         background-color = "#285577BB";
-        default-timeout = 20000; 
+        default-timeout = 20000;
       };
     };
   };

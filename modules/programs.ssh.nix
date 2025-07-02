@@ -1,13 +1,9 @@
-{ config, pkgs, lib, myconfig, ... }:
-{
+{ config, pkgs, lib, myconfig, ... }: {
   config = {
     programs.ssh.startAgent = true;
     services.gnome.gcr-ssh-agent.enable = lib.mkForce false;
     home-manager.sharedModules = [{
-      home.packages = with pkgs; [ 
-        eternal-terminal
-        sshfs
-      ];
+      home.packages = with pkgs; [ eternal-terminal sshfs ];
       home.file = {
         ".ssh/config".text = ''
           ControlMaster auto

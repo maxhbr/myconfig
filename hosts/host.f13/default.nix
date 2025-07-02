@@ -138,13 +138,7 @@
         myconfig.persistence.directories =
           [ ".config/Joplin" ".config/joplin-desktop" ];
       }
-      {
-        services.mako = {
-          settings = {
-            output = "eDP-1";
-          };
-        };
-      }
+      { services.mako = { settings = { output = "eDP-1"; }; }; }
       {
         home.packages = with pkgs.helper; [
           (connectBtDevice {
