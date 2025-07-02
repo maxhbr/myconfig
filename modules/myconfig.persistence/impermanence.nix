@@ -52,7 +52,89 @@ let
     in if validate sortedPaths then paths else throw "Path validation failed";
 
 in {
-  imports = [ inputs.impermanence.nixosModule ];
+  imports = [ 
+    inputs.impermanence.nixosModule
+    {
+      config = lib.mkIf (config.myconfig.persistence.impermanence.btrbk_device != null && config.myconfig.persistence.impermanence.btrbk_luks_device != null) (let
+          mountPoint = "/btr_backup";
+          mkTarget = name: "${mountPoint}/${config.networking.hostName}-${name}";
+          mkSettings = name: subvolume: {
+              snapshot_preserve_min = "24h";
+              snapshot_preserve     = "7d 4w 6m 1y";   
+              volume."/btr_pool" = {
+                inherit subvolume;
+                snapshot_dir = ".snapshots";
+                target = mkTarget name;
+              };
+            };
+          mkScript = name: pkgs.writeShellScriptBin "btrbk-usbhdd-${name}" ''
+            set -euo pipefail
+
+            conf="/etc/btrbk/usbhdd-${name}.conf"
+            if [ ! -f "$conf" ]; then
+              echo "Config file $conf does not exist"
+              exit 1
+            fi
+            
+            if [ ! -b "${validateDevice config.myconfig.persistence.impermanence.btrbk_device}" ]; then
+              echo "Device ${validateDevice config.myconfig.persistence.impermanence.btrbk_device} does not exist"
+              if [ ! -b "${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}" ]; then
+                echo "Device ${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device} does not exist"
+                exit 1
+              fi
+              echo "Decrypting ${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}"
+              sudo cryptsetup luksOpen "${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}" "btr_backup_luks"
+
+              if [ ! -b "${validateDevice config.myconfig.persistence.impermanence.btrbk_device}" ]; then
+                echo "Device ${validateDevice config.myconfig.persistence.impermanence.btrbk_device} still does not exist"
+                exit 1
+              fi
+            fi
+
+            if ! mountpoint -q "${mountPoint}"; then
+              echo "Mounting ${mountPoint}"
+              sudo mount "${validateDevice config.myconfig.persistence.impermanence.btrbk_device}" "${mountPoint}"
+            fi
+
+            target=${mkTarget name}
+            if [ ! -d "$target" ]; then
+              sudo mkdir -p "$target"
+            fi
+
+            set -x
+            sudo -H -u btrbk bash -c "btrbk -c $conf --progress --verbose run"
+          '';
+        in {
+        fileSystems."${mountPoint}" = {
+          device  = validateDevice config.myconfig.persistence.impermanence.btrbk_device;
+          fsType  = "btrfs";
+          options = [
+            "subvolid=5"          # show all subvolumes
+            "compress=zstd"
+            "nofail"              # don’t block boot if the disk is absent
+            "x-systemd.automount" # mount lazily the first time it’s accessed
+          ];
+        };
+        services.btrbk = {
+          instances = {
+            "usbhdd-priv" = {
+              onCalendar = null;
+              settings = mkSettings "priv" volumePriv;
+            };
+            "usbhdd-work" = {
+              onCalendar = null;
+              settings = mkSettings "work" volumeWork;
+            };
+          };
+        };
+        systemd.tmpfiles.rules = [
+          "d /btr_pool/.snapshots 0755 root root"
+        ];
+
+        environment.systemPackages = [ pkgs.lz4 (mkScript "priv") (mkScript "work") ];
+      });
+    }
+  ];
   options = with lib; {
     myconfig.persistence.impermanence.enable =
       lib.mkEnableOption "impermanence";
@@ -62,6 +144,23 @@ in {
       type = types.nullOr types.str;
       description = "Location of the device.";
     };
+    myconfig.persistence.impermanence.btrbk_device = mkOption {
+      default = null;
+      example = "/dev/disk/by-uuid/8e3c7395-c663-4080-9463-3b8a18bd7ad3";
+      type = types.nullOr types.str;
+      description = "Location of the btrbk device.";
+    };
+    myconfig.persistence.impermanence.btrbk_luks_device = mkOption {
+      default = null;
+      example = "/dev/disk/by-uuid/8e3c7395-c663-4080-9463-3b8a18bd7ad3";
+      type = types.nullOr types.str;
+      description = "Location of the btrbk LUKS device, which is used to encrypt the btrbk device.";
+    };
+    # myconfig.persistence.impermanence.btrbk_targets = mkOption {
+    #   default = [ ];
+    #   type = types.listOf types.str;
+    #   description = "List of btrbk targets to backup.";
+    # };
     myconfig.persistence.impermanence.enable_smartd =
       mkEnableOption "smartd for the btrfs impermanence device";
   };
@@ -151,6 +250,13 @@ in {
       device = "none";
       fsType = "tmpfs";
       options = [ "defaults" "size=20%" "mode=755" ];
+    };
+
+    fileSystems."/btr_pool" = {
+      device =
+        validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      fsType = "btrfs";
+      options = [ "subvolid=5" ];
     };
 
     fileSystems."/var/log" = {

@@ -81,7 +81,7 @@ in {
               xdg.configFile = {
                 "niri/config.kdl".source = let
                   xwayland-config =
-                    if pkgs.lib.versionAtLeast pkgs.niri.version "25.06" then ''
+                    if pkgs.lib.versionOlder "25.05.1" pkgs.niri.version then ''
                       xwayland-satellite {
                           path "${pkgs.xwayland-satellite}/bin/xwayland-satellite"
                       }

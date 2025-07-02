@@ -65,6 +65,8 @@
       persistence.impermanence = {
         enable = true;
         btrfs_device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
+        btrbk_device = "/dev/disk/by-uuid/8e3c7395-c663-4080-9463-3b8a18bd7ad3";
+        btrbk_luks_device = "/dev/disk/by-uuid/51df4369-0063-446a-96db-6d08b6349935";
       };
       desktop = {
         enable = true;
