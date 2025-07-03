@@ -67,15 +67,9 @@ in {
                 target = mkTarget name;
               };
             };
-          mkScript = name: pkgs.writeShellScriptBin "btrbk-usbhdd-${name}" ''
+          mountScript = pkgs.writeShellScriptBin "btrbk-mount" ''
             set -euo pipefail
 
-            conf="/etc/btrbk/usbhdd-${name}.conf"
-            if [ ! -f "$conf" ]; then
-              echo "Config file $conf does not exist"
-              exit 1
-            fi
-            
             if [ ! -b "${validateDevice config.myconfig.persistence.impermanence.btrbk_device}" ]; then
               echo "Device ${validateDevice config.myconfig.persistence.impermanence.btrbk_device} does not exist"
               if [ ! -b "${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}" ]; then
@@ -91,10 +85,38 @@ in {
               fi
             fi
 
+            if [ ! -d "${mountPoint}" ]; then
+              echo "Mount point ${mountPoint} does not exist"
+              exit 1
+            fi
+
             if ! mountpoint -q "${mountPoint}"; then
               echo "Mounting ${mountPoint}"
               sudo mount "${validateDevice config.myconfig.persistence.impermanence.btrbk_device}" "${mountPoint}"
             fi
+          '';
+          umountScript = pkgs.writeShellScriptBin "btrbk-umount" ''
+            set -euo pipefail
+
+            if mountpoint -q "${mountPoint}"; then
+              echo "Unmounting ${mountPoint}"
+              sudo umount "${mountPoint}"
+            fi
+            if [ -b "/dev/mapper/btr_backup_luks" ]; then
+              echo "Closing LUKS device"
+              sudo cryptsetup luksClose "btr_backup_luks"
+            fi
+          '';
+          mkScript = name: pkgs.writeShellScriptBin "btrbk-usbhdd-${name}" ''
+            set -euo pipefail
+
+            conf="/etc/btrbk/usbhdd-${name}.conf"
+            if [ ! -f "$conf" ]; then
+              echo "Config file $conf does not exist"
+              exit 1
+            fi
+            
+            ${mountScript}/bin/btrbk-mount
 
             target=${mkTarget name}
             if [ ! -d "$target" ]; then
@@ -103,6 +125,7 @@ in {
 
             set -x
             sudo -H -u btrbk bash -c "btrbk -c $conf --progress --verbose run"
+            times
           '';
         in {
         fileSystems."${mountPoint}" = {
@@ -131,7 +154,7 @@ in {
           "d /btr_pool/.snapshots 0755 root root"
         ];
 
-        environment.systemPackages = [ pkgs.lz4 (mkScript "priv") (mkScript "work") ];
+        environment.systemPackages = [ pkgs.lz4 (mkScript "priv") (mkScript "work") mountScript umountScript ];
       });
     }
   ];
@@ -156,11 +179,6 @@ in {
       type = types.nullOr types.str;
       description = "Location of the btrbk LUKS device, which is used to encrypt the btrbk device.";
     };
-    # myconfig.persistence.impermanence.btrbk_targets = mkOption {
-    #   default = [ ];
-    #   type = types.listOf types.str;
-    #   description = "List of btrbk targets to backup.";
-    # };
     myconfig.persistence.impermanence.enable_smartd =
       mkEnableOption "smartd for the btrfs impermanence device";
   };
