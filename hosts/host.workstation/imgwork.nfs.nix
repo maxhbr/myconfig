@@ -1,20 +1,37 @@
-{ pkgs, ... }: {
-  imports = [{
-    # Many clients only support NFSv3, which requires the server to have fixed ports:
-    services.nfs.server = {
-      # fixed rpc.statd port; for firewall
-      lockdPort = 4001;
-      mountdPort = 4002;
-      statdPort = 4000;
-      extraNfsdConfig = "";
-    };
-    networking.firewall = {
-      enable = true;
-      # for NFSv3; view with `rpcinfo -p`
-      allowedTCPPorts = [ 111 2049 4000 4001 4002 20048 ];
-      allowedUDPPorts = [ 111 2049 4000 4001 4002 20048 ];
-    };
-  }];
+{ pkgs, ... }:
+{
+  imports = [
+    {
+      # Many clients only support NFSv3, which requires the server to have fixed ports:
+      services.nfs.server = {
+        # fixed rpc.statd port; for firewall
+        lockdPort = 4001;
+        mountdPort = 4002;
+        statdPort = 4000;
+        extraNfsdConfig = "";
+      };
+      networking.firewall = {
+        enable = true;
+        # for NFSv3; view with `rpcinfo -p`
+        allowedTCPPorts = [
+          111
+          2049
+          4000
+          4001
+          4002
+          20048
+        ];
+        allowedUDPPorts = [
+          111
+          2049
+          4000
+          4001
+          4002
+          20048
+        ];
+      };
+    }
+  ];
   config = {
     # fileSystems."/export/imgwork" = {
     #   device = "/dev/disk/by-uuid/d1d992c4-637b-4070-a4e5-472b15cb986e";
@@ -32,4 +49,3 @@
     };
   };
 }
-

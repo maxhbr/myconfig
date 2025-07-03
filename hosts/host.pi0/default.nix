@@ -1,4 +1,5 @@
-{ lib, ... }: {
+{ lib, ... }:
+{
   imports = [
     ./hardware-configuration.nix
     ../modules
@@ -10,10 +11,12 @@
     networking.hostName = "pi0";
     networking.hostId = "a88cddde";
 
-    swapDevices = [{
-      device = "/swapfile";
-      priority = 0;
-      size = 1024;
-    }];
+    swapDevices = [
+      {
+        device = "/swapfile";
+        priority = 0;
+        size = 1024;
+      }
+    ];
   };
 }

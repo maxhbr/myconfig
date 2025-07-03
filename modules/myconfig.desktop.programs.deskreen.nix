@@ -1,7 +1,13 @@
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 let
   cfg = config.myconfig;
-  deskreenScript = with pkgs;
+  deskreenScript =
+    with pkgs;
     writeShellScriptBin "deskreen" ''
       release=2.0.3
       dir="$HOME/.deskreen-cache"
@@ -13,7 +19,8 @@ let
       ${appimage-run}/bin/appimage-run "$dir/Deskreen-$release.AppImage"
     '';
   deskreenPkg = pkgs.deskreen;
-in {
+in
+{
   options.myconfig = with lib; {
     desktop.deskreen.enable = mkEnableOption "deskreen";
     desktop.deskreen.usePkgs = mkOption {
@@ -22,15 +29,15 @@ in {
       description = "Use the deskreen package from nixpkgs";
     };
   };
-  config =
-    (lib.mkIf (config.myconfig.desktop.enable && cfg.desktop.deskreen.enable) {
-      home-manager.sharedModules = [{
-        home.packages = if cfg.desktop.deskreen.usePkgs then
-          [ deskreenPkg ]
-        else
-          [ deskreenScript ];
-      }];
+  config = (
+    lib.mkIf (config.myconfig.desktop.enable && cfg.desktop.deskreen.enable) {
+      home-manager.sharedModules = [
+        {
+          home.packages = if cfg.desktop.deskreen.usePkgs then [ deskreenPkg ] else [ deskreenScript ];
+        }
+      ];
       networking.firewall.allowedTCPPorts = [ 3131 ];
       networking.firewall.allowedUDPPorts = [ 3131 ];
-    });
+    }
+  );
 }

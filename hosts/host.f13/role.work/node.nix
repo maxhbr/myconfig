@@ -1,6 +1,7 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, ... }: {
+{ config, pkgs, ... }:
+{
   config = {
     system.extraSystemBuilderCmds = ''
       mkdir -p $out/pkgs/
@@ -17,13 +18,15 @@
         NODEJS_15_HOME = "/run/current-system/pkgs/nodejs-15_x";
       };
     };
-    home-manager.sharedModules = [{
-      home.file = {
-        # to simulate gradles kotlinYarnSetup nodejs bootstrapping:
-        ".gradle/nodejs/node-v12.16.1-linux-x64" = {
-          source = pkgs.nodejs-12_x;
+    home-manager.sharedModules = [
+      {
+        home.file = {
+          # to simulate gradles kotlinYarnSetup nodejs bootstrapping:
+          ".gradle/nodejs/node-v12.16.1-linux-x64" = {
+            source = pkgs.nodejs-12_x;
+          };
         };
-      };
-    }];
+      }
+    ];
   };
 }

@@ -1,6 +1,13 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, inputs, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  myconfig,
+  inputs,
+  ...
+}:
 let
   ai-tmux-session = "ai";
   ai-tmux-session-script = pkgs.writeShellScriptBin "ai-tmux-session" ''
@@ -16,8 +23,12 @@ let
     fi
     exec tmux attach-session -t ${ai-tmux-session}
   '';
-in {
-  imports = [ ../../hardware/eGPU.nix ./run-comfyui.nix ];
+in
+{
+  imports = [
+    ../../hardware/eGPU.nix
+    ./run-comfyui.nix
+  ];
 
   config = {
     nixpkgs.config.rocmSupport = false;
@@ -32,18 +43,30 @@ in {
       ai = {
         enable = true;
         acceleration.vulkan.enable = true;
-        inference-cpp = { enable = true; };
-        lmstudio = { enable = true; };
-        alpaca = { enable = true; };
+        inference-cpp = {
+          enable = true;
+        };
+        lmstudio = {
+          enable = true;
+        };
+        alpaca = {
+          enable = true;
+        };
         container = {
-          nlm-ingestor = { enable = false; };
-          open-webui = { enable = true; };
+          nlm-ingestor = {
+            enable = false;
+          };
+          open-webui = {
+            enable = true;
+          };
           sillytavern = {
             enable = false;
             host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
             port = 8888;
           };
-          kokoro-fastapi = { enable = false; };
+          kokoro-fastapi = {
+            enable = false;
+          };
           lobe-chat = {
             enable = true;
             host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
@@ -52,13 +75,15 @@ in {
             enable = false;
             config = {
               "environment_variables" = { };
-              "model_list" = [{
-                "model_name" = "ollama/qwen3:32b";
-                "litellm_params" = {
-                  model = "ollama/qwen3:32b";
-                  api_base = "http://host.containers.internal:11434";
-                };
-              }];
+              "model_list" = [
+                {
+                  "model_name" = "ollama/qwen3:32b";
+                  "litellm_params" = {
+                    model = "ollama/qwen3:32b";
+                    api_base = "http://host.containers.internal:11434";
+                  };
+                }
+              ];
             };
           };
         };
@@ -75,25 +100,27 @@ in {
         OLLAMA_ORIGIN = "*";
         OLLAMA_KEEP_ALIVE = "5m";
       };
-      loadModels = [
-        "cogito:32b"
-        "deepseek-r1:32b"
-        "gemma3:27b"
-        "llama3.2:3b"
-        "llava:34b"
-        "openthinker:32b"
-        "phi4"
-        "qwq:32b"
-        "smollm2:1.7b"
-        "qwen3:32b"
-        "qwen3:30b"
-        "magistral:24b"
-      ] ++ [
-        # for continue:
-        "llama3.1:8b"
-        "qwen2.5-coder:1.5b-base"
-        "nomic-embed-text:latest"
-      ];
+      loadModels =
+        [
+          "cogito:32b"
+          "deepseek-r1:32b"
+          "gemma3:27b"
+          "llama3.2:3b"
+          "llava:34b"
+          "openthinker:32b"
+          "phi4"
+          "qwq:32b"
+          "smollm2:1.7b"
+          "qwen3:32b"
+          "qwen3:30b"
+          "magistral:24b"
+        ]
+        ++ [
+          # for continue:
+          "llama3.1:8b"
+          "qwen2.5-coder:1.5b-base"
+          "nomic-embed-text:latest"
+        ];
     };
     services.tabby = {
       enable = false;
@@ -103,24 +130,20 @@ in {
     services.caddy = {
       enable = true;
       virtualHosts."${config.networking.hostName}.wg0.maxhbr.local" = {
-        listenAddresses =
-          [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+        listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
         hostName = "${config.networking.hostName}.wg0.maxhbr.local";
         serverAliases = [
           "${config.networking.hostName}.wg0"
           (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
         ];
         extraConfig = ''
-          reverse_proxy http://localhost:${
-            toString config.myconfig.ai.container.open-webui.port
-          }
+          reverse_proxy http://localhost:${toString config.myconfig.ai.container.open-webui.port}
         '';
       };
     };
 
     networking.firewall.interfaces."wg0".allowedTCPPorts = [ 443 ];
 
-    home-manager.sharedModules =
-      [{ home.packages = [ ai-tmux-session-script ]; }];
+    home-manager.sharedModules = [ { home.packages = [ ai-tmux-session-script ]; } ];
   };
 }

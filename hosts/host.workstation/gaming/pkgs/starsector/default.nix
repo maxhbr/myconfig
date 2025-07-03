@@ -1,8 +1,32 @@
 # from: https://discourse.nixos.org/t/game-got-starsector-to-run-on-nixos/5419
-{ stdenv, lib, unzip, requireFile, makeWrapper, xorg, openjdk8, alsaLib
-, at-spi2-atk, cairo, fontconfig, freetype, gdk-pixbuf, glib, gtk2-x11, libav
-, libX11, libXcursor, libXext, libxml2, libXrandr, libxslt, libXtst, libXxf86vm
-, openal, pango }:
+{
+  stdenv,
+  lib,
+  unzip,
+  requireFile,
+  makeWrapper,
+  xorg,
+  openjdk8,
+  alsaLib,
+  at-spi2-atk,
+  cairo,
+  fontconfig,
+  freetype,
+  gdk-pixbuf,
+  glib,
+  gtk2-x11,
+  libav,
+  libX11,
+  libXcursor,
+  libXext,
+  libxml2,
+  libXrandr,
+  libxslt,
+  libXtst,
+  libXxf86vm,
+  openal,
+  pango,
+}:
 
 stdenv.mkDerivation rec {
   pname = "starsector";
@@ -15,7 +39,10 @@ stdenv.mkDerivation rec {
   #   url = "https://s3.amazonaws.com/fractalsoftworks/starsector/starsector_linux-0.9.1a-RC8.zip";
   # };
 
-  nativeBuildInputs = [ unzip makeWrapper ];
+  nativeBuildInputs = [
+    unzip
+    makeWrapper
+  ];
   buildInputs = with xorg; [
     alsaLib
     at-spi2-atk
@@ -74,8 +101,7 @@ stdenv.mkDerivation rec {
 
   meta = with lib; {
     homggepage = "https://fractalsoftworks.com/";
-    description =
-      "Starsector (formerly “Starfarer”) is an in-development open-world single-player space-combat, roleplaying, exploration, and economic game.";
+    description = "Starsector (formerly “Starfarer”) is an in-development open-world single-player space-combat, roleplaying, exploration, and economic game.";
     platforms = platforms.linux;
     maintainers = with maintainers; [ ];
   };

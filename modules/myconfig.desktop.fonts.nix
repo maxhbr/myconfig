@@ -6,7 +6,13 @@
 # This can be removed, once the packages is listed
 # Copyright 2017-2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }: {
+{
+  pkgs,
+  config,
+  lib,
+  ...
+}:
+{
   config = lib.mkIf config.myconfig.desktop.enable {
     fonts = {
       enableDefaultPackages = true;
@@ -33,35 +39,37 @@
         roboto
       ];
     };
-    home-manager.sharedModules = [{
-      home.file = {
-        ".fontconfig/fonts.conf".text = ''
-          <?xml version="1.0"?>
-          <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
-          <fontconfig>
-              <match target="font" >
-                  <edit mode="assign" name="rgba" >
-                      <const>rgb</const>
-                  </edit>
-              </match>
-              <match target="font" >
-                  <edit mode="assign" name="hinting">
-                      <bool>true</bool>
-                  </edit>
-              </match>
-              <match target="font" >
-                  <edit mode="assign" name="hintstyle">
-                      <const>hintslight</const>
-                  </edit>
-              </match>
-              <match target="font">
-                  <edit mode="assign" name="lcdfilter">
-                      <const>lcddefault</const>
-                  </edit>
-              </match>
-          </fontconfig>
-        '';
-      };
-    }];
+    home-manager.sharedModules = [
+      {
+        home.file = {
+          ".fontconfig/fonts.conf".text = ''
+            <?xml version="1.0"?>
+            <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+            <fontconfig>
+                <match target="font" >
+                    <edit mode="assign" name="rgba" >
+                        <const>rgb</const>
+                    </edit>
+                </match>
+                <match target="font" >
+                    <edit mode="assign" name="hinting">
+                        <bool>true</bool>
+                    </edit>
+                </match>
+                <match target="font" >
+                    <edit mode="assign" name="hintstyle">
+                        <const>hintslight</const>
+                    </edit>
+                </match>
+                <match target="font">
+                    <edit mode="assign" name="lcdfilter">
+                        <const>lcddefault</const>
+                    </edit>
+                </match>
+            </fontconfig>
+          '';
+        };
+      }
+    ];
   };
 }

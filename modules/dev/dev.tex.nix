@@ -1,13 +1,25 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }:
+{
+  pkgs,
+  config,
+  lib,
+  ...
+}:
 let
   cfg = config.myconfig.dev.tex;
-  tex = (pkgs.texLiveAggregationFun {
-    paths =
-      [ pkgs.texLive pkgs.texLiveExtra pkgs.texLiveBeamer pkgs.texLiveCMSuper ];
-  });
-in {
+  tex = (
+    pkgs.texLiveAggregationFun {
+      paths = [
+        pkgs.texLive
+        pkgs.texLiveExtra
+        pkgs.texLiveBeamer
+        pkgs.texLiveCMSuper
+      ];
+    }
+  );
+in
+{
   config = lib.mkIf cfg.enable {
     home-manager.users.mhuber = {
       home.packages = with pkgs; [ tex ];

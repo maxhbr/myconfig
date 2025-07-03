@@ -2,12 +2,13 @@
 # and may be overwritten by future invocations.  Please make changes
 # to /etc/nixos/configuration.nix instead.
 { config, ... }:
-let user = config.myconfig.user;
-in {
+let
+  user = config.myconfig.user;
+in
+{
   fileSystems."/home/${user}/Bilder/ssd" = {
     device = "/dev/disk/by-uuid/71560da1-8650-4d6a-a13a-e0a6f01e19ce";
     fsType = "ext4";
-    options =
-      [ "auto,nofail,x-systemd.device-timeout=1,users,rw,discard,noatime" ];
+    options = [ "auto,nofail,x-systemd.device-timeout=1,users,rw,discard,noatime" ];
   };
 }

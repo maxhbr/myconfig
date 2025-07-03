@@ -1,4 +1,11 @@
-{ config, lib, inputs, pkgs, ... }: {
+{
+  config,
+  lib,
+  inputs,
+  pkgs,
+  ...
+}:
+{
   # copied from https://github.com/dnut/clipboard-sync/blob/master/flake.nix to not include their nixosMoudle
   options = {
     services.clipboard-sync.enable = lib.mkEnableOption "clipboard-sync";
@@ -13,8 +20,8 @@
       partOf = [ "graphical-session.target" ];
       requisite = [ "graphical-session.target" ];
       serviceConfig.ExecStart = "/usr/bin/env ${
-          inputs.clipboard-sync.packages.${pkgs.system}.default
-        }/bin/clipboard-sync --hide-timestamp --log-level debug";
+        inputs.clipboard-sync.packages.${pkgs.system}.default
+      }/bin/clipboard-sync --hide-timestamp --log-level debug";
       serviceConfig.Restart = "on-failure";
     };
   };

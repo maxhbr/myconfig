@@ -1,4 +1,5 @@
-{ pkgs, ... }: {
+{ pkgs, ... }:
+{
   config = {
     users = {
       extraUsers."openhab" = {
@@ -12,8 +13,14 @@
       extraGroups."openhab".gid = 1200;
     };
 
-    networking.firewall.allowedTCPPorts = [ 8080 8443 ];
-    networking.firewall.allowedUDPPorts = [ 8080 8443 ];
+    networking.firewall.allowedTCPPorts = [
+      8080
+      8443
+    ];
+    networking.firewall.allowedUDPPorts = [
+      8080
+      8443
+    ];
 
     docker-containers = {
       openhab = {

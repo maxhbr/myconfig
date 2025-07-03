@@ -1,7 +1,13 @@
 # based on:
 # <nixpkgs/nixos/modules/installer/cd-dvd/sd-image-raspberrypi4.nix>
 # this mainly removes the `installation-device` part
-{ config, lib, pkgs, modulesPath, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  modulesPath,
+  ...
+}:
 
 {
   imports = [
@@ -26,12 +32,10 @@
 
     firmwarePartitionName = "NIXOS_BOOT";
     # This is a hack to avoid replicating config.txt from boot.loader.raspberryPi
-    populateFirmwareCommands =
-      "${config.system.build.installBootLoader} ${config.system.build.toplevel} -d ./firmware";
+    populateFirmwareCommands = "${config.system.build.installBootLoader} ${config.system.build.toplevel} -d ./firmware";
 
     # As the boot process is done entirely in the firmware partition.
-    populateRootCommands =
-      "touch files/touched"; # See: https://github.com/NixOS/nixpkgs/pull/93175
+    populateRootCommands = "touch files/touched"; # See: https://github.com/NixOS/nixpkgs/pull/93175
   };
 
   fileSystems."/boot/firmware" = {

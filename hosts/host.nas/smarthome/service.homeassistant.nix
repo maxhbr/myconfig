@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 {
   config.services.home-assistant.enable = true;
@@ -18,23 +23,33 @@
             time_zone = "UTC";
           };
           config = { };
-          lovelace = { mode = "yaml"; };
-          logger = { default = "debug"; };
+          lovelace = {
+            mode = "yaml";
+          };
+          logger = {
+            default = "debug";
+          };
           http = { };
-          frontend = { themes = "!include_dir_merge_named themes"; };
+          frontend = {
+            themes = "!include_dir_merge_named themes";
+          };
           # feedreader.urls = [ "https://nixos.org/blogs.xml" ];
         };
         configWritable = true;
         lovelaceConfig = {
           title = "My Awesome Home";
-          views = [{
-            title = "Example";
-            cards = [{
-              type = "markdown";
-              title = "Lovelace";
-              content = "Welcome to your **Lovelace UI**.";
-            }];
-          }];
+          views = [
+            {
+              title = "Example";
+              cards = [
+                {
+                  type = "markdown";
+                  title = "Lovelace";
+                  content = "Welcome to your **Lovelace UI**.";
+                }
+              ];
+            }
+          ];
         };
         lovelaceConfigWritable = true;
       };

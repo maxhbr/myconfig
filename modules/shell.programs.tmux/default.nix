@@ -6,11 +6,17 @@ let
 
   inherit (lib) removePrefix;
 
-  pluginConf = plugins:
-    concatStringsSep "\n\n" (map (plugin:
-      let name = removePrefix "tmuxplugin-" plugin.name;
-      in "run-shell ${plugin}/share/tmux-plugins/${name}/${name}.tmux")
-      plugins);
+  pluginConf =
+    plugins:
+    concatStringsSep "\n\n" (
+      map (
+        plugin:
+        let
+          name = removePrefix "tmuxplugin-" plugin.name;
+        in
+        "run-shell ${plugin}/share/tmux-plugins/${name}/${name}.tmux"
+      ) plugins
+    );
 
   plugins = with pkgs.tmuxPlugins; [
     copycat
@@ -20,7 +26,8 @@ let
     vim-tmux-navigator
   ];
 
-in {
+in
+{
   nixpkgs.overlays = [ (final: prev: { tmux = final.master.tmux; }) ];
   environment = {
     shellAliases = {

@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: MIT
 { pkgs, ... }:
 let
-  gmvn = with pkgs;
+  gmvn =
+    with pkgs;
     writeScriptBin "gmvn" ''
       #!${stdenv.shell}
 
@@ -21,16 +22,21 @@ let
         -Dmaven.repo.local="$repo" \
         "$@"
     '';
-in {
+in
+{
   config = {
     nixpkgs.overlays = [
-      (self: super:
-        let defaultJdk = self.openjdk11;
-        in {
+      (
+        self: super:
+        let
+          defaultJdk = self.openjdk11;
+        in
+        {
           maven = super.maven.override { jdk = defaultJdk; };
           # gradle = (pkgs.gradleGen.override { java = defaultJdk; }).gradle_latest;
           jdk = defaultJdk;
-        })
+        }
+      )
     ];
 
     # generates:
@@ -47,8 +53,15 @@ in {
     '';
 
     environment = {
-      systemPackages = with pkgs; [ jdk maven gradle gmvn ];
-      shellAliases = { mvnDebug = "${pkgs.maven}/maven/bin/mvnDebug"; };
+      systemPackages = with pkgs; [
+        jdk
+        maven
+        gradle
+        gmvn
+      ];
+      shellAliases = {
+        mvnDebug = "${pkgs.maven}/maven/bin/mvnDebug";
+      };
       variables = {
         JAVA_8_HOME = "/run/current-system/pkgs/openjdk8/lib/openjdk";
         JAVA_11_HOME = "/run/current-system/pkgs/openjdk11/lib/openjdk";

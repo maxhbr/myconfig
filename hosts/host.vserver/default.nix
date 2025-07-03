@@ -1,6 +1,7 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, lib, ... }: {
+{ pkgs, lib, ... }:
+{
   imports = [
     ./hardware-configuration.nix
     # hardware:
@@ -11,7 +12,9 @@
     ./service.kanboard.nix
   ];
   config = {
-    myconfig = { headless.enable = true; };
+    myconfig = {
+      headless.enable = true;
+    };
 
     networking.hostName = "vserver";
     networking.hostId = "49496f29";
@@ -21,8 +24,14 @@
     services.netdata.enable = lib.mkForce false;
 
     # stk
-    networking.firewall.allowedUDPPorts = [ 2759 2757 ];
-    networking.firewall.allowedTCPPorts = [ 2759 2757 ];
+    networking.firewall.allowedUDPPorts = [
+      2759
+      2757
+    ];
+    networking.firewall.allowedTCPPorts = [
+      2759
+      2757
+    ];
 
     # This value determines the NixOS release from which the default
     # settings for stateful data, like file locations and database versions

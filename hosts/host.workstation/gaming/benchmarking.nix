@@ -1,7 +1,8 @@
 { pkgs, config, ... }:
 let
   user = config.myconfig.user;
-  mybench = with pkgs;
+  mybench =
+    with pkgs;
     writeShellScriptBin "mybench" ''
       benchDir="$HOME/Desktop/mybench/$(hostname)"
       mkdir -p $benchDir
@@ -9,10 +10,14 @@ let
       ${openssl}/bin/openssl speed | tee $benchDir/sslspeed
       ${glmark2}/bin/glmark2 --fullscreen --annotate | tee $benchDir/glmark2
     '';
-in {
+in
+{
   config = {
     home-manager.users."${user}" = {
-      home.packages = with pkgs; [ mybench glmark2 ];
+      home.packages = with pkgs; [
+        mybench
+        glmark2
+      ];
     };
   };
 }

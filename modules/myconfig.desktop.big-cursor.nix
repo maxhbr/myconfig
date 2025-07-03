@@ -1,19 +1,27 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }: {
+{
+  pkgs,
+  config,
+  lib,
+  ...
+}:
+{
   config = lib.mkIf config.myconfig.desktop.enable {
-    home-manager.sharedModules = [{
-      home.pointerCursor = {
-        package = pkgs.vanilla-dmz;
-        size = 128;
-        name = "Vanilla-DMZ";
-        x11 = {
-          enable = true;
-          defaultCursor = "left_ptr";
+    home-manager.sharedModules = [
+      {
+        home.pointerCursor = {
+          package = pkgs.vanilla-dmz;
+          size = 128;
+          name = "Vanilla-DMZ";
+          x11 = {
+            enable = true;
+            defaultCursor = "left_ptr";
+          };
+          gtk.enable = true;
         };
-        gtk.enable = true;
-      };
-    }];
+      }
+    ];
     nixpkgs.overlays = [
       (final: prev: {
         # set default cursor theme when installed

@@ -1,10 +1,14 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs ? import <nixpkgs> { } }:
+{
+  pkgs ? import <nixpkgs> { },
+}:
 
-let stdenv = pkgs.stdenv;
+let
+  stdenv = pkgs.stdenv;
 
-in stdenv.mkDerivation rec {
+in
+stdenv.mkDerivation rec {
   name = "find-cursor-${version}";
   version = "2020-05-28";
   src = pkgs.fetchFromGitHub {
@@ -14,8 +18,14 @@ in stdenv.mkDerivation rec {
     sha256 = "1ybwbamxl3mysack02bjh13qrcq57wnsjxwindgp6c724cbfpw3a";
   };
 
-  nativeBuildInputs = [ pkgs.makeWrapper ]
-    ++ (with pkgs.xorg; [ libX11 libXext libXdamage libXrender ]);
+  nativeBuildInputs =
+    [ pkgs.makeWrapper ]
+    ++ (with pkgs.xorg; [
+      libX11
+      libXext
+      libXdamage
+      libXrender
+    ]);
 
   buildPhase = ''
     make all

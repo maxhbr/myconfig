@@ -1,8 +1,17 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 {
   config = lib.mkIf config.services.xserver.desktopManager.gnome.enable {
-    environment.gnome.excludePackages = (with pkgs; [ gnome-photos gnome-tour ])
+    environment.gnome.excludePackages =
+      (with pkgs; [
+        gnome-photos
+        gnome-tour
+      ])
       ++ (with pkgs.gnome; [
         cheese # webcam tool
         gnome-music

@@ -1,4 +1,9 @@
-{ stdenv, pkg-config, hidapi, pkgs }:
+{
+  stdenv,
+  pkg-config,
+  hidapi,
+  pkgs,
+}:
 stdenv.mkDerivation {
   name = "footswitch";
   src = builtins.fetchGit {
@@ -6,7 +11,10 @@ stdenv.mkDerivation {
     rev = "7b89a3bdefbdf62bbdbffd080dfbd3936f4326b7";
     ref = "master";
   };
-  buildInputs = [ pkg-config hidapi ];
+  buildInputs = [
+    pkg-config
+    hidapi
+  ];
   buildPhase = ''
     make
   '';
@@ -18,8 +26,7 @@ stdenv.mkDerivation {
 
   meta = with pkgs.lib; {
     homepage = "https://github.com/rgerganov/footswitch";
-    description =
-      "Command line utlities for programming PCsensor and Scythe foot switches.";
+    description = "Command line utlities for programming PCsensor and Scythe foot switches.";
     license = licenses.mit;
     platforms = platforms.linux;
     maintainers = [ ];

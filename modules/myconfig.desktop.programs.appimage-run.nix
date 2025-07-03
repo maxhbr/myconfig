@@ -1,6 +1,12 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
-  appimage-run-xdg = with pkgs;
+  appimage-run-xdg =
+    with pkgs;
     writeShellScriptBin "appimage-run-xdg" ''
       set -euo pipefail
 
@@ -20,8 +26,12 @@ let
 
       ${appimage-run}/bin/appimage-run $@
     '';
-in {
+in
+{
   config = lib.mkIf config.myconfig.desktop.enable {
-    environment.systemPackages = [ appimage-run-xdg pkgs.appimage-run ];
+    environment.systemPackages = [
+      appimage-run-xdg
+      pkgs.appimage-run
+    ];
   };
 }

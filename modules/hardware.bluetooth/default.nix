@@ -1,6 +1,12 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
-  connectBtDevice = { name, id }:
+  connectBtDevice =
+    { name, id }:
     (pkgs.writeShellScriptBin (name + "_connect") ''
       # docu:
       #  see: https://wiki.archlinux.org/index.php/Bluetooth
@@ -66,21 +72,22 @@ let
       fi
       connect
     '');
-in {
-  config = (lib.mkIf config.hardware.bluetooth.enable {
-    # hardware.bluetooth = {
-    #   settings = { General = { Enable = "Source,Sink,Media,Socket"; }; };
-    # };
-    # see:
-    # - https://github.com/NixOS/nixpkgs/issues/113628
-    # - https://github.com/NixOS/nixpkgs/pull/113600
-    systemd.services.bluetooth.serviceConfig.ExecStart = [
-      ""
-      "${pkgs.bluez}/libexec/bluetooth/bluetoothd -f /etc/bluetooth/main.conf"
-    ];
-    home-manager.sharedModules =
-      [{ home.packages = with pkgs; [ bluetuith ]; }];
-    nixpkgs.overlays =
-      [ (self: super: { helper = { inherit connectBtDevice; }; }) ];
-  });
+in
+{
+  config = (
+    lib.mkIf config.hardware.bluetooth.enable {
+      # hardware.bluetooth = {
+      #   settings = { General = { Enable = "Source,Sink,Media,Socket"; }; };
+      # };
+      # see:
+      # - https://github.com/NixOS/nixpkgs/issues/113628
+      # - https://github.com/NixOS/nixpkgs/pull/113600
+      systemd.services.bluetooth.serviceConfig.ExecStart = [
+        ""
+        "${pkgs.bluez}/libexec/bluetooth/bluetoothd -f /etc/bluetooth/main.conf"
+      ];
+      home-manager.sharedModules = [ { home.packages = with pkgs; [ bluetuith ]; } ];
+      nixpkgs.overlays = [ (self: super: { helper = { inherit connectBtDevice; }; }) ];
+    }
+  );
 }

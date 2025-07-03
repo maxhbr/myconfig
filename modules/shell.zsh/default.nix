@@ -1,24 +1,41 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, myconfig, ... }:
+{
+  pkgs,
+  config,
+  myconfig,
+  ...
+}:
 let
   jsonFile = ./. + "/chisui-zsh-nix-shell.json";
   json = builtins.fromJSON (builtins.readFile jsonFile);
-in {
+in
+{
   config = {
-    home-manager.sharedModules = [{
-      home.packages = with pkgs; [ oh-my-zsh ];
-      home.file = {
-        ".zshrc".source = ./zshrc;
-        ".zprofile".source = ./zprofile;
-        ".profile".source = ./zprofile;
-        ".zshrc.pre-oh-my-zsh".source = ./zshrc.pre-oh-my-zsh;
-        ".zsh-nix-shell".source =
-          pkgs.fetchFromGitHub { inherit (json) owner repo rev sha256; };
-      };
-    }];
+    home-manager.sharedModules = [
+      {
+        home.packages = with pkgs; [ oh-my-zsh ];
+        home.file = {
+          ".zshrc".source = ./zshrc;
+          ".zprofile".source = ./zprofile;
+          ".profile".source = ./zprofile;
+          ".zshrc.pre-oh-my-zsh".source = ./zshrc.pre-oh-my-zsh;
+          ".zsh-nix-shell".source = pkgs.fetchFromGitHub {
+            inherit (json)
+              owner
+              repo
+              rev
+              sha256
+              ;
+          };
+        };
+      }
+    ];
     environment = {
-      shells = [ "${pkgs.zsh}/bin/zsh" "/run/current-system/sw/bin/zsh" ];
+      shells = [
+        "${pkgs.zsh}/bin/zsh"
+        "/run/current-system/sw/bin/zsh"
+      ];
     };
 
     programs.zsh = {

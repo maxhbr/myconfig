@@ -1,10 +1,17 @@
-{ pkgs, config, lib, ... }:
+{
+  pkgs,
+  config,
+  lib,
+  ...
+}:
 let
-  pipefox = with pkgs;
+  pipefox =
+    with pkgs;
     writeShellScriptBin "pipefox" ''
       ${nixos-unstable.firefox}/bin/firefox "data:text/html;base64,$(base64 -w 0 <&0)" &> /dev/null
     '';
-in {
+in
+{
   config = lib.mkIf config.myconfig.desktop.enable {
     myconfig.persistence.directories = [ ".mozilla" ];
     myconfig.desktop.wayland.launcherCommands = [ "firefox" ];
@@ -43,15 +50,19 @@ in {
             };
           };
           xdg.mimeApps = {
-            defaultApplications."x-scheme-handler/http" =
-              [ "firefox.desktop" "chromium.desktop" "qutebrowser.desktop" ];
-            defaultApplications."x-scheme-handler/https" =
-              [ "firefox.desktop" "chromium.desktop" "qutebrowser.desktop" ];
+            defaultApplications."x-scheme-handler/http" = [
+              "firefox.desktop"
+              "chromium.desktop"
+              "qutebrowser.desktop"
+            ];
+            defaultApplications."x-scheme-handler/https" = [
+              "firefox.desktop"
+              "chromium.desktop"
+              "qutebrowser.desktop"
+            ];
             defaultApplications."text/html" = [ "firefox.desktop" ];
-            defaultApplications."x-scheme-handler/about" =
-              [ "firefox.desktop" ];
-            defaultApplications."x-scheme-handler/unknown" =
-              [ "firefox.desktop" ];
+            defaultApplications."x-scheme-handler/about" = [ "firefox.desktop" ];
+            defaultApplications."x-scheme-handler/unknown" = [ "firefox.desktop" ];
           };
         };
       }

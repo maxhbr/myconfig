@@ -1,33 +1,42 @@
 # Copyright 2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, ... }:
+{
+  pkgs,
+  config,
+  lib,
+  ...
+}:
 let
   cfg = config.myconfig;
   wallpaperCmdString = ''
     output "*" bg ${pkgs.my-wallpapers}/share/background.png fill
   '';
-in {
-  config = (lib.mkIf (cfg.desktop.wayland.enable
-    && builtins.elem "sway" cfg.desktop.wayland.selectedSessions) {
+in
+{
+  config = (
+    lib.mkIf (cfg.desktop.wayland.enable && builtins.elem "sway" cfg.desktop.wayland.selectedSessions) {
       environment = {
         etc = {
           "sway/config".source = ./sway/config;
           "sway/config.d/zoom.us.conf".source = ./sway/config.d/zoom.us.conf;
-          "sway/config.d/dex.conf".source =
-            pkgs.writeText "dex.conf" "exec ${pkgs.dex}/bin/dex --autostart";
-          "sway/config.d/background.conf".source =
-            pkgs.writeText "background.conf" wallpaperCmdString;
+          "sway/config.d/dex.conf".source = pkgs.writeText "dex.conf" "exec ${pkgs.dex}/bin/dex --autostart";
+          "sway/config.d/background.conf".source = pkgs.writeText "background.conf" wallpaperCmdString;
         };
       };
-      home-manager.sharedModules = [{
-        programs.waybar = {
-          enable = true;
-          settings.mainBar = {
-            modules-left = [ "sway/workspaces" "sway/mode" ];
-            modules-center = [ "sway/window" ];
+      home-manager.sharedModules = [
+        {
+          programs.waybar = {
+            enable = true;
+            settings.mainBar = {
+              modules-left = [
+                "sway/workspaces"
+                "sway/mode"
+              ];
+              modules-center = [ "sway/window" ];
+            };
           };
-        };
-      }];
+        }
+      ];
 
       programs.sway = {
         enable = true;
@@ -45,8 +54,7 @@ in {
           (writeShellScriptBin "my-set-background" ''
             ${sway}/bin/swaymsg ${wallpaperCmdString}
           '')
-          (pkgs.writeScriptBin "sway-run-or-raise"
-            (builtins.readFile ./sway-run-or-raise))
+          (pkgs.writeScriptBin "sway-run-or-raise" (builtins.readFile ./sway-run-or-raise))
           (writeShellScriptBin "sway-foot-neomutt" ''
             exec sway-run-or-raise foot-neomutt
           '')
@@ -57,21 +65,11 @@ in {
 
         extraSessionCommands = ''
           export XDG_CURRENT_DESKTOP=sway
-          export XKB_DEFAULT_LAYOUT=${
-            config.environment.sessionVariables."XKB_DEFAULT_LAYOUT"
-          }
-          export XKB_DEFAULT_VARIANT=${
-            config.environment.sessionVariables."XKB_DEFAULT_VARIANT"
-          }
-          export XDG_SESSION_TYPE=${
-            config.environment.sessionVariables."XDG_SESSION_TYPE"
-          }
-          export SDL_VIDEODRIVER=${
-            config.environment.sessionVariables."SDL_VIDEODRIVER"
-          }
-          export QT_QPA_PLATFORM=${
-            config.environment.sessionVariables."QT_QPA_PLATFORM"
-          }
+          export XKB_DEFAULT_LAYOUT=${config.environment.sessionVariables."XKB_DEFAULT_LAYOUT"}
+          export XKB_DEFAULT_VARIANT=${config.environment.sessionVariables."XKB_DEFAULT_VARIANT"}
+          export XDG_SESSION_TYPE=${config.environment.sessionVariables."XDG_SESSION_TYPE"}
+          export SDL_VIDEODRIVER=${config.environment.sessionVariables."SDL_VIDEODRIVER"}
+          export QT_QPA_PLATFORM=${config.environment.sessionVariables."QT_QPA_PLATFORM"}
           export QT_WAYLAND_DISABLE_WINDOWDECORATION=${
             config.environment.sessionVariables."QT_WAYLAND_DISABLE_WINDOWDECORATION"
           }
@@ -81,6 +79,11 @@ in {
         '';
       };
 
-      myconfig.desktop.wayland.sessions = { sway = { command = "sway"; }; };
-    });
+      myconfig.desktop.wayland.sessions = {
+        sway = {
+          command = "sway";
+        };
+      };
+    }
+  );
 }

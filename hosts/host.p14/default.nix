@@ -1,6 +1,14 @@
 # Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, inputs, ... }: {
+{
+  config,
+  pkgs,
+  lib,
+  myconfig,
+  inputs,
+  ...
+}:
+{
   imports = [
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
@@ -48,8 +56,7 @@
       services.openssh = {
         listenAddresses = [
           {
-            addr =
-              (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
+            addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
             port = 22;
           }
           {
@@ -64,25 +71,26 @@
       };
     }
     {
-      config = let
-        tmux-session = "btops";
-        tmux-btops = pkgs.writeShellScriptBin "tmux-btops" ''
-          # if session is not yet created, create it
-          if ! tmux has-session -t ${tmux-session}; then
-            tmux new-session -d -s ${tmux-session}
-            tmux send-keys -t ${tmux-session}:1 "btop" C-m
-            tmux split-window -h -t ${tmux-session}
-            tmux send-keys -t ${tmux-session}:1 "et -x  mhuber@spare.wg0:22022 --command btop" C-m
-            tmux split-window -v -t ${tmux-session}
-            tmux send-keys -t ${tmux-session}:1 "et -x  mhuber@workstation.wg0:22022 --command btop" C-m
-            tmux split-window -v -t ${tmux-session}
-          fi
-          exec tmux attach-session -t ${tmux-session}
-        '';
-      in {
-        home-manager.sharedModules =
-          [{ home.packages = with pkgs; [ tmux-btops ]; }];
-      };
+      config =
+        let
+          tmux-session = "btops";
+          tmux-btops = pkgs.writeShellScriptBin "tmux-btops" ''
+            # if session is not yet created, create it
+            if ! tmux has-session -t ${tmux-session}; then
+              tmux new-session -d -s ${tmux-session}
+              tmux send-keys -t ${tmux-session}:1 "btop" C-m
+              tmux split-window -h -t ${tmux-session}
+              tmux send-keys -t ${tmux-session}:1 "et -x  mhuber@spare.wg0:22022 --command btop" C-m
+              tmux split-window -v -t ${tmux-session}
+              tmux send-keys -t ${tmux-session}:1 "et -x  mhuber@workstation.wg0:22022 --command btop" C-m
+              tmux split-window -v -t ${tmux-session}
+            fi
+            exec tmux attach-session -t ${tmux-session}
+          '';
+        in
+        {
+          home-manager.sharedModules = [ { home.packages = with pkgs; [ tmux-btops ]; } ];
+        };
     }
     # {
     #   fileSystems."/home/mhuber/MINE/Bilder/imgwork" = {
@@ -100,7 +108,7 @@
     #       DP-5 = "DP-5,2560x1440,1920x0,1"; # Dell Inc. DELL U2719D 7RVLSS2 (DP-5)
     #       DP-3 = "DP-3,1920x1080,2240x1440,1"; #  HAT Kamvas Pro 13  (DP-3 via HDMI)
     #     in {
-    #       home.packages = with pkgs; [ 
+    #       home.packages = with pkgs; [
     #         (writeShellScriptBin "hyprctl-monitors-home"  "${hyprctl} hyprctl --batch 'keyword monitor ${eDP-1}; keyword monitor ${DP-5}; keyword monitor ${DP-3}'")
     #       ];
     #       # wayland.windowManager.hyprland = {
@@ -114,7 +122,8 @@
     #   };
     # }
     # )
-    ({ pkgs, ... }:
+    (
+      { pkgs, ... }:
       let
         fix-my-notebook = pkgs.writeShellScriptBin "fix-my-notebook" ''
           set -euo pipefail
@@ -122,12 +131,13 @@
           systemctl restart bluetooth.service
           dbus-wm-environment wlroots
         '';
-      in {
+      in
+      {
         config = {
-          home-manager.sharedModules =
-            [{ home.packages = with pkgs; [ fix-my-notebook ]; }];
+          home-manager.sharedModules = [ { home.packages = with pkgs; [ fix-my-notebook ]; } ];
         };
-      })
+      }
+    )
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
     {
       programs.kdeconnect.enable = true;
@@ -223,7 +233,9 @@
     virtualisation = {
       docker.enable = true;
       podman.enable = true;
-      oci-containers = { backend = "podman"; };
+      oci-containers = {
+        backend = "podman";
+      };
       # virtualbox.host.enable = true;
       # lxc.enable = true;
       libvirtd.enable = true;
@@ -309,7 +321,10 @@
         efi.canTouchEfiVariables = true;
       };
 
-      binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];
+      binfmt.emulatedSystems = [
+        "aarch64-linux"
+        "armv6l-linux"
+      ];
       kernelPackages = lib.mkForce pkgs.linuxPackages_latest;
       initrd = {
         supportedFilesystems = [ "nfs" ];

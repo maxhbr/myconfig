@@ -1,4 +1,10 @@
-{ config, pkgs, lib, ... }: {
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
+{
   config = lib.mkIf config.boot.loader.systemd-boot.enable {
     boot.loader = {
       efi.canTouchEfiVariables = true;

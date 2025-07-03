@@ -4,7 +4,8 @@
 # See:
 # - https://nixos.wiki/wiki/Storage_optimization
 
-{ pkgs, ... }: {
+{ pkgs, ... }:
+{
   config = {
     nix.gc = {
       automatic = true;

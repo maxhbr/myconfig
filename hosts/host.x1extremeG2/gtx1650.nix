@@ -9,13 +9,14 @@ let
   ##############################################################################
   blacklistNouveau = {
     # Blacklist nouveau
-    boot.extraModprobeConfig =
-      "install nouveau /run/current-system/sw/bin/false";
+    boot.extraModprobeConfig = "install nouveau /run/current-system/sw/bin/false";
     boot.blacklistedKernelModules = [ "nouveau" ];
   };
   ##############################################################################
-  rawNvidiaConf = { ... }:
-    blacklistNouveau // {
+  rawNvidiaConf =
+    { ... }:
+    blacklistNouveau
+    // {
       services.xserver = {
         videoDrivers = [ "nvidia" ];
         # # screenSection = ''
@@ -56,34 +57,55 @@ let
       ];
     };
   ##############################################################################
-  rawNouveauConf = { ... }: { services.xserver.videoDrivers = [ "nouveau" ]; };
+  rawNouveauConf =
+    { ... }:
+    {
+      services.xserver.videoDrivers = [ "nouveau" ];
+    };
   ##############################################################################
-  rawIntelConf = { ... }:
-    blacklistNouveau // {
+  rawIntelConf =
+    { ... }:
+    blacklistNouveau
+    // {
       services.xserver.videoDrivers = [ "intel" ];
     };
   ##############################################################################
-  bumblebeeConf = { pkgs, ... }:
-    blacklistNouveau // {
+  bumblebeeConf =
+    { pkgs, ... }:
+    blacklistNouveau
+    // {
       hardware.bumblebee = {
         enable = true;
         connectDisplay = true;
       };
-      environment.systemPackages = with pkgs; [ bumblebee xorg.xf86videointel ];
+      environment.systemPackages = with pkgs; [
+        bumblebee
+        xorg.xf86videointel
+      ];
     };
   ##############################################################################
-  bumblebeeNouveauConf = { pkgs, ... }: {
-    hardware.bumblebee = {
-      enable = true;
-      connectDisplay = true;
-      driver = "nouveau";
+  bumblebeeNouveauConf =
+    { pkgs, ... }:
+    {
+      hardware.bumblebee = {
+        enable = true;
+        connectDisplay = true;
+        driver = "nouveau";
+      };
+      environment.systemPackages = with pkgs; [
+        bumblebee
+        xorg.xf86videointel
+      ];
     };
-    environment.systemPackages = with pkgs; [ bumblebee xorg.xf86videointel ];
-  };
   ##############################################################################
-  optimusPrimeConf = { ... }:
-    blacklistNouveau // {
-      services.xserver.videoDrivers = [ "intel" "nvidia" ];
+  optimusPrimeConf =
+    { ... }:
+    blacklistNouveau
+    // {
+      services.xserver.videoDrivers = [
+        "intel"
+        "nvidia"
+      ];
       hardware.nvidia = {
         prime = {
           sync.enable = true;
@@ -99,7 +121,13 @@ let
       };
     };
   ##############################################################################
-  primeRenderOffload = { pkgs, config, lib, ... }:
+  primeRenderOffload =
+    {
+      pkgs,
+      config,
+      lib,
+      ...
+    }:
     let
       nvidia-offload = pkgs.writeShellScriptBin "nvidia-offload" ''
         export __NV_PRIME_RENDER_OFFLOAD=1
@@ -108,7 +136,8 @@ let
         export __VK_LAYER_NV_optimus=NVIDIA_only
         exec -a "$0" "$@"
       '';
-    in {
+    in
+    {
       config = {
         environment.systemPackages = [ nvidia-offload ];
         services.xserver.videoDrivers = [ "nvidia" ];
@@ -125,12 +154,23 @@ let
           enable = true;
           driSupport = true;
           driSupport32Bit = true;
-          extraPackages = with pkgs; [ vaapiIntel intel-media-driver ];
+          extraPackages = with pkgs; [
+            vaapiIntel
+            intel-media-driver
+          ];
         };
       };
     };
 
-in {
-  inherit rawIntelConf rawNvidiaConf rawNouveauConf bumblebeeConf
-    bumblebeeNouveauConf optimusPrimeConf primeRenderOffload;
+in
+{
+  inherit
+    rawIntelConf
+    rawNvidiaConf
+    rawNouveauConf
+    bumblebeeConf
+    bumblebeeNouveauConf
+    optimusPrimeConf
+    primeRenderOffload
+    ;
 }

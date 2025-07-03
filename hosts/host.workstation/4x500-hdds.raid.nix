@@ -28,7 +28,13 @@
     fileSystems."/mnt/.4x500-1" = {
       device = "/dev/mapper/4x500-1";
       fsType = "btrfs";
-      options = [ "defaults" "noatime" "compress=zstd" "subvol=@sub" "nofail" ];
+      options = [
+        "defaults"
+        "noatime"
+        "compress=zstd"
+        "subvol=@sub"
+        "nofail"
+      ];
     };
     fileSystems."/mnt/.4x500-2" = {
       device = "/dev/mapper/4x500-2";
@@ -65,16 +71,32 @@
       statdPort = 4000;
       lockdPort = 4001;
     };
-    networking.firewall.allowedTCPPorts = [ 2049 111 4000 4001 ];
-    networking.firewall.allowedUDPPorts = [ 2049 111 4000 4001 ];
+    networking.firewall.allowedTCPPorts = [
+      2049
+      111
+      4000
+      4001
+    ];
+    networking.firewall.allowedUDPPorts = [
+      2049
+      111
+      4000
+      4001
+    ];
 
     fileSystems."/export/data" = {
       device = "/mnt/4x500/lvm-guest";
-      options = [ "bind" "x-systemd.requires-mounts-for=/mnt/4x500" ];
+      options = [
+        "bind"
+        "x-systemd.requires-mounts-for=/mnt/4x500"
+      ];
     };
     fileSystems."/export/guest" = {
       device = "/mnt/4x500/lvm-data";
-      options = [ "bind" "x-systemd.requires-mounts-for=/mnt/4x500" ];
+      options = [
+        "bind"
+        "x-systemd.requires-mounts-for=/mnt/4x500"
+      ];
     };
   };
 }

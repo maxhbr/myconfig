@@ -1,8 +1,22 @@
-{ lib, river-unwrapped, makeWrapper, symlinkJoin, writeShellScriptBin
-, withBaseWrapper ? true, extraSessionCommands ? "", dbus
-, withGtkWrapper ? false, wrapGAppsHook, gdk-pixbuf, glib, gtk3
-, extraPaths ? [ ], extraOptions ? [ ] # E.g.: [ "--verbose" ]
-, xwaylandSupport ? true, dbusSupport ? true }:
+{
+  lib,
+  river-unwrapped,
+  makeWrapper,
+  symlinkJoin,
+  writeShellScriptBin,
+  withBaseWrapper ? true,
+  extraSessionCommands ? "",
+  dbus,
+  withGtkWrapper ? false,
+  wrapGAppsHook,
+  gdk-pixbuf,
+  glib,
+  gtk3,
+  extraPaths ? [ ],
+  extraOptions ? [ ], # E.g.: [ "--verbose" ]
+  xwaylandSupport ? true,
+  dbusSupport ? true,
+}:
 
 assert extraSessionCommands != "" -> withBaseWrapper;
 
@@ -21,21 +35,23 @@ let
       export DBUS_SESSION_BUS_ADDRESS
       exec ${river}/bin/river "$@"
     else
-      exec ${
-        if !dbusSupport then "" else "${dbus}/bin/dbus-run-session"
-      } ${river}/bin/river "$@"
+      exec ${if !dbusSupport then "" else "${dbus}/bin/dbus-run-session"} ${river}/bin/river "$@"
     fi
   '';
-in symlinkJoin {
+in
+symlinkJoin {
   name = "my-river-${river.version}";
 
   paths = (optional withBaseWrapper baseWrapper) ++ [ river ] ++ extraPaths;
 
   strictDeps = false;
-  nativeBuildInputs = [ makeWrapper ]
-    ++ (optional withGtkWrapper wrapGAppsHook);
+  nativeBuildInputs = [ makeWrapper ] ++ (optional withGtkWrapper wrapGAppsHook);
 
-  buildInputs = optionals withGtkWrapper [ gdk-pixbuf glib gtk3 ];
+  buildInputs = optionals withGtkWrapper [
+    gdk-pixbuf
+    glib
+    gtk3
+  ];
 
   # We want to run wrapProgram manually
   dontWrapGApps = true;
@@ -45,8 +61,7 @@ in symlinkJoin {
 
     wrapProgram $out/bin/river \
       ${optionalString withGtkWrapper ''"''${gappsWrapperArgs[@]}"''} \
-      ${
-        optionalString (extraOptions != [ ])
+      ${optionalString (extraOptions != [ ])
         "${concatMapStrings (x: " --add-flags " + x) extraOptions}"
       }
   '';

@@ -1,4 +1,11 @@
-{ config, pkgs, lib, myconfig, ... }: {
+{
+  config,
+  pkgs,
+  lib,
+  myconfig,
+  ...
+}:
+{
   config = {
     boot = {
       # kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
@@ -7,7 +14,9 @@
     };
 
     environment = {
-      variables = { TMP = "/tmp"; };
+      variables = {
+        TMP = "/tmp";
+      };
       systemPackages = with pkgs; [
         kbd
 

@@ -1,6 +1,7 @@
 # based on:
 # - https://github.com/illegalprime/nixos-on-arm/blob/master/images/rpi0-otg-ether/default.nix
-{ pkgs, ... }: {
+{ pkgs, ... }:
+{
   imports = [ ./otg.nix ];
 
   boot.otg = {
@@ -24,8 +25,10 @@
     '';
   };
 
-  networking.interfaces.usb0.ipv4.addresses = [{
-    address = "10.0.3.1";
-    prefixLength = 24;
-  }];
+  networking.interfaces.usb0.ipv4.addresses = [
+    {
+      address = "10.0.3.1";
+      prefixLength = 24;
+    }
+  ];
 }

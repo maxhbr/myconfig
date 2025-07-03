@@ -4,4 +4,5 @@
 # This file is used by the vagrant-nixos plugin
 #
 
-{ }
+{
+}

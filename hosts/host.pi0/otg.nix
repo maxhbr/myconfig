@@ -49,8 +49,10 @@ let
     };
     # "multi"        = { module = ""; config = ""; }; # TODO:
   };
-in with builtins;
-with lib; {
+in
+with builtins;
+with lib;
+{
   options = {
     boot.otg = {
       enable = mkOption {
@@ -70,7 +72,10 @@ with lib; {
         '';
       };
       link = mkOption {
-        type = types.enum [ "module" "static" ];
+        type = types.enum [
+          "module"
+          "static"
+        ];
         default = "module";
         example = "static";
         description = ''
@@ -80,29 +85,38 @@ with lib; {
       };
     };
   };
-  config = let
-    module = otg_modules.${config.boot.otg.module};
-    link = {
-      "static" = "y";
-      "module" = "m";
-    }.${config.boot.otg.link};
-  in mkIf config.boot.otg.enable {
+  config =
+    let
+      module = otg_modules.${config.boot.otg.module};
+      link =
+        {
+          "static" = "y";
+          "module" = "m";
+        }
+        .${config.boot.otg.link};
+    in
+    mkIf config.boot.otg.enable {
 
-    # add otg modules if necessary to kernel config
-    boot.kernelPatches = [{
-      name = "usb-otg";
-      patch = null;
-      extraConfig = ''
-        USB_GADGET y
-        USB_DWC2 m
-        USB_DWC2_DUAL_ROLE y
-        ${module.config} ${link}
-      '';
-    }];
+      # add otg modules if necessary to kernel config
+      boot.kernelPatches = [
+        {
+          name = "usb-otg";
+          patch = null;
+          extraConfig = ''
+            USB_GADGET y
+            USB_DWC2 m
+            USB_DWC2_DUAL_ROLE y
+            ${module.config} ${link}
+          '';
+        }
+      ];
 
-    # make sure they're loaded when the pi boots
-    boot.kernelModules = [ "dwc2" "${module.module}" ];
+      # make sure they're loaded when the pi boots
+      boot.kernelModules = [
+        "dwc2"
+        "${module.module}"
+      ];
 
-    boot.loader.raspberryPi.firmwareConfig = "dtoverlay=dwc2";
-  };
+      boot.loader.raspberryPi.firmwareConfig = "dtoverlay=dwc2";
+    };
 }

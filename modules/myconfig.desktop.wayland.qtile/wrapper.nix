@@ -1,8 +1,22 @@
-{ lib, qtile, makeWrapper, symlinkJoin, writeShellScriptBin
-, withBaseWrapper ? true, extraSessionCommands ? "", dbus
-, withGtkWrapper ? false, wrapGAppsHook, gdk-pixbuf, glib, gtk3
-, extraPaths ? [ ], extraOptions ? [ ] # E.g.: [ "--verbose" ]
-, xwaylandSupport ? true, dbusSupport ? true }:
+{
+  lib,
+  qtile,
+  makeWrapper,
+  symlinkJoin,
+  writeShellScriptBin,
+  withBaseWrapper ? true,
+  extraSessionCommands ? "",
+  dbus,
+  withGtkWrapper ? false,
+  wrapGAppsHook,
+  gdk-pixbuf,
+  glib,
+  gtk3,
+  extraPaths ? [ ],
+  extraOptions ? [ ], # E.g.: [ "--verbose" ]
+  xwaylandSupport ? true,
+  dbusSupport ? true,
+}:
 
 assert extraSessionCommands != "" -> withBaseWrapper;
 
@@ -20,21 +34,23 @@ let
       export DBUS_SESSION_BUS_ADDRESS
       exec ${qtile}/bin/qtile "$@"
     else
-      exec ${
-        if !dbusSupport then "" else "${dbus}/bin/dbus-run-session"
-      } ${qtile}/bin/qtile "$@"
+      exec ${if !dbusSupport then "" else "${dbus}/bin/dbus-run-session"} ${qtile}/bin/qtile "$@"
     fi
   '';
-in symlinkJoin {
+in
+symlinkJoin {
   name = "qtile-${qtile.version}";
 
   paths = (optional withBaseWrapper baseWrapper) ++ extraPaths;
 
   strictDeps = false;
-  nativeBuildInputs = [ makeWrapper ]
-    ++ (optional withGtkWrapper wrapGAppsHook);
+  nativeBuildInputs = [ makeWrapper ] ++ (optional withGtkWrapper wrapGAppsHook);
 
-  buildInputs = optionals withGtkWrapper [ gdk-pixbuf glib gtk3 ];
+  buildInputs = optionals withGtkWrapper [
+    gdk-pixbuf
+    glib
+    gtk3
+  ];
 
   # We want to run wrapProgram manually
   dontWrapGApps = true;
@@ -55,8 +71,7 @@ in symlinkJoin {
 
     wrapProgram $out/bin/qtile \
       ${optionalString withGtkWrapper ''"''${gappsWrapperArgs[@]}"''} \
-      ${
-        optionalString (extraOptions != [ ])
+      ${optionalString (extraOptions != [ ])
         "${concatMapStrings (x: " --add-flags " + x) extraOptions}"
       }
   '';

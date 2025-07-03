@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 # NixOS module for running deCONZ ZigBee gateway as a service.
 #
 # FIXME: These two auth issues:
@@ -18,7 +23,8 @@ let
   name = "deconz";
   stateDir = "/var/lib/${name}";
   deconz = pkgs.qt5.callPackage ./deconz.nix { };
-in {
+in
+{
   options.myconfig.services.deconz = {
 
     enable = mkEnableOption "deCONZ, a ZigBee gateway";
@@ -61,7 +67,10 @@ in {
 
     extraOpts = mkOption {
       type = types.listOf types.str;
-      default = [ "--auto-connect=1" "--dbg-info=1" ];
+      default = [
+        "--auto-connect=1"
+        "--dbg-info=1"
+      ];
       description = ''
         Extra command line options for deCONZ.
         These options seem undocumented, but some examples can be found here:
@@ -72,8 +81,10 @@ in {
 
   config = mkIf cfg.enable {
 
-    networking.firewall.allowedTCPPorts =
-      lib.mkIf cfg.openFirewall [ cfg.httpPort cfg.wsPort ];
+    networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [
+      cfg.httpPort
+      cfg.wsPort
+    ];
 
     systemd.services.deconz = {
       description = "deCONZ ZigBee gateway";
@@ -85,20 +96,25 @@ in {
         rm -f ${stateDir}/.local/share/dresden-elektronik/deCONZ/zcldb.txt
       '';
       serviceConfig = {
-        ExecStart = "${cfg.package}/bin/deCONZ" + " -platform minimal"
+        ExecStart =
+          "${cfg.package}/bin/deCONZ"
+          + " -platform minimal"
           + " --http-port=${toString cfg.httpPort}"
           + " --ws-port=${toString cfg.wsPort}"
-          + (if cfg.device != "" then " --dev=${cfg.device}" else "") + " "
+          + (if cfg.device != "" then " --dev=${cfg.device}" else "")
+          + " "
           + (lib.concatStringsSep " " cfg.extraOpts);
         Restart = "on-failure";
-        AmbientCapabilities = let
-          # ref. upstream deconz.service
-          caps = lib.optionals (cfg.httpPort < 1024 || cfg.wsPort < 1024)
-            [ "CAP_NET_BIND_SERVICE" ]
-            ++ lib.optionals (cfg.allowRebootSystem) [ "CAP_SYS_BOOT" ]
-            ++ lib.optionals (cfg.allowRestartService) [ "CAP_KILL" ]
-            ++ lib.optionals (cfg.allowSetSystemTime) [ "CAP_SYS_TIME" ];
-        in lib.concatStringsSep " " caps;
+        AmbientCapabilities =
+          let
+            # ref. upstream deconz.service
+            caps =
+              lib.optionals (cfg.httpPort < 1024 || cfg.wsPort < 1024) [ "CAP_NET_BIND_SERVICE" ]
+              ++ lib.optionals (cfg.allowRebootSystem) [ "CAP_SYS_BOOT" ]
+              ++ lib.optionals (cfg.allowRestartService) [ "CAP_KILL" ]
+              ++ lib.optionals (cfg.allowSetSystemTime) [ "CAP_SYS_TIME" ];
+          in
+          lib.concatStringsSep " " caps;
         UMask = "0027";
         User = name;
         StateDirectory = name;

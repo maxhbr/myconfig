@@ -1,4 +1,10 @@
-{ pkgs, config, lib, myconfig, ... }:
+{
+  pkgs,
+  config,
+  lib,
+  myconfig,
+  ...
+}:
 # copied from https://github.com/Xe/nixos-configs/blob/master/common/crypto/default.nix : MIT
 # see also: https://christine.website/blog/nixos-encrypted-secrets-2021-01-20
 # License: MIT
@@ -59,67 +65,87 @@ let
     };
   };
 
-  mkSecretOnDisk = name:
+  mkSecretOnDisk =
+    name:
     { source, unsafePubkeyOverwrite, ... }:
     pkgs.stdenv.mkDerivation {
       name = "${name}-secret";
       phases = "installPhase";
-      installPhase = let
-        pubkeyArgs = if unsafePubkeyOverwrite == null then
-          "-r '${
-            myconfig.metadatalib.get.hosts."${config.networking.hostName}".pubkeys."/etc/ssh/ssh_host_rsa_key.pub"
-          }'"
-        else
-          "-R '${unsafePubkeyOverwrite}'";
-      in ''
-        "${pkgs.age}"/bin/age -a ${pubkeyArgs} -o "$out" '${source}'
-      '';
+      installPhase =
+        let
+          pubkeyArgs =
+            if unsafePubkeyOverwrite == null then
+              "-r '${
+                myconfig.metadatalib.get.hosts."${config.networking.hostName
+                }".pubkeys."/etc/ssh/ssh_host_rsa_key.pub"
+              }'"
+            else
+              "-R '${unsafePubkeyOverwrite}'";
+        in
+        ''
+          "${pkgs.age}"/bin/age -a ${pubkeyArgs} -o "$out" '${source}'
+        '';
     };
 
-  mkService = name:
-    { source, dest, owner, group, permissions, wantedBy, unsafePubkeyOverwrite
-    , unsafePrivkeyOverwrite, ... }: {
+  mkService =
+    name:
+    {
+      source,
+      dest,
+      owner,
+      group,
+      permissions,
+      wantedBy,
+      unsafePubkeyOverwrite,
+      unsafePrivkeyOverwrite,
+      ...
+    }:
+    {
       description = "decrypt secret for ${name}";
       wantedBy = [ "multi-user.target" ] ++ wantedBy;
       before = wantedBy;
 
       serviceConfig.Type = "oneshot";
 
-      script = let
-        privkey = if unsafePrivkeyOverwrite == null then
-          "/etc/ssh/ssh_host_rsa_key"
-        else
-          unsafePrivkeyOverwrite;
-      in with pkgs; ''
-        dir="$(dirname '${dest}')"
-        if [[ ! -d "$dir" ]]; then
-          mkdir -p "$dir"
-          chown '${owner}':'${group}' "$dir"
-        fi
+      script =
+        let
+          privkey =
+            if unsafePrivkeyOverwrite == null then "/etc/ssh/ssh_host_rsa_key" else unsafePrivkeyOverwrite;
+        in
+        with pkgs;
+        ''
+          dir="$(dirname '${dest}')"
+          if [[ ! -d "$dir" ]]; then
+            mkdir -p "$dir"
+            chown '${owner}':'${group}' "$dir"
+          fi
 
-        rm -rf '${dest}'
-        "${age}"/bin/age -d \
-            -i '${privkey}' -o '${dest}' \
-            '${mkSecretOnDisk name { inherit source unsafePubkeyOverwrite; }}'
+          rm -rf '${dest}'
+          "${age}"/bin/age -d \
+              -i '${privkey}' -o '${dest}' \
+              '${mkSecretOnDisk name { inherit source unsafePubkeyOverwrite; }}'
 
-        chown '${owner}':'${group}' '${dest}'
-        chmod '${permissions}' '${dest}'
+          chown '${owner}':'${group}' '${dest}'
+          chmod '${permissions}' '${dest}'
 
-        # # test for readability, fails if a parent folder is not readable
-        # sudo -H -u '${owner}' -g '${group}' bash -c "test -r '${dest}'"
-      '';
+          # # test for readability, fails if a parent folder is not readable
+          # sudo -H -u '${owner}' -g '${group}' bash -c "test -r '${dest}'"
+        '';
     };
-in {
+in
+{
   options.myconfig.secrets = mkOption {
     type = types.attrsOf secret;
     description = "secret configuration";
     default = { };
   };
 
-  config.systemd.services = let
-    units = mapAttrs' (name: info: {
-      name = "${name}-key";
-      value = (mkService name info);
-    }) cfg;
-  in units;
+  config.systemd.services =
+    let
+      units = mapAttrs' (name: info: {
+        name = "${name}-key";
+        value = (mkService name info);
+      }) cfg;
+    in
+    units;
 }

@@ -1,6 +1,11 @@
 # Copyright 2017 Maximilian nuber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   pw-simultaneous = pkgs.writeShellScriptBin "pw-simultaneous" ''
@@ -29,35 +34,44 @@ let
     ${pkgs.pipewire}/bin/pw-record -P '{ stream.capture.sink=true }' "$HOME/recording-$(date "+%F_%H-%M-%S").flac"
   '';
 
-in {
-  config = (lib.mkIf config.services.pipewire.enable {
-    home-manager.sharedModules = [{
-      home.packages = with pkgs; [ qjackctl pw-simultaneous pw-record-all ];
-    }];
-    services.pulseaudio.enable = false;
-    security.rtkit.enable = true;
-    services.pipewire = {
-      alsa = {
-        enable = true;
-        support32Bit = true;
-      };
-      pulse.enable = true;
-      wireplumber.enable = true;
+in
+{
+  config = (
+    lib.mkIf config.services.pipewire.enable {
+      home-manager.sharedModules = [
+        {
+          home.packages = with pkgs; [
+            qjackctl
+            pw-simultaneous
+            pw-record-all
+          ];
+        }
+      ];
+      services.pulseaudio.enable = false;
+      security.rtkit.enable = true;
+      services.pipewire = {
+        alsa = {
+          enable = true;
+          support32Bit = true;
+        };
+        pulse.enable = true;
+        wireplumber.enable = true;
 
-      # config.pipewire = {
-      #   config.pipewire = {
-      #     "context.properties" = {
-      #       #"link.max-buffers" = 64;
-      #       "link.max-buffers" =
-      #         16; # version < 3 clients can't handle more than this
-      #       "log.level" = 2; # https://docs.pipewire.org/page_daemon.html
-      #       #"default.clock.rate" = 48000;
-      #       #"default.clock.quantum" = 1024;
-      #       #"default.clock.min-quantum" = 32;
-      #       #"default.clock.max-quantum" = 8192;
-      #     };
-      #   };
-      # };
-    };
-  });
+        # config.pipewire = {
+        #   config.pipewire = {
+        #     "context.properties" = {
+        #       #"link.max-buffers" = 64;
+        #       "link.max-buffers" =
+        #         16; # version < 3 clients can't handle more than this
+        #       "log.level" = 2; # https://docs.pipewire.org/page_daemon.html
+        #       #"default.clock.rate" = 48000;
+        #       #"default.clock.quantum" = 1024;
+        #       #"default.clock.min-quantum" = 32;
+        #       #"default.clock.max-quantum" = 8192;
+        #     };
+        #   };
+        # };
+      };
+    }
+  );
 }

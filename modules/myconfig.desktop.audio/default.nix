@@ -1,9 +1,16 @@
 # Copyright 2017 Maximilian nuber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
-let cfg = config.myconfig;
-in {
+let
+  cfg = config.myconfig;
+in
+{
   imports = [
     ./modules/services.pipewire.nix
     # ./modules/hardware.pulseaudio.nix
@@ -18,11 +25,20 @@ in {
   };
   config = lib.mkIf (cfg.desktop.enable && cfg.desktop.audio.enable) {
     home-manager.sharedModules = [
-      ({ config, ... }: {
-        home.packages = with pkgs; [ pavucontrol pamix pulsemixer ];
-        programs.cava = { enable = false; };
-        myconfig.desktop.wayland.launcherCommands = [ "pavucontrol" ];
-      })
+      (
+        { config, ... }:
+        {
+          home.packages = with pkgs; [
+            pavucontrol
+            pamix
+            pulsemixer
+          ];
+          programs.cava = {
+            enable = false;
+          };
+          myconfig.desktop.wayland.launcherCommands = [ "pavucontrol" ];
+        }
+      )
     ];
     services.pipewire.enable = true;
   };

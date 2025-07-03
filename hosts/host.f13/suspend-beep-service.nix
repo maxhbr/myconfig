@@ -4,8 +4,7 @@ let
   sink-card = "1";
   sink-hw = "hw:${sink-card},0";
 
-  sound-file =
-    "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/service-logout.oga";
+  sound-file = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/service-logout.oga";
   pactl-suspend-sink = pkgs.writeShellScriptBin "pactl-suspend-sink" ''
     set +e
     set -x
@@ -25,7 +24,8 @@ let
     ${pkgs.sox}/bin/sox ${sound-file} -t wav - | ${pkgs.alsa-utils}/bin/aplay -D ${sink-hw} -
     true
   '';
-in {
+in
+{
   environment.systemPackages = [ play-suspend-sound ];
   systemd.services.play-suspend-sound = {
     description = "Play a short sound just before suspend/hibernate";

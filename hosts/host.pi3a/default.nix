@@ -1,4 +1,5 @@
-{ lib, ... }: {
+{ lib, ... }:
+{
   imports = [
     ./hardware-configuration.nix
     # ./raspicam.nix
@@ -25,17 +26,21 @@
     myconfig = {
       desktop = {
         enable = true;
-        wayland = { enable = true; };
+        wayland = {
+          enable = true;
+        };
       };
     };
 
     services.greetd.enable = lib.mkForce false;
 
-    swapDevices = [{
-      device = "/swapfile";
-      priority = 0;
-      size = 1024;
-    }];
+    swapDevices = [
+      {
+        device = "/swapfile";
+        priority = 0;
+        size = 1024;
+      }
+    ];
     # This value determines the NixOS release from which the default
     # settings for stateful data, like file locations and database versions
     # on your system were taken. It‘s perfectly fine and recommended to leave

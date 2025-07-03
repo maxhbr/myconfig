@@ -1,6 +1,12 @@
-{ pkgs, config, lib, ... }:
+{
+  pkgs,
+  config,
+  lib,
+  ...
+}:
 let
-  lxdMyInit = with pkgs;
+  lxdMyInit =
+    with pkgs;
     writeScriptBin "lxdMyInit" ''
       #!${stdenv.shell}
       cat <<EOF | sudo ${pkgs.lxd}/bin/lxd init --preseed
@@ -36,7 +42,8 @@ let
       cluster: null
       EOF
     '';
-  lxdMyTeardown = with pkgs;
+  lxdMyTeardown =
+    with pkgs;
     writeScriptBin "lxdMyTeardown" ''
       #!${stdenv.shell}
       echo "##########################################################################"
@@ -62,7 +69,8 @@ let
       echo "##########################################################################"
       sudo ${pkgs.lxd}/bin/lxc storage delete default
     '';
-  lxcList = with pkgs;
+  lxcList =
+    with pkgs;
     writeScriptBin "lxcList" ''
       #!${stdenv.shell}
       set -ex
@@ -72,14 +80,23 @@ let
       sudo ${lxd}/bin/lxc storage volume list default
     '';
 
-in {
-  config = (lib.mkIf config.virtualisation.lxc.enable {
-    home-manager.users.mhuber = {
-      home.packages = with pkgs; [ lxc lxcList lxd lxdMyInit lxdMyTeardown ];
-    };
-    virtualisation = {
-      # lxc.enable = true;
-      lxd.enable = true;
-    };
-  });
+in
+{
+  config = (
+    lib.mkIf config.virtualisation.lxc.enable {
+      home-manager.users.mhuber = {
+        home.packages = with pkgs; [
+          lxc
+          lxcList
+          lxd
+          lxdMyInit
+          lxdMyTeardown
+        ];
+      };
+      virtualisation = {
+        # lxc.enable = true;
+        lxd.enable = true;
+      };
+    }
+  );
 }

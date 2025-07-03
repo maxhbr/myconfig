@@ -1,10 +1,16 @@
 # Copyright 2018 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs ? import <nixpkgs> { }, stdenv ? pkgs.stdenv, xmobarrc ? ./xmobarrc
-, xmobarrcTop ? ./xmobarrc.top, my-mute-telco }:
+{
+  pkgs ? import <nixpkgs> { },
+  stdenv ? pkgs.stdenv,
+  xmobarrc ? ./xmobarrc,
+  xmobarrcTop ? ./xmobarrc.top,
+  my-mute-telco,
+}:
 
 let
-  isvpn = with pkgs;
+  isvpn =
+    with pkgs;
     writeShellScriptBin "isvpn" ''
       delimiter=$1
       startcol=$2
@@ -17,7 +23,8 @@ let
         echo -n "$pre"'VPN'"$post"
       fi
     '';
-  isBtBlocked = with pkgs;
+  isBtBlocked =
+    with pkgs;
     writeShellScriptBin "isBtBlocked" ''
       delimiter=$1
       startcol=$2
@@ -32,7 +39,8 @@ let
         echo -n "''${pre}¬BT''${post}"
       fi
     '';
-  getCpuPerfState = with pkgs;
+  getCpuPerfState =
+    with pkgs;
     writeShellScriptBin "getCpuPerfState" ''
       startcol=$1
       endcol=$2
@@ -46,7 +54,8 @@ let
         fi
       fi
     '';
-  hasXssLock = with pkgs;
+  hasXssLock =
+    with pkgs;
     writeShellScriptBin "hasXssLock" ''
       delimiter=$1
       startcol=$2
@@ -59,7 +68,8 @@ let
         echo -n "$pre"'¬XSS-LOCK'"$post"
       fi
     '';
-  xmobarXmonad = with pkgs;
+  xmobarXmonad =
+    with pkgs;
     writeShellScriptBin "xmobarXmonad" ''
       set -e
       export PATH=$PATH:${isvpn}/bin/:${hasXssLock}/bin/:${getCpuPerfState}/bin/
@@ -72,7 +82,8 @@ let
       ${xmobar}/bin/xmobar ${xmobarrc} &
       echo $! > $pidfile
     '';
-  xmobarDmesg = with pkgs;
+  xmobarDmesg =
+    with pkgs;
     writeShellScriptBin "xmobarDmesg" ''
       set -o pipefail
       set -ex
@@ -81,8 +92,15 @@ let
       }
       fun &disown
     '';
-in pkgs.buildEnv {
+in
+pkgs.buildEnv {
   name = "my-xmobar";
   extraOutputsToInstall = [ "bin" ];
-  paths = [ pkgs.xmobar xmobarXmonad xmobarDmesg my-mute-telco isBtBlocked ];
+  paths = [
+    pkgs.xmobar
+    xmobarXmonad
+    xmobarDmesg
+    my-mute-telco
+    isBtBlocked
+  ];
 }

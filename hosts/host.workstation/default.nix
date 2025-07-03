@@ -1,6 +1,14 @@
 # Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, inputs, ... }: {
+{
+  config,
+  pkgs,
+  lib,
+  myconfig,
+  inputs,
+  ...
+}:
+{
   imports = [
     ./hardware-configuration.nix
     ./imgwork.nfs.nix
@@ -34,9 +42,12 @@
       networking.firewall.allowedTCPPorts = [ 22022 ];
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
-    ( # wol
-      let interface = "enp4s0";
-      in {
+    (
+      # wol
+      let
+        interface = "enp4s0";
+      in
+      {
         # services.wakeonlan.interfaces = [{
         #   inherit interface;
         #   method = "magicpacket";
@@ -64,11 +75,15 @@
             Type = "oneshot";
           };
         };
-      })
-    (myconfig.metadatalib.setupAsBuildMachine
-      [ myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub" ])
+      }
+    )
+    (myconfig.metadatalib.setupAsBuildMachine [
+      myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
+    ])
     {
-      services.vsftpd = { enable = true; };
+      services.vsftpd = {
+        enable = true;
+      };
     }
     # other profiles
     ./gaming
@@ -112,7 +127,9 @@
     virtualisation = {
       docker.enable = true;
       podman.enable = true;
-      oci-containers = { backend = "podman"; };
+      oci-containers = {
+        backend = "podman";
+      };
       #virtualbox.host.enable = true;
     };
 
@@ -128,8 +145,14 @@
     hardware.enableRedistributableFirmware = true;
     hardware.cpu.amd.updateMicrocode = true;
 
-    boot.initrd.supportedFilesystems = [ "luks" "btrfs" ];
-    boot.binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];
+    boot.initrd.supportedFilesystems = [
+      "luks"
+      "btrfs"
+    ];
+    boot.binfmt.emulatedSystems = [
+      "aarch64-linux"
+      "armv6l-linux"
+    ];
 
     # This value determines the NixOS release from which the default
     # settings for stateful data, like file locations and database versions

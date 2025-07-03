@@ -1,8 +1,15 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 with lib;
 
-let cfg = config.myconfig.services.dmesgMonitor;
-in {
+let
+  cfg = config.myconfig.services.dmesgMonitor;
+in
+{
   options.myconfig.services.dmesgMonitor = {
     enable = mkEnableOption "System log error monitor service";
 
@@ -23,8 +30,7 @@ in {
     initialDelay = mkOption {
       type = types.int;
       default = 600;
-      description =
-        "Initial delay in seconds after boot before starting checks";
+      description = "Initial delay in seconds after boot before starting checks";
     };
 
     lookbackWindow = mkOption {
@@ -41,11 +47,12 @@ in {
   };
 
   config = mkIf cfg.enable {
-    assertions = [{
-      assertion = cfg.lookbackWindow < (cfg.initialDelay - 60);
-      message =
-        "lookbackWindow must be smaller than initialDelay to ensure we only look at logs after the service starts monitoring";
-    }];
+    assertions = [
+      {
+        assertion = cfg.lookbackWindow < (cfg.initialDelay - 60);
+        message = "lookbackWindow must be smaller than initialDelay to ensure we only look at logs after the service starts monitoring";
+      }
+    ];
 
     systemd.services.dmesg-monitor = {
       description = "System Log Error Monitor";
@@ -105,7 +112,6 @@ in {
       };
     };
 
-    networking.firewall.allowedTCPPorts =
-      lib.optional (cfg.publicPort != null) cfg.publicPort;
+    networking.firewall.allowedTCPPorts = lib.optional (cfg.publicPort != null) cfg.publicPort;
   };
 }

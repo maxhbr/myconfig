@@ -26,7 +26,10 @@
     isNormalUser = true;
     group = "qemu";
     uid = 1001;
-    extraGroups = [ "myconfig" "wheel" ];
+    extraGroups = [
+      "myconfig"
+      "wheel"
+    ];
     home = "/home/qemu";
     createHome = true;
     shell = "/run/current-system/sw/bin/zsh";

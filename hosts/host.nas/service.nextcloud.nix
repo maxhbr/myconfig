@@ -1,4 +1,11 @@
-{ pkgs, config, lib, myconfig, ... }: {
+{
+  pkgs,
+  config,
+  lib,
+  myconfig,
+  ...
+}:
+{
   imports = [
     (lib.mkIf config.services.prometheus.enable {
       services.prometheus.exporters.nextcloud = {
@@ -44,10 +51,12 @@
       postgresql = {
         enable = true;
         ensureDatabases = [ "nextcloud" ];
-        ensureUsers = [{
-          name = "nextcloud";
-          ensurePermissions."DATABASE nextcloud" = "ALL PRIVILEGES";
-        }];
+        ensureUsers = [
+          {
+            name = "nextcloud";
+            ensurePermissions."DATABASE nextcloud" = "ALL PRIVILEGES";
+          }
+        ];
       };
     };
     systemd.services."nextcloud-setup" = {

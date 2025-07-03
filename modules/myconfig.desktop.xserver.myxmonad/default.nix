@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.myconfig;
   my-mute-telco = pkgs.callPackage ./myMuteTelco { inherit pkgs; };
@@ -10,14 +15,21 @@ let
   myxev = pkgs.writeShellScriptBin "myxev" ''
     ${pkgs.xorg.xev}/bin/xev -id $(${pkgs.xdotool}/bin/xdotool getactivewindow)
   '';
-in {
+in
+{
   options.myconfig = with lib; {
-    desktop.xserver.xmonad = { enable = mkEnableOption "xmonad"; };
+    desktop.xserver.xmonad = {
+      enable = mkEnableOption "xmonad";
+    };
   };
   imports = [
-    (lib.mkIf (config.services.xserver.enable
-      && cfg.desktop.xserver.xmonad.enable
-      && config.services.xserver.desktopManager.xfce.enable) {
+    (lib.mkIf
+      (
+        config.services.xserver.enable
+        && cfg.desktop.xserver.xmonad.enable
+        && config.services.xserver.desktopManager.xfce.enable
+      )
+      {
         services.xserver.desktopManager = {
           xterm.enable = false;
           xfce = {
@@ -26,10 +38,11 @@ in {
             enableScreensaver = false;
           };
         };
-      })
+      }
+    )
   ];
-  config = (lib.mkIf
-    (config.services.xserver.enable && cfg.desktop.xserver.xmonad.enable) {
+  config = (
+    lib.mkIf (config.services.xserver.enable && cfg.desktop.xserver.xmonad.enable) {
       environment.variables = {
         XSECURELOCK_BLANK_TIMEOUT = "-1";
         XSECURELOCK_COMPOSITE_OBSCURER = "0";
@@ -44,10 +57,7 @@ in {
             Option "MaxClients" "2048"
           '';
           displayManager.defaultSession =
-            if config.services.xserver.desktopManager.xfce.enable then
-              "xfce+myXmonad"
-            else
-              "none+myXmonad";
+            if config.services.xserver.desktopManager.xfce.enable then "xfce+myXmonad" else "none+myXmonad";
           windowManager = {
             session = lib.singleton {
               name = "myXmonad";
@@ -64,30 +74,33 @@ in {
         };
       };
 
-      home-manager.sharedModules = [{
-        # imports = [ ./picom.hm.nix ];
-        home.packages = with pkgs; [
-          my-xmonad
-          my-xmobar
-          my-mute-telco
+      home-manager.sharedModules = [
+        {
+          # imports = [ ./picom.hm.nix ];
+          home.packages = with pkgs; [
+            my-xmonad
+            my-xmobar
+            my-mute-telco
 
-          dzen2
-          myxev
-        ];
-        xsession.windowManager.command = "${my-xmonad}/bin/xmonad";
-        home.file = {
-          ".myXmonadBinary" = {
-            text = ''
-              "${my-xmonad}/bin/xmonad"
-            '';
-            onChange = ''
-              if [[ -v DISPLAY ]] ; then
-                echo "Restarting xmonad"
-                ${my-xmonad}/bin/xmonad &
-              fi
-            '';
+            dzen2
+            myxev
+          ];
+          xsession.windowManager.command = "${my-xmonad}/bin/xmonad";
+          home.file = {
+            ".myXmonadBinary" = {
+              text = ''
+                "${my-xmonad}/bin/xmonad"
+              '';
+              onChange = ''
+                if [[ -v DISPLAY ]] ; then
+                  echo "Restarting xmonad"
+                  ${my-xmonad}/bin/xmonad &
+                fi
+              '';
+            };
           };
-        };
-      }];
-    });
+        }
+      ];
+    }
+  );
 }

@@ -1,6 +1,13 @@
-{ pkgs, lib, config, ... }:
-let cfg = config.myconfig.dev;
-in {
+{
+  pkgs,
+  lib,
+  config,
+  ...
+}:
+let
+  cfg = config.myconfig.dev;
+in
+{
   options.myconfig.dev = with lib; {
     enable = mkEnableOption "myconfig.dev";
     elixir.enable = mkEnableOption "myconfig.dev.elixir";
@@ -28,9 +35,16 @@ in {
     ./dev.tex.nix
   ];
   config = {
-    myconfig.dev.enable = cfg.elixir.enable || cfg.haskell.enable
-      || cfg.network.enable || cfg.tex.enable || cfg.compliance.enable
-      || cfg.go.enable || cfg.ruby.enable || cfg.python.enable
-      || cfg.rust.enable || cfg.nodejs.enable;
+    myconfig.dev.enable =
+      cfg.elixir.enable
+      || cfg.haskell.enable
+      || cfg.network.enable
+      || cfg.tex.enable
+      || cfg.compliance.enable
+      || cfg.go.enable
+      || cfg.ruby.enable
+      || cfg.python.enable
+      || cfg.rust.enable
+      || cfg.nodejs.enable;
   };
 }

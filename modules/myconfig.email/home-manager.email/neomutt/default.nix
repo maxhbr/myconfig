@@ -1,25 +1,34 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
-  mailcap_file = pkgs.writeText "mailcap" (let
-    htmlViaLynx = ''
-      text/html; ${pkgs.lynx}/bin/lynx %s
-      text/html; ${pkgs.lynx}/bin/lynx -dump %s; copiousoutput
-    '';
-    htmlViaW3m = ''
-      text/html; ${pkgs.w3m}/bin/w3m -dump -ppc 8 -graph -s -I %{charset} -T text/html; copiousoutput
-    '';
-    htmlViaElinks = ''
-      text/html; ${pkgs.elinks}/bin/elinks %s; nametemplate=%s.html
-      text/html; ${pkgs.elinks}/bin/elinks -dump %s; nametemplate=%s.html; copiousoutput
-    '';
-  in ''
-    ${htmlViaElinks}
-    application/pdf; ${pkgs.zathura}/bin/zathura %s
-    image/*; ${pkgs.sxiv}/bin/sxiv %s
-    application/x-tar; ${pkgs.xarchiver}/bin/xarchiver %s &;
-  '');
-in {
+  mailcap_file = pkgs.writeText "mailcap" (
+    let
+      htmlViaLynx = ''
+        text/html; ${pkgs.lynx}/bin/lynx %s
+        text/html; ${pkgs.lynx}/bin/lynx -dump %s; copiousoutput
+      '';
+      htmlViaW3m = ''
+        text/html; ${pkgs.w3m}/bin/w3m -dump -ppc 8 -graph -s -I %{charset} -T text/html; copiousoutput
+      '';
+      htmlViaElinks = ''
+        text/html; ${pkgs.elinks}/bin/elinks %s; nametemplate=%s.html
+        text/html; ${pkgs.elinks}/bin/elinks -dump %s; nametemplate=%s.html; copiousoutput
+      '';
+    in
+    ''
+      ${htmlViaElinks}
+      application/pdf; ${pkgs.zathura}/bin/zathura %s
+      image/*; ${pkgs.sxiv}/bin/sxiv %s
+      application/x-tar; ${pkgs.xarchiver}/bin/xarchiver %s &;
+    ''
+  );
+in
+{
   config = lib.mkIf config.programs.neomutt.enable {
     programs.neomutt = {
       sidebar = {
@@ -35,8 +44,7 @@ in {
         mailcap_path = "${mailcap_file}";
         envelope_from = "yes";
         edit_headers = "yes";
-        query_command = ''
-          "${pkgs.notmuch-addrlookup}/bin/notmuch-addrlookup --format=mutt '%s'"'';
+        query_command = ''"${pkgs.notmuch-addrlookup}/bin/notmuch-addrlookup --format=mutt '%s'"'';
       };
 
       binds = [
@@ -53,7 +61,10 @@ in {
           action = "last-entry";
         }
         {
-          map = [ "index" "pager" ];
+          map = [
+            "index"
+            "pager"
+          ];
           key = "R";
           action = "group-reply";
         }
@@ -68,8 +79,7 @@ in {
           # "file as Spam"
           map = [ "index" ];
           key = "S";
-          action =
-            "<tag-prefix><enter-command>unset resolve<enter><tag-prefix><clear-flag>N<tag-prefix><enter-command>set resolve<enter><tag-prefix><save-message>=Spam.Verified<enter>";
+          action = "<tag-prefix><enter-command>unset resolve<enter><tag-prefix><clear-flag>N<tag-prefix><enter-command>set resolve<enter><tag-prefix><save-message>=Spam.Verified<enter>";
         }
         {
           # "file as Spam"
@@ -79,7 +89,10 @@ in {
         }
         {
           # macro index,pager M "<pipe-message>abook --add-email-quiet<return>" "add sender to abook"
-          map = [ "index" "pager" ];
+          map = [
+            "index"
+            "pager"
+          ];
           key = "M";
           action = "<pipe-message>abook --add-email-quiet<return>";
         }
@@ -98,16 +111,21 @@ in {
         {
           map = [ "index" ];
           key = "<f5>";
-          action =
-            "<sync-mailbox><refresh><enter-command>source ~/.config/neomutt/neomuttrc<enter><change-folder>!<enter>";
+          action = "<sync-mailbox><refresh><enter-command>source ~/.config/neomutt/neomuttrc<enter><change-folder>!<enter>";
         }
         {
-          map = [ "index" "pager" ];
+          map = [
+            "index"
+            "pager"
+          ];
           key = "\\cb";
           action = "<pipe-message> ${pkgs.urlscan}/bin/urlscan<Enter>";
         }
         {
-          map = [ "attach" "compose" ];
+          map = [
+            "attach"
+            "compose"
+          ];
           key = "\\cb";
           action = "<pipe-entry> ${pkgs.urlscan}/bin/urlscan<Enter>";
         }

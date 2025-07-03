@@ -1,5 +1,6 @@
 # https://community.grafana.com/t/installing-on-nixos/6712/2
-{ config, pkgs, ... }: {
+{ config, pkgs, ... }:
+{
   config = {
     services = {
       grafana = {

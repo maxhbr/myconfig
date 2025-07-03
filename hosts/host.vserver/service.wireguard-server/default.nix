@@ -9,17 +9,23 @@
 # $ wg genkey > ~/wireguard-keys/private
 # $ wg pubkey < ~/wireguard-keys/private > ~/wireguard-keys/public
 
-{ pkgs, config, lib, myconfig, ... }:
+{
+  pkgs,
+  config,
+  lib,
+  myconfig,
+  ...
+}:
 let
   wgHosts = myconfig.metadatalib.getOtherWgHosts config.networking.hostName;
   peers = lib.map (wgHost: {
     publicKey = wgHost.publicKey;
     allowedIPs = [ "${wgHost.ip4}/32" ];
   }) wgHosts;
-  otherAddresses =
-    lib.map (wgHost: "/${wgHost.name}.wg0.maxhbr.local/${wgHost.ip4}") wgHosts;
+  otherAddresses = lib.map (wgHost: "/${wgHost.name}.wg0.maxhbr.local/${wgHost.ip4}") wgHosts;
 
-in {
+in
+{
   config = {
     environment.systemPackages = with pkgs; [ wireguard-tools ];
     # enable NAT
@@ -27,7 +33,10 @@ in {
     networking.nat.externalInterface = "ens3";
     networking.nat.internalInterfaces = [ "wg0" ];
     networking.firewall = {
-      allowedUDPPorts = [ 51820 51821 ];
+      allowedUDPPorts = [
+        51820
+        51821
+      ];
 
       # This allows the wireguard server to route your traffic to the internet and hence be like a VPN
       # For this to work you have to set the dnsserver IP of your router (or dnsserver of choice) in your clients
@@ -40,7 +49,10 @@ in {
     services.dnsmasq.enable = true;
     services.dnsmasq.settings = {
       domain = "maxhbr.local";
-      listen-address = [ "127.0.0.1" "10.199.199.1" ];
+      listen-address = [
+        "127.0.0.1"
+        "10.199.199.1"
+      ];
       dhcp-range = [ "10.199.199.2,10.199.199.254,12h" ];
       dhcp-leasefile = "/var/lib/dnsmasq/dnsmasq.leases";
       address = [ "/wg0.maxhbr.local/10.199.199.1" ] ++ otherAddresses;

@@ -1,6 +1,13 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, inputs, ... }: {
+{
+  pkgs,
+  config,
+  lib,
+  inputs,
+  ...
+}:
+{
   imports = [
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.lenovo-thinkpad-x1-extreme-gen2
@@ -113,11 +120,11 @@
             source = ./autorandr;
             recursive = true;
           };
-          ".config/autorandr/mobile/postswitch.d/mykeylight-off".source = let
-            script = with pkgs;
-              writeShellScriptBin "script"
-              "${mykeylight}/bin/mykeylight-off &disown";
-          in "${script}/bin/script";
+          ".config/autorandr/mobile/postswitch.d/mykeylight-off".source =
+            let
+              script = with pkgs; writeShellScriptBin "script" "${mykeylight}/bin/mykeylight-off &disown";
+            in
+            "${script}/bin/script";
         };
         home.packages = with pkgs; [
           google-chrome # for netflix and stadia
@@ -126,12 +133,15 @@
       }
       (lib.mkIf config.hardware.pulseaudio.enable {
         home.file = {
-          ".config/autorandr/postswitch.d/mute_notebook_audio".source = let
-            script = with pkgs;
-              writeShellScriptBin "script" ''
-                exec ${pulseaudio}/bin/pactl set-sink-mute "alsa_output.pci-0000_00_1f.3.analog-stereo" "1"
-              '';
-          in "${script}/bin/script";
+          ".config/autorandr/postswitch.d/mute_notebook_audio".source =
+            let
+              script =
+                with pkgs;
+                writeShellScriptBin "script" ''
+                  exec ${pulseaudio}/bin/pactl set-sink-mute "alsa_output.pci-0000_00_1f.3.analog-stereo" "1"
+                '';
+            in
+            "${script}/bin/script";
         };
       })
     ];

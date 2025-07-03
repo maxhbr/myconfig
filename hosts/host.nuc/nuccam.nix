@@ -1,6 +1,7 @@
 { pkgs, ... }:
 let
-  streamcam = with pkgs;
+  streamcam =
+    with pkgs;
     writeShellScriptBin "streamcam" ''
       ${pkgs.mjpg-streamer}/bin/mjpg_streamer \
         -i "input_uvc.so \
@@ -9,8 +10,11 @@ let
           -r 1920x1080" \
         -o "output_http.so -w /www -p 32145"
     '';
-in {
-  home-manager.users.mhuber = { home.packages = [ streamcam ]; };
+in
+{
+  home-manager.users.mhuber = {
+    home.packages = [ streamcam ];
+  };
 
   networking.firewall.allowedTCPPorts = [ 32145 ];
   networking.firewall.allowedUDPPorts = [ 32145 ];

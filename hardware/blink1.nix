@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   blink1-udev-rules = pkgs.writeTextFile {
     name = "blink1-udev-rules";
@@ -19,20 +24,29 @@ let
     '';
     destination = "/etc/udev/rules.d/51-blink1.rules";
   };
-in {
+in
+{
   config = {
     services.udev.packages = [ blink1-udev-rules ];
-    environment.systemPackages = [ blink1-udev-rules pkgs.blink1-tool ];
+    environment.systemPackages = [
+      blink1-udev-rules
+      pkgs.blink1-tool
+    ];
 
-    home-manager.sharedModules = [{
-      home.file = {
-        ".config/autorandr/postswitch.d/reset_blink1".source = let
-          muteNotebookAudio = with pkgs;
-            writeShellScriptBin "reset_blink1" ''
-              ${blink1-tool}/bin/blink1-tool --off &disown
-            '';
-        in "${muteNotebookAudio}/bin/reset_blink1";
-      };
-    }];
+    home-manager.sharedModules = [
+      {
+        home.file = {
+          ".config/autorandr/postswitch.d/reset_blink1".source =
+            let
+              muteNotebookAudio =
+                with pkgs;
+                writeShellScriptBin "reset_blink1" ''
+                  ${blink1-tool}/bin/blink1-tool --off &disown
+                '';
+            in
+            "${muteNotebookAudio}/bin/reset_blink1";
+        };
+      }
+    ];
   };
 }

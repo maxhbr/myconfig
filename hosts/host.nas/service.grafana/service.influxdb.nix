@@ -1,46 +1,59 @@
-{ config, lib, pkgs, ... }: {
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+{
   imports = [
-    (let deflux = pkgs.callPackage ./deflux { };
-    in {
-      config = {
-        home-manager.sharedModules = [{ home.packages = [ deflux ]; }];
-        users.users.deflux = {
-          group = "deflux";
-          isSystemUser = true;
-        };
-        users.groups.deflux = { };
-        environment.etc = {
-          "deflux.yml".text = ''
-            deconz:
-              addr: http://127.0.0.1:${
-                toString config.myconfig.services.deconz.httpPort
-              }/api
-              apikey: "CF1CAF4EDA"
-            influxdb:
-              addr: http://127.0.0.1:8086/
-              useragent: Deflux
-              # username: Deflux
-              # password: Deflux
-            influxdbdatabase: deconz
-          '';
-        };
-        systemd.services.deflux = {
-          wantedBy = [ "multi-user.target" ];
-          after = [ "network.target" "influxdb.target" ];
-          description = "Start deflux.";
-          serviceConfig = {
-            Type = "simple";
-            User = "deflux";
-            ExecStart = "${deflux}/bin/deflux";
+    (
+      let
+        deflux = pkgs.callPackage ./deflux { };
+      in
+      {
+        config = {
+          home-manager.sharedModules = [ { home.packages = [ deflux ]; } ];
+          users.users.deflux = {
+            group = "deflux";
+            isSystemUser = true;
+          };
+          users.groups.deflux = { };
+          environment.etc = {
+            "deflux.yml".text = ''
+              deconz:
+                addr: http://127.0.0.1:${toString config.myconfig.services.deconz.httpPort}/api
+                apikey: "CF1CAF4EDA"
+              influxdb:
+                addr: http://127.0.0.1:8086/
+                useragent: Deflux
+                # username: Deflux
+                # password: Deflux
+              influxdbdatabase: deconz
+            '';
+          };
+          systemd.services.deflux = {
+            wantedBy = [ "multi-user.target" ];
+            after = [
+              "network.target"
+              "influxdb.target"
+            ];
+            description = "Start deflux.";
+            serviceConfig = {
+              Type = "simple";
+              User = "deflux";
+              ExecStart = "${deflux}/bin/deflux";
+            };
           };
         };
-      };
-    })
+      }
+    )
   ];
   config = {
-    home-manager.sharedModules = [{ home.packages = with pkgs; [ influxdb ]; }];
+    home-manager.sharedModules = [ { home.packages = with pkgs; [ influxdb ]; } ];
     services = {
-      influxdb = { enable = true; };
+      influxdb = {
+        enable = true;
+      };
       grafana.provision = {
         enable = true;
         datasources = [

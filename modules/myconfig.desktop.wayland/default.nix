@@ -1,15 +1,23 @@
 # Copyright 2022 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, myconfig, ... }:
+{
+  pkgs,
+  config,
+  lib,
+  myconfig,
+  ...
+}:
 let
   cfg = config.myconfig;
   nixosConfig = config;
-in {
+in
+{
   options.myconfig = with lib; {
     desktop.wayland = {
       commonPackages = mkOption {
         type = with types; listOf package;
-        default = with pkgs;
+        default =
+          with pkgs;
           [
             # xwayland
             xorg.xwininfo # to find out if somenthing runs under xwayland
@@ -98,7 +106,11 @@ in {
             gammastep
             wev # Wayland event viewer
             qt5.qtwayland
-          ] ++ [ wayvnc waypipe ];
+          ]
+          ++ [
+            wayvnc
+            waypipe
+          ];
         example = literalExpression ''
           with pkgs; [ ]
         '';
@@ -149,7 +161,10 @@ in {
         '';
       };
       selectedGreeter = mkOption {
-        type = types.enum [ "tuigreet" "gtkgreet" ];
+        type = types.enum [
+          "tuigreet"
+          "gtkgreet"
+        ];
         default = "tuigreet";
         description = lib.mdDoc ''
           Choose the greeter to use
@@ -159,23 +174,30 @@ in {
         type = types.bool;
         default = false;
       };
-      sessions = let settingsFormat = pkgs.formats.toml { };
-      in mkOption {
-        type = settingsFormat.type;
-        example = literalExpression ''
-          {
-            sway = {
-              command = "''${pkgs.greetd.greetd}/bin/agreety --cmd sway";
-            };
-          }
-        '';
-        description = lib.mdDoc ''
-          greetd configuration ([documentation](https://man.sr.ht/~kennylevinsen/greetd/))
-          as a Nix attribute set.
-        '';
-      };
+      sessions =
+        let
+          settingsFormat = pkgs.formats.toml { };
+        in
+        mkOption {
+          type = settingsFormat.type;
+          example = literalExpression ''
+            {
+              sway = {
+                command = "''${pkgs.greetd.greetd}/bin/agreety --cmd sway";
+              };
+            }
+          '';
+          description = lib.mdDoc ''
+            greetd configuration ([documentation](https://man.sr.ht/~kennylevinsen/greetd/))
+            as a Nix attribute set.
+          '';
+        };
       notificationCenter = mkOption {
-        type = types.enum [ "swaync" "mako" "dunst" ];
+        type = types.enum [
+          "swaync"
+          "mako"
+          "dunst"
+        ];
         default = "mako";
         description = lib.mdDoc ''
           Notification center to use.
@@ -193,16 +215,17 @@ in {
       home-manager.sharedModules = [
         {
           options.myconfig = with lib; {
-            desktop.wayland = { enable = mkEnableOption "wayland"; };
+            desktop.wayland = {
+              enable = mkEnableOption "wayland";
+            };
           };
         }
-        ({ config, lib, ... }:
+        (
+          { config, lib, ... }:
           let
             launcherCommands = config.myconfig.desktop.wayland.launcherCommands;
             myWofi = pkgs.writeShellScriptBin "my-wofi" ''
-              choice="$(printf '%s\n' "${
-                lib.escapeShellArgs launcherCommands
-              }" |
+              choice="$(printf '%s\n' "${lib.escapeShellArgs launcherCommands}" |
                         tr ' ' '\n' |
                         sort |
                         ${pkgs.wofi}/bin/wofi --dmenu \
@@ -213,7 +236,8 @@ in {
               [ -z "$choice" ] && exit 0
               ${pkgs.util-linux}/bin/setsid $choice >/dev/null 2>&1 &
             '';
-          in {
+          in
+          {
             options.myconfig = with lib; {
               desktop.wayland = {
                 launcherCommands = mkOption {
@@ -232,107 +256,108 @@ in {
               };
             };
             config = {
-              myconfig.desktop.wayland.launcherCommands =
-                nixosConfig.myconfig.desktop.wayland.launcherCommands;
+              myconfig.desktop.wayland.launcherCommands = nixosConfig.myconfig.desktop.wayland.launcherCommands;
               home.packages = [ myWofi ];
             };
-          })
+          }
+        )
       ];
     }
   ];
 
-  config = (lib.mkIf cfg.desktop.wayland.enable {
-    services.greetd.enable = true;
-    services.clipboard-sync.enable = true;
-    environment.sessionVariables = {
-      "NIXOS_OZONE_WL" = "1";
-      "XDG_SESSION_TYPE" = "wayland";
-      "SDL_VIDEODRIVER" = "wayland";
-      # needs qt5.qtwayland in systemPackages
-      "QT_QPA_PLATFORM" = "wayland";
-      "QT_WAYLAND_DISABLE_WINDOWDECORATION" = "1";
-      # Fix for some Java AWT applications (e.g. Android Studio),
-      # use this if they aren't displayed properly:
-      "_JAVA_AWT_WM_NONREPARENTING" = "1";
-    };
+  config = (
+    lib.mkIf cfg.desktop.wayland.enable {
+      services.greetd.enable = true;
+      services.clipboard-sync.enable = true;
+      environment.sessionVariables = {
+        "NIXOS_OZONE_WL" = "1";
+        "XDG_SESSION_TYPE" = "wayland";
+        "SDL_VIDEODRIVER" = "wayland";
+        # needs qt5.qtwayland in systemPackages
+        "QT_QPA_PLATFORM" = "wayland";
+        "QT_WAYLAND_DISABLE_WINDOWDECORATION" = "1";
+        # Fix for some Java AWT applications (e.g. Android Studio),
+        # use this if they aren't displayed properly:
+        "_JAVA_AWT_WM_NONREPARENTING" = "1";
+      };
 
-    # services.xserver.displayManager.sddm.wayland = true;
-    # services.xserver.displayManager.gdm.wayland = true;
-    services.libinput.enable = true;
+      # services.xserver.displayManager.sddm.wayland = true;
+      # services.xserver.displayManager.gdm.wayland = true;
+      services.libinput.enable = true;
 
-    nixpkgs = {
-      overlays = [
-        # Disable some things that don’t cross compile
-        # from https://github.com/matthewbauer/nixiosk/blob/7e6d1e1875ec5ae810e99fe5a1c814abdf56fecb/configuration.nix#L104
-        (self: super:
-          lib.optionalAttrs
-          (super.stdenv.hostPlatform != super.stdenv.buildPlatform) {
-            gtk3 = super.gtk3.override { cupsSupport = false; };
-            mesa = super.mesa.override { eglPlatforms = [ "wayland" ]; };
-          })
-      ];
-    };
+      nixpkgs = {
+        overlays = [
+          # Disable some things that don’t cross compile
+          # from https://github.com/matthewbauer/nixiosk/blob/7e6d1e1875ec5ae810e99fe5a1c814abdf56fecb/configuration.nix#L104
+          (
+            self: super:
+            lib.optionalAttrs (super.stdenv.hostPlatform != super.stdenv.buildPlatform) {
+              gtk3 = super.gtk3.override { cupsSupport = false; };
+              mesa = super.mesa.override { eglPlatforms = [ "wayland" ]; };
+            }
+          )
+        ];
+      };
 
-    home-manager.sharedModules = [
-      { myconfig.desktop.wayland.enable = true; }
-      ./home-manager.kanshi.nix
-      ./home-manager.swaync.nix
-      ./home-manager.mako.nix
-      ./home-manager.foot.nix
-      {
-        home.packages = cfg.desktop.wayland.commonPackages;
-        xdg.configFile = {
-          "way-displays/cfg.yaml".source = ./way-displays/cfg.yaml;
-          "electron-flags.conf".text = ''
-            --enable-features=UseOzonePlatform
-            --ozone-platform=wayland
-            --ozone-platform-hint=auto
-            --enable-features=WaylandWindowDecorations
-          '';
-        };
-        programs.waybar.enable = true;
-        services.kanshi.enable = false;
-        services.swaync.enable = cfg.desktop.wayland.notificationCenter
-          == "swaync";
-        services.mako.enable = cfg.desktop.wayland.notificationCenter == "mako";
-        services.dunst.enable = cfg.desktop.wayland.notificationCenter
-          == "dunst";
-        services.random-background.enable = lib.mkForce false;
-        services.screen-locker.enable = lib.mkForce false;
-        programs.foot.enable = true;
-      }
-      {
-        programs.wofi = {
-          enable = true;
-          settings = {
-            mode = "run";
-            location = "bottom-right";
-            allow_markup = true;
-            width = 250;
+      home-manager.sharedModules = [
+        { myconfig.desktop.wayland.enable = true; }
+        ./home-manager.kanshi.nix
+        ./home-manager.swaync.nix
+        ./home-manager.mako.nix
+        ./home-manager.foot.nix
+        {
+          home.packages = cfg.desktop.wayland.commonPackages;
+          xdg.configFile = {
+            "way-displays/cfg.yaml".source = ./way-displays/cfg.yaml;
+            "electron-flags.conf".text = ''
+              --enable-features=UseOzonePlatform
+              --ozone-platform=wayland
+              --ozone-platform-hint=auto
+              --enable-features=WaylandWindowDecorations
+            '';
           };
-        };
-      }
-    ];
-    services.physlock.enable = lib.mkForce false;
+          programs.waybar.enable = true;
+          services.kanshi.enable = false;
+          services.swaync.enable = cfg.desktop.wayland.notificationCenter == "swaync";
+          services.mako.enable = cfg.desktop.wayland.notificationCenter == "mako";
+          services.dunst.enable = cfg.desktop.wayland.notificationCenter == "dunst";
+          services.random-background.enable = lib.mkForce false;
+          services.screen-locker.enable = lib.mkForce false;
+          programs.foot.enable = true;
+        }
+        {
+          programs.wofi = {
+            enable = true;
+            settings = {
+              mode = "run";
+              location = "bottom-right";
+              allow_markup = true;
+              width = 250;
+            };
+          };
+        }
+      ];
+      services.physlock.enable = lib.mkForce false;
 
-    # https://github.com/NixOS/nixpkgs/issues/143365
-    # security.pam.services.swaylock = {};
-    security.pam.services.swaylock.text = ''
-      # Account management.
-      account required pam_unix.so
+      # https://github.com/NixOS/nixpkgs/issues/143365
+      # security.pam.services.swaylock = {};
+      security.pam.services.swaylock.text = ''
+        # Account management.
+        account required pam_unix.so
 
-      # Authentication management.
-      auth sufficient pam_unix.so   likeauth try_first_pass
-      auth required pam_deny.so
+        # Authentication management.
+        auth sufficient pam_unix.so   likeauth try_first_pass
+        auth required pam_deny.so
 
-      # Password management.
-      password sufficient pam_unix.so nullok sha512
+        # Password management.
+        password sufficient pam_unix.so nullok sha512
 
-      # Session management.
-      session required pam_env.so conffile=/etc/pam/environment readenv=0
-      session required pam_unix.so
-    '';
+        # Session management.
+        session required pam_env.so conffile=/etc/pam/environment readenv=0
+        session required pam_unix.so
+      '';
 
-    myconfig.desktop.wayland.launcherCommands = [ "wdisplays" ];
-  });
+      myconfig.desktop.wayland.launcherCommands = [ "wdisplays" ];
+    }
+  );
 }

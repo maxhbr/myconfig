@@ -1,4 +1,11 @@
-{ stdenv, unzip, requireFile, autoPatchelfHook, gdk-pixbuf, gtk2-x11, steam-run
+{
+  stdenv,
+  unzip,
+  requireFile,
+  autoPatchelfHook,
+  gdk-pixbuf,
+  gtk2-x11,
+  steam-run,
 }:
 
 stdenv.mkDerivation rec {
@@ -7,9 +14,17 @@ stdenv.mkDerivation rec {
 
   src = ./DungeonsofDredmor_Complete_linux_1389995827.tar.gz;
 
-  nativeBuildInputs = [ unzip autoPatchelfHook ];
+  nativeBuildInputs = [
+    unzip
+    autoPatchelfHook
+  ];
 
-  buildInputs = [ gtk2-x11 gdk-pixbuf stdenv.cc.cc.lib steam-run ];
+  buildInputs = [
+    gtk2-x11
+    gdk-pixbuf
+    stdenv.cc.cc.lib
+    steam-run
+  ];
 
   unpackPhase = ''
     mkdir -p dod

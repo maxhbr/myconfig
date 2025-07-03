@@ -1,6 +1,8 @@
-{ pkgs, ... }: {
+{ pkgs, ... }:
+{
   imports = [
-    ({ config, lib, ... }:
+    (
+      { config, lib, ... }:
       lib.mkIf config.services.kanboard.enable {
         services.kanboard = {
           nginx = {
@@ -20,8 +22,10 @@
           iptables -D nixos-fw -p tcp --source 10.199.199.0/24 --dport 443 -j nixos-fw-accept || true
           iptables -D nixos-fw -p udp --source 10.199.199.0/24 --dport 443 -j nixos-fw-accept || true
         '';
-      })
+      }
+    )
   ];
-  config = { services.kanboard.enable = false; };
+  config = {
+    services.kanboard.enable = false;
+  };
 }
-

@@ -1,6 +1,12 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
-  mkscreenshot = with pkgs;
+  mkscreenshot =
+    with pkgs;
     writeShellScriptBin "mkscreenshot.sh" ''
       set -e
 
@@ -40,8 +46,11 @@ let
       EOF
       fi
     '';
-in {
-  config = (lib.mkIf config.services.xserver.enable {
-    home-manager.sharedModules = [{ home.packages = [ mkscreenshot ]; }];
-  });
+in
+{
+  config = (
+    lib.mkIf config.services.xserver.enable {
+      home-manager.sharedModules = [ { home.packages = [ mkscreenshot ]; } ];
+    }
+  );
 }

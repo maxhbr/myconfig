@@ -6,7 +6,12 @@
 #     --keep-failed \
 #     -E 'with import <nixpkgs> {}; callPackage ./default.nix {}'
 
-{ stdenv, fetchurl, unzip, pkgs }:
+{
+  stdenv,
+  fetchurl,
+  unzip,
+  pkgs,
+}:
 # based on: https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=powder
 stdenv.mkDerivation {
   name = "powder118";
@@ -16,7 +21,10 @@ stdenv.mkDerivation {
     sha256 = "1mzk338sz7g77k09pw6cb47lg60si76x2mrm83r1zpf7f8wjz0af";
   };
 
-  buildInputs = [ pkgs.SDL pkgs.gcc6 ];
+  buildInputs = [
+    pkgs.SDL
+    pkgs.gcc6
+  ];
 
   buildPhase = ''
     patchShebangs .
@@ -33,8 +41,7 @@ stdenv.mkDerivation {
 
   meta = with pkgs.lib; {
     homepage = "http://zincland.com/powder";
-    description =
-      "A graphical roguelike, originally designed for the Game Boy Advance";
+    description = "A graphical roguelike, originally designed for the Game Boy Advance";
     license = licenses.unfree;
     platforms = platforms.linux;
     maintainers = [ "mail@maximilian-huber.de" ];

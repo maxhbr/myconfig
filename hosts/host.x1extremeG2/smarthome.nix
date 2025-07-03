@@ -3,5 +3,7 @@
 { pkgs, ... }:
 
 {
-  config = { environment.systemPackages = with pkgs; [ hue-cli ]; };
+  config = {
+    environment.systemPackages = with pkgs; [ hue-cli ];
+  };
 }

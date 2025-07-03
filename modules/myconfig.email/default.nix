@@ -1,7 +1,14 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
-let cfg = config.myconfig;
-in {
+let
+  cfg = config.myconfig;
+in
+{
   options.myconfig = with lib; {
     email.enable = mkEnableOption "myconfig.email";
   };

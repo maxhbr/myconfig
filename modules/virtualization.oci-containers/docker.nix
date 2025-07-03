@@ -1,23 +1,37 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
-let enable = config.virtualisation.docker.enable;
-in {
+let
+  enable = config.virtualisation.docker.enable;
+in
+{
   config = {
-    home-manager.sharedModules = [{
-      home.packages = with pkgs; [ docker docker-compose ];
-      # home.file = {
-      #   "bin/docker" = {
-      #     source = ./bin;
-      #     recursive = true;
-      #   };
-      #   "dockerfiles" = {
-      #     source = ./bin;
-      #     recursive = true;
-      #   };
-      # };
-    }];
+    home-manager.sharedModules = [
+      {
+        home.packages = with pkgs; [
+          docker
+          docker-compose
+        ];
+        # home.file = {
+        #   "bin/docker" = {
+        #     source = ./bin;
+        #     recursive = true;
+        #   };
+        #   "dockerfiles" = {
+        #     source = ./bin;
+        #     recursive = true;
+        #   };
+        # };
+      }
+    ];
     environment = {
-      variables = { DOCKER_BUILDKIT = "1"; };
+      variables = {
+        DOCKER_BUILDKIT = "1";
+      };
       shellAliases = {
         d = "docker";
         dc = "docker-compose";
@@ -52,12 +66,11 @@ in {
 
     systemd.services.docker.restartIfChanged = lib.mkForce false;
     virtualisation.docker = {
-      daemon.settings = { ip = "127.0.0.1"; };
+      daemon.settings = {
+        ip = "127.0.0.1";
+      };
       extraOptions = "--data-root /home/docker";
-      storageDriver = if config.fileSystems."/".fsType == "btrfs" then
-        "btrfs"
-      else
-        "overlay2"; # 'overlay2' for systemd; 'btrfs' for btrfs ; etc.
+      storageDriver = if config.fileSystems."/".fsType == "btrfs" then "btrfs" else "overlay2"; # 'overlay2' for systemd; 'btrfs' for btrfs ; etc.
       # socketActivation = false;
       rootless = {
         enable = true;

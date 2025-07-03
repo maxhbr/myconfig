@@ -1,6 +1,7 @@
 { pkgs, config, ... }:
 let
-  streamcam = with pkgs;
+  streamcam =
+    with pkgs;
     writeShellScriptBin "streamcam" ''
       ${pkgs.mjpg-streamer}/bin/mjpg_streamer \
         -i "input_uvc.so \
@@ -10,19 +11,22 @@ let
           -r ''${2:-1280x720}" \
         -o "output_http.so -w /www -p 32145"
     '';
-in {
-  home-manager.sharedModules = [{
-    home.packages = with pkgs; [
-      gst_all_1.gstreamer
-      gst_all_1.gst-plugins-bad
-      gst_all_1.gst-plugins-base
-      gst_all_1.gst-plugins-good
-      gst_all_1.gst-plugins-ugly
-      gst_all_1.gst-rtsp-server
-      mjpg-streamer
-      streamcam
-    ];
-  }];
+in
+{
+  home-manager.sharedModules = [
+    {
+      home.packages = with pkgs; [
+        gst_all_1.gstreamer
+        gst_all_1.gst-plugins-bad
+        gst_all_1.gst-plugins-base
+        gst_all_1.gst-plugins-good
+        gst_all_1.gst-plugins-ugly
+        gst_all_1.gst-rtsp-server
+        mjpg-streamer
+        streamcam
+      ];
+    }
+  ];
 
   networking.firewall.allowedTCPPorts = [ 32145 ];
   networking.firewall.allowedUDPPorts = [ 32145 ];

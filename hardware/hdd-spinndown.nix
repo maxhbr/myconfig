@@ -1,6 +1,7 @@
 { pkgs, ... }:
 let
-  spindownAllHdds = with pkgs;
+  spindownAllHdds =
+    with pkgs;
     writeScriptBin "spindownAllHdds" ''
       rotHdds() {
         ${util-linux}/bin/lsblk -dnp -o name,rota |
@@ -13,11 +14,14 @@ let
         ${hdparm}/bin/hdparm -S 240 -B 127 $@
       fi
     '';
-in {
+in
+{
   config = {
     powerManagement.powerUpCommands = with pkgs; ''
       ${spindownAllHdds}/bin/spindownAllHdds
     '';
-    home-manager.users.mhuber = { home.packages = [ spindownAllHdds ]; };
+    home-manager.users.mhuber = {
+      home.packages = [ spindownAllHdds ];
+    };
   };
 }

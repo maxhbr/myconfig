@@ -1,6 +1,7 @@
 { pkgs, config, ... }:
 let
-  chrootPopOS = with pkgs;
+  chrootPopOS =
+    with pkgs;
     writeShellScriptBin "chrootPopOS" ''
       set -euo pipefail
       set -x
@@ -31,9 +32,9 @@ let
                PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin" \
                /bin/bash --login
     '';
-in {
+in
+{
   config = {
-    home-manager.sharedModules =
-      [{ home.packages = with pkgs; [ chrootPopOS ]; }];
+    home-manager.sharedModules = [ { home.packages = with pkgs; [ chrootPopOS ]; } ];
   };
 }

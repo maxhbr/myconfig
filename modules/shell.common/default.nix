@@ -1,22 +1,31 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, myconfig, ... }:
-let user = myconfig.user;
-in {
-  imports = [{
-    services.udisks2.enable = true;
-    environment.systemPackages = with pkgs; [
-      udisks2
-      # udiskie
-      bashmount
-    ];
-    environment = {
-      shellAliases = {
-        # mountall = "udiskie -a";
-        pmount = "udisksctl mount -b";
+{
+  pkgs,
+  config,
+  myconfig,
+  ...
+}:
+let
+  user = myconfig.user;
+in
+{
+  imports = [
+    {
+      services.udisks2.enable = true;
+      environment.systemPackages = with pkgs; [
+        udisks2
+        # udiskie
+        bashmount
+      ];
+      environment = {
+        shellAliases = {
+          # mountall = "udiskie -a";
+          pmount = "udisksctl mount -b";
+        };
       };
-    };
-  }];
+    }
+  ];
   config = {
     home-manager.users."${user}" = {
       home.file = {
@@ -80,8 +89,7 @@ in {
         tcpdump
         fuse
 
-        (writeScriptBin "myspeedtest.sh"
-          (builtins.readFile ./bin/myspeedtest.sh))
+        (writeScriptBin "myspeedtest.sh" (builtins.readFile ./bin/myspeedtest.sh))
         (writeScriptBin "startServer.py" ''
           #!${pkgs.python3}/bin/python
           import http.server

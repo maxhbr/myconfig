@@ -1,6 +1,11 @@
 # based on:
 # <nixpkgs/nixos/modules/installer/cd-dvd/sd-image-raspberrypi.nix>
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 {
   imports = [
@@ -29,8 +34,7 @@
     populateFirmwareCommands = ''
       ${config.system.build.installBootLoader} ${config.system.build.toplevel} -d ./firmware
     '';
-    populateRootCommands =
-      "touch files/touched"; # See: https://github.com/NixOS/nixpkgs/pull/93175
+    populateRootCommands = "touch files/touched"; # See: https://github.com/NixOS/nixpkgs/pull/93175
   };
 
   # boot.consoleLogLevel = lib.mkDefault 7;

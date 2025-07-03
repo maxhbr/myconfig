@@ -1,4 +1,10 @@
-{ config, pkgs, lib, ... }: {
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
+{
   config = {
     services = {
       prometheus = {
@@ -39,26 +45,29 @@
             firewallFilter = "-i br0 -p tcp -m tcp --dport 9100";
           };
         };
-        scrapeConfigs = [{
-          job_name = config.networking.hostName;
-          static_configs = [{
-            targets = [
-              "${config.services.prometheus.listenAddress}:${
-                toString config.services.prometheus.exporters.node.port
-              }"
+        scrapeConfigs = [
+          {
+            job_name = config.networking.hostName;
+            static_configs = [
+              {
+                targets = [
+                  "${config.services.prometheus.listenAddress}:${toString config.services.prometheus.exporters.node.port}"
+                ];
+              }
             ];
-          }];
-        }];
+          }
+        ];
       };
       grafana.provision = {
         enable = true;
-        datasources = [{
-          name = "prometheus";
-          type = "prometheus";
-          url =
-            "http://${config.services.prometheus.listenAddress}:9090/prometheus/";
-          isDefault = true;
-        }];
+        datasources = [
+          {
+            name = "prometheus";
+            type = "prometheus";
+            url = "http://${config.services.prometheus.listenAddress}:9090/prometheus/";
+            isDefault = true;
+          }
+        ];
       };
     };
   };

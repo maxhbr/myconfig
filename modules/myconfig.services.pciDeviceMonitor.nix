@@ -1,8 +1,15 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 with lib;
 
-let cfg = config.myconfig.services.pciDeviceMonitor;
-in {
+let
+  cfg = config.myconfig.services.pciDeviceMonitor;
+in
+{
   options.myconfig.services.pciDeviceMonitor = {
     enable = mkEnableOption "PCI device presence monitor service";
 
@@ -29,8 +36,7 @@ in {
     initialDelay = mkOption {
       type = types.int;
       default = 600;
-      description =
-        "Initial delay in seconds after boot before starting checks";
+      description = "Initial delay in seconds after boot before starting checks";
     };
   };
 

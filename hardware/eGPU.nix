@@ -1,16 +1,24 @@
-{ pkgs, config, inputs, ... }: {
+{
+  pkgs,
+  config,
+  inputs,
+  ...
+}:
+{
   imports = [
     ./RTX5090.nix
     # ./RX5500XT.nix
   ];
   config = {
-    home-manager.sharedModules = [{
-      home.packages = with pkgs; [
-        nvtopPackages.full
-        # oterm
-        pciutils
-      ];
-    }];
+    home-manager.sharedModules = [
+      {
+        home.packages = with pkgs; [
+          nvtopPackages.full
+          # oterm
+          pciutils
+        ];
+      }
+    ];
     # boot.kernelParams = [ "pcie_aspm=off" ];
 
     # services.tlp.settings = {
@@ -20,7 +28,7 @@
     # };
 
     # services.udev.extraRules = ''
-    #   ACTION=="add", SUBSYSTEM=="pci", 
+    #   ACTION=="add", SUBSYSTEM=="pci",
     #   ATTR{vendor}=="0x10de",  # NVIDIA vendor ID
     #   ATTR{power/control}="on"
     #   ACTION=="add", SUBSYSTEM=="pci",
@@ -29,4 +37,3 @@
     # '';
   };
 }
-

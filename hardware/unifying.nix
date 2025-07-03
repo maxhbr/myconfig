@@ -1,6 +1,11 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 {
-  home-manager.sharedModules = [{ home.packages = with pkgs; [ solaar ]; }];
+  home-manager.sharedModules = [ { home.packages = with pkgs; [ solaar ]; } ];
   hardware.logitech.wireless.enable = true;
 }

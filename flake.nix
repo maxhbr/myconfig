@@ -48,7 +48,8 @@
     myphoto.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, ... }@inputs:
+  outputs =
+    { self, nixpkgs, ... }@inputs:
     let
       inherit (inputs.nixpkgs) lib;
       nixpkgsConfig = {
@@ -57,276 +58,362 @@
         segger-jlink.acceptLicense = true;
         allowBroken = false;
       };
-    in lib.recursiveUpdate {
-      aggregatedInputs = inputs;
-      lib = import ./flake.lib.nix inputs;
+    in
+    lib.recursiveUpdate
+      {
+        aggregatedInputs = inputs;
+        lib = import ./flake.lib.nix inputs;
 
-      ##########################################################################
-      ## profiles and modules ##################################################
-      ##########################################################################
+        ##########################################################################
+        ## profiles and modules ##################################################
+        ##########################################################################
 
-      nixosModules = rec {
-        activateHomeManager = { config, lib, ... }: {
-          imports = [
-            # home manager:
-            inputs.home.nixosModules.home-manager
-          ];
-
-          config = {
-            home-manager = {
-              useUserPackages = true;
-              useGlobalPkgs = true;
-              backupFileExtension = let
-                rev = toString
-                  (self.shortRev or self.dirtyShortRev or self.lastModified or "unknown");
-              in "${rev}.homeManagerBackup";
-              sharedModules = [
-                ({ pkgs, ... }: {
-                  home.stateVersion =
-                    lib.mkDefault (config.system.stateVersion);
-                  home.packages = [
-                    pkgs.dconf
-                  ]; # see: https://github.com/nix-community/home-manager/issues/3113
-                })
+        nixosModules = rec {
+          activateHomeManager =
+            { config, lib, ... }:
+            {
+              imports = [
+                # home manager:
+                inputs.home.nixosModules.home-manager
               ];
-            };
-          };
-        };
-        readOnlyPkgs = {
-          imports = [ nixpkgs.nixosModules.readOnlyPkgs ];
-          nixpkgs.pkgs = nixpkgs.legacyPackages.x86_64-linux;
-        };
-        core = { ... }: {
-          imports = [
-            ({ pkgs, ... }: {
-              config.nixpkgs = {
-                overlays = let
-                  mkSubPkgsOverlay = targetName: input:
-                    (self: super: {
-                      "${targetName}" = super."${targetName}" or { }
-                        // import input {
-                          inherit (pkgs) system;
-                          config = pkgs.config // nixpkgsConfig;
-                        };
-                    });
-                in [
-                  (mkSubPkgsOverlay "master" inputs.master)
-                  (mkSubPkgsOverlay "nixos-unstable" inputs.nixos-unstable)
-                  (mkSubPkgsOverlay "nixos-unstable-small"
-                    inputs.ninos-unstable-small)
-                  (mkSubPkgsOverlay "nixos-2405" inputs.rel2405)
-                  (mkSubPkgsOverlay "nixos-2411" inputs.rel2411)
-                  (mkSubPkgsOverlay "stable" inputs.rel2411)
-                ];
-              };
-            })
-            ({ pkgs, ... }: {
-              # To use a version from a PR, use the following:    
-              ## 1. create an input with the following:
-              # pr275479.url =
-              #  "github:maxhbr/nixpkgs/freeplane-1_11_8"; # https://github.com/NixOS/nixpkgs/pull/275479
-              ## 2. add the input to the inputs list
-              # { input = "pr275479"; pkg = "freeplane"; }
-              nixpkgs.overlays = map ({ input, pkg }:
-                (_: _: {
-                  "${pkg}" = (import inputs."${input}" {
-                    inherit (pkgs) config system;
-                  })."${pkg}";
-                })) [ ];
-            })
-            ({ pkgs, ... }: {
-              nixpkgs.overlays = [
-                (_: _: {
-                  mybackup =
-                    pkgs.callPackage ../pkgs/mybackup { inherit pkgs; };
-                  my-wallpapers =
-                    inputs.my-wallpapers.defaultPackage.x86_64-linux;
-                })
-              ];
-            })
-            ({ pkgs, ... }: {
-              nixpkgs.overlays = [
-                inputs.nixgl.overlay # https://github.com/nix-community/nixGL
-              ];
-            })
-            inputs.my-wallpapers.nixosModule
 
-            ({ pkgs, config, ... }: {
               config = {
-                nix.settings = {
-                  trusted-public-keys = [
-                    "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+                home-manager = {
+                  useUserPackages = true;
+                  useGlobalPkgs = true;
+                  backupFileExtension =
+                    let
+                      rev = toString (self.shortRev or self.dirtyShortRev or self.lastModified or "unknown");
+                    in
+                    "${rev}.homeManagerBackup";
+                  sharedModules = [
+                    (
+                      { pkgs, ... }:
+                      {
+                        home.stateVersion = lib.mkDefault (config.system.stateVersion);
+                        home.packages = [
+                          pkgs.dconf
+                        ]; # see: https://github.com/nix-community/home-manager/issues/3113
+                      }
+                    )
                   ];
-                  substituters = [ "https://cache.nixos.org" ];
                 };
               };
-            })
-          ] ++ (map (n: "${./modules}/${n}")
-            (builtins.attrNames (builtins.readDir ./modules)));
-          config = {
-            hardware.enableRedistributableFirmware = true;
-            nixpkgs.overlays = [ inputs.nur.overlays.default ];
+            };
+          readOnlyPkgs = {
+            imports = [ nixpkgs.nixosModules.readOnlyPkgs ];
+            nixpkgs.pkgs = nixpkgs.legacyPackages.x86_64-linux;
           };
-        };
-      };
-
-      nixosConfigurationsGen = {
-        host-f13 = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "f13" ([
-            self.nixosModules.core
-            ({ pkgs, myconfig, ... }: {
-              imports = [ (myconfig.metadatalib.announceOtherHosts "f13") ];
-            })
-          ] ++ moreModules) metadataOverride);
-        host-p14 = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "p14" ([
-            self.nixosModules.core
-            ({ pkgs, myconfig, ... }: {
-              imports = [ (myconfig.metadatalib.announceOtherHosts "p14") ];
-              config = {
-                home-manager.sharedModules = [
-                  ({ config, ... }: {
-                    home.packages = [
-                      (pkgs.writeShellScriptBin "myconfig"
-                        (if config.programs.neovide.enable then
-                          "${config.programs.neovide.package}/bin/neovide ~/myconfig/myconfig &disown"
-                        else
-                          "$EDITOR  ~/myconfig/myconfig"))
+          core =
+            { ... }:
+            {
+              imports = [
+                (
+                  { pkgs, ... }:
+                  {
+                    config.nixpkgs = {
+                      overlays =
+                        let
+                          mkSubPkgsOverlay =
+                            targetName: input:
+                            (self: super: {
+                              "${targetName}" =
+                                super."${targetName}" or { }
+                                // import input {
+                                  inherit (pkgs) system;
+                                  config = pkgs.config // nixpkgsConfig;
+                                };
+                            });
+                        in
+                        [
+                          (mkSubPkgsOverlay "master" inputs.master)
+                          (mkSubPkgsOverlay "nixos-unstable" inputs.nixos-unstable)
+                          (mkSubPkgsOverlay "nixos-unstable-small" inputs.ninos-unstable-small)
+                          (mkSubPkgsOverlay "nixos-2405" inputs.rel2405)
+                          (mkSubPkgsOverlay "nixos-2411" inputs.rel2411)
+                          (mkSubPkgsOverlay "stable" inputs.rel2411)
+                        ];
+                    };
+                  }
+                )
+                (
+                  { pkgs, ... }:
+                  {
+                    # To use a version from a PR, use the following:
+                    ## 1. create an input with the following:
+                    # pr275479.url =
+                    #  "github:maxhbr/nixpkgs/freeplane-1_11_8"; # https://github.com/NixOS/nixpkgs/pull/275479
+                    ## 2. add the input to the inputs list
+                    # { input = "pr275479"; pkg = "freeplane"; }
+                    nixpkgs.overlays = map (
+                      { input, pkg }:
+                      (_: _: {
+                        "${pkg}" =
+                          (import inputs."${input}" {
+                            inherit (pkgs) config system;
+                          })."${pkg}";
+                      })
+                    ) [ ];
+                  }
+                )
+                (
+                  { pkgs, ... }:
+                  {
+                    nixpkgs.overlays = [
+                      (_: _: {
+                        mybackup = pkgs.callPackage ../pkgs/mybackup { inherit pkgs; };
+                        my-wallpapers = inputs.my-wallpapers.defaultPackage.x86_64-linux;
+                      })
                     ];
-                  })
-                ];
+                  }
+                )
+                (
+                  { pkgs, ... }:
+                  {
+                    nixpkgs.overlays = [
+                      inputs.nixgl.overlay # https://github.com/nix-community/nixGL
+                    ];
+                  }
+                )
+                inputs.my-wallpapers.nixosModule
+
+                (
+                  { pkgs, config, ... }:
+                  {
+                    config = {
+                      nix.settings = {
+                        trusted-public-keys = [
+                          "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+                        ];
+                        substituters = [ "https://cache.nixos.org" ];
+                      };
+                    };
+                  }
+                )
+              ] ++ (map (n: "${./modules}/${n}") (builtins.attrNames (builtins.readDir ./modules)));
+              config = {
+                hardware.enableRedistributableFirmware = true;
+                nixpkgs.overlays = [ inputs.nur.overlays.default ];
               };
-            })
-          ] ++ moreModules) metadataOverride);
-        host-brain = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "brain"
-            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
-        host-spare = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "spare"
-            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
-        host-x1extremeG2 = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" ([
-            { config = { hardware.enableRedistributableFirmware = true; }; }
-            self.nixosModules.core
-          ] ++ moreModules) metadataOverride);
-        host-workstation = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "workstation"
-            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
-        host-vserver = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "vserver"
-            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
-        host-nas = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "nas"
-            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
-        host-nuc = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "x86_64-linux" "nuc"
-            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
-        host-pi4 = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "aarch64-linux" "pi4"
-            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
-        host-pi3a = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "aarch64-linux" "pi3a"
-            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
-        host-r6c = moreModules: metadataOverride:
-          (self.lib.evalConfiguration "aarch64-linux" "r6c"
-            ([ self.nixosModules.core ] ++ moreModules) metadataOverride);
-      };
-
-      ##########################################################################
-      ## configurations ########################################################
-      ##########################################################################
-
-      nixosConfigurations = {
-        f13 = self.nixosConfigurationsGen.host-f13 [ ] { };
-        p14 = self.nixosConfigurationsGen.host-p14 [ ] { };
-        spare = self.nixosConfigurationsGen.host-spare [ ] { };
-        brain = self.nixosConfigurationsGen.host-brain [ ] { };
-        # x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [ ] { };
-        workstation = self.nixosConfigurationsGen.host-workstation [ ] { };
-        vserver = self.nixosConfigurationsGen.host-vserver [ ] { };
-        nas = self.nixosConfigurationsGen.host-nas [ ] { };
-        nuc = self.nixosConfigurationsGen.host-nuc [ ] { };
-        # pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
-        # pi3a = self.nixosConfigurationsGen.host-pi3a [ ] { };
-
-        # container = nixpkgs.lib.nixosSystem {
-        #   system = "x86_64-linux";
-        #   modules = [
-        #     self.nixosModules.activateHomeManager
-        #     self.nixosModules.readOnlyPkgs
-        #     # self.nixosModules.core
-        #     ({ pkgs, ... }: {
-        #       boot.isContainer = true;
-
-        #       # Let 'nixos-version --json' know about the Git revision
-        #       # of this flake.
-        #       system.configurationRevision =
-        #         nixpkgs.lib.mkIf (self ? rev) self.rev;
-
-        #       # Network configuration.
-        #       networking.useDHCP = false;
-        #       networking.firewall.allowedTCPPorts = [ 80 ];
-
-        #       # Enable a web server.
-        #       services.httpd = {
-        #         enable = true;
-        #         adminAddr = "morty@example.org";
-        #       };
-        #     })
-        #   ];
-        # };
-      };
-
-    } (let
-      eachDefaultSystem =
-        inputs.flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ];
-    in eachDefaultSystem (system: {
-      # might be overwritten in priv
-      packages = {
-        myconfig-iso = self.lib.mkISO {
-          inherit system;
-          hostName = "iso";
-          nixosModules = [ self.nixosModules.core ];
-          metadataOverride = { };
-          bootstrappedConfig = null;
+            };
         };
 
-        pi4-sd-image =
-          inputs.self.nixosConfigurations.pi4.config.system.build.sdImage;
-        pi3a-sd-image =
-          inputs.self.nixosConfigurations.pi3a.config.system.build.sdImage;
-      };
-
-      devShell = let
-        pkgs = import inputs.nixpkgs {
-          inherit system;
-          config = nixpkgsConfig;
+        nixosConfigurationsGen = {
+          host-f13 =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "x86_64-linux" "f13" (
+              [
+                self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "f13") ];
+                  }
+                )
+              ]
+              ++ moreModules
+            ) metadataOverride);
+          host-p14 =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "x86_64-linux" "p14" (
+              [
+                self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "p14") ];
+                    config = {
+                      home-manager.sharedModules = [
+                        (
+                          { config, ... }:
+                          {
+                            home.packages = [
+                              (pkgs.writeShellScriptBin "myconfig" (
+                                if config.programs.neovide.enable then
+                                  "${config.programs.neovide.package}/bin/neovide ~/myconfig/myconfig &disown"
+                                else
+                                  "$EDITOR  ~/myconfig/myconfig"
+                              ))
+                            ];
+                          }
+                        )
+                      ];
+                    };
+                  }
+                )
+              ]
+              ++ moreModules
+            ) metadataOverride);
+          host-brain =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "x86_64-linux" "brain" (
+              [ self.nixosModules.core ] ++ moreModules
+            ) metadataOverride);
+          host-spare =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "x86_64-linux" "spare" (
+              [ self.nixosModules.core ] ++ moreModules
+            ) metadataOverride);
+          host-x1extremeG2 =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "x86_64-linux" "x1extremeG2" (
+              [
+                {
+                  config = {
+                    hardware.enableRedistributableFirmware = true;
+                  };
+                }
+                self.nixosModules.core
+              ]
+              ++ moreModules
+            ) metadataOverride);
+          host-workstation =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "x86_64-linux" "workstation" (
+              [ self.nixosModules.core ] ++ moreModules
+            ) metadataOverride);
+          host-vserver =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "x86_64-linux" "vserver" (
+              [ self.nixosModules.core ] ++ moreModules
+            ) metadataOverride);
+          host-nas =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "x86_64-linux" "nas" (
+              [ self.nixosModules.core ] ++ moreModules
+            ) metadataOverride);
+          host-nuc =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "x86_64-linux" "nuc" (
+              [ self.nixosModules.core ] ++ moreModules
+            ) metadataOverride);
+          host-pi4 =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "aarch64-linux" "pi4" (
+              [ self.nixosModules.core ] ++ moreModules
+            ) metadataOverride);
+          host-pi3a =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "aarch64-linux" "pi3a" (
+              [ self.nixosModules.core ] ++ moreModules
+            ) metadataOverride);
+          host-r6c =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "aarch64-linux" "r6c" (
+              [ self.nixosModules.core ] ++ moreModules
+            ) metadataOverride);
         };
-      in pkgs.mkShell {
-        nativeBuildInputs = with pkgs; [ git git-crypt git-secrets nixfmt age ];
 
-        NIX_CONF_DIR = with pkgs;
-          let
-            nixConf = ''
-              ${pkgs.lib.optionalString (builtins.pathExists /etc/nix/nix.conf)
-              (builtins.readFile /etc/nix/nix.conf)}
-              experimental-features = nix-command flakes ca-references
-            '';
-            # access-tokens = "github.com=${secrets.git.github.oauth-token}"
-          in linkFarm "nix-conf-dir" ([
-            {
-              name = "nix.conf";
-              path = writeText "flakes-nix.conf" nixConf;
-            }
-            {
-              name = "registry.json";
-              path = /etc/nix/registry.json;
-            }
-            {
-              name = "machines";
-              path = /etc/nix/machines;
-            }
-          ]);
-      };
-    }));
+        ##########################################################################
+        ## configurations ########################################################
+        ##########################################################################
+
+        nixosConfigurations = {
+          f13 = self.nixosConfigurationsGen.host-f13 [ ] { };
+          p14 = self.nixosConfigurationsGen.host-p14 [ ] { };
+          spare = self.nixosConfigurationsGen.host-spare [ ] { };
+          brain = self.nixosConfigurationsGen.host-brain [ ] { };
+          # x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [ ] { };
+          workstation = self.nixosConfigurationsGen.host-workstation [ ] { };
+          vserver = self.nixosConfigurationsGen.host-vserver [ ] { };
+          nas = self.nixosConfigurationsGen.host-nas [ ] { };
+          nuc = self.nixosConfigurationsGen.host-nuc [ ] { };
+          # pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
+          # pi3a = self.nixosConfigurationsGen.host-pi3a [ ] { };
+
+          # container = nixpkgs.lib.nixosSystem {
+          #   system = "x86_64-linux";
+          #   modules = [
+          #     self.nixosModules.activateHomeManager
+          #     self.nixosModules.readOnlyPkgs
+          #     # self.nixosModules.core
+          #     ({ pkgs, ... }: {
+          #       boot.isContainer = true;
+
+          #       # Let 'nixos-version --json' know about the Git revision
+          #       # of this flake.
+          #       system.configurationRevision =
+          #         nixpkgs.lib.mkIf (self ? rev) self.rev;
+
+          #       # Network configuration.
+          #       networking.useDHCP = false;
+          #       networking.firewall.allowedTCPPorts = [ 80 ];
+
+          #       # Enable a web server.
+          #       services.httpd = {
+          #         enable = true;
+          #         adminAddr = "morty@example.org";
+          #       };
+          #     })
+          #   ];
+          # };
+        };
+
+      }
+      (
+        let
+          eachDefaultSystem = inputs.flake-utils.lib.eachSystem [
+            "x86_64-linux"
+            "aarch64-linux"
+          ];
+        in
+        eachDefaultSystem (system: {
+          # might be overwritten in priv
+          packages = {
+            myconfig-iso = self.lib.mkISO {
+              inherit system;
+              hostName = "iso";
+              nixosModules = [ self.nixosModules.core ];
+              metadataOverride = { };
+              bootstrappedConfig = null;
+            };
+
+            pi4-sd-image = inputs.self.nixosConfigurations.pi4.config.system.build.sdImage;
+            pi3a-sd-image = inputs.self.nixosConfigurations.pi3a.config.system.build.sdImage;
+          };
+
+          devShell =
+            let
+              pkgs = import inputs.nixpkgs {
+                inherit system;
+                config = nixpkgsConfig;
+              };
+            in
+            pkgs.mkShell {
+              nativeBuildInputs = with pkgs; [
+                git
+                git-crypt
+                git-secrets
+                nixfmt
+                age
+              ];
+
+              NIX_CONF_DIR =
+                with pkgs;
+                let
+                  nixConf = ''
+                    ${pkgs.lib.optionalString (builtins.pathExists /etc/nix/nix.conf) (
+                      builtins.readFile /etc/nix/nix.conf
+                    )}
+                    experimental-features = nix-command flakes ca-references
+                  '';
+                  # access-tokens = "github.com=${secrets.git.github.oauth-token}"
+                in
+                linkFarm "nix-conf-dir" ([
+                  {
+                    name = "nix.conf";
+                    path = writeText "flakes-nix.conf" nixConf;
+                  }
+                  {
+                    name = "registry.json";
+                    path = /etc/nix/registry.json;
+                  }
+                  {
+                    name = "machines";
+                    path = /etc/nix/machines;
+                  }
+                ]);
+            };
+        })
+      );
 }

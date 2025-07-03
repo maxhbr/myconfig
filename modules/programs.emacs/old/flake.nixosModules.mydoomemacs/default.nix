@@ -1,30 +1,47 @@
-{ inputs, pkgs, config, lib, ... }:
+{
+  inputs,
+  pkgs,
+  config,
+  lib,
+  ...
+}:
 let
   cfg = config.myconfig;
-  doomPrivateDir = let
-    doomPrivateDeriv = pkgs.stdenv.mkDerivation rec {
-      name = "doomPrivateDeriv-1.0";
-      src = ./doom.d;
-      installPhase = ''
-        mkdir -p "$out"
-        cp -r * "$out"
-      '';
-    };
-  in "${doomPrivateDeriv}";
-in {
+  doomPrivateDir =
+    let
+      doomPrivateDeriv = pkgs.stdenv.mkDerivation rec {
+        name = "doomPrivateDeriv-1.0";
+        src = ./doom.d;
+        installPhase = ''
+          mkdir -p "$out"
+          cp -r * "$out"
+        '';
+      };
+    in
+    "${doomPrivateDeriv}";
+in
+{
   imports = [
-    ({ ... }: {
-      nixpkgs.overlays = [ inputs.emacs.overlay ];
-      home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
-    })
+    (
+      { ... }:
+      {
+        nixpkgs.overlays = [ inputs.emacs.overlay ];
+        home-manager.sharedModules = [ inputs.nix-doom-emacs.hmModule ];
+      }
+    )
   ];
   options.myconfig = with lib; {
     editor.emacs.enable = mkEnableOption "emacs";
   };
   config = lib.mkIf config.myconfig.editor.emacs.enable {
-    environment = { variables = { EDITOR = "emacs -nw"; }; };
+    environment = {
+      variables = {
+        EDITOR = "emacs -nw";
+      };
+    };
     home-manager.sharedModules = [
-      ({ config, ... }:
+      (
+        { config, ... }:
         let
           xclipedit = pkgs.writeShellScriptBin "xclipedit" ''
             set -euo pipefail
@@ -38,7 +55,8 @@ in {
             $EDITOR "$tempfile"
             ${pkgs.xclip}/bin/xclip < "$tempfile"
           '';
-        in {
+        in
+        {
           programs.doom-emacs = {
             enable = true;
             inherit doomPrivateDir;
@@ -59,7 +77,8 @@ in {
               recursive = true;
             };
           };
-        })
+        }
+      )
     ];
   };
 }

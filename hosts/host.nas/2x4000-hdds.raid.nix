@@ -26,11 +26,21 @@
     fileSystems."/mnt/.2x4t-1" = {
       device = "/dev/mapper/2x4t-1";
       fsType = "btrfs";
-      options = [ "defaults" "noatime" "compress=zstd" "subvol=@sub" "nofail" ];
+      options = [
+        "defaults"
+        "noatime"
+        "compress=zstd"
+        "subvol=@sub"
+        "nofail"
+      ];
     };
 
     services.snapper = {
-      configs = { "2x4t" = { SUBVOLUME = "/mnt/2x4t"; }; };
+      configs = {
+        "2x4t" = {
+          SUBVOLUME = "/mnt/2x4t";
+        };
+      };
     };
 
     services.nfs.server = {
@@ -44,20 +54,39 @@
       statdPort = 4000;
       lockdPort = 4001;
     };
-    networking.firewall.allowedTCPPorts = [ 2049 111 4000 4001 ];
-    networking.firewall.allowedUDPPorts = [ 2049 111 4000 4001 ];
+    networking.firewall.allowedTCPPorts = [
+      2049
+      111
+      4000
+      4001
+    ];
+    networking.firewall.allowedUDPPorts = [
+      2049
+      111
+      4000
+      4001
+    ];
 
     fileSystems."/export/data" = {
       device = "/mnt/2x4t/lvm-data";
-      options = [ "bind" "x-systemd.requires-mounts-for=/mnt/2x4t" ];
+      options = [
+        "bind"
+        "x-systemd.requires-mounts-for=/mnt/2x4t"
+      ];
     };
     fileSystems."/export/guest" = {
       device = "/mnt/2x4t/lvm-guest";
-      options = [ "bind" "x-systemd.requires-mounts-for=/mnt/2x4t" ];
+      options = [
+        "bind"
+        "x-systemd.requires-mounts-for=/mnt/2x4t"
+      ];
     };
     fileSystems."/export/bilder" = {
       device = "/mnt/2x4t/lvm-bilder";
-      options = [ "bind" "x-systemd.requires-mounts-for=/mnt/2x4t" ];
+      options = [
+        "bind"
+        "x-systemd.requires-mounts-for=/mnt/2x4t"
+      ];
     };
   };
 }

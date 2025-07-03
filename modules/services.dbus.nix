@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 # https://nixos.wiki/wiki/Sway
 # https://www.reddit.com/r/NixOS/comments/s9ytrg/comment/htr06n8/
@@ -22,16 +27,10 @@ let
     systemctl-update() (
       set -x
       systemctl --user stop pipewire ${
-        if config.services.pipewire.wireplumber.enable then
-          "wireplumber"
-        else
-          "pipewire-media-session"
+        if config.services.pipewire.wireplumber.enable then "wireplumber" else "pipewire-media-session"
       } xdg-desktop-portal xdg-desktop-portal-wlr
       systemctl --user start pipewire ${
-        if config.services.pipewire.wireplumber.enable then
-          "wireplumber"
-        else
-          "pipewire-media-session"
+        if config.services.pipewire.wireplumber.enable then "wireplumber" else "pipewire-media-session"
       } xdg-desktop-portal xdg-desktop-portal-wlr
     )
 
@@ -52,10 +51,10 @@ let
     fi
   '';
 
-in {
+in
+{
   config = lib.mkIf config.services.dbus.enable {
-    home-manager.sharedModules =
-      [{ home.packages = with pkgs; [ dbus-wm-environment ]; }];
+    home-manager.sharedModules = [ { home.packages = with pkgs; [ dbus-wm-environment ]; } ];
 
     environment.etc = lib.mkIf config.programs.sway.enable {
       # overwrite the nixos.conf from https://github.com/NixOS/nixpkgs/blob/4ae405c83424f18b360dc9794f6300ab243f61e2/nixos/modules/programs/sway.nix#L129-L133
@@ -85,22 +84,28 @@ in {
       # portal implementation found in lexicographical order, use the following:
       #
       # xdg.portal.config.common.default = "*";
-      config = { common = { default = "wlr"; }; };
-      wlr.enable = true;
-      wlr.settings.screencast =
-        lib.mkIf config.myconfig.desktop.wayland.enable {
-          output_name = "eDP-1";
-          max_fps = 30;
-          chooser_type = "simple";
-          chooser_cmd = "${pkgs.slurp}/bin/slurp -f %o -or";
+      config = {
+        common = {
+          default = "wlr";
         };
-      extraPortals = let
-        gnome = config.services.desktopManager.gnome.enable;
-        kde = config.services.desktopManager.plasma6.enable
-          || config.services.xserver.desktopManager.plasma5.enable;
-      in [ pkgs.xdg-desktop-portal-wlr ]
-      ++ lib.optional kde pkgs.kdePackages.xdg-desktop-portal-kde
-      ++ lib.optional gnome pkgs.xdg-desktop-portal-gtk;
+      };
+      wlr.enable = true;
+      wlr.settings.screencast = lib.mkIf config.myconfig.desktop.wayland.enable {
+        output_name = "eDP-1";
+        max_fps = 30;
+        chooser_type = "simple";
+        chooser_cmd = "${pkgs.slurp}/bin/slurp -f %o -or";
+      };
+      extraPortals =
+        let
+          gnome = config.services.desktopManager.gnome.enable;
+          kde =
+            config.services.desktopManager.plasma6.enable
+            || config.services.xserver.desktopManager.plasma5.enable;
+        in
+        [ pkgs.xdg-desktop-portal-wlr ]
+        ++ lib.optional kde pkgs.kdePackages.xdg-desktop-portal-kde
+        ++ lib.optional gnome pkgs.xdg-desktop-portal-gtk;
     };
   };
 }

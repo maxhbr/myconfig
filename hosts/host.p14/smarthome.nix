@@ -3,5 +3,7 @@
 { pkgs, ... }:
 
 {
-  config = { environment.systemPackages = with pkgs; [ hueadm ]; };
+  config = {
+    environment.systemPackages = with pkgs; [ hueadm ];
+  };
 }

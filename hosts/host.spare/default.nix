@@ -1,6 +1,14 @@
 # Copyright 2016-2017 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, inputs, ... }: {
+{
+  config,
+  pkgs,
+  lib,
+  myconfig,
+  inputs,
+  ...
+}:
+{
   imports = [
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-pc-laptop
@@ -11,8 +19,9 @@
     ./ai.spare.nix
     ../host.f13/role.work
     ../host.workstation/gaming/games.steam
-    (myconfig.metadatalib.setupAsBuildMachine
-      [ myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub" ])
+    (myconfig.metadatalib.setupAsBuildMachine [
+      myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
+    ])
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
     {
       # programs.mosh.enable = lib.mkDefault true;
@@ -92,7 +101,9 @@
     virtualisation = {
       docker.enable = true;
       podman.enable = true;
-      oci-containers = { backend = "podman"; };
+      oci-containers = {
+        backend = "podman";
+      };
       # virtualbox.host.enable = true;
       # lxc.enable = true;
       libvirtd.enable = true;
@@ -105,12 +116,14 @@
     '';
     services.gnome.gnome-keyring.enable = true;
 
-    home-manager.sharedModules = [{
-      services.mako = {
-        output = "eDP-1";
-        defaultTimeout = lib.mkForce 20000;
-      };
-    }];
+    home-manager.sharedModules = [
+      {
+        services.mako = {
+          output = "eDP-1";
+          defaultTimeout = lib.mkForce 20000;
+        };
+      }
+    ];
 
     boot = {
       loader = {

@@ -3,9 +3,16 @@
 let
   cfg = config.myconfig;
   hasWayland = cfg.desktop.wayland.enable;
-in {
+in
+{
   home-manager.sharedModules = [
-    ({ config, lib, pkgs, ... }:
+    (
+      {
+        config,
+        lib,
+        pkgs,
+        ...
+      }:
       let
         awatcher = pkgs.rustPlatform.buildRustPackage rec {
           pname = "awatcher";
@@ -15,8 +22,7 @@ in {
           cargoLock = {
             lockFile = "${inputs.awatcher-src}/Cargo.lock";
             outputHashes = {
-              "aw-client-rust-0.1.0" =
-                "sha256-fCjVfmjrwMSa8MFgnC8n5jPzdaqSmNNdMRaYHNbs8Bo=";
+              "aw-client-rust-0.1.0" = "sha256-fCjVfmjrwMSa8MFgnC8n5jPzdaqSmNNdMRaYHNbs8Bo=";
             };
           };
 
@@ -24,7 +30,8 @@ in {
 
           buildInputs = [ pkgs.openssl ];
         };
-      in {
+      in
+      {
         config = lib.mkMerge [
           (lib.mkIf config.services.activitywatch.enable {
             services.activitywatch = {
@@ -33,6 +40,7 @@ in {
             };
           })
         ];
-      })
+      }
+    )
   ];
 }

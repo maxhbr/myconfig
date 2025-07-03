@@ -1,6 +1,12 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, myconfig, ... }: {
+{
+  pkgs,
+  config,
+  myconfig,
+  ...
+}:
+{
   config = {
     home-manager.sharedModules = [
       {
@@ -14,7 +20,9 @@
             U = "!du -chs *|sort -h|less";
             # gg = null;
           };
-          cmdKeybindings = { "<c-g>" = "cmd-escape"; };
+          cmdKeybindings = {
+            "<c-g>" = "cmd-escape";
+          };
           previewer = {
             source = pkgs.writeShellScript "pv.sh" ''
               #!/bin/sh

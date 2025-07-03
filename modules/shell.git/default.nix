@@ -3,7 +3,8 @@
 #
 # TODO: package scripts
 #
-{ config, pkgs, ... }: {
+{ config, pkgs, ... }:
+{
   config = {
     environment = {
       shellAliases = {
@@ -15,34 +16,41 @@
         tu = "tig HEAD @{upstream}";
       };
     };
-    home-manager.sharedModules = [{
-      home.packages = with pkgs;
-        [ github-cli ] ++ (with pkgs.gitAndTools; [
-          tig
-          pkgs.git-lfs
-          git-fame
-          git-gone
-          git-absorb
-          git-crypt
-          git-secrets
-        ]);
-      home.file = { ".gitconfig".source = ./gitconfig; };
-      programs.git = {
-        package = pkgs.gitAndTools.gitFull;
-        enable = true;
-        signing = {
-          key = null;
-          signByDefault = true;
-          format =
-            if config.programs.gnupg.agent.enable then "openpgp" else "ssh";
+    home-manager.sharedModules = [
+      {
+        home.packages =
+          with pkgs;
+          [ github-cli ]
+          ++ (with pkgs.gitAndTools; [
+            tig
+            pkgs.git-lfs
+            git-fame
+            git-gone
+            git-absorb
+            git-crypt
+            git-secrets
+          ]);
+        home.file = {
+          ".gitconfig".source = ./gitconfig;
         };
-      };
-      programs.fish = {
-        shellAbbrs = { g = "git"; };
-        functions = {
-          gitignore = "curl -sL https://www.gitignore.io/api/$argv";
+        programs.git = {
+          package = pkgs.gitAndTools.gitFull;
+          enable = true;
+          signing = {
+            key = null;
+            signByDefault = true;
+            format = if config.programs.gnupg.agent.enable then "openpgp" else "ssh";
+          };
         };
-      };
-    }];
+        programs.fish = {
+          shellAbbrs = {
+            g = "git";
+          };
+          functions = {
+            gitignore = "curl -sL https://www.gitignore.io/api/$argv";
+          };
+        };
+      }
+    ];
   };
 }

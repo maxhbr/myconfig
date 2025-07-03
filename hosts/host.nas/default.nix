@@ -1,13 +1,23 @@
 # Copyright 2019 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ pkgs, config, lib, myconfig, ... }: {
+{
+  pkgs,
+  config,
+  lib,
+  myconfig,
+  ...
+}:
+{
   imports = [
     # hardware:
     ./hardware-configuration.nix
     ../../hardware/efi.nix
     ../../hardware/hdd-spinndown.nix
     {
-      boot.initrd.supportedFilesystems = [ "btrfs" "luks" ];
+      boot.initrd.supportedFilesystems = [
+        "btrfs"
+        "luks"
+      ];
 
       services.btrfs.autoScrub = {
         enable = true;
@@ -36,7 +46,8 @@
     # ./service.grafana
     # ./service.pi-hole.nix
 
-    { # nginx
+    {
+      # nginx
       config = {
         services = {
           nginx = {
@@ -49,14 +60,22 @@
               addSSL = true;
               sslCertificate = "/etc/tls/nginx.crt";
               sslCertificateKey = "/etc/tls/nginx.key";
-              listen = map (addr: {
-                inherit addr;
-                port = 443;
-                ssl = true;
-              }) (lib.unique ([
-                config.networking.hostName
-                # (with (import ../lib.nix); (getSecretNoNewline "nas" "ip"))
-              ] ++ config.services.nextcloud.config.extraTrustedDomains));
+              listen =
+                map
+                  (addr: {
+                    inherit addr;
+                    port = 443;
+                    ssl = true;
+                  })
+                  (
+                    lib.unique (
+                      [
+                        config.networking.hostName
+                        # (with (import ../lib.nix); (getSecretNoNewline "nas" "ip"))
+                      ]
+                      ++ config.services.nextcloud.config.extraTrustedDomains
+                    )
+                  );
             };
           };
         };
@@ -122,10 +141,14 @@
     #   };
 
     # }
-    (myconfig.metadatalib.setupNixServe [ "workstation" "vserver" ])
+    (myconfig.metadatalib.setupNixServe [
+      "workstation"
+      "vserver"
+    ])
     {
-      nix.settings.trusted-substituters =
-        [ ("ssh://nix-ssh@" + myconfig.metadatalib.get.hosts.workstation.ip4) ];
+      nix.settings.trusted-substituters = [
+        ("ssh://nix-ssh@" + myconfig.metadatalib.get.hosts.workstation.ip4)
+      ];
     }
     (myconfig.metadatalib.setupAsBackupTarget "/mnt/2x4t/backup" [
       "x1extremeG2"
@@ -133,8 +156,7 @@
     ])
     (myconfig.metadatalib.fixIp "enp3s0")
     {
-      system.activationScripts.mkTlsDir =
-        "mkdir -p /etc/tls && chmod 777 /etc/tls";
+      system.activationScripts.mkTlsDir = "mkdir -p /etc/tls && chmod 777 /etc/tls";
     }
   ];
   config = {

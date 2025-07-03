@@ -1,6 +1,13 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, inputs, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  myconfig,
+  inputs,
+  ...
+}:
 let
   ai-tmux-session = "ai";
   ai-tmux-session-script = pkgs.writeShellScriptBin "ai-tmux-session" ''
@@ -16,7 +23,8 @@ let
     fi
     exec tmux attach-session -t ${ai-tmux-session}
   '';
-in {
+in
+{
   imports = [ ];
 
   config = {
@@ -27,8 +35,12 @@ in {
       ai = {
         enable = true;
         container = {
-          nlm-ingestor = { enable = false; };
-          open-webui = { enable = true; };
+          nlm-ingestor = {
+            enable = false;
+          };
+          open-webui = {
+            enable = true;
+          };
         };
       };
     };
@@ -61,7 +73,6 @@ in {
       acceleration = "cuda";
       model = "TabbyML/Qwen2.5-Coder-14B";
     };
-    home-manager.sharedModules =
-      [{ home.packages = [ ai-tmux-session-script ]; }];
+    home-manager.sharedModules = [ { home.packages = [ ai-tmux-session-script ]; } ];
   };
 }

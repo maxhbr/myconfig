@@ -1,4 +1,10 @@
-{ pkgs, config, lib, myconfig, ... }:
+{
+  pkgs,
+  config,
+  lib,
+  myconfig,
+  ...
+}:
 let
   cfg = config.myconfig;
   user = myconfig.user;
@@ -7,82 +13,94 @@ let
   cmd0 = cmd_for_session (lib.elemAt selectedSessions 0);
   sessionStarters = pkgs.symlinkJoin {
     name = "sessionStartes";
-    paths = let
-      fun = session:
-        pkgs.writeShellScriptBin "start-${session}-session"
-        (cmd_for_session session);
-    in builtins.map fun selectedSessions;
+    paths =
+      let
+        fun = session: pkgs.writeShellScriptBin "start-${session}-session" (cmd_for_session session);
+      in
+      builtins.map fun selectedSessions;
   };
-in {
+in
+{
   imports = [
     (lib.mkIf config.services.greetd.enable {
-      home-manager.sharedModules = [{
-        home.packages = with pkgs;
-          [
-            (writeShellScriptBin "regreet"
-              "sudo systemctl restart greetd.service")
+      home-manager.sharedModules = [
+        {
+          home.packages = with pkgs; [
+            (writeShellScriptBin "regreet" "sudo systemctl restart greetd.service")
           ];
-      }];
-      services.greetd = let
-        tuigreetSettings = {
-          default_session = {
-            command =
-              "${pkgs.greetd.tuigreet}/bin/tuigreet --width 120 --remember --remember-session --sessions /etc/greetd/wayland-sessions/ --time --cmd '${cmd0}'";
-            user = "greeter";
+        }
+      ];
+      services.greetd =
+        let
+          tuigreetSettings = {
+            default_session = {
+              command = "${pkgs.greetd.tuigreet}/bin/tuigreet --width 120 --remember --remember-session --sessions /etc/greetd/wayland-sessions/ --time --cmd '${cmd0}'";
+              user = "greeter";
+            };
           };
-        };
-        cageGtkgreetSettings = {
-          default_session.command =
-            "${pkgs.cage}/bin/cage -s  -- ${pkgs.greetd.gtkgreet}/bin/gtkgreet -l";
-          initial_session = {
-            command = cmd0;
-            user = "greeter";
+          cageGtkgreetSettings = {
+            default_session.command = "${pkgs.cage}/bin/cage -s  -- ${pkgs.greetd.gtkgreet}/bin/gtkgreet -l";
+            initial_session = {
+              command = cmd0;
+              user = "greeter";
+            };
           };
-        };
-        directLaunchSettings = rec {
-          initial_session = {
-            command = cmd0;
-            user = user;
+          directLaunchSettings = rec {
+            initial_session = {
+              command = cmd0;
+              user = user;
+            };
+            default_session = initial_session;
           };
-          default_session = initial_session;
+        in
+        {
+          settings =
+            if cfg.desktop.wayland.directLoginFirstSession then
+              directLaunchSettings
+            else if cfg.desktop.wayland.selectedGreeter == "gtkgreet" then
+              cageGtkgreetSettings
+            else if cfg.desktop.wayland.selectedGreeter == "tuigreet" then
+              tuigreetSettings
+            else
+              abort "selectedGreeter is invalid";
         };
-      in {
-        settings = if cfg.desktop.wayland.directLoginFirstSession then
-          directLaunchSettings
-        else if cfg.desktop.wayland.selectedGreeter == "gtkgreet" then
-          cageGtkgreetSettings
-        else if cfg.desktop.wayland.selectedGreeter == "tuigreet" then
-          tuigreetSettings
-        else
-          abort "selectedGreeter is invalid";
-      };
     })
   ];
-  config = (lib.mkIf (cfg.desktop.wayland.enable && selectedSessions != [ ]) {
-    home-manager.sharedModules =
-      [{ home.packages = with pkgs; [ sessionStarters ]; }];
+  config = (
+    lib.mkIf (cfg.desktop.wayland.enable && selectedSessions != [ ]) {
+      home-manager.sharedModules = [ { home.packages = with pkgs; [ sessionStarters ]; } ];
 
-    services.greetd = { enable = true; };
-
-    environment.etc = {
-      "greetd/environments".text = lib.foldr (session: str:
-        ''
-          start-${session}-session
-        '' + str) "fish" selectedSessions;
-    } // (let
-      fun = session: {
-        name = "greetd/wayland-sessions/${session}.desktop";
-        value = {
-          text = ''
-            [Desktop Entry]
-            Name=${session}
-            Comment=${session}
-            Exec=${cmd_for_session session}
-            Type=Application
-          '';
-        };
+      services.greetd = {
+        enable = true;
       };
-    in builtins.listToAttrs (builtins.map fun selectedSessions));
-  });
-}
 
+      environment.etc =
+        {
+          "greetd/environments".text = lib.foldr (
+            session: str:
+            ''
+              start-${session}-session
+            ''
+            + str
+          ) "fish" selectedSessions;
+        }
+        // (
+          let
+            fun = session: {
+              name = "greetd/wayland-sessions/${session}.desktop";
+              value = {
+                text = ''
+                  [Desktop Entry]
+                  Name=${session}
+                  Comment=${session}
+                  Exec=${cmd_for_session session}
+                  Type=Application
+                '';
+              };
+            };
+          in
+          builtins.listToAttrs (builtins.map fun selectedSessions)
+        );
+    }
+  );
+}

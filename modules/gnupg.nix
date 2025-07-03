@@ -1,4 +1,10 @@
-{ config, pkgs, lib, ... }: {
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
+{
   config = lib.mkIf config.programs.gnupg.agent.enable {
     programs.gnupg.agent = {
       enableSSHSupport = !config.programs.ssh.startAgent;
@@ -8,6 +14,8 @@
       # else
       #   pkgs.pinentry-curses;
     };
-    environment = { systemPackages = with pkgs; [ gnupg ]; };
+    environment = {
+      systemPackages = with pkgs; [ gnupg ];
+    };
   };
 }

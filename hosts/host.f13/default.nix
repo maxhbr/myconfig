@@ -1,6 +1,14 @@
 # Copyright 2016-2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, lib, myconfig, inputs, ... }: {
+{
+  config,
+  pkgs,
+  lib,
+  myconfig,
+  inputs,
+  ...
+}:
+{
   imports = [
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-pc-laptop
@@ -16,8 +24,7 @@
       services.openssh = {
         listenAddresses = [
           {
-            addr =
-              (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
+            addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
             port = 22;
           }
           {
@@ -137,10 +144,18 @@
     home-manager.sharedModules = [
       {
         home.packages = with pkgs.master; [ joplin-desktop ];
-        myconfig.persistence.directories =
-          [ ".config/Joplin" ".config/joplin-desktop" ];
+        myconfig.persistence.directories = [
+          ".config/Joplin"
+          ".config/joplin-desktop"
+        ];
       }
-      { services.mako = { settings = { output = "eDP-1"; }; }; }
+      {
+        services.mako = {
+          settings = {
+            output = "eDP-1";
+          };
+        };
+      }
       {
         home.packages = with pkgs.helper; [
           (connectBtDevice {
@@ -169,7 +184,10 @@
         efi.canTouchEfiVariables = true;
       };
 
-      binfmt.emulatedSystems = [ "aarch64-linux" "armv6l-linux" ];
+      binfmt.emulatedSystems = [
+        "aarch64-linux"
+        "armv6l-linux"
+      ];
       kernelPackages = lib.mkForce pkgs.linuxPackages_latest;
       initrd = {
         supportedFilesystems = [ "nfs" ];

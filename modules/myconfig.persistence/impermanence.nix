@@ -1,4 +1,11 @@
-{ pkgs, config, lib, myconfig, inputs, ... }:
+{
+  pkgs,
+  config,
+  lib,
+  myconfig,
+  inputs,
+  ...
+}:
 let
   user = myconfig.user;
   persistentDir = "/persistent";
@@ -12,14 +19,15 @@ let
   volumeWork = "@persistent_work";
   volumeCache = "@persistent_cache";
 
-  validateDevice = device:
+  validateDevice =
+    device:
     if lib.isString device && lib.hasPrefix "/dev/" device then
       device
     else
-      throw
-      "Invalid device: '${device}' (must be a string and start with '/dev/')";
+      throw "Invalid device: '${device}' (must be a string and start with '/dev/')";
 
-  validatePaths = paths:
+  validatePaths =
+    paths:
     let
       sortedPaths = lib.sort (a: b: lib.hasPrefix a b) paths;
 
@@ -27,7 +35,8 @@ let
       isPrefix = a: b: a != b && lib.hasPrefix a b;
 
       # Check each path against all following paths in the sorted list
-      checkPrefixes = path: rest:
+      checkPrefixes =
+        path: rest:
         if rest == [ ] then
           true
         else if isPrefix path (lib.head rest) then
@@ -36,131 +45,150 @@ let
           checkPrefixes path (lib.tail rest);
 
       # check that path does not start with / or ~
-      isRelativePath = path:
+      isRelativePath =
+        path:
         if lib.hasPrefix "/" path || lib.hasPrefix "~" path then
           throw "Invalid path: '${path}' must be a relative path"
         else
           true;
 
       # Validate all paths
-      validate = paths:
+      validate =
+        paths:
         if paths == [ ] then
           true
         else
           checkPrefixes (lib.head paths) (lib.tail paths)
-          && isRelativePath (lib.head paths) && validate (lib.tail paths);
-    in if validate sortedPaths then paths else throw "Path validation failed";
+          && isRelativePath (lib.head paths)
+          && validate (lib.tail paths);
+    in
+    if validate sortedPaths then paths else throw "Path validation failed";
 
-in {
-  imports = [ 
+in
+{
+  imports = [
     inputs.impermanence.nixosModule
     {
-      config = lib.mkIf (config.myconfig.persistence.impermanence.btrbk_device != null && config.myconfig.persistence.impermanence.btrbk_luks_device != null) (let
-          mountPoint = "/btr_backup";
-          mkTarget = name: "${mountPoint}/${config.networking.hostName}-${name}";
-          mkSettings = name: subvolume: {
-              snapshot_preserve_min = "24h";
-              snapshot_preserve     = "7d 4w 6m 1y";   
-              volume."/btr_pool" = {
-                inherit subvolume;
-                snapshot_dir = ".snapshots";
-                target = mkTarget name;
+      config =
+        lib.mkIf
+          (
+            config.myconfig.persistence.impermanence.btrbk_device != null
+            && config.myconfig.persistence.impermanence.btrbk_luks_device != null
+          )
+          (
+            let
+              mountPoint = "/btr_backup";
+              mkTarget = name: "${mountPoint}/${config.networking.hostName}-${name}";
+              mkSettings = name: subvolume: {
+                snapshot_preserve_min = "24h";
+                snapshot_preserve = "7d 4w 6m 1y";
+                volume."/btr_pool" = {
+                  inherit subvolume;
+                  snapshot_dir = ".snapshots";
+                  target = mkTarget name;
+                };
               };
-            };
-          mountScript = pkgs.writeShellScriptBin "btrbk-mount" ''
-            set -euo pipefail
+              mountScript = pkgs.writeShellScriptBin "btrbk-mount" ''
+                set -euo pipefail
 
-            if [ ! -b "${validateDevice config.myconfig.persistence.impermanence.btrbk_device}" ]; then
-              echo "Device ${validateDevice config.myconfig.persistence.impermanence.btrbk_device} does not exist"
-              if [ ! -b "${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}" ]; then
-                echo "Device ${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device} does not exist"
-                exit 1
-              fi
-              echo "Decrypting ${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}"
-              sudo cryptsetup luksOpen "${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}" "btr_backup_luks"
+                if [ ! -b "${validateDevice config.myconfig.persistence.impermanence.btrbk_device}" ]; then
+                  echo "Device ${validateDevice config.myconfig.persistence.impermanence.btrbk_device} does not exist"
+                  if [ ! -b "${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}" ]; then
+                    echo "Device ${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device} does not exist"
+                    exit 1
+                  fi
+                  echo "Decrypting ${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}"
+                  sudo cryptsetup luksOpen "${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}" "btr_backup_luks"
 
-              if [ ! -b "${validateDevice config.myconfig.persistence.impermanence.btrbk_device}" ]; then
-                echo "Device ${validateDevice config.myconfig.persistence.impermanence.btrbk_device} still does not exist"
-                exit 1
-              fi
-            fi
+                  if [ ! -b "${validateDevice config.myconfig.persistence.impermanence.btrbk_device}" ]; then
+                    echo "Device ${validateDevice config.myconfig.persistence.impermanence.btrbk_device} still does not exist"
+                    exit 1
+                  fi
+                fi
 
-            if [ ! -d "${mountPoint}" ]; then
-              echo "Mount point ${mountPoint} does not exist"
-              exit 1
-            fi
+                if [ ! -d "${mountPoint}" ]; then
+                  echo "Mount point ${mountPoint} does not exist"
+                  exit 1
+                fi
 
-            if ! mountpoint -q "${mountPoint}"; then
-              echo "Mounting ${mountPoint}"
-              sudo mount "${validateDevice config.myconfig.persistence.impermanence.btrbk_device}" "${mountPoint}"
-            fi
-          '';
-          umountScript = pkgs.writeShellScriptBin "btrbk-umount" ''
-            set -euo pipefail
+                if ! mountpoint -q "${mountPoint}"; then
+                  echo "Mounting ${mountPoint}"
+                  sudo mount "${validateDevice config.myconfig.persistence.impermanence.btrbk_device}" "${mountPoint}"
+                fi
+              '';
+              umountScript = pkgs.writeShellScriptBin "btrbk-umount" ''
+                set -euo pipefail
 
-            if mountpoint -q "${mountPoint}"; then
-              echo "Unmounting ${mountPoint}"
-              sudo umount "${mountPoint}"
-            fi
-            if [ -b "/dev/mapper/btr_backup_luks" ]; then
-              echo "Closing LUKS device"
-              sudo cryptsetup luksClose "btr_backup_luks"
-            fi
-          '';
-          mkScript = name: pkgs.writeShellScriptBin "btrbk-usbhdd-${name}" ''
-            set -euo pipefail
+                if mountpoint -q "${mountPoint}"; then
+                  echo "Unmounting ${mountPoint}"
+                  sudo umount "${mountPoint}"
+                fi
+                if [ -b "/dev/mapper/btr_backup_luks" ]; then
+                  echo "Closing LUKS device"
+                  sudo cryptsetup luksClose "btr_backup_luks"
+                fi
+              '';
+              mkScript =
+                name:
+                pkgs.writeShellScriptBin "btrbk-usbhdd-${name}" ''
+                  set -euo pipefail
 
-            conf="/etc/btrbk/usbhdd-${name}.conf"
-            if [ ! -f "$conf" ]; then
-              echo "Config file $conf does not exist"
-              exit 1
-            fi
-            
-            ${mountScript}/bin/btrbk-mount
+                  conf="/etc/btrbk/usbhdd-${name}.conf"
+                  if [ ! -f "$conf" ]; then
+                    echo "Config file $conf does not exist"
+                    exit 1
+                  fi
 
-            target=${mkTarget name}
-            if [ ! -d "$target" ]; then
-              sudo mkdir -p "$target"
-            fi
+                  ${mountScript}/bin/btrbk-mount
 
-            set -x
-            sudo -H -u btrbk bash -c "btrbk -c $conf --progress --verbose run"
-            times
-          '';
-        in {
-        fileSystems."${mountPoint}" = {
-          device  = validateDevice config.myconfig.persistence.impermanence.btrbk_device;
-          fsType  = "btrfs";
-          options = [
-            "subvolid=5"          # show all subvolumes
-            "compress=zstd"
-            "nofail"              # don’t block boot if the disk is absent
-            "x-systemd.automount" # mount lazily the first time it’s accessed
-          ];
-        };
-        services.btrbk = {
-          instances = {
-            "usbhdd-priv" = {
-              onCalendar = null;
-              settings = mkSettings "priv" volumePriv;
-            };
-            "usbhdd-work" = {
-              onCalendar = null;
-              settings = mkSettings "work" volumeWork;
-            };
-          };
-        };
-        systemd.tmpfiles.rules = [
-          "d /btr_pool/.snapshots 0755 root root"
-        ];
+                  target=${mkTarget name}
+                  if [ ! -d "$target" ]; then
+                    sudo mkdir -p "$target"
+                  fi
 
-        environment.systemPackages = [ pkgs.lz4 (mkScript "priv") (mkScript "work") mountScript umountScript ];
-      });
+                  set -x
+                  sudo -H -u btrbk bash -c "btrbk -c $conf --progress --verbose run"
+                  times
+                '';
+            in
+            {
+              fileSystems."${mountPoint}" = {
+                device = validateDevice config.myconfig.persistence.impermanence.btrbk_device;
+                fsType = "btrfs";
+                options = [
+                  "subvolid=5" # show all subvolumes
+                  "compress=zstd"
+                  "nofail" # don’t block boot if the disk is absent
+                  "x-systemd.automount" # mount lazily the first time it’s accessed
+                ];
+              };
+              services.btrbk = {
+                instances = {
+                  "usbhdd-priv" = {
+                    onCalendar = null;
+                    settings = mkSettings "priv" volumePriv;
+                  };
+                  "usbhdd-work" = {
+                    onCalendar = null;
+                    settings = mkSettings "work" volumeWork;
+                  };
+                };
+              };
+              systemd.tmpfiles.rules = [ "d /btr_pool/.snapshots 0755 root root" ];
+
+              environment.systemPackages = [
+                pkgs.lz4
+                (mkScript "priv")
+                (mkScript "work")
+                mountScript
+                umountScript
+              ];
+            }
+          );
     }
   ];
   options = with lib; {
-    myconfig.persistence.impermanence.enable =
-      lib.mkEnableOption "impermanence";
+    myconfig.persistence.impermanence.enable = lib.mkEnableOption "impermanence";
     myconfig.persistence.impermanence.btrfs_device = mkOption {
       default = null;
       example = "/dev/sda";
@@ -179,8 +207,7 @@ in {
       type = types.nullOr types.str;
       description = "Location of the btrbk LUKS device, which is used to encrypt the btrbk device.";
     };
-    myconfig.persistence.impermanence.enable_smartd =
-      mkEnableOption "smartd for the btrfs impermanence device";
+    myconfig.persistence.impermanence.enable_smartd = mkEnableOption "smartd for the btrfs impermanence device";
   };
 
   config = lib.mkIf config.myconfig.persistence.impermanence.enable {
@@ -267,56 +294,53 @@ in {
     fileSystems."/" = {
       device = "none";
       fsType = "tmpfs";
-      options = [ "defaults" "size=20%" "mode=755" ];
+      options = [
+        "defaults"
+        "size=20%"
+        "mode=755"
+      ];
     };
 
     fileSystems."/btr_pool" = {
-      device =
-        validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvolid=5" ];
     };
 
     fileSystems."/var/log" = {
-      device =
-        validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvol=${volumeLog}" ];
     };
 
     fileSystems."/nix" = {
-      device =
-        validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvol=${volumeNix}" ];
     };
 
     fileSystems."/home" = {
-      device =
-        validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvol=${volumeHome}" ];
     };
 
     fileSystems."${persistentPrivDir}" = {
-      device =
-        validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvol=${volumePriv}" ];
       neededForBoot = true;
     };
 
     fileSystems."${persistentWorkDir}" = {
-      device =
-        validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvol=${volumeWork}" ];
       neededForBoot = true;
     };
 
     fileSystems."${persistentCacheDir}" = {
-      device =
-        validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvol=${volumeCache}" ];
       neededForBoot = true;
@@ -336,7 +360,9 @@ in {
         files = [
           {
             file = "/var/keys/secret_file";
-            parentDirectory = { mode = "u=rwx,g=,o="; };
+            parentDirectory = {
+              mode = "u=rwx,g=,o=";
+            };
           }
           "/etc/ssh/ssh_host_ed25519_key"
           "/etc/ssh/ssh_host_ed25519_key.pub"
@@ -387,21 +413,22 @@ in {
       };
     };
     services.smartd = {
-      enable =
-        lib.mkDefault config.myconfig.persistence.impermanence.enable_smartd;
-      devices =
-        [{ device = config.myconfig.persistence.impermanence.btrfs_device; }];
+      enable = lib.mkDefault config.myconfig.persistence.impermanence.enable_smartd;
+      devices = [ { device = config.myconfig.persistence.impermanence.btrfs_device; } ];
     };
     home-manager.sharedModules = [
       inputs.impermanence.homeManagerModules.impermanence
-      ({ config, ... }:
+      (
+        { config, ... }:
         let
-          mkRelativeToHome = path:
+          mkRelativeToHome =
+            path:
             if lib.hasPrefix "${config.home.homeDirectory}/" path then
               lib.removePrefix "${config.home.homeDirectory}/" path
             else
               path;
-        in {
+        in
+        {
           config = {
             myconfig.persistence.directories = [
               "myconfig"
@@ -412,35 +439,31 @@ in {
               "_screenshots"
             ];
             myconfig.persistence.cache-directories = [ ".cache/nix-index" ];
-            home.persistence."${persistentPrivDir}/home/${config.home.username}" =
-              {
-                directories = validatePaths (lib.map mkRelativeToHome
-                  config.myconfig.persistence.directories);
-                files = validatePaths
-                  (lib.map mkRelativeToHome config.myconfig.persistence.files);
-                allowOther = true;
-              };
-            home.persistence."${persistentWorkDir}/home/${config.home.username}" =
-              {
-                directories = validatePaths (lib.map mkRelativeToHome
-                  config.myconfig.persistence.work-directories);
-                files = validatePaths (lib.map mkRelativeToHome
-                  config.myconfig.persistence.work-files);
-                allowOther = true;
-              };
-            home.persistence."${persistentCacheDir}/home/${config.home.username}" =
-              {
-                directories = validatePaths (lib.map mkRelativeToHome
-                  config.myconfig.persistence.cache-directories);
-                files = validatePaths (lib.map mkRelativeToHome
-                  config.myconfig.persistence.cache-files);
-                allowOther = true;
-              };
+            home.persistence."${persistentPrivDir}/home/${config.home.username}" = {
+              directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.directories);
+              files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.files);
+              allowOther = true;
+            };
+            home.persistence."${persistentWorkDir}/home/${config.home.username}" = {
+              directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-directories);
+              files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-files);
+              allowOther = true;
+            };
+            home.persistence."${persistentCacheDir}/home/${config.home.username}" = {
+              directories = validatePaths (
+                lib.map mkRelativeToHome config.myconfig.persistence.cache-directories
+              );
+              files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.cache-files);
+              allowOther = true;
+            };
           };
-        })
-      ({ config, ... }:
+        }
+      )
+      (
+        { config, ... }:
         let
-          mk_diff_command = dir: name:
+          mk_diff_command =
+            dir: name:
             pkgs.writeShellScriptBin "diff_${name}" ''
               set -euo pipefail
 
@@ -487,7 +510,14 @@ in {
 
           diff_home = mk_diff_command "/home/${user}" "home";
           diff_root = mk_diff_command "/" "root";
-        in { home.packages = [ diff_home diff_root ]; })
+        in
+        {
+          home.packages = [
+            diff_home
+            diff_root
+          ];
+        }
+      )
     ];
     system.activationScripts = {
       script.text = ''
@@ -504,4 +534,3 @@ in {
     };
   };
 }
-

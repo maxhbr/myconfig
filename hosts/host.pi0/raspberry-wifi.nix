@@ -1,7 +1,12 @@
 # based on:
 # - https://github.com/illegalprime/nixos-on-arm/blob/master/machines/raspberrypi-zerow/default.nix
-{ pkgs, lib, ... }: {
-  environment.systemPackages = with pkgs; [ wirelesstools wpa_supplicant dhcp ];
+{ pkgs, lib, ... }:
+{
+  environment.systemPackages = with pkgs; [
+    wirelesstools
+    wpa_supplicant
+    dhcp
+  ];
 
   networking.networkmanager.enable = lib.mkForce false;
 
