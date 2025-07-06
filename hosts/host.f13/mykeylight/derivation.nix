@@ -4,6 +4,9 @@ buildPythonApplication {
   pname = "mykeylight";
   version = "1.0";
 
+  pyproject = true;
+  build-system = [ setuptools ];
+
   propagatedBuildInputs = [ elgato ];
 
   src = ./.;

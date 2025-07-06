@@ -23,10 +23,6 @@ in
         in
         {
           inherit pass;
-          pass-git-helper = super.python3Packages.callPackage ./pass-git-helper.nix {
-            inherit (super.python3Packages) buildPythonApplication;
-            inherit (self.python3Packages) pyxdg;
-          };
           gopassWrapper =
             with pkgs;
             writeShellScriptBin "gopass_wrapper.sh" ''
