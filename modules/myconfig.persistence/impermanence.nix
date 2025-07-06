@@ -152,16 +152,17 @@ in
                 '';
             in
             {
-              fileSystems."${mountPoint}" = {
-                device = validateDevice config.myconfig.persistence.impermanence.btrbk_device;
-                fsType = "btrfs";
-                options = [
-                  "subvolid=5" # show all subvolumes
-                  "compress=zstd"
-                  "nofail" # don’t block boot if the disk is absent
-                  "x-systemd.automount" # mount lazily the first time it’s accessed
-                ];
-              };
+              # TODO: if this is set, bwrap and zoom does not work
+              # fileSystems."${mountPoint}" = {
+              #   device = validateDevice config.myconfig.persistence.impermanence.btrbk_device;
+              #   fsType = "btrfs";
+              #   options = [
+              #     "subvolid=5" # show all subvolumes
+              #     "compress=zstd"
+              #     "nofail" # don’t block boot if the disk is absent
+              #     "x-systemd.automount" # mount lazily the first time it’s accessed
+              #   ];
+              # };
               services.btrbk = {
                 instances = {
                   "usbhdd-priv" = {
