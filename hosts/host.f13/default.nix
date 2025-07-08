@@ -102,7 +102,7 @@
         obs.enable = true;
         imagework.enable = true;
         imagework.myphoto.enable = false;
-        # cad.enable = true;
+        cad.enable = true;
       };
       email.enable = true;
       virtualisation.enable = true;
