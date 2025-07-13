@@ -58,15 +58,6 @@ in
               '';
             };
           }
-          {
-            home.packages = with pkgs; [
-              openvpn
-              networkmanager-openvpn
-              openconnect
-              networkmanager-openconnect
-              networkmanagerapplet
-            ];
-          }
         ];
         myconfig.persistence.work-directories = [
           ".config/teams-for-linux"

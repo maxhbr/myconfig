@@ -22,11 +22,22 @@
             killPort = "kill $(${pkgs.lsof}/bin/lsof -t -i:$1)";
           };
         };
+        home.packages = with pkgs; [
+          networkmanagerapplet
+          openvpn
+          # openconnect
+        ];
       }
     ];
 
     networking = {
-      networkmanager.enable = true;
+      networkmanager = {
+        enable = true;
+        plugins = with pkgs; [
+          networkmanager-openvpn
+          # networkmanager-openconnect
+        ];
+      };
       firewall = {
         enable = true;
         allowPing = false;

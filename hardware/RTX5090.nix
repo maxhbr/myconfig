@@ -15,9 +15,9 @@
       {
         home.packages = with pkgs; [
           nvtopPackages.nvidia
-          nvidia-smi
-          nvidia-cuda-toolkit
-        ];
+        ] ++ (with pkgs.cudaPackages; [
+          cudatoolkit
+        ]);
       }
     ];
     users.extraUsers."${myconfig.user}".extraGroups = [ "nvidia" ];

@@ -127,9 +127,6 @@
     virtualisation = {
       docker.enable = true;
       podman.enable = true;
-      oci-containers = {
-        backend = "podman";
-      };
       #virtualbox.host.enable = true;
     };
 

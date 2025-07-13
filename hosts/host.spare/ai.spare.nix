@@ -42,7 +42,7 @@ in
       };
       ai = {
         enable = true;
-        acceleration.vulkan.enable = true;
+        # acceleration.vulkan.enable = true;
         inference-cpp = {
           enable = true;
         };

@@ -9,6 +9,7 @@
 let
   enablePodman = config.virtualisation.podman.enable;
   enableDocker = config.virtualisation.docker.enable;
+  backend = if enablePodman then "podman" else "docker";
 in
 {
   imports = [
@@ -20,9 +21,9 @@ in
       # virtualisation.podman.dockerCompat = !config.virtualisation.docker.enable;
       home-manager.sharedModules = [ { home.packages = with pkgs; [ buildkit ]; } ];
       virtualisation = {
-        oci-containers = {
-          backend = if enablePodman then "podman" else "docker";
-        };
+        # oci-containers = {
+        #   inherit backend;
+        # };
         containers = {
           policy = {
             "default" = [ { "type" = "reject"; } ];

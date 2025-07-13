@@ -5,9 +5,6 @@
   ...
 }:
 
-let
-  enable = config.virtualisation.docker.enable;
-in
 {
   config = {
     home-manager.sharedModules = [
