@@ -14,6 +14,6 @@ in
   };
   config = lib.mkIf cfg.email.enable {
     home-manager.sharedModules = [ ./home-manager.email ];
-    programs.evolution.enable = true;
+    programs.evolution.enable = lib.mkDefault true;
   };
 }

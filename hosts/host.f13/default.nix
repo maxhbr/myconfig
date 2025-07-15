@@ -100,11 +100,11 @@
         };
         messengers.enable = true;
         obs.enable = true;
-        imagework.enable = true;
-        imagework.myphoto.enable = false;
+        # imagework.enable = true; # https://github.com/NixOS/nixpkgs/issues/425306
+        # imagework.myphoto.enable = false;
         cad.enable = true;
       };
-      email.enable = true;
+      # email.enable = true;
       virtualisation.enable = true;
       # editor.emacs.enable = false;
       dev = {
@@ -127,6 +127,8 @@
       # lxc.enable = true;
       # libvirtd.enable = true;
     };
+
+    programs.evolution.enable = true;
 
     services.xserver.wacom.enable = false;
     services.xserver.digimend.enable = false;

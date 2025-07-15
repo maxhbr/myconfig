@@ -107,8 +107,8 @@ in
                 fi
 
                 if [ ! -d "${mountPoint}" ]; then
-                  echo "Mount point ${mountPoint} does not exist"
-                  exit 1
+                  echo "Mount point ${mountPoint} does not exist, try creating it"
+                  sudo mkdir -p "${mountPoint}"
                 fi
 
                 if ! mountpoint -q "${mountPoint}"; then

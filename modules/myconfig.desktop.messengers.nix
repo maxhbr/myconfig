@@ -18,7 +18,7 @@ in
       {
         home.packages = [
           signal-desktop
-          signal-cli
+          # signal-cli
           pkgs.smile
         ];
         myconfig.persistence.directories = [ ".config/Signal" ];

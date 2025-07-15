@@ -12,7 +12,7 @@
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [
-          aider-chat
+          # aider-chat
           code-cursor
           zed
         ];
