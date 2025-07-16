@@ -135,6 +135,8 @@
 
     programs.gnupg.agent.enable = true;
 
+    services.clamav.scanner.enable = true;
+
     services.hardware.bolt.enable = true;
 
     services.logind.extraConfig = ''

@@ -41,13 +41,22 @@ guard_pid() {
     echo "$this_pid" > "$pidfile"
 }   
 
+gnupg_to_mutt() {
+    log_step "running gnupg-to-mutt.pl"
+    if type gnupg-to-mutt.pl &> /dev/null; then 
+        gnupg-to-mutt.pl
+    else
+        log_warning "gnupg-to-mutt.pl not found"
+    fi
+}
+
 flake_update() {
     local update_mode="$1"; shift
     log_step "updating flake in $update_mode mode"
 
     if [[ "$update_mode" == "full" ]]; then
         flake_update_recursively "."
-        type gnupg-to-mutt.pl &> /dev/null && gnupg-to-mutt.pl
+        gnupg_to_mutt
     elif [[ "$update_mode" == "fast" ]]; then
         flake_update_one "."
         # grep '\.url = "path:' flake.nix | sed s/\.url.*// | sed 's/ //g' |
