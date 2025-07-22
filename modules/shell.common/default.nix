@@ -79,6 +79,7 @@ in
         iotop
         bmon
         nmon
+        ps_mem
         s-tui
         (writeShellScriptBin "usbtop" ''
           sudo modprobe usbmon

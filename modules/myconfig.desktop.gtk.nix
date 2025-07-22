@@ -93,7 +93,7 @@ in
                   "file://${config.home.homeDirectory}/Downloads"
                   "file://${config.home.homeDirectory}/Documents"
                   "file://${config.home.homeDirectory}/MINE"
-                  "file://${config.home.homeDirectory}/tng"
+                  "file://${config.home.homeDirectory}/TNG"
                 ];
               };
               gtk4 = { inherit extraCss; };

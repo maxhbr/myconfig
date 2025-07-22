@@ -29,6 +29,37 @@ in
         ];
       };
     }
+    # { 
+    #   # from: https://discourse.nixos.org/t/nix-build-ate-my-ram/35752
+    #   # OOM configuration:
+    #   systemd = {
+    #     # Create a separate slice for nix-daemon that is
+    #     # memory-managed by the userspace systemd-oomd killer
+    #     slices."nix-daemon".sliceConfig = let
+    #         memoryHigh = "75%";
+    #         memoryMax = "85%";
+    #         cpuQuota = "75%";
+    #       in {
+    #       ManagedOOMMemoryPressure = "kill";
+    #       ManagedOOMMemoryPressureLimit = memoryHigh;
+    #       # Slice to limit CPU and memory hogs
+    #       # DOCS https://www.freedesktop.org/software/systemd/man/latest/systemd.resource-control.html
+    #       # DOCS https://discourse.nixos.org/t/nix-build-ate-my-ram/35752?u=yajo
+    #       CPUAccounting = true;
+    #       CPUQuota = cpuQuota;
+    #       MemoryAccounting = true; # Allow to control with systemd-cgtop
+    #       MemoryHigh = memoryHigh;
+    #       MemoryMax = memoryMax;
+    #       MemorySwapMax = memoryHigh;
+    #       MemoryZSwapMax = memoryHigh;
+    #     };
+    #     services."nix-daemon".serviceConfig.Slice = "nix-daemon.slice";
+
+    #     # If a kernel-level OOM event does occur anyway,
+    #     # strongly prefer killing nix-daemon child processes
+    #     services."nix-daemon".serviceConfig.OOMScoreAdjust = 1000;
+    #   };
+    # }
   ];
   config = {
     nixpkgs.config = {

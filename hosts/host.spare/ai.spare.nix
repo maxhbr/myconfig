@@ -47,10 +47,10 @@ in
           enable = true;
         };
         lmstudio = {
-          enable = true;
+          enable = false;
         };
         alpaca = {
-          enable = true;
+          enable = false;
         };
         container = {
           nlm-ingestor = {
@@ -111,6 +111,7 @@ in
           "phi4"
           "qwq:32b"
           "smollm2:1.7b"
+          "qwen2.5vl:32b"
           "qwen3:32b"
           "qwen3:30b"
           "magistral:24b"
@@ -120,6 +121,9 @@ in
           "llama3.1:8b"
           "qwen2.5-coder:1.5b-base"
           "nomic-embed-text:latest"
+        ] ++ [
+          # for roo code
+          "codellama:34b-code"
         ];
     };
     services.tabby = {

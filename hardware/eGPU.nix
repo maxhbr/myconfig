@@ -13,7 +13,7 @@
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [
-          nvtopPackages.full
+          # nvtopPackages.full
           # oterm
           pciutils
         ];
