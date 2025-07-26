@@ -13,7 +13,6 @@ in
 {
   imports = [
     ./modules/services.pipewire.nix
-    # ./modules/hardware.pulseaudio.nix
     ./modules/services.pipewire.wireplumber.nix
     ./modules/services.pipewire.airplay.nix
   ];

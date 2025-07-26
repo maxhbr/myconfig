@@ -41,6 +41,14 @@ guard_pid() {
     echo "$this_pid" > "$pidfile"
 }   
 
+add_ssh_keys() {
+  local key="$HOME/.ssh/id_rsa"                                                                    
+  if [[ -f "$key" ]] && ! ssh-add -l | grep -q "$key" ; then                                                      
+    echo "ssh-add ..." >&2
+    ssh-add $key                                                                           
+  fi     
+}
+
 gnupg_to_mutt() {
     log_step "running gnupg-to-mutt.pl"
     if type gnupg-to-mutt.pl &> /dev/null; then 
@@ -273,11 +281,15 @@ main() {
     local target="${1:-$(hostname)}"
 
     guard_pid "$target"
+  
+    if [[ "$target" != "$(hostname)" ]]; then
+      add_ssh_keys
+    fi
 
     ################################################################################
     # setup logging
     start_time="$(date +%s)"
-    exec &> >(while read line; do current_time="$(date +%s)"; time_diff="$((current_time - start_time))"; printf "%5ds: %s\n" "$time_diff" "$line"; done)
+    exec &> >(while read line; do current_time="$(date +%s)"; time_diff="$((current_time - start_time))"; echo "$( date -u -d@"$time_diff" +"%H:%M:%S" )| $line"; done)
     logsDir="../_logs"
     mkdir -p "$logsDir"
     logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
