@@ -229,7 +229,6 @@ in
                         tr ' ' '\n' |
                         sort |
                         ${pkgs.wofi}/bin/wofi --dmenu \
-                             --lines=10 \
                              --prompt="Run:" \
                              --cache-file /dev/null)"
 

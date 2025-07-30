@@ -39,7 +39,7 @@ let
         path: rest:
         if rest == [ ] then
           true
-        else if isPrefix path (lib.head rest) then
+        else if isPrefix ("${path}/") (lib.head rest) then
           throw "Invalid paths: '${path}' is a prefix of '${lib.head rest}'"
         else
           checkPrefixes path (lib.tail rest);

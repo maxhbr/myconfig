@@ -166,6 +166,7 @@ in
                 ];
                 modules-right = [ "wlr/taskbar" ];
               };
+              # A dedicated anchor for your compositor session
               systemd.user.services.niri = {
                 Unit = {
                   Description = "A scrollable-tiling Wayland compositor";
@@ -179,6 +180,7 @@ in
                   Slice = "session.slice";
                   Type = "notify";
                   ExecStart = "${niri}/bin/niri --session";
+                  Restart = "on-failure";  # optional, keeps it from exiting permanently on crashes
                 };
               };
               systemd.user.targets.niri-shutdown = {

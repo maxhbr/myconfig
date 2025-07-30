@@ -103,6 +103,7 @@
         imagework.enable = true; # https://github.com/NixOS/nixpkgs/issues/425306
         # imagework.myphoto.enable = false;
         cad.enable = true;
+        joplin-desktop.enable = true;
       };
       # email.enable = true;
       virtualisation.enable = true;
@@ -144,13 +145,6 @@
     services.gnome.gnome-keyring.enable = true;
 
     home-manager.sharedModules = [
-      {
-        home.packages = with pkgs.master; [ joplin-desktop ];
-        myconfig.persistence.directories = [
-          ".config/Joplin"
-          ".config/joplin-desktop"
-        ];
-      }
       {
         services.mako = {
           settings = {

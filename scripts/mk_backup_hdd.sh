@@ -22,7 +22,7 @@ usage:
 EOF
 }
 
-if [[ "$FORMAT" != "YES" ]]; then
+if [[ "$FORMAT" != "YES" || "$#" -ne 2 ]]; then
     help
     exit 1
 fi
@@ -31,6 +31,7 @@ if [ "$(id -u)" -eq 0 ]; then
     echo "you should not run this script as root"
     exit 1
 fi
+
 
 SDX="$1"
 PASSPHRASE="$2"
@@ -86,11 +87,13 @@ mkLuks() {
     echo -n "$PASSPHRASE" | sudo cryptsetup --batch-mode luksFormat "$luksDev" -
     echo -n "$PASSPHRASE" | sudo cryptsetup --batch-mode luksOpen "$luksDev" "$name" -
 
-    local uuid=$(blkid -s UUID -o value "$luksDev")
+    sleep 3
+    sync
+    local uuid=$(set -x; lsblk -nr -o UUID,NAME | rg "$(basename "$luksDev")" | cut -f 1 -d " "  )
     while [[ -z "$uuid" ]]; do
-        echo "UUID of $luksDev: $uuid"
+        echo "UUID of $dev: $uuid" >&2
         sleep 1
-        uuid=$(blkid -s UUID -o value "$luksDev")
+        uuid=$(set -x; lsblk -nr -o UUID,NAME | rg "$(basename "$luksDev")" | cut -f 1 -d " "  )
     done
 
     echo "###########################################################################################"
