@@ -20,11 +20,14 @@ log_step() {
         echo "$(tput setaf 2)################################################################################$(tput sgr0)"
     } >&2
 }
+log_info() {
+    echo -e "info: $1" >&2
+}
 log_warning() {
-    echo "$(tput setaf 3)warning: $1$(tput sgr0)" >&2
+    echo -e "$(tput setaf 3)warning: $1$(tput sgr0)" >&2
 }
 log_error() {
-    echo "$(tput setaf 1)error: $1$(tput sgr0)" >&2
+    echo -e "$(tput setaf 1)error: $1$(tput sgr0)" >&2
 }
 
 guard_pid() {
@@ -222,15 +225,23 @@ diff_build_results() (
 )
 direct_deploy_locally() {
     local out_link="$1"; shift
+    local command="$1"; shift
     log_step "direct deploying $out_link to $(hostname)"
     local store_path="$(nix-store -q "$out_link")"
     set -x
     sudo nix-env --profile /nix/var/nix/profiles/system --set "$store_path"
-    sudo "$store_path/bin/switch-to-configuration" switch
+    sudo "$store_path/bin/switch-to-configuration" "$command"
 }
 deploy() (
     local target="$1"; shift
     local out_link="$1"; shift
+    local command="$1"; shift
+
+    # if [[ "$target" == "$(hostname)" ]]; then
+    #   direct_deploy_locally "$out_link" "$command"
+    #   return
+    # fi
+    
     log_step "deploying $out_link to $target"
     local use_wg="${1:-false}";
     cmd="nixos-rebuild"
@@ -249,7 +260,7 @@ deploy() (
     set -x
     until $cmd \
             `# --build-host localhost` \
-            switch `#-p test` \
+            "$command" `#-p test` \
             ${verbose:+"--verbose"} \
             --flake '.#'"$target"; do
         echo "... retry nixos-rebuild"
@@ -257,6 +268,7 @@ deploy() (
 )
 main() {
     local MODE=""
+    local COMMAND="switch"
     if [[ $# -gt 0 && ("$1" == "--verbose" || "$1" == "-v" || "$1" == "-vv") ]]; then
         verbose="--verbose"
         if [[ "$1" == "-vv" ]]; then
@@ -277,6 +289,14 @@ main() {
         MODE="$1"
         shift
     fi
+    if [[ $# -gt 0 && "$1" == "--boot" ]]; then
+      COMMAND="boot"
+      shift
+    elif [[ $# -gt 0 && "$1" == "--switch" ]]; then
+      COMMAND="switch"
+      shift
+    fi
+
 
     local target="${1:-$(hostname)}"
 
@@ -295,12 +315,16 @@ main() {
     logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
     echo -e "\n\n\n\n\n\n\n" >> "$logfile"
     exec &> >(tee -a "$logfile")
+    log_info "starting with...\nMODE=$MODE\nCOMMAND=$COMMAND\ntarget=$target\nverbose=$verbose\n"
     ################################################################################
   
     local token="$(pass github-bot-token2 -p || true)"
     if [[ ! -z "$token" ]]; then
-     NIX_CONFIG="access-tokens = github.com=$token"
-     export NIX_CONFIG
+        log_info "setting github token"
+        NIX_CONFIG="access-tokens = github.com=$token"
+        export NIX_CONFIG
+    else
+        log_warn "no github token"
     fi
 
     flake_update "$( [[ "$MODE" == "" ]] && echo "full" || echo "fast")"
@@ -314,12 +338,24 @@ main() {
     du_of_out_link "$target"
     if [[ "$MODE" == "--use-wg" ]]; then
         deploy "$target" "$out_link" true
+    elif [[ "$MODE" = "--test" ]]; then
+        if [[ "$target" == "$(hostname)" ]]; then
+            deploy "$target" "$out_link" dry-activate
+        fi
     elif [[ "$MODE" != "--test" ]]; then
-        # if [[ "$target" == "$(hostname)" ]]; then
-        #     direct_deploy_locally "$out_link"
-        # else
-            deploy "$target" "$out_link"
-        # fi
+        deploy "$target" "$out_link" "$COMMAND"
+        if [[ "$COMMAND" == "boot" ]]; then
+            echo "manually enable via:"
+            local store_path="$(nix-store -q "$out_link")"
+            echo "> sudo nix-env --profile /nix/var/nix/profiles/system --set $store_path"
+            echo "> sudo $store_path/bin/switch-to-configuration switch"
+        fi
+        if [[ "$target" == "$(hostname)" ]]; then
+            local generations="$out_link"'.generations'
+            nixos-rebuild list-generations > "$generations"
+            log_info "generations:"
+            cat "$generations" | head -5
+        fi
     fi
 }
 

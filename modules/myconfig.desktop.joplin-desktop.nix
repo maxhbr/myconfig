@@ -1,4 +1,7 @@
-{ pkgs, ... }:
+{ pkgs, lib, config, ... }:
+let
+  cfg = config.myconfig;
+in
 {
   options.myconfig = with lib; {
     desktop.joplin-desktop.enable = mkEnableOption "joplin-desktop";

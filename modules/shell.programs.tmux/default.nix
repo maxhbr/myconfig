@@ -1,7 +1,8 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ lib, pkgs, ... }:
+{ lib, pkgs, config, myconfig, ... }:
 let
+  user = myconfig.user;
   inherit (builtins) readFile concatStringsSep;
 
   inherit (lib) removePrefix;
@@ -68,4 +69,25 @@ in
       ${pluginConf plugins}
     '';
   };
+  # users.users.${user}.linger = true;
+  # services.logind.killUserProcesses = false;
+  home-manager.sharedModules = [
+    {
+      systemd.user.services."tmux@" = {
+        Unit = {
+          Description = "tmux session %i";
+          After = [ "default.target" ];
+        };
+        Service = {
+          Type = "forking";
+          Environment = "TMUX_TMPDIR=/tmp";
+          ExecStart = "${pkgs.tmux}/bin/tmux new-session -d -s %i";
+          ExecStop  = "${pkgs.tmux}/bin/tmux kill-session -t %i";
+          Restart = "on-failure";
+          KillMode = "process";
+        };
+        Install.WantedBy = [ "default.target" ];
+      };
+    }
+  ];
 }

@@ -11,10 +11,8 @@ let
     # PaperColor Light
     # Palette based on https://github.com/NLKNguyen/papercolor-theme
 
-    [cursor]
-    color=eeeeee 444444
-
     [colors]
+    cursor=eeeeee 444444
     background=eeeeee
     foreground=444444
     regular0=eeeeee  # black
