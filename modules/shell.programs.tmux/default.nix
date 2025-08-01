@@ -69,25 +69,4 @@ in
       ${pluginConf plugins}
     '';
   };
-  # users.users.${user}.linger = true;
-  # services.logind.killUserProcesses = false;
-  home-manager.sharedModules = [
-    {
-      systemd.user.services."tmux@" = {
-        Unit = {
-          Description = "tmux session %i";
-          After = [ "default.target" ];
-        };
-        Service = {
-          Type = "forking";
-          Environment = "TMUX_TMPDIR=/tmp";
-          ExecStart = "${pkgs.tmux}/bin/tmux new-session -d -s %i";
-          ExecStop  = "${pkgs.tmux}/bin/tmux kill-session -t %i";
-          Restart = "on-failure";
-          KillMode = "process";
-        };
-        Install.WantedBy = [ "default.target" ];
-      };
-    }
-  ];
 }

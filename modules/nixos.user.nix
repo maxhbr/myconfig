@@ -47,6 +47,7 @@
             "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDYUWsgqFqIHd3ftOC1W4j24wa1C4gjVt8yzdlqKn0KovLH5e4TdnMMkcoyVWAmrR/fxLCX0XbbUUAlwpA5mwxnyd5vBO7P+6tm9Z4I7rGW4EDxgRVA45/4qbe1DOW4qkYGf0MLidzq7xMXS7UIGcMZk1K0EIhj8tL1fPrPa8cV94/x5PAOGwXSALG3RFLH+8xxCOtean0/1Ev9+l+W19cp8+SwksjMCCbj1yrIgLPMaclMerZ6oUAKB6yXYkAoSSfVvSQLp9iRWwKkOAjDPvWCkKr4ICTKEY0z3lbhd587NwWmEUDAp9Z9rTNT5MVfKOGtlLVBMCB2rf0wmjuL/hlp"
             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF4/Erg9yplOhyzAWSbzBcHTduXnMgQ5ToRniCKlUDYK"
           ];
+          linger = true;
         };
         root = {
           openssh.authorizedKeys.keys =
@@ -113,5 +114,6 @@
         "en_US.UTF-8/UTF-8"
       ];
     };
+    services.logind.killUserProcesses = false; # this is the default
   };
 }
