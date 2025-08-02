@@ -21,6 +21,10 @@
 
     impermanence.url = "github:nix-community/impermanence";
 
+    agenix.url = "github:ryantm/agenix";
+    agenix.inputs.nixpkgs.follows = "nixpkgs";
+    agenix.inputs.darwin.follows = ""; # optionally choose not to download darwin deps (saves some resources on Linux)
+
     flake-utils.url = "github:numtide/flake-utils";
 
     nur.url = "github:nix-community/NUR";
@@ -69,37 +73,6 @@
         ##########################################################################
 
         nixosModules = rec {
-          activateHomeManager =
-            { config, lib, ... }:
-            {
-              imports = [
-                # home manager:
-                inputs.home.nixosModules.home-manager
-              ];
-
-              config = {
-                home-manager = {
-                  useUserPackages = true;
-                  useGlobalPkgs = true;
-                  backupFileExtension =
-                    let
-                      rev = toString (self.shortRev or self.dirtyShortRev or self.lastModified or "unknown");
-                    in
-                    "${rev}.homeManagerBackup";
-                  sharedModules = [
-                    (
-                      { pkgs, ... }:
-                      {
-                        home.stateVersion = lib.mkDefault (config.system.stateVersion);
-                        home.packages = [
-                          pkgs.dconf
-                        ]; # see: https://github.com/nix-community/home-manager/issues/3113
-                      }
-                    )
-                  ];
-                };
-              };
-            };
           readOnlyPkgs = {
             imports = [ nixpkgs.nixosModules.readOnlyPkgs ];
             nixpkgs.pkgs = nixpkgs.legacyPackages.x86_64-linux;

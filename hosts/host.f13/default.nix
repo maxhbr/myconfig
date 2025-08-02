@@ -10,6 +10,7 @@
 }:
 {
   imports = [
+    ./specialisation.nix
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-pc-laptop
     inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
@@ -46,7 +47,6 @@
       networking.firewall.interfaces."wg0".allowedTCPPorts = [ 22022 ];
       networking.firewall.interfaces."wg0".allowedUDPPorts = [ 22022 ];
     }
-    { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
     { programs.kdeconnect.enable = true; }
     {
       # set CPU to performance mode

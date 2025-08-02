@@ -312,7 +312,7 @@ main() {
     exec &> >(while read line; do current_time="$(date +%s)"; time_diff="$((current_time - start_time))"; echo "$( date -u -d@"$time_diff" +"%H:%M:%S" )| $line"; done)
     logsDir="../_logs"
     mkdir -p "$logsDir"
-    logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
+    local logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
     echo -e "\n\n\n\n\n\n\n" >> "$logfile"
     exec &> >(tee -a "$logfile")
     log_info "starting with...\nMODE=$MODE\nCOMMAND=$COMMAND\ntarget=$target\nverbose=$verbose\n"
@@ -330,6 +330,9 @@ main() {
     flake_update "$( [[ "$MODE" == "" ]] && echo "full" || echo "fast")"
 
     local out_link="$(get_out_link_of_target "$target")"
+    local latest_logfile="${out_link}.log"
+    rm -f "$latest_logfile"
+    ln -s "$(readlink -s --relative-to="$(dirname "$latest_logfile")" "$logfile")" "$latest_logfile" || true
     local old_result="$(readlink -f "$out_link" || true)"
     build "$target" "$out_link" || build "$target" "$out_link" --keep-failed --no-eval-cache
     if [[ -e "$old_result" ]]; then

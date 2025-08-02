@@ -78,8 +78,8 @@ in
                     '';
                   };
                   myconfig.persistence.directories = [
-                    "~/.local/share/kwalletd"
-                    "~/.local/share/kwalletmanager5"
+                    ".local/share/kwalletd"
+                    ".local/share/kwalletmanager5"
                   ];
                 }
               )

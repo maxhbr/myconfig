@@ -535,19 +535,57 @@ rec {
           # })
 
           # home manager:
-          self.nixosModules.activateHomeManager
           (
             { config, lib, ... }:
             {
+              imports = [
+                # home manager:
+                inputs.home.nixosModules.home-manager
+              ];
+
               config = {
                 home-manager = {
+                  useUserPackages = true;
+                  useGlobalPkgs = true;
                   extraSpecialArgs = specialArgs // {
                     super = config;
                   };
+                  backupFileExtension =
+                    let
+                      rev = toString (self.shortRev or self.dirtyShortRev or self.lastModified or "unknown");
+                    in
+                    "${rev}.homeManagerBackup";
+                  sharedModules = [
+                    (
+                      { pkgs, ... }:
+                      {
+                        home.stateVersion = lib.mkDefault (config.system.stateVersion);
+                        home.packages = [
+                          pkgs.dconf
+                        ]; # see: https://github.com/nix-community/home-manager/issues/3113
+                      }
+                    )
+                  ];
                 };
               };
             }
           )
+
+          ( { config, lib, ... }: {
+            imports = [ inputs.agenix.nixosModules.default ];
+            config = {
+              home-manager.sharedModules = [
+                inputs.agenix.homeManagerModules.default
+                ({pkgs, config, ...}:
+                {
+                  home.packages = [
+                    pkgs.age
+                    inputs.agenix.packages."${system}".default
+                  ];
+                })
+              ];
+            };
+          })
 
           (
             {
