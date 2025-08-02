@@ -163,7 +163,8 @@
                     };
                   }
                 )
-              ] ++ (map (n: "${./modules}/${n}") (builtins.attrNames (builtins.readDir ./modules)));
+              ]
+              ++ (map (n: "${./modules}/${n}") (builtins.attrNames (builtins.readDir ./modules)));
               config = {
                 hardware.enableRedistributableFirmware = true;
                 nixpkgs.overlays = [ inputs.nur.overlays.default ];

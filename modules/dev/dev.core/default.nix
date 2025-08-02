@@ -15,11 +15,9 @@ in
     nixpkgs.overlays = [
       (self: super: {
         my-meld = pkgs.meld.overrideAttrs (old: {
-          postFixup =
-            old.postFixup
-            + ''
-              wrapProgram $out/bin/meld --unset WAYLAND_DISPLAY
-            '';
+          postFixup = old.postFixup + ''
+            wrapProgram $out/bin/meld --unset WAYLAND_DISPLAY
+          '';
         });
       })
     ];

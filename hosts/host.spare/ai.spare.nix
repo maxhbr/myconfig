@@ -100,31 +100,31 @@ in
         OLLAMA_ORIGIN = "*";
         OLLAMA_KEEP_ALIVE = "5m";
       };
-      loadModels =
-        [
-          "cogito:32b"
-          "deepseek-r1:32b"
-          "gemma3:27b"
-          "llama3.2:3b"
-          "llava:34b"
-          "openthinker:32b"
-          "phi4"
-          "qwq:32b"
-          "smollm2:1.7b"
-          "qwen2.5vl:32b"
-          "qwen3:32b"
-          "qwen3:30b"
-          "magistral:24b"
-        ]
-        ++ [
-          # for continue:
-          "llama3.1:8b"
-          "qwen2.5-coder:1.5b-base"
-          "nomic-embed-text:latest"
-        ] ++ [
-          # for roo code
-          "codellama:34b-code"
-        ];
+      loadModels = [
+        "cogito:32b"
+        "deepseek-r1:32b"
+        "gemma3:27b"
+        "llama3.2:3b"
+        "llava:34b"
+        "openthinker:32b"
+        "phi4"
+        "qwq:32b"
+        "smollm2:1.7b"
+        "qwen2.5vl:32b"
+        "qwen3:32b"
+        "qwen3:30b"
+        "magistral:24b"
+      ]
+      ++ [
+        # for continue:
+        "llama3.1:8b"
+        "qwen2.5-coder:1.5b-base"
+        "nomic-embed-text:latest"
+      ]
+      ++ [
+        # for roo code
+        "codellama:34b-code"
+      ];
     };
     services.tabby = {
       enable = false;

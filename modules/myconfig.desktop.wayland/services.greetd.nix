@@ -74,33 +74,32 @@ in
         enable = true;
       };
 
-      environment.etc =
-        {
-          "greetd/environments".text = lib.foldr (
-            session: str:
-            ''
-              start-${session}-session
-            ''
-            + str
-          ) "fish" selectedSessions;
-        }
-        // (
-          let
-            fun = session: {
-              name = "greetd/wayland-sessions/${session}.desktop";
-              value = {
-                text = ''
-                  [Desktop Entry]
-                  Name=${session}
-                  Comment=${session}
-                  Exec=${cmd_for_session session}
-                  Type=Application
-                '';
-              };
+      environment.etc = {
+        "greetd/environments".text = lib.foldr (
+          session: str:
+          ''
+            start-${session}-session
+          ''
+          + str
+        ) "fish" selectedSessions;
+      }
+      // (
+        let
+          fun = session: {
+            name = "greetd/wayland-sessions/${session}.desktop";
+            value = {
+              text = ''
+                [Desktop Entry]
+                Name=${session}
+                Comment=${session}
+                Exec=${cmd_for_session session}
+                Type=Application
+              '';
             };
-          in
-          builtins.listToAttrs (builtins.map fun selectedSessions)
-        );
+          };
+        in
+        builtins.listToAttrs (builtins.map fun selectedSessions)
+      );
     }
   );
 }

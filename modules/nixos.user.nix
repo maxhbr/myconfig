@@ -16,26 +16,25 @@
           isNormalUser = true;
           group = "${myconfig.user}";
           uid = 1000;
-          extraGroups =
-            [
-              "myconfig"
-              "wheel"
-              "keys"
-              "audio"
-              "video"
-              "dialout"
-              "input"
-            ]
-            ++ pkgs.lib.optional config.virtualisation.virtualbox.host.enable "vboxusers"
-            ++ pkgs.lib.optional config.virtualisation.docker.enable "docker"
-            ++ pkgs.lib.optional config.virtualisation.libvirtd.enable "kvm"
-            ++ pkgs.lib.optional config.virtualisation.libvirtd.enable "libvirt"
-            ++ pkgs.lib.optional config.virtualisation.lxc.enable "lxc"
-            ++ pkgs.lib.optional config.virtualisation.lxd.enable "lxd"
-            ++ pkgs.lib.optional config.networking.networkmanager.enable "networkmanager"
-            ++ pkgs.lib.optional config.hardware.bumblebee.enable "bumblebee"
-            ++ pkgs.lib.optional config.programs.sway.enable "sway"
-            ++ pkgs.lib.optional config.services.pipewire.enable "realtime";
+          extraGroups = [
+            "myconfig"
+            "wheel"
+            "keys"
+            "audio"
+            "video"
+            "dialout"
+            "input"
+          ]
+          ++ pkgs.lib.optional config.virtualisation.virtualbox.host.enable "vboxusers"
+          ++ pkgs.lib.optional config.virtualisation.docker.enable "docker"
+          ++ pkgs.lib.optional config.virtualisation.libvirtd.enable "kvm"
+          ++ pkgs.lib.optional config.virtualisation.libvirtd.enable "libvirt"
+          ++ pkgs.lib.optional config.virtualisation.lxc.enable "lxc"
+          ++ pkgs.lib.optional config.virtualisation.lxd.enable "lxd"
+          ++ pkgs.lib.optional config.networking.networkmanager.enable "networkmanager"
+          ++ pkgs.lib.optional config.hardware.bumblebee.enable "bumblebee"
+          ++ pkgs.lib.optional config.programs.sway.enable "sway"
+          ++ pkgs.lib.optional config.services.pipewire.enable "realtime";
           home = "/home/${myconfig.user}";
           createHome = true;
           shell = "/run/current-system/sw/bin/fish";

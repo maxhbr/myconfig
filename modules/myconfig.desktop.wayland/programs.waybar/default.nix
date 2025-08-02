@@ -135,31 +135,30 @@ let
                     height = 25;
                     spacing = 4;
                     modules-left = [ ];
-                    modules-center =
-                      [
-                        # "wlr/taskbar"
-                        # "group/hardware"
-                        "idle_inhibitor"
-                        "custom/test_for_missing_tb_changing"
-                        # "custom/audio_idle_inhibitor"
-                        "clock#time"
-                        "clock#date"
-                        # ];
-                        # modules-right = [
-                      ]
-                      ++ lib.optionals power-profiles-daemon-config.enable [ "power-profiles-daemon" ]
-                      ++ [
-                        "battery"
-                        "backlight"
-                        "pulseaudio"
-                        "systemd-failed-units#user"
-                        "systemd-failed-units#system"
-                        "custom/isvpn"
-                        # "network"
-                        # "cpu"
-                        # "memory"
-                        "tray"
-                      ];
+                    modules-center = [
+                      # "wlr/taskbar"
+                      # "group/hardware"
+                      "idle_inhibitor"
+                      "custom/test_for_missing_tb_changing"
+                      # "custom/audio_idle_inhibitor"
+                      "clock#time"
+                      "clock#date"
+                      # ];
+                      # modules-right = [
+                    ]
+                    ++ lib.optionals power-profiles-daemon-config.enable [ "power-profiles-daemon" ]
+                    ++ [
+                      "battery"
+                      "backlight"
+                      "pulseaudio"
+                      "systemd-failed-units#user"
+                      "systemd-failed-units#system"
+                      "custom/isvpn"
+                      # "network"
+                      # "cpu"
+                      # "memory"
+                      "tray"
+                    ];
                     # "group/hardware" = {
                     #   "orientation" = "vertical";
                     #   "modules" = [ "cpu" "memory" ];

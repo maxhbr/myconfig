@@ -24,6 +24,9 @@ in
         myconfig.persistence.directories = [ ".config/Signal" ];
       }
     ];
-    myconfig.desktop.wayland.launcherCommands = [ "signal-desktop" "smile" ];
+    myconfig.desktop.wayland.launcherCommands = [
+      "signal-desktop"
+      "smile"
+    ];
   };
 }

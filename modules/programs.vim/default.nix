@@ -11,58 +11,57 @@ let
       customRC = builtins.readFile ./vimrc;
       packages.myVimPackage = with pkgs.vimPlugins; {
         # loaded on launch
-        start =
-          [
-            Vundle-vim
-            ale
-            airline
-            colors-solarized
-            ctrlp
-            easy-align
-            easymotion
-            fugitive
-            ghcid
-            gitgutter
-            idris-vim
-            neco-ghc
-            nerdcommenter
-            nerdtree
-            quickfixstatus
-            quickrun
-            rainbow_parentheses
-            shabadou-vim
-            signature
-            surround
-            syntastic
-            table-mode
-            tabmerge
-            tagbar
-            taglist
-            thumbnail-vim
-            undotree
-            vim-addon-nix
-            vim-autoformat
-            vim-commentary
-            vim-gista
-            vim-hardtime
-            vim-hier
-            vim-hindent
-            vim-orgmode
-            vim-racer
-            vim-xkbswitch
-            vimagit
-            vimproc-vim
-            vimwiki
-            watchdogs
-            webapi-vim
-          ]
-          ++ [
-            stylish-haskell
-            haskell-vim
-            # haskellconceal
-            hoogle
-          ]
-          ++ [ rust-vim ];
+        start = [
+          Vundle-vim
+          ale
+          airline
+          colors-solarized
+          ctrlp
+          easy-align
+          easymotion
+          fugitive
+          ghcid
+          gitgutter
+          idris-vim
+          neco-ghc
+          nerdcommenter
+          nerdtree
+          quickfixstatus
+          quickrun
+          rainbow_parentheses
+          shabadou-vim
+          signature
+          surround
+          syntastic
+          table-mode
+          tabmerge
+          tagbar
+          taglist
+          thumbnail-vim
+          undotree
+          vim-addon-nix
+          vim-autoformat
+          vim-commentary
+          vim-gista
+          vim-hardtime
+          vim-hier
+          vim-hindent
+          vim-orgmode
+          vim-racer
+          vim-xkbswitch
+          vimagit
+          vimproc-vim
+          vimwiki
+          watchdogs
+          webapi-vim
+        ]
+        ++ [
+          stylish-haskell
+          haskell-vim
+          # haskellconceal
+          hoogle
+        ]
+        ++ [ rust-vim ];
         opt = [ ];
       };
     };

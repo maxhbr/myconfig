@@ -11,12 +11,10 @@
         # see: https://github.com/NixOS/nixpkgs/issues/409284#issuecomment-2952396401
         llama-cpp =
           (prev.llama-cpp.overrideAttrs (oldAttrs: {
-            postPatch =
-              (oldAttrs.postPatch or "")
-              + ''
-                echo "Applying patch to ggml/src/ggml-vulkan/CMakeLists.txt"
-                sed -i '/DCMAKE_RUNTIME_OUTPUT_DIRECTORY/d' ggml/src/ggml-vulkan/CMakeLists.txt
-              '';
+            postPatch = (oldAttrs.postPatch or "") + ''
+              echo "Applying patch to ggml/src/ggml-vulkan/CMakeLists.txt"
+              sed -i '/DCMAKE_RUNTIME_OUTPUT_DIRECTORY/d' ggml/src/ggml-vulkan/CMakeLists.txt
+            '';
           })).override
             {
               # cudaSupport = false;

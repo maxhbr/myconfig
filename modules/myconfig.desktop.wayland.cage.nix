@@ -37,13 +37,12 @@ in
               "${pkgs.firefox}/bin/firefox -kiosk -private-window '${cfg.desktop.wayland.cage.url}'"
             else
               "${pkgs.foot}/bin/foot ${pkgs.tmux}/bin/tmux";
-          environment =
-            {
-              WLR_LIBINPUT_NO_DEVICES = wlrLibinputNoDevices;
-            }
-            // lib.optionalAttrs (config.environment.variables ? GDK_PIXBUF_MODULE_FILE) {
-              GDK_PIXBUF_MODULE_FILE = config.environment.variables.GDK_PIXBUF_MODULE_FILE;
-            };
+          environment = {
+            WLR_LIBINPUT_NO_DEVICES = wlrLibinputNoDevices;
+          }
+          // lib.optionalAttrs (config.environment.variables ? GDK_PIXBUF_MODULE_FILE) {
+            GDK_PIXBUF_MODULE_FILE = config.environment.variables.GDK_PIXBUF_MODULE_FILE;
+          };
         };
         # wait for network and DNS
         systemd.services."cage-tty1" = {

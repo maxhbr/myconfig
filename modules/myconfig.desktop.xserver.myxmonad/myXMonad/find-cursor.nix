@@ -18,14 +18,15 @@ stdenv.mkDerivation rec {
     sha256 = "1ybwbamxl3mysack02bjh13qrcq57wnsjxwindgp6c724cbfpw3a";
   };
 
-  nativeBuildInputs =
-    [ pkgs.makeWrapper ]
-    ++ (with pkgs.xorg; [
-      libX11
-      libXext
-      libXdamage
-      libXrender
-    ]);
+  nativeBuildInputs = [
+    pkgs.makeWrapper
+  ]
+  ++ (with pkgs.xorg; [
+    libX11
+    libXext
+    libXdamage
+    libXrender
+  ]);
 
   buildPhase = ''
     make all

@@ -29,7 +29,7 @@ in
         ];
       };
     }
-    # { 
+    # {
     #   # from: https://discourse.nixos.org/t/nix-build-ate-my-ram/35752
     #   # OOM configuration:
     #   systemd = {

@@ -517,44 +517,48 @@ in
         } -g ${toString config.users.extraGroups.${user}.gid}
       '';
     };
-  specialisation.work.configuration = let
-      persistentWorkDir = "${persistentDir}/work";
-    in {
-      config = {
-        fileSystems."${persistentWorkDir}" = {
-          device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
-          fsType = "btrfs";
-          options = [ "subvol=${volumeWork}" ];
-          neededForBoot = true;
-        };
-        home-manager.sharedModules = [
-          ({ config, ... }:
-          let
-            mkRelativeToHome =
-              path:
-              if lib.hasPrefix "${config.home.homeDirectory}/" path then
-                lib.removePrefix "${config.home.homeDirectory}/" path
-              else
-                path;
-          in
-          {
-            config = {
-              home.persistence."${persistentWorkDir}/home/${config.home.username}" = {
-                directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-directories);
-                files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-files);
-                allowOther = true;
-              };
-            };
-          })
-        ];
-        system.activationScripts = {
-          script.text = ''
-            install -d -m 700 "/${persistentWorkDir}/home/${user}" -o ${
-              toString config.users.extraUsers.${user}.uid
-            } -g ${toString config.users.extraGroups.${user}.gid}
-          '';
+    specialisation.work.configuration =
+      let
+        persistentWorkDir = "${persistentDir}/work";
+      in
+      {
+        config = {
+          fileSystems."${persistentWorkDir}" = {
+            device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+            fsType = "btrfs";
+            options = [ "subvol=${volumeWork}" ];
+            neededForBoot = true;
+          };
+          home-manager.sharedModules = [
+            (
+              { config, ... }:
+              let
+                mkRelativeToHome =
+                  path:
+                  if lib.hasPrefix "${config.home.homeDirectory}/" path then
+                    lib.removePrefix "${config.home.homeDirectory}/" path
+                  else
+                    path;
+              in
+              {
+                config = {
+                  home.persistence."${persistentWorkDir}/home/${config.home.username}" = {
+                    directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-directories);
+                    files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-files);
+                    allowOther = true;
+                  };
+                };
+              }
+            )
+          ];
+          system.activationScripts = {
+            script.text = ''
+              install -d -m 700 "/${persistentWorkDir}/home/${user}" -o ${
+                toString config.users.extraUsers.${user}.uid
+              } -g ${toString config.users.extraGroups.${user}.gid}
+            '';
+          };
         };
       };
-    };
   };
 }

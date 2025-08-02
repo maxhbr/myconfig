@@ -1,4 +1,9 @@
-{ pkgs, lib, config, ... }:
+{
+  pkgs,
+  lib,
+  config,
+  ...
+}:
 let
   cfg = config.myconfig;
 in
@@ -10,10 +15,10 @@ in
     home-manager.sharedModules = [
       {
         home.packages = with pkgs.master; [ joplin-desktop ];
-          myconfig.persistence.directories = [
-            ".config/Joplin"
-            ".config/joplin-desktop"
-          ];
+        myconfig.persistence.directories = [
+          ".config/Joplin"
+          ".config/joplin-desktop"
+        ];
       }
     ];
     myconfig.desktop.wayland.launcherCommands = [ "joplin-desktop" ];

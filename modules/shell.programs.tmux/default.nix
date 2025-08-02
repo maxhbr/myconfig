@@ -1,6 +1,12 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ lib, pkgs, config, myconfig, ... }:
+{
+  lib,
+  pkgs,
+  config,
+  myconfig,
+  ...
+}:
 let
   user = myconfig.user;
   inherit (builtins) readFile concatStringsSep;

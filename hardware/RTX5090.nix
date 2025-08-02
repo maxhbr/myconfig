@@ -13,11 +13,14 @@
   config = {
     home-manager.sharedModules = [
       {
-        home.packages = with pkgs; [
-          nvtopPackages.nvidia
-        ] ++ (with pkgs.cudaPackages; [
-          cudatoolkit
-        ]);
+        home.packages =
+          with pkgs;
+          [
+            nvtopPackages.nvidia
+          ]
+          ++ (with pkgs.cudaPackages; [
+            cudatoolkit
+          ]);
       }
     ];
     users.extraUsers."${myconfig.user}".extraGroups = [ "nvidia" ];

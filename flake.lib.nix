@@ -71,18 +71,17 @@ let
                       User ${myconfig.user}
                   '';
                 };
-                home.packages =
-                  [
-                    (pkgs.writeShellScriptBin "suspend-${otherHostName}" "ssh ${otherHostName} sudo systemctl suspend")
-                  ]
-                  ++ (
-                    if (lib.attrsets.hasAttrByPath [ "mac" ] otherHostMetadata) then
-                      [
-                        (pkgs.writeShellScriptBin "wake-${otherHostName}" "${pkgs.wol}/bin/wol ${otherHostMetadata.mac}")
-                      ]
-                    else
-                      [ ]
-                  );
+                home.packages = [
+                  (pkgs.writeShellScriptBin "suspend-${otherHostName}" "ssh ${otherHostName} sudo systemctl suspend")
+                ]
+                ++ (
+                  if (lib.attrsets.hasAttrByPath [ "mac" ] otherHostMetadata) then
+                    [
+                      (pkgs.writeShellScriptBin "wake-${otherHostName}" "${pkgs.wol}/bin/wol ${otherHostMetadata.mac}")
+                    ]
+                  else
+                    [ ]
+                );
               };
             }
           ))
@@ -450,7 +449,8 @@ let
           };
           environment.systemPackages = [
             (mkScript newName)
-          ] ++ (if hostHasWg then [ (mkScript newWgName) ] else [ ]);
+          ]
+          ++ (if hostHasWg then [ (mkScript newWgName) ] else [ ]);
         }
       );
 
@@ -571,21 +571,26 @@ rec {
             }
           )
 
-          ( { config, lib, ... }: {
-            imports = [ inputs.agenix.nixosModules.default ];
-            config = {
-              home-manager.sharedModules = [
-                inputs.agenix.homeManagerModules.default
-                ({pkgs, config, ...}:
-                {
-                  home.packages = [
-                    pkgs.age
-                    inputs.agenix.packages."${system}".default
-                  ];
-                })
-              ];
-            };
-          })
+          (
+            { config, lib, ... }:
+            {
+              imports = [ inputs.agenix.nixosModules.default ];
+              config = {
+                home-manager.sharedModules = [
+                  inputs.agenix.homeManagerModules.default
+                  (
+                    { pkgs, config, ... }:
+                    {
+                      home.packages = [
+                        pkgs.age
+                        inputs.agenix.packages."${system}".default
+                      ];
+                    }
+                  )
+                ];
+              };
+            }
+          )
 
           (
             {

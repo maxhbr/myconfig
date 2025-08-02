@@ -8,14 +8,12 @@
 }:
 let
   waylandSlack = pkgs.slack.overrideAttrs (old: {
-    installPhase =
-      old.installPhase
-      + ''
-        rm $out/bin/slack
+    installPhase = old.installPhase + ''
+      rm $out/bin/slack
 
-        makeWrapper $out/lib/slack/slack $out/bin/slack \
-          --add-flags "--ozone-platform=wayland --enable-features=UseOzonePlatform,WebRTCPipeWireCapturer"
-      '';
+      makeWrapper $out/lib/slack/slack $out/bin/slack \
+        --add-flags "--ozone-platform=wayland --enable-features=UseOzonePlatform,WebRTCPipeWireCapturer"
+    '';
     # --prefix xdg_data_dirs : $gsettings_schemas_path \
     # --prefix path : ${lib.makebinpath [pkgs.xdg-utils]} \
     # --set NIXOS_OZONE_WL 1 \
@@ -42,7 +40,7 @@ in
           #     };
           #   })
         ];
-      config = {
+        config = {
           nixpkgs.overlays = map (n: import n) [
             # ./idea-ultimate
           ];
@@ -68,22 +66,21 @@ in
                 ".config/Slack"
                 "TNG"
               ];
-              home.packages =
-                [
-                  slack-pkg
-                  teams-for-linux-pkg
-                ]
-                ++ (with pkgs; [
-                  # idea.idea-ultimate # jetbrains.phpstorm
-                  dia
-                  # insync
-                  exiftool
-                  # misc-desktop-tools:
-                  libreoffice
-                  # element-desktop
-                  subversion
-                  google-cloud-sdk
-                ]);
+              home.packages = [
+                slack-pkg
+                teams-for-linux-pkg
+              ]
+              ++ (with pkgs; [
+                # idea.idea-ultimate # jetbrains.phpstorm
+                dia
+                # insync
+                exiftool
+                # misc-desktop-tools:
+                libreoffice
+                # element-desktop
+                subversion
+                google-cloud-sdk
+              ]);
             }
           ];
           myconfig.desktop.wayland.launcherCommands = [
