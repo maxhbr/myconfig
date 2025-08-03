@@ -59,10 +59,7 @@ in
               }
             '';
           };
-          myconfig.persistence.files = [
-            ".local/state/wireplumber/default-routes"
-            ".local/state/wireplumber/stream-properties"
-          ];
+          myconfig.persistence.cache-directories = [ ".local/state/wireplumber/" ];
         }
       ];
     }

@@ -22,71 +22,76 @@ let
   teams-for-linux-pkg = pkgs.nixos-2405.teams-for-linux;
 in
 {
-  specialisation = {
-    work = {
-      inheritParentConfig = true;
-      configuration = {
-        imports = [
-          ./zoom-us
-          # ./jdk.nix
-          # ./node.nix
-          # ./azure-cli.nix
-          ./dotnet.nix
-          # ({ pkgs, ... }:
-          #   let wing-edit = pkgs.callPackage ../../../pkgs/wing-edit { };
-          #   in {
-          #     config = {
-          #       home-manager.users.mhuber = { home.packages = [ wing-edit ]; };
-          #     };
-          #   })
-        ];
-        config = {
-          nixpkgs.overlays = map (n: import n) [
-            # ./idea-ultimate
+  config = {
+    environment.systemPackages = [
+      (pkgs.writeShellScriptBin "specialise-on-work" "sudo /nix/var/nix/profiles/system/specialisation/work/bin/switch-to-configuration test")
+    ];
+    specialisation = {
+      work = {
+        inheritParentConfig = true;
+        configuration = {
+          imports = [
+            ./zoom-us
+            # ./jdk.nix
+            # ./node.nix
+            # ./azure-cli.nix
+            ./dotnet.nix
+            # ({ pkgs, ... }:
+            #   let wing-edit = pkgs.callPackage ../../../pkgs/wing-edit { };
+            #   in {
+            #     config = {
+            #       home-manager.users.mhuber = { home.packages = [ wing-edit ]; };
+            #     };
+            #   })
           ];
-          home-manager.sharedModules = [
-            {
-              imports = [
-                {
-                  programs.zsh.shellAliases = {
-                    unteams = ''while pkill teams; do echo "kill it with fire!"; done'';
-                  };
-                  programs.fish.functions = {
-                    unteams = ''
-                      while pkill teams
-                        echo "kill it with fire!"
-                      end
-                      echo "now wo are happy again"
-                    '';
-                  };
-                }
-              ];
-              myconfig.persistence.work-directories = [
-                ".config/teams-for-linux"
-                ".config/Slack"
-                "TNG"
-              ];
-              home.packages = [
-                slack-pkg
-                teams-for-linux-pkg
-              ]
-              ++ (with pkgs; [
-                # idea.idea-ultimate # jetbrains.phpstorm
-                dia
-                # insync
-                exiftool
-                # misc-desktop-tools:
-                libreoffice
-                # element-desktop
-                subversion
-                google-cloud-sdk
-              ]);
-            }
-          ];
-          myconfig.desktop.wayland.launcherCommands = [
-            "slack"
-            "teams-for-linux"
-          ];
+          config = {
+            nixpkgs.overlays = map (n: import n) [
+              # ./idea-ultimate
+            ];
+            home-manager.sharedModules = [
+              {
+                imports = [
+                  {
+                    programs.zsh.shellAliases = {
+                      unteams = ''while pkill teams; do echo "kill it with fire!"; done'';
+                    };
+                    programs.fish.functions = {
+                      unteams = ''
+                        while pkill teams
+                          echo "kill it with fire!"
+                        end
+                        echo "now wo are happy again"
+                      '';
+                    };
+                  }
+                ];
+                myconfig.persistence.work-directories = [
+                  ".config/teams-for-linux"
+                  ".config/Slack"
+                  "TNG"
+                ];
+                home.packages = [
+                  slack-pkg
+                  teams-for-linux-pkg
+                ]
+                ++ (with pkgs; [
+                  # idea.idea-ultimate # jetbrains.phpstorm
+                  dia
+                  # insync
+                  exiftool
+                  # misc-desktop-tools:
+                  libreoffice
+                  # element-desktop
+                  subversion
+                  google-cloud-sdk
+                ]);
+              }
+            ];
+            myconfig.desktop.wayland.launcherCommands = [
+              "slack"
+              "teams-for-linux"
+            ];
+          };
         };
       };
     };

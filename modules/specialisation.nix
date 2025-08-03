@@ -18,15 +18,19 @@
       {
         config = lib.mkIf (config.specialisation != { }) {
           # Config that should only apply to the default system, not the specialised ones
-          system.nixos.tags = [ "default" ];
         };
       }
     )
   ];
-  specialisation = {
-    experimental = {
-      inheritParentConfig = true;
-      configuration = {
+  config = {
+    environment.systemPackages = [
+      (pkgs.writeShellScriptBin "specialise-unload" "sudo /nix/var/nix/profiles/system/bin/switch-to-configuration test")
+    ];
+    specialisation = {
+      experimental = {
+        inheritParentConfig = true;
+        configuration = {
+        };
       };
     };
   };

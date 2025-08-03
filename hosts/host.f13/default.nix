@@ -81,7 +81,7 @@
           enable = true;
           selectedSessions = [
             "niri"
-            "niri-plain"
+            # "niri-plain"
             "labwc"
             "river"
             # "plasma6"
