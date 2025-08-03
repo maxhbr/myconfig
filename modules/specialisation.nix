@@ -25,6 +25,7 @@
   config = {
     environment.systemPackages = [
       (pkgs.writeShellScriptBin "specialise-unload" "sudo /nix/var/nix/profiles/system/bin/switch-to-configuration test")
+      (pkgs.writeShellScriptBin "specialise-load-experimental" "sudo /nix/var/nix/profiles/system/specialisation/experimental/bin/switch-to-configuration test")
     ];
     specialisation = {
       experimental = {
