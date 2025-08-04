@@ -426,10 +426,10 @@ binds {
     Mod+Shift+Up    { focus-monitor-up; }
     Mod+Shift+Right { focus-monitor-right; }
 
-    Mod5+Left  { move-column-to-monitor-left; }
-    Mod5+Down  { move-column-to-monitor-down; }
-    Mod5+Up    { move-column-to-monitor-up; }
-    Mod5+Right { move-column-to-monitor-right; }
+    Mod+Mod5+Left  { move-column-to-monitor-left; }
+    Mod+Mod5+Down  { move-column-to-monitor-down; }
+    Mod+Mod5+Up    { move-column-to-monitor-up; }
+    Mod+Mod5+Right { move-column-to-monitor-right; }
 
     // Alternatively, there are commands to move just a single window:
     // Mod+Shift+Ctrl+Left  { move-window-to-monitor-left; }

@@ -2,19 +2,16 @@
   description = "myconfig";
 
   inputs = {
-    master.url = "github:nixos/nixpkgs/master";
-    nixos-unstable-small.url = "github:nixos/nixpkgs/nixos-unstable-small";
-    nixos-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    rel2405.url = "github:nixos/nixpkgs/release-24.05";
-    rel2411.url = "github:nixos/nixpkgs/release-24.11";
+    master.url = "github:nixos/nixpkgs?ref=master";
+    nixos-unstable-small.url = "github:nixos/nixpkgs?ref=nixos-unstable-small";
+    nixos-unstable.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    rel2405.url = "github:nixos/nixpkgs?ref=release-24.05";
+    rel2411.url = "github:nixos/nixpkgs?ref=release-24.11";
 
-    nixpkgs-wayland = {
-      url = "github:nix-community/nixpkgs-wayland";
-      # only needed if you use as a package set:
-      inputs.nixpkgs.follows = "nixpkgs";
-      # nixpkgs-wayland.inputs.master.follows = "master";
-    };
+    nixpkgs-wayland.url = "github:nix-community/nixpkgs-wayland";
+    nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
+    nixpkgs-wayland.inputs.flake-utils.follows = "flake-utils";
 
     home.url = "github:nix-community/home-manager";
     home.inputs.nixpkgs.follows = "nixpkgs";
@@ -31,22 +28,21 @@
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
-    emacs.url = "github:nix-community/emacs-overlay";
-    doomemacs.url = "github:hlissner/doom-emacs";
-    doomemacs.flake = false;
-
     my-wallpapers.url = "github:maxhbr/wallpapers";
     my-wallpapers.inputs.nixpkgs.follows = "nixpkgs";
 
     zephyr-flake.url = "github:maxhbr/zephyr-flake";
-    # zephyr-flake.inputs.nixpkgs.follows = "nixpkgs";
+    zephyr-flake.inputs.nixpkgs.follows = "nixpkgs";
 
     # octrc.url = "github:maxhbr/octrc";
     # octrc.inputs.nixpkgs.follows = "nixpkgs";
 
     nixgl.url = "github:nix-community/nixGL";
+    nixgl.inputs.nixpkgs.follows = "nixpkgs";
+    nixgl.inputs.flake-utils.follows = "flake-utils";
 
     clipboard-sync.url = "github:dnut/clipboard-sync";
+    clipboard-sync.inputs.nixpkgs.follows = "nixpkgs";
 
     myphoto.url = "github:maxhbr/myphoto";
     myphoto.inputs.nixpkgs.follows = "nixpkgs";
