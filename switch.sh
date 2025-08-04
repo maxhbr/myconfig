@@ -63,6 +63,7 @@ gnupg_to_mutt() {
 
 flake_update() {
     local update_mode="$1"; shift
+    local logs_dir="$1"; shift
     log_step "updating flake in $update_mode mode"
 
     if [[ "$update_mode" == "full" ]]; then
@@ -78,7 +79,6 @@ flake_update() {
         log_error "unknown update mode: $update_mode"
         exit 1
     fi
-
 }
 
 flake_update_recursively() (
@@ -310,7 +310,7 @@ main() {
     # setup logging
     start_time="$(date +%s)"
     exec &> >(while read line; do current_time="$(date +%s)"; time_diff="$((current_time - start_time))"; echo "$( date -u -d@"$time_diff" +"%H:%M:%S" )| $line"; done)
-    logsDir="../_logs"
+    local logsDir="../_logs"
     mkdir -p "$logsDir"
     local logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
     echo -e "\n\n\n\n\n\n\n" >> "$logfile"
@@ -327,12 +327,11 @@ main() {
         log_warn "no github token"
     fi
 
-    flake_update "$( [[ "$MODE" == "" ]] && echo "full" || echo "fast")"
+    flake_update "$( [[ "$MODE" == "" ]] && echo "full" || echo "fast")" "$logsDir"
 
     local out_link="$(get_out_link_of_target "$target")"
     local latest_logfile="${out_link}.log"
-    rm -f "$latest_logfile"
-    ln -s "$(readlink -s --relative-to="$(dirname "$latest_logfile")" "$logfile")" "$latest_logfile" || true
+    ln -sf "$(realpath -m --relative-to="$(dirname "$latest_logfile")" "$logfile")" "$latest_logfile"
     local old_result="$(readlink -f "$out_link" || true)"
     build "$target" "$out_link" || build "$target" "$out_link" --keep-failed --no-eval-cache
     if [[ -e "$old_result" ]]; then

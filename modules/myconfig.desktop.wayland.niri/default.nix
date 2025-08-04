@@ -71,17 +71,27 @@ in
               niri-toggle-dpi-scale = pkgs.writeShellScriptBin "niri-toggle-dpi-scale" ''
                 set -euo pipefail
 
+                # "niri-toggle-dpi-scale" [scale] [output]
+
+                target=""
+                if [[ "$#" -gt 0 && "$1" =~ ^[0-9]*\.?[0-9]+$ ]]; then
+                    target="$1"; shift
+                fi
+
                 OUTPUT="''${1:-eDP-1}"
-                HI="2"
-                LO="1.3"
 
-                current_scale=$(${pkgs.niri}/bin/niri msg --json outputs \
-                                | ${pkgs.jq}/bin/jq -r --arg o "$OUTPUT" '.[$o].logical.scale')
+                if [[ -z "$target" ]]; then
+                    HI="2"
+                    LO="1.3"
 
-                if [[ "$current_scale" == "$HI"* ]]; then
-                    target="$LO"
-                else
-                    target="$HI"
+                    current_scale=$(${pkgs.niri}/bin/niri msg --json outputs \
+                                    | ${pkgs.jq}/bin/jq -r --arg o "$OUTPUT" '.[$o].logical.scale')
+
+                    if [[ "$current_scale" == "$HI"* ]]; then
+                        target="$LO"
+                    else
+                        target="$HI"
+                    fi
                 fi
 
                 set -x
