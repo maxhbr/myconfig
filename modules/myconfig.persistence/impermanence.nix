@@ -91,6 +91,14 @@ in
               mountScript = pkgs.writeShellScriptBin "btrbk-mount" ''
                 set -euo pipefail
 
+                lockfile=/tmp/btrbk-mount.lock
+                if [ -f "$lockfile" ]; then
+                  echo "Lock file $lockfile exists, exiting"
+                  exit 1
+                fi
+                touch "$lockfile"
+                trap "rm -f $lockfile" EXIT
+
                 if [ ! -b "${validateDevice config.myconfig.persistence.impermanence.btrbk_device}" ]; then
                   echo "Device ${validateDevice config.myconfig.persistence.impermanence.btrbk_device} does not exist"
                   if [ ! -b "${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}" ]; then
@@ -98,7 +106,14 @@ in
                     exit 1
                   fi
                   echo "Decrypting ${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}"
-                  sudo cryptsetup luksOpen "${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}" "btr_backup_luks"
+
+
+                  btrbk_keyfile=${config.myconfig.persistence.impermanence.btrbk_luks_keyfile}
+                  if [ -n "$btrbk_keyfile" ] && [ -f "$btrbk_keyfile" ]; then
+                    sudo cryptsetup luksOpen --key-file "$btrbk_keyfile" "${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}" "btr_backup_luks"
+                  else
+                    sudo cryptsetup luksOpen "${validateDevice config.myconfig.persistence.impermanence.btrbk_luks_device}" "btr_backup_luks"
+                  fi
 
                   if [ ! -b "${validateDevice config.myconfig.persistence.impermanence.btrbk_device}" ]; then
                     echo "Device ${validateDevice config.myconfig.persistence.impermanence.btrbk_device} still does not exist"
@@ -150,6 +165,19 @@ in
                   sudo -H -u btrbk bash -c "btrbk -c $conf --progress --verbose run"
                   times
                 '';
+                scripts = [
+                  (mkScript "priv")
+                  (mkScript "work")
+                ];
+                doAllScripts = pkgs.writeShellScriptBin "btrbk-backup-all" ''
+                  set -euo pipefail
+                  ${mountScript}/bin/btrbk-mount
+                  sleep 5
+                  ${pkgs.parallel}/bin/parallel --halt soon,fail=1 ::: ${toString (lib.map (script: "${script}/bin/${script.name}") scripts)}
+                  sleep 5
+                  sync
+                  ${umountScript}/bin/btrbk-umount
+                '';
             in
             {
               # TODO: if this is set, bwrap and zoom does not work
@@ -179,11 +207,10 @@ in
 
               environment.systemPackages = [
                 pkgs.lz4
-                (mkScript "priv")
-                (mkScript "work")
                 mountScript
                 umountScript
-              ];
+                doAllScripts
+              ] ++ scripts;
             }
           );
     }
@@ -207,6 +234,12 @@ in
       example = "/dev/disk/by-uuid/8e3c7395-c663-4080-9463-3b8a18bd7ad3";
       type = types.nullOr types.str;
       description = "Location of the btrbk LUKS device, which is used to encrypt the btrbk device.";
+    };
+    myconfig.persistence.impermanence.btrbk_luks_keyfile = mkOption {
+      default = null;
+      example = "/etc/btrbk/luks_keyfile";
+      type = types.nullOr types.str;
+      description = "Location of the btrbk LUKS keyfile.";
     };
     myconfig.persistence.impermanence.enable_smartd = mkEnableOption "smartd for the btrfs impermanence device";
   };

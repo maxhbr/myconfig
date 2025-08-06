@@ -104,16 +104,17 @@ in
         "cogito:32b"
         "deepseek-r1:32b"
         "gemma3:27b"
+        "gpt-oss:20b"
         "llama3.2:3b"
         "llava:34b"
+        "magistral:24b"
         "openthinker:32b"
         "phi4"
+        "qwen2.5vl:32b"
+        "qwen3:30b"
+        "qwen3:32b"
         "qwq:32b"
         "smollm2:1.7b"
-        "qwen2.5vl:32b"
-        "qwen3:32b"
-        "qwen3:30b"
-        "magistral:24b"
       ]
       ++ [
         # for continue:

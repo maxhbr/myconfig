@@ -131,11 +131,8 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 #tags button.focused,
 #custom-dwl_tag.focused,
 #workspaces button.focused {
+    border-top-right-radius: 7px;
     background: rgba(43, 48, 59, 0.5);
-    /* border-right: 2px solid #e0cbc7;
-    border-left: 2px solid #e0cbc7; */
-    /* padding-left: 0px;
-    padding-right: 0px; */
 }
 
 #workspaces button.empty {
@@ -147,7 +144,10 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 #custom-dwl_tag.occupied,
 #workspaces button.active,
 #window.focused {
+    background: rgba(238, 154, 0, 0.5);
+    border-top-right-radius: 7px;
     border-bottom: 3px solid #e0cbc7;
+    color: black;
 }
 
 #window:not(.focused) {
