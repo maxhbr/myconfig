@@ -93,7 +93,6 @@
         };
       };
       virtualisation.enable = true;
-      editor.emacs.enable = true;
       # dev = {
       #   compliance.enable = true;
       # };

@@ -94,21 +94,18 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 }
 
 #power-profiles-daemon.performance {
+    color: #e0cbc7;
 }
 
+#battery.warning:not(.charging),
+#systemd-failed-units.degraded,
 #custom-platform_profile.balanced, #power-profiles-daemon.balanced {
-    background: #ee9a00;
+    background: rgba(238, 154, 0, 0.5);
     color: black;
 }
 
 #custom-platform_profile.low-power, #power-profiles-daemon.power-saver {
     background: #f53c3c;
-}
-
-#battery.warning:not(.charging),
-#systemd-failed-units.degraded {
-    background: #ee9a00;
-    color: black;
 }
 
 @keyframes blink {
@@ -132,7 +129,9 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 #custom-dwl_tag.focused,
 #workspaces button.focused {
     border-top-right-radius: 7px;
-    background: rgba(43, 48, 59, 0.5);
+    background: rgba(238, 154, 0, 0.5);
+    border-bottom: 3px solid #e0cbc7;
+    color: white;
 }
 
 #workspaces button.empty {
@@ -142,12 +141,11 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 #taskbar button.active,
 #tags button.occupied,
 #custom-dwl_tag.occupied,
-#workspaces button.active,
+#workspaces button.active:not(.focused),
 #window.focused {
-    background: rgba(238, 154, 0, 0.5);
     border-top-right-radius: 7px;
+    background: rgba(43, 48, 59, 0.5);
     border-bottom: 3px solid #e0cbc7;
-    color: black;
 }
 
 #window:not(.focused) {
