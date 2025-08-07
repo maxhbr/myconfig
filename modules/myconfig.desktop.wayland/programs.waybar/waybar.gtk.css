@@ -127,7 +127,8 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 
 #tags button.focused,
 #custom-dwl_tag.focused,
-#workspaces button.focused {
+#workspaces button.focused,
+#window.focused {
     border-top-right-radius: 7px;
     background: rgba(238, 154, 0, 0.5);
     border-bottom: 3px solid #e0cbc7;
@@ -141,8 +142,8 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 #taskbar button.active,
 #tags button.occupied,
 #custom-dwl_tag.occupied,
-#workspaces button.active:not(.focused),
-#window.focused {
+#workspaces button.active:not(.focused)
+{
     border-top-right-radius: 7px;
     background: rgba(43, 48, 59, 0.5);
     border-bottom: 3px solid #e0cbc7;

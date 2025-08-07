@@ -98,7 +98,6 @@ in
         else pkgs.ollama;
 
       openFirewall = true;
-      # host = myconfig.metadatalib.metadata.hosts."${config.networking.hostName}".ip4;
       acceleration = "cuda";
       host = "0.0.0.0";
       environmentVariables = {
