@@ -19,7 +19,6 @@ in
       services.vnstat.enable = true;
       services.vsftpd.enable = true;
 
-      systemd.enableCgroupAccounting = true;
       system.autoUpgrade.allowReboot = true;
 
       home-manager.sharedModules = [ { home.packages = with pkgs; [ vnstat ]; } ];
