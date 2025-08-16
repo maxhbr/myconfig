@@ -105,6 +105,7 @@
         # imagework.myphoto.enable = false;
         cad.enable = true;
         joplin-desktop.enable = true;
+        logseq.enable = true;
       };
       # email.enable = true;
       virtualisation.enable = true;

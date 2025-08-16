@@ -34,7 +34,7 @@ in
         let
           tuigreetSettings = {
             default_session = {
-              command = "${pkgs.greetd.tuigreet}/bin/tuigreet --width 120 --remember --remember-session --sessions /etc/greetd/wayland-sessions/ --time --cmd '${cmd0}'";
+              command = "${pkgs.tuigreet}/bin/tuigreet --width 120 --remember --remember-session --sessions /etc/greetd/wayland-sessions/ --time --cmd '${cmd0}'";
               user = "greeter";
             };
           };
