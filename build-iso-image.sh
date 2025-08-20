@@ -6,11 +6,19 @@ set -exuo pipefail
 writeScripts() {
     local outDir="$1"
     local outFile="$2"
-    cat <<EOF | tee "$outDir/dd.sh"
-#!/usr/bin/env bash
-set -ex
-sdX="\$1"
-sudo dd if="$outFile" of="\$sdX" bs=4M conv=sync
+    cat <<'EOF' | tee "$outDir/dd.sh"
+#!/usr/bin/env nix-shell
+#! nix-shell -i bash -p parted gptfdisk systemdMinimal e2fsprogs
+set -euo pipefail
+set -x
+EOF
+    echo "iso=$outFile" | tee -a "$outDir/dd.sh"
+    cat <<'EOF' | tee -a "$outDir/dd.sh"
+sdX="$1"
+die() { exit 1; }
+[[ "$(lsblk -no TYPE "$sdX")" = "disk" ]] || die
+
+sudo dd if="$iso" of="$sdX" bs=4M conv=sync status=progress
 EOF
     chmod +x "$outDir/dd.sh"
 

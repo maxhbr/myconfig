@@ -82,6 +82,13 @@ in
           ''
           + str
         ) "fish" selectedSessions;
+        "greetd/wayland-sessions/tmux.desktop".text = ''
+          [Desktop Entry]
+          Name=tmux
+          Comment=tmux in foot in cage
+          Exec=${pkgs.cage}/bin/cage -s -- tfoot
+          Type=Application
+        '';
       }
       // (
         let

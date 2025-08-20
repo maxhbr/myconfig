@@ -8,8 +8,6 @@
 }:
 {
   imports = [
-    ../../hardware/eGPU.nix
-    ../../hardware/RX5500XT.nix
   ];
   config = {
     myconfig = {
@@ -22,8 +20,8 @@
             "niri"
             "niri-plain"
             "labwc"
-            "river"
-            "plasma6"
+            # "river"
+            # "plasma6"
             # "qtile"
           ];
         };
