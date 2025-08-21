@@ -212,9 +212,6 @@ in
     ./programs.waybar
     ./services.clipboard-sync.nix
     {
-      system.nixos.tags = cfg.desktop.wayland.selectedSessions;
-    }
-    {
       home-manager.sharedModules = [
         {
           options.myconfig = with lib; {
