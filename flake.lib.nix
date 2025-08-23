@@ -630,20 +630,6 @@ rec {
           )
 
           { _module.args = specialArgs; }
-        
-          {
-            system.nixos.tags = let
-              rev = self.rev or "dirty";
-              revCount = self.revCount or 0;
-              lastModifiedDate = self.lastModifiedDate or 0;
-            in if revCount > 0 then [
-              "rev:${rev}"
-              "revCount:${toString revCount}"
-              "lastModifiedDate:${toString lastModifiedDate}"
-            ] else [ 
-              "rev:${rev}"
-            ];
-          }
         ];
 
         extraModules = [
