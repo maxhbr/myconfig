@@ -33,17 +33,6 @@ in
             wofi
             bemenu
             # fuzzel
-            ## Screen Lockers
-            swaylock
-            ## Idle Management
-            swayidle
-            (writeShellScriptBin "myswayidle" ''
-              set -x
-              color=777777
-              exec ${swayidle}/bin/swayidle -w \
-                  timeout 300 '${swaylock}/bin/swaylock -f -c '"$color" \
-                  before-sleep '${swaylock}/bin/swaylock -f -c '"$color"
-            '')
             ## Other
             wayshot
             wf-recorder
@@ -134,7 +123,7 @@ in
       autostartCommands = mkOption {
         type = types.lines;
         default = with pkgs; ''
-          myswayidle 3600 &
+          # myswayidle 3600 &
           ${playerctl}/bin/playerctld daemon &
           ${pkgs.swaybg}/bin/swaybg \
               -c '#556677' \
@@ -207,6 +196,7 @@ in
   };
 
   imports = [
+    ./swaylock.nix
     ./services.greetd.nix
     ./sharescreen.nix
     ./programs.waybar
@@ -337,24 +327,6 @@ in
         }
       ];
       services.physlock.enable = lib.mkForce false;
-
-      # https://github.com/NixOS/nixpkgs/issues/143365
-      # security.pam.services.swaylock = {};
-      security.pam.services.swaylock.text = ''
-        # Account management.
-        account required pam_unix.so
-
-        # Authentication management.
-        auth sufficient pam_unix.so   likeauth try_first_pass
-        auth required pam_deny.so
-
-        # Password management.
-        password sufficient pam_unix.so nullok sha512
-
-        # Session management.
-        session required pam_env.so conffile=/etc/pam/environment readenv=0
-        session required pam_unix.so
-      '';
 
       myconfig.desktop.wayland.launcherCommands = [ "wdisplays" ];
     }
