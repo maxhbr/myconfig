@@ -60,7 +60,6 @@
       #     "${config.services.power-profiles-daemon.package}/bin/powerprofilesctl set performance";
       # };
     }
-    ./suspend-beep-service.nix
   ];
 
   config = {
