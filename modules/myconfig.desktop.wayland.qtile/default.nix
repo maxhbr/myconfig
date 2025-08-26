@@ -12,7 +12,7 @@ let
   user = myconfig.user;
   qtilePackage = pkgs.callPackage ./wrapper.nix {
     withBaseWrapper = true;
-    extraPaths = [ ]; # cfg.desktop.wayland.commonPackages;
+    extraPaths = [ ];
     extraSessionCommands = ''
       export XDG_CURRENT_DESKTOP=qtile
       export XKB_DEFAULT_LAYOUT=${config.environment.sessionVariables."XKB_DEFAULT_LAYOUT"}

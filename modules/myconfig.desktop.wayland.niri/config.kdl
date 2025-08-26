@@ -388,8 +388,8 @@ binds {
     Mod+Return { spawn "tfoot"; }
     Mod+P { spawn "my-wofi"; }
     Mod+Shift+P { spawn "wofi" "--show" "run"; }
-    Mod+X { spawn "swaylock" "-f" "-c" "000000"; }
-    Mod+Shift+X { spawn "swaylock" "-f" "-c" "000000"; }
+    Mod+X { spawn "swaylock" "-f"; }
+    Mod+Shift+X { spawn "swaylock" "-f"; }
 
     // You can also use a shell:
     // Mod+T { spawn "bash" "-c" "notify-send hello && exec alacritty"; }

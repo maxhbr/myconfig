@@ -32,13 +32,11 @@
           enable = true;
           directLoginFirstSession = true;
           selectedSessions = [
-            "plasma5-bigsrceen"
-            "plasma5"
-            # "river"
-            #"niri"
-            #"niri-plain"
+            "river"
+            "niri"
+            "niri-plain"
             # "hyprland"
-            # "labwc"
+            "labwc"
           ];
         };
       };

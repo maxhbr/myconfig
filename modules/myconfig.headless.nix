@@ -15,6 +15,7 @@ in
   };
   config = (
     lib.mkIf cfg.headless.enable {
+      system.nixos.tags = [ "headless" ];
       services.netdata.enable = true;
       services.vnstat.enable = true;
       services.vsftpd.enable = true;

@@ -21,22 +21,23 @@ in
           programs.swaylock = {
             enable = true;
             settings = {
-              color = "808080";
+              # color = "808080";
               font-size = 24;
               indicator-idle-visible = false;
               indicator-radius = 100;
               # line-color = "ffffff";
               show-failed-attempts = true;
+              image = "${cfg.desktop.wayland.wallpaper}";
             };
           };
           services.swayidle = {
             enable = true;
             timeouts = [
-              { timeout = 300; command = "''${config.programs.swaylock.package}/bin/swaylock -fF -c 654321"; }
+              { timeout = 300; command = "''${config.programs.swaylock.package}/bin/swaylock -fF -c B97531"; }
               # { timeout = 450; command = "''${pkgs.systemd}/bin/systemctl suspend"; }
             ];
             events = [
-              { event = "before-sleep"; command = "''${config.programs.swaylock.package}/bin/swaylock -fF -c 123456"; }
+              { event = "before-sleep"; command = "''${config.programs.swaylock.package}/bin/swaylock -fF -c 13579B"; }
               { event = "lock"; command = "lock"; }
             ];
           };
