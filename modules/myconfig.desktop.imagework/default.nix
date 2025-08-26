@@ -21,6 +21,7 @@ in
     desktop.imagework.myphoto.enable = mkEnableOption "myphoto" // {
       default = true;
     };
+    desktop.imagework.sigal.enable = mkEnableOption "sigal";
   };
   config = (
     lib.mkIf cfg.desktop.imagework.enable {
@@ -40,7 +41,8 @@ in
             # gthumb
             # krita
             # inkscape
-            sigal # static website generator
+          ] ++ lib.optionals cfg.desktop.imagework.sigal.enable [
+            sigal
             mk_sigal_gallery
           ];
           myconfig.persistence.files = [
