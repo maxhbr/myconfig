@@ -23,13 +23,11 @@
 
     programs.light.enable = true;
 
-    services = {
-      logind.settings.Login = {
-        HandlePowerKey = "suspend";
-        HandleLidSwitch = "suspend";
-        HandleLidSwitchDocked = "suspend";
-        RuntimeDirectorySize = "8G";
-      };
+    services.logind.settings.Login = {
+      HandlePowerKey = "suspend";
+      HandleLidSwitch = "suspend";
+      HandleLidSwitchDocked = "suspend";
+      RuntimeDirectorySize = "8G";
     };
   };
 }

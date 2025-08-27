@@ -8,6 +8,7 @@
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     rel2405.url = "github:nixos/nixpkgs?ref=release-24.05";
     rel2411.url = "github:nixos/nixpkgs?ref=release-24.11";
+    rel2505.url = "github:nixos/nixpkgs?ref=release-25.05";
 
     nixpkgs-wayland.url = "github:nix-community/nixpkgs-wayland";
     nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
@@ -97,6 +98,7 @@
                           (mkSubPkgsOverlay "master" inputs.master)
                           (mkSubPkgsOverlay "nixos-unstable" inputs.nixos-unstable)
                           (mkSubPkgsOverlay "nixos-unstable-small" inputs.ninos-unstable-small)
+                          (mkSubPkgsOverlay "nixos-2505" inputs.rel2505)
                           (mkSubPkgsOverlay "nixos-2405" inputs.rel2405)
                           (mkSubPkgsOverlay "nixos-2411" inputs.rel2411)
                           (mkSubPkgsOverlay "stable" inputs.rel2411)

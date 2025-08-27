@@ -113,6 +113,6 @@
         "en_US.UTF-8/UTF-8"
       ];
     };
-    services.logind.killUserProcesses = false; # this is the default
+    services.logind.settings.Login.KillUserProcesses = false;
   };
 }

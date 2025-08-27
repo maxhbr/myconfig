@@ -24,14 +24,14 @@
     {
       services.openssh = {
         listenAddresses = [
-          {
-            addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
-            port = 22;
-          }
-          {
-            addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
-            port = 22;
-          }
+          # {
+          #   addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
+          #   port = 22;
+          # }
+          # # {
+          # #   addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
+          # #   port = 22;
+          # # }
           {
             addr = "127.0.0.1";
             port = 22;
@@ -106,7 +106,7 @@
         joplin-desktop.enable = true;
         logseq.enable = true;
       };
-      # email.enable = true;
+      email.enable = true;
       virtualisation.enable = true;
       # editor.emacs.enable = false;
       dev = {

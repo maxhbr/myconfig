@@ -565,6 +565,23 @@ rec {
                         ]; # see: https://github.com/nix-community/home-manager/issues/3113
                       }
                     )
+                    (
+                      { pkgs, lib, config, ... }:
+                      let
+                        hmReady = "/tmp/home-manager.ready.${config.home.username}";
+                      in
+                      {
+                        home.activation.markHmUnready = lib.hm.dag.entryBefore [ "writeBoundary" ] ''
+                          rm -f ${hmReady} ${hmReady}.tmp
+                        '';
+                        home.activation.markHmReady =
+                          lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+                            if [[ ! -f ${hmReady} ]]; then
+                              date > ${hmReady}.tmp && mv ${hmReady}.tmp ${hmReady}
+                            fi
+                          '';
+                      }
+                    )
                   ];
                 };
               };

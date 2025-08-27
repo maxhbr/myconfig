@@ -248,10 +248,6 @@
 
     services.hardware.bolt.enable = true;
 
-    services.logind.extraConfig = ''
-      HandlePowerKey=suspend
-      RuntimeDirectorySize=8G
-    '';
     services.gnome.gnome-keyring.enable = true;
 
     home-manager.sharedModules = [
