@@ -152,5 +152,6 @@ in
           tmux-neomutt.sh
       '')
     ];
+    myconfig.persistence.cache-directories = [ ".cache/neomutt" ];
   };
 }
