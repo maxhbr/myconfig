@@ -69,7 +69,7 @@ in
   config = (
     lib.mkIf (cfg.desktop.wayland.enable && selectedSessions != [ ]) {
 
-      system.nixos.tags = [(lib.elemAt selectedSessions 0)];
+      system.nixos.tags = [ (lib.elemAt selectedSessions 0) ];
 
       home-manager.sharedModules = [ { home.packages = with pkgs; [ sessionStarters ]; } ];
 

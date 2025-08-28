@@ -27,24 +27,27 @@ in
     lib.mkIf cfg.desktop.imagework.enable {
       home-manager.sharedModules = [
         {
-          home.packages = with pkgs; [
-            gphoto2
-            gphoto2fs
-            gimp3-with-plugins
-            # darktable
-            # ansel # A darktable fork minus the bloat plus some design vision
-            geeqie
-            gphoto2
-            gphoto2fs
+          home.packages =
+            with pkgs;
+            [
+              gphoto2
+              gphoto2fs
+              gimp3-with-plugins
+              # darktable
+              # ansel # A darktable fork minus the bloat plus some design vision
+              geeqie
+              gphoto2
+              gphoto2fs
 
-            # rawtherapee
-            # gthumb
-            # krita
-            # inkscape
-          ] ++ lib.optionals cfg.desktop.imagework.sigal.enable [
-            sigal
-            mk_sigal_gallery
-          ];
+              # rawtherapee
+              # gthumb
+              # krita
+              # inkscape
+            ]
+            ++ lib.optionals cfg.desktop.imagework.sigal.enable [
+              sigal
+              mk_sigal_gallery
+            ];
           myconfig.persistence.files = [
             ".config/darktable/darktablerc"
             ".config/darktable/shortcutsrc"

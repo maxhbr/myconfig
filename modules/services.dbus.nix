@@ -99,8 +99,7 @@ in
       extraPortals =
         let
           gnome = config.services.desktopManager.gnome.enable;
-          kde =
-            config.services.desktopManager.plasma6.enable;
+          kde = config.services.desktopManager.plasma6.enable;
         in
         [ pkgs.xdg-desktop-portal-wlr ]
         ++ lib.optional kde pkgs.kdePackages.xdg-desktop-portal-kde

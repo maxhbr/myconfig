@@ -206,7 +206,7 @@ in
         ./home-manager.mako.nix
         ./home-manager.foot.nix
         {
-          home.packages = 
+          home.packages =
             with pkgs;
             [
               xorg.xwininfo # to find out if somenthing runs under xwayland

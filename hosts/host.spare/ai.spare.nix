@@ -93,9 +93,10 @@ in
       enable = true;
       # use master branch, if package is of version below 0.11.3, waiting for https://github.com/NixOS/nixpkgs/pull/431380
       package =
-        if (builtins.compareVersions pkgs.ollama.version "0.11.3" < 0)
-        then pkgs.master.ollama
-        else pkgs.ollama;
+        if (builtins.compareVersions pkgs.ollama.version "0.11.3" < 0) then
+          pkgs.master.ollama
+        else
+          pkgs.ollama;
 
       openFirewall = true;
       acceleration = "cuda";

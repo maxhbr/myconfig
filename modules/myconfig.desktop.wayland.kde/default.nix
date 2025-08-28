@@ -14,12 +14,7 @@ in
 {
   config = (
     lib.mkIf
-      (
-        cfg.desktop.wayland.enable
-        && (
-          builtins.elem "plasma6" cfg.desktop.wayland.selectedSessions
-        )
-      )
+      (cfg.desktop.wayland.enable && (builtins.elem "plasma6" cfg.desktop.wayland.selectedSessions))
       (
         lib.mkMerge [
           (lib.mkIf (builtins.elem "plasma6" cfg.desktop.wayland.selectedSessions) {
@@ -35,7 +30,7 @@ in
               };
             };
           })
-          
+
           {
             environment.systemPackages = with pkgs.kdePackages; [
               kdeplasma-addons

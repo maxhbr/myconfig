@@ -23,4 +23,3 @@ in
     myconfig.desktop.wayland.launcherCommands = [ "logseq" ];
   };
 }
-

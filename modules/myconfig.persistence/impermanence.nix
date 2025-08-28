@@ -165,19 +165,21 @@ in
                   sudo -H -u btrbk bash -c "btrbk -c $conf --progress --verbose run"
                   times
                 '';
-                scripts = [
-                  (mkScript "priv")
-                  (mkScript "work")
-                ];
-                doAllScripts = pkgs.writeShellScriptBin "btrbk-backup-all" ''
-                  set -euo pipefail
-                  ${mountScript}/bin/btrbk-mount
-                  sleep 5
-                  ${pkgs.parallel}/bin/parallel --halt soon,fail=1 ::: ${toString (lib.map (script: "${script}/bin/${script.name}") scripts)}
-                  sleep 5
-                  sync
-                  ${umountScript}/bin/btrbk-umount
-                '';
+              scripts = [
+                (mkScript "priv")
+                (mkScript "work")
+              ];
+              doAllScripts = pkgs.writeShellScriptBin "btrbk-backup-all" ''
+                set -euo pipefail
+                ${mountScript}/bin/btrbk-mount
+                sleep 5
+                ${pkgs.parallel}/bin/parallel --halt soon,fail=1 ::: ${
+                  toString (lib.map (script: "${script}/bin/${script.name}") scripts)
+                }
+                sleep 5
+                sync
+                ${umountScript}/bin/btrbk-umount
+              '';
             in
             {
               # TODO: if this is set, bwrap and zoom does not work
@@ -210,7 +212,8 @@ in
                 mountScript
                 umountScript
                 doAllScripts
-              ] ++ scripts;
+              ]
+              ++ scripts;
             }
           );
     }
