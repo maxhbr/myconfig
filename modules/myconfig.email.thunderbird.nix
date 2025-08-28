@@ -1,5 +1,11 @@
-let 
-  hm = { config, lib, pkgs, ...  }:
+let
+  hm =
+    {
+      config,
+      lib,
+      pkgs,
+      ...
+    }:
     {
       config = {
         programs.thunderbird = {
@@ -22,7 +28,7 @@ let
         # ];
       };
     };
-in 
+in
 {
   config,
   lib,
@@ -33,7 +39,9 @@ let
   cfg = config.myconfig;
 in
 {
-  config = lib.mkIf (cfg.desktop.enable && cfg.email.enable && (builtins.elem "thunderbird" cfg.email.clients)) {
-    home-manager.sharedModules = [ hm ];
-  };
+  config =
+    lib.mkIf (cfg.desktop.enable && cfg.email.enable && (builtins.elem "thunderbird" cfg.email.clients))
+      {
+        home-manager.sharedModules = [ hm ];
+      };
 }

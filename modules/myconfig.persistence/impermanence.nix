@@ -133,10 +133,13 @@ in
                   sudo cryptsetup luksClose "btr_backup_luks"
                 fi
               '';
-              mkBtrbk = name: subvolume: let
+              mkBtrbk =
+                name: subvolume:
+                let
                   target = "${mountPoint}/${config.networking.hostName}-${name}";
                   instanceName = "usbhdd-${name}";
-                in {
+                in
+                {
                   inherit instanceName;
                   instance = {
                     onCalendar = null;
@@ -174,7 +177,10 @@ in
                 };
               privBtrbk = mkBtrbk "priv" volumePriv;
               workBtrbk = mkBtrbk "work" volumeWork;
-              scripts = [ privBtrbk.script workBtrbk.script ];
+              scripts = [
+                privBtrbk.script
+                workBtrbk.script
+              ];
               doAllScripts = pkgs.writeShellScriptBin "btrbk-backup-all" ''
                 set -euo pipefail
                 ${mountScript}/bin/btrbk-mount

@@ -108,7 +108,7 @@
       };
       email = {
         enable = true;
-        clients = [ 
+        clients = [
           "aerc"
           "neomutt"
           "thunderbird"

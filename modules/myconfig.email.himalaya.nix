@@ -37,15 +37,20 @@ in
                 }
               ];
             };
-            home.packages = with pkgs; (lib.optionals (config.programs.neovide.enable) [
-              (writeShellScriptBin "himalaya-neovide" ''
-                exec ${config.programs.neovide.package}/bin/neovide +Himalaya
-              '')
-            ] ++ lib.optionals (config.programs.neovim.enable) [
-              (writeShellScriptBin "himalaya-nvim" ''
-                exec ${config.programs.neovim.package}/bin/nvim +Himalaya
-              '')
-            ]);
+            home.packages =
+              with pkgs;
+              (
+                lib.optionals (config.programs.neovide.enable) [
+                  (writeShellScriptBin "himalaya-neovide" ''
+                    exec ${config.programs.neovide.package}/bin/neovide +Himalaya
+                  '')
+                ]
+                ++ lib.optionals (config.programs.neovim.enable) [
+                  (writeShellScriptBin "himalaya-nvim" ''
+                    exec ${config.programs.neovim.package}/bin/nvim +Himalaya
+                  '')
+                ]
+              );
           };
         }
       )
