@@ -1,9 +1,45 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i bash -p nixfmt-rfc-style
+#! nix-shell -i bash -p nixfmt-rfc-style git
 in="$(dirname "$0")"
+
+REASON_TO_NOT_DO_COMMIT=""
+
+if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    echo "Not in a git repository"
+    exit 1
+else
+    # Check if the working directory is clean
+    if ! git diff-index --quiet HEAD --; then
+        echo "Working directory is not clean"
+        REASON_TO_NOT_DO_COMMIT="working directory is not clean"
+
+        read -p "Do you want to continue? (y/n) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Aborting"
+            exit 0
+        fi
+    fi
+fi
+
+# Run nixfmt on all .nix files
 time find "${1:-"$in"}" \
         -type f \
         -iname '*.nix' \
         -not -iname 'empty_nixos_config.nix' \
         -print \
         -exec nixfmt {} \;
+
+if [ -z "$REASON_TO_NOT_DO_COMMIT" ]; then
+    # Check if any files were modified
+    if ! git diff-index --quiet HEAD --; then
+        echo "Files were modified by nixfmt, committing changes..."
+        git add -A
+        git commit -m "nixfmtall"
+        echo "Changes committed successfully"
+    else
+        echo "No files were modified by nixfmt"
+    fi
+else
+    echo "Skipping commit because $REASON_TO_NOT_DO_COMMIT"
+fi
