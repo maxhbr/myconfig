@@ -1,23 +1,5 @@
-{
-  config,
-  lib,
-  pkgs,
-  ...
-}:
-let
-  cfg = config.myconfig;
-in
-{
-  config = lib.mkIf (cfg.email.enable && (builtins.elem "aerc" cfg.email.clients)) {
-    home-manager.sharedModules = [
-      (
-        {
-          config,
-          lib,
-          pkgs,
-          ...
-        }:
-
+let 
+  hm = { config, lib, pkgs, ...  }:
         {
           config = {
             home.packages = with pkgs; [
@@ -63,7 +45,7 @@ in
                 };
                 viewer = {
                   pager = "${pkgs.less}/bin/less -Rc";
-                  show-headers = true;
+                  show-headers = false;
                   always-show-mime = true;
                 };
                 filters = {
@@ -89,8 +71,19 @@ in
             };
             myconfig.desktop.wayland.launcherCommands = [ "aerc-alacritty" ];
           };
-        }
-      )
-    ];
+        };
+in 
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+let
+  cfg = config.myconfig;
+in
+{
+  config = lib.mkIf (cfg.email.enable && (builtins.elem "aerc" cfg.email.clients)) {
+    home-manager.sharedModules = [ hm ];
   };
 }

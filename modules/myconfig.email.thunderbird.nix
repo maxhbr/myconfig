@@ -11,8 +11,11 @@ let
           };
         };
         myconfig.desktop.wayland.launcherCommands = [ "thunderbird" ];
+        myconfig.persistence.directories = [
+          ".thunderbird/default"
+        ];
         myconfig.persistence.cache-directories = [
-          ".cache/thunderbird"
+          ".cache/thunderbird/default"
         ];
         # myconfig.persistence.directories = [
         #   ".mozilla"
