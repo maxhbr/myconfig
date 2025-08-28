@@ -9,10 +9,10 @@
   ...
 }:
 let
-  user = config.myconfig.user;
+  cfg = config.myconfig;
 in
 {
-  config = lib.mkIf (config.myconfig.desktop.enable && config.email.enable && (config.email.clients == "evolution")) {
+  config = lib.mkIf (cfg.desktop.enable && cfg.email.enable && (cfg.email.clients == "evolution")) {
     programs.evolution.enable = true;
     services.gnome = {
       evolution-data-server.enable = lib.mkDefault true;
