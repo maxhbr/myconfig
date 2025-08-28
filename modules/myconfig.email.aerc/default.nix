@@ -87,8 +87,8 @@ in
                 };
               };
             };
+            myconfig.desktop.wayland.launcherCommands = [ "aerc-alacritty" ];
           };
-          myconfig.desktop.wayland.launcherCommands = [ "aerc-alacritty" ];
         }
       )
     ];

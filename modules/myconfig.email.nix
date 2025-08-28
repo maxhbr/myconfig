@@ -57,6 +57,5 @@ in
         }
       )
     ];
-    programs.evolution.enable = lib.mkDefault true;
   };
 }

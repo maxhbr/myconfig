@@ -12,7 +12,8 @@ let
   user = config.myconfig.user;
 in
 {
-  config = lib.mkIf (config.programs.evolution.enable && config.myconfig.desktop.enable) {
+  config = lib.mkIf (config.myconfig.desktop.enable && config.email.enable && (config.email.clients == "evolution")) {
+    programs.evolution.enable = true;
     services.gnome = {
       evolution-data-server.enable = lib.mkDefault true;
       gnome-keyring.enable = lib.mkDefault true;

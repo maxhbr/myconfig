@@ -6,6 +6,7 @@
 }:
 
 let
+  cfg = config.myconfig;
   mailcap_file = pkgs.writeText "mailcap" (
     let
       htmlViaLynx = ''
@@ -41,6 +42,7 @@ in
         {
           config = {
             programs.neomutt = {
+              enable = true;
               sidebar = {
                 enable = true;
 
@@ -154,12 +156,25 @@ in
             };
             home.packages = with pkgs; [
               (writeScriptBin "gnupg-to-mutt.pl" (builtins.readFile ./gnupg-to-mutt.pl))
-              (writeScriptBin "tmux-neomutt.sh" (builtins.readFile ./tmux-neomutt.sh))
+              (writeShellScriptBin "neomutt-tmux" ''
+                if ${tmux}/bin/tmux has-session -t "neomutt" 2>/dev/null; then
+                  ${tmux}/bin/tmux attach -d -t "neomutt" \; \
+                      split-window -l 2 '${config.programs.mbsync.package}/bin/mbsync --all && exit' \; \
+                      last-pane
+                else
+                  ${tmux}/bin/tmux -2 \
+                      new-session -s "neomutt" "command ${config.programs.neomutt.package}/bin/neomutt" \; \
+                      set-option status \; \
+                      set set-titles-string "neomutt@tmux" \; \
+                      split-window -l 2 '${config.programs.mbsync.package}/bin/mbsync --all && exit' \; \
+                      last-pane \;
+                fi
+              '')
               (writeShellScriptBin "foot-neomutt" ''
                 exec ${foot}/bin/foot \
                   -T foot-neomutt \
                   -a foot-neomutt \
-                  tmux-neomutt.sh
+                  neomutt-tmux
               '')
             ];
             myconfig.persistence.cache-directories = [ ".cache/neomutt" ];

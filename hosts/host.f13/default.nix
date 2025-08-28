@@ -106,7 +106,14 @@
         joplin-desktop.enable = true;
         logseq.enable = true;
       };
-      email.enable = true;
+      email = {
+        enable = true;
+        clients = [ 
+          "aerc"
+          "neomutt"
+          "thunderbird"
+        ];
+      };
       virtualisation.enable = true;
       # editor.emacs.enable = false;
       dev = {
