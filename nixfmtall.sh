@@ -1,7 +1,28 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i bash -p nixfmt-rfc-style git
 
-cd "$(dirname "$0")"
+set -euo pipefail
+
+if [[ $# -gt 0 ]]; then
+    arg="$1"
+    if [[ -d "$arg" ]]; then
+        cd "$arg"
+        file="."
+    elif [[ -f "$arg" ]]; then
+        cd "$(dirname "$arg")"
+        file="$(basename "$arg")"
+    else
+        echo "Invalid argument: $arg"
+        exit 1
+    fi
+else
+    cd "$(dirname "$0")"
+    file="."
+fi
+
+##############################################################################
+## check before running
+##############################################################################
 
 REASON_TO_NOT_DO_COMMIT=""
 
@@ -23,13 +44,20 @@ else
     fi
 fi
 
-# Run nixfmt on all .nix files
-time find . \
+##############################################################################
+## running
+##############################################################################
+
+time find "$file" \
         -type f \
         -iname '*.nix' \
         -not -iname 'empty_nixos_config.nix' \
         -print \
         -exec nixfmt {} \;
+
+##############################################################################
+## commit after running
+##############################################################################
 
 if [ -z "$REASON_TO_NOT_DO_COMMIT" ]; then
     # Check if any files were modified
