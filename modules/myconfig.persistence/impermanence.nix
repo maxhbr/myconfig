@@ -62,7 +62,7 @@ let
           && isRelativePath (lib.head paths)
           && validate (lib.tail paths);
     in
-    if validate sortedPaths then paths else throw "Path validation failed";
+    if validate sortedPaths then lib.unique paths else throw "Path validation failed";
 
 in
 {
@@ -78,16 +78,6 @@ in
           (
             let
               mountPoint = "/btr_backup";
-              mkTarget = name: "${mountPoint}/${config.networking.hostName}-${name}";
-              mkSettings = name: subvolume: {
-                snapshot_preserve_min = "24h";
-                snapshot_preserve = "7d 4w 6m 1y";
-                volume."/btr_pool" = {
-                  inherit subvolume;
-                  snapshot_dir = ".snapshots";
-                  target = mkTarget name;
-                };
-              };
               mountScript = pkgs.writeShellScriptBin "btrbk-mount" ''
                 set -euo pipefail
 
@@ -143,33 +133,62 @@ in
                   sudo cryptsetup luksClose "btr_backup_luks"
                 fi
               '';
-              mkScript =
-                name:
-                pkgs.writeShellScriptBin "btrbk-usbhdd-${name}" ''
-                  set -euo pipefail
+              mkBtrbk = name: subvolume: let
+                  target = "${mountPoint}/${config.networking.hostName}-${name}";
+                  instanceName = "usbhdd-${name}";
+                in {
+                  inherit instanceName;
+                  instance = {
+                    onCalendar = null;
+                    settings = {
+                      snapshot_preserve_min = "24h";
+                      snapshot_preserve = "7d 4w 6m 1y";
+                      volume."/btr_pool" = {
+                        inherit subvolume target;
+                        snapshot_dir = ".snapshots";
+                      };
+                    };
+                  };
+                  script = pkgs.writeShellScriptBin "btrbk-${instanceName}" ''
+                    set -euo pipefail
 
-                  conf="/etc/btrbk/usbhdd-${name}.conf"
-                  if [ ! -f "$conf" ]; then
-                    echo "Config file $conf does not exist"
-                    exit 1
-                  fi
+                    conf="/etc/btrbk/${instanceName}.conf"
+                    if [ ! -f "$conf" ]; then
+                      echo "Config file $conf does not exist"
+                      exit 1
+                    fi
 
-                  ${mountScript}/bin/btrbk-mount
+                    ${mountScript}/bin/btrbk-mount
 
-                  target=${mkTarget name}
-                  if [ ! -d "$target" ]; then
-                    sudo mkdir -p "$target"
-                  fi
+                    target=${target}
+                    if [ ! -d "$target" ]; then
+                      sudo mkdir -p "$target"
+                    fi
 
-                  set -x
-                  sudo -H -u btrbk bash -c "btrbk -c $conf --progress --verbose run"
-                  times
-                '';
-              scripts = [
-                (mkScript "priv")
-                (mkScript "work")
-              ];
+                    exec &> >(sudo tee -a "${target}.log")
+                    echo "start @$(date) ..."
+                    set -x
+                    sudo -H -u btrbk bash -c "btrbk -c $conf --progress --verbose run"
+                    times
+                  '';
+                };
+              privBtrbk = mkBtrbk "priv" volumePriv;
+              workBtrbk = mkBtrbk "work" volumeWork;
+              scripts = [ privBtrbk.script workBtrbk.script ];
               doAllScripts = pkgs.writeShellScriptBin "btrbk-backup-all" ''
+                set -euo pipefail
+                ${mountScript}/bin/btrbk-mount
+                sleep 5
+                for script in ${toString (lib.map (script: "${script}/bin/${script.name}") scripts)}; do
+                  echo "Running $script"
+                  $script
+                  sleep 5
+                done
+                sleep 5
+                sync
+                ${umountScript}/bin/btrbk-umount
+              '';
+              doAllScriptsParallel = pkgs.writeShellScriptBin "btrbk-backup-all-parallel" ''
                 set -euo pipefail
                 ${mountScript}/bin/btrbk-mount
                 sleep 5
@@ -195,14 +214,8 @@ in
               # };
               services.btrbk = {
                 instances = {
-                  "usbhdd-priv" = {
-                    onCalendar = null;
-                    settings = mkSettings "priv" volumePriv;
-                  };
-                  "usbhdd-work" = {
-                    onCalendar = null;
-                    settings = mkSettings "work" volumeWork;
-                  };
+                  ${privBtrbk.instanceName} = privBtrbk.instance;
+                  ${workBtrbk.instanceName} = workBtrbk.instance;
                 };
               };
               systemd.tmpfiles.rules = [ "d /btr_pool/.snapshots 0755 root root" ];
@@ -212,6 +225,7 @@ in
                 mountScript
                 umountScript
                 doAllScripts
+                doAllScriptsParallel
               ]
               ++ scripts;
             }
