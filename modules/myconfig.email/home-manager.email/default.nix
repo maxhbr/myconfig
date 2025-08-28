@@ -41,7 +41,7 @@
     programs.himalaya.enable = true;
     programs.lieer.enable = true; # gmail sync
     programs.mbsync.enable = true;
-    programs.meli.enable = true;
+    programs.meli.enable = false;
     programs.msmtp.enable = true;
     programs.notmuch = {
       enable = true;

@@ -20,10 +20,12 @@
           };
           ui = {
             mouse-enabled = true;
+            # reverse-thread-order = true;
+            threading-enabled = true;
           };
           viewer = {
-            pager = "${pkgs.less}/bin/less -R";
-            # show-headers = true;
+            pager = "${pkgs.less}/bin/less -Rc";
+            show-headers = true;
             always-show-mime = true;
           };
           filters = {
