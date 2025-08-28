@@ -1,6 +1,7 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i bash -p nixfmt-rfc-style git
-in="$(dirname "$0")"
+
+cd "$(dirname "$0")"
 
 REASON_TO_NOT_DO_COMMIT=""
 
@@ -23,7 +24,7 @@ else
 fi
 
 # Run nixfmt on all .nix files
-time find "${1:-"$in"}" \
+time find . \
         -type f \
         -iname '*.nix' \
         -not -iname 'empty_nixos_config.nix' \
