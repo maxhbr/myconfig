@@ -17,6 +17,7 @@ in
         home.packages = with pkgs.master; [ logseq ];
         myconfig.persistence.directories = [
           ".config/Logseq"
+          ".logseq"
         ];
       }
     ];

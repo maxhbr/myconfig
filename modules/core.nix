@@ -7,46 +7,33 @@
 }:
 {
   config = {
-    boot = {
-      # kernelModules = [ "fuse" "kvm-intel" "coretemp" ];
-      # cleanTmpDir = ! config.boot.cleanTmpDir;
-      tmp.useTmpfs = true;
-    };
-
     environment = {
-      variables = {
-        TMP = "/tmp";
-      };
+      # variables = {
+      #   TMP = "/tmp";
+      # };
       systemPackages = with pkgs; [
-        kbd
-
-        # core:
-        wget
+        bind
+        borgbackup
+        bridge-utils
+        comma
+        cryptsetup
         curl
         git
         git-lfs
-        unzip
-        p7zip
-        tree # build fails?
-        rlwrap
-        vim
-
-        comma
-
-        # admin:
-        bind
-        bridge-utils
-        sysstat
-        cryptsetup
-        lsof
-        psmisc # contains: killall, pstree
-        lm_sensors
         iperf
-
-        #others:
-        nfs-utils
+        kbd
         libnfs
-        borgbackup
+        lm_sensors
+        lsof
+        nfs-utils
+        p7zip
+        psmisc # contains: killall, pstree
+        rlwrap
+        sysstat
+        tree
+        unzip
+        vim
+        wget
       ];
     };
 
@@ -67,7 +54,6 @@
     programs.zsh.interactiveShellInit = ''
       umask 027
     '';
-    programs.firejail.enable = true;
     programs.mtr.enable = true;
   };
 }

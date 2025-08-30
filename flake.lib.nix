@@ -588,6 +588,8 @@ rec {
                     )
                   ];
                 };
+                # wait for home-manager to be ready
+                systemd.services.greetd.unitConfig.ConditionPathExists = "/tmp/home-manager.ready.mhuber"; # TODO: hardcoded username
               };
             }
           )
