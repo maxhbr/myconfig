@@ -63,10 +63,20 @@
   ];
 
   config = {
-    networking.hostName = "f13";
-    networking.hostId = "00000${config.networking.hostName}";
-    networking.useDHCP = false;
-    networking.interfaces.wlp192s0.useDHCP = true;
+    networking = {
+      hostName = "f13";
+      hostId = "00000${config.networking.hostName}";
+      useDHCP = false;
+      interfaces.wlp192s0.useDHCP = true;
+
+#       dhcpcd.extraConfig = ''
+# # interface eth0
+# #   metric 100
+
+# interface wlp192s0
+#   metric 200
+#       '';
+    };
     myconfig = {
       persistence.impermanence = {
         enable = true;
@@ -112,6 +122,7 @@
           "aerc"
           "neomutt"
           "thunderbird"
+          "himalaya"
         ];
       };
       virtualisation.enable = true;
