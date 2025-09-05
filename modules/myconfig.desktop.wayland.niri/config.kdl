@@ -9,13 +9,8 @@
 input {
     keyboard {
         xkb {
-            // You can set rules, model, layout, variant and options.
-            // For more information, see xkeyboard-config(7).
-
-            // For example:
             layout "de"
             variant "neo"
-            // options "grp:win_space_toggle,compose:ralt,ctrl:nocaps"
         }
     }
 
@@ -193,8 +188,8 @@ layout {
     struts {
         left 100
         right 125 // 10 + 25 for symmetry with waybar
-        // top 64
-        // bottom 64
+        top -8
+        bottom -8
     }
 
     shadow {

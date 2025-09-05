@@ -100,7 +100,7 @@ in
             in
             {
               home.sessionVariables = {
-                DISPLAY = ":12";
+                DISPLAY = ":0";
               };
               home.packages = [
                 niri
@@ -110,17 +110,6 @@ in
               xdg.configFile = {
                 "niri/config.kdl".source =
                   let
-                    xwayland-config =
-                      if pkgs.lib.versionOlder "25.05.1" pkgs.niri.version then
-                        ''
-                          xwayland-satellite {
-                              path "${pkgs.xwayland-satellite}/bin/xwayland-satellite"
-                          }
-                        ''
-                      else
-                        ''
-                          spawn-at-startup "${niri-xwayland-satellite}/bin/niri-xwayland-satellite"
-                        '';
                     drv =
                       pkgs.runCommand "niri-config"
                         {
@@ -130,16 +119,21 @@ in
                         ''
                           mkdir $out
                           cat <<EOF >$out/config.kdl
+                          environment {
+                              QT_QPA_PLATFORM "wayland"
+                              DISPLAY "${config.home.sessionVariables.DISPLAY}"
+                              ELECTRON_OZONE_PLATFORM_HINT "${nixosConfig.environment.sessionVariables.ELECTRON_OZONE_PLATFORM_HINT}"
+                          }
+
                           $(cat $src)
 
-                          environment {
-                              DISPLAY "${config.home.sessionVariables.DISPLAY}"
+                          xwayland-satellite {
+                              path "${pkgs.xwayland-satellite}/bin/xwayland-satellite"
                           }
 
                           ${cfg.desktop.wayland.niri.additionalConfigKdl}
 
                           spawn-at-startup "${niri-autostart}"
-                          ${xwayland-config}
                           EOF
                           niri validate --config $out/config.kdl > $out/config.kdl.validate
                         '';

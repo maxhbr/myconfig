@@ -99,7 +99,8 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 
 #battery.warning:not(.charging),
 #systemd-failed-units.degraded,
-#custom-platform_profile.balanced, #power-profiles-daemon.balanced {
+#custom-platform_profile.balanced, #power-profiles-daemon.balanced,
+.warning {
     background: rgba(238, 154, 0, 0.5);
     color: black;
 }
@@ -115,7 +116,8 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
     }
 }
 #battery.critical:not(.charging),
-#custom-test_for_missing_tb_changing.error {
+#custom-test_for_missing_tb_changing.error,
+.error {
     background: #f53c3c;
     color: white;
     animation-name: blink;
@@ -181,7 +183,8 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
     min-height: 25px;
 }
 
-#idle_inhibitor.deactivated {
+#idle_inhibitor.deactivated,
+.okay {
     /* background-color: #1F2C36; */
     color: rgb(43, 48, 59);
 }

@@ -8,7 +8,28 @@
 let
   cfg = config.myconfig;
 
+  mbsync-tmux-session = "mbsync";
+  mbsync-tmux-session-script = pkgs.writeShellScriptBin "mbsync-tmux-session" ''
+    if tmux has-session -t ${mbsync-tmux-session}; then
+      tmux kill-session -t ${mbsync-tmux-session} || true
+    fi
+    if ! tmux has-session -t ${mbsync-tmux-session}; then
+      tmux new-session -d -s ${mbsync-tmux-session}
+      tmux send-keys -t ${mbsync-tmux-session}:1 "journalctl -f --user -u mbsync.service" C-m
+      tmux split-window -v -t ${mbsync-tmux-session}
+      tmux send-keys -t ${mbsync-tmux-session}:1 "systemctl --user restart mbsync.service" C-m
+      tmux split-window -v -t ${mbsync-tmux-session}
+      tmux send-keys -t ${mbsync-tmux-session}:1 "watch ${mbsync-get-status}/bin/mbsync-get-status verbose" C-m
+    fi
+    exec tmux attach-session -t ${mbsync-tmux-session}
+  '';
   mbsync-get-status = pkgs.writeShellScriptBin "mbsync-get-status" ''
+    set -euo pipefail
+    if [[ "$#" -gt 0 && "$1" == "verbose" ]]; then
+      VERBOSE="verbose"
+    else
+      VERBOSE=""
+    fi
     tsNow=$(date +%s)
 
     if [[ ! -f "$HOME/Maildir/mbsync.preExec.timestamp" ]]; then
@@ -17,7 +38,9 @@ let
     fi
     tsPreExec=$(cat "$HOME/Maildir/mbsync.preExec.timestamp")
     timeSinceLastStart=$((tsNow - tsPreExec))
-    # >&2 echo "timeSinceLastStart: $timeSinceLastStart"
+    if [[ "$VERBOSE" == "verbose" ]]; then
+      >&2 echo "timeSinceLastStart: $timeSinceLastStart @ $tsPreExec"
+    fi
 
     if [[ ! -f "$HOME/Maildir/mbsync.postExec.start.timestamp" ]]; then
       if [[ "$timeSinceLastStart" -lt 30 ]]; then
@@ -28,7 +51,9 @@ let
     fi
     tsPostExecStart=$(cat "$HOME/Maildir/mbsync.postExec.start.timestamp")
     timeSinceLastHookStart=$((tsNow - tsPostExecStart))
-    # >&2 echo "timeSinceLastHookStart: $timeSinceLastHookStart"
+    if [[ "$VERBOSE" == "verbose" ]]; then
+      >&2 echo "timeSinceLastHookStart: $timeSinceLastHookStart @ $tsPostExecStart"
+    fi
 
     if [[ ! -f "$HOME/Maildir/mbsync.postExec.end.timestamp" ]]; then
       if [[ "$timeSinceLastStart" -lt 30 ]]; then
@@ -39,14 +64,25 @@ let
     fi
     tsPostExecEnd=$(cat "$HOME/Maildir/mbsync.postExec.end.timestamp")
     timeSinceLastHookEnd=$((tsNow - tsPostExecEnd))
-    # >&2 echo "timeSinceLastHookEnd: $timeSinceLastHookEnd"
+    if [[ "$VERBOSE" == "verbose" ]]; then
+      >&2 echo "timeSinceLastHookEnd: $timeSinceLastHookEnd @ $tsPostExecEnd"
+    fi
+
+    if [[ "$timeSinceLastHookEnd" -lt 300 ]]; then
+      echo '{"text": "🖂✓", "tooltip": "mbsync successful","class":"okay"}'
+      exit 0
+    fi
 
     if [[ "$tsPostExecStart" -ge "$tsPreExec" ]]; then
-      # sync was successful
+      if [[ "$VERBOSE" == "verbose" ]]; then
+        >&2 echo "...sync was successful"
+      fi
       if [[ "$tsPostExecEnd" -ge "$tsPostExecStart" ]]; then
-        # hook was successful
+        if [[ "$VERBOSE" == "verbose" ]]; then
+          >&2 echo "...hook was successful"
+        fi
         if [[ "$timeSinceLastStart" -lt 3000 ]]; then
-          echo '{"text": "🖂✓", "tooltip": "mbsync successful","class":"success"}'
+          echo '{"text": "🖂✓", "tooltip": "mbsync successful","class":"okay"}'
           exit 0
         else
           echo '{"text": "🖂!", "tooltip": "mbsync stale, since '"$timeSinceLastStart"'s","class":"warning"}'
@@ -108,6 +144,7 @@ in
             };
             home.packages = with pkgs; [
               mbsync-get-status
+              mbsync-tmux-session-script
             ];
             programs.waybar = {
               settings = {
@@ -119,9 +156,9 @@ in
                     format = "{}";
                     exec = "${mbsync-get-status}/bin/mbsync-get-status";
                     return-type = "json";
-                    interval = 30;
+                    interval = 5;
                     # rotation = 90;
-                    on-click = "alacritty -e journalctl --user -f --unit mbsync.service";
+                    on-click = "alacritty -e ${mbsync-tmux-session-script}/bin/mbsync-tmux-session";
                   };
                 };
               };

@@ -33,7 +33,7 @@ in
               gphoto2
               gphoto2fs
               gimp3-with-plugins
-              # darktable
+              darktable
               # ansel # A darktable fork minus the bloat plus some design vision
               geeqie
               gphoto2

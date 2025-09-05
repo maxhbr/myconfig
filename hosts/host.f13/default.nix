@@ -93,7 +93,7 @@
             "niri"
             # "niri-plain"
             "labwc"
-            "river"
+            # "river"
             # "plasma6"
             # "dwl"
             # "qtile"
@@ -111,7 +111,7 @@
         messengers.enable = true;
         obs.enable = true;
         imagework.enable = true; # https://github.com/NixOS/nixpkgs/issues/425306
-        # imagework.myphoto.enable = false;
+        imagework.myphoto.enable = false;
         cad.enable = true;
         joplin-desktop.enable = true;
         logseq.enable = true;
