@@ -576,7 +576,7 @@ in
       )
     ];
     system.activationScripts = {
-      script.text = ''
+      createPersistentDirs.text = ''
         install -d -m 700 "/${persistentPrivDir}/home/${user}" -o ${
           toString config.users.extraUsers.${user}.uid
         } -g ${toString config.users.extraGroups.${user}.gid}

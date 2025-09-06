@@ -23,7 +23,8 @@ EOF
     chmod +x "$outDir/dd.sh"
 
     cat <<EOF | tee "$outDir/run-qemu.sh"
-#!/usr/bin/env bash
+#!/usr/bin/env nix-shell
+#! nix-shell -i bash -p qemu_kvm
 set -ex
 qemu-kvm -boot d -cdrom "$outFile" -m 32000 -cpu host -smp 6
 EOF

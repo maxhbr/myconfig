@@ -736,27 +736,20 @@ rec {
     let
       myisoconfigModules =
         let
-
-          xautologinModule =
-            { pkgs, config, ... }@args:
-            (
-              let
-                user = "mhuber";
-              in
-              {
-                # autologin
-                services.xserver.displayManager.autoLogin = {
-                  enable = config.services.xserver.enable;
-                  inherit user;
-                };
-              }
-            );
-
           forceSSHModule = {
             # OpenSSH is forced to have an empty `wantedBy` on the installer system[1], this won't allow it
             # to be automatically started. Override it with the normal value.
             # [1] https://github.com/NixOS/nixpkgs/blob/9e5aa25/nixos/modules/profiles/installation-device.nix#L76
             systemd.services.sshd.wantedBy = lib.mkOverride 40 [ "multi-user.target" ];
+            services.openssh = {
+              enable = lib.mkForce true;
+              listenAddresses = [
+                {
+                  addr = "0.0.0.0";
+                  port = 22;
+                }
+              ];
+            };
           };
 
           bootstrapModule =
@@ -796,10 +789,9 @@ rec {
                   import "${inputs.nixpkgs}/nixos" {
                     inherit system configuration;
                   };
-                preBuildConfigRoot = bootstrappedConfig;
                 preBuiltConfig =
                   (evalNixos (
-                    import preBuildConfigRoot {
+                    import bootstrappedConfig {
                       pkgs = inputs.nixpkgs;
                       inherit lib config;
                     }
@@ -823,25 +815,31 @@ rec {
                 isoImage.storeContents = [ preBuiltConfig ];
               }
             ));
+          addConfigModule = {
+            pkgs, ...
+          }: let
+              myconfigContent = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
+            in {
+                system.userActivationScripts = {
+                  lnmyconfig.text = ''
+                    if [[ ! -d "$HOME/myconfig-in-store" ]]; then
+                      ln -s ${myconfigContent} "$HOME/myconfig-in-store"
+                    fi
+                  '';
+                };
+            };
 
         in
         [
           "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-base.nix"
           "${inputs.nixpkgs}/nixos/modules/installer/cd-dvd/channel.nix"
           {
-            # add myconfig to iso
-            image = {
-              # contents = [{
-              #   source = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
-              #   target = "myconfig";
-              # }];
-              baseName = lib.mkForce "nixos-myconfig-${hostName}";
-            };
+            image.baseName = lib.mkForce "nixos-myconfig-${hostName}";
           }
           forceSSHModule
-          xautologinModule
           bootstrapModule
           bootstrapInstallModule
+          addConfigModule
           {
             networking.wireless.enable = false; # managed by network manager
           }
