@@ -815,18 +815,22 @@ rec {
                 isoImage.storeContents = [ preBuiltConfig ];
               }
             ));
-          addConfigModule = {
-            pkgs, ...
-          }: let
+          addConfigModule =
+            {
+              pkgs,
+              ...
+            }:
+            let
               myconfigContent = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
-            in {
-                system.userActivationScripts = {
-                  lnmyconfig.text = ''
-                    if [[ ! -d "$HOME/myconfig-in-store" ]]; then
-                      ln -s ${myconfigContent} "$HOME/myconfig-in-store"
-                    fi
-                  '';
-                };
+            in
+            {
+              system.userActivationScripts = {
+                lnmyconfig.text = ''
+                  if [[ ! -d "$HOME/myconfig-in-store" ]]; then
+                    ln -s ${myconfigContent} "$HOME/myconfig-in-store"
+                  fi
+                '';
+              };
             };
 
         in

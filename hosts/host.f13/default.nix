@@ -69,13 +69,13 @@
       useDHCP = false;
       interfaces.wlp192s0.useDHCP = true;
 
-#       dhcpcd.extraConfig = ''
-# # interface eth0
-# #   metric 100
+      #       dhcpcd.extraConfig = ''
+      # # interface eth0
+      # #   metric 100
 
-# interface wlp192s0
-#   metric 200
-#       '';
+      # interface wlp192s0
+      #   metric 200
+      #       '';
     };
     myconfig = {
       persistence.impermanence = {
