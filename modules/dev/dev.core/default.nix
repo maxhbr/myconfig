@@ -23,6 +23,7 @@ in
     ];
     home-manager.sharedModules = [
       {
+        programs.gh.enable = true;
         home.packages =
           with pkgs;
           (

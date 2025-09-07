@@ -2,20 +2,26 @@
 * My dotfiles / system configuration / utils / stuff
 Currently I use
 - OS: *[[https://nixos.org/][NixOS]]*
-- [[https://github.com/rycee/home-manager][home-manager]] for dotfiles and and user env, +with some help by stow+
-- Window Manager: +*[[http://xmonad.org/][xmonad]]* (with: [[https://github.com/jaor/xmobar][xmobar]], [[https://tools.suckless.org/dmenu/][dmenu]] + [[http://dmwit.com/yeganesh/][yeganesh]])+ and now on wayland
+- [[https://github.com/nix-community/home-manager][home-manager]] for dotfiles and and user env, +with some help by GNU stow+
+- Window Manager: 
+  - +*[[http://xmonad.org/][xmonad]]* (with: [[https://github.com/jaor/xmobar][xmobar]], [[https://tools.suckless.org/dmenu/][dmenu]] + [[http://dmwit.com/yeganesh/][yeganesh]])+ and now on wayland
   - or +[[http://www.qtile.org/][qtile]]+
   - or +[[https://github.com/riverwm/river][river]]+
   - or +[[https://github.com/swaywm/sway][sway]]+
   - or +[[https://github.com/labwc/labwc][labwc]]+
-  - or ...
+  - or +hyprland+
   - or *[[https://github.com/YaLTeR/niri/][niri]]*
+	- with xwaybar, swaylock, wofi, ...
 - EDITOR: 
 	- +emacs with spacemacs.org+
 	- +emacs with doom emacs+
 	- neovide / neovim
 - SHELL: fish +zsh (with: [[http://ohmyz.sh/][oh-my-zsh]])+
-- Email Client: +mutt with offlineimap+ [[https://www.djcbsoftware.nl/code/mu/mu4e.html][mu4e]] with mbsync
+- Email Client: Evolution or Thunderbird
+  - or +mutt with offlineimap+
+  - or +[[https://www.djcbsoftware.nl/code/mu/mu4e.html][mu4e]] with mbsync+
+  - or +neomutt with mbsync+
+  - or aerc with mbsync
 - Keyboard layout: [[https://www.neo-layout.org/][neo2]]
 - my wallpapers: [[https://github.com/maxhbr/wallpapers][maxhbr/wallpapers]]
 
