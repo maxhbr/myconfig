@@ -19,19 +19,6 @@
     inputs.nixos-hardware.nixosModules.common-cpu-amd
     inputs.nixos-hardware.nixosModules.common-pc-ssd
     ../../hardware/steamcontroller.nix
-    # ({ ... }: {
-    #   config = {
-    #     services.ollama = {
-    #       enable = true;
-    #       # listenAddress = "0.0.0.0:11434";
-    #       acceleration = "rocm";
-    #       # environmentVariables = {
-    #       #   OLLAMA_LLM_LIBRARY = "cpu";
-    #       #   HIP_VISIBLE_DEVICES = "0,1";
-    #       # };
-    #     };
-    #   };
-    # })
     (myconfig.metadatalib.fixIp "enp4s0")
     {
       # programs.mosh.enable = lib.mkDefault true;
@@ -48,22 +35,6 @@
         interface = "enp4s0";
       in
       {
-        # services.wakeonlan.interfaces = [{
-        #   inherit interface;
-        #   method = "magicpacket";
-        # }];
-
-        # [Unit]
-        # Description=Wake-on-LAN for %i
-        # Requires=network.target
-        # After=network.target
-
-        # [Service]
-        # ExecStart=/usr/bin/ethtool -s %i wol g
-        # Type=oneshot
-
-        # [Install]
-        # WantedBy=multi-user.target
         systemd.services.wolEnable = {
           description = "Wake-on-LAN for ${interface}";
           requires = [ "network.target" ];
@@ -77,7 +48,11 @@
         };
       }
     )
-    (myconfig.metadatalib.setupAsBuildMachine [
+    (myconfig.metadatalib.setupAsBuildMachine [        # xserver = {
+        #   enable = true;
+        #   xmonad.enable = false;
+        #   # kde.enable = true;
+        # };
       myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
     ])
     {
@@ -95,21 +70,13 @@
     myconfig = {
       desktop = {
         enable = true;
-        xserver = {
-          enable = true;
-          xmonad.enable = false;
-          kde.enable = true;
-        };
         wayland = {
-          enable = false;
+          enable = true;
           selectedSessions = [
-            # "hyprland"
             "niri"
             "niri-plain"
             "labwc"
-            "river"
             "plasma6"
-            # "qtile"
           ];
         };
         imagework.enable = true;
@@ -130,14 +97,8 @@
       #virtualbox.host.enable = true;
     };
 
-    #services.physlock.enable = true;
 
     programs.dconf.enable = true;
-
-    services.logind.extraConfig = ''
-      HandlePowerKey=suspend
-      RuntimeDirectorySize=6G
-    '';
 
     hardware.enableRedistributableFirmware = true;
     hardware.cpu.amd.updateMicrocode = true;
