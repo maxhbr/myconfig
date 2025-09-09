@@ -48,6 +48,13 @@ let
               mouse-enabled = true;
               # reverse-thread-order = true;
               threading-enabled = true;
+              index-columns = "date<=,name<20,flags>=,subject<*,notmuch>=";
+              column-notmuch = ''
+                {{- (map .Labels \
+                        (exclude .Folder) \
+                        (exclude "replied|passed|attachment|flagged|unread|draft") \
+                        | join ",") -}}
+              '';
             };
             viewer = {
               pager = "${pkgs.less}/bin/less -Rc";

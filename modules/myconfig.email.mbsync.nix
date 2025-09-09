@@ -113,29 +113,30 @@ in
               preExec =
                 let
                   mbsync-preExec = pkgs.writeShellScriptBin "mbsync-preExec" ''
-                    set -x
                     echo "$(${pkgs.coreutils}/bin/date +%s)" > "$HOME/Maildir/mbsync.preExec.timestamp"
                   '';
                 in
                 "${mbsync-preExec}/bin/mbsync-preExec";
               postExec =
                 let
+                  mkPostCommand = cmd: cli: inner:
+                    if config.programs.${cmd}.enable then
+                      ''
+                        echo "Running ${cmd} ..."
+                        if [ -n "$(${pkgs.procps}/bin/pgrep -x ${cmd})" ]; then
+                            echo "Already running one instance of mbsync or ${cmd}. Exiting..."
+                            exit 0
+                        fi
+                        ${cli} | tee "$HOME/Maildir/mbsync.${cmd}.log"
+                        ${inner}
+                      ''
+                    else
+                      ""
+                    fi
                   mbsync-postExec = pkgs.writeShellScriptBin "mbsync-postExec" ''
-                    set -x
                     echo "$(${pkgs.coreutils}/bin/date +%s)" > "$HOME/Maildir/mbsync.postExec.start.timestamp"
-                    ${
-                      if config.programs.notmuch.enable then
-                        "${pkgs.notmuch}/bin/notmuch new --no-hooks --verbose >/tmp/mbsync.notmuch.log"
-                      else
-                        ""
-                    }
-                    ${
-                      if config.programs.notmuch.enable && config.programs.afew.enable then
-                        "${pkgs.afew}/bin/afew --tag --new"
-                      else
-                        ""
-                    }
-                    ${if config.programs.mu.enable then "${pkgs.mu}/bin/mu index >/tmp/mbsync.mu.log" else ""}
+                    ${mkPostCommand "notmuch" "${pkgs.notmuch}/bin/notmuch new --no-hooks --verbose" (mkPostCommand "afew" "${pkgs.afew}/bin/afew --tag --new")}
+                    ${mkPostCommand "mu" "${pkgs.mu}/bin/mu index" ""}
                     echo "$(${pkgs.coreutils}/bin/date +%s)" > "$HOME/Maildir/mbsync.postExec.end.timestamp"
                   '';
                 in

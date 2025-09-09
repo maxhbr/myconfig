@@ -119,110 +119,137 @@ in
           myconfigAccountToHomeManagerEmailAccount =
             name:
             account:
-            (lib.recursiveUpdate {
-              enable = account.flavor == "plain" || config.programs.lieer.enable;
-              inherit (account)
-                realName
-                flavor
-                primary
-                address
-                aliases
-                userName
-                passwordCommand
-                ;
-              gpg = lib.mkIf (account.pgp-key-id != null) {
-                key = account.pgp-key-id;
-                signByDefault = true;
-                encryptByDefault = false;
-              };
+            (lib.mkMerge [
+              {
+                inherit (account)
+                  realName
+                  flavor
+                  primary
+                  address
+                  aliases
+                  userName
+                  passwordCommand
+                  ;
+                gpg = lib.mkIf (account.pgp-key-id != null) {
+                  key = account.pgp-key-id;
+                  signByDefault = true;
+                  encryptByDefault = false;
+                };
+                signature = {
+                  text = account.signature;
+                  showSignature = "append";
+                };
 
-              maildir = {
-                path = name;
-              };
-              folders = lib.mkIf (account.flavor != "gmail.com") {
-                inbox = "Inbox";
-                drafts = "Drafts";
-                sent = "Sent";
-                trash = "Trash";
-              };
-              mbsync = {
-                enable = config.programs.mbsync.enable;
-                create = "both";
-                expunge = "both";
-                extraConfig = {
-                  channel = {
-                    Sync = "All";
-                  };
-                  # account = {
-                  #   Timeout = 120;
-                  #   PipelineDepth = 1;
-                  # };
+                maildir = {
+                  path = name;
                 };
-              };
-
-              aerc = {
-                enable = config.programs.aerc.enable;
-                extraAccounts = {
-                  inherit (account) pgp-key-id;
-                  signature-file =
-                    let
-                      out = pkgs.writeText "signature" account.signature;
-                    in
-                    "${out}/signature";
-                  pgp-auto-sign = true;
-                  pgp-opportunistic-encrypt = true;
+                folders = lib.mkIf (account.flavor != "gmail.com") {
+                  inbox = "Inbox";
+                  drafts = "Drafts";
+                  sent = "Sent";
+                  trash = "Trash";
                 };
-              };
-              thunderbird = {
-                enable = config.programs.thunderbird.enable;
-              };
-              himalaya = {
-                enable = config.programs.himalaya.enable;
-                settings = {
-                  signature = account.signature;
-                  pgp-type = "gpg";
-                };
-              };
-              meli = {
-                enable = config.programs.meli.enable;
-              };
-              neomutt = {
-                enable = config.programs.neomutt.enable;
-                mailboxName = name;
-              };
-              msmtp.enable = config.programs.msmtp.enable;
-              notmuch = {
-                enable = config.programs.notmuch.enable;
-                neomutt.enable = config.programs.neomutt.enable;
-              };
-              alot = {
-                contactCompletion = {
-                  type = "shellcommand";
-                  command = "${pkgs.notmuch-addrlookup}/bin/notmuch-addrlookup ";
-                  regexp = "(?P<name>.*).*<(?P<email>.+)>";
-                  ignorecase = "True";
-                };
-              };
-              astroid = {
-                enable = config.programs.astroid.enable;
               }
-              // (lib.mkIf config.programs.msmtp.enable {
-                sendMailCommand = "${pkgs.msmtp}/bin/msmtp -a ${name}";
-              });
-              mu.enable = config.programs.mu.enable;
-              signature = {
-                text = account.signature;
-                showSignature = "append";
-              };
-              lieer =
-                lib.mkIf (config.programs.lieer.enable && account.flavor == "gmail.com") {
-                    enable = config.programs.lieer.enable;
-                    sync.enable = config.programs.lieer.enable;
-                    sync.frequency = "*:0/3";
-                    settings.account = account.address;
+              {
+                mbsync = {
+                  enable = config.programs.mbsync.enable;
+                  create = "both";
+                  expunge = "both";
+                  extraConfig = {
+                    channel = {
+                      Sync = "All";
+                    };
+                    # account = {
+                    #   Timeout = 120;
+                    #   PipelineDepth = 1;
+                    # };
                   };
+                };
+              }
+              {
+                msmtp.enable = config.programs.msmtp.enable;
+              }
+              {
+                notmuch = {
+                  enable = config.programs.notmuch.enable;
+                  neomutt.enable = config.programs.neomutt.enable;
+                };
+              }
+              {
+                mu.enable = config.programs.mu.enable;
+              }
+              {
+                aerc = {
+                  enable = config.programs.aerc.enable;
+                  extraAccounts = {
+                    inherit (account) pgp-key-id;
+                    signature-file =
+                      let
+                        out = pkgs.writeText "signature" account.signature;
+                      in
+                      "${out}/signature";
+                    pgp-auto-sign = true;
+                    pgp-opportunistic-encrypt = true;
+                  };
+                };
+              }
+              {
+                thunderbird = {
+                  enable = config.programs.thunderbird.enable;
+                };
+              }
+              {
+                himalaya = {
+                  enable = config.programs.himalaya.enable;
+                  settings = {
+                    signature = account.signature;
+                    pgp-type = "gpg";
+                  };
+                };
+              }
+              {
+                meli = {
+                  enable = config.programs.meli.enable;
+                };
+              }
+              {
+                neomutt = {
+                  enable = config.programs.neomutt.enable;
+                  mailboxName = name;
+                };
+              }
+              {
+                alot = {
+                  enable = config.programs.alot.enable;
+                  contactCompletion = {
+                    type = "shellcommand";
+                    command = "${pkgs.notmuch-addrlookup}/bin/notmuch-addrlookup ";
+                    regexp = "(?P<name>.*).*<(?P<email>.+)>";
+                    ignorecase = "True";
+                  };
+                };
+              }
+              {
+                astroid = {
+                  enable = config.programs.astroid.enable;
+                }
+                // (lib.mkIf config.programs.msmtp.enable {
+                  sendMailCommand = "${pkgs.msmtp}/bin/msmtp -a ${name}";
+                });
+              }
+              (lib.mkIf (config.programs.lieer.enable && account.flavor == "gmail.com") {
+                lieer =
+                  {
+                      enable = config.programs.lieer.enable;
+                      sync.enable = config.programs.lieer.enable;
+                      sync.frequency = "*:0/3";
+                      settings.account = account.address;
+                    };
 
-            } account.homeManagerEmailAccountOverwrites);
+              })
+              account.homeManagerEmailAccountOverwrites
+            ]
+          );
 
           mailAccountsToPersist =
             guard:
@@ -246,10 +273,10 @@ in
               extract_url
               urlscan
             ];
-            programs.lieer.enable = true; # gmail sync
+            programs.lieer.enable = true;
             services.lieer.enable = true;
             programs.msmtp.enable = true;
-            programs.afew.enable = true;
+            programs.afew.enable = false;
             accounts.email.accounts = lib.mapAttrs myconfigAccountToHomeManagerEmailAccount config.myconfig.accounts;
             myconfig.persistence.directories = mailAccountsToPersist (a: a.name != "tng");
             myconfig.persistence.work-directories = mailAccountsToPersist (a: a.name == "tng");
