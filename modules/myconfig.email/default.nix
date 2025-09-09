@@ -25,7 +25,16 @@ in
         default = "mbsync";
       };
       clients = mkOption {
-        type = types.listOf types.str;
+        type = types.listOf (types.enum [
+          "neomutt"
+          "aerc"
+          "alot"
+          "astroid"
+          "evolution"
+          "himalaya"
+          "meli"
+          "thunderbird"
+        ]);
         description = lib.mdDoc ''
           List of email clients to enable.
         '';
@@ -36,6 +45,19 @@ in
       };
     };
   };
+  imports = [
+    ./aerc
+    ./alot.nix
+    ./astroid.nix
+    ./evolution.nix
+    ./himalaya.nix
+    ./mbsync.nix
+    ./meli.nix
+    ./mu.nix
+    ./neomutt
+    ./notmuch.nix
+    ./thunderbird.nix
+  ];
   config = lib.mkIf cfg.email.enable {
     home-manager.sharedModules = [
       (

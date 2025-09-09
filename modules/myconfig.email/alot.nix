@@ -1,17 +1,5 @@
-{
-  config,
-  lib,
-  pkgs,
-  ...
-}:
 let
-  cfg = config.myconfig;
-in
-{
-  config = lib.mkIf (cfg.email.enable && (builtins.elem "alot" cfg.email.clients)) {
-    home-manager.sharedModules = [
-      (
-        {
+  hm = {
           config,
           lib,
           pkgs,
@@ -93,8 +81,18 @@ in
               unread.translated = "U";
             };
           };
-        }
-      )
-    ];
+        };
+in {
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+let
+  cfg = config.myconfig;
+in
+{
+  config = lib.mkIf (cfg.email.enable && (builtins.elem "alot" cfg.email.clients)) {
+    home-manager.sharedModules = [ hm ];
   };
 }

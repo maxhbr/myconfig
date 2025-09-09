@@ -1,17 +1,5 @@
-{
-  config,
-  lib,
-  pkgs,
-  ...
-}:
-let
-  cfg = config.myconfig;
-in
-{
-  config = lib.mkIf (cfg.email.enable && (builtins.elem "himalaya" cfg.email.clients)) {
-    home-manager.sharedModules = [
-      (
-        {
+let 
+  hm = {
           config,
           lib,
           pkgs,
@@ -62,8 +50,18 @@ in
                 ]
               );
           };
-        }
-      )
-    ];
+        };
+in {
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+let
+  cfg = config.myconfig;
+in
+{
+  config = lib.mkIf (cfg.email.enable && (builtins.elem "himalaya" cfg.email.clients)) {
+    home-manager.sharedModules = [ hm ];
   };
 }
