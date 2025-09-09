@@ -105,6 +105,24 @@ in
         { config, lib, ... }:
         {
           config = {
+            myconfig.homeManagerEmailConfig = [
+              {
+                mbsync = {
+                  enable = true;
+                  create = "both";
+                  expunge = "both";
+                  extraConfig = {
+                    channel = {
+                      Sync = "All";
+                    };
+                    # account = {
+                    #   Timeout = 120;
+                    #   PipelineDepth = 1;
+                    # };
+                  };
+                };
+              }
+            ];
             programs.mbsync.enable = true;
             services.mbsync = {
               enable = true;
@@ -119,7 +137,8 @@ in
                 "${mbsync-preExec}/bin/mbsync-preExec";
               postExec =
                 let
-                  mkPostCommand = cmd: cli: inner:
+                  mkPostCommand =
+                    cmd: cli: inner:
                     if config.programs.${cmd}.enable then
                       ''
                         echo "Running ${cmd} ..."
@@ -131,11 +150,12 @@ in
                         ${inner}
                       ''
                     else
-                      ""
-                    fi
+                      "";
                   mbsync-postExec = pkgs.writeShellScriptBin "mbsync-postExec" ''
                     echo "$(${pkgs.coreutils}/bin/date +%s)" > "$HOME/Maildir/mbsync.postExec.start.timestamp"
-                    ${mkPostCommand "notmuch" "${pkgs.notmuch}/bin/notmuch new --no-hooks --verbose" (mkPostCommand "afew" "${pkgs.afew}/bin/afew --tag --new")}
+                    ${mkPostCommand "notmuch" "${pkgs.notmuch}/bin/notmuch new --no-hooks --verbose" (
+                      mkPostCommand "afew" "${pkgs.afew}/bin/afew --tag --new" ""
+                    )}
                     ${mkPostCommand "mu" "${pkgs.mu}/bin/mu index" ""}
                     echo "$(${pkgs.coreutils}/bin/date +%s)" > "$HOME/Maildir/mbsync.postExec.end.timestamp"
                   '';

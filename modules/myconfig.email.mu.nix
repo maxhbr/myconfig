@@ -21,6 +21,11 @@ in
           config = {
             programs.mu.enable = true;
             myconfig.persistence.cache-directories = [ ".cache/mu" ];
+            myconfig.homeManagerEmailConfig = [
+              {
+                mu.enable = true;
+              }
+            ];
           };
         }
       )

@@ -97,6 +97,17 @@ let
 in
 {
   config = lib.mkIf (cfg.email.enable && (builtins.elem "aerc" cfg.email.clients)) {
-    home-manager.sharedModules = [ hm ];
+    home-manager.sharedModules = [
+      hm
+      {
+        myconfig.homeManagerEmailConfig = [
+          {
+            aerc = {
+              enable = true;
+            };
+          }
+        ];
+      }
+    ];
   };
 }

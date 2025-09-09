@@ -22,6 +22,17 @@ in
             programs.astroid = {
               enable = true;
             };
+            myconfig.homeManagerEmailConfig = [
+              {
+                astroid = {
+                  enable = true;
+                }
+                # // (lib.mkIf config.programs.msmtp.enable {
+                #   sendMailCommand = "${pkgs.msmtp}/bin/msmtp -a ${name}";
+                # })
+                ;
+              }
+            ];
           };
         }
       )

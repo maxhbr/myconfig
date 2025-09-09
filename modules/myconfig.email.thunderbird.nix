@@ -42,6 +42,17 @@ in
   config =
     lib.mkIf (cfg.desktop.enable && cfg.email.enable && (builtins.elem "thunderbird" cfg.email.clients))
       {
-        home-manager.sharedModules = [ hm ];
+        home-manager.sharedModules = [
+          hm
+          {
+            myconfig.homeManagerEmailConfig = [
+              {
+                thunderbird = {
+                  enable = true;
+                };
+              }
+            ];
+          }
+        ];
       };
 }

@@ -19,6 +19,18 @@ in
         }:
 
         {
+          myconfig.homeManagerEmailConfig = [
+            {
+              alot = {
+                contactCompletion = {
+                  type = "shellcommand";
+                  command = "${pkgs.notmuch-addrlookup}/bin/notmuch-addrlookup ";
+                  regexp = "(?P<name>.*).*<(?P<email>.+)>";
+                  ignorecase = "True";
+                };
+              };
+            }
+          ];
           programs.alot = {
             enable = true;
             # bindings = {

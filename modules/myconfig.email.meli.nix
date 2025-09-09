@@ -22,6 +22,13 @@ in
             programs.meli = {
               enable = true;
             };
+            myconfig.homeManagerEmailConfig = [
+              {
+                meli = {
+                  enable = true;
+                };
+              }
+            ];
           };
         }
       )

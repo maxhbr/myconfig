@@ -177,6 +177,13 @@ in
                   neomutt-tmux
               '')
             ];
+            myconfig.homeManagerEmailConfig = [
+              {
+                neomutt = {
+                  enable = true;
+                };
+              }
+            ];
             myconfig.persistence.cache-directories = [ ".cache/neomutt" ];
           };
         }

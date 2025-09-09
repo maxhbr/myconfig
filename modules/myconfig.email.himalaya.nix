@@ -19,6 +19,16 @@ in
         }:
         {
           config = {
+            myconfig.homeManagerEmailConfig = [
+              {
+                himalaya = {
+                  enable = true;
+                  settings = {
+                    pgp-type = "gpg";
+                  };
+                };
+              }
+            ];
             programs.himalaya = {
               enable = true;
               package = pkgs.himalaya.override {
