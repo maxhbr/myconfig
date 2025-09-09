@@ -26,8 +26,6 @@ jobs:
     strategy:
       matrix:
         config:
-          - { host: iso , action: "build --dry-run" }
-          - { host: iso , action: "build" }
           - { host: f13 , action: "build --dry-run" }
           # - { host: f13 , action: "build" }
           - { host: workstation , action: "build --dry-run" }

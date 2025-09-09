@@ -32,7 +32,6 @@
           enable = true;
           directLoginFirstSession = true;
           selectedSessions = [
-            "river"
             "niri"
             "niri-plain"
             # "hyprland"
