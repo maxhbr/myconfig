@@ -403,6 +403,7 @@
                 age
               ];
 
+              # TODO: building the CONF_DIR with content from /etc/... makes this require --impure flag 
               NIX_CONF_DIR =
                 with pkgs;
                 let

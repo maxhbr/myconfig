@@ -27,7 +27,7 @@ jobs:
       matrix:
         config:
           - { host: f13 , action: "build --dry-run" }
-          # - { host: f13 , action: "build" }
+          - { host: f13 , action: "build" }
           - { host: workstation , action: "build --dry-run" }
           # - { host: workstation , action: "build" }
           - { host: nas , action: "build --dry-run" }
@@ -36,8 +36,6 @@ jobs:
           # - { host: spare , action: "build" }
           - { host: vserver , action: "build --dry-run" }
           # - { host: vserver , action: "build" }
-          - { host: r6c , action: "build --dry-run" }
-          # - { host: r6c , action: "build" }
       fail-fast: false
 
     steps:
@@ -47,8 +45,11 @@ jobs:
       with:
         github_access_token: ${{ secrets.GITHUB_TOKEN }}
     - run: nix ${{ matrix.config.action }} -L '.#nixosConfigurations.'${{ matrix.config.host }}'.config.system.build.toplevel'
+
   build-iso:
     runs-on: ubuntu-latest
+
+    if: startsWith(github.ref, 'refs/tags/')
 
     steps:
     - run: git config --global init.defaultBranch main
