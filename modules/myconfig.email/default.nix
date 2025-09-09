@@ -25,16 +25,18 @@ in
         default = "mbsync";
       };
       clients = mkOption {
-        type = types.listOf (types.enum [
-          "neomutt"
-          "aerc"
-          "alot"
-          "astroid"
-          "evolution"
-          "himalaya"
-          "meli"
-          "thunderbird"
-        ]);
+        type = types.listOf (
+          types.enum [
+            "neomutt"
+            "aerc"
+            "alot"
+            "astroid"
+            "evolution"
+            "himalaya"
+            "meli"
+            "thunderbird"
+          ]
+        );
         description = lib.mdDoc ''
           List of email clients to enable.
         '';
