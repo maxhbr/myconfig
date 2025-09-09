@@ -332,6 +332,7 @@
           vserver = self.nixosConfigurationsGen.host-vserver [ ] { };
           nas = self.nixosConfigurationsGen.host-nas [ ] { };
           nuc = self.nixosConfigurationsGen.host-nuc [ ] { };
+          r6c = self.nixosConfigurationsGen.host-r6c [ ] { };
           # pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
           # pi3a = self.nixosConfigurationsGen.host-pi3a [ ] { };
 
