@@ -48,7 +48,7 @@ in
     };
   };
   imports = [
-    ./aerc
+    ./aerc.nix
     ./alot.nix
     ./astroid.nix
     ./evolution.nix
@@ -56,7 +56,7 @@ in
     ./mbsync.nix
     ./meli.nix
     ./mu.nix
-    ./neomutt
+    ./neomutt.nix
     ./notmuch.nix
     ./thunderbird.nix
   ];
