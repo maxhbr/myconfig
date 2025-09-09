@@ -117,7 +117,7 @@
         logseq.enable = true;
       };
       email = {
-        enable = true;
+        # enable = true; # this is set in the priv repo
         clients = [
           "aerc"
           "neomutt"

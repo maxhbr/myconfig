@@ -33,7 +33,7 @@ let
     tsNow=$(date +%s)
 
     if [[ ! -f "$HOME/Maildir/mbsync.preExec.timestamp" ]]; then
-      echo '{"text": "🖂✗", "tooltip": "mbsync not-starting","class":"error"}'
+      echo '{"text": "✗", "tooltip": "mbsync not-starting","class":"error"}'
       exit 0
     fi
     tsPreExec=$(cat "$HOME/Maildir/mbsync.preExec.timestamp")
@@ -46,7 +46,7 @@ let
       if [[ "$timeSinceLastStart" -lt 30 ]]; then
         exit 0
       fi
-      echo '{"text": "🖂✗", "tooltip": "mbsync not-syncing","class":"error"}'
+      echo '{"text": "✗", "tooltip": "mbsync not-syncing","class":"error"}'
       exit 0
     fi
     tsPostExecStart=$(cat "$HOME/Maildir/mbsync.postExec.start.timestamp")
@@ -59,7 +59,7 @@ let
       if [[ "$timeSinceLastStart" -lt 30 ]]; then
         exit 0
       fi
-      echo '{"text": "🖂✗", "tooltip": "mbsync not-indexing","class":"error"}'
+      echo '{"text": "✗", "tooltip": "mbsync not-indexing","class":"error"}'
       exit 0
     fi
     tsPostExecEnd=$(cat "$HOME/Maildir/mbsync.postExec.end.timestamp")
@@ -69,7 +69,7 @@ let
     fi
 
     if [[ "$timeSinceLastHookEnd" -lt 300 ]]; then
-      echo '{"text": "🖂✓", "tooltip": "mbsync successful","class":"okay"}'
+      echo '{"text": "🖂", "tooltip": "mbsync successful","class":"okay"}'
       exit 0
     fi
 
@@ -82,7 +82,7 @@ let
           >&2 echo "...hook was successful"
         fi
         if [[ "$timeSinceLastStart" -lt 3000 ]]; then
-          echo '{"text": "🖂✓", "tooltip": "mbsync successful","class":"okay"}'
+          echo '{"text": "🖂", "tooltip": "mbsync successful","class":"okay"}'
           exit 0
         else
           echo '{"text": "🖂!", "tooltip": "mbsync stale, since '"$timeSinceLastStart"'s","class":"warning"}'
@@ -93,7 +93,7 @@ let
         exit 0
       fi
     else
-      echo '{"text": "🖂✗", "tooltip": "mbsync sync-failed, since '"$timeSinceLastHookStart"'s","class":"error"}'
+      echo '{"text": "✗", "tooltip": "mbsync sync-failed, since '"$timeSinceLastHookStart"'s","class":"error"}'
       exit 0
     fi
   '';
