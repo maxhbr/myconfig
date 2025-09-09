@@ -29,11 +29,11 @@ in
           types.enum [
             "neomutt"
             "aerc"
-            "alot"
+            "alot" # untested
             "astroid"
             "evolution"
-            "himalaya"
-            "meli"
+            "himalaya" # untested
+            "meli" # untested
             "thunderbird"
           ]
         );
