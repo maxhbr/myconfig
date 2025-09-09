@@ -171,10 +171,6 @@
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;
 
-    services.logind.extraConfig = ''
-      HandlePowerKey=reboot
-    '';
-
     services = {
       snapper = {
         snapshotInterval = "hourly";

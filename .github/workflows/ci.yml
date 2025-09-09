@@ -26,12 +26,20 @@ jobs:
     strategy:
       matrix:
         config:
-          - { host: x1extremeG2 , action: "build --dry-run" }
-          - { host: x1extremeG2 , action: "build" }
+          - { host: iso , action: "build --dry-run" }
+          - { host: iso , action: "build" }
+          - { host: f13 , action: "build --dry-run" }
+          # - { host: f13 , action: "build" }
           - { host: workstation , action: "build --dry-run" }
-          - { host: workstation , action: "build" }
+          # - { host: workstation , action: "build" }
           - { host: nas , action: "build --dry-run" }
-          - { host: nas , action: "build" }
+          # - { host: nas , action: "build" }
+          - { host: spare , action: "build --dry-run" }
+          # - { host: spare , action: "build" }
+          - { host: vserver , action: "build --dry-run" }
+          # - { host: vserver , action: "build" }
+          - { host: r6c , action: "build --dry-run" }
+          # - { host: r6c , action: "build" }
       fail-fast: false
 
     steps:
