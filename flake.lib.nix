@@ -503,12 +503,11 @@ rec {
   mkConfiguration =
     system: hostName: nixosModules: metadataOverride:
     let
-      # pkgs = self.legacyPackages.${system};
-
+      user = "mhuber";
       specialArgs = {
         inherit inputs;
         myconfig = {
-          user = "mhuber";
+          inherit user;
           metadatalib = mkMetadatalib metadataOverride;
         };
         flake = self;
@@ -539,7 +538,6 @@ rec {
             { config, lib, ... }:
             {
               imports = [
-                # home manager:
                 inputs.home.nixosModules.home-manager
               ];
 
@@ -573,7 +571,7 @@ rec {
                         ...
                       }:
                       let
-                        hmReady = "/tmp/home-manager.ready.${config.home.username}";
+                        hmReady = "/home/${user}/.home-manager-${config.home.username}.service.ready";
                       in
                       {
                         home.activation.markHmUnready = lib.hm.dag.entryBefore [ "writeBoundary" ] ''
@@ -589,7 +587,8 @@ rec {
                   ];
                 };
                 # wait for home-manager to be ready
-                systemd.services.greetd.unitConfig.ConditionPathExists = "/tmp/home-manager.ready.mhuber"; # TODO: hardcoded username
+                systemd.services.greetd.unitConfig.ConditionPathExists =
+                  "/home/${user}/.home-manager-${user}.service.ready";
               };
             }
           )

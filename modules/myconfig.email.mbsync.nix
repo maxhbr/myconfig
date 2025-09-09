@@ -103,25 +103,17 @@ in
     home-manager.sharedModules = [
       (
         { config, lib, ... }:
-        let
-          mailAccountsToPersist =
-            guard:
-            lib.map (a: a.maildir.absPath) (
-              lib.filter (a: a.mbsync.enable && guard a) (lib.attrValues config.accounts.email.accounts)
-            );
-        in
         {
           config = {
-            myconfig.persistence.directories = mailAccountsToPersist (a: a.name != "tng");
-            myconfig.persistence.work-directories = mailAccountsToPersist (a: a.name == "tng");
             programs.mbsync.enable = true;
             services.mbsync = {
               enable = true;
-              verbose = false;
+              verbose = true;
               package = config.programs.mbsync.package;
               preExec =
                 let
                   mbsync-preExec = pkgs.writeShellScriptBin "mbsync-preExec" ''
+                    set -x
                     echo "$(${pkgs.coreutils}/bin/date +%s)" > "$HOME/Maildir/mbsync.preExec.timestamp"
                   '';
                 in
@@ -129,10 +121,17 @@ in
               postExec =
                 let
                   mbsync-postExec = pkgs.writeShellScriptBin "mbsync-postExec" ''
+                    set -x
                     echo "$(${pkgs.coreutils}/bin/date +%s)" > "$HOME/Maildir/mbsync.postExec.start.timestamp"
                     ${
                       if config.programs.notmuch.enable then
                         "${pkgs.notmuch}/bin/notmuch new --no-hooks --verbose >/tmp/mbsync.notmuch.log"
+                      else
+                        ""
+                    }
+                    ${
+                      if config.programs.notmuch.enable && config.programs.afew.enable then
+                        "${pkgs.afew}/bin/afew --tag --new"
                       else
                         ""
                     }

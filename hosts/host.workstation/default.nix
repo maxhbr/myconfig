@@ -48,11 +48,12 @@
         };
       }
     )
-    (myconfig.metadatalib.setupAsBuildMachine [        # xserver = {
-        #   enable = true;
-        #   xmonad.enable = false;
-        #   # kde.enable = true;
-        # };
+    (myconfig.metadatalib.setupAsBuildMachine [
+      # xserver = {
+      #   enable = true;
+      #   xmonad.enable = false;
+      #   # kde.enable = true;
+      # };
       myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
     ])
     {
@@ -96,7 +97,6 @@
       podman.enable = true;
       #virtualbox.host.enable = true;
     };
-
 
     programs.dconf.enable = true;
 

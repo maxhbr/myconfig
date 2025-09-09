@@ -39,7 +39,7 @@ else
         echo "Working directory is not clean"
         REASON_TO_NOT_DO_COMMIT="working directory is not clean"
 
-        read -p "Do you want to continue? (y/n) " -n 1 -r
+        read -p "Do you want to continue? It will not commit, just format (y/n) " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             echo "Aborting"

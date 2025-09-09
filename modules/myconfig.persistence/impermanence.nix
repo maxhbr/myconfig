@@ -459,6 +459,9 @@ in
       "${persistentCacheDir}" = {
         enable = true;
         hideMounts = true;
+        files = [
+          "/.persistence.ready"
+        ];
         directories = [
           {
             directory = "/var/lib/private";
@@ -495,22 +498,29 @@ in
               "_screenshots"
             ];
             myconfig.persistence.cache-directories = [ ".cache/nix-index" ];
-            home.persistence."${persistentPrivDir}/home/${config.home.username}" = {
-              directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.directories);
-              files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.files);
-              allowOther = true;
-            };
-            home.persistence."${persistentWorkDir}/home/${config.home.username}" = {
-              directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-directories);
-              files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-files);
-              allowOther = true;
-            };
-            home.persistence."${persistentCacheDir}/home/${config.home.username}" = {
-              directories = validatePaths (
-                lib.map mkRelativeToHome config.myconfig.persistence.cache-directories
-              );
-              files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.cache-files);
-              allowOther = true;
+            home.persistence = {
+              "${persistentCacheDir}" = {
+                files = [
+                  ".persistence.${config.home.username}.ready"
+                ];
+              };
+              "${persistentPrivDir}/home/${config.home.username}" = {
+                directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.directories);
+                files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.files);
+                allowOther = true;
+              };
+              "${persistentWorkDir}/home/${config.home.username}" = {
+                directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-directories);
+                files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-files);
+                allowOther = true;
+              };
+              "${persistentCacheDir}/home/${config.home.username}" = {
+                directories = validatePaths (
+                  lib.map mkRelativeToHome config.myconfig.persistence.cache-directories
+                );
+                files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.cache-files);
+                allowOther = true;
+              };
             };
           };
         }
