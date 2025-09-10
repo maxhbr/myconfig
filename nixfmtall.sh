@@ -3,17 +3,16 @@
 
 set -euo pipefail
 
-format() (
+format() {
   local file="$1"
   shift
   local nixfmt_args="$@"
-  set -x
   time find "$file" \
           -type f \
           -iname '*.nix' \
           -not -iname 'empty_nixos_config.nix' \
           -print0 | xargs -0 -n1 nixfmt $nixfmt_args
-)
+}
 
 check() {
   local file="$1"
