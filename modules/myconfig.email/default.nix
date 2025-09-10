@@ -155,41 +155,42 @@ in
                     userName
                     passwordCommand
                     ;
-                  gpg = lib.mkIf (account.pgp-key-id != null) {
-                    key = account.pgp-key-id;
-                    signByDefault = true;
-                    encryptByDefault = false;
-                  };
                   signature = {
                     text = account.signature;
                     showSignature = "append";
                   };
-
                   maildir = {
                     path = name;
-                  };
-                  folders = lib.mkIf (account.flavor != "gmail.com") {
-                    inbox = "Inbox";
-                    drafts = "Drafts";
-                    sent = "Sent";
-                    trash = "Trash";
                   };
                   neomutt.mailboxName = name;
                   msmtp.enable = config.programs.msmtp.enable;
                   aerc.extraAccounts = {
-                    inherit (account) pgp-key-id;
-                    signature-file =
-                      let
-                        out = pkgs.writeText "signature" account.signature;
-                      in
-                      "${out}/signature";
-                    pgp-auto-sign = true;
-                    pgp-opportunistic-encrypt = true;
+                    signature-file = "${pkgs.writeText "signature" account.signature}";
                   };
                   himalaya.settings = {
                     signature = account.signature;
                   };
                 }
+                (lib.mkIf (account.pgp-key-id != null) {
+                  gpg = {
+                    key = account.pgp-key-id;
+                    signByDefault = true;
+                    encryptByDefault = false;
+                  };
+                  aerc.extraAccounts = {
+                    inherit (account) pgp-key-id;
+                    pgp-auto-sign = true;
+                    pgp-opportunistic-encrypt = true;
+                  };
+                })
+                (lib.mkIf (account.flavor != "gmail.com") {
+                  folders = {
+                    inbox = "Inbox";
+                    drafts = "Drafts";
+                    sent = "Sent";
+                    trash = "Trash";
+                  };
+                })
                 (lib.mkIf (config.programs.lieer.enable && account.flavor == "gmail.com") {
                   lieer = {
                     enable = config.programs.lieer.enable;
@@ -197,7 +198,11 @@ in
                     sync.frequency = "*:0/3";
                     settings.account = account.address;
                   };
-
+                  aerc.extraAccounts = {
+                    folder-map = "${pkgs.writeText "folder-map" ''
+                      * = [Gmail]/*
+                    ''}";
+                  };
                 })
                 account.homeManagerEmailAccountOverwrites
               ]
