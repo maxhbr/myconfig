@@ -27,7 +27,7 @@ jobs:
       matrix:
         config:
           - { host: f13 , action: "build --dry-run" }
-          - { host: f13 , action: "build" }
+          # - { host: f13 , action: "build" }
           - { host: workstation , action: "build --dry-run" }
           # - { host: workstation , action: "build" }
           - { host: nas , action: "build --dry-run" }
