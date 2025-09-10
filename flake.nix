@@ -403,7 +403,7 @@
                 age
               ];
 
-              # TODO: building the CONF_DIR with content from /etc/... makes this require --impure flag 
+              # TODO: building the CONF_DIR with content from /etc/... makes this require --impure flag
               NIX_CONF_DIR =
                 with pkgs;
                 let
@@ -415,21 +415,25 @@
                   '';
                   # access-tokens = "github.com=${secrets.git.github.oauth-token}"
                 in
-                linkFarm "nix-conf-dir" ([
-                  {
-                    name = "nix.conf";
-                    path = writeText "flakes-nix.conf" nixConf;
-                  }
-                ] ++ 
-                  (lib.optionals (builtins.pathExists /etc/nix/registry.json) [{
-                    name = "registry.json";
-                    path = /etc/nix/registry.json;
-                  }])
-                  ++
-                  (lib.optionals (builtins.pathExists /etc/nix/machines) [{
-                    name = "machines";
-                    path = /etc/nix/machines;
-                  }])
+                linkFarm "nix-conf-dir" (
+                  [
+                    {
+                      name = "nix.conf";
+                      path = writeText "flakes-nix.conf" nixConf;
+                    }
+                  ]
+                  ++ (lib.optionals (builtins.pathExists /etc/nix/registry.json) [
+                    {
+                      name = "registry.json";
+                      path = /etc/nix/registry.json;
+                    }
+                  ])
+                  ++ (lib.optionals (builtins.pathExists /etc/nix/machines) [
+                    {
+                      name = "machines";
+                      path = /etc/nix/machines;
+                    }
+                  ])
                 );
             };
         })

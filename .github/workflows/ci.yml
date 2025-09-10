@@ -18,7 +18,19 @@ jobs:
       with:
         name: maxhbr
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-    - run: nix develop --impure --command env
+    - run: nix develop --impure --command echo "success"
+
+  nixfmt-check:
+    runs-on: ubuntu-latest
+    steps:
+    - run: git config --global init.defaultBranch main
+    - uses: actions/checkout@v5
+    - uses: cachix/install-nix-action@v31
+      with:
+        github_access_token: ${{ secrets.GITHUB_TOKEN }}
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+    - run: ./nixfmtall.sh --check
 
   build-os:
     runs-on: ubuntu-latest

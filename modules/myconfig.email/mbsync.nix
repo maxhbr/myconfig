@@ -131,7 +131,9 @@ in
               preExec =
                 let
                   mbsync-preExec = pkgs.writeShellScriptBin "mbsync-preExec" ''
+                    echo "Running mbsync-preExec ..."
                     echo "$(${pkgs.coreutils}/bin/date +%s)" > "$HOME/Maildir/mbsync.preExec.timestamp"
+                    echo "mbsync-preExec done"
                   '';
                 in
                 "${mbsync-preExec}/bin/mbsync-preExec";
@@ -152,12 +154,14 @@ in
                     else
                       "";
                   mbsync-postExec = pkgs.writeShellScriptBin "mbsync-postExec" ''
+                    echo "Running mbsync-postExec ..."
                     echo "$(${pkgs.coreutils}/bin/date +%s)" > "$HOME/Maildir/mbsync.postExec.start.timestamp"
                     ${mkPostCommand "notmuch" "${pkgs.notmuch}/bin/notmuch new --no-hooks --verbose" (
                       mkPostCommand "afew" "${pkgs.afew}/bin/afew --tag --new" ""
                     )}
                     ${mkPostCommand "mu" "${pkgs.mu}/bin/mu index" ""}
                     echo "$(${pkgs.coreutils}/bin/date +%s)" > "$HOME/Maildir/mbsync.postExec.end.timestamp"
+                    echo "mbsync-postExec done"
                   '';
                 in
                 "${mbsync-postExec}/bin/mbsync-postExec";
