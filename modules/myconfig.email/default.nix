@@ -142,11 +142,13 @@ in
         {
           options = {
             myconfig = {
-              homeManagerEmailConfig = with lib; mkOption {
-                type = types.listOf types.attrs;
-                default = [ ];
-                description = "Home Manager email config pieces applied to all accounts.";
-              };
+              homeManagerEmailConfig =
+                with lib;
+                mkOption {
+                  type = types.listOf types.attrs;
+                  default = [ ];
+                  description = "Home Manager email config pieces applied to all accounts.";
+                };
             };
           };
           config = {

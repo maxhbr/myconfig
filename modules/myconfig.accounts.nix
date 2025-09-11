@@ -87,7 +87,7 @@ in
                 };
               };
             };
-        id
+        in
         {
           options = {
             myconfig = {
