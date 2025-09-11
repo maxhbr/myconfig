@@ -1,16 +1,241 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-#
-# TODO: package scripts
-#
-{ config, pkgs, ... }:
+let
+  gitconfig = {
+    aliases = {
+      s = "status --short --branch";
+      b = "branch -vv";
+      a = "add";
+      c = "commit";
+      cf = "commit --fixup";
+      cm = "commit -s -m";
+      chunk = "commit --patch";
+      chunkammend = "commit --patch --amend";
+      cma = "commit -s -am";
+      cfa = "commit -a --fixup";
+      cfa0 = "commit -a --fixup HEAD";
+      cfa1 = "commit -a --fixup HEAD~";
+      cfa2 = "commit -a --fixup HEAD~2";
+      cfa3 = "commit -a --fixup HEAD~3";
+      cfa4 = "commit -a --fixup HEAD~4";
+      cfa5 = "commit -a --fixup";
+      ca = "commit -s --amend";
+      caa = "commit -s --amend -a";
+      cac = "commit -s --patch --amend";
+      reuse = "commit -c @ --reset-author";
+      co = "checkout";
+      cot = "checkout --track";
+      cob = "checkout -b";
+      f = "!f() { git fetch \${1:-\"--all\"}; }; f";
+      fb = "!f() { git fetch --prune \${1:-\"--all\"}; }; f";
+      fum = "!f() { if [[ \"$(git remote)\" != *'upstream'* ]]; then git fetch origin master:master; else git fetch upstream master:master; fi; }; f";
+      pum = "!f() { if [[ \"$(git remote)\" != *'upstream'* ]]; then git pull --rebase=interactive origin master; else git pull --rebase=interactive upstream master; fi; }; f";
+      up = "!git remote update -p; git merge --ff-only @{u}";
+      cp = "cherry-pick";
+
+      pushb = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git push \"\${1:-origin}\" \"$branchname\"; fi; }; f";
+      psuhb = "pushb";
+      pushfb = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git push --force-with-lease \"\${1:-origin}\" \"$branchname\"; fi; }; f";
+      pullb = "!f() { set -ex; local branchname=\"$(git symbolic-ref HEAD 2>/dev/null)\"; if [[ \"$branchname\" ]]; then  git pull \"\${1:-origin}\" \"$branchname\"; fi; }; f";
+
+      d = "diff";
+      dm = "diff master";
+      d0 = "diff HEAD";
+      d1 = "diff HEAD~";
+      d2 = "diff HEAD~2";
+      d3 = "diff HEAD~3";
+      d4 = "diff HEAD~4";
+      d1d = "diff master@{1day}...master";
+      d2d = "diff master@{2day}...master";
+      d3d = "diff master@{3day}...master";
+      d4d = "diff master@{4day}...master";
+      d1w = "diff master@{1week}...master";
+      dstaged = "diff --staged";
+      ds = "diff --stat -r";
+      ds0 = "diff --stat -r HEAD";
+      ds1 = "diff --stat -r HEAD~";
+      ds2 = "diff --stat -r HEAD~2";
+      ds3 = "diff --stat -r HEAD~3";
+      ds4 = "diff --stat -r HEAD~4";
+      dd = "diff --word-diff=color";
+      dw = "diff --color-words=\"[^[:space:],;:_-]+\"";
+      dt = "difftool --dir-diff";
+      dAncestor = "!f() { git diff $(git merge-base master HEAD); }; f";
+      dsAncestor = "!f() { git diff --stat $(git merge-base master HEAD); }; f";
+      changes = "diff --name-status -r";
+      diffstat = "diff --stat -r";
+      sortdiff = "!sh -c 'git diff \"$@\" | grep \"^[+-]\" | sort --key=1.2 | uniq -u -s1'";
+
+      ri = "rebase --autosquash --interactive";
+      rc = "rebase --continue";
+      ra = "rebase --abort";
+      rMaster = "rebase --autosquash --interactive master";
+      rAncestor = "!f() { git rebase --autosquash --interactive $(git merge-base \${1:-master} HEAD); }; f";
+      rsAncestor = "!f() { git reset --soft $(git merge-base master HEAD); }; f";
+
+      mkBundle = "!f() { git bundle create \"../$(basename $(pwd)).bundle\" --all; }; f";
+      mkBundleDated = "!f() { git bundle create \"../$(date '+%Y-%m-%d')_$(basename $(pwd)).bundle\" --all; }; f";
+
+      am = "am -3";
+
+      mt = "mergetool --no-prompt";
+      l = "log";
+      lg = "log --oneline";
+      sinit = "submodule init";
+      sup = "submodule update";
+      sdiff = "!git diff && git submodule foreach 'git diff'";
+      spush = "push --recurse-submodules=on-demand";
+      supdate = "submodule update --remote --merge";
+      unstage = "reset HEAD --";
+      untrack = "rm --cached";
+      unadd = "rm --cached";
+      unrm = "!f() { git reset -- $@ ; git checkout -- $@; }; f";
+
+      whatis = "show -s --pretty='tformat:%h (%s, %ad)' --date=short";
+      pwhatis = "show -s --pretty='tformat:%h, %s, %ad' --date=short";
+
+      new = "!sh -c 'git log $1@{1}..$1@{0} \"$@\"'";
+
+      remadd = "!f() { \
+                   			git remote add $1 git@github.com:\${1}/\${2}.git; \
+                   }; f";
+      ghc = "!f() { \
+                        if [ \"$#\" -ne 2 ]; then echo \"needs two arguments\"; exit 1; fi;\
+                        git clone --recurse-submodules git@github.com:\${1}/\${2}.git \${1}-\${2}; \
+                    }; f";
+      glc = "!f() { \
+                        if [ \"$#\" -ne 2 ]; then echo \"needs two arguments\"; exit 1; fi;\
+                        git clone --recurse-submodules git@gitlab.com:\${1}/\${2}.git \${1}-\${2}; \
+                    }; f";
+      gbc = "!f() { \
+                        if [ \"$#\" -ne 2 ]; then echo \"needs two arguments\"; exit 1; fi;\
+                        git clone --recurse-submodules https://bitbucket.org/\${1}/\${2} \${1}-\${2}; \
+                    }; f";
+      remotes = "remote -v";
+
+      listMergedBranches = "!f() { git branch --merged master | grep -v \"* master\"; }; f";
+      listMergedBranchesAndDelete = "!f() { git branch --merged master | grep -v \"* master\" | xargs -n 1 git branch -d; }; f";
+      # Pretty graphs
+      lol = "log --graph --decorate --pretty=oneline --abbrev-commit";
+      lola = "log --graph --decorate --pretty=oneline --abbrev-commit --all";
+      g = "log --graph --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %n%C(reverse)%C(bold)  %s %C(reset)%n%C(reverse) %C(reset) Author: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%n'";
+      gl = "log --graph --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset) (%H)%C(yellow)%d%C(reset)%n%C(reverse)  %C(bold)%s %C(reset)%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'";
+      gg = "log --graph --all --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset)%C(yellow)%d%C(reset) %n%C(reverse)%C(bold)  %s %C(reset)%n%C(reverse) %C(reset) Author: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%n'";
+      ggl = "log --graph --all --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset) (%H)%C(yellow)%d%C(reset)%n%C(reverse)  %C(bold)%s %C(reset)%n%b%n%nAuthor: %C(bold)%an%C(reset) <%ae> %C(bold)%ar%C(reset) (%ai)%nCommitter: %cn <%ce> %C(bold)%cr%C(reset) (%ci)%n'";
+      ggls = "log --graph --all --pretty=format:'%C(reverse) %C(reset) %C(red)%C(bold)%h%C(reset) (%H)%C(yellow)%d%C(reset)%n%C(reverse)  %C(bold)%s %C(reset)%n'";
+
+      ls-assume-unchanged = "!git ls-files -v | grep ^h | awk '{print $2}'";
+      assume-unchanged = "update-index --assume-unchanged";
+      assume-changed = "update-index --no-assume-unchanged";
+      testPR = "!f() { [[ $(git diff --shortstat 2> /dev/null | tail -n1) != \"\" ]] && { \
+                              echo \"git is unclean\"; \
+                              return 1; \
+                            }; \
+                            remote=\"\${2:-origin}\"; \
+                            branch=\"testpr/\${remote}/\${1}\"; \
+                            git fetch \"\${remote}\" \"+refs/pull/\${1}/merge:\" \
+                            && ( git checkout -b \"$branch\" -qf FETCH_HEAD \
+                              || ( git checkout \"$branch\" \
+                                && git reset --hard FETCH_HEAD ) ) \
+                            || ( echo && echo \"possible refs:\" && git ls-remote $remote | grep \"/merge\"; ); \
+                        }; f";
+      testMR = "!f() { [[ $(git diff --shortstat 2> /dev/null | tail -n1) != \"\" ]] && { \
+                              echo \"git is unclean\"; \
+                              return 1; \
+                            }; \
+                            remote=\"\${2:-origin}\"; \
+                            branch=\"testpr/\${remote}/\${1}\"; \
+                            git fetch \"\${remote}\" \"+refs/merge-requests/\${1}/head:\" \
+                            && ( git checkout -b \"$branch\" -qf FETCH_HEAD \
+                              || ( git checkout \"$branch\" \
+                                && git reset --hard FETCH_HEAD ) ) \
+                            || ( echo && echo \"possible refs:\" && git ls-remote $remote | grep \"/merge\"; ); \
+                        }; f";
+      # stolen from: https://stackoverflow.com/questions/16307091/make-git-status-show-unmodified-unchanged-tracked-files
+      ls-fstatus = "! cd $PWD/$GIT_PREFIX; git ls-files -cdmoskt --abbrev=8 | while read -r line; do \
+                      fn=$(echo \"$line\" | sed \"s/.*\\s\\([[:print:]]\\+\\)/\\1/\"); \
+                      st=$(git status -s \"$fn\" | printf \"%-02s \" $(sed \"s/\\([[:print:]]\\+\\)\\s.*/\\1/\")); \
+                      echo \"$st- $line\"; \
+                  done";
+
+      changeAuthor = "commit --amend --no-edit --author";
+
+      snapshot = "!git stash save \"snapshot: $(date)\" && git stash apply \"stash@{0}\"";
+      # see: https://stackoverflow.com/questions/11269256/how-to-name-and-retrieve-a-stash-by-name-in-git
+      sshow = "!f() { git stash show stash^{/$*} -p; }; f";
+      sapply = "!f() { git stash apply stash^{/$*}; }; f";
+      # git subtree:
+      sba = "!f() { git subtree add --prefix $2 $1 master --squash; }; f";
+      sbu = "!f() { git subtree pull --prefix $2 $1 master --squash; }; f";
+      # testing:
+      recap = "!f() { local default=$(git config user.email); git log --all --pretty=format:'%Cred%h%Creset - %s%Cgreen (%cr) %Cblue<%aN>' --no-merges --author=\${1:-$default} \${@:2}; }; f";
+      incoming = "!git remote update -p; git log ..@{u}";
+      outgoing = "log @{u}..";
+      unmerged = "!git branch -r --no-merged | grep -v HEAD | xargs -L1 git --no-pager log --pretty=tformat:'%Cgreen%d%Creset - %h by %an (%Cblue%ar%Creset)' -1";
+      merged = "!git branch -r --merged | grep -v HEAD | xargs -L1 git --no-pager log --pretty=tformat:'%Cgreen%d%Creset - %h by %an (%Cblue%ar%Creset)' -1";
+      # https://stackoverflow.com/questions/18500016/undo-a-git-rerere-resolution-that-was-done-in-a-rebase
+      unrerere = "rerere forget";
+      unrerereall = "!f() { rm -rf .git/rr-cache; }; f";
+      # typos
+      psuh = "push";
+    };
+    extraConfig = {
+      user.useConfigOnly = true;
+      core.logAllRefUpdates = "always";
+      color.branch = "auto";
+      color.diff = "auto";
+      color.interactive = "auto";
+      color.status = "auto";
+      core.autocrlf = "input";
+      core.safecrlf = false;
+      pull.rebase = "merges";
+      rebase.autoStash = true;
+      push.default = "matching";
+      filter.lfs.clean = "git-lfs clean -- %f";
+      filter.lfs.smudge = "git-lfs smudge -- %f";
+      filter.lfs.required = true;
+      filter.lfs.process = "git-lfs filter-process";
+      # stolen from https://stackoverflow.com/questions/1817370/using-ediff-as-git-mergetool
+      mergetool.ediff.cmd = "emacs --eval \"\
+(progn\
+  (defun ediff-write-merge-buffer ()\
+    (let ((file ediff-merge-store-file))\
+      (set-buffer ediff-buffer-C)\
+      (write-region (point-min) (point-max) file)\
+      (message \\\"Merge buffer saved in: %s\\\" file)\
+      (set-buffer-modified-p nil)\
+      (sit-for 1)))\
+  (setq ediff-quit-hook 'kill-emacs\
+        ediff-quit-merge-hook 'ediff-write-merge-buffer)\
+  (ediff-merge-files-with-ancestor \\\"$LOCAL\\\" \\\"$REMOTE\\\"\
+                                    \\\"$BASE\\\" nil \\\"$MERGED\\\"))\"";
+      merge.tool = "meld";
+      merge.conflictstyle = "diff3";
+      merge.ff = false;
+      diff.tool = "meld";
+      rerere.enabled = true;
+      help.autoCorrect = "prompt";
+      url."git@github.com:".pushInsteadOf = [
+        "https://github.com/"
+        "git://github.com/"
+      ];
+      init.defaultBranch = "main";
+
+    };
+  };
+
+in
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 {
   config = {
     environment = {
       shellAliases = {
         g = "git";
-        pushb = "git pushb";
-        pushfb = "git pushfb";
         gs = "git s";
         t = "tig";
         tu = "tig HEAD @{upstream}";
@@ -18,6 +243,14 @@
     };
     home-manager.sharedModules = [
       {
+        programs.fish = {
+          shellAbbrs = {
+            g = "git";
+          };
+          functions = {
+            gitignore = "curl -sL https://www.gitignore.io/api/$argv";
+          };
+        };
         home.packages =
           with pkgs;
           [ github-cli ]
@@ -30,26 +263,24 @@
             git-crypt
             git-secrets
           ]);
-        home.file = {
-          ".gitconfig".source = ./gitconfig;
-        };
-        programs.git = {
-          package = pkgs.gitAndTools.gitFull;
-          enable = true;
-          signing = {
-            key = null;
-            signByDefault = true;
-            format = if config.programs.gnupg.agent.enable then "openpgp" else "ssh";
-          };
-        };
-        programs.fish = {
-          shellAbbrs = {
-            g = "git";
-          };
-          functions = {
-            gitignore = "curl -sL https://www.gitignore.io/api/$argv";
-          };
-        };
+
+        programs.git = lib.mkMerge [
+          {
+            package = pkgs.gitAndTools.gitFull;
+            enable = true;
+            userName = "Maximilian Huber";
+            userEmail = "gh@maxhbr.de";
+            signing = {
+              key = "32CA3654";
+              signByDefault = false; # TODO?
+              format = if config.programs.gnupg.agent.enable then "openpgp" else "ssh";
+            };
+            extraConfig = {
+              github.user = "maxhbr";
+            };
+          }
+          gitconfig
+        ];
       }
     ];
   };
