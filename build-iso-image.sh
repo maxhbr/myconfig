@@ -16,7 +16,7 @@ EOF
     cat <<'EOF' | tee -a "$outDir/dd.sh"
 sdX="$1"
 die() { exit 1; }
-[[ "$(lsblk -no TYPE "$sdX")" = "disk" ]] || die
+[[ "$(lsblk -no TYPE "$sdX")" = "disk"* ]] || die
 
 sudo dd if="$iso" of="$sdX" bs=4M conv=sync status=progress
 EOF

@@ -196,6 +196,8 @@
 
     # typos
     psuh = "push"
+[commit]
+    gpgsign = false
 [color]
     branch = auto
     diff = auto
