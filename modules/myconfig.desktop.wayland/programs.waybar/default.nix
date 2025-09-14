@@ -120,26 +120,31 @@ let
           ${pkgs.light}/bin/light -S 80
         fi
       '';
-      doesFileExistCheck = file: let
+      doesFileExistCheck =
+        file:
+        let
           bn = builtins.baseNameOf file;
           checkName = "custom/doesFileExistCheck#${bn}";
-        in {
-        modules-left = [checkName];
-        "${checkName}" = {
-          format = "{}";
-          exec = (pkgs.writeShellScriptBin "doesFileExist" ''
-        set -euo pipefail
-        if [[ ! -f ${file} ]]; then
-          cat <<EOF
-        {"text":"!${bn}","class":"error"}
-        EOF
-        fi
-      '') + "/bin/doesFileExist";
-          return-type = "json";
-          interval = 6;
-          rotation = 90;
+        in
+        {
+          modules-left = [ checkName ];
+          "${checkName}" = {
+            format = "{}";
+            exec =
+              (pkgs.writeShellScriptBin "doesFileExist" ''
+                set -euo pipefail
+                if [[ ! -f ${file} ]]; then
+                  cat <<EOF
+                {"text":"!${bn}","class":"error"}
+                EOF
+                fi
+              '')
+              + "/bin/doesFileExist";
+            return-type = "json";
+            interval = 6;
+            rotation = 90;
+          };
         };
-      };
     in
     {
       config = (
@@ -149,8 +154,8 @@ let
             package = waybarPackage;
             systemd.enable = false;
             settings = {
-              mainBar =
-                lib.mkMerge ([
+              mainBar = lib.mkMerge (
+                [
                   {
                     layer = "top";
                     position = "left";
@@ -400,7 +405,9 @@ let
                     };
                     "custom/audio_idle_inhibitor".rotate = 90;
                   }
-                ] ++ (map doesFileExistCheck cfg.desktop.wayland.waybar.doesFileExistChecks));
+                ]
+                ++ (map doesFileExistCheck cfg.desktop.wayland.waybar.doesFileExistChecks)
+              );
             };
             style = builtins.readFile ./waybar.gtk.css;
           };

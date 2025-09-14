@@ -162,7 +162,9 @@ in
               urlscan
             ];
 
-            accounts.email.accounts = lib.mapAttrs myconfigAccountToHomeManagerEmailAccount (lib.filterAttrs (n: a: a.email != null) config.myconfig.accounts);
+            accounts.email.accounts = lib.mapAttrs myconfigAccountToHomeManagerEmailAccount (
+              lib.filterAttrs (n: a: a.email != null) config.myconfig.accounts
+            );
             programs.msmtp.enable = true;
             programs.lieer.enable = true; # lib.any (a: a.flavor == "gmail.com") (lib.attrValues config.accounts.email.accounts);
             services.lieer.enable = true; # config.programs.lieer.enable;
