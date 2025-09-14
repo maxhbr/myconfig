@@ -153,8 +153,8 @@ let
                 lib.mkMerge ([
                   {
                     layer = "top";
-                    position = "top";
-                    height = 25;
+                    position = "left";
+                    height = null;
                     spacing = 4;
                     modules-left = [ ];
                     modules-center = [
@@ -184,14 +184,17 @@ let
                     # "group/hardware" = {
                     #   "orientation" = "vertical";
                     #   "modules" = [ "cpu" "memory" ];
+                    #  rotate = 90;
                     # };
                     tray = {
                       spacing = 10;
+                      rotate = 90;
                     };
                     "clock#time" = {
                       format = "<big>{:%H:%M<sub>:%S</sub>}</big>";
                       interval = 1;
                       tooltip = false;
+                      rotate = 90;
                     };
                     "clock#date" = {
                       # format = "<sub>{:%Y-%m-%d}</sub>";
@@ -205,6 +208,7 @@ let
                       format = "cpu: {usage}%";
                       tooltip = false;
                       on-click = "foot-btop";
+                      rotate = 90;
                     };
                     "wlr/taskbar" = {
                       format = "{icon}";
@@ -226,6 +230,7 @@ let
                       app_ids-mapping = {
                         "firefoxdeveloperedition" = "firefox-developer-edition";
                       };
+                      rotate = 90;
                     };
                     "power-profiles-daemon" = lib.mkIf power-profiles-daemon-config.enable {
                       "format" = "{icon}";
@@ -239,6 +244,7 @@ let
                         "balanced" = "";
                         "power-saver" = "";
                       };
+                      rotate = 90;
                     };
                     "systemd-failed-units#user" = {
                       "hide-on-ok" = true;
@@ -246,6 +252,7 @@ let
                       "format-ok" = "✓";
                       "system" = false;
                       "user" = true;
+                      rotate = 90;
                     };
                     "systemd-failed-units#system" = {
                       "hide-on-ok" = true;
@@ -253,6 +260,7 @@ let
                       "format-ok" = "✓";
                       "system" = true;
                       "user" = false;
+                      rotate = 90;
                     };
                     "custom/isvpn" = {
                       format = "{}";
@@ -267,6 +275,7 @@ let
                         + "/bin/isvpn";
                       return-type = "json";
                       interval = 30;
+                      rotate = 90;
                     };
                     "custom/test_for_missing_tb_changing" = {
                       format = "{}";
@@ -284,9 +293,11 @@ let
                         + "/bin/test_for_missing_tb_changing";
                       return-type = "json";
                       interval = 60;
+                      rotate = 90;
                     };
                     memory = {
                       format = "ram: {}%";
+                      rotate = 90;
                     };
                     backlight = {
                       format = "{percent}% {icon}";
@@ -304,6 +315,7 @@ let
                       on-scroll-up = "${pkgs.light}/bin/light -A 1";
                       on-scroll-down = "${pkgs.light}/bin/light -U 1";
                       on-click = "${toggleLight}/bin/toggleLight";
+                      rotate = 90;
                     };
                     battery = {
                       states = {
@@ -322,6 +334,7 @@ let
                         ""
                       ];
                       # format-icons = ["\uf244" "\uf243" "\uf242" "\uf241" "\uf240"];
+                      rotate = 90;
                     };
                     network = {
                       format-wifi = "{essid} ({signalStrength}%) ";
@@ -333,6 +346,7 @@ let
                       format-disconnected = "Disconnected ⚠";
                       # format-alt = "{ifname}: {ipaddr}/{cidr}";
                       on-click = "foot-nmtui";
+                      rotate = 90;
                     };
                     bluetooth = {
                       format = " {status}";
@@ -352,6 +366,7 @@ let
                       tooltip-format-enumerate-connected = "{device_alias}	{device_address}";
                       tooltip-format-enumerate-connected-battery = "{device_alias}	{device_address}	{device_battery_percentage}%";
                       on-click = "foot-bluetuith";
+                      rotate = 90;
                     };
                     pulseaudio = {
                       format = "{volume}% {icon} {format_source}";
@@ -374,6 +389,7 @@ let
                         ];
                       };
                       on-click = "pavucontrol";
+                      rotate = 90;
                     };
                     idle_inhibitor = {
                       format = "{icon}";
@@ -382,29 +398,7 @@ let
                         deactivated = "";
                       };
                     };
-                  }
-                  {
-                    position = lib.mkForce "left";
-                    height = lib.mkForce null;
-                    pulseaudio.rotate = 90;
-                    bluetooth.rotate = 90;
-                    network.rotate = 90;
-                    "custom/isvpn.rotate" = 90;
-                    "power-profiles-daemon".rotate = 90;
-                    "systemd-failed-units".rotate = 90;
-                    "systemd-failed-units#user".rotate = 90;
-                    "systemd-failed-units#system".rotate = 90;
-                    "custom/test_for_missing_tb_changing".rotate = 90;
-                    cpu.rotate = 90;
-                    memory.rotate = 90;
-                    backlight.rotate = 90;
-                    battery.rotate = 90;
-                    "wlr/taskbar".rotate = 90;
-                    "group/hardware".rotate = 90;
                     "custom/audio_idle_inhibitor".rotate = 90;
-                    tray.rotate = 90;
-                    clock.rotate = 90;
-                    "clock#time".rotate = 90;
                   }
                 ] ++ (map doesFileExistCheck cfg.desktop.wayland.waybar.doesFileExistChecks));
             };
