@@ -8,6 +8,9 @@
   inputs,
   ...
 }:
+let
+  user = myconfig.user;
+in
 {
   imports = [
     ./specialisation.nix
@@ -21,6 +24,7 @@
     ./mykeylight
     ./role.work
     ./ai.f13.nix
+    ./debug_suspend_issue.nix
     {
       services.openssh = {
         listenAddresses = [
@@ -59,6 +63,11 @@
       #   serviceConfig.ExecStart =
       #     "${config.services.power-profiles-daemon.package}/bin/powerprofilesctl set performance";
       # };
+    }
+    {
+      myconfig.desktop.wayland.waybar.doesFileExistChecks = [
+        "/home/${user}/myconfig/.myconfig.ready"
+      ]
     }
   ];
 

@@ -29,5 +29,10 @@
       HandleLidSwitchDocked = "suspend";
       RuntimeDirectorySize = "8G";
     };
+
+    # disable USB wakeup
+    services.udev.extraRules = ''
+      ACTION=="add", SUBSYSTEM=="usb", ATTR{power/wakeup}="disabled"
+    '';
   };
 }
