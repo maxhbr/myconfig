@@ -1,4 +1,4 @@
-{pkgs, ...}:
+{ pkgs, ... }:
 {
   config = {
     systemd.services."pre-suspend-dump" = {
@@ -29,28 +29,32 @@
       ELECTRON_ENABLE_GPU = "false";
     };
     nixpkgs.overlays = [
-      (self: super:
-      let
-        lib = super.lib;
+      (
+        self: super:
+        let
+          lib = super.lib;
 
-        wrapElectronNoGpu = pkg: bins:
-          pkg.overrideAttrs (old: {
-            nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ super.makeWrapper ];
-            # Some packages already have a postFixup; append to it.
-            postFixup = (old.postFixup or "") + ''
-              for b in ${lib.concatStringsSep " " (map (b: "\"${b}\"") bins)}; do
-                if [ -x "$out/bin/$b" ]; then
-                  wrapProgram "$out/bin/$b" --add-flags "--disable-gpu"
-                fi
-              done
-            '';
-          });
+          wrapElectronNoGpu =
+            pkg: bins:
+            pkg.overrideAttrs (old: {
+              nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ super.makeWrapper ];
+              # Some packages already have a postFixup; append to it.
+              postFixup = (old.postFixup or "") + ''
+                for b in ${lib.concatStringsSep " " (map (b: "\"${b}\"") bins)}; do
+                  if [ -x "$out/bin/$b" ]; then
+                    wrapProgram "$out/bin/$b" --add-flags "--disable-gpu"
+                  fi
+                done
+              '';
+            });
 
-      in {
-        vscode    = wrapElectronNoGpu super.vscode    [ "code" ];
-        cursor   = wrapElectronNoGpu super.cursor   [ "cursor" ];
-        slack     = wrapElectronNoGpu super.slack     [ "slack" ];
-      })
+        in
+        {
+          vscode = wrapElectronNoGpu super.vscode [ "code" ];
+          cursor = wrapElectronNoGpu super.cursor [ "cursor" ];
+          slack = wrapElectronNoGpu super.slack [ "slack" ];
+        }
+      )
     ];
   };
 }

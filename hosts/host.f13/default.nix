@@ -67,7 +67,7 @@ in
     {
       myconfig.desktop.wayland.waybar.doesFileExistChecks = [
         "/home/${user}/myconfig/.myconfig.ready"
-      ]
+      ];
     }
   ];
 
