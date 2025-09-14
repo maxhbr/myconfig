@@ -7,9 +7,11 @@
       serviceConfig.Type = "oneshot";
       script = ''
         mkdir -p /var/log/suspdump
-        date > /var/log/suspdump/pre.txt
-        cat /sys/power/mem_sleep >> /var/log/suspdump/pre.txt
-        dmesg -c > /var/log/suspdump/dmesg-pre.txt || true
+        cat <<EOF > /var/log/suspdump/pre.txt
+        date: $(date)
+        /sys/power/mem_sleep: $(cat /sys/power/mem_sleep)
+        EOF
+        journalctl -b -0 -k > /var/log/suspdump/journal-kernel-pre.txt || true
       '';
     };
 
@@ -19,9 +21,10 @@
       serviceConfig.Type = "oneshot";
       script = ''
         mkdir -p /var/log/suspdump
-        date > /var/log/suspdump/post.txt
-        dmesg > /var/log/suspdump/dmesg-post.txt || true
-        journalctl -b -0 -k > /var/log/suspdump/journal-kernel.txt || true
+        cat <<EOF > /var/log/suspdump/post.txt
+        date: $(date)
+        EOF
+        journalctl -b -0 -k > /var/log/suspdump/journal-kernel-post.txt || true
       '';
     };
     environment.sessionVariables = {
@@ -53,6 +56,7 @@
           vscode = wrapElectronNoGpu super.vscode [ "code" ];
           cursor = wrapElectronNoGpu super.cursor [ "cursor" ];
           slack = wrapElectronNoGpu super.slack [ "slack" ];
+          signal-desktop = wrapElectronNoGpu super.signal-desktop [ "signal-desktop" ];
         }
       )
     ];

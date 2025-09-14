@@ -30,6 +30,8 @@
       RuntimeDirectorySize = "8G";
     };
 
+    services.hardware.bolt.enable = true;
+
     # disable USB wakeup
     services.udev.extraRules = ''
       ACTION=="add", SUBSYSTEM=="usb", ATTR{power/wakeup}="disabled"

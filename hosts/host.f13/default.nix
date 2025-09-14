@@ -45,11 +45,8 @@ in
     }
     {
       services.eternal-terminal = {
-        enable = true;
-        port = 22022;
+        enable = false;
       };
-      networking.firewall.interfaces."wg0".allowedTCPPorts = [ 22022 ];
-      networking.firewall.interfaces."wg0".allowedUDPPorts = [ 22022 ];
     }
     { programs.kdeconnect.enable = true; }
     {
@@ -135,7 +132,6 @@ in
         ];
       };
       virtualisation.enable = true;
-      # editor.emacs.enable = false;
       dev = {
         # compliance.enable = true;
         # go.enable = false;
@@ -157,14 +153,7 @@ in
       # libvirtd.enable = true;
     };
 
-    programs.evolution.enable = true;
-
-    services.xserver.wacom.enable = false;
-    services.xserver.digimend.enable = false;
-
     programs.gnupg.agent.enable = true;
-
-    services.hardware.bolt.enable = true;
 
     services.gnome.gnome-keyring.enable = true;
 
