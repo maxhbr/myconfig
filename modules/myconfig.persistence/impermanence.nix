@@ -503,6 +503,7 @@ in
                 files = [
                   ".persistence.${config.home.username}.ready"
                 ];
+                allowOther = true;
               };
               "${persistentPrivDir}/home/${config.home.username}" = {
                 directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.directories);
@@ -596,7 +597,13 @@ in
         install -d -m 700 "/${persistentCacheDir}/home/${user}" -o ${
           toString config.users.extraUsers.${user}.uid
         } -g ${toString config.users.extraGroups.${user}.gid}
+        touch "/${persistentCacheDir}/.persistence.ready"
+        touch "/${persistentCacheDir}/.persistence.${user}.ready"
       '';
     };
+    myconfig.desktop.wayland.waybar.doesFileExistChecks = [
+      "/.persistence.ready"
+      "/home/${user}/.persistence.${user}.ready"
+    ];
   };
 }

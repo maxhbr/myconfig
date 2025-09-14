@@ -73,15 +73,17 @@ in
                 {
                   inherit (account)
                     realName
-                    flavor
                     primary
                     address
                     aliases
+                    ;
+                  inherit (account.email)
+                    flavor
                     userName
                     passwordCommand
                     ;
                   signature = {
-                    text = account.signature;
+                    text = account.email.signature;
                     showSignature = "append";
                   };
                   maildir = {
@@ -90,10 +92,10 @@ in
                   neomutt.mailboxName = name;
                   msmtp.enable = config.programs.msmtp.enable;
                   aerc.extraAccounts = {
-                    signature-file = "${pkgs.writeText "signature" account.signature}";
+                    signature-file = "${pkgs.writeText "signature" account.email.signature}";
                   };
                   himalaya.settings = {
-                    signature = account.signature;
+                    signature = account.email.signature;
                   };
                 }
                 (lib.mkIf (account.pgp-key-id != null) {
@@ -108,7 +110,7 @@ in
                     pgp-opportunistic-encrypt = true;
                   };
                 })
-                (lib.mkIf (account.flavor != "gmail.com") {
+                (lib.mkIf (account.email.flavor != "gmail.com") {
                   folders = {
                     inbox = "Inbox";
                     drafts = "Drafts";
@@ -116,7 +118,7 @@ in
                     trash = "Trash";
                   };
                 })
-                (lib.mkIf (config.programs.lieer.enable && account.flavor == "gmail.com") {
+                (lib.mkIf (config.programs.lieer.enable && account.email.flavor == "gmail.com") {
                   lieer = {
                     enable = config.programs.lieer.enable;
                     sync.enable = config.programs.lieer.enable;
@@ -129,7 +131,7 @@ in
                     ''}";
                   };
                 })
-                account.homeManagerEmailAccountOverwrites
+                account.email.homeManagerEmailAccountOverwrites
               ]
             ));
 
@@ -160,7 +162,7 @@ in
               urlscan
             ];
 
-            accounts.email.accounts = lib.mapAttrs myconfigAccountToHomeManagerEmailAccount config.myconfig.accounts;
+            accounts.email.accounts = lib.mapAttrs myconfigAccountToHomeManagerEmailAccount (lib.filterAttrs (n: a: a.email != null) config.myconfig.accounts);
             programs.msmtp.enable = true;
             programs.lieer.enable = true; # lib.any (a: a.flavor == "gmail.com") (lib.attrValues config.accounts.email.accounts);
             services.lieer.enable = true; # config.programs.lieer.enable;

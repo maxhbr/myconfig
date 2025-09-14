@@ -2,12 +2,14 @@
   config,
   lib,
   pkgs,
+  myconfig,
   ...
 }:
 let
   # waybar-master = inputs.nixpkgs-wayland.packages.${pkgs.system}.waybar;
   power-profiles-daemon-config = config.services.power-profiles-daemon;
   cfg = config.myconfig;
+  user = myconfig.user;
   hmModule = (
     { config, ... }:
     let
@@ -118,6 +120,26 @@ let
           ${pkgs.light}/bin/light -S 80
         fi
       '';
+      doesFileExistCheck = file: let
+          bn = builtins.baseNameOf file;
+          checkName = "custom/doesFileExistCheck#${bn}";
+        in {
+        modules-left = [checkName];
+        "${checkName}" = {
+          format = "{}";
+          exec = (pkgs.writeShellScriptBin "doesFileExist" ''
+        set -euo pipefail
+        if [[ ! -f ${file} ]]; then
+          cat <<EOF
+        {"text":"!${bn}","class":"error"}
+        EOF
+        fi
+      '') + "/bin/doesFileExist";
+          return-type = "json";
+          interval = 6;
+          rotation = 90;
+        };
+      };
     in
     {
       config = (
@@ -128,7 +150,7 @@ let
             systemd.enable = false;
             settings = {
               mainBar =
-                lib.recursiveUpdate
+                lib.mkMerge ([
                   {
                     layer = "top";
                     position = "top";
@@ -237,7 +259,7 @@ let
                       exec =
                         (pkgs.writeShellScriptBin "isvpn" ''
                           if ${pkgs.nettools}/bin/ifconfig tun0 &> /dev/null; then
-                          cat <<EOF
+                            cat <<EOF
                           {"text":"VPN","class":"warning"}
                           EOF
                           fi
@@ -251,12 +273,12 @@ let
                       exec =
                         (pkgs.writeShellScriptBin "test_for_missing_tb_changing" ''
                           if ${pkgs.bolt}/bin/boltctl list | ${pkgs.gnugrep}/bin/grep "status" | ${pkgs.gnugrep}/bin/grep -q -v "disconnected"; then
-                          if ${pkgs.acpi}/bin/acpi -a | ${pkgs.gnugrep}/bin/grep -q "off-line"; then
-                            cat <<EOF
+                            if ${pkgs.acpi}/bin/acpi -a | ${pkgs.gnugrep}/bin/grep -q "off-line"; then
+                              cat <<EOF
                           {"text":"not-charging","class":"error"}
                           EOF
-                           exit 0
-                          fi
+                             exit 0
+                            fi
                           fi
                         '')
                         + "/bin/test_for_missing_tb_changing";
@@ -383,7 +405,8 @@ let
                     tray.rotate = 90;
                     clock.rotate = 90;
                     "clock#time".rotate = 90;
-                  };
+                  }
+                ] ++ (map doesFileExistCheck cfg.desktop.wayland.waybar.doesFileExistChecks));
             };
             style = builtins.readFile ./waybar.gtk.css;
           };
@@ -393,7 +416,18 @@ let
   );
 in
 {
+  options.myconfig = with lib; {
+    desktop.wayland = {
+      waybar.doesFileExistChecks = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+      };
+    };
+  };
   config = {
     home-manager.sharedModules = [ hmModule ];
+    myconfig.desktop.wayland.waybar.doesFileExistChecks = [
+      "/home/${user}/.home-manager-${user}.service.ready"
+    ];
   };
 }
