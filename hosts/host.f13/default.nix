@@ -43,6 +43,44 @@ in
         ];
       };
     }
+    (
+      { pkgs, ... }:
+      let
+        fix-my-notebook = pkgs.writeShellScriptBin "fix-my-notebook" ''
+          set -euo pipefail
+          set -x
+          systemctl restart home-manager-${user}.service
+          systemctl restart bluetooth.service
+          ${config.myconfig.desktop.audio.fix-audio.script}/bin/fix-audio --no-mixer
+        '';
+      in
+      {
+        config = {
+          myconfig.desktop.audio.fix-audio.enable = true;
+          myconfig.desktop.audio.fix-audio.bluez_devices = [
+            "AC:80:0A:2A:10:6F"
+            "EC:66:D1:BD:E4:98"
+            "EC:66:D1:B4:C8:3B"
+          ];
+          myconfig.desktop.audio.fix-audio.preferred_sinks_patterns = [
+            "alsa_output.usb-FiiO_DigiHug_USB_Audio-01.analog-stereo"
+            "alsa_output.pci-0000_c1_00.1.hdmi-stereo-extra2"
+            "alsa_output.pci-0000_c1_00.6.analog-stereo"
+            "usb-FiiO_DigiHug_USB_Audio-01.analog-stereo"
+            "hdmi-stereo"
+            "alsa_output.pci-0000_c1_00.6.analog-stereo"
+          ];
+          myconfig.desktop.audio.fix-audio.preferred_sources_patterns = [
+            "alsa_input.usb-BLUE_MICROPHONE_Blue_Snowball_797_2020_07_31_01554-00.mono-fallback"
+            "alsa_input.usb-046d_HD_Pro_Webcam_C920_9C1E301F-02.analog-stereo"
+            "usb-BLUE_MICROPHONE_Blue_Snowball_797_2020_07_31_01554-00.mono-fallback"
+            "usb-046d_HD_Pro_Webcam_C920_9C1E301F-02.analog-stereo"
+            "alsa_input.pci-0000_c1_00.6.analog-stereo"
+          ];
+          home-manager.sharedModules = [ { home.packages = with pkgs; [ fix-my-notebook ]; } ];
+        };
+      }
+    )
     {
       services.eternal-terminal = {
         enable = false;

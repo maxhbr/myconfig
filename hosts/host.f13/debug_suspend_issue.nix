@@ -31,6 +31,15 @@
       ELECTRON_DISABLE_GPU = "1";
       ELECTRON_ENABLE_GPU = "false";
     };
+
+    # Verbose systemd sleep logs
+    systemd.services.systemd-suspend.environment."SYSTEMD_LOG_LEVEL" = "debug";
+    systemd.services.systemd-hibernate.environment."SYSTEMD_LOG_LEVEL" = "debug";
+    systemd.services.systemd-suspend-then-hibernate.environment."SYSTEMD_LOG_LEVEL" = "debug";
+
+    # Persist journal between boots so we can read last-boot logs after a crash.
+    services.journald.extraConfig = "Storage=persistent";
+
     nixpkgs.overlays = [
       (
         self: super:

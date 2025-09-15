@@ -195,6 +195,14 @@ layout {
     shadow {
         on
     }
+
+    tab-indicator {
+        width 8
+        gap 8
+        hide-when-single-tab
+        length total-proportion=0.5
+        position "left"
+    }
 }
 
 // Add lines like this to spawn processes at startup.
@@ -398,10 +406,10 @@ binds {
 
     Mod+Shift+C { close-window; }
 
-    Mod+Left  { focus-column-left; }
+    Mod+Left  { focus-column-left-or-last; }
     Mod+Page_Down  { focus-window-down; }
     Mod+Page_Up    { focus-window-up; }
-    Mod+Right { focus-column-right; }
+    Mod+Right { focus-column-right-or-first; }
 
     Mod+Ctrl+Left  { move-column-left; }
     Mod+Ctrl+Page_Down  { move-window-down; }
@@ -436,8 +444,8 @@ binds {
     Mod+Shift+Ctrl+Up    { move-workspace-to-monitor-up; }
     Mod+Shift+Ctrl+Right { move-workspace-to-monitor-right; }
 
-    Mod+Down      { focus-workspace-down; }
-    Mod+Up        { focus-workspace-up; }
+    Mod+Down      { focus-window-or-workspace-down; }
+    Mod+Up        { focus-window-or-workspace-up; }
     Mod+J              { focus-workspace-down; }
     Mod+M              { focus-workspace-up; }
     Mod+Ctrl+Down { move-column-to-workspace-down; }
@@ -523,6 +531,9 @@ binds {
 
     Mod+Comma  { consume-window-into-column; }
     Mod+Period { expel-window-from-column; }
+
+    Mod+W { toggle-column-tabbed-display; }
+    Mod+Tab { focus-window-down-or-top; }
 
     // There are also commands that consume or expel a single window to the side.
     // Mod+BracketLeft  { consume-or-expel-window-left; }

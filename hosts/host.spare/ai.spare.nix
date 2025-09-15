@@ -111,6 +111,7 @@ in
         "gemma3:27b"
         "gpt-oss:20b"
         "llama3.2:3b"
+        "llava:7b"
         "llava:34b"
         "magistral:24b"
         "openthinker:32b"

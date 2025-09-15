@@ -15,6 +15,7 @@ in
     ./modules/services.pipewire.nix
     ./modules/services.pipewire.wireplumber.nix
     ./modules/services.pipewire.airplay.nix
+    ./fix-audio.nix
   ];
   options.myconfig = with lib; {
     desktop.audio.enable = mkEnableOption "myconfig.desktop.audio" // {

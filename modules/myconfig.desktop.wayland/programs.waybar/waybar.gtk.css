@@ -77,13 +77,13 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
 
 #pulseaudio:hover,
 #network:hover,
-#battery {
+#battery:hover,
+#idle_inhibitor:hover {
     background: linear-gradient(90deg, rgba(43, 48, 59, 0.5), rgba(80,80,80, 1));
 }
 
 #idle_inhibitor.activated,
 #battery.charging {
-    background: linear-gradient(90deg, rgba(14, 65, 35, 0.5), rgba(43, 48, 59, 0));
     color: white;
 }
 
