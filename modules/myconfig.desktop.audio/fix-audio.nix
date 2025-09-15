@@ -143,7 +143,7 @@ in
       type = lib.types.path;
       default = mkScript config.myconfig.desktop.audio.fix-audio.bluez_devices config.myconfig.desktop.audio.fix-audio.preferred_sinks_patterns config.myconfig.desktop.audio.fix-audio.preferred_sources_patterns;
     };
-  }
+  };
   config = lib.mkIf config.myconfig.desktop.audio.fix-audio.enable {
 
     home-manager.sharedModules = [ { home.packages = [ config.myconfig.desktop.audio.fix-audio.script ]; } ];
