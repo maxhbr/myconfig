@@ -27,7 +27,7 @@ list_sinks() {
 find_best_sink() {
   local d
   local s
-  for d in "${bluez_devices[@]}"; do
+  for d in "''${bluez_devices[@]}"; do
     s="bluez_output.${d}.1"
     if list_sinks | ${pkgs.gnugrep}/bin/grep -i -q "$s"; then
       echo "$s"
@@ -39,7 +39,7 @@ find_best_sink() {
       return 0
     fi
   done
-  for s in "${preferred_sinks_patterns[@]}"; do
+  for s in "''${preferred_sinks_patterns[@]}"; do
     if list_sinks | ${pkgs.gnugrep}/bin/grep -i -q "$s"; then
       echo "$s"
       return 0
@@ -53,7 +53,7 @@ list_sources() {
 find_best_source() {
   local d
   local s
-  for d in "${bluez_devices[@]}"; do
+  for d in "''${bluez_devices[@]}"; do
     s="bluez_input.${d}"
     if list_sources | ${pkgs.gnugrep}/bin/grep -i -q "$s"; then
       echo "$s"
@@ -65,7 +65,7 @@ find_best_source() {
       return 0
     fi
   done
-  for s in "${preferred_sources_patterns[@]}"; do
+  for s in "''${preferred_sources_patterns[@]}"; do
     if list_sources | ${pkgs.gnugrep}/bin/grep -i -q "$s"; then
       echo "$s"
       return 0
