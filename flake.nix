@@ -409,14 +409,14 @@
                 ];
                 checkPhase = ''
                   ${self.apps."${system}".fmt.program} --check
-                  shfmt -d -s -i 2 -ci ${files}
+                  shfmt -d -s -i 4 -ci ${files}
                   shellcheck -x ${files}
                 '';
               };
             fmt = with inputs.nixpkgs.legacyPackages."${system}"; writeShellScriptBin "fmt" '''';
           };
 
-          devShell =
+          devShells.default =
             let
               pkgs = import inputs.nixpkgs {
                 inherit system;

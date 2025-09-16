@@ -6,8 +6,9 @@ verbose=""
 ulimit -c unlimited
 
 have() {
-    local cmd="$1"; shift
-    if command -v "$cmd" &> /dev/null; then
+    local cmd="$1"
+    shift
+    if command -v "$cmd" &>/dev/null; then
         return 0
     fi
     return 1
@@ -31,30 +32,31 @@ log_error() {
 }
 
 guard_pid() {
-    local target="$1"; shift
+    local target="$1"
+    shift
     local this_pid=$$
     local pidfile="/tmp/$(echo "$0" | sed 's/\//-/g').${target}.pid"
-    if [[ -e "$pidfile" ]]; then
+    if [[ -e $pidfile ]]; then
         old_pid="$(cat "$pidfile")"
         if [[ -e "/proc/$old_pid" ]]; then
             log_error "process $old_pid is running for $target"
             exit 1
         fi
     fi
-    echo "$this_pid" > "$pidfile"
-}   
+    echo "$this_pid" >"$pidfile"
+}
 
 add_ssh_keys() {
-  local key="$HOME/.ssh/id_rsa"                                                                    
-  if [[ -f "$key" ]] && ! ssh-add -l | grep -q "$key" ; then                                                      
-    echo "ssh-add ..." >&2
-    ssh-add $key                                                                           
-  fi     
+    local key="$HOME/.ssh/id_rsa"
+    if [[ -f $key ]] && ! ssh-add -l | grep -q "$key"; then
+        echo "ssh-add ..." >&2
+        ssh-add $key
+    fi
 }
 
 gnupg_to_mutt() {
     log_step "running gnupg-to-mutt.pl"
-    if type gnupg-to-mutt.pl &> /dev/null; then 
+    if type gnupg-to-mutt.pl &>/dev/null; then
         gnupg-to-mutt.pl
     else
         log_warning "gnupg-to-mutt.pl not found"
@@ -62,14 +64,16 @@ gnupg_to_mutt() {
 }
 
 flake_update() {
-    local update_mode="$1"; shift
-    local logs_dir="$1"; shift
+    local update_mode="$1"
+    shift
+    local logs_dir="$1"
+    shift
     log_step "updating flake in $update_mode mode"
 
-    if [[ "$update_mode" == "full" ]]; then
+    if [[ $update_mode == "full" ]]; then
         flake_update_recursively "."
         gnupg_to_mutt
-    elif [[ "$update_mode" == "fast" ]]; then
+    elif [[ $update_mode == "fast" ]]; then
         flake_update_one "."
         # grep '\.url = "path:' flake.nix | sed s/\.url.*// | sed 's/ //g' |
         #     while read flake; do
@@ -82,10 +86,11 @@ flake_update() {
 }
 
 flake_update_recursively() (
-    local path="$1"; shift
+    local path="$1"
+    shift
     local flake="$path/flake.nix"
     echo ">> recursively walk flake $path"
-    if [[ ! -e "$flake" ]]; then
+    if [[ ! -e $flake ]]; then
         log_error "flake.nix not found in $path"
         return
     fi
@@ -99,31 +104,35 @@ flake_update_recursively() (
 )
 
 flake_update_one() (
-    local path="$1"; shift
-    local num_of_tries="${1:-1}";
+    local path="$1"
+    shift
+    local num_of_tries="${1:-1}"
     echo ">>> update flake $path and commit lock file"
-    if [[ "$num_of_tries" -gt 1 ]]; then
+    if [[ $num_of_tries -gt 1 ]]; then
         log_warning "retry $num_of_tries times"
     fi
-    cd "$path";
+    cd "$path"
     set -x
     nix flake update ${verbose:+"--verbose"} --commit-lock-file || {
         set +x
-        if [[ "$num_of_tries" -lt 3 ]]; then
+        if [[ $num_of_tries -lt 3 ]]; then
             flake_update_one "$path" $((num_of_tries + 1))
         else
             log_error "failed to update flake $path"
             exit 1
         fi
-    } 
+    }
 )
 get_out_link_of_target() {
-    local target="$1"; shift
+    local target="$1"
+    shift
     echo '../result.'"$target"
 }
 build() (
-    local target="$1"; shift
-    local out_link="$1"; shift
+    local target="$1"
+    shift
+    local out_link="$1"
+    shift
     log_step "building for $target to $out_link"
     local system='.#nixosConfigurations.'"$target"'.config.system.build.toplevel'
 
@@ -139,7 +148,8 @@ build() (
         "$system"
 )
 du_of_out_link() {
-    local target="$1"; shift
+    local target="$1"
+    shift
     local out_link="$(get_out_link_of_target "$target")"
     nix path-info -rhsS "$out_link" |
         tee "$out_link"'.du' |
@@ -160,53 +170,58 @@ du_of_out_link() {
             }
         ' |
         sort -n |
-        awk 'BEGIN {FS=","; OFS=","} {print $2,$3,$4}' > "$out_link"'.du.csv'
+        awk 'BEGIN {FS=","; OFS=","} {print $2,$3,$4}' >"$out_link"'.du.csv'
 }
 get_ip_of_target_from_metadata() {
-    local metadata_file="$1"; shift
-    local target="$1"; shift
-    local use_wg="${1:-false}";
-    cat "$metadata_file" | 
-        if [[ "$use_wg" == "true" ]]; then
+    local metadata_file="$1"
+    shift
+    local target="$1"
+    shift
+    local use_wg="${1:-false}"
+    cat "$metadata_file" |
+        if [[ $use_wg == "true" ]]; then
             jq -r ".hosts.${target}.wireguard.wg0.ip4" || true
         else
             jq -r ".hosts.${target}.ip4" || true
         fi
 }
 get_ip_of_target() {
-    local target="$1"; shift
-    local use_wg="${1:-false}";
+    local target="$1"
+    shift
+    local use_wg="${1:-false}"
 
-    if [[ "$use_wg" == "true" ]]; then
-      local hosts_alias="$target.wg0"
-      if grep -q " $hosts_alias"'$' /etc/hosts; then
-        echo "$hosts_alias"
-        return
-      fi
+    if [[ $use_wg == "true" ]]; then
+        local hosts_alias="$target.wg0"
+        if grep -q " $hosts_alias"'$' /etc/hosts; then
+            echo "$hosts_alias"
+            return
+        fi
     else
-      if grep -q " $target\$" /etc/hosts; then
-        echo "$target"
-        return
-      fi
+        if grep -q " $target\$" /etc/hosts; then
+            echo "$target"
+            return
+        fi
     fi
 
     ip="$(get_ip_of_target_from_metadata ./hosts/metadata.json "$target" "$use_wg")"
-    if [[ "$ip" == "null" ]]; then
+    if [[ $ip == "null" ]]; then
         ip="$(get_ip_of_target_from_metadata ../myconfig/hosts/metadata.json "$target" "$use_wg")"
     fi
-    if [[ "$ip" == "null" ]]; then
+    if [[ $ip == "null" ]]; then
         log_error "ip for $target not found in metadata"
         exit 1
     fi
-    if [[ "$ip" == "" ]]; then
-      log_error "ip can not be empty"
-      exit 1
+    if [[ $ip == "" ]]; then
+        log_error "ip can not be empty"
+        exit 1
     fi
     echo "$ip"
 }
 copy_closure_to_target() (
-    local targetIP="$1"; shift
-    local out_link="$1"; shift
+    local targetIP="$1"
+    shift
+    local out_link="$1"
+    shift
     log_step "copying closure to $targetIP"
     set -x
     until nix-copy-closure --to "$targetIP" "$out_link"; do
@@ -214,18 +229,22 @@ copy_closure_to_target() (
     done
 )
 diff_build_results() (
-    local old_result="$1"; shift
-    local out_link="$1"; shift
-    if command -v nvd &> /dev/null; then
+    local old_result="$1"
+    shift
+    local out_link="$1"
+    shift
+    if command -v nvd &>/dev/null; then
         log_step "diffing $old_result and $out_link"
         set -x
-        nvd list -r "$out_link" > "$out_link"'.list'
+        nvd list -r "$out_link" >"$out_link"'.list'
         nvd diff "$old_result" "$out_link" | tee "$out_link"'.diff'
     fi
 )
 direct_deploy_locally() {
-    local out_link="$1"; shift
-    local command="$1"; shift
+    local out_link="$1"
+    shift
+    local command="$1"
+    shift
     log_step "direct deploying $out_link to $(hostname)"
     local store_path="$(nix-store -q "$out_link")"
     set -x
@@ -233,19 +252,22 @@ direct_deploy_locally() {
     sudo "$store_path/bin/switch-to-configuration" "$command"
 }
 deploy() (
-    local target="$1"; shift
-    local out_link="$1"; shift
-    local command="$1"; shift
+    local target="$1"
+    shift
+    local out_link="$1"
+    shift
+    local command="$1"
+    shift
 
     # if [[ "$target" == "$(hostname)" ]]; then
     #   direct_deploy_locally "$out_link" "$command"
     #   return
     # fi
-    
+
     log_step "deploying $out_link to $target"
-    local use_wg="${1:-false}";
+    local use_wg="${1:-false}"
     cmd="nixos-rebuild"
-    if [[ "$target" != "$(hostname)" ]]; then
+    if [[ $target != "$(hostname)" ]]; then
         targetIP="root@$(get_ip_of_target "$target" "$use_wg")"
         targetIP="${TARGET_IP:-"$targetIP"}"
 
@@ -259,67 +281,70 @@ deploy() (
     export NIX_SSHOPTS='-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'
     set -x
     until $cmd \
-            `# --build-host localhost` \
-            "$command" `#-p test` \
-            ${verbose:+"--verbose"} \
-            --flake '.#'"$target"; do
+        `# --build-host localhost` \
+        "$command" `#-p test` \
+        ${verbose:+"--verbose"} \
+        --flake '.#'"$target"; do
         echo "... retry nixos-rebuild"
     done
 )
 main() {
     local MODE=""
     local COMMAND="switch"
-    if [[ $# -gt 0 && ("$1" == "--verbose" || "$1" == "-v" || "$1" == "-vv") ]]; then
+    if [[ $# -gt 0 && ($1 == "--verbose" || $1 == "-v" || $1 == "-vv") ]]; then
         verbose="--verbose"
-        if [[ "$1" == "-vv" ]]; then
+        if [[ $1 == "-vv" ]]; then
             set -x
         fi
         shift
-    elif [[ $# -gt 0 && ("$1" == "--quiet" || "$1" == "-q") ]]; then
+    elif [[ $# -gt 0 && ($1 == "--quiet" || $1 == "-q") ]]; then
         verbose=""
         shift
     fi
-    if [[ $# -gt 0 && "$1" == "--fast" ]]; then
+    if [[ $# -gt 0 && $1 == "--fast" ]]; then
         MODE="$1"
         shift
-    elif [[ $# -gt 0 && "$1" == "--test" ]]; then
+    elif [[ $# -gt 0 && $1 == "--test" ]]; then
         MODE="$1"
         shift
-    elif [[ $# -gt 0 && "$1" == "--use-wg" ]]; then
+    elif [[ $# -gt 0 && $1 == "--use-wg" ]]; then
         MODE="$1"
         shift
     fi
-    if [[ $# -gt 0 && "$1" == "--boot" ]]; then
-      COMMAND="boot"
-      shift
-    elif [[ $# -gt 0 && "$1" == "--switch" ]]; then
-      COMMAND="switch"
-      shift
+    if [[ $# -gt 0 && $1 == "--boot" ]]; then
+        COMMAND="boot"
+        shift
+    elif [[ $# -gt 0 && $1 == "--switch" ]]; then
+        COMMAND="switch"
+        shift
     fi
-
 
     local target="${1:-$(hostname)}"
 
     guard_pid "$target"
-  
-    if [[ "$target" != "$(hostname)" ]]; then
-      add_ssh_keys
+
+    if [[ $target != "$(hostname)" ]]; then
+        add_ssh_keys
     fi
 
     ################################################################################
     # setup logging
     start_time="$(date +%s)"
-    exec &> >(while read line; do current_time="$(date +%s)"; time_diff="$((current_time - start_time))"; echo "$( date -u -d@"$time_diff" +"%H:%M:%S" )| $line"; done)
+    exec &> >(while read line; do
+        current_time="$(date +%s)"
+        time_diff="$((current_time - start_time))"
+        echo "$(date -u -d@"$time_diff" +"%H:%M:%S")| $line"
+    done)
     local logsDir="../_logs"
     mkdir -p "$logsDir"
     local logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
-    echo -e "\n\n\n\n\n\n\n" >> "$logfile"
+    echo -e "\n\n\n\n\n\n\n" >>"$logfile"
     exec &> >(tee -a "$logfile")
     log_info "starting with...\nMODE=$MODE\nCOMMAND=$COMMAND\ntarget=$target\nverbose=$verbose\n"
     ################################################################################
-  
+
     local token="$(pass github-bot-token2 -p || true)"
-    if [[ ! -z "$token" ]]; then
+    if [[ -n $token ]]; then
         log_info "setting github token"
         NIX_CONFIG="access-tokens = github.com=$token"
         export NIX_CONFIG
@@ -327,34 +352,34 @@ main() {
         log_warn "no github token"
     fi
 
-    flake_update "$( [[ "$MODE" == "" ]] && echo "full" || echo "fast")" "$logsDir"
+    flake_update "$([[ $MODE == "" ]] && echo "full" || echo "fast")" "$logsDir"
 
     local out_link="$(get_out_link_of_target "$target")"
     local latest_logfile="${out_link}.log"
     ln -sf "$(realpath -m --relative-to="$(dirname "$latest_logfile")" "$logfile")" "$latest_logfile"
     local old_result="$(readlink -f "$out_link" || true)"
     build "$target" "$out_link" || build "$target" "$out_link" --keep-failed --no-eval-cache
-    if [[ -e "$old_result" ]]; then
+    if [[ -e $old_result ]]; then
         diff_build_results "$old_result" "$out_link"
     fi
     du_of_out_link "$target"
-    if [[ "$MODE" == "--use-wg" ]]; then
+    if [[ $MODE == "--use-wg" ]]; then
         deploy "$target" "$out_link" true
-    elif [[ "$MODE" = "--test" ]]; then
-        if [[ "$target" == "$(hostname)" ]]; then
+    elif [[ $MODE == "--test" ]]; then
+        if [[ $target == "$(hostname)" ]]; then
             deploy "$target" "$out_link" dry-activate
         fi
-    elif [[ "$MODE" != "--test" ]]; then
+    elif [[ $MODE != "--test" ]]; then
         deploy "$target" "$out_link" "$COMMAND"
-        if [[ "$COMMAND" == "boot" ]]; then
+        if [[ $COMMAND == "boot" ]]; then
             echo "manually enable via:"
             local store_path="$(nix-store -q "$out_link")"
             echo "> sudo nix-env --profile /nix/var/nix/profiles/system --set $store_path"
             echo "> sudo $store_path/bin/switch-to-configuration switch"
         fi
-        if [[ "$target" == "$(hostname)" ]]; then
+        if [[ $target == "$(hostname)" ]]; then
             local generations="$out_link"'.generations'
-            nixos-rebuild list-generations > "$generations"
+            nixos-rebuild list-generations >"$generations"
             log_info "generations:"
             cat "$generations" | head -5
         fi
@@ -368,4 +393,6 @@ if ! have nix || ! have nvd; then
     exec nix-shell -p nvd --command "$0" "$@"
 fi
 
-main "$@"; times; date
+main "$@"
+times
+date

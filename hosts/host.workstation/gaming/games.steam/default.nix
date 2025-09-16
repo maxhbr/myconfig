@@ -84,12 +84,7 @@ in
       dedicatedServer.openFirewall = true;
     };
 
-    hardware = {
-      opengl = {
-        # driSupport = true;
-        driSupport32Bit = true;
-      };
-      pulseaudio.support32Bit = true;
-    };
+    hardware.graphics.enable32Bit = true;
+    services.pulseaudio.support32Bit = true;
   };
 }

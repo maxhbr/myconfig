@@ -115,15 +115,6 @@
     };
     services.gnome.gnome-keyring.enable = true;
 
-    home-manager.sharedModules = [
-      {
-        services.mako = {
-          output = "eDP-1";
-          defaultTimeout = lib.mkForce 20000;
-        };
-      }
-    ];
-
     boot = {
       loader = {
         systemd-boot.enable = true;
