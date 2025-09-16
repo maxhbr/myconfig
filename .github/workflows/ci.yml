@@ -24,10 +24,6 @@ jobs:
         github_access_token: ${{ secrets.GITHUB_TOKEN }}
         extra_nix_config: |
           experimental-features = nix-command flakes
-    - uses: cachix/cachix-action@v15
-      with:
-        name: maxhbr
-        signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - run: nix develop --impure --command echo "success"
 
   nixfmt-check:
