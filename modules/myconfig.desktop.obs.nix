@@ -17,32 +17,32 @@ in
 
   config = (
     lib.mkIf (cfg.desktop.enable && cfg.desktop.obs.enable) {
-          programs.obs-studio = {
-            enable = true;
-            plugins =
-              with pkgs.obs-studio-plugins;
+      programs.obs-studio = {
+        enable = true;
+        plugins =
+          with pkgs.obs-studio-plugins;
+          (
+            [
+              wlrobs
+              obs-backgroundremoval
+              obs-pipewire-audio-capture
+              obs-gstreamer
+              obs-vkcapture
+              obs-ndi
+              # droidcam-obs
+            ]
+            ++ (lib.optionals
               (
-                [
-                  wlrobs
-                  obs-backgroundremoval
-                  obs-pipewire-audio-capture
-                  obs-gstreamer
-                  obs-vkcapture
-                  obs-ndi
-                  # droidcam-obs
-                ]
-                ++ (lib.optionals
-                  (
-                    config.myconfig.hardware.gpu.variant == "amd"
-                    || config.myconfig.hardware.gpu.variant == "amd-no-rocm"
-                  )
-                  [
-                    obs-vaapi # optional AMD hardware acceleration
-                  ]
-                )
-              );
-            enableVirtualCamera = true;
-          };
+                config.myconfig.hardware.gpu.variant == "amd"
+                || config.myconfig.hardware.gpu.variant == "amd-no-rocm"
+              )
+              [
+                obs-vaapi # optional AMD hardware acceleration
+              ]
+            )
+          );
+        enableVirtualCamera = true;
+      };
       home-manager.sharedModules = [
         {
           home.packages = with pkgs; [ ndi ];
