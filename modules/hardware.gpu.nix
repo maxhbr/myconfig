@@ -20,7 +20,7 @@ in
         "intel"
       ]
     );
-    default = "nvidia";
+    default = null;
   };
   config = lib.mkIf (cfg.variant != null) (
     lib.mkMerge [
@@ -49,6 +49,7 @@ in
           enable = true;
         };
         services.xserver.videoDrivers = [ "nvidia" ];
+        hardware.nvidia.open = true;
         hardware.nvidia-container-toolkit.enable = true;
       })
       # (lib.mkIf (

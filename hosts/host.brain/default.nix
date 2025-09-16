@@ -91,7 +91,6 @@ in
         };
       };
       virtualisation.enable = is_full_build;
-      editor.emacs.enable = is_full_build;
       # dev = {
       #   compliance.enable = true;
       # };
@@ -108,10 +107,6 @@ in
     };
     services.hardware.bolt.enable = false;
 
-    services.logind.extraConfig = ''
-      HandlePowerKey=suspend
-      RuntimeDirectorySize=8G
-    '';
     services.gnome.gnome-keyring.enable = true;
 
     home-manager.sharedModules = [

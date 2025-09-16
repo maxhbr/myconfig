@@ -42,7 +42,6 @@
     ../../hardware/blink1.nix
     # ../../hardware/unifying.nix
     ./hardware.hantek
-    ./mykeylight
     ./smarthome.nix
     ../host.f13/role.work
     ./programs.khal.nix
@@ -216,7 +215,6 @@
       ai.enable = true;
       email.enable = false;
       virtualisation.enable = true;
-      editor.emacs.enable = false;
       dev = {
         compliance.enable = true;
         go.enable = false;

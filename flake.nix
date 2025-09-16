@@ -383,14 +383,38 @@
               bootstrappedConfig = null;
             };
 
-            pi4-sd-image = inputs.self.nixosConfigurations.pi4.config.system.build.sdImage;
-            pi3a-sd-image = inputs.self.nixosConfigurations.pi3a.config.system.build.sdImage;
+            # pi4-sd-image = inputs.self.nixosConfigurations.pi4.config.system.build.sdImage;
+            # pi3a-sd-image = inputs.self.nixosConfigurations.pi3a.config.system.build.sdImage;
           };
 
           apps = {
             fmt = import ./flake.apps.fmt.nix inputs system;
           };
 
+          checks = {
+            fmt-check =
+              let
+                pkgs = inputs.nixpkgs.legacyPackages."${system}";
+                files = pkgs.lib.concatStringsSep " " [
+                  "switch.sh"
+                ];
+              in
+              pkgs.stdenv.mkDerivation {
+                name = "fmt-check";
+                src = ./.;
+                doCheck = true;
+                nativeBuildInputs = with pkgs; [
+                  shellcheck
+                  shfmt
+                ];
+                checkPhase = ''
+                  ${self.apps."${system}".fmt.program} --check
+                  shfmt -d -s -i 2 -ci ${files}
+                  shellcheck -x ${files}
+                '';
+              };
+            fmt = with inputs.nixpkgs.legacyPackages."${system}"; writeShellScriptBin "fmt" '''';
+          };
 
           devShell =
             let

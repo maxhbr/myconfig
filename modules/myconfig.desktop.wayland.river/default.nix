@@ -18,7 +18,7 @@ let
   riverPackage =
     if wrapPackage then
       pkgs.callPackage ./wrapper.nix {
-        river-unwrapped = pkgs.river;
+        river-unwrapped = pkgs.river-classic;
         withBaseWrapper = true;
         inherit extraPaths;
         extraSessionCommands = ''
