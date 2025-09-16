@@ -387,6 +387,11 @@
             pi3a-sd-image = inputs.self.nixosConfigurations.pi3a.config.system.build.sdImage;
           };
 
+          apps = {
+            fmt = import ./flake.apps.fmt.nix inputs system;
+          };
+
+
           devShell =
             let
               pkgs = import inputs.nixpkgs {
