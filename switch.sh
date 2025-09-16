@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2002
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -35,7 +36,8 @@ guard_pid() {
     local target="$1"
     shift
     local this_pid=$$
-    local pidfile="/tmp/$(echo "$0" | sed 's/\//-/g').${target}.pid"
+    local pidfile
+    pidfile="/tmp/$(echo "$0" | sed 's/\//-/g').${target}.pid"
     if [[ -e $pidfile ]]; then
         old_pid="$(cat "$pidfile")"
         if [[ -e "/proc/$old_pid" ]]; then
@@ -50,7 +52,7 @@ add_ssh_keys() {
     local key="$HOME/.ssh/id_rsa"
     if [[ -f $key ]] && ! ssh-add -l | grep -q "$key"; then
         echo "ssh-add ..." >&2
-        ssh-add $key
+        ssh-add "$key"
     fi
 }
 
@@ -65,8 +67,6 @@ gnupg_to_mutt() {
 
 flake_update() {
     local update_mode="$1"
-    shift
-    local logs_dir="$1"
     shift
     log_step "updating flake in $update_mode mode"
 
@@ -96,7 +96,7 @@ flake_update_recursively() (
     fi
     if grep -q '\.url = "path:' "$flake"; then
         grep '\.url = "path:' "$flake" | sed s/.*path:// | sed 's/".*//g' |
-            while read flake_path; do
+            while read -r flake_path; do
                 flake_update_recursively "$flake_path"
             done
     fi
@@ -144,13 +144,14 @@ build() (
         --log-format bar-with-logs \
         --out-link "$out_link" \
         --keep-going \
-        $@ \
+        "$@" \
         "$system"
 )
 du_of_out_link() {
     local target="$1"
     shift
-    local out_link="$(get_out_link_of_target "$target")"
+    local out_link
+    out_link="$(get_out_link_of_target "$target")"
     nix path-info -rhsS "$out_link" |
         tee "$out_link"'.du' |
         tail -1
@@ -246,7 +247,8 @@ direct_deploy_locally() {
     local command="$1"
     shift
     log_step "direct deploying $out_link to $(hostname)"
-    local store_path="$(nix-store -q "$out_link")"
+    local store_path
+    store_path="$(nix-store -q "$out_link")"
     set -x
     sudo nix-env --profile /nix/var/nix/profiles/system --set "$store_path"
     sudo "$store_path/bin/switch-to-configuration" "$command"
@@ -330,20 +332,22 @@ main() {
     ################################################################################
     # setup logging
     start_time="$(date +%s)"
-    exec &> >(while read line; do
+    exec &> >(while read -r line; do
         current_time="$(date +%s)"
         time_diff="$((current_time - start_time))"
         echo "$(date -u -d@"$time_diff" +"%H:%M:%S")| $line"
     done)
     local logsDir="../_logs"
     mkdir -p "$logsDir"
-    local logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
+    local logfile
+    logfile="$logsDir/$(date +%Y-%m-%d)-myconfig-${target}.log"
     echo -e "\n\n\n\n\n\n\n" >>"$logfile"
     exec &> >(tee -a "$logfile")
     log_info "starting with...\nMODE=$MODE\nCOMMAND=$COMMAND\ntarget=$target\nverbose=$verbose\n"
     ################################################################################
 
-    local token="$(pass github-bot-token2 -p || true)"
+    local token
+    token="$(pass github-bot-token2 -p || true)"
     if [[ -n $token ]]; then
         log_info "setting github token"
         NIX_CONFIG="access-tokens = github.com=$token"
@@ -352,12 +356,14 @@ main() {
         log_warn "no github token"
     fi
 
-    flake_update "$([[ $MODE == "" ]] && echo "full" || echo "fast")" "$logsDir"
+    flake_update "$([[ $MODE == "" ]] && echo "full" || echo "fast")"
 
-    local out_link="$(get_out_link_of_target "$target")"
+    local out_link
+    out_link="$(get_out_link_of_target "$target")"
     local latest_logfile="${out_link}.log"
     ln -sf "$(realpath -m --relative-to="$(dirname "$latest_logfile")" "$logfile")" "$latest_logfile"
-    local old_result="$(readlink -f "$out_link" || true)"
+    local old_result
+    old_result="$(readlink -f "$out_link" || true)"
     build "$target" "$out_link" || build "$target" "$out_link" --keep-failed --no-eval-cache
     if [[ -e $old_result ]]; then
         diff_build_results "$old_result" "$out_link"
@@ -373,7 +379,8 @@ main() {
         deploy "$target" "$out_link" "$COMMAND"
         if [[ $COMMAND == "boot" ]]; then
             echo "manually enable via:"
-            local store_path="$(nix-store -q "$out_link")"
+            local store_path
+            store_path="$(nix-store -q "$out_link")"
             echo "> sudo nix-env --profile /nix/var/nix/profiles/system --set $store_path"
             echo "> sudo $store_path/bin/switch-to-configuration switch"
         fi
