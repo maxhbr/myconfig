@@ -17,8 +17,6 @@ in
 
   config = (
     lib.mkIf (cfg.desktop.enable && cfg.desktop.obs.enable) {
-      home-manager.sharedModules = [
-        {
           programs.obs-studio = {
             enable = true;
             plugins =
@@ -45,6 +43,8 @@ in
               );
             enableVirtualCamera = true;
           };
+      home-manager.sharedModules = [
+        {
           home.packages = with pkgs; [ ndi ];
           myconfig.persistence.directories = [ ".config/obs-studio" ];
         }

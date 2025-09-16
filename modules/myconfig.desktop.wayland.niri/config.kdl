@@ -406,10 +406,10 @@ binds {
 
     Mod+Shift+C { close-window; }
 
-    Mod+Left  { focus-column-left-or-last; }
+    Mod+Left  { focus-column-or-monitor-left; }
     Mod+Page_Down  { focus-window-down; }
     Mod+Page_Up    { focus-window-up; }
-    Mod+Right { focus-column-right-or-first; }
+    Mod+Right { focus-column-or-monitor-right; }
 
     Mod+Ctrl+Left  { move-column-left; }
     Mod+Ctrl+Page_Down  { move-window-down; }

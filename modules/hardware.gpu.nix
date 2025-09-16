@@ -8,10 +8,11 @@
 }:
 let
   user = myconfig.user;
+  cfg = config.myconfig.hardware.gpu;
 in
 {
-  options.hardware.gpu.variant = lib.mkOption {
-    type = lib.nullOr (
+  options.myconfig.hardware.gpu.variant = lib.mkOption {
+    type = lib.types.nullOr (
       lib.types.enum [
         "nvidia"
         "amd"
@@ -22,16 +23,16 @@ in
     default = "nvidia";
   };
   config =
-    lib.mkIf config.hardware.gpu.variant != null (
+    lib.mkIf (cfg.variant != null) (
       lib.mkMerge [
-        (lib.mkIf (config.hardware.gpu.variant != null) {
+        (lib.mkIf (cfg.variant != null) {
           hardware.graphics = {
             enable = true;
           };
-          nixpkgs.config.cudaSupport = lib.mkDefault (config.hardware.gpu.variant == "nvidia");
-          nixpkgs.config.rocmSupport = lib.mkDefault (config.hardware.gpu.variant == "amd");
+          nixpkgs.config.cudaSupport = lib.mkDefault (cfg.variant == "nvidia");
+          nixpkgs.config.rocmSupport = lib.mkDefault (cfg.variant == "amd");
         })
-        (lib.mkIf (config.hardware.gpu.variant == "nvidia") {
+        (lib.mkIf (cfg.variant == "nvidia") {
           home-manager.sharedModules = [
             {
               home.packages =
@@ -51,10 +52,10 @@ in
           services.xserver.videoDrivers = [ "nvidia" ];
           hardware.nvidia-container-toolkit.enable = true;
         })
-        (lib.mkIf (
-          config.hardware.gpu.variant == "intel"
-        ) inputs.nixos-hardware.nixosModules.common-gpu-amd)
-        (lib.mkIf (config.hardware.gpu.variant == "amd" || config.hardware.gpu.variant == "amd-no-rocm") {
+        # (lib.mkIf (
+        #   config.hardware.gpu.variant == "intel"
+        # ) ({ imports = [ inputs.nixos-hardware.nixosModules.common-gpu-amd ]; }))
+        (lib.mkIf (cfg.variant == "amd" || cfg.variant == "amd-no-rocm") {
           services.xserver.videoDrivers = [ "amdgpu" ];
           home-manager.sharedModules = [
             {
@@ -65,7 +66,7 @@ in
             }
           ];
         })
-        (lib.mkIf (config.hardware.gpu.variant == "amd") {
+        (lib.mkIf (cfg.variant == "amd") {
           nixpkgs.config.rocmSupport = true;
           home-manager.sharedModules = [
             {
@@ -77,7 +78,7 @@ in
             }
           ];
         })
-        (lib.mkIf (config.hardware.gpu.variant == "amd-no-rocm") {
+        (lib.mkIf (cfg.variant == "amd-no-rocm") {
           nixpkgs.config.rocmSupport = false;
           nixpkgs.overlays = [
             (final: prev: {
@@ -97,7 +98,7 @@ in
             })
           ];
         })
-        (lib.mkIf (config.hardware.gpu.variant == "intel") {
+        (lib.mkIf (cfg.variant == "intel") {
         })
       ]
     );

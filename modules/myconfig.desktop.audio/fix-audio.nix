@@ -12,15 +12,15 @@ let
       set -euo pipefail
 
       bluez_devices=(
-        ${bluez_devices}
+        ${toString bluez_devices}
       )
 
       preferred_sinks_patterns=(
-        ${preferred_sinks_patterns}
+        ${toString preferred_sinks_patterns}
       )
 
       preferred_sources_patterns=(
-        ${preferred_sources_patterns}
+        ${toString preferred_sources_patterns}
       )
 
       list_sinks() {
@@ -30,7 +30,7 @@ let
         local d
         local s
         for d in "''${bluez_devices[@]}"; do
-          s="bluez_output.${d}.1"
+          s="bluez_output.''${d}.1"
           if list_sinks | ${pkgs.gnugrep}/bin/grep -i -q "$s"; then
             echo "$s"
             return 0
@@ -56,7 +56,7 @@ let
         local d
         local s
         for d in "''${bluez_devices[@]}"; do
-          s="bluez_input.${d}"
+          s="bluez_input.$d"
           if list_sources | ${pkgs.gnugrep}/bin/grep -i -q "$s"; then
             echo "$s"
             return 0
