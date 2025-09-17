@@ -76,8 +76,8 @@ writeExcludes() {
 EOF
 }
 
-doInitPreperations() {
-    >&2 echo "## doInitPreperations..."
+doInitPreparations() {
+    >&2 echo "## doInitPreparations..."
     local home="$1"
     shift
 
@@ -270,7 +270,7 @@ main() {
     # Run
 
     if $doInit; then
-        doInitPreperations "$home" "${POSITIONAL[@]}"
+        doInitPreparations "$home" "${POSITIONAL[@]}"
     fi
 
     if [[ ! -d "$home" ]]; then

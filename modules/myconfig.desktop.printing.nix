@@ -1,4 +1,4 @@
-# Copyright 2022 Maximilian nuber <oss@maximilian-huber.de>
+# Copyright 2022 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 {
   config,

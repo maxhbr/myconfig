@@ -10,6 +10,8 @@
     rel2411.url = "github:nixos/nixpkgs?ref=release-24.11";
     rel2505.url = "github:nixos/nixpkgs?ref=release-25.05";
 
+    git-hooks.url = "github:cachix/git-hooks.nix";
+
     nixpkgs-wayland.url = "github:nix-community/nixpkgs-wayland";
     nixpkgs-wayland.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -496,31 +498,43 @@
             };
           };
 
+          formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-tree;
+
           checks = {
-            fmt-check =
-              let
-                pkgs = inputs.nixpkgs.legacyPackages."${system}";
-                files = pkgs.lib.concatStringsSep " " [
-                  "switch.sh"
-                ];
-              in
-              pkgs.stdenv.mkDerivation {
-                name = "fmt-check";
-                src = ./.;
-                doCheck = true;
-                nativeBuildInputs = with pkgs; [
-                  shellcheck
-                  shfmt
-                ];
-                checkPhase = ''
-                  ${self.packages."${system}".fmt}/bin/fmt --check
-                  shfmt -d -s -i 4 -ci ${files}
-                  shellcheck -x ${files}
-                '';
-                installPhase = ''
-                  mkdir "$out"
-                '';
+            pre-commit-check = inputs.git-hooks.lib.${system}.run {
+              src = ./.;
+              hooks = {
+                  nixfmt-rfc-style.enable = true;
+                # shfmt.enable = true;
+                # shfmt.settings.simplify = true;
+                # shellcheck.enable = true;
+                # typos.enable = true;
               };
+            };
+            # fmt-check =
+            #   let
+            #     pkgs = inputs.nixpkgs.legacyPackages."${system}";
+            #     files = pkgs.lib.concatStringsSep " " [
+            #       "switch.sh"
+            #     ];
+            #   in
+            #   pkgs.stdenv.mkDerivation {
+            #     name = "fmt-check";
+            #     src = ./.;
+            #     doCheck = true;
+            #     nativeBuildInputs = with pkgs; [
+            #       shellcheck
+            #       shfmt
+            #     ];
+            #     checkPhase = ''
+            #       ${self.packages."${system}".fmt}/bin/fmt --check
+            #       shfmt -d -s -i 4 -ci ${files}
+            #       shellcheck -x ${files}
+            #     '';
+            #     installPhase = ''
+            #       mkdir "$out"
+            #     '';
+            #   };
           };
 
           devShells.default =

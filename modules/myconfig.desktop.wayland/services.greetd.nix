@@ -12,7 +12,7 @@ let
   cmd_for_session = session: cfg.desktop.wayland.sessions."${session}".command;
   cmd0 = cmd_for_session (lib.elemAt selectedSessions 0);
   sessionStarters = pkgs.symlinkJoin {
-    name = "sessionStartes";
+    name = "sessionStarters";
     paths =
       let
         fun = session: pkgs.writeShellScriptBin "start-${session}-session" (cmd_for_session session);
