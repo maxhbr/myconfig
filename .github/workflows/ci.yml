@@ -12,7 +12,7 @@ jobs:
     - uses: cachix/install-nix-action@v31
       with:
         github_access_token: ${{ secrets.GITHUB_TOKEN }}
-    - run: nix flake check
+    - run: nix flake check --all-systems
 
   try-develop:
     runs-on: ubuntu-latest
