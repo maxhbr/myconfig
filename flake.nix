@@ -517,6 +517,9 @@
                   shfmt -d -s -i 4 -ci ${files}
                   shellcheck -x ${files}
                 '';
+                installPhase = ''
+                  mkdir "$out"
+                '';
               };
           };
 
