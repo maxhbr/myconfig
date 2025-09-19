@@ -8,7 +8,6 @@ ulimit -c unlimited
 
 have() {
     local cmd="$1"
-    shift
     if command -v "$cmd" &>/dev/null; then
         return 0
     fi
@@ -34,7 +33,6 @@ log_error() {
 
 guard_pid() {
     local target="$1"
-    shift
     local this_pid=$$
     local pidfile
     pidfile="/tmp/$(echo "$0" | sed 's/\//-/g').${target}.pid"
@@ -67,7 +65,6 @@ gnupg_to_mutt() {
 
 flake_update() {
     local update_mode="$1"
-    shift
     log_step "updating flake in $update_mode mode"
 
     if [[ $update_mode == "full" ]]; then
@@ -87,7 +84,6 @@ flake_update() {
 
 flake_update_recursively() (
     local path="$1"
-    shift
     local flake="$path/flake.nix"
     echo ">> recursively walk flake $path"
     if [[ ! -e $flake ]]; then
@@ -105,8 +101,7 @@ flake_update_recursively() (
 
 flake_update_one() (
     local path="$1"
-    shift
-    local num_of_tries="${1:-1}"
+    local num_of_tries="${2:-1}"
     echo ">>> update flake $path and commit lock file"
     if [[ $num_of_tries -gt 1 ]]; then
         log_warning "retry $num_of_tries times"
@@ -125,7 +120,6 @@ flake_update_one() (
 )
 get_out_link_of_target() {
     local target="$1"
-    shift
     echo '../result.'"$target"
 }
 build() (
@@ -149,13 +143,16 @@ build() (
 )
 du_of_out_link() {
     local target="$1"
-    shift
     local out_link
     out_link="$(get_out_link_of_target "$target")"
+
+    local du_file="$out_link"'.du'
+    local du_csv_file="$out_link"'.du.csv'
+
+    log_step "compute $du_file"
+
     nix path-info -rhsS "$out_link" |
-        tee "$out_link"'.du' |
-        tail -1
-    cat "$out_link"'.du' |
+        tee "$du_file"|
         gawk '
         BEGIN {FS="\t"; OFS=","} {
             if ($3 ~ / *[0-9\.]+ KiB/)
@@ -171,14 +168,37 @@ du_of_out_link() {
             }
         ' |
         sort -n |
-        awk 'BEGIN {FS=","; OFS=","} {print $2,$3,$4}' >"$out_link"'.du.csv'
+        awk 'BEGIN {FS=","; OFS=","} {print $2,$3,$4}' >"$du_csv_file"
+    echo "$du_file"
+}
+home_manager_files_from_du() {
+    local target="$1"
+    local du_file="$2"
+    local hm_files_dir
+    hm_files_dir="$(get_out_link_of_target "$target").home-manager-files"
+
+    if [[ -d "$hm_files_dir" ]]; then
+        chmod -R u+rwx "$hm_files_dir"
+        rm -rf "$hm_files_dir"
+    fi
+    mkdir "$hm_files_dir"
+
+    log_step "copy home-manager files to $hm_files_dir"
+
+    cat "$du_file" |
+        awk '{print $1}' |
+        grep -E '.*-home-manager-files$' |
+        while read -r hmfiles; do
+            local target="$hm_files_dir/$(basename "$hmfiles")"
+            >&2 echo "copy to $target"
+            cp -Lr "$hmfiles" "$target" &>/dev/null || true
+            chmod -R u+rwx "$target"
+        done
 }
 get_ip_of_target_from_metadata() {
     local metadata_file="$1"
-    shift
-    local target="$1"
-    shift
-    local use_wg="${1:-false}"
+    local target="$2"
+    local use_wg="${3:-false}"
     cat "$metadata_file" |
         if [[ $use_wg == "true" ]]; then
             jq -r ".hosts.${target}.wireguard.wg0.ip4" || true
@@ -188,8 +208,7 @@ get_ip_of_target_from_metadata() {
 }
 get_ip_of_target() {
     local target="$1"
-    shift
-    local use_wg="${1:-false}"
+    local use_wg="${2:-false}"
 
     if [[ $use_wg == "true" ]]; then
         local hosts_alias="$target.wg0"
@@ -220,9 +239,7 @@ get_ip_of_target() {
 }
 copy_closure_to_target() (
     local targetIP="$1"
-    shift
-    local out_link="$1"
-    shift
+    local out_link="$2"
     log_step "copying closure to $targetIP"
     set -x
     until nix-copy-closure --to "$targetIP" "$out_link"; do
@@ -231,9 +248,7 @@ copy_closure_to_target() (
 )
 diff_build_results() (
     local old_result="$1"
-    shift
-    local out_link="$1"
-    shift
+    local out_link="$2"
     if command -v nvd &>/dev/null; then
         log_step "diffing $old_result and $out_link"
         set -x
@@ -243,9 +258,7 @@ diff_build_results() (
 )
 direct_deploy_locally() {
     local out_link="$1"
-    shift
-    local command="$1"
-    shift
+    local command="$2"
     log_step "direct deploying $out_link to $(hostname)"
     local store_path
     store_path="$(nix-store -q "$out_link")"
@@ -255,11 +268,8 @@ direct_deploy_locally() {
 }
 deploy() (
     local target="$1"
-    shift
-    local out_link="$1"
-    shift
-    local command="$1"
-    shift
+    local out_link="$2"
+    local command="$3"
 
     # if [[ "$target" == "$(hostname)" ]]; then
     #   direct_deploy_locally "$out_link" "$command"
@@ -267,7 +277,7 @@ deploy() (
     # fi
 
     log_step "deploying $out_link to $target"
-    local use_wg="${1:-false}"
+    local use_wg="${4:-false}"
     cmd="nixos-rebuild"
     if [[ $target != "$(hostname)" ]]; then
         targetIP="root@$(get_ip_of_target "$target" "$use_wg")"
@@ -368,7 +378,8 @@ main() {
     if [[ -e $old_result ]]; then
         diff_build_results "$old_result" "$out_link"
     fi
-    du_of_out_link "$target"
+    local du_file="$(du_of_out_link "$target")"
+    home_manager_files_from_du "$target" "$du_file"
     if [[ $MODE == "--use-wg" ]]; then
         deploy "$target" "$out_link" true
     elif [[ $MODE == "--test" ]]; then
