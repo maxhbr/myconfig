@@ -141,33 +141,12 @@ in
                   "${drv}/config.kdl";
               };
               programs.waybar.settings.mainBar = {
-                "niri/window" = {
-                  "format" = "{}";
-                  "rewrite" = {
-                    "(.*) - Mozilla Firefox" = "🌎 $1";
-                    "(.*) - zsh" = "> [$1]";
-                  };
-                  rotate = 90;
-                };
                 "niri/workspaces" = {
                   "format" = "{index}";
-                  # "format-icons" = {
-                  #   # Named workspaces
-                  #   # (you need to configure them in niri)
-                  #   "browser" = "";
-                  #   "discord" = "";
-                  #   "chat" = "<b></b>";
-
-                  #   # Icons by state
-                  #   "active" = "";
-                  #   "default" = "";
-                  # };
                   rotate = 90;
                 };
                 modules-left = [ "niri/workspaces" ];
-                modules-center = [
-                  # "niri/window"
-                ];
+                modules-center = [ ];
                 modules-right = [ "wlr/taskbar" ];
               };
               # A dedicated anchor for your compositor session

@@ -199,7 +199,7 @@ layout {
     tab-indicator {
         width 8
         gap 0
-        hide-when-single-tab
+        // hide-when-single-tab
         length total-proportion=0.666
         position "left"
     }
@@ -326,6 +326,13 @@ window-rule {
     match app-id=r#"^com\.obsproject\.Studio$"#
 
     min-width 876
+    block-out-from "screen-capture"
+}
+
+window-rule {
+    match is-floating=true
+
+    baba-is-float true
 }
 
 layer-rule {

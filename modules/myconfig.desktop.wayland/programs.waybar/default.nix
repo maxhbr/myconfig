@@ -157,6 +157,7 @@ let
               mainBar = lib.mkMerge (
                 [
                   {
+                    name = "mainBar";
                     layer = "top";
                     position = "left";
                     height = null;

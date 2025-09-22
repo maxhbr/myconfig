@@ -363,7 +363,7 @@ main() {
         NIX_CONFIG="access-tokens = github.com=$token"
         export NIX_CONFIG
     else
-        log_warn "no github token"
+        log_warning "no github token"
     fi
 
     flake_update "$([[ $MODE == "" ]] && echo "full" || echo "fast")"
