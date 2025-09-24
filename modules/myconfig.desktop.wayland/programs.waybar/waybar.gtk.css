@@ -1,3 +1,7 @@
+/* ############################################################################
+ * Base styling for waybar
+ */ 
+
 * {
     border: none;
     border-radius: 0;
@@ -5,15 +9,11 @@
     font-size: 13px;
     min-height: 0;
 }
-
-window#waybar.left {
+window#waybar {
+    color: #e0cbc7;
     background: linear-gradient(90deg, rgba(43, 48, 59, 0.5), rgba(43, 48, 59, 0));
-    color: #e0cbc7;
 }
-window#waybar.right {
-    background: linear-gradient(90deg, rgba(43, 48, 59, 0), rgba(43, 48, 59, 0.5));
-    color: #e0cbc7;
-}
+window.eDP-1 * { font-size: 12px; }
 
 .modules-center {
     padding-top: 5px;
@@ -21,34 +21,45 @@ window#waybar.right {
     margin-top: 10px;
     margin-bottom: 10px;
 }
-window#waybar.left .modules-center {
+
+.modules-left,
+.modules-right,
+.modules-center {
     background: rgba(43, 48, 59, 0.5);
-    border-top: 2px solid #e0cbc7;
+}
+
+.modules-left,
+.modules-center {
+    padding-top: 10px;
     border-bottom: 2px solid #e0cbc7;
-    border-right: 3px solid #e0cbc7;
-    border-radius: 0px 14px 14px 0px;
+    /* border-bottom-right-radius: 14px; */
 }
-.modules-left {
-  padding-top: 10px;
+
+.modules-right,
+.modules-center {
+    padding-bottom: 10px;
+    border-top: 2px solid #e0cbc7;
+    /* border-top-right-radius: 14px; */
 }
-.modules-right {
-  padding-bottom: 10px;
-}
-.modules-right > widget > * {
-    border-top: 3px solid #e0cbc7;
+
+.modules-right>widget>* {
     padding-top: 5px;
-    border-radius: 0px 7px 0px 0px;
+    /* border-radius: 0px 7px 0px 0px; */
 }
 
 tooltip {
     background: rgba(43, 48, 59, 0.5);
     border: 1px solid rgba(100, 114, 125, 0.5);
-    border-radius: 7px;
+    /* border-radius: 7px; */
 }
 
 tooltip label {
     color: #e0cbc7;
 }
+
+/* ############################################################################
+ * Base styling
+ */ 
 
 #backlight,
 #network,
@@ -56,63 +67,95 @@ tooltip label {
 #custom-audio_idle_inhibitor,
 #mode,
 #window,
-button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button 
-{
-    padding: 2px 0;
-    background: transparent;
+button,
+#tags button,
+#workspaces button,
+#custom-dwl_tag,
+#taskbar button,
+#idle_inhibitor,
+#battery,
+#systemd-failed-units,
+#power-profiles-daemon {
+    padding: 0 0;
     color: #e0cbc7;
+    min-width: 20px;
+    min-height: 20px;
+}
+
+button {
+    border-right: 3px solid transparent; 
+    /* border-radius: 0px 7px 7px 0px; */
 }
 
 #network,
+#pulseaudio,
+#backlight,
 #battery {
-    padding-top: 11px;
+    padding-top: 7px;
 }
 
-#taskbar button,
-#tags button,
-#custom-dwl_tag,
-#workspaces button {
-    border-bottom: 3px solid transparent;
-    border-radius: 0px 0px 7px 0px;
-}
-#tags button,
-#custom-dwl_tag,
-#workspaces button {
-    min-width: 25px;
+#custom-platform_profile,
+#power-profiles-daemon {
+    padding-top: 5px;
+    padding-bottom: 5px;
+    font-size: 0.8em;
 }
 
-#pulseaudio:hover,
-#network:hover,
-#battery:hover,
-#idle_inhibitor:hover,
-#backlight:hover {
-    background: linear-gradient(90deg, rgba(43, 48, 59, 0.5), rgba(80,80,80, 1));
+#idle_inhibitor.deactivated,
+#workspaces button.empty,
+.okay {
+    color: rgb(43, 48, 59);
 }
 
-#idle_inhibitor.activated,
-#battery.charging {
-    color: white;
+#custom-isvpn,
+#systemd-failed-units {
+    font-size: 0.7em;
+    padding-top: 0.2em;
+    padding-bottom: 0.2em;
 }
 
-#custom-platform_profile, window#waybar.left #power-profiles-daemon {
-  padding-top: 5px;
-  padding-bottom: 5px;
-  font-size: 0.8em;
+/* ############################################################################
+ * Workspace and Windows styling
+ */ 
+
+#tags button.focused,
+#custom-dwl_tag.focused,
+#workspaces button.focused,
+#window.focused {
+    background: rgba(238, 154, 0, 0.5);
+    border-right: 3px solid #e0cbc7;
 }
 
-#power-profiles-daemon.performance {
-    color: #e0cbc7;
+#taskbar button.active,
+#tags button.occupied,
+#custom-dwl_tag.occupied,
+#workspaces button.active:not(.focused):not(.empty) {
+    border-right: 3px solid #e0cbc7;
 }
+
+/* ############################################################################
+ * Warning styling for buttons
+ */ 
 
 #battery.warning:not(.charging),
-#systemd-failed-units.degraded,
-#custom-platform_profile.balanced, #power-profiles-daemon.balanced,
+#custom-platform_profile.balanced,
+#power-profiles-daemon.balanced,
+#custom-isvpn,
 .warning {
     background: rgba(238, 154, 0, 0.5);
     color: black;
 }
 
-#custom-platform_profile.low-power, #power-profiles-daemon.power-saver {
+#systemd-failed-units.degraded{
+    color: #ee9a00;
+}
+
+/* ############################################################################
+ * Critical and urgent styling for buttons
+ */ 
+
+#custom-platform_profile.low-power,
+#power-profiles-daemon.power-saver {
     background: #f53c3c;
 }
 
@@ -122,8 +165,10 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
         color: black;
     }
 }
+
 #battery.critical:not(.charging),
 #custom-test_for_missing_tb_changing.error,
+#tray > .needs-attention,
 .error {
     background: #f53c3c;
     color: white;
@@ -134,68 +179,18 @@ button, #tags button, #workspaces button, #custom-dwl_tag, #taskbar button
     animation-direction: alternate;
 }
 
-#tags button.focused,
-#custom-dwl_tag.focused,
-#workspaces button.focused,
-#window.focused {
-    border-top-right-radius: 7px;
-    background: rgba(238, 154, 0, 0.5);
-    border-bottom: 3px solid #e0cbc7;
-    color: white;
-}
-
-#workspaces button.empty {
-    color: gray;
-}
-
-#taskbar button.active,
-#tags button.occupied,
-#custom-dwl_tag.occupied,
-#workspaces button.active:not(.focused)
-{
-    border-top-right-radius: 7px;
-    background: rgba(43, 48, 59, 0.5);
-    border-bottom: 3px solid #e0cbc7;
-}
-
-#window:not(.focused) {
-    border-bottom: 3px solid transparent;
-}
-
 @keyframes blink-border {
     to {
         border-bottom: 3px solid #ee9a00;
     }
 }
+
 #custom-dwl_tag.urgent,
+#taskbar button.minimized,
 #tags button.urgent {
     animation-name: blink-border;
     animation-duration: 0.5s;
     animation-timing-function: linear;
     animation-iteration-count: infinite;
     animation-direction: alternate;
-}
-
-#custom-isvpn {
-    background: #ee9a00;
-    color: black;
-    font-size: 0.7em;
-    padding-top: 0.2em;
-    padding-bottom: 0.2em;
-}
-
-
-
-#idle_inhibitor {
-    min-height: 25px;
-}
-
-#idle_inhibitor.deactivated,
-.okay {
-    /* background-color: #1F2C36; */
-    color: rgb(43, 48, 59);
-}
-
-#hardware, .vertical {
-    font-size: 0.4em;
 }

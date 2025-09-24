@@ -197,24 +197,39 @@ let
         ) metadata.hosts
       );
 
-    setupAsSyncthingClient = cert: key: devices: folders: {
-      myconfig.secrets = {
-        "syncthing.cert.pem" = {
-          source = cert;
-          dest = "/etc/syncthing/cert.pem";
+    setupAsSyncthingClient = cert: key: devices: folders: 
+      {
+        pkgs,
+        lib,
+        myconfig,
+        config,
+        ...
+      }:
+      {
+        myconfig.secrets = {
+          "syncthing.cert.pem" = {
+            source = cert;
+            dest = "/etc/syncthing/cert.pem";
+          };
+          "syncthing.key.pem" = {
+            source = key;
+            dest = "/etc/syncthing/key.pem";
+          };
         };
-        "syncthing.key.pem" = {
-          source = key;
-          dest = "/etc/syncthing/key.pem";
+        services.syncthing = {
+          enable = true;
+          cert = "/etc/syncthing/cert.pem";
+          key = "/etc/syncthing/key.pem";
+          settings = { inherit devices folders; };
+        };
+        system.activationScripts = {
+          createPersistentDirs.text = ''
+            install -d -m 700 "/home/${myconfig.user}/syncthing" -o ${
+              toString config.users.extraUsers.${myconfig.user}.uid
+            } -g ${toString config.users.extraGroups.${myconfig.user}.gid}
+          '';
         };
       };
-      services.syncthing = {
-        enable = true;
-        cert = "/etc/syncthing/cert.pem";
-        key = "/etc/syncthing/key.pem";
-        settings = { inherit devices folders; };
-      };
-    };
 
     mkSyncthingDevice =
       hostName: introducer:

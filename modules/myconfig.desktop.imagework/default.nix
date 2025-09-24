@@ -55,6 +55,11 @@ in
         }
       ]
       ++ lib.optionals cfg.desktop.imagework.myphoto.enable [ inputs.myphoto.homeManagerModules.myphoto ];
+      myconfig.desktop.wayland.launcherCommands = [
+        "geeqie"
+        "darktable"
+        "gimp"
+      ];
     }
   );
 }

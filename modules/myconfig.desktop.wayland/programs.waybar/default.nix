@@ -37,6 +37,15 @@ let
           }
         else
           pkgs.waybar;
+      waybarDevelop = pkgs.writeShellScriptBin "waybarDevelop" ''
+        set -euo pipefail
+        css=~/myconfig/myconfig/modules/myconfig.desktop.wayland/programs.waybar/waybar.gtk.css
+        config=~/.config/waybar/config
+        ${pkgs.psmisc}/bin/pkill waybar || true
+        cat <<EOF | ${pkgs.entr}/bin/entr -r ${waybarPackage}/bin/waybar --log-level debug -c $config -s $css
+        $css
+        EOF
+      '';
       waybarOnce = pkgs.writeShellScriptBin "waybarOnce" ''
         set -euo pipefail
 
@@ -164,34 +173,24 @@ let
                     spacing = 4;
                     modules-left = [ ];
                     modules-center = [
-                      # "wlr/taskbar"
-                      # "group/hardware"
                       "idle_inhibitor"
                       "custom/test_for_missing_tb_changing"
                       # "custom/audio_idle_inhibitor"
                       "clock#time"
                       "clock#date"
-                      # ];
-                      # modules-right = [
                     ]
                     ++ lib.optionals power-profiles-daemon-config.enable [ "power-profiles-daemon" ]
                     ++ [
+                      "custom/isvpn"
+                      "systemd-failed-units#user"
+                      "systemd-failed-units#system"
+                    ];
+                    modules-right = [
                       "battery"
                       "backlight"
                       "pulseaudio"
-                      "systemd-failed-units#user"
-                      "systemd-failed-units#system"
-                      "custom/isvpn"
-                      # "network"
-                      # "cpu"
-                      # "memory"
                       "tray"
                     ];
-                    # "group/hardware" = {
-                    #   "orientation" = "vertical";
-                    #   "modules" = [ "cpu" "memory" ];
-                    #  rotate = 90;
-                    # };
                     tray = {
                       spacing = 10;
                       rotate = 90;
@@ -203,7 +202,6 @@ let
                       rotate = 90;
                     };
                     "clock#date" = {
-                      # format = "<sub>{:%Y-%m-%d}</sub>";
                       format = ''
                         {:%e
                         <sub>%b</sub>}'';
@@ -226,7 +224,7 @@ let
                         app_id: {app_id}
                         {short_state}'';
                       on-click = "activate";
-                      on-click-middle = "close";
+                      on-click-middle = "minimize-raise";
                       ignore-list = [
                         "Alacritty"
                         "Foot"
@@ -339,7 +337,6 @@ let
                         ""
                         ""
                       ];
-                      # format-icons = ["\uf244" "\uf243" "\uf242" "\uf241" "\uf240"];
                       rotate = 90;
                     };
                     network = {

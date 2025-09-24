@@ -186,8 +186,10 @@ layout {
     // Top and bottom struts will simply add outer gaps in addition to the area occupied by
     // layer-shell panels and regular gaps.
     struts {
-        left 100
-        right 125 // 10 + 25 for symmetry with waybar
+        // left 100
+        // right 125 // 100 + 25 for symmetry with waybar
+        left 25
+        right 50 // 25 + 25 for symmetry with waybar
         top -8
         bottom -8
     }
@@ -329,18 +331,10 @@ window-rule {
     block-out-from "screen-capture"
 }
 
-window-rule {
-    match is-floating=true
-
-    baba-is-float true
-}
-
 layer-rule {
     match namespace="waybar"
     match at-startup=true
 
-    // Properties that apply continuously.
-    opacity 0.9
     block-out-from "screen-capture"
 }
 

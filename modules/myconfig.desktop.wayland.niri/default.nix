@@ -146,8 +146,8 @@ in
                   rotate = 90;
                 };
                 modules-left = [ "niri/workspaces" ];
-                modules-center = [ ];
-                modules-right = [ "wlr/taskbar" ];
+                # modules-center = [ ];
+                # modules-right = [ "wlr/taskbar" ];
               };
               # A dedicated anchor for your compositor session
               systemd.user.services.niri = {

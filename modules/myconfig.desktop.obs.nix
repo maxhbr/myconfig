@@ -50,6 +50,9 @@ in
         }
       ];
       myconfig.v4l2.enable = true;
+      myconfig.desktop.wayland.launcherCommands = [
+        "obs"
+      ];
     }
   );
 }
