@@ -2,16 +2,36 @@
  * Base styling for waybar
  */ 
 
+@define-color white	#e0cbc7;
+@define-color black	#282828;
+@define-color transparentgray rgba(43, 48, 59, 0.5);
+@define-color invisiblegray rgba(43, 48, 59, 0);
+@define-color transparentorange rgba(238, 154, 0, 0.5);
+@define-color red #f53c3c;
+@define-color orange #ee9a00;
+
+@define-color border @white;
+@define-color font @white;
+@define-color background @transparentgray;
+@define-color highlight @transparentorange;
+@define-color error @red;
+
 * {
     border: none;
     border-radius: 0;
     font-family: Roboto, Helvetica, Arial, sans-serif;
     font-size: 13px;
     min-height: 0;
+    min-width: 0;
+	margin: 0;
+	padding: 0;
+	box-shadow: none;
+	text-shadow: none;
+	icon-shadow: none;
 }
 window#waybar {
-    color: #e0cbc7;
-    background: linear-gradient(90deg, rgba(43, 48, 59, 0.5), rgba(43, 48, 59, 0));
+    color: @font;
+    background: linear-gradient(90deg, @transparentgray, @invisiblegray);
 }
 window.eDP-1 * { font-size: 12px; }
 
@@ -25,21 +45,21 @@ window.eDP-1 * { font-size: 12px; }
 .modules-left,
 .modules-right,
 .modules-center {
-    background: rgba(43, 48, 59, 0.5);
+    background: @background;
+    padding-top: 15px;
+    padding-bottom: 15px;
 }
 
 .modules-left,
 .modules-center {
-    padding-top: 10px;
-    border-bottom: 2px solid #e0cbc7;
-    /* border-bottom-right-radius: 14px; */
+    border-bottom: 4px solid @border;
+    border-bottom-right-radius: 8px;
 }
 
 .modules-right,
 .modules-center {
-    padding-bottom: 10px;
-    border-top: 2px solid #e0cbc7;
-    /* border-top-right-radius: 14px; */
+    border-top: 4px solid @border;
+    border-top-right-radius: 8px;
 }
 
 .modules-right>widget>* {
@@ -48,13 +68,13 @@ window.eDP-1 * { font-size: 12px; }
 }
 
 tooltip {
-    background: rgba(43, 48, 59, 0.5);
+    background: @transparentgray;
     border: 1px solid rgba(100, 114, 125, 0.5);
     /* border-radius: 7px; */
 }
 
 tooltip label {
-    color: #e0cbc7;
+    color: @font;
 }
 
 /* ############################################################################
@@ -77,13 +97,13 @@ button,
 #systemd-failed-units,
 #power-profiles-daemon {
     padding: 0 0;
-    color: #e0cbc7;
-    min-width: 20px;
-    min-height: 20px;
+    color: @font;
+    min-width: 16px;
+    min-height: 16px;
 }
 
 button {
-    border-right: 3px solid transparent; 
+    border-right: 4px solid transparent; 
     /* border-radius: 0px 7px 7px 0px; */
 }
 
@@ -101,13 +121,12 @@ button {
     font-size: 0.8em;
 }
 
-#idle_inhibitor.deactivated,
-#workspaces button.empty,
-.okay {
+#workspaces button.empty {
     color: rgb(43, 48, 59);
 }
 
 #custom-isvpn,
+#idle_inhibitor,
 #systemd-failed-units {
     font-size: 0.7em;
     padding-top: 0.2em;
@@ -122,15 +141,17 @@ button {
 #custom-dwl_tag.focused,
 #workspaces button.focused,
 #window.focused {
-    background: rgba(238, 154, 0, 0.5);
-    border-right: 3px solid #e0cbc7;
+    background: @highlight;
+    border-right: 4px solid @border;
+    color: @black;
 }
 
 #taskbar button.active,
 #tags button.occupied,
 #custom-dwl_tag.occupied,
 #workspaces button.active:not(.focused):not(.empty) {
-    border-right: 3px solid #e0cbc7;
+    border-right: 4px solid @border;
+    background: linear-gradient(90deg, @transparentgray, @highlight);
 }
 
 /* ############################################################################
@@ -140,14 +161,15 @@ button {
 #battery.warning:not(.charging),
 #custom-platform_profile.balanced,
 #power-profiles-daemon.balanced,
+#idle_inhibitor.activated,
 #custom-isvpn,
 .warning {
-    background: rgba(238, 154, 0, 0.5);
-    color: black;
+    background: @highlight;
+    color: @black;
 }
 
 #systemd-failed-units.degraded{
-    color: #ee9a00;
+    color: @orange;
 }
 
 /* ############################################################################
@@ -156,13 +178,13 @@ button {
 
 #custom-platform_profile.low-power,
 #power-profiles-daemon.power-saver {
-    background: #f53c3c;
+    background: @error;
 }
 
 @keyframes blink {
     to {
-        background-color: #ffffff;
-        color: black;
+        background-color: @white;
+        color: @black;
     }
 }
 
@@ -170,7 +192,7 @@ button {
 #custom-test_for_missing_tb_changing.error,
 #tray > .needs-attention,
 .error {
-    background: #f53c3c;
+    background: @error;
     color: white;
     animation-name: blink;
     animation-duration: 0.5s;
@@ -181,7 +203,7 @@ button {
 
 @keyframes blink-border {
     to {
-        border-bottom: 3px solid #ee9a00;
+        border-bottom: 4px solid @orange;
     }
 }
 

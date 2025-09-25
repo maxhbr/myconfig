@@ -158,7 +158,7 @@ let
     {
       config = (
         lib.mkIf config.programs.waybar.enable {
-          home.packages = [ waybarOnce ];
+          home.packages = [ waybarOnce waybarDevelop ];
           programs.waybar = {
             package = waybarPackage;
             systemd.enable = false;
@@ -178,18 +178,18 @@ let
                       # "custom/audio_idle_inhibitor"
                       "clock#time"
                       "clock#date"
+                      "custom/isvpn"
                     ]
                     ++ lib.optionals power-profiles-daemon-config.enable [ "power-profiles-daemon" ]
                     ++ [
-                      "custom/isvpn"
-                      "systemd-failed-units#user"
-                      "systemd-failed-units#system"
-                    ];
-                    modules-right = [
                       "battery"
                       "backlight"
                       "pulseaudio"
+                    ];
+                    modules-right = [
                       "tray"
+                      "systemd-failed-units#user"
+                      "systemd-failed-units#system"
                     ];
                     tray = {
                       spacing = 10;
@@ -257,6 +257,7 @@ let
                       "system" = false;
                       "user" = true;
                       rotate = 90;
+                      "on-click" = "${pkgs.alacritty}/bin/alacritty --command 'bash' '-c' 'systemctl --user --failed | less'";
                     };
                     "systemd-failed-units#system" = {
                       "hide-on-ok" = true;
@@ -265,6 +266,7 @@ let
                       "system" = true;
                       "user" = false;
                       rotate = 90;
+                      "on-click" = "${pkgs.alacritty}/bin/alacritty --command 'bash' '-c' 'systemctl --system --failed | less'";
                     };
                     "custom/isvpn" = {
                       format = "{}";
