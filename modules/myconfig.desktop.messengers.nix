@@ -6,8 +6,6 @@
 }:
 let
   cfg = config.myconfig;
-  signal-desktop = pkgs.nixos-unstable.signal-desktop;
-  signal-cli = pkgs.nixos-unstable.signal-cli;
 in
 {
   options.myconfig = with lib; {
@@ -16,7 +14,7 @@ in
   config = lib.mkIf cfg.desktop.messengers.enable {
     home-manager.sharedModules = [
       {
-        home.packages = [
+        home.packages = with pkgs; [
           signal-desktop
           # signal-cli
           pkgs.smile

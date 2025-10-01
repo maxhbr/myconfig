@@ -20,3 +20,4 @@ result-*
 .vagrant
 myconfig.out-link
 *.img
+__old_modules/

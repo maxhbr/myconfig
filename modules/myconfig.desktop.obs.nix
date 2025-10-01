@@ -29,7 +29,6 @@ in
               obs-gstreamer
               obs-vkcapture
               obs-ndi
-              # droidcam-obs
             ]
             ++ (lib.optionals
               (
