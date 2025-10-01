@@ -18,7 +18,7 @@
     ../../hardware/btrfs.nix
     inputs.nixos-hardware.nixosModules.common-cpu-amd
     inputs.nixos-hardware.nixosModules.common-pc-ssd
-    ../../hardware/steamcontroller.nix
+    # ../../hardware/steamcontroller.nix
     (myconfig.metadatalib.fixIp "enp4s0")
     {
       # programs.mosh.enable = lib.mkDefault true;

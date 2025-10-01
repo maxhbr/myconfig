@@ -19,7 +19,7 @@ let
     # --set NIXOS_OZONE_WL 1 \
   });
   slack-pkg = pkgs.slack;
-  teams-for-linux-pkg = pkgs.nixos-2405.teams-for-linux;
+  teams-for-linux-pkg = pkgs.teams-for-linux;
 in
 {
   imports = [

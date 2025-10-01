@@ -9,6 +9,7 @@
   config = lib.mkIf config.services.mako.enable {
     services.mako = {
       settings = {
+        layer = "overlay";
         background-color = "#282828BB";
         border-color = "#ee9a00";
         margin = 8;
