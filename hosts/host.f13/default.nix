@@ -24,7 +24,6 @@ in
     ./mykeylight
     ./role.work
     ./ai.f13.nix
-    ./debug_suspend_issue.nix
     {
       services.openssh = {
         listenAddresses = [
@@ -104,6 +103,15 @@ in
         "/home/${user}/myconfig/.myconfig.ready"
       ];
     }
+
+    # Problems with suspend
+    ./debug_suspend_issue.nix
+    {
+      services.logind.settings.Login = {
+        HandleLidSwitch = lib.mkForce "ignore";
+        HandleLidSwitchDocked = lib.mkForce "ignore";
+      };
+    }
   ];
 
   config = {
@@ -181,6 +189,7 @@ in
         # rust.enable = true;
         # elixir.enable = false;
         # zephyr.enable = true;
+        embedded.enable = true;
       };
     };
     virtualisation = {

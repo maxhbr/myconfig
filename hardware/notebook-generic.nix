@@ -24,9 +24,9 @@
     programs.light.enable = true;
 
     services.logind.settings.Login = {
-      HandlePowerKey = "suspend";
-      HandleLidSwitch = "suspend";
-      HandleLidSwitchDocked = "suspend";
+      HandlePowerKey = lib.mkDefault "suspend";
+      HandleLidSwitch = lib.mkDefault "suspend";
+      HandleLidSwitchDocked = lib.mkDefault "suspend";
       RuntimeDirectorySize = "8G";
     };
 

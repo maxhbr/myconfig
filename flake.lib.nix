@@ -197,7 +197,8 @@ let
         ) metadata.hosts
       );
 
-    setupAsSyncthingClient = cert: key: devices: folders: 
+    setupAsSyncthingClient =
+      cert: key: devices: folders:
       {
         pkgs,
         lib,

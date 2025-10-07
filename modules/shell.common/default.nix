@@ -81,10 +81,10 @@ in
         nmon
         ps_mem
         s-tui
-        (writeShellScriptBin "usbtop" ''
-          sudo modprobe usbmon
-          sudo ${usbtop}/bin/usbtop
-        '')
+        # (writeShellScriptBin "usbtop" ''
+        #   sudo modprobe usbmon
+        #   sudo ${usbtop}/bin/usbtop
+        # '')
         pwgen
         usbutils
         tcpdump

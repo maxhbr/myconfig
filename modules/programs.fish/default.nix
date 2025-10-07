@@ -34,6 +34,7 @@ in
                 shopt -q login_shell && LOGIN_OPTION='--login' || LOGIN_OPTION=""
                 exec ${pkgs.fish}/bin/fish $LOGIN_OPTION
               fi
+              ${pkgs.any-nix-shell}/bin/any-nix-shell fish --info-right | source
             '';
           };
           home-manager.sharedModules = [

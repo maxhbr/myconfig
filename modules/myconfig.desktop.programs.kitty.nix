@@ -4,9 +4,6 @@
   config,
   ...
 }:
-let
-  user = config.myconfig.user;
-in
 {
   config = (
     lib.mkIf config.services.xserver.enable {

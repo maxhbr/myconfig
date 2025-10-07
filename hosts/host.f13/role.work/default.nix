@@ -72,7 +72,7 @@ in
           # insync
           exiftool
           # misc-desktop-tools:
-          libreoffice
+          # libreoffice
           # element-desktop
           subversion
           google-cloud-sdk

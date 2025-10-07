@@ -158,7 +158,10 @@ let
     {
       config = (
         lib.mkIf config.programs.waybar.enable {
-          home.packages = [ waybarOnce waybarDevelop ];
+          home.packages = [
+            waybarOnce
+            waybarDevelop
+          ];
           programs.waybar = {
             package = waybarPackage;
             systemd.enable = false;
@@ -257,7 +260,8 @@ let
                       "system" = false;
                       "user" = true;
                       rotate = 90;
-                      "on-click" = "${pkgs.alacritty}/bin/alacritty --command 'bash' '-c' 'systemctl --user --failed | less'";
+                      "on-click" =
+                        "${pkgs.alacritty}/bin/alacritty --command 'bash' '-c' 'systemctl --user --failed | less'";
                     };
                     "systemd-failed-units#system" = {
                       "hide-on-ok" = true;
@@ -266,7 +270,8 @@ let
                       "system" = true;
                       "user" = false;
                       rotate = 90;
-                      "on-click" = "${pkgs.alacritty}/bin/alacritty --command 'bash' '-c' 'systemctl --system --failed | less'";
+                      "on-click" =
+                        "${pkgs.alacritty}/bin/alacritty --command 'bash' '-c' 'systemctl --system --failed | less'";
                     };
                     "custom/isvpn" = {
                       format = "{}";

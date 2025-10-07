@@ -10,14 +10,15 @@ in
 {
   options.myconfig.dev = with lib; {
     enable = mkEnableOption "myconfig.dev";
-    elixir.enable = mkEnableOption "myconfig.dev.elixir";
     compliance.enable = mkEnableOption "myconfig.dev.compliance";
+    elixir.enable = mkEnableOption "myconfig.dev.elixir";
+    embedded.enable = mkEnableOption "myconfig.dev.embedded";
     go.enable = mkEnableOption "myconfig.dev.go";
     haskell.enable = mkEnableOption "myconfig.dev.haskell";
     network.enable = mkEnableOption "myconfig.dev.network";
     nodejs.enable = mkEnableOption "myconfig.dev.nodejs";
-    ruby.enable = mkEnableOption "myconfig.dev.ruby";
     python.enable = mkEnableOption "myconfig.dev.python";
+    ruby.enable = mkEnableOption "myconfig.dev.ruby";
     rust.enable = mkEnableOption "myconfig.dev.rust";
     tex.enable = mkEnableOption "myconfig.dev.tex";
   };
@@ -25,18 +26,20 @@ in
   imports = [
     ./dev.core
     ./dev.elixir.nix
+    ./dev.embedded.nix
     ./dev.go.nix
     ./dev.haskell
     ./dev.network.nix
     ./dev.nodejs.nix
-    ./dev.ruby.nix
     ./dev.python.nix
+    ./dev.ruby.nix
     ./dev.rust.nix
     ./dev.tex.nix
   ];
   config = {
     myconfig.dev.enable =
       cfg.elixir.enable
+      || cfg.embedded.enable
       || cfg.haskell.enable
       || cfg.network.enable
       || cfg.tex.enable

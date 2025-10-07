@@ -28,7 +28,7 @@ in
               obs-pipewire-audio-capture
               obs-gstreamer
               obs-vkcapture
-              obs-ndi
+              distroav
             ]
             ++ (lib.optionals
               (

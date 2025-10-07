@@ -8,9 +8,9 @@
 {
   config = {
     home-manager.sharedModules = [
-      {
+      ({config,...}:
+      lib.mkIf config.programs.taskwarrior.enable {
         programs.taskwarrior = {
-          enable = true;
           package = pkgs.taskwarrior3;
           config = {
             report.active = {
@@ -56,7 +56,7 @@
             taskW = "task project:Work";
           };
         };
-      }
+      })
     ];
   };
 }

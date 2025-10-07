@@ -33,7 +33,7 @@ in
                 prusa-slicer
                 # luxcorerender
                 fstl
-                meshlab
+                # meshlab
                 gmsh
               ]
               ++ [
