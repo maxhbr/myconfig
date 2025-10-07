@@ -30,7 +30,6 @@ in
         {
           home.packages = with pkgs; [
             pavucontrol
-            pamix
             pulsemixer
           ];
           programs.cava = {
