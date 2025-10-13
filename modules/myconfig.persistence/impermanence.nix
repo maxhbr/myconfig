@@ -353,7 +353,7 @@ in
       fsType = "tmpfs";
       options = [
         "defaults"
-        "size=20%"
+        "size=40%"
         "mode=755"
       ];
     };
@@ -496,6 +496,7 @@ in
               "MINE"
               "bin"
               "_screenshots"
+              ".pki"
             ];
             myconfig.persistence.cache-directories = [ ".cache/nix-index" ];
             home.persistence = {

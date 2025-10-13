@@ -165,6 +165,12 @@ in
               ''
             ) (lib.filterAttrs (name: profile: name != "default") config.programs.vscode.profiles)
           );
+          myconfig.persistence.directories = [ ".config/Code/" ];
+          myconfig.persistence.files = [
+            ".vscode-oss/extensions.json"
+            ".vscode/argv.json"
+          ];
+          myconfig.persistence.cache-directories = [ ".cache/vscode-cpptools" ];
         }
       )
     ];
