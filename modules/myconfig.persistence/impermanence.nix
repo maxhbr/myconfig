@@ -240,6 +240,12 @@ in
   ];
   options = with lib; {
     myconfig.persistence.impermanence.enable = lib.mkEnableOption "impermanence";
+    myconfig.persistence.impermanence.tmpfs_size = mkOption {
+      default = "20%";
+      example = "4G";
+      type = types.str;
+      description = "Size of the tmpfs mounted on /.";
+    };
     myconfig.persistence.impermanence.btrfs_device = mkOption {
       default = null;
       example = "/dev/sda";
@@ -353,7 +359,7 @@ in
       fsType = "tmpfs";
       options = [
         "defaults"
-        "size=40%"
+        "size=${config.myconfig.persistence.impermanence.tmpfs_size}"
         "mode=755"
       ];
     };
