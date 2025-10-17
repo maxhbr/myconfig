@@ -37,12 +37,12 @@ in
                 gmsh
               ]
               ++ [
-                # pcb design
                 # librepcb
                 # gerbv
+                # kicad-unstable-small
                 # kicad-small
                 # kicad
-                jre # for freerouting
+                # jre # for freerouting
               ]
             );
         }
