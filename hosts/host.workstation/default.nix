@@ -81,13 +81,14 @@
           ];
         };
         imagework.enable = true;
+        imagework.myphoto.enable = true;
         obs.enable = true;
       };
       headless.enable = true;
       # virtualisation.gpuPassthroughHost.enable = true;
       dev = {
         compliance.enable = true;
-        haskell.enable = true;
+        # haskell.enable = true;
         network.enable = true;
       };
     };

@@ -27,7 +27,7 @@ in
               ++ [
                 # 3D
                 # blender
-                openscad-unstable
+                # openscad-unstable
                 freecad # 3D
                 povray # raytracing for freecad
                 prusa-slicer

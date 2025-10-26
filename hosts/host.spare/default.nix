@@ -91,6 +91,8 @@
             }
           '';
         };
+        imagework.enable = true; # https://github.com/NixOS/nixpkgs/issues/425306
+        imagework.myphoto.enable = true;
       };
       virtualisation.enable = true;
       # dev = {
@@ -105,7 +107,7 @@
       };
       # virtualbox.host.enable = true;
       # lxc.enable = true;
-      libvirtd.enable = true;
+      # libvirtd.enable = true;
     };
     services.hardware.bolt.enable = true;
 
