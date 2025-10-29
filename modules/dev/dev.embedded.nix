@@ -17,13 +17,13 @@ in
       {
         home.packages = with pkgs; [
           platformio-core
-          segger-jlink-headless
 
           picocom minicom tio
         ];
       }
     ];
-    users.users."${user}".extraGroups = [
+    users.groups.plugdev = { };
+    users.users."${user}".extraGroups = lib.mkAfter [
       "dialout"
       "uucp"
       "plugdev"

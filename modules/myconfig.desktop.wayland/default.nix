@@ -274,6 +274,7 @@ in
               lswt # list Wayland toplevels
               # xdg-desktop-portal-wlr
               nomacs
+              pcmanfm
               wev # Wayland event viewer
               qt5.qtwayland
             ]
@@ -313,7 +314,7 @@ in
       ];
       services.physlock.enable = lib.mkForce false;
 
-      myconfig.desktop.wayland.launcherCommands = [ "wdisplays" ];
+      myconfig.desktop.wayland.launcherCommands = [ "wdisplays" "pcmanfm" ];
     }
   );
 }

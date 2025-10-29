@@ -34,6 +34,22 @@ in
               gphoto2fs
               gimp3-with-plugins
               darktable
+              (writeShellScriptBin "darktable-here" ''
+                here=$(pwd)
+                arg="''${1:-$here}"
+                darktable_dir="$here/darktable"
+
+                mkdir -p "$darktable_dir"
+
+                exec ${darktable}/bin/darktable \
+                    `#--configdir "$darktable_dir/config"` \
+                    --cachedir "$darktable_dir/cache" \
+                    --library "$darktable_dir/library.db" \
+                    `#--datadir "$darktable_dir/data"` \
+                    --tmpdir "$darktable_dir/tmp" \
+                    --dumpdir "$darktable_dir" \
+                    "$arg"
+              '')
               # ansel # A darktable fork minus the bloat plus some design vision
               geeqie
               gphoto2
