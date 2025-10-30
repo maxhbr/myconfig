@@ -231,6 +231,9 @@ in
   lib,
   ...
 }:
+let
+  nixosConfig = config;
+in
 {
   config = {
     environment = {
@@ -242,19 +245,20 @@ in
       };
     };
     home-manager.sharedModules = [
-      {
-        programs.fish = {
-          shellAbbrs = {
-            g = "git";
+      (
+        { config, ... }:
+        {
+          programs.fish = {
+            shellAbbrs = {
+              g = "git";
+            };
+            functions = {
+              gitignore = "curl -sL https://www.gitignore.io/api/$argv";
+            };
           };
-          functions = {
-            gitignore = "curl -sL https://www.gitignore.io/api/$argv";
-          };
-        };
-        home.packages =
-          with pkgs;
-          [ github-cli ]
-          ++ (with pkgs.gitAndTools; [
+          home.packages = with pkgs; [
+            github-cli
+            config.programs.git.package
             tig
             pkgs.git-lfs
             git-fame
@@ -262,26 +266,27 @@ in
             git-absorb
             git-crypt
             git-secrets
-          ]);
+          ];
 
-        programs.git = lib.mkMerge [
-          {
-            package = pkgs.gitAndTools.gitFull;
-            enable = true;
-            userName = "Maximilian Huber";
-            userEmail = "gh@maxhbr.de";
-            signing = {
-              key = "32CA3654";
-              signByDefault = false; # TODO?
-              format = if config.programs.gnupg.agent.enable then "openpgp" else "ssh";
-            };
-            extraConfig = {
-              github.user = "maxhbr";
-            };
-          }
-          gitconfig
-        ];
-      }
+          programs.git = lib.mkMerge [
+            {
+              package = pkgs.gitFull;
+              enable = true;
+              userName = "Maximilian Huber";
+              userEmail = "gh@maxhbr.de";
+              signing = {
+                key = "32CA3654";
+                signByDefault = false; # TODO?
+                format = if nixosConfig.programs.gnupg.agent.enable then "openpgp" else "ssh";
+              };
+              extraConfig = {
+                github.user = "maxhbr";
+              };
+            }
+            gitconfig
+          ];
+        }
+      )
     ];
   };
 }

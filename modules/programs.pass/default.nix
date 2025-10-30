@@ -6,7 +6,7 @@ let
     with pkgs;
     writeScriptBin "wireguardKeypairToPassStore.sh" (lib.fileContents ./wireguardKeypairToPassStore.sh);
   otpPass = pkgs.writeShellScriptBin "otpPass" ''
-    ${pkgs.oathToolkit}/bin/oathtool --totp -b "$(${pkgs.pass}/bin/pass -p "$1")"
+    ${pkgs.oath-toolkit}/bin/oathtool --totp -b "$(${pkgs.pass}/bin/pass -p "$1")"
   '';
 in
 {

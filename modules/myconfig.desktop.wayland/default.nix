@@ -314,7 +314,10 @@ in
       ];
       services.physlock.enable = lib.mkForce false;
 
-      myconfig.desktop.wayland.launcherCommands = [ "wdisplays" "pcmanfm" ];
+      myconfig.desktop.wayland.launcherCommands = [
+        "wdisplays"
+        "pcmanfm"
+      ];
     }
   );
 }
