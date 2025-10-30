@@ -1,8 +1,8 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 let
-  gitconfig = {
-    aliases = {
+  gitsettings = {
+    alias = {
       s = "status --short --branch";
       b = "branch -vv";
       a = "add";
@@ -179,24 +179,23 @@ let
       # typos
       psuh = "push";
     };
-    extraConfig = {
-      user.useConfigOnly = true;
-      core.logAllRefUpdates = "always";
-      color.branch = "auto";
-      color.diff = "auto";
-      color.interactive = "auto";
-      color.status = "auto";
-      core.autocrlf = "input";
-      core.safecrlf = false;
-      pull.rebase = "merges";
-      rebase.autoStash = true;
-      push.default = "matching";
-      filter.lfs.clean = "git-lfs clean -- %f";
-      filter.lfs.smudge = "git-lfs smudge -- %f";
-      filter.lfs.required = true;
-      filter.lfs.process = "git-lfs filter-process";
-      # stolen from https://stackoverflow.com/questions/1817370/using-ediff-as-git-mergetool
-      mergetool.ediff.cmd = "emacs --eval \"\
+    user.useConfigOnly = true;
+    core.logAllRefUpdates = "always";
+    color.branch = "auto";
+    color.diff = "auto";
+    color.interactive = "auto";
+    color.status = "auto";
+    core.autocrlf = "input";
+    core.safecrlf = false;
+    pull.rebase = "merges";
+    rebase.autoStash = true;
+    push.default = "matching";
+    filter.lfs.clean = "git-lfs clean -- %f";
+    filter.lfs.smudge = "git-lfs smudge -- %f";
+    filter.lfs.required = true;
+    filter.lfs.process = "git-lfs filter-process";
+    # stolen from https://stackoverflow.com/questions/1817370/using-ediff-as-git-mergetool
+    mergetool.ediff.cmd = "emacs --eval \"\
 (progn\
   (defun ediff-write-merge-buffer ()\
     (let ((file ediff-merge-store-file))\
@@ -209,19 +208,18 @@ let
         ediff-quit-merge-hook 'ediff-write-merge-buffer)\
   (ediff-merge-files-with-ancestor \\\"$LOCAL\\\" \\\"$REMOTE\\\"\
                                     \\\"$BASE\\\" nil \\\"$MERGED\\\"))\"";
-      merge.tool = "meld";
-      merge.conflictstyle = "diff3";
-      merge.ff = false;
-      diff.tool = "meld";
-      rerere.enabled = true;
-      help.autoCorrect = "prompt";
-      url."git@github.com:".pushInsteadOf = [
-        "https://github.com/"
-        "git://github.com/"
-      ];
-      init.defaultBranch = "main";
+    merge.tool = "meld";
+    merge.conflictstyle = "diff3";
+    merge.ff = false;
+    diff.tool = "meld";
+    rerere.enabled = true;
+    help.autoCorrect = "prompt";
+    url."git@github.com:".pushInsteadOf = [
+      "https://github.com/"
+      "git://github.com/"
+    ];
+    init.defaultBranch = "main";
 
-    };
   };
 
 in
@@ -272,18 +270,23 @@ in
             {
               package = pkgs.gitFull;
               enable = true;
-              userName = "Maximilian Huber";
-              userEmail = "gh@maxhbr.de";
+              settings = lib.mkMerge [
+                {
+                  user = {
+                    name = "Maximilian Huber";
+                    email = "gh@maxhbr.de";
+                  };
+                  github.user = "maxhbr";
+                }
+                gitsettings
+              ];
+
               signing = {
                 key = "32CA3654";
                 signByDefault = false; # TODO?
                 format = if nixosConfig.programs.gnupg.agent.enable then "openpgp" else "ssh";
               };
-              extraConfig = {
-                github.user = "maxhbr";
-              };
             }
-            gitconfig
           ];
         }
       )

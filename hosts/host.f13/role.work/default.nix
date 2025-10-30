@@ -68,7 +68,7 @@ in
         ]
         ++ (with pkgs; [
           # idea.idea-ultimate # jetbrains.phpstorm
-          dia
+          # dia
           # insync
           exiftool
           # misc-desktop-tools:

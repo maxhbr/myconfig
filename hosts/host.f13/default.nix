@@ -17,7 +17,7 @@ in
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-pc-laptop
     inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
-    ./framework-amd-ai-300-series.nix
+    ./framework-amd-ai-300-series.nix # inputs.nixos-hardware.nixosModules.framework-amd-ai-300-series
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
     ../../hardware/Radeon890M.nix
