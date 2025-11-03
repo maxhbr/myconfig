@@ -37,7 +37,7 @@ in
               (writeShellScriptBin "darktable-here" ''
                 here=$(pwd)
                 arg="''${1:-$here}"
-                darktable_dir="$here/darktable"
+                darktable_dir="$here../darktable-exported/darktable"
 
                 mkdir -p "$darktable_dir"
 
