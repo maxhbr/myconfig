@@ -381,7 +381,7 @@ main() {
     local du_file="$(du_of_out_link "$target")"
     home_manager_files_from_du "$target" "$du_file"
     if [[ $MODE == "--use-wg" ]]; then
-        deploy "$target" "$out_link" true
+        deploy "$target" "$out_link" "$COMMAND" true
     elif [[ $MODE == "--test" ]]; then
         if [[ $target == "$(hostname)" ]]; then
             deploy "$target" "$out_link" dry-activate

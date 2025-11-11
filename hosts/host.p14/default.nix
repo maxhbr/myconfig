@@ -17,20 +17,6 @@
       # https://nixos.wiki/wiki/Intel_Graphics
       #  getting the device ID with: $ nix-shell -p pciutils --run "lspci -nn | grep VGA"
       boot.kernelParams = [ "i915.force_probe=46a6" ];
-
-      # # https://nixos.wiki/wiki/Accelerated_Video_Playback
-      #   nixpkgs.config.packageOverrides = pkgs: {
-      #   intel-vaapi-driver = pkgs.intel-vaapi-driver.override { enableHybridCodec = true; };
-      # };
-      # hardware.opengl = {
-      #   enable = true;
-      #   extraPackages = with pkgs; [
-      #     intel-media-driver # LIBVA_DRIVER_NAME=iHD
-      #     intel-vaapi-driver # LIBVA_DRIVER_NAME=i965 (older but works better for Firefox/Chromium)
-      #     libvdpau-va-gl
-      #   ];
-      # };
-      # environment.sessionVariables = { LIBVA_DRIVER_NAME = "iHD"; }; # Force intel-media-driver
     }
     inputs.nixos-hardware.nixosModules.common-pc-laptop
     # inputs.nixos-hardware.nixosModules.common-pc-laptop-acpi_call
@@ -38,12 +24,6 @@
     inputs.nixos-hardware.nixosModules.lenovo-thinkpad
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
-    ../../hardware/footswitch.nix
-    ../../hardware/blink1.nix
-    # ../../hardware/unifying.nix
-    ./hardware.hantek
-    ./smarthome.nix
-    ../host.f13/role.work
     ./programs.khal.nix
     {
       myconfig.ai = {
@@ -98,29 +78,6 @@
     #     options = [ "nofail" "soft" ];
     #   };
     # }
-    # ../host.workstation/gaming/games.steam
-    # ({config, pkgs, ...}: {
-    #   config = lib.mkIf config.myconfig.desktop.wayland.hyprland.enable {
-    #     home-manager.sharedModules = [({config, ...}: let
-    #       hyprctl = "${config.wayland.windowManager.hyprland.package}/bin/hyprctl";
-    #       eDP-1 = "eDP-1,1920x1200,0x0,1";
-    #       DP-5 = "DP-5,2560x1440,1920x0,1"; # Dell Inc. DELL U2719D 7RVLSS2 (DP-5)
-    #       DP-3 = "DP-3,1920x1080,2240x1440,1"; #  HAT Kamvas Pro 13  (DP-3 via HDMI)
-    #     in {
-    #       home.packages = with pkgs; [
-    #         (writeShellScriptBin "hyprctl-monitors-home"  "${hyprctl} hyprctl --batch 'keyword monitor ${eDP-1}; keyword monitor ${DP-5}; keyword monitor ${DP-3}'")
-    #       ];
-    #       # wayland.windowManager.hyprland = {
-    #       #   extraConfig = ''
-    #       #     device:opentabletdriver-virtual-artist-tablet {
-    #       #         output=DP-5
-    #       #     }
-    #       #   '';
-    #       # };
-    #     })];
-    #   };
-    # }
-    # )
     (
       { pkgs, ... }:
       let
@@ -141,9 +98,6 @@
     {
       programs.kdeconnect.enable = true;
     }
-
-    # Testing: Thunderbolt GPUs
-    # ./eGPU.p14.nix
   ];
 
   config = {
@@ -161,11 +115,6 @@
             "niri"
             "niri-plain"
             "labwc"
-            "river"
-            "plasma6"
-            # "dwl"
-            # "qtile"
-            # "hyprland"
           ];
           niri.additionalConfigKdl = ''
             // You can configure outputs by their name, which you can find
@@ -208,35 +157,34 @@
         };
         messengers.enable = false;
         imagework.enable = true;
+        imagework.myphoto.enable = true;
         obs.enable = true;
-        # cad.enable = true;
-        # deskreen.enable = true;
       };
       ai.enable = true;
       email.enable = false;
       virtualisation.enable = true;
       dev = {
-        compliance.enable = true;
+        compliance.enable = false;
         go.enable = false;
-        haskell.enable = true;
-        network.enable = true;
-        nodejs.enable = true;
-        # ruby.enable = true;
-        python.enable = true;
-        # rust.enable = true;
-        # elixir.enable = false;
-        # zephyr.enable = true;
+        # haskell.enable = true;
+        # network.enable = true;
+        # nodejs.enable = true;
+        # # ruby.enable = true;
+        # python.enable = true;
+        # # rust.enable = true;
+        # # elixir.enable = false;
+        # # zephyr.enable = true;
       };
     };
     virtualisation = {
-      docker.enable = true;
+      # docker.enable = true;
       podman.enable = true;
       oci-containers = {
         backend = "podman";
       };
       # virtualbox.host.enable = true;
       # lxc.enable = true;
-      libvirtd.enable = true;
+      # libvirtd.enable = true;
     };
 
     services.xserver.wacom.enable = false;
@@ -250,10 +198,6 @@
 
     home-manager.sharedModules = [
       {
-        home.packages = with pkgs; [
-          google-chrome # for netflix
-          joplin-desktop
-        ];
         programs.zsh.shellAliases = {
           upg-get-hostId = ''
             cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
@@ -282,30 +226,6 @@
         #     };
         #   };
         # };
-      }
-      {
-        home.packages = with pkgs.helper; [
-          (connectBtDevice {
-            name = "WF-1000XM5";
-            id = "AC:80:0A:2A:10:6F";
-          })
-          (connectBtDevice {
-            name = "Px7";
-            id = "EC:66:D1:B4:C8:3B";
-          })
-          (connectBtDevice {
-            name = "Px7s2e";
-            id = "EC:66:D1:BD:E4:98";
-          })
-          (connectBtDevice {
-            name = "Px8";
-            id = "EC:66:D1:C6:94:14";
-          })
-          (connectBtDevice {
-            name = "Streambot";
-            id = "E9:08:EF:60:57:21";
-          })
-        ];
       }
     ];
 

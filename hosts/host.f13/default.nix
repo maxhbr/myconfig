@@ -167,7 +167,7 @@ in
         imagework.enable = true; # https://github.com/NixOS/nixpkgs/issues/425306
         imagework.myphoto.enable = true;
         cad.enable = true;
-        joplin-desktop.enable = true;
+        # joplin-desktop.enable = true;
         logseq.enable = true;
       };
       email = {

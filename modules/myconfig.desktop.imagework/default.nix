@@ -37,7 +37,7 @@ in
               (writeShellScriptBin "darktable-here" ''
                 here=$(pwd)
                 arg="''${1:-$here}"
-                darktable_dir="$here../darktable-exported/darktable"
+                darktable_dir="$here/../darktable_here"
 
                 mkdir -p "$darktable_dir"
 
@@ -67,6 +67,7 @@ in
           myconfig.persistence.files = [
             ".config/darktable/darktablerc"
             ".config/darktable/shortcutsrc"
+            ".config/geeqie/geeqierc.xml"
           ];
         }
       ]
