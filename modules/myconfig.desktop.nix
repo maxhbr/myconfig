@@ -35,7 +35,7 @@ in
           xarchiver
           feh
           imagemagick
-          mplayer # unsuported on aarch
+          # mplayer # unsuported on aarch
           playerctl # mpris media player command-line controller
           xdg-utils
         ];

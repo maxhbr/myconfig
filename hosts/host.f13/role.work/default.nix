@@ -19,7 +19,6 @@ let
     # --set NIXOS_OZONE_WL 1 \
   });
   slack-pkg = pkgs.slack;
-  teams-for-linux-pkg = pkgs.teams-for-linux;
 in
 {
   imports = [
@@ -35,6 +34,28 @@ in
     #       home-manager.users.mhuber = { home.packages = [ wing-edit ]; };
     #     };
     #   })
+    (
+      let
+        teams-for-linux-pkg = pkgs.teams-for-linux;
+      in
+      {
+        home-manager.sharedModules = [
+          {
+            home.packages = [
+              teams-for-linux-pkg
+            ];
+            myconfig.persistence.work-directories = [
+              ".config/teams-for-linux"
+            ];
+          }
+        ];
+        myconfig.desktop.wayland.launcherCommands = [
+
+          "teams-for-linux"
+        ];
+
+      }
+    )
   ];
   config = {
     nixpkgs.overlays = map (n: import n) [
@@ -58,13 +79,11 @@ in
           }
         ];
         myconfig.persistence.work-directories = [
-          ".config/teams-for-linux"
           ".config/Slack"
           "TNG"
         ];
         home.packages = [
           slack-pkg
-          teams-for-linux-pkg
         ]
         ++ (with pkgs; [
           # idea.idea-ultimate # jetbrains.phpstorm
@@ -81,7 +100,6 @@ in
     ];
     myconfig.desktop.wayland.launcherCommands = [
       "slack"
-      "teams-for-linux"
     ];
   };
 }

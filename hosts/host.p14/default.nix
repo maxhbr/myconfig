@@ -24,31 +24,54 @@
     inputs.nixos-hardware.nixosModules.lenovo-thinkpad
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
-    ./programs.khal.nix
     {
       myconfig.ai = {
         enable = true;
-        coding.enable = true;
+        coding.enable = false;
       };
     }
     {
-      services.openssh = {
-        listenAddresses = [
-          {
-            addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
-            port = 22;
-          }
-          {
-            addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
-            port = 22;
-          }
-          {
-            addr = "127.0.0.1";
-            port = 22;
-          }
-        ];
+      services.eternal-terminal = {
+        enable = true;
+        port = 22022;
       };
+      networking.firewall.allowedTCPPorts = [ 22022 ];
+      networking.firewall.allowedUDPPorts = [ 22022 ];
+      home-manager.sharedModules =
+        let
+          p14-tmux-session = "p14";
+          p14-tmux-session-script = pkgs.writeShellScriptBin "p14-tmux-session" ''
+            # if session is not yet created, create it
+            if ! tmux has-session -t ${p14-tmux-session}; then
+              tmux new-session -d -s ${p14-tmux-session}
+              tmux send-keys -t ${p14-tmux-session}:1 "btop" C-m
+              tmux split-window -h -t ${p14-tmux-session}
+              tmux send-keys -t ${p14-tmux-session}:1 "journalctl -f" C-m
+              tmux split-window -v -t ${p14-tmux-session}
+            fi
+            exec tmux attach-session -t ${p14-tmux-session}
+          '';
+        in
+        [ { home.packages = [ p14-tmux-session-script ]; } ];
     }
+    # {
+    #   services.openssh = {
+    #     listenAddresses = [
+    #       {
+    #         addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
+    #         port = 22;
+    #       }
+    #       {
+    #         addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
+    #         port = 22;
+    #       }
+    #       {
+    #         addr = "127.0.0.1";
+    #         port = 22;
+    #       }
+    #     ];
+    #   };
+    # }
     {
       config =
         let
@@ -160,20 +183,9 @@
         imagework.myphoto.enable = true;
         obs.enable = true;
       };
-      ai.enable = true;
-      email.enable = false;
       virtualisation.enable = true;
       dev = {
-        compliance.enable = false;
-        go.enable = false;
-        # haskell.enable = true;
-        # network.enable = true;
-        # nodejs.enable = true;
-        # # ruby.enable = true;
-        # python.enable = true;
-        # # rust.enable = true;
-        # # elixir.enable = false;
-        # # zephyr.enable = true;
+        embedded.enable = true;
       };
     };
     virtualisation = {

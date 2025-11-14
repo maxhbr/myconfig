@@ -25,17 +25,11 @@ in
               cabal-install
               hoogle
               hlint
-              hindent
               ghcid
-              # packunused
-              # brittany
-              # ghc-mod
             ]
-          )) # ghc
+          ))
           hlint
           pandoc
-          # unused
-          # hdevtools
         ]);
       home.file = {
         ".ghci".source = ./ghci;

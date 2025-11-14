@@ -183,7 +183,7 @@ in
       dev = {
         # compliance.enable = true;
         # go.enable = false;
-        # haskell.enable = true;
+        haskell.enable = true;
         network.enable = true;
         # nodejs.enable = true;
         # ruby.enable = true;
