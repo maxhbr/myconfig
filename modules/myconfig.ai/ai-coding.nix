@@ -15,10 +15,13 @@
           # aider-chat
           code-cursor
           zed
+          codex
+          qwen-code
         ];
         myconfig.persistence.cache-directories = [
           ".config/Cursor"
           ".cursor"
+          ".codex"
         ];
         myconfig.desktop.wayland.launcherCommands = [ "cursor" ];
       }
