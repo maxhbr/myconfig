@@ -71,17 +71,17 @@
                   }
                   nvim-web-devicons
 
-                  {
-                    plugin = lualine-nvim;
-                    type = "lua";
-                    config = ''
-                      require('lualine').setup {
-                        options = {
-                          theme = 'tokyonight'
-                        }
-                      }
-                    '';
-                  }
+                  # {
+                  #   plugin = lualine-nvim;
+                  #   type = "lua";
+                  #   config = ''
+                  #     require('lualine').setup {
+                  #       options = {
+                  #         theme = 'tokyonight'
+                  #       }
+                  #     }
+                  #   '';
+                  # }
 
                   # Buffer tabs
                   {

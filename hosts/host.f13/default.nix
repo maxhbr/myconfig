@@ -43,6 +43,9 @@ in
         ];
       };
     }
+    {
+      home-manager.sharedModules = [ { home.packages = with pkgs; [ gftp ]; } ];
+    }
     (
       { pkgs, ... }:
       let
