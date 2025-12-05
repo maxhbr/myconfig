@@ -25,7 +25,7 @@ let
 in
 {
   config = (
-    lib.mkIf cfg.desktop.wayland.enable {
+    lib.mkIf (cfg.desktop.wayland.enable && cfg.v4l2.enable) {
       home-manager.sharedModules = [
         {
           home.packages = [

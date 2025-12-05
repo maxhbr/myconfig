@@ -15,21 +15,6 @@ in
     v4l2.enable = mkEnableOption "v4l2";
   };
 
-  imports = [
-    (
-      {
-        pkgs,
-        config,
-        lib,
-        ...
-      }:
-      (lib.mkIf cfg.v4l2.enable {
-        boot = {
-        };
-      })
-    )
-  ];
-
   config = (
     lib.mkIf cfg.v4l2.enable {
       boot = {

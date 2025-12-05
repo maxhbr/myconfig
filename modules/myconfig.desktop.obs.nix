@@ -40,7 +40,7 @@ in
               ]
             )
           );
-        enableVirtualCamera = true;
+        enableVirtualCamera = cfg.v4l2.enable;
       };
       home-manager.sharedModules = [
         {
@@ -48,7 +48,7 @@ in
           myconfig.persistence.directories = [ ".config/obs-studio" ];
         }
       ];
-      myconfig.v4l2.enable = true;
+      myconfig.v4l2.enable = false;
       myconfig.desktop.wayland.launcherCommands = [
         "obs"
       ];
