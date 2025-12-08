@@ -23,18 +23,7 @@ in
     ../../hardware/Radeon890M.nix
     ./hardware.hantek
     ./mykeylight
-    {
-      specialisation = {
-        work = {
-          inheritParentConfig = true;
-          configuration = {
-            imports = [
-              ./role.work
-            ];
-          };
-        };
-      };
-    }
+    ./role.work
     ./ai.f13.nix
     {
       services.openssh = {
