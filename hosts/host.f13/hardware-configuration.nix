@@ -22,11 +22,10 @@
   boot.extraModulePackages = [ ];
 
   boot.initrd.luks.devices."enc-pv" = {
-    device = "/dev/disk/by-partuuid/ce42bae1-cd5b-4738-b52c-c1f8b7148b09";
+    device = "/dev/disk/by-uuid/2d31a80b-c6ac-4475-8b08-75faa64825b4";
     allowDiscards = true;
-    keyFileSize = 4096;
-    keyFile = "/dev/disk/by-id/usb-hp_v222w_070D472F8F013A50-0:0";
-    # preLVM = true;
+    # keyFileSize = 4096;
+    # keyFile = "/dev/disk/by-id/usb-hp_v222w_070D472F8F013A50-0:0";
   };
 
   fileSystems."/.swapfile" = {

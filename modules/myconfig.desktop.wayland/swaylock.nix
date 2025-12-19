@@ -53,6 +53,21 @@ in
             };
           }
         )
+        (
+          { config, ... }:
+          {
+            programs.wlogout = {
+              layout = [
+                {
+                  label = "lock";
+                  action = "${config.programs.swaylock.package}/bin/swaylock";
+                  text = "Lock";
+                  keybind = "l";
+                }
+              ];
+            };
+          }
+        )
       ];
 
       # https://github.com/NixOS/nixpkgs/issues/143365

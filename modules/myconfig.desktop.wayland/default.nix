@@ -206,6 +206,7 @@ in
         ./home-manager.swaync.nix
         ./home-manager.mako.nix
         ./home-manager.foot.nix
+        ./home-manager.wlogout.nix
         {
           home.packages =
             with pkgs;

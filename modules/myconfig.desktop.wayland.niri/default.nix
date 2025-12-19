@@ -178,6 +178,21 @@ in
               };
             }
           )
+          (
+            { config, ... }:
+            {
+              programs.wlogout = {
+                layout = [
+                  {
+                    label = "logout";
+                    action = "${niri}/bin/niri msg action quit";
+                    text = "Logout";
+                    keybind = "e";
+                  }
+                ];
+              };
+            }
+          )
         ];
 
         myconfig.desktop.wayland.sessions = {

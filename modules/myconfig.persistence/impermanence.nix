@@ -363,282 +363,320 @@ in
       boot.initrd.systemd.enable = true;
       boot.initrd.systemd.services.impermanence-setup = {
         description = "Impermanence initrd preparation";
-        wantedBy = [ "initrd.target" ];
+
+        # Run as part of filesystem setup, but strictly after LUKS
+        wantedBy = [ "initrd-fs.target" ];
+        before = [ "initrd-fs.target" ];
+
         after = [ "systemd-cryptsetup@enc-pv.service" ];
-        wants = [ "systemd-cryptsetup@enc-pv.service" ];
-        unitConfig.DefaultDependencies = "no";
-        serviceConfig.Type = "oneshot";
-        script = impermanenceInitrdScript;
+        requires = [ "systemd-cryptsetup@enc-pv.service" ];
+
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          TimeoutStartSec = "2min";
+        };
+
+        script = ''
+          set -euo pipefail
+          set -x
+
+          if [ -e /run/myconfig-impermanence-initrd.done ]; then
+            echo "impermanence init already ran; skipping"
+            exit 0
+          fi
+          touch /run/myconfig-impermanence-initrd.done
+
+          # Wait explicitly for the LUKS mapper node
+          for i in $(seq 1 200); do
+            [ -b /dev/mapper/enc-pv ] && break
+            sleep 0.05
+          done
+          [ -b /dev/mapper/enc-pv ] || {
+            echo "ERROR: /dev/mapper/enc-pv not present"
+            exit 1
+          }
+
+          mkdir -p /btrfs_tmp
+          mount -t btrfs -o subvolid=5 /dev/mapper/enc-pv /btrfs_tmp
+
+          exec 1>>/btrfs_tmp/boot.initrd.impermanence.log 2>&1
+
+          ${impermanenceInitrdScript}
+
+          umount /btrfs_tmp
+          set +x
+        '';
       };
 
-    fileSystems."/" = {
-      device = "none";
-      fsType = "tmpfs";
-      options = [
-        "defaults"
-        "size=${config.myconfig.persistence.impermanence.tmpfs_size}"
-        "mode=755"
-      ];
-    };
-
-    fileSystems."/btr_pool" = {
-      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
-      fsType = "btrfs";
-      options = [ "subvolid=5" ];
-    };
-
-    fileSystems."/var/log" = {
-      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
-      fsType = "btrfs";
-      options = [ "subvol=${volumeLog}" ];
-    };
-
-    fileSystems."/nix" = {
-      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
-      fsType = "btrfs";
-      options = [ "subvol=${volumeNix}" ];
-      neededForBoot = true;
-    };
-
-    fileSystems."/home" = {
-      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
-      fsType = "btrfs";
-      options = [ "subvol=${volumeHome}" ];
-    };
-
-    fileSystems."${persistentPrivDir}" = {
-      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
-      fsType = "btrfs";
-      options = [ "subvol=${volumePriv}" ];
-      neededForBoot = true;
-    };
-
-    fileSystems."${persistentWorkDir}" = {
-      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
-      fsType = "btrfs";
-      options = [ "subvol=${volumeWork}" ];
-      neededForBoot = true;
-    };
-
-    fileSystems."${persistentCacheDir}" = {
-      device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
-      fsType = "btrfs";
-      options = [ "subvol=${volumeCache}" ];
-      neededForBoot = true;
-    };
-
-    programs.fuse.userAllowOther = true;
-    environment.persistence = {
-      "${persistentPrivDir}" = {
-        enable = true;
-        hideMounts = true;
-        directories = [
-          "/var/lib/bluetooth"
-          "/var/lib/nixos"
-          "/etc/NetworkManager/system-connections"
-          "/etc/ssh/authorized_keys"
+      fileSystems."/" = {
+        device = "none";
+        fsType = "tmpfs";
+        options = [
+          "defaults"
+          "size=${config.myconfig.persistence.impermanence.tmpfs_size}"
+          "mode=755"
         ];
-        files = [
-          {
-            file = "/var/keys/secret_file";
-            parentDirectory = {
-              mode = "u=rwx,g=,o=";
-            };
-          }
-          "/etc/ssh/ssh_host_ed25519_key"
-          "/etc/ssh/ssh_host_ed25519_key.pub"
-          "/etc/ssh/ssh_host_rsa_key"
-          "/etc/ssh/ssh_host_rsa_key.pub"
-        ];
-        users.${user} = {
+      };
+
+      fileSystems."/btr_pool" = {
+        device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+        fsType = "btrfs";
+        options = [ "subvolid=5" ];
+      };
+
+      fileSystems."/var/log" = {
+        device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+        fsType = "btrfs";
+        options = [ "subvol=${volumeLog}" ];
+      };
+
+      fileSystems."/nix" = {
+        device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+        fsType = "btrfs";
+        options = [ "subvol=${volumeNix}" ];
+        neededForBoot = true;
+      };
+
+      fileSystems."/home" = {
+        device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+        fsType = "btrfs";
+        options = [ "subvol=${volumeHome}" ];
+      };
+
+      fileSystems."${persistentPrivDir}" = {
+        device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+        fsType = "btrfs";
+        options = [ "subvol=${volumePriv}" ];
+        neededForBoot = true;
+      };
+
+      fileSystems."${persistentWorkDir}" = {
+        device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+        fsType = "btrfs";
+        options = [ "subvol=${volumeWork}" ];
+        neededForBoot = true;
+      };
+
+      fileSystems."${persistentCacheDir}" = {
+        device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
+        fsType = "btrfs";
+        options = [ "subvol=${volumeCache}" ];
+        neededForBoot = true;
+      };
+
+      programs.fuse.userAllowOther = true;
+      environment.persistence = {
+        "${persistentPrivDir}" = {
+          enable = true;
+          hideMounts = true;
           directories = [
-            # TODO: module in home-manager can't use `mode`?
-            # TODO: parent directories are owned by root
+            "/var/lib/bluetooth"
+            "/var/lib/nixos"
+            "/etc/NetworkManager/system-connections"
+            "/etc/ssh/authorized_keys"
+          ];
+          files = [
             {
-              directory = ".gnupg";
-              mode = "0700";
-              user = user;
-              group = user;
+              file = "/var/keys/secret_file";
+              parentDirectory = {
+                mode = "u=rwx,g=,o=";
+              };
             }
+            "/etc/ssh/ssh_host_ed25519_key"
+            "/etc/ssh/ssh_host_ed25519_key.pub"
+            "/etc/ssh/ssh_host_rsa_key"
+            "/etc/ssh/ssh_host_rsa_key.pub"
+          ];
+          users.${user} = {
+            directories = [
+              # TODO: module in home-manager can't use `mode`?
+              # TODO: parent directories are owned by root
+              {
+                directory = ".gnupg";
+                mode = "0700";
+                user = user;
+                group = user;
+              }
+              {
+                directory = ".ssh";
+                mode = "0700";
+                user = user;
+                group = user;
+              }
+              {
+                directory = ".local/share/keyrings";
+                mode = "0700";
+                user = user;
+                group = user;
+              }
+              {
+                directory = ".password-store";
+                mode = "0700";
+                user = user;
+                group = user;
+              }
+            ];
+          };
+        };
+        "${persistentWorkDir}" = {
+          enable = true;
+          hideMounts = true;
+          users.${user} = {
+            directories = [ ];
+            files = [ ];
+          };
+        };
+        "${persistentCacheDir}" = {
+          enable = true;
+          hideMounts = true;
+          files = [
+            "/.persistence.ready"
+          ];
+          directories = [
             {
-              directory = ".ssh";
+              directory = "/var/lib/private";
               mode = "0700";
-              user = user;
-              group = user;
             }
-            {
-              directory = ".local/share/keyrings";
-              mode = "0700";
-              user = user;
-              group = user;
-            }
-            {
-              directory = ".password-store";
-              mode = "0700";
-              user = user;
-              group = user;
-            }
+            "/var/lib/systemd/coredump"
           ];
         };
       };
-      "${persistentWorkDir}" = {
-        enable = true;
-        hideMounts = true;
-        users.${user} = {
-          directories = [ ];
-          files = [ ];
-        };
+      services.smartd = {
+        enable = lib.mkDefault config.myconfig.persistence.impermanence.enable_smartd;
+        devices = [ { device = config.myconfig.persistence.impermanence.btrfs_device; } ];
       };
-      "${persistentCacheDir}" = {
-        enable = true;
-        hideMounts = true;
-        files = [
-          "/.persistence.ready"
-        ];
-        directories = [
+      home-manager.sharedModules = [
+        inputs.impermanence.homeManagerModules.impermanence
+        (
+          { config, ... }:
+          let
+            mkRelativeToHome =
+              path:
+              if lib.hasPrefix "${config.home.homeDirectory}/" path then
+                lib.removePrefix "${config.home.homeDirectory}/" path
+              else
+                path;
+          in
           {
-            directory = "/var/lib/private";
-            mode = "0700";
-          }
-          "/var/lib/systemd/coredump"
-        ];
-      };
-    };
-    services.smartd = {
-      enable = lib.mkDefault config.myconfig.persistence.impermanence.enable_smartd;
-      devices = [ { device = config.myconfig.persistence.impermanence.btrfs_device; } ];
-    };
-    home-manager.sharedModules = [
-      inputs.impermanence.homeManagerModules.impermanence
-      (
-        { config, ... }:
-        let
-          mkRelativeToHome =
-            path:
-            if lib.hasPrefix "${config.home.homeDirectory}/" path then
-              lib.removePrefix "${config.home.homeDirectory}/" path
-            else
-              path;
-        in
-        {
-          config = {
-            myconfig.persistence.directories = [
-              "myconfig"
-              "Downloads"
-              "Documents"
-              "MINE"
-              "bin"
-              "_screenshots"
-              ".pki"
-            ];
-            myconfig.persistence.cache-directories = [ ".cache/nix-index" ];
-            home.persistence = {
-              "${persistentCacheDir}" = {
-                files = [
-                  ".persistence.${config.home.username}.ready"
-                ];
-                allowOther = true;
-              };
-              "${persistentPrivDir}/home/${config.home.username}" = {
-                directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.directories);
-                files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.files);
-                allowOther = true;
-              };
-              "${persistentWorkDir}/home/${config.home.username}" = {
-                directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-directories);
-                files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-files);
-                allowOther = true;
-              };
-              "${persistentCacheDir}/home/${config.home.username}" = {
-                directories = validatePaths (
-                  lib.map mkRelativeToHome config.myconfig.persistence.cache-directories
-                );
-                files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.cache-files);
-                allowOther = true;
+            config = {
+              myconfig.persistence.directories = [
+                "myconfig"
+                "Downloads"
+                "Documents"
+                "MINE"
+                "bin"
+                "_screenshots"
+                ".pki"
+              ];
+              myconfig.persistence.cache-directories = [ ".cache/nix-index" ];
+              home.persistence = {
+                "${persistentCacheDir}" = {
+                  files = [
+                    ".persistence.${config.home.username}.ready"
+                  ];
+                  allowOther = true;
+                };
+                "${persistentPrivDir}/home/${config.home.username}" = {
+                  directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.directories);
+                  files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.files);
+                  allowOther = true;
+                };
+                "${persistentWorkDir}/home/${config.home.username}" = {
+                  directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-directories);
+                  files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-files);
+                  allowOther = true;
+                };
+                "${persistentCacheDir}/home/${config.home.username}" = {
+                  directories = validatePaths (
+                    lib.map mkRelativeToHome config.myconfig.persistence.cache-directories
+                  );
+                  files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.cache-files);
+                  allowOther = true;
+                };
               };
             };
-          };
-        }
-      )
-      (
-        { config, ... }:
-        let
-          mk_diff_command =
-            dir: name:
-            pkgs.writeShellScriptBin "diff_${name}" ''
-              set -euo pipefail
+          }
+        )
+        (
+          { config, ... }:
+          let
+            mk_diff_command =
+              dir: name:
+              pkgs.writeShellScriptBin "diff_${name}" ''
+                set -euo pipefail
 
-              # Variables
-              BASE_DIR="${dir}"
-              OUTPUT_DIR="$HOME/tmp_diff_${name}"
-              TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
-              CURRENT_FILE="$OUTPUT_DIR/$TIMESTAMP"
-              CLEANED_FILE="$CURRENT_FILE.cleaned"
-              ADDED_FILE="$CURRENT_FILE.added"
-              LIST_FILE="$OUTPUT_DIR/list"
+                # Variables
+                BASE_DIR="${dir}"
+                OUTPUT_DIR="$HOME/tmp_diff_${name}"
+                TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
+                CURRENT_FILE="$OUTPUT_DIR/$TIMESTAMP"
+                CLEANED_FILE="$CURRENT_FILE.cleaned"
+                ADDED_FILE="$CURRENT_FILE.added"
+                LIST_FILE="$OUTPUT_DIR/list"
 
-              # Ensure output directory exists
-              mkdir -p "$OUTPUT_DIR"
+                # Ensure output directory exists
+                mkdir -p "$OUTPUT_DIR"
 
-              # Find the previous snapshot file (sorted by timestamp)
-              PREVIOUS_FILE="$(ls -t "$OUTPUT_DIR" | grep '\.cleaned$' | head -n 2 | tail -n 1 || true)"
+                # Find the previous snapshot file (sorted by timestamp)
+                PREVIOUS_FILE="$(ls -t "$OUTPUT_DIR" | grep '\.cleaned$' | head -n 2 | tail -n 1 || true)"
 
-              # Generate current file list
-              ${pkgs.fd}/bin/fd \
-                --one-file-system \
-                --base-directory "$BASE_DIR" \
-                --type f \
-                --hidden \
-                --exclude "{$(basename "$OUTPUT_DIR"),.cache}" \
-                | while read -r line; do
-                  if [[ "$(readlink -f "$line")" == /nix/store/* ]]; then
-                      continue
-                  fi
-                  echo "$line"
-                done | sort > "$CLEANED_FILE"
-              echo "Current file list saved to: $CLEANED_FILE"
-              wc -l "$CLEANED_FILE" | tee -a "$LIST_FILE"
+                # Generate current file list
+                ${pkgs.fd}/bin/fd \
+                  --one-file-system \
+                  --base-directory "$BASE_DIR" \
+                  --type f \
+                  --hidden \
+                  --exclude "{$(basename "$OUTPUT_DIR"),.cache}" \
+                  | while read -r line; do
+                    if [[ "$(readlink -f "$line")" == /nix/store/* ]]; then
+                        continue
+                    fi
+                    echo "$line"
+                  done | sort > "$CLEANED_FILE"
+                echo "Current file list saved to: $CLEANED_FILE"
+                wc -l "$CLEANED_FILE" | tee -a "$LIST_FILE"
 
-              # If previous exists, compute added files
-              if [[ -n "$PREVIOUS_FILE" && -f "$OUTPUT_DIR/$PREVIOUS_FILE" ]]; then
-                  comm -13 <(sort "$OUTPUT_DIR/$PREVIOUS_FILE") <(sort "$CLEANED_FILE") > "$ADDED_FILE"
-                  echo "Diff saved to: $ADDED_FILE"
-                  wc -l "$ADDED_FILE" | tee -a "$LIST_FILE"
-              else
-                  echo "No previous file to diff against."
-              fi
-            '';
+                # If previous exists, compute added files
+                if [[ -n "$PREVIOUS_FILE" && -f "$OUTPUT_DIR/$PREVIOUS_FILE" ]]; then
+                    comm -13 <(sort "$OUTPUT_DIR/$PREVIOUS_FILE") <(sort "$CLEANED_FILE") > "$ADDED_FILE"
+                    echo "Diff saved to: $ADDED_FILE"
+                    wc -l "$ADDED_FILE" | tee -a "$LIST_FILE"
+                else
+                    echo "No previous file to diff against."
+                fi
+              '';
 
-          diff_home = mk_diff_command "/home/${user}" "home";
-          diff_root = mk_diff_command "/" "root";
-        in
-        {
-          home.packages = [
-            diff_home
-            diff_root
-          ];
-        }
-      )
-    ];
-    system.activationScripts = {
-      createPersistentDirs.text = ''
-        install -d -m 700 "/${persistentPrivDir}/home/${user}" -o ${
-          toString config.users.extraUsers.${user}.uid
-        } -g ${toString config.users.extraGroups.${user}.gid}
-        install -d -m 700 "/${persistentWorkDir}/home/${user}" -o ${
-          toString config.users.extraUsers.${user}.uid
-        } -g ${toString config.users.extraGroups.${user}.gid}
-        install -d -m 700 "/${persistentCacheDir}/home/${user}" -o ${
-          toString config.users.extraUsers.${user}.uid
-        } -g ${toString config.users.extraGroups.${user}.gid}
-        touch "/${persistentCacheDir}/.persistence.ready"
-        touch "/${persistentCacheDir}/.persistence.${user}.ready"
-      '';
-    };
-    myconfig.desktop.wayland.waybar.doesFileExistChecks = [
-      "/.persistence.ready"
-      "/home/${user}/.persistence.${user}.ready"
-    ];
+            diff_home = mk_diff_command "/home/${user}" "home";
+            diff_root = mk_diff_command "/" "root";
+          in
+          {
+            home.packages = [
+              diff_home
+              diff_root
+            ];
+          }
+        )
+      ];
+      system.activationScripts = {
+        createPersistentDirs.text = ''
+          install -d -m 700 "/${persistentPrivDir}/home/${user}" -o ${
+            toString config.users.extraUsers.${user}.uid
+          } -g ${toString config.users.extraGroups.${user}.gid}
+          install -d -m 700 "/${persistentWorkDir}/home/${user}" -o ${
+            toString config.users.extraUsers.${user}.uid
+          } -g ${toString config.users.extraGroups.${user}.gid}
+          install -d -m 700 "/${persistentCacheDir}/home/${user}" -o ${
+            toString config.users.extraUsers.${user}.uid
+          } -g ${toString config.users.extraGroups.${user}.gid}
+          touch "/${persistentCacheDir}/.persistence.ready"
+          touch "/${persistentCacheDir}/.persistence.${user}.ready"
+        '';
+      };
+      myconfig.desktop.wayland.waybar.doesFileExistChecks = [
+        "/.persistence.ready"
+        "/home/${user}/.persistence.${user}.ready"
+      ];
     }
   );
 }

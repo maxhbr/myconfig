@@ -92,7 +92,7 @@ let
     pkgs.writeShellScriptBin "darktable-here" ''
       here=$(pwd)
       arg="''${1:-$here}"
-      
+
       # Search for existing darktable_here directory
       darktable_dir=""
       search_dir="$here"
@@ -103,7 +103,7 @@ let
         fi
         search_dir=$(dirname "$search_dir")
       done
-      
+
       # Fallback: create new directory at ../darktable_here
       if [[ -z "$darktable_dir" ]]; then
         darktable_dir="$here/../darktable_here"
@@ -127,7 +127,7 @@ let
     pkgs.writeShellScriptBin "digikam-here" ''
       here=$(pwd)
       arg="''${1:-$here}"
-      
+
       # Search for existing digikam_here directory
       digikam_dir=""
       search_dir="$here"
@@ -138,7 +138,7 @@ let
         fi
         search_dir=$(dirname "$search_dir")
       done
-      
+
       # Fallback: create new directory at ../digikam_here
       if [[ -z "$digikam_dir" ]]; then
         digikam_dir="$here/../digikam_here"
