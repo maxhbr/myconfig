@@ -38,6 +38,8 @@ let
                 "mail.identity.default.reply_on_top" = 1;
                 "mail.identity.default.sig_on_reply" = false;
 
+                "mail.openpgp.allow_external_gnupg" = true;
+
                 "mail.identity.id1.include_sig_on_reply" = true;
                 "mail.identity.id1.include_sig_on_forward" = true;
 
