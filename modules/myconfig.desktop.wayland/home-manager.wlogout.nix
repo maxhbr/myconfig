@@ -40,10 +40,10 @@
         }
 
         button {
-            border-radius: 0;
-            border-color: black;
+          border-radius: 0;
+          border-color: black;
           text-decoration-color: #FFFFFF;
-            color: #FFFFFF;
+          color: #FFFFFF;
           background-color: #1E1E1E;
           border-style: solid;
           border-width: 1px;
@@ -53,7 +53,7 @@
         }
 
         button:focus, button:active, button:hover {
-          background-color: #3700B3;
+          background-color: #ee9a00;
           outline-style: none;
         }
 
@@ -64,14 +64,6 @@
         #reboot   { background-image: image(url("${config.programs.wlogout.package}/share/wlogout/icons/reboot.png")); }
         #shutdown { background-image: image(url("${config.programs.wlogout.package}/share/wlogout/icons/shutdown.png")); }
       '';
-
-
-
-      #   button:focus, button:hover {
-      #     outline-style: none;
-      #   }
-
-      # '';
     };
   };
 }
