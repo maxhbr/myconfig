@@ -8,19 +8,19 @@
   ...
 }:
 let
-  zoom-us-overlay = (
-    self: super: {
-      zoom-us = super.zoom-us.overrideAttrs (old: {
-        # postFixup = old.postFixup + ''
-        postFixup = ''
-          wrapProgram $out/bin/zoom-us \
-            --set QT_DEBUG_PLUGINS 1 \
-            --set XDG_CURRENT_DESKTOP gnome \
-            --set XDG_SESSION_TYPE ""
-        '';
-      });
-    }
-  );
+  # zoom-us-overlay = (
+  #   self: super: {
+  #     zoom-us = super.zoom-us.overrideAttrs (old: {
+  #       # postFixup = old.postFixup + ''
+  #       postFixup = ''
+  #         wrapProgram $out/bin/zoom-us \
+  #           --set QT_DEBUG_PLUGINS 1 \
+  #           --set XDG_CURRENT_DESKTOP gnome \
+  #           --set XDG_SESSION_TYPE ""
+  #       '';
+  #     });
+  #   }
+  # );
   zoom-us = pkgs.zoom-us;
   mk-zoom-auto =
     name: zoom-pkg:
@@ -44,22 +44,17 @@ let
 in
 {
   config = {
-    nixpkgs.overlays = [ zoom-us-overlay ];
-    home-manager.sharedModules = [
-      {
-        home.packages = [
-          zoom-us
-          zoom-auto
-        ];
-        xdg.mimeApps = {
-          defaultApplications."x-scheme-handler/zoommtg" = [ "us.zoom.Zoom.desktop" ];
-        };
-        myconfig.persistence.work-directories = [ ".zoom/data" ];
-        myconfig.persistence.work-files = [
-          ".config/zoom.conf"
-          ".config/zoomus.conf"
-        ];
-      }
+    home.packages = [
+      zoom-us
+      zoom-auto
+    ];
+    xdg.mimeApps = {
+      defaultApplications."x-scheme-handler/zoommtg" = [ "us.zoom.Zoom.desktop" ];
+    };
+    myconfig.persistence.work-directories = [ ".zoom/data" ];
+    myconfig.persistence.work-files = [
+      ".config/zoom.conf"
+      ".config/zoomus.conf"
     ];
     myconfig.desktop.wayland.launcherCommands = [
       "zoom-us"

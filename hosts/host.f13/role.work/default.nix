@@ -22,42 +22,8 @@ let
 in
 {
   imports = [
-    ./zoom-us
-    # ./jdk.nix
-    # ./node.nix
-    # ./azure-cli.nix
-    ./dotnet.nix
-    # ({ pkgs, ... }:
-    #   let wing-edit = pkgs.callPackage ../../../pkgs/wing-edit { };
-    #   in {
-    #     config = {
-    #       home-manager.users.mhuber = { home.packages = [ wing-edit ]; };
-    #     };
-    #   })
-    (
-      let
-        teams-for-linux-pkg = pkgs.teams-for-linux;
-      in
-      {
-        home-manager.sharedModules = [
-          {
-            home.packages = [
-              teams-for-linux-pkg
-            ];
-            myconfig.persistence.work-directories = [
-              ".config/teams-for-linux"
-            ];
-          }
-        ];
-        myconfig.desktop.wayland.launcherCommands = [
-
-          "teams-for-linux"
-        ];
-
-      }
-    )
   ];
-  config = {
+  config = lib.mkIf (config.specialisation != { }) {
     nixpkgs.overlays = map (n: import n) [
       # ./idea-ultimate
     ];
@@ -97,6 +63,9 @@ in
           google-cloud-sdk
         ]);
       }
+      ./home-manager.dotnet.nix
+      ./home-manager.teams-for-linux.nix
+      ./home-manager.zoom-us
     ];
     myconfig.desktop.wayland.launcherCommands = [
       "slack"
