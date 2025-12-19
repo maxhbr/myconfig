@@ -397,6 +397,7 @@ in
       device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvol=${volumeNix}" ];
+      neededForBoot = true;
     };
 
     fileSystems."/home" = {
@@ -416,6 +417,7 @@ in
       device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
       fsType = "btrfs";
       options = [ "subvol=${volumeWork}" ];
+      neededForBoot = true;
     };
 
     fileSystems."${persistentCacheDir}" = {
@@ -477,6 +479,14 @@ in
               group = user;
             }
           ];
+        };
+      };
+      "${persistentWorkDir}" = {
+        enable = true;
+        hideMounts = true;
+        users.${user} = {
+          directories = [ ];
+          files = [ ];
         };
       };
       "${persistentCacheDir}" = {
