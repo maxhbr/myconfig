@@ -138,7 +138,7 @@ in
       persistence.impermanence = {
         enable = true;
         tmpfs_size = "60%";
-        btrfs_device = "/dev/disk/by-uuid/78c33ad0-409f-4ea5-9fe0-3050b9561788";
+        btrfs_device = "/dev/mapper/enc-pv";
         btrbk_device = "/dev/disk/by-uuid/8e3c7395-c663-4080-9463-3b8a18bd7ad3";
         btrbk_luks_device = "/dev/disk/by-uuid/51df4369-0063-446a-96db-6d08b6349935";
         btrbk_luks_keyfile = "/home/mhuber/.password-store/hardware/backup/backupLuks_aa3f2db7-7b1a-4232-9b42-15270e9e5a79.key";
