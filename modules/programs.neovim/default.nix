@@ -53,7 +53,7 @@
                     '';
                   }
 
-                  (nvim-treesitter.withPlugins (_: pkgs.tree-sitter.allGrammars))
+                  nvim-treesitter
                   # Preferred theme
                   tokyonight-nvim
                   sonokai
