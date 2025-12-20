@@ -21,12 +21,7 @@ let
   slack-pkg = pkgs.slack;
 in
 {
-  imports = [
-  ];
-  config = lib.mkIf (config.specialisation != { }) {
-    nixpkgs.overlays = map (n: import n) [
-      # ./idea-ultimate
-    ];
+  config = {
     home-manager.sharedModules = [
       {
         imports = [
@@ -43,32 +38,31 @@ in
               '';
             };
           }
+          {
+            myconfig.persistence.work-directories = [
+              ".config/Slack"
+            ];
+            home.packages = [
+              slack-pkg
+            ]
+            myconfig.desktop.wayland.launcherCommands = [
+              "slack"
+            ];
+          }
         ];
         myconfig.persistence.work-directories = [
-          ".config/Slack"
           "TNG"
         ];
-        home.packages = [
-          slack-pkg
-        ]
-        ++ (with pkgs; [
-          # idea.idea-ultimate # jetbrains.phpstorm
-          # dia
-          # insync
+        home.packages = with pkgs; [
           exiftool
-          # misc-desktop-tools:
           libreoffice
-          # element-desktop
           subversion
-          google-cloud-sdk
-        ]);
+        ];
       }
+
       ./home-manager.dotnet.nix
       ./home-manager.teams-for-linux.nix
       ./home-manager.zoom-us
-    ];
-    myconfig.desktop.wayland.launcherCommands = [
-      "slack"
     ];
   };
 }
