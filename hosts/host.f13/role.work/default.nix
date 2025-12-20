@@ -7,7 +7,7 @@
   ...
 }:
 {
-  config = {
+  config = lib.mkIf (config.specialisation != { }) {
     home-manager.sharedModules = [
       {
         imports = [

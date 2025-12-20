@@ -8,7 +8,7 @@
 let
   teams-for-linux-pkg = pkgs.teams-for-linux;
 in
-{
+lib.mkIf (config.specialisation != { }) {
   home.packages = [
     teams-for-linux-pkg
   ];
