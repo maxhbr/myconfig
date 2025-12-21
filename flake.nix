@@ -9,6 +9,7 @@
     rel2405.url = "github:nixos/nixpkgs?ref=release-24.05";
     rel2411.url = "github:nixos/nixpkgs?ref=release-24.11";
     rel2505.url = "github:nixos/nixpkgs?ref=release-25.05";
+    rel2511.url = "github:nixos/nixpkgs?ref=release-25.11";
 
     git-hooks.url = "github:cachix/git-hooks.nix";
 
@@ -100,6 +101,7 @@
                           (mkSubPkgsOverlay "master" inputs.master)
                           (mkSubPkgsOverlay "nixos-unstable" inputs.nixos-unstable)
                           (mkSubPkgsOverlay "nixos-unstable-small" inputs.ninos-unstable-small)
+                          (mkSubPkgsOverlay "nixos-2511" inputs.rel2511)
                           (mkSubPkgsOverlay "nixos-2505" inputs.rel2505)
                           (mkSubPkgsOverlay "nixos-2405" inputs.rel2405)
                           (mkSubPkgsOverlay "nixos-2411" inputs.rel2411)
