@@ -25,31 +25,31 @@
             };
           }
           (
-let
-  waylandSlack = pkgs.slack.overrideAttrs (old: {
-    installPhase = old.installPhase + ''
-      rm $out/bin/slack
+            let
+              waylandSlack = pkgs.slack.overrideAttrs (old: {
+                installPhase = old.installPhase + ''
+                  rm $out/bin/slack
 
-      makeWrapper $out/lib/slack/slack $out/bin/slack \
-        --add-flags "--ozone-platform=wayland --enable-features=UseOzonePlatform,WebRTCPipeWireCapturer"
-    '';
-    # --prefix xdg_data_dirs : $gsettings_schemas_path \
-    # --prefix path : ${lib.makebinpath [pkgs.xdg-utils]} \
-    # --set NIXOS_OZONE_WL 1 \
-  });
-  slack-pkg = pkgs.slack;
-in
-          {
-            myconfig.persistence.work-directories = [
-              ".config/Slack"
-            ];
-            home.packages = [
-              slack-pkg
-            ];
-            myconfig.desktop.wayland.launcherCommands = [
-              "slack"
-            ];
-          }
+                  makeWrapper $out/lib/slack/slack $out/bin/slack \
+                    --add-flags "--ozone-platform=wayland --enable-features=UseOzonePlatform,WebRTCPipeWireCapturer"
+                '';
+                # --prefix xdg_data_dirs : $gsettings_schemas_path \
+                # --prefix path : ${lib.makebinpath [pkgs.xdg-utils]} \
+                # --set NIXOS_OZONE_WL 1 \
+              });
+              slack-pkg = pkgs.slack;
+            in
+            {
+              myconfig.persistence.work-directories = [
+                ".config/Slack"
+              ];
+              home.packages = [
+                slack-pkg
+              ];
+              myconfig.desktop.wayland.launcherCommands = [
+                "slack"
+              ];
+            }
           )
         ];
         myconfig.persistence.work-directories = [

@@ -174,6 +174,7 @@ in
         # joplin-desktop.enable = true;
         logseq.enable = true;
       };
+      v4l2.enable = true;
       email = {
         # enable = true; # this is set in the priv repo
         clients = [
