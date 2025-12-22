@@ -48,7 +48,7 @@ in
           myconfig.persistence.directories = [ ".config/obs-studio" ];
         }
       ];
-      myconfig.v4l2.enable = false;
+      myconfig.v4l2.enable = true;
       myconfig.desktop.wayland.launcherCommands = [
         "obs"
       ];

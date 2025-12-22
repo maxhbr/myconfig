@@ -94,12 +94,11 @@ in
       # use master branch, if package is of version below 0.11.3, waiting for https://github.com/NixOS/nixpkgs/pull/431380
       package =
         if (builtins.compareVersions pkgs.ollama.version "0.11.3" < 0) then
-          pkgs.master.ollama
+          pkgs.master.ollama-cuda
         else
-          pkgs.ollama;
+          pkgs.ollama-cuda;
 
       openFirewall = true;
-      acceleration = "cuda";
       host = "0.0.0.0";
       environmentVariables = {
         OLLAMA_ORIGIN = "*";
