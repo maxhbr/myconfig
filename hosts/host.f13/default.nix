@@ -21,6 +21,13 @@ in
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
     ../../hardware/Radeon890M.nix
+    ../../hardware/RZ717.nix
+    {
+      config = {
+        # Disable NetworkManager-wait-online to speed up boot time
+        systemd.services.NetworkManager-wait-online.enable = false;
+      };
+    }
     ./hardware.framework.do-not-wake-on-input.nix
     ./hardware.hantek
     ./mykeylight
