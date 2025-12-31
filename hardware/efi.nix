@@ -5,4 +5,9 @@
 {
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
+  home-manager.sharedModules = [
+    {
+      home.packages = with pkgs; [ efibootmgr efivar ];
+    }
+  ];
 }

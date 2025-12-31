@@ -11,6 +11,9 @@
     rel2505.url = "github:nixos/nixpkgs?ref=release-25.05";
     rel2511.url = "github:nixos/nixpkgs?ref=release-25.11";
 
+    nix-index-database.url = "github:nix-community/nix-index-database";
+    nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
+
     git-hooks.url = "github:cachix/git-hooks.nix";
 
     nixpkgs-wayland.url = "github:nix-community/nixpkgs-wayland";

@@ -15,7 +15,6 @@
         bind
         borgbackup
         bridge-utils
-        comma
         cryptsetup
         curl
         git
