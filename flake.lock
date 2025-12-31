@@ -307,11 +307,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1767177870,
-        "narHash": "sha256-nREBIGunKwuqscpJIkrPKaGmk9VwDRVnOD2k+dWWImE=",
+        "lastModified": 1767178225,
+        "narHash": "sha256-Ir5ICMEzENNRqhWCnB12Qei6M8mXiwRPe6vMSb6LVu4=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "38451b2eb8eefc0b9e0e361da6991b5e80b90854",
+        "rev": "c7f015223c873b386b2bc7af8170ea29925d731c",
         "type": "github"
       },
       "original": {
@@ -359,6 +359,26 @@
       "original": {
         "owner": "maxhbr",
         "repo": "myphoto",
+        "type": "github"
+      }
+    },
+    "nix-index-database": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1765267181,
+        "narHash": "sha256-d3NBA9zEtBu2JFMnTBqWj7Tmi7R5OikoU2ycrdhQEws=",
+        "owner": "nix-community",
+        "repo": "nix-index-database",
+        "rev": "82befcf7dc77c909b0f2a09f5da910ec95c5b78f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "nix-index-database",
         "type": "github"
       }
     },
@@ -540,11 +560,11 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1767177815,
-        "narHash": "sha256-qrplVUDsioeqWZAom/wO7CT7NypIVypv8MDTnLXHIb0=",
+        "lastModified": 1767178746,
+        "narHash": "sha256-8B05dc5idEMvgBw3ZzY/xOH+jW/0I+5IxDWUxXy7OZw=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "a8b97f438f11c29a0fb795e2f91f84f61a2fc994",
+        "rev": "a47920946d535965aa90a0ff1f687d35c4a60ae1",
         "type": "github"
       },
       "original": {
@@ -628,6 +648,7 @@
         "master": "master",
         "my-wallpapers": "my-wallpapers",
         "myphoto": "myphoto",
+        "nix-index-database": "nix-index-database",
         "nixgl": "nixgl",
         "nixos-hardware": "nixos-hardware",
         "nixos-unstable": "nixos-unstable",
