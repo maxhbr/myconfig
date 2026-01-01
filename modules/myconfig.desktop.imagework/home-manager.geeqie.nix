@@ -1,7 +1,12 @@
-{pkgs, lib, config, ... }:
+{
+  pkgs,
+  lib,
+  config,
+  ...
+}:
 let
   cfg = config.myconfig.desktop.imagework.geeqie;
-in  
+in
 {
   options.myconfig.desktop.imagework.geeqie.enable = lib.mkEnableOption "geeqie";
   config = lib.mkIf cfg.enable {

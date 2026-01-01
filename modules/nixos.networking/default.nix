@@ -22,7 +22,12 @@ in
     # ./extrahosts
     # ./service.stubby.nix
     (
-      { pkgs, config, lib, ... }:
+      {
+        pkgs,
+        config,
+        lib,
+        ...
+      }:
       {
         config = lib.mkIf (cfg.wifi-backend == "iwd") {
           networking.networkmanager.wifi.backend = "iwd";
@@ -42,7 +47,12 @@ in
       }
     )
     (
-      { pkgs, config, lib, ... }:
+      {
+        pkgs,
+        config,
+        lib,
+        ...
+      }:
       {
         config = lib.mkIf (cfg.wifi-backend == "wpa_supplicant") {
           networking.networkmanager.wifi.backend = "wpa_supplicant";

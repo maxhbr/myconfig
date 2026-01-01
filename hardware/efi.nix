@@ -7,7 +7,10 @@
   boot.loader.efi.canTouchEfiVariables = true;
   home-manager.sharedModules = [
     {
-      home.packages = with pkgs; [ efibootmgr efivar ];
+      home.packages = with pkgs; [
+        efibootmgr
+        efivar
+      ];
     }
   ];
 }
