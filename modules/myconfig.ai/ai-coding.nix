@@ -16,7 +16,7 @@
           code-cursor
           zed
           codex
-          qwen-code
+          # qwen-code
         ];
         myconfig.persistence.cache-directories = [
           ".config/Cursor"

@@ -74,14 +74,15 @@ let
                 home.packages = [
                   (pkgs.writeShellScriptBin "suspend-${otherHostName}" "ssh ${otherHostName} sudo systemctl suspend")
                 ]
-                ++ (
-                  if (lib.attrsets.hasAttrByPath [ "mac" ] otherHostMetadata) then
-                    [
-                      (pkgs.writeShellScriptBin "wake-${otherHostName}" "${pkgs.wol}/bin/wol ${otherHostMetadata.mac}")
-                    ]
-                  else
-                    [ ]
-                );
+                # ++ (
+                #   if (lib.attrsets.hasAttrByPath [ "mac" ] otherHostMetadata) then
+                #     [
+                #       (pkgs.writeShellScriptBin "wake-${otherHostName}" "${pkgs.wol}/bin/wol ${otherHostMetadata.mac}")
+                #     ]
+                #   else
+                #     [ ]
+                #     )
+                    ;
               };
             }
           ))

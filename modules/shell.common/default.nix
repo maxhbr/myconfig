@@ -68,7 +68,7 @@ in
         w3m
         man-pages
         file
-        renameutils # qmv
+        # renameutils # qmv
         pv
         entr
 

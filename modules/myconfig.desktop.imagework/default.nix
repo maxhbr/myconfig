@@ -181,7 +181,6 @@ in
             [
               gphoto2
               gphoto2fs
-              geeqie
               gphoto2
               gphoto2fs
 
@@ -198,13 +197,12 @@ in
           myconfig.persistence.files = [
             ".config/darktable/darktablerc"
             ".config/darktable/shortcutsrc"
-            ".config/geeqie/geeqierc.xml"
           ];
         }
+        ./home-manager.geeqie.nix
       ]
       ++ lib.optionals cfg.desktop.imagework.myphoto.enable [ inputs.myphoto.homeManagerModules.myphoto ];
       myconfig.desktop.wayland.launcherCommands = [
-        "geeqie"
         "darktable"
         "digikam"
         "gimp"

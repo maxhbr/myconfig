@@ -18,8 +18,8 @@ in
         home.packages = with pkgs; [
           platformio-core
 
-          picocom
-          minicom
+          # picocom
+          # minicom
           tio
         ];
       }
