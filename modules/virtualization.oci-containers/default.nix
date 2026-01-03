@@ -18,7 +18,7 @@ in
   ];
   config = (
     lib.mkIf (enablePodman || enableDocker) {
-      # virtualisation.podman.dockerCompat = !config.virtualisation.docker.enable;
+      virtualisation.podman.dockerCompat = !enableDocker;
       home-manager.sharedModules = [ { home.packages = with pkgs; [ buildkit ]; } ];
       virtualisation = {
         # oci-containers = {
@@ -33,6 +33,10 @@ in
                 "docker.io/library" = [ { "type" = "insecureAcceptAnything"; } ];
                 "ghcr.io" = [ { "type" = "insecureAcceptAnything"; } ];
                 "quay.io" = [ { "type" = "insecureAcceptAnything"; } ];
+              };
+
+              "docker-archive" = {
+                "" = [ { "type" = "insecureAcceptAnything"; } ];
               };
 
               # local images written while building

@@ -40,15 +40,39 @@
           };
         }
     )
+    (
+      { config, myconfig, ... }:
+      let
+        nixosConfig = config;
+        user = myconfig.user;
+      in
+      lib.mkIf (nixosConfig.virtualisation.podman.enable) {
+        boot.kernelModules = [ "tun" ];
+        services.udev.extraRules = ''
+          KERNEL=="tun", NAME="net/tun", MODE="0666"
+        '';
+      }
+    )
   ];
   config = lib.mkIf config.virtualisation.podman.enable {
     home-manager.sharedModules = [
       {
-        home.packages = with pkgs; [ podman-compose ];
+        home.packages = with pkgs; [
+          dive # look into docker image layers
+          podman-tui # status of containers in the terminal
+          podman-compose
+        ];
         myconfig.persistence.cache-directories = [ ".local/share/containers/cache/" ];
       }
     ];
-    virtualisation.podman.autoPrune.enable = true;
-    environment.systemPackages = [ pkgs.netavark ];
+    virtualisation.podman = {
+      autoPrune.enable = true;
+      # # Create a `docker` alias for podman, to use it as a drop-in replacement
+      # dockerCompat = true;
+      defaultNetwork.settings.dns_enabled = true;
+    };
+    environment.systemPackages = [
+      pkgs.netavark
+    ];
   };
 }

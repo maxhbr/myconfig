@@ -21,18 +21,18 @@ in
     lib.mkIf cfg.desktop.imagework.enable {
       home-manager.sharedModules = [
         {
-          home.packages = [
-          ]
-          ++ (with pkgs; [
+          home.packages = with pkgs; [
             gphoto2
             gphoto2fs
+
+            qimgv
 
             # rawtherapee
             # gthumb
             # krita
             # inkscape
-          ]);
-          myconfig.desktop.imagework.geeqie.enable = true;
+          ];
+          myconfig.desktop.imagework.geeqie.enable = false;
           myconfig.desktop.imagework.darktable.enable = true;
           myconfig.desktop.imagework.digikam.enable = true;
           myconfig.desktop.imagework.gimp.enable = true;
