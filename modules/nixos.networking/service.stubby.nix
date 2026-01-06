@@ -2,11 +2,7 @@
 # SPDX-License-Identifier: MIT
 { config, lib, ... }:
 {
-  config = {
-    services.stubby.enable = true;
-  };
-  imports = [
-    (lib.mkIf config.services.stubby.enable {
+  config = lib.mkIf config.services.stubby.enable {
       services.stubby = {
         upstreamServers = ''
           - address_data: 8.8.8.8
@@ -38,6 +34,5 @@
         networkmanager.dns = "none";
         resolvconf.dnsExtensionMechanism = false;
       };
-    })
-  ];
+  };
 }

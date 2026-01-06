@@ -216,16 +216,17 @@ get_ip_of_target() {
             echo "$hosts_alias"
             return
         fi
-    else
-        if grep -q " $target\$" /etc/hosts; then
-            echo "$target"
-            return
-        fi
     fi
 
     ip="$(get_ip_of_target_from_metadata ./hosts/metadata.json "$target" "$use_wg")"
     if [[ $ip == "null" ]]; then
         ip="$(get_ip_of_target_from_metadata ../myconfig/hosts/metadata.json "$target" "$use_wg")"
+    fi
+    if [[ $ip == "null" ]]; then
+        if grep -q " $target\$" /etc/hosts; then
+            echo "$target"
+            return
+        fi
     fi
     if [[ $ip == "null" ]]; then
         log_error "ip for $target not found in metadata"

@@ -7,20 +7,24 @@ let
 in
 {
   options = {
-    myconfig.wifi-backend = pkgs.lib.mkOption {
-      type = pkgs.lib.types.enum [
-        "iwd"
-        "wpa_supplicant"
-      ];
-      default = "iwd";
-      description = ''
-        Backend for managing WiFi connections.
-      '';
+    myconfig.wifi = {
+      backend = pkgs.lib.mkOption {
+        type = pkgs.lib.types.enum [
+          "iwd"
+          "wpa_supplicant"
+          "none"
+        ];
+        default = "iwd";
+        description = ''
+          Backend for managing WiFi connections.
+        '';
+      };
     };
   };
   imports = [
     # ./extrahosts
-    # ./service.stubby.nix
+    ./service.stubby.nix
+    ./helpers.nix
     (
       {
         pkgs,
@@ -29,7 +33,36 @@ in
         ...
       }:
       {
-        config = lib.mkIf (cfg.wifi-backend == "iwd") {
+        config = lib.mkIf (config.networking.networkmanager.enable) {
+          networking = {
+            networkmanager = {
+              plugins = with pkgs; [
+                networkmanager-openvpn
+                # networkmanager-openconnect
+              ];
+            };
+          };
+          home-manager.sharedModules = [
+            {
+              home.packages = with pkgs; [
+                networkmanagerapplet
+                openvpn
+                # openconnect
+              ];
+            }
+          ];
+        };
+      }
+    )
+    (
+      {
+        pkgs,
+        config,
+        lib,
+        ...
+      }:
+      {
+        config = lib.mkIf (cfg.wifi.backend == "iwd") {
           networking.networkmanager.wifi.backend = "iwd";
           services.connman.wifi.backend = "iwd";
           networking.wireless.iwd = {
@@ -54,8 +87,11 @@ in
         ...
       }:
       {
-        config = lib.mkIf (cfg.wifi-backend == "wpa_supplicant") {
-          networking.networkmanager.wifi.backend = "wpa_supplicant";
+        config = lib.mkIf (cfg.wifi.backend == "wpa_supplicant") {
+          networking = {
+            wireless.enable = true;
+            networkmanager.wifi.backend = "wpa_supplicant";
+          };
           services.connman.wifi.backend = "wpa_supplicant";
           home-manager.sharedModules = [
             {
@@ -74,36 +110,9 @@ in
   config = {
     boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
     boot.kernel.sysctl."net.ipv6.conf.all.forwarding" = "1";
-    environment.interactiveShellInit = ''
-      myPorts() { /run/wrappers/bin/sudo ${pkgs.iproute2}/bin/ss -tulpen; }
-      killPort() { kill $(${pkgs.lsof}/bin/lsof -t -i:$1); }
-    '';
-
-    home-manager.sharedModules = [
-      {
-        programs.fish = {
-          functions = {
-            myPorts = "/run/wrappers/bin/sudo ${pkgs.iproute2}/bin/ss -tulpen";
-            killPort = "kill $(${pkgs.lsof}/bin/lsof -t -i:$1)";
-          };
-        };
-        home.packages = with pkgs; [
-          networkmanagerapplet
-          openvpn
-          # openconnect
-        ];
-      }
-    ];
 
     networking = {
-      networkmanager = {
-        enable = true;
-        plugins = with pkgs; [
-          networkmanager-openvpn
-          # networkmanager-openconnect
-        ];
-      };
-      wireless.enable = true;
+      networkmanager.enable = true;
       firewall = {
         enable = true;
         allowPing = false;

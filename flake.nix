@@ -340,8 +340,8 @@
           nas = self.nixosConfigurationsGen.host-nas [ ] { };
           nuc = self.nixosConfigurationsGen.host-nuc [ ] { };
           r6c = self.nixosConfigurationsGen.host-r6c [ ] { };
-          # pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
-          # pi3a = self.nixosConfigurationsGen.host-pi3a [ ] { };
+          pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
+          pi3a = self.nixosConfigurationsGen.host-pi3a [ ] { };
 
           # container = nixpkgs.lib.nixosSystem {
           #   system = "x86_64-linux";
@@ -389,9 +389,6 @@
               metadataOverride = { };
               bootstrappedConfig = null;
             };
-
-            # pi4-sd-image = inputs.self.nixosConfigurations.pi4.config.system.build.sdImage;
-            # pi3a-sd-image = inputs.self.nixosConfigurations.pi3a.config.system.build.sdImage;
           };
 
           formatter = nixpkgs.legacyPackages.${system}.nixfmt-tree;

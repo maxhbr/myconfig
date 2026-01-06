@@ -32,6 +32,7 @@
     myconfig = {
       desktop.enable = true;
       headless.enable = true;
+      wifi.backend = "wpa_supplicant";
     };
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;

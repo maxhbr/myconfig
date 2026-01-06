@@ -40,6 +40,39 @@ let
           "$arg"
     ''
   );
+  mydarktable-cli-here = (
+    pkgs.writeShellScriptBin "darktable-cli-here" ''
+      here=$(pwd)
+      arg="''${1:-$here}"
+
+      # Search for existing darktable_here directory
+      darktable_dir=""
+      search_dir="$here"
+      while [[ "$search_dir" != "/" ]]; do
+        if [[ -d "$search_dir/darktable_here" ]]; then
+          darktable_dir="$search_dir/darktable_here"
+          break
+        fi
+        search_dir=$(dirname "$search_dir")
+      done
+
+      # Fallback: create new directory at ../darktable_here
+      if [[ -z "$darktable_dir" ]]; then
+        darktable_dir="$here/../darktable_here"
+      fi
+
+      mkdir -p "$darktable_dir"
+
+      exec ${mydarktable}/bin/darktable-cli \
+          `#--core --configdir "$darktable_dir/config"` \
+          --core --cachedir "$darktable_dir/cache" \
+          --core --library "$darktable_dir/library.db" \
+          `#--core --datadir "$darktable_dir/data"` \
+          --core --tmpdir "$darktable_dir/tmp" \
+          --core --dumpdir "$darktable_dir" \
+          "$arg"
+    ''
+  );
 in
 {
   options.myconfig.desktop.imagework.darktable.enable = lib.mkEnableOption "darktable";
@@ -47,6 +80,7 @@ in
     home.packages = [
       mydarktable
       mydarktable-here
+      mydarktable-cli-here
     ];
     myconfig.persistence.files = [
       ".config/darktable/darktablerc"
