@@ -9,6 +9,20 @@
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.raspberry-pi-4
     {
+      hardware = {
+        raspberry-pi."4".apply-overlays-dtmerge.enable = true;
+        deviceTree = {
+          enable = true;
+          filter = "*rpi-4-*.dtb";
+        };
+      };
+      environment.systemPackages = with pkgs; [
+        libraspberrypi
+        raspberrypi-eeprom
+      ];
+      networking.networkmanager.wifi.powersave = false;
+    }
+    {
       environment.systemPackages = with pkgs; [ x11vnc ];
       ## Setup via ssh tunnel:
       # $ ssh -t -L 5900:localhost:5900 $IP 'x11vnc -ncache 10 -unixpw -localhost -display :0'
@@ -17,6 +31,15 @@
       ## or open ports
       # networking.firewall.allowedUDPPorts = [ 5900 ];
       # networking.firewall.allowedTCPPorts = [ 5900 ];
+    }
+    {
+      home-manager.sharedModules = [
+        {
+          home.packages = with pkgs; [
+            tio
+          ];
+        }
+      ];
     }
   ];
 
@@ -30,10 +53,11 @@
     system.stateVersion = lib.mkForce "22.11"; # Did you read the comment?
 
     myconfig = {
-      desktop.enable = true;
+      desktop.enable = false;
       headless.enable = true;
       wifi.backend = "wpa_supplicant";
     };
+    hardware.enableRedistributableFirmware = true;
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;
 
