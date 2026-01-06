@@ -15,6 +15,30 @@
       myconfig.metadatalib.get.hosts.x1extremeG2.pubkeys."id_rsa.pub"
     ])
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
+    {
+      services.eternal-terminal = {
+        enable = true;
+        port = 22022;
+      };
+      networking.firewall.allowedTCPPorts = [ 22022 ];
+      networking.firewall.allowedUDPPorts = [ 22022 ];
+      home-manager.sharedModules =
+        let
+          r6c-tmux-session = "r6c";
+          r6c-tmux-session-script = pkgs.writeShellScriptBin "r6c-tmux-session" ''
+            # if session is not yet created, create it
+            if ! tmux has-session -t ${r6c-tmux-session}; then
+              tmux new-session -d -s ${r6c-tmux-session}
+              tmux send-keys -t ${r6c-tmux-session}:1 "btop" C-m
+              tmux split-window -h -t ${r6c-tmux-session}
+              tmux send-keys -t ${r6c-tmux-session}:1 "journalctl -f" C-m
+              tmux split-window -v -t ${r6c-tmux-session}
+            fi
+            exec tmux attach-session -t ${r6c-tmux-session}
+          '';
+        in
+        [ { home.packages = [ r6c-tmux-session-script ]; } ];
+    }
   ];
 
   config = {
