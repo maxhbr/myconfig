@@ -392,9 +392,9 @@ binds {
     Mod+Return { spawn "tfoot"; }
     Mod+P { spawn "my-wofi"; }
     Mod+Shift+P { spawn "wofi" "--show" "run"; }
-    //Mod+X { spawn "swaylock" "-f"; }
-    Mod+X hotkey-overlay-title="Power Menu" { spawn "wlogout"; }
-    Mod+Shift+X { spawn "swaylock" "-f"; }
+    Mod+X hotkey-overlay-title="Lock" { spawn "swaylock" "-f"; }
+    Mod+Shift+X hotkey-overlay-title="Power Menu" { spawn "wlogout"; }
+    Mod+Shift+F11 { spawn "wlogout"; }
 
     // You can also use a shell:
     // Mod+T { spawn "bash" "-c" "notify-send hello && exec alacritty"; }
@@ -585,7 +585,6 @@ binds {
 
     // The quit action will show a confirmation dialog to avoid accidental exits.
     Mod+Shift+Q { quit; }
-    Mod+Shift+F11 { spawn "systemctl" "suspend"; }
 
 
     // Powers off the monitors. To turn them back on, do any input like

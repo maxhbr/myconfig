@@ -32,6 +32,9 @@
       networking.firewall.allowedTCPPorts = [ 22022 ];
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
+    {
+      services.earlyoom.enable = lib.mkForce false;
+    }
   ];
 
   config = {

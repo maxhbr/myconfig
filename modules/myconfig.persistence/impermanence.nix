@@ -67,7 +67,7 @@ let
 in
 {
   imports = [
-    inputs.impermanence.nixosModule
+    inputs.impermanence.nixosModules.impermanence
     {
       config =
         lib.mkIf
@@ -547,7 +547,6 @@ in
         devices = [ { device = config.myconfig.persistence.impermanence.btrfs_device; } ];
       };
       home-manager.sharedModules = [
-        inputs.impermanence.homeManagerModules.impermanence
         (
           { config, ... }:
           let
@@ -571,28 +570,21 @@ in
               ];
               myconfig.persistence.cache-directories = [ ".cache/nix-index" ];
               home.persistence = {
-                "${persistentCacheDir}" = {
-                  files = [
-                    ".persistence.${config.home.username}.ready"
-                  ];
-                  allowOther = true;
-                };
-                "${persistentPrivDir}/home/${config.home.username}" = {
+                "${persistentPrivDir}" = {
                   directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.directories);
                   files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.files);
-                  allowOther = true;
                 };
-                "${persistentWorkDir}/home/${config.home.username}" = {
+                "${persistentWorkDir}" = {
                   directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-directories);
                   files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-files);
-                  allowOther = true;
                 };
-                "${persistentCacheDir}/home/${config.home.username}" = {
+                "${persistentCacheDir}" = {
                   directories = validatePaths (
                     lib.map mkRelativeToHome config.myconfig.persistence.cache-directories
                   );
-                  files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.cache-files);
-                  allowOther = true;
+                  files = [
+                    ".persistence.${config.home.username}.ready"
+                  ] ++ (validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.cache-files));
                 };
               };
             };
@@ -670,7 +662,7 @@ in
             toString config.users.extraUsers.${user}.uid
           } -g ${toString config.users.extraGroups.${user}.gid}
           touch "/${persistentCacheDir}/.persistence.ready"
-          touch "/${persistentCacheDir}/.persistence.${user}.ready"
+          touch "/${persistentCacheDir}/home/${user}/.persistence.${user}.ready"
         '';
       };
       myconfig.desktop.wayland.waybar.doesFileExistChecks = [
