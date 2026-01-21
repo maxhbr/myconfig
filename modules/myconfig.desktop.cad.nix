@@ -28,7 +28,7 @@ in
                 # 3D
                 # blender
                 # openscad-unstable
-                freecad # 3D
+                # freecad # 3D
                 povray # raytracing for freecad
                 prusa-slicer
                 # luxcorerender

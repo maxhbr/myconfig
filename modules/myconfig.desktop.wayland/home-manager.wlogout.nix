@@ -9,7 +9,7 @@
   config = {
     programs.wlogout = {
       enable = true;
-      layout = [
+      layout = lib.mkBefore [
         {
           label = "suspend";
           action = "systemctl suspend";

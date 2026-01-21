@@ -17,8 +17,6 @@
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
     ./ai.spare.nix
-    ../host.f13/role.work
-    ../host.workstation/gaming/games.steam
     (myconfig.metadatalib.setupAsBuildMachine [
       myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
     ])
@@ -45,15 +43,15 @@
     # networking.interfaces.enp82s0u2u1u2.useDHCP = true;
     myconfig = {
       desktop = {
-        enable = true;
+        enable = false;
         wayland = {
           enable = true;
           selectedSessions = [
             "niri"
-            "niri-plain"
+            # "niri-plain"
             # "labwc"
             # "river"
-            "plasma6"
+            # "plasma6"
           ];
           niri.additionalConfigKdl = ''
             // You can configure outputs by their name, which you can find
@@ -103,7 +101,7 @@
       # };
     };
     virtualisation = {
-      docker.enable = true;
+      # docker.enable = true;
       podman.enable = true;
       oci-containers = {
         backend = "podman";
