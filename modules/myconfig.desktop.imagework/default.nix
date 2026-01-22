@@ -32,7 +32,7 @@ in
             # krita
             # inkscape
           ];
-          myconfig.desktop.imagework.geeqie.enable = false;
+          myconfig.desktop.imagework.geeqie.enable = true;
           myconfig.desktop.imagework.darktable.enable = true;
           myconfig.desktop.imagework.digikam.enable = true;
           myconfig.desktop.imagework.gimp.enable = true;

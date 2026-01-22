@@ -27,11 +27,10 @@ in
 {
   imports = [
     ../../hardware/eGPU.nix
-    ./run-comfyui.nix
   ];
 
   config = {
-    nixpkgs.config.rocmSupport = false;
+    # nixpkgs.config.rocmSupport = false;
     myconfig = {
       services.dmesgMonitor = {
         enable = true;
@@ -119,16 +118,6 @@ in
         "qwen3:32b"
         "qwq:32b"
         "smollm2:1.7b"
-      ]
-      ++ [
-        # for continue:
-        "llama3.1:8b"
-        "qwen2.5-coder:1.5b-base"
-        "nomic-embed-text:latest"
-      ]
-      ++ [
-        # for roo code
-        "codellama:34b-code"
       ];
     };
     services.tabby = {

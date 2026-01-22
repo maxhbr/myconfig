@@ -20,9 +20,9 @@
           # qwen-code
           claude-code
         ];
-        myconfig.persistence.cache-files = [
-          ".local/share/opencode/auth.json"
-        ];
+        # myconfig.persistence.cache-files = [
+        #   ".local/share/opencode/auth.json"
+        # ];
         myconfig.persistence.cache-directories = [
           ".config/Cursor"
           ".cursor"

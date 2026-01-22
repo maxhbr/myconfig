@@ -28,8 +28,8 @@ in
         hardware.graphics = {
           enable = true;
         };
-        nixpkgs.config.cudaSupport = lib.mkDefault (cfg.variant == "nvidia");
-        nixpkgs.config.rocmSupport = lib.mkDefault (cfg.variant == "amd");
+        # nixpkgs.config.cudaSupport = lib.mkDefault (cfg.variant == "nvidia");
+        # nixpkgs.config.rocmSupport = lib.mkDefault (cfg.variant == "amd");
       })
       (lib.mkIf (cfg.variant == "nvidia") {
         home-manager.sharedModules = [
@@ -45,9 +45,6 @@ in
           }
         ];
         users.extraUsers."${myconfig.user}".extraGroups = [ "nvidia" ];
-        hardware.graphics = {
-          enable = true;
-        };
         services.xserver.videoDrivers = [ "nvidia" ];
         hardware.nvidia.open = true;
         hardware.nvidia-container-toolkit.enable = true;
@@ -67,7 +64,6 @@ in
         ];
       })
       (lib.mkIf (cfg.variant == "amd") {
-        nixpkgs.config.rocmSupport = true;
         home-manager.sharedModules = [
           {
             home.packages = with pkgs; [

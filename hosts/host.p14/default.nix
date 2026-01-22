@@ -10,6 +10,7 @@
 }:
 {
   imports = [
+    ./ai.p14.nix
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
     # inputs.nixos-hardware.nixosModules.common-gpu-intel
