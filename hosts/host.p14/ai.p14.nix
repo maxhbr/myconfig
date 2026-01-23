@@ -91,7 +91,7 @@ in
     services.ollama = {
       enable = true;
       package =
-        if (builtins.compareVersions pkgs.ollama.version "0.14.2" < 0) then
+        if (builtins.compareVersions pkgs.ollama.version "0.14.3" < 0) then
           pkgs.master.ollama-cuda
         else
           pkgs.ollama-cuda;
@@ -106,12 +106,13 @@ in
         "cogito:32b"
         "deepseek-r1:32b"
         "gemma3:27b"
+        "glm-4.7-flash:q8_0"
         "gpt-oss:20b"
-        "llama3.2:3b"
+        # "llama3.2:3b"
         "llava:7b"
         "llava:34b"
-        "magistral:24b"
-        "openthinker:32b"
+        # "magistral:24b"
+        # "openthinker:32b"
         "phi4"
         "qwen2.5vl:32b"
         "qwen3:30b"
