@@ -23,6 +23,7 @@ in
     ./inference.cpp.nix
     ./programs.lmstudio.nix
     ./programs.alpaca.nix
+    ./programs.opencode
   ];
   options.myconfig = with lib; {
     ai.enable = mkEnableOption "myconfig.ai";
