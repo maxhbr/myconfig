@@ -10,19 +10,19 @@ let
 in
 {
   options.myconfig = with lib; {
-    ai.opencode = {
-      enable = mkEnableOption "myconfig.ai.opencode";
+    ai.claude-code = {
+      enable = mkEnableOption "myconfig.ai.claude-code";
     };
   };
-  config = lib.mkIf config.myconfig.ai.opencode.enable {
+  config = lib.mkIf config.myconfig.ai.claude-code.enable {
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [
-          opencode
+          claude-code
           (callLib ../fns/sandboxed-app.nix {
-            name = "opencode";
-            pkg = opencode;
-            readOnlyConfigDirs = [ ".config/opencode" ];
+            name = "claude-code";
+            pkg = claude-code;
+            readOnlyConfigDirs = [ ".config/claude-code" ];
           })
         ];
       }

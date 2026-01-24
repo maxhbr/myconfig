@@ -10,19 +10,19 @@ let
 in
 {
   options.myconfig = with lib; {
-    ai.opencode = {
-      enable = mkEnableOption "myconfig.ai.opencode";
+    ai.qwen-code = {
+      enable = mkEnableOption "myconfig.ai.qwen-code";
     };
   };
-  config = lib.mkIf config.myconfig.ai.opencode.enable {
+  config = lib.mkIf config.myconfig.ai.qwen-code.enable {
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [
-          opencode
+          qwen-code
           (callLib ../fns/sandboxed-app.nix {
-            name = "opencode";
-            pkg = opencode;
-            readOnlyConfigDirs = [ ".config/opencode" ];
+            name = "qwen-code";
+            pkg = qwen-code;
+            readOnlyConfigDirs = [ ".config/qwen-code" ];
           })
         ];
       }

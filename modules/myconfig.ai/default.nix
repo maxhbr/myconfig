@@ -8,6 +8,7 @@
 }:
 let
   nixpkgsConfig = config.nixpkgs.config;
+  callLib = file: import file { inherit lib pkgs; };
 in
 {
   imports = [
@@ -24,11 +25,26 @@ in
     ./programs.lmstudio.nix
     ./programs.alpaca.nix
     ./programs.opencode
+    ./programs.codex
+    ./programs.qwen-code
+    ./programs.claude-code
   ];
   options.myconfig = with lib; {
     ai.enable = mkEnableOption "myconfig.ai";
   };
   config = lib.mkIf config.myconfig.ai.enable {
-    home-manager.sharedModules = [ { home.packages = with pkgs; [ aichat ]; } ];
+    home-manager.sharedModules = [ {
+       home.packages = with pkgs; [ 
+        aichat 
+          (callLib ./fns/sandboxed-app.nix {
+            name = "fish";
+            pkg = fish;
+          })
+          (callLib ./fns/sandboxed-app.nix {
+            name = "bash";
+            pkg = bash;
+          })
+        ]; 
+       } ];
   };
 }

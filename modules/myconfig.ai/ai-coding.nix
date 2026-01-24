@@ -15,10 +15,6 @@
           # aider-chat
           code-cursor
           zed
-          codex
-          opencode
-          # qwen-code
-          claude-code
         ];
         # myconfig.persistence.cache-files = [
         #   ".local/share/opencode/auth.json"
@@ -26,10 +22,13 @@
         myconfig.persistence.cache-directories = [
           ".config/Cursor"
           ".cursor"
-          ".codex"
         ];
         myconfig.desktop.wayland.launcherCommands = [ "cursor" ];
       }
     ];
+    myconfig.ai.opencode.enable = lib.mkDefault true;
+    myconfig.ai.codex.enable = lib.mkDefault true;
+    myconfig.ai.qwen-code.enable = lib.mkDefault true;
+    myconfig.ai.claude-code.enable = lib.mkDefault true;
   };
 }
