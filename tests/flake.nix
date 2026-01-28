@@ -13,45 +13,51 @@
         (haskellPackages.ghc.withPackages (p: cabal2nix.buildInputs))
         pkgs.cabal-install
       ];
-      mkApp = name: runtimeInputs: script: {
-        type = "app";
-        program = lib.getExe (
-          pkgs.writeShellApplication {
-            inherit name runtimeInputs;
-            text = ''
-              if ! [ -e jail-nix-tests.cabal ]; then
-                if [ -e tests/jail-nix-tests.cabal ]; then
-                  cd tests
-                else
-                  echo "${name} must be called in repo root or tests directory"
-                  exit 1
-                fi
+      mkTestPackage =
+        name: runtimeInputs: script:
+        pkgs.writeShellApplication {
+          inherit name runtimeInputs;
+          text = ''
+            if ! [ -e jail-nix-tests.cabal ]; then
+              if [ -e tests/jail-nix-tests.cabal ]; then
+                cd tests
+              else
+                echo "${name} must be called in repo root or tests directory"
+                exit 1
               fi
-              ${script}
-            '';
-          }
-        );
-      };
+            fi
+            ${script}
+          '';
+        };
     in
-    {
-      apps.x86_64-linux.runTests = mkApp "run-all-jail-nix-tests" testDependencies ''
-        ${
-          lib.pipe
-            {
-              jail-nix = ../.;
-              nixpkgs = nixpkgs;
-            }
-            [
-              (lib.mapAttrsToList (name: path: "${name}=${path}"))
-              (lib.concatStringsSep " ")
-              (lib.toShellVar "NIX_PATH")
-            ]
-        } cabal run spec -- "$@"
-      '';
+    rec {
+      packages.x86_64-linux = rec {
+        all-for-ci = pkgs.linkFarmFromDrvs "all-for-ci" [
+          run-tests
+          check-fmt
+          fmt
+          devShells.x86_64-linux.default
+        ];
 
-      apps.x86_64-linux.checkFmt = mkApp "check-fmt" [ pkgs.nixfmt-tree ] "treefmt --ci";
+        run-tests = mkTestPackage "run-tests" testDependencies ''
+          ${
+            lib.pipe
+              {
+                jail-nix = ../.;
+                nixpkgs = nixpkgs;
+              }
+              [
+                (lib.mapAttrsToList (name: path: "${name}=${path}"))
+                (lib.concatStringsSep " ")
+                (lib.toShellVar "NIX_PATH")
+              ]
+          } cabal run spec -- "$@"
+        '';
 
-      apps.x86_64-linux.fmt = mkApp "fmt" [ pkgs.nixfmt-tree ] "treefmt";
+        check-fmt = mkTestPackage "check-fmt" [ pkgs.nixfmt-tree ] "treefmt --ci";
+
+        fmt = mkTestPackage "fmt" [ pkgs.nixfmt-tree ] "treefmt";
+      };
 
       devShells.x86_64-linux.default = pkgs.mkShell {
         buildInputs = testDependencies ++ [

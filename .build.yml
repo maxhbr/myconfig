@@ -1,10 +1,21 @@
 image: nixos/25.05
 environment:
   NIX_CONFIG: "experimental-features = nix-command flakes"
+secrets:
+  - a0a725d2-f640-4a64-b71c-021d2f3f8378
 sources:
   - https://git.sr.ht/~alexdavid/jail.nix
 tasks:
-  - setup: "sudo ln -s /etc/zoneinfo/EST /etc/localtime"
-  - test-jail-nix: "cd jail.nix && nix run ./tests#runTests"
-  - check-format: "cd jail.nix && nix run ./tests#checkFmt"
-  - build-website: "cd jail.nix && nix build -L ./website#default"
+  - setup: |
+      sudo ln -s /etc/zoneinfo/EST /etc/localtime
+      nix-env -iA cachix -f https://cachix.org/api/v1/install
+      cachix use jailnix
+      cachix doctor
+  - build-pkgs: |
+      cd jail.nix
+      nix build --print-build-logs --out-link result-tests ./tests#all-for-ci
+      cachix push jailnix result-tests
+      nix build --print-build-logs --out-link result-website ./website#default
+      cachix push jailnix result-website
+  - run-tests: cd jail.nix && cachix watch-exec jailnix -- result-tests/run-tests/bin/run-tests
+  - check-fmt: cd jail.nix && result-tests/check-fmt/bin/check-fmt
