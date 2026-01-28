@@ -7,7 +7,7 @@
     let
       pkgs = import nixpkgs { system = "x86_64-linux"; };
       lib = pkgs.lib;
-      haskellPackages = pkgs.haskell.packages.ghc984;
+      haskellPackages = pkgs.haskell.packages.ghc912;
       cabal2nix = haskellPackages.callCabal2nix "jail-nix-tests" ./. { };
       testDependencies = [
         (haskellPackages.ghc.withPackages (p: cabal2nix.buildInputs))

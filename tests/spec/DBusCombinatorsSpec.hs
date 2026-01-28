@@ -6,7 +6,7 @@ import DBus qualified
 import DBus.Client qualified as DBus
 import DBus.Internal.Types qualified as DBus
 import Data.Int (Int32)
-import Data.Text
+import Data.Text hiding (show)
 import System.Random
 import Test.Hspec
 import TestPrelude
