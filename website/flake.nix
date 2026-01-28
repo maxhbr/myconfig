@@ -19,11 +19,18 @@
         };
       };
 
+      docsFileSet =
+        with lib.fileset;
+        toSource {
+          root = ../.;
+          fileset = ../lib;
+        };
+
       formatCombinatorDoc =
         name: combinatorObj:
         let
           attrPos = builtins.unsafeGetAttrPos "impl" combinatorObj;
-          file = lib.removePrefix (toString ./..) attrPos.file;
+          file = lib.removePrefix (toString docsFileSet) attrPos.file;
         in
         ''
           ### ${name}
@@ -37,7 +44,7 @@
       combinatorDocs =
         let
           allCombinators =
-            (import ../lib/combinators.nix pkgs (throw "Docs must not depend on jail arg")).docs;
+            (import (docsFileSet + /lib/combinators.nix) pkgs (throw "Docs must not depend on jail arg")).docs;
 
           formatSection =
             filter:
