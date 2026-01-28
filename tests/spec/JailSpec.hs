@@ -73,6 +73,11 @@ spec = parallel $ inTestM $ do
         evalNixExpr [i| (jail "not-overridable" (sh "") []) ? override |]
       liftIO $ jailHasOverride `shouldBe` False
 
+  it "forwards shellPath from shell packages" $ do
+    jailedBashShellPath :: String <-
+      evalNixExpr [i| (jail "bash" pkgs.bash []).shellPath |]
+    liftIO $ jailedBashShellPath `shouldBe` "/bin/bash"
+
   describe "advanced configuration" $ do
     it "allows overriding base permissions shared across all jails" $ do
       tmpDir <- getTestDir

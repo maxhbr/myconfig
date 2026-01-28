@@ -122,6 +122,9 @@ let
           # forward man pages
           // lib.optionalAttrs (exe ? man) { inherit (exe) man; }
 
+          # forward `shellPath`
+          // lib.optionalAttrs (exe ? shellPath) { inherit (exe) shellPath; }
+
           # forward `override`
           // lib.optionalAttrs (exe ? override) {
             override = overrideFn: jail name (exe.override overrideFn) permissions;
