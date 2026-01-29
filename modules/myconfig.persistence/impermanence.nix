@@ -442,6 +442,7 @@ in
         device = validateDevice config.myconfig.persistence.impermanence.btrfs_device;
         fsType = "btrfs";
         options = [ "subvol=${volumeHome}" ];
+        neededForBoot = true;
       };
 
       fileSystems."${persistentPrivDir}" = {

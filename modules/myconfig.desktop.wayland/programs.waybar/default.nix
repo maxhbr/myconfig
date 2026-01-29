@@ -193,6 +193,8 @@ let
                       "tray"
                       "systemd-failed-units#user"
                       "systemd-failed-units#system"
+                      "cpu"
+                      "memory"
                     ];
                     tray = {
                       spacing = 10;
@@ -212,7 +214,7 @@ let
                       tooltip = false;
                     };
                     cpu = {
-                      format = "cpu: {usage}%";
+                      format = "c: {usage}%";
                       tooltip = false;
                       on-click = "foot-btop";
                       rotate = 90;
@@ -307,7 +309,7 @@ let
                       rotate = 90;
                     };
                     memory = {
-                      format = "ram: {}%";
+                      format = "m: {}%";
                       rotate = 90;
                     };
                     backlight = {

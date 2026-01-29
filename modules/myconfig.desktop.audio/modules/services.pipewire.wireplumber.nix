@@ -48,7 +48,7 @@ in
     lib.mkIf config.services.pipewire.wireplumber.enable {
       home-manager.sharedModules = [
         {
-          home.packages = [ mute_mic ];
+          home.packages = [ /* mute_mic */ ];
           xdg.configFile = {
             "wireplumber/bluetooth.lua.d/50-bluez_monitor.lua".text = ''
               bluez_monitor.properties = {

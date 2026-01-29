@@ -10,7 +10,7 @@ input {
     keyboard {
         xkb {
             layout "de"
-            variant "neo"
+            variant "neo,nodeadkeys"
         }
     }
 

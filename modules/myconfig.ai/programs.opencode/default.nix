@@ -7,6 +7,11 @@
 
 let
   callLib = file: import file { inherit lib pkgs; };
+  opencodeBwrap = callLib ../fns/sandboxed-app.nix {
+    name = "opencode";
+    pkg = pkgs.opencode;
+    readOnlyConfigDirs = [ ".config/opencode" ];
+  };
 in
 {
   options.myconfig = with lib; {
@@ -19,10 +24,13 @@ in
       {
         home.packages = with pkgs; [
           opencode
-          (callLib ../fns/sandboxed-app.nix {
-            name = "opencode";
-            pkg = opencode;
-            readOnlyConfigDirs = [ ".config/opencode" ];
+          opencodeBwrap
+          (writeShellApplication {
+            name = "opencode-tmp";
+            runtimeInputs = [ coreutils ];
+            text = ''
+              cd "$(mktemp -d)" && exec ${lib.getExe opencodeBwrap} "$@"
+            '';
           })
         ];
       }
