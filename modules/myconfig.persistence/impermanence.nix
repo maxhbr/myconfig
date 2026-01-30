@@ -364,12 +364,17 @@ in
       boot.initrd.systemd.services.impermanence-setup = {
         description = "Impermanence initrd preparation";
 
-        # Run as part of filesystem setup, but strictly after LUKS
-        wantedBy = [ "initrd-fs.target" ];
-        before = [ "initrd-fs.target" ];
+        # Run AFTER LUKS but BEFORE any filesystems start mounting
+        wantedBy = [ "basic.target" ];
+        before = [
+          "sysroot.mount"
+          "local-fs.target"
+        ];
 
         after = [ "systemd-cryptsetup@enc-pv.service" ];
         requires = [ "systemd-cryptsetup@enc-pv.service" ];
+
+        unitConfig.DefaultDependencies = false;
 
         serviceConfig = {
           Type = "oneshot";
@@ -585,7 +590,8 @@ in
                   );
                   files = [
                     ".persistence.${config.home.username}.ready"
-                  ] ++ (validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.cache-files));
+                  ]
+                  ++ (validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.cache-files));
                 };
               };
             };
