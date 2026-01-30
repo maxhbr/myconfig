@@ -8,7 +8,11 @@
   pkg,
   extraRuntimeInputs ? [ ],
   readOnlyConfigDirs ? [ ],
-  writableDirs ? [ ".local/share" ".cache" ".local/state" ],
+  writableDirs ? [
+    ".local/share"
+    ".cache"
+    ".local/state"
+  ],
   extraBwrapArgs ? [ ],
   envVars ? { },
   shareNet ? true,
@@ -20,9 +24,13 @@ let
 
   readOnlyDirsStr = lib.concatMapStringsSep " " (dir: ''"$HOME/${dir}"'') readOnlyConfigDirs;
 
-  roBindArgs = lib.concatMapStringsSep "\n      " (dir: ''--ro-bind "$HOME/${dir}" "$HOME/${dir}"'') readOnlyConfigDirs;
+  roBindArgs = lib.concatMapStringsSep "\n      " (
+    dir: ''--ro-bind "$HOME/${dir}" "$HOME/${dir}"''
+  ) readOnlyConfigDirs;
 
-  envArgs = lib.concatStringsSep "\n      " (lib.mapAttrsToList (k: v: ''--setenv ${k} "${v}"'') envVars);
+  envArgs = lib.concatStringsSep "\n      " (
+    lib.mapAttrsToList (k: v: ''--setenv ${k} "${v}"'') envVars
+  );
 in
 
 pkgs.writeShellApplication {
@@ -38,7 +46,7 @@ pkgs.writeShellApplication {
     XDG_CACHE_HOME="''${XDG_CACHE_HOME:-$HOME/.cache}"
     XDG_STATE_HOME="''${XDG_STATE_HOME:-$HOME/.local/state}"
 
-    ${lib.optionalString (readOnlyConfigDirs != []) "mkdir -p ${readOnlyDirsStr}"}
+    ${lib.optionalString (readOnlyConfigDirs != [ ]) "mkdir -p ${readOnlyDirsStr}"}
     mkdir -p "$XDG_DATA_HOME" "$XDG_CACHE_HOME" "$XDG_STATE_HOME"
 
     args=(

@@ -603,4 +603,8 @@ binds {
 
     Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
     Mod+Shift+Escape { power-off-monitors; }
+
+    // Disable airplane mode key (Fn+F10)
+    XF86WLAN { spawn "true"; }
+    XF86RFKill { spawn "true"; }
 }

@@ -33,9 +33,10 @@ in
     ai.enable = mkEnableOption "myconfig.ai";
   };
   config = lib.mkIf config.myconfig.ai.enable {
-    home-manager.sharedModules = [ {
-       home.packages = with pkgs; [ 
-        aichat 
+    home-manager.sharedModules = [
+      {
+        home.packages = with pkgs; [
+          aichat
           (callLib ./fns/sandboxed-app.nix {
             name = "fish";
             pkg = fish;
@@ -44,7 +45,8 @@ in
             name = "bash";
             pkg = bash;
           })
-        ]; 
-       } ];
+        ];
+      }
+    ];
   };
 }
