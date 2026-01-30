@@ -24,6 +24,7 @@ in
   imports = [
     # ./extrahosts
     ./service.stubby.nix
+    ./service.dhcpcd-optimization.nix
     ./helpers.nix
     (
       {
