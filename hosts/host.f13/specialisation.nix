@@ -23,6 +23,18 @@
     )
   ];
   specialisation = {
+    wlp-supplicant = {
+      inheritParentConfig = true;
+      configuration = {
+        myconfig.wifi.backend = "wpa_supplicant";
+      };
+    };
+    iwd = {
+      inheritParentConfig = true;
+      configuration = {
+        myconfig.wifi.backend = "iwd";
+      };
+    };
     # gaming = {
     #   inheritParentConfig = true;
     #   configuration = {

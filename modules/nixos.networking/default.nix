@@ -90,7 +90,6 @@ in
       {
         config = lib.mkIf (cfg.wifi.backend == "wpa_supplicant") {
           networking = {
-            wireless.enable = true;
             networkmanager.wifi.backend = "wpa_supplicant";
           };
           services.connman.wifi.backend = "wpa_supplicant";
