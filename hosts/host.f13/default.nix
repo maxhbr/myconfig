@@ -144,6 +144,7 @@ in
     myconfig = {
       persistence.impermanence = {
         enable = true;
+        soft_permanence_for_boot = false;
         tmpfs_size = "30%";
         btrfs_device = "/dev/mapper/enc-pv";
         btrbk_device = "/dev/disk/by-uuid/8e3c7395-c663-4080-9463-3b8a18bd7ad3";
