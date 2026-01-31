@@ -7,7 +7,7 @@ This file contains guidelines for agentic coding agents working on this NixOS fl
 ### Core Nix Commands
 - `nix build .#nixosConfigurations.<hostname>.config.system.build.toplevel` - Build a specific host configuration
 - `nix build .#x86_64-linux.myconfig-iso` - Build ISO image
-- `nix flake check --all-systems` - Validate all flake outputs across all systems
+- `nix flake check` - Validate all flake outputs across all systems
 - `nixDevelop --impure` - Enter development environment (requires --impure flag)
 
 ### Formatting & Linting
@@ -27,7 +27,7 @@ Run manually: `nix run .#checks.pre-commit-check`
 
 ### CI Validation
 The CI workflow runs these checks:
-- `nix flake check --all-systems`
+- `nix flake check`
 - `./nixfmtall.sh --check`
 - Dry-run builds for hosts: f13, workstation, nas, spare, vserver
 
