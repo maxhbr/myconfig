@@ -70,173 +70,167 @@ in
   imports = [
     inputs.impermanence.nixosModules.impermanence
     {
-      config =
-        lib.mkIf
-          (
-            cfg.btrbk_device != null
-            && cfg.btrbk_luks_device != null
-          )
-          (
+      config = lib.mkIf (cfg.btrbk_device != null && cfg.btrbk_luks_device != null) (
+        let
+          mountPoint = "/btr_backup";
+          mountScript = pkgs.writeShellScriptBin "btrbk-mount" ''
+            set -euo pipefail
+
+            lockfile=/tmp/btrbk-mount.lock
+            if [ -f "$lockfile" ]; then
+              echo "Lock file $lockfile exists, exiting"
+              exit 1
+            fi
+            touch "$lockfile"
+            trap "rm -f $lockfile" EXIT
+
+            if [ ! -b "${validateDevice cfg.btrbk_device}" ]; then
+              echo "Device ${validateDevice cfg.btrbk_device} does not exist"
+              if [ ! -b "${validateDevice cfg.btrbk_luks_device}" ]; then
+                echo "Device ${validateDevice cfg.btrbk_luks_device} does not exist"
+                exit 1
+              fi
+              echo "Decrypting ${validateDevice cfg.btrbk_luks_device}"
+
+
+              btrbk_keyfile=${cfg.btrbk_luks_keyfile}
+              if [ -n "$btrbk_keyfile" ] && [ -f "$btrbk_keyfile" ]; then
+                sudo cryptsetup luksOpen --key-file "$btrbk_keyfile" "${validateDevice cfg.btrbk_luks_device}" "btr_backup_luks"
+              else
+                sudo cryptsetup luksOpen "${validateDevice cfg.btrbk_luks_device}" "btr_backup_luks"
+              fi
+
+              if [ ! -b "${validateDevice cfg.btrbk_device}" ]; then
+                echo "Device ${validateDevice cfg.btrbk_device} still does not exist"
+                exit 1
+              fi
+            fi
+
+            if [ ! -d "${mountPoint}" ]; then
+              echo "Mount point ${mountPoint} does not exist, try creating it"
+              sudo mkdir -p "${mountPoint}"
+            fi
+
+            if ! mountpoint -q "${mountPoint}"; then
+              echo "Mounting ${mountPoint}"
+              sudo mount "${validateDevice cfg.btrbk_device}" "${mountPoint}"
+            fi
+          '';
+          umountScript = pkgs.writeShellScriptBin "btrbk-umount" ''
+            set -euo pipefail
+
+            if mountpoint -q "${mountPoint}"; then
+              echo "Unmounting ${mountPoint}"
+              sudo umount "${mountPoint}"
+            fi
+            if [ -b "/dev/mapper/btr_backup_luks" ]; then
+              echo "Closing LUKS device"
+              sudo cryptsetup luksClose "btr_backup_luks"
+            fi
+          '';
+          mkBtrbk =
+            name: subvolume:
             let
-              mountPoint = "/btr_backup";
-              mountScript = pkgs.writeShellScriptBin "btrbk-mount" ''
-                set -euo pipefail
-
-                lockfile=/tmp/btrbk-mount.lock
-                if [ -f "$lockfile" ]; then
-                  echo "Lock file $lockfile exists, exiting"
-                  exit 1
-                fi
-                touch "$lockfile"
-                trap "rm -f $lockfile" EXIT
-
-                if [ ! -b "${validateDevice cfg.btrbk_device}" ]; then
-                  echo "Device ${validateDevice cfg.btrbk_device} does not exist"
-                  if [ ! -b "${validateDevice cfg.btrbk_luks_device}" ]; then
-                    echo "Device ${validateDevice cfg.btrbk_luks_device} does not exist"
-                    exit 1
-                  fi
-                  echo "Decrypting ${validateDevice cfg.btrbk_luks_device}"
-
-
-                  btrbk_keyfile=${cfg.btrbk_luks_keyfile}
-                  if [ -n "$btrbk_keyfile" ] && [ -f "$btrbk_keyfile" ]; then
-                    sudo cryptsetup luksOpen --key-file "$btrbk_keyfile" "${validateDevice cfg.btrbk_luks_device}" "btr_backup_luks"
-                  else
-                    sudo cryptsetup luksOpen "${validateDevice cfg.btrbk_luks_device}" "btr_backup_luks"
-                  fi
-
-                  if [ ! -b "${validateDevice cfg.btrbk_device}" ]; then
-                    echo "Device ${validateDevice cfg.btrbk_device} still does not exist"
-                    exit 1
-                  fi
-                fi
-
-                if [ ! -d "${mountPoint}" ]; then
-                  echo "Mount point ${mountPoint} does not exist, try creating it"
-                  sudo mkdir -p "${mountPoint}"
-                fi
-
-                if ! mountpoint -q "${mountPoint}"; then
-                  echo "Mounting ${mountPoint}"
-                  sudo mount "${validateDevice cfg.btrbk_device}" "${mountPoint}"
-                fi
-              '';
-              umountScript = pkgs.writeShellScriptBin "btrbk-umount" ''
-                set -euo pipefail
-
-                if mountpoint -q "${mountPoint}"; then
-                  echo "Unmounting ${mountPoint}"
-                  sudo umount "${mountPoint}"
-                fi
-                if [ -b "/dev/mapper/btr_backup_luks" ]; then
-                  echo "Closing LUKS device"
-                  sudo cryptsetup luksClose "btr_backup_luks"
-                fi
-              '';
-              mkBtrbk =
-                name: subvolume:
-                let
-                  target = "${mountPoint}/${config.networking.hostName}-${name}";
-                  instanceName = "usbhdd-${name}";
-                in
-                {
-                  inherit instanceName;
-                  instance = {
-                    onCalendar = null;
-                    settings = {
-                      snapshot_preserve_min = "24h";
-                      snapshot_preserve = "7d 4w 6m 1y";
-                      volume."/btr_pool" = {
-                        inherit subvolume target;
-                        snapshot_dir = ".snapshots";
-                      };
-                    };
-                  };
-                  script = pkgs.writeShellScriptBin "btrbk-${instanceName}" ''
-                    set -euo pipefail
-
-                    conf="/etc/btrbk/${instanceName}.conf"
-                    if [ ! -f "$conf" ]; then
-                      echo "Config file $conf does not exist"
-                      exit 1
-                    fi
-
-                    ${mountScript}/bin/btrbk-mount
-
-                    target=${target}
-                    if [ ! -d "$target" ]; then
-                      sudo mkdir -p "$target"
-                    fi
-
-                    exec &> >(sudo tee -a "${target}.log")
-                    echo "start @$(date) ..."
-                    set -x
-                    sudo -H -u btrbk bash -c "btrbk -c $conf --progress --verbose run"
-                    times
-                  '';
-                };
-              privBtrbk = mkBtrbk "priv" volumePriv;
-              workBtrbk = mkBtrbk "work" volumeWork;
-              scripts = [
-                privBtrbk.script
-                workBtrbk.script
-              ];
-              doAllScripts = pkgs.writeShellScriptBin "btrbk-backup-all" ''
-                set -euo pipefail
-                ${mountScript}/bin/btrbk-mount
-                sleep 5
-                for script in ${toString (lib.map (script: "${script}/bin/${script.name}") scripts)}; do
-                  echo "Running $script"
-                  $script
-                  sleep 5
-                done
-                sleep 5
-                sync
-                ${umountScript}/bin/btrbk-umount
-              '';
-              doAllScriptsParallel = pkgs.writeShellScriptBin "btrbk-backup-all-parallel" ''
-                set -euo pipefail
-                ${mountScript}/bin/btrbk-mount
-                sleep 5
-                ${pkgs.parallel}/bin/parallel --halt soon,fail=1 ::: ${
-                  toString (lib.map (script: "${script}/bin/${script.name}") scripts)
-                }
-                sleep 5
-                sync
-                ${umountScript}/bin/btrbk-umount
-              '';
+              target = "${mountPoint}/${config.networking.hostName}-${name}";
+              instanceName = "usbhdd-${name}";
             in
             {
-              # TODO: if this is set, bwrap and zoom does not work
-              # fileSystems."${mountPoint}" = {
-              #   device = validateDevice config.myconfig.persistence.impermanence.btrbk_device;
-              #   fsType = "btrfs";
-              #   options = [
-              #     "subvolid=5" # show all subvolumes
-              #     "compress=zstd"
-              #     "nofail" # don’t block boot if the disk is absent
-              #     "x-systemd.automount" # mount lazily the first time it’s accessed
-              #   ];
-              # };
-              services.btrbk = {
-                instances = {
-                  ${privBtrbk.instanceName} = privBtrbk.instance;
-                  ${workBtrbk.instanceName} = workBtrbk.instance;
+              inherit instanceName;
+              instance = {
+                onCalendar = null;
+                settings = {
+                  snapshot_preserve_min = "24h";
+                  snapshot_preserve = "7d 4w 6m 1y";
+                  volume."/btr_pool" = {
+                    inherit subvolume target;
+                    snapshot_dir = ".snapshots";
+                  };
                 };
               };
-              systemd.tmpfiles.rules = [ "d /btr_pool/.snapshots 0755 root root" ];
+              script = pkgs.writeShellScriptBin "btrbk-${instanceName}" ''
+                set -euo pipefail
 
-              environment.systemPackages = [
-                pkgs.lz4
-                mountScript
-                umountScript
-                doAllScripts
-                doAllScriptsParallel
-              ]
-              ++ scripts;
+                conf="/etc/btrbk/${instanceName}.conf"
+                if [ ! -f "$conf" ]; then
+                  echo "Config file $conf does not exist"
+                  exit 1
+                fi
+
+                ${mountScript}/bin/btrbk-mount
+
+                target=${target}
+                if [ ! -d "$target" ]; then
+                  sudo mkdir -p "$target"
+                fi
+
+                exec &> >(sudo tee -a "${target}.log")
+                echo "start @$(date) ..."
+                set -x
+                sudo -H -u btrbk bash -c "btrbk -c $conf --progress --verbose run"
+                times
+              '';
+            };
+          privBtrbk = mkBtrbk "priv" volumePriv;
+          workBtrbk = mkBtrbk "work" volumeWork;
+          scripts = [
+            privBtrbk.script
+            workBtrbk.script
+          ];
+          doAllScripts = pkgs.writeShellScriptBin "btrbk-backup-all" ''
+            set -euo pipefail
+            ${mountScript}/bin/btrbk-mount
+            sleep 5
+            for script in ${toString (lib.map (script: "${script}/bin/${script.name}") scripts)}; do
+              echo "Running $script"
+              $script
+              sleep 5
+            done
+            sleep 5
+            sync
+            ${umountScript}/bin/btrbk-umount
+          '';
+          doAllScriptsParallel = pkgs.writeShellScriptBin "btrbk-backup-all-parallel" ''
+            set -euo pipefail
+            ${mountScript}/bin/btrbk-mount
+            sleep 5
+            ${pkgs.parallel}/bin/parallel --halt soon,fail=1 ::: ${
+              toString (lib.map (script: "${script}/bin/${script.name}") scripts)
             }
-          );
+            sleep 5
+            sync
+            ${umountScript}/bin/btrbk-umount
+          '';
+        in
+        {
+          # TODO: if this is set, bwrap and zoom does not work
+          # fileSystems."${mountPoint}" = {
+          #   device = validateDevice config.myconfig.persistence.impermanence.btrbk_device;
+          #   fsType = "btrfs";
+          #   options = [
+          #     "subvolid=5" # show all subvolumes
+          #     "compress=zstd"
+          #     "nofail" # don’t block boot if the disk is absent
+          #     "x-systemd.automount" # mount lazily the first time it’s accessed
+          #   ];
+          # };
+          services.btrbk = {
+            instances = {
+              ${privBtrbk.instanceName} = privBtrbk.instance;
+              ${workBtrbk.instanceName} = workBtrbk.instance;
+            };
+          };
+          systemd.tmpfiles.rules = [ "d /btr_pool/.snapshots 0755 root root" ];
+
+          environment.systemPackages = [
+            pkgs.lz4
+            mountScript
+            umountScript
+            doAllScripts
+            doAllScriptsParallel
+          ]
+          ++ scripts;
+        }
+      );
     }
   ];
   options = with lib; {

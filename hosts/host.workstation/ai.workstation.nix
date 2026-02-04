@@ -45,11 +45,11 @@ in
       };
     };
     services.ollama = {
-      enable = true;
+      enable = false;
 
       # host = myconfig.metadatalib.metadata.hosts."${config.networking.hostName}".ip4;
       # listenAddress = "0.0.0.0:11434";
-      acceleration = "rocm";
+      # acceleration = "rocm";
       # environmentVariables = {
       #   OLLAMA_LLM_LIBRARY = "cpu";
       #   HIP_VISIBLE_DEVICES = "0,1";

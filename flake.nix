@@ -265,11 +265,6 @@
               ]
               ++ moreModules
             ) metadataOverride);
-          host-brain =
-            moreModules: metadataOverride:
-            (self.lib.evalConfiguration "x86_64-linux" "brain" (
-              [ self.nixosModules.core ] ++ moreModules
-            ) metadataOverride);
           host-spare =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "x86_64-linux" "spare" (
@@ -323,6 +318,11 @@
             (self.lib.evalConfiguration "aarch64-linux" "r6c" (
               [ self.nixosModules.core ] ++ moreModules
             ) metadataOverride);
+          host-thing =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "x86_64-linux" "thing" (
+              [ self.nixosModules.core ] ++ moreModules
+            ) metadataOverride);
         };
 
         ##########################################################################
@@ -333,7 +333,6 @@
           f13 = self.nixosConfigurationsGen.host-f13 [ ] { };
           p14 = self.nixosConfigurationsGen.host-p14 [ ] { };
           spare = self.nixosConfigurationsGen.host-spare [ ] { };
-          brain = self.nixosConfigurationsGen.host-brain [ ] { };
           # x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [ ] { };
           workstation = self.nixosConfigurationsGen.host-workstation [ ] { };
           vserver = self.nixosConfigurationsGen.host-vserver [ ] { };
@@ -342,6 +341,7 @@
           r6c = self.nixosConfigurationsGen.host-r6c [ ] { };
           pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
           pi3a = self.nixosConfigurationsGen.host-pi3a [ ] { };
+          thing = self.nixosConfigurationsGen.host-thing [ ] { };
 
           # container = nixpkgs.lib.nixosSystem {
           #   system = "x86_64-linux";

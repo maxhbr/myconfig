@@ -37,6 +37,21 @@ Build log files for each host are stored in the parent directory:
 - Direct access: `../_logs/YYYY-MM-DD-myconfig-<hostname>.log`
 - The logs directory `../_logs/` contains historical build logs for all hosts
 
+## Git Hygiene
+
+### Adding New Files
+- **Always add newly created files to git** after they are created and validated
+- Run `git add <filepath>` for each new file (e.g., `git add hosts/host.newmachine/default.nix`)
+- For new hosts, add the entire directory: `git add hosts/host.<hostname>/`
+- Update `flake.nix` and metadata files should also be staged
+- This ensures all changes are tracked and visible via `git status`
+
+### Before Committing
+- Run `./nixfmtall.sh` to format all Nix files
+- Run `nix flake check` to validate configuration
+- Review staged changes with `git diff --staged`
+- Only commit when explicitly requested by the user
+
 ## Code Style Guidelines
 
 ### Nix Files

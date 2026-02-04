@@ -6,7 +6,7 @@
 }:
 
 {
-  config.services.unifi.enable = false;
+  config.services.unifi.enable = true;
   imports = [
     (lib.mkIf config.services.unifi.enable {
       services.unifi = {
