@@ -24,6 +24,7 @@ in
     ./inference.cpp.nix
     ./programs.lmstudio.nix
     ./programs.alpaca.nix
+    ./programs.vllm.nix
     ./programs.opencode
     ./programs.codex
     ./programs.qwen-code

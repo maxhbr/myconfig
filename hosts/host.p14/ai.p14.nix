@@ -51,6 +51,9 @@ in
         alpaca = {
           enable = false;
         };
+        vllm = {
+          enable = true;
+        };
         container = {
           nlm-ingestor = {
             enable = false;
