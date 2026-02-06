@@ -16,6 +16,7 @@
 
   boot.initrd.availableKernelModules = [
     "xhci_pci"
+    "thunderbolt" "uas"
     "ahci"
     "nvme"
     "usb_storage"
@@ -26,27 +27,21 @@
   boot.kernelModules = [ "kvm-amd" ];
   boot.extraModulePackages = [ ];
 
-  fileSystems."/" = {
-    device = "/dev/disk/by-uuid/REPLACE_WITH_ROOT_UUID";
-    fsType = "ext4";
-  };
+  boot.initrd.luks.devices."enc-pv".device = "/dev/disk/by-uuid/e2df1c65-99ee-4198-a3e4-41a4aaea8126";
 
-  fileSystems."/boot" = {
-    device = "/dev/disk/by-uuid/REPLACE_WITH_BOOT_UUID";
-    fsType = "vfat";
-  };
+  fileSystems."/.swapfile" =
+    { device = "/dev/mapper/enc-pv";
+      fsType = "btrfs";
+      options = [ "subvol=@swapfile" ];
+    };
+
+  fileSystems."/boot" =
+    { device = "/dev/disk/by-uuid/12CE-A600";
+      fsType = "vfat";
+      options = [ "fmask=0022" "dmask=0022" ];
+    };
 
   swapDevices = [ ];
-
-  # Enables DHCP on each ethernet and wireless interface. In case of scripted networking
-  # (the default) this is the recommended approach. When using systemd-networkd it's
-  # still possible to use this option, but it's recommended to use it in conjunction
-  # with explicit per-interface declarations with `networking.interfaces.<interface>.useDHCP`.
-  networking.useDHCP = lib.mkDefault true;
-
-  # Configure network proxy if necessary
-  # networking.proxy.default = "http://user:password@proxy:port/";
-  # networking.proxy.noProxy = "127.0.0.1,localhost,internal.domain";
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
   hardware.cpu.amd.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;

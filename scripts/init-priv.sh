@@ -7,6 +7,7 @@
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 set -e
 
+myconfig="$(pwd)"
 priv_template_dir="scripts/priv.template"
 split_branch="priv-subtree-branch"
 use_test_dir=false
@@ -56,8 +57,8 @@ if [[ "$update_mode" == "true" ]]; then
 
   cd "$target_dir"
   echo "Updating private config repository..."
-  git pull --no-ff .. "$split_branch"
-  cd ..
+  git pull --no-ff "$myconfig" "$split_branch"
+  cd "$myconfig"
 
   git branch -D "$split_branch" > /dev/null 2>&1
 

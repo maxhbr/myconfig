@@ -21,6 +21,7 @@
         enable = false;
       };
     }
+    ./ai.thing.nix
   ];
 
   config = {
