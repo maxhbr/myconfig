@@ -19,6 +19,14 @@ Run the bootstrap script to set up disk partitions and filesystems:
 sudo BOOTSTRAP=YES scripts/bootstrap.sh /dev/sdX "your-passphrase" [vg_name] [mnt]
 ```
 
+**Example for ephemeral root (stateless system):**
+
+```bash
+sudo BOOTSTRAP=YES EPHEMERAL_ROOT=true scripts/bootstrap.sh /dev/nvme0n1 "my-password"
+```
+
+This creates a temporary root filesystem and separate persistent subvolumes typically useful for servers or stateless systems.
+
 Parameters:
 - `/dev/sdX`: The target device (e.g., `/dev/sda`, `/dev/nvme0n1`)
 - `"your-passphrase"`: Disk encryption passphrase (leave empty for no encryption)
