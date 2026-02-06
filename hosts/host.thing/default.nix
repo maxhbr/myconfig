@@ -12,7 +12,7 @@
   imports = [
     ./hardware-configuration.nix
     ../../hardware/efi.nix
-    # ../../hardware/btrfs.nix
+    ../../hardware/btrfs.nix
     inputs.nixos-hardware.nixosModules.framework-desktop-amd-ai-max-300-series
     # (myconfig.metadatalib.fixIp "REPLACE_WITH_INTERFACE")
     {
@@ -29,6 +29,12 @@
     networking.useDHCP = false;
 
     myconfig = {
+      persistence.impermanence = {
+        enable = true;
+        soft_permanence_for_boot = false;
+        tmpfs_size = "20%";
+        btrfs_device = "/dev/mapper/enc-pv";
+      };
       desktop = {
         enable = true;
         wayland = {
@@ -53,6 +59,12 @@
       loader = {
         systemd-boot.enable = true;
         efi.canTouchEfiVariables = true;
+      };
+      initrd = {
+        supportedFilesystems = [
+          "btrfs"
+          "luks"
+        ];
       };
     };
 
