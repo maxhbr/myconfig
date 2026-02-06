@@ -34,7 +34,10 @@ in
           })
           (writeShellApplication {
             name = "opencode-worktree";
-            runtimeInputs = [ git coreutils ];
+            runtimeInputs = [
+              git
+              coreutils
+            ];
             text = ''
               if [ ! -d .git ]; then
                 echo "Error: Not in a git repository root"
