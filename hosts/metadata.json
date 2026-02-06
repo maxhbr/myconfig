@@ -170,7 +170,7 @@
       "wireguard": {
         "wg0": {
           "ip4": "10.199.199.60",
-          "pubkey": "PLACEHOLDER_REPLACE_WITH_ACTUAL_WG_PUBKEY"
+          "pubkey": "cYmrNdse8+bop7JwxiZk8J9BejXRzOOcgkW6whi5yWo="
         }
       }
     }

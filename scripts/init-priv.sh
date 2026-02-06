@@ -43,6 +43,12 @@ if [[ "$update_mode" == "true" ]]; then
     exit 1
   fi
 
+  timestamp=$(date +%Y%m%d%H%M%S)
+  backup_dir="../priv.$timestamp"
+  echo "Creating backup at: $backup_dir"
+  cp -a "$target_dir" "$backup_dir"
+  echo "Backup created successfully"
+
   git branch -D "$split_branch" > /dev/null 2>&1 || true
 
   echo "Splitting subtree from $priv_template_dir..."

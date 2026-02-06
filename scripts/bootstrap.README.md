@@ -62,6 +62,26 @@ To test without creating the actual directory:
 scripts/init-priv.sh --test
 ```
 
+### Updating Private Configuration
+
+After the myconfig template has been updated, you can pull new changes into your private config:
+
+```bash
+scripts/init-priv.sh update
+```
+
+This will:
+1. Create a backup at `../priv.<timestamp>` (never automatically cleaned up)
+2. Create a fresh subtree branch from the updated template
+3. Merge it into your `../priv` repository via git pull
+
+You may encounter merge conflicts that need to be resolved manually. If something goes wrong, you can restore from the backup:
+
+```bash
+rm -rf ../priv
+cp -a ../priv.<timestamp> ../priv
+```
+
 ## 4. Install NixOS
 
 Finally, install the NixOS configuration:
