@@ -14,8 +14,20 @@ tasks:
   - build-pkgs: |
       cd jail.nix
       nix build --print-build-logs --out-link result-tests ./tests#all-for-ci
-      cachix push jailnix result-tests
+      if [ -e ~/.config/cachix/cachix.dhall ]; then
+        cachix push jailnix result-tests
+      fi
       nix build --print-build-logs --out-link result-website ./website#default
-      cachix push jailnix result-website
-  - run-tests: cd jail.nix && cachix watch-exec jailnix -- result-tests/run-tests/bin/run-tests
-  - check-fmt: cd jail.nix && result-tests/check-fmt/bin/check-fmt
+      if [ -e ~/.config/cachix/cachix.dhall ]; then
+        cachix push jailnix result-website
+      fi
+  - run-tests: |
+      cd jail.nix
+      if [ -e ~/.config/cachix/cachix.dhall ]; then
+        cachix watch-exec jailnix -- result-tests/run-tests/bin/run-tests
+      else
+        result-tests/run-tests/bin/run-tests
+      fi
+  - check-fmt: |
+      cd jail.nix
+      result-tests/check-fmt/bin/check-fmt
