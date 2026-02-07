@@ -14,12 +14,19 @@
     ../../hardware/efi.nix
     ../../hardware/btrfs.nix
     inputs.nixos-hardware.nixosModules.framework-desktop-amd-ai-max-300-series
-    # (myconfig.metadatalib.fixIp "REPLACE_WITH_INTERFACE")
+    (myconfig.metadatalib.fixIp "enp191s0")
+    (myconfig.metadatalib.setupAsBuildMachine [
+      myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
+    ])
+    { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
     {
       # programs.mosh.enable = lib.mkDefault true;
       services.eternal-terminal = {
-        enable = false;
+        enable = true;
+        port = 22022;
       };
+      networking.firewall.allowedTCPPorts = [ 22022 ];
+      networking.firewall.allowedUDPPorts = [ 22022 ];
     }
     ./ai.thing.nix
   ];
@@ -36,6 +43,7 @@
         tmpfs_size = "20%";
         btrfs_device = "/dev/mapper/enc-pv";
       };
+      headless.enable = true;
       desktop = {
         enable = true;
         wayland = {
@@ -45,6 +53,8 @@
             "labwc"
           ];
         };
+        imagework.enable = true; # https://github.com/NixOS/nixpkgs/issues/425306
+        imagework.myphoto.enable = true;
       };
       virtualisation.enable = true;
     };
@@ -52,7 +62,14 @@
     virtualisation = {
       # docker.enable = true;
       podman.enable = true;
+      oci-containers = {
+        backend = "podman";
+      };
+      # virtualbox.host.enable = true;
+      # lxc.enable = true;
+      # libvirtd.enable = true;
     };
+    services.hardware.bolt.enable = true;
 
     hardware.enableRedistributableFirmware = true;
 
@@ -65,7 +82,9 @@
         supportedFilesystems = [
           "btrfs"
           "luks"
+          "nfs"
         ];
+        kernelModules = [ "nfs" ];
       };
     };
 
