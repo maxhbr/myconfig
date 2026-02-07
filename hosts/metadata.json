@@ -167,6 +167,11 @@
     "thing": {
       "network": "home",
       "ip4": "192.168.1.60",
+      "pubkeys": {
+        "id_ed25519.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINcemgl/oP7qdR1hBnHWwERqpwPLZIN1Ce9kL7Kop2Dn thing",
+        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGM/dA06yJuySuA9M/gRm9AhdlgudT2DFf8M4Lg4xmHx root@thing",
+        "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCYnft40UuZTzX2r+f6bA/WuNLxQSmRvOhPoL0LNkwyf4RHYR9UMtU3SxH8HKn0vK/6y09TZHPCWkCyGmDBsm9OYSWjFENGd1oELNfWaFnR7y7Oskt22giPh4gmh3a3FBSVqhH/MYLaWpstTvnJ/K43MMYK8M/6tvK6jS947Nt6NLVT9PkphG17/bhtsOPCzW6EeqIyoMlir3bye2TZYFXkwhmo+mK4VEfsbKZhWALdAYMeM+OfQIgsWfRmU5Wjd7YzFfzOOnlgKy/1UgIEqMXdsdEcrlaPn1tBvmdqgJ8vEdSl+mKoU4UGdB0RITq1XMlU/oup12iDzi00VVdgw/Se5G6DmPpndfAwqLiavahKl01RR/ohMMKdwcJZu/QZvO2EZSH2kDD3zS/6RCcCoJSb9wEVqdJwtvPac/PNnljMbgvZ/IcIQL2MkfZBs6TqUp1D5kTdFKy/mQJmg+W6ndvIqDrcurpcRXu63Uk3t+L1aXGTT4morET5l2inYIY3K19YLW/pDdYJMcvOVWS3KETcYSZ5VEPadtodXM7Y1zNS0rYjSIsHi3OEY7nXS3xGUhOiaKqvklZ1kwlUAur9tsX+jfvFHh18Gxs4b1zx9tLQIYb10dT9oVD8HHAYVP2C1sp/6+0ugeJPX6OCKLeOLVBzwtoVvSYL2zf1sSigHHXrSQ== root@thing"
+      },
       "wireguard": {
         "wg0": {
           "ip4": "10.199.199.60",

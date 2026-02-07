@@ -98,8 +98,7 @@ in
         HCC_AMDGPU_TARGET = "gfx1151"; # used to be necessary, but doesn't seem to anymore
         OLLAMA_FLASH_ATTENTION = "1";
       };
-      # results in environment variable "HSA_OVERRIDE_GFX_VERSION=10.3.0"
-      rocmOverrideGfx = "11.0.1";
+      # rocmOverrideGfx = "11.5.1";
 
       openFirewall = false;
       host = "0.0.0.0";
