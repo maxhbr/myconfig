@@ -97,11 +97,9 @@ in
       environmentVariables = {
         HCC_AMDGPU_TARGET = "gfx1151"; # used to be necessary, but doesn't seem to anymore
         OLLAMA_FLASH_ATTENTION = "0";
-
-        # Alternative configuration for gfx1151 APU stability (uncomment if segfaults persist):
-        # HSA_OVERRIDE_GFX_VERSION = "11.0.1";  # Force gfx1151 emulation
-        # OLLAMA_MAX_LOADED_MODELS = "1";      # Prevent memory issues
-        # OLLAMA_NUM_PARALLEL = "1";           # Reduce concurrent operations
+        HSA_OVERRIDE_GFX_VERSION = "11.0.1"; # Force gfx1151 emulation
+        OLLAMA_MAX_LOADED_MODELS = "1"; # Prevent memory issues
+        OLLAMA_NUM_PARALLEL = "1"; # Reduce concurrent operations
       };
       # rocmOverrideGfx = "11.5.1";
 
