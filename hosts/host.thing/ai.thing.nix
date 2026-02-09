@@ -96,7 +96,12 @@ in
       package = pkgs.ollama-rocm;
       environmentVariables = {
         HCC_AMDGPU_TARGET = "gfx1151"; # used to be necessary, but doesn't seem to anymore
-        OLLAMA_FLASH_ATTENTION = "1";
+        OLLAMA_FLASH_ATTENTION = "0";
+
+        # Alternative configuration for gfx1151 APU stability (uncomment if segfaults persist):
+        # HSA_OVERRIDE_GFX_VERSION = "11.0.1";  # Force gfx1151 emulation
+        # OLLAMA_MAX_LOADED_MODELS = "1";      # Prevent memory issues
+        # OLLAMA_NUM_PARALLEL = "1";           # Reduce concurrent operations
       };
       # rocmOverrideGfx = "11.5.1";
 
@@ -145,7 +150,9 @@ in
       };
     };
 
-    networking.firewall.interfaces."wg0".allowedTCPPorts = lib.optionals config.services.caddy.enable [ 443 ];
+    networking.firewall.interfaces."wg0".allowedTCPPorts = lib.optionals config.services.caddy.enable [
+      443
+    ];
 
     home-manager.sharedModules = [ { home.packages = [ ai-tmux-session-script ]; } ];
   };

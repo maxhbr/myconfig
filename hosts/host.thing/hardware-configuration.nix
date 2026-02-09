@@ -16,7 +16,8 @@
 
   boot.initrd.availableKernelModules = [
     "xhci_pci"
-    "thunderbolt" "uas"
+    "thunderbolt"
+    "uas"
     "ahci"
     "nvme"
     "usb_storage"
@@ -29,17 +30,20 @@
 
   boot.initrd.luks.devices."enc-pv".device = "/dev/disk/by-uuid/e2df1c65-99ee-4198-a3e4-41a4aaea8126";
 
-  fileSystems."/.swapfile" =
-    { device = "/dev/mapper/enc-pv";
-      fsType = "btrfs";
-      options = [ "subvol=@swapfile" ];
-    };
+  fileSystems."/.swapfile" = {
+    device = "/dev/mapper/enc-pv";
+    fsType = "btrfs";
+    options = [ "subvol=@swapfile" ];
+  };
 
-  fileSystems."/boot" =
-    { device = "/dev/disk/by-uuid/12CE-A600";
-      fsType = "vfat";
-      options = [ "fmask=0022" "dmask=0022" ];
-    };
+  fileSystems."/boot" = {
+    device = "/dev/disk/by-uuid/12CE-A600";
+    fsType = "vfat";
+    options = [
+      "fmask=0022"
+      "dmask=0022"
+    ];
+  };
 
   swapDevices = [ ];
 

@@ -321,7 +321,8 @@
           host-thing =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "x86_64-linux" "thing" (
-              [ self.nixosModules.core 
+              [
+                self.nixosModules.core
                 (
                   {
                     pkgs,
@@ -344,19 +345,18 @@
                               '';
                           in
                           {
-                            home.packages =
-                              with pkgs;
-                              [
-                                (mk-upg-script "upg" "")
-                                (mk-upg-script "upg-fast" "--fast")
-                              ];
+                            home.packages = with pkgs; [
+                              (mk-upg-script "upg" "")
+                              (mk-upg-script "upg-fast" "--fast")
+                            ];
                           }
                         )
                       ];
                     };
                   }
                 )
-              ] ++ moreModules
+              ]
+              ++ moreModules
             ) metadataOverride);
         };
 
