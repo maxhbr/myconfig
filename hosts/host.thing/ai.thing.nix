@@ -93,22 +93,16 @@ in
     };
     services.ollama = {
       enable = true;
-      package = pkgs.ollama-rocm;
+      package = pkgs.ollama-vulkan;
       environmentVariables = {
-        HCC_AMDGPU_TARGET = "gfx1151"; # used to be necessary, but doesn't seem to anymore
         OLLAMA_FLASH_ATTENTION = "0";
-        HSA_OVERRIDE_GFX_VERSION = "11.0.1"; # Force gfx1151 emulation
-        OLLAMA_MAX_LOADED_MODELS = "1"; # Prevent memory issues
-        OLLAMA_NUM_PARALLEL = "1"; # Reduce concurrent operations
-      };
-      # rocmOverrideGfx = "11.5.1";
-
-      openFirewall = false;
-      host = "0.0.0.0";
-      environmentVariables = {
         OLLAMA_ORIGIN = "*";
         OLLAMA_KEEP_ALIVE = "5m";
       };
+
+      openFirewall = false;
+      host = "0.0.0.0";
+
       loadModels = [
         # "cogito:32b"
         # "deepseek-r1:32b"
