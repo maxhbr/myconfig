@@ -49,8 +49,7 @@ in
               worktree_name="''${dirname}-opencode-''${timestamp}"
               branch_name="opencode-''${timestamp}"
 
-              git checkout -b "''${branch_name}" || exit 1
-              git worktree add "../''${worktree_name}" "''${branch_name}" || exit 1
+              git worktree add -b "''${branch_name}" "../''${worktree_name}" || exit 1
               cd "../''${worktree_name}" && exec ${lib.getExe opencodeBwrap} "$@"
             '';
           })

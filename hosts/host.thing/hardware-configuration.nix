@@ -34,7 +34,6 @@
     keyFileSize = 4096;
     preLVM = true;
     allowDiscards = true;
-    fallbackToPassword = true;
   };
 
   fileSystems."/.swapfile" = {
