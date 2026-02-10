@@ -180,7 +180,7 @@ in
         imagework.myphoto.enable = true;
         cad.enable = true;
         # joplin-desktop.enable = true;
-        logseq.enable = true;
+        logseq.enable = false;
       };
       v4l2.enable = true;
       email = {

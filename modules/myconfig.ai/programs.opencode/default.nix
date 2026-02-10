@@ -10,7 +10,7 @@ let
   opencodeBwrap = callLib ../fns/sandboxed-app.nix {
     name = "opencode";
     pkg = pkgs.opencode;
-    readOnlyConfigDirs = [ ".config/opencode" ];
+    writableDirs = [ ".config/opencode" ];
   };
 in
 {
