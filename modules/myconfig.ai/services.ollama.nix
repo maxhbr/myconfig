@@ -12,23 +12,26 @@
       };
     };
     services.nextjs-ollama-llm-ui.enable = true;
-    home.sharedModules = [
+    home-manager.sharedModules = [
       {
         home.packages = with pkgs; [
-          writeShellApplication {
+          (writeShellApplication {
             name = "ollama-bench";
             runtimeInputs = [ config.services.ollama.package ];
             text = ''
               set -euo pipefail
               model="$1"
-              mkdir -p "$HOME/ollama-bench-results"
+              logdir="$HOME/ollama-bench-results"
+              mkdir -p "$logdir"
               ollama pull "$model"
+              logfile="$logdir/''${model//[^a-zA-Z0-9]/_}-$(date +%Y%m%d-%H%M%S).log"
+              
               {
                 ollama show "$model"
                 bench -model "$model" -epochs 3 -temperature 0.7
-              } | tee "$HOME/ollama-bench-results/$(echo "$model" | sed 's/[^a-zA-Z0-9]/_/g')-$(date +%Y%m%d-%H%M%S).log"
+              } | tee "$logfile"
             '';
-          }
+          })
         ];
       }
     ];
