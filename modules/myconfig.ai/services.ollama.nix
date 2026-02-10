@@ -25,7 +25,7 @@
               mkdir -p "$logdir"
               ollama pull "$model"
               logfile="$logdir/''${model//[^a-zA-Z0-9]/_}-$(date +%Y%m%d-%H%M%S).log"
-              
+
               {
                 ollama show "$model"
                 bench -model "$model" -epochs 3 -temperature 0.7

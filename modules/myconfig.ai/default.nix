@@ -14,6 +14,7 @@ in
   imports = [
     ./ai-coding.nix
     ./services.ollama.nix
+    ./services.open-webui.nix
     ./services.tabby.nix
     ./container.open-webui.nix
     ./container.nlm-ingestor.nix

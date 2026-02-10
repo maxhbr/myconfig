@@ -26,7 +26,30 @@ let
 in
 {
   imports = [
-    # ../../hardware/eGPU.nix
+    ({
+      config = lib.mkIf (config.myconfig.ai.container.open-webui.enable || config.myconfig.ai.open-webui.enable) let
+          port = if config.myconfig.ai.container.open-webui.enable then config.myconfig.ai.container.open-webui.port else config.myconfig.ai.open-webui.port;
+        in {
+        services.caddy = {
+          enable = true;
+          virtualHosts."${config.networking.hostName}.wg0.maxhbr.local" = {
+            listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+            hostName = "${config.networking.hostName}.wg0.maxhbr.local";
+            serverAliases = [
+              "${config.networking.hostName}.wg0"
+              (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
+            ];
+            extraConfig = ''
+              reverse_proxy http://localhost:${toString port}
+            '';
+          };
+        };
+
+        networking.firewall.interfaces."wg0".allowedTCPPorts = lib.optionals config.services.caddy.enable [
+          443
+        ];
+      };
+    })
   ];
 
   config = {
@@ -51,6 +74,9 @@ in
         alpaca = {
           enable = false;
         };
+        open-webui = {
+          enable = true;
+        };
         vllm = {
           enable = true;
         };
@@ -59,7 +85,7 @@ in
             enable = false;
           };
           open-webui = {
-            enable = true;
+            enable = false;
           };
           sillytavern = {
             enable = false;
@@ -127,24 +153,6 @@ in
     #   acceleration = "cuda";
     #   model = "TabbyML/Qwen2.5-Coder-14B";
     # };
-    services.caddy = {
-      enable = true;
-      virtualHosts."${config.networking.hostName}.wg0.maxhbr.local" = {
-        listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
-        hostName = "${config.networking.hostName}.wg0.maxhbr.local";
-        serverAliases = [
-          "${config.networking.hostName}.wg0"
-          (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
-        ];
-        extraConfig = ''
-          reverse_proxy http://localhost:${toString config.myconfig.ai.container.open-webui.port}
-        '';
-      };
-    };
-
-    networking.firewall.interfaces."wg0".allowedTCPPorts = lib.optionals config.services.caddy.enable [
-      443
-    ];
 
     home-manager.sharedModules = [ { home.packages = [ ai-tmux-session-script ]; } ];
   };
