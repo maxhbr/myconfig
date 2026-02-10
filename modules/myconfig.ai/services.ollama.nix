@@ -26,7 +26,7 @@
               {
                 ollama show "$model"
                 bench -model "$model" -epochs 3 -temperature 0.7
-              } | tee "$HOME/ollama-bench-results/${model}-$(date +%Y%m%d-%H%M%S).log"
+              } | tee "$HOME/ollama-bench-results/$(echo "$model" | sed 's/[^a-zA-Z0-9]/_/g')-$(date +%Y%m%d-%H%M%S).log"
             '';
           }
         ];
