@@ -59,7 +59,7 @@ in
             enable = false;
           };
           open-webui = {
-            enable = false;
+            enable = true;
           };
           sillytavern = {
             enable = false;
@@ -128,7 +128,7 @@ in
     #   model = "TabbyML/Qwen2.5-Coder-14B";
     # };
     services.caddy = {
-      enable = false;
+      enable = true;
       virtualHosts."${config.networking.hostName}.wg0.maxhbr.local" = {
         listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
         hostName = "${config.networking.hostName}.wg0.maxhbr.local";
