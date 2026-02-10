@@ -27,7 +27,7 @@ in
 {
   imports = [
     ({
-      config = lib.mkIf (config.myconfig.ai.container.open-webui.enable || config.myconfig.ai.open-webui.enable) let
+      config = lib.mkIf (config.myconfig.ai.container.open-webui.enable || config.myconfig.ai.open-webui.enable) (let
           port = if config.myconfig.ai.container.open-webui.enable then config.myconfig.ai.container.open-webui.port else config.myconfig.ai.open-webui.port;
         in {
         services.caddy = {
@@ -48,7 +48,7 @@ in
         networking.firewall.interfaces."wg0".allowedTCPPorts = lib.optionals config.services.caddy.enable [
           443
         ];
-      };
+      });
     })
   ];
 

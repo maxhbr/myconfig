@@ -9,7 +9,7 @@
 }:
 
 let
-  cfg = myconfig.ai.open-webui;
+  cfg = config.myconfig.ai.open-webui;
 in
 {
   options.myconfig.ai.open-webui = with lib; {
@@ -28,7 +28,7 @@ in
     };
   };
 
-  config = lib.mkIf (config.myconfig.ai.enable && ccfg.enable) {
+  config = lib.mkIf (config.myconfig.ai.enable && cfg.enable) {
     services.open-webui = {
       enable = true;
       host = cfg.host;
