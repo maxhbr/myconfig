@@ -93,6 +93,13 @@ in
                   msmtp.enable = config.programs.msmtp.enable;
                   aerc.extraAccounts = {
                     signature-file = "${pkgs.writeText "signature" account.email.signature}";
+                    outgoing =
+                      let
+                        aerc-sendmail = pkgs.writeShellScriptBin "aerc-sendmail-${name}" ''
+                          exec "${config.programs.msmtp.package}/bin/msmtp" -a "${name}" "$@"
+                        '';
+                      in
+                      "${aerc-sendmail}/bin/aerc-sendmail-${name}";
                   };
                   himalaya.settings = {
                     signature = account.email.signature;
