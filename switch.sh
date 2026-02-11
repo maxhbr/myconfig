@@ -189,7 +189,8 @@ home_manager_files_from_du() {
         awk '{print $1}' |
         grep -E '.*-home-manager-files$' |
         while read -r hmfiles; do
-            local target="$hm_files_dir/$(basename "$hmfiles")"
+            local target
+            target="$hm_files_dir/$(basename "$hmfiles")"
             >&2 echo "copy to $target"
             cp -Lr "$hmfiles" "$target" &>/dev/null || true
             chmod -R u+rwx "$target"
@@ -379,7 +380,8 @@ main() {
     if [[ -e $old_result ]]; then
         diff_build_results "$old_result" "$out_link"
     fi
-    local du_file="$(du_of_out_link "$target")"
+    local du_file
+    du_file="$(du_of_out_link "$target")"
     home_manager_files_from_du "$target" "$du_file"
     if [[ $MODE == "--use-wg" ]]; then
         deploy "$target" "$out_link" "$COMMAND" true
