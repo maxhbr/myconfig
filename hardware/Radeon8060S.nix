@@ -6,7 +6,7 @@
 }:
 let
   # Optimized llama-cpp for Strix Halo
-  llama-cpp-max = pkgs.llama-cpp-rocm.override {
+  llama-cpp-max = pkgs.llama-cpp.override {
     rocmSupport = true;
     # Force the compiler to target the RDNA 3.5 ISA
     rocmGpuTargets = [ "gfx1151" ];
