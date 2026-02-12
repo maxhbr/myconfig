@@ -41,19 +41,15 @@ let
       ai.inference-cpp.ollama-cpp.package = llama-cpp-gfx1151;
     };
     services.ollama.package = lib.mkForce ollama-rocm-gfx1151;
-
-    boot.kernelParams = [
-      # "amd_iommu=off"
-      "iommu=pt"            # Use pass-through for better performance
-      "amd_iommu=on"        # Explicitly turn it on
-      "amdgpu.gttsize=131072"
-      "ttm.pages_limit=33554432"
-    ];
   };
   config-no-rocm = {
     myconfig = {
       hardware.gpu.variant = "amd-no-rocm";
     };
+  };
+in
+{
+  config = config-no-rocm // {
     boot.kernelParams = [
       # "amd_iommu=off"
       "iommu=pt"            # Use pass-through for better performance
@@ -62,7 +58,4 @@ let
       "ttm.pages_limit=33554432"
     ];
   };
-in
-{
-  config = config-rocm;
 }

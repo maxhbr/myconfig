@@ -32,6 +32,7 @@ in
           koboldcpp
           config.myconfig.ai.inference-cpp.ollama-cpp.package
         ];
+        myconfig.persistence.cache-directories = [ ".cache/llama.cpp/" ];
       }
     ];
   };
