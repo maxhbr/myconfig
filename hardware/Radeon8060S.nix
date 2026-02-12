@@ -14,7 +14,7 @@ let
         rocmGpuTargets = [ "gfx1151" ];
       })
     ];
-    buildInputs = [ pkgs.makeWrapper ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
     postBuild = ''
       wrapProgram $out/bin/llama-cli \
         --set HSA_OVERRIDE_GFX_VERSION 11.5.1 \
@@ -22,7 +22,7 @@ let
     '';
   };
 
-  ollama-rocm-gfx1151 = pkg.ollama-rocm.override {
+  ollama-rocm-gfx1151 = pkgs.ollama-rocm.override {
     rocmGpuTargets = [ "gfx1151" ];
   };
 in
