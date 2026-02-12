@@ -376,8 +376,11 @@ main() {
             cd "$script_dir"
             git fetch -q
             if git rev-list HEAD..@{u} --count 2>/dev/null | grep -q '^[1-9]'; then
-                log_error "upstream has commits that could be pulled. run 'git pull' first"
-                exit 1
+                git pull --rebase || {
+                    log_error "git pull --rebase failed due to conflicts. resolve conflicts and run again"
+                    git rebase --abort
+                    exit 1
+                }
             fi
         )
     fi
