@@ -29,6 +29,7 @@
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
     ./ai.thing.nix
+    ./Radeon8060S.nix
     {
       services.earlyoom.enable = lib.mkForce false;
     }
