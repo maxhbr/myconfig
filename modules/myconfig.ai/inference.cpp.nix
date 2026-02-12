@@ -18,6 +18,11 @@ in
   options.myconfig = with lib; {
     ai.inference-cpp = {
       enable = mkEnableOption "myconfig.ai.inference-cpp";
+      ollama-cpp.package = mkOption {
+        type = types.package;
+        default = matching-llama-cpp;
+        description = "The ollama-cpp package to use";
+      };
     };
   };
   config = lib.mkIf config.myconfig.ai.inference-cpp.enable {
@@ -25,7 +30,7 @@ in
       {
         home.packages = with pkgs; [
           koboldcpp
-          matching-llama-cpp
+          config.myconfig.ai.inference-cpp.ollama-cpp.package
         ];
       }
     ];

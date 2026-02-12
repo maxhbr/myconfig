@@ -62,6 +62,12 @@ in
             ];
           }
         ];
+        hardware.graphics = {
+          extraPackages = with pkgs; [
+            rocmPackages.clr.icd
+            amdvlk # Optional, but good for Vulkan fallback
+          ];
+        };
       })
       (lib.mkIf (cfg.variant == "amd") {
         home-manager.sharedModules = [
