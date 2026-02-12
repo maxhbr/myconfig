@@ -61,7 +61,7 @@ in
     })
     ({
       config = 
-        lib.mkIf (config.myconfig.hardware.gpu.variant = "amd") {
+        lib.mkIf (config.myconfig.hardware.gpu.variant == "amd") {
           services.ollama = {
             environmentVariables = {
               HSA_OVERRIDE_GFX_VERSION = “11.5.1”;
