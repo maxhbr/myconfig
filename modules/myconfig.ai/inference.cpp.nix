@@ -8,11 +8,11 @@ let
   gpuvariant = config.myconfig.hardware.gpu.variant;
   matching-llama-cpp =
     if gpuvariant == "amd" then
-      llama-cpp-rocm
+      pkgs.llama-cpplama-cpp-rocm
     else if gpuvariant == "amd-no-rocm" then
-      llama-cpp-vulcan
+      pkgs.llama-cpp-vulcan
     else
-      llama-cpp;
+      pkgs.llama-cpp;
 in
 {
   options.myconfig = with lib; {
