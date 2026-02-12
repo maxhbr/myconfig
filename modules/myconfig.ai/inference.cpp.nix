@@ -10,7 +10,7 @@ let
     if gpuvariant == "amd" then
       pkgs.llama-cpp-rocm
     else if gpuvariant == "amd-no-rocm" then
-      pkgs.llama-cpp-vulcan
+      pkgs.llama-cpp-vulkan
     else
       pkgs.llama-cpp;
 in
