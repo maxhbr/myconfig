@@ -60,20 +60,17 @@ in
           );
     })
     ({
-      config = 
-        lib.mkIf (config.myconfig.hardware.gpu.variant == "amd") {
-          services.ollama = {
-            environmentVariables = {
-              HSA_OVERRIDE_GFX_VERSION = "11.5.1";
-              HIP_VISIBLE_DEVICES = "1";
-              OLLAMA_LLM_LIBRARY = "rocm";
-              HCC_AMDGPU_TARGET = "gfx1151";
-              HSA_ENABLE_SDMA = "1";
-              OLLAMA_DEBUG = "1";
-            };
-            rocmOverrideGfx = "11.5.1";
+      config = lib.mkIf (config.myconfig.hardware.gpu.variant == "amd") {
+        services.ollama = {
+          environmentVariables = {
+            HSA_OVERRIDE_GFX_VERSION = "11.5.1";
+            HIP_VISIBLE_DEVICES = "1";
+            HCC_AMDGPU_TARGET = "gfx1151";
+            HSA_ENABLE_SDMA = "1";
           };
+          rocmOverrideGfx = "11.5.1";
         };
+      };
     })
   ];
 
@@ -147,7 +144,6 @@ in
       environmentVariables = {
         OLLAMA_FLASH_ATTENTION = "0";
         OLLAMA_ORIGIN = "*";
-        OLLAMA_KEEP_ALIVE = "5m";
       };
 
       openFirewall = false;

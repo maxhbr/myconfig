@@ -5,10 +5,40 @@
   ...
 }:
 {
+  imports = [
+    ({
+      config = lib.mkIf (config.myconfig.hardware.gpu.variant == "nvidia") {
+        services.ollama.package = pkgs.ollama-cuda;
+      };
+    })
+    ({
+      config = lib.mkIf (config.myconfig.hardware.gpu.variant == "amd") {
+        services.ollama = {
+          package = pkgs.ollama-rocm;
+          environmentVariables = {
+            OLLAMA_LLM_LIBRARY = "rocm";
+          };
+          rocmOverrideGfx = "11.5.1";
+        };
+      };
+    })
+    ({
+      config = lib.mkIf (config.myconfig.hardware.gpu.variant == "amd-no-rocm") {
+        services.ollama = {
+          package = pkgs.ollama-vulkan;
+          environmentVariables = {
+            OLLAMA_VULKAN = "1";
+          };
+        };
+      };
+    })
+
+  ];
   config = lib.mkIf config.services.ollama.enable {
     services.ollama = {
       environmentVariables = {
         OLLAMA_KEEP_ALIVE = "5m";
+        OLLAMA_DEBUG = "1";
       };
     };
     services.nextjs-ollama-llm-ui.enable = true;
