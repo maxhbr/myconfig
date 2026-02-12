@@ -368,6 +368,20 @@ main() {
         log_warning "no github token"
     fi
 
+    local script_dir
+    script_dir="$(dirname "$(readlink -f "$0")")"
+    if [[ -d "$script_dir/.git" ]]; then
+        log_info "checking for upstream commits"
+        (
+            cd "$script_dir"
+            git fetch -q
+            if git rev-list HEAD..@{u} --count 2>/dev/null | grep -q '^[1-9]'; then
+                log_error "upstream has commits that could be pulled. run 'git pull' first"
+                exit 1
+            fi
+        )
+    fi
+
     flake_update "$([[ $MODE == "" ]] && echo "full" || echo "fast")"
 
     local out_link
