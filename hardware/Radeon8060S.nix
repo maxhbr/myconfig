@@ -25,13 +25,19 @@ let
   ollama-rocm-gfx1151 = pkgs.ollama-rocm.override {
     rocmGpuTargets = [ "gfx1151" ];
   };
-in
-{
-  config = {
+  config-rocm = {
     myconfig = {
       hardware.gpu.variant = "amd";
       ai.inference-cpp.ollama-cpp.package = llama-cpp-gfx1151;
     };
     services.ollama.package = lib.mkForce ollama-rocm-gfx1151;
   };
+  config-no-rocm {
+    myconfig = {
+      hardware.gpu.variant = "amd-no-rocm";
+    };
+  };
+in
+{
+  config = config-rocm;
 }
