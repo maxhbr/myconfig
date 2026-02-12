@@ -48,6 +48,7 @@ in
         services.xserver.videoDrivers = [ "nvidia" ];
         hardware.nvidia.open = true;
         hardware.nvidia-container-toolkit.enable = true;
+        services.ollama.package = pkgs.ollama-cuda;
       })
       # (lib.mkIf (
       #   config.hardware.gpu.variant == "intel"
@@ -73,6 +74,7 @@ in
             ];
           }
         ];
+        services.ollama.package = pkgs.ollama-rocm;
       })
       (lib.mkIf (cfg.variant == "amd-no-rocm") {
         nixpkgs.config.rocmSupport = false;
@@ -93,6 +95,7 @@ in
                 };
           })
         ];
+        services.ollama.package = pkgs.ollama-vulkan;
       })
       (lib.mkIf (cfg.variant == "intel") {
       })

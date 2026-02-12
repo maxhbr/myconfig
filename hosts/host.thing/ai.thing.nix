@@ -128,7 +128,6 @@ in
     };
     services.ollama = {
       enable = true;
-      package = pkgs.ollama-vulkan;
       environmentVariables = {
         OLLAMA_FLASH_ATTENTION = "0";
         OLLAMA_ORIGIN = "*";
