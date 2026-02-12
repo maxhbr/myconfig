@@ -9,7 +9,7 @@ let
   llama-cpp-max = pkgs.llama-cpp.override {
     rocmSupport = true;
     # Force the compiler to target the RDNA 3.5 ISA
-    gpuTargets = [ "gfx1151" ]; 
+    gpuTargets = [ "gfx1151" ];
   };
   llama-cpp-optimized = pkgs.symlinkJoin {
     name = "llama-cpp-optimized";
@@ -26,7 +26,7 @@ in
   config = {
     myconfig = {
       hardware.gpu.variant = "amd";
-      ai.inference-cpp.ollama-cpp.package = llama-cpp-optimized
+      ai.inference-cpp.ollama-cpp.package = llama-cpp-optimized;
     };
   };
 }
