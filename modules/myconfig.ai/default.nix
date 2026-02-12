@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: MIT
 {
   config,
+  myconfig,
   lib,
   pkgs,
   ...
 }:
 let
+  user = myconfig.user;
   nixpkgsConfig = config.nixpkgs.config;
   callLib = file: import file { inherit lib pkgs; };
 in
@@ -50,5 +52,11 @@ in
         ];
       }
     ];
+    services.udev.extraRules = ''
+      SUBSYSTEM=="accel", GROUP="render", MODE="0660"
+    '';
+    users.users."${user}" = {
+      extraGroups = [ "render" ];
+    };
   };
 }
