@@ -29,6 +29,9 @@
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
     ./ai.thing.nix
+    {
+      services.earlyoom.enable = lib.mkForce false;
+    }
   ];
 
   config = {
