@@ -39,7 +39,7 @@
     services.ollama = {
       environmentVariables = {
         OLLAMA_KEEP_ALIVE = "5m";
-        OLLAMA_DEBUG = "1";
+        # OLLAMA_DEBUG = "1";
       };
     };
     services.nextjs-ollama-llm-ui.enable = true;
