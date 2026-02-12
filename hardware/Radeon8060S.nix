@@ -38,7 +38,7 @@ let
     };
     services.ollama.package = lib.mkForce ollama-rocm-gfx1151;
   };
-  config-no-rocm {
+  config-no-rocm = {
     myconfig = {
       hardware.gpu.variant = "amd-no-rocm";
     };
