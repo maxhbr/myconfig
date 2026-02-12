@@ -30,7 +30,7 @@
 
   boot.initrd.luks.devices."enc-pv" = {
     device = "/dev/disk/by-uuid/e2df1c65-99ee-4198-a3e4-41a4aaea8126";
-    keyFile = "/dev/disk/by-id/usb-TS-RDF5_SD_Transcend_000000000037-0:0";
+    keyFile = "/dev/disk/by-id/usb-Verbatim_STORE_N_GO_25073013740484-0:0";
     keyFileSize = 4096;
     preLVM = true;
     allowDiscards = true;
