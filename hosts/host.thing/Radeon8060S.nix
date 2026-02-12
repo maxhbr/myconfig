@@ -43,7 +43,9 @@ let
     services.ollama.package = lib.mkForce ollama-rocm-gfx1151;
 
     boot.kernelParams = [
-      "amd_iommu=off"
+      # "amd_iommu=off"
+      "iommu=pt"            # Use pass-through for better performance
+      "amd_iommu=on"        # Explicitly turn it on
       "amdgpu.gttsize=131072"
       "ttm.pages_limit=33554432"
     ];
@@ -53,7 +55,9 @@ let
       hardware.gpu.variant = "amd-no-rocm";
     };
     boot.kernelParams = [
-      "amd_iommu=off"
+      # "amd_iommu=off"
+      "iommu=pt"            # Use pass-through for better performance
+      "amd_iommu=on"        # Explicitly turn it on
       "amdgpu.gttsize=131072"
       "ttm.pages_limit=33554432"
     ];
