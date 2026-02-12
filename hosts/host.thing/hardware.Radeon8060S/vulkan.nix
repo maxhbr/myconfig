@@ -6,7 +6,7 @@ let
     name = "llama-cpp-optimized";
     paths = [ 
       (pkgs.llama-cpp.override {
-        vulcanSupport = true;
+        vulkanSupport = true;
         # Force the compiler to target the RDNA 3.5 ISA
         rocmGpuTargets = [ "gfx1151" ];
         # extraCmakeFlags = [ 
