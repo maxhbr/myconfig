@@ -72,6 +72,54 @@ in
         };
       };
     })
+    (
+      {...}: let
+        config_json = {
+          "$schema" = "https://opencode.ai/config.json";
+          "autoupdate" = false;
+          "share" = "disabled";
+          "permission" = {
+            "bash" = "ask";
+            "edit" = "ask";
+          };
+          "provider" = {
+            "litellm" = {
+              "npm" = "@ai-sdk/openai-compatible";
+              "name" = "LiteLLM";
+              "options" = {
+                "baseURL" = "http://${config.services.litellm.host}:${config.services.litellm.port}/v1"
+              };
+              "models" = {
+                "GLM-4-Flash" = {
+                  "name" = "GLM-4-Flash"
+                };
+              };
+            };
+          };
+          "disabled_providers" = [
+            "opencode";
+          ];
+          "mcp" = {
+            "mcp-nixos" = {
+              "type" = "local";
+              "command" = [ "${lib.getExe pkgs.mcp-nixos}" ];
+              "enabled" = true;
+            };
+            "context7" = {
+              "type" = "remote";
+              "url" = "https://mcp.context7.com/mcp";
+            };
+          };
+        };
+      in {
+        myconfig.ai.opencode.enable = true;
+        home-manager.sharedModules = [{
+          xdg.configFile = {
+            "opencode/opencode.json".text = builtins.toJSON config_json;
+          };
+        }];
+      }
+    )
   ];
 
   config = {
@@ -136,28 +184,6 @@ in
           lobe-chat = {
             enable = false;
             host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
-          };
-          litellm = {
-            enable = false;
-            config = {
-              "environment_variables" = { };
-              "model_list" = [
-                {
-                  "model_name" = "GLM-4.7-Flash-BF16.gguf";
-                  "litellm_params" = {
-                    model = "GLM-4.7-Flash-BF16.gguf";
-                    api_base = "http://localhost:22545";
-                  };
-                }
-                # {
-                #   "model_name" = "ollama/qwen3:32b";
-                #   "litellm_params" = {
-                #     model = "ollama/qwen3:32b";
-                #     api_base = "http://host.containers.internal:11434";
-                #   };
-                # }
-              ];
-            };
           };
         };
       };

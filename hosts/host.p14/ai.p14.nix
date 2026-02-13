@@ -93,11 +93,6 @@ in
     };
     services.ollama = {
       enable = true;
-      package =
-        if (builtins.compareVersions pkgs.ollama.version "0.14.3" < 0) then
-          pkgs.master.ollama-cuda
-        else
-          pkgs.ollama-cuda;
 
       openFirewall = true;
       host = "0.0.0.0";

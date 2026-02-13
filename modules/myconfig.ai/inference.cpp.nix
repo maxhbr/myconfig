@@ -11,6 +11,8 @@ let
       pkgs.llama-cpp-rocm
     else if gpuvariant == "amd-no-rocm" then
       pkgs.llama-cpp-vulkan
+    else if gpuvariant == "nvidia" then
+      pkgs.llama-cpp.override { cudaSupport = true; }
     else
       pkgs.llama-cpp;
 in
