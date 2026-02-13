@@ -28,7 +28,7 @@
           package = pkgs.ollama-vulkan;
           environmentVariables = {
             OLLAMA_VULKAN = "1";
-            RADV_PERFTEST = "sam"; 
+            RADV_PERFTEST = "sam";
           };
         };
       };

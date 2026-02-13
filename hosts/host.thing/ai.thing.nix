@@ -76,6 +76,22 @@ in
 
   config = {
     # nixpkgs.config.rocmSupport = false;
+
+    services.litellm = {
+      enable = true;
+      port = 4000;
+      settings.model_list = [
+        {
+          "model_name" = "GLM-4-Flash";
+          "litellm_params" = {
+            model = "openai/glm-4"; # Prefix with 'openai/' to use the compatible handler
+            api_base = "http://127.0.0.1:22545/v1";
+            api_key = "not-needed";
+          };
+        }
+      ];
+    };
+
     myconfig = {
       # services.dmesgMonitor = {
       #   enable = true;
@@ -127,12 +143,19 @@ in
               "environment_variables" = { };
               "model_list" = [
                 {
-                  "model_name" = "ollama/qwen3:32b";
+                  "model_name" = "GLM-4.7-Flash-BF16.gguf";
                   "litellm_params" = {
-                    model = "ollama/qwen3:32b";
-                    api_base = "http://host.containers.internal:11434";
+                    model = "GLM-4.7-Flash-BF16.gguf";
+                    api_base = "http://localhost:22545";
                   };
                 }
+                # {
+                #   "model_name" = "ollama/qwen3:32b";
+                #   "litellm_params" = {
+                #     model = "ollama/qwen3:32b";
+                #     api_base = "http://host.containers.internal:11434";
+                #   };
+                # }
               ];
             };
           };
