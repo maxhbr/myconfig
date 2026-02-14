@@ -18,7 +18,6 @@
           environmentVariables = {
             OLLAMA_LLM_LIBRARY = "rocm";
           };
-          rocmOverrideGfx = "11.5.1";
         };
       };
     })
