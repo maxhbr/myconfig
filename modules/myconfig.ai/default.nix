@@ -18,6 +18,7 @@ in
     ./services.ollama.nix
     ./services.open-webui.nix
     ./services.tabby.nix
+    ./services.llama-server.nix
     ./container.open-webui.nix
     ./container.nlm-ingestor.nix
     ./container.SillyTavern.nix

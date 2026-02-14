@@ -170,6 +170,11 @@ in
         vllm = {
           enable = true;
         };
+        services = {
+          llama-server = {
+            enable = true;
+          };
+        };
         container = {
           nlm-ingestor = {
             enable = false;
