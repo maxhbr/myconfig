@@ -73,7 +73,8 @@ in
       };
     })
     (
-      {...}: let
+      { ... }:
+      let
         config_json = {
           "$schema" = "https://opencode.ai/config.json";
           "autoupdate" = false;
@@ -87,17 +88,17 @@ in
               "npm" = "@ai-sdk/openai-compatible";
               "name" = "LiteLLM";
               "options" = {
-                "baseURL" = "http://${config.services.litellm.host}:${config.services.litellm.port}/v1"
+                "baseURL" = "http://${config.services.litellm.host}:${toString config.services.litellm.port}/v1";
               };
               "models" = {
                 "GLM-4-Flash" = {
-                  "name" = "GLM-4-Flash"
+                  "name" = "GLM-4-Flash";
                 };
               };
             };
           };
           "disabled_providers" = [
-            "opencode";
+            "opencode"
           ];
           "mcp" = {
             "mcp-nixos" = {
@@ -111,13 +112,16 @@ in
             };
           };
         };
-      in {
+      in
+      {
         myconfig.ai.opencode.enable = true;
-        home-manager.sharedModules = [{
-          xdg.configFile = {
-            "opencode/opencode.json".text = builtins.toJSON config_json;
-          };
-        }];
+        home-manager.sharedModules = [
+          {
+            xdg.configFile = {
+              "opencode/opencode.json".text = builtins.toJSON config_json;
+            };
+          }
+        ];
       }
     )
   ];
