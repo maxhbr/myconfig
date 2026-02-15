@@ -26,6 +26,7 @@ let
 in
 {
   imports = [
+    ./containers.vllm-rocm.nix
     ({
       config =
         lib.mkIf (config.myconfig.ai.container.open-webui.enable || config.myconfig.ai.open-webui.enable)
