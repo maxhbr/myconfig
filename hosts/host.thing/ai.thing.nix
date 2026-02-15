@@ -141,6 +141,15 @@ in
             api_key = "not-needed";
           };
         }
+        {
+          "model_name" = "Qwen3-Coder-Next";
+          "litellm_params" = {
+            model = "openai/qwen3-coder";
+            api_base = "http://localhost:22546/v1";
+            api_key = "not-needed";
+            max_tokens = 4096;
+          };
+        }
       ];
     };
 
@@ -170,11 +179,11 @@ in
         vllm = {
           enable = true;
         };
-        services = {
-          llama-server = {
-            enable = true;
-          };
-        };
+        # services = {
+        #   llama-server = {
+        #     enable = true;
+        #   };
+        # };
         container = {
           nlm-ingestor = {
             enable = false;
@@ -232,6 +241,18 @@ in
     #   model = "TabbyML/Qwen2.5-Coder-14B";
     # };
 
-    home-manager.sharedModules = [ { home.packages = [ ai-tmux-session-script ]; } ];
+    home-manager.sharedModules = [
+      {
+        home.packages = [
+          ai-tmux-session-script
+          (pkgs.writeShellScriptBin "run-qwen3-coder" ''
+            "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/Qwen3-Coder-Next-Q8_0.gguf --port 22546 -c 262144 -fa -ctk q8_0 -ctv q8_0
+          '')
+          (pkgs.writeShellScriptBin "run-glm4-flash" ''
+            "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/GLM-4.7-Flash-BF16.gguf --port 22545 -c 202752 -fa -ctk q8_0 -ctv q8_0
+          '')
+        ];
+      }
+    ];
   };
 }
