@@ -75,6 +75,14 @@ in
     (
       { ... }:
       let
+        opencodeModels = builtins.listToAttrs (
+          lib.map (model: {
+            name = model.model_name;
+            value = {
+              "name" = model.model_name;
+            };
+          }) config.services.litellm.settings.model_list
+        );
         config_json = {
           "$schema" = "https://opencode.ai/config.json";
           "autoupdate" = false;
@@ -90,14 +98,7 @@ in
               "options" = {
                 "baseURL" = "http://${config.services.litellm.host}:${toString config.services.litellm.port}/v1";
               };
-               "models" = {
-                 "GLM-4-Flash" = {
-                   "name" = "GLM-4-Flash";
-                 };
-                 "Qwen3-Coder-Next" = {
-                   "name" = "Qwen3-Coder-Next";
-                 };
-               };
+              "models" = opencodeModels;
             };
           };
           "disabled_providers" = [
