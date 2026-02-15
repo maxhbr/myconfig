@@ -152,7 +152,7 @@ du_of_out_link() {
     log_step "compute $du_file"
 
     nix path-info -rhsS "$out_link" |
-        tee "$du_file"|
+        tee "$du_file" |
         gawk '
         BEGIN {FS="\t"; OFS=","} {
             if ($3 ~ / *[0-9\.]+ KiB/)
@@ -177,7 +177,7 @@ home_manager_files_from_du() {
     local hm_files_dir
     hm_files_dir="$(get_out_link_of_target "$target").home-manager-files"
 
-    if [[ -d "$hm_files_dir" ]]; then
+    if [[ -d $hm_files_dir ]]; then
         chmod -R u+rwx "$hm_files_dir"
         rm -rf "$hm_files_dir"
     fi
@@ -375,7 +375,7 @@ main() {
         (
             cd "$script_dir"
             git fetch -q
-            if git rev-list HEAD..@{u} --count 2>/dev/null | grep -q '^[1-9]'; then
+            if git rev-list HEAD.."@{u}" --count 2>/dev/null | grep -q '^[1-9]'; then
                 git pull --rebase || {
                     log_error "git pull --rebase failed due to conflicts. resolve conflicts and run again"
                     git rebase --abort
