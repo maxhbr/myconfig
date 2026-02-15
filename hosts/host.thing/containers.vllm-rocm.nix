@@ -3,7 +3,7 @@
 let
   hfCacheHostPath = "/persistent/cache/vllm/huggingface-cache";
   image = "rocm/vllm:latest";
-  model = "meta-llama/Llama-3.1-8B-Instruct";
+  model = "zai-org/GLM-4.7-Flash";
   hostPort = 8000;
 in
 {
