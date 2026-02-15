@@ -90,11 +90,14 @@ in
               "options" = {
                 "baseURL" = "http://${config.services.litellm.host}:${toString config.services.litellm.port}/v1";
               };
-              "models" = {
-                "GLM-4-Flash" = {
-                  "name" = "GLM-4-Flash";
-                };
-              };
+               "models" = {
+                 "GLM-4-Flash" = {
+                   "name" = "GLM-4-Flash";
+                 };
+                 "Qwen3-Coder-Next" = {
+                   "name" = "Qwen3-Coder-Next";
+                 };
+               };
             };
           };
           "disabled_providers" = [
@@ -209,7 +212,7 @@ in
     services.ollama = {
       enable = true;
       environmentVariables = {
-        OLLAMA_FLASH_ATTENTION = "0";
+        # OLLAMA_FLASH_ATTENTION = lib.mkForce "0";
         OLLAMA_ORIGIN = "*";
       };
 
@@ -246,10 +249,10 @@ in
         home.packages = [
           ai-tmux-session-script
           (pkgs.writeShellScriptBin "run-qwen3-coder" ''
-            "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/Qwen3-Coder-Next-Q8_0.gguf --port 22546 -c 262144 -fa -ctk q8_0 -ctv q8_0
+            "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/Qwen3-Coder-Next-Q8_0.gguf --port 22546 -c 262144 -fa on -ctk q8_0 -ctv q8_0
           '')
           (pkgs.writeShellScriptBin "run-glm4-flash" ''
-            "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/GLM-4.7-Flash-BF16.gguf --port 22545 -c 202752 -fa -ctk q8_0 -ctv q8_0
+            "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/GLM-4.7-Flash-BF16.gguf --port 22545 -c 202752 -fa on -ctk q8_0 -ctv q8_0
           '')
         ];
       }
