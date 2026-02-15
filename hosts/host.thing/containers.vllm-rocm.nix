@@ -1,7 +1,7 @@
 { config, pkgs, ... }:
 
 let
-  hfCacheHostPath = "/var/lib/vllm/huggingface-cache";
+  hfCacheHostPath = "/persistent/cache/vllm/huggingface-cache";
   image = "rocm/vllm:latest";
   model = "meta-llama/Llama-3.1-8B-Instruct";
   hostPort = 8000;

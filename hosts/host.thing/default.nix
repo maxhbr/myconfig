@@ -33,6 +33,11 @@
     {
       services.earlyoom.enable = lib.mkForce false;
     }
+    {
+      home-manager.sharedModules = [{
+        services.swayidle.enable = lib.mkForce false;
+      }];
+    }
   ];
 
   config = {
