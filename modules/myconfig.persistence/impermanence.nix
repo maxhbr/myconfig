@@ -551,7 +551,10 @@ in
               mode = "0700";
             }
             "/var/lib/systemd/coredump"
-          ];
+          ]
+          ++ (lib.optionals config.virtualisation.containers.enable [
+            config.virtualisation.containers.storage.settings.storage.graphroot
+          ]);
         };
       };
       services.smartd = {
