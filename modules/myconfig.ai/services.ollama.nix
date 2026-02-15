@@ -38,6 +38,7 @@
     services.ollama = {
       environmentVariables = {
         OLLAMA_KEEP_ALIVE = "5m";
+        OLLAMA_FLASH_ATTENTION = "1";
         # OLLAMA_DEBUG = "1";
       };
     };
