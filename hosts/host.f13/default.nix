@@ -240,6 +240,16 @@ in
       }
     ];
 
+    services.acpid.handlers = {
+      rfkill-ignore = {
+        event = "button/rfkill.*";
+        action = "/bin/true";
+      };
+    };
+    services.logind.settings.Login = {
+      HandleSwitchKey = "ignore";
+    };
+
     boot = {
       loader = {
         systemd-boot.enable = true;
