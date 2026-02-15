@@ -40,20 +40,22 @@ in
   config = lib.mkIf config.myconfig.ai.enable {
     home-manager.sharedModules = [
       {
-        home.packages = with pkgs; [
-          aichat
-          (callLib ./fns/sandboxed-app.nix {
-            name = "fish";
-            pkg = fish;
-          })
-          (callLib ./fns/sandboxed-app.nix {
-            name = "bash";
-            pkg = bash;
-          })
-        ]
-        ++ (with pkgs.python3Packages; [
-          huggingface-hub
-        ]);
+        home.packages =
+          with pkgs;
+          [
+            aichat
+            (callLib ./fns/sandboxed-app.nix {
+              name = "fish";
+              pkg = fish;
+            })
+            (callLib ./fns/sandboxed-app.nix {
+              name = "bash";
+              pkg = bash;
+            })
+          ]
+          ++ (with pkgs.python3Packages; [
+            huggingface-hub
+          ]);
         myconfig.persistence.cache-directories = [ ".cache/huggingface/" ];
       }
     ];

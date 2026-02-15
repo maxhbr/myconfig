@@ -11,9 +11,11 @@
     };
   };
   config = lib.mkIf config.myconfig.ai.lmstudio.enable {
-    home-manager.sharedModules = [ {
-      home.packages = with pkgs; [ lmstudio ];
-      myconfig.persistence.cache-directories = [ ".lmstudio" ];
-    } ];
+    home-manager.sharedModules = [
+      {
+        home.packages = with pkgs; [ lmstudio ];
+        myconfig.persistence.cache-directories = [ ".lmstudio" ];
+      }
+    ];
   };
 }
