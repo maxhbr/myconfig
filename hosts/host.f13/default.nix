@@ -115,15 +115,6 @@ in
         "/home/${user}/myconfig/.myconfig.ready"
       ];
     }
-
-    {
-      services.logind.settings.Login = {
-        HandleLidSwitch = lib.mkForce "ignore";
-        HandleLidSwitchDocked = lib.mkForce "ignore";
-      };
-    }
-    # # Problems with suspend
-    # ./debug_suspend_issue.nix
   ];
 
   config = {
