@@ -50,9 +50,11 @@ in
             name = "bash";
             pkg = bash;
           })
-          python314Packages.huggingface-hub
-        ];
-        myconfig.persistence.cache-directories = [ ".cache/huggingface/ " ];
+        ]
+        ++ (with pkgs.python3Packages; [
+          huggingface-hub
+        ]);
+        myconfig.persistence.cache-directories = [ ".cache/huggingface/" ];
       }
     ];
     services.udev.extraRules = ''

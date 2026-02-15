@@ -71,16 +71,37 @@ in
       (lib.mkIf (cfg.variant == "amd") {
         home-manager.sharedModules = [
           {
-            home.packages = with pkgs; [
-              nvtopPackages.amd
-              rocmPackages.rocminfo
-              rocmPackages.rocm-smi
-            ];
+            home.packages =
+              with pkgs;
+              [
+                nvtopPackages.amd
+                rocmPackages.rocminfo
+                rocmPackages.rocm-smi
+                onnxruntime
+              ]
+              ++ (with pkgs.python3Packages; [
+                onnx
+                onnxruntime-tools
+              ]);
           }
         ];
       })
       (lib.mkIf (cfg.variant == "amd-no-rocm") {
         nixpkgs.config.rocmSupport = false;
+        home-manager.sharedModules = [
+          {
+            home.packages =
+              with pkgs;
+              [
+                nvtopPackages.amd
+                onnxruntime
+              ]
+              ++ (with pkgs.python3Packages; [
+                onnx
+                onnxruntime-tools
+              ]);
+          }
+        ];
         nixpkgs.overlays = [
           (final: prev: {
             # see: https://github.com/NixOS/nixpkgs/issues/409284#issuecomment-2952396401
