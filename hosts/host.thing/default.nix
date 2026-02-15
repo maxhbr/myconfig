@@ -60,7 +60,7 @@
         imagework.enable = true; # https://github.com/NixOS/nixpkgs/issues/425306
         imagework.myphoto.enable = true;
       };
-      dev.enable = true;
+      dev.core.enable = true;
       virtualisation.enable = true;
     };
 

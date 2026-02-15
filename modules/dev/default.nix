@@ -10,6 +10,7 @@ in
 {
   options.myconfig.dev = with lib; {
     enable = mkEnableOption "myconfig.dev";
+    core.enable = mkEnableOption "myconfig.dev.core, implies myconfig.dev.enable";
     compliance.enable = mkEnableOption "myconfig.dev.compliance";
     elixir.enable = mkEnableOption "myconfig.dev.elixir";
     embedded.enable = mkEnableOption "myconfig.dev.embedded";
@@ -38,7 +39,8 @@ in
   ];
   config = {
     myconfig.dev.enable =
-      cfg.elixir.enable
+      cfg.core.enable
+      || cfg.elixir.enable
       || cfg.embedded.enable
       || cfg.haskell.enable
       || cfg.network.enable
