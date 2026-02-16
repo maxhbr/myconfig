@@ -4,15 +4,6 @@
   pkgs,
   ...
 }:
-
-let
-  callLib = file: import file { inherit lib pkgs; };
-  opencodeBwrap = callLib ../fns/sandboxed-app.nix {
-    name = "opencode";
-    pkg = pkgs.opencode;
-    writableDirs = [ ".config/opencode" ];
-  };
-in
 {
   options.myconfig = with lib; {
     ai.opencode = {
@@ -21,20 +12,55 @@ in
   };
   config = lib.mkIf config.myconfig.ai.opencode.enable {
     home-manager.sharedModules = [
+      ({config, lib, pkgs,...}:
+      let
+        callLib = file: import file { inherit lib pkgs; };
+        opencodeBwrap = callLib ../fns/sandboxed-app.nix {
+          name = "opencode";
+          pkg = config.programs.opencode.package;
+          writableDirs = [ ".config/opencode" ];
+        };
+      in
       {
-        home.packages = with pkgs; [
-          opencode
+        programs.opencode = {
+          enable = true;
+          enableMcpIntegration = true;
+          web.enable = true;
+          agents = {
+            code-reviewer = ''
+              # Code Reviewer Agent
+
+              You are a senior software engineer specializing in code reviews.
+              Focus on code quality, security, and maintainability.
+
+              ## Guidelines
+              - Review for potential bugs and edge cases
+              - Check for security vulnerabilities
+              - Ensure code follows best practices
+              - Suggest improvements for readability and performance
+            '';
+          };
+          commands = {
+            commit = ''
+              # Commit Command
+
+              Create a git commit with proper message formatting.
+              Usage: /commit [message]
+            '';
+          };
+        };
+        home.packages = [
           opencodeBwrap
-          (writeShellApplication {
+          (pkgs.writeShellApplication {
             name = "opencode-tmp";
-            runtimeInputs = [ coreutils ];
+            runtimeInputs = with pkgs; [ coreutils ];
             text = ''
               cd "$(mktemp -d)" && exec ${lib.getExe opencodeBwrap} "$@"
             '';
           })
-          (writeShellApplication {
+          (pkgs.writeShellApplication {
             name = "opencode-worktree";
-            runtimeInputs = [
+            runtimeInputs = with pkgs; [
               git
               coreutils
             ];
@@ -54,7 +80,7 @@ in
             '';
           })
         ];
-      }
+      })
     ];
   };
 }
