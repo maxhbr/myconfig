@@ -132,6 +132,7 @@ in
   ];
 
   config = {
+    system.nixos.tags = [config.myconfig.hardware.gpu.variant];
     # nixpkgs.config.rocmSupport = false;
 
     services.litellm = {

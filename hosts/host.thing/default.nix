@@ -29,14 +29,17 @@
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
     ./ai.thing.nix
-    ./hardware.Radeon8060S
+    # ./hardware.Radeon8060S
+    ../../hardware/eGPU.nix
     {
       services.earlyoom.enable = lib.mkForce false;
     }
     {
-      home-manager.sharedModules = [{
-        services.swayidle.enable = lib.mkForce false;
-      }];
+      home-manager.sharedModules = [
+        {
+          services.swayidle.enable = lib.mkForce false;
+        }
+      ];
     }
   ];
 

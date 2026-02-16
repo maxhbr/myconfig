@@ -15,6 +15,7 @@ in
 {
   imports = [
     ./ai-coding.nix
+    ./programs.aichat.nix
     ./services.ollama.nix
     ./services.open-webui.nix
     ./services.tabby.nix
@@ -38,12 +39,12 @@ in
     ai.enable = mkEnableOption "myconfig.ai";
   };
   config = lib.mkIf config.myconfig.ai.enable {
+    myconfig.ai.aichat.enable = true;
     home-manager.sharedModules = [
       {
         home.packages =
           with pkgs;
           [
-            aichat
             (callLib ./fns/sandboxed-app.nix {
               name = "fish";
               pkg = fish;
