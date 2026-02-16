@@ -24,7 +24,7 @@
           opencodeBwrap = callLib ../fns/sandboxed-app.nix {
             name = "opencode";
             pkg = config.programs.opencode.package;
-            writableDirs = [ ".config/opencode" ];
+            writableDirs = [ ".config/opencode" ".config/mcp" ];
           };
         in
         {

@@ -25,7 +25,7 @@
           claudeCodeBwrap = callLib ../fns/sandboxed-app.nix {
             name = "claude-code";
             pkg = config.programs.claude-code.package;
-            writableDirs = [ ".config/claude-code" ];
+            writableDirs = [ ".config/claude-code" ".config/mcp" ];
           };
         in
         {
