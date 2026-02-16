@@ -332,11 +332,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1771273015,
-        "narHash": "sha256-Z4Zqx3B8ympAkgUMtWpkwcfZRlrcSGKcZFjZTflooPo=",
+        "lastModified": 1771273105,
+        "narHash": "sha256-zH4asVQWfdn6MbqEYNQpItqDrJUakL8nc9sJZX0oevI=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "6a8895f8301db6ed572e6449f4a9d033b19c2012",
+        "rev": "7acb77d117dc7ecadef95aaee7bd917482a9696c",
         "type": "github"
       },
       "original": {
