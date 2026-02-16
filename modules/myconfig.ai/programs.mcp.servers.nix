@@ -12,9 +12,8 @@
           enable = true;
           servers = {
             mcp-nixos = {
-              type = "local";
-              command = [ "${lib.getExe pkgs.mcp-nixos}" ];
-              enabled = true;
+              command = "${lib.getExe pkgs.mcp-nixos}";
+              args = [];
             };
             context7 = {
               url = "https://mcp.context7.com/mcp";
