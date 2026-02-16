@@ -84,46 +84,32 @@ in
             };
           }) config.services.litellm.settings.model_list
         );
-        config_json = {
-          "$schema" = "https://opencode.ai/config.json";
-          "autoupdate" = false;
-          "share" = "disabled";
-          "permission" = {
-            "bash" = "ask";
-            "edit" = "ask";
-          };
-          "provider" = {
-            "litellm" = {
-              "npm" = "@ai-sdk/openai-compatible";
-              "name" = "LiteLLM";
-              "options" = {
-                "baseURL" = "http://${config.services.litellm.host}:${toString config.services.litellm.port}/v1";
-              };
-              "models" = opencodeModels;
-            };
-          };
-          "disabled_providers" = [
-            "opencode"
-          ];
-          "mcp" = {
-            "mcp-nixos" = {
-              "type" = "local";
-              "command" = [ "${lib.getExe pkgs.mcp-nixos}" ];
-              "enabled" = true;
-            };
-            "context7" = {
-              "type" = "remote";
-              "url" = "https://mcp.context7.com/mcp";
-            };
-          };
-        };
       in
       {
         myconfig.ai.opencode.enable = true;
         home-manager.sharedModules = [
           {
-            xdg.configFile = {
-              "opencode/opencode.json".text = builtins.toJSON config_json;
+            programs.opencode.settings = {
+              # "$schema" = "https://opencode.ai/config.json";
+              "autoupdate" = false;
+              "share" = "disabled";
+              "permission" = {
+                "bash" = "ask";
+                "edit" = "ask";
+              };
+              "provider" = {
+                "litellm" = {
+                  "npm" = "@ai-sdk/openai-compatible";
+                  "name" = "LiteLLM";
+                  "options" = {
+                    "baseURL" = "http://${config.services.litellm.host}:${toString config.services.litellm.port}/v1";
+                  };
+                  "models" = opencodeModels;
+                };
+              };
+              "disabled_providers" = [
+                "opencode"
+              ];
             };
           }
         ];
