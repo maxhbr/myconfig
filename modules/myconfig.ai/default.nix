@@ -16,7 +16,7 @@ in
   imports = [
     ./ai-coding.nix
     ./programs.aichat.nix
-    ./programs.mcp.server.nix;
+    ./programs.mcp.server.nix
     ./services.ollama.nix
     ./services.open-webui.nix
     ./services.tabby.nix
