@@ -52,6 +52,12 @@
 
     myphoto.url = "github:maxhbr/myphoto";
     myphoto.inputs.nixpkgs.follows = "nixpkgs";
+
+    #############################################################
+    # PRs
+    # https://github.com/NixOS/nixpkgs/pull/486717
+    pr486717.url = "GaetanLepage/nixpkgs/cuda_13_1";
+    pr486717.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -116,21 +122,14 @@
                 (
                   { pkgs, ... }:
                   {
-                    # To use a version from a PR, use the following:
-                    ## 1. create an input with the following:
-                    # pr275479.url =
-                    #  "github:maxhbr/nixpkgs/freeplane-1_11_8"; # https://github.com/NixOS/nixpkgs/pull/275479
-                    ## 2. add the input to the inputs list
-                    # { input = "pr275479"; pkg = "freeplane"; }
-                    nixpkgs.overlays = map (
-                      { input, pkg }:
+                    nixpkgs.overlays =[
                       (_: _: {
-                        "${pkg}" =
-                          (import inputs."${input}" {
+                        cudaPackages =
+                          (import inputs.pr486717 {
                             inherit (pkgs) config system;
-                          })."${pkg}";
+                          }).cudaPackages;
                       })
-                    ) [ ];
+                    ];
                   }
                 )
                 (
@@ -353,6 +352,27 @@
                         )
                       ];
                     };
+                  }
+                )
+                (
+                  { pkgs, ... }:
+                  {
+                    # To use a version from a PR, use the following:
+                    ## 1. create an input with the following:
+                    # pr275479.url =
+                    #  "github:maxhbr/nixpkgs/freeplane-1_11_8"; # https://github.com/NixOS/nixpkgs/pull/275479
+                    ## 2. add the input to the inputs list
+                    # { input = "pr275479"; pkg = "freeplane"; }
+                    nixpkgs.overlays = map (
+                      { input, pkg }:
+                      (_: _: {
+                        "${pkg}" =
+                          (import inputs."${input}" {
+                            inherit (pkgs) config system;
+                          })."${pkg}";
+                      })
+                    ) [
+                     ];
                   }
                 )
               ]
