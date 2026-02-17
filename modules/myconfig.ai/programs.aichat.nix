@@ -17,32 +17,28 @@
           enable = true;
           package = pkgs.aichat;
           settings = {
-            model = "localhost:Qwen/Qwen3-4B";
-            clients = [
-              {
-                type = "openai-compatible";
-                name = "localhost";
-                api_base = "http://localhost:4000/v1";
-                models = [
-                  {
-                    name = "GLM-4-Flash";
-                  }
-                  {
-                    name = "Qwen3-Coder-Next";
-                  }
-                  {
-                    name = "Qwen/Qwen3-4B";
-                  }
-                ];
-              }
-              {
-                type = "openai-compatible";
-                name = "ollama";
-                api_base = "http://localhost:11434/v1";
-                models = [
-                ];
-              }
-            ];
+            model = "litellm:Qwen/Qwen3-4B";
+            clients =
+              lib.optionals config.services.litellm.enable [
+                {
+                  type = "openai-compatible";
+                  name = "litellm";
+                  api_base = "http://localhost:${toString config.services.litellm.port}/v1";
+                  models = builtins.map (model: {
+                    name = model.model_name;
+                  }) config.services.litellm.settings.model_list;
+                }
+              ]
+              ++ lib.optionals config.services.ollama.enable [
+                {
+                  type = "openai-compatible";
+                  name = "ollama";
+                  api_base = "http://${config.services.ollama.host}:${toString config.services.ollama.port}/v1";
+                  models = builtins.map (model: {
+                    name = model;
+                  }) config.services.ollama.loadModels;
+                }
+              ];
           };
         };
       }

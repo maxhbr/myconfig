@@ -22,7 +22,10 @@ in
           (callLib ../fns/sandboxed-app.nix {
             name = "qwen-code";
             pkg = qwen-code;
-            readOnlyConfigDirs = [ ".config/qwen-code" ".config/mcp" ];
+            readOnlyConfigDirs = [
+              ".config/qwen-code"
+              ".config/mcp"
+            ];
           })
         ];
       }

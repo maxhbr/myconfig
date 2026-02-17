@@ -13,7 +13,7 @@
           servers = {
             mcp-nixos = {
               command = "${lib.getExe pkgs.mcp-nixos}";
-              args = [];
+              args = [ ];
             };
             context7 = {
               url = "https://mcp.context7.com/mcp";
