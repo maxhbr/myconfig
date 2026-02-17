@@ -171,7 +171,7 @@ in
         imagework.myphoto.enable = true;
         cad.enable = true;
         # joplin-desktop.enable = true;
-        logseq.enable = false;
+        logseq.enable = true;
       };
       v4l2.enable = true;
       email = {
