@@ -56,7 +56,7 @@
     #############################################################
     # PRs
     # https://github.com/NixOS/nixpkgs/pull/486717
-    pr486717.url = "GaetanLepage/nixpkgs/cuda_13_1";
+    pr486717.url = "github:GaetanLepage/nixpkgs/cuda_13_1";
     pr486717.inputs.nixpkgs.follows = "nixpkgs";
   };
 
