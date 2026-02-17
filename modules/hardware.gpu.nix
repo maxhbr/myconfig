@@ -122,6 +122,12 @@ in
       })
       (lib.mkIf (cfg.variant == "intel") {
       })
+      (lib.mkIf (cfg.variant != null) {
+        systemd.tmpfiles.rules = [
+          "d /run/myconfig 0755 root root - -"
+          "f /run/myconfig/gpu-variant 0644 root root - ${cfg.variant}"
+        ];
+      })
     ]
   );
 }

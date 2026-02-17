@@ -17,7 +17,7 @@
           enable = true;
           package = pkgs.aichat;
           settings = {
-            model = "localhost:GLM-4-Flash";
+            model = "localhost:Qwen/Qwen3-4B";
             clients = [
               {
                 type = "openai-compatible";
@@ -29,6 +29,9 @@
                   }
                   {
                     name = "Qwen3-Coder-Next";
+                  }
+                  {
+                    name = "Qwen/Qwen3-4B";
                   }
                 ];
               }

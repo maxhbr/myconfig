@@ -14,12 +14,7 @@ let
     paths = [
       (pkgs.llama-cpp.override {
         rocmSupport = true;
-        # Force the compiler to target the RDNA 3.5 ISA
         rocmGpuTargets = [ "gfx1151" ];
-        # extraCmakeFlags = [
-        #   "-DGGML_HIP_ROCWMMA=ON"
-        #   "-DGGML_HIP_ROCWMMA_FATTN=ON" # Critical for long context performance
-        # ];
       })
     ];
     nativeBuildInputs = [ pkgs.makeWrapper ];
