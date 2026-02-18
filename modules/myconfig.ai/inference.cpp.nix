@@ -31,7 +31,7 @@ in
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [
-          koboldcpp
+          # koboldcpp
           config.myconfig.ai.inference-cpp.ollama-cpp.package
         ];
         myconfig.persistence.cache-directories = [ ".cache/llama.cpp/" ];

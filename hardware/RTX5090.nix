@@ -25,13 +25,13 @@
         finegrained = false;
       };
     };
-    nixpkgs.overlays =[
-      (_: _: {
-        cudaPackages =
-          (import inputs.pr486717 {
-            inherit (pkgs) config system;
-          }).cudaPackages;
-      })
-    ];
+    # nixpkgs.overlays =[
+    #   (_: _: {
+    #     cudaPackages =
+    #       (import inputs.pr486717 {
+    #         inherit (pkgs) config system;
+    #       }).cudaPackages;
+    #   })
+    # ];
   };
 }

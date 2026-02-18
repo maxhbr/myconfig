@@ -31,13 +31,13 @@ let
           linuxPackages.nvidia_x11
           libGLU
           libGL
-          xorg.libXi
-          xorg.libXmu
+          libXi
+          libXmu
           freeglut
-          xorg.libXext
-          xorg.libX11
-          xorg.libXv
-          xorg.libXrandr
+          libXext
+          libX11
+          libXv
+          libXrandr
           zlib
           ncurses5
           stdenv.cc

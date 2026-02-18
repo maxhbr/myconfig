@@ -35,6 +35,30 @@
             enable = true;
             enableMcpIntegration = true;
             web.enable = true;
+            ## TODO: overwriting with `lib.mkForce` does not work here
+            # settings = {
+            #   permission = lib.mkForce {
+            #     "bash" = {
+            #       "*" = "ask";
+            #       "head *" = "allow";
+            #       "go build *" = "allow";
+            #       "go test *" = "allow";
+            #       "go generate *" = "allow";
+            #       "go fmt *" = "allow";
+            #       "go vet *" = "allow";
+            #       "npm run dev *" = "allow";
+            #       "npm run build *" = "allow";
+            #       "npm run lint *" = "allow";
+            #       "npm test *" = "allow";
+            #       "ls *" = "allow";
+            #       "grep *" = "allow";
+            #       "rg *" = "allow";
+            #       "find *" = "allow";
+            #       "mkdir *" = "allow";
+            #     };
+            #     "edit" = "ask";
+            #   };
+            # };
             agents = {
               code-reviewer = ''
                 # Code Reviewer Agent

@@ -30,12 +30,34 @@ let
   ollama-rocm-gfx1151 = pkgs.ollama-rocm.override {
     rocmGpuTargets = [ "gfx1151" ];
   };
+
+  vllm-gfx1151 = pkgs.python3Packages.vllm.override { 
+    rocmSupport = true;
+    cudaSupport = false;
+    rocmGpuTargets = [ "gfx1151" ];
+  };
 in
 {
   config = {
+    nixpkgs.overlays = [
+      (self: super: {
+        python3Packages = super.python3Packages // {
+          torch = self.python3Packages.torch.override {
+            rocmSupport = true;
+            cudaSupport = false;
+            rocmGpuTargets = [ "gfx1151" ];
+          };
+          vllm = vllm-gfx1151;
+        };
+        ollama-rocm = ollama-rocm-gfx1151;
+        ollama = ollama-rocm-gfx1151;
+        llama-cpp = llama-cpp-gfx1151;
+      })
+    ];
     myconfig = {
       hardware.gpu.variant = "amd";
       ai.inference-cpp.ollama-cpp.package = llama-cpp-gfx1151;
+      ai.vllm.package = vllm-gfx1151;
     };
     services.ollama.package = lib.mkForce ollama-rocm-gfx1151;
   };
