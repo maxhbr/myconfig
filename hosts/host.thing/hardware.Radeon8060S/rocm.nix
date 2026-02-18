@@ -34,7 +34,7 @@ let
   vllm-gfx1151 = pkgs.python3Packages.vllm.override { 
     rocmSupport = true;
     cudaSupport = false;
-    rocmGpuTargets = [ "gfx1151" ];
+    gpuTargets = [ "gfx1151" ];
   };
 in
 {
@@ -45,7 +45,7 @@ in
           torch = self.python3Packages.torch.override {
             rocmSupport = true;
             cudaSupport = false;
-            rocmGpuTargets = [ "gfx1151" ];
+            # rocmGpuTargets = [ "gfx1151" ];
           };
           # vllm = vllm-gfx1151;
         };
