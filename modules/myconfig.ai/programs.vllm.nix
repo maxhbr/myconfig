@@ -15,7 +15,7 @@
   config = lib.mkIf config.myconfig.ai.vllm.enable {
     home-manager.sharedModules = [
       {
-        home.packages = with pkgs; [ vllm ];
+        home.packages = with pkgs; [ python313Packages.vllm ];
       }
     ];
   };

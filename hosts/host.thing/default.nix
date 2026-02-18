@@ -29,8 +29,8 @@
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
     ./ai.thing.nix
-    # ./hardware.Radeon8060S
-    ../../hardware/eGPU.nix
+    ./hardware.Radeon8060S
+    # ../../hardware/eGPU.nix
     {
       services.earlyoom.enable = lib.mkForce false;
     }
@@ -41,6 +41,7 @@
         }
       ];
     }
+    { nixpkgs.config.allowBroken = true; }
   ];
 
   config = {
@@ -61,9 +62,10 @@
         wayland = {
           enable = true;
           selectedSessions = [
-            "niri"
-            "labwc"
+            # "niri"
+            # "labwc"
           ];
+          # directLoginFirstSession = true;
         };
         imagework.enable = true; # https://github.com/NixOS/nixpkgs/issues/425306
         imagework.myphoto.enable = true;

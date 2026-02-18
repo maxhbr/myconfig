@@ -44,6 +44,7 @@ in
               ]);
           }
         ];
+        nixpkgs.config.cudaSupport = true;
         users.extraUsers."${myconfig.user}".extraGroups = [ "nvidia" ];
         services.xserver.videoDrivers = [ "nvidia" ];
         hardware.nvidia.open = true;
