@@ -61,26 +61,26 @@ in
       };
       home.packages =
         with pkgs;
-        [
+        let
+            tmux-session = name: writeShellScriptBin "${name}-tmux" ''
+                  tmux has-session -t ${name} 2>/dev/null
+                  [[ "$?" -eq 1 ]] && tmux new-session -d -s ${name}
+                  tmux attach-session -t ${name}
+                '';
+            foot-tmux-session = name:
+              writeShellScriptBin "foot-${name}" ''
+                exec ${footclient} \
+                  -T tmux-${name} \
+                  -a tmux-${name} \
+                  ${tmux-session name}/bin/${name}-tmux
+              '';
+        in [
           (writeShellScriptBin "tfoot" ''
             exec ${footclient} ${tmux}/bin/tmux
           '')
-          (
-            let
-              tmux-scratch = writeShellScriptBin "tmux-scratch" ''
-                NAME="tmux-scratch"
-                tmux has-session -t $NAME 2>/dev/null
-                [[ "$?" -eq 1 ]] && tmux new-session -d -s $NAME
-                tmux attach-session -t $NAME
-              '';
-            in
-            writeShellScriptBin "foot-scratch" ''
-              exec ${footclient} \
-                -T tmux-scratch \
-                -a tmux-scratch \
-                ${tmux-scratch}/bin/tmux-scratch
-            ''
-          )
+          (foot-tmux-session "scratch")
+          (tmux-session "greetd")
+          (foot-tmux-session "greetd")
           (writeShellScriptBin "tfoot-reattach" ''
             ${tmux}/bin/tmux ls |
                 ${gnugrep}/bin/grep -v '(attached)' |

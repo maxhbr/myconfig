@@ -89,7 +89,7 @@ in
           [Desktop Entry]
           Name=tmux
           Comment=tmux in foot in cage
-          Exec=${pkgs.cage}/bin/cage -s -- tfoot
+          Exec=${pkgs.cage}/bin/cage -s -- foot-greetd 
           Type=Application
         '';
       }
