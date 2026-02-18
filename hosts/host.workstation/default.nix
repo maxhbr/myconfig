@@ -55,6 +55,8 @@
       #   # kde.enable = true;
       # };
       myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
+      myconfig.metadatalib.get.hosts.f13.pubkeys."id_ed25519_no_pw.pub"
+      myconfig.metadatalib.get.hosts.thing.pubkeys."id_ed25519.pub"
     ])
     {
       services.vsftpd = {
