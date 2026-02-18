@@ -10,7 +10,8 @@
 }:
 {
   imports = [
-    ./vulkan.nix
+    # ./vulkan.nix
+    ./rocm.nix
   ];
   config = {
     boot.kernelParams = [
