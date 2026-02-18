@@ -10,7 +10,7 @@ let
   user = myconfig.user;
   selectedSessions = cfg.desktop.wayland.selectedSessions;
   cmd_for_session = session: cfg.desktop.wayland.sessions."${session}".command;
-  cmd0 = cmd_for_session (lib.elemAt selectedSessions 0);
+  cmd0 = if selectedSessions == [ ] then "tmux" else cmd_for_session (lib.elemAt selectedSessions 0);
   sessionStarters = pkgs.symlinkJoin {
     name = "sessionStarters";
     paths =
