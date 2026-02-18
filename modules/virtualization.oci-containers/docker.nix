@@ -23,6 +23,7 @@
         #     recursive = true;
         #   };
         # };
+        myconfig.persistence.cache-directories = [ ".local/share/docker/containerd/" ];
       }
     ];
     environment = {
