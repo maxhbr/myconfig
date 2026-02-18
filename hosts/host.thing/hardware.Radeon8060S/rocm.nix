@@ -47,11 +47,11 @@ in
             cudaSupport = false;
             rocmGpuTargets = [ "gfx1151" ];
           };
-          vllm = vllm-gfx1151;
+          # vllm = vllm-gfx1151;
         };
-        ollama-rocm = ollama-rocm-gfx1151;
-        ollama = ollama-rocm-gfx1151;
-        llama-cpp = llama-cpp-gfx1151;
+        # ollama-rocm = ollama-rocm-gfx1151;
+        # ollama = ollama-rocm-gfx1151;
+        # llama-cpp = llama-cpp-gfx1151;
       })
     ];
     myconfig = {
