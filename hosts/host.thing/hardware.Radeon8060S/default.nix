@@ -22,6 +22,9 @@
       "ttm.pages_limit=33554432"
       "amdttm.pages_limit=33554432"
     ];
+    environment.sessionVariables = rec {
+      HSA_OVERRIDE_GFX_VERSION = "11.5.1";
+    };
     services.ollama = {
       environmentVariables = {
         HSA_OVERRIDE_GFX_VERSION = "11.5.1";
