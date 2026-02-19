@@ -63,12 +63,10 @@ in
                       };
                       __list_dir_handler = {
                         body = ''
-                          # echo content after cd / z / or any pwd change
-                          set linesInLs (ls -1GF | ${pkgs.coreutils}/bin/wc -l)
-                          set linesInTerminal (${pkgs.ncurses}/bin/tput lines)
-                            if [  -lt  ]; then
-                              ls -GF
-                            fi
+                          set linesInLs (ls -1GF | wc -l)
+                          if test $linesInLs -lt 20
+                            ls -GF
+                          end
                         '';
                         onVariable = "PWD";
                       };
