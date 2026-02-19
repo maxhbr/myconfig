@@ -82,6 +82,7 @@
               '';
             };
           };
+          myconfig.persistence.directories = [".local/share/opencode"];
           home.packages = [
             opencodeBwrap
             (pkgs.writeShellApplication {
