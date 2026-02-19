@@ -33,9 +33,23 @@ let
     vim-tmux-navigator
   ];
 
+  tmux-switch-client = pkgs.writeShellApplication {
+    name = "tmux-switch-client.sh";
+    runtimeInputs = with pkgs; [
+      tmux
+      gawk
+      coreutils
+    ];
+    text = lib.fileContents ./tmux-switch-client.sh;
+  };
 in
 {
   nixpkgs.overlays = [ (final: prev: { tmux = final.master.tmux; }) ];
+  home-manager.sharedModules = [
+    {
+      home.packages = [ tmux-switch-client ];
+    }
+  ];
   environment = {
     shellAliases = {
       tx = "tmux new-session -A -s $USER";
