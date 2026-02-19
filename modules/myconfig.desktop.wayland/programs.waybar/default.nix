@@ -195,6 +195,7 @@ let
                       "systemd-failed-units#system"
                       "cpu"
                       "memory"
+                      "network"
                     ];
                     tray = {
                       spacing = 10;

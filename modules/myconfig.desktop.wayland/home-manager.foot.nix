@@ -62,19 +62,23 @@ in
       home.packages =
         with pkgs;
         let
-            tmux-session = name: writeShellScriptBin "${name}-tmux" ''
-                  tmux has-session -t ${name} 2>/dev/null
-                  [[ "$?" -eq 1 ]] && tmux new-session -d -s ${name}
-                  tmux attach-session -t ${name}
-                '';
-            foot-tmux-session = name:
-              writeShellScriptBin "foot-${name}" ''
-                exec ${footclient} \
-                  -T tmux-${name} \
-                  -a tmux-${name} \
-                  ${tmux-session name}/bin/${name}-tmux
-              '';
-        in [
+          tmux-session =
+            name:
+            writeShellScriptBin "${name}-tmux" ''
+              tmux has-session -t ${name} 2>/dev/null
+              [[ "$?" -eq 1 ]] && tmux new-session -d -s ${name}
+              tmux attach-session -t ${name}
+            '';
+          foot-tmux-session =
+            name:
+            writeShellScriptBin "foot-${name}" ''
+              exec ${footclient} \
+                -T tmux-${name} \
+                -a tmux-${name} \
+                ${tmux-session name}/bin/${name}-tmux
+            '';
+        in
+        [
           (writeShellScriptBin "tfoot" ''
             exec ${footclient} ${tmux}/bin/tmux
           '')

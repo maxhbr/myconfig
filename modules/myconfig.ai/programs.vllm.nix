@@ -7,13 +7,16 @@
   ...
 }:
 let
-  vllm = with pkgs; if (config.myconfig.hardware.gpu.variant == "amd")
-    then python3Packages.vllm.override { 
-      rocmSupport = true;
-      cudaSupport = false;
-    }
-    else python3Packages.vllm;
-in 
+  vllm =
+    with pkgs;
+    if (config.myconfig.hardware.gpu.variant == "amd") then
+      python3Packages.vllm.override {
+        rocmSupport = true;
+        cudaSupport = false;
+      }
+    else
+      python3Packages.vllm;
+in
 {
   options.myconfig = with lib; {
     ai.vllm = {
