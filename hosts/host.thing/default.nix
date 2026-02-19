@@ -65,7 +65,7 @@
             # "niri"
             # "labwc"
           ];
-          # directLoginFirstSession = true;
+          directLoginFirstSession = true;
         };
         imagework.enable = true; # https://github.com/NixOS/nixpkgs/issues/425306
         imagework.myphoto.enable = true;
