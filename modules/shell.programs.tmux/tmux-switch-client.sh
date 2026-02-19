@@ -13,6 +13,11 @@ case "$arg" in
 	p|prev)
 		direction=0
 		;;
+	l|list)
+		# List all sessions, sorted by creation time
+		tmux list-sessions -F "#{session_created} #{session_name}" | sort -n | awk '{print $2}'
+		exit 0
+		;;
 	*)
 		# Treat as session name and switch directly
 		tmux switch-client -t "$arg"
