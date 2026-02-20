@@ -126,7 +126,7 @@ in
         {
           "model_name" = "GLM-4-Flash";
           "litellm_params" = {
-            model = "openai/glm-4"; # Prefix with 'openai/' to use the compatible handler
+            model = "openai/glm-4";
             api_base = "http://127.0.0.1:22545/v1";
             api_key = "not-needed";
           };
@@ -147,9 +147,15 @@ in
             api_base = "https://localhost:8000/v1";
           };
         }
-        # ollama
-        # ...
-      ];
+      ] ++ lib.optionals config.services.ollama.enable (
+        map (model: {
+          model_name = "ollama/${model}";
+          litellm_params = {
+            model = "ollama/${model}";
+            api_base = "http://${config.services.ollama.host}:${toString config.services.ollama.port}";
+          };
+        }) config.services.ollama.loadModels
+      );
     };
 
     myconfig = {
