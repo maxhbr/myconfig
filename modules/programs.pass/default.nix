@@ -41,10 +41,16 @@ in
     ];
     home-manager.sharedModules = [
       {
+        programs.password-store = {
+          enable = true;
+          # package = pass;
+        };
+        services.pass-secret-service.enable = true;
+        programs.browserpass.enable = config.myconfig.desktop.enable;
         home.packages =
           with pkgs;
           [
-            pass
+            # pass
             pass-git-helper
             wireguardKeypairToPassStore
             otpPass
@@ -52,6 +58,7 @@ in
           ++ lib.optionals config.myconfig.desktop.enable [
             gopass
             gopass-jsonapi
+            dmenu-wayland
           ];
         home.file = {
           ".config/pass-git-helper/git-pass-mapping.ini".source =

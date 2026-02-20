@@ -31,7 +31,7 @@ let
     rocmGpuTargets = [ "gfx1151" ];
   };
 
-  # vllm-gfx1151 = pkgs.python3Packages.vllm.override { 
+  # vllm-gfx1151 = pkgs.python3Packages.vllm.override {
   #   rocmSupport = true;
   #   cudaSupport = false;
   #   gpuTargets = [ "gfx1151" ];

@@ -40,10 +40,12 @@ in
         DO_NOT_TRACK = "True";
         SCARF_NO_ANALYTICS = "True";
         ENABLE_FORWARD_USER_INFO_HEADERS = "True";
-      } // lib.optionalAttrs config.services.litellm.enable {
+      }
+      // lib.optionalAttrs config.services.litellm.enable {
         LITELLM_BASE_URL = "http://${config.services.litellm.host}:${toString config.services.litellm.port}";
         LITELLM_API_BASE_URL = "http://${config.services.litellm.host}:${toString config.services.litellm.port}/v1";
-      } // lib.optionalAttrs config.services.ollama.enable {
+      }
+      // lib.optionalAttrs config.services.ollama.enable {
         OLLAMA_BASE_URL = "http://${config.services.ollama.host}:${toString config.services.ollama.port}";
         OLLAMA_API_BASE_URL = "http://${config.services.ollama.host}:${toString config.services.ollama.port}/api";
       };
