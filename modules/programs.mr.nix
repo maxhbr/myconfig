@@ -12,8 +12,12 @@
           programs.mr = {
             enable = lib.mkDefault true;
             settings = {
-              "mr/myconfig/" = {
+              "myconfig/myconfig/" = {
                 checkout = "git clone https://github.com/maxhbr/myconfig";
+                update = "git pull --rebase";
+              };
+              "myconfig/myphoto/" = {
+                checkout = "git clone https://github.com/maxhbr/myphoto";
                 update = "git pull --rebase";
               };
             };
