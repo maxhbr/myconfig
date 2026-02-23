@@ -40,7 +40,8 @@ in
             web.enable = true;
             settings = {
               "autoupdate" = false;
-              "provider" = lib.mkIf osconfig.services.litellm.enable (let
+"provider" = lib.mkMerge [
+                (lib.mkIf osconfig.services.litellm.enable (let
                   opencodeModels = builtins.listToAttrs (
                     lib.map (model: {
                       name = model.model_name;
@@ -50,14 +51,35 @@ in
                     }) osconfig.services.litellm.settings.model_list
                   );
                 in {
-                "litellm" = {
-                  "npm" = "@ai-sdk/openai-compatible";
-                  "name" = "LiteLLM";
-                  "options" = {
-                    "baseURL" = "http://${osconfig.services.litellm.host}:${toString osconfig.services.litellm.port}/v1";
+                  "litellm" = {
+                    "npm" = "@ai-sdk/openai-compatible";
+                    "name" = "LiteLLM";
+                    "options" = {
+                      "baseURL" = "http://${osconfig.services.litellm.host}:${toString osconfig.services.litellm.port}/v1";
+                    };
+                    "models" = opencodeModels;
                   };
-                  "models" = opencodeModels;
-                };
+                }))
+                (lib.mkIf osconfig.services.ollama.enable (let
+                  ollamaModels = builtins.listToAttrs (
+                    lib.map (model: {
+                      name = model;
+                      value = {
+                        "name" = model;
+                      };
+                    }) osconfig.services.ollama.loadModels
+                  );
+                in {
+                  "ollama" = {
+                    "npm" = "@ai-sdk/openai-compatible";
+                    "name" = "Ollama";
+                    "options" = {
+                      "baseURL" = "http://${osconfig.services.ollama.host}:${toString osconfig.services.ollama.port}/v1";
+                    };
+                    "models" = ollamaModels;
+                  };
+                }))
+              ];
               });
             ## TODO: overwriting with `lib.mkForce` does not work here
             #   permission = lib.mkForce {
