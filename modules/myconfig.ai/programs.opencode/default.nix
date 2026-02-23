@@ -4,6 +4,9 @@
   pkgs,
   ...
 }:
+let
+  osconfig = config;
+in
 {
   options.myconfig = with lib; {
     ai.opencode = {
@@ -37,21 +40,21 @@
             web.enable = true;
             settings = {
               "autoupdate" = false;
-              "provider" = lib.mkIf config.services.litellm.enable (let
+              "provider" = lib.mkIf osconfig.services.litellm.enable (let
                   opencodeModels = builtins.listToAttrs (
                     lib.map (model: {
                       name = model.model_name;
                       value = {
                         "name" = model.model_name;
                       };
-                    }) config.services.litellm.settings.model_list
+                    }) osconfig.services.litellm.settings.model_list
                   );
                 in {
                 "litellm" = {
                   "npm" = "@ai-sdk/openai-compatible";
                   "name" = "LiteLLM";
                   "options" = {
-                    "baseURL" = "http://${config.services.litellm.host}:${toString config.services.litellm.port}/v1";
+                    "baseURL" = "http://${osconfig.services.litellm.host}:${toString osconfig.services.litellm.port}/v1";
                   };
                   "models" = opencodeModels;
                 };
