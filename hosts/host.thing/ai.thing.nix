@@ -75,16 +75,16 @@ in
     })
     (
       { ... }:
-      let
-        opencodeModels = builtins.listToAttrs (
-          lib.map (model: {
-            name = model.model_name;
-            value = {
-              "name" = model.model_name;
-            };
-          }) config.services.litellm.settings.model_list
-        );
-      in
+      # let
+      #   opencodeModels = builtins.listToAttrs (
+      #     lib.map (model: {
+      #       name = model.model_name;
+      #       value = {
+      #         "name" = model.model_name;
+      #       };
+      #     }) config.services.litellm.settings.model_list
+      #   );
+      # in
       {
         myconfig.ai.opencode.enable = true;
         home-manager.sharedModules = [
@@ -97,16 +97,16 @@ in
                 "bash" = "ask";
                 "edit" = "ask";
               };
-              "provider" = {
-                "litellm" = {
-                  "npm" = "@ai-sdk/openai-compatible";
-                  "name" = "LiteLLM";
-                  "options" = {
-                    "baseURL" = "http://${config.services.litellm.host}:${toString config.services.litellm.port}/v1";
-                  };
-                  "models" = opencodeModels;
-                };
-              };
+              # "provider" = lib.mkIf config.services.litellm.enable {
+              #   "litellm" = {
+              #     "npm" = "@ai-sdk/openai-compatible";
+              #     "name" = "LiteLLM";
+              #     "options" = {
+              #       "baseURL" = "http://${config.services.litellm.host}:${toString config.services.litellm.port}/v1";
+              #     };
+              #     "models" = opencodeModels;
+              #   };
+              # };
               "disabled_providers" = [
                 "opencode"
               ];

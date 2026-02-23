@@ -35,8 +35,28 @@
             enable = true;
             enableMcpIntegration = true;
             web.enable = true;
+            settings = {
+              "autoupdate" = false;
+              "provider" = lib.mkIf config.services.litellm.enable (let
+                  opencodeModels = builtins.listToAttrs (
+                    lib.map (model: {
+                      name = model.model_name;
+                      value = {
+                        "name" = model.model_name;
+                      };
+                    }) config.services.litellm.settings.model_list
+                  );
+                in {
+                "litellm" = {
+                  "npm" = "@ai-sdk/openai-compatible";
+                  "name" = "LiteLLM";
+                  "options" = {
+                    "baseURL" = "http://${config.services.litellm.host}:${toString config.services.litellm.port}/v1";
+                  };
+                  "models" = opencodeModels;
+                };
+              });
             ## TODO: overwriting with `lib.mkForce` does not work here
-            # settings = {
             #   permission = lib.mkForce {
             #     "bash" = {
             #       "*" = "ask";
@@ -58,7 +78,7 @@
             #     };
             #     "edit" = "ask";
             #   };
-            # };
+            };
             agents = {
               code-reviewer = ''
                 # Code Reviewer Agent
