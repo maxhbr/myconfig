@@ -87,32 +87,6 @@ in
       # in
       {
         myconfig.ai.opencode.enable = true;
-        home-manager.sharedModules = [
-          {
-            programs.opencode.settings = {
-              # "$schema" = "https://opencode.ai/config.json";
-              "autoupdate" = false;
-              "share" = "disabled";
-              "permission" = {
-                "bash" = "ask";
-                "edit" = "ask";
-              };
-              # "provider" = lib.mkIf config.services.litellm.enable {
-              #   "litellm" = {
-              #     "npm" = "@ai-sdk/openai-compatible";
-              #     "name" = "LiteLLM";
-              #     "options" = {
-              #       "baseURL" = "http://${config.services.litellm.host}:${toString config.services.litellm.port}/v1";
-              #     };
-              #     "models" = opencodeModels;
-              #   };
-              # };
-              "disabled_providers" = [
-                "opencode"
-              ];
-            };
-          }
-        ];
       }
     )
   ];

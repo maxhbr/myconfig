@@ -40,6 +40,11 @@ in
             web.enable = true;
             settings = {
               "autoupdate" = false;
+              "share" = "disabled";
+              "permission" = {
+                "bash" = "ask";
+                "edit" = "ask";
+              };
               "provider" = lib.mkMerge [
                 (lib.mkIf osconfig.services.litellm.enable (
                   let
@@ -86,6 +91,9 @@ in
                     };
                   }
                 ))
+              ];
+              "disabled_providers" = [
+                "opencode"
               ];
               ## TODO: overwriting with `lib.mkForce` does not work here
               #   permission = lib.mkForce {
