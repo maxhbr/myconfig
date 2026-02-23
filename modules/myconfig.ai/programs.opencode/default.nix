@@ -139,6 +139,12 @@ in
                 Create a git commit with proper message formatting.
                 Usage: /commit [message]
               '';
+              run = ''
+                # Run Command
+
+                Run the provided command as is
+                Usage: /run command
+              '';
             };
           };
           myconfig.persistence.directories = [ ".local/share/opencode" ];
