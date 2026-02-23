@@ -147,7 +147,8 @@ in
             api_base = "https://localhost:8000/v1";
           };
         }
-      ] ++ lib.optionals config.services.ollama.enable (
+      ]
+      ++ lib.optionals config.services.ollama.enable (
         map (model: {
           model_name = "ollama/${model}";
           litellm_params = {

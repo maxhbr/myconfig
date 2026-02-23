@@ -8,7 +8,8 @@
   config = {
     home-manager.sharedModules = [
       (
-        { config, ... }: {
+        { config, ... }:
+        {
           programs.mr = {
             enable = lib.mkDefault true;
             settings = {

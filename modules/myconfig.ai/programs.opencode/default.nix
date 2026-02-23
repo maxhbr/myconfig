@@ -40,69 +40,75 @@ in
             web.enable = true;
             settings = {
               "autoupdate" = false;
-"provider" = lib.mkMerge [
-                (lib.mkIf osconfig.services.litellm.enable (let
-                  opencodeModels = builtins.listToAttrs (
-                    lib.map (model: {
-                      name = model.model_name;
-                      value = {
-                        "name" = model.model_name;
+              "provider" = lib.mkMerge [
+                (lib.mkIf osconfig.services.litellm.enable (
+                  let
+                    opencodeModels = builtins.listToAttrs (
+                      lib.map (model: {
+                        name = model.model_name;
+                        value = {
+                          "name" = model.model_name;
+                        };
+                      }) osconfig.services.litellm.settings.model_list
+                    );
+                  in
+                  {
+                    "litellm" = {
+                      "npm" = "@ai-sdk/openai-compatible";
+                      "name" = "LiteLLM";
+                      "options" = {
+                        "baseURL" =
+                          "http://${osconfig.services.litellm.host}:${toString osconfig.services.litellm.port}/v1";
                       };
-                    }) osconfig.services.litellm.settings.model_list
-                  );
-                in {
-                  "litellm" = {
-                    "npm" = "@ai-sdk/openai-compatible";
-                    "name" = "LiteLLM";
-                    "options" = {
-                      "baseURL" = "http://${osconfig.services.litellm.host}:${toString osconfig.services.litellm.port}/v1";
+                      "models" = opencodeModels;
                     };
-                    "models" = opencodeModels;
-                  };
-                }))
-                (lib.mkIf osconfig.services.ollama.enable (let
-                  ollamaModels = builtins.listToAttrs (
-                    lib.map (model: {
-                      name = model;
-                      value = {
-                        "name" = model;
+                  }
+                ))
+                (lib.mkIf osconfig.services.ollama.enable (
+                  let
+                    ollamaModels = builtins.listToAttrs (
+                      lib.map (model: {
+                        name = model;
+                        value = {
+                          "name" = model;
+                        };
+                      }) osconfig.services.ollama.loadModels
+                    );
+                  in
+                  {
+                    "ollama" = {
+                      "npm" = "@ai-sdk/openai-compatible";
+                      "name" = "Ollama";
+                      "options" = {
+                        "baseURL" = "http://${osconfig.services.ollama.host}:${toString osconfig.services.ollama.port}/v1";
                       };
-                    }) osconfig.services.ollama.loadModels
-                  );
-                in {
-                  "ollama" = {
-                    "npm" = "@ai-sdk/openai-compatible";
-                    "name" = "Ollama";
-                    "options" = {
-                      "baseURL" = "http://${osconfig.services.ollama.host}:${toString osconfig.services.ollama.port}/v1";
+                      "models" = ollamaModels;
                     };
-                    "models" = ollamaModels;
-                  };
-                }))
+                  }
+                ))
               ];
-              });
-            ## TODO: overwriting with `lib.mkForce` does not work here
-            #   permission = lib.mkForce {
-            #     "bash" = {
-            #       "*" = "ask";
-            #       "head *" = "allow";
-            #       "go build *" = "allow";
-            #       "go test *" = "allow";
-            #       "go generate *" = "allow";
-            #       "go fmt *" = "allow";
-            #       "go vet *" = "allow";
-            #       "npm run dev *" = "allow";
-            #       "npm run build *" = "allow";
-            #       "npm run lint *" = "allow";
-            #       "npm test *" = "allow";
-            #       "ls *" = "allow";
-            #       "grep *" = "allow";
-            #       "rg *" = "allow";
-            #       "find *" = "allow";
-            #       "mkdir *" = "allow";
-            #     };
-            #     "edit" = "ask";
-            #   };
+              ## TODO: overwriting with `lib.mkForce` does not work here
+              #   permission = lib.mkForce {
+              #     "bash" = {
+              #       "*" = "ask";
+              #       "head *" = "allow";
+              #       "go build *" = "allow";
+              #       "go test *" = "allow";
+              #       "go generate *" = "allow";
+              #       "go fmt *" = "allow";
+              #       "go vet *" = "allow";
+              #       "npm run dev *" = "allow";
+              #       "npm run build *" = "allow";
+              #       "npm run lint *" = "allow";
+              #       "npm test *" = "allow";
+              #       "ls *" = "allow";
+              #       "grep *" = "allow";
+              #       "rg *" = "allow";
+              #       "find *" = "allow";
+              #       "mkdir *" = "allow";
+              #     };
+              #     "edit" = "ask";
+              #   };
             };
             agents = {
               code-reviewer = ''
