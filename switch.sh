@@ -326,7 +326,7 @@ main() {
         MODE="$1"
         shift
     elif [[ $# -gt 0 && $1 == "--local" ]]; then
-        local_build="--builders ''"
+        local_build=("--builders" "")
         shift
     fi
     if [[ $# -gt 0 && $1 == "--boot" ]]; then
@@ -397,7 +397,7 @@ main() {
     ln -sf "$(realpath -m --relative-to="$(dirname "$latest_logfile")" "$logfile")" "$latest_logfile"
     local old_result
     old_result="$(readlink -f "$out_link" || true)"
-    build "$target" "$out_link" $local_build || build "$target" "$out_link" --keep-failed --no-eval-cache $local_build
+    build "$target" "$out_link" "${local_build[@]}" || build "$target" "$out_link" --keep-failed --no-eval-cache "${local_build[@]}"
     if [[ -e $old_result ]]; then
         diff_build_results "$old_result" "$out_link"
     fi

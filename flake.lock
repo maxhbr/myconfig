@@ -614,22 +614,6 @@
         "type": "github"
       }
     },
-    "pr486717": {
-      "locked": {
-        "lastModified": 1770243937,
-        "narHash": "sha256-gzqKgIAjyz57IQhgoTz1okBmQSJ3nM55OhKbIyjdBSQ=",
-        "owner": "GaetanLepage",
-        "repo": "nixpkgs",
-        "rev": "4766a37f41cb90c845a62bc3b97be2eafa786e1c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "GaetanLepage",
-        "ref": "cuda_13_1",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "rel2405": {
       "locked": {
         "lastModified": 1735651292,
@@ -713,7 +697,6 @@
         "nixpkgs": "nixpkgs_4",
         "nixpkgs-wayland": "nixpkgs-wayland",
         "nur": "nur",
-        "pr486717": "pr486717",
         "rel2405": "rel2405",
         "rel2411": "rel2411",
         "rel2505": "rel2505",
