@@ -67,7 +67,12 @@ in
             writeShellScriptBin "${name}-tmux" ''
               tmux has-session -t ${name} 2>/dev/null
               [[ "$?" -eq 1 ]] && tmux new-session -d -s ${name}
-              tmux attach-session -t ${name}
+
+              if [[ -n "$TMUX" ]]; then
+                tmux switch-client -t ${name}
+              else
+                tmux attach-session -t ${name}
+              fi
             '';
           foot-tmux-session =
             name:
