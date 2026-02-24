@@ -64,9 +64,12 @@ in
         let
           tmux-session =
             name:
+            {
+              initialCommand ? "",
+            }:
             writeShellScriptBin "${name}-tmux" ''
               tmux has-session -t ${name} 2>/dev/null
-              [[ "$?" -eq 1 ]] && tmux new-session -d -s ${name}
+              [[ "$?" -eq 1 ]] && tmux new-session -d -s ${name} ${initialCommand}
 
               if [[ -n "$TMUX" ]]; then
                 tmux switch-client -t ${name}
@@ -75,23 +78,23 @@ in
               fi
             '';
           foot-tmux-session =
-            name:
+            name: args:
             writeShellScriptBin "foot-${name}" ''
               exec ${footclient} \
                 -T tmux-${name} \
                 -a tmux-${name} \
-                ${tmux-session name}/bin/${name}-tmux
+                ${tmux-session name args}/bin/${name}-tmux
             '';
         in
         [
           (writeShellScriptBin "tfoot" ''
             exec ${footclient} ${tmux}/bin/tmux
           '')
-          (tmux-session "zero")
-          (foot-tmux-session "zero")
-          (foot-tmux-session "scratch")
-          (tmux-session "greetd")
-          (foot-tmux-session "greetd")
+          (tmux-session "zero" { initialCommand = "${btop}/bin/btop"; })
+          (foot-tmux-session "zero" { initialCommand = "${btop}/bin/btop"; })
+          (foot-tmux-session "scratch" { })
+          (tmux-session "greetd" { })
+          (foot-tmux-session "greetd" { })
           (writeShellScriptBin "tfoot-reattach" ''
             ${tmux}/bin/tmux ls |
                 ${gnugrep}/bin/grep -v '(attached)' |
