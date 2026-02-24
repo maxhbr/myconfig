@@ -21,6 +21,10 @@
               #   CONTEXT7_API_KEY = "{env:CONTEXT7_API_KEY}";
               # };
             };
+            weather = {
+              command = "${lib.getExe pkgs.emcee}";
+              args = ["https://api.weather.gov/openapi.json"];
+            };
           };
         };
       }

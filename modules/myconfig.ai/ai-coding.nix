@@ -15,6 +15,9 @@
           # aider-chat
           code-cursor
           zed
+          # sandboxing
+          nono
+          bubblewrap
         ];
         # myconfig.persistence.cache-files = [
         #   ".local/share/opencode/auth.json"

@@ -357,4 +357,10 @@
     </device>
   </libinput>
 
+  <windowRules>
+    <windowRule identifier="^tmux-zero$">
+      <fullscreen>yes</fullscreen>
+    </windowRule>
+  </windowRules>
+
 </labwc_config>
