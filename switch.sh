@@ -315,7 +315,7 @@ main() {
         verbose=""
         shift
     fi
-    local local_build=""
+    local local_build=()
     if [[ $# -gt 0 && $1 == "--fast" ]]; then
         MODE="$1"
         shift

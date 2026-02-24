@@ -82,6 +82,8 @@ in
           (writeShellScriptBin "tfoot" ''
             exec ${footclient} ${tmux}/bin/tmux
           '')
+          (tmux-session "zero")
+          (foot-tmux-session "zero")
           (foot-tmux-session "scratch")
           (tmux-session "greetd")
           (foot-tmux-session "greetd")
@@ -115,9 +117,10 @@ in
         );
       myconfig.desktop.wayland.launcherCommands = [
         "foot"
+        "foot-zero"
+        "foot-scratch"
         "tfoot"
         "tfoot-reattach"
-        "foot-scratch"
         "foot-bluetuith"
         "foot-htop"
         "foot-btop"

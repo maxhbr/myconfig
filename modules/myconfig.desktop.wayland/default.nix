@@ -43,7 +43,7 @@ in
 
           ${foot}/bin/foot --server &
           {
-            tfoot || ${pkgs.foot}/bin/foot
+            foot-zero || foot -T tmux-zero -a tmux-zero
           } >/dev/null 2>&1 &
 
           ${wlsunset}/bin/wlsunset &

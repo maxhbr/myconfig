@@ -277,6 +277,12 @@ window-rule {
 }
 
 window-rule {
+    match app-id="^tmux-zero$"
+
+    open-fullscreen true
+}
+
+window-rule {
     exclude app-id="^firefox$"
     exclude app-id="^teams-for-linux$"
     exclude app-id="^Slack$"
