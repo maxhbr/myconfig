@@ -32,11 +32,16 @@ in
         lib.mkIf (config.myconfig.ai.container.open-webui.enable || config.myconfig.ai.open-webui.enable)
           (
             let
-              port =
+              openWebuiPort =
                 if config.myconfig.ai.container.open-webui.enable then
                   config.myconfig.ai.container.open-webui.port
                 else
                   config.myconfig.ai.open-webui.port;
+              litellmRouteConfig = lib.optionalString config.services.litellm.enable ''
+                handle_path /litellm/* {
+                  reverse_proxy http://localhost:${toString config.services.litellm.port}
+                }
+              '';
             in
             {
               services.caddy = {
@@ -49,7 +54,8 @@ in
                     (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
                   ];
                   extraConfig = ''
-                    reverse_proxy http://localhost:${toString port}
+                    ${litellmRouteConfig}
+                    reverse_proxy http://localhost:${toString openWebuiPort}
                   '';
                 };
               };
