@@ -142,6 +142,7 @@ in
 
       };
       optimise.automatic = true;
+      nix.optimise.dates = [ "03:45" ];
     };
 
     # see: https://github.com/NixOS/nixpkgs/issues/54707#issuecomment-1132907191
