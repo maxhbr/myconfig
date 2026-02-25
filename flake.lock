@@ -664,11 +664,11 @@
     },
     "rel2511": {
       "locked": {
-        "lastModified": 1772017020,
-        "narHash": "sha256-fVY4tMRo9RX2/IVAx1C+q6M7qvmh46JzbYS68qZyWP0=",
+        "lastModified": 1772017366,
+        "narHash": "sha256-n1xoHfGh8Rpg4s2fD0DqvLRQxuGdwAPWyYZxvbsMLSc=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "731388a8853f87c905183d19942bd3385907a088",
+        "rev": "bfb8a8129fbf1bb71b2d244b408561a35f6ed505",
         "type": "github"
       },
       "original": {
