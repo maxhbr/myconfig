@@ -149,6 +149,22 @@ in
           reverse_proxy http://localhost:${toString config.myconfig.ai.container.open-webui.port}
         '';
       };
+      virtualHosts."ollama.${config.networking.hostName}.wg0.maxhbr.local" = {
+        listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+        hostName = "ollama.${config.networking.hostName}.wg0.maxhbr.local";
+        serverAliases = [ "ollama.${config.networking.hostName}.wg0" ];
+        extraConfig = ''
+          reverse_proxy http://localhost:11434
+        '';
+      };
+      virtualHosts."litellm.${config.networking.hostName}.wg0.maxhbr.local" = {
+        listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+        hostName = "litellm.${config.networking.hostName}.wg0.maxhbr.local";
+        serverAliases = [ "litellm.${config.networking.hostName}.wg0" ];
+        extraConfig = ''
+          reverse_proxy http://localhost:4000
+        '';
+      };
     };
 
     networking.firewall.interfaces."wg0".allowedTCPPorts = [ 443 ];
