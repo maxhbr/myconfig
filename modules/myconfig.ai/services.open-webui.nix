@@ -23,8 +23,8 @@ in
 
     port = mkOption {
       type = types.int;
-      default = 8080;
-      description = "Port for Open WebUI";
+      default = 8888;
+      description = "Port for Open WebUI, 8080 is used by litellm";
     };
   };
 

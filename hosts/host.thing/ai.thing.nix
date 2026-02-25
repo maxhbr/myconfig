@@ -102,41 +102,41 @@ in
 
     services.litellm = {
       enable = true;
-      settings.model_list = [
-        {
-          "model_name" = "GLM-4-Flash";
-          "litellm_params" = {
-            model = "openai/glm-4";
-            api_base = "http://127.0.0.1:22545/v1";
-            api_key = "not-needed";
-          };
-        }
-        {
-          "model_name" = "Qwen3-Coder-Next";
-          "litellm_params" = {
-            model = "openai/qwen3-coder";
-            api_base = "http://localhost:22546/v1";
-            api_key = "not-needed";
-            max_tokens = 4096;
-          };
-        }
-        {
-          model_name = "Qwen/Qwen3-4B";
-          litellm_params = {
-            model = "hosted_vllm/Qwen/Qwen3-4B";
-            api_base = "https://localhost:8000/v1";
-          };
-        }
-      ]
-      ++ lib.optionals config.services.ollama.enable (
-        map (model: {
-          model_name = "ollama/${model}";
-          litellm_params = {
-            model = "ollama/${model}";
-            api_base = "http://${config.services.ollama.host}:${toString config.services.ollama.port}";
-          };
-        }) config.services.ollama.loadModels
-      );
+      # settings.model_list = [
+      #   {
+      #     "model_name" = "GLM-4-Flash";
+      #     "litellm_params" = {
+      #       model = "openai/glm-4";
+      #       api_base = "http://127.0.0.1:22545/v1";
+      #       api_key = "not-needed";
+      #     };
+      #   }
+      #   {
+      #     "model_name" = "Qwen3-Coder-Next";
+      #     "litellm_params" = {
+      #       model = "openai/qwen3-coder";
+      #       api_base = "http://localhost:22546/v1";
+      #       api_key = "not-needed";
+      #       max_tokens = 4096;
+      #     };
+      #   }
+      #   {
+      #     model_name = "Qwen/Qwen3-4B";
+      #     litellm_params = {
+      #       model = "hosted_vllm/Qwen/Qwen3-4B";
+      #       api_base = "https://localhost:8000/v1";
+      #     };
+      #   }
+      # ]
+      # ++ lib.optionals config.services.ollama.enable (
+      #   map (model: {
+      #     model_name = "ollama/${model}";
+      #     litellm_params = {
+      #       model = "ollama/${model}";
+      #       api_base = "http://${config.services.ollama.host}:${toString config.services.ollama.port}";
+      #     };
+      #   }) config.services.ollama.loadModels
+      # );
     };
 
     myconfig = {
@@ -163,7 +163,7 @@ in
           enable = true;
         };
         vllm = {
-          enable = true;
+          enable = false;
         };
         # services = {
         #   llama-server = {

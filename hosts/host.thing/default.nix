@@ -62,7 +62,7 @@
         wayland = {
           enable = true;
           selectedSessions = [
-            # "niri"
+            "niri"
             # "labwc"
           ];
           directLoginFirstSession = true;

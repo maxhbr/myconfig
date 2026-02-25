@@ -46,6 +46,8 @@ in
       #   maximum_spend_logs_retention_period = "30d";
       #   database_url = "postgresql://litellm:litellm@127.0.0.1:${toString config.services.postgresql.port}/litellm";
       # };
+      # settings.litellm_settings = 
+      # services.general_settings =
       settings.model_list = lib.optionals config.services.ollama.enable (
         map (model: {
           model_name = "ollama/${model}";
