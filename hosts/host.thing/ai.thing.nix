@@ -42,6 +42,11 @@ in
                   reverse_proxy http://localhost:${toString config.services.litellm.port}
                 }
               '';
+              ollamaRouteConfig = lib.optionalString config.services.ollama.enable ''
+                handle_path /ollama/* {
+                  reverse_proxy http://localhost:11434
+                }
+              '';
             in
             {
               services.caddy = {
@@ -55,7 +60,24 @@ in
                   ];
                   extraConfig = ''
                     ${litellmRouteConfig}
+                    ${ollamaRouteConfig}
                     reverse_proxy http://localhost:${toString openWebuiPort}
+                  '';
+                };
+                virtualHosts."ollama.${config.networking.hostName}.wg0.maxhbr.local" = lib.mkIf config.services.ollama.enable {
+                  listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+                  hostName = "ollama.${config.networking.hostName}.wg0.maxhbr.local";
+                  serverAliases = [ "ollama.${config.networking.hostName}.wg0" ];
+                  extraConfig = ''
+                    reverse_proxy http://localhost:11434
+                  '';
+                };
+                virtualHosts."litellm.${config.networking.hostName}.wg0.maxhbr.local" = lib.mkIf config.services.litellm.enable {
+                  listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+                  hostName = "litellm.${config.networking.hostName}.wg0.maxhbr.local";
+                  serverAliases = [ "litellm.${config.networking.hostName}.wg0" ];
+                  extraConfig = ''
+                    reverse_proxy http://localhost:${toString config.services.litellm.port}
                   '';
                 };
               };
