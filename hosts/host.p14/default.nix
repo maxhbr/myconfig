@@ -10,7 +10,7 @@
 }:
 {
   imports = [
-    # ./ai.p14.nix
+    ./ai.p14.nix
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
     # inputs.nixos-hardware.nixosModules.common-gpu-intel
@@ -25,12 +25,6 @@
     inputs.nixos-hardware.nixosModules.lenovo-thinkpad
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
-    {
-      myconfig.ai = {
-        enable = true;
-        coding.enable = false;
-      };
-    }
     {
       services.eternal-terminal = {
         enable = true;

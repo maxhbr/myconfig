@@ -41,6 +41,7 @@ in
       };
       ai = {
         enable = true;
+        coding.enable = false;
         # acceleration.vulkan.enable = true;
         inference-cpp = {
           enable = true;
@@ -52,7 +53,7 @@ in
           enable = false;
         };
         vllm = {
-          enable = true;
+          enable = false;
         };
         container = {
           nlm-ingestor = {
