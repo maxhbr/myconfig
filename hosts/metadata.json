@@ -74,21 +74,6 @@
         }
       }
     },
-    "spare": {
-      "network": "home",
-      "ip4": "192.168.1.127",
-      "pubkeys": {
-        "id_rsa.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCp+ZgpaG+uZ7CXeapOhvgzOp2NDzRMQaOYDL0/BkQxz4qJpqTP3pM5R3/ObhTOPMPvJCtuJaM2hVhowmHvMgOx1af355p9grr/jqiN3AB+djbEVUskmocnKAugcsxXXa+gjOcjpgbbbpeHz1QjTkmICLBwrMCECNZqxp7ZtjlsrUVfblCZVA5LN979wnqXONzVOhr1H7XBFTjZYUcnbFKr8W3FDiSa/t94aoIWMFyDQ5Unr0bfOSEAE5m7iMLfOxvsUaonFfABuHp59yYiRB/h3TGJ1TRg+lasbeh2VoNllTRxLsd16qFv6FDDeGJ7RRSEPo6+pz6p85pBOs7XZF+xKEuFO1/7fHUdrcT0k4gzENDYUgDGsEJnECCC+qEHmT47OeXsLEwQcmz/MMcRedxZgaQbqTqGFfHrA9L7ts2rcNESWoM7RkpRS4twT7x6y/87/6Y+cGjGpQpZTiGh7VU5ixuze8s/WUlATxr7Eu16lYf9WM2E4vmoRR6HibdBP4E= mhuber@spare",
-        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICSGhlJF3ML29vV3/eq7m/hy25VmUzgjgnKDbbsEQtn6 root@spare",
-        "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC0ntzetUlAUgCq1v7VDaWEwm7qBE+gmIspnIeVkUrWurC/EHsjre8CW2etdD9WpJPRXjA0eHAvM+5S6q2NmSGxPXINezGCigB3PoTmzq8fYuj0f5aZt3w0SHwkLuM6s0E+8CkAqHWOEVY2Il++ExibRCr9chU4DWno1QUVha1hBIjpXY3rZx0KBwygNpWJeOi0Ece6hPcAoA9VDdkuU8SSih252/TtMngswDEvXVRfmNDZYZYawipk5q9R7j0thyIl3vfs7Zia5jIe3aDNzDln6OaDqe2BDCR6TksyYICVM4qlCPSZxV45ogx3yERDrGBH8PlmH2mwi82LRSCu7CU7eQaxzAjeAGNq9+Ksvv6MAhRSaiWPi63j1i+0ERwZfHr/DjUESyklW/oNUT982Z7ea7FxhMg9Ff8j7j+iWWveB6n2ocYEwyBa46LvL70O63RM2S08jgoH0wNw71L+QtzI2MfpE0L3WRlFRZ7dUzItEm+esP2ZxXPeRssXKwhR0GxYUQVT18qAgA127cYUUMUgvp2liCw9NlbXE1yudVqTncyATgWzACV77tbHR2n/+kdcHqq+7x1sp9QQYfr9kD8KMdOq65yvX1kfJx4WcLS/Q1d8+KoRwHeX+g6QSwd667Ng0pd3l3rxoyakvRneWkG+D9du06LqQB36ZWZ4N4ucOw== root@spare"
-      },
-      "wireguard": {
-        "wg0": {
-          "ip4": "10.199.199.87",
-          "pubkey": "6rTOMXv5e/RWOM4fHTiWVlH0TEcfnsWx1dRKppTj+Ww="
-        }
-      }
-    },
     "vserver": {
       "pubkeys": {
         "id_rsa.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC6dumJloLmi+otqmB9rhaVkjjrGO3Qk+eTUA3U3oJPTw9fP1gEuOIRtU1dRY3C3gj8QXlXK1E+7C537Lw40dDLtkvXg5/0mtG/G16nFm1xtNRdLVsQkYPh2r4oZfkprLV/d9kwARZP46FuBD5nG8vHOSTEoEdqZyndJN40iv7VSSxJ9qv2QE8XusrId4Cicpr6uw9v0eh5ftO5HaNz+AcDK98q33QAOdCKMgG0B0hLkRET5jyTy0KB/do6ojTcA5ZfrAzYuB5h2xjLCUQ+wyJtAGTwG3wEjzj7laBs1d1v4UyRD0LRPjmxy41ivS+WUJ0Hcv7ZJD2jmXAoEn7GoOTunOvwjhHPS7HFiuEF8ruQ6YeAJqlxQsb/pgQF5dHkoBclCGsdN/+tmgybNCmtKEs3D2AAukgTbiHmnC4dDf8QCe4GbrFB5S2aWURAdetehz2d7eTEz2IFEzyZ8YlIMqROfzaQQsypPEcG3lTmuECQHs7XhtZ8igRe2AhAjn9ON8qGrE6hT1faFNCQ/f5UKJoMyHFSgRIJ1Wovo06bwuJgcxK0NJljtzBlccWPUupg0pSYPx2XDUR+er8zpXvprAeflLOQjznp6047hSz3iP1ZMwe7znOTazPX0XCBL6RjsS7xd7sU925iCe5mmxc0p9qEjNSu/LtJ7ZoYxt3Vj6Qyqw== mhuber@x1extremeG2",

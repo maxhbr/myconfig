@@ -222,7 +222,6 @@
                               ++ (map (hn: (mk-upg-script "upg-${hn}" "--fast ${hn}")) [
                                 "p14"
                                 "workstation"
-                                "spare"
                                 "r6c"
                                 "nas"
                                 "vserver"
@@ -267,11 +266,6 @@
                 )
               ]
               ++ moreModules
-            ) metadataOverride);
-          host-spare =
-            moreModules: metadataOverride:
-            (self.lib.evalConfiguration "x86_64-linux" "spare" (
-              [ self.nixosModules.core ] ++ moreModules
             ) metadataOverride);
           host-x1extremeG2 =
             moreModules: metadataOverride:
@@ -370,7 +364,6 @@
         nixosConfigurations = {
           f13 = self.nixosConfigurationsGen.host-f13 [ ] { };
           p14 = self.nixosConfigurationsGen.host-p14 [ ] { };
-          spare = self.nixosConfigurationsGen.host-spare [ ] { };
           # x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [ ] { };
           workstation = self.nixosConfigurationsGen.host-workstation [ ] { };
           vserver = self.nixosConfigurationsGen.host-vserver [ ] { };
