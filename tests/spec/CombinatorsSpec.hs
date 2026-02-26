@@ -69,6 +69,29 @@ spec = parallel $ inTestM $ do
         |]
           `shouldOutput` "secret\n"
 
+    it "allows forwarding $PATH and extending it with add-pkg-deps" $ do
+      helloPath <- evalNixExpr [i| "${pkgs.hello}/bin" |]
+      coreutilsPath <- evalNixExpr [i| "${pkgs.coreutils}/bin" |]
+      withEnv "PATH" "foo:bar" $ do
+        [i|
+          jail "test" (sh ''echo "''${PATH-unset}"'') (c: [
+            (c.fwd-env "PATH")
+            (c.add-pkg-deps [ pkgs.hello ])
+          ])
+        |]
+          `shouldOutput` (helloPath <> ":" <> coreutilsPath <> ":foo:bar\n")
+
+    it "overrides $PATH to whatever is forwarded if specified after add-pkg-deps" $ do
+      coreutilsPath <- evalNixExpr [i| "${pkgs.coreutils}/bin" |]
+      withEnv "PATH" "foo:bar" $ do
+        [i|
+          jail "test" (sh ''echo "''${PATH-unset}"'') (c: [
+            (c.add-pkg-deps [ pkgs.hello ])
+            (c.fwd-env "PATH")
+          ])
+        |]
+          `shouldOutput` (coreutilsPath <> ":foo:bar\n")
+
     it "correctly escapes variables" $ do
       withEnv "MY_ENV_VAR" "$(echo foo)" $ do
         [i|

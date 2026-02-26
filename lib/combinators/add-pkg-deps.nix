@@ -7,5 +7,18 @@ in
   doc = ''
     Adds the packages' `bin` directory to `$PATH`.
   '';
-  impl = pkgs: compose (builtins.map (pkg: add-path "${lib.getBin pkg}/bin") pkgs);
+  impl =
+    pkgsToAdd:
+    compose (
+      builtins.map (pkg: add-path "${lib.getBin pkg}/bin") pkgsToAdd
+      ++ [
+        (
+          state:
+          state
+          // {
+            additionalRuntimeClosures = state.additionalRuntimeClosures ++ (map toString pkgsToAdd);
+          }
+        )
+      ]
+    );
 }

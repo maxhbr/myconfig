@@ -32,7 +32,6 @@ let
         name = name;
         cmd = lib.getExe bubblewrapPackage;
         entry = if builtins.typeOf exe == "string" then lib.escapeShellArg exe else lib.getExe exe;
-        path = [ ];
         argv = "\"$@\"";
         runtime = "";
         newSession = true;
@@ -74,7 +73,6 @@ let
             ]
             s
         )
-        (s: if builtins.length s.path > 0 then set-env "PATH" (lib.concatStringsSep ":" s.path) s else s)
         (s: if s.newSession then unsafe-add-raw-args "--new-session" s else s)
         (s: if s.dieWithParent then unsafe-add-raw-args "--die-with-parent" s else s)
         (

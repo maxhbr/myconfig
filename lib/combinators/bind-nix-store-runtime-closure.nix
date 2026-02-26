@@ -50,7 +50,6 @@ in
       let
         runtimeClosure = pkgs.writeText "${state.name}-runtime-closure" ''
           ${pkgs.lib.concatStringsSep "\n" state.additionalRuntimeClosures}
-          ${pkgs.lib.concatStringsSep "\n" state.path}
           ${state.argv}
           ${state.entry}
         '';
