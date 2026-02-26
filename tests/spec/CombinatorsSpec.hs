@@ -108,12 +108,12 @@ spec = parallel $ inTestM $ do
       out <-
         runNixDrv
           [i|
-            jail "test" (sh ''curl https://example.org'') (c: [
+            jail "test" (sh ''curl https://alexdav.id'') (c: [
               (c.add-pkg-deps [ pkgs.curl ])
               c.network
             ])
           |]
-      liftIO $ out `shouldContain` "<h1>Example Domain</h1>"
+      liftIO $ out `shouldContain` "jail.nix"
 
     it "allows overriding the hostname with set-hostname" $ do
       [i|
@@ -151,12 +151,12 @@ spec = parallel $ inTestM $ do
         runNixDrvWithinVm
           [i| { services.resolved.enable = true; } |]
           [i|
-            jail "test" (sh ''curl https://example.org'') (c: [
+            jail "test" (sh ''curl https://alexdav.id'') (c: [
               (c.add-pkg-deps [ pkgs.curl ])
               c.network
             ])
           |]
-      liftIO $ out `shouldContain` "<h1>Example Domain</h1>"
+      liftIO $ out `shouldContain` "jail.nix"
 
   describe "no-die-with-parent" $ do
     let waitForChildPid :: Process.Pid -> TestM Process.Pid
