@@ -56,7 +56,7 @@ in
     ];
     myconfig = {
       hardware.gpu.variant = "amd";
-      ai.inference-cpp.ollama-cpp.package = llama-cpp-gfx1151;
+      ai.inference-cpp.llama-cpp.package = llama-cpp-gfx1151;
       # ai.vllm.package = vllm-gfx1151;
     };
     services.ollama.package = lib.mkForce ollama-rocm-gfx1151;

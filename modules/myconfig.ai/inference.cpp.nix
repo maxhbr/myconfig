@@ -20,10 +20,10 @@ in
   options.myconfig = with lib; {
     ai.inference-cpp = {
       enable = mkEnableOption "myconfig.ai.inference-cpp";
-      ollama-cpp.package = mkOption {
+      llama-cpp.package = mkOption {
         type = types.package;
         default = matching-llama-cpp;
-        description = "The ollama-cpp package to use";
+        description = "The llama-cpp package to use";
       };
     };
   };
@@ -32,7 +32,7 @@ in
       {
         home.packages = with pkgs; [
           # koboldcpp
-          config.myconfig.ai.inference-cpp.ollama-cpp.package
+          config.myconfig.ai.inference-cpp.llama-cpp.package
         ];
         myconfig.persistence.cache-directories = [ ".cache/llama.cpp/" ];
       }

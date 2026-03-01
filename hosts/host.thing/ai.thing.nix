@@ -169,7 +169,7 @@ in
           enable = true;
         };
         vllm = {
-          enable = false;
+          enable = true;
         };
         # services = {
         #   llama-server = {
@@ -216,14 +216,18 @@ in
         "glm-4.7-flash:bf16"
         "gpt-oss:20b"
         "gpt-oss:120b"
+        "granite4"
         "llama4:16x17b"
-        # # "llama3.2:3b"
+        # "llama3.2:3b"
         # "llava:7b"
         # "llava:34b"
-        # # "magistral:24b"
-        # # "openthinker:32b"
+        # "magistral:24b"
+        # "openthinker:32b"
         # "phi4"
+        "qwen3-coder-next:q8_0"
         # "qwen2.5vl:32b"
+        "qwen3-vl:32b"
+        "qwen3.5:122b"
         # "qwen3:30b"
         # "qwen3:32b"
         # "qwq:32b"
