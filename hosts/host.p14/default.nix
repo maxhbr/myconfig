@@ -77,7 +77,7 @@
               tmux new-session -d -s ${tmux-session}
               tmux send-keys -t ${tmux-session}:1 "btop" C-m
               tmux split-window -h -t ${tmux-session}
-              tmux send-keys -t ${tmux-session}:1 "et -x  mhuber@spare.wg0:22022 --command btop" C-m
+              tmux send-keys -t ${tmux-session}:1 "et -x  mhuber@thing.wg0:22022 --command btop" C-m
               tmux split-window -v -t ${tmux-session}
               tmux send-keys -t ${tmux-session}:1 "et -x  mhuber@workstation.wg0:22022 --command btop" C-m
               tmux split-window -v -t ${tmux-session}
