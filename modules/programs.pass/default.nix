@@ -1,6 +1,11 @@
 # Copyright 2017-2020 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   wireguardKeypairToPassStore =
     with pkgs;
@@ -45,6 +50,16 @@ in
         programs.password-store = {
           enable = true;
           # package = pass;
+          settings =
+            let
+              accounts = lib.attrValues config.myconfig.accounts;
+              primaryAccount = lib.findFirst (a: a.primary) (builtins.head accounts) accounts;
+            in
+            {
+              PASSWORD_STORE_DIR = "${config.xdg.dataHome}/password-store";
+              PASSWORD_STORE_KEY = lib.mkIf (accounts != [ ]) primaryAccount.pgp-key-id;
+              PASSWORD_STORE_CLIP_TIME = "60";
+            };
         };
         services.pass-secret-service.enable = true;
         programs.browserpass.enable = config.myconfig.desktop.enable;
