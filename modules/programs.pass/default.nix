@@ -11,6 +11,7 @@ let
 in
 {
   config = {
+    myconfig.persistence.directories = [ ".local/share/password-store/" ];
     nixpkgs.overlays = [
       (
         self: super:

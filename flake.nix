@@ -106,7 +106,7 @@
                         [
                           (mkSubPkgsOverlay "master" inputs.master)
                           (mkSubPkgsOverlay "nixos-unstable" inputs.nixos-unstable)
-                          (mkSubPkgsOverlay "nixos-unstable-small" inputs.ninos-unstable-small)
+                          (mkSubPkgsOverlay "nixos-unstable-small" inputs.nixos-unstable-small)
                           (mkSubPkgsOverlay "nixos-2511" inputs.rel2511)
                           (mkSubPkgsOverlay "nixos-2505" inputs.rel2505)
                           (mkSubPkgsOverlay "nixos-2405" inputs.rel2405)
