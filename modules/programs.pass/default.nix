@@ -16,7 +16,6 @@ let
 in
 {
   config = {
-    myconfig.persistence.directories = [ ".local/share/password-store/" ];
     nixpkgs.overlays = [
       (
         self: super:
@@ -56,7 +55,7 @@ in
               primaryAccount = lib.findFirst (a: a.primary) (builtins.head accounts) accounts;
             in
             {
-              PASSWORD_STORE_DIR = "${config.xdg.dataHome}/password-store";
+              PASSWORD_STORE_DIR = "${config.home.homeDirectory}/.password-store";
               PASSWORD_STORE_KEY = lib.mkIf (accounts != [ ]) primaryAccount.pgp-key-id;
               PASSWORD_STORE_CLIP_TIME = "60";
             };
