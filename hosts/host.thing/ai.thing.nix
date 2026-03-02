@@ -169,7 +169,7 @@ in
           enable = true;
         };
         vllm = {
-          enable = true;
+          enable = false;
         };
         # services = {
         #   llama-server = {

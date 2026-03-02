@@ -14,6 +14,7 @@
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [ lmstudio ];
+        myconfig.persistence.directories = [ ".config/LM Studio" ];
         myconfig.persistence.cache-directories = [ ".lmstudio" ];
       }
     ];
