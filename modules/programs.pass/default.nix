@@ -7,6 +7,7 @@
   ...
 }:
 let
+  osConfig = config;
   wireguardKeypairToPassStore =
     with pkgs;
     writeScriptBin "wireguardKeypairToPassStore.sh" (lib.fileContents ./wireguardKeypairToPassStore.sh);
@@ -45,42 +46,44 @@ in
       )
     ];
     home-manager.sharedModules = [
-      {
-        programs.password-store = {
-          enable = true;
-          # package = pass;
-          settings =
-            let
-              accounts = lib.attrValues config.myconfig.accounts;
-              primaryAccount = lib.findFirst (a: a.primary) (builtins.head accounts) accounts;
-            in
-            {
+      (
+        { config, ... }:
+        let
+          accounts = lib.attrValues config.myconfig.accounts;
+          primaryAccount = lib.findFirst (a: a.primary) (builtins.head accounts) accounts;
+        in
+        {
+          programs.password-store = {
+            enable = true;
+            # package = pass;
+            settings = {
               PASSWORD_STORE_DIR = "${config.home.homeDirectory}/.password-store";
               PASSWORD_STORE_KEY = lib.mkIf (accounts != [ ]) primaryAccount.pgp-key-id;
               PASSWORD_STORE_CLIP_TIME = "60";
             };
-        };
-        services.pass-secret-service.enable = true;
-        programs.browserpass.enable = config.myconfig.desktop.enable;
-        home.packages =
-          with pkgs;
-          [
-            # pass
-            pass-git-helper
-            wireguardKeypairToPassStore
-            otpPass
-          ]
-          ++ lib.optionals config.myconfig.desktop.enable [
-            gopass
-            gopass-jsonapi
-            dmenu-wayland
-          ];
-        home.file = {
-          ".config/pass-git-helper/git-pass-mapping.ini".source =
-            ./config/pass-git-helper/git-pass-mapping.ini;
-        };
-        programs.git.extraConfig.credential.helper = "${pkgs.pass-git-helper}/bin/pass-git-helper";
-      }
+          };
+          services.pass-secret-service.enable = true;
+          programs.browserpass.enable = osConfig.myconfig.desktop.enable;
+          home.packages =
+            with pkgs;
+            [
+              # pass
+              pass-git-helper
+              wireguardKeypairToPassStore
+              otpPass
+            ]
+            ++ lib.optionals osConfig.myconfig.desktop.enable [
+              gopass
+              gopass-jsonapi
+              dmenu-wayland
+            ];
+          home.file = {
+            ".config/pass-git-helper/git-pass-mapping.ini".source =
+              ./config/pass-git-helper/git-pass-mapping.ini;
+          };
+          programs.git.extraConfig.credential.helper = "${pkgs.pass-git-helper}/bin/pass-git-helper";
+        }
+      )
     ];
   };
 }
