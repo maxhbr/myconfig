@@ -32,9 +32,9 @@
         # inconsolata
         # liberation_ttf
         mplus-outline-fonts.githubRelease
-        noto-fonts
-        noto-fonts-cjk-sans
-        noto-fonts-color-emoji
+        # noto-fonts
+        # noto-fonts-cjk-sans
+        # noto-fonts-color-emoji
         proggyfonts
         roboto
       ];

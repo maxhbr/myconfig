@@ -50,7 +50,7 @@ in
                       rm = "rm -I";
                       cp = "cp -i";
                       mv = "mv -vi";
-                      ducks = "du -chs *";
+                      ducks = "du --one-file-system -chs -- *";
                       ff = "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type f -iname ";
                       ffd = "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -type d -iname ";
                       ffa = "find . -not -iwholename '*.svn*' -not -iwholename '*.git*' -iname ";
