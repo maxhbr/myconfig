@@ -241,29 +241,6 @@
             (self.lib.evalConfiguration "x86_64-linux" "p14" (
               [
                 self.nixosModules.core
-                (
-                  { pkgs, myconfig, ... }:
-                  {
-                    imports = [ (myconfig.metadatalib.announceOtherHosts "p14") ];
-                    config = {
-                      home-manager.sharedModules = [
-                        (
-                          { config, ... }:
-                          {
-                            home.packages = [
-                              (pkgs.writeShellScriptBin "myconfig" (
-                                if config.programs.neovide.enable then
-                                  "${config.programs.neovide.package}/bin/neovide ~/myconfig/myconfig &disown"
-                                else
-                                  "$EDITOR  ~/myconfig/myconfig"
-                              ))
-                            ];
-                          }
-                        )
-                      ];
-                    };
-                  }
-                )
               ]
               ++ moreModules
             ) metadataOverride);
