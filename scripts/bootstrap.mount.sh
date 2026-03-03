@@ -33,6 +33,7 @@ mount_btrfs "@home"            "$MNT/home"
 mount_btrfs "@persistent_priv" "$MNT/persistent/priv"
 mount_btrfs "@persistent_work" "$MNT/persistent/work"
 mount_btrfs "@persistent_cache" "$MNT/persistent/cache"
+mount_btrfs "@persistent_other" "$MNT/persistent/other"
 mount_btrfs "@swapfile"        "$MNT/.swapfile"
 
 mkdir -p "$MNT/boot"
