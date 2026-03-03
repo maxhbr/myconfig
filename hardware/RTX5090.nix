@@ -10,7 +10,7 @@
   config = {
     myconfig.hardware.gpu.variant = "nvidia";
     hardware.nvidia = {
-      package = config.boot.kernelPackages.nvidiaPackages.beta; # latest or stable
+      package = config.boot.kernelPackages.nvidiaPackages.stable;
       open = true;
       nvidiaSettings = true;
       modesetting.enable = true;

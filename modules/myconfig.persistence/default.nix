@@ -32,6 +32,8 @@ in
     myconfig.persistence.work-files = optionFiles;
     myconfig.persistence.cache-directories = optionDirectories;
     myconfig.persistence.cache-files = optionFiles;
+    myconfig.persistence.other-directories = optionDirectories;
+    myconfig.persistence.other-files = optionFiles;
   };
   config = {
     home-manager.sharedModules = [
@@ -45,6 +47,8 @@ in
             myconfig.persistence.work-files = optionFiles;
             myconfig.persistence.cache-directories = optionDirectories;
             myconfig.persistence.cache-files = optionFiles;
+            myconfig.persistence.other-directories = optionDirectories;
+            myconfig.persistence.other-files = optionFiles;
           };
           config = {
             # take from nixos config
@@ -54,6 +58,8 @@ in
             myconfig.persistence.work-files = nixosConfig.myconfig.persistence.work-files;
             myconfig.persistence.cache-directories = nixosConfig.myconfig.persistence.cache-directories;
             myconfig.persistence.cache-files = nixosConfig.myconfig.persistence.cache-files;
+            myconfig.persistence.other-directories = nixosConfig.myconfig.persistence.other-directories;
+            myconfig.persistence.other-files = nixosConfig.myconfig.persistence.other-files;
           };
         }
       )

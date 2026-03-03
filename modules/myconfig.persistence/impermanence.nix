@@ -13,12 +13,14 @@ let
   persistentPrivDir = "${persistentDir}/priv";
   persistentWorkDir = "${persistentDir}/work";
   persistentCacheDir = "${persistentDir}/cache";
+  persistentOtherDir = "${persistentDir}/other";
   volumeLog = "@log";
   volumeNix = "@nix";
   volumeHome = "@home";
   volumePriv = "@persistent_priv";
   volumeWork = "@persistent_work";
   volumeCache = "@persistent_cache";
+  volumeOther = "@persistent_other";
 
   validateDevice =
     device:
@@ -357,6 +359,7 @@ in
                 create_subvolume_if_not_exists "${volumePriv}"
                 create_subvolume_if_not_exists "${volumeWork}"
                 create_subvolume_if_not_exists "${volumeCache}"
+                create_subvolume_if_not_exists "${volumeOther}"
 
                 exec 1>&- 2>&-
 
@@ -477,6 +480,13 @@ in
         neededForBoot = true;
       };
 
+      fileSystems."${persistentOtherDir}" = {
+        device = validateDevice cfg.btrfs_device;
+        fsType = "btrfs";
+        options = [ "subvol=${volumeOther}" ];
+        neededForBoot = true;
+      };
+
       programs.fuse.userAllowOther = true;
       environment.persistence = {
         "${persistentPrivDir}" = {
@@ -556,6 +566,14 @@ in
             config.virtualisation.containers.storage.settings.storage.graphroot
           ]);
         };
+        "${persistentOtherDir}" = {
+          enable = true;
+          hideMounts = true;
+          users.${user} = {
+            directories = [ ];
+            files = [ ];
+          };
+        };
       };
       services.smartd = {
         enable = lib.mkDefault cfg.enable_smartd;
@@ -601,6 +619,12 @@ in
                     ".persistence.${config.home.username}.ready"
                   ]
                   ++ (validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.cache-files));
+                };
+                "${persistentOtherDir}" = {
+                  directories = validatePaths (
+                    lib.map mkRelativeToHome config.myconfig.persistence.other-directories
+                  );
+                  files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.other-files);
                 };
               };
             };
@@ -675,6 +699,9 @@ in
             toString config.users.extraUsers.${user}.uid
           } -g ${toString config.users.extraGroups.${user}.gid}
           install -d -m 700 "/${persistentCacheDir}/home/${user}" -o ${
+            toString config.users.extraUsers.${user}.uid
+          } -g ${toString config.users.extraGroups.${user}.gid}
+          install -d -m 700 "/${persistentOtherDir}/home/${user}" -o ${
             toString config.users.extraUsers.${user}.uid
           } -g ${toString config.users.extraGroups.${user}.gid}
           touch "/${persistentCacheDir}/.persistence.ready"
