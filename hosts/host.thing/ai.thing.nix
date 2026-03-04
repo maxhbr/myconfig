@@ -245,10 +245,16 @@ in
         home.packages = [
           ai-tmux-session-script
           (pkgs.writeShellScriptBin "run-qwen3-coder" ''
-            "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/Qwen3-Coder-Next-Q8_0.gguf --port 22546 -c 262144 -fa on -ctk q8_0 -ctv q8_0
+            set -x
+            exec "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/Qwen3-Coder-Next-Q8_0.gguf --port 22546 -c 262144 -fa on -ctk q8_0 -ctv q8_0 -ngl all "$@"
           '')
           (pkgs.writeShellScriptBin "run-glm4-flash" ''
-            "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/GLM-4.7-Flash-BF16.gguf --port 22545 -c 202752 -fa on -ctk q8_0 -ctv q8_0
+            set -x
+            exec "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/GLM-4.7-Flash-BF16.gguf --port 22545 -c 202752 -fa on -ctk bf16 -ctv bf16 -ngl all "$@"
+          '')
+          (pkgs.writeShellScriptBin "run-glm4-flash-q8_0" ''
+            set -x
+            exec "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/GLM-4.7-Flash-BF16.gguf --port 22545 -c 202752 -fa on -ctk q8_0 -ctv q8_0 -ngl all "$@"
           '')
         ];
       }
