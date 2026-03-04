@@ -98,7 +98,22 @@ in
       #   );
       # in
       {
-        myconfig.ai.opencode.enable = true;
+        myconfig.ai.opencode = {
+          enable = true;
+          localModels = [
+            {
+              name = "qwen3-coder";
+              port = 22546;
+            }
+            {
+              name = "glm4-flash";
+              port = 22545;
+            }
+            {
+              port = 30000;
+            }
+          ];
+        };
       }
     )
   ];
