@@ -11,6 +11,14 @@ let
   cfg = config.myconfig.hardware.gpu;
   hasVariant = v: builtins.elem v cfg.variant;
   hasAnyVariant = cfg.variant != [ ];
+  hasMultipleGpuFamilies =
+    (hasVariant "nvidia") && (hasVariant "amd" || hasVariant "amd-no-rocm" || hasVariant "intel")
+    || (hasVariant "amd" || hasVariant "amd-no-rocm") && (hasVariant "intel");
+  nvtopPackage = if hasMultipleGpuFamilies then pkgs.nvtopPackages.full
+    else if hasVariant "nvidia" then pkgs.nvtopPackages.nvidia
+    else if hasVariant "amd" || hasVariant "amd-no-rocm" then pkgs.nvtopPackages.amd
+    else if hasVariant "intel" then pkgs.nvtopPackages.intel
+    else pkgs.nvtopPackages.full;
 in
 {
   options.myconfig.hardware.gpu.variant = lib.mkOption {
@@ -31,20 +39,20 @@ in
         hardware.graphics = {
           enable = true;
         };
+        home-manager.sharedModules = [
+          {
+            home.packages = [ nvtopPackage ];
+          }
+        ];
         # nixpkgs.config.cudaSupport = lib.mkDefault (hasVariant "nvidia");
         # nixpkgs.config.rocmSupport = lib.mkDefault (hasVariant "amd");
       }
       (lib.mkIf (hasVariant "nvidia") {
         home-manager.sharedModules = [
           {
-            home.packages =
-              with pkgs;
-              [
-                nvtopPackages.nvidia
-              ]
-              ++ (with pkgs.cudaPackages; [
-                cudatoolkit
-              ]);
+            home.packages = with pkgs.cudaPackages; [
+              cudatoolkit
+            ];
           }
         ];
         users.extraUsers."${myconfig.user}".extraGroups = [ "nvidia" ];
@@ -59,7 +67,6 @@ in
           {
             home.packages = with pkgs; [
               vulkan-tools
-              nvtopPackages.amd
             ];
           }
         ];
@@ -75,7 +82,6 @@ in
             home.packages =
               with pkgs;
               [
-                nvtopPackages.amd
                 rocmPackages.rocminfo
                 rocmPackages.rocm-smi
                 onnxruntime
@@ -94,7 +100,6 @@ in
             home.packages =
               with pkgs;
               [
-                nvtopPackages.amd
                 onnxruntime
               ]
               ++ (with pkgs.python3Packages; [
