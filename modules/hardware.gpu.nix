@@ -14,11 +14,17 @@ let
   hasMultipleGpuFamilies =
     (hasVariant "nvidia") && (hasVariant "amd" || hasVariant "amd-no-rocm" || hasVariant "intel")
     || (hasVariant "amd" || hasVariant "amd-no-rocm") && (hasVariant "intel");
-  nvtopPackage = if hasMultipleGpuFamilies then pkgs.nvtopPackages.full
-    else if hasVariant "nvidia" then pkgs.nvtopPackages.nvidia
-    else if hasVariant "amd" || hasVariant "amd-no-rocm" then pkgs.nvtopPackages.amd
-    else if hasVariant "intel" then pkgs.nvtopPackages.intel
-    else pkgs.nvtopPackages.full;
+  nvtopPackage =
+    if hasMultipleGpuFamilies then
+      pkgs.nvtopPackages.full
+    else if hasVariant "nvidia" then
+      pkgs.nvtopPackages.nvidia
+    else if hasVariant "amd" || hasVariant "amd-no-rocm" then
+      pkgs.nvtopPackages.amd
+    else if hasVariant "intel" then
+      pkgs.nvtopPackages.intel
+    else
+      pkgs.nvtopPackages.full;
 in
 {
   options.myconfig.hardware.gpu.variant = lib.mkOption {
