@@ -601,6 +601,9 @@ in
                 "_screenshots"
                 ".pki"
               ];
+              myconfig.persistence.other-directories = [
+                "imgwork"
+              ];
               myconfig.persistence.cache-directories = [ ".cache/nix-index" ];
               home.persistence = {
                 "${persistentPrivDir}" = {
