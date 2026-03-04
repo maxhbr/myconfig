@@ -33,7 +33,7 @@ in
 {
   config = {
     myconfig = {
-      hardware.gpu.variant = "amd-no-rocm";
+      hardware.gpu.variant = [ "amd-no-rocm" ];
       ai.inference-cpp.llama-cpp.package = llama-cpp-gfx1151;
     };
   };

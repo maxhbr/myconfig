@@ -6,6 +6,6 @@
 }:
 {
   config = {
-    myconfig.hardware.gpu.variant = "amd";
+    myconfig.hardware.gpu.variant = [ "amd" ];
   };
 }

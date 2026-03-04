@@ -9,7 +9,7 @@
 let
   vllm =
     with pkgs;
-    if (config.myconfig.hardware.gpu.variant == "amd") then
+    if (builtins.elem "amd" config.myconfig.hardware.gpu.variant) then
       python3Packages.vllm.override {
         rocmSupport = true;
         cudaSupport = false;

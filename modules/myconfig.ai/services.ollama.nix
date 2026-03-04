@@ -12,35 +12,43 @@ in
   options.myconfig.ai.ollama = with lib; {
     useOllamaFromMaster = mkEnableOption "use ollama from nixpkgs master instead of nixos-unstable-small";
   };
-  imports = [
-    ({
-      config = lib.mkIf (config.myconfig.hardware.gpu.variant == "nvidia") {
-        services.ollama.package = pkgs.ollama-cuda;
-      };
-    })
-    ({
-      config = lib.mkIf (config.myconfig.hardware.gpu.variant == "amd") {
-        services.ollama = {
-          package = pkgs.ollama-rocm;
-          environmentVariables = {
-            OLLAMA_LLM_LIBRARY = "rocm";
+  imports =
+    let
+      gpuVariants = config.myconfig.hardware.gpu.variant;
+      hasVariant = v: builtins.elem v gpuVariants;
+    in
+    [
+      # Ollama package selection: pick the best available GPU backend.
+      # Priority: nvidia > amd (rocm) > amd-no-rocm (vulkan).
+      # Only one package can be set, so use nested mkIf to ensure exclusivity.
+      ({
+        config = lib.mkIf (hasVariant "nvidia") {
+          services.ollama.package = pkgs.ollama-cuda;
+        };
+      })
+      ({
+        config = lib.mkIf (hasVariant "amd" && !hasVariant "nvidia") {
+          services.ollama = {
+            package = pkgs.ollama-rocm;
+            environmentVariables = {
+              OLLAMA_LLM_LIBRARY = "rocm";
+            };
           };
         };
-      };
-    })
-    ({
-      config = lib.mkIf (config.myconfig.hardware.gpu.variant == "amd-no-rocm") {
-        services.ollama = {
-          package = pkgs.ollama-vulkan;
-          environmentVariables = {
-            OLLAMA_VULKAN = "1";
-            RADV_PERFTEST = "sam";
+      })
+      ({
+        config = lib.mkIf (hasVariant "amd-no-rocm" && !hasVariant "nvidia" && !hasVariant "amd") {
+          services.ollama = {
+            package = pkgs.ollama-vulkan;
+            environmentVariables = {
+              OLLAMA_VULKAN = "1";
+              RADV_PERFTEST = "sam";
+            };
           };
         };
-      };
-    })
+      })
 
-  ];
+    ];
   config = lib.mkIf config.services.ollama.enable {
     nixpkgs.overlays = [
       (_: prev: {

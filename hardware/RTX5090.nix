@@ -8,7 +8,7 @@
 }:
 {
   config = {
-    myconfig.hardware.gpu.variant = "nvidia";
+    myconfig.hardware.gpu.variant = [ "nvidia" ];
     hardware.nvidia = {
       package = config.boot.kernelPackages.nvidiaPackages.stable;
       open = true;

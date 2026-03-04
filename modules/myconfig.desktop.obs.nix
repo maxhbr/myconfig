@@ -39,8 +39,8 @@ in
               ]
               ++ (lib.optionals
                 (
-                  config.myconfig.hardware.gpu.variant == "amd"
-                  || config.myconfig.hardware.gpu.variant == "amd-no-rocm"
+                  builtins.elem "amd" config.myconfig.hardware.gpu.variant
+                  || builtins.elem "amd-no-rocm" config.myconfig.hardware.gpu.variant
                 )
                 [
                   obs-vaapi # optional AMD hardware acceleration

@@ -55,7 +55,7 @@ in
       })
     ];
     myconfig = {
-      hardware.gpu.variant = "amd";
+      hardware.gpu.variant = [ "amd" ];
       ai.inference-cpp.llama-cpp.package = llama-cpp-gfx1151;
       # ai.vllm.package = vllm-gfx1151;
     };

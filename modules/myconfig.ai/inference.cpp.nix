@@ -5,14 +5,15 @@
   ...
 }:
 let
-  gpuvariant = config.myconfig.hardware.gpu.variant;
+  gpuvariants = config.myconfig.hardware.gpu.variant;
+  hasVariant = v: builtins.elem v gpuvariants;
   matching-llama-cpp =
-    if gpuvariant == "amd" then
-      pkgs.llama-cpp-rocm
-    else if gpuvariant == "amd-no-rocm" then
-      pkgs.llama-cpp-vulkan
-    else if gpuvariant == "nvidia" then
+    if hasVariant "nvidia" then
       pkgs.llama-cpp.override { cudaSupport = true; }
+    else if hasVariant "amd" then
+      pkgs.llama-cpp-rocm
+    else if hasVariant "amd-no-rocm" then
+      pkgs.llama-cpp-vulkan
     else
       pkgs.llama-cpp;
 in

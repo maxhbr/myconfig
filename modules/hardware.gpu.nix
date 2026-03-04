@@ -9,10 +9,12 @@
 let
   user = myconfig.user;
   cfg = config.myconfig.hardware.gpu;
+  hasVariant = v: builtins.elem v cfg.variant;
+  hasAnyVariant = cfg.variant != [ ];
 in
 {
   options.myconfig.hardware.gpu.variant = lib.mkOption {
-    type = lib.types.nullOr (
+    type = lib.types.listOf (
       lib.types.enum [
         "nvidia"
         "amd"
@@ -20,18 +22,19 @@ in
         "intel"
       ]
     );
-    default = null;
+    default = [ ];
+    description = "List of GPU variants to enable. Multiple variants can be active simultaneously.";
   };
-  config = lib.mkIf (cfg.variant != null) (
+  config = lib.mkIf hasAnyVariant (
     lib.mkMerge [
-      (lib.mkIf (cfg.variant != null) {
+      {
         hardware.graphics = {
           enable = true;
         };
-        # nixpkgs.config.cudaSupport = lib.mkDefault (cfg.variant == "nvidia");
-        # nixpkgs.config.rocmSupport = lib.mkDefault (cfg.variant == "amd");
-      })
-      (lib.mkIf (cfg.variant == "nvidia") {
+        # nixpkgs.config.cudaSupport = lib.mkDefault (hasVariant "nvidia");
+        # nixpkgs.config.rocmSupport = lib.mkDefault (hasVariant "amd");
+      }
+      (lib.mkIf (hasVariant "nvidia") {
         home-manager.sharedModules = [
           {
             home.packages =
@@ -49,10 +52,8 @@ in
         hardware.nvidia.open = true;
         hardware.nvidia-container-toolkit.enable = true;
       })
-      # (lib.mkIf (
-      #   config.hardware.gpu.variant == "intel"
-      # ) ({ imports = [ inputs.nixos-hardware.nixosModules.common-gpu-amd ]; }))
-      (lib.mkIf (cfg.variant == "amd" || cfg.variant == "amd-no-rocm") {
+      # (lib.mkIf (hasVariant "intel") ({ imports = [ inputs.nixos-hardware.nixosModules.common-gpu-amd ]; }))
+      (lib.mkIf (hasVariant "amd" || hasVariant "amd-no-rocm") {
         services.xserver.videoDrivers = [ "amdgpu" ];
         home-manager.sharedModules = [
           {
@@ -68,7 +69,7 @@ in
           ];
         };
       })
-      (lib.mkIf (cfg.variant == "amd") {
+      (lib.mkIf (hasVariant "amd") {
         home-manager.sharedModules = [
           {
             home.packages =
@@ -86,7 +87,7 @@ in
           }
         ];
       })
-      (lib.mkIf (cfg.variant == "amd-no-rocm") {
+      (lib.mkIf (hasVariant "amd-no-rocm") {
         nixpkgs.config.rocmSupport = false;
         home-manager.sharedModules = [
           {
@@ -120,14 +121,14 @@ in
           })
         ];
       })
-      (lib.mkIf (cfg.variant == "intel") {
+      (lib.mkIf (hasVariant "intel") {
       })
-      (lib.mkIf (cfg.variant != null) {
+      {
         systemd.tmpfiles.rules = [
           "d /run/myconfig 0755 root root - -"
-          "f /run/myconfig/gpu-variant 0644 root root - ${cfg.variant}"
+          "f /run/myconfig/gpu-variant 0644 root root - ${builtins.concatStringsSep "," cfg.variant}"
         ];
-      })
+      }
     ]
   );
 }

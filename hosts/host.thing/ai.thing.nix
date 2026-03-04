@@ -73,7 +73,7 @@ in
           );
     })
     ({
-      config = lib.mkIf (config.myconfig.hardware.gpu.variant == "amd") {
+      config = lib.mkIf (builtins.elem "amd" config.myconfig.hardware.gpu.variant) {
         services.ollama = {
           environmentVariables = {
             HSA_OVERRIDE_GFX_VERSION = "11.5.1";
@@ -104,7 +104,7 @@ in
   ];
 
   config = {
-    system.nixos.tags = [ config.myconfig.hardware.gpu.variant ];
+    system.nixos.tags = config.myconfig.hardware.gpu.variant;
 
     services.litellm = {
       enable = true;
