@@ -89,11 +89,11 @@ mkLuks() {
 
     sleep 3
     sync
-    local uuid=$(set -x; lsblk -nr -o UUID,NAME | rg "$(basename "$luksDev")" | cut -f 1 -d " "  )
+    local uuid=$(set -x; sudo cryptsetup luksUUID "$luksDev")
     while [[ -z "$uuid" ]]; do
-        echo "UUID of $dev: $uuid" >&2
+        echo "UUID of $luksDev: $uuid" >&2
         sleep 1
-        uuid=$(set -x; lsblk -nr -o UUID,NAME | rg "$(basename "$luksDev")" | cut -f 1 -d " "  )
+        uuid=$(set -x; sudo cryptsetup luksUUID "$luksDev")
     done
 
     echo "###########################################################################################"
@@ -131,7 +131,12 @@ mkBTRFS() {
 ##  run  #######################################################################
 ################################################################################
 
-sudo cryptsetup luksClose backupLuks || true
+cleanup() {
+    sudo cryptsetup close backupLuks || true
+}
+trap cleanup EXIT
+
+cleanup
 
 mkPartitions "$SDX"
 SDX1="$(sudo fdisk -l "$SDX" | grep '^/dev' | cut -d' ' -f1 | sed -n 1p)"
