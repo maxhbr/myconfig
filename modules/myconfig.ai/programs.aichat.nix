@@ -38,7 +38,23 @@
                     name = model;
                   }) config.services.ollama.loadModels;
                 }
-              ];
+              ]
+              ++ lib.optionals (config.myconfig.ai.localModels != [ ]) (
+                map (
+                  model:
+                  let
+                    modelName = if model.name != null then model.name else "${model.host}:${toString model.port}";
+                  in
+                  {
+                    type = "openai-compatible";
+                    name = "local-${modelName}";
+                    api_base = "http://${model.host}:${toString model.port}/v1";
+                    models = [
+                      { name = modelName; }
+                    ];
+                  }
+                ) config.myconfig.ai.localModels
+              );
           };
         };
       }
