@@ -48,15 +48,32 @@ in
       # };
       # settings.litellm_settings =
       # services.general_settings =
-      settings.model_list = lib.optionals config.services.ollama.enable (
-        map (model: {
-          model_name = "ollama/${model}";
-          litellm_params = {
-            model = "ollama/${model}";
-            api_base = "http://${config.services.ollama.host}:${toString config.services.ollama.port}";
-          };
-        }) config.services.ollama.loadModels
-      );
+      settings.model_list =
+        lib.optionals config.services.ollama.enable (
+          map (model: {
+            model_name = "ollama/${model}";
+            litellm_params = {
+              model = "ollama/${model}";
+              api_base = "http://${config.services.ollama.host}:${toString config.services.ollama.port}";
+            };
+          }) config.services.ollama.loadModels
+        )
+        ++ lib.optionals (config.myconfig.ai.localModels != [ ]) (
+          map (
+            model:
+            let
+              modelName = if model.name != null then model.name else "${model.host}:${toString model.port}";
+            in
+            {
+              model_name = modelName;
+              litellm_params = {
+                model = "openai/${modelName}";
+                api_base = "http://${model.host}:${toString model.port}/v1";
+                api_key = "not-needed";
+              };
+            }
+          ) config.myconfig.ai.localModels
+        );
     };
 
     home-manager.sharedModules = [

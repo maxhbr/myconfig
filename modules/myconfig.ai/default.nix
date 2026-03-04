@@ -25,7 +25,6 @@ in
     ./container.open-webui.nix
     ./container.nlm-ingestor.nix
     ./container.SillyTavern.nix
-    ./container.litellm.nix
     ./container.lobe-chat.nix
     ./container.Kokoro-FastAPI.nix
     ./inference.cpp.nix
@@ -39,6 +38,30 @@ in
   ];
   options.myconfig = with lib; {
     ai.enable = mkEnableOption "myconfig.ai";
+    ai.localModels = mkOption {
+      type = types.listOf (
+        types.submodule {
+          options = {
+            name = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = "Model name for the local server instance (defaults to '<host>:<port>')";
+            };
+            port = mkOption {
+              type = types.int;
+              description = "Port the local server is listening on";
+            };
+            host = mkOption {
+              type = types.str;
+              default = "localhost";
+              description = "Host the local server is listening on";
+            };
+          };
+        }
+      );
+      default = [ ];
+      description = "List of local model server instances (e.g. llama-cpp) available for AI tools";
+    };
   };
   config = lib.mkIf config.myconfig.ai.enable {
     myconfig.ai.aichat.enable = true;

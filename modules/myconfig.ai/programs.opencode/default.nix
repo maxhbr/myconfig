@@ -11,30 +11,6 @@ in
   options.myconfig = with lib; {
     ai.opencode = {
       enable = mkEnableOption "myconfig.ai.opencode";
-      localModels = mkOption {
-        type = types.listOf (
-          types.submodule {
-            options = {
-              name = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Model name for the llama-cpp server instance (defaults to 'llama-cpp-<port>')";
-              };
-              port = mkOption {
-                type = types.int;
-                description = "Port the llama-cpp server is listening on";
-              };
-              host = mkOption {
-                type = types.str;
-                default = "localhost";
-                description = "Host the llama-cpp server is listening on";
-              };
-            };
-          }
-        );
-        default = [ ];
-        description = "List of local llama-cpp server instances to configure as opencode providers";
-      };
     };
   };
   config = lib.mkIf config.myconfig.ai.opencode.enable {
@@ -70,21 +46,21 @@ in
                 "edit" = "ask";
               };
               "provider" = lib.mkMerge [
-                (lib.mkIf (osconfig.myconfig.ai.opencode.localModels != [ ]) (
+                (lib.mkIf (osconfig.myconfig.ai.localModels != [ ]) (
                   builtins.listToAttrs (
                     lib.map (
                       model:
                       let
-                        modelName =
-                          if model.name != null then model.name else "localhost:${toString model.port}";
+                        hostPort = "${model.host}:${toString model.port}";
+                        modelName = if model.name != null then model.name else hostPort;
                       in
                       {
                         name = "local-${modelName}";
                         value = {
                           "npm" = "@ai-sdk/openai-compatible";
-                          "name" = "provider:${modelName}";
+                          "name" = "${hostPort}";
                           "options" = {
-                            "baseURL" = "http://${model.host}:${toString model.port}/v1";
+                            "baseURL" = "http://${hostPort}/v1";
                           };
                           "models" = {
                             "${modelName}" = {
@@ -93,7 +69,7 @@ in
                           };
                         };
                       }
-                    ) osconfig.myconfig.ai.opencode.localModels
+                    ) osconfig.myconfig.ai.localModels
                   )
                 ))
                 (lib.mkIf osconfig.services.litellm.enable (
