@@ -24,6 +24,8 @@
     ];
     environment.sessionVariables = rec {
       HSA_OVERRIDE_GFX_VERSION = "11.5.1";
+      # Use the internal Strix Halo iGPU for the Wayland compositor, not the eGPU
+      WLR_DRM_DEVICES = "/dev/dri/by-path/pci-0000:c2:00.0-card";
     };
     services.ollama = {
       environmentVariables = {
