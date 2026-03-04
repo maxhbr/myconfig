@@ -138,9 +138,13 @@ in
         soft_permanence_for_boot = false;
         tmpfs_size = "30%";
         btrfs_device = "/dev/mapper/enc-pv";
-        btrbk_device = "/dev/disk/by-uuid/8e3c7395-c663-4080-9463-3b8a18bd7ad3";
-        btrbk_luks_device = "/dev/disk/by-uuid/51df4369-0063-446a-96db-6d08b6349935";
-        btrbk_luks_keyfile = "/home/mhuber/.password-store/hardware/backup/backupLuks_aa3f2db7-7b1a-4232-9b42-15270e9e5a79.key";
+        # sdd
+        # ├─sdd1         ext4        1.0   backupUnenc 160b2393-6f8f-4a74-97b5-e30876a604d3
+        # └─sdd2         crypto_LUKS 2                 eb6f6825-be7c-4666-8dfe-0d7ef592287c
+        #   └─backupLuks btrfs             backupEnc   b3a6f87c-5ffb-4cfd-96f1-a7d6acd50d1a
+        btrbk_device = "/dev/disk/by-uuid/b3a6f87c-5ffb-4cfd-96f1-a7d6acd50d1a";
+        btrbk_luks_device = "/dev/disk/by-uuid/eb6f6825-be7c-4666-8dfe-0d7ef592287c";
+        btrbk_luks_keyfile = "/home/mhuber/.password-store/hardware/backup/backupLuks_eb6f6825-be7c-4666-8dfe-0d7ef592287c.key";
       };
       desktop = {
         enable = true;
