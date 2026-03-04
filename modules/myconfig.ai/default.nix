@@ -41,6 +41,7 @@ in
   };
   config = lib.mkIf config.myconfig.ai.enable {
     myconfig.ai.aichat.enable = true;
+    myconfig.ai.llm.enable = true;
     home-manager.sharedModules = [
       {
         home.packages =
