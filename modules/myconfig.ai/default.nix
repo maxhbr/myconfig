@@ -17,6 +17,7 @@ in
     ./ai-coding.nix
     ./programs.aichat.nix
     ./programs.mcp.servers.nix
+    ./programs.llm.nix
     ./services.ollama.nix
     ./services.open-webui.nix
     ./services.tabby.nix
