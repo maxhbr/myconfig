@@ -221,6 +221,10 @@ in
             set -x
             exec "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/GLM-4.7-Flash-BF16.gguf --port 22545 -c 202752 -fa on -ctk q8_0 -ctv q8_0 -ngl all "$@"
           '')
+          (pkgs.writeShellScriptBin "run-qwen3-5-vulkan" ''
+            set -x
+            exec LLAMA_ARG_DEVICE=Vulkan1 "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M.gguf --port 22545 -c 202752 -fa on "$@"
+          '')
         ];
       }
     ];
