@@ -21,7 +21,7 @@
 
     hardware.bluetooth.enable = true;
 
-    programs.light.enable = true;
+    myconfig.desktop.brightnessctl.enable = true;
 
     services.logind.settings.Login = {
       HandlePowerKey = lib.mkDefault "suspend";

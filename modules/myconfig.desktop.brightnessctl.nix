@@ -6,20 +6,27 @@
   config,
   ...
 }:
+let
+  cfg = config.myconfig.desktop.brightnessctl;
+in
 {
-  config = lib.mkIf config.programs.light.enable {
+  options.myconfig.desktop.brightnessctl = with lib; {
+    enable = mkEnableOption "myconfig.desktop.brightnessctl";
+  };
+  config = lib.mkIf cfg.enable {
+    environment.systemPackages = [ pkgs.brightnessctl ];
     services.actkbd = {
       enable = lib.mkDefault true;
       bindings = [
         {
           keys = [ 224 ]; # XF86MonBrightnessDown
           events = [ "key" ];
-          command = "${pkgs.light}/bin/light  -T 0.7"; # or -U 10";
+          command = "${pkgs.brightnessctl}/bin/brightnessctl set 10%-";
         }
         {
           keys = [ 225 ]; # XF86MonBrightnessUp
           events = [ "key" ];
-          command = "${pkgs.light}/bin/light -A 10";
+          command = "${pkgs.brightnessctl}/bin/brightnessctl set +10%";
         }
       ];
     };

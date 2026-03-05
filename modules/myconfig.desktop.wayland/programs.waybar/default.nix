@@ -122,11 +122,13 @@ let
       '';
       toggleLight = pkgs.writeShellScriptBin "toggleLight" ''
         set -x
-        current=$(${pkgs.light}/bin/light -G)
-        if [[ $current == "80.00"* ]]; then
-          ${pkgs.light}/bin/light -S 20
+        current=$(${pkgs.brightnessctl}/bin/brightnessctl get)
+        max=$(${pkgs.brightnessctl}/bin/brightnessctl max)
+        percent=$(( current * 100 / max ))
+        if [[ $percent -ge 80 ]]; then
+          ${pkgs.brightnessctl}/bin/brightnessctl set 20%
         else
-          ${pkgs.light}/bin/light -S 80
+          ${pkgs.brightnessctl}/bin/brightnessctl set 80%
         fi
       '';
       doesFileExistCheck =
@@ -326,8 +328,8 @@ let
                         ""
                         ""
                       ];
-                      on-scroll-up = "${pkgs.light}/bin/light -A 1";
-                      on-scroll-down = "${pkgs.light}/bin/light -U 1";
+                      on-scroll-up = "${pkgs.brightnessctl}/bin/brightnessctl set +1%";
+                      on-scroll-down = "${pkgs.brightnessctl}/bin/brightnessctl set 1%-";
                       on-click = "${toggleLight}/bin/toggleLight";
                       rotate = 90;
                     };
