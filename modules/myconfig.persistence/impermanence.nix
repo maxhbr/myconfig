@@ -72,73 +72,72 @@ in
   imports = [
     inputs.impermanence.nixosModules.impermanence
     {
-      config = lib.mkIf (cfg.btrbk_device != null && cfg.btrbk_luks_device != null) (
+      config =
         let
-          mountPoint = "/btr_backup";
-          mountScript = pkgs.writeShellScriptBin "btrbk-mount" ''
-            set -euo pipefail
-
-            lockfile=/tmp/btrbk-mount.lock
-            if [ -f "$lockfile" ]; then
-              echo "Lock file $lockfile exists, exiting"
-              exit 1
-            fi
-            touch "$lockfile"
-            trap "rm -f $lockfile" EXIT
-
-            if [ ! -b "${validateDevice cfg.btrbk_device}" ]; then
-              echo "Device ${validateDevice cfg.btrbk_device} does not exist"
-              if [ ! -b "${validateDevice cfg.btrbk_luks_device}" ]; then
-                echo "Device ${validateDevice cfg.btrbk_luks_device} does not exist"
-                exit 1
-              fi
-              echo "Decrypting ${validateDevice cfg.btrbk_luks_device}"
-
-
-              btrbk_keyfile=${cfg.btrbk_luks_keyfile}
-              if [ -n "$btrbk_keyfile" ] && [ -f "$btrbk_keyfile" ]; then
-                sudo cryptsetup luksOpen --key-file "$btrbk_keyfile" "${validateDevice cfg.btrbk_luks_device}" "btr_backup_luks"
-              else
-                sudo cryptsetup luksOpen "${validateDevice cfg.btrbk_luks_device}" "btr_backup_luks"
-              fi
-
-              if [ ! -b "${validateDevice cfg.btrbk_device}" ]; then
-                echo "Device ${validateDevice cfg.btrbk_device} still does not exist"
-                exit 1
-              fi
-            fi
-
-            if [ ! -d "${mountPoint}" ]; then
-              echo "Mount point ${mountPoint} does not exist, try creating it"
-              sudo mkdir -p "${mountPoint}"
-            fi
-
-            if ! mountpoint -q "${mountPoint}"; then
-              echo "Mounting ${mountPoint}"
-              sudo mount "${validateDevice cfg.btrbk_device}" "${mountPoint}"
-            fi
-          '';
-          umountScript = pkgs.writeShellScriptBin "btrbk-umount" ''
-            set -euo pipefail
-
-            if mountpoint -q "${mountPoint}"; then
-              echo "Unmounting ${mountPoint}"
-              sudo umount "${mountPoint}"
-            fi
-            if [ -b "/dev/mapper/btr_backup_luks" ]; then
-              echo "Closing LUKS device"
-              sudo cryptsetup luksClose "btr_backup_luks"
-            fi
-          '';
-          mkBtrbk =
-            name: subvolume:
+          # Per-category btrbk device configuration builder
+          mkBtrbkCategory =
+            name: btrbkCfg: subvolume:
             let
+              enabled = btrbkCfg.device != null && btrbkCfg.luks_device != null;
+              mountPoint = "/btr_backup_${name}";
+              luksName = "btr_backup_${name}_luks";
+              mountScript = pkgs.writeShellScriptBin "btrbk-mount-${name}" ''
+                set -euo pipefail
+
+                lockfile=/tmp/btrbk-mount-${name}.lock
+                if [ -f "$lockfile" ]; then
+                  echo "Lock file $lockfile exists, exiting"
+                  exit 1
+                fi
+                touch "$lockfile"
+                trap "rm -f $lockfile" EXIT
+
+                if [ ! -b "${validateDevice btrbkCfg.device}" ]; then
+                  echo "Device ${validateDevice btrbkCfg.device} does not exist"
+                  if [ ! -b "${validateDevice btrbkCfg.luks_device}" ]; then
+                    echo "Device ${validateDevice btrbkCfg.luks_device} does not exist"
+                    exit 1
+                  fi
+                  echo "Decrypting ${validateDevice btrbkCfg.luks_device}"
+
+                  btrbk_keyfile=${toString btrbkCfg.luks_keyfile}
+                  if [ -n "$btrbk_keyfile" ] && [ -f "$btrbk_keyfile" ]; then
+                    sudo cryptsetup luksOpen --key-file "$btrbk_keyfile" "${validateDevice btrbkCfg.luks_device}" "${luksName}"
+                  else
+                    sudo cryptsetup luksOpen "${validateDevice btrbkCfg.luks_device}" "${luksName}"
+                  fi
+
+                  if [ ! -b "${validateDevice btrbkCfg.device}" ]; then
+                    echo "Device ${validateDevice btrbkCfg.device} still does not exist"
+                    exit 1
+                  fi
+                fi
+
+                if [ ! -d "${mountPoint}" ]; then
+                  echo "Mount point ${mountPoint} does not exist, try creating it"
+                  sudo mkdir -p "${mountPoint}"
+                fi
+
+                if ! mountpoint -q "${mountPoint}"; then
+                  echo "Mounting ${mountPoint}"
+                  sudo mount "${validateDevice btrbkCfg.device}" "${mountPoint}"
+                fi
+              '';
+              umountScript = pkgs.writeShellScriptBin "btrbk-umount-${name}" ''
+                set -euo pipefail
+
+                if mountpoint -q "${mountPoint}"; then
+                  echo "Unmounting ${mountPoint}"
+                  sudo umount "${mountPoint}"
+                fi
+                if [ -b "/dev/mapper/${luksName}" ]; then
+                  echo "Closing LUKS device ${luksName}"
+                  sudo cryptsetup luksClose "${luksName}"
+                fi
+              '';
               target = "${mountPoint}/${config.networking.hostName}-${name}";
               instanceName = "usbhdd-${name}";
-            in
-            {
-              inherit instanceName;
-              instance = {
+              btrbkInstance = {
                 onCalendar = null;
                 settings = {
                   snapshot_preserve_min = "24h";
@@ -149,7 +148,7 @@ in
                   };
                 };
               };
-              script = pkgs.writeShellScriptBin "btrbk-${instanceName}" ''
+              backupScript = pkgs.writeShellScriptBin "btrbk-${instanceName}" ''
                 set -euo pipefail
 
                 conf="/etc/btrbk/${instanceName}.conf"
@@ -158,7 +157,7 @@ in
                   exit 1
                 fi
 
-                ${mountScript}/bin/btrbk-mount
+                ${mountScript}/bin/btrbk-mount-${name}
 
                 target=${target}
                 if [ ! -d "$target" ]; then
@@ -171,16 +170,37 @@ in
                 sudo -H -u btrbk bash -c "btrbk -c $conf --progress --verbose run"
                 times
               '';
+            in
+            {
+              inherit
+                enabled
+                mountScript
+                umountScript
+                backupScript
+                instanceName
+                btrbkInstance
+                ;
             };
-          privBtrbk = mkBtrbk "priv" volumePriv;
-          workBtrbk = mkBtrbk "work" volumeWork;
-          scripts = [
-            privBtrbk.script
-            workBtrbk.script
+
+          privBtrbk = mkBtrbkCategory "priv" cfg.btrbk_priv volumePriv;
+          workBtrbk = mkBtrbkCategory "work" cfg.btrbk_work volumeWork;
+          otherBtrbk = mkBtrbkCategory "other" cfg.btrbk_other volumeOther;
+
+          allCategories = [
+            privBtrbk
+            workBtrbk
+            otherBtrbk
           ];
+          enabledCategories = lib.filter (c: c.enabled) allCategories;
+          anyEnabled = enabledCategories != [ ];
+
+          scripts = lib.map (c: c.backupScript) enabledCategories;
+          mountScripts = lib.map (c: c.mountScript) enabledCategories;
+          umountScripts = lib.map (c: c.umountScript) enabledCategories;
+
           doAllScripts = pkgs.writeShellScriptBin "btrbk-backup-all" ''
             set -euo pipefail
-            ${mountScript}/bin/btrbk-mount
+            ${lib.concatMapStringsSep "\n" (c: "${c.mountScript}/bin/${c.mountScript.name}") enabledCategories}
             sleep 5
             for script in ${toString (lib.map (script: "${script}/bin/${script.name}") scripts)}; do
               echo "Running $script"
@@ -189,92 +209,96 @@ in
             done
             sleep 5
             sync
-            ${umountScript}/bin/btrbk-umount
+            ${lib.concatMapStringsSep "\n" (
+              c: "${c.umountScript}/bin/${c.umountScript.name}"
+            ) enabledCategories}
           '';
           doAllScriptsParallel = pkgs.writeShellScriptBin "btrbk-backup-all-parallel" ''
             set -euo pipefail
-            ${mountScript}/bin/btrbk-mount
+            ${lib.concatMapStringsSep "\n" (c: "${c.mountScript}/bin/${c.mountScript.name}") enabledCategories}
             sleep 5
             ${pkgs.parallel}/bin/parallel --halt soon,fail=1 ::: ${
               toString (lib.map (script: "${script}/bin/${script.name}") scripts)
             }
             sleep 5
             sync
-            ${umountScript}/bin/btrbk-umount
+            ${lib.concatMapStringsSep "\n" (
+              c: "${c.umountScript}/bin/${c.umountScript.name}"
+            ) enabledCategories}
           '';
         in
-        {
-          # TODO: if this is set, bwrap and zoom does not work
-          # fileSystems."${mountPoint}" = {
-          #   device = validateDevice config.myconfig.persistence.impermanence.btrbk_device;
-          #   fsType = "btrfs";
-          #   options = [
-          #     "subvolid=5" # show all subvolumes
-          #     "compress=zstd"
-          #     "nofail" # don’t block boot if the disk is absent
-          #     "x-systemd.automount" # mount lazily the first time it’s accessed
-          #   ];
-          # };
+        lib.mkIf anyEnabled {
           services.btrbk = {
-            instances = {
-              ${privBtrbk.instanceName} = privBtrbk.instance;
-              ${workBtrbk.instanceName} = workBtrbk.instance;
-            };
+            instances = lib.listToAttrs (
+              lib.map (c: {
+                name = c.instanceName;
+                value = c.btrbkInstance;
+              }) enabledCategories
+            );
           };
           systemd.tmpfiles.rules = [ "d /btr_pool/.snapshots 0755 root root" ];
 
           environment.systemPackages = [
             pkgs.lz4
-            mountScript
-            umountScript
+          ]
+          ++ mountScripts
+          ++ umountScripts
+          ++ scripts
+          ++ [
             doAllScripts
             doAllScriptsParallel
-          ]
-          ++ scripts;
-        }
-      );
+          ];
+        };
     }
   ];
   options = with lib; {
-    myconfig.persistence.impermanence = {
-      enable = lib.mkEnableOption "impermanence";
-      soft_permanence_for_boot = mkOption {
-        default = true;
-        type = types.bool;
-        description = "Whether /home has soft permanence (wiped/backed up on boot). When false, /home is just tmpfs.";
+    myconfig.persistence.impermanence =
+      let
+        btrbkDeviceOptions = {
+          device = mkOption {
+            default = null;
+            example = "/dev/disk/by-uuid/8e3c7395-c663-4080-9463-3b8a18bd7ad3";
+            type = types.nullOr types.str;
+            description = "Location of the btrbk backup device.";
+          };
+          luks_device = mkOption {
+            default = null;
+            example = "/dev/disk/by-uuid/8e3c7395-c663-4080-9463-3b8a18bd7ad3";
+            type = types.nullOr types.str;
+            description = "Location of the btrbk LUKS device, which is used to encrypt the btrbk device.";
+          };
+          luks_keyfile = mkOption {
+            default = null;
+            example = "/etc/btrbk/luks_keyfile";
+            type = types.nullOr types.str;
+            description = "Location of the btrbk LUKS keyfile.";
+          };
+        };
+      in
+      {
+        enable = lib.mkEnableOption "impermanence";
+        soft_permanence_for_boot = mkOption {
+          default = true;
+          type = types.bool;
+          description = "Whether /home has soft permanence (wiped/backed up on boot). When false, /home is just tmpfs.";
+        };
+        tmpfs_size = mkOption {
+          default = "20%";
+          example = "4G";
+          type = types.str;
+          description = "Size of the tmpfs mounted on /.";
+        };
+        btrfs_device = mkOption {
+          default = null;
+          example = "/dev/sda";
+          type = types.nullOr types.str;
+          description = "Location of the device.";
+        };
+        btrbk_priv = btrbkDeviceOptions;
+        btrbk_work = btrbkDeviceOptions;
+        btrbk_other = btrbkDeviceOptions;
+        enable_smartd = mkEnableOption "smartd for the btrfs impermanence device";
       };
-      tmpfs_size = mkOption {
-        default = "20%";
-        example = "4G";
-        type = types.str;
-        description = "Size of the tmpfs mounted on /.";
-      };
-      btrfs_device = mkOption {
-        default = null;
-        example = "/dev/sda";
-        type = types.nullOr types.str;
-        description = "Location of the device.";
-      };
-      btrbk_device = mkOption {
-        default = null;
-        example = "/dev/disk/by-uuid/8e3c7395-c663-4080-9463-3b8a18bd7ad3";
-        type = types.nullOr types.str;
-        description = "Location of the btrbk device.";
-      };
-      btrbk_luks_device = mkOption {
-        default = null;
-        example = "/dev/disk/by-uuid/8e3c7395-c663-4080-9463-3b8a18bd7ad3";
-        type = types.nullOr types.str;
-        description = "Location of the btrbk LUKS device, which is used to encrypt the btrbk device.";
-      };
-      btrbk_luks_keyfile = mkOption {
-        default = null;
-        example = "/etc/btrbk/luks_keyfile";
-        type = types.nullOr types.str;
-        description = "Location of the btrbk LUKS keyfile.";
-      };
-      enable_smartd = mkEnableOption "smartd for the btrfs impermanence device";
-    };
   };
 
   config = lib.mkIf cfg.enable (
