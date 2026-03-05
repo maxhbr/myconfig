@@ -207,6 +207,7 @@ in
 
     home-manager.sharedModules = [
       {
+        myconfig.persistence.cache-directories = [ ".config/comfy-ui/" ];
         home.packages = [
           ai-tmux-session-script
           (pkgs.writeShellScriptBin "run-qwen3-coder" ''
