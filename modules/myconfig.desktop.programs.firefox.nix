@@ -26,6 +26,7 @@ in
               name = "0";
               # settings = {
               #   # "browser.startup.homepage" = "https://nixos.org";
+              #   "browser.tabs.splitView.enabled" = true;
               #   "browser.sessionstore.warnOnQuit" = true;
               #   "browser.search.region" = "DE";
               #   "browser.toolbars.bookmarks.2h2020" = true;
