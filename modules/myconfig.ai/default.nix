@@ -35,6 +35,7 @@ in
     ./programs.codex
     ./programs.qwen-code
     ./programs.claude-code
+    ./programs.github-copilot-cli
   ];
   options.myconfig = with lib; {
     ai.enable = mkEnableOption "myconfig.ai";

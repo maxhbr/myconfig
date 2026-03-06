@@ -33,5 +33,6 @@
     myconfig.ai.codex.enable = lib.mkDefault true;
     myconfig.ai.qwen-code.enable = lib.mkDefault true;
     myconfig.ai.claude-code.enable = lib.mkDefault true;
+    myconfig.ai.github-copilot-cli.enable = lib.mkDefault true;
   };
 }
