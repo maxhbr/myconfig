@@ -33,6 +33,10 @@
           };
         in
         {
+          myconfig.persistence.directories = [
+            ".config/.copilot"
+            ".local/state/.copilot"
+          ];
           home.packages = [
             ghCopilotCliBwrap
             (pkgs.writeShellApplication {
