@@ -113,13 +113,12 @@ in
       extraOptions = ''
         keep-outputs = true
         keep-derivations = true
-        auto-optimise-store = true
         binary-caches-parallel-connections = 10
       '';
 
       settings = rec {
         sandbox = true;
-        auto-optimise-store = true;
+        auto-optimise-store = lib.mkDefault true;
 
         allowed-users = [
           "@wheel"
