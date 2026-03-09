@@ -36,6 +36,7 @@ in
     ./programs.qwen-code
     ./programs.claude-code
     ./programs.github-copilot-cli
+    ./skill.playwright-cli.nix
   ];
   options.myconfig = with lib; {
     ai.enable = mkEnableOption "myconfig.ai";
