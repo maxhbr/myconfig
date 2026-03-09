@@ -5,7 +5,7 @@
   ...
 }:
 {
-  config = lib.mkIf config.myconfig.ai.enable {
+  config = lib.mkIf config.myconfig.ai.coding.enable {
     home-manager.sharedModules = [
       {
         programs.mcp = {
