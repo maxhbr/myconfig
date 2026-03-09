@@ -34,5 +34,6 @@
     myconfig.ai.qwen-code.enable = lib.mkDefault true;
     myconfig.ai.claude-code.enable = lib.mkDefault true;
     myconfig.ai.github-copilot-cli.enable = lib.mkDefault true;
+    myconfig.ai.skills.playwright.enable = lib.mkDefault true;
   };
 }

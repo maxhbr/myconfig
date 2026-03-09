@@ -5,6 +5,7 @@
   ...
 }:
 let
+  cfg = config.myconfig.ai.skills.playwright;
   playwright-cli = pkgs.buildNpmPackage rec {
     pname = "playwright-cli";
     version = "0.1.1";
@@ -36,22 +37,52 @@ let
   };
 in
 {
-  config = lib.mkIf config.myconfig.ai.coding.enable {
+  options.myconfig.ai.skills.playwright = with lib; {
+    enable = mkEnableOption "myconfig.ai.skills.playwright";
+    browserName = mkOption {
+      type = types.enum [
+        "chromium"
+        "firefox"
+      ];
+      default = "chromium";
+      description = "The browser to use for playwright-cli";
+    };
+  };
+  config = lib.mkIf cfg.enable {
     home-manager.sharedModules = [
-      {
-        home.packages = [ playwright-cli ];
-        home.file.".playwright/cli.config.json".text = builtins.toJSON {
-          browser = {
-            browserName = "chromium";
-            launchOptions = {
-              executablePath = "${pkgs.chromium}/bin/chromium";
+      (
+        { config, ... }:
+        let
+          executablePath =
+            {
+              chromium = "${config.programs.chromium.package or pkgs.chromium}/bin/chromium";
+              firefox = "${config.programs.firefox.package or pkgs.firefox}/bin/firefox";
+            }
+            .${cfg.browserName};
+        in
+        {
+          home.packages = [ playwright-cli ];
+          home.file.".config/playwright/cli.config.json".text = builtins.toJSON {
+            browser = {
+              browserName = cfg.browserName;
+              launchOptions = {
+                inherit executablePath;
+              };
+              allowUnrestrictedFileAccess = true;
             };
           };
-        };
-        programs.opencode.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
-        programs.claude-code.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
-        programs.codex.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
-      }
+          home.sessionVariables = {
+            PLAYWRIGHT_MCP_CONFIG = "$HOME/.config/playwright/cli.config.json";
+            PLAYWRIGHT_MCP_BROWSER = cfg.browserName;
+            PLAYWRIGHT_MCP_EXECUTABLE_PATH = executablePath;
+            PLAYWRIGHT_MCP_ALLOW_UNRESTRICTED_FILE_ACCESS = "true";
+          };
+
+          programs.opencode.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
+          programs.claude-code.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
+          programs.codex.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
+        }
+      )
     ];
   };
 }
