@@ -141,26 +141,26 @@ in
         #     enable = true;
         #   };
         # };
-        container = {
-          nlm-ingestor = {
-            enable = false;
-          };
-          open-webui = {
-            enable = false;
-          };
-          sillytavern = {
-            enable = false;
-            host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
-            port = 8888;
-          };
-          kokoro-fastapi = {
-            enable = false;
-          };
-          lobe-chat = {
-            enable = false;
-            host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
-          };
-        };
+        # container = {
+        #   nlm-ingestor = {
+        #     enable = false;
+        #   };
+        #   open-webui = {
+        #     enable = false;
+        #   };
+        #   sillytavern = {
+        #     enable = false;
+        #     host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
+        #     port = 8888;
+        #   };
+        #   kokoro-fastapi = {
+        #     enable = false;
+        #   };
+        #   lobe-chat = {
+        #     enable = false;
+        #     host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
+        #   };
+        # };
       };
     };
     services.ollama = {

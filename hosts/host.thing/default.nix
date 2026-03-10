@@ -32,7 +32,7 @@
     ./hardware.Radeon8060S
     ../../hardware/eGPU.nix
     {
-      services.earlyoom.enable = lib.mkForce false;
+      # services.earlyoom.enable = lib.mkForce false;
     }
     {
       home-manager.sharedModules = [
