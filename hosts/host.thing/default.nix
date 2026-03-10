@@ -30,6 +30,7 @@
     }
     ./ai.thing.nix
     ./hardware.Radeon8060S
+    ./disk.nix
     ../../hardware/eGPU.nix
     {
       # services.earlyoom.enable = lib.mkForce false;
