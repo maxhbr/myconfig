@@ -35,6 +35,15 @@
         myconfig.wifi.backend = "iwd";
       };
     };
+    no-psr-workaround = {
+      inheritParentConfig = true;
+      configuration = {
+        # Disable the PSR (panel self-refresh) workaround amdgpu.dcdebugmask=0x10
+        # to test whether it interferes with s2idle/S0ix suspend.
+        # Boot this specialisation from systemd-boot to test suspend without it.
+        boot.kernelParams = lib.mkAfter [ "amdgpu.dcdebugmask=0x0" ];
+      };
+    };
     # gaming = {
     #   inheritParentConfig = true;
     #   configuration = {
