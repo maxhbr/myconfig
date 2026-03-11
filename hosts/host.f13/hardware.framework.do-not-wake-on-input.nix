@@ -18,13 +18,25 @@ let
         echo "Disabling touchpad wake..."
         echo disabled > /sys/devices/platform/AMDI0010:03/i2c-2/i2c-PIXA3854:00/power/wakeup || true
       fi
+
+      ### Disable XHCI (USB host controller) ACPI wakeup sources.
+      ### These can cause spurious wakes or prevent proper S0ix entry on
+      ### AMD platforms, leading to a reboot instead of resume from s2idle.
+      if [ -e /proc/acpi/wakeup ]; then
+        for dev in XHC0 XHC1 XHC3 XHC4; do
+          if grep -q "''${dev}.*enabled" /proc/acpi/wakeup; then
+            echo "Disabling ACPI wakeup for $dev..."
+            echo "$dev" > /proc/acpi/wakeup || true
+          fi
+        done
+      fi
     '';
   };
 in
 {
 
   systemd.services.disable-input-wake = {
-    description = "Disable wake from internal keyboard and touchpad";
+    description = "Disable wake from internal keyboard, touchpad, and XHCI controllers";
     wantedBy = [ "multi-user.target" ];
     after = [ "sysinit.target" ];
 
