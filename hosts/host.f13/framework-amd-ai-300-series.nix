@@ -23,27 +23,14 @@
       hardware.framework.laptop13.audioEnhancement.rawDeviceName =
         lib.mkDefault "alsa_output.pci-0000_c1_00.6.analog-stereo";
 
-      # copied from https://github.com/NixOS/nixos-hardware/blob/master/framework/13-inch/common/amd.nix
+      # NOTE: amdgpu.dcdebugmask=0x10, rtc_cmos.use_acpi_alarm=1, amd_pstate,
+      # and power-profiles-daemon are already set by the amd.nix import below.
+      # Only add params here that are NOT in upstream nixos-hardware.
       boot.kernelParams = [
-        # There seems to be an issue with panel self-refresh (PSR) that
-        # causes hangs for users.
-        #
-        # https://community.frame.work/t/fedora-kde-becomes-suddenly-slow/58459
-        # https://gitlab.freedesktop.org/drm/amd/-/issues/3647
-        "amdgpu.dcdebugmask=0x10"
-
         # Enable AMD PMC Smart Trace Buffer for s2idle debugging and
         # to help the PMC driver initialize properly for S0ix entry
         "amd_pmc.enable_stb=1"
-      ]
-      # Workaround for SuspendThenHibernate: https://lore.kernel.org/linux-kernel/20231106162310.85711-1-mario.limonciello@amd.com/
-      ++ lib.optionals (lib.versionOlder config.boot.kernelPackages.kernel.version "6.8") [
-        "rtc_cmos.use_acpi_alarm=1"
       ];
-
-      # AMD has better battery life with PPD over TLP:
-      # https://community.frame.work/t/responded-amd-7040-sleep-states/38101/13
-      services.power-profiles-daemon.enable = lib.mkDefault true;
 
     }
     # ####################################################################################################################

@@ -99,18 +99,8 @@ in
       };
     }
     { programs.kdeconnect.enable = true; }
-    {
-      # set CPU to performance mode
-      boot.kernelParams = [ "amd_pstate=active" ];
-      services.power-profiles-daemon.enable = true;
-      # systemd.services.set-performance = {
-      #   description = "Set performance profile";
-      #   wantedBy = [ "multi-user.target" ];
-      #   serviceConfig.Type = "oneshot";
-      #   serviceConfig.ExecStart =
-      #     "${config.services.power-profiles-daemon.package}/bin/powerprofilesctl set performance";
-      # };
-    }
+    # NOTE: amd_pstate=active and power-profiles-daemon are already set by
+    # framework-amd-ai-300-series.nix -> amd.nix -> pstate.nix
     {
       myconfig.desktop.wayland.waybar.doesFileExistChecks = [
         "/home/${user}/myconfig/.myconfig.ready"
