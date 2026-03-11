@@ -29,6 +29,7 @@ in
       };
     }
     ./hardware.framework.do-not-wake-on-input.nix
+    ./suspend-debug.nix
     ./hardware.hantek
     ./mykeylight
     ./role.work
