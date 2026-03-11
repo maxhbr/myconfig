@@ -262,7 +262,11 @@ in
         "aarch64-linux"
         "armv6l-linux"
       ];
-      kernelPackages = lib.mkForce pkgs.linuxPackages_latest;
+      # Pinned to 6.18 due to s2idle suspend regression in 6.19.3+
+      # (suspend entry never resumes, machine reboots instead).
+      # Suspend worked on 6.18.9 and 6.19.2, broke starting 6.19.3.
+      # See specialisation "kernel-6_19-latest" to test newer kernels.
+      kernelPackages = lib.mkForce pkgs.linuxPackages_6_18;
       initrd = {
         supportedFilesystems = [ "nfs" ];
         kernelModules = [ "nfs" ];
