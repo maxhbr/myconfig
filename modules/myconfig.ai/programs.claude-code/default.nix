@@ -26,12 +26,14 @@
             name = "claude-code";
             pkg = config.programs.claude-code.package;
             writableDirs = [
+              ".claude"
               ".config/claude-code"
               ".config/mcp"
             ];
           };
         in
         {
+          myconfig.persistence.directories = [ ".claude" ];
           programs.claude-code = {
             enable = true;
             enableMcpIntegration = true;
