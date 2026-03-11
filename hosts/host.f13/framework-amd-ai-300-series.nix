@@ -25,12 +25,10 @@
 
       # NOTE: amdgpu.dcdebugmask=0x10, rtc_cmos.use_acpi_alarm=1, amd_pstate,
       # and power-profiles-daemon are already set by the amd.nix import below.
-      # Only add params here that are NOT in upstream nixos-hardware.
-      boot.kernelParams = [
-        # Enable AMD PMC Smart Trace Buffer for s2idle debugging and
-        # to help the PMC driver initialize properly for S0ix entry
-        "amd_pmc.enable_stb=1"
-      ];
+
+      # DO NOT set amd_pmc.enable_stb=1 here -- on Strix Point it causes
+      # "SMU cmd failed. err: 0xff" and amd_pmc probe failure (error -12),
+      # which completely disables S0ix power management.
 
     }
     # ####################################################################################################################
