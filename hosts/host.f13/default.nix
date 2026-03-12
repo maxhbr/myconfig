@@ -112,8 +112,6 @@ in
     networking = {
       hostName = "f13";
       hostId = "00000${config.networking.hostName}";
-      useDHCP = false;
-      interfaces.wlp192s0.useDHCP = true;
 
       #       dhcpcd.extraConfig = ''
       # # interface eth0
