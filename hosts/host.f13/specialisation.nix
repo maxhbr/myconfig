@@ -44,14 +44,6 @@
         boot.kernelParams = lib.mkAfter [ "amdgpu.dcdebugmask=0x0" ];
       };
     };
-    kernel-6_19-latest = {
-      inheritParentConfig = true;
-      configuration = {
-        # Test with latest 6.19.x kernel to check if the s2idle regression
-        # (broken since 6.19.3) has been fixed in a newer point release.
-        boot.kernelPackages = lib.mkForce pkgs.linuxPackages_latest;
-      };
-    };
     # gaming = {
     #   inheritParentConfig = true;
     #   configuration = {
