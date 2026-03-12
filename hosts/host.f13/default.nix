@@ -262,11 +262,16 @@ in
         "aarch64-linux"
         "armv6l-linux"
       ];
-      # Pinned to 6.18 due to s2idle suspend regression in 6.19.3+
-      # (suspend entry never resumes, machine reboots instead).
-      # Suspend worked on 6.18.9 and 6.19.2, broke starting 6.19.3.
-      # See specialisation "kernel-6_19-latest" to test newer kernels.
-      kernelPackages = lib.mkForce pkgs.linuxPackages_6_18;
+      # s2idle suspend regression in 6.19.3+ (machine reboots instead of
+      # resuming). Use 6.18 as fallback, switch back to latest once it
+      # moves past the broken range. Bump the upper bound after testing
+      # the "kernel-6_19-latest" specialisation on a new point release.
+      kernelPackages =
+        let
+          latestVersion = pkgs.linuxPackages_latest.kernel.version;
+          isBroken = lib.versionAtLeast latestVersion "6.19.3" && lib.versionOlder latestVersion "6.19.7";
+        in
+        lib.mkForce (if isBroken then pkgs.linuxPackages_6_18 else pkgs.linuxPackages_latest);
       initrd = {
         supportedFilesystems = [ "nfs" ];
         kernelModules = [ "nfs" ];
