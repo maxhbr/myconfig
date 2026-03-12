@@ -94,6 +94,7 @@ in
         (writeScriptBin "startServer.py" ''
           #!${pkgs.python3}/bin/python
           import http.server
+          import sys
 
           class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
               def end_headers(self):
@@ -106,7 +107,8 @@ in
                   self.send_header("Expires", "0")
 
           if __name__ == '__main__':
-              http.server.test(HandlerClass=MyHTTPRequestHandler)
+              port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+              http.server.test(HandlerClass=MyHTTPRequestHandler, bind="127.0.0.1", port=port)
         '')
         (writeShellScriptBin "mountExfat" ''
           src="$(readlink -f $1)"
