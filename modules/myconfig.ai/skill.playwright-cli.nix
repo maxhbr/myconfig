@@ -44,19 +44,21 @@ in
   };
   config = lib.mkIf cfg.enable {
     home-manager.sharedModules = [
-      { config, ... }:
-      {
-        home.packages = [ playwright-cli ];
+      (
+        { config, ... }:
+        {
+          home.packages = [ playwright-cli ];
 
-        home.sessionVariables = {
-          PLAYWRIGHT_MCP_BROWSER = "chromium";
-          PLAYWRIGHT_MCP_ALLOW_UNRESTRICTED_FILE_ACCESS = "true";
-        };
+          home.sessionVariables = {
+            PLAYWRIGHT_MCP_BROWSER = "chromium";
+            PLAYWRIGHT_MCP_ALLOW_UNRESTRICTED_FILE_ACCESS = "true";
+          };
 
-        programs.opencode.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
-        programs.claude-code.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
-        programs.codex.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
-      }
+          programs.opencode.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
+          programs.claude-code.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
+          programs.codex.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
+        }
+      )
     ];
   };
 }
