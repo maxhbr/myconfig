@@ -41,16 +41,33 @@ in
 {
   options.myconfig.ai.skills.playwright = with lib; {
     enable = mkEnableOption "myconfig.ai.skills.playwright";
+    browserName = mkOption {
+      type = types.enum [
+        "chromium"
+        "firefox"
+      ];
+      default = "chromium";
+      description = "The browser to use for playwright-cli";
+    };
   };
   config = lib.mkIf cfg.enable {
     home-manager.sharedModules = [
       (
         { config, ... }:
+        let
+          executablePath =
+            {
+              chromium = "${config.programs.chromium.package or pkgs.chromium}/bin/chromium";
+              firefox = "${config.programs.firefox.package or pkgs.firefox}/bin/firefox";
+            }
+            .${cfg.browserName};
+        in
         {
           home.packages = [ playwright-cli ];
 
           home.sessionVariables = {
-            PLAYWRIGHT_MCP_BROWSER = "chromium";
+            PLAYWRIGHT_MCP_BROWSER = cfg.browserName;
+            PLAYWRIGHT_MCP_EXECUTABLE_PATH = executablePath;
             PLAYWRIGHT_MCP_ALLOW_UNRESTRICTED_FILE_ACCESS = "true";
           };
 
