@@ -27,6 +27,7 @@ in
 {
   imports = [
     # ./containers.vllm-rocm.nix
+    ./llm-servers.nix
     ({
       config =
         lib.mkIf (config.myconfig.ai.container.open-webui.enable || config.myconfig.ai.open-webui.enable)
@@ -210,24 +211,46 @@ in
         myconfig.persistence.cache-directories = [ ".config/comfy-ui/" ];
         home.packages = [
           ai-tmux-session-script
-          (pkgs.writeShellScriptBin "run-qwen3-coder" ''
-            set -x
-            exec "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/Qwen3-Coder-Next-Q8_0.gguf --port 22546 -c 262144 -fa on -ctk q8_0 -ctv q8_0 -ngl all "$@"
-          '')
-          (pkgs.writeShellScriptBin "run-glm4-flash" ''
-            set -x
-            exec "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/GLM-4.7-Flash-BF16.gguf --port 22545 -c 202752 -fa on -ctk bf16 -ctv bf16 -ngl all "$@"
-          '')
-          (pkgs.writeShellScriptBin "run-glm4-flash-q8_0" ''
-            set -x
-            exec "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/GLM-4.7-Flash-BF16.gguf --port 22545 -c 202752 -fa on -ctk q8_0 -ctv q8_0 -ngl all "$@"
-          '')
-          (pkgs.writeShellScriptBin "run-qwen3-5-vulkan" ''
-            set -x
-            exec LLAMA_ARG_DEVICE=Vulkan1 "${pkgs.llama-cpp}/bin/llama-server" -m ~/MINE/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M.gguf --port 22545 -c 202752 -fa on "$@"
-          '')
         ];
       }
     ];
+
+    myconfig.ai.llmServers = {
+      enable = true;
+      models = [
+        {
+          name = "run-qwen3-coder";
+          modelPath = "/home/mhuber/disk/models/Qwen3-Coder-Next-Q8_0.gguf";
+          port = 22546;
+          contextSize = 262144;
+          flashAttention = true;
+          extraArgs = "-ctk q8_0 -ctv q8_0 -ngl all";
+        }
+        {
+          name = "run-glm4-flash";
+          modelPath = "/home/mhuber/disk/models/GLM-4.7-Flash-BF16.gguf";
+          port = 22545;
+          contextSize = 202752;
+          flashAttention = true;
+          extraArgs = "-ctk bf16 -ctv bf16 -ngl all";
+        }
+        {
+          name = "run-glm4-flash-q8_0";
+          modelPath = "/home/mhuber/disk/models/GLM-4.7-Flash-BF16.gguf";
+          port = 22545;
+          contextSize = 202752;
+          flashAttention = true;
+          extraArgs = "-ctk q8_0 -ctv q8_0 -ngl all";
+        }
+        {
+          name = "run-qwen3-5-vulkan";
+          modelPath = "/home/mhuber/disk/models/Qwen3.5-122B-A10B-MXFP4_MOE.gguf";
+          port = 22545;
+          contextSize = 202752;
+          device = "Vulkan1";
+          flashAttention = true;
+        }
+      ];
+    };
   };
 }
