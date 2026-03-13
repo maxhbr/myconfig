@@ -15,8 +15,8 @@ let
     pkgs.writeShellScriptBin model.name ''
       set -x
       ${
-        lib.optionalString (model.device != null) "exec LLAMA_ARG_DEVICE=${model.device}"
-      } "${pkgs.llama-cpp}/bin/llama-server" \
+        lib.optionalString (model.device != null) "export LLAMA_ARG_DEVICE=${model.device}"
+      } exec "${pkgs.llama-cpp}/bin/llama-server" \
         -m "${model.modelPath}" \
         --port ${toString model.port} \
         -c ${toString model.contextSize} \
