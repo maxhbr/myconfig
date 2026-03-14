@@ -13,10 +13,9 @@ let
   modelScript =
     model:
     pkgs.writeShellScriptBin model.name ''
-      set -x
-      ${
-        lib.optionalString (model.device != null) "export LLAMA_ARG_DEVICE=${model.device}"
-      } exec "${pkgs.llama-cpp}/bin/llama-server" \
+      #! nix-shell -i bash -p llama-cpp
+      ${lib.optionalString (model.device != null) "export LLAMA_ARG_DEVICE=${model.device}"}
+      exec "${pkgs.llama-cpp}/bin/llama-server" \
         -m "${model.modelPath}" \
         --port ${toString model.port} \
         -c ${toString model.contextSize} \
