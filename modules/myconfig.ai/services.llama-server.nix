@@ -94,6 +94,12 @@ in
                 default = false;
                 description = "Create systemd user service for this instance";
               };
+
+              enableService = mkOption {
+                type = types.bool;
+                default = false;
+                description = "Enable the systemd user service to start on boot/login";
+              };
             };
           }
         );
@@ -106,6 +112,7 @@ in
   config =
     let
       serviceInstances = builtins.filter (inst: inst.value.createService) enabledInstances;
+      enabledServiceInstances = builtins.filter (inst: inst.value.enableService) serviceInstances;
     in
     lib.mkIf (builtins.any (inst: inst.value.enable) instancesWithKeys) {
       home-manager.sharedModules = [
@@ -117,10 +124,10 @@ in
               value = {
                 Unit = {
                   Description = "LLM server: ${inst.key}";
-                  Wants = [ "graphical-session.target" ];
+                  Wants = lib.optionals inst.value.enableService [ "graphical-session.target" ];
                   After = [ "graphical-session.target" ];
-                  PartOf = [ "graphical-session.target" ];
-                  Requisite = [ "graphical-session.target" ];
+                  PartOf = lib.optionals inst.value.enableService [ "graphical-session.target" ];
+                  Requisite = lib.optionals inst.value.enableService [ "graphical-session.target" ];
                 };
                 Service = {
                   ExecStart = "${createScript inst}/bin/llama-server-${inst.key}";
@@ -131,7 +138,7 @@ in
                   ++ inst.value.extraEnvironment;
                 };
                 Install = {
-                  WantedBy = [ "graphical-session.target" ];
+                  WantedBy = lib.optionals inst.value.enableService [ "graphical-session.target" ];
                 };
               };
             }) serviceInstances
