@@ -4,6 +4,16 @@
   pkgs,
   ...
 }:
+let
+  cfg = config.myconfig.ai;
+  generateModelConfig =
+    model:
+    "- model_id: ${model.host}:${toString model.port}\n"
+    + "  model_name: ${
+        if model.name != null then model.name else "${model.host}:${toString model.port}"
+      }\n"
+    + "  api_base: http://${model.host}:${toString model.port}/v1\n";
+in
 {
   options.myconfig = with lib; {
     ai.llm = {
@@ -18,11 +28,8 @@
           python313Packages.llm
           python313Packages.llm-ollama
         ];
-        xdg.configFile."io.datasette.llm/extra-openai-models.yaml".text = ''
-          - model_id: localhost:22545
-            model_name: localhost:22545
-            api_base: http://127.0.0.1:22545/v1
-        '';
+        xdg.configFile."io.datasette.llm/extra-openai-models.yaml".text =
+          if cfg.localModels != [ ] then lib.concatStrings (map generateModelConfig cfg.localModels) else "";
       }
     ];
   };
