@@ -92,6 +92,10 @@ in
         myconfig.ai.opencode.enable = true;
         myconfig.ai.localModels = [
           {
+            name = "qwen3-5-vulkan";
+            port = 22547;
+          }
+          {
             port = 22546;
           }
           {
@@ -137,11 +141,16 @@ in
         vllm = {
           enable = true;
         };
-        # services = {
-        #   llama-server = {
-        #     enable = true;
-        #   };
-        # };
+        services = {
+          llama-server.instances.qwen3-5-vulkan = {
+            enable = true;
+            modelPath = "/home/mhuber/disk/models/Qwen3.5-122B-A10B-MXFP4_MOE.gguf";
+            port = 22547;
+            contextSize = 202752;
+            device = "Vulkan1";
+            flashAttention = true;
+          };
+        };
         # container = {
         #   nlm-ingestor = {
         #     enable = false;
