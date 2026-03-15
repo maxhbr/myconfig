@@ -88,6 +88,12 @@ in
                 default = "";
                 description = "Additional arguments to pass to llama-server";
               };
+
+              createService = mkOption {
+                type = types.bool;
+                default = false;
+                description = "Create systemd user service for this instance";
+              };
             };
           }
         );
@@ -97,36 +103,40 @@ in
     };
   };
 
-  config = lib.mkIf (builtins.any (inst: inst.value.enable) instancesWithKeys) {
-    home-manager.sharedModules = [
-      {
-        home.packages = scripts;
-        systemd.user.services = builtins.listToAttrs (
-          builtins.map (inst: {
-            name = "llama-server-${inst.key}";
-            value = {
-              Unit = {
-                Description = "LLM server: ${inst.key}";
-                Wants = [ "graphical-session.target" ];
-                After = [ "graphical-session.target" ];
-                PartOf = [ "graphical-session.target" ];
-                Requisite = [ "graphical-session.target" ];
+  config =
+    let
+      serviceInstances = builtins.filter (inst: inst.value.createService) enabledInstances;
+    in
+    lib.mkIf (builtins.any (inst: inst.value.enable) instancesWithKeys) {
+      home-manager.sharedModules = [
+        {
+          home.packages = scripts;
+          systemd.user.services = builtins.listToAttrs (
+            builtins.map (inst: {
+              name = "llama-server-${inst.key}";
+              value = {
+                Unit = {
+                  Description = "LLM server: ${inst.key}";
+                  Wants = [ "graphical-session.target" ];
+                  After = [ "graphical-session.target" ];
+                  PartOf = [ "graphical-session.target" ];
+                  Requisite = [ "graphical-session.target" ];
+                };
+                Service = {
+                  ExecStart = "${createScript inst}/bin/llama-server-${inst.key}";
+                  Restart = "on-failure";
+                  Environment = [
+                    (lib.optionalString (inst.value.device != null) "LLAMA_ARG_DEVICE=${inst.value.device}")
+                  ]
+                  ++ inst.value.extraEnvironment;
+                };
+                Install = {
+                  WantedBy = [ "graphical-session.target" ];
+                };
               };
-              Service = {
-                ExecStart = "${createScript inst}/bin/llama-server-${inst.key}";
-                Restart = "on-failure";
-                Environment = [
-                  (lib.optionalString (inst.value.device != null) "LLAMA_ARG_DEVICE=${inst.value.device}")
-                ]
-                ++ inst.value.extraEnvironment;
-              };
-              Install = {
-                WantedBy = [ "graphical-session.target" ];
-              };
-            };
-          }) enabledInstances
-        );
-      }
-    ];
-  };
+            }) serviceInstances
+          );
+        }
+      ];
+    };
 }
