@@ -63,7 +63,7 @@
       }
 
       ./home-manager.dotnet.nix
-      ./home-manager.teams-for-linux.nix
+      # ./home-manager.teams-for-linux.nix
       ./home-manager.zoom-us
     ];
   };

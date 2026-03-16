@@ -191,48 +191,17 @@
                     imports = [ (myconfig.metadatalib.announceOtherHosts "f13") ];
                   }
                 )
-                (
-                  {
-                    pkgs,
-                    config,
-                    lib,
-                    ...
-                  }:
-                  {
-                    config = lib.mkIf (config.specialisation != { }) {
-                      home-manager.sharedModules = [
-                        (
-                          { config, ... }:
-                          let
-                            mk-upg-script =
-                              name: args:
-                              pkgs.writeShellScriptBin name ''
-                                set -euo pipefail
-                                set -x
-                                exec ${config.home.homeDirectory}/myconfig/priv/switch.sh ${args} "$@"
-                              '';
-                          in
-                          {
-                            home.packages =
-                              with pkgs;
-                              [
-                                (mk-upg-script "upg" "")
-                                (mk-upg-script "upg-fast" "--fast")
-                              ]
-                              ++ (map (hn: (mk-upg-script "upg-${hn}" "--fast ${hn}")) [
-                                "p14"
-                                "workstation"
-                                "r6c"
-                                "nas"
-                                "vserver"
-                                "nuc"
-                              ]);
-                          }
-                        )
-                      ];
-                    };
-                  }
-                )
+                {
+                  myconfig.upg.enable = true;
+                  myconfig.upg.otherHosts = [
+                    "p14"
+                    "workstation"
+                    "r6c"
+                    "nas"
+                    "vserver"
+                    "nuc"
+                  ];
+                }
               ]
               ++ moreModules
             ) metadataOverride);
@@ -297,38 +266,7 @@
             (self.lib.evalConfiguration "x86_64-linux" "thing" (
               [
                 self.nixosModules.core
-                (
-                  {
-                    pkgs,
-                    config,
-                    lib,
-                    ...
-                  }:
-                  {
-                    config = lib.mkIf (config.specialisation != { }) {
-                      home-manager.sharedModules = [
-                        (
-                          { config, ... }:
-                          let
-                            mk-upg-script =
-                              name: args:
-                              pkgs.writeShellScriptBin name ''
-                                set -euo pipefail
-                                set -x
-                                exec ${config.home.homeDirectory}/myconfig/priv/switch.sh ${args} "$@"
-                              '';
-                          in
-                          {
-                            home.packages = with pkgs; [
-                              (mk-upg-script "upg" "")
-                              (mk-upg-script "upg-fast" "--fast")
-                            ];
-                          }
-                        )
-                      ];
-                    };
-                  }
-                )
+                { myconfig.upg.enable = true; }
               ]
               ++ moreModules
             ) metadataOverride);
