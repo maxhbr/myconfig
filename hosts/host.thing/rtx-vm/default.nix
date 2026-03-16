@@ -16,8 +16,6 @@ let
 in
 {
   options.virtualisation.rtxVm = {
-    enable = lib.mkEnableOption "RTX 5090 GPU passthrough VM";
-
     memory = lib.mkOption {
       type = lib.types.int;
       default = 16384;
@@ -58,7 +56,12 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
+  imports = [
+    ./modules/virtualization.gpuPassthrough.nix
+    ./modules/virtualization.libvirtDomains.nix
+  ];
+
+  config = {
     # Enable libvirt daemon
     virtualisation.libvirtd.enable = true;
 

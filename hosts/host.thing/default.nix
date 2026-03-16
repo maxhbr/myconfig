@@ -32,9 +32,7 @@
     ./hardware.Radeon8060S
     ./disk.nix
     ../../hardware/eGPU.nix
-    ./rtx-vm/modules/virtualization.gpuPassthrough.nix
-    ./rtx-vm/modules/virtualization.libvirtDomains.nix
-    ./rtx-vm/default.nix
+    # ./rtx-vm/default.nix
     {
       # services.earlyoom.enable = lib.mkForce false;
     }
@@ -88,9 +86,6 @@
       # lxc.enable = true;
       libvirtd.enable = true;
     };
-
-    # Enable RTX 5090 GPU passthrough VM
-    virtualisation.rtxVm.enable = true;
 
     services.hardware.bolt.enable = true;
 
