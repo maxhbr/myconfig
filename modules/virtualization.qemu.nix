@@ -22,7 +22,6 @@
 
       virtualisation.libvirtd = {
         qemu = {
-          ovmf.enable = true;
           runAsRoot = false;
         };
         onBoot = "ignore";

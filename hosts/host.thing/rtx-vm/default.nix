@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: MIT
 #
 # RTX 5090 GPU Passthrough VM Configuration Module
-# Import this into hosts/host.thing/default.nix:
-#   ./rtx-vm/default.nix
+# High-level wrapper that sets up gpuPassthrough and libvirtDomains modules
 
 {
   pkgs,
@@ -44,7 +43,10 @@ in
     };
 
     networkType = lib.mkOption {
-      type = lib.types.enum [ "nat" "bridge" ];
+      type = lib.types.enum [
+        "nat"
+        "bridge"
+      ];
       default = "nat";
       description = "Network type";
     };
@@ -61,29 +63,31 @@ in
     virtualisation.libvirtd.enable = true;
 
     # GPU passthrough configuration
-    virtualisation.gpuPassthrough = {
-      enable = true;
-      iommuType = "amd";
-      gpus = [
-        {
-          vendorId = "10de";
-          deviceIds = [ "2b85" "22e8" ];
-          pciAddresses = [ "62:00.0" "62:00.1" ];
-        }
-      ];
-    };
+    virtualisation.gpuPassthrough.enable = true;
+    virtualisation.gpuPassthrough.iommuType = "amd";
+    virtualisation.gpuPassthrough.gpus = [
+      {
+        vendorId = "10de";
+        deviceIds = [
+          "2b85"
+          "22e8"
+        ];
+        pciAddresses = [
+          "62:00.0"
+          "62:00.1"
+        ];
+      }
+    ];
 
     # Ubuntu AI VM definition
-    virtualisation.libvirtDomains.ai-gpu-vm = {
-      enable = true;
-      memory = cfg.memory;
-      vcpus = cfg.vcpus;
-      diskSize = cfg.diskSize;
-      ubuntuVersion = cfg.ubuntuVersion;
-      networkType = cfg.networkType;
-      gpuPassthrough = true;
-      customStoragePath = cfg.customStoragePath;
-    };
+    virtualisation.libvirtDomains.ai-gpu-vm.enable = true;
+    virtualisation.libvirtDomains.ai-gpu-vm.memory = cfg.memory;
+    virtualisation.libvirtDomains.ai-gpu-vm.vcpus = cfg.vcpus;
+    virtualisation.libvirtDomains.ai-gpu-vm.diskSize = cfg.diskSize;
+    virtualisation.libvirtDomains.ai-gpu-vm.ubuntuVersion = cfg.ubuntuVersion;
+    virtualisation.libvirtDomains.ai-gpu-vm.networkType = cfg.networkType;
+    virtualisation.libvirtDomains.ai-gpu-vm.gpuPassthrough = true;
+    virtualisation.libvirtDomains.ai-gpu-vm.customStoragePath = cfg.customStoragePath;
 
     # User permissions
     users.users.mhuber.extraGroups = [ "libvirt" ];

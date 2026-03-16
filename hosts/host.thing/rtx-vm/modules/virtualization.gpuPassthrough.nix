@@ -22,21 +22,23 @@ in
     };
 
     iommuType = lib.mkOption {
-      type = lib.types.enum [ "intel" "amd" ];
-      default = if config.boot.kernelModules == [ "kvm-intel" ] then "intel" else "amd";
+      type = lib.types.enum [
+        "intel"
+        "amd"
+      ];
+      default = "amd";
       description = "IOMMU type based on CPU architecture";
     };
   };
 
   config = lib.mkIf cfg.enable {
     # IOMMU kernel parameters
-    boot.kernelParams =
-      [
-        "iommu=pt"  # Pass-through mode for performance
-        "iommufd=1" # Required for modern VFIO
-      ]
-      ++ lib.optional (cfg.iommuType == "amd") "amd_iommu=on"
-      ++ lib.optional (cfg.iommuType == "intel") "intel_iommu=on";
+    boot.kernelParams = [
+      "iommu=pt" # Pass-through mode for performance
+      "iommufd=1" # Required for modern VFIO
+    ]
+    ++ lib.optional (cfg.iommuType == "amd") "amd_iommu=on"
+    ++ lib.optional (cfg.iommuType == "intel") "intel_iommu=on";
 
     # VFIO kernel modules
     boot.kernelModules = [
@@ -50,9 +52,9 @@ in
     boot.extraModprobeConfig =
       let
         # Build vfio-pci ids parameter from gpu configurations
-        nvidiaIds =
-          lib.concatMapStringsSep "," (gpu: "${gpu.vendorId}:${builtins.concatStringsSep "," gpu.deviceIds}")
-            (lib.filter (gpu: gpu.vendorId == "10de") cfg.gpus);
+        nvidiaIds = lib.concatMapStringsSep "," (
+          gpu: "${gpu.vendorId}:${builtins.concatStringsSep "," gpu.deviceIds}"
+        ) (lib.filter (gpu: gpu.vendorId == "10de") cfg.gpus);
       in
       ''
         # NVIDIA GPU passthrough to VFIO
@@ -70,21 +72,13 @@ in
       package = config.boot.kernelPackages.nvidiaPackages.stable;
     };
 
-    # Libvirt user permissions for VFIO access
-    users.groups.libvirt = { };
-    users.users.mhuber = lib.mkIf (config.users.users.mhuber.exists) {
-      extraGroups = [ "libvirt" ];
-    };
-
     # System packages for VM management
     environment.systemPackages = with pkgs; [
       qemu_kvm
       libvirt
-      virtinst  # Provides virt-install
       virt-viewer
       spice
       spice-protocol
-      edk2-ovmf
     ];
 
     # Thunderbolt auto-authorization for GPU
