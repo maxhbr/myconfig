@@ -53,6 +53,8 @@
     myphoto.url = "github:maxhbr/myphoto";
     myphoto.inputs.nixpkgs.follows = "nixpkgs";
 
+    llama-cpp-pr.url = "github:r-ryantm/nixpkgs/a1e8ce6b50ffa87ad0d39881c47eb214982330dc"; # https://github.com/NixOS/nixpkgs/pull/500995
+
     #############################################################
     # PRs
   };
@@ -123,17 +125,28 @@
                     ## 1. create an input with the following:
                     # pr275479.url =
                     #  "github:maxhbr/nixpkgs/freeplane-1_11_8"; # https://github.com/NixOS/nixpkgs/pull/275479
+                    # llama-cpp-pr.url =
+                    #  "github:r-ryantm/nixpkgs/a1e8ce6b50ffa87ad0d39881c47eb214982330dc"; # https://github.com/NixOS/nixpkgs/pull/500995
                     ## 2. add the input to the inputs list
                     # { input = "pr275479"; pkg = "freeplane"; }
-                    nixpkgs.overlays = map (
-                      { input, pkg }:
-                      (_: _: {
-                        "${pkg}" =
-                          (import inputs."${input}" {
-                            inherit (pkgs) config system;
-                          })."${pkg}";
-                      })
-                    ) [ ];
+                    # { input = "llama-cpp-pr"; pkg = "llama-cpp"; }
+                    nixpkgs.overlays =
+                      map
+                        (
+                          { input, pkg }:
+                          (_: _: {
+                            "${pkg}" =
+                              (import inputs."${input}" {
+                                inherit (pkgs) config system;
+                              })."${pkg}";
+                          })
+                        )
+                        [
+                          {
+                            input = "llama-cpp-pr";
+                            pkg = "llama-cpp";
+                          }
+                        ];
                   }
                 )
                 (
