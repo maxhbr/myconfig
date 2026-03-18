@@ -330,22 +330,6 @@
         "type": "github"
       }
     },
-    "llama-cpp-pr": {
-      "locked": {
-        "lastModified": 1773831304,
-        "narHash": "sha256-5tYEQ7I24AOdlNeWQQX2O0J4UGU1JpozM0suKE3Io/k=",
-        "owner": "r-ryantm",
-        "repo": "nixpkgs",
-        "rev": "a1e8ce6b50ffa87ad0d39881c47eb214982330dc",
-        "type": "github"
-      },
-      "original": {
-        "owner": "r-ryantm",
-        "repo": "nixpkgs",
-        "rev": "a1e8ce6b50ffa87ad0d39881c47eb214982330dc",
-        "type": "github"
-      }
-    },
     "master": {
       "locked": {
         "lastModified": 1773827972,
@@ -630,6 +614,22 @@
         "type": "github"
       }
     },
+    "pr500995": {
+      "locked": {
+        "lastModified": 1773831304,
+        "narHash": "sha256-5tYEQ7I24AOdlNeWQQX2O0J4UGU1JpozM0suKE3Io/k=",
+        "owner": "r-ryantm",
+        "repo": "nixpkgs",
+        "rev": "a1e8ce6b50ffa87ad0d39881c47eb214982330dc",
+        "type": "github"
+      },
+      "original": {
+        "owner": "r-ryantm",
+        "repo": "nixpkgs",
+        "rev": "a1e8ce6b50ffa87ad0d39881c47eb214982330dc",
+        "type": "github"
+      }
+    },
     "rel2405": {
       "locked": {
         "lastModified": 1735651292,
@@ -702,7 +702,6 @@
         "git-hooks": "git-hooks",
         "home": "home",
         "impermanence": "impermanence",
-        "llama-cpp-pr": "llama-cpp-pr",
         "master": "master",
         "my-wallpapers": "my-wallpapers",
         "myphoto": "myphoto",
@@ -714,6 +713,7 @@
         "nixpkgs": "nixpkgs_4",
         "nixpkgs-wayland": "nixpkgs-wayland",
         "nur": "nur",
+        "pr500995": "pr500995",
         "rel2405": "rel2405",
         "rel2411": "rel2411",
         "rel2505": "rel2505",

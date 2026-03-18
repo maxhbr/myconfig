@@ -53,7 +53,7 @@
     myphoto.url = "github:maxhbr/myphoto";
     myphoto.inputs.nixpkgs.follows = "nixpkgs";
 
-    llama-cpp-pr.url = "github:r-ryantm/nixpkgs/a1e8ce6b50ffa87ad0d39881c47eb214982330dc"; # https://github.com/NixOS/nixpkgs/pull/500995
+    pr500995.url = "github:r-ryantm/nixpkgs/a1e8ce6b50ffa87ad0d39881c47eb214982330dc";
 
     #############################################################
     # PRs
@@ -125,11 +125,8 @@
                     ## 1. create an input with the following:
                     # pr275479.url =
                     #  "github:maxhbr/nixpkgs/freeplane-1_11_8"; # https://github.com/NixOS/nixpkgs/pull/275479
-                    # llama-cpp-pr.url =
-                    #  "github:r-ryantm/nixpkgs/a1e8ce6b50ffa87ad0d39881c47eb214982330dc"; # https://github.com/NixOS/nixpkgs/pull/500995
-                    ## 2. add the input to the inputs list
+                    ## 2. add the input to the inputs list below
                     # { input = "pr275479"; pkg = "freeplane"; }
-                    # { input = "llama-cpp-pr"; pkg = "llama-cpp"; }
                     nixpkgs.overlays =
                       map
                         (
@@ -143,7 +140,7 @@
                         )
                         [
                           {
-                            input = "llama-cpp-pr";
+                            input = "pr500995";
                             pkg = "llama-cpp";
                           }
                         ];
