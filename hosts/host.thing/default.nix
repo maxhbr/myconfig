@@ -44,6 +44,22 @@
       ];
     }
     { nixpkgs.config.allowBroken = true; }
+    {
+      security.pam.loginLimits = [
+        {
+          domain = "@wheel";
+          item = "memlock";
+          type = "soft";
+          value = "unlimited";
+        }
+        {
+          domain = "@wheel";
+          item = "memlock";
+          type = "hard";
+          value = "unlimited";
+        }
+      ];
+    }
   ];
 
   config = {
