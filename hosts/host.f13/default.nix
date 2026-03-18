@@ -240,15 +240,25 @@ in
       }
     ];
 
-    services.acpid.handlers = {
-      rfkill-ignore = {
-        event = "button/rfkill.*";
-        action = "/bin/true";
-      };
-    };
-    services.logind.settings.Login = {
-      HandleSwitchKey = "ignore";
-    };
+    # Disable the rfkill key (Fn+F10) on Framework 13.
+    # The FRMW0004 HID device exposes "Wireless Radio Control" as a
+    # *dedicated* input node (separate from Consumer Control / multimedia
+    # keys).  The kernel rfkill input handler toggles wifi soft-block
+    # directly in kernel-space before any compositor sees the event, so
+    # niri keybinds and acpid handlers cannot prevent it.
+    #
+    # Inhibiting the input device at the udev level is the only reliable
+    # fix: it prevents KEY_RFKILL from reaching any handler.
+    services.udev.extraRules = ''
+      ACTION=="add", SUBSYSTEM=="input", ATTRS{name}=="FRMW0004:00 32AC:0006 Wireless Radio Control", ATTR{inhibited}="1"
+    '';
+    # Defense-in-depth: remap the HID usage for Wireless Radio Button
+    # (0x000100C6) to KEY_RESERVED so even if the device is not inhibited,
+    # KEY_RFKILL is never emitted.
+    services.udev.extraHwdb = ''
+      evdev:input:b0018v32ACp0006*
+        KEYBOARD_KEY_000100c6=reserved
+    '';
 
     boot = {
       loader = {

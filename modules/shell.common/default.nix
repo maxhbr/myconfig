@@ -29,32 +29,6 @@ in
   config = {
     home-manager.users."${user}" = {
       home.file = {
-        ".aliasrc".source = ./aliasrc;
-        ".bashrc" = {
-          text = ''
-            #
-            # ~/.bashrc
-            #
-
-            # If not running interactively, don't do anything
-            [[ $- != *i* ]] && return
-
-            ###############################################################################
-            [[ -f ~/.aliasrc ]] && source ~/.aliasrc
-            [[ -f ~/.aliasrc-private ]] && source ~/.aliasrc-private
-            [[ -d $HOME/bin ]] && {
-                export PATH=$HOME/bin:$PATH
-                [[ -d $HOME/bin/stolen ]] && export PATH=$PATH:$HOME/bin/stolen
-                [[ -d $HOME/bin/docker ]] && export PATH=$PATH:$HOME/bin/docker
-            }
-            [[ -d $HOME/.perl/bin ]] && export PATH=$HOME/.perl/bin:$PATH
-            [[ -d $HOME/.cabal/bin ]] && export PATH=$HOME/.cabal/bin:$PATH
-            [[ -d $HOME/.local/bin ]] && export PATH=$HOME/.local/bin:$PATH
-
-            ###############################################################################
-            export PROMPT_COMMAND='history -a'
-          '';
-        };
         ".agignore" = {
           text = ''
             /.git/

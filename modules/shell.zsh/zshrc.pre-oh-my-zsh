@@ -1,1 +1,0 @@
-plugins=(git bundler osx rake ruby)
