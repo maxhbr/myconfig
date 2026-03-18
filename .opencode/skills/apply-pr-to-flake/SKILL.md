@@ -21,6 +21,13 @@ Use this when you want to apply a PR from the main nixpkgs repository to overrid
 2. **Repository** - Which nixpkgs repository to use (default: NixOS/nixpkgs)
 3. **Package name** - Which nixpkgs package to override
 4. **Input name** - Descriptive name for the input (e.g., pr500995, pr471984)
+5. **Version check** - Should I verify the package version is not newer than a specific version? (default: null, no check)
+   - If yes: Provide the maximum allowed version in semantic version format (e.g., "8401")
+   - If no: Set to null to skip version checking
+6. **Create module file** - Should I create `modules/pr-overlays.nix` for declarative management?
+   - Yes: Creates a NixOS module with option `myconfig.prOverlays.enable` and list of overlays [{package, prNumber, inputName, maxVersion?, prUrl}]
+   - No: Only modify flake.nix
+   - Default: Yes for new setups
 
 ## Implementation steps
 
