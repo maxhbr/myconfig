@@ -34,7 +34,6 @@ in
                 shopt -q login_shell && LOGIN_OPTION='--login' || LOGIN_OPTION=""
                 exec ${pkgs.fish}/bin/fish $LOGIN_OPTION
               fi
-              ${pkgs.any-nix-shell}/bin/any-nix-shell fish --info-right | source
             '';
           };
           home-manager.sharedModules = [
@@ -89,6 +88,9 @@ in
                     loginShellInit = "";
                     interactiveShellInit = ''
                       set -U fish_greeting
+
+                      # see: https://github.com/haslersn/any-nix-shell/blob/master/README.md#fish-1
+                      ${pkgs.any-nix-shell}/bin/any-nix-shell fish --info-right | source
 
                       # see: https://fishshell.com/docs/current/#command-line-editor
                       function hybrid_bindings --description "Vi-style bindings that inherit emacs-style bindings in all modes"
