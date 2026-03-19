@@ -148,6 +148,7 @@ in
                   };
                 };
               };
+
               backupScript = pkgs.writeShellScriptBin "btrbk-${instanceName}" ''
                 set -euo pipefail
 
@@ -164,10 +165,12 @@ in
                   sudo mkdir -p "$target"
                 fi
 
+                subcmd="''${*:-run}"
+
                 exec &> >(sudo tee -a "${target}.log")
                 echo "start @$(date) ..."
                 set -x
-                sudo -H -u btrbk bash -c "btrbk -c $conf --progress --verbose run"
+                sudo -H -u btrbk bash -c "btrbk -c $conf --progress --verbose $subcmd"
                 times
               '';
             in
