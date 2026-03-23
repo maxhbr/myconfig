@@ -176,7 +176,7 @@ in
           };
           myconfig.persistence.directories = [ ".local/share/opencode" ];
           home.packages = [
-            opencode-desktop
+            pkgs.opencode-desktop
             opencodeBwrap
             (pkgs.writeShellApplication {
               name = "opencode-tmp";
