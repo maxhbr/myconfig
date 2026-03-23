@@ -38,6 +38,7 @@ in
             enable = true;
             enableMcpIntegration = true;
             web.enable = true;
+
             settings = {
               "autoupdate" = false;
               "share" = "disabled";
@@ -175,6 +176,7 @@ in
           };
           myconfig.persistence.directories = [ ".local/share/opencode" ];
           home.packages = [
+            opencode-desktop
             opencodeBwrap
             (pkgs.writeShellApplication {
               name = "opencode-tmp";

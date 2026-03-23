@@ -11,19 +11,6 @@
     home-manager.sharedModules = [
       {
         imports = [
-          {
-            programs.zsh.shellAliases = {
-              unteams = ''while pkill teams; do echo "kill it with fire!"; done'';
-            };
-            programs.fish.functions = {
-              unteams = ''
-                while pkill teams
-                  echo "kill it with fire!"
-                end
-                echo "now wo are happy again"
-              '';
-            };
-          }
           (
             let
               waylandSlack = pkgs.slack.overrideAttrs (old: {
@@ -63,7 +50,7 @@
       }
 
       ./home-manager.dotnet.nix
-      # ./home-manager.teams-for-linux.nix
+      ./home-manager.teams-for-linux.nix
       ./home-manager.zoom-us
     ];
   };
