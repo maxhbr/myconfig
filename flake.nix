@@ -127,7 +127,6 @@
                     #  "github:maxhbr/nixpkgs/freeplane-1_11_8"; # https://github.com/NixOS/nixpkgs/pull/275479
                     ## 2. add the input to the inputs list below
                     # { input = "pr275479"; pkg = "freeplane"; maxVersion = null; }
-                    # { input = "pr500995"; pkg = "llama-cpp"; maxVersion = "8401"; }
                     nixpkgs.overlays =
                       map
                         (
@@ -156,7 +155,7 @@
                           {
                             input = "pr500995";
                             pkg = "llama-cpp";
-                            maxVersion = "8401";
+                            # maxVersion = "8401";
                           }
                         ];
                   }
