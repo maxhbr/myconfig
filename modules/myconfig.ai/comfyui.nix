@@ -31,7 +31,12 @@ in
       cuda_version = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "version of cuda to use (e.g., 'cu128'); null for CPU-only";
+        description = "version of cuda to use (e.g., 'cu128')";
+      };
+      rocm_version = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "version of rocm to use (e.g., 'gfx1151')";
       };
     };
   };
@@ -79,8 +84,8 @@ in
             ps.torchvision
             ps.torchaudio
           ]);
-          comfyuiCuda = pkgs.writeShellApplication {
-            name = "run-comfyui-cuda";
+          mkComfyui = {flavor, pytorch-index-url, libraries, exports, ...}: pkgs.writeShellApplication {
+            name = "run-comfyui-${flavor}";
 
             runtimeInputs = [
               pkgs.cudatoolkit
@@ -125,9 +130,8 @@ in
             excludeShellChecks = [ "SC1091" ];
 
             text = ''
-              export CUDA_PATH=${pkgs.cudatoolkit}
-              export EXTRA_LDFLAGS="-L/lib -L${pkgs.linuxPackages.nvidia_x11}/lib"
               export EXTRA_CCFLAGS="-I/usr/include"
+              ${exports}
 
               export PATH=${
                 pkgs.lib.makeBinPath [
@@ -160,16 +164,15 @@ in
               }:$PATH
 
               export LD_LIBRARY_PATH=${
-                pkgs.lib.makeLibraryPath [
+                pkgs.lib.makeLibraryPath ([
                   pkgs.stdenv.cc.cc.lib
                   pkgs.zlib
-                  pkgs.linuxPackages.nvidia_x11
                   pkgs.ncurses5
-                  pkgs.cudaPackages.cuda_cudart
-                ]
+                  pkgs.glibc
+                ] ++ libraries)
               }:''${LD_LIBRARY_PATH:-}
 
-              COMFYUI_ENV="${abs_comfy_base}/venv.cuda"
+              COMFYUI_ENV="${abs_comfy_base}/venv.${flavor}"
 
               echo "Virtual Environment: $COMFYUI_ENV"
 
@@ -181,7 +184,7 @@ in
                 source "$COMFYUI_ENV/bin/activate"
                 pip install --upgrade pip
                 pip install -r ${cfg.src}/requirements.txt
-                pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/${cfg.cuda_version}
+                pip install --pre torch torchvision torchaudio --index-url ${pytorch-index-url}
               )
 
               if [[ ! -d "$COMFYUI_ENV" ]]; then
@@ -190,25 +193,50 @@ in
               echo "Using existing virtual environment."
               source "$COMFYUI_ENV/bin/activate"
 
-              echo "============================================"
-              echo "  ComfyUI CUDA Development Environment"
-              echo "============================================"
-              echo ""
-              echo "Commands:"
-              echo "  run-comfyui       - Start ComfyUI"
-              echo ""
-              echo "Environment:"
-              echo "  CUDA_PATH: $CUDA_PATH"
-              echo ""
-              echo "============================================"
-
               run-comfyui
             '';
           };
+          cudaLibraries = [
+            pkgs.linuxPackages.nvidia_x11
+            pkgs.cudaPackages.cuda_cudart
+          ];
+          comfyuiCuda = mkComfyui {
+            flavor = "cuda";
+            pytorch-index-url = "https://download.pytorch.org/whl/nightly/${cfg.cuda_version}";
+            libraries = cudaLibraries;
+            exports = ''
+            export CUDA_PATH=${pkgs.cudatoolkit}
+            export EXTRA_LDFLAGS="-L/lib -L${pkgs.linuxPackages.nvidia_x11}/lib"
+            '';
+          };
 
+          rocmLibraries = [
+            pkgs.rocmPackages.clr
+            pkgs.rocmPackages.rocblas
+            pkgs.rocmPackages.hipblas
+            pkgs.rocmPackages.miopen
+          ];
+
+          comfyuiRocmGFX1151 = mkComfyui {
+            # for: Ryzen AI Max 395 (gfx1151 / Strix Halo)
+            flavor = "rocm";
+            pytorch-index-url = "https://rocm.nightlies.amd.com/v2/gfx1151/";
+            libraries = rocmLibraries;
+            exports = ''
+            unset CUDA_VISIBLE_DEVICES
+            export HIP_VISIBLE_DEVICES=0
+            export HSA_OVERRIDE_GFX_VERSION=11.5.1
+            export GPU_MAX_HEAP_SIZE=100
+            export GPU_MAX_ALLOC_PERCENT=100
+            export AMD_LOG_LEVEL=0
+            export FLASH_ATTENTION_TRITON_AMD_ENABLE=1
+            export HSA_ENABLE_SDMA=0
+            '';
+          };
         in
         {
-          home.packages = lib.optional (cfg.cuda_version != null) comfyuiCuda;
+          home.packages = 
+            (lib.optional (cfg.cuda_version != null) comfyuiCuda) ++ (lib.optional (cfg.rocm_version == "gfx1151") comfyuiRocmGFX1151);
           myconfig.persistence.cache-directories = [ cfg.comfy_base ];
         }
       )

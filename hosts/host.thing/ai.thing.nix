@@ -143,6 +143,7 @@ in
         comfyui = {
           enable = true;
           cuda_version = "cu128";
+          rocm_version = "gfx1151";
         };
         services = {
           llama-server.instances = {
