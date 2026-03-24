@@ -140,6 +140,9 @@ in
         vllm = {
           enable = true;
         };
+        comfyui = {
+          enable = true;
+        };
         services = {
           llama-server.instances = {
             qwen3-5-vulkan = {

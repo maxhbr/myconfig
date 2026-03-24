@@ -15,6 +15,7 @@ in
 {
   imports = [
     ./ai-coding.nix
+    ./comfyui.nix
     ./programs.aichat.nix
     ./programs.mcp.servers.nix
     ./programs.llm.nix
