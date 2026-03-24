@@ -29,9 +29,9 @@ in
         description = "ComfyUI source from nix";
       };
       cuda_version = mkOption {
-        type = types.str;
-        default = "cu128";
-        description = "version of cuda to use";
+        type = types.nullOr types.str;
+        default = null;
+        description = "version of cuda to use (e.g., 'cu128'); null for CPU-only";
       };
     };
   };
@@ -208,9 +208,7 @@ in
 
         in
         {
-          home.packages = [
-            comfyuiCuda
-          ];
+          home.packages = lib.optional (cfg.cuda_version != null) comfyuiCuda;
           myconfig.persistence.cache-directories = [ cfg.comfy_base ];
         }
       )

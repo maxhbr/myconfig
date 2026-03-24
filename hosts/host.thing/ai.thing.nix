@@ -142,6 +142,7 @@ in
         };
         comfyui = {
           enable = true;
+          cuda_version = "cu128";
         };
         services = {
           llama-server.instances = {
