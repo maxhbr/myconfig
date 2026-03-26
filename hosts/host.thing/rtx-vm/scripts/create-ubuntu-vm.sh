@@ -11,7 +11,7 @@ VM_NAME="ai-gpu-vm"
 VM_MEMORY=16384
 VM_VCPUS=6
 VM_DISK_SIZE="100G"
-VM_DISK_PATH="/home/mhuber/disk/virtlibvirt/images/${VM_NAME}.qcow2"
+VM_DISK_PATH="/mnt/disk/virtlibvirt/images/${VM_NAME}.qcow2"
 ISO_PATH="${1:-}"
 
 # Colors for output

@@ -49,6 +49,8 @@
 
     #############################################################
     # PRs
+    # https://github.com/NixOS/nixpkgs/pull/502283
+    pr502283.url = "github:Stebalien/nixpkgs/ff077fe943fab73adf58ad2f0f7650f49a1fda61";
   };
 
   outputs =
@@ -144,6 +146,11 @@
                           })
                         )
                         [
+                          {
+                            input = "pr502283";
+                            pkg = "llama-swap";
+                            # maxVersion = "199";
+                          }
                         ];
                   }
                 )

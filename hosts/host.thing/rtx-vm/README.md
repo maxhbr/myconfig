@@ -333,7 +333,7 @@ echo "ISO downloaded to ${ISO_PATH}"
       memory = 16384;
       vcpus = 6;
       diskSize = "100G";
-      customStoragePath = "/home/mhuber/disk/virtlibvirt/images";
+      customStoragePath = "/mnt/disk/virtlibvirt/images";
       networkType = "nat";
       gpuPassthrough = true;
       ubuntuVersion = "24.04";

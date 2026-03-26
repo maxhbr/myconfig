@@ -51,7 +51,7 @@ in
 
     customStoragePath = lib.mkOption {
       type = lib.types.str;
-      default = "/home/mhuber/disk/virtlibvirt/images";
+      default = "/mnt/disk/virtlibvirt/images";
       description = "Storage path for VM disks";
     };
   };

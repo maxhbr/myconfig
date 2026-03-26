@@ -91,6 +91,6 @@ cleanup:
 	@echo "=== Cleaning up VM ==="
 	@virsh destroy $(VM_NAME) 2>/dev/null || true
 	@virsh undefine $(VM_NAME) --nvram 2>/dev/null || true
-	@rm -f /home/mhuber/disk/virtlibvirt/images/$(VM_NAME).qcow2
+	@rm -f /mnt/disk/virtlibvirt/images/$(VM_NAME).qcow2
 	@rm -f /tmp/$(VM_NAME).xml
 	@echo "VM and disk removed"

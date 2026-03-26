@@ -91,10 +91,6 @@ in
         myconfig.ai.opencode.enable = true;
         myconfig.ai.localModels = [
           {
-            name = "qwen3-5-vulkan";
-            port = 22547;
-          }
-          {
             port = 22546;
           }
           {
@@ -147,18 +143,9 @@ in
         };
         services = {
           llama-server.instances = {
-            qwen3-5-vulkan = {
-              enable = true;
-              createService = true;
-              modelPath = "/home/mhuber/disk/models/Qwen3.5-122B-A10B-MXFP4_MOE.gguf";
-              port = 22547;
-              contextSize = 202752;
-              device = "Vulkan1";
-              flashAttention = true;
-            };
             qwen3-coder = {
               enable = true;
-              modelPath = "/home/mhuber/disk/models/Qwen3-Coder-Next-Q8_0.gguf";
+              modelPath = "/mnt/disk/models/Qwen3-Coder-Next-Q8_0.gguf";
               port = 22546;
               contextSize = 262144;
               flashAttention = true;
@@ -166,7 +153,7 @@ in
             };
             glm4-flash = {
               enable = true;
-              modelPath = "/home/mhuber/disk/models/GLM-4.7-Flash-BF16.gguf";
+              modelPath = "/mnt/disk/models/GLM-4.7-Flash-BF16.gguf";
               port = 22545;
               contextSize = 202752;
               flashAttention = true;
@@ -196,6 +183,8 @@ in
         # };
       };
     };
+
+
     # services.ollama = {
     #   enable = true;
     #   environmentVariables = {
