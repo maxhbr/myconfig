@@ -6,10 +6,6 @@
     nixos-unstable-small.url = "github:nixos/nixpkgs?ref=nixos-unstable-small";
     nixos-unstable.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
-    rel2405.url = "github:nixos/nixpkgs?ref=release-24.05";
-    rel2411.url = "github:nixos/nixpkgs?ref=release-24.11";
-    rel2505.url = "github:nixos/nixpkgs?ref=release-25.05";
-    rel2511.url = "github:nixos/nixpkgs?ref=release-25.11";
 
     nix-index-database.url = "github:nix-community/nix-index-database";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
@@ -23,6 +19,7 @@
     home.inputs.nixpkgs.follows = "nixpkgs";
 
     impermanence.url = "github:nix-community/impermanence";
+    impermanence.inputs.nixpkgs.follows = "nixpkgs";
 
     agenix.url = "github:ryantm/agenix";
     agenix.inputs.nixpkgs.follows = "nixpkgs";
@@ -31,6 +28,7 @@
     flake-utils.url = "github:numtide/flake-utils";
 
     nur.url = "github:nix-community/NUR";
+    nur.inputs.nixpkgs.follows = "nixpkgs";
 
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
@@ -43,17 +41,11 @@
     # octrc.url = "github:maxhbr/octrc";
     # octrc.inputs.nixpkgs.follows = "nixpkgs";
 
-    nixgl.url = "github:nix-community/nixGL";
-    nixgl.inputs.nixpkgs.follows = "nixpkgs";
-    nixgl.inputs.flake-utils.follows = "flake-utils";
-
     clipboard-sync.url = "github:dnut/clipboard-sync";
     clipboard-sync.inputs.nixpkgs.follows = "nixpkgs";
 
     myphoto.url = "github:maxhbr/myphoto";
     myphoto.inputs.nixpkgs.follows = "nixpkgs";
-
-    pr500995.url = "github:r-ryantm/nixpkgs/a1e8ce6b50ffa87ad0d39881c47eb214982330dc";
 
     #############################################################
     # PRs
@@ -152,11 +144,6 @@
                           })
                         )
                         [
-                          {
-                            input = "pr500995";
-                            pkg = "llama-cpp";
-                            # maxVersion = "8401";
-                          }
                         ];
                   }
                 )
@@ -168,14 +155,6 @@
                         mybackup = pkgs.callPackage ../pkgs/mybackup { inherit pkgs; };
                         my-wallpapers = inputs.my-wallpapers.defaultPackage.x86_64-linux;
                       })
-                    ];
-                  }
-                )
-                (
-                  { pkgs, ... }:
-                  {
-                    nixpkgs.overlays = [
-                      inputs.nixgl.overlay # https://github.com/nix-community/nixGL
                     ];
                   }
                 )
@@ -194,11 +173,13 @@
                     };
                   }
                 )
+                {
+                  nixpkgs.overlays = [ inputs.nur.overlays.default ];
+                }
               ]
               ++ (map (n: ./modules + "/${n}") (builtins.attrNames (builtins.readDir ./modules)));
               config = {
                 hardware.enableRedistributableFirmware = true;
-                nixpkgs.overlays = [ inputs.nur.overlays.default ];
               };
             };
         };
