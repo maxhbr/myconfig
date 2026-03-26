@@ -43,7 +43,31 @@ in
               "autoupdate" = false;
               "share" = "disabled";
               "permission" = {
-                "bash" = "ask";
+                "bash" = {
+                  "*" = "ask";
+                  "head *" = "allow";
+                  "tail *" = "allow";
+                  "git add *" = "allow";
+                  "git status *" = "allow";
+                  "git diff *" = "allow";
+                  "nix flake check *" = "allow";
+                  "nix fmt" = "allow";
+                  "nix fmt *" = "allow";
+                  "go build *" = "allow";
+                  "go test *" = "allow";
+                  "go generate *" = "allow";
+                  "go fmt *" = "allow";
+                  "go vet *" = "allow";
+                  "npm run dev *" = "allow";
+                  "npm run build *" = "allow";
+                  "npm run lint *" = "allow";
+                  "npm test *" = "allow";
+                  "ls *" = "allow";
+                  "grep *" = "allow";
+                  "rg *" = "allow";
+                  "find *" = "allow";
+                  "mkdir *" = "allow";
+                };
                 "edit" = "ask";
               };
               "provider" = lib.mkMerge [
@@ -122,28 +146,6 @@ in
               "disabled_providers" = [
                 "opencode"
               ];
-              ## TODO: overwriting with `lib.mkForce` does not work here
-              #   permission = lib.mkForce {
-              #     "bash" = {
-              #       "*" = "ask";
-              #       "head *" = "allow";
-              #       "go build *" = "allow";
-              #       "go test *" = "allow";
-              #       "go generate *" = "allow";
-              #       "go fmt *" = "allow";
-              #       "go vet *" = "allow";
-              #       "npm run dev *" = "allow";
-              #       "npm run build *" = "allow";
-              #       "npm run lint *" = "allow";
-              #       "npm test *" = "allow";
-              #       "ls *" = "allow";
-              #       "grep *" = "allow";
-              #       "rg *" = "allow";
-              #       "find *" = "allow";
-              #       "mkdir *" = "allow";
-              #     };
-              #     "edit" = "ask";
-              #   };
             };
             agents = {
               code-reviewer = ''
