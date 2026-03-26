@@ -35,28 +35,5 @@
         myconfig.wifi.backend = "iwd";
       };
     };
-    # gaming = {
-    #   inheritParentConfig = true;
-    #   configuration = {
-    #     programs.steam = {
-    #       enable = true;
-    #       remotePlay.openFirewall = true;
-    #       dedicatedServer.openFirewall = true;
-    #     };
-    #     programs.appimage.enable = true;
-    #     programs.appimage.binfmt = true;
-    #     hardware = {
-    #         graphics = {
-    #             enable = true;
-    #             enable32Bit = true;
-    #         };
-
-    #         amdgpu.amdvlk = {
-    #             enable = true;
-    #             support32Bit.enable = true;
-    #         };
-    #     };
-    #   };
-    # };
   };
 }
