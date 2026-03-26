@@ -6,7 +6,7 @@ in
   imports = [ ./user.myconfig.nix ];
   config = {
     home-manager.users.mhuber = {
-      home.packages = with pkgs; [ nixos-unstable.nixfmt ];
+      home.packages = with pkgs; [ nixfmt ];
       programs.zsh.shellAliases = {
         upg-get-hostId = ''cksum /etc/machine-id | while read c rest; do printf "%x" $c; done'';
       };

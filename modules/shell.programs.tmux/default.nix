@@ -44,7 +44,6 @@ let
   };
 in
 {
-  nixpkgs.overlays = [ (final: prev: { tmux = final.master.tmux; }) ];
   home-manager.sharedModules = [
     {
       home.packages = [ tmux-switch-client ];

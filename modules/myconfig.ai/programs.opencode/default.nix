@@ -42,7 +42,7 @@ in
             settings = {
               "autoupdate" = false;
               "share" = "disabled";
-              "permission" = {
+              "permission" = lib.mkForce {
                 "bash" = {
                   "*" = "ask";
                   "head *" = "allow";

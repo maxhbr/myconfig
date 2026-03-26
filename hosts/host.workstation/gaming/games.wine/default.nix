@@ -7,7 +7,7 @@
       (
         self: super:
         let
-          wineSelf = with self.nixos-unstable; [
+          wineSelf = with self; [
             wine
             winetricks
             playonlinux
@@ -16,10 +16,10 @@
             wineBuild = "wineWow";
             gstreamerSupport = false;
           };
-          wowWine = self.nixos-unstable.wine.override wineCfg;
-          wowWinetricks = (self.nixos-unstable.winetricks.override { wine = wowWine; });
-          wowPlayonlinux = (self.nixos-unstable.playonlinux.override { wine = wowWine; });
-          wowLutris = (self.nixos-unstable.lutris.override { wine = wowWine; });
+          wowWine = self.wine.override wineCfg;
+          wowWinetricks = (self.winetricks.override { wine = wowWine; });
+          wowPlayonlinux = (self.playonlinux.override { wine = wowWine; });
+          wowLutris = (self.lutris.override { wine = wowWine; });
         in
         {
           wine = wowWine;

@@ -6,7 +6,7 @@
 }:
 
 let
-  teams-for-linux-pkg = pkgs.nixos-unstable-small.teams-for-linux;
+  teams-for-linux-pkg = pkgs.teams-for-linux;
 in
 {
   config = {

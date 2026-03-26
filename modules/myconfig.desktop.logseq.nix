@@ -14,7 +14,7 @@ in
   config = lib.mkIf (cfg.desktop.enable && cfg.desktop.logseq.enable) {
     home-manager.sharedModules = [
       {
-        home.packages = with pkgs.master; [ logseq ];
+        home.packages = with pkgs; [ logseq ];
         myconfig.persistence.directories = [
           ".config/Logseq"
           ".logseq"

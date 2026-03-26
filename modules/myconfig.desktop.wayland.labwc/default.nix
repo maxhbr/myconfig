@@ -9,7 +9,7 @@
 }:
 let
   cfg = config.myconfig;
-  pkg = pkgs.master.labwc;
+  pkg = pkgs.labwc;
   user = myconfig.user;
 in
 {

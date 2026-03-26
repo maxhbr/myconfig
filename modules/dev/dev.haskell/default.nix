@@ -13,7 +13,7 @@ in
   config = lib.mkIf cfg.enable {
     home-manager.users.mhuber = {
       home.packages =
-        with pkgs.nixos-unstable;
+        with pkgs;
         [
           stack
           sourceHighlight

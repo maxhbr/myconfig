@@ -6,12 +6,9 @@
 }:
 let
   cfg = config.myconfig.ai.ollama;
-  ollamaSrc = if cfg.useOllamaFromMaster then pkgs.master else pkgs.nixos-unstable-small;
 in
 {
-  options.myconfig.ai.ollama = with lib; {
-    useOllamaFromMaster = mkEnableOption "use ollama from nixpkgs master instead of nixos-unstable-small";
-  };
+  options.myconfig.ai.ollama = with lib; { };
   imports =
     let
       gpuVariants = config.myconfig.hardware.gpu.variant;
@@ -50,14 +47,7 @@ in
 
     ];
   config = lib.mkIf config.services.ollama.enable {
-    nixpkgs.overlays = [
-      (_: prev: {
-        ollama = ollamaSrc.ollama;
-        ollama-cuda = ollamaSrc.ollama-cuda or prev.ollama-cuda;
-        ollama-rocm = ollamaSrc.ollama-rocm or prev.ollama-rocm;
-        ollama-vulkan = ollamaSrc.ollama-vulkan or prev.ollama-vulkan;
-      })
-    ];
+    # ollama packages now come from the default nixpkgs
     services.ollama = {
       environmentVariables = {
         OLLAMA_KEEP_ALIVE = "5m";

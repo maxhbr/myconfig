@@ -5,7 +5,7 @@
   ...
 }:
 let
-  steam = pkgs.nixos-unstable.steam.override {
+  steam = pkgs.steam.override {
     extraPkgs =
       innerPkgs: with innerPkgs; [
         mono

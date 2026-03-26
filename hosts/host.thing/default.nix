@@ -43,7 +43,7 @@
         }
       ];
     }
-    { nixpkgs.config.allowBroken = true; }
+    # { nixpkgs.config.allowBroken = true; }
     {
       security.pam.loginLimits = [
         {

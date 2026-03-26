@@ -14,7 +14,7 @@ in
   config = lib.mkIf (cfg.desktop.enable && cfg.desktop.joplin-desktop.enable) {
     home-manager.sharedModules = [
       {
-        home.packages = with pkgs.master; [ joplin-desktop ];
+        home.packages = with pkgs; [ joplin-desktop ];
         myconfig.persistence.directories = [
           ".config/Joplin"
           ".config/joplin-desktop"
