@@ -178,9 +178,11 @@ in
                                   )
                                 }:''${LD_LIBRARY_PATH:-}
 
-                                COMFYUI_ENV="${abs_comfy_base}/venv.${flavor}"
+                                COMFYUI_ENV="${abs_comfy_base}/venv.${flavor}.${
+                                  if flavor == "cuda" then cfg.cuda_version else cfg.rocm_version
+                                }"
 
-                                echo "Virtual Environment: $COMFYUI_ENV"
+                                 echo "Virtual Environment: $COMFYUI_ENV"
 
                 init_venv() (
                                 set -euo pipefail

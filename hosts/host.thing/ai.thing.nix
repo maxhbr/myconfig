@@ -142,7 +142,7 @@ in
         };
         comfyui = {
           enable = true;
-          cuda_version = "cu128";
+          cuda_version = "cu129";
           rocm_version = "gfx1151";
         };
         services = {
