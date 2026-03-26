@@ -563,22 +563,6 @@
         "type": "github"
       }
     },
-    "pr500995": {
-      "locked": {
-        "lastModified": 1773831304,
-        "narHash": "sha256-5tYEQ7I24AOdlNeWQQX2O0J4UGU1JpozM0suKE3Io/k=",
-        "owner": "r-ryantm",
-        "repo": "nixpkgs",
-        "rev": "a1e8ce6b50ffa87ad0d39881c47eb214982330dc",
-        "type": "github"
-      },
-      "original": {
-        "owner": "r-ryantm",
-        "repo": "nixpkgs",
-        "rev": "a1e8ce6b50ffa87ad0d39881c47eb214982330dc",
-        "type": "github"
-      }
-    },
     "root": {
       "inputs": {
         "agenix": "agenix",
@@ -597,7 +581,6 @@
         "nixpkgs": "nixpkgs_3",
         "nixpkgs-wayland": "nixpkgs-wayland",
         "nur": "nur",
-        "pr500995": "pr500995",
         "zephyr-flake": "zephyr-flake"
       }
     },
