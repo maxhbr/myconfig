@@ -93,6 +93,9 @@ flake_update_recursively() (
     if grep -q '\.url = "path:' "$flake"; then
         grep '\.url = "path:' "$flake" | sed s/.*path:// | sed 's/".*//g' |
             while read -r flake_path; do
+                if [[ "$flake_path" != /* ]]; then
+                    flake_path="$(realpath "$path/$flake_path")"
+                fi
                 flake_update_recursively "$flake_path"
             done
     fi
