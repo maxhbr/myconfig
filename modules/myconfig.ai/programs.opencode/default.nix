@@ -51,6 +51,7 @@ in
                   "git status *" = "allow";
                   "git diff *" = "allow";
                   "nix flake check *" = "allow";
+                  "nix flake *" = "allow";
                   "nix fmt" = "allow";
                   "nix fmt *" = "allow";
                   "go build *" = "allow";
