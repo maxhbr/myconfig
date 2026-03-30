@@ -143,6 +143,28 @@ in
                     };
                   }
                 ))
+                (lib.mkIf osconfig.services.llama-swap.enable (
+                  let
+                    llamaSwapModels = builtins.listToAttrs (
+                      lib.map (model: {
+                        name = model;
+                        value = {
+                          "name" = model;
+                        };
+                      }) (builtins.attrNames osconfig.services.llama-swap.settings.models)
+                    );
+                  in
+                  {
+                    "llama-swap" = {
+                      "npm" = "@ai-sdk/openai-compatible";
+                      "name" = "llama-swap";
+                      "options" = {
+                        "baseURL" = "http://localhost:${toString osconfig.services.llama-swap.port}/v1";
+                      };
+                      "models" = llamaSwapModels;
+                    };
+                  }
+                ))
               ];
               "disabled_providers" = [
                 "opencode"

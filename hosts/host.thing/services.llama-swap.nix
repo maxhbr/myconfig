@@ -8,12 +8,12 @@
 }:
 {
   config = {
-    myconfig.ai.localModels = [
-      {
-        name = "llama-swap";
-        port = config.services.llama-swap.port;
-      }
-    ];
+    # myconfig.ai.localModels = [
+    #   {
+    #     name = "llama-swap";
+    #     port = config.services.llama-swap.port;
+    #   }
+    # ];
     services.llama-swap = {
       enable = true;
       port = 33656;
@@ -24,7 +24,8 @@
           llama-server = lib.getExe' config.myconfig.ai.inference-cpp.llama-cpp.package "llama-server";
         in
         {
-          healthCheckTimeout = 60;
+          healthCheckTimeout = 500;
+          sendLoadingState = true;
           models = {
             "qwen3.5-122B-A10B-Q5_K_M" = {
               cmd = ''
@@ -36,6 +37,7 @@
               env = [
                 "LLAMA_ARG_DEVICE=Vulkan1"
               ];
+              ttl = 1800;
             };
             "qwen3.5-35B-A3B-Q6_K" = {
               cmd = ''
@@ -47,6 +49,7 @@
               env = [
                 "LLAMA_ARG_DEVICE=Vulkan0"
               ];
+              ttl = 300;
             };
             "Qwen3.5-27B-Q8_0" = {
               cmd = ''
@@ -58,6 +61,7 @@
               env = [
                 "LLAMA_ARG_DEVICE=Vulkan0"
               ];
+              ttl = 300;
             };
             # "other-model" = {
             #   proxy = "http://127.0.0.1:5555";
