@@ -29,6 +29,7 @@
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
     ./ai.thing.nix
+    ./services.llama-swap.nix
     ./specialisation.nix
     ./hardware.Radeon8060S
     ./disk.nix

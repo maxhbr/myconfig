@@ -133,9 +133,9 @@ in
         open-webui = {
           enable = true;
         };
-        vllm = {
-          enable = true;
-        };
+        # vllm = {
+        #   enable = true;
+        # };
         comfyui = {
           enable = true;
           cuda_version = "cu129";
