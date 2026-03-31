@@ -34,10 +34,6 @@
     ./hardware.Radeon8060S.nix
     ./disk.nix
     ../../hardware/eGPU.nix
-    # ./rtx-vm/default.nix
-    {
-      # services.earlyoom.enable = lib.mkForce false;
-    }
     {
       home-manager.sharedModules = [
         {
@@ -45,7 +41,6 @@
         }
       ];
     }
-    # { nixpkgs.config.allowBroken = true; }
     {
       security.pam.loginLimits = [
         {
@@ -95,13 +90,10 @@
     };
 
     virtualisation = {
-      # docker.enable = true;
       podman.enable = true;
       oci-containers = {
         backend = "podman";
       };
-      # virtualbox.host.enable = true;
-      # lxc.enable = true;
       libvirtd.enable = true;
     };
 
