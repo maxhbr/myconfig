@@ -90,6 +90,7 @@ in
               [
                 rocmPackages.rocminfo
                 rocmPackages.rocm-smi
+                clinfo
                 onnxruntime
               ]
               ++ (with pkgs.python3Packages; [
@@ -98,6 +99,21 @@ in
               ]);
           }
         ];
+        systemd.tmpfiles.rules =
+          let
+            rocmEnv = pkgs.symlinkJoin {
+              name = "rocm-combined";
+              paths = with pkgs.rocmPackages; [
+                rocblas
+                hipblas
+                clr
+              ];
+            };
+          in
+          [
+            "L+    /opt/rocm   -    -    -     -    ${rocmEnv}"
+          ];
+        hardware.amdgpu.opencl.enable = true;
       })
       (lib.mkIf (hasVariant "amd-no-rocm") {
         nixpkgs.config.rocmSupport = false;
@@ -139,6 +155,7 @@ in
           "d /run/myconfig 0755 root root - -"
           "f /run/myconfig/gpu-variant 0644 root root - ${builtins.concatStringsSep "," cfg.variant}"
         ];
+        hardware.graphics.extraPackages = [ intel-compute-runtime ];
       }
     ]
   );

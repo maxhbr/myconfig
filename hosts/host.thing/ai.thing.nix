@@ -184,7 +184,6 @@ in
       };
     };
 
-
     services.ollama = {
       enable = true;
       environmentVariables = {

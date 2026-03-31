@@ -4,14 +4,64 @@
   config,
   lib,
   pkgs,
-  myconfig,
-  inputs,
   ...
 }:
 {
   imports = [
-    ./vulkan.nix
-    # ./rocm.nix
+    (
+      # vulkan
+      {
+        lib,
+        config,
+        pkgs,
+        ...
+      }:
+      {
+        config = lib.mkIf (config.specialisation != { }) (
+          let
+            llama-cpp-gfx1151 = pkgs.llama-cpp.override {
+              vulkanSupport = true;
+              rocmGpuTargets = [ "gfx1151" ];
+            };
+          in
+          {
+            myconfig = {
+              hardware.gpu.variant = [ "amd-no-rocm" ];
+              ai.inference-cpp.llama-cpp.package = llama-cpp-gfx1151;
+            };
+          }
+        );
+      }
+    )
+    # rocm
+    (
+      {
+        config,
+        pkgs,
+        lib,
+        ...
+      }:
+      {
+        specialisation = {
+          rocm = {
+            inheritParentConfig = true;
+            configuration =
+              let
+                llama-cpp-gfx1151 = pkgs.llama-cpp.override {
+                  rocmSupport = true;
+                  rocmGpuTargets = [ "gfx1151" ];
+                };
+              in
+              {
+                myconfig = {
+                  hardware.gpu.variant = [ "amd" ];
+                  ai.inference-cpp.llama-cpp.package = llama-cpp-gfx1151;
+                };
+              };
+          };
+        };
+      }
+    )
   ];
   config = {
     boot.kernelParams = [
@@ -26,15 +76,14 @@
       HSA_OVERRIDE_GFX_VERSION = "11.5.1";
       # Use the internal Strix Halo iGPU for the Wayland compositor, not the eGPU
       WLR_DRM_DEVICES = "/dev/dri/by-path/pci-0000:c2:00.0-card";
+      # # other options:
+      # GGML_HIP_VISIBLE_DEVICES = 0;
+      # HSA_ENABLE_SDMA = 0;
+      # HIP_FORCE_DEV_KERNARG = 1;
     };
     services.ollama = {
       environmentVariables = {
         HSA_OVERRIDE_GFX_VERSION = "11.5.1";
-        # Ensure it picks the Strix Halo iGPU if you have an eGPU plugged in
-        # OLLAMA_VULKAN_DEVICE = "0";
-
-        # This tells the RADV driver to ignore its internal 1/8th RAM limit
-        # and allow allocations up to the full heap size.
         RADV_THREAD_SUBMISSION = "1";
       };
       rocmOverrideGfx = "11.5.1";
