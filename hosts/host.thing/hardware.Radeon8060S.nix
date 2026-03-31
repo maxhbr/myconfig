@@ -6,18 +6,6 @@
   pkgs,
   ...
 }:
-let
-  llama-cpp-gfx1151-vulkan = pkgs.llama-cpp.override {
-    rocmSupport = false;
-    vulkanSupport = true;
-    rocmGpuTargets = [ "gfx1151" ];
-  };
-  llama-cpp-gfx1151-rocm = pkgs.llama-cpp.override {
-    rocmSupport = true;
-    vulkanSupport = false;
-    rocmGpuTargets = [ "gfx1151" ];
-  };
-in
 {
   imports = [
     (

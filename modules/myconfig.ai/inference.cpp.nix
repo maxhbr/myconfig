@@ -17,6 +17,12 @@ let
     #   pkgs.llama-cpp.override { cudaSupport = true; }
     else
       pkgs.llama-cpp;
+  my-llama-cpp = pkgs.llama-cpp.override {
+    rocmSupport = hasVariant "amd";
+    vulkanSupport = (hasVariant "amd-no-rocm" || hasVariant "amd");
+    cudaSupport = hasVariant "nvidia";
+    blasSupport = false;
+  };
 in
 {
   options.myconfig = with lib; {
@@ -24,7 +30,7 @@ in
       enable = mkEnableOption "myconfig.ai.inference-cpp";
       llama-cpp.package = mkOption {
         type = types.package;
-        default = matching-llama-cpp;
+        default = my-llama-cpp;
         description = "The llama-cpp package to use";
       };
     };

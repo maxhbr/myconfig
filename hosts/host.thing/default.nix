@@ -31,7 +31,7 @@
     ./ai.thing.nix
     ./services.llama-swap.nix
     ./specialisation.nix
-    ./hardware.Radeon8060S
+    ./hardware.Radeon8060S.nix
     ./disk.nix
     ../../hardware/eGPU.nix
     # ./rtx-vm/default.nix
