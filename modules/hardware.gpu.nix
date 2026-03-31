@@ -155,7 +155,7 @@ in
           "d /run/myconfig 0755 root root - -"
           "f /run/myconfig/gpu-variant 0644 root root - ${builtins.concatStringsSep "," cfg.variant}"
         ];
-        hardware.graphics.extraPackages = [ intel-compute-runtime ];
+        hardware.graphics.extraPackages = [ pkgs.intel-compute-runtime ];
       }
     ]
   );

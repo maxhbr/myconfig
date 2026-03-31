@@ -5,15 +5,16 @@
   ...
 }:
 let
+  cfg = config.myconfig.ai.inference-cpp;
   gpuvariants = config.myconfig.hardware.gpu.variant;
   hasVariant = v: builtins.elem v gpuvariants;
   matching-llama-cpp =
-    if hasVariant "nvidia" then
-      pkgs.llama-cpp.override { cudaSupport = true; }
-    else if hasVariant "amd" then
+    if hasVariant "amd" then
       pkgs.llama-cpp-rocm
     else if hasVariant "amd-no-rocm" then
       pkgs.llama-cpp-vulkan
+    # else  hasVariant "nvidia" then
+    #   pkgs.llama-cpp.override { cudaSupport = true; }
     else
       pkgs.llama-cpp;
 in
@@ -28,12 +29,13 @@ in
       };
     };
   };
-  config = lib.mkIf config.myconfig.ai.inference-cpp.enable {
+  config = lib.mkIf cfg.enable {
+    services.llama-cpp.package = cfg.llama-cpp.package;
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [
           # koboldcpp
-          config.myconfig.ai.inference-cpp.llama-cpp.package
+          cfg.llama-cpp.package
         ];
         myconfig.persistence.cache-directories = [ ".cache/llama.cpp/" ];
       }

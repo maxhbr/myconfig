@@ -6,6 +6,18 @@
   pkgs,
   ...
 }:
+let
+  llama-cpp-gfx1151-vulkan = pkgs.llama-cpp.override {
+    rocmSupport = false;
+    vulkanSupport = true;
+    rocmGpuTargets = [ "gfx1151" ];
+  };
+  llama-cpp-gfx1151-rocm = pkgs.llama-cpp.override {
+    rocmSupport = true;
+    vulkanSupport = false;
+    rocmGpuTargets = [ "gfx1151" ];
+  };
+in
 {
   imports = [
     (
@@ -17,20 +29,11 @@
         ...
       }:
       {
-        config = lib.mkIf (config.specialisation != { }) (
-          let
-            llama-cpp-gfx1151 = pkgs.llama-cpp.override {
-              vulkanSupport = true;
-              rocmGpuTargets = [ "gfx1151" ];
-            };
-          in
-          {
-            myconfig = {
-              hardware.gpu.variant = [ "amd-no-rocm" ];
-              ai.inference-cpp.llama-cpp.package = llama-cpp-gfx1151;
-            };
-          }
-        );
+        config = lib.mkIf (config.specialisation != { }) {
+          myconfig = {
+            hardware.gpu.variant = [ "amd-no-rocm" ];
+          };
+        };
       }
     )
     # rocm
@@ -45,19 +48,11 @@
         specialisation = {
           rocm = {
             inheritParentConfig = true;
-            configuration =
-              let
-                llama-cpp-gfx1151 = pkgs.llama-cpp.override {
-                  rocmSupport = true;
-                  rocmGpuTargets = [ "gfx1151" ];
-                };
-              in
-              {
-                myconfig = {
-                  hardware.gpu.variant = [ "amd" ];
-                  ai.inference-cpp.llama-cpp.package = llama-cpp-gfx1151;
-                };
+            configuration = {
+              myconfig = {
+                hardware.gpu.variant = [ "amd" ];
               };
+            };
           };
         };
       }
