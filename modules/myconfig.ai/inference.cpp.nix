@@ -36,11 +36,10 @@ in
     };
   };
   config = lib.mkIf cfg.enable {
-    services.llama-cpp.package = cfg.llama-cpp.package;
+    services.llama-cpp.package = lib.mkDefault cfg.llama-cpp.package;
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [
-          # koboldcpp
           cfg.llama-cpp.package
         ];
         myconfig.persistence.cache-directories = [ ".cache/llama.cpp/" ];

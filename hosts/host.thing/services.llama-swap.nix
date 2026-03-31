@@ -7,12 +7,14 @@
   ...
 }:
 let
-  llama-server = lib.getExe' config.services.llama-cpp.package "llama-server";
+  llama-cuda-server = lib.getExe' pkgs.llama-cpp "llama-server";
+  llama-rocm-server = lib.getExe' pkgs.llama-cpp-rocm "llama-server";
+  llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
   hasGpuVariant = v: builtins.elem v config.myconfig.hardware.gpu.variant;
   cudaModels = lib.mkIf (hasGpuVariant "nvidia") {
     "CUDA:Qwen3.5-27B-Q8_0" = {
       cmd = ''
-        ${llama-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf -fa on --no-webui
+        ${llama-cuda-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf -fa on --no-webui
       '';
       env = [
         "LLAMA_ARG_DEVICE=CUDA0"
@@ -21,7 +23,7 @@ let
     };
     "CUDA:Qwen3.5-27B-Q8_0:mmproj" = {
       cmd = ''
-        ${llama-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --mmproj /persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-BF16.gguf -fa on --no-webui
+        ${llama-cuda-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --mmproj /persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-BF16.gguf -fa on --no-webui
       '';
       env = [
         "LLAMA_ARG_DEVICE=CUDA0"
@@ -32,7 +34,7 @@ let
   rocmModels = lib.mkIf (hasGpuVariant "amd") {
     "ROCm0:Qwen3.5-27B-Q8_0" = {
       cmd = ''
-        ${llama-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf -fa on --no-webui
+        ${llama-rocm-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf -fa on --no-webui
       '';
       env = [
         "LLAMA_ARG_DEVICE=ROCm0"
@@ -41,7 +43,7 @@ let
     };
     "ROCm0:Qwen3.5-27B-Q8_0:mmproj" = {
       cmd = ''
-        ${llama-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --mmproj /persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-F16.gguf -fa on --no-webui
+        ${llama-rocm-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --mmproj /persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-F16.gguf -fa on --no-webui
       '';
       env = [
         "LLAMA_ARG_DEVICE=ROCm0"
@@ -52,7 +54,7 @@ let
   vulkanModels = lib.mkIf (hasGpuVariant "amd" || hasGpuVariant "amd-no-rocm") {
     "Vulkan1:qwen3.5-122B-A10B-Q5_K_M" = {
       cmd = ''
-        ${llama-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf  -fa on --no-webui
+        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf  -fa on --no-webui
       '';
       aliases = [
         "qwen3.5-122B-A10B-Q5_K_M"
@@ -65,7 +67,7 @@ let
     };
     "Vulkan1:qwen3.5-122B-A10B-Q5_K_M:mmproj" = {
       cmd = ''
-        ${llama-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf --mmproj /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/mmproj-BF16.gguf -fa on --no-webui
+        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf --mmproj /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/mmproj-BF16.gguf -fa on --no-webui
       '';
       env = [
         "LLAMA_ARG_DEVICE=Vulkan1"
@@ -74,7 +76,7 @@ let
     };
     "Vulkan0:Qwen3.5-27B-Q8_0" = {
       cmd = ''
-        ${llama-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf -fa on --no-webui
+        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf -fa on --no-webui
       '';
       aliases = [
         "Qwen3.5-27B-Q8_0"
@@ -87,7 +89,7 @@ let
     };
     "Vulkan0:Qwen3.5-27B-Q8_0:mmproj" = {
       cmd = ''
-        ${llama-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --mmproj /persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-BF16.gguf -fa on --no-webui
+        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --mmproj /persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-BF16.gguf -fa on --no-webui
       '';
       env = [
         "LLAMA_ARG_DEVICE=Vulkan0"
@@ -96,7 +98,7 @@ let
     };
     "Vulkan1:Qwen3.5-27B-Q8_0" = {
       cmd = ''
-        ${llama-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf -fa on --no-webui
+        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf -fa on --no-webui
       '';
       env = [
         "LLAMA_ARG_DEVICE=Vulkan1"
@@ -105,7 +107,7 @@ let
     };
     "Vulkan1:Qwen3.5-27B-BF16" = {
       cmd = ''
-        ${llama-server} --port ''${PORT} -m /persistent/models/cache/Qwen3.5-27B-GGUF/BF16/Qwen3.5-27B-BF16-00001-of-00002.gguf -fa on -ctk f16 -ctv f16 --no-webui
+        ${llama-vulkan-server} --port ''${PORT} -m /persistent/models/cache/Qwen3.5-27B-GGUF/BF16/Qwen3.5-27B-BF16-00001-of-00002.gguf -fa on -ctk f16 -ctv f16 --no-webui
       '';
       aliases = [
         "Qwen3.5-27B-BF16"
