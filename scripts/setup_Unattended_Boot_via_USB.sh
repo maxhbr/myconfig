@@ -71,8 +71,13 @@ echo "======================================================================="
 echo "Add the following to your NixOS configuration:"
 echo "======================================================================="
 echo ""
-echo "  # Needed to find the USB device during initrd stage"
-echo '  boot.initrd.kernelModules = [ "usb_storage" ];'
+echo "  # Kernel modules needed to detect the USB stick in initrd."
+echo "  # xhci_pci/ehci_pci cover USB 3/2 host controllers; usb_storage is the"
+echo "  # generic mass-storage driver.  Add uas if your stick uses the UAS protocol."
+echo '  boot.initrd.kernelModules = [ "xhci_pci" "ehci_pci" "usb_storage" ];'
+echo ""
+echo "  # Give USB time to enumerate before the key is read."
+echo '  boot.initrd.postDeviceCommands = lib.mkBefore '"''"'sleep 2'"''"';'
 echo ""
 echo "  boot.initrd.luks.devices = {"
 echo "    luksroot = {"
@@ -84,7 +89,7 @@ fi
 echo "      allowDiscards = true;"
 echo "      keyFileSize = 4096;"
 if [[ -n $USB_BY_ID ]]; then
-    echo "      # pinning to /dev/disk/by-id/usbkey works"
+    echo "      # Stable by-id path avoids device rename across boots."
     echo "      keyFile = \"/dev/disk/by-id/${USB_BY_ID}\";"
 else
     echo "      keyFile = \"${USB_DEVICE}\";"
