@@ -47,6 +47,19 @@ in
                   reverse_proxy http://localhost:${toString config.services.ollama.port}
                 }
               '';
+              llamaSwapRouteConfig = lib.optionalString config.services.llama-swap.enable ''
+                reverse_proxy http://localhost:${toString config.services.llama-swap.port}
+              '';
+              openWebuiRouteConfig = lib.optionalString config.services.caddy.enable ''
+                handle_path /open-webui/* {
+                  reverse_proxy http://localhost:${toString openWebuiPort}
+                }
+              '';
+              comfyuiRouteConfig = lib.optionalString config.myconfig.ai.comfyui.enable ''
+                handle_path /comfyui/* {
+                  reverse_proxy http://localhost:8188
+                }
+              '';
             in
             {
               services.caddy = {
@@ -59,10 +72,12 @@ in
                     (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
                   ];
                   extraConfig = ''
-                    ${litellmRouteConfig}
-                    ${ollamaRouteConfig}
-                    reverse_proxy http://localhost:${toString openWebuiPort}
-                  '';
+                     ${litellmRouteConfig}
+                     ${ollamaRouteConfig}
+                     ${openWebuiRouteConfig}
+                     ${comfyuiRouteConfig}
+                     ${llamaSwapRouteConfig}
+                   '';
                 };
               };
 

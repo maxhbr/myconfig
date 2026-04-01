@@ -85,7 +85,7 @@ let
       env = [
         "LLAMA_ARG_DEVICE=Vulkan0"
       ];
-      ttl = 300;
+      ttl = 0;
     };
     "Vulkan0:Qwen3.5-27B-Q8_0:mmproj" = {
       cmd = ''
