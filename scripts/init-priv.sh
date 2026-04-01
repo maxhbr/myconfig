@@ -84,9 +84,9 @@ else
   git init
 
   echo "Importing subtree history..."
-  git pull -q .. "$split_branch"
+  git pull -q "$myconfig" "$split_branch"
 
-  cd ..
+  cd "$myconfig"
   git branch -D "$split_branch" > /dev/null 2>&1
 
   if [[ "$use_test_dir" == "true" ]]; then
