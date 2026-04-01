@@ -133,7 +133,12 @@ in
                       source = "${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_mode_prompt.fish";
                     };
                     "fish/functions/fish_prompt.fish" = {
-                      source = "${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_prompt.fish";
+                      text = ''
+                        function fish_prompt --description Hydro
+                            echo -n (set_color --bold)(hostname -s)(set_color normal)" "
+                            echo -e -n "$_hydro_color_start$hydro_symbol_start$hydro_color_normal$_hydro_color_pwd$_hydro_pwd$hydro_color_normal $_hydro_color_git$$_hydro_git$hydro_color_normal$_hydro_color_duration$_hydro_cmd_duration$hydro_color_normal$_hydro_status$hydro_color_normal "
+                        end
+                      '';
                     };
                     "fish/functions/fish_title.fish" = {
                       source = "${pkgs.fishPlugins.hydro}/share/fish/vendor_functions.d/fish_title.fish";

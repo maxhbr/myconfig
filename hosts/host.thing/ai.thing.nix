@@ -72,12 +72,12 @@ in
                     (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
                   ];
                   extraConfig = ''
-                     ${litellmRouteConfig}
-                     ${ollamaRouteConfig}
-                     ${openWebuiRouteConfig}
-                     ${comfyuiRouteConfig}
-                     ${llamaSwapRouteConfig}
-                   '';
+                    ${litellmRouteConfig}
+                    ${ollamaRouteConfig}
+                    ${openWebuiRouteConfig}
+                    ${comfyuiRouteConfig}
+                    ${llamaSwapRouteConfig}
+                  '';
                 };
               };
 
