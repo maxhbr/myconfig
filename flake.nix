@@ -222,6 +222,9 @@
             (self.lib.evalConfiguration "x86_64-linux" "p14" (
               [
                 self.nixosModules.core
+                {
+                  myconfig.upg.enable = true;
+                }
               ]
               ++ moreModules
             ) metadataOverride);

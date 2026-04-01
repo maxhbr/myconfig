@@ -10,10 +10,9 @@
 }:
 {
   imports = [
-    ./ai.p14.nix
+    # ./ai.p14.nix
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
-    # inputs.nixos-hardware.nixosModules.common-gpu-intel
     {
       # https://nixos.wiki/wiki/Intel_Graphics
       #  getting the device ID with: $ nix-shell -p pciutils --run "lspci -nn | grep VGA"
@@ -49,73 +48,7 @@
         in
         [ { home.packages = [ p14-tmux-session-script ]; } ];
     }
-    # {
-    #   services.openssh = {
-    #     listenAddresses = [
-    #       {
-    #         addr = (myconfig.metadatalib.getWgIp "${config.networking.hostName}");
-    #         port = 22;
-    #       }
-    #       {
-    #         addr = (myconfig.metadatalib.getIp "${config.networking.hostName}");
-    #         port = 22;
-    #       }
-    #       {
-    #         addr = "127.0.0.1";
-    #         port = 22;
-    #       }
-    #     ];
-    #   };
-    # }
-    {
-      config =
-        let
-          tmux-session = "btops";
-          tmux-btops = pkgs.writeShellScriptBin "tmux-btops" ''
-            # if session is not yet created, create it
-            if ! tmux has-session -t ${tmux-session}; then
-              tmux new-session -d -s ${tmux-session}
-              tmux send-keys -t ${tmux-session}:1 "btop" C-m
-              tmux split-window -h -t ${tmux-session}
-              tmux send-keys -t ${tmux-session}:1 "et -x  mhuber@thing.wg0:22022 --command btop" C-m
-              tmux split-window -v -t ${tmux-session}
-              tmux send-keys -t ${tmux-session}:1 "et -x  mhuber@workstation.wg0:22022 --command btop" C-m
-              tmux split-window -v -t ${tmux-session}
-            fi
-            exec tmux attach-session -t ${tmux-session}
-          '';
-        in
-        {
-          home-manager.sharedModules = [ { home.packages = with pkgs; [ tmux-btops ]; } ];
-        };
-    }
-    # {
-    #   fileSystems."/home/mhuber/MINE/Bilder/imgwork" = {
-    #     device = "192.168.1.40:/imgwork";
-    #     fsType = "nfs";
-    #     options = [ "nofail" "soft" ];
-    #   };
-    # }
-    (
-      { pkgs, ... }:
-      let
-        fix-my-notebook = pkgs.writeShellScriptBin "fix-my-notebook" ''
-          set -euo pipefail
-          set -x
-          systemctl restart bluetooth.service
-          dbus-wm-environment wlroots
-        '';
-      in
-      {
-        config = {
-          home-manager.sharedModules = [ { home.packages = with pkgs; [ fix-my-notebook ]; } ];
-        };
-      }
-    )
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
-    {
-      programs.kdeconnect.enable = true;
-    }
   ];
 
   config = {
@@ -174,13 +107,13 @@
           '';
         };
         messengers.enable = false;
-        imagework.enable = true;
-        imagework.myphoto.enable = true;
-        obs.enable = true;
+        imagework.enable = false;
+        imagework.myphoto.enable = false;
+        obs.enable = false;
       };
       virtualisation.enable = true;
       dev = {
-        embedded.enable = true;
+        embedded.enable = false;
       };
     };
     virtualisation = {
@@ -205,34 +138,12 @@
 
     home-manager.sharedModules = [
       {
-        programs.zsh.shellAliases = {
-          upg-get-hostId = ''
-            cksum /etc/machine-id | while read c rest; do printf "%x" $c; done
-          '';
-        };
-      }
-      {
         services.mako = {
           settings = {
             output = "eDP-1";
             default-timeout = 20000;
           };
         };
-        # services.kanshi = {
-        #   enable = lib.mkForce true;
-        #   settings = {
-        #     # get list via "swaymsg -t get_outputs"
-        #     undocked = {
-        #       outputs = [{
-        #         criteria = "eDP-1";
-        #         mode = "1920x1200@60Hz";
-        #         position = "0,0";
-        #         scale = 1.0;
-        #       }];
-        #       exec = [ "${pkgs.mykeylight}/bin/mykeylight-off" ];
-        #     };
-        #   };
-        # };
       }
     ];
 
