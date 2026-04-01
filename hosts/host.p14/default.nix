@@ -11,6 +11,7 @@
 {
   imports = [
     ./ai.p14.nix
+    ./hermes-agent
     ./observability.nix
     ../shared.localModels.llama-swap.nix
     ./hardware-configuration.nix

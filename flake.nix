@@ -47,6 +47,9 @@
     myphoto.url = "github:maxhbr/myphoto";
     myphoto.inputs.nixpkgs.follows = "nixpkgs";
 
+    hermes-agent.url = "github:NousResearch/hermes-agent";
+    hermes-agent.inputs.nixpkgs.follows = "nixpkgs";
+
     #############################################################
     # PRs
     # https://github.com/NixOS/nixpkgs/pull/502283
