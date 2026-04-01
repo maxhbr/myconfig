@@ -10,7 +10,8 @@
 }:
 {
   imports = [
-    # ./ai.p14.nix
+    ./ai.p14.nix
+    ./observability.nix
     ../shared.localModels.llama-swap.nix
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
@@ -58,6 +59,7 @@
     networking.useDHCP = false;
     networking.interfaces.wlp0s20f3.useDHCP = true;
     # networking.interfaces.enp82s0u2u1u2.useDHCP = true;
+
     myconfig = {
       desktop = {
         enable = true;

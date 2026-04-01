@@ -17,7 +17,7 @@
     myconfig = {
       ai = {
         enable = true;
-        coding.enable = false;
+        coding.enable = true;
         inference-cpp = {
           enable = true;
         };
