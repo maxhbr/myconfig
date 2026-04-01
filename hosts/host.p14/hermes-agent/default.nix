@@ -21,14 +21,20 @@
           base_url = "http://192.168.1.60:33656/v1";
           api_key = "local-key";
         };
-        custom_providers = [
-          {
-            name = "Local (localhost:33656)";
-            base_url = "http://192.168.1.60:33656/v1";
-            model = "Qwen3.5-27B-Q8_0";
+        custom_providers = lib.concatMap (
+          provider:
+          let
+            hostPort = "${provider.host}:${toString provider.port}";
+            providerName = if provider.name != null then provider.name else hostPort;
+            modelNames = if provider.models != [ ] then provider.models else [ providerName ];
+          in
+          lib.map (modelName: {
+            name = "${providerName} / ${modelName}";
+            base_url = "http://${hostPort}/v1";
+            model = modelName;
             api_key = "local-key";
-          }
-        ];
+          }) modelNames
+        ) config.myconfig.ai.localModels;
         terminal.backend = "local";
         compression = { enabled = true; threshold = 0.85; };
         toolsets = [ "all" ];
