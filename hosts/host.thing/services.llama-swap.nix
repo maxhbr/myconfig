@@ -135,6 +135,16 @@ let
       ];
       ttl = 300;
     };
+    "Vulkan1:Qwen3.5-27B-BF16:modded" = {
+      cmd = ''
+        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/BF16/Qwen3.5-27B-BF16-00001-of-00002.gguf --gpu-layers 999 -fa on -ctk f16 -ctv f16 --no-webui -c 131072 --threads 4 --batch-size 2048 -np 1 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0
+      '';
+      env = [
+        "LLAMA_ARG_DEVICE=Vulkan1"
+        "CUDA_VISIBLE_DEVICES="
+      ];
+      ttl = 300;
+    };
   };
 in
 {
