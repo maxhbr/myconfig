@@ -30,8 +30,8 @@
     settings = {
       server.http_addr = "127.0.0.1";
       security.admin_user = "admin";
-      security.admin_password = "***";
-      security.secret_key = "SW2YcwTIb9zpOOhoPsMm";
+      # security.admin_password = "%SECRET:grafana_admin_password%";
+      # security.secret_key = "%SECRET:grafana_secret_key%";
       anonymous.enabled = false;
     };
     settings.server.domain = "localhost";

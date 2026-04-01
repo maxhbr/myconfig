@@ -107,6 +107,7 @@ Build log files for each host are stored in the parent directory:
 - Use agenix for secrets management
 - Never commit secrets to repository
 - Git used for sensitive files (via git-crypt, git-secrets)
+- **All secrets must be stored in the separate `../priv/` repository, never in this repo**
 
 ### Error Handling
 - Nix: Use `lib.mkIf` for conditional logic rather than throwing errors
