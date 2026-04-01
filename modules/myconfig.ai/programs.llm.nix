@@ -8,11 +8,19 @@ let
   cfg = config.myconfig.ai;
   generateModelConfig =
     model:
-    "- model_id: ${model.host}:${toString model.port}\n"
-    + "  model_name: ${
-        if model.name != null then model.name else "${model.host}:${toString model.port}"
-      }\n"
-    + "  api_base: http://${model.host}:${toString model.port}/v1\n";
+    let
+      hostPort = "${model.host}:${toString model.port}";
+      providerName = if model.name != null then model.name else hostPort;
+      modelNames = if model.models != [ ] then model.models else [ providerName ];
+    in
+    lib.concatStrings (
+      lib.map (
+        modelName:
+        "- model_id: ${hostPort}/${modelName}\n"
+        + "  model_name: ${modelName}\n"
+        + "  api_base: http://${hostPort}/v1\n"
+      ) modelNames
+    );
 in
 {
   options.myconfig = with lib; {

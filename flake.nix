@@ -213,18 +213,20 @@
                     "vserver"
                     "nuc"
                   ];
-                  home-manager.sharedModules = [{
-                    programs.mr.settings = {
-                      "myconfig/thing-priv/" = {
-                        checkout = "git clone ssh://thing/home/mhuber/myconfig/priv/.git";
-                        update = "git pull --rebase";
+                  home-manager.sharedModules = [
+                    {
+                      programs.mr.settings = {
+                        "myconfig/thing-priv/" = {
+                          checkout = "git clone ssh://thing/home/mhuber/myconfig/priv/.git";
+                          update = "git pull --rebase";
+                        };
+                        "myconfig/p14-priv/" = {
+                          checkout = "git clone ssh://p14/home/mhuber/myconfig/priv/.git";
+                          update = "git pull --rebase";
+                        };
                       };
-                      "myconfig/p14-priv/" = {
-                        checkout = "git clone ssh://p14/home/mhuber/myconfig/priv/.git";
-                        update = "git pull --rebase";
-                      };
-                    };
-                  }];
+                    }
+                  ];
                 }
               ]
               ++ moreModules

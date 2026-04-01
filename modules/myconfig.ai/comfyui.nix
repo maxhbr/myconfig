@@ -259,9 +259,10 @@ in
               pkgs.rocmPackages.miopen
             ];
           };
-          packages = (lib.optional (cfg.cuda_version != null) comfyuiCuda)
+          packages =
+            (lib.optional (cfg.cuda_version != null) comfyuiCuda)
             ++ (lib.optional (cfg.rocm_version == "gfx1151") comfyuiRocmGFX1151);
-          firstPackage = if packages == [] then null else lib.head packages;
+          firstPackage = if packages == [ ] then null else lib.head packages;
         in
         {
           home.packages = packages;

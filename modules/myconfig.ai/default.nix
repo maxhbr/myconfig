@@ -48,7 +48,12 @@ in
             name = mkOption {
               type = types.nullOr types.str;
               default = null;
-              description = "Model name for the local server instance (defaults to '<host>:<port>')";
+              description = "Provider alias for the local server instance (defaults to '<host>:<port>')";
+            };
+            models = mkOption {
+              type = types.listOf types.str;
+              default = [ ];
+              description = "Model names served by this local server instance (defaults to [name] or ['<host>:<port>'])";
             };
             port = mkOption {
               type = types.int;

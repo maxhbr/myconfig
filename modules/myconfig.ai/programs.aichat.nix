@@ -43,15 +43,15 @@
                 map (
                   model:
                   let
-                    modelName = if model.name != null then model.name else "${model.host}:${toString model.port}";
+                    hostPort = "${model.host}:${toString model.port}";
+                    providerName = if model.name != null then model.name else hostPort;
+                    modelNames = if model.models != [ ] then model.models else [ providerName ];
                   in
                   {
                     type = "openai-compatible";
-                    name = "local-${modelName}";
-                    api_base = "http://${model.host}:${toString model.port}/v1";
-                    models = [
-                      { name = modelName; }
-                    ];
+                    name = "local-${providerName}";
+                    api_base = "http://${hostPort}/v1";
+                    models = map (modelName: { name = modelName; }) modelNames;
                   }
                 ) config.myconfig.ai.localModels
               );

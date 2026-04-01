@@ -78,21 +78,25 @@ in
                       model:
                       let
                         hostPort = "${model.host}:${toString model.port}";
-                        modelName = if model.name != null then model.name else hostPort;
+                        providerName = if model.name != null then model.name else hostPort;
+                        modelNames = if model.models != [ ] then model.models else [ providerName ];
                       in
                       {
-                        name = "local-${modelName}";
+                        name = "local-${providerName}";
                         value = {
                           "npm" = "@ai-sdk/openai-compatible";
                           "name" = "${hostPort}";
                           "options" = {
                             "baseURL" = "http://${hostPort}/v1";
                           };
-                          "models" = {
-                            "${modelName}" = {
-                              "name" = modelName;
-                            };
-                          };
+                          "models" = builtins.listToAttrs (
+                            lib.map (modelName: {
+                              name = modelName;
+                              value = {
+                                "name" = modelName;
+                              };
+                            }) modelNames
+                          );
                         };
                       }
                     ) osconfig.myconfig.ai.localModels

@@ -59,19 +59,21 @@ in
           }) config.services.ollama.loadModels
         )
         ++ lib.optionals (config.myconfig.ai.localModels != [ ]) (
-          map (
+          lib.concatMap (
             model:
             let
-              modelName = if model.name != null then model.name else "${model.host}:${toString model.port}";
+              hostPort = "${model.host}:${toString model.port}";
+              providerName = if model.name != null then model.name else hostPort;
+              modelNames = if model.models != [ ] then model.models else [ providerName ];
             in
-            {
+            map (modelName: {
               model_name = modelName;
               litellm_params = {
                 model = "openai/${modelName}";
-                api_base = "http://${model.host}:${toString model.port}/v1";
+                api_base = "http://${hostPort}/v1";
                 api_key = "not-needed";
               };
-            }
+            }) modelNames
           ) config.myconfig.ai.localModels
         );
     };
