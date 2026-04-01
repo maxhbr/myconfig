@@ -14,7 +14,7 @@ let
   cudaModels = lib.mkIf (hasGpuVariant "nvidia") {
     "CUDA:Qwen3.5-27B-Q8_0" = {
       cmd = ''
-        ${llama-cuda-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf -fa on --no-webui
+        ${llama-cuda-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --gpu-layers 999 -fa on --no-webui
       '';
       env = [
         "LLAMA_ARG_DEVICE=CUDA0"
@@ -23,7 +23,7 @@ let
     };
     "CUDA:Qwen3.5-27B-Q8_0:mmproj" = {
       cmd = ''
-        ${llama-cuda-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --mmproj /persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-BF16.gguf -fa on --no-webui
+        ${llama-cuda-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --gpu-layers 999 --mmproj /persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-BF16.gguf -fa on --no-webui
       '';
       env = [
         "LLAMA_ARG_DEVICE=CUDA0"
@@ -34,19 +34,21 @@ let
   rocmModels = lib.mkIf (hasGpuVariant "amd") {
     "ROCm0:Qwen3.5-27B-Q8_0" = {
       cmd = ''
-        ${llama-rocm-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf -fa on --no-webui
+        ${llama-rocm-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --gpu-layers 999 -fa on --no-webui
       '';
       env = [
         "LLAMA_ARG_DEVICE=ROCm0"
+        "CUDA_VISIBLE_DEVICES="
       ];
       ttl = 300;
     };
     "ROCm0:Qwen3.5-27B-Q8_0:mmproj" = {
       cmd = ''
-        ${llama-rocm-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --mmproj /persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-F16.gguf -fa on --no-webui
+        ${llama-rocm-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --gpu-layers 999 --mmproj /persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-F16.gguf -fa on --no-webui
       '';
       env = [
         "LLAMA_ARG_DEVICE=ROCm0"
+        "CUDA_VISIBLE_DEVICES="
       ];
       ttl = 300;
     };
@@ -54,7 +56,7 @@ let
   vulkanModels = lib.mkIf (hasGpuVariant "amd" || hasGpuVariant "amd-no-rocm") {
     "Vulkan1:qwen3.5-122B-A10B-Q5_K_M" = {
       cmd = ''
-        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf  -fa on --no-webui
+        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf --gpu-layers 999 -fa on --no-webui
       '';
       aliases = [
         "qwen3.5-122B-A10B-Q5_K_M"
@@ -62,21 +64,23 @@ let
       ];
       env = [
         "LLAMA_ARG_DEVICE=Vulkan1"
+        "CUDA_VISIBLE_DEVICES="
       ];
       ttl = 1800;
     };
     "Vulkan1:qwen3.5-122B-A10B-Q5_K_M:mmproj" = {
       cmd = ''
-        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf --mmproj /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/mmproj-BF16.gguf -fa on --no-webui
+        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf --gpu-layers 999 --mmproj /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/mmproj-BF16.gguf -fa on --no-webui
       '';
       env = [
         "LLAMA_ARG_DEVICE=Vulkan1"
+        "CUDA_VISIBLE_DEVICES="
       ];
       ttl = 1800;
     };
     "Vulkan0:Qwen3.5-27B-Q8_0" = {
       cmd = ''
-        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf -fa on --no-webui
+        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --gpu-layers 999 -fa on --no-webui
       '';
       aliases = [
         "Qwen3.5-27B-Q8_0"
@@ -84,36 +88,40 @@ let
       ];
       env = [
         "LLAMA_ARG_DEVICE=Vulkan0"
+        "CUDA_VISIBLE_DEVICES="
       ];
       ttl = 0;
     };
     "Vulkan0:Qwen3.5-27B-Q8_0:mmproj" = {
       cmd = ''
-        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --mmproj /persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-BF16.gguf -fa on --no-webui
+        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --gpu-layers 999 --mmproj /persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-BF16.gguf -fa on --no-webui
       '';
       env = [
         "LLAMA_ARG_DEVICE=Vulkan0"
+        "CUDA_VISIBLE_DEVICES="
       ];
       ttl = 300;
     };
     "Vulkan1:Qwen3.5-27B-Q8_0" = {
       cmd = ''
-        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf -fa on --no-webui
+        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --gpu-layers 999 -fa on --no-webui
       '';
       env = [
         "LLAMA_ARG_DEVICE=Vulkan1"
+        "CUDA_VISIBLE_DEVICES="
       ];
       ttl = 300;
     };
     "Vulkan1:Qwen3.5-27B-BF16" = {
       cmd = ''
-        ${llama-vulkan-server} --port ''${PORT} -m /persistent/models/cache/Qwen3.5-27B-GGUF/BF16/Qwen3.5-27B-BF16-00001-of-00002.gguf -fa on -ctk f16 -ctv f16 --no-webui
+        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/BF16/Qwen3.5-27B-BF16-00001-of-00002.gguf --gpu-layers 999 -fa on -ctk f16 -ctv f16 --no-webui
       '';
       aliases = [
         "Qwen3.5-27B-BF16"
       ];
       env = [
         "LLAMA_ARG_DEVICE=Vulkan1"
+        "CUDA_VISIBLE_DEVICES="
       ];
       ttl = 300;
     };

@@ -31,13 +31,14 @@ in
       cuda_version = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "version of cuda to use (e.g., 'cu128')";
+        description = "version of cuda to use (e.g., 'cu129')";
       };
       rocm_version = mkOption {
         type = types.nullOr types.str;
         default = null;
         description = "version of rocm to use (e.g., 'gfx1151')";
       };
+      userservice = mkEnableOption "Run as systemd user service";
     };
   };
 
@@ -258,12 +259,32 @@ in
               pkgs.rocmPackages.miopen
             ];
           };
+          packages = (lib.optional (cfg.cuda_version != null) comfyuiCuda)
+            ++ (lib.optional (cfg.rocm_version == "gfx1151") comfyuiRocmGFX1151);
+          firstPackage = if packages == [] then null else lib.head packages;
         in
         {
-          home.packages =
-            (lib.optional (cfg.cuda_version != null) comfyuiCuda)
-            ++ (lib.optional (cfg.rocm_version == "gfx1151") comfyuiRocmGFX1151);
+          home.packages = packages;
           myconfig.persistence.cache-directories = [ cfg.comfy_base ];
+
+          systemd.user.services.comfyui = lib.mkIf (cfg.userservice && firstPackage != null) {
+            Unit = {
+              Description = "ComfyUI";
+              Wants = [ "graphical-session.target" ];
+              After = [ "graphical-session.target" ];
+              PartOf = [ "graphical-session.target" ];
+              Requisite = [ "graphical-session.target" ];
+            };
+            Service = {
+              Type = "simple";
+              ExecStart = "${lib.getExe firstPackage}";
+              Restart = "on-failure";
+              RestartSec = 5;
+            };
+            Install = {
+              WantedBy = [ "graphical-session.target" ];
+            };
+          };
         }
       )
     ];
