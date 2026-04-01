@@ -92,6 +92,16 @@ let
       ];
       ttl = 0;
     };
+    "Vulkan0:Qwen3.5-27B-Q8_0:modded" = {
+      cmd = ''
+        ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --gpu-layers 999 -fa on --no-webui -c 131072 --threads 4 --batch-size 2048 -np 1 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0
+      '';
+      env = [
+        "LLAMA_ARG_DEVICE=Vulkan0"
+        "CUDA_VISIBLE_DEVICES="
+      ];
+      ttl = 0;
+    };
     "Vulkan0:Qwen3.5-27B-Q8_0:mmproj" = {
       cmd = ''
         ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf --gpu-layers 999 --mmproj /persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-BF16.gguf -fa on --no-webui
