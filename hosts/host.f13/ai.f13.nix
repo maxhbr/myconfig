@@ -13,7 +13,9 @@
     myconfig = {
       ai = {
         enable = true;
-        coding.enable = true;
+        opencode.enable = true;
+        claude-code.enable = true;
+        codex.enable = true;
         inference-cpp = {
           enable = false;
         };

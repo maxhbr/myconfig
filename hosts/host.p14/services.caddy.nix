@@ -27,5 +27,7 @@
     };
   };
 
-  networking.firewall.interfaces."wg0".allowedTCPPorts = lib.optionals config.services.caddy.enable [ 443 ];
+  networking.firewall.interfaces."wg0".allowedTCPPorts = lib.optionals config.services.caddy.enable [
+    443
+  ];
 }
