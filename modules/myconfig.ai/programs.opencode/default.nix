@@ -14,6 +14,7 @@ in
     };
   };
   config = lib.mkIf config.myconfig.ai.opencode.enable {
+    myconfig.ai.skills.playwright.enable = lib.mkDefault true;
     home-manager.sharedModules = [
       (
         {
@@ -34,6 +35,7 @@ in
           };
         in
         {
+          programs.mcp.enable = true;
           programs.opencode = {
             enable = true;
             enableMcpIntegration = true;

@@ -13,6 +13,8 @@
     ./ai.p14.nix
     ./hermes-agent
     ./observability.nix
+    ./homeassistant.nix
+    ./services.caddy.nix
     ../shared.localModels.llama-swap.nix
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only

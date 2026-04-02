@@ -14,7 +14,6 @@ let
 in
 {
   imports = [
-    ./ai-coding.nix
     ./comfyui.nix
     ./programs.aichat.nix
     ./programs.mcp.servers.nix
@@ -92,6 +91,13 @@ in
             huggingface-hub
           ]);
         myconfig.persistence.cache-directories = [ ".cache/huggingface/" ];
+      }
+      {
+        home.packages = with pkgs; [
+          # sandboxing
+          nono
+          bubblewrap
+        ];
       }
     ];
     services.udev.extraRules = ''

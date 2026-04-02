@@ -12,6 +12,7 @@
     };
   };
   config = lib.mkIf config.myconfig.ai.claude-code.enable {
+    myconfig.ai.skills.playwright.enable = lib.mkDefault true;
     home-manager.sharedModules = [
       (
         {
@@ -34,6 +35,7 @@
         in
         {
           myconfig.persistence.directories = [ ".claude" ];
+          programs.mcp.enable = true;
           programs.claude-code = {
             enable = true;
             enableMcpIntegration = true;

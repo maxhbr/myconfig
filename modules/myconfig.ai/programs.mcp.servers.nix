@@ -5,16 +5,15 @@
   ...
 }:
 {
-  config = lib.mkIf config.myconfig.ai.coding.enable {
+  config = {
     home-manager.sharedModules = [
-      {
+      ({config, ...}: lib.mkIf config.programs.mcp.enable {
         programs.mcp = {
-          enable = true;
           servers = {
-            # mcp-nixos = {
-            #   command = "${lib.getExe pkgs.mcp-nixos}";
-            #   args = [ ];
-            # };
+            mcp-nixos = {
+              command = "${lib.getExe pkgs.mcp-nixos}";
+              args = [ ];
+            };
             context7 = {
               url = "https://mcp.context7.com/mcp";
               # headers = {
@@ -27,7 +26,7 @@
             # };
           };
         };
-      }
+      })
     ];
   };
 }
