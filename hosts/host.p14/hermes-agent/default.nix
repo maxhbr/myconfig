@@ -58,6 +58,7 @@ let
             API_SERVER_ENABLED=true
             API_SERVER_PORT=8642
             API_SERVER_HOST=${apiServerHost}
+            HASS_URL=http://localhost:8123
           ''
         );
       in

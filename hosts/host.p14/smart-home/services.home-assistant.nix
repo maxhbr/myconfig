@@ -8,11 +8,11 @@
 }:
 
 {
-  options.myconfig.homeassistant = with lib; {
+  options.myconfig.smart-home.home-assistant = with lib; {
     enable = mkEnableOption "Home Assistant native installation";
   };
 
-  config = lib.mkIf config.myconfig.homeassistant.enable {
+  config = lib.mkIf config.myconfig.smart-home.home-assistant.enable {
     services.home-assistant = {
       enable = true;
       package = pkgs.home-assistant;
@@ -53,6 +53,9 @@
       group = "homeassistant";
       home = "/var/lib/home-assistant";
       isSystemUser = true;
+      createHome = true;
     };
+
+    myconfig.persistence.directories = [ "/var/lib/home-assistant" ];
   };
 }
