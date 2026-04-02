@@ -44,7 +44,12 @@ in
         ./home-manager.geeqie.nix
         ./home-manager.sigal.nix
       ]
-      ++ lib.optionals cfg.desktop.imagework.myphoto.enable [ inputs.myphoto.homeManagerModules.myphoto ];
+      ++ lib.optionals cfg.desktop.imagework.myphoto.enable [
+        inputs.myphoto.homeManagerModules.myphoto
+        {
+           myconfig.persistence.directories = [ ".myphoto" ];
+        }
+      ];
     }
   );
 }

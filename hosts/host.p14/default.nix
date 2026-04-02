@@ -117,6 +117,15 @@
         imagework.myphoto.enable = false;
         obs.enable = false;
       };
+      email = {
+        # enable = true; # this is set in the priv repo
+        clients = [
+          "aerc"
+          "neomutt"
+          "thunderbird"
+          "himalaya"
+        ];
+      };
       smart-home.enable = true;
       virtualisation.enable = true;
       dev = {
