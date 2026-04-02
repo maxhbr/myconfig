@@ -13,7 +13,7 @@
     ./ai.p14.nix
     ./hermes-agent
     ./observability.nix
-    ./homeassistant.nix
+    ./smart-home
     ./services.caddy.nix
     ../shared.localModels.llama-swap.nix
     ./hardware-configuration.nix
@@ -117,6 +117,7 @@
         imagework.myphoto.enable = false;
         obs.enable = false;
       };
+      smart-home.enable = true;
       virtualisation.enable = true;
       dev = {
         embedded.enable = false;
