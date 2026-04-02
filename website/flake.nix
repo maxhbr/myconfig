@@ -10,7 +10,7 @@
       lib = pkgs.lib;
 
       repo = rec {
-        rev = if self ? rev then self.rev else lib.warn "Repo is dirty, links will not work!" "???";
+        rev = if self ? rev then self.rev else lib.warn "Repo is dirty, links point to main!" "main";
         shortRev = lib.substring 0 8 rev;
         urls = {
           base = "https://git.sr.ht/~alexdavid/jail.nix";
@@ -34,9 +34,9 @@
         in
         ''
           ### ${name}
-          **${name} :: ${combinatorObj.sig}**
+          <a class="source" href="${repo.urls.file file attrPos.line}">Source</a>
 
-          [Source](${repo.urls.file file attrPos.line})
+          **${name} :: ${combinatorObj.sig}**
 
           ${combinatorObj.doc}
         '';
@@ -104,6 +104,7 @@
           name = "readthedocs";
           hljs_languages = [ "nix" ];
         };
+        extra_css = [ "extra.css" ];
         # Copyright is placed directly into the page within a <p> tag.
         # Concatenating with </p><p> here is super janky, but good enough for
         # now.

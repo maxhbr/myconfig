@@ -1,0 +1,9 @@
+.document {
+  position: relative;
+}
+
+a.source {
+  position: absolute;
+  margin-top: -48px;
+  right: 0;
+}
