@@ -38,6 +38,13 @@
 
           **${name} :: ${combinatorObj.sig}**
 
+          ${
+            if combinatorObj ? aliases then
+              "Aliases: ${lib.concatMapStringsSep ", " (alias: "`${alias}`") combinatorObj.aliases}"
+            else
+              ""
+          }
+
           ${combinatorObj.doc}
         '';
 
