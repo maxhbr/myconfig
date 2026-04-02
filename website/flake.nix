@@ -75,7 +75,7 @@
 
           ${hr}
 
-          ${formatSection (v: !(is "deprecated" v || is "includedInBasePermissions" v || is "internal" v))}
+          ${formatSection (v: !(is "includedInBasePermissions" v || is "internal" v))}
 
           ${hr}
 
@@ -86,15 +86,6 @@
           `basePermissions`](advanced-configuration.md#basepermissions).
 
           ${formatSection (is "includedInBasePermissions")}
-
-          ${hr}
-
-          ## Deprecated Combinators
-
-          The following combinators have been deprecated, and may be removed in the
-          future.
-
-          ${formatSection (is "deprecated")}
         '';
 
       mkdocsSettings = {

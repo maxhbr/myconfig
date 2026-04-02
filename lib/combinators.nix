@@ -74,33 +74,7 @@ let
         wrap-entry = ./combinators/wrap-entry.nix;
         write-text = ./combinators/write-text.nix;
         xwayland = ./combinators/xwayland.nix;
-      }
-    //
-    ############################################
-    # deprecated combinators:
-    {
-      persisthome = {
-        deprecated = true;
-        sig = "Permission";
-        doc = "This was reworked to store data under `~/.local/share/jail.nix` and renamed to [persist-home](#persist-home).";
-        impl =
-          with combinators;
-          name:
-          lib.warn
-            "persisthome is deprecated, use persist-home instead. When doing so, rename ~/.local/share/jails/${name} to ${helpers.dataDirSubPath "home/${name}"}"
-            (compose [
-              (add-runtime "mkdir -p ~/.local/share/jails/${lib.escapeShellArg name}")
-              (rw-bind (noescape "~/.local/share/jails/${lib.escapeShellArg name}") (noescape "~"))
-            ]);
       };
-
-      dbus-unsafe = {
-        deprecated = true;
-        sig = "Permission";
-        doc = "This was renamed to [unsafe-dbus](#unsafe-dbus).";
-        impl = lib.warn "dbus-unsafe is deprecated, use unsafe-dbus instead" combinators.unsafe-dbus;
-      };
-    };
   combinators = lib.mapAttrs (_: combinatorObj: combinatorObj.impl) rawCombinators;
 in
 {
