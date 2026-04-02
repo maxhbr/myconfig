@@ -154,19 +154,15 @@ in
       port = 33656;
       openFirewall = true;
       listenAddress = "0.0.0.0";
-      settings =
-        let
-          llama-server = lib.getExe' config.services.llama-cpp.package "llama-server";
-        in
-        {
-          healthCheckTimeout = 500;
-          sendLoadingState = true;
-          models = lib.mkMerge [
-            cudaModels
-            rocmModels
-            vulkanModels
-          ];
-        };
+      settings = {
+        healthCheckTimeout = 500;
+        sendLoadingState = true;
+        models = lib.mkMerge [
+          cudaModels
+          rocmModels
+          vulkanModels
+        ];
+      };
       # tls = {
       #   enable =
       #   keyFile =
