@@ -20,6 +20,7 @@ Expire-Date: 0
 %commit
 EOF
     GNUPGHOME="$gpgDir" gpg --armor --export > "$gpgDir/public.asc"
+    GNUPGHOME="$gpgDir" gpg --armor --export-secret-keys > "$gpgDir/private.asc"
     git add "$gpgDir"
 else
     echo "already exists!"
