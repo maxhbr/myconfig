@@ -28,6 +28,7 @@
       networking.firewall.allowedTCPPorts = [ 22022 ];
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
+    ./nixpkgs.overlays.llama-cpp.nix
     ./ai.thing.nix
     ./services.llama-swap.nix
     ./specialisation.nix
