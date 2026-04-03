@@ -32,9 +32,8 @@
       httpPort = 8124; # TCP port for the web server
       wsPort = 8135; # TCP port for the WebSocket
 
-      openFirewall = false;# Whether to enable opening up the service ports in the firewall
+      openFirewall = false; # Whether to enable opening up the service ports in the firewall
     };
 
   };
 }
-

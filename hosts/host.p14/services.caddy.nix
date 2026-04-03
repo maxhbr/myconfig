@@ -21,13 +21,13 @@
       extraConfig = ''
         reverse_proxy http://localhost:8123
       '';
-        # handle_path /home-assistant {
-        #   redir /home-assistant/ 308
-        # }
-        # handle_path /home-assistant/* {
-        #   reverse_proxy http://localhost:8123
-        # }
-         # reverse_proxy http://localhost:${toString config.myconfig.ai.open-webui.port}
+      # handle_path /home-assistant {
+      #   redir /home-assistant/ 308
+      # }
+      # handle_path /home-assistant/* {
+      #   reverse_proxy http://localhost:8123
+      # }
+      # reverse_proxy http://localhost:${toString config.myconfig.ai.open-webui.port}
     };
   };
 

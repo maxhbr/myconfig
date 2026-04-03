@@ -47,7 +47,7 @@ in
       ++ lib.optionals cfg.desktop.imagework.myphoto.enable [
         inputs.myphoto.homeManagerModules.myphoto
         {
-           myconfig.persistence.directories = [ ".myphoto" ];
+          myconfig.persistence.directories = [ ".myphoto" ];
         }
       ];
     }
