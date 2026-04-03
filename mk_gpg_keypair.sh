@@ -22,3 +22,5 @@ EOF
 else
     echo "already exists!"
 fi
+GNUPGHOME="$gpgDir" gpg --fingerprint
+GNUPGHOME="$gpgDir" gpg --list-secret-keys --keyid-format long
