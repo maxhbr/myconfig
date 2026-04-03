@@ -17,9 +17,13 @@ in
           tag = "b${version}";
           inherit hash;
         };
-        postPatch = (oldAttrs.postPatch or "") + ''
-          echo "7c7d6ce" > COMMIT
-        '';
+        postPatch =
+          (builtins.replaceStrings [ "rm tools/server/public/index.html.gz" ] [ "" ] (
+            oldAttrs.postPatch or ""
+          ))
+          + ''
+            echo "7c7d6ce" > COMMIT
+          '';
         inherit npmDepsHash;
         npmDeps = prev.fetchNpmDeps {
           name = "llama-cpp-${version}-npm-deps";
