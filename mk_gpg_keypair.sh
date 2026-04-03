@@ -7,6 +7,7 @@ hostname="${1:?Usage: $0 <hostname>}"
 gpgDir="hosts/host.${hostname}/secrets/gpg"
 if [[ ! -d "$gpgDir" ]]; then
     mkdir -p "$gpgDir"
+    chmod 700 "$gpgDir"
     GNUPGHOME="$gpgDir" gpg --batch --gen-key <<EOF
 %no-protection
 Key-Type: eddsa
@@ -23,5 +24,6 @@ EOF
 else
     echo "already exists!"
 fi
+chmod 700 "$gpgDir"
 GNUPGHOME="$gpgDir" gpg --fingerprint
 GNUPGHOME="$gpgDir" gpg --list-secret-keys --keyid-format long
