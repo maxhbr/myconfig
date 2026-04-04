@@ -79,7 +79,6 @@
           "CUDA0"
         ];
         aliases = [
-          "hermes"
           "gemma-4-26B-A4B-Q8"
         ];
         ttl = 300;
@@ -101,6 +100,7 @@
         name = "gemma-4-31B-it-Q6_K_XL";
         path = "/mnt/disk/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q6_K_XL.gguf";
         devices = [
+          "hermes"
           "Vulkan0"
           "Vulkan1"
           "CUDA0"
