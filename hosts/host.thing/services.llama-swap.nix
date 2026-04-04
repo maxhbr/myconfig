@@ -156,7 +156,6 @@ in
       listenAddress = "0.0.0.0";
       settings = {
         healthCheckTimeout = 500;
-        sendLoadingState = true;
         models = lib.mkMerge [
           cudaModels
           rocmModels
@@ -168,26 +167,6 @@ in
       #   keyFile =
       #   certFile =
       # };
-    };
-    systemd.services.llama-swap = {
-      # https://github.com/nixos/nixpkgs/issues/441531
-      environment.XDG_CACHE_HOME = "/var/cache/llama-swap";
-      serviceConfig.CacheDirectory = "llama-swap";
-    };
-    home-manager.users.${myconfig.user} = {
-      home.packages =
-        let
-          scripts = lib.mapAttrs' (model: cfg: {
-            name = "llama-manual-${lib.replaceStrings [ ":" ] [ "_" ] model}";
-            value = pkgs.writeShellScriptBin "llama-manual-${lib.replaceStrings [ ":" ] [ "_" ] model}" ''
-              export PORT=''${1:-33657}
-              ${lib.concatStringsSep "\n" (map (e: "export ${e}") cfg.env)}
-              set -x
-              ${cfg.cmd}
-            '';
-          }) config.services.llama-swap.settings.models;
-        in
-        lib.attrValues scripts;
     };
   };
 }
