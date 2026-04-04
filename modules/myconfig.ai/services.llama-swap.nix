@@ -47,6 +47,7 @@ let
     {
       model,
       device,
+      isFirstDevice ? false,
       suffix ? "",
       extraArgs ? "",
     }:
@@ -62,18 +63,27 @@ let
         env = envForDevice device;
         ttl = model.ttl;
       }
-      // lib.optionalAttrs (model.aliases != [ ] && suffix == "") { inherit (model) aliases; };
+      // lib.optionalAttrs (model.aliases != [ ] && suffix == "" && isFirstDevice) {
+        inherit (model) aliases;
+      };
     };
 
   # Generate all model entries for a single model input across all its devices
   mkModelEntries =
     model:
+    let
+      eligibleDevices = builtins.filter guardDevice model.devices;
+      firstDevice = if eligibleDevices != [ ] then builtins.head eligibleDevices else null;
+    in
     lib.concatMap (
       device:
       lib.optionals (guardDevice device) (
+        let
+          isFirstDevice = device == firstDevice;
+        in
         [
           # Base model entry
-          (mkModelEntry { inherit model device; })
+          (mkModelEntry { inherit model device isFirstDevice; })
         ]
         ++ lib.optionals (model.mmproj != null) [
           # mmproj variant
