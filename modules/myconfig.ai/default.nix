@@ -22,6 +22,7 @@ in
     ./services.open-webui.nix
     ./services.tabby.nix
     ./services.llama-server.nix
+    ./services.llama-swap.nix
     ./container.open-webui.nix
     ./container.nlm-ingestor.nix
     ./container.SillyTavern.nix

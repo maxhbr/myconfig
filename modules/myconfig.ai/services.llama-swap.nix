@@ -8,69 +8,139 @@
   ...
 }:
 let
-  mkLlamaCppScriptName = {name, device, file}: "llama-server_${name}_${device}";
-
-  mkLlamaCppScript = args@{name, device, file}: let
-      llama-cuda-server = lib.getExe' pkgs.llama-cpp "llama-server";
-      llama-rocm-server = lib.getExe' pkgs.llama-cpp-rocm "llama-server";
-      llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
-      llama-server = if lib.strings.hasPrefix "Vulkan" device
-                     then llama-cpp-vulkan
-                     else if lib.strings.hasPrefix "ROCm" device
-                          then llama-rocm-server
-                          else llama-cuda-server;
-    in writeShellApplication {
-      name = mkLlamaCppScriptName args;
-
-      runtimeInputs = [
-      ];
-
-      text = ''
-        ${llama-server} --port $1 -m "${file}" --gpu-layers 999 -fa on --no-webui
-      '';
-    };
+  cfg = config.myconfig.ai.llama-swap;
 
   hasGpuVariant = v: builtins.elem v config.myconfig.hardware.gpu.variant;
-  guardLlamaCppScript = device:
-      if lib.strings.hasPrefix "Vulkan" device
-      then (hasGpuVariant "amd" || hasGpuVariant "amd-no-rocm")
-      else if lib.strings.hasPrefix "ROCm" device
-           then (hasGpuVariant "amd")
-           else if lib.strings.hasPrefix "CUDA" device
-               then (hasGpuVariant "nvidia")
-               else false;
-in 
+
+  # Determine whether a given device string is supported by the current hardware
+  guardDevice =
+    device:
+    if lib.hasPrefix "Vulkan" device then
+      (hasGpuVariant "amd" || hasGpuVariant "amd-no-rocm")
+    else if lib.hasPrefix "ROCm" device then
+      (hasGpuVariant "amd")
+    else if lib.hasPrefix "CUDA" device then
+      (hasGpuVariant "nvidia")
+    else
+      false;
+
+  # Select the correct llama-server binary for a device
+  llamaServerFor =
+    device:
+    if lib.hasPrefix "Vulkan" device then
+      lib.getExe' pkgs.llama-cpp-vulkan "llama-server"
+    else if lib.hasPrefix "ROCm" device then
+      lib.getExe' pkgs.llama-cpp-rocm "llama-server"
+    else
+      lib.getExe' pkgs.llama-cpp "llama-server";
+
+  # Build environment variables for a device
+  envForDevice =
+    device:
+    [ "LLAMA_ARG_DEVICE=${device}" ]
+    ++ lib.optional (
+      lib.hasPrefix "Vulkan" device || lib.hasPrefix "ROCm" device
+    ) "CUDA_VISIBLE_DEVICES=";
+
+  # Generate a single llama-swap model entry
+  mkModelEntry =
+    {
+      model,
+      device,
+      suffix ? "",
+      extraArgs ? "",
+    }:
+    let
+      server = llamaServerFor device;
+      modelKey = "${device}:${model.name}${suffix}";
+    in
+    {
+      "${modelKey}" = {
+        cmd = ''
+          ${server} --port ''${PORT} -m "${model.path}" --gpu-layers 999 -fa on --no-webui ${model.params} ${extraArgs}
+        '';
+        env = envForDevice device;
+        ttl = model.ttl;
+      }
+      // lib.optionalAttrs (model.aliases != [ ] && suffix == "") { inherit (model) aliases; };
+    };
+
+  # Generate all model entries for a single model input across all its devices
+  mkModelEntries =
+    model:
+    lib.concatMap (
+      device:
+      lib.optionals (guardDevice device) (
+        [
+          # Base model entry
+          (mkModelEntry { inherit model device; })
+        ]
+        ++ lib.optionals (model.mmproj != null) [
+          # mmproj variant
+          (mkModelEntry {
+            inherit model device;
+            suffix = ":mmproj";
+            extraArgs = ''--mmproj "${model.mmproj}"'';
+          })
+        ]
+      )
+    ) model.devices;
+
+  # Generate all models from the input list
+  allModels = lib.mkMerge (lib.concatMap mkModelEntries cfg.models);
+in
 {
-  imports = [
-  ];
-  options.myconfig = with lib; {
-    ai = {
-      localModelApps = mkOption {
-        type = types.listOf (
-          types.submodule {
-            options = {
-              name = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "model alias";
-              };
-              devices = mkOption {
-                type = types.listOf types.str;
-                default = [ ];
-                description = "Devices to provide scripts for the CARD";
-              };
+  imports = [ ];
+  options.myconfig.ai.llama-swap = with lib; {
+    models = mkOption {
+      type = types.listOf (
+        types.submodule {
+          options = {
+            name = mkOption {
+              type = types.str;
+              description = "Model name used as identifier in the llama-swap model key";
             };
-          }
-        );
-        default = [ ];
-        description = "List of local model server instances (e.g. llama-cpp) available for AI tools";
-      };
+            path = mkOption {
+              type = types.str;
+              description = "Path to the GGUF model file";
+            };
+            devices = mkOption {
+              type = types.listOf types.str;
+              default = [ ];
+              description = "List of devices to run this model on (e.g. 'Vulkan0', 'CUDA0', 'ROCm0')";
+            };
+            mmproj = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = "Path to mmproj file; when set, a :mmproj variant is auto-generated";
+            };
+            params = mkOption {
+              type = types.str;
+              default = "";
+              description = "Additional llama-server parameters";
+            };
+            aliases = mkOption {
+              type = types.listOf types.str;
+              default = [ ];
+              description = "Aliases for this model in llama-swap";
+            };
+            ttl = mkOption {
+              type = types.int;
+              default = 300;
+              description = "Time-to-live in seconds before the model is unloaded";
+            };
+          };
+        }
+      );
+      default = [ ];
+      description = "Declarative model definitions that are expanded into llama-swap model entries per device";
     };
   };
   config = lib.mkIf config.services.llama-swap.enable {
     services.llama-swap = {
       settings = {
         sendLoadingState = true;
+        models = allModels;
       };
     };
 
@@ -79,21 +149,22 @@ in
       environment.XDG_CACHE_HOME = "/var/cache/llama-swap";
       serviceConfig.CacheDirectory = "llama-swap";
     };
-    home-manager.sharedModules = [{
-      home.packages =
-        let
-          scripts = lib.mapAttrs' (model: cfg: {
-            name = "llama-manual-${lib.replaceStrings [ ":" ] [ "_" ] model}";
-            value = pkgs.writeShellScriptBin "llama-manual-${lib.replaceStrings [ ":" ] [ "_" ] model}" ''
-              export PORT=''${1:-33657}
-              ${lib.concatStringsSep "\n" (map (e: "export ${e}") cfg.env)}
-              set -x
-              ${cfg.cmd}
-            '';
-          }) config.services.llama-swap.settings.models;
-        in
-        lib.attrValues scripts;
-    }];
+    home-manager.sharedModules = [
+      {
+        home.packages =
+          let
+            scripts = lib.mapAttrs' (model: modelCfg: {
+              name = "llama-manual-${lib.replaceStrings [ ":" ] [ "_" ] model}";
+              value = pkgs.writeShellScriptBin "llama-manual-${lib.replaceStrings [ ":" ] [ "_" ] model}" ''
+                export PORT=''${1:-33657}
+                ${lib.concatStringsSep "\n" (map (e: "export ${e}") modelCfg.env)}
+                set -x
+                ${modelCfg.cmd}
+              '';
+            }) config.services.llama-swap.settings.models;
+          in
+          lib.attrValues scripts;
+      }
+    ];
   };
 }
-
