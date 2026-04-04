@@ -8,7 +8,7 @@ let
 in
 {
   fileSystems."/mnt/disk" = {
-    device = "/dev/disk/by-uuid/29baa1b7-3832-4c45-a079-1729f219582d";
+    device = "/dev/disk/by-uuid/c0fd2f7c-5a5c-4fb5-a567-070e68cfbef7";
     fsType = "ext4";
     options = [
       "auto"
