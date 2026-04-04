@@ -42,7 +42,31 @@ let
       lib.hasPrefix "Vulkan" device || lib.hasPrefix "ROCm" device
     ) "CUDA_VISIBLE_DEVICES=";
 
-  # Generate a single llama-swap model entry
+  # Build a shell application that launches llama-server for a specific model+device combo.
+  # Usage: <script> <port> [extra-args...]
+  mkLlamaScript =
+    {
+      model,
+      device,
+      suffix ? "",
+      extraArgs ? "",
+    }:
+    let
+      server = llamaServerFor device;
+      safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}${suffix}";
+      scriptName = "llama-server_${device}_${safeName}";
+      envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
+    in
+    pkgs.writeShellApplication {
+      name = scriptName;
+      runtimeInputs = [ ];
+      text = ''
+        ${envExports}
+        ${server} --port "$1" -m "${model.path}" --gpu-layers 999 -fa on --no-webui ${model.params} ${extraArgs} "''${@:2}"
+      '';
+    };
+
+  # Generate a single llama-swap model entry backed by a shell application
   mkModelEntry =
     {
       model,
@@ -52,15 +76,19 @@ let
       extraArgs ? "",
     }:
     let
-      server = llamaServerFor device;
+      script = mkLlamaScript {
+        inherit
+          model
+          device
+          suffix
+          extraArgs
+          ;
+      };
       modelKey = "${device}:${model.name}${suffix}";
     in
     {
       "${modelKey}" = {
-        cmd = ''
-          ${server} --port ''${PORT} -m "${model.path}" --gpu-layers 999 -fa on --no-webui ${model.params} ${extraArgs}
-        '';
-        env = envForDevice device;
+        cmd = "${lib.getExe script} \${PORT}";
         ttl = model.ttl;
       }
       // lib.optionalAttrs (model.aliases != [ ] && suffix == "" && isFirstDevice) {
@@ -95,6 +123,27 @@ let
         ]
       )
     ) model.devices;
+
+  # Collect all script derivations for home-manager packages
+  mkScriptEntries =
+    model:
+    lib.concatMap (
+      device:
+      lib.optionals (guardDevice device) (
+        [
+          (mkLlamaScript { inherit model device; })
+        ]
+        ++ lib.optionals (model.mmproj != null) [
+          (mkLlamaScript {
+            inherit model device;
+            suffix = ":mmproj";
+            extraArgs = ''--mmproj "${model.mmproj}"'';
+          })
+        ]
+      )
+    ) model.devices;
+
+  allScripts = lib.concatMap mkScriptEntries cfg.models;
 
   # Generate all models from the input list
   allModels = lib.mkMerge (lib.concatMap mkModelEntries cfg.models);
@@ -161,19 +210,7 @@ in
     };
     home-manager.sharedModules = [
       {
-        home.packages =
-          let
-            scripts = lib.mapAttrs' (model: modelCfg: {
-              name = "llama-manual-${lib.replaceStrings [ ":" ] [ "_" ] model}";
-              value = pkgs.writeShellScriptBin "llama-manual-${lib.replaceStrings [ ":" ] [ "_" ] model}" ''
-                export PORT=''${1:-33657}
-                ${lib.concatStringsSep "\n" (map (e: "export ${e}") modelCfg.env)}
-                set -x
-                ${modelCfg.cmd}
-              '';
-            }) config.services.llama-swap.settings.models;
-          in
-          lib.attrValues scripts;
+        home.packages = allScripts;
       }
     ];
   };
