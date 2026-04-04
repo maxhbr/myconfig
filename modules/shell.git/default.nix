@@ -292,20 +292,22 @@ in
                 "flake.lock merge=nix-flake-lock"
               ];
               settings = {
-                merge."nix-flake-lock" = let
-                  gitMergeFlakeLock = pkgs.writeShellScript "git-merge-flake-lock" ''
-                    set -euo pipefail
+                merge."nix-flake-lock" =
+                  let
+                    gitMergeFlakeLock = pkgs.writeShellScript "git-merge-flake-lock" ''
+                      set -euo pipefail
 
-                    repo_root="$(${lib.getExe pkgs.git} rev-parse --show-toplevel)"
-                    cd "$repo_root"
+                      repo_root="$(${lib.getExe pkgs.git} rev-parse --show-toplevel)"
+                      cd "$repo_root"
 
-                    ${lib.getExe pkgs.nix} flake update --flake . >/dev/null
-                    cp flake.lock "$2"
-                  '';
-                in {
-                  name = "Regenerate flake.lock";
-                  driver = "${gitMergeFlakeLock} %O %A %B";
-                };
+                      ${lib.getExe pkgs.nix} flake update --flake . >/dev/null
+                      cp flake.lock "$2"
+                    '';
+                  in
+                  {
+                    name = "Regenerate flake.lock";
+                    driver = "${gitMergeFlakeLock} %O %A %B";
+                  };
               };
             }
           ];

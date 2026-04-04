@@ -78,7 +78,7 @@
           "Vulkan1"
           "CUDA0"
         ];
-        aliases = [ 
+        aliases = [
           "hermes"
           "gemma-4-26B-A4B-Q8"
         ];

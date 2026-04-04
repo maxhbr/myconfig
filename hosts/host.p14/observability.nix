@@ -1,7 +1,12 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 
-{ pkgs, ... }:
+{
+  pkgs,
+  config,
+  lib,
+  ...
+}:
 {
   # Observability - Prometheus + Grafana
   services.prometheus = {
@@ -31,7 +36,7 @@
       server.http_addr = "127.0.0.1";
       security.admin_user = "admin";
       # security.admin_password = "%SECRET:grafana_admin_password%";
-      # security.secret_key = "%SECRET:grafana_secret_key%";
+      security.secret_key = lib.mkDefault "SW2YcwTIb9zpOOhoPsMm"; # will be overwritten in private repo
       anonymous.enabled = false;
     };
     settings.server.domain = "localhost";
