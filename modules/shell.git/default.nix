@@ -268,8 +268,8 @@ in
 
           programs.git = lib.mkMerge [
             {
-              package = pkgs.gitFull;
               enable = true;
+              package = pkgs.gitFull;
               settings = lib.mkMerge [
                 {
                   user = {
@@ -285,6 +285,27 @@ in
                 key = "32CA3654";
                 signByDefault = false; # TODO?
                 format = if nixosConfig.programs.gnupg.agent.enable then "openpgp" else "ssh";
+              };
+            }
+            {
+              attributes = [
+                "flake.lock merge=nix-flake-lock"
+              ];
+              settings = {
+                merge."nix-flake-lock" = let
+                  gitMergeFlakeLock = pkgs.writeShellScript "git-merge-flake-lock" ''
+                    set -euo pipefail
+
+                    repo_root="$(${lib.getExe pkgs.git} rev-parse --show-toplevel)"
+                    cd "$repo_root"
+
+                    ${lib.getExe pkgs.nix} flake update --flake . >/dev/null
+                    cp flake.lock "$2"
+                  '';
+                in {
+                  name = "Regenerate flake.lock";
+                  driver = "${gitMergeFlakeLock} %O %A %B";
+                };
               };
             }
           ];

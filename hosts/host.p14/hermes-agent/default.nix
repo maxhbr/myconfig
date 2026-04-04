@@ -20,10 +20,20 @@ let
     stateDir = stateDir;
     settings = {
       model = {
-        default = "Qwen3.5-27B-Q8_0";
+        default = "hermes";
         provider = "custom";
         base_url = "http://192.168.1.60:33656/v1";
         api_key = "local-key";
+      };
+      fallback_model = {
+        default = "hermes-fallback";
+        provider = "custom";
+        base_url = "http://192.168.1.60:33656/v1";
+        api_key = "local-key";
+      };
+      compression = {
+        summary_provider = hermesServiceCfg.settings.model.provider;
+        summary_model = hermesServiceCfg.settings.model.default;
       };
       custom_providers = lib.concatMap (
         provider:
