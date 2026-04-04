@@ -292,6 +292,10 @@ in
                 "flake.lock merge=nix-flake-lock"
               ];
               settings = {
+                merge."nix-flake-lock" =
+                  let
+                    gitMergeFlakeLock = pkgs.writeShellScript "git-merge-flake-lock" ''
+                      set -euo pipefail
                 merge."nix-flake-lock" = let
                   gitMergeFlakeLock = pkgs.writeShellScript "git-merge-flake-lock" ''
                     set -euo pipefail
