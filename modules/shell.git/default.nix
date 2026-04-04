@@ -296,14 +296,24 @@ in
                   gitMergeFlakeLock = pkgs.writeShellScript "git-merge-flake-lock" ''
                     set -euo pipefail
 
+                    current_file="$2"
+                    other_file="$3"
+
                     repo_root="$(${lib.getExe pkgs.git} rev-parse --show-toplevel)"
                     cd "$repo_root"
 
-                    ${lib.getExe pkgs.nix} flake update --flake . >/dev/null
-                    cp flake.lock "$2"
+                    current_ref="HEAD"
+                    other_ref="$(cat .git/MERGE_HEAD)"
+
+                    current_ts="$(${lib.getExe pkgs.git} log -1 --format=%ct "$current_ref" -- flake.lock 2>/dev/null || echo 0)"
+                    other_ts="$(${lib.getExe pkgs.git} log -1 --format=%ct "$other_ref" -- flake.lock 2>/dev/null || echo 0)"
+
+                    if [ "$other_ts" -gt "$current_ts" ]; then
+                      cp "$other_file" "$current_file"
+                    fi
                   '';
                 in {
-                  name = "Regenerate flake.lock";
+                  name = "Take flake.lock from newer side";
                   driver = "${gitMergeFlakeLock} %O %A %B";
                 };
               };
