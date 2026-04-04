@@ -13,13 +13,14 @@
         name = "Qwen3.5-27B-Q8_0";
         path = "/persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf";
         devices = [
-          "CUDA0"
-          "ROCm0"
           "Vulkan0"
           "Vulkan1"
+          "CUDA0"
+          "ROCm0"
         ];
         mmproj = "/persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-BF16.gguf";
         aliases = [
+          "hermes-fallback"
           "Qwen3.5-27B-Q8_0"
           "Qwen3.5-27B"
         ];
