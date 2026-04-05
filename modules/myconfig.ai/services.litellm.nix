@@ -37,6 +37,26 @@ in
     }
   ];
   config = lib.mkIf (config.myconfig.ai.enable && config.services.litellm.enable) {
+    # The upstream nixpkgs litellm module uses DynamicUser = true, which causes
+    # systemd to create /var/lib/litellm as a symlink to /var/lib/private/litellm.
+    # However, the same module also has systemd.tmpfiles.rules that create real
+    # directories at /var/lib/litellm/{ui,tiktoken-cache}, causing a conflict
+    # (STATUS=238/STATE_DIRECTORY, "File exists"). Fix by using an explicit
+    # static user instead, so StateDirectory creates a real directory without
+    # the symlink indirection.
+    users.users.litellm = {
+      isSystemUser = true;
+      group = "litellm";
+      home = "/var/lib/litellm";
+    };
+    users.groups.litellm = { };
+    systemd.services.litellm.serviceConfig = {
+      DynamicUser = lib.mkForce false;
+      PrivateUsers = lib.mkForce false;
+      User = lib.mkForce "litellm";
+      Group = lib.mkForce "litellm";
+    };
+
     services.litellm = {
       host = "127.0.0.1";
       port = 4000;
