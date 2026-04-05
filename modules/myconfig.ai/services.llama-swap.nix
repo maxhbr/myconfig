@@ -148,6 +148,54 @@ let
   # Generate all models from the input list
   allModels = lib.mkMerge (lib.concatMap mkModelEntries cfg.models);
 
+  # Extract the numeric suffix from a device string (e.g. "Vulkan0" -> "0", "ROCm1" -> "1").
+  # Devices with the same index share the same physical GPU, so they must be in the same group.
+  deviceIndex =
+    device:
+    let
+      m = builtins.match ".*([0-9]+)$" device;
+    in
+    if m != null then builtins.head m else device;
+
+  # Build groups: one group per physical GPU (by device index) so models on different GPUs
+  # can run simultaneously. Within the same GPU, models swap (they share VRAM).
+  allGroups =
+    let
+      # Collect (gpuIndex, modelKey) pairs for all eligible model entries
+      gpuModelPairs = lib.concatMap (
+        model:
+        lib.concatMap (
+          device:
+          lib.optionals (guardDevice device) (
+            [
+              {
+                gpu = deviceIndex device;
+                key = "${device}:${model.name}";
+              }
+            ]
+            ++ lib.optional (model.mmproj != null) {
+              gpu = deviceIndex device;
+              key = "${device}:${model.name}:mmproj";
+            }
+          )
+        ) model.devices
+      ) cfg.models;
+
+      # Group model keys by GPU index
+      gpuIndices = lib.unique (map (p: p.gpu) gpuModelPairs);
+      membersFor = idx: map (p: p.key) (builtins.filter (p: p.gpu == idx) gpuModelPairs);
+    in
+    lib.listToAttrs (
+      map (idx: {
+        name = "gpu${idx}";
+        value = {
+          swap = true;
+          exclusive = false;
+          members = membersFor idx;
+        };
+      }) gpuIndices
+    );
+
   # Collect all model names/keys exposed by this llama-swap instance for localModels registration
   allModelNames = lib.concatMap (
     model:
@@ -221,6 +269,7 @@ in
       settings = {
         sendLoadingState = true;
         models = allModels;
+        groups = allGroups;
       };
     };
 
