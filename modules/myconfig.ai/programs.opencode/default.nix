@@ -44,6 +44,7 @@ in
             settings = {
               "autoupdate" = false;
               "share" = "disabled";
+              "defaultModel" = "local-llama-swap.thing:Vulkan1:qwen3.5-122B-A10B-Q5_K_M";
               "permission" = lib.mkForce {
                 "bash" = {
                   "*" = "ask";

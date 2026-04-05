@@ -11,23 +11,28 @@
 {
   services.caddy = {
     enable = true;
-    virtualHosts."${config.networking.hostName}.wg0.maxhbr.local" = {
-      listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
-      hostName = "${config.networking.hostName}.wg0.maxhbr.local";
-      serverAliases = [
-        "${config.networking.hostName}.wg0"
-        (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
-      ];
-      extraConfig = ''
-        reverse_proxy http://localhost:8123
-      '';
-      # handle_path /home-assistant {
-      #   redir /home-assistant/ 308
-      # }
-      # handle_path /home-assistant/* {
-      #   reverse_proxy http://localhost:8123
-      # }
-      # reverse_proxy http://localhost:${toString config.myconfig.ai.open-webui.port}
+    virtualHosts = {
+      "${config.networking.hostName}.wg0.maxhbr.local" = {
+        listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+        hostName = "${config.networking.hostName}.wg0.maxhbr.local";
+        serverAliases = [
+          "${config.networking.hostName}.wg0"
+          (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
+        ];
+        extraConfig = ''
+          reverse_proxy http://localhost:8123
+        '';
+      };
+      "grafana.${config.networking.hostName}.wg0.maxhbr.local" = {
+        listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+        hostName = "grafana.${config.networking.hostName}.wg0.maxhbr.local";
+        serverAliases = [
+          "grafana.${config.networking.hostName}.wg0"
+        ];
+        extraConfig = ''
+          reverse_proxy http://localhost:3000
+        '';
+      };
     };
   };
 
