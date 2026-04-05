@@ -37,38 +37,38 @@ in
     }
   ];
   config = lib.mkIf (config.myconfig.ai.enable && config.services.litellm.enable) {
-    # The nixpkgs litellm module uses DynamicUser = true, which requires
-    # /var/lib/litellm to be a symlink → /var/lib/private/litellm.
-    # However, its own systemd.tmpfiles.rules creates /var/lib/litellm as a
-    # real directory (via "d /var/lib/litellm/ui"), so when litellm.service
-    # starts, DynamicUser's symlink creation fails with STATUS=238/STATE_DIRECTORY
-    # ("File exists"). On impermanence systems this happens on every boot.
-    #
-    # Fix: run a oneshot service after tmpfiles-setup but before litellm that
-    # converts the real directory to the symlink DynamicUser expects.
-    systemd.services.litellm-state-dir-fix = {
-      description = "Fix litellm state directory for DynamicUser";
-      before = [ "litellm.service" ];
-      wantedBy = [ "litellm.service" ];
-      after = [ "systemd-tmpfiles-setup.service" ];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        ExecStart = pkgs.writeShellScript "litellm-state-dir-fix" ''
-          set -euo pipefail
-          # Ensure the private state directory exists (DynamicUser target)
-          mkdir -p /var/lib/private/litellm
-          # If tmpfiles created /var/lib/litellm as a real directory, replace it
-          # with the relative symlink that DynamicUser expects.
-          if [ -d /var/lib/litellm ] && [ ! -L /var/lib/litellm ]; then
-            rm -rf /var/lib/litellm
-            ln -s private/litellm /var/lib/litellm
-          elif [ ! -e /var/lib/litellm ]; then
-            ln -s private/litellm /var/lib/litellm
-          fi
-        '';
-      };
-    };
+    # # The nixpkgs litellm module uses DynamicUser = true, which requires
+    # # /var/lib/litellm to be a symlink → /var/lib/private/litellm.
+    # # However, its own systemd.tmpfiles.rules creates /var/lib/litellm as a
+    # # real directory (via "d /var/lib/litellm/ui"), so when litellm.service
+    # # starts, DynamicUser's symlink creation fails with STATUS=238/STATE_DIRECTORY
+    # # ("File exists"). On impermanence systems this happens on every boot.
+    # #
+    # # Fix: run a oneshot service after tmpfiles-setup but before litellm that
+    # # converts the real directory to the symlink DynamicUser expects.
+    # systemd.services.litellm-state-dir-fix = {
+    #   description = "Fix litellm state directory for DynamicUser";
+    #   before = [ "litellm.service" ];
+    #   wantedBy = [ "litellm.service" ];
+    #   after = [ "systemd-tmpfiles-setup.service" ];
+    #   serviceConfig = {
+    #     Type = "oneshot";
+    #     RemainAfterExit = true;
+    #     ExecStart = pkgs.writeShellScript "litellm-state-dir-fix" ''
+    #       set -euo pipefail
+    #       # Ensure the private state directory exists (DynamicUser target)
+    #       mkdir -p /var/lib/private/litellm
+    #       # If tmpfiles created /var/lib/litellm as a real directory, replace it
+    #       # with the relative symlink that DynamicUser expects.
+    #       if [ -d /var/lib/litellm ] && [ ! -L /var/lib/litellm ]; then
+    #         rm -rf /var/lib/litellm
+    #         ln -s private/litellm /var/lib/litellm
+    #       elif [ ! -e /var/lib/litellm ]; then
+    #         ln -s private/litellm /var/lib/litellm
+    #       fi
+    #     '';
+    #   };
+    # };
 
     services.litellm = {
       host = "127.0.0.1";
