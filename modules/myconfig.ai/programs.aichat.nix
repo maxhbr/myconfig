@@ -17,7 +17,6 @@
           enable = true;
           package = pkgs.aichat;
           settings = {
-            model = "litellm:Qwen/Qwen3-4B";
             clients =
               lib.optionals config.services.litellm.enable [
                 {
