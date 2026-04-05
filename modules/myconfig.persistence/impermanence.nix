@@ -583,10 +583,10 @@ in
             "/.persistence.ready"
           ];
           directories = [
-            {
-              directory = "/var/lib/private";
-              mode = "0700";
-            }
+            # {
+            #   directory = "/var/lib/private";
+            #   mode = "0700";
+            # }
             "/var/lib/systemd/coredump"
           ]
           ++ (lib.optionals config.virtualisation.containers.enable [

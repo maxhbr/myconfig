@@ -123,7 +123,7 @@ in
   config = {
     system.nixos.tags = config.myconfig.hardware.gpu.variant;
 
-    # services.litellm.enable = true;
+    services.litellm.enable = true;
 
     myconfig = {
       # services.dmesgMonitor = {
