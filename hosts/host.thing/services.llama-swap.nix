@@ -20,7 +20,7 @@
         ];
         mmproj = "/persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-BF16.gguf";
         aliases = [
-          "hermes-fallback"
+          "hermes"
           "Qwen3.5-27B-Q8_0"
           "Qwen3.5-27B"
         ];
@@ -105,7 +105,7 @@
           "CUDA0"
         ];
         aliases = [
-          "hermes"
+          "hermes-fallback"
           "gemma-4-31B-Q6"
         ];
         ttl = 300;

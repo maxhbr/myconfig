@@ -10,6 +10,7 @@ let
   stateDir = "/home/mhuber/hermes-agent";
 
   cfg = config.myconfig.ai.hermes;
+  thingIp = myconfig.metadatalib.getIp "thing";
 
   apiServerHost = if cfg.container.enable then config.containers.hermes.localAddress else "localhost";
   hermesServiceCfg = {
@@ -22,33 +23,37 @@ let
       model = {
         default = "hermes";
         provider = "custom";
-        base_url = "http://192.168.1.60:33656/v1";
+        base_url = "http://${thingIp}:33656/v1";
         api_key = "local-key";
       };
       fallback_model = {
         default = "hermes-fallback";
         provider = "custom";
-        base_url = "http://192.168.1.60:33656/v1";
+        base_url = "http://${thingIp}:33656/v1";
         api_key = "local-key";
       };
       compression = {
         summary_provider = hermesServiceCfg.settings.model.provider;
         summary_model = hermesServiceCfg.settings.model.default;
       };
-      custom_providers = lib.concatMap (
-        provider:
+      custom_providers =
         let
-          hostPort = "${provider.host}:${toString provider.port}";
-          providerName = if provider.name != null then provider.name else hostPort;
-          modelNames = if provider.models != [ ] then provider.models else [ providerName ];
+          custom_local_providers = lib.concatMap (
+            provider:
+            let
+              hostPort = "${provider.host}:${toString provider.port}";
+              providerName = if provider.name != null then provider.name else hostPort;
+              modelNames = if provider.models != [ ] then provider.models else [ providerName ];
+            in
+            lib.map (modelName: {
+              name = "${providerName} / ${modelName}";
+              base_url = "http://${hostPort}/v1";
+              model = modelName;
+              api_key = "local-key";
+            }) modelNames
+          ) config.myconfig.ai.localModels;
         in
-        lib.map (modelName: {
-          name = "${providerName} / ${modelName}";
-          base_url = "http://${hostPort}/v1";
-          model = modelName;
-          api_key = "local-key";
-        }) modelNames
-      ) config.myconfig.ai.localModels;
+        custom_local_providers;
       terminal.backend = "local";
       compression = {
         enabled = true;
