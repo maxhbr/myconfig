@@ -147,6 +147,19 @@ let
 
   # Generate all models from the input list
   allModels = lib.mkMerge (lib.concatMap mkModelEntries cfg.models);
+
+  # Collect all model names/keys exposed by this llama-swap instance for localModels registration
+  allModelNames = lib.concatMap (
+    model:
+    lib.concatMap (
+      device:
+      lib.optionals (guardDevice device) (
+        [ "${device}:${model.name}" ]
+        ++ lib.optional (model.mmproj != null) "${device}:${model.name}:mmproj"
+      )
+    ) model.devices
+    ++ model.aliases
+  ) cfg.models;
 in
 {
   imports = [ ];
@@ -196,6 +209,14 @@ in
     };
   };
   config = lib.mkIf config.services.llama-swap.enable {
+    myconfig.ai.localModels = [
+      {
+        name = "llama-swap";
+        models = allModelNames;
+        port = config.services.llama-swap.port;
+      }
+    ];
+
     services.llama-swap = {
       settings = {
         sendLoadingState = true;
