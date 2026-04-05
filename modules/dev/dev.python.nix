@@ -10,9 +10,14 @@ let
   cfg = config.myconfig.dev.python;
 in
 {
+  options.myconfig.dev.python = with lib; {
+    enable = mkEnableOption "myconfig.dev.python";
+  };
   config = lib.mkIf cfg.enable {
     home-manager.sharedModules = [
-      # { home.packages = with pkgs; [ pdm ]; }
+      {
+        home.packages = with pkgs; [ python3 ];
+      }
     ];
   };
 }
