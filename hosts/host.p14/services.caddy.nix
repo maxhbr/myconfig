@@ -20,17 +20,10 @@
           (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
         ];
         extraConfig = ''
+          handle_path /grafana/* {
+            reverse_proxy http://localhost:3000
+          }
           reverse_proxy http://localhost:8123
-        '';
-      };
-      "grafana.${config.networking.hostName}.wg0.maxhbr.local" = {
-        listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
-        hostName = "grafana.${config.networking.hostName}.wg0.maxhbr.local";
-        serverAliases = [
-          "grafana.${config.networking.hostName}.wg0"
-        ];
-        extraConfig = ''
-          reverse_proxy http://localhost:3000
         '';
       };
     };
