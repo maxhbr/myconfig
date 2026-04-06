@@ -154,18 +154,18 @@
               #   ];
               #   "ttl" = 300;
               # };
-              # "gemma-4-31B-it-BF16" = let
-              #   llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
-              # in {
-              #   cmd = ''
-              #     ${llama-vulkan-server} --port ''${PORT} -m /mnt/disk/models/gemma-4-31B-it-GGUF/BF16/gemma-4-31B-it-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -fa on --no-webui
-              #   '';
-              #   aliases = [
-              #     "gemma-4-31B"
-              #     "gemma-4-31B-BF16"
-              #   ];
-              #   "ttl" = 300;
-              # };
+              "gemma-4-31B-it-BF16" = let
+                llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
+              in {
+                cmd = ''
+                  ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/gemma-4-31B-it-GGUF/BF16/gemma-4-31B-it-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -fa on --no-webui
+                '';
+                aliases = [
+                  "gemma-4-31B"
+                  "gemma-4-31B-BF16"
+                ];
+                "ttl" = 300;
+              };
             };
           };
         };
