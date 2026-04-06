@@ -121,5 +121,101 @@
         healthCheckTimeout = 500;
       };
     };
+
+    ############
+    containers.llama-swap-33657 = {
+      autoStart = true;
+      privateNetwork = false;
+      # hostAddress = "10.233.10.1";
+      # localAddress = "10.233.10.2";
+
+      # Important: cgroup device permissions
+      allowedDevices = [
+        { node = "/dev/dri/renderD128"; modifier = "rw"; }
+        { node = "/dev/dri/card0"; modifier = "rw"; }
+      ];
+
+      # Important: actual device + driver userspace visibility
+      bindMounts = {
+        "/dev/dri" = {
+          hostPath = "/dev/dri";
+          isReadOnly = false;
+        };
+        "/run/opengl-driver" = {
+          hostPath = "/run/opengl-driver";
+          isReadOnly = true;
+        };
+      };
+
+      config = { pkgs, lib, ... }: {
+        hardware.graphics.enable = true;
+        services.llama-swap = {
+          enable = true;
+          port = 33657;
+          openFirewall = true;
+          listenAddress = "0.0.0.0";
+          settings = {
+            healthCheckTimeout = 500;
+          };
+        };
+
+        # users.groups.render.gid = 303;
+        # users.groups.video.gid = 44; # adjust if your host uses a different GID
+        # users.users.llama = {
+        #   isSystemUser = true;
+        #   group = "users";
+        #   extraGroups = [ "render" "video" ];
+        #   home = "/var/lib/llama";
+        #   createHome = true;
+        # };
+
+        # environment.systemPackages = with pkgs; [
+        #   vulkan-tools
+        #   mesa-demos
+
+        #   # One of these, depending on your channel:
+        #   llama-cpp-vulkan
+        #   # or: (llama-cpp.override { vulkanSupport = true; })
+        # ];
+
+        # environment.variables = {
+        #   # Force RADV explicitly if you want to avoid ambiguity
+        #   VK_ICD_FILENAMES = "/run/opengl-driver/share/vulkan/icd.d/radeon_icd.x86_64.json";
+
+        #   # Conservative but useful for troubleshooting
+        #   VK_DRIVER_FILES = "/run/opengl-driver/share/vulkan/icd.d/radeon_icd.x86_64.json";
+
+        #   # Make sure shader cache and model cache are writable
+        #   HOME = "/var/lib/llama";
+        #   XDG_CACHE_HOME = "/var/lib/llama/.cache";
+        # };
+
+        # systemd.tmpfiles.rules = [
+        #   "d /var/lib/llama 0755 llama users - -"
+        #   "d /var/lib/llama/.cache 0755 llama users - -"
+        #   "d /var/lib/llama/models 0755 llama users - -"
+        # ];
+
+        # systemd.services.llama-server = {
+        #   wantedBy = [ "multi-user.target" ];
+        #   after = [ "network-online.target" ];
+        #   serviceConfig = {
+        #     User = "llama";
+        #     Group = "users";
+        #     WorkingDirectory = "/var/lib/llama";
+        #     StateDirectory = "llama";
+        #     Restart = "on-failure";
+        #     ExecStart = ''
+        #       ${pkgs.llama-cpp-vulkan}/bin/llama-server \
+        #         -m /var/lib/llama/models/model.gguf \
+        #         --host 0.0.0.0 \
+        #         --port 8080 \
+        #         -ngl 99
+        #     '';
+        #   };
+        # };
+      };
+    };
+    ############
   };
 }
