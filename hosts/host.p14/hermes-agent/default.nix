@@ -28,7 +28,7 @@ let
         api_key = "local-key";
       };
       fallback_model = {
-        default = "hermes-fallback";
+        model = "hermes-fallback";
         provider = "custom";
         base_url = "http://${thingIp}:33656/v1";
         api_key = "local-key";
