@@ -148,7 +148,7 @@
         "/persistent/cache/models/" = {
           hostPath = "/persistent/cache/models/";
           isReadOnly = true;
-        }
+        };
       };
 
       config = { pkgs, lib, ... }: {
