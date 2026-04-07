@@ -200,11 +200,11 @@ in
       };
     };
 
-    # myconfig.persistence.cache-directories = [ config.services.ollama.home ];
-    environment.persistence."/persistent/cache".directories = [ config.services.ollama.home ];
+    systemd.tmpfiles.rules = [ "d /persistent/cache/ollama 0700 ollama ollama -" ];
 
     services.ollama = {
       enable = true;
+      home = "/persistent/cache/ollama";
       environmentVariables = {
         # OLLAMA_FLASH_ATTENTION = lib.mkForce "0";
         OLLAMA_ORIGIN = "*";
