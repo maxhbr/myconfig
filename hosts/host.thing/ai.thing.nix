@@ -200,9 +200,10 @@ in
       };
     };
 
+    myconfig.persistence.cache-directories = [ config.services.ollama.home ];
+
     services.ollama = {
       enable = true;
-      home = "/persistent/cache/ollama";
       environmentVariables = {
         # OLLAMA_FLASH_ATTENTION = lib.mkForce "0";
         OLLAMA_ORIGIN = "*";
