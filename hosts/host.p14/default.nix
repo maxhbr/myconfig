@@ -28,6 +28,7 @@
     inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
     inputs.nixos-hardware.nixosModules.lenovo-thinkpad
     ../../hardware/efi.nix
+    ../../hardware/btrfs.nix
     ../../hardware/notebook-generic.nix
     {
       services.eternal-terminal = {
