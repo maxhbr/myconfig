@@ -50,13 +50,14 @@ echo "==> Creating branch '${BRANCH}' from '${REMOTE_REF}'..."
 git checkout -b "${BRANCH}" "${REMOTE_REF}"
 
 if [[ ${INCLUDE_FLAKE_LOCK} == "false" ]]; then
-    # Reset flake.lock to the state on origin/master to avoid conflicts
     if git diff --quiet "${LOCAL_MASTER}" "${REMOTE_REF}" -- flake.lock; then
         echo "==> flake.lock is identical, nothing to filter."
     else
-        echo "==> Resetting flake.lock to origin/master state..."
-        git checkout "${LOCAL_MASTER}" -- flake.lock
-        git commit -m "reset flake.lock to origin/master state"
+        echo "==> Filtering flake.lock out of all commits (dropping empty commits)..."
+        FLAKE_LOCK_BLOB="$(git rev-parse "${LOCAL_MASTER}:flake.lock")"
+        git filter-branch -f --prune-empty --index-filter "
+            git update-index --cacheinfo 100644,${FLAKE_LOCK_BLOB},flake.lock 2>/dev/null || true
+        " -- "${LOCAL_MASTER}..HEAD"
     fi
 fi
 
