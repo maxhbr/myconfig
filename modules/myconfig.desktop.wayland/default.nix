@@ -168,7 +168,7 @@ in
   config = (
     lib.mkIf cfg.desktop.wayland.enable {
       services.greetd.enable = true;
-      services.clipboard-sync.enable = true;
+      services.clipboard-sync.enable = false; # TODO: currently fails and creates a lot of log in systemctl
       environment.sessionVariables = {
         "NIXOS_OZONE_WL" = "1";
         "XDG_SESSION_TYPE" = "wayland";
