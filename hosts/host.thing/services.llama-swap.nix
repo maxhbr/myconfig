@@ -78,8 +78,14 @@
 
       # Important: cgroup device permissions
       allowedDevices = [
-        { node = "/dev/dri/renderD128"; modifier = "rw"; }
-        { node = "/dev/dri/card0"; modifier = "rw"; }
+        {
+          node = "/dev/dri/renderD128";
+          modifier = "rw";
+        }
+        {
+          node = "/dev/dri/card0";
+          modifier = "rw";
+        }
       ];
 
       # Important: actual device + driver userspace visibility
@@ -98,78 +104,86 @@
         };
       };
 
-      config = { pkgs, lib, ... }: {
-        hardware.graphics.enable = true;
-        services.llama-swap = {
-          enable = true;
-          port = 33657;
-          openFirewall = true;
-          listenAddress = "0.0.0.0";
-          settings = {
-            healthCheckTimeout = 500;
-            models = {
-              "qwen3.5-122B-A10B-Q5_K_M" = let
-                 llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
-                in {
-                cmd = ''
-                  ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf  -fa on --no-webui
-                '';
-                aliases = [
-                  "opencode"
-                  "qwen3.5-122B"
-                ];
-                "ttl" = 1800;
-              };
-              "qwen3.5-27B-F16" = let
-                llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
-              in {
-                cmd = ''
-                  ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/BF16/Qwen3.5-27B-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -fa on --no-webui
-                '';
-                aliases = [
-                  "opencode-fallback"
-                  "Qwen3.5-27B-BF16"
-                  "Qwen3.5-27B"
-                ];
-                "ttl" = 300;
-              };
-              # "qwen3.5-27B-BF16:modded" = let
-              #   llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
-              # in {
-              #   cmd = ''
-              #     ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/BF16/Qwen3.5-27B-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -c 131072 --threads 4 --batch-size 2048 -np 1 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0 -fa on --no-webui
-              #   '';
-              #   aliases = [];
-              #   "ttl" = 300;
-              # };
-              # "gemma-4-27B-it-BF16" = let
-              #   llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
-              # in {
-              #   cmd = ''
-              #     ${llama-vulkan-server} --port ''${PORT} -m /mnt/disk/models/gemma-4-26B-A4B-it-GGUF/BF16/gemma-4-26B-A4B-it-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -fa on --no-webui
-              #   '';
-              #   aliases = [
-              #     "gemma-4-26B"
-              #     "gemma-4-26B-A4B"
-              #   ];
-              #   "ttl" = 300;
-              # };
-              "gemma-4-31B-it-BF16" = let
-                llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
-              in {
-                cmd = ''
-                  ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/gemma-4-31B-it-GGUF/BF16/gemma-4-31B-it-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -fa on --no-webui
-                '';
-                aliases = [
-                  "gemma-4-31B"
-                  "gemma-4-31B-BF16"
-                ];
-                "ttl" = 300;
+      config =
+        { pkgs, lib, ... }:
+        {
+          hardware.graphics.enable = true;
+          services.llama-swap = {
+            enable = true;
+            port = 33657;
+            openFirewall = true;
+            listenAddress = "0.0.0.0";
+            settings = {
+              healthCheckTimeout = 500;
+              models = {
+                "qwen3.5-122B-A10B-Q5_K_M" =
+                  let
+                    llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
+                  in
+                  {
+                    cmd = ''
+                      ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf  -fa on --no-webui
+                    '';
+                    aliases = [
+                      "opencode"
+                      "qwen3.5-122B"
+                    ];
+                    "ttl" = 1800;
+                  };
+                "qwen3.5-27B-F16" =
+                  let
+                    llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
+                  in
+                  {
+                    cmd = ''
+                      ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/BF16/Qwen3.5-27B-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -fa on --no-webui
+                    '';
+                    aliases = [
+                      "opencode-fallback"
+                      "Qwen3.5-27B-BF16"
+                      "Qwen3.5-27B"
+                    ];
+                    "ttl" = 300;
+                  };
+                # "qwen3.5-27B-BF16:modded" = let
+                #   llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
+                # in {
+                #   cmd = ''
+                #     ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/BF16/Qwen3.5-27B-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -c 131072 --threads 4 --batch-size 2048 -np 1 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0 -fa on --no-webui
+                #   '';
+                #   aliases = [];
+                #   "ttl" = 300;
+                # };
+                # "gemma-4-27B-it-BF16" = let
+                #   llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
+                # in {
+                #   cmd = ''
+                #     ${llama-vulkan-server} --port ''${PORT} -m /mnt/disk/models/gemma-4-26B-A4B-it-GGUF/BF16/gemma-4-26B-A4B-it-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -fa on --no-webui
+                #   '';
+                #   aliases = [
+                #     "gemma-4-26B"
+                #     "gemma-4-26B-A4B"
+                #   ];
+                #   "ttl" = 300;
+                # };
+                "gemma-4-31B-it-BF16" =
+                  let
+                    llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
+                  in
+                  {
+                    cmd = ''
+                      ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/gemma-4-31B-it-GGUF/BF16/gemma-4-31B-it-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -fa on --no-webui
+                    '';
+                    aliases = [
+                      "gemma-4-31B"
+                      "gemma-4-31B-BF16"
+                    ];
+                    "ttl" = 300;
+                  };
               };
             };
           };
         };
-      };
     };
     ############
   };
