@@ -39,6 +39,13 @@ if git diff --quiet "${LOCAL_MASTER}..${REMOTE_REF}" --; then
     exit 0
 fi
 
+ORIGINAL_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+cleanup() {
+    echo "==> Switching back to ${ORIGINAL_BRANCH}..."
+    git checkout "${ORIGINAL_BRANCH}"
+}
+trap cleanup EXIT
+
 echo "==> Creating branch '${BRANCH}' from '${REMOTE_REF}'..."
 git checkout -b "${BRANCH}" "${REMOTE_REF}"
 
@@ -70,8 +77,5 @@ gh pr create \
 $(if [[ ${INCLUDE_FLAKE_LOCK} == "false" ]]; then echo "- **flake.lock changes excluded** to avoid merge conflicts"; fi)
 EOF
     )"
-
-echo "==> Switching back to master..."
-git checkout master
 
 echo "==> Done."
