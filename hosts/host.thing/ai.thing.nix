@@ -200,7 +200,8 @@ in
       };
     };
 
-    myconfig.persistence.cache-directories = [ config.services.ollama.home ];
+    # myconfig.persistence.cache-directories = [ config.services.ollama.home ];
+    environment.persistence."/persistent/cache".directories = [ config.services.ollama.home ];
 
     services.ollama = {
       enable = true;
