@@ -28,12 +28,20 @@
                   [storage.options]
                   mount_program = "${pkgs.fuse-overlayfs}/bin/fuse-overlayfs"
                 '';
+                home.file.".config/containers/containers.conf".text = ''
+                  [engine]
+                  image_copy_tmp_dir = "/persistent/cache/${config.home.username}-podman-tmp"
+                  tmp_dir            = "/persistent/cache/${config.home.username}-podman-tmp"
+                '';
               }
             )
           ];
           system.activationScripts = {
             script.text = ''
               install -d -m 700 "/persistent/cache/${user}-podman-containers" -o ${
+                toString nixosConfig.users.extraUsers.${user}.uid
+              } -g ${toString nixosConfig.users.extraGroups.${user}.gid}
+              install -d -m 700 "/persistent/cache/${user}-podman-tmp" -o ${
                 toString nixosConfig.users.extraUsers.${user}.uid
               } -g ${toString nixosConfig.users.extraGroups.${user}.gid}
             '';
