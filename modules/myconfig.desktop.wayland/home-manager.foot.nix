@@ -92,13 +92,12 @@ in
           '')
           (tmux-session "zero" { initialCommand = "${btop}/bin/btop"; })
           (foot-tmux-session "zero" { initialCommand = "${btop}/bin/btop"; })
-          (
-            writeShellScriptBin "foot-host-tmux-session" ''
-              exec ${footclient} \
-                -T foot-host-tmux-session \
-                -a foot-host-tmux-session \
-                host-tmux-session
-            '')
+          (writeShellScriptBin "foot-host-tmux-session" ''
+            exec ${footclient} \
+              -T foot-host-tmux-session \
+              -a foot-host-tmux-session \
+              host-tmux-session
+          '')
           (foot-tmux-session "scratch" { })
           (tmux-session "greetd" { })
           (foot-tmux-session "greetd" { })

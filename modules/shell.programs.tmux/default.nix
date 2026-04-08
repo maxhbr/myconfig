@@ -43,34 +43,43 @@ let
     text = lib.fileContents ./tmux-switch-client.sh;
   };
 
-  host-tmux-session-script = let
+  host-tmux-session-script =
+    let
       hostname = config.networking.hostName;
       host-tmux-session = "host-tmux-session";
-      nvtopCmd = if config.myconfig.hardware.gpu.variant != [ ] then ''
-        tmux send-keys -t ${host-tmux-session}:1 "nvtop -i" C-m
+      nvtopCmd =
+        if config.myconfig.hardware.gpu.variant != [ ] then
+          ''
+            tmux send-keys -t ${host-tmux-session}:1 "nvtop -i" C-m
+            tmux split-window -v -t ${host-tmux-session}
+          ''
+        else
+          "echo 'No nvtop'";
+    in
+    pkgs.writeShellScriptBin host-tmux-session ''
+      # if session is not yet created, create it
+      if ! tmux has-session -t ${host-tmux-session}; then
+        tmux new-session -d -s ${host-tmux-session}
+        tmux send-keys -t ${host-tmux-session}:1 "btop" C-m
+        tmux split-window -h -t ${host-tmux-session}
+        ${nvtopCmd}
+        tmux send-keys -t ${host-tmux-session}:1 "journalctl -f" C-m
         tmux split-window -v -t ${host-tmux-session}
-      '' else "echo 'No nvtop'";
-    in pkgs.writeShellScriptBin host-tmux-session ''
-    # if session is not yet created, create it
-    if ! tmux has-session -t ${host-tmux-session}; then
-      tmux new-session -d -s ${host-tmux-session}
-      tmux send-keys -t ${host-tmux-session}:1 "btop" C-m
-      tmux split-window -h -t ${host-tmux-session}
-      ${nvtopCmd}
-      tmux send-keys -t ${host-tmux-session}:1 "journalctl -f" C-m
-      tmux split-window -v -t ${host-tmux-session}
-    fi
-    if [[ -n "$TMUX" ]]; then
-      tmux switch-client -t ${host-tmux-session}
-    else
-      exec tmux attach-session -t ${host-tmux-session}
-    fi
-  '';
+      fi
+      if [[ -n "$TMUX" ]]; then
+        tmux switch-client -t ${host-tmux-session}
+      else
+        exec tmux attach-session -t ${host-tmux-session}
+      fi
+    '';
 in
 {
   home-manager.sharedModules = [
     {
-      home.packages = [ tmux-switch-client host-tmux-session-script ];
+      home.packages = [
+        tmux-switch-client
+        host-tmux-session-script
+      ];
     }
   ];
   environment = {

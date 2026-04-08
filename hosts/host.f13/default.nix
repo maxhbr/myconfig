@@ -110,38 +110,72 @@ in
     {
       home-manager.sharedModules = [
         {
-          home.packages = let
-              mkTmuxSession = host: useWg: ports: let
+          home.packages =
+            let
+              mkTmuxSession =
+                host: useWg: ports:
+                let
                   scriptName = "et-${host}${if useWg then "-wg0" else ""}";
                   hostAddr = if useWg then (myconfig.metadatalib.getWgIp host) else (myconfig.metadatalib.getIp host);
-                  portsArgs = if ports == [] then "" else "-t ${lib.concatStringsSep "," (map (port: "${toString port}:${toString port}") ports)}";
-                    in pkgs.writeShellScriptBin scriptName ''
-                        set -euo pipefail
-                        if [[ -n "$TMUX" ]]; then
-                          echo "Already in tmux session, not starting et session to ${hostAddr}"
-                          exit 1
-                        fi
-                        set -x
-                        exec et --kill-other-sessions ${portsArgs} --noexit mhuber@${hostAddr}:22022 --command "host-tmux-session"
-                      '';
-              mkAlacrittyTmuxSession = host: useWg: ports: let
+                  portsArgs =
+                    if ports == [ ] then
+                      ""
+                    else
+                      "-t ${lib.concatStringsSep "," (map (port: "${toString port}:${toString port}") ports)}";
+                in
+                pkgs.writeShellScriptBin scriptName ''
+                  set -euo pipefail
+                  if [[ -n "''${TMUX:-}" ]]; then
+                    echo "Already in tmux session, not starting et session to ${hostAddr}"
+                    exit 1
+                  fi
+                  set -x
+                  exec et --kill-other-sessions ${portsArgs} --noexit mhuber@${hostAddr}:22022 --command "host-tmux-session"
+                '';
+              mkAlacrittyTmuxSession =
+                host: useWg: ports:
+                let
                   scriptName = "alacritty-et-${host}${if useWg then "-wg0" else ""}";
                   name = "${host}-tmux-session";
                   tmuxSessionScript = lib.getExe (mkTmuxSession host useWg ports);
-                    in pkgs.writeShellScriptBin scriptName ''
-                        set -euo pipefail
-                        set -x
-                        exec alacritty -v \
-                                --title "${name}" \
-                                --class "Alacritty:${name}" \
-                                --command "${tmuxSessionScript}"
-                      '';
-            in [
-            (mkAlacrittyTmuxSession "p14" false [ 8123 8124 ])
-            (mkAlacrittyTmuxSession "p14" true [ 8123 8124 ])
-            (mkAlacrittyTmuxSession "thing" false [ 8188 22545 22546 22547 23545 33656 33657 ])
-            (mkAlacrittyTmuxSession "thing" true [ 8188 22545 22546 22547 23545 33656 33657 ])
-          ];
+                in
+                pkgs.writeShellScriptBin scriptName ''
+                  set -euo pipefail
+                  set -x
+                  exec alacritty -v \
+                          --title "${name}" \
+                          --class "Alacritty:${name}" \
+                          --command "${tmuxSessionScript}"
+                '';
+            in
+            [
+              (mkAlacrittyTmuxSession "p14" false [
+                8123
+                8124
+              ])
+              (mkAlacrittyTmuxSession "p14" true [
+                8123
+                8124
+              ])
+              (mkAlacrittyTmuxSession "thing" false [
+                8188
+                22545
+                22546
+                22547
+                23545
+                33656
+                33657
+              ])
+              (mkAlacrittyTmuxSession "thing" true [
+                8188
+                22545
+                22546
+                22547
+                23545
+                33656
+                33657
+              ])
+            ];
         }
       ];
     }
@@ -201,17 +235,6 @@ in
                 scale 1.30
                 transform "normal"
                 position x=0 y=0
-            }
-            workspace "p14"
-            window-rule {
-                match at-startup=true app-id="Alacritty:p14-tmux-session"
-                open-on-workspace "p14"
-            }
-            workspace "thing"
-            window-rule {
-                match at-startup=true app-id="Alacritty:thing-tmux-session"
-                match title="thing-tmux-session"
-                open-on-workspace "thing"
             }
           '';
         };
