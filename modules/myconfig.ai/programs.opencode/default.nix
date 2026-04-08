@@ -51,6 +51,7 @@ in
                   "tail *" = "allow";
                   "git add *" = "allow";
                   "git status *" = "allow";
+                  "git log *" = "allow";
                   "git diff *" = "allow";
                   "nix flake check *" = "allow";
                   "nix flake *" = "allow";

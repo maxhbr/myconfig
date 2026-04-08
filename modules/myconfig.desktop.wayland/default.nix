@@ -43,7 +43,7 @@ in
 
           ${foot}/bin/foot --server &
           {
-            foot-zero || foot -T tmux-zero -a tmux-zero
+            foot-host-tmux-session || foot -T host-tmux-session -a host-tmux-session
           } >/dev/null 2>&1 &
 
           ${wlsunset}/bin/wlsunset &
