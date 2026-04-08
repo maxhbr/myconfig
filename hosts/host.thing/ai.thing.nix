@@ -200,6 +200,7 @@ in
       };
     };
 
+    ## TODO: setting home does not work and without it, it writes in tmpfs
     # systemd.tmpfiles.rules = [ "d /persistent/cache/ollama 0700 ollama ollama -" ];
     # services.ollama = {
     #   enable = true;
