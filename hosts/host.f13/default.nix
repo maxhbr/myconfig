@@ -22,6 +22,7 @@ in
     ../../hardware/notebook-generic.nix
     ../../hardware/Radeon890M.nix
     ../../hardware/RZ717.nix
+    ../../hardware/btrfs.nix
     {
       config = {
         # Disable NetworkManager-wait-online to speed up boot time
@@ -175,6 +176,8 @@ in
                 33656
                 33657
               ])
+              (mkAlacrittyTmuxSession "workstation" false [ ])
+              (mkAlacrittyTmuxSession "workstation" true [ ])
             ];
         }
       ];
@@ -200,10 +203,6 @@ in
         soft_permanence_for_boot = false;
         tmpfs_size = "30%";
         btrfs_device = "/dev/mapper/enc-pv";
-        # sdd
-        # ├─sdd1         ext4        1.0   backupUnenc 160b2393-6f8f-4a74-97b5-e30876a604d3
-        # └─sdd2         crypto_LUKS 2                 eb6f6825-be7c-4666-8dfe-0d7ef592287c
-        #   └─backupLuks btrfs             backupEnc   b3a6f87c-5ffb-4cfd-96f1-a7d6acd50d1a
         btrbk_priv = {
           device = "/dev/disk/by-uuid/b3a6f87c-5ffb-4cfd-96f1-a7d6acd50d1a";
           luks_device = "/dev/disk/by-uuid/eb6f6825-be7c-4666-8dfe-0d7ef592287c";
