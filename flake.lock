@@ -262,11 +262,11 @@
         "uv2nix": "uv2nix_2"
       },
       "locked": {
-        "lastModified": 1775851781,
-        "narHash": "sha256-p8h/olBL3KWKN9p5bRRf20g03n2HPpKx23tYCColGXw=",
+        "lastModified": 1775853638,
+        "narHash": "sha256-6ZcCOiemSfjyVaJUppbPiwtm+l40o6PfXlIh2HWLotE=",
         "owner": "NousResearch",
         "repo": "hermes-agent",
-        "rev": "f83e86d826e1ed95870d139895118c52a82af05e",
+        "rev": "8bcb8b8e8754486272f0a36fd56db5ade307caaa",
         "type": "github"
       },
       "original": {
@@ -379,11 +379,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1775852308,
-        "narHash": "sha256-X91O2QzLrq81ZmfELpAHZv+4zMFG18jnyFojQS+wdME=",
+        "lastModified": 1775856950,
+        "narHash": "sha256-t+/85GVl1dbKFOPKVMnqLDPbaImLF4m/K9UrNnECnsY=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "aac310ab397ee7524ea9dc13b3b60d675dc079c8",
+        "rev": "9e8d027be9e5a1a14e6324c2150ad11fc979724d",
         "type": "github"
       },
       "original": {
@@ -421,11 +421,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1775852823,
-        "narHash": "sha256-XeQsr8vnYy/PWPmCWGdTV8p/+Lu8YYYf0qAPKchwAcE=",
+        "lastModified": 1775857416,
+        "narHash": "sha256-PDQ2v7xhBCsoaZi93BIiTFypO5x48Qw6eTNri7/Y8ao=",
         "owner": "maxhbr",
         "repo": "myphoto",
-        "rev": "988bb0d94d9f603b47b54401cbce6fe3cde7464d",
+        "rev": "6a24ed64ff82da698696de29282f90f89232ffe1",
         "type": "github"
       },
       "original": {
@@ -595,11 +595,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1775851477,
-        "narHash": "sha256-rIfGEW2LI+kugt0tjyS9pqu3TP+sdL8jAa1RUNAXlz0=",
+        "lastModified": 1775856128,
+        "narHash": "sha256-SwUJXU5iDwmJiH7C5bI5zvhZ2G4r6GGlR0fHNN7oTCo=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "2d2b6c4c66ef32a5f93ca459953c7f04486ed780",
+        "rev": "1dd17594202f62abe4838fb1c70fba93e7a60e80",
         "type": "github"
       },
       "original": {
