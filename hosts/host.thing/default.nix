@@ -39,7 +39,7 @@
       home-manager.sharedModules = [
         {
           services.swayidle.enable = lib.mkForce false;
-          services.swayvnc.enable = true;
+          services.wayvnc.enable = true;
         }
       ];
     }
