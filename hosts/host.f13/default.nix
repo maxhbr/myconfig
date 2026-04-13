@@ -57,6 +57,9 @@ in
     {
       home-manager.sharedModules = [ { home.packages = with pkgs; [ gftp ]; } ];
     }
+    {
+      home-manager.sharedModules = [ { home.packages = with pkgs; [ tigervnc ]; } ];
+    }
     (
       { pkgs, ... }:
       let

@@ -10,6 +10,7 @@
       autoStart = lib.mkDefault true;
       settings = {
         address = lib.mkDefault "localhost";
+        port = lib.mkDefault 5901;
       };
     };
   };
