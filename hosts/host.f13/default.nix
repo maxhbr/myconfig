@@ -162,6 +162,7 @@ in
                 8124
               ])
               (mkAlacrittyTmuxSession "thing" false [
+                5901
                 8188
                 22545
                 22546
@@ -171,6 +172,7 @@ in
                 33657
               ])
               (mkAlacrittyTmuxSession "thing" true [
+                5901
                 8188
                 22545
                 22546
