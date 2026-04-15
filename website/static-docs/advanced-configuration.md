@@ -76,3 +76,9 @@ jail = jail-nix.lib.extend {
 
 This configuration option allows you to override what bubblewrap package
 jail.nix uses for its jails. The default value is `pkgs.bubblewrap`.
+
+## suppressExperimentalWarnings
+
+By default, jail.nix will emit an evaluation warning if you use an
+[experimental combinator](combinators.md#experimental-combinators). Setting
+this to true suppresses these warnings.

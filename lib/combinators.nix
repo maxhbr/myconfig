@@ -1,4 +1,9 @@
-pkgs: jail:
+{
+  pkgs,
+  suppressExperimentalWarnings ? false,
+  ...
+}:
+jail:
 let
   inherit (pkgs) lib;
   helpers = import ./helpers.nix pkgs;
@@ -21,21 +26,26 @@ let
   combinators =
     let
       foldCombinator =
-        acc: names: combinatorImpl:
+        acc: names: combinator:
         if lib.length names == 0 then
           acc
         else
           let
             name = lib.head names;
+            combinatorImpl =
+              if combinator.experimental or false && !suppressExperimentalWarnings then
+                builtins.warn "jail.nix combinator ${name} is experimental!" combinator.impl
+              else
+                combinator.impl;
           in
           if acc ? ${name} then
             throw "duplicate combinator ${name}"
           else
-            foldCombinator (acc // { ${name} = combinatorImpl; }) (lib.tail names) combinatorImpl;
+            foldCombinator (acc // { ${name} = combinatorImpl; }) (lib.tail names) combinator;
     in
-    lib.foldl' (
-      acc: { name, value }: foldCombinator acc ([ name ] ++ value.aliases or [ ]) value.impl
-    ) { } (lib.attrsToList rawCombinators);
+    lib.foldl' (acc: { name, value }: foldCombinator acc ([ name ] ++ value.aliases or [ ]) value) { } (
+      lib.attrsToList rawCombinators
+    );
 in
 {
   inherit combinators;

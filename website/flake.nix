@@ -51,7 +51,9 @@
       combinatorDocs =
         let
           allCombinators =
-            (import (docsFileSet + /lib/combinators.nix) pkgs (throw "Docs must not depend on jail arg")).docs;
+            (import (docsFileSet + /lib/combinators.nix) { inherit pkgs; } (
+              throw "Docs must not depend on jail arg"
+            )).docs;
 
           formatSection =
             filter:
@@ -82,7 +84,7 @@
 
           ${hr}
 
-          ${formatSection (v: !(is "includedInBasePermissions" v || is "internal" v))}
+          ${formatSection (v: !(is "includedInBasePermissions" v || is "internal" v || is "experimental" v))}
 
           ${hr}
 
@@ -93,6 +95,20 @@
           `basePermissions`](advanced-configuration.md#basepermissions).
 
           ${formatSection (is "includedInBasePermissions")}
+
+          ${hr}
+
+          ## Experimental Combinators
+
+          The following combinators are experimental, and may be removed, or
+          have breaking changes in the future. Please reach out if you have any
+          feedback on them.
+
+          Using these combinators will emit an evaluation warning, you can
+          suppress this warning with
+          [suppressExperimentalWarnings](advanced-configuration.md#suppressexperimentalwarnings).
+
+          ${formatSection (is "experimental")}
         '';
 
       mkdocsSettings = {
