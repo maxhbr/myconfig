@@ -19,9 +19,28 @@
         ];
         mmproj = "/persistent/cache/models/Qwen3.5-27B-GGUF/mmproj-BF16.gguf";
         aliases = [
-          "hermes"
           "Qwen3.5-27B-Q8_0"
           "Qwen3.5-27B"
+        ];
+        ttl = 0;
+      }
+      {
+        name = "Qwen3.6-35B-A3B-UD-Q5_K_XL";
+        path = "/persistent/cache/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
+        devices = [
+          "Vulkan0"
+          "CUDA0"
+          "ROCm0"
+        ];
+        # mmproj = 
+        aliases = [
+          "hermes"
+          "Qwen3.6-35B-A3B-UD-Q5_K_XL"
+          "Qwen3.6-35B-A3B-UD-Q5_K"
+          "Qwen3.6-35B-A3B-UD-Q5"
+          "Qwen3.6-35B-A3B-UD"
+          "Qwen3.6-35B-A3B"
+          "Qwen3.6-35B"
         ];
         ttl = 0;
       }
@@ -142,6 +161,22 @@
                       "opencode-fallback"
                       "Qwen3.5-27B-BF16"
                       "Qwen3.5-27B"
+                    ];
+                    "ttl" = 300;
+                  };
+                "qwen3.6-35B-A3B-BF16" =
+                  let
+                    llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
+                  in
+                  {
+                    cmd = ''
+                      ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.6-35B-A3B-GGUF/BF16/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -fa on --no-webui
+                    '';
+                    aliases = [
+                      "opencode-fallback"
+                      "Qwen3.6-35B-A3B-BF16"
+                      "Qwen3.6-35B-A3B"
+                      "Qwen3.6-35B"
                     ];
                     "ttl" = 300;
                   };
