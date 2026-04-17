@@ -26,7 +26,7 @@
           "Qwen3.6-35B-A3B"
           "Qwen3.6-35B"
         ];
-        ttl = 0;
+        ttl = 900;
       }
       # {
       #   name = "Qwen3.5-27B-Q8_0:modded";
