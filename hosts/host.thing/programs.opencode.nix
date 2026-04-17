@@ -8,7 +8,7 @@
   ...
 }:
 {
-  config = lib.mkIf config.myconfig.ai.opencode.enable {
+  config = {
     home-manager.sharedModules = [
       {
         myconfig.ai.opencode.enable = true;
