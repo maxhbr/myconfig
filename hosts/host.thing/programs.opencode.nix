@@ -9,9 +9,9 @@
 }:
 {
   config = {
+    myconfig.ai.opencode.enable = true;
     home-manager.sharedModules = [
       {
-        myconfig.ai.opencode.enable = true;
         programs.opencode.settings = {
           # Default model: "opencode" alias -> qwen3.5-122B-A10B-Q5_K_M in the
           # containerized llama-swap on port 33657 (provider name "llama-swap-33657").
