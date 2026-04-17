@@ -90,7 +90,7 @@ let
       runtimeInputs = [ ];
       text = ''
         ${envExports}
-        ${bench} -m "${model.path}" --gpu-layers 999 ${model.params} -d 0,4096,8192,16384,32768 -p 2048 -n 32 -ub 2048 -mmp 0
+        ${bench} -m "${model.path}" ${model.params} -d 0,4096,8192,16384,32768 -p 2048 -n 32 -ub 2048 -mmp 0
       '';
     };
 
