@@ -90,8 +90,8 @@ let
       runtimeInputs = [ ];
       text = ''
         ${envExports}
-        mkdir -p ~/llama-bench-logs
-        exec &> >(tee -a "~/llama-bench-logs/${scriptName}.log")
+        mkdir -p "$HOME/llama-bench-logs"
+        exec &> >(tee -a "$HOME/llama-bench-logs/${scriptName}.log")
         set -x
         ${bench} -m "${model.path}" ${model.params} -d 0,4096,8192,16384,32768 -p 2048 -n 32 -ub 2048 -mmp 0
       '';
