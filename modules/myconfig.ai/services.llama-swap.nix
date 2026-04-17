@@ -33,6 +33,14 @@ let
       lib.getExe' pkgs.llama-cpp-rocm "llama-server"
     else
       lib.getExe' pkgs.llama-cpp "llama-server";
+  llamaBenchFor =
+    device:
+    if lib.hasPrefix "Vulkan" device then
+      lib.getExe' pkgs.llama-cpp-vulkan "llama-bench"
+    else if lib.hasPrefix "ROCm" device then
+      lib.getExe' pkgs.llama-cpp-rocm "llama-bench"
+    else
+      lib.getExe' pkgs.llama-cpp "llama-bench";
 
   # Build environment variables for a device
   envForDevice =
@@ -63,6 +71,26 @@ let
       text = ''
         ${envExports}
         ${server} --port "$1" -m "${model.path}" --gpu-layers 999 -fa on --no-webui ${model.params} ${extraArgs} "''${@:2}"
+      '';
+    };
+
+  mkLlamaBenchScript =
+    {
+      model,
+      device,
+    }:
+    let
+      bench = llamaBenchFor device;
+      safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
+      scriptName = "llama-bench_${device}_${safeName}";
+      envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
+    in
+    pkgs.writeShellApplication {
+      name = scriptName;
+      runtimeInputs = [ ];
+      text = ''
+        ${envExports}
+        ${bench} -m "${model.path}" --gpu-layers 999 ${model.params} -d 0,4096,8192,16384,32768 -p 2048 -n 32 -ub 2048 -mmp 0
       '';
     };
 
@@ -132,6 +160,7 @@ let
       lib.optionals (guardDevice device) (
         [
           (mkLlamaScript { inherit model device; })
+          (mkLlamaBenchScript { inherit model device; })
         ]
         ++ lib.optionals (model.mmproj != null) [
           (mkLlamaScript {
