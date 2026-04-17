@@ -158,7 +158,6 @@
                       ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-27B-GGUF/BF16/Qwen3.5-27B-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -fa on --no-webui
                     '';
                     aliases = [
-                      "opencode-fallback"
                       "Qwen3.5-27B-BF16"
                       "Qwen3.5-27B"
                     ];
