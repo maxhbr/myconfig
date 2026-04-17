@@ -17,9 +17,10 @@
           "CUDA0"
           "ROCm0"
         ];
-        # mmproj = 
+        # mmproj =
         aliases = [
           "hermes"
+          "opencode-fast"
           "Qwen3.6-35B-A3B-UD-Q5_K"
           "Qwen3.6-35B-A3B-UD-Q5"
           "Qwen3.6-35B-A3B-UD"

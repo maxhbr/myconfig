@@ -27,6 +27,7 @@ in
 {
   imports = [
     # ./containers.vllm-rocm.nix
+    ./programs.opencode.nix
     ({
       config =
         lib.mkIf (config.myconfig.ai.container.open-webui.enable || config.myconfig.ai.open-webui.enable)
@@ -103,17 +104,12 @@ in
     (
       { ... }:
       {
-        myconfig.ai.opencode.enable = true;
         myconfig.ai.localModels = [
           {
             port = 22546;
           }
           {
             port = 22545;
-          }
-          {
-            name = "sglang";
-            port = 30000;
           }
         ];
       }
@@ -156,26 +152,6 @@ in
           cuda_version = "cu129";
           rocm_version = "gfx1151";
           userservice = true;
-        };
-        services = {
-          llama-server.instances = {
-            qwen3-coder = {
-              enable = true;
-              modelPath = "/mnt/disk/models/Qwen3-Coder-Next-Q8_0.gguf";
-              port = 22546;
-              contextSize = 262144;
-              flashAttention = true;
-              extraArgs = "-ctk q8_0 -ctv q8_0 -ngl all";
-            };
-            glm4-flash = {
-              enable = true;
-              modelPath = "/mnt/disk/models/GLM-4.7-Flash-BF16.gguf";
-              port = 22545;
-              contextSize = 202752;
-              flashAttention = true;
-              extraArgs = "-ctk bf16 -ctv bf16 -ngl all";
-            };
-          };
         };
         # container = {
         #   nlm-ingestor = {
