@@ -15,27 +15,29 @@ in
 {
   imports = [
     ./comfyui.nix
+    ./container.Kokoro-FastAPI.nix
+    ./container.SillyTavern.nix
+    ./container.crawl4ai.nix
+    ./container.lobe-chat.nix
+    ./container.nlm-ingestor.nix
+    ./container.open-webui.nix
+    ./inference.cpp.nix
     ./programs.aichat.nix
-    ./programs.mcp.servers.nix
+    ./programs.alpaca.nix
+    ./programs.claude-code
+    ./programs.codex
+    ./programs.github-copilot-cli
     ./programs.llm.nix
+    ./programs.lmstudio.nix
+    ./programs.mcp.servers.nix
+    ./programs.opencode
+    ./programs.qwen-code
+    ./programs.vllm.nix
+    ./services.litellm.nix
+    ./services.llama-swap.nix
     ./services.ollama.nix
     ./services.open-webui.nix
     ./services.tabby.nix
-    ./services.llama-swap.nix
-    ./container.open-webui.nix
-    ./container.nlm-ingestor.nix
-    ./container.SillyTavern.nix
-    ./container.lobe-chat.nix
-    ./container.Kokoro-FastAPI.nix
-    ./inference.cpp.nix
-    ./programs.lmstudio.nix
-    ./programs.alpaca.nix
-    ./programs.vllm.nix
-    ./programs.opencode
-    ./programs.codex
-    ./programs.qwen-code
-    ./programs.claude-code
-    ./programs.github-copilot-cli
     ./skill.playwright-cli.nix
   ];
   options.myconfig = with lib; {
@@ -74,6 +76,15 @@ in
     myconfig.ai.aichat.enable = true;
     myconfig.ai.llm.enable = true;
     myconfig.dev.python.enable = true;
+    systemd.tmpfiles.rules = [
+      "d /run/myconfig 0755 root root - -"
+      (
+        let
+          localModelsJson = builtins.toJSON config.myconfig.ai.localModels;
+        in
+        "f /run/myconfig/localModels.json 0644 root root - ${localModelsJson}"
+      )
+    ];
     home-manager.sharedModules = [
       {
         home.packages =

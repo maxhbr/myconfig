@@ -28,65 +28,84 @@ in
   imports = [
     # ./containers.vllm-rocm.nix
     ./programs.opencode.nix
+    ./services.n8n.nix
+    ./services.searxng.nix
     ({
       config =
-        lib.mkIf (config.myconfig.ai.container.open-webui.enable || config.myconfig.ai.open-webui.enable)
-          (
-            let
-              openWebuiPort =
-                if config.myconfig.ai.container.open-webui.enable then
-                  config.myconfig.ai.container.open-webui.port
-                else
-                  config.myconfig.ai.open-webui.port;
-              litellmRouteConfig = lib.optionalString config.services.litellm.enable ''
-                handle_path /litellm/* {
-                  reverse_proxy http://localhost:${toString config.services.litellm.port}
-                }
-              '';
-              ollamaRouteConfig = lib.optionalString config.services.ollama.enable ''
-                handle_path /ollama/* {
-                  reverse_proxy http://localhost:${toString config.services.ollama.port}
-                }
-              '';
-              llamaSwapRouteConfig = lib.optionalString config.services.llama-swap.enable ''
-                reverse_proxy http://localhost:${toString config.services.llama-swap.port}
-              '';
-              openWebuiRouteConfig = lib.optionalString config.services.caddy.enable ''
+        let
+          openWebuiPort =
+            if config.myconfig.ai.container.open-webui.enable then
+              config.myconfig.ai.container.open-webui.port
+            else
+              config.myconfig.ai.open-webui.port;
+          litellmRouteConfig = lib.optionalString config.services.litellm.enable ''
+            handle_path /litellm/* {
+              reverse_proxy http://localhost:${toString config.services.litellm.port}
+            }
+          '';
+          ollamaRouteConfig = lib.optionalString config.services.ollama.enable ''
+            handle_path /ollama/* {
+              reverse_proxy http://localhost:${toString config.services.ollama.port}
+            }
+          '';
+          llamaSwapRouteConfig = lib.optionalString config.services.llama-swap.enable ''
+            reverse_proxy http://localhost:${toString config.services.llama-swap.port}
+          '';
+          openWebuiRouteConfig =
+            lib.optionalString
+              (config.myconfig.ai.container.open-webui.enable || config.myconfig.ai.open-webui.enable)
+              ''
                 handle_path /open-webui/* {
                   reverse_proxy http://localhost:${toString openWebuiPort}
                 }
               '';
-              comfyuiRouteConfig = lib.optionalString config.myconfig.ai.comfyui.enable ''
-                handle_path /comfyui/* {
-                  reverse_proxy http://localhost:8188
-                }
-              '';
-            in
-            {
-              services.caddy = {
-                enable = true;
-                virtualHosts."${config.networking.hostName}.wg0.maxhbr.local" = {
-                  listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
-                  hostName = "${config.networking.hostName}.wg0.maxhbr.local";
-                  serverAliases = [
-                    "${config.networking.hostName}.wg0"
-                    (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
-                  ];
-                  extraConfig = ''
-                    ${litellmRouteConfig}
-                    ${ollamaRouteConfig}
-                    ${openWebuiRouteConfig}
-                    ${comfyuiRouteConfig}
-                    ${llamaSwapRouteConfig}
-                  '';
-                };
-              };
-
-              networking.firewall.interfaces."wg0".allowedTCPPorts = lib.optionals config.services.caddy.enable [
-                443
-              ];
+          comfyuiRouteConfig = lib.optionalString config.myconfig.ai.comfyui.enable ''
+            handle_path /comfyui/* {
+              reverse_proxy http://localhost:8188
             }
-          );
+          '';
+          searxngRouteConfig = lib.optionalString config.services.searx.enable ''
+            handle_path /searx/uwsgi/* {
+              reverse_proxy http://localhost${toString config.services.searx.uwsgiConfig.http}
+            }
+            handle_path /searx/* {
+              reverse_proxy http://localhost:${toString config.services.searx.settings.server.port}
+            }
+          '';
+           n8nRouteConfig = lib.optionalString config.services.n8n.enable ''
+            handle_path /n8n/* {
+              reverse_proxy http://localhost:${toString config.services.n8n.environment.N8N_PORT}
+            }
+          '';
+        in
+        {
+          services.searx.settings.server.base_url =
+            lib.mkForce "${config.networking.hostName}.wg0.maxhbr.local/searx/";
+          services.caddy = {
+            enable = true;
+            virtualHosts."${config.networking.hostName}.wg0.maxhbr.local" = {
+              listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+              hostName = "${config.networking.hostName}.wg0.maxhbr.local";
+              serverAliases = [
+                "${config.networking.hostName}.wg0"
+                (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
+              ];
+              extraConfig = ''
+                ${litellmRouteConfig}
+                ${ollamaRouteConfig}
+                ${openWebuiRouteConfig}
+                ${comfyuiRouteConfig}
+                ${llamaSwapRouteConfig}
+                ${searxngRouteConfig}
+                ${n8nRouteConfig}
+              '';
+            };
+          };
+
+          networking.firewall.interfaces."wg0".allowedTCPPorts = lib.optionals config.services.caddy.enable [
+            443
+          ];
+        };
     })
     ({
       config = lib.mkIf (builtins.elem "amd" config.myconfig.hardware.gpu.variant) {
@@ -153,26 +172,29 @@ in
           rocm_version = "gfx1151";
           userservice = true;
         };
-        # container = {
-        #   nlm-ingestor = {
-        #     enable = false;
-        #   };
-        #   open-webui = {
-        #     enable = false;
-        #   };
-        #   sillytavern = {
-        #     enable = false;
-        #     host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
-        #     port = 8888;
-        #   };
-        #   kokoro-fastapi = {
-        #     enable = false;
-        #   };
-        #   lobe-chat = {
-        #     enable = false;
-        #     host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
-        #   };
-        # };
+        container = {
+          nlm-ingestor = {
+            enable = false;
+          };
+          open-webui = {
+            enable = false;
+          };
+          crawl4ai = {
+            enable = true;
+          };
+          sillytavern = {
+            enable = false;
+            host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
+            port = 8888;
+          };
+          kokoro-fastapi = {
+            enable = false;
+          };
+          lobe-chat = {
+            enable = false;
+            host = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
+          };
+        };
       };
     };
 

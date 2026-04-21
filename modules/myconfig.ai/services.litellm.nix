@@ -71,8 +71,8 @@ in
     # };
 
     services.litellm = {
-      host = "127.0.0.1";
-      port = 4000;
+      host = lib.mkForce "127.0.0.1";
+      port = lib.mkForce 4000;
       # settings.general_settings = {
       #   store_prompts_in_spend_logs = true;
       #   disable_spend_logs = false;
