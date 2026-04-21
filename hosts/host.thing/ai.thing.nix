@@ -28,8 +28,6 @@ in
   imports = [
     # ./containers.vllm-rocm.nix
     ./programs.opencode.nix
-    ./services.n8n.nix
-    ./services.searxng.nix
     ({
       config =
         let
