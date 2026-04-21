@@ -37,7 +37,7 @@
     keyFileSize = 4096;
     preLVM = true;
     allowDiscards = true;
-    fallbackToPassword = true;
+    # fallbackToPassword = true;
   };
 
   fileSystems."/home" = {

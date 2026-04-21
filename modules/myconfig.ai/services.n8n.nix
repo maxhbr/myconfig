@@ -38,15 +38,15 @@
     ];
 
     # services.traefik.dynamicConfigOptions.http = rec {
-      # routers.to-n8n = {
-      #   rule = "Host(`${publicFqdn}`) && (PathRegexp(`^/webhook(-test)?/.*`) || PathRegexp(`^/form/.*`))";
-      #   service = "n8n";
-      # };
-      # services."${routers.to-n8n.service}".loadBalancer.servers = [
-      #   {
-      #     url = "http://127.0.0.1:${builtins.toString config.services.n8n.environment.N8N_PORT}";
-      #   }
-      # ];
+    # routers.to-n8n = {
+    #   rule = "Host(`${publicFqdn}`) && (PathRegexp(`^/webhook(-test)?/.*`) || PathRegexp(`^/form/.*`))";
+    #   service = "n8n";
+    # };
+    # services."${routers.to-n8n.service}".loadBalancer.servers = [
+    #   {
+    #     url = "http://127.0.0.1:${builtins.toString config.services.n8n.environment.N8N_PORT}";
+    #   }
+    # ];
     # };
   };
 }

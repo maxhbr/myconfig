@@ -72,7 +72,7 @@ in
               reverse_proxy http://localhost:${toString config.services.searx.settings.server.port}
             }
           '';
-           n8nRouteConfig = lib.optionalString config.services.n8n.enable ''
+          n8nRouteConfig = lib.optionalString config.services.n8n.enable ''
             handle_path /n8n/* {
               reverse_proxy http://localhost:${toString config.services.n8n.environment.N8N_PORT}
             }

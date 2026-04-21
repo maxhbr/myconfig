@@ -35,8 +35,10 @@ in
     ./programs.vllm.nix
     ./services.litellm.nix
     ./services.llama-swap.nix
+    ./services.n8n.nix
     ./services.ollama.nix
     ./services.open-webui.nix
+    ./services.searxng.nix
     ./services.tabby.nix
     ./skill.playwright-cli.nix
   ];
