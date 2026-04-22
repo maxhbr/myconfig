@@ -107,39 +107,43 @@ in
                 niri-xwayland-satellite
                 niri-toggle-dpi-scale
               ];
-              xdg.configFile = {
-                "niri/config.kdl".source =
-                  let
-                    drv =
-                      pkgs.runCommand "niri-config"
-                        {
-                          nativeBuildInputs = [ niri ];
-                          src = ./config.kdl;
+              xdg.configFile =
+                let
+                  drv =
+                    pkgs.runCommand "niri-config"
+                      {
+                        nativeBuildInputs = [ niri ];
+                        src = ./config.kdl;
+                      }
+                      ''
+                        mkdir $out
+                        cat <<EOF >$out/config.kdl
+                        environment {
+                            QT_QPA_PLATFORM "wayland"
+                            DISPLAY "${config.home.sessionVariables.DISPLAY}"
+                            ELECTRON_OZONE_PLATFORM_HINT "${nixosConfig.environment.sessionVariables.ELECTRON_OZONE_PLATFORM_HINT}"
                         }
-                        ''
-                          mkdir $out
-                          cat <<EOF >$out/config.kdl
-                          environment {
-                              QT_QPA_PLATFORM "wayland"
-                              DISPLAY "${config.home.sessionVariables.DISPLAY}"
-                              ELECTRON_OZONE_PLATFORM_HINT "${nixosConfig.environment.sessionVariables.ELECTRON_OZONE_PLATFORM_HINT}"
-                          }
 
-                          $(cat $src)
+                        $(cat $src)
 
-                          xwayland-satellite {
-                              path "${pkgs.xwayland-satellite}/bin/xwayland-satellite"
-                          }
+                        xwayland-satellite {
+                            path "${pkgs.xwayland-satellite}/bin/xwayland-satellite"
+                        }
 
-                          ${cfg.desktop.wayland.niri.additionalConfigKdl}
+                        include "include.kdl"
 
-                          spawn-at-startup "${niri-autostart}"
-                          EOF
-                          niri validate --config $out/config.kdl > $out/config.kdl.validate
-                        '';
-                  in
-                  "${drv}/config.kdl";
-              };
+                        spawn-at-startup "${niri-autostart}"
+                        EOF
+                        cat <<EOF >$out/include.kdl
+                        ${cfg.desktop.wayland.niri.additionalConfigKdl}
+                        EOF
+                        niri validate --config $out/config.kdl > $out/config.kdl.validate
+                      '';
+                in
+                {
+                  "niri/config.kdl".source = "${drv}/config.kdl";
+                  "niri/include.kdl".source = "${drv}/include.kdl";
+                };
               programs.waybar.settings.mainBar = {
                 "niri/workspaces" = {
                   "format" = "{index}";
