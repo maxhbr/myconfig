@@ -28,7 +28,23 @@
       networking.firewall.allowedTCPPorts = [ 22022 ];
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
-    ./ai.thing.nix
+    # ./containers.vllm-rocm.nix
+    ./programs.opencode.nix
+    ./services.caddy.nix
+    (
+      { ... }:
+      {
+        myconfig.ai.localModels = [
+          {
+            port = 22546;
+          }
+          {
+            port = 22545;
+          }
+        ];
+      }
+    )
+    # ./services.ollama.nix
     ./services.llama-swap.nix
     ./specialisation.nix
     ./hardware.Radeon8060S.nix
@@ -64,6 +80,9 @@
     networking.hostName = "thing";
     networking.hostId = "3e7c8a1f";
     networking.useDHCP = false;
+    system.nixos.tags = config.myconfig.hardware.gpu.variant;
+
+    services.litellm.enable = true;
 
     myconfig = {
       persistence.impermanence = {
@@ -85,6 +104,32 @@
         };
         imagework.enable = true; # https://github.com/NixOS/nixpkgs/issues/425306
         imagework.myphoto.enable = true;
+      };
+      ai = {
+        enable = true;
+        inference-cpp = {
+          enable = true;
+        };
+        lmstudio = {
+          enable = true;
+        };
+        alpaca = {
+          enable = false;
+        };
+        open-webui = {
+          enable = true;
+        };
+        # vllm = {
+        #   enable = true;
+        # };
+        comfyui = {
+          enable = true;
+        };
+        container = {
+          crawl4ai = {
+            enable = true;
+          };
+        };
       };
       dev.core.enable = true;
       virtualisation.enable = true;

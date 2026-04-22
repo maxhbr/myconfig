@@ -8,7 +8,6 @@ let
   cfg = config.myconfig.ai.ollama;
 in
 {
-  options.myconfig.ai.ollama = with lib; { };
   imports =
     let
       gpuVariants = config.myconfig.hardware.gpu.variant;
@@ -19,12 +18,12 @@ in
       # Priority: nvidia > amd (rocm) > amd-no-rocm (vulkan).
       # Only one package can be set, so use nested mkIf to ensure exclusivity.
       ({
-        config = lib.mkIf (hasVariant "nvidia") {
+        config = lib.mkIf (config.services.ollama.enable && hasVariant "nvidia") {
           services.ollama.package = pkgs.ollama-cuda;
         };
       })
       ({
-        config = lib.mkIf (hasVariant "amd" && !hasVariant "nvidia") {
+        config = lib.mkIf (config.services.ollama.enable && hasVariant "amd" && !hasVariant "nvidia") {
           services.ollama = {
             package = pkgs.ollama-rocm;
             environmentVariables = {
@@ -34,7 +33,7 @@ in
         };
       })
       ({
-        config = lib.mkIf (hasVariant "amd-no-rocm" && !hasVariant "nvidia" && !hasVariant "amd") {
+        config = lib.mkIf (config.services.ollama.enable && hasVariant "amd-no-rocm" && !hasVariant "nvidia" && !hasVariant "amd") {
           services.ollama = {
             package = pkgs.ollama-vulkan;
             environmentVariables = {
