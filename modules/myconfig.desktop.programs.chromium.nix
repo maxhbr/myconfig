@@ -16,10 +16,12 @@ let
       exit 3
     fi
     postfix=$(date +%s | sha256sum | base64 | head -c 32 ; echo)
-    mkdir -p "/tmp/incoChrome_$postfix"
+    user_data_dir="/tmp/incoChrome_$postfix"
+    mkdir -p "$user_data_dir"
+    trap 'rm -rf "$user_data_dir"' EXIT
     ${chromium}/bin/chromium --incognito \
-        --user-data-dir="/tmp/incoChrome_$postfix" \
-        $@ &disown
+        --user-data-dir="$user_data_dir" \
+        "$@"
   '';
   pipechrome = pkgs.writeShellScriptBin "pipechrome" ''
     ${chromium}/bin/chromium "data:text/html;base64,$(base64 -w 0 <&0)" &> /dev/null
