@@ -162,6 +162,7 @@ in
                 8124
               ])
               (mkAlacrittyTmuxSession "thing" false [
+                5678
                 5901
                 8080
                 8188
@@ -173,6 +174,7 @@ in
                 33657
               ])
               (mkAlacrittyTmuxSession "thing" true [
+                5678 # n8n
                 5901
                 8080
                 8188
@@ -245,7 +247,7 @@ in
             input {
                 tablet {
                     // off
-                    map-to-output "DP-2"
+                    map-to-output "DP-12"
                     // map-to-focused-output
                     // left-handed
                     // calibration-matrix 1.0 0.0 0.0 0.0 1.0 0.0
