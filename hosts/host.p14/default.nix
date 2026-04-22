@@ -13,7 +13,6 @@
     ./ai.p14.nix
     ./hermes-agent
     ./observability.nix
-    ./smart-home
     ./services.caddy.nix
     ../shared.localModels.llama-swap.nix
     ./hardware-configuration.nix
@@ -127,7 +126,6 @@
           "himalaya"
         ];
       };
-      smart-home.enable = true;
       virtualisation.enable = true;
       dev = {
         embedded.enable = false;

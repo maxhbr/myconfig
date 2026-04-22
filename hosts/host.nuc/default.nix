@@ -9,6 +9,8 @@
 }:
 {
   imports = [
+    ./smart-home
+    ./services.caddy.nix
     ./hardware-configuration.nix
     ../../hardware/grub.nix
     {
@@ -26,6 +28,7 @@
     myconfig = {
       desktop.enable = false;
       headless.enable = true;
+      smart-home.enable = true;
     };
 
     networking.hostName = "nuc";
