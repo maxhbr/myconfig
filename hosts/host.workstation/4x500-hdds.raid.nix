@@ -86,6 +86,7 @@
 
     fileSystems."/export/data" = {
       device = "/mnt/4x500/lvm-guest";
+      fsType = "none";
       options = [
         "bind"
         "x-systemd.requires-mounts-for=/mnt/4x500"
@@ -93,6 +94,7 @@
     };
     fileSystems."/export/guest" = {
       device = "/mnt/4x500/lvm-data";
+      fsType = "none";
       options = [
         "bind"
         "x-systemd.requires-mounts-for=/mnt/4x500"

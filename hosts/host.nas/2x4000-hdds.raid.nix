@@ -69,6 +69,7 @@
 
     fileSystems."/export/data" = {
       device = "/mnt/2x4t/lvm-data";
+      fsType = "none";
       options = [
         "bind"
         "x-systemd.requires-mounts-for=/mnt/2x4t"
@@ -76,6 +77,7 @@
     };
     fileSystems."/export/guest" = {
       device = "/mnt/2x4t/lvm-guest";
+      fsType = "none";
       options = [
         "bind"
         "x-systemd.requires-mounts-for=/mnt/2x4t"
@@ -83,6 +85,7 @@
     };
     fileSystems."/export/bilder" = {
       device = "/mnt/2x4t/lvm-bilder";
+      fsType = "none";
       options = [
         "bind"
         "x-systemd.requires-mounts-for=/mnt/2x4t"
