@@ -88,14 +88,19 @@
     },
     "nuc": {
       "network": "home",
-      "ip4": "192.168.1.112",
+      "ip4": "192.168.1.92",
       "mac": "94:de:80:8f:a3:7a",
+      "pubkeys": {
+        "/etc/ssh/ssh_host_ed25519_key.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEIrawZkAai/exfhyZESswz34y1W3p39x3huggxdAwZ5 root@nuc",
+        "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDFFTeQisQz6sBHv0erflo909H0bqun8Bqsbx+5YXN4zGgz2/Y3nx+YCnUv2e2bawRzGa/D/f3GqH1aMvd2fU1Jo3H575xIKsKljGfSpDwXYkNGvAqwGMbU0tDXXMesRBf3aFmmx1WNETuESGLJbcsNfHxaeeDUS4fHy3dymvTOqsiw+N3+MtDD/UymWup494KzhEiu4kXU+oQOW4Jon2OJLnCseGoPJeeB0JvFPHOKGYsBcq8eyuCMbx/DKXkMiZn2BG9soc8fVzQWZ0nYZUWtp513/hWtmJfQ16yBxlsuLpL/k+4AFnEdy4A9ZtHcZlHw3WG797siggnAAa2HKnjwsNZIRy78AsXSIvc2VV7iAhcMnzz6ZJqtLMfZ9bppI4uqzYt/M5BU3LptEuBkfrNDVW7A9hRa5HWCPLK0ZxOH7ntWULY90jpZiuikew+hHwW94U9LUr9ROcX0n0xDT5TfqWFgOjMzoOL5ORTGXzN8eeVVWwK6P+j4UviLdrtTszeGIZqOPLrdkDs6SyG+NmSksY1G05anBVBpfWq8F9qT2inISuaH30DvA3OKMeRh027BfVlVKNpykZJ/Qe+kwLGftGAoOSTF35TptURLyNxeC+SYgQIK1QwHMJuJOomRnc4NsRitjJfsq8dots9xoB1SqgDEoWxK3GxpaBmI+sTXrw== root@nuc"
+      },
       "wireguard": {
         "wg0": {
           "ip4": "10.199.199.9",
           "pubkey": "MHISqlHM8Yb6ks9h66AXCCY6/x8z2f7BYmSII8e6MzI="
         }
       }
+
     },
     "Pixel9": {
       "network": "home",

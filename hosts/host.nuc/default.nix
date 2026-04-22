@@ -20,7 +20,7 @@
         enable = true;
       };
     }
-    (myconfig.metadatalib.fixIp "enp2s0")
+    (myconfig.metadatalib.fixIp "enp0s20u2")
   ];
   config = {
     myconfig = {
