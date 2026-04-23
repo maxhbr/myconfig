@@ -19,8 +19,6 @@
         ];
         # mmproj =
         aliases = [
-          "hermes"
-          "opencode-fast"
           "Qwen3.6-35B-A3B-UD-Q5_K"
           "Qwen3.6-35B-A3B-UD-Q5"
           "Qwen3.6-35B-A3B-UD"
@@ -39,8 +37,8 @@
         ];
         # mmproj =
         aliases = [
-          # "hermes"
-          # "opencode-fast"
+          "hermes"
+          "opencode-fast"
           "Qwen3.6-27B"
         ];
         ttl = 900;
@@ -55,6 +53,8 @@
         ];
         # mmproj =
         aliases = [
+          "hermes-fallback"
+          "opencode-fast-fallback"
         ];
         ttl = 900;
       }
@@ -85,7 +85,7 @@
           "CUDA0"
         ];
         aliases = [
-          "hermes-fallback"
+          # "hermes-fallback"
           "gemma-4-31B-Q6"
         ];
         ttl = 300;
@@ -158,7 +158,8 @@
                       ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf  -fa on --no-webui
                     '';
                     aliases = [
-                      "opencode"
+                      "opencode-slow"
+                      "opencode-fallback"
                       "qwen3.5-122B"
                     ];
                     "ttl" = 1800;
@@ -172,7 +173,7 @@
                       ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.6-27B-GGUF/BF16/Qwen3.6-27B-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -fa on --no-webui
                     '';
                     aliases = [
-                      "opencode-fallback"
+                      "opencode"
                       "Qwen3.6-27B-GGUF"
                       "Qwen3.6-27B"
                     ];

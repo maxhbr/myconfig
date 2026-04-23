@@ -98,5 +98,29 @@
           ) config.myconfig.deployedServices.services."${config.networking.hostName}"
         );
     };
+    networking.extraHosts =
+      let
+        genExtraHost =
+          host:
+          { name, port, ... }:
+          let
+            wgIp = myconfig.metadatalib.getWgIp host;
+          in
+          "${wgIp} ${name}.${host}.wg0.maxhbr.local\n${wgIp} ${toString port}.${host}.wg0.maxhbr.local";
+      in
+      lib.concatStringsSep "\n" (
+        lib.attrValues (
+          lib.foldl' (
+            acc: host:
+            acc
+            // lib.listToAttrs (
+              lib.map (service: {
+                name = "${service.name}.${host}";
+                value = genExtraHost host service;
+              }) config.myconfig.deployedServices.services.${host}
+            )
+          ) { } (builtins.attrNames config.myconfig.deployedServices.services)
+        )
+      );
   };
 }

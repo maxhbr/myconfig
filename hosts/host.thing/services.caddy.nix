@@ -18,7 +18,6 @@ let
   #   else
   #     config.myconfig.ai.open-webui.port;
 
-
 in
 {
   config = {
@@ -35,19 +34,6 @@ in
     myconfig.deployedServices.configureCaddy = true;
     services.caddy = {
       enable = true;
-      # virtualHosts =
-      #   allVhosts
-      #   // lib.mkIf config.services.searx.enable {
-      #     "${hostName}" = {
-      #       inherit hostName;
-      #       listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
-      #       serverAliases = [
-      #         "${config.networking.hostName}.wg0"
-      #         (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
-      #       ];
-      #       extraConfig = extraConfig + "\n" + searxngConfig;
-      #     };
-      #   };
     };
 
     networking.firewall.interfaces."wg0".allowedTCPPorts = lib.optionals config.services.caddy.enable [
