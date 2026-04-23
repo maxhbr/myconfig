@@ -70,27 +70,40 @@ in
 
     services.caddy = {
       enable = true;
-      virtualHosts."${hostName}" = {
-        inherit hostName;
-        listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
-        serverAliases = [
-          "${config.networking.hostName}.wg0"
-          (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
-        ];
-        extraConfig = ''
-          ${litellmRouteConfig}
-          ${ollamaRouteConfig}
-          ${openWebuiRouteConfig}
-          ${comfyuiRouteConfig}
-          ${llamaSwapRouteConfig}
-          ${searxngRouteConfig}
-          ${n8nRouteConfig}
-        '';
+      virtualHosts = {
+        "${hostName}" = {
+          inherit hostName;
+          listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+          serverAliases = [
+            "${config.networking.hostName}.wg0"
+            (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
+          ];
+          extraConfig = ''
+            ${litellmRouteConfig}
+            ${ollamaRouteConfig}
+            ${openWebuiRouteConfig}
+            ${comfyuiRouteConfig}
+            ${searxngRouteConfig}
+            ${n8nRouteConfig}
+            ${llamaSwapRouteConfig}
+          '';
+        };
+        "n8n.${hostName}" = {
+          hostName = "n8n.${hostName}";
+          listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+          serverAliases = [
+            "n8n.${config.networking.hostName}.wg0"
+            # (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
+          ];
+          extraConfig = ''
+            reverse_proxy http://localhost:5678
+          '';
+        };
       };
     };
 
     networking.firewall.interfaces."wg0".allowedTCPPorts = lib.optionals config.services.caddy.enable [
       443
     ];
-  };
+ };
 }
