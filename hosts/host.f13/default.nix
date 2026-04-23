@@ -104,6 +104,7 @@ in
       };
     }
     { programs.kdeconnect.enable = true; }
+    ../shared.deployedServices.nix
     # NOTE: amd_pstate=active and power-profiles-daemon are already set by
     # framework-amd-ai-300-series.nix -> amd.nix -> pstate.nix
     {

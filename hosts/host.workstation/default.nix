@@ -65,6 +65,7 @@
     }
     # other profiles
     ./gaming
+    ../shared.deployedServices.nix
   ]; # ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.5") ]);
 
   config = {

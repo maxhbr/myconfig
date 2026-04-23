@@ -49,6 +49,10 @@
           port = 33656;
         }
         {
+          name = "llama-swap-2";
+          port = 33657;
+        }
+        {
           name = "litellm";
           port = 4000;
         }

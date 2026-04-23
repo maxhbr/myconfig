@@ -54,6 +54,7 @@
         [ { home.packages = [ p14-tmux-session-script ]; } ];
     }
     { environment.systemPackages = with pkgs; [ linuxPackages.usbip ]; }
+    ../shared.deployedServices.nix
   ];
 
   config = {

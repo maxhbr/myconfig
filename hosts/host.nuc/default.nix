@@ -32,6 +32,7 @@
       networking.firewall.allowedTCPPorts = [ 22022 ];
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
+    ../shared.deployedServices.nix
   ];
   config = {
     myconfig = {
