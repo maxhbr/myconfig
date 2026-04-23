@@ -11,52 +11,116 @@
 
 let
   hostName = "${config.networking.hostName}.wg0.maxhbr.local";
+
   openWebuiPort =
     if config.myconfig.ai.container.open-webui.enable then
       config.myconfig.ai.container.open-webui.port
     else
       config.myconfig.ai.open-webui.port;
-  litellmRouteConfig = lib.optionalString config.services.litellm.enable ''
-    handle_path /litellm/* {
-      reverse_proxy http://localhost:${toString config.services.litellm.port}
+
+  pathBasedServices = [
+    {
+      name = "litellm";
+      path = "/litellm/*";
+      port = config.services.litellm.port;
+      enable = config.services.litellm.enable;
     }
-  '';
-  ollamaRouteConfig = lib.optionalString config.services.ollama.enable ''
-    handle_path /ollama/* {
-      reverse_proxy http://localhost:${toString config.services.ollama.port}
+    {
+      name = "ollama";
+      path = "/ollama/*";
+      port = config.services.ollama.port;
+      enable = config.services.ollama.enable;
     }
-  '';
-  llamaSwapRouteConfig = lib.optionalString config.services.llama-swap.enable ''
-    reverse_proxy http://localhost:${toString config.services.llama-swap.port}
-  '';
-  openWebuiRouteConfig =
-    lib.optionalString
-      (config.myconfig.ai.container.open-webui.enable || config.myconfig.ai.open-webui.enable)
-      ''
-        handle_path /open-webui/* {
-          reverse_proxy http://localhost:${toString openWebuiPort}
-        }
-      '';
-  comfyuiRouteConfig = lib.optionalString config.myconfig.ai.comfyui.enable ''
-    handle_path /comfyui/* {
-      reverse_proxy http://localhost:8188
+    {
+      name = "open-webui";
+      path = "/open-webui/*";
+      port = openWebuiPort;
+      enable = config.myconfig.ai.container.open-webui.enable || config.myconfig.ai.open-webui.enable;
     }
-  '';
-  searxngRouteConfig = lib.optionalString config.services.searx.enable ''
-    handle_path /searx/uwsgi/* {
-      reverse_proxy http://localhost${toString config.services.searx.uwsgiConfig.http}
+    {
+      name = "comfyui";
+      path = "/comfyui/*";
+      port = 8188;
+      enable = config.myconfig.ai.comfyui.enable;
     }
-    handle_path /searx/* {
-      reverse_proxy http://localhost:${toString config.services.searx.settings.server.port}
+    {
+      name = "n8n";
+      path = "/n8n/*";
+      port = 5678;
+      enable = config.services.n8n.enable || config.myconfig.containers.n8n.enable;
     }
-  '';
-  n8nRouteConfig =
-    lib.optionalString (config.services.n8n.enable || config.myconfig.containers.n8n.enable)
-      ''
-        handle_path /n8n/* {
-          reverse_proxy http://localhost:5678
-        }
-      '';
+  ];
+
+  extraConfig = lib.concatStringsSep "\n" (
+    lib.flatten (
+      map (
+        svc:
+        lib.optionals svc.enable [
+          ''
+            handle_path ${svc.path} {
+              reverse_proxy http://localhost:${toString svc.port}
+            }
+          ''
+        ]
+      ) pathBasedServices
+    )
+  );
+
+  subdomainServices = [
+    {
+      name = "llama-swap";
+      subdomain = "llama-swap";
+      port = config.services.llama-swap.port;
+      enable = config.services.llama-swap.enable;
+    }
+  ];
+
+  subdomainVhosts = lib.foldl' (
+    acc: svc:
+    acc
+    // lib.optionalAttrs svc.enable {
+      "${svc.subdomain}.${hostName}" = {
+        hostName = "${svc.subdomain}.${hostName}";
+        listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+        serverAliases = [
+          "${svc.subdomain}.${config.networking.hostName}.wg0"
+        ];
+        extraConfig = ''
+          reverse_proxy http://localhost:${toString svc.port}
+        '';
+      };
+    }
+  ) { } subdomainServices;
+
+  allVhosts = {
+    "${hostName}" = {
+      inherit hostName;
+      listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+      serverAliases = [
+        "${config.networking.hostName}.wg0"
+        (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
+      ];
+      inherit extraConfig;
+    };
+  }
+  // subdomainVhosts;
+
+  searxngVhost = lib.mkIf config.services.searx.enable {
+    searxngExtraConfig = ''
+      handle_path /searx/uwsgi/* {
+        reverse_proxy http://localhost${toString config.services.searx.uwsgiConfig.http}
+      }
+      handle_path /searx/* {
+        reverse_proxy http://localhost:${toString config.services.searx.settings.server.port}
+      }
+    '';
+  };
+
+  searxngConfig = lib.mkIf (
+    config.services.searx.enable
+    && builtins.hasAttr "searxngExtraConfig" (lib.foldl' lib.recursiveUpdate { } searxngVhost)
+  ) (builtins.head (builtins.map (v: v.searxngExtraConfig) (lib.attrValues searxngVhost)));
+
 in
 {
   config = {
@@ -72,36 +136,19 @@ in
 
     services.caddy = {
       enable = true;
-      virtualHosts = {
-        "${hostName}" = {
-          inherit hostName;
-          listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
-          serverAliases = [
-            "${config.networking.hostName}.wg0"
-            (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
-          ];
-          extraConfig = ''
-            ${litellmRouteConfig}
-            ${ollamaRouteConfig}
-            ${openWebuiRouteConfig}
-            ${comfyuiRouteConfig}
-            ${searxngRouteConfig}
-            ${n8nRouteConfig}
-            ${llamaSwapRouteConfig}
-          '';
+      virtualHosts =
+        allVhosts
+        // lib.mkIf config.services.searx.enable {
+          "${hostName}" = {
+            inherit hostName;
+            listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+            serverAliases = [
+              "${config.networking.hostName}.wg0"
+              (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
+            ];
+            extraConfig = extraConfig + "\n" + searxngConfig;
+          };
         };
-        "n8n.${hostName}" = {
-          hostName = "n8n.${hostName}";
-          listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
-          serverAliases = [
-            "n8n.${config.networking.hostName}.wg0"
-            # (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
-          ];
-          extraConfig = ''
-            reverse_proxy http://localhost:5678
-          '';
-        };
-      };
     };
 
     networking.firewall.interfaces."wg0".allowedTCPPorts = lib.optionals config.services.caddy.enable [

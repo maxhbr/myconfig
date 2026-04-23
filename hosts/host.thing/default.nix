@@ -30,6 +30,7 @@
     }
     # ./containers.vllm-rocm.nix
     ./programs.opencode.nix
+    ../shared.deployedServices.nix
     ./services.caddy.nix
     (
       { ... }:
