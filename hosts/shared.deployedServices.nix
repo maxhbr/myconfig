@@ -75,6 +75,13 @@
       virtualHosts =
         let
           baseHostName = "${config.networking.hostName}.wg0.maxhbr.local";
+          servicesList = config.myconfig.deployedServices.services."${config.networking.hostName}";
+          portToService = lib.listToAttrs (
+            lib.map (s: {
+              name = toString s.port;
+              value = s.name;
+            }) servicesList
+          );
         in
         lib.listToAttrs (
           lib.map (
@@ -83,44 +90,39 @@
               port,
               ip,
             }:
+            let
+              portAliasUnique = (portToService.${toString port} == name);
+            in
             (lib.nameValuePair "${name}.${baseHostName}" {
               hostName = "${name}.${baseHostName}";
               listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
-              serverAliases = [
-                "${toString port}.${baseHostName}"
-                "${name}.${config.networking.hostName}.wg0"
-                "${toString port}.${config.networking.hostName}.wg0"
-              ];
+              serverAliases =
+                (lib.optional portAliasUnique "${toString port}.${baseHostName}")
+                ++ [
+                  "${name}.${config.networking.hostName}.wg0"
+                ]
+                ++ (lib.optional portAliasUnique "${toString port}.${config.networking.hostName}.wg0");
               extraConfig = ''
+                tls internal
                 reverse_proxy http://${ip}:${toString port}
               '';
             })
-          ) config.myconfig.deployedServices.services."${config.networking.hostName}"
+          ) servicesList
         );
     };
     networking.extraHosts =
       let
-        genExtraHost =
-          host:
-          { name, port, ... }:
-          let
-            wgIp = myconfig.metadatalib.getWgIp host;
-          in
-          "${wgIp} ${name}.${host}.wg0.maxhbr.local\n${wgIp} ${toString port}.${host}.wg0.maxhbr.local";
+        wgIp = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
+        baseHost = "${config.networking.hostName}.wg0.maxhbr.local";
       in
       lib.concatStringsSep "\n" (
-        lib.attrValues (
-          lib.foldl' (
-            acc: host:
-            acc
-            // lib.listToAttrs (
-              lib.map (service: {
-                name = "${service.name}.${host}";
-                value = genExtraHost host service;
-              }) config.myconfig.deployedServices.services.${host}
-            )
-          ) { } (builtins.attrNames config.myconfig.deployedServices.services)
-        )
+        lib.concatMap (
+          { name, port, ... }:
+          [
+            "${wgIp} ${name}.${baseHost}"
+            "${wgIp} ${toString port}.${baseHost}"
+          ]
+        ) config.myconfig.deployedServices.services."${config.networking.hostName}"
       );
   };
 }
