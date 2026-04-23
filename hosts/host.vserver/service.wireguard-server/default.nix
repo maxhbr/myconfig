@@ -22,7 +22,7 @@ let
     publicKey = wgHost.publicKey;
     allowedIPs = [ "${wgHost.ip4}/32" ];
   }) wgHosts;
-  otherAddresses = lib.map (wgHost: "/${wgHost.name}.wg0.maxhbr.local/${wgHost.ip4}") wgHosts;
+  otherAddresses = lib.map (wgHost: "/.${wgHost.name}.wg0.maxhbr.local/${wgHost.ip4}") wgHosts;
 
   # validate with:
   # $  nix eval --no-write-lock-file .#nixosConfigurations.vserver.config.networking.wireguard.interfaces.wg0.peers --json
