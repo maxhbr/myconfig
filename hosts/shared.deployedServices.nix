@@ -116,17 +116,22 @@
     };
     networking.extraHosts =
       let
-        wgIp = myconfig.metadatalib.getWgIp "${config.networking.hostName}";
-        baseHost = "${config.networking.hostName}.wg0.maxhbr.local";
+        baseDomain = "wg0.maxhbr.local";
       in
       lib.concatStringsSep "\n" (
         lib.concatMap (
-          { name, port, ... }:
-          [
-            "${wgIp} ${name}.${baseHost}"
-            "${wgIp} ${toString port}.${baseHost}"
-          ]
-        ) config.myconfig.deployedServices.services."${config.networking.hostName}"
+          hostname: lib.concatMap (
+            { name, port, ... }:
+            let
+              wgIp = myconfig.metadatalib.getWgIp hostname;
+              baseHost = "${hostname}.wg0.maxhbr.local";
+            in
+            [
+              "${wgIp} ${name}.${baseHost}"
+              "${wgIp} ${toString port}.${baseHost}"
+            ]
+          ) config.myconfig.deployedServices.services.${hostname}
+        ) (lib.attrNames config.myconfig.deployedServices.services)
       );
   };
 }
