@@ -90,8 +90,9 @@ let
       runtimeInputs = [ ];
       text = ''
         ${envExports}
-        mkdir -p "$HOME/llama-bench-logs"
-        exec &> >(tee -a "$HOME/llama-bench-logs/${scriptName}.log")
+        dir="$HOME/benchmarks/llama-bench-logs"
+        mkdir -p "$dir"
+        exec &> >(tee -a "$dir/${scriptName}.log")
         set -x
         ${bench} -m "${model.path}" ${model.params} -d 0,4096,8192,16384,32768 -p 2048 -n 32 -ub 2048 -mmp 0
       '';
@@ -296,6 +297,7 @@ in
         port = config.services.llama-swap.port;
       }
     ];
+    
 
     services.llama-swap = {
       settings = {
@@ -313,6 +315,7 @@ in
     home-manager.sharedModules = [
       {
         home.packages = allScripts;
+        myconfig.persistence.cache-directories = [ "benchmarks/llama-bench-logs" ];
       }
     ];
   };

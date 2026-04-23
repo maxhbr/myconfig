@@ -29,6 +29,35 @@
         ];
         ttl = 900;
       }
+      {
+        name = "Qwen3.6-27B-Q8_0";
+        path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
+        devices = [
+          "Vulkan0"
+          "CUDA0"
+          "ROCm0"
+        ];
+        # mmproj =
+        aliases = [
+          # "hermes"
+          # "opencode-fast"
+          "Qwen3.6-27B"
+        ];
+        ttl = 900;
+      }
+      {
+        name = "Qwen3.6-27B-UD-Q6_K_XL";
+        path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
+        devices = [
+          "Vulkan0"
+          "CUDA0"
+          "ROCm0"
+        ];
+        # mmproj =
+        aliases = [
+        ];
+        ttl = 900;
+      }
       # {
       #   name = "Qwen3.5-27B-Q8_0:modded";
       #   path = "/persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf";
@@ -134,18 +163,18 @@
                     ];
                     "ttl" = 1800;
                   };
-                "qwen3.6-35B-A3B-BF16" =
+                "Qwen3.6-27B-GGUF-BF16" =
                   let
                     llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
                   in
                   {
                     cmd = ''
-                      ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.6-35B-A3B-GGUF/BF16/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -fa on --no-webui
+                      ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.6-27B-GGUF/BF16/Qwen3.6-27B-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -fa on --no-webui
                     '';
                     aliases = [
                       "opencode-fallback"
-                      "Qwen3.6-35B-A3B"
-                      "Qwen3.6-35B"
+                      "Qwen3.6-27B-GGUF"
+                      "Qwen3.6-27B"
                     ];
                     "ttl" = 300;
                   };
