@@ -23,6 +23,15 @@
       };
     }
     (myconfig.metadatalib.fixIp "enp0s20u2")
+    {
+      # programs.mosh.enable = lib.mkDefault true;
+      services.eternal-terminal = {
+        enable = true;
+        port = 22022;
+      };
+      networking.firewall.allowedTCPPorts = [ 22022 ];
+      networking.firewall.allowedUDPPorts = [ 22022 ];
+    }
   ];
   config = {
     myconfig = {

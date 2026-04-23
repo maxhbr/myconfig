@@ -154,10 +154,14 @@ in
             in
             [
               (mkAlacrittyTmuxSession "p14" false [
+              ])
+              (mkAlacrittyTmuxSession "p14" true [
+              ])
+              (mkAlacrittyTmuxSession "nuc" false [
                 8123
                 8124
               ])
-              (mkAlacrittyTmuxSession "p14" true [
+              (mkAlacrittyTmuxSession "nuc" true [
                 8123
                 8124
               ])
