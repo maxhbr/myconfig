@@ -155,6 +155,7 @@ let
           };
 
           environment.systemPackages = [ pkgs.wireguard-tools ];
+          networking.nameservers = [ "10.199.199.1" ];
           networking.wireguard.interfaces = {
             "${wgInterface}" = {
               ips = [

@@ -22,12 +22,13 @@ let
     publicKey = wgHost.publicKey;
     allowedIPs = [ "${wgHost.ip4}/32" ];
   }) wgHosts;
-  otherAddresses = lib.map (wgHost: "/.${wgHost.name}.wg0.maxhbr.local/${wgHost.ip4}") wgHosts;
 
   # validate with:
   # $  nix eval --no-write-lock-file .#nixosConfigurations.vserver.config.networking.wireguard.interfaces.wg0.peers --json
 in
 {
+  imports = [ ./services.dnsmasq.nix ];
+
   config = {
     environment.systemPackages = with pkgs; [ wireguard-tools ];
     # enable NAT
@@ -47,18 +48,8 @@ in
       '';
     };
 
-    # Enable dnsmasq service
-    services.dnsmasq.enable = true;
-    services.dnsmasq.settings = {
-      domain = "maxhbr.local";
-      listen-address = [
-        "127.0.0.1"
-        "10.199.199.1"
-      ];
-      dhcp-range = [ "10.199.199.2,10.199.199.254,12h" ];
-      dhcp-leasefile = "/var/lib/dnsmasq/dnsmasq.leases";
-      address = [ "/wg0.maxhbr.local/10.199.199.1" ] ++ otherAddresses;
-    };
+    myconfig.wg0.services.dnsmasq.enable = true;
+
     networking.firewall.interfaces."wg0".allowedTCPPorts = [ 53 ];
     networking.firewall.interfaces."wg0".allowedUDPPorts = [ 53 ];
 

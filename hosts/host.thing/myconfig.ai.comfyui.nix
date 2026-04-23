@@ -1,4 +1,3 @@
-
 # Copyright 2016-2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 {

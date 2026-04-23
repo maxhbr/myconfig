@@ -50,11 +50,13 @@ let
       reverse_proxy http://localhost:${toString config.services.searx.settings.server.port}
     }
   '';
-  n8nRouteConfig = lib.optionalString (config.services.n8n.enable || config.myconfig.containers.n8n.enable) ''
-    handle_path /n8n/* {
-      reverse_proxy http://localhost:5678
-    }
-  '';
+  n8nRouteConfig =
+    lib.optionalString (config.services.n8n.enable || config.myconfig.containers.n8n.enable)
+      ''
+        handle_path /n8n/* {
+          reverse_proxy http://localhost:5678
+        }
+      '';
 in
 {
   config = {
@@ -105,5 +107,5 @@ in
     networking.firewall.interfaces."wg0".allowedTCPPorts = lib.optionals config.services.caddy.enable [
       443
     ];
- };
+  };
 }

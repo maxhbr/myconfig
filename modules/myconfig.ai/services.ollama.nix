@@ -33,15 +33,23 @@ in
         };
       })
       ({
-        config = lib.mkIf (config.services.ollama.enable && hasVariant "amd-no-rocm" && !hasVariant "nvidia" && !hasVariant "amd") {
-          services.ollama = {
-            package = pkgs.ollama-vulkan;
-            environmentVariables = {
-              OLLAMA_VULKAN = "1";
-              RADV_PERFTEST = "sam";
+        config =
+          lib.mkIf
+            (
+              config.services.ollama.enable
+              && hasVariant "amd-no-rocm"
+              && !hasVariant "nvidia"
+              && !hasVariant "amd"
+            )
+            {
+              services.ollama = {
+                package = pkgs.ollama-vulkan;
+                environmentVariables = {
+                  OLLAMA_VULKAN = "1";
+                  RADV_PERFTEST = "sam";
+                };
+              };
             };
-          };
-        };
       })
 
     ];

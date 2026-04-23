@@ -297,7 +297,6 @@ in
         port = config.services.llama-swap.port;
       }
     ];
-    
 
     services.llama-swap = {
       settings = {

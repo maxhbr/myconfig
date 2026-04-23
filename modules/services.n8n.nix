@@ -8,37 +8,42 @@
   inputs,
   ...
 }:
-let 
+let
   default_N8N_ENCRYPTION_KEY_FILE = "/run/n8n/encryption-key";
   default_N8N_RUNNERS_AUTH_TOKEN_FILE = "/run/n8n/runner-token";
-  n8nConfig = 
-    { config, pkgs, lib, ... }:
+  n8nConfig =
+    {
+      config,
+      pkgs,
+      lib,
+      ...
+    }:
     {
       config = lib.mkIf config.services.n8n.enable {
-          services.n8n = {
-            environment = {
-              GENERIC_TIMEZONE = "Europe/Amsterdam";
-              N8N_PORT = 5678;
-              N8N_DIAGNOSTICS_ENABLED = false;
-              N8N_VERSION_NOTIFICATIONS_ENABLED = false;
-              N8N_ENCRYPTION_KEY_FILE = lib.mkDefault default_N8N_ENCRYPTION_KEY_FILE;
-              N8N_RUNNERS_AUTH_TOKEN_FILE = lib.mkDefault default_N8N_RUNNERS_AUTH_TOKEN_FILE;
-            };
-
-            taskRunners = {
-              enable = true;
-              runners = {
-                javascript.enable = true;
-                python.enable = true;
-              };
-            };
+        services.n8n = {
+          environment = {
+            GENERIC_TIMEZONE = "Europe/Amsterdam";
+            N8N_PORT = 5678;
+            N8N_DIAGNOSTICS_ENABLED = false;
+            N8N_VERSION_NOTIFICATIONS_ENABLED = false;
+            N8N_ENCRYPTION_KEY_FILE = lib.mkDefault default_N8N_ENCRYPTION_KEY_FILE;
+            N8N_RUNNERS_AUTH_TOKEN_FILE = lib.mkDefault default_N8N_RUNNERS_AUTH_TOKEN_FILE;
           };
 
-          systemd.tmpfiles.rules = [
-            "d /run/n8n 0750 n8n n8n -"
-          ];
+          taskRunners = {
+            enable = true;
+            runners = {
+              javascript.enable = true;
+              python.enable = true;
+            };
+          };
+        };
+
+        systemd.tmpfiles.rules = [
+          "d /run/n8n 0750 n8n n8n -"
+        ];
+      };
     };
-  };
 
 in
 {
