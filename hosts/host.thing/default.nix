@@ -127,7 +127,7 @@
         };
         container = {
           crawl4ai = {
-            enable = true;
+            enable = false;
           };
         };
       };

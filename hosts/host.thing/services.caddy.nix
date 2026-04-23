@@ -10,6 +10,7 @@
 }:
 
 let
+  hostName = "${config.networking.hostName}.wg0.maxhbr.local";
   openWebuiPort =
     if config.myconfig.ai.container.open-webui.enable then
       config.myconfig.ai.container.open-webui.port
@@ -49,21 +50,29 @@ let
       reverse_proxy http://localhost:${toString config.services.searx.settings.server.port}
     }
   '';
-  n8nRouteConfig = lib.optionalString config.services.n8n.enable ''
+  n8nRouteConfig = lib.optionalString (config.services.n8n.enable || config.myconfig.containers.n8n.enable) ''
     handle_path /n8n/* {
-      reverse_proxy http://localhost:${toString config.services.n8n.environment.N8N_PORT}
+      reverse_proxy http://localhost:5678
     }
   '';
 in
 {
   config = {
-    services.searx.settings.server.base_url =
-      lib.mkForce "${config.networking.hostName}.wg0.maxhbr.local/searx/";
+    services.searx.settings.server.base_url = lib.mkForce "${hostName}/searx/";
+    services.n8n.environment = {
+      WEBHOOK_URL = "https://${hostName}/";
+      N8N_PROXY_HOPS = 1;
+    };
+    containers.n8n.config.services.n8n.environment = {
+      WEBHOOK_URL = "https://${hostName}/";
+      N8N_PROXY_HOPS = 1;
+    };
+
     services.caddy = {
       enable = true;
-      virtualHosts."${config.networking.hostName}.wg0.maxhbr.local" = {
+      virtualHosts."${hostName}" = {
+        inherit hostName;
         listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
-        hostName = "${config.networking.hostName}.wg0.maxhbr.local";
         serverAliases = [
           "${config.networking.hostName}.wg0"
           (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
