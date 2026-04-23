@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: MIT
 {
   config,
+  myconfig,
   pkgs,
   lib,
   ...
 }:
 {
-  options.myconfig.deployedServices =
-    with lib;
-    mkOption {
+  options.myconfig.deployedServices = with lib; {
+    services = mkOption {
       type = types.attrsOf (
         types.listOf (
           types.submodule {
@@ -23,8 +23,8 @@
                 description = "Port on which the service listens";
               };
               ip = mkOption {
-                type = types.nullOr types.str;
-                default = null;
+                type = types.str;
+                default = "localhost";
                 description = "Optional custom IP address for the service";
               };
             };
@@ -34,9 +34,11 @@
       default = { };
       description = "Map of hostnames to their deployed services";
     };
+    configureCaddy = mkEnableOption "configure caddy for this machine";
+  };
 
   config = {
-    myconfig.deployedServices = {
+    myconfig.deployedServices.services = {
       thing = [
         {
           name = "n8n";
@@ -67,6 +69,34 @@
           port = 8080;
         }
       ];
+    };
+    services.caddy = lib.mkIf config.myconfig.deployedServices.configureCaddy {
+      enable = lib.mkDefault true;
+      virtualHosts =
+        let
+          baseHostName = "${config.networking.hostName}.wg0.maxhbr.local";
+        in
+        lib.listToAttrs (
+          lib.map (
+            {
+              name,
+              port,
+              ip,
+            }:
+            (lib.nameValuePair "${name}.${baseHostName}" {
+              hostName = "${name}.${baseHostName}";
+              listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
+              serverAliases = [
+                "${toString port}.${baseHostName}"
+                "${name}.${config.networking.hostName}.wg0"
+                "${toString port}.${config.networking.hostName}.wg0"
+              ];
+              extraConfig = ''
+                reverse_proxy http://${ip}:${toString port}
+              '';
+            })
+          ) config.myconfig.deployedServices.services."${config.networking.hostName}"
+        );
     };
   };
 }
