@@ -52,7 +52,35 @@ in
       enable = mkEnableOption "myconfig.containers.n8n";
     };
   };
-  imports = [ n8nConfig ];
+  imports = [
+    n8nConfig
+    (lib.mkIf config.myconfig.containers.n8n.enable {
+      myconfig.secrets = {
+        "N8N_RUNNERS_AUTH_TOKEN_FILE" = {
+          dest = config.containers.n8n.config.services.n8n.environment.N8N_RUNNERS_AUTH_TOKEN_FILE;
+          permissions = "0444";
+        };
+
+        "N8N_ENCRYPTION_KEY_FILE" = {
+          dest = config.containers.n8n.config.services.n8n.environment.N8N_ENCRYPTION_KEY_FILE;
+          permissions = "0444";
+        };
+      };
+    })
+    (lib.mkIf config.services.n8n.enable {
+      myconfig.secrets = {
+        "N8N_RUNNERS_AUTH_TOKEN_FILE" = {
+          dest = config.services.n8n.environment.N8N_RUNNERS_AUTH_TOKEN_FILE;
+          permissions = "0444";
+        };
+
+        "N8N_ENCRYPTION_KEY_FILE" = {
+          dest = config.services.n8n.environment.N8N_ENCRYPTION_KEY_FILE;
+          permissions = "0444";
+        };
+      };
+    })
+  ];
   config = lib.mkIf config.myconfig.containers.n8n.enable {
     containers.n8n = {
       autoStart = true;

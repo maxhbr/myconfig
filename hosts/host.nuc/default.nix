@@ -8,8 +8,9 @@
   ...
 }:
 {
-  imports = [
+ imports = [
     ./smart-home
+    ./observability.nix
     ./services.caddy.nix
     ./hardware-configuration.nix
     ../../hardware/grub.nix
@@ -39,6 +40,7 @@
       desktop.enable = false;
       headless.enable = true;
       smart-home.enable = true;
+      deployedServices.configureCaddy = true;
     };
 
     networking.hostName = "nuc";

@@ -39,6 +39,28 @@
 
   config = {
     myconfig.deployedServices.services = {
+      nuc = [
+        {
+          name = "hass";
+          port = 8123;
+        }
+        {
+          name = "deconz";
+          port = 8124;
+        }
+        {
+          name = "prometheus";
+          port = 9090;
+        }
+        {
+          name = "grafana";
+          port = 3000;
+        }
+        {
+          name = "node-exporter";
+          port = 9100;
+        }
+      ];
       thing = [
         {
           name = "n8n";
@@ -120,7 +142,8 @@
       in
       lib.concatStringsSep "\n" (
         lib.concatMap (
-          hostname: lib.concatMap (
+          hostname:
+          lib.concatMap (
             { name, port, ... }:
             let
               wgIp = myconfig.metadatalib.getWgIp hostname;
