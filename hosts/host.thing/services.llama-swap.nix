@@ -173,6 +173,13 @@
           hardware.graphics.enable = true;
           myconfig.ai.llama-swap = {
             models = [
+              {
+                name = "Qwen3.5-9B-Q5_K_M";
+                path = "/persistent/cache/models/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
+                devices = [ "Vulkan0" ];
+                aliases = [ "sidekick" ];
+                ttl = 300;
+              }
             ];
           };
           services.llama-swap = {
@@ -183,19 +190,6 @@
             settings = {
               healthCheckTimeout = 500;
               models = {
-                "Qwen3.5-9B-Q5_K_M" =
-                  let
-                    llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
-                  in
-                  {
-                    cmd = ''
-                      ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf -fa on --no-webui
-                    '';
-                    aliases = [
-                      "sidekick"
-                    ];
-                    "ttl" = 300;
-                  };
                 "qwen3.5-122B-A10B-Q5_K_M" =
                   let
                     llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
