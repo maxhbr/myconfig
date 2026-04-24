@@ -77,6 +77,11 @@ in
       }
       {
         home.packages = with pkgs; [
+          llmfit
+        ];
+      }
+      {
+        home.packages = with pkgs; [
           # sandboxing
           nono
           fence
