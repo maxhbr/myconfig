@@ -10,6 +10,17 @@
   config = {
     myconfig.ai.llama-swap.models = [
       {
+        name = "Qwen3.5-9B-Q5_K_M";
+        path = "/persistent/cache/models/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
+        devices = [
+          "Vulkan0"
+          "CUDA0"
+          "ROCm0"
+        ];
+        aliases = [ "sidekick" ];
+        ttl = 300;
+      }
+      {
         name = "Qwen3.6-35B-A3B-UD-Q5_K_XL";
         path = "/persistent/cache/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
         devices = [
@@ -30,6 +41,8 @@
       {
         name = "Qwen3.6-27B-Q8_0";
         path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
+        ctxSize = 262144;
+        params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
         devices = [
           "Vulkan0"
           "CUDA0"
@@ -44,8 +57,21 @@
         ttl = 900;
       }
       {
+        name = "Qwen3.6-27B-Q8_0-tweaked";
+        path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
+        params = "--jinja --reasoning-format deepseek -ngl 99 -fa -sm row --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 -c 40960 -n 32768 --no-context-shift";
+        devices = [
+          "Vulkan0"
+          "CUDA0"
+          "ROCm0"
+        ];
+        aliases = [ ];
+        ttl = 900;
+      }
+      {
         name = "Qwen3.6-27B-UD-Q6_K_XL";
         path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
+        params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
         devices = [
           "Vulkan0"
           "CUDA0"
@@ -149,6 +175,19 @@
             settings = {
               healthCheckTimeout = 500;
               models = {
+                "Qwen3.5-9B-Q5_K_M" =
+                  let
+                    llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
+                  in
+                  {
+                    cmd = ''
+                      ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf -fa on --no-webui
+                    '';
+                    aliases = [
+                      "sidekick"
+                    ];
+                    "ttl" = 300;
+                  };
                 "qwen3.5-122B-A10B-Q5_K_M" =
                   let
                     llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
@@ -203,6 +242,7 @@
         name = "llama-swap-33657";
         port = 33657;
         models = [
+          "sidekick"
           "qwen3.5-122B-A10B-Q5_K_M"
           "opencode"
           "qwen3.6-35B-A3B-BF16"

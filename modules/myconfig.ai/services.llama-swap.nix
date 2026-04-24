@@ -64,13 +64,14 @@ let
       safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}${suffix}";
       scriptName = "llama-server_${device}_${safeName}";
       envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
+      ctxSizeFlag = lib.optionalString (model.ctxSize != null) "--ctx-size ${toString model.ctxSize} ";
     in
     pkgs.writeShellApplication {
       name = scriptName;
       runtimeInputs = [ ];
       text = ''
         ${envExports}
-        ${server} --port "$1" -m "${model.path}" --gpu-layers 999 -fa on --no-webui ${model.params} ${extraArgs} "''${@:2}"
+        ${server} --port "$1" -m "${model.path}" --gpu-layers 999 -fa on --no-webui ${ctxSizeFlag}${model.params} ${extraArgs} "''${@:2}"
       '';
     };
 
@@ -94,7 +95,7 @@ let
         mkdir -p "$dir"
         exec &> >(tee -a "$dir/${scriptName}.log")
         set -x
-        ${bench} -m "${model.path}" ${model.params} -d 0,4096,8192,16384,32768 -p 2048 -n 32 -ub 2048 -mmp 0
+        ${bench} -m "${model.path}" -d 0,4096,8192,16384,32768 -p 2048 -n 32 -ub 2048 -mmp 0
       '';
     };
 
@@ -281,6 +282,11 @@ in
               type = types.int;
               default = 300;
               description = "Time-to-live in seconds before the model is unloaded";
+            };
+            ctxSize = mkOption {
+              type = types.nullOr types.int;
+              default = null;
+              description = "Context size (--ctx-size) for llama-server; null to use the model default";
             };
           };
         }

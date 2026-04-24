@@ -4,6 +4,7 @@
     "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf",
     "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf",
     "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf",
-    "unsloth/Qwen3.6-27B-GGUF/BF16"
+    "unsloth/Qwen3.6-27B-GGUF/BF16",
+    "unsloth/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf"
   ]
 }
