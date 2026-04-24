@@ -164,7 +164,7 @@
       };
 
       config =
-        { pkgs, lib, ... }:
+        { ... }:
         {
           imports = [
             ../../modules/myconfig.ai/services.llama-swap.nix
