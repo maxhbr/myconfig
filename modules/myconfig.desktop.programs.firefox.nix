@@ -6,7 +6,7 @@
 }:
 {
   config = lib.mkIf config.myconfig.desktop.enable {
-    myconfig.persistence.directories = [ ".mozilla" ];
+    myconfig.persistence.directories = [ ".mozilla" ".config/mozilla" ];
     myconfig.desktop.wayland.launcherCommands = [ "firefox" ];
     home-manager.sharedModules = [
       (
@@ -23,6 +23,7 @@
             home.packages = [ pipefox ];
             programs.firefox = {
               enable = lib.mkDefault true;
+              configPath = "${config.xdg.configHome}/mozilla/firefox";
               profiles."0" = {
                 id = 0;
                 isDefault = true;
@@ -77,7 +78,7 @@
       {
         config = {
           home.file = {
-            ".mozilla/native-messaging-hosts/com.justwatch.gopass.json" = {
+            ".config/mozilla/native-messaging-hosts/com.justwatch.gopass.json" = {
               text = ''
                 {
                 "name": "com.justwatch.gopass",
