@@ -180,6 +180,17 @@
                 aliases = [ "sidekick" ];
                 ttl = 300;
               }
+              {
+                name = "qwen3.5-122B-A10B-Q5_K_M";
+                path = "/persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf";
+                devices = [ "Vulkan0" ];
+                aliases = [
+                  "opencode-slow"
+                  "opencode-fallback"
+                  "qwen3.5-122B"
+                ];
+                ttl = 1800;
+              }
             ];
           };
           services.llama-swap = {
@@ -190,21 +201,6 @@
             settings = {
               healthCheckTimeout = 500;
               models = {
-                "qwen3.5-122B-A10B-Q5_K_M" =
-                  let
-                    llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
-                  in
-                  {
-                    cmd = ''
-                      ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf  -fa on --no-webui
-                    '';
-                    aliases = [
-                      "opencode-slow"
-                      "opencode-fallback"
-                      "qwen3.5-122B"
-                    ];
-                    "ttl" = 1800;
-                  };
                 "Qwen3.6-27B-GGUF-BF16" =
                   let
                     llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
