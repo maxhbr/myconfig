@@ -8,7 +8,7 @@
   ...
 }:
 {
- imports = [
+  imports = [
     ./smart-home
     ./observability.nix
     ./services.caddy.nix
