@@ -100,7 +100,7 @@ in
               modelNames = if model.models != [ ] then model.models else [ providerName ];
             in
             map (modelName: {
-              model_name = modelName;
+              model_name = "${providerName}:${modelName}";
               litellm_params = {
                 model = "openai/${modelName}";
                 api_base = "http://${hostPort}/v1";

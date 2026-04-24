@@ -15,7 +15,6 @@
         devices = [
           "Vulkan0"
           "CUDA0"
-          "ROCm0"
         ];
         aliases = [ "sidekick" ];
         ttl = 300;
@@ -26,7 +25,6 @@
         devices = [
           "Vulkan0"
           "CUDA0"
-          "ROCm0"
         ];
         # mmproj =
         aliases = [
@@ -41,12 +39,11 @@
       {
         name = "Qwen3.6-27B-Q8_0";
         path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
-        ctxSize = 262144;
+        # ctxSize = 262144;
         params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
         devices = [
           "Vulkan0"
           "CUDA0"
-          "ROCm0"
         ];
         # mmproj =
         aliases = [
@@ -63,7 +60,6 @@
         devices = [
           "Vulkan0"
           "CUDA0"
-          "ROCm0"
         ];
         aliases = [ ];
         ttl = 900;
@@ -75,7 +71,6 @@
         devices = [
           "Vulkan0"
           "CUDA0"
-          "ROCm0"
         ];
         # mmproj =
         aliases = [
@@ -227,20 +222,7 @@
           };
         };
     };
-    myconfig.ai.localModels = [
-      {
-        name = "llama-swap-33657";
-        port = 33657;
-        models = [
-          "sidekick"
-          "qwen3.5-122B-A10B-Q5_K_M"
-          "opencode"
-          "qwen3.6-35B-A3B-BF16"
-          "opencode-fallback"
-          "gemma-4-31B-it-BF16"
-        ];
-      }
-    ];
+    myconfig.ai.localModels = config.containers.llama-swap-33657.config.myconfig.ai.localModels;
     ############
   };
 }
