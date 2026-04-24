@@ -191,6 +191,18 @@
                 ];
                 ttl = 1800;
               }
+              {
+                name = "Qwen3.6-27B-GGUF-BF16";
+                path = "/persistent/cache/models/Qwen3.6-27B-GGUF/BF16/Qwen3.6-27B-BF16-00001-of-00002.gguf";
+                params = "-ctk f16 -ctv f16";
+                devices = [ "Vulkan0" ];
+                aliases = [
+                  "opencode"
+                  "Qwen3.6-27B-GGUF"
+                  "Qwen3.6-27B"
+                ];
+                ttl = 300;
+              }
             ];
           };
           services.llama-swap = {
@@ -201,21 +213,6 @@
             settings = {
               healthCheckTimeout = 500;
               models = {
-                "Qwen3.6-27B-GGUF-BF16" =
-                  let
-                    llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
-                  in
-                  {
-                    cmd = ''
-                      ${llama-vulkan-server} --port ''${PORT} -m /persistent/cache/models/Qwen3.6-27B-GGUF/BF16/Qwen3.6-27B-BF16-00001-of-00002.gguf -ctk f16 -ctv f16 -fa on --no-webui
-                    '';
-                    aliases = [
-                      "opencode"
-                      "Qwen3.6-27B-GGUF"
-                      "Qwen3.6-27B"
-                    ];
-                    "ttl" = 300;
-                  };
                 "gemma-4-31B-it-BF16" =
                   let
                     llama-vulkan-server = lib.getExe' pkgs.llama-cpp-vulkan "llama-server";
