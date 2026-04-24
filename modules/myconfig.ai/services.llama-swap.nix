@@ -3,6 +3,7 @@
 {
   config,
   myconfig,
+  options,
   lib,
   pkgs,
   ...
@@ -244,7 +245,6 @@ let
   ) cfg.models;
 in
 {
-  imports = [ ];
   options.myconfig.ai.llama-swap = with lib; {
     models = mkOption {
       type = types.listOf (
@@ -295,13 +295,44 @@ in
       description = "Declarative model definitions that are expanded into llama-swap model entries per device";
     };
   };
+  imports = [
+    (
+      {
+        config,
+        options,
+        lib,
+        ...
+      }:
+
+      let
+        hmEnabled = lib.hasAttrByPath [ "home-manager" "sharedModules" ] options;
+      in
+      {
+        config = lib.optionalAttrs hmEnabled {
+          home-manager.sharedModules = lib.mkIf config.services.llama-swap.enable [
+            {
+              home.packages = allScripts;
+              myconfig.persistence.cache-directories = [
+                "benchmarks/llama-bench-logs"
+              ];
+            }
+          ];
+        };
+      }
+    )
+  ];
   config = lib.mkIf config.services.llama-swap.enable {
     myconfig.ai.localModels = [
-      {
-        name = "llama-swap";
-        models = allModelNames;
-        port = config.services.llama-swap.port;
-      }
+      (
+        let
+          port = config.services.llama-swap.port;
+        in
+        {
+          name = "llama-swap-${toString port}";
+          models = allModelNames;
+          port = port;
+        }
+      )
     ];
 
     services.llama-swap = {
@@ -317,11 +348,5 @@ in
       environment.XDG_CACHE_HOME = "/var/cache/llama-swap";
       serviceConfig.CacheDirectory = "llama-swap";
     };
-    home-manager.sharedModules = [
-      {
-        home.packages = allScripts;
-        myconfig.persistence.cache-directories = [ "benchmarks/llama-bench-logs" ];
-      }
-    ];
   };
 }

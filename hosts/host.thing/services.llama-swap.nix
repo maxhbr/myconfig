@@ -166,7 +166,15 @@
       config =
         { pkgs, lib, ... }:
         {
+          imports = [
+            ../../modules/myconfig.ai/services.llama-swap.nix
+            ../../modules/myconfig.ai/myconfig.localModels.nix
+          ];
           hardware.graphics.enable = true;
+          myconfig.ai.llama-swap = {
+            models = [
+            ];
+          };
           services.llama-swap = {
             enable = true;
             port = 33657;
