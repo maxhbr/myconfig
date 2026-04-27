@@ -126,7 +126,7 @@ let
           extraArgs
           ;
       };
-      modelKey = "${device}:${model.name}${suffix}";
+      modelKey = if isFirstDevice then "${model.name}${suffix}" else "${device}:${model.name}${suffix}";
     in
     {
       "${modelKey}" = {
@@ -268,7 +268,7 @@ in
             };
             devices = mkOption {
               type = types.listOf types.str;
-              default = [ ];
+              default = [ "Vulkan0" ];
               description = "List of devices to run this model on (e.g. 'Vulkan0', 'CUDA0', 'ROCm0')";
             };
             mmproj = mkOption {
