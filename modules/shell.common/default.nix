@@ -38,7 +38,6 @@ in
     };
     environment = {
       systemPackages = with pkgs; [
-        elinks
         w3m
         man-pages
         file

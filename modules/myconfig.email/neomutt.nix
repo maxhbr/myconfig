@@ -16,13 +16,13 @@ let
       htmlViaW3m = ''
         text/html; ${pkgs.w3m}/bin/w3m -dump -ppc 8 -graph -s -I %{charset} -T text/html; copiousoutput
       '';
-      htmlViaElinks = ''
-        text/html; ${pkgs.elinks}/bin/elinks %s; nametemplate=%s.html
-        text/html; ${pkgs.elinks}/bin/elinks -dump %s; nametemplate=%s.html; copiousoutput
-      '';
+      # htmlViaElinks = ''
+      #   text/html; ${pkgs.elinks}/bin/elinks %s; nametemplate=%s.html
+      #   text/html; ${pkgs.elinks}/bin/elinks -dump %s; nametemplate=%s.html; copiousoutput
+      # '';
     in
     ''
-      ${htmlViaElinks}
+      ${htmlViaLynx}
       application/pdf; ${pkgs.zathura}/bin/zathura %s
       image/*; ${pkgs.sxiv}/bin/sxiv %s
       application/x-tar; ${pkgs.xarchiver}/bin/xarchiver %s &;
