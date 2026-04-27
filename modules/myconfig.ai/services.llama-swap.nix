@@ -11,12 +11,15 @@
 let
   cfg = config.myconfig.ai.llama-swap;
 
-  hasGpuVariant = v: (let
-                          hasMyconfigProperty = lib.hasAttrByPath [ "myconfig" "hardware" "gpu" "variant" ] options;
-                          hasGpuVariant = builtins.elem v config.myconfig.hardware.gpu.variant;
-                        in if hasMyconfigProperty
-                            then hasGpuVariant
-                            else true);
+  hasGpuVariant =
+    v:
+    (
+      let
+        hasMyconfigProperty = lib.hasAttrByPath [ "myconfig" "hardware" "gpu" "variant" ] options;
+        hasGpuVariant = builtins.elem v config.myconfig.hardware.gpu.variant;
+      in
+      if hasMyconfigProperty then hasGpuVariant else true
+    );
 
   # Determine whether a given device string is supported by the current hardware
   guardDevice =

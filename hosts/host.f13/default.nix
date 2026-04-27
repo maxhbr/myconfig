@@ -275,7 +275,7 @@ in
           "aerc"
           "neomutt"
           "thunderbird"
-          "himalaya"
+          # "himalaya"
         ];
       };
       virtualisation.enable = true;
