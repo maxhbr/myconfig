@@ -12,10 +12,10 @@
         lib.mkIf config.programs.mcp.enable {
           programs.mcp = {
             servers = {
-              mcp-nixos = {
-                command = "${lib.getExe pkgs.mcp-nixos}";
-                args = [ ];
-              };
+              # mcp-nixos = {
+              #   command = "${lib.getExe pkgs.mcp-nixos}";
+              #   args = [ ];
+              # };
               context7 = {
                 url = "https://mcp.context7.com/mcp";
                 # headers = {
