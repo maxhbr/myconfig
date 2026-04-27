@@ -143,6 +143,13 @@ in
 
   config.systemd.services =
     let
+      missingSource = filterAttrs (name: info: info.source == null) cfg;
+      _ = lib.warn (
+        if missingSource != { } then
+          "myconfig.secrets: source is missing for: ${lib.concatStringsSep ", " (lib.attrNames missingSource)}"
+        else
+          ""
+      ) null;
       units = mapAttrs' (name: info: {
         name = "${name}-key";
         value = (mkService name info);
