@@ -18,7 +18,8 @@ let
   secret = types.submodule {
     options = {
       source = mkOption {
-        type = types.path;
+        default = null;
+        type = types.nullOr types.path;
         description = "local secret path";
       };
 
@@ -145,7 +146,7 @@ in
       units = mapAttrs' (name: info: {
         name = "${name}-key";
         value = (mkService name info);
-      }) cfg;
+      }) (filterAttrs (name: info: info.source != null) cfg);
     in
     units;
 }
