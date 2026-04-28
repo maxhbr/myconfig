@@ -6,135 +6,187 @@
   inputs,
   ...
 }:
+let
+  rtxModels = [
+    {
+      name = "Qwen3.5-9B-Q5_K_M";
+      path = "/persistent/cache/models/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
+      ctxSize = 262144;
+      devices = [
+        "Vulkan0"
+        "CUDA0"
+      ];
+      aliases = [ "sidekick" ];
+      ttl = 300;
+    }
+    {
+      name = "Qwen3.6-35B-A3B-UD-Q5_K_XL";
+      path = "/persistent/cache/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
+      devices = [
+        "Vulkan0"
+        "CUDA0"
+      ];
+      # mmproj =
+      aliases = [
+        "Qwen3.6-35B-A3B-UD-Q5_K"
+        "Qwen3.6-35B-A3B-UD-Q5"
+        "Qwen3.6-35B-A3B-UD"
+        "Qwen3.6-35B-A3B"
+        "Qwen3.6-35B"
+      ];
+      ttl = 900;
+    }
+    {
+      name = "Qwen3.6-27B-Q8_0";
+      path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
+      params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
+      devices = [
+        "Vulkan0"
+        "CUDA0"
+      ];
+      # mmproj =
+      aliases = [
+        "hermes"
+        "opencode-fast"
+        "Qwen3.6-27B"
+      ];
+      ttl = 900;
+    }
+    {
+      name = "Qwen3.6-27B-Q8_0-tweaked";
+      path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
+      params = "--jinja --reasoning-format deepseek -ngl 99 -fa -sm row --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 -c 40960 -n 32768 --no-context-shift";
+      devices = [
+        "Vulkan0"
+        "CUDA0"
+      ];
+      aliases = [ ];
+      ttl = 900;
+    }
+    {
+      name = "Qwen3.6-27B-UD-Q4_K_XL";
+      path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
+      params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
+      devices = [
+        "Vulkan0"
+        "CUDA0"
+      ];
+      aliases = [ ];
+      ttl = 900;
+    }
+    {
+      name = "Qwen3.6-27B-UD-Q5_K_XL";
+      path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
+      params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
+      devices = [
+        "Vulkan0"
+        "CUDA0"
+      ];
+      aliases = [ ];
+      ttl = 900;
+    }
+    {
+      name = "Qwen3.6-27B-UD-Q6_K_XL";
+      path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
+      params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
+      devices = [
+        "Vulkan0"
+        "CUDA0"
+      ];
+      # mmproj =
+      aliases = [
+        "hermes-fallback"
+        "opencode-fast-fallback"
+      ];
+      ttl = 900;
+    }
+    # {
+    #   name = "Qwen3.5-27B-Q8_0:modded";
+    #   path = "/persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf";
+    #   devices = [ "Vulkan0" ];
+    #   params = "-c 131072 --threads 4 --batch-size 2048 -np 1 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0";
+    #   ttl = 0;
+    # }
+    {
+      name = "gemma-4-26B-A4B-it-Q8_K_XL";
+      path = "/mnt/disk/models/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf";
+      devices = [
+        "Vulkan0"
+        "CUDA0"
+      ];
+      aliases = [
+        "gemma-4-26B-A4B-Q8"
+      ];
+      ttl = 300;
+    }
+    {
+      name = "gemma-4-31B-it-Q6_K_XL";
+      path = "/mnt/disk/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q6_K_XL.gguf";
+      devices = [
+        "Vulkan0"
+        "CUDA0"
+      ];
+      aliases = [
+        # "hermes-fallback"
+        "gemma-4-31B-Q6"
+      ];
+      ttl = 300;
+    }
+  ];
+
+  amdModels = [
+    {
+      name = "qwen3.5-122B-A10B-Q5_K_M";
+      path = "/persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf";
+      aliases = [
+        "opencode-slow"
+        "opencode-fallback"
+        "qwen3.5-122B"
+      ];
+      ttl = 1800;
+    }
+    {
+      name = "Qwen3.6-27B-GGUF-BF16";
+      path = "/persistent/cache/models/Qwen3.6-27B-GGUF/BF16/Qwen3.6-27B-BF16-00001-of-00002.gguf";
+      params = "-ctk f16 -ctv f16 --chat-template-kwargs '{\"preserve_thinking\": true}'";
+      aliases = [
+        "opencode"
+        "Qwen3.6-27B-GGUF"
+        "Qwen3.6-27B"
+      ];
+      ttl = 300;
+    }
+    {
+      name = "gemma-4-31B-it-BF16";
+      path = "/persistent/cache/models/gemma-4-31B-it-GGUF/BF16/gemma-4-31B-it-BF16-00001-of-00002.gguf";
+      params = "-ctk f16 -ctv f16";
+      aliases = [
+        "gemma-4-31B"
+        "gemma-4-31B-BF16"
+      ];
+      ttl = 300;
+    }
+    # {
+    #   name = "Qwen3.6-27B-UD-Q4_K_XL";
+    #   path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
+    #   params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
+    # }
+    # {
+    #   name = "Qwen3.6-27B-UD-Q5_K_XL";
+    #   path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
+    #   params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
+    # }
+    # {
+    #   name = "Qwen3.6-27B-UD-Q6_K_XL";
+    #   path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
+    #   params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
+    # }
+  ];
+
+in
 {
   config = {
-    myconfig.ai.llama-swap.models = [
-      {
-        name = "Qwen3.5-9B-Q5_K_M";
-        path = "/persistent/cache/models/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
-        ctxSize = 262144;
-        devices = [
-          "Vulkan0"
-          "CUDA0"
-        ];
-        aliases = [ "sidekick" ];
-        ttl = 300;
-      }
-      {
-        name = "Qwen3.6-35B-A3B-UD-Q5_K_XL";
-        path = "/persistent/cache/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
-        devices = [
-          "Vulkan0"
-          "CUDA0"
-        ];
-        # mmproj =
-        aliases = [
-          "Qwen3.6-35B-A3B-UD-Q5_K"
-          "Qwen3.6-35B-A3B-UD-Q5"
-          "Qwen3.6-35B-A3B-UD"
-          "Qwen3.6-35B-A3B"
-          "Qwen3.6-35B"
-        ];
-        ttl = 900;
-      }
-      {
-        name = "Qwen3.6-27B-Q8_0";
-        path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
-        params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-        devices = [
-          "Vulkan0"
-          "CUDA0"
-        ];
-        # mmproj =
-        aliases = [
-          "hermes"
-          "opencode-fast"
-          "Qwen3.6-27B"
-        ];
-        ttl = 900;
-      }
-      {
-        name = "Qwen3.6-27B-Q8_0-tweaked";
-        path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
-        params = "--jinja --reasoning-format deepseek -ngl 99 -fa -sm row --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 -c 40960 -n 32768 --no-context-shift";
-        devices = [
-          "Vulkan0"
-          "CUDA0"
-        ];
-        aliases = [ ];
-        ttl = 900;
-      }
-      {
-        name = "Qwen3.6-27B-UD-Q4_K_XL";
-        path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
-        params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-        devices = [
-          "Vulkan0"
-          "CUDA0"
-        ];
-        aliases = [ ];
-        ttl = 900;
-      }
-      {
-        name = "Qwen3.6-27B-UD-Q5_K_XL";
-        path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
-        params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-        devices = [
-          "Vulkan0"
-          "CUDA0"
-        ];
-        aliases = [ ];
-        ttl = 900;
-      }
-      {
-        name = "Qwen3.6-27B-UD-Q6_K_XL";
-        path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
-        params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-        devices = [
-          "Vulkan0"
-          "CUDA0"
-        ];
-        # mmproj =
-        aliases = [
-          "hermes-fallback"
-          "opencode-fast-fallback"
-        ];
-        ttl = 900;
-      }
-      # {
-      #   name = "Qwen3.5-27B-Q8_0:modded";
-      #   path = "/persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf";
-      #   devices = [ "Vulkan0" ];
-      #   params = "-c 131072 --threads 4 --batch-size 2048 -np 1 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0";
-      #   ttl = 0;
-      # }
-      {
-        name = "gemma-4-26B-A4B-it-Q8_K_XL";
-        path = "/mnt/disk/models/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf";
-        devices = [
-          "Vulkan0"
-          "CUDA0"
-        ];
-        aliases = [
-          "gemma-4-26B-A4B-Q8"
-        ];
-        ttl = 300;
-      }
-      {
-        name = "gemma-4-31B-it-Q6_K_XL";
-        path = "/mnt/disk/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q6_K_XL.gguf";
-        devices = [
-          "Vulkan0"
-          "CUDA0"
-        ];
-        aliases = [
-          # "hermes-fallback"
-          "gemma-4-31B-Q6"
-        ];
-        ttl = 300;
-      }
-    ];
-
+    myconfig.ai.llama-swap.models = rtxModels;
     services.llama-swap = {
       enable = true;
       port = 33656;
@@ -188,63 +240,28 @@
             ../../modules/myconfig.ai/myconfig.localModels.nix
           ];
           hardware.graphics.enable = true;
-          myconfig.ai.llama-swap = {
-            models = [
-              {
-                name = "Qwen3.5-9B-Q5_K_M";
-                path = "/persistent/cache/models/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
-                ctxSize = 262144;
-                aliases = [ "sidekick" ];
-                ttl = 300;
-              }
-              {
-                name = "qwen3.5-122B-A10B-Q5_K_M";
-                path = "/persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf";
-                aliases = [
-                  "opencode-slow"
-                  "opencode-fallback"
-                  "qwen3.5-122B"
-                ];
-                ttl = 1800;
-              }
-              {
-                name = "Qwen3.6-27B-GGUF-BF16";
-                path = "/persistent/cache/models/Qwen3.6-27B-GGUF/BF16/Qwen3.6-27B-BF16-00001-of-00002.gguf";
-                params = "-ctk f16 -ctv f16 --chat-template-kwargs '{\"preserve_thinking\": true}'";
-                aliases = [
-                  "opencode"
-                  "Qwen3.6-27B-GGUF"
-                  "Qwen3.6-27B"
-                ];
-                ttl = 300;
-              }
-              {
-                name = "gemma-4-31B-it-BF16";
-                path = "/persistent/cache/models/gemma-4-31B-it-GGUF/BF16/gemma-4-31B-it-BF16-00001-of-00002.gguf";
-                params = "-ctk f16 -ctv f16";
-                aliases = [
-                  "gemma-4-31B"
-                  "gemma-4-31B-BF16"
-                ];
-                ttl = 300;
-              }
-              {
-                name = "Qwen3.6-27B-UD-Q4_K_XL";
-                path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
-                params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-              }
-              {
-                name = "Qwen3.6-27B-UD-Q5_K_XL";
-                path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
-                params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-              }
-              {
-                name = "Qwen3.6-27B-UD-Q6_K_XL";
-                path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
-                params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-              }
-            ];
-          };
+          myconfig.ai.llama-swap.models =
+            let
+              allAliasesAndNamesFromAmdModels = [];  # TODO
+              fromRtxModels = map (
+                {
+                  name,
+                  path,
+                  aliases,
+                  params ? "",
+                  ...
+                }:
+                {
+                  inherit
+                    name
+                    path
+                    params
+                    ;
+                  aliases = aliases; # TODO: should be all aliases that are not in allAliasesAndNamesFromAmdModels
+                }
+              ) rtxModels;
+            in
+            fromRtxModels ++ amdModels;
           services.llama-swap = {
             enable = true;
             port = 33657;
