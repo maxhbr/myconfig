@@ -210,7 +210,7 @@
               {
                 name = "Qwen3.6-27B-GGUF-BF16";
                 path = "/persistent/cache/models/Qwen3.6-27B-GGUF/BF16/Qwen3.6-27B-BF16-00001-of-00002.gguf";
-                params = "-ctk f16 -ctv f16";
+                params = "-ctk f16 -ctv f16 --chat-template-kwargs '{\"preserve_thinking\": true}'";
                 aliases = [
                   "opencode"
                   "Qwen3.6-27B-GGUF"
@@ -227,6 +227,21 @@
                   "gemma-4-31B-BF16"
                 ];
                 ttl = 300;
+              }
+              {
+                name = "Qwen3.6-27B-UD-Q4_K_XL";
+                path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
+                params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
+              }
+              {
+                name = "Qwen3.6-27B-UD-Q5_K_XL";
+                path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
+                params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
+              }
+              {
+                name = "Qwen3.6-27B-UD-Q6_K_XL";
+                path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
+                params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
               }
             ];
           };
