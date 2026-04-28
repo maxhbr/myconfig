@@ -148,7 +148,7 @@ in
                             echo "Already running one instance of mbsync or ${cmd}. Exiting..."
                             exit 0
                         fi
-                        ${cli} | tee "$HOME/Maildir/mbsync.${cmd}.log"
+                        ${cli} | ${pkgs.coreutils}/bin/tee "$HOME/Maildir/mbsync.${cmd}.log"
                         ${inner}
                       ''
                     else
