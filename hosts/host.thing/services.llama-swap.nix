@@ -257,7 +257,7 @@ in
                     path
                     params
                     ;
-                  aliases = aliases; # TODO: should be all aliases that are not in allAliasesAndNamesFromAmdModels
+                  aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
                 }
               ) rtxModels;
             in
