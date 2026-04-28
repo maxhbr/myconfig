@@ -242,7 +242,7 @@ in
           hardware.graphics.enable = true;
           myconfig.ai.llama-swap.models =
             let
-              allAliasesAndNamesFromAmdModels = [];  # TODO
+              allAliasesAndNamesFromAmdModels = lib.concatMap (m: [ m.name ] ++ (m.aliases or [ ])) amdModels;
               fromRtxModels = map (
                 {
                   name,
