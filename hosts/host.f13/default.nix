@@ -104,6 +104,11 @@ in
       };
     }
     { programs.kdeconnect.enable = true; }
+    {
+      services.input-remapper.enable = true;
+      services.input-remapper.enableUdevRules = true;
+      home-manager.sharedModules = [ { home.packages = with pkgs; [ input-remapper ]; } ];
+    }
     ../shared.deployedServices.nix
     # NOTE: amd_pstate=active and power-profiles-daemon are already set by
     # framework-amd-ai-300-series.nix -> amd.nix -> pstate.nix
