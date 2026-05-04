@@ -47,15 +47,6 @@ in
     myconfig.ai.aichat.enable = true;
     myconfig.ai.llm.enable = true;
     myconfig.dev.python.enable = true;
-    systemd.tmpfiles.rules = [
-      "d /run/myconfig 0755 root root - -"
-      (
-        let
-          localModelsJson = builtins.toJSON config.myconfig.ai.localModels;
-        in
-        "f /run/myconfig/localModels.json 0644 root root - ${localModelsJson}"
-      )
-    ];
     home-manager.sharedModules = [
       {
         home.packages =

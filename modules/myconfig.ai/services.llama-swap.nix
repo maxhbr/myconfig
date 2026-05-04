@@ -127,7 +127,10 @@ let
           extraArgs
           ;
       };
-      modelKey = (if unlisted then "unlisted:" else "") + (if isFirstDevice then "" else "${device}:") +  "${model.name}${suffix}";
+      modelKey =
+        (if unlisted then "unlisted:" else "")
+        + (if isFirstDevice then "" else "${device}:")
+        + "${model.name}${suffix}";
     in
     {
       "${modelKey}" = {

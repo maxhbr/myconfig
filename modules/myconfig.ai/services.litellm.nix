@@ -73,12 +73,12 @@ in
     services.litellm = {
       host = lib.mkForce "127.0.0.1";
       port = lib.mkForce 4000;
-      # settings.general_settings = {
-      #   store_prompts_in_spend_logs = true;
-      #   disable_spend_logs = false;
-      #   maximum_spend_logs_retention_period = "30d";
-      #   database_url = "postgresql://litellm:litellm@127.0.0.1:${toString config.services.postgresql.port}/litellm";
-      # };
+      settings.general_settings = {
+        store_prompts_in_spend_logs = true;
+        disable_spend_logs = false;
+        maximum_spend_logs_retention_period = "30d";
+        database_url = "postgresql://litellm:litellm@127.0.0.1:${toString config.services.postgresql.port}/litellm";
+      };
       # settings.litellm_settings =
       # services.general_settings =
       settings.model_list =
@@ -99,16 +99,33 @@ in
               providerName = if model.name != null then model.name else hostPort;
               modelNames = if model.models != [ ] then model.models else [ providerName ];
             in
-            map (modelName: {
-              model_name = "${providerName}:${modelName}";
-              litellm_params = {
-                model = "openai/${modelName}";
-                api_base = "http://${hostPort}/v1";
-                api_key = "not-needed";
-              };
-            }) modelNames
+            lib.concatMap (
+              modelEntry:
+              let
+                modelName = if lib.isAttrs modelEntry then modelEntry.name else modelEntry;
+                aliases = if lib.isAttrs modelEntry then modelEntry.aliases else [ ];
+                entry = {
+                  model_name = "${providerName}:${modelName}";
+                  litellm_params = {
+                    model = "openai/${modelName}";
+                    api_base = "http://${hostPort}/v1";
+                    api_key = "not-needed";
+                  };
+                };
+              in
+              [ entry ]
+              ++ map (alias: {
+                model_name = alias;
+                litellm_params = entry.litellm_params;
+              }) aliases
+            ) modelNames
           ) config.myconfig.ai.localModels
         );
+      # settings.router_settings = {
+      #   model_group_alias = {
+      #     "gpt-4" = "gpt-4o"
+      #   };
+      # };
     };
 
     home-manager.sharedModules = [
