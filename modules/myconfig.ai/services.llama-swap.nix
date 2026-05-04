@@ -127,7 +127,7 @@ let
           extraArgs
           ;
       };
-      modelKey = if isFirstDevice then "${model.name}${suffix}" else "${device}:${model.name}${suffix}";
+      modelKey = (if unlisted then "unlisted:" else "") + (if isFirstDevice then "" else "${device}:") +  "${model.name}${suffix}";
     in
     {
       "${modelKey}" = {
@@ -135,7 +135,7 @@ let
         ttl = model.ttl;
       }
       // lib.optionalAttrs unlisted { unlisted = true; }
-      // lib.optionalAttrs (model.aliases != [ ] && suffix == "" && isFirstDevice) {
+      // lib.optionalAttrs (model.aliases != [ ] && suffix == "" && isFirstDevice && unlisted == false) {
         inherit (model) aliases;
       };
     };
