@@ -172,28 +172,28 @@ in
                 8124
               ])
               (mkAlacrittyTmuxSession "thing" false [
-                5678
-                5901
-                8080
-                8188
-                22545
-                22546
-                22547
-                23545
-                33656
-                33657
+                # 5678
+                # 5901
+                # 8080
+                # 8188
+                # 22545
+                # 22546
+                # 22547
+                # 23545
+                # 33656
+                # 33657
               ])
               (mkAlacrittyTmuxSession "thing" true [
-                5678 # n8n
-                5901
-                8080
-                8188
-                22545
-                22546
-                22547
-                23545
-                33656
-                33657
+                # 5678 # n8n
+                # 5901
+                # 8080
+                # 8188
+                # 22545
+                # 22546
+                # 22547
+                # 23545
+                # 33656
+                # 33657
               ])
               (mkAlacrittyTmuxSession "workstation" false [ ])
               (mkAlacrittyTmuxSession "workstation" true [ ])
