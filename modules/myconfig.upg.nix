@@ -20,6 +20,7 @@ in
     };
   };
   config = lib.mkIf cfg.upg.enable {
+    system.autoUpgrade.enable = true;
     home-manager.sharedModules = [
       (
         {
@@ -77,9 +78,6 @@ in
           };
         }
       )
-      {
-        system.autoUpgrade.enable = true;
-      }
     ];
   };
 }
