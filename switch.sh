@@ -4,6 +4,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 verbose=""
+LEAD_HOST="f13"
 ulimit -c unlimited
 
 have() {
@@ -91,13 +92,19 @@ flake_update_recursively() (
         return
     fi
     if grep -q '\.url = "path:' "$flake"; then
-        grep '\.url = "path:' "$flake" | sed s/.*path:// | sed 's/".*//g' |
-            while read -r flake_path; do
-                if [[ $flake_path != /* ]]; then
-                    flake_path="$(realpath "$path/$flake_path")"
-                fi
-                flake_update_recursively "$flake_path"
-            done
+        local resolved_path
+        resolved_path="$(realpath "$path")"
+        if [[ $(basename "$resolved_path") == "myconfig" && $(hostname) != "$LEAD_HOST" ]]; then
+            log_info "skip recursing beyond myconfig flake on host $(hostname) (not $LEAD_HOST)"
+        else
+            grep '\.url = "path:' "$flake" | sed s/.*path:// | sed 's/".*//g' |
+                while read -r flake_path; do
+                    if [[ $flake_path != /* ]]; then
+                        flake_path="$(realpath "$path/$flake_path")"
+                    fi
+                    flake_update_recursively "$flake_path"
+                done
+        fi
     fi
     flake_update_one "$path"
 )
@@ -106,6 +113,12 @@ flake_update_one() (
     local path="$1"
     local num_of_tries="${2:-1}"
     echo ">>> update flake $path and commit lock file"
+    local resolved_path
+    resolved_path="$(realpath "$path")"
+    if [[ $(basename "$resolved_path") == "myconfig" && $(hostname) != "$LEAD_HOST" ]]; then
+        log_info "skip updating myconfig flake on host $(hostname) (not $LEAD_HOST)"
+        return
+    fi
     if [[ $num_of_tries -gt 1 ]]; then
         log_warning "retry $num_of_tries times"
     fi

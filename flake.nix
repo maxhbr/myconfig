@@ -421,6 +421,8 @@
                 git-secrets
                 nixfmt
                 age
+                shfmt
+                shellcheck
               ];
 
               # TODO: building the CONF_DIR with content from /etc/... makes this require --impure flag
