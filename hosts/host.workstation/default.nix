@@ -92,7 +92,7 @@
       dev = {
         compliance.enable = true;
         # haskell.enable = true;
-        network.enable = true;
+        # network.enable = true;
       };
     };
 
