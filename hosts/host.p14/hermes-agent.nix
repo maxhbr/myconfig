@@ -11,6 +11,7 @@ let
   stateDir = "/home/mhuber/hermes-agent";
 
   cfg = config.myconfig.ai.hermes;
+  thingIp = myconfig.metadatalib.getIp "thing";  
 
   apiServerHost = if cfg.container.enable then config.containers.hermes.localAddress else "localhost";
   hermesServiceCfg = {
@@ -20,16 +21,28 @@ let
     createUser = false;
     stateDir = stateDir;
     settings = {
+      # model = {
+      #   default = "llama-swap-33656:hermes";
+      #   provider = "custom";
+      #   base_url = "http://litellm.thing.wg0.maxhbr.local/v1";
+      #   api_key = "local-key";
+      # };
+      # fallback_model = {
+      #   model = "llama-swap-33656:hermes-fallback";
+      #   provider = "custom";
+      #   base_url = "http://litellm.thing.wg0.maxhbr.local/v1";
+      #   api_key = "local-key";
+      # };
       model = {
-        default = "llama-swap-33656:hermes";
+        default = "hermes";
         provider = "custom";
-        base_url = "http://litellm.thing.wg0.maxhbr.local/v1";
+        base_url = "http://${thingIp}:33656/v1";
         api_key = "local-key";
       };
       fallback_model = {
-        model = "llama-swap-33656:hermes-fallback";
+        model = "hermes-fallback";
         provider = "custom";
-        base_url = "http://litellm.thing.wg0.maxhbr.local/v1";
+        base_url = "http://${thingIp}:33656/v1";
         api_key = "local-key";
       };
       compression = {

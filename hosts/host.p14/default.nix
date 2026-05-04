@@ -11,7 +11,7 @@
 {
   imports = [
     ./ai.p14.nix
-    ./hermes-agent
+    ./hermes-agent.nix
     ./services.caddy.nix
     ../shared.localModels.llama-swap.nix
     ./hardware-configuration.nix
@@ -123,7 +123,7 @@
           "aerc"
           "neomutt"
           "thunderbird"
-          "himalaya"
+          # "himalaya"
         ];
       };
       virtualisation.enable = true;
