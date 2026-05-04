@@ -9,22 +9,11 @@
 }:
 
 {
-  services.caddy = {
-    enable = true;
-    virtualHosts = {
-      "${config.networking.hostName}.wg0.maxhbr.local" = {
-        listenAddresses = [ (myconfig.metadatalib.getWgIp "${config.networking.hostName}") ];
-        hostName = "${config.networking.hostName}.wg0.maxhbr.local";
-        serverAliases = [
-          "${config.networking.hostName}.wg0"
-          (myconfig.metadatalib.getWgIp "${config.networking.hostName}")
-        ];
-        extraConfig = ''
-          reverse_proxy http://localhost:8123
-        '';
-      };
-    };
-  };
+  # The base hostname `<hostname>.wg0.maxhbr.local` is served by the
+  # myconfig.deployedServices module as an index page that links to
+  # all configured sub-domains.
+
+  services.caddy.enable = true;
 
   networking.firewall.interfaces."wg0".allowedTCPPorts = lib.optionals config.services.caddy.enable [
     443
