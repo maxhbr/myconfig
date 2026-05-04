@@ -80,7 +80,7 @@ let
       runtimeInputs = [ ];
       text = ''
         ${envExports}
-        ${server} --port "$1" -m "${model.path}" --gpu-layers 999 -fa on --no-webui ${ctxSizeFlag}${model.params} ${extraArgs} "''${@:2}"
+        ${server} --port "''${1:-22545}" -m "${model.path}" --gpu-layers 999 -fa on --no-webui ${ctxSizeFlag}${model.params} ${extraArgs} "''${@:2}"
       '';
     };
 
