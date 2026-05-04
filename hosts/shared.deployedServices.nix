@@ -40,18 +40,22 @@
         {
           name = "llama-swap";
           port = 33656;
+          forceHttps = false;
         }
         {
           name = "llama-swap-2";
           port = 33657;
+          forceHttps = false;
         }
         {
           name = "litellm";
           port = 4000;
+          forceHttps = false;
         }
         {
           name = "ollama";
           port = 11434;
+          forceHttps = false;
         }
         {
           name = "open-webui";

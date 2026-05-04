@@ -27,6 +27,11 @@
                 default = "localhost";
                 description = "Optional custom IP address for the service";
               };
+              forceHttps = mkOption {
+                type = types.bool;
+                default = true;
+                description = "Whether to force HTTPS (redirect HTTP to HTTPS) for this service";
+              };
             };
           }
         )
@@ -37,7 +42,7 @@
     configureCaddy = mkEnableOption "configure caddy for this machine";
   };
 
-  config = {
+  config = lib.mkIf (config.myconfig.deployedServices.services != { }) {
     services.caddy = lib.mkIf config.myconfig.deployedServices.configureCaddy {
       enable = lib.mkDefault true;
       virtualHosts =
@@ -113,29 +118,55 @@
             cp ${indexHtml} $out/index.html
           '';
           serviceHosts = lib.listToAttrs (
-            lib.map (
+            lib.concatMap (
               {
                 name,
                 port,
                 ip,
+                forceHttps,
               }:
               let
                 portAliasUnique = (portToService.${toString port} == name);
-              in
-              (lib.nameValuePair "${name}.${baseHostName}" {
-                hostName = "${name}.${baseHostName}";
-                listenAddresses = [ (myconfig.metadatalib.getWgIp hostName) ];
-                serverAliases =
+                aliases =
                   (lib.optional portAliasUnique "${toString port}.${baseHostName}")
                   ++ [
                     "${name}.${hostName}.wg0"
                   ]
                   ++ (lib.optional portAliasUnique "${toString port}.${hostName}.wg0");
-                extraConfig = ''
-                  tls internal
+                proxyConfig = ''
                   reverse_proxy http://${ip}:${toString port}
                 '';
-              })
+              in
+              if forceHttps then
+                [
+                  (lib.nameValuePair "${name}.${baseHostName}" {
+                    hostName = "${name}.${baseHostName}";
+                    listenAddresses = [ (myconfig.metadatalib.getWgIp hostName) ];
+                    serverAliases = aliases;
+                    extraConfig = ''
+                      tls internal
+                      ${proxyConfig}
+                    '';
+                  })
+                ]
+              else
+                [
+                  (lib.nameValuePair "https://${name}.${baseHostName}" {
+                    hostName = "https://${name}.${baseHostName}";
+                    listenAddresses = [ (myconfig.metadatalib.getWgIp hostName) ];
+                    serverAliases = lib.map (a: "https://${a}") aliases;
+                    extraConfig = ''
+                      tls internal
+                      ${proxyConfig}
+                    '';
+                  })
+                  (lib.nameValuePair "http://${name}.${baseHostName}" {
+                    hostName = "http://${name}.${baseHostName}";
+                    listenAddresses = [ (myconfig.metadatalib.getWgIp hostName) ];
+                    serverAliases = lib.map (a: "http://${a}") aliases;
+                    extraConfig = proxyConfig;
+                  })
+                ]
             ) servicesList
           );
           indexHost = {
