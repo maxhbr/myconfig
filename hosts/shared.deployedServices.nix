@@ -69,6 +69,11 @@
           name = "searxng";
           port = 8080;
         }
+        {
+          name = "qdrant";
+          port = 6333;
+          forceHttps = false;
+        }
       ];
     };
   };

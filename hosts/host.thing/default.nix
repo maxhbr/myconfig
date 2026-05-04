@@ -47,6 +47,8 @@
     )
     # ./services.ollama.nix
     ./services.llama-swap.nix
+    ./services.wyoming.nix
+    ./services.qdrant.nix
     ./specialisation.nix
     ./hardware.Radeon8060S.nix
     ./disk.nix
