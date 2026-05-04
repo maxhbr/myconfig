@@ -132,6 +132,37 @@ let
       ];
       ttl = 300;
     }
+    {
+      name = "gemma-4-31B-it-UD-Q4_K_XL";
+      path = "/persistent/cache/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf";
+      ctxSize = 65536;
+      devices = [
+        "Vulkan0"
+        "CUDA0"
+      ];
+      mmproj = "/persistent/cache/models/gemma-4-31B-it-GGUF/mmproj-F16.gguf";
+      params = "--batch-size 2048 --ubatch-size 512 --threads 1 --jinja";
+      aliases = [
+        "gemma-4:31b-q4"
+        "gemma-4-31B-Q4"
+      ];
+      ttl = 300;
+    }
+    {
+      name = "gemma-4-31B-it-UD-Q4_K_XL-nothink";
+      path = "/persistent/cache/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf";
+      ctxSize = 65536;
+      devices = [
+        "Vulkan0"
+        "CUDA0"
+      ];
+      mmproj = "/persistent/cache/models/gemma-4-31B-it-GGUF/mmproj-F16.gguf";
+      params = "--batch-size 2048 --ubatch-size 512 --threads 1 --chat-template-kwargs '{\"enable_thinking\": false}' --jinja";
+      aliases = [
+        "gemma-4:31b-q4-nothink"
+      ];
+      ttl = 300;
+    }
   ];
 
   amdModels = [

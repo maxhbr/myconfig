@@ -10,7 +10,7 @@
 }:
 let
   host = myconfig.metadatalib.getWgIp config.networking.hostName;
-in 
+in
 {
   services.qdrant = {
     enable = true;
