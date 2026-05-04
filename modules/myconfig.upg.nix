@@ -77,6 +77,9 @@ in
           };
         }
       )
+      {
+        system.autoUpgrade.enable = true;
+      }
     ];
   };
 }

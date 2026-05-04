@@ -263,6 +263,7 @@ let
         trusted-users = [ "nixBuild" ];
         allowed-users = [ "nixBuild" ];
       };
+      system.autoUpgrade.enable = true;
     };
 
     setupBuildSlave =
