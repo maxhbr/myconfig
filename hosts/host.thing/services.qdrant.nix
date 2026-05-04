@@ -8,6 +8,9 @@
   inputs,
   ...
 }:
+let
+  host = myconfig.metadatalib.getWgIp config.networking.hostName;
+in 
 {
   services.qdrant = {
     enable = true;
@@ -17,7 +20,7 @@
         snapshots_path = "/var/lib/qdrant/snapshots";
       };
       service = {
-        host = "0.0.0.0";
+        inherit host;
         http_port = 6333;
       };
       telemetry_disabled = true;
