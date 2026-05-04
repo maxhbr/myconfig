@@ -47,9 +47,12 @@
     )
     # ./services.ollama.nix
     ./services.llama-swap.nix
+    ./services.wyoming.nix
+    ./services.qdrant.nix
     ./specialisation.nix
     ./hardware.Radeon8060S.nix
     ./disk.nix
+    ./btr2-pool.nix
     ../../hardware/eGPU.nix
     {
       home-manager.sharedModules = [
