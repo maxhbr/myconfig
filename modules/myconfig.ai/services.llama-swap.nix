@@ -116,6 +116,7 @@ let
       isFirstDevice ? false,
       suffix ? "",
       extraArgs ? "",
+      unlisted ? false,
     }:
     let
       script = mkLlamaScript {
@@ -133,16 +134,21 @@ let
         cmd = "${lib.getExe script} \${PORT}";
         ttl = model.ttl;
       }
+      // lib.optionalAttrs unlisted { unlisted = true; }
       // lib.optionalAttrs (model.aliases != [ ] && suffix == "" && isFirstDevice) {
         inherit (model) aliases;
       };
     };
 
-  # Generate all model entries for a single model input across all its devices
-  mkModelEntries =
-    model:
+  # Generate model entries for a list of devices, optionally marking them as unlisted
+  mkDeviceEntries =
+    {
+      model,
+      devices,
+      unlisted ? false,
+    }:
     let
-      eligibleDevices = builtins.filter guardDevice model.devices;
+      eligibleDevices = builtins.filter guardDevice devices;
       firstDevice = if eligibleDevices != [ ] then builtins.head eligibleDevices else null;
     in
     lib.concatMap (
@@ -152,23 +158,41 @@ let
           isFirstDevice = device == firstDevice;
         in
         [
-          # Base model entry
-          (mkModelEntry { inherit model device isFirstDevice; })
+          (mkModelEntry {
+            inherit
+              model
+              device
+              isFirstDevice
+              unlisted
+              ;
+          })
         ]
         ++ lib.optionals (model.mmproj != null) [
-          # mmproj variant
           (mkModelEntry {
-            inherit model device;
+            inherit model device unlisted;
             suffix = ":mmproj";
             extraArgs = ''--mmproj "${model.mmproj}"'';
           })
         ]
       )
-    ) model.devices;
+    ) devices;
+
+  # Generate all model entries for a single model input across all its devices
+  mkModelEntries =
+    model:
+    mkDeviceEntries {
+      inherit model;
+      devices = model.devices;
+    }
+    ++ mkDeviceEntries {
+      inherit model;
+      devices = model.unlistedDevices;
+      unlisted = true;
+    };
 
   # Collect all script derivations for home-manager packages
-  mkScriptEntries =
-    model:
+  mkScriptDeviceEntries =
+    { model, devices }:
     lib.concatMap (
       device:
       lib.optionals (guardDevice device) (
@@ -184,7 +208,18 @@ let
           })
         ]
       )
-    ) model.devices;
+    ) devices;
+
+  mkScriptEntries =
+    model:
+    mkScriptDeviceEntries {
+      inherit model;
+      devices = model.devices;
+    }
+    ++ mkScriptDeviceEntries {
+      inherit model;
+      devices = model.unlistedDevices;
+    };
 
   allScripts = lib.concatMap mkScriptEntries cfg.models;
 
@@ -204,9 +239,8 @@ let
   # can run simultaneously. Within the same GPU, models swap (they share VRAM).
   allGroups =
     let
-      # Collect (gpuIndex, modelKey) pairs for all eligible model entries
-      gpuModelPairs = lib.concatMap (
-        model:
+      mkGpuPairs =
+        { model, devices }:
         lib.concatMap (
           device:
           lib.optionals (guardDevice device) (
@@ -221,7 +255,18 @@ let
               key = "${device}:${model.name}:mmproj";
             }
           )
-        ) model.devices
+        ) devices;
+      # Collect (gpuIndex, modelKey) pairs for all eligible model entries
+      gpuModelPairs = lib.concatMap (
+        model:
+        mkGpuPairs {
+          inherit model;
+          devices = model.devices;
+        }
+        ++ mkGpuPairs {
+          inherit model;
+          devices = model.unlistedDevices;
+        }
       ) cfg.models;
 
       # Group model keys by GPU index
@@ -239,16 +284,27 @@ let
       }) gpuIndices
     );
 
-  # Collect all model names/keys exposed by this llama-swap instance for localModels registration
-  allModelNames = lib.concatMap (
-    model:
+  mkModelNames =
+    { model, devices }:
     lib.concatMap (
       device:
       lib.optionals (guardDevice device) (
         [ "${device}:${model.name}" ]
         ++ lib.optional (model.mmproj != null) "${device}:${model.name}:mmproj"
       )
-    ) model.devices
+    ) devices;
+
+  # Collect all model names/keys exposed by this llama-swap instance for localModels registration
+  allModelNames = lib.concatMap (
+    model:
+    mkModelNames {
+      inherit model;
+      devices = model.devices;
+    }
+    ++ mkModelNames {
+      inherit model;
+      devices = model.unlistedDevices;
+    }
     ++ model.aliases
   ) cfg.models;
 in
@@ -270,6 +326,11 @@ in
               type = types.listOf types.str;
               default = [ "Vulkan0" ];
               description = "List of devices to run this model on (e.g. 'Vulkan0', 'CUDA0', 'ROCm0')";
+            };
+            unlistedDevices = mkOption {
+              type = types.listOf types.str;
+              default = [ ];
+              description = "Devices that generate llama-swap entries with unlisted = true (accessible only via direct script)";
             };
             mmproj = mkOption {
               type = types.nullOr types.str;

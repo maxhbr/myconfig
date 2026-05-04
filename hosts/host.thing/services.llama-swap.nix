@@ -10,22 +10,14 @@ let
   rtxModels = [
     {
       name = "Qwen3.5-9B-Q5_K_M";
-      path = "/persistent/cache/models/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
+      path = "/models/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
       ctxSize = 262144;
-      devices = [
-        "Vulkan0"
-        "CUDA0"
-      ];
       aliases = [ "sidekick" ];
       ttl = 300;
     }
     {
       name = "Qwen3.6-35B-A3B-UD-Q5_K_XL";
-      path = "/persistent/cache/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
-      devices = [
-        "Vulkan0"
-        "CUDA0"
-      ];
+      path = "/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
       # mmproj =
       aliases = [
         "Qwen3.6-35B-A3B-UD-Q5_K"
@@ -38,12 +30,8 @@ let
     }
     {
       name = "Qwen3.6-27B-Q8_0";
-      path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
+      path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
       params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-      devices = [
-        "Vulkan0"
-        "CUDA0"
-      ];
       # mmproj =
       aliases = [
         "hermes"
@@ -54,45 +42,29 @@ let
     }
     {
       name = "Qwen3.6-27B-Q8_0-tweaked";
-      path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
+      path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
       params = "--jinja --reasoning-format deepseek -ngl 99 -fa -sm row --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 -c 40960 -n 32768 --no-context-shift";
-      devices = [
-        "Vulkan0"
-        "CUDA0"
-      ];
       aliases = [ ];
       ttl = 900;
     }
     {
       name = "Qwen3.6-27B-UD-Q4_K_XL";
-      path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
+      path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
       params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-      devices = [
-        "Vulkan0"
-        "CUDA0"
-      ];
       aliases = [ ];
       ttl = 900;
     }
     {
       name = "Qwen3.6-27B-UD-Q5_K_XL";
-      path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
+      path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
       params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-      devices = [
-        "Vulkan0"
-        "CUDA0"
-      ];
       aliases = [ ];
       ttl = 900;
     }
     {
       name = "Qwen3.6-27B-UD-Q6_K_XL";
-      path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
+      path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
       params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-      devices = [
-        "Vulkan0"
-        "CUDA0"
-      ];
       # mmproj =
       aliases = [
         "hermes-fallback"
@@ -102,7 +74,7 @@ let
     }
     # {
     #   name = "Qwen3.5-27B-Q8_0:modded";
-    #   path = "/persistent/cache/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf";
+    #   path = "/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf";
     #   devices = [ "Vulkan0" ];
     #   params = "-c 131072 --threads 4 --batch-size 2048 -np 1 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0";
     #   ttl = 0;
@@ -110,10 +82,6 @@ let
     {
       name = "gemma-4-26B-A4B-it-Q8_K_XL";
       path = "/mnt/disk/models/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf";
-      devices = [
-        "Vulkan0"
-        "CUDA0"
-      ];
       aliases = [
         "gemma-4-26B-A4B-Q8"
       ];
@@ -122,10 +90,6 @@ let
     {
       name = "gemma-4-31B-it-Q6_K_XL";
       path = "/mnt/disk/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q6_K_XL.gguf";
-      devices = [
-        "Vulkan0"
-        "CUDA0"
-      ];
       aliases = [
         # "hermes-fallback"
         "gemma-4-31B-Q6"
@@ -134,13 +98,9 @@ let
     }
     {
       name = "gemma-4-31B-it-UD-Q4_K_XL";
-      path = "/persistent/cache/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf";
+      path = "/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf";
       ctxSize = 65536;
-      devices = [
-        "Vulkan0"
-        "CUDA0"
-      ];
-      mmproj = "/persistent/cache/models/gemma-4-31B-it-GGUF/mmproj-F16.gguf";
+      mmproj = "/models/gemma-4-31B-it-GGUF/mmproj-F16.gguf";
       params = "--batch-size 2048 --ubatch-size 512 --threads 1 --jinja";
       aliases = [
         "gemma-4:31b-q4"
@@ -150,13 +110,9 @@ let
     }
     {
       name = "gemma-4-31B-it-UD-Q4_K_XL-nothink";
-      path = "/persistent/cache/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf";
+      path = "/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf";
       ctxSize = 65536;
-      devices = [
-        "Vulkan0"
-        "CUDA0"
-      ];
-      mmproj = "/persistent/cache/models/gemma-4-31B-it-GGUF/mmproj-F16.gguf";
+      mmproj = "/models/gemma-4-31B-it-GGUF/mmproj-F16.gguf";
       params = "--batch-size 2048 --ubatch-size 512 --threads 1 --chat-template-kwargs '{\"enable_thinking\": false}' --jinja";
       aliases = [
         "gemma-4:31b-q4-nothink"
@@ -168,7 +124,7 @@ let
   amdModels = [
     {
       name = "qwen3.5-122B-A10B-Q5_K_M";
-      path = "/persistent/cache/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf";
+      path = "/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf";
       aliases = [
         "opencode-slow"
         "opencode-fallback"
@@ -178,7 +134,7 @@ let
     }
     {
       name = "Qwen3.6-27B-GGUF-BF16";
-      path = "/persistent/cache/models/Qwen3.6-27B-GGUF/BF16/Qwen3.6-27B-BF16-00001-of-00002.gguf";
+      path = "/models/Qwen3.6-27B-GGUF/BF16/Qwen3.6-27B-BF16-00001-of-00002.gguf";
       params = "-ctk f16 -ctv f16 --chat-template-kwargs '{\"preserve_thinking\": true}'";
       aliases = [
         "opencode"
@@ -189,7 +145,7 @@ let
     }
     {
       name = "gemma-4-31B-it-BF16";
-      path = "/persistent/cache/models/gemma-4-31B-it-GGUF/BF16/gemma-4-31B-it-BF16-00001-of-00002.gguf";
+      path = "/models/gemma-4-31B-it-GGUF/BF16/gemma-4-31B-it-BF16-00001-of-00002.gguf";
       params = "-ctk f16 -ctv f16";
       aliases = [
         "gemma-4-31B"
@@ -199,17 +155,17 @@ let
     }
     # {
     #   name = "Qwen3.6-27B-UD-Q4_K_XL";
-    #   path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
+    #   path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
     #   params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
     # }
     # {
     #   name = "Qwen3.6-27B-UD-Q5_K_XL";
-    #   path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
+    #   path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
     #   params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
     # }
     # {
     #   name = "Qwen3.6-27B-UD-Q6_K_XL";
-    #   path = "/persistent/cache/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
+    #   path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
     #   params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
     # }
   ];
@@ -217,7 +173,19 @@ let
 in
 {
   config = {
-    myconfig.ai.llama-swap.models = rtxModels;
+    myconfig.ai.llama-swap.models = map (
+      model:
+      model
+      // {
+        devices = [
+          "Vulkan0"
+          "CUDA0"
+        ];
+        unlistedDevices = [
+          "Vulkan1"
+        ];
+      }
+    ) rtxModels;
     services.llama-swap = {
       enable = true;
       port = 33656;
@@ -257,8 +225,8 @@ in
           hostPath = "/run/opengl-driver";
           isReadOnly = true;
         };
-        "/persistent/cache/models/" = {
-          hostPath = "/persistent/cache/models/";
+        "/models/" = {
+          hostPath = "/models/";
           isReadOnly = true;
         };
       };

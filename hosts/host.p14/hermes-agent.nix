@@ -11,7 +11,7 @@ let
   stateDir = "/home/mhuber/hermes-agent";
 
   cfg = config.myconfig.ai.hermes;
-  thingIp = myconfig.metadatalib.getIp "thing";  
+  thingIp = myconfig.metadatalib.getIp "thing";
 
   apiServerHost = if cfg.container.enable then config.containers.hermes.localAddress else "localhost";
   hermesServiceCfg = {

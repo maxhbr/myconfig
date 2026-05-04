@@ -6,14 +6,25 @@
   myconfig,
   ...
 }:
+let
+  btrfs_device = "/dev/disk/by-uuid/54e93b27-641e-484f-b8d5-6487b73bcf94";
+in
 {
   boot.initrd.luks.devices."btr2_pool" = {
     device = "/dev/disk/by-uuid/4162ab7a-c579-4152-9e50-98a819b0d0af";
+    keyFile = "/dev/disk/by-id/usb-Verbatim_STORE_N_GO_25073013740484-0:0";
+    keyFileSize = 4096;
     allowDiscards = true;
   };
 
+  fileSystems."/btr2_pool" = {
+    device = btrfs_device;
+    fsType = "btrfs";
+    options = [ "subvolid=5" ];
+  };
+
   fileSystems."/home/${myconfig.user}/models" = {
-    device = "/dev/disk/by-uuid/54e93b27-641e-484f-b8d5-6487b73bcf94";
+    device = btrfs_device;
     fsType = "btrfs";
     options = [
       "compress=zstd"
@@ -25,7 +36,7 @@
   };
 
   fileSystems."/models" = {
-    device = "/dev/disk/by-uuid/54e93b27-641e-484f-b8d5-6487b73bcf94";
+    device = btrfs_device;
     fsType = "btrfs";
     options = [
       "ro"
