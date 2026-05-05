@@ -38,6 +38,7 @@
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
     # ./containers.vllm-rocm.nix
+    ./programs.aider.nix
     ./programs.opencode.nix
     ../shared.deployedServices.nix
     ./services.caddy.nix

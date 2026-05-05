@@ -13,6 +13,7 @@
     myconfig = {
       ai = {
         enable = true;
+        aider.enable = true;
         opencode.enable = true;
         pi-coding-agent.enable = true;
         claude-code.enable = false;
