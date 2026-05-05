@@ -55,7 +55,5 @@
       isSystemUser = true;
       createHome = true;
     };
-
-    myconfig.persistence.directories = [ "/var/lib/home-assistant" ];
   };
 }

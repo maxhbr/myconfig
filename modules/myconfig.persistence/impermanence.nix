@@ -520,8 +520,7 @@ in
           enable = true;
           hideMounts = true;
           directories = [
-            "/var/lib/bluetooth"
-            "/var/lib/nixos"
+            "/var/lib"
             "/etc/NetworkManager/system-connections"
             "/etc/ssh/authorized_keys"
           ];
@@ -587,7 +586,6 @@ in
             #   directory = "/var/lib/private";
             #   mode = "0700";
             # }
-            "/var/lib/systemd/coredump"
           ]
           ++ (lib.optionals config.virtualisation.containers.enable [
             config.virtualisation.containers.storage.settings.storage.graphroot

@@ -27,13 +27,4 @@ in
     };
   };
 
-  environment.persistence = lib.mkMerge [
-    {
-      "/persistent/cache" = {
-        directories = [
-          "/var/lib/qdrant"
-        ];
-      };
-    }
-  ];
 }

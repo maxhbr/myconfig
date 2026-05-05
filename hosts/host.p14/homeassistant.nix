@@ -56,8 +56,6 @@
       createHome = true;
     };
 
-    myconfig.persistence.directories = [ "/var/lib/home-assistant" ];
-
     services.deconz = {
       enable = true;
       group = "homeassistant";
