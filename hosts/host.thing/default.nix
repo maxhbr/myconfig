@@ -101,7 +101,7 @@
         model_group_alias = {
           "hermes" = "llama-swap-33656:hermes";
           "hermes-fallback" = "llama-swap-33656:hermes-fallback";
-          "opencode-fast" ="llama-swap-33656:opencode-fast";
+          "opencode-fast" = "llama-swap-33656:opencode-fast";
           "opencode-fast-fallback" = "llama-swap-33656:opencode-fast-fallback";
           "opencode" = "llama-swap-33657:opencode";
           "opencode-slow" = "llama-swap-33657:opencode-slow";

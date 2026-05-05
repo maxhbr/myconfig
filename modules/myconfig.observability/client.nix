@@ -3,6 +3,7 @@
 {
   config,
   lib,
+  pkgs,
   myconfig,
   ...
 }:
@@ -40,14 +41,16 @@ in
       description = "Extra collectors to enable in node_exporter.";
     };
 
-    enableDcgmExporter = mkEnableOption "dcgm-exporter for GPU metrics";
+    enableDcgmExporter = mkEnableOption "dcgm-exporter for NVIDIA GPU metrics";
+
+    dcgmExporterPort = mkOption {
+      type = types.port;
+      default = 9400;
+      description = "Port the dcgm-exporter listens on (loopback only).";
+    };
   };
 
   config = lib.mkIf clientCfg.enable {
-    services.prometheus.exporters.dcgm = lib.mkIf clientCfg.enableDcgmExporter {
-      enable = true;
-    };
-
     services.prometheus.exporters.node = {
       enable = true;
       port = clientCfg.nodeExporterPort;
@@ -56,6 +59,25 @@ in
       listenAddress = "127.0.0.1";
 
       enabledCollectors = clientCfg.enabledNodeCollectors;
+    };
+
+    # dcgm-exporter is not yet a NixOS module in nixpkgs (only the package
+    # `prometheus-dcgm-exporter` exists), so we run it as a plain systemd
+    # service. Requires an NVIDIA GPU with the driver loaded.
+    systemd.services.prometheus-dcgm-exporter = lib.mkIf clientCfg.enableDcgmExporter {
+      description = "Prometheus dcgm-exporter (NVIDIA GPU metrics)";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "network.target" ];
+      serviceConfig = {
+        ExecStart = "${pkgs.prometheus-dcgm-exporter}/bin/dcgm-exporter --address=127.0.0.1:${toString clientCfg.dcgmExporterPort}";
+        Restart = "on-failure";
+        RestartSec = "5s";
+        DynamicUser = true;
+        SupplementaryGroups = [ "video" ];
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        NoNewPrivileges = true;
+      };
     };
 
     services.vmagent = {
@@ -70,29 +92,53 @@ in
           };
         };
 
-        scrape_configs =
-          [
-            {
-              job_name = "node";
-              static_configs = [
-                { targets = [ "127.0.0.1:${toString clientCfg.nodeExporterPort}" ]; }
-              ];
-            }
-            {
-              job_name = "vmagent";
-              static_configs = [
-                { targets = [ "127.0.0.1:${toString clientCfg.vmagentPort}" ]; }
-              ];
-            }
-          ]
-          ++ lib.optionals clientCfg.enableDcgmExporter [
-            {
-              job_name = "dcgm";
-              static_configs = [
-                { targets = [ "127.0.0.1:${toString config.services.prometheus.exporters.dcgm.port}" ]; }
-              ];
-            }
-          ];
+        scrape_configs = [
+          {
+            job_name = "node";
+            static_configs = [
+              { targets = [ "127.0.0.1:${toString clientCfg.nodeExporterPort}" ]; }
+            ];
+          }
+          {
+            job_name = "vmagent";
+            static_configs = [
+              { targets = [ "127.0.0.1:${toString clientCfg.vmagentPort}" ]; }
+            ];
+          }
+        ]
+        ++ lib.optionals clientCfg.enableDcgmExporter [
+          {
+            job_name = "dcgm";
+            static_configs = [
+              { targets = [ "127.0.0.1:${toString clientCfg.dcgmExporterPort}" ]; }
+            ];
+          }
+        ]
+        ++ lib.optionals config.services.litellm.enable [
+          {
+            job_name = "litellm";
+            metrics_path = "/metrics";
+            static_configs = [
+              { targets = [ "${config.services.litellm.host}:${toString config.services.litellm.port}" ]; }
+            ];
+          }
+        ]
+        # When netdata is enabled, scrape its Prometheus endpoint.
+        # See https://www.netdata.cloud/blog/netdata-prometheus-grafana-stack/
+        ++ lib.optionals config.services.netdata.enable [
+          {
+            job_name = "netdata";
+            metrics_path = "/api/v1/allmetrics";
+            params = {
+              format = [ "prometheus_all_hosts" ];
+              help = [ "no" ];
+            };
+            honor_labels = true;
+            static_configs = [
+              { targets = [ "127.0.0.1:19999" ]; }
+            ];
+          }
+        ];
       };
 
       remoteWrite = {
