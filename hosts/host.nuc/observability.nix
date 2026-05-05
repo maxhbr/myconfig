@@ -4,6 +4,10 @@
   lib,
   ...
 }:
+let
+  basicAuthPassword = "unsafe:isheix9aitoo8pooThie";
+  basicAuthPasswordFile = pkgs.writeText "victoriametrics-basic-auth-password" basicAuthPassword;
+in
 
 {
   imports = [
@@ -70,22 +74,10 @@
             # Depending on your nixpkgs vmagent module version, basic auth may either
             # be supported here or may need to go through extraArgs.
             # If this attrset fails evaluation, use extraArgs below instead.
-            basicAuth = {
-              username = "vmagent";
-              passwordFile = "/run/secrets/victoriametrics_basic_auth_password";
-            };
+            basicAuthUsername = "vmagent";
+            basicAuthPasswordFile = toString basicAuthPasswordFile;
           };
-
-          # Fallback if your services.vmagent.remoteWrite option does not support basicAuth:
-          #
-          # extraArgs = [
-          #   "-remoteWrite.basicAuth.username=vmagent"
-          #   "-remoteWrite.basicAuth.passwordFile=/run/secrets/victoriametrics_basic_auth_password"
-          # ];
         };
-
-        # No need to expose node_exporter.
-        networking.firewall.allowedTCPPorts = [ ];
       }
     )
   ];
@@ -101,7 +93,7 @@
 
       # Strongly recommended if exposed beyond loopback.
       basicAuthUsername = "vmagent";
-      basicAuthPasswordFile = "/run/secrets/victoriametrics_basic_auth_password";
+      basicAuthPasswordFile = toString basicAuthPasswordFile;
     };
 
     services.grafana = {
@@ -116,7 +108,8 @@
 
         security = {
           admin_user = "admin";
-          secret_key = lib.mkDefault "$__file{/run/secrets/grafana_secret_key}";
+          admin_password = lib.mkDefault "admin";
+          secret_key = lib.mkDefault "SW2YcwTIb9zpOOhoPsMm"; # will be overwritten in private
         };
 
         "auth.anonymous" = {
@@ -136,7 +129,7 @@
           basicAuth = true;
           basicAuthUser = "vmagent";
           secureJsonData = {
-            basicAuthPassword = "$__file{/run/secrets/victoriametrics_basic_auth_password}";
+            basicAuthPassword = "$__file{${toString basicAuthPasswordFile}}";
           };
         }
       ];
@@ -146,5 +139,6 @@
       8428 # VictoriaMetrics remote_write endpoint
       3000 # Only if you want Grafana reachable directly over LAN.
     ];
+
   };
 }
