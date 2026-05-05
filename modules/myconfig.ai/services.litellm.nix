@@ -73,6 +73,21 @@ in
     services.litellm = {
       host = lib.mkForce "127.0.0.1";
       port = lib.mkForce 4000;
+      # The upstream litellm package does not include prometheus_client,
+      # which is required for the `prometheus` callback used below for
+      # observability. Rebuild the wrapped Python application with that
+      # extra dependency added.
+      package = lib.mkIf config.myconfig.observability.client.enable (
+        pkgs.python3Packages.toPythonApplication (
+          pkgs.python3Packages.litellm.overridePythonAttrs (oldAttrs: {
+            dependencies =
+              (oldAttrs.dependencies or [ ])
+              ++ pkgs.python3Packages.litellm.optional-dependencies.proxy
+              ++ pkgs.python3Packages.litellm.optional-dependencies.extra_proxy
+              ++ [ pkgs.python3Packages.prometheus-client ];
+          })
+        )
+      );
       # settings.general_settings = {
       #   store_prompts_in_spend_logs = true;
       #   disable_spend_logs = false;

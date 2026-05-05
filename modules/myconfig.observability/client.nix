@@ -40,15 +40,11 @@ in
       ];
       description = "Extra collectors to enable in node_exporter.";
     };
-
-    enableDcgmExporter = mkEnableOption "dcgm-exporter for NVIDIA GPU metrics";
-
-    dcgmExporterPort = mkOption {
-      type = types.port;
-      default = 9400;
-      description = "Port the dcgm-exporter listens on (loopback only).";
-    };
   };
+
+  imports = [
+    ./client.dcgm-exporter.nix
+  ];
 
   config = lib.mkIf clientCfg.enable {
     services.prometheus.exporters.node = {
@@ -59,25 +55,6 @@ in
       listenAddress = "127.0.0.1";
 
       enabledCollectors = clientCfg.enabledNodeCollectors;
-    };
-
-    # dcgm-exporter is not yet a NixOS module in nixpkgs (only the package
-    # `prometheus-dcgm-exporter` exists), so we run it as a plain systemd
-    # service. Requires an NVIDIA GPU with the driver loaded.
-    systemd.services.prometheus-dcgm-exporter = lib.mkIf clientCfg.enableDcgmExporter {
-      description = "Prometheus dcgm-exporter (NVIDIA GPU metrics)";
-      wantedBy = [ "multi-user.target" ];
-      after = [ "network.target" ];
-      serviceConfig = {
-        ExecStart = "${pkgs.prometheus-dcgm-exporter}/bin/dcgm-exporter --address=127.0.0.1:${toString clientCfg.dcgmExporterPort}";
-        Restart = "on-failure";
-        RestartSec = "5s";
-        DynamicUser = true;
-        SupplementaryGroups = [ "video" ];
-        ProtectSystem = "strict";
-        ProtectHome = true;
-        NoNewPrivileges = true;
-      };
     };
 
     services.vmagent = {
@@ -103,14 +80,6 @@ in
             job_name = "vmagent";
             static_configs = [
               { targets = [ "127.0.0.1:${toString clientCfg.vmagentPort}" ]; }
-            ];
-          }
-        ]
-        ++ lib.optionals clientCfg.enableDcgmExporter [
-          {
-            job_name = "dcgm";
-            static_configs = [
-              { targets = [ "127.0.0.1:${toString clientCfg.dcgmExporterPort}" ]; }
             ];
           }
         ]

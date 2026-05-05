@@ -19,7 +19,7 @@
         host_hostname = "nuc";
         client = {
           enable = true;
-          enableDcgmExporter = true;
+          # enableDcgmExporter = true;
         };
       };
     }
