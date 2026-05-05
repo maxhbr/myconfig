@@ -13,6 +13,7 @@ in
   imports = [
     ./host.nix
     ./host.loki.nix
+    ./host.uptime.nix
     ./client.nix
     ./client.alloy.nix
   ];

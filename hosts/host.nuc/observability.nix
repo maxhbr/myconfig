@@ -4,6 +4,7 @@
 {
   myconfig.observability = {
     host.enable = true;
+    host.uptime.enable = true;
     client.enable = true;
   };
 }
