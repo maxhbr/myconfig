@@ -21,7 +21,7 @@ in
       description = "Port the dcgm-exporter listens on (loopback only).";
     };
   };
-  config = lib.mkIf (clientCfg.enable  && clientCfg.enableDcgmExporter) {
+  config = lib.mkIf (clientCfg.enable && clientCfg.enableDcgmExporter) {
     # dcgm-exporter is not yet a NixOS module in nixpkgs (only the package
     # `prometheus-dcgm-exporter` exists), so we run it as a plain systemd
     # service. Requires an NVIDIA GPU with the driver loaded.
