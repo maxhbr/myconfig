@@ -51,7 +51,12 @@ $ git clone --depth 1 "https://github.com/maxhbr/myconfig" --branch "master" --s
 #+END_SRC
 
 * License
-This project is licensed under MIT (see [[./LICENSE]])
+This project is licensed under MIT (see [[./LICENSE]]).
+
+Note that parts of this repository under [[./vendor/]] are vendored from
+upstream projects and remain licensed under their respective licenses
+(see the =LICENSE= file inside each vendored directory). For example,
+[[./vendor/alexdavid-jail.nix/]] is licensed under GPL-3.0.
 
 #+BEGIN_COMMENT
 SPDX-License-Identifier: MIT
