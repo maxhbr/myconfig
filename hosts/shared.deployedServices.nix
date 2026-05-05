@@ -19,18 +19,6 @@
           name = "deconz";
           port = 8124;
         }
-        {
-          name = "prometheus";
-          port = 9090;
-        }
-        {
-          name = "grafana";
-          port = 3000;
-        }
-        {
-          name = "node-exporter";
-          port = 9100;
-        }
       ];
       thing = [
         {

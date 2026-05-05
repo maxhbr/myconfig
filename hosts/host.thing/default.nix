@@ -14,6 +14,12 @@
     ../../hardware/efi.nix
     ../../hardware/btrfs.nix
     inputs.nixos-hardware.nixosModules.framework-desktop-amd-ai-max-300-series
+    {
+      myconfig.observability = {
+        host_hostname = "nuc";
+        client.enable = true;
+      };
+    }
     (myconfig.metadatalib.fixIp "enp191s0")
     (myconfig.metadatalib.setupAsBuildMachine [
       myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"

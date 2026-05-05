@@ -14,6 +14,12 @@
     ./imgwork.nfs.nix
     ../../hardware/RX5500XT.nix
     ./ai.workstation.nix
+    {
+      myconfig.observability = {
+        host_hostname = "nuc";
+        client.enable = true;
+      };
+    }
     ../../hardware/efi.nix
     ../../hardware/btrfs.nix
     inputs.nixos-hardware.nixosModules.common-cpu-amd

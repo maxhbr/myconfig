@@ -13,6 +13,12 @@
     ./ai.p14.nix
     ./hermes-agent.nix
     ./services.caddy.nix
+    {
+      myconfig.observability = {
+        host_hostname = "nuc";
+        client.enable = true;
+      };
+    }
     ../shared.localModels.llama-swap.nix
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
