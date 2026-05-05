@@ -14,6 +14,10 @@
   config = {
     myconfig = {
       headless.enable = true;
+      observability = {
+        host_hostname = "nuc";
+        client.enable = true;
+      };
     };
 
     networking.hostName = "vserver";
