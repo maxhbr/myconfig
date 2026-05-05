@@ -15,6 +15,11 @@ let
   # URL plus the models exposed there. We then materialize them as aider
   # model settings entries that route via litellm's "openai/<model>" provider
   # but with extra_params.api_base/api_key overriding the endpoint.
+  # LiteLLM uses ":" as a tag separator in model ids, so the alias side of
+  # the name (which becomes the litellm model id) must not contain ":".
+  # The upstream model name is sent verbatim to the server so it can keep ":".
+  sanitize = builtins.replaceStrings [ ":" ] [ "_" ];
+
   mkProvider =
     {
       key,
@@ -25,7 +30,7 @@ let
       inherit key baseUrl;
       models = lib.map (modelId: {
         upstreamModel = modelId;
-        aiderName = "openai/${key}--${modelId}";
+        aiderName = "openai/${sanitize key}--${sanitize modelId}";
       }) models;
     };
 
@@ -75,6 +80,16 @@ let
       inherit (m) aiderName upstreamModel;
     }) p.models
   ) allProviders;
+
+  # Prefer "clean" upstream model names (plain aliases like "opencode")
+  # when picking a default to avoid ending up on device-prefixed entries
+  # like "Vulkan0:foo".
+  defaultModelEntry =
+    let
+      isCleanName = e: !(lib.hasInfix ":" e.upstreamModel);
+      clean = lib.filter isCleanName allModelEntries;
+    in
+    if clean != [ ] then builtins.head clean else builtins.head allModelEntries;
 
   # ~/.aider.model.settings.yml content. Aider uses LiteLLM under the hood;
   # by giving the model a name like "openai/<unique>" and setting
@@ -136,24 +151,27 @@ in
         # See: https://github.com/nix-community/home-manager/blob/master/modules/programs/aider-chat.nix
         programs.aider-chat = {
           enable = true;
-          settings = {
-            model-settings-file = "~/.aider.model.settings.yml";
-            model-metadata-file = "~/.aider.model.metadata.json";
-            check-update = false;
-            analytics-disable = true;
-            show-model-warnings = false;
-            auto-commits = false;
-            dirty-commits = true;
-            gitignore = true;
-            pretty = true;
-            stream = true;
-            suggest-shell-commands = false;
-            notifications = false;
-          }
-          // lib.optionalAttrs (allModelEntries != [ ]) {
+          settings = lib.mkMerge [
+            {
+              model-settings-file = "~/.aider.model.settings.yml";
+              model-metadata-file = "~/.aider.model.metadata.json";
+              check-update = false;
+              analytics-disable = true;
+              show-model-warnings = false;
+              auto-commits = false;
+              dirty-commits = true;
+              gitignore = true;
+              pretty = true;
+              stream = true;
+              suggest-shell-commands = false;
+              notifications = false;
+            }
             # Pick a reasonable default model when one is available.
-            model = (builtins.head allModelEntries).aiderName;
-          };
+            # Use mkDefault so per-host configs can override without conflict.
+            (lib.mkIf (allModelEntries != [ ]) {
+              model = lib.mkDefault defaultModelEntry.aiderName;
+            })
+          ];
         };
 
         # Aider writes per-repo files (.aider.tags.cache.v4, .aider.input.history,
