@@ -1,49 +1,150 @@
-# Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
-# SPDX-License-Identifier: MIT
-
 {
   pkgs,
   config,
   lib,
   ...
 }:
+
 {
-  # Observability - Prometheus + Grafana
-  services.prometheus = {
-    enable = true;
-    port = 9090;
-    listenAddress = "127.0.0.1";
-    scrapeConfigs = [
+  imports = [
+    (
       {
-        job_name = "node_exporter";
-        static_configs = [ { targets = [ "localhost:9100" ]; } ];
-      }
+        config,
+        lib,
+        ...
+      }:
+
+      let
+        metricsServer = "localhost";
+      in
       {
-        job_name = "prometheus";
-        static_configs = [ { targets = [ "localhost:9090" ]; } ];
+        services.prometheus.exporters.node = {
+          enable = true;
+          port = 9100;
+
+          # Important: only local vmagent can scrape this.
+          listenAddress = "127.0.0.1";
+
+          enabledCollectors = [
+            "logind"
+            "systemd"
+          ];
+        };
+
+        services.vmagent = {
+          enable = true;
+
+          prometheusConfig = {
+            global = {
+              scrape_interval = "15s";
+
+              external_labels = {
+                host = config.networking.hostName;
+              };
+            };
+
+            scrape_configs = [
+              {
+                job_name = "node";
+                static_configs = [
+                  {
+                    targets = [ "127.0.0.1:9100" ];
+                  }
+                ];
+              }
+
+              {
+                job_name = "vmagent";
+                static_configs = [
+                  {
+                    targets = [ "127.0.0.1:8429" ];
+                  }
+                ];
+              }
+            ];
+          };
+
+          remoteWrite = {
+            url = "http://${metricsServer}:8428/api/v1/write";
+
+            # Depending on your nixpkgs vmagent module version, basic auth may either
+            # be supported here or may need to go through extraArgs.
+            # If this attrset fails evaluation, use extraArgs below instead.
+            basicAuth = {
+              username = "vmagent";
+              passwordFile = "/run/secrets/victoriametrics_basic_auth_password";
+            };
+          };
+
+          # Fallback if your services.vmagent.remoteWrite option does not support basicAuth:
+          #
+          # extraArgs = [
+          #   "-remoteWrite.basicAuth.username=vmagent"
+          #   "-remoteWrite.basicAuth.passwordFile=/run/secrets/victoriametrics_basic_auth_password"
+          # ];
+        };
+
+        # No need to expose node_exporter.
+        networking.firewall.allowedTCPPorts = [ ];
       }
-    ];
-    exporters.node = {
-      enable = true;
-      port = 9100;
-      enabledCollectors = [ "logind" ];
-    };
-  };
-  services.grafana = {
-    enable = true;
-    port = 3000;
-    settings = {
-      server.http_addr = "127.0.0.1";
-      security.admin_user = "admin";
-      # security.admin_password = "%SECRET:grafana_admin_password%";
-      security.secret_key = lib.mkDefault "SW2YcwTIb9zpOOhoPsMm"; # will be overwritten in private repo
-      anonymous.enabled = false;
-    };
-    settings.server.domain = "localhost";
-  };
-  networking.firewall.allowedTCPPorts = [
-    9090
-    9100
-    3000
+    )
   ];
+  config = {
+    services.victoriametrics = {
+      enable = true;
+
+      # Bind to your LAN/VPN interface, or use "0.0.0.0:8428" if firewall-restricted.
+      listenAddress = "0.0.0.0:8428";
+
+      # Optional but recommended.
+      retentionPeriod = "90d";
+
+      # Strongly recommended if exposed beyond loopback.
+      basicAuthUsername = "vmagent";
+      basicAuthPasswordFile = "/run/secrets/victoriametrics_basic_auth_password";
+    };
+
+    services.grafana = {
+      enable = true;
+
+      settings = {
+        server = {
+          domain = "localhost";
+          http_addr = "127.0.0.1";
+          http_port = 3000;
+        };
+
+        security = {
+          admin_user = "admin";
+          secret_key = lib.mkDefault "$__file{/run/secrets/grafana_secret_key}";
+        };
+
+        "auth.anonymous" = {
+          enabled = false;
+        };
+      };
+
+      provision.datasources.settings.datasources = [
+        {
+          name = "VictoriaMetrics";
+          type = "prometheus";
+          url = "http://127.0.0.1:8428";
+          access = "proxy";
+          isDefault = true;
+
+          # If you enable VictoriaMetrics basic auth, Grafana also needs it.
+          basicAuth = true;
+          basicAuthUser = "vmagent";
+          secureJsonData = {
+            basicAuthPassword = "$__file{/run/secrets/victoriametrics_basic_auth_password}";
+          };
+        }
+      ];
+    };
+
+    networking.firewall.allowedTCPPorts = [
+      8428 # VictoriaMetrics remote_write endpoint
+      3000 # Only if you want Grafana reachable directly over LAN.
+    ];
+  };
 }
