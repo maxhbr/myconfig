@@ -70,7 +70,7 @@
     lib.recursiveUpdate
       {
         aggregatedInputs = inputs;
-        lib = import ./flake.lib.nix inputs;
+        lib = { jail = import ./vendor/alexdavid-jail.nix/lib; } // import ./flake.lib.nix inputs;
 
         ##########################################################################
         ## profiles and modules ##################################################

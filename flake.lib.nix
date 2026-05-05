@@ -519,6 +519,7 @@ rec {
           inherit user;
           metadatalib = mkMetadatalib metadataOverride;
         };
+        jail = import ./vendor/alexdavid-jail.nix/lib;
         flake = self;
 
         modules = nixosModules ++ [
