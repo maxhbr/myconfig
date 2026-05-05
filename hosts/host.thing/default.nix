@@ -103,6 +103,7 @@
           "opencode" = "llama-swap-33657:opencode";
           "opencode-slow" = "llama-swap-33657:opencode-slow";
           "opencode-fallback" = "llama-swap-33657:opencode-fallback";
+          "sidekick" = "llama-swap-33656:sidekick";
         };
       };
     };
