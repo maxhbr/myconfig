@@ -63,10 +63,10 @@
                 host:
                 let
                   hostBase = "${host}.wg0.maxhbr.local";
-                  hostIp = myconfig.metadatalib.getIp host;
+                  wgIp = myconfig.metadatalib.getWgIp host;
                   items = lib.concatMapStringsSep "\n" (
                     { name, port, ... }:
-                    ''<li><a href="https://${name}.${hostBase}/">${name}</a> <a class="port" href="http://${hostIp}:${toString port}">(:${toString port})</a></li>''
+                    ''<li><a href="https://${name}.${hostBase}/">${name}</a> <a class="port" href="http://${wgIp}:${toString port}">(:${toString port})</a></li>''
                   ) allServices.${host};
                   isCurrent = host == hostName;
                 in

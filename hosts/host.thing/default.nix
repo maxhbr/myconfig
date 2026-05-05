@@ -17,7 +17,10 @@
     {
       myconfig.observability = {
         host_hostname = "nuc";
-        client.enable = true;
+        client = {
+          enable = true;
+          enableDcgmExporter = true;
+        };
       };
     }
     (myconfig.metadatalib.fixIp "enp191s0")

@@ -74,7 +74,7 @@ in
         {
           name = "VictoriaMetrics";
           type = "prometheus";
-          url = "http://127.0.0.1:${toString cfg.remoteWritePort}";
+          url = "http://${wgIp}:${toString cfg.remoteWritePort}";
           access = "proxy";
           isDefault = true;
 

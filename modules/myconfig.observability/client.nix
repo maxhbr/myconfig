@@ -39,9 +39,15 @@ in
       ];
       description = "Extra collectors to enable in node_exporter.";
     };
+
+    enableDcgmExporter = mkEnableOption "dcgm-exporter for GPU metrics";
   };
 
   config = lib.mkIf clientCfg.enable {
+    services.prometheus.exporters.dcgm = lib.mkIf clientCfg.enableDcgmExporter {
+      enable = true;
+    };
+
     services.prometheus.exporters.node = {
       enable = true;
       port = clientCfg.nodeExporterPort;
@@ -64,20 +70,29 @@ in
           };
         };
 
-        scrape_configs = [
-          {
-            job_name = "node";
-            static_configs = [
-              { targets = [ "127.0.0.1:${toString clientCfg.nodeExporterPort}" ]; }
-            ];
-          }
-          {
-            job_name = "vmagent";
-            static_configs = [
-              { targets = [ "127.0.0.1:${toString clientCfg.vmagentPort}" ]; }
-            ];
-          }
-        ];
+        scrape_configs =
+          [
+            {
+              job_name = "node";
+              static_configs = [
+                { targets = [ "127.0.0.1:${toString clientCfg.nodeExporterPort}" ]; }
+              ];
+            }
+            {
+              job_name = "vmagent";
+              static_configs = [
+                { targets = [ "127.0.0.1:${toString clientCfg.vmagentPort}" ]; }
+              ];
+            }
+          ]
+          ++ lib.optionals clientCfg.enableDcgmExporter [
+            {
+              job_name = "dcgm";
+              static_configs = [
+                { targets = [ "127.0.0.1:${toString config.services.prometheus.exporters.dcgm.port}" ]; }
+              ];
+            }
+          ];
       };
 
       remoteWrite = {
