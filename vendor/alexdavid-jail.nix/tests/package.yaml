@@ -1,0 +1,46 @@
+name: jail-nix-tests
+tests:
+  spec:
+    source-dirs: [spec]
+    main: Spec.hs
+    dependencies:
+      - aeson
+      - base
+      - bytestring
+      - containers
+      - dbus
+      - extra
+      - filepath
+      - hspec
+      - hspec-core
+      - interpolate
+      - mtl
+      - process
+      - random
+      - string-conversions
+      - temporary
+      - text
+      - unix
+
+default-extensions:
+  - DerivingStrategies
+  - FlexibleInstances
+  - GeneralizedNewtypeDeriving
+  - ImportQualifiedPost
+  - LambdaCase
+  - NamedFieldPuns
+  - NumericUnderscores
+  - OverloadedStrings
+  - QuasiQuotes
+  - ScopedTypeVariables
+  - TupleSections
+  - TypeFamilies
+
+ghc-options:
+  - -Wall
+  - -Werror
+  - -Wno-name-shadowing
+  - -threaded
+  - -rtsopts
+  - '"-with-rtsopts=-T -N"'
+  - -j
