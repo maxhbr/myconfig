@@ -12,15 +12,17 @@ in
 {
   imports = [
     ./host.nix
+    ./host.loki.nix
     ./client.nix
+    ./client.alloy.nix
   ];
 
   options.myconfig.observability = with lib; {
     client = {
-      enable = mkEnableOption "myconfig.observability.client (node_exporter + vmagent)";
+      enable = mkEnableOption "myconfig.observability.client (node_exporter + vmagent + alloy)";
     };
     host = {
-      enable = mkEnableOption "myconfig.observability.host (VictoriaMetrics + Grafana)";
+      enable = mkEnableOption "myconfig.observability.host (VictoriaMetrics + Loki + Grafana)";
     };
 
     host_hostname = mkOption {
@@ -43,6 +45,15 @@ in
       type = types.port;
       default = 3000;
       description = "HTTP port for the Grafana UI on the observability host.";
+    };
+
+    lokiPort = mkOption {
+      type = types.port;
+      default = 3100;
+      description = ''
+        HTTP port where Loki listens for log ingestion (push API) and
+        queries from Grafana. Used by Alloy on clients to push logs.
+      '';
     };
 
     basicAuthUsername = mkOption {

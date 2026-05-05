@@ -84,12 +84,20 @@ in
             basicAuthPassword = "$__file{${toString cfg.basicAuthPasswordFile}}";
           };
         }
+        {
+          name = "Loki";
+          type = "loki";
+          url = "http://${wgIp}:${toString cfg.lokiPort}";
+          access = "proxy";
+          isDefault = false;
+        }
       ];
     };
 
     networking.firewall.allowedTCPPorts = [
       cfg.remoteWritePort # VictoriaMetrics remote_write endpoint
       cfg.grafanaPort # Grafana UI (only if you want it reachable directly over LAN)
+      cfg.lokiPort # Loki HTTP endpoint
     ];
   };
 }
