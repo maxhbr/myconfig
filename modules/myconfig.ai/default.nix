@@ -32,6 +32,7 @@ in
     ./programs.lmstudio.nix
     ./programs.mcp.servers.nix
     ./programs.opencode
+    ./programs.pi-coding-agent.nix
     ./programs.qwen-code
     ./programs.vllm.nix
     ./services.litellm.nix
