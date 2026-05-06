@@ -61,13 +61,17 @@
       ];
       p14 = [
         {
-          name = "searxng";
-          port = 28080;
+          name = "open-webui";
+          port = 8888;
         }
-        {
-          name = "searxng-plain";
-          port = 18080;
-        }
+        # {
+        #   name = "searxng";
+        #   port = 28080;
+        # }
+        # {
+        #   name = "searxng-plain";
+        #   port = 18080;
+        # }
       ];
     };
   };

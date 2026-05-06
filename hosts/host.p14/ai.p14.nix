@@ -20,7 +20,7 @@
         aider.enable = true;
         opencode.enable = true;
         pi-coding-agent.enable = true;
-        searx.enable = true;
+        # searx.enable = true;
         inference-cpp = {
           enable = true;
         };
