@@ -630,22 +630,6 @@
         "type": "github"
       }
     },
-    "pr502283": {
-      "locked": {
-        "lastModified": 1774549621,
-        "narHash": "sha256-I6G1Bg1DTmltdAMAHkp7S6kktX81qqg/WaQzEBt6MDE=",
-        "owner": "Stebalien",
-        "repo": "nixpkgs",
-        "rev": "ff077fe943fab73adf58ad2f0f7650f49a1fda61",
-        "type": "github"
-      },
-      "original": {
-        "owner": "Stebalien",
-        "repo": "nixpkgs",
-        "rev": "ff077fe943fab73adf58ad2f0f7650f49a1fda61",
-        "type": "github"
-      }
-    },
     "pyproject-build-systems": {
       "inputs": {
         "nixpkgs": [
@@ -753,7 +737,6 @@
         "nixpkgs": "nixpkgs_3",
         "nixpkgs-wayland": "nixpkgs-wayland",
         "nur": "nur",
-        "pr502283": "pr502283",
         "zephyr-flake": "zephyr-flake"
       }
     },
