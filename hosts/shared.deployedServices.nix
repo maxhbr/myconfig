@@ -47,7 +47,7 @@
         }
         {
           name = "open-webui";
-          port = 8080;
+          port = 8888;
         }
         {
           name = "comfyui";
@@ -55,7 +55,11 @@
         }
         {
           name = "searxng";
-          port = 8080;
+          port = 28080;
+        }
+        {
+          name = "searxng-plain";
+          port = 18080;
         }
         {
           name = "qdrant";
