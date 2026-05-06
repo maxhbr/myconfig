@@ -51,9 +51,6 @@ in
       };
     };
 
-    # Ensure ollama is enabled and running
-    services.ollama.enable = lib.mkDefault true;
-
     # Add home-manager shell scripts for managing Open WebUI
     home-manager.sharedModules = [
       {
