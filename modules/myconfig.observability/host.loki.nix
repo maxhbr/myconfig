@@ -213,7 +213,7 @@ let
             expr = ''
               sum(rate({job="systemd-journal", host=~"$host", level=~"${errorLevelRegex}"}[5m]))
               /
-              clamp_min(sum(rate({job="systemd-journal", host=~"$host"}[5m])), 1)
+              sum(rate({job="systemd-journal", host=~"$host"}[5m]))
             '';
             refId = "A";
           }
