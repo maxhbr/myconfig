@@ -123,13 +123,12 @@ let
       {
         id = 3;
         type = "stat";
-        title = "vmagent process uptime (per host)";
+        title = "System uptime (per host)";
         description = ''
-          `vm_app_uptime_seconds` from each host's local vmagent — i.e.
-          how long the metrics-collection daemon has been running.
-          Resets to 0 on vmagent restart (typically after a NixOS
-          activation), so this is effectively a process-uptime view
-          complementing the system-age panels above.
+          `netdata_system_uptime_seconds_average` from each host's local
+          netdata exporter — the wall-clock uptime of the machine
+          itself (resets only on reboot), complementing the system-age
+          panels above which track time-since-NixOS-activation.
         '';
         datasource = "VictoriaMetrics";
         gridPos = {
@@ -160,12 +159,12 @@ let
                   value = null;
                 }
                 {
-                  # > 5 min — process has settled
+                  # > 5 min — host has finished booting
                   color = "yellow";
                   value = 300;
                 }
                 {
-                  # > 1 h — looks healthy
+                  # > 1 h — running steadily
                   color = "green";
                   value = 3600;
                 }
@@ -175,7 +174,7 @@ let
         };
         targets = [
           {
-            expr = ''vm_app_uptime_seconds{job="vmagent"}'';
+            expr = "netdata_system_uptime_seconds_average";
             legendFormat = "{{host}}";
             refId = "A";
             instant = true;
