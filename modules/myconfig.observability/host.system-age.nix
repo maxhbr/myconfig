@@ -109,6 +109,10 @@ let
               drawStyle = "line";
               lineInterpolation = "stepAfter";
               fillOpacity = 10;
+              scaleDistribution = {
+                type = "log";
+                log = 10;
+              };
             };
           };
         };
