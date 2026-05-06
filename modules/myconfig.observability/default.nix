@@ -15,6 +15,7 @@ in
     ./host.loki.nix
     ./host.uptime.nix
     ./host.system-age.nix
+    ./host.litellm.nix
     ./client.nix
     ./client.alloy.nix
   ];
