@@ -24,7 +24,6 @@ in
     ./container.open-webui.nix
     ./inference.cpp.nix
     ./programs.aichat.nix
-    ./programs.aider
     ./programs.alpaca.nix
     ./programs.claude-code
     ./programs.codex
