@@ -81,6 +81,7 @@ in
         "cast"
 
         # Device ecosystems
+        "deconz"
         "hue"
         "unifi"
         "tplink"

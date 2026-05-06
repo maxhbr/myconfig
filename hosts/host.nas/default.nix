@@ -40,10 +40,7 @@
       # };
     }
     ./2x4000-hdds.raid.nix
-    ./smarthome
     ./service.unifi.nix
-    # ./service.nextcloud.nix
-    # ./service.grafana
     # ./service.pi-hole.nix
 
     {
