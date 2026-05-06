@@ -44,6 +44,7 @@ in
 
   imports = [
     ./client.dcgm-exporter.nix
+    ./client.system-age.nix
   ];
 
   config = lib.mkIf clientCfg.enable {
@@ -55,6 +56,15 @@ in
       listenAddress = "127.0.0.1";
 
       enabledCollectors = clientCfg.enabledNodeCollectors;
+
+      # Point the textfile collector at the directory managed by
+      # client.system-age.nix (and any other module that drops a
+      # `*.prom` file there). Only configure the flag when the
+      # system-age sub-module is actually enabled, otherwise leave
+      # node_exporter at its defaults.
+      extraFlags = lib.optionals clientCfg.systemAge.enable [
+        "--collector.textfile.directory=${clientCfg.systemAge.textfileDir}"
+      ];
     };
 
     services.vmagent = {
