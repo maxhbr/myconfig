@@ -755,5 +755,10 @@ in
         }
       ];
     };
+
+    # Register this dashboard with the host-level playlist.
+    myconfig.observability.host.playlist.dashboardUids = lib.mkIf lokiCfg.provisionDashboard [
+      logsDashboard.uid
+    ];
   };
 }

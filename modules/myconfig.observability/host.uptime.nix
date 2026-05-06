@@ -306,5 +306,11 @@ in
         }
       ];
     };
+
+    # Register this dashboard with the host-level playlist so it is
+    # walked through alongside the other myconfig dashboards.
+    myconfig.observability.host.playlist.dashboardUids = lib.mkIf uptimeCfg.provisionDashboard [
+      uptimeDashboard.uid
+    ];
   };
 }

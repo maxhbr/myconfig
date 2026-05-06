@@ -230,5 +230,8 @@ in
         }
       ];
     };
+
+    # Register this dashboard with the host-level playlist.
+    myconfig.observability.host.playlist.dashboardUids = [ systemAgeDashboard.uid ];
   };
 }
