@@ -57,6 +57,7 @@ in
                   "nix flake *" = "allow";
                   "nix fmt" = "allow";
                   "nix fmt *" = "allow";
+                  "nix build --dry-run *" = "allow";
                   "go build *" = "allow";
                   "go test *" = "allow";
                   "go generate *" = "allow";
