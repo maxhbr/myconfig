@@ -19,10 +19,14 @@ let
 
   # Levels considered "errors" for the error-rate panels. Alloy maps
   # the systemd `PRIORITY` field to a `level` label using the
-  # `__journal_priority_keyword` source, which yields values like
-  # `emerg`, `alert`, `crit`, `err`, `warning`, `notice`, `info`,
-  # `debug`. We treat anything at `err` or worse as an error.
-  errorLevelRegex = "emerg|alert|crit|err";
+  # `__journal_priority_keyword` source. Different versions emit the
+  # keyword either lowercase (`emerg`, `alert`, `crit`, `err`) following
+  # go-systemd's `Priority.String()`, or with the `error` spelling that
+  # the Alloy reference docs show. Some setups also pass the raw
+  # systemd level (uppercase, e.g. `ERR`, `EMERG`). LogQL stream-
+  # selector regexes are fully anchored, so we list every plausible
+  # spelling explicitly and use the case-insensitive RE2 flag `(?i)`.
+  errorLevelRegex = "(?i)(emerg|alert|crit|err|error)";
 
   # Grafana dashboard for an overview of logs ingested into Loki:
   # total log rate, error rate, ratio, and breakdowns by host / level /
