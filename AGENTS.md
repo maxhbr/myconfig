@@ -97,6 +97,16 @@ Build log files for each host are stored in the parent directory:
 - Use `inherit (inputs.nixpkgs) lib` for nixpkgs lib functions
 - Follow flake input convention: define all inputs at top of _flake.nix_
 
+### Local Source Checkouts for Lookup
+Local checkouts of upstream sources are available for reference and lookup
+(e.g. searching for module options, package definitions, or library functions):
+- **nixpkgs**: `~/myconfig/nixos/nixpkgs`
+- **home-manager**: `~/myconfig/nixos/home-manager`
+
+Use these checkouts with Grep/Glob/Read tools to investigate upstream behavior,
+find existing modules, or look up option definitions. Do not modify these
+directories — they are read-only references.
+
 ### Naming Conventions
 - Modules: `category.subcategory.feature.nix` or `subdir/default.nix`
 - Options: `myconfig.<category>.<feature>.enable`
