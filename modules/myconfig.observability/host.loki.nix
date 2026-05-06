@@ -7,13 +7,644 @@
 {
   config,
   lib,
+  pkgs,
   myconfig,
   ...
 }:
 let
   cfg = config.myconfig.observability;
   hostCfg = cfg.host;
+  lokiCfg = hostCfg.loki;
   wgIp = myconfig.metadatalib.getWgIp cfg.host_hostname;
+
+  # Levels considered "errors" for the error-rate panels. Alloy maps
+  # the systemd `PRIORITY` field to a `level` label using the
+  # `__journal_priority_keyword` source, which yields values like
+  # `emerg`, `alert`, `crit`, `err`, `warning`, `notice`, `info`,
+  # `debug`. We treat anything at `err` or worse as an error.
+  errorLevelRegex = "emerg|alert|crit|err";
+
+  # Grafana dashboard for an overview of logs ingested into Loki:
+  # total log rate, error rate, ratio, and breakdowns by host / level /
+  # unit, plus a live tail of recent error logs.
+  logsDashboard = {
+    uid = "myconfig-logs";
+    title = "Logs overview";
+    schemaVersion = 39;
+    version = 1;
+    timezone = "browser";
+    refresh = "30s";
+    time = {
+      from = "now-1h";
+      to = "now";
+    };
+    annotations.list = [ ];
+    templating.list = [
+      {
+        name = "host";
+        label = "Host";
+        type = "query";
+        datasource = {
+          type = "loki";
+          uid = "loki";
+        };
+        # Loki variable query: type=1 means "label values", and `label`
+        # is the label whose values to enumerate. `stream` narrows the
+        # search to a specific log stream selector.
+        query = {
+          label = "host";
+          refId = "LokiVariableQueryEditor-VariableQuery";
+          stream = ''{job="systemd-journal"}'';
+          type = 1;
+        };
+        # `definition` is what older provisioning paths read; we mirror
+        # the structured query into it as a fallback.
+        definition = ''label_values({job="systemd-journal"}, host)'';
+        refresh = 2;
+        sort = 1;
+        multi = true;
+        includeAll = true;
+        allValue = ".+";
+        current = {
+          selected = false;
+          text = "All";
+          value = "$__all";
+        };
+        options = [ ];
+      }
+    ];
+    panels = [
+      {
+        id = 1;
+        type = "stat";
+        title = "Log rate (lines/s)";
+        datasource = {
+          type = "loki";
+          uid = "loki";
+        };
+        gridPos = {
+          h = 4;
+          w = 6;
+          x = 0;
+          y = 0;
+        };
+        options = {
+          reduceOptions = {
+            calcs = [ "lastNotNull" ];
+            fields = "";
+            values = false;
+          };
+          colorMode = "value";
+          graphMode = "area";
+          textMode = "auto";
+        };
+        fieldConfig.defaults = {
+          unit = "logs/s";
+          decimals = 1;
+        };
+        targets = [
+          {
+            expr = ''sum(rate({job="systemd-journal", host=~"$host"}[1m]))'';
+            refId = "A";
+          }
+        ];
+      }
+      {
+        id = 2;
+        type = "stat";
+        title = "Error rate (lines/s)";
+        datasource = {
+          type = "loki";
+          uid = "loki";
+        };
+        gridPos = {
+          h = 4;
+          w = 6;
+          x = 6;
+          y = 0;
+        };
+        options = {
+          reduceOptions = {
+            calcs = [ "lastNotNull" ];
+            fields = "";
+            values = false;
+          };
+          colorMode = "value";
+          graphMode = "area";
+          textMode = "auto";
+        };
+        fieldConfig.defaults = {
+          unit = "logs/s";
+          decimals = 2;
+          thresholds = {
+            mode = "absolute";
+            steps = [
+              {
+                color = "green";
+                value = null;
+              }
+              {
+                color = "yellow";
+                value = 0.1;
+              }
+              {
+                color = "red";
+                value = 1;
+              }
+            ];
+          };
+        };
+        targets = [
+          {
+            expr = ''sum(rate({job="systemd-journal", host=~"$host", level=~"${errorLevelRegex}"}[1m]))'';
+            refId = "A";
+          }
+        ];
+      }
+      {
+        id = 3;
+        type = "stat";
+        title = "Error ratio";
+        datasource = {
+          type = "loki";
+          uid = "loki";
+        };
+        gridPos = {
+          h = 4;
+          w = 6;
+          x = 12;
+          y = 0;
+        };
+        options = {
+          reduceOptions = {
+            calcs = [ "lastNotNull" ];
+            fields = "";
+            values = false;
+          };
+          colorMode = "value";
+          graphMode = "area";
+          textMode = "auto";
+        };
+        fieldConfig.defaults = {
+          unit = "percentunit";
+          decimals = 2;
+          min = 0;
+          max = 1;
+          thresholds = {
+            mode = "absolute";
+            steps = [
+              {
+                color = "green";
+                value = null;
+              }
+              {
+                color = "yellow";
+                value = 0.01;
+              }
+              {
+                color = "red";
+                value = 0.1;
+              }
+            ];
+          };
+        };
+        targets = [
+          {
+            expr = ''
+              sum(rate({job="systemd-journal", host=~"$host", level=~"${errorLevelRegex}"}[5m]))
+              /
+              clamp_min(sum(rate({job="systemd-journal", host=~"$host"}[5m])), 1)
+            '';
+            refId = "A";
+          }
+        ];
+      }
+      {
+        id = 4;
+        type = "stat";
+        title = "Reporting hosts";
+        datasource = {
+          type = "loki";
+          uid = "loki";
+        };
+        gridPos = {
+          h = 4;
+          w = 6;
+          x = 18;
+          y = 0;
+        };
+        options = {
+          reduceOptions = {
+            calcs = [ "lastNotNull" ];
+            fields = "";
+            values = false;
+          };
+          colorMode = "value";
+          graphMode = "none";
+          textMode = "auto";
+        };
+        fieldConfig.defaults = {
+          unit = "short";
+          decimals = 0;
+        };
+        targets = [
+          {
+            expr = ''count(sum by (host) (rate({job="systemd-journal", host=~"$host"}[5m])))'';
+            refId = "A";
+          }
+        ];
+      }
+      {
+        id = 10;
+        type = "timeseries";
+        title = "Log rate by host";
+        datasource = {
+          type = "loki";
+          uid = "loki";
+        };
+        gridPos = {
+          h = 9;
+          w = 12;
+          x = 0;
+          y = 4;
+        };
+        fieldConfig.defaults = {
+          unit = "logs/s";
+          custom = {
+            drawStyle = "line";
+            lineInterpolation = "linear";
+            fillOpacity = 10;
+            stacking = {
+              mode = "normal";
+              group = "A";
+            };
+          };
+        };
+        options.legend = {
+          displayMode = "table";
+          placement = "right";
+          calcs = [
+            "mean"
+            "max"
+          ];
+        };
+        targets = [
+          {
+            expr = ''sum by (host) (rate({job="systemd-journal", host=~"$host"}[1m]))'';
+            legendFormat = "{{host}}";
+            refId = "A";
+          }
+        ];
+      }
+      {
+        id = 11;
+        type = "timeseries";
+        title = "Log rate by level";
+        datasource = {
+          type = "loki";
+          uid = "loki";
+        };
+        gridPos = {
+          h = 9;
+          w = 12;
+          x = 12;
+          y = 4;
+        };
+        fieldConfig.defaults = {
+          unit = "logs/s";
+          custom = {
+            drawStyle = "line";
+            lineInterpolation = "linear";
+            fillOpacity = 10;
+            stacking = {
+              mode = "normal";
+              group = "A";
+            };
+          };
+        };
+        fieldConfig.overrides = [
+          {
+            matcher = {
+              id = "byName";
+              options = "emerg";
+            };
+            properties = [
+              {
+                id = "color";
+                value = {
+                  mode = "fixed";
+                  fixedColor = "dark-red";
+                };
+              }
+            ];
+          }
+          {
+            matcher = {
+              id = "byName";
+              options = "alert";
+            };
+            properties = [
+              {
+                id = "color";
+                value = {
+                  mode = "fixed";
+                  fixedColor = "red";
+                };
+              }
+            ];
+          }
+          {
+            matcher = {
+              id = "byName";
+              options = "crit";
+            };
+            properties = [
+              {
+                id = "color";
+                value = {
+                  mode = "fixed";
+                  fixedColor = "red";
+                };
+              }
+            ];
+          }
+          {
+            matcher = {
+              id = "byName";
+              options = "err";
+            };
+            properties = [
+              {
+                id = "color";
+                value = {
+                  mode = "fixed";
+                  fixedColor = "orange";
+                };
+              }
+            ];
+          }
+          {
+            matcher = {
+              id = "byName";
+              options = "warning";
+            };
+            properties = [
+              {
+                id = "color";
+                value = {
+                  mode = "fixed";
+                  fixedColor = "yellow";
+                };
+              }
+            ];
+          }
+          {
+            matcher = {
+              id = "byName";
+              options = "info";
+            };
+            properties = [
+              {
+                id = "color";
+                value = {
+                  mode = "fixed";
+                  fixedColor = "blue";
+                };
+              }
+            ];
+          }
+        ];
+        options.legend = {
+          displayMode = "table";
+          placement = "right";
+          calcs = [
+            "mean"
+            "max"
+          ];
+        };
+        targets = [
+          {
+            expr = ''sum by (level) (rate({job="systemd-journal", host=~"$host"}[1m]))'';
+            legendFormat = "{{level}}";
+            refId = "A";
+          }
+        ];
+      }
+      {
+        id = 20;
+        type = "timeseries";
+        title = "Error rate by host";
+        datasource = {
+          type = "loki";
+          uid = "loki";
+        };
+        gridPos = {
+          h = 9;
+          w = 12;
+          x = 0;
+          y = 13;
+        };
+        fieldConfig.defaults = {
+          unit = "logs/s";
+          custom = {
+            drawStyle = "line";
+            lineInterpolation = "linear";
+            fillOpacity = 10;
+          };
+        };
+        options.legend = {
+          displayMode = "table";
+          placement = "right";
+          calcs = [
+            "mean"
+            "max"
+          ];
+        };
+        targets = [
+          {
+            expr = ''sum by (host) (rate({job="systemd-journal", host=~"$host", level=~"${errorLevelRegex}"}[1m]))'';
+            legendFormat = "{{host}}";
+            refId = "A";
+          }
+        ];
+      }
+      {
+        id = 21;
+        type = "table";
+        title = "Top noisy units (last 1h)";
+        datasource = {
+          type = "loki";
+          uid = "loki";
+        };
+        gridPos = {
+          h = 9;
+          w = 12;
+          x = 12;
+          y = 13;
+        };
+        options = {
+          showHeader = true;
+          sortBy = [
+            {
+              displayName = "Value";
+              desc = true;
+            }
+          ];
+        };
+        fieldConfig.defaults = {
+          custom = {
+            align = "left";
+          };
+        };
+        targets = [
+          {
+            expr = ''
+              topk(20, sum by (host, unit) (
+                count_over_time({job="systemd-journal", host=~"$host", unit!=""}[1h])
+              ))
+            '';
+            instant = true;
+            refId = "A";
+            format = "table";
+          }
+        ];
+        transformations = [
+          {
+            id = "organize";
+            options = {
+              excludeByName = {
+                Time = true;
+              };
+              indexByName = { };
+              renameByName = {
+                Value = "Lines (1h)";
+                host = "Host";
+                unit = "Unit";
+              };
+            };
+          }
+        ];
+      }
+      {
+        id = 30;
+        type = "table";
+        title = "Top error-producing units (last 1h)";
+        datasource = {
+          type = "loki";
+          uid = "loki";
+        };
+        gridPos = {
+          h = 9;
+          w = 12;
+          x = 0;
+          y = 22;
+        };
+        options = {
+          showHeader = true;
+          sortBy = [
+            {
+              displayName = "Errors (1h)";
+              desc = true;
+            }
+          ];
+        };
+        targets = [
+          {
+            expr = ''
+              topk(20, sum by (host, unit) (
+                count_over_time({job="systemd-journal", host=~"$host", unit!="", level=~"${errorLevelRegex}"}[1h])
+              ))
+            '';
+            instant = true;
+            refId = "A";
+            format = "table";
+          }
+        ];
+        transformations = [
+          {
+            id = "organize";
+            options = {
+              excludeByName = {
+                Time = true;
+              };
+              indexByName = { };
+              renameByName = {
+                Value = "Errors (1h)";
+                host = "Host";
+                unit = "Unit";
+              };
+            };
+          }
+        ];
+      }
+      {
+        id = 31;
+        type = "logs";
+        title = "Recent errors";
+        datasource = {
+          type = "loki";
+          uid = "loki";
+        };
+        gridPos = {
+          h = 9;
+          w = 12;
+          x = 12;
+          y = 22;
+        };
+        options = {
+          showTime = true;
+          showLabels = false;
+          showCommonLabels = false;
+          wrapLogMessage = true;
+          prettifyLogMessage = false;
+          enableLogDetails = true;
+          dedupStrategy = "none";
+          sortOrder = "Descending";
+        };
+        targets = [
+          {
+            expr = ''{job="systemd-journal", host=~"$host", level=~"${errorLevelRegex}"}'';
+            refId = "A";
+            maxLines = 500;
+          }
+        ];
+      }
+      {
+        id = 40;
+        type = "logs";
+        title = "Recent logs (all levels)";
+        datasource = {
+          type = "loki";
+          uid = "loki";
+        };
+        gridPos = {
+          h = 10;
+          w = 24;
+          x = 0;
+          y = 31;
+        };
+        options = {
+          showTime = true;
+          showLabels = false;
+          showCommonLabels = false;
+          wrapLogMessage = true;
+          prettifyLogMessage = false;
+          enableLogDetails = true;
+          dedupStrategy = "none";
+          sortOrder = "Descending";
+        };
+        targets = [
+          {
+            expr = ''{job="systemd-journal", host=~"$host"}'';
+            refId = "A";
+            maxLines = 500;
+          }
+        ];
+      }
+    ];
+  };
+
+  logsDashboardFile = pkgs.writeText "logs-dashboard.json" (builtins.toJSON logsDashboard);
 in
 {
   options.myconfig.observability.host.loki = with lib; {
@@ -21,6 +652,16 @@ in
       type = types.str;
       default = "720h"; # 30 days
       description = "Loki log retention period (compactor delay until logs are deleted).";
+    };
+
+    provisionDashboard = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Provision a Grafana dashboard ("Logs overview") with total log
+        and error rates plus breakdowns by host, level and systemd
+        unit, sourced from the Loki datasource.
+      '';
     };
   };
 
@@ -96,5 +737,23 @@ in
 
     # The firewall opening for cfg.lokiPort is done centrally in host.nix
     # alongside the VictoriaMetrics + Grafana ports.
+
+    services.grafana.provision.dashboards.settings = lib.mkIf lokiCfg.provisionDashboard {
+      # `apiVersion` is also set by ./host.uptime.nix; mark this one as
+      # default so the two modules coexist when both are enabled.
+      apiVersion = lib.mkDefault 1;
+      providers = [
+        {
+          name = "myconfig-logs";
+          type = "file";
+          disableDeletion = true;
+          updateIntervalSeconds = 60;
+          options.path = pkgs.runCommand "logs-dashboards" { } ''
+            mkdir -p $out
+            cp ${logsDashboardFile} $out/logs.json
+          '';
+        }
+      ];
+    };
   };
 }

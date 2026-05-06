@@ -70,28 +70,50 @@ in
         };
       };
 
-      provision.datasources.settings.datasources = [
-        {
-          name = "VictoriaMetrics";
-          type = "prometheus";
-          url = "http://${wgIp}:${toString cfg.remoteWritePort}";
-          access = "proxy";
-          isDefault = true;
+      provision.datasources.settings = {
+        # Grafana matches datasources by name and never reassigns the
+        # UID of an existing row, so simply adding `uid = ...` to a
+        # previously-provisioned datasource has no effect (the auto-
+        # generated UID stays). Listing them in `deleteDatasources`
+        # forces a drop+recreate on each startup, after which the
+        # `uid` fields below are honoured. Dashboards reference these
+        # datasources by their stable UIDs (`victoriametrics`, `loki`).
+        deleteDatasources = [
+          {
+            name = "VictoriaMetrics";
+            orgId = 1;
+          }
+          {
+            name = "Loki";
+            orgId = 1;
+          }
+        ];
 
-          basicAuth = true;
-          basicAuthUser = cfg.basicAuthUsername;
-          secureJsonData = {
-            basicAuthPassword = "$__file{${toString cfg.basicAuthPasswordFile}}";
-          };
-        }
-        {
-          name = "Loki";
-          type = "loki";
-          url = "http://${wgIp}:${toString cfg.lokiPort}";
-          access = "proxy";
-          isDefault = false;
-        }
-      ];
+        datasources = [
+          {
+            name = "VictoriaMetrics";
+            uid = "victoriametrics";
+            type = "prometheus";
+            url = "http://${wgIp}:${toString cfg.remoteWritePort}";
+            access = "proxy";
+            isDefault = true;
+
+            basicAuth = true;
+            basicAuthUser = cfg.basicAuthUsername;
+            secureJsonData = {
+              basicAuthPassword = "$__file{${toString cfg.basicAuthPasswordFile}}";
+            };
+          }
+          {
+            name = "Loki";
+            uid = "loki";
+            type = "loki";
+            url = "http://${wgIp}:${toString cfg.lokiPort}";
+            access = "proxy";
+            isDefault = false;
+          }
+        ];
+      };
     };
 
     networking.firewall.allowedTCPPorts = [
