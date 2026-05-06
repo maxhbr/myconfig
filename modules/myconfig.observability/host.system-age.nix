@@ -21,7 +21,7 @@ let
     uid = "myconfig-system-age";
     title = "NixOS system age";
     schemaVersion = 39;
-    version = 1;
+    version = 2;
     timezone = "browser";
     refresh = "1m";
     time = {
@@ -122,6 +122,68 @@ let
       }
       {
         id = 3;
+        type = "stat";
+        title = "vmagent process uptime (per host)";
+        description = ''
+          `vm_app_uptime_seconds` from each host's local vmagent — i.e.
+          how long the metrics-collection daemon has been running.
+          Resets to 0 on vmagent restart (typically after a NixOS
+          activation), so this is effectively a process-uptime view
+          complementing the system-age panels above.
+        '';
+        datasource = "VictoriaMetrics";
+        gridPos = {
+          h = 8;
+          w = 24;
+          x = 0;
+          y = 20;
+        };
+        options = {
+          reduceOptions = {
+            calcs = [ "lastNotNull" ];
+            fields = "";
+            values = false;
+          };
+          colorMode = "background";
+          graphMode = "area";
+          textMode = "value_and_name";
+          orientation = "auto";
+        };
+        fieldConfig = {
+          defaults = {
+            unit = "s";
+            thresholds = {
+              mode = "absolute";
+              steps = [
+                {
+                  color = "red";
+                  value = null;
+                }
+                {
+                  # > 5 min — process has settled
+                  color = "yellow";
+                  value = 300;
+                }
+                {
+                  # > 1 h — looks healthy
+                  color = "green";
+                  value = 3600;
+                }
+              ];
+            };
+          };
+        };
+        targets = [
+          {
+            expr = ''vm_app_uptime_seconds{job="vmagent"}'';
+            legendFormat = "{{host}}";
+            refId = "A";
+            instant = true;
+          }
+        ];
+      }
+      {
+        id = 4;
         type = "table";
         title = "Activation time + NixOS label per host";
         datasource = "VictoriaMetrics";
@@ -129,7 +191,7 @@ let
           h = 10;
           w = 24;
           x = 0;
-          y = 20;
+          y = 28;
         };
         transformations = [
           {
@@ -230,8 +292,5 @@ in
         }
       ];
     };
-
-    # Register this dashboard with the host-level playlist.
-    myconfig.observability.host.playlist.dashboardUids = [ systemAgeDashboard.uid ];
   };
 }
