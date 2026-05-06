@@ -123,6 +123,7 @@
         imagework.myphoto.enable = false;
         obs.enable = false;
       };
+      deployedServices.configureCaddy = true;
       email = {
         # enable = true; # this is set in the priv repo
         clients = [
