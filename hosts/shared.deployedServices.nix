@@ -54,17 +54,19 @@
           port = 8188;
         }
         {
+          name = "qdrant";
+          port = 6333;
+          forceHttps = false;
+        }
+      ];
+      p14 = [
+        {
           name = "searxng";
           port = 28080;
         }
         {
           name = "searxng-plain";
           port = 18080;
-        }
-        {
-          name = "qdrant";
-          port = 6333;
-          forceHttps = false;
         }
       ];
     };
