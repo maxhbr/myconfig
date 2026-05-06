@@ -161,6 +161,10 @@
   ];
   config = {
     myconfig = {
+      observability = {
+        host_hostname = "nuc";
+        client.enable = true;
+      };
       headless.enable = true;
       virtualisation.enable = true;
     };
