@@ -57,6 +57,7 @@
     )
     # ./services.ollama.nix
     ./services.llama-swap.nix
+    ./services.open-webui.nix
     ./services.wyoming.nix
     ./services.qdrant.nix
     ./specialisation.nix
