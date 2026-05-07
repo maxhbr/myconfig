@@ -13,6 +13,8 @@ let
   forgejoUser = "maxhbr";
   nixosUser = "mhuber";
 
+  hermesAgentUser = "hermes-agent";
+
   forgejoPort = config.services.forgejo.settings.server.HTTP_PORT;
   forgejoApi = "http://127.0.0.1:${toString forgejoPort}/api/v1";
 
@@ -93,16 +95,26 @@ in
         owner = "forgejo";
         group = "forgejo";
       };
+
+      forgejo-hermes-agent-password = {
+        dest = "/run/forgejo-hermes-agent-password";
+        owner = "forgejo";
+        group = "forgejo";
+      };
     };
 
     systemd.services.forgejo = {
-      serviceConfig.After = [ "forgejo-admin-password-key.service" ];
+      serviceConfig.After = [
+        "forgejo-admin-password-key.service"
+        "forgejo-hermes-agent-password-key.service"
+      ];
 
       preStart =
         let
           cfg = config.services.forgejo;
           adminCmd = "${lib.getExe cfg.package} admin user";
           pwd = config.myconfig.secrets.forgejo-admin-password;
+          haPwd = config.myconfig.secrets.forgejo-hermes-agent-password;
         in
         ''
           ${adminCmd} create \
@@ -110,6 +122,12 @@ in
             --email "root@localhost" \
             --username ${forgejoUser} \
             --password "$(tr -d '\n' < ${pwd.dest})" \
+            || true
+
+          ${adminCmd} create \
+            --email "hermes-agent@localhost" \
+            --username ${hermesAgentUser} \
+            --password "$(tr -d '\n' < ${haPwd.dest})" \
             || true
         '';
     };
