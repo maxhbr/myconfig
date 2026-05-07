@@ -20,6 +20,9 @@
         dest = config.containers.searx.config.services.searx.environmentFile;
         owner = "searx";
         group = "searx";
+        # dest is bind-mounted into the searx container; decrypt directly
+        # to dest rather than symlinking from /run/agenix.
+        symlink = false;
       };
     };
     containers.searx = {

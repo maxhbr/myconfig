@@ -5,10 +5,6 @@
   myconfig,
   ...
 }:
-# copied from https://github.com/Xe/nixos-configs/blob/master/common/crypto/default.nix : MIT
-# see also: https://christine.website/blog/nixos-encrypted-secrets-2021-01-20
-# License: MIT
-# Copyright (c) 2020 Christine Dodrill <me@christine.website>
 
 with lib;
 
@@ -63,18 +59,32 @@ let
         type = types.nullOr types.path;
         description = "overwrite the used privkey.";
       };
+
+      symlink = mkOption {
+        default = true;
+        type = types.bool;
+        description = ''
+          Whether to symlink the secret to its destination (agenix default)
+          or decrypt it directly to `dest`.
+
+          Set to `false` when the `dest` path is bind-mounted into a NixOS
+          container, since a symlink target under `/run/agenix` would not
+          be visible inside the container's mount namespace.
+        '';
+      };
     };
   };
 
-  mkSecretOnDisk =
+  mkEncryptedAgeFile =
     name:
     { source, unsafePubkeyOverwrite, ... }:
-    pkgs.stdenv.mkDerivation {
-      name = "${name}-secret";
-      phases = "installPhase";
-      installPhase =
+    pkgs.runCommand "${name}.age"
+      {
+        nativeBuildInputs = [ pkgs.age ];
+      }
+      (
         let
-          pubkeyArgs =
+          pubkeyArg =
             if unsafePubkeyOverwrite == null then
               "-r '${
                 myconfig.metadatalib.get.hosts."${config.networking.hostName
@@ -84,55 +94,18 @@ let
               "-R '${unsafePubkeyOverwrite}'";
         in
         ''
-          "${pkgs.age}"/bin/age -a ${pubkeyArgs} -o "$out" '${source}'
-        '';
-    };
-
-  mkService =
-    name:
-    {
-      source,
-      dest,
-      owner,
-      group,
-      permissions,
-      wantedBy,
-      unsafePubkeyOverwrite,
-      unsafePrivkeyOverwrite,
-      ...
-    }:
-    {
-      description = "decrypt secret for ${name}";
-      wantedBy = [ "multi-user.target" ] ++ wantedBy;
-      before = wantedBy;
-
-      serviceConfig.Type = "oneshot";
-
-      script =
-        let
-          privkey =
-            if unsafePrivkeyOverwrite == null then "/etc/ssh/ssh_host_rsa_key" else unsafePrivkeyOverwrite;
-        in
-        with pkgs;
+          age -a ${pubkeyArg} -o "$out" '${source}'
         ''
-          dir="$(dirname '${dest}')"
-          if [[ ! -d "$dir" ]]; then
-            mkdir -p "$dir"
-            chown '${owner}':'${group}' "$dir"
-          fi
+      );
 
-          rm -rf '${dest}'
-          "${age}"/bin/age -d \
-              -i '${privkey}' -o '${dest}' \
-              '${mkSecretOnDisk name { inherit source unsafePubkeyOverwrite; }}'
+  validSecrets = filterAttrs (_name: info: info.source != null) cfg;
 
-          chown '${owner}':'${group}' '${dest}'
-          chmod '${permissions}' '${dest}'
+  missingSource = filterAttrs (_name: info: info.source == null) cfg;
 
-          # # test for readability, fails if a parent folder is not readable
-          # sudo -H -u '${owner}' -g '${group}' bash -c "test -r '${dest}'"
-        '';
-    };
+  secretsWithPrivkeyOverride = filterAttrs (
+    _name: info: info.unsafePrivkeyOverwrite != null
+  ) validSecrets;
+
 in
 {
   options.myconfig.secrets = mkOption {
@@ -141,19 +114,46 @@ in
     default = { };
   };
 
-  config.systemd.services =
-    let
-      missingSource = filterAttrs (name: info: info.source == null) cfg;
-      _ = lib.warn (
-        if missingSource != { } then
-          "myconfig.secrets: source is missing for: ${lib.concatStringsSep ", " (lib.attrNames missingSource)}"
-        else
-          ""
-      ) null;
-      units = mapAttrs' (name: info: {
-        name = "${name}-key";
-        value = (mkService name info);
-      }) (filterAttrs (name: info: info.source != null) cfg);
-    in
-    units;
+  config = mkMerge [
+    {
+      warnings =
+        optional (
+          missingSource != { }
+        ) "myconfig.secrets: source is missing for: ${concatStringsSep ", " (attrNames missingSource)}"
+        ++
+          optional (secretsWithPrivkeyOverride != { })
+            "myconfig.secrets: unsafePrivkeyOverwrite cannot be represented per-secret by agenix; using all override keys globally via age.identityPaths.";
+
+      age.secrets = mapAttrs (name: info: {
+        file = mkEncryptedAgeFile name info;
+        path = info.dest;
+        owner = info.owner;
+        group = info.group;
+        mode = info.permissions;
+        inherit (info) symlink;
+      }) validSecrets;
+    }
+
+    /*
+      Your old module allowed per-secret private-key overrides.
+
+      Agenix has a global `age.identityPaths`, not a per-secret private key
+      option. This preserves behavior approximately by adding all overridden
+      private keys to the global identity list.
+    */
+    (mkIf (secretsWithPrivkeyOverride != { }) {
+      age.identityPaths = mapAttrsToList (
+        _name: info: toString info.unsafePrivkeyOverwrite
+      ) secretsWithPrivkeyOverride;
+    })
+
+    /*
+      Your old `wantedBy` made custom systemd units run before specific targets.
+      Agenix normally handles secrets during activation. If you had services
+      relying on old `wantedBy` ordering, prefer changing those services to
+      depend on agenix's activation result or simply reference the final path.
+
+      In most cases, no explicit ordering is needed.
+    */
+  ];
 }

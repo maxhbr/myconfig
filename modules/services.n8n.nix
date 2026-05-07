@@ -55,15 +55,20 @@ in
   imports = [
     n8nConfig
     (lib.mkIf config.myconfig.containers.n8n.enable {
+      # symlink = false: dest is bind-mounted into the n8n container, so the
+      # decrypted file must exist at `dest` directly (a symlink target under
+      # /run/agenix would not be visible inside the container).
       myconfig.secrets = {
         "N8N_RUNNERS_AUTH_TOKEN_FILE" = {
           dest = config.containers.n8n.config.services.n8n.environment.N8N_RUNNERS_AUTH_TOKEN_FILE;
           permissions = "0444";
+          symlink = false;
         };
 
         "N8N_ENCRYPTION_KEY_FILE" = {
           dest = config.containers.n8n.config.services.n8n.environment.N8N_ENCRYPTION_KEY_FILE;
           permissions = "0444";
+          symlink = false;
         };
       };
     })
