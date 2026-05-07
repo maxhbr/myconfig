@@ -13,6 +13,7 @@
     ./ai.p14.nix
     ./hermes-agent.nix
     ./services.caddy.nix
+    ./services.forgejo-token.nix
     {
       myconfig.observability = {
         host_hostname = "nuc";
