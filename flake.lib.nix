@@ -37,6 +37,12 @@ let
               "8.8.8.8"
               "8.8.4.4"
             ];
+            # Hosts pinned to a fixed LAN IP via `fixIp` are the ones that
+            # should accept inbound WireGuard handshakes from same-LAN peers
+            # for direct (non-rendezvous) peering. Open UDP/51820 only on
+            # this specific LAN interface so roaming/Wi-Fi-only hosts (which
+            # don't call `fixIp`) never expose the port on untrusted Wi-Fi.
+            firewall.interfaces."${deviceName}".allowedUDPPorts = [ 51820 ];
           };
         }
       );
@@ -214,9 +220,12 @@ let
 
             environment.systemPackages = [ pkgs.wireguard-tools ];
             networking.nameservers = [ "10.199.199.1" ];
-            # Open the wg listen port so same-LAN peers can reach this host
-            # directly (otherwise we'd only ever connect outbound).
-            networking.firewall.allowedUDPPorts = [ 51820 ];
+            # NOTE: UDP/51820 is intentionally NOT opened on the global
+            # firewall here. Roaming hosts (laptops on untrusted Wi-Fi) must
+            # not expose the wg listen port to whatever network they're on.
+            # Hosts that should accept inbound wg handshakes from same-LAN
+            # peers open the port on their LAN interface via `fixIp`, which
+            # is exactly the set of LAN-anchored hosts.
             networking.wireguard.interfaces = {
               "${wgInterface}" = {
                 ips = [
