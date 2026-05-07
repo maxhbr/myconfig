@@ -13,8 +13,9 @@
 #     module, which the host should also enable) gets an extra
 #     `blackbox` scrape job whose targets are derived from
 #     `config.myconfig.deployedServices.services` across all hosts.
-#   * Optionally a small Grafana dashboard is provisioned so the
-#     metrics show up out of the box.
+#
+# The Grafana dashboard for these metrics is provisioned by
+# ./host.home-lab-status.nix together with the NixOS system-age panels.
 #
 # Metrics produced (per target):
 #   * `probe_success`          1/0 - did the probe pass all checks?
@@ -87,126 +88,6 @@ let
   };
 
   blackboxConfigFile = pkgs.writeText "blackbox-exporter.yml" (builtins.toJSON blackboxConfig);
-
-  # Minimal Grafana dashboard for service uptime.
-  uptimeDashboard = {
-    uid = "myconfig-uptime";
-    title = "Service uptime";
-    schemaVersion = 39;
-    version = 1;
-    timezone = "browser";
-    refresh = "30s";
-    time = {
-      from = "now-6h";
-      to = "now";
-    };
-    templating.list = [ ];
-    annotations.list = [ ];
-    panels = [
-      {
-        id = 1;
-        type = "stat";
-        title = "Service status (1 = up)";
-        datasource = "VictoriaMetrics";
-        gridPos = {
-          h = 12;
-          w = 24;
-          x = 0;
-          y = 0;
-        };
-        options = {
-          reduceOptions = {
-            calcs = [ "lastNotNull" ];
-            fields = "";
-            values = false;
-          };
-          colorMode = "background";
-          graphMode = "none";
-          textMode = "value_and_name";
-          orientation = "auto";
-        };
-        fieldConfig = {
-          defaults = {
-            mappings = [
-              {
-                type = "value";
-                options = {
-                  "0" = {
-                    color = "red";
-                    text = "DOWN";
-                  };
-                  "1" = {
-                    color = "green";
-                    text = "UP";
-                  };
-                };
-              }
-            ];
-            thresholds = {
-              mode = "absolute";
-              steps = [
-                {
-                  color = "red";
-                  value = null;
-                }
-                {
-                  color = "green";
-                  value = 1;
-                }
-              ];
-            };
-          };
-        };
-        targets = [
-          {
-            expr = ''probe_success{job="blackbox"}'';
-            legendFormat = "{{instance}}";
-            refId = "A";
-          }
-        ];
-      }
-      {
-        id = 2;
-        type = "timeseries";
-        title = "HTTP status code";
-        datasource = "VictoriaMetrics";
-        gridPos = {
-          h = 10;
-          w = 12;
-          x = 0;
-          y = 12;
-        };
-        targets = [
-          {
-            expr = ''probe_http_status_code{job="blackbox"}'';
-            legendFormat = "{{instance}}";
-            refId = "A";
-          }
-        ];
-      }
-      {
-        id = 3;
-        type = "timeseries";
-        title = "Probe duration (s)";
-        datasource = "VictoriaMetrics";
-        gridPos = {
-          h = 10;
-          w = 12;
-          x = 12;
-          y = 12;
-        };
-        targets = [
-          {
-            expr = ''probe_duration_seconds{job="blackbox"}'';
-            legendFormat = "{{instance}}";
-            refId = "A";
-          }
-        ];
-      }
-    ];
-  };
-
-  uptimeDashboardFile = pkgs.writeText "uptime-dashboard.json" (builtins.toJSON uptimeDashboard);
 in
 {
   options.myconfig.observability.host.uptime = with lib; {
@@ -229,12 +110,6 @@ in
       default = [ ];
       example = [ "https://example.com/" ];
       description = "Additional URLs to probe beyond myconfig.deployedServices.";
-    };
-
-    provisionDashboard = mkOption {
-      type = types.bool;
-      default = true;
-      description = "Provision a basic Grafana dashboard for uptime metrics.";
     };
   };
 
@@ -290,21 +165,5 @@ in
         ];
       }
     ];
-
-    services.grafana.provision.dashboards.settings = lib.mkIf uptimeCfg.provisionDashboard {
-      apiVersion = 1;
-      providers = [
-        {
-          name = "myconfig-uptime";
-          type = "file";
-          disableDeletion = true;
-          updateIntervalSeconds = 60;
-          options.path = pkgs.runCommand "uptime-dashboards" { } ''
-            mkdir -p $out
-            cp ${uptimeDashboardFile} $out/uptime.json
-          '';
-        }
-      ];
-    };
   };
 }
