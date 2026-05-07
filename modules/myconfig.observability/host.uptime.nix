@@ -158,6 +158,17 @@ in
             source_labels = [ "__param_target" ];
             target_label = "instance";
           }
+          # Extract the probed host (e.g. "nuc", "thing") from the
+          # deployedServices URL pattern so dashboards can filter by
+          # host symmetrically with system-level metrics. Targets that
+          # don't match the pattern (e.g. `extraTargets` pointing at
+          # external URLs) get no label.
+          {
+            source_labels = [ "__param_target" ];
+            regex = "https?://[^.]+\\.([^.]+)\\.wg0\\.maxhbr\\.local/.*";
+            target_label = "probed_host";
+            replacement = "\${1}";
+          }
           {
             target_label = "__address__";
             replacement = "127.0.0.1:${toString uptimeCfg.blackboxPort}";

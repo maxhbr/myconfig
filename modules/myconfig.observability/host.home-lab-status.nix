@@ -77,7 +77,7 @@ let
       };
       targets = [
         {
-          expr = "nixos_system_age_seconds";
+          expr = ''nixos_system_age_seconds{host=~"$host"}'';
           legendFormat = "{{host}}";
           refId = "A";
           instant = true;
@@ -138,7 +138,7 @@ let
       };
       targets = [
         {
-          expr = "netdata_system_uptime_seconds_average";
+          expr = ''netdata_system_uptime_seconds_average{host=~"$host"}'';
           legendFormat = "{{host}}";
           refId = "A";
           instant = true;
@@ -172,7 +172,7 @@ let
       };
       targets = [
         {
-          expr = "nixos_system_age_seconds";
+          expr = ''nixos_system_age_seconds{host=~"$host"}'';
           legendFormat = "{{host}}";
           refId = "A";
         }
@@ -220,14 +220,14 @@ let
       ];
       targets = [
         {
-          expr = "nixos_system_activation_timestamp_seconds";
+          expr = ''nixos_system_activation_timestamp_seconds{host=~"$host"}'';
           legendFormat = "{{host}}";
           refId = "A";
           format = "table";
           instant = true;
         }
         {
-          expr = "nixos_system_info";
+          expr = ''nixos_system_info{host=~"$host"}'';
           legendFormat = "{{host}}";
           refId = "B";
           format = "table";
@@ -314,7 +314,7 @@ let
       };
       targets = [
         {
-          expr = ''probe_success{job="blackbox"}'';
+          expr = ''probe_success{job="blackbox", probed_host=~"$host"}'';
           legendFormat = "{{instance}}";
           refId = "A";
         }
@@ -333,7 +333,7 @@ let
       };
       targets = [
         {
-          expr = ''probe_http_status_code{job="blackbox"}'';
+          expr = ''probe_http_status_code{job="blackbox", probed_host=~"$host"}'';
           legendFormat = "{{instance}}";
           refId = "A";
         }
@@ -352,7 +352,7 @@ let
       };
       targets = [
         {
-          expr = ''probe_duration_seconds{job="blackbox"}'';
+          expr = ''probe_duration_seconds{job="blackbox", probed_host=~"$host"}'';
           legendFormat = "{{instance}}";
           refId = "A";
         }
@@ -399,7 +399,22 @@ let
       from = "now-24h";
       to = "now";
     };
-    templating.list = [ ];
+    templating.list = [
+      {
+        name = "host";
+        label = "host";
+        type = "query";
+        datasource = "VictoriaMetrics";
+        # Source the host list from a metric every client emits so
+        # the variable is populated even if some hosts have no
+        # deployedServices probed by blackbox.
+        query = "label_values(nixos_system_age_seconds, host)";
+        refresh = 2;
+        includeAll = true;
+        multi = true;
+        sort = 1;
+      }
+    ];
     annotations.list = [ ];
     panels = [ systemRow ] ++ systemPanels ++ [ serviceRow ] ++ servicePanels;
   };
