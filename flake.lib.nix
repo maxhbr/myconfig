@@ -121,12 +121,73 @@ let
         };
       };
 
+    # Build a full-mesh peer list for `thisHost` on the given wg interface.
+    #
+    # For every other host that has `wireguard.<wgInterface>.{ip4,pubkey}`:
+    #   * allowedIPs = [ "<peer-wg-ip>/32" ]                       (per-peer routing)
+    #   * endpoint   = peer.ip4:51820 if peer has a routable ip4   (LAN or public)
+    #                  (peer's `network == thisHost.network` means same LAN,
+    #                  so peer.ip4 is a directly-routable LAN address)
+    #   * persistentKeepalive = 25 for peers that aren't on the same LAN
+    #     (NAT keepalive only needed when traversing the internet)
+    #
+    # The rendezvous host (`metadata.networks.<wgInterface>.peer`, typically
+    # `vserver`) gets a wider `allowedIPs = [ "<wg-subnet>" ]` so it acts as a
+    # catch-all router for wg peers we can't currently reach directly (e.g.
+    # while roaming off-LAN, or for peers without a known endpoint like
+    # phones). WireGuard does longest-prefix-match on allowedIPs, so the per
+    # peer /32 entries take precedence whenever the direct path works, and
+    # everything else falls through to the rendezvous.
+    #
+    # When two hosts share the `network` field (e.g. both `home`), they peer
+    # directly via their LAN ip4. WireGuard's roaming retargets endpoints
+    # when a peer's source address changes, so a laptop moving between LAN
+    # and WAN keeps working without a config reload.
+    getWgPeersFor =
+      wgInterface: thisHostName:
+      let
+        thisHost = metadata.hosts."${thisHostName}";
+        thisNetwork = thisHost.network or null;
+        wgNetwork = metadata.networks."${wgInterface}" or { };
+        rendezvousHost = wgNetwork.peer or null;
+        otherHosts = lib.filter (
+          { name, host }:
+          name != thisHostName
+          && (lib.attrsets.hasAttrByPath [ "wireguard" wgInterface "ip4" ] host)
+          && (lib.attrsets.hasAttrByPath [ "wireguard" wgInterface "pubkey" ] host)
+        ) (lib.mapAttrsToList (name: host: { inherit name host; }) metadata.hosts);
+      in
+      lib.map (
+        { name, host }:
+        let
+          peerNetwork = host.network or null;
+          peerHasIp4 = lib.attrsets.hasAttrByPath [ "ip4" ] host;
+          sameLan = thisNetwork != null && peerNetwork != null && thisNetwork == peerNetwork;
+          peerWgIp = host.wireguard."${wgInterface}".ip4;
+          isRendezvous = rendezvousHost != null && name == rendezvousHost;
+          # The rendezvous host carries the catch-all so it can route to peers
+          # we can't reach directly. All other peers get a strict /32.
+          allowed =
+            if isRendezvous then
+              ([ "${peerWgIp}/32" ] ++ (wgNetwork.allowedIPs or [ ]))
+            else
+              [ "${peerWgIp}/32" ];
+        in
+        {
+          publicKey = host.wireguard."${wgInterface}".pubkey;
+          allowedIPs = lib.unique allowed;
+        }
+        // (lib.optionalAttrs peerHasIp4 { endpoint = "${host.ip4}:51820"; })
+        # Send keepalives every 25 seconds across the internet to keep NAT
+        # tables alive. Skip on same-LAN peers (saves battery on laptops, and
+        # the LAN doesn't drop UDP flows).
+        // (lib.optionalAttrs (peerHasIp4 && !sameLan) { persistentKeepalive = 25; })
+      ) otherHosts;
+
     setupAsWireguardClient =
       wgInterface: privateKey:
       (
         let
-          wgNetwork = metadata.networks."${wgInterface}";
-          wgPeerMetadata = metadata.hosts."${wgNetwork.peer}";
           privateKeyFile = "/etc/wireguard/${wgInterface}-private";
         in
         {
@@ -135,39 +196,42 @@ let
           pkgs,
           ...
         }@args:
-        (lib.mkIf (lib.attrsets.hasAttrByPath [ "ip4" ] wgPeerMetadata) {
+        let
+          thisHostName = config.networking.hostName;
+          peers = getWgPeersFor wgInterface thisHostName;
+        in
+        (lib.mkIf
+          (lib.attrsets.hasAttrByPath [ "wireguard" wgInterface "ip4" ] metadata.hosts."${thisHostName}")
+          {
 
-          myconfig.secrets = {
-            "wireguard.private" = {
-              source = privateKey;
-              dest = privateKeyFile;
-              wantedBy = [ "wireguard-${wgInterface}.service" ];
+            myconfig.secrets = {
+              "wireguard.private" = {
+                source = privateKey;
+                dest = privateKeyFile;
+                wantedBy = [ "wireguard-${wgInterface}.service" ];
+              };
             };
-          };
 
-          environment.systemPackages = [ pkgs.wireguard-tools ];
-          networking.nameservers = [ "10.199.199.1" ];
-          networking.wireguard.interfaces = {
-            "${wgInterface}" = {
-              ips = [
-                # (getWgIp config.networking.hostName) + "/24")
-                (metadata.hosts."${config.networking.hostName}".wireguard."${wgInterface}".ip4 + "/24")
-              ]; # Determines the IP address and subnet of the server's end of the tunnel interface.
-              inherit privateKeyFile;
-              mtu = 1380;
-              peers = [
-                {
-                  publicKey = wgPeerMetadata.wireguard."${wgInterface}".pubkey;
-                  # allowedIPs = [ "0.0.0.0/0" ];
-                  # Or forward only particular subnets
-                  allowedIPs = wgNetwork.allowedIPs;
-                  endpoint = (wgPeerMetadata.ip4 + ":51820");
-                  persistentKeepalive = 25; # Send keepalives every 25 seconds. Important to keep NAT tables alive.
-                }
-              ];
+            environment.systemPackages = [ pkgs.wireguard-tools ];
+            networking.nameservers = [ "10.199.199.1" ];
+            # Open the wg listen port so same-LAN peers can reach this host
+            # directly (otherwise we'd only ever connect outbound).
+            networking.firewall.allowedUDPPorts = [ 51820 ];
+            networking.wireguard.interfaces = {
+              "${wgInterface}" = {
+                ips = [
+                  (metadata.hosts."${thisHostName}".wireguard."${wgInterface}".ip4 + "/24")
+                ];
+                # Stable listenPort lets peers (LAN or via rendezvous) find us
+                # at a known UDP port, and lets WireGuard's roaming work.
+                listenPort = 51820;
+                inherit privateKeyFile;
+                mtu = 1380;
+                inherit peers;
+              };
             };
-          };
-        })
+          }
+        )
       );
 
     getOtherWgHosts =

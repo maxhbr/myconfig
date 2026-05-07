@@ -82,6 +82,7 @@
       },
       "wireguard": {
         "wg0": {
+          "ip4": "10.199.199.1",
           "pubkey": "hw+7W5j8jIikqSJbTWiY4RN4mHu1TnLUjLWficAubBs="
         }
       }
