@@ -17,6 +17,7 @@ in
     ./host.home-lab-status.nix
     ./host.host-status.nix
     ./host.litellm.nix
+    ./host.power.nix
     ./client.nix
     ./client.alloy.nix
   ];
