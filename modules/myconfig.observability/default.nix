@@ -15,6 +15,7 @@ in
     ./host.loki.nix
     ./host.uptime.nix
     ./host.home-lab-status.nix
+    ./host.host-status.nix
     ./host.litellm.nix
     ./client.nix
     ./client.alloy.nix
