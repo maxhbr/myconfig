@@ -665,13 +665,27 @@ let
         label = "entity";
         type = "query";
         datasource = "VictoriaMetrics";
-        # Source the entity list from the power metric so the
-        # variable is populated as soon as any sensor is exposed —
-        # energy-only sensors will still match because most power
-        # plugs in HA emit *both* metrics.
-        query = "label_values(hass_sensor_power_w, entity)";
+        # Source the entity list from *both* metrics this dashboard
+        # uses — many HA sensors only expose one of the two (e.g.
+        # "energy returned" sensors only have `hass_sensor_energy_kwh`),
+        # so sourcing from a single metric would silently drop them
+        # from the dropdown and break every panel that filters on
+        # `entity=~"$entity"`.
+        query = ''label_values({__name__=~"hass_sensor_(power_w|energy_kwh)"}, entity)'';
         refresh = 2;
         includeAll = true;
+        # Default to "All" on first open so panels show data even
+        # before the user touches the dropdown.
+        current = {
+          selected = true;
+          text = [ "All" ];
+          value = [ "$__all" ];
+        };
+        # Make "All" expand to a real wildcard regex instead of the
+        # auto-generated `(a|b|c|...)` list — that way panels still
+        # match even if a brand-new sensor appears that wasn't in the
+        # dropdown when the dashboard was loaded.
+        allValue = ".*";
         multi = true;
         sort = 1;
       }
