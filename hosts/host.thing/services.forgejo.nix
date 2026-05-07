@@ -25,7 +25,7 @@ in
       settings = {
         server = {
           DOMAIN = forgejoDomain;
-          ROOT_URL = "http://${forgejoDomain}:3000/";
+          ROOT_URL = "https://${forgejoDomain}/";
           HTTP_PORT = 3000;
           SSH_PORT = 22;
         };
@@ -33,6 +33,29 @@ in
         service = {
           DISABLE_REGISTRATION = true;
         };
+      };
+    };
+
+    systemd.services.forgejo = {
+      serviceConfig.After = [ "forgejo-admin-password-key.service" ];
+
+      preStart =
+        let
+          cfg = config.services.forgejo;
+          adminCmd = "${lib.getExe cfg.package} admin user";
+          pwd = config.myconfig.secrets.forgejo-admin-password;
+          user = "maxhbr";
+        in
+        ''
+          ${adminCmd} create --admin --email "root@localhost" --username ${user} --password "$(tr -d '\n' < ${pwd.dest})" || true
+        '';
+    };
+
+    myconfig.secrets = {
+      forgejo-admin-password = {
+        dest = "/run/forgejo-admin-password";
+        owner = "forgejo";
+        group = "forgejo";
       };
     };
 
