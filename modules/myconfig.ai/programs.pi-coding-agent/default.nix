@@ -65,10 +65,14 @@ let
     }
   ) osconfig.myconfig.ai.localModels;
 
+  # `host` may be a wildcard (e.g. "0.0.0.0") for external exposure;
+  # rewrite to localhost for in-host clients.
+  litellmHost =
+    if osconfig.services.litellm.host == "0.0.0.0" then "localhost" else osconfig.services.litellm.host;
   litellmProvider = lib.optional osconfig.services.litellm.enable (mkOpenAiCompatibleProvider {
     key = "litellm";
     name = "LiteLLM";
-    baseUrl = "http://${osconfig.services.litellm.host}:${toString osconfig.services.litellm.port}/v1";
+    baseUrl = "http://${litellmHost}:${toString osconfig.services.litellm.port}/v1";
     models = lib.map (m: m.model_name) osconfig.services.litellm.settings.model_list;
   });
 

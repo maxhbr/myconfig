@@ -41,10 +41,19 @@ in
         SCARF_NO_ANALYTICS = "True";
         ENABLE_FORWARD_USER_INFO_HEADERS = "True";
       }
-      // lib.optionalAttrs config.services.litellm.enable {
-        LITELLM_BASE_URL = "http://${config.services.litellm.host}:${toString config.services.litellm.port}";
-        LITELLM_API_BASE_URL = "http://${config.services.litellm.host}:${toString config.services.litellm.port}/v1";
-      }
+      // lib.optionalAttrs config.services.litellm.enable (
+        let
+          # `host` may be a wildcard (e.g. "0.0.0.0") for external exposure;
+          # rewrite to localhost for in-host clients.
+          litellmHost =
+            if config.services.litellm.host == "0.0.0.0" then "localhost" else config.services.litellm.host;
+          base = "http://${litellmHost}:${toString config.services.litellm.port}";
+        in
+        {
+          LITELLM_BASE_URL = base;
+          LITELLM_API_BASE_URL = "${base}/v1";
+        }
+      )
       // lib.optionalAttrs config.services.ollama.enable {
         OLLAMA_BASE_URL = "http://${config.services.ollama.host}:${toString config.services.ollama.port}";
         OLLAMA_API_BASE_URL = "http://${config.services.ollama.host}:${toString config.services.ollama.port}/api";

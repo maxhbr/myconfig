@@ -35,7 +35,7 @@ in
     ./mykeylight
     ./role.work
     ./ai.f13.nix
-    ../shared.localModels.llama-swap.nix
+    ../shared.localModels.litellm.nix
     {
       services.openssh = {
         listenAddresses = [

@@ -11,7 +11,10 @@ let
   stateDir = "/home/mhuber/hermes-agent";
 
   cfg = config.myconfig.ai.hermes;
-  thingIp = myconfig.metadatalib.getIp "thing";
+
+  # LiteLLM listens on the wg0 IP of `thing` (port 4000) — see
+  # hosts/host.thing/default.nix. Connect directly, no Caddy in the path.
+  litellmBaseUrl = "http://${myconfig.metadatalib.getWgIp "thing"}:4000/v1";
 
   apiServerHost = if cfg.container.enable then config.containers.hermes.localAddress else "localhost";
   hermesServiceCfg = {
@@ -21,28 +24,16 @@ let
     createUser = false;
     stateDir = stateDir;
     settings = {
-      # model = {
-      #   default = "llama-swap-33656:hermes";
-      #   provider = "custom";
-      #   base_url = "http://litellm.thing.wg0.maxhbr.local/v1";
-      #   api_key = "local-key";
-      # };
-      # fallback_model = {
-      #   model = "llama-swap-33656:hermes-fallback";
-      #   provider = "custom";
-      #   base_url = "http://litellm.thing.wg0.maxhbr.local/v1";
-      #   api_key = "local-key";
-      # };
       model = {
         default = "hermes";
         provider = "custom";
-        base_url = "http://${thingIp}:33656/v1";
+        base_url = litellmBaseUrl;
         api_key = "local-key";
       };
       fallback_model = {
         model = "hermes-fallback";
         provider = "custom";
-        base_url = "http://${thingIp}:33656/v1";
+        base_url = litellmBaseUrl;
         api_key = "local-key";
       };
       compression = {
@@ -197,7 +188,5 @@ in
 
         };
     };
-    networking.firewall.interfaces."ve-hermes@if2".allowedTCPPorts = [ 33656 ];
-    networking.firewall.interfaces."ve-hermes@if2".allowedUDPPorts = [ 33656 ];
   };
 }

@@ -93,15 +93,23 @@ in
             ];
           }
         ]
-        ++ lib.optionals config.services.litellm.enable [
-          {
-            job_name = "litellm";
-            metrics_path = "/metrics";
-            static_configs = [
-              { targets = [ "${config.services.litellm.host}:${toString config.services.litellm.port}" ]; }
-            ];
-          }
-        ]
+        ++ lib.optionals config.services.litellm.enable (
+          let
+            # `host` may be a wildcard (e.g. "0.0.0.0") for external exposure;
+            # use localhost for the in-host scrape target.
+            litellmHost =
+              if config.services.litellm.host == "0.0.0.0" then "localhost" else config.services.litellm.host;
+          in
+          [
+            {
+              job_name = "litellm";
+              metrics_path = "/metrics";
+              static_configs = [
+                { targets = [ "${litellmHost}:${toString config.services.litellm.port}" ]; }
+              ];
+            }
+          ]
+        )
         # When netdata is enabled, scrape its Prometheus endpoint.
         # See https://www.netdata.cloud/blog/netdata-prometheus-grafana-stack/
         ++ lib.optionals config.services.netdata.enable [

@@ -24,7 +24,11 @@
 let
   cfg = config.myconfig.ai.open-webui;
 
-  litellmUrl = "http://${config.services.litellm.host}:${toString config.services.litellm.port}/v1";
+  # `host` may be a wildcard (e.g. "0.0.0.0") for external exposure;
+  # rewrite to localhost for in-host clients.
+  litellmHost =
+    if config.services.litellm.host == "0.0.0.0" then "localhost" else config.services.litellm.host;
+  litellmUrl = "http://${litellmHost}:${toString config.services.litellm.port}/v1";
   llamaSwapUrl = "http://127.0.0.1:${toString config.services.llama-swap.port}/v1";
   llamaSwap2Url = "http://127.0.0.1:${toString config.containers.llama-swap-33657.config.services.llama-swap.port}/v1";
 

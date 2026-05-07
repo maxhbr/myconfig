@@ -19,7 +19,7 @@
         client.enable = true;
       };
     }
-    ../shared.localModels.llama-swap.nix
+    ../shared.localModels.litellm.nix
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
     {
