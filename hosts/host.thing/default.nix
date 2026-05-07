@@ -41,6 +41,8 @@
     ./programs.opencode.nix
     ../shared.deployedServices.nix
     ./services.caddy.nix
+    ./services.forgejo.nix
+    ./services.gitolite.nix
     (
       { ... }:
       {

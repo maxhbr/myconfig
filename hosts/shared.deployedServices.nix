@@ -22,6 +22,13 @@
       ];
       thing = [
         {
+          name = "forgejo";
+          port = 3000;
+        }
+        {
+          name = "gitolite";
+        }
+        {
           name = "n8n";
           port = 5678;
         }

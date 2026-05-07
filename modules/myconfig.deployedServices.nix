@@ -19,8 +19,9 @@
                 description = "Service name, used as subdomain";
               };
               port = mkOption {
-                type = types.int;
-                description = "Port on which the service listens";
+                type = types.nullOr types.int;
+                default = null;
+                description = "Port on which the service listens (null for non-HTTP services)";
               };
               ip = mkOption {
                 type = types.str;
@@ -55,7 +56,7 @@
             lib.map (s: {
               name = toString s.port;
               value = s.name;
-            }) servicesList
+            }) (lib.filter (s: s.port != null) servicesList)
           );
           indexHtml =
             let
@@ -66,7 +67,11 @@
                   wgIp = myconfig.metadatalib.getWgIp host;
                   items = lib.concatMapStringsSep "\n" (
                     { name, port, ... }:
-                    ''<li><a href="https://${name}.${hostBase}/">${name}</a> <a class="port" href="http://${wgIp}:${toString port}">(:${toString port})</a></li>''
+                    ''<li><a href="https://${name}.${hostBase}/">${name}</a>${
+                      lib.optionalString (
+                        port != null
+                      ) ''<a class="port" href="http://${wgIp}:${toString port}">(:${toString port})</a>''
+                    }</li>''
                   ) allServices.${host};
                   isCurrent = host == hostName;
                 in
@@ -126,48 +131,51 @@
                 ip,
                 forceHttps,
               }:
-              let
-                portAliasUnique = (portToService.${toString port} == name);
-                aliases =
-                  (lib.optional portAliasUnique "${toString port}.${baseHostName}")
-                  ++ [
-                    "${name}.${hostName}.wg0"
-                  ]
-                  ++ (lib.optional portAliasUnique "${toString port}.${hostName}.wg0");
-                proxyConfig = ''
-                  reverse_proxy http://${ip}:${toString port}
-                '';
-              in
-              if forceHttps then
-                [
-                  (lib.nameValuePair "${name}.${baseHostName}" {
-                    hostName = "${name}.${baseHostName}";
-                    listenAddresses = [ (myconfig.metadatalib.getWgIp hostName) ];
-                    serverAliases = aliases;
-                    extraConfig = ''
-                      tls internal
-                      ${proxyConfig}
-                    '';
-                  })
-                ]
+              if port == null then
+                [ ]
               else
-                [
-                  (lib.nameValuePair "https://${name}.${baseHostName}" {
-                    hostName = "https://${name}.${baseHostName}";
-                    listenAddresses = [ (myconfig.metadatalib.getWgIp hostName) ];
-                    serverAliases = lib.map (a: "https://${a}") aliases;
-                    extraConfig = ''
-                      tls internal
-                      ${proxyConfig}
-                    '';
-                  })
-                  (lib.nameValuePair "http://${name}.${baseHostName}" {
-                    hostName = "http://${name}.${baseHostName}";
-                    listenAddresses = [ (myconfig.metadatalib.getWgIp hostName) ];
-                    serverAliases = lib.map (a: "http://${a}") aliases;
-                    extraConfig = proxyConfig;
-                  })
-                ]
+                let
+                  portAliasUnique = (portToService.${toString port} == name);
+                  aliases =
+                    (lib.optional portAliasUnique "${toString port}.${baseHostName}")
+                    ++ [
+                      "${name}.${hostName}.wg0"
+                    ]
+                    ++ (lib.optional portAliasUnique "${toString port}.${hostName}.wg0");
+                  proxyConfig = ''
+                    reverse_proxy http://${ip}:${toString port}
+                  '';
+                in
+                if forceHttps then
+                  [
+                    (lib.nameValuePair "${name}.${baseHostName}" {
+                      hostName = "${name}.${baseHostName}";
+                      listenAddresses = [ (myconfig.metadatalib.getWgIp hostName) ];
+                      serverAliases = aliases;
+                      extraConfig = ''
+                        tls internal
+                        ${proxyConfig}
+                      '';
+                    })
+                  ]
+                else
+                  [
+                    (lib.nameValuePair "https://${name}.${baseHostName}" {
+                      hostName = "https://${name}.${baseHostName}";
+                      listenAddresses = [ (myconfig.metadatalib.getWgIp hostName) ];
+                      serverAliases = lib.map (a: "https://${a}") aliases;
+                      extraConfig = ''
+                        tls internal
+                        ${proxyConfig}
+                      '';
+                    })
+                    (lib.nameValuePair "http://${name}.${baseHostName}" {
+                      hostName = "http://${name}.${baseHostName}";
+                      listenAddresses = [ (myconfig.metadatalib.getWgIp hostName) ];
+                      serverAliases = lib.map (a: "http://${a}") aliases;
+                      extraConfig = proxyConfig;
+                    })
+                  ]
             ) servicesList
           );
           indexHost = {
@@ -203,6 +211,8 @@
             { name, port, ... }:
             [
               "${wgIp} ${name}.${baseHost}"
+            ]
+            ++ lib.optionals (port != null) [
               "${wgIp} ${toString port}.${baseHost}"
             ]
           ) config.myconfig.deployedServices.services.${hostname})
