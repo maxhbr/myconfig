@@ -70,6 +70,7 @@
     # networking.interfaces.enp82s0u2u1u2.useDHCP = true;
 
     myconfig = {
+      headless.enable = true;
       desktop = {
         enable = true;
         wayland = {
