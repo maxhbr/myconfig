@@ -33,6 +33,16 @@
                 default = true;
                 description = "Whether to force HTTPS (redirect HTTP to HTTPS) for this service";
               };
+              disableCache = mkOption {
+                type = types.bool;
+                default = false;
+                description = ''
+                  Whether to instruct browsers (and any intermediary
+                  caches) to never cache responses from this service.
+                  Caddy will override the upstream `Cache-Control`,
+                  `Pragma` and `Expires` response headers.
+                '';
+              };
             };
           }
         )
@@ -130,6 +140,7 @@
                 port,
                 ip,
                 forceHttps,
+                disableCache,
               }:
               if port == null then
                 [ ]
@@ -142,7 +153,17 @@
                       "${name}.${hostName}.wg0"
                     ]
                     ++ (lib.optional portAliasUnique "${toString port}.${hostName}.wg0");
+                  noCacheHeaders = lib.optionalString disableCache ''
+                    header {
+                      Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+                      Pragma "no-cache"
+                      Expires "0"
+                      -ETag
+                      -Last-Modified
+                    }
+                  '';
                   proxyConfig = ''
+                    ${noCacheHeaders}
                     reverse_proxy http://${ip}:${toString port}
                   '';
                 in
