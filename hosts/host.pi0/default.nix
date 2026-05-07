@@ -5,8 +5,11 @@
     ../modules
     # ../../secrets/common/wifi.home.nix
     ./raspicam.nix
-  ]
-  ++ (with (import ../lib.nix); [ (setupAsWireguardClient "10.199.199.9") ]);
+    # NOTE: previously called `setupAsWireguardClient` here via a stale
+    # `import ../lib.nix` path that no longer exists. The active wg client
+    # setup for hosts in this repo lives in the private repo and is invoked
+    # as `myconfig.metadatalib.setupAsWireguardClient "wg0" <agePrivKey>`.
+  ];
 
   config = {
     networking.hostName = "pi0";
