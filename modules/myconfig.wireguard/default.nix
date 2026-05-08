@@ -60,6 +60,17 @@ let
         sameLan = thisNetwork != null && peerNetwork != null && thisNetwork == peerNetwork;
         peerWgIp = host.wireguard."${wgInterface}".ip4;
         isRendezvous = rendezvousHost != null && name == rendezvousHost;
+        # Per-peer: this peer is roaming (no stable IP we can lock onto).
+        # Set in metadata.json as `wireguard.<wg>.roaming = true`. We must
+        # NOT bake that peer's `ip4` (a snapshot, not a reservation) into
+        # an `endpoint`, because the kernel would then re-encrypt replies
+        # to a stale source address that no host actually owns. WireGuard
+        # endpoint roaming will discover the peer's current outer address
+        # the first time it sends us a packet.
+        peerIsRoaming = host.wireguard."${wgInterface}".roaming or false;
+        # Local: I am roaming and this peer is on my home LAN. We can't
+        # rely on my LAN ip (DHCP, foreign Wi-Fi); the runtime probe
+        # patches in LAN endpoints when we detect we're at home.
         isGhostPeer = roaming && sameLan && !isRendezvous;
         allowed =
           if isGhostPeer then
@@ -68,13 +79,16 @@ let
             ([ "${peerWgIp}/32" ] ++ (wgNetwork.allowedIPs or [ ]))
           else
             [ "${peerWgIp}/32" ];
+        # Endpoint suppression: drop endpoint+keepalive when the peer is
+        # marked roaming OR we are ghosting it locally.
+        suppressEndpoint = isGhostPeer || peerIsRoaming;
       in
       {
         publicKey = host.wireguard."${wgInterface}".pubkey;
         allowedIPs = lib.unique allowed;
       }
-      // (lib.optionalAttrs (peerHasIp4 && !isGhostPeer) { endpoint = "${host.ip4}:51820"; })
-      // (lib.optionalAttrs (peerHasIp4 && !sameLan && !isGhostPeer) {
+      // (lib.optionalAttrs (peerHasIp4 && !suppressEndpoint) { endpoint = "${host.ip4}:51820"; })
+      // (lib.optionalAttrs (peerHasIp4 && !sameLan && !suppressEndpoint) {
         persistentKeepalive = 25;
       })
     ) otherHosts;
@@ -100,8 +114,20 @@ let
           hasWgIp = lib.attrsets.hasAttrByPath [ "wireguard" wgInterface "ip4" ] host;
           hasPubkey = lib.attrsets.hasAttrByPath [ "wireguard" wgInterface "pubkey" ] host;
           hasLanIp = lib.attrsets.hasAttrByPath [ "ip4" ] host;
+          # Skip peers that are themselves roaming: their `ip4` is a
+          # snapshot, not a reservation, so we shouldn't patch it in as
+          # an endpoint when we come back on the home LAN.
+          peerIsRoaming = host.wireguard."${wgInterface}".roaming or false;
         in
-        if (name != thisHostName') && sameLan && !isRendezvous && hasWgIp && hasPubkey && hasLanIp then
+        if
+          (name != thisHostName')
+          && sameLan
+          && !isRendezvous
+          && !peerIsRoaming
+          && hasWgIp
+          && hasPubkey
+          && hasLanIp
+        then
           {
             inherit name;
             publicKey = host.wireguard."${wgInterface}".pubkey;
@@ -287,6 +313,20 @@ let
 
   secretNameFor = wgInterface: "wireguard.private.${wgInterface}";
 
+  # Default value of `myconfig.wireguard.<wg>.roaming` for this host:
+  # read from metadata's `wireguard.<wg>.roaming`, so the truth lives in
+  # one place (visible to *every* host's config eval — including peers,
+  # who must know not to bake a roaming host's snapshot ip4 as a static
+  # endpoint). Per-host overrides via `myconfig.wireguard.<wg>.roaming
+  # = ...;` still win because the option uses `default = ...`, not
+  # `mkForce`.
+  metadataRoamingDefault =
+    wgInterface:
+    let
+      thisHostMeta = metadata.hosts."${config.networking.hostName}" or { };
+    in
+    thisHostMeta.wireguard."${wgInterface}".roaming or false;
+
 in
 {
   options.myconfig.wireguard = lib.mkOption {
@@ -327,7 +367,10 @@ in
 
             roaming = lib.mkOption {
               type = lib.types.bool;
-              default = false;
+              default = metadataRoamingDefault name;
+              defaultText = lib.literalExpression ''
+                metadata.hosts.<thisHost>.wireguard.<wg>.roaming or false
+              '';
               description = ''
                 Mark this host as a roaming WireGuard client (no stable LAN
                 identity, e.g. a laptop or phone). Same-LAN peers are
@@ -338,6 +381,12 @@ in
                 host is back on the home LAN and patches in direct LAN
                 endpoints + per-peer /32 allowedIPs at runtime, restoring
                 the LAN optimization. See README for details.
+
+                Defaults to the value of
+                `metadata.hosts.<thisHost>.wireguard.${name}.roaming`,
+                so the truth lives in one place. Other hosts read that
+                same metadata flag to know not to bake this host's
+                snapshot ip4 as a static peer endpoint.
               '';
             };
 
@@ -534,14 +583,14 @@ in
         { config, lib, ... }:
         {
           # Each enabled+roaming wg interface contributes one custom
-          # waybar module + an entry in modules-center; lists merge by
+          # waybar module + an entry in modules-right; lists merge by
           # concatenation, attrsets by key, so this composes with the
           # base waybar config in modules/myconfig.desktop.wayland/
           # programs.waybar/.
           config = lib.mkIf config.programs.waybar.enable {
             programs.waybar.settings.mainBar = lib.mkMerge (
               lib.map (wgInterface: {
-                modules-center = [ "custom/wg-${wgInterface}" ];
+                modules-right = [ "custom/wg-${wgInterface}" ];
                 "custom/wg-${wgInterface}" = {
                   format = "{}";
                   exec = mkWaybarReader wgInterface;

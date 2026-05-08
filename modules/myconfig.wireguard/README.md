@@ -66,18 +66,27 @@ The matching server side (NAT/MASQUERADE for the wg subnet, dnsmasq for
 `wireguard.<wg>.ip4` and `wireguard.<wg>.pubkey` and emits one peer
 entry per host with these rules:
 
-| Condition                                              | `allowedIPs`         | `endpoint`                | `persistentKeepalive` |
-| ------------------------------------------------------ | -------------------- | ------------------------- | --------------------- |
-| Same `network` as me, and peer has `ip4` (LAN-anchored)| `[<peer-wg-ip>/32]`  | `<peer-lan-ip>:51820`     | _(none — LAN)_        |
-| Different `network`, peer has `ip4` (typically vserver)| `[<peer-wg-ip>/32]`  | `<peer-pub-ip>:51820`     | `25` _(NAT keepalive)_|
-| Peer is the rendezvous host                            | + `10.199.199.0/24`  | (as above)                | (as above)            |
-| Peer has no `ip4` (e.g. phone)                         | `[<peer-wg-ip>/32]`  | _(none — peer initiates)_ | _(none)_              |
-| `roaming = true` and peer is on my `network`           | `[]` _(ghost peer)_  | _(none)_                  | _(none)_              |
+| Condition                                                                         | `allowedIPs`         | `endpoint`                | `persistentKeepalive` |
+| --------------------------------------------------------------------------------- | -------------------- | ------------------------- | --------------------- |
+| Same `network` as me, and peer has `ip4` (LAN-anchored)                           | `[<peer-wg-ip>/32]`  | `<peer-lan-ip>:51820`     | _(none — LAN)_        |
+| Different `network`, peer has `ip4` (typically vserver)                           | `[<peer-wg-ip>/32]`  | `<peer-pub-ip>:51820`     | `25` _(NAT keepalive)_|
+| Peer is the rendezvous host                                                       | + `10.199.199.0/24`  | (as above)                | (as above)            |
+| Peer has no `ip4` (e.g. phone)                                                    | `[<peer-wg-ip>/32]`  | _(none — peer initiates)_ | _(none)_              |
+| Peer is roaming (`metadata.hosts.<peer>.wireguard.<wg>.roaming = true`)           | `[<peer-wg-ip>/32]`  | _(none — peer initiates)_ | _(none)_              |
+| `roaming = true` and peer is on my `network`                                      | `[]` _(ghost peer)_  | _(none)_                  | _(none)_              |
 
 The kernel does **longest-prefix-match** on `allowedIPs`, so a per-peer
 `/32` always wins over the rendezvous catch-all when we *do* have a
 direct path. When we don't, packets for that peer's wg IP fall through
 to the rendezvous and get forwarded.
+
+Critically, **a roaming peer's `ip4` is a snapshot, not a reservation**:
+the next time their laptop joins home Wi-Fi, the router may hand it a
+different address. So we must *not* bake that ip4 into other hosts'
+peer entries as a static `endpoint` — if we did, replies destined for
+the (now stale) LAN ip would be sent into the void. WireGuard endpoint
+roaming will discover the peer's actual outer source address the first
+time it sends us a packet (directly or via the rendezvous relay).
 
 ---
 
@@ -109,13 +118,31 @@ Effect:
 ### Roaming host
 
 A laptop or phone that doesn't have a stable LAN identity (DHCP, Wi-Fi
-SSIDs change, IPs differ between networks). Config:
+SSIDs change, IPs differ between networks). Mark it in metadata:
+
+```json
+"f13": {
+  "network": "home",
+  "wireguard": {
+    "wg0": {
+      "ip4":     "10.199.199.12",
+      "pubkey":  "...",
+      "roaming": true
+    }
+  }
+}
+```
+
+The metadata flag is the **single source of truth**: every other host
+reads it at build time so it knows not to bake this host's snapshot
+ip4 into a static peer endpoint. The host's own
+`myconfig.wireguard.<wg>.roaming` option defaults to that flag, so a
+typical roaming-host config is just:
 
 ```nix
 myconfig.wireguard.wg0 = {
   enable           = true;
   privateKeySource = ../../priv/secrets/wireguard.<host>.age;
-  roaming          = true;
 };
 ```
 
@@ -125,11 +152,14 @@ Effect:
   (no `endpoint`, empty `allowedIPs`). Only the rendezvous peer has
   routable allowedIPs (`10.199.199.0/24`), so off-LAN all wg traffic
   flows through vserver.
+* Other hosts emit *this* host as a peer with no endpoint and no
+  keepalive — they wait for our packets to arrive and let WireGuard
+  endpoint roaming pin the current address.
 * The `wg-roaming-<wg>.service` + `.timer` + a NetworkManager
-  dispatcher hook detect "we're on the home LAN" and patch the ghost
-  peers in via `wg set` (endpoint + per-peer `/32`). When we leave the
-  LAN, the script clears the per-peer allowedIPs so traffic falls back
-  to the rendezvous catch-all.
+  dispatcher hook detect "we're on the home LAN" and patch our own
+  ghost peers in via `wg set` (endpoint + per-peer `/32`). When we
+  leave the LAN, the script clears the per-peer allowedIPs so traffic
+  falls back to the rendezvous catch-all.
 * The host firewall does **not** open UDP/51820 globally, so the wg
   port is never exposed on untrusted Wi-Fi.
 

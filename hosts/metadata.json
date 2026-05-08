@@ -13,7 +13,8 @@
       "wireguard": {
         "wg0": {
           "ip4": "10.199.199.12",
-          "pubkey": "WBSIYDYWvnhKyCdBsBpc8F7lKCI4CRUeEgCwrIkx2lg="
+          "pubkey": "WBSIYDYWvnhKyCdBsBpc8F7lKCI4CRUeEgCwrIkx2lg=",
+          "roaming": true
         }
       }
     },
@@ -108,7 +109,8 @@
       "wireguard": {
         "wg0": {
           "ip4": "10.199.199.3",
-          "pubkey": "qSLdPv2i+J/sz6z/ymSkRLBUyLNeNsvtBXVEHtHkbU0="
+          "pubkey": "qSLdPv2i+J/sz6z/ymSkRLBUyLNeNsvtBXVEHtHkbU0=",
+          "roaming": true
         }
       }
     },
