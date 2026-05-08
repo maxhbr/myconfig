@@ -29,6 +29,13 @@ in
         systemd.services.NetworkManager-wait-online.enable = false;
       };
     }
+    {
+      # f13 is a laptop with no stable LAN identity (DHCP, Wi-Fi). Mark it
+      # as a roaming WireGuard client so its same-LAN peers default to
+      # vserver-relayed off-LAN, with a runtime probe upgrading to direct
+      # LAN endpoints when we're back on the home network.
+      myconfig.wireguard.wg0.roaming = true;
+    }
     ./hardware.framework.do-not-wake-on-input.nix
     ./suspend-debug.nix
     ./hardware.hantek

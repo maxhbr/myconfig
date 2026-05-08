@@ -340,109 +340,94 @@ let
             echo "wg-roaming[$iface]: $mode_prev -> $mode_now" >&2
           '';
         in
-        {
-          options.myconfig.wireguard."${wgInterface}" = {
-            roaming = lib.mkOption {
-              type = lib.types.bool;
-              default = false;
-              description = ''
-                Mark this host as a roaming WireGuard client (no stable LAN
-                identity, e.g. a laptop or phone). Same-LAN peers are
-                emitted as "ghost" peers in the static config (no endpoint,
-                empty allowedIPs), so off-LAN all wg-subnet traffic relays
-                via the rendezvous host (vserver). A `wg-roaming-${wgInterface}`
-                systemd service detects when the host is back on the home
-                LAN and patches in direct LAN endpoints + per-peer /32
-                allowedIPs at runtime, restoring the LAN optimization.
-              '';
-            };
-          };
+        # The `myconfig.wireguard.<wg>.roaming` option is declared in
+        # `modules/myconfig.wireguard.nix` so hosts can set it even when
+        # this helper isn't imported (e.g. when evaluating the public
+        # flake without the private repo's wg client wiring).
+        (lib.mkIf
+          (lib.attrsets.hasAttrByPath [ "wireguard" wgInterface "ip4" ] metadata.hosts."${thisHostName}")
+          {
 
-          config =
-            lib.mkIf
-              (lib.attrsets.hasAttrByPath [ "wireguard" wgInterface "ip4" ] metadata.hosts."${thisHostName}")
-              {
-
-                myconfig.secrets = {
-                  "wireguard.private" = {
-                    source = privateKey;
-                    dest = privateKeyFile;
-                    wantedBy = [ "wireguard-${wgInterface}.service" ];
-                  };
-                };
-
-                environment.systemPackages = [ pkgs.wireguard-tools ];
-                networking.nameservers = [ "10.199.199.1" ];
-                # NOTE: UDP/51820 is intentionally NOT opened on the global
-                # firewall here. Roaming hosts (laptops on untrusted Wi-Fi) must
-                # not expose the wg listen port to whatever network they're on.
-                # Hosts that should accept inbound wg handshakes from same-LAN
-                # peers open the port on their LAN interface via `fixIp`, which
-                # is exactly the set of LAN-anchored hosts.
-                networking.wireguard.interfaces = {
-                  "${wgInterface}" = {
-                    ips = [
-                      (metadata.hosts."${thisHostName}".wireguard."${wgInterface}".ip4 + "/24")
-                    ];
-                    # Stable listenPort lets peers (LAN or via rendezvous) find us
-                    # at a known UDP port, and lets WireGuard's roaming work.
-                    listenPort = 51820;
-                    inherit privateKeyFile;
-                    mtu = 1380;
-                    inherit peers;
-                  };
-                };
-
-                # Roaming probe: switches same-LAN peers between "ghost"
-                # (off-LAN, all traffic relays via rendezvous) and "direct"
-                # (on-LAN, per-peer /32 + endpoint). The static Nix config
-                # is the off-LAN-safe baseline; this service upgrades it to
-                # LAN-direct when we detect we're at home.
-                systemd.services."wg-roaming-${wgInterface}" = lib.mkIf cfg.roaming {
-                  description = "WireGuard roaming home-LAN probe for ${wgInterface}";
-                  after = [
-                    "wireguard-${wgInterface}.service"
-                    "network-online.target"
-                  ];
-                  wants = [ "network-online.target" ];
-                  requires = [ "wireguard-${wgInterface}.service" ];
-                  wantedBy = [ "multi-user.target" ];
-                  serviceConfig = {
-                    Type = "oneshot";
-                    ExecStart = roamingScript;
-                    # The script is idempotent and short. Don't fail the
-                    # whole unit if a single `wg set` errors transiently.
-                    SuccessExitStatus = [ 0 ];
-                  };
-                };
-                systemd.timers."wg-roaming-${wgInterface}" = lib.mkIf cfg.roaming {
-                  description = "Periodic WireGuard roaming probe for ${wgInterface}";
-                  wantedBy = [ "timers.target" ];
-                  timerConfig = {
-                    OnBootSec = "30s";
-                    OnUnitActiveSec = "60s";
-                    AccuracySec = "5s";
-                    Unit = "wg-roaming-${wgInterface}.service";
-                  };
-                };
-                # NetworkManager dispatcher: react immediately to link
-                # up/down/connectivity-change events instead of waiting
-                # for the 60s timer. Idempotent; no-op if NM isn't used.
-                networking.networkmanager.dispatcherScripts = lib.mkIf cfg.roaming [
-                  {
-                    type = "basic";
-                    source = pkgs.writeShellScript "wg-roaming-${wgInterface}-dispatcher" ''
-                      case "$2" in
-                        up|down|connectivity-change|dhcp4-change|dhcp6-change)
-                          ${pkgs.systemd}/bin/systemctl start \
-                            wg-roaming-${wgInterface}.service || true
-                          ;;
-                      esac
-                    '';
-                  }
-                ];
+            myconfig.secrets = {
+              "wireguard.private" = {
+                source = privateKey;
+                dest = privateKeyFile;
+                wantedBy = [ "wireguard-${wgInterface}.service" ];
               };
-        }
+            };
+
+            environment.systemPackages = [ pkgs.wireguard-tools ];
+            networking.nameservers = [ "10.199.199.1" ];
+            # NOTE: UDP/51820 is intentionally NOT opened on the global
+            # firewall here. Roaming hosts (laptops on untrusted Wi-Fi) must
+            # not expose the wg listen port to whatever network they're on.
+            # Hosts that should accept inbound wg handshakes from same-LAN
+            # peers open the port on their LAN interface via `fixIp`, which
+            # is exactly the set of LAN-anchored hosts.
+            networking.wireguard.interfaces = {
+              "${wgInterface}" = {
+                ips = [
+                  (metadata.hosts."${thisHostName}".wireguard."${wgInterface}".ip4 + "/24")
+                ];
+                # Stable listenPort lets peers (LAN or via rendezvous) find us
+                # at a known UDP port, and lets WireGuard's roaming work.
+                listenPort = 51820;
+                inherit privateKeyFile;
+                mtu = 1380;
+                inherit peers;
+              };
+            };
+
+            # Roaming probe: switches same-LAN peers between "ghost"
+            # (off-LAN, all traffic relays via rendezvous) and "direct"
+            # (on-LAN, per-peer /32 + endpoint). The static Nix config
+            # is the off-LAN-safe baseline; this service upgrades it to
+            # LAN-direct when we detect we're at home.
+            systemd.services."wg-roaming-${wgInterface}" = lib.mkIf cfg.roaming {
+              description = "WireGuard roaming home-LAN probe for ${wgInterface}";
+              after = [
+                "wireguard-${wgInterface}.service"
+                "network-online.target"
+              ];
+              wants = [ "network-online.target" ];
+              requires = [ "wireguard-${wgInterface}.service" ];
+              wantedBy = [ "multi-user.target" ];
+              serviceConfig = {
+                Type = "oneshot";
+                ExecStart = roamingScript;
+                # The script is idempotent and short. Don't fail the
+                # whole unit if a single `wg set` errors transiently.
+                SuccessExitStatus = [ 0 ];
+              };
+            };
+            systemd.timers."wg-roaming-${wgInterface}" = lib.mkIf cfg.roaming {
+              description = "Periodic WireGuard roaming probe for ${wgInterface}";
+              wantedBy = [ "timers.target" ];
+              timerConfig = {
+                OnBootSec = "30s";
+                OnUnitActiveSec = "60s";
+                AccuracySec = "5s";
+                Unit = "wg-roaming-${wgInterface}.service";
+              };
+            };
+            # NetworkManager dispatcher: react immediately to link
+            # up/down/connectivity-change events instead of waiting
+            # for the 60s timer. Idempotent; no-op if NM isn't used.
+            networking.networkmanager.dispatcherScripts = lib.mkIf cfg.roaming [
+              {
+                type = "basic";
+                source = pkgs.writeShellScript "wg-roaming-${wgInterface}-dispatcher" ''
+                  case "$2" in
+                    up|down|connectivity-change|dhcp4-change|dhcp6-change)
+                      ${pkgs.systemd}/bin/systemctl start \
+                        wg-roaming-${wgInterface}.service || true
+                      ;;
+                  esac
+                '';
+              }
+            ];
+          }
+        )
       );
 
     getOtherWgHosts =
