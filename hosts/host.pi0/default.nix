@@ -6,9 +6,14 @@
     # ../../secrets/common/wifi.home.nix
     ./raspicam.nix
     # NOTE: previously called `setupAsWireguardClient` here via a stale
-    # `import ../lib.nix` path that no longer exists. The active wg client
-    # setup for hosts in this repo lives in the private repo and is invoked
-    # as `myconfig.metadatalib.setupAsWireguardClient "wg0" <agePrivKey>`.
+    # `import ../lib.nix` path that no longer exists. The active wg
+    # client setup for hosts in this repo is now option-based; enable
+    # in the private repo with:
+    #   myconfig.wireguard.wg0 = {
+    #     enable           = true;
+    #     privateKeySource = <path-to-age-encrypted-private-key>;
+    #   };
+    # See modules/myconfig.wireguard/README.md for details.
   ];
 
   config = {

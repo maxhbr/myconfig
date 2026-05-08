@@ -33,7 +33,9 @@ in
       # f13 is a laptop with no stable LAN identity (DHCP, Wi-Fi). Mark it
       # as a roaming WireGuard client so its same-LAN peers default to
       # vserver-relayed off-LAN, with a runtime probe upgrading to direct
-      # LAN endpoints when we're back on the home network.
+      # LAN endpoints when we're back on the home network. The matching
+      # `enable = true` and `privateKeySource = ...` live in the private
+      # repo. See modules/myconfig.wireguard/README.md for the full design.
       myconfig.wireguard.wg0.roaming = true;
     }
     ./hardware.framework.do-not-wake-on-input.nix
