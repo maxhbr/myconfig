@@ -396,6 +396,27 @@ in
       '';
     in
     {
+      # Fix agenix decryption on every boot of impermanence hosts.
+      #
+      # The default `age.identityPaths` points at /etc/ssh/ssh_host_*_key, which
+      # on impermanence hosts are bind-mounted by impermanence's per-file
+      # `persist-*.service` units. Those units are gated on `local-fs.target`,
+      # which is reached *after* `initrd-nixos-activation.service` (where
+      # agenix's activation script runs without sysusersEnabled). As a result,
+      # on a fresh boot agenix finds no readable identities and `/run/agenix/`
+      # stays empty until the next `nixos-rebuild switch`.
+      #
+      # The persistent btrfs subvolume at `${persistentPrivDir}` is declared
+      # with `neededForBoot = true` and is therefore mounted inside the initrd,
+      # before stage-2 activation. The host keys already live there (impermanence
+      # persists them as files), so pointing agenix at the persistent path
+      # directly avoids the race. The recipient pubkey is unchanged (same key,
+      # different read path), so no `.age` files need re-encryption.
+      age.identityPaths = [
+        "${persistentPrivDir}/etc/ssh/ssh_host_ed25519_key"
+        "${persistentPrivDir}/etc/ssh/ssh_host_rsa_key"
+      ];
+
       boot.initrd.systemd.enable = true;
       boot.initrd.systemd.services.impermanence-setup = {
         description = "Impermanence initrd preparation";
