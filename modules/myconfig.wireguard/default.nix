@@ -114,6 +114,16 @@ let
     );
 
   # Bash script generator for the roaming probe. See README for details.
+  #
+  # Two side effects on every invocation:
+  #
+  #   * /run/wg-roaming/<iface>.mode  — last applied mode ("on-lan" or
+  #                                     "off-lan"). The peer toggling is
+  #                                     idempotent and only runs on flip.
+  #   * /run/wg/<iface>.status.json   — machine-readable status snapshot
+  #                                     for the waybar module + ad-hoc
+  #                                     CLI inspection. Always rewritten,
+  #                                     so a stale clock isn't presented.
   mkRoamingScript =
     wgInterface: roamingPeers: homeGateway:
     let
@@ -143,6 +153,34 @@ let
         ip route show default 2>/dev/null | grep -qE "via $home_gw( |$)"
       }
 
+      write_status() {
+        local mode="$1"
+        local up="false"
+        local peers_total=0
+        local peers_recent=0
+        if wg show "$iface" >/dev/null 2>&1; then
+          up="true"
+          peers_total=$(wg show "$iface" peers 2>/dev/null | wc -l)
+          # Peers with handshake within the last 180 seconds (a freshness
+          # threshold a bit over WireGuard's 120s rekey timer).
+          local now
+          now=$(date +%s)
+          while read -r _pk hs _rest; do
+            [[ -z "''${hs:-}" || "$hs" == "0" ]] && continue
+            if (( now - hs < 180 )); then
+              peers_recent=$(( peers_recent + 1 ))
+            fi
+          done < <(wg show "$iface" latest-handshakes 2>/dev/null || true)
+        fi
+        local status_dir=/run/wg
+        mkdir -p "$status_dir"
+        local tmp="$status_dir/$iface.status.json.tmp"
+        cat > "$tmp" <<EOF
+      {"interface":"$iface","up":$up,"mode":"$mode","roaming":true,"peers_total":$peers_total,"peers_handshake_recent":$peers_recent,"ts":$(date +%s)}
+      EOF
+        mv "$tmp" "$status_dir/$iface.status.json"
+      }
+
       mode_now="off-lan"
       on_home_lan && mode_now="on-lan"
 
@@ -152,32 +190,83 @@ let
       mode_prev=""
       [[ -f "$state_file" ]] && mode_prev=$(cat "$state_file")
 
-      # Idempotent: skip if mode is unchanged.
-      if [[ "$mode_now" == "$mode_prev" ]]; then
+      # Idempotent peer toggling: only `wg set` on actual mode change.
+      # Status file is rewritten on every run regardless, so its
+      # timestamp reflects the last probe and waybar can flag staleness.
+      if [[ "$mode_now" != "$mode_prev" ]]; then
+        for entry in "''${peers[@]:-}"; do
+          [[ -z "$entry" ]] && continue
+          pubkey="''${entry%%|*}"
+          rest="''${entry#*|}"
+          lan_ip="''${rest%%|*}"
+          wg_ip="''${rest#*|}"
+
+          if [[ "$mode_now" == "on-lan" ]]; then
+            wg set "$iface" peer "$pubkey" \
+              endpoint "$lan_ip:51820" \
+              allowed-ips "$wg_ip/32"
+          else
+            # Clear allowed-ips so traffic for this peer's wg IP falls
+            # through to the rendezvous catch-all. Endpoint stays as
+            # last-set; harmless without a cryptokey route to this peer.
+            wg set "$iface" peer "$pubkey" allowed-ips ""
+          fi
+        done
+        echo "$mode_now" > "$state_file"
+        echo "wg-roaming[$iface]: $mode_prev -> $mode_now" >&2
+      fi
+
+      write_status "$mode_now"
+    '';
+
+  # Reader script used by the waybar custom module. Reads
+  # /run/wg/<iface>.status.json and emits a single JSON line for waybar.
+  # Only roaming hosts publish that file (the bar entry is hidden on
+  # non-roaming hosts), so this script can assume the roaming shape.
+  mkWaybarReader =
+    wgInterface:
+    pkgs.writeShellScript "wg-waybar-${wgInterface}" ''
+      set -euo pipefail
+      PATH=${
+        lib.makeBinPath [
+          pkgs.coreutils
+          pkgs.jq
+        ]
+      }:$PATH
+
+      iface=${lib.escapeShellArg wgInterface}
+      status_file=/run/wg/$iface.status.json
+
+      if [[ ! -r "$status_file" ]]; then
+        printf '%s\n' '{"text":"wg ?","class":"warning","tooltip":"'"$iface"': no status file yet"}'
         exit 0
       fi
 
-      for entry in "''${peers[@]:-}"; do
-        [[ -z "$entry" ]] && continue
-        pubkey="''${entry%%|*}"
-        rest="''${entry#*|}"
-        lan_ip="''${rest%%|*}"
-        wg_ip="''${rest#*|}"
-
-        if [[ "$mode_now" == "on-lan" ]]; then
-          wg set "$iface" peer "$pubkey" \
-            endpoint "$lan_ip:51820" \
-            allowed-ips "$wg_ip/32"
-        else
-          # Clear allowed-ips so traffic for this peer's wg IP falls
-          # through to the rendezvous catch-all. Endpoint stays as
-          # last-set; harmless without a cryptokey route to this peer.
-          wg set "$iface" peer "$pubkey" allowed-ips ""
-        fi
-      done
-
-      echo "$mode_now" > "$state_file"
-      echo "wg-roaming[$iface]: $mode_prev -> $mode_now" >&2
+      jq -rc --arg iface "$iface" '
+        def age: (now | floor) - .ts;
+        def stale: age > 180;
+        def text:
+          if .up == false then "wg ✗"
+          elif .roaming and .mode == "on-lan"  then "wg LAN"
+          elif .roaming and .mode == "off-lan" then "wg VPN"
+          else "wg ●"
+          end;
+        def class:
+          if .up == false then "error"
+          elif stale then "warning"
+          elif .roaming and .mode == "off-lan" then "warning"
+          else ""
+          end;
+        def tooltip:
+          ($iface
+           + ": " + (if .up then "up" else "down" end)
+           + (if .roaming then " (roaming, " + .mode + ")" else "" end)
+           + "\npeers: " + (.peers_handshake_recent|tostring)
+           + "/" + (.peers_total|tostring) + " active"
+           + "\nupdated " + (age|tostring) + "s ago"
+          );
+        { text: text, class: class, tooltip: tooltip }
+      ' "$status_file"
     '';
 
   # Helper: home gateway IP for the host's `network`, used by the runtime
@@ -282,6 +371,21 @@ in
                 to leave the system's nameservers untouched.
               '';
             };
+
+            waybar.enable = lib.mkOption {
+              type = lib.types.bool;
+              default = true;
+              description = ''
+                Add a `custom/wg-${name}` indicator to the waybar
+                `mainBar` showing whether the interface is up and
+                whether it's currently using direct LAN peering or
+                relaying via the rendezvous host. Only takes effect on
+                hosts where `roaming = true`; non-roaming hosts don't
+                publish the status file the indicator reads. The
+                reader consumes `/run/wg/${name}.status.json`, written
+                on every run of the roaming probe.
+              '';
+            };
           };
         }
       )
@@ -346,6 +450,8 @@ in
     # all traffic relays via rendezvous) and "direct" (on-LAN, per-peer
     # /32 + endpoint). The static Nix config is the off-LAN-safe
     # baseline; this service upgrades it to LAN-direct when at home.
+    # The probe also writes /run/wg/<iface>.status.json on every run;
+    # the waybar custom module reads it.
     systemd.services = lib.mkMerge (
       lib.mapAttrsToList (
         wgInterface: cfg:
@@ -407,6 +513,49 @@ in
         ]
       ) config.myconfig.wireguard
     );
+
+    # Waybar indicator. Only roaming hosts publish a status file (the
+    # roaming probe writes it on every run); on non-roaming hosts the
+    # bar entry is omitted.
+    #
+    # Captured at module-eval time: the per-interface settings are baked
+    # into the home-manager submodule below, so the HM module doesn't
+    # need to re-read the system config (where `super` access can be
+    # awkward and varies between user / shared-module contexts).
+    home-manager.sharedModules =
+      let
+        waybarIfaces = lib.filter (n: n != null) (
+          lib.mapAttrsToList (
+            wgInterface: cfg: if cfg.enable && cfg.roaming && cfg.waybar.enable then wgInterface else null
+          ) config.myconfig.wireguard
+        );
+      in
+      lib.optional (waybarIfaces != [ ]) (
+        { config, lib, ... }:
+        {
+          # Each enabled+roaming wg interface contributes one custom
+          # waybar module + an entry in modules-center; lists merge by
+          # concatenation, attrsets by key, so this composes with the
+          # base waybar config in modules/myconfig.desktop.wayland/
+          # programs.waybar/.
+          config = lib.mkIf config.programs.waybar.enable {
+            programs.waybar.settings.mainBar = lib.mkMerge (
+              lib.map (wgInterface: {
+                modules-center = [ "custom/wg-${wgInterface}" ];
+                "custom/wg-${wgInterface}" = {
+                  format = "{}";
+                  exec = mkWaybarReader wgInterface;
+                  return-type = "json";
+                  interval = 5;
+                  rotate = 90;
+                  on-click = "${pkgs.systemd}/bin/systemctl start wg-roaming-${wgInterface}.service";
+                  tooltip = true;
+                };
+              }) waybarIfaces
+            );
+          };
+        }
+      );
 
     assertions = lib.mkMerge (
       lib.mapAttrsToList (
