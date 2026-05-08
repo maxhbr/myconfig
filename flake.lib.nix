@@ -149,8 +149,18 @@ let
     # directly via their LAN ip4. WireGuard's roaming retargets endpoints
     # when a peer's source address changes, so a laptop moving between LAN
     # and WAN keeps working without a config reload.
+    #
+    # When `roaming = true` (laptops/phones with no stable LAN identity),
+    # we cannot trust same-LAN endpoints at boot/Nix-evaluation time: the
+    # host might be on any Wi-Fi. So same-network peers are emitted as
+    # "ghost" peers (no endpoint, empty allowedIPs). All wg-subnet traffic
+    # then flows via the rendezvous catch-all by default. A runtime probe
+    # service detects when we're on the home LAN and patches each ghost
+    # peer's endpoint+allowedIPs in via `wg set`, restoring direct LAN
+    # peering. See `wgRoamingPeers` and the `wg-roaming-<wgInterface>`
+    # systemd service in `setupAsWireguardClient`.
     getWgPeersFor =
-      wgInterface: thisHostName:
+      wgInterface: thisHostName: roaming:
       let
         thisHost = metadata.hosts."${thisHostName}";
         thisNetwork = thisHost.network or null;
@@ -171,10 +181,17 @@ let
           sameLan = thisNetwork != null && peerNetwork != null && thisNetwork == peerNetwork;
           peerWgIp = host.wireguard."${wgInterface}".ip4;
           isRendezvous = rendezvousHost != null && name == rendezvousHost;
+          # On a roaming host, same-LAN peers are emitted as ghosts: known
+          # pubkey, but no routing and no endpoint. The runtime probe
+          # populates them when we detect we're on the home LAN.
+          isGhostPeer = roaming && sameLan && !isRendezvous;
           # The rendezvous host carries the catch-all so it can route to peers
-          # we can't reach directly. All other peers get a strict /32.
+          # we can't reach directly. All other peers get a strict /32 (or
+          # nothing, when ghosted).
           allowed =
-            if isRendezvous then
+            if isGhostPeer then
+              [ ]
+            else if isRendezvous then
               ([ "${peerWgIp}/32" ] ++ (wgNetwork.allowedIPs or [ ]))
             else
               [ "${peerWgIp}/32" ];
@@ -183,12 +200,48 @@ let
           publicKey = host.wireguard."${wgInterface}".pubkey;
           allowedIPs = lib.unique allowed;
         }
-        // (lib.optionalAttrs peerHasIp4 { endpoint = "${host.ip4}:51820"; })
+        // (lib.optionalAttrs (peerHasIp4 && !isGhostPeer) { endpoint = "${host.ip4}:51820"; })
         # Send keepalives every 25 seconds across the internet to keep NAT
         # tables alive. Skip on same-LAN peers (saves battery on laptops, and
         # the LAN doesn't drop UDP flows).
-        // (lib.optionalAttrs (peerHasIp4 && !sameLan) { persistentKeepalive = 25; })
+        // (lib.optionalAttrs (peerHasIp4 && !sameLan && !isGhostPeer) {
+          persistentKeepalive = 25;
+        })
       ) otherHosts;
+
+    # Information needed by the roaming runtime probe: for each same-LAN
+    # peer of `thisHost`, its pubkey, LAN ip:port, and wg /32 — so the
+    # script can patch them in via `wg set` when we're on the home LAN.
+    getWgRoamingPeersFor =
+      wgInterface: thisHostName:
+      let
+        thisHost = metadata.hosts."${thisHostName}";
+        thisNetwork = thisHost.network or null;
+        wgNetwork = metadata.networks."${wgInterface}" or { };
+        rendezvousHost = wgNetwork.peer or null;
+      in
+      lib.filter (p: p != null) (
+        lib.mapAttrsToList (
+          name: host:
+          let
+            peerNetwork = host.network or null;
+            sameLan = thisNetwork != null && peerNetwork != null && thisNetwork == peerNetwork;
+            isRendezvous = rendezvousHost != null && name == rendezvousHost;
+            hasWgIp = lib.attrsets.hasAttrByPath [ "wireguard" wgInterface "ip4" ] host;
+            hasPubkey = lib.attrsets.hasAttrByPath [ "wireguard" wgInterface "pubkey" ] host;
+            hasLanIp = lib.attrsets.hasAttrByPath [ "ip4" ] host;
+          in
+          if (name != thisHostName) && sameLan && !isRendezvous && hasWgIp && hasPubkey && hasLanIp then
+            {
+              inherit name;
+              publicKey = host.wireguard."${wgInterface}".pubkey;
+              wgIp = host.wireguard."${wgInterface}".ip4;
+              lanIp = host.ip4;
+            }
+          else
+            null
+        ) metadata.hosts
+      );
 
     setupAsWireguardClient =
       wgInterface: privateKey:
@@ -204,43 +257,192 @@ let
         }@args:
         let
           thisHostName = config.networking.hostName;
-          peers = getWgPeersFor wgInterface thisHostName;
+          cfg = config.myconfig.wireguard."${wgInterface}";
+          peers = getWgPeersFor wgInterface thisHostName cfg.roaming;
+          roamingPeers = getWgRoamingPeersFor wgInterface thisHostName;
+          thisHost = metadata.hosts."${thisHostName}";
+          thisNetwork = thisHost.network or null;
+          # Home gateway used by the runtime probe: a packet's default
+          # route goes via this IP iff we're on the home LAN. Falls back
+          # to "" (probe will then never fire LAN mode) if unknown.
+          homeGateway =
+            if
+              thisNetwork != null
+              && lib.attrsets.hasAttrByPath [ "networks" thisNetwork "defaultGateway" ] metadata
+            then
+              metadata.networks."${thisNetwork}".defaultGateway
+            else
+              "";
+          # Bash array literal of "<pubkey>|<lanIp>|<wgIp>" tuples. Pipes
+          # don't appear in pubkeys/IPs so they're safe as separators.
+          peerEntries = lib.concatMapStringsSep " " (
+            p: lib.escapeShellArg "${p.publicKey}|${p.lanIp}|${p.wgIp}"
+          ) roamingPeers;
+          roamingScript = pkgs.writeShellScript "wg-roaming-${wgInterface}" ''
+            set -euo pipefail
+            PATH=${
+              lib.makeBinPath [
+                pkgs.iproute2
+                pkgs.wireguard-tools
+                pkgs.coreutils
+                pkgs.gnugrep
+              ]
+            }:$PATH
+
+            iface=${lib.escapeShellArg wgInterface}
+            home_gw=${lib.escapeShellArg homeGateway}
+            peers=( ${peerEntries} )
+
+            # Detect "we are on the home LAN": the kernel's default route
+            # points at the home gateway. This is a strict, fast check —
+            # no ICMP, no DNS, no round-trip — and it's what we actually
+            # care about (same L3 segment as our LAN-anchored peers).
+            on_home_lan() {
+              [[ -n "$home_gw" ]] || return 1
+              ip route show default 2>/dev/null | grep -qE "via $home_gw( |$)"
+            }
+
+            mode_now="off-lan"
+            on_home_lan && mode_now="on-lan"
+
+            state_dir=/run/wg-roaming
+            mkdir -p "$state_dir"
+            state_file="$state_dir/$iface.mode"
+            mode_prev=""
+            [[ -f "$state_file" ]] && mode_prev=$(cat "$state_file")
+
+            # Idempotent: skip if mode is unchanged.
+            if [[ "$mode_now" == "$mode_prev" ]]; then
+              exit 0
+            fi
+
+            for entry in "''${peers[@]:-}"; do
+              [[ -z "$entry" ]] && continue
+              pubkey="''${entry%%|*}"
+              rest="''${entry#*|}"
+              lan_ip="''${rest%%|*}"
+              wg_ip="''${rest#*|}"
+
+              if [[ "$mode_now" == "on-lan" ]]; then
+                wg set "$iface" peer "$pubkey" \
+                  endpoint "$lan_ip:51820" \
+                  allowed-ips "$wg_ip/32"
+              else
+                # Clear allowed-ips so traffic for this peer's wg IP
+                # falls through to the rendezvous catch-all. Endpoint
+                # stays as last-set; it doesn't matter when there's no
+                # cryptokey route to this peer.
+                wg set "$iface" peer "$pubkey" allowed-ips ""
+              fi
+            done
+
+            echo "$mode_now" > "$state_file"
+            echo "wg-roaming[$iface]: $mode_prev -> $mode_now" >&2
+          '';
         in
-        (lib.mkIf
-          (lib.attrsets.hasAttrByPath [ "wireguard" wgInterface "ip4" ] metadata.hosts."${thisHostName}")
-          {
-
-            myconfig.secrets = {
-              "wireguard.private" = {
-                source = privateKey;
-                dest = privateKeyFile;
-                wantedBy = [ "wireguard-${wgInterface}.service" ];
-              };
+        {
+          options.myconfig.wireguard."${wgInterface}" = {
+            roaming = lib.mkOption {
+              type = lib.types.bool;
+              default = false;
+              description = ''
+                Mark this host as a roaming WireGuard client (no stable LAN
+                identity, e.g. a laptop or phone). Same-LAN peers are
+                emitted as "ghost" peers in the static config (no endpoint,
+                empty allowedIPs), so off-LAN all wg-subnet traffic relays
+                via the rendezvous host (vserver). A `wg-roaming-${wgInterface}`
+                systemd service detects when the host is back on the home
+                LAN and patches in direct LAN endpoints + per-peer /32
+                allowedIPs at runtime, restoring the LAN optimization.
+              '';
             };
+          };
 
-            environment.systemPackages = [ pkgs.wireguard-tools ];
-            networking.nameservers = [ "10.199.199.1" ];
-            # NOTE: UDP/51820 is intentionally NOT opened on the global
-            # firewall here. Roaming hosts (laptops on untrusted Wi-Fi) must
-            # not expose the wg listen port to whatever network they're on.
-            # Hosts that should accept inbound wg handshakes from same-LAN
-            # peers open the port on their LAN interface via `fixIp`, which
-            # is exactly the set of LAN-anchored hosts.
-            networking.wireguard.interfaces = {
-              "${wgInterface}" = {
-                ips = [
-                  (metadata.hosts."${thisHostName}".wireguard."${wgInterface}".ip4 + "/24")
+          config =
+            lib.mkIf
+              (lib.attrsets.hasAttrByPath [ "wireguard" wgInterface "ip4" ] metadata.hosts."${thisHostName}")
+              {
+
+                myconfig.secrets = {
+                  "wireguard.private" = {
+                    source = privateKey;
+                    dest = privateKeyFile;
+                    wantedBy = [ "wireguard-${wgInterface}.service" ];
+                  };
+                };
+
+                environment.systemPackages = [ pkgs.wireguard-tools ];
+                networking.nameservers = [ "10.199.199.1" ];
+                # NOTE: UDP/51820 is intentionally NOT opened on the global
+                # firewall here. Roaming hosts (laptops on untrusted Wi-Fi) must
+                # not expose the wg listen port to whatever network they're on.
+                # Hosts that should accept inbound wg handshakes from same-LAN
+                # peers open the port on their LAN interface via `fixIp`, which
+                # is exactly the set of LAN-anchored hosts.
+                networking.wireguard.interfaces = {
+                  "${wgInterface}" = {
+                    ips = [
+                      (metadata.hosts."${thisHostName}".wireguard."${wgInterface}".ip4 + "/24")
+                    ];
+                    # Stable listenPort lets peers (LAN or via rendezvous) find us
+                    # at a known UDP port, and lets WireGuard's roaming work.
+                    listenPort = 51820;
+                    inherit privateKeyFile;
+                    mtu = 1380;
+                    inherit peers;
+                  };
+                };
+
+                # Roaming probe: switches same-LAN peers between "ghost"
+                # (off-LAN, all traffic relays via rendezvous) and "direct"
+                # (on-LAN, per-peer /32 + endpoint). The static Nix config
+                # is the off-LAN-safe baseline; this service upgrades it to
+                # LAN-direct when we detect we're at home.
+                systemd.services."wg-roaming-${wgInterface}" = lib.mkIf cfg.roaming {
+                  description = "WireGuard roaming home-LAN probe for ${wgInterface}";
+                  after = [
+                    "wireguard-${wgInterface}.service"
+                    "network-online.target"
+                  ];
+                  wants = [ "network-online.target" ];
+                  requires = [ "wireguard-${wgInterface}.service" ];
+                  wantedBy = [ "multi-user.target" ];
+                  serviceConfig = {
+                    Type = "oneshot";
+                    ExecStart = roamingScript;
+                    # The script is idempotent and short. Don't fail the
+                    # whole unit if a single `wg set` errors transiently.
+                    SuccessExitStatus = [ 0 ];
+                  };
+                };
+                systemd.timers."wg-roaming-${wgInterface}" = lib.mkIf cfg.roaming {
+                  description = "Periodic WireGuard roaming probe for ${wgInterface}";
+                  wantedBy = [ "timers.target" ];
+                  timerConfig = {
+                    OnBootSec = "30s";
+                    OnUnitActiveSec = "60s";
+                    AccuracySec = "5s";
+                    Unit = "wg-roaming-${wgInterface}.service";
+                  };
+                };
+                # NetworkManager dispatcher: react immediately to link
+                # up/down/connectivity-change events instead of waiting
+                # for the 60s timer. Idempotent; no-op if NM isn't used.
+                networking.networkmanager.dispatcherScripts = lib.mkIf cfg.roaming [
+                  {
+                    type = "basic";
+                    source = pkgs.writeShellScript "wg-roaming-${wgInterface}-dispatcher" ''
+                      case "$2" in
+                        up|down|connectivity-change|dhcp4-change|dhcp6-change)
+                          ${pkgs.systemd}/bin/systemctl start \
+                            wg-roaming-${wgInterface}.service || true
+                          ;;
+                      esac
+                    '';
+                  }
                 ];
-                # Stable listenPort lets peers (LAN or via rendezvous) find us
-                # at a known UDP port, and lets WireGuard's roaming work.
-                listenPort = 51820;
-                inherit privateKeyFile;
-                mtu = 1380;
-                inherit peers;
               };
-            };
-          }
-        )
+        }
       );
 
     getOtherWgHosts =
