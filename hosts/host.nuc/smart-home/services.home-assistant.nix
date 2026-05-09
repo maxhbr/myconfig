@@ -83,6 +83,7 @@ in
         # Device ecosystems
         "deconz"
         "hue"
+        "switchbot"
         "unifi"
         "tplink"
         "brother"

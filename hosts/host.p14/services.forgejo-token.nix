@@ -23,6 +23,7 @@ in
       dest = "/run/forgejo-admin-password";
       owner = "root";
       group = "root";
+      symlink = false;
     };
   };
 
@@ -47,48 +48,41 @@ in
     };
 
     script = ''
-      set -euo pipefail
+      # Fire-and-forget: no retries, no blocking, graceful failure.
 
-      for i in $(seq 1 60); do
-        if curl --silent --fail --max-time 2 \
-          "${forgejoApi}/version" \
-          >/dev/null; then
-          break
-        fi
+      PASSWORD=$(tr -d '\n' < ${config.myconfig.secrets.forgejo-admin-password.dest} 2>/dev/null || true)
 
-        if [ "$i" = 60 ]; then
-          echo "Forgejo API did not become ready"
-          exit 1
-        fi
-
-        sleep 1
-      done
+      if [ -z "$PASSWORD" ]; then
+        echo "No password available, skipping token creation"
+        exit 0
+      fi
 
       response=$(
         curl \
           --silent \
-          --max-time 10 \
-          --user "${forgejoAdminUser}:$(tr -d '\n' < ${config.myconfig.secrets.forgejo-admin-password.dest})" \
+          --max-time 5 \
+          --user "${forgejoAdminUser}:$PASSWORD" \
           --header 'Content-Type: application/json' \
           --request POST \
           --data '{
             "name": "hermes-agent",
             "expires_at": 4102444800
           }' \
-          "${forgejoApi}/admin/users/${hermesAgentUser}/tokens"
+          "${forgejoApi}/admin/users/${hermesAgentUser}/tokens" \
+          2>/dev/null || echo ""
       )
 
-      token=$(echo "$response" | jq -r '.sha1 // empty')
+      token=$(echo "$response" | jq -r '.sha1 // empty' 2>/dev/null || true)
 
       if [ -n "$token" ]; then
         echo "$token" > /run/forgejo-hermes-agent-token
         chmod 640 /run/forgejo-hermes-agent-token
         echo "Created API token for ${hermesAgentUser}"
       else
-        echo "Failed to create API token for ${hermesAgentUser}"
-        echo "$response"
-        exit 1
+        echo "Skipping token creation (Forgejo unreachable or request failed)"
       fi
+
+      exit 0
     '';
   };
 }
