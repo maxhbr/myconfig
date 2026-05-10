@@ -172,6 +172,9 @@ let
 
 in
 {
+  imports = [
+    ./services.llama-swap.vllm.nix
+  ];
   config = {
     myconfig.ai.llama-swap.models = map (
       model:
