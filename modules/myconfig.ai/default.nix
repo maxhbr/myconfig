@@ -34,7 +34,6 @@ in
     ./programs.opencode
     ./programs.pi-coding-agent
     ./programs.qwen-code
-    ./programs.vllm.nix
     ./services.litellm.nix
     ./services.llama-swap.nix
     ./services.ollama.nix

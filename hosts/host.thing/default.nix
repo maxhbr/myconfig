@@ -37,7 +37,6 @@
       networking.firewall.allowedTCPPorts = [ 22022 ];
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
-    # ./containers.vllm-rocm.nix
     ./programs.opencode.nix
     ../shared.deployedServices.nix
     ./services.caddy.nix
@@ -162,9 +161,6 @@
         open-webui = {
           enable = true;
         };
-        # vllm = {
-        #   enable = true;
-        # };
         comfyui = {
           enable = true;
         };
