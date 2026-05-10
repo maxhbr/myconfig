@@ -17,6 +17,43 @@ let
   lokiCfg = hostCfg.loki;
   wgIp = myconfig.metadatalib.getWgIp cfg.host_hostname;
 
+  # ---------------------------------------------------------------------
+  # Loki recording rules
+  #
+  # The ruler evaluates these LogQL expressions on a fixed interval and
+  # remote-writes the resulting samples to VictoriaMetrics. The
+  # `loki:host_logs_recent_count` metric is emitted *only when a host
+  # produced at least one log line in the last evaluation window*, so
+  # `time() - timestamp(last_over_time(loki:host_logs_recent_count[24h:]))`
+  # in PromQL yields "seconds since the most recent log line was
+  # received from this host" — which is what the home-lab-status
+  # dashboard surfaces as "Time since last log received".
+  # ---------------------------------------------------------------------
+  recordingRulesFile = pkgs.writeText "myconfig-loki-recording-rules.yaml" (
+    builtins.toJSON {
+      groups = [
+        {
+          name = "myconfig-log-freshness";
+          interval = "1m";
+          rules = [
+            {
+              record = "loki:host_logs_recent_count";
+              expr = ''sum by (host) (count_over_time({job="systemd-journal"}[1m]))'';
+            }
+          ];
+        }
+      ];
+    }
+  );
+
+  # Loki's ruler with `storage.type=local` expects the directory layout
+  # `<dir>/<tenant id>/<file>.yaml`. In single-tenant mode the tenant
+  # id is `fake`.
+  recordingRulesDir = pkgs.runCommand "myconfig-loki-rules" { } ''
+    mkdir -p $out/fake
+    cp ${recordingRulesFile} $out/fake/myconfig.yaml
+  '';
+
   # Levels considered "errors" for the error-rate panels. Alloy maps
   # the systemd `PRIORITY` field to a `level` label using the
   # `__journal_priority_keyword` source. Different versions emit the
@@ -733,6 +770,34 @@ in
           reject_old_samples_max_age = "168h";
           retention_period = hostCfg.loki.retentionPeriod;
           allow_structured_metadata = true;
+        };
+
+        # Recording rules are evaluated by the embedded ruler and the
+        # resulting samples are remote-written into VictoriaMetrics
+        # (which exposes the Prometheus remote_write receiver at
+        # /api/v1/write on its listen port). See
+        # `recordingRulesDir` above for the rule definitions.
+        ruler = {
+          storage = {
+            type = "local";
+            local.directory = "${recordingRulesDir}";
+          };
+          rule_path = "/var/lib/loki/ruler";
+          ring.kvstore.store = "inmemory";
+          enable_api = true;
+          # Evaluate rules slightly faster than the 1m group interval
+          # so the freshness metric stays current.
+          evaluation_interval = "30s";
+          remote_write = {
+            enabled = true;
+            client = {
+              url = "http://${wgIp}:${toString cfg.remoteWritePort}/api/v1/write";
+              basic_auth = {
+                username = cfg.basicAuthUsername;
+                password_file = toString cfg.basicAuthPasswordFile;
+              };
+            };
+          };
         };
 
         analytics.reporting_enabled = false;

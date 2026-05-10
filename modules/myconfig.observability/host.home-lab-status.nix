@@ -2,13 +2,16 @@
 # SPDX-License-Identifier: MIT
 #
 # Combined Grafana dashboard for "home-lab status": NixOS system age /
-# activation info (from ./client.system-age.nix) plus uptime/blackbox
-# probes for every deployedService (from ./host.uptime.nix).
+# activation info (from ./client.system-age.nix), uptime/blackbox
+# probes for every deployedService (from ./host.uptime.nix), and
+# log-shipping freshness from the `loki:host_logs_recent_count`
+# recording rule (from ./host.loki.nix).
 #
-# The two underlying feature modules still own their data sources
-# (textfile collector + blackbox_exporter + vmagent scrape jobs); this
-# module only owns the dashboard UI and replaces the previous two
-# separate dashboards (`myconfig-system-age` and `myconfig-uptime`).
+# The underlying feature modules still own their data sources
+# (textfile collector + blackbox_exporter + vmagent scrape jobs +
+# Loki ruler); this module only owns the dashboard UI and replaces
+# the previous separate dashboards (`myconfig-system-age` and
+# `myconfig-uptime`).
 {
   config,
   lib,
@@ -257,6 +260,138 @@ let
   # ---------------------------------------------------------------------
   # Service-status row (blackbox probes against deployedServices)
   # ---------------------------------------------------------------------
+  # ---------------------------------------------------------------------
+  # Logs-status row (freshness of journal logs ingested into Loki)
+  #
+  # Sourced from the `loki:host_logs_recent_count` recording rule that
+  # ./host.loki.nix has Loki's embedded ruler emit into VictoriaMetrics.
+  # The metric is only sampled while a host is producing logs, so
+  # `time() - timestamp(last_over_time(...))` gives the seconds since
+  # that host's most recent log line was received by Loki — a
+  # client-side or network outage will make this number grow.
+  # ---------------------------------------------------------------------
+  logsPanels = [
+    {
+      id = 30;
+      type = "stat";
+      title = "Time since last log received (per host)";
+      description = ''
+        Seconds since Loki last ingested a journal log line from each
+        host, derived from the `loki:host_logs_recent_count` recording
+        rule. Stale values (> 5 min) typically mean the client's
+        Alloy agent is down or the network path to Loki is broken.
+      '';
+      datasource = "VictoriaMetrics";
+      gridPos = {
+        h = 8;
+        w = 12;
+        x = 0;
+        y = 47;
+      };
+      options = {
+        reduceOptions = {
+          calcs = [ "lastNotNull" ];
+          fields = "";
+          values = false;
+        };
+        colorMode = "background";
+        graphMode = "area";
+        textMode = "value_and_name";
+        orientation = "auto";
+      };
+      fieldConfig = {
+        defaults = {
+          unit = "s";
+          thresholds = {
+            mode = "absolute";
+            steps = [
+              {
+                color = "green";
+                value = null;
+              }
+              {
+                # > 5 min — slightly stale
+                color = "yellow";
+                value = 300;
+              }
+              {
+                # > 30 min — likely client down
+                color = "orange";
+                value = 1800;
+              }
+              {
+                # > 2 h — definitely down
+                color = "red";
+                value = 7200;
+              }
+            ];
+          };
+        };
+      };
+      targets = [
+        {
+          # Subquery: sample `loki:host_logs_recent_count` at 1m
+          # resolution over the last 24h and take the timestamp of the
+          # last sample present (i.e. the last time the host emitted
+          # any log lines). Subtracting from `time()` yields the age
+          # in seconds. PromQL automatically broadcasts the scalar
+          # `time()` across the per-host vector returned by
+          # `timestamp(last_over_time(...))`.
+          expr = ''
+            time() - timestamp(last_over_time(loki:host_logs_recent_count{host=~"$host"}[24h:1m]))
+          '';
+          legendFormat = "{{host}}";
+          refId = "A";
+          instant = true;
+        }
+      ];
+    }
+    {
+      id = 31;
+      type = "timeseries";
+      title = "Time since last log received over time (per host)";
+      description = ''
+        Same metric as the stat panel but plotted over the dashboard
+        time range, useful for spotting intermittent log-shipping
+        outages.
+      '';
+      datasource = "VictoriaMetrics";
+      gridPos = {
+        h = 8;
+        w = 12;
+        x = 12;
+        y = 47;
+      };
+      fieldConfig = {
+        defaults = {
+          unit = "s";
+          custom = {
+            drawStyle = "line";
+            lineInterpolation = "linear";
+            fillOpacity = 10;
+          };
+        };
+      };
+      options.legend = {
+        displayMode = "table";
+        placement = "right";
+        calcs = [
+          "mean"
+          "max"
+        ];
+      };
+      targets = [
+        {
+          expr = ''
+            time() - timestamp(last_over_time(loki:host_logs_recent_count{host=~"$host"}[24h:1m]))
+          '';
+          legendFormat = "{{host}}";
+          refId = "A";
+        }
+      ];
+    }
+  ];
+
   servicePanels = [
     {
       id = 20;
@@ -388,6 +523,20 @@ let
     panels = [ ];
   };
 
+  logsRow = {
+    id = 3;
+    type = "row";
+    title = "Logs status";
+    collapsed = false;
+    gridPos = {
+      h = 1;
+      w = 24;
+      x = 0;
+      y = 46;
+    };
+    panels = [ ];
+  };
+
   homeLabDashboard = {
     uid = "myconfig-home-lab-status";
     title = "Home-lab status";
@@ -416,7 +565,14 @@ let
       }
     ];
     annotations.list = [ ];
-    panels = [ systemRow ] ++ systemPanels ++ [ serviceRow ] ++ servicePanels;
+    panels = [
+      systemRow
+    ]
+    ++ systemPanels
+    ++ [ serviceRow ]
+    ++ servicePanels
+    ++ [ logsRow ]
+    ++ logsPanels;
   };
 
   homeLabDashboardFile = pkgs.writeText "home-lab-status-dashboard.json" (
@@ -431,8 +587,8 @@ in
       description = ''
         Provision the combined "Home-lab status" Grafana dashboard,
         which merges the previous "NixOS system age" and "Service
-        uptime" dashboards into a single view with two collapsible
-        rows (System status / Service status).
+        uptime" dashboards into a single view with three collapsible
+        rows (System status / Service status / Logs status).
       '';
     };
   };
