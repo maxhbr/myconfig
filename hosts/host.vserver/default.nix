@@ -27,6 +27,11 @@
 
     services.netdata.enable = lib.mkForce false;
 
+    services.eternal-terminal = {
+      enable = true;
+      port = 22022;
+    };
+
     # stk
     networking.firewall.allowedUDPPorts = [
       2759

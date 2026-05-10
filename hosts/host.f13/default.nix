@@ -141,12 +141,23 @@ in
                 in
                 pkgs.writeShellScriptBin scriptName ''
                   set -euo pipefail
+                  use_jumphost=0
+                  while getopts "j" opt; do
+                    case "$opt" in
+                      j) use_jumphost=1 ;;
+                      *) echo "Usage: ${scriptName} [-j]" >&2; exit 1 ;;
+                    esac
+                  done
                   if [[ -n "''${TMUX:-}" ]]; then
                     echo "Already in tmux session, not starting et session to ${hostAddr}"
                     exit 1
                   fi
+                  jumphost_args=()
+                  if [[ "$use_jumphost" == "1" ]]; then
+                    jumphost_args=(--jumphost ${myconfig.metadatalib.getIp "vserver"} --jport 22022)
+                  fi
                   set -x
-                  exec et --kill-other-sessions ${portsArgs} --noexit mhuber@${hostAddr}:22022 --command "host-tmux-session"
+                  exec et "''${jumphost_args[@]}" --kill-other-sessions ${portsArgs} --noexit mhuber@${hostAddr}:22022 --command "host-tmux-session"
                 '';
               mkAlacrittyTmuxSession =
                 host: useWg: ports:
@@ -161,7 +172,7 @@ in
                   exec alacritty -v \
                           --title "${name}" \
                           --class "Alacritty:${name}" \
-                          --command "${tmuxSessionScript}"
+                          --command "${tmuxSessionScript}" "$@"
                 '';
             in
             [
@@ -170,12 +181,12 @@ in
               (mkAlacrittyTmuxSession "p14" true [
               ])
               (mkAlacrittyTmuxSession "nuc" false [
-                8123
-                8124
+                # 8123
+                # 8124
               ])
               (mkAlacrittyTmuxSession "nuc" true [
-                8123
-                8124
+                # 8123
+                # 8124
               ])
               (mkAlacrittyTmuxSession "thing" false [
                 # 5678
