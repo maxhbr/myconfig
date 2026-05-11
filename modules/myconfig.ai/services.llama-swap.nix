@@ -94,25 +94,121 @@ let
       safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
       scriptName = "llama-bench_${device}_${safeName}";
       envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
+      # Matching llama-server script (no suffix, no extraArgs) — used to capture
+      # runtime metadata via /props before benchmarking.
+      serverScript = mkLlamaScript { inherit model device; };
     in
     pkgs.writeShellApplication {
       name = scriptName;
-      runtimeInputs = [ ];
+      runtimeInputs = [
+        pkgs.curl
+        pkgs.jq
+      ];
       text = ''
         ${envExports}
         dir="$HOME/benchmarks/llama-bench-logs"
         mkdir -p "$dir"
+
+        # --- Capture model metadata by briefly starting llama-server and querying /props ---
+        capture_metadata() {
+          local port="$1"
+          local props_json="$dir/${scriptName}.props.json"
+          local server_log="$dir/${scriptName}.server.log"
+          local server_pid=""
+
+          cleanup_server() {
+            if [[ -n "$server_pid" ]] && kill -0 "$server_pid" 2>/dev/null; then
+              kill "$server_pid" 2>/dev/null || true
+              wait "$server_pid" 2>/dev/null || true
+            fi
+          }
+          trap cleanup_server RETURN
+
+          echo "[metadata] starting llama-server on port $port to capture /props" >&2
+          ${lib.getExe serverScript} "$port" --no-warmup >"$server_log" 2>&1 &
+          server_pid=$!
+
+          # Wait until /props responds (or the server dies / we time out)
+          local waited=0
+          while (( waited < 120 )); do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "[metadata] llama-server exited before becoming ready; see $server_log" >&2
+              return 1
+            fi
+            if curl -fsS "http://127.0.0.1:$port/props" -o "$props_json" 2>/dev/null; then
+              break
+            fi
+            sleep 1
+            waited=$((waited + 1))
+          done
+          if [[ ! -s "$props_json" ]]; then
+            echo "[metadata] failed to fetch /props within timeout" >&2
+            return 1
+          fi
+
+          # Pull the most interesting fields out of /props. The exact shape of
+          # /props varies between llama.cpp versions; use jq with // empty so
+          # missing fields just yield blanks.
+          local n_ctx n_ctx_per_seq model_path model_size n_params arch chat_template
+          n_ctx=$(jq -r '
+            (.default_generation_settings.n_ctx
+             // .default_generation_settings.params.n_ctx
+             // .n_ctx
+             // empty)' "$props_json")
+          n_ctx_per_seq=$(jq -r '
+            (.default_generation_settings.n_ctx_per_seq
+             // .n_ctx_per_seq
+             // empty)' "$props_json")
+          model_path=$(jq -r '(.model_path // .default_generation_settings.model // empty)' "$props_json")
+          model_size=$(jq -r '(.model_size // empty)' "$props_json")
+          n_params=$(jq -r '(.model_n_params // .n_params // empty)' "$props_json")
+          arch=$(jq -r '(.model_arch // empty)' "$props_json")
+          chat_template=$(jq -r '(.chat_template // empty)' "$props_json" \
+            | tr '\n' ' ' | tr '\r' ' ')
+
+          # metadata.csv: one row per script, deduped by script name. Written
+          # with jq -r @csv so embedded commas/quotes are escaped properly.
+          local meta="$dir/metadata.csv"
+          local header="script,device,model,model_path,n_ctx,n_ctx_per_seq,n_params,model_size,arch,chat_template_oneline"
+          if [[ ! -f "$meta" ]]; then
+            printf '%s\n' "$header" > "$meta"
+          fi
+          # Drop any existing row for this script so we always reflect the
+          # latest captured values.
+          if grep -q "^\"${scriptName}\"," "$meta" 2>/dev/null; then
+            grep -v "^\"${scriptName}\"," "$meta" > "$meta.tmp" && mv "$meta.tmp" "$meta"
+          fi
+          jq -rn \
+            --arg script   "${scriptName}" \
+            --arg device   "${device}" \
+            --arg model    "${model.name}" \
+            --arg path     "$model_path" \
+            --arg n_ctx    "$n_ctx" \
+            --arg n_ctx_ps "$n_ctx_per_seq" \
+            --arg n_params "$n_params" \
+            --arg size     "$model_size" \
+            --arg arch     "$arch" \
+            --arg tmpl     "$chat_template" \
+            '[$script,$device,$model,$path,$n_ctx,$n_ctx_ps,$n_params,$size,$arch,$tmpl] | @csv' \
+            >> "$meta"
+          echo "[metadata] wrote row for ${scriptName} to $meta" >&2
+        }
+
+        # Try to capture metadata, but never block the benchmark on failures.
+        capture_metadata 22799 || echo "[metadata] capture failed; continuing with benchmark" >&2
+
         bench() (
           set -x
           ${bench} -m "${model.path}" -d 0,4096,8192,16384,32768 -p 2048 -n 32 -ub 2048 -mmp 0 -o csv -oe md
         )
+        # shellcheck disable=SC2094
         {
           if [[ -f "$dir/all.csv" ]]; then
             bench tail -n +2 
           else
             bench
           fi
-        } 1>> $dir/all.csv 2>> "$dir/${scriptName}.log"
+        } 1>> "$dir/all.csv" 2>> "$dir/${scriptName}.log"
       '';
     };
 
