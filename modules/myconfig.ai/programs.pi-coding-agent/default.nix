@@ -125,6 +125,11 @@ let
   piBwrap = callLib ../fns/sandboxed-app.nix {
     name = "pi";
     pkg = pkgs.nixos-unstable.pi-coding-agent;
+    extraRuntimeInputs = [
+      pkgs.wget
+      pkgs.curl
+      pkgs.jq
+    ];
     writableDirs = [
       ".pi"
     ];
@@ -173,6 +178,9 @@ let
         pkgs.fd
         pkgs.less
         pkgs.which
+        pkgs.wget
+        pkgs.curl
+        pkgs.jq
       ])
 
       # Forward useful environment variables if they are set on the host.
