@@ -10,6 +10,14 @@ This file contains guidelines for agentic coding agents working on this NixOS fl
 - `nix flake check` - Validate all flake outputs across all systems
 - `nixDevelop --impure` - Enter development environment (requires --impure flag)
 
+### Building Single home-manager Packages
+- `./build-pkg-for-host.sh <pkg-name> [<hostname>]` - Build a single package as
+  it is configured in `home.packages` for user `mhuber` on the given host.
+  Hostname defaults to the current machine's hostname. Useful for iterating on
+  bubblewrap/jail wrappers and other module-generated wrappers without
+  rebuilding the whole system or home-manager closure.
+  Example: `./build-pkg-for-host.sh jailed-pi f13`
+
 ### Formatting & Linting
 - `./nixfmtall.sh` - Format all Nix files (runs `nix fmt`)
 - `./nixfmtall.sh --check` - Check Nix formatting without making changes

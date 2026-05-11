@@ -4,12 +4,15 @@
   config,
   lib,
   pkgs,
+  jail,
   ...
 }:
 
 let
   osconfig = config;
   callLib = file: import file { inherit lib pkgs; };
+
+  jailLib = jail.init pkgs;
 
   # Build a provider entry for an OpenAI-compatible base URL.
   mkOpenAiCompatibleProvider =
@@ -126,6 +129,54 @@ let
       ".pi"
     ];
   };
+
+  # `jailed-pi` is an alternative to `piBwrap` that uses the jail.nix library
+  # (vendored at ./vendor/alexdavid-jail.nix) instead of a hand-rolled
+  # bubblewrap wrapper. The `jail` argument is provided as a NixOS module
+  # specialArg in flake.lib.nix.
+  jailed-pi = jailLib "jailed-pi" pkgs.nixos-unstable.pi-coding-agent (
+    with jailLib.combinators;
+    [
+      # Network access for talking to LLM endpoints, including TLS/CA bundle
+      # and /etc/resolv.conf etc.
+      network
+
+      # Expose the host's `~/.pi` directory read-write. This is required so
+      # the agent picks up the auto-generated provider extension installed by
+      # home-manager (`~/.pi/agent/extensions/myconfig-providers.ts`) and so
+      # session/credential state persists across invocations.
+      (add-runtime "mkdir -p ~/.pi")
+      (rw-bind (noescape "~/.pi") (noescape "~/.pi"))
+
+      # Bind-mount the working directory read-write so pi can edit files in
+      # the user's project. The CWD is the project root (or a worktree, when
+      # invoked via `pi-worktree`).
+      mount-cwd
+
+      # Make common developer tools available inside the jail. pi shells out
+      # to git, ripgrep, fd, etc.
+      (add-pkg-deps [
+        pkgs.git
+        pkgs.coreutils
+        pkgs.findutils
+        pkgs.gnugrep
+        pkgs.gnused
+        pkgs.gawk
+        pkgs.ripgrep
+        pkgs.fd
+        pkgs.less
+        pkgs.which
+      ])
+
+      # Forward useful environment variables if they are set on the host.
+      (try-fwd-env "TERM")
+      (try-fwd-env "COLORTERM")
+      (try-fwd-env "LANG")
+      (try-fwd-env "LC_ALL")
+      (try-fwd-env "EDITOR")
+      (try-fwd-env "VISUAL")
+    ]
+  );
 in
 {
   options.myconfig = with lib; {
@@ -141,11 +192,19 @@ in
         home.packages = [
           pkgs.nixos-unstable.pi-coding-agent
           piBwrap
+          jailed-pi
           (pkgs.writeShellApplication {
             name = "pi-tmp";
             runtimeInputs = with pkgs; [ coreutils ];
             text = ''
               cd "$(mktemp -d)" && exec ${lib.getExe piBwrap} "$@"
+            '';
+          })
+          (pkgs.writeShellApplication {
+            name = "jailed-pi-tmp";
+            runtimeInputs = with pkgs; [ coreutils ];
+            text = ''
+              cd "$(mktemp -d)" && exec ${lib.getExe jailed-pi} "$@"
             '';
           })
           (pkgs.writeShellApplication {
@@ -167,6 +226,27 @@ in
 
               git worktree add -b "''${branch_name}" "../''${worktree_name}" || exit 1
               cd "../''${worktree_name}" && exec ${lib.getExe piBwrap} "$@"
+            '';
+          })
+          (pkgs.writeShellApplication {
+            name = "jailed-pi-worktree";
+            runtimeInputs = with pkgs; [
+              git
+              coreutils
+            ];
+            text = ''
+              if [ ! -d .git ]; then
+                echo "Error: Not in a git repository root"
+                exit 1
+              fi
+
+              timestamp=$(date +%s)
+              dirname=$(basename "$(pwd)")
+              worktree_name="''${dirname}-pi-''${timestamp}"
+              branch_name="pi-''${timestamp}"
+
+              git worktree add -b "''${branch_name}" "../''${worktree_name}" || exit 1
+              cd "../''${worktree_name}" && exec ${lib.getExe jailed-pi} "$@"
             '';
           })
         ];
