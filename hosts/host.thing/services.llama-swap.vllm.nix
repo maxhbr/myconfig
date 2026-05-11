@@ -59,7 +59,7 @@ let
       args=(
         ${docker} run
         --rm
-        --gpus all
+        --device nvidia.com/gpu=all
         --name "${containerName}"
         --ipc=host
         -p "$HOST_PORT:8000"
@@ -108,15 +108,18 @@ in
 {
   imports = [
     {
-      virtualisation.docker.enable = true;
+      virtualisation.docker.enable = lib.mkDefault true;
+      hardware.nvidia-container-toolkit.enable = lib.mkDefault true;
       systemd.services.llama-swap = {
         wants = [
           "docker.service"
           "docker.socket"
+          "nvidia-container-toolkit-cdi-generator.service"
         ];
         after = [
           "docker.service"
           "docker.socket"
+          "nvidia-container-toolkit-cdi-generator.service"
         ];
 
         serviceConfig = {
@@ -150,5 +153,17 @@ in
         ttl = 0;
       };
     };
+    home-manager.sharedModules = [
+      {
+        programs.aichat.settings.clients = [{
+          type = "openai-compatible";
+          name = "vllm";
+          api_base = "http://localhost:22548/v1";
+          models = [
+            servedModelName
+          ];
+        }];
+      }
+    ];
   };
 }

@@ -35,6 +35,18 @@ in
     ];
   };
 
+  fileSystems."/home/${myconfig.user}/imgwork2" = {
+    device = btrfs_device;
+    fsType = "btrfs";
+    options = [
+      "compress=zstd"
+      "subvol=@imgwork"
+      "nofail"
+      "discard"
+      "noatime"
+    ];
+  };
+
   fileSystems."/models" = {
     device = btrfs_device;
     fsType = "btrfs";
