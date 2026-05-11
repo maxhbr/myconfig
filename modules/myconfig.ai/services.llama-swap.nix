@@ -207,14 +207,16 @@ let
         )
         echo "[bench] sleeping 2s before running llama-bench" >&2
         sleep 2
-        # When all.csv already exists, strip the CSV header line emitted by
-        # llama-bench so we don't get repeated header rows in the aggregate
-        # output. Stderr is tee'd to both the per-script log and the terminal.
+        # Results from all models on the same device are aggregated into a
+        # single per-device CSV. When the file already exists, strip the CSV
+        # header line emitted by llama-bench so we don't get repeated header
+        # rows. Stderr is tee'd to both the per-script log and the terminal.
+        csv="$dir/${device}.csv"
         # shellcheck disable=SC2094
-        if [[ -f "$dir/all.csv" ]]; then
-          bench 2> >(tee -a "$dir/${scriptName}.log" >&2) | tail -n +2 >> "$dir/all.csv"
+        if [[ -f "$csv" ]]; then
+          bench 2> >(tee -a "$dir/${scriptName}.log" >&2) | tail -n +2 >> "$csv"
         else
-          bench 2> >(tee -a "$dir/${scriptName}.log" >&2) >> "$dir/all.csv"
+          bench 2> >(tee -a "$dir/${scriptName}.log" >&2) >> "$csv"
         fi
       '';
     };
