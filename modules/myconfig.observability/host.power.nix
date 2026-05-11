@@ -234,6 +234,7 @@ let
       };
       fieldConfig.defaults = {
         unit = "watt";
+        min = 0;
         custom = {
           drawStyle = "line";
           lineInterpolation = "linear";
@@ -284,6 +285,7 @@ let
       };
       fieldConfig.defaults = {
         unit = "watt";
+        min = 0;
         custom = {
           drawStyle = "line";
           fillOpacity = 20;
@@ -404,6 +406,7 @@ let
       };
       fieldConfig.defaults = {
         unit = "kwatth";
+        min = 0;
         custom = {
           drawStyle = "bars";
           fillOpacity = 60;
@@ -454,6 +457,7 @@ let
       };
       fieldConfig.defaults = {
         unit = "kwatth";
+        min = 0;
         custom = {
           drawStyle = "bars";
           fillOpacity = 80;
@@ -494,6 +498,7 @@ let
       };
       fieldConfig.defaults = {
         unit = "kwatth";
+        min = 0;
         custom = {
           drawStyle = "line";
           lineInterpolation = "linear";
