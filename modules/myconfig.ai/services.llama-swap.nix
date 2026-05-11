@@ -340,6 +340,15 @@ let
     name = "llama-bench-all";
     runtimeInputs = allScripts;
     text = ''
+      dir="$HOME/benchmarks/llama-bench-logs"
+      mkdir -p "$dir"
+      log="$dir/llama-bench-all-$(date -u +%Y-%m-%dT%H-%M-%SZ).log"
+      echo "Logging combined output to $log"
+
+      # Tee all subsequent output (stdout+stderr) to the log file while still
+      # showing it on the terminal.
+      exec > >(tee -a "$log") 2>&1
+
       scripts=(${lib.concatStringsSep " " benchScriptNames})
       echo "Running ''${#scripts[@]} llama-bench script(s)..."
       failed=()
