@@ -149,7 +149,7 @@ let
           # Pull the most interesting fields out of /props. The exact shape of
           # /props varies between llama.cpp versions; use jq with // empty so
           # missing fields just yield blanks.
-          local n_ctx n_ctx_per_seq model_path model_size n_params arch chat_template
+          local n_ctx n_ctx_per_seq model_path model_size n_params arch
           n_ctx=$(jq -r '
             (.default_generation_settings.n_ctx
              // .default_generation_settings.params.n_ctx
@@ -163,13 +163,11 @@ let
           model_size=$(jq -r '(.model_size // empty)' "$props_json")
           n_params=$(jq -r '(.model_n_params // .n_params // empty)' "$props_json")
           arch=$(jq -r '(.model_arch // empty)' "$props_json")
-          chat_template=$(jq -r '(.chat_template // empty)' "$props_json" \
-            | tr '\n' ' ' | tr '\r' ' ')
 
           # metadata.csv: one row per script, deduped by script name. Written
           # with jq -r @csv so embedded commas/quotes are escaped properly.
           local meta="$dir/metadata.csv"
-          local header="script,device,model,model_path,n_ctx,n_ctx_per_seq,n_params,model_size,arch,chat_template_oneline"
+          local header="script,device,model,model_path,n_ctx,n_ctx_per_seq,n_params,model_size,arch"
           if [[ ! -f "$meta" ]]; then
             printf '%s\n' "$header" > "$meta"
           fi
@@ -188,8 +186,7 @@ let
             --arg n_params "$n_params" \
             --arg size     "$model_size" \
             --arg arch     "$arch" \
-            --arg tmpl     "$chat_template" \
-            '[$script,$device,$model,$path,$n_ctx,$n_ctx_ps,$n_params,$size,$arch,$tmpl] | @csv' \
+            '[$script,$device,$model,$path,$n_ctx,$n_ctx_ps,$n_params,$size,$arch] | @csv' \
             >> "$meta"
           echo "[metadata] wrote row for ${scriptName} to $meta" >&2
         }
@@ -208,7 +205,7 @@ let
           else
             bench
           fi
-        } 1>> "$dir/all.csv" 2>> "$dir/${scriptName}.log"
+        } 1>> "$dir/all.csv" 2> >(tee -a "$dir/${scriptName}.log" >&2)
       '';
     };
 
