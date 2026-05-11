@@ -232,9 +232,9 @@ let
         csv="$dir/${device}.csv"
         # shellcheck disable=SC2094
         if [[ -f "$csv" ]]; then
-          bench 2> >(tee -a "$dir/${scriptName}.log" >&2) | tail -n +2 >> "$csv"
+          bench 2> >(tee -a "$dir/${scriptName}.log" >&2) | tee "$dir/${scriptName}.csv" | tail -n +2 >> "$csv"
         else
-          bench 2> >(tee -a "$dir/${scriptName}.log" >&2) >> "$csv"
+          bench 2> >(tee -a "$dir/${scriptName}.log" >&2) | tee "$dir/${scriptName}.csv" >> "$csv"
         fi
       '';
     };
