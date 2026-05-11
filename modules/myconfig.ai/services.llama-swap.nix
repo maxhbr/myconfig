@@ -167,16 +167,19 @@ let
           # metadata.csv: one row per script, deduped by script name. Written
           # with jq -r @csv so embedded commas/quotes are escaped properly.
           local meta="$dir/metadata.csv"
-          local header="script,device,model,model_path,n_ctx,n_ctx_per_seq,n_params,model_size,arch"
+          local header="timestamp,script,device,model,model_path,n_ctx,n_ctx_per_seq,n_params,model_size,arch"
           if [[ ! -f "$meta" ]]; then
             printf '%s\n' "$header" > "$meta"
           fi
           # Drop any existing row for this script so we always reflect the
-          # latest captured values.
-          if grep -q "^\"${scriptName}\"," "$meta" 2>/dev/null; then
-            grep -v "^\"${scriptName}\"," "$meta" > "$meta.tmp" && mv "$meta.tmp" "$meta"
+          # latest captured values. The script name is the 2nd CSV column.
+          if grep -q ",\"${scriptName}\"," "$meta" 2>/dev/null; then
+            grep -v ",\"${scriptName}\"," "$meta" > "$meta.tmp" && mv "$meta.tmp" "$meta"
           fi
+          local timestamp
+          timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           jq -rn \
+            --arg ts       "$timestamp" \
             --arg script   "${scriptName}" \
             --arg device   "${device}" \
             --arg model    "${model.name}" \
@@ -186,7 +189,7 @@ let
             --arg n_params "$n_params" \
             --arg size     "$model_size" \
             --arg arch     "$arch" \
-            '[$script,$device,$model,$path,$n_ctx,$n_ctx_ps,$n_params,$size,$arch] | @csv' \
+            '[$ts,$script,$device,$model,$path,$n_ctx,$n_ctx_ps,$n_params,$size,$arch] | @csv' \
             >> "$meta"
           echo "[metadata] wrote row for ${scriptName} to $meta" >&2
         }
