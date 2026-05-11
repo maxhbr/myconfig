@@ -195,7 +195,25 @@ let
             --arg arch     "$arch" \
             '[$ts,$script,$device,$model,$path,$n_ctx,$n_ctx_ps,$n_params,$size,$arch] | @csv' \
             >> "$meta"
-          echo "[metadata] wrote row for ${scriptName} to $meta" >&2
+
+          # Print a structured human-readable summary of the captured metadata
+          # to stderr so it shows up in the terminal next to the bench output.
+          {
+            printf '%s\n' "[metadata] ---- captured metadata ----"
+            printf '[metadata]   %-14s %s\n' \
+              "timestamp"     "$timestamp" \
+              "script"        "${scriptName}" \
+              "device"        "${device}" \
+              "model"         "${model.name}" \
+              "model_path"    "$model_path" \
+              "n_ctx"         "$n_ctx" \
+              "n_ctx_per_seq" "$n_ctx_per_seq" \
+              "n_params"      "$n_params" \
+              "model_size"    "$model_size" \
+              "arch"          "$arch"
+            printf '%s\n' "[metadata] ---------------------------"
+            printf '%s\n' "[metadata] wrote row for ${scriptName} to $meta"
+          } >&2
         }
 
         # Try to capture metadata, but never block the benchmark on failures.
