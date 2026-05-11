@@ -93,6 +93,8 @@ let
       bench = llamaBenchFor device;
       safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
       scriptName = "llama-bench_${device}_${safeName}";
+      # Exported for capture_metadata's llama-server invocation. llama-bench
+      # itself ignores LLAMA_ARG_DEVICE and uses the explicit -dev CLI flag.
       envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
       # Matching llama-server script (no suffix, no extraArgs) — used to capture
       # runtime metadata via /props before benchmarking.
@@ -201,7 +203,7 @@ let
 
         bench() (
           set -x
-          ${bench} -m "${model.path}" -d 0,4096,8192,16384,32768 -p 2048 -n 32 -ub 2048 -mmp 0 -o csv -oe md
+          ${bench} -m "${model.path}" -dev "${device}" -d 0,4096,8192,16384,32768 -p 2048 -n 32 -ub 2048 -mmp 0 -o csv -oe md
         )
         echo "[bench] sleeping 2s before running llama-bench" >&2
         sleep 2
