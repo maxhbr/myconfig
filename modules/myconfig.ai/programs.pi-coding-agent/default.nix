@@ -141,6 +141,13 @@ let
       # and /etc/resolv.conf etc.
       network
 
+      # Bind the entire `/nix/store` read-only. The base permissions only
+      # bind the runtime closure of the jailed derivation; pi shells out to
+      # arbitrary tools (git, ripgrep, ...) added via add-pkg-deps and may
+      # also exec store paths it discovers in the user's project (e.g.
+      # `nix run`, `direnv`, etc.), so we expose the full store instead.
+      (ro-bind "/nix/store" "/nix/store")
+
       # Expose the host's `~/.pi` directory read-write. This is required so
       # the agent picks up the auto-generated provider extension installed by
       # home-manager (`~/.pi/agent/extensions/myconfig-providers.ts`) and so
