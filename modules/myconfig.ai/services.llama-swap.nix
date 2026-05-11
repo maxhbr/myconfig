@@ -335,37 +335,72 @@ let
     s: lib.optional (lib.hasPrefix "llama-bench_" s.name) s.name
   ) allScripts;
 
-  # Aggregate script that runs every generated llama-bench-* script sequentially
-  llamaBenchAll = pkgs.writeShellApplication {
-    name = "llama-bench-all";
-    runtimeInputs = allScripts;
-    text = ''
-      dir="$HOME/benchmarks/llama-bench-logs"
-      mkdir -p "$dir"
-      log="$dir/llama-bench-all-$(date -u +%Y-%m-%dT%H-%M-%SZ).log"
-      echo "Logging combined output to $log"
+  # All distinct devices that have at least one generated llama-bench_<device>_* script
+  benchDevices = lib.unique (
+    lib.concatMap (
+      n:
+      let
+        # Strip the "llama-bench_" prefix, then take everything up to the next "_"
+        rest = lib.removePrefix "llama-bench_" n;
+        parts = lib.splitString "_" rest;
+      in
+      lib.optional (parts != [ ]) (builtins.head parts)
+    ) benchScriptNames
+  );
 
-      # Tee all subsequent output (stdout+stderr) to the log file while still
-      # showing it on the terminal.
-      exec > >(tee -a "$log") 2>&1
+  # Build an aggregate "run every matching llama-bench script" wrapper. The
+  # `scripts` arg is the list of script names to include; `name` is the
+  # resulting binary's name.
+  mkLlamaBenchAggregate =
+    {
+      name,
+      scripts,
+    }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = allScripts;
+      text = ''
+        dir="$HOME/benchmarks/llama-bench-logs"
+        mkdir -p "$dir"
+        log="$dir/${name}-$(date -u +%Y-%m-%dT%H-%M-%SZ).log"
+        echo "Logging combined output to $log"
 
-      scripts=(${lib.concatStringsSep " " benchScriptNames})
-      echo "Running ''${#scripts[@]} llama-bench script(s)..."
-      failed=()
-      for s in "''${scripts[@]}"; do
-        echo "=== Running $s ==="
-        if ! "$s" "$@"; then
-          echo "!!! $s failed" >&2
-          failed+=("$s")
+        # Tee all subsequent output (stdout+stderr) to the log file while still
+        # showing it on the terminal.
+        exec > >(tee -a "$log") 2>&1
+
+        scripts=(${lib.concatStringsSep " " scripts})
+        echo "Running ''${#scripts[@]} llama-bench script(s)..."
+        failed=()
+        for s in "''${scripts[@]}"; do
+          echo "=== Running $s ==="
+          if ! "$s" "$@"; then
+            echo "!!! $s failed" >&2
+            failed+=("$s")
+          fi
+        done
+        if (( ''${#failed[@]} > 0 )); then
+          echo "Failed scripts: ''${failed[*]}" >&2
+          exit 1
         fi
-      done
-      if (( ''${#failed[@]} > 0 )); then
-        echo "Failed scripts: ''${failed[*]}" >&2
-        exit 1
-      fi
-      echo "All llama-bench scripts completed successfully."
-    '';
+        echo "All llama-bench scripts completed successfully."
+      '';
+    };
+
+  # The catch-all aggregate that runs every generated bench script
+  llamaBenchAll = mkLlamaBenchAggregate {
+    name = "llama-bench-all";
+    scripts = benchScriptNames;
   };
+
+  # Per-device aggregates: llama-bench_CUDA0, llama-bench_Vulkan0, ...
+  llamaBenchPerDevice = map (
+    device:
+    mkLlamaBenchAggregate {
+      name = "llama-bench_${device}";
+      scripts = builtins.filter (n: lib.hasPrefix "llama-bench_${device}_" n) benchScriptNames;
+    }
+  ) benchDevices;
 
   # Generate all models from the input list
   allModels = lib.mkMerge (lib.concatMap mkModelEntries cfg.models);
@@ -524,7 +559,7 @@ in
         config = lib.optionalAttrs hmEnabled {
           home-manager.sharedModules = lib.mkIf config.services.llama-swap.enable [
             {
-              home.packages = allScripts ++ [ llamaBenchAll ];
+              home.packages = allScripts ++ [ llamaBenchAll ] ++ llamaBenchPerDevice;
               myconfig.persistence.cache-directories = [
                 "benchmarks/llama-bench-logs"
               ];
