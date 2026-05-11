@@ -234,6 +234,34 @@ let
 
   allScripts = lib.concatMap mkScriptEntries cfg.models;
 
+  # Collect the names of all generated llama-bench-* scripts
+  benchScriptNames = lib.concatMap (
+    s: lib.optional (lib.hasPrefix "llama-bench_" s.name) s.name
+  ) allScripts;
+
+  # Aggregate script that runs every generated llama-bench-* script sequentially
+  llamaBenchAll = pkgs.writeShellApplication {
+    name = "llama-bench-all";
+    runtimeInputs = allScripts;
+    text = ''
+      scripts=(${lib.concatStringsSep " " benchScriptNames})
+      echo "Running ''${#scripts[@]} llama-bench script(s)..."
+      failed=()
+      for s in "''${scripts[@]}"; do
+        echo "=== Running $s ==="
+        if ! "$s" "$@"; then
+          echo "!!! $s failed" >&2
+          failed+=("$s")
+        fi
+      done
+      if (( ''${#failed[@]} > 0 )); then
+        echo "Failed scripts: ''${failed[*]}" >&2
+        exit 1
+      fi
+      echo "All llama-bench scripts completed successfully."
+    '';
+  };
+
   # Generate all models from the input list
   allModels = lib.mkMerge (lib.concatMap mkModelEntries cfg.models);
 
@@ -391,7 +419,7 @@ in
         config = lib.optionalAttrs hmEnabled {
           home-manager.sharedModules = lib.mkIf config.services.llama-swap.enable [
             {
-              home.packages = allScripts;
+              home.packages = allScripts ++ [ llamaBenchAll ];
               myconfig.persistence.cache-directories = [
                 "benchmarks/llama-bench-logs"
               ];
