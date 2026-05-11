@@ -165,6 +165,11 @@ let
       # invoked via `pi-worktree`).
       mount-cwd
 
+      # Expose `/usr/bin` read-only so the agent can inspect host-installed
+      # binaries (e.g. `which`, `file`, or system-provided tools outside the
+      # Nix store).
+      (ro-bind "/usr/bin" "/usr/bin")
+
       # Make common developer tools available inside the jail. pi shells out
       # to git, ripgrep, fd, etc.
       (add-pkg-deps [
