@@ -102,9 +102,17 @@ let
         ${envExports}
         dir="$HOME/benchmarks/llama-bench-logs"
         mkdir -p "$dir"
-        exec &> >(tee -a "$dir/${scriptName}.log")
-        set -x
-        ${bench} -m "${model.path}" -d 0,4096,8192,16384,32768 -p 2048 -n 32 -ub 2048 -mmp 0
+        bench() (
+          set -x
+          ${bench} -m "${model.path}" -d 0,4096,8192,16384,32768 -p 2048 -n 32 -ub 2048 -mmp 0 -o csv -oe md
+        )
+        {
+          if [[ -f "$dir/all.csv" ]]; then
+            bench tail -n +2 
+          else
+            bench
+          fi
+        } 1>> $dir/all.csv 2>> "$dir/${scriptName}.log"
       '';
     };
 
