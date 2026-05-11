@@ -124,6 +124,8 @@ let
           }
           trap cleanup_server RETURN
 
+          echo "[metadata] sleeping 2s before starting llama-server" >&2
+          sleep 2
           echo "[metadata] starting llama-server on port $port to capture /props" >&2
           ${lib.getExe serverScript} "$port" --no-warmup >"$server_log" 2>&1 &
           server_pid=$!
@@ -201,6 +203,8 @@ let
           set -x
           ${bench} -m "${model.path}" -d 0,4096,8192,16384,32768 -p 2048 -n 32 -ub 2048 -mmp 0 -o csv -oe md
         )
+        echo "[bench] sleeping 2s before running llama-bench" >&2
+        sleep 2
         # shellcheck disable=SC2094
         {
           if [[ -f "$dir/all.csv" ]]; then
