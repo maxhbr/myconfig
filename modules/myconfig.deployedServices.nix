@@ -162,10 +162,19 @@
                       -Last-Modified
                     }
                   '';
-                  proxyConfig = ''
-                    ${noCacheHeaders}
-                    reverse_proxy http://${ip}:${toString port}
-                  '';
+                  reverse = false;
+                  proxyConfig = if reverse 
+                                    then ''
+                                          ${noCacheHeaders}
+                                          reverse_proxy http://${ip}:${toString port}
+                                        ''
+                                    else ''
+                                          ${noCacheHeaders}
+                                          proxy / http://${ip}:${toString port} {
+                                              websocket
+                                              transparent
+                                          }
+                                      '';
                 in
                 if forceHttps then
                   [
