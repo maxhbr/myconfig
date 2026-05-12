@@ -8,12 +8,12 @@
     "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf",
     "unsloth/Qwen3.6-27B-GGUF/BF16",
     "unsloth/Qwen3.6-27B-NVFP4",
+    "sakamakismile/Qwen3.6-27B-Text-NVFP4-MTP",
     "unsloth/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf",
     "unsloth/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf",
     "unsloth/gemma-4-31B-it-GGUF/mmproj-F16.gguf",
     "unsloth/gemma-4-31B-it-GGUF/mmproj-BF16.gguf",
     "unsloth/gemma-4-31B-it-GGUF/mmproj-F16.gguf",
     "unsloth/gemma-4-31B-it-GGUF/mmproj-F32.gguf"
-
   ]
 }
