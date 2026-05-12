@@ -33,11 +33,7 @@ let
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
       params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
       # mmproj =
-      aliases = [
-        "hermes"
-        "opencode-fast"
-        "Qwen3.6-27B"
-      ];
+      aliases = [ ];
       ttl = 900;
     }
     {
@@ -58,7 +54,11 @@ let
       name = "Qwen3.6-27B-UD-Q5_K_XL";
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
       params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-      aliases = [ ];
+      aliases = [
+        "hermes"
+        "opencode-fast"
+        "Qwen3.6-27B"
+      ];
       ttl = 900;
     }
     {
