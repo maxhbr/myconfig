@@ -183,6 +183,15 @@ let
       # Nix store).
       (ro-bind "/usr/bin" "/usr/bin")
 
+      # Expose user config directories read-only so tools inside the jail
+      # can pick up host configuration (e.g. ripgrep ignores, bat themes,
+      # nix settings, pistol pager config).
+      (ro-bind (noescape "~/.config/nix") (noescape "~/.config/nix"))
+      (ro-bind (noescape "~/.config/nixpkgs") (noescape "~/.config/nixpkgs"))
+      (ro-bind (noescape "~/.config/pistol") (noescape "~/.config/pistol"))
+      (ro-bind (noescape "~/.config/ripgrep") (noescape "~/.config/ripgrep"))
+      (ro-bind (noescape "~/.config/bat") (noescape "~/.config/bat"))
+
       # Make common developer tools available inside the jail. pi shells out
       # to git, ripgrep, fd, etc.
       (add-pkg-deps [
