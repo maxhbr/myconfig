@@ -160,6 +160,19 @@ let
       (add-runtime "mkdir -p ~/.pi")
       (rw-bind (noescape "~/.pi") (noescape "~/.pi"))
 
+      # Expose the host's `~/tmp` directory read-write inside the jail so
+      # pi has a persistent writable scratch space under $HOME.
+      (add-runtime "mkdir -p ~/tmp")
+      (rw-bind (noescape "~/tmp") (noescape "~/tmp"))
+
+      # Provide a host-backed /tmp instead of the base tmpfs. Creates
+      # /tmp/jailed-pi on the host and bind-mounts it as /tmp in the jail,
+      # giving pi a real writable /tmp that survives across invocations.
+      (add-runtime ''
+        mkdir -p /tmp/jailed-pi
+        RUNTIME_ARGS+=(--bind /tmp/jailed-pi /tmp)
+      '')
+
       # Bind-mount the working directory read-write so pi can edit files in
       # the user's project. The CWD is the project root (or a worktree, when
       # invoked via `pi-worktree`).
