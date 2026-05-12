@@ -108,6 +108,7 @@ in
         };
         frontend = { };
         http = {
+          base_url = "https://hass.nuc.wg0.maxhbr.local/";
           use_x_forwarded_for = true;
           trusted_proxies = [
             "127.0.0.1"
