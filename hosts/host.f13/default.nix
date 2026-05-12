@@ -218,14 +218,16 @@ in
         }
       ];
     }
+    # {
+    #   fileSystems."/home/${user}/imgwork2" = {
+    #     device = "${myconfig.metadatalib.getIp "thing"}:/home/${user}/imgwork2";
+    #     fsType = "nfs";
+    #     options = [ "nofail" ];
+    #   };
+    # }
   ];
 
   config = {
-    fileSystems."/home/${user}/imgwork2" = {
-      device = "${myconfig.metadatalib.getIp "thing"}:/home/${user}/imgwork2";
-      fsType = "nfs";
-      options = [ "nofail" ];
-    };
     networking = {
       hostName = "f13";
       hostId = "00000${config.networking.hostName}";
