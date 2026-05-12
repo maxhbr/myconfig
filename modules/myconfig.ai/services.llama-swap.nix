@@ -108,7 +108,7 @@ let
       ];
       text = ''
         ${envExports}
-        dir="$HOME/benchmarks/llama-bench-logs"
+        dir="$HOME/benchmarks/llama-bench/$(date +%Y-%m-%d)"
         mkdir -p "$dir"
 
         # --- Capture model metadata by briefly starting llama-server and querying /props ---
@@ -168,9 +168,9 @@ let
           n_params=$(jq -r '(.model_n_params // .n_params // empty)' "$props_json")
           arch=$(jq -r '(.model_arch // empty)' "$props_json")
 
-          # metadata.csv: one row per script, deduped by script name. Written
+          # <device>.metadata.csv: one row per script, deduped by script name. Written
           # with jq -r @csv so embedded commas/quotes are escaped properly.
-          local meta="$dir/metadata.csv"
+          local meta="$dir/${device}.metadata.csv"
           local header="timestamp,script,device,model,model_path,n_ctx,n_ctx_per_seq,n_params,model_size,arch"
           if [[ ! -f "$meta" ]]; then
             printf '%s\n' "$header" > "$meta"
@@ -387,7 +387,7 @@ let
       inherit name;
       runtimeInputs = allScripts;
       text = ''
-        dir="$HOME/benchmarks/llama-bench-logs"
+        dir="$HOME/benchmarks/llama-bench/$(date +%Y-%m-%d)"
         mkdir -p "$dir"
         log="$dir/${name}-$(date -u +%Y-%m-%dT%H-%M-%SZ).log"
         echo "Logging combined output to $log"
@@ -588,7 +588,7 @@ in
             {
               home.packages = allScripts ++ [ llamaBenchAll ] ++ llamaBenchPerDevice;
               myconfig.persistence.cache-directories = [
-                "benchmarks/llama-bench-logs"
+                "benchmarks/llama-bench"
               ];
             }
           ];
