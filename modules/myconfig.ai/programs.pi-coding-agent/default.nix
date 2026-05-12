@@ -208,6 +208,7 @@ let
         pkgs.wget
         pkgs.curl
         pkgs.jq
+        pkgs.nix
       ])
 
       # Forward useful environment variables if they are set on the host.
