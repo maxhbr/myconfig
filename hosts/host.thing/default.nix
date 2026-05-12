@@ -64,7 +64,6 @@
     ./hardware.Radeon8060S.nix
     ./disk.nix
     ./btr2-pool.nix
-    ./imgwork2.nfs.nix
     ../../hardware/eGPU.nix
     {
       home-manager.sharedModules = [
