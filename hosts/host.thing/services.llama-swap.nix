@@ -25,6 +25,8 @@ let
         "Qwen3.6-35B-A3B-UD"
         "Qwen3.6-35B-A3B"
         "Qwen3.6-35B"
+        "hermes-fallback"
+        "opencode-fast-fallback"
       ];
       ttl = 900;
     }
@@ -66,10 +68,7 @@ let
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
       params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
       # mmproj =
-      aliases = [
-        "hermes-fallback"
-        "opencode-fast-fallback"
-      ];
+      aliases = [ ];
       ttl = 900;
     }
     # {
