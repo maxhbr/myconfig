@@ -98,7 +98,7 @@ let
         "opencode-fast"
         "Qwen3.6-27B"
       ];
-      ctxSize = 131072;
+      ctxSize = 262144;
       ttl = 900;
       # variants = {
       #   "128k" = {
@@ -169,6 +169,12 @@ let
         mmproj = {
           mmproj = "/models/gemma-4-31B-it-GGUF/mmproj-F16.gguf";
         };
+        nothink = {
+          params = [
+            "--chat-template-kwargs"
+            "{\"enable_thinking\":false}"
+          ];
+        };
       };
       aliases = [
         "gemma-4:31b-q4"
@@ -176,31 +182,7 @@ let
       ];
       ttl = 300;
     }
-    {
-      name = "gemma-4-31B-it-UD-Q4_K_XL-nothink";
-      path = "/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf";
-      ctxSize = 65536;
-      variants = {
-        mmproj = {
-          mmproj = "/models/gemma-4-31B-it-GGUF/mmproj-F16.gguf";
-        };
-      };
-      params = [
-        "--batch-size"
-        "2048"
-        "--ubatch-size"
-        "512"
-        "--threads"
-        "1"
-        "--chat-template-kwargs"
-        "{\"enable_thinking\": false}"
-        "--jinja"
-      ];
-      aliases = [
-        "gemma-4:31b-q4-nothink"
-      ];
-      ttl = 300;
-    }
+    
   ];
 
   amdModels = [
@@ -223,7 +205,7 @@ let
         "-ctv"
         "f16"
         "--chat-template-kwargs"
-        "{\"preserve_thinking\": true}"
+        "{\"preserve_thinking\":true}"
       ];
       aliases = [
         "opencode"
