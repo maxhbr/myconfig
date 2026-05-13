@@ -155,14 +155,16 @@ in
     };
     home-manager.sharedModules = [
       {
-        programs.aichat.settings.clients = [{
-          type = "openai-compatible";
-          name = "vllm";
-          api_base = "http://localhost:22548/v1";
-          models = [
-            servedModelName
-          ];
-        }];
+        programs.aichat.settings.clients = [
+          {
+            type = "openai-compatible";
+            name = "vllm";
+            api_base = "http://localhost:22548/v1";
+            models = [
+              servedModelName
+            ];
+          }
+        ];
       }
     ];
   };
