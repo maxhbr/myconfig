@@ -18,7 +18,6 @@ let
     {
       name = "Qwen3.6-35B-A3B-UD-Q5_K_XL";
       path = "/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
-      # mmproj =
       aliases = [
         "Qwen3.6-35B-A3B-UD-Q5_K"
         "Qwen3.6-35B-A3B-UD-Q5"
@@ -33,41 +32,90 @@ let
     {
       name = "Qwen3.6-27B-Q8_0";
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
-      params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-      # mmproj =
+      params = [
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
+      ];
       aliases = [ ];
       ttl = 900;
-    }
-    {
-      name = "Qwen3.6-27B-Q8_0-tweaked";
-      path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
-      params = "--jinja --reasoning-format deepseek -ngl 99 -fa -sm row --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 -c 40960 -n 32768 --no-context-shift";
-      aliases = [ ];
-      ttl = 900;
+      variants = {
+        tweaked = {
+          params = [
+            "--jinja"
+            "--reasoning-format"
+            "deepseek"
+            "-ngl"
+            "99"
+            "-fa"
+            "-sm"
+            "row"
+            "--temp"
+            "0.6"
+            "--top-k"
+            "20"
+            "--top-p"
+            "0.95"
+            "--min-p"
+            "0"
+            "-c"
+            "40960"
+            "-n"
+            "32768"
+            "--no-context-shift"
+          ];
+        };
+      };
     }
     {
       name = "Qwen3.6-27B-UD-Q4_K_XL";
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
-      params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
+      params = [
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
+      ];
       aliases = [ ];
       ttl = 900;
     }
     {
       name = "Qwen3.6-27B-UD-Q5_K_XL";
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
-      params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
+      params = [
+        "--cache-type-k"
+        "q8_0"
+        "--cache-type-v"
+        "q8_0"
+        "--parallel"
+        "1"
+        "--batch-size"
+        "2048"
+        "--ubatch-size"
+        "512"
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
+      ];
       aliases = [
         "hermes"
         "opencode-fast"
         "Qwen3.6-27B"
       ];
+      ctxSize = 262144;
       ttl = 900;
+      # variants = {
+      #   "128k" = {
+      #     params = [
+      #       "--ctx-size"
+      #       "131072"
+      #     ];
+      #   };
+      # };
     }
     {
       name = "Qwen3.6-27B-UD-Q6_K_XL";
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
-      params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-      # mmproj =
+      params = [
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
+      ];
       aliases = [ ];
       ttl = 900;
     }
@@ -75,7 +123,16 @@ let
     #   name = "Qwen3.5-27B-Q8_0:modded";
     #   path = "/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf";
     #   devices = [ "Vulkan0" ];
-    #   params = "-c 131072 --threads 4 --batch-size 2048 -np 1 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0";
+    #   params = [
+    #     "-c" "131072"
+    #     "--threads" "4"
+    #     "--batch-size" "2048"
+    #     "-np" "1"
+    #     "--temp" "0.6"
+    #     "--top-p" "0.95"
+    #     "--top-k" "20"
+    #     "--min-p" "0.0"
+    #   ];
     #   ttl = 0;
     # }
     {
@@ -99,25 +156,33 @@ let
       name = "gemma-4-31B-it-UD-Q4_K_XL";
       path = "/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf";
       ctxSize = 65536;
-      mmproj = "/models/gemma-4-31B-it-GGUF/mmproj-F16.gguf";
-      params = "--batch-size 2048 --ubatch-size 512 --threads 1 --jinja";
+      params = [
+        "--batch-size"
+        "2048"
+        "--ubatch-size"
+        "512"
+        "--threads"
+        "1"
+        "--jinja"
+      ];
+      variants = {
+        mmproj = {
+          mmproj = "/models/gemma-4-31B-it-GGUF/mmproj-F16.gguf";
+        };
+        nothink = {
+          params = [
+            "--chat-template-kwargs"
+            "{\"enable_thinking\":false}"
+          ];
+        };
+      };
       aliases = [
         "gemma-4:31b-q4"
         "gemma-4-31B-Q4"
       ];
       ttl = 300;
     }
-    {
-      name = "gemma-4-31B-it-UD-Q4_K_XL-nothink";
-      path = "/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf";
-      ctxSize = 65536;
-      mmproj = "/models/gemma-4-31B-it-GGUF/mmproj-F16.gguf";
-      params = "--batch-size 2048 --ubatch-size 512 --threads 1 --chat-template-kwargs '{\"enable_thinking\": false}' --jinja";
-      aliases = [
-        "gemma-4:31b-q4-nothink"
-      ];
-      ttl = 300;
-    }
+
   ];
 
   amdModels = [
@@ -134,7 +199,14 @@ let
     {
       name = "Qwen3.6-27B-GGUF-BF16";
       path = "/models/Qwen3.6-27B-GGUF/BF16/Qwen3.6-27B-BF16-00001-of-00002.gguf";
-      params = "-ctk f16 -ctv f16 --chat-template-kwargs '{\"preserve_thinking\": true}'";
+      params = [
+        "-ctk"
+        "f16"
+        "-ctv"
+        "f16"
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
+      ];
       aliases = [
         "opencode"
         "Qwen3.6-27B-GGUF"
@@ -145,28 +217,18 @@ let
     {
       name = "gemma-4-31B-it-BF16";
       path = "/models/gemma-4-31B-it-GGUF/BF16/gemma-4-31B-it-BF16-00001-of-00002.gguf";
-      params = "-ctk f16 -ctv f16";
+      params = [
+        "-ctk"
+        "f16"
+        "-ctv"
+        "f16"
+      ];
       aliases = [
         "gemma-4-31B"
         "gemma-4-31B-BF16"
       ];
       ttl = 300;
     }
-    # {
-    #   name = "Qwen3.6-27B-UD-Q4_K_XL";
-    #   path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
-    #   params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-    # }
-    # {
-    #   name = "Qwen3.6-27B-UD-Q5_K_XL";
-    #   path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
-    #   params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-    # }
-    # {
-    #   name = "Qwen3.6-27B-UD-Q6_K_XL";
-    #   path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
-    #   params = "--chat-template-kwargs '{\"preserve_thinking\": true}'";
-    # }
   ];
 
 in
@@ -249,7 +311,7 @@ in
                   name,
                   path,
                   aliases,
-                  params ? "",
+                  params ? [ ],
                   ...
                 }:
                 {
