@@ -11,8 +11,8 @@
 let
   osconfig = config;
   callLib = file: import file { inherit lib pkgs; };
-
-  jailLib = jail.init pkgs;
+  callJailLib = file: import file { inherit lib pkgs jail; };
+  jail-app = callJailLib ../fns/jail-app.nix;
 
   # Build a provider entry for an OpenAI-compatible base URL.
   mkOpenAiCompatibleProvider =
@@ -137,105 +137,17 @@ let
 
   # `jailed-pi` is an alternative to `piBwrap` that uses the jail.nix library
   # (vendored at ./vendor/alexdavid-jail.nix) instead of a hand-rolled
-  # bubblewrap wrapper. The `jail` argument is provided as a NixOS module
-  # specialArg in flake.lib.nix.
-  jailed-pi = jailLib "jailed-pi" pkgs.nixos-unstable.pi-coding-agent (
-    with jailLib.combinators;
-    [
-      # Network access for talking to LLM endpoints, including TLS/CA bundle
-      # and /etc/resolv.conf etc.
-      network
-
-      # Expose the host's timezone (binds /etc/localtime) so timestamps,
-      # git commits and the agent's notion of "now" match the host.
-      time-zone
-
-      # Drop bwrap's `--new-session` flag. With --new-session, the jailed
-      # process is detached from the controlling TTY which breaks signal
-      # handling (Ctrl-C) and some TUI features in interactive agents like
-      # pi. See BWRAP(1) for security trade-offs.
-      no-new-session
-
-      # Bind the entire `/nix/store` read-only. The base permissions only
-      # bind the runtime closure of the jailed derivation; pi shells out to
-      # arbitrary tools (git, ripgrep, ...) added via add-pkg-deps and may
-      # also exec store paths it discovers in the user's project (e.g.
-      # `nix run`, `direnv`, etc.), so we expose the full store instead.
-      (ro-bind "/nix/store" "/nix/store")
-
-      # Expose the host's `~/.pi` directory read-write. This is required so
-      # the agent picks up the auto-generated provider extension installed by
-      # home-manager (`~/.pi/agent/extensions/myconfig-providers.ts`) and so
-      # session/credential state persists across invocations.
-      (add-runtime "mkdir -p ~/.pi")
-      (rw-bind (noescape "~/.pi") (noescape "~/.pi"))
-
-      # Expose the host's `~/tmp` directory read-write inside the jail so
-      # pi has a persistent writable scratch space under $HOME.
-      (add-runtime "mkdir -p ~/tmp")
-      (rw-bind (noescape "~/tmp") (noescape "~/tmp"))
-
-      # Provide a host-backed /tmp instead of the base tmpfs. Creates
-      # /tmp/jailed-pi on the host and bind-mounts it as /tmp in the jail,
-      # giving pi a real writable /tmp that survives across invocations.
-      (add-runtime ''
-        mkdir -p /tmp/jailed-pi
-        RUNTIME_ARGS+=(--bind /tmp/jailed-pi /tmp)
-      '')
-
-      # Bind-mount the working directory read-write so pi can edit files in
-      # the user's project. The CWD is the project root (or a worktree, when
-      # invoked via `pi-worktree`).
-      mount-cwd
-
-      # Expose `/usr/bin` read-only so the agent can inspect host-installed
-      # binaries (e.g. `which`, `file`, or system-provided tools outside the
-      # Nix store).
-      (ro-bind "/usr/bin" "/usr/bin")
-
-      # Expose user config directories read-only so tools inside the jail
-      # can pick up host configuration (e.g. ripgrep ignores, bat themes,
-      # nix settings, pistol pager config).
-      (ro-bind (noescape "~/.config/nix") (noescape "~/.config/nix"))
-      (ro-bind (noescape "~/.config/nixpkgs") (noescape "~/.config/nixpkgs"))
-      (ro-bind (noescape "~/.config/pistol") (noescape "~/.config/pistol"))
-      (ro-bind (noescape "~/.config/ripgrep") (noescape "~/.config/ripgrep"))
-      (ro-bind (noescape "~/.config/bat") (noescape "~/.config/bat"))
-
-      # Make common developer tools available inside the jail. pi shells out
-      # to git, ripgrep, fd, etc.
-      (add-pkg-deps [
-        pkgs.bashInteractive
-        pkgs.git
-        pkgs.coreutils
-        pkgs.findutils
-        pkgs.gnugrep
-        pkgs.gnused
-        pkgs.gawk
-        pkgs.ripgrep
-        pkgs.fd
-        pkgs.less
-        pkgs.which
-        pkgs.wget
-        pkgs.curl
-        pkgs.jq
-        pkgs.nix
-        pkgs.procps
-        pkgs.diffutils
-        pkgs.gnutar
-        pkgs.gzip
-        pkgs.unzip
-      ])
-
-      # Forward useful environment variables if they are set on the host.
-      (try-fwd-env "TERM")
-      (try-fwd-env "COLORTERM")
-      (try-fwd-env "LANG")
-      (try-fwd-env "LC_ALL")
-      (try-fwd-env "EDITOR")
-      (try-fwd-env "VISUAL")
-    ]
-  );
+  # bubblewrap wrapper. See `../fns/jail-app.nix` for the shared defaults.
+  #
+  # `~/.pi` is rw-bound because the agent picks up the auto-generated
+  # provider extension installed by home-manager
+  # (`~/.pi/agent/extensions/myconfig-providers.ts`) and so session and
+  # credential state persists across invocations.
+  jailed-pi = jail-app {
+    name = "jailed-pi";
+    pkg = pkgs.nixos-unstable.pi-coding-agent;
+    userDataDirs = [ ".pi" ];
+  };
 in
 {
   options.myconfig = with lib; {
