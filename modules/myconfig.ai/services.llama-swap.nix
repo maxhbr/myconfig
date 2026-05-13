@@ -74,13 +74,15 @@ let
       scriptName = "llama-server_${device}_${safeName}";
       envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
       ctxSizeFlag = lib.optionalString (model.ctxSize != null) "--ctx-size ${toString model.ctxSize} ";
+      paramsStr = lib.concatStringsSep " " (map lib.escapeShellArg model.params);
+      extraArgsStr = lib.concatStringsSep " " (map lib.escapeShellArg extraArgs);
     in
     pkgs.writeShellApplication {
       name = scriptName;
       runtimeInputs = [ ];
       text = ''
         ${envExports}
-        exec ${server} --port "''${1:-22545}" -m "${model.path}" --gpu-layers 999 -fa on --no-webui ${ctxSizeFlag}${lib.concatStringsSep " " model.params} ${lib.concatStringsSep " " extraArgs} "''${@:2}"
+        exec ${server} --port "''${1:-22545}" -m ${lib.escapeShellArg model.path} --gpu-layers 999 -fa on --no-webui ${ctxSizeFlag}${paramsStr} ${extraArgsStr} "''${@:2}"
       '';
     };
 
