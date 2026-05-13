@@ -65,18 +65,17 @@ let
     {
       model,
       device,
-      suffix ? "",
-      extraArgs ? [ ],
     }:
     let
       server = llamaServerFor device;
-      safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}${suffix}";
+      safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
       scriptName = "llama-server_${device}_${safeName}";
       envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
       ctxSizeFlag = lib.optionalString (model.ctxSize != null) "--ctx-size ${toString model.ctxSize}";
-      aliasesFlag = lib.optionalString (model.aliases != []) "--alias ${lib.concatStringsSep "," model.aliases}"; 
+      aliasesFlag = lib.optionalString (
+        model.aliases != [ ]
+      ) "--alias ${lib.concatStringsSep "," model.aliases}";
       paramsStr = lib.concatStringsSep " " (map lib.escapeShellArg model.params);
-      extraArgsStr = lib.concatStringsSep " " (map lib.escapeShellArg extraArgs);
     in
     pkgs.writeShellApplication {
       name = scriptName;
@@ -90,7 +89,7 @@ let
           --flash-attn on \
           --mlock \
           --metrics \
-          --no-webui ${ctxSizeFlag} ${aliasesFlag} ${paramsStr} ${extraArgsStr} "''${@:2}"
+          --no-webui ${ctxSizeFlag} ${aliasesFlag} ${paramsStr} "''${@:2}"
       '';
     };
 
@@ -106,7 +105,7 @@ let
       # Exported for capture_metadata's llama-server invocation. llama-bench
       # itself ignores LLAMA_ARG_DEVICE and uses the explicit -dev CLI flag.
       envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
-      # Matching llama-server script (no suffix, no extraArgs) — used to capture
+      # Matching llama-server script — used to capture
       # runtime metadata via /props before benchmarking.
       serverScript = mkLlamaScript { inherit model device; };
     in
@@ -249,14 +248,41 @@ let
       '';
     };
 
+  applyVariant =
+    variantName: variant: model:
+    (builtins.removeAttrs model [ "variants" ])
+    // {
+      name = "${model.name}-${variantName}";
+      inherit (variant) aliases;
+      args =
+        model.args
+        ++ variant.args
+        ++ (lib.optionals (variant.mmproj != null) [
+          "--mmproj"
+          variant.mmproj
+        ]);
+    }
+    // lib.optionalAttrs (variant.ctxSize != null) { inherit (variant) ctxSize; };
+
+  unpackContainedVariants =
+    model:
+    [ (builtins.removeAttrs model [ "variants" ]) ]
+    ++ map (
+      variantName:
+      let
+        variant = lib.getAttr variantName model.variants;
+      in
+      applyVariant variantName variant model
+    ) (builtins.attrNames model.variants);
+
+  unpackedModels = lib.concatMap unpackContainedVariants cfg.models;
+
   # Generate a single llama-swap model entry backed by a shell application
   mkModelEntry =
     {
       model,
       device,
       isFirstDevice ? false,
-      suffix ? "",
-      extraArgs ? "",
       unlisted ? false,
     }:
     let
@@ -264,23 +290,17 @@ let
         inherit
           model
           device
-          suffix
-          extraArgs
           ;
       };
       modelKey =
-        (if unlisted then "unlisted:" else "")
-        + (if isFirstDevice then "" else "${device}:")
-        + "${model.name}${suffix}";
+        (if unlisted then "unlisted:" else "") + (if isFirstDevice then "" else "${device}:") + model.name;
     in
     {
       "${modelKey}" = {
         cmd = "${lib.getExe script} \${PORT}";
         ttl = model.ttl;
-      }
-      // lib.optionalAttrs unlisted { unlisted = true; }
-      // lib.optionalAttrs (model.aliases != [ ] && suffix == "" && isFirstDevice && unlisted == false) {
-        inherit (model) aliases;
+        inherit unlisted;
+        aliases = lib.optionals (isFirstDevice && unlisted == false) model.aliases;
       };
     };
 
@@ -292,62 +312,33 @@ let
       unlisted ? false,
     }:
     let
-      eligibleDevices = builtins.filter guardDevice devices;
-      firstDevice = if eligibleDevices != [ ] then builtins.head eligibleDevices else null;
-
-      # Build entries for the base model and all its variants
-      mkVariantEntries =
-        {
-          variantSuffix, # "" for base, "-variant_name" for variants
-          extraParams, # extra params (list of strings) to append
-        }:
-        lib.concatMap (
-          device:
-          lib.optionals (guardDevice device) (
-            let
-              isFirstDevice = device == firstDevice;
-            in
-            [
-              (mkModelEntry {
-                inherit
-                  model
-                  device
-                  unlisted
-                  ;
-                suffix = variantSuffix;
-                extraArgs = extraParams;
-                isFirstDevice = (if variantSuffix == "" then isFirstDevice else false);
-              })
-            ]
-          )
-        ) devices;
+      firstDevice = if devices != [ ] then builtins.head devices else null;
     in
-    # Base model entries
-    mkVariantEntries {
-      variantSuffix = "";
-      extraParams = [ ];
-    }
-    ++ lib.concatMap (
-      variantName:
+    map (
+      device:
       let
-        variant = lib.getAttr variantName model.variants;
+        isFirstDevice = device == firstDevice;
       in
-      mkVariantEntries {
-        variantSuffix = "-${variantName}";
-        extraParams = variant.params;
+      mkModelEntry {
+        inherit
+          model
+          device
+          isFirstDevice
+          unlisted
+          ;
       }
-    ) (builtins.attrNames model.variants);
+    ) devices;
 
   # Generate all model entries for a single model input across all its devices
   mkModelEntries =
     model:
     mkDeviceEntries {
       inherit model;
-      devices = model.devices;
+      devices = builtins.filter guardDevice model.devices;
     }
     ++ mkDeviceEntries {
       inherit model;
-      devices = model.unlistedDevices;
+      devices = builtins.filter guardDevice model.unlistedDevices;
       unlisted = true;
     };
 
@@ -356,16 +347,12 @@ let
     {
       model,
       devices,
-      variantSuffix ? "",
-      extraParams ? [ ],
     }:
     lib.concatMap (
       device:
       lib.optionals (guardDevice device) ([
         (mkLlamaScript {
           inherit model device;
-          suffix = variantSuffix;
-          extraArgs = extraParams;
         })
         (mkLlamaBenchScript {
           inherit model device;
@@ -378,36 +365,13 @@ let
     mkScriptDeviceEntries {
       inherit model;
       devices = model.devices;
-      variantSuffix = "";
-      extraParams = [ ];
     }
     ++ mkScriptDeviceEntries {
       inherit model;
       devices = model.unlistedDevices;
-      variantSuffix = "";
-      extraParams = [ ];
-    }
-    ++ lib.concatMap (
-      variantName:
-      let
-        variant = lib.getAttr variantName model.variants;
-      in
-      mkScriptDeviceEntries {
-        inherit model;
-        devices = model.devices;
-        variantSuffix = "-${variantName}";
-        extraParams =
-          (lib.optional (variant.mmproj != null) "--mmproj ${variant.mmproj}") ++ variant.params;
-      }
-      ++ mkScriptDeviceEntries {
-        inherit model;
-        devices = model.unlistedDevices;
-        variantSuffix = "-${variantName}";
-        extraParams = variant.params;
-      }
-    ) (builtins.attrNames model.variants);
+    };
 
-  allScripts = lib.concatMap mkScriptEntries cfg.models;
+  allScripts = lib.concatMap mkScriptEntries unpackedModels;
 
   # Collect the names of all generated llama-bench-* scripts
   benchScriptNames = lib.concatMap (
@@ -482,7 +446,7 @@ let
   ) benchDevices;
 
   # Generate all models from the input list
-  allModels = lib.mkMerge (lib.concatMap mkModelEntries cfg.models);
+  allModels = lib.mkMerge (lib.concatMap mkModelEntries unpackedModels);
 
   # Extract the numeric suffix from a device string (e.g. "Vulkan0" -> "0", "ROCm1" -> "1").
   # Devices with the same index share the same physical GPU, so they must be in the same group.
@@ -508,18 +472,6 @@ let
                 key = "${device}:${model.name}";
               }
             ]
-            ++ lib.concatMap (
-              variantName:
-              let
-                key = "${device}:${model.name}-${variantName}";
-              in
-              [
-                {
-                  gpu = deviceIndex device;
-                  inherit key;
-                }
-              ]
-            ) (builtins.attrNames model.variants)
           )
         ) devices;
       # Collect (gpuIndex, modelKey) pairs for all eligible model entries
@@ -533,7 +485,7 @@ let
           inherit model;
           devices = model.unlistedDevices;
         }
-      ) cfg.models;
+        ) unpackedModels;
 
       # Group model keys by GPU index
       gpuIndices = lib.unique (map (p: p.gpu) gpuModelPairs);
@@ -556,13 +508,6 @@ let
       device:
       lib.optionals (guardDevice device) (
         [ "${device}:${model.name}" ]
-        ++ lib.concatMap (
-          variantName:
-          let
-            name = "${device}:${model.name}-${variantName}";
-          in
-          [ name ]
-        ) (builtins.attrNames model.variants)
       )
     ) devices;
 
@@ -578,7 +523,7 @@ let
       devices = model.unlistedDevices;
     }
     ++ model.aliases
-  ) cfg.models;
+  ) unpackedModels;
 in
 {
   options.myconfig.ai.llama-swap = with lib; {
@@ -632,6 +577,11 @@ in
                       type = types.listOf types.str;
                       default = [ ];
                       description = "Aliases for this model in llama-swap";
+                    };
+                    ctxSize = mkOption {
+                      type = types.nullOr types.int;
+                      default = null;
+                      description = "Context size (--ctx-size) for llama-server; null to use the model default";
                     };
                     params = mkOption {
                       type = types.listOf types.str;

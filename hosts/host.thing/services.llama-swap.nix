@@ -182,7 +182,7 @@ let
       ];
       ttl = 300;
     }
-    
+
   ];
 
   amdModels = [
@@ -229,27 +229,6 @@ let
       ];
       ttl = 300;
     }
-    # {
-    #   name = "Qwen3.6-27B-UD-Q4_K_XL";
-    #   path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
-    #   params = [
-    #     "--chat-template-kwargs" "{\"preserve_thinking\": true}"
-    #   ];
-    # }
-    # {
-    #   name = "Qwen3.6-27B-UD-Q5_K_XL";
-    #   path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
-    #   params = [
-    #     "--chat-template-kwargs" "{\"preserve_thinking\": true}"
-    #   ];
-    # }
-    # {
-    #   name = "Qwen3.6-27B-UD-Q6_K_XL";
-    #   path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
-    #   params = [
-    #     "--chat-template-kwargs" "{\"preserve_thinking\": true}"
-    #   ];
-    # }
   ];
 
 in
