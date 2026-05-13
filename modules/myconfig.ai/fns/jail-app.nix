@@ -87,8 +87,6 @@
     pkgs.unzip
   ],
   extraDevTools ? [ ],
-
-  # Environment variables forwarded from the host if set.
   fwdEnv ? [
     "TERM"
     "COLORTERM"
@@ -98,30 +96,10 @@
     "VISUAL"
   ],
   extraFwdEnv ? [ ],
-
-  # Escape hatch: arbitrary extra jail.combinators permissions appended at
-  # the end (e.g. additional rw-binds, set-env, add-runtime). Callers can
-  # build these with `jail.init pkgs` if they need combinator helpers
-  # themselves; otherwise pass raw permissions.
   extraPermissions ? [ ],
-
-  # Toggle the full /nix/store ro-bind. Defaults to true because agents
-  # routinely shell out to arbitrary store paths (nix run, direnv, store
-  # paths embedded in project files). Disable only if you want strict
-  # closure-based isolation.
   bindFullNixStore ? true,
-
-  # Toggle the /usr/bin ro-bind. Useful for tools that look up host-only
-  # binaries via PATH (e.g. `which`). Defaults to true to match the
-  # existing pi-coding-agent behaviour.
   bindUsrBin ? true,
-
-  # Toggle persistent host-backed /tmp at /tmp/<name>. When true (default),
-  # the host directory `/tmp/<name>` is created and bind-mounted as /tmp
-  # inside the jail so scratch files survive across invocations.
   persistentTmp ? true,
-
-  # Toggle ~/tmp rw-bind. Defaults to true.
   bindUserTmp ? true,
 }:
 
