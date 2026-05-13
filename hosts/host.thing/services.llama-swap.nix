@@ -90,17 +90,63 @@ let
         "2048"
         "--ubatch-size"
         "512"
-        "--chat-template-kwargs"
-        "{\"preserve_thinking\":true}"
       ];
       aliases = [
-        "hermes"
-        "opencode-fast"
         "Qwen3.6-27B"
       ];
       ctxSize = 262144;
       ttl = 900;
       variants = {
+        general-tasks = {
+          params = [
+            "--temp" "1.0"
+            "--top-p" "0.95"
+            "--top-k" "20"
+            "--min-p" "0.00"
+            "--presence-penalty" "1.5"
+            "--chat-template-kwargs" "{\"enable_thinking\":true,\"preserve_thinking\":false}"
+            # TODO: repetition_penalty=1.0
+          ];
+          aliases = [
+            "hermes"
+          ];
+        };
+        precise-coding-tasks = {
+          params = [
+            "--temp" "0.6"
+            "--top-p" "0.95"
+            "--top-k" "20"
+            "--min-p" "0.00"
+            "--presence-penalty" "0.0"
+            "--chat-template-kwargs" "{\"enable_thinking\":true,\"preserve_thinking\":true}"
+            # TODO: repetition_penalty=1.0
+          ];
+          aliases = [
+            "opencode-fast"
+          ];
+        };
+        instruct-general-tasks = {
+          params = [
+            "--temp" "0.7"
+            "--top-p" "0.8"
+            "--top-k" "20"
+            "--min-p" "0.00"
+            "--presence-penalty" "1.5"
+            "--chat-template-kwargs" "{\"enable_thinking\":false}"
+            # TODO: repetition_penalty=1.0
+          ];
+        };
+        instruct-reasoning-tasks = {
+          params = [
+            "--temp" "1.0"
+            "--top-p" "0.95"
+            "--top-k" "20"
+            "--min-p" "0.00"
+            "--presence-penalty" "1.5"
+            "--chat-template-kwargs" "{\"enable_thinking\":false}"
+            # TODO: repetition_penalty=1.0
+          ];
+        };
         modded = {
           params = [
             "--threads" "4"
