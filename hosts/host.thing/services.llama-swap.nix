@@ -100,44 +100,60 @@ let
       ];
       ctxSize = 262144;
       ttl = 900;
-      # variants = {
-      #   "128k" = {
-      #     params = [
-      #       "--ctx-size"
-      #       "131072"
-      #     ];
-      #   };
-      # };
+      variants = {
+        modded = {
+          params = [
+            "--threads" "4"
+            "-np" "1"
+            "--temp" "0.6"
+            "--top-p" "0.95"
+            "--top-k" "20"
+            "--min-p" "0.0"
+          ];
+        };
+      };
     }
     {
       name = "Qwen3.6-27B-UD-Q6_K_XL";
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
       params = [
+        "--cache-type-k"
+        "q8_0"
+        "--cache-type-v"
+        "q8_0"
+        "--parallel"
+        "1"
+        "--batch-size"
+        "2048"
+        "--ubatch-size"
+        "512"
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
       ];
+      ctxSize = 196608;
       aliases = [ ];
       ttl = 900;
+      variants = {
+        "65536" = {
+          ctxSize = 65536;
+        };
+        "131072" = {
+          ctxSize = 131072;
+        };
+      };
     }
-    # {
-    #   name = "Qwen3.5-27B-Q8_0:modded";
-    #   path = "/models/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf";
-    #   devices = [ "Vulkan0" ];
-    #   params = [
-    #     "-c" "131072"
-    #     "--threads" "4"
-    #     "--batch-size" "2048"
-    #     "-np" "1"
-    #     "--temp" "0.6"
-    #     "--top-p" "0.95"
-    #     "--top-k" "20"
-    #     "--min-p" "0.0"
-    #   ];
-    #   ttl = 0;
-    # }
     {
       name = "gemma-4-26B-A4B-it-Q8_K_XL";
       path = "/mnt/disk/models/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf";
+      params = [
+        "--batch-size"
+        "2048"
+        "--ubatch-size"
+        "512"
+        "--threads"
+        "1"
+        "--jinja"
+      ];
       aliases = [
         "gemma-4-26B-A4B-Q8"
       ];
@@ -146,8 +162,16 @@ let
     {
       name = "gemma-4-31B-it-Q6_K_XL";
       path = "/mnt/disk/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q6_K_XL.gguf";
+      params = [
+        "--batch-size"
+        "2048"
+        "--ubatch-size"
+        "512"
+        "--threads"
+        "1"
+        "--jinja"
+      ];
       aliases = [
-        # "hermes-fallback"
         "gemma-4-31B-Q6"
       ];
       ttl = 300;

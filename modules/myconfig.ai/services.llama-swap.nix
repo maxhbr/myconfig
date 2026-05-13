@@ -119,10 +119,28 @@ let
         ${envExports}
         dir="$HOME/benchmarks/llama-bench/$(date +%Y-%m-%d)"
         mkdir -p "$dir"
+        capture_metadata_port=22799
 
-        # --- Capture model metadata by briefly starting llama-server and querying /props ---
+        bench() (
+          set -x
+          ${bench} \
+            -m "${model.path}" \
+            -dev "${device}" \
+            -ngl 999 \
+            -fa 1 \
+            -d 0,4096,8192,16384,32768 \
+            -p 2048 \
+            -n 128 \
+            -ub 2048 \
+            -o csv -oe md
+        )
+
         capture_metadata() {
-          local port="$1"
+          local pp2048_at_8k="$1"
+          local tg32_at_8k="$2"
+          local tg32_at_16k="$3"
+
+          # --- Capture model metadata by briefly starting llama-server and querying /props ---
           local props_json="$dir/${scriptName}.props.json"
           local server_log="$dir/${scriptName}.server.log"
           local server_pid=""
@@ -137,8 +155,8 @@ let
 
           echo "[metadata] sleeping 2s before starting llama-server" >&2
           sleep 2
-          echo "[metadata] starting llama-server on port $port to capture /props" >&2
-          ${lib.getExe serverScript} "$port" --no-warmup >"$server_log" 2>&1 &
+          echo "[metadata] starting llama-server on port $capture_metadata_port to capture /props" >&2
+          ${lib.getExe serverScript} "$capture_metadata_port" --no-warmup >"$server_log" 2>&1 &
           server_pid=$!
 
           # Wait until /props responds (or the server dies / we time out)
@@ -148,7 +166,7 @@ let
               echo "[metadata] llama-server exited before becoming ready; see $server_log" >&2
               return 1
             fi
-            if curl -fsS "http://127.0.0.1:$port/props" -o "$props_json" 2>/dev/null; then
+            if curl -fsS "http://127.0.0.1:$capture_metadata_port/props" -o "$props_json" 2>/dev/null; then
               break
             fi
             sleep 1
@@ -225,13 +243,10 @@ let
           } >&2
         }
 
-        # Try to capture metadata, but never block the benchmark on failures.
-        capture_metadata 22799 || echo "[metadata] capture failed; continuing with benchmark" >&2
+        ###########################################################################################
+        ##  run  ##################################################################################
+        ###########################################################################################
 
-        bench() (
-          set -x
-          ${bench} -m "${model.path}" -dev "${device}" -d 0,4096,8192,16384,32768 -p 2048 -n 32 -ub 2048 -mmp 0 -o csv -oe md
-        )
         echo "[bench] sleeping 2s before running llama-bench" >&2
         sleep 2
         # Results from all models on the same device are aggregated into a
@@ -245,6 +260,77 @@ let
         else
           bench 2> >(tee -a "$dir/${scriptName}.log" >&2) | tee "$dir/${scriptName}.csv" >> "$csv"
         fi
+
+        get_llama_bench_metric() {
+          local csv="''${1:?usage: get_llama_bench_metric CSV N_PROMPT N_GEN N_DEPTH}"
+          local want_n_prompt="''${2:?usage: get_llama_bench_metric CSV N_PROMPT N_GEN N_DEPTH}"
+          local want_n_gen="''${3:?usage: get_llama_bench_metric CSV N_PROMPT N_GEN N_DEPTH}"
+          local want_n_depth="''${4:?usage: get_llama_bench_metric CSV N_PROMPT N_GEN N_DEPTH}"
+
+          awk -F, \
+            -v want_n_prompt="$want_n_prompt" \
+            -v want_n_gen="$want_n_gen" \
+            -v want_n_depth="$want_n_depth" '
+        function trimq(s) {
+          gsub(/^"|"$/, "", s)
+          return s
+        }
+
+        NR == 1 {
+          for (i = 1; i <= NF; i++) {
+            h[trimq($i)] = i
+          }
+
+          if (!("n_prompt" in h) || !("n_gen" in h) || !("n_depth" in h) || !("avg_ts" in h)) {
+            print "missing one of required columns: n_prompt, n_gen, n_depth, avg_ts" > "/dev/stderr"
+            exit 2
+          }
+
+          next
+        }
+
+        {
+          n_prompt = trimq($(h["n_prompt"])) + 0
+          n_gen    = trimq($(h["n_gen"])) + 0
+          n_depth  = trimq($(h["n_depth"])) + 0
+          avg_ts   = trimq($(h["avg_ts"]))
+
+          if (n_prompt == want_n_prompt && n_gen == want_n_gen && n_depth == want_n_depth) {
+            print avg_ts
+            found = 1
+            exit 0
+          }
+        }
+
+        END {
+          if (!found) {
+            printf "metric not found: n_prompt=%s n_gen=%s n_depth=%s\n", want_n_prompt, want_n_gen, want_n_depth > "/dev/stderr"
+            exit 3
+          }
+        }
+        ' "$csv"
+        }
+
+        get_pp2048_at_8k() {
+          get_llama_bench_metric "$1" 2048 0 8192
+        }
+
+        get_tg32_at_8k() {
+          get_llama_bench_metric "$1" 0 32 8192
+        }
+
+        get_tg32_at_16k() {
+          get_llama_bench_metric "$1" 0 32 16384
+        }
+
+        pp2048_at_8k="$(get_pp2048_at_8k "$dir/${scriptName}.csv")"
+        tg32_at_8k="$(get_tg32_at_8k "$dir/${scriptName}.csv")"
+        tg32_at_16k="$(get_tg32_at_16k "$dir/${scriptName}.csv")"
+
+        # Try to capture metadata, but never block the benchmark on failures.
+        capture_metadata "$pp2048_at_8k" "$tg32_at_8k" "$tg32_at_16k" || echo "[metadata] capture failed; continuing with benchmark" >&2
+
+        times
       '';
     };
 
