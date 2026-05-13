@@ -180,25 +180,18 @@ let
           # Pull the most interesting fields out of /props. The exact shape of
           # /props varies between llama.cpp versions; use jq with // empty so
           # missing fields just yield blanks.
-          local n_ctx n_ctx_per_seq model_path model_size n_params arch
+          local n_ctx model_path
           n_ctx=$(jq -r '
             (.default_generation_settings.n_ctx
              // .default_generation_settings.params.n_ctx
              // .n_ctx
              // empty)' "$props_json")
-          n_ctx_per_seq=$(jq -r '
-            (.default_generation_settings.n_ctx_per_seq
-             // .n_ctx_per_seq
-             // empty)' "$props_json")
           model_path=$(jq -r '(.model_path // .default_generation_settings.model // empty)' "$props_json")
-          model_size=$(jq -r '(.model_size // empty)' "$props_json")
-          n_params=$(jq -r '(.model_n_params // .n_params // empty)' "$props_json")
-          arch=$(jq -r '(.model_arch // empty)' "$props_json")
 
           # <device>.metadata.csv: one row per script, deduped by script name. Written
           # with jq -r @csv so embedded commas/quotes are escaped properly.
           local meta="$dir/${device}.metadata.csv"
-          local header="timestamp,script,device,model,prompt ingestion speed,normal chat streaming speed,long-context streaming speed,n_ctx,n_ctx_per_seq,n_params,model_size,arch"
+          local header="timestamp,script,device,model,prompt ingestion speed,normal chat streaming speed,long-context streaming speed,n_ctx"
           if [[ ! -f "$meta" ]]; then
             printf '%s\n' "$header" > "$meta"
           fi
@@ -218,11 +211,7 @@ let
             --arg tg128_8k  "$tg128_at_8k" \
             --arg tg128_16k "$tg128_at_16k" \
             --arg n_ctx    "$n_ctx" \
-            --arg n_ctx_ps "$n_ctx_per_seq" \
-            --arg n_params "$n_params" \
-            --arg size     "$model_size" \
-            --arg arch     "$arch" \
-            '[$ts,$script,$device,$model,$pp2048,$tg128_8k,$tg128_16k,$n_ctx,$n_ctx_ps,$n_params,$size,$arch] | @csv' \
+            '[$ts,$script,$device,$model,$pp2048,$tg128_8k,$tg128_16k,$n_ctx] | @csv' \
             >> "$meta"
 
           # Print a structured human-readable summary of the captured metadata
@@ -236,10 +225,6 @@ let
               "model"                                  "${model.name}" \
               "model_path"                             "$model_path" \
               "n_ctx"                                  "$n_ctx" \
-              "n_ctx_per_seq"                          "$n_ctx_per_seq" \
-              "n_params"                               "$n_params" \
-              "model_size"                             "$model_size" \
-              "arch"                                   "$arch" \
               "prompt ingestion speed(pp2048@8k)"      "$pp2048_at_8k" \
               "normal chat streaming speed(tg128@8k)"   "$tg128_at_8k" \
               "long-context streaming speed(tg128@16k)" "$tg128_at_16k"
