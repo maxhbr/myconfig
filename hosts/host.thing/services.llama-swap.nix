@@ -34,46 +34,44 @@ let
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
       params = [
         "--chat-template-kwargs"
-        "{\"preserve_thinking\": true}"
+        "{\"preserve_thinking\":true}"
       ];
       aliases = [ ];
       ttl = 900;
-    }
-    {
-      name = "Qwen3.6-27B-Q8_0-tweaked";
-      path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
-      params = [
-        "--jinja"
-        "--reasoning-format"
-        "deepseek"
-        "-ngl"
-        "99"
-        "-fa"
-        "-sm"
-        "row"
-        "--temp"
-        "0.6"
-        "--top-k"
-        "20"
-        "--top-p"
-        "0.95"
-        "--min-p"
-        "0"
-        "-c"
-        "40960"
-        "-n"
-        "32768"
-        "--no-context-shift"
-      ];
-      aliases = [ ];
-      ttl = 900;
+      variants = {
+        tweaked = {
+          params = [
+            "--jinja"
+            "--reasoning-format"
+            "deepseek"
+            "-ngl"
+            "99"
+            "-fa"
+            "-sm"
+            "row"
+            "--temp"
+            "0.6"
+            "--top-k"
+            "20"
+            "--top-p"
+            "0.95"
+            "--min-p"
+            "0"
+            "-c"
+            "40960"
+            "-n"
+            "32768"
+            "--no-context-shift"
+          ];
+        };
+      };
     }
     {
       name = "Qwen3.6-27B-UD-Q4_K_XL";
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
       params = [
         "--chat-template-kwargs"
-        "{\"preserve_thinking\": true}"
+        "{\"preserve_thinking\":true}"
       ];
       aliases = [ ];
       ttl = 900;
@@ -82,22 +80,41 @@ let
       name = "Qwen3.6-27B-UD-Q5_K_XL";
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
       params = [
+        "--cache-type-k"
+        "q8_0"
+        "--cache-type-v"
+        "q8_0"
+        "--parallel"
+        "1"
+        "--batch-size"
+        "2048"
+        "--ubatch-size"
+        "512"
         "--chat-template-kwargs"
-        "{\"preserve_thinking\": true}"
+        "{\"preserve_thinking\":true}"
       ];
       aliases = [
         "hermes"
         "opencode-fast"
         "Qwen3.6-27B"
       ];
+      ctxSize = 131072;
       ttl = 900;
+      # variants = {
+      #   "128k" = {
+      #     params = [
+      #       "--ctx-size"
+      #       "131072"
+      #     ];
+      #   };
+      # };
     }
     {
       name = "Qwen3.6-27B-UD-Q6_K_XL";
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
       params = [
         "--chat-template-kwargs"
-        "{\"preserve_thinking\": true}"
+        "{\"preserve_thinking\":true}"
       ];
       aliases = [ ];
       ttl = 900;
