@@ -111,6 +111,7 @@ let
     time-zone
     no-new-session
     ro-bind
+    try-ro-bind
     rw-bind
     add-runtime
     add-pkg-deps
@@ -188,6 +189,12 @@ let
     # the Nix store).
     ro-bind "/usr/bin" "/usr/bin"
   )
+  ++ [
+    # Expose `/etc/nix/nix.conf` read-only so that `nix` commands inside
+    # the jail pick up the host's Nix configuration (substituters,
+    # trusted-users, experimental-features, etc.).
+    (try-ro-bind "/etc/nix/nix.conf" "/etc/nix/nix.conf")
+  ]
   ++ configDirPerms
   ++ [
     (add-pkg-deps (devTools ++ extraDevTools))
