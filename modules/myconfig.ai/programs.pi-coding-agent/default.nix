@@ -146,6 +146,16 @@ let
       # and /etc/resolv.conf etc.
       network
 
+      # Expose the host's timezone (binds /etc/localtime) so timestamps,
+      # git commits and the agent's notion of "now" match the host.
+      time-zone
+
+      # Drop bwrap's `--new-session` flag. With --new-session, the jailed
+      # process is detached from the controlling TTY which breaks signal
+      # handling (Ctrl-C) and some TUI features in interactive agents like
+      # pi. See BWRAP(1) for security trade-offs.
+      no-new-session
+
       # Bind the entire `/nix/store` read-only. The base permissions only
       # bind the runtime closure of the jailed derivation; pi shells out to
       # arbitrary tools (git, ripgrep, ...) added via add-pkg-deps and may
@@ -195,6 +205,7 @@ let
       # Make common developer tools available inside the jail. pi shells out
       # to git, ripgrep, fd, etc.
       (add-pkg-deps [
+        pkgs.bashInteractive
         pkgs.git
         pkgs.coreutils
         pkgs.findutils
@@ -209,6 +220,11 @@ let
         pkgs.curl
         pkgs.jq
         pkgs.nix
+        pkgs.procps
+        pkgs.diffutils
+        pkgs.gnutar
+        pkgs.gzip
+        pkgs.unzip
       ])
 
       # Forward useful environment variables if they are set on the host.
