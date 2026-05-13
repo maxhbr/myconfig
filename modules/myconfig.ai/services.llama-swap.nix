@@ -137,8 +137,8 @@ let
 
         capture_metadata() {
           local pp2048_at_8k="$1"
-          local tg32_at_8k="$2"
-          local tg32_at_16k="$3"
+          local tg128_at_8k="$2"
+          local tg128_at_16k="$3"
 
           # --- Capture model metadata by briefly starting llama-server and querying /props ---
           local props_json="$dir/${scriptName}.props.json"
@@ -180,25 +180,18 @@ let
           # Pull the most interesting fields out of /props. The exact shape of
           # /props varies between llama.cpp versions; use jq with // empty so
           # missing fields just yield blanks.
-          local n_ctx n_ctx_per_seq model_path model_size n_params arch
+          local n_ctx model_path
           n_ctx=$(jq -r '
             (.default_generation_settings.n_ctx
              // .default_generation_settings.params.n_ctx
              // .n_ctx
              // empty)' "$props_json")
-          n_ctx_per_seq=$(jq -r '
-            (.default_generation_settings.n_ctx_per_seq
-             // .n_ctx_per_seq
-             // empty)' "$props_json")
           model_path=$(jq -r '(.model_path // .default_generation_settings.model // empty)' "$props_json")
-          model_size=$(jq -r '(.model_size // empty)' "$props_json")
-          n_params=$(jq -r '(.model_n_params // .n_params // empty)' "$props_json")
-          arch=$(jq -r '(.model_arch // empty)' "$props_json")
 
           # <device>.metadata.csv: one row per script, deduped by script name. Written
           # with jq -r @csv so embedded commas/quotes are escaped properly.
           local meta="$dir/${device}.metadata.csv"
-          local header="timestamp,script,device,model,prompt ingestion speed,normal chat streaming speed,long-context streaming speed,n_ctx,n_ctx_per_seq,n_params,model_size,arch"
+          local header="timestamp,script,device,model,prompt ingestion speed,normal chat streaming speed,long-context streaming speed,n_ctx"
           if [[ ! -f "$meta" ]]; then
             printf '%s\n' "$header" > "$meta"
           fi
@@ -215,14 +208,10 @@ let
             --arg device   "${device}" \
             --arg model    "${model.name}" \
             --arg pp2048   "$pp2048_at_8k" \
-            --arg tg32_8k  "$tg32_at_8k" \
-            --arg tg32_16k "$tg32_at_16k" \
+            --arg tg128_8k  "$tg128_at_8k" \
+            --arg tg128_16k "$tg128_at_16k" \
             --arg n_ctx    "$n_ctx" \
-            --arg n_ctx_ps "$n_ctx_per_seq" \
-            --arg n_params "$n_params" \
-            --arg size     "$model_size" \
-            --arg arch     "$arch" \
-            '[$ts,$script,$device,$model,$pp2048,$tg32_8k,$tg32_16k,$n_ctx,$n_ctx_ps,$n_params,$size,$arch] | @csv' \
+            '[$ts,$script,$device,$model,$pp2048,$tg128_8k,$tg128_16k,$n_ctx] | @csv' \
             >> "$meta"
 
           # Print a structured human-readable summary of the captured metadata
@@ -236,13 +225,9 @@ let
               "model"                                  "${model.name}" \
               "model_path"                             "$model_path" \
               "n_ctx"                                  "$n_ctx" \
-              "n_ctx_per_seq"                          "$n_ctx_per_seq" \
-              "n_params"                               "$n_params" \
-              "model_size"                             "$model_size" \
-              "arch"                                   "$arch" \
               "prompt ingestion speed(pp2048@8k)"      "$pp2048_at_8k" \
-              "normal chat streaming speed(tg32@8k)"   "$tg32_at_8k" \
-              "long-context streaming speed(tg32@16k)" "$tg32_at_16k"
+              "normal chat streaming speed(tg128@8k)"   "$tg128_at_8k" \
+              "long-context streaming speed(tg128@16k)" "$tg128_at_16k"
             printf '%s\n' "[metadata] ---------------------------"
             printf '%s\n' "[metadata] wrote row for ${scriptName} to $meta"
           } >&2
@@ -277,28 +262,31 @@ let
             -v want_n_gen="$want_n_gen" \
             -v want_n_depth="$want_n_depth" '
         function trimq(s) {
+          gsub(/\r$/, "", s)
           gsub(/^"|"$/, "", s)
           return s
         }
 
-        NR == 1 {
-          for (i = 1; i <= NF; i++) {
-            h[trimq($i)] = i
-          }
-
-          if (!("n_prompt" in h) || !("n_gen" in h) || !("n_depth" in h) || !("avg_ts" in h)) {
-            print "missing one of required columns: n_prompt, n_gen, n_depth, avg_ts" > "/dev/stderr"
-            exit 2
-          }
-
+        # Skip header and non-data lines.
+        $1 !~ /^"/ {
           next
         }
 
         {
-          n_prompt = trimq($(h["n_prompt"])) + 0
-          n_gen    = trimq($(h["n_gen"])) + 0
-          n_depth  = trimq($(h["n_depth"])) + 0
-          avg_ts   = trimq($(h["avg_ts"]))
+          # Do not use header-derived column indexes with awk -F, here.
+          # This file contains quoted fields with commas, especially gpu_info:
+          #
+          #   "NVIDIA GeForce RTX 5090, Radeon 8060S Graphics ..."
+          #
+          # awk -F, is therefore not a real CSV parser and shifts all earlier columns.
+          # However, the fields we need are at the end and contain no commas:
+          #
+          #   n_prompt,n_gen,n_depth,test_time,avg_ns,stddev_ns,avg_ts,stddev_ts
+          #
+          n_prompt = trimq($(NF - 7)) + 0
+          n_gen    = trimq($(NF - 6)) + 0
+          n_depth  = trimq($(NF - 5)) + 0
+          avg_ts   = trimq($(NF - 1))
 
           if (n_prompt == want_n_prompt && n_gen == want_n_gen && n_depth == want_n_depth) {
             print avg_ts
@@ -309,7 +297,7 @@ let
 
         END {
           if (!found) {
-            printf "metric not found: n_prompt=%s n_gen=%s n_depth=%s\n", want_n_prompt, want_n_gen, want_n_depth > "/dev/stderr"
+            printf "metric not found: n_prompt=%s n_gen=%s n_depth=%s in %s\n", want_n_prompt, want_n_gen, want_n_depth, FILENAME > "/dev/stderr"
             exit 3
           }
         }
@@ -320,20 +308,20 @@ let
           get_llama_bench_metric "$1" 2048 0 8192
         }
 
-        get_tg32_at_8k() {
-          get_llama_bench_metric "$1" 0 32 8192
+        get_tg128_at_8k() {
+          get_llama_bench_metric "$1" 0 128 8192
         }
 
-        get_tg32_at_16k() {
-          get_llama_bench_metric "$1" 0 32 16384
+        get_tg128_at_16k() {
+          get_llama_bench_metric "$1" 0 128 16384
         }
 
         pp2048_at_8k="$(get_pp2048_at_8k "$dir/${scriptName}.csv")"
-        tg32_at_8k="$(get_tg32_at_8k "$dir/${scriptName}.csv")"
-        tg32_at_16k="$(get_tg32_at_16k "$dir/${scriptName}.csv")"
+        tg128_at_8k="$(get_tg128_at_8k "$dir/${scriptName}.csv")"
+        tg128_at_16k="$(get_tg128_at_16k "$dir/${scriptName}.csv")"
 
         # Try to capture metadata, but never block the benchmark on failures.
-        capture_metadata "$pp2048_at_8k" "$tg32_at_8k" "$tg32_at_16k" || echo "[metadata] capture failed; continuing with benchmark" >&2
+        capture_metadata "$pp2048_at_8k" "$tg128_at_8k" "$tg128_at_16k" || echo "[metadata] capture failed; continuing with benchmark" >&2
 
         times
       '';

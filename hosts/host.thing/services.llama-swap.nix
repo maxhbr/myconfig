@@ -143,25 +143,8 @@ let
       };
     }
     {
-      name = "gemma-4-26B-A4B-it-Q8_K_XL";
-      path = "/mnt/disk/models/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf";
-      params = [
-        "--batch-size"
-        "2048"
-        "--ubatch-size"
-        "512"
-        "--threads"
-        "1"
-        "--jinja"
-      ];
-      aliases = [
-        "gemma-4-26B-A4B-Q8"
-      ];
-      ttl = 300;
-    }
-    {
       name = "gemma-4-31B-it-Q6_K_XL";
-      path = "/mnt/disk/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q6_K_XL.gguf";
+      path = "/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q6_K_XL.gguf";
       params = [
         "--batch-size"
         "2048"
@@ -201,7 +184,6 @@ let
         };
       };
       aliases = [
-        "gemma-4:31b-q4"
         "gemma-4-31B-Q4"
       ];
       ttl = 300;
