@@ -284,32 +284,49 @@ let
     let
       eligibleDevices = builtins.filter guardDevice devices;
       firstDevice = if eligibleDevices != [ ] then builtins.head eligibleDevices else null;
+
+      # Build entries for the base model and all its variants
+      mkVariantEntries =
+        {
+          variantSuffix, # "" for base, "-variant_name" for variants
+          extraParams, # extra params to append
+        }:
+        lib.concatMap (
+          device:
+          lib.optionals (guardDevice device) (
+            let
+              isFirstDevice = device == firstDevice;
+            in
+            [
+              (mkModelEntry {
+                inherit
+                  model
+                  device
+                  unlisted
+                  ;
+                suffix = variantSuffix;
+                extraArgs = extraParams;
+                isFirstDevice = (if variantSuffix == "" then isFirstDevice else false);
+              })
+            ]
+          )
+        ) devices;
     in
-    lib.concatMap (
-      device:
-      lib.optionals (guardDevice device) (
-        let
-          isFirstDevice = device == firstDevice;
-        in
-        [
-          (mkModelEntry {
-            inherit
-              model
-              device
-              isFirstDevice
-              unlisted
-              ;
-          })
-        ]
-        ++ lib.optionals (model.mmproj != null) [
-          (mkModelEntry {
-            inherit model device unlisted;
-            suffix = ":mmproj";
-            extraArgs = ''--mmproj "${model.mmproj}"'';
-          })
-        ]
-      )
-    ) devices;
+    # Base model entries
+    mkVariantEntries {
+      variantSuffix = "";
+      extraParams = "";
+    }
+    ++ lib.concatMap (
+      variantName:
+      let
+        variant = lib.getAttr variantName model.variants;
+      in
+      mkVariantEntries {
+        variantSuffix = "-${variantName}";
+        extraParams = variant.params;
+      }
+    ) (builtins.attrNames model.variants);
 
   # Generate all model entries for a single model input across all its devices
   mkModelEntries =
@@ -326,22 +343,24 @@ let
 
   # Collect all script derivations for home-manager packages
   mkScriptDeviceEntries =
-    { model, devices }:
+    {
+      model,
+      devices,
+      variantSuffix ? "",
+      extraParams ? "",
+    }:
     lib.concatMap (
       device:
-      lib.optionals (guardDevice device) (
-        [
-          (mkLlamaScript { inherit model device; })
-          (mkLlamaBenchScript { inherit model device; })
-        ]
-        ++ lib.optionals (model.mmproj != null) [
-          (mkLlamaScript {
-            inherit model device;
-            suffix = ":mmproj";
-            extraArgs = ''--mmproj "${model.mmproj}"'';
-          })
-        ]
-      )
+      lib.optionals (guardDevice device) ([
+        (mkLlamaScript {
+          inherit model device;
+          suffix = variantSuffix;
+          extraArgs = extraParams;
+        })
+        (mkLlamaBenchScript {
+          inherit model device;
+        })
+      ])
     ) devices;
 
   mkScriptEntries =
@@ -349,11 +368,34 @@ let
     mkScriptDeviceEntries {
       inherit model;
       devices = model.devices;
+      variantSuffix = "";
+      extraParams = "";
     }
     ++ mkScriptDeviceEntries {
       inherit model;
       devices = model.unlistedDevices;
-    };
+      variantSuffix = "";
+      extraParams = "";
+    }
+    ++ lib.concatMap (
+      variantName:
+      let
+        variant = lib.getAttr variantName model.variants;
+      in
+      mkScriptDeviceEntries {
+        inherit model;
+        devices = model.devices;
+        variantSuffix = "-${variantName}";
+        extraParams =
+          (if (variant.mmproj != null) then "--mmproj ${variant.mmproj}" else "") + variant.params;
+      }
+      ++ mkScriptDeviceEntries {
+        inherit model;
+        devices = model.unlistedDevices;
+        variantSuffix = "-${variantName}";
+        extraParams = variant.params;
+      }
+    ) (builtins.attrNames model.variants);
 
   allScripts = lib.concatMap mkScriptEntries cfg.models;
 
@@ -456,10 +498,18 @@ let
                 key = "${device}:${model.name}";
               }
             ]
-            ++ lib.optional (model.mmproj != null) {
-              gpu = deviceIndex device;
-              key = "${device}:${model.name}:mmproj";
-            }
+            ++ lib.concatMap (
+              variantName:
+              let
+                key = "${device}:${model.name}-${variantName}";
+              in
+              [
+                {
+                  gpu = deviceIndex device;
+                  inherit key;
+                }
+              ]
+            ) (builtins.attrNames model.variants)
           )
         ) devices;
       # Collect (gpuIndex, modelKey) pairs for all eligible model entries
@@ -496,7 +546,13 @@ let
       device:
       lib.optionals (guardDevice device) (
         [ "${device}:${model.name}" ]
-        ++ lib.optional (model.mmproj != null) "${device}:${model.name}:mmproj"
+        ++ lib.concatMap (
+          variantName:
+          let
+            name = "${device}:${model.name}-${variantName}";
+          in
+          [ name ]
+        ) (builtins.attrNames model.variants)
       )
     ) devices;
 
@@ -538,11 +594,6 @@ in
               default = [ ];
               description = "Devices that generate llama-swap entries with unlisted = true (accessible only via direct script)";
             };
-            mmproj = mkOption {
-              type = types.nullOr types.str;
-              default = null;
-              description = "Path to mmproj file; when set, a :mmproj variant is auto-generated";
-            };
             params = mkOption {
               type = types.str;
               default = "";
@@ -562,6 +613,31 @@ in
               type = types.nullOr types.int;
               default = null;
               description = "Context size (--ctx-size) for llama-server; null to use the model default";
+            };
+            variants = mkOption {
+              type = types.attrsOf (
+                types.submodule {
+                  options = {
+                    aliases = mkOption {
+                      type = types.listOf types.str;
+                      default = [ ];
+                      description = "Aliases for this model in llama-swap";
+                    };
+                    params = mkOption {
+                      type = types.str;
+                      default = "";
+                      description = "Additional llama-server parameters appended to the parent model params";
+                    };
+                    mmproj = mkOption {
+                      type = types.nullOr types.str;
+                      default = null;
+                      description = "Path to mmproj file; when set, a :mmproj variant is auto-generated";
+                    };
+                  };
+                }
+              );
+              default = { };
+              description = "Named variants of this model. Each variant generates a ${model.name}-${variant_name} entry with its params merged on top of the parent params";
             };
           };
         }
