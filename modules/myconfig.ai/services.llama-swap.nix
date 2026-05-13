@@ -137,8 +137,8 @@ let
 
         capture_metadata() {
           local pp2048_at_8k="$1"
-          local tg32_at_8k="$2"
-          local tg32_at_16k="$3"
+          local tg128_at_8k="$2"
+          local tg128_at_16k="$3"
 
           # --- Capture model metadata by briefly starting llama-server and querying /props ---
           local props_json="$dir/${scriptName}.props.json"
@@ -215,14 +215,14 @@ let
             --arg device   "${device}" \
             --arg model    "${model.name}" \
             --arg pp2048   "$pp2048_at_8k" \
-            --arg tg32_8k  "$tg32_at_8k" \
-            --arg tg32_16k "$tg32_at_16k" \
+            --arg tg128_8k  "$tg128_at_8k" \
+            --arg tg128_16k "$tg128_at_16k" \
             --arg n_ctx    "$n_ctx" \
             --arg n_ctx_ps "$n_ctx_per_seq" \
             --arg n_params "$n_params" \
             --arg size     "$model_size" \
             --arg arch     "$arch" \
-            '[$ts,$script,$device,$model,$pp2048,$tg32_8k,$tg32_16k,$n_ctx,$n_ctx_ps,$n_params,$size,$arch] | @csv' \
+            '[$ts,$script,$device,$model,$pp2048,$tg128_8k,$tg128_16k,$n_ctx,$n_ctx_ps,$n_params,$size,$arch] | @csv' \
             >> "$meta"
 
           # Print a structured human-readable summary of the captured metadata
@@ -241,8 +241,8 @@ let
               "model_size"                             "$model_size" \
               "arch"                                   "$arch" \
               "prompt ingestion speed(pp2048@8k)"      "$pp2048_at_8k" \
-              "normal chat streaming speed(tg32@8k)"   "$tg32_at_8k" \
-              "long-context streaming speed(tg32@16k)" "$tg32_at_16k"
+              "normal chat streaming speed(tg128@8k)"   "$tg128_at_8k" \
+              "long-context streaming speed(tg128@16k)" "$tg128_at_16k"
             printf '%s\n' "[metadata] ---------------------------"
             printf '%s\n' "[metadata] wrote row for ${scriptName} to $meta"
           } >&2
@@ -277,11 +277,18 @@ let
             -v want_n_gen="$want_n_gen" \
             -v want_n_depth="$want_n_depth" '
         function trimq(s) {
+          gsub(/\r$/, "", s)
           gsub(/^"|"$/, "", s)
           return s
         }
 
-        NR == 1 {
+        # Do not assume the CSV header is line 1.
+        # Some llama.cpp / backend messages may precede it.
+        !have_header {
+          if ($1 != "build_commit") {
+            next
+          }
+
           for (i = 1; i <= NF; i++) {
             h[trimq($i)] = i
           }
@@ -291,10 +298,11 @@ let
             exit 2
           }
 
+          have_header = 1
           next
         }
 
-        {
+        have_header {
           n_prompt = trimq($(h["n_prompt"])) + 0
           n_gen    = trimq($(h["n_gen"])) + 0
           n_depth  = trimq($(h["n_depth"])) + 0
@@ -308,6 +316,11 @@ let
         }
 
         END {
+          if (!have_header) {
+            print "CSV header not found: expected a line starting with build_commit" > "/dev/stderr"
+            exit 2
+          }
+
           if (!found) {
             printf "metric not found: n_prompt=%s n_gen=%s n_depth=%s\n", want_n_prompt, want_n_gen, want_n_depth > "/dev/stderr"
             exit 3
@@ -320,20 +333,20 @@ let
           get_llama_bench_metric "$1" 2048 0 8192
         }
 
-        get_tg32_at_8k() {
-          get_llama_bench_metric "$1" 0 32 8192
+        get_tg128_at_8k() {
+          get_llama_bench_metric "$1" 0 128 8192
         }
 
-        get_tg32_at_16k() {
-          get_llama_bench_metric "$1" 0 32 16384
+        get_tg128_at_16k() {
+          get_llama_bench_metric "$1" 0 128 16384
         }
 
         pp2048_at_8k="$(get_pp2048_at_8k "$dir/${scriptName}.csv")"
-        tg32_at_8k="$(get_tg32_at_8k "$dir/${scriptName}.csv")"
-        tg32_at_16k="$(get_tg32_at_16k "$dir/${scriptName}.csv")"
+        tg128_at_8k="$(get_tg128_at_8k "$dir/${scriptName}.csv")"
+        tg128_at_16k="$(get_tg128_at_16k "$dir/${scriptName}.csv")"
 
         # Try to capture metadata, but never block the benchmark on failures.
-        capture_metadata "$pp2048_at_8k" "$tg32_at_8k" "$tg32_at_16k" || echo "[metadata] capture failed; continuing with benchmark" >&2
+        capture_metadata "$pp2048_at_8k" "$tg128_at_8k" "$tg128_at_16k" || echo "[metadata] capture failed; continuing with benchmark" >&2
 
         times
       '';
