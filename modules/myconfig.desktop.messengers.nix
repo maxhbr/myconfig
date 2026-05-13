@@ -18,13 +18,18 @@ in
           signal-desktop
           # signal-cli
           pkgs.smile
-        ];
-        myconfig.persistence.directories = [ ".config/Signal" ];
+          pkgs.telegram-desktop
+       ];
+       myconfig.persistence.directories = [
+         ".config/Signal"
+         ".local/share/TelegramDesktop"
+       ];
       }
     ];
     myconfig.desktop.wayland.launcherCommands = [
       "signal-desktop"
       "smile"
+      "Telegram"
     ];
   };
 }

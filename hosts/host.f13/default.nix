@@ -217,6 +217,16 @@ in
             ];
         }
       ];
+      myconfig.desktop.wayland.launcherCommands = [
+        "alacritty-et-p14"
+        "alacritty-et-p14-wg0"
+        "alacritty-et-nuc"
+        "alacritty-et-nuc-wg0"
+        "alacritty-et-thing"
+        "alacritty-et-thing-wg0"
+        "alacritty-et-workstation"
+        "alacritty-et-workstation-wg0"
+      ];
     }
     # {
     #   fileSystems."/home/${user}/imgwork2" = {

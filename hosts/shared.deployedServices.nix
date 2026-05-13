@@ -15,6 +15,7 @@
           name = "hass";
           port = 8123;
           disableCache = true;
+          forceHttps = false;
         }
         {
           name = "deconz";
