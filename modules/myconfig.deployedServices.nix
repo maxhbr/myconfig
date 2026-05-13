@@ -164,10 +164,7 @@
                   '';
                   proxyConfig = ''
                     ${noCacheHeaders}
-                    reverse_proxy http://${ip}:${toString port} {
-                        websocket
-                        transparent
-                    }
+                    reverse_proxy http://${ip}:${toString port}
                   '';
                 in
                 if forceHttps then
