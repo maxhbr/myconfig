@@ -99,12 +99,18 @@ let
       variants = {
         general-tasks = {
           params = [
-            "--temp" "1.0"
-            "--top-p" "0.95"
-            "--top-k" "20"
-            "--min-p" "0.00"
-            "--presence-penalty" "1.5"
-            "--chat-template-kwargs" "{\"enable_thinking\":true,\"preserve_thinking\":false}"
+            "--temp"
+            "1.0"
+            "--top-p"
+            "0.95"
+            "--top-k"
+            "20"
+            "--min-p"
+            "0.00"
+            "--presence-penalty"
+            "1.5"
+            "--chat-template-kwargs"
+            "{\"enable_thinking\":true,\"preserve_thinking\":false}"
             # TODO: repetition_penalty=1.0
           ];
           aliases = [
@@ -113,12 +119,18 @@ let
         };
         precise-coding-tasks = {
           params = [
-            "--temp" "0.6"
-            "--top-p" "0.95"
-            "--top-k" "20"
-            "--min-p" "0.00"
-            "--presence-penalty" "0.0"
-            "--chat-template-kwargs" "{\"enable_thinking\":true,\"preserve_thinking\":true}"
+            "--temp"
+            "0.6"
+            "--top-p"
+            "0.95"
+            "--top-k"
+            "20"
+            "--min-p"
+            "0.00"
+            "--presence-penalty"
+            "0.0"
+            "--chat-template-kwargs"
+            "{\"enable_thinking\":true,\"preserve_thinking\":true}"
             # TODO: repetition_penalty=1.0
           ];
           aliases = [
@@ -127,34 +139,52 @@ let
         };
         instruct-general-tasks = {
           params = [
-            "--temp" "0.7"
-            "--top-p" "0.8"
-            "--top-k" "20"
-            "--min-p" "0.00"
-            "--presence-penalty" "1.5"
-            "--chat-template-kwargs" "{\"enable_thinking\":false}"
+            "--temp"
+            "0.7"
+            "--top-p"
+            "0.8"
+            "--top-k"
+            "20"
+            "--min-p"
+            "0.00"
+            "--presence-penalty"
+            "1.5"
+            "--chat-template-kwargs"
+            "{\"enable_thinking\":false}"
             # TODO: repetition_penalty=1.0
           ];
         };
         instruct-reasoning-tasks = {
           params = [
-            "--temp" "1.0"
-            "--top-p" "0.95"
-            "--top-k" "20"
-            "--min-p" "0.00"
-            "--presence-penalty" "1.5"
-            "--chat-template-kwargs" "{\"enable_thinking\":false}"
+            "--temp"
+            "1.0"
+            "--top-p"
+            "0.95"
+            "--top-k"
+            "20"
+            "--min-p"
+            "0.00"
+            "--presence-penalty"
+            "1.5"
+            "--chat-template-kwargs"
+            "{\"enable_thinking\":false}"
             # TODO: repetition_penalty=1.0
           ];
         };
         modded = {
           params = [
-            "--threads" "4"
-            "-np" "1"
-            "--temp" "0.6"
-            "--top-p" "0.95"
-            "--top-k" "20"
-            "--min-p" "0.0"
+            "--threads"
+            "4"
+            "-np"
+            "1"
+            "--temp"
+            "0.6"
+            "--top-p"
+            "0.95"
+            "--top-k"
+            "20"
+            "--min-p"
+            "0.0"
           ];
         };
       };

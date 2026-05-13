@@ -544,14 +544,12 @@ let
         { model, devices }:
         lib.concatMap (
           device:
-          lib.optionals (guardDevice device) (
-            [
-              {
-                gpu = deviceIndex device;
-                key = "${device}:${model.name}";
-              }
-            ]
-          )
+          lib.optionals (guardDevice device) ([
+            {
+              gpu = deviceIndex device;
+              key = "${device}:${model.name}";
+            }
+          ])
         ) devices;
       # Collect (gpuIndex, modelKey) pairs for all eligible model entries
       gpuModelPairs = lib.concatMap (
@@ -564,7 +562,7 @@ let
           inherit model;
           devices = model.unlistedDevices;
         }
-        ) unpackedModels;
+      ) unpackedModels;
 
       # Group model keys by GPU index
       gpuIndices = lib.unique (map (p: p.gpu) gpuModelPairs);
@@ -583,12 +581,7 @@ let
 
   mkModelNames =
     { model, devices }:
-    lib.concatMap (
-      device:
-      lib.optionals (guardDevice device) (
-        [ "${device}:${model.name}" ]
-      )
-    ) devices;
+    lib.concatMap (device: lib.optionals (guardDevice device) ([ "${device}:${model.name}" ])) devices;
 
   # Collect all model names/keys exposed by this llama-swap instance for localModels registration
   allModelNames = lib.concatMap (
