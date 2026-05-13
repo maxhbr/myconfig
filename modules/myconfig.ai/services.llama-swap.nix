@@ -282,31 +282,26 @@ let
           return s
         }
 
-        # Do not assume the CSV header is line 1.
-        # Some llama.cpp / backend messages may precede it.
-        !have_header {
-          if ($1 != "build_commit") {
-            next
-          }
-
-          for (i = 1; i <= NF; i++) {
-            h[trimq($i)] = i
-          }
-
-          if (!("n_prompt" in h) || !("n_gen" in h) || !("n_depth" in h) || !("avg_ts" in h)) {
-            print "missing one of required columns: n_prompt, n_gen, n_depth, avg_ts" > "/dev/stderr"
-            exit 2
-          }
-
-          have_header = 1
+        # Skip header and non-data lines.
+        $1 !~ /^"/ {
           next
         }
 
-        have_header {
-          n_prompt = trimq($(h["n_prompt"])) + 0
-          n_gen    = trimq($(h["n_gen"])) + 0
-          n_depth  = trimq($(h["n_depth"])) + 0
-          avg_ts   = trimq($(h["avg_ts"]))
+        {
+          # Do not use header-derived column indexes with awk -F, here.
+          # This file contains quoted fields with commas, especially gpu_info:
+          #
+          #   "NVIDIA GeForce RTX 5090, Radeon 8060S Graphics ..."
+          #
+          # awk -F, is therefore not a real CSV parser and shifts all earlier columns.
+          # However, the fields we need are at the end and contain no commas:
+          #
+          #   n_prompt,n_gen,n_depth,test_time,avg_ns,stddev_ns,avg_ts,stddev_ts
+          #
+          n_prompt = trimq($(NF - 7)) + 0
+          n_gen    = trimq($(NF - 6)) + 0
+          n_depth  = trimq($(NF - 5)) + 0
+          avg_ts   = trimq($(NF - 1))
 
           if (n_prompt == want_n_prompt && n_gen == want_n_gen && n_depth == want_n_depth) {
             print avg_ts
@@ -316,13 +311,8 @@ let
         }
 
         END {
-          if (!have_header) {
-            print "CSV header not found: expected a line starting with build_commit" > "/dev/stderr"
-            exit 2
-          }
-
           if (!found) {
-            printf "metric not found: n_prompt=%s n_gen=%s n_depth=%s\n", want_n_prompt, want_n_gen, want_n_depth > "/dev/stderr"
+            printf "metric not found: n_prompt=%s n_gen=%s n_depth=%s in %s\n", want_n_prompt, want_n_gen, want_n_depth, FILENAME > "/dev/stderr"
             exit 3
           }
         }
