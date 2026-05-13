@@ -52,8 +52,6 @@
   # the jail should pick up. Override to replace; use `extraConfigDirs` to
   # append.
   configDirs ? [
-    ".config/nix"
-    ".config/nixpkgs"
     ".config/pistol"
     ".config/ripgrep"
     ".config/bat"
