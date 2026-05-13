@@ -66,7 +66,7 @@ let
       model,
       device,
       suffix ? "",
-      extraArgs ? "",
+      extraArgs ? [ ],
     }:
     let
       server = llamaServerFor device;
@@ -80,7 +80,7 @@ let
       runtimeInputs = [ ];
       text = ''
         ${envExports}
-        exec ${server} --port "''${1:-22545}" -m "${model.path}" --gpu-layers 999 -fa on --no-webui ${ctxSizeFlag}${model.params} ${extraArgs} "''${@:2}"
+        exec ${server} --port "''${1:-22545}" -m "${model.path}" --gpu-layers 999 -fa on --no-webui ${ctxSizeFlag}${lib.concatStringsSep " " model.params} ${lib.concatStringsSep " " extraArgs} "''${@:2}"
       '';
     };
 
@@ -289,7 +289,7 @@ let
       mkVariantEntries =
         {
           variantSuffix, # "" for base, "-variant_name" for variants
-          extraParams, # extra params to append
+          extraParams, # extra params (list of strings) to append
         }:
         lib.concatMap (
           device:
@@ -315,7 +315,7 @@ let
     # Base model entries
     mkVariantEntries {
       variantSuffix = "";
-      extraParams = "";
+      extraParams = [ ];
     }
     ++ lib.concatMap (
       variantName:
@@ -347,7 +347,7 @@ let
       model,
       devices,
       variantSuffix ? "",
-      extraParams ? "",
+      extraParams ? [ ],
     }:
     lib.concatMap (
       device:
@@ -369,13 +369,13 @@ let
       inherit model;
       devices = model.devices;
       variantSuffix = "";
-      extraParams = "";
+      extraParams = [ ];
     }
     ++ mkScriptDeviceEntries {
       inherit model;
       devices = model.unlistedDevices;
       variantSuffix = "";
-      extraParams = "";
+      extraParams = [ ];
     }
     ++ lib.concatMap (
       variantName:
@@ -387,7 +387,7 @@ let
         devices = model.devices;
         variantSuffix = "-${variantName}";
         extraParams =
-          (if (variant.mmproj != null) then "--mmproj ${variant.mmproj}" else "") + variant.params;
+          (lib.optional (variant.mmproj != null) "--mmproj ${variant.mmproj}") ++ variant.params;
       }
       ++ mkScriptDeviceEntries {
         inherit model;
@@ -595,8 +595,8 @@ in
               description = "Devices that generate llama-swap entries with unlisted = true (accessible only via direct script)";
             };
             params = mkOption {
-              type = types.str;
-              default = "";
+              type = types.listOf types.str;
+              default = [ ];
               description = "Additional llama-server parameters";
             };
             aliases = mkOption {
@@ -624,8 +624,8 @@ in
                       description = "Aliases for this model in llama-swap";
                     };
                     params = mkOption {
-                      type = types.str;
-                      default = "";
+                      type = types.listOf types.str;
+                      default = [ ];
                       description = "Additional llama-server parameters appended to the parent model params";
                     };
                     mmproj = mkOption {
