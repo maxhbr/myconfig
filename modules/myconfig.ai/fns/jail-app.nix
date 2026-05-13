@@ -35,10 +35,18 @@
   pkg,
 
   # Writable home directories for the agent's own state/config (e.g.
-  # [ ".pi" ] for pi, [ ".claude" ".claude.json" ] for claude-code). Each
-  # entry is interpreted relative to $HOME and rw-bound into the jail. The
-  # helper creates the host-side directory if it does not exist.
+  # [ ".pi" ] for pi, [ ".claude" ] for claude-code). Each entry is
+  # interpreted relative to $HOME and rw-bound into the jail. The helper
+  # creates the host-side directory with `mkdir -p` if it does not exist.
+  # For single-file state (e.g. ".claude.json") use `userDataFiles`
+  # instead.
   userDataDirs ? [ ],
+
+  # Writable single files in the home directory for the agent's state.
+  # Use this instead of `userDataDirs` for entries that are files rather
+  # than directories (e.g. ".claude.json"). The helper `touch`es the
+  # host-side file so the bind mount has something to attach to.
+  userDataFiles ? [ ],
 
   # Read-only host config directories (relative to $HOME) that tools inside
   # the jail should pick up. Override to replace; use `extraConfigDirs` to
@@ -138,6 +146,11 @@ let
     (rw-bind (noescape "~/${dir}") (noescape "~/${dir}"))
   ]) userDataDirs;
 
+  userDataFilePerms = lib.concatMap (file: [
+    (add-runtime "touch ~/${file}")
+    (rw-bind (noescape "~/${file}") (noescape "~/${file}"))
+  ]) userDataFiles;
+
   configDirPerms = lib.map (dir: ro-bind (noescape "~/${dir}") (noescape "~/${dir}")) (
     configDirs ++ extraConfigDirs
   );
@@ -168,6 +181,7 @@ let
     ro-bind "/nix/store" "/nix/store"
   )
   ++ userDataPerms
+  ++ userDataFilePerms
   ++ lib.optionals bindUserTmp [
     # Expose the host's `~/tmp` directory read-write inside the jail so
     # the agent has a persistent writable scratch space under $HOME.

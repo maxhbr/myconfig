@@ -21,15 +21,31 @@ in
           config,
           lib,
           pkgs,
+          jail,
           ...
         }:
         let
           callLib = file: import file { inherit lib pkgs; };
+          callJailLib = file: import file { inherit lib pkgs jail; };
           opencodeBwrap = callLib ../fns/sandboxed-app.nix {
             name = "opencode";
             pkg = config.programs.opencode.package;
             writableDirs = [
               ".config/opencode"
+              ".config/mcp"
+            ];
+          };
+          jail-app = callJailLib ../fns/jail-app.nix;
+          # `jailed-opencode` is an alternative to `opencodeBwrap` that uses
+          # the jail.nix library instead of a hand-rolled bubblewrap wrapper.
+          # See `../fns/jail-app.nix` for the shared defaults.
+          jailed-opencode = jail-app {
+            name = "jailed-opencode";
+            pkg = config.programs.opencode.package;
+            userDataDirs = [
+              ".config/opencode"
+              ".local/share/opencode"
+              ".local/state/opencode"
               ".config/mcp"
             ];
           };
@@ -214,11 +230,19 @@ in
           home.packages = [
             pkgs.opencode-desktop
             opencodeBwrap
+            jailed-opencode
             (pkgs.writeShellApplication {
               name = "opencode-tmp";
               runtimeInputs = with pkgs; [ coreutils ];
               text = ''
                 cd "$(mktemp -d)" && exec ${lib.getExe opencodeBwrap} "$@"
+              '';
+            })
+            (pkgs.writeShellApplication {
+              name = "jailed-opencode-tmp";
+              runtimeInputs = with pkgs; [ coreutils ];
+              text = ''
+                cd "$(mktemp -d)" && exec ${lib.getExe jailed-opencode} "$@"
               '';
             })
             (pkgs.writeShellApplication {
@@ -240,6 +264,27 @@ in
 
                 git worktree add -b "''${branch_name}" "../''${worktree_name}" || exit 1
                 cd "../''${worktree_name}" && exec ${lib.getExe opencodeBwrap} "$@"
+              '';
+            })
+            (pkgs.writeShellApplication {
+              name = "jailed-opencode-worktree";
+              runtimeInputs = with pkgs; [
+                git
+                coreutils
+              ];
+              text = ''
+                if [ ! -d .git ]; then
+                  echo "Error: Not in a git repository root"
+                  exit 1
+                fi
+
+                timestamp=$(date +%s)
+                dirname=$(basename "$(pwd)")
+                worktree_name="''${dirname}-opencode-''${timestamp}"
+                branch_name="opencode-''${timestamp}"
+
+                git worktree add -b "''${branch_name}" "../''${worktree_name}" || exit 1
+                cd "../''${worktree_name}" && exec ${lib.getExe jailed-opencode} "$@"
               '';
             })
           ];
