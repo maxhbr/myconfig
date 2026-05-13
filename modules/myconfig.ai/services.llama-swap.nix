@@ -198,7 +198,7 @@ let
           # <device>.metadata.csv: one row per script, deduped by script name. Written
           # with jq -r @csv so embedded commas/quotes are escaped properly.
           local meta="$dir/${device}.metadata.csv"
-          local header="timestamp,script,device,model,model_path,n_ctx,n_ctx_per_seq,n_params,model_size,arch"
+          local header="timestamp,script,device,model,prompt ingestion speed,normal chat streaming speed,long-context streaming speed,n_ctx,n_ctx_per_seq,n_params,model_size,arch"
           if [[ ! -f "$meta" ]]; then
             printf '%s\n' "$header" > "$meta"
           fi
@@ -214,30 +214,35 @@ let
             --arg script   "${scriptName}" \
             --arg device   "${device}" \
             --arg model    "${model.name}" \
-            --arg path     "$model_path" \
+            --arg pp2048   "$pp2048_at_8k" \
+            --arg tg32_8k  "$tg32_at_8k" \
+            --arg tg32_16k "$tg32_at_16k" \
             --arg n_ctx    "$n_ctx" \
             --arg n_ctx_ps "$n_ctx_per_seq" \
             --arg n_params "$n_params" \
             --arg size     "$model_size" \
             --arg arch     "$arch" \
-            '[$ts,$script,$device,$model,$path,$n_ctx,$n_ctx_ps,$n_params,$size,$arch] | @csv' \
+            '[$ts,$script,$device,$model,$pp2048,$tg32_8k,$tg32_16k,$n_ctx,$n_ctx_ps,$n_params,$size,$arch] | @csv' \
             >> "$meta"
 
           # Print a structured human-readable summary of the captured metadata
           # to stderr so it shows up in the terminal next to the bench output.
           {
             printf '%s\n' "[metadata] ---- captured metadata ----"
-            printf '[metadata]   %-14s %s\n' \
-              "timestamp"     "$timestamp" \
-              "script"        "${scriptName}" \
-              "device"        "${device}" \
-              "model"         "${model.name}" \
-              "model_path"    "$model_path" \
-              "n_ctx"         "$n_ctx" \
-              "n_ctx_per_seq" "$n_ctx_per_seq" \
-              "n_params"      "$n_params" \
-              "model_size"    "$model_size" \
-              "arch"          "$arch"
+            printf '[metadata]   %-40s %s\n' \
+              "timestamp"                              "$timestamp" \
+              "script"                                 "${scriptName}" \
+              "device"                                 "${device}" \
+              "model"                                  "${model.name}" \
+              "model_path"                             "$model_path" \
+              "n_ctx"                                  "$n_ctx" \
+              "n_ctx_per_seq"                          "$n_ctx_per_seq" \
+              "n_params"                               "$n_params" \
+              "model_size"                             "$model_size" \
+              "arch"                                   "$arch" \
+              "prompt ingestion speed(pp2048@8k)"      "$pp2048_at_8k" \
+              "normal chat streaming speed(tg32@8k)"   "$tg32_at_8k" \
+              "long-context streaming speed(tg32@16k)" "$tg32_at_16k"
             printf '%s\n' "[metadata] ---------------------------"
             printf '%s\n' "[metadata] wrote row for ${scriptName} to $meta"
           } >&2
