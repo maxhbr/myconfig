@@ -45,6 +45,96 @@ Build log files for each host are stored in the parent directory:
 - Direct access: `../_logs/YYYY-MM-DD-myconfig-<hostname>.log`
 - The logs directory `../_logs/` contains historical build logs for all hosts
 
+## Refactoring & Snapshot Verification
+
+When refactoring a module that should be behavior-preserving (no observable
+changes to evaluated config), capture a *snapshot* of the relevant slice of
+the evaluated NixOS configuration **before** making changes, then diff against
+the same query **after**. A byte-identical diff is strong evidence that the
+refactor did not alter behavior.
+
+### Workflow
+1. Identify which hosts actually exercise the module being refactored
+   (grep for the option / import path, e.g. `myconfig.ai.llama-cpp`).
+2. Pick the smallest slice of `config` that captures the module's outputs.
+   Common targets:
+   - The service config it produces, e.g. `config.services.<name>.settings`
+   - Generated `home.packages` names and outPaths
+   - `myconfig.ai.localModels` or similar registries it contributes to
+   - The full toplevel drv hash (coarse but exhaustive — see below)
+3. Save the baseline JSON to `/tmp/opencode/<task>/before-<host>.json`.
+4. Perform the refactor (split files, rename helpers, etc.).
+5. `git add` the new files — `nix` evaluates from the git tree, so untracked
+   files are invisible. Forgetting this produces misleading "file does not
+   exist" errors.
+6. Re-run the same `nix eval` into `after-<host>.json`.
+7. `diff before-<host>.json after-<host>.json` → must be empty.
+
+### Snapshot template
+For module-specific config + generated home-manager wrappers:
+```bash
+mkdir -p /tmp/opencode/<task>
+nix eval --impure --raw --expr '
+let
+  flake = builtins.getFlake ("git+file://" + toString /home/mhuber/myconfig/myconfig);
+  cfg = flake.nixosConfigurations."<hostname>";
+
+  # --- pick the slices that matter for the module under refactor ---
+  serviceSettings = cfg.config.services.<name>.settings;
+  hmPkgs = cfg.config.home-manager.users.mhuber.home.packages;
+  relevantPkgs = builtins.filter
+    (p: let n = p.name or p.pname or ""; in
+        builtins.match "<regex-of-generated-pkg-names>.*" n != null)
+    hmPkgs;
+
+  # Strip non-JSON-serialisable fields (functions, derivations) from
+  # nested attrsets before toJSON. Keep stable identifying fields.
+  sanitize = x: { inherit (x) name port; models = x.models or []; };
+in
+  builtins.toJSON {
+    settings = serviceSettings;
+    pkgNames = map (p: p.name or p.pname) relevantPkgs;
+    pkgOutPaths = map (p: p.outPath) relevantPkgs;
+    # add more slices as needed
+  }
+' > /tmp/opencode/<task>/before-<hostname>.json 2> /tmp/opencode/<task>/before-<hostname>.err
+```
+After refactoring + `git add`, re-run with `after-<hostname>.json` and:
+```bash
+diff /tmp/opencode/<task>/before-<hostname>.json \
+     /tmp/opencode/<task>/after-<hostname>.json \
+  && echo IDENTICAL
+```
+
+### Coarser alternative: toplevel drvPath
+For a single-line "did anything change at all?" check, compare the system
+toplevel derivation path. If it matches, *nothing* about the host changed:
+```bash
+nix eval --raw .#nixosConfigurations.<hostname>.config.system.build.toplevel.drvPath
+```
+This is the strongest possible check but gives no signal about *what*
+diverged when it does change — use the JSON snapshot to localise diffs.
+
+### Common pitfalls
+- **Untracked files**: `nix` reads the git tree (dirty or clean), so
+  `git add` every new file before re-evaluating, otherwise the new modules
+  are silently invisible and the "after" eval still uses the old layout
+  or errors with "path does not exist".
+- **Non-serialisable values**: `builtins.toJSON` will fail on functions or
+  derivations nested inside attrsets. Strip them via a `sanitize` helper
+  (keep only the stable identifying fields like `name` / `port` / `outPath`).
+- **Eval warnings vs errors**: a non-zero exit + zero-byte output JSON means
+  the eval *failed* — read `*.err`. Pure warnings (e.g. deprecated options)
+  appear on stderr but exit 0 and produce valid JSON; that's fine.
+- **Latent bugs**: if the original code has a bug (e.g. writes `args` but
+  consumers read `params`), the snapshot will encode that buggy behavior.
+  Preserve it verbatim in the refactor for a clean diff, and leave a `NOTE`
+  comment pointing at the bug for a follow-up commit.
+- **Closure-equal output paths**: when extracting a helper that builds a
+  derivation, make sure the inputs are identical — even reordering
+  `runtimeInputs` or changing whitespace inside a `writeShellApplication`
+  text changes the outPath and breaks the diff.
+
 ## Git Hygiene
 
 ### Adding New Files
