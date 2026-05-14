@@ -47,7 +47,7 @@
     myphoto.url = "github:maxhbr/myphoto";
     myphoto.inputs.nixpkgs.follows = "nixpkgs";
 
-    hermes-agent.url = "github:NousResearch/hermes-agent";
+    hermes-agent.url = "github:NousResearch/hermes-agent/v2026.5.7";
     hermes-agent.inputs.nixpkgs.follows = "nixpkgs";
   };
 
