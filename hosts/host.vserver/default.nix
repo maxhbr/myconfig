@@ -8,8 +8,7 @@
     ../../hardware/grub.nix
     # configuration
     ./service.wireguard-server
-    ./service.youtrack.nix
-    ./service.kanboard.nix
+    ../shared.deployedServices.nix
   ];
   config = {
     myconfig = {
@@ -18,6 +17,7 @@
         host_hostname = "nuc";
         client.enable = true;
       };
+      deployedServices.configureCaddy = false;
     };
 
     networking.hostName = "vserver";
