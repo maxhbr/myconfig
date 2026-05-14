@@ -12,6 +12,10 @@
 # treats every device as available (useful for containers / NixOS
 # checks where the hardware module isn't imported).
 { lib, pkgs }:
+let
+  # CUDA-enabled variant of llama-cpp (plain pkgs.llama-cpp has no CUDA backend)
+  llama-cpp-cuda = pkgs.llama-cpp.override { cudaSupport = true; };
+in
 {
   # `hasGpuVariant` is parameterised on a module's `config` + `options`
   # because the `myconfig.hardware.gpu.variant` option might not be
@@ -46,7 +50,7 @@
     else if lib.hasPrefix "ROCm" device then
       lib.getExe' pkgs.llama-cpp-rocm "llama-server"
     else
-      lib.getExe' pkgs.llama-cpp "llama-server";
+      lib.getExe' llama-cpp-cuda "llama-server";
 
   llamaBenchFor =
     device:
@@ -55,7 +59,7 @@
     else if lib.hasPrefix "ROCm" device then
       lib.getExe' pkgs.llama-cpp-rocm "llama-bench"
     else
-      lib.getExe' pkgs.llama-cpp "llama-bench";
+      lib.getExe' llama-cpp-cuda "llama-bench";
 
   # Environment variables exported around llama-server / llama-bench runs to
   # pin them to a specific device.
