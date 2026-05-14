@@ -23,7 +23,6 @@ in
     ./container.lobe-chat.nix
     ./container.nlm-ingestor.nix
     ./container.open-webui.nix
-    ./inference.cpp.nix
     ./programs.aichat.nix
     ./programs.alpaca.nix
     ./programs.claude-code
