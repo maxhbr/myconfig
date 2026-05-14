@@ -403,6 +403,7 @@ in
     ./services.llama-swap.vllm.nix
   ];
   config = {
+    myconfig.ai.llama-cpp.router.enable = true;
     myconfig.ai.llama-cpp.models = map (
       model:
       model
