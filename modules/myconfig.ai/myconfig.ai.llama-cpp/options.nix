@@ -11,6 +11,24 @@
 { lib, ... }:
 {
   options.myconfig.ai.llama-cpp = with lib; {
+    router = {
+      enable = mkEnableOption "per-device llama-server router scripts driven by INI presets";
+
+      service.enable = mkEnableOption "systemd services for each generated router (implementation deferred; option declared for forward compat)";
+
+      modelsMax = mkOption {
+        type = types.int;
+        default = 1;
+        description = "Value for llama-server --models-max (1 = one model loaded at a time per device).";
+      };
+
+      basePort = mkOption {
+        type = types.int;
+        default = 22600;
+        description = "Default port used by llama-server_<Device> when invoked without arguments.";
+      };
+    };
+
     models = mkOption {
       type = types.listOf (
         types.submodule {
