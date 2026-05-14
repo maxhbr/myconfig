@@ -59,6 +59,7 @@ let
         in
         custom_local_providers;
       terminal.backend = "local";
+      terminal.cwd = "${stateDir}/workspace";
       compression = {
         enabled = true;
         threshold = 0.85;
@@ -77,7 +78,7 @@ let
             API_SERVER_ENABLED=true
             API_SERVER_PORT=8642
             API_SERVER_HOST=${apiServerHost}
-            HASS_URL=http://localhost:8123
+            HASS_URL=http://hass.nuc.wg0.maxhbr.local
           ''
         );
       in
