@@ -12,7 +12,13 @@ let
   devices = import ./devices.nix { inherit lib pkgs; };
   variants = import ./variants.nix { inherit lib; };
   scripts = import ./scripts.nix { inherit lib pkgs devices; };
+  router = import ./router.nix { inherit lib pkgs devices; };
 in
 {
-  inherit devices variants scripts;
+  inherit
+    devices
+    variants
+    scripts
+    router
+    ;
 }
