@@ -15,6 +15,7 @@ in
 {
   imports = [
     ./myconfig.localModels.nix
+    ./myconfig.ai.llama-cpp
     ./comfyui.nix
     ./container.Kokoro-FastAPI.nix
     ./container.SillyTavern.nix
@@ -35,7 +36,6 @@ in
     ./programs.pi-coding-agent
     ./programs.qwen-code
     ./services.litellm.nix
-    ./services.llama-swap.nix
     ./services.ollama.nix
     ./services.open-webui.nix
     ./services.searxng.nix

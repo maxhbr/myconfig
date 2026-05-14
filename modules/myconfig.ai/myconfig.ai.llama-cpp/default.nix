@@ -9,7 +9,7 @@
   ...
 }:
 let
-  cfg = config.myconfig.ai.llama-swap;
+  cfg = config.myconfig.ai.llama-cpp;
 
   hasGpuVariant =
     v:
@@ -598,7 +598,7 @@ let
   ) unpackedModels;
 in
 {
-  options.myconfig.ai.llama-swap = with lib; {
+  options.myconfig.ai.llama-cpp = with lib; {
     models = mkOption {
       type = types.listOf (
         types.submodule {
@@ -686,7 +686,44 @@ in
         lib,
         ...
       }:
+      {
+        config = lib.mkIf config.services.llama-swap.enable {
+          myconfig.ai.localModels = [
+            (
+              let
+                port = config.services.llama-swap.port;
+              in
+              {
+                name = "llama-swap-${toString port}";
+                models = allModelNames;
+                port = port;
+              }
+            )
+          ];
 
+          services.llama-swap = {
+            settings = {
+              sendLoadingState = true;
+              models = allModels;
+              groups = allGroups;
+            };
+          };
+
+          systemd.services.llama-swap = {
+            # https://github.com/nixos/nixpkgs/issues/441531
+            environment.XDG_CACHE_HOME = "/var/cache/llama-swap";
+            serviceConfig.CacheDirectory = "llama-swap";
+          };
+        };
+      }
+    )
+    (
+      {
+        config,
+        options,
+        lib,
+        ...
+      }:
       let
         hmEnabled = lib.hasAttrByPath [ "home-manager" "sharedModules" ] options;
       in
@@ -704,32 +741,4 @@ in
       }
     )
   ];
-  config = lib.mkIf config.services.llama-swap.enable {
-    myconfig.ai.localModels = [
-      (
-        let
-          port = config.services.llama-swap.port;
-        in
-        {
-          name = "llama-swap-${toString port}";
-          models = allModelNames;
-          port = port;
-        }
-      )
-    ];
-
-    services.llama-swap = {
-      settings = {
-        sendLoadingState = true;
-        models = allModels;
-        groups = allGroups;
-      };
-    };
-
-    systemd.services.llama-swap = {
-      # https://github.com/nixos/nixpkgs/issues/441531
-      environment.XDG_CACHE_HOME = "/var/cache/llama-swap";
-      serviceConfig.CacheDirectory = "llama-swap";
-    };
-  };
 }

@@ -403,7 +403,7 @@ in
     ./services.llama-swap.vllm.nix
   ];
   config = {
-    myconfig.ai.llama-swap.models = map (
+    myconfig.ai.llama-cpp.models = map (
       model:
       model
       // {
@@ -469,7 +469,7 @@ in
             ../../modules/myconfig.ai/myconfig.localModels.nix
           ];
           hardware.graphics.enable = true;
-          myconfig.ai.llama-swap.models =
+          myconfig.ai.llama-cpp.models =
             let
               allAliasesAndNamesFromAmdModels = lib.concatMap (m: [ m.name ] ++ (m.aliases or [ ])) amdModels;
               fromRtxModels = map (

@@ -56,7 +56,7 @@
       }
     )
     # ./services.ollama.nix
-    ./services.llama-swap.nix
+    ./myconfig.ai.llama-cpp.nix
     ./services.open-webui.nix
     ./services.wyoming.nix
     ./services.qdrant.nix
