@@ -10,6 +10,25 @@ let
   btrfs_device = "/dev/disk/by-uuid/54e93b27-641e-484f-b8d5-6487b73bcf94";
 in
 {
+  imports = [
+    ({config,...}:
+    {
+      config = lib.mkIf (config.services.vsftpd.enable){
+        # fileSystems."${config.users.extraUsers.ftpuser.home}" = {
+        fileSystems."/var/ftp" = {
+          device = btrfs_device;
+          fsType = "btrfs";
+          options = [
+            "compress=zstd"
+            "subvol=@ftp"
+            "nofail"
+            "discard"
+            "noatime"
+          ];
+        };
+      };
+    })
+  ];
   config = {
     boot.initrd.luks.devices."btr2_pool" = {
       device = "/dev/disk/by-uuid/4162ab7a-c579-4152-9e50-98a819b0d0af";
@@ -36,12 +55,13 @@ in
       ];
     };
 
-    fileSystems."/home/${myconfig.user}/imgwork2" = {
+    fileSystems."/mnt/models" = {
       device = btrfs_device;
       fsType = "btrfs";
       options = [
+        "ro"
         "compress=zstd"
-        "subvol=@imgwork"
+        "subvol=@models"
         "nofail"
         "discard"
         "noatime"
@@ -60,6 +80,19 @@ in
         "noatime"
       ];
     };
+
+    fileSystems."/home/${myconfig.user}/imgwork2" = {
+      device = btrfs_device;
+      fsType = "btrfs";
+      options = [
+        "compress=zstd"
+        "subvol=@imgwork"
+        "nofail"
+        "discard"
+        "noatime"
+      ];
+    };
+
     services.nfs.server = {
       enable = true;
       exports = ''
