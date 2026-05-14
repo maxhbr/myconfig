@@ -465,7 +465,7 @@ in
         { ... }:
         {
           imports = [
-            ../../modules/myconfig.ai/services.llama-swap.nix
+            ../../modules/myconfig.ai/myconfig.ai.llama-cpp
             ../../modules/myconfig.ai/myconfig.localModels.nix
           ];
           hardware.graphics.enable = true;
