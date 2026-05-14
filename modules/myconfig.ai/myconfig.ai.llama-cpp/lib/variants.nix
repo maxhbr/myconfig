@@ -4,24 +4,21 @@
 # Model "variant" expansion: a single declarative model entry with
 # `variants = { foo = { ... }; }` is expanded into multiple flat model
 # entries (`<name>` plus `<name>-<variantName>`).
-#
-# NOTE: `applyVariant` currently writes an `args` attribute on the
-# resulting model, but every consumer reads `model.params`. As a result,
-# per-variant `params` / `mmproj` overrides are silently dropped today;
-# only `ctxSize` and `aliases` actually flow through. This refactor
-# preserves the existing (buggy) behaviour byte-for-byte; fixing the
-# attribute name is left as a follow-up.
 { lib }:
 let
+  # Write `params` (not `args`): every consumer (scripts.nix,
+  # llama-swap.nix, router.nix) reads `model.params`. The earlier
+  # `args = ...` was a typo that silently dropped per-variant `params`
+  # and `mmproj` overrides while letting `ctxSize` / `aliases` through.
   applyVariant =
     variantName: variant: model:
     (builtins.removeAttrs model [ "variants" ])
     // {
       name = "${model.name}-${variantName}";
       inherit (variant) aliases;
-      args =
-        model.args
-        ++ variant.args
+      params =
+        model.params
+        ++ variant.params
         ++ (lib.optionals (variant.mmproj != null) [
           "--mmproj"
           variant.mmproj
