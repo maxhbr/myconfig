@@ -68,7 +68,7 @@
     };
     servicePort = mkOption {
       type = types.port;
-      default = 22600;
+      default = 33656;
       description = "Listen port used by services.llama-cpp when serviceVariant == \"llama-server\".";
     };
     serviceOpenFirewall = mkOption {
