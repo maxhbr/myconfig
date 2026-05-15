@@ -18,8 +18,9 @@
           # (provider name "llama-server-33657").
           model = "local-llama-server-33657/opencode";
           # Fast/small model: "opencode-fast" alias -> Qwen3.6-35B-A3B-UD-Q5_K_XL
-          # on the host-level llama-swap on port 33656 (provider name "llama-swap").
-          small_model = "local-llama-swap/opencode-fast";
+          # on the host-level llama-server router on port 33656
+          # (provider name "llama-server-33656").
+          small_model = "local-llama-server-33656/opencode-fast";
         };
       }
     ];

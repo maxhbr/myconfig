@@ -404,7 +404,13 @@ in
   ];
   config = {
     myconfig.ai.llama-cpp = {
-      serviceVariant = "llama-swap";
+      # Single CUDA0-bound llama-server instance on port 33656 (the new
+      # INI-preset-driven router backend). The home-manager
+      # llama-server_<Device> wrappers (router.enable = true) still get
+      # generated for all three devices so ad-hoc Vulkan0/Vulkan1 access
+      # remains available — they just aren't tied to a system service.
+      serviceVariant = "llama-server";
+      serviceDevice = "CUDA0";
       servicePort = 33656;
       serviceListenAddress = "0.0.0.0";
       serviceOpenFirewall = true;
@@ -422,9 +428,6 @@ in
           ];
         }
       ) rtxModels;
-    };
-    services.llama-swap.settings = {
-      healthCheckTimeout = 500;
     };
 
     ############

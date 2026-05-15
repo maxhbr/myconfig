@@ -8,7 +8,7 @@ AI workstation with AMD Radeon 8060S GPU (Framework Laptop 16).
 |---------|------|-------------|
 | eternal-terminal | 22022 | TCP/UDP |
 | vllm-rocm (container) | 8000 | OCI container with vllm |
-| llama-swap | 33656 | Model swap proxy (host) |
+| llama-server | 33656 | llama-server router (host, CUDA0-only) |
 | llama-cpp-33657 | 33657 | llama-server router (container, Vulkan0-only) |
 | comfyui | 8188 | ComfyUI (via `run-comfyui` script) |
 | caddy (reverse proxy) | 443 | WireGuard tunnel access |
@@ -26,12 +26,12 @@ Caddy routes available at port 443:
 - `/ollama/*` → Ollama
 - `/open-webui/*` → Open WebUI
 - `/comfyui/*` → ComfyUI
-- (default) → llama-swap
+- (default) → llama-server (port 33656)
 
 ## Key Features
 
 - **AI/ML**: AMD ROCm support, llama-cpp-vulkan, vllm container
-- **Model Management**: llama-swap for automatic model switching with TTL
+- **Model Management**: llama-server router backend with INI-driven model presets (--models-max 1, swap-on-demand via the OpenAI `model` field)
 - **Desktop**: Wayland (niri, labwc), WayVNC for remote access
 - **Impermanence**: Btrfs + LUKS with tmpfs overlay
 

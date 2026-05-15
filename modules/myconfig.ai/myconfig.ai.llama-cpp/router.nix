@@ -150,23 +150,6 @@ let
 
   serviceModelsPreset =
     if isLlamaServerService then router.toModelsPreset (iniDataForDevice serviceDevice) else null;
-
-  # Pick the right GPU-enabled llama-cpp package for the chosen
-  # service device. `devices.llamaServerFor` returns the *exe path* of
-  # llama-server, but `services.llama-cpp.package` wants the package.
-  # Inline the same dispatch here.
-  serviceLlamaPackage =
-    let
-      d = serviceDevice;
-    in
-    if d == null then
-      pkgs.llama-cpp
-    else if lib.hasPrefix "Vulkan" d then
-      pkgs.llama-cpp-vulkan
-    else if lib.hasPrefix "ROCm" d then
-      pkgs.llama-cpp-rocm
-    else
-      pkgs.llama-cpp.override { cudaSupport = true; };
 in
 {
   config = lib.mkMerge [
@@ -206,7 +189,13 @@ in
     (lib.mkIf isLlamaServerService {
       services.llama-cpp = {
         enable = true;
-        package = lib.mkDefault serviceLlamaPackage;
+        # `services.llama-cpp.package` is set by services.llama-cpp.nix
+        # via `lib.mkDefault` (it picks a multi-backend llama-cpp build
+        # appropriate for the host's GPU variants). We don't override
+        # it here — at runtime the LLAMA_ARG_DEVICE env var (set below)
+        # selects which backend that build uses. Hosts that need a
+        # different package can set `services.llama-cpp.package`
+        # explicitly with the usual mkForce / mkOverride mechanism.
         host = cfg.serviceListenAddress;
         port = cfg.servicePort;
         openFirewall = cfg.serviceOpenFirewall;

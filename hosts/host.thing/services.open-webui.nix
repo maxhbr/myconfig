@@ -4,9 +4,9 @@
 # Configure Open WebUI's "Manage OpenAI API Connections" with the local
 # OpenAI-compatible endpoints running on this host:
 #
-#   * litellm     -> http://127.0.0.1:4000/v1
-#   * llama-swap  -> http://127.0.0.1:33656/v1   (RTX, host service)
-#   * llama-swap2 -> http://127.0.0.1:33657/v1   (AMD, in nixos-container)
+#   * litellm       -> http://127.0.0.1:4000/v1
+#   * llama-server  -> http://127.0.0.1:33656/v1   (CUDA0, host service)
+#   * llama-server2 -> http://127.0.0.1:33657/v1   (Vulkan0, nixos-container)
 #
 # Open WebUI reads these from the env vars OPENAI_API_BASE_URLS and
 # OPENAI_API_KEYS (semicolon-separated, one entry per connection). The keys
@@ -29,9 +29,8 @@ let
   litellmHost =
     if config.services.litellm.host == "0.0.0.0" then "localhost" else config.services.litellm.host;
   litellmUrl = "http://${litellmHost}:${toString config.services.litellm.port}/v1";
-  llamaSwapUrl = "http://127.0.0.1:${toString config.services.llama-swap.port}/v1";
-  # Sibling instance now runs the llama-server router backend, not llama-swap.
-  llamaSwap2Url = "http://127.0.0.1:${toString config.containers.llama-cpp-33657.config.myconfig.ai.llama-cpp.servicePort}/v1";
+  llamaServerUrl = "http://127.0.0.1:${toString config.myconfig.ai.llama-cpp.servicePort}/v1";
+  llamaServer2Url = "http://127.0.0.1:${toString config.containers.llama-cpp-33657.config.myconfig.ai.llama-cpp.servicePort}/v1";
 
   connections = [
     {
@@ -39,12 +38,12 @@ let
       key = "sk-litellm-local";
     }
     {
-      url = llamaSwapUrl;
-      key = "sk-llama-swap-local";
+      url = llamaServerUrl;
+      key = "sk-llama-server-local";
     }
     {
-      url = llamaSwap2Url;
-      key = "sk-llama-swap2-local";
+      url = llamaServer2Url;
+      key = "sk-llama-server2-local";
     }
   ];
 
