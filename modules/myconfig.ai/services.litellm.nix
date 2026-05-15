@@ -130,11 +130,28 @@ in
                   };
                 };
               in
+              # Three entries per alias:
+              #   1. The canonical `<provider>:<modelName>` entry.
+              #   2. A bare `<alias>` entry (so callers can use the
+              #      short form when there is no provider collision).
+              #   3. A prefixed `<provider>:<alias>` entry so that
+              #      `model_group_alias` (and any consumer that wants
+              #      to pin a specific provider) can unambiguously
+              #      address an alias on a particular backend. This
+              #      mirrors the behaviour of the legacy llama-swap
+              #      backend, which published every alias as a
+              #      top-level model name on the swap instance.
               [ entry ]
-              ++ map (alias: {
-                model_name = alias;
-                litellm_params = entry.litellm_params;
-              }) aliases
+              ++ lib.concatMap (alias: [
+                {
+                  model_name = alias;
+                  litellm_params = entry.litellm_params;
+                }
+                {
+                  model_name = "${providerName}:${alias}";
+                  litellm_params = entry.litellm_params;
+                }
+              ]) aliases
             ) modelNames
           ) config.myconfig.ai.localModels
         );
