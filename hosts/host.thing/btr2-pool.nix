@@ -11,23 +11,25 @@ let
 in
 {
   imports = [
-    ({config,...}:
-    {
-      config = lib.mkIf (config.services.vsftpd.enable){
-        # fileSystems."${config.users.extraUsers.ftpuser.home}" = {
-        fileSystems."/var/ftp" = {
-          device = btrfs_device;
-          fsType = "btrfs";
-          options = [
-            "compress=zstd"
-            "subvol=@ftp"
-            "nofail"
-            "discard"
-            "noatime"
-          ];
+    (
+      { config, ... }:
+      {
+        config = lib.mkIf (config.services.vsftpd.enable) {
+          # fileSystems."${config.users.extraUsers.ftpuser.home}" = {
+          fileSystems."/var/ftp" = {
+            device = btrfs_device;
+            fsType = "btrfs";
+            options = [
+              "compress=zstd"
+              "subvol=@ftp"
+              "nofail"
+              "discard"
+              "noatime"
+            ];
+          };
         };
-      };
-    })
+      }
+    )
   ];
   config = {
     boot.initrd.luks.devices."btr2_pool" = {
