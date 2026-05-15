@@ -403,28 +403,28 @@ in
     ./services.llama-swap.vllm.nix
   ];
   config = {
-    myconfig.ai.llama-cpp.serviceVariant = "llama-swap";
-    myconfig.ai.llama-cpp.router.enable = true;
-    myconfig.ai.llama-cpp.models = map (
-      model:
-      model
-      // {
-        devices = [
-          "Vulkan0"
-          "CUDA0"
-        ];
-        unlistedDevices = [
-          "Vulkan1"
-        ];
-      }
-    ) rtxModels;
-    services.llama-swap = {
-      port = 33656;
-      openFirewall = true;
-      listenAddress = "0.0.0.0";
-      settings = {
-        healthCheckTimeout = 500;
-      };
+    myconfig.ai.llama-cpp = {
+      serviceVariant = "llama-swap";
+      servicePort = 33656;
+      serviceListenAddress = "0.0.0.0";
+      serviceOpenFirewall = true;
+      router.enable = true;
+      models = map (
+        model:
+        model
+        // {
+          devices = [
+            "Vulkan0"
+            "CUDA0"
+          ];
+          unlistedDevices = [
+            "Vulkan1"
+          ];
+        }
+      ) rtxModels;
+    };
+    services.llama-swap.settings = {
+      healthCheckTimeout = 500;
     };
 
     ############
@@ -470,36 +470,36 @@ in
             ../../modules/myconfig.ai/myconfig.localModels.nix
           ];
           hardware.graphics.enable = true;
-          myconfig.ai.llama-cpp.models =
-            let
-              allAliasesAndNamesFromAmdModels = lib.concatMap (m: [ m.name ] ++ (m.aliases or [ ])) amdModels;
-              fromRtxModels = map (
-                {
-                  name,
-                  path,
-                  aliases,
-                  params ? [ ],
-                  ...
-                }:
-                {
-                  inherit
-                    name
-                    path
-                    params
-                    ;
-                  aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
-                }
-              ) rtxModels;
-            in
-            fromRtxModels ++ amdModels;
-          services.llama-swap = {
-            enable = true;
-            port = 33657;
-            openFirewall = true;
-            listenAddress = "0.0.0.0";
-            settings = {
-              healthCheckTimeout = 500;
-            };
+          myconfig.ai.llama-cpp = {
+            serviceVariant = "llama-swap";
+            servicePort = 33657;
+            serviceListenAddress = "0.0.0.0";
+            serviceOpenFirewall = true;
+            models =
+              let
+                allAliasesAndNamesFromAmdModels = lib.concatMap (m: [ m.name ] ++ (m.aliases or [ ])) amdModels;
+                fromRtxModels = map (
+                  {
+                    name,
+                    path,
+                    aliases,
+                    params ? [ ],
+                    ...
+                  }:
+                  {
+                    inherit
+                      name
+                      path
+                      params
+                      ;
+                    aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
+                  }
+                ) rtxModels;
+              in
+              fromRtxModels ++ amdModels;
+          };
+          services.llama-swap.settings = {
+            healthCheckTimeout = 500;
           };
         };
     };

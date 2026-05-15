@@ -59,22 +59,27 @@
       example = "CUDA0";
     };
 
-    # Service-side port/listen address for the llama-server backend.
-    # llama-swap is configured separately via services.llama-swap.*.
+    # Backend-agnostic service-side networking. Routed into
+    # `services.llama-swap.{port,listenAddress,openFirewall}` when
+    # serviceVariant == "llama-swap", and into
+    # `services.llama-cpp.{port,host,openFirewall}` when serviceVariant
+    # == "llama-server". `mkDefault` is used on the wiring so hosts can
+    # still reach into the backend-specific options directly when they
+    # need to.
     serviceListenAddress = mkOption {
       type = types.str;
       default = "127.0.0.1";
-      description = "Listen address used by services.llama-cpp when serviceVariant == \"llama-server\".";
+      description = "Listen address for the active llama-cpp service backend (llama-swap or llama-server).";
     };
     servicePort = mkOption {
       type = types.port;
       default = 33656;
-      description = "Listen port used by services.llama-cpp when serviceVariant == \"llama-server\".";
+      description = "Listen port for the active llama-cpp service backend (llama-swap or llama-server).";
     };
     serviceOpenFirewall = mkOption {
       type = types.bool;
       default = false;
-      description = "Open the firewall for the llama-server backend port when serviceVariant == \"llama-server\".";
+      description = "Open the firewall for the active llama-cpp service backend's port.";
     };
 
     router = {

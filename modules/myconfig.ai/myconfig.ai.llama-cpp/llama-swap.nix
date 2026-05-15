@@ -233,12 +233,19 @@ in
 {
   config = lib.mkMerge [
     # Auto-enable services.llama-swap when the host opts in via the
-    # serviceVariant enum. Hosts can still set
-    # `services.llama-swap.enable = true` directly (e.g. inside
-    # containers where the enum-based wiring doesn't reach), and
-    # `mkDefault` keeps explicit overrides winning.
+    # serviceVariant enum, and route the backend-agnostic
+    # `myconfig.ai.llama-cpp.service{Port,ListenAddress,OpenFirewall}`
+    # options into the corresponding `services.llama-swap.*` fields.
+    # `mkDefault` keeps explicit `services.llama-swap.*` overrides
+    # winning (useful in containers where the inner config wants to
+    # set things directly).
     (lib.mkIf (cfg.serviceVariant == "llama-swap") {
-      services.llama-swap.enable = lib.mkDefault true;
+      services.llama-swap = {
+        enable = lib.mkDefault true;
+        port = lib.mkDefault cfg.servicePort;
+        listenAddress = lib.mkDefault cfg.serviceListenAddress;
+        openFirewall = lib.mkDefault cfg.serviceOpenFirewall;
+      };
     })
 
     (lib.mkIf config.services.llama-swap.enable {
