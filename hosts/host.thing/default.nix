@@ -108,14 +108,14 @@
       host = lib.mkOverride 49 "0.0.0.0";
       settings.router_settings = {
         model_group_alias = {
-          "hermes" = "llama-server-33656:hermes";
-          "hermes-fallback" = "llama-server-33656:hermes-fallback";
-          "opencode-fast" = "llama-server-33656:opencode-fast";
-          "opencode-fast-fallback" = "llama-server-33656:opencode-fast-fallback";
-          "opencode" = "llama-server-33657:opencode";
-          "opencode-slow" = "llama-server-33657:opencode-slow";
-          "opencode-fallback" = "llama-server-33657:opencode-fallback";
-          "sidekick" = "llama-server-33656:sidekick";
+          "hermes" = "rtx5090:hermes";
+          "hermes-fallback" = "rtx5090:hermes-fallback";
+          "opencode-fast" = "rtx5090:opencode-fast";
+          "opencode-fast-fallback" = "rtx5090:opencode-fast-fallback";
+          "opencode" = "gfx1151:opencode";
+          "opencode-slow" = "gfx1151:opencode-slow";
+          "opencode-fallback" = "gfx1151:opencode-fallback";
+          "sidekick" = "rtx5090:sidekick";
         };
       };
     };

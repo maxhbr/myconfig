@@ -414,6 +414,11 @@ in
       servicePort = 33656;
       serviceListenAddress = "0.0.0.0";
       serviceOpenFirewall = true;
+      # Publish this instance as `rtx5090` in myconfig.ai.localModels so
+      # downstream tools (litellm, opencode, ...) see backend-agnostic
+      # GPU-keyed names instead of implementation-revealing
+      # `llama-server-33656`.
+      serviceProviderName = "rtx5090";
       router.enable = true;
       models = map (
         model:
@@ -431,11 +436,11 @@ in
     };
 
     ############
-    # Vulkan-only sibling instance running the new llama-server router
+    # Vulkan-only sibling instance running the llama-server router
     # backend (single llama-server bound to Vulkan0 with an INI preset
     # listing every model). Lives in a container so the host can keep
-    # its CUDA-using llama-swap stack on a different port without
-    # GPU library conflicts.
+    # its CUDA-using stack on a different port without GPU library
+    # conflicts.
     containers.llama-cpp-33657 = {
       autoStart = true;
       privateNetwork = false;
@@ -484,6 +489,11 @@ in
             servicePort = 33657;
             serviceListenAddress = "0.0.0.0";
             serviceOpenFirewall = true;
+            # Publish this instance as `gfx1151` (the AMD Radeon 8060S /
+            # Ryzen AI Max+ 395 iGPU LLVM target) so downstream tools
+            # see a backend-agnostic GPU-keyed name instead of
+            # `llama-server-33657`.
+            serviceProviderName = "gfx1151";
             models =
               let
                 allAliasesAndNamesFromAmdModels = lib.concatMap (m: [ m.name ] ++ (m.aliases or [ ])) amdModels;

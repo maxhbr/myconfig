@@ -82,6 +82,27 @@
       description = "Open the firewall for the active llama-cpp service backend's port.";
     };
 
+    # User-facing provider name published into `myconfig.ai.localModels`
+    # (consumed by litellm, opencode, aichat, ...). The default keeps
+    # the legacy implementation-revealing scheme
+    # ("llama-server-${port}" / "llama-swap-${port}") so existing hosts
+    # see no change. Hosts that want a backend-agnostic, user-friendly
+    # name (e.g. by GPU device: "rtx5090", "gfx1151") should override
+    # this option.
+    serviceProviderName = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = ''
+        Provider name used for the `myconfig.ai.localModels` entry this
+        module publishes (and therefore the prefix LiteLLM emits for
+        every served model, e.g. `${"\${serviceProviderName}"}:hermes`).
+        Defaults to a port-suffixed implementation name
+        ("llama-server-${"\${servicePort}"}" or "llama-swap-${"\${servicePort}"}")
+        when null, preserving legacy behaviour.
+      '';
+      example = "rtx5090";
+    };
+
     router = {
       enable = mkEnableOption "per-device llama-server router scripts driven by INI presets (home-manager wrappers, independent of `serviceVariant`)";
 

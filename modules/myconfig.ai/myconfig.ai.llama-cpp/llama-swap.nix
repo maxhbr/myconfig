@@ -255,7 +255,8 @@ in
             port = config.services.llama-swap.port;
           in
           {
-            name = "llama-swap-${toString port}";
+            name =
+              if cfg.serviceProviderName != null then cfg.serviceProviderName else "llama-swap-${toString port}";
             models = allModelNames;
             port = port;
           }

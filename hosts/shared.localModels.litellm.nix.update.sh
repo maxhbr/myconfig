@@ -42,8 +42,10 @@ cat >"$OUTPUT" <<NIXEOF
 # SPDX-License-Identifier: MIT
 #
 # Exposes the LiteLLM proxy running on \`thing\` as a localModels provider.
-# LiteLLM aggregates the underlying llama-swap instances and prefixes each
-# model name with the producer's provider name (e.g. \`llama-swap-33656:...\`).
+# LiteLLM aggregates the underlying per-GPU model server instances and
+# prefixes each model name with the producer's provider name
+# (e.g. \`rtx5090:...\` for the NVIDIA RTX 5090 instance,
+# \`gfx1151:...\` for the AMD Radeon 8060S iGPU instance).
 # LiteLLM listens on \`0.0.0.0:${LITELLM_PORT}\` on \`thing\` (firewall-restricted to
 # wg0, see hosts/host.thing/default.nix), so peers reach it directly via the
 # wg0 IP — no Caddy in the path.

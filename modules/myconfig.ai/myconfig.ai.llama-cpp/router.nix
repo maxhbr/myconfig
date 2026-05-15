@@ -231,7 +231,11 @@ in
 
       myconfig.ai.localModels = [
         {
-          name = "llama-server-${toString cfg.servicePort}";
+          name =
+            if cfg.serviceProviderName != null then
+              cfg.serviceProviderName
+            else
+              "llama-server-${toString cfg.servicePort}";
           host = "localhost";
           port = cfg.servicePort;
           models = serviceLocalModelsEntries;

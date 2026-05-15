@@ -43,12 +43,12 @@
           port = 5678;
         }
         {
-          name = "llama-swap";
+          name = "rtx5090";
           port = 33656;
           forceHttps = false;
         }
         {
-          name = "llama-swap-2";
+          name = "gfx1151";
           port = 33657;
           forceHttps = false;
         }
