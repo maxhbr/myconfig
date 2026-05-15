@@ -403,6 +403,7 @@ in
     ./services.llama-swap.vllm.nix
   ];
   config = {
+    myconfig.ai.llama-cpp.serviceVariant = "llama-swap";
     myconfig.ai.llama-cpp.router.enable = true;
     myconfig.ai.llama-cpp.models = map (
       model:
@@ -418,7 +419,6 @@ in
       }
     ) rtxModels;
     services.llama-swap = {
-      enable = true;
       port = 33656;
       openFirewall = true;
       listenAddress = "0.0.0.0";

@@ -11,9 +11,10 @@
 #   runners.
 #
 # Gated on `config.services.llama-swap.enable`, so hosts that don't run
-# llama-swap simply leave their declared models inert. A future
-# alternative backend (e.g. a different model swap daemon) can live next
-# to this file and be gated on its own enable flag.
+# llama-swap simply leave their declared models inert. When
+# `myconfig.ai.llama-cpp.serviceVariant = "llama-swap"`, this module
+# also auto-enables `services.llama-swap.enable` (mkDefault) so the
+# host only needs to set port / listenAddress / openFirewall.
 {
   config,
   options,
@@ -231,6 +232,15 @@ let
 in
 {
   config = lib.mkMerge [
+    # Auto-enable services.llama-swap when the host opts in via the
+    # serviceVariant enum. Hosts can still set
+    # `services.llama-swap.enable = true` directly (e.g. inside
+    # containers where the enum-based wiring doesn't reach), and
+    # `mkDefault` keeps explicit overrides winning.
+    (lib.mkIf (cfg.serviceVariant == "llama-swap") {
+      services.llama-swap.enable = lib.mkDefault true;
+    })
+
     (lib.mkIf config.services.llama-swap.enable {
       myconfig.ai.localModels = [
         (

@@ -3,10 +3,22 @@
 #
 # Per-device llama-server router backend for the llama-cpp module.
 #
-# When `myconfig.ai.llama-cpp.router.enable = true`, generates one
-# `llama-server_<Device>` home-manager wrapper per device that has at
-# least one model declared in `myconfig.ai.llama-cpp.models`. Each
-# wrapper runs
+# Two distinct (but related) features live here:
+#
+#  1. `router.enable` — home-manager wrappers `llama-server_<Device>`
+#     that launch llama-server with the device-specific INI preset.
+#     Independent of which (if any) system service runs.
+#
+#  2. `serviceVariant == "llama-server"` — wire the same INI into the
+#     upstream nixpkgs `services.llama-cpp` module so a system-managed
+#     systemd unit serves the models for `serviceDevice`. Also
+#     publishes `myconfig.ai.localModels` so downstream tools (litellm,
+#     opencode, ...) can discover the served models.
+#
+# The companion variant `serviceVariant == "llama-swap"` lives in
+# ./llama-swap.nix.
+#
+# Per-device wrappers run
 #
 #   llama-server --models-preset <generated.ini> --models-max <N>
 #                --port <port> [extra args]
@@ -16,10 +28,6 @@
 # (or an upstream proxy) switch between models at runtime via the
 # OpenAI-compatible `model` field while keeping a fixed port per
 # device.
-#
-# Coexists with ./llama-swap.nix — both backends consume the same
-# `models` option. The systemd / localModels publication side is
-# scaffolded under `router.service.enable` but not yet implemented.
 {
   config,
   options,
@@ -83,13 +91,22 @@ let
       unhandled = translated.unhandled;
     };
 
+  # Shared { globals, sections } structure for a device. Used both for
+  # the home-manager wrappers' on-disk INI and for the
+  # `services.llama-cpp.modelsPreset` attrset.
+  iniDataForDevice = device: {
+    globals = globalKeys;
+    sections = map sectionFor (modelsForDevice device);
+  };
+
   iniForDevice =
     device:
-    router.renderIni {
-      name = "llama-cpp-router-${device}.ini";
-      globals = globalKeys;
-      sections = map sectionFor (modelsForDevice device);
-    };
+    router.renderIni (
+      {
+        name = "llama-cpp-router-${device}.ini";
+      }
+      // iniDataForDevice device
+    );
 
   scriptForDevice =
     device:
@@ -107,26 +124,130 @@ let
   allRouterScripts = map scriptForDevice effectiveDevices;
 
   hmEnabled = lib.hasAttrByPath [ "home-manager" "sharedModules" ] options;
+
+  # --- llama-server service backend --------------------------------------
+  #
+  # When `serviceVariant == "llama-server"`, configure the upstream
+  # nixpkgs `services.llama-cpp` module with the INI preset generated
+  # for `serviceDevice`. We also publish `myconfig.ai.localModels` so
+  # discovery-style consumers see the served models.
+
+  isLlamaServerService = cfg.serviceVariant == "llama-server";
+  serviceDevice = cfg.serviceDevice;
+
+  serviceModels = if isLlamaServerService then modelsForDevice serviceDevice else [ ];
+  serviceModelNames = map (m: m.name) serviceModels;
+  serviceModelAliases = lib.unique (lib.concatMap (m: m.aliases) serviceModels);
+
+  # `models` for myconfig.ai.localModels: one entry per model with its
+  # aliases attached. The service serves exactly one model at a time,
+  # but every section in the INI is selectable via the OpenAI `model`
+  # field, so we publish them all.
+  serviceLocalModelsEntries = map (m: {
+    name = m.name;
+    aliases = m.aliases;
+  }) serviceModels;
+
+  serviceModelsPreset =
+    if isLlamaServerService then router.toModelsPreset (iniDataForDevice serviceDevice) else null;
+
+  # Pick the right GPU-enabled llama-cpp package for the chosen
+  # service device. `devices.llamaServerFor` returns the *exe path* of
+  # llama-server, but `services.llama-cpp.package` wants the package.
+  # Inline the same dispatch here.
+  serviceLlamaPackage =
+    let
+      d = serviceDevice;
+    in
+    if d == null then
+      pkgs.llama-cpp
+    else if lib.hasPrefix "Vulkan" d then
+      pkgs.llama-cpp-vulkan
+    else if lib.hasPrefix "ROCm" d then
+      pkgs.llama-cpp-rocm
+    else
+      pkgs.llama-cpp.override { cudaSupport = true; };
 in
 {
-  config = lib.mkIf rcfg.enable (
-    lib.mkMerge [
-      (lib.optionalAttrs hmEnabled {
+  config = lib.mkMerge [
+    # --- assertions: serviceVariant <-> serviceDevice consistency --------
+    {
+      assertions = [
+        {
+          assertion = !isLlamaServerService || serviceDevice != null;
+          message = "myconfig.ai.llama-cpp.serviceVariant = \"llama-server\" requires myconfig.ai.llama-cpp.serviceDevice to be set (e.g. \"CUDA0\").";
+        }
+        {
+          assertion =
+            !isLlamaServerService
+            || serviceDevice == null
+            || (serviceModels != [ ] && guardDevice serviceDevice);
+          message = "myconfig.ai.llama-cpp.serviceDevice = \"${toString serviceDevice}\" has no models on this host (no model declares it in devices/unlistedDevices, or the host lacks the required GPU variant).";
+        }
+        {
+          assertion = cfg.serviceVariant != "llama-swap" || cfg.serviceDevice == null;
+          message = "myconfig.ai.llama-cpp.serviceDevice must be null when serviceVariant = \"llama-swap\" (llama-swap is multi-device by design).";
+        }
+      ];
+    }
+
+    # --- home-manager wrappers (router.enable, independent of service) ---
+    (lib.mkIf rcfg.enable (
+      lib.optionalAttrs hmEnabled {
         home-manager.sharedModules = [
           {
             home.packages = allRouterScripts;
           }
         ];
-      })
+      }
+    ))
 
-      # Service variant — option declared in options.nix; implementation
-      # is a follow-up. When wired up this branch should also publish
-      # `myconfig.ai.localModels` entries (one per device, with port +
-      # model name list).
-      (lib.mkIf rcfg.service.enable {
-        # TODO: generate systemd.user.services.llama-server-<device>
-        #       + myconfig.ai.localModels entries
-      })
-    ]
-  );
+    # --- llama-server system service backend -----------------------------
+    (lib.mkIf isLlamaServerService {
+      services.llama-cpp = {
+        enable = true;
+        package = lib.mkDefault serviceLlamaPackage;
+        host = cfg.serviceListenAddress;
+        port = cfg.servicePort;
+        openFirewall = cfg.serviceOpenFirewall;
+        modelsPreset = serviceModelsPreset;
+        # `--models-max` is not a first-class option on the nixpkgs
+        # module; pass it through `extraFlags`. Defaults to 1 (the
+        # single-llama-server-per-device deployment).
+        extraFlags = [
+          "--models-max"
+          (toString rcfg.modelsMax)
+        ];
+      };
+
+      # llama-server picks the device via $LLAMA_ARG_DEVICE.
+      # `CUDA_VISIBLE_DEVICES=` (empty) is required for Vulkan/ROCm so
+      # CUDA libs don't fight the active backend. `devices.envForDevice`
+      # returns "KEY=VALUE" strings; convert them to the
+      # systemd `environment` attrset shape.
+      systemd.services.llama-cpp.environment = lib.listToAttrs (
+        map (
+          kv:
+          let
+            parts = lib.splitString "=" kv;
+            k = builtins.head parts;
+            v = lib.concatStringsSep "=" (builtins.tail parts);
+          in
+          {
+            name = k;
+            value = v;
+          }
+        ) (devices.envForDevice serviceDevice)
+      );
+
+      myconfig.ai.localModels = [
+        {
+          name = "llama-server-${toString cfg.servicePort}";
+          host = "localhost";
+          port = cfg.servicePort;
+          models = serviceLocalModelsEntries;
+        }
+      ];
+    })
+  ];
 }

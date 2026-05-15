@@ -168,6 +168,46 @@ let
     in
     pkgs.writeText name text;
 
+  # Stringify a key/value as it should appear in the INI file. The
+  # `services.llama-cpp.modelsPreset` option from nixpkgs is typed as
+  # `attrsOf attrs` and is fed through `lib.generators.toINI {}`, which
+  # accepts bool/int/string directly — but to keep the on-wire INI
+  # byte-identical to the wrappers' INI we coerce booleans to
+  # "true"/"false" strings and ints to their decimal form here too.
+  stringifyValue =
+    value:
+    if value == true then
+      "true"
+    else if value == false then
+      "false"
+    else if builtins.isInt value then
+      toString value
+    else
+      toString value;
+
+  stringifyKeys = attrs: lib.mapAttrs (_: stringifyValue) attrs;
+
+  # Convert the `{ globals, sections }` shape into the attrset shape
+  # required by `services.llama-cpp.modelsPreset` (which is fed to
+  # `lib.generators.toINI`). The `[*]` global section becomes the "*"
+  # key; each model becomes a key under its `name`. `unhandled`
+  # comments are dropped here because nixpkgs' toINI has no concept of
+  # comments — the home-manager wrappers' INI still surfaces them.
+  toModelsPreset =
+    {
+      globals,
+      sections,
+    }:
+    {
+      "*" = stringifyKeys globals;
+    }
+    // lib.listToAttrs (
+      map (s: {
+        name = s.name;
+        value = stringifyKeys s.keys;
+      }) sections
+    );
+
   # Build the per-device wrapper. Usage: `llama-server_<Device> [port] [extra args]`.
   mkRouterScript =
     {
@@ -196,5 +236,10 @@ let
     };
 in
 {
-  inherit translateParamsToIni renderIni mkRouterScript;
+  inherit
+    translateParamsToIni
+    renderIni
+    toModelsPreset
+    mkRouterScript
+    ;
 }

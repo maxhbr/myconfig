@@ -11,10 +11,74 @@
 { lib, ... }:
 {
   options.myconfig.ai.llama-cpp = with lib; {
-    router = {
-      enable = mkEnableOption "per-device llama-server router scripts driven by INI presets";
+    # Which system service backend (if any) serves the models declared
+    # in `models`. `null` means no service is started by this module
+    # (hosts may still set the underlying `services.*.enable` directly).
+    #
+    # - "llama-swap"   -> auto-enable `services.llama-swap` and feed it
+    #                     the per-(model, device) wrappers (existing
+    #                     behaviour; this is the multi-GPU, swapping
+    #                     deployment).
+    # - "llama-server" -> auto-enable the upstream nixpkgs
+    #                     `services.llama-cpp` with the INI preset
+    #                     generated for `serviceDevice`. A single
+    #                     device serves every model on it; the runtime
+    #                     `model` field of the OpenAI API picks which
+    #                     section of the INI is active. Requires
+    #                     `serviceDevice` to be set.
+    serviceVariant = mkOption {
+      type = types.nullOr (
+        types.enum [
+          "llama-swap"
+          "llama-server"
+        ]
+      );
+      default = null;
+      description = ''
+        Pick which system service backend serves `myconfig.ai.llama-cpp.models`:
+          - null: no service activated by this module
+          - "llama-swap":   enable services.llama-swap (per-(model, device) wrappers)
+          - "llama-server": enable upstream services.llama-cpp with the INI preset
+                            generated for `serviceDevice`
+      '';
+    };
 
-      service.enable = mkEnableOption "systemd services for each generated router (implementation deferred; option declared for forward compat)";
+    # Required iff serviceVariant == "llama-server". Picks which device
+    # (e.g. "CUDA0", "Vulkan0") the single llama-server instance binds
+    # to. The generated INI for that device is then the only set of
+    # models the service exposes.
+    serviceDevice = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = ''
+        Device to bind the llama-server service to when
+        serviceVariant == "llama-server" (e.g. "CUDA0", "Vulkan0",
+        "ROCm0"). Must appear in at least one model's `devices` or
+        `unlistedDevices` list.
+      '';
+      example = "CUDA0";
+    };
+
+    # Service-side port/listen address for the llama-server backend.
+    # llama-swap is configured separately via services.llama-swap.*.
+    serviceListenAddress = mkOption {
+      type = types.str;
+      default = "127.0.0.1";
+      description = "Listen address used by services.llama-cpp when serviceVariant == \"llama-server\".";
+    };
+    servicePort = mkOption {
+      type = types.port;
+      default = 22600;
+      description = "Listen port used by services.llama-cpp when serviceVariant == \"llama-server\".";
+    };
+    serviceOpenFirewall = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Open the firewall for the llama-server backend port when serviceVariant == \"llama-server\".";
+    };
+
+    router = {
+      enable = mkEnableOption "per-device llama-server router scripts driven by INI presets (home-manager wrappers, independent of `serviceVariant`)";
 
       modelsMax = mkOption {
         type = types.int;
