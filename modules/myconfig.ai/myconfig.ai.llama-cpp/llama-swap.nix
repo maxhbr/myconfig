@@ -279,7 +279,7 @@ in
     })
 
     (lib.optionalAttrs hmEnabled {
-      home-manager.sharedModules = lib.mkIf config.services.llama-swap.enable [
+      home-manager.sharedModules = lib.mkIf (unpackedModels != [ ]) [
         {
           home.packages = allScripts ++ [ llamaBenchAll ] ++ llamaBenchPerDevice;
           myconfig.persistence.cache-directories = [
