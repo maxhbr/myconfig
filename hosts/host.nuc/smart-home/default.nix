@@ -20,7 +20,10 @@
 
   config = lib.mkIf config.myconfig.smart-home.enable {
     myconfig.smart-home = {
-      home-assistant.enable = true;
+      home-assistant = {
+        enable = true;
+        exposeOnLan = true;
+      };
       deconz.enable = true;
     };
   };

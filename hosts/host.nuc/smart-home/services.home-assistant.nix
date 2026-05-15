@@ -15,6 +15,17 @@ in
   options.myconfig.smart-home.home-assistant = with lib; {
     enable = mkEnableOption "Home Assistant native installation";
 
+    exposeOnLan = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Whether to expose Home Assistant on the local network
+        (opens the HTTP port in the firewall on all interfaces).
+        This allows the mobile companion app to connect directly
+        via the LAN IP, e.g. `http://192.168.1.92:8123`.
+      '';
+    };
+
     prometheus = {
       enable = mkOption {
         type = types.bool;
@@ -65,6 +76,7 @@ in
         "isal"
 
         # Common local integrations
+        "mobile_app"
         "shelly"
         "esphome"
         "mqtt"
@@ -98,6 +110,7 @@ in
       ]
       ++ lib.optional haCfg.prometheus.enable "prometheus";
       config = {
+        default_config = { };
         home = {
           name = "Home";
           latitude = 48.1351;
@@ -148,6 +161,8 @@ in
             ];
           }
         ];
+
+    networking.firewall.allowedTCPPorts = lib.mkIf haCfg.exposeOnLan [ haPort ];
 
     systemd.services.home-assistant = {
       serviceConfig = {
