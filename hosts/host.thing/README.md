@@ -9,7 +9,7 @@ AI workstation with AMD Radeon 8060S GPU (Framework Laptop 16).
 | eternal-terminal | 22022 | TCP/UDP |
 | vllm-rocm (container) | 8000 | OCI container with vllm |
 | llama-swap | 33656 | Model swap proxy (host) |
-| llama-swap-33657 | 33657 | Model swap proxy (container) |
+| llama-cpp-33657 | 33657 | llama-server router (container, Vulkan0-only) |
 | comfyui | 8188 | ComfyUI (via `run-comfyui` script) |
 | caddy (reverse proxy) | 443 | WireGuard tunnel access |
 | litellm | (dynamic) | LiteLLM proxy |

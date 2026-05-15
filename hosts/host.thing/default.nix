@@ -112,9 +112,9 @@
           "hermes-fallback" = "llama-swap-33656:hermes-fallback";
           "opencode-fast" = "llama-swap-33656:opencode-fast";
           "opencode-fast-fallback" = "llama-swap-33656:opencode-fast-fallback";
-          "opencode" = "llama-swap-33657:opencode";
-          "opencode-slow" = "llama-swap-33657:opencode-slow";
-          "opencode-fallback" = "llama-swap-33657:opencode-fallback";
+          "opencode" = "llama-server-33657:opencode";
+          "opencode-slow" = "llama-server-33657:opencode-slow";
+          "opencode-fallback" = "llama-server-33657:opencode-fallback";
           "sidekick" = "llama-swap-33656:sidekick";
         };
       };

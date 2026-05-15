@@ -30,7 +30,8 @@ let
     if config.services.litellm.host == "0.0.0.0" then "localhost" else config.services.litellm.host;
   litellmUrl = "http://${litellmHost}:${toString config.services.litellm.port}/v1";
   llamaSwapUrl = "http://127.0.0.1:${toString config.services.llama-swap.port}/v1";
-  llamaSwap2Url = "http://127.0.0.1:${toString config.containers.llama-swap-33657.config.services.llama-swap.port}/v1";
+  # Sibling instance now runs the llama-server router backend, not llama-swap.
+  llamaSwap2Url = "http://127.0.0.1:${toString config.containers.llama-cpp-33657.config.myconfig.ai.llama-cpp.servicePort}/v1";
 
   connections = [
     {

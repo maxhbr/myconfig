@@ -14,8 +14,9 @@
       {
         programs.opencode.settings = {
           # Default model: "opencode" alias -> qwen3.5-122B-A10B-Q5_K_M in the
-          # containerized llama-swap on port 33657 (provider name "llama-swap-33657").
-          model = "local-llama-swap-33657/opencode";
+          # containerized llama-server router on port 33657
+          # (provider name "llama-server-33657").
+          model = "local-llama-server-33657/opencode";
           # Fast/small model: "opencode-fast" alias -> Qwen3.6-35B-A3B-UD-Q5_K_XL
           # on the host-level llama-swap on port 33656 (provider name "llama-swap").
           small_model = "local-llama-swap/opencode-fast";

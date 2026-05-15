@@ -428,7 +428,12 @@ in
     };
 
     ############
-    containers.llama-swap-33657 = {
+    # Vulkan-only sibling instance running the new llama-server router
+    # backend (single llama-server bound to Vulkan0 with an INI preset
+    # listing every model). Lives in a container so the host can keep
+    # its CUDA-using llama-swap stack on a different port without
+    # GPU library conflicts.
+    containers.llama-cpp-33657 = {
       autoStart = true;
       privateNetwork = false;
       # hostAddress = "10.233.10.1";
@@ -471,7 +476,8 @@ in
           ];
           hardware.graphics.enable = true;
           myconfig.ai.llama-cpp = {
-            serviceVariant = "llama-swap";
+            serviceVariant = "llama-server";
+            serviceDevice = "Vulkan0";
             servicePort = 33657;
             serviceListenAddress = "0.0.0.0";
             serviceOpenFirewall = true;
@@ -498,12 +504,9 @@ in
               in
               fromRtxModels ++ amdModels;
           };
-          services.llama-swap.settings = {
-            healthCheckTimeout = 500;
-          };
         };
     };
-    myconfig.ai.localModels = config.containers.llama-swap-33657.config.myconfig.ai.localModels;
+    myconfig.ai.localModels = config.containers.llama-cpp-33657.config.myconfig.ai.localModels;
     ############
   };
 }
