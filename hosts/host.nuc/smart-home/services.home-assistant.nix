@@ -110,7 +110,7 @@ in
       ]
       ++ lib.optional haCfg.prometheus.enable "prometheus";
       config = {
-        default_config = { };
+        # default_config = { }; # this breaks metrics collection
         home = {
           name = "Home";
           latitude = 48.1351;
