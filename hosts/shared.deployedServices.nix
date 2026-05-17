@@ -76,6 +76,13 @@
           forceHttps = false;
         }
       ];
+      workstation = [
+        {
+          name = "rx5500xt";
+          port = 33656;
+          forceHttps = false;
+        }
+      ];
       p14 = [
         {
           name = "open-webui";
