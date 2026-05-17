@@ -39,7 +39,7 @@ in
     myconfig.ai.inference-cpp.enable = true;
     myconfig.ai.llama-cpp = {
       serviceVariant = "llama-server";
-      serviceDevice = "ROCm0";
+      serviceDevice = "Vulkan0";
       servicePort = 33656;
       serviceListenAddress = "0.0.0.0";
       serviceOpenFirewall = true;
@@ -53,7 +53,7 @@ in
         {
           name = "Qwen3.5-9B-UD-Q4_K_XL";
           path = "${modelsDir}/Qwen3.5-9B-GGUF/Qwen3.5-9B-UD-Q4_K_XL.gguf";
-          devices = [ "ROCm0" ];
+          devices = [ "Vulkan0" ];
           aliases = [ "sidekick" ];
           ttl = 300;
         }
