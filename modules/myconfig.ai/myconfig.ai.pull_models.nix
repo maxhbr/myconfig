@@ -152,6 +152,22 @@ in
     home-manager.sharedModules = [
       {
         home.packages = [ pullModels ];
+
+        systemd.user.services.pull-models = {
+          Unit = {
+            Description = "Pull HuggingFace models via pull-models script";
+            After = [ "default.target" ];
+          };
+          Service = {
+            Type = "oneshot";
+            ExecStartPre = "${pkgs.coreutils}/bin/sleep 60";
+            ExecStart = "${pullModels}/bin/pull-models";
+            RemainAfterExit = true;
+          };
+          Install = {
+            WantedBy = [ "default.target" ];
+          };
+        };
       }
     ];
   };
