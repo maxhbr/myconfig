@@ -35,7 +35,6 @@
     # copied from https://github.com/NixOS/nixos-hardware/blob/master/framework/13-inch/common/default.nix
     "${inputs.nixos-hardware}/framework/13-inch/common/../../../common/pc/laptop"
     "${inputs.nixos-hardware}/framework/13-inch/common/../../../common/pc/ssd"
-    "${inputs.nixos-hardware}/framework/13-inch/common/../../bluetooth.nix"
     "${inputs.nixos-hardware}/framework/13-inch/common/../../framework-tool.nix"
     "${inputs.nixos-hardware}/framework/13-inch/common/./audio.nix"
     {
