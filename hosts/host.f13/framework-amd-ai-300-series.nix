@@ -36,7 +36,7 @@
     "${inputs.nixos-hardware}/framework/13-inch/common/../../../common/pc/laptop"
     "${inputs.nixos-hardware}/framework/13-inch/common/../../../common/pc/ssd"
     "${inputs.nixos-hardware}/framework/13-inch/common/../../framework-tool.nix"
-    "${inputs.nixos-hardware}/framework/13-inch/common/./audio.nix"
+    "${inputs.nixos-hardware}/framework/13-inch/common/./classic-audio.nix"
     {
       # Fix TRRS headphones missing a mic
       # https://community.frame.work/t/headset-microphone-on-linux/12387/3
