@@ -89,7 +89,16 @@ let
       jq -r 'to_entries[] | .key as $dir | .value[] | "\($dir)\t\(.)"' "$MODELS_JSON" \
       | while IFS=$'\t' read -r dir model; do
           [[ -z "$dir" || -z "$model" ]] && continue
-          [[ -d "$dir" ]] || { warn "Directory '$dir' missing – skipping"; continue; }
+          expanded_dir="''${dir/#\~/$HOME}"
+          if [[ ! -d "$expanded_dir" ]]; then
+              log "Directory '$expanded_dir' missing – creating"
+              if $DRY_RUN; then
+                  log "[DRY RUN] mkdir -p $expanded_dir"
+              else
+                  mkdir -p "$expanded_dir"
+              fi
+          fi
+          dir="$expanded_dir"
 
           slash_count=$(tr -cd '/' <<<"$model" | wc -c)
 
