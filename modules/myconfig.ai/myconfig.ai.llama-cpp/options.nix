@@ -161,6 +161,43 @@
               default = null;
               description = "Context size (--ctx-size) for llama-server; null to use the model default";
             };
+            pull-models = mkOption {
+              type = types.nullOr (
+                types.submodule {
+                  options = {
+                    target_directory = mkOption {
+                      type = types.path;
+                      description = ''
+                        Directory into which the `pull-models` helper should
+                        download this model. Auto-collected into
+                        `myconfig.ai.pull_models.models` (keyed by this
+                        path) when `myconfig.ai.pull_models.enable` is on.
+                      '';
+                    };
+                    hf_spec = mkOption {
+                      type = types.listOf types.str;
+                      description = ''
+                        HuggingFace model specs for the `pull-models` helper.
+                        A list of strings, each one of: `"org/repo"` (full
+                        repo), `"org/repo/file.ext"` (single file), or
+                        `"org/repo/subdir"` (subdir/*). Useful when a
+                        single model has companion sidecars (e.g. mmproj
+                        files) that should be downloaded together. See
+                        `myconfig.ai.pull_models.models` for the spec
+                        format.
+                      '';
+                    };
+                  };
+                }
+              );
+              default = null;
+              description = ''
+                Optional metadata describing how `myconfig.ai.pull_models`
+                should download this model. When set, each element of
+                `hf_spec` is appended to
+                `myconfig.ai.pull_models.models.<target_directory>`.
+              '';
+            };
             variants = mkOption {
               type = types.attrsOf (
                 types.submodule {

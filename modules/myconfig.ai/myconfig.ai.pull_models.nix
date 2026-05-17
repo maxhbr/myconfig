@@ -149,6 +149,26 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Auto-collect per-model `pull-models = { target_directory; hf_spec; }`
+    # entries declared in `myconfig.ai.llama-cpp.models` into
+    # `myconfig.ai.pull_models.models`. Hosts can keep declaring extra
+    # specs in `pull_models.models` directly; module merging unions both
+    # sources per target directory.
+    myconfig.ai.pull_models.models =
+      let
+        llamaModels = config.myconfig.ai.llama-cpp.models or [ ];
+        withPull = builtins.filter (m: (m.pull-models or null) != null) llamaModels;
+      in
+      lib.foldl' (
+        acc: m:
+        let
+          dir = toString m.pull-models.target_directory;
+          specs = m.pull-models.hf_spec;
+          prev = acc.${dir} or [ ];
+        in
+        acc // { ${dir} = prev ++ specs; }
+      ) { } withPull;
+
     home-manager.sharedModules = [
       {
         home.packages = [ pullModels ];

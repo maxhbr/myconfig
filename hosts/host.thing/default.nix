@@ -151,26 +151,15 @@
         pi-coding-agent.enable = true;
         pull_models = {
           enable = true;
+          # Specs without a corresponding `myconfig.ai.llama-cpp.models`
+          # entry stay declared here. Everything that *is* served by
+          # llama-cpp is collected automatically from each model's
+          # `pull-models = { target_directory; hf_spec; }` (see
+          # ./myconfig.ai.llama-cpp.nix).
           models = {
             "/home/mhuber/models" = [
-              "unsloth/Qwen3.5-122B-A10B-GGUF/Q5_K_M"
-              "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf"
-              "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf"
-              "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf"
-              "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf"
-              "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf"
-              "unsloth/Qwen3.6-27B-GGUF/BF16"
               "unsloth/Qwen3.6-27B-NVFP4"
               "sakamakismile/Qwen3.6-27B-Text-NVFP4-MTP"
-              "unsloth/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf"
-              "unsloth/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q6_K_XL.gguf"
-              "unsloth/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf"
-              "unsloth/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf"
-              "unsloth/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q5_K_XL.gguf"
-              "unsloth/gemma-4-31B-it-GGUF/BF16"
-              "unsloth/gemma-4-31B-it-GGUF/mmproj-F16.gguf"
-              "unsloth/gemma-4-31B-it-GGUF/mmproj-BF16.gguf"
-              "unsloth/gemma-4-31B-it-GGUF/mmproj-F32.gguf"
             ];
           };
         };

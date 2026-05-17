@@ -7,10 +7,15 @@
   ...
 }:
 let
+  modelsPullDir = "/home/mhuber/models";
   rtxModels = [
     {
       name = "Qwen3.5-9B-Q5_K_M";
       path = "/models/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf" ];
+      };
       ctxSize = 262144;
       aliases = [ "sidekick" ];
       ttl = 300;
@@ -18,6 +23,10 @@ let
     {
       name = "Qwen3.6-35B-A3B-UD-Q5_K_XL";
       path = "/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf" ];
+      };
       aliases = [
         "Qwen3.6-35B-A3B-UD-Q5_K"
         "Qwen3.6-35B-A3B-UD-Q5"
@@ -32,6 +41,10 @@ let
     {
       name = "Qwen3.6-27B-Q8_0";
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf" ];
+      };
       params = [
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
@@ -69,6 +82,10 @@ let
     {
       name = "Qwen3.6-27B-UD-Q4_K_XL";
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf" ];
+      };
       params = [
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
@@ -79,6 +96,10 @@ let
     {
       name = "Qwen3.6-27B-UD-Q5_K_XL";
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf" ];
+      };
       params = [
         "--cache-type-k"
         "q8_0"
@@ -192,6 +213,10 @@ let
     {
       name = "Qwen3.6-27B-UD-Q6_K_XL";
       path = "/models/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf" ];
+      };
       params = [
         "--cache-type-k"
         "q8_0"
@@ -221,6 +246,10 @@ let
     {
       name = "gemma-4-31B-it-UD-Q5_K_XL";
       path = "/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q5_K_XL.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q5_K_XL.gguf" ];
+      };
       params = [
         "--batch-size"
         "2048"
@@ -245,6 +274,16 @@ let
     {
       name = "gemma-4-31B-it-UD-Q4_K_XL";
       path = "/models/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [
+          "unsloth/gemma-4-31B-it-GGUF/gemma-4-31B-it-UD-Q4_K_XL.gguf"
+          # mmproj sidecars used by `variants.mmproj.mmproj` below.
+          "unsloth/gemma-4-31B-it-GGUF/mmproj-F16.gguf"
+          "unsloth/gemma-4-31B-it-GGUF/mmproj-BF16.gguf"
+          "unsloth/gemma-4-31B-it-GGUF/mmproj-F32.gguf"
+        ];
+      };
       ctxSize = 65536;
       params = [
         "--batch-size"
@@ -280,6 +319,10 @@ let
     {
       name = "gemma-4-26B-A4B-it-UD-Q6_K_XL";
       path = "/models/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q6_K_XL.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q6_K_XL.gguf" ];
+      };
       params = [
         "--batch-size"
         "2048"
@@ -305,6 +348,10 @@ let
     {
       name = "gemma-4-26B-A4B-it-UD-Q8_K_XL";
       path = "/models/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q8_K_XL.gguf" ];
+      };
       params = [
         "--batch-size"
         "2048"
@@ -332,6 +379,10 @@ let
     {
       name = "qwen3.5-122B-A10B-Q5_K_M";
       path = "/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.5-122B-A10B-GGUF/Q5_K_M" ];
+      };
       aliases = [
         "opencode-slow"
         "opencode-fallback"
@@ -342,6 +393,10 @@ let
     {
       name = "Qwen3.6-27B-GGUF-BF16";
       path = "/models/Qwen3.6-27B-GGUF/BF16/Qwen3.6-27B-BF16-00001-of-00002.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-27B-GGUF/BF16" ];
+      };
       params = [
         "-ctk"
         "f16"
@@ -360,6 +415,10 @@ let
     {
       name = "gemma-4-31B-it-BF16";
       path = "/models/gemma-4-31B-it-GGUF/BF16/gemma-4-31B-it-BF16-00001-of-00002.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/gemma-4-31B-it-GGUF/BF16" ];
+      };
       params = [
         "-ctk"
         "f16"
@@ -380,6 +439,17 @@ in
     ./services.llama-swap.vllm.nix
   ];
   config = {
+    # The amdModels above are served by the `llama-cpp-33657` container,
+    # not by the host's own llama-cpp. Their `pull-models` specs would
+    # therefore not be picked up by the auto-collector that reads
+    # `config.myconfig.ai.llama-cpp.models` at the host level. Surface
+    # them here explicitly so `pull-models` on the host still downloads
+    # them into ${modelsPullDir} (the container reads `/models/` via a
+    # separate bind mount, which is out of scope for this helper).
+    myconfig.ai.pull_models.models.${modelsPullDir} = lib.concatMap (m: m.pull-models.hf_spec) (
+      builtins.filter (m: (m.pull-models or null) != null) amdModels
+    );
+
     myconfig.ai.llama-cpp = {
       # Single CUDA0-bound llama-server instance on port 33656 (the new
       # INI-preset-driven router backend). The home-manager
