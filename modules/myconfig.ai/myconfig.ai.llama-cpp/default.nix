@@ -17,6 +17,10 @@
 #   llama-swap.nix       — llama-swap integration
 #   router.nix           — per-device llama-server router (one INI-driven
 #                          llama-server_<Device> wrapper per device)
+#   myconfig.ai.pull_models.nix
+#                        — bridge that auto-collects each model's
+#                          `pull-models = { target_directory; hf_spec; }`
+#                          into `myconfig.ai.pull_models.models`
 #
 # The router and llama-swap backends consume the same `models` option
 # and can be enabled independently.
@@ -27,5 +31,6 @@
     ./services.llama-cpp.nix
     ./llama-swap.nix
     ./router.nix
+    ./myconfig.ai.pull_models.nix
   ];
 }
