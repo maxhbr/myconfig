@@ -17,7 +17,12 @@ in
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-pc-laptop
     inputs.nixos-hardware.nixosModules.common-pc-laptop-ssd
-    ./framework-amd-ai-300-series.nix # inputs.nixos-hardware.nixosModules.framework-amd-ai-300-series
+    inputs.nixos-hardware.nixosModules.framework-amd-ai-300-series
+    # framework-laptop-kmod (Embedded Controller access via sysfs) is enabled
+    # by default by nixos-hardware on kernel >= 6.10. It loads cros_ec and
+    # cros_ec_lpcs and ships the `framework-laptop-kmod` out-of-tree module.
+    # Uncomment to opt out:
+    # { hardware.framework.enableKmod = false; }
     ../../hardware/efi.nix
     ../../hardware/notebook-generic.nix
     ../../hardware/Radeon890M.nix
