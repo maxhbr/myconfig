@@ -15,6 +15,7 @@ in
 {
   imports = [
     ./myconfig.localModels.nix
+    ./myconfig.ai.pull_models.nix
     ./myconfig.ai.llama-cpp
     ./comfyui.nix
     ./container.Kokoro-FastAPI.nix
