@@ -120,7 +120,13 @@
                     '';
                   }
 
-                  vim-markdown
+                  {
+                    plugin = vim-markdown;
+                    config = ''
+                      " Don't fold markdown documents by default when opening them
+                      let g:vim_markdown_folding_disabled = 1
+                    '';
+                  }
 
                   {
                     # :Copilot setup
