@@ -81,7 +81,7 @@
       {
         config = {
           home.file = {
-            ".config/mozilla/native-messaging-hosts/com.justwatch.gopass.json" = {
+            ".mozilla/native-messaging-hosts/com.justwatch.gopass.json" = {
               text = ''
                 {
                 "name": "com.justwatch.gopass",
