@@ -375,6 +375,11 @@ let
 
   ];
 
+  # Package built for the host with ROCm+Vulkan support (variant = "amd").
+  # Passed into the container so it reuses the same binary instead of
+  # falling back to the plain llama-cpp without GPU backends.
+  host-llama-cpp-pkg = config.myconfig.ai.inference-cpp.llama-cpp.package;
+
   amdModels = [
     {
       name = "qwen3.5-122B-A10B-Q5_K_M";
@@ -477,6 +482,7 @@ in
           ];
           unlistedDevices = [
             "Vulkan1"
+            "ROCm0"
           ];
         }
       ) rtxModels;
@@ -530,6 +536,10 @@ in
             ../../modules/myconfig.ai/myconfig.localModels.nix
           ];
           hardware.graphics.enable = true;
+          # Use the host's llama-cpp binary (built with ROCm+Vulkan for
+          # variant = "amd") instead of the container's default plain
+          # build which lacks GPU backend support.
+          services.llama-cpp.package = lib.mkForce host-llama-cpp-pkg;
           myconfig.ai.llama-cpp = {
             serviceVariant = "llama-server";
             serviceDevice = "Vulkan0";
@@ -562,7 +572,16 @@ in
                   }
                 ) rtxModels;
               in
-              fromRtxModels ++ amdModels;
+              map (
+                model:
+                model
+                // {
+                  devices = [
+                    "Vulkan0"
+                    "ROCm0"
+                  ];
+                }
+              ) (fromRtxModels ++ amdModels);
           };
         };
     };
