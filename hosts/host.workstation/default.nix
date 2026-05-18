@@ -14,8 +14,6 @@
     ./imgwork.nfs.nix
     ../../hardware/RX5500XT.nix
     ./ai.workstation.nix
-    ./myconfig.ai.llama-cpp.nix
-    ./services.caddy.nix
     {
       myconfig.observability = {
         host_hostname = "nuc";
