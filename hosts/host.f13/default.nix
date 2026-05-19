@@ -162,7 +162,10 @@ in
                     jumphost_args=(--jumphost ${myconfig.metadatalib.getIp "vserver"} --jport 22022)
                   fi
                   set -x
-                  exec et "''${jumphost_args[@]}" --kill-other-sessions ${portsArgs} --noexit mhuber@${hostAddr}:22022 --command "host-tmux-session"
+                  until et "''${jumphost_args[@]}" --kill-other-sessions ${portsArgs} --noexit mhuber@${hostAddr}:22022 --command "host-tmux-session"; do
+                    echo "et to ${hostAddr} failed, retrying in 5s..." >&2
+                    sleep 5
+                  done
                 '';
               mkAlacrittyTmuxSession =
                 host: useWg: ports:
