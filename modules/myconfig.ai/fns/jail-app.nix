@@ -188,6 +188,12 @@ let
     ro-bind "/usr/bin" "/usr/bin"
   )
   ++ [
+    # Expose `/run` read-only so the agent can access runtime state such
+    # as D-Bus sockets, PipeWire/PulseAudio sockets, and other system
+    # services without being able to modify them.
+    (try-ro-bind "/run" "/run")
+  ]
+  ++ [
     # Expose `/etc/nix/nix.conf` read-only so that `nix` commands inside
     # the jail pick up the host's Nix configuration (substituters,
     # trusted-users, experimental-features, etc.).
