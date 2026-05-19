@@ -19,12 +19,11 @@
       #   }
       # ];
       nuc = [
-        {
+        (rec {
           name = "hass";
           port = 8123;
-          disableCache = true;
-          forceHttps = false;
-        }
+          redirect = "http://${name}.nuc.wg0.maxhbr.local:${toString port}";
+        })
         {
           name = "deconz";
           port = 8124;

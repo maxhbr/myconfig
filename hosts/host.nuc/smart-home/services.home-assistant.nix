@@ -121,7 +121,7 @@ in
         };
         frontend = { };
         http = {
-          base_url = "https://hass.nuc.wg0.maxhbr.local/";
+          base_url = "http://hass.nuc.wg0.maxhbr.local:${toString haPort}/";
           use_x_forwarded_for = true;
           trusted_proxies = [
             "127.0.0.1"

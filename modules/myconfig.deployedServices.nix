@@ -43,6 +43,17 @@
                   `Pragma` and `Expires` response headers.
                 '';
               };
+              redirect = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = ''
+                  If set, Caddy will issue an HTTP redirect to this URL
+                  instead of acting as a reverse proxy. Useful when the
+                  service should be reached directly on its upstream
+                  host (e.g. to avoid websocket / cookie issues through
+                  the proxy).
+                '';
+              };
             };
           }
         )
@@ -141,12 +152,13 @@
                 ip,
                 forceHttps,
                 disableCache,
+                redirect,
               }:
-              if port == null then
+              if port == null && redirect == null then
                 [ ]
               else
                 let
-                  portAliasUnique = (portToService.${toString port} == name);
+                  portAliasUnique = port != null && (portToService.${toString port} == name);
                   aliases =
                     (lib.optional portAliasUnique "${toString port}.${baseHostName}")
                     ++ [
@@ -162,10 +174,17 @@
                       -Last-Modified
                     }
                   '';
-                  proxyConfig = ''
-                    ${noCacheHeaders}
-                    reverse_proxy http://${ip}:${toString port}
-                  '';
+                  proxyConfig =
+                    if redirect != null then
+                      ''
+                        ${noCacheHeaders}
+                        redir ${redirect} permanent
+                      ''
+                    else
+                      ''
+                        ${noCacheHeaders}
+                        reverse_proxy http://${ip}:${toString port}
+                      '';
                 in
                 if forceHttps then
                   [
