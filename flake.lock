@@ -1,5 +1,26 @@
 {
   "nodes": {
+    "NanoKVM-USB": {
+      "inputs": {
+        "flake-utils": "flake-utils",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1775673275,
+        "narHash": "sha256-KLXyRrv9vG44X/K0D6S9h1qWJxPBxXLiVO8ltQdChxo=",
+        "owner": "maxhbr",
+        "repo": "NanoKVM-USB",
+        "rev": "e41cd30297db4a87dcb77ed2d01d5b7a721bb90d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "maxhbr",
+        "repo": "NanoKVM-USB",
+        "type": "github"
+      }
+    },
     "agenix": {
       "inputs": {
         "darwin": [],
@@ -7,7 +28,7 @@
         "nixpkgs": [
           "nixpkgs"
         ],
-        "systems": "systems"
+        "systems": "systems_2"
       },
       "locked": {
         "lastModified": 1770165109,
@@ -134,7 +155,7 @@
     },
     "flake-utils": {
       "inputs": {
-        "systems": "systems_2"
+        "systems": "systems"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -153,6 +174,24 @@
     "flake-utils_2": {
       "inputs": {
         "systems": "systems_3"
+      },
+      "locked": {
+        "lastModified": 1731533236,
+        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "flake-utils_3": {
+      "inputs": {
+        "systems": "systems_4"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -362,7 +401,7 @@
     },
     "lib-aggregate": {
       "inputs": {
-        "flake-utils": "flake-utils_2",
+        "flake-utils": "flake-utils_3",
         "nixpkgs-lib": "nixpkgs-lib"
       },
       "locked": {
@@ -381,11 +420,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1779263859,
-        "narHash": "sha256-v2DM7IuylfdilrbOahQ+eK2SeH86cQZw07+WVulVOrc=",
+        "lastModified": 1779264556,
+        "narHash": "sha256-L/cVp54MbEqDtF2AjW5mnksQZ9gCz4Sq7JzXBRV05OU=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "20ed92c22c7c478d972bc298379d5ef6eb7b3bf6",
+        "rev": "28c7da6f4cc6685fd7b70b59913496dba4df437c",
         "type": "github"
       },
       "original": {
@@ -721,9 +760,10 @@
     },
     "root": {
       "inputs": {
+        "NanoKVM-USB": "NanoKVM-USB",
         "agenix": "agenix",
         "clipboard-sync": "clipboard-sync",
-        "flake-utils": "flake-utils",
+        "flake-utils": "flake-utils_2",
         "git-hooks": "git-hooks",
         "hermes-agent": "hermes-agent",
         "home": "home",
@@ -772,6 +812,21 @@
       }
     },
     "systems_3": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    },
+    "systems_4": {
       "locked": {
         "lastModified": 1681028828,
         "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
