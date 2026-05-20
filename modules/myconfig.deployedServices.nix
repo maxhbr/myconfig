@@ -62,17 +62,40 @@
       description = "Map of hostnames to their deployed services";
     };
     configureCaddy = mkEnableOption "configure caddy for this machine";
+    center = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = ''
+        The central host. For example "vserver".
+        If set it generats proxy configuration for all services on the other hosts.
+        If another host ("nur") provides "hass.nuc.wg0.maxhbr.local" it generates "hass.nuc.vserver.wg0.maxhbr.local" and redirects to it.
+        It redirects to the https port but ignores the certificate (which is self generated).
+      '';
+    };
   };
 
   config = lib.mkIf (config.myconfig.deployedServices.services != { }) {
+    # When this host serves Caddy for deployedServices, open the
+    # corresponding HTTP(S) ports on the WireGuard interface so peers
+    # can actually reach it. Each Caddy vhost binds explicitly to the
+    # host's `wg0` IP, so opening these ports on `wg0` only is
+    # sufficient and keeps the public interface untouched.
+    networking.firewall.interfaces."wg0".allowedTCPPorts =
+      lib.mkIf config.myconfig.deployedServices.configureCaddy
+        [
+          80
+          443
+        ];
     services.caddy = lib.mkIf config.myconfig.deployedServices.configureCaddy {
       enable = lib.mkDefault true;
       virtualHosts =
         let
           hostName = config.networking.hostName;
           baseHostName = "${hostName}.wg0.maxhbr.local";
-          servicesList = config.myconfig.deployedServices.services."${hostName}";
           allServices = config.myconfig.deployedServices.services;
+          servicesList = allServices."${hostName}" or [ ];
+          center = config.myconfig.deployedServices.center;
+          isCenter = center != null && center == hostName;
           portToService = lib.listToAttrs (
             lib.map (s: {
               name = toString s.port;
@@ -230,19 +253,98 @@
               '';
             };
           };
+          # When this host is the configured `center`, generate proxy
+          # virtualHosts that re-expose services from every other host
+          # under `${name}.${otherHost}.${centerBase}` and reverse-proxy
+          # to the upstream Caddy at
+          # `https://${name}.${otherHost}.wg0.maxhbr.local`. The upstream
+          # uses `tls internal` (self-signed), so TLS verification is
+          # disabled for the proxy transport.
+          centerProxyHosts =
+            if !isCenter then
+              { }
+            else
+              let
+                centerIp = myconfig.metadatalib.getWgIp hostName;
+                otherHosts = lib.filter (h: h != hostName) (lib.attrNames allServices);
+                proxyForService =
+                  otherHost:
+                  {
+                    name,
+                    port,
+                    redirect,
+                    ...
+                  }:
+                  if port == null && redirect == null then
+                    [ ]
+                  else
+                    let
+                      upstreamFqdn = "${name}.${otherHost}.wg0.maxhbr.local";
+                      proxiedFqdn = "${name}.${otherHost}.${baseHostName}";
+                      extraConfig = ''
+                        tls internal
+                        reverse_proxy https://${upstreamFqdn} {
+                          header_up Host {upstream_hostport}
+                          transport http {
+                            tls
+                            tls_insecure_skip_verify
+                          }
+                        }
+                      '';
+                    in
+                    [
+                      (lib.nameValuePair proxiedFqdn {
+                        hostName = proxiedFqdn;
+                        listenAddresses = [ centerIp ];
+                        serverAliases = [ "${name}.${otherHost}.${hostName}.wg0" ];
+                        inherit extraConfig;
+                      })
+                    ];
+              in
+              lib.listToAttrs (
+                lib.concatMap (
+                  otherHost: lib.concatMap (proxyForService otherHost) allServices.${otherHost}
+                ) otherHosts
+              );
         in
-        serviceHosts // indexHost;
+        serviceHosts // indexHost // centerProxyHosts;
     };
     networking.extraHosts =
       let
         baseDomain = "wg0.maxhbr.local";
+        center = config.myconfig.deployedServices.center;
+        allServices = config.myconfig.deployedServices.services;
+        allHosts = lib.attrNames allServices;
+        centerWgIp = if center != null then myconfig.metadatalib.getWgIp center else null;
+        # When a center is configured, also publish
+        # `${name}.${otherHost}.${center}.${baseDomain}` mappings
+        # pointing at the center's WG IP for every service on every
+        # non-center host.
+        # Suffix appended to short `${name}.${otherHost}` / `${port}.${otherHost}`
+        # labels to form the center-proxied FQDN. Mirrors the vhost names
+        # generated above when this host is the center.
+        centerSuffix = lib.optionalString (center != null) "${center}.${baseDomain}";
+        centerAliasLines = lib.optionals (center != null) (
+          lib.concatMap (
+            hostname:
+            lib.concatMap (
+              { name, port, ... }:
+              [
+                "${centerWgIp} ${name}.${hostname}.${centerSuffix}"
+              ]
+              ++ lib.optionals (port != null) [
+                "${centerWgIp} ${toString port}.${hostname}.${centerSuffix}"
+              ]
+            ) allServices.${hostname}
+          ) (lib.filter (h: h != center) allHosts)
+        );
       in
       lib.concatStringsSep "\n" (
-        lib.concatMap (
+        (lib.concatMap (
           hostname:
           let
             wgIp = myconfig.metadatalib.getWgIp hostname;
-            baseHost = "${hostname}.wg0.maxhbr.local";
+            baseHost = "${hostname}.${baseDomain}";
           in
           [
             "${wgIp} ${baseHost}"
@@ -255,8 +357,9 @@
             ++ lib.optionals (port != null) [
               "${wgIp} ${toString port}.${baseHost}"
             ]
-          ) config.myconfig.deployedServices.services.${hostname})
-        ) (lib.attrNames config.myconfig.deployedServices.services)
+          ) allServices.${hostname})
+        ) allHosts)
+        ++ centerAliasLines
       );
   };
 }

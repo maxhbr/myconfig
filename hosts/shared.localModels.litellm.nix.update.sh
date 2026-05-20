@@ -74,6 +74,13 @@ in
         host = myconfig.metadatalib.getWgIp "thing";
         port = ${LITELLM_PORT};
       }
+      {
+        name = "litellm.thing.vserver.wg0";
+        inherit models;
+        # Proxy connection via vserver.
+        host = "https://litellm.thing.vserver.wg0.maxhbr.local";
+        port = 443;
+      }
     ];
   };
 }
