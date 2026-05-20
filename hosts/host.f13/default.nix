@@ -46,6 +46,7 @@ in
     ./mykeylight
     ./role.work
     ./ai.f13.nix
+    ./NanoKVM-USB.nix
     ../shared.localModels.litellm.nix
     {
       services.openssh = {

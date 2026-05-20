@@ -49,6 +49,9 @@
 
     hermes-agent.url = "github:NousResearch/hermes-agent/v2026.5.7";
     hermes-agent.inputs.nixpkgs.follows = "nixpkgs";
+
+    NanoKVM-USB.url = "github:maxhbr/NanoKVM-USB";
+    NanoKVM-USB.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -219,6 +222,10 @@
                         };
                         "myconfig/p14-priv/" = {
                           checkout = "git clone ssh://p14/home/mhuber/myconfig/priv/.git";
+                          update = "git pull --rebase";
+                        };
+                        "myconfig/maxhbr-NanoKVM-USB" = {
+                          checkout = "git clone https://github.com/maxhbr/NanoKVM-USB";
                           update = "git pull --rebase";
                         };
                       };
