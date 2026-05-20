@@ -13,6 +13,12 @@
     deconz.enable = mkEnableOption "enable deconz service";
   };
 
+  # NOTE: deCONZ/Phoscon was replaced by Zigbee2MQTT (see
+  # services.zigbee2mqtt.nix). This module is kept for rollback during
+  # the migration: setting `myconfig.smart-home.deconz.enable = true`
+  # in `default.nix` will restore deCONZ. Both stacks expect exclusive
+  # access to the ConBee II at `/dev/ttyACM0`, so only enable one at
+  # a time.
   config = lib.mkIf config.myconfig.smart-home.deconz.enable {
     environment.systemPackages = with pkgs; [
       config.services.deconz.package

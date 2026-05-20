@@ -25,8 +25,9 @@
           redirect = "http://${name}.nuc.wg0.maxhbr.local:${toString port}";
         })
         {
-          name = "deconz";
-          port = 8124;
+          # Zigbee2MQTT frontend (replaced deCONZ/Phoscon, formerly :8124)
+          name = "zigbee2mqtt";
+          port = 8080;
         }
       ];
       thing = [

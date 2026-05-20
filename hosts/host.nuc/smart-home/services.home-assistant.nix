@@ -93,7 +93,9 @@ in
         "cast"
 
         # Device ecosystems
-        "deconz"
+        # Zigbee is handled via Zigbee2MQTT -> the `mqtt` component
+        # above picks up Z2M's MQTT discovery messages; no dedicated
+        # `deconz` component is needed.
         "hue"
         "switchbot"
         "unifi"
