@@ -8,7 +8,7 @@
 }:
 let
   haCfg = config.myconfig.smart-home.home-assistant;
-  haPort = config.services.home-assistant.config.http.server_port or 8123;
+  haPort = 8123;
   obsClientCfg = config.myconfig.observability.client;
 in
 {
@@ -122,6 +122,7 @@ in
         frontend = { };
         http = {
           base_url = "http://hass.nuc.wg0.maxhbr.local:${toString haPort}/";
+          server_port = haPort;
           use_x_forwarded_for = true;
           trusted_proxies = [
             "127.0.0.1"
