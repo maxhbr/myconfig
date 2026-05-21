@@ -16,6 +16,7 @@ in
     ./host.uptime.nix
     ./host.home-lab-status.nix
     ./host.host-status.nix
+    ./host.scrape-health.nix
     ./host.litellm.nix
     ./host.power.nix
     ./client.nix
