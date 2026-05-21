@@ -150,7 +150,17 @@ in
     # Append a scrape job to the local vmagent (if observability.client
     # is enabled). vmagent reads `Authorization: Bearer <token>` from
     # `bearer_token_file`. The token is a Home Assistant Long-Lived
-    # Access Token created in the HA UI; see `tokenFile` option above.
+    # Access Token created in the HA UI.
+    #
+    # The vmagent NixOS module sets `DynamicUser=true`, which means the
+    # `vmagent` user/group only exist while the unit is running — so
+    # the `chown vmagent:vmagent` agenix would run during the boot-time
+    # activation script silently fails (the user doesn't exist yet),
+    # leaving the decrypted file as `root:root 0400` and unreadable by
+    # vmagent. To dodge that, the agenix secret stays at its default
+    # location with default ownership, and systemd materialises a copy
+    # in the unit's credentials directory via `LoadCredential=` — which
+    # systemd reads as root and makes available to the dynamic user.
     services.vmagent.prometheusConfig.scrape_configs =
       lib.mkIf (haCfg.prometheus.enable && config.services.vmagent.enable)
         [
@@ -158,11 +168,33 @@ in
             job_name = "home-assistant";
             metrics_path = "/api/prometheus";
             scrape_interval = haCfg.prometheus.scrapeInterval;
-            bearer_token_file = toString config.myconfig.secrets."hass_bearer_token_file".dest;
+            # systemd materialises the credential at this path inside
+            # the unit's runtime (a tmpfs only readable by the unit's
+            # user). See `LoadCredential=` below.
+            bearer_token_file = "/run/credentials/vmagent.service/hass_bearer_token";
             static_configs = [
               { targets = [ "127.0.0.1:${toString haPort}" ]; }
             ];
           }
+        ];
+
+    # Gate on `age.secrets.hass_bearer_token_file` actually existing —
+    # the secret is only materialised when the private overlay
+    # provides `source = ...` (see `myconfig.secrets.nix`). On hosts
+    # that build the public flake without the overlay (e.g. CI), the
+    # secret is filtered out and there's no file to load.
+    systemd.services.vmagent.serviceConfig.LoadCredential =
+      lib.mkIf
+        (
+          haCfg.prometheus.enable
+          && config.services.vmagent.enable
+          && (config.age.secrets ? hass_bearer_token_file)
+        )
+        [
+          # systemd reads the source as root (which can read the
+          # `root:root 0400` agenix file), then makes a copy available
+          # to the unit's (dynamic) user under `%d/hass_bearer_token`.
+          "hass_bearer_token:${config.age.secrets.hass_bearer_token_file.path}"
         ];
 
     networking.firewall.allowedTCPPorts = lib.mkIf haCfg.exposeOnLan [ haPort ];
@@ -183,12 +215,15 @@ in
       isSystemUser = true;
       createHome = true;
     };
+    # Declare the bearer-token secret slot. The actual `source = ...`
+    # is provided by the private overlay (`priv/hosts/host.nuc/`),
+    # which holds the encrypted token. Owner/permissions stay at the
+    # agenix defaults (`root:root 0400`) — vmagent reads it indirectly
+    # via the `LoadCredential=` hop above rather than reading the
+    # decrypted file directly, so the file does not need to be owned
+    # by the (dynamic) `vmagent` user.
     myconfig.secrets = lib.mkIf (haCfg.prometheus.enable && config.services.vmagent.enable) {
-      "hass_bearer_token_file" = {
-        dest = "/run/vmagent/hass_bearer_token_file";
-        owner = "vmagent";
-        group = "vmagent";
-      };
+      "hass_bearer_token_file" = { };
     };
   };
 }

@@ -11,69 +11,80 @@ with lib;
 let
   cfg = config.myconfig.secrets;
 
-  secret = types.submodule {
-    options = {
-      source = mkOption {
-        default = null;
-        type = types.nullOr types.path;
-        description = "local secret path";
-      };
+  secret = types.submodule (
+    { name, ... }:
+    {
+      options = {
+        source = mkOption {
+          default = null;
+          type = types.nullOr types.path;
+          description = "local secret path";
+        };
 
-      dest = mkOption {
-        type = types.str;
-        description = "where to write the decrypted secret to";
-      };
+        dest = mkOption {
+          type = types.str;
+          default = "/run/agenix/${name}";
+          defaultText = lib.literalExpression ''"/run/agenix/''${name}"'';
+          description = ''
+            Path where the decrypted secret is installed. Defaults to the
+            agenix default location (`/run/agenix/<name>`), which is owned
+            by `root:root 0400` and only readable by root and by systemd
+            units that load it via `LoadCredential=`. Override for secrets
+            consumed directly by a service running as a non-root user.
+          '';
+        };
 
-      owner = mkOption {
-        default = "root";
-        type = types.str;
-        description = "who should own the secret";
-      };
+        owner = mkOption {
+          default = "root";
+          type = types.str;
+          description = "who should own the secret";
+        };
 
-      group = mkOption {
-        default = "root";
-        type = types.str;
-        description = "what group should own the secret";
-      };
+        group = mkOption {
+          default = "root";
+          type = types.str;
+          description = "what group should own the secret";
+        };
 
-      permissions = mkOption {
-        default = "0400";
-        type = types.str;
-        description = "Permissions expressed as octal.";
-      };
+        permissions = mkOption {
+          default = "0400";
+          type = types.str;
+          description = "Permissions expressed as octal.";
+        };
 
-      wantedBy = mkOption {
-        default = [ ];
-        type = types.listOf types.str;
-        description = "Other targets that depend on this secret.";
-      };
+        wantedBy = mkOption {
+          default = [ ];
+          type = types.listOf types.str;
+          description = "Other targets that depend on this secret.";
+        };
 
-      unsafePubkeyOverwrite = mkOption {
-        default = null;
-        type = types.nullOr types.path;
-        description = "overwrite the used pubkey.";
-      };
+        unsafePubkeyOverwrite = mkOption {
+          default = null;
+          type = types.nullOr types.path;
+          description = "overwrite the used pubkey.";
+        };
 
-      unsafePrivkeyOverwrite = mkOption {
-        default = null;
-        type = types.nullOr types.path;
-        description = "overwrite the used privkey.";
-      };
+        unsafePrivkeyOverwrite = mkOption {
+          default = null;
+          type = types.nullOr types.path;
+          description = "overwrite the used privkey.";
+        };
 
-      symlink = mkOption {
-        default = true;
-        type = types.bool;
-        description = ''
-          Whether to symlink the secret to its destination (agenix default)
-          or decrypt it directly to `dest`.
+        symlink = mkOption {
+          default = true;
+          type = types.bool;
+          description = ''
+            Whether to symlink the secret to its destination (agenix default)
+            or decrypt it directly to `dest`.
 
-          Set to `false` when the `dest` path is bind-mounted into a NixOS
-          container, since a symlink target under `/run/agenix` would not
-          be visible inside the container's mount namespace.
-        '';
+            Set to `false` when the `dest` path is bind-mounted into a NixOS
+            container, since a symlink target under `/run/agenix` would not
+            be visible inside the container's mount namespace.
+          '';
+        };
       };
-    };
-  };
+    }
+  );
 
   mkEncryptedAgeFile =
     name:
