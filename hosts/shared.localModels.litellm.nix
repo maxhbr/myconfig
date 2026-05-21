@@ -100,8 +100,8 @@ in
         name = "litellm.thing.vserver.wg0";
         inherit models;
         # proxy connection via vserver
-        host = "https://litellm.thing.vserver.wg0.maxhbr.local";
-        port = 443;
+        host = "litellm.thing.vserver.wg0.maxhbr.local";
+        port = 80;
       }
     ];
   };

@@ -272,6 +272,7 @@
                   {
                     name,
                     port,
+                    forceHttps,
                     redirect,
                     ...
                   }:
@@ -281,8 +282,12 @@
                     let
                       upstreamFqdn = "${name}.${otherHost}.wg0.maxhbr.local";
                       proxiedFqdn = "${name}.${otherHost}.${baseHostName}";
-                      extraConfig = ''
-                        tls internal
+                      shortAlias = "${name}.${otherHost}.${hostName}.wg0";
+                      # The upstream Caddy serves the service on HTTPS
+                      # with a self-signed `tls internal` cert, so we
+                      # always proxy via HTTPS for the https variant and
+                      # disable verification.
+                      httpsProxy = ''
                         reverse_proxy https://${upstreamFqdn} {
                           header_up Host {upstream_hostport}
                           transport http {
@@ -291,15 +296,51 @@
                           }
                         }
                       '';
+                      # When the upstream is `forceHttps = false`, it
+                      # additionally serves the service on plain HTTP;
+                      # proxy via http there to avoid unnecessary TLS.
+                      # `header_up Host` is required so the upstream
+                      # Caddy matches its own `http://${upstreamFqdn}`
+                      # site rather than seeing the center-proxied
+                      # Host and falling through to its auto-https
+                      # redirect (which would otherwise 308 every
+                      # request back to https://*.vserver.*).
+                      httpProxy = ''
+                        reverse_proxy http://${upstreamFqdn} {
+                          header_up Host {upstream_hostport}
+                        }
+                      '';
                     in
-                    [
-                      (lib.nameValuePair proxiedFqdn {
-                        hostName = proxiedFqdn;
-                        listenAddresses = [ centerIp ];
-                        serverAliases = [ "${name}.${otherHost}.${hostName}.wg0" ];
-                        inherit extraConfig;
-                      })
-                    ];
+                    if forceHttps then
+                      [
+                        (lib.nameValuePair proxiedFqdn {
+                          hostName = proxiedFqdn;
+                          listenAddresses = [ centerIp ];
+                          serverAliases = [ shortAlias ];
+                          extraConfig = ''
+                            tls internal
+                            ${httpsProxy}
+                          '';
+                        })
+                      ]
+                    else
+                      [
+                        (lib.nameValuePair "https://${proxiedFqdn}" {
+                          hostName = "https://${proxiedFqdn}";
+                          listenAddresses = [ centerIp ];
+                          serverAliases = [ "https://${shortAlias}" ];
+                          extraConfig = ''
+                            tls internal
+                            ${httpsProxy}
+                          '';
+                        })
+                        (lib.nameValuePair "http://${proxiedFqdn}" {
+                          hostName = "http://${proxiedFqdn}";
+                          listenAddresses = [ centerIp ];
+                          serverAliases = [ "http://${shortAlias}" ];
+                          extraConfig = httpProxy;
+                        })
+                      ];
               in
               lib.listToAttrs (
                 lib.concatMap (
