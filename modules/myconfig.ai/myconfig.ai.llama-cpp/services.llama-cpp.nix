@@ -31,15 +31,6 @@ let
     else
       [ ];
   hasVariant = v: builtins.elem v gpuvariants;
-  matching-llama-cpp =
-    if hasVariant "amd" then
-      pkgs.llama-cpp-rocm
-    else if hasVariant "amd-no-rocm" then
-      pkgs.llama-cpp-vulkan
-    # else  hasVariant "nvidia" then
-    #   pkgs.llama-cpp.override { cudaSupport = true; }
-    else
-      pkgs.llama-cpp;
   my-llama-cpp = pkgs.llama-cpp.override {
     rocmSupport = hasVariant "amd";
     vulkanSupport = (hasVariant "amd-no-rocm" || hasVariant "amd");

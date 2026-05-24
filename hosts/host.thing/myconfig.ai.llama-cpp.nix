@@ -375,6 +375,11 @@ let
 
   ];
 
+  # Package built for the host with ROCm+Vulkan support (variant = "amd").
+  # Passed into the container so it reuses the same binary instead of
+  # falling back to the plain llama-cpp without GPU backends.
+  host-llama-cpp-pkg = config.myconfig.ai.inference-cpp.llama-cpp.package;
+
   amdModels = [
     {
       name = "qwen3.5-122B-A10B-Q5_K_M";
@@ -461,10 +466,6 @@ in
       servicePort = 33656;
       serviceListenAddress = "0.0.0.0";
       serviceOpenFirewall = true;
-      # Publish this instance as `rtx5090` in myconfig.ai.localModels so
-      # downstream tools (litellm, opencode, ...) see backend-agnostic
-      # GPU-keyed names instead of implementation-revealing
-      # `llama-server-33656`.
       serviceProviderName = "rtx5090";
       router.enable = true;
       models = map (
@@ -477,6 +478,7 @@ in
           ];
           unlistedDevices = [
             "Vulkan1"
+            "ROCm0"
           ];
         }
       ) rtxModels;
@@ -530,16 +532,16 @@ in
             ../../modules/myconfig.ai/myconfig.localModels.nix
           ];
           hardware.graphics.enable = true;
+          # Use the host's llama-cpp binary (built with ROCm+Vulkan for
+          # variant = "amd") instead of the container's default plain
+          # build which lacks GPU backend support.
+          services.llama-cpp.package = lib.mkForce host-llama-cpp-pkg;
           myconfig.ai.llama-cpp = {
-            serviceVariant = "llama-server";
-            serviceDevice = "Vulkan0";
+            serviceVariant = "llama-swap";
+            # serviceDevice = "Vulkan0"; # only for serviceVariant llama-server
             servicePort = 33657;
             serviceListenAddress = "0.0.0.0";
             serviceOpenFirewall = true;
-            # Publish this instance as `gfx1151` (the AMD Radeon 8060S /
-            # Ryzen AI Max+ 395 iGPU LLVM target) so downstream tools
-            # see a backend-agnostic GPU-keyed name instead of
-            # `llama-server-33657`.
             serviceProviderName = "gfx1151";
             models =
               let
@@ -562,7 +564,16 @@ in
                   }
                 ) rtxModels;
               in
-              fromRtxModels ++ amdModels;
+              map (
+                model:
+                model
+                // {
+                  devices = [
+                    "Vulkan0"
+                    "ROCm0"
+                  ];
+                }
+              ) (fromRtxModels ++ amdModels);
           };
         };
     };

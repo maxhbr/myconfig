@@ -19,7 +19,7 @@
       {
         config = lib.mkIf (config.specialisation != { }) {
           myconfig = {
-            hardware.gpu.variant = [ "amd-no-rocm" ];
+            hardware.gpu.variant = [ "amd" ];
           };
         };
       }
@@ -38,7 +38,7 @@
             inheritParentConfig = true;
             configuration = {
               myconfig = {
-                hardware.gpu.variant = [ "amd" ];
+                hardware.gpu.variant = [ "amd-no-rocm" ];
               };
             };
           };
