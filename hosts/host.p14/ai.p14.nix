@@ -23,9 +23,9 @@
         inference-cpp = {
           enable = true;
         };
-        open-webui = {
-          enable = true;
-        };
+        # open-webui = {
+        #   enable = true;
+        # };
       };
     };
     networking.firewall.interfaces."wg0".allowedTCPPorts = [ 443 ];
