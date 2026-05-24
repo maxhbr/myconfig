@@ -7,18 +7,24 @@
   config,
   ...
 }:
-let
-in
-
 {
 
   imports = [
     #{
-    #  config = lib.mkIf (config.myconfig.ai.enable && config.services.litellm.enable) {
+    #  # TODO: Litellm is packaged without generated prisma schema and they can not be generated on the fly with being in /nix/store:  https://github.com/NixOS/nixpkgs/issues/432925
+    #  config = lib.mkIf (config.myconfig.ai.enable && config.services.litellm.enable && config.services.litellm.settings.general_settings.disable_spend_logs == false) {
+    #    services.litellm = {
+    #      settings.general_settings = {
+    #        store_prompts_in_spend_logs = true;
+    #        # disable_spend_logs = false;
+    #        maximum_spend_logs_retention_period = "120d";
+    #        database_url = "postgresql://litellm:litellm@127.0.0.1:${toString config.services.postgresql.port}/litellm";
+    #      };
+    #    };
     #    services.postgresql = {
     #      enable = true;
     #      port = 5432;
-    #      ensureDatabases = [ "mydatabase" ];
+    #      ensureDatabases = [ "litellm" ];
     #      authentication = pkgs.lib.mkOverride 10 ''
     #        #type database DBuser origin-address auth-method
     #        local all      all     trust
@@ -88,13 +94,9 @@ in
           })
         )
       );
-      # settings.general_settings = {
-      #   store_prompts_in_spend_logs = true;
-      #   disable_spend_logs = false;
-      #   maximum_spend_logs_retention_period = "30d";
-      #   database_url = "postgresql://litellm:litellm@127.0.0.1:${toString config.services.postgresql.port}/litellm";
-      # };
-      # services.general_settings =
+      settings.general_settings = {
+        disable_spend_logs = true;
+      };
       settings.litellm_settings = lib.mkIf config.myconfig.observability.client.enable {
         callbacks = [ "prometheus" ];
       };
@@ -105,6 +107,9 @@ in
             litellm_params = {
               model = "ollama/${model}";
               api_base = "http://${config.services.ollama.host}:${toString config.services.ollama.port}";
+              request = {
+                allowPrivateNetwork = true;
+              };
             };
           }) config.services.ollama.loadModels
         )
@@ -127,6 +132,9 @@ in
                     model = "openai/${modelName}";
                     api_base = "http://${hostPort}/v1";
                     api_key = "not-needed";
+                    request = {
+                      allowPrivateNetwork = true;
+                    };
                   };
                 };
               in
