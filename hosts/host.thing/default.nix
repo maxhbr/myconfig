@@ -172,9 +172,9 @@
         alpaca = {
           enable = false;
         };
-        open-webui = {
-          enable = true;
-        };
+        # open-webui = {
+        #   enable = true;
+        # };
         comfyui = {
           enable = true;
         };
