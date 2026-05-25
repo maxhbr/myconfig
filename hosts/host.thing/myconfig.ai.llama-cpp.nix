@@ -419,6 +419,48 @@ let
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
       ];
+      variants = {
+        thinking-general = {
+          params = [
+            "--temp" "1.0"
+            "--top-p" "0.95"
+            "--top-k" "20"
+            "--min-p" "0.0"
+            "--presence-penalty" "1.5"
+            "--repetition-penalty" "1.0"
+          ];
+        };
+        thinking-coding = {
+          params = [
+            "--temp" "0.6"
+            "--top-p" "0.95"
+            "--top-k" "20"
+            "--min-p" "0.0"
+            "--presence-penalty" "0.0"
+            "--repetition-penalty" "1.0"
+          ];
+        };
+        instruct-general = {
+          params = [
+            "--temp" "0.7"
+            "--top-p" "0.8"
+            "--top-k" "20"
+            "--min-p" "0.0"
+            "--presence-penalty" "1.5"
+            "--repetition-penalty" "1.0"
+          ];
+        };
+        instruct-reasoning = {
+          params = [
+            "--temp" "1.0"
+            "--top-p" "1.0"
+            "--top-k" "40"
+            "--min-p" "0.0"
+            "--presence-penalty" "2.0"
+            "--repetition-penalty" "1.0"
+          ];
+        };
+      };
       aliases = [
         "Qwen3.6-35B-A3B-BF16"
         "Qwen3.6-35B-A3B"
