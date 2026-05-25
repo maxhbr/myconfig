@@ -199,6 +199,12 @@ let
     # trusted-users, experimental-features, etc.).
     (try-ro-bind "/etc/nix/nix.conf" "/etc/nix/nix.conf")
   ]
+  ++ [
+    # Expose `/nix/var/nix` read-only so that `nix` commands inside
+    # the jail can find the store database and don't fall back to the
+    # multi-user chroot store path (which produces a warning).
+    (try-ro-bind "/nix/var/nix" "/nix/var/nix")
+  ]
   ++ configDirPerms
   ++ [
     (add-pkg-deps (devTools ++ extraDevTools))
