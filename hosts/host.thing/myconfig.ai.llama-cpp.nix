@@ -27,6 +27,15 @@ let
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf" ];
       };
+      variants = {
+        tweaked = {
+          # https://github.com/nathanlgabriel/paper_code_mapping_assessment/blob/main/README.md
+          params = [
+            "--split-mode" "layer" "--tensor-split" "1,1.12" "--parallel" "1" "--cache-type-k" "q8_0" "--cache-type-v" "q8_0"
+          ];
+          ctxSize = 262144;
+        };
+      };
       aliases = [
         "Qwen3.6-35B-A3B-UD-Q5_K"
         "Qwen3.6-35B-A3B-UD-Q5"
@@ -394,6 +403,27 @@ let
         "qwen3.5-122B"
       ];
       ttl = 1800;
+    }
+    {
+      name = "Qwen3.6-35B-A3B-BF16";
+      path = "/models/Qwen3.6-35B-A3B-GGUF/BF16/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/BF16" ];
+      };
+      params = [
+        "-ctk"
+        "f16"
+        "-ctv"
+        "f16"
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
+      ];
+      aliases = [
+        "Qwen3.6-35B-A3B-BF16"
+        "Qwen3.6-35B-A3B"
+      ];
+      ttl = 300;
     }
     {
       name = "Qwen3.6-27B-GGUF-BF16";
