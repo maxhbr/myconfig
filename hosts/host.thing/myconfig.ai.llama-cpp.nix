@@ -668,6 +668,15 @@ in
           ];
         }
       ) rtxModels;
+      scriptOnlyModels = map (
+        model:
+        model
+        // {
+          devices = [
+            "Vulkan1"
+          ];
+        }
+      ) amdModels;
     };
 
     ############

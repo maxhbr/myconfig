@@ -9,6 +9,119 @@
 # alternative (e.g. a llama-swap replacement) should consume the same
 # shape.
 { lib, ... }:
+let
+  inherit (lib) types mkOption;
+
+  modelSubmodule = types.submodule {
+    options = {
+      name = mkOption {
+        type = types.str;
+        description = "Model name used as identifier in the llama-swap model key";
+      };
+      path = mkOption {
+        type = types.str;
+        description = "Path to the GGUF model file";
+      };
+      devices = mkOption {
+        type = types.listOf types.str;
+        default = [ "Vulkan0" ];
+        description = "List of devices to run this model on (e.g. 'Vulkan0', 'CUDA0', 'ROCm0')";
+      };
+      unlistedDevices = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Devices that generate llama-swap entries with unlisted = true (accessible only via direct script)";
+      };
+      params = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Additional llama-server parameters";
+      };
+      aliases = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Aliases for this model in llama-swap";
+      };
+      ttl = mkOption {
+        type = types.int;
+        default = 300;
+        description = "Time-to-live in seconds before the model is unloaded";
+      };
+      ctxSize = mkOption {
+        type = types.nullOr types.int;
+        default = null;
+        description = "Context size (--ctx-size) for llama-server; null to use the model default";
+      };
+      pull-models = mkOption {
+        type = types.nullOr (
+          types.submodule {
+            options = {
+              target_directory = mkOption {
+                type = types.path;
+                description = ''
+                  Directory into which the `pull-models` helper should
+                  download this model. Auto-collected into
+                  `myconfig.ai.pull_models.models` (keyed by this
+                  path) when `myconfig.ai.pull_models.enable` is on.
+                '';
+              };
+              hf_spec = mkOption {
+                type = types.listOf types.str;
+                description = ''
+                  HuggingFace model specs for the `pull-models` helper.
+                  A list of strings, each one of: `"org/repo"` (full
+                  repo), `"org/repo/file.ext"` (single file), or
+                  `"org/repo/subdir"` (subdir/*). Useful when a
+                  single model has companion sidecars (e.g. mmproj
+                  files) that should be downloaded together. See
+                  `myconfig.ai.pull_models.models` for the spec
+                  format.
+                '';
+              };
+            };
+          }
+        );
+        default = null;
+        description = ''
+          Optional metadata describing how `myconfig.ai.pull_models`
+          should download this model. When set, each element of
+          `hf_spec` is appended to
+          `myconfig.ai.pull_models.models.<target_directory>`.
+        '';
+      };
+      variants = mkOption {
+        type = types.attrsOf (
+          types.submodule {
+            options = {
+              aliases = mkOption {
+                type = types.listOf types.str;
+                default = [ ];
+                description = "Aliases for this model in llama-swap";
+              };
+              ctxSize = mkOption {
+                type = types.nullOr types.int;
+                default = null;
+                description = "Context size (--ctx-size) for llama-server; null to use the model default";
+              };
+              params = mkOption {
+                type = types.listOf types.str;
+                default = [ ];
+                description = "Additional llama-server parameters appended to the parent model params";
+              };
+              mmproj = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = "Path to mmproj file; when set, a :mmproj variant is auto-generated";
+              };
+            };
+          }
+        );
+        default = { };
+        description = "Named variants of this model. Each variant generates a <model.name>-<variant_name> entry with its params merged on top of the parent params";
+      };
+    };
+  };
+in
 {
   options.myconfig.ai.llama-cpp = with lib; {
     # Which system service backend (if any) serves the models declared
@@ -120,119 +233,14 @@
     };
 
     models = mkOption {
-      type = types.listOf (
-        types.submodule {
-          options = {
-            name = mkOption {
-              type = types.str;
-              description = "Model name used as identifier in the llama-swap model key";
-            };
-            path = mkOption {
-              type = types.str;
-              description = "Path to the GGUF model file";
-            };
-            devices = mkOption {
-              type = types.listOf types.str;
-              default = [ "Vulkan0" ];
-              description = "List of devices to run this model on (e.g. 'Vulkan0', 'CUDA0', 'ROCm0')";
-            };
-            unlistedDevices = mkOption {
-              type = types.listOf types.str;
-              default = [ ];
-              description = "Devices that generate llama-swap entries with unlisted = true (accessible only via direct script)";
-            };
-            params = mkOption {
-              type = types.listOf types.str;
-              default = [ ];
-              description = "Additional llama-server parameters";
-            };
-            aliases = mkOption {
-              type = types.listOf types.str;
-              default = [ ];
-              description = "Aliases for this model in llama-swap";
-            };
-            ttl = mkOption {
-              type = types.int;
-              default = 300;
-              description = "Time-to-live in seconds before the model is unloaded";
-            };
-            ctxSize = mkOption {
-              type = types.nullOr types.int;
-              default = null;
-              description = "Context size (--ctx-size) for llama-server; null to use the model default";
-            };
-            pull-models = mkOption {
-              type = types.nullOr (
-                types.submodule {
-                  options = {
-                    target_directory = mkOption {
-                      type = types.path;
-                      description = ''
-                        Directory into which the `pull-models` helper should
-                        download this model. Auto-collected into
-                        `myconfig.ai.pull_models.models` (keyed by this
-                        path) when `myconfig.ai.pull_models.enable` is on.
-                      '';
-                    };
-                    hf_spec = mkOption {
-                      type = types.listOf types.str;
-                      description = ''
-                        HuggingFace model specs for the `pull-models` helper.
-                        A list of strings, each one of: `"org/repo"` (full
-                        repo), `"org/repo/file.ext"` (single file), or
-                        `"org/repo/subdir"` (subdir/*). Useful when a
-                        single model has companion sidecars (e.g. mmproj
-                        files) that should be downloaded together. See
-                        `myconfig.ai.pull_models.models` for the spec
-                        format.
-                      '';
-                    };
-                  };
-                }
-              );
-              default = null;
-              description = ''
-                Optional metadata describing how `myconfig.ai.pull_models`
-                should download this model. When set, each element of
-                `hf_spec` is appended to
-                `myconfig.ai.pull_models.models.<target_directory>`.
-              '';
-            };
-            variants = mkOption {
-              type = types.attrsOf (
-                types.submodule {
-                  options = {
-                    aliases = mkOption {
-                      type = types.listOf types.str;
-                      default = [ ];
-                      description = "Aliases for this model in llama-swap";
-                    };
-                    ctxSize = mkOption {
-                      type = types.nullOr types.int;
-                      default = null;
-                      description = "Context size (--ctx-size) for llama-server; null to use the model default";
-                    };
-                    params = mkOption {
-                      type = types.listOf types.str;
-                      default = [ ];
-                      description = "Additional llama-server parameters appended to the parent model params";
-                    };
-                    mmproj = mkOption {
-                      type = types.nullOr types.str;
-                      default = null;
-                      description = "Path to mmproj file; when set, a :mmproj variant is auto-generated";
-                    };
-                  };
-                }
-              );
-              default = { };
-              description = "Named variants of this model. Each variant generates a ${model.name}-${variant_name} entry with its params merged on top of the parent params";
-            };
-          };
-        }
-      );
+      type = types.listOf modelSubmodule;
       default = [ ];
       description = "Declarative model definitions that are expanded into llama-swap model entries per device";
+    };
+    scriptOnlyModels = mkOption {
+      type = types.listOf modelSubmodule;
+      default = [ ];
+      description = "Declarative model definitions that are exposed as scripts";
     };
   };
 }

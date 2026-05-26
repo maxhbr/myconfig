@@ -17,7 +17,7 @@ let
   inherit (llamaLib.devices) deviceIndex;
   inherit (scripts) mkLlamaScript mkLlamaBenchScript mkLlamaBenchAggregate;
 
-  unpackedModels = variants.unpackModels cfg.models;
+  unpackedModels = variants.unpackModels (cfg.models ++ cfg.scriptOnlyModels);
 
   # --- home-manager scripts ----------------------------------------------
 
