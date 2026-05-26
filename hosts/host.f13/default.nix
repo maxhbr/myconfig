@@ -354,6 +354,9 @@ in
 
     home-manager.sharedModules = [
       {
+        programs.password-store.enable = true;
+      }
+      {
         services.mako = {
           settings = {
             output = "eDP-1";

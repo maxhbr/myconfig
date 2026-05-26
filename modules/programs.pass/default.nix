@@ -51,10 +51,8 @@ in
         let
           accounts = lib.attrValues config.myconfig.accounts;
           primaryAccount = lib.findFirst (a: a.primary) (builtins.head accounts) accounts;
-        in
-        {
+        in lib.mkIf config.programs.password-store.enable {
           programs.password-store = {
-            enable = true;
             # package = pass;
             settings = {
               PASSWORD_STORE_DIR = "${config.home.homeDirectory}/.password-store";
