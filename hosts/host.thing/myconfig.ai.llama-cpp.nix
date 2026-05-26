@@ -405,6 +405,65 @@ let
       ttl = 1800;
     }
     {
+      name = "Qwen3.6-35B-A3B-Q8_0";
+      path = "/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-Q8_0.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-Q8_0.gguf" ];
+      };
+      params = [
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
+      ];
+      variants = {
+        thinking-general = {
+          params = [
+            "--temp" "1.0"
+            "--top-p" "0.95"
+            "--top-k" "20"
+            "--min-p" "0.0"
+            "--presence-penalty" "1.5"
+            "--repetition-penalty" "1.0"
+          ];
+        };
+        thinking-coding = {
+          params = [
+            "--temp" "0.6"
+            "--top-p" "0.95"
+            "--top-k" "20"
+            "--min-p" "0.0"
+            "--presence-penalty" "0.0"
+            "--repetition-penalty" "1.0"
+          ];
+        };
+        instruct-general = {
+          params = [
+            "--temp" "0.7"
+            "--top-p" "0.8"
+            "--top-k" "20"
+            "--min-p" "0.0"
+            "--presence-penalty" "1.5"
+            "--repetition-penalty" "1.0"
+          ];
+        };
+        instruct-reasoning = {
+          params = [
+            "--temp" "1.0"
+            "--top-p" "1.0"
+            "--top-k" "40"
+            "--min-p" "0.0"
+            "--presence-penalty" "2.0"
+            "--repetition-penalty" "1.0"
+          ];
+        };
+      };
+      aliases = [
+        "Qwen3.6-35B-A3B-Q8_0"
+        "Qwen3.6-35B-A3B"
+      ];
+      ttl = 300;
+    }
+    {
       name = "Qwen3.6-35B-A3B-BF16";
       path = "/models/Qwen3.6-35B-A3B-GGUF/BF16/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf";
       pull-models = {
