@@ -70,6 +70,10 @@ in
     services.vmagent = {
       enable = true;
 
+      # Bind the self-scrape HTTP endpoint to loopback only — no
+      # external consumer needs this port.
+      extraArgs = [ "-httpListenAddr=127.0.0.1:${toString clientCfg.vmagentPort}" ];
+
       prometheusConfig = {
         global = {
           scrape_interval = clientCfg.scrapeInterval;
