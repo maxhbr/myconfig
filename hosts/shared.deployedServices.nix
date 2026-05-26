@@ -63,10 +63,10 @@
             port = 11434;
             forceHttps = false;
           }
-          {
-            name = "open-webui";
-            port = 8888;
-          }
+          # {
+          #   name = "open-webui";
+          #   port = 8888;
+          # }
           {
             name = "comfyui";
             port = 8188;
@@ -78,10 +78,10 @@
           }
         ];
         p14 = [
-          {
-            name = "open-webui";
-            port = 8888;
-          }
+          # {
+          #   name = "open-webui";
+          #   port = 8888;
+          # }
           # {
           #   name = "searxng";
           #   port = 28080;
