@@ -1,5 +1,9 @@
 let
   modelsPullDir = "/home/mhuber/models";
+  # Context sizes from /props endpoint: 196608 = full, 131072 = 128k, 49152 = quarter
+  ctxSize = 196608;
+  ctxSize128k = 131072;
+  ctxSizeQuarter = ctxSize / 4;  # 49152
 in
 {
   amdModels = [
@@ -23,6 +27,11 @@ in
         "q4_0"
       ];
       ttl = 300;
+      variants = {
+        "196k" = { ctxSize = ctxSize; };
+        "128k" = { ctxSize = ctxSize128k; };
+        "49k" = { ctxSize = ctxSizeQuarter; };
+      };
     }
     {
       name = "MiniMax-M2.7-UD-IQ4_XS";
@@ -44,6 +53,11 @@ in
         "q4_0"
       ];
       ttl = 300;
+      variants = {
+        "196k" = { ctxSize = ctxSize; };
+        "128k" = { ctxSize = ctxSize128k; };
+        "49k" = { ctxSize = ctxSizeQuarter; };
+      };
     }
   ];
 }
