@@ -17,6 +17,10 @@ in
         "0.95"
         "--top-k"
         "40"
+        "--cache-type-k"
+        "q4_0"
+        "--cache-type-v"
+        "q4_0"
       ];
       ttl = 300;
     }
@@ -34,6 +38,10 @@ in
         "0.95"
         "--top-k"
         "40"
+        "--cache-type-k"
+        "q4_0"
+        "--cache-type-v"
+        "q4_0"
       ];
       ttl = 300;
     }
