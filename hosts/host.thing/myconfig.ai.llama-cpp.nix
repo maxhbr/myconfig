@@ -459,7 +459,6 @@ let
       };
       aliases = [
         "Qwen3.6-35B-A3B-Q8_0"
-        "Qwen3.6-35B-A3B"
       ];
       ttl = 300;
     }
@@ -522,7 +521,6 @@ let
       };
       aliases = [
         "Qwen3.6-35B-A3B-BF16"
-        "Qwen3.6-35B-A3B"
       ];
       ttl = 300;
     }
