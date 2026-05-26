@@ -31,7 +31,16 @@ let
         tweaked = {
           # https://github.com/nathanlgabriel/paper_code_mapping_assessment/blob/main/README.md
           params = [
-            "--split-mode" "layer" "--tensor-split" "1,1.12" "--parallel" "1" "--cache-type-k" "q8_0" "--cache-type-v" "q8_0"
+            "--split-mode"
+            "layer"
+            "--tensor-split"
+            "1,1.12"
+            "--parallel"
+            "1"
+            "--cache-type-k"
+            "q8_0"
+            "--cache-type-v"
+            "q8_0"
           ];
           ctxSize = 262144;
         };
@@ -418,42 +427,66 @@ let
       variants = {
         thinking-general = {
           params = [
-            "--temp" "1.0"
-            "--top-p" "0.95"
-            "--top-k" "20"
-            "--min-p" "0.0"
-            "--presence-penalty" "1.5"
-            "--repetition-penalty" "1.0"
+            "--temp"
+            "1.0"
+            "--top-p"
+            "0.95"
+            "--top-k"
+            "20"
+            "--min-p"
+            "0.0"
+            "--presence-penalty"
+            "1.5"
+            "--repetition-penalty"
+            "1.0"
           ];
         };
         thinking-coding = {
           params = [
-            "--temp" "0.6"
-            "--top-p" "0.95"
-            "--top-k" "20"
-            "--min-p" "0.0"
-            "--presence-penalty" "0.0"
-            "--repetition-penalty" "1.0"
+            "--temp"
+            "0.6"
+            "--top-p"
+            "0.95"
+            "--top-k"
+            "20"
+            "--min-p"
+            "0.0"
+            "--presence-penalty"
+            "0.0"
+            "--repetition-penalty"
+            "1.0"
           ];
         };
         instruct-general = {
           params = [
-            "--temp" "0.7"
-            "--top-p" "0.8"
-            "--top-k" "20"
-            "--min-p" "0.0"
-            "--presence-penalty" "1.5"
-            "--repetition-penalty" "1.0"
+            "--temp"
+            "0.7"
+            "--top-p"
+            "0.8"
+            "--top-k"
+            "20"
+            "--min-p"
+            "0.0"
+            "--presence-penalty"
+            "1.5"
+            "--repetition-penalty"
+            "1.0"
           ];
         };
         instruct-reasoning = {
           params = [
-            "--temp" "1.0"
-            "--top-p" "1.0"
-            "--top-k" "40"
-            "--min-p" "0.0"
-            "--presence-penalty" "2.0"
-            "--repetition-penalty" "1.0"
+            "--temp"
+            "1.0"
+            "--top-p"
+            "1.0"
+            "--top-k"
+            "40"
+            "--min-p"
+            "0.0"
+            "--presence-penalty"
+            "2.0"
+            "--repetition-penalty"
+            "1.0"
           ];
         };
       };
@@ -480,42 +513,66 @@ let
       variants = {
         thinking-general = {
           params = [
-            "--temp" "1.0"
-            "--top-p" "0.95"
-            "--top-k" "20"
-            "--min-p" "0.0"
-            "--presence-penalty" "1.5"
-            "--repetition-penalty" "1.0"
+            "--temp"
+            "1.0"
+            "--top-p"
+            "0.95"
+            "--top-k"
+            "20"
+            "--min-p"
+            "0.0"
+            "--presence-penalty"
+            "1.5"
+            "--repetition-penalty"
+            "1.0"
           ];
         };
         thinking-coding = {
           params = [
-            "--temp" "0.6"
-            "--top-p" "0.95"
-            "--top-k" "20"
-            "--min-p" "0.0"
-            "--presence-penalty" "0.0"
-            "--repetition-penalty" "1.0"
+            "--temp"
+            "0.6"
+            "--top-p"
+            "0.95"
+            "--top-k"
+            "20"
+            "--min-p"
+            "0.0"
+            "--presence-penalty"
+            "0.0"
+            "--repetition-penalty"
+            "1.0"
           ];
         };
         instruct-general = {
           params = [
-            "--temp" "0.7"
-            "--top-p" "0.8"
-            "--top-k" "20"
-            "--min-p" "0.0"
-            "--presence-penalty" "1.5"
-            "--repetition-penalty" "1.0"
+            "--temp"
+            "0.7"
+            "--top-p"
+            "0.8"
+            "--top-k"
+            "20"
+            "--min-p"
+            "0.0"
+            "--presence-penalty"
+            "1.5"
+            "--repetition-penalty"
+            "1.0"
           ];
         };
         instruct-reasoning = {
           params = [
-            "--temp" "1.0"
-            "--top-p" "1.0"
-            "--top-k" "40"
-            "--min-p" "0.0"
-            "--presence-penalty" "2.0"
-            "--repetition-penalty" "1.0"
+            "--temp"
+            "1.0"
+            "--top-p"
+            "1.0"
+            "--top-k"
+            "40"
+            "--min-p"
+            "0.0"
+            "--presence-penalty"
+            "2.0"
+            "--repetition-penalty"
+            "1.0"
           ];
         };
       };

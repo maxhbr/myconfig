@@ -227,8 +227,6 @@ let
     }
     ++ model.aliases
   ) unpackedModels;
-
-  hmEnabled = lib.hasAttrByPath [ "home-manager" "sharedModules" ] options;
 in
 {
   config = lib.mkMerge [
@@ -276,17 +274,6 @@ in
         environment.XDG_CACHE_HOME = "/var/cache/llama-swap";
         serviceConfig.CacheDirectory = "llama-swap";
       };
-    })
-
-    (lib.optionalAttrs hmEnabled {
-      home-manager.sharedModules = lib.mkIf (unpackedModels != [ ]) [
-        {
-          home.packages = allScripts ++ [ llamaBenchAll ] ++ llamaBenchPerDevice;
-          myconfig.persistence.cache-directories = [
-            "benchmarks/llama-bench"
-          ];
-        }
-      ];
     })
   ];
 }

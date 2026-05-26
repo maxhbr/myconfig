@@ -51,7 +51,8 @@ in
         let
           accounts = lib.attrValues config.myconfig.accounts;
           primaryAccount = lib.findFirst (a: a.primary) (builtins.head accounts) accounts;
-        in lib.mkIf config.programs.password-store.enable {
+        in
+        lib.mkIf config.programs.password-store.enable {
           programs.password-store = {
             # package = pass;
             settings = {

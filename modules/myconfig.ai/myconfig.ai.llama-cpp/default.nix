@@ -28,6 +28,7 @@
 {
   imports = [
     ./options.nix
+    ./all-scripts.nix
     ./services.llama-cpp.nix
     ./llama-swap.nix
     ./router.nix
