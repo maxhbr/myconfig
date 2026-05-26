@@ -10,6 +10,14 @@ in
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/MiniMax-M2.7-GGUF/UD-Q3_K_S" ];
       };
+      params = [
+        "--temp"
+        "1.0"
+        "--top-p"
+        "0.95"
+        "--top-k"
+        "40"
+      ];
       ttl = 300;
     }
     {
@@ -19,6 +27,14 @@ in
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/MiniMax-M2.7-GGUF/UD-IQ4_XS" ];
       };
+      params = [
+        "--temp"
+        "1.0"
+        "--top-p"
+        "0.95"
+        "--top-k"
+        "40"
+      ];
       ttl = 300;
     }
   ];
