@@ -67,6 +67,39 @@ in
         pairing a device.
       '';
     };
+
+    availability = mkOption {
+      type = types.submodule {
+        options = {
+          enable = mkEnableOption "Device Availability feature" // {
+            default = true;
+          };
+          activeTimeout = mkOption {
+            type = types.int;
+            default = 10;
+            description = ''
+              Timeout in minutes after which an active (mains-powered)
+              device is considered unavailable when no message was
+              received.
+            '';
+          };
+          passiveTimeout = mkOption {
+            type = types.int;
+            default = 1500;
+            description = ''
+              Timeout in minutes after which a passive (battery-powered)
+              device is considered unavailable when no message was
+              received.
+            '';
+          };
+        };
+      };
+      default = {};
+      description = ''
+        Device Availability configuration.
+        See: https://www.zigbee2mqtt.io/guide/configuration/device-availability.html
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -113,6 +146,11 @@ in
           network_key = "GENERATE";
           pan_id = "GENERATE";
           ext_pan_id = "GENERATE";
+        };
+
+        availability = lib.mkIf cfg.availability.enable {
+          active.timeout = cfg.availability.activeTimeout;
+          passive.timeout = cfg.availability.passiveTimeout;
         };
 
         permit_join = cfg.permitJoin;
