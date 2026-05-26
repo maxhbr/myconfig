@@ -9,6 +9,7 @@
 let
   modelsPullDir = "/home/mhuber/models";
   gemma4 = import ./gemma4.nix;
+  minimaxM2_7 = import ./MiniMax-M2.7-GGUF.nix;
   qwen3_6_27B = import ./Qwen3.6-27B.nix;
   qwen3_6_35B-A3B = import ./Qwen3.6-35B-A3B.nix;
   rtxModels = [
@@ -46,7 +47,8 @@ let
   ]
   ++ qwen3_6_27B.amdModels
   ++ qwen3_6_35B-A3B.amdModels
-  ++ gemma4.amdModels;
+  ++ gemma4.amdModels
+  ++ minimaxM2_7.amdModels;
 
   # Package built for the host with ROCm+Vulkan support (variant = "amd").
   # Passed into the container so it reuses the same binary instead of
