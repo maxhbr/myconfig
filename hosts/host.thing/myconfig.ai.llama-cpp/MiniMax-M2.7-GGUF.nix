@@ -26,10 +26,11 @@ in
         "--cache-type-v"
         "q4_0"
       ];
-      ttl = 300;
+      ttl = 1500;
+      ctxSize = ctxSize128k;
       variants = {
         "196k" = { ctxSize = ctxSize; };
-        "128k" = { ctxSize = ctxSize128k; };
+        # "128k" = { ctxSize = ctxSize128k; };
         "49k" = { ctxSize = ctxSizeQuarter; };
       };
     }
@@ -52,10 +53,11 @@ in
         "--cache-type-v"
         "q4_0"
       ];
-      ttl = 300;
+      ttl = 1500;
+      ctxSize = ctxSize128k;
       variants = {
         "196k" = { ctxSize = ctxSize; };
-        "128k" = { ctxSize = ctxSize128k; };
+        # "128k" = { ctxSize = ctxSize128k; };
         "49k" = { ctxSize = ctxSizeQuarter; };
       };
     }
