@@ -378,14 +378,18 @@ main() {
     log_info "starting with...\nMODE=$MODE\nCOMMAND=$COMMAND\ntarget=$target\nverbose=$verbose\n"
     ################################################################################
 
-    local token
-    token="$(pass github-bot-token2 -p || true)"
-    if [[ -n $token ]]; then
-        log_info "setting github token"
-        NIX_CONFIG="access-tokens = github.com=$token"
-        export NIX_CONFIG
+    if have pass; then
+        local token
+        token="$(pass github-bot-token2 -p || true)"
+        if [[ -n $token ]]; then
+            log_info "setting github token"
+            NIX_CONFIG="access-tokens = github.com=$token"
+            export NIX_CONFIG
+        else
+            log_warning "no github token"
+        fi
     else
-        log_warning "no github token"
+        log_warning "pass not found, skipping github token setup"
     fi
 
     local script_dir
