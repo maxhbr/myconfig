@@ -71,7 +71,7 @@ in
   rtxModels = [
     {
       name = "Qwen3.6-35B-A3B-UD-Q5_K_XL";
-      path = "/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
+      path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
       pull-models = {
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf" ];
@@ -110,7 +110,7 @@ in
   amdModels = [
     {
       name = "Qwen3.6-35B-A3B-Q8_0";
-      path = "/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-Q8_0.gguf";
+      path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-Q8_0.gguf";
       pull-models = {
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-Q8_0.gguf" ];
@@ -124,7 +124,7 @@ in
     }
     {
       name = "Qwen3.6-35B-A3B-BF16";
-      path = "/models/Qwen3.6-35B-A3B-GGUF/BF16/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf";
+      path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/BF16/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf";
       pull-models = {
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/BF16" ];

@@ -19,11 +19,11 @@ mv /home/mhuber/models/Qwen3.6-27B-GGUF /home/mhuber/models/unsloth-Qwen3.6-27B-
 # Qwen3.6-35B-A3B (unsloth)
 mv /home/mhuber/models/Qwen3.6-35B-A3B-GGUF /home/mhuber/models/unsloth-Qwen3.6-35B-A3B-GGUF
 
-# gemma-4-31B-it (google)
-mv /home/mhuber/models/gemma-4-31B-it-GGUF /home/mhuber/models/google-gemma-4-31B-it-GGUF
+# gemma-4-31B-it (unsloth)
+mv /home/mhuber/models/gemma-4-31B-it-GGUF /home/mhuber/models/unsloth-gemma-4-31B-it-GGUF
 
-# gemma-4-26B-A4B-it (google)
-mv /home/mhuber/models/gemma-4-26B-A4B-it-GGUF /home/mhuber/models/google-gemma-4-26B-A4B-it-GGUF
+# gemma-4-26B-A4B-it (unsloth)
+mv /home/mhuber/models/gemma-4-26B-A4B-it-GGUF /home/mhuber/models/unsloth-gemma-4-26B-A4B-it-GGUF
 
 # MiniMax-M2.7 (unsloth)
 mv /home/mhuber/models/MiniMax-M2.7-GGUF /home/mhuber/models/unsloth-MiniMax-M2.7-GGUF
@@ -44,8 +44,8 @@ mv /home/mhuber/models/Qwen3.5-122B-A10B-GGUF /home/mhuber/models/unsloth-Qwen3.
 |-------|---------------|---------------|----------|
 | Qwen3.6-27B | `Qwen3.6-27B-GGUF/` | `unsloth-Qwen3.6-27B-GGUF/` | `unsloth/Qwen3.6-27B-GGUF/...` |
 | Qwen3.6-35B-A3B | `Qwen3.6-35B-A3B-GGUF/` | `unsloth-Qwen3.6-35B-A3B-GGUF/` | `unsloth/Qwen3.6-35B-A3B-GGUF/...` |
-| gemma-4-31B-it | `gemma-4-31B-it-GGUF/` | `google-gemma-4-31B-it-GGUF/` | `google/gemma-3-...` |
-| gemma-4-26B-A4B-it | `gemma-4-26B-A4B-it-GGUF/` | `google-gemma-4-26B-A4B-it-GGUF/` | `google/gemma-3-...` |
+| gemma-4-31B-it | `gemma-4-31B-it-GGUF/` | `unsloth-gemma-4-31B-it-GGUF/` | `unsloth/gemma-4-31B-it-GGUF/...` |
+| gemma-4-26B-A4B-it | `gemma-4-26B-A4B-it-GGUF/` | `unsloth-gemma-4-26B-A4B-it-GGUF/` | `unsloth/gemma-4-26B-A4B-it-GGUF/...` |
 | MiniMax-M2.7 | `MiniMax-M2.7-GGUF/` | `unsloth-MiniMax-M2.7-GGUF/` | `unsloth/MiniMax-M2.7-GGUF/...` |
 | Nemotron-3-Super | `Nemotron-3-Super-120B-A12B-GGUF/` | `AesSedai-Nemotron-3-Super-120B-A12B-GGUF/` | `AesSedai/NVIDIA-Nemotron-3-Super-120B-A12B-GGUF/...` |
 | Qwen3.5-9B | `Qwen3.5-9B-GGUF/` | `unsloth-Qwen3.5-9B-GGUF/` | `unsloth/Qwen3.5-9B-GGUF/...` |

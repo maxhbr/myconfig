@@ -16,7 +16,7 @@ let
   rtxModels = [
     {
       name = "Qwen3.5-9B-Q5_K_M";
-      path = "/models/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
+      path = "/models/unsloth-Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
       pull-models = {
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf" ];
@@ -34,7 +34,7 @@ let
     [
       {
         name = "qwen3.5-122B-A10B-Q5_K_M";
-        path = "/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf";
+        path = "/models/unsloth-Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf";
         pull-models = {
           target_directory = modelsPullDir;
           hf_spec = [ "unsloth/Qwen3.5-122B-A10B-GGUF/Q5_K_M" ];
