@@ -10,12 +10,13 @@ let
   modelsPullDir = "/home/mhuber/models";
   gemma4 = import ./gemma4.nix;
   minimaxM2_7 = import ./MiniMax-M2.7-GGUF.nix;
+  nemotron3Super = import ./Nemotron-3-Super.nix;
   qwen3_6_27B = import ./Qwen3.6-27B.nix;
   qwen3_6_35B-A3B = import ./Qwen3.6-35B-A3B.nix;
   rtxModels = [
     {
       name = "Qwen3.5-9B-Q5_K_M";
-      path = "/models/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
+      path = "/models/unsloth-Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
       pull-models = {
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf" ];
@@ -33,7 +34,7 @@ let
     [
       {
         name = "qwen3.5-122B-A10B-Q5_K_M";
-        path = "/models/Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf";
+        path = "/models/unsloth-Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf";
         pull-models = {
           target_directory = modelsPullDir;
           hf_spec = [ "unsloth/Qwen3.5-122B-A10B-GGUF/Q5_K_M" ];
@@ -50,6 +51,7 @@ let
     ++ qwen3_6_35B-A3B.amdModels
     ++ gemma4.amdModels
     ++ minimaxM2_7.amdModels
+    ++ nemotron3Super.amdModels
   );
 
   # Package built for the host with ROCm+Vulkan support (variant = "amd").

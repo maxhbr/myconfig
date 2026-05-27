@@ -105,7 +105,8 @@ let
           if [[ "$slash_count" -eq 1 ]]; then
               PROCESSED=$((PROCESSED + 1))
               log "[$PROCESSED/$TOTAL_MODELS] $dir – $model (full repo)"
-              local_dir="$dir/''${model##*/}"
+              # Keep org in path: "org/repo" → "$dir/org-repo"
+              local_dir="$dir/''${model//\//-}"
               download "$model" "*" "$local_dir"
               [[ -e "$local_dir" ]] && log "$(du -sh "$local_dir" | awk '{print $1}') – $local_dir"
               log "----------------------------------------"
@@ -114,8 +115,8 @@ let
 
           repo_id="''${model%/*}"
           path_in_repo="''${model##*/}"
-          repo_name="''${repo_id##*/}"
-          local_dir="$dir/$repo_name"
+          # Keep org in path: "org/repo" → "org-repo"
+          local_dir="$dir/''${repo_id//\//-}"
 
           PROCESSED=$((PROCESSED + 1))
           log "[$PROCESSED/$TOTAL_MODELS] $dir – $model"
@@ -142,9 +143,9 @@ in
       example = literalExpression ''
         {
           "/home/mhuber/models" = [
-            "unsloth/Qwen3-30B-A3B-GGUF"                                  # full repo
-            "unsloth/Qwen3-30B-A3B-GGUF/Qwen3-30B-A3B-UD-Q5_K_XL.gguf"    # single file
-            "unsloth/gemma-3-27B-it-GGUF/BF16"                            # subdir/*
+            "unsloth/Qwen3-30B-A3B-GGUF"                                  # full repo → unsloth-Qwen3-30B-A3B-GGUF/
+            "unsloth/Qwen3-30B-A3B-GGUF/Qwen3-30B-A3B-UD-Q5_K_XL.gguf"    # single file → unsloth-Qwen3-30B-A3B-GGUF/...
+            "unsloth/gemma-3-27B-it-GGUF/BF16"                            # subdir/* → unsloth-gemma-3-27B-it-GGUF/BF16/...
           ];
         }
       '';
@@ -152,7 +153,8 @@ in
         Mapping of target directory → list of HuggingFace model specs to
         pull. Each spec is either `org/repo` (full repo download),
         `org/repo/file.ext` (single file, detected by '.' in the last
-        segment), or `org/repo/subdir` (download `subdir/*`).
+        segment), or `org/repo/subdir` (download `subdir/*`). The org
+        prefix is kept in the path: `org/repo` becomes `org-repo`.
       '';
     };
   };
