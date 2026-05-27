@@ -10,6 +10,7 @@ let
   modelsPullDir = "/home/mhuber/models";
   gemma4 = import ./gemma4.nix;
   minimaxM2_7 = import ./MiniMax-M2.7-GGUF.nix;
+  nemotron3Super = import ./Nemotron-3-Super.nix;
   qwen3_6_27B = import ./Qwen3.6-27B.nix;
   qwen3_6_35B-A3B = import ./Qwen3.6-35B-A3B.nix;
   rtxModels = [
@@ -50,6 +51,7 @@ let
     ++ qwen3_6_35B-A3B.amdModels
     ++ gemma4.amdModels
     ++ minimaxM2_7.amdModels
+    ++ nemotron3Super.amdModels
   );
 
   # Package built for the host with ROCm+Vulkan support (variant = "amd").

@@ -3,7 +3,7 @@ let
   # Context sizes from /props endpoint: 196608 = full, 131072 = 128k, 49152 = quarter
   ctxSize = 196608;
   ctxSize128k = 131072;
-  ctxSizeQuarter = ctxSize / 4;  # 49152
+  ctxSizeQuarter = ctxSize / 4; # 49152
 in
 {
   amdModels = [
@@ -29,9 +29,13 @@ in
       ttl = 1500;
       ctxSize = ctxSize128k;
       variants = {
-        "196k" = { ctxSize = ctxSize; };
+        "196k" = {
+          ctxSize = ctxSize;
+        };
         # "128k" = { ctxSize = ctxSize128k; };
-        "49k" = { ctxSize = ctxSizeQuarter; };
+        "49k" = {
+          ctxSize = ctxSizeQuarter;
+        };
       };
     }
     {
@@ -56,9 +60,13 @@ in
       ttl = 1500;
       ctxSize = ctxSize128k;
       variants = {
-        "196k" = { ctxSize = ctxSize; };
+        "196k" = {
+          ctxSize = ctxSize;
+        };
         # "128k" = { ctxSize = ctxSize128k; };
-        "49k" = { ctxSize = ctxSizeQuarter; };
+        "49k" = {
+          ctxSize = ctxSizeQuarter;
+        };
       };
     }
   ];
