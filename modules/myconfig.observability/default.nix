@@ -19,6 +19,7 @@ in
     ./host.scrape-health.nix
     ./host.litellm.nix
     ./host.power.nix
+    ./host.co2.nix
     ./client.nix
     ./client.alloy.nix
   ];

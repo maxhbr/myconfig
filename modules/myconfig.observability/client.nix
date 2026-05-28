@@ -45,6 +45,7 @@ in
   imports = [
     ./client.dcgm-exporter.nix
     ./client.system-age.nix
+    ./client.co2-exporter.nix
   ];
 
   config = lib.mkIf clientCfg.enable {
