@@ -420,11 +420,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1779891616,
-        "narHash": "sha256-YxgbYn91+RICDBGj26pADhx8VEvQJk6RNEFXSdmAVuA=",
+        "lastModified": 1779953142,
+        "narHash": "sha256-bK2TNR1I6/o0czWQGSto0e0Qz7apcrAlmLu6hrFzGjo=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "6c815af27961e6000070212d7304b9258ab130c4",
+        "rev": "b9bdc44a01c2eadb8da35af94d707f11755e848f",
         "type": "github"
       },
       "original": {
@@ -529,11 +529,11 @@
     },
     "nixos-unstable-small": {
       "locked": {
-        "lastModified": 1779847850,
-        "narHash": "sha256-4xcMyKu9RgxxgIRnEzW79jiSvqzs0shQJxI2G3Mbu18=",
+        "lastModified": 1779912294,
+        "narHash": "sha256-Ek1wwdQHlM06lnnuCrZqQD4wo8iTnCgMt+VRN+xyH2g=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "0c6db2b5d257d845bbee67a38dee43bbca3bd462",
+        "rev": "9be0b880a6dbb749060aca82f60bede62f318e69",
         "type": "github"
       },
       "original": {
@@ -657,16 +657,32 @@
         ]
       },
       "locked": {
-        "lastModified": 1779890030,
-        "narHash": "sha256-fZXrn0AoX3i+tMIu3oXwnZZ646bxBXwGWtRYPM4nFQ0=",
+        "lastModified": 1779952429,
+        "narHash": "sha256-3JOCrhsYQ+0oxRh7oBGMWuc/brRzzAhj92SiKBY9rVc=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "9d5ed1b22950907ccf786e9d78a9cc0b74a27995",
+        "rev": "db5d95b08e56b330244420eb729f0dfe8f87cc77",
         "type": "github"
       },
       "original": {
         "owner": "nix-community",
         "repo": "NUR",
+        "type": "github"
+      }
+    },
+    "pr523912": {
+      "locked": {
+        "lastModified": 1779692660,
+        "narHash": "sha256-691RCewfz8y412TO3ZYupN7+SMahGGI4GnMEMtwVCGI=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "19e8a5b4c7ea228e73dd02d2c4e30ea77e7f5761",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "pull/523912/head",
+        "repo": "nixpkgs",
         "type": "github"
       }
     },
@@ -778,6 +794,7 @@
         "nixpkgs": "nixpkgs_3",
         "nixpkgs-wayland": "nixpkgs-wayland",
         "nur": "nur",
+        "pr523912": "pr523912",
         "zephyr-flake": "zephyr-flake"
       }
     },

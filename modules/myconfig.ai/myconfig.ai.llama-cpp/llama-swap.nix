@@ -213,7 +213,15 @@ let
 
   mkModelNames =
     { model, devices }:
-    lib.concatMap (device: lib.optionals (guardDevice device) ([ "${device}:${model.name}" ])) devices;
+    let
+      firstDevice = if devices != [ ] then builtins.head devices else null;
+    in
+    lib.concatMap (
+      device:
+      lib.optionals (guardDevice device) [
+        (if device == firstDevice then model.name else "${device}:${model.name}")
+      ]
+    ) devices;
 
   allModelNames = lib.concatMap (
     model:
