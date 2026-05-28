@@ -160,14 +160,22 @@ in
           hostPath = "/models/";
           isReadOnly = true;
         };
+        "/proc/meminfo" = {
+          hostPath = "/proc/meminfo";
+          isReadOnly = true;
+        };
       };
 
       config =
-        { ... }:
+        { pkgs, ... }:
         {
           imports = [
             ../../../modules/myconfig.ai/myconfig.ai.llama-cpp
             ../../../modules/myconfig.ai/myconfig.localModels.nix
+          ];
+          environment.systemPackages = with pkgs; [
+            nvtopPackages.amd
+            rocmPackages.rocm-smi
           ];
           hardware.graphics.enable = true;
           # Use the host's llama-cpp binary (built with ROCm+Vulkan for
