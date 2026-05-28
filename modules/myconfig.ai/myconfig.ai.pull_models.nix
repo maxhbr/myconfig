@@ -137,6 +137,7 @@ in
 {
   options.myconfig.ai.pull_models = with lib; {
     enable = mkEnableOption "myconfig.ai.pull_models (pull-models helper script)";
+    enableService = mkEnableOption "the pull-models systemd user service (auto-pull on login)";
     models = mkOption {
       type = types.attrsOf (types.listOf types.str);
       default = { };
@@ -164,19 +165,21 @@ in
       {
         home.packages = [ pullModels ];
 
-        systemd.user.services.pull-models = {
-          Unit = {
-            Description = "Pull HuggingFace models via pull-models script";
-            After = [ "default.target" ];
-          };
-          Service = {
-            Type = "oneshot";
-            ExecStartPre = "${pkgs.coreutils}/bin/sleep 60";
-            ExecStart = "${pullModels}/bin/pull-models";
-            RemainAfterExit = true;
-          };
-          Install = {
-            WantedBy = [ "default.target" ];
+        systemd.user.services = lib.mkIf cfg.enableService {
+          pull-models = {
+            Unit = {
+              Description = "Pull HuggingFace models via pull-models script";
+              After = [ "default.target" ];
+            };
+            Service = {
+              Type = "oneshot";
+              ExecStartPre = "${pkgs.coreutils}/bin/sleep 60";
+              ExecStart = "${pullModels}/bin/pull-models";
+              RemainAfterExit = true;
+            };
+            Install = {
+              WantedBy = [ "default.target" ];
+            };
           };
         };
       }
