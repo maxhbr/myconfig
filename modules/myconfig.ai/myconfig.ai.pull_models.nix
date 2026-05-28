@@ -123,9 +123,9 @@ let
 
           if [[ "$path_in_repo" == *.* ]]; then
               target_path="$local_dir/$path_in_repo"
-              [[ -f "$target_path" ]] || download "$repo_id" "$path_in_repo" "$local_dir"
+              download "$repo_id" "$path_in_repo" "$local_dir"
           else
-              [[ -d "$local_dir/$path_in_repo" ]] || download "$repo_id" "$path_in_repo/*" "$local_dir"
+              download "$repo_id" "$path_in_repo/*" "$local_dir"
               target_path="$local_dir/$path_in_repo"
           fi
           [[ -e "$target_path" ]] && log "$(du -sh "$target_path" | awk '{print $1}') – $target_path"
