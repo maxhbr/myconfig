@@ -118,49 +118,7 @@
                     };
                   }
                 )
-                (
-                  { pkgs, config, ... }:
-                  {
-                    # To use a version from a PR, use the following:
-                    ## 1. create an input with the following:
-                    # pr275479.url =
-                    #  "github:maxhbr/nixpkgs/freeplane-1_11_8"; # https://github.com/NixOS/nixpkgs/pull/275479
-                    ## 2. add the input to the inputs list below
-                    # { input = "pr275479"; pkg = "freeplane"; maxVersion = null; }
-                    nixpkgs.overlays =
-                      map
-                        (
-                          {
-                            input,
-                            pkg,
-                            maxVersion ? null,
-                          }:
-                          let
-                            prPkg = import inputs."${input}" {
-                              inherit (pkgs) config system;
-                            };
-                            prVersion = prPkg."${pkg}";
-                          in
-                          (_: super: {
-                            "${pkg}" =
-                              if maxVersion == null then
-                                prVersion
-                              else if pkgs.lib.versionOlder (pkgs.lib.getVersion prVersion) maxVersion then
-                                prVersion
-                              else
-                                super."${pkg}" or prVersion;
-                          })
-                        )
-                        [
-                          # { input = "pr275479"; pkg = "freeplane"; maxVersion = null; }
-                          {
-                            input = "pr523912";
-                            pkg = "llama-cpp";
-                            maxVersion = null;
-                          }
-                        ];
-                  }
-                )
+                (import ./flake.pkgs_from_prs.nix { inherit inputs; })
                 (
                   { pkgs, ... }:
                   {
