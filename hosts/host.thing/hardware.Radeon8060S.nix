@@ -48,12 +48,14 @@
   ];
   config = {
     boot.kernelParams = [
-      # "amd_iommu=off"
-      "iommu=pt" # Use pass-through for better performance
-      "amd_iommu=on" # Explicitly turn it on
-      "amdgpu.gttsize=131072"
-      "ttm.pages_limit=33554432"
-      "amdttm.pages_limit=33554432"
+      # IOMMU off for ~6% better memory bandwidth (no VFIO/passthrough in use).
+      # See https://github.com/kyuz0/amd-strix-halo-toolboxes/issues/66
+      # Switch back to `iommu=pt` + `amd_iommu=on` if enabling rtx-vm/ passthrough.
+      "amd_iommu=off"
+      # 124 GiB for GTT/TTM, leaving 4 GiB headroom for the system (128 GiB total).
+      "amdgpu.gttsize=126976" # 124 * 1024
+      "ttm.pages_limit=32505856" # 124 * 1024 * 1024 / 4
+      "amdttm.pages_limit=32505856"
     ];
     environment.sessionVariables = rec {
       HSA_OVERRIDE_GFX_VERSION = "11.5.1";
