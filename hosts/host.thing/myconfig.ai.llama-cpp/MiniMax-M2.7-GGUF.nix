@@ -39,6 +39,36 @@ in
       };
     }
     {
+      name = "MiniMax-M2.7-UD-IQ4_NL";
+      path = "/models/unsloth-MiniMax-M2.7-GGUF/UD-IQ4_NL/MiniMax-M2.7-UD-IQ4_NL-00001-of-00004.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/MiniMax-M2.7-GGUF/UD-IQ4_NL" ];
+      };
+      params = [
+        "--temp"
+        "1.0"
+        "--top-p"
+        "0.95"
+        "--top-k"
+        "40"
+        "--cache-type-k"
+        "q4_0"
+        "--cache-type-v"
+        "q4_0"
+      ];
+      ttl = 1500;
+      ctxSize = ctxSize128k;
+      variants = {
+        "196k" = {
+          ctxSize = ctxSize;
+        };
+        "49k" = {
+          ctxSize = ctxSizeQuarter;
+        };
+      };
+    }
+    {
       name = "MiniMax-M2.7-UD-IQ4_XS";
       path = "/models/unsloth-MiniMax-M2.7-GGUF/UD-IQ4_XS/MiniMax-M2.7-UD-IQ4_XS-00001-of-00004.gguf";
       pull-models = {

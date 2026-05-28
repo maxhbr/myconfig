@@ -140,5 +140,23 @@ in
       variants = recommended_variants_Qwen3_6-35B-A3B;
       ttl = 300;
     }
+    {
+      name = "Qwen3.6-35B-A3B-MTP-BF16";
+      path = "/models/ggml-org-Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-MTP-BF16.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "ggml-org/Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-MTP-BF16.gguf" ];
+      };
+      params = [
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
+        "--spec-type"
+        "draft-mtp"
+        "--spec-draft-n-max"
+        "3"
+      ];
+      variants = recommended_variants_Qwen3_6-35B-A3B;
+      ttl = 300;
+    }
   ];
 }
