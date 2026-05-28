@@ -20,6 +20,7 @@ in
     ./host.litellm.nix
     ./host.power.nix
     ./host.co2.nix
+    ./host.weather.nix
     ./client.nix
     ./client.alloy.nix
   ];

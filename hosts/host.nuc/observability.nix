@@ -12,5 +12,16 @@
     # `air_temp` (°C); the central Grafana dashboard is provisioned
     # via host.co2.nix.
     client.co2Exporter.enable = true;
+
+    # Outdoor weather metrics for Augsburg, fetched from Open-Meteo
+    # every 10 minutes and emitted via the node_exporter textfile
+    # collector. Central Grafana dashboard provisioned via
+    # host.weather.nix (uid `myconfig-weather`).
+    client.weatherExporter = {
+      enable = true;
+      latitude = "48.3705";
+      longitude = "10.8978";
+      locationLabel = "Augsburg";
+    };
   };
 }
