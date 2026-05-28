@@ -68,6 +68,7 @@ Notes:
 - `structure = "link"` uses `home.file` symlinks; `symlink-tree` and `copy-tree` run in `home.activation`.
 - `symlink-tree` uses `rsync -a --delete` (preserve symlinks); `copy-tree` uses `rsync -aL --delete` (dereference symlinks).
 - `dest` supports shell variable expansion at runtime (e.g. `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills`). Note: `link` structure does not support shell variables and will use the fallback path.
+- Symlinks inside skills are preserved when their target stays inside the source root; escaping or dangling ones are dropped. See [Symlinks inside skills](#symlinks-inside-skills).
 
 ## Flake outputs
 
@@ -145,12 +146,22 @@ See [`examples/devshell/flake.nix`](./examples/devshell/flake.nix).
 
 Now `nix develop` will automatically install skills to your project directory.
 
+## Symlinks inside skills
+
+Symlinks inside skill directories are kept when their textual target stays inside the declared source root (e.g. `../shared` to a sibling at the root). Symlinks whose target escapes the root are dropped, along with any links left dangling by that drop.
+
+- The entire source root is imported into the store, not just each skill subdirectory. Scope the source via `path = ./skills` or `subdir` if the root contains unrelated heavy trees (`.git`, build artefacts).
+- `--safe-links` checks the textual target, not the resolved path. Keep symlinks source-root-relative.
+- Sources resolving to the same physical directory share one store path and one safe-tree derivation.
+
 ## Checks / safety
 
 - Disallows skill IDs containing `/..` or leading `/`.
 - Disallows source `idPrefix` values ending with `/`.
 - Verifies `SKILL.md` for discovered and explicit skills.
 - Fails on duplicate IDs across sources.
+- Preserves symlinks that stay inside a declared source root and drops escaping or dangling symlinks when materializing bundles.
+- Rejects `..` traversal in source `subdir` and explicit skill `path` values.
 - Caps recursion at 100 levels when maxDepth is null to guard against symlink loops.
 - Activation scripts always `mkdir -p` and use `rsync -a --delete` by default.
 

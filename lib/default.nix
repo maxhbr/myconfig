@@ -7,6 +7,7 @@ let
     filter
     foldl'
     hasAttr
+    hashString
     isBool
     isFunction
     isList
@@ -14,6 +15,7 @@ let
     pathExists
     readDir
     readFile
+    substring
     ;
 
   inherit (lib)
@@ -29,6 +31,31 @@ let
     hasPrefix
     hasSuffix
     ;
+
+  isUnsafeRelPath = rel:
+    hasPrefix "/" rel
+    || rel == ".."
+    || hasPrefix "../" rel
+    || hasInfix "/../" rel
+    || hasSuffix "/.." rel;
+
+  assertSafeRelPath = ctx: rel:
+    if isUnsafeRelPath rel then
+      throw "agent-skills: ${ctx} '${rel}' must be relative and must not traverse outside the source root"
+    else rel;
+
+  # Shared bash helper injected into both the local-install and sync scripts.
+  # Some destinations are populated by previous `copy-tree` runs that copied
+  # from the read-only Nix store, leaving the tree non-writable. rsync needs
+  # write permission to update those trees, so chmod before syncing.
+  ensureWritableTreeBash = ''
+    ensure_writable_tree() {
+      local path="$1"
+      if [ -e "$path" ] && [ ! -L "$path" ]; then
+        chmod -R u+w "$path"
+      fi
+    }
+  '';
 
   # Resolve the root path for a source, preferring an explicit path and
   # falling back to a flake input name.
@@ -62,11 +89,34 @@ let
       else "${validatedPrefix}/${validatedBaseId}"
     );
 
+  appendRelPath = root: rel:
+    if rel == "" || rel == "." then "${root}" else "${root}/${rel}";
+
+  sourceRelPathFor = skill:
+    let rel = skill.sourceRelPath or (skill.relPath or ".");
+    in if rel == "." then "" else rel;
+
+  sourceRootFor = skill: skill.sourceRoot or skill.absPath;
+
+  # Stable name keeps aliased declarations of the same dir collapsing to one
+  # store path, which is what safeSourceRoots' memoisation relies on.
+  sourceRootStorePath = skill:
+    builtins.path {
+      path = sourceRootFor skill;
+      name = "agent-skills-source";
+    };
+
+  # hashString strips string context; `baseNameOf storePath` would smuggle a
+  # store-path reference into the derivation name, which Nix forbids.
+  sourceRootKey = storePath:
+    substring 0 32 (hashString "sha256" (toString storePath));
+
   # Recursively search for SKILL.md directories up to `maxDepth`.
   # null = unlimited (capped internally at 100 to guard against symlink loops).
   discoverSource = name: cfg:
     let
-      skillsRoot' = resolveSourceRoot name cfg + "/${cfg.subdir or "."}";
+      subdir = assertSafeRelPath "source ${name} subdir" (cfg.subdir or ".");
+      skillsRoot' = resolveSourceRoot name cfg + "/${subdir}";
       skillsRoot = if !pathExists skillsRoot' then
         throw "agent-skills: source ${name} subdir ${toString skillsRoot'} does not exist"
       else skillsRoot';
@@ -87,6 +137,8 @@ let
                 id = prefixSkillId idPrefix (if relPath == "" then name else relPath);
                 source = name;
                 relPath = relPath;
+                sourceRoot = skillsRoot;
+                sourceRelPath = relPath;
                 absPath = path;
                 meta = {};
               }
@@ -214,13 +266,14 @@ let
             if sources ? ${srcName} then sources.${srcName}
             else throw "agent-skills: skill ${name} references missing source ${srcName}";
           srcRoot = resolveSourceRoot srcName sourceCfg;
-          subdir = sourceCfg.subdir or ".";
-          rel = cfg.path or name;
+          subdir = assertSafeRelPath "source ${srcName} subdir" (sourceCfg.subdir or ".");
+          sourceRoot = if subdir == "." then srcRoot else srcRoot + "/${subdir}";
+          rel' = cfg.path or name;
+          rel = if rel' == "." then "." else assertSafeRelPath "skill ${name} path" rel';
+          sourceRelPath = if rel == "." then "" else rel;
           absPath =
-            if subdir == "." && rel == "." then srcRoot
-            else if subdir == "." then srcRoot + "/${rel}"
-            else if rel == "." then srcRoot + "/${subdir}"
-            else srcRoot + "/${subdir}/${rel}";
+            if sourceRelPath == "" then sourceRoot
+            else sourceRoot + "/${sourceRelPath}";
           validated =
             if !pathExists absPath then
               throw "agent-skills: skill ${name} path ${absPath} does not exist"
@@ -233,6 +286,7 @@ let
         in assert validated; {
           inherit id absPath;
           relPath = rel;
+          inherit sourceRoot sourceRelPath;
           source = srcName;
           meta = cfg.meta or {};
           transform = cfg.transform or null;
@@ -261,17 +315,43 @@ let
   mkBundle = { pkgs, selection, name ? "agent-skills-bundle" }:
     let
       skills = map (id: selection.${id} // { inherit id; }) (attrNames selection);
+      # --safe-links drops symlinks whose textual target escapes the root;
+      # the find pass cleans up chains left dangling by that drop (a -> b -> outside where b was already removed).
+      mkSafeSourceRoot = storePath: key:
+        pkgs.runCommand "agent-skills-source-${key}-safe" { preferLocalBuild = true; } ''
+          mkdir -p "$out"
+          ${pkgs.rsync}/bin/rsync -a --safe-links ${storePath}/ "$out"/
+          # rsync inherited the store's read-only perms; relax so find can delete.
+          chmod -R u+w "$out"
+          ${pkgs.findutils}/bin/find "$out" -xtype l -delete
+        '';
+      safeSourceRoots = foldl'
+        (acc: skill:
+          let
+            storePath = sourceRootStorePath skill;
+            key = sourceRootKey storePath;
+          in
+          if acc ? ${key} then acc
+          else acc // { ${key} = mkSafeSourceRoot storePath key; })
+        {}
+        skills;
       buildCommands = concatMapStringsSep "\n" (skill:
         let
           hasTransform = skill ? transform && skill.transform != null && isFunction skill.transform;
           hasPackages = (skill.packages or []) != [];
           needsCustomisation = hasTransform || hasPackages;
-          skillName = lib.replaceStrings [ "/" ] [ "-" ] skill.id;
-          # This is necessary to make it readable within the nix store
-          skillPath = builtins.path { path = skill.absPath; name = "agent-skill-${skillName}"; };
+          safeRoot = safeSourceRoots.${sourceRootKey (sourceRootStorePath skill)};
+          sourceRelPath = sourceRelPathFor skill;
+          skillPath = appendRelPath safeRoot sourceRelPath;
+          validateSkillPath = ''
+          if [ ! -f ${lib.escapeShellArg "${skillPath}/SKILL.md"} ]; then
+            echo ${lib.escapeShellArg "agent-skills: selected skill ${skill.id} is missing SKILL.md in the safe source tree"} >&2
+            echo ${lib.escapeShellArg "agent-skills: this usually means the skill directory is a symlink escaping the declared source root"} >&2
+            exit 1
+          fi
+          '';
 
-          # Read original SKILL.md content at evaluation time
-          originalContent = readFile (skillPath + "/SKILL.md");
+          originalContent = readFile "${skillPath}/SKILL.md";
           packagesTable = mkPackagesTable (skill.packages or []);
 
           # Apply transform function or use default (original + dependencies at end)
@@ -290,6 +370,7 @@ let
               in ''ln -s "${info.path}" "$out/$dest/${info.name}"''
             ) (skill.packages or []);
           in ''
+          ${validateSkillPath}
           dest=${lib.escapeShellArg skill.id}
           mkdir -p "$out/$dest"
           # Link all files except SKILL.md
@@ -306,6 +387,7 @@ let
 ${transformedContent}
 SKILL_EOF
         '' else ''
+          ${validateSkillPath}
           dest=${lib.escapeShellArg skill.id}
           mkdir -p "$out/$(dirname "$dest")"
           ln -s ${lib.escapeShellArg skillPath} "$out/$dest"
@@ -469,6 +551,8 @@ SKILL_EOF
           return 1  # Not safe
         }
 
+        ${ensureWritableTreeBash}
+
         for i in "''${!targets[@]}"; do
           IFS="|" read -r name structure dest <<< "''${targets[$i]}"
           if [ -n "''${override[$i]:-}" ]; then
@@ -500,6 +584,7 @@ SKILL_EOF
                 rm -rf "$full_dest"
               fi
               mkdir -p "$full_dest"
+              ensure_writable_tree "$full_dest"
               ${pkgs.rsync}/bin/rsync -a --delete ${excludeFlags} "$bundle/" "$full_dest/"
               # Ensure dest is writable so agents can create subdirectories (e.g., .system)
               chmod u+w "$full_dest"
@@ -509,6 +594,7 @@ SKILL_EOF
                 rm -rf "$full_dest"
               fi
               mkdir -p "$full_dest"
+              ensure_writable_tree "$full_dest"
               ${pkgs.rsync}/bin/rsync -aL --delete ${excludeFlags} "$bundle/" "$full_dest/"
               # Ensure dest is writable so agents can create subdirectories (e.g., .system)
               chmod u+w "$full_dest"
@@ -542,6 +628,7 @@ SKILL_EOF
               rm -rf "$full_dest"
             fi
             mkdir -p "$full_dest"
+            ensure_writable_tree "$full_dest"
             ${pkgs.rsync}/bin/rsync -aL --delete ${excludeFlags} "$bundle/" "$full_dest/"
             # Ensure dest is writable so agents can create subdirectories (e.g., .system)
             chmod u+w "$full_dest"
@@ -593,6 +680,8 @@ SKILL_EOF
         exit 1
       fi
 
+      ${ensureWritableTreeBash}
+
       sync_dest() {
         local dest="$1"
         local structure="$2"
@@ -605,12 +694,14 @@ SKILL_EOF
             ;;
           symlink-tree)
             mkdir -p "$dest"
+            ensure_writable_tree "$dest"
             ${pkgs.rsync}/bin/rsync -a --delete ${excludeFlags} "$bundle/" "$dest/"
             # Ensure dest is writable so agents can create subdirectories (e.g., .system)
             chmod u+w "$dest"
             ;;
           copy-tree)
             mkdir -p "$dest"
+            ensure_writable_tree "$dest"
             ${pkgs.rsync}/bin/rsync -aL --delete ${excludeFlags} "$bundle/" "$dest/"
             # Ensure dest is writable so agents can create subdirectories (e.g., .system)
             chmod u+w "$dest"
