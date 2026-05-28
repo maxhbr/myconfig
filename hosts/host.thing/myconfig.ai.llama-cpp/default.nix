@@ -33,6 +33,15 @@ let
   amdModels = map (model: model // { params = (model.params or [ ]) ++ [ "--no-mmap" ]; }) (
     [
       {
+        name = "NVIDIA-Nemotron-3-Nano-Omni-Q8_0";
+        path = "/models/ggml-org-NVIDIA-Nemotron-3-Nano-Omni/nemotron-3-nano-omni-ga_v1.0-Q8_0.gguf";
+        pull-models = {
+          target_directory = modelsPullDir;
+          hf_spec = [ "ggml-org/NVIDIA-Nemotron-3-Nano-Omni/nemotron-3-nano-omni-ga_v1.0-Q8_0.gguf" ];
+        };
+        ttl = 1800;
+      }
+      {
         name = "qwen3.5-122B-A10B-Q5_K_M";
         path = "/models/unsloth-Qwen3.5-122B-A10B-GGUF/Q5_K_M/Qwen3.5-122B-A10B-Q5_K_M-00001-of-00003.gguf";
         pull-models = {
