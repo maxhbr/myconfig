@@ -109,7 +109,7 @@ in
           [
             {
               job_name = "litellm";
-              metrics_path = "/metrics";
+              metrics_path = "/metrics/";
               static_configs = [
                 { targets = [ "${litellmHost}:${toString config.services.litellm.port}" ]; }
               ];
