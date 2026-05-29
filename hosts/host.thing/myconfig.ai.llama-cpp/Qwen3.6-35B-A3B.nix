@@ -119,8 +119,10 @@ in
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
       ];
+      ctxSize = 262144;
+      parallel = 4;
       variants = recommended_variants_Qwen3_6-35B-A3B;
-      ttl = 300;
+      ttl = 3600;
     }
     {
       name = "Qwen3.6-35B-A3B-BF16";
@@ -137,8 +139,10 @@ in
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
       ];
+      ctxSize = 262144;
+      parallel = 4;
       variants = recommended_variants_Qwen3_6-35B-A3B;
-      ttl = 300;
+      ttl = 3600;
     }
     {
       name = "Qwen3.6-35B-A3B-MTP-BF16";
@@ -155,8 +159,10 @@ in
         "--spec-draft-n-max"
         "3"
       ];
+      ctxSize = 262144;
+      parallel = 4;
       variants = recommended_variants_Qwen3_6-35B-A3B;
-      ttl = 300;
+      ttl = 3600;
     }
   ];
 }
