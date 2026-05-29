@@ -14,6 +14,7 @@ in
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/MiniMax-M2.7-GGUF/UD-Q3_K_S" ];
       };
+      cacheType = "q4_0";
       params = [
         "--temp"
         "1.0"
@@ -21,10 +22,6 @@ in
         "0.95"
         "--top-k"
         "40"
-        "--cache-type-k"
-        "q4_0"
-        "--cache-type-v"
-        "q4_0"
       ];
       ttl = 1500;
       ctxSize = ctxSize128k;
@@ -45,6 +42,7 @@ in
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/MiniMax-M2.7-GGUF/UD-IQ4_NL" ];
       };
+      cacheType = "q4_0";
       params = [
         "--temp"
         "1.0"
@@ -52,10 +50,6 @@ in
         "0.95"
         "--top-k"
         "40"
-        "--cache-type-k"
-        "q4_0"
-        "--cache-type-v"
-        "q4_0"
       ];
       ttl = 1500;
       ctxSize = ctxSize128k;
@@ -75,6 +69,7 @@ in
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/MiniMax-M2.7-GGUF/UD-IQ4_XS" ];
       };
+      cacheType = "q4_0";
       params = [
         "--temp"
         "1.0"
@@ -82,10 +77,6 @@ in
         "0.95"
         "--top-k"
         "40"
-        "--cache-type-k"
-        "q4_0"
-        "--cache-type-v"
-        "q4_0"
       ];
       ttl = 1500;
       ctxSize = ctxSize128k;

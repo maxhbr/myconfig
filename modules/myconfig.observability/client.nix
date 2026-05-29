@@ -47,6 +47,7 @@ in
     ./client.system-age.nix
     ./client.co2-exporter.nix
     ./client.weather-exporter.nix
+    ./client.llama-server.nix
   ];
 
   config = lib.mkIf clientCfg.enable {
