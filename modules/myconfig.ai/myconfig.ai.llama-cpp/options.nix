@@ -57,6 +57,18 @@ let
         default = 1;
         description = "Number of parallel requests, increases the set ctx-size by its value";
       };
+      cacheType = mkOption {
+        type = types.nullOr (
+          types.enum [
+            "f16"
+            "q8_0"
+            "q5_1"
+            "q4_0"
+          ]
+        );
+        default = null;
+        description = "KV cache quantisation type; null to use the model default";
+      };
       pull-models = mkOption {
         type = types.nullOr (
           types.submodule {
@@ -120,7 +132,12 @@ let
               };
               cacheType = mkOption {
                 type = types.nullOr (
-                  types.enum [ "f16" "q8_0" "q5_1" "q4_0" ]
+                  types.enum [
+                    "f16"
+                    "q8_0"
+                    "q5_1"
+                    "q4_0"
+                  ]
                 );
                 default = null;
                 description = "KV cache quantisation type; null to use the model default";
