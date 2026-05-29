@@ -31,6 +31,13 @@ input {
         // accel-profile "flat"
     }
 
+    tablet {
+        // off
+        map-to-focused-output
+        // left-handed
+        // calibration-matrix 1.0 0.0 0.0 0.0 1.0 0.0
+    }
+
     // Uncomment this to make the mouse warp to the center of newly focused windows.
     // warp-mouse-to-focus
 
@@ -588,9 +595,9 @@ binds {
     // Mod+Ctrl+Space       { switch-layout "next"; }
     // Mod+Shift+Space { switch-layout "prev"; }
 
-    Print { screenshot; }
-    Ctrl+Print { screenshot-screen; }
-    Alt+Print { screenshot-window; }
+    Print { screenshot show-pointer=false; }
+    Ctrl+Print { screenshot-screen show-pointer=false; }
+    Alt+Print { screenshot-window show-pointer=false; }
 
     // The quit action will show a confirmation dialog to avoid accidental exits.
     Mod+Shift+Q { quit; }

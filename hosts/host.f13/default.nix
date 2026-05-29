@@ -297,15 +297,6 @@ in
                 transform "normal"
                 position x=0 y=0
             }
-            input {
-                tablet {
-                    // off
-                    map-to-output "DP-12"
-                    // map-to-focused-output
-                    // left-handed
-                    // calibration-matrix 1.0 0.0 0.0 0.0 1.0 0.0
-                }
-            }
           '';
         };
         messengers.enable = true;
