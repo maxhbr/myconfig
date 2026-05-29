@@ -81,7 +81,14 @@ let
       keys = {
         model = m.path;
       }
-      // lib.optionalAttrs (m.ctxSize != null) { ctx-size = m.ctxSize; }
+      // lib.optionalAttrs (m.ctxSize != null) { ctx-size = (m.ctxSize * m.parallel); }
+      // lib.optionalAttrs (m.cacheType != null) {
+        cache-type-k = m.cacheType;
+        cache-type-v = m.cacheType;
+        spec-draft-type-k = m.cacheType;
+        spec-draft-type-v = m.cacheType;
+      }
+      // lib.optionalAttrs (m.parallel > 1) { parallel = m.parallel; }
       // lib.optionalAttrs (m.aliases != [ ]) { alias = lib.concatStringsSep "," m.aliases; }
       // translated.keys;
     in

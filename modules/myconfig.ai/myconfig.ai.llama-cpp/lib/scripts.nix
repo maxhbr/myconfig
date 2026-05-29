@@ -28,7 +28,11 @@ let
       safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
       scriptName = "llama-server_${device}_${safeName}";
       envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
-      ctxSizeFlag = lib.optionalString (model.ctxSize != null) "--ctx-size ${toString model.ctxSize}";
+      ctxSizeFlag = lib.optionalString (model.ctxSize != null) "--ctx-size ${toString (model.ctxSize * model.parallel)}";
+      cacheTypeFlag = lib.optionalString (
+        model.cacheType != null
+      ) "--cache-type-k ${model.cacheType} --cache-type-v ${model.cacheType} --spec-draft-type-k ${model.cacheType} --spec-draft-type-v ${model.cacheType}";
+      parallelFlag = lib.optionalString (model.parallel > 1) "--parallel ${toString model.parallel} --cont-batching";
       aliasesFlag = lib.optionalString (
         model.aliases != [ ]
       ) "--alias ${lib.concatStringsSep "," model.aliases}";
@@ -46,7 +50,7 @@ let
           --flash-attn on \
           --mlock \
           --metrics \
-          --no-webui ${ctxSizeFlag} ${aliasesFlag} ${paramsStr} "''${@:2}"
+          --no-webui ${ctxSizeFlag} ${cacheTypeFlag} ${parallelFlag} ${aliasesFlag} ${paramsStr} "''${@:2}"
       '';
     };
 
