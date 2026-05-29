@@ -21,6 +21,7 @@ in
     ./host.power.nix
     ./host.co2.nix
     ./host.weather.nix
+    ./host.llama-server.nix
     ./client.nix
     ./client.alloy.nix
   ];
