@@ -16,12 +16,14 @@ in
 
     device = mkOption {
       type = types.str;
-      default = "/dev/ttyACM0";
+      default = "/dev/serial/by-id/usb-SMLIGHT_SMLIGHT_SLZB-07p7_6878f140e8d6ef119f1a50878f302768-if00-port0";
       description = ''
-        Serial device for the Zigbee coordinator (ConBee II / RaspBee II).
-        Make sure the kernel exposes the adapter at this path; if it
-        moves between boots, pin it via a udev rule and reference the
-        stable `/dev/serial/by-id/...` symlink here.
+        Serial device for the Zigbee coordinator. Default targets the
+        SMLIGHT SLZB-07p7 (CC2652P7 + CP2102N) via its stable
+        `/dev/serial/by-id/...` symlink so the path survives reboots
+        and USB re-enumeration. Adjust the suffix if the dongle exposes
+        a different serial number — check
+        `ls -l /dev/serial/by-id/` after plugging it in.
       '';
     };
 
@@ -34,9 +36,11 @@ in
         "ember"
         "auto"
       ];
-      default = "deconz";
+      default = "zstack";
       description = ''
-        Zigbee2MQTT adapter driver. `deconz` matches ConBee II / RaspBee II.
+        Zigbee2MQTT adapter driver. `zstack` matches Texas Instruments
+        CC2652/CC1352-based coordinators such as the SMLIGHT SLZB-07p7
+        (CC2652P7). Use `deconz` for ConBee II / RaspBee II.
       '';
     };
 
