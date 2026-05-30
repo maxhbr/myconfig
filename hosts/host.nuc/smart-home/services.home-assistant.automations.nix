@@ -35,6 +35,8 @@ let
   # only need updating in one place.
   schreibtischButtonDeviceId = "b5ce603d4259ece94bb8653ca5dc131b";
   shellySchreibtisch = "switch.shelly_schreibtisch";
+  shellyTV = "01KRH9B9KHKGJ4WGNFQ0R6FMYH";
+  
 in
 {
   config = lib.mkIf haCfg.enable {
