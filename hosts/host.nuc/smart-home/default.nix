@@ -14,6 +14,7 @@
     ./services.mosquitto.nix
     ./services.zigbee2mqtt.nix
     ./services.home-assistant.nix
+    ./services.home-assistant.automations.nix
   ];
 
   options.myconfig.smart-home = with lib; {

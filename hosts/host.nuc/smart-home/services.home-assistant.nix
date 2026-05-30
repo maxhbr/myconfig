@@ -122,6 +122,7 @@ in
           currency = "EUR";
         };
         frontend = { };
+        # Automations are declared in ./services.home-assistant.automations.nix.
         http = {
           base_url = "http://hass.nuc.wg0.maxhbr.local:${toString haPort}/";
           server_port = haPort;
