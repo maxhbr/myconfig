@@ -230,6 +230,13 @@ get_ip_of_target() {
     if [[ $use_wg == "true" ]]; then
         local hosts_alias="$target.wg0"
         if grep -q " $hosts_alias"'$' /etc/hosts; then
+            # When using a jump host, return the raw IP so the jump host can reach it
+            local ip_from_hosts
+            ip_from_hosts="$(getent hosts "$hosts_alias" | awk '{print $1}')"
+            if [[ -n "$ip_from_hosts" ]]; then
+                echo "$ip_from_hosts"
+                return
+            fi
             echo "$hosts_alias"
             return
         fi
@@ -261,7 +268,8 @@ copy_closure_to_target() (
     log_step "copying closure to $targetIP"
     set -x
     until nix-copy-closure --to "$targetIP" "$out_link"; do
-        log_warning "retry nix-copy-closure"
+        log_warning "retry nix-copy-closure in 10s"
+        sleep 10
     done
 )
 diff_build_results() (
@@ -296,6 +304,13 @@ deploy() (
 
     log_step "deploying $out_link to $target"
     local use_wg="${4:-false}"
+
+    local ssh_opts='-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'
+    if [[ $use_wg == "true" ]]; then
+        ssh_opts="$ssh_opts -J vserver"
+    fi
+    export NIX_SSHOPTS="$ssh_opts"
+
     cmd="nixos-rebuild"
     if [[ $target != "$(hostname)" ]]; then
         targetIP="root@$(get_ip_of_target "$target" "$use_wg")"
@@ -307,8 +322,6 @@ deploy() (
     else
         cmd="sudo $cmd"
     fi
-
-    export NIX_SSHOPTS='-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'
     set -x
     until $cmd \
         `# --build-host localhost` \
