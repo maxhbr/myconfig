@@ -466,6 +466,25 @@ in
       ) config.myconfig.wireguard
     );
 
+    # Add this host's own wg address to /etc/hosts so that
+    # `<hostname>.wg0` resolves locally (announceOtherHosts skips self).
+    networking.extraHosts = lib.mkMerge (
+      lib.mapAttrsToList (
+        wgInterface: cfg:
+        lib.mkIf cfg.enable (
+          let
+            thisHostWgIp = metadata.hosts."${config.networking.hostName}".wireguard."${wgInterface}".ip4;
+            thisHostName = config.networking.hostName;
+            baseDomain = "${wgInterface}.maxhbr.local";
+          in
+          ''
+            ${thisHostWgIp} ${thisHostName}.${wgInterface}
+            ${thisHostWgIp} ${thisHostName}.${baseDomain}
+          ''
+        )
+      ) config.myconfig.wireguard
+    );
+
     networking.nameservers = lib.mkMerge (
       lib.mapAttrsToList (
         _wgInterface: cfg: lib.mkIf (cfg.enable && cfg.dnsServer != null) [ cfg.dnsServer ]

@@ -205,6 +205,12 @@
             (self.lib.evalConfiguration "x86_64-linux" "p14" (
               [
                 self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "p14") ];
+                  }
+                )
                 {
                   myconfig.upg.enable = true;
                 }
@@ -227,43 +233,112 @@
           host-workstation =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "x86_64-linux" "workstation" (
-              [ self.nixosModules.core ] ++ moreModules
+              [
+                self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "workstation") ];
+                  }
+                )
+              ]
+              ++ moreModules
             ) metadataOverride);
           host-vserver =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "x86_64-linux" "vserver" (
-              [ self.nixosModules.core ] ++ moreModules
+              [
+                self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "vserver") ];
+                  }
+                )
+              ]
+              ++ moreModules
             ) metadataOverride);
           host-nas =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "x86_64-linux" "nas" (
-              [ self.nixosModules.core ] ++ moreModules
+              [
+                self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "nas") ];
+                  }
+                )
+              ]
+              ++ moreModules
             ) metadataOverride);
           host-nuc =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "x86_64-linux" "nuc" (
-              [ self.nixosModules.core ] ++ moreModules
+              [
+                self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "nuc") ];
+                  }
+                )
+              ]
+              ++ moreModules
             ) metadataOverride);
           host-pi4 =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "aarch64-linux" "pi4" (
-              [ self.nixosModules.core ] ++ moreModules
+              [
+                self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "pi4") ];
+                  }
+                )
+              ]
+              ++ moreModules
             ) metadataOverride);
           host-pi3a =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "aarch64-linux" "pi3a" (
-              [ self.nixosModules.core ] ++ moreModules
+              [
+                self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "pi3a") ];
+                  }
+                )
+              ]
+              ++ moreModules
             ) metadataOverride);
           host-r6c =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "aarch64-linux" "r6c" (
-              [ self.nixosModules.core ] ++ moreModules
+              [
+                self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "r6c") ];
+                  }
+                )
+              ]
+              ++ moreModules
             ) metadataOverride);
           host-thing =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "x86_64-linux" "thing" (
               [
                 self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "thing") ];
+                  }
+                )
                 { myconfig.upg.enable = true; }
               ]
               ++ moreModules

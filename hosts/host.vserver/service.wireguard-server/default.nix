@@ -30,6 +30,13 @@ in
   imports = [ ./services.dnsmasq.nix ];
 
   config = {
+    # Add this host's own wg0 address to /etc/hosts so that
+    # `vserver.wg0` resolves locally (announceOtherHosts skips self).
+    networking.extraHosts = ''
+      10.199.199.1 ${config.networking.hostName}.wg0
+      10.199.199.1 ${config.networking.hostName}.wg0.maxhbr.local
+    '';
+
     environment.systemPackages = with pkgs; [ wireguard-tools ];
     # enable NAT
     networking.nat.enable = true;
