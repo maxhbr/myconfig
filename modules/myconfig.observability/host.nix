@@ -57,8 +57,7 @@ in
           domain = "localhost";
           http_addr = "127.0.0.1";
           http_port = cfg.grafanaPort;
-          allowed_origins =
-            "https://grafana.nuc.wg0.maxhbr.local https://grafana.nuc.vserver.wg0.maxhbr.local";
+          allowed_origins = "https://grafana.nuc.wg0.maxhbr.local https://grafana.nuc.vserver.wg0.maxhbr.local";
         };
 
         security = {
