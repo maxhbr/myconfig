@@ -73,7 +73,12 @@ in
     };
 
     panId = mkOption {
-      type = with types; oneOf [ ints.u16 (strMatching "GENERATE") ];
+      type =
+        with types;
+        oneOf [
+          ints.u16
+          (strMatching "GENERATE")
+        ];
       default = "GENERATE";
       description = ''
         16-bit Zigbee PAN ID as a decimal integer, or the sentinel
@@ -101,7 +106,12 @@ in
     };
 
     extPanId = mkOption {
-      type = with types; oneOf [ (listOf ints.u8) (strMatching "GENERATE") ];
+      type =
+        with types;
+        oneOf [
+          (listOf ints.u8)
+          (strMatching "GENERATE")
+        ];
       default = "GENERATE";
       description = ''
         64-bit extended Zigbee PAN ID as an 8-element list of bytes
@@ -115,7 +125,12 @@ in
     };
 
     networkKey = mkOption {
-      type = with types; oneOf [ (listOf ints.u8) (strMatching "GENERATE") ];
+      type =
+        with types;
+        oneOf [
+          (listOf ints.u8)
+          (strMatching "GENERATE")
+        ];
       default = "GENERATE";
       description = ''
         128-bit Zigbee network (master) key as a 16-element list of
