@@ -21,6 +21,7 @@ in
     ./host.power.nix
     ./host.co2.nix
     ./host.weather.nix
+    ./host.temperature-humidity.nix
     ./host.llama-server.nix
     ./client.nix
     ./client.alloy.nix
