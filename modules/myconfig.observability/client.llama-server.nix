@@ -186,8 +186,8 @@ let
               g_scrape_success.set(0)
               g_scrape_timestamp.set(time.time())
               # Clear model counts on failure so dashboards reflect the outage
-              g_model_count.set(0, labels={"value": "loaded"})
-              g_model_count.set(0, labels={"value": "unloaded"})
+              g_model_count.labels(value="loaded").set(0)
+              g_model_count.labels(value="unloaded").set(0)
               return
 
           g_scrape_success.set(1)
@@ -250,8 +250,8 @@ let
                   del gauge._metrics[label_key]
 
           # --- Aggregate counts ---
-          g_model_count.set(loaded_count, labels={"value": "loaded"})
-          g_model_count.set(unloaded_count, labels={"value": "unloaded"})
+          g_model_count.labels(value="loaded").set(loaded_count)
+          g_model_count.labels(value="unloaded").set(unloaded_count)
 
       def main():
           start_http_server(EXPORTER_PORT, addr="127.0.0.1")
