@@ -55,18 +55,6 @@ let
           ENFORCE_EAGER="''${ENFORCE_EAGER:-1}"
           REMOVE_EXISTING_CONTAINER="''${REMOVE_EXISTING_CONTAINER:-1}"
 
-          # Always add localhost:$HOST_PORT so callers can address the model
-          # generically without knowing the internal model name in advance.
-          # Optionally append extra names via EXTRA_SERVED_MODEL_NAMES (space-separated).
-          extra_names=("localhost:$HOST_PORT")
-          if [ -n "''${EXTRA_SERVED_MODEL_NAMES:-}" ]; then
-            # shellcheck disable=SC2206
-            extra_names+=( $EXTRA_SERVED_MODEL_NAMES )
-          fi
-          for extra_name in "''${extra_names[@]}"; do
-            args+=(--served-model-name "$extra_name")
-          done
-
           if [ ! -d "$MODEL_HOST_PATH" ]; then
             echo "Model directory does not exist: $MODEL_HOST_PATH" >&2
             exit 1
@@ -118,6 +106,18 @@ let
             extra_args=( $EXTRA_VLLM_ARGS )
             args+=("''${extra_args[@]}")
           fi
+
+          # Always add localhost:$HOST_PORT so callers can address the model
+          # generically without knowing the internal model name in advance.
+          # Optionally append extra names via EXTRA_SERVED_MODEL_NAMES (space-separated).
+          extra_names=("localhost:$HOST_PORT")
+          if [ -n "''${EXTRA_SERVED_MODEL_NAMES:-}" ]; then
+            # shellcheck disable=SC2206
+            extra_names+=( $EXTRA_SERVED_MODEL_NAMES )
+          fi
+          for extra_name in "''${extra_names[@]}"; do
+            args+=(--served-model-name "$extra_name")
+          done
 
           echo "Starting vLLM Docker container:"
           echo "  model:              $MODEL_HOST_PATH"
