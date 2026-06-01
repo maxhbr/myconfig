@@ -28,12 +28,19 @@ let
         text = ''
           set -euo pipefail
 
+          # Optional first argument: host port (overrides env / default).
+          if [ $# -gt 0 ]; then
+            HOST_PORT="$1"
+            shift
+          else
+            HOST_PORT="''${HOST_PORT:-${toString port}}"
+          fi
+
           # Host-side model checkout.
           MODEL_HOST_PATH="''${MODEL_HOST_PATH:-${modelHostPath}}"
 
           # Docker/vLLM settings.
           DOCKER_IMAGE="''${DOCKER_IMAGE:-docker.io/vllm/vllm-openai:latest}"
-          HOST_PORT="''${HOST_PORT:-${toString port}}"
 
           # vLLM model/server settings.
           DTYPE="''${DTYPE:-bfloat16}"
