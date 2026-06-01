@@ -15,6 +15,7 @@ let
       servedModelName,
       containerName,
       port,
+      maxModelLen ? 185024,
       extraConfig ? { },
     }:
     let
@@ -88,6 +89,7 @@ let
             "$DOCKER_IMAGE"
             "/model"
             --dtype "$DTYPE"
+            --max-model-len ${toString maxModelLen}
             --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION"
             --max-num-seqs "$MAX_NUM_SEQS"
             --max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS"
@@ -184,6 +186,7 @@ let
     servedModelName = "Qwen3.6-27B-NVFP4";
     containerName = "vllm-dockerized-Qwen3.6-27B-NVFP4";
     port = 22548;
+    maxModelLen = 185024;
     extraConfig = { };
   };
 
@@ -193,6 +196,7 @@ let
     servedModelName = "Qwen3.6-27B-Text-NVFP4-MTP";
     containerName = "vllm-dockerized-Qwen3.6-27B-Text-NVFP4-MTP";
     port = 22549;
+    maxModelLen = 185024;
     extraConfig = {
       aliases = [
         "vllm:mtp"
