@@ -28,10 +28,13 @@ let
         text = ''
           set -euo pipefail
 
-          # Optional first argument: host port (overrides env / default).
+          # First argument is the optional host port; everything else
+          # is passed verbatim to the vLLM CLI.
+          EXTRA_ARGS=()
           if [ $# -gt 0 ]; then
             HOST_PORT="$1"
             shift
+            EXTRA_ARGS=("$@")
           else
             HOST_PORT="''${HOST_PORT:-${toString port}}"
           fi
@@ -44,7 +47,6 @@ let
 
           # vLLM model/server settings.
           DTYPE="''${DTYPE:-bfloat16}"
-          MAX_MODEL_LEN="''${MAX_MODEL_LEN:-4096}"
           GPU_MEMORY_UTILIZATION="''${GPU_MEMORY_UTILIZATION:-0.93}"
           MAX_NUM_SEQS="''${MAX_NUM_SEQS:-1}"
           MAX_NUM_BATCHED_TOKENS="''${MAX_NUM_BATCHED_TOKENS:-1024}"
@@ -54,6 +56,10 @@ let
           LANGUAGE_MODEL_ONLY="''${LANGUAGE_MODEL_ONLY:-1}"
           ENFORCE_EAGER="''${ENFORCE_EAGER:-1}"
           REMOVE_EXISTING_CONTAINER="''${REMOVE_EXISTING_CONTAINER:-1}"
+
+          # Tool calling flags (required for "auto" tool_choice in OpenAI API).
+          ENABLE_AUTO_TOOL_CHOICE="''${ENABLE_AUTO_TOOL_CHOICE:-1}"
+          TOOL_CALL_PARSER="''${TOOL_CALL_PARSER:-qwen3_xml}"
 
           if [ ! -d "$MODEL_HOST_PATH" ]; then
             echo "Model directory does not exist: $MODEL_HOST_PATH" >&2
@@ -82,7 +88,6 @@ let
             "$DOCKER_IMAGE"
             "/model"
             --dtype "$DTYPE"
-            --max-model-len "$MAX_MODEL_LEN"
             --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION"
             --max-num-seqs "$MAX_NUM_SEQS"
             --max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS"
@@ -99,6 +104,19 @@ let
 
           if [ "$ENFORCE_EAGER" = "1" ]; then
             args+=(--enforce-eager)
+          fi
+
+          if [ "$ENABLE_AUTO_TOOL_CHOICE" = "1" ]; then
+            args+=(--enable-auto-tool-choice)
+          fi
+
+          if [ -n "$TOOL_CALL_PARSER" ]; then
+            args+=(--tool-call-parser "$TOOL_CALL_PARSER")
+          fi
+
+          # Append any positional arguments beyond the port.
+          if [ ''${#EXTRA_ARGS[@]} -gt 0 ]; then
+            args+=("''${EXTRA_ARGS[@]}")
           fi
 
           if [ -n "''${EXTRA_VLLM_ARGS:-}" ]; then
