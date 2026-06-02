@@ -94,6 +94,32 @@ in
             }
           ];
         }
+        {
+          id = "vibration_sensor_turn_on_light";
+          alias = "Vibration -> Light On";
+          mode = "single";
+          triggers = [
+            {
+              trigger = "device";
+              domain = "binary_sensor";
+              device_id = "ee7fefee50ee9dec379e57eb1986d7cf";
+              entity_id = "b09c35791298c879bb5fc163b66cca3d";
+              type = "vibration";
+              metadata = {
+                secondary = false;
+              };
+            }
+          ];
+          conditions = [ ];
+          actions = [
+            {
+              type = "turn_on";
+              device_id = "c775cf1cf67f40ad8864c8f17de5cdf0";
+              entity_id = "95436ab5cf3d9360079e61f68c0515e3";
+              domain = "light";
+            }
+          ];
+        }
       ];
       "automation ui" = "!include automations.yaml";
     };

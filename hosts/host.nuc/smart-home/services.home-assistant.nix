@@ -103,6 +103,9 @@ in
         "brother"
         "ipp"
 
+        # Climate / thermostats
+        "tado"
+
         # Optional but common
         "bluetooth"
         "bluetooth_adapters"
