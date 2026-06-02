@@ -15,6 +15,7 @@
     ./services.zigbee2mqtt.nix
     ./services.home-assistant.nix
     ./services.home-assistant.automations.nix
+    ./services.node-red.nix
   ];
 
   options.myconfig.smart-home = with lib; {
@@ -33,6 +34,7 @@
       # (only one may hold /dev/ttyACM0 at a time).
       deconz.enable = false;
       zigbee2mqtt.enable = true;
+      node-red.enable = true;
     };
   };
 }

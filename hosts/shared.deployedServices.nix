@@ -30,6 +30,10 @@
             name = "zigbee2mqtt";
             port = 8080;
           }
+          {
+            name = "node-red";
+            port = 1880;
+          }
         ];
         thing = [
           {
