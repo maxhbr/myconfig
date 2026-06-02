@@ -96,6 +96,7 @@ in
         # Zigbee is handled via Zigbee2MQTT -> the `mqtt` component
         # above picks up Z2M's MQTT discovery messages; no dedicated
         # `deconz` component is needed.
+        "elgato" # Elgato Key Light / Light Strip (discovered via zeroconf _elg._tcp.local.)
         "hue"
         "switchbot"
         "unifi"
