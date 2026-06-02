@@ -10,7 +10,6 @@
 }:
 {
   imports = [
-    ./services.deconz.nix
     ./services.mosquitto.nix
     ./services.zigbee2mqtt.nix
     ./services.home-assistant.nix
@@ -28,11 +27,6 @@
         enable = true;
         exposeOnLan = true;
       };
-      # Migrated from deCONZ/Phoscon to Zigbee2MQTT. Mosquitto is
-      # auto-enabled by the zigbee2mqtt module. To roll back, flip
-      # `zigbee2mqtt.enable` to `false` and set `deconz.enable = true`
-      # (only one may hold /dev/ttyACM0 at a time).
-      deconz.enable = false;
       zigbee2mqtt.enable = true;
       node-red.enable = true;
     };
