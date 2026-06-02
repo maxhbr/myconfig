@@ -31,8 +31,8 @@
         home.packages = with pkgs; [ mykeylight ];
         home.file.".mykeylight" = {
           text = ''
-            192.168.1.202
-            192.168.1.231
+            192.168.1.224
+            192.168.1.195
           '';
         };
       };
