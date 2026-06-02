@@ -11,7 +11,6 @@ parser = argparse.ArgumentParser(description='mykeylight.')
 parser.add_argument('--on', action=argparse.BooleanOptionalAction)
 parser.add_argument('--off', action=argparse.BooleanOptionalAction)
 
-config = open(os.path.expanduser('~/.mykeylight'), 'r')
 with open(os.path.expanduser('~/.mykeylight'), 'r') as config:
     ips = config.read().splitlines()
 
@@ -35,5 +34,4 @@ async def main():
         await toggle()
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    asyncio.run(main())
