@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 {
   pkgs,
+  inputs,
   config,
   lib,
   myconfig,
@@ -31,6 +32,11 @@ in
         )
       )
       {
+        nixpkgs.overlays = [
+          (_: _: { 
+            niri = inputs.niri.packages.${pkgs.system}.niri;
+          })
+        ];
         home-manager.sharedModules = [
           (
             { config, ... }:
