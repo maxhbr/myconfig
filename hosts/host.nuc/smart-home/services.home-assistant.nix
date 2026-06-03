@@ -10,6 +10,8 @@ let
   haCfg = config.myconfig.smart-home.home-assistant;
   haPort = 8123;
   obsClientCfg = config.myconfig.observability.client;
+  obsCfg = config.myconfig.observability;
+  vmListenAddress = config.services.victoriametrics.listenAddress;
 in
 {
   options.myconfig.smart-home.home-assistant = with lib; {
@@ -113,7 +115,8 @@ in
         "homekit_controller"
         "matter"
       ]
-      ++ lib.optional haCfg.prometheus.enable "prometheus";
+      ++ lib.optional haCfg.prometheus.enable "prometheus"
+      ++ lib.optional obsCfg.host.enable "influxdb";
       config = {
         # default_config = { }; # this breaks metrics collection
         home = {
@@ -147,6 +150,37 @@ in
         # Endpoint: GET /api/prometheus (requires Bearer auth)
         prometheus = {
           namespace = haCfg.prometheus.namespace;
+        };
+      }
+      // lib.optionalAttrs obsCfg.host.enable {
+        # https://www.home-assistant.io/integrations/influxdb/
+        # VictoriaMetrics exposes an InfluxDB v2 line-protocol endpoint
+        # at /influx/api/v2/write on the same port as its HTTP API.
+        # No token/org/bucket are required; VM ignores them but the
+        # integration requires non-empty strings for api_version: 2.
+        influxdb = {
+          api_version = 2;
+          host = vmListenAddress;
+          ssl = false;
+          token = "ignored";
+          organization = "ignored";
+          bucket = "home_assistant";
+          exclude = {
+            domains = [
+              # "automation"
+              "binary_sensor"
+              "device_tracker"
+              "group"
+              "input_boolean"
+              "input_text"
+              "persistent_notification"
+              "scene"
+              "script"
+              # "sun"
+              "update"
+              "zone"
+            ];
+          };
         };
       };
     };

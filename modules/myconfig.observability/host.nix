@@ -15,7 +15,7 @@ in
   options.myconfig.observability.host = with lib; {
     retentionPeriod = mkOption {
       type = types.str;
-      default = "90d";
+      default = "900d";
       description = "VictoriaMetrics retention period.";
     };
 
