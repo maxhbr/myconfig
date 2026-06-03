@@ -28,7 +28,7 @@
         exposeOnLan = true;
       };
       zigbee2mqtt.enable = true;
-      node-red.enable = true;
+      node-red.enable = false;
     };
   };
 }
