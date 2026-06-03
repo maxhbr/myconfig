@@ -11,7 +11,9 @@ let
   haPort = 8123;
   obsClientCfg = config.myconfig.observability.client;
   obsCfg = config.myconfig.observability;
-  vmListenAddress = config.services.victoriametrics.listenAddress;
+  # listenAddress is "host:port" — split out just the host for HA's influxdb
+  # integration, which takes host and port as separate fields.
+  vmHost = builtins.head (lib.splitString ":" config.services.victoriametrics.listenAddress);
 in
 {
   options.myconfig.smart-home.home-assistant = with lib; {
@@ -130,7 +132,6 @@ in
         frontend = { };
         # Automations are declared in ./services.home-assistant.automations.nix.
         http = {
-          base_url = "http://hass.nuc.wg0.maxhbr.local:${toString haPort}/";
           server_port = haPort;
           use_x_forwarded_for = true;
           trusted_proxies = [
@@ -154,20 +155,27 @@ in
       }
       // lib.optionalAttrs obsCfg.host.enable {
         # https://www.home-assistant.io/integrations/influxdb/
-        # VictoriaMetrics exposes an InfluxDB v2 line-protocol endpoint
-        # at /influx/api/v2/write on the same port as its HTTP API.
-        # No token/org/bucket are required; VM ignores them but the
-        # integration requires non-empty strings for api_version: 2.
+        # VictoriaMetrics supports the InfluxDB v1 HTTP write API at /write
+        # and authenticates via HTTP Basic Auth — which matches what the HA
+        # influxdb integration sends for api_version: 1 (username + password).
+        # The v2 API only sends "Authorization: Token …" which VM rejects (401).
+        #
+        # The password is managed in /var/lib/hass/secrets.yaml (HA secrets
+        # file, not tracked in git) under the key `vm_basic_auth_password`.
+        # The private overlay is responsible for populating that file alongside
+        # other HA secrets; the default insecure password from
+        # myconfig.observability.basicAuthPasswordFile should be used there
+        # until it is replaced via the private overlay.
         influxdb = {
-          api_version = 2;
-          host = vmListenAddress;
+          api_version = 1;
+          host = vmHost;
+          port = obsCfg.remoteWritePort;
           ssl = false;
-          token = "ignored";
-          organization = "ignored";
-          bucket = "home_assistant";
+          database = "home_assistant";
+          username = obsCfg.basicAuthUsername;
+          password = "!secret vm_basic_auth_password";
           exclude = {
             domains = [
-              # "automation"
               "binary_sensor"
               "device_tracker"
               "group"
@@ -176,7 +184,6 @@ in
               "persistent_notification"
               "scene"
               "script"
-              # "sun"
               "update"
               "zone"
             ];
@@ -244,6 +251,18 @@ in
         ProtectSystem = "strict";
         ReadWritePaths = "/var/lib/home-assistant";
       };
+    }
+    // lib.optionalAttrs obsCfg.host.enable {
+      # Write /var/lib/hass/secrets.yaml before HA starts so that the
+      # `!secret vm_basic_auth_password` reference in the influxdb config
+      # is satisfied. The password is read from the file managed by
+      # myconfig.observability (nix store default, or agenix-managed path
+      # when the private overlay is active).
+      preStart = lib.mkAfter ''
+        install -m 0600 /dev/null /var/lib/hass/secrets.yaml
+        echo "vm_basic_auth_password: $(cat ${toString obsCfg.basicAuthPasswordFile})" \
+          >> /var/lib/hass/secrets.yaml
+      '';
     };
 
     users.groups.homeassistant = { };
