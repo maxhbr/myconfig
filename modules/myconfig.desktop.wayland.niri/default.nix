@@ -32,11 +32,11 @@ in
         )
       )
       {
-        nixpkgs.overlays = [
-          (_: _: { 
-            niri = inputs.niri.packages.${pkgs.system}.niri;
-          })
-        ];
+        # nixpkgs.overlays = [
+        #   (_: _: {
+        #     niri = inputs.niri.packages.${pkgs.system}.niri;
+        #   })
+        # ];
         home-manager.sharedModules = [
           (
             { config, ... }:

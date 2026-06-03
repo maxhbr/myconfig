@@ -34,7 +34,7 @@ input {
     tablet {
         // off
         map-to-focused-output
-        map-to-focused-window
+        // map-to-focused-window
         // left-handed
         // calibration-matrix 1.0 0.0 0.0 0.0 1.0 0.0
     }
