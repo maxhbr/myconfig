@@ -19,10 +19,10 @@
 #
 # | Flake input | Package     | PR                                                 | Status   |
 # | ----------- | ----------- | -------------------------------------------------- | -------- |
-# | `pr523912`  | `llama-cpp` | <https://github.com/NixOS/nixpkgs/pull/523912>     | active   |
+# | _(none)_    |             |                                                    |          |
 #
-# (Commented-out example: `pr275479` → `freeplane` — see `flake.nix` for the
-# template.)
+# (Commented-out examples: `pr275479` → `freeplane`, `pr523912` → `llama-cpp`
+# (merged 2026-05-28) — see `flake.nix` for the template.)
 #
 # ---
 #
@@ -264,10 +264,6 @@
       )
       [
         # { input = "pr275479"; pkg = "freeplane"; maxVersion = null; }
-        {
-          input = "pr523912";
-          pkg = "llama-cpp";
-          maxVersion = null;
-        }
+        # { input = "pr523912"; pkg = "llama-cpp"; maxVersion = null; }  # merged 2026-05-28 (9309), removed
       ];
 }

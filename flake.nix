@@ -53,8 +53,6 @@
     NanoKVM-USB.url = "github:maxhbr/NanoKVM-USB";
     NanoKVM-USB.inputs.nixpkgs.follows = "nixpkgs";
 
-    pr523912.url = "github:NixOS/nixpkgs/pull/523912/head"; # https://github.com/NixOS/nixpkgs/pull/523912
-
     niri.url = "github:niri-wm/niri";
   };
 
