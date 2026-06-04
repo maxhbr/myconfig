@@ -82,8 +82,6 @@
 
     networking.networkmanager.enable = true;
 
-    services.vsftpd.enable = lib.mkForce false; # fails to build on arm
-
     swapDevices = [
       {
         device = "/swapfile";
