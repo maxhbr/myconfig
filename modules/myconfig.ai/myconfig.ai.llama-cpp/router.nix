@@ -71,6 +71,23 @@ let
     mlock = true;
     metrics = true;
     no-webui = true;
+    # Disable the server's idle-slot prompt save/restore path
+    # (--cache-idle-slots, default-on in recent llama.cpp b9xxx). It
+    # hard-aborts (ggml_abort) instead of failing gracefully when a
+    # context checkpoint can't be restored into the KV cache — most
+    # reliably reproduced with SWA models (n_swa) once the RAM cache
+    # limit is hit and the oldest entry is evicted:
+    #
+    #   state_read_meta: failed to find available cells in kv cache
+    #   common.cpp: checkpoint size mismatch: expected N, got 0
+    #   state_seq_set_data: error loading state: failed to restore kv cache
+    #   -> ggml_abort, the whole llama-server process dies and never recovers
+    #
+    # Turning this off keeps ordinary prompt caching (same-prompt KV
+    # reuse) but stops the crashing cross-task save/restore. Drop this
+    # once the upstream restore path degrades gracefully instead of
+    # aborting.
+    cache-idle-slots = false;
   };
 
   # Build a single `[<model.name>]` section.
@@ -221,7 +238,20 @@ in
       # CUDA libs don't fight the active backend. `devices.envForDevice`
       # returns "KEY=VALUE" strings; convert them to the
       # systemd `environment` attrset shape.
-      systemd.services.llama-cpp.environment = lib.listToAttrs (
+      #
+      # HOME / XDG_CACHE_HOME: the upstream services.llama-cpp unit runs
+      # as a DynamicUser with no $HOME, so the multi-backend build's
+      # Vulkan backend resolves its shader cache to `//.cache` and logs
+      #   "Failed to create //.cache for shader cache (Read-only file
+      #    system)---disabling."
+      # on every start. Point HOME at the existing CacheDirectory
+      # (/var/cache/llama-cpp) so the pipeline cache lands in a writable,
+      # persisted location and warmup is faster on subsequent starts.
+      systemd.services.llama-cpp.environment = {
+        HOME = "/var/cache/llama-cpp";
+        XDG_CACHE_HOME = "/var/cache/llama-cpp";
+      }
+      // lib.listToAttrs (
         map (
           kv:
           let
