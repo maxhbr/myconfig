@@ -71,22 +71,35 @@ let
     mlock = true;
     metrics = true;
     no-webui = true;
-    # Disable the server's idle-slot prompt save/restore path
-    # (--cache-idle-slots, default-on in recent llama.cpp b9xxx). It
-    # hard-aborts (ggml_abort) instead of failing gracefully when a
-    # context checkpoint can't be restored into the KV cache — most
-    # reliably reproduced with SWA models (n_swa) once the RAM cache
-    # limit is hit and the oldest entry is evicted:
+    # Disable per-slot *context checkpoints* (-ctxcp / --ctx-checkpoints
+    # / --swa-checkpoints, default 32 in llama.cpp b9xxx). This is the
+    # mechanism that actually hard-aborts on our SWA models. During
+    # update_slots, when n_swa forces a partial-cache reuse the server
+    # tries to restore a saved context checkpoint via
+    # common_prompt_checkpoint::load_tgt -> llama_state_seq_set_data_ext;
+    # when the saved blob can't be reloaded into the KV cache it
+    # GGML_ABORTs instead of degrading to a full re-prefill:
     #
+    #   slot update_slots: ... n_swa = 1024
+    #   slot update_slots: ... Checking checkpoint with [..] against ..
     #   state_read_meta: failed to find available cells in kv cache
-    #   common.cpp: checkpoint size mismatch: expected N, got 0
+    #   common.cpp:2093: checkpoint size mismatch: expected N, got 0
     #   state_seq_set_data: error loading state: failed to restore kv cache
     #   -> ggml_abort, the whole llama-server process dies and never recovers
     #
-    # Turning this off keeps ordinary prompt caching (same-prompt KV
-    # reuse) but stops the crashing cross-task save/restore. Drop this
+    # With ctx-checkpoints = 0 no checkpoints are ever created
+    # (server-context.cpp: `do_checkpoint = n_ctx_checkpoints > 0`), so
+    # the restore branch is never taken and the slot falls back to full
+    # prompt re-processing (`do_reset`) instead of aborting. Drop this
     # once the upstream restore path degrades gracefully instead of
-    # aborting.
+    # aborting (see ggml-org/llama.cpp PR #15293).
+    ctx-checkpoints = 0;
+
+    # Also disable the idle-slot prompt save/restore path
+    # (--cache-idle-slots, default-on). It has a separate but related
+    # abort site (slot_save_and_clear / state restore) that can fire
+    # under the same SWA + RAM-cache-pressure conditions. Keeping it off
+    # leaves ordinary same-prompt KV reuse intact.
     cache-idle-slots = false;
   };
 
