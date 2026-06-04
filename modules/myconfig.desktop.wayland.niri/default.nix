@@ -26,6 +26,13 @@ let
       fi
     '';
   });
+  uwsmCfg = cfg.desktop.wayland.uwsm;
+  # Compositor entrypoint used when running niri under uwsm. uwsm itself sets
+  # up the graphical-session systemd targets, so we launch `niri --session`
+  # directly instead of the `niri-session` helper script.
+  niriUwsmBin = pkgs.writeShellScript "niri-uwsm" ''
+    exec ${niri}/bin/niri --session
+  '';
 in
 {
   # add option for additional config added to config.kdl
@@ -219,9 +226,27 @@ in
           )
         ];
 
-        myconfig.desktop.wayland.sessions = {
+        # Register niri as a uwsm-managed Wayland compositor. This produces the
+        # `niri-uwsm.desktop` wayland-session entry (via programs.uwsm) used by
+        # display managers, and is gated on uwsm being enabled.
+        programs.uwsm.waylandCompositors = lib.mkIf uwsmCfg.enable {
           niri = {
-            command = "${niri}/bin/niri-session";
+            prettyName = "Niri";
+            comment = "Niri compositor managed by UWSM";
+            binPath = niriUwsmBin;
+          };
+        };
+
+        myconfig.desktop.wayland.sessions = {
+          # When uwsm is enabled this routes the greetd session through
+          # `uwsm start -F -- niri --session`; otherwise it falls back to the
+          # plain `niri-session` helper.
+          niri = {
+            command =
+              if uwsmCfg.enable then
+                uwsmCfg.mkSessionCommand { binPath = niriUwsmBin; }
+              else
+                "${niri}/bin/niri-session";
           };
           niri-plain = {
             command = "${niri}/bin/niri";

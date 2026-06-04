@@ -109,6 +109,7 @@ in
   imports = [
     ./swaylock.nix
     ./services.greetd.nix
+    ./programs.uwsm.nix
     ./sharescreen.nix
     ./programs.waybar
     ./services.clipboard-sync.nix
