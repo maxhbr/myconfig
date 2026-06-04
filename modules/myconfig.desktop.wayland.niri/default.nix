@@ -11,7 +11,21 @@ let
   nixosConfig = config;
   cfg = config.myconfig;
   user = myconfig.user;
-  niri = pkgs.niri;
+  # Patch the upstream `niri-session` script which calls
+  #   systemctl --user import-environment
+  # without an explicit variable list. That bare form is deprecated by systemd
+  # and on newer systemd versions aborts the session.
+  # See https://github.com/niri-wm/niri/issues/254
+  niri = pkgs.niri.overrideAttrs (old: {
+    postInstall = (old.postInstall or "") + ''
+      if [ -e "$out/bin/niri-session" ]; then
+        substituteInPlace "$out/bin/niri-session" \
+          --replace-fail \
+            'systemctl --user import-environment' \
+            'systemctl --user import-environment PATH WAYLAND_DISPLAY DISPLAY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_SESSION_ID XDG_SESSION_DESKTOP XDG_SEAT XDG_VTNR'
+      fi
+    '';
+  });
 in
 {
   # add option for additional config added to config.kdl
