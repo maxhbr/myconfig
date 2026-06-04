@@ -92,6 +92,12 @@ in
               action = "switch.turn_off";
               target.entity_id = shellySchreibtisch;
             }
+            {
+              type = "turn_off";
+              device_id = "92d93babffd096fb5f398af883b6ee2c";
+              entity_id = "5d2126fae9ea142ee7152d6e3b5c3c63";
+              domain = "light";
+            }
           ];
         }
         {
