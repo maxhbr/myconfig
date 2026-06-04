@@ -20,8 +20,6 @@
         client = {
           enable = true;
           # enableDcgmExporter = true;
-
-          co2Exporter.enable = true;
         };
       };
     }

@@ -143,8 +143,9 @@ build() (
     shift
     local out_link="$1"
     shift
-    log_step "building for $target to $out_link"
-    local system='.#nixosConfigurations.'"$target"'.config.system.build.toplevel'
+    local build_attr="${BUILD_ATTR:-toplevel}"
+    log_step "building $build_attr for $target to $out_link"
+    local system='.#nixosConfigurations.'"$target"'.config.system.build.'"$build_attr"
 
     set -x
     nix build \
@@ -357,6 +358,9 @@ main() {
     elif [[ $# -gt 0 && $1 == "--local" ]]; then
         local_build=("--builders" "")
         shift
+    elif [[ $# -gt 0 && $1 == "--build-vm" ]]; then
+        MODE="$1"
+        shift
     fi
     if [[ $# -gt 0 && $1 == "--boot" ]]; then
         COMMAND="boot"
@@ -426,8 +430,23 @@ main() {
 
     local out_link
     out_link="$(get_out_link_of_target "$target")"
+    if [[ $MODE == "--build-vm" ]]; then
+        out_link="${out_link}.vm"
+    fi
     local latest_logfile="${out_link}.log"
     ln -sf "$(realpath -m --relative-to="$(dirname "$latest_logfile")" "$logfile")" "$latest_logfile"
+
+    if [[ $MODE == "--build-vm" ]]; then
+        BUILD_ATTR="vm" build "$target" "$out_link" "${local_build[@]}" ||
+            BUILD_ATTR="vm" build "$target" "$out_link" --keep-failed --no-eval-cache "${local_build[@]}"
+        log_step "VM built for $target"
+        local vm_run_script
+        vm_run_script="$(realpath -m "$out_link")/bin/run-${target}-vm"
+        log_info "run it via (from a writable dir; disk image is created in \$PWD):"
+        log_info "> NIX_DISK_IMAGE=/tmp/${target}-vm.qcow2 $vm_run_script"
+        return
+    fi
+
     local old_result
     old_result="$(readlink -f "$out_link" || true)"
     build "$target" "$out_link" "${local_build[@]}" || build "$target" "$out_link" --keep-failed --no-eval-cache "${local_build[@]}"

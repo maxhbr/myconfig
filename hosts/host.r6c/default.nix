@@ -50,20 +50,27 @@
     };
 
     myconfig = {
-      desktop = {
-        enable = true;
-        wayland = {
+      # desktop = {
+      #   enable = true;
+      #   wayland = {
+      #     enable = true;
+      #     directLoginFirstSession = true;
+      #     selectedSessions = [
+      #       "niri"
+      #       "niri-plain"
+      #       # "hyprland"
+      #       "labwc"
+      #     ];
+      #   };
+      # };
+      headless.enable = true;
+      observability = {
+        host_hostname = "nuc";
+        client = {
           enable = true;
-          directLoginFirstSession = true;
-          selectedSessions = [
-            "niri"
-            "niri-plain"
-            # "hyprland"
-            "labwc"
-          ];
+          co2Exporter.enable = true;
         };
       };
-      headless.enable = true;
     };
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;
