@@ -54,6 +54,15 @@
                   the proxy).
                 '';
               };
+              excludeFromMonitoring = mkOption {
+                type = types.bool;
+                default = false;
+                description = ''
+                  When true, this service is excluded from blackbox
+                  uptime monitoring (no probe target is generated for
+                  it in the vmagent scrape job).
+                '';
+              };
             };
           }
         )
@@ -287,9 +296,16 @@
                       # with a self-signed `tls internal` cert, so we
                       # always proxy via HTTPS for the https variant and
                       # disable verification.
+                      # `header_up Origin` and `header_up Referer` rewrite
+                      # those headers to the upstream's own hostname so that
+                      # services that validate allowed_origins (e.g. Grafana)
+                      # see their own FQDN rather than the center-proxy FQDN
+                      # and do not reject the request as a disallowed origin.
                       httpsProxy = ''
                         reverse_proxy https://${upstreamFqdn} {
                           header_up Host {upstream_hostport}
+                          header_up Origin https://{upstream_hostport}
+                          header_up Referer https://{upstream_hostport}{uri}
                           transport http {
                             tls
                             tls_insecure_skip_verify
@@ -308,6 +324,8 @@
                       httpProxy = ''
                         reverse_proxy http://${upstreamFqdn} {
                           header_up Host {upstream_hostport}
+                          header_up Origin http://{upstream_hostport}
+                          header_up Referer http://{upstream_hostport}{uri}
                         }
                       '';
                     in

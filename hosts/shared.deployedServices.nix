@@ -74,11 +74,13 @@
           {
             name = "comfyui";
             port = 8188;
+            excludeFromMonitoring = true;
           }
           {
             name = "qdrant";
             port = 6333;
             forceHttps = false;
+            excludeFromMonitoring = true;
           }
         ];
         p14 = [

@@ -43,7 +43,12 @@ let
   # regardless of `forceHttps` (Caddy serves both, but HTTPS always
   # exists). We always probe HTTPS so the probe also exercises the
   # reverse proxy + TLS termination.
-  urlsForHost = host: map (s: "https://${s.name}.${host}.wg0.maxhbr.local/") allServices.${host};
+  # Services with `excludeFromMonitoring = true` are omitted.
+  urlsForHost =
+    host:
+    map (s: "https://${s.name}.${host}.wg0.maxhbr.local/") (
+      builtins.filter (s: !s.excludeFromMonitoring) allServices.${host}
+    );
 
   probeTargets = lib.concatMap urlsForHost (lib.attrNames allServices);
 
