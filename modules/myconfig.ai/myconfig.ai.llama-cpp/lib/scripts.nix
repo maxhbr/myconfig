@@ -54,7 +54,9 @@ let
           --flash-attn on \
           --mlock \
           --metrics \
-          --no-webui ${ctxSizeFlag} ${cacheTypeFlag} ${parallelFlag} ${aliasesFlag} ${paramsStr} "''${@:2}"
+          --no-webui \
+          --timeout 600 \
+          ${ctxSizeFlag} ${cacheTypeFlag} ${parallelFlag} ${aliasesFlag} ${paramsStr} "''${@:2}"
       '';
     };
 

@@ -101,6 +101,14 @@ let
     # under the same SWA + RAM-cache-pressure conditions. Keeping it off
     # leaves ordinary same-prompt KV reuse intact.
     cache-idle-slots = false;
+
+    # Increase the server-side slot timeout (seconds). The default (30 s)
+    # is hit when a slot waits longer than that for the next generated
+    # token — which happens routinely on large Qwen3.6 prompts that need
+    # full re-prefilling (SWA forces a reset): the prefill alone can take
+    # tens of seconds at > 1 k tokens/s on 40 k-token contexts.
+    # See https://github.com/ggml-org/llama.cpp/pull/22907
+    timeout = 600;
   };
 
   # Build a single `[<model.name>]` section.
