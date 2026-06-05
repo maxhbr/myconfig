@@ -185,6 +185,7 @@
                 forceHttps,
                 disableCache,
                 redirect,
+                excludeFromMonitoring,
               }:
               if port == null && redirect == null then
                 [ ]
