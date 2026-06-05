@@ -20,12 +20,22 @@ in
       default = 9400;
       description = "Port the dcgm-exporter listens on (loopback only).";
     };
+    dcgmExporterUseContainer = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        When true, skip the native systemd service for dcgm-exporter
+        and assume an OCI container provides it instead (see e.g.
+        hosts/host.thing/nvidia.dcgm-exporter.nix). The vmagent
+        scrape config is still provisioned.
+      '';
+    };
   };
   config = lib.mkIf (clientCfg.enable && clientCfg.enableDcgmExporter) {
-    # dcgm-exporter is not yet a NixOS module in nixpkgs (only the package
-    # `prometheus-dcgm-exporter` exists), so we run it as a plain systemd
-    # service. Requires an NVIDIA GPU with the driver loaded.
-    systemd.services.prometheus-dcgm-exporter = {
+    # When useContainer is false, run dcgm-exporter as a plain systemd
+    # service using the nixpkgs package. Requires an NVIDIA GPU with
+    # the driver loaded.
+    systemd.services.prometheus-dcgm-exporter = lib.mkIf (!clientCfg.dcgmExporterUseContainer) {
       description = "Prometheus dcgm-exporter (NVIDIA GPU metrics)";
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
@@ -41,6 +51,8 @@ in
       };
     };
 
+    # vmagent scrape config is always active — the exporter endpoint
+    # is at the same address regardless of native vs container mode.
     services.vmagent = {
       prometheusConfig = {
         scrape_configs = [

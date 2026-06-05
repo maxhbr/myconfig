@@ -23,6 +23,7 @@ in
     ./host.weather.nix
     ./host.temperature-humidity.nix
     ./host.llama-server.nix
+    ./host.dcgm.nix
     ./client.nix
     ./client.alloy.nix
   ];
