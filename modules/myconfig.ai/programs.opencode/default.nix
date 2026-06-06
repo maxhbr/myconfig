@@ -74,6 +74,7 @@ in
                   "nix fmt" = "allow";
                   "nix fmt *" = "allow";
                   "nix build --dry-run *" = "allow";
+                  "nix-instantiate *" = "allow";
                   "go build *" = "allow";
                   "go test *" = "allow";
                   "go generate *" = "allow";
