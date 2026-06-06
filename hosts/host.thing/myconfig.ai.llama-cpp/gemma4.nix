@@ -77,6 +77,84 @@ in
       ttl = 300;
     }
     {
+      name = "gemma-4-31B-it-qat-q4_0";
+      path = "/models/google-gemma-4-31B-it-qat-q4_0-gguf/gemma-4-31B_q4_0-it.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "google/gemma-4-31B-it-qat-q4_0-gguf" ];
+      };
+      ctxSize = 65536;
+      params = [
+        "--batch-size"
+        "2048"
+        "--ubatch-size"
+        "512"
+        "--threads"
+        "1"
+        "--jinja"
+        "--temp"
+        "1.0"
+        "--top-p"
+        "0.95"
+        "--top-k"
+        "64"
+      ];
+      variants = {
+        mmproj = {
+          mmproj = "/models/google-gemma-4-31B-it-qat-q4_0-gguf/gemma-4-31B-it-mmproj.gguf";
+        };
+        nothink = {
+          params = [
+            "--chat-template-kwargs"
+            "{\"enable_thinking\":false}"
+          ];
+        };
+      };
+      aliases = [
+        "gemma-4-31B-Q4-QAT"
+      ];
+      ttl = 300;
+    }
+    {
+      name = "gemma-4-26B-A4B-it-qat-q4_0";
+      path = "/models/google-gemma-4-26B-A4B-it-qat-q4_0-gguf/gemma-4-26B_q4_0-it.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "google/gemma-4-26B-A4B-it-qat-q4_0-gguf" ];
+      };
+      ctxSize = 262144;
+      params = [
+        "--batch-size"
+        "2048"
+        "--ubatch-size"
+        "512"
+        "--threads"
+        "1"
+        "--jinja"
+        "--temp"
+        "1.0"
+        "--top-p"
+        "0.95"
+        "--top-k"
+        "64"
+      ];
+      variants = {
+        mmproj = {
+          mmproj = "/models/google-gemma-4-26B-A4B-it-qat-q4_0-gguf/gemma-4-26B-it-mmproj.gguf";
+        };
+        nothink = {
+          params = [
+            "--chat-template-kwargs"
+            "{\"enable_thinking\":false}"
+          ];
+        };
+      };
+      aliases = [
+        "gemma-4-26B-Q4-QAT"
+      ];
+      ttl = 300;
+    }
+    {
       name = "gemma-4-26B-A4B-it-UD-Q6_K_XL";
       path = "/models/unsloth-gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q6_K_XL.gguf";
       pull-models = {
