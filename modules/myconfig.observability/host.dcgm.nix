@@ -20,7 +20,6 @@
 #   DCGM_FI_DEV_MEM_CLOCK      – Memory clock (MHz)
 #   DCGM_FI_DEV_GPU_UTIL       – GPU utilization (%)
 #   DCGM_FI_DEV_FB_USED        – Framebuffer memory used (MiB)
-#   DCGM_FI_DEV_FB_FREE        – Framebuffer memory free (MiB)
 #   DCGM_FI_PROF_PIPE_TENSOR_ACTIVE – Tensor core utilization (0..1)
 #
 # See: https://github.com/NVIDIA/dcgm-exporter
