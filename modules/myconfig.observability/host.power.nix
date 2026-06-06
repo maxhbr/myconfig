@@ -232,18 +232,48 @@ let
         x = 0;
         y = 8;
       };
-      fieldConfig.defaults = {
-        unit = "watt";
-        min = 0;
-        custom = {
-          drawStyle = "line";
-          lineInterpolation = "linear";
-          fillOpacity = 20;
-          stacking = {
-            mode = "normal";
-            group = "A";
+      fieldConfig = {
+        defaults = {
+          unit = "watt";
+          min = 0;
+          custom = {
+            drawStyle = "line";
+            lineInterpolation = "linear";
+            fillOpacity = 20;
+            stacking = {
+              mode = "normal";
+              group = "A";
+            };
           };
         };
+        overrides = [
+          {
+            # GPU power series go into their own stacking group so they
+            # are displayed as separate lines and do not add to the HA
+            # shelly-sensor stack (GPU draw is already included there).
+            matcher = {
+              id = "byFrameRefID";
+              options = "B";
+            };
+            properties = [
+              {
+                id = "custom.stacking";
+                value = {
+                  mode = "normal";
+                  group = "B";
+                };
+              }
+              {
+                id = "custom.fillOpacity";
+                value = 0;
+              }
+              {
+                id = "custom.lineWidth";
+                value = 2;
+              }
+            ];
+          }
+        ];
       };
       options.legend = {
         displayMode = "table";
@@ -265,6 +295,14 @@ let
           '';
           legendFormat = "{{friendly_name}}";
           refId = "A";
+        }
+        {
+          # GPU power usage from DCGM exporter — shown as non-stacking
+          # overlay lines (stacking group "B") so they are visible
+          # alongside the HA shelly sensors without double-counting.
+          expr = "DCGM_FI_DEV_POWER_USAGE";
+          legendFormat = "GPU {{gpu}} ({{host}}) [DCGM]";
+          refId = "B";
         }
       ];
     }

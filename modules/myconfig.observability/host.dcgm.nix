@@ -36,12 +36,14 @@ let
   dcgmCfg = hostCfg.dcgm;
 
   # Helper to build a timeseries panel (Grafana v10+ native panel).
-  mkTimeseriesPanel =
+  # targets is a list of { expr, legendFormat, refId, unit? } attrsets.
+  # unit / yMin / yMax apply to the default field config (first series);
+  # per-series unit overrides can be added via fieldConfig.overrides if needed.
+  mkMultiTimeseriesPanel =
     {
       id,
       title,
-      expr,
-      legendFormat ? "GPU {{gpu}} ({{host}})",
+      targets, # list of { expr, legendFormat, refId }
       unit ? "short",
       gridPos,
       yMin ? null,
@@ -82,13 +84,39 @@ let
           ];
         };
       };
+      targets = map (t: {
+        inherit (t) expr legendFormat refId;
+        datasource = {
+          type = "prometheus";
+          uid = "victoriametrics";
+        };
+      }) targets;
+    };
+
+  # Helper to build a timeseries panel (Grafana v10+ native panel).
+  mkTimeseriesPanel =
+    {
+      id,
+      title,
+      expr,
+      legendFormat ? "GPU {{gpu}} ({{host}})",
+      unit ? "short",
+      gridPos,
+      yMin ? null,
+      yMax ? null,
+    }:
+    mkMultiTimeseriesPanel {
+      inherit
+        id
+        title
+        unit
+        gridPos
+        yMin
+        yMax
+        ;
       targets = [
         {
           inherit expr legendFormat;
-          datasource = {
-            type = "prometheus";
-            uid = "victoriametrics";
-          };
           refId = "A";
         }
       ];
@@ -304,10 +332,10 @@ let
         })
 
         # -- Time-series panels --
-        (mkTimeseriesPanel {
+        # Row y=4: Temperature (combined) | Power Usage
+        (mkMultiTimeseriesPanel {
           id = 10;
-          title = "GPU Temperature";
-          expr = "DCGM_FI_DEV_GPU_TEMP${filter}";
+          title = "Temperature";
           unit = "celsius";
           yMin = 0;
           gridPos = {
@@ -316,6 +344,18 @@ let
             x = 0;
             y = 4;
           };
+          targets = [
+            {
+              expr = "DCGM_FI_DEV_GPU_TEMP${filter}";
+              legendFormat = "GPU Temp – GPU {{gpu}} ({{host}})";
+              refId = "A";
+            }
+            {
+              expr = "DCGM_FI_DEV_MEMORY_TEMP${filter}";
+              legendFormat = "Mem Temp – GPU {{gpu}} ({{host}})";
+              refId = "B";
+            }
+          ];
         })
         (mkTimeseriesPanel {
           id = 11;
@@ -330,10 +370,10 @@ let
             y = 4;
           };
         })
-        (mkTimeseriesPanel {
+        # Row y=12: Utilization (combined) | Framebuffer Memory Used
+        (mkMultiTimeseriesPanel {
           id = 12;
-          title = "GPU Utilization";
-          expr = "DCGM_FI_DEV_GPU_UTIL${filter}";
+          title = "Utilization";
           unit = "percent";
           yMin = 0;
           yMax = 100;
@@ -343,14 +383,25 @@ let
             x = 0;
             y = 12;
           };
+          targets = [
+            {
+              expr = "DCGM_FI_DEV_GPU_UTIL${filter}";
+              legendFormat = "GPU Util – GPU {{gpu}} ({{host}})";
+              refId = "A";
+            }
+            {
+              expr = "DCGM_FI_PROF_PIPE_TENSOR_ACTIVE${filter} * 100";
+              legendFormat = "Tensor Core – GPU {{gpu}} ({{host}})";
+              refId = "B";
+            }
+          ];
         })
         (mkTimeseriesPanel {
           id = 13;
-          title = "Tensor Core Utilization";
-          expr = "DCGM_FI_PROF_PIPE_TENSOR_ACTIVE${filter}";
-          unit = "percentunit";
+          title = "Framebuffer Memory Used";
+          expr = "DCGM_FI_DEV_FB_USED${filter}";
+          unit = "decmbytes";
           yMin = 0;
-          yMax = 1;
           gridPos = {
             h = 8;
             w = 12;
@@ -358,11 +409,12 @@ let
             y = 12;
           };
         })
+        # Row y=20: SM Clock | Memory Clock
         (mkTimeseriesPanel {
           id = 14;
-          title = "Framebuffer Memory Used";
-          expr = "DCGM_FI_DEV_FB_USED${filter}";
-          unit = "decmbytes";
+          title = "SM Clock";
+          expr = "DCGM_FI_DEV_SM_CLOCK${filter}";
+          unit = "rothertz";
           yMin = 0;
           gridPos = {
             h = 8;
@@ -373,32 +425,6 @@ let
         })
         (mkTimeseriesPanel {
           id = 15;
-          title = "Framebuffer Memory Free";
-          expr = "DCGM_FI_DEV_FB_FREE${filter}";
-          unit = "decmbytes";
-          yMin = 0;
-          gridPos = {
-            h = 8;
-            w = 12;
-            x = 12;
-            y = 20;
-          };
-        })
-        (mkTimeseriesPanel {
-          id = 16;
-          title = "SM Clock";
-          expr = "DCGM_FI_DEV_SM_CLOCK${filter}";
-          unit = "rothertz";
-          yMin = 0;
-          gridPos = {
-            h = 8;
-            w = 12;
-            x = 0;
-            y = 28;
-          };
-        })
-        (mkTimeseriesPanel {
-          id = 17;
           title = "Memory Clock";
           expr = "DCGM_FI_DEV_MEM_CLOCK${filter}";
           unit = "rothertz";
@@ -407,20 +433,7 @@ let
             h = 8;
             w = 12;
             x = 12;
-            y = 28;
-          };
-        })
-        (mkTimeseriesPanel {
-          id = 18;
-          title = "Memory Temperature";
-          expr = "DCGM_FI_DEV_MEMORY_TEMP${filter}";
-          unit = "celsius";
-          yMin = 0;
-          gridPos = {
-            h = 8;
-            w = 12;
-            x = 0;
-            y = 36;
+            y = 20;
           };
         })
       ];
