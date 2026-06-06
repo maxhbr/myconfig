@@ -2,12 +2,25 @@
 # SPDX-License-Identifier: MIT
 #
 # Grafana dashboard "Llama-server models": visualises llama-server /
-# llama-swap model state and metadata sourced from the Prometheus
-# gauges produced by ``client.llama-server.nix``.
+# llama-swap model state, metadata and timing performance sourced from
+# the Prometheus gauges produced by ``client.llama-server.nix``.
 #
-# The exporter scrapes ``GET /v1/models`` on the llama-server /
-# llama-swap instance and exposes gauges (``llama_server_model_status``,
-# ``llama_server_model_info``, ``llama_server_model_ctx_size``, etc.).
+# Two exporters feed metrics:
+#
+# 1. ``llama-server-model-exporter.py`` – scrapes ``GET /v1/models`` and
+#    exposes gauges (``llama_server_model_status``, ``llama_server_model_info``,
+#    ``llama_server_model_ctx_size``, etc.).  Visualised in the model-roster
+#    and capacity sections.
+#
+# 2. ``llama-server-timing-exporter.py`` – tails the systemd journal and
+#    parses ``slot print_timing`` lines from the llama-cpp service.  Emits
+#    ``llama_server_tg_tokens_per_second`` (rolling live gauge) and per-task
+#    metrics (``llama_server_task_tg_tokens_per_second``,
+#    ``llama_server_task_prompt_eval_tokens_per_second``,
+#    ``llama_server_task_total_time_ms``, ``llama_server_task_n_decoded_tokens``,
+#    ``llama_server_task_n_prompt_tokens``).  Visualised in the "Timing"
+#    section.
+#
 # The local vmagent scrapes these gauges and remote-writes them into
 # the central VictoriaMetrics instance.
 #
@@ -31,7 +44,7 @@ let
     uid = "myconfig-llama-server";
     title = "Llama-server models";
     schemaVersion = 39;
-    version = 1;
+    version = 2;
     timezone = "browser";
     refresh = "30s";
     time = {
@@ -644,7 +657,350 @@ let
       }
 
       # ================================================================
-      # Row 46: Scrape health
+      # Row 46: Timing metrics (from llama-server-timing-exporter)
+      # ================================================================
+      #
+      # These panels visualise the metrics written by
+      # ``llama-server-timing-exporter.py`` which tails the systemd journal
+      # and parses ``slot print_timing`` lines from the llama-cpp service.
+      #
+      # Metrics:
+      #   llama_server_tg_tokens_per_second          – rolling live gauge
+      #   llama_server_task_tg_tokens_per_second     – per-task TG rate
+      #   llama_server_task_prompt_eval_tokens_per_second – per-task prefill
+      #   llama_server_task_total_time_ms            – per-task wall time
+      #   llama_server_task_n_decoded_tokens         – decoded tokens/task
+      #   llama_server_task_n_prompt_tokens          – prompt tokens/task
+      #   llama_server_timing_journal_lines_total    – exporter health counter
+
+      # --- Row header --------------------------------------------------
+      {
+        id = 50;
+        type = "row";
+        title = "Timing (journal exporter)";
+        collapsed = false;
+        gridPos = {
+          h = 1;
+          w = 24;
+          x = 0;
+          y = 46;
+        };
+        panels = [ ];
+      }
+
+      # --- Live TG rate stat -------------------------------------------
+      {
+        id = 51;
+        type = "stat";
+        title = "Current TG rate";
+        description = "Most recent rolling token-generation rate from the periodic print_timing log line.";
+        datasource = "VictoriaMetrics";
+        gridPos = {
+          h = 5;
+          w = 6;
+          x = 0;
+          y = 47;
+        };
+        options = {
+          reduceOptions = {
+            calcs = [ "lastNotNull" ];
+            fields = "";
+            values = false;
+          };
+          colorMode = "background";
+          graphMode = "area";
+          textMode = "auto";
+          orientation = "auto";
+        };
+        fieldConfig.defaults = {
+          unit = "reqps";
+          decimals = 1;
+          displayName = "t/s";
+          thresholds = {
+            mode = "absolute";
+            steps = [
+              {
+                color = "red";
+                value = null;
+              }
+              {
+                color = "yellow";
+                value = 5;
+              }
+              {
+                color = "green";
+                value = 20;
+              }
+            ];
+          };
+        };
+        targets = [
+          {
+            expr = "llama_server_tg_tokens_per_second{host=~\"$host\"}";
+            legendFormat = "{{host}}";
+            refId = "A";
+            instant = true;
+          }
+        ];
+      }
+
+      # --- Timing exporter health stat ---------------------------------
+      {
+        id = 52;
+        type = "stat";
+        title = "Journal lines processed";
+        description = "Total journal lines processed by the timing exporter since last restart.";
+        datasource = "VictoriaMetrics";
+        gridPos = {
+          h = 5;
+          w = 6;
+          x = 6;
+          y = 47;
+        };
+        options = {
+          reduceOptions = {
+            calcs = [ "lastNotNull" ];
+            fields = "";
+            values = false;
+          };
+          colorMode = "value";
+          graphMode = "area";
+          textMode = "auto";
+          orientation = "auto";
+        };
+        fieldConfig.defaults = {
+          unit = "short";
+          decimals = 0;
+          thresholds = {
+            mode = "absolute";
+            steps = [
+              {
+                color = "blue";
+                value = null;
+              }
+            ];
+          };
+        };
+        targets = [
+          {
+            expr = "llama_server_timing_journal_lines_total{host=~\"$host\"}";
+            legendFormat = "{{host}}";
+            refId = "A";
+            instant = true;
+          }
+        ];
+      }
+
+      # --- Live TG rate over time -------------------------------------
+      {
+        id = 53;
+        type = "timeseries";
+        title = "Live TG rate over time";
+        description = "Rolling token-generation rate (t/s) from the most recent periodic print_timing line.";
+        datasource = "VictoriaMetrics";
+        gridPos = {
+          h = 8;
+          w = 12;
+          x = 12;
+          y = 47;
+        };
+        fieldConfig.defaults = {
+          unit = "reqps";
+          min = 0;
+          displayName = "t/s";
+          custom = {
+            drawStyle = "line";
+            lineInterpolation = "linear";
+            fillOpacity = 10;
+          };
+        };
+        options.legend = {
+          displayMode = "table";
+          placement = "bottom";
+          calcs = [
+            "lastNotNull"
+            "mean"
+            "max"
+          ];
+        };
+        targets = [
+          {
+            expr = "llama_server_tg_tokens_per_second{host=~\"$host\"}";
+            legendFormat = "{{host}}";
+            refId = "A";
+          }
+        ];
+      }
+
+      # --- Per-task TG rate over time ----------------------------------
+      {
+        id = 54;
+        type = "timeseries";
+        title = "Per-task TG rate";
+        description = "Token-generation rate (t/s) at the end of each completed task (from the final print_timing summary).";
+        datasource = "VictoriaMetrics";
+        gridPos = {
+          h = 8;
+          w = 12;
+          x = 0;
+          y = 55;
+        };
+        fieldConfig.defaults = {
+          unit = "reqps";
+          min = 0;
+          displayName = "t/s";
+          custom = {
+            drawStyle = "points";
+            pointSize = 4;
+            fillOpacity = 0;
+          };
+        };
+        options.legend = {
+          displayMode = "table";
+          placement = "bottom";
+          calcs = [
+            "lastNotNull"
+            "mean"
+            "max"
+          ];
+        };
+        targets = [
+          {
+            expr = "llama_server_task_tg_tokens_per_second{host=~\"$host\"}";
+            legendFormat = "{{host}} task {{task}}";
+            refId = "A";
+          }
+        ];
+      }
+
+      # --- Per-task prompt-eval rate -----------------------------------
+      {
+        id = 55;
+        type = "timeseries";
+        title = "Per-task prefill (prompt eval) rate";
+        description = "Prompt-evaluation rate (t/s) for each completed task.";
+        datasource = "VictoriaMetrics";
+        gridPos = {
+          h = 8;
+          w = 12;
+          x = 12;
+          y = 55;
+        };
+        fieldConfig.defaults = {
+          unit = "reqps";
+          min = 0;
+          displayName = "t/s";
+          custom = {
+            drawStyle = "points";
+            pointSize = 4;
+            fillOpacity = 0;
+          };
+        };
+        options.legend = {
+          displayMode = "table";
+          placement = "bottom";
+          calcs = [
+            "lastNotNull"
+            "mean"
+            "max"
+          ];
+        };
+        targets = [
+          {
+            expr = "llama_server_task_prompt_eval_tokens_per_second{host=~\"$host\"}";
+            legendFormat = "{{host}} task {{task}}";
+            refId = "A";
+          }
+        ];
+      }
+
+      # --- Per-task total wall time ------------------------------------
+      {
+        id = 56;
+        type = "timeseries";
+        title = "Per-task total time";
+        description = "Total wall time (ms) for each completed task (prompt + eval combined).";
+        datasource = "VictoriaMetrics";
+        gridPos = {
+          h = 8;
+          w = 12;
+          x = 0;
+          y = 63;
+        };
+        fieldConfig.defaults = {
+          unit = "ms";
+          min = 0;
+          custom = {
+            drawStyle = "points";
+            pointSize = 4;
+            fillOpacity = 0;
+          };
+        };
+        options.legend = {
+          displayMode = "table";
+          placement = "bottom";
+          calcs = [
+            "lastNotNull"
+            "mean"
+            "max"
+          ];
+        };
+        targets = [
+          {
+            expr = "llama_server_task_total_time_ms{host=~\"$host\"}";
+            legendFormat = "{{host}} task {{task}}";
+            refId = "A";
+          }
+        ];
+      }
+
+      # --- Per-task token counts ----------------------------------------
+      {
+        id = 57;
+        type = "timeseries";
+        title = "Per-task token counts";
+        description = "Number of prompt tokens processed and tokens generated per completed task.";
+        datasource = "VictoriaMetrics";
+        gridPos = {
+          h = 8;
+          w = 12;
+          x = 12;
+          y = 63;
+        };
+        fieldConfig.defaults = {
+          unit = "short";
+          min = 0;
+          custom = {
+            drawStyle = "points";
+            pointSize = 4;
+            fillOpacity = 0;
+          };
+        };
+        options.legend = {
+          displayMode = "table";
+          placement = "bottom";
+          calcs = [
+            "lastNotNull"
+            "mean"
+            "max"
+          ];
+        };
+        targets = [
+          {
+            expr = "llama_server_task_n_prompt_tokens{host=~\"$host\"}";
+            legendFormat = "{{host}} prompt tokens (task {{task}})";
+            refId = "A";
+          }
+          {
+            expr = "llama_server_task_n_decoded_tokens{host=~\"$host\"}";
+            legendFormat = "{{host}} decoded tokens (task {{task}})";
+            refId = "B";
+          }
+        ];
+      }
+
+      # ================================================================
+      # Row 71: Scrape health
       # ================================================================
       {
         id = 40;
@@ -655,7 +1011,7 @@ let
           h = 5;
           w = 6;
           x = 0;
-          y = 46;
+          y = 71;
         };
         options = {
           reduceOptions = {
@@ -716,7 +1072,7 @@ let
           h = 5;
           w = 6;
           x = 6;
-          y = 46;
+          y = 71;
         };
         options = {
           reduceOptions = {

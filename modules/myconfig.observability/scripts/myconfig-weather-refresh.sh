@@ -5,8 +5,8 @@
 # Fetch current weather + daily forecast from Open-Meteo and write
 # Prometheus textfile metrics.
 #
-# All site-specific values are injected by the Nix writeShellApplication
-# wrapper via @PLACEHOLDER@ substitutions (pkgs.substituteAll):
+# All site-specific values are injected via pkgs.replaceVars substitutions
+# (@ NAME @ syntax without spaces) before the script is installed:
 #
 #   @textfileDir@      directory to write weather.prom into
 #   @apiUrl@           full Open-Meteo API URL with lat/lon/vars/tz

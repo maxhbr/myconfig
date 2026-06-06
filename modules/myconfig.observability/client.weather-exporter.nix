@@ -143,7 +143,7 @@ let
 
   # The shell script logic lives in scripts/myconfig-weather-refresh.sh.
   # Site-specific values are substituted via pkgs.substituteAll
-  # (@PLACEHOLDER@ syntax) so the script file itself contains no Nix
+  # (@ NAME @ substitution syntax) so the script file itself contains no Nix
   # interpolations and can be read/linted independently.
   refreshScriptFile = pkgs.replaceVars ./scripts/myconfig-weather-refresh.sh {
     textfileDir = weatherCfg.textfileDir;
@@ -157,6 +157,7 @@ let
   refreshScript = pkgs.writeShellApplication {
     name = "myconfig-weather-refresh";
     runtimeInputs = with pkgs; [
+      bash
       coreutils
       curl
       jq

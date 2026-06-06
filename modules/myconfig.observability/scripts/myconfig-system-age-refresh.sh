@@ -5,11 +5,11 @@
 # Derive the activation timestamp of the currently running NixOS system
 # from profile generation symlinks and write Prometheus textfile metrics.
 #
-# All site-specific values are injected by the Nix writeShellApplication
-# wrapper via @PLACEHOLDER@ substitutions (pkgs.substituteAll):
+# All site-specific values are injected via pkgs.replaceVars substitutions
+# (@ NAME @ syntax without spaces) before the script is installed:
 #
-#   @textfileDir@       directory to write system-age.prom into
-#   @staticInfoSnippet@ pre-rendered nixos_system_info metric line(s)
+#   textfileDir       - directory to write system-age.prom into
+#   staticInfoSnippet - (multi-line) pre-rendered nixos_system_info metric block
 #
 # Strategy for finding the activation timestamp:
 #   1. Resolve the store path of /run/current-system.
@@ -74,8 +74,7 @@ age_seconds=$(( now_ts - activation_ts ))
     printf '# HELP nixos_system_age_seconds Age of the currently active NixOS generation in seconds (now - activation).\n'
     printf '# TYPE nixos_system_age_seconds gauge\n'
     printf 'nixos_system_age_seconds{source="%s"} %s\n' "$activation_source" "$age_seconds"
-    cat <<'EOF'
-@staticInfoSnippet@EOF
+    printf '%s' '@staticInfoSnippet@'
 } > "$tmp"
 
 chmod 0644 "$tmp"

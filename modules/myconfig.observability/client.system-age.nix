@@ -50,7 +50,7 @@ let
 
   # The shell script logic lives in scripts/myconfig-system-age-refresh.sh.
   # Site-specific values (textfileDir, staticInfoSnippet) are substituted
-  # via pkgs.substituteAll (@PLACEHOLDER@ syntax).
+  # via pkgs.replaceVars (@ NAME @ substitution syntax).
   refreshScriptFile = pkgs.replaceVars ./scripts/myconfig-system-age-refresh.sh {
     textfileDir = ageCfg.textfileDir;
     staticInfoSnippet = staticInfoSnippet;
@@ -58,7 +58,10 @@ let
 
   refreshScript = pkgs.writeShellApplication {
     name = "myconfig-system-age-refresh";
-    runtimeInputs = with pkgs; [ coreutils ];
+    runtimeInputs = with pkgs; [
+      bash
+      coreutils
+    ];
     text = ''
       bash ${refreshScriptFile}
     '';
