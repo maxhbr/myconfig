@@ -33,6 +33,7 @@ in
                 "docker.io/library" = [ { "type" = "insecureAcceptAnything"; } ];
                 "ghcr.io" = [ { "type" = "insecureAcceptAnything"; } ];
                 "quay.io" = [ { "type" = "insecureAcceptAnything"; } ];
+                "nvcr.io" = [ { "type" = "insecureAcceptAnything"; } ];
               };
 
               "docker-archive" = {

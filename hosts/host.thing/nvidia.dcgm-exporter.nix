@@ -38,7 +38,6 @@ in
       extraOptions = [
         "--device=nvidia.com/gpu=all"
         "--cap-add=SYS_ADMIN"
-        "--name=dcgm-exporter"
       ];
     };
 
