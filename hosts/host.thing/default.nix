@@ -62,6 +62,7 @@
     ./services.open-webui.nix
     ./services.wyoming.nix
     ./services.qdrant.nix
+    ./services.litellm.nix
     ./specialisation.nix
     ./hardware.Radeon8060S.nix
     ./disk.nix
@@ -98,34 +99,6 @@
     networking.hostId = "3e7c8a1f";
     networking.useDHCP = false;
     system.nixos.tags = config.myconfig.hardware.gpu.variant;
-
-    services.litellm = {
-      enable = true;
-      # Bind LiteLLM to all interfaces so peers (e.g. p14, f13) can reach
-      # http://<thing-wg-ip>:4000/v1 directly. The host itself (Caddy,
-      # open-webui, vmagent, …) reaches it through `localhost:4000`. The
-      # firewall rule below restricts external exposure to wg0. This
-      # overrides the 127.0.0.1 lib.mkForce in
-      # modules/myconfig.ai/services.litellm.nix.
-      host = lib.mkOverride 49 "0.0.0.0";
-      settings.router_settings = {
-        model_group_alias = {
-          "hermes" = "rtx5090:hermes";
-          "hermes-fallback" = "rtx5090:hermes-fallback";
-          "opencode-fast" = "rtx5090:opencode-fast";
-          "opencode-fast-fallback" = "rtx5090:opencode-fast-fallback";
-          "opencode" = "gfx1151:opencode";
-          "opencode-slow" = "gfx1151:opencode-slow";
-          "opencode-fallback" = "gfx1151:opencode-fallback";
-          "sidekick" = "rtx5090:sidekick";
-        };
-      };
-    };
-
-    # Allow peers to reach LiteLLM on port 4000 via wg0.
-    networking.firewall.interfaces."wg0".allowedTCPPorts = [
-      config.services.litellm.port
-    ];
 
     myconfig = {
       persistence.impermanence = {

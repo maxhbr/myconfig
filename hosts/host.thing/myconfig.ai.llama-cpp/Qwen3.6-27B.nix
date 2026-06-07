@@ -17,9 +17,7 @@ let
         "{\"enable_thinking\":true,\"preserve_thinking\":false}"
         # TODO: repetition_penalty=1.0
       ];
-      aliases = [
-        "hermes"
-      ];
+      aliases = [ ];
     };
     precise-coding-tasks = {
       params = [
@@ -176,9 +174,7 @@ in
       ttl = 900;
       variants = recommended_variants_Qwen3_6-27B // {
         general-tasks = {
-          aliases = [
-            "hermes"
-          ];
+          aliases = [ ];
         };
         precise-coding-tasks = {
           aliases = [
