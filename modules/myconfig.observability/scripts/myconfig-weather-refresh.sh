@@ -6,13 +6,13 @@
 # Prometheus textfile metrics.
 #
 # All site-specific values are injected via pkgs.replaceVars substitutions
-# (@ NAME @ syntax without spaces) before the script is installed:
+# before the script is installed:
 #
-#   @textfileDir@      directory to write weather.prom into
-#   @apiUrl@           full Open-Meteo API URL with lat/lon/vars/tz
-#   @commonLabels@     label set baked into every sample
-#   @httpTimeout@      curl --max-time value (seconds)
-#   @wmoCaseBranches@  case-statement branches for WMO code -> description
+#   textfileDir      directory to write weather.prom into
+#   apiUrl           full Open-Meteo API URL with lat/lon/vars/tz
+#   commonLabels     label set baked into every sample
+#   httpTimeout      curl --max-time value (seconds)
+#   wmoCaseBranches  case-statement branches for WMO code -> description
 #
 # shellcheck disable=SC2154  # variables are substituted by Nix at build time
 

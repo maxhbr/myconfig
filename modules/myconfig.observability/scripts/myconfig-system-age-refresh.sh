@@ -6,10 +6,10 @@
 # from profile generation symlinks and write Prometheus textfile metrics.
 #
 # All site-specific values are injected via pkgs.replaceVars substitutions
-# (@ NAME @ syntax without spaces) before the script is installed:
+# before the script is installed:
 #
-#   textfileDir       - directory to write system-age.prom into
-#   staticInfoSnippet - (multi-line) pre-rendered nixos_system_info metric block
+#   textfileDir       directory to write system-age.prom into
+#   staticInfoSnippet (multi-line) pre-rendered nixos_system_info metric block
 #
 # Strategy for finding the activation timestamp:
 #   1. Resolve the store path of /run/current-system.
