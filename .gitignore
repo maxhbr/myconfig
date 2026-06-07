@@ -22,3 +22,4 @@ myconfig.out-link
 *.img
 __old_modules/
 session-*
+__pycache__
