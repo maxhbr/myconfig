@@ -11,8 +11,8 @@ let
   grafana-skills = pkgs.fetchFromGitHub {
     owner = "grafana";
     repo = "skills";
-    rev = "ccbb23df0073b3fbbbbc4c95cae4b00cfbfb6823";
-    hash = "sha256-5D8OSeNAKoyE6YO3v7GliQVhHzYgt4qopWwWJS8QpjI=";
+    rev = "bc09fe7272b13a6ca32ca12ae3b8f3dff542af54";
+    hash = "sha256-Y1ZpLl8IvPE4r/fOPsRPUWm7bdYLj8vle2ss7Assj0M=";
   };
   pluginName = "grafana-core";
   skillNames = [
