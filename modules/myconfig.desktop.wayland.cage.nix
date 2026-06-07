@@ -16,7 +16,7 @@ in
     desktop.wayland.cage = {
       enable = mkEnableOption "cage";
       url = mkOption {
-        type = types.string;
+        type = types.str;
         default = "";
         description = ''
           url to open in Firefox
@@ -26,7 +26,11 @@ in
   };
   config = (
     lib.mkIf
-      (cfg.desktop.wayland.enable && cfg.desktop.wayland.cage.enable && cfg.desktop.wayland.desktop == "")
+      (
+        cfg.desktop.wayland.enable
+        && cfg.desktop.wayland.cage.enable
+        && cfg.desktop.wayland.selectedSessions == [ ]
+      )
       {
         # environment.systemPackages = with pkgs; [ cage firefox ];
         services.cage = {

@@ -35,6 +35,7 @@ in
           Grafana secret_key (placeholder, override via private overlay).
         '';
       };
+      allowAnonymous = mkEnableOption "anonymous access to Grafana (useful for kiosk displays)";
     };
   };
 
@@ -67,7 +68,9 @@ in
         };
 
         "auth.anonymous" = {
-          enabled = false;
+          enabled = hostCfg.grafana.allowAnonymous;
+          org_name = "Main Org.";
+          hide_version = true;
         };
       };
 

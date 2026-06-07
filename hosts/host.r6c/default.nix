@@ -50,19 +50,18 @@
     };
 
     myconfig = {
-      # desktop = {
-      #   enable = true;
-      #   wayland = {
-      #     enable = true;
-      #     directLoginFirstSession = true;
-      #     selectedSessions = [
-      #       "niri"
-      #       "niri-plain"
-      #       # "hyprland"
-      #       "labwc"
-      #     ];
-      #   };
-      # };
+      desktop = {
+        enable = true;
+        wayland = {
+          enable = true;
+          directLoginFirstSession = true;
+          selectedSessions = [ ];
+          cage = {
+            enable = true;
+            url = "http://grafana.nuc.wg0.maxhbr.local/d/myconfig-home-lab-status?kiosk";
+          };
+        };
+      };
       headless.enable = true;
       observability = {
         host_hostname = "nuc";
@@ -74,8 +73,6 @@
     };
     virtualisation.docker.enable = true;
     virtualisation.podman.enable = true;
-
-    # environment.sessionVariables = { WLR_RENDERER_ALLOW_SOFTWARE = "1"; };
 
     networking.hostName = "r6c";
     networking.hostId = "ac8aad7a";

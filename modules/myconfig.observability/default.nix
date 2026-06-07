@@ -91,6 +91,7 @@ in
         {
           name = "grafana";
           port = 3000;
+          forceHttps = false;
         }
       ];
     };

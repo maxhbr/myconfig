@@ -5,6 +5,7 @@
   myconfig.observability = {
     host.enable = true;
     host.uptime.enable = true;
+    host.grafana.allowAnonymous = true;
     client.enable = true;
 
     # TFA Dostmann AirCO2NTROL Mini (31.5006.02) is plugged into USB
