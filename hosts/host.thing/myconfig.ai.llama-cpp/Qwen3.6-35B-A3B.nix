@@ -100,7 +100,7 @@ in
         "Qwen3.6-35B-A3B-UD"
         "Qwen3.6-35B-A3B"
         "Qwen3.6-35B"
-        "hermes-fallback"
+        "hermes"
         "opencode-fast-fallback"
       ];
       ttl = 900;
