@@ -62,7 +62,9 @@
     environment.sessionVariables = rec {
       HSA_OVERRIDE_GFX_VERSION = "11.5.1";
       # Use the internal Strix Halo iGPU for the Wayland compositor, not the eGPU
-      WLR_DRM_DEVICES = "/dev/dri/by-path/pci-0000:c2:00.0-card";
+      WLR_DRM_DEVICES = "/dev/dri/by-path/pci-0000:c3:00.0-card";
+      # Niri (non-WLR) needs its own env var to pick the correct DRM device.
+      NIRI_DRM_DEVICES = "/dev/dri/by-path/pci-0000:c3:00.0-card";
       # # other options:
       # GGML_HIP_VISIBLE_DEVICES = 0;
       # HSA_ENABLE_SDMA = 0;
@@ -75,5 +77,12 @@
       };
       rocmOverrideGfx = "11.5.1";
     };
+
+    # Tell niri to only use the iGPU for rendering, not the RTX 5090 eGPU.
+    myconfig.desktop.wayland.niri.additionalConfigKdl = ''
+      debug {
+        render-drm-device "/dev/dri/by-path/pci-0000:c3:00.0-card"
+      }
+    ''; # "/dev/dri/renderD128"
   };
 }
