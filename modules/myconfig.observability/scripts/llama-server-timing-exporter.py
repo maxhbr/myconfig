@@ -28,16 +28,31 @@ import subprocess
 import sys
 import os
 import time
+import threading
 
 OUTFILE = sys.argv[1]
 UNIT_NAME = sys.argv[2]
 
+# How long (seconds) a completed task's per-task metrics remain in the
+# textfile after completion. Per-task metrics are point-in-time events:
+# exposing them as persistent gauges makes Grafana draw a flat horizontal
+# line from completion time to "now" (and overlap across tasks). By
+# expiring them shortly after completion each task instead shows up as a
+# discrete spike/point around the time it actually finished.
+TASK_TTL_SECONDS = float(os.environ.get("LLAMA_TIMING_TASK_TTL_SECONDS", "60"))
+
+# How often (seconds) to re-write the textfile in the background so that
+# expired tasks drop out even when the journal is idle (the main loop only
+# re-writes when a new line arrives).
+REWRITE_INTERVAL_SECONDS = 15.0
+
 # --- regexes -----------------------------------------------------------
 
-# Periodic line:
+# Periodic line (captures slot id + task so interleaved generations from
+# multiple slots/tasks are tracked as independent series):
 #   slot print_timing: id 0 | task 47721 | n_decoded =    100, tg =  56.60 t/s
 RE_PERIODIC = re.compile(
-    r"slot\s+print_timing:.*?task\s+(\d+).*?n_decoded\s*=\s*(\d+),\s*tg\s*=\s*([\d.]+)\s*t/s"
+    r"slot\s+print_timing:.*?id\s+(\d+).*?task\s+(\d+).*?n_decoded\s*=\s*(\d+),\s*tg\s*=\s*([\d.]+)\s*t/s"
 )
 
 # Final-summary lines (matched individually, state-machine assembled):
@@ -56,17 +71,30 @@ RE_TOTAL = re.compile(
 
 # --- state -------------------------------------------------------------
 
-# Rolling "live" tg rate: last seen value (Gauge semantics — we just
-# want the most recent value at scrape time).
-last_tg_tps = 0.0
+# Live (periodic) tg rate, tracked per active generation so interleaved
+# tasks each get their own series. Keyed by (slot_id, task_id) -> dict with
+# the latest "tg" value and a "_seen_at" wall-clock stamp used to expire
+# series once a task stops emitting periodic lines (otherwise a finished
+# generation would leave a permanent flat line).
+live_tg = {}  # (slot_id (str), task_id (str)) -> {"tg": float, "_seen_at": float}
+
+# How long (seconds) a live per-task tg series lingers after its last
+# periodic print_timing line before being dropped from the textfile.
+LIVE_TTL_SECONDS = float(os.environ.get("LLAMA_TIMING_LIVE_TTL_SECONDS", "15"))
 
 # Pending per-task summary accumulator: task_id -> dict of partial fields.
 pending = {}
 
 # Completed task ring buffer — keep the last 1000 tasks so the .prom
-# file carries recent history without growing unboundedly.
+# file never grows unboundedly even under pathological churn within the
+# TTL window. Each entry additionally carries a "_done_at" wall-clock
+# timestamp used for TTL-based expiry at write time.
 MAX_TASKS = 1000
 completed = {}  # task_id (str) -> result dict
+
+# Guards `completed`/`live_tg`/`lines_total` against concurrent access
+# from the main journal loop and the background re-write timer.
+state_lock = threading.Lock()
 
 # Simple counter of processed journal lines.
 lines_total = 0
@@ -74,17 +102,38 @@ lines_total = 0
 # --- helpers -----------------------------------------------------------
 
 
-def write_prom(path, last_tg, tasks, n_lines):
+def write_prom(path, live, tasks, n_lines):
+    # Only emit tasks completed within the TTL window. Expired tasks are
+    # dropped so each per-task metric renders as a discrete point in time
+    # rather than a permanent flat line.
+    now = time.time()
+    fresh = {
+        tid: r
+        for tid, r in tasks.items()
+        if now - r.get("_done_at", now) <= TASK_TTL_SECONDS
+    }
+    # Live tg series, expired once a generation stops emitting periodic lines.
+    fresh_live = {
+        key: r
+        for key, r in live.items()
+        if now - r.get("_seen_at", now) <= LIVE_TTL_SECONDS
+    }
+
     tmp = path + ".tmp"
     with open(tmp, "w") as f:
-        # live tg rate (Gauge — last seen value)
+        # live tg rate (Gauge — most recent periodic value, per slot/task)
         f.write(
             "# HELP llama_server_tg_tokens_per_second "
             "Rolling token-generation rate (t/s) from the most recent "
-            "periodic print_timing log line.\n"
+            "periodic print_timing log line, labelled by slot and task. "
+            "Interleaved generations appear as independent series.\n"
         )
         f.write("# TYPE llama_server_tg_tokens_per_second gauge\n")
-        f.write(f"llama_server_tg_tokens_per_second {last_tg:.4f}\n")
+        for (slot_id, task_id), r in fresh_live.items():
+            f.write(
+                f'llama_server_tg_tokens_per_second'
+                f'{{slot="{slot_id}",task="{task_id}"}} {r["tg"]:.4f}\n'
+            )
 
         # per-task final metrics
         f.write(
@@ -113,7 +162,7 @@ def write_prom(path, last_tg, tasks, n_lines):
         )
         f.write("# TYPE llama_server_task_n_prompt_tokens gauge\n")
 
-        for tid, r in tasks.items():
+        for tid, r in fresh.items():
             lbl = f'task="{tid}"'
             if "tg_tps" in r:
                 f.write(
@@ -151,22 +200,50 @@ def task_complete(task_id):
     """Move a pending task to completed once we have all three fields."""
     r = pending.get(task_id, {})
     if "tg_tps" in r and "prompt_tps" in r and "total_ms" in r:
-        completed[task_id] = r
+        r["_done_at"] = time.time()
+        with state_lock:
+            completed[task_id] = r
+            # Evict oldest if over limit
+            while len(completed) > MAX_TASKS:
+                oldest = next(iter(completed))
+                del completed[oldest]
         del pending[task_id]
-        # Evict oldest if over limit
-        while len(completed) > MAX_TASKS:
-            oldest = next(iter(completed))
-            del completed[oldest]
+
+
+def snapshot_and_write():
+    """Take a consistent snapshot of shared state under the lock and
+    re-write the textfile. Safe to call from multiple threads."""
+    with state_lock:
+        live = {k: dict(v) for k, v in live_tg.items()}
+        tasks = dict(completed)
+        n_lines = lines_total
+    write_prom(OUTFILE, live, tasks, n_lines)
+
+
+def background_rewriter():
+    """Periodically re-write the textfile so TTL-expired tasks drop out
+    even when the journal is idle (the main loop only writes on new lines)."""
+    while True:
+        time.sleep(REWRITE_INTERVAL_SECONDS)
+        snapshot_and_write()
 
 
 def process_line(line):
-    global last_tg_tps, lines_total
-    lines_total += 1
+    global lines_total
+    with state_lock:
+        lines_total += 1
 
     # 1. Periodic tg line
     m = RE_PERIODIC.search(line)
     if m and "prompt eval time" not in line and "eval time" not in line and "total time" not in line:
-        last_tg_tps = float(m.group(3))
+        slot_id = m.group(1)
+        task_id = m.group(2)
+        tg = float(m.group(4))
+        with state_lock:
+            live_tg[(slot_id, task_id)] = {"tg": tg, "_seen_at": time.time()}
+            # Bound the live map under pathological churn (matches MAX_TASKS).
+            while len(live_tg) > MAX_TASKS:
+                del live_tg[next(iter(live_tg))]
         return
 
     # 2. prompt eval line (first of the final-summary block)
@@ -218,14 +295,17 @@ print(f"llama-server-timing-exporter: writing textfile to {OUTFILE!r}", flush=Tr
 
 # Write an initial (empty) file so node_exporter doesn't log a
 # "file not found" warning before the first real line arrives.
-write_prom(OUTFILE, last_tg_tps, completed, lines_total)
+snapshot_and_write()
+
+# Background thread to expire stale tasks while the journal is idle.
+threading.Thread(target=background_rewriter, daemon=True).start()
 
 with subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True, bufsize=1) as proc:
     for raw_line in proc.stdout:
         line = raw_line.rstrip("\n")
         process_line(line)
         # Re-write on every line (cheap — it's an atomic rename).
-        write_prom(OUTFILE, last_tg_tps, completed, lines_total)
+        snapshot_and_write()
 
 print("llama-server-timing-exporter: journalctl exited, restarting via systemd", flush=True)
 sys.exit(1)

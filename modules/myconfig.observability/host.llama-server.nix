@@ -14,8 +14,10 @@
 #
 # 2. ``llama-server-timing-exporter.py`` – tails the systemd journal and
 #    parses ``slot print_timing`` lines from the llama-cpp service.  Emits
-#    ``llama_server_tg_tokens_per_second`` (rolling live gauge) and per-task
-#    metrics (``llama_server_task_tg_tokens_per_second``,
+#    ``llama_server_tg_tokens_per_second`` (rolling live gauge, labelled by
+#    ``slot`` and ``task`` so interleaved generations are independent series)
+#    and per-task summary metrics
+#    (``llama_server_task_tg_tokens_per_second``,
 #    ``llama_server_task_prompt_eval_tokens_per_second``,
 #    ``llama_server_task_total_time_ms``, ``llama_server_task_n_decoded_tokens``,
 #    ``llama_server_task_n_prompt_tokens``).  Visualised in the "Timing"
@@ -665,7 +667,7 @@ let
       # and parses ``slot print_timing`` lines from the llama-cpp service.
       #
       # Metrics:
-      #   llama_server_tg_tokens_per_second          – rolling live gauge
+      #   llama_server_tg_tokens_per_second          – live gauge {slot,task}
       #   llama_server_task_tg_tokens_per_second     – per-task TG rate
       #   llama_server_task_prompt_eval_tokens_per_second – per-task prefill
       #   llama_server_task_total_time_ms            – per-task wall time
@@ -692,8 +694,8 @@ let
       {
         id = 51;
         type = "stat";
-        title = "Current TG rate";
-        description = "Most recent rolling token-generation rate from the periodic print_timing log line.";
+        title = "Current TG rate (total)";
+        description = "Aggregate live token-generation rate across all active tasks/slots (sum of the most recent periodic print_timing values).";
         datasource = "VictoriaMetrics";
         gridPos = {
           h = 5;
@@ -736,7 +738,7 @@ let
         };
         targets = [
           {
-            expr = "llama_server_tg_tokens_per_second{host=~\"$host\"}";
+            expr = "sum(llama_server_tg_tokens_per_second{host=~\"$host\"})";
             legendFormat = "{{host}}";
             refId = "A";
             instant = true;
@@ -795,8 +797,8 @@ let
       {
         id = 53;
         type = "timeseries";
-        title = "Live TG rate over time";
-        description = "Rolling token-generation rate (t/s) from the most recent periodic print_timing line.";
+        title = "Live TG rate over time (per task, stacked)";
+        description = "Rolling token-generation rate (t/s) from periodic print_timing lines, one series per slot/task. Interleaved generations are stacked so the top of the stack is total live throughput.";
         datasource = "VictoriaMetrics";
         gridPos = {
           h = 8;
@@ -807,11 +809,14 @@ let
         fieldConfig.defaults = {
           unit = "reqps";
           min = 0;
-          displayName = "t/s";
           custom = {
             drawStyle = "line";
             lineInterpolation = "linear";
-            fillOpacity = 10;
+            fillOpacity = 25;
+            stacking = {
+              mode = "normal";
+              group = "A";
+            };
           };
         };
         options.legend = {
@@ -826,7 +831,7 @@ let
         targets = [
           {
             expr = "llama_server_tg_tokens_per_second{host=~\"$host\"}";
-            legendFormat = "{{host}}";
+            legendFormat = "{{host}} slot {{slot}} task {{task}}";
             refId = "A";
           }
         ];
