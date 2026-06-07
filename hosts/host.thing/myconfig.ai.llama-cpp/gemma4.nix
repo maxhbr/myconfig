@@ -151,6 +151,7 @@ in
       };
       aliases = [
         "gemma-4-26B-Q4-QAT"
+        "hermes-fallback"
       ];
       ttl = 300;
     }

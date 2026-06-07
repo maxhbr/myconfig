@@ -82,7 +82,8 @@
     myconfig.desktop.wayland.niri.additionalConfigKdl = ''
       debug {
         render-drm-device "/dev/dri/by-path/pci-0000:c3:00.0-card"
+        ignore-drm-device "/dev/dri/renderD129"
       }
-    ''; # "/dev/dri/renderD128"
+    '';
   };
 }
