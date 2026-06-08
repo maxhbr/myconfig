@@ -8,6 +8,7 @@
     ../../hardware/grub.nix
     # configuration
     ./service.wireguard-server
+    ./services.step-ca.nix
     ../shared.deployedServices.nix
   ];
   config = {

@@ -8,6 +8,10 @@
   ...
 }:
 {
+  imports = [
+    ./internalCa
+  ];
+
   options.myconfig.deployedServices = with lib; {
     services = mkOption {
       type = types.attrsOf (
@@ -105,6 +109,50 @@
           servicesList = allServices."${hostName}" or [ ];
           center = config.myconfig.deployedServices.center;
           isCenter = center != null && center == hostName;
+
+          internalCa = config.myconfig.deployedServices.internalCa;
+          useAcme = internalCa.enable && internalCa.useAcmeForCaddy;
+
+          # TLS directive used in every site block that previously
+          # said `tls internal`. When `useAcmeForCaddy` is on we point
+          # Caddy at the internal step-ca ACME directory; the root cert
+          # is already in the system trust store (see
+          # internalCa/default.nix) so no explicit `trusted_roots` is
+          # strictly needed, but we pass it anyway for robustness in
+          # case Caddy's CA bundle resolution differs.
+          caddyTlsConfig =
+            if useAcme then
+              ''
+                tls {
+                  issuer acme {
+                    dir ${internalCa.acmeDirectoryUrl}
+                    trusted_roots ${internalCa.rootCert}
+                  }
+                }
+              ''
+            else
+              "tls internal";
+
+          # `transport http { ... }` block used inside the `center`
+          # host's `reverse_proxy https://${upstreamFqdn} { ... }`
+          # config (see `httpsProxy` below). When all peers' Caddy
+          # uses real (ACME-issued) certs that chain to the root we
+          # just installed, verification can succeed normally;
+          # otherwise we have to skip verification because peers are
+          # still using `tls internal` (per-host self-signed).
+          #
+          # NOTE: line breaks + indentation are crafted so that the
+          # interpolation site in `httpsProxy` produces the exact same
+          # whitespace as the previous hand-written literal block.
+          # Specifically, the interpolation occurs after two spaces of
+          # leading literal text on the first line, so this string
+          # must start without leading whitespace and embed the
+          # remaining indent verbatim.
+          caddyProxyTlsTransport =
+            if useAcme then
+              "transport http {\n    tls\n  }"
+            else
+              "transport http {\n    tls\n    tls_insecure_skip_verify\n  }";
           portToService = lib.listToAttrs (
             lib.map (s: {
               name = toString s.port;
@@ -226,7 +274,7 @@
                       listenAddresses = [ (myconfig.metadatalib.getWgIp hostName) ];
                       serverAliases = aliases;
                       extraConfig = ''
-                        tls internal
+                        ${caddyTlsConfig}
                         ${proxyConfig}
                       '';
                     })
@@ -238,7 +286,7 @@
                       listenAddresses = [ (myconfig.metadatalib.getWgIp hostName) ];
                       serverAliases = lib.map (a: "https://${a}") aliases;
                       extraConfig = ''
-                        tls internal
+                        ${caddyTlsConfig}
                         ${proxyConfig}
                       '';
                     })
@@ -257,7 +305,7 @@
               listenAddresses = [ (myconfig.metadatalib.getWgIp hostName) ];
               serverAliases = [ "${hostName}.wg0" ];
               extraConfig = ''
-                tls internal
+                ${caddyTlsConfig}
                 root * ${indexRoot}
                 file_server
               '';
@@ -267,9 +315,12 @@
           # virtualHosts that re-expose services from every other host
           # under `${name}.${otherHost}.${centerBase}` and reverse-proxy
           # to the upstream Caddy at
-          # `https://${name}.${otherHost}.wg0.maxhbr.local`. The upstream
-          # uses `tls internal` (self-signed), so TLS verification is
-          # disabled for the proxy transport.
+          # `https://${name}.${otherHost}.wg0.maxhbr.local`. Whether the
+          # proxy transport verifies the upstream's TLS cert depends on
+          # `myconfig.deployedServices.internalCa.useAcmeForCaddy`:
+          # when ACME is on, all peers serve real internal-CA certs and
+          # verification is enabled; otherwise verification is skipped
+          # because peers use Caddy's `tls internal` self-signed certs.
           centerProxyHosts =
             if !isCenter then
               { }
@@ -293,10 +344,15 @@
                       upstreamFqdn = "${name}.${otherHost}.wg0.maxhbr.local";
                       proxiedFqdn = "${name}.${otherHost}.${baseHostName}";
                       shortAlias = "${name}.${otherHost}.${hostName}.wg0";
-                      # The upstream Caddy serves the service on HTTPS
-                      # with a self-signed `tls internal` cert, so we
-                      # always proxy via HTTPS for the https variant and
-                      # disable verification.
+                      # Always proxy via HTTPS for the https variant.
+                      # When the internal-CA / ACME stack is on
+                      # (`useAcme` true), the upstream presents a real
+                      # cert chaining to a root we already installed in
+                      # the system trust store, so the transport block
+                      # uses normal verification. Otherwise the upstream
+                      # is using Caddy's `tls internal` self-signed
+                      # cert and we have to skip verification —
+                      # `caddyProxyTlsTransport` encodes both cases.
                       # `header_up Origin` and `header_up Referer` rewrite
                       # those headers to the upstream's own hostname so that
                       # services that validate allowed_origins (e.g. Grafana)
@@ -307,10 +363,7 @@
                           header_up Host {upstream_hostport}
                           header_up Origin https://{upstream_hostport}
                           header_up Referer https://{upstream_hostport}{uri}
-                          transport http {
-                            tls
-                            tls_insecure_skip_verify
-                          }
+                          ${caddyProxyTlsTransport}
                         }
                       '';
                       # When the upstream is `forceHttps = false`, it
@@ -337,7 +390,7 @@
                           listenAddresses = [ centerIp ];
                           serverAliases = [ shortAlias ];
                           extraConfig = ''
-                            tls internal
+                            ${caddyTlsConfig}
                             ${httpsProxy}
                           '';
                         })
@@ -349,7 +402,7 @@
                           listenAddresses = [ centerIp ];
                           serverAliases = [ "https://${shortAlias}" ];
                           extraConfig = ''
-                            tls internal
+                            ${caddyTlsConfig}
                             ${httpsProxy}
                           '';
                         })

@@ -6,9 +6,11 @@
 #
 # Architecture:
 #   * `prometheus-blackbox-exporter` runs on the observability host on
-#     127.0.0.1, configured to perform HTTPS probes that ignore TLS
-#     issues (Caddy uses `tls internal` so all probed sites have
-#     self-signed certs).
+#     127.0.0.1. Whether HTTPS probes verify TLS depends on
+#     `myconfig.deployedServices.internalCa.useAcmeForCaddy`: when on,
+#     probed Caddy vhosts present real internal-CA certs and probes
+#     verify normally; when off, Caddy is using `tls internal` per-host
+#     self-signed certs and the probes have to ignore TLS issues.
 #   * The local `vmagent` (provided by the observability *client*
 #     module, which the host should also enable) gets an extra
 #     `blackbox` scrape job whose targets are derived from
@@ -36,6 +38,8 @@ let
   uptimeCfg = hostCfg.uptime;
 
   allServices = config.myconfig.deployedServices.services;
+  internalCaCfg = config.myconfig.deployedServices.internalCa or { };
+  useAcme = (internalCaCfg.enable or false) && (internalCaCfg.useAcmeForCaddy or false);
 
   # Build the list of URLs to probe from the deployedServices catalog.
   # Each service is reachable through Caddy at
@@ -54,9 +58,13 @@ let
 
   blackboxConfig = {
     modules = {
-      # HTTP(S) probe used for every deployedService URL.
-      # `insecure_skip_verify` is mandatory because Caddy issues
-      # self-signed certs via `tls internal`.
+      # HTTP(S) probe used for every deployedService URL. TLS
+      # verification policy follows the internal-CA toggle: when ACME
+      # is on, the probed Caddy vhosts serve real internal-CA certs
+      # and the blackbox host already trusts that root via
+      # security.pki.certificateFiles, so verification can succeed.
+      # When off, Caddy issues self-signed certs via `tls internal`
+      # and `insecure_skip_verify` is mandatory.
       http_2xx = {
         prober = "http";
         timeout = "5s";
@@ -84,7 +92,7 @@ let
           fail_if_ssl = false;
           fail_if_not_ssl = false;
           tls_config = {
-            insecure_skip_verify = true;
+            insecure_skip_verify = !useAcme;
           };
           follow_redirects = true;
         };
