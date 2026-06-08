@@ -131,6 +131,12 @@ let
         description = "Packages to symlink into the skill directory.";
       };
 
+      rewriteCommands = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Automatically rewrite package binary names to ./name paths in SKILL.md content.";
+      };
+
       transform = lib.mkOption {
         type = lib.types.nullOr lib.types.raw;
         default = null;

@@ -83,6 +83,58 @@ ${original}
     };
   };
 
+  # Rewrite test sources
+  rewriteSources = {
+    rewrite-fixtures = {
+      path = ./fixtures/rewrite-skill;
+    };
+  };
+
+  rewriteCatalog = agentLib.discoverCatalog rewriteSources;
+
+  # Case 6: rewriteCommands = true (default) with packages
+  testSelectionRewrite = agentLib.selectSkills {
+    catalog = rewriteCatalog;
+    allowlist = [];
+    sources = rewriteSources;
+    skills = {
+      test-skill-rewrite = {
+        from = "rewrite-fixtures";
+        path = ".";
+        packages = [ pkgs.jq ];
+      };
+    };
+  };
+
+  # Case 7: rewriteCommands = false with packages
+  testSelectionRewriteDisabled = agentLib.selectSkills {
+    catalog = rewriteCatalog;
+    allowlist = [];
+    sources = rewriteSources;
+    skills = {
+      test-skill-rewrite-disabled = {
+        from = "rewrite-fixtures";
+        path = ".";
+        packages = [ pkgs.jq ];
+        rewriteCommands = false;
+      };
+    };
+  };
+
+  # Case 8: multi-binary packages are not rewritten to missing ./binary paths
+  testSelectionRewriteMultiBin = agentLib.selectSkills {
+    catalog = rewriteCatalog;
+    allowlist = [];
+    sources = rewriteSources;
+    skills = {
+      test-skill-rewrite-multi-bin = {
+        from = "rewrite-fixtures";
+        path = ".";
+        packages = [ pkgs.bun ];
+      };
+    };
+  };
+
   # Case 5: Error case - transform is not a function
   invalidSelection = agentLib.selectSkills {
     catalog = testCatalog;
@@ -121,6 +173,24 @@ ${original}
     inherit pkgs;
     selection = testSelectionTransformOnly;
     name = "agent-skills-test-transform-only";
+  };
+
+  testBundleRewrite = agentLib.mkBundle {
+    inherit pkgs;
+    selection = testSelectionRewrite;
+    name = "agent-skills-test-rewrite";
+  };
+
+  testBundleRewriteDisabled = agentLib.mkBundle {
+    inherit pkgs;
+    selection = testSelectionRewriteDisabled;
+    name = "agent-skills-test-rewrite-disabled";
+  };
+
+  testBundleRewriteMultiBin = agentLib.mkBundle {
+    inherit pkgs;
+    selection = testSelectionRewriteMultiBin;
+    name = "agent-skills-test-rewrite-multi-bin";
   };
 in
 pkgs.runCommand "agent-skills-transform-packages-test" {} ''
@@ -225,6 +295,58 @@ pkgs.runCommand "agent-skills-transform-packages-test" {} ''
   ''}
 
   echo "Case 5 passed!"
+
+  echo ""
+  echo "=== Case 6: rewriteCommands = true (default) ==="
+  skillMd6="${testBundleRewrite}/test-skill-rewrite/SKILL.md"
+
+  test -f "$skillMd6" || { echo "SKILL.md not found"; exit 1; }
+
+  # Bare "jq " should be rewritten to "./jq "
+  grep -q '\./jq ' "$skillMd6" || { echo "jq not rewritten to ./jq"; exit 1; }
+
+  # "| jq " should become "| ./jq "
+  grep -q '| \./jq ' "$skillMd6" || { echo "piped jq not rewritten"; exit 1; }
+
+  # Already-prefixed "./jq" should NOT become "././jq"
+  ! grep -q '\./\./jq' "$skillMd6" || { echo "Double-prefixed ././jq found"; exit 1; }
+
+  # Original bare "jq " at start of line should not remain
+  ! grep -q '^jq ' "$skillMd6" || { echo "Bare jq still present at start of line"; exit 1; }
+
+  echo "Case 6 passed!"
+
+  echo ""
+  echo "=== Case 7: rewriteCommands = false ==="
+  skillMd7="${testBundleRewriteDisabled}/test-skill-rewrite-disabled/SKILL.md"
+
+  test -f "$skillMd7" || { echo "SKILL.md not found"; exit 1; }
+
+  # Bare "jq " should remain (not rewritten)
+  grep -q '^jq ' "$skillMd7" || { echo "Bare jq should remain when rewriteCommands=false"; exit 1; }
+
+  # Dependencies table should still be present
+  grep -q "## Dependencies" "$skillMd7" || { echo "Dependencies section not found"; exit 1; }
+
+  echo "Case 7 passed!"
+
+  echo ""
+  echo "=== Case 8: rewriteCommands skips multi-binary packages ==="
+  skillMd8="${testBundleRewriteMultiBin}/test-skill-rewrite-multi-bin/SKILL.md"
+  skillDir8="${testBundleRewriteMultiBin}/test-skill-rewrite-multi-bin"
+
+  test -f "$skillMd8" || { echo "SKILL.md not found"; exit 1; }
+
+  # bun exposes multiple binaries under ./bun/, so bare bunx must not become a missing ./bunx path.
+  grep -q '^bunx --version' "$skillMd8" || { echo "Bare bunx should remain for multi-binary package"; exit 1; }
+  ! grep -q '\./bunx' "$skillMd8" || { echo "bunx was rewritten to missing ./bunx path"; exit 1; }
+
+  # The actual multi-binary package layout should still be available.
+  test -L "$skillDir8/bun" || { echo "bun symlink not found"; exit 1; }
+  test -x "$skillDir8/bun/bun" || { echo "bun binary not found"; exit 1; }
+  test -x "$skillDir8/bun/bunx" || { echo "bunx binary not found"; exit 1; }
+
+  echo "Case 8 passed!"
 
   echo ""
   echo "All tests passed!"
