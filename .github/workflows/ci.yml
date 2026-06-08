@@ -25,8 +25,4 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: ./.github/actions/setup-nix
       - name: Run tests
-        run: |
-          rev=$(nix eval --raw --impure --expr \
-            'let lock = builtins.fromJSON (builtins.readFile ./flake.lock); in lock.nodes.nixpkgs.locked.rev')
-          NIX_PATH="nixpkgs=https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz" \
-            nix build -f ./test --print-build-logs
+        run: nix build .#checks.x86_64-linux.transform-packages --print-build-logs
