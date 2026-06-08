@@ -7,6 +7,8 @@
   ...
 }:
 let
+  cfg = config.myconfig.ai.container.headroom;
+
   headroom = {
     image = "ghcr.io/chopratejas/headroom:latest";
 
@@ -16,6 +18,8 @@ let
       "--pull=always"
       "--name=headroom"
       "--hostname=headroom"
+      "--env=HEADROOM_TELEMETRY=off"
+      "--env=OPENAI_TARGET_API_URL=${cfg.targetApiUrl}"
     ];
   };
 in
@@ -23,6 +27,10 @@ in
   options.myconfig = with lib; {
     ai.container.headroom = {
       enable = mkEnableOption "myconfig.ai.container.headroom";
+      targetApiUrl = mkOption {
+        type = types.str;
+        description = "The OpenAI-compatible API URL that headroom targets.";
+      };
     };
   };
   config = lib.mkIf (config.myconfig.ai.enable && config.myconfig.ai.container.headroom.enable) {

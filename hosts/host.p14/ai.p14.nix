@@ -29,6 +29,7 @@
         container = {
           headroom = {
             enable = true;
+            targetApiUrl = "http://litellm.thing.wg0.maxhbr.local/v1";
           };
         };
       };
