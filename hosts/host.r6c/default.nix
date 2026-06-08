@@ -58,7 +58,7 @@
           selectedSessions = [ ];
           cage = {
             enable = true;
-            url = "http://grafana.nuc.wg0.maxhbr.local/d/myconfig-home-lab-status?kiosk";
+            url = "http://grafana.nuc.wg0.maxhbr.local/playlists/play/adjf27l?kiosk";
           };
         };
       };
