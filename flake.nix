@@ -118,44 +118,15 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           bundle = bundleFor system;
-        in {
-          skills = pkgs.runCommand "agent-skills-checks" {} ''
-            test -d ${bundle}
-            mkdir -p "$out"
-            touch "$out/ok"
-          '';
-          discover = import ./test/discover.nix {
-            inherit pkgs;
-            agentLib = lib;
+          agentSkillsModule = import ./modules/home-manager/agent-skills.nix {
+            inherit inputs;
+            lib = nixpkgs.lib;
           };
-          transform-packages = import ./test/transform-packages.nix {
-            inherit pkgs;
-            agentLib = lib;
-          };
-          targets = import ./test/targets.nix {
-            inherit pkgs;
-            agentLib = lib;
-          };
-          local-install-script = import ./test/local-install-script.nix {
-            inherit pkgs;
-            agentLib = lib;
-          };
-          home-manager-warnings = import ./test/home-manager-warnings.nix {
-            inherit pkgs;
-            hmLib = home-manager.lib;
-            agentSkillsModule = import ./modules/home-manager/agent-skills.nix {
-              inherit inputs;
-              lib = nixpkgs.lib;
-            };
-          };
-          home-manager-input-source = import ./test/home-manager-input-source.nix {
-            inherit pkgs;
-            hmLib = home-manager.lib;
-            agentSkillsModule = import ./modules/home-manager/agent-skills.nix {
-              inherit inputs;
-              lib = nixpkgs.lib;
-            };
-          };
+        in
+        import ./test {
+          inherit pkgs bundle agentSkillsModule;
+          agentLib = lib;
+          hmLib = home-manager.lib;
         });
 
       homeManagerModules.default =
