@@ -21,6 +21,7 @@ in
     ./container.Kokoro-FastAPI.nix
     ./container.SillyTavern.nix
     ./container.crawl4ai.nix
+    ./container.headroom.nix
     ./container.lobe-chat.nix
     ./container.nlm-ingestor.nix
     ./container.open-webui.nix

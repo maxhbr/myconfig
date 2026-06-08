@@ -157,6 +157,9 @@
           crawl4ai = {
             enable = false;
           };
+          headroom = {
+            enable = true;
+          };
         };
       };
       containers.n8n.enable = true;
