@@ -153,5 +153,23 @@ in
     networking.extraHosts = ''
       ${myconfig.metadatalib.getWgIp cfg.caHost} ${cfg.caFqdn}
     '';
+
+    # Firefox has its own NSS-based trust store and ignores the system
+    # CA bundle by default — so installing the root via
+    # `security.pki.certificateFiles` above is not enough on hosts
+    # where Firefox is the daily-driver browser. The Firefox Enterprise
+    # Policy `Certificates.ImportEnterpriseRoots = true` makes Firefox
+    # additionally consult the OS trust store on every startup,
+    # picking up our internal CA root without per-profile certificate
+    # import. Policies apply globally to all profiles (no per-profile
+    # wiring needed) and survive profile resets.
+    home-manager.sharedModules = [
+      (
+        { config, lib, ... }:
+        lib.mkIf (config.programs.firefox.enable or false) {
+          programs.firefox.policies.Certificates.ImportEnterpriseRoots = true;
+        }
+      )
+    ];
   };
 }

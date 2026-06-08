@@ -83,6 +83,8 @@
     pkgs.gnutar
     pkgs.gzip
     pkgs.unzip
+    pkgs.shfmt
+    pkgs.shellcheck
   ],
   extraDevTools ? [ ],
   fwdEnv ? [
