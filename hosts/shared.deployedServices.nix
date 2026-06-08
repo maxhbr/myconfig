@@ -82,11 +82,6 @@
             forceHttps = false;
             excludeFromMonitoring = true;
           }
-          {
-            name = "headroom";
-            port = 8787;
-            forceHttps = false;
-          }
         ];
         p14 = [
           # {
@@ -101,6 +96,11 @@
           #   name = "searxng-plain";
           #   port = 18080;
           # }
+          {
+            name = "headroom";
+            port = 8787;
+            forceHttps = false;
+          }
         ];
       };
       center = "vserver";

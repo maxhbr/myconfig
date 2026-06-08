@@ -158,7 +158,7 @@
             enable = false;
           };
           headroom = {
-            enable = true;
+            enable = false;
           };
         };
       };

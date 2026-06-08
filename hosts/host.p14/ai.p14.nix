@@ -26,6 +26,11 @@
         # open-webui = {
         #   enable = true;
         # };
+        container = {
+          headroom = {
+            enable = true;
+          };
+        };
       };
     };
     networking.firewall.interfaces."wg0".allowedTCPPorts = [ 443 ];
