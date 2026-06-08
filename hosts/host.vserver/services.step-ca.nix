@@ -9,43 +9,56 @@
 # certificates via ACME instead of using `tls internal` (Caddy's own
 # per-host self-signed CA).
 #
-# State lives in `/var/lib/step-ca`. step-ca's NixOS module uses
-# `DynamicUser = true` with `StateDirectory = "step-ca"`, so the state
-# is owned by a transient UID but mapped onto a stable on-disk path.
-# vserver does not use impermanence, so this state persists across
-# reboots automatically.
+# CA key material is generated offline in the priv repo via
+# `scripts/priv.template/mk_step-ca_keys.sh` (run from the priv repo
+# root) and deployed to vserver as four agenix-managed secrets:
+#
+#   * step-ca-intermediate-password
+#       Passphrase for the intermediate key, consumed by the upstream
+#       step-ca module via systemd LoadCredential=.
+#   * step-ca-root-ca-crt
+#       PEM-encoded root certificate. Public material, but kept under
+#       agenix anyway so step-ca finds it at a stable in-repo path.
+#   * step-ca-intermediate-ca-crt
+#       PEM-encoded intermediate certificate. Same rationale.
+#   * step-ca-intermediate-ca-key
+#       Encrypted PEM-encoded intermediate private key.
+#
+# In the public repo each of these is declared as a *stub* — `source`
+# is null, so the agenix derivation is skipped and a warning is
+# emitted. The priv overlay supplies the actual `source = ...` paths.
+# Until that happens, step-ca will fail to start (expected) but the
+# rest of the system still evaluates and boots.
+#
+# State (BadgerDB, db tx log, etc.) lives in `/var/lib/step-ca`. The
+# upstream NixOS module uses `DynamicUser = true` with
+# `StateDirectory = "step-ca"`, so the state is owned by the step-ca
+# user (which is also declared statically by the upstream module, so
+# the DynamicUser flag is effectively a no-op here). vserver does not
+# use impermanence, so this state persists across reboots
+# automatically.
 #
 # Bootstrap (one-time, manual):
-#   1. Deploy this configuration once. step-ca will not start yet
-#      because /var/lib/step-ca/certs/intermediate_ca.crt does not
-#      exist; that is expected.
-#   2. On vserver, run `step ca init` as the step-ca user (or as root
-#      and chown afterwards):
-#        sudo -u step-ca STEPPATH=/var/lib/step-ca step ca init \
-#          --deployment-type standalone \
-#          --name "MyConfig Internal CA" \
-#          --dns "ca.vserver.wg0.maxhbr.local" \
-#          --address "10.199.199.1:8443" \
-#          --provisioner acme \
-#          --acme
-#      Choose a strong passphrase when prompted. Save it.
-#   3. Copy the generated root certificate out:
-#        sudo cat /var/lib/step-ca/certs/root_ca.crt
-#      and replace `modules/myconfig.deployedServices/internalCa/root.crt`
-#      in this repo with it. Commit.
-#   4. In the priv repo, save the passphrase as plaintext:
-#        echo -n '<the-passphrase>' > ../priv/secrets/step-ca-intermediate-password
-#      and add the corresponding
-#        myconfig.secrets.step-ca-intermediate-password.source =
-#          ./secrets/step-ca-intermediate-password;
-#      override in the priv overlay's modules for the vserver host.
-#   5. `nixos-rebuild switch` on vserver — step-ca starts, exposes the
-#      ACME directory, and Caddy on every host re-issues its certs.
+#   1. In the priv repo checkout, run:
+#        ./mk_step-ca_keys.sh vserver
+#      This generates root/intermediate keys, certs, and passphrases
+#      under hosts/host.vserver/secrets/step-ca/, and copies root_ca.crt
+#      into the public repo's `modules/myconfig.deployedServices/
+#      internalCa/root.crt`.
+#   2. In the priv overlay, set the `source = ./...` paths for all four
+#      `myconfig.secrets.step-ca-*` entries (see
+#      scripts/priv.template/mk_step-ca_keys.sh.README.md in the
+#      public repo).
+#   3. Commit both repos.
+#   4. `nixos-rebuild switch` on vserver — step-ca starts, serves
+#      `https://${caFqdn}:${caPort}/acme/acme/directory`.
+#   5. `nixos-rebuild switch` on every Caddy host — Caddy switches from
+#      `tls internal` to ACME against the internal CA.
 #
 # Operations:
-#   * Trigger ACME provisioner inspection from any wg0-connected host:
-#       curl --cacert /etc/ssl/internal-ca-root.crt \
-#         https://ca.vserver.wg0.maxhbr.local:8443/acme/acme/directory
+#   * Verify the ACME endpoint from any wg0-connected host:
+#       curl https://ca.vserver.wg0.maxhbr.local:8443/acme/acme/directory
+#     (the root cert is already in the system trust store)
 #   * Rotate the intermediate (recommended every few years):
 #       https://smallstep.com/docs/step-ca/renewal/
 #   * Inspect the database:
@@ -66,11 +79,12 @@ let
   caPort = internalCa.caPort;
   caFqdn = internalCa.caFqdn;
 
-  # Paths inside /var/lib/step-ca, populated by `step ca init` on
-  # bootstrap. The upstream NixOS module symlinks /etc/smallstep/ca.json
-  # to our generated config, and step-ca reads root/crt/key relative to
-  # those absolute paths.
+  # State directory used for BadgerDB + any runtime artefacts. step-ca
+  # writes here, so the path must be writable. ca.crt / intermediate
+  # are *not* placed here — they come from agenix (see below).
   stateDir = "/var/lib/step-ca";
+
+  secrets = config.myconfig.secrets;
 in
 {
   config = {
@@ -84,20 +98,16 @@ in
       # upstream module loads this via systemd LoadCredential, so the
       # file only needs to be readable by root at activation time —
       # which is exactly what `myconfig.secrets` (agenix) guarantees.
-      #
-      # NOTE: the secret is declared as a stub below (source = null).
-      # The actual plaintext lives in ../priv/secrets/ and is supplied
-      # by the priv overlay; without it, step-ca will fail to start
-      # but the rest of the system still evaluates and boots.
-      intermediatePasswordFile = config.myconfig.secrets.step-ca-intermediate-password.dest;
+      intermediatePasswordFile = secrets.step-ca-intermediate-password.dest;
 
       settings = {
-        # Root / intermediate / key are populated by `step ca init` and
-        # live under the state directory. step-ca reads these on every
-        # start to assemble the issuance chain.
-        root = "${stateDir}/certs/root_ca.crt";
-        crt = "${stateDir}/certs/intermediate_ca.crt";
-        key = "${stateDir}/secrets/intermediate_ca_key";
+        # Root / intermediate / key are all supplied via agenix. The
+        # decrypted paths are owned by the step-ca user/group (set
+        # below in `myconfig.secrets.*`), and step-ca reads them on
+        # every start to assemble the issuance chain.
+        root = secrets.step-ca-root-ca-crt.dest;
+        crt = secrets.step-ca-intermediate-ca-crt.dest;
+        key = secrets.step-ca-intermediate-ca-key.dest;
 
         # `address` here is overridden by services.step-ca.{address,port}
         # per the upstream module (see nixos/modules/services/security/
@@ -143,11 +153,6 @@ in
             {
               type = "ACME";
               name = "acme";
-              # Force the HTTP-01 challenge: Caddy and step-ca exchange
-              # the challenge over the same wg0-only port (80) that
-              # `myconfig.deployedServices` already opens. TLS-ALPN-01
-              # would also work but HTTP-01 is simpler to debug.
-              # (Left at default to allow either; comment retained.)
             }
           ];
         };
@@ -163,19 +168,45 @@ in
       };
     };
 
-    # Stub secret. Public repo declares the destination + ownership;
-    # the priv overlay supplies the `source = ./...` plaintext path.
-    # While `source` is null the agenix derivation is skipped (see
-    # `validSecrets` in modules/myconfig.secrets.nix:112) and a warning
-    # is emitted. step-ca will then fail to start because its
-    # `LoadCredential=intermediate_password:...` source file is
-    # missing — that is the expected state until the priv overlay
-    # supplies the passphrase.
-    myconfig.secrets.step-ca-intermediate-password = {
-      dest = "/run/step-ca-intermediate-password";
-      # step-ca uses DynamicUser + systemd LoadCredential, so the file
-      # only needs to be readable by root at unit-start time. Default
-      # owner = root, mode = 0400.
+    # Stub secrets. Public repo declares destination + ownership; the
+    # priv overlay supplies `source = ./secrets/step-ca/<name>;` for
+    # each. While any `source` is null, the corresponding agenix
+    # derivation is skipped (see `validSecrets` in
+    # modules/myconfig.secrets.nix:112), a warning is emitted, and
+    # step-ca fails to start because settings.{root,crt,key} or
+    # LoadCredential= source files are missing — that is the expected
+    # state until the priv overlay supplies the material.
+    #
+    # All four files are owned step-ca:step-ca so the step-ca service
+    # can read them directly. (The upstream NixOS module declares
+    # users.users.step-ca and users.groups.step-ca statically, which
+    # makes the static user the effective service user even with
+    # DynamicUser=true on modern systemd.)
+    myconfig.secrets = {
+      step-ca-intermediate-password = {
+        dest = "/run/step-ca-intermediate-password";
+        # The upstream module reads this via systemd LoadCredential=
+        # (which copies to a credentials dir before step-ca starts),
+        # so root:root 0400 (the default) is fine.
+      };
+      step-ca-root-ca-crt = {
+        dest = "/run/step-ca-root-ca-crt";
+        owner = "step-ca";
+        group = "step-ca";
+        permissions = "0444";
+      };
+      step-ca-intermediate-ca-crt = {
+        dest = "/run/step-ca-intermediate-ca-crt";
+        owner = "step-ca";
+        group = "step-ca";
+        permissions = "0444";
+      };
+      step-ca-intermediate-ca-key = {
+        dest = "/run/step-ca-intermediate-ca-key";
+        owner = "step-ca";
+        group = "step-ca";
+        permissions = "0400";
+      };
     };
 
     # Open the CA's port on the WireGuard interface only.
@@ -185,15 +216,19 @@ in
     # `modules/myconfig.deployedServices/internalCa/default.nix`
     # so every host (including vserver itself) gets the same mapping.
 
-    # Order step-ca after the passphrase secret unit has materialised.
-    # The agenix-generated unit name follows the convention
+    # Order step-ca after every secret it needs has materialised. The
+    # agenix-generated unit name follows the convention
     # `<secret-name>-key.service` (mirrors hosts/host.thing/
     # services.forgejo.nix:107).
     systemd.services.step-ca.serviceConfig.After = [
       "step-ca-intermediate-password-key.service"
+      "step-ca-root-ca-crt-key.service"
+      "step-ca-intermediate-ca-crt-key.service"
+      "step-ca-intermediate-ca-key-key.service"
     ];
 
-    # `step` CLI for bootstrap + day-to-day CA operations on vserver.
+    # `step` CLI for day-to-day CA operations on vserver (inspect
+    # certs, manage provisioners, ad-hoc signing, …).
     environment.systemPackages = with pkgs; [
       step-cli
       step-ca
