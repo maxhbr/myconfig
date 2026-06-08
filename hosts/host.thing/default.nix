@@ -159,6 +159,7 @@
           };
           headroom = {
             enable = false;
+            targetApiUrl = "http://litellm.thing.wg0.maxhbr.local/v1";
           };
         };
       };
