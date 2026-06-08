@@ -119,22 +119,6 @@ in
       };
     }
     {
-      name = "Qwen3.6-27B-MTP-Q8_0";
-      path = "/models/ggml-org-Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-MTP-Q8_0.gguf";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [ "ggml-org/Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-MTP-Q8_0.gguf" ];
-      };
-      params = [
-        "--spec-type"
-        "draft-mtp"
-        "--spec-draft-n-max"
-        "3"
-      ];
-      aliases = [ ];
-      ttl = 900;
-    }
-    {
       name = "Qwen3.6-27B-UD-Q4_K_XL";
       path = "/models/unsloth-Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
       pull-models = {
@@ -235,6 +219,22 @@ in
   ];
 
   amdModels = [
+    {
+      name = "Qwen3.6-27B-MTP-Q8_0";
+      path = "/models/ggml-org-Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-MTP-Q8_0.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "ggml-org/Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-MTP-Q8_0.gguf" ];
+      };
+      params = [
+        "--spec-type"
+        "draft-mtp"
+        "--spec-draft-n-max"
+        "3"
+      ];
+      aliases = [ ];
+      ttl = 900;
+    }
     {
       name = "Qwen3.6-27B-BF16";
       path = "/models/unsloth-Qwen3.6-27B-GGUF/BF16/Qwen3.6-27B-BF16-00001-of-00002.gguf";
