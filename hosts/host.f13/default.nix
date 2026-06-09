@@ -305,7 +305,7 @@ in
         imagework.myphoto.enable = true;
         cad.enable = true;
         # joplin-desktop.enable = true;
-        logseq.enable = true;
+        # logseq.enable = true; # disabled: pulls in insecure electron-39.8.10
       };
       v4l2.enable = true;
       email = {
