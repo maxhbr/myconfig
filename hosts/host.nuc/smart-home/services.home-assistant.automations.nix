@@ -126,6 +126,33 @@ in
             }
           ];
         }
+        {
+          id = "tv_on_if_occupied";
+          alias = "TV on if occupied";
+          description = "TV on if occupied";
+          mode = "single";
+          triggers = [
+            {
+              trigger = "device";
+              domain = "binary_sensor";
+              device_id = "a766b7b2420015a3c7b51f9e6dc03c47";
+              entity_id = "83b9f62ae68ea5f5e5723d04c653e20c";
+              type = "occupied";
+              metadata = {
+                secondary = false;
+              };
+            }
+          ];
+          conditions = [ ];
+          actions = [
+            {
+              type = "turn_on";
+              device_id = "cd95b4bafcba5175d7da2de59fcaf278";
+              entity_id = "9c5be7577f2bebabc1b6a36b22cfedd9";
+              domain = "switch";
+            }
+          ];
+        }
       ];
       "automation ui" = "!include automations.yaml";
     };
