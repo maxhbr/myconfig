@@ -24,6 +24,7 @@ in
     ./host.temperature-humidity.nix
     ./host.llama-server.nix
     ./host.dcgm.nix
+    ./host.unifi.nix
     ./client.nix
     ./client.alloy.nix
   ];

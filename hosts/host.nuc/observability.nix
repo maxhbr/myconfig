@@ -1,6 +1,6 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
-{ ... }:
+{ config, lib, ... }:
 {
   myconfig.observability = {
     host.enable = true;
@@ -24,5 +24,28 @@
       longitude = "10.8978";
       locationLabel = "Augsburg";
     };
+
+    # UniFi controller monitoring via unpoller (Prometheus mode) →
+    # vmagent → VictoriaMetrics. The local read-only UniFi admin
+    # (username `unpoller`) is created manually in the controller
+    # UI at https://192.168.1.1/ — see host.unifi.nix for the full
+    # procedure. The password lives in `../priv/` as an agenix
+    # secret named `unifi-unpoller-password`; until that overlay
+    # provides a source for the secret stub declared below, the
+    # exporter will start with the placeholder password and fail
+    # to log in (visible in `journalctl -u prometheus-unpoller-exporter`).
+    host.unifi = {
+      enable = true;
+      passwordFile = lib.mkIf (config.age.secrets ? unifi-unpoller-password) (
+        config.age.secrets.unifi-unpoller-password.path
+      );
+    };
   };
+
+  # Stub agenix secret declaration. Real `source = ...` is provided
+  # by the private overlay (`priv/hosts/host.nuc/`). When source is
+  # absent, `myconfig.secrets.nix` filters this entry out and
+  # `config.age.secrets.unifi-unpoller-password` does not exist —
+  # the `mkIf` guard above keeps the module evaluable in that state.
+  myconfig.secrets."unifi-unpoller-password" = { };
 }
