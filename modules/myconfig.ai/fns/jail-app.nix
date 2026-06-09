@@ -85,6 +85,7 @@
     pkgs.unzip
     pkgs.shfmt
     pkgs.shellcheck
+    pkgs.python3
   ],
   extraDevTools ? [ ],
   fwdEnv ? [
