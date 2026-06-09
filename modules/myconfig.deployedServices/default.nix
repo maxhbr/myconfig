@@ -32,6 +32,30 @@
                 default = "localhost";
                 description = "Optional custom IP address for the service";
               };
+              upstreamScheme = mkOption {
+                type = types.enum [
+                  "http"
+                  "https"
+                ];
+                default = "http";
+                description = ''
+                  Scheme Caddy uses to talk to the upstream service.
+                  Set to "https" for services that only speak TLS on
+                  their upstream port (e.g. a UniFi gateway's web UI
+                  on 192.168.1.1:443).
+                '';
+              };
+              upstreamSkipTlsVerify = mkOption {
+                type = types.bool;
+                default = false;
+                description = ''
+                  When `upstreamScheme = "https"` and the upstream
+                  presents a self-signed or otherwise untrusted cert
+                  (e.g. UniFi appliances), set this to skip TLS
+                  verification on the proxy → upstream hop. Has no
+                  effect when `upstreamScheme = "http"`.
+                '';
+              };
               forceHttps = mkOption {
                 type = types.bool;
                 default = true;
@@ -153,12 +177,6 @@
               "transport http {\n    tls\n  }"
             else
               "transport http {\n    tls\n    tls_insecure_skip_verify\n  }";
-          portToService = lib.listToAttrs (
-            lib.map (s: {
-              name = toString s.port;
-              value = s.name;
-            }) (lib.filter (s: s.port != null) servicesList)
-          );
           indexHtml =
             let
               renderHostSection =
@@ -230,6 +248,8 @@
                 name,
                 port,
                 ip,
+                upstreamScheme,
+                upstreamSkipTlsVerify,
                 forceHttps,
                 disableCache,
                 redirect,
@@ -239,13 +259,9 @@
                 [ ]
               else
                 let
-                  portAliasUnique = port != null && (portToService.${toString port} == name);
-                  aliases =
-                    (lib.optional portAliasUnique "${toString port}.${baseHostName}")
-                    ++ [
-                      "${name}.${hostName}.wg0"
-                    ]
-                    ++ (lib.optional portAliasUnique "${toString port}.${hostName}.wg0");
+                  aliases = [
+                    "${name}.${hostName}.wg0"
+                  ];
                   noCacheHeaders = lib.optionalString disableCache ''
                     header {
                       Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
@@ -255,6 +271,22 @@
                       -Last-Modified
                     }
                   '';
+                  # When proxying to an HTTPS upstream with a
+                  # self-signed cert (e.g. UniFi appliances), we need a
+                  # `transport http { tls; tls_insecure_skip_verify }`
+                  # block. For plain http upstreams or trusted https
+                  # upstreams, no transport block is needed.
+                  upstreamTransport =
+                    if upstreamScheme == "https" && upstreamSkipTlsVerify then
+                      ''
+                         {
+                          transport http {
+                            tls
+                            tls_insecure_skip_verify
+                          }
+                        }''
+                    else
+                      "";
                   proxyConfig =
                     if redirect != null then
                       ''
@@ -264,7 +296,7 @@
                     else
                       ''
                         ${noCacheHeaders}
-                        reverse_proxy http://${ip}:${toString port}
+                        reverse_proxy ${upstreamScheme}://${ip}:${toString port}${upstreamTransport}
                       '';
                 in
                 if forceHttps then
@@ -432,23 +464,13 @@
         # When a center is configured, also publish
         # `${name}.${otherHost}.${center}.${baseDomain}` mappings
         # pointing at the center's WG IP for every service on every
-        # non-center host.
-        # Suffix appended to short `${name}.${otherHost}` / `${port}.${otherHost}`
-        # labels to form the center-proxied FQDN. Mirrors the vhost names
-        # generated above when this host is the center.
+        # non-center host. Mirrors the vhost names generated above
+        # when this host is the center.
         centerSuffix = lib.optionalString (center != null) "${center}.${baseDomain}";
         centerAliasLines = lib.optionals (center != null) (
           lib.concatMap (
             hostname:
-            lib.concatMap (
-              { name, port, ... }:
-              [
-                "${centerWgIp} ${name}.${hostname}.${centerSuffix}"
-              ]
-              ++ lib.optionals (port != null) [
-                "${centerWgIp} ${toString port}.${hostname}.${centerSuffix}"
-              ]
-            ) allServices.${hostname}
+            map ({ name, ... }: "${centerWgIp} ${name}.${hostname}.${centerSuffix}") allServices.${hostname}
           ) (lib.filter (h: h != center) allHosts)
         );
       in
@@ -462,15 +484,7 @@
           [
             "${wgIp} ${baseHost}"
           ]
-          ++ (lib.concatMap (
-            { name, port, ... }:
-            [
-              "${wgIp} ${name}.${baseHost}"
-            ]
-            ++ lib.optionals (port != null) [
-              "${wgIp} ${toString port}.${baseHost}"
-            ]
-          ) allServices.${hostname})
+          ++ (map ({ name, ... }: "${wgIp} ${name}.${baseHost}") allServices.${hostname})
         ) allHosts)
         ++ centerAliasLines
       );

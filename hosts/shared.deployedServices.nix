@@ -30,6 +30,19 @@
             name = "zigbee2mqtt";
             port = 8080;
           }
+          {
+            # UniFi gateway (router) web UI on 192.168.1.1:443. The
+            # upstream uses TLS with a self-signed cert, so the proxy
+            # must speak https and skip cert verification.
+            name = "unifi";
+            ip = "192.168.1.1";
+            port = 443;
+            upstreamScheme = "https";
+            upstreamSkipTlsVerify = true;
+            # UniFi serves its own redirect loops if probed at "/",
+            # and the cert is self-signed; keep it out of blackbox.
+            excludeFromMonitoring = true;
+          }
           # {
           #   name = "node-red";
           #   port = 1880;
