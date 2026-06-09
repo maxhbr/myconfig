@@ -48,7 +48,7 @@ in
         }
       )
       (
-        { config, ... }:
+        { config, pkgs, ... }:
         {
           programs.mr = {
             enable = lib.mkDefault true;
@@ -73,6 +73,31 @@ in
                 checkout = "git clone https://github.com/nix-community/home-manager";
                 update = "git pull --rebase";
               };
+            };
+          };
+
+          systemd.user.services.mr-update-nixos = {
+            Unit = {
+              Description = "Run mr update in ~/myconfig/nixos/";
+            };
+            Service = {
+              Type = "oneshot";
+              WorkingDirectory = "${config.home.homeDirectory}/myconfig/nixos";
+              ExecStart = "${pkgs.mr}/bin/mr update";
+            };
+          };
+
+          systemd.user.timers.mr-update-nixos = {
+            Unit = {
+              Description = "Daily mr update in ~/myconfig/nixos/ at 04:00";
+            };
+            Timer = {
+              OnCalendar = "*-*-* 04:00:00";
+              RandomizedDelaySec = "30m";
+              Persistent = true;
+            };
+            Install = {
+              WantedBy = [ "timers.target" ];
             };
           };
         }
