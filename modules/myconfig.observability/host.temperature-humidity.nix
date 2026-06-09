@@ -164,6 +164,11 @@ let
   thDashboard = {
     uid = "myconfig-temperature-humidity";
     title = "Temperature & humidity";
+    tags = [
+      "myconfig"
+      "environment"
+      "temperature-humidity"
+    ];
     schemaVersion = 39;
     version = 1;
     timezone = "browser";

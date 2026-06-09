@@ -1116,6 +1116,11 @@ let
   scrapeHealthDashboard = {
     uid = "myconfig-scrape-health";
     title = "Scrape health";
+    tags = [
+      "myconfig"
+      "observability"
+      "scrape-health"
+    ];
     schemaVersion = 39;
     version = 1;
     timezone = "browser";

@@ -166,6 +166,11 @@ let
   weatherDashboard = {
     uid = "myconfig-weather";
     title = "Outdoor weather";
+    tags = [
+      "myconfig"
+      "environment"
+      "weather"
+    ];
     schemaVersion = 39;
     version = 1;
     timezone = "browser";

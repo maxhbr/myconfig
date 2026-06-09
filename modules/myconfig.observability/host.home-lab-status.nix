@@ -540,6 +540,11 @@ let
   homeLabDashboard = {
     uid = "myconfig-home-lab-status";
     title = "Home-lab status";
+    tags = [
+      "myconfig"
+      "home-lab"
+      "status"
+    ];
     schemaVersion = 39;
     version = 1;
     timezone = "browser";

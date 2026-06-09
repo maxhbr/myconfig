@@ -17,6 +17,7 @@ in
     ./host.home-lab-status.nix
     ./host.host-status.nix
     ./host.scrape-health.nix
+    ./host.victoriametrics.nix
     ./host.litellm.nix
     ./host.power.nix
     ./host.co2.nix

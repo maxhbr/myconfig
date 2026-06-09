@@ -177,6 +177,11 @@ let
   dcgmDashboard = {
     uid = "myconfig-dcgm";
     title = "NVIDIA GPU (DCGM)";
+    tags = [
+      "myconfig"
+      "gpu"
+      "nvidia"
+    ];
     schemaVersion = 39;
     version = 1;
     timezone = "browser";

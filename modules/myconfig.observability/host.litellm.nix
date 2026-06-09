@@ -29,6 +29,11 @@ let
   litellmDashboard = {
     uid = "myconfig-litellm";
     title = "LiteLLM";
+    tags = [
+      "myconfig"
+      "llm"
+      "litellm"
+    ];
     schemaVersion = 39;
     version = 1;
     timezone = "browser";

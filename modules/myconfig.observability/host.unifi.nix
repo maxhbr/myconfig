@@ -142,6 +142,17 @@ in
   options.myconfig.observability.host.unifi = with lib; {
     enable = mkEnableOption "myconfig.observability.host.unifi (unpoller → vmagent → VictoriaMetrics → Grafana)";
 
+    user = mkOption {
+      type = types.str;
+      default = "unpoller";
+      description = ''
+        Username of the local read-only UniFi admin used by unpoller
+        to authenticate against the controller API (see module header
+        for the UI-side setup procedure). Must match the account
+        whose password is provided via `passwordFile`.
+      '';
+    };
+
     passwordFile = mkOption {
       type = types.path;
       default = pkgs.writeText "unifi-unpoller-default.password" "unsafe:CHANGE_ME";
@@ -178,7 +189,7 @@ in
       controllers = [
         {
           url = "https://192.168.1.1";
-          user = "unpoller";
+          user = unifiCfg.user;
           # The upstream module's `pass` option wraps the value as
           # `file://<absolute-path>` for unpoller to read at runtime.
           pass = unifiCfg.passwordFile;

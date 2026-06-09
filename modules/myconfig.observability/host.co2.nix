@@ -87,6 +87,11 @@ let
   co2Dashboard = {
     uid = "myconfig-co2";
     title = "Indoor CO2 & temperature";
+    tags = [
+      "myconfig"
+      "environment"
+      "co2"
+    ];
     schemaVersion = 39;
     version = 1;
     timezone = "browser";

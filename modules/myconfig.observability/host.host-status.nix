@@ -675,6 +675,11 @@ let
   hostStatusDashboard = {
     uid = "myconfig-host-status";
     title = "Host status";
+    tags = [
+      "myconfig"
+      "host"
+      "status"
+    ];
     schemaVersion = 39;
     version = 1;
     timezone = "browser";

@@ -45,6 +45,11 @@ let
   llamaDashboard = {
     uid = "myconfig-llama-server";
     title = "Llama-server models";
+    tags = [
+      "myconfig"
+      "llm"
+      "llama-server"
+    ];
     schemaVersion = 39;
     version = 2;
     timezone = "browser";

@@ -71,6 +71,11 @@ let
   logsDashboard = {
     uid = "myconfig-logs";
     title = "Logs overview";
+    tags = [
+      "myconfig"
+      "logs"
+      "loki"
+    ];
     schemaVersion = 39;
     version = 1;
     timezone = "browser";

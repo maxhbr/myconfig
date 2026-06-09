@@ -694,6 +694,11 @@ let
   powerDashboard = {
     uid = "myconfig-power";
     title = "Power usage";
+    tags = [
+      "myconfig"
+      "power"
+      "energy"
+    ];
     schemaVersion = 39;
     version = 1;
     timezone = "browser";

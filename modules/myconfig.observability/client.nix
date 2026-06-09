@@ -100,6 +100,37 @@ in
             ];
           }
         ]
+        # When VictoriaMetrics is running on this host, scrape its own
+        # `/metrics` endpoint so we can track on-disk size
+        # (`vm_data_size_bytes`), free disk space
+        # (`vm_free_disk_space_bytes`), row counts and ingest rates from
+        # the perspective of the TSDB itself. The dashboard provisioned
+        # in host.victoriametrics.nix relies on this job being present.
+        ++ lib.optionals config.services.victoriametrics.enable [
+          {
+            job_name = "victoriametrics";
+            # VictoriaMetrics is bound to the WireGuard IP (see
+            # host.nix), but it also listens on the same port locally.
+            # Scrape over localhost to avoid going through the
+            # firewall and to keep credentials off the wire.
+            scheme = "http";
+            basic_auth = {
+              username = cfg.basicAuthUsername;
+              password_file = toString cfg.basicAuthPasswordFile;
+            };
+            static_configs = [
+              {
+                targets = [
+                  # services.victoriametrics.listenAddress is
+                  # `<wgIp>:<port>`, so reuse it verbatim — the
+                  # scrape goes over the WG interface but stays
+                  # local to the host.
+                  config.services.victoriametrics.listenAddress
+                ];
+              }
+            ];
+          }
+        ]
         ++ lib.optionals config.services.litellm.enable (
           let
             # `host` may be a wildcard (e.g. "0.0.0.0") for external exposure;
