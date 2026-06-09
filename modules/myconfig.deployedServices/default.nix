@@ -271,22 +271,32 @@
                       -Last-Modified
                     }
                   '';
-                  # When proxying to an HTTPS upstream with a
-                  # self-signed cert (e.g. UniFi appliances), we need a
-                  # `transport http { tls; tls_insecure_skip_verify }`
-                  # block. For plain http upstreams or trusted https
-                  # upstreams, no transport block is needed.
-                  upstreamTransport =
-                    if upstreamScheme == "https" && upstreamSkipTlsVerify then
-                      ''
-                         {
-                          transport http {
-                            tls
-                            tls_insecure_skip_verify
-                          }
-                        }''
-                    else
-                      "";
+                  # When proxying to an HTTPS upstream we rewrite the
+                  # Host, Origin and Referer headers to the upstream's
+                  # own hostport. UniFi gateways (and most appliances
+                  # with hard-coded internal FQDNs / IPs) validate
+                  # these on WebSocket upgrades for CSRF, so without
+                  # the rewrite e.g. `wss://.../api/ws/webrtc/local`
+                  # fails the handshake.
+                  #
+                  # When the upstream cert is self-signed we also need
+                  # `tls_insecure_skip_verify` inside the transport
+                  # block.
+                  proxyBlockLines =
+                    lib.optionals (upstreamScheme == "https") [
+                      "header_up Host {upstream_hostport}"
+                      "header_up Origin ${upstreamScheme}://{upstream_hostport}"
+                      "header_up Referer ${upstreamScheme}://{upstream_hostport}{uri}"
+                    ]
+                    ++ lib.optionals (upstreamScheme == "https" && upstreamSkipTlsVerify) [
+                      "transport http {"
+                      "  tls"
+                      "  tls_insecure_skip_verify"
+                      "}"
+                    ];
+                  proxyBlock =
+                    lib.optionalString (proxyBlockLines != [ ])
+                      " {\n${lib.concatMapStringsSep "\n" (l: "  ${l}") proxyBlockLines}\n}";
                   proxyConfig =
                     if redirect != null then
                       ''
@@ -296,7 +306,7 @@
                     else
                       ''
                         ${noCacheHeaders}
-                        reverse_proxy ${upstreamScheme}://${ip}:${toString port}${upstreamTransport}
+                        reverse_proxy ${upstreamScheme}://${ip}:${toString port}${proxyBlock}
                       '';
                 in
                 if forceHttps then
