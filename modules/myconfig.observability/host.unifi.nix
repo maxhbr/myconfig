@@ -232,6 +232,9 @@ in
           type = "file";
           disableDeletion = true;
           updateIntervalSeconds = 60;
+          # Group these dashboards under a "Unifi" folder in the
+          # Grafana UI sidebar (created on first sync if missing).
+          folder = "Unifi";
           options.path = dashboardsDir;
         }
       ];

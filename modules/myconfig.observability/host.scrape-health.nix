@@ -1120,6 +1120,7 @@ let
       "myconfig"
       "observability"
       "scrape-health"
+      "meta"
     ];
     schemaVersion = 39;
     version = 1;
@@ -1191,6 +1192,9 @@ in
           type = "file";
           disableDeletion = true;
           updateIntervalSeconds = 60;
+          # Group meta-dashboards (dashboards about the observability
+          # pipeline itself) under a "Meta" folder in the Grafana UI.
+          folder = "Meta";
           options.path = pkgs.runCommand "scrape-health-dashboards" { } ''
             mkdir -p $out
             cp ${scrapeHealthDashboardFile} $out/scrape-health.json
