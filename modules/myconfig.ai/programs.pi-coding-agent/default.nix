@@ -27,9 +27,7 @@ let
       value = {
         inherit name baseUrl;
         api = "openai-completions";
-        # Pi requires apiKey when models are provided. Use a literal dummy
-        # since the local servers don't validate it.
-        apiKey = "DUMMY_API_KEY";
+        apiKey = "dummy";
         authHeader = false;
         models = lib.map (modelId: {
           id = modelId;
