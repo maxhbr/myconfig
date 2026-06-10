@@ -112,10 +112,24 @@ let
   };
 
   # Build a single `[<model.name>]` section.
+  #
+  # The `tags` key is llama-server's first-class `--tags` flag — a
+  # comma-separated string that llama-server splits into the per-
+  # model `tags[]` array surfaced in `GET /v1/models`. We assemble a
+  # list of tags here and join with "," at emission time so a future
+  # caller can add more tags without restructuring the schema. The
+  # only tag we currently produce is the `_kind` computed by
+  # `lib/variants.nix:unpackContainedVariants` ("base" or "variant"),
+  # so external tools can distinguish a top-level model from a
+  # variants.<n>-generated one without re-parsing the name. Aliases
+  # don't get their own section (llama-server registers them via the
+  # `alias = ` key of the parent section) — they piggyback on the
+  # parent's tags.
   sectionFor =
     m:
     let
       translated = router.translateParamsToIni m.params;
+      tagsList = lib.optional (m ? _kind && m._kind != null) m._kind;
       keys = {
         model = m.path;
       }
@@ -128,6 +142,7 @@ let
       }
       // lib.optionalAttrs (m.parallel > 1) { parallel = m.parallel; }
       // lib.optionalAttrs (m.aliases != [ ]) { alias = lib.concatStringsSep "," m.aliases; }
+      // lib.optionalAttrs (tagsList != [ ]) { tags = lib.concatStringsSep "," tagsList; }
       // translated.keys;
     in
     {
