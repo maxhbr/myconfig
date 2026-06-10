@@ -44,6 +44,7 @@ let
 
   hasGpuVariant = devices.mkHasGpuVariant { inherit config options; };
   guardDevice = devices.mkGuardDevice hasGpuVariant;
+  inherit (devices) backendForDevice;
 
   unpackedModels = variants.unpackModels cfg.models;
 
@@ -125,12 +126,28 @@ let
   aliasLineageTags = m: [ m.name ] ++ modelLineageTags m;
 
   # Final `tags` list published for a model entry: lineage first, then
-  # the user-provided tags (already pre-merged with the parent's tags
-  # in `lib/variants.nix` for variants), deduped while preserving the
+  # the device's llama.cpp backend ("cuda" / "rocm" / "vulkan", from
+  # `devices.backendForDevice`) so tag-based routing can pin requests
+  # to a specific backend without parsing the device string, then the
+  # user-provided tags (already pre-merged with the parent's tags in
+  # `lib/variants.nix` for variants). Deduped while preserving the
   # first occurrence. Aliases reuse this with the alias-specific
-  # lineage.
-  modelTags = m: lib.unique (modelLineageTags m ++ (m._userTags or [ ]));
-  aliasTags = m: lib.unique (aliasLineageTags m ++ (m._userTags or [ ]));
+  # lineage. `device` is the resolved llama-cpp device string
+  # (e.g. "CUDA0") that this entry is being served on.
+  modelTags =
+    device: m:
+    lib.unique (
+      modelLineageTags m
+      ++ (lib.optional (backendForDevice device != null) (backendForDevice device))
+      ++ (m._userTags or [ ])
+    );
+  aliasTags =
+    device: m:
+    lib.unique (
+      aliasLineageTags m
+      ++ (lib.optional (backendForDevice device != null) (backendForDevice device))
+      ++ (m._userTags or [ ])
+    );
 
   # Build a single `[<model.name>]` section.
   #
@@ -145,7 +162,9 @@ let
   #     so external tools can distinguish a top-level model from a
   #     variants.<n>-generated one without re-parsing the name;
   #   - lineage tags (`modelLineageTags`): a variant additionally
-  #     carries the name of its base model; and
+  #     carries the name of its base model;
+  #   - the llama.cpp backend for `device` ("cuda" / "rocm" / "vulkan"),
+  #     for backend-aware tag routing; and
   #   - user-provided `tags` from the model declaration (merged with
   #     the parent's `tags` for variants — see `lib/variants.nix`).
   # Aliases don't get their own section (llama-server registers them
@@ -155,12 +174,14 @@ let
   # `myconfig.ai.localModels` below; the user-tag portion is identical
   # to the parent's.
   sectionFor =
-    m:
+    device: m:
     let
       translated = router.translateParamsToIni m.params;
+      backendTag = backendForDevice device;
       tagsList = lib.unique (
         (lib.optional (m ? _kind && m._kind != null) m._kind)
         ++ (modelLineageTags m)
+        ++ (lib.optional (backendTag != null) backendTag)
         ++ (m._userTags or [ ])
       );
       keys = {
@@ -189,7 +210,7 @@ let
   # `services.llama-cpp.modelsPreset` attrset.
   iniDataForDevice = device: {
     globals = globalKeys;
-    sections = map sectionFor (modelsForDevice device);
+    sections = map (sectionFor device) (modelsForDevice device);
   };
 
   iniForDevice =
@@ -252,14 +273,14 @@ let
     (map (m: {
       name = m.name;
       kind = m._kind;
-      tags = modelTags m;
+      tags = modelTags serviceDevice m;
     }) serviceModels)
     ++ (lib.concatMap (
       m:
       map (a: {
         name = a;
         kind = "alias";
-        tags = aliasTags m;
+        tags = aliasTags serviceDevice m;
       }) m.aliases
     ) serviceModels);
 

@@ -79,4 +79,21 @@ in
       m = builtins.match ".*([0-9]+)$" device;
     in
     if m != null then builtins.head m else device;
+
+  # Lowercase backend name for a device string. Used by the publishers
+  # (router.nix, llama-swap.nix) to tag every model entry with the
+  # llama.cpp backend it runs on, so tag-based routing / observability
+  # can filter on "cuda" vs "rocm" vs "vulkan" without inspecting the
+  # raw device string. Returns null for unrecognised devices so
+  # callers can `lib.optional` it cleanly.
+  backendForDevice =
+    device:
+    if lib.hasPrefix "Vulkan" device then
+      "vulkan"
+    else if lib.hasPrefix "ROCm" device then
+      "rocm"
+    else if lib.hasPrefix "CUDA" device then
+      "cuda"
+    else
+      null;
 }

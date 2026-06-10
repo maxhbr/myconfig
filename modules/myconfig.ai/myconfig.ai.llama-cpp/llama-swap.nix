@@ -29,7 +29,7 @@ let
 
   hasGpuVariant = llamaLib.devices.mkHasGpuVariant { inherit config options; };
   guardDevice = llamaLib.devices.mkGuardDevice hasGpuVariant;
-  inherit (llamaLib.devices) deviceIndex;
+  inherit (llamaLib.devices) deviceIndex backendForDevice;
   inherit (scripts) mkLlamaScript mkLlamaBenchScript mkLlamaBenchAggregate;
 
   unpackedModels = variants.unpackModels cfg.models;
@@ -236,12 +236,31 @@ let
   aliasLineageTags = m: [ m.name ] ++ modelLineageTags m;
 
   # Final `tags` list published for a model entry: lineage first, then
-  # the user-provided tags (already pre-merged with the parent's tags
-  # in `lib/variants.nix` for variants), deduped while preserving the
+  # the device's llama.cpp backend ("cuda" / "rocm" / "vulkan", from
+  # `backendForDevice`) so tag-based routing can pin requests to a
+  # specific backend without parsing the device string, then the
+  # user-provided tags (already pre-merged with the parent's tags in
+  # `lib/variants.nix` for variants). Deduped while preserving the
   # first occurrence. Aliases reuse this with the alias-specific
-  # lineage.
-  modelTags = m: lib.unique (modelLineageTags m ++ (m._userTags or [ ]));
-  aliasTags = m: lib.unique (aliasLineageTags m ++ (m._userTags or [ ]));
+  # lineage. `device` is the resolved llama-cpp device string
+  # (e.g. "CUDA0") that this entry is being served on. For aliases —
+  # which only register on the firstDevice (see `mkModelEntry`) — we
+  # use the firstDevice of the model's `devices` list to derive the
+  # backend tag.
+  modelTags =
+    device: m:
+    lib.unique (
+      modelLineageTags m
+      ++ (lib.optional (backendForDevice device != null) (backendForDevice device))
+      ++ (m._userTags or [ ])
+    );
+  aliasTags =
+    device: m:
+    lib.unique (
+      aliasLineageTags m
+      ++ (lib.optional (backendForDevice device != null) (backendForDevice device))
+      ++ (m._userTags or [ ])
+    );
 
   mkModelEntriesForDevices =
     { model, devices }:
@@ -254,10 +273,23 @@ let
         {
           name = if device == firstDevice then model.name else "${device}:${model.name}";
           kind = model._kind;
-          tags = modelTags model;
+          tags = modelTags device model;
         }
       ]
     ) devices;
+
+  # Pick the device whose backend tag should be attached to a model's
+  # aliases. llama-swap only registers each alias on the
+  # firstDevice entry of `model.devices` (see `mkModelEntry`), so the
+  # alias is reachable on whichever backend that device names. Fall
+  # back to the first `unlistedDevices` entry if `devices` is empty.
+  aliasDeviceForModel =
+    model:
+    let
+      ds = model.devices ++ model.unlistedDevices;
+      guarded = builtins.filter guardDevice ds;
+    in
+    if guarded != [ ] then builtins.head guarded else null;
 
   allModelEntries = lib.concatMap (
     model:
@@ -272,7 +304,7 @@ let
     ++ (map (a: {
       name = a;
       kind = "alias";
-      tags = aliasTags model;
+      tags = aliasTags (aliasDeviceForModel model) model;
     }) model.aliases)
   ) unpackedModels;
 in
