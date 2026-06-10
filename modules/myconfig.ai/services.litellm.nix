@@ -138,22 +138,29 @@
                 #     no classification (e.g. shared.localModels.litellm.nix);
                 #     emit only the prefixed form.
                 modelKind = if lib.isAttrs modelEntry then (modelEntry.kind or null) else null;
+                # `litellm_params.tags` is LiteLLM's standard tag field
+                # (used by tag-based routing and surfaced on
+                # /model/info). Mirror the localModels kind here so
+                # downstream tools can filter on base/variant/alias
+                # without re-parsing the model name.
+                litellmParams = {
+                  model = "openai/${modelName}";
+                  api_base = "http://${hostPort}/v1";
+                  api_key = "not-needed";
+                  request = {
+                    allowPrivateNetwork = true;
+                  };
+                }
+                // lib.optionalAttrs (modelKind != null) { tags = [ modelKind ]; };
                 entry = {
                   model_name = "${providerName}:${modelName}";
-                  litellm_params = {
-                    model = "openai/${modelName}";
-                    api_base = "http://${hostPort}/v1";
-                    api_key = "not-needed";
-                    request = {
-                      allowPrivateNetwork = true;
-                    };
-                  };
+                  litellm_params = litellmParams;
                 };
               in
               [ entry ]
               ++ lib.optional (modelKind == "alias") {
                 model_name = modelName;
-                litellm_params = entry.litellm_params;
+                litellm_params = litellmParams;
               }
             ) modelNames
           ) config.myconfig.ai.localModels
