@@ -212,14 +212,36 @@ let
   # --- localModels names ------------------------------------------------
   #
   # Each unpacked model contributes:
-  #   - one `{ name = ...; kind = m._kind; }` entry per device it runs on
+  #   - one `{ name; kind; tags; }` entry per device it runs on
   #     (firstDevice is unprefixed; subsequent devices get a "<dev>:" prefix
   #     so they remain distinct in the published list). `_kind` is "base"
   #     or "variant", propagated from `lib/variants.nix:unpackContainedVariants`.
-  #   - one `{ name = alias; kind = "alias"; }` entry per declared alias.
-  #     llama-swap itself only registers aliases against the first-device
-  #     entry (see `mkModelEntry`), but the alias is still resolvable on
-  #     the served port, so we publish it once at the registry level.
+  #     Lineage `tags`:
+  #       - base    -> []
+  #       - variant -> [ _baseName ]
+  #   - one `{ name = alias; kind = "alias"; tags; }` entry per declared
+  #     alias. llama-swap itself only registers aliases against the
+  #     first-device entry (see `mkModelEntry`), but the alias is still
+  #     resolvable on the served port, so we publish it once at the
+  #     registry level. Lineage `tags` for the alias depend on its parent:
+  #       - alias of base    -> [ <base.name> ]
+  #       - alias of variant -> [ <variant.name>, <base.name> ]
+
+  # Lineage tags for a model entry itself (not for its aliases).
+  modelLineageTags = m: if m._kind == "variant" then [ m._baseName ] else [ ];
+
+  # Lineage tags for an alias of a model: the model's own name first,
+  # then (only for a variant parent) the base it came from. This gives
+  # an alias of a variant two tags; an alias of a base just one.
+  aliasLineageTags = m: [ m.name ] ++ modelLineageTags m;
+
+  # Final `tags` list published for a model entry: lineage first, then
+  # the user-provided tags (already pre-merged with the parent's tags
+  # in `lib/variants.nix` for variants), deduped while preserving the
+  # first occurrence. Aliases reuse this with the alias-specific
+  # lineage.
+  modelTags = m: lib.unique (modelLineageTags m ++ (m._userTags or [ ]));
+  aliasTags = m: lib.unique (aliasLineageTags m ++ (m._userTags or [ ]));
 
   mkModelEntriesForDevices =
     { model, devices }:
@@ -232,6 +254,7 @@ let
         {
           name = if device == firstDevice then model.name else "${device}:${model.name}";
           kind = model._kind;
+          tags = modelTags model;
         }
       ]
     ) devices;
@@ -249,6 +272,7 @@ let
     ++ (map (a: {
       name = a;
       kind = "alias";
+      tags = aliasTags model;
     }) model.aliases)
   ) unpackedModels;
 in

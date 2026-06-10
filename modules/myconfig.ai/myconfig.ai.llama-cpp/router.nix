@@ -111,25 +111,58 @@ let
     timeout = 600;
   };
 
+  # Lineage tags for a model entry itself (not for its aliases).
+  # `_baseName` and `_kind` come from
+  # `lib/variants.nix:unpackContainedVariants`:
+  #   - base    -> []
+  #   - variant -> [ _baseName ]
+  modelLineageTags = m: lib.optional (m._kind or null == "variant") m._baseName;
+
+  # Lineage tags for an alias of a model: the parent's own name
+  # first, then (only when the parent is a variant) the base it came
+  # from. An alias of a base gets one tag; an alias of a variant gets
+  # two.
+  aliasLineageTags = m: [ m.name ] ++ modelLineageTags m;
+
+  # Final `tags` list published for a model entry: lineage first, then
+  # the user-provided tags (already pre-merged with the parent's tags
+  # in `lib/variants.nix` for variants), deduped while preserving the
+  # first occurrence. Aliases reuse this with the alias-specific
+  # lineage.
+  modelTags = m: lib.unique (modelLineageTags m ++ (m._userTags or [ ]));
+  aliasTags = m: lib.unique (aliasLineageTags m ++ (m._userTags or [ ]));
+
   # Build a single `[<model.name>]` section.
   #
   # The `tags` key is llama-server's first-class `--tags` flag — a
   # comma-separated string that llama-server splits into the per-
   # model `tags[]` array surfaced in `GET /v1/models`. We assemble a
   # list of tags here and join with "," at emission time so a future
-  # caller can add more tags without restructuring the schema. The
-  # only tag we currently produce is the `_kind` computed by
-  # `lib/variants.nix:unpackContainedVariants` ("base" or "variant"),
-  # so external tools can distinguish a top-level model from a
-  # variants.<n>-generated one without re-parsing the name. Aliases
-  # don't get their own section (llama-server registers them via the
-  # `alias = ` key of the parent section) — they piggyback on the
-  # parent's tags.
+  # caller can add more tags without restructuring the schema. Tags
+  # emitted in order, deduped:
+  #   - the `_kind` computed by
+  #     `lib/variants.nix:unpackContainedVariants` ("base" / "variant"),
+  #     so external tools can distinguish a top-level model from a
+  #     variants.<n>-generated one without re-parsing the name;
+  #   - lineage tags (`modelLineageTags`): a variant additionally
+  #     carries the name of its base model; and
+  #   - user-provided `tags` from the model declaration (merged with
+  #     the parent's `tags` for variants — see `lib/variants.nix`).
+  # Aliases don't get their own section (llama-server registers them
+  # via the `alias = ` key of the parent section) — they piggyback on
+  # the parent's INI tags. Their lineage tag set (which includes the
+  # parent's name on top of the base) is published separately via
+  # `myconfig.ai.localModels` below; the user-tag portion is identical
+  # to the parent's.
   sectionFor =
     m:
     let
       translated = router.translateParamsToIni m.params;
-      tagsList = lib.optional (m ? _kind && m._kind != null) m._kind;
+      tagsList = lib.unique (
+        (lib.optional (m ? _kind && m._kind != null) m._kind)
+        ++ (modelLineageTags m)
+        ++ (m._userTags or [ ])
+      );
       keys = {
         model = m.path;
       }
@@ -207,18 +240,28 @@ let
   #
   # `_kind` was attached to each unpacked model by
   # `lib/variants.nix:unpackContainedVariants` ("base" or "variant").
-  # Aliases are emitted here as additional `{ name; kind = "alias"; }`
+  # Aliases are emitted here as additional `{ name; kind = "alias"; tags; }`
   # entries — they have no llama-cpp section of their own, they just
   # piggyback on a base/variant via llama-server's `alias = ` INI key.
+  # Lineage `tags`:
+  #   - base    -> []
+  #   - variant -> [ <baseName> ]
+  #   - alias of base    -> [ <base.name> ]
+  #   - alias of variant -> [ <variant.name>, <base.name> ]
   serviceLocalModelsEntries =
     (map (m: {
       name = m.name;
       kind = m._kind;
+      tags = modelTags m;
     }) serviceModels)
-    ++ (map (a: {
-      name = a;
-      kind = "alias";
-    }) (lib.unique (lib.concatMap (m: m.aliases) serviceModels)));
+    ++ (lib.concatMap (
+      m:
+      map (a: {
+        name = a;
+        kind = "alias";
+        tags = aliasTags m;
+      }) m.aliases
+    ) serviceModels);
 
   serviceModelsPreset =
     if isLlamaServerService then router.toModelsPreset (iniDataForDevice serviceDevice) else null;

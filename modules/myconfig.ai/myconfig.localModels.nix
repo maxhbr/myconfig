@@ -50,6 +50,37 @@
                           llama-swap.nix) and should not be set by hand.
                         '';
                       };
+                      tags = mkOption {
+                        type = types.listOf types.str;
+                        default = [ ];
+                        description = ''
+                          Tags for this model entry. Lineage tags come first
+                          (bare model names this entry derives from, ordered
+                          from nearest parent to ultimate base model),
+                          followed by any user-provided tags declared on the
+                          source model (and merged with the variant's own
+                          tags for variants). The combined list is
+                          deduplicated while preserving the first occurrence.
+                          Computed by the publisher (router.nix /
+                          llama-swap.nix); should not be set by hand.
+
+                          Lineage conventions:
+                            - kind = "base":    lineage = [ ]
+                                                (a base has no parent)
+                            - kind = "variant": lineage = [ <baseName> ]
+                                                (the base it was generated from)
+                            - kind = "alias" of a base:    lineage = [ <baseName> ]
+                            - kind = "alias" of a variant: lineage = [ <variantName>, <baseName> ]
+                                                (parent variant first, then the base
+                                                that variant was generated from)
+                            - kind = null:      lineage = [ ]
+                                                (upstream-provided, no lineage info)
+
+                          User tags propagate from the source model to every
+                          derived entry: the base itself, all of its variants,
+                          and every alias attached to either.
+                        '';
+                      };
                     };
                   })
                 ]

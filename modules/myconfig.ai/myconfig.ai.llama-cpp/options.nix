@@ -42,6 +42,24 @@ let
         default = [ ];
         description = "Aliases for this model in llama-swap";
       };
+      tags = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = ''
+          User-provided tags for this model. Propagated by the
+          publishers (router.nix / llama-swap.nix) to every entry
+          derived from this model: the unpacked base entry, every
+          variant generated from it (after the variant's own
+          `tags`), and every alias (base- or variant-attached).
+
+          These are merged with the computed classification tag
+          (`base` / `variant`) and lineage tags (the parent model
+          names) into a single deduplicated list, both in the
+          llama-server `tags=` INI key and in the
+          `myconfig.ai.localModels.<provider>.models[*].tags` field
+          surfaced to downstream tools.
+        '';
+      };
       ttl = mkOption {
         type = types.int;
         default = 300;
@@ -114,6 +132,17 @@ let
                 type = types.listOf types.str;
                 default = [ ];
                 description = "Aliases for this model in llama-swap";
+              };
+              tags = mkOption {
+                type = types.listOf types.str;
+                default = [ ];
+                description = ''
+                  Additional user-provided tags for this variant.
+                  Appended to the parent model's `tags` to form the
+                  full user-tag set propagated to this variant entry
+                  and its aliases. See the parent model's `tags`
+                  option for the merge semantics.
+                '';
               };
               ctxSize = mkOption {
                 type = types.nullOr types.int;
