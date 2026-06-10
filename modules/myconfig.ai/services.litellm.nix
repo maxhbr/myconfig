@@ -125,7 +125,19 @@
               modelEntry:
               let
                 modelName = if lib.isAttrs modelEntry then modelEntry.name else modelEntry;
-                aliases = if lib.isAttrs modelEntry then modelEntry.aliases else [ ];
+                # Computed in router.nix / llama-swap.nix:
+                #   - "base" / "variant" -> a real llama-cpp model section,
+                #     published as `${providerName}:${modelName}`.
+                #   - "alias"            -> piggybacks on a base/variant
+                #     model. Additionally emit a bare `${modelName}`
+                #     litellm entry so callers can use the short form
+                #     across providers (this preserves the old
+                #     three-entries-per-alias behaviour where aliases
+                #     used to be nested under a parent model entry).
+                #   - null               -> upstream-provided name with
+                #     no classification (e.g. shared.localModels.litellm.nix);
+                #     emit only the prefixed form.
+                modelKind = if lib.isAttrs modelEntry then (modelEntry.kind or null) else null;
                 entry = {
                   model_name = "${providerName}:${modelName}";
                   litellm_params = {
@@ -138,28 +150,11 @@
                   };
                 };
               in
-              # Three entries per alias:
-              #   1. The canonical `<provider>:<modelName>` entry.
-              #   2. A bare `<alias>` entry (so callers can use the
-              #      short form when there is no provider collision).
-              #   3. A prefixed `<provider>:<alias>` entry so that
-              #      `model_group_alias` (and any consumer that wants
-              #      to pin a specific provider) can unambiguously
-              #      address an alias on a particular backend. This
-              #      mirrors the behaviour of the legacy llama-swap
-              #      backend, which published every alias as a
-              #      top-level model name on the swap instance.
               [ entry ]
-              ++ lib.concatMap (alias: [
-                {
-                  model_name = alias;
-                  litellm_params = entry.litellm_params;
-                }
-                {
-                  model_name = "${providerName}:${alias}";
-                  litellm_params = entry.litellm_params;
-                }
-              ]) aliases
+              ++ lib.optional (modelKind == "alias") {
+                model_name = modelName;
+                litellm_params = entry.litellm_params;
+              }
             ) modelNames
           ) config.myconfig.ai.localModels
         );

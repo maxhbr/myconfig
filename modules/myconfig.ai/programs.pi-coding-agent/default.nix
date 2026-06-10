@@ -51,7 +51,8 @@ let
     let
       hostPort = "${model.host}:${toString model.port}";
       providerName = if model.name != null then model.name else hostPort;
-      # localModels may contain strings or { name, aliases } submodules.
+      # localModels may contain strings or `{ name, kind ? null }`
+      # submodules (computed kind tag is unused here).
       modelNames =
         let
           raw = if model.models != [ ] then model.models else [ providerName ];

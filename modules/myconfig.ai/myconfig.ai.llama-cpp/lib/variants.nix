@@ -6,6 +6,15 @@
 # entries (`<name>` plus `<name>-<variantName>`).
 { lib }:
 let
+  # Each unpacked model entry carries a `_kind` tag that downstream
+  # publishers (router.nix, llama-swap.nix) propagate into
+  # `myconfig.ai.localModels` so consumers can distinguish the
+  # original ("base") model from a generated ("variant") one. The
+  # third localModels kind ("alias") is emitted later — at the
+  # publisher level — because aliases never have their own llama-cpp
+  # model entry, they are just additional names pointing at a
+  # base/variant model.
+  #
   # Write `params` (not `args`): every consumer (scripts.nix,
   # llama-swap.nix, router.nix) reads `model.params`. The earlier
   # `args = ...` was a typo that silently dropped per-variant `params`
@@ -15,6 +24,7 @@ let
     (builtins.removeAttrs model [ "variants" ])
     // {
       name = "${model.name}-${variantName}";
+      _kind = "variant";
       inherit (variant) aliases;
       params =
         model.params
@@ -28,7 +38,7 @@ let
 
   unpackContainedVariants =
     model:
-    [ (builtins.removeAttrs model [ "variants" ]) ]
+    [ ((builtins.removeAttrs model [ "variants" ]) // { _kind = "base"; }) ]
     ++ map (
       variantName:
       let

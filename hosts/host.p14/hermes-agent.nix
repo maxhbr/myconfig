@@ -47,7 +47,11 @@ let
             let
               hostPort = "${provider.host}:${toString provider.port}";
               providerName = if provider.name != null then provider.name else hostPort;
-              modelNames = if provider.models != [ ] then provider.models else [ providerName ];
+              rawModels = if provider.models != [ ] then provider.models else [ providerName ];
+              # localModels may contain plain strings or
+              # `{ name, kind ? null }` submodules (kind is computed by
+              # the publisher and unused here); flatten both shapes.
+              modelNames = lib.map (m: if builtins.isAttrs m then m.name else m) rawModels;
             in
             lib.map (modelName: {
               name = "${providerName} / ${modelName}";

@@ -101,8 +101,12 @@ in
                         hostPort = "${model.host}:${toString model.port}";
                         providerName = if model.name != null then model.name else hostPort;
                         # localModels may contain plain strings or
-                        # `{ name, aliases }` submodules; flatten both shapes
-                        # to a string list for the opencode `models` map.
+                        # `{ name, kind ? null }` submodules (`kind` is one
+                        # of "base"/"variant"/"alias"/null, computed by the
+                        # publisher); flatten both shapes to a string list
+                        # for the opencode `models` map. opencode treats
+                        # every name the same, so the kind tag is ignored
+                        # here.
                         rawModels = if model.models != [ ] then model.models else [ providerName ];
                         modelNames = lib.map (m: if builtins.isAttrs m then m.name else m) rawModels;
                       in

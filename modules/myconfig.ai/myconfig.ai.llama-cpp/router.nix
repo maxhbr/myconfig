@@ -184,14 +184,26 @@ let
   serviceModelNames = map (m: m.name) serviceModels;
   serviceModelAliases = lib.unique (lib.concatMap (m: m.aliases) serviceModels);
 
-  # `models` for myconfig.ai.localModels: one entry per model with its
-  # aliases attached. The service serves exactly one model at a time,
-  # but every section in the INI is selectable via the OpenAI `model`
-  # field, so we publish them all.
-  serviceLocalModelsEntries = map (m: {
-    name = m.name;
-    aliases = m.aliases;
-  }) serviceModels;
+  # `models` for myconfig.ai.localModels: one tagged entry per model,
+  # plus one tagged entry per alias (so consumers see every
+  # API-reachable name as a top-level model). The service serves
+  # exactly one model at a time, but every section in the INI is
+  # selectable via the OpenAI `model` field, so we publish them all.
+  #
+  # `_kind` was attached to each unpacked model by
+  # `lib/variants.nix:unpackContainedVariants` ("base" or "variant").
+  # Aliases are emitted here as additional `{ name; kind = "alias"; }`
+  # entries — they have no llama-cpp section of their own, they just
+  # piggyback on a base/variant via llama-server's `alias = ` INI key.
+  serviceLocalModelsEntries =
+    (map (m: {
+      name = m.name;
+      kind = m._kind;
+    }) serviceModels)
+    ++ (map (a: {
+      name = a;
+      kind = "alias";
+    }) (lib.unique (lib.concatMap (m: m.aliases) serviceModels)));
 
   serviceModelsPreset =
     if isLlamaServerService then router.toModelsPreset (iniDataForDevice serviceDevice) else null;

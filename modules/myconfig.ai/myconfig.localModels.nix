@@ -27,10 +27,28 @@
                         type = types.str;
                         description = "Model name";
                       };
-                      aliases = mkOption {
-                        type = types.listOf types.str;
-                        default = [ ];
-                        description = "List of alias names for the model";
+                      kind = mkOption {
+                        type = types.nullOr (
+                          types.enum [
+                            "base"
+                            "variant"
+                            "alias"
+                          ]
+                        );
+                        default = null;
+                        description = ''
+                          Derived classification of this model entry:
+                            - "base":    an unpacked top-level model entry (as declared by
+                                         the user in `myconfig.ai.llama-cpp.models`).
+                            - "variant": an entry synthesized from a `variants.<n>` block;
+                                         its `name` is `<base>-<n>`.
+                            - "alias":   an alternative name for a base/variant model, with
+                                         no llama-cpp entry of its own.
+                            - null:      classification unknown (e.g. for upstream provider
+                                         lists that don't carry this information).
+                          This field is computed by the publisher (router.nix /
+                          llama-swap.nix) and should not be set by hand.
+                        '';
                       };
                     };
                   })

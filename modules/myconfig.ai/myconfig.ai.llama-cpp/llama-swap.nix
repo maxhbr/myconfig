@@ -210,8 +210,18 @@ let
     );
 
   # --- localModels names ------------------------------------------------
+  #
+  # Each unpacked model contributes:
+  #   - one `{ name = ...; kind = m._kind; }` entry per device it runs on
+  #     (firstDevice is unprefixed; subsequent devices get a "<dev>:" prefix
+  #     so they remain distinct in the published list). `_kind` is "base"
+  #     or "variant", propagated from `lib/variants.nix:unpackContainedVariants`.
+  #   - one `{ name = alias; kind = "alias"; }` entry per declared alias.
+  #     llama-swap itself only registers aliases against the first-device
+  #     entry (see `mkModelEntry`), but the alias is still resolvable on
+  #     the served port, so we publish it once at the registry level.
 
-  mkModelNames =
+  mkModelEntriesForDevices =
     { model, devices }:
     let
       firstDevice = if devices != [ ] then builtins.head devices else null;
@@ -219,21 +229,27 @@ let
     lib.concatMap (
       device:
       lib.optionals (guardDevice device) [
-        (if device == firstDevice then model.name else "${device}:${model.name}")
+        {
+          name = if device == firstDevice then model.name else "${device}:${model.name}";
+          kind = model._kind;
+        }
       ]
     ) devices;
 
-  allModelNames = lib.concatMap (
+  allModelEntries = lib.concatMap (
     model:
-    mkModelNames {
+    mkModelEntriesForDevices {
       inherit model;
       devices = model.devices;
     }
-    ++ mkModelNames {
+    ++ mkModelEntriesForDevices {
       inherit model;
       devices = model.unlistedDevices;
     }
-    ++ model.aliases
+    ++ (map (a: {
+      name = a;
+      kind = "alias";
+    }) model.aliases)
   ) unpackedModels;
 in
 {
@@ -263,7 +279,7 @@ in
           {
             name =
               if cfg.serviceProviderName != null then cfg.serviceProviderName else "llama-swap-${toString port}";
-            models = allModelNames;
+            models = allModelEntries;
             port = port;
           }
         )
