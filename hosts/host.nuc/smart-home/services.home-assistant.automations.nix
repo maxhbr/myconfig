@@ -153,6 +153,121 @@ in
             }
           ];
         }
+        {
+          id = "start_tv";
+          alias = "Start TV";
+          description = "Start TV";
+          mode = "single";
+          triggers = [
+            {
+              trigger = "device";
+              domain = "mqtt";
+              device_id = "b6c71e3e8e32a626000c4b2d02b92701";
+              type = "action";
+              subtype = "single";
+              metadata = { };
+            }
+          ];
+          conditions = [ ];
+          actions = [
+            {
+              type = "turn_on";
+              device_id = "cd95b4bafcba5175d7da2de59fcaf278";
+              entity_id = "9c5be7577f2bebabc1b6a36b22cfedd9";
+              domain = "switch";
+            }
+            {
+              type = "turn_off";
+              device_id = "92d93babffd096fb5f398af883b6ee2c";
+              entity_id = "5d2126fae9ea142ee7152d6e3b5c3c63";
+              domain = "light";
+            }
+            {
+              type = "turn_off";
+              device_id = "0e33acb12394f87c8a0bb8196b7e264e";
+              entity_id = "a5d5cce4128eadb1c5a351e16ff0675e";
+              domain = "light";
+            }
+            {
+              type = "turn_off";
+              device_id = "95615f6f124bdb91c579209b3ffb3b9a";
+              entity_id = "84cc62db8aa3a40c2f746f4fe6cdfb0b";
+              domain = "light";
+            }
+            {
+              type = "brightness_decrease";
+              device_id = "b26f6249db2a8bca092185068d1a49e9";
+              entity_id = "c0bd08fd366f92f11003dc5327fbd852";
+              domain = "light";
+            }
+            {
+              type = "turn_off";
+              device_id = "2bc1aacf480c2db99dadd56c15febd98";
+              entity_id = "1e8c296f6dc0013bd587b4df2340b842";
+              domain = "light";
+            }
+          ];
+        }
+        {
+          id = "stop_tv";
+          alias = "Stop TV";
+          description = "Stop TV";
+          mode = "single";
+          triggers = [
+            {
+              trigger = "device";
+              domain = "mqtt";
+              device_id = "b6c71e3e8e32a626000c4b2d02b92701";
+              type = "action";
+              subtype = "long";
+            }
+          ];
+          conditions = [ ];
+          actions = [
+            {
+              type = "turn_off";
+              device_id = "cd95b4bafcba5175d7da2de59fcaf278";
+              entity_id = "9c5be7577f2bebabc1b6a36b22cfedd9";
+              domain = "switch";
+            }
+            {
+              type = "turn_off";
+              device_id = "b26f6249db2a8bca092185068d1a49e9";
+              entity_id = "c0bd08fd366f92f11003dc5327fbd852";
+              domain = "light";
+            }
+            {
+              type = "turn_off";
+              device_id = "18249ff79b00be7c1494666d5263948d";
+              entity_id = "c7d67b1de43e79890ff9a7655bdda1a5";
+              domain = "light";
+            }
+          ];
+        }
+        {
+          id = "boxen_on";
+          alias = "Boxen on";
+          description = "Boxen on";
+          mode = "single";
+          triggers = [
+            {
+              trigger = "device";
+              domain = "mqtt";
+              device_id = "b6c71e3e8e32a626000c4b2d02b92701";
+              type = "action";
+              subtype = "double";
+            }
+          ];
+          conditions = [ ];
+          actions = [
+            {
+              type = "turn_on";
+              device_id = "18249ff79b00be7c1494666d5263948d";
+              entity_id = "c7d67b1de43e79890ff9a7655bdda1a5";
+              domain = "light";
+            }
+          ];
+        }
       ];
       "automation ui" = "!include automations.yaml";
     };
