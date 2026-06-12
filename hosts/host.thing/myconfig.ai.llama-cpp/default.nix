@@ -196,7 +196,7 @@ in
                   {
                     name,
                     path,
-                    aliases,
+                    aliases ? [ ],
                     params ? [ ],
                     ...
                   }:
