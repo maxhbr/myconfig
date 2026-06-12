@@ -286,8 +286,7 @@ let
       }) m.aliases
     ) serviceModels);
 
-  serviceModelsPreset =
-    if isLlamaServerService then router.toModelsPreset (iniDataForDevice serviceDevice) else null;
+  serviceModelsPresetFile = if isLlamaServerService then iniForDevice serviceDevice else null;
 in
 {
   config = lib.mkMerge [
@@ -334,17 +333,13 @@ in
         # selects which backend that build uses. Hosts that need a
         # different package can set `services.llama-cpp.package`
         # explicitly with the usual mkForce / mkOverride mechanism.
-        host = cfg.serviceListenAddress;
-        port = cfg.servicePort;
         openFirewall = cfg.serviceOpenFirewall;
-        modelsPreset = serviceModelsPreset;
-        # `--models-max` is not a first-class option on the nixpkgs
-        # module; pass it through `extraFlags`. Defaults to 1 (the
-        # single-llama-server-per-device deployment).
-        extraFlags = [
-          "--models-max"
-          (toString rcfg.modelsMax)
-        ];
+        settings = {
+          host = cfg.serviceListenAddress;
+          port = cfg.servicePort;
+          models-preset = serviceModelsPresetFile;
+          models-max = rcfg.modelsMax;
+        };
       };
 
       # llama-server picks the device via $LLAMA_ARG_DEVICE.
