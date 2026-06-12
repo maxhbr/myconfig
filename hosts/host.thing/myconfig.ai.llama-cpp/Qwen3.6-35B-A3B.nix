@@ -70,6 +70,33 @@ in
 {
   rtxModels = [
     {
+      name = "Qwen3.6-35B-A3B-UD-IQ1_M";
+      path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-IQ1_M.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-IQ1_M.gguf" ];
+      };
+      ttl = 900;
+    }
+    {
+      name = "Qwen3.6-35B-A3B-UD-Q2_K_XL";
+      path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q2_K_XL.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q2_K_XL.gguf" ];
+      };
+      ttl = 900;
+    }
+    {
+      name = "Qwen3.6-35B-A3B-UD-Q3_K_XL";
+      path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q3_K_XL.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q3_K_XL.gguf" ];
+      };
+      ttl = 900;
+    }
+    {
       name = "Qwen3.6-35B-A3B-UD-Q5_K_XL";
       path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
       pull-models = {
