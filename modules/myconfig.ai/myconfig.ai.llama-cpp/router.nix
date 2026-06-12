@@ -110,6 +110,8 @@ let
     # tens of seconds at > 1 k tokens/s on 40 k-token contexts.
     # See https://github.com/ggml-org/llama.cpp/pull/22907
     timeout = 600;
+
+    sleep-idle-seconds = 1800;
   };
 
   # Lineage tags for a model entry itself (not for its aliases).

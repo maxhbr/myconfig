@@ -183,6 +183,27 @@ in
                           --class "Alacritty:${name}" \
                           --command "${tmuxSessionScript}" "$@"
                 '';
+              mkAlacrittySshSession =
+                host:
+                let
+                  scriptName = "alacritty-ssh-${host}-wg0";
+                  name = "${host}-ssh";
+                  hostAddr = myconfig.metadatalib.getWgIp host;
+                  sshScript = pkgs.writeShellScriptBin "ssh-to-${host}-wg0" ''
+                    set -euo pipefail
+                    until ssh -J mhuber@${myconfig.metadatalib.getIp "vserver"} mhuber@${hostAddr}; do
+                      echo "SSH to ${hostAddr} failed, retrying in 5s..." >&2
+                      sleep 5
+                    done
+                  '';
+                in
+                pkgs.writeShellScriptBin scriptName ''
+                  set -euo pipefail
+                  exec alacritty -v \
+                          --title "${name}" \
+                          --class "Alacritty:${name}" \
+                          --command "${lib.getExe sshScript}" "$@"
+                '';
             in
             [
               (mkAlacrittyTmuxSession "p14" false [
@@ -223,6 +244,12 @@ in
               ])
               (mkAlacrittyTmuxSession "workstation" false [ ])
               (mkAlacrittyTmuxSession "workstation" true [ ])
+
+              # SSH-only (wg0, no tmux/et)
+              (mkAlacrittySshSession "p14")
+              (mkAlacrittySshSession "nuc")
+              (mkAlacrittySshSession "thing")
+              (mkAlacrittySshSession "workstation")
             ];
         }
       ];
@@ -235,6 +262,10 @@ in
         "alacritty-et-thing-wg0"
         "alacritty-et-workstation"
         "alacritty-et-workstation-wg0"
+        "alacritty-ssh-p14-wg0"
+        "alacritty-ssh-nuc-wg0"
+        "alacritty-ssh-thing-wg0"
+        "alacritty-ssh-workstation-wg0"
       ];
     }
     # {
