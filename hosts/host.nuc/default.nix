@@ -12,6 +12,7 @@
     ./smart-home
     ./observability.nix
     ./services.caddy.nix
+    ./backup-hdd.nix
     ./hardware-configuration.nix
     ../../hardware/grub.nix
     {
