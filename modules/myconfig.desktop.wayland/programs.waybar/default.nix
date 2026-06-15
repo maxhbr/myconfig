@@ -50,14 +50,23 @@ let
         set -euo pipefail
 
         # Argument Parsing
-        #  $0 [--auto-restart] [--no-auto-kill] session
-        auto_restart=false
+        #  $0 [--auto-restart] [--no-auto-restart] [--no-auto-kill] session [waybar-args...]
+        #
+        # Default behaviour: auto-restart is ON. A watchdog (this script
+        # itself, backgrounded into a loop) keeps respawning waybar if it
+        # dies. Re-invoking waybarOnce kills the previous watchdog (and its
+        # waybar child via SIGTERM trap) before starting a new one.
+        auto_restart=true
         auto_kill=true
         session=""
         while [[ $# -gt 0 ]]; do
           case "$1" in
             --auto-restart)
               auto_restart=true
+              shift
+              ;;
+            --no-auto-restart)
+              auto_restart=false
               shift
               ;;
             --no-auto-kill)
@@ -73,51 +82,104 @@ let
         done
 
         bn=/tmp/''${session}.''${XDG_VTNR:-x}.''${USER}.waybar
+        watchdog_pidfile=$bn.watchdog.pid
         pidfile=$bn.pid
         logfile=$bn.log
 
-        auto_restart_waybar() {
-          if [ -f $pidfile ]; then
-            pid=$(cat $pidfile)
-            if kill -0 $pid &> /dev/null; then
-              echo "waybar is running, skipping auto-restart"
-              exit 1
-            fi
-          fi
-          set +e
-          while true; do
-            $0 --no-auto-kill "$session" "$@"
-            echo "waybar crashed, restarting..."
-            sleep 1
-          done
-          exit 0
-        }
-
-        start_waybar() {
-          if [ -f $pidfile ]; then
-            pid=$(cat $pidfile)
-            if kill -0 $pid &> /dev/null; then
+        # Kill any previous watchdog instance. The watchdog's EXIT trap will
+        # take its waybar child down with it, so we don't need to touch
+        # $pidfile here.
+        kill_previous_watchdog() {
+          if [ -f "$watchdog_pidfile" ]; then
+            local old
+            old=$(cat "$watchdog_pidfile" 2> /dev/null || true)
+            if [ -n "''${old:-}" ] && [ "$old" != "$$" ] && kill -0 "$old" &> /dev/null; then
               if $auto_kill; then
-                kill $pid
+                echo "killing previous waybarOnce watchdog (pid $old)"
+                kill "$old" 2> /dev/null || true
+                # wait briefly for it to clean up
+                for _ in 1 2 3 4 5 6 7 8 9 10; do
+                  kill -0 "$old" &> /dev/null || break
+                  sleep 0.1
+                done
+                kill -0 "$old" &> /dev/null && kill -9 "$old" 2> /dev/null || true
               else
-                echo "waybar is running"
+                echo "previous waybarOnce watchdog is running (pid $old)"
                 exit 1
               fi
-            else
-              rm $pidfile
             fi
+            rm -f "$watchdog_pidfile"
+          fi
+        }
+
+        # Start waybar once in the foreground, recording its pid. Returns
+        # waybar's exit status.
+        run_waybar_once() {
+          # If a stale waybar from before is still alive, kill it.
+          if [ -f "$pidfile" ]; then
+            local oldwb
+            oldwb=$(cat "$pidfile" 2> /dev/null || true)
+            if [ -n "''${oldwb:-}" ] && kill -0 "$oldwb" &> /dev/null; then
+              if $auto_kill; then
+                kill "$oldwb" 2> /dev/null || true
+              else
+                echo "waybar is running (pid $oldwb)"
+                exit 1
+              fi
+            fi
+            rm -f "$pidfile"
           fi
 
           echo "... waybar log is written to $logfile"
-          ${waybarPackage}/bin/waybar "$@" > $logfile 2>&1 &
-          echo $! > $pidfile
-          wait
+          ${waybarPackage}/bin/waybar "$@" >> "$logfile" 2>&1 &
+          local wb=$!
+          echo "$wb" > "$pidfile"
+          wait "$wb"
         }
 
+        # Watchdog loop: keep restarting waybar until we are signalled.
+        # On exit (incl. SIGTERM from a successor invocation) kill the
+        # current waybar child and clean up pidfiles.
+        watchdog_loop() {
+          echo "$$" > "$watchdog_pidfile"
+          cleanup() {
+            trap - EXIT INT TERM HUP
+            if [ -f "$pidfile" ]; then
+              local wb
+              wb=$(cat "$pidfile" 2> /dev/null || true)
+              if [ -n "''${wb:-}" ] && kill -0 "$wb" &> /dev/null; then
+                kill "$wb" 2> /dev/null || true
+              fi
+              rm -f "$pidfile"
+            fi
+            # only remove the watchdog pidfile if it still points at us
+            if [ -f "$watchdog_pidfile" ] && [ "$(cat "$watchdog_pidfile" 2> /dev/null || true)" = "$$" ]; then
+              rm -f "$watchdog_pidfile"
+            fi
+            exit 0
+          }
+          trap cleanup EXIT INT TERM HUP
+
+          set +e
+          while true; do
+            run_waybar_once "$@"
+            local rc=$?
+            # If we were asked to stop, the trap will fire and exit.
+            echo "waybar exited (status $rc), restarting in 1s..." >> "$logfile"
+            sleep 1
+          done
+        }
+
+        kill_previous_watchdog
+
         if $auto_restart; then
-          auto_restart_waybar "$@"
+          watchdog_loop "$@"
         else
-          start_waybar "$@"
+          # No watchdog: still record our pid so a future invocation can
+          # find and kill this run.
+          echo "$$" > "$watchdog_pidfile"
+          trap 'rm -f "$watchdog_pidfile" "$pidfile"' EXIT INT TERM HUP
+          run_waybar_once "$@"
         fi
       '';
       toggleLight = pkgs.writeShellScriptBin "toggleLight" ''
