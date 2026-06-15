@@ -17,9 +17,9 @@
 #
 # ## Current Usage
 #
-# | Flake input | Package     | PR                                                 | Status   |
-# | ----------- | ----------- | -------------------------------------------------- | -------- |
-# | _(none)_    |             |                                                    |          |
+# | Flake input | Package | PR                                                       | Status                                                                 |
+# | ----------- | ------- | -------------------------------------------------------- | ---------------------------------------------------------------------- |
+# | `pr531581`  | `gimp`  | <https://github.com/NixOS/nixpkgs/pull/531581> (#531581) | Merged to master 2026-06-14; remove once nixos-unstable catches up.    |
 #
 # (Commented-out examples: `pr275479` → `freeplane`, `pr523912` → `llama-cpp`
 # (merged 2026-05-28) — see `flake.nix` for the template.)
@@ -265,5 +265,13 @@
       [
         # { input = "pr275479"; pkg = "freeplane"; maxVersion = null; }
         # { input = "pr523912"; pkg = "llama-cpp"; maxVersion = null; }  # merged 2026-05-28 (9309), removed
+        # gimp: revert __structuredAttrs to fix runtime crash. Merged to master
+        # (commit 69e8f20) on 2026-06-14, not yet in nixos-unstable channel.
+        # Remove once `nixpkgs` input advances past that commit.
+        {
+          input = "pr531581";
+          pkg = "gimp";
+          maxVersion = null;
+        }
       ];
 }

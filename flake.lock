@@ -721,6 +721,22 @@
         "type": "github"
       }
     },
+    "pr531581": {
+      "locked": {
+        "lastModified": 1781421142,
+        "narHash": "sha256-ZWn4IuUAYdj+CoQ0LCZW8It3d7oe/X+oR9mzpGRtRjo=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "b5f702439e92f29dce5cd933a8f0cfe7baf46d19",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "pull/531581/head",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "pyproject-build-systems": {
       "inputs": {
         "nixpkgs": [
@@ -830,6 +846,7 @@
         "nixpkgs": "nixpkgs_5",
         "nixpkgs-wayland": "nixpkgs-wayland",
         "nur": "nur",
+        "pr531581": "pr531581",
         "zephyr-flake": "zephyr-flake"
       }
     },

@@ -54,6 +54,9 @@
     NanoKVM-USB.inputs.nixpkgs.follows = "nixpkgs";
 
     niri.url = "github:niri-wm/niri";
+
+    # PR overrides (see flake.pkgs_from_prs.nix)
+    pr531581.url = "github:NixOS/nixpkgs/pull/531581/head"; # gimp: revert __structuredAttrs (crash fix)
   };
 
   outputs =
