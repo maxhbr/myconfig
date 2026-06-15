@@ -15,7 +15,7 @@
         enable = true;
         opencode.enable = true;
         pi-coding-agent.enable = true;
-        claude-code.enable = false;
+        claude-code.enable = true;
         codex.enable = true;
         inference-cpp = {
           enable = false;
