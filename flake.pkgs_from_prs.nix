@@ -71,20 +71,20 @@
 #             maxVersion ? null,  # see "version guard" below
 #           }:
 #           let
-#             prPkg  = import inputs."${input}" {
+#             prPkg     = import inputs."${input}" {
 #               inherit (pkgs) config system;
 #             };
 #             prVersion = prPkg."${pkg}";
 #           in
-#           (_: super: {
-#             "${pkg}" =
-#               if maxVersion == null then
-#                 prVersion                                     # always use PR
-#               else if pkgs.lib.versionOlder (pkgs.lib.getVersion prVersion) maxVersion then
-#                 prVersion                                     # PR version is newer
-#               else
-#                 super."${pkg}" or prVersion;                  # main nixpkgs caught up
-#           })
+#           (_: super:
+#             let
+#               superPkg = super."${pkg}";
+#               # Use PR while main nixpkgs is still older than maxVersion.
+#               usePr =
+#                 maxVersion == null
+#                 || pkgs.lib.versionOlder (pkgs.lib.getVersion superPkg) maxVersion;
+#             in
+#             { "${pkg}" = if usePr then prVersion else superPkg; })
 #         )
 #         [
 #           { input = "pr523912"; pkg = "llama-cpp"; maxVersion = null; }
@@ -115,13 +115,16 @@
 #
 # ## Version Guard (`maxVersion`)
 #
-# The `maxVersion` parameter controls when to stop using the PR version:
+# The `maxVersion` parameter controls when to stop using the PR version. It is
+# compared against the version of the package in **main nixpkgs** (`super`),
+# *not* the PR's own version — the PR version is fixed at the PR head and
+# would never trigger a self-fallback.
 #
-# | Value           | Behavior                                                         |
-# | --------------- | ---------------------------------------------------------------- |
-# | `null`          | **Always** use the PR version, even if main nixpkgs catches up.  |
-# | `"x.y.z"`       | Use PR version **only** if it is newer than `maxVersion`.        |
-# |                 | Once main nixpkgs reaches `>= maxVersion`, fall back to `super`. |
+# | Value           | Behavior                                                              |
+# | --------------- | --------------------------------------------------------------------- |
+# | `null`          | **Always** use the PR version, even if main nixpkgs catches up.       |
+# | `"x.y.z"`       | Use PR version **only while** main nixpkgs's version is `< x.y.z`.    |
+# |                 | Once main nixpkgs reaches `>= x.y.z`, fall back to `super.<pkg>`.     |
 #
 # Setting a version guard means the overlay will **automatically** stop using
 # the PR once the upstream nixpkgs branch is at or past the target version.
@@ -133,8 +136,9 @@
 # { input = "pr523912"; pkg = "llama-cpp"; maxVersion = "0.3.1"; }
 # ```
 #
-# This says: "use the PR's llama-cpp as long as it's newer than 0.3.1; once
-# main nixpkgs ships 0.3.1 or later, switch back to the main version."
+# This says: "use the PR's llama-cpp while main nixpkgs is still on a version
+# older than 0.3.1; once main nixpkgs ships 0.3.1 or later, switch back to the
+# main version."
 #
 # ---
 #
@@ -244,23 +248,27 @@
         {
           input, # name of the flake input (e.g. "pr523912")
           pkg, # package attribute name (e.g. "llama-cpp")
-          maxVersion ? null, # see "version guard" in README.pkgs_from_prs.md
+          maxVersion ? null, # see "Version Guard" section in this file
         }:
         let
-          prPkg = import inputs."${input}" {
+          prPkgSet = import inputs."${input}" {
             inherit (pkgs) config system;
           };
-          prVersion = prPkg."${pkg}";
+          prDrv = prPkgSet."${pkg}";
         in
-        (_: super: {
-          "${pkg}" =
-            if maxVersion == null then
-              prVersion
-            else if pkgs.lib.versionOlder (pkgs.lib.getVersion prVersion) maxVersion then
-              prVersion
-            else
-              super."${pkg}" or prVersion;
-        })
+        (
+          _: super:
+          let
+            superDrv = super."${pkg}";
+            # Use the PR's package while main nixpkgs (super) is still older
+            # than `maxVersion`. Once super catches up (>= maxVersion), fall
+            # back to super so the overlay self-disables.
+            usePr = maxVersion == null || pkgs.lib.versionOlder (pkgs.lib.getVersion superDrv) maxVersion;
+          in
+          {
+            "${pkg}" = if usePr then prDrv else superDrv;
+          }
+        )
       )
       [
         # { input = "pr275479"; pkg = "freeplane"; maxVersion = null; }
