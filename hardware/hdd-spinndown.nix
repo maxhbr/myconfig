@@ -5,8 +5,8 @@ let
     writeScriptBin "spindownAllHdds" ''
       rotHdds() {
         ${util-linux}/bin/lsblk -dnp -o name,rota |
-            ${gnugrep}/bin/grep \'.*\\s1\' |
-            ${coreutils}/bin/cut -d \' \' -f 1
+            ${gnugrep}/bin/grep '.*[[:space:]]1' |
+            ${coreutils}/bin/cut -d ' ' -f 1
       }
       if [[ $# -eq 0 ]] ; then
         ${hdparm}/bin/hdparm -S 240 -B 127 $(rotHdds)
