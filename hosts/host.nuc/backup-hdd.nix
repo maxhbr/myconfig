@@ -29,9 +29,9 @@
   ...
 }:
 let
-  uuid         = "e140f8b4-15ef-47c3-8058-a58d76473a4b";
-  mnt          = "/mnt/backup/${uuid}";
-  repo         = "${mnt}/restic/${config.networking.hostName}-smart-home-obs";
+  uuid = "e140f8b4-15ef-47c3-8058-a58d76473a4b";
+  mnt = "/mnt/backup/${uuid}";
+  repo = "${mnt}/restic/${config.networking.hostName}-smart-home-obs";
   passwordFile = "/etc/restic/password";
 in
 {
@@ -43,15 +43,15 @@ in
   };
 
   fileSystems."${mnt}" = {
-    device  = "/dev/disk/by-uuid/${uuid}";
-    fsType  = "ext4";
+    device = "/dev/disk/by-uuid/${uuid}";
+    fsType = "ext4";
     options = [ "noauto,nofail,x-systemd.device-timeout=1,sync,users,rw" ];
   };
 
   services.restic.backups.restic = {
-    repository   = repo;
+    repository = repo;
     passwordFile = passwordFile;
-    initialize   = true; # safe: runs `restic cat config || restic init`
+    initialize = true; # safe: runs `restic cat config || restic init`
 
     paths = [
       "/var/lib/hass"
