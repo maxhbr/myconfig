@@ -245,6 +245,33 @@ in
           ];
         }
         {
+          id = "movement_schreibtisch_an";
+          alias = "Movement -> Schreibtisch an";
+          description = "Movement -> Schreibtisch an";
+          mode = "single";
+          triggers = [
+            {
+              trigger = "device";
+              type = "occupied";
+              device_id = "07e1effd9653e7b1acf05fc636072598";
+              entity_id = "2268c8e0376953ed64c404bf5241bac0";
+              domain = "binary_sensor";
+              metadata = {
+                secondary = false;
+              };
+            }
+          ];
+          conditions = [ ];
+          actions = [
+            {
+              type = "turn_on";
+              device_id = "d668f489803490e725f296b1284aa762";
+              entity_id = "884a914bd6170fa1c25bd11c946fa6f7";
+              domain = "switch";
+            }
+          ];
+        }
+        {
           id = "boxen_on";
           alias = "Boxen on";
           description = "Boxen on";
