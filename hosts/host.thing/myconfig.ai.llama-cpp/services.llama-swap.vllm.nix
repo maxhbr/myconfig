@@ -17,6 +17,17 @@ let
       port,
       maxModelLen ? 185024,
       extraConfig ? { },
+      # Optional vLLM tuning overrides (null = use script default)
+      dtype ? null,
+      gpuMemoryUtilization ? null,
+      maxNumSeqs ? null,
+      kvCacheDtype ? null,
+      reasoningParser ? null,
+      compilationConfig ? null,
+      speculativeConfig ? null,
+      enableEnforceEager ? null, # null = keep existing default (1)
+      # Hugging Face repo for on-demand download (null = skip download)
+      modelHfRepo ? null,
     }:
     let
       vllmPkg = pkgs.writeShellApplication {
@@ -24,6 +35,7 @@ let
 
         runtimeInputs = [
           pkgs.coreutils
+          (pkgs.python3.withPackages (ps: [ ps.huggingface-hub ]))
         ];
 
         text = ''
@@ -47,20 +59,40 @@ let
           DOCKER_IMAGE="''${DOCKER_IMAGE:-docker.io/vllm/vllm-openai:latest}"
 
           # vLLM model/server settings.
-          DTYPE="''${DTYPE:-bfloat16}"
-          GPU_MEMORY_UTILIZATION="''${GPU_MEMORY_UTILIZATION:-0.93}"
-          MAX_NUM_SEQS="''${MAX_NUM_SEQS:-1}"
+          DTYPE="''${DTYPE-${if dtype != null then toString dtype else "bfloat16"}}"
+          GPU_MEMORY_UTILIZATION="''${GPU_MEMORY_UTILIZATION-${
+            if gpuMemoryUtilization != null then toString gpuMemoryUtilization else "0.93"
+          }}"
+          MAX_NUM_SEQS="''${MAX_NUM_SEQS-${if maxNumSeqs != null then toString maxNumSeqs else "1"}}"
           MAX_NUM_BATCHED_TOKENS="''${MAX_NUM_BATCHED_TOKENS:-1024}"
+          KV_CACHE_DTYPE="''${KV_CACHE_DTYPE-${if kvCacheDtype != null then kvCacheDtype else ""}}"
+          REASONING_PARSER="''${REASONING_PARSER-${if reasoningParser != null then reasoningParser else ""}}"
+          COMPILATION_CONFIG="''${COMPILATION_CONFIG-${
+            if compilationConfig != null then compilationConfig else ""
+          }}"
+          SPECULATIVE_CONFIG="''${SPECULATIVE_CONFIG-${
+            if speculativeConfig != null then speculativeConfig else ""
+          }}"
 
           # Toggle flags.
           TRUST_REMOTE_CODE="''${TRUST_REMOTE_CODE:-1}"
           LANGUAGE_MODEL_ONLY="''${LANGUAGE_MODEL_ONLY:-1}"
-          ENFORCE_EAGER="''${ENFORCE_EAGER:-1}"
+          ENFORCE_EAGER="''${ENFORCE_EAGER-${
+            if enableEnforceEager != null then (if enableEnforceEager then "1" else "0") else "1"
+          }}"
           REMOVE_EXISTING_CONTAINER="''${REMOVE_EXISTING_CONTAINER:-1}"
 
           # Tool calling flags (required for "auto" tool_choice in OpenAI API).
           ENABLE_AUTO_TOOL_CHOICE="''${ENABLE_AUTO_TOOL_CHOICE:-1}"
           TOOL_CALL_PARSER="''${TOOL_CALL_PARSER:-qwen3_xml}"
+
+          MODEL_HF_REPO="''${MODEL_HF_REPO:-${if modelHfRepo != null then modelHfRepo else ""}}"
+
+          if [ -n "$MODEL_HF_REPO" ]; then
+            echo "Ensuring model is present: $MODEL_HF_REPO" >&2
+            MODEL_DOWNLOAD_PATH="''${MODEL_HOST_PATH#/models/}"
+            hf download "$MODEL_HF_REPO" --local-dir "/home/mhuber/models/''${MODEL_DOWNLOAD_PATH}"
+          fi
 
           if [ ! -d "$MODEL_HOST_PATH" ]; then
             echo "Model directory does not exist: $MODEL_HOST_PATH" >&2
@@ -93,7 +125,6 @@ let
             --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION"
             --max-num-seqs "$MAX_NUM_SEQS"
             --max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS"
-            --served-model-name "${servedModelName}"
           )
 
           if [ "$TRUST_REMOTE_CODE" = "1" ]; then
@@ -116,6 +147,22 @@ let
             args+=(--tool-call-parser "$TOOL_CALL_PARSER")
           fi
 
+          if [ -n "$KV_CACHE_DTYPE" ]; then
+            args+=(--kv-cache-dtype "$KV_CACHE_DTYPE")
+          fi
+
+          if [ -n "$REASONING_PARSER" ]; then
+            args+=(--reasoning-parser "$REASONING_PARSER")
+          fi
+
+          if [ -n "$COMPILATION_CONFIG" ]; then
+            args+=(--compilation-config.cudagraph_mode "$COMPILATION_CONFIG")
+          fi
+
+          if [ -n "$SPECULATIVE_CONFIG" ]; then
+            args+=(--speculative-config "$SPECULATIVE_CONFIG")
+          fi
+
           # Append any positional arguments beyond the port.
           if [ ''${#EXTRA_ARGS[@]} -gt 0 ]; then
             args+=("''${EXTRA_ARGS[@]}")
@@ -130,12 +177,14 @@ let
           # Always add localhost:$HOST_PORT so callers can address the model
           # generically without knowing the internal model name in advance.
           # Optionally append extra names via EXTRA_SERVED_MODEL_NAMES (space-separated).
-          extra_names=("localhost:$HOST_PORT")
+          # Order matters: the LAST --served-model-name becomes the model id.
+          all_served_names=("localhost:$HOST_PORT")
           if [ -n "''${EXTRA_SERVED_MODEL_NAMES:-}" ]; then
             # shellcheck disable=SC2206
-            extra_names+=( $EXTRA_SERVED_MODEL_NAMES )
+            all_served_names+=( $EXTRA_SERVED_MODEL_NAMES )
           fi
-          for extra_name in "''${extra_names[@]}"; do
+          all_served_names+=("${servedModelName}")
+          for extra_name in "''${all_served_names[@]}"; do
             args+=(--served-model-name "$extra_name")
           done
 
@@ -170,19 +219,12 @@ let
           ttl = 0;
         };
       };
-      aichatClient = {
-        type = "openai-compatible";
-        name = "vllm";
-        api_base = "http://localhost:${toString port}/v1";
-        models = [
-          servedModelName
-        ];
-      };
     };
 
   # --- Variant 1: Qwen3.6-27B-NVFP4 (base) ---
   vllmQwen36_27B_NVFP4 = mkVllmDockerized {
     modelHostPath = "/models/unsloth-Qwen3.6-27B-NVFP4";
+    modelHfRepo = "unsloth/Qwen3.6-27B-NVFP4";
     servedModelName = "Qwen3.6-27B-NVFP4";
     containerName = "vllm-dockerized-Qwen3.6-27B-NVFP4";
     port = 22548;
@@ -193,13 +235,52 @@ let
   # --- Variant 2: Qwen3.6-27B-Text-NVFP4-MTP (multi-token prediction) ---
   vllmQwen36_27B_Text_NVFP4_MTP = mkVllmDockerized {
     modelHostPath = "/models/unsloth-Qwen3.6-27B-Text-NVFP4-MTP";
+    modelHfRepo = "unsloth/Qwen3.6-27B-Text-NVFP4-MTP";
     servedModelName = "Qwen3.6-27B-Text-NVFP4-MTP";
     containerName = "vllm-dockerized-Qwen3.6-27B-Text-NVFP4-MTP";
-    port = 22549;
+    port = 22548;
     maxModelLen = 185024;
     extraConfig = {
       aliases = [
         "vllm:mtp"
+      ];
+    };
+  };
+
+  # --- Variant 3: Qwen3.6-27B-int4-AutoRound (Intel AutoRound int4) ---
+  vllmQwen36_27B_int4_AutoRound = mkVllmDockerized {
+    modelHostPath = "/models/Intel-Qwen3.6-27B-int4-AutoRound";
+    modelHfRepo = "Intel/Qwen3.6-27B-int4-AutoRound";
+    servedModelName = "Qwen3.6-27B-int4-AutoRound";
+    containerName = "vllm-dockerized-Qwen3.6-27B-int4-AutoRound";
+    port = 22548;
+    maxModelLen = 185024;
+    extraConfig = {
+      aliases = [
+        "vllm:autoround"
+      ];
+    };
+  };
+
+  # --- Variant 4: Qwen3.6-27B-int4-AutoRound (Lorbus, MTP + reasoning) ---
+  vllmQwen36_27B_int4_AutoRound_Lorbus = mkVllmDockerized {
+    modelHostPath = "/models/Lorbus-Qwen3.6-27B-int4-AutoRound";
+    modelHfRepo = "Lorbus/Qwen3.6-27B-int4-AutoRound";
+    servedModelName = "Qwen3.6-27B-int4-AutoRound-Lorbus";
+    containerName = "vllm-dockerized-Qwen3.6-27B-int4-AutoRound-Lorbus";
+    port = 22548;
+    maxModelLen = 262144;
+    dtype = "half";
+    gpuMemoryUtilization = 0.85;
+    maxNumSeqs = 3;
+    kvCacheDtype = "tq-t4nc";
+    reasoningParser = "qwen3";
+    compilationConfig = "none";
+    speculativeConfig = "{\"method\": \"mtp\", \"num_speculative_tokens\": 1}";
+    enableEnforceEager = false;
+    extraConfig = {
+      aliases = [
+        "vllm:lorbus"
       ];
     };
   };
@@ -237,14 +318,28 @@ in
     environment.systemPackages = [
       vllmQwen36_27B_NVFP4.vllmPkg
       vllmQwen36_27B_Text_NVFP4_MTP.vllmPkg
+      vllmQwen36_27B_int4_AutoRound.vllmPkg
+      vllmQwen36_27B_int4_AutoRound_Lorbus.vllmPkg
     ];
     services.llama-swap.settings.models =
-      vllmQwen36_27B_NVFP4.modelConfig // vllmQwen36_27B_Text_NVFP4_MTP.modelConfig;
+      vllmQwen36_27B_NVFP4.modelConfig
+      // vllmQwen36_27B_Text_NVFP4_MTP.modelConfig
+      // vllmQwen36_27B_int4_AutoRound.modelConfig
+      // vllmQwen36_27B_int4_AutoRound_Lorbus.modelConfig;
     home-manager.sharedModules = [
       {
         programs.aichat.settings.clients = [
-          vllmQwen36_27B_NVFP4.aichatClient
-          vllmQwen36_27B_Text_NVFP4_MTP.aichatClient
+          {
+            type = "openai-compatible";
+            name = "vllm";
+            api_base = "http://localhost:22548/v1";
+            models = [
+              { name = "Qwen3.6-27B-NVFP4"; }
+              { name = "Qwen3.6-27B-Text-NVFP4-MTP"; }
+              { name = "Qwen3.6-27B-int4-AutoRound"; }
+              { name = "Qwen3.6-27B-int4-AutoRound-Lorbus"; }
+            ];
+          }
         ];
       }
     ];
