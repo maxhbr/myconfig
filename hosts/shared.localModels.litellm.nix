@@ -10,7 +10,7 @@
 # wg0, see hosts/host.thing/default.nix), so peers reach it directly via the
 # wg0 IP — no Caddy in the path.
 #
-# Regenerate with: ./hosts/shared.localModels.litellm.nix.update.sh
+# Regenerate with: ./hosts/shared.localModels.update.sh
 {
   config,
   pkgs,
@@ -118,6 +118,7 @@ let
     "gfx1151:ROCm0:Qwen3.6-35B-A3B-UD-Q2_K_XL"
     "gfx1151:ROCm0:Qwen3.6-35B-A3B-UD-Q3_K_XL"
     "gfx1151:ROCm0:Qwen3.6-35B-A3B-UD-Q5_K_XL"
+    "gfx1151:ROCm0:TheDrummer_Skyfall-31B-v4.2-Q6_K"
     "gfx1151:ROCm0:gemma-4-26B-A4B-it-UD-Q6_K_XL"
     "gfx1151:ROCm0:gemma-4-26B-A4B-it-UD-Q8_K_XL"
     "gfx1151:ROCm0:gemma-4-26B-A4B-it-qat-q4_0"
@@ -126,6 +127,7 @@ let
     "gfx1151:ROCm0:gemma-4-31B-it-UD-Q5_K_XL"
     "gfx1151:ROCm0:gemma-4-31B-it-qat-q4_0"
     "gfx1151:ROCm0:qwen3.5-122B-A10B-Q5_K_M"
+    "gfx1151:TheDrummer_Skyfall-31B-v4.2-Q6_K"
     "gfx1151:gemma-4-26B-A4B-it-UD-Q6_K_XL"
     "gfx1151:gemma-4-26B-A4B-it-UD-Q8_K_XL"
     "gfx1151:gemma-4-26B-A4B-it-qat-q4_0"
@@ -190,6 +192,7 @@ let
     "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-thinking-coding"
     "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-thinking-general"
     "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-tweaked"
+    "rtx5090:TheDrummer_Skyfall-31B-v4.2-Q6_K"
     "rtx5090:gemma-4-26B-A4B-it-UD-Q6_K_XL"
     "rtx5090:gemma-4-26B-A4B-it-UD-Q8_K_XL"
     "rtx5090:gemma-4-26B-A4B-it-qat-q4_0"
