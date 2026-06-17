@@ -196,8 +196,10 @@ diverged when it does change — use the JSON snapshot to localise diffs.
 - Follow flake input convention: define all inputs at top of _flake.nix_
 
 ### Local Source Checkouts for Lookup
-Local checkouts of upstream sources are available for reference and lookup
-(e.g. searching for module options, package definitions, or library functions):
+Local checkouts of upstream sources are available for **reference only** (e.g.
+searching for module options, package definitions, or library functions). These
+directories are **not used by the build system** — all dependencies are managed
+via flake inputs in `_flake.nix_:
 - **nixpkgs**: `~/myconfig/nixos/nixpkgs`
 - **home-manager**: `~/myconfig/nixos/home-manager`
 
