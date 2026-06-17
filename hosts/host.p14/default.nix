@@ -21,6 +21,8 @@
       };
     }
     ../shared.localModels.litellm.nix
+    ../shared.localModels.rtx5090.nix
+    ../shared.localModels.gfx1151.nix
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
     {
