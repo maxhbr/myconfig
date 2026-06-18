@@ -234,8 +234,8 @@ let
 
   # --- Variant 2: Qwen3.6-27B-Text-NVFP4-MTP (multi-token prediction) ---
   vllmQwen36_27B_Text_NVFP4_MTP = mkVllmDockerized {
-    modelHostPath = "/models/unsloth-Qwen3.6-27B-Text-NVFP4-MTP";
-    modelHfRepo = "unsloth/Qwen3.6-27B-Text-NVFP4-MTP";
+    modelHostPath = "/models/sakamakismile-Qwen3.6-27B-Text-NVFP4-MTP";
+    modelHfRepo = "sakamakismile/Qwen3.6-27B-Text-NVFP4-MTP";
     servedModelName = "Qwen3.6-27B-Text-NVFP4-MTP";
     containerName = "vllm-dockerized-Qwen3.6-27B-Text-NVFP4-MTP";
     port = 22548;

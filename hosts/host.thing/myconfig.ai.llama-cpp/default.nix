@@ -72,9 +72,6 @@ let
   host-llama-cpp-pkg = config.myconfig.ai.inference-cpp.llama-cpp.package;
 in
 {
-  imports = [
-    ./services.llama-swap.vllm.nix
-  ];
   config = {
     # The amdModels above are served by the `llama-cpp-33657` container,
     # not by the host's own llama-cpp. Their `pull-models` specs would
