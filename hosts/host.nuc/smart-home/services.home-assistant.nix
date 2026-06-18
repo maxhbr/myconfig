@@ -65,7 +65,31 @@ in
   config = lib.mkIf haCfg.enable {
     services.home-assistant = {
       enable = true;
-      package = pkgs.home-assistant;
+      # Override the bundled `broadlink` Python library to register the
+      # Broadlink RM5 Plus IR blaster, which upstream does not yet
+      # recognise ("Device not supported"). This mirrors the manual fix
+      # from
+      # https://github.com/orgs/home-assistant/discussions/765#discussioncomment-14803873
+      # but applies it declaratively at build time (instead of editing
+      # the library inside the running container, which would be lost on
+      # every HA update). The device id `0x5224` is added to the
+      # `rm4pro` block of `broadlink/__init__.py`.
+      #
+      # Remove this override once upstream python-broadlink ships the
+      # RM5 Plus device id.
+      package = pkgs.home-assistant.override {
+        packageOverrides = self: super: {
+          broadlink = super.broadlink.overridePythonAttrs (oldAttrs: {
+            # Register the Broadlink RM5 Plus IR blaster, see
+            # https://github.com/orgs/home-assistant/discussions/765#discussioncomment-14803873
+            postPatch = (oldAttrs.postPatch or "") + ''
+              rm5plus=$'    rm4pro: {\n        0x5224: ("RM5 plus", "Broadlink"),'
+              substituteInPlace broadlink/__init__.py \
+                --replace-fail '    rm4pro: {' "$rm5plus"
+            '';
+          });
+        };
+      };
       extraComponents = [
         # Basic/default UI pieces
         "analytics"
