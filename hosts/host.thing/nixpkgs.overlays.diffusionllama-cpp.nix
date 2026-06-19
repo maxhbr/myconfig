@@ -27,8 +27,7 @@ in
           preBuild = ''
             pushd ${oldAttrs.npmRoot}
           '';
-          # Hash will be resolved on first build; replace with real value.
-          hash = lib.fakeHash;
+          hash = "sha256-pjdbI6NcZRlJVd62xhgbLhWrwFYwgsIwjORqvo1+VD8=";
         };
         # CUDA is required for the diffusion-gemma GPU offload
         cudaSupport = true;
