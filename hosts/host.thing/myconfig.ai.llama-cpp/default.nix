@@ -14,6 +14,7 @@ let
   qwen3_6_27B = import ./Qwen3.6-27B.nix;
   qwen3_6_35B-A3B = import ./Qwen3.6-35B-A3B.nix;
   thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix;
+  diffusiongemma26B = import ./diffusiongemma-26B-A4B-it.nix;
   rtxModels = [
     {
       name = "Qwen3.5-9B-Q5_K_M";
@@ -30,7 +31,8 @@ let
   ++ qwen3_6_27B.rtxModels
   ++ qwen3_6_35B-A3B.rtxModels
   ++ gemma4.rtxModels
-  ++ thedrummerSkyfall31B.rtxModels;
+  ++ thedrummerSkyfall31B.rtxModels
+  ++ diffusiongemma26B.rtxModels;
 
   amdModels = map (model: model // { params = (model.params or [ ]) ++ [ "--no-mmap" ]; }) (
     [
@@ -64,6 +66,7 @@ let
     ++ minimaxM2_7.amdModels
     ++ nemotron3Super.amdModels
     ++ thedrummerSkyfall31B.amdModels
+    ++ diffusiongemma26B.amdModels
   );
 
   # Package built for the host with ROCm+Vulkan support (variant = "amd").
