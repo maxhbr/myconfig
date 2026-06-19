@@ -28,60 +28,68 @@ let
   # Each becomes '_SYSTEMD_UNIT!=<unit>' in the River match list.
   excludeMatchExprs = map (u: "_SYSTEMD_UNIT!=${u}") alloyCfg.excludeUnits;
 
+  # Optional attribute lines for the loki.source.journal block. Only the
+  # active ones are emitted; each is indented to match the surrounding block.
+  journalOptLines =
+    lib.optional (
+      alloyCfg.journalMinPriority != null
+    ) "  priority      = ${toString alloyCfg.journalMinPriority}"
+    ++ lib.optional (
+      alloyCfg.journalUnits != [ ]
+    ) "  units         = ${renderRiverList alloyCfg.journalUnits}"
+    ++ lib.optional (
+      alloyCfg.excludeUnits != [ ]
+    ) "  match         = ${renderRiverList excludeMatchExprs}";
+
+  # Render as lines each followed by a newline, or empty when there are none,
+  # so the surrounding heredoc never gains a stray blank line.
+  journalOpts = lib.concatMapStrings (l: l + "\n") journalOptLines;
+
   # Alloy uses its own River-flavoured configuration language. We render
   # it from Nix into a plain text file.
   alloyConfig = ''
-        // Managed by myconfig.observability.client.alloy
-        // Forwards systemd journal entries to Loki at ${lokiUrl}
+    // Managed by myconfig.observability.client.alloy
+    // Forwards systemd journal entries to Loki at ${lokiUrl}
 
-        loki.write "default" {
-          endpoint {
-            url = "${lokiUrl}"
-          }
-          external_labels = {
-            host = "${hostName}",
-          }
-        }
+    loki.write "default" {
+      endpoint {
+        url = "${lokiUrl}"
+      }
+      external_labels = {
+        host = "${hostName}",
+      }
+    }
 
-        loki.relabel "journal" {
-          forward_to = []
+    loki.relabel "journal" {
+      forward_to = []
 
-          rule {
-            source_labels = ["__journal__systemd_unit"]
-            target_label  = "unit"
-          }
-          rule {
-            source_labels = ["__journal__hostname"]
-            target_label  = "nodename"
-          }
-          rule {
-            source_labels = ["__journal_priority_keyword"]
-            target_label  = "level"
-          }
-          rule {
-            source_labels = ["__journal__transport"]
-            target_label  = "transport"
-          }
-        }
+      rule {
+        source_labels = ["__journal__systemd_unit"]
+        target_label  = "unit"
+      }
+      rule {
+        source_labels = ["__journal__hostname"]
+        target_label  = "nodename"
+      }
+      rule {
+        source_labels = ["__journal_priority_keyword"]
+        target_label  = "level"
+      }
+      rule {
+        source_labels = ["__journal__transport"]
+        target_label  = "transport"
+      }
+    }
 
-        loki.source.journal "system" {
-          max_age       = "${alloyCfg.journalMaxAge}"
-    ${lib.optionalString (alloyCfg.journalMinPriority != null) ''
-      priority      = ${toString alloyCfg.journalMinPriority}
-    ''}
-    ${lib.optionalString (alloyCfg.journalUnits != [ ]) ''
-      units         = ${renderRiverList alloyCfg.journalUnits}
-    ''}
-    ${lib.optionalString (alloyCfg.excludeUnits != [ ]) ''
-      match         = ${renderRiverList excludeMatchExprs}
-    ''}
-          relabel_rules = loki.relabel.journal.rules
-          forward_to    = [loki.write.default.receiver]
-          labels        = {
-            job  = "systemd-journal",
-            host = "${hostName}",
-          }
-        }
+    loki.source.journal "system" {
+      max_age       = "${alloyCfg.journalMaxAge}"
+    ${journalOpts}  relabel_rules = loki.relabel.journal.rules
+      forward_to    = [loki.write.default.receiver]
+      labels        = {
+        job  = "systemd-journal",
+        host = "${hostName}",
+      }
+    }
   '';
 in
 {
