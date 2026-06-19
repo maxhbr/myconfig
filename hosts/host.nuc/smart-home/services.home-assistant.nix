@@ -110,6 +110,7 @@ in
         "zeroconf"
         "ssdp"
         "dhcp"
+        "broadlink" # Broadlink IR/RF blasters (RM5 Plus, see package override above)
 
         # Media / cameras / streams
         "ffmpeg"
