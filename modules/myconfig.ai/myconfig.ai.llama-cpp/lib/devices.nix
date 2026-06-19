@@ -63,9 +63,11 @@ in
 
   # Diffusion-gemma devices ("diffusionCUDA0", …) use the patched
   # diffusionllama-cpp binary that includes PR #24423.
+  # The server binary is `llama-diffusion-cli` (not the standard
+  # `llama-server`). Bench falls back to the standard `llama-bench`.
   # `diffusionPkg` is the diffusionllama-cpp package; callers pass it
   # from `config.myconfig.ai.llama-cpp.diffusionLlamaCpp`.
-  llamaServerForDiffusion = diffusionPkg: device: lib.getExe' diffusionPkg "llama-server";
+  llamaServerForDiffusion = diffusionPkg: device: lib.getExe' diffusionPkg "llama-diffusion-cli";
 
   llamaBenchForDiffusion = diffusionPkg: device: lib.getExe' diffusionPkg "llama-bench";
 

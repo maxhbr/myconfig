@@ -31,6 +31,10 @@ in
         };
         # CUDA is required for the diffusion-gemma GPU offload
         cudaSupport = true;
+        # Build the diffusion-gemma CLI binary (PR #24423)
+        postBuild = (oldAttrs.postBuild or "") + ''
+          cmake --build build -j --config Release --target llama-diffusion-cli
+        '';
       });
     })
   ];
