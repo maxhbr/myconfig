@@ -14,20 +14,20 @@ in
         src = prev.fetchFromGitHub {
           inherit owner repo;
           rev = ref;
-          # Hash will be resolved at build time; override if needed
-          sha256 = lib.fakeHash;
+          sha256 = "sha256-qCYFGhY162I93xWdD7Xx1tXhCPB48lxIWxWm6cikC90=";
         };
         npmDeps = prev.fetchNpmDeps {
           name = "llama-cpp-diffusion-npm-deps";
           src = prev.fetchFromGitHub {
             inherit owner repo;
             rev = ref;
-            sha256 = lib.fakeHash;
+            sha256 = "sha256-qCYFGhY162I93xWdD7Xx1tXhCPB48lxIWxWm6cikC90=";
           };
           inherit (oldAttrs) patches;
           preBuild = ''
             pushd ${oldAttrs.npmRoot}
           '';
+          # Hash will be resolved on first build; replace with real value.
           hash = lib.fakeHash;
         };
         # CUDA is required for the diffusion-gemma GPU offload
