@@ -12,9 +12,16 @@
   lib,
   pkgs,
   devices,
+  diffusionLlamaCpp ? null,
 }:
 let
-  inherit (devices) llamaServerFor llamaBenchFor envForDevice;
+  inherit (devices)
+    llamaServerFor
+    llamaServerForDiffusion
+    llamaBenchFor
+    llamaBenchForDiffusion
+    envForDevice
+    ;
 
   # Build a shell application that launches llama-server for a specific
   # (model, device) combo. Usage: `<script> <port> [extra-args...]`.
@@ -24,7 +31,11 @@ let
       device,
     }:
     let
-      server = llamaServerFor device;
+      server =
+        if lib.hasPrefix "diffusionCUDA" device && diffusionLlamaCpp != null then
+          llamaServerForDiffusion diffusionLlamaCpp device
+        else
+          llamaServerFor device;
       safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
       scriptName = "llama-server_${device}_${safeName}";
       envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
@@ -66,7 +77,11 @@ let
       device,
     }:
     let
-      bench = llamaBenchFor device;
+      bench =
+        if lib.hasPrefix "diffusionCUDA" device && diffusionLlamaCpp != null then
+          llamaBenchForDiffusion diffusionLlamaCpp device
+        else
+          llamaBenchFor device;
       safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
       scriptName = "llama-bench_${device}_${safeName}";
       # Exported for capture_metadata's llama-server invocation. llama-bench

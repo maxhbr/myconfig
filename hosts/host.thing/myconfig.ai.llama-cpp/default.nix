@@ -15,6 +15,10 @@ let
   qwen3_6_35B-A3B = import ./Qwen3.6-35B-A3B.nix;
   thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix;
   diffusiongemma26B = import ./diffusiongemma-26B-A4B-it.nix;
+
+  # diffusionllama-cpp from host overlay (PR #24423)
+  diffusionLlamaCpp = pkgs.diffusionllama-cpp or null;
+
   rtxModels = [
     {
       name = "Qwen3.5-9B-Q5_K_M";
@@ -31,8 +35,17 @@ let
   ++ qwen3_6_27B.rtxModels
   ++ qwen3_6_35B-A3B.rtxModels
   ++ gemma4.rtxModels
-  ++ thedrummerSkyfall31B.rtxModels
-  ++ diffusiongemma26B.rtxModels;
+  ++ thedrummerSkyfall31B.rtxModels;
+
+  diffusionModels = map (
+    model:
+    model
+    // {
+      devices = [
+        "diffusionCUDA0"
+      ];
+    }
+  ) diffusiongemma26B.diffusionModels;
 
   amdModels = map (model: model // { params = (model.params or [ ]) ++ [ "--no-mmap" ]; }) (
     [
@@ -84,7 +97,7 @@ in
     # them into ${modelsPullDir} (the container reads `/models/` via a
     # separate bind mount, which is out of scope for this helper).
     myconfig.ai.pull_models.models.${modelsPullDir} = lib.concatMap (m: m.pull-models.hf_spec) (
-      builtins.filter (m: (m.pull-models or null) != null) amdModels
+      builtins.filter (m: (m.pull-models or null) != null) (amdModels ++ diffusionModels)
     );
 
     myconfig.ai.llama-cpp = {
@@ -100,6 +113,7 @@ in
       serviceOpenFirewall = true;
       serviceProviderName = "rtx5090";
       router.enable = true;
+      diffusionLlamaCpp = diffusionLlamaCpp;
       models = map (
         model:
         model
@@ -114,15 +128,17 @@ in
           ];
         }
       ) rtxModels;
-      scriptOnlyModels = map (
-        model:
-        model
-        // {
-          devices = [
-            "Vulkan1"
-          ];
-        }
-      ) amdModels;
+      scriptOnlyModels =
+        map (
+          model:
+          model
+          // {
+            devices = [
+              "Vulkan1"
+            ];
+          }
+        ) amdModels
+        ++ diffusionModels;
     };
 
     ############

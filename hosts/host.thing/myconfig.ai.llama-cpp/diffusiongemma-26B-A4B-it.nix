@@ -1,8 +1,10 @@
+# Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
 let
   modelsPullDir = "/home/mhuber/models";
 in
 {
-  rtxModels = [
+  diffusionModels = [
     {
       name = "diffusiongemma-26B-A4B-it-Q6_K";
       path = "/models/unsloth-diffusiongemma-26B-A4B-it-GGUF/diffusiongemma-26B-A4B-it-Q6_K.gguf";

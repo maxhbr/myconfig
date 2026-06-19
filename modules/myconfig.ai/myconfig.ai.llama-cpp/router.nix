@@ -39,7 +39,10 @@ let
   cfg = config.myconfig.ai.llama-cpp;
   rcfg = cfg.router;
 
-  llamaLib = import ./lib { inherit lib pkgs; };
+  llamaLib = import ./lib {
+    inherit lib pkgs;
+    diffusionLlamaCpp = cfg.diffusionLlamaCpp;
+  };
   inherit (llamaLib) variants devices router;
 
   hasGpuVariant = devices.mkHasGpuVariant { inherit config options; };

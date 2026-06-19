@@ -37,7 +37,7 @@ in
       (hasGpuVariant "amd" || hasGpuVariant "amd-no-rocm")
     else if lib.hasPrefix "ROCm" device then
       (hasGpuVariant "amd")
-    else if lib.hasPrefix "CUDA" device then
+    else if lib.hasPrefix "diffusionCUDA" device || lib.hasPrefix "CUDA" device then
       (hasGpuVariant "nvidia")
     else
       false;
@@ -61,6 +61,14 @@ in
     else
       lib.getExe' llama-cpp-cuda "llama-bench";
 
+  # Diffusion-gemma devices ("diffusionCUDA0", …) use the patched
+  # diffusionllama-cpp binary that includes PR #24423.
+  # `diffusionPkg` is the diffusionllama-cpp package; callers pass it
+  # from `config.myconfig.ai.llama-cpp.diffusionLlamaCpp`.
+  llamaServerForDiffusion = diffusionPkg: device: lib.getExe' diffusionPkg "llama-server";
+
+  llamaBenchForDiffusion = diffusionPkg: device: lib.getExe' diffusionPkg "llama-bench";
+
   # Environment variables exported around llama-server / llama-bench runs to
   # pin them to a specific device.
   envForDevice =
@@ -83,15 +91,17 @@ in
   # Lowercase backend name for a device string. Used by the publishers
   # (router.nix, llama-swap.nix) to tag every model entry with the
   # llama.cpp backend it runs on, so tag-based routing / observability
-  # can filter on "cuda" vs "rocm" vs "vulkan" without inspecting the
-  # raw device string. Returns null for unrecognised devices so
-  # callers can `lib.optional` it cleanly.
+  # can filter on "cuda" vs "rocm" vs "vulkan" vs "diffusion" without
+  # inspecting the raw device string. Returns null for unrecognised
+  # devices so callers can `lib.optional` it cleanly.
   backendForDevice =
     device:
     if lib.hasPrefix "Vulkan" device then
       "vulkan"
     else if lib.hasPrefix "ROCm" device then
       "rocm"
+    else if lib.hasPrefix "diffusionCUDA" device then
+      "diffusion"
     else if lib.hasPrefix "CUDA" device then
       "cuda"
     else

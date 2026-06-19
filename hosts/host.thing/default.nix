@@ -59,6 +59,7 @@
     )
     # ./services.ollama.nix
     ./myconfig.ai.llama-cpp
+    ./nixpkgs.overlays.diffusionllama-cpp.nix
     ./myconfig.ai.vllm
     ./services.open-webui.nix
     ./services.wyoming.nix
