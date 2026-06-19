@@ -71,9 +71,19 @@ in
 
   # Environment variables exported around llama-server / llama-bench runs to
   # pin them to a specific device.
+  # `diffusionCUDA0` resolves to `CUDA0` for the actual env var — the
+  # "diffusion" prefix is only used by the Nix-side device routing to
+  # pick the patched diffusionllama-cpp binary.
   envForDevice =
     device:
-    [ "LLAMA_ARG_DEVICE=${device}" ]
+    let
+      envDevice =
+        if lib.hasPrefix "diffusionCUDA" device then
+          "CUDA${lib.removePrefix "diffusionCUDA" device}"
+        else
+          device;
+    in
+    [ "LLAMA_ARG_DEVICE=${envDevice}" ]
     ++ lib.optional (
       lib.hasPrefix "Vulkan" device || lib.hasPrefix "ROCm" device
     ) "CUDA_VISIBLE_DEVICES=";
