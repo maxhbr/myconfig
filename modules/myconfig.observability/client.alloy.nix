@@ -20,51 +20,68 @@ let
   hostName = config.networking.hostName;
   lokiUrl = "http://${wgIp}:${toString cfg.lokiPort}/loki/api/v1/push";
 
+  # River helper: render an optional list as a River array literal.
+  # '["a", "b"]' or '[]' if empty.
+  renderRiverList = items: builtins.toJSON items;
+
+  # Build match expressions for excluded units.
+  # Each becomes '_SYSTEMD_UNIT!=<unit>' in the River match list.
+  excludeMatchExprs = map (u: "_SYSTEMD_UNIT!=${u}") alloyCfg.excludeUnits;
+
   # Alloy uses its own River-flavoured configuration language. We render
   # it from Nix into a plain text file.
   alloyConfig = ''
-    // Managed by myconfig.observability.client.alloy
-    // Forwards systemd journal entries to Loki at ${lokiUrl}
+        // Managed by myconfig.observability.client.alloy
+        // Forwards systemd journal entries to Loki at ${lokiUrl}
 
-    loki.write "default" {
-      endpoint {
-        url = "${lokiUrl}"
-      }
-      external_labels = {
-        host = "${hostName}",
-      }
-    }
+        loki.write "default" {
+          endpoint {
+            url = "${lokiUrl}"
+          }
+          external_labels = {
+            host = "${hostName}",
+          }
+        }
 
-    loki.relabel "journal" {
-      forward_to = []
+        loki.relabel "journal" {
+          forward_to = []
 
-      rule {
-        source_labels = ["__journal__systemd_unit"]
-        target_label  = "unit"
-      }
-      rule {
-        source_labels = ["__journal__hostname"]
-        target_label  = "nodename"
-      }
-      rule {
-        source_labels = ["__journal_priority_keyword"]
-        target_label  = "level"
-      }
-      rule {
-        source_labels = ["__journal__transport"]
-        target_label  = "transport"
-      }
-    }
+          rule {
+            source_labels = ["__journal__systemd_unit"]
+            target_label  = "unit"
+          }
+          rule {
+            source_labels = ["__journal__hostname"]
+            target_label  = "nodename"
+          }
+          rule {
+            source_labels = ["__journal_priority_keyword"]
+            target_label  = "level"
+          }
+          rule {
+            source_labels = ["__journal__transport"]
+            target_label  = "transport"
+          }
+        }
 
-    loki.source.journal "system" {
-      max_age       = "${alloyCfg.journalMaxAge}"
-      relabel_rules = loki.relabel.journal.rules
-      forward_to    = [loki.write.default.receiver]
-      labels        = {
-        job  = "systemd-journal",
-        host = "${hostName}",
-      }
-    }
+        loki.source.journal "system" {
+          max_age       = "${alloyCfg.journalMaxAge}"
+    ${lib.optionalString (alloyCfg.journalMinPriority != null) ''
+      priority      = ${toString alloyCfg.journalMinPriority}
+    ''}
+    ${lib.optionalString (alloyCfg.journalUnits != [ ]) ''
+      units         = ${renderRiverList alloyCfg.journalUnits}
+    ''}
+    ${lib.optionalString (alloyCfg.excludeUnits != [ ]) ''
+      match         = ${renderRiverList excludeMatchExprs}
+    ''}
+          relabel_rules = loki.relabel.journal.rules
+          forward_to    = [loki.write.default.receiver]
+          labels        = {
+            job  = "systemd-journal",
+            host = "${hostName}",
+          }
+        }
   '';
 in
 {
@@ -82,8 +99,50 @@ in
 
     journalMaxAge = mkOption {
       type = types.str;
-      default = "12h";
-      description = "Maximum age of journal entries to ingest at startup.";
+      default = "1h";
+      description = ''
+        Maximum age of journal entries to ingest at startup.
+        Keep this small on laptops to avoid CPU/thermal spikes
+        on cold starts.
+      '';
+    };
+
+    journalMinPriority = mkOption {
+      type = types.nullOr types.int;
+      default = 4; # warning
+      description = ''
+        Minimum syslog priority level to collect. Set to `null` to
+        collect all levels. Syslog priority scale:
+
+        0 = emergency
+        1 = alert
+        2 = critical
+        3 = error
+        4 = warning  (default)
+        5 = notice
+        6 = info
+        7 = debug
+      '';
+    };
+
+    journalUnits = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = ''
+        If non-empty, only collect journal entries from the listed
+        systemd units. Leave empty to collect from all units.
+      '';
+    };
+
+    excludeUnits = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = ''
+        List of systemd units to exclude from collection.
+        Applied as `_SYSTEMD_UNIT!=<unit>` match expressions.
+        Useful for filtering out chatty services without
+        maintaining an exhaustive whitelist.
+      '';
     };
 
     extraConfig = mkOption {
