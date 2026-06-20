@@ -20,33 +20,87 @@ let
   hostName = config.networking.hostName;
   lokiUrl = "http://${wgIp}:${toString cfg.lokiPort}/loki/api/v1/push";
 
-  # River helper: render an optional list as a River array literal.
-  # '["a", "b"]' or '[]' if empty.
-  renderRiverList = items: builtins.toJSON items;
+  # Build the list of priority levels to collect: 0 (emergency) through
+  # journalMinPriority (inclusive).  When journalMinPriority is null every
+  # level is collected via a single block with no PRIORITY match.
+  priorityLevels =
+    if alloyCfg.journalMinPriority == null then
+      [ null ] # single block, no PRIORITY filter
+    else
+      lib.lists.range 0 alloyCfg.journalMinPriority;
 
-  # Build match expressions for excluded units.
-  # Each becomes '_SYSTEMD_UNIT!=<unit>' in the River match list.
-  excludeMatchExprs = map (u: "_SYSTEMD_UNIT!=${u}") alloyCfg.excludeUnits;
+  # Build the `matches` string for one source block.
+  # Combines an optional PRIORITY filter with an optional single-unit filter.
+  # (The `matches` attribute uses systemd journal match syntax: AND-only,
+  # space-separated FIELD=VALUE pairs.  Range filters and != are not
+  # supported by Alloy; exclude-unit filtering is handled via relabel rules.)
+  makeMatches =
+    prio:
+    let
+      prioExpr = if prio == null then "" else "PRIORITY=${toString prio}";
+      unitExpr =
+        if alloyCfg.journalUnits != [ ] then
+          # Only the first listed unit can be expressed as an exact match here;
+          # additional units require separate source blocks (not supported yet).
+          "_SYSTEMD_UNIT=${lib.head alloyCfg.journalUnits}"
+        else
+          "";
+      parts = lib.filter (s: s != "") [
+        prioExpr
+        unitExpr
+      ];
+    in
+    lib.concatStringsSep " " parts;
 
-  # Optional attribute lines for the loki.source.journal block. Only the
-  # active ones are emitted; each is indented to match the surrounding block.
-  journalOptLines =
-    lib.optional (
-      alloyCfg.journalMinPriority != null
-    ) "  priority      = ${toString alloyCfg.journalMinPriority}"
-    ++ lib.optional (
-      alloyCfg.journalUnits != [ ]
-    ) "  units         = ${renderRiverList alloyCfg.journalUnits}"
-    ++ lib.optional (
-      alloyCfg.excludeUnits != [ ]
-    ) "  match         = ${renderRiverList excludeMatchExprs}";
+  # Render one loki.source.journal block.
+  # `label` is the River component label (string), `prio` is an int or null.
+  makeJournalBlock =
+    label: prio:
+    let
+      matchesStr = makeMatches prio;
+      # Rendered as a complete line (with trailing newline) or empty string.
+      matchesLine = lib.optionalString (matchesStr != "") "  matches       = \"${matchesStr}\"\n";
+    in
+    # Use plain string concatenation so `matchesLine` indentation is literal,
+    # not subject to Nix heredoc stripping.
+    "loki.source.journal \"${label}\" {\n"
+    + "  max_age       = \"${alloyCfg.journalMaxAge}\"\n"
+    + matchesLine
+    + "  relabel_rules = loki.relabel.journal.rules\n"
+    + "  forward_to    = [loki.write.default.receiver]\n"
+    + "  labels        = {\n"
+    + "    job  = \"systemd-journal\",\n"
+    + "    host = \"${hostName}\",\n"
+    + "  }\n"
+    + "}\n";
 
-  # Render as lines each followed by a newline, or empty when there are none,
-  # so the surrounding heredoc never gains a stray blank line.
-  journalOpts = lib.concatMapStrings (l: l + "\n") journalOptLines;
+  # One block per priority level (or a single block when priority is null).
+  journalBlocks = lib.concatMapStrings (
+    prio:
+    let
+      label = if prio == null then "system" else "system_p${toString prio}";
+    in
+    makeJournalBlock label prio
+  ) priorityLevels;
+
+  # Exclude-unit relabel rules: drop any entry whose unit label matches an
+  # excluded unit.  (The old `match = [...]` with `!=` syntax is not
+  # supported by the Alloy `matches` attribute.)
+  excludeRelabelRules = lib.concatMapStrings (u: ''
+    rule {
+      source_labels = ["unit"]
+      regex         = "^${lib.escapeRegex u}$"
+      action        = "drop"
+    }
+  '') alloyCfg.excludeUnits;
 
   # Alloy uses its own River-flavoured configuration language. We render
   # it from Nix into a plain text file.
+  # excludeRelabelRules lines already include leading 2-space indent.
+  excludeRelabelBlock = lib.optionalString (alloyCfg.excludeUnits != [ ]) (
+    "\n" + excludeRelabelRules
+  );
+
   alloyConfig = ''
     // Managed by myconfig.observability.client.alloy
     // Forwards systemd journal entries to Loki at ${lokiUrl}
@@ -79,18 +133,9 @@ let
         source_labels = ["__journal__transport"]
         target_label  = "transport"
       }
-    }
+    ${excludeRelabelBlock}}
 
-    loki.source.journal "system" {
-      max_age       = "${alloyCfg.journalMaxAge}"
-    ${journalOpts}  relabel_rules = loki.relabel.journal.rules
-      forward_to    = [loki.write.default.receiver]
-      labels        = {
-        job  = "systemd-journal",
-        host = "${hostName}",
-      }
-    }
-  '';
+    ${journalBlocks}'';
 in
 {
   options.myconfig.observability.client.alloy = with lib; {
@@ -137,8 +182,11 @@ in
       type = types.listOf types.str;
       default = [ ];
       description = ''
-        If non-empty, only collect journal entries from the listed
-        systemd units. Leave empty to collect from all units.
+        If non-empty, restrict collection to the first listed systemd unit
+        via a `matches = "_SYSTEMD_UNIT=<unit>"` filter on each generated
+        source block.  Only the first entry is used; filtering by multiple
+        units simultaneously is not supported by Alloy's `matches` attribute
+        (which is AND-only).  Leave empty to collect from all units.
       '';
     };
 
@@ -146,10 +194,11 @@ in
       type = types.listOf types.str;
       default = [ ];
       description = ''
-        List of systemd units to exclude from collection.
-        Applied as `_SYSTEMD_UNIT!=<unit>` match expressions.
-        Useful for filtering out chatty services without
-        maintaining an exhaustive whitelist.
+        List of systemd units to exclude from collection.  Implemented as
+        relabel `drop` rules on the `unit` label (after the unit name has
+        been extracted from `__journal__systemd_unit`).  Useful for
+        filtering out chatty services without maintaining an exhaustive
+        allowlist.
       '';
     };
 
