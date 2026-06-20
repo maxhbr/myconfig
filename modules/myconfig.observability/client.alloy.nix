@@ -86,10 +86,17 @@ let
   # Exclude-unit relabel rules: drop any entry whose unit label matches an
   # excluded unit.  (The old `match = [...]` with `!=` syntax is not
   # supported by the Alloy `matches` attribute.)
+  #
+  # River string literals do not support `\.` as an escape sequence, so we
+  # cannot use lib.escapeRegex directly (it would emit `\.` for literal dots).
+  # Instead, replace each literal dot in the unit name with `[.]` — a RE2
+  # character class that matches a dot without requiring any backslash.
+  escapeForRiverRegex = u: lib.replaceStrings [ "." ] [ "[.]" ] u;
+
   excludeRelabelRules = lib.concatMapStrings (u: ''
     rule {
       source_labels = ["unit"]
-      regex         = "^${lib.escapeRegex u}$"
+      regex         = "^${escapeForRiverRegex u}$"
       action        = "drop"
     }
   '') alloyCfg.excludeUnits;
