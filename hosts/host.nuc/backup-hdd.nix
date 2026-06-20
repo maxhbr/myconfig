@@ -48,6 +48,22 @@ in
     options = [ "noauto,nofail,x-systemd.device-timeout=1,sync,users,rw" ];
   };
 
+  # Let systemd manage the mount on the *host* mount namespace and pull it in
+  # on demand. Mounting by hand inside the service's preStart does NOT work:
+  # the restic service runs with PrivateTmp=, so each Exec* phase gets its own
+  # transient mount namespace. A mount done in preStart is discarded before
+  # ExecStart runs, which previously made `restic init` (preStart) succeed but
+  # `restic backup` (ExecStart) fail with "repository does not exist".
+  #
+  # RequiresMountsFor adds Requires=+After= on the auto-generated .mount unit
+  # (no manual unit-name escaping needed) so the noauto/nofail mount is started
+  # before the service. ReadWritePaths exposes the host mount inside the
+  # service's namespace.
+  systemd.services."restic-backups-restic" = {
+    unitConfig.RequiresMountsFor = [ mnt ];
+    serviceConfig.ReadWritePaths = [ mnt ];
+  };
+
   services.restic.backups.restic = {
     repository = repo;
     passwordFile = passwordFile;
@@ -77,73 +93,31 @@ in
       "--keep-monthly unlimited"
     ];
 
-    # Ensure the drive is mounted before starting. This script runs as a
-    # *child* of the service preStart, so `exit 0` here would NOT prevent the
-    # subsequent `restic init`/`restic backup` from running — it would only
-    # return control to the parent preStart, which would then initialise and
-    # write the repo on the *root* filesystem at ${repo}. We therefore exit
-    # NON-ZERO when the drive is absent: that fails the whole service before
-    # any restic command runs, so nothing is ever written to the wrong place.
-    # The timer ignores service failures, so a missing drive does not block
-    # anything else.
+    # The USB HDD is mounted by systemd via RequiresMountsFor (see the
+    # systemd.services."restic-backups-restic" block above) before this runs,
+    # on the host mount namespace. This guard is defense in depth: if for any
+    # reason ${mnt} is not actually a mountpoint, abort NON-ZERO so the whole
+    # service fails before any restic command runs and nothing is ever written
+    # to the root filesystem at ${repo}. The timer ignores service failures, so
+    # a missing/unmountable drive does not block anything else.
     backupPrepareCommand = ''
       set -euo pipefail
 
-      dev="/dev/disk/by-uuid/${uuid}"
-      echo "[restic-prepare] target device: $dev"
-      echo "[restic-prepare] mount point:   ${mnt}"
+      echo "[restic-prepare] mount point: ${mnt}"
 
-      mkdir -p "${mnt}"
-
-      # Already mounted? Then there is nothing to do.
-      if ${pkgs.util-linux}/bin/mountpoint -q "${mnt}"; then
-        echo "[restic-prepare] ${mnt} is already a mountpoint — reusing it."
-      else
-        # Is the block device even present? If the UUID does not resolve, the
-        # USB HDD is unplugged / powered off / has a different filesystem UUID.
-        if [ ! -e "$dev" ]; then
-          echo "[restic-prepare] device $dev does not exist." >&2
-          echo "[restic-prepare] cause: USB HDD not plugged in, not powered on," >&2
-          echo "[restic-prepare]        or its filesystem UUID differs from ${uuid}." >&2
-          echo "[restic-prepare] available disks/UUIDs for reference:" >&2
-          ${pkgs.util-linux}/bin/lsblk -o NAME,SIZE,FSTYPE,UUID,MOUNTPOINT >&2 || true
-          echo "[restic-prepare] aborting backup so restic never writes to the root fs." >&2
-          exit 1
-        fi
-
-        # Device is present — try to mount it, capturing the real error message
-        # from mount(8) instead of swallowing it.
-        echo "[restic-prepare] mounting $dev at ${mnt} ..."
-        if ! mount_err=$(mount "$dev" "${mnt}" 2>&1); then
-          # A concurrent run or an already-present mount is fine; anything else
-          # is a real failure we want explained in the journal.
-          if ${pkgs.util-linux}/bin/mountpoint -q "${mnt}"; then
-            echo "[restic-prepare] mount reported an error but ${mnt} is now mounted" \
-                 "(likely a race with a concurrent run): $mount_err"
-          else
-            echo "[restic-prepare] mount failed: $mount_err" >&2
-            echo "[restic-prepare] hints: filesystem dirty (needs fsck), wrong fsType" >&2
-            echo "[restic-prepare]        (expected ext4), or device busy/read-only." >&2
-            echo "[restic-prepare] aborting backup so restic never writes to the root fs." >&2
-            exit 1
-          fi
-        fi
-      fi
-
-      # Final hard requirement: the USB HDD must actually be mounted here. If it
-      # is not, abort so restic never writes to the root filesystem at ${repo}.
       if ! ${pkgs.util-linux}/bin/mountpoint -q "${mnt}"; then
-        echo "[restic-prepare] ${mnt} is still not a mountpoint after mount attempt." >&2
-        echo "[restic-prepare] aborting backup." >&2
+        echo "[restic-prepare] ${mnt} is not a mountpoint — the backup drive" >&2
+        echo "[restic-prepare] (UUID ${uuid}) is not mounted." >&2
+        echo "[restic-prepare] cause: USB HDD not plugged in / powered off, a" >&2
+        echo "[restic-prepare]        changed filesystem UUID, or a mount failure." >&2
+        echo "[restic-prepare] available disks/UUIDs for reference:" >&2
+        ${pkgs.util-linux}/bin/lsblk -o NAME,SIZE,FSTYPE,UUID,MOUNTPOINT >&2 || true
+        echo "[restic-prepare] aborting backup so restic never writes to the root fs." >&2
         exit 1
       fi
 
       echo "[restic-prepare] ${mnt} is mounted; repo path: ${repo}"
       mkdir -p "${repo}"
-    '';
-
-    backupCleanupCommand = ''
-      umount "${mnt}" 2>/dev/null || true
     '';
   };
 }
