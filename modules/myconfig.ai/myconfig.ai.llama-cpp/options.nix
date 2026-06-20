@@ -274,6 +274,20 @@ in
       example = "rtx5090";
     };
 
+    # Optional diffusion-gemma llama.cpp binary (PR #24423). When set,
+    # devices with a "diffusionCUDA" prefix use this package instead of
+    # the standard llama-cpp-cuda build.
+    diffusionLlamaCpp = mkOption {
+      type = types.nullOr types.package;
+      default = null;
+      description = ''
+        The diffusionllama-cpp package (llama.cpp with PR #24423 applied
+        for diffusion-gemma GPU offload support). Set to
+        `pkgs.diffusionllama-cpp` from a host overlay to enable
+        "diffusionCUDA" devices.
+      '';
+    };
+
     router = {
       enable = mkEnableOption "per-device llama-server router scripts driven by INI presets (home-manager wrappers, independent of `serviceVariant`)";
 

@@ -9,7 +9,10 @@
 }:
 let
   cfg = config.myconfig.ai.llama-cpp;
-  llamaLib = import ./lib { inherit lib pkgs; };
+  llamaLib = import ./lib {
+    inherit lib pkgs;
+    diffusionLlamaCpp = cfg.diffusionLlamaCpp;
+  };
   inherit (llamaLib) variants scripts;
 
   hasGpuVariant = llamaLib.devices.mkHasGpuVariant { inherit config options; };

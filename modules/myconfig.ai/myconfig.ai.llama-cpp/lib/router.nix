@@ -19,9 +19,10 @@
   lib,
   pkgs,
   devices,
+  diffusionLlamaCpp ? null,
 }:
 let
-  inherit (devices) llamaServerFor envForDevice;
+  inherit (devices) llamaServerFor llamaServerForDiffusion envForDevice;
 
   # Translate a list of free-form `--flag value` / `-flag value` /
   # `--no-flag` CLI args into an attrset suitable for INI emission.
@@ -177,7 +178,11 @@ let
       modelsMax,
     }:
     let
-      server = llamaServerFor device;
+      server =
+        if lib.hasPrefix "diffusionCUDA" device && diffusionLlamaCpp != null then
+          llamaServerForDiffusion diffusionLlamaCpp device
+        else
+          llamaServerFor device;
       scriptName = "llama-server_${device}";
       envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
     in
