@@ -14,6 +14,7 @@ let
   qwen3_6_27B = import ./Qwen3.6-27B.nix;
   qwen3_6_35B-A3B = import ./Qwen3.6-35B-A3B.nix;
   thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix;
+  deepseekV4Flash = import ./DeepSeek-V4-Flash.nix;
   rtxModels = [
     {
       name = "Qwen3.5-9B-Q5_K_M";
@@ -64,6 +65,7 @@ let
     ++ minimaxM2_7.amdModels
     ++ nemotron3Super.amdModels
     ++ thedrummerSkyfall31B.amdModels
+    ++ deepseekV4Flash.amdModels
   );
 
   # Package built for the host with ROCm+Vulkan support (variant = "amd").
