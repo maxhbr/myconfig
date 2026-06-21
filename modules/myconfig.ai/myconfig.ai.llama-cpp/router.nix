@@ -111,7 +111,13 @@ let
     # See https://github.com/ggml-org/llama.cpp/pull/22907
     timeout = 600;
 
-    sleep-idle-seconds = 1800;
+    # Disable idle sleep — Qwen3.6-27B has a CUDA bug that triggers
+    # after the server goes to sleep and wakes up.
+    # See https://github.com/ggml-org/llama.cpp/issues/24694
+    # sleep-idle-seconds = 500;
+    # Disable automatic fit so the router uses our explicit configuration
+    # deterministically rather than trying to auto-size.
+    fit = "off";
   };
 
   # Lineage tags for a model entry itself (not for its aliases).

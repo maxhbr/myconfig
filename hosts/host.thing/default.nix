@@ -64,8 +64,6 @@
     ./services.wyoming.nix
     ./services.qdrant.nix
     ./services.litellm.nix
-    ../shared.localModels.rtx5090.nix
-    ../shared.localModels.gfx1151.nix
     ./specialisation.nix
     ./hardware.Radeon8060S.nix
     ./disk.nix
