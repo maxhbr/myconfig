@@ -314,13 +314,10 @@ let
               spanNulls = false;
             };
           };
-          overrides = [
-            {
-              matcher = {
-                id = "byName";
-                options = "Augsburg temp";
-              };
-              properties = [
+          overrides =
+            let
+              # Shared dashed-line style for all outdoor series.
+              dashedProps = [
                 {
                   id = "custom.lineStyle";
                   value = {
@@ -335,9 +332,65 @@ let
                   id = "custom.fillOpacity";
                   value = 0;
                 }
+                {
+                  id = "custom.lineWidth";
+                  value = 2;
+                }
               ];
-            }
-          ];
+            in
+            [
+              # Green when outdoor is cooler than all indoor sensors
+              # → opening a window would help.
+              {
+                matcher = {
+                  id = "byName";
+                  options = "Augsburg (cooler)";
+                };
+                properties = dashedProps ++ [
+                  {
+                    id = "color";
+                    value = {
+                      mode = "fixed";
+                      fixedColor = "green";
+                    };
+                  }
+                ];
+              }
+              # Red when outdoor is warmer than all indoor sensors
+              # → opening a window would make it worse.
+              {
+                matcher = {
+                  id = "byName";
+                  options = "Augsburg (warmer)";
+                };
+                properties = dashedProps ++ [
+                  {
+                    id = "color";
+                    value = {
+                      mode = "fixed";
+                      fixedColor = "red";
+                    };
+                  }
+                ];
+              }
+              # Grey when outdoor is between the indoor values
+              # → mixed / neutral situation.
+              {
+                matcher = {
+                  id = "byName";
+                  options = "Augsburg (between)";
+                };
+                properties = dashedProps ++ [
+                  {
+                    id = "color";
+                    value = {
+                      mode = "fixed";
+                      fixedColor = "gray";
+                    };
+                  }
+                ];
+              }
+            ];
         };
         options.legend = {
           displayMode = "table";
@@ -349,18 +402,36 @@ let
             "mean"
           ];
         };
-        targets = [
-          {
-            expr = "air_temp{${filt}}";
-            legendFormat = "{{host}} / {{tag}}";
-            refId = "A";
-          }
-          {
-            expr = ''weather_temperature_celsius{location="Augsburg"}'';
-            legendFormat = "Augsburg temp";
-            refId = "B";
-          }
-        ];
+        targets =
+          let
+            outdoor = ''weather_temperature_celsius{location="Augsburg"}'';
+            indoor = "air_temp{${filt}}";
+          in
+          [
+            {
+              expr = indoor;
+              legendFormat = "{{host}} / {{tag}}";
+              refId = "A";
+            }
+            # Only show when outdoor < min(indoor) — opening a window cools the room.
+            {
+              expr = "${outdoor} < min(${indoor})";
+              legendFormat = "Augsburg (cooler)";
+              refId = "B";
+            }
+            # Only show when outdoor > max(indoor) — opening a window heats the room.
+            {
+              expr = "${outdoor} > max(${indoor})";
+              legendFormat = "Augsburg (warmer)";
+              refId = "C";
+            }
+            # Only show when outdoor is between min and max indoor.
+            {
+              expr = "(${outdoor} >= min(${indoor})) * (${outdoor} <= max(${indoor})) * ${outdoor}";
+              legendFormat = "Augsburg (between)";
+              refId = "D";
+            }
+          ];
       }
 
       # ---------------------------------------------------------------
