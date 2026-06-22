@@ -390,6 +390,47 @@ let
                   }
                 ];
               }
+              # Klima power: independent right-hand Y-axis in watts,
+              # filled area so running periods are immediately visible.
+              {
+                matcher = {
+                  id = "byName";
+                  options = "klima power (W)";
+                };
+                properties = [
+                  {
+                    id = "unit";
+                    value = "watt";
+                  }
+                  {
+                    id = "color";
+                    value = {
+                      mode = "fixed";
+                      fixedColor = "purple";
+                    };
+                  }
+                  {
+                    id = "custom.axisPlacement";
+                    value = "right";
+                  }
+                  {
+                    id = "custom.axisLabel";
+                    value = "Power (W)";
+                  }
+                  {
+                    id = "custom.fillOpacity";
+                    value = 15;
+                  }
+                  {
+                    id = "custom.lineWidth";
+                    value = 1;
+                  }
+                  {
+                    id = "custom.lineInterpolation";
+                    value = "smooth";
+                  }
+                ];
+              }
             ];
         };
         options.legend = {
@@ -434,6 +475,13 @@ let
               expr = "${outdoor} + (${outdoor} * 0 / ((${outdoor} >= bool scalar(min(${indoor}))) * (${outdoor} <= bool scalar(max(${indoor})))))";
               legendFormat = "Augsburg (between)";
               refId = "D";
+            }
+            # Klima power on a separate right-hand Y-axis so the watt scale
+            # does not compress the temperature lines.
+            {
+              expr = ''hass_sensor_power_w{friendly_name="shelly_klima Power"}'';
+              legendFormat = "klima power (W)";
+              refId = "E";
             }
           ];
       }
