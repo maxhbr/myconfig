@@ -426,8 +426,12 @@ let
               refId = "C";
             }
             # Only show when outdoor is between min and max indoor.
+            # Using the `v + (v*0 / bool_mask)` idiom: when bool_mask=1 the
+            # expression reduces to `v + 0 = v`; when bool_mask=0 it reduces
+            # to `v + NaN = NaN` which Grafana renders as a gap — not a zero.
+            # Plain `v * bool` would give 0 instead of NaN when false.
             {
-              expr = "(${outdoor} >= min(${indoor})) * (${outdoor} <= max(${indoor})) * ${outdoor}";
+              expr = "${outdoor} + (${outdoor} * 0 / ((${outdoor} >= bool scalar(min(${indoor}))) * (${outdoor} <= bool scalar(max(${indoor})))))";
               legendFormat = "Augsburg (between)";
               refId = "D";
             }
