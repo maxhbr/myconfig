@@ -73,6 +73,7 @@ let
       runtimeInputs = [ ];
       text = ''
         ${envExports}
+        set -x
         exec ${server} \
           --port "''${1:-22545}" \
           -m ${lib.escapeShellArg model.path} \
