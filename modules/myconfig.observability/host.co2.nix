@@ -325,6 +325,10 @@ let
                   };
                 }
                 {
+                  id = "custom.lineInterpolation";
+                  value = "smooth";
+                }
+                {
                   id = "custom.fillOpacity";
                   value = 0;
                 }
