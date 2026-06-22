@@ -347,7 +347,7 @@ let
                     id = "color";
                     value = {
                       mode = "fixed";
-                      fixedColor = "green";
+                      fixedColor = "blue";
                     };
                   }
                 ];

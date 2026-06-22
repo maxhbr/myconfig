@@ -171,6 +171,7 @@ in
       variants = recommended_variants_Qwen3_6-35B-A3B;
       ttl = 3600;
     }
+
     {
       name = "Qwen3.6-35B-A3B-MTP-BF16";
       path = "/models/ggml-org-Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-MTP-BF16.gguf";
@@ -188,6 +189,43 @@ in
       ];
       ctxSize = 262144;
       parallel = 4;
+      variants = recommended_variants_Qwen3_6-35B-A3B;
+      ttl = 3600;
+    }
+  ];
+
+  # Models that are served across multiple GPU devices simultaneously (multi-GPU
+  # split). These use a comma-separated device string (e.g. "Vulkan0,Vulkan1")
+  # and require a `tensorSplit` ratio. They are kept separate from `amdModels`
+  # so callers can preserve the `devices` field and apply the correct
+  # `--split-mode layer` + `--tensor-split` flags rather than pinning to a
+  # single device.
+  multiGpuModels = [
+    {
+      name = "Qwen3.6-35B-A3B-BF16-split";
+      path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/BF16/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/BF16" ];
+      };
+      # "Vulkan0,Vulkan1" splits the model across both GPUs; tensorSplit is
+      # required whenever a device string contains a comma.
+      devices = [ "Vulkan0,Vulkan1" ];
+      tensorSplit = "2,3";
+      params = [
+        "-ctk"
+        "f16"
+        "-ctv"
+        "f16"
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
+        "--no-mmap"
+      ];
+      ctxSize = 262144;
+      parallel = 1;
+      aliases = [
+        "Qwen3.6-35B-A3B-BF16-multigpu"
+      ];
       variants = recommended_variants_Qwen3_6-35B-A3B;
       ttl = 3600;
     }

@@ -87,6 +87,18 @@ let
         default = null;
         description = "KV cache quantisation type; null to use the model default";
       };
+      tensorSplit = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Comma-separated tensor-split ratios passed as `--tensor-split` to
+          llama-server (e.g. "2,3"). Required when a `devices` entry contains
+          a comma (multi-device), e.g. "Vulkan0,Vulkan1". The module asserts
+          at evaluation time that `tensorSplit` is non-null whenever a
+          multi-device string is present.
+        '';
+        example = "2,3";
+      };
       pull-models = mkOption {
         type = types.nullOr (
           types.submodule {

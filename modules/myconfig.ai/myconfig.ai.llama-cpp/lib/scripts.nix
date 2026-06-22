@@ -14,19 +14,39 @@
   devices,
 }:
 let
-  inherit (devices) llamaServerFor llamaBenchFor envForDevice;
+  inherit (devices)
+    llamaServerFor
+    llamaBenchFor
+    envForDevice
+    isMultiDevice
+    ;
 
   # Build a shell application that launches llama-server for a specific
   # (model, device) combo. Usage: `<script> <port> [extra-args...]`.
+  #
+  # When `device` is a comma-separated multi-device string (e.g.
+  # "Vulkan0,Vulkan1"), the script additionally passes `--split-mode layer`
+  # and `--tensor-split <model.tensorSplit>`.  `model.tensorSplit` must be
+  # non-null in that case; the assertion below enforces this at eval time.
   mkLlamaScript =
     {
       model,
       device,
     }:
     let
+      # Assert tensorSplit is set whenever a multi-device string is used.
+      _check =
+        if isMultiDevice device && model.tensorSplit == null then
+          builtins.throw "llama-cpp model '${model.name}': device '${device}' contains multiple devices (comma-separated) but `tensorSplit` is null. Set `tensorSplit` to a comma-separated ratio string (e.g. \"2,3\")."
+        else
+          null;
+
       server = llamaServerFor device;
+      # Sanitise the device string for use in the script/package name:
+      # replace commas with dashes so "Vulkan0,Vulkan1" -> "Vulkan0-Vulkan1".
+      safeDevice = lib.replaceStrings [ "," ] [ "-" ] device;
       safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
-      scriptName = "llama-server_${device}_${safeName}";
+      scriptName = "llama-server_${safeDevice}_${safeName}";
       envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
       ctxSizeFlag =
         lib.optionalString (model.ctxSize != null)
@@ -40,9 +60,15 @@ let
       aliasesFlag = lib.optionalString (
         model.aliases != [ ]
       ) "--alias ${lib.concatStringsSep "," model.aliases}";
+      # For multi-device, add --split-mode and --tensor-split.
+      multiDeviceFlags = lib.optionalString (isMultiDevice device) (
+        "--split-mode layer --tensor-split ${model.tensorSplit}"
+      );
       paramsStr = lib.concatStringsSep " " (map lib.escapeShellArg model.params);
     in
-    pkgs.writeShellApplication {
+    # Trigger the assertion by referencing _check (builtins.seq evaluates the
+    # first argument to WHNF before returning the second).
+    builtins.seq _check pkgs.writeShellApplication {
       name = scriptName;
       runtimeInputs = [ ];
       text = ''
@@ -56,7 +82,7 @@ let
           --metrics \
           --no-webui \
           --timeout 600 \
-          ${ctxSizeFlag} ${cacheTypeFlag} ${parallelFlag} ${aliasesFlag} ${paramsStr} "''${@:2}"
+          ${ctxSizeFlag} ${cacheTypeFlag} ${parallelFlag} ${multiDeviceFlags} ${aliasesFlag} ${paramsStr} "''${@:2}"
       '';
     };
 
@@ -67,8 +93,9 @@ let
     }:
     let
       bench = llamaBenchFor device;
+      safeDevice = lib.replaceStrings [ "," ] [ "-" ] device;
       safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
-      scriptName = "llama-bench_${device}_${safeName}";
+      scriptName = "llama-bench_${safeDevice}_${safeName}";
       # Exported for capture_metadata's llama-server invocation. llama-bench
       # itself ignores LLAMA_ARG_DEVICE and uses the explicit -dev CLI flag.
       envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));

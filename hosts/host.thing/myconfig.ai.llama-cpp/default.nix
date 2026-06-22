@@ -13,6 +13,7 @@ let
   nemotron3Super = import ./Nemotron-3-Super.nix;
   qwen3_6_27B = import ./Qwen3.6-27B.nix;
   qwen3_6_35B-A3B = import ./Qwen3.6-35B-A3B.nix;
+  qwen3_6_35B-A3B-multiGpu = qwen3_6_35B-A3B.multiGpuModels;
   thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix;
   rtxModels = [
     {
@@ -81,7 +82,7 @@ in
     # them into ${modelsPullDir} (the container reads `/models/` via a
     # separate bind mount, which is out of scope for this helper).
     myconfig.ai.pull_models.models.${modelsPullDir} = lib.concatMap (m: m.pull-models.hf_spec) (
-      builtins.filter (m: (m.pull-models or null) != null) amdModels
+      builtins.filter (m: (m.pull-models or null) != null) (amdModels ++ qwen3_6_35B-A3B-multiGpu)
     );
 
     myconfig.ai.llama-cpp = {
@@ -111,15 +112,19 @@ in
           ];
         }
       ) rtxModels;
-      scriptOnlyModels = map (
-        model:
-        model
-        // {
-          devices = [
-            "Vulkan1"
-          ];
-        }
-      ) amdModels;
+      scriptOnlyModels =
+        map (
+          model:
+          model
+          // {
+            devices = [
+              "Vulkan1"
+            ];
+          }
+        ) amdModels
+        # Multi-GPU models already carry their own `devices` list (e.g.
+        # "Vulkan0,Vulkan1") and must not have it overridden.
+        ++ qwen3_6_35B-A3B-multiGpu;
     };
 
     ############
