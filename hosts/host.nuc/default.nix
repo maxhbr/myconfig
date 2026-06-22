@@ -15,6 +15,7 @@
     ./backup-hdd.nix
     ./hardware-configuration.nix
     ../../hardware/grub.nix
+    ../../hardware/btrfs.nix
     {
       boot.initrd.supportedFilesystems = [
         "btrfs"
