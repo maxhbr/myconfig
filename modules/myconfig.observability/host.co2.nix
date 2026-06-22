@@ -316,16 +316,12 @@ let
           };
           overrides =
             let
-              # Shared dashed-line style for all outdoor series.
-              dashedProps = [
+              # Shared solid-line style for all outdoor series.
+              solidProps = [
                 {
                   id = "custom.lineStyle";
                   value = {
-                    dash = [
-                      8
-                      8
-                    ];
-                    fill = "dash";
+                    fill = "solid";
                   };
                 }
                 {
@@ -346,7 +342,7 @@ let
                   id = "byName";
                   options = "Augsburg (cooler)";
                 };
-                properties = dashedProps ++ [
+                properties = solidProps ++ [
                   {
                     id = "color";
                     value = {
@@ -363,7 +359,7 @@ let
                   id = "byName";
                   options = "Augsburg (warmer)";
                 };
-                properties = dashedProps ++ [
+                properties = solidProps ++ [
                   {
                     id = "color";
                     value = {
@@ -380,7 +376,7 @@ let
                   id = "byName";
                   options = "Augsburg (between)";
                 };
-                properties = dashedProps ++ [
+                properties = solidProps ++ [
                   {
                     id = "color";
                     value = {
