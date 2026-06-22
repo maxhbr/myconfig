@@ -218,6 +218,36 @@ in
     }
   ];
 
+  multiGpuModels = [
+    {
+      name = "Qwen3.6-27B-BF16-split";
+      path = "/models/unsloth-Qwen3.6-27B-GGUF/BF16/Qwen3.6-27B-BF16-00001-of-00002.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-27B-GGUF/BF16" ];
+      };
+      devices = [ "Vulkan0,Vulkan1" ];
+      tensorSplit = "1,2";
+      params = [
+        "-ctk"
+        "f16"
+        "-ctv"
+        "f16"
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
+        "--no-mmap"
+      ];
+      ctxSize = 262144;
+      parallel = 1;
+      aliases = [
+        "Qwen3.6-27B-BF16-multigpu"
+        "opencode"
+        "Qwen3.6-27B"
+      ];
+      ttl = 3600;
+    }
+  ];
+
   amdModels = [
     {
       name = "Qwen3.6-27B-MTP-Q8_0";
