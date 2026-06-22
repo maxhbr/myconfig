@@ -234,7 +234,7 @@ get_ip_of_target() {
             # When using a jump host, return the raw IP so the jump host can reach it
             local ip_from_hosts
             ip_from_hosts="$(getent hosts "$hosts_alias" | awk '{print $1}')"
-            if [[ -n "$ip_from_hosts" ]]; then
+            if [[ -n $ip_from_hosts ]]; then
                 echo "$ip_from_hosts"
                 return
             fi
@@ -376,6 +376,10 @@ main() {
 
     if [[ $target != "$(hostname)" ]]; then
         add_ssh_keys
+        if command -v nmcli &>/dev/null && nmcli connection show --active | grep -q " tun"; then
+            log_error "VPN is active, refusing to update remote host $target"
+            exit 1
+        fi
     fi
 
     ################################################################################

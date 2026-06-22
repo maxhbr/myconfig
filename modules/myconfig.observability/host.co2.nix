@@ -303,15 +303,41 @@ let
           x = 0;
           y = 16;
         };
-        fieldConfig.defaults = {
-          unit = "celsius";
-          decimals = 1;
-          custom = {
-            drawStyle = "line";
-            lineWidth = 2;
-            fillOpacity = 10;
-            spanNulls = false;
+        fieldConfig = {
+          defaults = {
+            unit = "celsius";
+            decimals = 1;
+            custom = {
+              drawStyle = "line";
+              lineWidth = 2;
+              fillOpacity = 10;
+              spanNulls = false;
+            };
           };
+          overrides = [
+            {
+              matcher = {
+                id = "byName";
+                options = "Augsburg temp";
+              };
+              properties = [
+                {
+                  id = "custom.lineStyle";
+                  value = {
+                    dash = [
+                      8
+                      8
+                    ];
+                    fill = "dash";
+                  };
+                }
+                {
+                  id = "custom.fillOpacity";
+                  value = 0;
+                }
+              ];
+            }
+          ];
         };
         options.legend = {
           displayMode = "table";
@@ -328,6 +354,11 @@ let
             expr = "air_temp{${filt}}";
             legendFormat = "{{host}} / {{tag}}";
             refId = "A";
+          }
+          {
+            expr = ''weather_temperature_celsius{location="Augsburg"}'';
+            legendFormat = "Augsburg temp";
+            refId = "B";
           }
         ];
       }
