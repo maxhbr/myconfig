@@ -477,9 +477,10 @@ let
               refId = "D";
             }
             # Klima power on a separate right-hand Y-axis so the watt scale
-            # does not compress the temperature lines.
+            # does not compress the temperature lines. Values below 20 W are
+            # treated as standby/noise and hidden (rendered as gaps).
             {
-              expr = ''hass_sensor_power_w{friendly_name="shelly_klima Power"}'';
+              expr = ''hass_sensor_power_w{friendly_name="shelly_klima Power"} > 20'';
               legendFormat = "klima power (W)";
               refId = "E";
             }
