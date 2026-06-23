@@ -96,6 +96,7 @@
       );
       settings.general_settings = {
         disable_spend_logs = true;
+        request_timeout = 3600; # 60 minutes, upstream default is 600s (10 min)
       };
       settings.litellm_settings = lib.mkIf config.myconfig.observability.client.enable {
         callbacks = [ "prometheus" ];

@@ -216,6 +216,23 @@ in
         };
       };
     }
+    {
+      name = "Qwen3.6-27B-Q6_K";
+      path = "/models/unsloth-Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-Q6_K.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-Q6_K.gguf" ];
+      };
+      params = [
+        "--spec-type"
+        "draft-mtp"
+        "--spec-draft-n-max"
+        "2"
+      ];
+      aliases = [ ];
+      parallel = 1;
+      ttl = 900;
+    }
   ];
 
   multiGpuModels = [
