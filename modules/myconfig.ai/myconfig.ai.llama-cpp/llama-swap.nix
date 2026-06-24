@@ -173,26 +173,46 @@ let
   # models swap (they share VRAM).
   allGroups =
     let
+      # Build (gpu-index, model-key) pairs for a set of devices.
+      # `firstDevice` is the first *listed* (non-unlisted) device for the
+      # model; it determines which entry uses an unprefixed key — matching
+      # the naming convention used in `mkModelEntry`.
       mkGpuPairs =
-        { model, devices }:
+        {
+          model,
+          devices,
+          firstDevice,
+          unlisted ? false,
+        }:
         lib.concatMap (
           device:
           lib.optionals (guardDevice device) ([
             {
               gpu = deviceIndex device;
-              key = "${device}:${model.name}";
+              key =
+                (if unlisted then "unlisted:" else "")
+                + (if device == firstDevice then "" else "${device}:")
+                + model.name;
             }
           ])
         ) devices;
       gpuModelPairs = lib.concatMap (
         model:
+        let
+          firstDevice =
+            let
+              guarded = builtins.filter guardDevice model.devices;
+            in
+            if guarded != [ ] then builtins.head guarded else null;
+        in
         mkGpuPairs {
-          inherit model;
+          inherit model firstDevice;
           devices = model.devices;
         }
         ++ mkGpuPairs {
-          inherit model;
+          inherit model firstDevice;
           devices = model.unlistedDevices;
+          unlisted = true;
         }
       ) unpackedModels;
       gpuIndices = lib.unique (map (p: p.gpu) gpuModelPairs);
