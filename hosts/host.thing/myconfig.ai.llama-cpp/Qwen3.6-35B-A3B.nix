@@ -106,6 +106,7 @@ in
       variants = recommended_variants_Qwen3_6-35B-A3B // {
         tweaked = {
           # https://github.com/nathanlgabriel/paper_code_mapping_assessment/blob/main/README.md
+          cacheType = "q8_0";
           params = [
             "--split-mode"
             "layer"
@@ -113,10 +114,6 @@ in
             "1,1.12"
             "--parallel"
             "1"
-            "--cache-type-k"
-            "q8_0"
-            "--cache-type-v"
-            "q8_0"
           ];
           ctxSize = 262144;
         };
