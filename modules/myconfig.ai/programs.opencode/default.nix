@@ -202,6 +202,7 @@ in
                   }
                 ))
               ];
+              "theme" = "system";
               "disabled_providers" = [
                 "opencode"
               ];
