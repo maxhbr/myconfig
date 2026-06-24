@@ -139,13 +139,9 @@ in
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf" ];
       };
+      cacheType = "q8_0";
+      parallel = 1;
       params = [
-        "--cache-type-k"
-        "q8_0"
-        "--cache-type-v"
-        "q8_0"
-        "--parallel"
-        "1"
         "--batch-size"
         "2048"
         "--ubatch-size"
@@ -190,13 +186,9 @@ in
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf" ];
       };
+      cacheType = "q8_0";
+      parallel = 1;
       params = [
-        "--cache-type-k"
-        "q8_0"
-        "--cache-type-v"
-        "q8_0"
-        "--parallel"
-        "1"
         "--batch-size"
         "2048"
         "--ubatch-size"
@@ -215,6 +207,25 @@ in
           ctxSize = 131072;
         };
       };
+    }
+    {
+      name = "Qwen3.6-27B-Q6_K-MTP";
+      path = "/models/unsloth-Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-Q6_K.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-Q6_K.gguf" ];
+      };
+      params = [
+        "--spec-type"
+        "draft-mtp"
+        "--spec-draft-n-max"
+        "2"
+      ];
+      cacheType = "q8_0";
+      ctxSize = 184320;
+      aliases = [ ];
+      parallel = 1;
+      ttl = 900;
     }
   ];
 

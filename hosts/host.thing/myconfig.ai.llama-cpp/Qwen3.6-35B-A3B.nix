@@ -106,17 +106,13 @@ in
       variants = recommended_variants_Qwen3_6-35B-A3B // {
         tweaked = {
           # https://github.com/nathanlgabriel/paper_code_mapping_assessment/blob/main/README.md
+          cacheType = "q8_0";
+          parallel = 1;
           params = [
             "--split-mode"
             "layer"
             "--tensor-split"
             "1,1.12"
-            "--parallel"
-            "1"
-            "--cache-type-k"
-            "q8_0"
-            "--cache-type-v"
-            "q8_0"
           ];
           ctxSize = 262144;
         };
@@ -207,6 +203,29 @@ in
       params = [
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
+      ];
+      ctxSize = 262144;
+      cacheType = "f16";
+      parallel = 1;
+      aliases = [
+        "Qwen3.6-35B-A3B-BF16-multigpu"
+      ];
+      variants = recommended_variants_Qwen3_6-35B-A3B;
+      ttl = 3600;
+    }
+    {
+      name = "Qwen3.6-35B-A3B-BF16-MTP-split";
+      path = "/models/ggml-org-Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-MTP-BF16.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "ggml-org/Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-MTP-BF16.gguf" ];
+      };
+      devices = [ "Vulkan0,Vulkan1" ];
+      tensorSplit = "3,4";
+      params = [
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
+        "--spec-type" "draft-mtp" "--spec-draft-n-max" "2"
       ];
       ctxSize = 262144;
       cacheType = "f16";
