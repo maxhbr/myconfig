@@ -107,13 +107,12 @@ in
         tweaked = {
           # https://github.com/nathanlgabriel/paper_code_mapping_assessment/blob/main/README.md
           cacheType = "q8_0";
+          parallel = 1;
           params = [
             "--split-mode"
             "layer"
             "--tensor-split"
             "1,1.12"
-            "--parallel"
-            "1"
           ];
           ctxSize = 262144;
         };
@@ -226,7 +225,6 @@ in
       params = [
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
-        # "--parallel" "1"
         "--spec-type" "draft-mtp" "--spec-draft-n-max" "2"
       ];
       ctxSize = 262144;

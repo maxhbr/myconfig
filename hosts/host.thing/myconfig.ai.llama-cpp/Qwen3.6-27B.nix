@@ -140,9 +140,8 @@ in
         hf_spec = [ "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q5_K_XL.gguf" ];
       };
       cacheType = "q8_0";
+      parallel = 1;
       params = [
-        "--parallel"
-        "1"
         "--batch-size"
         "2048"
         "--ubatch-size"
@@ -188,9 +187,8 @@ in
         hf_spec = [ "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q6_K_XL.gguf" ];
       };
       cacheType = "q8_0";
+      parallel = 1;
       params = [
-        "--parallel"
-        "1"
         "--batch-size"
         "2048"
         "--ubatch-size"
