@@ -16,6 +16,7 @@ let
   qwen3_6_27B-multiGpu = qwen3_6_27B.multiGpuModels;
   qwen3_6_35B-A3B-multiGpu = qwen3_6_35B-A3B.multiGpuModels;
   thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix;
+  ornith1_0_35B = import ./Ornith-1.0-35B.nix;
   rtxModels = [
     {
       name = "Qwen3.5-9B-Q5_K_M";
@@ -32,7 +33,8 @@ let
   ++ qwen3_6_27B.rtxModels
   ++ qwen3_6_35B-A3B.rtxModels
   ++ gemma4.rtxModels
-  ++ thedrummerSkyfall31B.rtxModels;
+  ++ thedrummerSkyfall31B.rtxModels
+  ++ ornith1_0_35B.rtxModels;
 
   amdModels = map (model: model // { params = (model.params or [ ]) ++ [ "--no-mmap" ]; }) (
     [
@@ -62,6 +64,7 @@ let
     ++ minimaxM2_7.amdModels
     ++ nemotron3Super.amdModels
     ++ thedrummerSkyfall31B.amdModels
+    ++ ornith1_0_35B.amdModels
   );
 
   # Package built for the host with ROCm+Vulkan support (variant = "amd").
