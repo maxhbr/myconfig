@@ -183,6 +183,11 @@ let
                 default = null;
                 description = "KV cache quantisation type; null to use the model default";
               };
+              parallel = mkOption {
+                type = types.nullOr types.int;
+                default = null;
+                description = "Number of parallel requests; null to inherit from the parent model";
+              };
             };
           }
         );
