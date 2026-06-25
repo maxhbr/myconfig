@@ -19,7 +19,7 @@
         "opencode-fast-fallback" = "rtx5090:opencode-fast-fallback";
         "opencode" = "gfx1151:opencode";
         "opencode-slow" = "gfx1151:opencode-slow";
-        "opencode-fallback" = "gfx1151:opencode-fallback";
+
         "sidekick" = "rtx5090:sidekick";
       };
     };
