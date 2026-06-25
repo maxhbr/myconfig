@@ -25,6 +25,7 @@
       };
     }
     ./nvidia.dcgm-exporter.nix
+    ../../hardware/RTX5090.nix
     (myconfig.metadatalib.fixIp "enp191s0")
     (myconfig.metadatalib.setupAsBuildMachine [
       myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
