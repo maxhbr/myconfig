@@ -29,7 +29,6 @@ in
         "196k" = {
           ctxSize = ctxSize;
         };
-        # "128k" = { ctxSize = ctxSize128k; };
         "49k" = {
           ctxSize = ctxSizeQuarter;
         };
@@ -84,7 +83,6 @@ in
         "196k" = {
           ctxSize = ctxSize;
         };
-        # "128k" = { ctxSize = ctxSize128k; };
         "49k" = {
           ctxSize = ctxSizeQuarter;
         };

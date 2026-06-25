@@ -25,10 +25,6 @@ in
         "--top-k"
         "64"
       ];
-      aliases = [
-        "gemma-4-31B-Q5"
-        "gemma-4-dense"
-      ];
       ttl = 300;
     }
     {
@@ -71,9 +67,6 @@ in
           ];
         };
       };
-      aliases = [
-        "gemma-4-31B-Q4"
-      ];
       ttl = 300;
     }
     {
@@ -110,9 +103,6 @@ in
           ];
         };
       };
-      aliases = [
-        "gemma-4-31B-Q4-QAT"
-      ];
       ttl = 300;
     }
     {
@@ -150,7 +140,6 @@ in
         };
       };
       aliases = [
-        "gemma-4-26B-Q4-QAT"
         "hermes-fallback"
       ];
       ttl = 300;
@@ -178,10 +167,6 @@ in
         "64"
       ];
       ctxSize = 262144;
-      aliases = [
-        "gemma-4-26B-Q6"
-        "gemma-4-MoE"
-      ];
       ttl = 300;
     }
     {
@@ -206,9 +191,6 @@ in
         "--top-k"
         "64"
       ];
-      aliases = [
-        "gemma-4-26B-Q8"
-      ];
       ttl = 300;
     }
 
@@ -222,16 +204,7 @@ in
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/gemma-4-31B-it-GGUF/BF16" ];
       };
-      params = [
-        "-ctk"
-        "f16"
-        "-ctv"
-        "f16"
-      ];
-      aliases = [
-        "gemma-4-31B"
-        "gemma-4-31B-BF16"
-      ];
+      cacheType = "f16";
       ttl = 300;
     }
   ];

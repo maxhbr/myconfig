@@ -17,7 +17,6 @@ let
         "{\"enable_thinking\":true,\"preserve_thinking\":false}"
         # TODO: repetition_penalty=1.0
       ];
-      aliases = [ ];
     };
     precise-coding-tasks = {
       params = [
@@ -34,9 +33,6 @@ let
         "--chat-template-kwargs"
         "{\"enable_thinking\":true,\"preserve_thinking\":true}"
         # TODO: repetition_penalty=1.0
-      ];
-      aliases = [
-        "opencode-fast"
       ];
     };
     instruct-general-tasks = {
@@ -90,33 +86,6 @@ in
       ];
       aliases = [ ];
       ttl = 900;
-      variants = {
-        tweaked = {
-          params = [
-            "--jinja"
-            "--reasoning-format"
-            "deepseek"
-            "-ngl"
-            "99"
-            "-fa"
-            "-sm"
-            "row"
-            "--temp"
-            "0.6"
-            "--top-k"
-            "20"
-            "--top-p"
-            "0.95"
-            "--min-p"
-            "0"
-            "-c"
-            "40960"
-            "-n"
-            "32768"
-            "--no-context-shift"
-          ];
-        };
-      };
     }
     {
       name = "Qwen3.6-27B-UD-Q4_K_XL";
@@ -147,9 +116,6 @@ in
         "--ubatch-size"
         "512"
       ];
-      aliases = [
-        "Qwen3.6-27B"
-      ];
       ctxSize = 262144;
       ttl = 900;
       variants = recommended_variants_Qwen3_6-27B // {
@@ -159,22 +125,6 @@ in
         precise-coding-tasks = {
           aliases = [
             "opencode-fast"
-          ];
-        };
-        modded = {
-          params = [
-            "--threads"
-            "4"
-            "-np"
-            "1"
-            "--temp"
-            "0.6"
-            "--top-p"
-            "0.95"
-            "--top-k"
-            "20"
-            "--min-p"
-            "0.0"
           ];
         };
       };
@@ -199,14 +149,7 @@ in
       ctxSize = 196608;
       aliases = [ ];
       ttl = 900;
-      variants = {
-        "65536" = {
-          ctxSize = 65536;
-        };
-        "131072" = {
-          ctxSize = 131072;
-        };
-      };
+      variants = recommended_variants_Qwen3_6-27B;
     }
     {
       name = "Qwen3.6-27B-Q6_K-MTP";
@@ -223,7 +166,9 @@ in
       ];
       cacheType = "q8_0";
       ctxSize = 184320;
-      aliases = [ ];
+      aliases = [
+        "opencode"
+      ];
       parallel = 1;
       ttl = 900;
     }
@@ -240,21 +185,13 @@ in
       devices = [ "Vulkan0,Vulkan1" ];
       tensorSplit = "1,2";
       params = [
-        "-ctk"
-        "f16"
-        "-ctv"
-        "f16"
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
         "--no-mmap"
       ];
       ctxSize = 262144;
       parallel = 1;
-      aliases = [
-        "Qwen3.6-27B-BF16-multigpu"
-        "opencode"
-        "Qwen3.6-27B"
-      ];
+      cacheType = "f16";
       ttl = 3600;
     }
   ];
@@ -284,16 +221,12 @@ in
         hf_spec = [ "unsloth/Qwen3.6-27B-GGUF/BF16" ];
       };
       params = [
-        "-ctk"
-        "f16"
-        "-ctv"
-        "f16"
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
       ];
+      cacheType = "f16";
       aliases = [
-        "opencode"
-        "Qwen3.6-27B"
+        "opencode-slow"
       ];
       ttl = 300;
     }

@@ -70,33 +70,6 @@ in
 {
   rtxModels = [
     {
-      name = "Qwen3.6-35B-A3B-UD-IQ1_M";
-      path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-IQ1_M.gguf";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-IQ1_M.gguf" ];
-      };
-      ttl = 900;
-    }
-    {
-      name = "Qwen3.6-35B-A3B-UD-Q2_K_XL";
-      path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q2_K_XL.gguf";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q2_K_XL.gguf" ];
-      };
-      ttl = 900;
-    }
-    {
-      name = "Qwen3.6-35B-A3B-UD-Q3_K_XL";
-      path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q3_K_XL.gguf";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q3_K_XL.gguf" ];
-      };
-      ttl = 900;
-    }
-    {
       name = "Qwen3.6-35B-A3B-UD-Q5_K_XL";
       path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
       pull-models = {
@@ -118,11 +91,6 @@ in
         };
       };
       aliases = [
-        "Qwen3.6-35B-A3B-UD-Q5_K"
-        "Qwen3.6-35B-A3B-UD-Q5"
-        "Qwen3.6-35B-A3B-UD"
-        "Qwen3.6-35B-A3B"
-        "Qwen3.6-35B"
         "hermes"
         "opencode-fast-fallback"
       ];
@@ -155,15 +123,12 @@ in
         hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/BF16" ];
       };
       params = [
-        "-ctk"
-        "f16"
-        "-ctv"
-        "f16"
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
       ];
       ctxSize = 262144;
       parallel = 4;
+      cacheType = "f16";
       variants = recommended_variants_Qwen3_6-35B-A3B;
       ttl = 3600;
     }
@@ -192,28 +157,6 @@ in
 
   multiGpuModels = [
     {
-      name = "Qwen3.6-35B-A3B-BF16-split";
-      path = "/models/unsloth-Qwen3.6-35B-A3B-GGUF/BF16/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/BF16" ];
-      };
-      devices = [ "Vulkan0,Vulkan1" ];
-      tensorSplit = "2,3";
-      params = [
-        "--chat-template-kwargs"
-        "{\"preserve_thinking\":true}"
-      ];
-      ctxSize = 262144;
-      cacheType = "f16";
-      parallel = 1;
-      aliases = [
-        "Qwen3.6-35B-A3B-BF16-multigpu"
-      ];
-      variants = recommended_variants_Qwen3_6-35B-A3B;
-      ttl = 3600;
-    }
-    {
       name = "Qwen3.6-35B-A3B-BF16-MTP-split";
       path = "/models/ggml-org-Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-MTP-BF16.gguf";
       pull-models = {
@@ -225,14 +168,14 @@ in
       params = [
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
-        "--spec-type" "draft-mtp" "--spec-draft-n-max" "2"
+        "--spec-type"
+        "draft-mtp"
+        "--spec-draft-n-max"
+        "2"
       ];
       ctxSize = 262144;
       cacheType = "f16";
       parallel = 1;
-      aliases = [
-        "Qwen3.6-35B-A3B-BF16-multigpu"
-      ];
       variants = recommended_variants_Qwen3_6-35B-A3B;
       ttl = 3600;
     }
