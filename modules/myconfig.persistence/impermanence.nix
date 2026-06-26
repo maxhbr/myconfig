@@ -600,7 +600,7 @@ in
           enable = true;
           hideMounts = true;
           files = [
-            "/.persistence.ready"
+            "/var/.persistence.ready"
           ];
           directories = [
             # {
@@ -758,7 +758,7 @@ in
         '';
       };
       myconfig.desktop.wayland.waybar.doesFileExistChecks = [
-        "/.persistence.ready"
+        "/var/.persistence.ready"
         "/home/${user}/.persistence.${user}.ready"
       ];
     }

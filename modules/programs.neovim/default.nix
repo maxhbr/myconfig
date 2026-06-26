@@ -103,7 +103,7 @@
                   kdl-vim
 
                   # nushell
-                  null-ls-nvim
+                  none-ls-nvim
                   {
                     plugin = nvim-nu;
                     type = "lua";
