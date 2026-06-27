@@ -74,20 +74,6 @@ in
 {
   rtxModels = [
     {
-      name = "Qwen3.6-27B-Q8_0";
-      path = "/models/unsloth-Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [ "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf" ];
-      };
-      params = [
-        "--chat-template-kwargs"
-        "{\"preserve_thinking\":true}"
-      ];
-      aliases = [ ];
-      ttl = 900;
-    }
-    {
       name = "Qwen3.6-27B-UD-Q4_K_XL";
       path = "/models/unsloth-Qwen3.6-27B-GGUF/Qwen3.6-27B-UD-Q4_K_XL.gguf";
       pull-models = {
@@ -209,6 +195,20 @@ in
         "draft-mtp"
         "--spec-draft-n-max"
         "3"
+      ];
+      aliases = [ ];
+      ttl = 900;
+    }
+    {
+      name = "Qwen3.6-27B-Q8_0";
+      path = "/models/unsloth-Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-27B-GGUF/Qwen3.6-27B-Q8_0.gguf" ];
+      };
+      params = [
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
       ];
       aliases = [ ];
       ttl = 900;
