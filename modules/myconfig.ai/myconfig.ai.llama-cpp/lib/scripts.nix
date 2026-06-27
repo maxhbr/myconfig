@@ -130,6 +130,48 @@ let
             -o csv -oe md
         )
 
+        # Parameter sweep: find the best -b / -ub combination for prompt processing.
+        # Runs prompt-only (-p 4096 -n 0) at depth 8192 for each (B, UB) pair and
+        # writes results to a dedicated sweep CSV so the main per-device CSV stays
+        # clean and its column layout is not disturbed.
+        bench_sweep() {
+          local sweep_csv="$dir/${scriptName}.sweep.csv"
+          local header_written=0
+          for B in 1024 2048 4096 8192; do
+            for UB in 512 1024 2048; do
+              # UB must be <= B; skip invalid combos silently.
+              if (( UB > B )); then
+                continue
+              fi
+              echo "[sweep] b=$B ub=$UB" >&2
+              local out
+              # Capture CSV output; pass -d 8192 so depth is fixed for comparability.
+              out=$(
+                set -x
+                ${bench} \
+                  -m "${model.path}" \
+                  -dev "${device}" \
+                  -ngl 999 \
+                  -fa 1 \
+                  -d 8192 \
+                  -p 4096 \
+                  -n 0 \
+                  -b "$B" \
+                  -ub "$UB" \
+                  -o csv
+              )
+              if (( header_written == 0 )); then
+                printf '%s\n' "$out" >> "$sweep_csv"
+                header_written=1
+              else
+                # Strip the CSV header line for subsequent rows.
+                printf '%s\n' "$out" | tail -n +2 >> "$sweep_csv"
+              fi
+            done
+          done
+          echo "[sweep] results written to $sweep_csv" >&2
+        }
+
         capture_metadata() {
           local pp2048_at_8k="$1"
           local tg128_at_8k="$2"
@@ -317,6 +359,10 @@ let
 
         # Try to capture metadata, but never block the benchmark on failures.
         capture_metadata "$pp2048_at_8k" "$tg128_at_8k" "$tg128_at_16k" || echo "[metadata] capture failed; continuing with benchmark" >&2
+
+        # Run the -b / -ub parameter sweep for prompt-processing speed tuning.
+        # Failures are non-fatal so a sweep error never blocks the main result.
+        bench_sweep 2> >(tee -a "$dir/${scriptName}.log" >&2) || echo "[sweep] sweep failed; continuing" >&2
 
         times
       '';
