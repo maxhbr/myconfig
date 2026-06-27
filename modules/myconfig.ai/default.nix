@@ -19,7 +19,6 @@ in
     ./myconfig.ai.llama-cpp
     ./comfyui.nix
     ./container.Kokoro-FastAPI.nix
-    ./container.SillyTavern.nix
     ./container.crawl4ai.nix
     ./container.headroom.nix
     ./container.lobe-chat.nix
@@ -37,7 +36,6 @@ in
     ./programs.pi-coding-agent
     ./programs.qwen-code
     ./services.litellm.nix
-    ./services.ollama.nix
     ./services.open-webui.nix
     ./services.searxng.nix
     ./services.tabby.nix

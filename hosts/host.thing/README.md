@@ -23,7 +23,6 @@ Services are accessible via WireGuard tunnel:
 
 Caddy routes available at port 443:
 - `/litellm/*` → LiteLLM
-- `/ollama/*` → Ollama
 - `/open-webui/*` → Open WebUI
 - `/comfyui/*` → ComfyUI
 - (default) → llama-server (port 33656)

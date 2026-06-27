@@ -78,12 +78,6 @@ let
     models = lib.map (m: m.model_name) osconfig.services.litellm.settings.model_list;
   });
 
-  ollamaProvider = lib.optional osconfig.services.ollama.enable (mkOpenAiCompatibleProvider {
-    key = "ollama";
-    name = "Ollama";
-    baseUrl = "http://${osconfig.services.ollama.host}:${toString osconfig.services.ollama.port}/v1";
-    models = osconfig.services.ollama.loadModels;
-  });
 
   llamaSwapProvider = lib.optional osconfig.services.llama-swap.enable (mkOpenAiCompatibleProvider {
     key = "llama-swap";
@@ -92,7 +86,7 @@ let
     models = builtins.attrNames osconfig.services.llama-swap.settings.models;
   });
 
-  allProviders = localModelProviders ++ litellmProvider ++ ollamaProvider ++ llamaSwapProvider;
+  allProviders = localModelProviders ++ litellmProvider ++ llamaSwapProvider;
 
   # Generate a TypeScript extension that registers all providers via
   # pi.registerProvider(). See:

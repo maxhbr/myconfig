@@ -53,11 +53,7 @@ in
           LITELLM_BASE_URL = base;
           LITELLM_API_BASE_URL = "${base}/v1";
         }
-      )
-      // lib.optionalAttrs config.services.ollama.enable {
-        OLLAMA_BASE_URL = "http://${config.services.ollama.host}:${toString config.services.ollama.port}";
-        OLLAMA_API_BASE_URL = "http://${config.services.ollama.host}:${toString config.services.ollama.port}/api";
-      };
+      );
     };
 
     # Add home-manager shell scripts for managing Open WebUI

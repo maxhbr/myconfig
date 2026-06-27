@@ -38,7 +38,6 @@ in
       {
         home.packages = with pkgs; [
           python313Packages.llm
-          python313Packages.llm-ollama
         ];
         xdg.configFile."io.datasette.llm/extra-openai-models.yaml".text =
           if cfg.localModels != [ ] then lib.concatStrings (map generateModelConfig cfg.localModels) else "";

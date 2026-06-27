@@ -28,16 +28,6 @@
                   }) config.services.litellm.settings.model_list;
                 }
               ]
-              ++ lib.optionals config.services.ollama.enable [
-                {
-                  type = "openai-compatible";
-                  name = "ollama";
-                  api_base = "http://${config.services.ollama.host}:${toString config.services.ollama.port}/v1";
-                  models = builtins.map (model: {
-                    name = model;
-                  }) config.services.ollama.loadModels;
-                }
-              ]
               ++ lib.optionals (config.myconfig.ai.localModels != [ ]) (
                 map (
                   model:

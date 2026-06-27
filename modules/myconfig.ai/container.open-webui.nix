@@ -31,8 +31,6 @@ let
 
     environment = rec {
       "TZ" = "Europe/Amsterdam";
-      "OLLAMA_BASE_URL" = "http://host.containers.internal:${toString config.services.ollama.port}";
-      "OLLAMA_API_BASE_URL" = "${OLLAMA_BASE_URL}/api";
     };
 
     volumes = [ "/home/open-webui/data:/app/backend/data" ];
@@ -69,7 +67,6 @@ in
       (
         config.myconfig.ai.enable
         && config.myconfig.ai.container.open-webui.enable
-        && config.services.ollama.enable
       )
       {
         virtualisation.oci-containers.containers = { inherit open-webui; };

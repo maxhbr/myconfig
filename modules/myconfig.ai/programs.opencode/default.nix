@@ -157,28 +157,6 @@ in
                     };
                   }
                 ))
-                (lib.mkIf osconfig.services.ollama.enable (
-                  let
-                    ollamaModels = builtins.listToAttrs (
-                      lib.map (model: {
-                        name = model;
-                        value = {
-                          "name" = model;
-                        };
-                      }) osconfig.services.ollama.loadModels
-                    );
-                  in
-                  {
-                    "ollama" = {
-                      "npm" = "@ai-sdk/openai-compatible";
-                      "name" = "Ollama";
-                      "options" = {
-                        "baseURL" = "http://${osconfig.services.ollama.host}:${toString osconfig.services.ollama.port}/v1";
-                      };
-                      "models" = ollamaModels;
-                    };
-                  }
-                ))
                 (lib.mkIf osconfig.services.llama-swap.enable (
                   let
                     llamaSwapModels = builtins.listToAttrs (

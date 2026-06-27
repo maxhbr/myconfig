@@ -102,19 +102,7 @@
         callbacks = [ "prometheus" ];
       };
       settings.model_list =
-        lib.optionals config.services.ollama.enable (
-          map (model: {
-            model_name = "ollama/${model}";
-            litellm_params = {
-              model = "ollama/${model}";
-              api_base = "http://${config.services.ollama.host}:${toString config.services.ollama.port}";
-              request = {
-                allowPrivateNetwork = true;
-              };
-            };
-          }) config.services.ollama.loadModels
-        )
-        ++ lib.optionals (config.myconfig.ai.localModels != [ ]) (
+        lib.optionals (config.myconfig.ai.localModels != [ ]) (
           lib.concatMap (
             model:
             let

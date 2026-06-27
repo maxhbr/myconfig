@@ -75,11 +75,6 @@
             port = 4000;
             forceHttps = false;
           }
-          {
-            name = "ollama";
-            port = 11434;
-            forceHttps = false;
-          }
           # {
           #   name = "open-webui";
           #   port = 8888;

@@ -28,13 +28,6 @@
         };
       };
     };
-    services.ollama = {
-      enable = false;
-
-      openFirewall = false;
-      # acceleration = "rocm";
-      host = "127.0.0.1";
-    };
 
     home-manager.sharedModules = [
       {

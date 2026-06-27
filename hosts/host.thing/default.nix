@@ -58,7 +58,6 @@
         ];
       }
     )
-    # ./services.ollama.nix
     ./myconfig.ai.llama-cpp
     ./myconfig.ai.vllm
     ./services.open-webui.nix
