@@ -84,48 +84,48 @@ in
       )
     );
 
-    myconfig.ai.llama-cpp = {
-      # Single CUDA0-bound llama-server instance on port 33656 (the new
-      # INI-preset-driven router backend). The home-manager
-      # llama-server_<Device> wrappers (router.enable = true) still get
-      # generated for all three devices so ad-hoc Vulkan0/Vulkan1 access
-      # remains available — they just aren't tied to a system service.
-      serviceVariant = "llama-server";
-      serviceDevice = "CUDA0";
-      servicePort = 33656;
-      serviceListenAddress = "0.0.0.0";
-      serviceOpenFirewall = true;
-      serviceProviderName = "rtx5090";
-      router.enable = true;
-      models = map (
-        model:
-        model
-        // {
-          devices = [
-            "Vulkan0"
-            "CUDA0"
-          ];
-          unlistedDevices = [
-            "Vulkan1"
-            "ROCm0"
-          ];
-        }
-      ) rtxModels;
-      scriptOnlyModels =
-        map (
-          model:
-          model
-          // {
-            devices = [
-              "Vulkan1"
-            ];
-          }
-        ) amdModels
-        # Multi-GPU models already carry their own `devices` list (e.g.
-        # "Vulkan0,Vulkan1") and must not have it overridden.
-        ++ qwen3_6_27B-multiGpu
-        ++ qwen3_6_35B-A3B-multiGpu;
-    };
+    # myconfig.ai.llama-cpp = {
+    #   # Single CUDA0-bound llama-server instance on port 33656 (the new
+    #   # INI-preset-driven router backend). The home-manager
+    #   # llama-server_<Device> wrappers (router.enable = true) still get
+    #   # generated for all three devices so ad-hoc Vulkan0/Vulkan1 access
+    #   # remains available — they just aren't tied to a system service.
+    #   serviceVariant = "llama-server";
+    #   serviceDevice = "CUDA0";
+    #   servicePort = 33656;
+    #   serviceListenAddress = "0.0.0.0";
+    #   serviceOpenFirewall = true;
+    #   serviceProviderName = "rtx5090";
+    #   router.enable = true;
+    #   models = map (
+    #     model:
+    #     model
+    #     // {
+    #       devices = [
+    #         "Vulkan0"
+    #         "CUDA0"
+    #       ];
+    #       unlistedDevices = [
+    #         "Vulkan1"
+    #         "ROCm0"
+    #       ];
+    #     }
+    #   ) rtxModels;
+    #   scriptOnlyModels =
+    #     map (
+    #       model:
+    #       model
+    #       // {
+    #         devices = [
+    #           "Vulkan1"
+    #         ];
+    #       }
+    #     ) amdModels
+    #     # Multi-GPU models already carry their own `devices` list (e.g.
+    #     # "Vulkan0,Vulkan1") and must not have it overridden.
+    #     ++ qwen3_6_27B-multiGpu
+    #     ++ qwen3_6_35B-A3B-multiGpu;
+    # };
 
     ############
     # Vulkan-only sibling instance running the llama-server router
