@@ -78,7 +78,6 @@ let
     models = lib.map (m: m.model_name) osconfig.services.litellm.settings.model_list;
   });
 
-
   llamaSwapProvider = lib.optional osconfig.services.llama-swap.enable (mkOpenAiCompatibleProvider {
     key = "llama-swap";
     name = "llama-swap";

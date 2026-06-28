@@ -55,6 +55,7 @@
     ".config/pistol"
     ".config/ripgrep"
     ".config/bat"
+    ".config/git"
   ],
   extraConfigDirs ? [ ],
 
