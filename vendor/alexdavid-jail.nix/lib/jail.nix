@@ -1,13 +1,14 @@
-{
+jailNixCfg@{
   pkgs,
   additionalCombinators ? _: { },
   basePermissions ? import ./base-permissions.nix pkgs,
   bubblewrapPackage ? pkgs.bubblewrap,
+  ...
 }:
 let
   inherit (pkgs) lib;
 
-  builtinCombinators = (import ./combinators.nix pkgs jail).combinators;
+  builtinCombinators = (import ./combinators.nix jailNixCfg jail).combinators;
 
   allCombinators = builtinCombinators // additionalCombinators builtinCombinators;
 

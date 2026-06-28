@@ -10,7 +10,7 @@
       lib = pkgs.lib;
 
       repo = rec {
-        rev = if self ? rev then self.rev else lib.warn "Repo is dirty, links will not work!" "???";
+        rev = if self ? rev then self.rev else lib.warn "Repo is dirty, links point to main!" "main";
         shortRev = lib.substring 0 8 rev;
         urls = {
           base = "https://git.sr.ht/~alexdavid/jail.nix";
@@ -34,9 +34,16 @@
         in
         ''
           ### ${name}
+          <a class="source" href="${repo.urls.file file attrPos.line}">Source</a>
+
           **${name} :: ${combinatorObj.sig}**
 
-          [Source](${repo.urls.file file attrPos.line})
+          ${
+            if combinatorObj ? aliases then
+              "Aliases: ${lib.concatMapStringsSep ", " (alias: "`${alias}`") combinatorObj.aliases}"
+            else
+              ""
+          }
 
           ${combinatorObj.doc}
         '';
@@ -44,7 +51,9 @@
       combinatorDocs =
         let
           allCombinators =
-            (import (docsFileSet + /lib/combinators.nix) pkgs (throw "Docs must not depend on jail arg")).docs;
+            (import (docsFileSet + /lib/combinators.nix) { inherit pkgs; } (
+              throw "Docs must not depend on jail arg"
+            )).docs;
 
           formatSection =
             filter:
@@ -75,7 +84,7 @@
 
           ${hr}
 
-          ${formatSection (v: !(is "deprecated" v || is "includedInBasePermissions" v || is "internal" v))}
+          ${formatSection (v: !(is "includedInBasePermissions" v || is "internal" v || is "experimental" v))}
 
           ${hr}
 
@@ -89,12 +98,17 @@
 
           ${hr}
 
-          ## Deprecated Combinators
+          ## Experimental Combinators
 
-          The following combinators have been deprecated, and may be removed in the
-          future.
+          The following combinators are experimental, and may be removed, or
+          have breaking changes in the future. Please reach out if you have any
+          feedback on them.
 
-          ${formatSection (is "deprecated")}
+          Using these combinators will emit an evaluation warning, you can
+          suppress this warning with
+          [suppressExperimentalWarnings](advanced-configuration.md#suppressexperimentalwarnings).
+
+          ${formatSection (is "experimental")}
         '';
 
       mkdocsSettings = {
@@ -104,6 +118,7 @@
           name = "readthedocs";
           hljs_languages = [ "nix" ];
         };
+        extra_css = [ "extra.css" ];
         # Copyright is placed directly into the page within a <p> tag.
         # Concatenating with </p><p> here is super janky, but good enough for
         # now.

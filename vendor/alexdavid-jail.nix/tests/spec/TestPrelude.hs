@@ -158,7 +158,7 @@ runNixDrvWithinVm vmConfig nixDrvExpr = do
                   };
                   script = let
                     jail-nix = import <jail-nix> {};
-                    jail = jail-nix.extend { inherit pkgs; };
+                    jail = jail-nix.extend { inherit pkgs; suppressExperimentalWarnings = true; };
                     testToRun = #{nixDrvExpr};
                   in ''
                     (
@@ -204,7 +204,7 @@ evalNixExpr nixExpr = do
           lib = pkgs.lib;
           sh = script: (pkgs.writeShellApplication { name = "test-script"; text = script; });
           jail-nix = import <jail-nix> {};
-          jail = jail-nix.extend { inherit pkgs; };
+          jail = jail-nix.extend { inherit pkgs; suppressExperimentalWarnings = true; };
         in #{nixExpr}
       |]
   liftIO $

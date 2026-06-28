@@ -284,6 +284,94 @@ spec = parallel $ inTestM $ do
           |]
       liftIO $ doesFileExist (tmpDir </> "fake-browser") `shouldReturn` False
 
+  describe "overlay combinators" $ do
+    let runOverlayTest :: String -> String -> TestM String
+        runOverlayTest combinatorInvocation shellCmd = do
+          tmpDir <- getTestDir
+          let fooSource = tmpDir </> "source/foo"
+          let barSource = tmpDir </> "source/bar"
+          let rwSource = tmpDir </> "rwSource"
+          let workDir = tmpDir </> "workDir"
+          liftIO $ do
+            createDirectoryIfMissing True fooSource
+            createDirectoryIfMissing True barSource
+            createDirectoryIfMissing True rwSource
+            createDirectoryIfMissing True workDir
+            writeFile (fooSource </> "only-foo") "only-foo"
+            writeFile (barSource </> "only-bar") "only-bar"
+            writeFile (fooSource </> "both") "both-foo"
+            writeFile (barSource </> "both") "both-bar"
+          runNixDrv
+            [i|
+              let
+                fooSource = "#{fooSource}";
+                barSource = "#{barSource}";
+                rwSource = "#{rwSource}";
+                workDir = "#{workDir}";
+              in
+                jail "test" (sh "#{shellCmd}") (c: [
+                  (#{combinatorInvocation})
+                ])
+            |]
+
+    describe "overlay-tmp" $ do
+      let runTest = runOverlayTest [i| c.overlay-tmp [ fooSource barSource ] "/dest" |]
+      it "overlays files from the sources list" $ do
+        runTest "ls /dest"
+          `shouldReturnTestM` unindent
+            [i|
+              both
+              only-bar
+              only-foo
+            |]
+
+      it "uses sources specified later to shadow files specified in multiple sources" $ do
+        runTest "cat /dest/both"
+          `shouldReturnTestM` "both-bar"
+
+      it "creates a writable tmpfs overlay" $ do
+        runTest "echo baz > /dest/baz && cat /dest/baz"
+          `shouldReturnTestM` "baz\n"
+
+    describe "overlay-ro" $ do
+      let runTest = runOverlayTest [i| c.overlay-ro [ fooSource barSource ] "/dest" |]
+      it "overlays files from the sources list" $ do
+        runTest "ls /dest"
+          `shouldReturnTestM` unindent
+            [i|
+              both
+              only-bar
+              only-foo
+            |]
+
+      it "uses sources specified later to shadow files specified in multiple sources" $ do
+        runTest "cat /dest/both"
+          `shouldReturnTestM` "both-bar"
+
+      it "mounts a read-only destination" $ do
+        runTest "echo baz > /dest/baz || echo failed"
+          `shouldReturnTestM` "failed\n"
+
+    describe "overlay-rw" $ do
+      let runTest = runOverlayTest [i| c.overlay-rw [ fooSource barSource ] rwSource workDir "/dest" |]
+      it "overlays files from the sources list" $ do
+        runTest "ls /dest"
+          `shouldReturnTestM` unindent
+            [i|
+              both
+              only-bar
+              only-foo
+            |]
+
+      it "uses sources specified later to shadow files specified in multiple sources" $ do
+        runTest "cat /dest/both"
+          `shouldReturnTestM` "both-bar"
+
+      it "writes chagnes to the rw directory" $ do
+        void $ runTest "echo baz > /dest/baz"
+        tmpDir <- getTestDir
+        liftIO $ readFile (tmpDir </> "rwSource/baz") `shouldReturn` "baz\n"
+
   describe "readonly-paths-from-var" $ do
     forM_ [":", " "] $ \separator ->
       describe ("with separator \"" <> separator <> "\"") $ do
