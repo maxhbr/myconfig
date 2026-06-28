@@ -101,73 +101,72 @@
       settings.litellm_settings = lib.mkIf config.myconfig.observability.client.enable {
         callbacks = [ "prometheus" ];
       };
-      settings.model_list =
-        lib.optionals (config.myconfig.ai.localModels != [ ]) (
+      settings.model_list = lib.optionals (config.myconfig.ai.localModels != [ ]) (
+        lib.concatMap (
+          model:
+          let
+            hostPort = "${model.host}:${toString model.port}";
+            providerName = if model.name != null then model.name else hostPort;
+            modelNames = if model.models != [ ] then model.models else [ providerName ];
+          in
           lib.concatMap (
-            model:
+            modelEntry:
             let
-              hostPort = "${model.host}:${toString model.port}";
-              providerName = if model.name != null then model.name else hostPort;
-              modelNames = if model.models != [ ] then model.models else [ providerName ];
-            in
-            lib.concatMap (
-              modelEntry:
-              let
-                modelName = if lib.isAttrs modelEntry then modelEntry.name else modelEntry;
-                # Computed in router.nix / llama-swap.nix:
-                #   - "base" / "variant" -> a real llama-cpp model section,
-                #     published as `${providerName}:${modelName}`.
-                #   - "alias"            -> piggybacks on a base/variant
-                #     model. Additionally emit a bare `${modelName}`
-                #     litellm entry so callers can use the short form
-                #     across providers (this preserves the old
-                #     three-entries-per-alias behaviour where aliases
-                #     used to be nested under a parent model entry).
-                #   - null               -> upstream-provided name with
-                #     no classification (e.g. shared.localModels.litellm.nix);
-                #     emit only the prefixed form.
-                modelKind = if lib.isAttrs modelEntry then (modelEntry.kind or null) else null;
-                modelTags = if lib.isAttrs modelEntry then (modelEntry.tags or [ ]) else [ ];
-                # `litellm_params.tags` is LiteLLM's standard tag field
-                # (used by tag-based routing and surfaced on
-                # /model/info). The list assembled here is, in order
-                # (deduped, first occurrence wins):
-                #   1. the localModels `kind` ("base"/"variant"/"alias"),
-                #      so downstream tools can filter on classification
-                #      without re-parsing the model name;
-                #   2. the provider name (e.g. "rtx5090", "gfx1151") so
-                #      tag-based routing can pin requests to a specific
-                #      backend GPU. When `serviceProviderName` is unset,
-                #      `providerName` falls back to "<host>:<port>",
-                #      which is still a stable per-backend label;
-                #   3. the lineage + user-provided tags the publisher
-                #      attached (see
-                #      `myconfig.ai.localModels.<provider>.models[*].tags`).
-                tagList = lib.unique (
-                  (lib.optional (modelKind != null) modelKind) ++ [ providerName ] ++ modelTags
-                );
-                litellmParams = {
-                  model = "openai/${modelName}";
-                  api_base = "http://${hostPort}/v1";
-                  api_key = "not-needed";
-                  request = {
-                    allowPrivateNetwork = true;
-                  };
-                }
-                // lib.optionalAttrs (tagList != [ ]) { tags = tagList; };
-                entry = {
-                  model_name = "${providerName}:${modelName}";
-                  litellm_params = litellmParams;
+              modelName = if lib.isAttrs modelEntry then modelEntry.name else modelEntry;
+              # Computed in router.nix / llama-swap.nix:
+              #   - "base" / "variant" -> a real llama-cpp model section,
+              #     published as `${providerName}:${modelName}`.
+              #   - "alias"            -> piggybacks on a base/variant
+              #     model. Additionally emit a bare `${modelName}`
+              #     litellm entry so callers can use the short form
+              #     across providers (this preserves the old
+              #     three-entries-per-alias behaviour where aliases
+              #     used to be nested under a parent model entry).
+              #   - null               -> upstream-provided name with
+              #     no classification (e.g. shared.localModels.litellm.nix);
+              #     emit only the prefixed form.
+              modelKind = if lib.isAttrs modelEntry then (modelEntry.kind or null) else null;
+              modelTags = if lib.isAttrs modelEntry then (modelEntry.tags or [ ]) else [ ];
+              # `litellm_params.tags` is LiteLLM's standard tag field
+              # (used by tag-based routing and surfaced on
+              # /model/info). The list assembled here is, in order
+              # (deduped, first occurrence wins):
+              #   1. the localModels `kind` ("base"/"variant"/"alias"),
+              #      so downstream tools can filter on classification
+              #      without re-parsing the model name;
+              #   2. the provider name (e.g. "rtx5090", "gfx1151") so
+              #      tag-based routing can pin requests to a specific
+              #      backend GPU. When `serviceProviderName` is unset,
+              #      `providerName` falls back to "<host>:<port>",
+              #      which is still a stable per-backend label;
+              #   3. the lineage + user-provided tags the publisher
+              #      attached (see
+              #      `myconfig.ai.localModels.<provider>.models[*].tags`).
+              tagList = lib.unique (
+                (lib.optional (modelKind != null) modelKind) ++ [ providerName ] ++ modelTags
+              );
+              litellmParams = {
+                model = "openai/${modelName}";
+                api_base = "http://${hostPort}/v1";
+                api_key = "not-needed";
+                request = {
+                  allowPrivateNetwork = true;
                 };
-              in
-              [ entry ]
-              ++ lib.optional (modelKind == "alias") {
-                model_name = modelName;
-                litellm_params = litellmParams;
               }
-            ) modelNames
-          ) config.myconfig.ai.localModels
-        );
+              // lib.optionalAttrs (tagList != [ ]) { tags = tagList; };
+              entry = {
+                model_name = "${providerName}:${modelName}";
+                litellm_params = litellmParams;
+              };
+            in
+            [ entry ]
+            ++ lib.optional (modelKind == "alias") {
+              model_name = modelName;
+              litellm_params = litellmParams;
+            }
+          ) modelNames
+        ) config.myconfig.ai.localModels
+      );
       # settings.router_settings = {
       #   model_group_alias = {
       #     "gpt-4" = "gpt-4o"

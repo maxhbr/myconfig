@@ -62,20 +62,14 @@ in
       };
     };
   };
-  config =
-    lib.mkIf
-      (
-        config.myconfig.ai.enable
-        && config.myconfig.ai.container.open-webui.enable
-      )
-      {
-        virtualisation.oci-containers.containers = { inherit open-webui; };
-        system.activationScripts = {
-          script.text = ''
-            install -d -m 755 /home/open-webui/data -o root -g root
-            install -d -m 755 /home/open-webui/openedai/voices -o root -g root
-            install -d -m 755 /home/open-webui/openedai/config -o root -g root
-          '';
-        };
-      };
+  config = lib.mkIf (config.myconfig.ai.enable && config.myconfig.ai.container.open-webui.enable) {
+    virtualisation.oci-containers.containers = { inherit open-webui; };
+    system.activationScripts = {
+      script.text = ''
+        install -d -m 755 /home/open-webui/data -o root -g root
+        install -d -m 755 /home/open-webui/openedai/voices -o root -g root
+        install -d -m 755 /home/open-webui/openedai/config -o root -g root
+      '';
+    };
+  };
 }
