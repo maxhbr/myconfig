@@ -84,7 +84,6 @@ in
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
       ];
-      aliases = [ ];
       ttl = 900;
     }
     {
@@ -105,12 +104,9 @@ in
       ctxSize = 262144;
       ttl = 900;
       variants = recommended_variants_Qwen3_6-27B // {
-        general-tasks = {
-          aliases = [ ];
-        };
         precise-coding-tasks = {
           aliases = [
-            "opencode-fast"
+            "opencode-fallback"
           ];
         };
       };
@@ -133,7 +129,6 @@ in
         "{\"preserve_thinking\":true}"
       ];
       ctxSize = 196608;
-      aliases = [ ];
       ttl = 900;
       variants = recommended_variants_Qwen3_6-27B;
     }
@@ -200,7 +195,13 @@ in
         "--spec-draft-n-max"
         "3"
       ];
-      aliases = [ ];
+      variants = recommended_variants_Qwen3_6-27B // {
+        precise-coding-tasks = {
+          aliases = [
+            "opencode"
+          ];
+        };
+      };
       ttl = 900;
     }
     {
@@ -214,7 +215,13 @@ in
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
       ];
-      aliases = [ ];
+      variants = recommended_variants_Qwen3_6-27B // {
+        precise-coding-tasks = {
+          aliases = [
+            "opencode-fallback"
+          ];
+        };
+      };
       ttl = 900;
     }
     {

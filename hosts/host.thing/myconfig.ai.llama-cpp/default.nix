@@ -231,6 +231,7 @@ in
                       group
                       ;
                     aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
+                    # variants are dropped for now
                   }
                 ) rtxModels;
               in
