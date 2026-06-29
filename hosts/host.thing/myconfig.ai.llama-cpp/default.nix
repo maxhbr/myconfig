@@ -16,6 +16,9 @@ let
   qwen3_6_27B-multiGpu = qwen3_6_27B.multiGpuModels;
   qwen3_6_35B-A3B-multiGpu = qwen3_6_35B-A3B.multiGpuModels;
   thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix;
+  # Helper to set the llama-swap group on a list of models.
+  withGroup = group: map (m: m // { inherit group; });
+
   rtxModels = [
     {
       name = "Qwen3.5-9B-Q5_K_M";
@@ -29,8 +32,8 @@ let
       ttl = 300;
     }
   ]
-  ++ qwen3_6_27B.rtxModels
-  ++ qwen3_6_35B-A3B.rtxModels
+  ++ withGroup "Qwen3.6-27B" qwen3_6_27B.rtxModels
+  ++ withGroup "Qwen3.6-35B-A3B" qwen3_6_35B-A3B.rtxModels
   ++ gemma4.rtxModels
   ++ thedrummerSkyfall31B.rtxModels;
 
@@ -56,8 +59,8 @@ let
         ttl = 1800;
       }
     ]
-    ++ qwen3_6_27B.amdModels
-    ++ qwen3_6_35B-A3B.amdModels
+    ++ withGroup "Qwen3.6-27B" qwen3_6_27B.amdModels
+    ++ withGroup "Qwen3.6-35B-A3B" qwen3_6_35B-A3B.amdModels
     ++ gemma4.amdModels
     ++ minimaxM2_7.amdModels
     ++ nemotron3Super.amdModels
@@ -194,6 +197,20 @@ in
             serviceListenAddress = "0.0.0.0";
             serviceOpenFirewall = true;
             serviceProviderName = "gfx1151";
+            groups = {
+              "Qwen3.6-27B" = {
+                swap = true;
+                exclusive = false;
+              };
+              "Qwen3.6-35B-A3B" = {
+                swap = true;
+                exclusive = false;
+              };
+              default = {
+                swap = true;
+                exclusive = true;
+              };
+            };
             models =
               let
                 allAliasesAndNamesFromAmdModels = lib.concatMap (m: [ m.name ] ++ (m.aliases or [ ])) amdModels;
@@ -203,6 +220,7 @@ in
                     path,
                     aliases ? [ ],
                     params ? [ ],
+                    group ? "default",
                     ...
                   }:
                   {
@@ -210,6 +228,7 @@ in
                       name
                       path
                       params
+                      group
                       ;
                     aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
                   }

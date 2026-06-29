@@ -166,18 +166,20 @@ let
     }
   ) benchDevices;
 
-  # --- llama-swap groups (one per physical GPU) --------------------------
+  # --- llama-swap groups (one per (group, GPU)) --------------------------
 
-  # Build groups: one group per physical GPU (by device index) so models
-  # on different GPUs can run simultaneously. Within the same GPU,
-  # models swap (they share VRAM).
+  # Build groups: one group per (model-group, physical-GPU) pair.
+  # Models on different GPUs can run simultaneously. Within the same
+  # GPU and group, models swap by default (they share VRAM). The
+  # group name comes from the model's `group` attribute (default
+  # "default"); swap/exclusive/persistent come from `cfg.groups`.
   allGroups =
     let
-      # Build (gpu-index, model-key) pairs for a set of devices.
-      # `firstDevice` is the first *listed* (non-unlisted) device for the
-      # model; it determines which entry uses an unprefixed key — matching
-      # the naming convention used in `mkModelEntry`.
-      mkGpuPairs =
+      # Build (group-name, gpu-index, model-key) triples for a set of
+      # devices. `firstDevice` is the first *listed* (non-unlisted) device
+      # for the model; it determines which entry uses an unprefixed key —
+      # matching the naming convention used in `mkModelEntry`.
+      mkGroupGpuPairs =
         {
           model,
           devices,
@@ -188,6 +190,7 @@ let
           device:
           lib.optionals (guardDevice device) ([
             {
+              groupName = model.group;
               gpu = deviceIndex device;
               key =
                 (if unlisted then "unlisted:" else "")
@@ -196,7 +199,7 @@ let
             }
           ])
         ) devices;
-      gpuModelPairs = lib.concatMap (
+      groupGpuPairs = lib.concatMap (
         model:
         let
           firstDevice =
@@ -205,28 +208,51 @@ let
             in
             if guarded != [ ] then builtins.head guarded else null;
         in
-        mkGpuPairs {
+        mkGroupGpuPairs {
           inherit model firstDevice;
           devices = model.devices;
         }
-        ++ mkGpuPairs {
+        ++ mkGroupGpuPairs {
           inherit model firstDevice;
           devices = model.unlistedDevices;
           unlisted = true;
         }
       ) unpackedModels;
-      gpuIndices = lib.unique (map (p: p.gpu) gpuModelPairs);
-      membersFor = idx: map (p: p.key) (builtins.filter (p: p.gpu == idx) gpuModelPairs);
-    in
-    lib.listToAttrs (
-      map (idx: {
-        name = "gpu${idx}";
-        value = {
+      # Distinct (group-name, gpu-index) pairs that actually have members.
+      groupGpuKeys = lib.unique (
+        map (p: {
+          name = p.groupName;
+          gpu = p.gpu;
+        }) groupGpuPairs
+      );
+      membersFor =
+        name: gpu: map (p: p.key) (builtins.filter (p: p.groupName == name && p.gpu == gpu) groupGpuPairs);
+      # Look up group settings from cfg.groups, falling back to defaults
+      # for groups not explicitly configured.
+      groupSettings =
+        name:
+        cfg.groups.${name} or {
           swap = true;
           exclusive = false;
-          members = membersFor idx;
+          persistent = false;
         };
-      }) gpuIndices
+    in
+    lib.listToAttrs (
+      map (
+        gk:
+        let
+          settings = groupSettings gk.name;
+        in
+        {
+          name = "${gk.name}_gpu${gk.gpu}";
+          value = {
+            swap = settings.swap;
+            exclusive = settings.exclusive;
+            persistent = settings.persistent;
+            members = membersFor gk.name gk.gpu;
+          };
+        }
+      ) groupGpuKeys
     );
 
   # --- localModels names ------------------------------------------------

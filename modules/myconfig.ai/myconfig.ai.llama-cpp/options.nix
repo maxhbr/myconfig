@@ -60,6 +60,16 @@ let
           surfaced to downstream tools.
         '';
       };
+      group = mkOption {
+        type = types.str;
+        default = "default";
+        description = ''
+          Group name for llama-swap grouping. Models in the same group
+          share swapping behaviour (controlled by the group's `swap`
+          and `exclusive` settings). The default group "default" is
+          used when no group is specified.
+        '';
+      };
       ttl = mkOption {
         type = types.int;
         default = 300;
@@ -307,6 +317,56 @@ in
       };
     };
 
+    groups = mkOption {
+      type = types.attrsOf (
+        types.submodule {
+          options = {
+            swap = mkOption {
+              type = types.bool;
+              default = true;
+              description = ''
+                Controls model swapping behaviour within the group.
+                True: only one model runs at a time (models swap in/out).
+                False: all models in the group can run simultaneously.
+              '';
+            };
+            exclusive = mkOption {
+              type = types.bool;
+              default = false;
+              description = ''
+                Controls how the group affects other groups.
+                True: causes all other groups to unload when this group
+                runs a model.
+                False: does not affect other groups (allows concurrent
+                models across groups).
+              '';
+            };
+            persistent = mkOption {
+              type = types.bool;
+              default = false;
+              description = ''
+                Prevents other groups from unloading the models in this
+                group. Does not affect individual model behaviour within
+                the group.
+              '';
+            };
+          };
+        }
+      );
+      default = {
+        default = {
+          swap = true;
+          exclusive = false;
+          persistent = false;
+        };
+      };
+      description = ''
+        Group settings for llama-swap. Keys are group names that must
+        match the `group` attribute on models. The "default" group is
+        always present with sensible defaults; override or extend as
+        needed. Members are auto-derived from model `group` attributes.
+      '';
+    };
     models = mkOption {
       type = types.listOf modelSubmodule;
       default = [ ];
