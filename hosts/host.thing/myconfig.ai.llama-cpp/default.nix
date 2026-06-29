@@ -214,26 +214,26 @@ in
             models =
               let
                 allAliasesAndNamesFromAmdModels = lib.concatMap (m: [ m.name ] ++ (m.aliases or [ ])) amdModels;
-                fromRtxModels = map (
-                  {
-                    name,
-                    path,
-                    aliases ? [ ],
-                    params ? [ ],
-                    group ? "default",
-                    ...
-                  }:
-                  {
-                    inherit
-                      name
-                      path
-                      params
-                      group
-                      ;
-                    aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
-                    # variants are dropped for now
-                  }
-                ) rtxModels;
+                # fromRtxModels = map (
+                #   {
+                #     name,
+                #     path,
+                #     aliases ? [ ],
+                #     params ? [ ],
+                #     group ? "default",
+                #     ...
+                #   }:
+                #   {
+                #     inherit
+                #       name
+                #       path
+                #       params
+                #       group
+                #       ;
+                #     aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
+                #     # variants are dropped for now
+                #   }
+                # ) rtxModels;
               in
               map (
                 model:
@@ -244,7 +244,7 @@ in
                     "ROCm0"
                   ];
                 }
-              ) (fromRtxModels ++ amdModels);
+              ) amdModels; # (fromRtxModels ++ amdModels);
           };
         };
     };
