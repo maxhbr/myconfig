@@ -19,13 +19,13 @@
         host_hostname = "nuc";
         client = {
           enable = true;
-          enableDcgmExporter = true;
-          dcgmExporterUseContainer = true;
+          # enableDcgmExporter = true;
+          # dcgmExporterUseContainer = true;
         };
       };
     }
-    ./nvidia.dcgm-exporter.nix
-    ../../hardware/RTX5090.nix
+    # ./nvidia.dcgm-exporter.nix
+    # ../../hardware/RTX5090.nix
     (myconfig.metadatalib.fixIp "enp191s0")
     (myconfig.metadatalib.setupAsBuildMachine [
       myconfig.metadatalib.get.hosts.p14.pubkeys."id_ed25519_no_pw.pub"
@@ -59,7 +59,7 @@
       }
     )
     ./myconfig.ai.llama-cpp
-    ./myconfig.ai.vllm
+    # ./myconfig.ai.vllm
     ./services.open-webui.nix
     ./services.wyoming.nix
     ./services.qdrant.nix
