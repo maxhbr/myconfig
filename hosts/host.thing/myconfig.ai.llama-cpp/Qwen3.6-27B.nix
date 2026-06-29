@@ -149,8 +149,10 @@ in
         "draft-mtp"
         "--spec-draft-n-max"
         "2"
-        "-b" "2048"
-        "-ub" "2048"
+        "-b"
+        "2048"
+        "-ub"
+        "2048"
       ];
       cacheType = "q8_0";
       ctxSize = 184320;
