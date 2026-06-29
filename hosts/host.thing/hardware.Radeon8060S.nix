@@ -8,43 +8,6 @@
 }:
 {
   imports = [
-    (
-      # vulkan
-      {
-        lib,
-        config,
-        pkgs,
-        ...
-      }:
-      {
-        config = lib.mkIf (config.specialisation != { }) {
-          myconfig = {
-            hardware.gpu.variant = [ "amd" ];
-          };
-        };
-      }
-    )
-    # rocm
-    (
-      {
-        config,
-        pkgs,
-        lib,
-        ...
-      }:
-      {
-        specialisation = {
-          rocm = {
-            inheritParentConfig = true;
-            configuration = {
-              myconfig = {
-                hardware.gpu.variant = [ "amd-no-rocm" ];
-              };
-            };
-          };
-        };
-      }
-    )
   ];
   config = {
     boot.kernelParams = [
@@ -79,11 +42,14 @@
     };
 
     # Tell niri to only use the iGPU for rendering, not the RTX 5090 eGPU.
-    myconfig.desktop.wayland.niri.additionalConfigKdl = ''
-      debug {
-        render-drm-device "/dev/dri/by-path/pci-0000:c3:00.0-card"
-        ignore-drm-device "/dev/dri/renderD129"
-      }
-    '';
+    myconfig = {
+      hardware.gpu.variant = [ "amd" ];
+      desktop.wayland.niri.additionalConfigKdl = ''
+        debug {
+          render-drm-device "/dev/dri/by-path/pci-0000:c3:00.0-card"
+          ignore-drm-device "/dev/dri/renderD129"
+        }
+      '';
+    };
   };
 }
