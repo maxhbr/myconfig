@@ -15,10 +15,12 @@
       model_group_alias = {
         "hermes" = "gfx1151:hermes";
         "hermes-fallback" = "gfx1151:hermes-fallback";
-        "opencode-fast" = "rtx5090:opencode-fast";
-        "opencode-fast-fallback" = "rtx5090:opencode-fast-fallback";
+        "opencode-fast" = "gfx1151:opencode-fast";
+        "opencode-fast-fallback" = "gfx1151:opencode-fast-fallback";
         "opencode" = "gfx1151:opencode";
+        "opencode-fallback" = "gfx1151:opencode-fallback";
         "opencode-slow" = "gfx1151:opencode-slow";
+        "opencode-slow-fallback" = "gfx1151:opencode-slow-fallback";
 
         "sidekick" = "rtx5090:sidekick";
       };

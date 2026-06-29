@@ -76,20 +76,7 @@ in
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf" ];
       };
-      variants = recommended_variants_Qwen3_6-35B-A3B // {
-        tweaked = {
-          # https://github.com/nathanlgabriel/paper_code_mapping_assessment/blob/main/README.md
-          cacheType = "q8_0";
-          parallel = 1;
-          params = [
-            "--split-mode"
-            "layer"
-            "--tensor-split"
-            "1,1.12"
-          ];
-          ctxSize = 262144;
-        };
-      };
+      variants = recommended_variants_Qwen3_6-35B-A3B;
       aliases = [
         "hermes"
         "opencode-fast-fallback"
@@ -110,6 +97,10 @@ in
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
       ];
+      aliases = [
+        "hermes"
+        "opencode-fast-fallback"
+      ];
       ctxSize = 262144;
       parallel = 4;
       variants = recommended_variants_Qwen3_6-35B-A3B;
@@ -125,6 +116,9 @@ in
       params = [
         "--chat-template-kwargs"
         "{\"preserve_thinking\":true}"
+      ];
+      aliases = [
+        "opencode-slow-fallback"
       ];
       ctxSize = 262144;
       parallel = 4;
