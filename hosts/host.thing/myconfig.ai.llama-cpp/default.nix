@@ -72,105 +72,104 @@ let
   # falling back to the plain llama-cpp without GPU backends.
   host-llama-cpp-pkg = config.myconfig.ai.inference-cpp.llama-cpp.package;
 
-
   gfx-llama-cpp-config = {
-            serviceVariant = "llama-swap";
-            # serviceDevice = "Vulkan0"; # only for serviceVariant llama-server
-            servicePort = 33657;
-            serviceListenAddress = "0.0.0.0";
-            serviceOpenFirewall = true;
-            serviceProviderName = "gfx1151";
-            groups = {
-              "Qwen3.6-27B" = {
-                swap = true;
-                exclusive = false;
-              };
-              "Qwen3.6-35B-A3B" = {
-                swap = true;
-                exclusive = false;
-              };
-              default = {
-                swap = true;
-                exclusive = true;
-              };
-            };
-            models =
-              let
-                allAliasesAndNamesFromAmdModels = lib.concatMap (m: [ m.name ] ++ (m.aliases or [ ])) amdModels;
-                # fromRtxModels = map (
-                #   {
-                #     name,
-                #     path,
-                #     aliases ? [ ],
-                #     params ? [ ],
-                #     group ? "default",
-                #     ...
-                #   }:
-                #   {
-                #     inherit
-                #       name
-                #       path
-                #       params
-                #       group
-                #       ;
-                #     aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
-                #     # variants are dropped for now
-                #   }
-                # ) rtxModels;
-              in
-              map (
-                model:
-                model
-                // {
-                  devices = [
-                    "Vulkan0"
-                    "ROCm0"
-                  ];
-                }
-              ) amdModels; # (fromRtxModels ++ amdModels);
-          };
-  rtx-llama-cpp-config = {
-      # Single CUDA0-bound llama-server instance on port 33656 (the new
-      # INI-preset-driven router backend). The home-manager
-      # llama-server_<Device> wrappers (router.enable = true) still get
-      # generated for all three devices so ad-hoc Vulkan0/Vulkan1 access
-      # remains available — they just aren't tied to a system service.
-      serviceVariant = "llama-server";
-      serviceDevice = "CUDA0";
-      servicePort = 33656;
-      serviceListenAddress = "0.0.0.0";
-      serviceOpenFirewall = true;
-      serviceProviderName = "rtx5090";
-      router.enable = true;
-      models = map (
+    serviceVariant = "llama-swap";
+    # serviceDevice = "Vulkan0"; # only for serviceVariant llama-server
+    servicePort = 33657;
+    serviceListenAddress = "0.0.0.0";
+    serviceOpenFirewall = true;
+    serviceProviderName = "gfx1151";
+    groups = {
+      "Qwen3.6-27B" = {
+        swap = true;
+        exclusive = false;
+      };
+      "Qwen3.6-35B-A3B" = {
+        swap = true;
+        exclusive = false;
+      };
+      default = {
+        swap = true;
+        exclusive = true;
+      };
+    };
+    models =
+      let
+        allAliasesAndNamesFromAmdModels = lib.concatMap (m: [ m.name ] ++ (m.aliases or [ ])) amdModels;
+        # fromRtxModels = map (
+        #   {
+        #     name,
+        #     path,
+        #     aliases ? [ ],
+        #     params ? [ ],
+        #     group ? "default",
+        #     ...
+        #   }:
+        #   {
+        #     inherit
+        #       name
+        #       path
+        #       params
+        #       group
+        #       ;
+        #     aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
+        #     # variants are dropped for now
+        #   }
+        # ) rtxModels;
+      in
+      map (
         model:
         model
         // {
           devices = [
             "Vulkan0"
-            "CUDA0"
-          ];
-          unlistedDevices = [
-            "Vulkan1"
             "ROCm0"
           ];
         }
-      ) rtxModels;
-      scriptOnlyModels =
-        map (
-          model:
-          model
-          // {
-            devices = [
-              "Vulkan1"
-            ];
-          }
-        ) amdModels
-        # Multi-GPU models already carry their own `devices` list (e.g.
-        # "Vulkan0,Vulkan1") and must not have it overridden.
-        ++ qwen3_6_27B-multiGpu
-        ++ qwen3_6_35B-A3B-multiGpu;
-    };
+      ) amdModels; # (fromRtxModels ++ amdModels);
+  };
+  rtx-llama-cpp-config = {
+    # Single CUDA0-bound llama-server instance on port 33656 (the new
+    # INI-preset-driven router backend). The home-manager
+    # llama-server_<Device> wrappers (router.enable = true) still get
+    # generated for all three devices so ad-hoc Vulkan0/Vulkan1 access
+    # remains available — they just aren't tied to a system service.
+    serviceVariant = "llama-server";
+    serviceDevice = "CUDA0";
+    servicePort = 33656;
+    serviceListenAddress = "0.0.0.0";
+    serviceOpenFirewall = true;
+    serviceProviderName = "rtx5090";
+    router.enable = true;
+    models = map (
+      model:
+      model
+      // {
+        devices = [
+          "Vulkan0"
+          "CUDA0"
+        ];
+        unlistedDevices = [
+          "Vulkan1"
+          "ROCm0"
+        ];
+      }
+    ) rtxModels;
+    scriptOnlyModels =
+      map (
+        model:
+        model
+        // {
+          devices = [
+            "Vulkan1"
+          ];
+        }
+      ) amdModels
+      # Multi-GPU models already carry their own `devices` list (e.g.
+      # "Vulkan0,Vulkan1") and must not have it overridden.
+      ++ qwen3_6_27B-multiGpu
+      ++ qwen3_6_35B-A3B-multiGpu;
+  };
 in
 {
   config = {
@@ -252,7 +251,7 @@ in
     #       myconfig.ai.llama-cpp = gfx-llama-cpp-config;
     #     };
     # };
-    myconfig.ai.localModels = config.containers.llama-cpp-33657.config.myconfig.ai.localModels;
-    ############
+    # myconfig.ai.localModels = config.containers.llama-cpp-33657.config.myconfig.ai.localModels;
+    # ############
   };
 }
