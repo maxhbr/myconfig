@@ -47,7 +47,11 @@ let
       safeDevice = lib.replaceStrings [ "," ] [ "-" ] device;
       safeName = lib.replaceStrings [ ":" ] [ "-" ] "${model.name}";
       scriptName = "llama-server_${safeDevice}_${safeName}";
-      envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
+      envExports = lib.concatStringsSep "\n" (
+        map (
+          e: if lib.hasPrefix "UNSET:" e then "unset ${lib.removePrefix "UNSET:" e}" else "export ${e}"
+        ) (envForDevice device)
+      );
       ctxSizeFlag =
         lib.optionalString (model.ctxSize != null)
           "--ctx-size ${toString (model.ctxSize * model.parallel)}";
@@ -99,7 +103,11 @@ let
       scriptName = "llama-bench_${safeDevice}_${safeName}";
       # Exported for capture_metadata's llama-server invocation. llama-bench
       # itself ignores LLAMA_ARG_DEVICE and uses the explicit -dev CLI flag.
-      envExports = lib.concatStringsSep "\n" (map (e: "export ${e}") (envForDevice device));
+      envExports = lib.concatStringsSep "\n" (
+        map (
+          e: if lib.hasPrefix "UNSET:" e then "unset ${lib.removePrefix "UNSET:" e}" else "export ${e}"
+        ) (envForDevice device)
+      );
       # Matching llama-server script — used to capture
       # runtime metadata via /props before benchmarking.
       serverScript = mkLlamaScript { inherit model device; };

@@ -86,13 +86,17 @@ in
   # pin them to a specific device. For multi-device strings the full
   # comma-separated value is preserved in LLAMA_ARG_DEVICE; the Vulkan/ROCm
   # CUDA_VISIBLE_DEVICES suppression is based on the first device.
+  #
+  # NOTE: we must `unset` (not `export CUDA_VISIBLE_DEVICES=`) because
+  # an empty-string value confuses ROCm into thinking no device is visible.
+  # Elements prefixed with "UNSET:" are handled specially by the caller.
   envForDevice =
     device:
     let
       d = firstDevice device;
     in
     [ "LLAMA_ARG_DEVICE=${device}" ]
-    ++ lib.optional (lib.hasPrefix "Vulkan" d || lib.hasPrefix "ROCm" d) "CUDA_VISIBLE_DEVICES=";
+    ++ lib.optional (lib.hasPrefix "Vulkan" d || lib.hasPrefix "ROCm" d) "UNSET:CUDA_VISIBLE_DEVICES";
 
   # Extract the numeric suffix from a device string (e.g. "Vulkan0" -> "0",
   # "ROCm1" -> "1"). For multi-device strings the index of the first device
