@@ -28,6 +28,10 @@ let
       enableEnforceEager ? null, # null = keep existing default (1)
       # Hugging Face repo for on-demand download (null = skip download)
       modelHfRepo ? null,
+      # GPU backend: "nvidia" (default) or "rocm"
+      gpuBackend ? "nvidia",
+      # ROCm: override GFX version (e.g. "11.5.1"); only used when gpuBackend = "rocm"
+      rocmOverrideGfxVersion ? "11.5.1",
     }:
     let
       vllmPkg = pkgs.writeShellApplication {
@@ -55,8 +59,16 @@ let
           # Host-side model checkout.
           MODEL_HOST_PATH="''${MODEL_HOST_PATH:-${modelHostPath}}"
 
+          # GPU backend selection ("nvidia" or "rocm").
+          GPU_BACKEND="${gpuBackend}"
+
           # Docker/vLLM settings.
-          DOCKER_IMAGE="''${DOCKER_IMAGE:-docker.io/vllm/vllm-openai:latest}"
+          ${
+            if gpuBackend == "rocm" then
+              ''DOCKER_IMAGE="''${DOCKER_IMAGE:-docker.io/rocm/vllm-openai:latest}"''
+            else
+              ''DOCKER_IMAGE="''${DOCKER_IMAGE:-docker.io/vllm/vllm-openai:latest}"''
+          }
 
           # vLLM model/server settings.
           DTYPE="''${DTYPE-${if dtype != null then toString dtype else "bfloat16"}}"
@@ -110,22 +122,50 @@ let
             fi
           fi
 
-          args=(
-            ${docker} run
-            --rm
-            --device nvidia.com/gpu=all
-            --name "${containerName}"
-            --ipc=host
-            -p "$HOST_PORT:8000"
-            -v "$MODEL_HOST_PATH:/model:ro"
-            "$DOCKER_IMAGE"
-            "/model"
-            --dtype "$DTYPE"
-            --max-model-len ${toString maxModelLen}
-            --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION"
-            --max-num-seqs "$MAX_NUM_SEQS"
-            --max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS"
-          )
+          ${
+            if gpuBackend == "rocm" then
+              ''
+                args=(
+                  ${docker} run
+                  --rm
+                  --device /dev/kfd
+                  --device /dev/dri
+                  --group-add video
+                  --group-add render
+                  -e HSA_OVERRIDE_GFX_VERSION="${rocmOverrideGfxVersion}"
+                  --name "${containerName}"
+                  --ipc=host
+                  -p "$HOST_PORT:8000"
+                  -v "$MODEL_HOST_PATH:/model:ro"
+                  "$DOCKER_IMAGE"
+                  "/model"
+                  --dtype "$DTYPE"
+                  --max-model-len ${toString maxModelLen}
+                  --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION"
+                  --max-num-seqs "$MAX_NUM_SEQS"
+                  --max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS"
+                )
+              ''
+            else
+              ''
+                args=(
+                  ${docker} run
+                  --rm
+                  --device nvidia.com/gpu=all
+                  --name "${containerName}"
+                  --ipc=host
+                  -p "$HOST_PORT:8000"
+                  -v "$MODEL_HOST_PATH:/model:ro"
+                  "$DOCKER_IMAGE"
+                  "/model"
+                  --dtype "$DTYPE"
+                  --max-model-len ${toString maxModelLen}
+                  --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION"
+                  --max-num-seqs "$MAX_NUM_SEQS"
+                  --max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS"
+                )
+              ''
+          }
 
           if [ "$TRUST_REMOTE_CODE" = "1" ]; then
             args+=(--trust-remote-code)
@@ -262,6 +302,47 @@ let
     };
   };
 
+  # --- Variant 5: Qwen-AgentWorld-35B-A3B (Qwen official, language world model) ---
+  vllmQwenAgentWorld35B_A3B = mkVllmDockerized {
+    modelHostPath = "/models/Qwen-AgentWorld-35B-A3B";
+    modelHfRepo = "Qwen/Qwen-AgentWorld-35B-A3B";
+    servedModelName = "Qwen-AgentWorld-35B-A3B";
+    containerName = "vllm-dockerized-Qwen-AgentWorld-35B-A3B";
+    port = 22548;
+    maxModelLen = 131072;
+    dtype = "bfloat16";
+    gpuMemoryUtilization = 0.93;
+    maxNumSeqs = 3;
+    reasoningParser = "qwen3";
+    extraConfig = {
+      aliases = [
+        "vllm:agentworld"
+      ];
+    };
+  };
+
+  # --- Variant 6: Qwen3.6-27B-FP8 (Qwen official, ROCm / AMD) ---
+  vllmQwen36_27B_FP8_ROCm = mkVllmDockerized {
+    modelHostPath = "/models/Qwen-Qwen3.6-27B-FP8";
+    modelHfRepo = "Qwen/Qwen3.6-27B-FP8";
+    servedModelName = "Qwen3.6-27B-FP8";
+    containerName = "vllm-dockerized-Qwen3.6-27B-FP8-ROCm";
+    port = 22549;
+    maxModelLen = 131072;
+    dtype = "auto";
+    gpuMemoryUtilization = 0.93;
+    maxNumSeqs = 3;
+    reasoningParser = "qwen3";
+    gpuBackend = "rocm";
+    rocmOverrideGfxVersion = "11.5.1";
+    extraConfig = {
+      aliases = [
+        "vllm:fp8"
+        "vllm:rocm"
+      ];
+    };
+  };
+
   # --- Variant 4: Qwen3.6-27B-int4-AutoRound (Lorbus, MTP + reasoning) ---
   vllmQwen36_27B_int4_AutoRound_Lorbus = mkVllmDockerized {
     modelHostPath = "/models/Lorbus-Qwen3.6-27B-int4-AutoRound";
@@ -320,12 +401,16 @@ in
       vllmQwen36_27B_Text_NVFP4_MTP.vllmPkg
       vllmQwen36_27B_int4_AutoRound.vllmPkg
       vllmQwen36_27B_int4_AutoRound_Lorbus.vllmPkg
+      vllmQwenAgentWorld35B_A3B.vllmPkg
+      vllmQwen36_27B_FP8_ROCm.vllmPkg
     ];
     services.llama-swap.settings.models =
       vllmQwen36_27B_NVFP4.modelConfig
       // vllmQwen36_27B_Text_NVFP4_MTP.modelConfig
       // vllmQwen36_27B_int4_AutoRound.modelConfig
-      // vllmQwen36_27B_int4_AutoRound_Lorbus.modelConfig;
+      // vllmQwen36_27B_int4_AutoRound_Lorbus.modelConfig
+      // vllmQwenAgentWorld35B_A3B.modelConfig
+      // vllmQwen36_27B_FP8_ROCm.modelConfig;
     home-manager.sharedModules = [
       {
         programs.aichat.settings.clients = [
@@ -338,6 +423,8 @@ in
               { name = "Qwen3.6-27B-Text-NVFP4-MTP"; }
               { name = "Qwen3.6-27B-int4-AutoRound"; }
               { name = "Qwen3.6-27B-int4-AutoRound-Lorbus"; }
+              { name = "Qwen-AgentWorld-35B-A3B"; }
+              { name = "Qwen3.6-27B-FP8"; }
             ];
           }
         ];
