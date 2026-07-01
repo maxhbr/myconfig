@@ -8,11 +8,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1775673275,
-        "narHash": "sha256-KLXyRrv9vG44X/K0D6S9h1qWJxPBxXLiVO8ltQdChxo=",
+        "lastModified": 1782898276,
+        "narHash": "sha256-I+gYaZYwZ0f2kaUkptTm7Q36XxX+IaXVeEF0NhOURKk=",
         "owner": "maxhbr",
         "repo": "NanoKVM-USB",
-        "rev": "e41cd30297db4a87dcb77ed2d01d5b7a721bb90d",
+        "rev": "03a83eabb1b674020f9ab2b6df6c4da2c209558e",
         "type": "github"
       },
       "original": {
@@ -420,11 +420,11 @@
     },
     "master": {
       "locked": {
-        "lastModified": 1782896186,
-        "narHash": "sha256-DxQctaNw2f+mft/D84lgFC0bXJMl5ERvtSFdCisCt5Q=",
+        "lastModified": 1782896814,
+        "narHash": "sha256-3VAA38OyPFyGCR/JGt6E0+rKbC8fSveIpJNcZ92xhiE=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "0e25b40b826a95e46bca4cc89e01f972478e8534",
+        "rev": "69a45623d91480c29d465db6ded426e6d6260451",
         "type": "github"
       },
       "original": {
@@ -707,11 +707,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1782896405,
-        "narHash": "sha256-1rfbwbom+6xSv+oCXvOloBVZJ4ZxAP4mLkEVuH0vSkA=",
+        "lastModified": 1782898037,
+        "narHash": "sha256-lFGqUfNalB6aL4jS/qyLhW6xUaiv61wm0PxnfLmGi6U=",
         "owner": "nix-community",
         "repo": "NUR",
-        "rev": "c90b96e201bdf79aed2f657a5abe8ca24c1e15a6",
+        "rev": "fa4ab73073f38b56c5d5d41b00933f07f3545243",
         "type": "github"
       },
       "original": {
