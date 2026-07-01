@@ -23,7 +23,7 @@ let
     port = 22549;
     maxModelLen = 131072;
     dtype = "auto";
-    gpuMemoryUtilization = 0.93;
+    gpuMemoryUtilization = 0.75;
     maxNumSeqs = 3;
     reasoningParser = "qwen3";
     rocmOverrideGfxVersion = "11.5.1";
@@ -38,7 +38,19 @@ in
 {
   imports = [
     {
-      virtualisation.docker.enable = lib.mkDefault true;
+      virtualisation.podman.enable = lib.mkDefault true;
+      virtualisation.podman.dockerCompat = lib.mkDefault true;
+
+      systemd.services.llama-swap = {
+        wants = [
+          "podman.service"
+          "podman.socket"
+        ];
+        after = [
+          "podman.service"
+          "podman.socket"
+        ];
+      };
     }
   ];
   config = {

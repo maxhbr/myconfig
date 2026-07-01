@@ -7,18 +7,18 @@
 { pkgs }:
 
 let
-  docker = "${pkgs.docker}/bin/docker";
-
-  # Build the shared shell-script body for a vLLM Docker container.
+  # Build the shared shell-script body for a vLLM container (Docker or Podman).
   # $1 is the optional host port; everything else is passed to vLLM CLI.
   #
   # Backend-specific parts are injected via:
   #   backendDockerImage   – default image (overridable via DOCKER_IMAGE env var)
   #   backendDockerRunArgs – shell fragment for GPU device/group/env flags
+  #   containerRuntime     – "docker" or "podman"
   #
   # All remaining parameters are vLLM tuning knobs and model metadata.
   mkVllmDockerized =
     {
+      containerRuntime ? "docker", # "docker" or "podman"
       # --- Backend-specific ---
       backendDockerImage, # e.g. "docker.io/vllm/vllm-openai:latest"
       backendDockerRunArgs, # shell fragment (inside the args=(...) block)
@@ -46,11 +46,15 @@ let
       modelHfRepo ? null,
     }:
     let
+      runtime = pkgs.${containerRuntime};
+      runtimeBin = "${runtime}/bin/${containerRuntime}";
+
       vllmPkg = pkgs.writeShellApplication {
         name = containerName;
 
         runtimeInputs = [
           pkgs.coreutils
+          runtime
           (pkgs.python3.withPackages (ps: [ ps.huggingface-hub ]))
         ];
 
@@ -121,13 +125,13 @@ let
           fi
 
           if [ "$REMOVE_EXISTING_CONTAINER" = "1" ]; then
-            if ${docker} ps -a --format '{{.Names}}' | grep -Fxq "${containerName}"; then
-              ${docker} rm -f "${containerName}" >/dev/null
+            if ${runtimeBin} ps -a --format '{{.Names}}' | grep -Fxq "${containerName}"; then
+              ${runtimeBin} rm -f "${containerName}" >/dev/null
             fi
           fi
 
           args=(
-            ${docker} run
+            ${runtimeBin} run
             --rm
             ${backendDockerRunArgs}
             --name "${containerName}"
@@ -231,7 +235,7 @@ let
             "vllm:opencode"
           ]
           ++ (extraConfig.aliases or [ ]);
-          cmdStop = "${docker} stop ${containerName}";
+          cmdStop = "${runtimeBin} stop ${containerName}";
           ttl = 0;
         };
       };
@@ -248,6 +252,7 @@ in
       port,
       maxModelLen ? 185024,
       extraConfig ? { },
+      containerRuntime ? "docker",
       # Optional vLLM tuning overrides (null = use script default)
       dtype ? null,
       gpuMemoryUtilization ? null,
@@ -271,6 +276,7 @@ in
         port
         maxModelLen
         extraConfig
+        containerRuntime
         dtype
         gpuMemoryUtilization
         maxNumSeqs
@@ -292,6 +298,7 @@ in
       port,
       maxModelLen ? 185024,
       extraConfig ? { },
+      containerRuntime ? "podman",
       # Optional vLLM tuning overrides (null = use script default)
       dtype ? null,
       gpuMemoryUtilization ? null,
@@ -314,7 +321,7 @@ in
         --entrypoint vllm
         -e HSA_OVERRIDE_GFX_VERSION="${rocmOverrideGfxVersion}"
       '';
-      backendModelArg = "\"--model\" \"/model\"";
+      backendModelArg = "\"serve\" \"/model\"";
       inherit
         modelHostPath
         servedModelName
@@ -322,6 +329,7 @@ in
         port
         maxModelLen
         extraConfig
+        containerRuntime
         dtype
         gpuMemoryUtilization
         maxNumSeqs
