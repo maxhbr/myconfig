@@ -7,6 +7,7 @@
 
 {
   imports = [
-    ./docker.vllm.nix
+    ./docker.vllm.cuda.nix
+    ./docker.vllm.rocm.nix
   ];
 }

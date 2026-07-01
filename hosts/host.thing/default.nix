@@ -56,6 +56,7 @@
     )
     ./myconfig.ai.llama-cpp
     # ./myconfig.ai.vllm
+    ./myconfig.ai.vllm/docker.vllm.rocm.nix
     ./services.open-webui.nix
     ./services.wyoming.nix
     ./services.qdrant.nix
