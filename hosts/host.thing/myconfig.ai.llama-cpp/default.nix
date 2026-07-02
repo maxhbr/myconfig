@@ -17,6 +17,7 @@ let
   qwen3_6_35B-A3B-multiGpu = qwen3_6_35B-A3B.multiGpuModels;
   thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix;
   ornith = import ./Ornith-1.0-35B.nix;
+  qwen3_235B = import ./Qwen3-235B-A22B.nix;
   # Helper to set the llama-swap group on a list of models.
   withGroup = group: map (m: m // { inherit group; });
 
@@ -37,7 +38,8 @@ let
   ++ withGroup "Qwen3.6-35B-A3B" qwen3_6_35B-A3B.rtxModels
   ++ gemma4.rtxModels
   ++ thedrummerSkyfall31B.rtxModels
-  ++ withGroup "Ornith-1.0-35B" ornith.rtxModels;
+  ++ withGroup "Ornith-1.0-35B" ornith.rtxModels
+  ++ withGroup "Qwen3-235B-A22B" qwen3_235B.rtxModels;
 
   amdModels = map (model: model // { params = (model.params or [ ]) ++ [ "--no-mmap" ]; }) (
     [
@@ -68,6 +70,7 @@ let
     ++ nemotron3Super.amdModels
     ++ thedrummerSkyfall31B.amdModels
     ++ withGroup "Ornith-1.0-35B" ornith.amdModels
+    ++ withGroup "Qwen3-235B-A22B" qwen3_235B.amdModels
   );
 
   # Package built for the host with ROCm+Vulkan support (variant = "amd").
