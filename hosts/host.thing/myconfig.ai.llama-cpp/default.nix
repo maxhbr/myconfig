@@ -21,28 +21,30 @@ let
   # Helper to set the llama-swap group on a list of models.
   withGroup = group: map (m: m // { inherit group; });
 
+  sidekickModel = {
+    name = "Qwen3.5-9B-Q5_K_M";
+    path = "/models/unsloth-Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
+    pull-models = {
+      target_directory = modelsPullDir;
+      hf_spec = [ "unsloth/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf" ];
+    };
+    ctxSize = 262144;
+    aliases = [ "sidekick" ];
+    ttl = 300;
+  };
+
   rtxModels = [
-    {
-      name = "Qwen3.5-9B-Q5_K_M";
-      path = "/models/unsloth-Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [ "unsloth/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q5_K_M.gguf" ];
-      };
-      ctxSize = 262144;
-      aliases = [ "sidekick" ];
-      ttl = 300;
-    }
+    sidekickModel
   ]
-  ++ withGroup "Qwen3.6-27B" qwen3_6_27B.rtxModels
-  ++ withGroup "Qwen3.6-35B-A3B" qwen3_6_35B-A3B.rtxModels
+  ++ withGroup "dense" qwen3_6_27B.rtxModels
+  ++ withGroup "MoE" qwen3_6_35B-A3B.rtxModels
+  ++ withGroup "MoE" ornith.rtxModels
   ++ gemma4.rtxModels
-  ++ thedrummerSkyfall31B.rtxModels
-  ++ withGroup "Ornith-1.0-35B" ornith.rtxModels
-  ++ withGroup "Qwen3-235B-A22B" qwen3_235B.rtxModels;
+  ++ thedrummerSkyfall31B.rtxModels;
 
   amdModels = map (model: model // { params = (model.params or [ ]) ++ [ "--no-mmap" ]; }) (
     [
+      sidekickModel
       {
         name = "NVIDIA-Nemotron-3-Nano-Omni-Q8_0";
         path = "/models/ggml-org-NVIDIA-Nemotron-3-Nano-Omni/nemotron-3-nano-omni-ga_v1.0-Q8_0.gguf";
@@ -63,14 +65,14 @@ let
         ttl = 1800;
       }
     ]
-    ++ withGroup "Qwen3.6-27B" qwen3_6_27B.amdModels
-    ++ withGroup "Qwen3.6-35B-A3B" qwen3_6_35B-A3B.amdModels
+    ++ withGroup "dense" qwen3_6_27B.amdModels
+    ++ withGroup "MoE" qwen3_6_35B-A3B.amdModels
+    ++ withGroup "MoE" ornith.amdModels
     ++ gemma4.amdModels
     ++ minimaxM2_7.amdModels
     ++ nemotron3Super.amdModels
     ++ thedrummerSkyfall31B.amdModels
-    ++ withGroup "Ornith-1.0-35B" ornith.amdModels
-    ++ withGroup "Qwen3-235B-A22B" qwen3_235B.amdModels
+    ++ qwen3_235B.amdModels
   );
 
   # Package built for the host with ROCm+Vulkan support (variant = "amd").
