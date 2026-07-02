@@ -99,7 +99,7 @@ in
       ];
       aliases = [
         "hermes"
-        "opencode-fast-fallback"
+        "opencode-fast"
       ];
       ctxSize = 262144;
       parallel = 4;
