@@ -201,7 +201,11 @@ in
             "opencode"
           ];
         };
+        q8_0 = {
+          cacheType = "q8_0";
+        };
       };
+      ctxSize = 262144;
       ttl = 900;
     }
     {
@@ -221,25 +225,12 @@ in
             "opencode-fallback"
           ];
         };
+        q8_0 = {
+          cacheType = "q8_0";
+        };
       };
+      ctxSize = 262144;
       ttl = 900;
-    }
-    {
-      name = "Qwen3.6-27B-BF16";
-      path = "/models/unsloth-Qwen3.6-27B-GGUF/BF16/Qwen3.6-27B-BF16-00001-of-00002.gguf";
-      pull-models = {
-        target_directory = modelsPullDir;
-        hf_spec = [ "unsloth/Qwen3.6-27B-GGUF/BF16" ];
-      };
-      params = [
-        "--chat-template-kwargs"
-        "{\"preserve_thinking\":true}"
-      ];
-      cacheType = "f16";
-      aliases = [
-        "opencode-slow"
-      ];
-      ttl = 300;
     }
   ];
 }
