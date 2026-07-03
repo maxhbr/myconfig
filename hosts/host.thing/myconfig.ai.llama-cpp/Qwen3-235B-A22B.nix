@@ -13,6 +13,8 @@ in
         ];
       };
       ttl = 3600;
+      ctxSize = 262144;
+      cacheType = "q8_0";
     }
   ];
 }
