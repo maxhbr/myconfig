@@ -8,14 +8,16 @@
 }:
 let
   modelsPullDir = "/home/mhuber/models";
-  gemma4 = import ./gemma4.nix;
-  minimaxM2_7 = import ./MiniMax-M2.7-GGUF.nix;
-  nemotron3Super = import ./Nemotron-3-Super.nix;
-  qwen3_6_27B = import ./Qwen3.6-27B.nix;
-  qwen3_6_35B-A3B = import ./Qwen3.6-35B-A3B.nix;
+  agentsA1 = import ./Agents-A1.nix { inherit modelsPullDir; };
+  gemma4 = import ./gemma4.nix { inherit modelsPullDir; };
+  minimaxM2_7 = import ./MiniMax-M2.7-GGUF.nix { inherit modelsPullDir; };
+  nemotron3Super = import ./Nemotron-3-Super.nix { inherit modelsPullDir; };
+  qwen3_6_27B = import ./Qwen3.6-27B.nix { inherit modelsPullDir; };
+  qwen3_6_35B-A3B = import ./Qwen3.6-35B-A3B.nix { inherit modelsPullDir; };
+  qwenAgentWorld35BA3B = import ./Qwen-AgentWorld-35B-A3B.nix { inherit modelsPullDir; };
   qwen3_6_27B-multiGpu = qwen3_6_27B.multiGpuModels;
   qwen3_6_35B-A3B-multiGpu = qwen3_6_35B-A3B.multiGpuModels;
-  thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix;
+  thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix { inherit modelsPullDir; };
   # Helper to set the llama-swap group on a list of models.
   withGroup = group: map (m: m // { inherit group; });
 
@@ -65,6 +67,8 @@ let
     ++ minimaxM2_7.amdModels
     ++ nemotron3Super.amdModels
     ++ thedrummerSkyfall31B.amdModels
+    ++ agentsA1.amdModels
+    ++ qwenAgentWorld35BA3B.amdModels
   );
 
   # Package built for the host with ROCm+Vulkan support (variant = "amd").

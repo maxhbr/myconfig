@@ -1,5 +1,5 @@
+{ modelsPullDir }:
 let
-  modelsPullDir = "/home/mhuber/models";
   # Context sizes from /props endpoint: 196608 = full, 131072 = 128k, 49152 = quarter
   ctxSize = 196608;
   ctxSize128k = 131072;

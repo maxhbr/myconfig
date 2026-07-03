@@ -1,6 +1,4 @@
-let
-  modelsPullDir = "/home/mhuber/models";
-in
+{ modelsPullDir }:
 {
   amdModels = [
     {

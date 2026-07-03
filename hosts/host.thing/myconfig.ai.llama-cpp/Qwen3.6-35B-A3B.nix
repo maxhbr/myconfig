@@ -1,5 +1,5 @@
+{ modelsPullDir }:
 let
-  modelsPullDir = "/home/mhuber/models";
   recommended_variants_Qwen3_6-35B-A3B = {
     thinking-general = {
       params = [
