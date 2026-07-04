@@ -14,7 +14,6 @@ let
   nemotron3Super = import ./Nemotron-3-Super.nix { inherit modelsPullDir; };
   qwen3_6_27B = import ./Qwen3.6-27B.nix { inherit modelsPullDir; };
   qwen3_6_35B-A3B = import ./Qwen3.6-35B-A3B.nix { inherit modelsPullDir; };
-  qwenAgentWorld35BA3B = import ./Qwen-AgentWorld-35B-A3B.nix { inherit modelsPullDir; };
   qwen3_6_27B-multiGpu = qwen3_6_27B.multiGpuModels;
   qwen3_6_35B-A3B-multiGpu = qwen3_6_35B-A3B.multiGpuModels;
   thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix { inherit modelsPullDir; };
@@ -75,7 +74,6 @@ let
     ++ nemotron3Super.amdModels
     ++ thedrummerSkyfall31B.amdModels
     ++ agentsA1.amdModels
-    ++ qwenAgentWorld35BA3B.amdModels
     ++ qwen3_235B.amdModels
   );
 
