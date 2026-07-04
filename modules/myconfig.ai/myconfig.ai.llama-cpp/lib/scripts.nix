@@ -69,14 +69,72 @@ let
         "--split-mode layer --tensor-split ${model.tensorSplit}"
       );
       paramsStr = lib.concatStringsSep " " (map lib.escapeShellArg model.params);
+
+      # Optional `pull-models` metadata (see ./options.nix). When set, the
+      # generated script first checks whether `model.path` exists and, if
+      # not, fetches it via `hf download` (huggingface-hub) before starting
+      # llama-server. This mirrors the spec format and on-disk layout of
+      # the `myconfig.ai.pull_models` helper, but is scoped to this single
+      # model so the wrapper is self-contained and works even when that
+      # helper module is not enabled.
+      #
+      # `model.path` typically points at a read-only bind mount (e.g.
+      # /models) of the same backing volume that the writable
+      # `target_directory` (e.g. /home/mhuber/models) mounts, so a
+      # successful pull makes the file appear at `model.path` too.
+      pullModelsCfg = model.pull-models or null;
+      hasPullModels = pullModelsCfg != null;
+      hfPkg = pkgs.python3Packages.huggingface-hub;
+      # Shell-escaped writable download root. Only forced when
+      # `hasPullModels` (Nix laziness guards the `pullModelsCfg` access).
+      targetDirEsc = lib.optionalString hasPullModels (
+        lib.escapeShellArg (toString pullModelsCfg.target_directory)
+      );
+      # Shell snippet (empty when pull-models is unset) that, when the model
+      # file is missing, defines a `pull_model` helper and invokes it once
+      # per `hf_spec` entry. Spec parsing matches the `pull-models` helper:
+      #   "org/repo"          -> full repo    -> "<dir>/org-repo"
+      #   "org/repo/file.ext" -> single file  -> "<dir>/org-repo/file.ext"
+      #   "org/repo/subdir"   -> subdir/*     -> "<dir>/org-repo/subdir/..."
+      pullBlock = lib.optionalString hasPullModels ''
+        if [[ ! -e ${lib.escapeShellArg model.path} ]]; then
+          echo "[pull] model file not found at ${lib.escapeShellArg model.path}; pulling from HuggingFace..." >&2
+          pull_model() {
+            local target_dir="$1" spec="$2"
+            local slash_count repo_id path_in_repo local_dir
+            slash_count=$(tr -cd '/' <<<"$spec" | wc -c)
+            if [[ "$slash_count" -eq 1 ]]; then
+              # "org/repo" -> full repo download into "<dir>/org-repo"
+              local_dir="$target_dir/''${spec//\//-}"
+              hf download "$spec" --include "*" --local-dir "$local_dir"
+            else
+              repo_id="''${spec%/*}"
+              path_in_repo="''${spec##*/}"
+              local_dir="$target_dir/''${repo_id//\//-}"
+              if [[ "$path_in_repo" == *.* ]]; then
+                hf download "$repo_id" --include "$path_in_repo" --local-dir "$local_dir"
+              else
+                hf download "$repo_id" --include "$path_in_repo/*" --local-dir "$local_dir"
+              fi
+            fi
+          }
+          # Iterate the hf_spec list via an array so shellcheck does not
+          # flag SC2043 when a model has only a single spec.
+          hf_specs=( ${lib.concatStringsSep " " (map lib.escapeShellArg pullModelsCfg.hf_spec)} )
+          for spec in "''${hf_specs[@]}"; do
+            pull_model ${targetDirEsc} "$spec"
+          done
+        fi
+      '';
     in
     # Trigger the assertion by referencing _check (builtins.seq evaluates the
     # first argument to WHNF before returning the second).
     builtins.seq _check pkgs.writeShellApplication {
       name = scriptName;
-      runtimeInputs = [ ];
+      runtimeInputs = [ ] ++ lib.optional hasPullModels hfPkg;
       text = ''
         ${envExports}
+        ${pullBlock}
         set -x
         exec ${server} \
           --port "''${1:-22545}" \
