@@ -21,6 +21,9 @@
 #                        — bridge that auto-collects each model's
 #                          `pull-models = { target_directory; hf_spec; }`
 #                          into `myconfig.ai.pull_models.models`
+#   docs.nix
+#                — renders /run/myconfig/docs/models.md from the
+#                  declared model definitions
 #
 # The router and llama-swap backends consume the same `models` option
 # and can be enabled independently.
@@ -33,5 +36,6 @@
     ./llama-swap.nix
     ./router.nix
     ./myconfig.ai.pull_models.nix
+    ./docs.nix
   ];
 }
