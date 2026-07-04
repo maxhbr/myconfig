@@ -98,32 +98,37 @@ let
       #   "org/repo/subdir"   -> subdir/*     -> "<dir>/org-repo/subdir/..."
       pullBlock = lib.optionalString hasPullModels ''
         if [[ ! -e ${lib.escapeShellArg model.path} ]]; then
-          echo "[pull] model file not found at ${lib.escapeShellArg model.path}; pulling from HuggingFace..." >&2
-          pull_model() {
-            local target_dir="$1" spec="$2"
-            local slash_count repo_id path_in_repo local_dir
-            slash_count=$(tr -cd '/' <<<"$spec" | wc -c)
-            if [[ "$slash_count" -eq 1 ]]; then
-              # "org/repo" -> full repo download into "<dir>/org-repo"
-              local_dir="$target_dir/''${spec//\//-}"
-              hf download "$spec" --include "*" --local-dir "$local_dir"
-            else
-              repo_id="''${spec%/*}"
-              path_in_repo="''${spec##*/}"
-              local_dir="$target_dir/''${repo_id//\//-}"
-              if [[ "$path_in_repo" == *.* ]]; then
-                hf download "$repo_id" --include "$path_in_repo" --local-dir "$local_dir"
+          target_dir=${targetDirEsc}
+          if [[ ! -w "$target_dir" ]]; then
+            echo "[pull] model file not found at ${lib.escapeShellArg model.path} and target directory '$target_dir' is not writable; skipping pull" >&2
+          else
+            echo "[pull] model file not found at ${lib.escapeShellArg model.path}; pulling from HuggingFace into '$target_dir'..." >&2
+            pull_model() {
+              local target_dir="$1" spec="$2"
+              local slash_count repo_id path_in_repo local_dir
+              slash_count=$(tr -cd '/' <<<"$spec" | wc -c)
+              if [[ "$slash_count" -eq 1 ]]; then
+                # "org/repo" -> full repo download into "<dir>/org-repo"
+                local_dir="$target_dir/''${spec//\//-}"
+                hf download "$spec" --include "*" --local-dir "$local_dir"
               else
-                hf download "$repo_id" --include "$path_in_repo/*" --local-dir "$local_dir"
+                repo_id="''${spec%/*}"
+                path_in_repo="''${spec##*/}"
+                local_dir="$target_dir/''${repo_id//\//-}"
+                if [[ "$path_in_repo" == *.* ]]; then
+                  hf download "$repo_id" --include "$path_in_repo" --local-dir "$local_dir"
+                else
+                  hf download "$repo_id" --include "$path_in_repo/*" --local-dir "$local_dir"
+                fi
               fi
-            fi
-          }
-          # Iterate the hf_spec list via an array so shellcheck does not
-          # flag SC2043 when a model has only a single spec.
-          hf_specs=( ${lib.concatStringsSep " " (map lib.escapeShellArg pullModelsCfg.hf_spec)} )
-          for spec in "''${hf_specs[@]}"; do
-            pull_model ${targetDirEsc} "$spec"
-          done
+            }
+            # Iterate the hf_spec list via an array so shellcheck does not
+            # flag SC2043 when a model has only a single spec.
+            hf_specs=( ${lib.concatStringsSep " " (map lib.escapeShellArg pullModelsCfg.hf_spec)} )
+            for spec in "''${hf_specs[@]}"; do
+              pull_model "$target_dir" "$spec"
+            done
+          fi
         fi
       '';
     in
