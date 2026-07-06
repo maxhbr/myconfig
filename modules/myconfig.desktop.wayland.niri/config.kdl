@@ -323,6 +323,7 @@ window-rule {
     exclude app-id="^zoom$"
     exclude app-id="^teams-for-linux$"
     exclude app-id="^org-knopflerfish-framework-BundleThread$"
+    exclude app-id="^Electron$"
 
     opacity 0.8
 }
@@ -331,13 +332,10 @@ window-rule {
     match app-id=r#"^org\.keepassxc\.KeePassXC$"#
     match app-id=r#"^org\.gnome\.World\.Secrets$"#
     match app-id="^Signal$"
+    match app-id="^Slack$"
+    exclude app-id="^Electron$"
 
     block-out-from "screen-capture"
-}
-
-window-rule {
-    match app-id="^Signal$"
-    match app-id="^Slack$"
 }
 
 window-rule {
