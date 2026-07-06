@@ -14,7 +14,6 @@ let
   nemotron3Super = import ./Nemotron-3-Super.nix { inherit modelsPullDir; };
   qwen3_6_27B = import ./Qwen3.6-27B.nix { inherit modelsPullDir; };
   qwen3_6_35B-A3B = import ./Qwen3.6-35B-A3B.nix { inherit modelsPullDir; };
-  qwenAgentWorld35BA3B = import ./Qwen-AgentWorld-35B-A3B.nix { inherit modelsPullDir; };
   qwen3_6_27B-multiGpu = qwen3_6_27B.multiGpuModels;
   qwen3_6_35B-A3B-multiGpu = qwen3_6_35B-A3B.multiGpuModels;
   thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix { inherit modelsPullDir; };
@@ -40,7 +39,6 @@ let
   ]
   ++ withGroup "dense" qwen3_6_27B.rtxModels
   ++ withGroup "MoE" qwen3_6_35B-A3B.rtxModels
-  ++ withGroup "MoE" ornith.rtxModels
   ++ gemma4.rtxModels
   ++ thedrummerSkyfall31B.rtxModels;
 
@@ -75,9 +73,40 @@ let
     ++ nemotron3Super.amdModels
     ++ thedrummerSkyfall31B.amdModels
     ++ agentsA1.amdModels
-    ++ qwenAgentWorld35BA3B.amdModels
     ++ qwen3_235B.amdModels
   );
+  fromRtxModels =
+    let
+      # Gather all names and aliases from AMD models, including aliases
+      # declared inside variants (which are invisible at the top level
+      # but end up as aliases once variants are unpacked).
+      allAliasesAndNamesFromAmdModels = lib.concatMap (
+        m:
+        [ m.name ]
+        ++ (m.aliases or [ ])
+        ++ lib.concatMap (v: v.aliases or [ ]) (lib.attrValues (m.variants or { }))
+      ) amdModels;
+    in
+    map (
+      {
+        name,
+        path,
+        aliases ? [ ],
+        params ? [ ],
+        group ? "default",
+        ...
+      }:
+      {
+        inherit
+          name
+          path
+          params
+          group
+          ;
+        aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
+        # variants are dropped for now
+      }
+    ) (lib.filter (m: !lib.elem m.name allAliasesAndNamesFromAmdModels) rtxModels);
 
   # Package built for the host with ROCm+Vulkan support (variant = "amd").
   # Passed into the container so it reuses the same binary instead of
@@ -105,40 +134,16 @@ let
         exclusive = true;
       };
     };
-    models =
-      let
-        allAliasesAndNamesFromAmdModels = lib.concatMap (m: [ m.name ] ++ (m.aliases or [ ])) amdModels;
-        # fromRtxModels = map (
-        #   {
-        #     name,
-        #     path,
-        #     aliases ? [ ],
-        #     params ? [ ],
-        #     group ? "default",
-        #     ...
-        #   }:
-        #   {
-        #     inherit
-        #       name
-        #       path
-        #       params
-        #       group
-        #       ;
-        #     aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
-        #     # variants are dropped for now
-        #   }
-        # ) rtxModels;
-      in
-      map (
-        model:
-        model
-        // {
-          devices = [
-            "Vulkan0"
-            "ROCm0"
-          ];
-        }
-      ) amdModels; # (fromRtxModels ++ amdModels);
+    models = map (
+      model:
+      model
+      // {
+        devices = [
+          "Vulkan0"
+          "ROCm0"
+        ];
+      }
+    ) (amdModels ++ fromRtxModels);
   };
   rtx-llama-cpp-config = {
     # Single CUDA0-bound llama-server instance on port 33656 (the new
