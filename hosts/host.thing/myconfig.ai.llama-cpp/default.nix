@@ -203,72 +203,72 @@ in
       )
     );
 
-    myconfig.ai.llama-cpp = gfx-llama-cpp-config;
+    myconfig.ai.llama-cpp = rtx-llama-cpp-config;
 
-    # ############
-    # # Vulkan-only sibling instance running the llama-server router
-    # # backend (single llama-server bound to Vulkan0 with an INI preset
-    # # listing every model). Lives in a container so the host can keep
-    # # its CUDA-using stack on a different port without GPU library
-    # # conflicts.
-    # containers.llama-cpp-33657 = {
-    #   autoStart = true;
-    #   privateNetwork = false;
-    #   # hostAddress = "10.233.10.1";
-    #   # localAddress = "10.233.10.2";
+    ############
+    # Vulkan-only sibling instance running the llama-server router
+    # backend (single llama-server bound to Vulkan0 with an INI preset
+    # listing every model). Lives in a container so the host can keep
+    # its CUDA-using stack on a different port without GPU library
+    # conflicts.
+    containers.llama-cpp-33657 = {
+      autoStart = true;
+      privateNetwork = false;
+      # hostAddress = "10.233.10.1";
+      # localAddress = "10.233.10.2";
 
-    #   # Important: cgroup device permissions
-    #   allowedDevices = [
-    #     {
-    #       node = "/dev/dri/renderD128";
-    #       modifier = "rw";
-    #     }
-    #     {
-    #       node = "/dev/dri/card0";
-    #       modifier = "rw";
-    #     }
-    #   ];
+      # Important: cgroup device permissions
+      allowedDevices = [
+        {
+          node = "/dev/dri/renderD128";
+          modifier = "rw";
+        }
+        {
+          node = "/dev/dri/card0";
+          modifier = "rw";
+        }
+      ];
 
-    #   # Important: actual device + driver userspace visibility
-    #   bindMounts = {
-    #     "/dev/dri" = {
-    #       hostPath = "/dev/dri";
-    #       isReadOnly = false;
-    #     };
-    #     "/run/opengl-driver" = {
-    #       hostPath = "/run/opengl-driver";
-    #       isReadOnly = true;
-    #     };
-    #     "/models/" = {
-    #       hostPath = "/models/";
-    #       isReadOnly = true;
-    #     };
-    #     "/proc/meminfo" = {
-    #       hostPath = "/proc/meminfo";
-    #       isReadOnly = true;
-    #     };
-    #   };
+      # Important: actual device + driver userspace visibility
+      bindMounts = {
+        "/dev/dri" = {
+          hostPath = "/dev/dri";
+          isReadOnly = false;
+        };
+        "/run/opengl-driver" = {
+          hostPath = "/run/opengl-driver";
+          isReadOnly = true;
+        };
+        "/models/" = {
+          hostPath = "/models/";
+          isReadOnly = true;
+        };
+        "/proc/meminfo" = {
+          hostPath = "/proc/meminfo";
+          isReadOnly = true;
+        };
+      };
 
-    #   config =
-    #     { pkgs, ... }:
-    #     {
-    #       imports = [
-    #         ../../../modules/myconfig.ai/myconfig.ai.llama-cpp
-    #         ../../../modules/myconfig.ai/myconfig.localModels.nix
-    #       ];
-    #       environment.systemPackages = with pkgs; [
-    #         nvtopPackages.amd
-    #         rocmPackages.rocm-smi
-    #       ];
-    #       hardware.graphics.enable = true;
-    #       # Use the host's llama-cpp binary (built with ROCm+Vulkan for
-    #       # variant = "amd") instead of the container's default plain
-    #       # build which lacks GPU backend support.
-    #       services.llama-cpp.package = lib.mkForce host-llama-cpp-pkg;
-    #       myconfig.ai.llama-cpp = gfx-llama-cpp-config;
-    #     };
-    # };
-    # myconfig.ai.localModels = config.containers.llama-cpp-33657.config.myconfig.ai.localModels;
-    # ############
+      config =
+        { pkgs, ... }:
+        {
+          imports = [
+            ../../../modules/myconfig.ai/myconfig.ai.llama-cpp
+            ../../../modules/myconfig.ai/myconfig.localModels.nix
+          ];
+          environment.systemPackages = with pkgs; [
+            nvtopPackages.amd
+            rocmPackages.rocm-smi
+          ];
+          hardware.graphics.enable = true;
+          # Use the host's llama-cpp binary (built with ROCm+Vulkan for
+          # variant = "amd") instead of the container's default plain
+          # build which lacks GPU backend support.
+          services.llama-cpp.package = lib.mkForce host-llama-cpp-pkg;
+          myconfig.ai.llama-cpp = gfx-llama-cpp-config;
+        };
+    };
+    myconfig.ai.localModels = config.containers.llama-cpp-33657.config.myconfig.ai.localModels;
+    ############
   };
 }

@@ -63,6 +63,7 @@
     ./services.litellm.nix
     ./specialisation.nix
     ./hardware.Radeon8060S.nix
+    ./hardware.RTX5090.nix
     ./disk.nix
     ./btr2-pool.nix
     {
