@@ -47,6 +47,20 @@
           #   name = "node-red";
           #   port = 1880;
           # }
+          # OWASP Dependency-Track (see hosts/host.nuc/services.dependency-track.nix).
+          # The frontend SPA is served here; it calls the API at the
+          # `dtrack-api` subdomain below (cross-origin, CORS-enabled on the
+          # apiserver). The API vhost is excluded from blackbox monitoring
+          # because its `/` returns 401 (health is at /health).
+          {
+            name = "dtrack";
+            port = 8081;
+          }
+          {
+            name = "dtrack-api";
+            port = 8082;
+            excludeFromMonitoring = true;
+          }
         ];
         thing = [
           {

@@ -20,6 +20,12 @@
 #   /var/lib/mosquitto        — low (no persistence configured)
 #   /var/lib/grafana          — high (dashboards, user data)
 #   /var/lib/loki/ruler       — high (alert rules; small)
+#   /var/lib/dependency-track — high (OWASP Dependency-Track apiserver data dir;
+#                               embedded H2 DB holds users/teams/projects/password
+#                               and API-key *hashes*; /data/keys/secret.key
+#                               encrypts sensitive config properties — without it
+#                               previously-encrypted values can't be decrypted on
+#                               restore. See services.dependency-track.nix)
 #   /var/lib/victoriametrics  — large (90-day retention; re-scraped on restart)
 #   /var/lib/loki/chunks      — large (30-day retention; logs roll off)
 {
@@ -76,6 +82,7 @@ in
       "/var/lib/mosquitto"
       "/var/lib/grafana"
       "/var/lib/loki/ruler"
+      "/var/lib/dependency-track"
       # large initial backup; deduplicates well after first run:
       "/var/lib/victoriametrics"
       "/var/lib/loki/chunks"

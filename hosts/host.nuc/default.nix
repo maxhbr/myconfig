@@ -12,6 +12,7 @@
     ./smart-home
     ./observability.nix
     ./services.caddy.nix
+    ./services.dependency-track.nix
     ./backup-hdd.nix
     ./hardware-configuration.nix
     ../../hardware/grub.nix
@@ -43,6 +44,15 @@
       headless.enable = true;
       smart-home.enable = true;
       deployedServices.configureCaddy = true;
+      # Podman is needed for the Dependency-Track containers (see
+      # services.dependency-track.nix). `myconfig.virtualisation.enable`
+      # turns on podman; the explicit backend selects podman for oci-containers.
+      virtualisation.enable = true;
+    };
+
+    virtualisation = {
+      podman.enable = true;
+      oci-containers.backend = "podman";
     };
 
     networking.hostName = "nuc";
