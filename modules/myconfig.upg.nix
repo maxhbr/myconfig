@@ -43,6 +43,8 @@ in
             [
               (mk-upg-script "upg" "")
               (mk-upg-script "upg-fast" "--fast")
+              sbomnix
+              nvd
             ]
             ++ (map (hn: (mk-upg-script "upg-${hn}" "--fast ${hn}")) cfg.upg.otherHosts);
         }

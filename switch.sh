@@ -332,6 +332,37 @@ deploy() (
         echo "... retry nixos-rebuild"
     done
 )
+sbom() (
+    local target="$1"
+    local out_link="$2"
+    local sbom_dir="$out_link.sbom"
+    mkdir -p "$sbom_dir"
+    log_step "sbom $sbom_dir"
+    cd "$sbom_dir"
+    sbomnix "$out_link"
+    local cdx="sbom.cdx.json"
+    if [[ -f "$cdx" ]]; then
+        if have pass; then
+            local dtrack_token
+            dtrack_token="$(pass "priv/home-lab/automation@dtrack.nuc.wg0.maxhbr.local" -p || true)"
+            if [[ -n $dtrack_token ]]; then
+                log_info "setting github token"
+                local version
+                version="$(jq -r '.metadata.component.name' "$cdx")"
+                curl -X POST "https://dtrack-api.nuc.wg0.maxhbr.local/api/v1/bom" \                                                                                                                                                                                                                   
+                     -H "X-Api-Key: $dtrack_token" \
+                     -F "autoCreate=true" \
+                     -F "projectName=host.$target" \
+                     -F "projectVersion=$version" \
+                     -F "bom=@$cdx"
+            else
+                log_warning "no dtrack token"
+            fi
+        else
+            log_warning "pass not found, skipping dtrack upload"
+        fi
+    fi
+)
 main() {
     local MODE=""
     local COMMAND="switch"
@@ -482,13 +513,16 @@ main() {
             cat "$generations" | head -5
         fi
     fi
+    if [[ $MODE == "--use-wg" || $MODE != "--test" ]]; then
+        sbom "$target" "$out_link" || true
+    fi
 }
 
 ################################################################################
 
-if ! have nix || ! have nvd; then
+if ! have nix || ! have nvd || ! have sbomnix; then
     log_error "nvd not found"
-    exec nix-shell -p nvd --command "$0" "$@"
+    exec nix-shell -p nvd -p sbomnix --command "$0" "$@"
 fi
 
 main "$@"
