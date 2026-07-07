@@ -349,7 +349,7 @@ sbom() (
                 log_info "setting github token"
                 local version
                 version="$(jq -r '.metadata.component.name' "$cdx")"
-                curl -X POST "https://dtrack-api.nuc.wg0.maxhbr.local/api/v1/bom" \                                                                                                                                                                                                                   
+                curl -X POST "https://dtrack-api.nuc.wg0.maxhbr.local/api/v1/bom" \
                      -H "X-Api-Key: $dtrack_token" \
                      -F "autoCreate=true" \
                      -F "projectName=host.$target" \
