@@ -70,7 +70,7 @@ let
         orientation = "auto";
       };
       fieldConfig.defaults = {
-        unit = "watt";
+        unit = "W";
         decimals = 0;
         thresholds = {
           mode = "absolute";
