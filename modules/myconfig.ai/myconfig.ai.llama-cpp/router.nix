@@ -362,20 +362,36 @@ in
       # on every start. Point HOME at the existing CacheDirectory
       # (/var/cache/llama-cpp) so the pipeline cache lands in a writable,
       # persisted location and warmup is faster on subsequent starts.
-      # The upstream `services.llama-cpp` unit runs as a DynamicUser
-      # with `PrivateDevices=false` but, unlike `services.ollama`, grants
-      # no access to the GPU device nodes. A dynamic user has no
-      # `video`/`render` supplementary groups, so it cannot open
-      # `/dev/nvidia*` (root:video 0660) or `/dev/dri/renderD*`
-      # (root:render 0660). CUDA then enumerates zero devices and
-      # llama-server rejects `LLAMA_ARG_DEVICE=CUDA0` with
-      #   error while handling environment variable "LLAMA_ARG_DEVICE":
-      #   invalid device: CUDA0
+      # The upstream `services.llama-cpp` unit hardens the service
+      # the same way `services.ollama` does — but with two GPU-relevant
+      # omissions that break CUDA `cuInit` on this host:
+      #
+      #  1. No `SupplementaryGroups` / `DeviceAllow`: a DynamicUser has
+      #     no `video`/`render` membership, so it cannot open
+      #     `/dev/nvidia*` (root:video 0660) or `/dev/dri/renderD*`
+      #     (root:render 0660). CUDA then sees zero devices and
+      #     llama-server rejects `LLAMA_ARG_DEVICE=CUDA0` with
+      #       error while handling environment variable "LLAMA_ARG_DEVICE":
+      #       invalid device: CUDA0
+      #  2. `SystemCallFilter = ["@system-service" "~@privileged"]`
+      #     omits the `@resources` group that ollama includes. That
+      #     group covers the NUMA memory-policy syscalls (`mbind`,
+      #     `set_mempolicy`, `get_mempolicy`, `migrate_pages`,
+      #     `move_pages`) plus scheduling ones (`sched_setaffinity`,
+      #     `setpriority`) that the NVIDIA UVM driver uses for GPU
+      #     memory placement. On a Strix Halo (CPU+iGPU unified memory)
+      #     + eGPU topology the driver calls these during `cuInit`;
+      #     without `@resources` they return EPERM and `cuInit` aborts
+      #     with CUDA_ERROR_UNKNOWN, logged as
+      #       ggml_cuda_init: failed to initialize CUDA: unknown error
+      #
       # Mirror `services.ollama`'s proven GPU-access provisions
-      # (SupplementaryGroups + DeviceAllow/DevicePolicy) so the dynamic
-      # user can actually reach the accelerators. This is only needed
-      # for the system service, not the home-manager wrappers (which run
-      # as the regular user, already in `render`/`video`).
+      # (SupplementaryGroups + DeviceAllow/DevicePolicy, `@resources`
+      # in the syscall filter, `ProcSubset=all` for /proc/meminfo GPU
+      # memory detection — the container sibling bind-mounts it for the
+      # same reason). Only the system service needs this; the
+      # home-manager wrappers run as the regular user (already in
+      # `render`/`video`, no seccomp filter).
       systemd.services.llama-cpp.serviceConfig = {
         SupplementaryGroups = [
           "video"
@@ -393,6 +409,15 @@ in
           "char-fb"
           "char-kfd"
         ];
+        # Add `@resources` (NUMA memory-policy + scheduling syscalls
+        # the NVIDIA UVM driver needs for cuInit) and widen ProcSubset
+        # to `all` so /proc/meminfo is visible for GPU memory detection.
+        # `lib.mkForce` overrides the upstream module's plain values.
+        SystemCallFilter = lib.mkForce [
+          "@system-service @resources"
+          "~@privileged"
+        ];
+        ProcSubset = lib.mkForce "all";
       };
 
       systemd.services.llama-cpp.environment = {
