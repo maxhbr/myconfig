@@ -362,6 +362,39 @@ in
       # on every start. Point HOME at the existing CacheDirectory
       # (/var/cache/llama-cpp) so the pipeline cache lands in a writable,
       # persisted location and warmup is faster on subsequent starts.
+      # The upstream `services.llama-cpp` unit runs as a DynamicUser
+      # with `PrivateDevices=false` but, unlike `services.ollama`, grants
+      # no access to the GPU device nodes. A dynamic user has no
+      # `video`/`render` supplementary groups, so it cannot open
+      # `/dev/nvidia*` (root:video 0660) or `/dev/dri/renderD*`
+      # (root:render 0660). CUDA then enumerates zero devices and
+      # llama-server rejects `LLAMA_ARG_DEVICE=CUDA0` with
+      #   error while handling environment variable "LLAMA_ARG_DEVICE":
+      #   invalid device: CUDA0
+      # Mirror `services.ollama`'s proven GPU-access provisions
+      # (SupplementaryGroups + DeviceAllow/DevicePolicy) so the dynamic
+      # user can actually reach the accelerators. This is only needed
+      # for the system service, not the home-manager wrappers (which run
+      # as the regular user, already in `render`/`video`).
+      systemd.services.llama-cpp.serviceConfig = {
+        SupplementaryGroups = [
+          "video"
+          "render"
+        ];
+        DevicePolicy = "closed";
+        DeviceAllow = [
+          # CUDA
+          "char-nvidiactl"
+          "char-nvidia-caps"
+          "char-nvidia-frontend"
+          "char-nvidia-uvm"
+          # ROCm / Vulkan
+          "char-drm"
+          "char-fb"
+          "char-kfd"
+        ];
+      };
+
       systemd.services.llama-cpp.environment = {
         HOME = "/var/cache/llama-cpp";
         XDG_CACHE_HOME = "/var/cache/llama-cpp";
