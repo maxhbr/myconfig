@@ -83,6 +83,29 @@ in
       ];
       ttl = 900;
     }
+    {
+      name = "Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP";
+      path = "/models/unsloth-Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-UD-Q5_K_XL.gguf" ];
+      };
+      params = [
+        "--spec-type"
+        "draft-mtp"
+        "--spec-draft-n-max"
+        "2"
+        "-b"
+        "2048"
+        "-ub"
+        "2048"
+      ];
+      cacheType = "q8_0";
+      ctxSize = 184320;
+      parallel = 1;
+      variants = recommended_variants_Qwen3_6-35B-A3B;
+      ttl = 900;
+    }
   ];
 
   amdModels = [
@@ -100,6 +123,26 @@ in
       aliases = [
         "hermes"
         "opencode-fast"
+      ];
+      ctxSize = 262144;
+      parallel = 4;
+      variants = recommended_variants_Qwen3_6-35B-A3B;
+      ttl = 3600;
+    }
+    {
+      name = "Qwen3.6-35B-A3B-UD-Q8_K_XL-MTP";
+      path = "/models/unsloth-Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "unsloth/Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf" ];
+      };
+      params = [
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
+        "--spec-type"
+        "draft-mtp"
+        "--spec-draft-n-max"
+        "3"
       ];
       ctxSize = 262144;
       parallel = 4;
