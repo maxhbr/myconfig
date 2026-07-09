@@ -26,6 +26,7 @@ in
           pkgs,
           config,
           lib,
+          super,
           ...
         }:
         {
@@ -39,11 +40,32 @@ in
                   set -x
                   exec ${config.home.homeDirectory}/myconfig/priv/switch.sh ${args} "$@"
                 '';
+              # Use the system nix (config.nix.package) instead of the
+              # nix version sbomnix pulls in by default.
+              # NOTE: `sbomnix.override { nix = ...; }` does *not* propagate
+              # into the wrapper PATH -- the callPackage `nix` argument is
+              # ignored by the final `makeWrapperArgs` (a buildPythonApplication
+              # finalAttrs quirk). Rebuilding `makeWrapperArgs` via
+              # `overridePythonAttrs` actually swaps the nix on PATH.
+              sbomnix-with-system-nix = sbomnix.overridePythonAttrs (_old: {
+                makeWrapperArgs = [
+                  "--prefix PATH : ${
+                    pkgs.lib.makeBinPath [
+                      git
+                      super.nix.package
+                      python3.pkgs.graphviz
+                      nix-visualize
+                      vulnix
+                      grype
+                    ]
+                  }"
+                ];
+              });
             in
             [
               (mk-upg-script "upg" "")
               (mk-upg-script "upg-fast" "--fast")
-              sbomnix
+              sbomnix-with-system-nix
               nvd
             ]
             ++ (map (hn: (mk-upg-script "upg-${hn}" "--fast ${hn}")) cfg.upg.otherHosts);
