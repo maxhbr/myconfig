@@ -11,7 +11,6 @@
 {
   imports = [
     ./ai.p14.nix
-    ./hermes-agent.nix
     ./services.caddy.nix
     ./services.forgejo-token.nix
     {

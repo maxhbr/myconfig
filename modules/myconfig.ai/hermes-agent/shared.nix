@@ -1,8 +1,28 @@
+# Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
+# SPDX-License-Identifier: MIT
+#
+# Shared bindings for the hermes-agent service and its NixOS-container
+# variant. Both `service.nix` (native backend) and `nixos-container.nix`
+# (container backend) import this file so the `services.hermes-agent`
+# configuration (`hermesServiceCfg`) and the supporting paths/URLs are
+# defined in exactly one place.
+#
+# This is a plain function (not a NixOS module): it is called with the host
+# module arguments and returns an attrset of values. The same `import ./file
+# { inherit ...; }` pattern is used by modules/myconfig.ai/fns/ and
+# programs.pi-coding-agent.
+#
+# NOTE: `hermesServiceCfg.settings` declares `compression` twice (once with
+# `summary_provider`/`summary_model`, once with `enabled`/`threshold`).
+# This is intentional and works because the upstream `services.hermes-agent`
+# `settings` option uses a deep-merge type (`recursiveUpdate`), which
+# combines both blocks into a single
+# `{ enabled, threshold, summary_provider, summary_model }` attrset —
+# verified by force-enabling the module.
 {
   config,
   lib,
   pkgs,
-  inputs,
   myconfig,
   ...
 }:
@@ -16,6 +36,10 @@ let
   # hosts/host.thing/default.nix. Connect directly, no Caddy in the path.
   litellmBaseUrl = "http://${myconfig.metadatalib.getWgIp "thing"}:4000/v1";
 
+  # When the container backend is enabled, advertise the container's own
+  # address to hermes; otherwise bind to localhost. `containers.hermes` is
+  # defined by nixos-container.nix — this cross-module reference is safe
+  # because NixOS option evaluation is lazy.
   apiServerHost = if cfg.container.enable then config.containers.hermes.localAddress else "localhost";
   hermesServiceCfg = {
     enable = true;
@@ -94,104 +118,12 @@ let
   };
 in
 {
-  options = {
-    myconfig.ai.hermes = {
-      enable = lib.mkEnableOption "Hermes agent configuration";
-      container = {
-        enable = lib.mkEnableOption "Hermes gateway container";
-        autostart = lib.mkEnableOption "Autostart Hermes gateway container";
-      };
-    };
-  };
-
-  imports = [
-    inputs.hermes-agent.nixosModules.default
-  ];
-
-  config = lib.mkIf cfg.enable {
-    myconfig.persistence.directories = [ "hermes-agent" ];
-    environment.sessionVariables = {
-      HERMES_HOME = "${stateDir}/.hermes";
-    };
-    home-manager.users.mhuber =
-      { pkgs, ... }:
-      {
-        home.packages = [
-          inputs.hermes-agent.packages.${pkgs.system}.default
-        ];
-      };
-    services.hermes-agent = lib.mkIf (!cfg.container.enable) hermesServiceCfg;
-    containers.hermes = lib.mkIf cfg.container.enable {
-      autoStart = cfg.container.autostart;
-      privateNetwork = true;
-      hostAddress = "192.168.111.10";
-      localAddress = "192.168.111.11";
-      hostAddress6 = "fc00::1";
-      localAddress6 = "fc00::2";
-      bindMounts = {
-        "${stateDir}" = {
-          hostPath = stateDir;
-          mountPoint = stateDir;
-          isReadOnly = false;
-        };
-        "/home/mhuber/.hermes-secrets" = {
-          hostPath = "/home/mhuber/.hermes-secrets";
-          mountPoint = "/home/mhuber/.hermes-secrets";
-          isReadOnly = false;
-        };
-      };
-
-      config =
-        {
-          config,
-          pkgs,
-          lib,
-          ...
-        }:
-        let
-          containerConfig = config;
-        in
-        {
-          imports = [
-            inputs.hermes-agent.nixosModules.default
-            inputs.home.nixosModules.home-manager
-          ];
-
-          services.hermes-agent = hermesServiceCfg;
-
-          users.users.mhuber = lib.mkForce {
-            isNormalUser = true;
-            home = "/home/mhuber";
-            createHome = true;
-            uid = hostConfig.users.users.mhuber.uid or 1000;
-            extraGroups = [ "mhuber" ];
-          };
-          users.groups.mhuber = { };
-
-          home-manager.users.mhuber =
-            { pkgs, ... }:
-            {
-              imports = [
-              ];
-
-              home.stateVersion = containerConfig.system.stateVersion;
-            };
-
-          system.stateVersion = "25.11";
-
-          networking = {
-            firewall = {
-              enable = true;
-              # allowedTCPPorts = [ 80 ];
-            };
-            # Use systemd-resolved inside the container
-            # Workaround for bug https://github.com/NixOS/nixpkgs/issues/162686
-            useHostResolvConf = lib.mkForce false;
-          };
-
-          services.resolved.enable = true;
-
-        };
-    };
-  };
+  inherit
+    hostConfig
+    stateDir
+    cfg
+    litellmBaseUrl
+    apiServerHost
+    hermesServiceCfg
+    ;
 }
