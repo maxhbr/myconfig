@@ -356,17 +356,17 @@
         ##########################################################################
 
         nixosConfigurations = {
-          # f13 = self.nixosConfigurationsGen.host-f13 [ ] { };
-          # p14 = self.nixosConfigurationsGen.host-p14 [ ] { };
-          # # x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [ ] { };
-          # workstation = self.nixosConfigurationsGen.host-workstation [ ] { };
-          # vserver = self.nixosConfigurationsGen.host-vserver [ ] { };
-          # nas = self.nixosConfigurationsGen.host-nas [ ] { };
-          # nuc = self.nixosConfigurationsGen.host-nuc [ ] { };
-          # r6c = self.nixosConfigurationsGen.host-r6c [ ] { };
-          # pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
-          # pi3a = self.nixosConfigurationsGen.host-pi3a [ ] { };
-          # thing = self.nixosConfigurationsGen.host-thing [ ] { };
+          test-f13 = self.nixosConfigurationsGen.host-f13 [ ] { };
+          test-p14 = self.nixosConfigurationsGen.host-p14 [ ] { };
+          # x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [ ] { };
+          test-workstation = self.nixosConfigurationsGen.host-workstation [ ] { };
+          test-vserver = self.nixosConfigurationsGen.host-vserver [ ] { };
+          test-nas = self.nixosConfigurationsGen.host-nas [ ] { };
+          test-nuc = self.nixosConfigurationsGen.host-nuc [ ] { };
+          test-r6c = self.nixosConfigurationsGen.host-r6c [ ] { };
+          test-pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
+          test-pi3a = self.nixosConfigurationsGen.host-pi3a [ ] { };
+          test-thing = self.nixosConfigurationsGen.host-thing [ ] { };
 
           # container = nixpkgs.lib.nixosSystem {
           #   system = "x86_64-linux";
