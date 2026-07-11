@@ -3,6 +3,19 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
+source_env_file() {
+    local env_file="$1"
+    if [[ -f $env_file ]]; then
+        set -a
+        # shellcheck disable=SC1090,SC1091
+        source "$env_file"
+        set +a
+    fi
+}
+# Source .env from the resolved (real) directory first (in case $0 is a
+# symlink), then from the directory of $0 so the latter can override.
+source_env_file "$(dirname "$(readlink -f "$0")")/.env"
+source_env_file "$(dirname "$0")/.env"
 verbose=""
 LEAD_HOST="f13"
 ulimit -c unlimited
@@ -342,24 +355,26 @@ sbom() (
     sbomnix "$out_link"
     local cdx="sbom.cdx.json"
     if [[ -f "$cdx" ]]; then
-        if have pass; then
-            local dtrack_token
-            dtrack_token="$(pass "priv/home-lab/automation@dtrack.nuc.wg0.maxhbr.local" -p || true)"
-            if [[ -n $dtrack_token ]]; then
-                log_info "setting github token"
-                local version
-                version="$(jq -r '.metadata.component.name' "$cdx")"
-                curl -X POST "https://dtrack-api.nuc.vserver.wg0.maxhbr.local/api/v1/bom" \
-                     -H "X-Api-Key: $dtrack_token" \
-                     -F "autoCreate=true" \
-                     -F "projectName=host.$target" \
-                     -F "projectVersion=$version" \
-                     -F "bom=@$cdx"
+        local dtrack_token="${DTRACK_TOKEN:-}"
+        if [[ -z $dtrack_token ]]; then
+            if have pass; then
+                dtrack_token="$(pass "priv/home-lab/automation@dtrack.nuc.wg0.maxhbr.local" -p || true)"
             else
-                log_warning "no dtrack token"
+                log_warning "pass not found, skipping dtrack upload"
             fi
+        fi
+        if [[ -n $dtrack_token ]]; then
+            log_info "uploading sbom to dtrack"
+            local version
+            version="$(jq -r '.metadata.component.name' "$cdx")"
+            curl -X POST "https://dtrack-api.nuc.vserver.wg0.maxhbr.local/api/v1/bom" \
+                -H "X-Api-Key: $dtrack_token" \
+                -F "autoCreate=true" \
+                -F "projectName=host.$target" \
+                -F "projectVersion=$version" \
+                -F "bom=@$cdx"
         else
-            log_warning "pass not found, skipping dtrack upload"
+            log_warning "no dtrack token"
         fi
     fi
 )
