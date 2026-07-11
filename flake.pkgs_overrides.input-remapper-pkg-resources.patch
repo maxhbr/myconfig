@@ -1,0 +1,21 @@
+diff --git a/inputremapper/configs/data.py b/inputremapper/configs/data.py
+index bb868a6..2684323 100644
+--- a/inputremapper/configs/data.py
++++ b/inputremapper/configs/data.py
+@@ -25,8 +25,6 @@ import os
+ import site
+ import sys
+ 
+-import pkg_resources
+-
+ from inputremapper.logging.logger import logger
+ 
+ logged = False
+@@ -56,6 +54,7 @@ def _try_python_package_location():
+     """Look for the data dir at the packages installation location."""
+     source = None
+     try:
++        import pkg_resources
+         source = pkg_resources.require("input-remapper")[0].location
+         # failed in some ubuntu installations
+     except Exception:

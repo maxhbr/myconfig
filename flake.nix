@@ -124,6 +124,7 @@
                   }
                 )
                 (import ./flake.pkgs_from_prs.nix { inherit inputs; })
+                (import ./flake.pkgs_overrides.nix { })
                 (
                   { pkgs, ... }:
                   {
