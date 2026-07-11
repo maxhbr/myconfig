@@ -26,6 +26,13 @@
         alpaca = {
           enable = false;
         };
+        hermes = {
+          enable = true;
+          microvm = {
+            enable = true;
+            autostart = true;
+          };
+        };
       };
     };
 

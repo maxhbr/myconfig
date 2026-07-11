@@ -49,6 +49,8 @@
 
     hermes-agent.url = "github:NousResearch/hermes-agent/v2026.5.7";
     hermes-agent.inputs.nixpkgs.follows = "nixpkgs";
+    microvm.url = "github:astro/microvm.nix";
+    microvm.inputs.nixpkgs.follows = "nixpkgs";
 
     NanoKVM-USB.url = "github:maxhbr/NanoKVM-USB";
     NanoKVM-USB.inputs.nixpkgs.follows = "nixpkgs";

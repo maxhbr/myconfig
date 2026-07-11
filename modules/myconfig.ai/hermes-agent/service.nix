@@ -38,6 +38,10 @@ in
         enable = lib.mkEnableOption "Hermes gateway container";
         autostart = lib.mkEnableOption "Autostart Hermes gateway container";
       };
+      microvm = {
+        enable = lib.mkEnableOption "Hermes gateway microvm";
+        autostart = lib.mkEnableOption "Autostart Hermes gateway microvm";
+      };
     };
   };
 
@@ -57,6 +61,9 @@ in
           inputs.hermes-agent.packages.${pkgs.system}.default
         ];
       };
-    services.hermes-agent = lib.mkIf (!cfg.container.enable) hermesServiceCfg;
+    # Run the native host service only when neither the container nor the
+    # microvm backend is active — those backends run hermes inside their own
+    # isolated environment instead.
+    services.hermes-agent = lib.mkIf (!cfg.container.enable && !cfg.microvm.enable) hermesServiceCfg;
   };
 }

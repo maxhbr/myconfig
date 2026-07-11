@@ -15,10 +15,13 @@
 #                         in native mode.
 #   nixos-container.nix  — containerized and isolated hermes service via a
 #                         NixOS declarative container.
+#   microvm.nix          — hermes service in a microvm.nix MicroVM (real VM,
+#                         separate kernel), managed as a host systemd service.
 { ... }:
 {
   imports = [
     ./service.nix
     ./nixos-container.nix
+    ./microvm.nix
   ];
 }
