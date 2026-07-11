@@ -17,22 +17,6 @@
         pi-coding-agent.enable = true;
         claude-code.enable = true;
         codex.enable = true;
-        inference-cpp = {
-          enable = false;
-        };
-        lmstudio = {
-          enable = false;
-        };
-        alpaca = {
-          enable = false;
-        };
-        hermes = {
-          enable = true;
-          microvm = {
-            enable = true;
-            autostart = true;
-          };
-        };
       };
     };
 
