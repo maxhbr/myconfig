@@ -40,11 +40,11 @@ let
   ++ withGroup "dense" qwen3_6_27B.rtxModels
   ++ withGroup "MoE" qwen3_6_35B-A3B.rtxModels
   ++ gemma4.rtxModels
-  ++ thedrummerSkyfall31B.rtxModels;
+  ++ thedrummerSkyfall31B.rtxModels
+  ++ agentsA1.rtxModels;
 
   amdModels = map (model: model // { params = (model.params or [ ]) ++ [ "--no-mmap" ]; }) (
     [
-      sidekickModel
       {
         name = "NVIDIA-Nemotron-3-Nano-Omni-Q8_0";
         path = "/models/ggml-org-NVIDIA-Nemotron-3-Nano-Omni/nemotron-3-nano-omni-ga_v1.0-Q8_0.gguf";
