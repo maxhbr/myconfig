@@ -84,9 +84,12 @@ in
     };
 
     hassUrl = mkOption {
-      type = types.str;
+      type = types.nullOr types.str;
       default = "http://hass.nuc.wg0.maxhbr.local";
-      description = "Home Assistant URL (passed to the hermes agent via env).";
+      description = ''
+        Home Assistant URL (passed to the hermes agent via env).
+        Set to null to omit HASS_URL entirely.
+      '';
     };
 
     extraPackages = mkOption {

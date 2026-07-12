@@ -108,7 +108,7 @@ let
             API_SERVER_ENABLED=true
             API_SERVER_PORT=${toString cfg.apiServerPort}
             API_SERVER_HOST=${apiServerHost}
-            HASS_URL=${cfg.hassUrl}
+            ${lib.optionalString (cfg.hassUrl != null) "HASS_URL=${cfg.hassUrl}"}
           ''
         );
       in
