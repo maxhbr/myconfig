@@ -41,12 +41,37 @@ in
   options.myconfig.ai.hermes = with lib; {
     enable = mkEnableOption "Hermes agent configuration";
 
+    user = mkOption {
+      type = types.str;
+      default = myconfig.user;
+      defaultText = literalExpression "myconfig.user";
+      description = "User that runs the hermes-agent service.";
+    };
+
+    group = mkOption {
+      type = types.str;
+      default = myconfig.user;
+      defaultText = literalExpression "myconfig.user";
+      description = "Group that runs the hermes-agent service.";
+    };
+
     stateDir = mkOption {
       type = types.str;
-      default = "/home/mhuber/hermes-agent";
+      default = "/home/${myconfig.user}/hermes-agent";
+      defaultText = literalExpression ''"/home/''\${myconfig.user}/hermes-agent"'';
       description = ''
         State directory for hermes-agent. Contains the .hermes/ subdir
         (HERMES_HOME) and the workspace/.
+      '';
+    };
+
+    secretsDir = mkOption {
+      type = types.str;
+      default = "/home/${myconfig.user}/.hermes-secrets";
+      defaultText = literalExpression ''"/home/''\${myconfig.user}/.hermes-secrets"'';
+      description = ''
+        Directory containing hermes secret files (e.g. the env file with
+        API keys). Mounted read-only into the container/microvm backends.
       '';
     };
 
@@ -121,13 +146,71 @@ in
       '';
     };
 
+    toolsets = mkOption {
+      type = types.listOf types.str;
+      default = [ "all" ];
+      description = ''
+        Toolsets enabled for the hermes agent. Defaults to [ "all" ].
+        Restrict per-host (e.g. a headless server might drop browser tools).
+      '';
+    };
+
+    telegram = {
+      enable = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Enable the Telegram messaging integration. Only hosts with a
+          Telegram bot token (in the secrets env file) should enable this.
+        '';
+      };
+      requireMention = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Whether the bot requires @mention to respond in group chats.
+          Ignored when telegram.enable is false.
+        '';
+      };
+    };
+
     container = {
       enable = mkEnableOption "Hermes gateway container";
       autostart = mkEnableOption "Autostart Hermes gateway container";
+      hostAddress = mkOption {
+        type = types.str;
+        default = "192.168.111.10";
+        description = "Host-side IPv4 address for the container network.";
+      };
+      localAddress = mkOption {
+        type = types.str;
+        default = "192.168.111.11";
+        description = "Container-side IPv4 address for the container network.";
+      };
+      hostAddress6 = mkOption {
+        type = types.str;
+        default = "fc00::1";
+        description = "Host-side IPv6 address for the container network.";
+      };
+      localAddress6 = mkOption {
+        type = types.str;
+        default = "fc00::2";
+        description = "Container-side IPv6 address for the container network.";
+      };
     };
     microvm = {
       enable = mkEnableOption "Hermes gateway microvm";
       autostart = mkEnableOption "Autostart Hermes gateway microvm";
+      vcpu = mkOption {
+        type = types.ints.positive;
+        default = 2;
+        description = "Number of virtual CPU cores for the hermes microvm.";
+      };
+      mem = mkOption {
+        type = types.ints.positive;
+        default = 2048;
+        description = "Amount of RAM (in MB) for the hermes microvm.";
+      };
     };
   };
 
@@ -140,7 +223,7 @@ in
     environment.sessionVariables = {
       HERMES_HOME = "${cfg.stateDir}/.hermes";
     };
-    home-manager.users.mhuber =
+    home-manager.users."${cfg.user}" =
       { pkgs, ... }:
       {
         home.packages = [

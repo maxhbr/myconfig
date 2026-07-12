@@ -48,6 +48,7 @@ let
   inherit (shared)
     hermesServiceCfg
     stateDir
+    secretsDir
     hostConfig
     ;
   cfg = config.myconfig.ai.hermes;
@@ -97,7 +98,7 @@ in
       microvm.host.enable = true;
 
       # Host-side `hermes-microvm` CLI wrapper (see `let` block above).
-      home-manager.users.mhuber =
+      home-manager.users."${cfg.user}" =
         { pkgs, ... }:
         {
           home.packages = [ hermes-microvm ];
@@ -145,8 +146,8 @@ in
               # qemu with KVM acceleration on x86_64 Linux (f13 is a
               # Framework AMD laptop). cloud-hypervisor is an alternative.
               hypervisor = "qemu";
-              vcpu = 2;
-              mem = 2048;
+              vcpu = cfg.microvm.vcpu;
+              mem = cfg.microvm.mem;
 
               # Share the host's /nix/store read-only so the VM needs no
               # store disk image and boots fast. storeOnDisk auto-disables
@@ -173,8 +174,8 @@ in
                   # Secrets stay on the host (agenix-managed) and are
                   # exposed read-only to the VM.
                   tag = "hermes-secrets";
-                  source = "/home/mhuber/.hermes-secrets";
-                  mountPoint = "/home/mhuber/.hermes-secrets";
+                  source = secretsDir;
+                  mountPoint = secretsDir;
                   proto = "virtiofs";
                   readOnly = true;
                 }
@@ -207,7 +208,7 @@ in
             # the API server binds to 0.0.0.0 (see comment above).
             services.hermes-agent = hermesServiceCfg // {
               environmentFiles = [
-                "/home/mhuber/.hermes-secrets/env"
+                "${secretsDir}/env"
                 "${hermesMicrovmEnv}"
               ];
             };

@@ -34,6 +34,7 @@ let
   inherit (shared)
     hermesServiceCfg
     stateDir
+    secretsDir
     hostConfig
     ;
   cfg = config.myconfig.ai.hermes;
@@ -43,19 +44,19 @@ in
     containers.hermes = {
       autoStart = cfg.container.autostart;
       privateNetwork = true;
-      hostAddress = "192.168.111.10";
-      localAddress = "192.168.111.11";
-      hostAddress6 = "fc00::1";
-      localAddress6 = "fc00::2";
+      hostAddress = cfg.container.hostAddress;
+      localAddress = cfg.container.localAddress;
+      hostAddress6 = cfg.container.hostAddress6;
+      localAddress6 = cfg.container.localAddress6;
       bindMounts = {
         "${stateDir}" = {
           hostPath = stateDir;
           mountPoint = stateDir;
           isReadOnly = false;
         };
-        "/home/mhuber/.hermes-secrets" = {
-          hostPath = "/home/mhuber/.hermes-secrets";
-          mountPoint = "/home/mhuber/.hermes-secrets";
+        "${secretsDir}" = {
+          hostPath = secretsDir;
+          mountPoint = secretsDir;
           isReadOnly = false;
         };
       };

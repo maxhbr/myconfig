@@ -12,10 +12,10 @@
 # `import ./file { inherit ...; }` pattern is used by modules/myconfig.ai/fns/
 # and programs.pi-coding-agent.
 #
-# All host-specific values (model, baseUrl, port, HASS URL, extraPackages,
-# stateDir) are read from `config.myconfig.ai.hermes.*` options declared in
-# service.nix. Override them per-host; the defaults live in the option
-# declarations.
+# All host-specific values (user, group, model, baseUrl, port, HASS URL,
+# extraPackages, stateDir, secretsDir, toolsets, telegram) are read from
+# `config.myconfig.ai.hermes.*` options declared in service.nix. Override
+# them per-host; the defaults live in the option declarations.
 #
 # NOTE: `hermesServiceCfg.settings` declares `compression` twice (once with
 # `summary_provider`/`summary_model`, once with `enabled`/`threshold`).
@@ -36,6 +36,7 @@ let
   cfg = config.myconfig.ai.hermes;
 
   stateDir = cfg.stateDir;
+  secretsDir = cfg.secretsDir;
   litellmBaseUrl = cfg.model.baseUrl;
 
   # When the container backend is enabled, advertise the container's own
@@ -45,8 +46,8 @@ let
   apiServerHost = cfg.apiServerHost;
   hermesServiceCfg = {
     enable = true;
-    user = "mhuber";
-    group = "mhuber";
+    user = cfg.user;
+    group = cfg.group;
     createUser = false;
     stateDir = stateDir;
     settings = {
@@ -94,11 +95,13 @@ let
         enabled = true;
         threshold = 0.85;
       };
-      toolsets = [ "all" ];
+      toolsets = cfg.toolsets;
+    }
+    // (lib.optionalAttrs cfg.telegram.enable {
       telegram = {
-        require_mention = true;
+        require_mention = cfg.telegram.requireMention;
       };
-    };
+    });
     extraPackages = cfg.extraPackages;
     environmentFiles =
       let
@@ -115,7 +118,7 @@ let
         );
       in
       [
-        "/home/mhuber/.hermes-secrets/env"
+        "${secretsDir}/env"
         "${hermes-api-env}"
       ];
     addToSystemPackages = true;
@@ -125,6 +128,7 @@ in
   inherit
     hostConfig
     stateDir
+    secretsDir
     cfg
     litellmBaseUrl
     apiServerHost
