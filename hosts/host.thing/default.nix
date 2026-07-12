@@ -37,7 +37,6 @@
       networking.firewall.allowedUDPPorts = [ 22022 ];
     }
     ./programs.opencode.nix
-    ../../modules/myconfig.ai/hermes-agent
     ../shared.deployedServices.nix
     ./services.caddy.nix
     ./services.forgejo.nix
