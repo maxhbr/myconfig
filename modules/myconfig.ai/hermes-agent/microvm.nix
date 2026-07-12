@@ -22,6 +22,12 @@
 # `microvm` user on hosts that don't use the backend. Hosts that opt in set
 # `myconfig.ai.hermes.microvm.enable = true`, which flips
 # `microvm.host.enable` to `true`.
+#
+# In addition to the VM itself, this module installs a `hermes-microvm`
+# wrapper on the host that runs the hermes CLI pointed at the gateway's
+# OpenAI-compatible API server (forwarded to host 127.0.0.1:8642), so the
+# user can interact with the agent living inside the VM from the host
+# shell.
 {
   config,
   lib,
@@ -45,6 +51,36 @@ let
     hostConfig
     ;
   cfg = config.myconfig.ai.hermes;
+
+  # The hermes CLI binary (same package the native backend installs).
+  hermesPkg = inputs.hermes-agent.packages.${pkgs.system}.default;
+
+  # Host-side wrapper that runs the hermes CLI against the gateway running
+  # inside the microvm. The gateway exposes an OpenAI-compatible API
+  # (POST /v1/chat/completions etc.) on the forwarded host port 127.0.0.1:8642
+  # — see `forwardPorts` below. The hermes CLI reads `OPENROUTER_BASE_URL` as
+  # its model base_url fallback (the only base_url env var in cli.py:main)
+  # and `OPENAI_API_KEY` for the key. The gateway has no `API_SERVER_KEY`
+  # set, so auth is disabled and any key value is accepted.
+  hermes-microvm = pkgs.writeShellApplication {
+    name = "hermes-microvm";
+    runtimeInputs = [ hermesPkg ];
+    text = ''
+      # Fail early with a helpful message if the microvm is not running.
+      if ! /run/current-system/sw/bin/systemctl is-active --quiet microvm@hermes.service; then
+        echo "The hermes microvm is not running." >&2
+        echo "Start it with:  sudo systemctl start microvm@hermes" >&2
+        echo "(autostart is controlled by myconfig.ai.hermes.microvm.autostart)" >&2
+        exit 1
+      fi
+
+      # Point the hermes CLI at the gateway inside the VM. The gateway
+      # advertises model "hermes-agent" (see its /v1/models endpoint).
+      export OPENROUTER_BASE_URL="http://127.0.0.1:8642/v1"
+      export OPENAI_API_KEY="local-key"
+      exec hermes --model hermes-agent "$@"
+    '';
+  };
 in
 {
   imports = [
@@ -59,6 +95,13 @@ in
 
     (lib.mkIf (cfg.enable && cfg.microvm.enable) {
       microvm.host.enable = true;
+
+      # Host-side `hermes-microvm` CLI wrapper (see `let` block above).
+      home-manager.users.mhuber =
+        { pkgs, ... }:
+        {
+          home.packages = [ hermes-microvm ];
+        };
 
       microvm.vms.hermes = {
         autostart = cfg.microvm.autostart;
