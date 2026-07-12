@@ -46,6 +46,7 @@ in
     ./mykeylight
     ./role.work
     ./ai.f13.nix
+    ../../modules/myconfig.ai/hermes-agent
     ./NanoKVM-USB.nix
     ../shared.localModels.litellm.nix
     {

@@ -24,7 +24,6 @@ in
     ./container.lobe-chat.nix
     ./container.nlm-ingestor.nix
     ./container.open-webui.nix
-    ./hermes-agent
     ./programs.aichat.nix
     ./programs.alpaca.nix
     ./programs.claude-code
