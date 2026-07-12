@@ -42,7 +42,7 @@ let
   # address to hermes; otherwise bind to localhost. `containers.hermes` is
   # defined by nixos-container.nix — this cross-module reference is safe
   # because NixOS option evaluation is lazy.
-  apiServerHost = if cfg.container.enable then config.containers.hermes.localAddress else "localhost";
+  apiServerHost = cfg.apiServerHost;
   hermesServiceCfg = {
     enable = true;
     user = "mhuber";
@@ -105,9 +105,11 @@ let
         hermes-api-env = (
           pkgs.writeText "hermes-api-env" ''
             OPENAI_API_KEY=local-key
-            API_SERVER_ENABLED=true
-            API_SERVER_PORT=${toString cfg.apiServerPort}
-            API_SERVER_HOST=${apiServerHost}
+            ${lib.optionalString (cfg.apiServerPort != null && cfg.apiServerHost != null) ''
+              API_SERVER_ENABLED=true
+              API_SERVER_PORT=${toString cfg.apiServerPort}
+              API_SERVER_HOST=${apiServerHost}
+            ''}
             ${lib.optionalString (cfg.hassUrl != null) "HASS_URL=${cfg.hassUrl}"}
           ''
         );

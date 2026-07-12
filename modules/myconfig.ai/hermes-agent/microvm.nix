@@ -122,9 +122,11 @@ in
             # forwarding, which targets the guest's 10.0.2.15 address).
             hermesMicrovmEnv = pkgs.writeText "hermes-microvm-api-env" ''
               OPENAI_API_KEY=local-key
-              API_SERVER_ENABLED=true
-              API_SERVER_PORT=${toString cfg.apiServerPort}
-              API_SERVER_HOST=0.0.0.0
+              ${lib.optionalString (cfg.apiServerPort != null) ''
+                API_SERVER_ENABLED=true
+                API_SERVER_PORT=${toString cfg.apiServerPort}
+                API_SERVER_HOST=0.0.0.0
+              ''}
               ${lib.optionalString (cfg.hassUrl != null) "HASS_URL=${cfg.hassUrl}"}
             '';
           in

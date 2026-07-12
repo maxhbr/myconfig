@@ -78,9 +78,29 @@ in
     };
 
     apiServerPort = mkOption {
-      type = types.port;
+      type = types.nullOr types.port;
       default = 8642;
-      description = "Port for the hermes API server (the gateway's REST API).";
+      description = ''
+        Port for the hermes API server (the gateway's REST API).
+        Set to null to omit the API server endpoint env lines
+        (API_SERVER_ENABLED, API_SERVER_PORT, API_SERVER_HOST).
+      '';
+    };
+
+    apiServerHost = mkOption {
+      type = types.nullOr types.str;
+      default =
+        if config.myconfig.ai.hermes.container.enable then
+          config.containers.hermes.localAddress
+        else
+          "localhost";
+      defaultText = literalExpression ''"localhost"'';
+      description = ''
+        Host/address the hermes API server binds to, passed via
+        API_SERVER_HOST. Defaults to the container's local address when
+        the container backend is enabled, otherwise "localhost". Set to
+        null to omit the API server endpoint env lines entirely.
+      '';
     };
 
     hassUrl = mkOption {
