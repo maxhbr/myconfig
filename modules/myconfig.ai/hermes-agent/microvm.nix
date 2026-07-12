@@ -76,7 +76,7 @@ let
 
       # Point the hermes CLI at the gateway inside the VM. The gateway
       # advertises model "hermes-agent" (see its /v1/models endpoint).
-      export OPENROUTER_BASE_URL="http://127.0.0.1:8642/v1"
+      export OPENROUTER_BASE_URL="http://127.0.0.1:${toString cfg.apiServerPort}/v1"
       export OPENAI_API_KEY="local-key"
       exec hermes --model hermes-agent "$@"
     '';
@@ -123,9 +123,9 @@ in
             hermesMicrovmEnv = pkgs.writeText "hermes-microvm-api-env" ''
               OPENAI_API_KEY=local-key
               API_SERVER_ENABLED=true
-              API_SERVER_PORT=8642
+              API_SERVER_PORT=${toString cfg.apiServerPort}
               API_SERVER_HOST=0.0.0.0
-              HASS_URL=http://hass.nuc.wg0.maxhbr.local
+              HASS_URL=${cfg.hassUrl}
             '';
           in
           {
@@ -136,7 +136,7 @@ in
             networking.hostName = "hermes";
             # Open the guest firewall for the API port so forwarded traffic
             # from the host reaches the hermes API server.
-            networking.firewall.allowedTCPPorts = [ 8642 ];
+            networking.firewall.allowedTCPPorts = [ cfg.apiServerPort ];
 
             # ── microvm guest configuration ─────────────────────────────
             microvm = {
@@ -189,13 +189,13 @@ in
                 }
               ];
 
-              # Expose the hermes API on the host's localhost:8642.
+              # Expose the hermes API on the host's localhost.
               forwardPorts = [
                 {
                   from = "host";
                   host.address = "127.0.0.1";
-                  host.port = 8642;
-                  guest.port = 8642;
+                  host.port = cfg.apiServerPort;
+                  guest.port = cfg.apiServerPort;
                 }
               ];
             };

@@ -1,16 +1,21 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# Shared bindings for the hermes-agent service and its NixOS-container
-# variant. Both `service.nix` (native backend) and `nixos-container.nix`
-# (container backend) import this file so the `services.hermes-agent`
+# Shared bindings for the hermes-agent service and its NixOS-container /
+# microvm variants. `service.nix` (native backend), `nixos-container.nix`
+# and `microvm.nix` all import this file so the `services.hermes-agent`
 # configuration (`hermesServiceCfg`) and the supporting paths/URLs are
 # defined in exactly one place.
 #
 # This is a plain function (not a NixOS module): it is called with the host
-# module arguments and returns an attrset of values. The same `import ./file
-# { inherit ...; }` pattern is used by modules/myconfig.ai/fns/ and
-# programs.pi-coding-agent.
+# module arguments and returns an attrset of values. The same
+# `import ./file { inherit ...; }` pattern is used by modules/myconfig.ai/fns/
+# and programs.pi-coding-agent.
+#
+# All host-specific values (model, baseUrl, port, HASS URL, extraPackages,
+# stateDir) are read from `config.myconfig.ai.hermes.*` options declared in
+# service.nix. Override them per-host; the defaults live in the option
+# declarations.
 #
 # NOTE: `hermesServiceCfg.settings` declares `compression` twice (once with
 # `summary_provider`/`summary_model`, once with `enabled`/`threshold`).
@@ -28,13 +33,10 @@
 }:
 let
   hostConfig = config;
-  stateDir = "/home/mhuber/hermes-agent";
-
   cfg = config.myconfig.ai.hermes;
 
-  # LiteLLM listens on the wg0 IP of `thing` (port 4000) — see
-  # hosts/host.thing/default.nix. Connect directly, no Caddy in the path.
-  litellmBaseUrl = "http://${myconfig.metadatalib.getWgIp "thing"}:4000/v1";
+  stateDir = cfg.stateDir;
+  litellmBaseUrl = cfg.model.baseUrl;
 
   # When the container backend is enabled, advertise the container's own
   # address to hermes; otherwise bind to localhost. `containers.hermes` is
@@ -49,13 +51,13 @@ let
     stateDir = stateDir;
     settings = {
       model = {
-        default = "hermes";
+        default = cfg.model.default;
         provider = "custom";
         base_url = litellmBaseUrl;
         api_key = "local-key";
       };
       fallback_model = {
-        model = "hermes-fallback";
+        model = cfg.model.fallback;
         provider = "custom";
         base_url = litellmBaseUrl;
         api_key = "local-key";
@@ -97,16 +99,16 @@ let
         require_mention = true;
       };
     };
-    extraPackages = with pkgs; [ openhue-cli ];
+    extraPackages = cfg.extraPackages;
     environmentFiles =
       let
         hermes-api-env = (
           pkgs.writeText "hermes-api-env" ''
             OPENAI_API_KEY=local-key
             API_SERVER_ENABLED=true
-            API_SERVER_PORT=8642
+            API_SERVER_PORT=${toString cfg.apiServerPort}
             API_SERVER_HOST=${apiServerHost}
-            HASS_URL=http://hass.nuc.wg0.maxhbr.local
+            HASS_URL=${cfg.hassUrl}
           ''
         );
       in
