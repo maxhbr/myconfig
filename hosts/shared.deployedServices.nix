@@ -89,6 +89,11 @@
             port = 4000;
             forceHttps = false;
           }
+          {
+            name = "orca";
+            port = 6768;
+            forceHttps = false;
+          }
           # {
           #   name = "open-webui";
           #   port = 8888;

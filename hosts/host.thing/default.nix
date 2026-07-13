@@ -61,6 +61,7 @@
     ./services.wyoming.nix
     # ./services.qdrant.nix
     ./services.litellm.nix
+    ./services.orca.nix
     ./specialisation.nix
     ./hardware.Radeon8060S.nix
     ./hardware.RTX5090.nix
