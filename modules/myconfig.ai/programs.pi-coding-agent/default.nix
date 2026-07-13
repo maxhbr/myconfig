@@ -125,6 +125,10 @@ let
     writableDirs = [
       ".pi"
     ];
+    # Read-only bind of `~/.agents/skills/`, where `myconfig.ai.skills`
+    # deploys handcrafted skills for pi (which has no `programs.pi.skills`
+    # option). See `modules/myconfig.ai/skills/default.nix`.
+    readOnlyConfigDirs = [ ".agents" ];
   };
 
   # `jailed-pi` is an alternative to `piBwrap` that uses the jail.nix library
@@ -139,6 +143,11 @@ let
     name = "jailed-pi";
     pkg = pkgs.nixos-unstable.pi-coding-agent;
     userDataDirs = [ ".pi" ];
+    # Read-only bind of `~/.agents/skills/` so pi discovers the handcrafted
+    # skills deployed there by `myconfig.ai.skills`. Bound via
+    # `extraConfigDirs` (try-ro-bind inside `jail-app.nix`), so the jail still
+    # starts on a host where `.agents` has not been deployed.
+    extraConfigDirs = [ ".agents" ];
   };
 in
 {

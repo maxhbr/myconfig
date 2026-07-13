@@ -49,8 +49,10 @@
   userDataFiles ? [ ],
 
   # Read-only host config directories (relative to $HOME) that tools inside
-  # the jail should pick up. Override to replace; use `extraConfigDirs` to
-  # append.
+  # the jail should pick up. Each entry is bound read-only only if it exists
+  # on the host; a missing directory is skipped silently (try-ro-bind), so a
+  # jail never fails to start because an optional config dir is absent.
+  # Override to replace; use `extraConfigDirs` to append.
   configDirs ? [
     ".config/pistol"
     ".config/ripgrep"
@@ -132,7 +134,7 @@ let
     (rw-bind (noescape "~/${file}") (noescape "~/${file}"))
   ]) userDataFiles;
 
-  configDirPerms = lib.map (dir: ro-bind (noescape "~/${dir}") (noescape "~/${dir}")) (
+  configDirPerms = lib.map (dir: try-ro-bind (noescape "~/${dir}") (noescape "~/${dir}")) (
     configDirs ++ extraConfigDirs
   );
 
