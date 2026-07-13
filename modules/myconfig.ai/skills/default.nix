@@ -56,6 +56,7 @@ let
 in
 {
   imports = [
+    ./commit.nix
     ./grafana-core.nix
     ./playwright-cli.nix
   ];
