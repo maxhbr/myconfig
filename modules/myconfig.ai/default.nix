@@ -30,6 +30,7 @@ in
     ./programs.claude-code
     ./programs.codex
     ./programs.github-copilot-cli
+    ./programs.herdr.nix
     ./programs.llm.nix
     ./programs.lmstudio.nix
     ./programs.mcp.servers.nix
