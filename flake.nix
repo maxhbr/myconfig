@@ -52,6 +52,12 @@
     microvm.url = "github:astro/microvm.nix";
     microvm.inputs.nixpkgs.follows = "nixpkgs";
 
+    # Agent skills sources (consumed by vendor/agent-skills-nix)
+    mattpocock-skills = {
+      url = "github:mattpocock/skills";
+      flake = false;
+    };
+
     NanoKVM-USB.url = "github:maxhbr/NanoKVM-USB";
     NanoKVM-USB.inputs.nixpkgs.follows = "nixpkgs";
 

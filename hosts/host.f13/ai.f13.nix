@@ -17,6 +17,7 @@
         pi-coding-agent.enable = true;
         claude-code.enable = true;
         codex.enable = true;
+        skills.enable = true;
       };
     };
 

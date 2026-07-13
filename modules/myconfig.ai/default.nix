@@ -42,6 +42,7 @@ in
     ./services.tabby.nix
     ./skill.grafana-core.nix
     ./skill.playwright-cli.nix
+    ./skills
   ];
   options.myconfig.ai.enable = lib.mkEnableOption "myconfig.ai";
   config = lib.mkIf config.myconfig.ai.enable {
