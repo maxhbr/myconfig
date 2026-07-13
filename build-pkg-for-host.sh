@@ -17,8 +17,9 @@
 #   <pkg-name>  Name of the package as it appears in `home.packages`
 #               (i.e. the derivation's `name` / `pname`). Examples:
 #                 jailed-pi, jailed-pi-tmp, jailed-pi-worktree, pi-bwrap, ...
-#   <hostname>  NixOS host name to evaluate against (defaults to the current
-#               machine's hostname, see `hostname`). Must match a key in
+#   <hostname>  Short host name (without the `test-` prefix) to evaluate
+#               against (defaults to the current machine's hostname). The
+#               script builds against the `test-<hostname>` key in
 #               `self.nixosConfigurations`.
 #
 # Examples:
@@ -45,7 +46,14 @@ if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
 fi
 
 pkg_name="$1"
-host_name="${2:-$(hostname)}"
+short_host="${2:-$(hostname 2>/dev/null || cat /proc/sys/kernel/hostname)}"
+
+if [ "${short_host}" = "jail" ]; then
+    echo "Refusing to build for host 'jail' (jailed environment); pass an explicit <hostname>." >&2
+    exit 1
+fi
+
+host_name="test-${short_host}"
 
 echo "==> Building home-manager package '${pkg_name}' for host '${host_name}'"
 
