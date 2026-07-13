@@ -21,6 +21,10 @@ in
     };
   };
   config = lib.mkIf cfg.enable {
+    # Register the skill source (NixOS-level); `skills/default.nix` applies
+    # it to every enabled agent harness via the `handcrafted` registry.
+    myconfig.ai.skills.handcrafted.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
+
     home-manager.sharedModules = [
       (
         { config, ... }:
@@ -40,10 +44,6 @@ in
             PLAYWRIGHT_MCP_EXECUTABLE_PATH = executablePath;
             PLAYWRIGHT_MCP_ALLOW_UNRESTRICTED_FILE_ACCESS = "true";
           };
-
-          programs.opencode.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
-          programs.claude-code.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
-          programs.codex.skills.playwright-cli = "${playwright-cli.src}/skills/playwright-cli";
         }
       )
     ];

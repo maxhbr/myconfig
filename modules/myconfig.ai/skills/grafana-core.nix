@@ -36,12 +36,8 @@ in
     enable = mkEnableOption "myconfig.ai.skills.grafana-core";
   };
   config = lib.mkIf cfg.enable {
-    home-manager.sharedModules = [
-      {
-        programs.opencode.skills = skillsAttrs;
-        programs.claude-code.skills = skillsAttrs;
-        programs.codex.skills = skillsAttrs;
-      }
-    ];
+    # Register the skill sources; `skills/default.nix` applies them to every
+    # enabled agent harness via the `handcrafted` registry.
+    myconfig.ai.skills.handcrafted = skillsAttrs;
   };
 }

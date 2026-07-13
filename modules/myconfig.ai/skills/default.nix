@@ -53,6 +53,24 @@ let
     // lib.optionalAttrs (config.myconfig.ai ? pi-coding-agent) (
       when (config.myconfig.ai.pi-coding-agent.enable or false) "pi"
     );
+
+  # Whether each agent harness is enabled on this host. Used to gate the
+  # handcrafted-skill apply block below so a host without, say, pi-coding-agent
+  # does not get `~/.agents/skills/` entries it will never load.
+  harnessEnabled = {
+    opencode = config.myconfig.ai.opencode.enable or false;
+    claude-code = config.myconfig.ai.claude-code.enable or false;
+    codex = config.myconfig.ai.codex.enable or false;
+    pi = config.myconfig.ai.pi-coding-agent.enable or false;
+  };
+
+  # Registry of locally-defined ("handcrafted") skills, populated by the
+  # individual skill modules (commit, playwright-cli, grafana-core). Each
+  # entry maps a skill name to its source directory (the dir containing
+  # `SKILL.md`). The apply block below deploys every entry to each enabled
+  # agent harness — independently of the agent-skills sync framework, which
+  # is opt-in via `myconfig.ai.skills.enable`.
+  handcrafted = config.myconfig.ai.skills.handcrafted;
 in
 {
   imports = [
@@ -119,42 +137,88 @@ in
         Defaults to the upstream `defaultExcludePatterns` (`[ "/.system" ]`).
       '';
     };
+
+    handcrafted = mkOption {
+      type = types.attrsOf (types.either types.path types.str);
+      default = { };
+      description = ''
+        Registry of locally-defined ("handcrafted") skills, keyed by skill
+        name and valued by the source directory (a Nix path or a store-path
+        string) that contains the skill's `SKILL.md`. Populated by the
+        individual skill modules (`commit.nix`, `playwright-cli.nix`,
+        `grafana-core.nix`); this module deploys every entry to each enabled
+        agent harness — opencode, claude-code and codex via their
+        `programs.<harness>.skills` option, and pi-coding-agent (which has no
+        such option) directly to the shared `~/.agents/skills/` discovery
+        directory.
+      '';
+    };
   };
 
-  config = lib.mkIf cfg.enable {
-    home-manager.sharedModules = [
-      agentSkillsHmModule
-      {
-        programs.agent-skills = {
-          enable = true;
+  config = lib.mkMerge [
+    {
+      # Apply every handcrafted skill to each enabled agent harness.
+      # opencode, claude-code and codex expose a `programs.<harness>.skills`
+      # attrset that home-manager turns into per-skill symlinks under their
+      # config directories. pi-coding-agent has no such option — it discovers
+      # skills purely from the filesystem — so skills are written directly to
+      # the shared `~/.agents/skills/` discovery directory (which pi reads and
+      # which the agent-skills sync framework does not manage by default, so
+      # this does not collide with the framework's `--delete` rsync on hosts
+      # that opt into it below). This block runs whenever a skill is enabled,
+      # independent of the sync framework (`myconfig.ai.skills.enable`).
+      home-manager.sharedModules = [
+        {
+          programs.opencode.skills = lib.mkIf harnessEnabled.opencode handcrafted;
+          programs.claude-code.skills = lib.mkIf harnessEnabled.claude-code handcrafted;
+          programs.codex.skills = lib.mkIf harnessEnabled.codex handcrafted;
+          home.file = lib.mkIf harnessEnabled.pi (
+            lib.mapAttrs' (
+              name: src:
+              lib.nameValuePair ".agents/skills/${name}" {
+                source = src;
+                recursive = true;
+              }
+            ) handcrafted
+          );
+        }
+      ];
+    }
+    (lib.mkIf cfg.enable {
+      home-manager.sharedModules = [
+        agentSkillsHmModule
+        {
+          programs.agent-skills = {
+            enable = true;
 
-          sources = lib.mkMerge [
-            {
-              mattpocock = {
-                input = lib.mkDefault "mattpocock-skills";
-                subdir = lib.mkDefault "skills";
-              };
-            }
-            cfg.sources
-          ];
+            sources = lib.mkMerge [
+              {
+                mattpocock = {
+                  input = lib.mkDefault "mattpocock-skills";
+                  subdir = lib.mkDefault "skills";
+                };
+              }
+              cfg.sources
+            ];
 
-          skills = lib.mkMerge [
-            {
-              enableAll = lib.mkDefault [ "mattpocock" ];
-              enable = lib.mkDefault [ ];
-              explicit = lib.mkDefault { };
-            }
-            cfg.skills
-          ];
+            skills = lib.mkMerge [
+              {
+                enableAll = lib.mkDefault [ "mattpocock" ];
+                enable = lib.mkDefault [ ];
+                explicit = lib.mkDefault { };
+              }
+              cfg.skills
+            ];
 
-          targets = lib.mkMerge [
-            harnessTargetDefaults
-            cfg.targets
-          ];
+            targets = lib.mkMerge [
+              harnessTargetDefaults
+              cfg.targets
+            ];
 
-          excludePatterns = lib.mkIf (cfg.excludePatterns != [ ]) cfg.excludePatterns;
-        };
-      }
-    ];
-  };
+            excludePatterns = lib.mkIf (cfg.excludePatterns != [ ]) cfg.excludePatterns;
+          };
+        }
+      ];
+    })
+  ];
 }
