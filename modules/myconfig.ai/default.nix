@@ -39,6 +39,7 @@ in
     ./programs.qwen-code
     ./services.litellm.nix
     ./services.open-webui.nix
+    ./services.orca.nix
     ./services.searxng.nix
     ./services.tabby.nix
     ./skills
