@@ -8,7 +8,7 @@ This file contains guidelines for agentic coding agents working on this NixOS fl
 - `nix build .#nixosConfigurations.<hostname>.config.system.build.toplevel` - Build a specific host configuration
 - `nix build .#x86_64-linux.myconfig-iso` - Build ISO image
 - `nix flake check` - Validate all flake outputs across all systems
-- `nixDevelop --impure` - Enter development environment (requires --impure flag)
+- `nix develop --impure` - Enter development environment (requires --impure flag)
 
 ### Building Single home-manager Packages
 - `./build-pkg-for-host.sh <pkg-name> [<hostname>]` - Build a single package as
@@ -25,19 +25,18 @@ This file contains guidelines for agentic coding agents working on this NixOS fl
 - `shellcheck -x <file>` - Lint shell scripts
 
 ### Pre-commit Hooks
-Pre-commit checks run automatically via git-hooks:
-- nixfmt-rfc-style (Nix formatting)
-- shfmt (shell script formatting, simplified, case indent)
-- shellcheck (shell static analysis)
-- typos (spell checking)
+The `pre-commit-check` git-hook only enables **nixfmt-rfc-style** (Nix
+formatting). `shfmt` and `shellcheck` are commented out in the git-hook block;
+they instead run via a separate `shell-fmt-check` check derivation, scoped to
+`switch.sh` only (see the `files` list in `flake.nix`). `typos` is not enabled.
 
-Run manually: `nix run .#checks.pre-commit-check`
+Run manually: `nix run .#checks.x86_64-linux.pre-commit-check`
 
 ### CI Validation
 The CI workflow runs these checks:
 - `nix flake check`
 - `./nixfmtall.sh --check`
-- Dry-run builds for hosts: f13, workstation, nas, spare, vserver
+- Dry-run builds for hosts: f13, workstation, nas, vserver
 
 ### Finding Build Log Files
 Build log files for each host are stored in the parent directory:
