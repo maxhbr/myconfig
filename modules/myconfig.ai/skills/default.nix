@@ -55,6 +55,11 @@ let
     );
 in
 {
+  imports = [
+    ./grafana-core.nix
+    ./playwright-cli.nix
+  ];
+
   options.myconfig.ai.skills = with lib; {
     enable = mkEnableOption "agent skills management via home-manager (vendor/agent-skills-nix)";
 

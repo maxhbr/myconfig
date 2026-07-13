@@ -41,8 +41,6 @@ in
     ./services.open-webui.nix
     ./services.searxng.nix
     ./services.tabby.nix
-    ./skill.grafana-core.nix
-    ./skill.playwright-cli.nix
     ./skills
   ];
   options.myconfig.ai.enable = lib.mkEnableOption "myconfig.ai";
