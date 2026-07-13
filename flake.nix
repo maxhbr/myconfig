@@ -137,6 +137,7 @@
                     nixpkgs.overlays = [
                       (_: _: {
                         mybackup = pkgs.callPackage ../pkgs/mybackup { inherit pkgs; };
+                        playwright-cli = pkgs.callPackage ./pkgs/playwright-cli { };
                         my-wallpapers = inputs.my-wallpapers.defaultPackage.x86_64-linux;
                       })
                     ];
