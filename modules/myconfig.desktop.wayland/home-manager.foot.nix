@@ -127,6 +127,7 @@ in
             (mkFootTuiCmd "htop" htop)
             (mkFootTuiCmd "btop" btop)
             (mkFootTuiCmd "nmtui" networkmanager)
+            (mkFootTuiCmd "herdr" herdr)
           ]
         );
       myconfig.desktop.wayland.launcherCommands = [
@@ -139,6 +140,7 @@ in
         "foot-htop"
         "foot-btop"
         "foot-nmtui"
+        "foot-herdr"
       ];
     }
   );
