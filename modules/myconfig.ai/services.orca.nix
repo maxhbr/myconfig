@@ -3,11 +3,13 @@
 #
 # Orca runtime server — headless Linux service.
 #
-# Packages the Orca AppImage and runs `orca serve` as a systemd
-# service under a dedicated system user.  Orca bundles its own
-# Xvfb auto-start (display :99) when no $DISPLAY is set, so no
-# separate Xvfb service is needed.  Xvfb is still installed as a
-# runtime dependency because Orca looks it up on the $PATH.
+# Packages the Orca AppImage and runs `orca serve` as a systemd service
+# under a dedicated system user.  The service is granted FUSE device
+# access (DeviceAllow=char-fuse) so the AppImage can mount its squashfs
+# payload at runtime.  Orca bundles its own Xvfb auto-start (display :99)
+# when no $DISPLAY is set, so no separate Xvfb service is needed.  Xvfb
+# is still installed as a runtime dependency because Orca looks it up on
+# the $PATH.
 {
   config,
   pkgs,
@@ -19,8 +21,12 @@ let
 
   orcaVersion = "1.4.137";
 
+  # Keep the AppImage as-is and grant the systemd service FUSE device
+  # access at runtime (DeviceAllow=char-fuse).  This is simpler and
+  # more reliable than trying to extract the squashfs payload in the
+  # Nix build sandbox (no loop/FUSE devices available there).
   orcaAppImage =
-    pkgs.runCommand "orca-linux-${orcaVersion}.AppImage"
+    pkgs.runCommand "orca-${orcaVersion}.AppImage"
       {
         nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
         src = pkgs.fetchurl {
@@ -33,8 +39,8 @@ let
         chmod +x "$out"
 
         # Wrap so that Xvfb is on $PATH (Orca auto-starts it on :99 when
-        # $DISPLAY is unset) and libfuse2 is on $LD_LIBRARY_PATH (AppImage
-        # runtime dependency).
+        # $DISPLAY is unset) and libfuse2 is on $LD_LIBRARY_PATH
+        # (AppImage runtime dependency).
         wrapProgram "$out" \
           --prefix PATH : "${lib.makeBinPath [ pkgs.xorg.xvfb ]}" \
           --prefix LD_LIBRARY_PATH : "${pkgs.fuse}/lib"
@@ -120,10 +126,18 @@ in
         RestartSec = 5;
 
         # Hardening
-        ProtectSystem = "strict";
+        ProtectSystem = "full";
         ProtectHome = "read-only";
         PrivateTmp = true;
         StateDirectory = "orca";
+        # AppImage needs FUSE to mount its squashfs payload at runtime.
+        # Grant char-fuse device access (the fuse device node is created
+        # on-demand by the kernel when a process opens /dev/fuse).
+        DevicePolicy = "closed";
+        DeviceAllow = [ "char-fuse rw" ];
+        # Chromium sandbox and Electron runtime need write access to
+        # the data directory (e.g. for lock files, GPU data, etc.).
+        ReadWritePaths = [ (toString cfg.dataDir) ];
       };
     };
 
