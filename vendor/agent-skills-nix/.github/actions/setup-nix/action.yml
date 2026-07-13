@@ -1,0 +1,9 @@
+name: 'Setup Nix'
+description: 'Install Nix'
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Nix
+      uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31.9.0
+      with:
+        github_access_token: ${{ github.token }}
