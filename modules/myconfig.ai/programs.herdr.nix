@@ -49,7 +49,7 @@ let
 
     [keys]
     # tmux: set -g prefix C-a  (default is ctrl+b)
-    prefix = "ctrl+a"
+    prefix = "ctrl+b"
 
     # tmux: bind r source-file ~/.tmux.conf
     reload_config = "prefix+r"
