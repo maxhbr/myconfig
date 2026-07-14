@@ -11,9 +11,7 @@ commit message derived from the diff and the repository's existing history.
 ## When to use
 
 - The user asks to commit, stage-and-commit, or "do a commit" of the current changes.
-- Do **not** commit unless the user explicitly asks. Staging, diffing, and
-  drafting a proposed message are always fine; the final `git commit` requires
-  an explicit request.
+- Do **not** commit unless the user explicitly asks.
 
 ## Workflow
 
@@ -58,15 +56,13 @@ commit message derived from the diff and the repository's existing history.
 
 6. **Commit.** `git commit -m "<summary>" -m "<body>"` (or a heredoc for
    multi-paragraph bodies). If a pre-commit hook fails, read the failure, fix the
-   root cause, and re-stage — do not bypass hooks with `--no-verify`.
-
-7. **Report.** Show the resulting commit with `git show --stat HEAD` so the user
-   can verify the message and scope.
+   root cause, and re-stage — do not bypass hooks with `--no-verify`. Then
+   show the result with `git show --stat HEAD`.
 
 ## Pitfalls
 
-- **Committing without asking.** Never run `git commit` unless the user explicitly
-  requested it. Draft the message first and confirm if there is any doubt.
+- **Committing without asking.** Never run `git commit` unless the user
+  explicitly requested it.
 - **`git add -A` with a dirty tree.** Stray files sneak in. Stage named paths or
   review `git status` first.
 - **Secrets.** Keys, tokens, and `../priv/` content must never be committed here.
