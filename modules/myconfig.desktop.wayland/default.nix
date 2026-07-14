@@ -209,6 +209,7 @@ in
         ./home-manager.foot.nix
         ./home-manager.wayvnc.nix
         ./home-manager.wlogout.nix
+        ./home-manager.services.voxtype.nix
         {
           home.packages =
             with pkgs;

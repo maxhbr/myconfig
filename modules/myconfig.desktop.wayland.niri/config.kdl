@@ -622,4 +622,8 @@ binds {
     // Disable airplane mode key (Fn+F10)
     XF86WLAN { spawn "true"; }
     XF86RFKill { spawn "true"; }
+
+    // Extra keybinds injected by home-manager modules (e.g. voxtype).
+    // Replaced during config generation, see modules/myconfig.desktop.wayland.niri.
+    @@niri-extra-binds@@
 }

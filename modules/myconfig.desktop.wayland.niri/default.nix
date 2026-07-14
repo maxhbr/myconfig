@@ -43,6 +43,27 @@ in
       description = "Additional config added to config.kdl";
     };
   };
+  # Always expose the `extraBinds` home-manager option (even when niri is not
+  # the active session) so other home-manager modules — e.g. voxtype — can
+  # register niri keybinds. The value is substituted into the `binds { }`
+  # block of the generated config at the `@@niri-extra-binds@@` marker.
+  imports = [
+    {
+      home-manager.sharedModules = [
+        {
+          options.myconfig.desktop.wayland.niri.extraBinds = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+            description = ''
+              Extra niri keybind lines (KDL, without the surrounding `binds { }`
+              block) injected into the generated niri config. Intended for
+              home-manager modules that want to register compositor binds.
+            '';
+          };
+        }
+      ];
+    }
+  ];
   config = (
     lib.mkIf
       (
@@ -136,6 +157,7 @@ in
               ];
               xdg.configFile =
                 let
+                  extraBinds = config.myconfig.desktop.wayland.niri.extraBinds;
                   drv =
                     pkgs.runCommand "niri-config"
                       {
@@ -161,6 +183,8 @@ in
 
                         spawn-at-startup "${niri-autostart}"
                         EOF
+                        substituteInPlace $out/config.kdl \
+                          --replace-fail "@@niri-extra-binds@@" ${lib.escapeShellArg extraBinds}
                         cat <<EOF >$out/include.kdl
                         ${cfg.desktop.wayland.niri.additionalConfigKdl}
                         EOF

@@ -387,6 +387,11 @@ in
         };
       }
       {
+        # Voxtype push-to-talk speech-to-text. Configured by
+        # myconfig.desktop.wayland via home-manager.services.voxtype.nix.
+        services.voxtype.enable = true;
+      }
+      {
         home.packages = with pkgs.helper; [
           (connectBtDevice {
             name = "WF-1000XM5";
