@@ -354,7 +354,7 @@ sbom() (
     cd "$sbom_dir"
     sbomnix "$out_link"
     local cdx="sbom.cdx.json"
-    if [[ -f "$cdx" ]]; then
+    if [[ -f $cdx ]]; then
         local dtrack_token="${DTRACK_TOKEN:-}"
         if [[ -z $dtrack_token ]]; then
             if have pass; then
@@ -492,7 +492,8 @@ main() {
         log_step "VM built for $target"
         local vm_run_script
         vm_run_script="$(realpath -m "$out_link")/bin/run-${target}-vm"
-        log_info "run it via (from a writable dir; disk image is created in \$PWD):"
+        # shellcheck disable=SC2016 # $PWD is a literal hint, not an expansion
+        log_info 'run it via (from a writable dir; disk image is created in $PWD):'
         log_info "> NIX_DISK_IMAGE=/tmp/${target}-vm.qcow2 $vm_run_script"
         return
     fi
