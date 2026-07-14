@@ -25,6 +25,10 @@
 # |                | pandas 3.x, so `pythonRuntimeDepsCheckHook` rejects the      |
 # |                | build. Relaxed via `pythonRelaxDeps`. Breaks the             |
 # |                | sbomnix -> dfdiskcache -> pandas build chain.                 |
+# | voxtype-vulkan | nixpkgs builds without any `osd-*` cargo feature, so neither   |
+# |                | `voxtype-osd-gtk4` nor `voxtype-osd-native` lands on PATH and   |
+# |                | the `voxtype-osd` launcher crashes on every daemon start.    |
+# |                | Override builds the `osd-gtk4` feature + GTK4 deps.           |
 #
 # When removing an override, also drop its entry here and rebuild.
 
@@ -88,6 +92,39 @@
           });
         })
       ];
+    })
+
+    # voxtype-vulkan: build the optional `osd-gtk4` cargo feature so the GTK4
+    # OSD binary (`voxtype-osd-gtk4`) ships with the package. Upstream nixpkgs
+    # builds voxtype with no OSD feature enabled, so the always-built
+    # `voxtype-osd` launcher fails with:
+    #   voxtype-osd: neither 'voxtype-osd-native' nor 'voxtype-osd-gtk4'
+    #   was found on PATH or next to this binary.
+    # …on every daemon start, then gives up after 3 retries.
+    #
+    # `voxtype-vulkan` is a separate top-level attribute
+    # (callPackage ... { vulkanSupport = true; }), so the override must target
+    # it directly, not `voxtype`. `overrideAttrs` targets `cargoBuildFeatures`
+    # (the derivation attr the cargo-build-hook actually reads — `buildFeatures`
+    # is only an input to buildRustPackage's flag computation, which already
+    # ran) and appends the GTK4 runtime libs to `buildInputs`. The optional deps
+    # are already pinned in Cargo.lock, so `cargoHash` is unchanged.
+    #
+    # Upstream issue: https://github.com/NixOS/nixpkgs/issues/533080
+    #
+    # TODO: remove once nixpkgs enables `osd-gtk4` (or `osd-native`) in
+    # pkgs/by-name/vo/voxtype/package.nix.
+    (_final: prev: {
+      voxtype-vulkan = prev.voxtype-vulkan.overrideAttrs (old: {
+        cargoBuildFeatures = (old.cargoBuildFeatures or [ ]) ++ [ "osd-gtk4" ];
+        cargoCheckFeatures = (old.cargoCheckFeatures or old.cargoBuildFeatures or [ ]) ++ [ "osd-gtk4" ];
+        buildInputs = (old.buildInputs or [ ]) ++ [
+          prev.gtk4
+          prev.gtk4-layer-shell
+          prev.cairo
+          prev.glib
+        ];
+      });
     })
   ];
 }
