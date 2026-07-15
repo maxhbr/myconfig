@@ -27,57 +27,6 @@ in
         let
           callLib = file: import file { inherit lib pkgs; };
           callJailLib = file: import file { inherit lib pkgs jail; };
-
-          # Visually flag *un-jailed* opencode sessions. As with pi, the jailed
-          # (sandboxed) `jailed-opencode*` wrappers are the safe default and
-          # keep the user's normal theme untouched; everything else (bare
-          # `opencode`, the `opencode-bwrap`/`-tmp`/`-worktree` wrappers) gets a
-          # red editor/prompt border as a warning that it is running without the
-          # jail.
-          #
-          # opencode has no runtime theme-switch API (unlike pi's extension), so
-          # the theme is chosen statically in `~/.config/opencode/tui.json`. We
-          # make the *default* theme the red-bordered `myconfig-unjailed` theme,
-          # then let the jailed wrappers override it back to the normal theme via
-          # `OPENCODE_CONFIG_CONTENT` (an inline config that takes precedence
-          # over the on-disk config). This keeps the jail's on-disk config
-          # (which it bind-mounts read-write) unmodified.
-          #
-          # The theme is mostly left to the terminal defaults (like the built-in
-          # `system` theme) and only recolors the border tokens. It is declared
-          # via `programs.opencode.themes` below.
-          unjailedThemeName = "myconfig-unjailed";
-          unjailedBorderColor = "#cc2222";
-
-          # The theme opencode should fall back to when *not* un-jailed. This is
-          # the same value the user would otherwise get from `settings.theme`
-          # ("system"); the jailed wrappers inject it via OPENCODE_CONFIG_CONTENT
-          # so the jail does not need to touch its bind-mounted config.
-          normalThemeName = "system";
-
-          # Wrap a jailed opencode binary so it forces the normal theme back on,
-          # overriding the un-jailed default baked into tui.json. Uses
-          # OPENCODE_CONFIG_CONTENT (inline config, higher precedence than the
-          # on-disk config) so nothing on disk is modified.
-          withNormalTheme =
-            drv:
-            pkgs.symlinkJoin {
-              inherit (drv) name;
-              paths = [ drv ];
-              nativeBuildInputs = [ pkgs.makeWrapper ];
-              postBuild = ''
-                for f in $out/bin/*; do
-                  wrapProgram "$f" \
-                    --set OPENCODE_CONFIG_CONTENT '{"theme":"${normalThemeName}"}'
-                done
-              '';
-              # `symlinkJoin` does not copy `meta`; preserve `mainProgram` so
-              # `lib.getExe` (used by the `-tmp`/`-worktree` wrappers) resolves.
-              meta = (drv.meta or { }) // {
-                mainProgram = drv.meta.mainProgram or drv.name;
-              };
-            };
-
           opencodeBwrap = callLib ../fns/sandboxed-app.nix {
             name = "opencode";
             pkg = config.programs.opencode.package;
@@ -90,7 +39,7 @@ in
           # `jailed-opencode` is an alternative to `opencodeBwrap` that uses
           # the jail.nix library instead of a hand-rolled bubblewrap wrapper.
           # See `../fns/jail-app.nix` for the shared defaults.
-          jailed-opencode = withNormalTheme (jail-app {
+          jailed-opencode = jail-app {
             name = "jailed-opencode";
             pkg = config.programs.opencode.package;
             userDataDirs = [
@@ -99,7 +48,7 @@ in
               ".local/state/opencode"
               ".config/mcp"
             ];
-          });
+          };
         in
         {
           programs.mcp.enable = true;
@@ -231,25 +180,10 @@ in
                   }
                 ))
               ];
+              "theme" = "system";
               "disabled_providers" = [
                 "opencode"
               ];
-            };
-            # Default the TUI to the red-bordered un-jailed warning theme. The
-            # jailed wrappers override this back to the normal theme at runtime
-            # via OPENCODE_CONFIG_CONTENT (see `withNormalTheme`), so only
-            # un-jailed sessions show the warning.
-            tui.theme = unjailedThemeName;
-            # Custom theme: inherit terminal colors for everything (like the
-            # built-in `system` theme) but paint the borders red as an
-            # un-jailed warning.
-            themes.${unjailedThemeName} = {
-              "$schema" = "https://opencode.ai/theme.json";
-              theme = {
-                border = unjailedBorderColor;
-                borderActive = unjailedBorderColor;
-                borderSubtle = unjailedBorderColor;
-              };
             };
             agents = {
               code-reviewer = ''
