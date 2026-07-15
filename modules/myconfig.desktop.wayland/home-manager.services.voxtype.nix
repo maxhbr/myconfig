@@ -35,6 +35,19 @@
           mode = "type";
           fallback_to_clipboard = true;
         };
+        text = {
+          # Custom word replacements applied after transcription
+          # (case-insensitive, preserves word boundaries). Fix commonly
+          # misheard words, brand names, and technical terms.
+          replacements = {
+            "vox type" = "voxtype";
+            "oh marky" = "Omarchy";
+          };
+          # Convert spoken punctuation words into symbols — useful for
+          # developers and technical writing (e.g. saying "open paren"
+          # produces "(").
+          spoken_punctuation = true;
+        };
       };
     };
 
