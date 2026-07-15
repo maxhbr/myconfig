@@ -20,7 +20,7 @@
           max_duration_secs = 60;
           feedback = {
             enabled = true;
-            theme = "subtle"; # built-in themes: default, subtle, mechanical
+            theme = "subtle";
             volume = 0.7; # 0.0 to 1.0
           };
         };
