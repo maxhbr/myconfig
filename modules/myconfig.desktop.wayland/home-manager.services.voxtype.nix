@@ -18,6 +18,11 @@
           device = "default";
           sample_rate = 16000;
           max_duration_secs = 60;
+          feedback = {
+            enabled = true;
+            theme = "default"; # built-in themes: default, subtle, mechanical
+            volume = 0.7; # 0.0 to 1.0
+          };
         };
         whisper = {
           model = "base";
