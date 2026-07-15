@@ -14,6 +14,10 @@
       package = pkgs.voxtype-vulkan;
       loadModels = [ "large-v3-turbo" ];
       settings = {
+        # State file for Waybar/polybar integration. The daemon writes
+        # its current state (idle/recording/transcribing) here; the
+        # waybar custom/voxtype module reads it via `voxtype status`.
+        state_file = "auto";
         # Push-to-talk via the ^ key (below ESC). keyd remaps that physical
         # key (grave → f13) on its virtual device (see
         # myconfig.desktop.wayland.niri); voxtype reads evdev for F13 and
