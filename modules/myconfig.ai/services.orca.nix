@@ -1,15 +1,20 @@
 # Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# Orca runtime server — headless Linux service.
+# Orca runtime server — headless Linux service and desktop application.
 #
 # Packages the Orca AppImage and optionally runs `orca serve` as a
-# systemd service under a dedicated system user.  The service is granted
-# FUSE device access (DeviceAllow=char-fuse) so the AppImage can mount
-# its squashfs payload at runtime.  Orca bundles its own Xvfb auto-start
-# (display :99) when no $DISPLAY is set, so no separate Xvfb service is
-# needed.  Xvfb is still installed as a runtime dependency because Orca
-# looks it up on the $PATH.
+# systemd service under a dedicated system user, and/or exposes the Orca
+# Electron GUI as a desktop application (bin/orca + .desktop entry).
+#
+# The AppImage is kept bit-for-bit (NOT wrapped with makeBinaryWrapper):
+# `wrapProgram` on a bare-file `$out` moves the original to a hidden
+# `.*-wrapped` sibling of `$out` that is not part of the derivation
+# closure, producing a dangling exec path (silent exit 255).  Instead the
+# AppImage is launched through `appimage-run`, which extracts the squashfs
+# payload (no FUSE / libfuse2 / /dev/fuse needed) and provides the FHS
+# runtime the AppImage expects.  Orca bundles its own Xvfb auto-start
+# (display :99) when no $DISPLAY is set, so Xvfb is kept on $PATH.
 {
   config,
   pkgs,
@@ -21,14 +26,12 @@ let
 
   orcaVersion = "1.4.137";
 
-  # Keep the AppImage as-is and grant the systemd service FUSE device
-  # access at runtime (DeviceAllow=char-fuse).  This is simpler and
-  # more reliable than trying to extract the squashfs payload in the
-  # Nix build sandbox (no loop/FUSE devices available there).
+  # The raw Orca AppImage, with the executable bit set.  This is the
+  # canonical package (cfg.package) and is always launched through
+  # `appimage-run` (see the desktop launcher and the service ExecStart).
   orcaAppImage =
     pkgs.runCommand "orca-${orcaVersion}.AppImage"
       {
-        nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
         src = pkgs.fetchurl {
           url = "https://github.com/stablyai/orca/releases/download/v${orcaVersion}/orca-linux.AppImage";
           sha256 = "16693wgcs3sm2wi4id8s1jjnjxn9y6qly2hbcr27cjlklqpi4x4c";
@@ -37,18 +40,50 @@ let
       ''
         cp "$src" "$out"
         chmod +x "$out"
+      '';
 
-        # Wrap so that Xvfb is on $PATH (Orca auto-starts it on :99 when
-        # $DISPLAY is unset) and libfuse2 is on $LD_LIBRARY_PATH
-        # (AppImage runtime dependency).
-        wrapProgram "$out" \
-          --prefix PATH : "${lib.makeBinPath [ pkgs.xorg.xvfb ]}" \
-          --prefix LD_LIBRARY_PATH : "${pkgs.fuse}/lib"
+  # `orca` command: launches the AppImage through appimage-run, with Xvfb
+  # on $PATH (Orca auto-starts it on :99 when no $DISPLAY is set, so this
+  # also works headless).  Passing `serve ...` through here runs the
+  # runtime server instead of the desktop GUI.
+  orcaLauncher =
+    with pkgs;
+    writeShellScriptBin "orca" ''
+      set -euo pipefail
+      export PATH="${lib.makeBinPath [ xorg.xvfb ]}:$PATH"
+      exec ${appimage-run}/bin/appimage-run ${orcaAppImage} "$@"
+    '';
+
+  # Desktop application package: the `orca` launcher (for $PATH) plus a
+  # .desktop entry so the Orca Electron GUI shows up in application
+  # launchers (niri/fuzzel/wofi, etc.).  Exec points at the launcher so
+  # the AppImage is always run through appimage-run.
+  orcaDesktopPkg =
+    let
+      desktopEntry = pkgs.writeText "orca.desktop" ''
+        [Desktop Entry]
+        Type=Application
+        Name=Orca
+        Comment=Orca AI desktop application
+        Exec=${orcaLauncher}/bin/orca
+        Terminal=false
+        Categories=Development;Utility;
+      '';
+    in
+    pkgs.runCommand "orca-${orcaVersion}-desktop"
+      {
+        # Reference the AppImage so this derivation rebuilds when it does.
+        passthru = { inherit orcaAppImage; };
+      }
+      ''
+        mkdir -p $out/bin $out/share/applications
+        ln -s ${orcaLauncher}/bin/orca $out/bin/orca
+        cp ${desktopEntry} $out/share/applications/orca.desktop
       '';
 in
 {
   options.myconfig.ai.orca = with lib; {
-    enable = mkEnableOption "Orca runtime server package (AppImage + CLI wrappers)";
+    enable = mkEnableOption "Orca package (AppImage + CLI wrappers)";
 
     service = with lib; {
       enable = mkEnableOption "Orca runtime server systemd service";
@@ -58,7 +93,7 @@ in
       type = types.package;
       default = orcaAppImage;
       defaultText = literalExpression "orcaAppImage";
-      description = "Orca AppImage package.";
+      description = "Orca AppImage package. Launched via appimage-run.";
     };
 
     port = mkOption {
@@ -97,7 +132,18 @@ in
   };
 
   config = lib.mkMerge [
-    # --- Package (AppImage + CLI wrappers) ---
+    # --- Desktop application (bin/orca + .desktop entry) ---
+    # Only where a desktop session exists. Provides the Orca Electron
+    # GUI as a launchable application (via the .desktop entry) plus an
+    # `orca` command on $PATH. The service (`orca serve`) is independent
+    # and controlled by `service.enable` below.
+    (lib.mkIf (config.myconfig.ai.enable && config.myconfig.desktop.enable && cfg.enable) {
+      home-manager.sharedModules = [
+        { home.packages = [ orcaDesktopPkg ]; }
+      ];
+    })
+
+    # --- CLI wrappers (service helpers) ---
     (lib.mkIf (config.myconfig.ai.enable && (cfg.enable || cfg.service.enable)) {
       home-manager.sharedModules = [
         {
@@ -161,12 +207,17 @@ in
           WorkingDirectory = toString cfg.dataDir;
 
           # Software rendering — safe on any host (VPS, workstation, etc).
+          # Xvfb is on $PATH because Orca auto-starts it on :99 when
+          # $DISPLAY is unset (the service never sets DISPLAY).
           Environment = [
             "LIBGL_ALWAYS_SOFTWARE=1"
-            # Do NOT set DISPLAY; Orca auto-starts Xvfb on :99 when unset.
+            "PATH=${lib.makeBinPath [ pkgs.xorg.xvfb ]}"
           ];
 
-          ExecStart = "${cfg.package} serve --port ${toString cfg.port} --pairing-address ${cfg.pairingAddress}";
+          # Run the AppImage through appimage-run, which extracts the
+          # squashfs payload (no FUSE device needed) and provides the
+          # FHS runtime the AppImage expects.
+          ExecStart = "${pkgs.appimage-run}/bin/appimage-run ${cfg.package} serve --port ${toString cfg.port} --pairing-address ${cfg.pairingAddress}";
 
           Restart = "on-failure";
           RestartSec = 5;
@@ -176,13 +227,12 @@ in
           ProtectHome = "read-only";
           PrivateTmp = true;
           StateDirectory = "orca";
-          # AppImage needs FUSE to mount its squashfs payload at runtime.
-          # Grant char-fuse device access (the fuse device node is created
-          # on-demand by the kernel when a process opens /dev/fuse).
+          # No FUSE device needed: appimage-run extracts the payload
+          # instead of mounting it.
           DevicePolicy = "closed";
-          DeviceAllow = [ "char-fuse rw" ];
           # Chromium sandbox and Electron runtime need write access to
-          # the data directory (e.g. for lock files, GPU data, etc.).
+          # the data directory (e.g. for lock files, GPU data, and the
+          # appimage-run extraction cache under $HOME/.cache).
           ReadWritePaths = [ (toString cfg.dataDir) ];
         };
       };
