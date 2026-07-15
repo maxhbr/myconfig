@@ -12,7 +12,7 @@
     services.voxtype = {
       # Use the Vulkan variant for GPU-accelerated Whisper inference.
       package = pkgs.voxtype-vulkan;
-      loadModels = [ "base" ];
+      loadModels = [ "large-v3-turbo" ];
       settings = {
         audio = {
           device = "default";
@@ -25,7 +25,7 @@
           };
         };
         whisper = {
-          model = "base";
+          model = "large-v3-turbo";
           language = [
             "en"
             "de"
