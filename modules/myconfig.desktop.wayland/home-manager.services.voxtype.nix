@@ -82,6 +82,26 @@
     # voxtype-model-loader service doesn't re-download them.
     myconfig.persistence.cache-directories = [ ".local/share/voxtype/" ];
 
+    programs.waybar = {
+      settings = {
+        mainBar = {
+          modules-center = [ "custom/voxtype" ];
+          # Extended voxtype status: shows the status icon + model
+          # name, with model/device/backend in the tooltip. Requires
+          # state_file = "auto" (set in the voxtype config).
+          # See: https://github.com/peteonrails/voxtype#waybar-integration
+          "custom/voxtype" = {
+            exec = "${config.services.voxtype.package}/bin/voxtype status --follow --format json --extended";
+            return-type = "json";
+            format = "{} [{}]";
+            format-alt = "{model}";
+            tooltip = true;
+            rotate = 90;
+          };
+        };
+      };
+    };
+
     home.packages = [
       # Toggle voxtype meeting mode. First call starts a meeting (with an
       # optional title); the next call stops it and exports the transcript
