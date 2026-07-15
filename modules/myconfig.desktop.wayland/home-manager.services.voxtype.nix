@@ -60,6 +60,13 @@
           # produces "(").
           spoken_punctuation = true;
         };
+        meeting = {
+          # Enable `voxtype meeting start/stop` for continuous
+          # transcription with chunked processing and export.
+          # Meetings are stored under ~/.local/share/voxtype/meetings/
+          # (already persisted via cache-directories).
+          enabled = true;
+        };
       };
     };
 
