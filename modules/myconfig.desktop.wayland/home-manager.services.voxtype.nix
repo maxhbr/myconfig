@@ -81,5 +81,55 @@
     # Persist downloaded whisper models across reboots so the
     # voxtype-model-loader service doesn't re-download them.
     myconfig.persistence.cache-directories = [ ".local/share/voxtype/" ];
+
+    home.packages = [
+      # Toggle voxtype meeting mode. First call starts a meeting (with an
+      # optional title); the next call stops it and exports the transcript
+      # as Markdown (with speaker labels + timestamps) to ~/meetings/.
+      #   voxtype-meeting                 # untitled meeting
+      #   voxtype-meeting "Weekly standup"  # titled meeting
+      (pkgs.writeShellScriptBin "voxtype-meeting" ''
+        set -euo pipefail
+
+        voxtype="${config.services.voxtype.package}/bin/voxtype"
+        meetings_dir="$HOME/meetings"
+        mkdir -p "$meetings_dir"
+
+        # Sanitize a title for use in a filename: keep alnum + hyphen,
+        # collapse runs of underscores, trim edges.
+        sanitize() {
+          echo "$1" | tr -c '[:alnum:]-' '_' | sed 's/_\{2,\}/_/g; s/^_//; s/_$//'
+        }
+
+        # `meeting status` always exits 0; detect an active meeting from
+        # its output ("Meeting Status:" when running, "No meeting" when idle).
+        if "$voxtype" meeting status 2>/dev/null | grep -q "^Meeting Status:"; then
+          echo "Stopping meeting..."
+          "$voxtype" meeting stop
+
+          # Derive the title from the most recent meeting for the filename.
+          # `meeting list --limit 1` prints the title on the 4th line.
+          title="$("$voxtype" meeting list --limit 1 2>/dev/null | sed -n '4p' | tr -d '[:space:]')"
+          if [[ -n "$title" ]]; then
+            file="$meetings_dir/$(date +%Y-%m-%d_%H%M%S)_$(sanitize "$title").md"
+          else
+            file="$meetings_dir/$(date +%Y-%m-%d_%H%M%S).md"
+          fi
+          "$voxtype" meeting export latest \
+            --format markdown --speakers --timestamps \
+            --output "$file"
+          echo "Exported to: $file"
+        else
+          title="''${1:-}"
+          if [[ -n "$title" ]]; then
+            echo "Starting meeting: $title"
+            "$voxtype" meeting start --title "$title"
+          else
+            echo "Starting meeting (untitled)"
+            "$voxtype" meeting start
+          fi
+        fi
+      '')
+    ];
   };
 }
