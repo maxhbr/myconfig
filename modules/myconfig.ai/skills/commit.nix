@@ -30,6 +30,11 @@ in
       # Register the skill source; `skills/default.nix` applies it to every
       # enabled agent harness via the `handcrafted` registry.
       myconfig.ai.skills.handcrafted.commit = skillDir;
+      # Also expose the same workflow as a pi prompt template (`/commit`),
+      # deployed to `~/.pi/agent/prompts/commit.md` by `skills/default.nix`.
+      # The prompt-template form drops the "do not commit unless asked" guard
+      # since invoking `/commit` is itself the explicit request.
+      myconfig.ai.skills.handcraftedPrompts.commit = ./commit/prompt.md;
     })
   ];
 }

@@ -71,6 +71,11 @@ let
   # agent harness — independently of the agent-skills sync framework, which
   # is opt-in via `myconfig.ai.skills.enable`.
   handcrafted = config.myconfig.ai.skills.handcrafted;
+  # Registry of locally-defined pi prompt templates, populated by individual
+  # skill modules when a workflow should also be reachable as a `/`-command
+  # prompt template. Deployed to `~/.pi/agent/prompts/<name>.md` for every host
+  # with pi-coding-agent enabled.
+  handcraftedPrompts = config.myconfig.ai.skills.handcraftedPrompts;
 in
 {
   imports = [
@@ -153,6 +158,21 @@ in
         directory.
       '';
     };
+
+    handcraftedPrompts = mkOption {
+      type = types.attrsOf (types.either types.path types.str);
+      default = { };
+      description = ''
+        Registry of locally-defined pi prompt templates, keyed by template
+        name and valued by the source `.md` file (a Nix path or a store-path
+        string). Deployed to `~/.pi/agent/prompts/<name>.md`, where pi
+        discovers global prompt templates (invoked via `/<name>` in the
+        editor). Populated by individual skill modules alongside their
+        `handcrafted` skill entry when the same workflow should also be
+        reachable as a `/`-command prompt template. Only applied on hosts
+        with pi-coding-agent enabled.
+      '';
+    };
   };
 
   config = lib.mkMerge [
@@ -173,13 +193,16 @@ in
           programs.claude-code.skills = lib.mkIf harnessEnabled.claude-code handcrafted;
           programs.codex.skills = lib.mkIf harnessEnabled.codex handcrafted;
           home.file = lib.mkIf harnessEnabled.pi (
-            lib.mapAttrs' (
+            (lib.mapAttrs' (
               name: src:
               lib.nameValuePair ".agents/skills/${name}" {
                 source = src;
                 recursive = true;
               }
-            ) handcrafted
+            ) handcrafted)
+            // (lib.mapAttrs' (
+              name: src: lib.nameValuePair ".pi/agent/prompts/${name}.md" { source = src; }
+            ) handcraftedPrompts)
           );
         }
       ];
