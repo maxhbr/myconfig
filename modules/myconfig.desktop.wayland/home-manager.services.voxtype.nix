@@ -54,5 +54,9 @@
     myconfig.desktop.wayland.niri.extraBinds = ''
       Mod+G hotkey-overlay-title="Voxtype (voice)" { spawn "voxtype" "record" "toggle"; }
     '';
+
+    # Persist downloaded whisper models across reboots so the
+    # voxtype-model-loader service doesn't re-download them.
+    myconfig.persistence.cache-directories = [ ".local/share/voxtype/" ];
   };
 }
