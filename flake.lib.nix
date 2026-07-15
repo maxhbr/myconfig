@@ -664,6 +664,58 @@ rec {
                       else
                         builtins.head (builtins.match "([0-9a-f]+).*" (builtins.head matching))
               );
+
+              gitBin = "${pkgs.git}/bin/git";
+
+              # User-facing script: report whether the working repo
+              # (~/myconfig/myconfig) is ahead of the commit the running
+              # system was built from (recorded in /run/myconfig/myconfig-commit).
+              #   - exit 0, print <N> : repo is N commits ahead of the saved commit
+              #   - exit 0 (warning)  : saved commit file is missing (system built
+              #                         without this module / tmpfiles not run yet)
+              #   - exit 1, print 0   : repo HEAD matches the saved commit exactly
+              #   - exit 2 (stderr)   : no saved commit recorded, repo diverged/
+              #                         behind, or other error
+              myconfig-ahead = pkgs.writeShellScriptBin "myconfig-ahead" ''
+                set -euo pipefail
+
+                repo="''${MYCONFIG_REPO:-$HOME/myconfig/myconfig}"
+                savedFile="''${MYCONFIG_COMMIT_FILE:-/run/myconfig/myconfig-commit}"
+
+                if [[ ! -r "$savedFile" ]]; then
+                  echo "myconfig-ahead: no saved commit file at $savedFile (system not built with this module?)" >&2
+                  exit 0
+                fi
+
+                saved="$(<"$savedFile")"
+                saved="''${saved//[[:space:]]/}"
+
+                if [[ -z "$saved" || "$saved" == "unknown" ]]; then
+                  echo "myconfig-ahead: no saved commit recorded" >&2
+                  exit 2
+                fi
+
+                cd "$repo"
+                current="$(${gitBin} rev-parse HEAD)"
+
+                if [[ "$saved" == "$current" ]]; then
+                  echo 0
+                  exit 1
+                fi
+
+                if ! ${gitBin} cat-file -e "''${saved}^{commit}" 2>/dev/null; then
+                  echo "myconfig-ahead: saved commit $saved not found in repository $repo" >&2
+                  exit 2
+                fi
+
+                if ${gitBin} merge-base --is-ancestor "$saved" HEAD; then
+                  ${gitBin} rev-list --count "''${saved}..HEAD"
+                  exit 0
+                else
+                  echo "myconfig-ahead: repository is not ahead of saved commit $saved (diverged or behind)" >&2
+                  exit 2
+                fi
+              '';
             in
             {
               # ca-references
@@ -697,6 +749,8 @@ rec {
                 "d /run/myconfig 0755 root root -"
                 "L+ /run/myconfig/myconfig-commit - - - - ${pkgs.writeText "myconfig-commit" "${myconfigRev}\n"}"
               ];
+
+              environment.systemPackages = [ myconfig-ahead ];
             }
           )
         ];
