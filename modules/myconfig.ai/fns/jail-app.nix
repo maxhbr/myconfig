@@ -105,6 +105,14 @@
   bindUsrBin ? true,
   persistentTmp ? true,
   bindUserTmp ? true,
+
+  # When true (the default), refuse to start if the working directory is
+  # $HOME. Otherwise `mount-cwd` would bind-mount the *entire* home
+  # directory read-write into the jail, exposing every file (including
+  # secrets and other agents' state) to the agent. The `*-tmp` and
+  # `*-worktree` wrapper variants are unaffected because they `cd` away
+  # from $HOME before exec'ing the jailed binary.
+  rejectHomeCwd ? true,
 }:
 
 let
@@ -140,82 +148,96 @@ let
 
   fwdEnvPerms = lib.map try-fwd-env (fwdEnv ++ extraFwdEnv);
 
-  permissions = [
-    # Network access for talking to LLM endpoints, including TLS/CA bundle
-    # and /etc/resolv.conf etc.
-    network
+  permissions =
+    lib.optional rejectHomeCwd (
+      # Refuse to start when the working directory is $HOME. Otherwise
+      # mount-cwd would bind-mount the *entire* home directory read-write
+      # into the jail, exposing every file (including secrets and other
+      # agents' state) to the agent. Run from a project subdirectory.
+      add-runtime ''
+        if [ "$PWD" = "$HOME" ]; then
+          echo "${name}: refusing to run in home directory ($HOME): the working directory would expose your entire home directory to the agent." >&2
+          echo "${name}: run from a project subdirectory instead." >&2
+          exit 1
+        fi
+      ''
+    )
+    ++ [
+      # Network access for talking to LLM endpoints, including TLS/CA bundle
+      # and /etc/resolv.conf etc.
+      network
 
-    # Expose the host's timezone (binds /etc/localtime) so timestamps,
-    # git commits and the agent's notion of "now" match the host.
-    time-zone
+      # Expose the host's timezone (binds /etc/localtime) so timestamps,
+      # git commits and the agent's notion of "now" match the host.
+      time-zone
 
-    # Drop bwrap's `--new-session` flag. With --new-session, the jailed
-    # process is detached from the controlling TTY which breaks signal
-    # handling (Ctrl-C) and some TUI features in interactive agents.
-    # See BWRAP(1) for security trade-offs.
-    no-new-session
-  ]
-  ++ lib.optional bindFullNixStore (
-    # Bind the entire `/nix/store` read-only. The base permissions only
-    # bind the runtime closure of the jailed derivation; agents shell out
-    # to arbitrary tools (git, ripgrep, ...) added via add-pkg-deps and
-    # may also exec store paths discovered in the user's project (e.g.
-    # `nix run`, `direnv`, etc.), so we expose the full store instead.
-    ro-bind "/nix/store" "/nix/store"
-  )
-  ++ userDataPerms
-  ++ userDataFilePerms
-  ++ lib.optionals bindUserTmp [
-    # Expose the host's `~/tmp` directory read-write inside the jail so
-    # the agent has a persistent writable scratch space under $HOME.
-    (add-runtime "mkdir -p ~/tmp")
-    (rw-bind (noescape "~/tmp") (noescape "~/tmp"))
-  ]
-  ++ lib.optional persistentTmp (
-    # Provide a host-backed /tmp instead of the base tmpfs. Creates
-    # /tmp/<name> on the host and bind-mounts it as /tmp in the jail,
-    # giving the agent a real writable /tmp that survives across
-    # invocations.
-    add-runtime ''
-      mkdir -p /tmp/${name}
-      RUNTIME_ARGS+=(--bind /tmp/${name} /tmp)
-    ''
-  )
-  ++ [
-    # Bind-mount the working directory read-write so the agent can edit
-    # files in the user's project. The CWD is typically the project root
-    # (or a worktree, when invoked via a *-worktree wrapper).
-    mount-cwd
-  ]
-  ++ lib.optional bindUsrBin (
-    # Expose `/usr/bin` read-only so the agent can inspect host-installed
-    # binaries (e.g. `which`, `file`, or system-provided tools outside
-    # the Nix store).
-    ro-bind "/usr/bin" "/usr/bin"
-  )
-  ++ [
-    # Expose `/run` read-only so the agent can access runtime state such
-    # as D-Bus sockets, PipeWire/PulseAudio sockets, and other system
-    # services without being able to modify them.
-    (try-ro-bind "/run" "/run")
-  ]
-  ++ [
-    # Expose `/etc/nix/nix.conf` read-only so that `nix` commands inside
-    # the jail pick up the host's Nix configuration (substituters,
-    # trusted-users, experimental-features, etc.).
-    (try-ro-bind "/etc/nix/nix.conf" "/etc/nix/nix.conf")
-  ]
-  ++ [
-    # Expose `/nix/var/nix` read-only so that `nix` commands inside
-    # the jail can find the store database and don't fall back to the
-    # multi-user chroot store path (which produces a warning).
-    (try-ro-bind "/nix/var/nix" "/nix/var/nix")
-  ]
-  ++ configDirPerms
-  ++ [
-    (add-pkg-deps (devTools ++ extraDevTools))
-  ]
-  ++ fwdEnvPerms
-  ++ extraPermissions;
+      # Drop bwrap's `--new-session` flag. With --new-session, the jailed
+      # process is detached from the controlling TTY which breaks signal
+      # handling (Ctrl-C) and some TUI features in interactive agents.
+      # See BWRAP(1) for security trade-offs.
+      no-new-session
+    ]
+    ++ lib.optional bindFullNixStore (
+      # Bind the entire `/nix/store` read-only. The base permissions only
+      # bind the runtime closure of the jailed derivation; agents shell out
+      # to arbitrary tools (git, ripgrep, ...) added via add-pkg-deps and
+      # may also exec store paths discovered in the user's project (e.g.
+      # `nix run`, `direnv`, etc.), so we expose the full store instead.
+      ro-bind "/nix/store" "/nix/store"
+    )
+    ++ userDataPerms
+    ++ userDataFilePerms
+    ++ lib.optionals bindUserTmp [
+      # Expose the host's `~/tmp` directory read-write inside the jail so
+      # the agent has a persistent writable scratch space under $HOME.
+      (add-runtime "mkdir -p ~/tmp")
+      (rw-bind (noescape "~/tmp") (noescape "~/tmp"))
+    ]
+    ++ lib.optional persistentTmp (
+      # Provide a host-backed /tmp instead of the base tmpfs. Creates
+      # /tmp/<name> on the host and bind-mounts it as /tmp in the jail,
+      # giving the agent a real writable /tmp that survives across
+      # invocations.
+      add-runtime ''
+        mkdir -p /tmp/${name}
+        RUNTIME_ARGS+=(--bind /tmp/${name} /tmp)
+      ''
+    )
+    ++ [
+      # Bind-mount the working directory read-write so the agent can edit
+      # files in the user's project. The CWD is typically the project root
+      # (or a worktree, when invoked via a *-worktree wrapper).
+      mount-cwd
+    ]
+    ++ lib.optional bindUsrBin (
+      # Expose `/usr/bin` read-only so the agent can inspect host-installed
+      # binaries (e.g. `which`, `file`, or system-provided tools outside
+      # the Nix store).
+      ro-bind "/usr/bin" "/usr/bin"
+    )
+    ++ [
+      # Expose `/run` read-only so the agent can access runtime state such
+      # as D-Bus sockets, PipeWire/PulseAudio sockets, and other system
+      # services without being able to modify them.
+      (try-ro-bind "/run" "/run")
+    ]
+    ++ [
+      # Expose `/etc/nix/nix.conf` read-only so that `nix` commands inside
+      # the jail pick up the host's Nix configuration (substituters,
+      # trusted-users, experimental-features, etc.).
+      (try-ro-bind "/etc/nix/nix.conf" "/etc/nix/nix.conf")
+    ]
+    ++ [
+      # Expose `/nix/var/nix` read-only so that `nix` commands inside
+      # the jail can find the store database and don't fall back to the
+      # multi-user chroot store path (which produces a warning).
+      (try-ro-bind "/nix/var/nix" "/nix/var/nix")
+    ]
+    ++ configDirPerms
+    ++ [
+      (add-pkg-deps (devTools ++ extraDevTools))
+    ]
+    ++ fwdEnvPerms
+    ++ extraPermissions;
 in
 jailLib name pkg permissions
