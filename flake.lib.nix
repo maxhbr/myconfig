@@ -624,6 +624,47 @@ rec {
         extraModules = [
           (
             { pkgs, ... }:
+            let
+              # Recover the myconfig commit even when this flake is consumed
+              # via a `path:` input (as ../priv does). A `path:` input keeps
+              # the `.git` directory in the copied store tree, so the rev can
+              # be read with pure Nix file reads (no git subprocess). When
+              # built as the root flake (`git+file:`), `self.rev` is already
+              # populated and is preferred.
+              #
+              # NOTE: this always reports the *committed* HEAD. It cannot tell
+              # whether the built tree carried uncommitted changes (that would
+              # need `git+file:` input semantics, see AGENTS.md).
+              myconfigRev = lib.trim (
+                if self ? rev then
+                  self.rev
+                else if !builtins.pathExists "${self}/.git" then
+                  "unknown"
+                else
+                  let
+                    gitDir = "${self}/.git";
+                    headFile = lib.trim (lib.fileContents "${gitDir}/HEAD");
+                    m = builtins.match "ref: (.+)" headFile;
+                  in
+                  if m == null then
+                    headFile # detached HEAD: HEAD holds the rev directly
+                  else
+                    let
+                      ref = builtins.head m;
+                    in
+                    if builtins.pathExists "${gitDir}/${ref}" then
+                      lib.trim (lib.fileContents "${gitDir}/${ref}")
+                    else
+                      let
+                        pr = lib.splitString "\n" (lib.fileContents "${gitDir}/packed-refs");
+                        matching = builtins.filter (l: builtins.match "[0-9a-f]+ ${lib.escapeRegex ref}" l != null) pr;
+                      in
+                      if matching == [ ] then
+                        "unknown"
+                      else
+                        builtins.head (builtins.match "([0-9a-f]+).*" (builtins.head matching))
+              );
+            in
             {
               # ca-references
               nix.extraOptions = ''
@@ -647,7 +688,15 @@ rec {
                 nixos = "${self}/";
                 home-manager = "${inputs.home}/";
               };
-              system.configurationRevision = self.rev or "dirty";
+              system.configurationRevision = myconfigRev;
+
+              # Surface the myconfig commit on the running system. /run is
+              # tmpfs; the symlink is (re)created at boot and on every
+              # `nixos-rebuild switch` by systemd-tmpfiles-setup.service.
+              systemd.tmpfiles.rules = [
+                "d /run/myconfig 0755 root root -"
+                "L+ /run/myconfig/myconfig-commit - - - - ${pkgs.writeText "myconfig-commit" "${myconfigRev}\n"}"
+              ];
             }
           )
         ];
