@@ -670,12 +670,15 @@ rec {
               # User-facing script: report whether the working repo
               # (~/myconfig/myconfig) is ahead of the commit the running
               # system was built from (recorded in /run/myconfig/myconfig-commit).
-              #   - exit 0, print <N> : repo is N commits ahead of the saved commit
-              #   - exit 0 (warning)  : saved commit file is missing (system built
-              #                         without this module / tmpfiles not run yet)
-              #   - exit 1, print 0   : repo HEAD matches the saved commit exactly
-              #   - exit 2 (stderr)   : no saved commit recorded, repo diverged/
-              #                         behind, or other error
+              #   - exit 0, print <N>       : repo is N commits ahead of the saved commit
+              #   - exit 0, print <N>-dirty : repo is N ahead AND has uncommitted changes
+              #                              to tracked files (always exit 0 when unclean,
+              #                              even on an exact HEAD match -> "0-dirty")
+              #   - exit 0 (warning)       : saved commit file is missing (system built
+              #                              without this module / tmpfiles not run yet)
+              #   - exit 1, print 0        : repo HEAD matches the saved commit, clean tree
+              #   - exit 2 (stderr)        : no saved commit recorded, repo diverged/
+              #                              behind, or other error
               myconfig-ahead = pkgs.writeShellScriptBin "myconfig-ahead" ''
                 set -euo pipefail
 
@@ -698,8 +701,19 @@ rec {
                 cd "$repo"
                 current="$(${gitBin} rev-parse HEAD)"
 
+                # Detect uncommitted changes to tracked files (untracked files
+                # don't count, matching `git describe --dirty`).
+                if ${gitBin} diff --quiet HEAD 2>/dev/null; then
+                  dirty=""
+                else
+                  dirty="-dirty"
+                fi
+
                 if [[ "$saved" == "$current" ]]; then
-                  echo 0
+                  echo "0''${dirty}"
+                  if [[ -n "$dirty" ]]; then
+                    exit 0
+                  fi
                   exit 1
                 fi
 
@@ -709,7 +723,8 @@ rec {
                 fi
 
                 if ${gitBin} merge-base --is-ancestor "$saved" HEAD; then
-                  ${gitBin} rev-list --count "''${saved}..HEAD"
+                  count="$(${gitBin} rev-list --count "''${saved}..HEAD")"
+                  echo "''${count}''${dirty}"
                   exit 0
                 else
                   echo "myconfig-ahead: repository is not ahead of saved commit $saved (diverged or behind)" >&2
