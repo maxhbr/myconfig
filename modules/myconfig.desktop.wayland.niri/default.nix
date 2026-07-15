@@ -74,6 +74,34 @@ in
         )
       )
       {
+        # keyd: tap left Super to open the launcher; hold it for a normal
+        # Super modifier. niri binds `Mod+P` (Super+P on a TTY session) to
+        # `spawn "my-wofi"`, so the tap emits that combo and lets niri spawn
+        # the launcher as the user. keyd runs as root, so we do NOT run
+        # `my-wofi` directly via `command(...)` — it would lack the user's
+        # WAYLAND_DISPLAY / session environment.
+        services.keyd = {
+          enable = true;
+          keyboards.default = {
+            ids = [ "*" ];
+            settings.global = {
+              overload_tap_timeout = 200; # ms to register a tap before timeout
+            };
+            settings.main = {
+              compose = "layer(meta)"; # hold Menu/Compose key for Super
+              # tap Super → launcher (niri Mod+P → my-wofi); hold Super = modifier
+              leftmeta = "overload(meta, macro(leftmeta+v))"; # NEO -> QWERTY
+              # ^ key (below ESC, physical KEY_GRAVE) → F13. voxtype watches
+              # evdev for F13 in push-to-talk mode (see
+              # home-manager.services.voxtype.nix): hold to record, release to
+              # transcribe. F13 is a function key, so the Neo XKB layout does
+              # not affect it; the ^ dead-circumflex glyph is never produced.
+              # keyd emits F13 on both press and release, giving voxtype a
+              # clean down/up pair on its virtual device.
+              grave = "f13";
+            };
+          };
+        };
         # nixpkgs.overlays = [
         #   (_: _: {
         #     niri = inputs.niri.packages.${pkgs.system}.niri;
