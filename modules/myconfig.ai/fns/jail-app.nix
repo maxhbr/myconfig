@@ -100,6 +100,15 @@
     "VISUAL"
   ],
   extraFwdEnv ? [ ],
+
+  # Extra environment variables to set *inside* the jail, as a `name = value`
+  # attrset. Unlike `fwdEnv`/`extraFwdEnv` (which forward a variable from the
+  # host environment only if it is set), these are set unconditionally via the
+  # `set-env` combinator (`--setenv`), independent of the host environment.
+  # Useful for marking a particular wrapper so that tools inside the jail can
+  # detect how they were launched (e.g. `PI_JAIL_MARKER = "1"`).
+  extraRuntimeEnv ? { },
+
   extraPermissions ? [ ],
   bindFullNixStore ? true,
   bindUsrBin ? true,
@@ -127,6 +136,7 @@ let
     rw-bind
     add-runtime
     add-pkg-deps
+    set-env
     try-fwd-env
     mount-cwd
     noescape
@@ -147,6 +157,8 @@ let
   );
 
   fwdEnvPerms = lib.map try-fwd-env (fwdEnv ++ extraFwdEnv);
+
+  runtimeEnvPerms = lib.mapAttrsToList (name: value: set-env name value) extraRuntimeEnv;
 
   permissions =
     lib.optional rejectHomeCwd (
@@ -238,6 +250,7 @@ let
       (add-pkg-deps (devTools ++ extraDevTools))
     ]
     ++ fwdEnvPerms
+    ++ runtimeEnvPerms
     ++ extraPermissions;
 in
 jailLib name pkg permissions
