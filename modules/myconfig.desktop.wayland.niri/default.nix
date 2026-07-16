@@ -74,14 +74,11 @@ in
         )
       )
       {
-        # keyd: tap left Super to open the launcher; hold it for a normal
-        # Super modifier. niri binds `Mod+P` (Super+P on a TTY session) to
-        # `spawn "my-wofi"`, so the tap emits that combo and lets niri spawn
-        # the launcher as the user. keyd runs as root, so we do NOT run
-        # `my-wofi` directly via `command(...)` — it would lack the user's
-        # WAYLAND_DISPLAY / session environment.
-        services.keyd = {
-          enable = true;
+        # keyd disabled by default — it interferes with touchpad
+        # "disable while typing". Re-enable on a per-host basis with
+        # `services.keyd.enable = true;` if you want the launcher tap
+        # and the F13 voxtype hotkey back.
+        services.keyd = lib.mkIf config.services.keyd.enable {
           keyboards.default = {
             ids = [ "*" ];
             settings.global = {
