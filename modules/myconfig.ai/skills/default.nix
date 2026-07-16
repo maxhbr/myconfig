@@ -82,6 +82,7 @@ in
     ./commit.nix
     ./grafana-core.nix
     ./playwright-cli.nix
+    ./review.nix
   ];
 
   options.myconfig.ai.skills = with lib; {
