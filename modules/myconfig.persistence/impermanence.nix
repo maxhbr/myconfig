@@ -9,6 +9,7 @@
 let
   cfg = config.myconfig.persistence.impermanence;
   user = myconfig.user;
+  agents = config.myconfig.agentUsers;
   persistentDir = "/persistent";
   persistentPrivDir = "${persistentDir}/priv";
   persistentWorkDir = "${persistentDir}/work";
@@ -374,6 +375,16 @@ in
                       toString config.users.extraUsers.${user}.uid
                     } -g ${toString config.users.extraGroups.${user}.gid}
                   done
+                  ${lib.concatMapStrings (agent: ''
+                    install -d -m 750 "/btrfs_tmp/${volumeHome}/${agent}" \
+                      -o ${toString config.users.extraUsers.${agent}.uid} \
+                      -g ${toString config.users.extraGroups.${agent}.gid}
+                    for folder in .local .local/share .config; do
+                      install -d -m 750 "/btrfs_tmp/${volumeHome}/${agent}/$folder" \
+                        -o ${toString config.users.extraUsers.${agent}.uid} \
+                        -g ${toString config.users.extraGroups.${agent}.gid}
+                    done
+                  '') agents}
                 }
 
           clean_home
@@ -635,48 +646,62 @@ in
                 lib.removePrefix "${config.home.homeDirectory}/" path
               else
                 path;
+            isPrimaryUser = config.home.username == user;
+            isAgentUser = builtins.elem config.home.username agents;
           in
           {
-            config = {
-              myconfig.persistence.directories = [
-                "myconfig"
-                "Downloads"
-                "Documents"
-                "MINE"
-                "bin"
-                "_screenshots"
-                ".pki"
-              ];
-              myconfig.persistence.other-directories = [
-                "imgwork"
-              ];
-              myconfig.persistence.cache-directories = [ ".cache/nix-index" ];
-              home.persistence = {
-                "${persistentPrivDir}" = {
-                  directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.directories);
-                  files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.files);
+            config = lib.mkMerge [
+              # primary user: full persistence (priv/work/cache/other trees)
+              (lib.mkIf isPrimaryUser {
+                myconfig.persistence.directories = [
+                  "myconfig"
+                  "Downloads"
+                  "Documents"
+                  "MINE"
+                  "bin"
+                  "_screenshots"
+                  ".pki"
+                ];
+                myconfig.persistence.other-directories = [
+                  "imgwork"
+                ];
+                myconfig.persistence.cache-directories = [ ".cache/nix-index" ];
+                home.persistence = {
+                  "${persistentPrivDir}" = {
+                    directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.directories);
+                    files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.files);
+                  };
+                  "${persistentWorkDir}" = {
+                    directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-directories);
+                    files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-files);
+                  };
+                  "${persistentCacheDir}" = {
+                    directories = validatePaths (
+                      lib.map mkRelativeToHome config.myconfig.persistence.cache-directories
+                    );
+                    files = [
+                      ".persistence.${config.home.username}.ready"
+                    ]
+                    ++ (validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.cache-files));
+                  };
+                  "${persistentOtherDir}" = {
+                    directories = validatePaths (
+                      lib.map mkRelativeToHome config.myconfig.persistence.other-directories
+                    );
+                    files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.other-files);
+                  };
                 };
-                "${persistentWorkDir}" = {
-                  directories = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-directories);
-                  files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.work-files);
+              })
+              # agent users: only a persistent `workdir` under the work tree.
+              # Everything else (priv secrets, cache, dotfiles) stays ephemeral
+              # so agent state is lost on reboot, as required.
+              (lib.mkIf isAgentUser {
+                home.persistence."${persistentWorkDir}" = {
+                  directories = [ "workdir" ];
+                  files = [ ];
                 };
-                "${persistentCacheDir}" = {
-                  directories = validatePaths (
-                    lib.map mkRelativeToHome config.myconfig.persistence.cache-directories
-                  );
-                  files = [
-                    ".persistence.${config.home.username}.ready"
-                  ]
-                  ++ (validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.cache-files));
-                };
-                "${persistentOtherDir}" = {
-                  directories = validatePaths (
-                    lib.map mkRelativeToHome config.myconfig.persistence.other-directories
-                  );
-                  files = validatePaths (lib.map mkRelativeToHome config.myconfig.persistence.other-files);
-                };
-              };
-            };
+              })
+            ];
           }
         )
         (
@@ -730,9 +755,12 @@ in
 
             diff_home = mk_diff_command "/home/${user}" "home";
             diff_root = mk_diff_command "/" "root";
+            isPrimaryUser = config.home.username == user;
           in
           {
-            home.packages = [
+            # diff_home hardcodes /home/${user} (= the primary user); agents
+            # must not get it (would diff a home they cannot read).
+            home.packages = lib.mkIf isPrimaryUser [
               diff_home
               diff_root
             ];

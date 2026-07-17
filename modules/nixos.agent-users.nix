@@ -33,20 +33,31 @@ in
 
   config = lib.mkIf (agents != [ ]) {
     users = {
-      # one primary group per agent (so mhuber can be added to it)
-      extraGroups = lib.genAttrs agents (_: { });
+      # one primary group per agent (so the primary user can be added to it).
+      # Static gids so the impermanence initrd can chown agent homes and file
+      # ownership stays stable across reboots on persistent volumes.
+      extraGroups = lib.listToAttrs (
+        lib.imap0 (i: name: lib.nameValuePair name { gid = 1001 + i; }) agents
+      );
 
-      extraUsers = lib.genAttrs agents (name: {
-        isNormalUser = true;
-        group = name;
-        home = "/home/${name}";
-        homeMode = "0750"; # group-readable: primary user is in the group
-        createHome = true;
-        shell = "/run/current-system/sw/bin/fish";
-        hashedPassword = "!"; # locked: no password login
-        linger = true; # let coding-agent user services run without login
-        # intentionally NO extraGroups: no wheel, no keys, no docker, ...
-      });
+      extraUsers = lib.listToAttrs (
+        lib.imap0 (
+          i: name:
+          lib.nameValuePair name {
+            isNormalUser = true;
+            group = name;
+            # static uid: stable ownership on persistent volumes + initrd chown
+            uid = 1001 + i;
+            home = "/home/${name}";
+            homeMode = "0750"; # group-readable: primary user is in the group
+            createHome = true;
+            shell = "/run/current-system/sw/bin/fish";
+            hashedPassword = "!"; # locked: no password login
+            linger = true; # let coding-agent user services run without login
+            # intentionally NO extraGroups: no wheel, no keys, no docker, ...
+          }
+        ) agents
+      );
     };
 
     # empty attrset per agent is enough to activate home-manager, which
