@@ -47,12 +47,14 @@ in
     ];
     home-manager.sharedModules = [
       (
-        { config, ... }:
+        { config, myconfig, ... }:
         let
           accounts = lib.attrValues config.myconfig.accounts;
           primaryAccount = lib.findFirst (a: a.primary) (builtins.head accounts) accounts;
         in
-        lib.mkIf config.programs.password-store.enable {
+        # only the primary user gets password-store / pass-secret-service;
+        # agent users must not get access to mhuber's secrets.
+        lib.mkIf (config.programs.password-store.enable && config.home.username == myconfig.user) {
           programs.password-store = {
             # package = pass;
             settings = {
