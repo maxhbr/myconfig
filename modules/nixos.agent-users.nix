@@ -64,6 +64,14 @@ in
     # then applies all of home-manager.sharedModules to the agent.
     home-manager.users = lib.genAttrs agents (_: { });
 
+    # Let agents connect to the nix daemon: home-manager activation needs
+    # store access, but agents are in no group nix allows by default
+    # (@wheel/@builders) and have minimal extraGroups.  Add them to
+    # `allowed-users` only — deliberately NOT `trusted-users`, so a
+    # compromised agent cannot redirect builds to a malicious substituter
+    # or import unsigned store paths.
+    nix.settings.allowed-users = config.myconfig.agentUsers;
+
     systemd.tmpfiles.rules = lib.concatMap (name: [
       "d /home/${name} 0750 ${name} ${name} - -"
       "d /persistent/cache/home/${name} 0750 ${name} ${name} - -"
