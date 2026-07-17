@@ -139,6 +139,7 @@ in
         target_directory = modelsPullDir;
         hf_spec = [ "unsloth/Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-Q6_K.gguf" ];
       };
+      mlock = false; # mlock fails with "Cannot allocate memory" on this model
       params = [
         "--spec-type"
         "draft-mtp"
@@ -150,12 +151,18 @@ in
         "2048"
       ];
       cacheType = "q8_0";
-      ctxSize = 184320;
+      ctxSize = 131072; # ~128k context — fits in RTX 5090 24 GB with Q6_K model (~17 GB)
       aliases = [
         "opencode"
       ];
       parallel = 1;
       ttl = 900;
+      variants = {
+        full-ctx = {
+          ctxSize = 184320; # full context with quantized (q8_0) cache
+          tags = [ "long-context" ];
+        };
+      };
     }
   ];
 

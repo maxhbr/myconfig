@@ -146,6 +146,16 @@ let
           `myconfig.ai.pull_models.models.<target_directory>`.
         '';
       };
+      mlock = mkOption {
+        type = types.nullOr types.bool;
+        default = null;
+        description = ''
+          Override the global `mlock` setting for this model.
+          `null` to inherit the global default; `false` to disable
+          `mlock` even if the global enables it; `true` to enable it
+          even if the global disables it.
+        '';
+      };
       variants = mkOption {
         type = types.attrsOf (
           types.submodule {

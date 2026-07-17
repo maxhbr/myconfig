@@ -195,6 +195,7 @@ let
       keys = {
         model = m.path;
       }
+      // lib.optionalAttrs (m.mlock != null) { mlock = m.mlock; }
       // lib.optionalAttrs (m.ctxSize != null) { ctx-size = (m.ctxSize * m.parallel); }
       // lib.optionalAttrs (m.cacheType != null) {
         cache-type-k = m.cacheType;
@@ -418,6 +419,10 @@ in
           "~@privileged"
         ];
         ProcSubset = lib.mkForce "all";
+        # llama-server --mlock will try to lock ~2 GB of RAM. The default
+        # RLIMIT_MEMLOCK (64 KB) is far too small; set to unlimited so the
+        # service can mlock() the full working set without EAGAIN.
+        LimitMEMLOCK = -1;
       };
 
       systemd.services.llama-cpp.environment = {

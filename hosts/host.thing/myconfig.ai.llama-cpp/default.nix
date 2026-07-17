@@ -19,6 +19,7 @@ let
   thedrummerSkyfall31B = import ./TheDrummer_Skyfall-31B.nix { inherit modelsPullDir; };
   ornith = import ./Ornith-1.0-35B.nix { inherit modelsPullDir; };
   qwen3_235B = import ./Qwen3-235B-A22B.nix { inherit modelsPullDir; };
+  hy3 = import ./Hy3-Q2_K_L.nix { inherit modelsPullDir; };
   # Helper to set the llama-swap group on a list of models.
   withGroup = group: map (m: m // { inherit group; });
 
@@ -74,6 +75,7 @@ let
     ++ thedrummerSkyfall31B.amdModels
     ++ agentsA1.amdModels
     ++ qwen3_235B.amdModels
+    ++ hy3.amdModels
   );
   fromRtxModels =
     let
