@@ -538,7 +538,10 @@ rec {
                         ...
                       }:
                       let
-                        hmReady = "/home/${user}/.home-manager-${config.home.username}.service.ready";
+                        # use the per-user home directory so this works for
+                        # agent users too (whose home is /home/<agent>, not
+                        # /home/${user}).
+                        hmReady = "${config.home.homeDirectory}/.home-manager-${config.home.username}.service.ready";
                       in
                       {
                         home.activation.markHmUnready = lib.hm.dag.entryBefore [ "writeBoundary" ] ''
@@ -588,17 +591,30 @@ rec {
               myconfig,
               ...
             }:
+            let
+              # the primary user plus every configured agent user — each
+              # needs its own nix profile/gcroots directories and a
+              # mk-hm-dirs-<name> service so home-manager can activate.
+              allUsers = [ myconfig.user ] ++ config.myconfig.agentUsers;
+            in
             {
               config = {
-                system.activationScripts.genProfileManagementDirs = "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}";
-                systemd.services.mk-hm-dirs = {
-                  serviceConfig.Type = "oneshot";
-                  script = ''
-                    mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
-                    chown ${myconfig.user} /nix/var/nix/{profiles,gcroots}/per-user/${myconfig.user}
-                  '';
-                  wantedBy = [ "home-manager-${myconfig.user}.service" ];
-                };
+                system.activationScripts.genProfileManagementDirs = lib.concatMapStringsSep "\n" (
+                  u: "mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${u}"
+                ) allUsers;
+                systemd.services = builtins.listToAttrs (
+                  map (u: {
+                    name = "mk-hm-dirs-${u}";
+                    value = {
+                      serviceConfig.Type = "oneshot";
+                      script = ''
+                        mkdir -m 0755 -p /nix/var/nix/{profiles,gcroots}/per-user/${u}
+                        chown ${u} /nix/var/nix/{profiles,gcroots}/per-user/${u}
+                      '';
+                      wantedBy = [ "home-manager-${u}.service" ];
+                    };
+                  }) allUsers
+                );
               };
             }
           )
