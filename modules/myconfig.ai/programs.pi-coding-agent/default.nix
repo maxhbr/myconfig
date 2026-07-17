@@ -276,6 +276,90 @@ let
     }
   '';
 
+  # The subagent example extension (examples/extensions/subagent/) ships as
+  # a multi-file extension plus sample agent definitions and workflow prompt
+  # templates. pi discovers each from a distinct location (see the example's
+  # README.md):
+  #   * the extension entry point (`index.ts`) and its sibling `agents.ts`
+  #     helper go to ~/.pi/agent/extensions/subagent/ (pi loads
+  #     `*/index.ts`; `agents.ts` is imported via a relative "./agents.ts"
+  #     specifier, so it must sit next to `index.ts`);
+  #   * sample agent markdown files go to ~/.pi/agent/agents/ (discovered by
+  #     the extension's `discoverAgents()`, which reads `getAgentDir()/agents`);
+  #   * workflow prompt templates go to ~/.pi/agent/prompts/ (invoked via
+  #     `/implement`, `/scout-and-plan`, `/implement-and-review`).
+  # The file list is enumerated with `builtins.readDir` rather than
+  # hardcoded, so files added upstream are picked up automatically. Reading
+  # the package store path at eval time is the same pattern already used
+  # above for `baseTheme` (`builtins.readFile` of the theme JSON).
+  subagentExampleDir = "${pi-coding-agent-pkg}/lib/node_modules/pi-monorepo/examples/extensions/subagent";
+
+  subagentExtensionFiles = lib.mapAttrs' (
+    name: _:
+    lib.nameValuePair ".pi/agent/extensions/subagent/${name}" {
+      source = "${subagentExampleDir}/${name}";
+    }
+  ) (lib.filterAttrs (name: _: lib.hasSuffix ".ts" name) (builtins.readDir subagentExampleDir));
+
+  # The upstream sample agent `.md` files hard-code a `model:` frontmatter
+  # field (e.g. `claude-haiku-4-5`, `claude-sonnet-4-5`) pointing at Anthropic
+  # models that are not available through this config's local providers. The
+  # field is optional in the subagent extension: `agents.ts` only requires
+  # `name` and `description`, and `index.ts` passes `--model` to the spawned
+  # subprocess only when `agent.model` is set. With the field absent the
+  # subagent inherits the user's configured default model (from
+  # `~/.pi/agent/settings.json` or pi's built-in default) -- the desired
+  # behavior for a sample-extension deployment. Rather than fork the files to
+  # hard-code a *different* model name (which would just move the
+  # hard-coding), strip the `model:` line entirely so the sample agents stay
+  # close to upstream and always follow the user's default model. The store
+  # originals are read-only, so each file is re-emitted via `pkgs.writeText`
+  # with the offending line filtered out.
+  subagentAgentFiles =
+    let
+      agentsDir = "${subagentExampleDir}/agents";
+      # Drop any frontmatter `model:` line so the subagent falls back to
+      # the user's default model instead of a hard-coded upstream model.
+      # The sample files have flat (un-indented) frontmatter and their
+      # system-prompt bodies contain no line starting with `model:`, so a
+      # simple prefix filter is exact here.
+      stripModelLine =
+        content:
+        lib.concatStringsSep "\n" (
+          lib.filter (line: !(lib.hasPrefix "model:" line)) (lib.splitString "\n" content)
+        );
+    in
+    lib.mapAttrs' (
+      name: _:
+      lib.nameValuePair ".pi/agent/agents/${name}" {
+        source = pkgs.writeText name (stripModelLine (builtins.readFile "${agentsDir}/${name}"));
+      }
+    ) (lib.filterAttrs (name: _: lib.hasSuffix ".md" name) (builtins.readDir agentsDir));
+
+  subagentPromptFiles =
+    lib.mapAttrs'
+      (
+        name: _:
+        lib.nameValuePair ".pi/agent/prompts/${name}" {
+          source = "${subagentExampleDir}/prompts/${name}";
+        }
+      )
+      (
+        lib.filterAttrs (name: _: lib.hasSuffix ".md" name) (
+          builtins.readDir "${subagentExampleDir}/prompts"
+        )
+      );
+
+  # The handoff example (examples/extensions/handoff.ts) is a single-file
+  # extension that adds a `/handoff` command for transferring context to a
+  # new focused session instead of lossy compaction. Deployed as a global
+  # single-file extension at ~/.pi/agent/extensions/handoff.ts (pi
+  # auto-discovers `~/.pi/agent/extensions/*.ts`). Its runtime value imports
+  # (`@earendil-works/pi-ai`, `@earendil-works/pi-coding-agent`, ...) resolve
+  # against pi's own node_modules at load time, unlike the generated
+  # `myconfig-*` extensions above which only use type-only imports.
+  handoffExtension = "${pi-coding-agent-pkg}/lib/node_modules/pi-monorepo/examples/extensions/handoff.ts";
+
   piBwrap = callLib ../fns/sandboxed-app.nix {
     name = "pi";
     pkg = pkgs.nixos-unstable.pi-coding-agent;
@@ -329,9 +413,23 @@ in
     home-manager.sharedModules = [
       {
         myconfig.persistence.directories = [ ".pi" ];
-        home.file.".pi/agent/extensions/myconfig-providers.ts".source = providersExtension;
-        home.file.".pi/agent/extensions/myconfig-jail-marker.ts".source = jailMarkerExtension;
-        home.file.".pi/agent/themes/unjailed.json".source = unjailedTheme;
+        # Deploy the generated extensions/theme plus the subagent example
+        # extension (multi-file, plus sample agents and workflow prompts) and
+        # the handoff single-file extension. `mkMerge` is required because the
+        # subagent files are produced as attrsets (enumerated with
+        # `builtins.readDir` in the `let` bindings above) and must be combined
+        # with the dotted `home.file.*` entries within this same module.
+        home.file = lib.mkMerge [
+          {
+            ".pi/agent/extensions/myconfig-providers.ts".source = providersExtension;
+            ".pi/agent/extensions/myconfig-jail-marker.ts".source = jailMarkerExtension;
+            ".pi/agent/extensions/handoff.ts".source = handoffExtension;
+            ".pi/agent/themes/unjailed.json".source = unjailedTheme;
+          }
+          subagentExtensionFiles
+          subagentAgentFiles
+          subagentPromptFiles
+        ];
         home.packages = [
           pkgs.nixos-unstable.pi-coding-agent
           piBwrap
