@@ -692,11 +692,15 @@ in
                   };
                 };
               })
-              # agent users: only a persistent `workdir` under the work tree.
-              # Everything else (priv secrets, cache, dotfiles) stays ephemeral
-              # so agent state is lost on reboot, as required.
+              # agent users: only a persistent `workdir`, under the cache
+              # tree.  The cache subvolume is NOT in the btrbk backup set
+              # (priv/work/other are), so the workdir is scratch space that
+              # survives reboots but is not backed up — matching the
+              # disposable nature of agent state.  Everything else (priv
+              # secrets, dotfiles) stays ephemeral so agent state is lost on
+              # reboot, as required.
               (lib.mkIf isAgentUser {
-                home.persistence."${persistentWorkDir}" = {
+                home.persistence."${persistentCacheDir}" = {
                   directories = [ "workdir" ];
                   files = [ ];
                 };

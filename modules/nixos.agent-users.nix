@@ -66,7 +66,7 @@ in
 
     systemd.tmpfiles.rules = lib.concatMap (name: [
       "d /home/${name} 0750 ${name} ${name} - -"
-      "d /persistent/work/home/${name} 0750 ${name} ${name} - -"
+      "d /persistent/cache/home/${name} 0750 ${name} ${name} - -"
     ]) agents;
   };
 }
