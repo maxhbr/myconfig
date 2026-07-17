@@ -53,6 +53,9 @@
     programs.zsh.interactiveShellInit = ''
       umask 027
     '';
+    programs.fish.interactiveShellInit = ''
+      umask 027
+    '';
     programs.mtr.enable = true;
   };
 }
