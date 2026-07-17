@@ -54,6 +54,7 @@
         ];
       }
     )
+    ./nixpkgs.overlays.llama-cpp.nix
     ./myconfig.ai.llama-cpp
     # ./myconfig.ai.vllm
     ./myconfig.ai.vllm/docker.vllm.rocm.nix
