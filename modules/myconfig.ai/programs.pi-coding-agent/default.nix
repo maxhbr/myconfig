@@ -425,6 +425,7 @@ in
             ".pi/agent/extensions/myconfig-jail-marker.ts".source = jailMarkerExtension;
             ".pi/agent/extensions/handoff.ts".source = handoffExtension;
             ".pi/agent/themes/unjailed.json".source = unjailedTheme;
+            ".pi/agent/keybindings.json".source = ./keybindings.json;
           }
           subagentExtensionFiles
           subagentAgentFiles
