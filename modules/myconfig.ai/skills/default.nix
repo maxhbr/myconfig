@@ -76,12 +76,22 @@ let
   # prompt template. Deployed to `~/.pi/agent/prompts/<name>.md` for every host
   # with pi-coding-agent enabled.
   handcraftedPrompts = config.myconfig.ai.skills.handcraftedPrompts;
+  # Registry of locally-defined pi sub-agent definitions, populated by
+  # individual skill modules (research). Each entry maps an agent name to its
+  # source `.md` file. Deployed to `~/.pi/agent/agents/<name>.md`, where the
+  # pi subagent extension discovers agents. Unlike the upstream sample
+  # agents (whose `model:` line is stripped before deployment), these are
+  # deployed verbatim — preserving `model:` frontmatter so a handcrafted
+  # agent can pin a fast/cheap model for its sub-agents. Only applied on
+  # hosts with pi-coding-agent enabled.
+  handcraftedAgents = config.myconfig.ai.skills.handcraftedAgents;
 in
 {
   imports = [
     ./commit.nix
     ./grafana-core.nix
     ./playwright-cli.nix
+    ./research.nix
     ./review.nix
   ];
 
@@ -174,6 +184,22 @@ in
         with pi-coding-agent enabled.
       '';
     };
+
+    handcraftedAgents = mkOption {
+      type = types.attrsOf (types.either types.path types.str);
+      default = { };
+      description = ''
+        Registry of locally-defined pi sub-agent definitions, keyed by agent
+        name and valued by the source `.md` file (a Nix path or a store-path
+        string). Deployed to `~/.pi/agent/agents/<name>.md`, where the pi
+        subagent extension discovers agents. Unlike the upstream sample
+        agents (whose `model:` frontmatter is stripped before deployment),
+        these are deployed verbatim — preserving `model:` lines so a
+        handcrafted agent can pin a fast/cheap model for its sub-agents.
+        Populated by individual skill modules (`research.nix`); only applied
+        on hosts with pi-coding-agent enabled.
+      '';
+    };
   };
 
   config = lib.mkMerge [
@@ -204,6 +230,9 @@ in
             // (lib.mapAttrs' (
               name: src: lib.nameValuePair ".pi/agent/prompts/${name}.md" { source = src; }
             ) handcraftedPrompts)
+            // (lib.mapAttrs' (
+              name: src: lib.nameValuePair ".pi/agent/agents/${name}.md" { source = src; }
+            ) handcraftedAgents)
           );
         }
       ];
