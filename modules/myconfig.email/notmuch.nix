@@ -15,10 +15,11 @@ in
           config,
           lib,
           pkgs,
+          myconfig,
           ...
         }:
         {
-          config = {
+          config = lib.mkIf (config.home.username == myconfig.user) {
             programs.notmuch = {
               enable = true;
             };

@@ -102,9 +102,14 @@ in
   config = lib.mkIf (cfg.email.enable && (cfg.email.syncer == "mbsync")) {
     home-manager.sharedModules = [
       (
-        { config, lib, ... }:
         {
-          config = {
+          config,
+          lib,
+          myconfig,
+          ...
+        }:
+        {
+          config = lib.mkIf (config.home.username == myconfig.user) {
             myconfig.homeManagerEmailConfig = [
               {
                 mbsync = {

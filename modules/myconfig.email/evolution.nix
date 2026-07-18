@@ -12,6 +12,13 @@ let
   cfg = config.myconfig;
 in
 {
+  # NOTE: dead code — `cfg.email.clients` is a `listOf` (see
+  # modules/myconfig.email/default.nix), so the comparison
+  # `cfg.email.clients == "evolution"` always evaluates to false and this
+  # block never applies. If this is ever fixed (e.g. to
+  # `builtins.elem "evolution" cfg.email.clients`), a main-user guard
+  # (`config.home.username == myconfig.user`) will be needed here too,
+  # since this is NixOS-level config, not a home-manager sharedModule.
   config = lib.mkIf (cfg.desktop.enable && cfg.email.enable && (cfg.email.clients == "evolution")) {
     programs.evolution.enable = true;
     services.gnome = {

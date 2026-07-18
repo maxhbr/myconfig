@@ -63,7 +63,12 @@ in
   config = lib.mkIf cfg.email.enable {
     home-manager.sharedModules = [
       (
-        { config, lib, ... }:
+        {
+          config,
+          lib,
+          myconfig,
+          ...
+        }:
         let
           myconfigAccountToHomeManagerEmailAccount =
             name: account:
@@ -160,7 +165,7 @@ in
                 };
             };
           };
-          config = {
+          config = lib.mkIf (config.home.username == myconfig.user) {
             home.packages = with pkgs; [
               abook
               aba

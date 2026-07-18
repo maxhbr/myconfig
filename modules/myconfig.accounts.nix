@@ -102,6 +102,12 @@ in
         {
           options = {
             myconfig = {
+              # NOTE: account *values* are consumed only for the main user
+              # (`myconfig.user`, hardcoded `"mhuber"` in `flake.lib.nix`);
+              # enforcement lives in `modules/myconfig.email/*` via
+              # `config.home.username == myconfig.user` guards (same idiom as
+              # `modules/programs.pass/default.nix`; `impermanence.nix` uses
+              # the same check via a let-bound `user = myconfig.user` alias).
               accounts = lib.mkOption {
                 type = types.attrsOf (types.submodule myconfigAccountsModule);
                 default = { };

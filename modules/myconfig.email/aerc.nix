@@ -4,10 +4,11 @@ let
       config,
       lib,
       pkgs,
+      myconfig,
       ...
     }:
     {
-      config = {
+      config = lib.mkIf (config.home.username == myconfig.user) {
         home.packages = with pkgs; [
           w3m
           (writeShellScriptBin "aerc-tmux" ''
@@ -83,6 +84,13 @@ let
           };
         };
         myconfig.desktop.wayland.launcherCommands = [ "aerc-alacritty" ];
+        myconfig.homeManagerEmailConfig = [
+          {
+            aerc = {
+              enable = true;
+            };
+          }
+        ];
       };
     };
 in
@@ -97,17 +105,6 @@ let
 in
 {
   config = lib.mkIf (cfg.email.enable && (builtins.elem "aerc" cfg.email.clients)) {
-    home-manager.sharedModules = [
-      hm
-      {
-        myconfig.homeManagerEmailConfig = [
-          {
-            aerc = {
-              enable = true;
-            };
-          }
-        ];
-      }
-    ];
+    home-manager.sharedModules = [ hm ];
   };
 }

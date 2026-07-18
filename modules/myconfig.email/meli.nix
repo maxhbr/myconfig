@@ -15,10 +15,11 @@ in
           config,
           lib,
           pkgs,
+          myconfig,
           ...
         }:
         {
-          config = lib.mkIf config.programs.meli.enable {
+          config = lib.mkIf (config.programs.meli.enable && config.home.username == myconfig.user) {
             programs.meli = {
               enable = true;
             };

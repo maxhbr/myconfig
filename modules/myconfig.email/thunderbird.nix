@@ -4,10 +4,11 @@ let
       config,
       lib,
       pkgs,
+      myconfig,
       ...
     }:
     {
-      config = {
+      config = lib.mkIf (config.home.username == myconfig.user) {
         programs.thunderbird = {
           enable = true;
           profiles = {
