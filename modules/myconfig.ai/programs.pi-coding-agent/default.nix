@@ -425,6 +425,9 @@ in
             ".pi/agent/extensions/myconfig-jail-marker.ts".source = jailMarkerExtension;
             ".pi/agent/extensions/handoff.ts".source = handoffExtension;
             ".pi/agent/themes/unjailed.json".source = unjailedTheme;
+            # Override the default `app.interrupt` (escape) with `ctrl+c`
+            # for reliability across SSH and tmux; `app.clear` moves to
+            # `ctrl+q` to avoid the conflict. See ./keybindings.json.
             ".pi/agent/keybindings.json".source = ./keybindings.json;
           }
           subagentExtensionFiles
