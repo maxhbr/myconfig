@@ -18,9 +18,9 @@
 #
 # All "default" lists (configDirs, devTools, fwdEnv, userDataDirs) can be
 # either replaced wholesale or extended via the matching `extra*` argument.
-# In addition, every wrapper inherits `myconfig.ai.jail.fwdEnvs` (default
-# `[ "OPENAI_API_KEY" ]`) from the NixOS config passed in as `osconfig` —
-# see `globalFwdEnvs` below.
+# In addition, every wrapper inherits `myconfig.ai.jail.fwdEnvs` from the
+# NixOS config passed in as `osconfig` — see `globalFwdEnvs` below. This
+# extends the always-forwarded `OPENAI_API_KEY`.
 #
 # The resulting derivation is a `jail` permission bundle. See
 # `vendor/alexdavid-jail.nix/lib/combinators/` for available primitives.
@@ -32,8 +32,8 @@
   # option (see `../myconfig.ai.jail.nix`) so every `jail-app` wrapper picks
   # up the global forwarded-env list without each call site having to pass
   # it explicitly. Defaults to `{}` so the library still works standalone
-  # (e.g. in `nix repl`); in that case `globalFwdEnvs` falls back to the
-  # same default as the option.
+  # (e.g. in `nix repl`); in that case `globalFwdEnvs` reduces to just the
+  # always-forwarded `OPENAI_API_KEY`.
   osconfig ? { },
 }:
 
@@ -171,11 +171,11 @@ let
   );
 
   # Environment variables forwarded from the host into *every* jail-app
-  # wrapper, sourced from the shared `myconfig.ai.jail.fwdEnvs` option so
-  # that adding a new wrapper requires no per-call wiring. `or` makes this
-  # safe when `osconfig` is `{}` (standalone library use) — the fallback
-  # matches the option's own default.
-  globalFwdEnvs = osconfig.myconfig.ai.jail.fwdEnvs or [ "OPENAI_API_KEY" ];
+  # wrapper. `OPENAI_API_KEY` is always forwarded; the shared
+  # `myconfig.ai.jail.fwdEnvs` option extends this base list so that
+  # adding a new wrapper requires no per-call wiring. `or [ ]` makes this
+  # safe when `osconfig` is `{}` (standalone library use).
+  globalFwdEnvs = [ "OPENAI_API_KEY" ] ++ (osconfig.myconfig.ai.jail.fwdEnvs or [ ]);
 
   fwdEnvPerms = lib.map try-fwd-env (fwdEnv ++ extraFwdEnv ++ globalFwdEnvs);
 

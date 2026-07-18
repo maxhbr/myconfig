@@ -9,11 +9,12 @@
   options.myconfig.ai.jail = with lib; {
     fwdEnvs = mkOption {
       type = types.listOf types.str;
-      default = [ "OPENAI_API_KEY" ];
+      default = [ ];
       description = ''
         Environment variables forwarded from the host into every
         `jail-app` wrapper (`jailed-pi`, `jailed-opencode`,
-        `jailed-claude`, ...).
+        `jailed-claude`, ...), in addition to `OPENAI_API_KEY` which is
+        always forwarded.
 
         Each name is forwarded via `try-fwd-env`, i.e. it is passed through
         only when set on the host, so a jail never fails to start because
