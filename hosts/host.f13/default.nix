@@ -48,6 +48,7 @@ in
     ./ai.f13.nix
     ./services.orca.nix
     ./hermes-agent.nix
+    ./myconfig.agentUsers.nix
     ./NanoKVM-USB.nix
     ../shared.localModels.litellm.nix
     {
@@ -293,10 +294,6 @@ in
       #       '';
     };
     myconfig = {
-      agentUsers = [
-        "agent"
-        "assistant"
-      ];
       persistence.impermanence = {
         enable = true;
         soft_permanence_for_boot = false;
