@@ -153,8 +153,14 @@ diverged when it does change — use the JSON snapshot to localise diffs.
 
 ### Nix Files
 - **Formatting**: Use nixfmt-rfc-style (RFC 51 style)
-- **File naming**: Use dot-separated names following module hierarchy
-  - Examples: `services.openssh.nix`, `myconfig.desktop.nix`, `dev.haskell/default.nix`
+- **File naming**: a module file's name mirrors the top-level option it
+  defines or configures. Use dot-separated names following the option
+  hierarchy.
+  - `myconfig.agentUsers.nix` → defines `options.myconfig.agentUsers`
+  - `myconfig.secrets.nix` → defines `options.myconfig.secrets`
+  - `boot.initrd.supportedFilesystems.nix` → configures
+    `boot.initrd.supportedFilesystems`
+  - `dev.haskell/default.nix` → a subfeature grouped in a directory
 - **Module structure**: Follow standard NixOS module pattern
   ```nix
   { config, lib, pkgs, ... }:
@@ -207,7 +213,15 @@ find existing modules, or look up option definitions. Do not modify these
 directories — they are read-only references.
 
 ### Naming Conventions
-- Modules: `category.subcategory.feature.nix` or `subdir/default.nix`
+- **Module files**: the file name is the option path it defines or
+  configures (dropping the value), e.g. a module defining
+  `options.myconfig.agentUsers` lives at `modules/myconfig.agentUsers.nix`;
+  one configuring `boot.initrd.supportedFilesystems` lives at
+  `modules/boot.initrd.supportedFilesystems.nix`. Use a
+  directory (`subdir/default.nix`) when a feature spans multiple files.
+  All `*.nix` directly under `modules/` are auto-imported by
+  `nixosModules.core` via `builtins.readDir`, so only the file name
+  matters — there is no import list to update.
 - Options: `myconfig.<category>.<feature>.enable`
 - Context variables: `cfg` for current config, `self/super` for overlays
 - Host names: lowercase alphanumeric (e.g., f13, workstation, nas)
