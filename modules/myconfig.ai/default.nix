@@ -17,6 +17,7 @@ in
     ./myconfig.localModels.nix
     ./myconfig.ai.pull_models.nix
     ./myconfig.ai.llama-cpp
+    ./myconfig.ai.jail.nix
     ./comfyui.nix
     ./container.Kokoro-FastAPI.nix
     ./container.crawl4ai.nix

@@ -26,7 +26,16 @@ in
         }:
         let
           callLib = file: import file { inherit lib pkgs; };
-          callJailLib = file: import file { inherit lib pkgs jail; };
+          callJailLib =
+            file:
+            import file {
+              inherit
+                lib
+                pkgs
+                jail
+                osconfig
+                ;
+            };
           opencodeBwrap = callLib ../fns/sandboxed-app.nix {
             name = "opencode";
             pkg = config.programs.opencode.package;

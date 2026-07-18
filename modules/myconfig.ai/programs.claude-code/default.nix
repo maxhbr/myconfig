@@ -5,6 +5,9 @@
   ...
 }:
 
+let
+  osconfig = config;
+in
 {
   options.myconfig = with lib; {
     ai.claude-code = {
@@ -24,7 +27,16 @@
         }:
         let
           callLib = file: import file { inherit lib pkgs; };
-          callJailLib = file: import file { inherit lib pkgs jail; };
+          callJailLib =
+            file:
+            import file {
+              inherit
+                lib
+                pkgs
+                jail
+                osconfig
+                ;
+            };
           claudeCodeBwrap = callLib ../fns/sandboxed-app.nix {
             name = "claude-code";
             pkg = config.programs.claude-code.package;

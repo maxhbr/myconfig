@@ -18,6 +18,9 @@
 #
 # All "default" lists (configDirs, devTools, fwdEnv, userDataDirs) can be
 # either replaced wholesale or extended via the matching `extra*` argument.
+# In addition, every wrapper inherits `myconfig.ai.jail.fwdEnvs` (default
+# `[ "OPENAI_API_KEY" ]`) from the NixOS config passed in as `osconfig` —
+# see `globalFwdEnvs` below.
 #
 # The resulting derivation is a `jail` permission bundle. See
 # `vendor/alexdavid-jail.nix/lib/combinators/` for available primitives.
@@ -25,6 +28,13 @@
   lib,
   pkgs,
   jail,
+  # The NixOS `config`, used to read the shared `myconfig.ai.jail.fwdEnvs`
+  # option (see `../myconfig.ai.jail.nix`) so every `jail-app` wrapper picks
+  # up the global forwarded-env list without each call site having to pass
+  # it explicitly. Defaults to `{}` so the library still works standalone
+  # (e.g. in `nix repl`); in that case `globalFwdEnvs` falls back to the
+  # same default as the option.
+  osconfig ? { },
 }:
 
 {
@@ -100,6 +110,10 @@
     "VISUAL"
   ],
   extraFwdEnv ? [ ],
+  # NOTE: in addition to `fwdEnv` + `extraFwdEnv`, every wrapper inherits the
+  # shared `myconfig.ai.jail.fwdEnvs` list (read from `osconfig`); see
+  # `globalFwdEnvs` in the `let` below. Use `extraFwdEnv` only for
+  # wrapper-specific variables.
 
   # Extra environment variables to set *inside* the jail, as a `name = value`
   # attrset. Unlike `fwdEnv`/`extraFwdEnv` (which forward a variable from the
@@ -156,7 +170,14 @@ let
     configDirs ++ extraConfigDirs
   );
 
-  fwdEnvPerms = lib.map try-fwd-env (fwdEnv ++ extraFwdEnv);
+  # Environment variables forwarded from the host into *every* jail-app
+  # wrapper, sourced from the shared `myconfig.ai.jail.fwdEnvs` option so
+  # that adding a new wrapper requires no per-call wiring. `or` makes this
+  # safe when `osconfig` is `{}` (standalone library use) — the fallback
+  # matches the option's own default.
+  globalFwdEnvs = osconfig.myconfig.ai.jail.fwdEnvs or [ "OPENAI_API_KEY" ];
+
+  fwdEnvPerms = lib.map try-fwd-env (fwdEnv ++ extraFwdEnv ++ globalFwdEnvs);
 
   runtimeEnvPerms = lib.mapAttrsToList (name: value: set-env name value) extraRuntimeEnv;
 

@@ -11,7 +11,16 @@
 let
   osconfig = config;
   callLib = file: import file { inherit lib pkgs; };
-  callJailLib = file: import file { inherit lib pkgs jail; };
+  callJailLib =
+    file:
+    import file {
+      inherit
+        lib
+        pkgs
+        jail
+        osconfig
+        ;
+    };
   jail-app = callJailLib ../fns/jail-app.nix;
 
   # Build a provider entry for an OpenAI-compatible base URL.
