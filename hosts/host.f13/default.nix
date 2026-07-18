@@ -293,6 +293,10 @@ in
       #       '';
     };
     myconfig = {
+      agentUsers = [
+        "agent"
+        "assistant"
+      ];
       persistence.impermanence = {
         enable = true;
         soft_permanence_for_boot = false;
