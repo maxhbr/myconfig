@@ -12,11 +12,49 @@
 # each other.
 {
   config,
+  pkgs,
   lib,
+  myconfig,
   ...
 }:
 let
   agents = config.myconfig.agentUsers;
+
+  # Launch the agent's persistent tmux session in the current terminal.
+  # `sudo -u <name> -i` starts a login shell as the agent (full PATH,
+  # home-manager fish config) and `tmux new-session -A` attaches to an
+  # existing session or creates a fresh one.
+  mkAgentTmux =
+    name:
+    pkgs.writeShellScriptBin "${name}-tmux" ''
+      set -euo pipefail
+      exec sudo -u ${name} -i -- tmux new-session -A -s ${name}
+    '';
+
+  # Open a new alacritty window running the agent's tmux session.
+  # Alacritty runs as the primary user (so it can reach the display),
+  # the shell inside switches to the agent via <name>-tmux.
+  mkAgentAlacrittyTmux =
+    name:
+    let
+      scriptName = "${name}-alacritty-tmux";
+      windowName = "${name}-tmux";
+      tmuxScript = lib.getExe (mkAgentTmux name);
+    in
+    pkgs.writeShellScriptBin scriptName ''
+      set -euo pipefail
+      exec alacritty \
+        --title "${windowName}" \
+        --class "Alacritty:${windowName}" \
+        --command "${tmuxScript}"
+    '';
+
+  agentTmuxScripts = lib.concatMap (name: [
+    (mkAgentTmux name)
+    (mkAgentAlacrittyTmux name)
+  ]) agents;
+
+  agentLauncherCommands = map (name: "${name}-alacritty-tmux") agents;
 in
 {
   options.myconfig.agentUsers = lib.mkOption {
@@ -62,7 +100,15 @@ in
 
     # empty attrset per agent is enough to activate home-manager, which
     # then applies all of home-manager.sharedModules to the agent.
-    home-manager.users = lib.genAttrs agents (_: { });
+    # The primary user additionally gets the agent tmux launch scripts
+    #   <name>-tmux           — run in the current terminal
+    #   <name>-alacritty-tmux — open a new alacritty window
+    # (mkMerge: two definitions of home-manager.users in one module).
+    home-manager.users = lib.mkMerge [
+      (lib.genAttrs agents (_: { }))
+      { "${myconfig.user}".home.packages = agentTmuxScripts; }
+    ];
+    myconfig.desktop.wayland.launcherCommands = agentLauncherCommands;
 
     # Let agents connect to the nix daemon: home-manager activation needs
     # store access, but agents are in no group nix allows by default
