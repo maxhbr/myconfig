@@ -119,11 +119,6 @@ in
       };
     }
     { programs.kdeconnect.enable = true; }
-    {
-      services.input-remapper.enable = true;
-      services.input-remapper.enableUdevRules = true;
-      home-manager.sharedModules = [ { home.packages = with pkgs; [ input-remapper ]; } ];
-    }
     ../shared.deployedServices.nix
     # NOTE: amd_pstate=active and power-profiles-daemon are already set by
     # framework-amd-ai-300-series.nix -> amd.nix -> pstate.nix
@@ -337,7 +332,7 @@ in
         obs.enable = true;
         imagework.enable = true; # https://github.com/NixOS/nixpkgs/issues/425306
         imagework.myphoto.enable = true;
-        cad.enable = true;
+        # cad.enable = true;
         # joplin-desktop.enable = true;
         # logseq.enable = true; # disabled: pulls in insecure electron-39.8.10
       };
@@ -389,11 +384,6 @@ in
         };
       }
       {
-        # Voxtype push-to-talk speech-to-text. Configured by
-        # myconfig.desktop.wayland via home-manager.services.voxtype.nix.
-        services.voxtype.enable = true;
-      }
-      {
         home.packages = with pkgs.helper; [
           (connectBtDevice {
             name = "WF-1000XM5";
@@ -414,6 +404,10 @@ in
         ];
       }
     ];
+
+    home-manager.users.mhuber = {
+      services.voxtype.enable = true;
+    };
 
     # Disable the rfkill key (Fn+F10) on Framework 13.
     # The FRMW0004 HID device exposes "Wireless Radio Control" as a
