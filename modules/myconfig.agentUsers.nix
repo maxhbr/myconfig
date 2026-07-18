@@ -122,5 +122,34 @@ in
       "d /home/${name} 0750 ${name} ${name} - -"
       "d /persistent/cache/home/${name} 0750 ${name} ${name} - -"
     ]) agents;
+
+    # An agent named "offline" is network-isolated: all egress except
+    # loopback is rejected, so it can only reach local services (the nix
+    # daemon over its unix socket, local LLMs on 127.0.0.1, …).  This is
+    # applied automatically wherever an "offline" agent is declared —
+    # there is no per-host opt-in, by design (fail-closed).
+    #
+    # NOTE: the match is on the owning socket's uid, so only the offline
+    # user's *own* processes are blocked.  The nix daemon runs as root
+    # over a unix socket (unfiltered) and can still fetch store paths —
+    # a known limitation if true air-gapping is required.
+    networking.firewall = lib.mkIf (builtins.elem "offline" agents) (
+      let
+        offlineUid = toString config.users.users."offline".uid;
+      in
+      {
+        extraCommands = ''
+          # Block all network egress from the "offline" agent except
+          # loopback.  iptables does not filter unix sockets, so the
+          # nix daemon and the local X/Wayland socket keep working.
+          iptables -A OUTPUT -m owner --uid-owner ${offlineUid} -o lo -j RETURN
+          iptables -A OUTPUT -m owner --uid-owner ${offlineUid} -j REJECT
+        ''
+        + lib.optionalString config.networking.enableIPv6 ''
+          ip6tables -A OUTPUT -m owner --uid-owner ${offlineUid} -o lo -j RETURN
+          ip6tables -A OUTPUT -m owner --uid-owner ${offlineUid} -j REJECT
+        '';
+      }
+    );
   };
 }
