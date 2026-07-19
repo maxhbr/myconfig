@@ -189,10 +189,12 @@ in
                   }
                 ))
               ];
-              "theme" = "system";
               "disabled_providers" = [
                 "opencode"
               ];
+            };
+            tui = {
+              "theme" = "system";
             };
             agents = {
               code-reviewer = ''
