@@ -140,6 +140,17 @@
   # host paths to expose.
   extraReadOnlyEnvPaths ? [ ],
 
+  # Read-write host paths discovered at runtime from environment variables.
+  # Each entry is the name of an env var whose non-empty value is treated as
+  # an absolute host path and bind-mounted read-write at the same path. Unlike
+  # `extraReadOnlyEnvPaths`, the bind uses `--bind`: callers must only set the
+  # variable to an existing path.
+  #
+  # This is intentionally separate from `extraReadOnlyEnvPaths` so callers
+  # can expose a mostly read-only tree and remount only a nested subpath
+  # writable (for example, a linked worktree's shared `.git` directory).
+  extraReadWriteEnvPaths ? [ ],
+
   extraPermissions ? [ ],
   bindFullNixStore ? true,
   bindUsrBin ? true,
@@ -204,13 +215,24 @@ let
   # jail at the same path via `--ro-bind-try` (missing path → skipped). The
   # interpolation `${var}` expands to the variable name, and `''${var}` is
   # emitted literally so bash expands it at runtime.
-  runtimeEnvPathPerms = lib.map (
+  runtimeReadOnlyEnvPathPerms = lib.map (
     var:
     add-runtime ''
       if [ -n "''${${var}:-}" ]; then
         RUNTIME_ARGS+=(--ro-bind-try "''${${var}}" "''${${var}}")
       fi''
   ) extraReadOnlyEnvPaths;
+
+  # Bind host paths named by env vars read-write at runtime. These permissions
+  # deliberately follow `runtimeReadOnlyEnvPathPerms` below so a writable
+  # nested bind overrides an earlier read-only parent bind.
+  runtimeReadWriteEnvPathPerms = lib.map (
+    var:
+    add-runtime ''
+      if [ -n "''${${var}:-}" ]; then
+        RUNTIME_ARGS+=(--bind "''${${var}}" "''${${var}}")
+      fi''
+  ) extraReadWriteEnvPaths;
 
   permissions =
     lib.optional rejectHomeCwd (
@@ -303,7 +325,8 @@ let
     ]
     ++ fwdEnvPerms
     ++ runtimeEnvPerms
-    ++ runtimeEnvPathPerms
+    ++ runtimeReadOnlyEnvPathPerms
+    ++ runtimeReadWriteEnvPathPerms
     ++ extraPermissions;
 in
 jailLib name pkg permissions
