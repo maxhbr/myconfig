@@ -10,6 +10,11 @@
     networking.hostId = "78acddde";
     networking.wireless.enable = lib.mkForce false;
 
+    # zfs is pulled in via the raspberry-pi hardware module's
+    # supportedFilesystems; explicitly preserve the legacy default so the
+    # evaluation warning is silenced without changing import behavior.
+    boot.zfs.forceImportRoot = true;
+
     myconfig = {
       desktop = {
         enable = true;

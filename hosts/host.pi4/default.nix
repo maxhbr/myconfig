@@ -64,6 +64,11 @@
     networking.hostName = "pi4";
     networking.hostId = "ac8edd7a";
 
+    # zfs is pulled in via the raspberry-pi hardware module's
+    # supportedFilesystems; explicitly preserve the legacy default so the
+    # evaluation warning is silenced without changing import behavior.
+    boot.zfs.forceImportRoot = true;
+
     swapDevices = [
       {
         device = "/swapfile";
