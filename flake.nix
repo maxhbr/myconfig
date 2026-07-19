@@ -449,7 +449,16 @@
             pre-commit-check = inputs.git-hooks.lib.${system}.run {
               src = ./.;
               hooks = {
-                nixfmt.enable = true;
+                nixfmt = {
+                  enable = true;
+                  # Vendored subtrees (managed via `git subtree`) keep
+                  # their upstream formatting and may contain Nix fragments
+                  # that nixfmt cannot parse.  Exclude them here, mirroring
+                  # the `TREEFMT_EXCLUDES="vendor/**"` policy in
+                  # nixfmtall.sh so `nix flake check` and `./nixfmtall.sh`
+                  # agree on what gets formatted.
+                  excludes = [ "vendor/.*" ];
+                };
                 # shfmt.enable = true;
                 # shfmt.settings.simplify = true;
                 # shellcheck.enable = true;
