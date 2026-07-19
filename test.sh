@@ -97,33 +97,31 @@ else
     log_warning "pass not found, skipping github token setup"
 fi
 
-status=0
-
 # 1. Run flake checks (evaluates all flake outputs, including tests).
 log_step "running 'nix flake check'"
-if nix flake check 2>&1; then
-    log_info "flake check passed"
-else
+if ! nix flake check 2>&1; then
     rc=$?
-    log_error "flake check failed (exit $rc)"
-    status=$rc
+    log_error "flake check failed (exit $rc), stopping"
+    log_step "done (exit status ${rc})"
+    exit "$rc"
 fi
+log_info "flake check passed"
 
 # 2. Build the system toplevel derivation for the test host (no out-link).
 log_step "building toplevel for ${host_name}"
-if nix build \
+if ! nix build \
     --no-link \
     --print-out-paths \
     -L \
     --fallback \
     --log-format bar-with-logs \
     ".#nixosConfigurations.\"${host_name}\".config.system.build.toplevel"; then
-    log_info "build of ${host_name} toplevel succeeded"
-else
     rc=$?
-    log_error "build of ${host_name} toplevel failed (exit $rc)"
-    status=$rc
+    log_error "build of ${host_name} toplevel failed (exit $rc), stopping"
+    log_step "done (exit status ${rc})"
+    exit "$rc"
 fi
+log_info "build of ${host_name} toplevel succeeded"
 
-log_step "done (exit status ${status})"
-exit "$status"
+log_step "done (exit status 0)"
+exit 0
