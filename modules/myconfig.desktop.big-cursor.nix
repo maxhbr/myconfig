@@ -11,6 +11,7 @@
     home-manager.sharedModules = [
       {
         home.pointerCursor = {
+          enable = true;
           package = pkgs.vanilla-dmz;
           size = 128;
           name = "Vanilla-DMZ";

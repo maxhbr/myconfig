@@ -96,7 +96,10 @@ in
                   "file://${config.home.homeDirectory}/TNG"
                 ];
               };
-              gtk4 = { inherit extraCss; };
+              gtk4 = {
+                inherit extraCss;
+                theme = config.gtk.theme;
+              };
             };
           }
         )

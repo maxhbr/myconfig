@@ -40,11 +40,13 @@
           dbhost = "/run/postgresql";
           dbname = "nextcloud";
           adminuser = "Admin";
-          extraTrustedDomains = [
+        };
+        settings = {
+          trusted_domains = [
             myconfig.metadatalib.get.hosts."${config.networking.hostName}".ip4
             myconfig.metadatalib.get.hosts."${config.networking.hostName}".wireguard.wg0.ip4
           ];
-          overwriteProtocol = "https";
+          overwriteprotocol = "https";
         };
         maxUploadSize = "20G";
       };

@@ -125,11 +125,26 @@ in
     default = { };
   };
 
+  options.myconfig.secretsWarnOnMissingSource = mkOption {
+    type = types.bool;
+    default = true;
+    description = ''
+      Whether to emit an evaluation warning when a declared
+      `myconfig.secrets` entry has no `source` set (i.e. the private
+      `../priv/` repo that provisions per-secret sources is absent).
+
+      Real hosts keep the default `true` so an unprovisioned secret is
+      surfaced. Test builds (`test-*` in `flake.nix`) deliberately omit
+      the private repo, so they set this to `false` to silence the
+      expected warning.
+    '';
+  };
+
   config = mkMerge [
     {
       warnings =
         optional (
-          missingSource != { }
+          config.myconfig.secretsWarnOnMissingSource && missingSource != { }
         ) "myconfig.secrets: source is missing for: ${concatStringsSep ", " (attrNames missingSource)}"
         ++
           optional (secretsWithPrivkeyOverride != { })

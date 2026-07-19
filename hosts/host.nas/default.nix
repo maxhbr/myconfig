@@ -70,7 +70,7 @@
                         config.networking.hostName
                         # (with (import ../lib.nix); (getSecretNoNewline "nas" "ip"))
                       ]
-                      ++ config.services.nextcloud.config.extraTrustedDomains
+                      ++ config.services.nextcloud.settings.trusted_domains
                     )
                   );
             };

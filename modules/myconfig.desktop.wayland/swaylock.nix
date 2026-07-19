@@ -40,16 +40,10 @@ in
                 }
                 # { timeout = 450; command = "''${pkgs.systemd}/bin/systemctl suspend"; }
               ];
-              events = [
-                {
-                  event = "before-sleep";
-                  command = "''${config.programs.swaylock.package}/bin/swaylock -fF -c 13579B";
-                }
-                {
-                  event = "lock";
-                  command = "lock";
-                }
-              ];
+              events = {
+                before-sleep = "''${config.programs.swaylock.package}/bin/swaylock -fF -c 13579B";
+                lock = "lock";
+              };
             };
           }
         )
