@@ -46,6 +46,7 @@ in
     ./mykeylight
     ./role.work
     ./ai.f13.nix
+    ./services.litellm.nix
     ./services.orca.nix
     ./hermes-agent.nix
     ./myconfig.agentUsers.nix
