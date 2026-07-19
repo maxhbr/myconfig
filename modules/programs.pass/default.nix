@@ -82,7 +82,7 @@ in
             ".config/pass-git-helper/git-pass-mapping.ini".source =
               ./config/pass-git-helper/git-pass-mapping.ini;
           };
-          programs.git.extraConfig.credential.helper = "${pkgs.pass-git-helper}/bin/pass-git-helper";
+          programs.git.settings.credential.helper = "${pkgs.pass-git-helper}/bin/pass-git-helper";
         }
       )
     ];
