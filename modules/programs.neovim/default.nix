@@ -41,6 +41,7 @@
                   nvim-tree-lua
                   {
                     plugin = vim-startify;
+                    type = "viml";
                     config = "let g:startify_change_to_vcs_root = 0";
                   }
 
@@ -124,6 +125,7 @@
 
                   {
                     plugin = vim-markdown;
+                    type = "viml";
                     config = ''
                       " Don't fold markdown documents by default when opening them
                       let g:vim_markdown_folding_disabled = 1
@@ -133,6 +135,7 @@
                   {
                     # :Copilot setup
                     plugin = copilot-vim;
+                    type = "viml";
                     config = ''
                       let g:copilot_filetypes = {
                             \ '*': v:false,
