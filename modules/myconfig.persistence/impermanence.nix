@@ -9,7 +9,7 @@
 let
   cfg = config.myconfig.persistence.impermanence;
   user = myconfig.user;
-  agents = config.myconfig.agentUsers;
+  agents = config.myconfig.agentUsers.names;
   persistentDir = "/persistent";
   persistentPrivDir = "${persistentDir}/priv";
   persistentWorkDir = "${persistentDir}/work";

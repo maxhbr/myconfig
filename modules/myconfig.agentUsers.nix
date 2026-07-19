@@ -3,8 +3,8 @@
 # Defines a configurable list of isolated "agent" users.  Each agent
 # inherits the full home-manager sharedModules config of the primary user
 # (tmux, coding agents, shell, dev tools) but gets an *ephemeral* home
-# (state lost on reboot, no impermanence), no secrets, and a single
-# persistent `workdir/` under the work impermanence tree.
+# (state lost on reboot, no impermanence), and a single persistent
+# `workdir/` under the work impermanence tree.
 #
 # Permission model: the primary user is added to every agent's primary
 # group (see nixos.user.nix) and agent homes are 0750, so the primary
@@ -18,7 +18,7 @@
   ...
 }:
 let
-  agents = config.myconfig.agentUsers;
+  agents = config.myconfig.agentUsers.names;
 
   # Launch the agent's persistent tmux session in the current terminal.
   # `sudo -u <name> -i` starts a login shell as the agent (full PATH,
@@ -55,18 +55,60 @@ let
   ]) agents;
 
   agentLauncherCommands = map (name: "${name}-alacritty-tmux") agents;
+
+  agentUserInherit = config.myconfig.agentUsers.inheritFromMainUser;
 in
 {
   options.myconfig.agentUsers = lib.mkOption {
-    type = lib.types.listOf lib.types.str;
-    default = [ "agent" ];
-    description = ''
-      Usernames for isolated agent users with ephemeral homes.
-      Each user gets the same home-manager sharedModules config as the
-      primary user (tmux, coding agents, shell, dev tools) but with an
-      ephemeral home (state lost on reboot), no secrets, and a
-      persistent `workdir` under the work impermanence tree.
-    '';
+    type = lib.types.submodule {
+      options = {
+        names = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ "agent" ];
+          description = ''
+            Usernames for isolated agent users with ephemeral homes.
+            Each user gets the same home-manager sharedModules config as the
+            primary user (tmux, coding agents, shell, dev tools) but with an
+            ephemeral home (state lost on reboot), no secrets, and a
+            persistent `workdir` under the work impermanence tree.
+          '';
+        };
+        inheritFromMainUser = {
+          sessionVariables = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [ ];
+            description = ''
+              Session variable names to copy from the main user's
+              `home.sessionVariables` to each agent user.
+              Example: `[ "SKAINET_TOKEN" "TAIA_BEARER_TOKEN" ]`
+            '';
+          };
+          homeFiles = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [ ];
+            description = ''
+              `home.file` attribute names to copy from the main user's
+              config to each agent user. Supports prefix matching — if no
+              exact match exists, all keys starting with the prefix are
+              included (useful for recursive file trees like
+              `.pi/agent/extensions/trustedtokens-provider`).
+              Example: `[ ".pi/agent/extensions/skainet-provider.ts" ".pi/agent/extensions/trustedtokens-provider" ]`
+            '';
+          };
+          # NOTE: there is intentionally no "homeConfig" option here.
+          # Copying evaluated home-manager option subtrees (e.g.
+          # `programs.bash`) from the main user into an agent user as
+          # raw definitions causes infinite recursion: the subtrees are
+          # produced by `home-manager.sharedModules`, which apply to the
+          # agent too, so re-inserting the already-merged value as a
+          # definition creates a cycle through the module system's
+          # `mapAttrsRecursiveCond` option evaluation.  Anything set in a
+          # sharedModule is already inherited by every agent; anything
+          # set directly on `home-manager.users.<mainUser>` can be
+          # copied leaf-by-leaf via `sessionVariables` / `homeFiles`.
+        };
+      };
+    };
   };
 
   config = lib.mkIf (agents != [ ]) {
@@ -106,6 +148,37 @@ in
     # (mkMerge: two definitions of home-manager.users in one module).
     home-manager.users = lib.mkMerge [
       (lib.genAttrs agents (_: { }))
+
+      # Copy selected sessionVariables from the main user to each agent.
+      # Only copies variables that actually exist (skips silently if absent).
+      (lib.genAttrs agents (
+        name:
+        let
+          mainVars = config.home-manager.users."${myconfig.user}".home.sessionVariables or { };
+          available = builtins.filter (v: builtins.hasAttr v mainVars) agentUserInherit.sessionVariables;
+        in
+        {
+          home.sessionVariables = lib.genAttrs available (var: mainVars.${var});
+        }
+      ))
+
+      # Copy selected home.file entries from the main user to each agent.
+      # Supports both exact matches and prefix matching (for recursive dirs).
+      (lib.genAttrs agents (
+        name:
+        let
+          mainFile = config.home-manager.users."${myconfig.user}".home.file;
+          allKeys = lib.attrNames mainFile;
+          resolve =
+            prefix:
+            if lib.hasAttr prefix mainFile then [ prefix ] else lib.filter (k: lib.hasPrefix prefix k) allKeys;
+          matchedKeys = lib.unique (lib.concatMap resolve agentUserInherit.homeFiles);
+        in
+        {
+          home.file = lib.attrsets.getAttrs matchedKeys mainFile;
+        }
+      ))
+
       { "${myconfig.user}".home.packages = agentTmuxScripts; }
     ];
     myconfig.desktop.wayland.launcherCommands = agentLauncherCommands;
@@ -116,7 +189,7 @@ in
     # `allowed-users` only — deliberately NOT `trusted-users`, so a
     # compromised agent cannot redirect builds to a malicious substituter
     # or import unsigned store paths.
-    nix.settings.allowed-users = config.myconfig.agentUsers;
+    nix.settings.allowed-users = config.myconfig.agentUsers.names;
 
     systemd.tmpfiles.rules = lib.concatMap (name: [
       "d /home/${name} 0750 ${name} ${name} - -"

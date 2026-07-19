@@ -12,11 +12,13 @@
 }:
 {
   config = {
-    myconfig.agentUsers = [
-      "agent"
-      "assistant"
-      "offline"
-    ];
+    myconfig.agentUsers = {
+      names = [
+        "agent"
+        "assistant"
+        "offline"
+      ];
+    };
 
     # Per-agent home-manager blocks for f13-specific customisation.
     # The shared module already activates home-manager for every agent

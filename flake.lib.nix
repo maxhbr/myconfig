@@ -595,7 +595,7 @@ rec {
               # the primary user plus every configured agent user — each
               # needs its own nix profile/gcroots directories and a
               # mk-hm-dirs-<name> service so home-manager can activate.
-              allUsers = [ myconfig.user ] ++ config.myconfig.agentUsers;
+              allUsers = [ myconfig.user ] ++ config.myconfig.agentUsers.names;
             in
             {
               config = {
