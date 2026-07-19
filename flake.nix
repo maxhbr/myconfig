@@ -363,17 +363,37 @@
         ##########################################################################
 
         nixosConfigurations = {
-          test-f13 = self.nixosConfigurationsGen.host-f13 [ ] { };
-          test-p14 = self.nixosConfigurationsGen.host-p14 [ ] { };
+          test-f13 = self.nixosConfigurationsGen.host-f13 [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
+          test-p14 = self.nixosConfigurationsGen.host-p14 [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
           # x1extremeG2 = self.nixosConfigurationsGen.host-x1extremeG2 [ ] { };
-          test-workstation = self.nixosConfigurationsGen.host-workstation [ ] { };
-          test-vserver = self.nixosConfigurationsGen.host-vserver [ ] { };
-          test-nas = self.nixosConfigurationsGen.host-nas [ ] { };
-          test-nuc = self.nixosConfigurationsGen.host-nuc [ ] { };
-          test-r6c = self.nixosConfigurationsGen.host-r6c [ ] { };
-          test-pi4 = self.nixosConfigurationsGen.host-pi4 [ ] { };
-          test-pi3a = self.nixosConfigurationsGen.host-pi3a [ ] { };
-          test-thing = self.nixosConfigurationsGen.host-thing [ ] { };
+          test-workstation = self.nixosConfigurationsGen.host-workstation [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
+          test-vserver = self.nixosConfigurationsGen.host-vserver [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
+          test-nas = self.nixosConfigurationsGen.host-nas [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
+          test-nuc = self.nixosConfigurationsGen.host-nuc [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
+          test-r6c = self.nixosConfigurationsGen.host-r6c [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
+          test-pi4 = self.nixosConfigurationsGen.host-pi4 [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
+          test-pi3a = self.nixosConfigurationsGen.host-pi3a [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
+          test-thing = self.nixosConfigurationsGen.host-thing [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
 
           # container = nixpkgs.lib.nixosSystem {
           #   system = "x86_64-linux";
