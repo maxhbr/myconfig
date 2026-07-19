@@ -15,7 +15,7 @@
     (modulesPath + "/installer/sd-card/sd-image.nix")
   ];
 
-  nixpkgs.system = "aarch64-linux";
+  nixpkgs.hostPlatform.system = "aarch64-linux";
 
   # defined in https://github.com/NixOS/nixos-hardware/tree/master/raspberry-pi/4
   boot.consoleLogLevel = lib.mkDefault 7;

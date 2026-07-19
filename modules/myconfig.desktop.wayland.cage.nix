@@ -55,6 +55,14 @@ in
             "network-online.target"
             "systemd-resolved.service"
           ];
+          # `after` without `wants`/`requires` is a no-op for ordering; add
+          # the matching dependencies. r6c (the cage kiosk host) does not
+          # enable services.resolved, so use `wants` for both rather than
+          # a hard `requires` on systemd-resolved.service.
+          wants = [
+            "network-online.target"
+            "systemd-resolved.service"
+          ];
         };
       }
   );

@@ -46,6 +46,18 @@ in
       )
     ];
     home-manager.sharedModules = [
+      # Provide explicit password-store.settings for EVERY enabling user so
+      # the legacy default (and its changed-default warning) does not apply.
+      # This covers agent/assistant/offline users in addition to mhuber.
+      (
+        { config, ... }:
+        lib.mkIf config.programs.password-store.enable {
+          programs.password-store.settings = {
+            PASSWORD_STORE_DIR = "${config.home.homeDirectory}/.password-store";
+            PASSWORD_STORE_CLIP_TIME = "60";
+          };
+        }
+      )
       (
         { config, myconfig, ... }:
         let
@@ -58,9 +70,7 @@ in
           programs.password-store = {
             # package = pass;
             settings = {
-              PASSWORD_STORE_DIR = "${config.home.homeDirectory}/.password-store";
               PASSWORD_STORE_KEY = lib.mkIf (accounts != [ ]) primaryAccount.pgp-key-id;
-              PASSWORD_STORE_CLIP_TIME = "60";
             };
           };
           services.pass-secret-service.enable = true;
@@ -82,7 +92,7 @@ in
             ".config/pass-git-helper/git-pass-mapping.ini".source =
               ./config/pass-git-helper/git-pass-mapping.ini;
           };
-          programs.git.extraConfig.credential.helper = "${pkgs.pass-git-helper}/bin/pass-git-helper";
+          programs.git.settings.credential.helper = "${pkgs.pass-git-helper}/bin/pass-git-helper";
         }
       )
     ];

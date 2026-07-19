@@ -15,7 +15,7 @@
     # <nixpkgs/nixos/modules/profiles/installation-device.nix>
   ];
 
-  nixpkgs.system = "aarch64-linux";
+  nixpkgs.hostPlatform.system = "aarch64-linux";
 
   boot.consoleLogLevel = lib.mkDefault 7;
   boot.loader.grub.enable = false;

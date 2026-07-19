@@ -410,6 +410,17 @@ let
     # untouched (after self-healing any legacy marker corruption); when unset
     # (un-jailed) it applies the red-border `unjailed` theme in-memory only.
     extraRuntimeEnv.PI_JAIL_MARKER = "1";
+    # Bind the host path named by `PI_WORKTREE_MAIN_REPO` read-only into the
+    # jail. The `*-worktree` wrapper scripts set this to the *original* git
+    # repository (the worktree's linked main repo) before exec'ing `jailed-pi`,
+    # so git operations against the worktree can resolve the shared `.git`
+    # object store, refs and config that live in the main repo. Without this
+    # bind, `mount-cwd` only exposes the worktree directory itself and git
+    # fails with `fatal: not a git repository` because the worktree's `.git`
+    # file points into the main repo's `.git/worktrees/<name>/`. Unset for
+    # the plain (`jailed-pi`, `jailed-pi-tmp`) variants, where the
+    # conditional `--ro-bind-try` skips the bind silently.
+    extraReadOnlyEnvPaths = [ "PI_WORKTREE_MAIN_REPO" ];
   };
 in
 {
@@ -503,6 +514,16 @@ in
               branch_name="pi-''${timestamp}"
 
               git worktree add -b "''${branch_name}" "../''${worktree_name}" || exit 1
+              # Export the absolute path of the *original* repository (the
+              # main repo this worktree is linked from) so `jailed-pi` can
+              # bind it read-only into the jail. Without this, git inside the
+              # jail cannot resolve the worktree's shared `.git` (objects,
+              # refs, config) and fails with `fatal: not a git repository`.
+              # `pwd -P` resolves to the canonical path before `cd`-ing into
+              # the sibling worktree directory. Assigned separately from
+              # `export` to satisfy shellcheck SC2155.
+              main_repo="$(pwd -P)"
+              export PI_WORKTREE_MAIN_REPO="''${main_repo}"
               cd "../''${worktree_name}" && exec ${lib.getExe jailed-pi} "$@"
             '';
           })

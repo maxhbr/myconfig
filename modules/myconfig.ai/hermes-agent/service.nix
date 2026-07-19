@@ -208,7 +208,8 @@ in
       };
       mem = mkOption {
         type = types.ints.positive;
-        default = 2048;
+        # avoid QEMU "memory is exactly 2GB" hang, microvm.nix#171
+        default = 2049;
         description = "Amount of RAM (in MB) for the hermes microvm.";
       };
     };

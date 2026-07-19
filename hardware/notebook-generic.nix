@@ -15,7 +15,7 @@
     environment.systemPackages = with pkgs; [
       acpi
       acpid
-      xorg.xbacklight
+      xbacklight
       powertop
     ];
 

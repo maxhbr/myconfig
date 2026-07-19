@@ -123,6 +123,23 @@
   # detect how they were launched (e.g. `PI_JAIL_MARKER = "1"`).
   extraRuntimeEnv ? { },
 
+  # Read-only host paths discovered at runtime from environment
+  # variables. Each entry is the name of an env var whose value (when set
+  # and non-empty) is treated as an absolute host path to bind read-only
+  # into the jail at the same path. The bind uses `--ro-bind-try` so a
+  # missing path is skipped silently instead of aborting the jail.
+  #
+  # This is the mechanism the `*-worktree` wrapper scripts use to make the
+  # *original* git repository (the worktree's linked main repo) visible
+  # read-only inside the jail, so git operations against the worktree can
+  # resolve the shared `.git` object store, refs and config. The env var
+  # is set by the shell wrapper before exec'ing the jailed binary, so the
+  # path is only bound when the wrapper actually created a worktree.
+  #
+  # Set to `[ ]` (the default) for wrappers that have no runtime-discovered
+  # host paths to expose.
+  extraReadOnlyEnvPaths ? [ ],
+
   extraPermissions ? [ ],
   bindFullNixStore ? true,
   bindUsrBin ? true,
@@ -180,6 +197,20 @@ let
   fwdEnvPerms = lib.map try-fwd-env (fwdEnv ++ extraFwdEnv ++ globalFwdEnvs);
 
   runtimeEnvPerms = lib.mapAttrsToList (name: value: set-env name value) extraRuntimeEnv;
+
+  # Bind host paths named by env vars read-only at runtime. Each `var` is
+  # the name of an environment variable; when it is set and non-empty the
+  # value is treated as an absolute host path and bound read-only into the
+  # jail at the same path via `--ro-bind-try` (missing path → skipped). The
+  # interpolation `${var}` expands to the variable name, and `''${var}` is
+  # emitted literally so bash expands it at runtime.
+  runtimeEnvPathPerms = lib.map (
+    var:
+    add-runtime ''
+      if [ -n "''${${var}:-}" ]; then
+        RUNTIME_ARGS+=(--ro-bind-try "''${${var}}" "''${${var}}")
+      fi''
+  ) extraReadOnlyEnvPaths;
 
   permissions =
     lib.optional rejectHomeCwd (
@@ -272,6 +303,7 @@ let
     ]
     ++ fwdEnvPerms
     ++ runtimeEnvPerms
+    ++ runtimeEnvPathPerms
     ++ extraPermissions;
 in
 jailLib name pkg permissions
