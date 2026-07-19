@@ -429,7 +429,7 @@
             pre-commit-check = inputs.git-hooks.lib.${system}.run {
               src = ./.;
               hooks = {
-                nixfmt-rfc-style.enable = true;
+                nixfmt.enable = true;
                 # shfmt.enable = true;
                 # shfmt.settings.simplify = true;
                 # shellcheck.enable = true;
