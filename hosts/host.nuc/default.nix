@@ -57,5 +57,9 @@
 
     networking.hostName = "nuc";
     networking.hostId = "29d93123";
+
+    # nuc was never assigned a stateVersion (the warning defaulted to the
+    # current release). Set to the most recent NixOS version per user request.
+    system.stateVersion = lib.mkForce "26.11";
   };
 }
