@@ -142,17 +142,28 @@ let
   commonLabels = ''location="${weatherCfg.locationLabel}",latitude="${weatherCfg.latitude}",longitude="${weatherCfg.longitude}"'';
 
   # The shell script logic lives in scripts/myconfig-weather-refresh.sh.
-  # Site-specific values are substituted via pkgs.substituteAll
+  # Site-specific values are substituted via pkgs.replaceVars
   # (@ NAME @ substitution syntax) so the script file itself contains no Nix
   # interpolations and can be read/linted independently.
-  refreshScriptFile = pkgs.replaceVars ./scripts/myconfig-weather-refresh.sh {
-    textfileDir = weatherCfg.textfileDir;
-    apiUrl = apiUrl;
-    commonLabels = commonLabels;
-    httpTimeout = toString weatherCfg.httpTimeoutSeconds;
-    timezone = weatherCfg.timezone;
-    wmoCaseBranches = wmoCaseBranches;
-  };
+  #
+  # replaceVars forces `preferLocalBuild = true; allowSubstitutes = false`
+  # in its derivation, which breaks distributed builds (see
+  # client.system-age.nix for the full explanation). Override both back to
+  # their stdenv defaults so the derivation can be built directly on the
+  # remote builder.
+  refreshScriptFile =
+    (pkgs.replaceVars ./scripts/myconfig-weather-refresh.sh {
+      textfileDir = weatherCfg.textfileDir;
+      apiUrl = apiUrl;
+      commonLabels = commonLabels;
+      httpTimeout = toString weatherCfg.httpTimeoutSeconds;
+      timezone = weatherCfg.timezone;
+      wmoCaseBranches = wmoCaseBranches;
+    }).overrideAttrs
+      {
+        preferLocalBuild = false;
+        allowSubstitutes = true;
+      };
 
   refreshScript = pkgs.writeShellApplication {
     name = "myconfig-weather-refresh";

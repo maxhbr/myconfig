@@ -51,10 +51,23 @@ let
   # The shell script logic lives in scripts/myconfig-system-age-refresh.sh.
   # Site-specific values (textfileDir, staticInfoSnippet) are substituted
   # via pkgs.replaceVars (@ NAME @ substitution syntax).
-  refreshScriptFile = pkgs.replaceVars ./scripts/myconfig-system-age-refresh.sh {
-    textfileDir = ageCfg.textfileDir;
-    staticInfoSnippet = staticInfoSnippet;
-  };
+  #
+  # replaceVars forces `preferLocalBuild = true; allowSubstitutes = false`
+  # in its derivation, which breaks distributed builds: the path is built
+  # locally and then copied to the remote builder, but because it was
+  # built by an untrusted local user it carries no signature and the
+  # remote builder rejects it with "lacks a signature by a trusted key".
+  # Override both back to their stdenv defaults so the derivation can be
+  # built directly on the remote builder instead.
+  refreshScriptFile =
+    (pkgs.replaceVars ./scripts/myconfig-system-age-refresh.sh {
+      textfileDir = ageCfg.textfileDir;
+      staticInfoSnippet = staticInfoSnippet;
+    }).overrideAttrs
+      {
+        preferLocalBuild = false;
+        allowSubstitutes = true;
+      };
 
   refreshScript = pkgs.writeShellApplication {
     name = "myconfig-system-age-refresh";
