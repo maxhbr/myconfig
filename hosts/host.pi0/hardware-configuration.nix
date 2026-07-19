@@ -15,7 +15,7 @@
     ./raspberry-wifi.nix
   ];
 
-  nixpkgs.system = "armv6l-linux";
+  nixpkgs.hostPlatform.system = "armv6l-linux";
 
   # set cross compiling
   nixpkgs.crossSystem = lib.systems.elaborate lib.systems.examples.raspberryPi;
