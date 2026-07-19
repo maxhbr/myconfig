@@ -95,17 +95,23 @@ in
               Example: `[ ".pi/agent/extensions/skainet-provider.ts" ".pi/agent/extensions/trustedtokens-provider" ]`
             '';
           };
-          # NOTE: there is intentionally no "homeConfig" option here.
-          # Copying evaluated home-manager option subtrees (e.g.
-          # `programs.bash`) from the main user into an agent user as
-          # raw definitions causes infinite recursion: the subtrees are
-          # produced by `home-manager.sharedModules`, which apply to the
-          # agent too, so re-inserting the already-merged value as a
-          # definition creates a cycle through the module system's
-          # `mapAttrsRecursiveCond` option evaluation.  Anything set in a
-          # sharedModule is already inherited by every agent; anything
-          # set directly on `home-manager.users.<mainUser>` can be
-          # copied leaf-by-leaf via `sessionVariables` / `homeFiles`.
+          homeConfig = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [ ];
+            description = ''
+              Dot-separated paths into the main user's home-manager
+              config to copy wholesale to each agent user. Each entry
+              names a complete subtree that is inherited verbatim.
+              Example: `[ "programs.opencode.settings" ]` copies the
+              main user's `programs.opencode.settings` block to every
+              agent.
+
+              Missing paths are *not* eagerly checked: because the value
+              is read lazily (after the `home-manager.users` merge), a
+              path that doesn't resolve yields `null` at use time rather
+              than being skipped silently. Prefer correct paths.
+            '';
+          };
         };
       };
     };
@@ -177,6 +183,52 @@ in
         {
           home.file = lib.attrsets.getAttrs matchedKeys mainFile;
         }
+      ))
+
+      # Copy complete config subtrees (e.g. "programs.opencode.settings")
+      # from the main user to each agent user. Paths are dot-separated;
+      # e.g. "programs.opencode.settings" -> { programs.opencode.settings = ...; }.
+      #
+      # Laziness is critical: `home-manager.users` is one `attrsOf submodule`
+      # option whose merge forces every user's definition to WHNF (its
+      # keys), so the agent definition must NOT touch
+      # `config.home-manager.users.<mainUser>` while being built — that
+      # would re-enter the option mid-merge and infinite-recurse. We
+      # therefore build a deeply-nested attrset whose *leaves* are thunks
+      # that read the main user only when actually accessed (well after
+      # the merge completes). `buildNested` wraps the leaf without forcing
+      # it (unlike `foldl'`, which seq's its accumulator); `walk` is only
+      # called from those leaf thunks. There is deliberately no eager
+      # `walk path != null` filter — it would force the main user during
+      # the merge — so a misspelled path resolves to `null` at use time.
+      (lib.genAttrs agents (
+        name:
+        let
+          mainUser = config.home-manager.users."${myconfig.user}";
+          # Walk a dot-separated path into an attrset, returning the value or null.
+          walk =
+            path:
+            let
+              parts = lib.splitString "." path;
+            in
+            lib.foldl' (
+              acc: part: if acc != null && builtins.hasAttr part acc then acc.${part} else null
+            ) mainUser parts;
+          # Build a nested attrset from a path list and a value WITHOUT
+          # forcing the value (each level wraps the rest in a 1-key
+          # attrset, so WHNF stops at the outer key).
+          buildNested =
+            parts: value:
+            if parts == [ ] then
+              value
+            else
+              { "${builtins.head parts}" = buildNested (builtins.tail parts) value; };
+          mkNested = path: value: buildNested (lib.splitString "." path) value;
+          merged = lib.foldl' (
+            acc: path: lib.recursiveUpdate acc (mkNested path (walk path))
+          ) { } agentUserInherit.homeConfig;
+        in
+        merged
       ))
 
       { "${myconfig.user}".home.packages = agentTmuxScripts; }
