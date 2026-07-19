@@ -527,11 +527,11 @@ in
 
               timestamp=$(date +%s)
               dirname=$(basename "$(pwd)")
-              worktree_parent="../''${dirname}-pi-worktrees"
-              worktree_dir="''${worktree_parent}/''${timestamp}"
-              resume_script="''${worktree_parent}/''${timestamp}.resume.sh"
-              cleanup_script="''${worktree_parent}/''${timestamp}.cleanup.sh"
+              worktree_parent="../''${dirname}-worktrees"
               branch_name="pi-''${timestamp}"
+              worktree_dir="''${worktree_parent}/''${branch_name}"
+              resume_script="''${worktree_parent}/''${branch_name}.resume.sh"
+              cleanup_script="''${worktree_parent}/''${branch_name}.cleanup.sh"
 
               mkdir -p "$worktree_parent"
               git worktree add -b "''${branch_name}" "$worktree_dir" || exit 1
