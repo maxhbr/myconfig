@@ -50,7 +50,7 @@ let
     with pkgs;
     writeShellScriptBin "orca" ''
       set -euo pipefail
-      export PATH="${lib.makeBinPath [ xorg.xvfb ]}:$PATH"
+      export PATH="${lib.makeBinPath [ xvfb ]}:$PATH"
       exec ${appimage-run}/bin/appimage-run ${orcaAppImage} "$@"
     '';
 
@@ -211,7 +211,7 @@ in
           # $DISPLAY is unset (the service never sets DISPLAY).
           Environment = [
             "LIBGL_ALWAYS_SOFTWARE=1"
-            "PATH=${lib.makeBinPath [ pkgs.xorg.xvfb ]}"
+            "PATH=${lib.makeBinPath [ pkgs.xvfb ]}"
           ];
 
           # Run the AppImage through appimage-run, which extracts the
