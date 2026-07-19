@@ -436,7 +436,10 @@ in
             ".pi/agent/themes/unjailed.json".source = unjailedTheme;
             # Override the default `app.interrupt` (escape) with `ctrl+c`
             # for reliability across SSH and tmux; `app.clear` moves to
-            # `ctrl+q` to avoid the conflict. See ./keybindings.json.
+            # `ctrl+q` to avoid the conflict. `app.model.cycleForward`
+            # (default `ctrl+p`) and `app.model.cycleBackward` (default
+            # `shift+ctrl+p`) are disabled so those keys are never swallowed
+            # by model cycling. See ./keybindings.json.
             ".pi/agent/keybindings.json".source = ./keybindings.json;
           }
           subagentExtensionFiles

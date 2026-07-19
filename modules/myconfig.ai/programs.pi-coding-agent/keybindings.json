@@ -1,4 +1,6 @@
 {
   "app.interrupt": "ctrl+c",
-  "app.clear": "ctrl+q"
+  "app.clear": "ctrl+q",
+  "app.model.cycleForward": [],
+  "app.model.cycleBackward": []
 }
