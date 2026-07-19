@@ -14,13 +14,12 @@ let
   forgejoPort = 3000;
   forgejoApi = "http://${forgejoHost}:${toString forgejoPort}/api/v1";
 
-  forgejoAdminUser = "maxhbr";
   hermesAgentUser = "hermes-agent";
 in
 {
   myconfig.secrets = {
-    forgejo-admin-password = {
-      dest = "/run/forgejo-admin-password";
+    forgejo-hermes-agent-password = {
+      dest = "/run/forgejo-hermes-agent-password";
       owner = "root";
       group = "root";
       symlink = false;
@@ -32,7 +31,7 @@ in
     wantedBy = [ "multi-user.target" ];
     after = [
       "network-online.target"
-      "forgejo-admin-password-key.service"
+      "forgejo-hermes-agent-password-key.service"
     ];
     wants = [ "network-online.target" ];
 
@@ -50,7 +49,7 @@ in
     script = ''
       # Fire-and-forget: no retries, no blocking, graceful failure.
 
-      PASSWORD=$(tr -d '\n' < ${config.myconfig.secrets.forgejo-admin-password.dest} 2>/dev/null || true)
+      PASSWORD=$(tr -d '\n' < ${config.myconfig.secrets.forgejo-hermes-agent-password.dest} 2>/dev/null || true)
 
       if [ -z "$PASSWORD" ]; then
         echo "No password available, skipping token creation"
@@ -61,14 +60,14 @@ in
         curl \
           --silent \
           --max-time 5 \
-          --user "${forgejoAdminUser}:$PASSWORD" \
+          --user "${hermesAgentUser}:$PASSWORD" \
           --header 'Content-Type: application/json' \
           --request POST \
           --data '{
             "name": "hermes-agent",
             "expires_at": 4102444800
           }' \
-          "${forgejoApi}/admin/users/${hermesAgentUser}/tokens" \
+          "${forgejoApi}/users/me/tokens" \
           2>/dev/null || echo ""
       )
 
