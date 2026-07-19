@@ -243,6 +243,19 @@ let
         };
         nix.buildMachines = map (system: {
           hostName = name;
+          # Use the "new" ssh-ng protocol (nix-daemon --stdio) rather
+          # than the legacy ssh protocol (nix-store --serve).  The legacy
+          # protocol runs `nix-store --serve` as the connecting SSH user,
+          # which then talks to the remote nix-daemon over the local socket;
+          # under Nix >= 2.34 that daemon rejects input-addressed
+          # derivations from untrusted clients with "you are not privileged
+          # to build input-addressed derivations", because nix-store --serve
+          # cannot propagate the caller's trusted-users status.  ssh-ng runs
+          # `nix-daemon --stdio` directly, which trusts stdio clients by
+          # default (it cannot see the peer over a plain pipe), so
+          # input-addressed derivations build correctly.  See
+          # https://nix.dev/manual/nix/2.34/store/types/ssh-store.html
+          protocol = "ssh-ng";
           maxJobs = 6;
           supportedFeatures = [
             "nixos-test"
