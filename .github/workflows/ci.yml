@@ -52,6 +52,14 @@ jobs:
           # - { host: test-nas , action: "build" }
           - { host: test-vserver , action: "build --dry-run" }
           # - { host: test-vserver , action: "build" }
+          - { host: test-p14 , action: "build --dry-run" }
+          # - { host: test-p14 , action: "build" }
+          - { host: test-nuc , action: "build --dry-run" }
+          # - { host: test-nuc , action: "build" }
+          - { host: test-r6c , action: "build --dry-run" }
+          # - { host: test-r6c , action: "build" }
+          - { host: test-thing , action: "build --dry-run" }
+          # - { host: test-thing , action: "build" }
       fail-fast: false
 
     steps:

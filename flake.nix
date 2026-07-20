@@ -299,34 +299,34 @@
               ]
               ++ moreModules
             ) metadataOverride);
-          host-pi4 =
-            moreModules: metadataOverride:
-            (self.lib.evalConfiguration "aarch64-linux" "pi4" (
-              [
-                self.nixosModules.core
-                (
-                  { pkgs, myconfig, ... }:
-                  {
-                    imports = [ (myconfig.metadatalib.announceOtherHosts "pi4") ];
-                  }
-                )
-              ]
-              ++ moreModules
-            ) metadataOverride);
-          host-pi3a =
-            moreModules: metadataOverride:
-            (self.lib.evalConfiguration "aarch64-linux" "pi3a" (
-              [
-                self.nixosModules.core
-                (
-                  { pkgs, myconfig, ... }:
-                  {
-                    imports = [ (myconfig.metadatalib.announceOtherHosts "pi3a") ];
-                  }
-                )
-              ]
-              ++ moreModules
-            ) metadataOverride);
+          # host-pi4 =
+          #   moreModules: metadataOverride:
+          #   (self.lib.evalConfiguration "aarch64-linux" "pi4" (
+          #     [
+          #       self.nixosModules.core
+          #       (
+          #         { pkgs, myconfig, ... }:
+          #         {
+          #           imports = [ (myconfig.metadatalib.announceOtherHosts "pi4") ];
+          #         }
+          #       )
+          #     ]
+          #     ++ moreModules
+          #   ) metadataOverride);
+          # host-pi3a =
+          #   moreModules: metadataOverride:
+          #   (self.lib.evalConfiguration "aarch64-linux" "pi3a" (
+          #     [
+          #       self.nixosModules.core
+          #       (
+          #         { pkgs, myconfig, ... }:
+          #         {
+          #           imports = [ (myconfig.metadatalib.announceOtherHosts "pi3a") ];
+          #         }
+          #       )
+          #     ]
+          #     ++ moreModules
+          #   ) metadataOverride);
           host-r6c =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "aarch64-linux" "r6c" (
@@ -385,12 +385,12 @@
           test-r6c = self.nixosConfigurationsGen.host-r6c [
             { myconfig.secretsWarnOnMissingSource = false; }
           ] { };
-          test-pi4 = self.nixosConfigurationsGen.host-pi4 [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
-          test-pi3a = self.nixosConfigurationsGen.host-pi3a [
-            { myconfig.secretsWarnOnMissingSource = false; }
-          ] { };
+          # test-pi4 = self.nixosConfigurationsGen.host-pi4 [
+          #   { myconfig.secretsWarnOnMissingSource = false; }
+          # ] { };
+          # test-pi3a = self.nixosConfigurationsGen.host-pi3a [
+          #   { myconfig.secretsWarnOnMissingSource = false; }
+          # ] { };
           test-thing = self.nixosConfigurationsGen.host-thing [
             { myconfig.secretsWarnOnMissingSource = false; }
           ] { };
