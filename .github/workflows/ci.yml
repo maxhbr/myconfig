@@ -44,16 +44,14 @@ jobs:
     strategy:
       matrix:
         config:
-          - { host: f13 , action: "build --dry-run" }
-          # - { host: f13 , action: "build" }
-          - { host: workstation , action: "build --dry-run" }
-          # - { host: workstation , action: "build" }
-          - { host: nas , action: "build --dry-run" }
-          # - { host: nas , action: "build" }
-          - { host: spare , action: "build --dry-run" }
-          # - { host: spare , action: "build" }
-          - { host: vserver , action: "build --dry-run" }
-          # - { host: vserver , action: "build" }
+          - { host: test-f13 , action: "build --dry-run" }
+          # - { host: test-f13 , action: "build" }
+          - { host: test-workstation , action: "build --dry-run" }
+          # - { host: test-workstation , action: "build" }
+          - { host: test-nas , action: "build --dry-run" }
+          # - { host: test-nas , action: "build" }
+          - { host: test-vserver , action: "build --dry-run" }
+          # - { host: test-vserver , action: "build" }
       fail-fast: false
 
     steps:
