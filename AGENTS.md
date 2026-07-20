@@ -212,6 +212,18 @@ Use these checkouts with Grep/Glob/Read tools to investigate upstream behavior,
 find existing modules, or look up option definitions. Do not modify these
 directories — they are read-only references.
 
+To inspect the **exact pinned version** the build actually consumes (as opposed
+to the local checkouts above, which are not used by the build), use the
+`./get_input.sh` helper. It prints the store path of the locked revision of any
+top-level flake input from `flake.lock`:
+```bash
+./get_input.sh nixpkgs        # /nix/store/...-source
+./get_input.sh home           # home-manager input (named `home` in this flake)
+```
+Then `nix store cat`, `nix run`, or `ls` the returned path to read the pinned
+source tree of `nixpkgs` or `home-manager`. Inputs that `follows` another and
+non-flake (`flake = false`) inputs are supported.
+
 ### Naming Conventions
 - **Module files**: the file name is the option path it defines or
   configures (dropping the value), e.g. a module defining
