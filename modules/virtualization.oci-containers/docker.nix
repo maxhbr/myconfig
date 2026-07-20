@@ -6,7 +6,13 @@
 }:
 
 {
-  config = {
+  # Only configure docker (packages, rootless user service, daemon settings)
+  # when docker is actually enabled on the host. Previously this block was
+  # unconditional, so on podman-only hosts (docker.enable = false) it still
+  # set `virtualisation.docker.rootless.enable = true` and
+  # `systemd.services.docker.restartIfChanged`, producing a broken system
+  # docker.service (no ExecStart) and a failing rootless user docker.service.
+  config = lib.mkIf config.virtualisation.docker.enable {
     home-manager.sharedModules = [
       {
         home.packages = with pkgs; [
