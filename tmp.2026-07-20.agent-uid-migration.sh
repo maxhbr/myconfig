@@ -44,7 +44,7 @@ log() { printf '\n=== %s ===\n' "$*"; }
 
 # Extra filesystem roots that may hold agent-owned state and live on their own
 # mount (find -xdev will not cross into them from /). Adjust per host if needed.
-EXTRA_ROOTS=(/persistent /work /home)
+EXTRA_ROOTS=(/home/agent)
 
 migrate_user() {
     local name="$1" new_id="$2"
