@@ -18,7 +18,7 @@ let
 in
 {
   myconfig.secrets = {
-    forgejo-hermes-agent-password = {
+    "forgejo-hermes-agent-password" = {
       dest = "/run/forgejo-hermes-agent-password";
       owner = "root";
       group = "root";
