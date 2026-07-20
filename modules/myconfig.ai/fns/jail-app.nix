@@ -151,6 +151,25 @@
   # writable (for example, a linked worktree's shared `.git` directory).
   extraReadWriteEnvPaths ? [ ],
 
+  # Name of the environment variable (default `JAIL_EXTRA_RO_PATHS`)
+  # whose colon-separated value lists host paths to bind read-only into
+  # the jail at runtime. Each existing entry is bound via
+  # `--ro-bind-try` (missing entries are skipped silently). This is the
+  # interactive escape hatch for exposing extra directories without
+  # rebuilding — e.g.:
+  #
+  #   JAIL_EXTRA_RO_PATHS=/etc:/run/user/1000 jailed-pi
+  #
+  # Entries should be absolute paths; relative paths are rejected by
+  # bubblewrap. Set to `null` to disable the mechanism for this wrapper.
+  extraReadOnlyPathsEnvVar ? "JAIL_EXTRA_RO_PATHS",
+
+  # Same as `extraReadOnlyPathsEnvVar` but binds read-write (`--bind`).
+  # Emitted *after* the read-only block so a writable entry overrides an
+  # earlier read-only parent bind. Defaults to `JAIL_EXTRA_RW_PATHS`;
+  # set to `null` to disable.
+  extraReadWritePathsEnvVar ? "JAIL_EXTRA_RW_PATHS",
+
   extraPermissions ? [ ],
   bindFullNixStore ? true,
   bindUsrBin ? true,
@@ -233,6 +252,30 @@ let
         RUNTIME_ARGS+=(--bind "''${${var}}" "''${${var}}")
       fi''
   ) extraReadWriteEnvPaths;
+
+  # Colon-separated host paths from a single env var (default
+  # `JAIL_EXTRA_RO_PATHS`), bound read-only at runtime. This is the
+  # interactive escape hatch — set the env var at the shell prompt to
+  # expose extra host directories without rebuilding.
+  runtimeReadOnlyPathsPerm = lib.optional (extraReadOnlyPathsEnvVar != null) (add-runtime ''
+    if [ -n "''${${extraReadOnlyPathsEnvVar}:-}" ]; then
+      IFS=':' read -ra _ro_paths <<< "''${${extraReadOnlyPathsEnvVar}}"
+      for _p in "''${_ro_paths[@]}"; do
+        if [ -n "$_p" ] && [ -e "$_p" ]; then
+          RUNTIME_ARGS+=(--ro-bind-try "$_p" "$_p")
+        fi
+      done
+    fi'');
+
+  runtimeReadWritePathsPerm = lib.optional (extraReadWritePathsEnvVar != null) (add-runtime ''
+    if [ -n "''${${extraReadWritePathsEnvVar}:-}" ]; then
+      IFS=':' read -ra _rw_paths <<< "''${${extraReadWritePathsEnvVar}}"
+      for _p in "''${_rw_paths[@]}"; do
+        if [ -n "$_p" ] && [ -e "$_p" ]; then
+          RUNTIME_ARGS+=(--bind "$_p" "$_p")
+        fi
+      done
+    fi'');
 
   permissions =
     lib.optional rejectHomeCwd (
@@ -327,6 +370,8 @@ let
     ++ runtimeEnvPerms
     ++ runtimeReadOnlyEnvPathPerms
     ++ runtimeReadWriteEnvPathPerms
+    ++ runtimeReadOnlyPathsPerm
+    ++ runtimeReadWritePathsPerm
     ++ extraPermissions;
 in
 jailLib name pkg permissions
