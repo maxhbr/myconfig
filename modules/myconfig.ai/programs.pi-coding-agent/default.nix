@@ -527,10 +527,47 @@ in
                 exit 1
               fi
 
+              # An optional first positional argument that does not start
+              # with "-" is consumed as a human-readable suffix for the
+              # branch name (e.g. "jailed-pi-worktree refactor auth" creates
+              # branch "pi-<ts>-<pid>-refactor-auth"). Everything else is
+              # forwarded to pi. Arguments beginning with "-" are always
+              # pi flags and are left untouched.
+              branch_suffix=""
+              if [ "$#" -gt 0 ] && ! case "$1" in -*) ;; *) false ;; esac; then
+                branch_suffix="$1"
+                shift
+              fi
+
+              # Normalize the suffix so the resulting branch name is a valid
+              # git ref: replace every character outside [A-Za-z0-9._/-] with
+              # "-", collapse runs of "-", ".", "/", then strip leading /
+              # trailing "-", ".", "/" and the forbidden ".lock" suffix.
+              if [ -n "$branch_suffix" ]; then
+                branch_suffix=$(printf "%s" "$branch_suffix" \
+                  | tr -c "A-Za-z0-9._/-" "-" \
+                  | tr -s -- "-./")
+                while case "$branch_suffix" in -*|.*|/*) true ;; *) false ;; esac; do
+                  branch_suffix="''${branch_suffix#-}"
+                  branch_suffix="''${branch_suffix#.}"
+                  branch_suffix="''${branch_suffix#/}"
+                done
+                while case "$branch_suffix" in *-|*.|*/|*.lock) true ;; *) false ;; esac; do
+                  branch_suffix="''${branch_suffix%-}"
+                  branch_suffix="''${branch_suffix%.}"
+                  branch_suffix="''${branch_suffix%/}"
+                  branch_suffix="''${branch_suffix%.lock}"
+                done
+              fi
+
               timestamp=$(date +%s)
               dirname=$(basename "$(pwd)")
               worktree_parent="../''${dirname}-worktrees"
-              branch_name="pi-''${timestamp}-$$"
+              if [ -n "$branch_suffix" ]; then
+                branch_name="pi-''${timestamp}-$$-''${branch_suffix}"
+              else
+                branch_name="pi-''${timestamp}-$$"
+              fi
               worktree_dir="''${worktree_parent}/''${branch_name}"
 
               mkdir -p "$worktree_parent"
