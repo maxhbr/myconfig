@@ -57,6 +57,26 @@ let
   agentLauncherCommands = map (name: "${name}-alacritty-tmux") agents;
 
   agentUserInherit = config.myconfig.agentUsers.inheritFromMainUser;
+
+  # Dedicated, static uid/gid block for agent users.
+  #
+  # It MUST live outside every range that NixOS' update-users-groups.pl
+  # allocates from automatically, otherwise an agent's static id can
+  # collide with a dynamically-assigned user/group:
+  #   * system users/groups : 400 .. 999      (isSystemUser, descending)
+  #   * normal users/groups : 1000 .. 29999   (isNormalUser, ascending)
+  #   * nix build users     : 30000 .. 30999  (nixbld1..N)
+  #   * `nobody`            : 65534
+  # A previous base of 1001 collided with the dynamically-allocated
+  # `nixBuild` remote-build user (which had landed on uid 1001): two
+  # passwd entries sharing a uid make getpwuid() -- used by `whoami`
+  # and, crucially, by the nix daemon's authPeer() trust check --
+  # resolve to the wrong name, so the builder saw connections as the
+  # untrusted `agent` user and rejected unsigned store-path uploads
+  # with "cannot add path '...' because it lacks a signature by a
+  # trusted key".  31000+ is above nixbld and below `nobody`, so it is
+  # never handed out automatically and cannot overlap with anything.
+  agentIdBase = 31000;
 in
 {
   options.myconfig.agentUsers = lib.mkOption {
@@ -121,9 +141,10 @@ in
     users = {
       # one primary group per agent (so the primary user can be added to it).
       # Static gids so the impermanence initrd can chown agent homes and file
-      # ownership stays stable across reboots on persistent volumes.
+      # ownership stays stable across reboots on persistent volumes.  See
+      # `agentIdBase` above for the collision-avoidance rationale.
       extraGroups = lib.listToAttrs (
-        lib.imap0 (i: name: lib.nameValuePair name { gid = 1001 + i; }) agents
+        lib.imap0 (i: name: lib.nameValuePair name { gid = agentIdBase + i; }) agents
       );
 
       extraUsers = lib.listToAttrs (
@@ -132,8 +153,10 @@ in
           lib.nameValuePair name {
             isNormalUser = true;
             group = name;
-            # static uid: stable ownership on persistent volumes + initrd chown
-            uid = 1001 + i;
+            # static uid: stable ownership on persistent volumes + initrd
+            # chown; dedicated high range (see `agentIdBase`) so it can never
+            # collide with the dynamically-allocated `nixBuild` builder user.
+            uid = agentIdBase + i;
             home = "/home/${name}";
             homeMode = "0750"; # group-readable: primary user is in the group
             createHome = true;
