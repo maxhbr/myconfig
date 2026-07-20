@@ -38,6 +38,17 @@ jobs:
           experimental-features = nix-command flakes
     - run: ./nixfmtall.sh --check
 
+  stale-override-check:
+    # Fail when a nixpkgs commit that makes a local override redundant
+    # (see flake.pkgs_overrides.nix TODO notes) is reachable from the flake's
+    # pinned nixpkgs-unstable input. See check-stale-overrides.sh.
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - run: ./.github/scripts/check-stale-overrides.sh
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build-os:
     runs-on: ubuntu-latest
 
