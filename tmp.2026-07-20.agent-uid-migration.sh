@@ -17,11 +17,18 @@
 # deployment (`upg --local <host>`). A reboot afterwards is recommended and is
 # safe because agent homes are ephemeral (impermanence).
 #
+# It also handles the GID-only variant of this problem, i.e. the warnings:
+#   warning: not applying GID change of group 'agent' (1001 -> 31000) in /etc/group
+#   warning: not applying GID change of group 'assistant' (1002 -> 31001) in /etc/group
+#   warning: not applying GID change of group 'offline' (1003 -> 31002) in /etc/group
+# For each mapping the matching group is migrated even when no user of that name
+# exists (agentUsers declares a group per agent with gid = agentIdBase + index).
+#
 # Usage:
 #   sudo ./tmp.2026-07-20.agent-uid-migration.sh                 # migrates: agent -> 31000
-#   sudo ./tmp.2026-07-20.agent-uid-migration.sh agent=31000 offline=31001
+#   sudo ./tmp.2026-07-20.agent-uid-migration.sh agent=31000 assistant=31001 offline=31002
 #
-# Each argument is <username>=<new-id>; the new id is used for BOTH uid and gid
+# Each argument is <name>=<new-id>; the new id is used for BOTH uid and gid
 # (agentUsers assigns matching uid/gid = agentIdBase + index). Order must match
 # the host's myconfig.agentUsers.names list.
 #
@@ -37,20 +44,44 @@ fi
 # --- parse mappings ----------------------------------------------------------
 declare -a MAPPINGS=("$@")
 if [[ ${#MAPPINGS[@]} -eq 0 ]]; then
-    MAPPINGS=("agent=31000")
+    MAPPINGS=("agent=31000" "assistant=31001" "offline=31002")
 fi
 
 log() { printf '\n=== %s ===\n' "$*"; }
 
-# Extra filesystem roots that may hold agent-owned state and live on their own
-# mount (find -xdev will not cross into them from /). Adjust per host if needed.
-EXTRA_ROOTS=(/home/agent)
+# Migrate a group's GID independently of any user of the same name. Handles the
+# "not applying GID change of group" warnings for groups that have no matching
+# user (or whose user is migrated separately below).
+migrate_group() {
+    local name="$1" new_id="$2"
+
+    if ! getent group "$name" &>/dev/null; then
+        return 0
+    fi
+
+    local old_gid
+    old_gid="$(getent group "$name" | cut -d: -f3)"
+
+    if [[ $old_gid == "$new_id" ]]; then
+        log "group '$name' already at gid $new_id — nothing to do"
+        return 0
+    fi
+
+    log "migrating group '$name': gid $old_gid -> $new_id"
+    groupmod -g "$new_id" "$name"
+
+    log "rechowning files under /home/$name with old gid $old_gid -> gid $new_id"
+    [[ -d /home/$name ]] && find "/home/$name" -gid "$old_gid" -exec chgrp -h "$new_id" {} + 2>/dev/null || true
+
+    log "group '$name' migrated: $(getent group "$name")"
+}
 
 migrate_user() {
     local name="$1" new_id="$2"
 
     if ! id "$name" &>/dev/null; then
-        log "user '$name' does not exist on this host — skipping"
+        log "user '$name' does not exist on this host — migrating group only"
+        migrate_group "$name" "$new_id"
         return 0
     fi
 
@@ -87,12 +118,8 @@ migrate_user() {
 
     # 3. Rechown any remaining files that still reference the OLD ids.
     #    usermod already fixed the home dir contents; catch everything else.
-    log "rechowning files owned by old uid $old_uid / gid $old_gid -> $new_id:$new_id"
-    find / -xdev \( -uid "$old_uid" -o -gid "$old_gid" \) -exec chown -h "$new_id:$new_id" {} + 2>/dev/null || true
-    for root in "${EXTRA_ROOTS[@]}"; do
-        [[ -d $root ]] || continue
-        find "$root" -xdev \( -uid "$old_uid" -o -gid "$old_gid" \) -exec chown -h "$new_id:$new_id" {} + 2>/dev/null || true
-    done
+    log "rechowning files under /home/$name owned by old uid $old_uid / gid $old_gid -> $new_id:$new_id"
+    [[ -d /home/$name ]] && find "/home/$name" \( -uid "$old_uid" -o -gid "$old_gid" \) -exec chown -h "$new_id:$new_id" {} + 2>/dev/null || true
 
     # 4. Drop the stale runtime dir pinned to the old uid.
     log "removing stale /run/user/$old_uid"
