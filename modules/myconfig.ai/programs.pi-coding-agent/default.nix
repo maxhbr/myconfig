@@ -620,6 +620,7 @@ in
               done
 
               worktree_dir="''${worktree_dir}"
+              worktree_parent="''${worktree_parent}"
               main_repo="''${main_repo}"
               branch="''${branch_name}"
 
@@ -662,6 +663,10 @@ in
               fi
               rm -f "$resume_script" "$cleanup_script"
               git worktree prune || true
+              # Remove the "...-worktrees" parent directory if it is now empty
+              # (i.e. this was the last worktree). rmdir only succeeds on an
+              # empty directory, so failures are silently ignored.
+              rmdir "\$worktree_parent" 2>/dev/null || true
               echo "removed worktree: \$worktree_dir"
               echo "removed branch:   \$branch"
               EOF
