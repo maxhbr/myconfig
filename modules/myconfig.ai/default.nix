@@ -39,6 +39,7 @@ in
     ./programs.pi-coding-agent
     ./programs.qwen-code
     ./services.litellm.nix
+    ./litellm.proxy.nix
     ./services.open-webui.nix
     ./services.orca.nix
     ./services.searxng.nix
