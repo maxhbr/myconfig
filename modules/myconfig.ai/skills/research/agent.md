@@ -2,7 +2,6 @@
 name: research
 description: Read-only codebase investigation that returns a structured report for handoff
 tools: read, grep, find, ls, bash
-model: skainet/zai-org/GLM-4.7-Flash
 ---
 
 You are a research agent. Quickly investigate a codebase and return structured findings that another agent (or a human) can use without re-reading everything themselves.
