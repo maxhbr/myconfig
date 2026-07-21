@@ -136,31 +136,10 @@ let
     # first argument to WHNF before returning the second).
     builtins.seq _check pkgs.writeShellApplication {
       name = scriptName;
-      runtimeInputs = [ pkgs.jq ] ++ lib.optional hasPullModels hfPkg;
+      runtimeInputs = lib.optional hasPullModels hfPkg;
       text = ''
         ${envExports}
         ${pullBlock}
-
-        # --- CSV run logger ---------------------------------------------------
-        run_csv="$HOME/benchmarks/llama-server.runs.csv"
-        mkdir -p "$(dirname "$run_csv")"
-
-        # shellcheck disable=SC2329
-        log_run() {
-          local date="$1" model_file="$2" device="$3" args="$4"
-          model_file="''${model_file//\"/\"\"}";
-          args="''${args//\"/\"\"}";
-          jq -rn \
-            --arg d  "$date" \
-            --arg mf "$model_file" \
-            --arg dv "$device" \
-            --arg a  "$args" \
-            '"[$d,$mf,$dv,$a] | @csv"' >> "$run_csv"
-        }
-
-        # Log the exit code when the script finishes (normal or error).
-        exit_code=0
-        trap 'log_run "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${lib.escapeShellArg model.path}" "${device}" "llama-server $exit_code"' EXIT
 
         set -x
         ${server} \
@@ -172,8 +151,7 @@ let
           --metrics \
           --no-webui \
           --timeout 600 \
-          ${ctxSizeFlag} ${cacheTypeFlag} ${parallelFlag} ${multiDeviceFlags} ${aliasesFlag} ${paramsStr} "''${@:2}" || exit_code=$?
-        exit $exit_code
+          ${ctxSizeFlag} ${cacheTypeFlag} ${parallelFlag} ${multiDeviceFlags} ${aliasesFlag} ${paramsStr} "''${@:2}"
       '';
     };
 
