@@ -51,7 +51,14 @@ in
     ./hermes-agent.nix
     ./myconfig.agentUsers.nix
     ./NanoKVM-USB.nix
-    ../shared.localModels.litellm.nix
+    # NOTE: f13 does NOT import ../shared.localModels.litellm.nix. That
+    # file registers thing's LiteLLM as myconfig.ai.localModels providers,
+    # which would create *direct* provider entries in the AI client configs
+    # (aichat, opencode, pi-coding-agent, …) pointing at thing/vserver —
+    # bypassing f13's own LiteLLM proxy at localhost:4000 and breaking for
+    # the offline agent, which can only reach loopback. f13's local LiteLLM
+    # proxy (see ./services.litellm.nix) is the single access point and
+    # carries the model list directly. See that file for details.
     {
       services.openssh = {
         listenAddresses = [
