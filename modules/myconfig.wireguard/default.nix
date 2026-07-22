@@ -60,6 +60,12 @@ let
         sameLan = thisNetwork != null && peerNetwork != null && thisNetwork == peerNetwork;
         peerWgIp = host.wireguard."${wgInterface}".ip4;
         isRendezvous = rendezvousHost != null && name == rendezvousHost;
+        # Whether *this* host (the config target) is the rendezvous /
+        # relay hub. The hub must never ghost a peer: its `allowedIPs`
+        # double as WireGuard's ingress filter and its cryptokey route,
+        # so an empty list makes it silently drop every inner packet
+        # from that peer and lose the return path — breaking the relay.
+        thisHostIsRendezvous = rendezvousHost != null && thisHostName' == rendezvousHost;
         # Per-peer: this peer is roaming (no stable IP we can lock onto).
         # Set in metadata.json as `wireguard.<wg>.roaming = true`. We must
         # NOT bake that peer's `ip4` (a snapshot, not a reservation) into
@@ -78,7 +84,11 @@ let
         # to the rendezvous /24 relay in both directions. A reverse
         # roaming probe (see below) promotes it back to a direct /32
         # when a fresh direct handshake + LAN-range endpoint are seen.
-        isRoamingPeerGhost = peerIsRoaming && !isRendezvous;
+        # Never applies on the rendezvous host itself: the relay hub
+        # keeps the real /32 (endpoint still suppressed — it's learned
+        # at runtime via WireGuard endpoint roaming) so it can accept
+        # and route the roaming peer's relayed traffic.
+        isRoamingPeerGhost = peerIsRoaming && !isRendezvous && !thisHostIsRendezvous;
         allowed =
           if isGhostPeer || isRoamingPeerGhost then
             [ ]

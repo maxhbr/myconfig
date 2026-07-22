@@ -75,8 +75,13 @@ entry per host with these rules:
 | Peer is roaming (`metadata.hosts.<peer>.wireguard.<wg>.roaming = true`)           | `[]` _(ghost peer)_  | _(none — peer initiates)_ | _(none)_              |
 | `roaming = true` and peer is on my `network`                                      | `[]` _(ghost peer)_  | _(none)_                  | _(none)_              |
 
-A roaming peer is now emitted as a **ghost on every host** (empty
-`allowedIPs`, no endpoint), not just on the roaming host itself. This is
+A roaming peer is now emitted as a **ghost on every host except the
+rendezvous** (empty `allowedIPs`, no endpoint), not just on the roaming
+host itself. The rendezvous/relay hub is exempt: its `allowedIPs` double
+as WireGuard's ingress filter and its cryptokey route, so it must keep
+the roaming peer's real `/32` (endpoint still suppressed — learned at
+runtime) or it would silently drop every inner packet from that peer and
+lose the return path, breaking the relay itself. This is
 the fix for the off-LAN return-path black-hole: previously a
 LAN-anchored host baked a static `/32` for a roaming peer with no
 endpoint, so once that peer roamed off the LAN it relayed via the
