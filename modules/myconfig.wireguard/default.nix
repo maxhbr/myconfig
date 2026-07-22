@@ -728,6 +728,15 @@ in
             wants = [ "network-online.target" ];
             requires = [ "wireguard-${wgInterface}.service" ];
             wantedBy = [ "multi-user.target" ];
+            # This oneshot is triggered by both a 60s timer and a
+            # NetworkManager dispatcher hook that fires on several events
+            # (up | connectivity-change | dhcp4-change | ...). At boot or
+            # on a connectivity change those events arrive in a burst,
+            # which trips systemd's default start rate limit
+            # (StartLimitBurst=5 / StartLimitIntervalSec=10s) and marks
+            # the unit `failed` even though every run exits 0. Frequent
+            # triggering is by design here, so disable the limiter.
+            startLimitIntervalSec = 0;
             serviceConfig = {
               Type = "oneshot";
               ExecStart =
@@ -757,6 +766,10 @@ in
             wants = [ "network-online.target" ];
             requires = [ "wireguard-${wgInterface}.service" ];
             wantedBy = [ "multi-user.target" ];
+            # Same rationale as wg-roaming-${wgInterface}: frequent
+            # (timer + dispatcher-burst) triggering must not trip the
+            # start rate limiter.
+            startLimitIntervalSec = 0;
             serviceConfig = {
               Type = "oneshot";
               ExecStart = mkReverseRoamingScript wgInterface reversePeers (lanCidrFor config.networking.hostName);

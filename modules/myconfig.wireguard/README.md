@@ -233,6 +233,14 @@ mode. The script no-ops when the mode hasn't changed.
 * A NetworkManager dispatcher hook fires immediately on
   `up | down | connectivity-change | dhcp4-change | dhcp6-change`.
 
+The timer and the dispatcher hook can fire the oneshot in a burst
+(several NM events arrive within a second or two at boot / on a
+connectivity change), which would trip systemd's default start rate
+limit (`StartLimitBurst=5` per `StartLimitIntervalSec=10s`) and mark the
+unit `failed` even though every run exits `0`. Frequent triggering is by
+design, so the probe services set `startLimitIntervalSec = 0` to disable
+the limiter.
+
 ### Reverse roaming probe
 
 The forward probe (above) runs on the *roaming* host and patches its own
