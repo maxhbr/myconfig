@@ -51,7 +51,7 @@ in
       # This allows the wireguard server to route your traffic to the internet and hence be like a VPN
       # For this to work you have to set the dnsserver IP of your router (or dnsserver of choice) in your clients
       extraCommands = ''
-        iptables -t nat -A POSTROUTING -s 10.199.199.0/24 -o eth0 -j MASQUERADE
+        iptables -t nat -A POSTROUTING -s 10.199.199.0/24 -o ${config.networking.nat.externalInterface} -j MASQUERADE
       '';
     };
 

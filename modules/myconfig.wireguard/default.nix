@@ -72,8 +72,15 @@ let
         # rely on my LAN ip (DHCP, foreign Wi-Fi); the runtime probe
         # patches in LAN endpoints when we detect we're at home.
         isGhostPeer = roaming && sameLan && !isRendezvous;
+        # Symmetric ghosting: on a LAN-anchored host, a roaming peer's
+        # static baseline is also a ghost (empty allowedIPs, no
+        # endpoint) so off-road traffic to/from that peer falls through
+        # to the rendezvous /24 relay in both directions. A reverse
+        # roaming probe (see below) promotes it back to a direct /32
+        # when a fresh direct handshake + LAN-range endpoint are seen.
+        isRoamingPeerGhost = peerIsRoaming && !isRendezvous;
         allowed =
-          if isGhostPeer then
+          if isGhostPeer || isRoamingPeerGhost then
             [ ]
           else if isRendezvous then
             ([ "${peerWgIp}/32" ] ++ (wgNetwork.allowedIPs or [ ]))
@@ -133,6 +140,47 @@ let
             publicKey = host.wireguard."${wgInterface}".pubkey;
             wgIp = host.wireguard."${wgInterface}".ip4;
             lanIp = host.ip4;
+          }
+        else
+          null
+      ) metadata.hosts
+    );
+
+  # Reverse roaming probe input: on a non-roaming (LAN-anchored) host,
+  # the set of *roaming* peers that share this host's network. Because
+  # a roaming peer is now ghosted symmetrically in the static config
+  # (empty allowedIPs, no endpoint), off-road traffic to it relays via
+  # the rendezvous. When such a peer is actually on the home LAN we want
+  # to promote it back to a direct /32 — but only after we've seen a
+  # fresh direct handshake AND learned a LAN-range endpoint for it. This
+  # helper returns the candidates; the runtime script does the
+  # detection. We deliberately do NOT bake in a lanIp: the roaming
+  # peer's ip4 is a snapshot, so the endpoint must be learned at
+  # runtime via `wg show endpoints`.
+  getReverseRoamingPeersFor =
+    wgInterface: thisHostName':
+    let
+      thisHost = metadata.hosts."${thisHostName'}";
+      thisNetwork = thisHost.network or null;
+      wgNetwork = metadata.networks."${wgInterface}" or { };
+      rendezvousHost = wgNetwork.peer or null;
+    in
+    lib.filter (p: p != null) (
+      lib.mapAttrsToList (
+        name: host:
+        let
+          peerNetwork = host.network or null;
+          sameLan = thisNetwork != null && peerNetwork != null && thisNetwork == peerNetwork;
+          isRendezvous = rendezvousHost != null && name == rendezvousHost;
+          hasWgIp = lib.attrsets.hasAttrByPath [ "wireguard" wgInterface "ip4" ] host;
+          hasPubkey = lib.attrsets.hasAttrByPath [ "wireguard" wgInterface "pubkey" ] host;
+          peerIsRoaming = host.wireguard."${wgInterface}".roaming or false;
+        in
+        if (name != thisHostName') && peerIsRoaming && sameLan && !isRendezvous && hasWgIp && hasPubkey then
+          {
+            inherit name;
+            publicKey = host.wireguard."${wgInterface}".pubkey;
+            wgIp = host.wireguard."${wgInterface}".ip4;
           }
         else
           null
@@ -245,6 +293,127 @@ let
       write_status "$mode_now"
     '';
 
+  # Bash script generator for the *reverse* roaming probe, run on
+  # non-roaming (LAN-anchored) hosts. For each roaming peer that shares
+  # our LAN, decide whether to promote it from ghost (relay via
+  # rendezvous) to direct /32:
+  #
+  #   * If the peer has a fresh direct handshake (age < 180s) AND its
+  #     learned endpoint IP is inside our LAN CIDR -> the peer is on the
+  #     home LAN right now and reachable directly:
+  #         wg set <iface> peer <pk> allowed-ips <wgIp>/32
+  #   * Otherwise (stale handshake, or endpoint outside the LAN, i.e.
+  #     the peer is off-road and relaying via rendezvous) -> keep it a
+  #     ghost so replies fall through to the rendezvous /24 catch-all:
+  #         wg set <iface> peer <pk> allowed-ips ""
+  #
+  # Idempotent per-peer via
+  # /run/wg-roaming/<iface>-reverse.<pk-sanitized> state files, mirroring
+  # mkRoamingScript. The pubkey is base64 and can contain `/` and `+`,
+  # which are unsafe in a filename, so we sanitize it to `[A-Za-z0-9_]`
+  # before building the path. We never set an endpoint here:
+  # WireGuard endpoint roaming already pins the peer's outer address
+  # from its inbound packets; we only toggle the cryptokey route.
+  mkReverseRoamingScript =
+    wgInterface: reversePeers: lanCidr:
+    let
+      peerEntries = lib.concatMapStringsSep " " (
+        p: lib.escapeShellArg "${p.publicKey}|${p.wgIp}"
+      ) reversePeers;
+    in
+    pkgs.writeShellScript "wg-roaming-reverse-${wgInterface}" ''
+      set -euo pipefail
+      PATH=${
+        lib.makeBinPath [
+          pkgs.iproute2
+          pkgs.wireguard-tools
+          pkgs.coreutils
+          pkgs.gnugrep
+        ]
+      }:$PATH
+
+      iface=${lib.escapeShellArg wgInterface}
+      lan_cidr=${lib.escapeShellArg lanCidr}
+      peers=( ${peerEntries} )
+
+      # Return 0 if the IPv4 address in $1 is inside the CIDR in $2.
+      # Pure-bash /24-aware check that also handles arbitrary prefix
+      # lengths by masking both addresses to the prefix.
+      ip_in_cidr() {
+        local ip="$1" cidr="$2"
+        [[ -n "$ip" && -n "$cidr" ]] || return 1
+        local net="''${cidr%%/*}" bits="''${cidr##*/}"
+        [[ "$cidr" == */* ]] || return 1
+        ip2int() {
+          local a b c d
+          IFS=. read -r a b c d <<<"$1" || return 1
+          [[ -n "$a" && -n "$b" && -n "$c" && -n "$d" ]] || return 1
+          echo $(( (a << 24) + (b << 16) + (c << 8) + d ))
+        }
+        local ipi neti mask
+        ipi=$(ip2int "$ip") || return 1
+        neti=$(ip2int "$net") || return 1
+        if (( bits <= 0 )); then
+          mask=0
+        elif (( bits >= 32 )); then
+          mask=4294967295
+        else
+          mask=$(( (4294967295 << (32 - bits)) & 4294967295 ))
+        fi
+        (( (ipi & mask) == (neti & mask) ))
+      }
+
+      now=$(date +%s)
+      state_dir=/run/wg-roaming
+      mkdir -p "$state_dir"
+
+      # wg is required; if the interface isn't up yet, bail quietly.
+      wg show "$iface" >/dev/null 2>&1 || exit 0
+
+      for entry in "''${peers[@]:-}"; do
+        [[ -z "$entry" ]] && continue
+        pubkey="''${entry%%|*}"
+        wg_ip="''${entry#*|}"
+
+        # Handshake age for this peer.
+        hs=$(wg show "$iface" latest-handshakes 2>/dev/null \
+               | grep -F "$pubkey" | awk '{print $2}' || true)
+        [[ -z "''${hs:-}" ]] && hs=0
+
+        # Learned endpoint (host:port) for this peer, if any.
+        ep=$(wg show "$iface" endpoints 2>/dev/null \
+               | grep -F "$pubkey" | awk '{print $2}' || true)
+        ep_ip="''${ep%:*}"
+        # Strip brackets in case of an IPv6-literal endpoint.
+        ep_ip="''${ep_ip#[}"
+        ep_ip="''${ep_ip%]}"
+
+        want="off"
+        if [[ "$hs" != "0" ]] && (( now - hs < 180 )) \
+             && ip_in_cidr "$ep_ip" "$lan_cidr"; then
+          want="on"
+        fi
+
+        # Sanitize the base64 pubkey for use in a filename: it can
+        # contain `/` (which would be treated as a directory separator,
+        # breaking the write) and `+`. Map every non-alphanumeric char
+        # to `_`.
+        pk_safe="''${pubkey//[^A-Za-z0-9]/_}"
+        state_file="$state_dir/$iface-reverse.$pk_safe"
+        prev=""
+        [[ -f "$state_file" ]] && prev=$(cat "$state_file")
+        [[ "$want" == "$prev" ]] && continue
+
+        if [[ "$want" == "on" ]]; then
+          wg set "$iface" peer "$pubkey" allowed-ips "$wg_ip/32"
+        else
+          wg set "$iface" peer "$pubkey" allowed-ips ""
+        fi
+        echo "$want" > "$state_file"
+        echo "wg-roaming-reverse[$iface]: $pubkey $prev -> $want" >&2
+      done
+    '';
+
   # Reader script used by the waybar custom module. Reads
   # /run/wg/<iface>.status.json and emits a single JSON line for waybar.
   # Only roaming hosts publish that file (the bar entry is hidden on
@@ -310,6 +479,32 @@ let
       metadata.networks."${thisNetwork}".defaultGateway
     else
       "";
+
+  # Helper: this host's LAN CIDR, used by the reverse roaming probe to
+  # decide whether a roaming peer's learned endpoint is on our LAN.
+  # Prefers an explicit `cidr` on the network; otherwise infers a /24
+  # from the `defaultGateway` (a.b.c.1 -> a.b.c.0/24). "" when not
+  # derivable from metadata.
+  lanCidrFor =
+    thisHostName:
+    let
+      thisHost = metadata.hosts."${thisHostName}";
+      thisNetwork = thisHost.network or null;
+      net = if thisNetwork != null then (metadata.networks."${thisNetwork}" or { }) else { };
+      gw = net.defaultGateway or null;
+      inferred =
+        if gw != null then
+          let
+            octets = lib.splitString "." gw;
+          in
+          if lib.length octets == 4 then
+            "${lib.elemAt octets 0}.${lib.elemAt octets 1}.${lib.elemAt octets 2}.0/24"
+          else
+            ""
+        else
+          "";
+    in
+    net.cidr or inferred;
 
   secretNameFor = wgInterface: "wireguard.private.${wgInterface}";
 
@@ -521,7 +716,7 @@ in
     # The probe also writes /run/wg/<iface>.status.json on every run;
     # the waybar custom module reads it.
     systemd.services = lib.mkMerge (
-      lib.mapAttrsToList (
+      (lib.mapAttrsToList (
         wgInterface: cfg:
         lib.mkIf (cfg.enable && cfg.roaming) {
           "wg-roaming-${wgInterface}" = {
@@ -542,11 +737,38 @@ in
             };
           };
         }
-      ) config.myconfig.wireguard
+      ) config.myconfig.wireguard)
+      # Reverse roaming probe: on LAN-anchored hosts that have at least
+      # one roaming peer on their LAN, promote such a peer back to a
+      # direct /32 when it's actually at home (fresh direct handshake +
+      # LAN-range learned endpoint). See mkReverseRoamingScript.
+      ++ (lib.mapAttrsToList (
+        wgInterface: cfg:
+        let
+          reversePeers = getReverseRoamingPeersFor wgInterface config.networking.hostName;
+        in
+        lib.mkIf (cfg.enable && !cfg.roaming && reversePeers != [ ]) {
+          "wg-roaming-reverse-${wgInterface}" = {
+            description = "WireGuard reverse roaming probe for ${wgInterface}";
+            after = [
+              "wireguard-${wgInterface}.service"
+              "network-online.target"
+            ];
+            wants = [ "network-online.target" ];
+            requires = [ "wireguard-${wgInterface}.service" ];
+            wantedBy = [ "multi-user.target" ];
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStart = mkReverseRoamingScript wgInterface reversePeers (lanCidrFor config.networking.hostName);
+              SuccessExitStatus = [ 0 ];
+            };
+          };
+        }
+      ) config.myconfig.wireguard)
     );
 
     systemd.timers = lib.mkMerge (
-      lib.mapAttrsToList (
+      (lib.mapAttrsToList (
         wgInterface: cfg:
         lib.mkIf (cfg.enable && cfg.roaming) {
           "wg-roaming-${wgInterface}" = {
@@ -560,7 +782,25 @@ in
             };
           };
         }
-      ) config.myconfig.wireguard
+      ) config.myconfig.wireguard)
+      ++ (lib.mapAttrsToList (
+        wgInterface: cfg:
+        let
+          reversePeers = getReverseRoamingPeersFor wgInterface config.networking.hostName;
+        in
+        lib.mkIf (cfg.enable && !cfg.roaming && reversePeers != [ ]) {
+          "wg-roaming-reverse-${wgInterface}" = {
+            description = "Periodic WireGuard reverse roaming probe for ${wgInterface}";
+            wantedBy = [ "timers.target" ];
+            timerConfig = {
+              OnBootSec = "45s";
+              OnUnitActiveSec = "60s";
+              AccuracySec = "5s";
+              Unit = "wg-roaming-reverse-${wgInterface}.service";
+            };
+          };
+        }
+      ) config.myconfig.wireguard)
     );
 
     networking.networkmanager.dispatcherScripts = lib.mkMerge (
@@ -645,6 +885,23 @@ in
             message =
               "myconfig.wireguard.${wgInterface}.enable = true on host '${config.networking.hostName}', "
               + "but `privateKeySource` is unset. Provide an age-encrypted private key file.";
+          }
+          {
+            # If a reverse roaming probe is wired (this host is
+            # LAN-anchored and has at least one roaming peer on its
+            # LAN), `lanCidrFor` must be derivable — otherwise the
+            # probe's `ip_in_cidr` check always fails and the probe can
+            # only ever demote, never promote (a silently broken
+            # reverse probe).
+            assertion =
+              cfg.roaming
+              || (getReverseRoamingPeersFor wgInterface config.networking.hostName) == [ ]
+              || (lanCidrFor config.networking.hostName) != "";
+            message =
+              "myconfig.wireguard.${wgInterface} on host '${config.networking.hostName}' wires a "
+              + "reverse roaming probe (a roaming peer shares this host's LAN), but no LAN CIDR is "
+              + "derivable: set `metadata.networks.<net>.cidr` or a 4-octet `defaultGateway` so the "
+              + "probe can decide whether a roaming peer's learned endpoint is on the LAN.";
           }
         ]
       ) config.myconfig.wireguard

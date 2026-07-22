@@ -176,7 +176,8 @@
   },
   "networks": {
     "home": {
-      "defaultGateway": "192.168.1.1"
+      "defaultGateway": "192.168.1.1",
+      "cidr": "192.168.1.0/24"
     },
     "wg0": {
       "allowedIPs": [ "10.199.199.0/24" ],
