@@ -90,26 +90,35 @@ let
         ++ lib.concatMap (v: v.aliases or [ ]) (lib.attrValues (m.variants or { }))
       ) amdModels;
     in
-    map (
-      {
-        name,
-        path,
-        aliases ? [ ],
-        params ? [ ],
-        group ? "default",
-        ...
-      }:
-      {
-        inherit
-          name
-          path
-          params
-          group
-          ;
-        aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
-        # variants are dropped for now
-      }
-    ) (lib.filter (m: !lib.elem m.name allAliasesAndNamesFromAmdModels) rtxModels);
+    map
+      (
+        {
+          name,
+          path,
+          aliases ? [ ],
+          params ? [ ],
+          group ? "default",
+          ...
+        }:
+        {
+          inherit
+            name
+            path
+            params
+            group
+            ;
+          aliases = lib.filter (a: !lib.elem a allAliasesAndNamesFromAmdModels) aliases;
+          # variants are dropped for now
+        }
+      )
+      (
+        lib.filter (
+          m:
+          !lib.elem m.name allAliasesAndNamesFromAmdModels
+          # NVFP4 quantisation is NVIDIA-only – cannot load on AMD/GFX
+          && !(lib.hasInfix "NVFP4" m.name)
+        ) rtxModels
+      );
 
   # Package built for the host with ROCm+Vulkan support (variant = "amd").
   # Passed into the container so it reuses the same binary instead of

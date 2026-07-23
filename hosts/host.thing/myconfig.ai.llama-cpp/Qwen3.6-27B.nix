@@ -164,6 +164,25 @@ in
         };
       };
     }
+    {
+      name = "Qwen3.6-27B-NVFP4";
+      path = "/models/tngtech-Qwen3.6-27B-NVFP4-GGUF/Qwen3.6-27B-NVFP4.gguf";
+      pull-models = {
+        target_directory = modelsPullDir;
+        hf_spec = [ "tngtech/Qwen3.6-27B-NVFP4-GGUF/Qwen3.6-27B-NVFP4.gguf" ];
+      };
+      cacheType = "q8_0";
+      params = [
+        "--batch-size"
+        "2048"
+        "--ubatch-size"
+        "512"
+        "--chat-template-kwargs"
+        "{\"preserve_thinking\":true}"
+      ];
+      ctxSize = 262144;
+      ttl = 900;
+    }
   ];
 
   multiGpuModels = [
