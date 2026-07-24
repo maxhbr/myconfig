@@ -29,15 +29,36 @@
 let
   cfg = config.myconfig.ai.litellm.proxy;
 
-  mkForwardEntry = modelName: {
-    model_name = modelName;
-    litellm_params = {
-      model = "openai/${modelName}";
-      api_base = cfg.upstreamApiBase;
-      api_key = cfg.apiKey;
-      request.allowPrivateNetwork = true;
-    };
-  };
+  # A model spec is either a bare string (the model name, no metadata) or
+  # an attrset { name; contextLength?; maxOutputTokens?; }. The attrset
+  # form lets a caller advertise the model's context window so LiteLLM can
+  # do context_window fallback routing and clients can size prompts. These
+  # numbers are *manually declared* — LiteLLM cannot derive them from the
+  # upstream (its /v1/models is a fixed OpenAI-schema list and the
+  # upstream /model/info reports null for these local models). They surface
+  # on the proxy's /model/info endpoint (model_info.max_input_tokens /
+  # max_output_tokens), never on /v1/models.
+  mkForwardEntry =
+    m:
+    let
+      spec = if lib.isString m then { name = m; } else m;
+      # Drop unset (null) fields so the string form and metadata-less
+      # attrsets produce byte-identical output to the previous behavior.
+      modelInfo = lib.filterAttrs (_: v: v != null) {
+        max_input_tokens = spec.contextLength or null;
+        max_output_tokens = spec.maxOutputTokens or null;
+      };
+    in
+    {
+      model_name = spec.name;
+      litellm_params = {
+        model = "openai/${spec.name}";
+        api_base = cfg.upstreamApiBase;
+        api_key = cfg.apiKey;
+        request.allowPrivateNetwork = true;
+      };
+    }
+    // lib.optionalAttrs (modelInfo != { }) { model_info = modelInfo; };
 in
 {
   options.myconfig.ai.litellm.proxy = {
@@ -54,11 +75,38 @@ in
     };
 
     models = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
+      type =
+        with lib.types;
+        listOf (
+          either str (submodule {
+            options = {
+              name = lib.mkOption {
+                type = str;
+                description = "Model name to forward (becomes `openai/<name>`).";
+              };
+              contextLength = lib.mkOption {
+                type = nullOr int;
+                default = null;
+                description = ''
+                  Context window in tokens. Emitted as
+                  `model_info.max_input_tokens`. Manually declared —
+                  LiteLLM cannot derive it from the upstream.
+                '';
+              };
+              maxOutputTokens = lib.mkOption {
+                type = nullOr int;
+                default = null;
+                description = "Max output tokens. Emitted as `model_info.max_output_tokens`.";
+              };
+            };
+          })
+        );
       default = [ ];
       description = ''
-        Model names to forward. Each becomes an `openai/<model>`
-        entry pointing at the upstream API base.
+        Models to forward. Each entry is either a bare model-name string
+        or an attrset `{ name; contextLength?; maxOutputTokens?; }`.
+        Each becomes an `openai/<name>` entry pointing at the upstream
+        API base; the optional fields add a `model_info` block.
       '';
     };
 
