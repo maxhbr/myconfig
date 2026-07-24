@@ -364,15 +364,44 @@ sbom() (
             fi
         fi
         if [[ -n $dtrack_token ]]; then
-            log_info "uploading sbom to dtrack"
+            local dtrack_api="https://dtrack-api.nuc.vserver.wg0.maxhbr.local"
+            local project_name="host.$target"
             local version
             version="$(jq -r '.metadata.component.name' "$cdx")"
-            curl -X POST "https://dtrack-api.nuc.vserver.wg0.maxhbr.local/api/v1/bom" \
+
+            # Find the latest existing project with a matching name so we can
+            # replace its SBOM in place instead of creating a new project for
+            # every version. Pick the one with the most recent BOM import.
+            local project_uuid
+            project_uuid="$(curl -sf \
                 -H "X-Api-Key: $dtrack_token" \
-                -F "autoCreate=true" \
-                -F "projectName=host.$target" \
-                -F "projectVersion=$version" \
-                -F "bom=@$cdx"
+                "$dtrack_api/api/v1/project?name=$project_name&excludeInactive=false" |
+                jq -r --arg name "$project_name" '
+                    [.[] | select(.name == $name)]
+                    | sort_by(.lastBomImport // 0)
+                    | last
+                    | .uuid // empty' 2>/dev/null || true)"
+
+            if [[ -n $project_uuid ]]; then
+                log_info "uploading sbom to dtrack (updating existing project $project_uuid)"
+                # Update the project version to reflect the current build.
+                curl -sf -X PATCH "$dtrack_api/api/v1/project/$project_uuid" \
+                    -H "X-Api-Key: $dtrack_token" \
+                    -H "Content-Type: application/json" \
+                    -d "$(jq -n --arg v "$version" '{version: $v}')" >/dev/null || true
+                curl -X POST "$dtrack_api/api/v1/bom" \
+                    -H "X-Api-Key: $dtrack_token" \
+                    -F "project=$project_uuid" \
+                    -F "bom=@$cdx"
+            else
+                log_info "uploading sbom to dtrack (creating project $project_name)"
+                curl -X POST "$dtrack_api/api/v1/bom" \
+                    -H "X-Api-Key: $dtrack_token" \
+                    -F "autoCreate=true" \
+                    -F "projectName=$project_name" \
+                    -F "projectVersion=$version" \
+                    -F "bom=@$cdx"
+            fi
         else
             log_warning "no dtrack token"
         fi
