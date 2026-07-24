@@ -724,6 +724,10 @@ in
                     elif ! git -C "\$main_repo" merge-base --is-ancestor "\$branch" HEAD; then
                       echo "branch \$branch is not merged into the current main-repo HEAD; refusing to delete. Use --merge or --force." >&2
                       err=1
+                    else
+                      # Worktree is clean and branch is already merged into HEAD.
+                      # Auto-delete without prompting.
+                      echo "worktree is clean and branch is already merged; removing automatically." >&2
                     fi
                   fi
                   if [ "\$err" -ne 0 ]; then
