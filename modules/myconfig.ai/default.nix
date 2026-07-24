@@ -45,12 +45,20 @@ in
     ./services.searxng.nix
     ./services.tabby.nix
     ./skills
+    ./myconfig.ai.workmux.nix
   ];
   options.myconfig.ai.enable = lib.mkEnableOption "myconfig.ai";
   config = lib.mkIf config.myconfig.ai.enable {
     myconfig.ai.aichat.enable = true;
     myconfig.ai.llm.enable = true;
     myconfig.dev.python.enable = true;
+    # workmux is a terminal-native companion to agentic coding; auto-enable
+    # it whenever the AI tooling, the dev profile, and tmux are all active.
+    # (ai is guaranteed by the surrounding mkIf.) Use mkDefault so a host
+    # can still turn it off explicitly.
+    myconfig.ai.workmux.enable = lib.mkDefault (
+      config.myconfig.dev.enable && config.programs.tmux.enable
+    );
     home-manager.sharedModules = [
       {
         home.packages =

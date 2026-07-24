@@ -63,6 +63,9 @@
 
     niri.url = "github:niri-wm/niri";
 
+    workmux.url = "github:raine/workmux";
+    workmux.inputs.nixpkgs.follows = "nixpkgs";
+
     # PR overrides (see flake.pkgs_from_prs.nix)
     pr531581.url = "github:NixOS/nixpkgs/pull/531581/head"; # gimp: revert __structuredAttrs (crash fix)
   };
