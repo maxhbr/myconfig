@@ -21,6 +21,7 @@ let
     "InternScience-Agents-A1-Q4_K_M"
     "InternScience-Agents-A1-Q4_K_M-mmproj"
     "Qwen3.5-9B-Q5_K_M"
+    "Qwen3.6-27B-NVFP4"
     "Qwen3.6-27B-Q6_K-MTP"
     "Qwen3.6-27B-Q6_K-MTP-full-ctx"
     "Qwen3.6-27B-UD-Q4_K_XL"

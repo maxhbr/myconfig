@@ -158,6 +158,7 @@
   "rtx5090:InternScience-Agents-A1-Q4_K_M"
   "rtx5090:InternScience-Agents-A1-Q4_K_M-mmproj"
   "rtx5090:Qwen3.5-9B-Q5_K_M"
+  "rtx5090:Qwen3.6-27B-NVFP4"
   "rtx5090:Qwen3.6-27B-Q6_K-MTP"
   "rtx5090:Qwen3.6-27B-Q6_K-MTP-full-ctx"
   "rtx5090:Qwen3.6-27B-UD-Q4_K_XL"
