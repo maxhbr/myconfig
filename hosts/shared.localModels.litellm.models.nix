@@ -8,6 +8,11 @@
 #   - hosts/shared.localModels.litellm.nix   (direct localModels providers)
 #   - hosts/shared.litellm.proxy.nix          (local LiteLLM proxy: f13, p14)
 #
+# Each entry is either a bare model-name string or a
+# `{ name; contextWindow; }` attrset. contextWindow (tokens) is scraped
+# from the backend llama-server's `--ctx-size` for models whose backend
+# publishes it; the rest are bare strings.
+#
 # Regenerate with: ./hosts/shared.localModels.update.sh
 [
   "gfx1151:Hy3-Q2_K_L"
@@ -155,51 +160,156 @@
   "opencode-fast"
   "opencode-fast-fallback"
   "opencode-slow-fallback"
-  "rtx5090:InternScience-Agents-A1-Q4_K_M"
-  "rtx5090:InternScience-Agents-A1-Q4_K_M-mmproj"
-  "rtx5090:Qwen3.5-9B-Q5_K_M"
-  "rtx5090:Qwen3.6-27B-NVFP4"
-  "rtx5090:Qwen3.6-27B-Q6_K-MTP"
-  "rtx5090:Qwen3.6-27B-Q6_K-MTP-full-ctx"
+  {
+    name = "rtx5090:InternScience-Agents-A1-Q4_K_M";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:InternScience-Agents-A1-Q4_K_M-mmproj";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.5-9B-Q5_K_M";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.6-27B-NVFP4";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.6-27B-Q6_K-MTP";
+    contextWindow = 131072;
+  }
+  {
+    name = "rtx5090:Qwen3.6-27B-Q6_K-MTP-full-ctx";
+    contextWindow = 184320;
+  }
   "rtx5090:Qwen3.6-27B-UD-Q4_K_XL"
-  "rtx5090:Qwen3.6-27B-UD-Q5_K_XL"
-  "rtx5090:Qwen3.6-27B-UD-Q5_K_XL-general-tasks"
-  "rtx5090:Qwen3.6-27B-UD-Q5_K_XL-instruct-general-tasks"
-  "rtx5090:Qwen3.6-27B-UD-Q5_K_XL-instruct-reasoning-tasks"
-  "rtx5090:Qwen3.6-27B-UD-Q5_K_XL-precise-coding-tasks"
-  "rtx5090:Qwen3.6-27B-UD-Q6_K_XL"
-  "rtx5090:Qwen3.6-27B-UD-Q6_K_XL-general-tasks"
-  "rtx5090:Qwen3.6-27B-UD-Q6_K_XL-instruct-general-tasks"
-  "rtx5090:Qwen3.6-27B-UD-Q6_K_XL-instruct-reasoning-tasks"
-  "rtx5090:Qwen3.6-27B-UD-Q6_K_XL-precise-coding-tasks"
+  {
+    name = "rtx5090:Qwen3.6-27B-UD-Q5_K_XL";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.6-27B-UD-Q5_K_XL-general-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.6-27B-UD-Q5_K_XL-instruct-general-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.6-27B-UD-Q5_K_XL-instruct-reasoning-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.6-27B-UD-Q5_K_XL-precise-coding-tasks";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:Qwen3.6-27B-UD-Q6_K_XL";
+    contextWindow = 196608;
+  }
+  {
+    name = "rtx5090:Qwen3.6-27B-UD-Q6_K_XL-general-tasks";
+    contextWindow = 196608;
+  }
+  {
+    name = "rtx5090:Qwen3.6-27B-UD-Q6_K_XL-instruct-general-tasks";
+    contextWindow = 196608;
+  }
+  {
+    name = "rtx5090:Qwen3.6-27B-UD-Q6_K_XL-instruct-reasoning-tasks";
+    contextWindow = 196608;
+  }
+  {
+    name = "rtx5090:Qwen3.6-27B-UD-Q6_K_XL-precise-coding-tasks";
+    contextWindow = 196608;
+  }
   "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL"
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP"
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP-instruct-general"
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP-instruct-reasoning"
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP-thinking-coding"
-  "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP-thinking-general"
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP";
+    contextWindow = 184320;
+  }
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP-instruct-general";
+    contextWindow = 184320;
+  }
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP-instruct-reasoning";
+    contextWindow = 184320;
+  }
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP-thinking-coding";
+    contextWindow = 184320;
+  }
+  {
+    name = "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-MTP-thinking-general";
+    contextWindow = 184320;
+  }
   "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-instruct-general"
   "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-instruct-reasoning"
   "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-thinking-coding"
   "rtx5090:Qwen3.6-35B-A3B-UD-Q5_K_XL-thinking-general"
   "rtx5090:TheDrummer_Skyfall-31B-v4.2-Q6_K"
-  "rtx5090:gemma-4-26B-A4B-it-UD-Q6_K_XL"
+  {
+    name = "rtx5090:gemma-4-26B-A4B-it-UD-Q6_K_XL";
+    contextWindow = 262144;
+  }
   "rtx5090:gemma-4-26B-A4B-it-UD-Q8_K_XL"
-  "rtx5090:gemma-4-26B-A4B-it-qat-q4_0"
-  "rtx5090:gemma-4-26B-A4B-it-qat-q4_0-mmproj"
-  "rtx5090:gemma-4-26B-A4B-it-qat-q4_0-nothink"
-  "rtx5090:gemma-4-31B-it-UD-Q4_K_XL"
-  "rtx5090:gemma-4-31B-it-UD-Q4_K_XL-mmproj"
-  "rtx5090:gemma-4-31B-it-UD-Q4_K_XL-nothink"
+  {
+    name = "rtx5090:gemma-4-26B-A4B-it-qat-q4_0";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:gemma-4-26B-A4B-it-qat-q4_0-mmproj";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:gemma-4-26B-A4B-it-qat-q4_0-nothink";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:gemma-4-31B-it-UD-Q4_K_XL";
+    contextWindow = 65536;
+  }
+  {
+    name = "rtx5090:gemma-4-31B-it-UD-Q4_K_XL-mmproj";
+    contextWindow = 65536;
+  }
+  {
+    name = "rtx5090:gemma-4-31B-it-UD-Q4_K_XL-nothink";
+    contextWindow = 65536;
+  }
   "rtx5090:gemma-4-31B-it-UD-Q5_K_XL"
-  "rtx5090:gemma-4-31B-it-qat-q4_0"
-  "rtx5090:gemma-4-31B-it-qat-q4_0-mmproj"
-  "rtx5090:gemma-4-31B-it-qat-q4_0-nothink"
+  {
+    name = "rtx5090:gemma-4-31B-it-qat-q4_0";
+    contextWindow = 65536;
+  }
+  {
+    name = "rtx5090:gemma-4-31B-it-qat-q4_0-mmproj";
+    contextWindow = 65536;
+  }
+  {
+    name = "rtx5090:gemma-4-31B-it-qat-q4_0-nothink";
+    contextWindow = 65536;
+  }
   "rtx5090:hermes"
-  "rtx5090:hermes-fallback"
-  "rtx5090:opencode"
-  "rtx5090:opencode-fallback"
+  {
+    name = "rtx5090:hermes-fallback";
+    contextWindow = 262144;
+  }
+  {
+    name = "rtx5090:opencode";
+    contextWindow = 131072;
+  }
+  {
+    name = "rtx5090:opencode-fallback";
+    contextWindow = 262144;
+  }
   "rtx5090:opencode-fast-fallback"
-  "rtx5090:sidekick"
+  {
+    name = "rtx5090:sidekick";
+    contextWindow = 262144;
+  }
   "sidekick"
 ]
