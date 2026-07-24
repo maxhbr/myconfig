@@ -50,6 +50,18 @@
                           llama-swap.nix) and should not be set by hand.
                         '';
                       };
+                      contextWindow = mkOption {
+                        type = types.nullOr types.int;
+                        default = null;
+                        description = ''
+                          Effective context window in tokens
+                          (ctxSize * parallel from the source model
+                          declaration). Null when the source model has no
+                          explicit ctxSize (uses its own default).
+                          Computed by the publisher (router.nix /
+                          llama-swap.nix); should not be set by hand.
+                        '';
+                      };
                       tags = mkOption {
                         type = types.listOf types.str;
                         default = [ ];

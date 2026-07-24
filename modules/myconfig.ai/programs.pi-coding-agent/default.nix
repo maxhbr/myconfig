@@ -23,6 +23,36 @@ let
     };
   jail-app = callJailLib ../fns/jail-app.nix;
 
+  # Build a lookup: model name (raw or provider-prefixed) -> contextWindow.
+  # Covers both direct local-provider lookups (raw name) and
+  # LiteLLM lookups (providerName:modelName).
+  contextWindowLookup = lib.listToAttrs (
+    lib.concatMap (
+      provider:
+      let
+        hostPort = "${provider.host}:${toString provider.port}";
+        providerName = if provider.name != null then provider.name else hostPort;
+        rawModels = if provider.models != [ ] then provider.models else [ ];
+      in
+      lib.concatMap (
+        m:
+        if builtins.isAttrs m && m.contextWindow != null then
+          [
+            {
+              name = m.name;
+              value = m.contextWindow;
+            }
+            {
+              name = "${providerName}:${m.name}";
+              value = m.contextWindow;
+            }
+          ]
+        else
+          [ ]
+      ) rawModels
+    ) osconfig.myconfig.ai.localModels
+  );
+
   # Build a provider entry for an OpenAI-compatible base URL.
   mkOpenAiCompatibleProvider =
     {
@@ -30,6 +60,7 @@ let
       name,
       baseUrl,
       models,
+      contextWindowLookup ? { },
     }:
     {
       inherit key;
@@ -38,20 +69,26 @@ let
         api = "openai-completions";
         apiKey = "dummy";
         authHeader = false;
-        models = lib.map (modelId: {
-          id = modelId;
-          name = modelId;
-          reasoning = false;
-          input = [ "text" ];
-          cost = {
-            input = 0;
-            output = 0;
-            cacheRead = 0;
-            cacheWrite = 0;
-          };
-          contextWindow = 128000;
-          maxTokens = 4096;
-        }) models;
+        models = lib.map (
+          modelId:
+          let
+            cw = contextWindowLookup.${modelId} or null;
+          in
+          {
+            id = modelId;
+            name = modelId;
+            reasoning = false;
+            input = [ "text" ];
+            cost = {
+              input = 0;
+              output = 0;
+              cacheRead = 0;
+              cacheWrite = 0;
+            };
+            maxTokens = 4096;
+          }
+          // lib.optionalAttrs (cw != null) { contextWindow = cw; }
+        ) models;
       };
     };
 
@@ -73,6 +110,7 @@ let
       name = hostPort;
       baseUrl = "http://${hostPort}/v1";
       models = modelNames;
+      inherit contextWindowLookup;
     }
   ) osconfig.myconfig.ai.localModels;
 
@@ -85,6 +123,7 @@ let
     name = "LiteLLM";
     baseUrl = "http://${litellmHost}:${toString osconfig.services.litellm.port}/v1";
     models = lib.map (m: m.model_name) osconfig.services.litellm.settings.model_list;
+    inherit contextWindowLookup;
   });
 
   llamaSwapProvider = lib.optional osconfig.services.llama-swap.enable (mkOpenAiCompatibleProvider {
@@ -92,6 +131,7 @@ let
     name = "llama-swap";
     baseUrl = "http://localhost:${toString osconfig.services.llama-swap.port}/v1";
     models = builtins.attrNames osconfig.services.llama-swap.settings.models;
+    inherit contextWindowLookup;
   });
 
   allProviders = localModelProviders ++ litellmProvider ++ llamaSwapProvider;

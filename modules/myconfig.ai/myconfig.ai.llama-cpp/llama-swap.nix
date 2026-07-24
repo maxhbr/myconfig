@@ -308,6 +308,10 @@ let
       ++ (m._userTags or [ ])
     );
 
+  # Effective context window for a model entry.
+  # ctxSize * parallel when explicitly set; null when the model uses its own default.
+  effectiveContextWindow = m: if m.ctxSize != null then m.ctxSize * m.parallel else null;
+
   mkModelEntriesForDevices =
     { model, devices }:
     let
@@ -319,6 +323,7 @@ let
         {
           name = if device == firstDevice then model.name else "${device}:${model.name}";
           kind = model._kind;
+          contextWindow = effectiveContextWindow model;
           tags = modelTags device model;
         }
       ]
@@ -350,6 +355,7 @@ let
     ++ (map (a: {
       name = a;
       kind = "alias";
+      contextWindow = effectiveContextWindow model;
       tags = aliasTags (aliasDeviceForModel model) model;
     }) model.aliases)
   ) unpackedModels;

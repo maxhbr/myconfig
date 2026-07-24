@@ -278,10 +278,16 @@ let
   #   - variant -> [ <baseName> ]
   #   - alias of base    -> [ <base.name> ]
   #   - alias of variant -> [ <variant.name>, <base.name> ]
+
+  # Effective context window for a model entry.
+  # ctxSize * parallel when explicitly set; null when the model uses its own default.
+  effectiveContextWindow = m: if m.ctxSize != null then m.ctxSize * m.parallel else null;
+
   serviceLocalModelsEntries =
     (map (m: {
       name = m.name;
       kind = m._kind;
+      contextWindow = effectiveContextWindow m;
       tags = modelTags serviceDevice m;
     }) serviceModels)
     ++ (lib.concatMap (
@@ -289,6 +295,7 @@ let
       map (a: {
         name = a;
         kind = "alias";
+        contextWindow = effectiveContextWindow m;
         tags = aliasTags serviceDevice m;
       }) m.aliases
     ) serviceModels);

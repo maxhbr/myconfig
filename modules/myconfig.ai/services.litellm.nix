@@ -136,6 +136,7 @@
                 #     emit only the prefixed form.
                 modelKind = if lib.isAttrs modelEntry then (modelEntry.kind or null) else null;
                 modelTags = if lib.isAttrs modelEntry then (modelEntry.tags or [ ]) else [ ];
+                modelContextWindow = if lib.isAttrs modelEntry then (modelEntry.contextWindow or null) else null;
                 # `litellm_params.tags` is LiteLLM's standard tag field
                 # (used by tag-based routing and surfaced on
                 # /model/info). The list assembled here is, in order
@@ -162,7 +163,11 @@
                     allowPrivateNetwork = true;
                   };
                 }
-                // lib.optionalAttrs (tagList != [ ]) { tags = tagList; };
+                // lib.optionalAttrs (tagList != [ ]) { tags = tagList; }
+                // lib.optionalAttrs (modelContextWindow != null) {
+                  max_input_tokens = modelContextWindow;
+                  max_tokens = lib.min (modelContextWindow / 4) 65536;
+                };
                 entry = {
                   model_name = "${providerName}:${modelName}";
                   litellm_params = litellmParams;

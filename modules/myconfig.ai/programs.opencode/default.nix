@@ -6,6 +6,34 @@
 }:
 let
   osconfig = config;
+
+  # Build a lookup: model name (raw or provider-prefixed) -> contextWindow.
+  contextWindowLookup = lib.listToAttrs (
+    lib.concatMap (
+      provider:
+      let
+        hostPort = "${provider.host}:${toString provider.port}";
+        providerName = if provider.name != null then provider.name else hostPort;
+        rawModels = if provider.models != [ ] then provider.models else [ ];
+      in
+      lib.concatMap (
+        m:
+        if builtins.isAttrs m && m.contextWindow != null then
+          [
+            {
+              name = m.name;
+              value = m.contextWindow;
+            }
+            {
+              name = "${providerName}:${m.name}";
+              value = m.contextWindow;
+            }
+          ]
+        else
+          [ ]
+      ) rawModels
+    ) osconfig.myconfig.ai.localModels
+  );
 in
 {
   options.myconfig = with lib; {
@@ -128,12 +156,21 @@ in
                             "baseURL" = "http://${hostPort}/v1";
                           };
                           "models" = builtins.listToAttrs (
-                            lib.map (modelName: {
-                              name = modelName;
-                              value = {
-                                "name" = modelName;
-                              };
-                            }) modelNames
+                            lib.map (
+                              modelName:
+                              let
+                                cw = contextWindowLookup.${modelName} or null;
+                              in
+                              {
+                                name = modelName;
+                                value = {
+                                  "name" = modelName;
+                                }
+                                // lib.optionalAttrs (cw != null) {
+                                  "contextWindowSize" = cw;
+                                };
+                              }
+                            ) modelNames
                           );
                         };
                       }
@@ -143,12 +180,21 @@ in
                 (lib.mkIf osconfig.services.litellm.enable (
                   let
                     opencodeModels = builtins.listToAttrs (
-                      lib.map (model: {
-                        name = model.model_name;
-                        value = {
-                          "name" = model.model_name;
-                        };
-                      }) osconfig.services.litellm.settings.model_list
+                      lib.map (
+                        model:
+                        let
+                          cw = contextWindowLookup.${model.model_name} or null;
+                        in
+                        {
+                          name = model.model_name;
+                          value = {
+                            "name" = model.model_name;
+                          }
+                          // lib.optionalAttrs (cw != null) {
+                            "contextWindowSize" = cw;
+                          };
+                        }
+                      ) osconfig.services.litellm.settings.model_list
                     );
                     # `host` may be a wildcard (e.g. "0.0.0.0") for external
                     # exposure; rewrite to localhost for in-host clients.
@@ -169,12 +215,21 @@ in
                 (lib.mkIf osconfig.services.llama-swap.enable (
                   let
                     llamaSwapModels = builtins.listToAttrs (
-                      lib.map (model: {
-                        name = model;
-                        value = {
-                          "name" = model;
-                        };
-                      }) (builtins.attrNames osconfig.services.llama-swap.settings.models)
+                      lib.map (
+                        model:
+                        let
+                          cw = contextWindowLookup.${model} or null;
+                        in
+                        {
+                          name = model;
+                          value = {
+                            "name" = model;
+                          }
+                          // lib.optionalAttrs (cw != null) {
+                            "contextWindowSize" = cw;
+                          };
+                        }
+                      ) (builtins.attrNames osconfig.services.llama-swap.settings.models)
                     );
                   in
                   {
