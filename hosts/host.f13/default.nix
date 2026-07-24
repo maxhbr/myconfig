@@ -46,7 +46,7 @@ in
     ./mykeylight
     ./role.work
     ./ai.f13.nix
-    ./services.litellm.nix
+    ../shared.litellm.proxy.nix
     ./services.orca.nix
     ./hermes-agent.nix
     ./myconfig.agentUsers.nix
@@ -57,7 +57,7 @@ in
     # (aichat, opencode, pi-coding-agent, …) pointing at thing/vserver —
     # bypassing f13's own LiteLLM proxy at localhost:4000 and breaking for
     # the offline agent, which can only reach loopback. f13's local LiteLLM
-    # proxy (see ./services.litellm.nix) is the single access point and
+    # proxy (see ../shared.litellm.proxy.nix) is the single access point and
     # carries the model list directly. See that file for details.
     {
       services.openssh = {

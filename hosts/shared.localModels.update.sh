@@ -2,8 +2,12 @@
 # Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# Generates hosts/shared.localModels.{rtx5090,gfx1151,litellm}.nix from the
-# live model server `/models` endpoints.
+# Generates the model lists consumed by the shared.localModels.* /
+# shared.litellm.* modules from the live model server `/models` endpoints:
+#   - hosts/shared.localModels.{rtx5090,gfx1151}.nix  (inline model lists)
+#   - hosts/shared.localModels.litellm.models.nix     (single source of
+#     truth for the litellm model names, imported by both
+#     hosts/shared.localModels.litellm.nix and hosts/shared.litellm.proxy.nix)
 
 set -euo pipefail
 
@@ -87,6 +91,10 @@ NIXEOF
     echo "Generated $output" >&2
 }
 
+# Writes only the shared litellm model list (single source of truth). The
+# wrapper modules hosts/shared.localModels.litellm.nix and
+# hosts/shared.litellm.proxy.nix both `import` this file, so they are
+# hand-maintained and not regenerated here.
 write_nix_litellm() {
     local output="$1"
     local url="$2"
@@ -95,56 +103,23 @@ write_nix_litellm() {
 
     local models_nix=""
     for m in "${models[@]}"; do
-        models_nix+="    \"${m}\""$'\n'
+        models_nix+="  \"${m}\""$'\n'
     done
 
     cat >"$output" <<NIXEOF
-# Copyright 2025 Maximilian Huber <oss@maximilian-huber.de>
+# Copyright 2026 Maximilian Huber <oss@maximilian-huber.de>
 # SPDX-License-Identifier: MIT
 #
-# Exposes the LiteLLM proxy running on \`thing\` as a localModels provider.
-# LiteLLM aggregates the underlying per-GPU model server instances and
-# prefixes each model name with the producer's provider name
-# (e.g. \`rtx5090:...\` for the NVIDIA RTX 5090 instance,
-# \`gfx1151:...\` for the AMD Radeon 8060S iGPU instance).
-# LiteLLM listens on \`0.0.0.0:4000\` on \`thing\` (firewall-restricted to
-# wg0, see hosts/host.thing/default.nix), so peers reach it directly via the
-# wg0 IP — no Caddy in the path.
+# Single source of truth for the model names published by thing's
+# LiteLLM proxy (the output of
+#   curl ${url}
+# ). Consumed by both:
+#   - hosts/shared.localModels.litellm.nix   (direct localModels providers)
+#   - hosts/shared.litellm.proxy.nix          (local LiteLLM proxy: f13, p14)
 #
 # Regenerate with: ./hosts/shared.localModels.update.sh
-{
-  config,
-  pkgs,
-  lib,
-  myconfig,
-  inputs,
-  ...
-}:
-let
-  # Model IDs as exposed by \`curl ${url}\`.
-  models = [
-${models_nix}  ];
-in
-{
-  config = {
-    myconfig.ai.localModels = [
-      {
-        name = "litellm.thing.wg0";
-        inherit models;
-        # Direct connection to LiteLLM on thing's wg0 IP (no Caddy proxy).
-        host = myconfig.metadatalib.getWgIp "thing";
-        port = 4000;
-      }
-      {
-        name = "litellm.thing.vserver.wg0";
-        inherit models;
-        # Proxy connection via vserver.
-        host = "litellm.thing.vserver.wg0.maxhbr.local";
-        port = 80;
-      }
-    ];
-  };
-}
+[
+${models_nix}]
 NIXEOF
 
     echo "Generated $output" >&2
@@ -170,7 +145,7 @@ for name in "${TARGETS[@]}"; do
             write_nix_rtxgfx "hosts/shared.localModels.${name}.nix" "$name" "$url" "${models_arr[@]}"
             ;;
         litellm)
-            write_nix_litellm "hosts/shared.localModels.${name}.nix" "$url" "${models_arr[@]}"
+            write_nix_litellm "hosts/shared.localModels.${name}.models.nix" "$url" "${models_arr[@]}"
             ;;
     esac
 done

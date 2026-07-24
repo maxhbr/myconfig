@@ -14,15 +14,20 @@
     ./hermes-agent.nix
     ./services.caddy.nix
     ./services.forgejo-token.nix
+    ../shared.litellm.proxy.nix
     {
       myconfig.observability = {
         host_hostname = "nuc";
         client.enable = true;
       };
     }
-    ../shared.localModels.litellm.nix
-    ../shared.localModels.rtx5090.nix
-    ../shared.localModels.gfx1151.nix
+    # NOTE: p14 does NOT import ../shared.localModels.{litellm,rtx5090,gfx1151}.nix.
+    # Those files register thing's model servers as myconfig.ai.localModels
+    # providers, which would create *direct* provider entries in the AI client
+    # configs (aichat, opencode, pi-coding-agent, …) pointing at thing/vserver —
+    # bypassing p14's own LiteLLM proxy at localhost:4000. p14's local LiteLLM
+    # proxy (see ../shared.litellm.proxy.nix) is the single access point and
+    # carries the model list directly. See that file for details.
     ./hardware-configuration.nix
     inputs.nixos-hardware.nixosModules.common-cpu-intel-cpu-only
     {

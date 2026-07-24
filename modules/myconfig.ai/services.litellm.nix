@@ -108,7 +108,7 @@
       # flake. Without this, a host that wants to replace the
       # auto-generated prefixed entries has to use `mkForce` (priority
       # 50), which silently discards those other contributors. See
-      # hosts/host.f13/services.litellm.nix for the override case.
+      # hosts/shared.litellm.proxy.nix for the override case.
       settings.model_list = lib.mkDefault (
         lib.optionals (config.myconfig.ai.localModels != [ ]) (
           lib.concatMap (
