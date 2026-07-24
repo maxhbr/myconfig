@@ -863,6 +863,7 @@
         "nixpkgs-wayland": "nixpkgs-wayland",
         "nur": "nur",
         "pr531581": "pr531581",
+        "workmux": "workmux",
         "zephyr-flake": "zephyr-flake"
       }
     },
@@ -988,6 +989,26 @@
       "original": {
         "owner": "pyproject-nix",
         "repo": "uv2nix",
+        "type": "github"
+      }
+    },
+    "workmux": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1784787797,
+        "narHash": "sha256-lLuYq+e8x+FqN8ZOquQCUP7OzgHNcsMmc3I1bHS5hc4=",
+        "owner": "raine",
+        "repo": "workmux",
+        "rev": "fe2a2249e6fa12bac7ab495d85c132786b90f2c5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "raine",
+        "repo": "workmux",
         "type": "github"
       }
     },
