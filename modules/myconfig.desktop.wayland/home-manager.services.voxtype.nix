@@ -78,6 +78,37 @@
       Mod+G hotkey-overlay-title="Voxtype (voice)" { spawn "voxtype" "record" "toggle"; }
     '';
 
+    # The upstream home-manager voxtype service starts at
+    # `default.target` and only sets WAYLAND_DISPLAY in the service
+    # Environment when `services.voxtype.wayland.display` is
+    # configured. On a niri session, WAYLAND_DISPLAY is imported into
+    # the systemd user environment by niri *after* `default.target`
+    # (login) but *before* `graphical-session.target` is activated —
+    # niri calls `systemctl --user import-environment WAYLAND_DISPLAY`
+    # and then notifies systemd it is ready, which activates
+    # `graphical-session.target` (niri.service has `Before=` it).
+    #
+    # So voxtype starts too early (at login), wtype cannot connect to
+    # the Wayland socket because WAYLAND_DISPLAY is not yet in the
+    # user manager environment, and every output method fails
+    # ("Wayland connection failed").
+    #
+    # Re-anchor the service to `graphical-session.target` (the same
+    # target clipboard-sync uses) so it starts only after niri has
+    # imported WAYLAND_DISPLAY. `WantedBy` is overridden with
+    # `mkForce` to *replace* the upstream `default.target` rather
+    # than merge with it — otherwise `default.target` would still try
+    # to start voxtype at login (before graphical-session.target is
+    # active) and the `Requisite=` would fail immediately.
+    systemd.user.services.voxtype = {
+      Unit = {
+        After = [ "graphical-session.target" ];
+        PartOf = lib.mkForce [ "graphical-session.target" ];
+        Requisite = [ "graphical-session.target" ];
+      };
+      Install.WantedBy = lib.mkForce [ "graphical-session.target" ];
+    };
+
     # Persist downloaded whisper models across reboots so the
     # voxtype-model-loader service doesn't re-download them.
     myconfig.persistence.cache-directories = [ ".local/share/voxtype/" ];
