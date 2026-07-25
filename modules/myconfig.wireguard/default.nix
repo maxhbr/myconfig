@@ -339,6 +339,7 @@ let
           pkgs.wireguard-tools
           pkgs.coreutils
           pkgs.gnugrep
+          pkgs.gawk
         ]
       }:$PATH
 
