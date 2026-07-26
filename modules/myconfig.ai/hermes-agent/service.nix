@@ -22,9 +22,33 @@
   ...
 }:
 let
-  # Default model base URL: LiteLLM on `thing`'s wg0 IP (port 4000).
-  # See hosts/host.thing/default.nix and hosts/host.thing/services.litellm.nix.
-  defaultModelBaseUrl = "http://${myconfig.metadatalib.getWgIp "thing"}:4000/v1";
+  # Auto-detect local LiteLLM proxy (same pattern as opencode and pi).
+  # Falls back to `thing`'s wg0 IP when no local proxy is present.
+  # NOTE: The local-proxy auto-detection only works for the native backend
+  # (services.hermes-agent running on the host). The container and microvm
+  # backends have isolated network namespaces where 127.0.0.1 does not reach
+  # the host's litellm. Hosts using those backends should override
+  # model.baseUrl explicitly or configure the container/microvm to forward
+  # the host's litellm port.
+  localLiteLlmBaseUrl =
+    if config.services.litellm.enable then
+      let
+        # Rewrite wildcard bind to localhost for in-host clients
+        # (same pattern as opencode/pi modules)
+        litellmHost =
+          if config.services.litellm.host == "0.0.0.0"
+          then "127.0.0.1"
+          else config.services.litellm.host;
+      in
+      "http://${litellmHost}:${toString config.services.litellm.port}/v1"
+    else
+      null;
+
+  defaultModelBaseUrl =
+    if localLiteLlmBaseUrl != null then
+      localLiteLlmBaseUrl
+    else
+      "http://${myconfig.metadatalib.getWgIp "thing"}:4000/v1";
 
   shared = import ./shared.nix {
     inherit
@@ -93,11 +117,17 @@ in
       baseUrl = mkOption {
         type = types.str;
         default = defaultModelBaseUrl;
-        defaultText = literalExpression ''"http://''${myconfig.metadatalib.getWgIp \"thing\"}:4000/v1"'';
+        defaultText = literalExpression ''
+          "http://127.0.0.1:4000/v1" when services.litellm is enabled,
+          otherwise "http://<thing-wg0-ip>:4000/v1"
+        '';
         description = ''
-          Base URL for the model provider. Defaults to LiteLLM on
-          `thing`'s wg0 IP. Override per-host to point at a different
-          OpenAI-compatible endpoint.
+          Base URL for the model provider. Auto-detects the local LiteLLM
+          proxy (localhost:4000) when `services.litellm.enable` is true
+          (same pattern as opencode and pi-coding-agent). Falls back to
+          LiteLLM on `thing`'s wg0 IP when no local proxy is present.
+          Override per-host to point at a different OpenAI-compatible
+          endpoint.
         '';
       };
     };
