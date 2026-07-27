@@ -16,22 +16,8 @@ let
   # without an explicit variable list. That bare form is deprecated by systemd
   # and on newer systemd versions aborts the session.
   # See https://github.com/niri-wm/niri/issues/254
-  # niri 26.04 vendors `libdisplay-info-sys 0.3.0`, which requires
-  # `libdisplay-info < 0.4.0`. The pinned nixpkgs bumped libdisplay-info to
-  # 0.4.0, breaking the build (pkg-config version constraint fails). Pin a
-  # compatible 0.3.0 for niri until the vendored crate is updated upstream.
-  # See https://gitlab.freedesktop.org/emersion/libdisplay-info
-  libdisplay-info-0_3 = pkgs.libdisplay-info.overrideAttrs (old: rec {
-    version = "0.3.0";
-    src = pkgs.fetchFromGitLab {
-      domain = "gitlab.freedesktop.org";
-      owner = "emersion";
-      repo = "libdisplay-info";
-      rev = version;
-      sha256 = "sha256-nXf2KGovNKvcchlHlzKBkAOeySMJXgxMpbi5z9gLrdc=";
-    };
-  });
-  niri = (pkgs.niri.override { libdisplay-info = libdisplay-info-0_3; }).overrideAttrs (old: {
+  # Use the upstream niri flake package (github:niri-wm/niri).
+  niri = inputs.niri.packages.${pkgs.system}.niri.overrideAttrs (old: {
     postInstall = (old.postInstall or "") + ''
       if [ -e "$out/bin/niri-session" ]; then
         substituteInPlace "$out/bin/niri-session" \
