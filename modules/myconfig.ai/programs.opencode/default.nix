@@ -2,10 +2,83 @@
   config,
   lib,
   pkgs,
+  jail,
   ...
 }:
 let
   osconfig = config;
+
+  callLib = file: import file { inherit lib pkgs; };
+  callJailLib =
+    file:
+    import file {
+      inherit
+        lib
+        pkgs
+        jail
+        osconfig
+        ;
+    };
+  jail-app = callJailLib ../fns/jail-app.nix;
+  mkWorkmuxWorktree = callLib ../fns/workmux-worktree.nix;
+
+  # home-manager uses `useGlobalPkgs`, so `pkgs.opencode` is the same package
+  # `programs.opencode.package` defaults to. Building the wrappers at the
+  # NixOS scope lets us register the workmux named agents from here.
+  opencodeBwrap = callLib ../fns/sandboxed-app.nix {
+    name = "opencode";
+    pkg = pkgs.opencode;
+    writableDirs = [
+      ".config/opencode"
+      ".config/mcp"
+    ];
+  };
+  # `jailed-opencode` is an alternative to `opencodeBwrap` that uses the
+  # jail.nix library instead of a hand-rolled bubblewrap wrapper. See
+  # `../fns/jail-app.nix` for the shared defaults.
+  jailed-opencode = jail-app {
+    name = "jailed-opencode";
+    pkg = pkgs.opencode;
+    userDataDirs = [
+      ".config/opencode"
+      ".local/share/opencode"
+      ".local/state/opencode"
+      ".config/mcp"
+    ];
+  };
+  # Worktree variant of `jailed-opencode`: additionally binds the linked main
+  # repository read-only and remounts its shared `.git` read-write, resolved
+  # at runtime from the WORKTREE_* env vars set by the workmux launcher.
+  jailed-opencode-worktree-inner = jail-app {
+    name = "jailed-opencode-worktree-inner";
+    pkg = pkgs.opencode;
+    userDataDirs = [
+      ".config/opencode"
+      ".local/share/opencode"
+      ".local/state/opencode"
+      ".config/mcp"
+    ];
+    extraReadOnlyEnvPaths = [ "WORKTREE_MAIN_REPO" ];
+    extraReadWriteEnvPaths = [ "WORKTREE_GIT_DIR" ];
+  };
+  opencodeWorktree = mkWorkmuxWorktree {
+    name = "opencode-worktree";
+    agentName = "opencode";
+    agentType = "opencode";
+    innerPkg = opencodeBwrap;
+    workmuxPkg = osconfig.myconfig.ai.workmux.package;
+    mainRepoEnv = "WORKTREE_MAIN_REPO";
+    gitDirEnv = "WORKTREE_GIT_DIR";
+  };
+  jailedOpencodeWorktree = mkWorkmuxWorktree {
+    name = "jailed-opencode-worktree";
+    agentName = "jailed-opencode";
+    agentType = "opencode";
+    innerPkg = jailed-opencode-worktree-inner;
+    workmuxPkg = osconfig.myconfig.ai.workmux.package;
+    mainRepoEnv = "WORKTREE_MAIN_REPO";
+    gitDirEnv = "WORKTREE_GIT_DIR";
+  };
 
   # Build a lookup: model name (raw or provider-prefixed) -> contextWindow.
   contextWindowLookup = lib.listToAttrs (
@@ -43,50 +116,16 @@ in
   };
   config = lib.mkIf config.myconfig.ai.opencode.enable {
     myconfig.ai.skills.playwright.enable = lib.mkDefault true;
+    myconfig.ai.workmux.agents.opencode = opencodeWorktree.agent;
+    myconfig.ai.workmux.agents.jailed-opencode = jailedOpencodeWorktree.agent;
     home-manager.sharedModules = [
       (
         {
           config,
           lib,
           pkgs,
-          jail,
           ...
         }:
-        let
-          callLib = file: import file { inherit lib pkgs; };
-          callJailLib =
-            file:
-            import file {
-              inherit
-                lib
-                pkgs
-                jail
-                osconfig
-                ;
-            };
-          opencodeBwrap = callLib ../fns/sandboxed-app.nix {
-            name = "opencode";
-            pkg = config.programs.opencode.package;
-            writableDirs = [
-              ".config/opencode"
-              ".config/mcp"
-            ];
-          };
-          jail-app = callJailLib ../fns/jail-app.nix;
-          # `jailed-opencode` is an alternative to `opencodeBwrap` that uses
-          # the jail.nix library instead of a hand-rolled bubblewrap wrapper.
-          # See `../fns/jail-app.nix` for the shared defaults.
-          jailed-opencode = jail-app {
-            name = "jailed-opencode";
-            pkg = config.programs.opencode.package;
-            userDataDirs = [
-              ".config/opencode"
-              ".local/share/opencode"
-              ".local/state/opencode"
-              ".config/mcp"
-            ];
-          };
-        in
         {
           programs.mcp.enable = true;
           programs.opencode = {
@@ -299,48 +338,8 @@ in
                 cd "$(mktemp -d)" && exec ${lib.getExe jailed-opencode} "$@"
               '';
             })
-            (pkgs.writeShellApplication {
-              name = "opencode-worktree";
-              runtimeInputs = with pkgs; [
-                git
-                coreutils
-              ];
-              text = ''
-                if [ ! -d .git ]; then
-                  echo "Error: Not in a git repository root"
-                  exit 1
-                fi
-
-                timestamp=$(date +%s)
-                dirname=$(basename "$(pwd)")
-                worktree_name="''${dirname}-opencode-''${timestamp}"
-                branch_name="opencode-''${timestamp}"
-
-                git worktree add -b "''${branch_name}" "../''${worktree_name}" || exit 1
-                cd "../''${worktree_name}" && exec ${lib.getExe opencodeBwrap} "$@"
-              '';
-            })
-            (pkgs.writeShellApplication {
-              name = "jailed-opencode-worktree";
-              runtimeInputs = with pkgs; [
-                git
-                coreutils
-              ];
-              text = ''
-                if [ ! -d .git ]; then
-                  echo "Error: Not in a git repository root"
-                  exit 1
-                fi
-
-                timestamp=$(date +%s)
-                dirname=$(basename "$(pwd)")
-                worktree_name="''${dirname}-opencode-''${timestamp}"
-                branch_name="opencode-''${timestamp}"
-
-                git worktree add -b "''${branch_name}" "../''${worktree_name}" || exit 1
-                cd "../''${worktree_name}" && exec ${lib.getExe jailed-opencode} "$@"
-              '';
-            })
+            opencodeWorktree.wrapper
+            jailedOpencodeWorktree.wrapper
           ];
         }
       )

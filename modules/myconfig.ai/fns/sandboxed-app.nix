@@ -101,6 +101,19 @@ pkgs.writeShellApplication {
       fi
     done
 
+    # Worktree support: when launched from a git worktree (e.g. via a workmux
+    # `*-worktree` wrapper) the current directory's `.git` is a file pointing
+    # into the linked main repository's `.git/worktrees/<name>/`. Bind the main
+    # repo read-only and remount its shared git dir read-write so git works
+    # inside the sandbox. The launcher sets these env vars; they are ignored
+    # for plain (non-worktree) invocations.
+    if [ -n "''${WORKTREE_MAIN_REPO:-}" ] && [ -e "''${WORKTREE_MAIN_REPO}" ]; then
+      args+=( --ro-bind "$WORKTREE_MAIN_REPO" "$WORKTREE_MAIN_REPO" )
+    fi
+    if [ -n "''${WORKTREE_GIT_DIR:-}" ] && [ -e "''${WORKTREE_GIT_DIR}" ]; then
+      args+=( --bind "$WORKTREE_GIT_DIR" "$WORKTREE_GIT_DIR" )
+    fi
+
     exec ${lib.getExe pkgs.bubblewrap} "''${args[@]}" -- ${lib.getExe pkg} "$@"
   '';
 

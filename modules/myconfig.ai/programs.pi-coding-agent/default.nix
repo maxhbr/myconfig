@@ -479,6 +479,31 @@ let
     # This bind is emitted after the read-only main-repo bind by jail-app.
     extraReadWriteEnvPaths = [ "PI_WORKTREE_GIT_DIR" ];
   };
+
+  # Thin workmux-driven replacement for the previous bespoke worktree script.
+  # `mkWorkmuxWorktree` builds the launcher run inside the worktree pane (which
+  # resolves the shared git dir, exports PI_WORKTREE_* and execs
+  # `jailed-pi-worktree-inner`) and the user-facing `jailed-pi-worktree`
+  # wrapper (which requires tmux and calls `workmux add --agent jailed-pi`).
+  mkWorkmuxWorktree = callLib ../fns/workmux-worktree.nix;
+  jailedPiWorktree = mkWorkmuxWorktree {
+    name = "jailed-pi-worktree";
+    agentName = "jailed-pi";
+    agentType = "pi";
+    innerPkg = jailed-pi-worktree-inner;
+    workmuxPkg = osconfig.myconfig.ai.workmux.package;
+  };
+  # Non-jailed variant driving the bubblewrap `piBwrap` wrapper. It exposes
+  # the worktree's shared git dir via the sandboxed-app `WORKTREE_*` env vars.
+  piWorktree = mkWorkmuxWorktree {
+    name = "pi-worktree";
+    agentName = "pi";
+    agentType = "pi";
+    innerPkg = piBwrap;
+    workmuxPkg = osconfig.myconfig.ai.workmux.package;
+    mainRepoEnv = "WORKTREE_MAIN_REPO";
+    gitDirEnv = "WORKTREE_GIT_DIR";
+  };
 in
 {
   options.myconfig = with lib; {
@@ -487,6 +512,10 @@ in
     };
   };
   config = lib.mkIf config.myconfig.ai.pi-coding-agent.enable {
+    # Register the jailed worktree launcher as a workmux "named agent" so
+    # `jailed-pi-worktree` (below) can `workmux add --agent jailed-pi`.
+    myconfig.ai.workmux.agents.jailed-pi = jailedPiWorktree.agent;
+    myconfig.ai.workmux.agents.pi = piWorktree.agent;
     home-manager.sharedModules = [
       {
         myconfig.persistence.directories = [ ".pi" ];
@@ -532,294 +561,8 @@ in
               cd "$(mktemp -d)" && exec ${lib.getExe jailed-pi} "$@"
             '';
           })
-          (pkgs.writeShellApplication {
-            name = "pi-worktree";
-            runtimeInputs = with pkgs; [
-              git
-              coreutils
-            ];
-            text = ''
-              if [ ! -d .git ]; then
-                echo "Error: Not in a git repository root"
-                exit 1
-              fi
-
-              timestamp=$(date +%s)
-              dirname=$(basename "$(pwd)")
-              worktree_parent="../''${dirname}-worktrees"
-              branch_name="pi-''${timestamp}-$$"
-              worktree_dir="''${worktree_parent}/''${branch_name}"
-
-              mkdir -p "$worktree_parent"
-              git worktree add -b "''${branch_name}" "$worktree_dir" || exit 1
-              cd "$worktree_dir" && exec ${lib.getExe piBwrap} "$@"
-            '';
-          })
-          (pkgs.writeShellApplication {
-            name = "jailed-pi-worktree";
-            runtimeInputs = with pkgs; [
-              git
-              coreutils
-            ];
-            text = ''
-              if [ ! -d .git ]; then
-                echo "Error: Not in a git repository root"
-                exit 1
-              fi
-
-              # An optional first positional argument that does not start
-              # with "-" is consumed as a human-readable suffix for the
-              # branch name (e.g. "jailed-pi-worktree refactor auth" creates
-              # branch "pi-<ts>-<pid>-refactor-auth"). Everything else is
-              # forwarded to pi. Arguments beginning with "-" are always
-              # pi flags and are left untouched.
-              branch_suffix=""
-              if [ "$#" -gt 0 ] && ! case "$1" in -*) ;; *) false ;; esac; then
-                branch_suffix="$1"
-                shift
-              fi
-
-              # Normalize the suffix so the resulting branch name is a valid
-              # git ref: replace every character outside [A-Za-z0-9._/-] with
-              # "-", collapse runs of "-", ".", "/", then strip leading /
-              # trailing "-", ".", "/" and the forbidden ".lock" suffix.
-              if [ -n "$branch_suffix" ]; then
-                branch_suffix=$(printf "%s" "$branch_suffix" \
-                  | tr -c "A-Za-z0-9._/-" "-" \
-                  | tr -s -- "-./")
-                while case "$branch_suffix" in -*|.*|/*) true ;; *) false ;; esac; do
-                  branch_suffix="''${branch_suffix#-}"
-                  branch_suffix="''${branch_suffix#.}"
-                  branch_suffix="''${branch_suffix#/}"
-                done
-                while case "$branch_suffix" in *-|*.|*/|*.lock) true ;; *) false ;; esac; do
-                  branch_suffix="''${branch_suffix%-}"
-                  branch_suffix="''${branch_suffix%.}"
-                  branch_suffix="''${branch_suffix%/}"
-                  branch_suffix="''${branch_suffix%.lock}"
-                done
-              fi
-
-              timestamp=$(date +%s)
-              dirname=$(basename "$(pwd)")
-              worktree_parent="../''${dirname}-worktrees"
-              if [ -n "$branch_suffix" ]; then
-                branch_name="pi-''${timestamp}-$$-''${branch_suffix}"
-              else
-                branch_name="pi-''${timestamp}-$$"
-              fi
-              worktree_dir="''${worktree_parent}/''${branch_name}"
-
-              mkdir -p "$worktree_parent"
-              git worktree add -b "''${branch_name}" "$worktree_dir" || exit 1
-
-              # Resolve every path to an absolute location now, so the EXIT
-              # trap and the generated resume/cleanup scripts work regardless
-              # of the current working directory (the wrapper cd's into the
-              # worktree before launching the agent, which would otherwise
-              # break the relative paths).
-              main_repo="$(pwd -P)"
-              worktree_parent="$(cd "$worktree_parent" && pwd -P)"
-              worktree_dir="$(cd "$worktree_dir" && pwd -P)"
-              resume_script="''${worktree_parent}/''${branch_name}.resume.sh"
-              cleanup_script="''${worktree_parent}/''${branch_name}.cleanup.sh"
-
-              # Export the canonical path of the linked main repository. The
-              # worktree jail binds that checkout read-only, then remounts its
-              # `.git` directory read-write so Git can create objects, refs,
-              # locks, and worktree metadata.
-              export PI_WORKTREE_MAIN_REPO="''${main_repo}"
-              export PI_WORKTREE_GIT_DIR="''${main_repo}/.git"
-
-              # These scripts live beside the worktree, keeping lifecycle
-              # helpers out of its Git status.
-              cat > "$resume_script" <<EOF
-              #!/usr/bin/env bash
-              set -euo pipefail
-              # Resume this worktree's Pi session. Generated by jailed-pi-worktree.
-              cd "''${worktree_dir}"
-              export PI_WORKTREE_MAIN_REPO="''${main_repo}"
-              export PI_WORKTREE_GIT_DIR="''${main_repo}/.git"
-              exec ${lib.getExe jailed-pi-worktree-inner} -c "\$@"
-              EOF
-              cat > "$cleanup_script" <<EOF
-              #!/usr/bin/env bash
-              set -euo pipefail
-              # Remove this worktree and its branch. Generated by jailed-pi-worktree.
-              # Usage: $cleanup_script [--merge|--ff-merge|--no-merge] [--force|-f]
-              #   --merge      : merge the branch with a normal (non-ff) merge before cleanup
-              #   --ff-merge   : merge with --ff-only (fails if the branch is not a fast-forward)
-              #   --no-merge   : skip merging (require the branch to already be merged, unless --force)
-              #   --force|-f   : remove even if dirty / detached / unmerged
-              # If a merge or cleanup step fails (e.g. conflicts, dirty tree),
-              # the user is given time to resolve the issue and the whole flow
-              # (prompt + merge + remove) is retried from the beginning.
-              force=0
-              merge=0
-              merge_mode="normal"
-              prompt_merge=1
-              for a in "\$@"; do
-                case "\$a" in
-                  --merge) merge=1; merge_mode="normal"; prompt_merge=0 ;;
-                  --ff-merge|--ff-only-merge) merge=1; merge_mode="ff-only"; prompt_merge=0 ;;
-                  --no-merge) merge=0; prompt_merge=0 ;;
-                  --force|-f) force=1 ;;
-                  *) echo "unknown argument: \$a" >&2; exit 2 ;;
-                esac
-              done
-
-              worktree_dir="''${worktree_dir}"
-              worktree_parent="''${worktree_parent}"
-              main_repo="''${main_repo}"
-              branch="''${branch_name}"
-
-              # --- retry loop: re-prompt + re-run merge/cleanup on failure ---
-              while true; do
-                echo "worktree: \$worktree_dir"
-                echo "branch:   \$branch"
-
-                # Re-determine the merge decision on each iteration when the
-                # caller did not pin it via a flag.
-                cur_merge=\$merge
-                cur_merge_mode=\$merge_mode
-                if [ "\$prompt_merge" -eq 1 ]; then
-                  read -r -p "Merge \$branch into the main branch before cleanup? [y]es, [f]f-only, [m]erge, [N]o: " answer
-                  case "\$answer" in
-                    [yY]|[yY][eE][sS]) cur_merge=1; cur_merge_mode="normal" ;;
-                    [fF]|[fF][fF]|[fF][aA][sS][tT]*) cur_merge=1; cur_merge_mode="ff-only" ;;
-                    [mM]|[mM][eE][rR][gG][eE]) cur_merge=1; cur_merge_mode="normal" ;;
-                    *) cur_merge=0 ;;
-                  esac
-                fi
-
-                if [ "\$cur_merge" -eq 1 ]; then
-                  if ! case "\$cur_merge_mode" in
-                    ff-only) git -C "\$main_repo" merge --ff-only "\$branch" ;;
-                    *) git -C "\$main_repo" merge "\$branch" ;;
-                  esac; then
-                    echo
-                    echo "merge failed. Resolve the issue (e.g. 'git -C \"\$main_repo\" merge --abort') and retry." >&2
-                    # Only interactive sessions can retry; pinned flags exit instead.
-                    if [ "\$prompt_merge" -eq 1 ] && [ -t 0 ]; then
-                      read -r -p "Press Enter to retry, or 'q' to quit: " answer
-                      case "\$answer" in [qQ]|[qQ][uU][iI][tT]) exit 1 ;; esac
-                      continue
-                    fi
-                    exit 1
-                  fi
-                fi
-
-                err=0
-                if [ "\$force" -eq 0 ]; then
-                  if [ -d "\$worktree_dir/.git" ] || git -C "\$main_repo" worktree list --porcelain | grep -q "\$worktree_dir"; then
-                    dirty="\$(git -C "\$worktree_dir" status --porcelain 2>/dev/null || true)"
-                    if [ -n "\$dirty" ]; then
-                      echo "worktree has uncommitted or untracked changes:" >&2
-                      echo "\$dirty" >&2
-                      echo "use --force to remove anyway" >&2
-                      err=1
-                    elif [ "\$branch" = "HEAD" ]; then
-                      echo "worktree is in detached HEAD state; use --force to remove" >&2
-                      err=1
-                    elif ! git -C "\$main_repo" merge-base --is-ancestor "\$branch" HEAD; then
-                      echo "branch \$branch is not merged into the current main-repo HEAD; refusing to delete. Use --merge or --force." >&2
-                      err=1
-                    else
-                      # Worktree is clean and branch is already merged into HEAD.
-                      # Auto-delete without prompting.
-                      echo "worktree is clean and branch is already merged; removing automatically." >&2
-                    fi
-                  fi
-                  if [ "\$err" -ne 0 ]; then
-                    if [ "\$prompt_merge" -eq 1 ] && [ -t 0 ]; then
-                      echo
-                      read -r -p "Cleanup blocked. Press Enter to retry, or 'q' to quit: " answer
-                      case "\$answer" in [qQ]|[qQ][uU][iI][tT]) exit 1 ;; esac
-                      continue
-                    fi
-                    exit 1
-                  fi
-                fi
-
-                cd "\$main_repo"
-                if [ "\$force" -eq 1 ]; then
-                  rm_err=0
-                  git worktree remove --force "\$worktree_dir" 2>/dev/null || rm_err=1
-                  git branch -D "\$branch" 2>/dev/null || true
-                else
-                  rm_err=0
-                  # Tolerate an already-removed worktree (e.g. after a partial
-                  # cleanup on a previous iteration) so retries stay safe.
-                  if git -C "\$main_repo" worktree list --porcelain | grep -q "\$worktree_dir"; then
-                    git worktree remove "\$worktree_dir" || rm_err=1
-                  fi
-                  if [ "\$rm_err" -eq 0 ]; then
-                    git branch -d "\$branch" 2>/dev/null || rm_err=1
-                  fi
-                fi
-                if [ "\$rm_err" -ne 0 ]; then
-                  echo "worktree/branch removal failed." >&2
-                  if [ "\$prompt_merge" -eq 1 ] && [ -t 0 ]; then
-                    echo
-                    read -r -p "Press Enter to retry, or 'q' to quit: " answer
-                    case "\$answer" in [qQ]|[qQ][uU][iI][tT]) exit 1 ;; esac
-                    continue
-                  fi
-                  exit 1
-                fi
-
-                rm -f "$resume_script" "$cleanup_script"
-                git worktree prune || true
-                # Remove the "...-worktrees" parent directory if it is now empty
-                # (i.e. this was the last worktree). rmdir only succeeds on an
-                # empty directory, so failures are silently ignored.
-                rmdir "\$worktree_parent" 2>/dev/null || true
-                echo "removed worktree: \$worktree_dir"
-                echo "removed branch:   \$branch"
-                exit 0
-              done
-              EOF
-              chmod +x "$resume_script" "$cleanup_script"
-
-              # shellcheck disable=SC2329 # Invoked by the EXIT trap below.
-              cleanup_on_exit() {
-                exit_status=$?
-                trap - EXIT
-                if [ -t 0 ]; then
-                  echo "worktree: $worktree_dir"
-                  echo "branch:   $branch_name"
-                  while true; do
-                    printf 'Pi session ended. Cleanup worktree? [y]es, [m]erge and cleanup, [f]ast-forward merge and cleanup, [N]o: '
-                    if ! read -r answer; then
-                      break
-                    fi
-                    case "$answer" in
-                      [yY]|[yY][eE][sS]) "$cleanup_script" --no-merge || true ;;
-                      [mM]|[mM][eE][rR][gG][eE]) "$cleanup_script" --merge || true ;;
-                      [fF]|[fF][fF]|[fF][aA][sS][tT]*) "$cleanup_script" --ff-merge || true ;;
-                      *) break ;;
-                    esac
-                    # If the cleanup script succeeded it removed itself; a
-                    # missing cleanup_script means we are done. Otherwise the
-                    # script failed and we re-ask the same question.
-                    if [ ! -f "$cleanup_script" ]; then
-                      break
-                    fi
-                    echo
-                    echo "cleanup did not complete. You can resolve the issue and retry." >&2
-                  done
-                fi
-                exit "$exit_status"
-              }
-              trap cleanup_on_exit EXIT
-
-              set +e
-              cd "$worktree_dir" && ${lib.getExe jailed-pi-worktree-inner} "$@"
-              session_status=$?
-              set -e
-              exit "$session_status"
-            '';
-          })
+          piWorktree.wrapper
+          jailedPiWorktree.wrapper
         ];
       }
     ];
