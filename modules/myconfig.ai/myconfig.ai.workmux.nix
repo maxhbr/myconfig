@@ -197,6 +197,12 @@ in
     settings = lib.mkOption {
       type = yamlFormat.type;
       default = {
+        # Nerdfonts are available in this terminal setup, so pin the icon
+        # setting declaratively. Without an explicit `nerdfont` key workmux
+        # runs an interactive "Nerdfont Setup" prompt on first use (when no
+        # PUA glyphs are present in the config), which blocks non-interactive
+        # worktree creation. `true` enables the nicer nerdfont glyphs.
+        nerdfont = true;
         # Default pane layout for `workmux add`: a single focused pane running
         # the selected agent (via the `<agent>` placeholder). Without this,
         # workmux only auto-launches an agent for projects that have a

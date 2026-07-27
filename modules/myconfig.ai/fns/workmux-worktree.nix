@@ -92,7 +92,11 @@ let
 
   wrapper = pkgs.writeShellApplication {
     inherit name;
-    runtimeInputs = [ workmuxPkg ];
+    runtimeInputs = [
+      workmuxPkg
+      pkgs.coreutils
+      pkgs.gnused
+    ];
     text = ''
       # workmux drives git worktrees *and* tmux windows; it is useless (and
       # errors deep inside) without a tmux server. Fail fast with a clear
@@ -103,9 +107,33 @@ let
         exit 1
       fi
 
-      # Everything after the command name is forwarded verbatim to
-      # `workmux add`: the branch name plus any workmux flags such as
-      # -p/--prompt, --base, -A/--auto-name, -b/--background, ...
+      # The first positional argument is workmux's branch name (it becomes a
+      # real git branch via `git worktree add -b <name>`). Free-form task
+      # descriptions like `${name} "Worktree test"` therefore fail git's
+      # ref-name validation (no spaces, no leading dash, ...). To keep the
+      # ergonomic "type a short description" flow working, slugify that first
+      # positional into a valid git branch name when it is present and is not
+      # itself a flag. All remaining arguments (including workmux flags such as
+      # -p/--prompt, --base, -A/--auto-name, ...) are forwarded verbatim.
+      if [ "$#" -gt 0 ] && [ "''${1#-}" = "$1" ]; then
+        raw="$1"
+        shift
+        slug="$(printf '%s' "$raw" \
+          | tr '[:upper:]' '[:lower:]' \
+          | sed -e 's#[^a-z0-9._/-]\+#-#g' \
+                -e 's#-\+#-#g' \
+                -e 's#^[-./]\+##' \
+                -e 's#[-./]\+$##')"
+        if [ -z "$slug" ]; then
+          echo "${name}: could not derive a valid branch name from '$raw'." >&2
+          exit 1
+        fi
+        if [ "$slug" != "$raw" ]; then
+          echo "${name}: using branch name '$slug' (from '$raw')." >&2
+        fi
+        set -- "$slug" "$@"
+      fi
+
       exec workmux add --agent ${agentName} "$@"
     '';
   };
