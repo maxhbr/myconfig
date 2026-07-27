@@ -12,10 +12,15 @@ let
   # `pkgs.codex` is the same package `programs.codex.package` defaults to) so
   # the workmux launcher and its named-agent registration can be assembled
   # here and merged into `myconfig.ai.workmux.agents`.
+  # Make the `workmux` binary available inside the sandbox (for the
+  # `workmux set-window-status` status hooks and `workmux merge`/`remove` from
+  # a worktree pane) whenever workmux is enabled.
+  workmuxDevTools = lib.optional osconfig.myconfig.ai.workmux.enable osconfig.myconfig.ai.workmux.package;
   codexBwrap = callLib ../fns/sandboxed-app.nix {
     name = "codex";
     pkg = pkgs.codex;
     writableDirs = [ ".config/codex" ];
+    extraRuntimeInputs = workmuxDevTools;
   };
   mkWorkmuxWorktree = callLib ../fns/workmux-worktree.nix;
   # `codex-worktree` is now a thin workmux wrapper: it requires tmux and runs

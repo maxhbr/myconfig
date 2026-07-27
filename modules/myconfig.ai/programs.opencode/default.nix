@@ -22,6 +22,11 @@ let
   jail-app = callJailLib ../fns/jail-app.nix;
   mkWorkmuxWorktree = callLib ../fns/workmux-worktree.nix;
 
+  # Make the `workmux` binary available inside the sandboxes (for the
+  # `workmux set-window-status` status hooks and `workmux merge`/`remove` from
+  # a worktree pane) whenever workmux is enabled.
+  workmuxDevTools = lib.optional osconfig.myconfig.ai.workmux.enable osconfig.myconfig.ai.workmux.package;
+
   # home-manager uses `useGlobalPkgs`, so `pkgs.opencode` is the same package
   # `programs.opencode.package` defaults to. Building the wrappers at the
   # NixOS scope lets us register the workmux named agents from here.
@@ -32,6 +37,7 @@ let
       ".config/opencode"
       ".config/mcp"
     ];
+    extraRuntimeInputs = workmuxDevTools;
   };
   # `jailed-opencode` is an alternative to `opencodeBwrap` that uses the
   # jail.nix library instead of a hand-rolled bubblewrap wrapper. See
@@ -45,6 +51,7 @@ let
       ".local/state/opencode"
       ".config/mcp"
     ];
+    extraDevTools = workmuxDevTools;
   };
   # Worktree variant of `jailed-opencode`: additionally binds the linked main
   # repository read-only and remounts its shared `.git` read-write, resolved
@@ -58,6 +65,7 @@ let
       ".local/state/opencode"
       ".config/mcp"
     ];
+    extraDevTools = workmuxDevTools;
     extraReadOnlyEnvPaths = [ "WORKTREE_MAIN_REPO" ];
     extraReadWriteEnvPaths = [ "WORKTREE_GIT_DIR" ];
   };

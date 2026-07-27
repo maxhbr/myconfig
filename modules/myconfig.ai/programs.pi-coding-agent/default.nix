@@ -23,6 +23,14 @@ let
     };
   jail-app = callJailLib ../fns/jail-app.nix;
 
+  # Make the `workmux` binary available *inside* the agent sandboxes (jail and
+  # bubblewrap) whenever workmux is enabled. The status-tracking hooks/
+  # extensions installed by `myconfig.ai.workmux` all shell out to
+  # `workmux set-window-status`, and worktree agents may run `workmux merge` /
+  # `workmux remove --keep-branch` from their pane, so the binary must resolve
+  # on PATH inside the sandbox (empty list on hosts without workmux).
+  workmuxDevTools = lib.optional osconfig.myconfig.ai.workmux.enable osconfig.myconfig.ai.workmux.package;
+
   # Build a lookup: model name (raw or provider-prefixed) -> contextWindow.
   # Covers both direct local-provider lookups (raw name) and
   # LiteLLM lookups (providerName:modelName).
@@ -416,7 +424,8 @@ let
       pkgs.wget
       pkgs.curl
       pkgs.jq
-    ];
+    ]
+    ++ workmuxDevTools;
     writableDirs = [
       ".pi"
     ];
@@ -450,6 +459,7 @@ let
     # untouched (after self-healing any legacy marker corruption); when unset
     # (un-jailed) it applies the red-border `unjailed` theme in-memory only.
     extraRuntimeEnv.PI_JAIL_MARKER = "1";
+    extraDevTools = workmuxDevTools;
     # Bind the host path named by `PI_WORKTREE_MAIN_REPO` read-only into the
     # jail. The `*-worktree` wrapper scripts set this to the *original* git
     # repository (the worktree's linked main repo) before exec'ing `jailed-pi`,
@@ -474,6 +484,7 @@ let
     pkg = pkgs.nixos-unstable.pi-coding-agent;
     userDataDirs = [ ".pi" ];
     extraConfigDirs = [ ".agents" ];
+    extraDevTools = workmuxDevTools;
     extraRuntimeEnv.PI_JAIL_MARKER = "1";
     extraReadOnlyEnvPaths = [ "PI_WORKTREE_MAIN_REPO" ];
     # This bind is emitted after the read-only main-repo bind by jail-app.

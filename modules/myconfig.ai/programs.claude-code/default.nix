@@ -22,6 +22,11 @@ let
   jail-app = callJailLib ../fns/jail-app.nix;
   mkWorkmuxWorktree = callLib ../fns/workmux-worktree.nix;
 
+  # Make the `workmux` binary available inside the sandboxes (for the
+  # `workmux set-window-status` status hooks and `workmux merge`/`remove` from
+  # a worktree pane) whenever workmux is enabled.
+  workmuxDevTools = lib.optional osconfig.myconfig.ai.workmux.enable osconfig.myconfig.ai.workmux.package;
+
   # home-manager uses `useGlobalPkgs`, so `pkgs.claude-code` is the same
   # package `programs.claude-code.package` defaults to. Building the wrappers
   # at the NixOS scope lets us register the workmux named agents from here.
@@ -33,6 +38,7 @@ let
       ".config/claude-code"
       ".config/mcp"
     ];
+    extraRuntimeInputs = workmuxDevTools;
   };
   # `jailed-claude` is an alternative to `claudeCodeBwrap` that uses the
   # jail.nix library instead of a hand-rolled bubblewrap wrapper. See
@@ -48,6 +54,7 @@ let
     userDataFiles = [
       ".claude.json"
     ];
+    extraDevTools = workmuxDevTools;
   };
   # Worktree variant of `jailed-claude`: additionally binds the linked main
   # repository read-only and remounts its shared `.git` read-write, resolved
@@ -63,6 +70,7 @@ let
     userDataFiles = [
       ".claude.json"
     ];
+    extraDevTools = workmuxDevTools;
     extraReadOnlyEnvPaths = [ "WORKTREE_MAIN_REPO" ];
     extraReadWriteEnvPaths = [ "WORKTREE_GIT_DIR" ];
   };
