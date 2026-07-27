@@ -84,7 +84,24 @@ in
       # /run/j2hc-<name>: Read-only file system"). /tmp is a host-backed
       # writable bind in every jail-app wrapper (persistentTmp), so the mount
       # point can be created there.
-      (ro-bind (noescape "\"\$${varPrefix}_TMP/fifo\"") "/tmp/j2hc-${jailTxName}")
+      #
+      # LOCAL PATCH (myconfig): emit the FIFO bind as a *runtime* arg
+      # (appended to $RUNTIME_ARGS) instead of a static `ro-bind`
+      # (`unsafe-add-raw-args`, which is placed in the bwrap command *before*
+      # "''${RUNTIME_ARGS[@]}"). jail-app's `persistentTmp` overmounts /tmp via
+      # a runtime `--bind /tmp/<name> /tmp`; because that runs from
+      # $RUNTIME_ARGS it would be applied *after* a static fifo bind and
+      # shadow it, so `/tmp/j2hc-<name>` inside the jail would resolve to a
+      # plain file in the persistentTmp dir rather than the FIFO and every
+      # message silently went nowhere. Emitting the fifo bind into
+      # $RUNTIME_ARGS here (after the persistentTmp bind, since this
+      # combinator is appended via `extraPermissions`) makes bwrap apply it
+      # last, so it wins over the /tmp overmount. Writing to a FIFO through a
+      # read-only bind mount is permitted by the kernel (mount RO only blocks
+      # filesystem writes, not pipe writes).
+      (add-runtime ''
+        RUNTIME_ARGS+=(--ro-bind "''$${varPrefix}_TMP/fifo" /tmp/j2hc-${jailTxName})
+      '')
       (add-pkg-deps [
         (pkgs.writeShellApplication {
           name = jailTxName;
