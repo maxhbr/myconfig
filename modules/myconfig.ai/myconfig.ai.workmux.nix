@@ -106,22 +106,22 @@ let
     text = ''
       session=workmux
 
-      # Create the session detached if it does not exist yet, remembering
-      # whether we just created it so the dashboard/sidebar are only added on
-      # first creation (not on every re-attach).
-      newly_created=0
+      # Create the session detached if it does not exist yet.
       if ! tmux has-session -t "=$session" 2>/dev/null; then
         tmux new-session -d -s "$session"
-        newly_created=1
       fi
 
-      # For a freshly created session, launch the persistent status sidebar and
-      # then the TUI dashboard in its main pane. Both run inside the session's
-      # own tmux context via send-keys, in one command sequence so the
-      # dashboard lands in the original shell pane regardless of the pane the
-      # sidebar activates.
-      if [ "$newly_created" -eq 1 ]; then
-        tmux send-keys -t "=$session" 'workmux sidebar --session; workmux dashboard' Enter
+      # Bootstrap the sidebar + dashboard once, tracked via a session option so
+      # a half-created session (e.g. from an older, buggy version) still gets
+      # its dashboard on the next run instead of a bare shell.
+      #
+      # `send-keys` takes a *pane* target and tmux only strips the `=`
+      # exact-match prefix for session/window targets, so `-t "=$session"`
+      # fails inside tmux with `can't find pane: =workmux`. The trailing colon
+      # (`=$session:`) forces session resolution and uses its active pane.
+      if [ "$(tmux show-options -t "=$session:" -qv @workmux_bootstrapped)" != 1 ]; then
+        tmux set-option -t "=$session:" @workmux_bootstrapped 1
+        tmux send-keys -t "=$session:" 'workmux sidebar --session; workmux dashboard' Enter
       fi
 
       # Switch when already inside tmux (attach cannot be nested), attach
