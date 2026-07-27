@@ -44,6 +44,7 @@ in
 
   imports = [
     ./client.dcgm-exporter.nix
+    ./client.amd-smi-exporter.nix
     ./client.system-age.nix
     ./client.co2-exporter.nix
     ./client.weather-exporter.nix

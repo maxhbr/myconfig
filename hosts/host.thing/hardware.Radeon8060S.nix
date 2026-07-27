@@ -8,6 +8,7 @@
 }:
 {
   imports = [
+    ./myconfig.observability.amd-smi-exporter.nix
   ];
   config = {
     boot.kernelParams = [
