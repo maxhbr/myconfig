@@ -63,6 +63,12 @@
   # read-only) and shared git dir (bound read-write) are handed to `innerPkg`.
   mainRepoEnv ? "PI_WORKTREE_MAIN_REPO",
   gitDirEnv ? "PI_WORKTREE_GIT_DIR",
+
+  # Arguments passed to the inner agent when *resuming in place* — i.e. when
+  # the user runs `<name>` with no arguments from inside an existing linked
+  # worktree (see the wrapper below). For pi/claude this is `--continue`,
+  # which re-attaches to the most recent session in the current directory.
+  resumeArgs ? [ "--continue" ],
 }:
 
 let
@@ -94,10 +100,32 @@ let
     inherit name;
     runtimeInputs = [
       workmuxPkg
+      pkgs.git
       pkgs.coreutils
       pkgs.gnused
     ];
     text = ''
+      # Resume-in-place: when invoked with *no arguments* from inside an
+      # existing linked git worktree, do not create a new worktree. Instead
+      # re-run the inner launcher directly in the current directory, which
+      # re-resolves and re-binds the same shared git dir (i.e. the same
+      # mounts) and resumes the previous agent session (``resumeArgs``).
+      #
+      # A *linked* worktree is detected by comparing the per-worktree git dir
+      # (`--git-dir`, e.g. `<main>/.git/worktrees/<name>`) with the shared
+      # common dir (`--git-common-dir`, e.g. `<main>/.git`): they differ only
+      # inside a linked worktree, and are equal in the main checkout. This
+      # keeps a bare `${name}` in the main repo falling through to the normal
+      # `workmux add` path below.
+      if [ "$#" -eq 0 ]; then
+        git_dir="$(git rev-parse --path-format=absolute --git-dir 2>/dev/null || true)"
+        git_common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+        if [ -n "$git_dir" ] && [ -n "$git_common_dir" ] && [ "$git_dir" != "$git_common_dir" ]; then
+          echo "${name}: resuming previous session in this worktree ($PWD)." >&2
+          exec ${lib.getExe launcher} ${lib.escapeShellArgs resumeArgs}
+        fi
+      fi
+
       # workmux drives git worktrees *and* tmux windows; it is useless (and
       # errors deep inside) without a tmux server. Fail fast with a clear
       # message instead.
