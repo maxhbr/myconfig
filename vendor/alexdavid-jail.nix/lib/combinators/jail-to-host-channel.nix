@@ -82,8 +82,15 @@ in
         (pkgs.writeShellApplication {
           name = jailTxName;
           runtimeInputs = [ pkgs.util-linux ];
+          # LOCAL PATCH (myconfig): the lock file lives under /tmp rather than
+          # upstream's /run/j2hc.lock. In upstream jails /run is an
+          # auto-created writable tmpfs dir, but this repo's jail-app.nix
+          # bind-mounts the host /run read-only into every jail, so
+          # `flock(1)` (which opens with O_CREAT) fails with EROFS on
+          # /run/j2hc.lock. /tmp is a host-backed writable bind in every
+          # jail-app wrapper (persistentTmp), so the lock can be created there.
           text = ''
-            flock /run/j2hc.lock ${
+            flock /tmp/j2hc.lock ${
               pkgs.lib.getExe (
                 pkgs.writeShellApplication {
                   name = "${jailTxName}-locked";

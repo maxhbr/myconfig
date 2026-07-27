@@ -23,13 +23,86 @@ let
     };
   jail-app = callJailLib ../fns/jail-app.nix;
 
+  # Jail library handle + the jail-to-host channel combinator. The combinator
+  # exposes a program *inside* the jail that forwards its single argument over
+  # a FIFO to a handler running *outside* the jail. We use it so the jailed pi
+  # can report its workmux status to the tmux server (which lives in the
+  # worktree pane's un-jailed environment where $TMUX/$TMUX_PANE and the tmux
+  # socket are valid) without exposing any tmux socket or $TMUX to the jail.
+  jailLib = jail.init pkgs;
+  inherit (jailLib.combinators) jail-to-host-channel;
+
   # Make the `workmux` binary available *inside* the agent sandboxes (jail and
   # bubblewrap) whenever workmux is enabled. The status-tracking hooks/
   # extensions installed by `myconfig.ai.workmux` all shell out to
-  # `workmux set-window-status`, and worktree agents may run `workmux merge` /
-  # `workmux remove --keep-branch` from their pane, so the binary must resolve
-  # on PATH inside the sandbox (empty list on hosts without workmux).
+  # `workmux set-window-status`, and un-jailed/plain worktree agents may run
+  # `workmux merge` / `workmux remove --keep-branch` from their pane, so the
+  # binary must resolve on PATH inside the sandbox (empty list on hosts without
+  # workmux). NOTE: the *jailed* worktree variant
+  # (`jailed-pi-worktree-inner`) does NOT carry the real binary; it installs
+  # `workmuxStatusShim` instead, which can only route `set-window-status` (see
+  # the shim below). `workmux merge`/`remove` from inside that jail cannot
+  # reach the tmux socket and will fail.
   workmuxDevTools = lib.optional osconfig.myconfig.ai.workmux.enable osconfig.myconfig.ai.workmux.package;
+
+  # A jail-to-host channel exposing `workmux_status_channel` *inside* the jail.
+  # Calling `workmux_status_channel <status>` sends `<status>` over a FIFO to
+  # the handler below, which runs *outside* the jail in the worktree tmux
+  # pane's environment. There, $TMUX/$TMUX_PANE and the tmux socket are valid,
+  # so `workmux set-window-status` can update the pane's tmux window name.
+  #
+  # LOAD-BEARING: the handler runs *outside* the jail as a background process
+  # forked by the launcher pane, and relies on inheriting the launcher pane's
+  # $TMUX / $TMUX_PANE (and thus the tmux socket). This inheritance is correct
+  # because the launcher execs the inner jail wrapper in-pane and the jail's
+  # non-empty `cleanup` means the wrapper does not `exec bwrap` (so the
+  # background handler survives). $TMUX is never leaked *into* the jail
+  # (bwrap --clearenv).
+  #
+  # The channel name must be a valid POSIX identifier (the combinator asserts
+  # `isValidPosixName`), hence underscores rather than hyphens. The handler is
+  # wrapped in a `writeShellApplication` with no runtimeInputs, so it sets its
+  # own PATH to make `workmux` and `tmux` resolvable. Gated on workmux being
+  # enabled (empty list otherwise).
+  #
+  # Errors are logged (rather than fully swallowed) to $TMPDIR/-/tmp so that a
+  # misconfigured channel leaves a diagnosable trail instead of failing
+  # silently (the pi extension also `.catch()`es the in-jail call).
+  workmuxStatusChannelPerms = lib.optional osconfig.myconfig.ai.workmux.enable (
+    jail-to-host-channel "workmux_status_channel" ''
+      export PATH=${
+        lib.makeBinPath [
+          osconfig.myconfig.ai.workmux.package
+          pkgs.tmux
+        ]
+      }:$PATH
+      workmux set-window-status "$1" >>"''${TMPDIR:-/tmp}/workmux_status_channel.log" 2>&1 || true
+    ''
+  );
+
+  # A `workmux` PATH-shim installed *inside* the worktree jail in place of the
+  # real workmux binary. It intercepts `set-window-status` and routes it
+  # through the `workmux_status_channel` program (exposed by the channel
+  # above), so status updates reach the host tmux server without the jail
+  # needing a tmux socket. Any other subcommand is forwarded to the real
+  # workmux binary by absolute store path. Installing the shim instead of the
+  # real `workmux` avoids a PATH name collision on `workmux`.
+  #
+  # NOTE: only `set-window-status` is rescued. Other subcommands (`workmux
+  # merge`, `workmux remove`, ...) exec the real binary, which still needs the
+  # tmux socket that is not present inside the jail, so they fail. This matches
+  # the pre-change behaviour (the inner jail previously carried the real binary,
+  # equally unable to reach tmux from inside the sandbox).
+  workmuxStatusShim = pkgs.writeShellApplication {
+    name = "workmux";
+    text = ''
+      if [ "''${1-}" = "set-window-status" ]; then
+        shift
+        exec workmux_status_channel "''${1-}"
+      fi
+      exec ${lib.getExe osconfig.myconfig.ai.workmux.package} "$@"
+    '';
+  };
 
   # Build a lookup: model name (raw or provider-prefixed) -> contextWindow.
   # Covers both direct local-provider lookups (raw name) and
@@ -484,11 +557,19 @@ let
     pkg = pkgs.nixos-unstable.pi-coding-agent;
     userDataDirs = [ ".pi" ];
     extraConfigDirs = [ ".agents" ];
-    extraDevTools = workmuxDevTools;
+    # Install the `workmux` PATH-shim (not the real binary) so
+    # `workmux set-window-status` — invoked by the jailed pi's
+    # `workmux-status.ts` extension — is routed through the jail-to-host
+    # channel below instead of shelling out to tmux (which is unreachable
+    # inside the jail). Gated on workmux being enabled.
+    extraDevTools = lib.optional osconfig.myconfig.ai.workmux.enable workmuxStatusShim;
     extraRuntimeEnv.PI_JAIL_MARKER = "1";
     extraReadOnlyEnvPaths = [ "PI_WORKTREE_MAIN_REPO" ];
     # This bind is emitted after the read-only main-repo bind by jail-app.
     extraReadWriteEnvPaths = [ "PI_WORKTREE_GIT_DIR" ];
+    # Expose the `workmux_status_channel` program inside the jail and run its
+    # host-side handler in the worktree tmux pane's environment.
+    extraPermissions = workmuxStatusChannelPerms;
   };
 
   # Thin workmux-driven replacement for the previous bespoke worktree script.
