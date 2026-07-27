@@ -25,9 +25,60 @@
 }:
 let
   cfg = config.myconfig.ai.workmux;
+  aiCfg = config.myconfig.ai;
   workmuxPkg = inputs.workmux.packages.${pkgs.system}.default;
+  # The workmux flake input also provides its source tree, from which the
+  # per-agent status-tracking extensions/plugins are deployed verbatim (the
+  # same files `workmux setup` would copy).
+  workmuxSrc = inputs.workmux;
 
   yamlFormat = pkgs.formats.yaml { };
+
+  # --- declarative equivalent of `workmux setup` -------------------------
+  # `workmux setup` detects installed agents and drops status-tracking hooks
+  # into each agent's config so panes report 🤖/💬/✅ in tmux window names.
+  # We wire the exact same artefacts declaratively instead, gated on which
+  # agent this host actually enables. See the embedded resources in the
+  # workmux source: `.pi/extensions/`, `resources/opencode/`,
+  # `.codex/hooks/workmux-status.json`, `.claude-plugin/plugin.json`.
+  statusCmd = status: "workmux set-window-status ${status}";
+  # A hook "group" with no matcher, as used by codex and (mostly) claude.
+  hookGroup = status: {
+    hooks = [
+      {
+        type = "command";
+        command = statusCmd status;
+      }
+    ];
+  };
+  # Claude Code hooks (from `.claude-plugin/plugin.json`), merged into
+  # `programs.claude-code.settings.hooks`.
+  claudeStatusHooks = {
+    UserPromptSubmit = [ (hookGroup "working") ];
+    Notification = [
+      {
+        matcher = "permission_prompt|elicitation_dialog";
+        hooks = [
+          {
+            type = "command";
+            command = statusCmd "waiting";
+          }
+        ];
+      }
+    ];
+    PostToolUse = [ (hookGroup "working") ];
+    Stop = [ (hookGroup "done") ];
+  };
+  # Codex hooks (from `.codex/hooks/workmux-status.json`), written to
+  # `~/.codex/hooks.json` via `programs.codex.hooks`.
+  codexStatusHooks = {
+    UserPromptSubmit = [ (hookGroup "working") ];
+    PermissionRequest = [ (hookGroup "waiting") ];
+    PostToolUse = [ (hookGroup "working") ];
+    SubagentStart = [ (hookGroup "working") ];
+    SubagentStop = [ (hookGroup "done") ];
+    Stop = [ (hookGroup "done") ];
+  };
 
   # Drop attrs whose value is null so optional named-agent fields
   # (args/env/...) do not emit empty YAML keys.
@@ -41,8 +92,10 @@ let
   );
 
   # `tmux-workmux` bootstraps a dedicated "workmux" tmux session for driving
-  # parallel worktree agents: it runs the one-time `workmux setup`, opens a
-  # session with the sidebar + dashboard, and attaches/switches to it.
+  # parallel worktree agents: it opens a session with the sidebar + dashboard
+  # and attaches/switches to it. The agent status-tracking hooks that the
+  # dashboard/sidebar rely on are installed declaratively (see `config`
+  # below), so there is no runtime `workmux setup` step here.
   tmux-workmux = pkgs.writeShellApplication {
     name = "tmux-workmux";
     runtimeInputs = [
@@ -52,18 +105,6 @@ let
     ];
     text = ''
       session=workmux
-
-      # Run the one-time `workmux setup` (installs the agent status-tracking
-      # hooks the dashboard/sidebar rely on) the first time this script is
-      # used. workmux has no "already set up" flag, so track it with a state
-      # sentinel and let setup itself be idempotent/interactive.
-      state_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/workmux"
-      sentinel="$state_dir/tmux-workmux.setup-done"
-      if [ ! -e "$sentinel" ]; then
-        workmux setup || true
-        mkdir -p "$state_dir"
-        touch "$sentinel"
-      fi
 
       # Create the session detached if it does not exist yet, remembering
       # whether we just created it so the dashboard/sidebar are only added on
@@ -96,6 +137,18 @@ in
 {
   options.myconfig.ai.workmux = {
     enable = lib.mkEnableOption "workmux, parallel development in tmux with git worktrees";
+
+    statusTracking.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Declaratively install workmux agent status-tracking hooks (the
+        declarative equivalent of `workmux setup`) for every coding agent
+        enabled on this host, so panes report agent status in tmux window
+        names / the dashboard / the sidebar. Disable to manage the hooks
+        yourself.
+      '';
+    };
 
     package = lib.mkOption {
       type = lib.types.package;
@@ -173,6 +226,30 @@ in
         home.file.".config/workmux/config.yaml".source =
           yamlFormat.generate "workmux-config.yaml" workmuxConfig;
       }
-    ];
+    ]
+    # Declarative `workmux setup`: install the status-tracking artefacts for
+    # each agent this host enables. Each agent uses whichever mechanism its
+    # home-manager module exposes (native hook/settings options where a
+    # merge is required, a plain file drop otherwise).
+    ++ lib.optional cfg.statusTracking.enable {
+      config = lib.mkMerge [
+        (lib.mkIf aiCfg.pi-coding-agent.enable {
+          home.file.".pi/agent/extensions/workmux-status.ts".source =
+            "${workmuxSrc}/.pi/extensions/workmux-status.ts";
+        })
+        (lib.mkIf aiCfg.opencode.enable {
+          home.file.".config/opencode/package.json".source = "${workmuxSrc}/resources/opencode/package.json";
+          home.file.".config/opencode/plugins/workmux-status.ts".source =
+            "${workmuxSrc}/resources/opencode/plugins/workmux-status.ts";
+        })
+        (lib.mkIf aiCfg.codex.enable {
+          programs.codex.hooks = codexStatusHooks;
+          programs.codex.settings.features.hooks = true;
+        })
+        (lib.mkIf aiCfg.claude-code.enable {
+          programs.claude-code.settings.hooks = claudeStatusHooks;
+        })
+      ];
+    };
   };
 }
