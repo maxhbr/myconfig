@@ -28,6 +28,13 @@
 
     services.netdata.enable = lib.mkForce false;
 
+    services.journald.extraConfig = ''
+      SystemMaxUse=500M
+      SystemKeepFree=3G
+      SystemMaxFileSize=100M
+      MaxRetentionSec=14day
+    '';
+
     services.eternal-terminal = {
       enable = true;
       port = 22022;
