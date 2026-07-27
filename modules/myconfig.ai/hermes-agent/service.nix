@@ -36,9 +36,7 @@ let
         # Rewrite wildcard bind to localhost for in-host clients
         # (same pattern as opencode/pi modules)
         litellmHost =
-          if config.services.litellm.host == "0.0.0.0"
-          then "127.0.0.1"
-          else config.services.litellm.host;
+          if config.services.litellm.host == "0.0.0.0" then "127.0.0.1" else config.services.litellm.host;
       in
       "http://${litellmHost}:${toString config.services.litellm.port}/v1"
     else
