@@ -93,6 +93,7 @@ in
     ./playwright-cli.nix
     ./research.nix
     ./review.nix
+    ./workmux.nix
   ];
 
   options.myconfig.ai.skills = with lib; {
