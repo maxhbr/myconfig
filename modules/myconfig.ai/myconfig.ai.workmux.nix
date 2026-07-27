@@ -39,6 +39,59 @@ let
     }
     // cfg.settings
   );
+
+  # `tmux-workmux` bootstraps a dedicated "workmux" tmux session for driving
+  # parallel worktree agents: it runs the one-time `workmux setup`, opens a
+  # session with the sidebar + dashboard, and attaches/switches to it.
+  tmux-workmux = pkgs.writeShellApplication {
+    name = "tmux-workmux";
+    runtimeInputs = [
+      cfg.package
+      pkgs.tmux
+      pkgs.coreutils
+    ];
+    text = ''
+      session=workmux
+
+      # Run the one-time `workmux setup` (installs the agent status-tracking
+      # hooks the dashboard/sidebar rely on) the first time this script is
+      # used. workmux has no "already set up" flag, so track it with a state
+      # sentinel and let setup itself be idempotent/interactive.
+      state_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/workmux"
+      sentinel="$state_dir/tmux-workmux.setup-done"
+      if [ ! -e "$sentinel" ]; then
+        workmux setup || true
+        mkdir -p "$state_dir"
+        touch "$sentinel"
+      fi
+
+      # Create the session detached if it does not exist yet, remembering
+      # whether we just created it so the dashboard/sidebar are only added on
+      # first creation (not on every re-attach).
+      newly_created=0
+      if ! tmux has-session -t "=$session" 2>/dev/null; then
+        tmux new-session -d -s "$session"
+        newly_created=1
+      fi
+
+      # For a freshly created session, launch the persistent status sidebar and
+      # then the TUI dashboard in its main pane. Both run inside the session's
+      # own tmux context via send-keys, in one command sequence so the
+      # dashboard lands in the original shell pane regardless of the pane the
+      # sidebar activates.
+      if [ "$newly_created" -eq 1 ]; then
+        tmux send-keys -t "=$session" 'workmux sidebar --session; workmux dashboard' Enter
+      fi
+
+      # Switch when already inside tmux (attach cannot be nested), attach
+      # otherwise.
+      if [ -n "''${TMUX:-}" ]; then
+        exec tmux switch-client -t "=$session"
+      else
+        exec tmux attach-session -t "=$session"
+      fi
+    '';
+  };
 in
 {
   options.myconfig.ai.workmux = {
@@ -113,7 +166,10 @@ in
   config = lib.mkIf cfg.enable {
     home-manager.sharedModules = [
       {
-        home.packages = [ cfg.package ];
+        home.packages = [
+          cfg.package
+          tmux-workmux
+        ];
         home.file.".config/workmux/config.yaml".source =
           yamlFormat.generate "workmux-config.yaml" workmuxConfig;
       }
