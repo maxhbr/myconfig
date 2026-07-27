@@ -77,7 +77,14 @@ in
         kill "''$${varPrefix}_RX_PID"
         rm -rf "''$${varPrefix}_TMP"
       '')
-      (ro-bind (noescape "\"\$${varPrefix}_TMP/fifo\"") "/run/j2hc-${jailTxName}")
+      # LOCAL PATCH (myconfig): bind the FIFO under /tmp instead of upstream's
+      # /run/j2hc-<name>. This repo's jail-app.nix bind-mounts the host /run
+      # read-only into every jail, so bwrap cannot create the mount point file
+      # at /run/j2hc-<name> (EROFS: "Can't create file at
+      # /run/j2hc-<name>: Read-only file system"). /tmp is a host-backed
+      # writable bind in every jail-app wrapper (persistentTmp), so the mount
+      # point can be created there.
+      (ro-bind (noescape "\"\$${varPrefix}_TMP/fifo\"") "/tmp/j2hc-${jailTxName}")
       (add-pkg-deps [
         (pkgs.writeShellApplication {
           name = jailTxName;
@@ -95,8 +102,8 @@ in
                 pkgs.writeShellApplication {
                   name = "${jailTxName}-locked";
                   text = ''
-                    echo "$1" > /run/j2hc-${jailTxName}
-                    echo "$(< /run/j2hc-${jailTxName})"
+                    echo "$1" > /tmp/j2hc-${jailTxName}
+                    echo "$(< /tmp/j2hc-${jailTxName})"
                   '';
                 }
               )
