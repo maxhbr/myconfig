@@ -123,8 +123,12 @@ in
       description = ''
         Skill selection merged on top of the default
         `{ enableAll = [ "mattpocock" ]; }`. Supports the upstream
-        `skills.{enable, enableAll, explicit}` options. For example, to opt
-        into a specific subset instead of all mattpocock skills:
+        `skills.{enable, enableAll, explicit}` options. Note that the default
+        `mattpocock` source is filtered to the recommended core categories
+        (`engineering`, `productivity`); the non-promoted `misc`/`personal`,
+        unfinished `in-progress`, and `deprecated` buckets are not discovered.
+        For example, to opt into a specific subset instead of all discovered
+        mattpocock skills:
 
         ```nix
         myconfig.ai.skills.skills = {
@@ -250,6 +254,15 @@ in
                 mattpocock = {
                   input = lib.mkDefault "mattpocock-skills";
                   subdir = lib.mkDefault "skills";
+                  # Reduce to the recommended core: mattpocock's repo groups
+                  # skills into categories, but only `engineering` and
+                  # `productivity` are promoted in the plugin / top-level
+                  # README. The `misc` and `personal` buckets are explicitly
+                  # "not promoted", `in-progress` is unfinished/excluded, and
+                  # `deprecated` is no longer used. Discover only the two
+                  # promoted categories so those non-recommended skills never
+                  # sync into any harness.
+                  filter.nameRegex = lib.mkDefault "(engineering|productivity)/.*";
                 };
               }
               cfg.sources
