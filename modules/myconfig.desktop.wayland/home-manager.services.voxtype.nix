@@ -50,6 +50,8 @@
         output = {
           mode = "type";
           fallback_to_clipboard = true;
+          # Pause media playback when recording starts.
+          pre_recording_command = "${pkgs.playerctl}/bin/playerctl pause";
         };
         text = {
           # Custom word replacements applied after transcription
