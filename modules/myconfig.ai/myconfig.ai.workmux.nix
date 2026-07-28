@@ -203,6 +203,14 @@ in
         # PUA glyphs are present in the config), which blocks non-interactive
         # worktree creation. `true` enables the nicer nerdfont glyphs.
         nerdfont = true;
+      }
+      # Default `workmux add` (no explicit `--agent`) to the `pi` named
+      # agent, but only on hosts that actually enable pi — otherwise the
+      # `agents:` map has no `pi` entry and workmux would fall back to
+      # running the bare `pi` command. workmux resolves the top-level
+      # `agent` key through the `agents` map (see `resolve_selected_agent`).
+      // lib.optionalAttrs aiCfg.pi-coding-agent.enable { agent = "pi"; }
+      // {
         # Default pane layout for `workmux add`: a single focused pane running
         # the selected agent (via the `<agent>` placeholder). Without this,
         # workmux only auto-launches an agent for projects that have a

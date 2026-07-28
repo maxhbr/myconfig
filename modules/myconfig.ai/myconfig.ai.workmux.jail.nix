@@ -47,6 +47,11 @@ let
     };
   jail-app = callJailLib ./fns/jail-app.nix;
 
+  # Combinators used directly below (for `extraPermissions`).
+  inherit (jail.init pkgs) combinators;
+
+  yamlFormat = pkgs.formats.yaml { };
+
   # tmux socket *inside* the jail. With `persistentTmp` (jail-app default) the
   # jail's /tmp is a host-backed directory private to this jail, so the socket
   # never collides with the user's normal tmux server on the host default
@@ -58,6 +63,26 @@ let
   # workmux can launch them in panes. The jail itself is the sandbox here, so
   # these are the raw agent binaries, not the nested `jailed-*` wrappers.
   innerAgents = lib.optional aiCfg.pi-coding-agent.enable pkgs.nixos-unstable.pi-coding-agent;
+
+  # workmux config used *inside* the jail. It deliberately does NOT reuse the
+  # host's `~/.config/workmux/config.yaml`: there the `pi` named agent points
+  # at `pi-workmux-launch`, which execs the bubblewrap-sandboxed `pi-bwrap`.
+  # Running that inside this jail would start a *nested* sandbox (fresh tmpfs
+  # $HOME, its own env) and lose pi's real configuration/credentials — exactly
+  # the "No models available / No API key" breakage. The jail is already the
+  # sandbox, so here the `pi` agent must be the *plain* pi binary. Everything
+  # else (nerdfont, the `<agent>` pane layout, the default `agent`) is inherited
+  # verbatim from `myconfig.ai.workmux.settings`.
+  jailWorkmuxConfig = {
+    agents = lib.optionalAttrs aiCfg.pi-coding-agent.enable {
+      pi = {
+        type = "pi";
+        command = lib.getExe pkgs.nixos-unstable.pi-coding-agent;
+      };
+    };
+  }
+  // wmCfg.settings;
+  jailWorkmuxConfigFile = yamlFormat.generate "workmux-jail-config.yaml" jailWorkmuxConfig;
 
   # Entrypoint executed as the jail's `pkg`. Mirrors the host `tmux-workmux`
   # bootstrap (see myconfig.ai.workmux.nix) but pins a private `-S <socket>`
@@ -125,11 +150,14 @@ let
   jailed-workmux-tmux = jail-app {
     name = "jailed-workmux-tmux";
     pkg = entry;
-    # rw state: pi session/config state and the workmux config dir (workmux may
-    # persist worktree metadata there).
+    # rw state: pi session/config state. NOTE: `.config/workmux` is
+    # deliberately *not* rw-bound here — the jail must not see the host's
+    # `pi`->`pi-bwrap` agent config (see `jailWorkmuxConfig`). Instead a
+    # jail-specific config is bound read-only via `extraPermissions` below;
+    # workmux's mutable runtime state lives under `~/.local/state/workmux`,
+    # which the jail's writable $HOME provides per-invocation.
     userDataDirs = [
       ".pi"
-      ".config/workmux"
     ];
     # ~/.agents/skills (handcrafted skills) picked up read-only by the agents.
     extraConfigDirs = [ ".agents" ];
@@ -142,6 +170,22 @@ let
     # Bind the `<basename>__worktrees` sibling read-write at runtime (path
     # supplied by the host launcher below via this env var).
     extraReadWriteEnvPaths = [ "WORKMUX_WORKTREES_DIR" ];
+    # tmux reads its global configuration from `/etc/tmux.conf` (written by the
+    # host's NixOS `programs.tmux`). The base jail only binds a couple of
+    # specific `/etc` files, so without this the in-jail tmux server would
+    # start with no keybindings/theme/plugins. `try-ro-bind` skips silently if
+    # the host has no `/etc/tmux.conf`.
+    #
+    # The jail-specific workmux config (plain `pi` agent, see above) is bound
+    # read-only over `~/.config/workmux/config.yaml`. bwrap creates the parent
+    # directory automatically. This shadows the host config that would
+    # otherwise map `pi` to the nested `pi-bwrap` sandbox.
+    extraPermissions = [
+      (combinators.try-ro-bind "/etc/tmux.conf" "/etc/tmux.conf")
+      (combinators.ro-bind "${jailWorkmuxConfigFile}" (
+        combinators.noescape "~/.config/workmux/config.yaml"
+      ))
+    ];
   };
 
   alacritty-workmux-here = pkgs.writeShellApplication {
