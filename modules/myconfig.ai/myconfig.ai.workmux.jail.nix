@@ -86,13 +86,20 @@ let
       # Pin the private socket for every tmux invocation in this script.
       tmux() { command tmux -S "$socket" "$@"; }
 
-      # Create the session detached if it does not exist yet. Set
-      # default-shell on the (freshly started) server *before* new-session so
-      # the first pane already uses bash and never execs `nologin`.
+      # Create the session detached if it does not exist yet. This *must* be a
+      # single tmux invocation: tmux defaults to `exit-empty on`, so a server
+      # started with no sessions exits again immediately. Splitting the
+      # bootstrap across separate `tmux` processes (start-server; set-option;
+      # new-session) makes the server vanish between calls, so `set-option`
+      # fails with "no server running" and the default-shell is never pinned.
+      # Setting both default-shell and default-command *before* new-session in
+      # one command sequence guarantees the very first pane (and every later
+      # split created by `workmux sidebar`) execs bash and never `nologin`.
       if ! tmux has-session -t "=$session" 2>/dev/null; then
-        tmux start-server
-        tmux set-option -g default-shell "$shell"
-        tmux new-session -d -s "$session"
+        tmux \
+          set-option -g default-shell "$shell" \; \
+          set-option -g default-command "$shell" \; \
+          new-session -d -s "$session"
       fi
 
       # Bootstrap the sidebar + dashboard exactly once (tracked via a session
@@ -104,7 +111,11 @@ let
         tmux send-keys -t "=$session:" 'workmux sidebar --session; workmux dashboard' Enter
       fi
 
-      exec tmux attach-session -t "=$session"
+      # NOTE: `exec` never runs shell functions, so it bypasses the `tmux()`
+      # wrapper above (which would otherwise inject `-S "$socket"`) and would
+      # attach to tmux's *default* socket. Pass `-S "$socket"` explicitly to
+      # the real binary here.
+      exec tmux -S "$socket" attach-session -t "=$session"
     '';
   };
 
