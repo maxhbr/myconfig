@@ -68,17 +68,30 @@ let
       wmCfg.package
       pkgs.tmux
       pkgs.coreutils
+      pkgs.bashInteractive
     ];
     text = ''
       session=workmux
       socket=${lib.escapeShellArg socketPath}
       mkdir -p "$(dirname "$socket")"
 
+      # Inside the jail, tmux resolves the login shell from the jail's
+      # /etc/passwd, where mhuber's shell is `nologin`. Every new pane would
+      # then exec `nologin`, die immediately and take the server down
+      # ("no server running"). Pin a real interactive bash instead, both via
+      # SHELL (default-shell falls back to it) and the tmux option directly.
+      shell=${lib.escapeShellArg (lib.getExe pkgs.bashInteractive)}
+      export SHELL="$shell"
+
       # Pin the private socket for every tmux invocation in this script.
       tmux() { command tmux -S "$socket" "$@"; }
 
-      # Create the session detached if it does not exist yet.
+      # Create the session detached if it does not exist yet. Set
+      # default-shell on the (freshly started) server *before* new-session so
+      # the first pane already uses bash and never execs `nologin`.
       if ! tmux has-session -t "=$session" 2>/dev/null; then
+        tmux start-server
+        tmux set-option -g default-shell "$shell"
         tmux new-session -d -s "$session"
       fi
 
