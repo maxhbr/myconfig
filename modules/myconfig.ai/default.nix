@@ -46,6 +46,7 @@ in
     ./services.tabby.nix
     ./skills
     ./myconfig.ai.workmux.nix
+    ./myconfig.ai.workmux.jail.nix
   ];
   options.myconfig.ai.enable = lib.mkEnableOption "myconfig.ai";
   config = lib.mkIf config.myconfig.ai.enable {
