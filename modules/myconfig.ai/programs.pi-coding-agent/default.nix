@@ -30,7 +30,24 @@ let
   # worktree pane's un-jailed environment where $TMUX/$TMUX_PANE and the tmux
   # socket are valid) without exposing any tmux socket or $TMUX to the jail.
   jailLib = jail.init pkgs;
-  inherit (jailLib.combinators) jail-to-host-channel;
+  inherit (jailLib.combinators) jail-to-host-channel add-runtime;
+
+  # Runtime permission for plain `jailed-pi`: when the working directory is a
+  # git repository that has a sibling `../<basename>__worktrees` directory
+  # (the convention used by the worktree tooling), bind that directory
+  # read-write into the jail so the agent can read/edit sibling worktrees.
+  # The check is done at runtime (in the wrapper, before `bwrap` starts) so
+  # the bind only happens when both the `.git` marker and the worktrees
+  # directory exist on the host. `mount-cwd` already binds `$PWD` itself; this
+  # adds the out-of-tree worktrees directory next to it.
+  worktreesSiblingPerm = add-runtime ''
+    if [ -e "$PWD/.git" ]; then
+      _jp_worktrees="$(dirname "$PWD")/$(basename "$PWD")__worktrees"
+      if [ -d "$_jp_worktrees" ]; then
+        RUNTIME_ARGS+=(--bind "$_jp_worktrees" "$_jp_worktrees")
+      fi
+    fi
+  '';
 
   # Make the `workmux` binary available *inside* the agent sandboxes (jail and
   # bubblewrap) whenever workmux is enabled. The status-tracking hooks/
@@ -544,6 +561,9 @@ let
     # the plain (`jailed-pi`, `jailed-pi-tmp`) variants, where the
     # conditional `--ro-bind-try` skips the bind silently.
     extraReadOnlyEnvPaths = [ "PI_WORKTREE_MAIN_REPO" ];
+    # Also expose a sibling `../<basename>__worktrees` directory read-write
+    # when running from a git repo that has one (see `worktreesSiblingPerm`).
+    extraPermissions = [ worktreesSiblingPerm ];
   };
 
   # Worktree-only variant: expose the linked main checkout read-only, then
