@@ -16,7 +16,8 @@
 # Overrides (environment variables):
 #   FLAKE   flake reference to build from        (default ".")
 #   TARGET  nixosConfigurations attribute name    (default "odroid")
-#   NIX_BUILD_EXTRA_ARGS  extra args for `nix build` (e.g. "--builders ...")
+#   NIX_BUILD_EXTRA_ARGS  extra args for `nix build`
+#                          (default "--option builders ''" to avoid remote builders)
 #
 # The built image already has the board-specific U-Boot fused into the raw gap
 # in front of the first partition (see hosts/host.odroid/hardware-configuration.nix,
@@ -75,9 +76,10 @@ if [[ ${FLAKE} == "." && ! -e "./flake.nix" ]]; then
     exit 1
 fi
 
-# Extra `nix build` args (e.g. `--builders ...`) can be passed via the
-# NIX_BUILD_EXTRA_ARGS environment variable (word-split intentionally).
-read -r -a extra_args <<<"${NIX_BUILD_EXTRA_ARGS:-}"
+# Default to disabling remote builders (SD image builds natively on the host).
+# Override with NIX_BUILD_EXTRA_ARGS to pass custom args (e.g. `--builders ...`).
+# shellcheck disable=SC2254
+read -r -a extra_args <<<"${NIX_BUILD_EXTRA_ARGS:---option builders ''}"
 
 # Follow the repo convention of placing result symlinks next to the flake root.
 OUT_LINK="../result.${TARGET}.sd-image"
@@ -117,6 +119,7 @@ fi
 
 echo >&2
 lsblk "${DEVICE}" >&2 || true
+echo "==> Image size: $(du -h "${IMG}" | cut -f1)" >&2
 echo >&2
 read -r -p "About to OVERWRITE ${DEVICE} with ${IMG##*/}. Type 'yes' to continue: " ans
 if [[ ${ans} != "yes" ]]; then

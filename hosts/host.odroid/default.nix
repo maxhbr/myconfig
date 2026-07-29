@@ -30,5 +30,13 @@
     # on your system were taken. It‘s perfectly fine and recommended to leave
     # this value at the release version of the first install of this system.
     system.stateVersion = lib.mkForce "25.05"; # Did you read the comment?
+
+    # node_exporter + vmagent + TFA Dostmann AirCO2NTROL Mini CO2 sensor
+    myconfig.observability = {
+      client = {
+        enable = true;
+        co2Exporter.enable = true;
+      };
+    };
   };
 }
