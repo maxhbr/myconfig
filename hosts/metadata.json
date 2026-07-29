@@ -178,7 +178,13 @@
       "ip4": "192.168.1.102"
     },
     "odroid": {
-      "network": "home"
+      "network": "home",
+      "wireguard": {
+        "wg0": {
+          "ip4": "10.199.199.14",
+          "pubkey": "qBHvJH6exW2DyDYQySbeUBmdJj6xpkLAIFcz951fuw0="
+        }
+      }
     }
   },
   "networks": {
