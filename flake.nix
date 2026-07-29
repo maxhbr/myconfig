@@ -344,6 +344,20 @@
               ]
               ++ moreModules
             ) metadataOverride);
+          host-futro =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "x86_64-linux" "futro" (
+              [
+                self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "futro") ];
+                  }
+                )
+              ]
+              ++ moreModules
+            ) metadataOverride);
           host-thing =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "x86_64-linux" "thing" (
@@ -395,6 +409,9 @@
           #   { myconfig.secretsWarnOnMissingSource = false; }
           # ] { };
           test-thing = self.nixosConfigurationsGen.host-thing [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
+          test-futro = self.nixosConfigurationsGen.host-futro [
             { myconfig.secretsWarnOnMissingSource = false; }
           ] { };
 
