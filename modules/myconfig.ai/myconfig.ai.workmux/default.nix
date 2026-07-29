@@ -135,6 +135,8 @@ let
   };
 in
 {
+  imports = [ ./jail.nix ];
+
   options.myconfig.ai.workmux = {
     enable = lib.mkEnableOption "workmux, parallel development in tmux with git worktrees";
 
