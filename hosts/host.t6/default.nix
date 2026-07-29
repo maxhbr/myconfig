@@ -21,16 +21,9 @@
   ];
 
   config = {
-    # The NanoPC-T6 cannot boot directly from NVMe/USB. U-Boot and /boot must
-    # live on eMMC or microSD. We therefore use the generic extlinux-compatible
-    # bootloader (written to /boot) instead of GRUB/systemd-boot; the
-    # board-specific Rockchip U-Boot is flashed to the boot device out of band
-    # (see the install guide).
-    boot.loader = {
-      grub.enable = false;
-      generic-extlinux-compatible.enable = true;
-    };
-
+    # The bootloader (generic-extlinux-compatible) and the board-specific
+    # Rockchip U-Boot are configured in ./hardware-configuration.nix, which also
+    # fuses U-Boot into the flashable SD image.
     boot.kernelPackages = pkgs.linuxPackages_latest;
 
     # Device tree for the NanoPC-T6.
@@ -49,7 +42,6 @@
     # TODO: replace with a real, stable host id (`head -c4 /dev/urandom | od -A none -t x4`)
     networking.hostId = "74366e61";
 
-    networking.useDHCP = lib.mkDefault true;
     networking.networkmanager.enable = true;
 
     swapDevices = [
