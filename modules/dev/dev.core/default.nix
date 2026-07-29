@@ -37,6 +37,19 @@ in
               pass-git-helper
               jq
               yq
+              csvkit
+              (writeShellScriptBin "cq" ''
+                # Run jq against a CSV file via csvjson.
+                # Usage:
+                #   cq file.csv '<jq filter>'
+                #   cat data.csv | cq '<jq filter>'
+                set -euo pipefail
+                if [[ $# -ge 1 && -f "$1" ]]; then
+                  ${pkgs.csvkit}/bin/csvjson "$1" | ${pkgs.jq}/bin/jq "$${@:2}"
+                else
+                  ${pkgs.csvkit}/bin/csvjson - | ${pkgs.jq}/bin/jq "$@"
+                fi
+              '')
               cropLog
               mercurial
               gnuplot
