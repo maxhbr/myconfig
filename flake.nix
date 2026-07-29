@@ -330,6 +330,20 @@
           #     ]
           #     ++ moreModules
           #   ) metadataOverride);
+          host-odroid =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "aarch64-linux" "odroid" (
+              [
+                self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "odroid") ];
+                  }
+                )
+              ]
+              ++ moreModules
+            ) metadataOverride);
           host-r6c =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "aarch64-linux" "r6c" (
@@ -400,6 +414,9 @@
             { myconfig.secretsWarnOnMissingSource = false; }
           ] { };
           test-r6c = self.nixosConfigurationsGen.host-r6c [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
+          test-odroid = self.nixosConfigurationsGen.host-odroid [
             { myconfig.secretsWarnOnMissingSource = false; }
           ] { };
           # test-pi4 = self.nixosConfigurationsGen.host-pi4 [
