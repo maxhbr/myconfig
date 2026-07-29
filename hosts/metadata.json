@@ -178,6 +178,9 @@
       "ip4": "192.168.1.102"
     },
     "odroid": {
+      "pubkeys": {
+        "/etc/ssh/ssh_host_rsa_key.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCl34VptXQRCm8XR2NHNK2XrwLYYUYAIzCZRYLwfygtnL2mAryOy/baLaDlLDPp5yfhfAgfgqjENWdJJxPTA3EDA3/GQRVV/B0vi5jANcaEnTrVn2HvnAuzjBL2M8U8TbL2IhQIJ/Pmd5jnpTBZ9nJeb/vUlYgvrHQPzlkKUihAJMXviwbd699CPeXlhX9qv17RONPA/T0axumiwrid8Nu0wl1dgo/HeqZ4CWYcLStLrjinOvU8nu7nB40x/tUmA/qTF5jKYbiKXW9JAzhWPpJjOpsap8LIoosv+l/0E8fd9YRyewYVemXvMH7RE9Nt9noAr5JfUrbrkMZXOZydssUBOdlqDlYXOrsEAuCIhxmiIskrpK4JLSo3rlagjEtgWJAXGrBon05WKhGU1WFhNyPXg8lSg0fr54V3EQILVxttn/6oth/K9W2YWts/KtWkwp8YSNqysQPVU6sF9Kz/Lv+XS0U5zjE0sYztT/FlKnDFHFOd1QmvQBti6oLMJJi0Y+9vUi1VZrmCu8CD96YGUfNnQIRNgzdRnwUjW5YsbDe8HFbQ1jyLerN/RMbf+v0zSb+rEb8pT9spDBcvWnNGzc0YrCPx6+0Cju+oZ0z9DrVzrVRgAkTx14LPKGp4QEQU0VTZ5cu+qSc03o459MBswZacapked5kq+S5DQf+hAtPMxQ== mhuber@jail"
+      },
       "network": "home",
       "wireguard": {
         "wg0": {
