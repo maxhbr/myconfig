@@ -41,6 +41,7 @@ in
     # `privateKeySource = ...` are set in the private repo. See
     # modules/myconfig.wireguard/README.md for the full design.
     ./hardware.framework.do-not-wake-on-input.nix
+    ./networking.prefer-wired.nix
     ./suspend-debug.nix
     ./hardware.hantek
     ./mykeylight
