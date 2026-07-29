@@ -123,6 +123,13 @@ $ sudo dd \
 Replace `/dev/sdX` with the correct whole-disk device. This operation destroys
 all existing data on that device.
 
+Alternatively use the helper script, which prompts for confirmation and
+unmounts any mounted partitions first:
+
+```console
+$ ./flash-edk2-sd-card.sh ROC-RK3568-PC_EFI.img /dev/sdX
+```
+
 Leave the EDK2 microSD installed during boot.
 
 ## 3. Download and write the NixOS installer
@@ -145,6 +152,12 @@ $ sudo dd \
 ```
 
 Replace `/dev/sdY` with the whole USB-stick device.
+
+Or use the helper script:
+
+```console
+$ ./flash-installer-usb.sh nixos-minimal-<release>-aarch64-linux.iso /dev/sdY
+```
 
 Use the ISO rather than the generic ARM SD image: EDK2 should expose the board
 as a UEFI AArch64 system, allowing the regular NixOS installer to boot
@@ -220,7 +233,17 @@ $ lsblk -o NAME,SIZE,MODEL,SERIAL,TYPE,TRAN,MOUNTPOINTS
 
 ## 7. Partition the target
 
-Create a GPT with a 512 MiB EFI System Partition and an ext4 root partition:
+The `format-target-disk.sh` helper performs the whole partition/format/mount
+sequence below (with a confirmation prompt and automatic `pN`/`N` suffix
+detection), producing the `EFI`/`nixos` filesystem labels expected by
+`hardware-configuration.nix`:
+
+```console
+$ sudo ./format-target-disk.sh /dev/nvme0n1
+```
+
+To do it manually instead, create a GPT with a 512 MiB EFI System Partition
+and an ext4 root partition:
 
 ```console
 $ sudo wipefs -a "$DISK"
