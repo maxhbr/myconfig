@@ -82,6 +82,9 @@ read -r -a extra_args <<<"${NIX_BUILD_EXTRA_ARGS:-}"
 # Follow the repo convention of placing result symlinks next to the flake root.
 OUT_LINK="../result.${TARGET}.sd-image"
 
+echo "==> Updating flake inputs ..." >&2
+nix flake update
+
 echo "==> Building SD image for '${TARGET}' from flake '${FLAKE}' ..." >&2
 nix build --print-out-paths "${FLAKE_ATTR}" \
     --out-link "${OUT_LINK}" \
