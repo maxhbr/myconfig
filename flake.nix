@@ -358,6 +358,20 @@
               ]
               ++ moreModules
             ) metadataOverride);
+          host-t6 =
+            moreModules: metadataOverride:
+            (self.lib.evalConfiguration "aarch64-linux" "t6" (
+              [
+                self.nixosModules.core
+                (
+                  { pkgs, myconfig, ... }:
+                  {
+                    imports = [ (myconfig.metadatalib.announceOtherHosts "t6") ];
+                  }
+                )
+              ]
+              ++ moreModules
+            ) metadataOverride);
           host-futro =
             moreModules: metadataOverride:
             (self.lib.evalConfiguration "x86_64-linux" "futro" (
@@ -417,6 +431,9 @@
             { myconfig.secretsWarnOnMissingSource = false; }
           ] { };
           test-odroid = self.nixosConfigurationsGen.host-odroid [
+            { myconfig.secretsWarnOnMissingSource = false; }
+          ] { };
+          test-t6 = self.nixosConfigurationsGen.host-t6 [
             { myconfig.secretsWarnOnMissingSource = false; }
           ] { };
           # test-pi4 = self.nixosConfigurationsGen.host-pi4 [
