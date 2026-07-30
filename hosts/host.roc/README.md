@@ -130,36 +130,56 @@ unmounts any mounted partitions first:
 $ ./flash-edk2-sd-card.sh ROC-RK3568-PC_EFI.img /dev/sdX
 ```
 
-Leave the EDK2 microSD installed during boot.
+If you omit the image path, the script downloads (and decompresses) a known
+firmware image automatically before flashing:
 
-## 3. Download and write the NixOS installer
-
-Download the current minimal AArch64 ISO. Its name is similar to:
-
-```text
-nixos-minimal-<release>-aarch64-linux.iso
+```console
+$ ./flash-edk2-sd-card.sh /dev/sdX
 ```
 
-Write it to a USB stick:
+By default it fetches `ROC-RK3568-PC_EFI.img.gz` from the
+[`jaredmcneill/quartz64_uefi` releases](https://github.com/jaredmcneill/quartz64_uefi/releases).
+Override the source with the `EDK2_URL` environment variable, or point at a
+pre-downloaded image with `EDK2_IMG`.
+
+Leave the EDK2 microSD installed during boot.
+
+## 3. Build and write the NixOS installer
+
+Build the myconfig AArch64 installer ISO with the repo's ISO builder:
+
+```console
+$ ./build-iso-image.sh iso aarch64-linux
+```
+
+This produces an ISO under `../iso.aarch64-linux/` and, next to it, a generated
+`dd.sh` flasher wired to that exact image. `dd.sh` refuses anything that is not
+a whole disk, prints the target with `lsblk`, prompts for confirmation,
+unmounts any mounted partitions, then writes with `dd ... conv=fsync
+status=progress`:
+
+```console
+$ ../iso.aarch64-linux/dd.sh /dev/sdY
+```
+
+Replace `/dev/sdY` with the whole USB-stick device.
+
+Alternatively, write any AArch64 ISO manually:
 
 ```console
 $ sudo dd \
-    if=nixos-minimal-<release>-aarch64-linux.iso \
+    if=<some>-aarch64-linux.iso \
     of=/dev/sdY \
     bs=4M \
     conv=fsync \
     status=progress
 ```
 
-Replace `/dev/sdY` with the whole USB-stick device.
+The upstream minimal AArch64 ISO from <https://nixos.org/download/#nixos-iso>
+(name similar to `nixos-minimal-<release>-aarch64-linux.iso`) also works as a
+fallback.
 
-Or use the helper script:
-
-```console
-$ ./flash-installer-usb.sh nixos-minimal-<release>-aarch64-linux.iso /dev/sdY
-```
-
-Use the ISO rather than the generic ARM SD image: EDK2 should expose the board
+Use an ISO rather than the generic ARM SD image: EDK2 should expose the board
 as a UEFI AArch64 system, allowing the regular NixOS installer to boot
 `EFI/BOOT/BOOTAA64.EFI`.
 
